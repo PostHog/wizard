@@ -2,8 +2,7 @@ import { major, minVersion } from 'semver';
 import fg from 'fast-glob';
 import { abortIfCancelled } from '../utils/clack-utils';
 import clack from '../utils/clack';
-import type { CloudRegion, WizardOptions } from '../utils/types';
-import { IS_DEV } from '../lib/constants';
+import type { WizardOptions } from '../utils/types';
 
 export function getNextJsVersionBucket(version: string | undefined) {
   if (!version) {
@@ -90,39 +89,4 @@ export async function getNextJsRouter({
 
 export const getNextJsRouterName = (router: NextJsRouter) => {
   return router === NextJsRouter.APP_ROUTER ? 'app router' : 'pages router';
-};
-
-export const getAssetHostFromHost = (host: string) => {
-  if (host.includes('us.i.posthog.com')) {
-    return 'https://us-assets.i.posthog.com';
-  }
-
-  if (host.includes('eu.i.posthog.com')) {
-    return 'https://eu-assets.i.posthog.com';
-  }
-
-  return host;
-};
-
-export const getUiHostFromHost = (host: string) => {
-  if (host.includes('us.i.posthog.com')) {
-    return 'https://us.posthog.com';
-  }
-
-  if (host.includes('eu.i.posthog.com')) {
-    return 'https://eu.posthog.com';
-  }
-
-  return host;
-};
-
-export const getCloudUrlFromRegion = (region: CloudRegion) => {
-  if (IS_DEV) {
-    return 'http://localhost:8010';
-  }
-
-  if (region === 'us') {
-    return 'https://us.posthog.com';
-  }
-  return 'https://eu.posthog.com';
 };

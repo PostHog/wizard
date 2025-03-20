@@ -1,4 +1,4 @@
-import { getAssetHostFromHost, getUiHostFromHost } from './utils';
+import { getAssetHostFromHost, getUiHostFromHost } from '../utils/urls';
 
 export const getNextjsAppRouterDocs = ({
   host,
@@ -9,9 +9,8 @@ export const getNextjsAppRouterDocs = ({
 }) => {
   return `
 ==============================
-FILE: PostHogProvider.${
-    language === 'typescript' ? 'tsx' : 'jsx'
-  } (put it somewhere where client files are, like the components folder)
+FILE: PostHogProvider.${language === 'typescript' ? 'tsx' : 'jsx'
+    } (put it somewhere where client files are, like the components folder)
 LOCATION: Wherever other providers are, or the components folder
 ==============================
 Changes:
@@ -128,7 +127,8 @@ LOCATION: Wherever the root next config is
 Changes:
 - Add rewrites to the Next.js config to support PostHog, if there are existing rewrites, add the PostHog rewrites to them.
 - Add skipTrailingSlashRedirect to the Next.js config to support PostHog trailing slash API requests.
-- This can be of type js, ts, mjs, cjs etc. You should adapt the file according
+- This can be of type js, ts, mjs, cjs etc. You should adapt the file according to what extension it uses, and if it does not exist yet use '.js'.
+
 Example:
 --------------------------------------------------
 const nextConfig = {
@@ -166,9 +166,8 @@ export const getNextjsPagesRouterDocs = ({
   return `
 ==============================
 FILE: _app.${language === 'typescript' ? 'tsx' : 'jsx'}
-LOCATION: Wherever the root _app.${
-    language === 'typescript' ? 'tsx' : 'jsx'
-  } file is
+LOCATION: Wherever the root _app.${language === 'typescript' ? 'tsx' : 'jsx'
+    } file is
 ==============================
 Changes:
 - Initialize PostHog in _app.js.
@@ -213,18 +212,19 @@ FILE: posthog.${language === 'typescript' ? 'ts' : 'js'}
 LOCATION: Wherever works best given the project structure
 ==============================
 Changes:
-- Initialize the PostHog Node.js client for server-side tracking.
+- Initialize the PostHog Node.js client
 
 Example:
 --------------------------------------------------
 import { PostHog } from "posthog-node"
 
 export default function PostHogClient() {
-  return new PostHog(process.env.NEXT_PUBLIC_POSTHOG_KEY!, {
+  const posthogClient = new PostHog(process.env.NEXT_PUBLIC_POSTHOG_KEY!, {
     host: "${host}",
     flushAt: 1,
     flushInterval: 0,
   })
+  return posthogClient
 }
 --------------------------------------------------
 
@@ -233,25 +233,33 @@ FILE: next.config.{js,ts,mjs,cjs}
 LOCATION: Wherever the root next config is
 ==============================
 Changes:
-- Add rewrites to support PostHog tracking.
-- Enable support for PostHog API trailing slash requests.
+- Add rewrites to the Next.js config to support PostHog, if there are existing rewrites, add the PostHog rewrites to them.
+- Add skipTrailingSlashRedirect to the Next.js config to support PostHog trailing slash API requests.
+- This can be of type js, ts, mjs, cjs etc. You should adapt the file according to what extension it uses, and if it does not exist yet use '.js'.
 
 Example:
 --------------------------------------------------
 const nextConfig = {
+  // other config
   async rewrites() {
     return [
-      { source: "/ingest/static/:path*", destination: "${getAssetHostFromHost(
-        host,
-      )}/static/:path*" },
-      { source: "/ingest/:path*", destination: "${host}/:path*" },
-      { source: "/ingest/decide", destination: "${host}/decide" },
-    ]
+      {
+        source: "/ingest/static/:path*",
+        destination: "${getAssetHostFromHost(host)}/static/:path*",
+      },
+      {
+        source: "/ingest/:path*",
+        destination: "${host}/:path*",
+      },
+      {
+        source: "/ingest/decide",
+        destination: "${host}/decide",
+      },
+    ];
   },
+  // This is required to support PostHog trailing slash API requests
   skipTrailingSlashRedirect: true,
 }
-
 module.exports = nextConfig
---------------------------------------------------
-`;
+--------------------------------------------------`;
 };

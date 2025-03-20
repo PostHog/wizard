@@ -44,4 +44,10 @@ export interface Feature {
   disabledHint?: string;
 }
 
+export type FileChange = {
+  filePath: string;
+  oldContent?: string;
+  newContent: string;
+};
+
 export type CloudRegion = 'us' | 'eu';

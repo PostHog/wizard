@@ -1,11 +1,14 @@
 export enum Integration {
   nextjs = 'nextjs',
+  react = 'react',
 }
 
 export function getIntegrationDescription(type: string): string {
   switch (type) {
     case Integration.nextjs:
       return 'Next.js';
+    case Integration.react:
+      return 'React';
     default:
       throw new Error(`Unknown integration ${type}`);
   }

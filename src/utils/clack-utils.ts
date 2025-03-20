@@ -25,7 +25,7 @@ import {
 } from '../lib/constants';
 import { analytics } from './analytics';
 import clack from './clack';
-import { getCloudUrlFromRegion } from '../nextjs/utils';
+import { getCloudUrlFromRegion } from './urls';
 
 interface ProjectData {
   projectApiKey: string;
@@ -922,4 +922,53 @@ export async function askShouldAddPackageOverride(
       }),
     ),
   );
+}
+
+export async function askForAIConsent(options: Pick<WizardOptions, 'default'>) {
+  return await traceStep('ask-for-ai-consent', async () => {
+    const aiConsent = options.default
+      ? true
+      : await abortIfCancelled(
+          clack.select({
+            message: 'Use AI to setup PostHog automatically? ✨',
+            options: [
+              {
+                label: 'Yes',
+                value: true,
+                hint: 'We will use AI to help you setup PostHog quickly',
+              },
+              {
+                label: 'No',
+                value: false,
+                hint: 'Continue without AI assistance',
+              },
+            ],
+            initialValue: true,
+          }),
+        );
+
+    return aiConsent;
+  });
+}
+
+export async function askForCloudRegion(): Promise<CloudRegion> {
+  return await traceStep('ask-for-cloud-region', async () => {
+    const cloudRegion: CloudRegion = await abortIfCancelled(
+      clack.select({
+        message: 'Select your cloud region',
+        options: [
+          {
+            label: 'US 🇺🇸',
+            value: 'us',
+          },
+          {
+            label: 'EU 🇪🇺',
+            value: 'eu',
+          },
+        ],
+      }),
+    );
+
+    return cloudRegion;
+  });
 }

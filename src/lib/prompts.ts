@@ -1,9 +1,14 @@
 import { PromptTemplate } from '@langchain/core/prompts';
 
-export const filterFilesPromptTemplate = new PromptTemplate({
-  inputVariables: ['documentation', 'file_list'],
-  template: `You are a PostHog installation wizard, a master AI programming assistant that implements PostHog for Next.js projects.
-Given the following list of Next.js file paths from a project, determine which files are likely to require modifications 
+export const baseFilterFilesPromptTemplate = new PromptTemplate({
+  inputVariables: [
+    'documentation',
+    'file_list',
+    'integration_name',
+    'integration_rules',
+  ],
+  template: `You are a PostHog installation wizard, a master AI programming assistant that implements PostHog for {integration_name} projects.
+Given the following list of file paths from a project, determine which files are likely to require modifications 
 to integrate PostHog. Use the installation documentation as a reference for what files might need modifications, do not include files that are unlikely to require modification based on the documentation.
 
 - If you would like to create a new file, you can include the file path in your response.
@@ -17,8 +22,8 @@ Rules:
 - If you are unsure, return the file, since it's better to have more files than less.
 - If you create a new file, it should not conflict with any existing files.
 - If the user is using TypeScript, you should return .ts and .tsx files.
-- You should implement both posthog-js and posthog-node.
 - The file structure of the project may be different than the documentation, you should follow the file structure of the project.
+{integration_rules}
 
 Installation documentation:
 {documentation}
@@ -28,15 +33,17 @@ All current files in the repository:
 {file_list}`,
 });
 
-export const generateFileChangesPromptTemplate = new PromptTemplate({
+export const baseGenerateFileChangesPromptTemplate = new PromptTemplate({
   inputVariables: [
     'file_content',
     'documentation',
     'file_path',
     'changed_files',
     'unchanged_files',
+    'integration_name',
+    'integration_rules',
   ],
-  template: `You are a PostHog installation wizard, a master AI programming assistant that implements PostHog for Next.js projects.
+  template: `You are a PostHog installation wizard, a master AI programming assistant that implements PostHog for {integration_name} projects.
 
 Your task is to update the file to integrate PostHog according to the documentation.
 Do not return a diff — you should return the complete updated file content.
@@ -48,11 +55,13 @@ Rules:
 - If the current file is empty, and you think it should be created, you can add the contents of the new file.
 - The file structure of the project may be different than the documentation, you should follow the file structure of the project.
 - Use relative imports if you are unsure what the project import paths are.
+{integration_rules}
+
 
 CONTEXT
 ---
 
-Documentation for integrating PostHog with Next.js:
+Documentation for integrating PostHog with {integration_name}:
 {documentation}
 
 The file you are updating is:
