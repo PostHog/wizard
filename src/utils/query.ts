@@ -2,7 +2,7 @@ import axios from 'axios';
 import type { ZodSchema } from 'zod';
 import { zodToJsonSchema } from 'zod-to-json-schema';
 import type { CloudRegion } from './types';
-import { getCloudUrlFromRegion } from '../nextjs/utils';
+import { getCloudUrlFromRegion } from './urls';
 
 export const query = async <S>({
   message,

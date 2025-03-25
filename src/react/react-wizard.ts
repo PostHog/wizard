@@ -15,15 +15,9 @@ import {
   runPrettierIfInstalled,
 } from '../utils/clack-utils';
 import { getPackageVersion, hasPackageInstalled } from '../utils/package-json';
-import {
-  getNextJsRouter,
-  getNextJsRouterName,
-  getNextJsVersionBucket,
-  NextJsRouter,
-} from './utils';
 import clack from '../utils/clack';
 import { Integration, ISSUES_URL } from '../lib/constants';
-import { getNextjsAppRouterDocs, getNextjsPagesRouterDocs } from './docs';
+import { getReactDocumentation } from './docs';
 import { analytics } from '../utils/analytics';
 import { addOrUpdateEnvironmentVariables } from '../utils/environment';
 import {
@@ -34,16 +28,16 @@ import {
 import type { WizardOptions } from '../utils/types';
 import { askForCloudRegion } from '../utils/clack-utils';
 
-export async function runNextjsWizard(options: WizardOptions): Promise<void> {
+export async function runReactWizard(options: WizardOptions): Promise<void> {
   printWelcome({
-    wizardName: 'PostHog Next.js Wizard',
+    wizardName: 'PostHog React Wizard',
   });
 
   const aiConsent = await askForAIConsent(options);
 
   if (!aiConsent) {
     await abort(
-      'The Next.js wizard requires AI to get setup right now. Please view the docs to setup Next.js manually instead: https://posthog.com/docs/libraries/next-js',
+      'The React wizard requires AI to get setup right now. Please view the docs to setup React manually instead: https://posthog.com/docs/libraries/react',
       0,
     );
   }
@@ -56,11 +50,13 @@ export async function runNextjsWizard(options: WizardOptions): Promise<void> {
 
   const packageJson = await getPackageDotJson(options);
 
-  await ensurePackageIsInstalled(packageJson, 'next', 'Next.js');
+  await ensurePackageIsInstalled(packageJson, 'react', 'React');
 
-  const nextVersion = getPackageVersion('next', packageJson);
+  const reactVersion = getPackageVersion('react', packageJson);
 
-  analytics.setTag('nextjs-version', getNextJsVersionBucket(nextVersion));
+  if (reactVersion) {
+    analytics.setTag('react-version', reactVersion);
+  }
 
   const { projectApiKey, wizardHash, host } = await getOrAskForProjectData({
     ...options,
@@ -82,36 +78,20 @@ export async function runNextjsWizard(options: WizardOptions): Promise<void> {
       integration: Integration.nextjs,
     });
 
-  await installPackage({
-    packageName: 'posthog-node',
-    packageNameDisplayLabel: 'posthog-node',
-    packageManager: packageManagerFromInstallStep,
-    alreadyInstalled: !!packageJson?.dependencies?.['posthog-node'],
-    forceInstall: options.forceInstall,
-    askBeforeUpdating: false,
-    installDir: options.installDir,
-    integration: Integration.nextjs,
-  });
-
-  const router = await getNextJsRouter(options);
-
   const relevantFiles = await getRelevantFilesForIntegration({
     installDir: options.installDir,
-    integration: Integration.nextjs,
+    integration: Integration.react,
   });
 
-  const installationDocumentation = getInstallationDocumentation({
-    router,
+  const installationDocumentation = getReactDocumentation({
     host,
     language: typeScriptDetected ? 'typescript' : 'javascript',
   });
 
-  clack.log.info(
-    `Reviewing PostHog documentation for ${getNextJsRouterName(router)}`,
-  );
+  clack.log.info(`Reviewing PostHog documentation for React`);
 
   const filesToChange = await getFilesToChange({
-    integration: Integration.nextjs,
+    integration: Integration.react,
     relevantFiles,
     documentation: installationDocumentation,
     wizardHash,
@@ -119,7 +99,7 @@ export async function runNextjsWizard(options: WizardOptions): Promise<void> {
   });
 
   await generateFileChangesForIntegration({
-    integration: Integration.nextjs,
+    integration: Integration.react,
     filesToChange,
     wizardHash,
     installDir: options.installDir,
@@ -129,10 +109,10 @@ export async function runNextjsWizard(options: WizardOptions): Promise<void> {
 
   await addOrUpdateEnvironmentVariables({
     variables: {
-      NEXT_PUBLIC_POSTHOG_KEY: projectApiKey,
+      REACT_APP_PUBLIC_POSTHOG_KEY: projectApiKey,
     },
     installDir: options.installDir,
-    integration: Integration.nextjs,
+    integration: Integration.react,
   });
 
   const packageManagerForOutro =
@@ -146,7 +126,7 @@ export async function runNextjsWizard(options: WizardOptions): Promise<void> {
   clack.outro(`
 ${chalk.green('Successfully installed PostHog!')} ${`\n\n${
     aiConsent
-      ? `Note: This uses experimental AI to setup your project. It might have got it wrong, please check!\n`
+      ? `Note: This uses experimental AI to setup your project. It might have got it wrong, pleaes check!\n`
       : ``
   }You should validate your setup by (re)starting your dev environment (e.g. ${chalk.cyan(
     `${packageManagerForOutro.runScriptCommand} dev`,
@@ -155,20 +135,4 @@ ${chalk.green('Successfully installed PostHog!')} ${`\n\n${
 ${chalk.dim(`If you encounter any issues, let us know here: ${ISSUES_URL}`)}`);
 
   await analytics.shutdown('success');
-}
-
-function getInstallationDocumentation({
-  router,
-  host,
-  language,
-}: {
-  router: NextJsRouter;
-  host: string;
-  language: 'typescript' | 'javascript';
-}) {
-  if (router === NextJsRouter.PAGES_ROUTER) {
-    return getNextjsPagesRouterDocs({ host, language });
-  }
-
-  return getNextjsAppRouterDocs({ host, language });
 }
