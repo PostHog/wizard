@@ -10,6 +10,8 @@
   },
   "dependencies": {
     "next": "14.2.21",
+    "posthog-js": "^1.234.4",
+    "posthog-node": "^4.11.1",
     "prettier": "^3.5.2",
     "react": "^18",
     "react-dom": "^18"
