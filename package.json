@@ -90,7 +90,7 @@
     "prebuild": "pnpm clean",
     "build:watch": "pnpm tsc -w",
     "build": "pnpm tsc",
-    "postbuild": "chmod +x ./dist/bin.js && cp -r scripts/** dist",
+    "postbuild": "chmod +x ./dist/bin.js && cp -r scripts/** dist && cp -r src/rules dist/src/",
     "lint": "pnpm lint:prettier && pnpm lint:eslint",
     "lint:prettier": "prettier --check \"{lib,src,test}/**/*.ts\"",
     "lint:eslint": "eslint . --cache --format stylish",

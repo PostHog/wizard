@@ -30,6 +30,7 @@ import {
 } from '../utils/file-utils';
 import type { WizardOptions } from '../utils/types';
 import { askForCloudRegion } from '../utils/clack-utils';
+import { installRules } from '../rules/install-rules';
 
 export async function runReactWizard(options: WizardOptions): Promise<void> {
   printWelcome({
@@ -129,14 +130,15 @@ export async function runReactWizard(options: WizardOptions): Promise<void> {
     integration: Integration.react,
   });
 
+  await installRules('react-rules.md', options.installDir);
+
   clack.outro(`
-${chalk.green('Successfully installed PostHog!')} ${`\n\n${
-    aiConsent
+${chalk.green('Successfully installed PostHog!')} ${`\n\n${aiConsent
       ? `Note: This uses experimental AI to setup your project. It might have got it wrong, pleaes check!\n`
       : ``
-  }You should validate your setup by (re)starting your dev environment (e.g. ${chalk.cyan(
-    `${packageManagerForOutro.runScriptCommand} dev`,
-  )})`}
+    }You should validate your setup by (re)starting your dev environment (e.g. ${chalk.cyan(
+      `${packageManagerForOutro.runScriptCommand} dev`,
+    )})`}
 
 ${chalk.dim(`If you encounter any issues, let us know here: ${ISSUES_URL}`)}`);
 
