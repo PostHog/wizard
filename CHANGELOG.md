@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.0](https://github.com/PostHog/wizard/compare/v1.0.0...v1.1.0) (2025-05-21)
+
+
+### Features
+
+* enable exception autocapture for all users ([#39](https://github.com/PostHog/wizard/issues/39)) ([0605bbd](https://github.com/PostHog/wizard/commit/0605bbd14cc11d8383005d9d9cd78380cb7347fa))
+
 ## 1.0.0 (2025-05-16)
 
 
