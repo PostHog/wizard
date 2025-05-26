@@ -32,6 +32,9 @@ importers:
       inquirer:
         specifier: ^6.2.0
         version: 6.5.2
+      lodash:
+        specifier: ^4.17.21
+        version: 4.17.21
       magicast:
         specifier: ^0.2.10
         version: 0.2.11
@@ -85,7 +88,7 @@ importers:
         specifier: ^29.5.14
         version: 29.5.14
       '@types/lodash':
-        specifier: ^4.14.144
+        specifier: ^4.17.15
         version: 4.17.15
       '@types/node':
         specifier: ^18.19.76

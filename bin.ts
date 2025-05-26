@@ -15,15 +15,93 @@ if (!satisfies(process.version, NODE_VERSION_RANGE)) {
   );
   process.exit(1);
 }
-import { run } from './src/run';
 
-// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call
-const argv = yargs(hideBin(process.argv)).options({
-  debug: {
-    default: false,
-    describe: 'Enable verbose logging\nenv: POSTHOG_WIZARD_DEBUG',
-    type: 'boolean',
-  },
-}).argv;
+import { runMCPInstall, runMCPRemove } from './src/mcp';
+import type { CloudRegion, WizardOptions } from './src/utils/types';
+import { runWizard } from './src/run';
 
-void run(argv);
+yargs(hideBin(process.argv))
+  // global options
+  .options({
+    debug: {
+      default: false,
+      describe: 'Enable verbose logging\nenv: POSTHOG_WIZARD_DEBUG',
+      type: 'boolean',
+    },
+    region: {
+      describe: 'PostHog cloud region\nenv: POSTHOG_WIZARD_REGION',
+      choices: ['us', 'eu'],
+      type: 'string',
+    },
+    default: {
+      default: false,
+      describe:
+        'Use default options for all prompts\nenv: POSTHOG_WIZARD_DEFAULT',
+      type: 'boolean',
+    },
+    signup: {
+      default: false,
+      describe:
+        'Create a new PostHog account during setup\nenv: POSTHOG_WIZARD_SIGNUP',
+      type: 'boolean',
+    },
+  })
+  .command(
+    ['$0'],
+    'Run the PostHog setup wizard',
+    (yargs) => {
+      return yargs.options({
+        'force-install': {
+          default: false,
+          describe:
+            'Force install packages even if peer dependency checks fail\nenv: POSTHOG_WIZARD_FORCE_INSTALL',
+          type: 'boolean',
+        },
+        'install-dir': {
+          describe:
+            'Directory to install PostHog in\nenv: POSTHOG_WIZARD_INSTALL_DIR',
+          type: 'string',
+        },
+        integration: {
+          describe: 'Integration to set up',
+          choices: ['nextjs', 'react', 'svelte', 'react-native'],
+          type: 'string',
+        },
+      });
+    },
+    (argv) => {
+      void runWizard(argv as unknown as WizardOptions);
+    },
+  )
+  .command('mcp <command>', 'MCP server management commands', (yargs) => {
+    return yargs
+      .command(
+        'add',
+        'Install PostHog MCP server to supported clients',
+        (yargs) => {
+          return yargs.options({});
+        },
+        (argv) => {
+          void runMCPInstall(
+            argv as unknown as { signup: boolean; region?: CloudRegion },
+          );
+        },
+      )
+      .command(
+        'remove',
+        'Remove PostHog MCP server from supported clients',
+        (yargs) => {
+          return yargs.options({});
+        },
+        () => {
+          void runMCPRemove();
+        },
+      )
+      .demandCommand(1, 'You must specify a subcommand (add or remove)')
+      .help();
+  })
+  .help()
+  .alias('help', 'h')
+  .version()
+  .alias('version', 'v')
+  .wrap(yargs.terminalWidth()).argv;

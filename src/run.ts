@@ -27,11 +27,7 @@ type Args = {
   signup?: boolean;
 };
 
-export async function run(argv: Args) {
-  await runWizard(argv);
-}
-
-async function runWizard(argv: Args) {
+export async function runWizard(argv: Args) {
   const finalArgs = {
     ...argv,
     ...readEnvironment(),

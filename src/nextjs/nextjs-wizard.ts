@@ -35,8 +35,9 @@ import {
   addOrUpdateEnvironmentVariablesStep,
   createPRStep,
   runPrettierStep,
+  addMCPServerToClientsStep,
+  uploadEnvironmentVariablesStep,
 } from '../steps';
-import { uploadEnvironmentVariablesStep } from '../steps/upload-environment-variables';
 export async function runNextjsWizard(options: WizardOptions): Promise<void> {
   printWelcome({
     wizardName: 'PostHog Next.js wizard',
@@ -65,10 +66,11 @@ export async function runNextjsWizard(options: WizardOptions): Promise<void> {
 
   analytics.setTag('nextjs-version', getNextJsVersionBucket(nextVersion));
 
-  const { projectApiKey, wizardHash, host } = await getOrAskForProjectData({
-    ...options,
-    cloudRegion,
-  });
+  const { projectApiKey, wizardHash, host, personalApiKey } =
+    await getOrAskForProjectData({
+      ...options,
+      cloudRegion,
+    });
 
   const sdkAlreadyInstalled = hasPackageInstalled('posthog-js', packageJson);
 
@@ -165,6 +167,12 @@ export async function runNextjsWizard(options: WizardOptions): Promise<void> {
     integration: Integration.nextjs,
     default: options.default,
   });
+
+  if (personalApiKey) {
+    await addMCPServerToClientsStep(personalApiKey, {
+      integration: Integration.nextjs,
+    });
+  }
 
   const prUrl = await createPRStep({
     installDir: options.installDir,

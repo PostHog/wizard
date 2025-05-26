@@ -33,6 +33,7 @@ interface ProjectData {
   host: string;
   wizardHash: string;
   distinctId: string;
+  personalApiKey?: string;
 }
 
 export interface CliSetupConfig {
@@ -500,20 +501,23 @@ export function isUsingTypeScript({
  * @returns project data (token, url)
  */
 export async function getOrAskForProjectData(
-  _options: WizardOptions & {
+  _options: Pick<WizardOptions, 'signup'> & {
     cloudRegion: CloudRegion;
   },
 ): Promise<{
   wizardHash: string;
   host: string;
   projectApiKey: string;
+  personalApiKey?: string;
 }> {
   const cloudUrl = getCloudUrlFromRegion(_options.cloudRegion);
-  const { host, projectApiKey, wizardHash } = await traceStep('login', () =>
-    askForWizardLogin({
-      url: cloudUrl,
-      signup: _options.signup,
-    }),
+  const { host, projectApiKey, personalApiKey, wizardHash } = await traceStep(
+    'login',
+    () =>
+      askForWizardLogin({
+        url: cloudUrl,
+        signup: _options.signup,
+      }),
   );
 
   if (!projectApiKey) {
@@ -534,6 +538,7 @@ ${chalk.cyan(`${cloudUrl}/settings/project#variables`)}`);
     wizardHash,
     host: host || DEFAULT_HOST_URL,
     projectApiKey: projectApiKey || DUMMY_PROJECT_API_KEY,
+    personalApiKey: personalApiKey,
   };
 }
 
@@ -595,6 +600,7 @@ async function askForWizardLogin(options: {
           project_api_key: string;
           host: string;
           user_distinct_id: string;
+          personal_api_key?: string;
         }>(`${options.url}/api/wizard/data`, {
           headers: {
             'Accept-Encoding': 'deflate',
@@ -607,6 +613,7 @@ async function askForWizardLogin(options: {
             projectApiKey: result.data.project_api_key,
             host: result.data.host,
             distinctId: result.data.user_distinct_id,
+            personalApiKey: result.data.personal_api_key,
           };
 
           resolve(data);
