@@ -20,7 +20,11 @@ import {
 } from './utils';
 import clack from '../utils/clack';
 import { Integration } from '../lib/constants';
-import { getNextjsAppRouterDocs, getNextjsPagesRouterDocs } from './docs';
+import {
+  getNextjsAppRouterDocs,
+  getNextjsPagesRouterDocs,
+  getModernNextjsDocs,
+} from './docs';
 import { analytics } from '../utils/analytics';
 import {
   generateFileChangesForIntegration,
@@ -37,6 +41,8 @@ import {
   runPrettierStep,
 } from '../steps';
 import { uploadEnvironmentVariablesStep } from '../steps/upload-environment-variables';
+import * as semver from 'semver';
+
 export async function runNextjsWizard(options: WizardOptions): Promise<void> {
   printWelcome({
     wizardName: 'PostHog Next.js wizard',
@@ -96,22 +102,37 @@ export async function runNextjsWizard(options: WizardOptions): Promise<void> {
     integration: Integration.nextjs,
   });
 
-  const router = await getNextJsRouter(options);
-
   const relevantFiles = await getRelevantFilesForIntegration({
     installDir: options.installDir,
     integration: Integration.nextjs,
   });
 
-  const installationDocumentation = getInstallationDocumentation({
-    router,
-    host,
-    language: typeScriptDetected ? 'typescript' : 'javascript',
-  });
+  let installationDocumentation;
 
-  clack.log.info(
-    `Reviewing PostHog documentation for ${getNextJsRouterName(router)}`,
-  );
+  if (instrumentationFileAvailable(nextVersion)) {
+    installationDocumentation = getModernNextjsDocs({
+      host,
+      language: typeScriptDetected ? 'typescript' : 'javascript',
+    });
+
+    clack.log.info(
+      `Reviewing PostHog documentation for instrumentation-client.${
+        typeScriptDetected ? 'ts' : 'js'
+      }`,
+    );
+  } else {
+    const router = await getNextJsRouter(options);
+
+    installationDocumentation = getInstallationDocumentation({
+      router,
+      host,
+      language: typeScriptDetected ? 'typescript' : 'javascript',
+    });
+
+    clack.log.info(
+      `Reviewing PostHog documentation for ${getNextJsRouterName(router)}`,
+    );
+  }
 
   const filesToChange = await getFilesToChange({
     integration: Integration.nextjs,
@@ -186,6 +207,21 @@ export async function runNextjsWizard(options: WizardOptions): Promise<void> {
   clack.outro(outroMessage);
 
   await analytics.shutdown('success');
+}
+
+function instrumentationFileAvailable(
+  nextVersion: string | undefined,
+): boolean {
+  const minimumVersion = '15.3.0'; //instrumentation-client.js|ts was introduced in 15.3
+
+  if (!nextVersion) {
+    return false;
+  }
+  const coercedNextVersion = semver.coerce(nextVersion);
+  if (!coercedNextVersion) {
+    return false; // Unable to parse nextVersion
+  }
+  return semver.gte(coercedNextVersion, minimumVersion);
 }
 
 function getInstallationDocumentation({

@@ -31,7 +31,7 @@ export function PostHogProvider({ children }: { children: React.ReactNode }) {
     posthog.init(process.env.NEXT_PUBLIC_POSTHOG_KEY!, {
       api_host: "/ingest",
       ui_host: "${getUiHostFromHost(host)}",
-      capture_pageview: false, // We capture pageviews manually
+      capture_pageview: 'history_change',
       capture_pageleave: true, // Enable pageleave capture
       capture_exceptions: true, // This enables capturing exceptions using Error Tracking, set to false if you don't want this
       debug: process.env.NODE_ENV === "development",
@@ -43,34 +43,6 @@ export function PostHogProvider({ children }: { children: React.ReactNode }) {
       <SuspendedPostHogPageView />
       {children}
     </PHProvider>
-  )
-}
-
-
-function PostHogPageView() {
-  const pathname = usePathname()
-  const searchParams = useSearchParams()
-  const posthog = usePostHog()
-
-  useEffect(() => {
-    if (pathname && posthog) {
-      let url = window.origin + pathname
-      const search = searchParams.toString()
-      if (search) {
-        url += "?" + search
-      }
-      posthog.capture("$pageview", { "$current_url": url })
-    }
-  }, [pathname, searchParams, posthog])
-
-  return null
-}
-
-function SuspendedPostHogPageView() {
-  return (
-    <Suspense fallback={null}>
-      <PostHogPageView />
-    </Suspense>
   )
 }
 --------------------------------------------------
@@ -116,6 +88,7 @@ import { PostHog } from "posthog-node"
 export default function PostHogClient() {
   const posthogClient = new PostHog(process.env.NEXT_PUBLIC_POSTHOG_KEY!, {
     host: process.env.NEXT_PUBLIC_POSTHOG_HOST,
+    capture_pageview: 'history_change',
     flushAt: 1,
     flushInterval: 0,
   })
@@ -176,7 +149,6 @@ LOCATION: Wherever the root _app.${
 Changes:
 - Initialize PostHog in _app.js.
 - Wrap the application in PostHogProvider.
-- Manually capture $pageview events.
 
 Example:
 --------------------------------------------------
@@ -190,19 +162,13 @@ export default function App({ Component, pageProps }) {
     posthog.init(process.env.NEXT_PUBLIC_POSTHOG_KEY, {
       api_host: "/ingest",
       ui_host: "${getUiHostFromHost(host)}",
+      capture_pageview: 'history_change',
       capture_exceptions: true, // This enables capturing exceptions using Error Tracking, set to false if you don't want this
       loaded: (posthog) => {
         if (process.env.NODE_ENV === "development") posthog.debug()
       },
       debug: process.env.NODE_ENV === "development",
     })
-
-    const handleRouteChange = () => posthog?.capture("$pageview")
-    Router.events.on("routeChangeComplete", handleRouteChange)
-
-    return () => {
-      Router.events.off("routeChangeComplete", handleRouteChange)
-    }
   }, [])
 
   return (
@@ -227,11 +193,84 @@ import { PostHog } from "posthog-node"
 export default function PostHogClient() {
   const posthogClient = new PostHog(process.env.NEXT_PUBLIC_POSTHOG_KEY!, {
     host: process.env.NEXT_PUBLIC_POSTHOG_HOST,
+    capture_pageview: 'history_change',
     flushAt: 1,
     flushInterval: 0,
   })
   return posthogClient
 }
+--------------------------------------------------
+
+==============================
+FILE: next.config.{js,ts,mjs,cjs}
+LOCATION: Wherever the root next config is
+==============================
+Changes:
+- Add rewrites to the Next.js config to support PostHog, if there are existing rewrites, add the PostHog rewrites to them.
+- Add skipTrailingSlashRedirect to the Next.js config to support PostHog trailing slash API requests.
+- This can be of type js, ts, mjs, cjs etc. You should adapt the file according to what extension it uses, and if it does not exist yet use '.js'.
+
+Example:
+--------------------------------------------------
+const nextConfig = {
+  // other config
+  async rewrites() {
+    return [
+      {
+        source: "/ingest/static/:path*",
+        destination: "${getAssetHostFromHost(host)}/static/:path*",
+      },
+      {
+        source: "/ingest/:path*",
+        destination: "${host}/:path*",
+      },
+      {
+        source: "/ingest/decide",
+        destination: "${host}/decide",
+      },
+    ];
+  },
+  // This is required to support PostHog trailing slash API requests
+  skipTrailingSlashRedirect: true,
+}
+module.exports = nextConfig
+--------------------------------------------------`;
+};
+
+export const getModernNextjsDocs = ({
+  host,
+  language,
+}: {
+  host: string;
+  language: 'typescript' | 'javascript';
+}) => {
+  return `
+==============================
+FILE: instrumentation-client.${language === 'typescript' ? 'ts' : 'js'} 
+LOCATION: in the root of the application or inside an src folder.
+==============================
+Changes:
+- Create or update the instrumentation-client.${
+    language === 'typescript' ? 'tsx' : 'jsx'
+  } file to use the PostHog client. If the file does not exist yet, create it.
+- Do *not* import instrumentation-client.${
+    language === 'typescript' ? 'tsx' : 'jsx'
+  } in any other file; Next.js will automatically handle it.
+- Do not modify any other pages/components in the Next.js application; the PostHog client will be automatically initialized and handle all pageview tasks on its own.
+
+Example:
+--------------------------------------------------
+
+import posthog from "posthog-js"
+
+posthog.init(process.env.NEXT_PUBLIC_POSTHOG_KEY!, {
+  api_host: "/ingest",
+  ui_host: "${getUiHostFromHost(host)}",
+  capture_pageview: 'history_change',
+  capture_pageleave: true, // Enable pageleave capture
+  capture_exceptions: true, // This enables capturing exceptions using Error Tracking, set to false if you don't want this
+  debug: process.env.NODE_ENV === "development",
+});
 --------------------------------------------------
 
 ==============================
