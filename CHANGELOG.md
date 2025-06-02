@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.2.0](https://github.com/PostHog/wizard/compare/v1.1.0...v1.2.0) (2025-06-02)
+
+
+### Features
+
+* setup mcp server automatically on install ([#48](https://github.com/PostHog/wizard/issues/48)) ([0b6b0b5](https://github.com/PostHog/wizard/commit/0b6b0b5414d0c66c248cea49f313589a94eefe09))
+
 ## [1.1.0](https://github.com/PostHog/wizard/compare/v1.0.0...v1.1.0) (2025-05-21)
 
 
