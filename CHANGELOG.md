@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.2.1](https://github.com/PostHog/wizard/compare/v1.2.0...v1.2.1) (2025-06-02)
+
+
+### Bug Fixes
+
+* do not suggest mcp installation for EU cloud users ([#54](https://github.com/PostHog/wizard/issues/54)) ([e3010d8](https://github.com/PostHog/wizard/commit/e3010d82f486d2be06e07ca2a282aa7ebaffd640))
+
 ## [1.2.0](https://github.com/PostHog/wizard/compare/v1.1.0...v1.2.0) (2025-06-02)
 
 
