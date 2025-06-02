@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.2.2](https://github.com/PostHog/wizard/compare/v1.2.1...v1.2.2) (2025-06-02)
+
+
+### Bug Fixes
+
+* remove parsing from mcp configs ([#56](https://github.com/PostHog/wizard/issues/56)) ([e89d75a](https://github.com/PostHog/wizard/commit/e89d75a9ab4daf3729c8472214694646ee8aca16))
+
 ## [1.2.1](https://github.com/PostHog/wizard/compare/v1.2.0...v1.2.1) (2025-06-02)
 
 
