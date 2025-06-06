@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.3.0](https://github.com/PostHog/wizard/compare/v1.2.2...v1.3.0) (2025-06-06)
+
+
+### Features
+
+* next instrumentation ([#59](https://github.com/PostHog/wizard/issues/59)) ([a6114bd](https://github.com/PostHog/wizard/commit/a6114bd54698fcfa5b2953882bc1f0548ee75115))
+
 ## [1.2.2](https://github.com/PostHog/wizard/compare/v1.2.1...v1.2.2) (2025-06-02)
 
 
