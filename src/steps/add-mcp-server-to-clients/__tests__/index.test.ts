@@ -35,15 +35,15 @@ describe('getSupportedClients', () => {
     }));
   });
 
-  it('should return all clients when both are supported', () => {
-    const result = getSupportedClients();
+  it('should return all clients when both are supported', async () => {
+    const result = await getSupportedClients();
 
     expect(result).toHaveLength(2);
     expect(MockedCursorMCPClient).toHaveBeenCalledTimes(1);
     expect(MockedClaudeMCPClient).toHaveBeenCalledTimes(1);
   });
 
-  it('should return only supported clients when some are not supported', () => {
+  it('should return only supported clients when some are not supported', async () => {
     MockedCursorMCPClient.mockImplementation(() => ({
       name: 'Cursor',
       isClientSupported: jest.fn().mockResolvedValue(false),
@@ -53,13 +53,13 @@ describe('getSupportedClients', () => {
       removeServer: jest.fn(),
     }));
 
-    const result = getSupportedClients();
+    const result = await getSupportedClients();
 
     expect(result).toHaveLength(1);
     expect(result[0].name).toBe('Claude Desktop');
   });
 
-  it('should return empty array when no clients are supported', () => {
+  it('should return empty array when no clients are supported', async () => {
     MockedCursorMCPClient.mockImplementation(() => ({
       name: 'Cursor',
       isClientSupported: jest.fn().mockResolvedValue(false),
@@ -78,7 +78,7 @@ describe('getSupportedClients', () => {
       removeServer: jest.fn(),
     }));
 
-    const result = getSupportedClients();
+    const result = await getSupportedClients();
 
     expect(result).toHaveLength(0);
   });
