@@ -391,7 +391,6 @@ export async function ensurePackageIsInstalled(
     analytics.setTag(`${packageName.toLowerCase()}-installed`, installed);
 
     if (!installed) {
-      analytics.setTag(`${packageName.toLowerCase()}-installed`, false);
       const continueWithoutPackage = await abortIfCancelled(
         clack.confirm({
           message: `${packageName} does not seem to be installed. Do you still want to continue?`,
