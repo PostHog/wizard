@@ -246,7 +246,7 @@ export const getModernNextjsDocs = ({
 }) => {
   return `
 ==============================
-FILE: instrumentation-client.${language === 'typescript' ? 'ts' : 'js'} 
+FILE: instrumentation-client.${language === 'typescript' ? 'ts' : 'js'}
 LOCATION: in the root of the application or inside an src folder.
 ==============================
 Changes:

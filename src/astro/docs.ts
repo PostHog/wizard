@@ -99,13 +99,5 @@ import PostHogLayout from '../layouts/PostHogLayout.astro';
   <h1>Welcome to Astro</h1>
 </PostHogLayout>
 --------------------------------------------------
-
-==============================
-NEXT STEPS
-==============================
-- Call \`posthog.identify()\` after user sign-in.
-- Fire custom events with \`posthog.capture()\`.
-- Gate features via \`posthog.isFeatureEnabled()\`.
-- Enable session recordings and heatmaps under “Recordings” in PostHog.
 `;
 }
