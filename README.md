@@ -17,7 +17,7 @@ To use the wizard, you can run it directly using:
 npx @posthog/wizard
 ```
 
-Currently the wizard can be used for **React, NextJS, Svelte and React Native**
+Currently the wizard can be used for **React, NextJS, Svelte, Astro and React Native**
 projects. If you have other integrations you would like the wizard to support,
 please open a [GitHub issue](https://github.com/posthog/wizard/issues)!
 
@@ -30,7 +30,7 @@ The following CLI arguments are available:
 | `--help`          | Show help                                                                  | boolean |                                 |                                             |                              |
 | `--version`       | Show version number                                                        | boolean |                                 |                                             |                              |
 | `--debug`         | Enable verbose logging                                                     | boolean | `false`                         |                                             | `POSTHOG_WIZARD_DEBUG`       |
-| `--integration`   | Choose the integration to setup                                            | choices | Select integration during setup | "nextjs", "react", "svelte", "react-native" | `POSTHOG_WIZARD_INTEGRATION` |
+| `--integration`   | Choose the integration to setup                                            | choices | Select integration during setup | "nextjs", "astro", "react", "svelte", "react-native" | `POSTHOG_WIZARD_INTEGRATION` |
 | `--force-install` | Force install the SDK NPM package (use with caution!)                      | boolean | `false`                         |                                             |                              |
 | `--install-dir`   | Relative path to install in                                                | string  | `.`                             |                                             | `POSTHOG_WIZARD_INSTALL_DIR` |
 | `--region`        | PostHog region to use                                                      | choices |                                 | "us", "eu"                                  | `POSTHOG_WIZARD_REGION`      |
