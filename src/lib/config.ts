@@ -106,7 +106,7 @@ export const INTEGRATION_CONFIG = {
     filterFilesRules: '',
     docsUrl: 'https://posthog.com/docs/libraries/js',
     defaultChanges:
-      '• Installed posthog-js package\n• Added PostHog component with initialization script\n• Created PostHogLayout for consistent analytics tracking\n• Setup environment variables for API key and host',
+      '• Added PostHog component with initialization script\n• Created PostHogLayout for consistent analytics tracking',
     nextSteps:
       '• Call posthog.identify() when a user signs into your app\n• Call posthog.capture() to capture custom events in your app\n• Use posthog.isFeatureEnabled() for feature flags',
   },

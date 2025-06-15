@@ -25,9 +25,7 @@ import { getOutroMessage } from '../lib/messages';
 import {
   addEditorRulesStep,
   addMCPServerToClientsStep,
-  addOrUpdateEnvironmentVariablesStep,
   runPrettierStep,
-  uploadEnvironmentVariablesStep,
 } from '../steps';
 
 export async function runAstroWizard(options: WizardOptions): Promise<void> {
@@ -94,31 +92,10 @@ export async function runAstroWizard(options: WizardOptions): Promise<void> {
     cloudRegion,
   });
 
-  const { relativeEnvFilePath, addedEnvVariables } =
-    await addOrUpdateEnvironmentVariablesStep({
-      variables: {
-        PUBLIC_POSTHOG_KEY: projectApiKey,
-        PUBLIC_POSTHOG_HOST: host,
-      },
-      installDir: options.installDir,
-      integration: Integration.astro,
-    });
-
   await runPrettierStep({
     installDir: options.installDir,
     integration: Integration.astro,
   });
-
-  const uploadedEnvVars = await uploadEnvironmentVariablesStep(
-    {
-      PUBLIC_POSTHOG_KEY: projectApiKey,
-      PUBLIC_POSTHOG_HOST: host,
-    },
-    {
-      integration: Integration.astro,
-      options,
-    },
-  );
 
   const addedEditorRules = await addEditorRulesStep({
     installDir: options.installDir,
@@ -136,8 +113,7 @@ export async function runAstroWizard(options: WizardOptions): Promise<void> {
     integration: Integration.astro,
     cloudRegion,
     addedEditorRules,
-    envFileChanged: addedEnvVariables ? relativeEnvFilePath : undefined,
-    uploadedEnvVars,
+    uploadedEnvVars: [],
   });
 
   clack.outro(outroMessage);
