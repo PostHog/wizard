@@ -94,10 +94,27 @@ export const INTEGRATION_CONFIG = {
     nextSteps:
       '• Call posthog.identify() when a user signs into your app\n• Call posthog.capture() to capture custom events in your app',
   },
+  [Integration.astro]: {
+    name: 'Astro',
+    filterPatterns: ['**/*.{astro,ts,js,jsx,tsx}'],
+    ignorePatterns: ['node_modules', 'dist', 'build', 'public', 'static'],
+    detect: async (options) => {
+      const packageJson = await getPackageDotJson(options);
+      return hasPackageInstalled('astro', packageJson);
+    },
+    generateFilesRules: '',
+    filterFilesRules: '',
+    docsUrl: 'https://posthog.com/docs/libraries/js',
+    defaultChanges:
+      '• Installed posthog-js package\n• Added PostHog component with initialization script\n• Created PostHogLayout for consistent analytics tracking\n• Setup environment variables for API key and host',
+    nextSteps:
+      '• Call posthog.identify() when a user signs into your app\n• Call posthog.capture() to capture custom events in your app\n• Use posthog.isFeatureEnabled() for feature flags',
+  },
 } as const satisfies Record<Integration, IntegrationConfig>;
 
 export const INTEGRATION_ORDER = [
   Integration.nextjs,
+  Integration.astro,
   Integration.svelte,
   Integration.reactNative,
   Integration.react,

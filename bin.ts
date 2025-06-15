@@ -64,7 +64,7 @@ yargs(hideBin(process.argv))
         },
         integration: {
           describe: 'Integration to set up',
-          choices: ['nextjs', 'react', 'svelte', 'react-native'],
+          choices: ['nextjs', 'astro', 'react', 'svelte', 'react-native'],
           type: 'string',
         },
       });

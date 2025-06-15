@@ -12,6 +12,7 @@ import { runReactWizard } from './react/react-wizard';
 import { analytics } from './utils/analytics';
 import { runSvelteWizard } from './svelte/svelte-wizard';
 import { runReactNativeWizard } from './react-native/react-native-wizard';
+import { runAstroWizard } from './astro/astro-wizard';
 import { EventEmitter } from 'events';
 import chalk from 'chalk';
 
@@ -74,6 +75,9 @@ export async function runWizard(argv: Args) {
       case Integration.reactNative:
         await runReactNativeWizard(wizardOptions);
         break;
+      case Integration.astro:
+        await runAstroWizard(wizardOptions);
+        break;
       default:
         clack.log.error('No setup wizard selected!');
     }
@@ -121,6 +125,7 @@ async function getIntegrationForSetup(
       message: 'What do you want to set up?',
       options: [
         { value: Integration.nextjs, label: 'Next.js' },
+        { value: Integration.astro, label: 'Astro' },
         { value: Integration.react, label: 'React' },
         { value: Integration.svelte, label: 'Svelte' },
         { value: Integration.reactNative, label: 'React Native' },
