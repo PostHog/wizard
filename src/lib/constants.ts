@@ -3,6 +3,7 @@ export enum Integration {
   react = 'react',
   svelte = 'svelte',
   reactNative = 'react-native',
+  astro = 'astro',
 }
 
 export function getIntegrationDescription(type: string): string {
@@ -15,6 +16,8 @@ export function getIntegrationDescription(type: string): string {
       return 'React Native';
     case Integration.svelte:
       return 'Svelte';
+    case Integration.astro:
+      return 'Astro';
     default:
       throw new Error(`Unknown integration ${type}`);
   }
