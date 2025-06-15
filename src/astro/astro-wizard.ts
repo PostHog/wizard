@@ -7,12 +7,9 @@ import {
   ensurePackageIsInstalled,
   getOrAskForProjectData,
   getPackageDotJson,
-  getPackageManager,
-  installPackage,
-  isUsingTypeScript,
   printWelcome,
 } from '../utils/clack-utils';
-import { getPackageVersion, hasPackageInstalled } from '../utils/package-json';
+import { getPackageVersion } from '../utils/package-json';
 import clack from '../utils/clack';
 import { Integration } from '../lib/constants';
 import { getAstroDocumentation } from './docs';
@@ -49,8 +46,6 @@ export async function runAstroWizard(options: WizardOptions): Promise<void> {
 
   const cloudRegion = options.cloudRegion ?? (await askForCloudRegion());
 
-  const typeScriptDetected = isUsingTypeScript(options);
-
   await confirmContinueIfNoOrDirtyGitRepo(options);
 
   const packageJson = await getPackageDotJson(options);
@@ -68,20 +63,7 @@ export async function runAstroWizard(options: WizardOptions): Promise<void> {
     cloudRegion,
   });
 
-  const sdkAlreadyInstalled = hasPackageInstalled('posthog-js', packageJson);
-
-  analytics.setTag('sdk-already-installed', sdkAlreadyInstalled);
-
-  const { packageManager: packageManagerFromInstallStep } =
-    await installPackage({
-      packageName: 'posthog-js',
-      packageNameDisplayLabel: 'posthog-js',
-      alreadyInstalled: !!packageJson?.dependencies?.['posthog-js'],
-      forceInstall: options.forceInstall,
-      askBeforeUpdating: false,
-      installDir: options.installDir,
-      integration: Integration.astro,
-    });
+  clack.log.info('Heading to include the PostHogSnippet in your Astro project');
 
   const relevantFiles = await getRelevantFilesForIntegration({
     installDir: options.installDir,
@@ -89,7 +71,8 @@ export async function runAstroWizard(options: WizardOptions): Promise<void> {
   });
 
   const installationDocumentation = getAstroDocumentation({
-    language: typeScriptDetected ? 'typescript' : 'javascript',
+    projectApiKey,
+    host,
   });
 
   clack.log.info('Reviewing PostHog documentation for Astro');
@@ -120,9 +103,6 @@ export async function runAstroWizard(options: WizardOptions): Promise<void> {
       installDir: options.installDir,
       integration: Integration.astro,
     });
-
-  const packageManagerForOutro =
-    packageManagerFromInstallStep ?? (await getPackageManager(options));
 
   await runPrettierStep({
     installDir: options.installDir,
@@ -156,7 +136,6 @@ export async function runAstroWizard(options: WizardOptions): Promise<void> {
     integration: Integration.astro,
     cloudRegion,
     addedEditorRules,
-    packageManager: packageManagerForOutro,
     envFileChanged: addedEnvVariables ? relativeEnvFilePath : undefined,
     uploadedEnvVars,
   });
