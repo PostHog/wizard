@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.3.1](https://github.com/PostHog/wizard/compare/v1.3.0...v1.3.1) (2025-06-23)
+
+
+### Bug Fixes
+
+* package not installed tracked twice ([#66](https://github.com/PostHog/wizard/issues/66)) ([31fe452](https://github.com/PostHog/wizard/commit/31fe45221d2d5354fec50125d554652dbba95bbb))
+* supported client detection ([#68](https://github.com/PostHog/wizard/issues/68)) ([60a96b1](https://github.com/PostHog/wizard/commit/60a96b1669e10a0aa74f21d69faa2d400d3db495))
+
 ## [1.3.0](https://github.com/PostHog/wizard/compare/v1.2.2...v1.3.0) (2025-06-06)
 
 
