@@ -56,7 +56,7 @@ Example:
       }),
       (e.__SV = 1));
   })(document, window.posthog || []);
-  posthog.init('${projectApiKey}', { api_host: '${host}' });
+  posthog.init('${projectApiKey}', { api_host: '${host}', defaults: '2025-05-24' });
 </script>
 --------------------------------------------------
 
