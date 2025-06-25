@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.4.0](https://github.com/PostHog/wizard/compare/v1.3.1...v1.4.0) (2025-06-25)
+
+
+### Features
+
+* add Astro support to PostHog Wizard ([#67](https://github.com/PostHog/wizard/issues/67)) ([7d28b6a](https://github.com/PostHog/wizard/commit/7d28b6ab5b5da2c756107b4f06c064010af586c6))
+
 ## [1.3.1](https://github.com/PostHog/wizard/compare/v1.3.0...v1.3.1) (2025-06-23)
 
 
