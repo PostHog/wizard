@@ -19,6 +19,7 @@ if (!satisfies(process.version, NODE_VERSION_RANGE)) {
 import { runMCPInstall, runMCPRemove } from './src/mcp';
 import type { CloudRegion, WizardOptions } from './src/utils/types';
 import { runWizard } from './src/run';
+import { runEventSetupWizard } from './src/event-setup';
 
 yargs(hideBin(process.argv))
   // global options
@@ -71,6 +72,16 @@ yargs(hideBin(process.argv))
     },
     (argv) => {
       void runWizard(argv as unknown as WizardOptions);
+    },
+  )
+  .command(
+    'event-setup',
+    'Run the event setup wizard',
+    (yargs) => {
+      return yargs.options({});
+    },
+    (argv) => {
+      void runEventSetupWizard(argv as unknown as WizardOptions);
     },
   )
   .command('mcp <command>', 'MCP server management commands', (yargs) => {
