@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.4.1](https://github.com/PostHog/wizard/compare/v1.4.0...v1.4.1) (2025-06-30)
+
+
+### Bug Fixes
+
+* be explicit about defaults in docs ([#77](https://github.com/PostHog/wizard/issues/77)) ([9f33e53](https://github.com/PostHog/wizard/commit/9f33e53d4db2e7c1e32a0e7b517b5996ee0ceed3))
+* remove router import ([#75](https://github.com/PostHog/wizard/issues/75)) ([1fc8872](https://github.com/PostHog/wizard/commit/1fc8872581809614dab05cb2db84663aad1a447f))
+
 ## [1.4.0](https://github.com/PostHog/wizard/compare/v1.3.1...v1.4.0) (2025-06-25)
 
 
