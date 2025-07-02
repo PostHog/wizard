@@ -36,7 +36,7 @@ export async function runEventSetupWizard(
   if (options.debug) {
     enableDebugLogs();
   }
-  
+
   clack.intro(
     `Let's get the basics of event tracking ready in your app. We'll generate a plan you can follow yourself, or with the help of an agent. You can always edit it later.
     
@@ -56,7 +56,7 @@ export async function runEventSetupWizard(
   );
 
   const cloudRegion = options.cloudRegion ?? (await askForCloudRegion());
-  
+
   const { wizardHash } = await getOrAskForProjectData({
     ...options,
     cloudRegion,
@@ -78,18 +78,18 @@ export async function runEventSetupWizard(
   // Get AI suggestions for events based on the North Star metric
   const s = clack.spinner();
   s.start('Analyzing your North Star metric to suggest relevant events');
-  
+
   let eventSuggestions: EventSuggestion[] = [];
   try {
-    const suggestionsPrompt = `For the metric "${northStarMetric}", provide 5 event names (lowercase-hyphenated like user-signed-up) and their descriptions. Events should directly influence this metric.`;
-    
+    const suggestionsPrompt = `For the metric "${northStarMetric}", provide 5 event names (lowercase-hyphenated like user-signed-up) and their descriptions. Events should be high-level, ocurring across the entire funnel leading to the North Star metric.`;
+
     const response = await query({
       message: suggestionsPrompt,
       region: cloudRegion,
       schema: EventSuggestionsSchema,
       wizardHash,
     });
-    
+
     // Combine names and descriptions into EventSuggestion objects
     eventSuggestions = response.names.map((name: string, index: number) => ({
       name,
@@ -118,12 +118,12 @@ export async function runEventSetupWizard(
 
   const events: Array<{ name: string; location: string; description?: string }> = [];
   const maxEvents = 8;
-  
+
   // Get relevant files for location suggestions
   const packageJson = await getPackageDotJson(options);
   const isNextJs = hasPackageInstalled('next', packageJson);
   let relevantFiles: string[] = [];
-  
+
   if (isNextJs) {
     relevantFiles = await getRelevantFilesForIntegration({
       installDir: options.installDir,
@@ -136,21 +136,21 @@ export async function runEventSetupWizard(
     if (!isNextJs || relevantFiles.length === 0) {
       return undefined;
     }
-    
+
     try {
       const locationPrompt = `Given a Next.js application with these files:\n${relevantFiles.slice(0, 50).join('\n')}\n\nWhere would be the most appropriate location to trigger the "${eventName}" event? ${eventDescription ? `This event ${eventDescription}.` : ''} Return just the file path, choosing from the existing files listed above.`;
-      
+
       const LocationSchema = z.object({
         filePath: z.string(),
       });
-      
+
       const response = await query({
         message: locationPrompt,
         region: cloudRegion,
         schema: LocationSchema,
         wizardHash,
       });
-      
+
       return response.filePath;
     } catch {
       return undefined;
@@ -165,31 +165,31 @@ export async function runEventSetupWizard(
         initialValue: true,
       }),
     );
-    
+
     if (useAISuggestions) {
       for (const suggestion of eventSuggestions) {
         const s = clack.spinner();
         s.start(`Finding best location for "${suggestion.name}" event`);
-        
+
         const suggestedLocation = await getSuggestedLocation(suggestion.name, suggestion.description);
         s.stop();
-        
+
         const location = await filePickerText({
           message: `Where should the "${suggestion.name}" event be triggered?`,
           placeholder: suggestedLocation || 'Type @ to browse files',
           cwd: options.installDir,
         });
-        
+
         if (clack.isCancel(location)) {
           abort('Setup cancelled');
         }
-        
+
         events.push({
           name: suggestion.name,
           description: suggestion.description,
           location: location as string,
         });
-        
+
         if (events.length >= maxEvents) {
           break;
         }
@@ -209,10 +209,10 @@ export async function runEventSetupWizard(
     if (!eventName) {
       break;
     }
-    
+
     const s = clack.spinner();
     s.start(`Finding best location for "${eventName}" event`);
-    
+
     const suggestedLocation = await getSuggestedLocation(eventName);
     s.stop();
 
@@ -260,20 +260,20 @@ export async function runEventSetupWizard(
   if (isNextJs) {
     const nextVersion = getPackageVersion('next', packageJson);
     const isNext15_3Plus = nextVersion && semver.gte(nextVersion, '15.3.0');
-    
+
     if (isNext15_3Plus) {
       // Check for instrumentation-client file
       try {
-        const instrumentationFiles = relevantFiles.filter(f => 
-          f.includes('instrumentation') && 
+        const instrumentationFiles = relevantFiles.filter(f =>
+          f.includes('instrumentation') &&
           (f.endsWith('.ts') || f.endsWith('.js')) &&
           (f.includes('client') || f.includes('Client'))
         );
-        
+
         if (instrumentationFiles.length > 0) {
           canAutoImplement = true;
         }
-      } catch {}
+      } catch { }
     }
   }
 
@@ -284,15 +284,15 @@ export async function runEventSetupWizard(
         initialValue: true,
       }),
     );
-    
+
     if (autoImplement) {
       const s = clack.spinner();
       s.start('Adding event tracking code to your application');
-      
+
       try {
         // Generate the event tracking documentation
         const eventTrackingDocs = generateEventTrackingDocumentation(events);
-        
+
         // Get files that need to be changed
         const filesToChange = await getFilesToChange({
           integration: Integration.nextjs,
@@ -301,7 +301,7 @@ export async function runEventSetupWizard(
           wizardHash,
           cloudRegion,
         });
-        
+
         // Generate and apply the changes
         await generateFileChangesForIntegration({
           integration: Integration.nextjs,
@@ -311,9 +311,9 @@ export async function runEventSetupWizard(
           documentation: eventTrackingDocs,
           cloudRegion,
         });
-        
+
         s.stop('Event tracking code added successfully!');
-        
+
         clack.outro(
           `Success! Your event tracking plan has been saved to ${chalk.cyan(
             fileName,
@@ -322,7 +322,7 @@ export async function runEventSetupWizard(
       } catch (error) {
         s.stop('Failed to add event tracking code automatically');
         clack.log.warn('Could not automatically add event tracking code. You can add it manually using the tracking plan.');
-        
+
         clack.outro(
           `Your event tracking plan has been saved to ${chalk.cyan(
             fileName,
@@ -349,7 +349,7 @@ export async function runEventSetupWizard(
 function generateEventTrackingDocumentation(events: Array<{ name: string; location: string; description?: string }>): string {
   let docs = `# Adding PostHog Event Tracking\n\n`;
   docs += `Import posthog from your PostHog client configuration and add these events:\n\n`;
-  
+
   events.forEach(event => {
     docs += `## Event: ${event.name}\n`;
     if (event.description) {
@@ -363,7 +363,7 @@ function generateEventTrackingDocumentation(events: Array<{ name: string; locati
     docs += `})\n`;
     docs += `\`\`\`\n\n`;
   });
-  
+
   return docs;
 }
 
