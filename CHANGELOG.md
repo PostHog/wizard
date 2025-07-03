@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.5.3](https://github.com/PostHog/wizard/compare/v1.5.2...v1.5.3) (2025-07-03)
+
+
+### Bug Fixes
+
+* remove pr comment at end of workflow ([#79](https://github.com/PostHog/wizard/issues/79)) ([a858f5b](https://github.com/PostHog/wizard/commit/a858f5bb859545b7020d4f1ed8b88e5972878a22))
+
 ## [1.5.2](https://github.com/PostHog/wizard/compare/v1.4.0...v1.5.2) (2025-06-30)
 
 
