@@ -21,6 +21,7 @@ import type { CloudRegion, WizardOptions } from './src/utils/types';
 import { runWizard } from './src/run';
 
 yargs(hideBin(process.argv))
+  .env('POSTHOG_WIZARD')
   // global options
   .options({
     debug: {
@@ -32,9 +33,15 @@ yargs(hideBin(process.argv))
       describe: 'PostHog cloud region\nenv: POSTHOG_WIZARD_REGION',
       choices: ['us', 'eu'],
       type: 'string',
+      default: 'us',
+    },
+    eu: {
+      describe: 'Use EU region (shorthand for --region eu)',
+      type: 'boolean',
+      default: false,
     },
     default: {
-      default: false,
+      default: true,
       describe:
         'Use default options for all prompts\nenv: POSTHOG_WIZARD_DEFAULT',
       type: 'boolean',
@@ -70,7 +77,11 @@ yargs(hideBin(process.argv))
       });
     },
     (argv) => {
-      void runWizard(argv as unknown as WizardOptions);
+      const options = { ...argv };
+      if (argv.eu) {
+        options.region = 'eu';
+      }
+      void runWizard(options as unknown as WizardOptions);
     },
   )
   .command('mcp <command>', 'MCP server management commands', (yargs) => {
@@ -82,8 +93,12 @@ yargs(hideBin(process.argv))
           return yargs.options({});
         },
         (argv) => {
+          const options = { ...argv };
+          if (argv.eu) {
+            options.region = 'eu';
+          }
           void runMCPInstall(
-            argv as unknown as { signup: boolean; region?: CloudRegion },
+            options as unknown as { signup: boolean; region?: CloudRegion },
           );
         },
       )

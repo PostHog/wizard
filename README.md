@@ -21,21 +21,34 @@ Currently the wizard can be used for **React, NextJS, Svelte, Astro and React Na
 projects. If you have other integrations you would like the wizard to support,
 please open a [GitHub issue](https://github.com/posthog/wizard/issues)!
 
+## MCP Commands
+
+The wizard also includes commands for managing PostHog MCP (Model Context Protocol) servers:
+
+```bash
+# Install PostHog MCP server to supported clients
+npx @posthog/wizard mcp add
+
+# Remove PostHog MCP server from supported clients
+npx @posthog/wizard mcp remove
+```
+
 # Options
 
 The following CLI arguments are available:
 
-| Option            | Description                                                                | Type    | Default                         | Choices                                     | Environment Variable         |
-| ----------------- | -------------------------------------------------------------------------- | ------- | ------------------------------- | ------------------------------------------- | ---------------------------- |
-| `--help`          | Show help                                                                  | boolean |                                 |                                             |                              |
-| `--version`       | Show version number                                                        | boolean |                                 |                                             |                              |
-| `--debug`         | Enable verbose logging                                                     | boolean | `false`                         |                                             | `POSTHOG_WIZARD_DEBUG`       |
-| `--integration`   | Choose the integration to setup                                            | choices | Select integration during setup | "nextjs", "astro", "react", "svelte", "react-native" | `POSTHOG_WIZARD_INTEGRATION` |
-| `--force-install` | Force install the SDK NPM package (use with caution!)                      | boolean | `false`                         |                                             |                              |
-| `--install-dir`   | Relative path to install in                                                | string  | `.`                             |                                             | `POSTHOG_WIZARD_INSTALL_DIR` |
-| `--region`        | PostHog region to use                                                      | choices |                                 | "us", "eu"                                  | `POSTHOG_WIZARD_REGION`      |
-| `--default`       | Select the default option for all questions automatically (where possible) | boolean | `false`                         |                                             | `POSTHOG_WIZARD_DEFAULT`     |
-| `--signup`        | Create a new PostHog account during setup                                  | boolean | `false`                         |                                             | `POSTHOG_WIZARD_SIGNUP`      |
+| Option            | Description                                                                | Type    | Default                         | Choices                                              | Environment Variable              |
+| ----------------- | -------------------------------------------------------------------------- | ------- | ------------------------------- | ---------------------------------------------------- | --------------------------------- |
+| `--help`          | Show help                                                                  | boolean |                                 |                                                      |                                   |
+| `--version`       | Show version number                                                        | boolean |                                 |                                                      |                                   |
+| `--debug`         | Enable verbose logging                                                     | boolean | `false`                         |                                                      | `POSTHOG_WIZARD_DEBUG`            |
+| `--region`        | PostHog cloud region                                                       | string  | `us`                            | "us", "eu"                                           | `POSTHOG_WIZARD_REGION`           |
+| `--eu`            | Use EU region (shorthand for --region eu)                                 | boolean | `false`                         |                                                      |                                   |
+| `--default`       | Use default options for all prompts                                       | boolean | `true`                          |                                                      | `POSTHOG_WIZARD_DEFAULT`          |
+| `--signup`        | Create a new PostHog account during setup                                  | boolean | `false`                         |                                                      | `POSTHOG_WIZARD_SIGNUP`           |
+| `--integration`   | Integration to set up                                                      | string  |                                 | "nextjs", "astro", "react", "svelte", "react-native" |                                   |
+| `--force-install` | Force install packages even if peer dependency checks fail                 | boolean | `false`                         |                                                      | `POSTHOG_WIZARD_FORCE_INSTALL`    |
+| `--install-dir`   | Directory to install PostHog in                                            | string  |                                 |                                                      | `POSTHOG_WIZARD_INSTALL_DIR`      |
 
 > Note: A large amount of the scaffolding for this came from the amazing Sentry
 > wizard, which you can find [here](https://github.com/getsentry/sentry-wizard)
