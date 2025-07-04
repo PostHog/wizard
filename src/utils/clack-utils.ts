@@ -12,7 +12,7 @@ import { debug } from './debug';
 import { type PackageDotJson, hasPackageInstalled } from './package-json';
 import {
   type PackageManager,
-  detectPackageManger,
+  detectAllPackageManagers,
   packageManagers,
 } from './package-manager';
 import { fulfillsVersionRange } from './semver';
@@ -459,17 +459,31 @@ export async function updatePackageDotJson(
 export async function getPackageManager({
   installDir,
 }: Pick<WizardOptions, 'installDir'>): Promise<PackageManager> {
-  const detectedPackageManager = detectPackageManger({ installDir });
+  const detectedPackageManagers = detectAllPackageManagers({ installDir });
 
-  if (detectedPackageManager) {
+  // If exactly one package manager detected, use it automatically
+  if (detectedPackageManagers.length === 1) {
+    const detectedPackageManager = detectedPackageManagers[0];
+    analytics.setTag('package-manager', detectedPackageManager.name);
     return detectedPackageManager;
   }
+
+  // If multiple or no package managers detected, prompt user to select
+  const options =
+    detectedPackageManagers.length > 0
+      ? detectedPackageManagers
+      : packageManagers;
+
+  const message =
+    detectedPackageManagers.length > 1
+      ? 'Multiple package managers detected. Please select one:'
+      : 'Please select your package manager.';
 
   const selectedPackageManager: PackageManager | symbol =
     await abortIfCancelled(
       clack.select({
-        message: 'Please select your package manager.',
-        options: packageManagers.map((packageManager) => ({
+        message,
+        options: options.map((packageManager) => ({
           value: packageManager,
           label: packageManager.label,
         })),
@@ -477,7 +491,6 @@ export async function getPackageManager({
     );
 
   analytics.setTag('package-manager', selectedPackageManager.name);
-
   return selectedPackageManager;
 }
 

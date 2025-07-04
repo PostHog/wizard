@@ -229,17 +229,20 @@ export const EXPO: PackageManager = {
 
 export const packageManagers = [BUN, YARN_V1, YARN_V2, PNPM, NPM, EXPO];
 
-export function detectPackageManger({
+export function detectAllPackageManagers({
   installDir,
-}: Pick<WizardOptions, 'installDir'>): PackageManager | null {
+}: Pick<WizardOptions, 'installDir'>): PackageManager[] {
   return traceStep('detect-package-manager', () => {
+    const detectedManagers: PackageManager[] = [];
     for (const packageManager of packageManagers) {
       if (packageManager.detect({ installDir })) {
-        analytics.setTag('package-manager', packageManager.name);
-        return packageManager;
+        detectedManagers.push(packageManager);
       }
     }
-    analytics.setTag('package-manager', 'not-detected');
-    return null;
+
+    if (detectedManagers.length === 0) {
+      analytics.setTag('package-manager', 'not-detected');
+    }
+    return detectedManagers;
   });
 }
