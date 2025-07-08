@@ -9,6 +9,7 @@ interface FilePickerOptions {
   initialValue?: string;
   cwd?: string;
   maxDisplayedFiles?: number;
+  suggestedFile?: string;
 }
 
 export async function filePickerText(opts: FilePickerOptions): Promise<string> {
@@ -30,11 +31,24 @@ export async function filePickerText(opts: FilePickerOptions): Promise<string> {
     .sort();
 
   // Add options for manual entry and skip
-  const allOptions = [
+  const fileOptions = files.map(file => ({ name: file, value: file }));
+  
+  // Build options array with suggested file at top if provided
+  let allOptions = [];
+  
+  // Add suggested file first if it exists and is valid
+  if (opts.suggestedFile && files.includes(opts.suggestedFile)) {
+    allOptions.push({ 
+      name: `⭐ ${opts.suggestedFile} (suggested)`, 
+      value: opts.suggestedFile 
+    });
+  }
+  
+  allOptions.push(
     { name: '⏩ Skip (no location)', value: '__skip__' },
     { name: '✏️  Enter path manually', value: '__manual__' },
-    ...files.map(file => ({ name: file, value: file }))
-  ];
+    ...fileOptions
+  );
 
   const searchFiles = async (_answersSoFar: any, input: string) => {
     if (!input) {

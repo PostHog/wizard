@@ -20,6 +20,8 @@ import { runMCPInstall, runMCPRemove } from './src/mcp';
 import type { CloudRegion, WizardOptions } from './src/utils/types';
 import { runWizard } from './src/run';
 import { runEventSetupWizard } from './src/event-setup';
+import { readEnvironment } from './src/utils/environment';
+import path from 'path';
 
 yargs(hideBin(process.argv))
   // global options
@@ -78,10 +80,41 @@ yargs(hideBin(process.argv))
     'event-setup',
     'Run the event setup wizard',
     (yargs) => {
-      return yargs.options({});
+      return yargs.options({
+        'install-dir': {
+          describe:
+            'Directory to run the wizard in\nenv: POSTHOG_WIZARD_INSTALL_DIR',
+          type: 'string',
+        },
+      });
     },
     (argv) => {
-      void runEventSetupWizard(argv as unknown as WizardOptions);
+      const finalArgs = {
+        ...argv,
+        ...readEnvironment(),
+      } as any;
+
+      let resolvedInstallDir: string;
+      if (finalArgs.installDir) {
+        if (path.isAbsolute(finalArgs.installDir)) {
+          resolvedInstallDir = finalArgs.installDir;
+        } else {
+          resolvedInstallDir = path.join(process.cwd(), finalArgs.installDir);
+        }
+      } else {
+        resolvedInstallDir = process.cwd();
+      }
+
+      const wizardOptions: WizardOptions = {
+        debug: finalArgs.debug ?? false,
+        installDir: resolvedInstallDir,
+        cloudRegion: finalArgs.region as CloudRegion | undefined,
+        default: finalArgs.default ?? false,
+        signup: finalArgs.signup ?? false,
+        forceInstall: false,
+      };
+
+      void runEventSetupWizard(wizardOptions);
     },
   )
   .command('mcp <command>', 'MCP server management commands', (yargs) => {

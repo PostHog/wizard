@@ -8,27 +8,32 @@ import {
 import clack from './utils/clack';
 import { WizardOptions } from './utils/types';
 import * as fs from 'fs/promises';
+import * as path from 'path';
 import chalk from 'chalk';
-import { filePickerText } from './utils/file-picker-prompt';
 import { query } from './utils/query';
 import { z } from 'zod';
 import {
-  getFilesToChange,
-  getRelevantFilesForIntegration,
-  generateFileChangesForIntegration,
+  getAllFilesInProject,
+  updateFile,
 } from './utils/file-utils';
-import { Integration } from './lib/constants';
 import { getPackageVersion, hasPackageInstalled } from './utils/package-json';
 import * as semver from 'semver';
-import { enableDebugLogs } from './utils/debug';
+import { enableDebugLogs, debug } from './utils/debug';
 
-// Schema for AI event suggestions
-const EventSuggestionsSchema = z.object({
-  names: z.array(z.string()),
-  descriptions: z.array(z.string()),
+// Schema for file selection from AI
+const FileSelectionSchema = z.object({
+  files: z.array(z.string()).max(10),
 });
 
-type EventSuggestion = { name: string; description?: string; suggestedLocation?: string };
+// Schema for enhanced file with events
+const EnhancedFileSchema = z.object({
+  filePath: z.string(),
+  content: z.string(),
+  events: z.array(z.object({
+    name: z.string(),
+    description: z.string(),
+  })),
+});
 
 export async function runEventSetupWizard(
   options: WizardOptions,
@@ -38,20 +43,11 @@ export async function runEventSetupWizard(
   }
 
   clack.intro(
-    `Let's get the basics of event tracking ready in your app. We'll generate a plan you can follow yourself, or with the help of an agent. You can always edit it later.
+    `Let's do a first pass on PostHog event tracking for your project.
     
-    To start, let's decide on a ${chalk.bold('North Star metric')}. A good North Star measures whether your product is on the right track.
-    
-    Examples:
-    
-    - ${chalk.bold('Total rides')} - Perfect for a ride-sharing app.
-    - ${chalk.bold('Daily active users')} - Great for a social media platform.
-    - ${chalk.bold('Signups')} - A good starting point for a very early-stage app.
-    
-    What top-level number could we track to measure the progress of your product?
+    Analyzing your project structure. Stand by to receive changes. Use git to discard any events you're not happy with.
 
-    Learn more about picking a North Star metric: https://posthog.com/docs/new-to-posthog/getting-hogpilled
-    
+    We'll start by selecting 10 files, adding up to two events to each. This will give you a great starting point for your event tracking.
     `,
   );
 
@@ -62,308 +58,206 @@ export async function runEventSetupWizard(
     cloudRegion,
   });
 
-  const northStarMetric = await abortIfCancelled(
-    clack.text({
-      message: "What should we call your product's North Star metric?",
-      placeholder: 'Total hedgehogs',
-    }),
-  );
-
-  clack.note(
-    `Great! We'll call it ${chalk.bold(northStarMetric)}.
-    
-    Now, let me suggest some events that could influence this metric...`,
-  );
-
-  // Get AI suggestions for events based on the North Star metric
-  const s = clack.spinner();
-  s.start('Analyzing your North Star metric to suggest relevant events');
-
-  let eventSuggestions: EventSuggestion[] = [];
-  try {
-    const suggestionsPrompt = `For the metric "${northStarMetric}", provide 5 event names (lowercase-hyphenated like user-signed-up) and their descriptions. Events should be high-level, ocurring across the entire funnel leading to the North Star metric.`;
-
-    const response = await query({
-      message: suggestionsPrompt,
-      region: cloudRegion,
-      schema: EventSuggestionsSchema,
-      wizardHash,
-    });
-
-    // Combine names and descriptions into EventSuggestion objects
-    eventSuggestions = response.names.map((name: string, index: number) => ({
-      name,
-      description: response.descriptions[index] || `Track when ${name} occurs`,
-    }));
-    s.stop('Generated event suggestions');
-  } catch (error) {
-    s.stop('Could not generate suggestions, proceeding with manual entry');
-    clack.log.warn('AI suggestions unavailable, you can enter events manually');
-  }
-
-  // Present suggestions to the user
-  if (eventSuggestions.length > 0) {
-    clack.log.info('Here are some suggested events based on your North Star metric:');
-    eventSuggestions.forEach((suggestion, index) => {
-      clack.log.info(`  ${index + 1}. ${chalk.bold(suggestion.name)} - ${suggestion.description}`);
-    });
-    clack.log.info('\nYou can use these suggestions or add your own events.');
-  }
-
-  clack.note(
-    `Let's set up the events for your tracking plan.
-    
-    We want to keep this simple: not more than 8 events to get started.`,
-  );
-
-  const events: Array<{ name: string; location: string; description?: string }> = [];
-  const maxEvents = 8;
-
-  // Get relevant files for location suggestions
+  // Check if this is a Next.js 15.3+ project with instrumentation-client
   const packageJson = await getPackageDotJson(options);
   const isNextJs = hasPackageInstalled('next', packageJson);
-  let relevantFiles: string[] = [];
 
-  if (isNextJs) {
-    relevantFiles = await getRelevantFilesForIntegration({
-      installDir: options.installDir,
-      integration: Integration.nextjs,
-    });
+  if (!isNextJs) {
+    abort('This feature is only available for Next.js projects.');
   }
 
-  // Helper function to get AI-suggested file locations
-  const getSuggestedLocation = async (eventName: string, eventDescription?: string): Promise<string | undefined> => {
-    if (!isNextJs || relevantFiles.length === 0) {
-      return undefined;
-    }
+  const nextVersion = getPackageVersion('next', packageJson);
+  const isNext15_3Plus = nextVersion && semver.gte(nextVersion, '15.3.0');
+
+  if (!isNext15_3Plus) {
+    abort('This feature requires Next.js 15.3.0 or higher.');
+  }
+
+  // Check for instrumentation-client file
+  const allFiles = await getAllFilesInProject(options.installDir);
+  const instrumentationFiles = allFiles.filter(f =>
+    f.includes('instrumentation') &&
+    (f.endsWith('.ts') || f.endsWith('.js')) &&
+    (f.includes('client') || f.includes('Client'))
+  );
+
+  if (instrumentationFiles.length === 0) {
+    abort('No instrumentation-client file found. Please set up Next.js instrumentation first.');
+  }
+
+  // Get the project file tree
+  const s = clack.spinner();
+  s.start('Analyzing your project structure');
+
+  const projectFiles = await getAllFilesInProject(options.installDir);
+  const relativeFiles = projectFiles
+    .map(f => path.relative(options.installDir, f))
+    .filter(f => {
+      // Exclude instrumentation files and next.config
+      const isInstrumentation = f.includes('instrumentation') &&
+        (f.endsWith('.ts') || f.endsWith('.js'));
+      const isNextConfig = f.startsWith('next.config.') || f === 'next.config';
+      return !isInstrumentation && !isNextConfig;
+    });
+
+  debug('Total files found:', projectFiles.length);
+  debug('Files after filtering:', relativeFiles.length);
+  s.stop('Project structure analyzed');
+
+  // Send file tree to AI to get 10 most useful files
+  s.start('Selecting some files to enhance with events...');
+
+  const fileSelectionPrompt = `Given this Next.js 15.3+ project structure and package.json, select the 10 most useful files for adding PostHog analytics events. Focus on:
+  - User interaction points (buttons, forms, navigation)
+  - Key user flows (auth, checkout, main features)
+  - Business-critical paths
+  - Files that represent important user actions
+  
+  Package.json:
+  ${JSON.stringify(packageJson, null, 2)}
+  
+  Project files:
+  ${relativeFiles.join('\n')}
+  
+  Return exactly 10 file paths that would benefit most from analytics tracking.`;
+
+  let selectedFiles: string[] = [];
+  try {
+    const response = await query({
+      message: fileSelectionPrompt,
+      region: cloudRegion,
+      schema: FileSelectionSchema,
+      wizardHash,
+    });
+    selectedFiles = response.files;
+    s.stop(`Selected ${selectedFiles.length} files for event tracking`);
+  } catch (error) {
+    s.stop('Failed to select files');
+    abort('Could not analyze project structure. Please try again.');
+  }
+
+  // Read the selected files and enhance them with events
+  clack.log.info('Files selected for event tracking:');
+  selectedFiles.forEach((file, index) => {
+    clack.log.info(`  ${index + 1}. ${file}`);
+  });
+
+  const enhancedFiles: Array<{
+    filePath: string;
+    events: Array<{ name: string; description: string }>;
+  }> = [];
+
+  clack.log.info('\nEnhancing files with event tracking. Changes will be applied as they come in. Use your git interface to review new events...');
+
+  for (const filePath of selectedFiles) {
+    const fileSpinner = clack.spinner();
+    fileSpinner.start(`Analyzing ${filePath}`);
 
     try {
-      const locationPrompt = `Given a Next.js application with these files:\n${relevantFiles.slice(0, 50).join('\n')}\n\nWhere would be the most appropriate location to trigger the "${eventName}" event? ${eventDescription ? `This event ${eventDescription}.` : ''} Return just the file path, choosing from the existing files listed above.`;
+      const fullPath = path.join(options.installDir, filePath);
+      const fileContent = await fs.readFile(fullPath, 'utf8');
 
-      const LocationSchema = z.object({
-        filePath: z.string(),
-      });
+      // Determine if this is client or server code
+      const isClientCode = filePath.includes('app/') || filePath.includes('pages/') ||
+        filePath.includes('components/') || fileContent.includes('"use client"');
+
+      const enhancePrompt = `Enhance this ${isClientCode ? 'client-side' : 'server-side'} Next.js file with 1-2 meaningful PostHog events.
+      
+      Rules:
+      - Import ${isClientCode ? 'posthog-js' : 'posthog-node'} appropriately
+      - Add 1-2 high-value events that track important user actions
+      - Use descriptive event names (lowercase-hyphenated)
+      - Include relevant properties with events
+      - Ensure the code remains functional and follows Next.js patterns
+      - For server code: initialize PostHog properly
+      - Do not set timestamps on events; PostHog will do this automatically
+      - Do not initialize PostHog in the file; assume it has already been initialized
+      - Do not change the formatting of the file; only add events
+      
+      File path: ${filePath}
+      File content:
+      ${fileContent}
+      
+      Return the enhanced file content and list the events added.`;
 
       const response = await query({
-        message: locationPrompt,
+        message: enhancePrompt,
         region: cloudRegion,
-        schema: LocationSchema,
+        schema: EnhancedFileSchema,
         wizardHash,
       });
 
-      return response.filePath;
-    } catch {
-      return undefined;
-    }
-  };
+      // Apply changes immediately
+      if (response.content !== fileContent) {
+        await updateFile({
+          filePath,
+          oldContent: fileContent,
+          newContent: response.content,
+        }, options);
 
-  // If we have suggestions, offer them first
-  if (eventSuggestions.length > 0) {
-    const useAISuggestions = await abortIfCancelled(
-      clack.confirm({
-        message: 'Would you like to use the AI-suggested events?',
-        initialValue: true,
-      }),
-    );
-
-    if (useAISuggestions) {
-      for (const suggestion of eventSuggestions) {
-        const s = clack.spinner();
-        s.start(`Finding best location for "${suggestion.name}" event`);
-
-        const suggestedLocation = await getSuggestedLocation(suggestion.name, suggestion.description);
-        s.stop();
-
-        const location = await filePickerText({
-          message: `Where should the "${suggestion.name}" event be triggered?`,
-          placeholder: suggestedLocation || 'Type @ to browse files',
-          cwd: options.installDir,
+        enhancedFiles.push({
+          filePath,
+          events: response.events,
         });
 
-        if (clack.isCancel(location)) {
-          abort('Setup cancelled');
-        }
-
-        events.push({
-          name: suggestion.name,
-          description: suggestion.description,
-          location: location as string,
-        });
-
-        if (events.length >= maxEvents) {
-          break;
-        }
+        fileSpinner.stop(`✓ Enhanced ${filePath} with ${response.events.length} events`);
+      } else {
+        fileSpinner.stop(`No changes needed for ${filePath}`);
       }
+    } catch (error) {
+      fileSpinner.stop(`✗ Failed to enhance ${filePath}`);
+      debug('Error enhancing file:', error);
     }
   }
 
-  // Allow user to add additional custom events
-  while (events.length < maxEvents) {
-    const eventName = await abortIfCancelled(
-      clack.text({
-        message: `Enter an event name – or leave blank to finish:`,
-        placeholder: 'e.g., user-signed-up',
-      }),
-    );
+  // All files have been updated immediately during enhancement
 
-    if (!eventName) {
-      break;
-    }
-
-    const s = clack.spinner();
-    s.start(`Finding best location for "${eventName}" event`);
-
-    const suggestedLocation = await getSuggestedLocation(eventName);
-    s.stop();
-
-    const location = await filePickerText({
-      message: `Where should the "${eventName}" event be triggered?`,
-      placeholder: suggestedLocation || 'Type @ to browse files',
-      cwd: options.installDir,
-    });
-
-    if (clack.isCancel(location)) {
-      abort('Setup cancelled');
-    }
-
-    events.push({
-      name: eventName,
-      location: location as string
-    });
-  }
-
+  // Generate event tracking plan
   const generateMarkdown = () => {
-    let md = `# Event tracking plan\n\n`;
-    md += `## 🧭 North Star Metric: ${northStarMetric}\n\n`;
-    md += `This document outlines the key events to track in order to measure and improve our North Star metric.\n\n`;
-    md += `## Events\n\n`;
-    events.forEach((event) => {
-      md += `### ${event.name}\n`;
-      md += `- **Description:** ${event.description || '[Add description here]'}\n`;
-      md += `- **Location:** ${event.location}\n`;
-      md += `- **Complete:** [ ]\n\n`;
+    let md = `# Event Tracking Plan\n\n`;
+    md += `This document lists all PostHog events that have been automatically added to your Next.js application.\n\n`;
+    md += `## Events by File\n\n`;
+
+    enhancedFiles.forEach((file) => {
+      if (file.events.length > 0) {
+        md += `### ${file.filePath}\n\n`;
+        file.events.forEach(event => {
+          md += `- **${event.name}**: ${event.description}\n`;
+        });
+        md += `\n`;
+      }
     });
+
     md += `\n---\n\n`;
-    md += `## 📊 Creating a Funnel Insight in PostHog\n\n`;
-    md += `Once these events are implemented, you can use the PostHog MCP to create a funnel insight. This will help you visualize how users progress through these key events and identify where they drop off.\n\n`;
-    md += `Learn more about creating funnels: https://posthog.com/docs/product-analytics/funnels\n`;
+    md += `## Next Steps\n\n`;
+    md += `1. Review the changes made to your files\n`;
+    md += `2. Test that events are being captured correctly\n`;
+    md += `3. Create insights and dashboards in PostHog\n`;
+    md += `4. Use the PostHog MCP to create funnel insights\n\n`;
+    md += `Learn more: https://posthog.com/docs/product-analytics\n`;
     return md;
   };
 
   const markdownContent = generateMarkdown();
-  const fileName = 'PostHog event tracking plan.md';
+  const fileName = 'event-tracking-plan.md';
+  const filePath = path.join(options.installDir, fileName);
 
-  await fs.writeFile(fileName, markdownContent);
+  await fs.writeFile(filePath, markdownContent);
 
-  // Check if this is a Next.js 15.3+ project with instrumentation-client
-  let canAutoImplement = false;
-  if (isNextJs) {
-    const nextVersion = getPackageVersion('next', packageJson);
-    const isNext15_3Plus = nextVersion && semver.gte(nextVersion, '15.3.0');
+  // Summary
+  const totalEvents = enhancedFiles.reduce((sum, file) => sum + file.events.length, 0);
 
-    if (isNext15_3Plus) {
-      // Check for instrumentation-client file
-      try {
-        const instrumentationFiles = relevantFiles.filter(f =>
-          f.includes('instrumentation') &&
-          (f.endsWith('.ts') || f.endsWith('.js')) &&
-          (f.includes('client') || f.includes('Client'))
-        );
-
-        if (instrumentationFiles.length > 0) {
-          canAutoImplement = true;
-        }
-      } catch { }
-    }
-  }
-
-  if (canAutoImplement && events.length > 0) {
-    const autoImplement = await abortIfCancelled(
-      clack.confirm({
-        message: 'Would you like me to automatically add the event tracking code to your Next.js app?',
-        initialValue: true,
-      }),
-    );
-
-    if (autoImplement) {
-      const s = clack.spinner();
-      s.start('Adding event tracking code to your application');
-
-      try {
-        // Generate the event tracking documentation
-        const eventTrackingDocs = generateEventTrackingDocumentation(events);
-
-        // Get files that need to be changed
-        const filesToChange = await getFilesToChange({
-          integration: Integration.nextjs,
-          relevantFiles: events.map(e => e.location),
-          documentation: eventTrackingDocs,
-          wizardHash,
-          cloudRegion,
-        });
-
-        // Generate and apply the changes
-        await generateFileChangesForIntegration({
-          integration: Integration.nextjs,
-          filesToChange,
-          wizardHash,
-          installDir: options.installDir,
-          documentation: eventTrackingDocs,
-          cloudRegion,
-        });
-
-        s.stop('Event tracking code added successfully!');
-
-        clack.outro(
-          `Success! Your event tracking plan has been saved to ${chalk.cyan(
-            fileName,
-          )} and the events have been added to your code. Review the changes to ensure they're correct.`,
-        );
-      } catch (error) {
-        s.stop('Failed to add event tracking code automatically');
-        clack.log.warn('Could not automatically add event tracking code. You can add it manually using the tracking plan.');
-
-        clack.outro(
-          `Your event tracking plan has been saved to ${chalk.cyan(
-            fileName,
-          )}. Review the plan and add the events manually to your app.`,
-        );
-      }
-    } else {
-      clack.outro(
-        `Success! Your event tracking plan has been saved to ${chalk.cyan(
-          fileName,
-        )}. Review the plan to confirm it's correct. You can add the events manually when you're ready.`,
-      );
-    }
-  } else {
-    clack.outro(
-      `Success! Your event tracking plan has been saved to ${chalk.cyan(
-        fileName,
-      )}. Review the plan to confirm it's correct. ${isNextJs ? 'To enable automatic event implementation, ensure you have Next.js 15.3+ with instrumentation-client set up.' : ''}`,
-    );
-  }
-}
-
-// Helper function to generate event tracking documentation
-function generateEventTrackingDocumentation(events: Array<{ name: string; location: string; description?: string }>): string {
-  let docs = `# Adding PostHog Event Tracking\n\n`;
-  docs += `Import posthog from your PostHog client configuration and add these events:\n\n`;
-
-  events.forEach(event => {
-    docs += `## Event: ${event.name}\n`;
-    if (event.description) {
-      docs += `Description: ${event.description}\n\n`;
-    }
-    docs += `Location: ${event.location}\n\n`;
-    docs += `Add this code where the event should be triggered:\n\n`;
-    docs += `\`\`\`javascript\n`;
-    docs += `posthog.capture('${event.name}', {\n`;
-    docs += `  // Add any relevant properties here\n`;
-    docs += `})\n`;
-    docs += `\`\`\`\n\n`;
-  });
-
-  return docs;
+  clack.outro(
+    `Success! Added ${chalk.bold(totalEvents.toString())} events across ${chalk.bold(enhancedFiles.length.toString())} files.
+    
+    Event tracking plan saved to: ${chalk.cyan(fileName)}
+    
+    Next steps:
+    1. Review changes with ${chalk.bold('git diff')}
+    2. Revert unwanted changes with ${chalk.bold('git checkout <file>')}
+    3. Test that events are being captured
+    4. Create insights in PostHog
+    `,
+  );
 }
 
