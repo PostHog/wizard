@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.6.1](https://github.com/PostHog/wizard/compare/v1.6.0...v1.6.1) (2025-07-08)
+
+
+### Bug Fixes
+
+* always ask for dirty repo ([#84](https://github.com/PostHog/wizard/issues/84)) ([9657f35](https://github.com/PostHog/wizard/commit/9657f35d7d23ad374283e66242903d59163c7182))
+* handle React 19 legacy peer deps ([#85](https://github.com/PostHog/wizard/issues/85)) ([ddd77a1](https://github.com/PostHog/wizard/commit/ddd77a1887e0acf04e353981a96509d91ae64175))
+
 ## [1.6.0](https://github.com/PostHog/wizard/compare/v1.5.3...v1.6.0) (2025-07-08)
 
 
