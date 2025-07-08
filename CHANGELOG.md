@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.6.0](https://github.com/PostHog/wizard/compare/v1.5.3...v1.6.0) (2025-07-08)
+
+
+### Features
+
+* allow package manager selection in ambiguous environment ([#82](https://github.com/PostHog/wizard/issues/82)) ([82c1ace](https://github.com/PostHog/wizard/commit/82c1ace0ef14f7729068a235409c0c754d00c735))
+* make --default the default, and add an --eu flag to make things simpler ([#81](https://github.com/PostHog/wizard/issues/81)) ([3904f4f](https://github.com/PostHog/wizard/commit/3904f4f9e85824ba128a90c07a5888b72805ef2a))
+
 ## [1.5.3](https://github.com/PostHog/wizard/compare/v1.5.2...v1.5.3) (2025-07-03)
 
 
