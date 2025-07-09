@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.7.0](https://github.com/PostHog/wizard/compare/v1.6.2...v1.7.0) (2025-07-09)
+
+
+### Features
+
+* track uncaught errors in the wizard ([#89](https://github.com/PostHog/wizard/issues/89)) ([005d534](https://github.com/PostHog/wizard/commit/005d5344325f0b33e6d5d6d2a71f21b2c6d14683))
+
 ## [1.6.2](https://github.com/PostHog/wizard/compare/v1.6.1...v1.6.2) (2025-07-09)
 
 
