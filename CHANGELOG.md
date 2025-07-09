@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.6.2](https://github.com/PostHog/wizard/compare/v1.6.1...v1.6.2) (2025-07-09)
+
+
+### Bug Fixes
+
+* drop --eu flag ([#87](https://github.com/PostHog/wizard/issues/87)) ([55dee68](https://github.com/PostHog/wizard/commit/55dee68794ca114c176fdc7335cc0378db72a3d6))
+
 ## [1.6.1](https://github.com/PostHog/wizard/compare/v1.6.0...v1.6.1) (2025-07-08)
 
 
