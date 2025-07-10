@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.7.1](https://github.com/PostHog/wizard/compare/v1.7.0...v1.7.1) (2025-07-10)
+
+
+### Bug Fixes
+
+* track exception properties correctly ([#92](https://github.com/PostHog/wizard/issues/92)) ([c817db7](https://github.com/PostHog/wizard/commit/c817db7278ea67d1c363b0849be9c0524aefdfbf))
+
 ## [1.7.0](https://github.com/PostHog/wizard/compare/v1.6.2...v1.7.0) (2025-07-09)
 
 
