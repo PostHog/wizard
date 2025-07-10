@@ -45,9 +45,9 @@ export async function runEventSetupWizard(
   clack.intro(
     `Let's do a first pass on PostHog event tracking for your project.
     
-    Analyzing your project structure. Stand by to receive changes. Use git to discard any events you're not happy with.
+    We'll start by analyzing your project structure, then choose ten files to enhance. Stand by to receive changes. Use git to discard any events you're not happy with.
 
-    We'll start by selecting 10 files, adding up to two events to each. This will give you a great starting point for your event tracking.
+    This will give you a great starting point, then you can add any events that we missed.
     `,
   );
 
@@ -167,12 +167,12 @@ export async function runEventSetupWizard(
       - Import ${isClientCode ? 'posthog-js' : 'posthog-node'} appropriately
       - Add 1-2 high-value events that track important user actions
       - Use descriptive event names (lowercase-hyphenated)
-      - Include relevant properties with events
+      - Include some properties with events where relevant, but do not create too much complexity to achieve this
       - Ensure the code remains functional and follows Next.js patterns
-      - For server code: initialize PostHog properly
       - Do not set timestamps on events; PostHog will do this automatically
       - Do not initialize PostHog in the file; assume it has already been initialized
       - Do not change the formatting of the file; only add events
+      - Always return the entire file content, not just the changes. Never return a diff or truncated response that says "rest of file unchanged"
       
       File path: ${filePath}
       File content:
