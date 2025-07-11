@@ -45,9 +45,9 @@ export async function runEventSetupWizard(
   clack.intro(
     `Let's do a first pass on PostHog event tracking for your project.
     
-    We'll start by analyzing your project structure, then choose ten files to enhance. Stand by to receive changes. Use git to discard any events you're not happy with.
+    We'll start by analyzing your project structure, then choose ten files to enhance. Use git to discard any events you're not happy with.
 
-    This will give you a great starting point, then you can add any events that we missed.
+    This will give you a starting point, then you can add any events that we missed.
     `,
   );
 
@@ -147,7 +147,7 @@ export async function runEventSetupWizard(
     events: Array<{ name: string; description: string }>;
   }> = [];
 
-  clack.log.info('\nEnhancing files with event tracking. Changes will be applied as they come in. Use your git interface to review new events...');
+  clack.log.info("\nEnhancing files with event tracking. Changes will be applied as they come in. Use your git interface to review new events. Feel free to toss anything you don't like...");
 
   for (const filePath of selectedFiles) {
     const fileSpinner = clack.spinner();
@@ -210,11 +210,9 @@ export async function runEventSetupWizard(
     }
   }
 
-  // All files have been updated immediately during enhancement
-
   // Generate event tracking plan
   const generateMarkdown = () => {
-    let md = `# Event Tracking Plan\n\n`;
+    let md = `# Event tracking plan\n\n`;
     md += `This document lists all PostHog events that have been automatically added to your Next.js application.\n\n`;
     md += `## Events by File\n\n`;
 
@@ -228,13 +226,16 @@ export async function runEventSetupWizard(
       }
     });
 
+    md += `\n## Events still awaiting implementation\n`;
+    md += `-`
+
     md += `\n---\n\n`;
     md += `## Next Steps\n\n`;
     md += `1. Review the changes made to your files\n`;
     md += `2. Test that events are being captured correctly\n`;
     md += `3. Create insights and dashboards in PostHog\n`;
-    md += `4. Use the PostHog MCP to create funnel insights\n\n`;
-    md += `Learn more: https://posthog.com/docs/product-analytics\n`;
+    md += `4. Make a list of events we missed above. Knock them out yourself, or give this file to an agent.`
+    md += `Learn more about what to measure with PostHog and why: https://posthog.com/docs/new-to-posthog/getting-hogpilled\n`;
     return md;
   };
 

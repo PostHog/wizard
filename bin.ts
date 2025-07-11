@@ -19,7 +19,7 @@ if (!satisfies(process.version, NODE_VERSION_RANGE)) {
 import { runMCPInstall, runMCPRemove } from './src/mcp';
 import type { CloudRegion, WizardOptions } from './src/utils/types';
 import { runWizard } from './src/run';
-import { runEventSetupWizard } from './src/event-setup';
+import { runEventSetupWizard } from './src/nextjs/event-setup';
 import { readEnvironment } from './src/utils/environment';
 import path from 'path';
 
