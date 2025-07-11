@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.8.0](https://github.com/PostHog/wizard/compare/v1.7.1...v1.8.0) (2025-07-11)
+
+
+### Features
+
+* support gemini models for generation ([#95](https://github.com/PostHog/wizard/issues/95)) ([97934e2](https://github.com/PostHog/wizard/commit/97934e251d45b6fd3b3349deee61f0701e7a83c0))
+
 ## [1.7.1](https://github.com/PostHog/wizard/compare/v1.7.0...v1.7.1) (2025-07-10)
 
 
