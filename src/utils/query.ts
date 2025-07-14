@@ -1,8 +1,17 @@
 import axios from 'axios';
 import type { ZodSchema } from 'zod';
 import { zodToJsonSchema } from 'zod-to-json-schema';
+import { retrieveQueryFixture, saveQueryFixture } from './fixture-utils';
 import type { AIModel, CloudRegion } from './types';
 import { getCloudUrlFromRegion } from './urls';
+
+export interface QueryOptions<S> {
+  message: string;
+  model?: AIModel;
+  region: CloudRegion;
+  schema: ZodSchema<S>;
+  wizardHash: string;
+}
 
 export const query = async <S>({
   message,
@@ -10,13 +19,20 @@ export const query = async <S>({
   region,
   schema,
   wizardHash,
-}: {
-  message: string;
-  model?: AIModel;
-  region: CloudRegion;
-  schema: ZodSchema<S>;
-  wizardHash: string;
-}): Promise<S> => {
+}: QueryOptions<S>): Promise<S> => {
+  if (process.env.NODE_ENV === 'test') {
+    const fixture = retrieveQueryFixture({
+      message,
+      model,
+      region,
+      schema,
+      wizardHash,
+    });
+    if (fixture) {
+      return fixture;
+    }
+  }
+
   const jsonSchema = zodToJsonSchema(schema, 'schema').definitions;
 
   const response = await axios.post<{ data: unknown }>(
@@ -39,6 +55,17 @@ export const query = async <S>({
     throw new Error(
       `Invalid response from wizard: ${validation.error.message}`,
     );
+  }
+
+  if (process.env.NODE_ENV === 'test') {
+    saveQueryFixture({
+      message,
+      model,
+      region,
+      schema,
+      wizardHash,
+      response: validation.data,
+    });
   }
 
   return validation.data;
