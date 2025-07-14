@@ -8,7 +8,6 @@ import {
   checkPackageJson,
 } from '../utils';
 import * as path from 'path';
-import nock from 'nock';
 
 describe('NextJS', () => {
   const projectDir = path.resolve(
@@ -17,22 +16,15 @@ describe('NextJS', () => {
   );
 
   beforeAll(async () => {
-    // Mock the PostHog API requests for getOrAskForProjectData
-    nock('https://app.posthog.com')
-      .post('/api/wizard/initialize')
-      .reply(200, { hash: 'mock-wizard-hash-123' });
-
-    nock('https://app.posthog.com')
-      .get('/api/wizard/data')
-      .matchHeader('X-PostHog-Wizard-Hash', 'mock-wizard-hash-123')
-      .reply(200, {
-        project_api_key: 'mock-project-api-key',
-        host: 'https://app.posthog.com',
-        user_distinct_id: 'mock-user-id',
-        personal_api_key: 'mock-personal-api-key',
-      });
-
     const wizardInstance = startWizardInstance(projectDir);
+
+    const regionPrompted = await wizardInstance.waitForOutput(
+      'Select your PostHog Cloud region',
+    );
+
+    if (regionPrompted) {
+      await wizardInstance.sendStdinAndWaitForOutput([KEYS.ENTER], 'US');
+    }
 
     // TODO: Step through the wizard - mocking queries
     const uncommittedFilesPrompted = await wizardInstance.waitForOutput(
@@ -64,7 +56,6 @@ describe('NextJS', () => {
   });
 
   afterAll(() => {
-    nock.cleanAll();
     revertLocalChanges(projectDir);
     cleanupGit(projectDir);
   });

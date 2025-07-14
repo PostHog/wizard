@@ -19,4 +19,5 @@ export default {
   //   },
   // },
   verbose: true,
+  setupFilesAfterEnv: ['<rootDir>/mocks/setup.ts'],
 };

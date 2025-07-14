@@ -19,6 +19,9 @@ if (!satisfies(process.version, NODE_VERSION_RANGE)) {
 import { runMCPInstall, runMCPRemove } from './src/mcp';
 import type { CloudRegion, WizardOptions } from './src/utils/types';
 import { runWizard } from './src/run';
+import { server } from './e2e-tests/mocks/server';
+
+server.listen();
 
 yargs(hideBin(process.argv))
   .env('POSTHOG_WIZARD')
