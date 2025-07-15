@@ -3,8 +3,8 @@ import { getCloudUrlFromRegion } from '../../src/utils/urls';
 import { DEFAULT_HOST_URL } from '../../src/lib/constants';
 import { fixtureTracker } from './fixture-tracker';
 
-// const shouldRecord = process.env.RECORD_FIXTURES === 'true';
-const shouldRecord = false;
+const shouldRecord = process.env.RECORD_FIXTURES === 'true';
+
 export const handlers = [
   http.post(`${getCloudUrlFromRegion('us')}/api/wizard/initialize`, () => {
     return HttpResponse.json({
@@ -41,7 +41,9 @@ export const handlers = [
         return passthrough();
       }
 
-      throw new Error('Missing fixture for LLM query.');
+      throw new Error(
+        'Missing fixture for LLM query. Rerun using RECORD_FIXTURES=true',
+      );
     },
   ),
 ];
