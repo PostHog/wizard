@@ -1,0 +1,7 @@
+{
+  "files": [
+    "src/components/posthog.astro",
+    "src/layouts/PostHogLayout.astro",
+    "src/pages/index.astro"
+  ]
+}

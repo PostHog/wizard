@@ -1,0 +1,3 @@
+{
+  "newContent": "---\nimport PostHog from '../components/posthog.astro';\n---\n<html>\n  <head>\n    <PostHog />\n  </head>\n  <body>\n    <slot />\n  </body>\n</html>"
+}

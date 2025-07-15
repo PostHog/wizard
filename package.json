@@ -140,7 +140,7 @@
   "author": "PostHog",
   "license": "MIT",
   "volta": {
-    "node": "18.20.6",
+    "node": "18.20.8",
     "pnpm": "9.15.5"
   }
 }
