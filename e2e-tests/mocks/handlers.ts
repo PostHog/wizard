@@ -1,7 +1,7 @@
 import { http, HttpResponse, passthrough } from 'msw';
 import { getCloudUrlFromRegion } from '../../src/utils/urls';
 import { DEFAULT_HOST_URL } from '../../src/lib/constants';
-import { retrieveQueryFixture } from '../../src/utils/fixture-utils';
+import { fixtureTracker } from './fixture-tracker';
 
 // const shouldRecord = process.env.RECORD_FIXTURES === 'true';
 const shouldRecord = false;
@@ -30,9 +30,10 @@ export const handlers = [
     async ({ request }) => {
       const requestBody = await request.clone().text();
 
-      const fixture = retrieveQueryFixture(requestBody);
+      const fixture = fixtureTracker.retrieveQueryFixture(requestBody);
 
       if (fixture) {
+        fixtureTracker.markFixtureAsUsed(requestBody);
         return HttpResponse.json({ data: fixture });
       }
 

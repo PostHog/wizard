@@ -1,9 +1,9 @@
 import axios from 'axios';
 import type { ZodSchema } from 'zod';
 import { zodToJsonSchema } from 'zod-to-json-schema';
-import { saveQueryFixture } from './fixture-utils';
 import type { AIModel, CloudRegion } from './types';
 import { getCloudUrlFromRegion } from './urls';
+import { fixtureTracker } from '../../e2e-tests/mocks/fixture-tracker';
 
 export interface QueryOptions<S> {
   message: string;
@@ -50,7 +50,8 @@ export const query = async <S>({
       model,
       json_schema: { ...jsonSchema, name: 'schema', strict: true },
     });
-    saveQueryFixture(requestBody, validation.data);
+
+    fixtureTracker.saveQueryFixture(requestBody, validation.data);
   }
 
   return validation.data;
