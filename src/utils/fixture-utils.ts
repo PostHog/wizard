@@ -1,78 +1,55 @@
 import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
-import type { QueryOptions } from './query';
 
-export const retrieveQueryFixture = <S>({
-  message,
-  model,
-  region,
-  schema,
-  wizardHash,
-}: QueryOptions<S>): S | null => {
-  const fixturePath = getFixturePath({
-    message,
-    model,
-    region,
-    schema,
-    wizardHash,
-  });
+const generateHashFromRequestBody = (requestBody: string) => {
+  return crypto.createHash('md5').update(requestBody).digest('hex');
+};
+
+const getFixturePathFromHash = (hash: string) => {
+  const findWizardRoot = (): string => {
+    let currentDir = process.cwd();
+    const root = path.parse(currentDir).root;
+
+    while (currentDir !== root) {
+      if (
+        fs.existsSync(path.join(currentDir, 'wizard.config.js')) ||
+        fs.existsSync(path.join(currentDir, 'package.json'))
+      ) {
+        if (path.basename(currentDir) === 'wizard') {
+          return currentDir;
+        }
+      }
+      if (path.basename(currentDir) === 'wizard') {
+        return currentDir;
+      }
+      currentDir = path.dirname(currentDir);
+    }
+    return process.cwd();
+  };
+
+  return path.join(findWizardRoot(), 'e2e-tests', 'fixtures', `${hash}.json`);
+};
+
+export const retrieveQueryFixture = (requestBody: string): unknown | null => {
+  const hash = generateHashFromRequestBody(requestBody);
+  const fixturePath = getFixturePathFromHash(hash);
 
   if (!fs.existsSync(fixturePath)) {
     return null;
   }
 
-  return JSON.parse(fs.readFileSync(fixturePath, 'utf8')) as S;
+  return JSON.parse(fs.readFileSync(fixturePath, 'utf8'));
 };
 
-export const saveQueryFixture = <S>({
-  message,
-  model,
-  region,
-  schema,
-  wizardHash,
-  response,
-}: QueryOptions<S> & { response: S }) => {
-  const fixturePath = getFixturePath({
-    message,
-    model,
-    region,
-    schema,
-    wizardHash,
-  });
+export const saveQueryFixture = (requestBody: string, response: unknown) => {
+  const hash = generateHashFromRequestBody(requestBody);
+  const fixturePath = getFixturePathFromHash(hash);
 
-  // Don't overwrite existing fixtures
   if (fs.existsSync(fixturePath)) {
     return;
   }
 
+  fs.mkdirSync(path.dirname(fixturePath), { recursive: true });
   fs.writeFileSync(fixturePath, JSON.stringify(response, null, 2));
-};
-
-const generateHash = <S>({
-  message,
-  model,
-  region,
-  schema,
-  wizardHash,
-}: QueryOptions<S>) => {
-  return crypto
-    .createHash('md5')
-    .update(JSON.stringify({ message, model, region, schema, wizardHash }))
-    .digest('hex');
-};
-
-const getFixturePath = <S>({
-  message,
-  model,
-  region,
-  schema,
-  wizardHash,
-}: QueryOptions<S>) => {
-  const hash = generateHash({ message, model, region, schema, wizardHash });
-  return path.join(
-    path.dirname(require?.main?.filename ?? ''),
-    'fixtures',
-    `${hash}.json`,
-  );
 };

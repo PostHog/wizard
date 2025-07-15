@@ -16,7 +16,7 @@ describe('NextJS', () => {
   );
 
   beforeAll(async () => {
-    const wizardInstance = startWizardInstance(projectDir);
+    const wizardInstance = startWizardInstance(projectDir, true);
 
     const regionPrompted = await wizardInstance.waitForOutput(
       'Select your PostHog Cloud region',
@@ -27,32 +27,35 @@ describe('NextJS', () => {
     }
 
     // TODO: Step through the wizard - mocking queries
-    const uncommittedFilesPrompted = await wizardInstance.waitForOutput(
-      'You have uncommitted or untracked files in your repo:',
-    );
+    // const uncommittedFilesPrompted = await wizardInstance.waitForOutput(
+    //   'You have uncommitted or untracked files in your repo:',
+    // );
 
-    if (uncommittedFilesPrompted) {
-      await wizardInstance.sendStdinAndWaitForOutput(
-        [KEYS.DOWN, KEYS.ENTER],
-        `If the browser window didn't open automatically, please open the following link to login into PostHog:`,
-        {
-          timeout: 240_000,
-        },
-      );
-    }
+    // console.log('uncommittedFilesPrompted', uncommittedFilesPrompted);
 
-    // const routeThroughNextJsPrompted =
-    //   packageManagerPrompted &&
-    //   (await wizardInstance.sendStdinAndWaitForOutput(
-    //     // Selecting `yarn` as the package manager
+    // if (uncommittedFilesPrompted) {
+    //   await wizardInstance.sendStdinAndWaitForOutput(
     //     [KEYS.DOWN, KEYS.ENTER],
-    //     'Do you want to route Sentry requests in the browser through your Next.js server',
+    //     `If the browser window didn't open automatically, please open the following link to login into PostHog:`,
     //     {
     //       timeout: 240_000,
     //     },
-    //   ));
+    //   );
+    // }
+    // console.log('uncommittedFilesPrompted', uncommittedFilesPrompted);
 
-    wizardInstance.kill();
+    const mcpSetUpPrompted = await wizardInstance.waitForOutput(
+      'Would you like to install the PostHog MCP server to use PostHog in your editor?',
+    );
+
+    if (mcpSetUpPrompted) {
+      await wizardInstance.sendStdinAndWaitForOutput(
+        [KEYS.DOWN, KEYS.ENTER],
+        'No',
+      );
+    }
+
+    // wizardInstance.kill();
   });
 
   afterAll(() => {

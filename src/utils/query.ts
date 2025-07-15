@@ -1,7 +1,7 @@
 import axios from 'axios';
 import type { ZodSchema } from 'zod';
 import { zodToJsonSchema } from 'zod-to-json-schema';
-import { retrieveQueryFixture, saveQueryFixture } from './fixture-utils';
+import { saveQueryFixture } from './fixture-utils';
 import type { AIModel, CloudRegion } from './types';
 import { getCloudUrlFromRegion } from './urls';
 
@@ -20,19 +20,6 @@ export const query = async <S>({
   schema,
   wizardHash,
 }: QueryOptions<S>): Promise<S> => {
-  if (process.env.NODE_ENV === 'test') {
-    const fixture = retrieveQueryFixture({
-      message,
-      model,
-      region,
-      schema,
-      wizardHash,
-    });
-    if (fixture) {
-      return fixture;
-    }
-  }
-
   const jsonSchema = zodToJsonSchema(schema, 'schema').definitions;
 
   const response = await axios.post<{ data: unknown }>(
@@ -58,14 +45,12 @@ export const query = async <S>({
   }
 
   if (process.env.NODE_ENV === 'test') {
-    saveQueryFixture({
+    const requestBody = JSON.stringify({
       message,
       model,
-      region,
-      schema,
-      wizardHash,
-      response: validation.data,
+      json_schema: { ...jsonSchema, name: 'schema', strict: true },
     });
+    saveQueryFixture(requestBody, validation.data);
   }
 
   return validation.data;
