@@ -21,9 +21,11 @@ import type { CloudRegion, WizardOptions } from './src/utils/types';
 import { runWizard } from './src/run';
 import { server } from './e2e-tests/mocks/server';
 
-server.listen({
-  onUnhandledRequest: 'bypass',
-});
+if (process.env.NODE_ENV === 'test') {
+  server.listen({
+    onUnhandledRequest: 'bypass',
+  });
+}
 
 yargs(hideBin(process.argv))
   .env('POSTHOG_WIZARD')

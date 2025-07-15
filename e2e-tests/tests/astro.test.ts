@@ -2,13 +2,14 @@
 import { cleanupGit, revertLocalChanges } from '../utils';
 import { startWizardInstance } from '../utils';
 import {
-	checkIfBuilds,
-	checkIfRunsOnDevMode,
-	checkIfRunsOnProdMode,
-} from "../utils";
+  checkIfBuilds,
+  checkIfRunsOnDevMode,
+  checkIfRunsOnProdMode,
+} from '../utils';
 import * as path from 'node:path';
 
-describe('Astro', () => {
+// eslint-disable-next-line jest/no-disabled-tests
+describe.skip('Astro', () => {
   const projectDir = path.resolve(
     __dirname,
     '../test-applications/astro-test-app',

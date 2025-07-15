@@ -8,7 +8,7 @@ export default {
   collectCoverage: true,
   testTimeout: 360000,
   testEnvironment: 'node',
-  testMatch: ['**/*.test.ts'],
+  testMatch: ['** /*.test.ts', '!**/test-applications/**/*.test.ts'],
   transform: {
     '^.+\\.tsx?$': 'ts-jest',
   },

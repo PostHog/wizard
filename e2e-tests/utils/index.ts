@@ -47,8 +47,14 @@ export class WizardTestEnv {
     }
   }
 
-  sendStdin(input: string) {
-    this.taskHandle.stdin?.write(input);
+  sendStdin(input: string | string[]) {
+    if (Array.isArray(input)) {
+      for (const i of input) {
+        this.taskHandle.stdin?.write(i);
+      }
+    } else {
+      this.taskHandle.stdin?.write(input);
+    }
   }
 
   /**

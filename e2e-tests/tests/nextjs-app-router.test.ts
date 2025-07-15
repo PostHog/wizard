@@ -26,23 +26,17 @@ describe('NextJS', () => {
       await wizardInstance.sendStdinAndWaitForOutput([KEYS.ENTER], 'US');
     }
 
-    // TODO: Step through the wizard - mocking queries
-    // const uncommittedFilesPrompted = await wizardInstance.waitForOutput(
-    //   'You have uncommitted or untracked files in your repo:',
-    // );
+    const uncommittedFilesPrompted = await wizardInstance.waitForOutput(
+      'You have uncommitted or untracked files in your repo:',
+      {
+        timeout: 2_000,
+        optional: true,
+      },
+    );
 
-    // console.log('uncommittedFilesPrompted', uncommittedFilesPrompted);
-
-    // if (uncommittedFilesPrompted) {
-    //   await wizardInstance.sendStdinAndWaitForOutput(
-    //     [KEYS.DOWN, KEYS.ENTER],
-    //     `If the browser window didn't open automatically, please open the following link to login into PostHog:`,
-    //     {
-    //       timeout: 240_000,
-    //     },
-    //   );
-    // }
-    // console.log('uncommittedFilesPrompted', uncommittedFilesPrompted);
+    if (uncommittedFilesPrompted) {
+      wizardInstance.sendStdin([KEYS.DOWN, KEYS.ENTER]);
+    }
 
     const mcpSetUpPrompted = await wizardInstance.waitForOutput(
       'Would you like to install the PostHog MCP server to use PostHog in your editor?',
@@ -55,7 +49,18 @@ describe('NextJS', () => {
       );
     }
 
-    // wizardInstance.kill();
+    const wizardComplete = await wizardInstance.waitForOutput(
+      'Successfully installed PostHog!',
+      {
+        timeout: 2_000,
+      },
+    );
+
+    if (wizardComplete) {
+      wizardInstance.kill();
+    } else {
+      throw new Error('Wizard did not complete');
+    }
   });
 
   afterAll(() => {
