@@ -15,7 +15,7 @@ export interface FrameworkTestConfig {
   name: string;
   /** Relative path to the test application directory */
   projectDir: string;
-  /** Expected output strings for different modes */
+  /** Expected output strings for different modes while running the tests */
   expectedOutput: {
     dev: string;
     prod?: string;
@@ -28,19 +28,18 @@ export interface FrameworkTestConfig {
     after?: string; // Insert after this step name
     steps: WizardStep[];
   }[];
-  /** Hooks for customizing the test flow */
   hooks?: {
-    beforeWizard?: () => Promise<void> | void;
-    afterWizard?: () => Promise<void> | void;
-    beforeTests?: () => Promise<void> | void;
-    afterTests?: () => Promise<void> | void;
+    beforeWizard?: () => Promise<void> | void; // Hook to run before the wizard starts
+    afterWizard?: () => Promise<void> | void; // Hook to run after the wizard finishes
+    beforeTests?: () => Promise<void> | void; // Hook to run before the tests start
+    afterTests?: () => Promise<void> | void; // Hook to run after the tests finish
   };
   /** Standard tests to run */
   tests?: {
     packageJson?: string[]; // Package names to check
-    devMode?: boolean;
-    build?: boolean;
-    prodMode?: boolean | string; // true for 'start', string for custom command
+    devMode?: boolean; // Whether to test the dev mode
+    build?: boolean; // Whether to test if the build command works
+    prodMode?: boolean | string; // true for 'start' as prod mode, string for custom command
   };
   /** Custom test definitions */
   customTests?: Array<{

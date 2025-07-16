@@ -1,10 +1,11 @@
-import { config } from 'dotenv';
+import { config as dotenvConfig } from 'dotenv';
+import type { Config as JestConfig } from 'jest';
 
-config({
+dotenvConfig({
   path: '.env',
 });
 
-export default {
+const config: JestConfig = {
   collectCoverage: true,
   testTimeout: 360000,
   testEnvironment: 'node',
@@ -13,13 +14,10 @@ export default {
     '^.+\\.tsx?$': 'ts-jest',
   },
   moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json', 'node'],
-  // globals: {
-  //   'ts-jest': {
-  //     tsconfig: 'tsconfig.json',
-  //   },
-  // },
   verbose: true,
   setupFilesAfterEnv: ['<rootDir>/mocks/setup.ts'],
   globalSetup: '<rootDir>/global-setup.ts',
   globalTeardown: '<rootDir>/global-teardown.ts',
 };
+
+export default config;
