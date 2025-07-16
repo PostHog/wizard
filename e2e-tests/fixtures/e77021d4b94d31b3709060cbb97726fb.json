@@ -1,3 +1,0 @@
-{
-  "newContent": "---\nimport PostHogLayout from '../layouts/PostHogLayout.astro';\n---\n<PostHogLayout>\n  <h1>Astro</h1>\n</PostHogLayout>"
-}
