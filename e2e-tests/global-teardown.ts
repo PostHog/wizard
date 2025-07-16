@@ -6,7 +6,7 @@ export default function globalTeardown() {
 
   // Clean up unused fixtures after all tests complete
   if (process.env.CLEANUP_UNUSED_FIXTURES !== 'false') {
-    // fixtureTracker.cleanupUnusedFixtures();
+    fixtureTracker.cleanupUnusedFixtures();
 
     // Log statistics for debugging
     const stats = fixtureTracker.getStats();

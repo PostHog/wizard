@@ -32,6 +32,37 @@ application to be defined in `test-applications`.
 To adjust the default behaviour of the framework, also take a look at
 `DEFAULT_WIZARD_STEPS` in `e2e-tests/utils/framework-test-utils.ts`
 
+## Fixture Generation
+
+To be able to mock our LLM calls in the E2E tests, we need to have a realistic
+fixture. To generate them, we a call to the `/query` endpoint in PostHog. We
+save this response as a fixture in `e2e-tests/fixtures`. The filename represents
+the hashed request body to the endpoint. When we run the tests again, we reuse
+those fixtures.
+
+Whenever the request body to the LLM change we also regenerate the fixture. The
+request body can change because of a few things:
+
+- Prompt:
+  - The system propmt
+  - The provided framework files
+  - etc.
+- LLM Model
+- Response Schema
+
+Because we use a set seed for the LLM, this means our tests are deterministic
+and actually reflective of how they would work in production as well.
+
+Two environment variables control our fixture management:
+
+`RECORD_FIXTURES` performs a `/query` request to create a fixture if no matching
+fixture is found the for the request body. Can be `true or false`. If `false`
+and no matching fixture is found, the test will fail.
+
+`CLEANUP_UNUSED_FIXTURES` deletes fixtures that were not used during an E2E jest
+run. Should only be set to true when running all E2E tests. Can be `true` or
+`false`
+
 ### Utilities
 
 `utils/` contains helpers such as the wizard runner, assertion tools and file
