@@ -33,3 +33,5 @@ plugins
 .vscode/launch.json
 .env
 .vercel
+
+e2e-tests/fixtures/.tracking/*
