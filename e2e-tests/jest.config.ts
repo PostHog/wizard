@@ -6,8 +6,8 @@ dotenvConfig({
 });
 
 const config: JestConfig = {
-  collectCoverage: true,
-  testTimeout: 360000,
+  collectCoverage: false,
+  testTimeout: 10000,
   testEnvironment: 'node',
   testMatch: ['**/*.test.ts', '!**/test-applications/**/*.test.ts'],
   transform: {
