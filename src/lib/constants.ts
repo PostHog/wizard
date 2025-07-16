@@ -40,7 +40,7 @@ export interface Args {
   integration: Integration;
 }
 
-export const IS_DEV = false;
+export const IS_DEV = true;
 
 export const DEBUG = false;
 

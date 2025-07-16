@@ -35,6 +35,7 @@ export const IGNORE_PATTERNS = [
   '**/dist/**',
   '**/build/**',
   '**/public/**',
+  '**/.next/**',
 ];
 export async function getNextJsRouter({
   installDir,

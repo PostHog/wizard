@@ -1,0 +1,3 @@
+{
+  "newContent": "import { StrictMode } from 'react'\nimport { createRoot } from 'react-dom/client'\nimport { PostHogProvider } from 'posthog-js/react'\nimport './index.css'\nimport App from './App.tsx'\n\ncreateRoot(document.getElementById('root')!).render(\n  <StrictMode>\n    <PostHogProvider\n      apiKey={import.meta.env.VITE_PUBLIC_POSTHOG_KEY}\n      options={{\n        api_host: import.meta.env.VITE_PUBLIC_POSTHOG_HOST,\n        defaults: '2025-05-24',\n        capture_exceptions: true,\n        debug: import.meta.env.MODE === 'development',\n      }}\n    >\n      <App />\n    </PostHogProvider>\n  </StrictMode>,\n)\n"
+}

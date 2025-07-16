@@ -617,9 +617,11 @@ async function askForWizardLogin(options: {
     }`,
   );
 
-  opn(urlToOpen, { wait: false }).catch(() => {
-    // opn throws in environments that don't have a browser (e.g. remote shells) so we just noop here
-  });
+  if (process.env.NODE_ENV !== 'test') {
+    opn(urlToOpen, { wait: false }).catch(() => {
+      // opn throws in environments that don't have a browser (e.g. remote shells) so we just noop here
+    });
+  }
 
   const loginSpinner = clack.spinner();
 

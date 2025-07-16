@@ -5,6 +5,15 @@ import type { AIModel, CloudRegion } from './types';
 import { getCloudUrlFromRegion } from './urls';
 import { analytics } from './analytics';
 import { AxiosError } from 'axios';
+import { fixtureTracker } from '../../e2e-tests/mocks/fixture-tracker';
+
+export interface QueryOptions<S> {
+  message: string;
+  model?: AIModel;
+  region: CloudRegion;
+  schema: ZodSchema<S>;
+  wizardHash: string;
+}
 
 export const query = async <S>({
   message,
@@ -12,13 +21,7 @@ export const query = async <S>({
   region,
   schema,
   wizardHash,
-}: {
-  message: string;
-  model?: AIModel;
-  region: CloudRegion;
-  schema: ZodSchema<S>;
-  wizardHash: string;
-}): Promise<S> => {
+}: QueryOptions<S>): Promise<S> => {
   const jsonSchema = zodToJsonSchema(schema, 'schema').definitions;
 
   const response = await axios
@@ -55,6 +58,16 @@ export const query = async <S>({
     throw new Error(
       `Invalid response from wizard: ${validation.error.message}`,
     );
+  }
+
+  if (process.env.NODE_ENV === 'test') {
+    const requestBody = JSON.stringify({
+      message,
+      model,
+      json_schema: { ...jsonSchema, name: 'schema', strict: true },
+    });
+
+    fixtureTracker.saveQueryFixture(requestBody, validation.data);
   }
 
   return validation.data;
