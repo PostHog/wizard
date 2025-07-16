@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.8.1](https://github.com/PostHog/wizard/compare/v1.8.0...v1.8.1) (2025-07-15)
+
+
+### Bug Fixes
+
+* capture query errors explicitely ([#100](https://github.com/PostHog/wizard/issues/100)) ([e0e860a](https://github.com/PostHog/wizard/commit/e0e860ae02d79318250361939dea666da7d55040))
+* getting terminal width ([#98](https://github.com/PostHog/wizard/issues/98)) ([d2a1346](https://github.com/PostHog/wizard/commit/d2a134610746e303be8b5a8a1bda4f890ee8299a))
+
 ## [1.8.0](https://github.com/PostHog/wizard/compare/v1.7.1...v1.8.0) (2025-07-11)
 
 
