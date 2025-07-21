@@ -40,7 +40,9 @@ export interface Args {
   integration: Integration;
 }
 
-export const IS_DEV = false;
+export const IS_DEV = ['test', 'development'].includes(
+  process.env.NODE_ENV ?? '',
+);
 
 export const DEBUG = false;
 
