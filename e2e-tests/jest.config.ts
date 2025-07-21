@@ -7,7 +7,7 @@ dotenvConfig({
 
 const config: JestConfig = {
   collectCoverage: false,
-  testTimeout: 10000,
+  testTimeout: process.env.RECORD_FIXTURES === 'true' ? 240 * 1000 : 10 * 1000,
   testEnvironment: 'node',
   testMatch: ['**/*.test.ts', '!**/test-applications/**/*.test.ts'],
   transform: {
