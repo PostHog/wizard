@@ -1,3 +1,0 @@
-{
-  "newContent": "VITE_PUBLIC_POSTHOG_KEY=mock-project-api-key\nVITE_PUBLIC_POSTHOG_HOST=http://localhost:8010"
-}
