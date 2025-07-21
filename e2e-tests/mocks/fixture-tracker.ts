@@ -170,11 +170,6 @@ class FixtureTracker {
   saveQueryFixture(requestBody: string, response: unknown): void {
     const hash = this.generateHashFromRequestBody(requestBody);
     const fixturePath = path.join(this.fixturesDir, `${hash}.json`);
-
-    if (fs.existsSync(fixturePath)) {
-      return;
-    }
-
     fs.mkdirSync(path.dirname(fixturePath), { recursive: true });
     fs.writeFileSync(fixturePath, JSON.stringify(response, null, 2));
   }
