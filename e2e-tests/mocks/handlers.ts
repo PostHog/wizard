@@ -3,7 +3,7 @@ import { getCloudUrlFromRegion } from '../../src/utils/urls';
 import { DEFAULT_HOST_URL } from '../../src/lib/constants';
 import { fixtureTracker } from './fixture-tracker';
 
-const shouldRecord = process.env.RECORD_FIXTURES === 'true';
+export const shouldRecord = process.env.RECORD_FIXTURES === 'true';
 
 export const handlers = [
   http.post(`${getCloudUrlFromRegion('us')}/api/wizard/initialize`, () => {
