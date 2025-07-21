@@ -56,7 +56,10 @@ export function createFrameworkTest(config: FrameworkTestConfig): void {
         }
 
         const prompted = await wizardInstance.waitForOutput(step.waitFor, {
-          timeout: step.timeout || 60000,
+          timeout:
+            step.timeout || process.env.RECORD_FIXTURES === 'true'
+              ? 240 * 1000
+              : 10 * 1000,
           optional: step.optional,
         });
 
@@ -65,6 +68,12 @@ export function createFrameworkTest(config: FrameworkTestConfig): void {
             await wizardInstance.sendStdinAndWaitForOutput(
               step.response,
               step.responseWaitFor,
+              {
+                timeout:
+                  step.timeout || process.env.RECORD_FIXTURES === 'true'
+                    ? 240 * 1000
+                    : 10 * 1000,
+              },
             );
           } else {
             wizardInstance.sendStdin(step.response);
