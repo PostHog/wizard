@@ -1,23 +1,18 @@
 # End-to-end tests for PostHog wizard
 
-## Structure
-
-```
-test-applications/
-|---- nextjs-app-router-test-app/
-tests/
-|---- nextjs-app-router.test.ts
-```
-
 ## Running Tests Locally
 
-Tests can be run locally from the root of the project with:
+E2E Tests can be run locally from the root of the project with:
 
 `pnpm test:e2e`
 
 To run a specific test application
 
 `pnpm test:e2e NextJS`
+
+To record new fixtures:
+
+`pnpm test:e2e-record`
 
 ## Writing Framework tests
 
