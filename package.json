@@ -102,6 +102,7 @@
     "fix:eslint": "eslint . --format stylish --fix",
     "test": "pnpm build && jest",
     "test:e2e": "pnpm build && ./e2e-tests/run.sh",
+    "test:e2e-record": "RECORD_FIXTURES=true && pnpm build && ./e2e-tests/run.sh --record",
     "try": "tsx bin.ts",
     "test:watch": "jest --watch",
     "prepare": "husky"
