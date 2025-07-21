@@ -1,0 +1,3 @@
+{
+  "newContent": "\"use client\"\n\nimport posthog from \"posthog-js\"\nimport { PostHogProvider as PHProvider } from \"posthog-js/react\"\nimport { useEffect } from \"react\"\n\nexport function PostHogProvider({ children }: { children: React.ReactNode }) {\n  useEffect(() => {\n    posthog.init(process.env.NEXT_PUBLIC_POSTHOG_KEY!, {\n      api_host: \"/ingest\",\n      ui_host: \"http://localhost:8010\",\n      defaults: '2025-05-24',\n      capture_exceptions: true, // enables Error Tracking\n      debug: process.env.NODE_ENV === \"development\",\n    })\n  }, [])\n\n  return <PHProvider client={posthog}>{children}</PHProvider>\n}\n"
+}

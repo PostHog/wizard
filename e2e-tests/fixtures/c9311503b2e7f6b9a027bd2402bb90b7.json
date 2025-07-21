@@ -1,0 +1,3 @@
+{
+  "newContent": "import { PostHog } from \"posthog-node\";\n\n// NOTE: This is a Node.js client, so you can use it for sending events from the server side to PostHog.\nexport default function PostHogClient() {\n  const posthogClient = new PostHog(process.env.NEXT_PUBLIC_POSTHOG_KEY!, {\n    host: process.env.NEXT_PUBLIC_POSTHOG_HOST,\n    flushAt: 1,\n    flushInterval: 0,\n  });\n  return posthogClient;\n}"
+}
