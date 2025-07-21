@@ -6,6 +6,7 @@ import { getCloudUrlFromRegion } from './urls';
 import { analytics } from './analytics';
 import { AxiosError } from 'axios';
 import { fixtureTracker } from '../../e2e-tests/mocks/fixture-tracker';
+import { shouldRecord } from '../../e2e-tests/mocks/handlers';
 
 export interface QueryOptions<S> {
   message: string;
@@ -35,6 +36,9 @@ export const query = async <S>({
       {
         headers: {
           'X-PostHog-Wizard-Hash': wizardHash,
+          ...(shouldRecord
+            ? { 'X-PostHog-Wizard-Fixture-Generation': true }
+            : {}),
         },
       },
     )
