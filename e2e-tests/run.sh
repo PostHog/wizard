@@ -1,14 +1,9 @@
 #!/usr/bin/env bash
 
-# Check if volta is installed
 VOLTA=$(which volta)
+cd "$(dirname "$0")" || exit
 
-# Set cwd to the directory of this script
-cd "$(dirname "$0")"
-
-export RECORD_FIXTURES=false
-
-# Set CLEANUP_UNUSED_FIXTURES based on whether any arguments were passed
+# Only cleanup fixtures if running all tests.
 if [ "$#" -gt 0 ]; then
   export CLEANUP_UNUSED_FIXTURES=false
 else
