@@ -3,10 +3,10 @@ import * as path from 'path';
 import * as crypto from 'crypto';
 
 class FixtureTracker {
-  private fixturesDir: string;
-  private trackingDir: string;
-  private existingFixturesFile: string;
-  private usedFixturesFile: string;
+  private readonly fixturesDir: string;
+  private readonly trackingDir: string;
+  private readonly existingFixturesFile: string;
+  private readonly usedFixturesFile: string;
 
   constructor() {
     this.fixturesDir = this.getFixturesDirectory();
@@ -43,7 +43,6 @@ class FixtureTracker {
     return path.join(findWizardRoot(), 'e2e-tests', 'fixtures');
   }
 
-  // Called before tests start to capture existing fixtures
   captureExistingFixtures(): void {
     if (!fs.existsSync(this.fixturesDir)) {
       return;
@@ -72,7 +71,6 @@ class FixtureTracker {
     fs.writeFileSync(this.usedFixturesFile, JSON.stringify([], null, 2));
   }
 
-  // Called when a fixture is used during tests
   markFixtureAsUsed(requestBody: string): void {
     const hash = this.generateHashFromRequestBody(requestBody);
     const fixturePath = path.join(this.fixturesDir, `${hash}.json`);
@@ -104,7 +102,6 @@ class FixtureTracker {
     }
   }
 
-  // Called after tests complete to clean up unused fixtures
   cleanupUnusedFixtures(): void {
     let existingFixtures: string[] = [];
     let usedFixtures: string[] = [];
@@ -141,9 +138,6 @@ class FixtureTracker {
       (fixture) => !usedFixturesSet.has(fixture),
     );
 
-    // eslint-disable-next-line no-console
-    console.log(`Cleaning up ${unusedFixtures.length} unused fixtures`);
-
     for (const fixturePath of unusedFixtures) {
       if (fs.existsSync(fixturePath)) {
         fs.unlinkSync(fixturePath);
@@ -162,7 +156,6 @@ class FixtureTracker {
     return crypto.createHash('md5').update(requestBody).digest('hex');
   }
 
-  // Retrieve a fixture from the filesystem
   retrieveQueryFixture(requestBody: string): unknown | null {
     const hash = this.generateHashFromRequestBody(requestBody);
     const fixturePath = path.join(this.fixturesDir, `${hash}.json`);
@@ -174,7 +167,6 @@ class FixtureTracker {
     return JSON.parse(fs.readFileSync(fixturePath, 'utf8'));
   }
 
-  // Save a fixture to the filesystem
   saveQueryFixture(requestBody: string, response: unknown): void {
     const hash = this.generateHashFromRequestBody(requestBody);
     const fixturePath = path.join(this.fixturesDir, `${hash}.json`);
@@ -187,7 +179,6 @@ class FixtureTracker {
     fs.writeFileSync(fixturePath, JSON.stringify(response, null, 2));
   }
 
-  // Get statistics for debugging
   getStats() {
     let existingFixtures: string[] = [];
     let usedFixtures: string[] = [];
@@ -220,5 +211,4 @@ class FixtureTracker {
   }
 }
 
-// Export singleton instance
 export const fixtureTracker = new FixtureTracker();
