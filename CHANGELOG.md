@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.8.2](https://github.com/PostHog/wizard/compare/v1.8.1...v1.8.2) (2025-07-23)
+
+
+### Bug Fixes
+
+* use /flags endpoint for nextjs rewrites ([#104](https://github.com/PostHog/wizard/issues/104)) ([8b5fe20](https://github.com/PostHog/wizard/commit/8b5fe201ed91509700e4480caba65bb40cc135c3))
+
 ## [1.8.1](https://github.com/PostHog/wizard/compare/v1.8.0...v1.8.1) (2025-07-15)
 
 
