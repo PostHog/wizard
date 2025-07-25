@@ -1,6 +1,6 @@
 # Changelog
 
-## [1.8.3](https://github.com/PostHog/wizard/compare/v1.8.2...v1.8.3) (2025-07-25)
+## [1.8.5](https://github.com/PostHog/wizard/compare/v1.8.2...v1.8.3) (2025-07-25)
 
 
 ### Bug Fixes
