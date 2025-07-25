@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.8.7](https://github.com/PostHog/wizard/compare/v1.8.5...v1.8.7) (2025-07-25)
+
+
+### Bug Fixes
+
+* don't import mock server in prod ([#109](https://github.com/PostHog/wizard/issues/109)) ([8601e3c](https://github.com/PostHog/wizard/commit/8601e3c824a27a6c7cefc87ac7787cbae80d6815))
+
+
+### Miscellaneous Chores
+
+* release 1.8.7 ([a7e175d](https://github.com/PostHog/wizard/commit/a7e175d74831f9f438d4a16c985dc9a0911b1c57))
+
 ## [1.8.5](https://github.com/PostHog/wizard/compare/v1.8.2...v1.8.3) (2025-07-25)
 
 
