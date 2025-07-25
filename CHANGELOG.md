@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.8.3](https://github.com/PostHog/wizard/compare/v1.8.2...v1.8.3) (2025-07-25)
+
+
+### Bug Fixes
+
+* don't import e2e tests ([#107](https://github.com/PostHog/wizard/issues/107)) ([7818f18](https://github.com/PostHog/wizard/commit/7818f1857d5c38940370aacbbb8e1ab0165a779c))
+
 ## [1.8.1](https://github.com/PostHog/wizard/compare/v1.8.0...v1.8.1) (2025-07-15)
 
 
