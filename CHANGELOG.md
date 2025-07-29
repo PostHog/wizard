@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.9.0](https://github.com/PostHog/wizard/compare/v1.8.7...v1.9.0) (2025-07-29)
+
+
+### Features
+
+* Event setup mode ([#94](https://github.com/PostHog/wizard/issues/94)) ([c412501](https://github.com/PostHog/wizard/commit/c4125016b257d9b25ce5f95f8d4d8262324ce2d7))
+
 ## [1.8.7](https://github.com/PostHog/wizard/compare/v1.8.5...v1.8.7) (2025-07-25)
 
 
