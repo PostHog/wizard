@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.10.0](https://github.com/PostHog/wizard/compare/v1.9.0...v1.10.0) (2025-08-12)
+
+
+### Features
+
+* prevent users from running wizard in non tty env ([#114](https://github.com/PostHog/wizard/issues/114)) ([e588d96](https://github.com/PostHog/wizard/commit/e588d96743469ac6176b174e33ade51875e6c8dd))
+
 ## [1.9.0](https://github.com/PostHog/wizard/compare/v1.8.7...v1.9.0) (2025-07-29)
 
 
