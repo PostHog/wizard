@@ -2,6 +2,19 @@ import readEnv from 'read-env';
 import { getPackageDotJson } from './clack-utils';
 import type { WizardOptions } from './types';
 import fg from 'fast-glob';
+import { IS_DEV } from '../lib/constants';
+
+export function isNonInteractiveEnvironment(): boolean {
+  if (IS_DEV || process.env.NODE_ENV === 'test') {
+    return false;
+  }
+
+  if (!process.stdout.isTTY || !process.stderr.isTTY) {
+    return true;
+  }
+
+  return false;
+}
 
 export function readEnvironment(): Record<string, unknown> {
   const result = readEnv('POSTHOG_WIZARD');

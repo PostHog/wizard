@@ -4,6 +4,7 @@ import { red } from './src/utils/logging';
 
 import yargs from 'yargs';
 import { hideBin } from 'yargs/helpers';
+import chalk from 'chalk';
 
 const NODE_VERSION_RANGE = '>=18.17.0';
 
@@ -20,8 +21,24 @@ import { runMCPInstall, runMCPRemove } from './src/mcp';
 import type { CloudRegion, WizardOptions } from './src/utils/types';
 import { runWizard } from './src/run';
 import { runEventSetupWizard } from './src/nextjs/event-setup';
-import { readEnvironment } from './src/utils/environment';
+import {
+  readEnvironment,
+  isNonInteractiveEnvironment,
+} from './src/utils/environment';
 import path from 'path';
+import clack from './src/utils/clack';
+
+// Check for non-interactive environment before proceeding
+if (isNonInteractiveEnvironment()) {
+  clack.intro(chalk.inverse(`PostHog Wizard`));
+
+  clack.log.error(
+    'This installer requires an interactive terminal (TTY) to run.\n' +
+      'It appears you are running in a non-interactive environment.\n' +
+      'Please run the wizard in an interactive terminal.',
+  );
+  process.exit(1);
+}
 
 if (process.env.NODE_ENV === 'test') {
   void (async () => {
