@@ -28,7 +28,6 @@ import {
 import path from 'path';
 import clack from './src/utils/clack';
 
-// Check for non-interactive environment before proceeding
 if (isNonInteractiveEnvironment()) {
   clack.intro(chalk.inverse(`PostHog Wizard`));
 

@@ -5,7 +5,7 @@ import fg from 'fast-glob';
 import { IS_DEV } from '../lib/constants';
 
 export function isNonInteractiveEnvironment(): boolean {
-  if (IS_DEV || process.env.NODE_ENV === 'test') {
+  if (IS_DEV) {
     return false;
   }
 
