@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.10.1](https://github.com/PostHog/wizard/compare/v1.10.0...v1.10.1) (2025-08-19)
+
+
+### Bug Fixes
+
+* remove /ingest/flags ([#119](https://github.com/PostHog/wizard/issues/119)) ([0431750](https://github.com/PostHog/wizard/commit/043175017954aa1889d8ca6ebbaf2ee8fdd37fed))
+
 ## [1.10.0](https://github.com/PostHog/wizard/compare/v1.9.0...v1.10.0) (2025-08-12)
 
 
