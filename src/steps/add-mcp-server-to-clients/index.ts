@@ -1,12 +1,10 @@
 import type { Integration } from '../../lib/constants';
 import { traceStep } from '../../telemetry';
 import { analytics } from '../../utils/analytics';
+import { multiselect } from '@clack/prompts';
 import clack from '../../utils/clack';
-import {
-  abort,
-  abortIfCancelled,
-  askForCloudRegion,
-} from '../../utils/clack-utils';
+import chalk from 'chalk';
+import { abortIfCancelled, askForCloudRegion } from '../../utils/clack-utils';
 import { MCPClient } from './MCPClient';
 import { CursorMCPClient } from './clients/cursor';
 import { ClaudeMCPClient } from './clients/claude';
@@ -46,7 +44,7 @@ export const addMCPServerToClientsStep = async ({
     ? await abortIfCancelled(
         clack.select({
           message:
-            'Would you like to install the PostHog MCP server to use PostHog in your editor?',
+            'Would you like to install the MCP server to use PostHog in your editor?',
           options: [
             { value: true, label: 'Yes' },
             { value: false, label: 'No' },
@@ -60,14 +58,32 @@ export const addMCPServerToClientsStep = async ({
     return [];
   }
 
-  const clients = await getSupportedClients();
+  const supportedClients = await getSupportedClients();
+
+  const selectedClientNames = await abortIfCancelled(
+    multiselect({
+      message: `Select which MCP clients to install the MCP server to: ${chalk.dim(
+        '(Toggle: Space, Confirm: Enter, Toggle All: A)',
+      )}`,
+      options: supportedClients.map((client) => ({
+        value: client.name,
+        label: client.name,
+      })),
+      initialValues: supportedClients.map((client) => client.name),
+      required: true,
+    }),
+    integration,
+  );
+
+  const clients = supportedClients.filter((client) =>
+    selectedClientNames.includes(client.name),
+  );
 
   const installedClients = await getInstalledClients();
 
   if (installedClients.length > 0) {
     clack.log.warn(
-      `The PostHog MCP server is already configured for:
-
+      `The MCP server is already configured for:
   ${installedClients.map((c) => `- ${c.name}`).join('\n  ')}`,
     );
 
@@ -111,7 +127,7 @@ export const addMCPServerToClientsStep = async ({
   });
 
   clack.log.success(
-    `Added the PostHog MCP server to:
+    `Added the MCP server to:
   ${clients.map((c) => `- ${c.name}`).join('\n  ')} `,
   );
 
@@ -139,40 +155,35 @@ export const removeMCPServerFromClientsStep = async ({
     return [];
   }
 
-  const removeServers: boolean = await abortIfCancelled(
-    clack.select({
-      message: `Found the PostHog MCP server in ${installedClients.length} clients. Would you like to remove it?`,
-      options: [
-        {
-          value: true,
-          label: 'Yes',
-          hint: `Remove PostHog MCP server`,
-        },
-        {
-          value: false,
-          label: 'No',
-          hint: 'Keep the MCP server configuration',
-        },
-      ],
+  const selectedClientNames = await abortIfCancelled(
+    multiselect({
+      message: `Select which clients to remove the MCP server from: ${chalk.dim(
+        '(Toggle: Space, Confirm: Enter, Toggle All: A)',
+      )}`,
+      options: installedClients.map((client) => ({
+        value: client.name,
+        label: client.name,
+      })),
+      initialValues: installedClients.map((client) => client.name),
     }),
     integration,
   );
 
-  if (!removeServers) {
+  const clientsToRemove = installedClients.filter((client) =>
+    selectedClientNames.includes(client.name),
+  );
+
+  if (clientsToRemove.length === 0) {
     analytics.capture('wizard interaction', {
-      action: 'declined to remove mcp servers',
-      clients: installedClients.map((c) => c.name),
+      action: 'no mcp servers selected for removal',
       integration,
     });
-
-    await abort('The MCP server was not removed.');
     return [];
   }
 
   const results = await traceStep('removing mcp servers', async () => {
-    await removeMCPServer(installedClients);
-
-    return installedClients.map((c) => c.name);
+    await removeMCPServer(clientsToRemove);
+    return clientsToRemove.map((c) => c.name);
   });
 
   analytics.capture('wizard interaction', {

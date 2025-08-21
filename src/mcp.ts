@@ -14,26 +14,30 @@ export const runMCPInstall = async (options: {
   signup: boolean;
   region?: CloudRegion;
 }) => {
-  clack.intro('Installing the PostHog MCP server.');
+  clack.intro(chalk.bgGreenBright('Installing the PostHog MCP server'));
 
   await addMCPServerToClientsStep({
     cloudRegion: options.region,
     askPermission: false,
   });
 
-  clack.outro(`${chalk.green(
-    'You might need to restart your MCP clients to see the changes.',
-  )}
+  clack.log.message(
+    `${chalk.greenBright(
+      'You might need to restart your MCP clients to see the changes.',
+    )}`,
+  );
 
-Get started with some prompts like:
+  clack.log.message(`Get started with some prompts like:
+- What feature flags do I have active?
+- Add a new feature flag for our homepage redesign
+- What are my most common errors?`);
 
-  - What feature flags do I have active?
-  - Add a new feature flag for our homepage redesign
-  - What are my most common errors?
-`);
+  clack.log.message(`Check out our MCP Server documentation:
+${chalk.blueBright(`https://posthog.com/docs/model-context-protocol`)}`);
 };
 
 export const runMCPRemove = async () => {
+  clack.intro(chalk.bgRed('Removing the PostHog MCP server'));
   const results = await removeMCPServerFromClientsStep({});
 
   if (results.length === 0) {
@@ -41,12 +45,13 @@ export const runMCPRemove = async () => {
     return;
   }
 
-  clack.outro(`PostHog MCP server removed from:
-  ${results.map((c) => `- ${c}`).join('\n  ')}
-  
-  ${chalk.green(
-    'You might need to restart your MCP clients to see the changes.',
-  )}`);
+  clack.log.success(`PostHog MCP server removed from:`);
+  results.map((c) => clack.log.message(`- ${c}`));
+  clack.outro(
+    `${chalk.green(
+      'You might need to restart your MCP clients to see the changes.\n\n',
+    )}`,
+  );
 };
 
 export const getPersonalApiKey = async (options: {
