@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.13.0](https://github.com/PostHog/wizard/compare/v1.12.0...v1.13.0) (2025-08-21)
+
+
+### Features
+
+* add zed mcp client ([#128](https://github.com/PostHog/wizard/issues/128)) ([2ac413e](https://github.com/PostHog/wizard/commit/2ac413ed4c4b7d862aabf76977969fe871dfe696))
+
+
+### Bug Fixes
+
+* wrap claude code mcp error to avoid logging exceptions ([#130](https://github.com/PostHog/wizard/issues/130)) ([41e8296](https://github.com/PostHog/wizard/commit/41e8296905bae0d1f2a2218ed3857c3301f80312))
+
 ## [1.12.0](https://github.com/PostHog/wizard/compare/v1.11.0...v1.12.0) (2025-08-21)
 
 
