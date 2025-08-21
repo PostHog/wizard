@@ -1,7 +1,6 @@
 import type { Integration } from '../../lib/constants';
 import { traceStep } from '../../telemetry';
 import { analytics } from '../../utils/analytics';
-import { multiselect } from '@clack/prompts';
 import clack from '../../utils/clack';
 import chalk from 'chalk';
 import { abortIfCancelled, askForCloudRegion } from '../../utils/clack-utils';
@@ -60,6 +59,7 @@ export const addMCPServerToClientsStep = async ({
 
   const supportedClients = await getSupportedClients();
 
+  const { multiselect } = await import('@clack/prompts');
   const selectedClientNames = await abortIfCancelled(
     multiselect({
       message: `Select which MCP clients to install the MCP server to: ${chalk.dim(
@@ -155,6 +155,7 @@ export const removeMCPServerFromClientsStep = async ({
     return [];
   }
 
+  const { multiselect } = await import('@clack/prompts');
   const selectedClientNames = await abortIfCancelled(
     multiselect({
       message: `Select which clients to remove the MCP server from: ${chalk.dim(
