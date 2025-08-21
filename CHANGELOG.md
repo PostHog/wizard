@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.11.0](https://github.com/PostHog/wizard/compare/v1.10.1...v1.11.0) (2025-08-21)
+
+
+### Features
+
+* add support for claude code as an MCP client ([#122](https://github.com/PostHog/wizard/issues/122)) ([0419a7d](https://github.com/PostHog/wizard/commit/0419a7d35d8993cf17c37a05fa831f44497c4609))
+* beautify mcp cli and add client selection ([#123](https://github.com/PostHog/wizard/issues/123)) ([f6a7e03](https://github.com/PostHog/wizard/commit/f6a7e03e9eb328691a880add97439821fdd49bf1))
+
+
+### Bug Fixes
+
+* use /sse for cursor ([#121](https://github.com/PostHog/wizard/issues/121)) ([1b942a4](https://github.com/PostHog/wizard/commit/1b942a499e66d461b3da7e14fa53c9a5db9ee4e5))
+* vercel env var provider lower case error ([#125](https://github.com/PostHog/wizard/issues/125)) ([34e2790](https://github.com/PostHog/wizard/commit/34e27907a5608b827554554b63ca5e9ea2a434fb))
+
 ## [1.10.1](https://github.com/PostHog/wizard/compare/v1.10.0...v1.10.1) (2025-08-19)
 
 
