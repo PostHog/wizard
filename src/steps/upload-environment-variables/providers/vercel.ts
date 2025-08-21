@@ -62,7 +62,9 @@ export class VercelEnvironmentProvider extends EnvironmentProvider {
       },
     });
 
-    const output = (result.stdout + result.stderr).toLowerCase();
+    const output = (
+      String(result.stdout) + String(result.stderr)
+    ).toLowerCase();
 
     if (
       output.includes('log in to vercel') ||
