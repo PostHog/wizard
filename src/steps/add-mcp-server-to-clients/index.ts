@@ -63,7 +63,7 @@ export const addMCPServerToClientsStep = async ({
   const selectedClientNames = await abortIfCancelled(
     multiselect({
       message: `Select which MCP clients to install the MCP server to: ${chalk.dim(
-        '(Toggle: Space, Confirm: Enter, Toggle All: A)',
+        '(Toggle: Space, Confirm: Enter, Toggle All: A, Cancel: CTRL + C)',
       )}`,
       options: supportedClients.map((client) => ({
         value: client.name,
@@ -158,7 +158,7 @@ export const removeMCPServerFromClientsStep = async ({
   const selectedClientNames = await abortIfCancelled(
     multiselect({
       message: `Select which clients to remove the MCP server from: ${chalk.dim(
-        '(Toggle: Space, Confirm: Enter, Toggle All: A)',
+        '(Toggle: Space, Confirm: Enter, Toggle All: A, Cancel: CTRL + C)',
       )}`,
       options: installedClients.map((client) => ({
         value: client.name,
