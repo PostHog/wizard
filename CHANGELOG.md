@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.12.0](https://github.com/PostHog/wizard/compare/v1.11.0...v1.12.0) (2025-08-21)
+
+
+### Features
+
+* add vscode mcp client ([#126](https://github.com/PostHog/wizard/issues/126)) ([380ee5b](https://github.com/PostHog/wizard/commit/380ee5b009c54504512c888f89b4db4bf90b5127))
+
 ## [1.11.0](https://github.com/PostHog/wizard/compare/v1.10.1...v1.11.0) (2025-08-21)
 
 
