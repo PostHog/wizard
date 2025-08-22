@@ -70,8 +70,13 @@ export async function abortIfCancelled<T>(
   integration?: Integration,
 ): Promise<Exclude<T, symbol>> {
   await analytics.shutdown('cancelled');
+  const resolvedInput = await input;
 
-  if (clack.isCancel(await input)) {
+  if (
+    clack.isCancel(resolvedInput) ||
+    (typeof resolvedInput === 'symbol' &&
+      resolvedInput.description === 'clack:cancel')
+  ) {
     const docsUrl = integration
       ? INTEGRATION_CONFIG[integration].docsUrl
       : 'https://posthog.com/docs';
