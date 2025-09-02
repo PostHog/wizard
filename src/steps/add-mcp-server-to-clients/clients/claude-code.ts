@@ -54,9 +54,13 @@ export class ClaudeCodeMCPClient extends DefaultMCPClient {
 
     try {
       execSync(command);
-    } catch {
+    } catch (error) {
       analytics.captureException(
-        new Error('Failed to add server to Claude Code'),
+        new Error(
+          `Failed to add server to Claude Code: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+        ),
       );
       return Promise.resolve({ success: false });
     }
@@ -69,9 +73,13 @@ export class ClaudeCodeMCPClient extends DefaultMCPClient {
 
     try {
       execSync(command);
-    } catch {
+    } catch (error) {
       analytics.captureException(
-        new Error('Failed to remove server from Claude Code'),
+        new Error(
+          `Failed to remove server from Claude Code: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+        ),
       );
       return Promise.resolve({ success: false });
     }
