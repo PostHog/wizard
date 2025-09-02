@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.13.1](https://github.com/PostHog/wizard/compare/v1.13.0...v1.13.1) (2025-08-22)
+
+
+### Bug Fixes
+
+* better input check in abortIfCancelled ([#131](https://github.com/PostHog/wizard/issues/131)) ([7ac009a](https://github.com/PostHog/wizard/commit/7ac009a3fa354677232936c69ff64db0aea1c4f4))
+
 ## [1.13.0](https://github.com/PostHog/wizard/compare/v1.12.0...v1.13.0) (2025-08-21)
 
 
