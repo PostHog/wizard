@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.13.2](https://github.com/PostHog/wizard/compare/v1.13.1...v1.13.2) (2025-09-02)
+
+
+### Bug Fixes
+
+* improve error capturing for claude code mcp client ([#138](https://github.com/PostHog/wizard/issues/138)) ([2dcf799](https://github.com/PostHog/wizard/commit/2dcf799a968508b28647986a6033f1f64acd1284))
+
 ## [1.13.1](https://github.com/PostHog/wizard/compare/v1.13.0...v1.13.1) (2025-08-22)
 
 
