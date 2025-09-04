@@ -45,8 +45,11 @@ export class ClaudeCodeMCPClient extends DefaultMCPClient {
     throw new Error('Not implemented');
   }
 
-  addServer(apiKey: string): Promise<{ success: boolean }> {
-    const config = getDefaultServerConfig(apiKey, 'sse');
+  addServer(
+    apiKey: string,
+    selectedFeatures?: string[],
+  ): Promise<{ success: boolean }> {
+    const config = getDefaultServerConfig(apiKey, 'sse', selectedFeatures);
 
     const command = `claude mcp add-json posthog -s user '${JSON.stringify(
       config,

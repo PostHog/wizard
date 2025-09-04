@@ -61,8 +61,12 @@ export class ZedClient extends DefaultMCPClient {
     throw new Error(`Unsupported platform: ${process.platform}`);
   }
 
-  getServerConfig(apiKey: string, type: 'sse' | 'streamable-http') {
-    const baseConfig = getDefaultServerConfig(apiKey, type);
+  getServerConfig(
+    apiKey: string,
+    type: 'sse' | 'streamable-http',
+    selectedFeatures?: string[],
+  ) {
+    const baseConfig = getDefaultServerConfig(apiKey, type, selectedFeatures);
     return {
       enabled: true,
       source: 'custom',
