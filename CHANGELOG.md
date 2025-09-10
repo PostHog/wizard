@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.14.0](https://github.com/PostHog/wizard/compare/v1.13.2...v1.14.0) (2025-09-10)
+
+
+### Features
+
+* allow feature selection during MCP setup ([#140](https://github.com/PostHog/wizard/issues/140)) ([91ff2ef](https://github.com/PostHog/wizard/commit/91ff2efe131e32a28cfb336b449f0d99b2fb1e22))
+
+
+### Bug Fixes
+
+* support node 22 ([#142](https://github.com/PostHog/wizard/issues/142)) ([11d4edb](https://github.com/PostHog/wizard/commit/11d4edb778fd1b6284a8d223af51ebded35d0ea4))
+
 ## [1.13.2](https://github.com/PostHog/wizard/compare/v1.13.1...v1.13.2) (2025-09-02)
 
 
