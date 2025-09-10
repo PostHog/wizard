@@ -327,6 +327,7 @@ describe('ClaudeMCPClient', () => {
       expect(getDefaultServerConfigMock).toHaveBeenCalledWith(
         mockApiKey,
         'sse',
+        undefined,
       );
     });
   });

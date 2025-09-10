@@ -12,6 +12,7 @@ import type { CloudRegion } from '../../utils/types';
 import { ClaudeCodeMCPClient } from './clients/claude-code';
 import { VisualStudioCodeClient } from './clients/visual-studio-code';
 import { ZedClient } from './clients/zed';
+import { AVAILABLE_FEATURES, ALL_FEATURE_VALUES } from './defaults';
 
 export const getSupportedClients = async (): Promise<MCPClient[]> => {
   const allClients = [
@@ -60,6 +61,19 @@ export const addMCPServerToClientsStep = async ({
   if (!hasPermission) {
     return [];
   }
+
+  const { groupMultiselect } = await import('@clack/prompts');
+  const selectedFeatures = await abortIfCancelled(
+    groupMultiselect({
+      message: `Select which PostHog features to enable as tools: ${chalk.dim(
+        '(Toggle: Space, Confirm: Enter, Toggle All: A, Cancel: CTRL + C)',
+      )}`,
+      options: AVAILABLE_FEATURES,
+      initialValues: [...ALL_FEATURE_VALUES],
+      required: false,
+    }),
+    integration,
+  );
 
   const supportedClients = await getSupportedClients();
 
@@ -127,7 +141,7 @@ export const addMCPServerToClientsStep = async ({
   const personalApiKey = await getPersonalApiKey({ cloudRegion: region });
 
   await traceStep('adding mcp servers', async () => {
-    await addMCPServer(clients, personalApiKey);
+    await addMCPServer(clients, personalApiKey, selectedFeatures);
   });
 
   clack.log.success(
@@ -215,9 +229,10 @@ export const getInstalledClients = async (): Promise<MCPClient[]> => {
 export const addMCPServer = async (
   clients: MCPClient[],
   personalApiKey: string,
+  selectedFeatures?: string[],
 ): Promise<void> => {
   for (const client of clients) {
-    await client.addServer(personalApiKey);
+    await client.addServer(personalApiKey, selectedFeatures);
   }
 };
 

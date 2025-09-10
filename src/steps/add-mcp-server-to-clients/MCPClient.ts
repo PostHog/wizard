@@ -8,7 +8,10 @@ export abstract class MCPClient {
   abstract getConfigPath(): Promise<string>;
   abstract getServerPropertyName(): string;
   abstract isServerInstalled(): Promise<boolean>;
-  abstract addServer(apiKey: string): Promise<{ success: boolean }>;
+  abstract addServer(
+    apiKey: string,
+    selectedFeatures?: string[],
+  ): Promise<{ success: boolean }>;
   abstract removeServer(): Promise<{ success: boolean }>;
   abstract isClientSupported(): Promise<boolean>;
 }
@@ -24,8 +27,12 @@ export abstract class DefaultMCPClient extends MCPClient {
     return 'mcpServers';
   }
 
-  getServerConfig(apiKey: string, type: 'sse' | 'streamable-http') {
-    return getDefaultServerConfig(apiKey, type);
+  getServerConfig(
+    apiKey: string,
+    type: 'sse' | 'streamable-http',
+    selectedFeatures?: string[],
+  ) {
+    return getDefaultServerConfig(apiKey, type, selectedFeatures);
   }
 
   async isServerInstalled(): Promise<boolean> {
@@ -47,13 +54,17 @@ export abstract class DefaultMCPClient extends MCPClient {
     }
   }
 
-  async addServer(apiKey: string): Promise<{ success: boolean }> {
-    return this._addServerType(apiKey, 'sse');
+  async addServer(
+    apiKey: string,
+    selectedFeatures?: string[],
+  ): Promise<{ success: boolean }> {
+    return this._addServerType(apiKey, 'sse', selectedFeatures);
   }
 
   async _addServerType(
     apiKey: string,
     type: 'sse' | 'streamable-http',
+    selectedFeatures?: string[],
   ): Promise<{ success: boolean }> {
     try {
       const configPath = await this.getConfigPath();
@@ -70,7 +81,11 @@ export abstract class DefaultMCPClient extends MCPClient {
         existingConfig = jsonc.parse(configContent) || {};
       }
 
-      const newServerConfig = this.getServerConfig(apiKey, type);
+      const newServerConfig = this.getServerConfig(
+        apiKey,
+        type,
+        selectedFeatures,
+      );
       const typedConfig = existingConfig as Record<string, any>;
       if (!typedConfig[serverPropertyName]) {
         typedConfig[serverPropertyName] = {};
