@@ -85,7 +85,7 @@
     "typescript": "^5.0.4"
   },
   "engines": {
-    "node": "18.x || 20.x",
+    "node": ">=18",
     "npm": ">=3.10.7"
   },
   "packageManager": "pnpm@9.15.5+sha256.8472168c3e1fd0bff287e694b053fccbbf20579a3ff9526b6333beab8df65a8d",
