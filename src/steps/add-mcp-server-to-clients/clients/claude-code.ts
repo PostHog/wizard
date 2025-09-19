@@ -24,14 +24,17 @@ export class ClaudeCodeMCPClient extends DefaultMCPClient {
     }
   }
 
-  isServerInstalled(): Promise<boolean> {
+  isServerInstalled(local?: boolean): Promise<boolean> {
     try {
-      // check if posthog in output
+      // check if specific server name exists in output
       const output = execSync('claude mcp list', {
         stdio: 'pipe',
       });
 
-      if (output.toString().includes('posthog')) {
+      const outputStr = output.toString();
+      const serverName = local ? 'posthog-local' : 'posthog';
+
+      if (outputStr.includes(serverName)) {
         return Promise.resolve(true);
       }
     } catch {
@@ -48,10 +51,17 @@ export class ClaudeCodeMCPClient extends DefaultMCPClient {
   addServer(
     apiKey: string,
     selectedFeatures?: string[],
+    local?: boolean,
   ): Promise<{ success: boolean }> {
-    const config = getDefaultServerConfig(apiKey, 'sse', selectedFeatures);
+    const config = getDefaultServerConfig(
+      apiKey,
+      'sse',
+      selectedFeatures,
+      local,
+    );
+    const serverName = local ? 'posthog-local' : 'posthog';
 
-    const command = `claude mcp add-json posthog -s user '${JSON.stringify(
+    const command = `claude mcp add-json ${serverName} -s user '${JSON.stringify(
       config,
     )}'`;
 
@@ -71,8 +81,9 @@ export class ClaudeCodeMCPClient extends DefaultMCPClient {
     return Promise.resolve({ success: true });
   }
 
-  removeServer(): Promise<{ success: boolean }> {
-    const command = `claude mcp remove --scope user posthog`;
+  removeServer(local?: boolean): Promise<{ success: boolean }> {
+    const serverName = local ? 'posthog-local' : 'posthog';
+    const command = `claude mcp remove --scope user ${serverName}`;
 
     try {
       execSync(command);

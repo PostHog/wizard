@@ -13,12 +13,18 @@ import { sleep } from './lib/helper-functions';
 export const runMCPInstall = async (options: {
   signup: boolean;
   region?: CloudRegion;
+  local?: boolean;
 }) => {
-  clack.intro(chalk.bgGreenBright('Installing the PostHog MCP server'));
+  clack.intro(
+    chalk.bgGreenBright(
+      `Installing the PostHog MCP server ${options.local && '(local)'}`,
+    ),
+  );
 
   await addMCPServerToClientsStep({
     cloudRegion: options.region,
     askPermission: false,
+    local: options.local,
   });
 
   clack.log.message(
@@ -36,9 +42,11 @@ export const runMCPInstall = async (options: {
 ${chalk.blueBright(`https://posthog.com/docs/model-context-protocol`)}`);
 };
 
-export const runMCPRemove = async () => {
+export const runMCPRemove = async (options?: { local?: boolean }) => {
   clack.intro(chalk.bgRed('Removing the PostHog MCP server'));
-  const results = await removeMCPServerFromClientsStep({});
+  const results = await removeMCPServerFromClientsStep({
+    local: options?.local,
+  });
 
   if (results.length === 0) {
     clack.outro(`No PostHog MCP servers found to remove.`);

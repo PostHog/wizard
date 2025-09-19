@@ -154,12 +154,23 @@ yargs(hideBin(process.argv))
         'add',
         'Install PostHog MCP server to supported clients',
         (yargs) => {
-          return yargs.options({});
+          return yargs.options({
+            local: {
+              default: false,
+              describe:
+                'Add local development MCP server (http://localhost:8787)',
+              type: 'boolean',
+            },
+          });
         },
         (argv) => {
           const options = { ...argv };
           void runMCPInstall(
-            options as unknown as { signup: boolean; region?: CloudRegion },
+            options as unknown as {
+              signup: boolean;
+              region?: CloudRegion;
+              local?: boolean;
+            },
           );
         },
       )
@@ -167,10 +178,18 @@ yargs(hideBin(process.argv))
         'remove',
         'Remove PostHog MCP server from supported clients',
         (yargs) => {
-          return yargs.options({});
+          return yargs.options({
+            local: {
+              default: false,
+              describe:
+                'Remove local development MCP server (http://localhost:8787)',
+              type: 'boolean',
+            },
+          });
         },
-        () => {
-          void runMCPRemove();
+        (argv) => {
+          const options = { ...argv };
+          void runMCPRemove(options as { local?: boolean });
         },
       )
       .demandCommand(1, 'You must specify a subcommand (add or remove)')

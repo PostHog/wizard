@@ -28,7 +28,8 @@ export class CursorMCPClient extends DefaultMCPClient {
   async addServer(
     apiKey: string,
     selectedFeatures?: string[],
+    local?: boolean,
   ): Promise<{ success: boolean }> {
-    return this._addServerType(apiKey, 'sse', selectedFeatures);
+    return this._addServerType(apiKey, 'sse', selectedFeatures, local);
   }
 }
