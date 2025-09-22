@@ -15,6 +15,7 @@ import { runReactNativeWizard } from './react-native/react-native-wizard';
 import { runAstroWizard } from './astro/astro-wizard';
 import { EventEmitter } from 'events';
 import chalk from 'chalk';
+import { RateLimitError } from './utils/errors';
 
 EventEmitter.defaultMaxListeners = 50;
 
@@ -88,11 +89,16 @@ export async function runWizard(argv: Args) {
     });
 
     await analytics.shutdown('error');
-    clack.log.error(
-      `Something went wrong. You can read the documentation at ${chalk.cyan(
-        `${INTEGRATION_CONFIG[integration].docsUrl}`,
-      )} to set up PostHog manually.`,
-    );
+
+    if (error instanceof RateLimitError) {
+      clack.log.error('Wizard usage limit reached. Please try again later.');
+    } else {
+      clack.log.error(
+        `Something went wrong. You can read the documentation at ${chalk.cyan(
+          `${INTEGRATION_CONFIG[integration].docsUrl}`,
+        )} to set up PostHog manually.`,
+      );
+    }
     process.exit(1);
   }
 }

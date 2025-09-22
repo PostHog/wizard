@@ -6,6 +6,7 @@ import { getCloudUrlFromRegion } from './urls';
 import { analytics } from './analytics';
 import { AxiosError } from 'axios';
 import { debug } from './debug';
+import { RateLimitError } from './errors';
 
 export interface QueryOptions<S> {
   message: string;
@@ -61,6 +62,10 @@ export const query = async <S>({
           json_schema: jsonSchema,
           type: 'wizard_query_error',
         });
+
+        if (error.response?.status === 429) {
+          throw new RateLimitError();
+        }
       }
 
       throw error;
