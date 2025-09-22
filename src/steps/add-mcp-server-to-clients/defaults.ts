@@ -68,8 +68,10 @@ export const getDefaultServerConfig = (
   apiKey: string,
   type: MCPServerType,
   selectedFeatures?: string[],
+  local?: boolean,
 ) => {
-  const baseUrl = `https://mcp.posthog.com/${type === 'sse' ? 'sse' : 'mcp'}`;
+  const host = local ? 'localhost:8787' : 'mcp.posthog.com';
+  const baseUrl = `${host}/${type === 'sse' ? 'sse' : 'mcp'}`;
 
   const isAllFeaturesSelected =
     selectedFeatures &&

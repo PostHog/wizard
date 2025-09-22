@@ -328,6 +328,7 @@ describe('ClaudeMCPClient', () => {
         mockApiKey,
         'sse',
         undefined,
+        undefined,
       );
     });
   });

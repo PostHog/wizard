@@ -7,12 +7,13 @@ export abstract class MCPClient {
   name: string;
   abstract getConfigPath(): Promise<string>;
   abstract getServerPropertyName(): string;
-  abstract isServerInstalled(): Promise<boolean>;
+  abstract isServerInstalled(local?: boolean): Promise<boolean>;
   abstract addServer(
     apiKey: string,
     selectedFeatures?: string[],
+    local?: boolean,
   ): Promise<{ success: boolean }>;
-  abstract removeServer(): Promise<{ success: boolean }>;
+  abstract removeServer(local?: boolean): Promise<{ success: boolean }>;
   abstract isClientSupported(): Promise<boolean>;
 }
 
@@ -31,11 +32,12 @@ export abstract class DefaultMCPClient extends MCPClient {
     apiKey: string,
     type: 'sse' | 'streamable-http',
     selectedFeatures?: string[],
+    local?: boolean,
   ) {
-    return getDefaultServerConfig(apiKey, type, selectedFeatures);
+    return getDefaultServerConfig(apiKey, type, selectedFeatures, local);
   }
 
-  async isServerInstalled(): Promise<boolean> {
+  async isServerInstalled(local?: boolean): Promise<boolean> {
     try {
       const configPath = await this.getConfigPath();
 
@@ -46,8 +48,10 @@ export abstract class DefaultMCPClient extends MCPClient {
       const configContent = await fs.promises.readFile(configPath, 'utf8');
       const config = jsonc.parse(configContent) as Record<string, any>;
       const serverPropertyName = this.getServerPropertyName();
+      const serverName = local ? 'posthog-local' : 'posthog';
+
       return (
-        serverPropertyName in config && 'posthog' in config[serverPropertyName]
+        serverPropertyName in config && serverName in config[serverPropertyName]
       );
     } catch {
       return false;
@@ -57,14 +61,16 @@ export abstract class DefaultMCPClient extends MCPClient {
   async addServer(
     apiKey: string,
     selectedFeatures?: string[],
+    local?: boolean,
   ): Promise<{ success: boolean }> {
-    return this._addServerType(apiKey, 'sse', selectedFeatures);
+    return this._addServerType(apiKey, 'sse', selectedFeatures, local);
   }
 
   async _addServerType(
     apiKey: string,
     type: 'sse' | 'streamable-http',
     selectedFeatures?: string[],
+    local?: boolean,
   ): Promise<{ success: boolean }> {
     try {
       const configPath = await this.getConfigPath();
@@ -85,16 +91,18 @@ export abstract class DefaultMCPClient extends MCPClient {
         apiKey,
         type,
         selectedFeatures,
+        local,
       );
       const typedConfig = existingConfig as Record<string, any>;
       if (!typedConfig[serverPropertyName]) {
         typedConfig[serverPropertyName] = {};
       }
-      typedConfig[serverPropertyName].posthog = newServerConfig;
+      const serverName = local ? 'posthog-local' : 'posthog';
+      typedConfig[serverPropertyName][serverName] = newServerConfig;
 
       const edits = jsonc.modify(
         configContent,
-        [serverPropertyName, 'posthog'],
+        [serverPropertyName, serverName],
         newServerConfig,
         {
           formattingOptions: {
@@ -114,7 +122,7 @@ export abstract class DefaultMCPClient extends MCPClient {
     }
   }
 
-  async removeServer(): Promise<{ success: boolean }> {
+  async removeServer(local?: boolean): Promise<{ success: boolean }> {
     try {
       const configPath = await this.getConfigPath();
 
@@ -126,13 +134,15 @@ export abstract class DefaultMCPClient extends MCPClient {
       const config = jsonc.parse(configContent) as Record<string, any>;
       const serverPropertyName = this.getServerPropertyName();
 
+      const serverName = local ? 'posthog-local' : 'posthog';
+
       if (
         serverPropertyName in config &&
-        'posthog' in config[serverPropertyName]
+        serverName in config[serverPropertyName]
       ) {
         const edits = jsonc.modify(
           configContent,
-          [serverPropertyName, 'posthog'],
+          [serverPropertyName, serverName],
           undefined,
           {
             formattingOptions: {

@@ -37,18 +37,21 @@ export const addMCPServerToClientsStep = async ({
   integration,
   cloudRegion,
   askPermission = true,
+  local = false,
 }: {
   integration?: Integration;
   cloudRegion?: CloudRegion;
   askPermission?: boolean;
+  local?: boolean;
 }): Promise<string[]> => {
   const region = cloudRegion ?? (await askForCloudRegion());
 
   const hasPermission = askPermission
     ? await abortIfCancelled(
         clack.select({
-          message:
-            'Would you like to install the MCP server to use PostHog in your editor?',
+          message: local
+            ? 'Would you like to install the local development MCP server?'
+            : 'Would you like to install the MCP server to use PostHog in your editor?',
           options: [
             { value: true, label: 'Yes' },
             { value: false, label: 'No' },
@@ -97,7 +100,7 @@ export const addMCPServerToClientsStep = async ({
     selectedClientNames.includes(client.name),
   );
 
-  const installedClients = await getInstalledClients();
+  const installedClients = await getInstalledClients(local);
 
   if (installedClients.length > 0) {
     clack.log.warn(
@@ -134,14 +137,14 @@ export const addMCPServerToClientsStep = async ({
       return [];
     }
 
-    await removeMCPServer(installedClients);
+    await removeMCPServer(installedClients, local);
     clack.log.info('Removed existing installation.');
   }
 
   const personalApiKey = await getPersonalApiKey({ cloudRegion: region });
 
   await traceStep('adding mcp servers', async () => {
-    await addMCPServer(clients, personalApiKey, selectedFeatures);
+    await addMCPServer(clients, personalApiKey, selectedFeatures, local);
   });
 
   clack.log.success(
@@ -160,10 +163,12 @@ export const addMCPServerToClientsStep = async ({
 
 export const removeMCPServerFromClientsStep = async ({
   integration,
+  local = false,
 }: {
   integration?: Integration;
+  local?: boolean;
 }): Promise<string[]> => {
-  const installedClients = await getInstalledClients();
+  const installedClients = await getInstalledClients(local);
   if (installedClients.length === 0) {
     analytics.capture('wizard interaction', {
       action: 'no mcp servers to remove',
@@ -200,7 +205,7 @@ export const removeMCPServerFromClientsStep = async ({
   }
 
   const results = await traceStep('removing mcp servers', async () => {
-    await removeMCPServer(clientsToRemove);
+    await removeMCPServer(clientsToRemove, local);
     return clientsToRemove.map((c) => c.name);
   });
 
@@ -213,12 +218,14 @@ export const removeMCPServerFromClientsStep = async ({
   return results;
 };
 
-export const getInstalledClients = async (): Promise<MCPClient[]> => {
+export const getInstalledClients = async (
+  local?: boolean,
+): Promise<MCPClient[]> => {
   const clients = await getSupportedClients();
   const installedClients: MCPClient[] = [];
 
   for (const client of clients) {
-    if (await client.isServerInstalled()) {
+    if (await client.isServerInstalled(local)) {
       installedClients.push(client);
     }
   }
@@ -230,14 +237,18 @@ export const addMCPServer = async (
   clients: MCPClient[],
   personalApiKey: string,
   selectedFeatures?: string[],
+  local?: boolean,
 ): Promise<void> => {
   for (const client of clients) {
-    await client.addServer(personalApiKey, selectedFeatures);
+    await client.addServer(personalApiKey, selectedFeatures, local);
   }
 };
 
-export const removeMCPServer = async (clients: MCPClient[]): Promise<void> => {
+export const removeMCPServer = async (
+  clients: MCPClient[],
+  local?: boolean,
+): Promise<void> => {
   for (const client of clients) {
-    await client.removeServer();
+    await client.removeServer(local);
   }
 };
