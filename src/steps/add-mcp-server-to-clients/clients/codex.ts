@@ -1,7 +1,14 @@
-import { DefaultMCPClient } from '../MCPClient';
-import { getDefaultServerConfig } from '../defaults';
-import { analytics } from '../../../utils/analytics';
+import { z } from 'zod';
 import { execSync, spawnSync } from 'node:child_process';
+
+import { DefaultMCPClient } from '../MCPClient';
+import { DefaultMCPClientConfig, getDefaultServerConfig } from '../defaults';
+
+import { analytics } from '../../../utils/analytics';
+
+export const CodexMCPConfig = DefaultMCPClientConfig;
+
+export type CodexMCPConfig = z.infer<typeof DefaultMCPClientConfig>;
 
 export class CodexMCPClient extends DefaultMCPClient {
   name = 'Codex CLI';
@@ -76,9 +83,7 @@ export class CodexMCPClient extends DefaultMCPClient {
 
     if (result.error || result.status !== 0) {
       analytics.captureException(
-        new Error(
-          'Failed to add server to Codex CLI. Please ensure codex is installed.',
-        ),
+        new Error('Failed to add server to Codex CLI.'),
       );
       return Promise.resolve({ success: false });
     }
@@ -94,9 +99,7 @@ export class CodexMCPClient extends DefaultMCPClient {
 
     if (result.error || result.status !== 0) {
       analytics.captureException(
-        new Error(
-          'Failed to remove server from Codex CLI. Please ensure codex is installed.',
-        ),
+        new Error('Failed to remove server from Codex CLI.'),
       );
       return Promise.resolve({ success: false });
     }
