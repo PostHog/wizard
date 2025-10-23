@@ -13,7 +13,7 @@ export interface QueryOptions<S> {
   model?: AIModel;
   region: CloudRegion;
   schema: ZodSchema<S>;
-  wizardHash: string;
+  accessToken: string;
 }
 
 export const query = async <S>({
@@ -21,7 +21,7 @@ export const query = async <S>({
   model = 'o4-mini',
   region,
   schema,
-  wizardHash,
+  accessToken,
 }: QueryOptions<S>): Promise<S> => {
   const fullSchema = zodToJsonSchema(schema, 'schema');
   const jsonSchema = fullSchema.definitions;
@@ -29,7 +29,7 @@ export const query = async <S>({
   debug('Full schema:', JSON.stringify(fullSchema, null, 2));
   debug('Query request:', {
     url: `${getCloudUrlFromRegion(region)}/api/wizard/query`,
-    wizardHash,
+    accessToken,
     message: message.substring(0, 100) + '...',
     json_schema: { ...jsonSchema, name: 'schema', strict: true },
   });
@@ -44,7 +44,7 @@ export const query = async <S>({
       },
       {
         headers: {
-          'X-PostHog-Wizard-Hash': wizardHash,
+          'X-PostHog-Wizard-Hash': accessToken,
           ...(process.env.RECORD_FIXTURES === 'true'
             ? { 'X-PostHog-Wizard-Fixture-Generation': true }
             : {}),

@@ -64,7 +64,7 @@ export async function runReactWizard(options: WizardOptions): Promise<void> {
     analytics.setTag('react-version', reactVersion);
   }
 
-  const { projectApiKey, wizardHash, host } = await getOrAskForProjectData({
+  const { projectApiKey, accessToken, host } = await getOrAskForProjectData({
     ...options,
     cloudRegion,
   });
@@ -102,14 +102,14 @@ export async function runReactWizard(options: WizardOptions): Promise<void> {
     integration: Integration.react,
     relevantFiles,
     documentation: installationDocumentation,
-    wizardHash,
+    accessToken,
     cloudRegion,
   });
 
   await generateFileChangesForIntegration({
     integration: Integration.react,
     filesToChange,
-    wizardHash,
+    accessToken,
     installDir: options.installDir,
     documentation: installationDocumentation,
     cloudRegion,

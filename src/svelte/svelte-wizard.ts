@@ -62,7 +62,7 @@ export async function runSvelteWizard(options: WizardOptions): Promise<void> {
     analytics.setTag('svelte-version', svelteVersion);
   }
 
-  const { projectApiKey, wizardHash, host } = await getOrAskForProjectData({
+  const { projectApiKey, accessToken, host } = await getOrAskForProjectData({
     ...options,
     cloudRegion,
   });
@@ -108,14 +108,14 @@ export async function runSvelteWizard(options: WizardOptions): Promise<void> {
     integration: Integration.svelte,
     relevantFiles,
     documentation: installationDocumentation,
-    wizardHash,
+    accessToken,
     cloudRegion,
   });
 
   await generateFileChangesForIntegration({
     integration: Integration.svelte,
     filesToChange,
-    wizardHash,
+    accessToken,
     installDir: options.installDir,
     documentation: installationDocumentation,
     cloudRegion,

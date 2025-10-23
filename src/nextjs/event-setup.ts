@@ -89,7 +89,7 @@ The event setup wizard will modify multiple files. For the best experience, comm
 
   const cloudRegion = options.cloudRegion ?? (await askForCloudRegion());
 
-  const { wizardHash } = await getOrAskForProjectData({
+  const { accessToken } = await getOrAskForProjectData({
     ...options,
     cloudRegion,
   });
@@ -206,7 +206,7 @@ The event setup wizard will modify multiple files. For the best experience, comm
       model: 'gemini-2.5-flash',
       region: cloudRegion,
       schema: FileSelectionSchema,
-      wizardHash,
+      accessToken,
     });
     selectedFiles = response.files;
     s.stop(`Selected ${selectedFiles.length} files for event tracking`);
@@ -312,7 +312,7 @@ The event setup wizard will modify multiple files. For the best experience, comm
         model: 'gemini-2.5-pro',
         region: cloudRegion,
         schema: EnhancedFileSchema,
-        wizardHash,
+        accessToken,
       });
 
       // Apply changes immediately

@@ -72,7 +72,7 @@ export async function runNextjsWizard(options: WizardOptions): Promise<void> {
 
   analytics.setTag('nextjs-version', getNextJsVersionBucket(nextVersion));
 
-  const { projectApiKey, wizardHash, host } = await getOrAskForProjectData({
+  const { projectApiKey, accessToken, host } = await getOrAskForProjectData({
     ...options,
     cloudRegion,
   });
@@ -135,14 +135,14 @@ export async function runNextjsWizard(options: WizardOptions): Promise<void> {
     integration: Integration.nextjs,
     relevantFiles,
     documentation: installationDocumentation,
-    wizardHash,
+    accessToken,
     cloudRegion,
   });
 
   await generateFileChangesForIntegration({
     integration: Integration.nextjs,
     filesToChange,
-    wizardHash,
+    accessToken,
     installDir: options.installDir,
     documentation: installationDocumentation,
     cloudRegion,

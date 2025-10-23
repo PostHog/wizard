@@ -2,11 +2,8 @@ import * as childProcess from 'node:child_process';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import { basename, isAbsolute, join, relative } from 'node:path';
-import { setInterval } from 'node:timers';
-import { URL } from 'node:url';
-import axios from 'axios';
+
 import chalk from 'chalk';
-import opn from 'opn';
 import { traceStep } from '../telemetry';
 import { debug } from './debug';
 import { type PackageDotJson, hasPackageInstalled } from './package-json';
@@ -26,13 +23,15 @@ import {
 } from '../lib/constants';
 import { analytics } from './analytics';
 import clack from './clack';
-import { getCloudUrlFromRegion } from './urls';
+import { getCloudUrlFromRegion, getHostFromRegion } from './urls';
 import { INTEGRATION_CONFIG } from '../lib/config';
+import { performOAuthFlow } from './oauth';
+import { fetchUserData, fetchProjectData } from '../lib/api';
 
 interface ProjectData {
   projectApiKey: string;
+  accessToken: string;
   host: string;
-  wizardHash: string;
   distinctId: string;
 }
 
@@ -546,14 +545,14 @@ export async function getOrAskForProjectData(
     cloudRegion: CloudRegion;
   },
 ): Promise<{
-  wizardHash: string;
   host: string;
   projectApiKey: string;
+  accessToken: string;
 }> {
   const cloudUrl = getCloudUrlFromRegion(_options.cloudRegion);
-  const { host, projectApiKey, wizardHash } = await traceStep('login', () =>
+  const { host, projectApiKey, accessToken } = await traceStep('login', () =>
     askForWizardLogin({
-      url: cloudUrl,
+      cloudRegion: _options.cloudRegion,
       signup: _options.signup,
     }),
   );
@@ -573,108 +572,53 @@ ${chalk.cyan(`${cloudUrl}/settings/project#variables`)}`);
   }
 
   return {
-    wizardHash,
+    accessToken,
     host: host || DEFAULT_HOST_URL,
     projectApiKey: projectApiKey || DUMMY_PROJECT_API_KEY,
   };
 }
 
 async function askForWizardLogin(options: {
-  url: string;
+  cloudRegion: CloudRegion;
   signup: boolean;
 }): Promise<ProjectData> {
-  let wizardHash: string;
-
-  try {
-    wizardHash = (
-      await axios.post<{ hash: string }>(`${options.url}/api/wizard/initialize`)
-    ).data.hash;
-  } catch (e: unknown) {
-    clack.log.error('Loading wizard failed.');
-    clack.log.info(JSON.stringify(e, null, 2));
-    await abort(
-      chalk.red(
-        `Please try again in a few minutes and let us know if this issue persists: ${ISSUES_URL}`,
-      ),
-    );
-    throw e;
-  }
-
-  const loginUrl = new URL(`${options.url}/wizard?hash=${wizardHash}`);
-
-  const signupUrl = new URL(
-    `${options.url}/signup?next=${encodeURIComponent(
-      `/wizard?hash=${wizardHash}`,
-    )}`,
-  );
-
-  const urlToOpen = options.signup ? signupUrl.toString() : loginUrl.toString();
-
-  clack.log.info(
-    `${chalk.bold(
-      `If the browser window didn't open automatically, please open the following link to login into PostHog:`,
-    )}\n\n${chalk.cyan(urlToOpen)}${
-      options.signup
-        ? `\n\nIf you already have an account, you can use this link:\n\n${chalk.cyan(
-            loginUrl.toString(),
-          )}`
-        : ``
-    }`,
-  );
-
-  if (process.env.NODE_ENV !== 'test') {
-    opn(urlToOpen, { wait: false }).catch(() => {
-      // opn throws in environments that don't have a browser (e.g. remote shells) so we just noop here
-    });
-  }
-
-  const loginSpinner = clack.spinner();
-
-  loginSpinner.start('Waiting for you to log in using the link above');
-
-  const data = await new Promise<ProjectData>((resolve) => {
-    const pollingInterval = setInterval(() => {
-      axios
-        .get<{
-          project_api_key: string;
-          host: string;
-          user_distinct_id: string;
-          personal_api_key?: string;
-        }>(`${options.url}/api/wizard/data`, {
-          headers: {
-            'Accept-Encoding': 'deflate',
-            'X-PostHog-Wizard-Hash': wizardHash,
-          },
-        })
-        .then((result) => {
-          const data: ProjectData = {
-            wizardHash,
-            projectApiKey: result.data.project_api_key,
-            host: result.data.host,
-            distinctId: result.data.user_distinct_id,
-          };
-
-          resolve(data);
-          clearTimeout(timeout);
-          clearInterval(pollingInterval);
-        })
-        .catch(() => {
-          // noop - just try again
-        });
-    }, 500);
-
-    const timeout = setTimeout(() => {
-      clearInterval(pollingInterval);
-      loginSpinner.stop(
-        'Login timed out. No worries - it happens to the best of us.',
-      );
-
-      analytics.setTag('opened-wizard-link', false);
-      void abort('Please restart the wizard and log in to complete the setup.');
-    }, 180_000);
+  const tokenResponse = await performOAuthFlow({
+    cloudRegion: options.cloudRegion,
+    scopes: ['user:read', 'project:read'],
   });
 
-  loginSpinner.stop(
+  const projectId = tokenResponse.scoped_teams?.[0];
+
+  if (projectId === undefined) {
+    const error = new Error(
+      'No project access granted. Please authorize with project-level access.',
+    );
+    analytics.captureException(error, {
+      step: 'wizard_login',
+      has_scoped_teams: !!tokenResponse.scoped_teams,
+    });
+    clack.log.error(error.message);
+    await abort();
+  }
+
+  const cloudUrl = getCloudUrlFromRegion(options.cloudRegion);
+  const host = getHostFromRegion(options.cloudRegion);
+
+  const projectData = await fetchProjectData(
+    tokenResponse.access_token,
+    projectId!,
+    cloudUrl,
+  );
+  const userData = await fetchUserData(tokenResponse.access_token, cloudUrl);
+
+  const data: ProjectData = {
+    accessToken: tokenResponse.access_token,
+    projectApiKey: projectData.api_token,
+    host,
+    distinctId: userData.distinct_id,
+  };
+
+  clack.log.success(
     `Login complete. ${options.signup ? 'Welcome to PostHog! 🎉' : ''}`,
   );
   analytics.setTag('opened-wizard-link', true);

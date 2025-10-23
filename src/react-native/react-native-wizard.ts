@@ -64,7 +64,7 @@ export async function runReactNativeWizard(
     analytics.setTag('react-native-version', reactNativeVersion);
   }
 
-  const { projectApiKey, wizardHash, host } = await getOrAskForProjectData({
+  const { projectApiKey, accessToken, host } = await getOrAskForProjectData({
     ...options,
     cloudRegion,
   });
@@ -132,14 +132,14 @@ export async function runReactNativeWizard(
     integration: Integration.reactNative,
     relevantFiles,
     documentation: installationDocumentation,
-    wizardHash,
+    accessToken,
     cloudRegion,
   });
 
   await generateFileChangesForIntegration({
     integration: Integration.reactNative,
     filesToChange,
-    wizardHash,
+    accessToken,
     installDir: options.installDir,
     documentation: installationDocumentation,
     cloudRegion,

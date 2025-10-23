@@ -76,13 +76,13 @@ export async function getFilesToChange({
   integration,
   relevantFiles,
   documentation,
-  wizardHash,
+  accessToken,
   cloudRegion,
 }: {
   integration: Integration;
   relevantFiles: string[];
   documentation: string;
-  wizardHash: string;
+  accessToken: string;
   cloudRegion: CloudRegion;
 }) {
   const filterFilesSpinner = clack.spinner();
@@ -103,7 +103,7 @@ export async function getFilesToChange({
   const filterFilesResponse = await query({
     message: prompt,
     schema: filterFilesResponseSchmea,
-    wizardHash,
+    accessToken,
     region: cloudRegion,
   });
 
@@ -122,11 +122,11 @@ export async function getFilesToChange({
 
 export async function generateFileContent({
   prompt,
-  wizardHash,
+  accessToken,
   cloudRegion,
 }: {
   prompt: string;
-  wizardHash: string;
+  accessToken: string;
   cloudRegion: CloudRegion;
 }) {
   const response = await query({
@@ -134,7 +134,7 @@ export async function generateFileContent({
     schema: z.object({
       newContent: z.string(),
     }),
-    wizardHash: wizardHash,
+    accessToken: accessToken,
     region: cloudRegion,
   });
 
@@ -144,14 +144,14 @@ export async function generateFileContent({
 export async function generateFileChangesForIntegration({
   integration,
   filesToChange,
-  wizardHash,
+  accessToken,
   documentation,
   installDir,
   cloudRegion,
 }: {
   integration: Integration;
   filesToChange: string[];
-  wizardHash: string;
+  accessToken: string;
   documentation: string;
   installDir: string;
   cloudRegion: CloudRegion;
@@ -203,7 +203,7 @@ export async function generateFileChangesForIntegration({
 
       const newContent = await generateFileContent({
         prompt,
-        wizardHash,
+        accessToken,
         cloudRegion,
       });
 

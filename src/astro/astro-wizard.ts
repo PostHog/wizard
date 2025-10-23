@@ -56,7 +56,7 @@ export async function runAstroWizard(options: WizardOptions): Promise<void> {
     analytics.setTag('astro-version', astroVersion);
   }
 
-  const { projectApiKey, wizardHash, host } = await getOrAskForProjectData({
+  const { projectApiKey, accessToken, host } = await getOrAskForProjectData({
     ...options,
     cloudRegion,
   });
@@ -79,14 +79,14 @@ export async function runAstroWizard(options: WizardOptions): Promise<void> {
     integration: Integration.astro,
     relevantFiles,
     documentation: installationDocumentation,
-    wizardHash,
+    accessToken,
     cloudRegion,
   });
 
   await generateFileChangesForIntegration({
     integration: Integration.astro,
     filesToChange,
-    wizardHash,
+    accessToken,
     installDir: options.installDir,
     documentation: installationDocumentation,
     cloudRegion,
