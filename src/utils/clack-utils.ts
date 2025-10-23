@@ -33,6 +33,7 @@ interface ProjectData {
   accessToken: string;
   host: string;
   distinctId: string;
+  projectId: number;
 }
 
 export interface CliSetupConfig {
@@ -548,13 +549,16 @@ export async function getOrAskForProjectData(
   host: string;
   projectApiKey: string;
   accessToken: string;
+  projectId: number;
 }> {
   const cloudUrl = getCloudUrlFromRegion(_options.cloudRegion);
-  const { host, projectApiKey, accessToken } = await traceStep('login', () =>
-    askForWizardLogin({
-      cloudRegion: _options.cloudRegion,
-      signup: _options.signup,
-    }),
+  const { host, projectApiKey, accessToken, projectId } = await traceStep(
+    'login',
+    () =>
+      askForWizardLogin({
+        cloudRegion: _options.cloudRegion,
+        signup: _options.signup,
+      }),
   );
 
   if (!projectApiKey) {
@@ -575,6 +579,7 @@ ${chalk.cyan(`${cloudUrl}/settings/project#variables`)}`);
     accessToken,
     host: host || DEFAULT_HOST_URL,
     projectApiKey: projectApiKey || DUMMY_PROJECT_API_KEY,
+    projectId,
   };
 }
 
@@ -617,6 +622,7 @@ async function askForWizardLogin(options: {
     projectApiKey: projectData.api_token,
     host,
     distinctId: userData.distinct_id,
+    projectId: projectId!,
   };
 
   clack.log.success(

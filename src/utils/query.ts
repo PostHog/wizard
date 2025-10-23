@@ -14,6 +14,7 @@ export interface QueryOptions<S> {
   region: CloudRegion;
   schema: ZodSchema<S>;
   accessToken: string;
+  projectId: number;
 }
 
 export const query = async <S>({
@@ -22,29 +23,48 @@ export const query = async <S>({
   region,
   schema,
   accessToken,
+  projectId,
 }: QueryOptions<S>): Promise<S> => {
   const fullSchema = zodToJsonSchema(schema, 'schema');
-  const jsonSchema = fullSchema.definitions;
+  const jsonSchema = fullSchema.definitions?.schema || fullSchema;
+
+  const url = `${getCloudUrlFromRegion(
+    region,
+  )}/api/projects/${projectId}/llm_gateway/v1/chat/completions`;
 
   debug('Full schema:', JSON.stringify(fullSchema, null, 2));
   debug('Query request:', {
-    url: `${getCloudUrlFromRegion(region)}/api/wizard/query`,
-    accessToken,
+    url,
     message: message.substring(0, 100) + '...',
-    json_schema: { ...jsonSchema, name: 'schema', strict: true },
+    json_schema: { name: 'schema', strict: true, schema: jsonSchema },
   });
 
   const response = await axios
-    .post<{ data: unknown }>(
-      `${getCloudUrlFromRegion(region)}/api/wizard/query`,
+    .post<{
+      choices: Array<{ message: { content: string } }>;
+    }>(
+      url,
       {
-        message,
         model,
-        json_schema: { ...jsonSchema, name: 'schema', strict: true },
+        messages: [
+          {
+            role: 'user',
+            content: message,
+          },
+        ],
+        response_format: {
+          type: 'json_schema',
+          json_schema: {
+            name: 'schema',
+            strict: true,
+            schema: jsonSchema,
+          },
+        },
       },
       {
         headers: {
-          'X-PostHog-Wizard-Hash': accessToken,
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
           ...(process.env.RECORD_FIXTURES === 'true'
             ? { 'X-PostHog-Wizard-Fixture-Generation': true }
             : {}),
@@ -76,7 +96,8 @@ export const query = async <S>({
     data: response.data,
   });
 
-  const validation = schema.safeParse(response.data.data);
+  const responseContent = JSON.parse(response.data.choices[0].message.content);
+  const validation = schema.safeParse(responseContent);
 
   if (!validation.success) {
     debug('Validation error:', validation.error);
@@ -91,9 +112,21 @@ export const query = async <S>({
     );
 
     const requestBody = JSON.stringify({
-      message,
       model,
-      json_schema: { ...jsonSchema, name: 'schema', strict: true },
+      messages: [
+        {
+          role: 'user',
+          content: message,
+        },
+      ],
+      response_format: {
+        type: 'json_schema',
+        json_schema: {
+          name: 'schema',
+          strict: true,
+          schema: jsonSchema,
+        },
+      },
     });
 
     fixtureTracker.saveQueryFixture(requestBody, validation.data);

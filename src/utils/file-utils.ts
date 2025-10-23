@@ -78,12 +78,14 @@ export async function getFilesToChange({
   documentation,
   accessToken,
   cloudRegion,
+  projectId,
 }: {
   integration: Integration;
   relevantFiles: string[];
   documentation: string;
   accessToken: string;
   cloudRegion: CloudRegion;
+  projectId: number;
 }) {
   const filterFilesSpinner = clack.spinner();
 
@@ -105,6 +107,7 @@ export async function getFilesToChange({
     schema: filterFilesResponseSchmea,
     accessToken,
     region: cloudRegion,
+    projectId,
   });
 
   const filesToChange = filterFilesResponse.files;
@@ -124,10 +127,12 @@ export async function generateFileContent({
   prompt,
   accessToken,
   cloudRegion,
+  projectId,
 }: {
   prompt: string;
   accessToken: string;
   cloudRegion: CloudRegion;
+  projectId: number;
 }) {
   const response = await query({
     message: prompt,
@@ -136,6 +141,7 @@ export async function generateFileContent({
     }),
     accessToken: accessToken,
     region: cloudRegion,
+    projectId,
   });
 
   return response.newContent;
@@ -148,6 +154,7 @@ export async function generateFileChangesForIntegration({
   documentation,
   installDir,
   cloudRegion,
+  projectId,
 }: {
   integration: Integration;
   filesToChange: string[];
@@ -155,6 +162,7 @@ export async function generateFileChangesForIntegration({
   documentation: string;
   installDir: string;
   cloudRegion: CloudRegion;
+  projectId: number;
 }) {
   const changes: FileChange[] = [];
 
@@ -205,6 +213,7 @@ export async function generateFileChangesForIntegration({
         prompt,
         accessToken,
         cloudRegion,
+        projectId,
       });
 
       if (newContent !== oldContent) {

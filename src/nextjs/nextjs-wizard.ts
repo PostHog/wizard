@@ -72,10 +72,11 @@ export async function runNextjsWizard(options: WizardOptions): Promise<void> {
 
   analytics.setTag('nextjs-version', getNextJsVersionBucket(nextVersion));
 
-  const { projectApiKey, accessToken, host } = await getOrAskForProjectData({
-    ...options,
-    cloudRegion,
-  });
+  const { projectApiKey, accessToken, host, projectId } =
+    await getOrAskForProjectData({
+      ...options,
+      cloudRegion,
+    });
 
   const sdkAlreadyInstalled = hasPackageInstalled('posthog-js', packageJson);
 
@@ -137,6 +138,7 @@ export async function runNextjsWizard(options: WizardOptions): Promise<void> {
     documentation: installationDocumentation,
     accessToken,
     cloudRegion,
+    projectId,
   });
 
   await generateFileChangesForIntegration({
@@ -146,6 +148,7 @@ export async function runNextjsWizard(options: WizardOptions): Promise<void> {
     installDir: options.installDir,
     documentation: installationDocumentation,
     cloudRegion,
+    projectId,
   });
 
   const packageManagerForOutro =

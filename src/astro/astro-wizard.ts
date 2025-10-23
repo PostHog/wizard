@@ -56,10 +56,11 @@ export async function runAstroWizard(options: WizardOptions): Promise<void> {
     analytics.setTag('astro-version', astroVersion);
   }
 
-  const { projectApiKey, accessToken, host } = await getOrAskForProjectData({
-    ...options,
-    cloudRegion,
-  });
+  const { projectApiKey, accessToken, host, projectId } =
+    await getOrAskForProjectData({
+      ...options,
+      cloudRegion,
+    });
 
   clack.log.info('Heading to include the PostHogSnippet in your Astro project');
 
@@ -81,6 +82,7 @@ export async function runAstroWizard(options: WizardOptions): Promise<void> {
     documentation: installationDocumentation,
     accessToken,
     cloudRegion,
+    projectId,
   });
 
   await generateFileChangesForIntegration({
@@ -90,6 +92,7 @@ export async function runAstroWizard(options: WizardOptions): Promise<void> {
     installDir: options.installDir,
     documentation: installationDocumentation,
     cloudRegion,
+    projectId,
   });
 
   await runPrettierStep({
