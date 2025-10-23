@@ -585,6 +585,7 @@ async function askForWizardLogin(options: {
   const tokenResponse = await performOAuthFlow({
     cloudRegion: options.cloudRegion,
     scopes: ['user:read', 'project:read'],
+    signup: options.signup,
   });
 
   const projectId = tokenResponse.scoped_teams?.[0];

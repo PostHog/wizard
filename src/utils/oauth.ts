@@ -26,6 +26,7 @@ export type OAuthTokenResponse = z.infer<typeof OAuthTokenResponseSchema>;
 interface OAuthConfig {
   scopes: string[];
   cloudRegion: CloudRegion;
+  signup?: boolean;
 }
 
 function generateCodeVerifier(): string {
@@ -150,14 +151,26 @@ export async function performOAuthFlow(
   authUrl.searchParams.set('scope', config.scopes.join(' '));
   authUrl.searchParams.set('required_access_level', 'project');
 
+  const signupUrl = new URL(
+    `${cloudUrl}/signup?next=${encodeURIComponent(authUrl.toString())}`,
+  );
+
+  const urlToOpen = config.signup ? signupUrl.toString() : authUrl.toString();
+
   clack.log.info(
     `${chalk.bold(
-      "If the browser window didn't open automatically, please open the following link to authorize:",
-    )}\n\n${chalk.cyan(authUrl.toString())}`,
+      "If the browser window didn't open automatically, please open the following link to login into PostHog:",
+    )}\n\n${chalk.cyan(urlToOpen)}${
+      config.signup
+        ? `\n\nIf you already have an account, you can use this link:\n\n${chalk.cyan(
+            authUrl.toString(),
+          )}`
+        : ``
+    }`,
   );
 
   if (process.env.NODE_ENV !== 'test') {
-    opn(authUrl.toString(), { wait: false }).catch(() => {
+    opn(urlToOpen, { wait: false }).catch(() => {
       // opn throws in environments without a browser
     });
   }
