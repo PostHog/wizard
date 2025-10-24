@@ -84,7 +84,7 @@ async function startCallbackServer(
               <p>${
                 isAccessDenied
                   ? 'Authorization cancelled.'
-                  : `Authorization failed: ${error}`
+                  : `Authorization failed.`
               }</p>
               <p>Return to your terminal. This window will close automatically.</p>
               <script>window.close();</script>
