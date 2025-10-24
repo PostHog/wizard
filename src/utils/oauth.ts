@@ -37,11 +37,23 @@ function generateCodeChallenge(verifier: string): string {
   return crypto.createHash('sha256').update(verifier).digest('base64url');
 }
 
-async function startCallbackServer(): Promise<{
-  code: string;
+async function startCallbackServer(
+  authUrl: string,
+  signupUrl: string,
+): Promise<{
   server: http.Server;
+  waitForCallback: () => Promise<string>;
 }> {
   return new Promise((resolve, reject) => {
+    let callbackResolve: (code: string) => void;
+    let callbackReject: (error: Error) => void;
+
+    const waitForCallback = () =>
+      new Promise<string>((res, rej) => {
+        callbackResolve = res;
+        callbackReject = rej;
+      });
+
     const server = http.createServer((req, res) => {
       if (!req.url) {
         res.writeHead(400);
@@ -49,6 +61,15 @@ async function startCallbackServer(): Promise<{
         return;
       }
       const url = new URL(req.url, `http://localhost:${OAUTH_PORT}`);
+
+      if (url.pathname === '/authorize') {
+        const isSignup = url.searchParams.get('signup') === 'true';
+        const redirectUrl = isSignup ? signupUrl : authUrl;
+        res.writeHead(302, { Location: redirectUrl });
+        res.end();
+        return;
+      }
+
       const code = url.searchParams.get('code');
       const error = url.searchParams.get('error');
 
@@ -70,7 +91,7 @@ async function startCallbackServer(): Promise<{
             </body>
           </html>
         `);
-        reject(new Error(`OAuth error: ${error}`));
+        callbackReject(new Error(`OAuth error: ${error}`));
         return;
       }
 
@@ -84,7 +105,7 @@ async function startCallbackServer(): Promise<{
             </body>
           </html>
         `);
-        resolve({ code, server });
+        callbackResolve(code);
       } else {
         res.writeHead(400, { 'Content-Type': 'text/html' });
         res.end(`
@@ -98,7 +119,10 @@ async function startCallbackServer(): Promise<{
       }
     });
 
-    server.listen(OAUTH_PORT);
+    server.listen(OAUTH_PORT, () => {
+      resolve({ server, waitForCallback });
+    });
+
     server.on('error', reject);
   });
 }
@@ -155,15 +179,23 @@ export async function performOAuthFlow(
     `${cloudUrl}/signup?next=${encodeURIComponent(authUrl.toString())}`,
   );
 
-  const urlToOpen = config.signup ? signupUrl.toString() : authUrl.toString();
+  const localSignupUrl = `http://localhost:${OAUTH_PORT}/authorize?signup=true`;
+  const localLoginUrl = `http://localhost:${OAUTH_PORT}/authorize`;
+
+  const urlToOpen = config.signup ? localSignupUrl : localLoginUrl;
+
+  const { server, waitForCallback } = await startCallbackServer(
+    authUrl.toString(),
+    signupUrl.toString(),
+  );
 
   clack.log.info(
     `${chalk.bold(
-      "If the browser window didn't open automatically, please open the following link to login into PostHog:",
+      "If the browser window didn't open automatically, please open the following link to be redirected to PostHog:",
     )}\n\n${chalk.cyan(urlToOpen)}${
       config.signup
         ? `\n\nIf you already have an account, you can use this link:\n\n${chalk.cyan(
-            authUrl.toString(),
+            localLoginUrl,
           )}`
         : ``
     }`,
@@ -179,10 +211,10 @@ export async function performOAuthFlow(
   loginSpinner.start('Waiting for authorization...');
 
   try {
-    const { code, server } = await Promise.race([
-      startCallbackServer(),
+    const code = await Promise.race([
+      waitForCallback(),
       new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error('Authorization timed out')), 180_000),
+        setTimeout(() => reject(new Error('Authorization timed out')), 60_000),
       ),
     ]);
 
@@ -194,6 +226,7 @@ export async function performOAuthFlow(
     return token;
   } catch (e) {
     loginSpinner.stop('Authorization failed.');
+    server.close();
 
     const error = e instanceof Error ? e : new Error('Unknown error');
 

@@ -7,6 +7,14 @@ import { analytics } from './analytics';
 import { AxiosError } from 'axios';
 import { debug } from './debug';
 import { RateLimitError } from './errors';
+import * as crypto from 'node:crypto';
+
+const generateTraceId = () => {
+  const randomBytes = crypto.randomBytes(32);
+  return crypto.createHash('sha256').update(randomBytes).digest('hex');
+};
+
+const TRACE_ID = generateTraceId();
 
 export interface QueryOptions<S> {
   message: string;
@@ -23,48 +31,31 @@ export const query = async <S>({
   region,
   schema,
   accessToken,
-  projectId,
+  projectId: _, // TODO: Use this to switch the wizard query endpoint over to the new LLM Gateway
 }: QueryOptions<S>): Promise<S> => {
   const fullSchema = zodToJsonSchema(schema, 'schema');
-  const jsonSchema = fullSchema.definitions?.schema || fullSchema;
-
-  const url = `${getCloudUrlFromRegion(
-    region,
-  )}/api/projects/${projectId}/llm_gateway/v1/chat/completions`;
+  const jsonSchema = fullSchema.definitions;
 
   debug('Full schema:', JSON.stringify(fullSchema, null, 2));
   debug('Query request:', {
-    url,
+    url: `${getCloudUrlFromRegion(region)}/api/wizard/query`,
+    accessToken,
     message: message.substring(0, 100) + '...',
-    json_schema: { name: 'schema', strict: true, schema: jsonSchema },
+    json_schema: { ...jsonSchema, name: 'schema', strict: true },
   });
 
   const response = await axios
-    .post<{
-      choices: Array<{ message: { content: string } }>;
-    }>(
-      url,
+    .post<{ data: unknown }>(
+      `${getCloudUrlFromRegion(region)}/api/wizard/query`,
       {
+        message,
         model,
-        messages: [
-          {
-            role: 'user',
-            content: message,
-          },
-        ],
-        response_format: {
-          type: 'json_schema',
-          json_schema: {
-            name: 'schema',
-            strict: true,
-            schema: jsonSchema,
-          },
-        },
+        json_schema: { ...jsonSchema, name: 'schema', strict: true },
       },
       {
         headers: {
           Authorization: `Bearer ${accessToken}`,
-          'Content-Type': 'application/json',
+          'X-PostHog-Trace-Id': TRACE_ID,
           ...(process.env.RECORD_FIXTURES === 'true'
             ? { 'X-PostHog-Wizard-Fixture-Generation': true }
             : {}),
@@ -96,8 +87,7 @@ export const query = async <S>({
     data: response.data,
   });
 
-  const responseContent = JSON.parse(response.data.choices[0].message.content);
-  const validation = schema.safeParse(responseContent);
+  const validation = schema.safeParse(response.data.data);
 
   if (!validation.success) {
     debug('Validation error:', validation.error);
@@ -112,21 +102,9 @@ export const query = async <S>({
     );
 
     const requestBody = JSON.stringify({
+      message,
       model,
-      messages: [
-        {
-          role: 'user',
-          content: message,
-        },
-      ],
-      response_format: {
-        type: 'json_schema',
-        json_schema: {
-          name: 'schema',
-          strict: true,
-          schema: jsonSchema,
-        },
-      },
+      json_schema: { ...jsonSchema, name: 'schema', strict: true },
     });
 
     fixtureTracker.saveQueryFixture(requestBody, validation.data);
