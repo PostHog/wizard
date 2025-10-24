@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.15.0](https://github.com/PostHog/wizard/compare/v1.14.0...v1.15.0) (2025-10-24)
+
+
+### Features
+
+* **mcp:** local mcp server management ([#151](https://github.com/PostHog/wizard/issues/151)) ([f40e4be](https://github.com/PostHog/wizard/commit/f40e4bee80706c355e800810d6c2a211777ed383))
+* repace cli flow with oauth ([#158](https://github.com/PostHog/wizard/issues/158)) ([38e0811](https://github.com/PostHog/wizard/commit/38e0811fe0077cd60de58502e50998f2794d836c))
+
+
+### Bug Fixes
+
+* make 429 error more descriptive ([#149](https://github.com/PostHog/wizard/issues/149)) ([b7955af](https://github.com/PostHog/wizard/commit/b7955af8bf663a926d684d625a792294265e99fe))
+
 ## [1.14.0](https://github.com/PostHog/wizard/compare/v1.13.2...v1.14.0) (2025-09-10)
 
 
