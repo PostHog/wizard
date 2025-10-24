@@ -7,13 +7,22 @@ import { analytics } from './analytics';
 import { AxiosError } from 'axios';
 import { debug } from './debug';
 import { RateLimitError } from './errors';
+import * as crypto from 'node:crypto';
+
+const generateTraceId = () => {
+  const randomBytes = crypto.randomBytes(32);
+  return crypto.createHash('sha256').update(randomBytes).digest('hex');
+};
+
+const TRACE_ID = generateTraceId();
 
 export interface QueryOptions<S> {
   message: string;
   model?: AIModel;
   region: CloudRegion;
   schema: ZodSchema<S>;
-  wizardHash: string;
+  accessToken: string;
+  projectId: number;
 }
 
 export const query = async <S>({
@@ -21,7 +30,8 @@ export const query = async <S>({
   model = 'o4-mini',
   region,
   schema,
-  wizardHash,
+  accessToken,
+  projectId: _, // TODO: Use this to switch the wizard query endpoint over to the new LLM Gateway
 }: QueryOptions<S>): Promise<S> => {
   const fullSchema = zodToJsonSchema(schema, 'schema');
   const jsonSchema = fullSchema.definitions;
@@ -29,7 +39,7 @@ export const query = async <S>({
   debug('Full schema:', JSON.stringify(fullSchema, null, 2));
   debug('Query request:', {
     url: `${getCloudUrlFromRegion(region)}/api/wizard/query`,
-    wizardHash,
+    accessToken,
     message: message.substring(0, 100) + '...',
     json_schema: { ...jsonSchema, name: 'schema', strict: true },
   });
@@ -44,7 +54,8 @@ export const query = async <S>({
       },
       {
         headers: {
-          'X-PostHog-Wizard-Hash': wizardHash,
+          Authorization: `Bearer ${accessToken}`,
+          'X-PostHog-Trace-Id': TRACE_ID,
           ...(process.env.RECORD_FIXTURES === 'true'
             ? { 'X-PostHog-Wizard-Fixture-Generation': true }
             : {}),

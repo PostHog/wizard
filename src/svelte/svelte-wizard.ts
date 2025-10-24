@@ -62,10 +62,11 @@ export async function runSvelteWizard(options: WizardOptions): Promise<void> {
     analytics.setTag('svelte-version', svelteVersion);
   }
 
-  const { projectApiKey, wizardHash, host } = await getOrAskForProjectData({
-    ...options,
-    cloudRegion,
-  });
+  const { projectApiKey, accessToken, host, projectId } =
+    await getOrAskForProjectData({
+      ...options,
+      cloudRegion,
+    });
 
   const sdkAlreadyInstalled = hasPackageInstalled('posthog-js', packageJson);
 
@@ -108,17 +109,19 @@ export async function runSvelteWizard(options: WizardOptions): Promise<void> {
     integration: Integration.svelte,
     relevantFiles,
     documentation: installationDocumentation,
-    wizardHash,
+    accessToken,
     cloudRegion,
+    projectId,
   });
 
   await generateFileChangesForIntegration({
     integration: Integration.svelte,
     filesToChange,
-    wizardHash,
+    accessToken,
     installDir: options.installDir,
     documentation: installationDocumentation,
     cloudRegion,
+    projectId,
   });
 
   const { relativeEnvFilePath, addedEnvVariables } =

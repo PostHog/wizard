@@ -64,10 +64,11 @@ export async function runReactNativeWizard(
     analytics.setTag('react-native-version', reactNativeVersion);
   }
 
-  const { projectApiKey, wizardHash, host } = await getOrAskForProjectData({
-    ...options,
-    cloudRegion,
-  });
+  const { projectApiKey, accessToken, host, projectId } =
+    await getOrAskForProjectData({
+      ...options,
+      cloudRegion,
+    });
 
   const sdkAlreadyInstalled = hasPackageInstalled('posthog-js', packageJson);
 
@@ -132,17 +133,19 @@ export async function runReactNativeWizard(
     integration: Integration.reactNative,
     relevantFiles,
     documentation: installationDocumentation,
-    wizardHash,
+    accessToken,
     cloudRegion,
+    projectId,
   });
 
   await generateFileChangesForIntegration({
     integration: Integration.reactNative,
     filesToChange,
-    wizardHash,
+    accessToken,
     installDir: options.installDir,
     documentation: installationDocumentation,
     cloudRegion,
+    projectId,
   });
 
   await runPrettierStep({
