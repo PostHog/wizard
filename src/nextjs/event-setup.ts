@@ -89,7 +89,7 @@ The event setup wizard will modify multiple files. For the best experience, comm
 
   const cloudRegion = options.cloudRegion ?? (await askForCloudRegion());
 
-  const { accessToken } = await getOrAskForProjectData({
+  const { accessToken, projectId } = await getOrAskForProjectData({
     ...options,
     cloudRegion,
   });
@@ -207,6 +207,7 @@ The event setup wizard will modify multiple files. For the best experience, comm
       region: cloudRegion,
       schema: FileSelectionSchema,
       accessToken,
+      projectId,
     });
     selectedFiles = response.files;
     s.stop(`Selected ${selectedFiles.length} files for event tracking`);
@@ -313,6 +314,7 @@ The event setup wizard will modify multiple files. For the best experience, comm
         region: cloudRegion,
         schema: EnhancedFileSchema,
         accessToken,
+        projectId,
       });
 
       // Apply changes immediately
