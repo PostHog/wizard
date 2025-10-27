@@ -176,9 +176,6 @@ async function chooseNextjsWizard(options: WizardOptions): Promise<void> {
     );
 
     if (flagValue === WizardVariant.Agent) {
-      clack.log.info(
-        'The wizard has chosen you to try the next-generation agent integration for Next.js. Stand by for the good stuff.',
-      );
       await runNextjsWizardAgent(options);
     } else {
       await runNextjsWizard(options);
