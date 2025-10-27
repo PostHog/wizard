@@ -64,6 +64,9 @@ export class Analytics {
       const distinctId = this.distinctId ?? this.anonymousId;
       return await this.client.getFeatureFlag(flagKey, distinctId, {
         sendFeatureFlagEvents: true,
+        personProperties: {
+          $app_name: this.appName,
+        },
       });
     } catch (error) {
       debug('Failed to get feature flag:', flagKey, error);
