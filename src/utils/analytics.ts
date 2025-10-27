@@ -11,6 +11,7 @@ export class Analytics {
     {};
   private distinctId?: string;
   private anonymousId: string;
+  private appName = 'wizard';
 
   constructor() {
     this.client = new PostHog(ANALYTICS_POSTHOG_PUBLIC_PROJECT_WRITE_KEY, {
@@ -20,7 +21,7 @@ export class Analytics {
       enableExceptionAutocapture: true,
     });
 
-    this.tags = {};
+    this.tags = { $app_name: this.appName };
 
     this.anonymousId = uuidv4();
 
