@@ -173,9 +173,7 @@ ${chalk.dim(
   'Note: This wizard uses an LLM agent to analyze and modify your project. Please review the changes made.',
 )}
 
-${chalk.dim(
-  `If you encounter any issues, drop me a line: danilo@posthog.com`,
-)}`;
+${chalk.dim(`How did this work for you? Drop me a line: danilo@posthog.com`)}`;
 
   clack.outro(outroMessage);
 
