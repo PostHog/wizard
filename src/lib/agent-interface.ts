@@ -8,6 +8,7 @@ import { Agent, PermissionMode } from '@posthog/agent';
 import clack from '../utils/clack';
 import { debug } from '../utils/debug';
 import type { WizardOptions } from '../utils/types';
+import { analytics } from '../utils/analytics';
 
 export type AgentConfig = {
   workingDirectory: string;
@@ -140,12 +141,24 @@ function handleAgentEvent(
       if (options.debug) {
         debug('Error details:', event.error);
       }
+      // Capture exception for error tracking
+      if (event.error instanceof Error) {
+        analytics.captureException(event.error, {
+          event_type: event.type,
+          message: event.message,
+        });
+      }
       break;
 
     case 'done':
       // Log completion to debug file only
       if (options.debug && event.durationMs) {
         debug(`Completed in ${Math.round(event.durationMs / 1000)}s`);
+      } else if (event.durationMs) {
+        analytics.capture('wizard-agent-success', {
+          duration_ms: event.durationMs,
+          duration_seconds: Math.round(event.durationMs / 1000),
+        });
       }
       break;
   }

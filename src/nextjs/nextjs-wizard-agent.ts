@@ -95,6 +95,8 @@ export async function runNextjsWizardAgent(
     host,
   });
 
+  analytics.capture('wizard-agent-integration-start');
+
   // Execute integration using agent
   await runAgent(agent, integrationPrompt, options, spinner, {
     estimatedDurationMinutes: 8,
