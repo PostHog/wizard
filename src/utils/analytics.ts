@@ -4,6 +4,7 @@ import {
   ANALYTICS_POSTHOG_PUBLIC_PROJECT_WRITE_KEY,
 } from '../lib/constants';
 import { v4 as uuidv4 } from 'uuid';
+import { debug } from './debug';
 export class Analytics {
   private client: PostHog;
   private tags: Record<string, string | boolean | number | null | undefined> =
@@ -55,6 +56,18 @@ export class Analytics {
         ...properties,
       },
     });
+  }
+
+  async getFeatureFlag(flagKey: string): Promise<string | boolean | undefined> {
+    try {
+      const distinctId = this.distinctId ?? this.anonymousId;
+      return await this.client.getFeatureFlag(flagKey, distinctId, {
+        sendFeatureFlagEvents: true,
+      });
+    } catch (error) {
+      debug('Failed to get feature flag:', flagKey, error);
+      return undefined;
+    }
   }
 
   async shutdown(status: 'success' | 'error' | 'cancelled') {

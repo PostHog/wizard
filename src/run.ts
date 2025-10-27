@@ -1,9 +1,15 @@
-import { abortIfCancelled } from './utils/clack-utils';
+import { abortIfCancelled, getPackageDotJson } from './utils/clack-utils';
 
 import { runNextjsWizard } from './nextjs/nextjs-wizard';
+import { runNextjsWizardAgent } from './nextjs/nextjs-wizard-agent';
 import type { CloudRegion, WizardOptions } from './utils/types';
 
-import { getIntegrationDescription, Integration } from './lib/constants';
+import {
+  getIntegrationDescription,
+  Integration,
+  FeatureFlagDefinition,
+  WizardVariant,
+} from './lib/constants';
 import { readEnvironment } from './utils/environment';
 import clack from './utils/clack';
 import path from 'path';
@@ -16,6 +22,8 @@ import { runAstroWizard } from './astro/astro-wizard';
 import { EventEmitter } from 'events';
 import chalk from 'chalk';
 import { RateLimitError } from './utils/errors';
+import { getPackageVersion } from './utils/package-json';
+import * as semver from 'semver';
 
 EventEmitter.defaultMaxListeners = 50;
 
@@ -65,7 +73,7 @@ export async function runWizard(argv: Args) {
   try {
     switch (integration) {
       case Integration.nextjs:
-        await runNextjsWizard(wizardOptions);
+        await chooseNextjsWizard(wizardOptions);
         break;
       case Integration.react:
         await runReactWizard(wizardOptions);
@@ -146,4 +154,36 @@ async function getIntegrationForSetup(
   );
 
   return integration;
+}
+
+async function chooseNextjsWizard(options: WizardOptions): Promise<void> {
+  try {
+    const packageJson = await getPackageDotJson(options);
+    const nextVersion = getPackageVersion('next', packageJson);
+
+    // If Next.js < 15, use legacy wizard
+    if (nextVersion) {
+      const coercedVersion = semver.coerce(nextVersion);
+      if (coercedVersion && semver.lt(coercedVersion, '15.3.0')) {
+        await runNextjsWizard(options);
+        return;
+      }
+    }
+
+    // Next.js >= 15 - check feature flag to determine which wizard to use
+    const flagValue = await analytics.getFeatureFlag(
+      FeatureFlagDefinition.NextV2,
+    );
+
+    if (flagValue === WizardVariant.Agent) {
+      clack.log.info(
+        'The wizard has chosen you to try the next-generation agent integration for Next.js. Stand by for the good stuff.',
+      );
+      await runNextjsWizardAgent(options);
+    } else {
+      await runNextjsWizard(options);
+    }
+  } catch (error) {
+    await runNextjsWizard(options);
+  }
 }
