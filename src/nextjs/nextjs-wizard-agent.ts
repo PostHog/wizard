@@ -12,7 +12,7 @@ import {
 import { getPackageVersion } from '../utils/package-json';
 import { getNextJsRouter, getNextJsVersionBucket, NextJsRouter } from './utils';
 import clack from '../utils/clack';
-import { Integration } from '../lib/constants';
+import { Integration, WIZARD_INTERACTION_EVENT_NAME } from '../lib/constants';
 import { analytics } from '../utils/analytics';
 import type { WizardOptions } from '../utils/types';
 import { askForCloudRegion } from '../utils/clack-utils';
@@ -40,6 +40,10 @@ export async function runNextjsWizardAgent(
     wizardName: 'PostHog Next.js wizard (agent-powered)',
   });
 
+  clack.log.info(
+    'The wizard has chosen you to try the next-generation agent integration for Next.js.\n\nStand by for the good stuff, and let me know how it goes: danilo@posthog.com',
+  );
+
   const aiConsent = await askForAIConsent(options);
 
   if (!aiConsent) {
@@ -60,6 +64,9 @@ export async function runNextjsWizardAgent(
   const nextVersion = getPackageVersion('next', packageJson);
   analytics.setTag('nextjs-version', getNextJsVersionBucket(nextVersion));
 
+  analytics.capture(WIZARD_INTERACTION_EVENT_NAME, {
+    action: 'started agent integration',
+  });
   // Get PostHog credentials
   const { projectApiKey, host, accessToken } = await getOrAskForProjectData({
     ...options,
@@ -95,12 +102,11 @@ export async function runNextjsWizardAgent(
     host,
   });
 
-  analytics.capture('wizard-agent-integration-start');
-
   // Execute integration using agent
   await runAgent(agent, integrationPrompt, options, spinner, {
     estimatedDurationMinutes: 8,
-    spinnerMessage: 'Customizing your PostHog setup...',
+    spinnerMessage:
+      'Writing your PostHog setup with events, error capture and more...',
     successMessage: 'PostHog integration complete',
     errorMessage: 'Integration failed',
   });

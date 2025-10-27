@@ -9,6 +9,7 @@ import clack from '../utils/clack';
 import { debug } from '../utils/debug';
 import type { WizardOptions } from '../utils/types';
 import { analytics } from '../utils/analytics';
+import { WIZARD_INTERACTION_EVENT_NAME } from './constants';
 
 export type AgentConfig = {
   workingDirectory: string;
@@ -155,7 +156,8 @@ function handleAgentEvent(
       if (options.debug && event.durationMs) {
         debug(`Completed in ${Math.round(event.durationMs / 1000)}s`);
       } else if (event.durationMs) {
-        analytics.capture('wizard-agent-success', {
+        analytics.capture(WIZARD_INTERACTION_EVENT_NAME, {
+          action: 'agent integration completed',
           duration_ms: event.durationMs,
           duration_seconds: Math.round(event.durationMs / 1000),
         });
@@ -188,7 +190,7 @@ export async function runAgent(
   } = config ?? {};
 
   clack.log.step(
-    `This whole process should take about ${estimatedDurationMinutes} minutes including error checking and fixes. Grab some coffee!`,
+    `This whole process should take about ${estimatedDurationMinutes} minutes including error checking and fixes.\n\nGrab some coffee!`,
   );
 
   spinner.start(spinnerMessage);
