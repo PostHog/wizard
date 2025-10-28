@@ -35,6 +35,7 @@
     "@clack/core": "^0.3.4",
     "@clack/prompts": "0.7.0",
     "@langchain/core": "^0.3.40",
+    "@posthog/agent": "1.11.0",
     "axios": "1.7.4",
     "chalk": "^2.4.1",
     "fast-glob": "^3.3.3",
@@ -134,7 +135,10 @@
       "\\.no-jest\\.(jsx?|tsx?)$",
       "/e2e-tests/"
     ],
-    "testEnvironment": "node"
+    "testEnvironment": "node",
+    "moduleNameMapper": {
+      "^@posthog/agent$": "<rootDir>/__mocks__/@posthog/agent.ts"
+    }
   },
   "lint-staged": {
     "*.{js,ts,tsx,jsx}": "pnpm fix"

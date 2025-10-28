@@ -11,6 +11,7 @@
   },
   "include": [
     "__tests__",
+    "__mocks__/**/*",
     "index.ts",
     "bin.ts",
     "src/lib/**/*",
