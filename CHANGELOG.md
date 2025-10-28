@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.16.0](https://github.com/PostHog/wizard/compare/v1.15.0...v1.16.0) (2025-10-28)
+
+
+### Features
+
+* @posthog/agent integrations for Next.js ([#160](https://github.com/PostHog/wizard/issues/160)) ([f95b78c](https://github.com/PostHog/wizard/commit/f95b78c6475a583f5e47c0af8650d77fe5a0ef49))
+
 ## [1.15.0](https://github.com/PostHog/wizard/compare/v1.14.0...v1.15.0) (2025-10-24)
 
 
