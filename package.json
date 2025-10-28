@@ -135,7 +135,10 @@
       "\\.no-jest\\.(jsx?|tsx?)$",
       "/e2e-tests/"
     ],
-    "testEnvironment": "node"
+    "testEnvironment": "node",
+    "moduleNameMapper": {
+      "^@posthog/agent$": "<rootDir>/__mocks__/@posthog/agent.ts"
+    }
   },
   "lint-staged": {
     "*.{js,ts,tsx,jsx}": "pnpm fix"

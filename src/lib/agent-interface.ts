@@ -3,7 +3,7 @@
  * Provides common agent initialization and event handling
  */
 
-// @ts-expect-error - posthog-agent is ESM, wizard is CommonJS. Works at runtime via local link.
+// @ts-ignore - posthog-agent is ESM, wizard is CommonJS. Works at runtime via local link.
 import { Agent, PermissionMode } from '@posthog/agent';
 import clack from '../utils/clack';
 import { debug } from '../utils/debug';

@@ -40,6 +40,7 @@ describe('Analytics', () => {
         'test-uuid',
         {
           team: 'growth',
+          $app_name: 'wizard',
           ...properties,
         },
       );
@@ -57,6 +58,7 @@ describe('Analytics', () => {
         'test-uuid',
         {
           team: 'growth',
+          $app_name: 'wizard',
           testTag: 'testValue',
           ...properties,
         },
@@ -75,6 +77,7 @@ describe('Analytics', () => {
         distinctId,
         {
           team: 'growth',
+          $app_name: 'wizard',
         },
       );
     });
@@ -89,6 +92,7 @@ describe('Analytics', () => {
         'test-uuid',
         {
           team: 'growth',
+          $app_name: 'wizard',
         },
       );
     });
@@ -106,6 +110,7 @@ describe('Analytics', () => {
         'test-uuid',
         {
           team: 'growth',
+          $app_name: 'wizard',
           environment: 'test',
           version: '1.0.0',
           integration: 'nextjs',
@@ -126,6 +131,7 @@ describe('Analytics', () => {
         'test-uuid',
         {
           team: 'growth',
+          $app_name: 'wizard',
           integration: 'react',
         },
       );
@@ -141,6 +147,7 @@ describe('Analytics', () => {
         'test-uuid',
         {
           team: 'growth',
+          $app_name: 'wizard',
         },
       );
     });
@@ -164,6 +171,7 @@ describe('Analytics', () => {
         'test-uuid',
         {
           team: 'growth',
+          $app_name: 'wizard',
           integration: 'nextjs',
           forceInstall: true,
           debug: false,
@@ -186,6 +194,7 @@ describe('Analytics', () => {
         distinctId,
         {
           team: 'growth',
+          $app_name: 'wizard',
           integration: 'svelte',
         },
       );
