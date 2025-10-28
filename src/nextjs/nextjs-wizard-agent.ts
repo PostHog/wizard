@@ -41,7 +41,7 @@ export async function runNextjsWizardAgent(
   });
 
   clack.log.info(
-    'The wizard has chosen you to try the next-generation agent integration for Next.js.\n\nStand by for the good stuff, and let me know how it goes: danilo@posthog.com',
+    '🧙 The wizard has chosen you to try the next-generation agent integration for Next.js.\n\nStand by for the good stuff, and let me know how it goes:\n\ndanilo@posthog.com',
   );
 
   const aiConsent = await askForAIConsent(options);
@@ -67,20 +67,17 @@ export async function runNextjsWizardAgent(
   analytics.capture(WIZARD_INTERACTION_EVENT_NAME, {
     action: 'started agent integration',
   });
-  // Get PostHog credentials
+
   const { projectApiKey, host, accessToken } = await getOrAskForProjectData({
     ...options,
     cloudRegion,
   });
 
-  // Determine router type
   const router = await getNextJsRouter(options);
   const routerType = router === NextJsRouter.APP_ROUTER ? 'app' : 'pages';
 
-  // Create spinner for visual feedback
   const spinner = clack.spinner();
 
-  // Initialize Agent with PostHog MCP
   const agent = initializeAgent(
     {
       workingDirectory: options.installDir,
@@ -92,7 +89,6 @@ export async function runNextjsWizardAgent(
     spinner,
   );
 
-  // Build integration prompt that invokes the MCP's /integrate command
   const integrationPrompt = buildIntegrationPrompt({
     framework: 'Next.js',
     version: nextVersion || 'latest',
@@ -102,7 +98,6 @@ export async function runNextjsWizardAgent(
     host,
   });
 
-  // Execute integration using agent
   await runAgent(agent, integrationPrompt, options, spinner, {
     estimatedDurationMinutes: 8,
     spinnerMessage:
@@ -137,7 +132,6 @@ export async function runNextjsWizardAgent(
     integration: Integration.nextjs,
   });
 
-  // Custom outro message for AI-powered wizard
   const continueUrl = options.signup
     ? `${getCloudUrlFromRegion(cloudRegion)}/products?source=wizard`
     : undefined;
@@ -186,9 +180,6 @@ ${chalk.dim(`How did this work for you? Drop me a line: danilo@posthog.com`)}`;
   await analytics.shutdown('success');
 }
 
-/**
- * Build the prompt that instructs the agent to use the PostHog MCP
- */
 function buildIntegrationPrompt(context: {
   framework: string;
   version: string;
