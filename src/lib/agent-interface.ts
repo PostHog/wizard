@@ -4,12 +4,22 @@
  */
 
 // @ts-ignore - posthog-agent is ESM, wizard is CommonJS. Works at runtime via local link.
-import { Agent, PermissionMode } from '@posthog/agent';
+import { Agent, PermissionMode, type AgentEvent } from '@posthog/agent';
 import clack from '../utils/clack';
 import { debug } from '../utils/debug';
 import type { WizardOptions } from '../utils/types';
 import { analytics } from '../utils/analytics';
 import { WIZARD_INTERACTION_EVENT_NAME } from './constants';
+
+// TODO: Remove these if/when posthog/agent exports an enum for events
+const EventType = {
+  RAW_SDK_EVENT: 'raw_sdk_event',
+  TOKEN: 'token',
+  TOOL_CALL: 'tool_call',
+  TOOL_RESULT: 'tool_result',
+  ERROR: 'error',
+  DONE: 'done',
+} as const;
 
 export type AgentConfig = {
   workingDirectory: string;
@@ -33,10 +43,10 @@ export function initializeAgent(
       workingDirectory: config.workingDirectory,
       posthogMcpUrl: config.posthogMcpUrl,
       posthogApiKey: config.posthogApiKey,
-      onEvent: (event: any) => {
+      onEvent: (event: AgentEvent) => {
         handleAgentEvent(event, options, spinner);
       },
-      debug: config.debug ?? false, // Suppress agent library console output - we handle events via onEvent
+      debug: config.debug ?? false,
     };
 
     if (options.debug) {
@@ -63,86 +73,71 @@ export function initializeAgent(
  * user feedback through the CLI spinner and logging
  */
 function handleAgentEvent(
-  event: any,
+  event: AgentEvent,
   options: WizardOptions,
   spinner: ReturnType<typeof clack.spinner>,
 ): void {
-  // In debug mode, log ALL events to see what we're getting
   if (options.debug) {
     debug(`Event type: ${event.type}`, JSON.stringify(event, null, 2));
   }
 
   // Only show [STATUS] events to the user - everything else goes to debug log
   switch (event.type) {
-    case 'raw_sdk_event':
-      // Extract text content from raw SDK assistant messages
+    case EventType.RAW_SDK_EVENT:
       if (event.sdkMessage?.type === 'assistant') {
         const message = event.sdkMessage.message;
         if (message?.content && Array.isArray(message.content)) {
-          // Extract text blocks
           const textContent = message.content
             .filter((block: any) => block.type === 'text')
             .map((block: any) => block.text)
             .join('\n');
 
-          if (textContent) {
-            // Log to debug file
-            if (options.debug) {
-              debug(textContent);
-            }
-
-            // Check for [STATUS] markers and log as steps
-            const statusMatch = textContent.match(/^.*\[STATUS\]\s*(.+?)$/m);
-            if (statusMatch) {
-              // Stop spinner, log the status step, restart spinner
-              spinner.stop(statusMatch[1].trim());
-              spinner.start('Integrating PostHog...');
-            }
+          // Check if the text contains a [STATUS] marker
+          const statusMatch = textContent.match(/^.*\[STATUS\]\s*(.+?)$/m);
+          if (statusMatch) {
+            // Stop spinner, log the status step, restart spinner
+            // This creates the progress list as the agent proceeds
+            spinner.stop(statusMatch[1].trim());
+            spinner.start('Integrating PostHog...');
           }
         }
       }
       break;
 
-    case 'token':
-      // Log streaming tokens to debug file only
-      if (options.debug && event.content) {
+    case EventType.TOKEN:
+      if (options.debug) {
         debug(event.content);
       }
       break;
 
-    case 'tool_call':
-      // Log tool calls to debug file only
-      if (options.debug && event.toolName) {
+    case EventType.TOOL_CALL:
+      if (options.debug) {
         debug(`Tool: ${event.toolName}`);
         debug('  Args:', JSON.stringify(event.args, null, 2));
       }
       break;
 
-    case 'tool_result':
-      // Log tool results to debug file only
-      if (options.debug && event.toolName) {
+    case EventType.TOOL_RESULT:
+      if (options.debug) {
         debug(`✅ ${event.toolName} completed`);
-        if (event.result) {
-          const resultStr: string =
-            typeof event.result === 'string'
-              ? event.result
-              : JSON.stringify(event.result, null, 2);
-          const truncated =
-            resultStr.length > 500
-              ? `${resultStr.substring(0, 500)}...`
-              : resultStr;
-          debug('  Result:', truncated);
-        }
+        const resultStr: string =
+          typeof event.result === 'string'
+            ? event.result
+            : JSON.stringify(event.result, null, 2);
+        const truncated =
+          resultStr.length > 500
+            ? `${resultStr.substring(0, 500)}...`
+            : resultStr;
+        debug('  Result:', truncated);
       }
       break;
 
-    case 'error':
+    case EventType.ERROR:
       // Always show errors to user
       clack.log.error(`Error: ${event.message}`);
-      if (options.debug) {
+      if (options.debug && event.error) {
         debug('Error details:', event.error);
       }
-      // Capture exception for error tracking
       if (event.error instanceof Error) {
         analytics.captureException(event.error, {
           event_type: event.type,
@@ -151,11 +146,11 @@ function handleAgentEvent(
       }
       break;
 
-    case 'done':
-      // Log completion to debug file only
-      if (options.debug && event.durationMs) {
-        debug(`Completed in ${Math.round(event.durationMs / 1000)}s`);
-      } else if (event.durationMs) {
+    case EventType.DONE:
+      if (event.durationMs) {
+        if (options.debug) {
+          debug(`Completed in ${Math.round(event.durationMs / 1000)}s`);
+        }
         analytics.capture(WIZARD_INTERACTION_EVENT_NAME, {
           action: 'agent integration completed',
           duration_ms: event.durationMs,
