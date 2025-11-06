@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.16.1](https://github.com/PostHog/wizard/compare/v1.16.0...v1.16.1) (2025-11-06)
+
+
+### Bug Fixes
+
+* MCP connection should happen over HTTPS ([#167](https://github.com/PostHog/wizard/issues/167)) ([aa9bcc2](https://github.com/PostHog/wizard/commit/aa9bcc2ad6fb7ef9871ed52d49827c78f75944db))
+
 ## [1.16.0](https://github.com/PostHog/wizard/compare/v1.15.0...v1.16.0) (2025-10-28)
 
 
