@@ -81,7 +81,7 @@ export async function runNextjsWizardAgent(
   const agent = initializeAgent(
     {
       workingDirectory: options.installDir,
-      posthogMcpUrl: 'http://mcp.posthog.com/mcp',
+      posthogMcpUrl: 'https://mcp.posthog.com/mcp',
       posthogApiKey: accessToken,
       debug: false,
     },
