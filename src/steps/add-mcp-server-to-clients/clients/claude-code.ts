@@ -1,5 +1,5 @@
 import { DefaultMCPClient } from '../MCPClient';
-import { DefaultMCPClientConfig, getDefaultServerConfig } from '../defaults';
+import { DefaultMCPClientConfig } from '../defaults';
 import { z } from 'zod';
 import { execSync } from 'child_process';
 import { analytics } from '../../../utils/analytics';
@@ -120,12 +120,9 @@ export class ClaudeCodeMCPClient extends DefaultMCPClient {
       return Promise.resolve({ success: false });
     }
 
-    const config = getDefaultServerConfig(
-      apiKey,
-      'sse',
-      selectedFeatures,
-      local,
-    );
+    // Build Claude Code-specific config
+    // Based on getDefaultServerConfig() but with fixes for Claude Code bugs
+    const config = this.buildClaudeCodeConfig(apiKey, selectedFeatures, local);
     const serverName = local ? 'posthog-local' : 'posthog';
 
     const command = `${claudeBinary} mcp add-json ${serverName} -s user '${JSON.stringify(
@@ -146,6 +143,61 @@ export class ClaudeCodeMCPClient extends DefaultMCPClient {
     }
 
     return Promise.resolve({ success: true });
+  }
+
+  private buildClaudeCodeConfig(
+    apiKey: string,
+    selectedFeatures?: string[],
+    local?: boolean,
+  ) {
+    // Replicate getDefaultServerConfig() logic but with Claude Code fixes:
+    // 1. Add https:// protocol (mcp-remote requires valid URLs)
+    // 2. Embed token directly in Authorization header (env var expansion broken)
+    //
+    // Claude Code bugs:
+    // - https://github.com/anthropics/claude-code/issues/6204
+    // - https://github.com/anthropics/claude-code/issues/9427
+    // - https://github.com/anthropics/claude-code/issues/10955
+
+    const protocol = local ? 'http://' : 'https://';
+    const host = local ? 'localhost:8787' : 'mcp.posthog.com';
+    const baseUrl = `${protocol}${host}/sse`;
+
+    const ALL_FEATURE_VALUES = [
+      'dashboards',
+      'insights',
+      'experiments',
+      'llm-analytics',
+      'error-tracking',
+      'flags',
+      'workspace',
+      'docs',
+    ];
+
+    const isAllFeaturesSelected =
+      selectedFeatures &&
+      selectedFeatures.length === ALL_FEATURE_VALUES.length &&
+      ALL_FEATURE_VALUES.every((feature) => selectedFeatures.includes(feature));
+
+    const urlWithFeatures =
+      selectedFeatures && selectedFeatures.length > 0 && !isAllFeaturesSelected
+        ? `${baseUrl}?features=${selectedFeatures.join(',')}`
+        : baseUrl;
+
+    return {
+      command: 'npx',
+      args: [
+        '-y',
+        'mcp-remote@latest',
+        urlWithFeatures,
+        '--header',
+        `Authorization:Bearer ${apiKey}`, // Embed token directly (not ${VAR})
+      ],
+      // Keep env block for backward compatibility if bugs get fixed
+      env: {
+        POSTHOG_AUTH_HEADER: `Bearer ${apiKey}`,
+      },
+    };
   }
 
   removeServer(local?: boolean): Promise<{ success: boolean }> {
