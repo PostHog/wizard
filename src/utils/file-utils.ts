@@ -76,14 +76,16 @@ export async function getFilesToChange({
   integration,
   relevantFiles,
   documentation,
-  wizardHash,
+  accessToken,
   cloudRegion,
+  projectId,
 }: {
   integration: Integration;
   relevantFiles: string[];
   documentation: string;
-  wizardHash: string;
+  accessToken: string;
   cloudRegion: CloudRegion;
+  projectId: number;
 }) {
   const filterFilesSpinner = clack.spinner();
 
@@ -103,8 +105,9 @@ export async function getFilesToChange({
   const filterFilesResponse = await query({
     message: prompt,
     schema: filterFilesResponseSchmea,
-    wizardHash,
+    accessToken,
     region: cloudRegion,
+    projectId,
   });
 
   const filesToChange = filterFilesResponse.files;
@@ -122,20 +125,23 @@ export async function getFilesToChange({
 
 export async function generateFileContent({
   prompt,
-  wizardHash,
+  accessToken,
   cloudRegion,
+  projectId,
 }: {
   prompt: string;
-  wizardHash: string;
+  accessToken: string;
   cloudRegion: CloudRegion;
+  projectId: number;
 }) {
   const response = await query({
     message: prompt,
     schema: z.object({
       newContent: z.string(),
     }),
-    wizardHash: wizardHash,
+    accessToken: accessToken,
     region: cloudRegion,
+    projectId,
   });
 
   return response.newContent;
@@ -144,17 +150,19 @@ export async function generateFileContent({
 export async function generateFileChangesForIntegration({
   integration,
   filesToChange,
-  wizardHash,
+  accessToken,
   documentation,
   installDir,
   cloudRegion,
+  projectId,
 }: {
   integration: Integration;
   filesToChange: string[];
-  wizardHash: string;
+  accessToken: string;
   documentation: string;
   installDir: string;
   cloudRegion: CloudRegion;
+  projectId: number;
 }) {
   const changes: FileChange[] = [];
 
@@ -203,8 +211,9 @@ export async function generateFileChangesForIntegration({
 
       const newContent = await generateFileContent({
         prompt,
-        wizardHash,
+        accessToken,
         cloudRegion,
+        projectId,
       });
 
       if (newContent !== oldContent) {

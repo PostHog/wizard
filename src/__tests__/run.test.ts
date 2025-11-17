@@ -4,6 +4,7 @@ import { analytics } from '../utils/analytics';
 import { Integration } from '../lib/constants';
 
 jest.mock('../nextjs/nextjs-wizard');
+jest.mock('../nextjs/nextjs-wizard-agent');
 jest.mock('../utils/analytics');
 jest.mock('../utils/clack');
 

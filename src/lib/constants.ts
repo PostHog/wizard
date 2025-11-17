@@ -6,6 +6,15 @@ export enum Integration {
   astro = 'astro',
 }
 
+export enum FeatureFlagDefinition {
+  NextV2 = 'wizard-next-v2',
+}
+
+export enum WizardVariant {
+  Legacy = 'legacy',
+  Agent = 'agent',
+}
+
 export function getIntegrationDescription(type: string): string {
   switch (type) {
     case Integration.nextjs:
@@ -56,3 +65,10 @@ export const DEFAULT_HOST_URL = IS_DEV
 export const ANALYTICS_POSTHOG_PUBLIC_PROJECT_WRITE_KEY = 'sTMFPsFhdP1Ssg';
 export const ANALYTICS_HOST_URL = 'https://internal-j.posthog.com';
 export const DUMMY_PROJECT_API_KEY = '_YOUR_POSTHOG_PROJECT_API_KEY_';
+
+export const POSTHOG_US_CLIENT_ID = 'c4Rdw8DIxgtQfA80IiSnGKlNX8QN00cFWF00QQhM';
+export const POSTHOG_EU_CLIENT_ID = 'bx2C5sZRN03TkdjraCcetvQFPGH6N2Y9vRLkcKEy';
+export const POSTHOG_DEV_CLIENT_ID = 'DC5uRLVbGI02YQ82grxgnK6Qn12SXWpCqdPb60oZ';
+export const OAUTH_PORT = 8239;
+
+export const WIZARD_INTERACTION_EVENT_NAME = 'wizard interaction';

@@ -70,7 +70,7 @@ export const getDefaultServerConfig = (
   selectedFeatures?: string[],
   local?: boolean,
 ) => {
-  const host = local ? 'localhost:8787' : 'mcp.posthog.com';
+  const host = local ? 'http://localhost:8787' : 'https://mcp.posthog.com';
   const baseUrl = `${host}/${type === 'sse' ? 'sse' : 'mcp'}`;
 
   const isAllFeaturesSelected =

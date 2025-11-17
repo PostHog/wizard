@@ -1,5 +1,40 @@
 # Changelog
 
+## [1.16.2](https://github.com/PostHog/wizard/compare/v1.16.1...v1.16.2) (2025-11-17)
+
+
+### Bug Fixes
+
+* Claude Code support for MCP server installation ([#169](https://github.com/PostHog/wizard/issues/169)) ([98589b9](https://github.com/PostHog/wizard/commit/98589b9899b97738ba3359eac39f37cb2c182e99))
+* **mcp:** add protocol explicitly ([#174](https://github.com/PostHog/wizard/issues/174)) ([a37c1b2](https://github.com/PostHog/wizard/commit/a37c1b2a50899e970351111e6acfa7cd90d251e7))
+
+## [1.16.1](https://github.com/PostHog/wizard/compare/v1.16.0...v1.16.1) (2025-11-06)
+
+
+### Bug Fixes
+
+* MCP connection should happen over HTTPS ([#167](https://github.com/PostHog/wizard/issues/167)) ([aa9bcc2](https://github.com/PostHog/wizard/commit/aa9bcc2ad6fb7ef9871ed52d49827c78f75944db))
+
+## [1.16.0](https://github.com/PostHog/wizard/compare/v1.15.0...v1.16.0) (2025-10-28)
+
+
+### Features
+
+* @posthog/agent integrations for Next.js ([#160](https://github.com/PostHog/wizard/issues/160)) ([f95b78c](https://github.com/PostHog/wizard/commit/f95b78c6475a583f5e47c0af8650d77fe5a0ef49))
+
+## [1.15.0](https://github.com/PostHog/wizard/compare/v1.14.0...v1.15.0) (2025-10-24)
+
+
+### Features
+
+* **mcp:** local mcp server management ([#151](https://github.com/PostHog/wizard/issues/151)) ([f40e4be](https://github.com/PostHog/wizard/commit/f40e4bee80706c355e800810d6c2a211777ed383))
+* repace cli flow with oauth ([#158](https://github.com/PostHog/wizard/issues/158)) ([38e0811](https://github.com/PostHog/wizard/commit/38e0811fe0077cd60de58502e50998f2794d836c))
+
+
+### Bug Fixes
+
+* make 429 error more descriptive ([#149](https://github.com/PostHog/wizard/issues/149)) ([b7955af](https://github.com/PostHog/wizard/commit/b7955af8bf663a926d684d625a792294265e99fe))
+
 ## [1.14.0](https://github.com/PostHog/wizard/compare/v1.13.2...v1.14.0) (2025-09-10)
 
 

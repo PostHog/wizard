@@ -13,8 +13,8 @@ export const handlers = [
   }),
 
   http.get(`${getCloudUrlFromRegion('us')}/api/wizard/data`, ({ request }) => {
-    const wizardHash = request.headers.get('X-PostHog-Wizard-Hash');
-    if (wizardHash === 'mock-wizard-hash-123') {
+    const accessToken = request.headers.get('X-PostHog-Wizard-Hash');
+    if (accessToken === 'mock-wizard-hash-123') {
       return HttpResponse.json({
         project_api_key: 'mock-project-api-key',
         host: DEFAULT_HOST_URL,

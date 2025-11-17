@@ -4,12 +4,14 @@ import {
   ANALYTICS_POSTHOG_PUBLIC_PROJECT_WRITE_KEY,
 } from '../lib/constants';
 import { v4 as uuidv4 } from 'uuid';
+import { debug } from './debug';
 export class Analytics {
   private client: PostHog;
   private tags: Record<string, string | boolean | number | null | undefined> =
     {};
   private distinctId?: string;
   private anonymousId: string;
+  private appName = 'wizard';
 
   constructor() {
     this.client = new PostHog(ANALYTICS_POSTHOG_PUBLIC_PROJECT_WRITE_KEY, {
@@ -19,7 +21,7 @@ export class Analytics {
       enableExceptionAutocapture: true,
     });
 
-    this.tags = {};
+    this.tags = { $app_name: this.appName };
 
     this.anonymousId = uuidv4();
 
@@ -55,6 +57,21 @@ export class Analytics {
         ...properties,
       },
     });
+  }
+
+  async getFeatureFlag(flagKey: string): Promise<string | boolean | undefined> {
+    try {
+      const distinctId = this.distinctId ?? this.anonymousId;
+      return await this.client.getFeatureFlag(flagKey, distinctId, {
+        sendFeatureFlagEvents: true,
+        personProperties: {
+          $app_name: this.appName,
+        },
+      });
+    } catch (error) {
+      debug('Failed to get feature flag:', flagKey, error);
+      return undefined;
+    }
   }
 
   async shutdown(status: 'success' | 'error' | 'cancelled') {
