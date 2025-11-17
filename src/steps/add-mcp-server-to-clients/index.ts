@@ -12,6 +12,7 @@ import type { CloudRegion } from '../../utils/types';
 import { ClaudeCodeMCPClient } from './clients/claude-code';
 import { VisualStudioCodeClient } from './clients/visual-studio-code';
 import { ZedClient } from './clients/zed';
+import { CodexMCPClient } from './clients/codex';
 import { AVAILABLE_FEATURES, ALL_FEATURE_VALUES } from './defaults';
 import { debug } from '../../utils/debug';
 
@@ -22,6 +23,7 @@ export const getSupportedClients = async (): Promise<MCPClient[]> => {
     new ClaudeCodeMCPClient(),
     new VisualStudioCodeClient(),
     new ZedClient(),
+    new CodexMCPClient(),
   ];
   const supportedClients: MCPClient[] = [];
 
