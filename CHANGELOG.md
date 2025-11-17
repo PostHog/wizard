@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.17.0](https://github.com/PostHog/wizard/compare/v1.16.2...v1.17.0) (2025-11-17)
+
+
+### Features
+
+* add codex mcp client ([#157](https://github.com/PostHog/wizard/issues/157)) ([5051759](https://github.com/PostHog/wizard/commit/5051759da0980ca773d6550b22ab7c9bad519436))
+
 ## [1.16.2](https://github.com/PostHog/wizard/compare/v1.16.1...v1.16.2) (2025-11-17)
 
 
