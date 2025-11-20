@@ -218,7 +218,7 @@ Instructions:
 2. Follow all instructions provided
 3. Set up environment variables for PostHog in a .env file with the API key and host provided above, using the appropriate naming convention for ${
     config.metadata.name
-  }. Make sure to use these environment variables in the code files you create.
+  }. Make sure to use these environment variables in the code files you create instead of hardcoding the API key and host.
 
 The PostHog MCP will provide specific integration code and instructions. Please follow them carefully. Be sure to look for lockfiles to determine the appropriate package manager to use when installing PostHog. Do not manually edit the package.json file.`;
 }
