@@ -170,6 +170,7 @@ yargs(hideBin(process.argv))
               signup: boolean;
               region?: CloudRegion;
               local?: boolean;
+              debug?: boolean;
             },
           );
         },
