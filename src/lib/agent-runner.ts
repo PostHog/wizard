@@ -14,7 +14,12 @@ import {
 import { analytics } from '../utils/analytics';
 import { WIZARD_INTERACTION_EVENT_NAME } from './constants';
 import clack from '../utils/clack';
-import { initializeAgent, runAgent } from './agent-interface';
+import {
+  initializeAgent,
+  runAgent,
+  AgentSignals,
+  AgentErrorType,
+} from './agent-interface';
 import { getCloudUrlFromRegion } from '../utils/urls';
 import chalk from 'chalk';
 import {
@@ -108,12 +113,70 @@ export async function runAgentWizard(
     spinner,
   );
 
-  await runAgent(agent, integrationPrompt, options, spinner, {
-    estimatedDurationMinutes: config.ui.estimatedDurationMinutes,
-    spinnerMessage: config.ui.spinnerMessage,
-    successMessage: config.ui.successMessage,
-    errorMessage: 'Integration failed',
-  });
+  const agentResult = await runAgent(
+    agent,
+    integrationPrompt,
+    options,
+    spinner,
+    {
+      estimatedDurationMinutes: config.ui.estimatedDurationMinutes,
+      spinnerMessage: config.ui.spinnerMessage,
+      successMessage: config.ui.successMessage,
+      errorMessage: 'Integration failed',
+    },
+  );
+
+  // Handle error cases detected in agent output
+  if (agentResult.error === AgentErrorType.MCP_MISSING) {
+    analytics.captureException(
+      new Error('Agent could not access PostHog MCP server'),
+      {
+        integration: config.metadata.integration,
+        error_type: AgentErrorType.MCP_MISSING,
+        signal: AgentSignals.ERROR_MCP_MISSING,
+      },
+    );
+
+    const errorMessage = `
+${chalk.red('❌ Could not access the PostHog MCP server')}
+
+The wizard was unable to connect to the PostHog MCP server.
+This could be due to a network issue or a configuration problem.
+
+Please try again, or set up ${
+      config.metadata.name
+    } manually by following our documentation:
+${chalk.cyan(config.metadata.docsUrl)}`;
+
+    clack.outro(errorMessage);
+    await analytics.shutdown('error');
+    process.exit(1);
+  }
+
+  if (agentResult.error === AgentErrorType.RESOURCE_MISSING) {
+    analytics.captureException(
+      new Error('Agent could not access setup resource'),
+      {
+        integration: config.metadata.integration,
+        error_type: AgentErrorType.RESOURCE_MISSING,
+        signal: AgentSignals.ERROR_RESOURCE_MISSING,
+      },
+    );
+
+    const errorMessage = `
+${chalk.red('❌ Could not access the setup resource')}
+
+The wizard could not access the setup resource. This may indicate a version mismatch or a temporary service issue.
+
+Please try again, or set up ${
+      config.metadata.name
+    } manually by following our documentation:
+${chalk.cyan(config.metadata.docsUrl)}`;
+
+    clack.outro(errorMessage);
+    await analytics.shutdown('error');
+    process.exit(1);
+  }
 
   // Parse .env file created by agent
   const envVars = parseEnvFile(
@@ -220,7 +283,17 @@ Instructions:
     config.metadata.name
   }. Make sure to use these environment variables in the code files you create instead of hardcoding the API key and host.
 
-The PostHog MCP will provide specific integration code and instructions. Please follow them carefully. Be sure to look for lockfiles to determine the appropriate package manager to use when installing PostHog. Do not manually edit the package.json file.`;
+The PostHog MCP will provide specific integration code and instructions. Please follow them carefully. Be sure to look for lockfiles to determine the appropriate package manager to use when installing PostHog. Do not manually edit the package.json file.
+
+Before beginning, confirm that you can access the PostHog MCP. If the PostHog MCP is not accessible, emit the following string:
+
+${AgentSignals.ERROR_MCP_MISSING} Could not access the PostHog MCP.
+
+If the PostHog MCP is accessible, attempt to access the setup resource. If the setup resource is not accessible, emit the following string:
+
+${AgentSignals.ERROR_RESOURCE_MISSING} Could not access the setup resource.
+
+`;
 }
 
 /**
