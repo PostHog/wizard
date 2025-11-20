@@ -12,7 +12,9 @@ import type { CloudRegion } from '../../utils/types';
 import { ClaudeCodeMCPClient } from './clients/claude-code';
 import { VisualStudioCodeClient } from './clients/visual-studio-code';
 import { ZedClient } from './clients/zed';
+import { CodexMCPClient } from './clients/codex';
 import { AVAILABLE_FEATURES, ALL_FEATURE_VALUES } from './defaults';
+import { debug } from '../../utils/debug';
 
 export const getSupportedClients = async (): Promise<MCPClient[]> => {
   const allClients = [
@@ -21,14 +23,23 @@ export const getSupportedClients = async (): Promise<MCPClient[]> => {
     new ClaudeCodeMCPClient(),
     new VisualStudioCodeClient(),
     new ZedClient(),
+    new CodexMCPClient(),
   ];
   const supportedClients: MCPClient[] = [];
 
+  debug('Checking for supported MCP clients...');
   for (const client of allClients) {
-    if (await client.isClientSupported()) {
+    const isSupported = await client.isClientSupported();
+    debug(`${client.name}: ${isSupported ? '✓ supported' : '✗ not supported'}`);
+    if (isSupported) {
       supportedClients.push(client);
     }
   }
+  debug(
+    `Found ${supportedClients.length} supported client(s): ${supportedClients
+      .map((c) => c.name)
+      .join(', ')}`,
+  );
 
   return supportedClients;
 };
@@ -100,7 +111,13 @@ export const addMCPServerToClientsStep = async ({
     selectedClientNames.includes(client.name),
   );
 
-  const installedClients = await getInstalledClients(local);
+  // Only check for existing installations in the clients the user selected
+  const installedClients = [];
+  for (const client of clients) {
+    if (await client.isServerInstalled(local)) {
+      installedClients.push(client);
+    }
+  }
 
   if (installedClients.length > 0) {
     clack.log.warn(

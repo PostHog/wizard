@@ -9,12 +9,17 @@ import type { CloudRegion } from './utils/types';
 import opn from 'opn';
 import { getCloudUrlFromRegion } from './utils/urls';
 import { sleep } from './lib/helper-functions';
+import { enableDebugLogs } from './utils/debug';
 
 export const runMCPInstall = async (options: {
   signup: boolean;
   region?: CloudRegion;
   local?: boolean;
+  debug?: boolean;
 }) => {
+  if (options.debug) {
+    enableDebugLogs();
+  }
   clack.intro(
     chalk.bgGreenBright(
       `Installing the PostHog MCP server ${options.local && '(local)'}`,

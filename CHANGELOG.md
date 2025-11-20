@@ -1,5 +1,27 @@
 # Changelog
 
+## [1.17.0](https://github.com/PostHog/wizard/compare/v1.16.2...v1.17.0) (2025-11-17)
+
+
+### Features
+
+* add codex mcp client ([#157](https://github.com/PostHog/wizard/issues/157)) ([5051759](https://github.com/PostHog/wizard/commit/5051759da0980ca773d6550b22ab7c9bad519436))
+
+## [1.16.2](https://github.com/PostHog/wizard/compare/v1.16.1...v1.16.2) (2025-11-17)
+
+
+### Bug Fixes
+
+* Claude Code support for MCP server installation ([#169](https://github.com/PostHog/wizard/issues/169)) ([98589b9](https://github.com/PostHog/wizard/commit/98589b9899b97738ba3359eac39f37cb2c182e99))
+* **mcp:** add protocol explicitly ([#174](https://github.com/PostHog/wizard/issues/174)) ([a37c1b2](https://github.com/PostHog/wizard/commit/a37c1b2a50899e970351111e6acfa7cd90d251e7))
+
+## [1.16.1](https://github.com/PostHog/wizard/compare/v1.16.0...v1.16.1) (2025-11-06)
+
+
+### Bug Fixes
+
+* MCP connection should happen over HTTPS ([#167](https://github.com/PostHog/wizard/issues/167)) ([aa9bcc2](https://github.com/PostHog/wizard/commit/aa9bcc2ad6fb7ef9871ed52d49827c78f75944db))
+
 ## [1.16.0](https://github.com/PostHog/wizard/compare/v1.15.0...v1.16.0) (2025-10-28)
 
 
