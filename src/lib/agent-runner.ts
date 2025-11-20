@@ -40,6 +40,10 @@ export async function runAgentWizard(
   // Setup phase
   printWelcome({ wizardName: config.ui.welcomeMessage });
 
+  clack.log.info(
+    `🧙 The wizard has chosen you to try the next-generation agent integration for ${config.metadata.name}.\n\nStand by for the good stuff, and let me know how it goes:\n\ndanilo@posthog.com`,
+  );
+
   const aiConsent = await askForAIConsent(options);
   if (!aiConsent) {
     await abort(config.metadata.abortMessage, 0);
