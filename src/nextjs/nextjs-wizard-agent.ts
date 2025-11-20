@@ -11,7 +11,6 @@ import {
   getNextJsRouterName,
   NextJsRouter,
 } from './utils';
-import clack from '../utils/clack';
 
 /**
  * Next.js framework configuration for the universal agent runner.
@@ -91,10 +90,6 @@ export async function runNextjsWizardAgent(
   if (options.debug) {
     enableDebugLogs();
   }
-
-  clack.log.info(
-    '🧙 The wizard has chosen you to try the next-generation agent integration for Next.js.\n\nStand by for the good stuff, and let me know how it goes:\n\ndanilo@posthog.com',
-  );
 
   await runAgentWizard(NEXTJS_AGENT_CONFIG, options);
 }

@@ -5,7 +5,6 @@ import { enableDebugLogs } from '../utils/debug';
 import { runAgentWizard } from '../lib/agent-runner';
 import { Integration } from '../lib/constants';
 import { getPackageVersion } from '../utils/package-json';
-import clack from '../utils/clack';
 
 /**
  * React framework configuration for the universal agent runner.
@@ -67,10 +66,6 @@ export async function runReactWizardAgent(
   if (options.debug) {
     enableDebugLogs();
   }
-
-  clack.log.info(
-    '🧙 The wizard has chosen you to try the next-generation agent integration for React.\n\nStand by for the good stuff, and let me know how it goes:\n\ndanilo@posthog.com',
-  );
 
   await runAgentWizard(REACT_AGENT_CONFIG, options);
 }
