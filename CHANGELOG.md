@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.18.0](https://github.com/PostHog/wizard/compare/v1.17.0...v1.18.0) (2025-11-20)
+
+
+### Features
+
+* add introspect scope ([e386083](https://github.com/PostHog/wizard/commit/e3860831fa3d3cbc232330ce7b22eb3230f51285))
+
 ## [1.17.0](https://github.com/PostHog/wizard/compare/v1.16.2...v1.17.0) (2025-11-17)
 
 
