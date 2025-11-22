@@ -17,6 +17,8 @@ async function getAgentModule(): Promise<any> {
   return _agentModule;
 }
 
+// Using `any` because typed imports from ESM modules require import attributes
+// syntax which prettier cannot parse. See PR discussion for details.
 type Agent = any;
 type AgentEvent = any;
 
