@@ -3,13 +3,22 @@
  * Provides common agent initialization and event handling
  */
 
-// @ts-ignore - posthog-agent is ESM, wizard is CommonJS. Works at runtime via local link.
-import { Agent, PermissionMode, type AgentEvent } from '@posthog/agent';
 import clack from '../utils/clack';
 import { debug } from '../utils/debug';
 import type { WizardOptions } from '../utils/types';
 import { analytics } from '../utils/analytics';
 import { WIZARD_INTERACTION_EVENT_NAME } from './constants';
+
+let _agentModule: any = null;
+async function getAgentModule(): Promise<any> {
+  if (!_agentModule) {
+    _agentModule = await import('@posthog/agent');
+  }
+  return _agentModule;
+}
+
+type Agent = any;
+type AgentEvent = any;
 
 // TODO: Remove these if/when posthog/agent exports an enum for events
 const EventType = {
@@ -31,14 +40,15 @@ export type AgentConfig = {
 /**
  * Initialize a PostHog Agent instance with the provided configuration
  */
-export function initializeAgent(
+export async function initializeAgent(
   config: AgentConfig,
   options: WizardOptions,
   spinner: ReturnType<typeof clack.spinner>,
-): Agent {
+): Promise<Agent> {
   clack.log.step('Initializing PostHog agent...');
 
   try {
+    const { Agent } = await getAgentModule();
     const agentConfig = {
       workingDirectory: config.workingDirectory,
       posthogMcpUrl: config.posthogMcpUrl,
@@ -183,6 +193,7 @@ export async function runAgent(
     successMessage = 'PostHog integration complete',
     errorMessage = 'Integration failed',
   } = config ?? {};
+  const { PermissionMode } = await getAgentModule();
 
   clack.log.step(
     `This whole process should take about ${estimatedDurationMinutes} minutes including error checking and fixes.\n\nGrab some coffee!`,
