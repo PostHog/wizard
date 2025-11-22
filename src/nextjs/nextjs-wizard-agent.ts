@@ -78,7 +78,7 @@ export async function runNextjsWizardAgent(
 
   const spinner = clack.spinner();
 
-  const agent = initializeAgent(
+  const agent = await initializeAgent(
     {
       workingDirectory: options.installDir,
       posthogMcpUrl: 'https://mcp.posthog.com/mcp',
