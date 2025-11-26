@@ -15,7 +15,7 @@ jobs:
       - name: Install pnpm
         uses: pnpm/action-setup@v2
         with:
-          version: 9.15.5
+          version: 10.23.0
           run_install: false
       - name: Set up Node
         uses: actions/setup-node@v4
@@ -44,7 +44,7 @@ jobs:
       - name: Install pnpm
         uses: pnpm/action-setup@v2
         with:
-          version: 9.15.5
+          version: 10.23.0
           run_install: false
       - name: Set up Node
         uses: actions/setup-node@v4
@@ -69,7 +69,7 @@ jobs:
       - name: Install pnpm
         uses: pnpm/action-setup@v2
         with:
-          version: 9.15.5
+          version: 10.23.0
           run_install: false
       - name: Set up Node
         uses: actions/setup-node@v4
@@ -89,5 +89,3 @@ jobs:
           # Do not fail the build if codecov fails to report the coverage.
           fail_ci_if_error: false
           flags: unit-tests
-
-          
