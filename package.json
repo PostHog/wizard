@@ -1,8 +1,8 @@
 {
   "name": "@posthog/wizard",
   "version": "1.19.0",
-  "homepage": "https://github.com/posthog/wizard",
-  "repository": "https://github.com/posthog/wizard",
+  "homepage": "https://github.com/PostHog/wizard",
+  "repository": "https://github.com/PostHog/wizard",
   "description": "The PostHog wizard helps you to configure your project",
   "keywords": [
     "posthog",
