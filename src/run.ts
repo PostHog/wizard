@@ -15,6 +15,7 @@ import clack from './utils/clack';
 import path from 'path';
 import { INTEGRATION_CONFIG, INTEGRATION_ORDER } from './lib/config';
 import { runReactWizard } from './react/react-wizard';
+import { runReactWizardAgent } from './react/react-wizard-agent';
 import { analytics } from './utils/analytics';
 import { runSvelteWizard } from './svelte/svelte-wizard';
 import { runReactNativeWizard } from './react-native/react-native-wizard';
@@ -76,7 +77,7 @@ export async function runWizard(argv: Args) {
         await chooseNextjsWizard(wizardOptions);
         break;
       case Integration.react:
-        await runReactWizard(wizardOptions);
+        await chooseReactWizard(wizardOptions);
         break;
       case Integration.svelte:
         await runSvelteWizard(wizardOptions);
@@ -182,5 +183,23 @@ async function chooseNextjsWizard(options: WizardOptions): Promise<void> {
     }
   } catch (error) {
     await runNextjsWizard(options);
+  }
+}
+
+async function chooseReactWizard(options: WizardOptions): Promise<void> {
+  try {
+    // Check feature flag to determine which wizard to use
+    const flagValue = await analytics.getFeatureFlag(
+      FeatureFlagDefinition.ReactV2,
+    );
+
+    if (flagValue === WizardVariant.Agent) {
+      await runReactWizardAgent(options);
+    } else {
+      await runReactWizard(options);
+    }
+  } catch (error) {
+    // On error, fall back to legacy wizard
+    await runReactWizard(options);
   }
 }

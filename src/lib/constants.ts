@@ -8,6 +8,7 @@ export enum Integration {
 
 export enum FeatureFlagDefinition {
   NextV2 = 'wizard-next-v2',
+  ReactV2 = 'wizard-react-v2',
 }
 
 export enum WizardVariant {
