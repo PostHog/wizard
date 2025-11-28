@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.20.0](https://github.com/PostHog/wizard/compare/v1.19.0...v1.20.0) (2025-11-28)
+
+
+### Features
+
+* use trusted publishing for the npm package ([#184](https://github.com/PostHog/wizard/issues/184)) ([8153876](https://github.com/PostHog/wizard/commit/8153876233c560a4b98a69090cb20fa94abe518c))
+
+
+### Bug Fixes
+
+* correct repository URLs to use 'PostHog' ([#187](https://github.com/PostHog/wizard/issues/187)) ([dcf58fa](https://github.com/PostHog/wizard/commit/dcf58fa6d196453c8795e337c922b88978481cc8))
+* update Node version from 18 to 24 in publishing workflow ([#186](https://github.com/PostHog/wizard/issues/186)) ([93374dc](https://github.com/PostHog/wizard/commit/93374dc6a4834771ac5f5c3fbda5ada56054d28e))
+* update node-forge versions from transitive deps ([#188](https://github.com/PostHog/wizard/issues/188)) ([84365f6](https://github.com/PostHog/wizard/commit/84365f6b820ea8aa6683fdf149f1ab536c6d0fee))
+
 ## [1.19.0](https://github.com/PostHog/wizard/compare/v1.18.0...v1.19.0) (2025-11-26)
 
 
