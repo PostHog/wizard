@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.19.0](https://github.com/PostHog/wizard/compare/v1.18.0...v1.19.0) (2025-11-26)
+
+
+### Features
+
+* Migrate to pnpm 10 ([#181](https://github.com/PostHog/wizard/issues/181)) ([e5b2112](https://github.com/PostHog/wizard/commit/e5b21121ddd0aef8d264cf2c646909d5dffca0c4))
+
+
+### Bug Fixes
+
+* use dynamic import to fix ESM/CJS startup ([#182](https://github.com/PostHog/wizard/issues/182)) ([a0b84be](https://github.com/PostHog/wizard/commit/a0b84be50755d65d07aadb02e2f85d01dc15c949))
+
 ## [1.18.0](https://github.com/PostHog/wizard/compare/v1.17.0...v1.18.0) (2025-11-20)
 
 
