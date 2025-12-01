@@ -233,6 +233,9 @@ export async function runAgent(
     const result = await agent.run(prompt, {
       repositoryPath: options.installDir,
       permissionMode: PermissionMode.ACCEPT_EDITS,
+      queryOverrides: {
+        model: 'claude-opus-4-5-20251101',
+      },
     });
 
     // Check for error markers in the agent's output
