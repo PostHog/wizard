@@ -59,6 +59,59 @@ export type AgentConfig = {
 };
 
 /**
+ * Allowed bash command patterns for the wizard agent.
+ * These are package manager commands needed for PostHog installation.
+ */
+const ALLOWED_BASH_PATTERNS = [
+  // Package installation
+  /^npm\s+install(\s|$)/,
+  /^pnpm\s+(install|add)(\s|$)/,
+  /^bun\s+(install|add)(\s|$)/,
+  /^yarn\s+add(\s|$)/,
+  /^npm\s+ci(\s|$)/,
+  // Package info (needed to detect package manager)
+  /^npm\s+--version/,
+  /^pnpm\s+--version/,
+  /^bun\s+--version/,
+  /^yarn\s+--version/,
+  /^which\s+(npm|pnpm|bun|yarn)/,
+  /^cat\s+.*package\.json/,
+  /^ls\s/,
+];
+
+/**
+ * Permission hook that allows only safe package manager commands.
+ * This prevents the agent from running arbitrary shell commands.
+ */
+export function wizardCanUseTool(
+  toolName: string,
+  input: { command?: string },
+): { behavior: 'allow' } | { behavior: 'deny'; message: string } {
+  // Allow all non-Bash tools
+  if (toolName !== 'Bash') {
+    return { behavior: 'allow' };
+  }
+
+  const command = (input.command ?? '').trim();
+
+  // Check if command matches any allowed pattern
+  const isAllowed = ALLOWED_BASH_PATTERNS.some((pattern) =>
+    pattern.test(command),
+  );
+
+  if (isAllowed) {
+    debug(`Allowing bash command: ${command}`);
+    return { behavior: 'allow' };
+  }
+
+  debug(`Denying bash command: ${command}`);
+  return {
+    behavior: 'deny',
+    message: `Bash command not allowed. Only package manager commands (npm/pnpm/bun/yarn install) are permitted.`,
+  };
+}
+
+/**
  * Initialize a PostHog Agent instance with the provided configuration
  */
 export function initializeAgent(
@@ -235,6 +288,7 @@ export async function runAgent(
       permissionMode: PermissionMode.ACCEPT_EDITS,
       queryOverrides: {
         model: 'claude-opus-4-5-20251101',
+        canUseTool: wizardCanUseTool,
       },
     });
 
