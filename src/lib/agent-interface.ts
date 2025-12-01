@@ -70,24 +70,18 @@ export type AgentConfig = {
 };
 
 /**
- * Allowed bash command patterns for the wizard agent.
+ * Allowed bash command prefixes for the wizard agent.
  * These are package manager commands needed for PostHog installation.
  */
-const ALLOWED_BASH_PATTERNS = [
+const ALLOWED_BASH_PREFIXES = [
   // Package installation
-  /^npm\s+install(\s|$)/,
-  /^pnpm\s+(install|add)(\s|$)/,
-  /^bun\s+(install|add)(\s|$)/,
-  /^yarn\s+add(\s|$)/,
-  /^npm\s+ci(\s|$)/,
-  // Package info (needed to detect package manager)
-  /^npm\s+--version/,
-  /^pnpm\s+--version/,
-  /^bun\s+--version/,
-  /^yarn\s+--version/,
-  /^which\s+(npm|pnpm|bun|yarn)/,
-  /^cat\s+.*package\.json/,
-  /^ls\s/,
+  'npm install',
+  'npm ci',
+  'pnpm install',
+  'pnpm add',
+  'bun install',
+  'bun add',
+  'yarn add',
 ];
 
 /**
@@ -105,9 +99,9 @@ export function wizardCanUseTool(
 
   const command = (input.command ?? '').trim();
 
-  // Check if command matches any allowed pattern
-  const isAllowed = ALLOWED_BASH_PATTERNS.some((pattern) =>
-    pattern.test(command),
+  // Check if command starts with any allowed prefix
+  const isAllowed = ALLOWED_BASH_PREFIXES.some((prefix) =>
+    command.startsWith(prefix),
   );
 
   if (isAllowed) {
