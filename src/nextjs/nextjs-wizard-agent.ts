@@ -22,41 +22,30 @@ const NEXTJS_AGENT_CONFIG: FrameworkConfig = {
     docsUrl: 'https://posthog.com/docs/libraries/next-js',
     abortMessage:
       'This wizard uses an LLM agent to intelligently modify your project. Please view the docs to setup Next.js manually instead: https://posthog.com/docs/libraries/next-js',
-      0,
-    );
-  }
+    gatherContext: async (options: WizardOptions) => {
+      const router = await getNextJsRouter(options);
+      return { router };
+    },
+  },
 
-  const cloudRegion = options.cloudRegion ?? (await askForCloudRegion());
-  const typeScriptDetected = isUsingTypeScript(options);
+  detection: {
+    packageName: 'next',
+    packageDisplayName: 'Next.js',
+    getVersion: (packageJson: any) => getPackageVersion('next', packageJson),
+    getVersionBucket: getNextJsVersionBucket,
+  },
 
-  await confirmContinueIfNoOrDirtyGitRepo(options);
+  environment: {
+    uploadToHosting: true,
+    expectedEnvVarSuffixes: ['POSTHOG_KEY', 'POSTHOG_HOST'],
+  },
 
-  const packageJson = await getPackageDotJson(options);
-  await ensurePackageIsInstalled(packageJson, 'next', 'Next.js');
-
-  const nextVersion = getPackageVersion('next', packageJson);
-  analytics.setTag('nextjs-version', getNextJsVersionBucket(nextVersion));
-
-  analytics.capture(WIZARD_INTERACTION_EVENT_NAME, {
-    action: 'started agent integration',
-  });
-
-  const { projectApiKey, host, accessToken } = await getOrAskForProjectData({
-    ...options,
-    cloudRegion,
-  });
-
-  const router = await getNextJsRouter(options);
-  const routerType = router === NextJsRouter.APP_ROUTER ? 'app' : 'pages';
-
-  const spinner = clack.spinner();
-
-  const agent = await initializeAgent(
-    {
-      workingDirectory: options.installDir,
-      posthogMcpUrl: 'https://mcp.posthog.com/mcp',
-      posthogApiKey: accessToken,
-      debug: false,
+  analytics: {
+    getTags: (context: any) => {
+      const router = context.router as NextJsRouter;
+      return {
+        router: router === NextJsRouter.APP_ROUTER ? 'app' : 'pages',
+      };
     },
   },
 
