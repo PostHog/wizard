@@ -82,6 +82,7 @@ const ALLOWED_BASH_PREFIXES = [
   'bun install',
   'bun add',
   'yarn add',
+  'yarn install',
 ];
 
 /**
