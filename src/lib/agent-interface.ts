@@ -99,6 +99,10 @@ export function wizardCanUseTool(
   }
 
   const command = (input.command ?? '').trim();
+  // Block commands with chained operators
+  if (/[;&|`$()]/.test(command)) {
+    return { behavior: 'deny', ... };
+  }   
 
   // Check if command starts with any allowed prefix
   const isAllowed = ALLOWED_BASH_PREFIXES.some((prefix) =>
