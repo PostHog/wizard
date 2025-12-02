@@ -1,6 +1,7 @@
 import { Analytics } from '../analytics';
 import { PostHog } from 'posthog-node';
 import { v4 as uuidv4 } from 'uuid';
+import { ANALYTICS_TEAM_TAG } from '../../lib/constants';
 
 jest.mock('posthog-node');
 jest.mock('uuid');
@@ -39,7 +40,7 @@ describe('Analytics', () => {
         error,
         'test-uuid',
         {
-          team: 'growth',
+          team: ANALYTICS_TEAM_TAG,
           $app_name: 'wizard',
           ...properties,
         },
@@ -57,7 +58,7 @@ describe('Analytics', () => {
         error,
         'test-uuid',
         {
-          team: 'growth',
+          team: ANALYTICS_TEAM_TAG,
           $app_name: 'wizard',
           testTag: 'testValue',
           ...properties,
@@ -76,7 +77,7 @@ describe('Analytics', () => {
         error,
         distinctId,
         {
-          team: 'growth',
+          team: ANALYTICS_TEAM_TAG,
           $app_name: 'wizard',
         },
       );
@@ -91,7 +92,7 @@ describe('Analytics', () => {
         error,
         'test-uuid',
         {
-          team: 'growth',
+          team: ANALYTICS_TEAM_TAG,
           $app_name: 'wizard',
         },
       );
@@ -109,7 +110,7 @@ describe('Analytics', () => {
         error,
         'test-uuid',
         {
-          team: 'growth',
+          team: ANALYTICS_TEAM_TAG,
           $app_name: 'wizard',
           environment: 'test',
           version: '1.0.0',
@@ -130,14 +131,14 @@ describe('Analytics', () => {
         error,
         'test-uuid',
         {
-          team: 'growth',
+          team: ANALYTICS_TEAM_TAG,
           $app_name: 'wizard',
           integration: 'react',
         },
       );
     });
 
-    it('should always include team:growth property in exceptions', () => {
+    it('should always include team property in exceptions', () => {
       const error = new Error('Test error');
 
       analytics.captureException(error);
@@ -146,7 +147,7 @@ describe('Analytics', () => {
         error,
         'test-uuid',
         {
-          team: 'growth',
+          team: ANALYTICS_TEAM_TAG,
           $app_name: 'wizard',
         },
       );
@@ -170,7 +171,7 @@ describe('Analytics', () => {
         error,
         'test-uuid',
         {
-          team: 'growth',
+          team: ANALYTICS_TEAM_TAG,
           $app_name: 'wizard',
           integration: 'nextjs',
           forceInstall: true,
@@ -193,7 +194,7 @@ describe('Analytics', () => {
         error,
         distinctId,
         {
-          team: 'growth',
+          team: ANALYTICS_TEAM_TAG,
           $app_name: 'wizard',
           integration: 'svelte',
         },
