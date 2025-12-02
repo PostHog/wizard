@@ -37,7 +37,10 @@ const NEXTJS_AGENT_CONFIG: FrameworkConfig = {
 
   environment: {
     uploadToHosting: true,
-    expectedEnvVarSuffixes: ['POSTHOG_KEY', 'POSTHOG_HOST'],
+    getEnvVars: (apiKey, host) => ({
+      NEXT_PUBLIC_POSTHOG_KEY: apiKey,
+      NEXT_PUBLIC_POSTHOG_HOST: host,
+    }),
   },
 
   analytics: {

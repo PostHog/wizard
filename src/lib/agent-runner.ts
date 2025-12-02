@@ -26,8 +26,6 @@ import {
   addMCPServerToClientsStep,
   uploadEnvironmentVariablesStep,
 } from '../steps';
-import * as fs from 'fs';
-import path from 'path';
 
 /**
  * Universal agent-powered wizard runner.
@@ -106,7 +104,7 @@ export async function runAgentWizard(
 
   // Initialize and run agent
   const spinner = clack.spinner();
-  const agent = initializeAgent(
+  const agent = await initializeAgent(
     {
       workingDirectory: options.installDir,
       posthogMcpUrl: 'https://mcp.posthog.com/mcp',
@@ -182,15 +180,12 @@ ${chalk.cyan(config.metadata.docsUrl)}`;
     process.exit(1);
   }
 
-  // Parse .env file created by agent
-  const envVars = parseEnvFile(
-    options.installDir,
-    config.environment.expectedEnvVarSuffixes,
-  );
+  // Build environment variables from OAuth credentials
+  const envVars = config.environment.getEnvVars(projectApiKey, host);
 
   // Upload environment variables to hosting providers (if configured)
   let uploadedEnvVars: string[] = [];
-  if (config.environment.uploadToHosting && Object.keys(envVars).length > 0) {
+  if (config.environment.uploadToHosting) {
     uploadedEnvVars = await uploadEnvironmentVariablesStep(envVars, {
       integration: config.metadata.integration,
       options,
@@ -298,71 +293,4 @@ If the PostHog MCP is accessible, attempt to access the setup resource. If the s
 ${AgentSignals.ERROR_RESOURCE_MISSING} Could not access the setup resource.
 
 `;
-}
-
-/**
- * Parse .env file created by agent and extract variables matching expected suffixes.
- *
- * Looks for .env.local first, then .env.
- * Filters variables to only include those ending with expected suffixes.
- */
-function parseEnvFile(
-  installDir: string,
-  expectedSuffixes: string[],
-): Record<string, string> {
-  // Check for .env.local first, then .env
-  const dotEnvLocalPath = path.join(installDir, '.env.local');
-  const dotEnvPath = path.join(installDir, '.env');
-
-  let envFilePath: string | null = null;
-  if (fs.existsSync(dotEnvLocalPath)) {
-    envFilePath = dotEnvLocalPath;
-  } else if (fs.existsSync(dotEnvPath)) {
-    envFilePath = dotEnvPath;
-  }
-
-  if (!envFilePath) {
-    // Agent didn't create .env file, return empty
-    return {};
-  }
-
-  try {
-    const content = fs.readFileSync(envFilePath, 'utf8');
-    const lines = content.split('\n');
-    const envVars: Record<string, string> = {};
-
-    for (const line of lines) {
-      const trimmed = line.trim();
-      // Skip empty lines and comments
-      if (!trimmed || trimmed.startsWith('#')) {
-        continue;
-      }
-
-      const match = trimmed.match(/^([^=]+)=(.*)$/);
-      if (match) {
-        const [, key, value] = match;
-        const cleanKey = key.trim();
-        const cleanValue = value.trim();
-
-        // Check if key ends with any expected suffix
-        const matchesSuffix = expectedSuffixes.some((suffix) =>
-          cleanKey.endsWith(suffix),
-        );
-
-        if (matchesSuffix) {
-          envVars[cleanKey] = cleanValue;
-        }
-      }
-    }
-
-    return envVars;
-  } catch (error) {
-    // Failed to parse .env file, return empty
-    clack.log.warning(
-      `Failed to parse .env file: ${
-        error instanceof Error ? error.message : 'Unknown error'
-      }`,
-    );
-    return {};
-  }
 }

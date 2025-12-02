@@ -63,10 +63,10 @@ export interface EnvironmentConfig {
   uploadToHosting: boolean;
 
   /**
-   * Base names to search for when uploading (e.g., ['POSTHOG_KEY', 'POSTHOG_HOST'])
-   * Wizard will scan .env for vars ending with these names
+   * Build the environment variables object for this framework.
+   * Returns the exact variable names and values to upload to hosting providers.
    */
-  expectedEnvVarSuffixes: string[];
+  getEnvVars: (apiKey: string, host: string) => Record<string, string>;
 }
 
 /**

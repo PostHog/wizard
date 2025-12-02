@@ -99,10 +99,14 @@ export function wizardCanUseTool(
   }
 
   const command = (input.command ?? '').trim();
-  // Block commands with chained operators
+  // Block commands with shell operators (chaining, subshells, etc.)
   if (/[;&|`$()]/.test(command)) {
-    return { behavior: 'deny', ... };
-  }   
+    debug(`Denying bash command with shell operators: ${command}`);
+    return {
+      behavior: 'deny',
+      message: `Bash command not allowed. Chained commands are not permitted.`,
+    };
+  }
 
   // Check if command starts with any allowed prefix
   const isAllowed = ALLOWED_BASH_PREFIXES.some((prefix) =>
