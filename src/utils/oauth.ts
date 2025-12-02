@@ -11,6 +11,29 @@ import { analytics } from './analytics';
 import type { CloudRegion } from './types';
 import { getCloudUrlFromRegion, getOauthClientIdFromRegion } from './urls';
 
+const OAUTH_CALLBACK_STYLES = `
+  <style>
+    * {
+      font-family: monospace;
+      background-color: #1b0a00;
+      color: #F7A502;
+      font-weight: medium;
+      font-size: 24px;
+      margin: .25rem;
+    }
+
+    .blink {
+      animation: blink-animation 1s steps(2, start) infinite;
+    }
+
+    @keyframes blink-animation {
+      to {
+        opacity: 0;
+      }
+    }
+  </style>
+`;
+
 const OAuthTokenResponseSchema = z.object({
   access_token: z.string(),
   expires_in: z.number(),
@@ -76,10 +99,17 @@ async function startCallbackServer(
       if (error) {
         const isAccessDenied = error === 'access_denied';
         res.writeHead(isAccessDenied ? 200 : 400, {
-          'Content-Type': 'text/html',
+          'Content-Type': 'text/html; charset=utf-8',
         });
         res.end(`
           <html>
+            <head>
+              <meta charset="UTF-8">
+              <title>PostHog wizard - Authorization ${
+                isAccessDenied ? 'cancelled' : 'failed'
+              }</title>
+              ${OAUTH_CALLBACK_STYLES}
+            </head>
             <body>
               <p>${
                 isAccessDenied
@@ -96,20 +126,31 @@ async function startCallbackServer(
       }
 
       if (code) {
-        res.writeHead(200, { 'Content-Type': 'text/html' });
+        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
         res.end(`
           <html>
+            <head>
+              <meta charset="UTF-8">
+              <title>PostHog wizard is ready</title>
+              ${OAUTH_CALLBACK_STYLES}
+            </head>
             <body>
-              <p>Authorization successful! Return to your terminal.</p>
+              <p>PostHog login complete!</p>
+              <p>Return to your terminal: the wizard is hard at work on your project<span class="blink">█</span></p>
               <script>window.close();</script>
             </body>
           </html>
         `);
         callbackResolve(code);
       } else {
-        res.writeHead(400, { 'Content-Type': 'text/html' });
+        res.writeHead(400, { 'Content-Type': 'text/html; charset=utf-8' });
         res.end(`
           <html>
+            <head>
+              <meta charset="UTF-8">
+              <title>PostHog wizard - Invalid request</title>
+              ${OAUTH_CALLBACK_STYLES}
+            </head>
             <body>
               <p>Invalid request - no authorization code received.</p>
               <p>You can close this window.</p>

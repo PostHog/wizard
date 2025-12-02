@@ -64,6 +64,7 @@ export const DEFAULT_HOST_URL = IS_DEV
   : 'https://us.i.posthog.com';
 export const ANALYTICS_POSTHOG_PUBLIC_PROJECT_WRITE_KEY = 'sTMFPsFhdP1Ssg';
 export const ANALYTICS_HOST_URL = 'https://internal-j.posthog.com';
+export const ANALYTICS_TEAM_TAG = 'docs-and-wizard';
 export const DUMMY_PROJECT_API_KEY = '_YOUR_POSTHOG_PROJECT_API_KEY_';
 
 export const POSTHOG_US_CLIENT_ID = 'c4Rdw8DIxgtQfA80IiSnGKlNX8QN00cFWF00QQhM';

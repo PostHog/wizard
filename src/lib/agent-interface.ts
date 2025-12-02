@@ -32,12 +32,98 @@ const EventType = {
   DONE: 'done',
 } as const;
 
+/**
+ * Content types for agent messages and blocks
+ */
+const ContentType = {
+  TEXT: 'text',
+  ASSISTANT: 'assistant',
+} as const;
+
+export const AgentSignals = {
+  /** Signal emitted when the agent reports progress to the user */
+  STATUS: '[STATUS]',
+  /** Signal emitted when the agent cannot access the PostHog MCP server */
+  ERROR_MCP_MISSING: '[ERROR-MCP-MISSING]',
+  /** Signal emitted when the agent cannot access the setup resource */
+  ERROR_RESOURCE_MISSING: '[ERROR-RESOURCE-MISSING]',
+} as const;
+
+export type AgentSignal = (typeof AgentSignals)[keyof typeof AgentSignals];
+
+/**
+ * Error types that can be returned from agent execution.
+ * These correspond to the error signals that the agent emits.
+ */
+export enum AgentErrorType {
+  /** Agent could not access the PostHog MCP server */
+  MCP_MISSING = 'WIZARD_MCP_MISSING',
+  /** Agent could not access the setup resource */
+  RESOURCE_MISSING = 'WIZARD_RESOURCE_MISSING',
+}
+
 export type AgentConfig = {
   workingDirectory: string;
   posthogMcpUrl: string;
   posthogApiKey: string;
   debug?: boolean;
 };
+
+/**
+ * Allowed bash command prefixes for the wizard agent.
+ * These are package manager commands needed for PostHog installation.
+ */
+const ALLOWED_BASH_PREFIXES = [
+  // Package installation
+  'npm install',
+  'npm ci',
+  'pnpm install',
+  'pnpm add',
+  'bun install',
+  'bun add',
+  'yarn add',
+  'yarn install',
+];
+
+/**
+ * Permission hook that allows only safe package manager commands.
+ * This prevents the agent from running arbitrary shell commands.
+ */
+export function wizardCanUseTool(
+  toolName: string,
+  input: { command?: string },
+): { behavior: 'allow' } | { behavior: 'deny'; message: string } {
+  // Allow all non-Bash tools
+  if (toolName !== 'Bash') {
+    return { behavior: 'allow' };
+  }
+
+  const command = (input.command ?? '').trim();
+  // Block commands with shell operators (chaining, subshells, etc.)
+  if (/[;&|`$()]/.test(command)) {
+    debug(`Denying bash command with shell operators: ${command}`);
+    return {
+      behavior: 'deny',
+      message: `Bash command not allowed. Chained commands are not permitted.`,
+    };
+  }
+
+  // Check if command starts with any allowed prefix
+  const isAllowed = ALLOWED_BASH_PREFIXES.some((prefix) =>
+    command.startsWith(prefix),
+  );
+
+  if (isAllowed) {
+    debug(`Allowing bash command: ${command}`);
+    return { behavior: 'allow' };
+  }
+
+  debug(`Denying bash command: ${command}`);
+  return {
+    behavior: 'deny',
+    message: `Bash command not allowed. Only package manager commands (npm/pnpm/bun/yarn install) are permitted.`,
+  };
+}
 
 /**
  * Initialize a PostHog Agent instance with the provided configuration
@@ -97,16 +183,23 @@ function handleAgentEvent(
   // Only show [STATUS] events to the user - everything else goes to debug log
   switch (event.type) {
     case EventType.RAW_SDK_EVENT:
-      if (event.sdkMessage?.type === 'assistant') {
+      if (event.sdkMessage?.type === ContentType.ASSISTANT) {
         const message = event.sdkMessage.message;
         if (message?.content && Array.isArray(message.content)) {
           const textContent = message.content
-            .filter((block: any) => block.type === 'text')
+            .filter((block: any) => block.type === ContentType.TEXT)
             .map((block: any) => block.text)
             .join('\n');
 
           // Check if the text contains a [STATUS] marker
-          const statusMatch = textContent.match(/^.*\[STATUS\]\s*(.+?)$/m);
+          const statusRegex = new RegExp(
+            `^.*${AgentSignals.STATUS.replace(
+              /[.*+?^${}()|[\]\\]/g,
+              '\\$&',
+            )}\\s*(.+?)$`,
+            'm',
+          );
+          const statusMatch = textContent.match(statusRegex);
           if (statusMatch) {
             // Stop spinner, log the status step, restart spinner
             // This creates the progress list as the agent proceeds
@@ -177,6 +270,8 @@ function handleAgentEvent(
 /**
  * Execute an agent with the provided prompt and options
  * Handles the full lifecycle: spinner, execution, error handling
+ *
+ * @returns An object containing any error detected in the agent's output
  */
 export async function runAgent(
   agent: Agent,
@@ -189,7 +284,7 @@ export async function runAgent(
     successMessage?: string;
     errorMessage?: string;
   },
-): Promise<void> {
+): Promise<{ error?: AgentErrorType }> {
   const {
     estimatedDurationMinutes = 8,
     spinnerMessage = 'Customizing your PostHog setup...',
@@ -205,15 +300,62 @@ export async function runAgent(
   spinner.start(spinnerMessage);
 
   try {
-    await agent.run(prompt, {
+    const result = await agent.run(prompt, {
       repositoryPath: options.installDir,
       permissionMode: PermissionMode.ACCEPT_EDITS,
+      queryOverrides: {
+        model: 'claude-opus-4-5-20251101',
+        canUseTool: wizardCanUseTool,
+      },
     });
+
+    // Check for error markers in the agent's output
+    const outputText = extractTextFromResults(result.results);
+
+    if (outputText.includes(AgentSignals.ERROR_MCP_MISSING)) {
+      spinner.stop('Agent could not access PostHog MCP');
+      return { error: AgentErrorType.MCP_MISSING };
+    }
+
+    if (outputText.includes(AgentSignals.ERROR_RESOURCE_MISSING)) {
+      spinner.stop('Agent could not access setup resource');
+      return { error: AgentErrorType.RESOURCE_MISSING };
+    }
+
     spinner.stop(successMessage);
+    return {};
   } catch (error) {
     spinner.stop(errorMessage);
     clack.log.error(`Error: ${(error as Error).message}`);
     debug('Full error:', error);
     throw error;
   }
+}
+
+/**
+ * Extract text content from agent execution results
+ */
+function extractTextFromResults(results: any[]): string {
+  const textParts: string[] = [];
+
+  for (const result of results) {
+    // Handle assistant messages with content blocks
+    if (result?.type === ContentType.ASSISTANT && result.message?.content) {
+      const content = result.message.content;
+      if (Array.isArray(content)) {
+        for (const block of content) {
+          if (block.type === ContentType.TEXT && block.text) {
+            textParts.push(block.text);
+          }
+        }
+      }
+    }
+
+    // Handle direct text content
+    if (typeof result === 'string') {
+      textParts.push(result);
+    }
+  }
+
+  return textParts.join('\n');
 }

@@ -2,6 +2,7 @@ import { PostHog } from 'posthog-node';
 import {
   ANALYTICS_HOST_URL,
   ANALYTICS_POSTHOG_PUBLIC_PROJECT_WRITE_KEY,
+  ANALYTICS_TEAM_TAG,
 } from '../lib/constants';
 import { v4 as uuidv4 } from 'uuid';
 import { debug } from './debug';
@@ -42,7 +43,7 @@ export class Analytics {
 
   captureException(error: Error, properties: Record<string, unknown> = {}) {
     this.client.captureException(error, this.distinctId ?? this.anonymousId, {
-      team: 'growth',
+      team: ANALYTICS_TEAM_TAG,
       ...this.tags,
       ...properties,
     });
