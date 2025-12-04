@@ -1,0 +1,13 @@
+minimumReleaseAge: 1440
+minimumReleaseAgeExclude:
+  - "@next/eslint-plugin-next@15.5.7"
+  - "@next/env@15.5.7"
+  - eslint-config-next@15.5.7
+  - next@15.5.7
+  - react@19.2.1
+  - react-dom@19.2.1
+  - react-is@19.2.1
+  - react-test-renderer@19.2.1
+
+packages:
+  - 'test-applications/**'
