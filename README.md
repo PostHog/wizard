@@ -3,8 +3,7 @@
 </p>
 
 > **⚠️ Experimental:** This wizard is still in an experimental phase. If you
-> have any feedback, please drop an email to **joshua** [at] **posthog** [dot] >
-> **com**.
+> have any feedback, please drop an email to **[wizard@posthog.com](mailto:wizard@posthog.com)**.
 
 <h1>PostHog wizard ✨</h1>
 <h4>The PostHog wizard helps you quickly add PostHog to your project using AI.</h4>
