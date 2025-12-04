@@ -1,7 +1,7 @@
-import { DefaultMCPClient } from '../MCPClient';
+import { DefaultMCPClient, MCPServerConfig } from '../MCPClient';
 import * as path from 'path';
 import * as os from 'os';
-import { DefaultMCPClientConfig } from '../defaults';
+import { DefaultMCPClientConfig, getNativeHTTPServerConfig } from '../defaults';
 import { z } from 'zod';
 
 export const CursorMCPConfig = DefaultMCPClientConfig;
@@ -25,11 +25,25 @@ export class CursorMCPClient extends DefaultMCPClient {
     return Promise.resolve(path.join(os.homedir(), '.cursor', 'mcp.json'));
   }
 
+  getServerConfig(
+    apiKey: string,
+    type: 'sse' | 'streamable-http',
+    selectedFeatures?: string[],
+    local?: boolean,
+  ): MCPServerConfig {
+    return getNativeHTTPServerConfig(apiKey, type, selectedFeatures, local);
+  }
+
   async addServer(
     apiKey: string,
     selectedFeatures?: string[],
     local?: boolean,
   ): Promise<{ success: boolean }> {
-    return this._addServerType(apiKey, 'sse', selectedFeatures, local);
+    return this._addServerType(
+      apiKey,
+      'streamable-http',
+      selectedFeatures,
+      local,
+    );
   }
 }
