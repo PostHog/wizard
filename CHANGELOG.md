@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.21.0](https://github.com/PostHog/wizard/compare/v1.20.0...v1.21.0) (2025-12-04)
+
+
+### Features
+
+* update mcp installations ([#191](https://github.com/PostHog/wizard/issues/191)) ([742fb33](https://github.com/PostHog/wizard/commit/742fb33c9f9f82d9f8c29fdb307c6663b648383d))
+
+
+### Bug Fixes
+
+* Update e2e deps for react and next ([#192](https://github.com/PostHog/wizard/issues/192)) ([c6ae6d9](https://github.com/PostHog/wizard/commit/c6ae6d9bb22db37b5c899d9a6aa254b3c37acd28))
+
 ## [1.20.0](https://github.com/PostHog/wizard/compare/v1.19.0...v1.20.0) (2025-12-02)
 
 
