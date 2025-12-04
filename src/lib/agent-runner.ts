@@ -39,7 +39,7 @@ export async function runAgentWizard(
   printWelcome({ wizardName: config.ui.welcomeMessage });
 
   clack.log.info(
-    `🧙 The wizard has chosen you to try the next-generation agent integration for ${config.metadata.name}.\n\nStand by for the good stuff, and let me know how it goes:\n\ndanilo@posthog.com`,
+    `🧙 The wizard has chosen you to try the next-generation agent integration for ${config.metadata.name}.\n\nStand by for the good stuff, and let the robot minders know how it goes:\n\nwizard@posthog.com`,
   );
 
   const aiConsent = await askForAIConsent(options);
@@ -104,10 +104,16 @@ export async function runAgentWizard(
 
   // Initialize and run agent
   const spinner = clack.spinner();
+
+  // Determine MCP URL: CLI flag > env var > production default
+  const mcpUrl = options.localMcp
+    ? 'http://localhost:8787/mcp'
+    : process.env.MCP_URL || 'https://mcp.posthog.com/mcp';
+
   const agent = await initializeAgent(
     {
       workingDirectory: options.installDir,
-      posthogMcpUrl: 'https://mcp.posthog.com/mcp',
+      posthogMcpUrl: mcpUrl,
       posthogApiKey: accessToken,
       debug: false,
     },
@@ -235,7 +241,7 @@ ${chalk.dim(
   'Note: This wizard uses an LLM agent to analyze and modify your project. Please review the changes made.',
 )}
 
-${chalk.dim(`How did this work for you? Drop me a line: danilo@posthog.com`)}`;
+${chalk.dim(`How did this work for you? Drop us a line: wizard@posthog.com`)}`;
 
   clack.outro(outroMessage);
 

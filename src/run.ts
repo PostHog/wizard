@@ -35,6 +35,7 @@ type Args = {
   region?: CloudRegion;
   default?: boolean;
   signup?: boolean;
+  localMcp?: boolean;
 };
 
 export async function runWizard(argv: Args) {
@@ -61,6 +62,7 @@ export async function runWizard(argv: Args) {
     cloudRegion: finalArgs.region ?? undefined,
     default: finalArgs.default ?? false,
     signup: finalArgs.signup ?? false,
+    localMcp: finalArgs.localMcp ?? false,
   };
 
   clack.intro(`Welcome to the PostHog setup wizard ✨`);
