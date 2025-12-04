@@ -116,35 +116,26 @@ users of the wizard, no training delays or other ambiguity.
 
 ## Running locally
 
-Run:
+### Quick test without linking
 
 ```bash
 pnpm try --install-dir=[a path]
 ```
 
-To build and use the tool locally:
+### Development with auto-rebuild
 
 ```bash
-bin/build
+pnpm run dev
 ```
 
-This compiles the TypeScript code and prepares the `dist` directory. Run this
-command any time you make changes to the wizard's source code.
+This builds, links globally, and watches for changes. Leave it running - any `.ts` file changes will auto-rebuild. Then from any project:
 
 ```bash
-pnpm link --global
+wizard --integration=nextjs
+
+# Or use local MCP server:
+wizard --integration=nextjs --local-mcp
 ```
-
-This command makes your local version of the wizard available system-wide. You
-generally only need to do this once.
-
-Then:
-
-```bash
-wizard [options]
-```
-
-The wizard will execute your last build.
 
 ## Testing
 

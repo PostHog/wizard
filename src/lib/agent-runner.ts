@@ -104,10 +104,16 @@ export async function runAgentWizard(
 
   // Initialize and run agent
   const spinner = clack.spinner();
+
+  // Determine MCP URL: CLI flag > env var > production default
+  const mcpUrl = options.localMcp
+    ? 'http://localhost:8787/mcp'
+    : process.env.MCP_URL || 'https://mcp.posthog.com/mcp';
+
   const agent = await initializeAgent(
     {
       workingDirectory: options.installDir,
-      posthogMcpUrl: 'https://mcp.posthog.com/mcp',
+      posthogMcpUrl: mcpUrl,
       posthogApiKey: accessToken,
       debug: false,
     },

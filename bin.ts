@@ -78,6 +78,12 @@ yargs(hideBin(process.argv))
         'Create a new PostHog account during setup\nenv: POSTHOG_WIZARD_SIGNUP',
       type: 'boolean',
     },
+    'local-mcp': {
+      default: false,
+      describe:
+        'Use local MCP server at http://localhost:8787/mcp\nenv: POSTHOG_WIZARD_LOCAL_MCP',
+      type: 'boolean',
+    },
   })
   .command(
     ['$0'],
@@ -143,6 +149,7 @@ yargs(hideBin(process.argv))
         default: finalArgs.default ?? false,
         signup: finalArgs.signup ?? false,
         forceInstall: false,
+        localMcp: finalArgs.localMcp ?? false,
       };
 
       void runEventSetupWizard(wizardOptions);
