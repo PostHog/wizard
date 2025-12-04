@@ -1,4 +1,7 @@
+minimumReleaseAgeExclude:
+  - next
+  - eslint-config-next
+
 onlyBuiltDependencies:
   - esbuild
   - msw
-minimumReleaseAge: 1440
