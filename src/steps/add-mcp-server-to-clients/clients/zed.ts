@@ -1,20 +1,27 @@
 import z from 'zod';
 import * as path from 'path';
 import * as os from 'os';
-import { DefaultMCPClient } from '../MCPClient';
-import { getDefaultServerConfig } from '../defaults';
+import { DefaultMCPClient, MCPServerConfig } from '../MCPClient';
+import { buildMCPUrl } from '../defaults';
 
 export const ZedMCPConfig = z
   .object({
     context_servers: z.record(
       z.string(),
-      z.object({
-        enabled: z.boolean().optional(),
-        source: z.string().optional(),
-        command: z.string().optional(),
-        args: z.array(z.string()).optional(),
-        env: z.record(z.string(), z.string()).optional(),
-      }),
+      z.union([
+        z.object({
+          enabled: z.boolean().optional(),
+          source: z.string().optional(),
+          command: z.string().optional(),
+          args: z.array(z.string()).optional(),
+          env: z.record(z.string(), z.string()).optional(),
+        }),
+        z.object({
+          enabled: z.boolean().optional(),
+          url: z.string(),
+          headers: z.record(z.string(), z.string()).optional(),
+        }),
+      ]),
     ),
   })
   .passthrough();
@@ -65,12 +72,27 @@ export class ZedClient extends DefaultMCPClient {
     apiKey: string,
     type: 'sse' | 'streamable-http',
     selectedFeatures?: string[],
-  ) {
-    const baseConfig = getDefaultServerConfig(apiKey, type, selectedFeatures);
+    local?: boolean,
+  ): MCPServerConfig {
     return {
       enabled: true,
-      source: 'custom',
-      ...baseConfig,
+      url: buildMCPUrl(type, selectedFeatures, local),
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+      },
     };
+  }
+
+  async addServer(
+    apiKey: string,
+    selectedFeatures?: string[],
+    local?: boolean,
+  ): Promise<{ success: boolean }> {
+    return this._addServerType(
+      apiKey,
+      'streamable-http',
+      selectedFeatures,
+      local,
+    );
   }
 }

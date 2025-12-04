@@ -4,11 +4,17 @@ export const DefaultMCPClientConfig = z
   .object({
     mcpServers: z.record(
       z.string(),
-      z.object({
-        command: z.string().optional(),
-        args: z.array(z.string()).optional(),
-        env: z.record(z.string(), z.string()).optional(),
-      }),
+      z.union([
+        z.object({
+          command: z.string().optional(),
+          args: z.array(z.string()).optional(),
+          env: z.record(z.string(), z.string()).optional(),
+        }),
+        z.object({
+          url: z.string(),
+          headers: z.record(z.string(), z.string()).optional(),
+        }),
+      ]),
     ),
   })
   .passthrough();
@@ -64,8 +70,7 @@ export const ALL_FEATURE_VALUES = Object.values(AVAILABLE_FEATURES)
 
 type MCPServerType = 'sse' | 'streamable-http';
 
-export const getDefaultServerConfig = (
-  apiKey: string,
+export const buildMCPUrl = (
   type: MCPServerType,
   selectedFeatures?: string[],
   local?: boolean,
@@ -78,10 +83,34 @@ export const getDefaultServerConfig = (
     selectedFeatures.length === ALL_FEATURE_VALUES.length &&
     ALL_FEATURE_VALUES.every((feature) => selectedFeatures.includes(feature));
 
-  const urlWithFeatures =
-    selectedFeatures && selectedFeatures.length > 0 && !isAllFeaturesSelected
-      ? `${baseUrl}?features=${selectedFeatures.join(',')}`
-      : baseUrl;
+  return selectedFeatures &&
+    selectedFeatures.length > 0 &&
+    !isAllFeaturesSelected
+    ? `${baseUrl}?features=${selectedFeatures.join(',')}`
+    : baseUrl;
+};
+
+export const getNativeHTTPServerConfig = (
+  apiKey: string,
+  type: MCPServerType,
+  selectedFeatures?: string[],
+  local?: boolean,
+) => {
+  return {
+    url: buildMCPUrl(type, selectedFeatures, local),
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+    },
+  };
+};
+
+export const getDefaultServerConfig = (
+  apiKey: string,
+  type: MCPServerType,
+  selectedFeatures?: string[],
+  local?: boolean,
+) => {
+  const urlWithFeatures = buildMCPUrl(type, selectedFeatures, local);
 
   return {
     command: 'npx',

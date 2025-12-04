@@ -3,6 +3,8 @@ import * as path from 'path';
 import * as jsonc from 'jsonc-parser';
 import { getDefaultServerConfig } from './defaults';
 
+export type MCPServerConfig = Record<string, unknown>;
+
 export abstract class MCPClient {
   name: string;
   abstract getConfigPath(): Promise<string>;
@@ -33,7 +35,7 @@ export abstract class DefaultMCPClient extends MCPClient {
     type: 'sse' | 'streamable-http',
     selectedFeatures?: string[],
     local?: boolean,
-  ) {
+  ): MCPServerConfig {
     return getDefaultServerConfig(apiKey, type, selectedFeatures, local);
   }
 
