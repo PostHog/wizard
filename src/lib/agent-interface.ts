@@ -4,7 +4,7 @@
  */
 
 import clack from '../utils/clack';
-import { debug } from '../utils/debug';
+import { debug, logToFile, initLogFile, LOG_FILE_PATH } from '../utils/debug';
 import type { WizardOptions } from '../utils/types';
 import { analytics } from '../utils/analytics';
 import { WIZARD_INTERACTION_EVENT_NAME } from './constants';
@@ -101,6 +101,7 @@ export function wizardCanUseTool(
   const command = (input.command ?? '').trim();
   // Block commands with shell operators (chaining, subshells, etc.)
   if (/[;&|`$()]/.test(command)) {
+    logToFile(`Denying bash command with shell operators: ${command}`);
     debug(`Denying bash command with shell operators: ${command}`);
     return {
       behavior: 'deny',
@@ -114,10 +115,12 @@ export function wizardCanUseTool(
   );
 
   if (isAllowed) {
+    logToFile(`Allowing bash command: ${command}`);
     debug(`Allowing bash command: ${command}`);
     return { behavior: 'allow' };
   }
 
+  logToFile(`Denying bash command: ${command}`);
   debug(`Denying bash command: ${command}`);
   return {
     behavior: 'deny',
@@ -133,6 +136,11 @@ export async function initializeAgent(
   options: WizardOptions,
   spinner: ReturnType<typeof clack.spinner>,
 ): Promise<Agent> {
+  // Initialize log file for this run
+  initLogFile();
+  logToFile('Agent initialization starting');
+  logToFile('Install directory:', options.installDir);
+
   clack.log.step('Initializing PostHog agent...');
 
   try {
@@ -148,6 +156,12 @@ export async function initializeAgent(
       debug: config.debug ?? false,
     };
 
+    logToFile('Agent config:', {
+      workingDirectory: agentConfig.workingDirectory,
+      posthogMcpUrl: agentConfig.posthogMcpUrl,
+      posthogApiKeyPresent: !!agentConfig.posthogApiKey,
+    });
+
     if (options.debug) {
       debug('Agent config:', {
         workingDirectory: agentConfig.workingDirectory,
@@ -157,10 +171,12 @@ export async function initializeAgent(
     }
 
     const agent = new Agent(agentConfig);
+    clack.log.step(`Verbose logs: ${LOG_FILE_PATH}`);
     clack.log.success("Agent initialized. Let's get cooking!");
     return agent;
   } catch (error) {
     clack.log.error(`Failed to initialize agent: ${(error as Error).message}`);
+    logToFile('Agent initialization error:', error);
     debug('Agent initialization error:', error);
     throw error;
   }
@@ -176,6 +192,9 @@ function handleAgentEvent(
   options: WizardOptions,
   spinner: ReturnType<typeof clack.spinner>,
 ): void {
+  // Always log to file
+  logToFile(`Event: ${event.type}`, JSON.stringify(event, null, 2));
+
   if (options.debug) {
     debug(`Event type: ${event.type}`, JSON.stringify(event, null, 2));
   }
@@ -217,30 +236,41 @@ function handleAgentEvent(
       break;
 
     case EventType.TOOL_CALL:
+      logToFile(
+        `Tool call: ${event.toolName}`,
+        JSON.stringify(event.args, null, 2),
+      );
       if (options.debug) {
         debug(`Tool: ${event.toolName}`);
         debug('  Args:', JSON.stringify(event.args, null, 2));
       }
       break;
 
-    case EventType.TOOL_RESULT:
+    case EventType.TOOL_RESULT: {
+      const resultStr: string =
+        typeof event.result === 'string'
+          ? event.result
+          : JSON.stringify(event.result, null, 2);
+      const truncated =
+        resultStr.length > 2000
+          ? `${resultStr.substring(0, 2000)}... [truncated]`
+          : resultStr;
+      logToFile(`Tool result: ${event.toolName}`, truncated);
       if (options.debug) {
         debug(`✅ ${event.toolName} completed`);
-        const resultStr: string =
-          typeof event.result === 'string'
-            ? event.result
-            : JSON.stringify(event.result, null, 2);
-        const truncated =
+        const debugTruncated =
           resultStr.length > 500
             ? `${resultStr.substring(0, 500)}...`
             : resultStr;
-        debug('  Result:', truncated);
+        debug('  Result:', debugTruncated);
       }
       break;
+    }
 
     case EventType.ERROR:
       // Always show errors to user
       clack.log.error(`Error: ${event.message}`);
+      logToFile('ERROR:', event.message, event.error);
       if (options.debug && event.error) {
         debug('Error details:', event.error);
       }
@@ -254,6 +284,7 @@ function handleAgentEvent(
 
     case EventType.DONE:
       if (event.durationMs) {
+        logToFile(`Completed in ${Math.round(event.durationMs / 1000)}s`);
         if (options.debug) {
           debug(`Completed in ${Math.round(event.durationMs / 1000)}s`);
         }
@@ -299,6 +330,9 @@ export async function runAgent(
 
   spinner.start(spinnerMessage);
 
+  logToFile('Starting agent run');
+  logToFile('Prompt:', prompt);
+
   try {
     const result = await agent.run(prompt, {
       repositoryPath: options.installDir,
@@ -313,20 +347,24 @@ export async function runAgent(
     const outputText = extractTextFromResults(result.results);
 
     if (outputText.includes(AgentSignals.ERROR_MCP_MISSING)) {
+      logToFile('Agent error: MCP_MISSING');
       spinner.stop('Agent could not access PostHog MCP');
       return { error: AgentErrorType.MCP_MISSING };
     }
 
     if (outputText.includes(AgentSignals.ERROR_RESOURCE_MISSING)) {
+      logToFile('Agent error: RESOURCE_MISSING');
       spinner.stop('Agent could not access setup resource');
       return { error: AgentErrorType.RESOURCE_MISSING };
     }
 
+    logToFile('Agent run completed successfully');
     spinner.stop(successMessage);
     return {};
   } catch (error) {
     spinner.stop(errorMessage);
     clack.log.error(`Error: ${(error as Error).message}`);
+    logToFile('Agent run failed:', error);
     debug('Full error:', error);
     throw error;
   }
