@@ -40,6 +40,11 @@ export type WizardOptions = {
    * Whether to create a new PostHog account during setup.
    */
   signup: boolean;
+
+  /**
+   * Whether to use the local MCP server at http://localhost:8787/mcp
+   */
+  localMcp: boolean;
 };
 
 export interface Feature {
