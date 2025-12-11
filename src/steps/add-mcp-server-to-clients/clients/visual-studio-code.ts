@@ -1,17 +1,25 @@
 import z from 'zod';
 import * as path from 'path';
 import * as os from 'os';
-import { DefaultMCPClient } from '../MCPClient';
+import { DefaultMCPClient, MCPServerConfig } from '../MCPClient';
+import { buildMCPUrl } from '../defaults';
 
 export const VisualStudioCodeMCPConfig = z
   .object({
     servers: z.record(
       z.string(),
-      z.object({
-        command: z.string().optional(),
-        args: z.array(z.string()).optional(),
-        env: z.record(z.string(), z.string()).optional(),
-      }),
+      z.union([
+        z.object({
+          command: z.string().optional(),
+          args: z.array(z.string()).optional(),
+          env: z.record(z.string(), z.string()).optional(),
+        }),
+        z.object({
+          type: z.enum(['http', 'sse']),
+          url: z.string(),
+          headers: z.record(z.string(), z.string()).optional(),
+        }),
+      ]),
     ),
   })
   .passthrough();
@@ -67,5 +75,33 @@ export class VisualStudioCodeClient extends DefaultMCPClient {
     }
 
     throw new Error(`Unsupported platform: ${process.platform}`);
+  }
+
+  getServerConfig(
+    apiKey: string,
+    type: 'sse' | 'streamable-http',
+    selectedFeatures?: string[],
+    local?: boolean,
+  ): MCPServerConfig {
+    return {
+      type: 'http',
+      url: buildMCPUrl(type, selectedFeatures, local),
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+      },
+    };
+  }
+
+  async addServer(
+    apiKey: string,
+    selectedFeatures?: string[],
+    local?: boolean,
+  ): Promise<{ success: boolean }> {
+    return this._addServerType(
+      apiKey,
+      'streamable-http',
+      selectedFeatures,
+      local,
+    );
   }
 }

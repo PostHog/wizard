@@ -1,5 +1,51 @@
 # Changelog
 
+## [1.21.0](https://github.com/PostHog/wizard/compare/v1.20.0...v1.21.0) (2025-12-04)
+
+
+### Features
+
+* update mcp installations ([#191](https://github.com/PostHog/wizard/issues/191)) ([742fb33](https://github.com/PostHog/wizard/commit/742fb33c9f9f82d9f8c29fdb307c6663b648383d))
+
+
+### Bug Fixes
+
+* Update e2e deps for react and next ([#192](https://github.com/PostHog/wizard/issues/192)) ([c6ae6d9](https://github.com/PostHog/wizard/commit/c6ae6d9bb22db37b5c899d9a6aa254b3c37acd28))
+
+## [1.20.0](https://github.com/PostHog/wizard/compare/v1.19.0...v1.20.0) (2025-12-02)
+
+
+### Features
+
+* generalized agent runner and MCP error detection ([#176](https://github.com/PostHog/wizard/issues/176)) ([fba19b3](https://github.com/PostHog/wizard/commit/fba19b332001c1238bb405f1fc97a233e0e07df1))
+* use trusted publishing for the npm package ([#184](https://github.com/PostHog/wizard/issues/184)) ([8153876](https://github.com/PostHog/wizard/commit/8153876233c560a4b98a69090cb20fa94abe518c))
+
+
+### Bug Fixes
+
+* correct repository URLs to use 'PostHog' ([#187](https://github.com/PostHog/wizard/issues/187)) ([dcf58fa](https://github.com/PostHog/wizard/commit/dcf58fa6d196453c8795e337c922b88978481cc8))
+* update Node version from 18 to 24 in publishing workflow ([#186](https://github.com/PostHog/wizard/issues/186)) ([93374dc](https://github.com/PostHog/wizard/commit/93374dc6a4834771ac5f5c3fbda5ada56054d28e))
+* update node-forge versions from transitive deps ([#188](https://github.com/PostHog/wizard/issues/188)) ([84365f6](https://github.com/PostHog/wizard/commit/84365f6b820ea8aa6683fdf149f1ab536c6d0fee))
+
+## [1.19.0](https://github.com/PostHog/wizard/compare/v1.18.0...v1.19.0) (2025-11-26)
+
+
+### Features
+
+* Migrate to pnpm 10 ([#181](https://github.com/PostHog/wizard/issues/181)) ([e5b2112](https://github.com/PostHog/wizard/commit/e5b21121ddd0aef8d264cf2c646909d5dffca0c4))
+
+
+### Bug Fixes
+
+* use dynamic import to fix ESM/CJS startup ([#182](https://github.com/PostHog/wizard/issues/182)) ([a0b84be](https://github.com/PostHog/wizard/commit/a0b84be50755d65d07aadb02e2f85d01dc15c949))
+
+## [1.18.0](https://github.com/PostHog/wizard/compare/v1.17.0...v1.18.0) (2025-11-20)
+
+
+### Features
+
+* add introspect scope ([e386083](https://github.com/PostHog/wizard/commit/e3860831fa3d3cbc232330ce7b22eb3230f51285))
+
 ## [1.17.0](https://github.com/PostHog/wizard/compare/v1.16.2...v1.17.0) (2025-11-17)
 
 

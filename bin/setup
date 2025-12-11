@@ -3,4 +3,5 @@ set -e
 
 # Install or upgrade dependencies
 echo "Installing dependencies..."
-pnpm install
+pnpm install;
+cd e2e-tests && pnpm install;

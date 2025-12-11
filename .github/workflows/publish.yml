@@ -7,6 +7,7 @@ on:
   workflow_dispatch:
 
 permissions:
+  id-token: write
   contents: read
 
 jobs:
@@ -39,10 +40,10 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Set up Node 18
+      - name: Set up Node 24
         uses: actions/setup-node@v4
         with:
-          node-version: 18
+          node-version: 24
           registry-url: https://registry.npmjs.org
 
       - name: Install pnpm
@@ -56,5 +57,3 @@ jobs:
         
       - name: Publish the package in the npm registry
         run: pnpm publish --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

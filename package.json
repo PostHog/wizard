@@ -1,8 +1,8 @@
 {
   "name": "@posthog/wizard",
-  "version": "1.17.0",
-  "homepage": "https://github.com/posthog/wizard",
-  "repository": "https://github.com/posthog/wizard",
+  "version": "1.21.0",
+  "homepage": "https://github.com/PostHog/wizard",
+  "repository": "https://github.com/PostHog/wizard",
   "description": "The PostHog wizard helps you to configure your project",
   "keywords": [
     "posthog",
@@ -35,7 +35,7 @@
     "@clack/core": "^0.3.4",
     "@clack/prompts": "0.7.0",
     "@langchain/core": "^0.3.40",
-    "@posthog/agent": "1.11.0",
+    "@posthog/agent": "1.24.2",
     "axios": "1.7.4",
     "chalk": "^2.4.1",
     "fast-glob": "^3.3.3",
@@ -89,13 +89,14 @@
     "node": ">=18",
     "npm": ">=3.10.7"
   },
-  "packageManager": "pnpm@9.15.5+sha256.8472168c3e1fd0bff287e694b053fccbbf20579a3ff9526b6333beab8df65a8d",
+  "packageManager": "pnpm@10.23.0+sha512.21c4e5698002ade97e4efe8b8b4a89a8de3c85a37919f957e7a0f30f38fbc5bbdd05980ffe29179b2fb6e6e691242e098d945d1601772cad0fef5fb6411e2a4b",
   "scripts": {
     "clean": "rm -rf ./dist",
     "prebuild": "pnpm clean",
     "build:watch": "pnpm tsc -w",
     "build": "pnpm tsc",
-    "postbuild": "chmod +x ./dist/bin.js && cp -r scripts/** dist && cp -r src/utils/rules dist/src/utils",
+    "postbuild": "chmod +x ./dist/bin.js && cp -r scripts/** dist && cp -r src/utils/rules dist/src/utils && pnpm test:smoke",
+    "test:smoke": "node -e \"require('./dist/bin.js')\" 2>&1 | head -5 | grep -q 'PostHog Wizard' || (echo 'Smoke test failed: compiled binary crashed on load' && exit 1)",
     "lint": "pnpm lint:prettier && pnpm lint:eslint",
     "lint:prettier": "prettier --check \"{lib,src,test}/**/*.ts\"",
     "lint:eslint": "eslint . --cache --format stylish",
@@ -106,6 +107,7 @@
     "test:e2e": "pnpm build && ./e2e-tests/run.sh",
     "test:e2e-record": "export RECORD_FIXTURES=true && pnpm build && ./e2e-tests/run.sh",
     "try": "tsx bin.ts",
+    "dev": "pnpm build && pnpm link --global && pnpm build:watch",
     "test:watch": "jest --watch",
     "prepare": "husky"
   },
@@ -147,6 +149,6 @@
   "license": "MIT",
   "volta": {
     "node": "20.18.2",
-    "pnpm": "9.15.5"
+    "pnpm": "10.23.0"
   }
 }
