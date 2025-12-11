@@ -91,14 +91,18 @@ const ALLOWED_BASH_PREFIXES = [
  */
 export function wizardCanUseTool(
   toolName: string,
-  input: { command?: string },
-): { behavior: 'allow' } | { behavior: 'deny'; message: string } {
+  input: Record<string, unknown>,
+):
+  | { behavior: 'allow'; updatedInput: Record<string, unknown> }
+  | { behavior: 'deny'; message: string } {
   // Allow all non-Bash tools
   if (toolName !== 'Bash') {
-    return { behavior: 'allow' };
+    return { behavior: 'allow', updatedInput: input };
   }
 
-  const command = (input.command ?? '').trim();
+  const command = (
+    typeof input.command === 'string' ? input.command : ''
+  ).trim();
   // Block commands with shell operators (chaining, subshells, etc.)
   if (/[;&|`$()]/.test(command)) {
     logToFile(`Denying bash command with shell operators: ${command}`);
@@ -117,7 +121,7 @@ export function wizardCanUseTool(
   if (isAllowed) {
     logToFile(`Allowing bash command: ${command}`);
     debug(`Allowing bash command: ${command}`);
-    return { behavior: 'allow' };
+    return { behavior: 'allow', updatedInput: input };
   }
 
   logToFile(`Denying bash command: ${command}`);
