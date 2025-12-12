@@ -32,10 +32,10 @@
     "definition": "dist/index.d.ts"
   },
   "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "0.1.65",
     "@clack/core": "^0.3.4",
     "@clack/prompts": "0.7.0",
     "@langchain/core": "^0.3.40",
-    "@posthog/agent": "1.24.2",
     "axios": "1.7.4",
     "chalk": "^2.4.1",
     "fast-glob": "^3.3.3",
@@ -139,7 +139,7 @@
     ],
     "testEnvironment": "node",
     "moduleNameMapper": {
-      "^@posthog/agent$": "<rootDir>/__mocks__/@posthog/agent.ts"
+      "^@anthropic-ai/claude-agent-sdk$": "<rootDir>/__mocks__/@anthropic-ai/claude-agent-sdk.ts"
     }
   },
   "lint-staged": {

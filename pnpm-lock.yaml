@@ -8,6 +8,9 @@ importers:
 
   .:
     dependencies:
+      '@anthropic-ai/claude-agent-sdk':
+        specifier: 0.1.65
+        version: 0.1.65(zod@3.24.2)
       '@clack/core':
         specifier: ^0.3.4
         version: 0.3.5
@@ -17,9 +20,6 @@ importers:
       '@langchain/core':
         specifier: ^0.3.40
         version: 0.3.40(openai@6.7.0(ws@8.18.1)(zod@3.24.2))
-      '@posthog/agent':
-        specifier: 1.24.2
-        version: 1.24.2(zod@3.24.2)
       axios:
         specifier: 1.7.4
         version: 1.7.4
@@ -166,8 +166,8 @@ packages:
     resolution: {integrity: sha512-30iZtAPgz+LTIYoeivqYo853f02jBYSd5uGnGpkFV0M3xOt9aN73erkgYAmZU43x4VfqcnLxW9Kpg3R5LC4YYw==}
     engines: {node: '>=6.0.0'}
 
-  '@anthropic-ai/claude-agent-sdk@0.1.55':
-    resolution: {integrity: sha512-nwlxPjn/gc7I+iOGYY7AGtM2xcjzJFCxF9Bnr0xH1JNaNx+QXLM3h/wmzSvuEOKeJgPymf1GMBs4DZ3jyd/Z7Q==}
+  '@anthropic-ai/claude-agent-sdk@0.1.65':
+    resolution: {integrity: sha512-UYdX7eNBuNk7/88CYbar2x0rIncJ3xZtadkOzQHOp8ZTo4AaNDUoaXa9MjleWV5L4WbJBJZh6CwCAsFVtoxh9w==}
     engines: {node: '>=18.0.0'}
     peerDependencies:
       zod: ^3.24.1
@@ -796,10 +796,6 @@ packages:
   '@open-draft/until@2.1.0':
     resolution: {integrity: sha512-U69T3ItWHvLwGg5eJ0n3I62nWuE6ilHlmz7zM0npLBRvPRd7e6NYmg54vvRtP5mZG7kZqZCFVdsTWo7BPtBujg==}
 
-  '@posthog/agent@1.24.2':
-    resolution: {integrity: sha512-BeSBqZFrBjl6Lq8447PZLQIRKDBUAjQCyJG45QIP439guiRAg+Jpf5SupaehGsl1kLpFF2MzEhpw2HU/m3XGCg==}
-    engines: {node: '>=20.0.0'}
-
   '@sinclair/typebox@0.27.8':
     resolution: {integrity: sha512-+Fj43pSMwJs4KRrH/938Uf+uAELIgVBmQzg/q1YG10djyfA3TnrU8N8XzqCh/okZdszqBQTZf96idMfE5lnwTA==}
 
@@ -1361,10 +1357,6 @@ packages:
 
   dotenv@16.4.7:
     resolution: {integrity: sha512-47qPchRCykZC03FhkYAhrvwU4xDBFIj1QPqaarj6mdM/hgUzfPHcpkHJOn3mJAufFeeAxAzeGsr5X0M4k6fLZQ==}
-    engines: {node: '>=12'}
-
-  dotenv@17.2.3:
-    resolution: {integrity: sha512-JVUnt+DUIzu87TABbhPmNfVdBDt18BLOWjMUFJMSi/Qqg7NTYtabbvSNJGOJ7afbRuv9D/lngizHtP7QyLQ+9w==}
     engines: {node: '>=12'}
 
   dunder-proto@1.0.1:
@@ -2838,9 +2830,6 @@ packages:
     resolution: {integrity: sha512-cYVsTjKl8b+FrnidjibDWskAv7UKOfcwaVZdp/it9n1s9fU3IkgDbhdIRKCW4JDsAlECJY0ytoVPT3sK6kideA==}
     engines: {node: '>=18'}
 
-  yoga-wasm-web@0.3.3:
-    resolution: {integrity: sha512-N+d4UJSJbt/R3wqY7Coqs5pcV0aUj2j9IaQ3rNj9bVCLld8tTGKRa2USARjnvZJWVx1NDmQev8EknoczaOQDOA==}
-
   zod-to-json-schema@3.24.3:
     resolution: {integrity: sha512-HIAfWdYIt1sssHfYZFCXp4rU1w2r8hVVXYIlmoa0r0gABLs5di3RCqPU5DDROogVz1pAdYBaz7HK5n9pSUNs3A==}
     peerDependencies:
@@ -2856,7 +2845,7 @@ snapshots:
       '@jridgewell/gen-mapping': 0.3.8
       '@jridgewell/trace-mapping': 0.3.25
 
-  '@anthropic-ai/claude-agent-sdk@0.1.55(zod@3.24.2)':
+  '@anthropic-ai/claude-agent-sdk@0.1.65(zod@3.24.2)':
     dependencies:
       zod: 3.24.2
     optionalDependencies:
@@ -3531,14 +3520,6 @@ snapshots:
 
   '@open-draft/until@2.1.0': {}
 
-  '@posthog/agent@1.24.2(zod@3.24.2)':
-    dependencies:
-      '@anthropic-ai/claude-agent-sdk': 0.1.55(zod@3.24.2)
-      dotenv: 17.2.3
-      yoga-wasm-web: 0.3.3
-    transitivePeerDependencies:
-      - zod
-
   '@sinclair/typebox@0.27.8': {}
 
   '@sinonjs/commons@3.0.1':
@@ -4142,8 +4123,6 @@ snapshots:
       esutils: 2.0.3
 
   dotenv@16.4.7: {}
-
-  dotenv@17.2.3: {}
 
   dunder-proto@1.0.1:
     dependencies:
@@ -5750,8 +5729,6 @@ snapshots:
   yocto-queue@0.1.0: {}
 
   yoctocolors-cjs@2.1.2: {}
-
-  yoga-wasm-web@0.3.3: {}
 
   zod-to-json-schema@3.24.3(zod@3.24.2):
     dependencies:

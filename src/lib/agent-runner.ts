@@ -74,10 +74,11 @@ export async function runAgentWizard(
   });
 
   // Get PostHog credentials
-  const { projectApiKey, host, accessToken } = await getOrAskForProjectData({
-    ...options,
-    cloudRegion,
-  });
+  const { projectApiKey, host, accessToken, projectId } =
+    await getOrAskForProjectData({
+      ...options,
+      cloudRegion,
+    });
 
   // Gather framework-specific context (e.g., Next.js router, React Native platform)
   const frameworkContext = config.metadata.gatherContext
@@ -110,15 +111,15 @@ export async function runAgentWizard(
     ? 'http://localhost:8787/mcp'
     : process.env.MCP_URL || 'https://mcp.posthog.com/mcp';
 
-  const agent = await initializeAgent(
+  const agent = initializeAgent(
     {
       workingDirectory: options.installDir,
       posthogMcpUrl: mcpUrl,
       posthogApiKey: accessToken,
-      debug: false,
+      posthogApiHost: host,
+      posthogProjectId: projectId,
     },
     options,
-    spinner,
   );
 
   const agentResult = await runAgent(
