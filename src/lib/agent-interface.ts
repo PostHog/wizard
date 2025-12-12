@@ -74,24 +74,71 @@ type AgentRunConfig = {
 };
 
 /**
- * Allowed bash command prefixes for the wizard agent.
- * These are package manager commands needed for PostHog installation.
+ * Package managers that can be used to run commands.
  */
-const ALLOWED_BASH_PREFIXES = [
+const PACKAGE_MANAGERS = ['npm', 'pnpm', 'yarn', 'bun', 'npx'];
+
+/**
+ * Safe scripts/commands that can be run with any package manager.
+ * Uses startsWith matching, so 'build' matches 'build', 'build:prod', etc.
+ */
+const SAFE_SCRIPTS = [
   // Package installation
-  'npm install',
-  'npm ci',
-  'pnpm install',
-  'pnpm add',
-  'bun install',
-  'bun add',
-  'yarn add',
-  'yarn install',
+  'install',
+  'add',
+  'ci',
+  // Build
+  'build',
+  // Type checking (various naming conventions)
+  'tsc',
+  'typecheck',
+  'type-check',
+  'check-types',
+  'types',
+  // Linting
+  'lint',
+  'eslint',
+  'next lint',
+  // Formatting
+  'format',
+  'prettier',
 ];
 
 /**
- * Permission hook that allows only safe package manager commands.
- * This prevents the agent from running arbitrary shell commands.
+ * Dangerous shell operators that could allow command injection.
+ * Note: We handle `2>&1` and `| tail/head` separately as safe patterns.
+ */
+const DANGEROUS_OPERATORS = /[;`$()]/;
+
+/**
+ * Check if command is an allowed package manager command.
+ * Matches: <pkg-manager> [run|exec] <safe-script> [args...]
+ */
+function matchesAllowedPrefix(command: string): boolean {
+  const parts = command.split(/\s+/);
+  if (parts.length === 0 || !PACKAGE_MANAGERS.includes(parts[0])) {
+    return false;
+  }
+
+  // Skip 'run' or 'exec' if present
+  let scriptIndex = 1;
+  if (parts[scriptIndex] === 'run' || parts[scriptIndex] === 'exec') {
+    scriptIndex++;
+  }
+
+  // Get the script/command portion (may include args)
+  const scriptPart = parts.slice(scriptIndex).join(' ');
+
+  // Check if script starts with any safe script name
+  return SAFE_SCRIPTS.some((safe) => scriptPart.startsWith(safe));
+}
+
+/**
+ * Permission hook that allows only safe commands.
+ * - Package manager install commands
+ * - Build/typecheck/lint commands for verification
+ * - Piping to tail/head for output limiting is allowed
+ * - Stderr redirection (2>&1) is allowed
  */
 export function wizardCanUseTool(
   toolName: string,
@@ -107,22 +154,69 @@ export function wizardCanUseTool(
   const command = (
     typeof input.command === 'string' ? input.command : ''
   ).trim();
-  // Block commands with shell operators (chaining, subshells, etc.)
-  if (/[;&|`$()]/.test(command)) {
-    logToFile(`Denying bash command with shell operators: ${command}`);
-    debug(`Denying bash command with shell operators: ${command}`);
+
+  // Block definitely dangerous operators: ; ` $ ( )
+  if (DANGEROUS_OPERATORS.test(command)) {
+    logToFile(`Denying bash command with dangerous operators: ${command}`);
+    debug(`Denying bash command with dangerous operators: ${command}`);
+    analytics.capture(WIZARD_INTERACTION_EVENT_NAME, {
+      action: 'bash command denied',
+      reason: 'dangerous operators',
+      command,
+    });
     return {
       behavior: 'deny',
-      message: `Bash command not allowed. Chained commands are not permitted.`,
+      message: `Bash command not allowed. Shell operators like ; \` $ ( ) are not permitted.`,
+    };
+  }
+
+  // Normalize: remove safe stderr redirection (2>&1, 2>&2, etc.)
+  const normalized = command.replace(/\s*\d*>&\d+\s*/g, ' ').trim();
+
+  // Check for pipe to tail/head (safe output limiting)
+  const pipeMatch = normalized.match(/^(.+?)\s*\|\s*(tail|head)(\s+\S+)*\s*$/);
+  if (pipeMatch) {
+    const baseCommand = pipeMatch[1].trim();
+
+    // Block if base command has pipes or & (multiple chaining)
+    if (/[|&]/.test(baseCommand)) {
+      logToFile(`Denying bash command with multiple pipes: ${command}`);
+      debug(`Denying bash command with multiple pipes: ${command}`);
+      analytics.capture(WIZARD_INTERACTION_EVENT_NAME, {
+        action: 'bash command denied',
+        reason: 'multiple pipes',
+        command,
+      });
+      return {
+        behavior: 'deny',
+        message: `Bash command not allowed. Only single pipe to tail/head is permitted.`,
+      };
+    }
+
+    if (matchesAllowedPrefix(baseCommand)) {
+      logToFile(`Allowing bash command with output limiter: ${command}`);
+      debug(`Allowing bash command with output limiter: ${command}`);
+      return { behavior: 'allow', updatedInput: input };
+    }
+  }
+
+  // Block remaining pipes and & (not covered by tail/head case above)
+  if (/[|&]/.test(normalized)) {
+    logToFile(`Denying bash command with pipe/&: ${command}`);
+    debug(`Denying bash command with pipe/&: ${command}`);
+    analytics.capture(WIZARD_INTERACTION_EVENT_NAME, {
+      action: 'bash command denied',
+      reason: 'disallowed pipe',
+      command,
+    });
+    return {
+      behavior: 'deny',
+      message: `Bash command not allowed. Pipes are only permitted with tail/head for output limiting.`,
     };
   }
 
   // Check if command starts with any allowed prefix
-  const isAllowed = ALLOWED_BASH_PREFIXES.some((prefix) =>
-    command.startsWith(prefix),
-  );
-
-  if (isAllowed) {
+  if (matchesAllowedPrefix(normalized)) {
     logToFile(`Allowing bash command: ${command}`);
     debug(`Allowing bash command: ${command}`);
     return { behavior: 'allow', updatedInput: input };
@@ -130,9 +224,14 @@ export function wizardCanUseTool(
 
   logToFile(`Denying bash command: ${command}`);
   debug(`Denying bash command: ${command}`);
+  analytics.capture(WIZARD_INTERACTION_EVENT_NAME, {
+    action: 'bash command denied',
+    reason: 'not in allowlist',
+    command,
+  });
   return {
     behavior: 'deny',
-    message: `Bash command not allowed. Only package manager commands (npm/pnpm/bun/yarn install) are permitted.`,
+    message: `Bash command not allowed. Only install, build, typecheck, and lint commands are permitted.`,
   };
 }
 
