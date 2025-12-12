@@ -283,8 +283,9 @@ Project context:
 - PostHog Host: ${context.host}${additionalContext}
 
 Instructions:
+
 1. Call the PostHog MCP's resource for setup: posthog://workflows/basic-integration/begin
-2. Follow all instructions provided
+2. Follow all instructions provided; do package installation as soon as possible.
 3. Set up environment variables for PostHog in a .env file with the API key and host provided above, using the appropriate naming convention for ${
     config.metadata.name
   }. Make sure to use these environment variables in the code files you create instead of hardcoding the API key and host.

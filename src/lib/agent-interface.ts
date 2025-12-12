@@ -246,26 +246,61 @@ export async function runAgent(
   const collectedText: string[] = [];
 
   try {
+    // Workaround for SDK bug: stdin closes before canUseTool responses can be sent.
+    // The fix is to use an async generator for the prompt that stays open until
+    // the result is received, keeping the stdin stream alive for permission responses.
+    // See: https://github.com/anthropics/claude-code/issues/4775
+    // See: https://github.com/anthropics/claude-agent-sdk-typescript/issues/41
+    let signalDone: () => void;
+    const resultReceived = new Promise<void>((resolve) => {
+      signalDone = resolve;
+    });
+
+    const createPromptStream = async function* () {
+      yield {
+        type: 'user',
+        session_id: '',
+        message: { role: 'user', content: prompt },
+        parent_tool_use_id: null,
+      };
+      await resultReceived;
+    };
+
     const response = query({
-      prompt,
+      prompt: createPromptStream(),
       options: {
         model: agentConfig.model,
         cwd: agentConfig.workingDirectory,
         permissionMode: 'acceptEdits',
         mcpServers: agentConfig.mcpServers,
-        pathToClaudeCodeExecutable: cliPath,
+        env: { ...process.env },
         canUseTool: (toolName: string, input: unknown) => {
-          return Promise.resolve(
-            wizardCanUseTool(toolName, input as Record<string, unknown>),
+          logToFile('canUseTool called:', { toolName, input });
+          const result = wizardCanUseTool(
+            toolName,
+            input as Record<string, unknown>,
           );
+          logToFile('canUseTool result:', result);
+          return Promise.resolve(result);
         },
         tools: { type: 'preset', preset: 'claude_code' },
+        // Capture stderr from CLI subprocess for debugging
+        stderr: (data: string) => {
+          logToFile('CLI stderr:', data);
+          if (options.debug) {
+            debug('CLI stderr:', data);
+          }
+        },
       },
     });
 
     // Process the async generator
     for await (const message of response) {
       handleSDKMessage(message, options, spinner, collectedText);
+      // Signal completion when result received
+      if (message.type === 'result') {
+        signalDone!();
+      }
     }
 
     const durationMs = Date.now() - startTime;
