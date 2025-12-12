@@ -2,8 +2,6 @@ onlyBuiltDependencies:
   - esbuild
   - msw
 minimumReleaseAge: 1440
-minimumReleaseAgeExclude:
-  - '@anthropic-ai/claude-agent-sdk'
 
 packages:
   - '!e2e-tests/**'
