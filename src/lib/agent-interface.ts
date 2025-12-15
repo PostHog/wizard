@@ -1,44 +1,38 @@
 /**
  * Shared agent interface for PostHog wizards
- * Provides common agent initialization and event handling
+ * Uses Claude Agent SDK directly with PostHog LLM gateway
  */
 
+import path from 'path';
 import clack from '../utils/clack';
 import { debug, logToFile, initLogFile, LOG_FILE_PATH } from '../utils/debug';
 import type { WizardOptions } from '../utils/types';
 import { analytics } from '../utils/analytics';
 import { WIZARD_INTERACTION_EVENT_NAME } from './constants';
 
-let _agentModule: any = null;
-async function getAgentModule(): Promise<any> {
-  if (!_agentModule) {
-    _agentModule = await import('@posthog/agent');
+// Dynamic import cache for ESM module
+let _sdkModule: any = null;
+async function getSDKModule(): Promise<any> {
+  if (!_sdkModule) {
+    _sdkModule = await import('@anthropic-ai/claude-agent-sdk');
   }
-  return _agentModule;
+  return _sdkModule;
+}
+
+/**
+ * Get the path to the bundled Claude Code CLI from the SDK package.
+ * This ensures we use the SDK's bundled version rather than the user's installed Claude Code.
+ */
+function getClaudeCodeExecutablePath(): string {
+  // require.resolve finds the package's main entry, then we get cli.js from same dir
+  const sdkPackagePath = require.resolve('@anthropic-ai/claude-agent-sdk');
+  return path.join(path.dirname(sdkPackagePath), 'cli.js');
 }
 
 // Using `any` because typed imports from ESM modules require import attributes
 // syntax which prettier cannot parse. See PR discussion for details.
-type Agent = any;
-type AgentEvent = any;
-
-// TODO: Remove these if/when posthog/agent exports an enum for events
-const EventType = {
-  RAW_SDK_EVENT: 'raw_sdk_event',
-  TOKEN: 'token',
-  TOOL_CALL: 'tool_call',
-  TOOL_RESULT: 'tool_result',
-  ERROR: 'error',
-  DONE: 'done',
-} as const;
-
-/**
- * Content types for agent messages and blocks
- */
-const ContentType = {
-  TEXT: 'text',
-  ASSISTANT: 'assistant',
-} as const;
+type SDKMessage = any;
+type McpServersConfig = any;
 
 export const AgentSignals = {
   /** Signal emitted when the agent reports progress to the user */
@@ -66,235 +60,246 @@ export type AgentConfig = {
   workingDirectory: string;
   posthogMcpUrl: string;
   posthogApiKey: string;
-  debug?: boolean;
+  posthogApiHost: string;
+  posthogProjectId: number;
 };
 
 /**
- * Allowed bash command prefixes for the wizard agent.
- * These are package manager commands needed for PostHog installation.
+ * Internal configuration object returned by initializeAgent
  */
-const ALLOWED_BASH_PREFIXES = [
+type AgentRunConfig = {
+  workingDirectory: string;
+  mcpServers: McpServersConfig;
+  model: string;
+};
+
+/**
+ * Package managers that can be used to run commands.
+ */
+const PACKAGE_MANAGERS = ['npm', 'pnpm', 'yarn', 'bun', 'npx'];
+
+/**
+ * Safe scripts/commands that can be run with any package manager.
+ * Uses startsWith matching, so 'build' matches 'build', 'build:prod', etc.
+ */
+const SAFE_SCRIPTS = [
   // Package installation
-  'npm install',
-  'npm ci',
-  'pnpm install',
-  'pnpm add',
-  'bun install',
-  'bun add',
-  'yarn add',
-  'yarn install',
+  'install',
+  'add',
+  'ci',
+  // Build
+  'build',
+  // Type checking (various naming conventions)
+  'tsc',
+  'typecheck',
+  'type-check',
+  'check-types',
+  'types',
+  // Linting
+  'lint',
+  'eslint',
+  'next lint',
+  // Formatting
+  'format',
+  'prettier',
 ];
 
 /**
- * Permission hook that allows only safe package manager commands.
- * This prevents the agent from running arbitrary shell commands.
+ * Dangerous shell operators that could allow command injection.
+ * Note: We handle `2>&1` and `| tail/head` separately as safe patterns.
+ */
+const DANGEROUS_OPERATORS = /[;`$()]/;
+
+/**
+ * Check if command is an allowed package manager command.
+ * Matches: <pkg-manager> [run|exec] <safe-script> [args...]
+ */
+function matchesAllowedPrefix(command: string): boolean {
+  const parts = command.split(/\s+/);
+  if (parts.length === 0 || !PACKAGE_MANAGERS.includes(parts[0])) {
+    return false;
+  }
+
+  // Skip 'run' or 'exec' if present
+  let scriptIndex = 1;
+  if (parts[scriptIndex] === 'run' || parts[scriptIndex] === 'exec') {
+    scriptIndex++;
+  }
+
+  // Get the script/command portion (may include args)
+  const scriptPart = parts.slice(scriptIndex).join(' ');
+
+  // Check if script starts with any safe script name
+  return SAFE_SCRIPTS.some((safe) => scriptPart.startsWith(safe));
+}
+
+/**
+ * Permission hook that allows only safe commands.
+ * - Package manager install commands
+ * - Build/typecheck/lint commands for verification
+ * - Piping to tail/head for output limiting is allowed
+ * - Stderr redirection (2>&1) is allowed
  */
 export function wizardCanUseTool(
   toolName: string,
-  input: { command?: string },
-): { behavior: 'allow' } | { behavior: 'deny'; message: string } {
+  input: Record<string, unknown>,
+):
+  | { behavior: 'allow'; updatedInput: Record<string, unknown> }
+  | { behavior: 'deny'; message: string } {
   // Allow all non-Bash tools
   if (toolName !== 'Bash') {
-    return { behavior: 'allow' };
+    return { behavior: 'allow', updatedInput: input };
   }
 
-  const command = (input.command ?? '').trim();
-  // Block commands with shell operators (chaining, subshells, etc.)
-  if (/[;&|`$()]/.test(command)) {
-    logToFile(`Denying bash command with shell operators: ${command}`);
-    debug(`Denying bash command with shell operators: ${command}`);
+  const command = (
+    typeof input.command === 'string' ? input.command : ''
+  ).trim();
+
+  // Block definitely dangerous operators: ; ` $ ( )
+  if (DANGEROUS_OPERATORS.test(command)) {
+    logToFile(`Denying bash command with dangerous operators: ${command}`);
+    debug(`Denying bash command with dangerous operators: ${command}`);
+    analytics.capture(WIZARD_INTERACTION_EVENT_NAME, {
+      action: 'bash command denied',
+      reason: 'dangerous operators',
+      command,
+    });
     return {
       behavior: 'deny',
-      message: `Bash command not allowed. Chained commands are not permitted.`,
+      message: `Bash command not allowed. Shell operators like ; \` $ ( ) are not permitted.`,
+    };
+  }
+
+  // Normalize: remove safe stderr redirection (2>&1, 2>&2, etc.)
+  const normalized = command.replace(/\s*\d*>&\d+\s*/g, ' ').trim();
+
+  // Check for pipe to tail/head (safe output limiting)
+  const pipeMatch = normalized.match(/^(.+?)\s*\|\s*(tail|head)(\s+\S+)*\s*$/);
+  if (pipeMatch) {
+    const baseCommand = pipeMatch[1].trim();
+
+    // Block if base command has pipes or & (multiple chaining)
+    if (/[|&]/.test(baseCommand)) {
+      logToFile(`Denying bash command with multiple pipes: ${command}`);
+      debug(`Denying bash command with multiple pipes: ${command}`);
+      analytics.capture(WIZARD_INTERACTION_EVENT_NAME, {
+        action: 'bash command denied',
+        reason: 'multiple pipes',
+        command,
+      });
+      return {
+        behavior: 'deny',
+        message: `Bash command not allowed. Only single pipe to tail/head is permitted.`,
+      };
+    }
+
+    if (matchesAllowedPrefix(baseCommand)) {
+      logToFile(`Allowing bash command with output limiter: ${command}`);
+      debug(`Allowing bash command with output limiter: ${command}`);
+      return { behavior: 'allow', updatedInput: input };
+    }
+  }
+
+  // Block remaining pipes and & (not covered by tail/head case above)
+  if (/[|&]/.test(normalized)) {
+    logToFile(`Denying bash command with pipe/&: ${command}`);
+    debug(`Denying bash command with pipe/&: ${command}`);
+    analytics.capture(WIZARD_INTERACTION_EVENT_NAME, {
+      action: 'bash command denied',
+      reason: 'disallowed pipe',
+      command,
+    });
+    return {
+      behavior: 'deny',
+      message: `Bash command not allowed. Pipes are only permitted with tail/head for output limiting.`,
     };
   }
 
   // Check if command starts with any allowed prefix
-  const isAllowed = ALLOWED_BASH_PREFIXES.some((prefix) =>
-    command.startsWith(prefix),
-  );
-
-  if (isAllowed) {
+  if (matchesAllowedPrefix(normalized)) {
     logToFile(`Allowing bash command: ${command}`);
     debug(`Allowing bash command: ${command}`);
-    return { behavior: 'allow' };
+    return { behavior: 'allow', updatedInput: input };
   }
 
   logToFile(`Denying bash command: ${command}`);
   debug(`Denying bash command: ${command}`);
+  analytics.capture(WIZARD_INTERACTION_EVENT_NAME, {
+    action: 'bash command denied',
+    reason: 'not in allowlist',
+    command,
+  });
   return {
     behavior: 'deny',
-    message: `Bash command not allowed. Only package manager commands (npm/pnpm/bun/yarn install) are permitted.`,
+    message: `Bash command not allowed. Only install, build, typecheck, and lint commands are permitted.`,
   };
 }
 
 /**
- * Initialize a PostHog Agent instance with the provided configuration
+ * Initialize agent configuration for the LLM gateway
  */
-export async function initializeAgent(
+export function initializeAgent(
   config: AgentConfig,
   options: WizardOptions,
-  spinner: ReturnType<typeof clack.spinner>,
-): Promise<Agent> {
+): AgentRunConfig {
   // Initialize log file for this run
   initLogFile();
   logToFile('Agent initialization starting');
   logToFile('Install directory:', options.installDir);
 
-  clack.log.step('Initializing PostHog agent...');
+  clack.log.step('Initializing Claude agent...');
 
   try {
-    const { Agent } = await getAgentModule();
+    // Configure LLM gateway environment variables (inherited by SDK subprocess)
+    const gatewayUrl = `${config.posthogApiHost}/api/projects/${config.posthogProjectId}/llm_gateway`;
+    process.env.ANTHROPIC_BASE_URL = gatewayUrl;
+    process.env.ANTHROPIC_AUTH_TOKEN = config.posthogApiKey;
+    // Disable experimental betas (like input_examples) that the LLM gateway doesn't support
+    process.env.CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS = 'true';
 
-    const agentConfig = {
-      workingDirectory: config.workingDirectory,
-      posthogMcpUrl: config.posthogMcpUrl,
-      posthogApiKey: config.posthogApiKey,
-      onEvent: (event: AgentEvent) => {
-        handleAgentEvent(event, options, spinner);
+    logToFile('Configured LLM gateway:', gatewayUrl);
+
+    // Configure MCP server with PostHog authentication
+    const mcpServers: McpServersConfig = {
+      posthog: {
+        type: 'http',
+        url: config.posthogMcpUrl,
+        headers: {
+          Authorization: `Bearer ${config.posthogApiKey}`,
+        },
       },
-      debug: config.debug ?? false,
+    };
+
+    const agentRunConfig: AgentRunConfig = {
+      workingDirectory: config.workingDirectory,
+      mcpServers,
+      model: 'claude-opus-4-5-20251101',
     };
 
     logToFile('Agent config:', {
-      workingDirectory: agentConfig.workingDirectory,
-      posthogMcpUrl: agentConfig.posthogMcpUrl,
-      posthogApiKeyPresent: !!agentConfig.posthogApiKey,
+      workingDirectory: agentRunConfig.workingDirectory,
+      posthogMcpUrl: config.posthogMcpUrl,
+      gatewayUrl,
+      apiKeyPresent: !!config.posthogApiKey,
     });
 
     if (options.debug) {
       debug('Agent config:', {
-        workingDirectory: agentConfig.workingDirectory,
-        posthogMcpUrl: agentConfig.posthogMcpUrl,
-        posthogApiKeyPresent: !!agentConfig.posthogApiKey,
+        workingDirectory: agentRunConfig.workingDirectory,
+        posthogMcpUrl: config.posthogMcpUrl,
+        gatewayUrl,
+        apiKeyPresent: !!config.posthogApiKey,
       });
     }
 
-    const agent = new Agent(agentConfig);
     clack.log.step(`Verbose logs: ${LOG_FILE_PATH}`);
     clack.log.success("Agent initialized. Let's get cooking!");
-    return agent;
+    return agentRunConfig;
   } catch (error) {
     clack.log.error(`Failed to initialize agent: ${(error as Error).message}`);
     logToFile('Agent initialization error:', error);
     debug('Agent initialization error:', error);
     throw error;
-  }
-}
-
-/**
- * Handle agent events and provide user feedback
- * This function processes events from the agent SDK and provides appropriate
- * user feedback through the CLI spinner and logging
- */
-function handleAgentEvent(
-  event: AgentEvent,
-  options: WizardOptions,
-  spinner: ReturnType<typeof clack.spinner>,
-): void {
-  // Always log to file
-  logToFile(`Event: ${event.type}`, JSON.stringify(event, null, 2));
-
-  if (options.debug) {
-    debug(`Event type: ${event.type}`, JSON.stringify(event, null, 2));
-  }
-
-  // Only show [STATUS] events to the user - everything else goes to debug log
-  switch (event.type) {
-    case EventType.RAW_SDK_EVENT:
-      if (event.sdkMessage?.type === ContentType.ASSISTANT) {
-        const message = event.sdkMessage.message;
-        if (message?.content && Array.isArray(message.content)) {
-          const textContent = message.content
-            .filter((block: any) => block.type === ContentType.TEXT)
-            .map((block: any) => block.text)
-            .join('\n');
-
-          // Check if the text contains a [STATUS] marker
-          const statusRegex = new RegExp(
-            `^.*${AgentSignals.STATUS.replace(
-              /[.*+?^${}()|[\]\\]/g,
-              '\\$&',
-            )}\\s*(.+?)$`,
-            'm',
-          );
-          const statusMatch = textContent.match(statusRegex);
-          if (statusMatch) {
-            // Stop spinner, log the status step, restart spinner
-            // This creates the progress list as the agent proceeds
-            spinner.stop(statusMatch[1].trim());
-            spinner.start('Integrating PostHog...');
-          }
-        }
-      }
-      break;
-
-    case EventType.TOKEN:
-      if (options.debug) {
-        debug(event.content);
-      }
-      break;
-
-    case EventType.TOOL_CALL:
-      logToFile(
-        `Tool call: ${event.toolName}`,
-        JSON.stringify(event.args, null, 2),
-      );
-      if (options.debug) {
-        debug(`Tool: ${event.toolName}`);
-        debug('  Args:', JSON.stringify(event.args, null, 2));
-      }
-      break;
-
-    case EventType.TOOL_RESULT: {
-      const resultStr: string =
-        typeof event.result === 'string'
-          ? event.result
-          : JSON.stringify(event.result, null, 2);
-      const truncated =
-        resultStr.length > 2000
-          ? `${resultStr.substring(0, 2000)}... [truncated]`
-          : resultStr;
-      logToFile(`Tool result: ${event.toolName}`, truncated);
-      if (options.debug) {
-        debug(`✅ ${event.toolName} completed`);
-        const debugTruncated =
-          resultStr.length > 500
-            ? `${resultStr.substring(0, 500)}...`
-            : resultStr;
-        debug('  Result:', debugTruncated);
-      }
-      break;
-    }
-
-    case EventType.ERROR:
-      // Always show errors to user
-      clack.log.error(`Error: ${event.message}`);
-      logToFile('ERROR:', event.message, event.error);
-      if (options.debug && event.error) {
-        debug('Error details:', event.error);
-      }
-      if (event.error instanceof Error) {
-        analytics.captureException(event.error, {
-          event_type: event.type,
-          message: event.message,
-        });
-      }
-      break;
-
-    case EventType.DONE:
-      if (event.durationMs) {
-        logToFile(`Completed in ${Math.round(event.durationMs / 1000)}s`);
-        if (options.debug) {
-          debug(`Completed in ${Math.round(event.durationMs / 1000)}s`);
-        }
-        analytics.capture(WIZARD_INTERACTION_EVENT_NAME, {
-          action: 'agent integration completed',
-          duration_ms: event.durationMs,
-          duration_seconds: Math.round(event.durationMs / 1000),
-        });
-      }
-      break;
   }
 }
 
@@ -305,7 +310,7 @@ function handleAgentEvent(
  * @returns An object containing any error detected in the agent's output
  */
 export async function runAgent(
-  agent: Agent,
+  agentConfig: AgentRunConfig,
   prompt: string,
   options: WizardOptions,
   spinner: ReturnType<typeof clack.spinner>,
@@ -322,7 +327,8 @@ export async function runAgent(
     successMessage = 'PostHog integration complete',
     errorMessage = 'Integration failed',
   } = config ?? {};
-  const { PermissionMode } = await getAgentModule();
+
+  const { query } = await getSDKModule();
 
   clack.log.step(
     `This whole process should take about ${estimatedDurationMinutes} minutes including error checking and fixes.\n\nGrab some coffee!`,
@@ -330,22 +336,76 @@ export async function runAgent(
 
   spinner.start(spinnerMessage);
 
+  const cliPath = getClaudeCodeExecutablePath();
   logToFile('Starting agent run');
+  logToFile('Claude Code executable:', cliPath);
   logToFile('Prompt:', prompt);
 
+  const startTime = Date.now();
+  const collectedText: string[] = [];
+
   try {
-    const result = await agent.run(prompt, {
-      repositoryPath: options.installDir,
-      permissionMode: PermissionMode.ACCEPT_EDITS,
-      queryOverrides: {
-        model: 'claude-opus-4-5-20251101',
-        canUseTool: wizardCanUseTool,
+    // Workaround for SDK bug: stdin closes before canUseTool responses can be sent.
+    // The fix is to use an async generator for the prompt that stays open until
+    // the result is received, keeping the stdin stream alive for permission responses.
+    // See: https://github.com/anthropics/claude-code/issues/4775
+    // See: https://github.com/anthropics/claude-agent-sdk-typescript/issues/41
+    let signalDone: () => void;
+    const resultReceived = new Promise<void>((resolve) => {
+      signalDone = resolve;
+    });
+
+    const createPromptStream = async function* () {
+      yield {
+        type: 'user',
+        session_id: '',
+        message: { role: 'user', content: prompt },
+        parent_tool_use_id: null,
+      };
+      await resultReceived;
+    };
+
+    const response = query({
+      prompt: createPromptStream(),
+      options: {
+        model: agentConfig.model,
+        cwd: agentConfig.workingDirectory,
+        permissionMode: 'acceptEdits',
+        mcpServers: agentConfig.mcpServers,
+        env: { ...process.env },
+        canUseTool: (toolName: string, input: unknown) => {
+          logToFile('canUseTool called:', { toolName, input });
+          const result = wizardCanUseTool(
+            toolName,
+            input as Record<string, unknown>,
+          );
+          logToFile('canUseTool result:', result);
+          return Promise.resolve(result);
+        },
+        tools: { type: 'preset', preset: 'claude_code' },
+        // Capture stderr from CLI subprocess for debugging
+        stderr: (data: string) => {
+          logToFile('CLI stderr:', data);
+          if (options.debug) {
+            debug('CLI stderr:', data);
+          }
+        },
       },
     });
 
-    // Check for error markers in the agent's output
-    const outputText = extractTextFromResults(result.results);
+    // Process the async generator
+    for await (const message of response) {
+      handleSDKMessage(message, options, spinner, collectedText);
+      // Signal completion when result received
+      if (message.type === 'result') {
+        signalDone!();
+      }
+    }
 
+    const durationMs = Date.now() - startTime;
+    const outputText = collectedText.join('\n');
+
+    // Check for error markers in the agent's output
     if (outputText.includes(AgentSignals.ERROR_MCP_MISSING)) {
       logToFile('Agent error: MCP_MISSING');
       spinner.stop('Agent could not access PostHog MCP');
@@ -358,7 +418,13 @@ export async function runAgent(
       return { error: AgentErrorType.RESOURCE_MISSING };
     }
 
-    logToFile('Agent run completed successfully');
+    logToFile(`Agent run completed in ${Math.round(durationMs / 1000)}s`);
+    analytics.capture(WIZARD_INTERACTION_EVENT_NAME, {
+      action: 'agent integration completed',
+      duration_ms: durationMs,
+      duration_seconds: Math.round(durationMs / 1000),
+    });
+
     spinner.stop(successMessage);
     return {};
   } catch (error) {
@@ -371,29 +437,83 @@ export async function runAgent(
 }
 
 /**
- * Extract text content from agent execution results
+ * Handle SDK messages and provide user feedback
  */
-function extractTextFromResults(results: any[]): string {
-  const textParts: string[] = [];
+function handleSDKMessage(
+  message: SDKMessage,
+  options: WizardOptions,
+  spinner: ReturnType<typeof clack.spinner>,
+  collectedText: string[],
+): void {
+  logToFile(`SDK Message: ${message.type}`, JSON.stringify(message, null, 2));
 
-  for (const result of results) {
-    // Handle assistant messages with content blocks
-    if (result?.type === ContentType.ASSISTANT && result.message?.content) {
-      const content = result.message.content;
+  if (options.debug) {
+    debug(`SDK Message type: ${message.type}`);
+  }
+
+  switch (message.type) {
+    case 'assistant': {
+      // Extract text content from assistant messages
+      const content = message.message?.content;
       if (Array.isArray(content)) {
         for (const block of content) {
-          if (block.type === ContentType.TEXT && block.text) {
-            textParts.push(block.text);
+          if (block.type === 'text' && typeof block.text === 'string') {
+            collectedText.push(block.text);
+
+            // Check for [STATUS] markers
+            const statusRegex = new RegExp(
+              `^.*${AgentSignals.STATUS.replace(
+                /[.*+?^${}()|[\]\\]/g,
+                '\\$&',
+              )}\\s*(.+?)$`,
+              'm',
+            );
+            const statusMatch = block.text.match(statusRegex);
+            if (statusMatch) {
+              spinner.stop(statusMatch[1].trim());
+              spinner.start('Integrating PostHog...');
+            }
           }
         }
       }
+      break;
     }
 
-    // Handle direct text content
-    if (typeof result === 'string') {
-      textParts.push(result);
+    case 'result': {
+      if (message.subtype === 'success') {
+        logToFile('Agent completed successfully');
+        if (typeof message.result === 'string') {
+          collectedText.push(message.result);
+        }
+      } else {
+        // Error result
+        logToFile('Agent error result:', message.subtype);
+        if (message.errors) {
+          for (const err of message.errors) {
+            clack.log.error(`Error: ${err}`);
+            logToFile('ERROR:', err);
+          }
+        }
+      }
+      break;
     }
+
+    case 'system': {
+      if (message.subtype === 'init') {
+        logToFile('Agent session initialized', {
+          model: message.model,
+          tools: message.tools?.length,
+          mcpServers: message.mcp_servers,
+        });
+      }
+      break;
+    }
+
+    default:
+      // Log other message types for debugging
+      if (options.debug) {
+        debug(`Unhandled message type: ${message.type}`);
+      }
+      break;
   }
-
-  return textParts.join('\n');
 }

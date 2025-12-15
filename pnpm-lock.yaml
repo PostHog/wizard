@@ -8,6 +8,9 @@ importers:
 
   .:
     dependencies:
+      '@anthropic-ai/claude-agent-sdk':
+        specifier: ~0.1.65
+        version: 0.1.65(zod@3.24.2)
       '@clack/core':
         specifier: ^0.3.4
         version: 0.3.5
@@ -17,9 +20,6 @@ importers:
       '@langchain/core':
         specifier: ^0.3.40
         version: 0.3.40(openai@6.7.0(ws@8.18.1)(zod@3.24.2))
-      '@posthog/agent':
-        specifier: 1.24.2
-        version: 1.24.2(zod@3.24.2)
       axios:
         specifier: 1.7.4
         version: 1.7.4
@@ -48,8 +48,8 @@ importers:
         specifier: ^5.4.0
         version: 5.5.0
       posthog-node:
-        specifier: ^4.9.0
-        version: 4.9.0
+        specifier: ^4.18.0
+        version: 4.18.0
       read-env:
         specifier: ^1.3.0
         version: 1.3.0
@@ -166,8 +166,8 @@ packages:
     resolution: {integrity: sha512-30iZtAPgz+LTIYoeivqYo853f02jBYSd5uGnGpkFV0M3xOt9aN73erkgYAmZU43x4VfqcnLxW9Kpg3R5LC4YYw==}
     engines: {node: '>=6.0.0'}
 
-  '@anthropic-ai/claude-agent-sdk@0.1.55':
-    resolution: {integrity: sha512-nwlxPjn/gc7I+iOGYY7AGtM2xcjzJFCxF9Bnr0xH1JNaNx+QXLM3h/wmzSvuEOKeJgPymf1GMBs4DZ3jyd/Z7Q==}
+  '@anthropic-ai/claude-agent-sdk@0.1.65':
+    resolution: {integrity: sha512-UYdX7eNBuNk7/88CYbar2x0rIncJ3xZtadkOzQHOp8ZTo4AaNDUoaXa9MjleWV5L4WbJBJZh6CwCAsFVtoxh9w==}
     engines: {node: '>=18.0.0'}
     peerDependencies:
       zod: ^3.24.1
@@ -796,10 +796,6 @@ packages:
   '@open-draft/until@2.1.0':
     resolution: {integrity: sha512-U69T3ItWHvLwGg5eJ0n3I62nWuE6ilHlmz7zM0npLBRvPRd7e6NYmg54vvRtP5mZG7kZqZCFVdsTWo7BPtBujg==}
 
-  '@posthog/agent@1.24.2':
-    resolution: {integrity: sha512-BeSBqZFrBjl6Lq8447PZLQIRKDBUAjQCyJG45QIP439guiRAg+Jpf5SupaehGsl1kLpFF2MzEhpw2HU/m3XGCg==}
-    engines: {node: '>=20.0.0'}
-
   '@sinclair/typebox@0.27.8':
     resolution: {integrity: sha512-+Fj43pSMwJs4KRrH/938Uf+uAELIgVBmQzg/q1YG10djyfA3TnrU8N8XzqCh/okZdszqBQTZf96idMfE5lnwTA==}
 
@@ -1106,6 +1102,9 @@ packages:
   asynckit@0.4.0:
     resolution: {integrity: sha512-Oei9OH4tRh0YqU3GxhX79dM/mwVgvbZJaSNaRk+bshkj0S5cfHcgYakreBjrHwatXKbz+IoIdYLxrKim2MjW0Q==}
 
+  axios@1.13.2:
+    resolution: {integrity: sha512-VPk9ebNqPcy5lRGuSlKx752IlDatOjT9paPlm8A7yOuW2Fbvp4X3JznJtT4f0GzGLLiWE9W8onz51SqLYwzGaA==}
+
   axios@1.7.4:
     resolution: {integrity: sha512-DukmaFRnY6AzAALSH4J2M3k6PkaC+MfaAGdEERRWcC9q3/TWQwLpHR8ZRLKTdQ3aBDL64EdluRDjJqKw+BPZEw==}
 
@@ -1363,10 +1362,6 @@ packages:
     resolution: {integrity: sha512-47qPchRCykZC03FhkYAhrvwU4xDBFIj1QPqaarj6mdM/hgUzfPHcpkHJOn3mJAufFeeAxAzeGsr5X0M4k6fLZQ==}
     engines: {node: '>=12'}
 
-  dotenv@17.2.3:
-    resolution: {integrity: sha512-JVUnt+DUIzu87TABbhPmNfVdBDt18BLOWjMUFJMSi/Qqg7NTYtabbvSNJGOJ7afbRuv9D/lngizHtP7QyLQ+9w==}
-    engines: {node: '>=12'}
-
   dunder-proto@1.0.1:
     resolution: {integrity: sha512-KIN/nDJBQRcXw0MLVhZE9iQHmG68qAVIBg9CqmUYjmQIhgij9U5MFvrqkUL5FbtyyzZuOeOt0zdeRe4UY7ct+A==}
     engines: {node: '>= 0.4'}
@@ -1574,6 +1569,15 @@ packages:
   flatted@3.3.3:
     resolution: {integrity: sha512-GX+ysw4PBCz0PzosHDepZGANEuFCMLrnRTiEy9McGjmkCQYwRq4A/X786G/fjM/+OjsWSU1ZrY5qyARZmO/uwg==}
 
+  follow-redirects@1.15.11:
+    resolution: {integrity: sha512-deG2P0JfjrTxl50XGCDyfI97ZGVCxIpfKYmfyrQ54n5FO/0gfIES8C/Psl6kWVDolizcaaxZJnTS0QSMxvnsBQ==}
+    engines: {node: '>=4.0'}
+    peerDependencies:
+      debug: '*'
+    peerDependenciesMeta:
+      debug:
+        optional: true
+
   follow-redirects@1.15.9:
     resolution: {integrity: sha512-gew4GsXizNgdoRyqmyfMHyAmXsZDk6mHkSxZFCzW9gwlbtOW44CDtYavM+y+72qD/Vq2l550kMF52DT8fOLJqQ==}
     engines: {node: '>=4.0'}
@@ -1585,6 +1589,10 @@ packages:
 
   form-data@4.0.2:
     resolution: {integrity: sha512-hGfm/slu0ZabnNt4oaRZ6uREyfCj6P4fT/n6A1rGV+Z0VdGXjfOhVUpkn6qVQONHGIFwmveGXyDs75+nr6FM8w==}
+    engines: {node: '>= 6'}
+
+  form-data@4.0.5:
+    resolution: {integrity: sha512-8RipRLol37bNs2bhoV67fiTEvdTrbMUYcFTiy3+wuuOnUog2QBHCZWXDRijWQfAkhBj2Uf5UnVaiWwA5vdd82w==}
     engines: {node: '>= 6'}
 
   fs.realpath@1.0.0:
@@ -2333,8 +2341,8 @@ packages:
     resolution: {integrity: sha512-uysumyrvkUX0rX/dEVqt8gC3sTBzd4zoWfLeS29nb53imdaXVvLINYXTI2GNqzaMuvacNx4uJQ8+b3zXR0pkgQ==}
     engines: {node: '>=10.4.0'}
 
-  posthog-node@4.9.0:
-    resolution: {integrity: sha512-Jg4YmHTzUUJ/lrwPAvYQcF6xpfaW/l11UJISlTqajj1+xANv3WJXRtBml+atWVqbwTvSBlkzXwEq9rd0Sy188A==}
+  posthog-node@4.18.0:
+    resolution: {integrity: sha512-XROs1h+DNatgKh/AlIlCtDxWzwrKdYDb2mOs58n4yN8BkGN9ewqeQwG5ApS4/IzwCb7HPttUkOVulkYatd2PIw==}
     engines: {node: '>=15.0.0'}
 
   prelude-ls@1.2.1:
@@ -2838,9 +2846,6 @@ packages:
     resolution: {integrity: sha512-cYVsTjKl8b+FrnidjibDWskAv7UKOfcwaVZdp/it9n1s9fU3IkgDbhdIRKCW4JDsAlECJY0ytoVPT3sK6kideA==}
     engines: {node: '>=18'}
 
-  yoga-wasm-web@0.3.3:
-    resolution: {integrity: sha512-N+d4UJSJbt/R3wqY7Coqs5pcV0aUj2j9IaQ3rNj9bVCLld8tTGKRa2USARjnvZJWVx1NDmQev8EknoczaOQDOA==}
-
   zod-to-json-schema@3.24.3:
     resolution: {integrity: sha512-HIAfWdYIt1sssHfYZFCXp4rU1w2r8hVVXYIlmoa0r0gABLs5di3RCqPU5DDROogVz1pAdYBaz7HK5n9pSUNs3A==}
     peerDependencies:
@@ -2856,7 +2861,7 @@ snapshots:
       '@jridgewell/gen-mapping': 0.3.8
       '@jridgewell/trace-mapping': 0.3.25
 
-  '@anthropic-ai/claude-agent-sdk@0.1.55(zod@3.24.2)':
+  '@anthropic-ai/claude-agent-sdk@0.1.65(zod@3.24.2)':
     dependencies:
       zod: 3.24.2
     optionalDependencies:
@@ -3531,14 +3536,6 @@ snapshots:
 
   '@open-draft/until@2.1.0': {}
 
-  '@posthog/agent@1.24.2(zod@3.24.2)':
-    dependencies:
-      '@anthropic-ai/claude-agent-sdk': 0.1.55(zod@3.24.2)
-      dotenv: 17.2.3
-      yoga-wasm-web: 0.3.3
-    transitivePeerDependencies:
-      - zod
-
   '@sinclair/typebox@0.27.8': {}
 
   '@sinonjs/commons@3.0.1':
@@ -3884,6 +3881,14 @@ snapshots:
 
   asynckit@0.4.0: {}
 
+  axios@1.13.2:
+    dependencies:
+      follow-redirects: 1.15.11
+      form-data: 4.0.5
+      proxy-from-env: 1.1.0
+    transitivePeerDependencies:
+      - debug
+
   axios@1.7.4:
     dependencies:
       follow-redirects: 1.15.9
@@ -4142,8 +4147,6 @@ snapshots:
       esutils: 2.0.3
 
   dotenv@16.4.7: {}
-
-  dotenv@17.2.3: {}
 
   dunder-proto@1.0.1:
     dependencies:
@@ -4413,6 +4416,8 @@ snapshots:
 
   flatted@3.3.3: {}
 
+  follow-redirects@1.15.11: {}
+
   follow-redirects@1.15.9: {}
 
   form-data@4.0.2:
@@ -4420,6 +4425,14 @@ snapshots:
       asynckit: 0.4.0
       combined-stream: 1.0.8
       es-set-tostringtag: 2.1.0
+      mime-types: 2.1.35
+
+  form-data@4.0.5:
+    dependencies:
+      asynckit: 0.4.0
+      combined-stream: 1.0.8
+      es-set-tostringtag: 2.1.0
+      hasown: 2.0.2
       mime-types: 2.1.35
 
   fs.realpath@1.0.0: {}
@@ -5313,9 +5326,9 @@ snapshots:
       base64-js: 1.5.1
       xmlbuilder: 15.1.1
 
-  posthog-node@4.9.0:
+  posthog-node@4.18.0:
     dependencies:
-      axios: 1.7.4
+      axios: 1.13.2
     transitivePeerDependencies:
       - debug
 
@@ -5750,8 +5763,6 @@ snapshots:
   yocto-queue@0.1.0: {}
 
   yoctocolors-cjs@2.1.2: {}
-
-  yoga-wasm-web@0.3.3: {}
 
   zod-to-json-schema@3.24.3(zod@3.24.2):
     dependencies:
