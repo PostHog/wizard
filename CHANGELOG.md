@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.21.1](https://github.com/PostHog/wizard/compare/v1.21.0...v1.21.1) (2025-12-15)
+
+
+### Bug Fixes
+
+* Remove `posthog/agent`, directly integrate with CASDK ([#196](https://github.com/PostHog/wizard/issues/196)) ([db8e745](https://github.com/PostHog/wizard/commit/db8e745dc4bff5503ad734741e3bf5945ed4e46a))
+
 ## [1.21.0](https://github.com/PostHog/wizard/compare/v1.20.0...v1.21.0) (2025-12-04)
 
 
