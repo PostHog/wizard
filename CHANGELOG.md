@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.22.0](https://github.com/PostHog/wizard/compare/v1.21.1...v1.22.0) (2025-12-17)
+
+
+### Features
+
+* Add insight and dashboard creation scopes ([#200](https://github.com/PostHog/wizard/issues/200)) ([eb9617f](https://github.com/PostHog/wizard/commit/eb9617f62aaeaf6e9e8d0c882293088170e08347))
+
 ## [1.21.1](https://github.com/PostHog/wizard/compare/v1.21.0...v1.21.1) (2025-12-15)
 
 
