@@ -1,0 +1,1 @@
+Review the most recent contents of /tmp/posthog-wizard.log. Look for 
