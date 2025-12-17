@@ -24,6 +24,12 @@ import chalk from 'chalk';
 import { RateLimitError } from './utils/errors';
 import { getPackageVersion } from './utils/package-json';
 import * as semver from 'semver';
+import {
+  checkAndOfferMigration,
+  runMigrationWizard,
+  migrationProviders,
+  detectProviderInstallation,
+} from './migrate';
 
 EventEmitter.defaultMaxListeners = 50;
 
@@ -66,6 +72,13 @@ export async function runWizard(argv: Args) {
   };
 
   clack.intro(`Welcome to the PostHog setup wizard ✨`);
+
+  const migrationProvider = await detectAndOfferMigration(wizardOptions);
+
+  if (migrationProvider) {
+    await runMigrationWizard(wizardOptions, migrationProvider);
+    return;
+  }
 
   const integration =
     finalArgs.integration ?? (await getIntegrationForSetup(wizardOptions));
@@ -156,6 +169,28 @@ async function getIntegrationForSetup(
   );
 
   return integration;
+}
+
+async function detectAndOfferMigration(
+  options: WizardOptions,
+): Promise<string | undefined> {
+  const packageJson = await getPackageDotJson(options);
+
+  for (const [providerId, provider] of Object.entries(migrationProviders)) {
+    const installation = detectProviderInstallation(packageJson, provider);
+
+    if (installation) {
+      const shouldMigrate = await checkAndOfferMigration(options, providerId);
+
+      if (shouldMigrate) {
+        return providerId;
+      }
+
+      return undefined;
+    }
+  }
+
+  return undefined;
 }
 
 async function chooseNextjsWizard(options: WizardOptions): Promise<void> {

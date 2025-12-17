@@ -6,6 +6,19 @@ export enum Integration {
   astro = 'astro',
 }
 
+export enum MigrationSource {
+  amplitude = 'amplitude',
+}
+
+export function getMigrationSourceDescription(source: MigrationSource): string {
+  switch (source) {
+    case MigrationSource.amplitude:
+      return 'Amplitude';
+    default:
+      throw new Error(`Unknown migration source ${source}`);
+  }
+}
+
 export enum FeatureFlagDefinition {
   NextV2 = 'wizard-next-v2',
 }

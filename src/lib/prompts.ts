@@ -79,3 +79,82 @@ Here are the files that have not been changed yet:
 Below is the current file contents:
 {file_content}`,
 });
+
+export const migrationFilterFilesPromptTemplate = new PromptTemplate({
+  inputVariables: [
+    'documentation',
+    'file_list',
+    'source_sdk',
+    'integration_rules',
+  ],
+  template: `You are a PostHog migration wizard, a master AI programming assistant that migrates projects from {source_sdk} to PostHog.
+Given the following list of file paths from a project, determine which files contain {source_sdk} code that needs to be migrated to PostHog.
+
+- Look for files that import or use {source_sdk} SDK
+- Look for files that initialize {source_sdk}
+- Look for files that track events with {source_sdk}
+- Look for files that identify users with {source_sdk}
+- Look for configuration files that may reference {source_sdk}
+
+You should return all files that contain {source_sdk} code that needs to be migrated. Return them in the order you would like to see them processed.
+
+Rules:
+- Only return files that actually contain {source_sdk} code or references
+- Do not return files that don't use {source_sdk}
+- If you are unsure, return the file, since it's better to have more files than less
+- Include any configuration or initialization files
+{integration_rules}
+
+Migration documentation:
+{documentation}
+
+All current files in the repository:
+
+{file_list}`,
+});
+
+export const migrationGenerateFileChangesPromptTemplate = new PromptTemplate({
+  inputVariables: [
+    'file_content',
+    'documentation',
+    'file_path',
+    'changed_files',
+    'unchanged_files',
+    'source_sdk',
+    'integration_rules',
+  ],
+  template: `You are a PostHog migration wizard, a master AI programming assistant that migrates projects from {source_sdk} to PostHog.
+
+Your task is to migrate the file from {source_sdk} to PostHog according to the migration documentation.
+Do not return a diff — you should return the complete updated file content.
+
+Rules:
+- Replace ALL {source_sdk} imports with PostHog imports
+- Replace ALL {source_sdk} initialization code with PostHog initialization
+- Replace ALL {source_sdk} tracking calls with PostHog equivalents
+- Replace ALL {source_sdk} identify calls with PostHog equivalents
+- Remove ALL {source_sdk}-specific code that has no PostHog equivalent
+- Preserve the existing code formatting and style
+- Make sure to remove any unused {source_sdk} imports after migration
+- If the file has no {source_sdk} code after review, return it unchanged
+{integration_rules}
+
+
+CONTEXT
+---
+
+Migration documentation from {source_sdk} to PostHog:
+{documentation}
+
+The file you are updating is:
+{file_path}
+
+Here are the changes you have already made to the project:
+{changed_files}
+
+Here are the files that have not been changed yet:
+{unchanged_files}
+
+Below is the current file contents:
+{file_content}`,
+});
