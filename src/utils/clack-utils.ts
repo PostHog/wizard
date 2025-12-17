@@ -589,7 +589,14 @@ async function askForWizardLogin(options: {
 }): Promise<ProjectData> {
   const tokenResponse = await performOAuthFlow({
     cloudRegion: options.cloudRegion,
-    scopes: ['user:read', 'project:read', 'introspection', 'task:write'],
+    scopes: [
+      'user:read',
+      'project:read',
+      'introspection',
+      'task:write',
+      'dashboard:write',
+      'insight:write',
+    ],
     signup: options.signup,
   });
 
