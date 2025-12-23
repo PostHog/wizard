@@ -22,6 +22,11 @@ import type { CloudRegion, WizardOptions } from './src/utils/types';
 import { runWizard } from './src/run';
 import { runEventSetupWizard } from './src/nextjs/event-setup';
 import {
+  runMigrationWizard,
+  getAvailableMigrationProviders,
+  type MigrationOptions,
+} from './src/migrate';
+import {
   readEnvironment,
   isNonInteractiveEnvironment,
 } from './src/utils/environment';
@@ -153,6 +158,62 @@ yargs(hideBin(process.argv))
       };
 
       void runEventSetupWizard(wizardOptions);
+    },
+  )
+  .command(
+    'migrate',
+    'Migrate from another analytics provider to PostHog',
+    (yargs) => {
+      const availableProviders = getAvailableMigrationProviders();
+      return yargs
+        .options({
+          'install-dir': {
+            describe:
+              'Directory to run the migration in\nenv: POSTHOG_WIZARD_INSTALL_DIR',
+            type: 'string',
+          },
+          'force-install': {
+            default: false,
+            describe:
+              'Force install packages even if peer dependency checks fail\nenv: POSTHOG_WIZARD_FORCE_INSTALL',
+            type: 'boolean',
+          },
+          from: {
+            describe: 'Analytics provider to migrate from',
+            choices: availableProviders,
+            default: 'amplitude',
+            type: 'string',
+          },
+        });
+    },
+    (argv) => {
+      const finalArgs = {
+        ...argv,
+        ...readEnvironment(),
+      } as any;
+
+      let resolvedInstallDir: string;
+      if (finalArgs.installDir) {
+        if (path.isAbsolute(finalArgs.installDir)) {
+          resolvedInstallDir = finalArgs.installDir;
+        } else {
+          resolvedInstallDir = path.join(process.cwd(), finalArgs.installDir);
+        }
+      } else {
+        resolvedInstallDir = process.cwd();
+      }
+
+      const migrationOptions: MigrationOptions = {
+        debug: finalArgs.debug ?? false,
+        installDir: resolvedInstallDir,
+        cloudRegion: finalArgs.region as CloudRegion | undefined,
+        default: finalArgs.default ?? false,
+        signup: finalArgs.signup ?? false,
+        forceInstall: finalArgs.forceInstall ?? false,
+        localMcp: finalArgs.localMcp ?? false,
+      };
+
+      void runMigrationWizard(migrationOptions, finalArgs.from as string);
     },
   )
   .command('mcp <command>', 'MCP server management commands', (yargs) => {

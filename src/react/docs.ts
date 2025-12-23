@@ -23,8 +23,10 @@ FILE: {index / App}.${
 LOCATION: Wherever the root of the app is
 ==============================
 Changes:
-- Add the PostHogProvider to the root of the app in the provider tree.
+- Initialize PostHog with posthog.init() before rendering.
+- Add the PostHogProvider to the root of the app in the provider tree, passing the initialized client.
 - Make sure to include the defaults: '2025-05-24' option in the init call.
+- Do not directly import posthog apart from initialization. Use the usePostHog hook in components instead.
 
 Example:
 --------------------------------------------------
@@ -32,27 +34,28 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
 
-import { PostHogProvider} from 'posthog-js/react'
+import posthog from 'posthog-js';
+import { PostHogProvider } from 'posthog-js/react';
+
+posthog.init(${apiKeyText}, {
+  api_host: ${hostText},
+  defaults: '2025-05-24',
+  capture_exceptions: true, // This enables capturing exceptions using Error Tracking, set to false if you don't want this
+  debug: ${
+    envVarPrefix === 'VITE_PUBLIC_'
+      ? 'import.meta.env.MODE === "development"'
+      : 'process.env.NODE_ENV === "development"'
+  },
+});
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
 
 root.render(
   <React.StrictMode>
-    <PostHogProvider
-      apiKey={${apiKeyText}}
-      options={{
-        api_host: ${hostText},
-        defaults: '2025-05-24',
-        capture_exceptions: true, // This enables capturing exceptions using Error Tracking, set to false if you don't want this
-        debug: ${
-          envVarPrefix === 'VITE_PUBLIC_'
-            ? 'import.meta.env.MODE === "development"'
-            : 'process.env.NODE_ENV === "development"'
-        },
-      }}
-    >
+    <PostHogProvider client={posthog}>
       <App />
     </PostHogProvider>
   </React.StrictMode>
+);
 --------------------------------------------------`;
 };
