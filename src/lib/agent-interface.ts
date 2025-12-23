@@ -9,6 +9,7 @@ import { debug, logToFile, initLogFile, LOG_FILE_PATH } from '../utils/debug';
 import type { WizardOptions } from '../utils/types';
 import { analytics } from '../utils/analytics';
 import { WIZARD_INTERACTION_EVENT_NAME } from './constants';
+import { getLlmGatewayUrlFromHost } from '../utils/urls';
 
 // Dynamic import cache for ESM module
 let _sdkModule: any = null;
@@ -61,7 +62,6 @@ export type AgentConfig = {
   posthogMcpUrl: string;
   posthogApiKey: string;
   posthogApiHost: string;
-  posthogProjectId: number;
 };
 
 /**
@@ -251,7 +251,7 @@ export function initializeAgent(
 
   try {
     // Configure LLM gateway environment variables (inherited by SDK subprocess)
-    const gatewayUrl = `${config.posthogApiHost}/api/projects/${config.posthogProjectId}/llm_gateway`;
+    const gatewayUrl = getLlmGatewayUrlFromHost(config.posthogApiHost);
     process.env.ANTHROPIC_BASE_URL = gatewayUrl;
     process.env.ANTHROPIC_AUTH_TOKEN = config.posthogApiKey;
     // Disable experimental betas (like input_examples) that the LLM gateway doesn't support

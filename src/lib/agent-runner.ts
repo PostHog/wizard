@@ -74,11 +74,10 @@ export async function runAgentWizard(
   });
 
   // Get PostHog credentials
-  const { projectApiKey, host, accessToken, projectId } =
-    await getOrAskForProjectData({
-      ...options,
-      cloudRegion,
-    });
+  const { projectApiKey, host, accessToken } = await getOrAskForProjectData({
+    ...options,
+    cloudRegion,
+  });
 
   // Gather framework-specific context (e.g., Next.js router, React Native platform)
   const frameworkContext = config.metadata.gatherContext
@@ -117,7 +116,6 @@ export async function runAgentWizard(
       posthogMcpUrl: mcpUrl,
       posthogApiKey: accessToken,
       posthogApiHost: host,
-      posthogProjectId: projectId,
     },
     options,
   );
