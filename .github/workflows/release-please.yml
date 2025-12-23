@@ -11,11 +11,12 @@ jobs:
     steps:
       - name: Get app token
         id: app-token
-        uses: getsentry/action-github-app-token@d4b5da6c5e37703f8c3b3e43abb5705b46e159cc # v3
+        uses: PostHog/create-app-token@main
         with:
           app_id: ${{ secrets.GH_APP_WIZARD_RELEASER_APP_ID }}
           private_key: ${{ secrets.GH_APP_WIZARD_RELEASER_PRIVATE_KEY }}
-      - uses: googleapis/release-please-action@16a9c90856f42705d54a6fda1823352bdc62cf38 # v4.4.0
+
+       - uses: googleapis/release-please-action@16a9c90856f42705d54a6fda1823352bdc62cf38 # v4.4.0
         with:
           token: ${{ steps.app-token.outputs.token }}
           release-type: node
