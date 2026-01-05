@@ -5,6 +5,10 @@ import { enableDebugLogs } from '../utils/debug';
 import { runAgentWizard } from '../lib/agent-runner';
 import { Integration } from '../lib/constants';
 import { getPackageVersion } from '../utils/package-json';
+import { getPackageDotJson } from '../utils/clack-utils';
+import clack from '../utils/clack';
+import chalk from 'chalk';
+import * as semver from 'semver';
 import {
   getNextJsRouter,
   getNextJsVersionBucket,
@@ -15,11 +19,14 @@ import {
 /**
  * Next.js framework configuration for the universal agent runner.
  */
+const MINIMUM_NEXTJS_VERSION = '15.3.0';
+
 const NEXTJS_AGENT_CONFIG: FrameworkConfig = {
   metadata: {
     name: 'Next.js',
     integration: Integration.nextjs,
     docsUrl: 'https://posthog.com/docs/libraries/next-js',
+    unsupportedVersionDocsUrl: 'https://posthog.com/docs/libraries/next-js',
     abortMessage:
       'This wizard uses an LLM agent to intelligently modify your project. Please view the docs to setup Next.js manually instead: https://posthog.com/docs/libraries/next-js',
     gatherContext: async (options: WizardOptions) => {
@@ -92,6 +99,26 @@ export async function runNextjsWizardAgent(
 ): Promise<void> {
   if (options.debug) {
     enableDebugLogs();
+  }
+
+  // Check Next.js version - agent wizard requires >= 15.3.0
+  const packageJson = await getPackageDotJson(options);
+  const nextVersion = getPackageVersion('next', packageJson);
+
+  if (nextVersion) {
+    const coercedVersion = semver.coerce(nextVersion);
+    if (coercedVersion && semver.lt(coercedVersion, MINIMUM_NEXTJS_VERSION)) {
+      const docsUrl =
+        NEXTJS_AGENT_CONFIG.metadata.unsupportedVersionDocsUrl ??
+        NEXTJS_AGENT_CONFIG.metadata.docsUrl;
+
+      clack.log.warn(
+        `The wizard can't help you with Next.js ${nextVersion}. Upgrade to Next.js ${MINIMUM_NEXTJS_VERSION} or later, or check out the manual setup guide:`,
+      );
+      clack.log.info(`Documentation: ${chalk.cyan(docsUrl)}`);
+      clack.outro('Setup wizard exited');
+      return;
+    }
   }
 
   await runAgentWizard(NEXTJS_AGENT_CONFIG, options);
