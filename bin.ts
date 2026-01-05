@@ -20,12 +20,7 @@ if (!satisfies(process.version, NODE_VERSION_RANGE)) {
 import { runMCPInstall, runMCPRemove } from './src/mcp';
 import type { CloudRegion, WizardOptions } from './src/utils/types';
 import { runWizard } from './src/run';
-import { runEventSetupWizard } from './src/nextjs/event-setup';
-import {
-  readEnvironment,
-  isNonInteractiveEnvironment,
-} from './src/utils/environment';
-import path from 'path';
+import { isNonInteractiveEnvironment } from './src/utils/environment';
 import clack from './src/utils/clack';
 
 if (isNonInteractiveEnvironment()) {
@@ -111,48 +106,6 @@ yargs(hideBin(process.argv))
     (argv) => {
       const options = { ...argv };
       void runWizard(options as unknown as WizardOptions);
-    },
-  )
-  .command(
-    'event-setup',
-    'Run the event setup wizard',
-    (yargs) => {
-      return yargs.options({
-        'install-dir': {
-          describe:
-            'Directory to run the wizard in\nenv: POSTHOG_WIZARD_INSTALL_DIR',
-          type: 'string',
-        },
-      });
-    },
-    (argv) => {
-      const finalArgs = {
-        ...argv,
-        ...readEnvironment(),
-      } as any;
-
-      let resolvedInstallDir: string;
-      if (finalArgs.installDir) {
-        if (path.isAbsolute(finalArgs.installDir)) {
-          resolvedInstallDir = finalArgs.installDir;
-        } else {
-          resolvedInstallDir = path.join(process.cwd(), finalArgs.installDir);
-        }
-      } else {
-        resolvedInstallDir = process.cwd();
-      }
-
-      const wizardOptions: WizardOptions = {
-        debug: finalArgs.debug ?? false,
-        installDir: resolvedInstallDir,
-        cloudRegion: finalArgs.region as CloudRegion | undefined,
-        default: finalArgs.default ?? false,
-        signup: finalArgs.signup ?? false,
-        forceInstall: false,
-        localMcp: finalArgs.localMcp ?? false,
-      };
-
-      void runEventSetupWizard(wizardOptions);
     },
   )
   .command('mcp <command>', 'MCP server management commands', (yargs) => {
