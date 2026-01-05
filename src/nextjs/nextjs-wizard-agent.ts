@@ -113,9 +113,9 @@ export async function runNextjsWizardAgent(
         NEXTJS_AGENT_CONFIG.metadata.docsUrl;
 
       clack.log.warn(
-        `The wizard can't help you with Next.js ${nextVersion}. Upgrade to Next.js ${MINIMUM_NEXTJS_VERSION} or later, or check out the manual setup guide:`,
+        `Sorry: the wizard can't help you with Next.js ${nextVersion}. Upgrade to Next.js ${MINIMUM_NEXTJS_VERSION} or later, or check out the manual setup guide.`,
       );
-      clack.log.info(`Next.js setup guide: ${chalk.cyan(docsUrl)}`);
+      clack.log.info(`Setup Next.js manually: ${chalk.cyan(docsUrl)}`);
       clack.outro('PostHog wizard will see you next time!');
       return;
     }
