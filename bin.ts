@@ -23,17 +23,6 @@ import { runWizard } from './src/run';
 import { isNonInteractiveEnvironment } from './src/utils/environment';
 import clack from './src/utils/clack';
 
-if (isNonInteractiveEnvironment()) {
-  clack.intro(chalk.inverse(`PostHog Wizard`));
-
-  clack.log.error(
-    'This installer requires an interactive terminal (TTY) to run.\n' +
-      'It appears you are running in a non-interactive environment.\n' +
-      'Please run the wizard in an interactive terminal.',
-  );
-  process.exit(1);
-}
-
 if (process.env.NODE_ENV === 'test') {
   void (async () => {
     try {
@@ -79,6 +68,17 @@ yargs(hideBin(process.argv))
         'Use local MCP server at http://localhost:8787/mcp\nenv: POSTHOG_WIZARD_LOCAL_MCP',
       type: 'boolean',
     },
+    ci: {
+      default: false,
+      describe:
+        'Enable CI mode for non-interactive execution\nenv: POSTHOG_WIZARD_CI',
+      type: 'boolean',
+    },
+    'api-key': {
+      describe:
+        'PostHog personal API key (phx_xxx) for authentication\nenv: POSTHOG_WIZARD_API_KEY',
+      type: 'string',
+    },
   })
   .command(
     ['$0'],
@@ -105,6 +105,42 @@ yargs(hideBin(process.argv))
     },
     (argv) => {
       const options = { ...argv };
+
+      // CI mode validation and TTY check
+      if (options.ci) {
+        // Validate required CI flags
+        if (!options.region) {
+          clack.intro(chalk.inverse(`PostHog Wizard`));
+          clack.log.error('CI mode requires --region (us or eu)');
+          process.exit(1);
+        }
+        if (!options.apiKey) {
+          clack.intro(chalk.inverse(`PostHog Wizard`));
+          clack.log.error(
+            'CI mode requires --api-key (personal API key phx_xxx)',
+          );
+          process.exit(1);
+        }
+        if (!options.installDir) {
+          clack.intro(chalk.inverse(`PostHog Wizard`));
+          clack.log.error(
+            'CI mode requires --install-dir (directory to install PostHog in)',
+          );
+          process.exit(1);
+        }
+      } else if (isNonInteractiveEnvironment()) {
+        // Original TTY error for non-CI mode
+        clack.intro(chalk.inverse(`PostHog Wizard`));
+        clack.log.error(
+          'This installer requires an interactive terminal (TTY) to run.\n' +
+            'It appears you are running in a non-interactive environment.\n' +
+            'Please run the wizard in an interactive terminal.\n\n' +
+            'For CI/CD environments, use --ci mode:\n' +
+            '  npx @posthog/wizard --ci --region us --api-key phx_xxx',
+        );
+        process.exit(1);
+      }
+
       void runWizard(options as unknown as WizardOptions);
     },
   )

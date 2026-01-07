@@ -48,6 +48,55 @@ The following CLI arguments are available:
 | `--integration`   | Integration to set up                                            | string  |         | "nextjs", "astro", "react", "svelte", "react-native" |                                |
 | `--force-install` | Force install packages even if peer dependency checks fail       | boolean | `false` |                                                      | `POSTHOG_WIZARD_FORCE_INSTALL` |
 | `--install-dir`   | Directory to install PostHog in                                  | string  |         |                                                      | `POSTHOG_WIZARD_INSTALL_DIR`   |
+| `--ci`            | Enable CI mode for non-interactive execution                     | boolean | `false` |                                                      | `POSTHOG_WIZARD_CI`            |
+| `--api-key`       | PostHog personal API key (phx_xxx) for authentication            | string  |         |                                                      | `POSTHOG_WIZARD_API_KEY`       |
+
+# CI/CD Usage
+
+Run the wizard non-interactively in CI/CD pipelines:
+
+```bash
+npx @posthog/wizard --ci --region us --api-key $POSTHOG_PERSONAL_API_KEY --install-dir .
+```
+
+## Required Flags for CI Mode
+
+- `--region`: Cloud region (`us` or `eu`)
+- `--api-key`: Personal API key (`phx_xxx`) from your [PostHog settings](https://app.posthog.com/settings/user-api-keys)
+- `--install-dir`: Directory to install PostHog in (e.g., `.` for current directory)
+
+## Optional Flags
+
+- `--integration`: Specify the framework if auto-detection fails (`nextjs`, `react`, `svelte`, `astro`, `react-native`)
+
+## Example GitHub Action
+
+```yaml
+- name: Setup PostHog
+  run: npx @posthog/wizard --ci --region us --api-key ${{ secrets.POSTHOG_API_KEY }} --install-dir .
+```
+
+## Example with Environment Variables
+
+```yaml
+- name: Setup PostHog
+  env:
+    POSTHOG_WIZARD_CI: true
+    POSTHOG_WIZARD_REGION: us
+    POSTHOG_WIZARD_API_KEY: ${{ secrets.POSTHOG_API_KEY }}
+    POSTHOG_WIZARD_INSTALL_DIR: .
+  run: npx @posthog/wizard
+```
+
+## CI Mode Behavior
+
+When running in CI mode (`--ci`):
+
+- Bypasses OAuth login flow (uses personal API key directly)
+- Auto-selects defaults for all prompts
+- Skips MCP server installation
+- Auto-continues on git warnings (uncommitted/untracked files)
+- Auto-consents to AI usage
 
 > Note: A large amount of the scaffolding for this came from the amazing Sentry
 > wizard, which you can find [here](https://github.com/getsentry/sentry-wizard)

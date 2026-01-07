@@ -151,6 +151,7 @@ export async function runSvelteWizard(options: WizardOptions): Promise<void> {
   await addMCPServerToClientsStep({
     cloudRegion,
     integration: Integration.svelte,
+    ci: options.ci,
   });
 
   const outroMessage = getOutroMessage({

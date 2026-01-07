@@ -162,11 +162,10 @@ export async function runReactNativeWizard(
   await addMCPServerToClientsStep({
     cloudRegion,
     integration: Integration.reactNative,
+    ci: options.ci,
   });
 
-  const packageManagerForOutro = await getPackageManager({
-    installDir: options.installDir,
-  });
+  const packageManagerForOutro = await getPackageManager(options);
 
   const outroMessage = getOutroMessage({
     options,
