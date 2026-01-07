@@ -6,15 +6,6 @@ export enum Integration {
   astro = 'astro',
 }
 
-export enum FeatureFlagDefinition {
-  NextV2 = 'wizard-next-v2',
-}
-
-export enum WizardVariant {
-  Legacy = 'legacy',
-  Agent = 'agent',
-}
-
 export function getIntegrationDescription(type: string): string {
   switch (type) {
     case Integration.nextjs:

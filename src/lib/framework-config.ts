@@ -31,6 +31,12 @@ export interface FrameworkMetadata {
   abortMessage: string;
 
   /**
+   * Optional URL to docs for users with unsupported framework versions.
+   * If not provided, defaults to docsUrl.
+   */
+  unsupportedVersionDocsUrl?: string;
+
+  /**
    * Optional function to gather framework-specific context before agent runs.
    * For Next.js: detects router type
    * For React Native: detects Expo vs bare

@@ -1,15 +1,14 @@
 import { runWizard } from '../run';
-import { runNextjsWizard } from '../nextjs/nextjs-wizard';
+import { runNextjsWizardAgent } from '../nextjs/nextjs-wizard-agent';
 import { analytics } from '../utils/analytics';
 import { Integration } from '../lib/constants';
 
-jest.mock('../nextjs/nextjs-wizard');
 jest.mock('../nextjs/nextjs-wizard-agent');
 jest.mock('../utils/analytics');
 jest.mock('../utils/clack');
 
-const mockRunNextjsWizard = runNextjsWizard as jest.MockedFunction<
-  typeof runNextjsWizard
+const mockRunNextjsWizardAgent = runNextjsWizardAgent as jest.MockedFunction<
+  typeof runNextjsWizardAgent
 >;
 const mockAnalytics = analytics as jest.Mocked<typeof analytics>;
 
@@ -38,7 +37,7 @@ describe('runWizard error handling', () => {
       forceInstall: false,
     };
 
-    mockRunNextjsWizard.mockRejectedValue(testError);
+    mockRunNextjsWizardAgent.mockRejectedValue(testError);
 
     await expect(runWizard(testArgs)).rejects.toThrow('process.exit called');
 
@@ -53,7 +52,7 @@ describe('runWizard error handling', () => {
   it('should not call captureException when wizard succeeds', async () => {
     const testArgs = { integration: Integration.nextjs };
 
-    mockRunNextjsWizard.mockResolvedValue(undefined);
+    mockRunNextjsWizardAgent.mockResolvedValue(undefined);
 
     await runWizard(testArgs);
 
