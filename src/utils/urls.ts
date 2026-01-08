@@ -67,12 +67,12 @@ export const getOauthClientIdFromRegion = (region: CloudRegion) => {
 
 export const getLlmGatewayUrlFromHost = (host: string) => {
   if (host.includes('localhost')) {
-    return 'http://localhost:3308';
+    return 'http://localhost:3308/wizard';
   }
 
   if (host.includes('eu.posthog.com') || host.includes('eu.i.posthog.com')) {
-    return 'https://gateway.eu.posthog.com';
+    return 'https://gateway.eu.posthog.com/wizard';
   }
 
-  return 'https://gateway.us.posthog.com';
+  return 'https://gateway.us.posthog.com/wizard';
 };
