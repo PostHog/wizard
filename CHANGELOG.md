@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.23.0](https://github.com/PostHog/wizard/compare/v1.22.0...v1.23.0) (2026-01-08)
+
+
+### Features
+
+* use llm gateway service ([#211](https://github.com/PostHog/wizard/issues/211)) ([9dc13af](https://github.com/PostHog/wizard/commit/9dc13af819841013512aba9fa847c92ded7cd217))
+
+
+### Bug Fixes
+
+* **ci:** incorrect action name ([9b53b22](https://github.com/PostHog/wizard/commit/9b53b22e4ed4bcd9b4d802160beab02c6303bb0f))
+* **ci:** invalid yaml syntax ([810d910](https://github.com/PostHog/wizard/commit/810d910ca16a6f22d2c67d9ffac17e673ffa50f2))
+* **ci:** use correct input names ([370bfc7](https://github.com/PostHog/wizard/commit/370bfc79f17dc97e66e3db56e6f33240ab4f5b75))
+
 ## [1.22.0](https://github.com/PostHog/wizard/compare/v1.21.1...v1.22.0) (2025-12-17)
 
 

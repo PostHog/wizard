@@ -661,7 +661,7 @@ async function askForWizardLogin(options: {
       'user:read',
       'project:read',
       'introspection',
-      'task:write',
+      'llm_gateway:read',
       'dashboard:write',
       'insight:write',
     ],
