@@ -3,7 +3,11 @@ import { abortIfCancelled } from './utils/clack-utils';
 import { runNextjsWizardAgent } from './nextjs/nextjs-wizard-agent';
 import type { CloudRegion, WizardOptions } from './utils/types';
 
-import { getIntegrationDescription, Integration } from './lib/constants';
+import {
+  getIntegrationDescription,
+  Integration,
+  FeatureFlagDefinition,
+} from './lib/constants';
 import { readEnvironment } from './utils/environment';
 import clack from './utils/clack';
 import path from 'path';
@@ -82,9 +86,17 @@ export async function runWizard(argv: Args) {
       case Integration.astro:
         await runAstroWizard(wizardOptions);
         break;
-      case Integration.reactRouter:
-        await runReactRouterWizardAgent(wizardOptions);
+      case Integration.reactRouter: {
+        const flagValue = await analytics.getFeatureFlag(
+          FeatureFlagDefinition.ReactRouter,
+        );
+        if (flagValue === true) {
+          await runReactRouterWizardAgent(wizardOptions);
+        } else {
+          await runReactWizard(wizardOptions);
+        }
         break;
+      }
       default:
         clack.log.error('No setup wizard selected!');
     }

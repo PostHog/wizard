@@ -7,6 +7,10 @@ export enum Integration {
   reactRouter = 'react-router',
 }
 
+export enum FeatureFlagDefinition {
+  ReactRouter = 'wizard-react-router',
+}
+
 export function getIntegrationDescription(type: string): string {
   switch (type) {
     case Integration.nextjs:
