@@ -69,10 +69,10 @@ const REACT_ROUTER_AGENT_CONFIG: FrameworkConfig = {
 
       // Map router mode to framework ID for MCP docs resource
       const frameworkIdMap: Record<ReactRouterMode, string> = {
-        [ReactRouterMode.V6]: 'react-react-router-v6',
-        [ReactRouterMode.V7_FRAMEWORK]: 'react-react-router-v7-framework',
-        [ReactRouterMode.V7_DATA]: 'react-react-router-v7-data',
-        [ReactRouterMode.V7_DECLARATIVE]: 'react-react-router-v7-declarative',
+        [ReactRouterMode.V6]: 'react-react-router-6',
+        [ReactRouterMode.V7_FRAMEWORK]: 'react-react-router-7-framework',
+        [ReactRouterMode.V7_DATA]: 'react-react-router-7-data',
+        [ReactRouterMode.V7_DECLARATIVE]: 'react-react-router-7-declarative',
       };
 
       const frameworkId = routerMode
