@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.24.0](https://github.com/PostHog/wizard/compare/v1.23.0...v1.24.0) (2026-01-09)
+
+
+### Features
+
+* CI mode for wizard ([#216](https://github.com/PostHog/wizard/issues/216)) ([3bf2558](https://github.com/PostHog/wizard/commit/3bf255891590c5743a7115f4bff29e68bcd9fc34))
+
 ## [1.23.0](https://github.com/PostHog/wizard/compare/v1.22.0...v1.23.0) (2026-01-08)
 
 
