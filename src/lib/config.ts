@@ -110,6 +110,30 @@ export const INTEGRATION_CONFIG = {
     nextSteps:
       '• Call posthog.identify() when a user signs into your app\n• Call posthog.capture() to capture custom events in your app\n• Use posthog.isFeatureEnabled() for feature flags',
   },
+  [Integration.reactRouter]: {
+    name: 'React Router',
+    filterPatterns: ['**/*.{tsx,ts,jsx,js}'],
+    ignorePatterns: [
+      'node_modules',
+      'dist',
+      'build',
+      'public',
+      'static',
+      'assets',
+    ],
+    detect: async (options) => {
+      const packageJson = await getPackageDotJson(options);
+      return hasPackageInstalled('react-router', packageJson);
+    },
+    generateFilesRules: '',
+    filterFilesRules: '',
+    docsUrl:
+      'https://posthog-git-react-post-hog.vercel.app/docs/libraries/react-router',
+    defaultChanges:
+      '• Installed posthog-js package\n• Added PostHogProvider to the root of the app\n• Integrated PostHog with React Router for pageview tracking',
+    nextSteps:
+      '• Call posthog.identify() when a user signs into your app\n• Call posthog.capture() to capture custom events in your app',
+  },
 } as const satisfies Record<Integration, IntegrationConfig>;
 
 export const INTEGRATION_ORDER = [
@@ -117,5 +141,6 @@ export const INTEGRATION_ORDER = [
   Integration.astro,
   Integration.svelte,
   Integration.reactNative,
+  Integration.reactRouter,
   Integration.react,
 ] as const;

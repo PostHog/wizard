@@ -1,6 +1,5 @@
 /* Simplified Next.js wizard using posthog-agent with PostHog MCP */
 import type { WizardOptions } from '../utils/types';
-import type { FrameworkConfig } from '../lib/framework-config';
 import { enableDebugLogs } from '../utils/debug';
 import { runAgentWizard } from '../lib/agent-runner';
 import { Integration } from '../lib/constants';
@@ -21,7 +20,7 @@ import {
  */
 const MINIMUM_NEXTJS_VERSION = '15.3.0';
 
-const NEXTJS_AGENT_CONFIG: FrameworkConfig = {
+const NEXTJS_AGENT_CONFIG = {
   metadata: {
     name: 'Next.js',
     integration: Integration.nextjs,
@@ -44,7 +43,7 @@ const NEXTJS_AGENT_CONFIG: FrameworkConfig = {
 
   environment: {
     uploadToHosting: true,
-    getEnvVars: (apiKey, host) => ({
+    getEnvVars: (apiKey: string, host: string) => ({
       NEXT_PUBLIC_POSTHOG_KEY: apiKey,
       NEXT_PUBLIC_POSTHOG_HOST: host,
     }),
