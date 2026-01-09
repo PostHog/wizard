@@ -51,6 +51,10 @@ The following CLI arguments are available:
 | `--ci`            | Enable CI mode for non-interactive execution                     | boolean | `false` |                                                      | `POSTHOG_WIZARD_CI`            |
 | `--api-key`       | PostHog personal API key (phx_xxx) for authentication            | string  |         |                                                      | `POSTHOG_WIZARD_API_KEY`       |
 
+> Note: A large amount of the scaffolding for this came from the amazing Sentry
+> wizard, which you can find [here](https://github.com/getsentry/sentry-wizard)
+> 💖
+
 # CI Mode
 
 Run the wizard non-interactive executions with `--ci`:
@@ -67,15 +71,24 @@ When running in CI mode (`--ci`):
 - Auto-continues on git warnings (uncommitted/untracked files)
 - Auto-consents to AI usage
 
+The CLI args override environment variables in CI mode.
+
 ### Required Flags for CI Mode
 
 - `--region`: Cloud region (`us` or `eu`)
 - `--api-key`: Personal API key (`phx_xxx`) from your [PostHog settings](https://app.posthog.com/settings/user-api-keys)
 - `--install-dir`: Directory to install PostHog in (e.g., `.` for current directory)
 
-> Note: A large amount of the scaffolding for this came from the amazing Sentry
-> wizard, which you can find [here](https://github.com/getsentry/sentry-wizard)
-> 💖
+### Required API Key Scopes
+
+When creating your personal API key, ensure it has the following scopes enabled:
+
+- `user:read` - Required to fetch user information
+- `project:read` - Required to fetch project details and API token
+- `introspection` - Required for API introspection
+- `llm_gateway:read` - Required for LLM gateway access
+- `dashboard:write` - Required to create dashboards
+- `insight:write` - Required to create insights
 
 # Steal this code
 
