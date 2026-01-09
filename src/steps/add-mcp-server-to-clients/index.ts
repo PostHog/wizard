@@ -49,12 +49,20 @@ export const addMCPServerToClientsStep = async ({
   cloudRegion,
   askPermission = true,
   local = false,
+  ci = false,
 }: {
   integration?: Integration;
   cloudRegion?: CloudRegion;
   askPermission?: boolean;
   local?: boolean;
+  ci?: boolean;
 }): Promise<string[]> => {
+  // CI mode: skip MCP installation entirely (default to No)
+  if (ci) {
+    clack.log.info('Skipping MCP installation (CI mode)');
+    return [];
+  }
+
   const region = cloudRegion ?? (await askForCloudRegion());
 
   const hasPermission = askPermission

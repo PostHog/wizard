@@ -23,6 +23,9 @@ describe('CLI argument parsing', () => {
     process.env = { ...originalEnv };
     delete process.env.POSTHOG_WIZARD_REGION;
     delete process.env.POSTHOG_WIZARD_DEFAULT;
+    delete process.env.POSTHOG_WIZARD_CI;
+    delete process.env.POSTHOG_WIZARD_API_KEY;
+    delete process.env.POSTHOG_WIZARD_INSTALL_DIR;
 
     // Mock process.exit to prevent test runner from exiting
     process.exit = jest.fn() as any;
@@ -185,6 +188,115 @@ describe('CLI argument parsing', () => {
       const args = getLastCallArgs(mockRunMCPInstall);
       expect(args.default).toBe(false);
       expect(args.debug).toBe(true);
+    });
+  });
+
+  describe('--ci flag', () => {
+    test('defaults to false when not specified', async () => {
+      await runCLI([]);
+
+      const args = getLastCallArgs(mockRunWizard);
+      expect(args.ci).toBe(false);
+    });
+
+    test('can be set to true', async () => {
+      await runCLI([
+        '--ci',
+        '--region',
+        'us',
+        '--api-key',
+        'phx_test',
+        '--install-dir',
+        '/tmp/test',
+      ]);
+
+      const args = getLastCallArgs(mockRunWizard);
+      expect(args.ci).toBe(true);
+    });
+
+    test('requires --region when --ci is set', async () => {
+      await runCLI([
+        '--ci',
+        '--api-key',
+        'phx_test',
+        '--install-dir',
+        '/tmp/test',
+      ]);
+
+      expect(process.exit).toHaveBeenCalledWith(1);
+    });
+
+    test('requires --api-key when --ci is set', async () => {
+      await runCLI(['--ci', '--region', 'us', '--install-dir', '/tmp/test']);
+
+      expect(process.exit).toHaveBeenCalledWith(1);
+    });
+
+    test('requires --install-dir when --ci is set', async () => {
+      await runCLI(['--ci', '--region', 'us', '--api-key', 'phx_test']);
+
+      expect(process.exit).toHaveBeenCalledWith(1);
+    });
+
+    test('passes --api-key to runWizard', async () => {
+      await runCLI([
+        '--ci',
+        '--region',
+        'us',
+        '--api-key',
+        'phx_test_key',
+        '--install-dir',
+        '/tmp/test',
+      ]);
+
+      const args = getLastCallArgs(mockRunWizard);
+      expect(args.apiKey).toBe('phx_test_key');
+    });
+  });
+
+  describe('CI environment variables', () => {
+    test('respects POSTHOG_WIZARD_CI', async () => {
+      process.env.POSTHOG_WIZARD_CI = 'true';
+      process.env.POSTHOG_WIZARD_REGION = 'us';
+      process.env.POSTHOG_WIZARD_API_KEY = 'phx_env_key';
+      process.env.POSTHOG_WIZARD_INSTALL_DIR = '/tmp/test';
+
+      await runCLI([]);
+
+      const args = getLastCallArgs(mockRunWizard);
+      expect(args.ci).toBe(true);
+    });
+
+    test('respects POSTHOG_WIZARD_API_KEY', async () => {
+      process.env.POSTHOG_WIZARD_CI = 'true';
+      process.env.POSTHOG_WIZARD_REGION = 'eu';
+      process.env.POSTHOG_WIZARD_API_KEY = 'phx_env_key';
+      process.env.POSTHOG_WIZARD_INSTALL_DIR = '/tmp/test';
+
+      await runCLI([]);
+
+      const args = getLastCallArgs(mockRunWizard);
+      expect(args.apiKey).toBe('phx_env_key');
+    });
+
+    test('CLI args override CI environment variables', async () => {
+      process.env.POSTHOG_WIZARD_CI = 'true';
+      process.env.POSTHOG_WIZARD_REGION = 'us';
+      process.env.POSTHOG_WIZARD_API_KEY = 'phx_env_key';
+      process.env.POSTHOG_WIZARD_INSTALL_DIR = '/tmp/test';
+
+      await runCLI([
+        '--region',
+        'eu',
+        '--api-key',
+        'phx_cli_key',
+        '--install-dir',
+        '/other/path',
+      ]);
+
+      const args = getLastCallArgs(mockRunWizard);
+      expect(args.region).toBe('eu');
+      expect(args.apiKey).toBe('phx_cli_key');
     });
   });
 });

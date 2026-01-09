@@ -109,6 +109,7 @@ export async function runAstroWizard(options: WizardOptions): Promise<void> {
   await addMCPServerToClientsStep({
     cloudRegion,
     integration: Integration.astro,
+    ci: options.ci,
   });
 
   const outroMessage = getOutroMessage({

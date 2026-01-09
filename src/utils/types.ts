@@ -45,6 +45,16 @@ export type WizardOptions = {
    * Whether to use the local MCP server at http://localhost:8787/mcp
    */
   localMcp: boolean;
+
+  /**
+   * CI mode - non-interactive execution
+   */
+  ci: boolean;
+
+  /**
+   * Personal API key (phx_xxx) - used for LLM gateway auth, skips OAuth
+   */
+  apiKey?: string;
 };
 
 export interface Feature {
