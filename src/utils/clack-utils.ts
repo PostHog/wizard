@@ -640,7 +640,7 @@ async function fetchProjectDataWithApiKey(
 
   if (!projectId) {
     throw new Error(
-      'Could not determine project ID from API key. Please ensure your API key has access to a project.',
+      'Could not determine project ID from API key. Please ensure your API key has access to a project in this cloud region.',
     );
   }
 

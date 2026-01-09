@@ -67,7 +67,7 @@ When running in CI mode (`--ci`):
 - Auto-continues on git warnings (uncommitted/untracked files)
 - Auto-consents to AI usage
 
-## Required Flags for CI Mode
+### Required Flags for CI Mode
 
 - `--region`: Cloud region (`us` or `eu`)
 - `--api-key`: Personal API key (`phx_xxx`) from your [PostHog settings](https://app.posthog.com/settings/user-api-keys)
