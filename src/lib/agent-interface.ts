@@ -10,6 +10,7 @@ import type { WizardOptions } from '../utils/types';
 import { analytics } from '../utils/analytics';
 import { WIZARD_INTERACTION_EVENT_NAME } from './constants';
 import { getLlmGatewayUrlFromHost } from '../utils/urls';
+import { LINTING_TOOLS } from './safe-tools';
 
 // Dynamic import cache for ESM module
 let _sdkModule: any = null;
@@ -81,6 +82,7 @@ const PACKAGE_MANAGERS = ['npm', 'pnpm', 'yarn', 'bun', 'npx'];
 /**
  * Safe scripts/commands that can be run with any package manager.
  * Uses startsWith matching, so 'build' matches 'build', 'build:prod', etc.
+ * Note: Linting tools are in LINTING_TOOLS and checked separately.
  */
 const SAFE_SCRIPTS = [
   // Package installation
@@ -95,13 +97,9 @@ const SAFE_SCRIPTS = [
   'type-check',
   'check-types',
   'types',
-  // Linting
+  // Linting/formatting script names (actual tools are in LINTING_TOOLS)
   'lint',
-  'eslint',
-  'next lint',
-  // Formatting
   'format',
-  'prettier',
 ];
 
 /**
@@ -129,8 +127,11 @@ function matchesAllowedPrefix(command: string): boolean {
   // Get the script/command portion (may include args)
   const scriptPart = parts.slice(scriptIndex).join(' ');
 
-  // Check if script starts with any safe script name
-  return SAFE_SCRIPTS.some((safe) => scriptPart.startsWith(safe));
+  // Check if script starts with any safe script name or linting tool
+  return (
+    SAFE_SCRIPTS.some((safe) => scriptPart.startsWith(safe)) ||
+    LINTING_TOOLS.some((tool) => scriptPart.startsWith(tool))
+  );
 }
 
 /**
@@ -231,7 +232,7 @@ export function wizardCanUseTool(
   });
   return {
     behavior: 'deny',
-    message: `Bash command not allowed. Only install, build, typecheck, and lint commands are permitted.`,
+    message: `Bash command not allowed. Only install, build, typecheck, lint, and formatting commands are permitted.`,
   };
 }
 
