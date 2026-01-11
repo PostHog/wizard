@@ -98,6 +98,7 @@ export async function runAgentWizard(
       typescript: typeScriptDetected,
       projectApiKey,
       host,
+      ci: options.ci,
     },
     frameworkContext,
   );
@@ -259,6 +260,7 @@ function buildIntegrationPrompt(
     typescript: boolean;
     projectApiKey: string;
     host: string;
+    ci?: boolean;
   },
   frameworkContext: Record<string, any>,
 ): string {
@@ -270,6 +272,11 @@ function buildIntegrationPrompt(
     additionalLines.length > 0
       ? '\n' + additionalLines.map((line) => `- ${line}`).join('\n')
       : '';
+
+  const ciModeInstruction = context.ci
+    ? `
+4. IMPORTANT: This is running in CI mode. Do NOT create any dashboards or insights in PostHog. Skip any steps that involve creating dashboards, insights, or other resources in the PostHog app.`
+    : '';
 
   return `You have access to the PostHog MCP server which provides an integration resource to integrate PostHog into this ${
     config.metadata.name
@@ -287,7 +294,7 @@ Instructions:
 2. Follow all instructions provided; do package installation as soon as possible.
 3. Set up environment variables for PostHog in a .env file with the API key and host provided above, using the appropriate naming convention for ${
     config.metadata.name
-  }. Make sure to use these environment variables in the code files you create instead of hardcoding the API key and host.
+  }. Make sure to use these environment variables in the code files you create instead of hardcoding the API key and host.${ciModeInstruction}
 
 The PostHog MCP will provide specific integration code and instructions. Please follow them carefully. Be sure to look for lockfiles to determine the appropriate package manager to use when installing PostHog. Do not manually edit the package.json file.
 
