@@ -1,4 +1,5 @@
 import z from 'zod';
+import type { CloudRegion } from '../../utils/types';
 
 export const DefaultMCPClientConfig = z
   .object({
@@ -74,6 +75,7 @@ export const buildMCPUrl = (
   type: MCPServerType,
   selectedFeatures?: string[],
   local?: boolean,
+  region?: CloudRegion,
 ) => {
   const host = local ? 'http://localhost:8787' : 'https://mcp.posthog.com';
   const baseUrl = `${host}/${type === 'sse' ? 'sse' : 'mcp'}`;
@@ -83,11 +85,23 @@ export const buildMCPUrl = (
     selectedFeatures.length === ALL_FEATURE_VALUES.length &&
     ALL_FEATURE_VALUES.every((feature) => selectedFeatures.includes(feature));
 
-  return selectedFeatures &&
+  const params: string[] = [];
+
+  // Add features param if not all features selected
+  if (
+    selectedFeatures &&
     selectedFeatures.length > 0 &&
     !isAllFeaturesSelected
-    ? `${baseUrl}?features=${selectedFeatures.join(',')}`
-    : baseUrl;
+  ) {
+    params.push(`features=${selectedFeatures.join(',')}`);
+  }
+
+  // Add region param for OAuth authorization server routing (EU users)
+  if (region && region !== 'us' && !local) {
+    params.push(`region=${region}`);
+  }
+
+  return params.length > 0 ? `${baseUrl}?${params.join('&')}` : baseUrl;
 };
 
 export const getNativeHTTPServerConfig = (
@@ -95,9 +109,10 @@ export const getNativeHTTPServerConfig = (
   type: MCPServerType,
   selectedFeatures?: string[],
   local?: boolean,
+  region?: CloudRegion,
 ) => {
   return {
-    url: buildMCPUrl(type, selectedFeatures, local),
+    url: buildMCPUrl(type, selectedFeatures, local, region),
     headers: {
       Authorization: `Bearer ${apiKey}`,
     },
@@ -109,8 +124,9 @@ export const getDefaultServerConfig = (
   type: MCPServerType,
   selectedFeatures?: string[],
   local?: boolean,
+  region?: CloudRegion,
 ) => {
-  const urlWithFeatures = buildMCPUrl(type, selectedFeatures, local);
+  const urlWithFeatures = buildMCPUrl(type, selectedFeatures, local, region);
 
   return {
     command: 'npx',

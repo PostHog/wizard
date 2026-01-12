@@ -169,7 +169,13 @@ export const addMCPServerToClientsStep = async ({
   const personalApiKey = await getPersonalApiKey({ cloudRegion: region });
 
   await traceStep('adding mcp servers', async () => {
-    await addMCPServer(clients, personalApiKey, selectedFeatures, local);
+    await addMCPServer(
+      clients,
+      personalApiKey,
+      selectedFeatures,
+      local,
+      region,
+    );
   });
 
   clack.log.success(
@@ -263,9 +269,10 @@ export const addMCPServer = async (
   personalApiKey: string,
   selectedFeatures?: string[],
   local?: boolean,
+  region?: CloudRegion,
 ): Promise<void> => {
   for (const client of clients) {
-    await client.addServer(personalApiKey, selectedFeatures, local);
+    await client.addServer(personalApiKey, selectedFeatures, local, region);
   }
 };
 

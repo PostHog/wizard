@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { execSync } from 'child_process';
 import { analytics } from '../../../utils/analytics';
 import { debug } from '../../../utils/debug';
+import type { CloudRegion } from '../../../utils/types';
 import * as os from 'os';
 import * as path from 'path';
 import * as fs from 'fs';
@@ -114,6 +115,7 @@ export class ClaudeCodeMCPClient extends DefaultMCPClient {
     apiKey: string,
     selectedFeatures?: string[],
     local?: boolean,
+    region?: CloudRegion,
   ): Promise<{ success: boolean }> {
     const claudeBinary = this.findClaudeBinary();
     if (!claudeBinary) {
@@ -121,7 +123,7 @@ export class ClaudeCodeMCPClient extends DefaultMCPClient {
     }
 
     const serverName = local ? 'posthog-local' : 'posthog';
-    const url = buildMCPUrl('streamable-http', selectedFeatures, local);
+    const url = buildMCPUrl('streamable-http', selectedFeatures, local, region);
 
     const command = `${claudeBinary} mcp add --transport http ${serverName} ${url} --header "Authorization: Bearer ${apiKey}" -s user`;
 
