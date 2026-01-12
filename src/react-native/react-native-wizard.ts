@@ -106,9 +106,9 @@ export async function runReactNativeWizard(
       alreadyInstalled: !!packageJson?.dependencies?.[packageName],
       forceInstall: options.forceInstall,
       askBeforeUpdating: false,
-      installDir: options.installDir,
       integration: Integration.reactNative,
       packageManager: isUsingExpo ? EXPO : undefined,
+      options,
     });
   }
 

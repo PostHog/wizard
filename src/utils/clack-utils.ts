@@ -306,7 +306,7 @@ export async function installPackage({
   packageManager,
   forceInstall = false,
   integration,
-  installDir,
+  options,
 }: {
   /** The string that is passed to the package manager CLI as identifier to install (e.g. `posthog-js`, or `posthog-js@^1.100.0`) */
   packageName: string;
@@ -319,8 +319,8 @@ export async function installPackage({
   forceInstall?: boolean;
   /** The integration that is being used */
   integration?: string;
-  /** The directory to install the package in */
-  installDir: string;
+  /** Wizard options containing installDir, ci, etc. */
+  options: Pick<WizardOptions, 'installDir' | 'ci'>;
 }): Promise<{ packageManager?: PackageManager }> {
   return traceStep('install-package', async () => {
     if (alreadyInstalled && askBeforeUpdating) {
@@ -339,11 +339,12 @@ export async function installPackage({
 
     const sdkInstallSpinner = clack.spinner();
 
-    const pkgManager =
-      packageManager || (await getPackageManager({ installDir }));
+    const pkgManager = packageManager || (await getPackageManager(options));
 
     // Most packages aren't compatible with React 19 yet, skip strict peer dependency checks if needed.
-    const isReact19 = await isReact19Installed({ installDir });
+    const isReact19 = await isReact19Installed({
+      installDir: options.installDir,
+    });
     const legacyPeerDepsFlag =
       isReact19 && pkgManager.name === 'npm' ? '--legacy-peer-deps' : '';
 
@@ -359,7 +360,7 @@ export async function installPackage({
           `${pkgManager.installCommand} ${packageName} ${pkgManager.flags} ${
             forceInstall ? pkgManager.forceInstallFlag : ''
           } ${legacyPeerDepsFlag}`.trim(),
-          { cwd: installDir },
+          { cwd: options.installDir },
           (err, stdout, stderr) => {
             if (err) {
               // Write a log file so we can better troubleshoot issues

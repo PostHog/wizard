@@ -61,7 +61,7 @@ describe.skip('installPackage', () => {
       forceInstall: true,
       askBeforeUpdating: false,
       packageManager: packageManagerMock,
-      installDir: process.cwd(),
+      options: { installDir: process.cwd(), ci: false },
     });
 
     expect(execSpy).toHaveBeenCalledWith(
@@ -102,7 +102,7 @@ describe.skip('installPackage', () => {
         forceInstall: flag,
         askBeforeUpdating: false,
         packageManager: packageManagerMock,
-        installDir: process.cwd(),
+        options: { installDir: process.cwd(), ci: false },
       });
 
       expect(execSpy).toHaveBeenCalledWith(

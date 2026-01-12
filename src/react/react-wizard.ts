@@ -81,8 +81,8 @@ export async function runReactWizard(options: WizardOptions): Promise<void> {
       alreadyInstalled: !!packageJson?.dependencies?.['posthog-js'],
       forceInstall: options.forceInstall,
       askBeforeUpdating: false,
-      installDir: options.installDir,
       integration: Integration.react,
+      options,
     });
 
   const relevantFiles = await getRelevantFilesForIntegration({
