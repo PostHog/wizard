@@ -201,6 +201,7 @@ ${chalk.cyan(config.metadata.docsUrl)}`;
   await addMCPServerToClientsStep({
     cloudRegion,
     integration: config.metadata.integration,
+    ci: options.ci,
   });
 
   // Build outro message

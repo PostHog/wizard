@@ -11,6 +11,7 @@ import {
   type PackageManager,
   detectAllPackageManagers,
   packageManagers,
+  NPM as npm,
 } from './package-manager';
 import { fulfillsVersionRange } from './semver';
 import type { CloudRegion, Feature, WizardOptions } from './types';
@@ -108,18 +109,20 @@ export function printWelcome(options: {
 }
 
 export async function confirmContinueIfNoOrDirtyGitRepo(
-  options: Pick<WizardOptions, 'default'>,
+  options: Pick<WizardOptions, 'default' | 'ci'>,
 ): Promise<void> {
   return traceStep('check-git-status', async () => {
     if (!isInGitRepo()) {
-      const continueWithoutGit = options.default
-        ? true
-        : await abortIfCancelled(
-            clack.confirm({
-              message:
-                'You are not inside a git repository. The wizard will create and update files. Do you want to continue anyway?',
-            }),
-          );
+      // CI mode: auto-continue without git
+      const continueWithoutGit =
+        options.default || options.ci
+          ? true
+          : await abortIfCancelled(
+              clack.confirm({
+                message:
+                  'You are not inside a git repository. The wizard will create and update files. Do you want to continue anyway?',
+              }),
+            );
 
       analytics.setTag('continue-without-git', continueWithoutGit);
 
@@ -132,6 +135,15 @@ export async function confirmContinueIfNoOrDirtyGitRepo(
 
     const uncommittedOrUntrackedFiles = getUncommittedOrUntrackedFiles();
     if (uncommittedOrUntrackedFiles.length) {
+      // CI mode: auto-continue with dirty repo
+      if (options.ci) {
+        clack.log.info(
+          `CI mode: continuing with uncommitted/untracked files in repo`,
+        );
+        analytics.setTag('continue-with-dirty-repo', true);
+        return;
+      }
+
       clack.log.warn(
         `You have uncommitted or untracked files in your repo:
 
@@ -486,10 +498,12 @@ export async function updatePackageDotJson(
   }
 }
 
-export async function getPackageManager({
-  installDir,
-}: Pick<WizardOptions, 'installDir'>): Promise<PackageManager> {
-  const detectedPackageManagers = detectAllPackageManagers({ installDir });
+export async function getPackageManager(
+  options: Pick<WizardOptions, 'installDir'> & { ci?: boolean },
+): Promise<PackageManager> {
+  const detectedPackageManagers = detectAllPackageManagers({
+    installDir: options.installDir,
+  });
 
   // If exactly one package manager detected, use it automatically
   if (detectedPackageManagers.length === 1) {
@@ -498,8 +512,19 @@ export async function getPackageManager({
     return detectedPackageManager;
   }
 
+  // CI mode: auto-select first detected or npm
+  if (options.ci) {
+    const selectedPackageManager =
+      detectedPackageManagers.length > 0 ? detectedPackageManagers[0] : npm;
+    clack.log.info(
+      `CI mode: auto-selected package manager: ${selectedPackageManager.label}`,
+    );
+    analytics.setTag('package-manager', selectedPackageManager.name);
+    return selectedPackageManager;
+  }
+
   // If multiple or no package managers detected, prompt user to select
-  const options =
+  const pkgOptions =
     detectedPackageManagers.length > 0
       ? detectedPackageManagers
       : packageManagers;
@@ -513,7 +538,7 @@ export async function getPackageManager({
     await abortIfCancelled(
       clack.select({
         message,
-        options: options.map((packageManager) => ({
+        options: pkgOptions.map((packageManager) => ({
           value: packageManager,
           label: packageManager.label,
         })),
@@ -542,7 +567,7 @@ export function isUsingTypeScript({
  * @returns project data (token, url)
  */
 export async function getOrAskForProjectData(
-  _options: Pick<WizardOptions, 'signup'> & {
+  _options: Pick<WizardOptions, 'signup' | 'ci' | 'apiKey'> & {
     cloudRegion: CloudRegion;
   },
 ): Promise<{
@@ -552,6 +577,25 @@ export async function getOrAskForProjectData(
   projectId: number;
 }> {
   const cloudUrl = getCloudUrlFromRegion(_options.cloudRegion);
+
+  // CI mode: bypass OAuth, use personal API key for LLM gateway
+  if (_options.ci && _options.apiKey) {
+    const host = getHostFromRegion(_options.cloudRegion);
+    clack.log.info('Using provided API key (CI mode - OAuth bypassed)');
+
+    const projectData = await fetchProjectDataWithApiKey(
+      _options.apiKey,
+      _options.cloudRegion,
+    );
+
+    return {
+      host,
+      projectApiKey: projectData.api_token, // Project API key for SDK config
+      accessToken: _options.apiKey, // Personal API key for LLM gateway
+      projectId: projectData.id,
+    };
+  }
+
   const { host, projectApiKey, accessToken, projectId } = await traceStep(
     'login',
     () =>
@@ -580,6 +624,30 @@ ${chalk.cyan(`${cloudUrl}/settings/project#variables`)}`);
     host: host || DEFAULT_HOST_URL,
     projectApiKey: projectApiKey || DUMMY_PROJECT_API_KEY,
     projectId,
+  };
+}
+
+/**
+ * Fetch project data using a personal API key (for CI mode)
+ */
+async function fetchProjectDataWithApiKey(
+  apiKey: string,
+  region: CloudRegion,
+): Promise<{ api_token: string; id: number }> {
+  const cloudUrl = getCloudUrlFromRegion(region);
+  const userData = await fetchUserData(apiKey, cloudUrl);
+  const projectId = userData.team?.id;
+
+  if (!projectId) {
+    throw new Error(
+      'Could not determine project ID from API key. Please ensure your API key has access to a project in this cloud region.',
+    );
+  }
+
+  const projectData = await fetchProjectData(apiKey, projectId, cloudUrl);
+  return {
+    api_token: projectData.api_token,
+    id: projectId,
   };
 }
 
@@ -888,28 +956,33 @@ export async function askShouldAddPackageOverride(
   );
 }
 
-export async function askForAIConsent(options: Pick<WizardOptions, 'default'>) {
+export async function askForAIConsent(
+  options: Pick<WizardOptions, 'default' | 'ci'>,
+) {
   return await traceStep('ask-for-ai-consent', async () => {
-    const aiConsent = options.default
-      ? true
-      : await abortIfCancelled(
-          clack.select({
-            message: 'This setup wizard uses AI, are you happy to continue? ✨',
-            options: [
-              {
-                label: 'Yes',
-                value: true,
-                hint: 'We will use AI to help you setup PostHog quickly',
-              },
-              {
-                label: 'No',
-                value: false,
-                hint: "I don't like AI",
-              },
-            ],
-            initialValue: true,
-          }),
-        );
+    // CI mode: auto-consent to AI
+    const aiConsent =
+      options.default || options.ci
+        ? true
+        : await abortIfCancelled(
+            clack.select({
+              message:
+                'This setup wizard uses AI, are you happy to continue? ✨',
+              options: [
+                {
+                  label: 'Yes',
+                  value: true,
+                  hint: 'We will use AI to help you setup PostHog quickly',
+                },
+                {
+                  label: 'No',
+                  value: false,
+                  hint: "I don't like AI",
+                },
+              ],
+              initialValue: true,
+            }),
+          );
 
     return aiConsent;
   });

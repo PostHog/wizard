@@ -156,6 +156,7 @@ export async function runReactWizard(options: WizardOptions): Promise<void> {
   await addMCPServerToClientsStep({
     cloudRegion,
     integration: Integration.react,
+    ci: options.ci,
   });
 
   const outroMessage = getOutroMessage({

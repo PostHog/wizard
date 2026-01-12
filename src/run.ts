@@ -33,6 +33,8 @@ type Args = {
   default?: boolean;
   signup?: boolean;
   localMcp?: boolean;
+  ci?: boolean;
+  apiKey?: string;
 };
 
 export async function runWizard(argv: Args) {
@@ -60,9 +62,15 @@ export async function runWizard(argv: Args) {
     default: finalArgs.default ?? false,
     signup: finalArgs.signup ?? false,
     localMcp: finalArgs.localMcp ?? false,
+    ci: finalArgs.ci ?? false,
+    apiKey: finalArgs.apiKey,
   };
 
   clack.intro(`Welcome to the PostHog setup wizard ✨`);
+
+  if (wizardOptions.ci) {
+    clack.log.info(chalk.dim('Running in CI mode'));
+  }
 
   const integration =
     finalArgs.integration ?? (await getIntegrationForSetup(wizardOptions));
