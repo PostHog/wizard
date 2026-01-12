@@ -329,6 +329,7 @@ describe('ClaudeMCPClient', () => {
         'sse',
         undefined,
         undefined,
+        undefined,
       );
     });
   });
