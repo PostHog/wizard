@@ -105,22 +105,28 @@ export const buildMCPUrl = (
 };
 
 export const getNativeHTTPServerConfig = (
-  apiKey: string,
+  apiKey: string | undefined,
   type: MCPServerType,
   selectedFeatures?: string[],
   local?: boolean,
   region?: CloudRegion,
 ) => {
-  return {
+  const config: Record<string, unknown> = {
     url: buildMCPUrl(type, selectedFeatures, local, region),
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-    },
   };
+
+  // Only add auth header if API key is provided (not OAuth mode)
+  if (apiKey) {
+    config.headers = {
+      Authorization: `Bearer ${apiKey}`,
+    };
+  }
+
+  return config;
 };
 
 export const getDefaultServerConfig = (
-  apiKey: string,
+  apiKey: string | undefined,
   type: MCPServerType,
   selectedFeatures?: string[],
   local?: boolean,
@@ -128,6 +134,15 @@ export const getDefaultServerConfig = (
 ) => {
   const urlWithFeatures = buildMCPUrl(type, selectedFeatures, local, region);
 
+  // OAuth mode: no auth header, let MCP handle OAuth
+  if (!apiKey) {
+    return {
+      command: 'npx',
+      args: ['-y', 'mcp-remote@latest', urlWithFeatures],
+    };
+  }
+
+  // API key mode: include auth header
   return {
     command: 'npx',
     args: [

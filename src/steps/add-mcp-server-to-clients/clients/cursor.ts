@@ -27,7 +27,7 @@ export class CursorMCPClient extends DefaultMCPClient {
   }
 
   getServerConfig(
-    apiKey: string,
+    apiKey: string | undefined,
     type: 'sse' | 'streamable-http',
     selectedFeatures?: string[],
     local?: boolean,
@@ -43,7 +43,7 @@ export class CursorMCPClient extends DefaultMCPClient {
   }
 
   async addServer(
-    apiKey: string,
+    apiKey?: string,
     selectedFeatures?: string[],
     local?: boolean,
     region?: CloudRegion,

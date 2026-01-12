@@ -112,7 +112,7 @@ export class ClaudeCodeMCPClient extends DefaultMCPClient {
   }
 
   addServer(
-    apiKey: string,
+    apiKey?: string,
     selectedFeatures?: string[],
     local?: boolean,
     region?: CloudRegion,
@@ -125,7 +125,10 @@ export class ClaudeCodeMCPClient extends DefaultMCPClient {
     const serverName = local ? 'posthog-local' : 'posthog';
     const url = buildMCPUrl('streamable-http', selectedFeatures, local, region);
 
-    const command = `${claudeBinary} mcp add --transport http ${serverName} ${url} --header "Authorization: Bearer ${apiKey}" -s user`;
+    // OAuth mode: no auth header
+    const authArgs = apiKey ? `--header "Authorization: Bearer ${apiKey}"` : '';
+    const command =
+      `${claudeBinary} mcp add --transport http ${serverName} ${url} ${authArgs} -s user`.trim();
 
     try {
       execSync(command);

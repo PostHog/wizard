@@ -12,7 +12,7 @@ export abstract class MCPClient {
   abstract getServerPropertyName(): string;
   abstract isServerInstalled(local?: boolean): Promise<boolean>;
   abstract addServer(
-    apiKey: string,
+    apiKey?: string,
     selectedFeatures?: string[],
     local?: boolean,
     region?: CloudRegion,
@@ -33,7 +33,7 @@ export abstract class DefaultMCPClient extends MCPClient {
   }
 
   getServerConfig(
-    apiKey: string,
+    apiKey: string | undefined,
     type: 'sse' | 'streamable-http',
     selectedFeatures?: string[],
     local?: boolean,
@@ -70,7 +70,7 @@ export abstract class DefaultMCPClient extends MCPClient {
   }
 
   async addServer(
-    apiKey: string,
+    apiKey?: string,
     selectedFeatures?: string[],
     local?: boolean,
     region?: CloudRegion,
@@ -79,7 +79,7 @@ export abstract class DefaultMCPClient extends MCPClient {
   }
 
   async _addServerType(
-    apiKey: string,
+    apiKey: string | undefined,
     type: 'sse' | 'streamable-http',
     selectedFeatures?: string[],
     local?: boolean,
