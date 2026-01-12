@@ -27,8 +27,6 @@ const REACT_ROUTER_AGENT_CONFIG: FrameworkConfig = {
     integration: Integration.reactRouter,
     docsUrl: 'https://posthog.com/docs/libraries/react',
     unsupportedVersionDocsUrl: 'https://posthog.com/docs/libraries/react',
-    abortMessage:
-      'This wizard uses an LLM agent to intelligently modify your project. Please view the docs to setup React Router manually instead: https://posthog.com/docs/libraries/react',
     gatherContext: async (options: WizardOptions) => {
       const routerMode = await getReactRouterMode(options);
       return { routerMode };
@@ -87,9 +85,6 @@ const REACT_ROUTER_AGENT_CONFIG: FrameworkConfig = {
   },
 
   ui: {
-    welcomeMessage: 'PostHog React Router wizard (agent-powered)',
-    spinnerMessage:
-      'Writing your PostHog setup with events, error capture and more...',
     successMessage: 'PostHog integration complete',
     estimatedDurationMinutes: 8,
     getOutroChanges: (context: any) => {
