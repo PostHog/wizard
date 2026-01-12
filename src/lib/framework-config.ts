@@ -27,9 +27,6 @@ export interface FrameworkMetadata {
   /** URL to framework-specific PostHog docs */
   docsUrl: string;
 
-  /** Message shown when user declines AI consent */
-  abortMessage: string;
-
   /**
    * Optional URL to docs for users with unsupported framework versions.
    * If not provided, defaults to docsUrl.
@@ -102,12 +99,6 @@ export interface PromptConfig {
  * UI messaging configuration
  */
 export interface UIConfig {
-  /** Welcome message for wizard start */
-  welcomeMessage: string;
-
-  /** Spinner message while agent runs */
-  spinnerMessage: string;
-
   /** Success message when agent completes */
   successMessage: string;
 
@@ -120,3 +111,16 @@ export interface UIConfig {
   /** Generate "Next steps" bullets from context */
   getOutroNextSteps: (context: any) => string[];
 }
+
+/**
+ * Generate welcome message from framework name
+ */
+export function getWelcomeMessage(frameworkName: string): string {
+  return `PostHog ${frameworkName} wizard (agent-powered)`;
+}
+
+/**
+ * Shared spinner message for all frameworks
+ */
+export const SPINNER_MESSAGE =
+  'Writing your PostHog setup with events, error capture and more...';

@@ -26,8 +26,6 @@ const NEXTJS_AGENT_CONFIG = {
     integration: Integration.nextjs,
     docsUrl: 'https://posthog.com/docs/libraries/next-js',
     unsupportedVersionDocsUrl: 'https://posthog.com/docs/libraries/next-js',
-    abortMessage:
-      'This wizard uses an LLM agent to intelligently modify your project. Please view the docs to setup Next.js manually instead: https://posthog.com/docs/libraries/next-js',
     gatherContext: async (options: WizardOptions) => {
       const router = await getNextJsRouter(options);
       return { router };
@@ -67,9 +65,6 @@ const NEXTJS_AGENT_CONFIG = {
   },
 
   ui: {
-    welcomeMessage: 'PostHog Next.js wizard (agent-powered)',
-    spinnerMessage:
-      'Writing your PostHog setup with events, error capture and more...',
     successMessage: 'PostHog integration complete',
     estimatedDurationMinutes: 8,
     getOutroChanges: (context: any) => {
