@@ -332,6 +332,34 @@ describe('ClaudeMCPClient', () => {
         undefined,
       );
     });
+
+    it('should call getDefaultServerConfig with undefined API key for OAuth mode', async () => {
+      existsSyncMock.mockReturnValue(false);
+
+      await client.addServer(undefined);
+
+      expect(getDefaultServerConfigMock).toHaveBeenCalledWith(
+        undefined,
+        'sse',
+        undefined,
+        undefined,
+        undefined,
+      );
+    });
+
+    it('should pass region parameter to getDefaultServerConfig', async () => {
+      existsSyncMock.mockReturnValue(false);
+
+      await client.addServer(mockApiKey, undefined, undefined, 'eu');
+
+      expect(getDefaultServerConfigMock).toHaveBeenCalledWith(
+        mockApiKey,
+        'sse',
+        undefined,
+        undefined,
+        'eu',
+      );
+    });
   });
 
   describe('removeServer', () => {

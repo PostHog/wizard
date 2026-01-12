@@ -96,7 +96,9 @@ export const buildMCPUrl = (
     params.push(`features=${selectedFeatures.join(',')}`);
   }
 
-  // Add region param for OAuth authorization server routing (EU users)
+  // Add region param for non-US regions to route OAuth to the correct authorization server.
+  // US is the default, so we only need to specify region for EU users.
+  // Not needed in local mode since local dev always uses the same auth server.
   if (region && region !== 'us' && !local) {
     params.push(`region=${region}`);
   }
