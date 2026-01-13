@@ -1,0 +1,159 @@
+name: Wizard CI Trigger
+
+on:
+  pull_request:
+    types: [opened]
+  issue_comment:
+    types: [created]
+
+jobs:
+  # ============================================================================
+  # POST WELCOME: First-time hint with all available apps
+  # ============================================================================
+  post-welcome:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fetch available apps from wizard-workbench
+        id: fetch-apps
+        run: |
+          # Fetch app categories from wizard-workbench repo
+          CATEGORIES=$(curl -s "https://api.github.com/repos/PostHog/wizard-workbench/contents/apps" \
+            -H "Accept: application/vnd.github.v3+json" \
+            | jq -r '[.[] | select(.type == "dir") | .name] | sort | .[]')
+
+          # Build markdown table by category
+          TABLE=""
+          CATEGORY_LIST=""
+          for category in $CATEGORIES; do
+            # Fetch apps in this category
+            APPS=$(curl -s "https://api.github.com/repos/PostHog/wizard-workbench/contents/apps/$category" \
+              -H "Accept: application/vnd.github.v3+json" \
+              | jq -r '[.[] | select(.type == "dir") | .name] | sort | .[]' 2>/dev/null || echo "")
+
+            if [ -n "$APPS" ]; then
+              # Format apps as category/app with backticks
+              FORMATTED=""
+              for app in $APPS; do
+                if [ -n "$FORMATTED" ]; then
+                  FORMATTED="$FORMATTED · \`$category/$app\`"
+                else
+                  FORMATTED="\`$category/$app\`"
+                fi
+              done
+              TABLE="$TABLE| \`$category\` | $FORMATTED |\n"
+
+              # Build category list
+              if [ -n "$CATEGORY_LIST" ]; then
+                CATEGORY_LIST="$CATEGORY_LIST · \`/wizard-ci $category\`"
+              else
+                CATEGORY_LIST="\`/wizard-ci $category\`"
+              fi
+            fi
+          done
+
+          # Use heredoc for multiline output
+          {
+            echo "table<<EOF"
+            echo -e "$TABLE"
+            echo "EOF"
+          } >> $GITHUB_OUTPUT
+
+          echo "categories=$CATEGORY_LIST" >> $GITHUB_OUTPUT
+
+      - name: Post wizard-ci hint
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const table = `${{ steps.fetch-apps.outputs.table }}`;
+            const categories = `${{ steps.fetch-apps.outputs.categories }}`;
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.pull_request.number,
+              body: `## 🧙 Wizard CI
+
+Test your changes against example apps by commenting:
+
+**Run all apps:**
+\`/wizard-ci all\`
+
+**Run by category:**
+${categories}
+
+**Run specific app:**
+| Category | Apps |
+|----------|------|
+${table}
+
+Results will be posted here when complete. Run the command multiple times as needed.`
+            });
+
+  # ============================================================================
+  # HANDLE COMMAND: Parse /wizard-ci and trigger workflow
+  # ============================================================================
+  handle-command:
+    if: |
+      github.event_name == 'issue_comment' &&
+      github.event.issue.pull_request &&
+      startsWith(github.event.comment.body, '/wizard-ci')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Generate GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.GH_APP_POSTHOG_WIZARD_CI_BOT_APP_ID }}
+          private-key: ${{ secrets.GH_APP_POSTHOG_WIZARD_CI_BOT_PRIVATE_KEY }}
+          owner: PostHog
+          repositories: wizard-workbench,examples
+
+      - name: Parse command and trigger
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ steps.app-token.outputs.token }}
+          script: |
+            // Get PR details first to check state
+            const pr = await github.rest.pulls.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.payload.issue.number
+            });
+
+            // Only allow triggers on open PRs (including drafts)
+            if (pr.data.state !== 'open') {
+              console.log(`PR is ${pr.data.state}, skipping trigger`);
+              return;
+            }
+
+            const comment = context.payload.comment.body;
+            const match = comment.match(/\/wizard-ci\s+(\S+)/);
+            const app = match ? match[1] : 'all';
+
+            // React with rocket to show we're processing
+            await github.rest.reactions.createForIssueComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              comment_id: context.payload.comment.id,
+              content: 'rocket'
+            });
+
+            // Trigger wizard-ci on wizard-workbench
+            await github.rest.repos.createDispatchEvent({
+              owner: 'PostHog',
+              repo: 'wizard-workbench',
+              event_type: 'wizard-ci-trigger',
+              client_payload: {
+                app: app,
+                source: 'examples-pr',
+                source_repo: 'examples',
+                source_pr_number: context.payload.issue.number,
+                source_pr_url: pr.data.html_url,
+                examples_ref: pr.data.head.ref,
+                notify_slack: 'false',
+                notify_pr: 'true'
+              }
+            });
+
+            console.log(`Triggered wizard-ci for app: ${app}`);
