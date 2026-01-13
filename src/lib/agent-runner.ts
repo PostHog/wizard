@@ -1,4 +1,8 @@
-import type { FrameworkConfig } from './framework-config';
+import {
+  getWelcomeMessage,
+  SPINNER_MESSAGE,
+  type FrameworkConfig,
+} from './framework-config';
 import type { WizardOptions } from '../utils/types';
 import {
   abort,
@@ -36,7 +40,7 @@ export async function runAgentWizard(
   options: WizardOptions,
 ): Promise<void> {
   // Setup phase
-  printWelcome({ wizardName: config.ui.welcomeMessage });
+  printWelcome({ wizardName: getWelcomeMessage(config.metadata.name) });
 
   clack.log.info(
     `🧙 The wizard has chosen you to try the next-generation agent integration for ${config.metadata.name}.\n\nStand by for the good stuff, and let the robot minders know how it goes:\n\nwizard@posthog.com`,
@@ -44,7 +48,10 @@ export async function runAgentWizard(
 
   const aiConsent = await askForAIConsent(options);
   if (!aiConsent) {
-    await abort(config.metadata.abortMessage, 0);
+    await abort(
+      `This wizard uses an LLM agent to intelligently modify your project. Please view the docs to set up ${config.metadata.name} manually instead: ${config.metadata.docsUrl}`,
+      0,
+    );
   }
 
   const cloudRegion = options.cloudRegion ?? (await askForCloudRegion());
@@ -127,7 +134,7 @@ export async function runAgentWizard(
     spinner,
     {
       estimatedDurationMinutes: config.ui.estimatedDurationMinutes,
-      spinnerMessage: config.ui.spinnerMessage,
+      spinnerMessage: SPINNER_MESSAGE,
       successMessage: config.ui.successMessage,
       errorMessage: 'Integration failed',
     },

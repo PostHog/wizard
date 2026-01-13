@@ -1,6 +1,5 @@
 /* Simplified Next.js wizard using posthog-agent with PostHog MCP */
 import type { WizardOptions } from '../utils/types';
-import type { FrameworkConfig } from '../lib/framework-config';
 import { enableDebugLogs } from '../utils/debug';
 import { runAgentWizard } from '../lib/agent-runner';
 import { Integration } from '../lib/constants';
@@ -21,14 +20,12 @@ import {
  */
 const MINIMUM_NEXTJS_VERSION = '15.3.0';
 
-const NEXTJS_AGENT_CONFIG: FrameworkConfig = {
+const NEXTJS_AGENT_CONFIG = {
   metadata: {
     name: 'Next.js',
     integration: Integration.nextjs,
     docsUrl: 'https://posthog.com/docs/libraries/next-js',
     unsupportedVersionDocsUrl: 'https://posthog.com/docs/libraries/next-js',
-    abortMessage:
-      'This wizard uses an LLM agent to intelligently modify your project. Please view the docs to setup Next.js manually instead: https://posthog.com/docs/libraries/next-js',
     gatherContext: async (options: WizardOptions) => {
       const router = await getNextJsRouter(options);
       return { router };
@@ -44,7 +41,7 @@ const NEXTJS_AGENT_CONFIG: FrameworkConfig = {
 
   environment: {
     uploadToHosting: true,
-    getEnvVars: (apiKey, host) => ({
+    getEnvVars: (apiKey: string, host: string) => ({
       NEXT_PUBLIC_POSTHOG_KEY: apiKey,
       NEXT_PUBLIC_POSTHOG_HOST: host,
     }),
@@ -68,9 +65,6 @@ const NEXTJS_AGENT_CONFIG: FrameworkConfig = {
   },
 
   ui: {
-    welcomeMessage: 'PostHog Next.js wizard (agent-powered)',
-    spinnerMessage:
-      'Writing your PostHog setup with events, error capture and more...',
     successMessage: 'PostHog integration complete',
     estimatedDurationMinutes: 8,
     getOutroChanges: (context: any) => {
