@@ -296,9 +296,9 @@ STEP 3: Run the installation command using Bash:
    - Execute the EXACT command returned by the resource (do not modify it)
    - This will download and extract the skill to .claude/skills/{skill-id}/
 
-STEP 4: Load the installed skill's SKILL.md file.
+STEP 4: Load the installed skill's SKILL.md file to understand what references are available.
 
-STEP 5: Carefully follow the skill's entire PostHog setup procedures to the letter.
+STEP 5: Follow the skill's workflow files in sequence. Look for numbered workflow files in the references (e.g., files with patterns like "1.0-", "1.1-", "1.2-"). Start with the first one and proceed through each step until completion. Each workflow file will tell you what to do and which file comes next.
 
 STEP 6: Set up environment variables for PostHog in a .env file with the API key and host provided above, using the appropriate naming convention for ${
     config.metadata.name
