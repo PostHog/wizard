@@ -98,7 +98,7 @@ jobs:
             const bodyParts = [
               '## 🧙 Wizard CI',
               '',
-              'Run the Wizard CI and test your changes against [wizard-workbench](https://github.com/PostHog/wizard-workbench) example apps by commenting:',
+              'Run the Wizard CI and test your changes against [wizard-workbench](https://github.com/PostHog/wizard-workbench) example apps by replying with a GitHub comment using one of the following commands:',
               '',
               '**Test all apps:**',
               '- `/wizard-ci all`',
