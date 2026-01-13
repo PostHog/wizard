@@ -271,7 +271,9 @@ function buildIntegrationPrompt(
       ? '\n' + additionalLines.map((line) => `- ${line}`).join('\n')
       : '';
 
-  return `You have access to the PostHog MCP server which provides an integration resource to integrate PostHog into this ${
+  const skillId = config.prompts.getSkillId(frameworkContext);
+
+  return `You have access to the PostHog MCP server which provides skills to integrate PostHog into this ${
     config.metadata.name
   } project.
 
@@ -281,23 +283,28 @@ Project context:
 - PostHog API Key: ${context.projectApiKey}
 - PostHog Host: ${context.host}${additionalContext}
 
-Instructions:
+Instructions (follow these steps IN ORDER - do not skip or reorder):
 
-1. Call the PostHog MCP's resource for setup: posthog://workflows/basic-integration/begin
-2. Follow all instructions provided; do package installation as soon as possible.
-3. Set up environment variables for PostHog in a .env file with the API key and host provided above, using the appropriate naming convention for ${
+STEP 1: Fetch the skill resource from: posthog://skills/${skillId}
+   The resource returns a shell command to install the skill.
+   If the skill is not accessible, emit: ${
+     AgentSignals.ERROR_RESOURCE_MISSING
+   } Could not access the setup resource.
+
+STEP 2: Run the installation command using Bash:
+   - Execute the EXACT command returned by the resource (do not modify it)
+   - This will download and extract the skill to .claude/skills/${skillId}/
+   - DO NOT do anything else before running this command - no searches, no Glob, no exploring
+
+STEP 3: Load the skill from .claude/skills/${skillId}/SKILL.md
+
+STEP 4: Carefully follow the skill's entire PostHog setup procedures to the letter
+
+STEP 5: Set up environment variables for PostHog in a .env file with the API key and host provided above, using the appropriate naming convention for ${
     config.metadata.name
   }. Make sure to use these environment variables in the code files you create instead of hardcoding the API key and host.
 
-The PostHog MCP will provide specific integration code and instructions. Please follow them carefully. Be sure to look for lockfiles to determine the appropriate package manager to use when installing PostHog. Do not manually edit the package.json file.
-
-Before beginning, confirm that you can access the PostHog MCP. If the PostHog MCP is not accessible, emit the following string:
-
-${AgentSignals.ERROR_MCP_MISSING} Could not access the PostHog MCP.
-
-If the PostHog MCP is accessible, attempt to access the setup resource. If the setup resource is not accessible, emit the following string:
-
-${AgentSignals.ERROR_RESOURCE_MISSING} Could not access the setup resource.
+Important: Look for lockfiles (pnpm-lock.yaml, package-lock.json, yarn.lock, bun.lockb) to determine the package manager. Do not manually edit package.json. Always install packages as a background task. Don't await completion; proceed with other work immediately after starting the installation.
 
 `;
 }
