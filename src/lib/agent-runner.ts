@@ -271,8 +271,6 @@ function buildIntegrationPrompt(
       ? '\n' + additionalLines.map((line) => `- ${line}`).join('\n')
       : '';
 
-  const skillId = config.prompts.getSkillId(frameworkContext);
-
   return `You have access to the PostHog MCP server which provides skills to integrate PostHog into this ${
     config.metadata.name
   } project.
@@ -285,22 +283,24 @@ Project context:
 
 Instructions (follow these steps IN ORDER - do not skip or reorder):
 
-STEP 1: Fetch the skill resource from: posthog://skills/${skillId}
-   The resource returns a shell command to install the skill.
-   If the skill is not accessible, emit: ${
+STEP 1: List available skills from the PostHog MCP server using ListMcpResourcesTool.
+   Review the skill descriptions and choose the one that best matches this project's framework and configuration.
+   If no suitable skill is found, emit: ${
      AgentSignals.ERROR_RESOURCE_MISSING
-   } Could not access the setup resource.
+   } Could not find a suitable skill for this project.
 
-STEP 2: Run the installation command using Bash:
+STEP 2: Fetch the chosen skill resource (e.g., posthog://skills/{skill-id}).
+   The resource returns a shell command to install the skill.
+
+STEP 3: Run the installation command using Bash:
    - Execute the EXACT command returned by the resource (do not modify it)
-   - This will download and extract the skill to .claude/skills/${skillId}/
-   - DO NOT do anything else before running this command - no searches, no Glob, no exploring
+   - This will download and extract the skill to .claude/skills/{skill-id}/
 
-STEP 3: Load the skill from .claude/skills/${skillId}/SKILL.md
+STEP 4: Load the installed skill's SKILL.md file.
 
-STEP 4: Carefully follow the skill's entire PostHog setup procedures to the letter
+STEP 5: Carefully follow the skill's entire PostHog setup procedures to the letter.
 
-STEP 5: Set up environment variables for PostHog in a .env file with the API key and host provided above, using the appropriate naming convention for ${
+STEP 6: Set up environment variables for PostHog in a .env file with the API key and host provided above, using the appropriate naming convention for ${
     config.metadata.name
   }. Make sure to use these environment variables in the code files you create instead of hardcoding the API key and host.
 

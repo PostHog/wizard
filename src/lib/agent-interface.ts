@@ -398,6 +398,7 @@ export async function runAgent(
     // - File operations: Read, Write, Edit
     // - Search: Glob, Grep
     // - Commands: Bash (with restrictions via canUseTool)
+    // - MCP discovery: ListMcpResourcesTool (to find available skills)
     // - Skills: Skill (to load installed PostHog skills)
     // MCP tools (PostHog) come from mcpServers, not allowedTools
     const allowedTools = [
@@ -407,6 +408,7 @@ export async function runAgent(
       'Glob',
       'Grep',
       'Bash',
+      'ListMcpResourcesTool',
       'Skill',
     ];
 
