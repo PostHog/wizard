@@ -107,7 +107,7 @@ Results will be posted here when complete. Run the command multiple times as nee
           app-id: ${{ secrets.GH_APP_POSTHOG_WIZARD_CI_BOT_APP_ID }}
           private-key: ${{ secrets.GH_APP_POSTHOG_WIZARD_CI_BOT_PRIVATE_KEY }}
           owner: PostHog
-          repositories: wizard-workbench,examples
+          repositories: wizard-workbench,wizard
 
       - name: Parse command and trigger
         uses: actions/github-script@v7
@@ -146,11 +146,11 @@ Results will be posted here when complete. Run the command multiple times as nee
               event_type: 'wizard-ci-trigger',
               client_payload: {
                 app: app,
-                source: 'examples-pr',
-                source_repo: 'examples',
+                source: 'wizard-pr',
+                source_repo: 'wizard',
                 source_pr_number: context.payload.issue.number,
                 source_pr_url: pr.data.html_url,
-                examples_ref: pr.data.head.ref,
+                wizard_ref: pr.data.head.ref,
                 notify_slack: 'false',
                 notify_pr: 'true'
               }
