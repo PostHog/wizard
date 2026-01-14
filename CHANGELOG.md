@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.26.0](https://github.com/PostHog/wizard/compare/v1.25.0...v1.26.0) (2026-01-14)
+
+
+### Features
+
+* add region param and OAuth option for MCP setup ([#220](https://github.com/PostHog/wizard/issues/220)) ([bd2a09d](https://github.com/PostHog/wizard/commit/bd2a09d76b1fa1197a3ef0c1cb2a24f4b9f13253))
+
+
+### Bug Fixes
+
+* ci copy ([#224](https://github.com/PostHog/wizard/issues/224)) ([7d12a39](https://github.com/PostHog/wizard/commit/7d12a39f28042733e61c9877f05e2a7df94d5547))
+
 ## [1.25.0](https://github.com/PostHog/wizard/compare/v1.24.0...v1.25.0) (2026-01-12)
 
 
