@@ -34,6 +34,10 @@ export const runMCPInstall = async (options: {
     )}`,
   );
 
+  clack.log.message(
+    `You'll be prompted to log in to PostHog when you first use the MCP.`,
+  );
+
   clack.log.message(`Get started with some prompts like:
 - What feature flags do I have active?
 - Add a new feature flag for our homepage redesign
