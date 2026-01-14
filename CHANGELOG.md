@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.25.1](https://github.com/PostHog/wizard/compare/v1.25.0...v1.25.1) (2026-01-14)
+
+
+### Bug Fixes
+
+* ci copy ([#224](https://github.com/PostHog/wizard/issues/224)) ([7d12a39](https://github.com/PostHog/wizard/commit/7d12a39f28042733e61c9877f05e2a7df94d5547))
+
 ## [1.25.0](https://github.com/PostHog/wizard/compare/v1.24.0...v1.25.0) (2026-01-12)
 
 
