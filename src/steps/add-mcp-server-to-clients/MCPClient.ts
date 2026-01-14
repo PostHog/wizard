@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as jsonc from 'jsonc-parser';
 import { getDefaultServerConfig } from './defaults';
+import type { CloudRegion } from '../../utils/types';
 
 export type MCPServerConfig = Record<string, unknown>;
 
@@ -11,9 +12,10 @@ export abstract class MCPClient {
   abstract getServerPropertyName(): string;
   abstract isServerInstalled(local?: boolean): Promise<boolean>;
   abstract addServer(
-    apiKey: string,
+    apiKey?: string,
     selectedFeatures?: string[],
     local?: boolean,
+    region?: CloudRegion,
   ): Promise<{ success: boolean }>;
   abstract removeServer(local?: boolean): Promise<{ success: boolean }>;
   abstract isClientSupported(): Promise<boolean>;
@@ -31,12 +33,19 @@ export abstract class DefaultMCPClient extends MCPClient {
   }
 
   getServerConfig(
-    apiKey: string,
+    apiKey: string | undefined,
     type: 'sse' | 'streamable-http',
     selectedFeatures?: string[],
     local?: boolean,
+    region?: CloudRegion,
   ): MCPServerConfig {
-    return getDefaultServerConfig(apiKey, type, selectedFeatures, local);
+    return getDefaultServerConfig(
+      apiKey,
+      type,
+      selectedFeatures,
+      local,
+      region,
+    );
   }
 
   async isServerInstalled(local?: boolean): Promise<boolean> {
@@ -61,18 +70,20 @@ export abstract class DefaultMCPClient extends MCPClient {
   }
 
   async addServer(
-    apiKey: string,
+    apiKey?: string,
     selectedFeatures?: string[],
     local?: boolean,
+    region?: CloudRegion,
   ): Promise<{ success: boolean }> {
-    return this._addServerType(apiKey, 'sse', selectedFeatures, local);
+    return this._addServerType(apiKey, 'sse', selectedFeatures, local, region);
   }
 
   async _addServerType(
-    apiKey: string,
+    apiKey: string | undefined,
     type: 'sse' | 'streamable-http',
     selectedFeatures?: string[],
     local?: boolean,
+    region?: CloudRegion,
   ): Promise<{ success: boolean }> {
     try {
       const configPath = await this.getConfigPath();
@@ -94,6 +105,7 @@ export abstract class DefaultMCPClient extends MCPClient {
         type,
         selectedFeatures,
         local,
+        region,
       );
       const typedConfig = existingConfig as Record<string, any>;
       if (!typedConfig[serverPropertyName]) {
