@@ -7,7 +7,6 @@ import { abortIfCancelled, askForCloudRegion } from '../../utils/clack-utils';
 import { MCPClient } from './MCPClient';
 import { CursorMCPClient } from './clients/cursor';
 import { ClaudeMCPClient } from './clients/claude';
-import { getPersonalApiKey } from '../../mcp';
 import type { CloudRegion } from '../../utils/types';
 import { ClaudeCodeMCPClient } from './clients/claude-code';
 import { VisualStudioCodeClient } from './clients/visual-studio-code';
@@ -166,10 +165,14 @@ export const addMCPServerToClientsStep = async ({
     clack.log.info('Removed existing installation.');
   }
 
-  const personalApiKey = await getPersonalApiKey({ cloudRegion: region });
-
   await traceStep('adding mcp servers', async () => {
-    await addMCPServer(clients, personalApiKey, selectedFeatures, local);
+    await addMCPServer(
+      clients,
+      undefined, // OAuth mode - no API key needed
+      selectedFeatures,
+      local,
+      region,
+    );
   });
 
   clack.log.success(
@@ -260,12 +263,13 @@ export const getInstalledClients = async (
 
 export const addMCPServer = async (
   clients: MCPClient[],
-  personalApiKey: string,
+  personalApiKey?: string,
   selectedFeatures?: string[],
   local?: boolean,
+  region?: CloudRegion,
 ): Promise<void> => {
   for (const client of clients) {
-    await client.addServer(personalApiKey, selectedFeatures, local);
+    await client.addServer(personalApiKey, selectedFeatures, local, region);
   }
 };
 
