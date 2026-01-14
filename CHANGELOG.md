@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.25.0](https://github.com/PostHog/wizard/compare/v1.24.0...v1.25.0) (2026-01-12)
+
+
+### Features
+
+* react router agent ([#215](https://github.com/PostHog/wizard/issues/215)) ([0a8f918](https://github.com/PostHog/wizard/commit/0a8f9185f544d436939fac5e5829ae39bc221faf))
+* Use bigger safe tools list ([#218](https://github.com/PostHog/wizard/issues/218)) ([6d819cd](https://github.com/PostHog/wizard/commit/6d819cd07485cb42c80f3a75ed5073ea76e745c8))
+
 ## [1.24.0](https://github.com/PostHog/wizard/compare/v1.23.0...v1.24.0) (2026-01-09)
 
 
