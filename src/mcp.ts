@@ -4,11 +4,7 @@ import {
   removeMCPServerFromClientsStep,
 } from './steps/add-mcp-server-to-clients';
 import clack from './utils/clack';
-import { abort } from './utils/clack-utils';
 import type { CloudRegion } from './utils/types';
-import opn from 'opn';
-import { getCloudUrlFromRegion } from './utils/urls';
-import { sleep } from './lib/helper-functions';
 import { enableDebugLogs } from './utils/debug';
 
 export const runMCPInstall = async (options: {
@@ -38,6 +34,10 @@ export const runMCPInstall = async (options: {
     )}`,
   );
 
+  clack.log.message(
+    `You'll be prompted to log in to PostHog when you first use the MCP.`,
+  );
+
   clack.log.message(`Get started with some prompts like:
 - What feature flags do I have active?
 - Add a new feature flag for our homepage redesign
@@ -65,47 +65,4 @@ export const runMCPRemove = async (options?: { local?: boolean }) => {
       'You might need to restart your MCP clients to see the changes.\n\n',
     )}`,
   );
-};
-
-export const getPersonalApiKey = async (options: {
-  cloudRegion: CloudRegion;
-}): Promise<string> => {
-  const cloudUrl = getCloudUrlFromRegion(options.cloudRegion);
-
-  const urlToOpen = `${cloudUrl}/settings/user-api-keys?preset=mcp_server`;
-
-  const spinner = clack.spinner();
-  spinner.start(
-    `Opening your project settings so you can get a Personal API key...`,
-  );
-
-  await sleep(1500);
-
-  spinner.stop(
-    `Opened your project settings. If the link didn't open automatically, open the following URL in your browser to get a Personal API key: \n\n${chalk.cyan(
-      urlToOpen,
-    )}`,
-  );
-
-  opn(urlToOpen, { wait: false }).catch(() => {
-    // opn throws in environments that don't have a browser (e.g. remote shells) so we just noop here
-  });
-
-  const personalApiKey = await clack.password({
-    message: 'Paste in your Personal API key:',
-    validate(value) {
-      if (value.length === 0) return `Value is required!`;
-
-      if (!value.startsWith('phx_')) {
-        return `That doesn't look right, are you sure you copied the right key? It should start with 'phx_'`;
-      }
-    },
-  });
-
-  if (!personalApiKey) {
-    await abort('Unable to proceed without a personal API key.');
-    return '';
-  }
-
-  return personalApiKey as string;
 };
