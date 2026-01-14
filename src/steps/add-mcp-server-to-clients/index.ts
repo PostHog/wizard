@@ -7,7 +7,6 @@ import { abortIfCancelled, askForCloudRegion } from '../../utils/clack-utils';
 import { MCPClient } from './MCPClient';
 import { CursorMCPClient } from './clients/cursor';
 import { ClaudeMCPClient } from './clients/claude';
-import { getPersonalApiKey } from '../../mcp';
 import type { CloudRegion } from '../../utils/types';
 import { ClaudeCodeMCPClient } from './clients/claude-code';
 import { VisualStudioCodeClient } from './clients/visual-studio-code';
@@ -166,35 +165,10 @@ export const addMCPServerToClientsStep = async ({
     clack.log.info('Removed existing installation.');
   }
 
-  // Ask user how they want to authenticate
-  const authMethod = await abortIfCancelled(
-    clack.select({
-      message: 'How would you like to authenticate with PostHog?',
-      options: [
-        {
-          value: 'api-key',
-          label: 'API Key',
-          hint: 'Create a personal API key now',
-        },
-        {
-          value: 'oauth',
-          label: 'OAuth (Beta)',
-          hint: 'Authenticate when you first use the MCP',
-        },
-      ],
-    }),
-    integration,
-  );
-
-  const personalApiKey =
-    authMethod === 'api-key'
-      ? await getPersonalApiKey({ cloudRegion: region })
-      : undefined;
-
   await traceStep('adding mcp servers', async () => {
     await addMCPServer(
       clients,
-      personalApiKey,
+      undefined, // OAuth mode - no API key needed
       selectedFeatures,
       local,
       region,
