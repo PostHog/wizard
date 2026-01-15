@@ -98,7 +98,8 @@ export async function runWizard(argv: Args) {
         const flagValue = await analytics.getFeatureFlag(
           FeatureFlagDefinition.ReactRouter,
         );
-        if (flagValue === true) {
+        // In CI mode, bypass feature flags and always use the React Router wizard
+        if (wizardOptions.ci || flagValue === true) {
           await runReactRouterWizardAgent(wizardOptions);
         } else {
           await runReactWizard(wizardOptions);
