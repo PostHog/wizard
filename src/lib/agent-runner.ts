@@ -192,6 +192,34 @@ ${chalk.cyan(config.metadata.docsUrl)}`;
     process.exit(1);
   }
 
+  if (
+    agentResult.error === AgentErrorType.RATE_LIMIT ||
+    agentResult.error === AgentErrorType.API_ERROR
+  ) {
+    analytics.capture(WIZARD_INTERACTION_EVENT_NAME, {
+      action: 'api error',
+      integration: config.metadata.integration,
+      error_type: agentResult.error,
+      error_message: agentResult.message,
+    });
+
+    analytics.captureException(new Error(`API error: ${agentResult.message}`), {
+      integration: config.metadata.integration,
+      error_type: agentResult.error,
+    });
+
+    const errorMessage = `
+${chalk.red('❌ API Error')}
+
+${chalk.yellow(agentResult.message || 'Unknown error')}
+
+Please report this error to: ${chalk.cyan('wizard@posthog.com')}`;
+
+    clack.outro(errorMessage);
+    await analytics.shutdown('error');
+    process.exit(1);
+  }
+
   // Build environment variables from OAuth credentials
   const envVars = config.environment.getEnvVars(projectApiKey, host);
 
@@ -292,7 +320,7 @@ Instructions (follow these steps IN ORDER - do not skip or reorder):
 
 STEP 1: List available skills from the PostHog MCP server using ListMcpResourcesTool.
    Review the skill descriptions and choose the one that best matches this project's framework and configuration.
-   If no suitable skill is found, emit: ${
+   If no suitable skill is found, or you cannot access the MCP server, emit: ${
      AgentSignals.ERROR_RESOURCE_MISSING
    } Could not find a suitable skill for this project.
 

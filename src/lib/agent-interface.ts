@@ -56,6 +56,10 @@ export enum AgentErrorType {
   MCP_MISSING = 'WIZARD_MCP_MISSING',
   /** Agent could not access the setup resource */
   RESOURCE_MISSING = 'WIZARD_RESOURCE_MISSING',
+  /** API rate limit exceeded */
+  RATE_LIMIT = 'WIZARD_RATE_LIMIT',
+  /** Generic API error */
+  API_ERROR = 'WIZARD_API_ERROR',
 }
 
 export type AgentConfig = {
@@ -349,7 +353,7 @@ export async function runAgent(
     successMessage?: string;
     errorMessage?: string;
   },
-): Promise<{ error?: AgentErrorType }> {
+): Promise<{ error?: AgentErrorType; message?: string }> {
   const {
     estimatedDurationMinutes = 8,
     spinnerMessage = 'Customizing your PostHog setup...',
@@ -469,6 +473,19 @@ export async function runAgent(
       return { error: AgentErrorType.RESOURCE_MISSING };
     }
 
+    // Check for API errors (rate limits, etc.)
+    if (outputText.includes('API Error: 429')) {
+      logToFile('Agent error: RATE_LIMIT');
+      spinner.stop('Rate limit exceeded');
+      return { error: AgentErrorType.RATE_LIMIT, message: outputText };
+    }
+
+    if (outputText.includes('API Error:')) {
+      logToFile('Agent error: API_ERROR');
+      spinner.stop('API error occurred');
+      return { error: AgentErrorType.API_ERROR, message: outputText };
+    }
+
     logToFile(`Agent run completed in ${Math.round(durationMs / 1000)}s`);
     analytics.capture(WIZARD_INTERACTION_EVENT_NAME, {
       action: 'agent integration completed',
@@ -531,7 +548,19 @@ function handleSDKMessage(
     }
 
     case 'result': {
-      if (message.subtype === 'success') {
+      // Check is_error flag - can be true even when subtype is 'success'
+      if (message.is_error) {
+        logToFile('Agent result with error:', message.result);
+        if (typeof message.result === 'string') {
+          collectedText.push(message.result);
+        }
+        if (message.errors) {
+          for (const err of message.errors) {
+            clack.log.error(`Error: ${err}`);
+            logToFile('ERROR:', err);
+          }
+        }
+      } else if (message.subtype === 'success') {
         logToFile('Agent completed successfully');
         if (typeof message.result === 'string') {
           collectedText.push(message.result);
