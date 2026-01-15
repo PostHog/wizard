@@ -18,6 +18,7 @@ import { runSvelteWizard } from './svelte/svelte-wizard';
 import { runReactNativeWizard } from './react-native/react-native-wizard';
 import { runAstroWizard } from './astro/astro-wizard';
 import { runReactRouterWizardAgent } from './react-router/react-router-wizard-agent';
+import { runDjangoWizardAgent } from './django/django-wizard-agent';
 import { EventEmitter } from 'events';
 import chalk from 'chalk';
 import { RateLimitError } from './utils/errors';
@@ -105,6 +106,25 @@ export async function runWizard(argv: Args) {
         }
         break;
       }
+      case Integration.django: {
+        // Always run Django wizard when using local MCP (for development)
+        // Otherwise check feature flag
+        const flagValue = wizardOptions.localMcp
+          ? true
+          : await analytics.getFeatureFlag(FeatureFlagDefinition.Django);
+        if (flagValue === true) {
+          await runDjangoWizardAgent(wizardOptions);
+        } else {
+          // No legacy wizard for Django - show manual docs
+          clack.log.info(
+            `The Django wizard is not yet available. Please follow our documentation to set up PostHog manually: ${chalk.cyan(
+              INTEGRATION_CONFIG[Integration.django].docsUrl,
+            )}`,
+          );
+          clack.outro('PostHog wizard will see you next time!');
+        }
+        break;
+      }
       default:
         clack.log.error('No setup wizard selected!');
     }
@@ -166,6 +186,7 @@ async function getIntegrationForSetup(
         { value: Integration.astro, label: 'Astro' },
         { value: Integration.react, label: 'React' },
         { value: Integration.reactRouter, label: 'React Router' },
+        { value: Integration.django, label: 'Django' },
         { value: Integration.svelte, label: 'Svelte' },
         { value: Integration.reactNative, label: 'React Native' },
       ],

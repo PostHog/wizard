@@ -56,6 +56,13 @@ export interface FrameworkDetection {
 
   /** Optional: Convert version to analytics bucket (e.g., "15.x") */
   getVersionBucket?: (version: string) => string;
+
+  /**
+   * Whether this framework uses package.json (Node.js/JavaScript).
+   * If false, skips package.json checks (for Python, Go, etc.)
+   * Defaults to true if not specified.
+   */
+  usesPackageJson?: boolean;
 }
 
 /**

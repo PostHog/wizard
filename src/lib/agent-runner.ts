@@ -60,14 +60,23 @@ export async function runAgentWizard(
   await confirmContinueIfNoOrDirtyGitRepo(options);
 
   // Framework detection and version
-  const packageJson = await getPackageDotJson(options);
-  await ensurePackageIsInstalled(
-    packageJson,
-    config.detection.packageName,
-    config.detection.packageDisplayName,
-  );
+  // Only check package.json for Node.js/JavaScript frameworks
+  const usesPackageJson = config.detection.usesPackageJson !== false;
+  let packageJson: any = null;
+  let frameworkVersion: string | undefined;
 
-  const frameworkVersion = config.detection.getVersion(packageJson);
+  if (usesPackageJson) {
+    packageJson = await getPackageDotJson(options);
+    await ensurePackageIsInstalled(
+      packageJson,
+      config.detection.packageName,
+      config.detection.packageDisplayName,
+    );
+    frameworkVersion = config.detection.getVersion(packageJson);
+  } else {
+    // For non-Node frameworks (e.g., Django), version is handled differently
+    frameworkVersion = config.detection.getVersion(null);
+  }
 
   // Set analytics tags for framework version
   if (frameworkVersion && config.detection.getVersionBucket) {
@@ -290,13 +299,31 @@ Project context:
 
 Instructions:
 
-1. Call the PostHog MCP's resource for setup: posthog://workflows/basic-integration/begin
-2. Follow all instructions provided; do package installation as soon as possible.
-3. Set up environment variables for PostHog in a .env file with the API key and host provided above, using the appropriate naming convention for ${
+1. First, determine the project type by checking which configuration files exist:
+   - JavaScript/TypeScript projects: Look for package.json, package-lock.json, yarn.lock, pnpm-lock.yaml, or bun.lockb
+   - Python projects: Look for requirements.txt, pyproject.toml, setup.py, Pipfile, or manage.py (Django)
+   - Swift/iOS projects: Look for Package.swift, *.xcodeproj, *.xcworkspace, or Podfile
+   - Do NOT assume package.json exists for non-JavaScript projects
+
+2. Call the PostHog MCP's resource for setup: posthog://workflows/basic-integration/begin
+3. Follow all instructions provided; do package installation as soon as possible.
+4. Set up environment variables for PostHog in a .env file with the API key and host provided above, using the appropriate naming convention for ${
     config.metadata.name
   }. Make sure to use these environment variables in the code files you create instead of hardcoding the API key and host.
 
-The PostHog MCP will provide specific integration code and instructions. Please follow them carefully. Be sure to look for lockfiles to determine the appropriate package manager to use when installing PostHog. Do not manually edit the package.json file.
+The PostHog MCP will provide specific integration code and instructions. Please follow them carefully.
+
+For package installation:
+- JavaScript projects: Look for lockfiles (package-lock.json, yarn.lock, pnpm-lock.yaml, bun.lockb) to determine the package manager. Do not manually edit package.json.
+- Python projects: Use pip, poetry, or pipenv based on existing config files (requirements.txt, pyproject.toml, Pipfile).
+- Swift projects: Use Swift Package Manager or CocoaPods based on existing config files.
+
+SECURITY: When generating any documentation or report files (like posthog-setup-report.md):
+- NEVER include the actual PostHog API key in documentation files
+- Instead of: POSTHOG_API_KEY=phc_actual_key_here
+- Use: POSTHOG_API_KEY=\${POSTHOG_API_KEY}  # Set in .env file
+- Or: POSTHOG_API_KEY=<your-api-key-from-env>
+- The .env file can contain the real key, but markdown/documentation files must not expose it
 
 Before beginning, confirm that you can access the PostHog MCP. If the PostHog MCP is not accessible, emit the following string:
 
