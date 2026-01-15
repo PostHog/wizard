@@ -377,27 +377,27 @@ export async function runAgent(
   const startTime = Date.now();
   const collectedText: string[] = [];
 
-  try {
-    // Workaround for SDK bug: stdin closes before canUseTool responses can be sent.
-    // The fix is to use an async generator for the prompt that stays open until
-    // the result is received, keeping the stdin stream alive for permission responses.
-    // See: https://github.com/anthropics/claude-code/issues/4775
-    // See: https://github.com/anthropics/claude-agent-sdk-typescript/issues/41
-    let signalDone: () => void;
-    const resultReceived = new Promise<void>((resolve) => {
-      signalDone = resolve;
-    });
+  // Workaround for SDK bug: stdin closes before canUseTool responses can be sent.
+  // The fix is to use an async generator for the prompt that stays open until
+  // the result is received, keeping the stdin stream alive for permission responses.
+  // See: https://github.com/anthropics/claude-code/issues/4775
+  // See: https://github.com/anthropics/claude-agent-sdk-typescript/issues/41
+  let signalDone: () => void;
+  const resultReceived = new Promise<void>((resolve) => {
+    signalDone = resolve;
+  });
 
-    const createPromptStream = async function* () {
-      yield {
-        type: 'user',
-        session_id: '',
-        message: { role: 'user', content: prompt },
-        parent_tool_use_id: null,
-      };
-      await resultReceived;
+  const createPromptStream = async function* () {
+    yield {
+      type: 'user',
+      session_id: '',
+      message: { role: 'user', content: prompt },
+      parent_tool_use_id: null,
     };
+    await resultReceived;
+  };
 
+  try {
     // Tools needed for the wizard:
     // - File operations: Read, Write, Edit
     // - Search: Glob, Grep
@@ -496,6 +496,31 @@ export async function runAgent(
     spinner.stop(successMessage);
     return {};
   } catch (error) {
+    // Signal done to unblock the async generator
+    signalDone!();
+
+    // Check if we collected an API error before the exception was thrown
+    const outputText = collectedText.join('\n');
+
+    // Extract just the API error line(s), not the entire output
+    const apiErrorMatch = outputText.match(/API Error: [^\n]+/g);
+    const apiErrorMessage = apiErrorMatch
+      ? apiErrorMatch.join('\n')
+      : 'Unknown API error';
+
+    if (outputText.includes('API Error: 429')) {
+      logToFile('Agent error (caught): RATE_LIMIT');
+      spinner.stop('Rate limit exceeded');
+      return { error: AgentErrorType.RATE_LIMIT, message: apiErrorMessage };
+    }
+
+    if (outputText.includes('API Error:')) {
+      logToFile('Agent error (caught): API_ERROR');
+      spinner.stop('API error occurred');
+      return { error: AgentErrorType.API_ERROR, message: apiErrorMessage };
+    }
+
+    // No API error found, re-throw the original exception
     spinner.stop(errorMessage);
     clack.log.error(`Error: ${(error as Error).message}`);
     logToFile('Agent run failed:', error);
