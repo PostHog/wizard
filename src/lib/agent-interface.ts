@@ -288,6 +288,8 @@ export function initializeAgent(
     const gatewayUrl = getLlmGatewayUrlFromHost(config.posthogApiHost);
     process.env.ANTHROPIC_BASE_URL = gatewayUrl;
     process.env.ANTHROPIC_AUTH_TOKEN = config.posthogApiKey;
+    // Use CLAUDE_CODE_OAUTH_TOKEN to override any stored /login credentials
+    process.env.CLAUDE_CODE_OAUTH_TOKEN = config.posthogApiKey;
     // Disable experimental betas (like input_examples) that the LLM gateway doesn't support
     process.env.CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS = 'true';
 
