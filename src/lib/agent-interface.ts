@@ -400,6 +400,31 @@ export async function runAgent(
     await resultReceived;
   };
 
+  // Helper to handle successful completion (used in normal path and race condition recovery)
+  const completeWithSuccess = (
+    suppressedError?: Error,
+  ): { error?: AgentErrorType; message?: string } => {
+    const durationMs = Date.now() - startTime;
+    const durationSeconds = Math.round(durationMs / 1000);
+
+    if (suppressedError) {
+      logToFile(
+        `Ignoring post-completion error, agent completed successfully in ${durationSeconds}s`,
+      );
+      logToFile('Suppressed error:', suppressedError.message);
+    } else {
+      logToFile(`Agent run completed in ${durationSeconds}s`);
+    }
+
+    analytics.capture(WIZARD_INTERACTION_EVENT_NAME, {
+      action: 'agent integration completed',
+      duration_ms: durationMs,
+      duration_seconds: durationSeconds,
+    });
+    spinner.stop(successMessage);
+    return {};
+  };
+
   try {
     // Tools needed for the wizard:
     // - File operations: Read, Write, Edit
@@ -465,7 +490,6 @@ export async function runAgent(
       }
     }
 
-    const durationMs = Date.now() - startTime;
     const outputText = collectedText.join('\n');
 
     // Check for error markers in the agent's output
@@ -494,15 +518,7 @@ export async function runAgent(
       return { error: AgentErrorType.API_ERROR, message: outputText };
     }
 
-    logToFile(`Agent run completed in ${Math.round(durationMs / 1000)}s`);
-    analytics.capture(WIZARD_INTERACTION_EVENT_NAME, {
-      action: 'agent integration completed',
-      duration_ms: durationMs,
-      duration_seconds: Math.round(durationMs / 1000),
-    });
-
-    spinner.stop(successMessage);
-    return {};
+    return completeWithSuccess();
   } catch (error) {
     // Signal done to unblock the async generator
     signalDone!();
@@ -512,20 +528,7 @@ export async function runAgent(
     // after the prompt stream closes, but streaming mode is still active.
     // See: https://github.com/anthropics/claude-agent-sdk-typescript/issues/41
     if (receivedSuccessResult) {
-      const durationMs = Date.now() - startTime;
-      logToFile(
-        `Ignoring post-completion error, agent completed successfully in ${Math.round(
-          durationMs / 1000,
-        )}s`,
-      );
-      logToFile('Suppressed error:', (error as Error).message);
-      analytics.capture(WIZARD_INTERACTION_EVENT_NAME, {
-        action: 'agent integration completed',
-        duration_ms: durationMs,
-        duration_seconds: Math.round(durationMs / 1000),
-      });
-      spinner.stop(successMessage);
-      return {};
+      return completeWithSuccess(error as Error);
     }
 
     // Check if we collected an API error before the exception was thrown
