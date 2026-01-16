@@ -192,6 +192,34 @@ ${chalk.cyan(config.metadata.docsUrl)}`;
     process.exit(1);
   }
 
+  if (
+    agentResult.error === AgentErrorType.RATE_LIMIT ||
+    agentResult.error === AgentErrorType.API_ERROR
+  ) {
+    analytics.capture(WIZARD_INTERACTION_EVENT_NAME, {
+      action: 'api error',
+      integration: config.metadata.integration,
+      error_type: agentResult.error,
+      error_message: agentResult.message,
+    });
+
+    analytics.captureException(new Error(`API error: ${agentResult.message}`), {
+      integration: config.metadata.integration,
+      error_type: agentResult.error,
+    });
+
+    const errorMessage = `
+${chalk.red('❌ API Error')}
+
+${chalk.yellow(agentResult.message || 'Unknown error')}
+
+Please report this error to: ${chalk.cyan('wizard@posthog.com')}`;
+
+    clack.outro(errorMessage);
+    await analytics.shutdown('error');
+    process.exit(1);
+  }
+
   // Build environment variables from OAuth credentials
   const envVars = config.environment.getEnvVars(projectApiKey, host);
 
@@ -278,7 +306,7 @@ function buildIntegrationPrompt(
       ? '\n' + additionalLines.map((line) => `- ${line}`).join('\n')
       : '';
 
-  return `You have access to the PostHog MCP server which provides an integration resource to integrate PostHog into this ${
+  return `You have access to the PostHog MCP server which provides skills to integrate PostHog into this ${
     config.metadata.name
   } project.
 
@@ -288,23 +316,30 @@ Project context:
 - PostHog API Key: ${context.projectApiKey}
 - PostHog Host: ${context.host}${additionalContext}
 
-Instructions:
+Instructions (follow these steps IN ORDER - do not skip or reorder):
 
-1. Call the PostHog MCP's resource for setup: posthog://workflows/basic-integration/begin
-2. Follow all instructions provided; do package installation as soon as possible.
-3. Set up environment variables for PostHog in a .env file with the API key and host provided above, using the appropriate naming convention for ${
+STEP 1: List available skills from the PostHog MCP server using ListMcpResourcesTool.
+   Review the skill descriptions and choose the one that best matches this project's framework and configuration.
+   If no suitable skill is found, or you cannot access the MCP server, emit: ${
+     AgentSignals.ERROR_RESOURCE_MISSING
+   } Could not find a suitable skill for this project.
+
+STEP 2: Fetch the chosen skill resource (e.g., posthog://skills/{skill-id}).
+   The resource returns a shell command to install the skill.
+
+STEP 3: Run the installation command using Bash:
+   - Execute the EXACT command returned by the resource (do not modify it)
+   - This will download and extract the skill to .claude/skills/{skill-id}/
+
+STEP 4: Load the installed skill's SKILL.md file to understand what references are available.
+
+STEP 5: Follow the skill's workflow files in sequence. Look for numbered workflow files in the references (e.g., files with patterns like "1.0-", "1.1-", "1.2-"). Start with the first one and proceed through each step until completion. Each workflow file will tell you what to do and which file comes next.
+
+STEP 6: Set up environment variables for PostHog in a .env file with the API key and host provided above, using the appropriate naming convention for ${
     config.metadata.name
   }. Make sure to use these environment variables in the code files you create instead of hardcoding the API key and host.
 
-The PostHog MCP will provide specific integration code and instructions. Please follow them carefully. Be sure to look for lockfiles to determine the appropriate package manager to use when installing PostHog. Do not manually edit the package.json file.
-
-Before beginning, confirm that you can access the PostHog MCP. If the PostHog MCP is not accessible, emit the following string:
-
-${AgentSignals.ERROR_MCP_MISSING} Could not access the PostHog MCP.
-
-If the PostHog MCP is accessible, attempt to access the setup resource. If the setup resource is not accessible, emit the following string:
-
-${AgentSignals.ERROR_RESOURCE_MISSING} Could not access the setup resource.
+Important: Look for lockfiles (pnpm-lock.yaml, package-lock.json, yarn.lock, bun.lockb) to determine the package manager. Do not manually edit package.json. Always install packages as a background task. Don't await completion; proceed with other work immediately after starting the installation.
 
 `;
 }
