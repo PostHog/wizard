@@ -455,7 +455,11 @@ export async function runAgent(
         settingSources: ['project'],
         // Explicitly enable required tools including Skill
         allowedTools,
-        env: { ...process.env },
+        env: {
+          ...process.env,
+          // Prevent user's Anthropic API key from overriding the wizard's OAuth token
+          ANTHROPIC_API_KEY: undefined,
+        },
         canUseTool: (toolName: string, input: unknown) => {
           logToFile('canUseTool called:', { toolName, input });
           const result = wizardCanUseTool(
