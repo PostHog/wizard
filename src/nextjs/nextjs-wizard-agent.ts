@@ -57,6 +57,10 @@ const NEXTJS_AGENT_CONFIG = {
   },
 
   prompts: {
+    projectTypeDetection:
+      'This is a JavaScript/TypeScript project. Look for package.json and lockfiles (package-lock.json, yarn.lock, pnpm-lock.yaml, bun.lockb) to confirm.',
+    packageInstallation:
+      'Look for lockfiles to determine the package manager (npm, yarn, pnpm, bun). Do not manually edit package.json.',
     getAdditionalContextLines: (context: any) => {
       const router = context.router as NextJsRouter;
       const routerType = router === NextJsRouter.APP_ROUTER ? 'app' : 'pages';

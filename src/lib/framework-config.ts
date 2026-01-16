@@ -56,6 +56,13 @@ export interface FrameworkDetection {
 
   /** Optional: Convert version to analytics bucket (e.g., "15.x") */
   getVersionBucket?: (version: string) => string;
+
+  /**
+   * Whether this framework uses package.json (Node.js/JavaScript).
+   * If false, skips package.json checks (for Python, Go, etc.)
+   * Defaults to true if not specified.
+   */
+  usesPackageJson?: boolean;
 }
 
 /**
@@ -93,6 +100,18 @@ export interface PromptConfig {
    * For React Native: "- Platform: Expo"
    */
   getAdditionalContextLines?: (context: any) => string[];
+
+  /**
+   * How to detect the project type for this framework.
+   * e.g., "Look for package.json and lockfiles" or "Look for requirements.txt and manage.py"
+   */
+  projectTypeDetection: string;
+
+  /**
+   * How to install packages for this framework.
+   * e.g., "Use npm/yarn/pnpm based on lockfile" or "Use pip/poetry based on config files"
+   */
+  packageInstallation: string;
 }
 
 /**

@@ -477,6 +477,24 @@ export async function getPackageDotJson({
   return packageJson || {};
 }
 
+/**
+ * Try to get package.json, returning null if it doesn't exist.
+ * Use this for detection purposes where missing package.json is expected (e.g., Python projects).
+ */
+export async function tryGetPackageJson({
+  installDir,
+}: Pick<WizardOptions, 'installDir'>): Promise<PackageDotJson | null> {
+  try {
+    const packageJsonFileContents = await fs.promises.readFile(
+      join(installDir, 'package.json'),
+      'utf8',
+    );
+    return JSON.parse(packageJsonFileContents) as PackageDotJson;
+  } catch {
+    return null;
+  }
+}
+
 export async function updatePackageDotJson(
   packageDotJson: PackageDotJson,
   { installDir }: Pick<WizardOptions, 'installDir'>,

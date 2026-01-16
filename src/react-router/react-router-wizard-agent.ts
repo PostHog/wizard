@@ -59,6 +59,10 @@ const REACT_ROUTER_AGENT_CONFIG: FrameworkConfig = {
   },
 
   prompts: {
+    projectTypeDetection:
+      'This is a JavaScript/TypeScript project. Look for package.json and lockfiles (package-lock.json, yarn.lock, pnpm-lock.yaml, bun.lockb) to confirm.',
+    packageInstallation:
+      'Look for lockfiles to determine the package manager (npm, yarn, pnpm, bun). Do not manually edit package.json.',
     getAdditionalContextLines: (context: any) => {
       const routerMode = context.routerMode as ReactRouterMode;
       const modeName = routerMode
