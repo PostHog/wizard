@@ -100,6 +100,18 @@ export interface PromptConfig {
    * For React Native: "- Platform: Expo"
    */
   getAdditionalContextLines?: (context: any) => string[];
+
+  /**
+   * How to detect the project type for this framework.
+   * e.g., "Look for package.json and lockfiles" or "Look for requirements.txt and manage.py"
+   */
+  projectTypeDetection: string;
+
+  /**
+   * How to install packages for this framework.
+   * e.g., "Use npm/yarn/pnpm based on lockfile" or "Use pip/poetry based on config files"
+   */
+  packageInstallation: string;
 }
 
 /**

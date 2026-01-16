@@ -1,4 +1,4 @@
-import { tryGetPackageDotJson } from '../utils/clack-utils';
+import { tryGetPackageJson } from '../utils/clack-utils';
 import { hasPackageInstalled } from '../utils/package-json';
 import type { WizardOptions } from '../utils/types';
 import { Integration } from './constants';
@@ -31,7 +31,7 @@ export const INTEGRATION_CONFIG = {
       'next-env.d.*',
     ],
     detect: async (options) => {
-      const packageJson = await tryGetPackageDotJson(options);
+      const packageJson = await tryGetPackageJson(options);
       return packageJson ? hasPackageInstalled('next', packageJson) : false;
     },
     generateFilesRules: '',
@@ -54,7 +54,7 @@ export const INTEGRATION_CONFIG = {
       'assets',
     ],
     detect: async (options) => {
-      const packageJson = await tryGetPackageDotJson(options);
+      const packageJson = await tryGetPackageJson(options);
       return packageJson ? hasPackageInstalled('react', packageJson) : false;
     },
     generateFilesRules: '',
@@ -70,7 +70,7 @@ export const INTEGRATION_CONFIG = {
     filterPatterns: ['**/*.{svelte,ts,js,jsx,tsx}'],
     ignorePatterns: ['node_modules', 'dist', 'build', 'public', 'static'],
     detect: async (options) => {
-      const packageJson = await tryGetPackageDotJson(options);
+      const packageJson = await tryGetPackageJson(options);
       return packageJson
         ? hasPackageInstalled('@sveltejs/kit', packageJson)
         : false;
@@ -88,7 +88,7 @@ export const INTEGRATION_CONFIG = {
     filterPatterns: ['**/*.{ts,js,jsx,tsx}'],
     ignorePatterns: ['node_modules', 'dist', 'build', 'public', 'static'],
     detect: async (options) => {
-      const packageJson = await tryGetPackageDotJson(options);
+      const packageJson = await tryGetPackageJson(options);
       return packageJson
         ? hasPackageInstalled('react-native', packageJson)
         : false;
@@ -106,7 +106,7 @@ export const INTEGRATION_CONFIG = {
     filterPatterns: ['**/*.{astro,ts,js,jsx,tsx}'],
     ignorePatterns: ['node_modules', 'dist', 'build', 'public', 'static'],
     detect: async (options) => {
-      const packageJson = await tryGetPackageDotJson(options);
+      const packageJson = await tryGetPackageJson(options);
       return packageJson ? hasPackageInstalled('astro', packageJson) : false;
     },
     generateFilesRules: '',
@@ -129,7 +129,7 @@ export const INTEGRATION_CONFIG = {
       'assets',
     ],
     detect: async (options) => {
-      const packageJson = await tryGetPackageDotJson(options);
+      const packageJson = await tryGetPackageJson(options);
       return packageJson
         ? hasPackageInstalled('react-router', packageJson)
         : false;

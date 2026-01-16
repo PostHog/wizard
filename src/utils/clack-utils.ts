@@ -481,7 +481,7 @@ export async function getPackageDotJson({
  * Try to get package.json, returning null if it doesn't exist.
  * Use this for detection purposes where missing package.json is expected (e.g., Python projects).
  */
-export async function tryGetPackageDotJson({
+export async function tryGetPackageJson({
   installDir,
 }: Pick<WizardOptions, 'installDir'>): Promise<PackageDotJson | null> {
   try {

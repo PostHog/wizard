@@ -299,11 +299,7 @@ Project context:
 
 Instructions:
 
-1. First, determine the project type by checking which configuration files exist:
-   - JavaScript/TypeScript projects: Look for package.json, package-lock.json, yarn.lock, pnpm-lock.yaml, or bun.lockb
-   - Python projects: Look for requirements.txt, pyproject.toml, setup.py, Pipfile, or manage.py (Django)
-   - Swift/iOS projects: Look for Package.swift, *.xcodeproj, *.xcworkspace, or Podfile
-   - Do NOT assume package.json exists for non-JavaScript projects
+1. ${config.prompts.projectTypeDetection}
 
 2. Call the PostHog MCP's resource for setup: posthog://workflows/basic-integration/begin
 3. Follow all instructions provided; do package installation as soon as possible.
@@ -313,10 +309,7 @@ Instructions:
 
 The PostHog MCP will provide specific integration code and instructions. Please follow them carefully.
 
-For package installation:
-- JavaScript projects: Look for lockfiles (package-lock.json, yarn.lock, pnpm-lock.yaml, bun.lockb) to determine the package manager. Do not manually edit package.json.
-- Python projects: Use pip, poetry, or pipenv based on existing config files (requirements.txt, pyproject.toml, Pipfile).
-- Swift projects: Use Swift Package Manager or CocoaPods based on existing config files.
+For package installation: ${config.prompts.packageInstallation}
 
 SECURITY: When generating any documentation or report files (like posthog-setup-report.md):
 - NEVER include the actual PostHog API key in documentation files

@@ -64,6 +64,10 @@ const DJANGO_AGENT_CONFIG: FrameworkConfig = {
   },
 
   prompts: {
+    projectTypeDetection:
+      'This is a Python/Django project. Look for requirements.txt, pyproject.toml, setup.py, Pipfile, or manage.py to confirm.',
+    packageInstallation:
+      'Use pip, poetry, or pipenv based on existing config files (requirements.txt, pyproject.toml, Pipfile). Do not pin the posthog version - just add "posthog" without version constraints.',
     getAdditionalContextLines: (context: any) => {
       const projectType = context.projectType as DjangoProjectType;
       const projectTypeName = projectType
@@ -83,7 +87,6 @@ const DJANGO_AGENT_CONFIG: FrameworkConfig = {
       const lines = [
         `Project type: ${projectTypeName}`,
         `Framework docs ID: ${frameworkId} (use posthog://docs/frameworks/${frameworkId} for documentation)`,
-        `IMPORTANT: When adding posthog to requirements.txt, do NOT pin a version. Use just "posthog" (not "posthog>=3.0.0" or any version constraint)`,
       ];
 
       if (context.settingsFile) {
