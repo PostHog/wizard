@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.27.0](https://github.com/PostHog/wizard/compare/v1.26.0...v1.27.0) (2026-01-19)
+
+
+### Features
+
+* django skill ([#230](https://github.com/PostHog/wizard/issues/230)) ([f18d7d2](https://github.com/PostHog/wizard/commit/f18d7d21ac9b0193febdc8e09b6080d05de454a8))
+
 ## [1.26.0](https://github.com/PostHog/wizard/compare/v1.25.0...v1.26.0) (2026-01-15)
 
 
