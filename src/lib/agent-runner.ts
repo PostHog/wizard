@@ -60,14 +60,23 @@ export async function runAgentWizard(
   await confirmContinueIfNoOrDirtyGitRepo(options);
 
   // Framework detection and version
-  const packageJson = await getPackageDotJson(options);
-  await ensurePackageIsInstalled(
-    packageJson,
-    config.detection.packageName,
-    config.detection.packageDisplayName,
-  );
+  // Only check package.json for Node.js/JavaScript frameworks
+  const usesPackageJson = config.detection.usesPackageJson !== false;
+  let packageJson: any = null;
+  let frameworkVersion: string | undefined;
 
-  const frameworkVersion = config.detection.getVersion(packageJson);
+  if (usesPackageJson) {
+    packageJson = await getPackageDotJson(options);
+    await ensurePackageIsInstalled(
+      packageJson,
+      config.detection.packageName,
+      config.detection.packageDisplayName,
+    );
+    frameworkVersion = config.detection.getVersion(packageJson);
+  } else {
+    // For non-Node frameworks (e.g., Django), version is handled differently
+    frameworkVersion = config.detection.getVersion(null);
+  }
 
   // Set analytics tags for framework version
   if (frameworkVersion && config.detection.getVersionBucket) {

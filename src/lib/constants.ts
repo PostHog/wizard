@@ -5,6 +5,7 @@ export enum Integration {
   reactNative = 'react-native',
   astro = 'astro',
   reactRouter = 'react-router',
+  django = 'django',
 }
 
 export enum FeatureFlagDefinition {
@@ -25,6 +26,8 @@ export function getIntegrationDescription(type: string): string {
       return 'Astro';
     case Integration.reactRouter:
       return 'React Router';
+    case Integration.django:
+      return 'Django';
     default:
       throw new Error(`Unknown integration ${type}`);
   }
