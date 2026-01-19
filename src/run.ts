@@ -107,25 +107,16 @@ export async function runWizard(argv: Args) {
         }
         break;
       }
-      case Integration.django: {
-        // Always run Django wizard when using local MCP (for development)
-        // Otherwise check feature flag
-        const flagValue = wizardOptions.localMcp
-          ? true
-          : await analytics.getFeatureFlag(FeatureFlagDefinition.Django);
-        if (flagValue === true) {
-          await runDjangoWizardAgent(wizardOptions);
-        } else {
-          // No legacy wizard for Django - show manual docs
-          clack.log.info(
-            `The Django wizard is not yet available. Please follow our documentation to set up PostHog manually: ${chalk.cyan(
-              INTEGRATION_CONFIG[Integration.django].docsUrl,
-            )}`,
-          );
-          clack.outro('PostHog wizard will see you next time!');
-        }
+      case Integration.django:
+        clack.log.info(
+          `${chalk.yellow(
+            '[BETA]',
+          )} The Django wizard is in beta. Questions or feedback? Email ${chalk.cyan(
+            'wizard@posthog.com',
+          )}`,
+        );
+        await runDjangoWizardAgent(wizardOptions);
         break;
-      }
       default:
         clack.log.error('No setup wizard selected!');
     }

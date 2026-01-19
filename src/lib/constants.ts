@@ -10,7 +10,6 @@ export enum Integration {
 
 export enum FeatureFlagDefinition {
   ReactRouter = 'wizard-react-router',
-  Django = 'wizard-django',
 }
 
 export function getIntegrationDescription(type: string): string {
