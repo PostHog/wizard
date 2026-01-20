@@ -19,6 +19,7 @@ import { runReactNativeWizard } from './react-native/react-native-wizard';
 import { runAstroWizard } from './astro/astro-wizard';
 import { runReactRouterWizardAgent } from './react-router/react-router-wizard-agent';
 import { runDjangoWizardAgent } from './django/django-wizard-agent';
+import { runFlaskWizardAgent } from './flask/flask-wizard-agent';
 import { EventEmitter } from 'events';
 import chalk from 'chalk';
 import { RateLimitError } from './utils/errors';
@@ -117,6 +118,16 @@ export async function runWizard(argv: Args) {
         );
         await runDjangoWizardAgent(wizardOptions);
         break;
+      case Integration.flask:
+        clack.log.info(
+          `${chalk.yellow(
+            '[BETA]',
+          )} The Flask wizard is in beta. Questions or feedback? Email ${chalk.cyan(
+            'wizard@posthog.com',
+          )}`,
+        );
+        await runFlaskWizardAgent(wizardOptions);
+        break;
       default:
         clack.log.error('No setup wizard selected!');
     }
@@ -179,6 +190,7 @@ async function getIntegrationForSetup(
         { value: Integration.react, label: 'React' },
         { value: Integration.reactRouter, label: 'React Router' },
         { value: Integration.django, label: 'Django' },
+        { value: Integration.flask, label: 'Flask' },
         { value: Integration.svelte, label: 'Svelte' },
         { value: Integration.reactNative, label: 'React Native' },
       ],
