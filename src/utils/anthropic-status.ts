@@ -94,11 +94,10 @@ export async function checkAnthropicStatusWithPrompt(
       )}
 
 ${chalk.yellow('Status:')} ${result.description}
+${chalk.yellow('Status page:')} ${CLAUDE_STATUS_PAGE}
 
 The wizard relies on Claude to make changes to your project.
-Please check the status page and try again later.
-
-${chalk.cyan('Status page:')} ${CLAUDE_STATUS_PAGE}`,
+Please check the status page and try again later.`,
     );
     return false;
   }
@@ -108,10 +107,9 @@ ${chalk.cyan('Status page:')} ${CLAUDE_STATUS_PAGE}`,
       `${chalk.yellow('Claude/Anthropic services are partially degraded.')}
 
 ${chalk.yellow('Status:')} ${result.description}
+${chalk.yellow('Status page:')} ${CLAUDE_STATUS_PAGE}
 
-The wizard may not work reliably while services are degraded.
-
-${chalk.cyan('Status page:')} ${CLAUDE_STATUS_PAGE}`,
+The wizard may not work reliably while services are degraded.`,
     );
 
     // In CI mode, continue with a warning
