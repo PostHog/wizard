@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.27.1](https://github.com/PostHog/wizard/compare/v1.27.0...v1.27.1) (2026-01-20)
+
+
+### Bug Fixes
+
+* Resilience to Agent SDK cleanup burps ([#231](https://github.com/PostHog/wizard/issues/231)) ([7572038](https://github.com/PostHog/wizard/commit/75720385542293d3a0114415edc3fe5582fbb377))
+
 ## [1.27.0](https://github.com/PostHog/wizard/compare/v1.26.0...v1.27.0) (2026-01-19)
 
 
