@@ -30,6 +30,7 @@ import {
   addMCPServerToClientsStep,
   uploadEnvironmentVariablesStep,
 } from '../steps';
+import { checkAnthropicStatusWithPrompt } from '../utils/anthropic-status';
 
 /**
  * Universal agent-powered wizard runner.
@@ -50,6 +51,15 @@ export async function runAgentWizard(
   if (!aiConsent) {
     await abort(
       `This wizard uses an LLM agent to intelligently modify your project. Please view the docs to set up ${config.metadata.name} manually instead: ${config.metadata.docsUrl}`,
+      0,
+    );
+  }
+
+  // Check Anthropic/Claude service status before proceeding
+  const statusOk = await checkAnthropicStatusWithPrompt({ ci: options.ci });
+  if (!statusOk) {
+    await abort(
+      `Please try again later, or set up ${config.metadata.name} manually: ${config.metadata.docsUrl}`,
       0,
     );
   }
