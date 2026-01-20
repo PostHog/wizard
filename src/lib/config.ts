@@ -1,7 +1,10 @@
-import { getPackageDotJson } from '../utils/clack-utils';
+import { tryGetPackageJson } from '../utils/clack-utils';
 import { hasPackageInstalled } from '../utils/package-json';
 import type { WizardOptions } from '../utils/types';
 import { Integration } from './constants';
+import fg from 'fast-glob';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 
 type IntegrationConfig = {
   name: string;
@@ -28,8 +31,8 @@ export const INTEGRATION_CONFIG = {
       'next-env.d.*',
     ],
     detect: async (options) => {
-      const packageJson = await getPackageDotJson(options);
-      return hasPackageInstalled('next', packageJson);
+      const packageJson = await tryGetPackageJson(options);
+      return packageJson ? hasPackageInstalled('next', packageJson) : false;
     },
     generateFilesRules: '',
     filterFilesRules: '',
@@ -51,8 +54,8 @@ export const INTEGRATION_CONFIG = {
       'assets',
     ],
     detect: async (options) => {
-      const packageJson = await getPackageDotJson(options);
-      return hasPackageInstalled('react', packageJson);
+      const packageJson = await tryGetPackageJson(options);
+      return packageJson ? hasPackageInstalled('react', packageJson) : false;
     },
     generateFilesRules: '',
     filterFilesRules: '',
@@ -67,8 +70,10 @@ export const INTEGRATION_CONFIG = {
     filterPatterns: ['**/*.{svelte,ts,js,jsx,tsx}'],
     ignorePatterns: ['node_modules', 'dist', 'build', 'public', 'static'],
     detect: async (options) => {
-      const packageJson = await getPackageDotJson(options);
-      return hasPackageInstalled('@sveltejs/kit', packageJson);
+      const packageJson = await tryGetPackageJson(options);
+      return packageJson
+        ? hasPackageInstalled('@sveltejs/kit', packageJson)
+        : false;
     },
     generateFilesRules: '',
     filterFilesRules: '',
@@ -83,8 +88,10 @@ export const INTEGRATION_CONFIG = {
     filterPatterns: ['**/*.{ts,js,jsx,tsx}'],
     ignorePatterns: ['node_modules', 'dist', 'build', 'public', 'static'],
     detect: async (options) => {
-      const packageJson = await getPackageDotJson(options);
-      return hasPackageInstalled('react-native', packageJson);
+      const packageJson = await tryGetPackageJson(options);
+      return packageJson
+        ? hasPackageInstalled('react-native', packageJson)
+        : false;
     },
     generateFilesRules: '',
     filterFilesRules: '',
@@ -99,8 +106,8 @@ export const INTEGRATION_CONFIG = {
     filterPatterns: ['**/*.{astro,ts,js,jsx,tsx}'],
     ignorePatterns: ['node_modules', 'dist', 'build', 'public', 'static'],
     detect: async (options) => {
-      const packageJson = await getPackageDotJson(options);
-      return hasPackageInstalled('astro', packageJson);
+      const packageJson = await tryGetPackageJson(options);
+      return packageJson ? hasPackageInstalled('astro', packageJson) : false;
     },
     generateFilesRules: '',
     filterFilesRules: '',
@@ -122,8 +129,10 @@ export const INTEGRATION_CONFIG = {
       'assets',
     ],
     detect: async (options) => {
-      const packageJson = await getPackageDotJson(options);
-      return hasPackageInstalled('react-router', packageJson);
+      const packageJson = await tryGetPackageJson(options);
+      return packageJson
+        ? hasPackageInstalled('react-router', packageJson)
+        : false;
     },
     generateFilesRules: '',
     filterFilesRules: '',
@@ -134,6 +143,91 @@ export const INTEGRATION_CONFIG = {
     nextSteps:
       '• Call posthog.identify() when a user signs into your app\n• Call posthog.capture() to capture custom events in your app',
   },
+  [Integration.django]: {
+    name: 'Django',
+    filterPatterns: ['**/*.py'],
+    ignorePatterns: [
+      'node_modules',
+      'dist',
+      'build',
+      'public',
+      'static',
+      'venv',
+      '.venv',
+      'env',
+      '.env',
+      '__pycache__',
+      '*.pyc',
+      'migrations',
+    ],
+    detect: async (options) => {
+      const { installDir } = options;
+
+      // Check for manage.py (Django project indicator)
+      const managePyMatches = await fg('**/manage.py', {
+        cwd: installDir,
+        ignore: ['**/venv/**', '**/.venv/**', '**/env/**', '**/.env/**'],
+      });
+
+      if (managePyMatches.length > 0) {
+        // Verify it's a Django manage.py by checking content
+        for (const match of managePyMatches) {
+          try {
+            const content = fs.readFileSync(
+              path.join(installDir, match),
+              'utf-8',
+            );
+            if (
+              content.includes('django') ||
+              content.includes('DJANGO_SETTINGS_MODULE')
+            ) {
+              return true;
+            }
+          } catch {
+            // Skip files that can't be read
+            continue;
+          }
+        }
+      }
+
+      // Check for Django in requirements files
+      const requirementsFiles = await fg(
+        ['**/requirements*.txt', '**/pyproject.toml', '**/setup.py'],
+        {
+          cwd: installDir,
+          ignore: ['**/venv/**', '**/.venv/**', '**/env/**', '**/.env/**'],
+        },
+      );
+
+      for (const reqFile of requirementsFiles) {
+        try {
+          const content = fs.readFileSync(
+            path.join(installDir, reqFile),
+            'utf-8',
+          );
+          // Check for Django package reference
+          if (
+            content.toLowerCase().includes('django') &&
+            !content.toLowerCase().includes('django-') // Avoid false positives from Django plugins only
+          ) {
+            return true;
+          }
+        } catch {
+          // Skip files that can't be read
+          continue;
+        }
+      }
+
+      return false;
+    },
+    generateFilesRules: '',
+    filterFilesRules: '',
+    docsUrl: 'https://posthog.com/docs/libraries/django',
+    defaultChanges:
+      '• Installed posthog Python package\n• Added PostHog middleware for automatic event tracking\n• Configured PostHog settings in Django settings file',
+    nextSteps:
+      '• Use identify_context() within new_context() to associate events with users\n• Call posthog.capture() to capture custom events\n• Use feature flags with posthog.feature_enabled()',
+  },
 } as const satisfies Record<Integration, IntegrationConfig>;
 
 export const INTEGRATION_ORDER = [
@@ -142,5 +236,6 @@ export const INTEGRATION_ORDER = [
   Integration.svelte,
   Integration.reactNative,
   Integration.reactRouter,
+  Integration.django,
   Integration.react,
 ] as const;
