@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.28.0](https://github.com/PostHog/wizard/compare/v1.27.1...v1.28.0) (2026-01-20)
+
+
+### Features
+
+* anthropic status check ([#236](https://github.com/PostHog/wizard/issues/236)) ([8415459](https://github.com/PostHog/wizard/commit/84154594e693f3f0d012519b4d92261fe9bdf9d4))
+
 ## [1.27.1](https://github.com/PostHog/wizard/compare/v1.27.0...v1.27.1) (2026-01-20)
 
 
