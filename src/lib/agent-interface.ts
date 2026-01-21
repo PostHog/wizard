@@ -81,7 +81,20 @@ type AgentRunConfig = {
 /**
  * Package managers that can be used to run commands.
  */
-const PACKAGE_MANAGERS = ['npm', 'pnpm', 'yarn', 'bun', 'npx'];
+const PACKAGE_MANAGERS = [
+  // JavaScript
+  'npm',
+  'pnpm',
+  'yarn',
+  'bun',
+  'npx',
+  // Python
+  'pip',
+  'pip3',
+  'poetry',
+  'pipenv',
+  'uv',
+];
 
 /**
  * Safe scripts/commands that can be run with any package manager.
