@@ -328,6 +328,67 @@ export const INTEGRATION_CONFIG = {
     nextSteps:
       '• Use posthog.identify() to associate events with users\n• Call posthog.capture() to capture custom events\n• Use feature flags with posthog.feature_enabled()',
   },
+  [Integration.laravel]: {
+    name: 'Laravel',
+    filterPatterns: ['**/*.php'],
+    ignorePatterns: [
+      'node_modules',
+      'vendor',
+      'storage',
+      'bootstrap/cache',
+      'public/build',
+      'public/hot',
+      '.phpunit.cache',
+    ],
+    detect: async (options) => {
+      const { installDir } = options;
+
+      // Primary check: artisan file (definitive Laravel indicator)
+      const artisanPath = path.join(installDir, 'artisan');
+      if (fs.existsSync(artisanPath)) {
+        try {
+          const content = fs.readFileSync(artisanPath, 'utf-8');
+          if (content.includes('Laravel') || content.includes('Artisan')) {
+            return true;
+          }
+        } catch {
+          // Continue to other checks
+        }
+      }
+
+      // Secondary check: composer.json with laravel/framework
+      const composerPath = path.join(installDir, 'composer.json');
+      if (fs.existsSync(composerPath)) {
+        try {
+          const content = fs.readFileSync(composerPath, 'utf-8');
+          const composer = JSON.parse(content);
+          if (
+            composer.require?.['laravel/framework'] ||
+            composer['require-dev']?.['laravel/framework']
+          ) {
+            return true;
+          }
+        } catch {
+          // Continue to other checks
+        }
+      }
+
+      // Tertiary check: Laravel-specific directory structure
+      const hasLaravelStructure = await fg(
+        ['**/bootstrap/app.php', '**/app/Http/Kernel.php'],
+        { cwd: installDir, ignore: ['**/vendor/**'] },
+      );
+
+      return hasLaravelStructure.length > 0;
+    },
+    generateFilesRules: '',
+    filterFilesRules: '',
+    docsUrl: 'https://posthog.com/docs/libraries/php',
+    defaultChanges:
+      '• Installed posthog/posthog-php via Composer\n• Added PostHog service provider\n• Configured automatic event tracking',
+    nextSteps:
+      '• Use PostHog::capture() to track custom events\n• Use PostHog::identify() to associate events with users',
+  },
 } as const satisfies Record<Integration, IntegrationConfig>;
 
 export const INTEGRATION_ORDER = [
@@ -338,5 +399,6 @@ export const INTEGRATION_ORDER = [
   Integration.reactRouter,
   Integration.django,
   Integration.flask,
+  Integration.laravel,
   Integration.react,
 ] as const;
