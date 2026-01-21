@@ -132,9 +132,14 @@ export async function runAgentWizard(
   const spinner = clack.spinner();
 
   // Determine MCP URL: CLI flag > env var > production default
+  // Use EU subdomain for EU users to work around Claude Code's OAuth bug
+  // See: https://github.com/anthropics/claude-code/issues/2267
   const mcpUrl = options.localMcp
     ? 'http://localhost:8787/mcp'
-    : process.env.MCP_URL || 'https://mcp.posthog.com/mcp';
+    : process.env.MCP_URL ||
+      (cloudRegion === 'eu'
+        ? 'https://mcp-eu.posthog.com/mcp'
+        : 'https://mcp.posthog.com/mcp');
 
   const agent = initializeAgent(
     {
