@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.29.0](https://github.com/PostHog/wizard/compare/v1.28.0...v1.29.0) (2026-01-21)
+
+
+### Features
+
+* flask init support ([#234](https://github.com/PostHog/wizard/issues/234)) ([5fe71fe](https://github.com/PostHog/wizard/commit/5fe71fe73f5003878b80edb1faf812a71eefb5a7))
+
 ## [1.28.0](https://github.com/PostHog/wizard/compare/v1.27.1...v1.28.0) (2026-01-20)
 
 
