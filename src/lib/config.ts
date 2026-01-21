@@ -228,6 +228,106 @@ export const INTEGRATION_CONFIG = {
     nextSteps:
       '• Use identify_context() within new_context() to associate events with users\n• Call posthog.capture() to capture custom events\n• Use feature flags with posthog.feature_enabled()',
   },
+  [Integration.flask]: {
+    name: 'Flask',
+    filterPatterns: ['**/*.py'],
+    ignorePatterns: [
+      'node_modules',
+      'dist',
+      'build',
+      'public',
+      'static',
+      'venv',
+      '.venv',
+      'env',
+      '.env',
+      '__pycache__',
+      '*.pyc',
+      'migrations',
+      'instance',
+    ],
+    detect: async (options) => {
+      const { installDir } = options;
+
+      // Note: Django is checked before Flask in INTEGRATION_ORDER,
+      // so if we get here, the project is not a Django project.
+
+      // Check for Flask in requirements files
+      const requirementsFiles = await fg(
+        [
+          '**/requirements*.txt',
+          '**/pyproject.toml',
+          '**/setup.py',
+          '**/Pipfile',
+        ],
+        {
+          cwd: installDir,
+          ignore: ['**/venv/**', '**/.venv/**', '**/env/**', '**/.env/**'],
+        },
+      );
+
+      for (const reqFile of requirementsFiles) {
+        try {
+          const content = fs.readFileSync(
+            path.join(installDir, reqFile),
+            'utf-8',
+          );
+          // Check for flask package (case-insensitive)
+          // Match "flask" as a standalone package, not just as part of plugin names
+          if (
+            /^flask([<>=~!]|$|\s)/im.test(content) ||
+            /["']flask["']/i.test(content)
+          ) {
+            return true;
+          }
+        } catch {
+          continue;
+        }
+      }
+
+      // Check for Flask app patterns in Python files
+      const pyFiles = await fg(
+        ['**/app.py', '**/wsgi.py', '**/application.py', '**/__init__.py'],
+        {
+          cwd: installDir,
+          ignore: [
+            '**/venv/**',
+            '**/.venv/**',
+            '**/env/**',
+            '**/.env/**',
+            '**/__pycache__/**',
+          ],
+        },
+      );
+
+      for (const pyFile of pyFiles) {
+        try {
+          const content = fs.readFileSync(
+            path.join(installDir, pyFile),
+            'utf-8',
+          );
+          if (
+            content.includes('from flask import') ||
+            content.includes('import flask') ||
+            /Flask\s*\(/.test(content)
+          ) {
+            return true;
+          }
+        } catch {
+          continue;
+        }
+      }
+
+      return false;
+    },
+    generateFilesRules: '',
+    filterFilesRules: '',
+    docsUrl: 'https://posthog.com/docs/libraries/flask',
+    defaultChanges:
+      '• Installed posthog Python package\n• Added PostHog initialization to your Flask app\n• Configured automatic event tracking',
+    nextSteps:
+      '• Use posthog.identify() to associate events with users\n• Call posthog.capture() to capture custom events\n• Use feature flags with posthog.feature_enabled()',
+  },
 } as const satisfies Record<Integration, IntegrationConfig>;
 
 export const INTEGRATION_ORDER = [
@@ -237,5 +337,6 @@ export const INTEGRATION_ORDER = [
   Integration.reactNative,
   Integration.reactRouter,
   Integration.django,
+  Integration.flask,
   Integration.react,
 ] as const;
