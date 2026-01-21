@@ -77,7 +77,14 @@ export const buildMCPUrl = (
   local?: boolean,
   region?: CloudRegion,
 ) => {
-  const host = local ? 'http://localhost:8787' : 'https://mcp.posthog.com';
+  // Use subdomain for EU to work around Claude Code's OAuth bug where it ignores
+  // the authorization_servers field and fetches /.well-known/oauth-authorization-server
+  // directly from the MCP server hostname. See: https://github.com/anthropics/claude-code/issues/2267
+  const host = local
+    ? 'http://localhost:8787'
+    : region === 'eu'
+    ? 'https://mcp-eu.posthog.com'
+    : 'https://mcp.posthog.com';
   const baseUrl = `${host}/${type === 'sse' ? 'sse' : 'mcp'}`;
 
   const isAllFeaturesSelected =
@@ -94,13 +101,6 @@ export const buildMCPUrl = (
     !isAllFeaturesSelected
   ) {
     params.push(`features=${selectedFeatures.join(',')}`);
-  }
-
-  // Add region param for non-US regions to route OAuth to the correct authorization server.
-  // US is the default, so we only need to specify region for EU users.
-  // Not needed in local mode since local dev always uses the same auth server.
-  if (region && region !== 'us' && !local) {
-    params.push(`region=${region}`);
   }
 
   return params.length > 0 ? `${baseUrl}?${params.join('&')}` : baseUrl;
