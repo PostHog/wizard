@@ -71,3 +71,4 @@ export const POSTHOG_DEV_CLIENT_ID = 'DC5uRLVbGI02YQ82grxgnK6Qn12SXWpCqdPb60oZ';
 export const OAUTH_PORT = 8239;
 
 export const WIZARD_INTERACTION_EVENT_NAME = 'wizard interaction';
+export const WIZARD_REMARK_EVENT_NAME = 'wizard remark';

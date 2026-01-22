@@ -8,7 +8,10 @@ import clack from '../utils/clack';
 import { debug, logToFile, initLogFile, LOG_FILE_PATH } from '../utils/debug';
 import type { WizardOptions } from '../utils/types';
 import { analytics } from '../utils/analytics';
-import { WIZARD_INTERACTION_EVENT_NAME } from './constants';
+import {
+  WIZARD_INTERACTION_EVENT_NAME,
+  WIZARD_REMARK_EVENT_NAME,
+} from './constants';
 import { getLlmGatewayUrlFromHost } from '../utils/urls';
 import { LINTING_TOOLS } from './safe-tools';
 
@@ -43,6 +46,8 @@ export const AgentSignals = {
   ERROR_MCP_MISSING: '[ERROR-MCP-MISSING]',
   /** Signal emitted when the agent cannot access the setup resource */
   ERROR_RESOURCE_MISSING: '[ERROR-RESOURCE-MISSING]',
+  /** Signal emitted when the agent provides a remark about its run */
+  WIZARD_REMARK: '[WIZARD-REMARK]',
 } as const;
 
 export type AgentSignal = (typeof AgentSignals)[keyof typeof AgentSignals];
@@ -446,6 +451,33 @@ export async function runAgent(
             debug('CLI stderr:', data);
           }
         },
+        // Stop hook to have the agent reflect on its run
+        hooks: {
+          Stop: [
+            {
+              hooks: [
+                (input: { stop_hook_active: boolean }) => {
+                  logToFile('Stop hook triggered', {
+                    stop_hook_active: input.stop_hook_active,
+                  });
+
+                  // Only ask for reflection on first stop (not after reflection is provided)
+                  if (input.stop_hook_active) {
+                    logToFile('Stop hook: allowing stop (already reflected)');
+                    return {}; // Allow stopping
+                  }
+
+                  logToFile('Stop hook: requesting reflection');
+                  return {
+                    decision: 'block',
+                    reason: `Before concluding, provide a brief remark about what information or guidance would have been useful to have in the integration prompt or documentation for this run. Specifically cite anything that would have prevented tool failures, erroneous edits, or other wasted turns. Format your response exactly as: ${AgentSignals.WIZARD_REMARK} Your remark here`,
+                  };
+                },
+              ],
+              timeout: 30,
+            },
+          ],
+        },
       },
     });
 
@@ -488,6 +520,23 @@ export async function runAgent(
     }
 
     logToFile(`Agent run completed in ${Math.round(durationMs / 1000)}s`);
+
+    // Extract and capture the agent's reflection on the run
+    const remarkRegex = new RegExp(
+      `${AgentSignals.WIZARD_REMARK.replace(
+        /[.*+?^${}()|[\]\\]/g,
+        '\\$&',
+      )}\\s*(.+?)(?:\\n|$)`,
+      's',
+    );
+    const remarkMatch = outputText.match(remarkRegex);
+    if (remarkMatch && remarkMatch[1]) {
+      const remark = remarkMatch[1].trim();
+      if (remark) {
+        analytics.capture(WIZARD_REMARK_EVENT_NAME, { remark });
+      }
+    }
+
     analytics.capture(WIZARD_INTERACTION_EVENT_NAME, {
       action: 'agent integration completed',
       duration_ms: durationMs,
