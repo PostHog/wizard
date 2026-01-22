@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.31.0](https://github.com/PostHog/wizard/compare/v1.30.0...v1.31.0) (2026-01-22)
+
+
+### Features
+
+* Transmit remarks about integration docs defects on conclusion ([#243](https://github.com/PostHog/wizard/issues/243)) ([909baaf](https://github.com/PostHog/wizard/commit/909baaf229a082b9f842fa215a520c87b5b1c359))
+
+
+### Bug Fixes
+
+* use EU subdomain for MCP OAuth routing ([#240](https://github.com/PostHog/wizard/issues/240)) ([3120d79](https://github.com/PostHog/wizard/commit/3120d7988db41b808338b7e54d47a5e0fcbcd74c))
+
 ## [1.30.0](https://github.com/PostHog/wizard/compare/v1.29.0...v1.30.0) (2026-01-21)
 
 
