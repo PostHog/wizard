@@ -5,6 +5,9 @@ export enum Integration {
   reactNative = 'react-native',
   astro = 'astro',
   reactRouter = 'react-router',
+  django = 'django',
+  flask = 'flask',
+  laravel = 'laravel',
 }
 
 export enum FeatureFlagDefinition {
@@ -25,6 +28,12 @@ export function getIntegrationDescription(type: string): string {
       return 'Astro';
     case Integration.reactRouter:
       return 'React Router';
+    case Integration.django:
+      return 'Django';
+    case Integration.flask:
+      return 'Flask';
+    case Integration.laravel:
+      return 'Laravel';
     default:
       throw new Error(`Unknown integration ${type}`);
   }

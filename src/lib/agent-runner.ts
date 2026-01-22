@@ -30,6 +30,7 @@ import {
   addMCPServerToClientsStep,
   uploadEnvironmentVariablesStep,
 } from '../steps';
+import { checkAnthropicStatusWithPrompt } from '../utils/anthropic-status';
 
 /**
  * Universal agent-powered wizard runner.
@@ -54,20 +55,38 @@ export async function runAgentWizard(
     );
   }
 
+  // Check Anthropic/Claude service status before proceeding
+  const statusOk = await checkAnthropicStatusWithPrompt({ ci: options.ci });
+  if (!statusOk) {
+    await abort(
+      `Please try again later, or set up ${config.metadata.name} manually: ${config.metadata.docsUrl}`,
+      0,
+    );
+  }
+
   const cloudRegion = options.cloudRegion ?? (await askForCloudRegion());
   const typeScriptDetected = isUsingTypeScript(options);
 
   await confirmContinueIfNoOrDirtyGitRepo(options);
 
   // Framework detection and version
-  const packageJson = await getPackageDotJson(options);
-  await ensurePackageIsInstalled(
-    packageJson,
-    config.detection.packageName,
-    config.detection.packageDisplayName,
-  );
+  // Only check package.json for Node.js/JavaScript frameworks
+  const usesPackageJson = config.detection.usesPackageJson !== false;
+  let packageJson: any = null;
+  let frameworkVersion: string | undefined;
 
-  const frameworkVersion = config.detection.getVersion(packageJson);
+  if (usesPackageJson) {
+    packageJson = await getPackageDotJson(options);
+    await ensurePackageIsInstalled(
+      packageJson,
+      config.detection.packageName,
+      config.detection.packageDisplayName,
+    );
+    frameworkVersion = config.detection.getVersion(packageJson);
+  } else {
+    // For non-Node frameworks (e.g., Django), version is handled differently
+    frameworkVersion = config.detection.getVersion(null);
+  }
 
   // Set analytics tags for framework version
   if (frameworkVersion && config.detection.getVersionBucket) {
@@ -113,9 +132,14 @@ export async function runAgentWizard(
   const spinner = clack.spinner();
 
   // Determine MCP URL: CLI flag > env var > production default
+  // Use EU subdomain for EU users to work around Claude Code's OAuth bug
+  // See: https://github.com/anthropics/claude-code/issues/2267
   const mcpUrl = options.localMcp
     ? 'http://localhost:8787/mcp'
-    : process.env.MCP_URL || 'https://mcp.posthog.com/mcp';
+    : process.env.MCP_URL ||
+      (cloudRegion === 'eu'
+        ? 'https://mcp-eu.posthog.com/mcp'
+        : 'https://mcp.posthog.com/mcp');
 
   const agent = initializeAgent(
     {

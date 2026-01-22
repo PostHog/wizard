@@ -86,7 +86,20 @@ type AgentRunConfig = {
 /**
  * Package managers that can be used to run commands.
  */
-const PACKAGE_MANAGERS = ['npm', 'pnpm', 'yarn', 'bun', 'npx'];
+const PACKAGE_MANAGERS = [
+  // JavaScript
+  'npm',
+  'pnpm',
+  'yarn',
+  'bun',
+  'npx',
+  // Python
+  'pip',
+  'pip3',
+  'poetry',
+  'pipenv',
+  'uv',
+];
 
 /**
  * Safe scripts/commands that can be run with any package manager.
@@ -293,6 +306,8 @@ export function initializeAgent(
     const gatewayUrl = getLlmGatewayUrlFromHost(config.posthogApiHost);
     process.env.ANTHROPIC_BASE_URL = gatewayUrl;
     process.env.ANTHROPIC_AUTH_TOKEN = config.posthogApiKey;
+    // Use CLAUDE_CODE_OAUTH_TOKEN to override any stored /login credentials
+    process.env.CLAUDE_CODE_OAUTH_TOKEN = config.posthogApiKey;
     // Disable experimental betas (like input_examples) that the LLM gateway doesn't support
     process.env.CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS = 'true';
 
@@ -382,6 +397,8 @@ export async function runAgent(
 
   const startTime = Date.now();
   const collectedText: string[] = [];
+  // Track if we received a successful result (before any cleanup errors)
+  let receivedSuccessResult = false;
 
   // Workaround for SDK bug: stdin closes before canUseTool responses can be sent.
   // The fix is to use an async generator for the prompt that stays open until
@@ -401,6 +418,48 @@ export async function runAgent(
       parent_tool_use_id: null,
     };
     await resultReceived;
+  };
+
+  // Helper to handle successful completion (used in normal path and race condition recovery)
+  const completeWithSuccess = (
+    suppressedError?: Error,
+  ): { error?: AgentErrorType; message?: string } => {
+    const durationMs = Date.now() - startTime;
+    const durationSeconds = Math.round(durationMs / 1000);
+
+    if (suppressedError) {
+      logToFile(
+        `Ignoring post-completion error, agent completed successfully in ${durationSeconds}s`,
+      );
+      logToFile('Suppressed error:', suppressedError.message);
+    } else {
+      logToFile(`Agent run completed in ${durationSeconds}s`);
+    }
+
+    // Extract and capture the agent's reflection on the run
+    const outputText = collectedText.join('\n');
+    const remarkRegex = new RegExp(
+      `${AgentSignals.WIZARD_REMARK.replace(
+        /[.*+?^${}()|[\]\\]/g,
+        '\\$&',
+      )}\\s*(.+?)(?:\\n|$)`,
+      's',
+    );
+    const remarkMatch = outputText.match(remarkRegex);
+    if (remarkMatch && remarkMatch[1]) {
+      const remark = remarkMatch[1].trim();
+      if (remark) {
+        analytics.capture(WIZARD_REMARK_EVENT_NAME, { remark });
+      }
+    }
+
+    analytics.capture(WIZARD_INTERACTION_EVENT_NAME, {
+      action: 'agent integration completed',
+      duration_ms: durationMs,
+      duration_seconds: durationSeconds,
+    });
+    spinner.stop(successMessage);
+    return {};
   };
 
   try {
@@ -433,7 +492,11 @@ export async function runAgent(
         settingSources: ['project'],
         // Explicitly enable required tools including Skill
         allowedTools,
-        env: { ...process.env },
+        env: {
+          ...process.env,
+          // Prevent user's Anthropic API key from overriding the wizard's OAuth token
+          ANTHROPIC_API_KEY: undefined,
+        },
         canUseTool: (toolName: string, input: unknown) => {
           logToFile('canUseTool called:', { toolName, input });
           const result = wizardCanUseTool(
@@ -486,11 +549,15 @@ export async function runAgent(
       handleSDKMessage(message, options, spinner, collectedText);
       // Signal completion when result received
       if (message.type === 'result') {
+        // Track successful results before any potential cleanup errors
+        // The SDK may emit a second error result during cleanup due to a race condition
+        if (message.subtype === 'success' && !message.is_error) {
+          receivedSuccessResult = true;
+        }
         signalDone!();
       }
     }
 
-    const durationMs = Date.now() - startTime;
     const outputText = collectedText.join('\n');
 
     // Check for error markers in the agent's output
@@ -519,35 +586,18 @@ export async function runAgent(
       return { error: AgentErrorType.API_ERROR, message: outputText };
     }
 
-    logToFile(`Agent run completed in ${Math.round(durationMs / 1000)}s`);
-
-    // Extract and capture the agent's reflection on the run
-    const remarkRegex = new RegExp(
-      `${AgentSignals.WIZARD_REMARK.replace(
-        /[.*+?^${}()|[\]\\]/g,
-        '\\$&',
-      )}\\s*(.+?)(?:\\n|$)`,
-      's',
-    );
-    const remarkMatch = outputText.match(remarkRegex);
-    if (remarkMatch && remarkMatch[1]) {
-      const remark = remarkMatch[1].trim();
-      if (remark) {
-        analytics.capture(WIZARD_REMARK_EVENT_NAME, { remark });
-      }
-    }
-
-    analytics.capture(WIZARD_INTERACTION_EVENT_NAME, {
-      action: 'agent integration completed',
-      duration_ms: durationMs,
-      duration_seconds: Math.round(durationMs / 1000),
-    });
-
-    spinner.stop(successMessage);
-    return {};
+    return completeWithSuccess();
   } catch (error) {
     // Signal done to unblock the async generator
     signalDone!();
+
+    // If we already received a successful result, the error is from SDK cleanup
+    // This happens due to a race condition: the SDK tries to send a cleanup command
+    // after the prompt stream closes, but streaming mode is still active.
+    // See: https://github.com/anthropics/claude-agent-sdk-typescript/issues/41
+    if (receivedSuccessResult) {
+      return completeWithSuccess(error as Error);
+    }
 
     // Check if we collected an API error before the exception was thrown
     const outputText = collectedText.join('\n');

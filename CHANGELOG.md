@@ -1,5 +1,40 @@
 # Changelog
 
+## [1.30.0](https://github.com/PostHog/wizard/compare/v1.29.0...v1.30.0) (2026-01-21)
+
+
+### Features
+
+* laravel wizard support ([#238](https://github.com/PostHog/wizard/issues/238)) ([fe5a220](https://github.com/PostHog/wizard/commit/fe5a220c91752a9e2886140e72f4881447322b15))
+
+## [1.29.0](https://github.com/PostHog/wizard/compare/v1.28.0...v1.29.0) (2026-01-21)
+
+
+### Features
+
+* flask init support ([#234](https://github.com/PostHog/wizard/issues/234)) ([5fe71fe](https://github.com/PostHog/wizard/commit/5fe71fe73f5003878b80edb1faf812a71eefb5a7))
+
+## [1.28.0](https://github.com/PostHog/wizard/compare/v1.27.1...v1.28.0) (2026-01-20)
+
+
+### Features
+
+* anthropic status check ([#236](https://github.com/PostHog/wizard/issues/236)) ([8415459](https://github.com/PostHog/wizard/commit/84154594e693f3f0d012519b4d92261fe9bdf9d4))
+
+## [1.27.1](https://github.com/PostHog/wizard/compare/v1.27.0...v1.27.1) (2026-01-20)
+
+
+### Bug Fixes
+
+* Resilience to Agent SDK cleanup burps ([#231](https://github.com/PostHog/wizard/issues/231)) ([7572038](https://github.com/PostHog/wizard/commit/75720385542293d3a0114415edc3fe5582fbb377))
+
+## [1.27.0](https://github.com/PostHog/wizard/compare/v1.26.0...v1.27.0) (2026-01-19)
+
+
+### Features
+
+* django skill ([#230](https://github.com/PostHog/wizard/issues/230)) ([f18d7d2](https://github.com/PostHog/wizard/commit/f18d7d21ac9b0193febdc8e09b6080d05de454a8))
+
 ## [1.26.0](https://github.com/PostHog/wizard/compare/v1.25.0...v1.26.0) (2026-01-15)
 
 

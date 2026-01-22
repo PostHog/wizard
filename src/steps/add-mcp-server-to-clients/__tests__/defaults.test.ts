@@ -28,9 +28,9 @@ describe('defaults', () => {
       );
     });
 
-    it('should add region param for EU region', () => {
+    it('should use EU subdomain for EU region', () => {
       const url = buildMCPUrl('streamable-http', undefined, false, 'eu');
-      expect(url).toBe('https://mcp.posthog.com/mcp?region=eu');
+      expect(url).toBe('https://mcp-eu.posthog.com/mcp');
     });
 
     it('should not add region param for US region (default)', () => {
@@ -43,11 +43,9 @@ describe('defaults', () => {
       expect(url).toBe('http://localhost:8787/mcp');
     });
 
-    it('should combine features and region params', () => {
+    it('should combine EU subdomain with features param', () => {
       const url = buildMCPUrl('streamable-http', ['dashboards'], false, 'eu');
-      expect(url).toBe(
-        'https://mcp.posthog.com/mcp?features=dashboards&region=eu',
-      );
+      expect(url).toBe('https://mcp-eu.posthog.com/mcp?features=dashboards');
     });
   });
 
@@ -78,7 +76,7 @@ describe('defaults', () => {
       expect(config).not.toHaveProperty('env');
     });
 
-    it('should include region in URL for EU users in OAuth mode', () => {
+    it('should use EU subdomain for EU users in OAuth mode', () => {
       const config = getDefaultServerConfig(
         undefined,
         'streamable-http',
@@ -86,7 +84,7 @@ describe('defaults', () => {
         false,
         'eu',
       );
-      expect(config.args).toContain('https://mcp.posthog.com/mcp?region=eu');
+      expect(config.args).toContain('https://mcp-eu.posthog.com/mcp');
     });
   });
 
@@ -112,7 +110,7 @@ describe('defaults', () => {
       expect(config).not.toHaveProperty('headers');
     });
 
-    it('should include region in URL for EU users', () => {
+    it('should use EU subdomain for EU users', () => {
       const config = getNativeHTTPServerConfig(
         undefined,
         'streamable-http',
@@ -120,7 +118,7 @@ describe('defaults', () => {
         false,
         'eu',
       );
-      expect(config.url).toBe('https://mcp.posthog.com/mcp?region=eu');
+      expect(config.url).toBe('https://mcp-eu.posthog.com/mcp');
     });
   });
 });
