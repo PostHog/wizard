@@ -190,6 +190,22 @@ export function wizardCanUseTool(
 ):
   | { behavior: 'allow'; updatedInput: Record<string, unknown> }
   | { behavior: 'deny'; message: string } {
+  // Block reading .env files to prevent credentials from transiting the LLM gateway
+  if (toolName === 'Read') {
+    const filePath =
+      typeof input.file_path === 'string' ? input.file_path : '';
+    const fileName = filePath.split('/').pop() || '';
+    if (/^\.env(\..+)?$/.test(fileName)) {
+      logToFile(`Denying Read access to .env file: ${filePath}`);
+      debug(`Denying Read access to .env file: ${filePath}`);
+      return {
+        behavior: 'deny' as const,
+        message:
+          'Reading .env files is not permitted to protect credentials.',
+      };
+    }
+  }
+
   // Allow all non-Bash tools
   if (toolName !== 'Bash') {
     return { behavior: 'allow', updatedInput: input };

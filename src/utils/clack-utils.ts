@@ -985,7 +985,7 @@ export async function askForAIConsent(
         : await abortIfCancelled(
             clack.select({
               message:
-                'This setup wizard uses AI, are you happy to continue? ✨',
+                'This wizard uses AI to set up PostHog. Project files (excluding .env) will be processed through PostHog\'s LLM gateway. Continue? ✨',
               options: [
                 {
                   label: 'Yes',
