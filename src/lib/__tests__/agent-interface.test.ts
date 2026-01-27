@@ -183,9 +183,9 @@ describe('runAgent', () => {
     });
 
     it('should suppress user-facing errors when SDK yields error result after success', async () => {
-      // This test models the ACTUAL SDK behavior observed in anthony-posthog-wizard.log:
+      // This test models actual SDK behavior where the SDK emits TWO result messages:
       // 1. SDK yields success result (num_turns: 105, is_error: false)
-      // 2. 8ms later, SDK yields a SECOND result with is_error: true containing
+      // 2. SDK yields a SECOND result with is_error: true containing
       //    accumulated cleanup/telemetry errors
       // 3. The errors should be logged to file but NOT shown to the user
       //
@@ -213,7 +213,6 @@ describe('runAgent', () => {
         };
 
         // Second result: error (SDK cleanup noise - yielded, not thrown)
-        // This is what actually happens per anthony-posthog-wizard.log lines 13271-13401
         yield {
           type: 'result',
           subtype: 'error_during_execution',
@@ -226,7 +225,6 @@ describe('runAgent', () => {
             'Error: 1P event logging: 14 events failed to export',
             'Error: 1P event logging: 13 events failed to export',
             'Error: Failed to export 14 events',
-            // ... more telemetry errors in the real log
           ],
         };
       }
