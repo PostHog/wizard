@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.31.1](https://github.com/PostHog/wizard/compare/v1.31.0...v1.31.1) (2026-01-27)
+
+
+### Bug Fixes
+
+* break the handlSDKMessage loop after agent completed successfully ([#246](https://github.com/PostHog/wizard/issues/246)) ([80a71ec](https://github.com/PostHog/wizard/commit/80a71ec5a068743666633856e811d705abde35e4))
+
 ## [1.31.0](https://github.com/PostHog/wizard/compare/v1.30.0...v1.31.0) (2026-01-22)
 
 
