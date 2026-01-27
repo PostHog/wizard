@@ -546,19 +546,24 @@ export async function runAgent(
 
     // Process the async generator
     for await (const message of response) {
-      handleSDKMessage(message, options, spinner, collectedText);
+      // Pass receivedSuccessResult so handleSDKMessage can suppress user-facing error
+      // output for post-success cleanup errors while still logging them to file
+      handleSDKMessage(
+        message,
+        options,
+        spinner,
+        collectedText,
+        receivedSuccessResult,
+      );
+
       // Signal completion when result received
       if (message.type === 'result') {
         // Track successful results before any potential cleanup errors
         // The SDK may emit a second error result during cleanup due to a race condition
         if (message.subtype === 'success' && !message.is_error) {
           receivedSuccessResult = true;
-          signalDone!();
-          // Exit immediately after success to avoid processing subsequent error results
-          // from SDK cleanup. These errors are cosmetic - the agent work completed successfully.
-          break;
         }
-        signalDone!(); // Only reached for non-success results
+        signalDone!();
       }
     }
 
@@ -635,12 +640,17 @@ export async function runAgent(
 
 /**
  * Handle SDK messages and provide user feedback
+ *
+ * @param receivedSuccessResult - If true, suppress user-facing error output for cleanup errors
+ *                          while still logging to file. The SDK may emit a second error
+ *                          result after success due to cleanup race conditions.
  */
 function handleSDKMessage(
   message: SDKMessage,
   options: WizardOptions,
   spinner: ReturnType<typeof clack.spinner>,
   collectedText: string[],
+  receivedSuccessResult = false,
 ): void {
   logToFile(`SDK Message: ${message.type}`, JSON.stringify(message, null, 2));
 
@@ -683,7 +693,10 @@ function handleSDKMessage(
         if (typeof message.result === 'string') {
           collectedText.push(message.result);
         }
-        if (message.errors) {
+        // Only show errors to user if we haven't already succeeded.
+        // Post-success errors are SDK cleanup noise (telemetry failures, streaming
+        // mode race conditions). Full message already logged above via JSON dump.
+        if (message.errors && !receivedSuccessResult) {
           for (const err of message.errors) {
             clack.log.error(`Error: ${err}`);
             logToFile('ERROR:', err);
@@ -695,9 +708,10 @@ function handleSDKMessage(
           collectedText.push(message.result);
         }
       } else {
-        // Error result
-        logToFile('Agent error result:', message.subtype);
-        if (message.errors) {
+        logToFile('Agent result with error:', message.result);
+        // Error result - only show to user if we haven't already succeeded.
+        // Full message already logged above via JSON dump.
+        if (message.errors && !receivedSuccessResult) {
           for (const err of message.errors) {
             clack.log.error(`Error: ${err}`);
             logToFile('ERROR:', err);
