@@ -181,5 +181,73 @@ describe('runAgent', () => {
       expect(result.error).toBe('WIZARD_API_ERROR');
       expect(result.message).toContain('API Error');
     });
+
+    it('should suppress user-facing errors when SDK yields error result after success', async () => {
+      // This test models actual SDK behavior where the SDK emits TWO result messages:
+      // 1. SDK yields success result (num_turns: 105, is_error: false)
+      // 2. SDK yields a SECOND result with is_error: true containing
+      //    accumulated cleanup/telemetry errors
+      // 3. The errors should be logged to file but NOT shown to the user
+      //
+      // This differs from the thrown exception test above - here the SDK YIELDS
+      // an error result message instead of THROWING an exception.
+
+      function* mockGeneratorWithYieldedErrorAfterSuccess() {
+        yield {
+          type: 'system',
+          subtype: 'init',
+          model: 'claude-opus-4-5-20251101',
+          tools: [],
+          mcp_servers: [],
+        };
+
+        // First result: success (this is the real completion)
+        yield {
+          type: 'result',
+          subtype: 'success',
+          is_error: false,
+          num_turns: 105,
+          result: '[WIZARD-REMARK] Integration completed successfully',
+          session_id: '2ce14bda-6d86-4220-b5bb-ab24f7004290',
+          total_cost_usd: 5.83,
+        };
+
+        // Second result: error (SDK cleanup noise - yielded, not thrown)
+        yield {
+          type: 'result',
+          subtype: 'error_during_execution',
+          is_error: true,
+          num_turns: 0,
+          session_id: '2ce14bda-6d86-4220-b5bb-ab24f7004290',
+          total_cost_usd: 0,
+          errors: [
+            'only prompt commands are supported in streaming mode',
+            'Error: 1P event logging: 14 events failed to export',
+            'Error: 1P event logging: 13 events failed to export',
+            'Error: Failed to export 14 events',
+          ],
+        };
+      }
+
+      mockQuery.mockReturnValue(mockGeneratorWithYieldedErrorAfterSuccess());
+
+      const result = await runAgent(
+        defaultAgentConfig,
+        'test prompt',
+        defaultOptions,
+        mockSpinner as unknown as ReturnType<typeof clack.spinner>,
+        {
+          successMessage: 'Test success',
+          errorMessage: 'Test error',
+        },
+      );
+
+      // Should return success (empty object), not error
+      expect(result).toEqual({});
+      expect(mockSpinner.stop).toHaveBeenCalledWith('Test success');
+
+      // clack.log.error should NOT have been called (errors suppressed for user)
+      expect(mockClack.log.error).not.toHaveBeenCalled();
+    });
   });
 });
