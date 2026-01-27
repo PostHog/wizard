@@ -553,8 +553,12 @@ export async function runAgent(
         // The SDK may emit a second error result during cleanup due to a race condition
         if (message.subtype === 'success' && !message.is_error) {
           receivedSuccessResult = true;
+          signalDone!();
+          // Exit immediately after success to avoid processing subsequent error results
+          // from SDK cleanup. These errors are cosmetic - the agent work completed successfully.
+          break;
         }
-        signalDone!();
+        signalDone!(); // Only reached for non-success results
       }
     }
 
