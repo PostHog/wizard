@@ -15,7 +15,7 @@ Every framework integration is a single `FrameworkConfig` object. The wizard has
 
 1. **`FrameworkConfig`** (`src/lib/framework-config.ts`) — the interface each framework implements
 2. **`FRAMEWORK_REGISTRY`** (`src/lib/registry.ts`) — maps `Integration` enum values to configs
-3. **`Integration` enum + `INTEGRATION_LABELS`** (`src/lib/constants.ts`) — enum order determines detection priority and menu display order
+3. **`Integration` enum** (`src/lib/constants.ts`) — enum order determines detection priority and menu display order
 
 The universal runner (`src/lib/agent-runner.ts`) handles all shared behavior: debug logging, version checking, welcome message, beta notices, AI consent, credential flow, agent execution, error handling, and outro messaging.
 
@@ -23,18 +23,13 @@ The universal runner (`src/lib/agent-runner.ts`) handles all shared behavior: de
 
 ### 1. Add to the Integration enum and labels
 
-In `src/lib/constants.ts`, add the new value to `Integration` and `INTEGRATION_LABELS`. **Enum order matters** — it controls both the detection priority (first match wins) and the display order in the CLI select menu.
+In `src/lib/constants.ts`, add the new value to `Integration`. **Enum order matters** — it controls both the detection priority (first match wins) and the display order in the CLI select menu. The display label comes from `metadata.name` in your `FrameworkConfig`.
 
 ```ts
 export enum Integration {
   // ... existing entries
   rails = 'rails',  // insert at the desired detection/display position
 }
-
-export const INTEGRATION_LABELS: Record<Integration, string> = {
-  // ... existing entries
-  [Integration.rails]: 'Ruby on Rails',
-};
 ```
 
 ### 2. Create the agent config file

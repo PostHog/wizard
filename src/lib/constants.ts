@@ -6,22 +6,6 @@ export enum Integration {
   laravel = 'laravel',
 }
 
-export const INTEGRATION_LABELS: Record<Integration, string> = {
-  [Integration.nextjs]: 'Next.js',
-  [Integration.reactRouter]: 'React Router',
-  [Integration.django]: 'Django',
-  [Integration.flask]: 'Flask',
-  [Integration.laravel]: 'Laravel',
-};
-
-export function getIntegrationDescription(type: string): string {
-  const label = INTEGRATION_LABELS[type as Integration];
-  if (!label) {
-    throw new Error(`Unknown integration ${type}`);
-  }
-  return label;
-}
-
 export interface Args {
   debug: boolean;
   integration: Integration;

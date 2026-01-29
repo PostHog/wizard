@@ -2,11 +2,7 @@ import { abortIfCancelled } from './utils/clack-utils';
 
 import type { CloudRegion, WizardOptions } from './utils/types';
 
-import {
-  getIntegrationDescription,
-  Integration,
-  INTEGRATION_LABELS,
-} from './lib/constants';
+import { Integration } from './lib/constants';
 import { readEnvironment } from './utils/environment';
 import clack from './utils/clack';
 import path from 'path';
@@ -111,7 +107,7 @@ async function getIntegrationForSetup(
 
   if (detectedIntegration) {
     clack.log.success(
-      `Detected integration: ${getIntegrationDescription(detectedIntegration)}`,
+      `Detected integration: ${FRAMEWORK_REGISTRY[detectedIntegration].metadata.name}`,
     );
     return detectedIntegration;
   }
@@ -121,7 +117,7 @@ async function getIntegrationForSetup(
       message: 'What do you want to set up?',
       options: Object.values(Integration).map((value) => ({
         value,
-        label: INTEGRATION_LABELS[value],
+        label: FRAMEWORK_REGISTRY[value].metadata.name,
       })),
     }),
   );
