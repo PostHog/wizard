@@ -6,12 +6,13 @@ import type { CloudRegion, WizardOptions } from './utils/types';
 import {
   getIntegrationDescription,
   Integration,
+  INTEGRATION_LABELS,
   FeatureFlagDefinition,
 } from './lib/constants';
 import { readEnvironment } from './utils/environment';
 import clack from './utils/clack';
 import path from 'path';
-import { INTEGRATION_CONFIG, INTEGRATION_ORDER } from './lib/config';
+import { INTEGRATION_CONFIG } from './lib/config';
 import { runReactWizard } from './react/react-wizard';
 import { analytics } from './utils/analytics';
 import { runSvelteWizard } from './svelte/svelte-wizard';
@@ -166,10 +167,10 @@ export async function runWizard(argv: Args) {
 async function detectIntegration(
   options: Pick<WizardOptions, 'installDir'>,
 ): Promise<Integration | undefined> {
+  const enumOrder = Object.values(Integration);
   const integrationConfigs = Object.entries(INTEGRATION_CONFIG).sort(
     ([a], [b]) =>
-      INTEGRATION_ORDER.indexOf(a as Integration) -
-      INTEGRATION_ORDER.indexOf(b as Integration),
+      enumOrder.indexOf(a as Integration) - enumOrder.indexOf(b as Integration),
   );
 
   for (const [integration, config] of integrationConfigs) {
@@ -195,17 +196,10 @@ async function getIntegrationForSetup(
   const integration: Integration = await abortIfCancelled(
     clack.select({
       message: 'What do you want to set up?',
-      options: [
-        { value: Integration.nextjs, label: 'Next.js' },
-        { value: Integration.astro, label: 'Astro' },
-        { value: Integration.react, label: 'React' },
-        { value: Integration.reactRouter, label: 'React Router' },
-        { value: Integration.django, label: 'Django' },
-        { value: Integration.flask, label: 'Flask' },
-        { value: Integration.laravel, label: 'Laravel' },
-        { value: Integration.svelte, label: 'Svelte' },
-        { value: Integration.reactNative, label: 'React Native' },
-      ],
+      options: Object.values(Integration).map((value) => ({
+        value,
+        label: INTEGRATION_LABELS[value],
+      })),
     }),
   );
 

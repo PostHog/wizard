@@ -1,53 +1,43 @@
 export enum Integration {
   nextjs = 'nextjs',
-  react = 'react',
+  astro = 'astro',
   svelte = 'svelte',
   reactNative = 'react-native',
-  astro = 'astro',
   reactRouter = 'react-router',
   django = 'django',
   flask = 'flask',
   laravel = 'laravel',
+  react = 'react',
 }
 
 export enum FeatureFlagDefinition {
   ReactRouter = 'wizard-react-router',
 }
 
-export function getIntegrationDescription(type: string): string {
-  switch (type) {
-    case Integration.nextjs:
-      return 'Next.js';
-    case Integration.react:
-      return 'React';
-    case Integration.reactNative:
-      return 'React Native';
-    case Integration.svelte:
-      return 'Svelte';
-    case Integration.astro:
-      return 'Astro';
-    case Integration.reactRouter:
-      return 'React Router';
-    case Integration.django:
-      return 'Django';
-    case Integration.flask:
-      return 'Flask';
-    case Integration.laravel:
-      return 'Laravel';
-    default:
-      throw new Error(`Unknown integration ${type}`);
-  }
-}
-
-type IntegrationChoice = {
-  name: string;
-  value: string;
+export const INTEGRATION_LABELS: Record<Integration, string> = {
+  [Integration.nextjs]: 'Next.js',
+  [Integration.astro]: 'Astro',
+  [Integration.svelte]: 'Svelte',
+  [Integration.reactNative]: 'React Native',
+  [Integration.reactRouter]: 'React Router',
+  [Integration.django]: 'Django',
+  [Integration.flask]: 'Flask',
+  [Integration.laravel]: 'Laravel',
+  [Integration.react]: 'React',
 };
 
-export function getIntegrationChoices(): IntegrationChoice[] {
-  return Object.keys(Integration).map((type: string) => ({
-    name: getIntegrationDescription(type),
-    value: type,
+export function getIntegrationDescription(type: string): string {
+  const label = INTEGRATION_LABELS[type as Integration];
+  if (!label) {
+    throw new Error(`Unknown integration ${type}`);
+  }
+  return label;
+}
+
+export function getIntegrationChoices(): { name: string; value: string }[] {
+  return Object.values(Integration).map((value) => ({
+    name: INTEGRATION_LABELS[value],
+    value,
   }));
 }
 

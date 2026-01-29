@@ -249,7 +249,7 @@ export const INTEGRATION_CONFIG = {
     detect: async (options) => {
       const { installDir } = options;
 
-      // Note: Django is checked before Flask in INTEGRATION_ORDER,
+      // Note: Django is checked before Flask in the Integration enum order,
       // so if we get here, the project is not a Django project.
 
       // Check for Flask in requirements files
@@ -390,15 +390,3 @@ export const INTEGRATION_CONFIG = {
       '• Use PostHog::capture() to track custom events\n• Use PostHog::identify() to associate events with users',
   },
 } as const satisfies Record<Integration, IntegrationConfig>;
-
-export const INTEGRATION_ORDER = [
-  Integration.nextjs,
-  Integration.astro,
-  Integration.svelte,
-  Integration.reactNative,
-  Integration.reactRouter,
-  Integration.django,
-  Integration.flask,
-  Integration.laravel,
-  Integration.react,
-] as const;
