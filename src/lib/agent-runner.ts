@@ -69,6 +69,16 @@ export async function runAgentWizard(
   // Setup phase
   printWelcome({ wizardName: getWelcomeMessage(config.metadata.name) });
 
+  if (config.metadata.beta) {
+    clack.log.info(
+      `${chalk.yellow('[BETA]')} The ${
+        config.metadata.name
+      } wizard is in beta. Questions or feedback? Email ${chalk.cyan(
+        'wizard@posthog.com',
+      )}`,
+    );
+  }
+
   clack.log.info(
     `🧙 The wizard has chosen you to try the next-generation agent integration for ${config.metadata.name}.\n\nStand by for the good stuff, and let the robot minders know how it goes:\n\nwizard@posthog.com`,
   );

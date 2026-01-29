@@ -33,6 +33,9 @@ export interface FrameworkMetadata {
    */
   unsupportedVersionDocsUrl?: string;
 
+  /** If true, shows a beta notice before running the wizard. */
+  beta?: boolean;
+
   /**
    * Optional function to gather framework-specific context before agent runs.
    * For Next.js: detects router type
@@ -69,6 +72,9 @@ export interface FrameworkDetection {
 
   /** Get the currently installed version. Called by runner for version check. */
   getInstalledVersion?: (options: WizardOptions) => Promise<string | undefined>;
+
+  /** Detect whether this framework is present in the project. */
+  detect: (options: Pick<WizardOptions, 'installDir'>) => Promise<boolean>;
 }
 
 /**

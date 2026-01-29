@@ -1,9 +1,10 @@
 /* Simplified Next.js wizard using posthog-agent with PostHog MCP */
 import type { WizardOptions } from '../utils/types';
+import type { FrameworkConfig } from '../lib/framework-config';
 import { runAgentWizard } from '../lib/agent-runner';
 import { Integration } from '../lib/constants';
-import { getPackageVersion } from '../utils/package-json';
-import { getPackageDotJson } from '../utils/clack-utils';
+import { getPackageVersion, hasPackageInstalled } from '../utils/package-json';
+import { getPackageDotJson, tryGetPackageJson } from '../utils/clack-utils';
 import {
   getNextJsRouter,
   getNextJsVersionBucket,
@@ -11,7 +12,7 @@ import {
   NextJsRouter,
 } from './utils';
 
-const NEXTJS_AGENT_CONFIG = {
+export const NEXTJS_AGENT_CONFIG: FrameworkConfig = {
   metadata: {
     name: 'Next.js',
     integration: Integration.nextjs,
@@ -32,6 +33,10 @@ const NEXTJS_AGENT_CONFIG = {
     getInstalledVersion: async (options: WizardOptions) => {
       const packageJson = await getPackageDotJson(options);
       return getPackageVersion('next', packageJson);
+    },
+    detect: async (options) => {
+      const packageJson = await tryGetPackageJson(options);
+      return packageJson ? hasPackageInstalled('next', packageJson) : false;
     },
   },
 

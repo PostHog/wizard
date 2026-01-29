@@ -3,8 +3,8 @@ import type { WizardOptions } from '../utils/types';
 import type { FrameworkConfig } from '../lib/framework-config';
 import { runAgentWizard } from '../lib/agent-runner';
 import { Integration } from '../lib/constants';
-import { getPackageVersion } from '../utils/package-json';
-import { getPackageDotJson } from '../utils/clack-utils';
+import { getPackageVersion, hasPackageInstalled } from '../utils/package-json';
+import { getPackageDotJson, tryGetPackageJson } from '../utils/clack-utils';
 import {
   getReactRouterMode,
   getReactRouterModeName,
@@ -12,7 +12,7 @@ import {
   ReactRouterMode,
 } from './utils';
 
-const REACT_ROUTER_AGENT_CONFIG: FrameworkConfig = {
+export const REACT_ROUTER_AGENT_CONFIG: FrameworkConfig = {
   metadata: {
     name: 'React Router',
     integration: Integration.reactRouter,
@@ -34,6 +34,12 @@ const REACT_ROUTER_AGENT_CONFIG: FrameworkConfig = {
     getInstalledVersion: async (options: WizardOptions) => {
       const packageJson = await getPackageDotJson(options);
       return getPackageVersion('react-router', packageJson);
+    },
+    detect: async (options) => {
+      const packageJson = await tryGetPackageJson(options);
+      return packageJson
+        ? hasPackageInstalled('react-router', packageJson)
+        : false;
     },
   },
 

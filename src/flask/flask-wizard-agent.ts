@@ -3,6 +3,9 @@ import type { WizardOptions } from '../utils/types';
 import type { FrameworkConfig } from '../lib/framework-config';
 import { runAgentWizard } from '../lib/agent-runner';
 import { Integration } from '../lib/constants';
+import fg from 'fast-glob';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 import {
   getFlaskVersion,
   getFlaskProjectType,
@@ -12,10 +15,11 @@ import {
   findFlaskAppFile,
 } from './utils';
 
-const FLASK_AGENT_CONFIG: FrameworkConfig = {
+export const FLASK_AGENT_CONFIG: FrameworkConfig = {
   metadata: {
     name: 'Flask',
     integration: Integration.flask,
+    beta: true,
     docsUrl: 'https://posthog.com/docs/libraries/python',
     unsupportedVersionDocsUrl: 'https://posthog.com/docs/libraries/python',
     gatherContext: async (options: WizardOptions) => {
@@ -33,6 +37,73 @@ const FLASK_AGENT_CONFIG: FrameworkConfig = {
     getVersionBucket: getFlaskVersionBucket,
     minimumVersion: '2.0.0',
     getInstalledVersion: (options: WizardOptions) => getFlaskVersion(options),
+    detect: async (options) => {
+      const { installDir } = options;
+
+      const requirementsFiles = await fg(
+        [
+          '**/requirements*.txt',
+          '**/pyproject.toml',
+          '**/setup.py',
+          '**/Pipfile',
+        ],
+        {
+          cwd: installDir,
+          ignore: ['**/venv/**', '**/.venv/**', '**/env/**', '**/.env/**'],
+        },
+      );
+
+      for (const reqFile of requirementsFiles) {
+        try {
+          const content = fs.readFileSync(
+            path.join(installDir, reqFile),
+            'utf-8',
+          );
+          if (
+            /^flask([<>=~!]|$|\s)/im.test(content) ||
+            /["']flask["']/i.test(content)
+          ) {
+            return true;
+          }
+        } catch {
+          continue;
+        }
+      }
+
+      const pyFiles = await fg(
+        ['**/app.py', '**/wsgi.py', '**/application.py', '**/__init__.py'],
+        {
+          cwd: installDir,
+          ignore: [
+            '**/venv/**',
+            '**/.venv/**',
+            '**/env/**',
+            '**/.env/**',
+            '**/__pycache__/**',
+          ],
+        },
+      );
+
+      for (const pyFile of pyFiles) {
+        try {
+          const content = fs.readFileSync(
+            path.join(installDir, pyFile),
+            'utf-8',
+          );
+          if (
+            content.includes('from flask import') ||
+            content.includes('import flask') ||
+            /Flask\s*\(/.test(content)
+          ) {
+            return true;
+          }
+        } catch {
+          continue;
+        }
+      }
+
+      return false;
+    },
   },
 
   environment: {

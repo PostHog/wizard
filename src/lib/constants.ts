@@ -1,29 +1,17 @@
 export enum Integration {
   nextjs = 'nextjs',
-  astro = 'astro',
-  svelte = 'svelte',
-  reactNative = 'react-native',
   reactRouter = 'react-router',
   django = 'django',
   flask = 'flask',
   laravel = 'laravel',
-  react = 'react',
-}
-
-export enum FeatureFlagDefinition {
-  ReactRouter = 'wizard-react-router',
 }
 
 export const INTEGRATION_LABELS: Record<Integration, string> = {
   [Integration.nextjs]: 'Next.js',
-  [Integration.astro]: 'Astro',
-  [Integration.svelte]: 'Svelte',
-  [Integration.reactNative]: 'React Native',
   [Integration.reactRouter]: 'React Router',
   [Integration.django]: 'Django',
   [Integration.flask]: 'Flask',
   [Integration.laravel]: 'Laravel',
-  [Integration.react]: 'React',
 };
 
 export function getIntegrationDescription(type: string): string {
@@ -32,13 +20,6 @@ export function getIntegrationDescription(type: string): string {
     throw new Error(`Unknown integration ${type}`);
   }
   return label;
-}
-
-export function getIntegrationChoices(): { name: string; value: string }[] {
-  return Object.values(Integration).map((value) => ({
-    name: INTEGRATION_LABELS[value],
-    value,
-  }));
 }
 
 export interface Args {

@@ -3,6 +3,9 @@ import type { WizardOptions } from '../utils/types';
 import type { FrameworkConfig } from '../lib/framework-config';
 import { runAgentWizard } from '../lib/agent-runner';
 import { Integration } from '../lib/constants';
+import fg from 'fast-glob';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 import {
   getLaravelVersion,
   getLaravelProjectType,
@@ -14,10 +17,11 @@ import {
   detectLaravelStructure,
 } from './utils';
 
-const LARAVEL_AGENT_CONFIG: FrameworkConfig = {
+export const LARAVEL_AGENT_CONFIG: FrameworkConfig = {
   metadata: {
     name: 'Laravel',
     integration: Integration.laravel,
+    beta: true,
     docsUrl: 'https://posthog.com/docs/libraries/php',
     unsupportedVersionDocsUrl: 'https://posthog.com/docs/libraries/php',
     gatherContext: async (options: WizardOptions) => {
@@ -44,6 +48,44 @@ const LARAVEL_AGENT_CONFIG: FrameworkConfig = {
     minimumVersion: '9.0.0',
     getInstalledVersion: (options: WizardOptions) =>
       Promise.resolve(getLaravelVersion(options)),
+    detect: async (options) => {
+      const { installDir } = options;
+
+      const artisanPath = path.join(installDir, 'artisan');
+      if (fs.existsSync(artisanPath)) {
+        try {
+          const content = fs.readFileSync(artisanPath, 'utf-8');
+          if (content.includes('Laravel') || content.includes('Artisan')) {
+            return true;
+          }
+        } catch {
+          // Continue to other checks
+        }
+      }
+
+      const composerPath = path.join(installDir, 'composer.json');
+      if (fs.existsSync(composerPath)) {
+        try {
+          const content = fs.readFileSync(composerPath, 'utf-8');
+          const composer = JSON.parse(content);
+          if (
+            composer.require?.['laravel/framework'] ||
+            composer['require-dev']?.['laravel/framework']
+          ) {
+            return true;
+          }
+        } catch {
+          // Continue to other checks
+        }
+      }
+
+      const hasLaravelStructure = await fg(
+        ['**/bootstrap/app.php', '**/app/Http/Kernel.php'],
+        { cwd: installDir, ignore: ['**/vendor/**'] },
+      );
+
+      return hasLaravelStructure.length > 0;
+    },
   },
 
   environment: {

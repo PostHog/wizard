@@ -3,6 +3,9 @@ import type { WizardOptions } from '../utils/types';
 import type { FrameworkConfig } from '../lib/framework-config';
 import { runAgentWizard } from '../lib/agent-runner';
 import { Integration } from '../lib/constants';
+import fg from 'fast-glob';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 import {
   getDjangoVersion,
   getDjangoProjectType,
@@ -12,10 +15,11 @@ import {
   findDjangoSettingsFile,
 } from './utils';
 
-const DJANGO_AGENT_CONFIG: FrameworkConfig = {
+export const DJANGO_AGENT_CONFIG: FrameworkConfig = {
   metadata: {
     name: 'Django',
     integration: Integration.django,
+    beta: true,
     docsUrl: 'https://posthog.com/docs/libraries/django',
     unsupportedVersionDocsUrl: 'https://posthog.com/docs/libraries/python',
     gatherContext: async (options: WizardOptions) => {
@@ -33,6 +37,60 @@ const DJANGO_AGENT_CONFIG: FrameworkConfig = {
     getVersionBucket: getDjangoVersionBucket,
     minimumVersion: '3.0.0',
     getInstalledVersion: (options: WizardOptions) => getDjangoVersion(options),
+    detect: async (options) => {
+      const { installDir } = options;
+
+      const managePyMatches = await fg('**/manage.py', {
+        cwd: installDir,
+        ignore: ['**/venv/**', '**/.venv/**', '**/env/**', '**/.env/**'],
+      });
+
+      if (managePyMatches.length > 0) {
+        for (const match of managePyMatches) {
+          try {
+            const content = fs.readFileSync(
+              path.join(installDir, match),
+              'utf-8',
+            );
+            if (
+              content.includes('django') ||
+              content.includes('DJANGO_SETTINGS_MODULE')
+            ) {
+              return true;
+            }
+          } catch {
+            continue;
+          }
+        }
+      }
+
+      const requirementsFiles = await fg(
+        ['**/requirements*.txt', '**/pyproject.toml', '**/setup.py'],
+        {
+          cwd: installDir,
+          ignore: ['**/venv/**', '**/.venv/**', '**/env/**', '**/.env/**'],
+        },
+      );
+
+      for (const reqFile of requirementsFiles) {
+        try {
+          const content = fs.readFileSync(
+            path.join(installDir, reqFile),
+            'utf-8',
+          );
+          if (
+            content.toLowerCase().includes('django') &&
+            !content.toLowerCase().includes('django-')
+          ) {
+            return true;
+          }
+        } catch {
+          continue;
+        }
+      }
+
+      return false;
+    },
   },
 
   environment: {

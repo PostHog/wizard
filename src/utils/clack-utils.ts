@@ -25,7 +25,7 @@ import {
 import { analytics } from './analytics';
 import clack from './clack';
 import { getCloudUrlFromRegion, getHostFromRegion } from './urls';
-import { INTEGRATION_CONFIG } from '../lib/config';
+import { FRAMEWORK_REGISTRY } from '../lib/registry';
 import { performOAuthFlow } from './oauth';
 import { fetchUserData, fetchProjectData } from '../lib/api';
 
@@ -79,7 +79,7 @@ export async function abortIfCancelled<T>(
       resolvedInput.description === 'clack:cancel')
   ) {
     const docsUrl = integration
-      ? INTEGRATION_CONFIG[integration].docsUrl
+      ? FRAMEWORK_REGISTRY[integration].metadata.docsUrl
       : 'https://posthog.com/docs';
 
     clack.cancel(
