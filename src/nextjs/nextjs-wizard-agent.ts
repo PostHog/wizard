@@ -1,24 +1,15 @@
 /* Simplified Next.js wizard using posthog-agent with PostHog MCP */
 import type { WizardOptions } from '../utils/types';
-import { enableDebugLogs } from '../utils/debug';
 import { runAgentWizard } from '../lib/agent-runner';
 import { Integration } from '../lib/constants';
 import { getPackageVersion } from '../utils/package-json';
 import { getPackageDotJson } from '../utils/clack-utils';
-import clack from '../utils/clack';
-import chalk from 'chalk';
-import * as semver from 'semver';
 import {
   getNextJsRouter,
   getNextJsVersionBucket,
   getNextJsRouterName,
   NextJsRouter,
 } from './utils';
-
-/**
- * Next.js framework configuration for the universal agent runner.
- */
-const MINIMUM_NEXTJS_VERSION = '15.3.0';
 
 const NEXTJS_AGENT_CONFIG = {
   metadata: {
@@ -37,6 +28,11 @@ const NEXTJS_AGENT_CONFIG = {
     packageDisplayName: 'Next.js',
     getVersion: (packageJson: any) => getPackageVersion('next', packageJson),
     getVersionBucket: getNextJsVersionBucket,
+    minimumVersion: '15.3.0',
+    getInstalledVersion: async (options: WizardOptions) => {
+      const packageJson = await getPackageDotJson(options);
+      return getPackageVersion('next', packageJson);
+    },
   },
 
   environment: {
@@ -95,29 +91,5 @@ const NEXTJS_AGENT_CONFIG = {
 export async function runNextjsWizardAgent(
   options: WizardOptions,
 ): Promise<void> {
-  if (options.debug) {
-    enableDebugLogs();
-  }
-
-  // Check Next.js version - agent wizard requires >= 15.3.0
-  const packageJson = await getPackageDotJson(options);
-  const nextVersion = getPackageVersion('next', packageJson);
-
-  if (nextVersion) {
-    const coercedVersion = semver.coerce(nextVersion);
-    if (coercedVersion && semver.lt(coercedVersion, MINIMUM_NEXTJS_VERSION)) {
-      const docsUrl =
-        NEXTJS_AGENT_CONFIG.metadata.unsupportedVersionDocsUrl ??
-        NEXTJS_AGENT_CONFIG.metadata.docsUrl;
-
-      clack.log.warn(
-        `Sorry: the wizard can't help you with Next.js ${nextVersion}. Upgrade to Next.js ${MINIMUM_NEXTJS_VERSION} or later, or check out the manual setup guide.`,
-      );
-      clack.log.info(`Setup Next.js manually: ${chalk.cyan(docsUrl)}`);
-      clack.outro('PostHog wizard will see you next time!');
-      return;
-    }
-  }
-
   await runAgentWizard(NEXTJS_AGENT_CONFIG, options);
 }

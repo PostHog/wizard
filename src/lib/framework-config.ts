@@ -63,6 +63,12 @@ export interface FrameworkDetection {
    * Defaults to true if not specified.
    */
   usesPackageJson?: boolean;
+
+  /** Minimum supported version. If set, runner checks before proceeding. */
+  minimumVersion?: string;
+
+  /** Get the currently installed version. Called by runner for version check. */
+  getInstalledVersion?: (options: WizardOptions) => Promise<string | undefined>;
 }
 
 /**

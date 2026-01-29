@@ -1,12 +1,8 @@
 /* Laravel wizard using posthog-agent with PostHog MCP */
 import type { WizardOptions } from '../utils/types';
 import type { FrameworkConfig } from '../lib/framework-config';
-import { enableDebugLogs } from '../utils/debug';
 import { runAgentWizard } from '../lib/agent-runner';
 import { Integration } from '../lib/constants';
-import clack from '../utils/clack';
-import chalk from 'chalk';
-import * as semver from 'semver';
 import {
   getLaravelVersion,
   getLaravelProjectType,
@@ -17,11 +13,6 @@ import {
   findLaravelBootstrapFile,
   detectLaravelStructure,
 } from './utils';
-
-/**
- * Laravel framework configuration for the universal agent runner
- */
-const MINIMUM_LARAVEL_VERSION = '9.0.0';
 
 const LARAVEL_AGENT_CONFIG: FrameworkConfig = {
   metadata: {
@@ -48,12 +39,11 @@ const LARAVEL_AGENT_CONFIG: FrameworkConfig = {
     packageName: 'laravel/framework',
     packageDisplayName: 'Laravel',
     usesPackageJson: false,
-    getVersion: (_packageJson: any) => {
-      // For Laravel, we don't use package.json. Version is extracted separately
-      // from composer.json in the wizard entry point
-      return undefined;
-    },
+    getVersion: (_packageJson: any) => undefined,
     getVersionBucket: getLaravelVersionBucket,
+    minimumVersion: '9.0.0',
+    getInstalledVersion: (options: WizardOptions) =>
+      Promise.resolve(getLaravelVersion(options)),
   },
 
   environment: {
@@ -160,28 +150,5 @@ const LARAVEL_AGENT_CONFIG: FrameworkConfig = {
 export async function runLaravelWizardAgent(
   options: WizardOptions,
 ): Promise<void> {
-  if (options.debug) {
-    enableDebugLogs();
-  }
-
-  // Check Laravel version - agent wizard requires >= 9.0.0
-  const laravelVersion = getLaravelVersion(options);
-
-  if (laravelVersion) {
-    const coercedVersion = semver.coerce(laravelVersion);
-    if (coercedVersion && semver.lt(coercedVersion, MINIMUM_LARAVEL_VERSION)) {
-      const docsUrl =
-        LARAVEL_AGENT_CONFIG.metadata.unsupportedVersionDocsUrl ??
-        LARAVEL_AGENT_CONFIG.metadata.docsUrl;
-
-      clack.log.warn(
-        `Sorry: the wizard can't help you with Laravel ${laravelVersion}. Upgrade to Laravel ${MINIMUM_LARAVEL_VERSION} or later, or check out the manual setup guide.`,
-      );
-      clack.log.info(`Setup Laravel manually: ${chalk.cyan(docsUrl)}`);
-      clack.outro('PostHog wizard will see you next time!');
-      return;
-    }
-  }
-
   await runAgentWizard(LARAVEL_AGENT_CONFIG, options);
 }

@@ -26,11 +26,13 @@ import {
 } from './agent-interface';
 import { getCloudUrlFromRegion } from '../utils/urls';
 import chalk from 'chalk';
+import * as semver from 'semver';
 import {
   addMCPServerToClientsStep,
   uploadEnvironmentVariablesStep,
 } from '../steps';
 import { checkAnthropicStatusWithPrompt } from '../utils/anthropic-status';
+import { enableDebugLogs } from '../utils/debug';
 
 /**
  * Universal agent-powered wizard runner.
@@ -40,6 +42,30 @@ export async function runAgentWizard(
   config: FrameworkConfig,
   options: WizardOptions,
 ): Promise<void> {
+  if (options.debug) {
+    enableDebugLogs();
+  }
+
+  // Version check
+  if (config.detection.minimumVersion && config.detection.getInstalledVersion) {
+    const version = await config.detection.getInstalledVersion(options);
+    if (version) {
+      const coerced = semver.coerce(version);
+      if (coerced && semver.lt(coerced, config.detection.minimumVersion)) {
+        const docsUrl =
+          config.metadata.unsupportedVersionDocsUrl ?? config.metadata.docsUrl;
+        clack.log.warn(
+          `Sorry: the wizard can't help you with ${config.metadata.name} ${version}. Upgrade to ${config.metadata.name} ${config.detection.minimumVersion} or later, or check out the manual setup guide.`,
+        );
+        clack.log.info(
+          `Setup ${config.metadata.name} manually: ${chalk.cyan(docsUrl)}`,
+        );
+        clack.outro('PostHog wizard will see you next time!');
+        return;
+      }
+    }
+  }
+
   // Setup phase
   printWelcome({ wizardName: getWelcomeMessage(config.metadata.name) });
 

@@ -1,12 +1,8 @@
 /* Flask wizard using posthog-agent with PostHog MCP */
 import type { WizardOptions } from '../utils/types';
 import type { FrameworkConfig } from '../lib/framework-config';
-import { enableDebugLogs } from '../utils/debug';
 import { runAgentWizard } from '../lib/agent-runner';
 import { Integration } from '../lib/constants';
-import clack from '../utils/clack';
-import chalk from 'chalk';
-import * as semver from 'semver';
 import {
   getFlaskVersion,
   getFlaskProjectType,
@@ -15,11 +11,6 @@ import {
   FlaskProjectType,
   findFlaskAppFile,
 } from './utils';
-
-/**
- * Flask framework configuration for the universal agent runner
- */
-const MINIMUM_FLASK_VERSION = '2.0.0';
 
 const FLASK_AGENT_CONFIG: FrameworkConfig = {
   metadata: {
@@ -38,12 +29,10 @@ const FLASK_AGENT_CONFIG: FrameworkConfig = {
     packageName: 'flask',
     packageDisplayName: 'Flask',
     usesPackageJson: false,
-    getVersion: (_packageJson: any) => {
-      // For Flask, we don't use package.json. Version is extracted separately
-      // from requirements.txt or pyproject.toml in the wizard entry point
-      return undefined;
-    },
+    getVersion: (_packageJson: any) => undefined,
     getVersionBucket: getFlaskVersionBucket,
+    minimumVersion: '2.0.0',
+    getInstalledVersion: (options: WizardOptions) => getFlaskVersion(options),
   },
 
   environment: {
@@ -127,28 +116,5 @@ const FLASK_AGENT_CONFIG: FrameworkConfig = {
 export async function runFlaskWizardAgent(
   options: WizardOptions,
 ): Promise<void> {
-  if (options.debug) {
-    enableDebugLogs();
-  }
-
-  // Check Flask version - agent wizard requires >= 2.0.0
-  const flaskVersion = await getFlaskVersion(options);
-
-  if (flaskVersion) {
-    const coercedVersion = semver.coerce(flaskVersion);
-    if (coercedVersion && semver.lt(coercedVersion, MINIMUM_FLASK_VERSION)) {
-      const docsUrl =
-        FLASK_AGENT_CONFIG.metadata.unsupportedVersionDocsUrl ??
-        FLASK_AGENT_CONFIG.metadata.docsUrl;
-
-      clack.log.warn(
-        `Sorry: the wizard can't help you with Flask ${flaskVersion}. Upgrade to Flask ${MINIMUM_FLASK_VERSION} or later, or check out the manual setup guide.`,
-      );
-      clack.log.info(`Setup Flask manually: ${chalk.cyan(docsUrl)}`);
-      clack.outro('PostHog wizard will see you next time!');
-      return;
-    }
-  }
-
   await runAgentWizard(FLASK_AGENT_CONFIG, options);
 }
