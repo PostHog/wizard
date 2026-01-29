@@ -15,7 +15,12 @@ import {
   findDjangoSettingsFile,
 } from './utils';
 
-export const DJANGO_AGENT_CONFIG: FrameworkConfig = {
+type DjangoContext = {
+  projectType?: DjangoProjectType;
+  settingsFile?: string;
+};
+
+export const DJANGO_AGENT_CONFIG: FrameworkConfig<DjangoContext> = {
   metadata: {
     name: 'Django',
     integration: Integration.django,
@@ -33,7 +38,7 @@ export const DJANGO_AGENT_CONFIG: FrameworkConfig = {
     packageName: 'django',
     packageDisplayName: 'Django',
     usesPackageJson: false,
-    getVersion: (_packageJson: any) => undefined,
+    getVersion: () => undefined,
     getVersionBucket: getDjangoVersionBucket,
     minimumVersion: '3.0.0',
     getInstalledVersion: (options: WizardOptions) => getDjangoVersion(options),
@@ -102,12 +107,9 @@ export const DJANGO_AGENT_CONFIG: FrameworkConfig = {
   },
 
   analytics: {
-    getTags: (context: any) => {
-      const projectType = context.projectType as DjangoProjectType;
-      return {
-        projectType: projectType || 'unknown',
-      };
-    },
+    getTags: (context) => ({
+      projectType: context.projectType || 'unknown',
+    }),
   },
 
   prompts: {
@@ -115,10 +117,9 @@ export const DJANGO_AGENT_CONFIG: FrameworkConfig = {
       'This is a Python/Django project. Look for requirements.txt, pyproject.toml, setup.py, Pipfile, or manage.py to confirm.',
     packageInstallation:
       'Use pip, poetry, or pipenv based on existing config files (requirements.txt, pyproject.toml, Pipfile). Do not pin the posthog version - just add "posthog" without version constraints.',
-    getAdditionalContextLines: (context: any) => {
-      const projectType = context.projectType as DjangoProjectType;
-      const projectTypeName = projectType
-        ? getDjangoProjectTypeName(projectType)
+    getAdditionalContextLines: (context) => {
+      const projectTypeName = context.projectType
+        ? getDjangoProjectTypeName(context.projectType)
         : 'unknown';
 
       // Map project type to framework ID for MCP docs resource
@@ -129,7 +130,9 @@ export const DJANGO_AGENT_CONFIG: FrameworkConfig = {
         [DjangoProjectType.CHANNELS]: 'django',
       };
 
-      const frameworkId = projectType ? frameworkIdMap[projectType] : 'django';
+      const frameworkId = context.projectType
+        ? frameworkIdMap[context.projectType]
+        : 'django';
 
       const lines = [
         `Project type: ${projectTypeName}`,
@@ -147,10 +150,9 @@ export const DJANGO_AGENT_CONFIG: FrameworkConfig = {
   ui: {
     successMessage: 'PostHog integration complete',
     estimatedDurationMinutes: 5,
-    getOutroChanges: (context: any) => {
-      const projectType = context.projectType as DjangoProjectType;
-      const projectTypeName = projectType
-        ? getDjangoProjectTypeName(projectType)
+    getOutroChanges: (context) => {
+      const projectTypeName = context.projectType
+        ? getDjangoProjectTypeName(context.projectType)
         : 'Django';
       return [
         `Analyzed your ${projectTypeName} project structure`,

@@ -3,7 +3,11 @@ import type { WizardOptions } from '../utils/types';
 import type { FrameworkConfig } from '../lib/framework-config';
 import { runAgentWizard } from '../lib/agent-runner';
 import { Integration } from '../lib/constants';
-import { getPackageVersion, hasPackageInstalled } from '../utils/package-json';
+import {
+  getPackageVersion,
+  hasPackageInstalled,
+  type PackageDotJson,
+} from '../utils/package-json';
 import { getPackageDotJson, tryGetPackageJson } from '../utils/clack-utils';
 import {
   getReactRouterMode,
@@ -12,7 +16,11 @@ import {
   ReactRouterMode,
 } from './utils';
 
-export const REACT_ROUTER_AGENT_CONFIG: FrameworkConfig = {
+type ReactRouterContext = {
+  routerMode?: ReactRouterMode;
+};
+
+export const REACT_ROUTER_AGENT_CONFIG: FrameworkConfig<ReactRouterContext> = {
   metadata: {
     name: 'React Router',
     integration: Integration.reactRouter,
@@ -27,8 +35,8 @@ export const REACT_ROUTER_AGENT_CONFIG: FrameworkConfig = {
   detection: {
     packageName: 'react-router',
     packageDisplayName: 'React Router',
-    getVersion: (packageJson: any) =>
-      getPackageVersion('react-router', packageJson),
+    getVersion: (packageJson: unknown) =>
+      getPackageVersion('react-router', packageJson as PackageDotJson),
     getVersionBucket: getReactRouterVersionBucket,
     minimumVersion: '6.0.0',
     getInstalledVersion: async (options: WizardOptions) => {
@@ -52,12 +60,9 @@ export const REACT_ROUTER_AGENT_CONFIG: FrameworkConfig = {
   },
 
   analytics: {
-    getTags: (context: any) => {
-      const routerMode = context.routerMode as ReactRouterMode;
-      return {
-        routerMode: routerMode || 'unknown',
-      };
-    },
+    getTags: (context) => ({
+      routerMode: context.routerMode || 'unknown',
+    }),
   },
 
   prompts: {
@@ -65,8 +70,8 @@ export const REACT_ROUTER_AGENT_CONFIG: FrameworkConfig = {
       'This is a JavaScript/TypeScript project. Look for package.json and lockfiles (package-lock.json, yarn.lock, pnpm-lock.yaml, bun.lockb) to confirm.',
     packageInstallation:
       'Look for lockfiles to determine the package manager (npm, yarn, pnpm, bun). Do not manually edit package.json.',
-    getAdditionalContextLines: (context: any) => {
-      const routerMode = context.routerMode as ReactRouterMode;
+    getAdditionalContextLines: (context) => {
+      const routerMode = context.routerMode;
       const modeName = routerMode
         ? getReactRouterModeName(routerMode)
         : 'unknown';
@@ -93,10 +98,9 @@ export const REACT_ROUTER_AGENT_CONFIG: FrameworkConfig = {
   ui: {
     successMessage: 'PostHog integration complete',
     estimatedDurationMinutes: 8,
-    getOutroChanges: (context: any) => {
-      const routerMode = context.routerMode as ReactRouterMode;
-      const modeName = routerMode
-        ? getReactRouterModeName(routerMode)
+    getOutroChanges: (context) => {
+      const modeName = context.routerMode
+        ? getReactRouterModeName(context.routerMode)
         : 'React Router';
       return [
         `Analyzed your React Router project structure (${modeName})`,

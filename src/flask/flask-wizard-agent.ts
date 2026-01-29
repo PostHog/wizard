@@ -15,7 +15,12 @@ import {
   findFlaskAppFile,
 } from './utils';
 
-export const FLASK_AGENT_CONFIG: FrameworkConfig = {
+type FlaskContext = {
+  projectType?: FlaskProjectType;
+  appFile?: string;
+};
+
+export const FLASK_AGENT_CONFIG: FrameworkConfig<FlaskContext> = {
   metadata: {
     name: 'Flask',
     integration: Integration.flask,
@@ -33,7 +38,7 @@ export const FLASK_AGENT_CONFIG: FrameworkConfig = {
     packageName: 'flask',
     packageDisplayName: 'Flask',
     usesPackageJson: false,
-    getVersion: (_packageJson: any) => undefined,
+    getVersion: () => undefined,
     getVersionBucket: getFlaskVersionBucket,
     minimumVersion: '2.0.0',
     getInstalledVersion: (options: WizardOptions) => getFlaskVersion(options),
@@ -115,12 +120,9 @@ export const FLASK_AGENT_CONFIG: FrameworkConfig = {
   },
 
   analytics: {
-    getTags: (context: any) => {
-      const projectType = context.projectType as FlaskProjectType;
-      return {
-        projectType: projectType || 'unknown',
-      };
-    },
+    getTags: (context) => ({
+      projectType: context.projectType || 'unknown',
+    }),
   },
 
   prompts: {
@@ -128,10 +130,9 @@ export const FLASK_AGENT_CONFIG: FrameworkConfig = {
       'This is a Python/Flask project. Look for requirements.txt, pyproject.toml, setup.py, Pipfile, or app.py/wsgi.py to confirm.',
     packageInstallation:
       'Use pip, poetry, or pipenv based on existing config files (requirements.txt, pyproject.toml, Pipfile). Do not pin the posthog version - just add "posthog" without version constraints.',
-    getAdditionalContextLines: (context: any) => {
-      const projectType = context.projectType as FlaskProjectType;
-      const projectTypeName = projectType
-        ? getFlaskProjectTypeName(projectType)
+    getAdditionalContextLines: (context) => {
+      const projectTypeName = context.projectType
+        ? getFlaskProjectTypeName(context.projectType)
         : 'unknown';
 
       // Map project type to framework ID for MCP docs resource
@@ -143,7 +144,9 @@ export const FLASK_AGENT_CONFIG: FrameworkConfig = {
         [FlaskProjectType.BLUEPRINT]: 'flask',
       };
 
-      const frameworkId = projectType ? frameworkIdMap[projectType] : 'flask';
+      const frameworkId = context.projectType
+        ? frameworkIdMap[context.projectType]
+        : 'flask';
 
       const lines = [
         `Project type: ${projectTypeName}`,
@@ -161,10 +164,9 @@ export const FLASK_AGENT_CONFIG: FrameworkConfig = {
   ui: {
     successMessage: 'PostHog integration complete',
     estimatedDurationMinutes: 5,
-    getOutroChanges: (context: any) => {
-      const projectType = context.projectType as FlaskProjectType;
-      const projectTypeName = projectType
-        ? getFlaskProjectTypeName(projectType)
+    getOutroChanges: (context) => {
+      const projectTypeName = context.projectType
+        ? getFlaskProjectTypeName(context.projectType)
         : 'Flask';
       return [
         `Analyzed your ${projectTypeName} project structure`,

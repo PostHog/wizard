@@ -17,7 +17,14 @@ import {
   detectLaravelStructure,
 } from './utils';
 
-export const LARAVEL_AGENT_CONFIG: FrameworkConfig = {
+type LaravelContext = {
+  projectType?: LaravelProjectType;
+  serviceProvider?: string;
+  bootstrapFile?: string;
+  laravelStructure?: string;
+};
+
+export const LARAVEL_AGENT_CONFIG: FrameworkConfig<LaravelContext> = {
   metadata: {
     name: 'Laravel',
     integration: Integration.laravel,
@@ -43,7 +50,7 @@ export const LARAVEL_AGENT_CONFIG: FrameworkConfig = {
     packageName: 'laravel/framework',
     packageDisplayName: 'Laravel',
     usesPackageJson: false,
-    getVersion: (_packageJson: any) => undefined,
+    getVersion: () => undefined,
     getVersionBucket: getLaravelVersionBucket,
     minimumVersion: '9.0.0',
     getInstalledVersion: (options: WizardOptions) =>
@@ -97,13 +104,10 @@ export const LARAVEL_AGENT_CONFIG: FrameworkConfig = {
   },
 
   analytics: {
-    getTags: (context: any) => {
-      const projectType = context.projectType as LaravelProjectType;
-      return {
-        projectType: projectType || 'unknown',
-        laravelStructure: context.laravelStructure || 'unknown',
-      };
-    },
+    getTags: (context) => ({
+      projectType: context.projectType || 'unknown',
+      laravelStructure: context.laravelStructure || 'unknown',
+    }),
   },
 
   prompts: {
@@ -111,10 +115,9 @@ export const LARAVEL_AGENT_CONFIG: FrameworkConfig = {
       'This is a PHP/Laravel project. Look for composer.json, artisan CLI, and app/ directory structure to confirm. Check for Laravel-specific packages like laravel/framework.',
     packageInstallation:
       'Use Composer to install packages. Run `composer require posthog/posthog-php` without pinning a specific version.',
-    getAdditionalContextLines: (context: any) => {
-      const projectType = context.projectType as LaravelProjectType;
-      const projectTypeName = projectType
-        ? getLaravelProjectTypeName(projectType)
+    getAdditionalContextLines: (context) => {
+      const projectTypeName = context.projectType
+        ? getLaravelProjectTypeName(context.projectType)
         : 'unknown';
 
       const lines = [
@@ -149,10 +152,9 @@ export const LARAVEL_AGENT_CONFIG: FrameworkConfig = {
   ui: {
     successMessage: 'PostHog integration complete',
     estimatedDurationMinutes: 5,
-    getOutroChanges: (context: any) => {
-      const projectType = context.projectType as LaravelProjectType;
-      const projectTypeName = projectType
-        ? getLaravelProjectTypeName(projectType)
+    getOutroChanges: (context) => {
+      const projectTypeName = context.projectType
+        ? getLaravelProjectTypeName(context.projectType)
         : 'Laravel';
 
       const changes = [
@@ -167,11 +169,11 @@ export const LARAVEL_AGENT_CONFIG: FrameworkConfig = {
         changes.push('Created a PostHog service provider for initialization');
       }
 
-      if (projectType === LaravelProjectType.INERTIA) {
+      if (context.projectType === LaravelProjectType.INERTIA) {
         changes.push('Configured PostHog to work with Inertia.js');
       }
 
-      if (projectType === LaravelProjectType.LIVEWIRE) {
+      if (context.projectType === LaravelProjectType.LIVEWIRE) {
         changes.push('Configured PostHog to work with Livewire');
       }
 

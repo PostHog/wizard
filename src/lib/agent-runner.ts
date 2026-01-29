@@ -15,6 +15,7 @@ import {
   printWelcome,
   askForCloudRegion,
 } from '../utils/clack-utils';
+import type { PackageDotJson } from '../utils/package-json';
 import { analytics } from '../utils/analytics';
 import { WIZARD_INTERACTION_EVENT_NAME } from './constants';
 import clack from '../utils/clack';
@@ -108,7 +109,7 @@ export async function runAgentWizard(
   // Framework detection and version
   // Only check package.json for Node.js/JavaScript frameworks
   const usesPackageJson = config.detection.usesPackageJson !== false;
-  let packageJson: any = null;
+  let packageJson: PackageDotJson | null = null;
   let frameworkVersion: string | undefined;
 
   if (usesPackageJson) {
@@ -355,7 +356,7 @@ function buildIntegrationPrompt(
     projectApiKey: string;
     host: string;
   },
-  frameworkContext: Record<string, any>,
+  frameworkContext: Record<string, unknown>,
 ): string {
   const additionalLines = config.prompts.getAdditionalContextLines
     ? config.prompts.getAdditionalContextLines(frameworkContext)
