@@ -363,7 +363,7 @@ STEP 6: Set up environment variables for PostHog in a .env file with the API key
     config.metadata.name
   }. Make sure to use these environment variables in the code files you create instead of hardcoding the API key and host.
 
-Important: Look for lockfiles (pnpm-lock.yaml, package-lock.json, yarn.lock, bun.lockb) to determine the package manager. Do not manually edit package.json. Always install packages as a background task. Don't await completion; proceed with other work immediately after starting the installation.
+Important: Look for lockfiles (pnpm-lock.yaml, package-lock.json, yarn.lock, bun.lockb) to determine the package manager (excluding the contents of node_modules). Do not manually edit package.json. Always install packages as a background task. Don't await completion; proceed with other work immediately after starting the installation. You must read a file immediately before attempting to write it, even if you have previously read it; failure to do so will cause a tool failure.
 
 `;
 }
