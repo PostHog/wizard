@@ -36,8 +36,23 @@ export enum Integration {
 
 Create `src/<framework>/<framework>-wizard-agent.ts`. This file exports:
 
-- A `FrameworkConfig` object (the full integration definition)
+- A context type for framework-specific data
+- A `FrameworkConfig<TContext>` object (the full integration definition)
 - A thin runner function that just calls `runAgentWizard(CONFIG, options)`
+
+Define a context type for any data gathered before the agent runs, then pass it as the generic parameter. Use `type` (not `interface`) so it satisfies the `Record<string, unknown>` constraint:
+
+```ts
+type RailsContext = {
+  projectType?: RailsProjectType;
+  gemfilePath?: string;
+};
+
+export const RAILS_AGENT_CONFIG: FrameworkConfig<RailsContext> = {
+  // All context-consuming callbacks (getTags, getOutroChanges, etc.)
+  // are now fully typed — no `any` casts needed.
+};
+```
 
 Use an existing config as a template. The config has these sections:
 
