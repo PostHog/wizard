@@ -1,54 +1,9 @@
 export enum Integration {
   nextjs = 'nextjs',
-  react = 'react',
-  svelte = 'svelte',
-  reactNative = 'react-native',
-  astro = 'astro',
   reactRouter = 'react-router',
   django = 'django',
   flask = 'flask',
   laravel = 'laravel',
-}
-
-export enum FeatureFlagDefinition {
-  ReactRouter = 'wizard-react-router',
-}
-
-export function getIntegrationDescription(type: string): string {
-  switch (type) {
-    case Integration.nextjs:
-      return 'Next.js';
-    case Integration.react:
-      return 'React';
-    case Integration.reactNative:
-      return 'React Native';
-    case Integration.svelte:
-      return 'Svelte';
-    case Integration.astro:
-      return 'Astro';
-    case Integration.reactRouter:
-      return 'React Router';
-    case Integration.django:
-      return 'Django';
-    case Integration.flask:
-      return 'Flask';
-    case Integration.laravel:
-      return 'Laravel';
-    default:
-      throw new Error(`Unknown integration ${type}`);
-  }
-}
-
-type IntegrationChoice = {
-  name: string;
-  value: string;
-};
-
-export function getIntegrationChoices(): IntegrationChoice[] {
-  return Object.keys(Integration).map((type: string) => ({
-    name: getIntegrationDescription(type),
-    value: type,
-  }));
 }
 
 export interface Args {

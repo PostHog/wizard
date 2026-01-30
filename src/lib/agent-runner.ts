@@ -15,6 +15,7 @@ import {
   printWelcome,
   askForCloudRegion,
 } from '../utils/clack-utils';
+import type { PackageDotJson } from '../utils/package-json';
 import { analytics } from '../utils/analytics';
 import { WIZARD_INTERACTION_EVENT_NAME } from './constants';
 import clack from '../utils/clack';
@@ -26,11 +27,13 @@ import {
 } from './agent-interface';
 import { getCloudUrlFromRegion } from '../utils/urls';
 import chalk from 'chalk';
+import * as semver from 'semver';
 import {
   addMCPServerToClientsStep,
   uploadEnvironmentVariablesStep,
 } from '../steps';
 import { checkAnthropicStatusWithPrompt } from '../utils/anthropic-status';
+import { enableDebugLogs } from '../utils/debug';
 
 /**
  * Universal agent-powered wizard runner.
@@ -40,8 +43,42 @@ export async function runAgentWizard(
   config: FrameworkConfig,
   options: WizardOptions,
 ): Promise<void> {
+  if (options.debug) {
+    enableDebugLogs();
+  }
+
+  // Version check
+  if (config.detection.minimumVersion && config.detection.getInstalledVersion) {
+    const version = await config.detection.getInstalledVersion(options);
+    if (version) {
+      const coerced = semver.coerce(version);
+      if (coerced && semver.lt(coerced, config.detection.minimumVersion)) {
+        const docsUrl =
+          config.metadata.unsupportedVersionDocsUrl ?? config.metadata.docsUrl;
+        clack.log.warn(
+          `Sorry: the wizard can't help you with ${config.metadata.name} ${version}. Upgrade to ${config.metadata.name} ${config.detection.minimumVersion} or later, or check out the manual setup guide.`,
+        );
+        clack.log.info(
+          `Setup ${config.metadata.name} manually: ${chalk.cyan(docsUrl)}`,
+        );
+        clack.outro('PostHog wizard will see you next time!');
+        return;
+      }
+    }
+  }
+
   // Setup phase
   printWelcome({ wizardName: getWelcomeMessage(config.metadata.name) });
+
+  if (config.metadata.beta) {
+    clack.log.info(
+      `${chalk.yellow('[BETA]')} The ${
+        config.metadata.name
+      } wizard is in beta. Questions or feedback? Email ${chalk.cyan(
+        'wizard@posthog.com',
+      )}`,
+    );
+  }
 
   clack.log.info(
     `🧙 The wizard has chosen you to try the next-generation agent integration for ${config.metadata.name}.\n\nStand by for the good stuff, and let the robot minders know how it goes:\n\nwizard@posthog.com`,
@@ -72,7 +109,7 @@ export async function runAgentWizard(
   // Framework detection and version
   // Only check package.json for Node.js/JavaScript frameworks
   const usesPackageJson = config.detection.usesPackageJson !== false;
-  let packageJson: any = null;
+  let packageJson: PackageDotJson | null = null;
   let frameworkVersion: string | undefined;
 
   if (usesPackageJson) {
@@ -319,7 +356,7 @@ function buildIntegrationPrompt(
     projectApiKey: string;
     host: string;
   },
-  frameworkContext: Record<string, any>,
+  frameworkContext: Record<string, unknown>,
 ): string {
   const additionalLines = config.prompts.getAdditionalContextLines
     ? config.prompts.getAdditionalContextLines(frameworkContext)
