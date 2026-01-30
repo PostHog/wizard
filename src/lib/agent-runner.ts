@@ -342,9 +342,12 @@ Project context:
 
 Instructions (follow these steps IN ORDER - do not skip or reorder):
 
-STEP 1: List available skills from the PostHog MCP server using ListMcpResourcesTool.
+STEP 1: List available skills from the PostHog MCP server using ListMcpResourcesTool. If this tool is not available or you cannot access the MCP server, you must emit: ${
+    AgentSignals.ERROR_MCP_MISSING
+  } Could not access the PostHog MCP server and halt.
+
    Review the skill descriptions and choose the one that best matches this project's framework and configuration.
-   If no suitable skill is found, or you cannot access the MCP server, emit: ${
+   If no suitable skill is found, or you cannot access the MCP server, you emit: ${
      AgentSignals.ERROR_RESOURCE_MISSING
    } Could not find a suitable skill for this project.
 
