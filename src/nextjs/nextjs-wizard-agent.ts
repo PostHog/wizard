@@ -1,7 +1,6 @@
 /* Simplified Next.js wizard using posthog-agent with PostHog MCP */
 import type { WizardOptions } from '../utils/types';
 import type { FrameworkConfig } from '../lib/framework-config';
-import { runAgentWizard } from '../lib/agent-runner';
 import { Integration } from '../lib/constants';
 import {
   getPackageVersion,
@@ -95,12 +94,3 @@ export const NEXTJS_AGENT_CONFIG: FrameworkConfig<NextjsContext> = {
     },
   },
 };
-
-/**
- * Next.js wizard powered by the universal agent runner.
- */
-export async function runNextjsWizardAgent(
-  options: WizardOptions,
-): Promise<void> {
-  await runAgentWizard(NEXTJS_AGENT_CONFIG, options);
-}

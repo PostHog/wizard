@@ -1,7 +1,6 @@
 /* React Router wizard using posthog-agent with PostHog MCP */
 import type { WizardOptions } from '../utils/types';
 import type { FrameworkConfig } from '../lib/framework-config';
-import { runAgentWizard } from '../lib/agent-runner';
 import { Integration } from '../lib/constants';
 import {
   getPackageVersion,
@@ -114,12 +113,3 @@ export const REACT_ROUTER_AGENT_CONFIG: FrameworkConfig<ReactRouterContext> = {
     ],
   },
 };
-
-/**
- * React Router wizard powered by the universal agent runner.
- */
-export async function runReactRouterWizardAgent(
-  options: WizardOptions,
-): Promise<void> {
-  await runAgentWizard(REACT_ROUTER_AGENT_CONFIG, options);
-}

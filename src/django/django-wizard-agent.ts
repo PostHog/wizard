@@ -1,7 +1,6 @@
 /* Django wizard using posthog-agent with PostHog MCP */
 import type { WizardOptions } from '../utils/types';
 import type { FrameworkConfig } from '../lib/framework-config';
-import { runAgentWizard } from '../lib/agent-runner';
 import { Integration } from '../lib/constants';
 import fg from 'fast-glob';
 import * as fs from 'node:fs';
@@ -168,12 +167,3 @@ export const DJANGO_AGENT_CONFIG: FrameworkConfig<DjangoContext> = {
     ],
   },
 };
-
-/**
- * Django wizard powered by the universal agent runner.
- */
-export async function runDjangoWizardAgent(
-  options: WizardOptions,
-): Promise<void> {
-  await runAgentWizard(DJANGO_AGENT_CONFIG, options);
-}
