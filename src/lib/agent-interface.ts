@@ -315,7 +315,7 @@ export function initializeAgent(
 
     // Configure MCP server with PostHog authentication
     const mcpServers: McpServersConfig = {
-      posthog: {
+      'posthog-wizard': {
         type: 'http',
         url: config.posthogMcpUrl,
         headers: {
