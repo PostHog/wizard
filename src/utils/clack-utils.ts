@@ -682,6 +682,7 @@ async function askForWizardLogin(options: {
       'llm_gateway:read',
       'dashboard:write',
       'insight:write',
+      'query:read',
     ],
     signup: options.signup,
   });

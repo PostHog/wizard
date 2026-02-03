@@ -379,9 +379,12 @@ Project context:
 
 Instructions (follow these steps IN ORDER - do not skip or reorder):
 
-STEP 1: List available skills from the PostHog MCP server using ListMcpResourcesTool.
+STEP 1: List available skills from the PostHog MCP server using ListMcpResourcesTool. If this tool is not available or you cannot access the MCP server, you must emit: ${
+    AgentSignals.ERROR_MCP_MISSING
+  } Could not access the PostHog MCP server and halt.
+
    Review the skill descriptions and choose the one that best matches this project's framework and configuration.
-   If no suitable skill is found, or you cannot access the MCP server, emit: ${
+   If no suitable skill is found, or you cannot access the MCP server, you emit: ${
      AgentSignals.ERROR_RESOURCE_MISSING
    } Could not find a suitable skill for this project.
 
@@ -400,7 +403,7 @@ STEP 6: Set up environment variables for PostHog in a .env file with the API key
     config.metadata.name
   }. Make sure to use these environment variables in the code files you create instead of hardcoding the API key and host.
 
-Important: Look for lockfiles (pnpm-lock.yaml, package-lock.json, yarn.lock, bun.lockb) to determine the package manager. Do not manually edit package.json. Always install packages as a background task. Don't await completion; proceed with other work immediately after starting the installation.
+Important: Look for lockfiles (pnpm-lock.yaml, package-lock.json, yarn.lock, bun.lockb) to determine the package manager (excluding the contents of node_modules). Do not manually edit package.json. Always install packages as a background task. Don't await completion; proceed with other work immediately after starting the installation. You must read a file immediately before attempting to write it, even if you have previously read it; failure to do so will cause a tool failure.
 
 `;
 }
