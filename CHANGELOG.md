@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.31.2](https://github.com/PostHog/wizard/compare/v1.31.1...v1.31.2) (2026-02-03)
+
+
+### Bug Fixes
+
+* changes based on the `wizard remark` event ([#249](https://github.com/PostHog/wizard/issues/249)) ([7de6b67](https://github.com/PostHog/wizard/commit/7de6b679af6bfbf7a731541caa61cdeb11d93458))
+
 ## [1.31.1](https://github.com/PostHog/wizard/compare/v1.31.0...v1.31.1) (2026-01-27)
 
 
