@@ -1,12 +1,10 @@
 /* Flask wizard using posthog-agent with PostHog MCP */
 import type { WizardOptions } from '../utils/types';
 import type { FrameworkConfig } from '../lib/framework-config';
-import { enableDebugLogs } from '../utils/debug';
-import { runAgentWizard } from '../lib/agent-runner';
 import { Integration } from '../lib/constants';
-import clack from '../utils/clack';
-import chalk from 'chalk';
-import * as semver from 'semver';
+import fg from 'fast-glob';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 import {
   getFlaskVersion,
   getFlaskProjectType,
@@ -16,15 +14,16 @@ import {
   findFlaskAppFile,
 } from './utils';
 
-/**
- * Flask framework configuration for the universal agent runner
- */
-const MINIMUM_FLASK_VERSION = '2.0.0';
+type FlaskContext = {
+  projectType?: FlaskProjectType;
+  appFile?: string;
+};
 
-const FLASK_AGENT_CONFIG: FrameworkConfig = {
+export const FLASK_AGENT_CONFIG: FrameworkConfig<FlaskContext> = {
   metadata: {
     name: 'Flask',
     integration: Integration.flask,
+    beta: true,
     docsUrl: 'https://posthog.com/docs/libraries/python',
     unsupportedVersionDocsUrl: 'https://posthog.com/docs/libraries/python',
     gatherContext: async (options: WizardOptions) => {
@@ -38,12 +37,77 @@ const FLASK_AGENT_CONFIG: FrameworkConfig = {
     packageName: 'flask',
     packageDisplayName: 'Flask',
     usesPackageJson: false,
-    getVersion: (_packageJson: any) => {
-      // For Flask, we don't use package.json. Version is extracted separately
-      // from requirements.txt or pyproject.toml in the wizard entry point
-      return undefined;
-    },
+    getVersion: () => undefined,
     getVersionBucket: getFlaskVersionBucket,
+    minimumVersion: '2.0.0',
+    getInstalledVersion: (options: WizardOptions) => getFlaskVersion(options),
+    detect: async (options) => {
+      const { installDir } = options;
+
+      const requirementsFiles = await fg(
+        [
+          '**/requirements*.txt',
+          '**/pyproject.toml',
+          '**/setup.py',
+          '**/Pipfile',
+        ],
+        {
+          cwd: installDir,
+          ignore: ['**/venv/**', '**/.venv/**', '**/env/**', '**/.env/**'],
+        },
+      );
+
+      for (const reqFile of requirementsFiles) {
+        try {
+          const content = fs.readFileSync(
+            path.join(installDir, reqFile),
+            'utf-8',
+          );
+          if (
+            /^flask([<>=~!]|$|\s)/im.test(content) ||
+            /["']flask["']/i.test(content)
+          ) {
+            return true;
+          }
+        } catch {
+          continue;
+        }
+      }
+
+      const pyFiles = await fg(
+        ['**/app.py', '**/wsgi.py', '**/application.py', '**/__init__.py'],
+        {
+          cwd: installDir,
+          ignore: [
+            '**/venv/**',
+            '**/.venv/**',
+            '**/env/**',
+            '**/.env/**',
+            '**/__pycache__/**',
+          ],
+        },
+      );
+
+      for (const pyFile of pyFiles) {
+        try {
+          const content = fs.readFileSync(
+            path.join(installDir, pyFile),
+            'utf-8',
+          );
+          if (
+            content.includes('from flask import') ||
+            content.includes('import flask') ||
+            /Flask\s*\(/.test(content)
+          ) {
+            return true;
+          }
+        } catch {
+          continue;
+        }
+      }
+
+      return false;
+    },
   },
 
   environment: {
@@ -55,12 +119,9 @@ const FLASK_AGENT_CONFIG: FrameworkConfig = {
   },
 
   analytics: {
-    getTags: (context: any) => {
-      const projectType = context.projectType as FlaskProjectType;
-      return {
-        projectType: projectType || 'unknown',
-      };
-    },
+    getTags: (context) => ({
+      projectType: context.projectType || 'unknown',
+    }),
   },
 
   prompts: {
@@ -68,10 +129,9 @@ const FLASK_AGENT_CONFIG: FrameworkConfig = {
       'This is a Python/Flask project. Look for requirements.txt, pyproject.toml, setup.py, Pipfile, or app.py/wsgi.py to confirm.',
     packageInstallation:
       'Use pip, poetry, or pipenv based on existing config files (requirements.txt, pyproject.toml, Pipfile). Do not pin the posthog version - just add "posthog" without version constraints.',
-    getAdditionalContextLines: (context: any) => {
-      const projectType = context.projectType as FlaskProjectType;
-      const projectTypeName = projectType
-        ? getFlaskProjectTypeName(projectType)
+    getAdditionalContextLines: (context) => {
+      const projectTypeName = context.projectType
+        ? getFlaskProjectTypeName(context.projectType)
         : 'unknown';
 
       // Map project type to framework ID for MCP docs resource
@@ -83,7 +143,9 @@ const FLASK_AGENT_CONFIG: FrameworkConfig = {
         [FlaskProjectType.BLUEPRINT]: 'flask',
       };
 
-      const frameworkId = projectType ? frameworkIdMap[projectType] : 'flask';
+      const frameworkId = context.projectType
+        ? frameworkIdMap[context.projectType]
+        : 'flask';
 
       const lines = [
         `Project type: ${projectTypeName}`,
@@ -101,10 +163,9 @@ const FLASK_AGENT_CONFIG: FrameworkConfig = {
   ui: {
     successMessage: 'PostHog integration complete',
     estimatedDurationMinutes: 5,
-    getOutroChanges: (context: any) => {
-      const projectType = context.projectType as FlaskProjectType;
-      const projectTypeName = projectType
-        ? getFlaskProjectTypeName(projectType)
+    getOutroChanges: (context) => {
+      const projectTypeName = context.projectType
+        ? getFlaskProjectTypeName(context.projectType)
         : 'Flask';
       return [
         `Analyzed your ${projectTypeName} project structure`,
@@ -120,35 +181,3 @@ const FLASK_AGENT_CONFIG: FrameworkConfig = {
     ],
   },
 };
-
-/**
- * Flask wizard powered by the universal agent runner.
- */
-export async function runFlaskWizardAgent(
-  options: WizardOptions,
-): Promise<void> {
-  if (options.debug) {
-    enableDebugLogs();
-  }
-
-  // Check Flask version - agent wizard requires >= 2.0.0
-  const flaskVersion = await getFlaskVersion(options);
-
-  if (flaskVersion) {
-    const coercedVersion = semver.coerce(flaskVersion);
-    if (coercedVersion && semver.lt(coercedVersion, MINIMUM_FLASK_VERSION)) {
-      const docsUrl =
-        FLASK_AGENT_CONFIG.metadata.unsupportedVersionDocsUrl ??
-        FLASK_AGENT_CONFIG.metadata.docsUrl;
-
-      clack.log.warn(
-        `Sorry: the wizard can't help you with Flask ${flaskVersion}. Upgrade to Flask ${MINIMUM_FLASK_VERSION} or later, or check out the manual setup guide.`,
-      );
-      clack.log.info(`Setup Flask manually: ${chalk.cyan(docsUrl)}`);
-      clack.outro('PostHog wizard will see you next time!');
-      return;
-    }
-  }
-
-  await runAgentWizard(FLASK_AGENT_CONFIG, options);
-}

@@ -4,20 +4,28 @@ import type { WizardOptions } from '../utils/types';
 /**
  * Configuration interface for framework-specific agent integrations.
  * Each framework exports a FrameworkConfig that the universal runner uses.
+ *
+ * The TContext generic represents the framework-specific context gathered
+ * before the agent runs (e.g., router type for Next.js, project type for Django).
+ * The runner threads this opaquely — all framework-specific logic stays inside the config.
  */
-export interface FrameworkConfig {
-  metadata: FrameworkMetadata;
+export interface FrameworkConfig<
+  TContext extends Record<string, unknown> = Record<string, unknown>,
+> {
+  metadata: FrameworkMetadata<TContext>;
   detection: FrameworkDetection;
   environment: EnvironmentConfig;
-  analytics: AnalyticsConfig;
-  prompts: PromptConfig;
-  ui: UIConfig;
+  analytics: AnalyticsConfig<TContext>;
+  prompts: PromptConfig<TContext>;
+  ui: UIConfig<TContext>;
 }
 
 /**
  * Basic framework information and documentation
  */
-export interface FrameworkMetadata {
+export interface FrameworkMetadata<
+  TContext extends Record<string, unknown> = Record<string, unknown>,
+> {
   /** Display name (e.g., "Next.js", "React") */
   name: string;
 
@@ -33,12 +41,15 @@ export interface FrameworkMetadata {
    */
   unsupportedVersionDocsUrl?: string;
 
+  /** If true, shows a beta notice before running the wizard. */
+  beta?: boolean;
+
   /**
    * Optional function to gather framework-specific context before agent runs.
    * For Next.js: detects router type
    * For React Native: detects Expo vs bare
    */
-  gatherContext?: (options: WizardOptions) => Promise<Record<string, any>>;
+  gatherContext?: (options: WizardOptions) => Promise<TContext>;
 }
 
 /**
@@ -52,7 +63,7 @@ export interface FrameworkDetection {
   packageDisplayName: string;
 
   /** Extract version from package.json */
-  getVersion: (packageJson: any) => string | undefined;
+  getVersion: (packageJson: unknown) => string | undefined;
 
   /** Optional: Convert version to analytics bucket (e.g., "15.x") */
   getVersionBucket?: (version: string) => string;
@@ -63,6 +74,15 @@ export interface FrameworkDetection {
    * Defaults to true if not specified.
    */
   usesPackageJson?: boolean;
+
+  /** Minimum supported version. If set, runner checks before proceeding. */
+  minimumVersion?: string;
+
+  /** Get the currently installed version. Called by runner for version check. */
+  getInstalledVersion?: (options: WizardOptions) => Promise<string | undefined>;
+
+  /** Detect whether this framework is present in the project. */
+  detect: (options: Pick<WizardOptions, 'installDir'>) => Promise<boolean>;
 }
 
 /**
@@ -82,24 +102,28 @@ export interface EnvironmentConfig {
 /**
  * Analytics configuration
  */
-export interface AnalyticsConfig {
+export interface AnalyticsConfig<
+  TContext extends Record<string, unknown> = Record<string, unknown>,
+> {
   /** Generate tags from context (e.g., { 'nextjs-version': '15.x', 'router': 'app' }) */
-  getTags: (context: any) => Record<string, any>;
+  getTags: (context: TContext) => Record<string, string>;
 
   /** Optional: Additional event properties */
-  getEventProperties?: (context: any) => Record<string, any>;
+  getEventProperties?: (context: TContext) => Record<string, string>;
 }
 
 /**
  * Prompt configuration
  */
-export interface PromptConfig {
+export interface PromptConfig<
+  TContext extends Record<string, unknown> = Record<string, unknown>,
+> {
   /**
    * Optional: Additional context lines to append to base prompt
    * For Next.js: "- Router: app"
    * For React Native: "- Platform: Expo"
    */
-  getAdditionalContextLines?: (context: any) => string[];
+  getAdditionalContextLines?: (context: TContext) => string[];
 
   /**
    * How to detect the project type for this framework.
@@ -117,7 +141,9 @@ export interface PromptConfig {
 /**
  * UI messaging configuration
  */
-export interface UIConfig {
+export interface UIConfig<
+  TContext extends Record<string, unknown> = Record<string, unknown>,
+> {
   /** Success message when agent completes */
   successMessage: string;
 
@@ -125,10 +151,10 @@ export interface UIConfig {
   estimatedDurationMinutes: number;
 
   /** Generate "What the agent did" bullets from context */
-  getOutroChanges: (context: any) => string[];
+  getOutroChanges: (context: TContext) => string[];
 
   /** Generate "Next steps" bullets from context */
-  getOutroNextSteps: (context: any) => string[];
+  getOutroNextSteps: (context: TContext) => string[];
 }
 
 /**

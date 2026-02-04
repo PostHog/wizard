@@ -1,12 +1,10 @@
 /* Laravel wizard using posthog-agent with PostHog MCP */
 import type { WizardOptions } from '../utils/types';
 import type { FrameworkConfig } from '../lib/framework-config';
-import { enableDebugLogs } from '../utils/debug';
-import { runAgentWizard } from '../lib/agent-runner';
 import { Integration } from '../lib/constants';
-import clack from '../utils/clack';
-import chalk from 'chalk';
-import * as semver from 'semver';
+import fg from 'fast-glob';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 import {
   getLaravelVersion,
   getLaravelProjectType,
@@ -18,15 +16,18 @@ import {
   detectLaravelStructure,
 } from './utils';
 
-/**
- * Laravel framework configuration for the universal agent runner
- */
-const MINIMUM_LARAVEL_VERSION = '9.0.0';
+type LaravelContext = {
+  projectType?: LaravelProjectType;
+  serviceProvider?: string;
+  bootstrapFile?: string;
+  laravelStructure?: string;
+};
 
-const LARAVEL_AGENT_CONFIG: FrameworkConfig = {
+export const LARAVEL_AGENT_CONFIG: FrameworkConfig<LaravelContext> = {
   metadata: {
     name: 'Laravel',
     integration: Integration.laravel,
+    beta: true,
     docsUrl: 'https://posthog.com/docs/libraries/php',
     unsupportedVersionDocsUrl: 'https://posthog.com/docs/libraries/php',
     gatherContext: async (options: WizardOptions) => {
@@ -48,12 +49,49 @@ const LARAVEL_AGENT_CONFIG: FrameworkConfig = {
     packageName: 'laravel/framework',
     packageDisplayName: 'Laravel',
     usesPackageJson: false,
-    getVersion: (_packageJson: any) => {
-      // For Laravel, we don't use package.json. Version is extracted separately
-      // from composer.json in the wizard entry point
-      return undefined;
-    },
+    getVersion: () => undefined,
     getVersionBucket: getLaravelVersionBucket,
+    minimumVersion: '9.0.0',
+    getInstalledVersion: (options: WizardOptions) =>
+      Promise.resolve(getLaravelVersion(options)),
+    detect: async (options) => {
+      const { installDir } = options;
+
+      const artisanPath = path.join(installDir, 'artisan');
+      if (fs.existsSync(artisanPath)) {
+        try {
+          const content = fs.readFileSync(artisanPath, 'utf-8');
+          if (content.includes('Laravel') || content.includes('Artisan')) {
+            return true;
+          }
+        } catch {
+          // Continue to other checks
+        }
+      }
+
+      const composerPath = path.join(installDir, 'composer.json');
+      if (fs.existsSync(composerPath)) {
+        try {
+          const content = fs.readFileSync(composerPath, 'utf-8');
+          const composer = JSON.parse(content);
+          if (
+            composer.require?.['laravel/framework'] ||
+            composer['require-dev']?.['laravel/framework']
+          ) {
+            return true;
+          }
+        } catch {
+          // Continue to other checks
+        }
+      }
+
+      const hasLaravelStructure = await fg(
+        ['**/bootstrap/app.php', '**/app/Http/Kernel.php'],
+        { cwd: installDir, ignore: ['**/vendor/**'] },
+      );
+
+      return hasLaravelStructure.length > 0;
+    },
   },
 
   environment: {
@@ -65,13 +103,10 @@ const LARAVEL_AGENT_CONFIG: FrameworkConfig = {
   },
 
   analytics: {
-    getTags: (context: any) => {
-      const projectType = context.projectType as LaravelProjectType;
-      return {
-        projectType: projectType || 'unknown',
-        laravelStructure: context.laravelStructure || 'unknown',
-      };
-    },
+    getTags: (context) => ({
+      projectType: context.projectType || 'unknown',
+      laravelStructure: context.laravelStructure || 'unknown',
+    }),
   },
 
   prompts: {
@@ -79,10 +114,9 @@ const LARAVEL_AGENT_CONFIG: FrameworkConfig = {
       'This is a PHP/Laravel project. Look for composer.json, artisan CLI, and app/ directory structure to confirm. Check for Laravel-specific packages like laravel/framework.',
     packageInstallation:
       'Use Composer to install packages. Run `composer require posthog/posthog-php` without pinning a specific version.',
-    getAdditionalContextLines: (context: any) => {
-      const projectType = context.projectType as LaravelProjectType;
-      const projectTypeName = projectType
-        ? getLaravelProjectTypeName(projectType)
+    getAdditionalContextLines: (context) => {
+      const projectTypeName = context.projectType
+        ? getLaravelProjectTypeName(context.projectType)
         : 'unknown';
 
       const lines = [
@@ -117,10 +151,9 @@ const LARAVEL_AGENT_CONFIG: FrameworkConfig = {
   ui: {
     successMessage: 'PostHog integration complete',
     estimatedDurationMinutes: 5,
-    getOutroChanges: (context: any) => {
-      const projectType = context.projectType as LaravelProjectType;
-      const projectTypeName = projectType
-        ? getLaravelProjectTypeName(projectType)
+    getOutroChanges: (context) => {
+      const projectTypeName = context.projectType
+        ? getLaravelProjectTypeName(context.projectType)
         : 'Laravel';
 
       const changes = [
@@ -135,11 +168,11 @@ const LARAVEL_AGENT_CONFIG: FrameworkConfig = {
         changes.push('Created a PostHog service provider for initialization');
       }
 
-      if (projectType === LaravelProjectType.INERTIA) {
+      if (context.projectType === LaravelProjectType.INERTIA) {
         changes.push('Configured PostHog to work with Inertia.js');
       }
 
-      if (projectType === LaravelProjectType.LIVEWIRE) {
+      if (context.projectType === LaravelProjectType.LIVEWIRE) {
         changes.push('Configured PostHog to work with Livewire');
       }
 
@@ -153,35 +186,3 @@ const LARAVEL_AGENT_CONFIG: FrameworkConfig = {
     ],
   },
 };
-
-/**
- * Laravel wizard powered by the universal agent runner.
- */
-export async function runLaravelWizardAgent(
-  options: WizardOptions,
-): Promise<void> {
-  if (options.debug) {
-    enableDebugLogs();
-  }
-
-  // Check Laravel version - agent wizard requires >= 9.0.0
-  const laravelVersion = getLaravelVersion(options);
-
-  if (laravelVersion) {
-    const coercedVersion = semver.coerce(laravelVersion);
-    if (coercedVersion && semver.lt(coercedVersion, MINIMUM_LARAVEL_VERSION)) {
-      const docsUrl =
-        LARAVEL_AGENT_CONFIG.metadata.unsupportedVersionDocsUrl ??
-        LARAVEL_AGENT_CONFIG.metadata.docsUrl;
-
-      clack.log.warn(
-        `Sorry: the wizard can't help you with Laravel ${laravelVersion}. Upgrade to Laravel ${MINIMUM_LARAVEL_VERSION} or later, or check out the manual setup guide.`,
-      );
-      clack.log.info(`Setup Laravel manually: ${chalk.cyan(docsUrl)}`);
-      clack.outro('PostHog wizard will see you next time!');
-      return;
-    }
-  }
-
-  await runAgentWizard(LARAVEL_AGENT_CONFIG, options);
-}

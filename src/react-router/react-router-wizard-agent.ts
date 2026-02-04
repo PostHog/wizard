@@ -1,14 +1,13 @@
 /* React Router wizard using posthog-agent with PostHog MCP */
 import type { WizardOptions } from '../utils/types';
 import type { FrameworkConfig } from '../lib/framework-config';
-import { enableDebugLogs } from '../utils/debug';
-import { runAgentWizard } from '../lib/agent-runner';
 import { Integration } from '../lib/constants';
-import { getPackageVersion } from '../utils/package-json';
-import { getPackageDotJson } from '../utils/clack-utils';
-import clack from '../utils/clack';
-import chalk from 'chalk';
-import * as semver from 'semver';
+import {
+  getPackageVersion,
+  hasPackageInstalled,
+  type PackageDotJson,
+} from '../utils/package-json';
+import { getPackageDotJson, tryGetPackageJson } from '../utils/clack-utils';
 import {
   getReactRouterMode,
   getReactRouterModeName,
@@ -16,12 +15,11 @@ import {
   ReactRouterMode,
 } from './utils';
 
-/**
- * React Router framework configuration for the universal agent runner.
- */
-const MINIMUM_REACT_ROUTER_VERSION = '6.0.0';
+type ReactRouterContext = {
+  routerMode?: ReactRouterMode;
+};
 
-const REACT_ROUTER_AGENT_CONFIG: FrameworkConfig = {
+export const REACT_ROUTER_AGENT_CONFIG: FrameworkConfig<ReactRouterContext> = {
   metadata: {
     name: 'React Router',
     integration: Integration.reactRouter,
@@ -36,9 +34,20 @@ const REACT_ROUTER_AGENT_CONFIG: FrameworkConfig = {
   detection: {
     packageName: 'react-router',
     packageDisplayName: 'React Router',
-    getVersion: (packageJson: any) =>
-      getPackageVersion('react-router', packageJson),
+    getVersion: (packageJson: unknown) =>
+      getPackageVersion('react-router', packageJson as PackageDotJson),
     getVersionBucket: getReactRouterVersionBucket,
+    minimumVersion: '6.0.0',
+    getInstalledVersion: async (options: WizardOptions) => {
+      const packageJson = await getPackageDotJson(options);
+      return getPackageVersion('react-router', packageJson);
+    },
+    detect: async (options) => {
+      const packageJson = await tryGetPackageJson(options);
+      return packageJson
+        ? hasPackageInstalled('react-router', packageJson)
+        : false;
+    },
   },
 
   environment: {
@@ -50,12 +59,9 @@ const REACT_ROUTER_AGENT_CONFIG: FrameworkConfig = {
   },
 
   analytics: {
-    getTags: (context: any) => {
-      const routerMode = context.routerMode as ReactRouterMode;
-      return {
-        routerMode: routerMode || 'unknown',
-      };
-    },
+    getTags: (context) => ({
+      routerMode: context.routerMode || 'unknown',
+    }),
   },
 
   prompts: {
@@ -63,8 +69,8 @@ const REACT_ROUTER_AGENT_CONFIG: FrameworkConfig = {
       'This is a JavaScript/TypeScript project. Look for package.json and lockfiles (package-lock.json, yarn.lock, pnpm-lock.yaml, bun.lockb) to confirm.',
     packageInstallation:
       'Look for lockfiles to determine the package manager (npm, yarn, pnpm, bun). Do not manually edit package.json.',
-    getAdditionalContextLines: (context: any) => {
-      const routerMode = context.routerMode as ReactRouterMode;
+    getAdditionalContextLines: (context) => {
+      const routerMode = context.routerMode;
       const modeName = routerMode
         ? getReactRouterModeName(routerMode)
         : 'unknown';
@@ -91,10 +97,9 @@ const REACT_ROUTER_AGENT_CONFIG: FrameworkConfig = {
   ui: {
     successMessage: 'PostHog integration complete',
     estimatedDurationMinutes: 8,
-    getOutroChanges: (context: any) => {
-      const routerMode = context.routerMode as ReactRouterMode;
-      const modeName = routerMode
-        ? getReactRouterModeName(routerMode)
+    getOutroChanges: (context) => {
+      const modeName = context.routerMode
+        ? getReactRouterModeName(context.routerMode)
         : 'React Router';
       return [
         `Analyzed your React Router project structure (${modeName})`,
@@ -108,39 +113,3 @@ const REACT_ROUTER_AGENT_CONFIG: FrameworkConfig = {
     ],
   },
 };
-
-/**
- * React Router wizard powered by the universal agent runner.
- */
-export async function runReactRouterWizardAgent(
-  options: WizardOptions,
-): Promise<void> {
-  if (options.debug) {
-    enableDebugLogs();
-  }
-
-  // Check React Router version - agent wizard requires >= 6.0.0
-  const packageJson = await getPackageDotJson(options);
-  const reactRouterVersion = getPackageVersion('react-router', packageJson);
-
-  if (reactRouterVersion) {
-    const coercedVersion = semver.coerce(reactRouterVersion);
-    if (
-      coercedVersion &&
-      semver.lt(coercedVersion, MINIMUM_REACT_ROUTER_VERSION)
-    ) {
-      const docsUrl =
-        REACT_ROUTER_AGENT_CONFIG.metadata.unsupportedVersionDocsUrl ??
-        REACT_ROUTER_AGENT_CONFIG.metadata.docsUrl;
-
-      clack.log.warn(
-        `Sorry: the wizard can't help you with React Router ${reactRouterVersion}. Upgrade to React Router ${MINIMUM_REACT_ROUTER_VERSION} or later, or check out the manual setup guide.`,
-      );
-      clack.log.info(`Setup React Router manually: ${chalk.cyan(docsUrl)}`);
-      clack.outro('PostHog wizard will see you next time!');
-      return;
-    }
-  }
-
-  await runAgentWizard(REACT_ROUTER_AGENT_CONFIG, options);
-}

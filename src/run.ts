@@ -1,29 +1,16 @@
 import { abortIfCancelled } from './utils/clack-utils';
 
-import { runNextjsWizardAgent } from './nextjs/nextjs-wizard-agent';
 import type { CloudRegion, WizardOptions } from './utils/types';
 
-import {
-  getIntegrationDescription,
-  Integration,
-  FeatureFlagDefinition,
-} from './lib/constants';
+import { Integration } from './lib/constants';
 import { readEnvironment } from './utils/environment';
 import clack from './utils/clack';
 import path from 'path';
-import { INTEGRATION_CONFIG, INTEGRATION_ORDER } from './lib/config';
-import { runReactWizard } from './react/react-wizard';
+import { FRAMEWORK_REGISTRY } from './lib/registry';
 import { analytics } from './utils/analytics';
-import { runSvelteWizard } from './svelte/svelte-wizard';
-import { runReactNativeWizard } from './react-native/react-native-wizard';
-import { runAstroWizard } from './astro/astro-wizard';
-import { runReactRouterWizardAgent } from './react-router/react-router-wizard-agent';
-import { runDjangoWizardAgent } from './django/django-wizard-agent';
-import { runFlaskWizardAgent } from './flask/flask-wizard-agent';
-import { runLaravelWizardAgent } from './laravel/laravel-wizard-agent';
+import { runAgentWizard } from './lib/agent-runner';
 import { EventEmitter } from 'events';
 import chalk from 'chalk';
-import { RateLimitError } from './utils/errors';
 
 EventEmitter.defaultMaxListeners = 50;
 
@@ -80,68 +67,10 @@ export async function runWizard(argv: Args) {
 
   analytics.setTag('integration', integration);
 
+  const config = FRAMEWORK_REGISTRY[integration];
+
   try {
-    switch (integration) {
-      case Integration.nextjs:
-        await runNextjsWizardAgent(wizardOptions);
-        break;
-      case Integration.react:
-        await runReactWizard(wizardOptions);
-        break;
-      case Integration.svelte:
-        await runSvelteWizard(wizardOptions);
-        break;
-      case Integration.reactNative:
-        await runReactNativeWizard(wizardOptions);
-        break;
-      case Integration.astro:
-        await runAstroWizard(wizardOptions);
-        break;
-      case Integration.reactRouter: {
-        const flagValue = await analytics.getFeatureFlag(
-          FeatureFlagDefinition.ReactRouter,
-        );
-        // In CI mode, bypass feature flags and always use the React Router wizard
-        if (wizardOptions.ci || flagValue === true) {
-          await runReactRouterWizardAgent(wizardOptions);
-        } else {
-          await runReactWizard(wizardOptions);
-        }
-        break;
-      }
-      case Integration.django:
-        clack.log.info(
-          `${chalk.yellow(
-            '[BETA]',
-          )} The Django wizard is in beta. Questions or feedback? Email ${chalk.cyan(
-            'wizard@posthog.com',
-          )}`,
-        );
-        await runDjangoWizardAgent(wizardOptions);
-        break;
-      case Integration.flask:
-        clack.log.info(
-          `${chalk.yellow(
-            '[BETA]',
-          )} The Flask wizard is in beta. Questions or feedback? Email ${chalk.cyan(
-            'wizard@posthog.com',
-          )}`,
-        );
-        await runFlaskWizardAgent(wizardOptions);
-        break;
-      case Integration.laravel:
-        clack.log.info(
-          `${chalk.yellow(
-            '[BETA]',
-          )} The Laravel wizard is in beta. Questions or feedback? Email ${chalk.cyan(
-            'wizard@posthog.com',
-          )}`,
-        );
-        await runLaravelWizardAgent(wizardOptions);
-        break;
-      default:
-        clack.log.error('No setup wizard selected!');
-    }
+    await runAgentWizard(config, wizardOptions);
   } catch (error) {
     analytics.captureException(error as Error, {
       integration,
@@ -150,15 +79,11 @@ export async function runWizard(argv: Args) {
 
     await analytics.shutdown('error');
 
-    if (error instanceof RateLimitError) {
-      clack.log.error('Wizard usage limit reached. Please try again later.');
-    } else {
-      clack.log.error(
-        `Something went wrong. You can read the documentation at ${chalk.cyan(
-          `${INTEGRATION_CONFIG[integration].docsUrl}`,
-        )} to set up PostHog manually.`,
-      );
-    }
+    clack.log.error(
+      `Something went wrong. You can read the documentation at ${chalk.cyan(
+        config.metadata.docsUrl,
+      )} to set up PostHog manually.`,
+    );
     process.exit(1);
   }
 }
@@ -166,16 +91,11 @@ export async function runWizard(argv: Args) {
 async function detectIntegration(
   options: Pick<WizardOptions, 'installDir'>,
 ): Promise<Integration | undefined> {
-  const integrationConfigs = Object.entries(INTEGRATION_CONFIG).sort(
-    ([a], [b]) =>
-      INTEGRATION_ORDER.indexOf(a as Integration) -
-      INTEGRATION_ORDER.indexOf(b as Integration),
-  );
-
-  for (const [integration, config] of integrationConfigs) {
-    const detected = await config.detect(options);
+  for (const integration of Object.values(Integration)) {
+    const config = FRAMEWORK_REGISTRY[integration];
+    const detected = await config.detection.detect(options);
     if (detected) {
-      return integration as Integration;
+      return integration;
     }
   }
 }
@@ -187,7 +107,7 @@ async function getIntegrationForSetup(
 
   if (detectedIntegration) {
     clack.log.success(
-      `Detected integration: ${getIntegrationDescription(detectedIntegration)}`,
+      `Detected integration: ${FRAMEWORK_REGISTRY[detectedIntegration].metadata.name}`,
     );
     return detectedIntegration;
   }
@@ -195,17 +115,10 @@ async function getIntegrationForSetup(
   const integration: Integration = await abortIfCancelled(
     clack.select({
       message: 'What do you want to set up?',
-      options: [
-        { value: Integration.nextjs, label: 'Next.js' },
-        { value: Integration.astro, label: 'Astro' },
-        { value: Integration.react, label: 'React' },
-        { value: Integration.reactRouter, label: 'React Router' },
-        { value: Integration.django, label: 'Django' },
-        { value: Integration.flask, label: 'Flask' },
-        { value: Integration.laravel, label: 'Laravel' },
-        { value: Integration.svelte, label: 'Svelte' },
-        { value: Integration.reactNative, label: 'React Native' },
-      ],
+      options: Object.values(Integration).map((value) => ({
+        value,
+        label: FRAMEWORK_REGISTRY[value].metadata.name,
+      })),
     }),
   );
 

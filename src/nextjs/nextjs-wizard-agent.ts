@@ -1,13 +1,13 @@
 /* Simplified Next.js wizard using posthog-agent with PostHog MCP */
 import type { WizardOptions } from '../utils/types';
-import { enableDebugLogs } from '../utils/debug';
-import { runAgentWizard } from '../lib/agent-runner';
+import type { FrameworkConfig } from '../lib/framework-config';
 import { Integration } from '../lib/constants';
-import { getPackageVersion } from '../utils/package-json';
-import { getPackageDotJson } from '../utils/clack-utils';
-import clack from '../utils/clack';
-import chalk from 'chalk';
-import * as semver from 'semver';
+import {
+  getPackageVersion,
+  hasPackageInstalled,
+  type PackageDotJson,
+} from '../utils/package-json';
+import { getPackageDotJson, tryGetPackageJson } from '../utils/clack-utils';
 import {
   getNextJsRouter,
   getNextJsVersionBucket,
@@ -15,12 +15,11 @@ import {
   NextJsRouter,
 } from './utils';
 
-/**
- * Next.js framework configuration for the universal agent runner.
- */
-const MINIMUM_NEXTJS_VERSION = '15.3.0';
+type NextjsContext = {
+  router?: NextJsRouter;
+};
 
-const NEXTJS_AGENT_CONFIG = {
+export const NEXTJS_AGENT_CONFIG: FrameworkConfig<NextjsContext> = {
   metadata: {
     name: 'Next.js',
     integration: Integration.nextjs,
@@ -35,8 +34,18 @@ const NEXTJS_AGENT_CONFIG = {
   detection: {
     packageName: 'next',
     packageDisplayName: 'Next.js',
-    getVersion: (packageJson: any) => getPackageVersion('next', packageJson),
+    getVersion: (packageJson: unknown) =>
+      getPackageVersion('next', packageJson as PackageDotJson),
     getVersionBucket: getNextJsVersionBucket,
+    minimumVersion: '15.3.0',
+    getInstalledVersion: async (options: WizardOptions) => {
+      const packageJson = await getPackageDotJson(options);
+      return getPackageVersion('next', packageJson);
+    },
+    detect: async (options) => {
+      const packageJson = await tryGetPackageJson(options);
+      return packageJson ? hasPackageInstalled('next', packageJson) : false;
+    },
   },
 
   environment: {
@@ -48,12 +57,9 @@ const NEXTJS_AGENT_CONFIG = {
   },
 
   analytics: {
-    getTags: (context: any) => {
-      const router = context.router as NextJsRouter;
-      return {
-        router: router === NextJsRouter.APP_ROUTER ? 'app' : 'pages',
-      };
-    },
+    getTags: (context) => ({
+      router: context.router === NextJsRouter.APP_ROUTER ? 'app' : 'pages',
+    }),
   },
 
   prompts: {
@@ -61,9 +67,9 @@ const NEXTJS_AGENT_CONFIG = {
       'This is a JavaScript/TypeScript project. Look for package.json and lockfiles (package-lock.json, yarn.lock, pnpm-lock.yaml, bun.lockb) to confirm.',
     packageInstallation:
       'Look for lockfiles to determine the package manager (npm, yarn, pnpm, bun). Do not manually edit package.json.',
-    getAdditionalContextLines: (context: any) => {
-      const router = context.router as NextJsRouter;
-      const routerType = router === NextJsRouter.APP_ROUTER ? 'app' : 'pages';
+    getAdditionalContextLines: (context) => {
+      const routerType =
+        context.router === NextJsRouter.APP_ROUTER ? 'app' : 'pages';
       return [`Router: ${routerType}`];
     },
   },
@@ -71,8 +77,8 @@ const NEXTJS_AGENT_CONFIG = {
   ui: {
     successMessage: 'PostHog integration complete',
     estimatedDurationMinutes: 8,
-    getOutroChanges: (context: any) => {
-      const router = context.router as NextJsRouter;
+    getOutroChanges: (context) => {
+      const router = context.router ?? NextJsRouter.APP_ROUTER;
       const routerName = getNextJsRouterName(router);
       return [
         `Analyzed your Next.js project structure (${routerName})`,
@@ -88,36 +94,3 @@ const NEXTJS_AGENT_CONFIG = {
     },
   },
 };
-
-/**
- * Next.js wizard powered by the universal agent runner.
- */
-export async function runNextjsWizardAgent(
-  options: WizardOptions,
-): Promise<void> {
-  if (options.debug) {
-    enableDebugLogs();
-  }
-
-  // Check Next.js version - agent wizard requires >= 15.3.0
-  const packageJson = await getPackageDotJson(options);
-  const nextVersion = getPackageVersion('next', packageJson);
-
-  if (nextVersion) {
-    const coercedVersion = semver.coerce(nextVersion);
-    if (coercedVersion && semver.lt(coercedVersion, MINIMUM_NEXTJS_VERSION)) {
-      const docsUrl =
-        NEXTJS_AGENT_CONFIG.metadata.unsupportedVersionDocsUrl ??
-        NEXTJS_AGENT_CONFIG.metadata.docsUrl;
-
-      clack.log.warn(
-        `Sorry: the wizard can't help you with Next.js ${nextVersion}. Upgrade to Next.js ${MINIMUM_NEXTJS_VERSION} or later, or check out the manual setup guide.`,
-      );
-      clack.log.info(`Setup Next.js manually: ${chalk.cyan(docsUrl)}`);
-      clack.outro('PostHog wizard will see you next time!');
-      return;
-    }
-  }
-
-  await runAgentWizard(NEXTJS_AGENT_CONFIG, options);
-}
