@@ -4,6 +4,7 @@ export enum Integration {
   django = 'django',
   flask = 'flask',
   laravel = 'laravel',
+  swift = 'swift',
 }
 
 export interface Args {

@@ -80,6 +80,10 @@ export async function runAgentWizard(
     );
   }
 
+  if (config.metadata.preRunNotice) {
+    clack.log.warn(config.metadata.preRunNotice);
+  }
+
   clack.log.info(
     `🧙 The wizard has chosen you to try the next-generation agent integration for ${config.metadata.name}.\n\nStand by for the good stuff, and let the robot minders know how it goes:\n\nwizard@posthog.com`,
   );

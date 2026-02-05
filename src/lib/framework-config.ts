@@ -44,6 +44,9 @@ export interface FrameworkMetadata<
   /** If true, shows a beta notice before running the wizard. */
   beta?: boolean;
 
+  /** Optional notice shown before the agent runs (e.g., "Close Xcode before proceeding"). */
+  preRunNotice?: string;
+
   /**
    * Optional function to gather framework-specific context before agent runs.
    * For Next.js: detects router type

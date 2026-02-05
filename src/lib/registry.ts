@@ -5,6 +5,7 @@ import { REACT_ROUTER_AGENT_CONFIG } from '../react-router/react-router-wizard-a
 import { DJANGO_AGENT_CONFIG } from '../django/django-wizard-agent';
 import { FLASK_AGENT_CONFIG } from '../flask/flask-wizard-agent';
 import { LARAVEL_AGENT_CONFIG } from '../laravel/laravel-wizard-agent';
+import { SWIFT_AGENT_CONFIG } from '../swift/swift-wizard-agent';
 
 export const FRAMEWORK_REGISTRY: Record<Integration, FrameworkConfig> = {
   [Integration.nextjs]: NEXTJS_AGENT_CONFIG,
@@ -12,4 +13,5 @@ export const FRAMEWORK_REGISTRY: Record<Integration, FrameworkConfig> = {
   [Integration.django]: DJANGO_AGENT_CONFIG,
   [Integration.flask]: FLASK_AGENT_CONFIG,
   [Integration.laravel]: LARAVEL_AGENT_CONFIG,
+  [Integration.swift]: SWIFT_AGENT_CONFIG,
 };
