@@ -16,9 +16,7 @@ export enum PythonPackageManager {
 /**
  * Get the installed Python version
  */
-export async function getPythonVersion(
-  options: WizardOptions,
-): Promise<string | undefined> {
+export function getPythonVersion(options: WizardOptions): string | undefined {
   try {
     const version = execSync('python --version || python3 --version', {
       cwd: options.installDir,
