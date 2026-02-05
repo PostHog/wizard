@@ -109,6 +109,12 @@ yargs(hideBin(process.argv))
           ],
           type: 'string',
         },
+        menu: {
+          default: false,
+          describe:
+            'Show menu for manual integration selection instead of auto-detecting\nenv: POSTHOG_WIZARD_MENU',
+          type: 'boolean',
+        },
       });
     },
     (argv) => {
