@@ -1,10 +1,10 @@
-import { major, minVersion } from 'semver';
 import fg from 'fast-glob';
 import { abortIfCancelled } from '../utils/clack-utils';
 import clack from '../utils/clack';
 import type { WizardOptions } from '../utils/types';
 import { Integration } from '../lib/constants';
 import { hasPackageInstalled } from '../utils/package-json';
+import { createVersionBucket } from '../utils/semver';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 
@@ -25,24 +25,7 @@ const IGNORE_PATTERNS = [
 /**
  * Get TanStack Router version bucket for analytics
  */
-export function getTanStackRouterVersionBucket(
-  version: string | undefined,
-): string {
-  if (!version) {
-    return 'none';
-  }
-
-  try {
-    const minVer = minVersion(version);
-    if (!minVer) {
-      return 'invalid';
-    }
-    const majorVersion = major(minVer);
-    return `${majorVersion}.x`;
-  } catch {
-    return 'unknown';
-  }
-}
+export const getTanStackRouterVersionBucket = createVersionBucket();
 
 /**
  * Check if the project uses file-based routing.
