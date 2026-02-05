@@ -1,6 +1,8 @@
 export enum Integration {
   nextjs = 'nextjs',
   reactRouter = 'react-router',
+  tanstackStart = 'tanstack-start',
+  tanstackRouter = 'tanstack-router',
   django = 'django',
   flask = 'flask',
   laravel = 'laravel',
