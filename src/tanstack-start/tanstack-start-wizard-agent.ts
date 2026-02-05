@@ -29,7 +29,7 @@ export const TANSTACK_START_AGENT_CONFIG: FrameworkConfig<TanStackStartContext> 
           packageJson as PackageDotJson,
         ),
       getVersionBucket: getTanStackStartVersionBucket,
-      minimumVersion: '1.0',
+      minimumVersion: '1.0.0',
       getInstalledVersion: async (options: WizardOptions) => {
         const packageJson = await getPackageDotJson(options);
         return getPackageVersion('@tanstack/react-start', packageJson);
