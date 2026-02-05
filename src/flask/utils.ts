@@ -1,7 +1,7 @@
-import { major, minVersion } from 'semver';
 import fg from 'fast-glob';
 import clack from '../utils/clack';
 import type { WizardOptions } from '../utils/types';
+import { createVersionBucket } from '../utils/semver';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 
@@ -29,25 +29,7 @@ const IGNORE_PATTERNS = [
 /**
  * Get Flask version bucket for analytics
  */
-export function getFlaskVersionBucket(version: string | undefined): string {
-  if (!version) {
-    return 'none';
-  }
-
-  try {
-    const minVer = minVersion(version);
-    if (!minVer) {
-      return 'invalid';
-    }
-    const majorVersion = major(minVer);
-    if (majorVersion >= 2) {
-      return `${majorVersion}.x`;
-    }
-    return `<2.0.0`;
-  } catch {
-    return 'unknown';
-  }
-}
+export const getFlaskVersionBucket = createVersionBucket();
 
 /**
  * Extract Flask version from requirements files or pyproject.toml

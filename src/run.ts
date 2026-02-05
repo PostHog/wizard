@@ -26,6 +26,7 @@ type Args = {
   localMcp?: boolean;
   ci?: boolean;
   apiKey?: string;
+  menu?: boolean;
 };
 
 export async function runWizard(argv: Args) {
@@ -55,6 +56,7 @@ export async function runWizard(argv: Args) {
     localMcp: finalArgs.localMcp ?? false,
     ci: finalArgs.ci ?? false,
     apiKey: finalArgs.apiKey,
+    menu: finalArgs.menu ?? false,
   };
 
   clack.intro(`Welcome to the PostHog setup wizard ✨`);
@@ -119,15 +121,17 @@ async function detectIntegration(
 }
 
 async function getIntegrationForSetup(
-  options: Pick<WizardOptions, 'installDir'>,
+  options: Pick<WizardOptions, 'installDir' | 'menu'>,
 ) {
-  const detectedIntegration = await detectIntegration(options);
+  if (!options.menu) {
+    const detectedIntegration = await detectIntegration(options);
 
-  if (detectedIntegration) {
-    clack.log.success(
-      `Detected integration: ${FRAMEWORK_REGISTRY[detectedIntegration].metadata.name}`,
-    );
-    return detectedIntegration;
+    if (detectedIntegration) {
+      clack.log.success(
+        `Detected integration: ${FRAMEWORK_REGISTRY[detectedIntegration].metadata.name}`,
+      );
+      return detectedIntegration;
+    }
   }
 
   const integration: Integration = await abortIfCancelled(

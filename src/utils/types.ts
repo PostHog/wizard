@@ -55,6 +55,11 @@ export type WizardOptions = {
    * Personal API key (phx_xxx) - used for LLM gateway auth, skips OAuth
    */
   apiKey?: string;
+
+  /**
+   * Whether to show the menu for manual integration selection instead of auto-detecting.
+   */
+  menu: boolean;
 };
 
 export interface Feature {

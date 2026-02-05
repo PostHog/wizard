@@ -31,6 +31,7 @@ describe('runAgent', () => {
     signup: false,
     localMcp: false,
     ci: false,
+    menu: false,
   };
 
   const defaultAgentConfig = {
