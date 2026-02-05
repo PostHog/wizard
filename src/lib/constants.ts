@@ -5,9 +5,9 @@ export enum Integration {
   tanstackRouter = 'tanstack-router',
   django = 'django',
   flask = 'flask',
+  fastapi = 'fastapi',
   laravel = 'laravel',
 }
-
 export interface Args {
   debug: boolean;
   integration: Integration;
