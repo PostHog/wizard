@@ -1,7 +1,7 @@
-import { major, minVersion } from 'semver';
 import fg from 'fast-glob';
 import clack from '../utils/clack';
 import type { WizardOptions } from '../utils/types';
+import { createVersionBucket } from '../utils/semver';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 
@@ -27,25 +27,7 @@ const IGNORE_PATTERNS = [
 /**
  * Get Django version bucket for analytics
  */
-export function getDjangoVersionBucket(version: string | undefined): string {
-  if (!version) {
-    return 'none';
-  }
-
-  try {
-    const minVer = minVersion(version);
-    if (!minVer) {
-      return 'invalid';
-    }
-    const majorVersion = major(minVer);
-    if (majorVersion >= 3) {
-      return `${majorVersion}.x`;
-    }
-    return `<3.0.0`;
-  } catch {
-    return 'unknown';
-  }
-}
+export const getDjangoVersionBucket = createVersionBucket();
 
 /**
  * Extract Django version from requirements files or pyproject.toml

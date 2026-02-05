@@ -1,10 +1,11 @@
-import { major, minVersion } from 'semver';
+import { major } from 'semver';
 import fg from 'fast-glob';
 import { abortIfCancelled, getPackageDotJson } from '../utils/clack-utils';
 import clack from '../utils/clack';
 import type { WizardOptions } from '../utils/types';
 import { Integration } from '../lib/constants';
 import { getPackageVersion } from '../utils/package-json';
+import { createVersionBucket } from '../utils/semver';
 import chalk from 'chalk';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -28,27 +29,7 @@ const IGNORE_PATTERNS = [
 /**
  * Get React Router version bucket for analytics
  */
-export function getReactRouterVersionBucket(
-  version: string | undefined,
-): string {
-  if (!version) {
-    return 'none';
-  }
-
-  try {
-    const minVer = minVersion(version);
-    if (!minVer) {
-      return 'invalid';
-    }
-    const majorVersion = major(minVer);
-    if (majorVersion >= 6) {
-      return `${majorVersion}.x`;
-    }
-    return `<6.0.0`;
-  } catch {
-    return 'unknown';
-  }
-}
+export const getReactRouterVersionBucket = createVersionBucket();
 
 /**
  * Check if react-router.config.ts exists (indicates framework mode - React Router v7)
