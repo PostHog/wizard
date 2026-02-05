@@ -67,7 +67,10 @@ export const PYTHON_AGENT_CONFIG: FrameworkConfig<PythonContext> = {
 
       for (const match of managePyMatches) {
         try {
-          const content = fs.readFileSync(path.join(installDir, match), 'utf-8');
+          const content = fs.readFileSync(
+            path.join(installDir, match),
+            'utf-8',
+          );
           if (
             content.includes('django') ||
             content.includes('DJANGO_SETTINGS_MODULE')
