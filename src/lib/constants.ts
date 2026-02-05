@@ -1,4 +1,8 @@
+/**
+ * Detection order matters: put framework-specific integrations BEFORE basic language fallbacks
+ */
 export enum Integration {
+  // Frameworks
   nextjs = 'nextjs',
   reactRouter = 'react-router',
   tanstackStart = 'tanstack-start',
@@ -8,6 +12,9 @@ export enum Integration {
   fastapi = 'fastapi',
   laravel = 'laravel',
   swift = 'swift',
+
+  // Language fallbacks
+  python = 'python',
 }
 export interface Args {
   debug: boolean;
