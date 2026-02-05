@@ -56,9 +56,12 @@ export const DJANGO_AGENT_CONFIG: FrameworkConfig<DjangoContext> = {
               path.join(installDir, match),
               'utf-8',
             );
+            // Check for actual Django imports and usage
             if (
-              content.includes('django') ||
-              content.includes('DJANGO_SETTINGS_MODULE')
+              content.includes('from django') ||
+              content.includes('import django') ||
+              content.includes('DJANGO_SETTINGS_MODULE') ||
+              /execute_from_command_line/.test(content)
             ) {
               return true;
             }
@@ -82,9 +85,11 @@ export const DJANGO_AGENT_CONFIG: FrameworkConfig<DjangoContext> = {
             path.join(installDir, reqFile),
             'utf-8',
           );
+          // Match Django as a package requirement, not in comments or other text
+          // Look for: django, django>=, django==, django~=, Django (capitalized)
           if (
-            content.toLowerCase().includes('django') &&
-            !content.toLowerCase().includes('django-')
+            /^django([>=~!<\s]|$)/im.test(content) ||
+            /["']django["']/i.test(content)
           ) {
             return true;
           }
