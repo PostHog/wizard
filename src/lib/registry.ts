@@ -6,6 +6,7 @@ import { TANSTACK_ROUTER_AGENT_CONFIG } from '../tanstack-router/tanstack-router
 import { TANSTACK_START_AGENT_CONFIG } from '../tanstack-start/tanstack-start-wizard-agent';
 import { DJANGO_AGENT_CONFIG } from '../django/django-wizard-agent';
 import { FLASK_AGENT_CONFIG } from '../flask/flask-wizard-agent';
+import { FASTAPI_AGENT_CONFIG } from '../fastapi/fastapi-wizard-agent';
 import { LARAVEL_AGENT_CONFIG } from '../laravel/laravel-wizard-agent';
 
 export const FRAMEWORK_REGISTRY: Record<Integration, FrameworkConfig> = {
@@ -15,5 +16,6 @@ export const FRAMEWORK_REGISTRY: Record<Integration, FrameworkConfig> = {
   [Integration.tanstackRouter]: TANSTACK_ROUTER_AGENT_CONFIG,
   [Integration.django]: DJANGO_AGENT_CONFIG,
   [Integration.flask]: FLASK_AGENT_CONFIG,
+  [Integration.fastapi]: FASTAPI_AGENT_CONFIG,
   [Integration.laravel]: LARAVEL_AGENT_CONFIG,
 };
