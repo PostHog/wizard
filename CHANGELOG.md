@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.32.0](https://github.com/PostHog/wizard/compare/v1.31.2...v1.32.0) (2026-02-06)
+
+
+### Features
+
+* add basic python language skill ([#254](https://github.com/PostHog/wizard/issues/254)) ([e09a4f5](https://github.com/PostHog/wizard/commit/e09a4f55cdf7ba990e4811b626425834b3e88502))
+* fastapi skill ([#251](https://github.com/PostHog/wizard/issues/251)) ([9872950](https://github.com/PostHog/wizard/commit/98729507fc5ecf7e517d1bfdb1dc8df54452c396))
+* Swift integration support ([#259](https://github.com/PostHog/wizard/issues/259)) ([8a7e164](https://github.com/PostHog/wizard/commit/8a7e164e397de25ea675e7da899a47e1e1f3d107))
+* tanstack router and start support ([#252](https://github.com/PostHog/wizard/issues/252)) ([77509be](https://github.com/PostHog/wizard/commit/77509be0ea0b22876d92a3bd2479364fcaad957a))
+
+
+### Bug Fixes
+
+* django detection bug ([#258](https://github.com/PostHog/wizard/issues/258)) ([368d89f](https://github.com/PostHog/wizard/commit/368d89f08938ddfa7e05d4eb18bac04890fac65d))
+
 ## [1.31.2](https://github.com/PostHog/wizard/compare/v1.31.1...v1.31.2) (2026-02-03)
 
 
