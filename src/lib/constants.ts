@@ -12,6 +12,7 @@ export enum Integration {
   fastapi = 'fastapi',
   laravel = 'laravel',
   swift = 'swift',
+  android = 'android',
 
   // Language fallbacks
   python = 'python',
