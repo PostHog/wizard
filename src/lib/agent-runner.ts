@@ -184,6 +184,7 @@ export async function runAgentWizard(
       posthogMcpUrl: mcpUrl,
       posthogApiKey: accessToken,
       posthogApiHost: host,
+      additionalMcpServers: config.metadata.additionalMcpServers,
     },
     options,
   );
