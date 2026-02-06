@@ -11,6 +11,7 @@ import { analytics } from './utils/analytics';
 import { runAgentWizard } from './lib/agent-runner';
 import { EventEmitter } from 'events';
 import chalk from 'chalk';
+import { logToFile } from './utils/debug';
 
 EventEmitter.defaultMaxListeners = 50;
 
@@ -25,6 +26,7 @@ type Args = {
   localMcp?: boolean;
   ci?: boolean;
   apiKey?: string;
+  menu?: boolean;
 };
 
 export async function runWizard(argv: Args) {
@@ -54,6 +56,7 @@ export async function runWizard(argv: Args) {
     localMcp: finalArgs.localMcp ?? false,
     ci: finalArgs.ci ?? false,
     apiKey: finalArgs.apiKey,
+    menu: finalArgs.menu ?? false,
   };
 
   clack.intro(`Welcome to the PostHog setup wizard ✨`);
@@ -79,11 +82,28 @@ export async function runWizard(argv: Args) {
 
     await analytics.shutdown('error');
 
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    const errorStack =
+      error instanceof Error && error.stack ? error.stack : undefined;
+
+    // Log to file for debugging
+    logToFile(`[Wizard run.ts] ERROR MESSAGE: ${errorMessage} `);
+    if (errorStack) {
+      logToFile(`[Wizard run.ts] ERROR STACK: ${errorStack}`);
+    }
+
     clack.log.error(
-      `Something went wrong. You can read the documentation at ${chalk.cyan(
+      `Something went wrong: ${chalk.red(
+        errorMessage,
+      )}\n\nYou can read the documentation at ${chalk.cyan(
         config.metadata.docsUrl,
       )} to set up PostHog manually.`,
     );
+
+    if (wizardOptions.debug && errorStack) {
+      clack.log.info(chalk.dim(errorStack));
+    }
+
     process.exit(1);
   }
 }
@@ -101,15 +121,17 @@ async function detectIntegration(
 }
 
 async function getIntegrationForSetup(
-  options: Pick<WizardOptions, 'installDir'>,
+  options: Pick<WizardOptions, 'installDir' | 'menu'>,
 ) {
-  const detectedIntegration = await detectIntegration(options);
+  if (!options.menu) {
+    const detectedIntegration = await detectIntegration(options);
 
-  if (detectedIntegration) {
-    clack.log.success(
-      `Detected integration: ${FRAMEWORK_REGISTRY[detectedIntegration].metadata.name}`,
-    );
-    return detectedIntegration;
+    if (detectedIntegration) {
+      clack.log.success(
+        `Detected integration: ${FRAMEWORK_REGISTRY[detectedIntegration].metadata.name}`,
+      );
+      return detectedIntegration;
+    }
   }
 
   const integration: Integration = await abortIfCancelled(

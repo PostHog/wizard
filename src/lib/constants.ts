@@ -1,12 +1,14 @@
 export enum Integration {
   nextjs = 'nextjs',
   reactRouter = 'react-router',
+  tanstackStart = 'tanstack-start',
+  tanstackRouter = 'tanstack-router',
   django = 'django',
   flask = 'flask',
+  fastapi = 'fastapi',
   laravel = 'laravel',
   swift = 'swift',
 }
-
 export interface Args {
   debug: boolean;
   integration: Integration;
