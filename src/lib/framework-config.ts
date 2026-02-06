@@ -53,6 +53,9 @@ export interface FrameworkMetadata<
    * For React Native: detects Expo vs bare
    */
   gatherContext?: (options: WizardOptions) => Promise<TContext>;
+
+  /** Optional additional MCP servers for this framework (e.g., Svelte MCP). */
+  additionalMcpServers?: Record<string, { url: string }>;
 }
 
 /**

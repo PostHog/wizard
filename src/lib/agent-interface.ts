@@ -72,6 +72,7 @@ export type AgentConfig = {
   posthogMcpUrl: string;
   posthogApiKey: string;
   posthogApiHost: string;
+  additionalMcpServers?: Record<string, { url: string }>;
 };
 
 /**
@@ -322,6 +323,11 @@ export function initializeAgent(
           Authorization: `Bearer ${config.posthogApiKey}`,
         },
       },
+      ...Object.fromEntries(
+        Object.entries(config.additionalMcpServers ?? {}).map(
+          ([name, { url }]) => [name, { type: 'http', url }],
+        ),
+      ),
     };
 
     const agentRunConfig: AgentRunConfig = {
