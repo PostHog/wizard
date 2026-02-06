@@ -7,6 +7,7 @@ export enum Integration {
   flask = 'flask',
   fastapi = 'fastapi',
   laravel = 'laravel',
+  swift = 'swift',
 }
 export interface Args {
   debug: boolean;

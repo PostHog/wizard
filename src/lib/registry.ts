@@ -8,6 +8,7 @@ import { DJANGO_AGENT_CONFIG } from '../django/django-wizard-agent';
 import { FLASK_AGENT_CONFIG } from '../flask/flask-wizard-agent';
 import { FASTAPI_AGENT_CONFIG } from '../fastapi/fastapi-wizard-agent';
 import { LARAVEL_AGENT_CONFIG } from '../laravel/laravel-wizard-agent';
+import { SWIFT_AGENT_CONFIG } from '../swift/swift-wizard-agent';
 
 export const FRAMEWORK_REGISTRY: Record<Integration, FrameworkConfig> = {
   [Integration.nextjs]: NEXTJS_AGENT_CONFIG,
@@ -18,4 +19,5 @@ export const FRAMEWORK_REGISTRY: Record<Integration, FrameworkConfig> = {
   [Integration.flask]: FLASK_AGENT_CONFIG,
   [Integration.fastapi]: FASTAPI_AGENT_CONFIG,
   [Integration.laravel]: LARAVEL_AGENT_CONFIG,
+  [Integration.swift]: SWIFT_AGENT_CONFIG,
 };
