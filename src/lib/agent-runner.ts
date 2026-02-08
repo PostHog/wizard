@@ -337,7 +337,7 @@ Please report this error to: ${chalk.cyan('wizard@posthog.com')}`;
       ? `Uploaded environment variables to your hosting provider`
       : '',
     preCommitUpdated
-      ? `Updated .pre-commit-config.yaml with posthog dependency`
+      ? `Updated pre-commit config with posthog dependency`
       : '',
   ].filter(Boolean);
 
