@@ -31,7 +31,9 @@ import * as semver from 'semver';
 import {
   addMCPServerToClientsStep,
   uploadEnvironmentVariablesStep,
+  updatePreCommitConfigStep,
 } from '../steps';
+import { Integration } from './constants';
 import { checkAnthropicStatusWithPrompt } from '../utils/anthropic-status';
 import { enableDebugLogs } from '../utils/debug';
 
@@ -304,6 +306,23 @@ Please report this error to: ${chalk.cyan('wizard@posthog.com')}`;
     ci: options.ci,
   });
 
+  // Update pre-commit config for Python frameworks
+  const pythonIntegrations = [
+    Integration.django,
+    Integration.flask,
+    Integration.fastapi,
+    Integration.python,
+  ];
+
+  let preCommitUpdated = false;
+  if (pythonIntegrations.includes(config.metadata.integration)) {
+    const preCommitResult = await updatePreCommitConfigStep({
+      installDir: options.installDir,
+      integration: config.metadata.integration,
+    });
+    preCommitUpdated = preCommitResult.updated;
+  }
+
   // Build outro message
   const continueUrl = options.signup
     ? `${getCloudUrlFromRegion(cloudRegion)}/products?source=wizard`
@@ -316,6 +335,9 @@ Please report this error to: ${chalk.cyan('wizard@posthog.com')}`;
       : '',
     uploadedEnvVars.length > 0
       ? `Uploaded environment variables to your hosting provider`
+      : '',
+    preCommitUpdated
+      ? `Updated .pre-commit-config.yaml with posthog dependency`
       : '',
   ].filter(Boolean);
 
