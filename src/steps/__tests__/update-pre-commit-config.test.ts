@@ -233,4 +233,131 @@ repos:
       expect(result).toEqual({ updated: false });
     });
   });
+
+  describe('format preservation', () => {
+    beforeEach(() => {
+      existsSyncMock.mockReturnValue(true);
+      writeFileMock.mockResolvedValue(undefined);
+    });
+
+    it('preserves flow-style arrays', async () => {
+      const input = `repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    hooks:
+      - id: check-added-large-files
+        args: ['--maxkb=1000']
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    hooks:
+      - id: mypy
+        args: [--ignore-missing-imports, --disallow-untyped-defs]
+`;
+      readFileMock.mockResolvedValue(input);
+
+      await updatePreCommitConfigStep(mockOptions);
+
+      const output = writeFileMock.mock.calls[0][1] as string;
+      expect(output).toContain("args: ['--maxkb=1000']");
+      expect(output).toContain(
+        'args: [--ignore-missing-imports, --disallow-untyped-defs]',
+      );
+    });
+
+    it('preserves blank lines between repos', async () => {
+      const input = `repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    hooks:
+      - id: trailing-whitespace
+
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    hooks:
+      - id: mypy
+`;
+      readFileMock.mockResolvedValue(input);
+
+      await updatePreCommitConfigStep(mockOptions);
+
+      const output = writeFileMock.mock.calls[0][1] as string;
+      expect(output).toContain('trailing-whitespace\n\n  - repo:');
+    });
+
+    it('preserves quoted strings', async () => {
+      const input = `repos:
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: "v1.19.1"
+    hooks:
+      - id: mypy
+`;
+      readFileMock.mockResolvedValue(input);
+
+      await updatePreCommitConfigStep(mockOptions);
+
+      const output = writeFileMock.mock.calls[0][1] as string;
+      expect(output).toContain('rev: "v1.19.1"');
+    });
+
+    it('preserves flow-style additional_dependencies and appends posthog', async () => {
+      const input = `repos:
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    hooks:
+      - id: mypy
+        additional_dependencies: [django-stubs, types-requests]
+`;
+      readFileMock.mockResolvedValue(input);
+
+      await updatePreCommitConfigStep(mockOptions);
+
+      const output = writeFileMock.mock.calls[0][1] as string;
+      expect(output).toContain('additional_dependencies:');
+      expect(output).toContain('django-stubs');
+      expect(output).toContain('types-requests');
+      expect(output).toContain('posthog');
+    });
+
+    it('preserves complex real-world config formatting', async () => {
+      const input = `repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: check-added-large-files
+        args: ['--maxkb=1000']
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.14.10
+    hooks:
+      - id: ruff-check
+
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: "v1.19.1"
+    hooks:
+      - id: mypy
+        args: [--ignore-missing-imports]
+        additional_dependencies:
+          [
+            django-stubs==5.2.8,
+            djangorestframework-stubs==3.14.5,
+          ]
+
+  - repo: local
+    hooks:
+      - id: commitizen-check
+        stages: [commit-msg]
+`;
+      readFileMock.mockResolvedValue(input);
+
+      await updatePreCommitConfigStep(mockOptions);
+
+      const output = writeFileMock.mock.calls[0][1] as string;
+
+      // Verify key formatting elements are preserved
+      expect(output).toContain("args: ['--maxkb=1000']");
+      expect(output).toContain('rev: "v1.19.1"');
+      expect(output).toContain('args: [--ignore-missing-imports]');
+      expect(output).toContain('stages: [commit-msg]');
+      // Verify blank lines between repos are preserved
+      expect(output).toContain('ruff-check\n\n  - repo:');
+      // Verify posthog was added
+      expect(output).toContain('posthog');
+    });
+  });
 });

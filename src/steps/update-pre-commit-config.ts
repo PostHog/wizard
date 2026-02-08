@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import path from 'path';
 import chalk from 'chalk';
-import { parse, stringify } from 'yaml';
+import { parseDocument, isSeq, isMap, YAMLSeq } from 'yaml';
 import type { Integration } from '../lib/constants';
 import { analytics } from '../utils/analytics';
 import clack from '../utils/clack';
@@ -12,23 +12,6 @@ const CONFIG_FILENAMES = ['.pre-commit-config.yaml', '.pre-commit-config.yml'];
 // Matches 'posthog' with any version specifier (==, >=, <=, ~=, !=, etc.) or extras [...]
 const POSTHOG_DEP_PATTERN = /^posthog([=<>~![]|$)/;
 
-interface PreCommitHook {
-  id: string;
-  additional_dependencies?: string[];
-  [key: string]: unknown;
-}
-
-interface PreCommitRepo {
-  repo: string;
-  hooks?: PreCommitHook[];
-  [key: string]: unknown;
-}
-
-interface PreCommitConfig {
-  repos?: PreCommitRepo[];
-  [key: string]: unknown;
-}
-
 function findConfigFile(installDir: string): string | null {
   for (const filename of CONFIG_FILENAMES) {
     const candidate = path.join(installDir, filename);
@@ -37,15 +20,6 @@ function findConfigFile(installDir: string): string | null {
     }
   }
   return null;
-}
-
-function hasTypeCheckingHooks(config: PreCommitConfig): boolean {
-  if (!config.repos || !Array.isArray(config.repos)) {
-    return false;
-  }
-  return config.repos.some((repo) =>
-    repo.hooks?.some((hook) => TYPE_CHECKING_HOOK_IDS.includes(hook.id)),
-  );
 }
 
 export async function updatePreCommitConfigStep({
@@ -77,9 +51,9 @@ export async function updatePreCommitConfigStep({
       return { updated: false };
     }
 
-    let config: PreCommitConfig;
+    let doc;
     try {
-      config = parse(content) as PreCommitConfig;
+      doc = parseDocument(content);
     } catch (error) {
       clack.log.warn(`Could not parse ${chalk.bold.cyan(configFilename)}`);
       analytics.capture('wizard interaction', {
@@ -90,39 +64,52 @@ export async function updatePreCommitConfigStep({
       return { updated: false };
     }
 
-    if (!config.repos || !Array.isArray(config.repos)) {
+    const repos = doc.get('repos');
+    if (!isSeq(repos)) {
       return { updated: false };
     }
 
     let modified = false;
+    let hasTypeCheckingHooks = false;
 
-    for (const repo of config.repos) {
-      if (!repo.hooks || !Array.isArray(repo.hooks)) {
-        continue;
-      }
+    for (const repo of repos.items) {
+      if (!isMap(repo)) continue;
 
-      for (const hook of repo.hooks) {
-        if (!TYPE_CHECKING_HOOK_IDS.includes(hook.id)) {
-          continue;
-        }
+      const hooks = repo.get('hooks');
+      if (!isSeq(hooks)) continue;
 
-        if (!hook.additional_dependencies) {
-          hook.additional_dependencies = [];
-        }
+      for (const hook of hooks.items) {
+        if (!isMap(hook)) continue;
 
-        const hasPosthog = hook.additional_dependencies.some((dep) =>
-          POSTHOG_DEP_PATTERN.test(dep),
-        );
+        const hookId = String(hook.get('id') ?? '');
+        if (!TYPE_CHECKING_HOOK_IDS.includes(hookId)) continue;
 
-        if (!hasPosthog) {
-          hook.additional_dependencies.push('posthog');
+        hasTypeCheckingHooks = true;
+
+        const deps = hook.get('additional_dependencies');
+
+        if (isSeq(deps)) {
+          // Check if posthog already exists
+          const hasPosthog = deps.items.some((item) =>
+            POSTHOG_DEP_PATTERN.test(String(item)),
+          );
+
+          if (!hasPosthog) {
+            deps.add('posthog');
+            modified = true;
+          }
+        } else if (deps === undefined || deps === null) {
+          // No additional_dependencies - create new sequence
+          const newDeps = new YAMLSeq();
+          newDeps.add('posthog');
+          hook.set('additional_dependencies', newDeps);
           modified = true;
         }
       }
     }
 
     if (!modified) {
-      if (hasTypeCheckingHooks(config)) {
+      if (hasTypeCheckingHooks) {
         clack.log.success(
           `${chalk.bold.cyan(
             configFilename,
@@ -133,7 +120,8 @@ export async function updatePreCommitConfigStep({
     }
 
     try {
-      await fs.promises.writeFile(configPath, stringify(config), 'utf8');
+      const output = doc.toString({ flowCollectionPadding: false });
+      await fs.promises.writeFile(configPath, output, 'utf8');
     } catch (error) {
       clack.log.warn(`Could not write ${chalk.bold.cyan(configFilename)}`);
       analytics.capture('wizard interaction', {
