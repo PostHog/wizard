@@ -206,6 +206,23 @@ export function wizardCanUseTool(
     return { behavior: 'allow', updatedInput: input };
   }
 
+  // Block Grep when it directly targets a .env file.
+  // Note: ripgrep skips dotfiles (like .env*) by default during directory traversal,
+  // so broad searches like `Grep { path: "." }` are already safe.
+  if (toolName === 'Grep') {
+    const grepPath = typeof input.path === 'string' ? input.path : '';
+    if (grepPath && path.basename(grepPath).startsWith('.env')) {
+      logToFile(`Denying Grep on env file: ${grepPath}`);
+      return {
+        behavior: 'deny',
+        message: `Grep on ${path.basename(
+          grepPath,
+        )} is not allowed. Use the env-file-tools MCP server (check_env_keys) to check environment variables.`,
+      };
+    }
+    return { behavior: 'allow', updatedInput: input };
+  }
+
   // Allow all other non-Bash tools
   if (toolName !== 'Bash') {
     return { behavior: 'allow', updatedInput: input };
