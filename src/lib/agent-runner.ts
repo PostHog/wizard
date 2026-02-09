@@ -85,7 +85,7 @@ export async function runAgentWizard(
   }
 
   clack.log.info(
-    `🧙 The wizard has chosen you to try the next-generation agent integration for ${config.metadata.name}.\n\nStand by for the good stuff, and let the robot minders know how it goes:\n\nwizard@posthog.com`,
+    `We're about to read your project using our LLM gateway.\n\n.env* file contents will not leave your machine.\n\nOther files will be read and edited to provide a fully-custom PostHog integration.`,
   );
 
   const aiConsent = await askForAIConsent(options);
@@ -182,7 +182,7 @@ export async function runAgentWizard(
         ? 'https://mcp-eu.posthog.com/mcp'
         : 'https://mcp.posthog.com/mcp');
 
-  const agent = initializeAgent(
+  const agent = await initializeAgent(
     {
       workingDirectory: options.installDir,
       posthogMcpUrl: mcpUrl,
@@ -404,9 +404,12 @@ STEP 4: Load the installed skill's SKILL.md file to understand what references a
 
 STEP 5: Follow the skill's workflow files in sequence. Look for numbered workflow files in the references (e.g., files with patterns like "1.0-", "1.1-", "1.2-"). Start with the first one and proceed through each step until completion. Each workflow file will tell you what to do and which file comes next.
 
-STEP 6: Set up environment variables for PostHog in a .env file with the API key and host provided above, using the appropriate naming convention for ${
-    config.metadata.name
-  }. Make sure to use these environment variables in the code files you create instead of hardcoding the API key and host.
+STEP 6: Set up environment variables for PostHog using the env-file-tools MCP server (this runs locally — secret values never leave the machine):
+   - Use check_env_keys to see which keys already exist in the project's .env file (e.g. .env.local or .env).
+   - Use set_env_values to create or update the PostHog API key and host, using the appropriate naming convention for ${
+     config.metadata.name
+   }. The tool will also ensure .gitignore coverage. Don't assume the presence of keys means the value is up to date. Write the correct value each time.
+   - Reference these environment variables in the code files you create instead of hardcoding the API key and host.
 
 Important: Look for lockfiles (pnpm-lock.yaml, package-lock.json, yarn.lock, bun.lockb) to determine the package manager (excluding the contents of node_modules). Do not manually edit package.json. Always install packages as a background task. Don't await completion; proceed with other work immediately after starting the installation. You must read a file immediately before attempting to write it, even if you have previously read it; failure to do so will cause a tool failure.
 
