@@ -7,6 +7,7 @@ export enum Integration {
   reactRouter = 'react-router',
   tanstackStart = 'tanstack-start',
   tanstackRouter = 'tanstack-router',
+  reactNative = 'react-native',
   django = 'django',
   flask = 'flask',
   fastapi = 'fastapi',
