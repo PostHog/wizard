@@ -4,6 +4,8 @@
 export enum Integration {
   // Frameworks
   nextjs = 'nextjs',
+  nuxt = 'nuxt',
+  vue = 'vue',
   reactRouter = 'react-router',
   tanstackStart = 'tanstack-start',
   tanstackRouter = 'tanstack-router',

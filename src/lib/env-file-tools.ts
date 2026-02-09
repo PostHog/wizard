@@ -97,11 +97,11 @@ export async function createEnvFileServer(workingDirectory: string) {
         results[key] = existingKeys.has(key) ? 'present' : 'missing';
       }
 
-      return Promise.resolve({
+      return {
         content: [
           { type: 'text' as const, text: JSON.stringify(results, null, 2) },
         ],
-      });
+      };
     },
   );
 
@@ -164,7 +164,7 @@ export async function createEnvFileServer(workingDirectory: string) {
       const envFileName = path.basename(resolved);
       ensureGitignoreCoverage(workingDirectory, envFileName);
 
-      return Promise.resolve({
+      return {
         content: [
           {
             type: 'text' as const,
@@ -173,7 +173,7 @@ export async function createEnvFileServer(workingDirectory: string) {
             }`,
           },
         ],
-      });
+      };
     },
   );
 
