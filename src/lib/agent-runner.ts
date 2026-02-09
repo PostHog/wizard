@@ -85,7 +85,7 @@ export async function runAgentWizard(
   }
 
   clack.log.info(
-    `The PostHog wizard will read your project using our LLM gateway. .env file contents will not leave your machine.`,
+    `We're about to read your project using our LLM gateway.\n\n.env* file contents will not leave your machine.\n\nOther files will be read and edited to provide a fully-custom PostHog integration.`,
   );
 
   const aiConsent = await askForAIConsent(options);
@@ -408,7 +408,7 @@ STEP 6: Set up environment variables for PostHog using the env-file-tools MCP se
    - Use check_env_keys to see which keys already exist in the project's .env file (e.g. .env.local or .env).
    - Use set_env_values to create or update the PostHog API key and host, using the appropriate naming convention for ${
      config.metadata.name
-   }. The tool will also ensure .gitignore coverage.
+   }. The tool will also ensure .gitignore coverage. Don't assume the presence of keys means the value is up to date. Write the correct value each time.
    - Reference these environment variables in the code files you create instead of hardcoding the API key and host.
 
 Important: Look for lockfiles (pnpm-lock.yaml, package-lock.json, yarn.lock, bun.lockb) to determine the package manager (excluding the contents of node_modules). Do not manually edit package.json. Always install packages as a background task. Don't await completion; proceed with other work immediately after starting the installation. You must read a file immediately before attempting to write it, even if you have previously read it; failure to do so will cause a tool failure.
