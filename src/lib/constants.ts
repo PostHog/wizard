@@ -1,4 +1,8 @@
+/**
+ * Detection order matters: put framework-specific integrations BEFORE basic language fallbacks
+ */
 export enum Integration {
+  // Frameworks
   nextjs = 'nextjs',
   nuxt = 'nuxt',
   vue = 'vue',
@@ -9,6 +13,11 @@ export enum Integration {
   flask = 'flask',
   fastapi = 'fastapi',
   laravel = 'laravel',
+  sveltekit = 'sveltekit',
+  swift = 'swift',
+
+  // Language fallbacks
+  python = 'python',
 }
 export interface Args {
   debug: boolean;
