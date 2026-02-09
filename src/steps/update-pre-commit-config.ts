@@ -70,7 +70,7 @@ export async function updatePreCommitConfigStep({
     }
 
     let modified = false;
-    let hasTypeCheckingHooks = false;
+    let alreadyHasPosthog = false;
 
     for (const repo of repos.items) {
       if (!isMap(repo)) continue;
@@ -84,8 +84,6 @@ export async function updatePreCommitConfigStep({
         const hookId = String(hook.get('id') ?? '');
         if (!TYPE_CHECKING_HOOK_IDS.includes(hookId)) continue;
 
-        hasTypeCheckingHooks = true;
-
         const deps = hook.get('additional_dependencies');
 
         if (isSeq(deps)) {
@@ -97,6 +95,8 @@ export async function updatePreCommitConfigStep({
           if (!hasPosthog) {
             deps.add('posthog');
             modified = true;
+          } else {
+            alreadyHasPosthog = true;
           }
         } else if (deps === undefined || deps === null) {
           // No additional_dependencies - create new sequence
@@ -104,12 +104,18 @@ export async function updatePreCommitConfigStep({
           newDeps.add('posthog');
           hook.set('additional_dependencies', newDeps);
           modified = true;
+        } else {
+          clack.log.warn(
+            `Unexpected additional_dependencies format in ${chalk.bold.cyan(
+              hookId,
+            )} hook, skipping`,
+          );
         }
       }
     }
 
     if (!modified) {
-      if (hasTypeCheckingHooks) {
+      if (alreadyHasPosthog) {
         clack.log.success(
           `${chalk.bold.cyan(
             configFilename,

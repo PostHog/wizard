@@ -17,7 +17,7 @@ import {
 } from '../utils/clack-utils';
 import type { PackageDotJson } from '../utils/package-json';
 import { analytics } from '../utils/analytics';
-import { WIZARD_INTERACTION_EVENT_NAME } from './constants';
+import { WIZARD_INTERACTION_EVENT_NAME, Integration } from './constants';
 import clack from '../utils/clack';
 import {
   initializeAgent,
@@ -33,7 +33,6 @@ import {
   uploadEnvironmentVariablesStep,
   updatePreCommitConfigStep,
 } from '../steps';
-import { Integration } from './constants';
 import { checkAnthropicStatusWithPrompt } from '../utils/anthropic-status';
 import { enableDebugLogs } from '../utils/debug';
 
@@ -336,9 +335,7 @@ Please report this error to: ${chalk.cyan('wizard@posthog.com')}`;
     uploadedEnvVars.length > 0
       ? `Uploaded environment variables to your hosting provider`
       : '',
-    preCommitUpdated
-      ? `Updated pre-commit config with posthog dependency`
-      : '',
+    preCommitUpdated ? `Updated pre-commit config with posthog dependency` : '',
   ].filter(Boolean);
 
   const nextSteps = [
