@@ -6,6 +6,7 @@ import { VUE_AGENT_CONFIG } from '../vue/vue-wizard-agent';
 import { REACT_ROUTER_AGENT_CONFIG } from '../react-router/react-router-wizard-agent';
 import { TANSTACK_ROUTER_AGENT_CONFIG } from '../tanstack-router/tanstack-router-wizard-agent';
 import { TANSTACK_START_AGENT_CONFIG } from '../tanstack-start/tanstack-start-wizard-agent';
+import { ASTRO_AGENT_CONFIG } from '../astro/astro-wizard-agent';
 import { DJANGO_AGENT_CONFIG } from '../django/django-wizard-agent';
 import { FLASK_AGENT_CONFIG } from '../flask/flask-wizard-agent';
 import { FASTAPI_AGENT_CONFIG } from '../fastapi/fastapi-wizard-agent';
@@ -21,6 +22,7 @@ export const FRAMEWORK_REGISTRY: Record<Integration, FrameworkConfig> = {
   [Integration.tanstackStart]: TANSTACK_START_AGENT_CONFIG,
   [Integration.reactRouter]: REACT_ROUTER_AGENT_CONFIG,
   [Integration.tanstackRouter]: TANSTACK_ROUTER_AGENT_CONFIG,
+  [Integration.astro]: ASTRO_AGENT_CONFIG,
   [Integration.django]: DJANGO_AGENT_CONFIG,
   [Integration.flask]: FLASK_AGENT_CONFIG,
   [Integration.fastapi]: FASTAPI_AGENT_CONFIG,
