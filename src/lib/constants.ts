@@ -11,6 +11,7 @@ export enum Integration {
   flask = 'flask',
   fastapi = 'fastapi',
   laravel = 'laravel',
+  sveltekit = 'sveltekit',
   swift = 'swift',
 
   // Language fallbacks
