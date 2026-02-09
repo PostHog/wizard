@@ -32,7 +32,7 @@ export const SVELTEKIT_AGENT_CONFIG: FrameworkConfig<SvelteKitContext> = {
         ? hasPackageInstalled('@sveltejs/kit', packageJson)
         : false;
     },
-    minimumVersion: '2.0.0'
+    minimumVersion: '2.0.0',
   },
 
   environment: {
