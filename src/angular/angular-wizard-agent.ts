@@ -41,8 +41,8 @@ export const ANGULAR_AGENT_CONFIG: FrameworkConfig<AngularContext> = {
   environment: {
     uploadToHosting: false,
     getEnvVars: (apiKey: string, host: string) => ({
-      POSTHOG_KEY: apiKey,
-      POSTHOG_HOST: host,
+      NG_APP_POSTHOG_KEY: apiKey,
+      NG_APP_POSTHOG_HOST: host,
     }),
   },
 
