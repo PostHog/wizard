@@ -14,6 +14,7 @@ import {
 } from './constants';
 import { getLlmGatewayUrlFromHost } from '../utils/urls';
 import { LINTING_TOOLS } from './safe-tools';
+import { createEnvFileServer, ENV_FILE_TOOL_NAMES } from './env-file-tools';
 
 // Dynamic import cache for ESM module
 let _sdkModule: any = null;
@@ -72,6 +73,7 @@ export type AgentConfig = {
   posthogMcpUrl: string;
   posthogApiKey: string;
   posthogApiHost: string;
+  additionalMcpServers?: Record<string, { url: string }>;
 };
 
 /**
@@ -190,7 +192,38 @@ export function wizardCanUseTool(
 ):
   | { behavior: 'allow'; updatedInput: Record<string, unknown> }
   | { behavior: 'deny'; message: string } {
-  // Allow all non-Bash tools
+  // Block direct reads/writes of .env files — use env-file-tools MCP instead
+  if (toolName === 'Read' || toolName === 'Write' || toolName === 'Edit') {
+    const filePath = typeof input.file_path === 'string' ? input.file_path : '';
+    const basename = path.basename(filePath);
+    if (basename.startsWith('.env')) {
+      logToFile(`Denying ${toolName} on env file: ${filePath}`);
+      return {
+        behavior: 'deny',
+        message: `Direct ${toolName} of ${basename} is not allowed. Use the env-file-tools MCP server (check_env_keys / set_env_values) to read or modify environment variables.`,
+      };
+    }
+    return { behavior: 'allow', updatedInput: input };
+  }
+
+  // Block Grep when it directly targets a .env file.
+  // Note: ripgrep skips dotfiles (like .env*) by default during directory traversal,
+  // so broad searches like `Grep { path: "." }` are already safe.
+  if (toolName === 'Grep') {
+    const grepPath = typeof input.path === 'string' ? input.path : '';
+    if (grepPath && path.basename(grepPath).startsWith('.env')) {
+      logToFile(`Denying Grep on env file: ${grepPath}`);
+      return {
+        behavior: 'deny',
+        message: `Grep on ${path.basename(
+          grepPath,
+        )} is not allowed. Use the env-file-tools MCP server (check_env_keys) to check environment variables.`,
+      };
+    }
+    return { behavior: 'allow', updatedInput: input };
+  }
+
+  // Allow all other non-Bash tools
   if (toolName !== 'Bash') {
     return { behavior: 'allow', updatedInput: input };
   }
@@ -290,10 +323,10 @@ export function wizardCanUseTool(
 /**
  * Initialize agent configuration for the LLM gateway
  */
-export function initializeAgent(
+export async function initializeAgent(
   config: AgentConfig,
   options: WizardOptions,
-): AgentRunConfig {
+): Promise<AgentRunConfig> {
   // Initialize log file for this run
   initLogFile();
   logToFile('Agent initialization starting');
@@ -322,7 +355,16 @@ export function initializeAgent(
           Authorization: `Bearer ${config.posthogApiKey}`,
         },
       },
+      ...Object.fromEntries(
+        Object.entries(config.additionalMcpServers ?? {}).map(
+          ([name, { url }]) => [name, { type: 'http', url }],
+        ),
+      ),
     };
+
+    // Add in-process env file tools (secret values never leave the machine)
+    const envFileServer = await createEnvFileServer(config.workingDirectory);
+    mcpServers['env-file-tools'] = envFileServer;
 
     const agentRunConfig: AgentRunConfig = {
       workingDirectory: config.workingDirectory,
@@ -479,6 +521,7 @@ export async function runAgent(
       'Bash',
       'ListMcpResourcesTool',
       'Skill',
+      ...ENV_FILE_TOOL_NAMES,
     ];
 
     const response = query({

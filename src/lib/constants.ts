@@ -4,13 +4,19 @@
 export enum Integration {
   // Frameworks
   nextjs = 'nextjs',
+  nuxt = 'nuxt',
+  vue = 'vue',
   reactRouter = 'react-router',
   tanstackStart = 'tanstack-start',
   tanstackRouter = 'tanstack-router',
+  reactNative = 'react-native',
+  angular = 'angular',
+  astro = 'astro',
   django = 'django',
   flask = 'flask',
   fastapi = 'fastapi',
   laravel = 'laravel',
+  sveltekit = 'sveltekit',
   swift = 'swift',
   android = 'android',
 
