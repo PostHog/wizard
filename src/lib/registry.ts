@@ -15,6 +15,7 @@ import { FASTAPI_AGENT_CONFIG } from '../fastapi/fastapi-wizard-agent';
 import { LARAVEL_AGENT_CONFIG } from '../laravel/laravel-wizard-agent';
 import { SVELTEKIT_AGENT_CONFIG } from '../svelte/svelte-wizard-agent';
 import { SWIFT_AGENT_CONFIG } from '../swift/swift-wizard-agent';
+import { ANDROID_AGENT_CONFIG } from '../android/android-wizard-agent';
 import { PYTHON_AGENT_CONFIG } from '../python/python-wizard-agent';
 
 export const FRAMEWORK_REGISTRY: Record<Integration, FrameworkConfig> = {
@@ -33,5 +34,6 @@ export const FRAMEWORK_REGISTRY: Record<Integration, FrameworkConfig> = {
   [Integration.laravel]: LARAVEL_AGENT_CONFIG,
   [Integration.sveltekit]: SVELTEKIT_AGENT_CONFIG,
   [Integration.swift]: SWIFT_AGENT_CONFIG,
+  [Integration.android]: ANDROID_AGENT_CONFIG,
   [Integration.python]: PYTHON_AGENT_CONFIG,
 };

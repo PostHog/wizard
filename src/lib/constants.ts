@@ -18,6 +18,7 @@ export enum Integration {
   laravel = 'laravel',
   sveltekit = 'sveltekit',
   swift = 'swift',
+  android = 'android',
 
   // Language fallbacks
   python = 'python',
