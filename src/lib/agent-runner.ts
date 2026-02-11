@@ -22,9 +22,13 @@ import clack from '../utils/clack';
 import {
   initializeAgent,
   runAgent,
+  runAgentSteps,
   AgentSignals,
   AgentErrorType,
 } from './agent-interface';
+import { logToFile } from '../utils/debug';
+import fs from 'fs';
+import path from 'path';
 import { getCloudUrlFromRegion } from '../utils/urls';
 import chalk from 'chalk';
 import * as semver from 'semver';
@@ -193,18 +197,90 @@ export async function runAgentWizard(
     options,
   );
 
-  const agentResult = await runAgent(
-    agent,
-    integrationPrompt,
-    options,
-    spinner,
-    {
-      estimatedDurationMinutes: config.ui.estimatedDurationMinutes,
-      spinnerMessage: SPINNER_MESSAGE,
-      successMessage: config.ui.successMessage,
-      errorMessage: 'Integration failed',
-    },
-  );
+  const agentRunConfig = {
+    estimatedDurationMinutes: config.ui.estimatedDurationMinutes,
+    spinnerMessage: SPINNER_MESSAGE,
+    successMessage: config.ui.successMessage,
+    errorMessage: 'Integration failed',
+  };
+
+  let agentResult;
+
+  if (options.benchmark) {
+    clack.log.info(
+      `${chalk.cyan(
+        '[BENCHMARK]',
+      )} Running in benchmark mode — each workflow phase will be tracked separately`,
+    );
+
+    // Benchmark mode: run setup + workflow phases in a single conversation,
+    // with per-step tracking. Context is preserved across steps (identical to normal mode).
+    const additionalLines = config.prompts.getAdditionalContextLines
+      ? config.prompts.getAdditionalContextLines(frameworkContext)
+      : [];
+    const additionalContext =
+      additionalLines.length > 0
+        ? '\n' + additionalLines.map((line) => `- ${line}`).join('\n')
+        : '';
+
+    const projectContext = `Project context:
+- Framework: ${config.metadata.name} ${frameworkVersion || 'latest'}
+- TypeScript: ${typeScriptDetected ? 'Yes' : 'No'}
+- PostHog API Key: ${projectApiKey}
+- PostHog Host: ${host}${additionalContext}`;
+
+    const setupPrompt = `You have access to the PostHog MCP server which provides skills to integrate PostHog into this ${config.metadata.name} project.
+
+${projectContext}
+
+Instructions (follow these steps IN ORDER - do not skip or reorder):
+
+STEP 1: List available skills from the PostHog MCP server using ListMcpResourcesTool. If this tool is not available or you cannot access the MCP server, you must emit: ${AgentSignals.ERROR_MCP_MISSING} Could not access the PostHog MCP server and halt.
+
+   Review the skill descriptions and choose the one that best matches this project's framework and configuration.
+   If no suitable skill is found, or you cannot access the MCP server, you emit: ${AgentSignals.ERROR_RESOURCE_MISSING} Could not find a suitable skill for this project.
+
+STEP 2: Fetch the chosen skill resource (e.g., posthog://skills/{skill-id}).
+   The resource returns a shell command to install the skill.
+
+STEP 3: Run the installation command using Bash:
+   - Execute the EXACT command returned by the resource (do not modify it)
+   - This will download and extract the skill to .claude/skills/{skill-id}/
+
+STEP 4: Load the installed skill's SKILL.md file to understand what references are available.
+
+STEP 5: Set up environment variables for PostHog in a .env file with the API key and host provided above, using the appropriate naming convention for ${config.metadata.name}. Make sure to use these environment variables in the code files you create instead of hardcoding the API key and host.
+
+Important: Look for lockfiles (pnpm-lock.yaml, package-lock.json, yarn.lock, bun.lockb) to determine the package manager (excluding the contents of node_modules). Do not manually edit package.json. Always install packages as a background task. Don't await completion; proceed with other work immediately after starting the installation. You must read a file immediately before attempting to write it, even if you have previously read it; failure to do so will cause a tool failure.
+
+`;
+
+    const setupStep = { name: 'setup', prompt: setupPrompt };
+
+    // Run all steps in a single conversation. After the setup step installs the skill,
+    // onAfterStep discovers workflow files on disk and adds them as additional steps.
+    agentResult = await runAgentSteps(agent, [setupStep], options, spinner, {
+      ...agentRunConfig,
+      onAfterStep: (stepIndex, stepName) => {
+        if (stepName === 'setup') {
+          return discoverBenchmarkSteps(
+            options.installDir,
+            config,
+            projectContext,
+          );
+        }
+        return [];
+      },
+    });
+  } else {
+    agentResult = await runAgent(
+      agent,
+      integrationPrompt,
+      options,
+      spinner,
+      agentRunConfig,
+    );
+  }
 
   // Handle error cases detected in agent output
   if (agentResult.error === AgentErrorType.MCP_MISSING) {
@@ -411,4 +487,94 @@ STEP 6: Set up environment variables for PostHog in a .env file with the API key
 Important: Look for lockfiles (pnpm-lock.yaml, package-lock.json, yarn.lock, bun.lockb) to determine the package manager (excluding the contents of node_modules). Do not manually edit package.json. Always install packages as a background task. Don't await completion; proceed with other work immediately after starting the installation. You must read a file immediately before attempting to write it, even if you have previously read it; failure to do so will cause a tool failure.
 
 `;
+}
+
+/**
+ * Discover installed skill workflow files and build benchmark step prompts.
+ * Scans .claude/skills/ in the install directory for workflow files (1.0-*, 1.1-*, etc.).
+ */
+function discoverBenchmarkSteps(
+  installDir: string,
+  config: FrameworkConfig,
+  projectContext: string,
+): Array<{ name: string; prompt: string }> {
+  const skillsDir = path.join(installDir, '.claude', 'skills');
+
+  if (!fs.existsSync(skillsDir)) {
+    logToFile('No .claude/skills/ directory found for benchmark discovery');
+    return [];
+  }
+
+  // Find installed skill directory
+  const skillDirs = fs.readdirSync(skillsDir).filter((entry) => {
+    const fullPath = path.join(skillsDir, entry);
+    return fs.statSync(fullPath).isDirectory();
+  });
+
+  if (skillDirs.length === 0) {
+    logToFile('No skill directories found in .claude/skills/');
+    return [];
+  }
+
+  // Use the first skill directory found
+  const skillId = skillDirs[0];
+  const skillPath = path.join(skillsDir, skillId);
+  logToFile(`Discovered skill for benchmark: ${skillId}`);
+
+  // Workflow files live in the references/ subdirectory
+  const referencesDir = path.join(skillPath, 'references');
+  if (!fs.existsSync(referencesDir)) {
+    logToFile('No references/ directory found in skill directory');
+    return [];
+  }
+
+  // Find workflow files matching pattern like "basic-integration-1.0-begin.md"
+  // The naming convention is {category}-{number}.{step}-{name}.md
+  const allFiles = fs.readdirSync(referencesDir);
+  const workflowFiles = allFiles
+    .filter((f) => /\d+\.\d+-\w+\.md$/.test(f))
+    .sort();
+
+  if (workflowFiles.length === 0) {
+    logToFile(
+      `No workflow files found in references/ directory. Files present: ${allFiles.join(
+        ', ',
+      )}`,
+    );
+    return [];
+  }
+
+  logToFile(
+    `Found ${workflowFiles.length} workflow files: ${workflowFiles.join(', ')}`,
+  );
+
+  const steps: Array<{ name: string; prompt: string }> = [];
+
+  for (const workflowFile of workflowFiles) {
+    // Extract phase name from filename
+    // e.g., "basic-integration-1.0-begin.md" -> "1.0-begin"
+    const phaseMatch = workflowFile.match(/(\d+\.\d+-.+)\.md$/);
+    const phaseName = phaseMatch
+      ? phaseMatch[1]
+      : workflowFile.replace(/\.md$/, '');
+
+    const prompt = `You are performing phase "${phaseName}" of a PostHog integration for a ${config.metadata.name} project.
+
+${projectContext}
+
+The PostHog skill is installed at .claude/skills/${skillId}/.
+Read SKILL.md in that directory for available reference files.
+
+Follow the instructions in the workflow file: .claude/skills/${skillId}/references/${workflowFile}
+
+Important: Read files before writing. Use environment variables, not hardcoded keys.
+Do not manually edit package.json. Use lockfiles to determine the package manager.
+You must read a file immediately before attempting to write it, even if you have previously read it; failure to do so will cause a tool failure.
+Always install packages as a background task. Don't await completion; proceed with other work immediately after starting the installation.
+`;
+
+    steps.push({ name: phaseName, prompt });
+  }
+
+  return steps;
 }

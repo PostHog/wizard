@@ -60,6 +60,13 @@ export type WizardOptions = {
    * Whether to show the menu for manual integration selection instead of auto-detecting.
    */
   menu: boolean;
+
+  /**
+   * Whether to run in benchmark mode with per-phase token tracking.
+   * When enabled, the wizard runs each workflow phase as a separate agent call
+   * and writes detailed usage data to /tmp/posthog-wizard-benchmark.json.
+   */
+  benchmark: boolean;
 };
 
 export interface Feature {
