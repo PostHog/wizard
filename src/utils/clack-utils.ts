@@ -100,12 +100,6 @@ export function printWelcome(options: {
   // eslint-disable-next-line no-console
   console.log('');
   clack.intro(chalk.inverse(` ${options.wizardName} `));
-
-  const welcomeText =
-    options.message ||
-    `The ${options.wizardName} will help you set up PostHog for your application.\nThank you for using PostHog :)`;
-
-  clack.note(welcomeText);
 }
 
 export async function confirmContinueIfNoOrDirtyGitRepo(

@@ -9,12 +9,16 @@ export enum Integration {
   reactRouter = 'react-router',
   tanstackStart = 'tanstack-start',
   tanstackRouter = 'tanstack-router',
+  reactNative = 'react-native',
+  angular = 'angular',
+  astro = 'astro',
   django = 'django',
   flask = 'flask',
   fastapi = 'fastapi',
   laravel = 'laravel',
   sveltekit = 'sveltekit',
   swift = 'swift',
+  android = 'android',
 
   // Language fallbacks
   python = 'python',
