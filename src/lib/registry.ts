@@ -17,6 +17,7 @@ import { SVELTEKIT_AGENT_CONFIG } from '../svelte/svelte-wizard-agent';
 import { SWIFT_AGENT_CONFIG } from '../swift/swift-wizard-agent';
 import { ANDROID_AGENT_CONFIG } from '../android/android-wizard-agent';
 import { PYTHON_AGENT_CONFIG } from '../python/python-wizard-agent';
+import { JAVASCRIPT_WEB_AGENT_CONFIG } from '../javascript-web/javascript-web-wizard-agent';
 
 export const FRAMEWORK_REGISTRY: Record<Integration, FrameworkConfig> = {
   [Integration.nextjs]: NEXTJS_AGENT_CONFIG,
@@ -36,4 +37,5 @@ export const FRAMEWORK_REGISTRY: Record<Integration, FrameworkConfig> = {
   [Integration.swift]: SWIFT_AGENT_CONFIG,
   [Integration.android]: ANDROID_AGENT_CONFIG,
   [Integration.python]: PYTHON_AGENT_CONFIG,
+  [Integration.javascript_web]: JAVASCRIPT_WEB_AGENT_CONFIG,
 };
