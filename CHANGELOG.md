@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.32.1](https://github.com/PostHog/wizard/compare/v1.32.0...v1.32.1) (2026-02-12)
+
+
+### Bug Fixes
+
+* don't show the entire conversation in error message ([#273](https://github.com/PostHog/wizard/issues/273)) ([1cb52eb](https://github.com/PostHog/wizard/commit/1cb52ebd7dd67f2b2839c65b2920e19cc8816215))
+
 ## [1.32.0](https://github.com/PostHog/wizard/compare/v1.31.2...v1.32.0) (2026-02-10)
 
 
