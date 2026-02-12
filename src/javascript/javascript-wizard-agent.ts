@@ -19,13 +19,13 @@ export const JAVASCRIPT_AGENT_CONFIG: FrameworkConfig<JavaScriptContext> = {
     integration: Integration.javascript,
     beta: true,
     docsUrl: 'https://posthog.com/docs/libraries/js',
-    gatherContext: async (options: WizardOptions) => {
+    gatherContext: (options: WizardOptions) => {
       const packageManagerName = detectJsPackageManager(options);
       const hasTypeScript = fs.existsSync(
         path.join(options.installDir, 'tsconfig.json'),
       );
       const hasBundler = detectBundler(options);
-      return { packageManagerName, hasTypeScript, hasBundler };
+      return Promise.resolve({ packageManagerName, hasTypeScript, hasBundler });
     },
   },
 
