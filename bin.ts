@@ -79,6 +79,11 @@ yargs(hideBin(process.argv))
         'PostHog personal API key (phx_xxx) for authentication\nenv: POSTHOG_WIZARD_API_KEY',
       type: 'string',
     },
+    'anthropic-key': {
+      describe:
+        'Anthropic API key for direct API access (bypasses LLM gateway)\nenv: POSTHOG_WIZARD_ANTHROPIC_KEY',
+      type: 'string',
+    },
   })
   .command(
     ['$0'],

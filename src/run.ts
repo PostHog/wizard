@@ -26,6 +26,7 @@ type Args = {
   localMcp?: boolean;
   ci?: boolean;
   apiKey?: string;
+  anthropicKey?: string;
   menu?: boolean;
 };
 
@@ -56,6 +57,7 @@ export async function runWizard(argv: Args) {
     localMcp: finalArgs.localMcp ?? false,
     ci: finalArgs.ci ?? false,
     apiKey: finalArgs.apiKey,
+    anthropicKey: finalArgs.anthropicKey,
     menu: finalArgs.menu ?? false,
   };
 
@@ -63,6 +65,10 @@ export async function runWizard(argv: Args) {
 
   if (wizardOptions.ci) {
     clack.log.info(chalk.dim('Running in CI mode'));
+  }
+
+  if (wizardOptions.anthropicKey) {
+    clack.log.info(chalk.dim('Using your Anthropic API key (BYOK mode)'));
   }
 
   const integration =

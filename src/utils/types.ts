@@ -57,6 +57,11 @@ export type WizardOptions = {
   apiKey?: string;
 
   /**
+   * Anthropic API key for direct API access, bypasses PostHog LLM gateway
+   */
+  anthropicKey?: string;
+
+  /**
    * Whether to show the menu for manual integration selection instead of auto-detecting.
    */
   menu: boolean;

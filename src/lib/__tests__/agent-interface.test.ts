@@ -1,10 +1,14 @@
-import { runAgent } from '../agent-interface';
+import { runAgent, initializeAgent } from '../agent-interface';
 import type { WizardOptions } from '../../utils/types';
 
 // Mock dependencies
 jest.mock('../../utils/clack');
 jest.mock('../../utils/analytics');
 jest.mock('../../utils/debug');
+jest.mock('../env-file-tools', () => ({
+  createEnvFileServer: jest.fn().mockResolvedValue({}),
+  ENV_FILE_TOOL_NAMES: [],
+}));
 
 // Mock the SDK module
 const mockQuery = jest.fn();
@@ -59,6 +63,64 @@ describe('runAgent', () => {
       info: jest.fn(),
       message: jest.fn(),
     };
+  });
+
+  describe('BYOK vs gateway mode', () => {
+    const defaultConfig = {
+      workingDirectory: '/test/dir',
+      posthogMcpUrl: 'http://localhost:8787/mcp',
+      posthogApiKey: 'phx_test_key',
+      posthogApiHost: 'http://localhost:8000',
+    };
+
+    const originalEnv = { ...process.env };
+
+    afterEach(() => {
+      process.env = { ...originalEnv };
+    });
+
+    it('should configure direct Anthropic API in BYOK mode', async () => {
+      const options: WizardOptions = {
+        ...defaultOptions,
+        anthropicKey: 'sk-ant-test123',
+      };
+
+      await initializeAgent(defaultConfig, options);
+
+      expect(process.env.ANTHROPIC_BASE_URL).toBe('https://api.anthropic.com');
+      expect(process.env.ANTHROPIC_API_KEY).toBe('sk-ant-test123');
+      expect(process.env.ANTHROPIC_AUTH_TOKEN).toBeUndefined();
+      expect(process.env.CLAUDE_CODE_OAUTH_TOKEN).toBeUndefined();
+    });
+
+    it('should configure LLM gateway when no anthropicKey provided', async () => {
+      await initializeAgent(defaultConfig, defaultOptions);
+
+      expect(process.env.ANTHROPIC_BASE_URL).toBe(
+        'http://localhost:3308/wizard',
+      );
+      expect(process.env.ANTHROPIC_AUTH_TOKEN).toBe('phx_test_key');
+      expect(process.env.CLAUDE_CODE_OAUTH_TOKEN).toBe('phx_test_key');
+      // LLM gateway doesn't support experimental betas
+      expect(process.env.CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS).toBe('true');
+      expect(process.env.ANTHROPIC_API_KEY).toBeUndefined();
+    });
+
+    it('should clear gateway env vars when switching to BYOK mode', async () => {
+      // Simulate a prior gateway run that set these env vars
+      process.env.ANTHROPIC_AUTH_TOKEN = 'phx_old_token';
+      process.env.CLAUDE_CODE_OAUTH_TOKEN = 'phx_old_token';
+
+      const options: WizardOptions = {
+        ...defaultOptions,
+        anthropicKey: 'sk-ant-test123',
+      };
+
+      await initializeAgent(defaultConfig, options);
+
+      expect(process.env.ANTHROPIC_AUTH_TOKEN).toBeUndefined();
+      expect(process.env.CLAUDE_CODE_OAUTH_TOKEN).toBeUndefined();
+    });
   });
 
   describe('race condition handling', () => {
