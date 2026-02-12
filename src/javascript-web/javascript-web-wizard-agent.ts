@@ -1,4 +1,4 @@
-/* Generic JavaScript language wizard using posthog-agent with PostHog MCP */
+/* Generic JavaScript Web (client-side) wizard using posthog-agent with PostHog MCP */
 import type { WizardOptions } from '../utils/types';
 import type { FrameworkConfig } from '../lib/framework-config';
 import { Integration } from '../lib/constants';
@@ -13,10 +13,10 @@ import {
   type JavaScriptContext,
 } from './utils';
 
-export const JAVASCRIPT_AGENT_CONFIG: FrameworkConfig<JavaScriptContext> = {
+export const JAVASCRIPT_WEB_AGENT_CONFIG: FrameworkConfig<JavaScriptContext> = {
   metadata: {
-    name: 'JavaScript',
-    integration: Integration.javascript,
+    name: 'JavaScript (Web)',
+    integration: Integration.javascript_web,
     beta: true,
     docsUrl: 'https://posthog.com/docs/libraries/js',
     gatherContext: (options: WizardOptions) => {
@@ -31,7 +31,7 @@ export const JAVASCRIPT_AGENT_CONFIG: FrameworkConfig<JavaScriptContext> = {
 
   detection: {
     packageName: 'posthog-js',
-    packageDisplayName: 'JavaScript',
+    packageDisplayName: 'JavaScript (Web)',
     usesPackageJson: false,
     getVersion: () => undefined,
     detect: async (options) => {
@@ -109,8 +109,8 @@ export const JAVASCRIPT_AGENT_CONFIG: FrameworkConfig<JavaScriptContext> = {
         `## CRITICAL: posthog-js Best Practices`,
         ``,
         `### 1. Use posthog-js (Browser SDK)`,
-        `This is a browser-side JavaScript project. Use the posthog-js package, NOT posthog-node.`,
-        `posthog-js is designed for client-side use and includes autocapture, session recording, and feature flags.`,
+        `This is a client-side web JavaScript project. Use the posthog-js package, NOT posthog-node.`,
+        `posthog-js is designed for browser use and includes autocapture, session recording, and feature flags.`,
         ``,
         `### 2. Initialization (REQUIRED)`,
         `posthog.init() MUST be called before any other PostHog methods:`,
