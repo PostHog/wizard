@@ -85,7 +85,9 @@ export async function runAgentWizard(
   }
 
   clack.log.info(
-    `We're about to read your project using our LLM gateway.\n\n.env* file contents will not leave your machine.\n\nOther files will be read and edited to provide a fully-custom PostHog integration.`,
+    options.anthropicKey
+      ? `We're about to read your project using your Anthropic API key.\n\n.env* file contents will not leave your machine.\n\nOther files will be read and edited to provide a fully-custom PostHog integration.`
+      : `We're about to read your project using our LLM gateway.\n\n.env* file contents will not leave your machine.\n\nOther files will be read and edited to provide a fully-custom PostHog integration.`,
   );
 
   const aiConsent = await askForAIConsent(options);
@@ -133,6 +135,10 @@ export async function runAgentWizard(
   if (frameworkVersion && config.detection.getVersionBucket) {
     const versionBucket = config.detection.getVersionBucket(frameworkVersion);
     analytics.setTag(`${config.metadata.integration}-version`, versionBucket);
+  }
+
+  if (options.anthropicKey) {
+    analytics.setTag('byok', true);
   }
 
   analytics.capture(WIZARD_INTERACTION_EVENT_NAME, {
