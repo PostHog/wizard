@@ -115,6 +115,12 @@ yargs(hideBin(process.argv))
             'Show menu for manual integration selection instead of auto-detecting\nenv: POSTHOG_WIZARD_MENU',
           type: 'boolean',
         },
+        benchmark: {
+          default: false,
+          describe:
+            'Run in benchmark mode with per-phase token tracking\nenv: POSTHOG_WIZARD_BENCHMARK',
+          type: 'boolean',
+        },
       });
     },
     (argv) => {

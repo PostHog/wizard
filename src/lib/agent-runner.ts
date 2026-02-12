@@ -193,17 +193,19 @@ export async function runAgentWizard(
     options,
   );
 
+  const agentRunConfig = {
+    estimatedDurationMinutes: config.ui.estimatedDurationMinutes,
+    spinnerMessage: SPINNER_MESSAGE,
+    successMessage: config.ui.successMessage,
+    errorMessage: 'Integration failed',
+  };
+
   const agentResult = await runAgent(
     agent,
     integrationPrompt,
     options,
     spinner,
-    {
-      estimatedDurationMinutes: config.ui.estimatedDurationMinutes,
-      spinnerMessage: SPINNER_MESSAGE,
-      successMessage: config.ui.successMessage,
-      errorMessage: 'Integration failed',
-    },
+    agentRunConfig,
   );
 
   // Handle error cases detected in agent output

@@ -27,6 +27,7 @@ type Args = {
   ci?: boolean;
   apiKey?: string;
   menu?: boolean;
+  benchmark?: boolean;
 };
 
 export async function runWizard(argv: Args) {
@@ -57,6 +58,7 @@ export async function runWizard(argv: Args) {
     ci: finalArgs.ci ?? false,
     apiKey: finalArgs.apiKey,
     menu: finalArgs.menu ?? false,
+    benchmark: finalArgs.benchmark ?? false,
   };
 
   clack.intro(`Welcome to the PostHog setup wizard ✨`);

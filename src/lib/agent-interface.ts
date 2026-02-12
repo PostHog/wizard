@@ -14,6 +14,8 @@ import {
 } from './constants';
 import { getLlmGatewayUrlFromHost } from '../utils/urls';
 import { LINTING_TOOLS } from './safe-tools';
+import type { BenchmarkData } from './benchmark';
+import { BenchmarkTracker } from './benchmark';
 import { createEnvFileServer, ENV_FILE_TOOL_NAMES } from './env-file-tools';
 
 // Dynamic import cache for ESM module
@@ -416,7 +418,11 @@ export async function runAgent(
     successMessage?: string;
     errorMessage?: string;
   },
-): Promise<{ error?: AgentErrorType; message?: string }> {
+): Promise<{
+  error?: AgentErrorType;
+  message?: string;
+  benchmark?: BenchmarkData;
+}> {
   const {
     estimatedDurationMinutes = 8,
     spinnerMessage = 'Customizing your PostHog setup...',
@@ -430,6 +436,9 @@ export async function runAgent(
     `This whole process should take about ${estimatedDurationMinutes} minutes including error checking and fixes.\n\nGrab some coffee!`,
   );
 
+  // Create benchmark tracker before spinner starts so its log output is visible
+  const tracker = options.benchmark ? new BenchmarkTracker(spinner) : null;
+
   spinner.start(spinnerMessage);
 
   const cliPath = getClaudeCodeExecutablePath();
@@ -441,6 +450,8 @@ export async function runAgent(
   const collectedText: string[] = [];
   // Track if we received a successful result (before any cleanup errors)
   let receivedSuccessResult = false;
+  // Track the result message for benchmark data extraction
+  let resultMessage: SDKMessage = null;
 
   // Workaround for SDK bug: stdin closes before canUseTool responses can be sent.
   // The fix is to use an async generator for the prompt that stays open until
@@ -465,7 +476,11 @@ export async function runAgent(
   // Helper to handle successful completion (used in normal path and race condition recovery)
   const completeWithSuccess = (
     suppressedError?: Error,
-  ): { error?: AgentErrorType; message?: string } => {
+  ): {
+    error?: AgentErrorType;
+    message?: string;
+    benchmark?: BenchmarkData;
+  } => {
     const durationMs = Date.now() - startTime;
     const durationSeconds = Math.round(durationMs / 1000);
 
@@ -501,7 +516,9 @@ export async function runAgent(
       duration_seconds: durationSeconds,
     });
     spinner.stop(successMessage);
-    return {};
+
+    const benchmark = tracker?.finalize(resultMessage, durationMs);
+    return { benchmark };
   };
 
   try {
@@ -598,6 +615,7 @@ export async function runAgent(
         collectedText,
         receivedSuccessResult,
       );
+      tracker?.onMessage(message);
 
       // Signal completion when result received
       if (message.type === 'result') {
@@ -605,6 +623,7 @@ export async function runAgent(
         // The SDK may emit a second error result during cleanup due to a race condition
         if (message.subtype === 'success' && !message.is_error) {
           receivedSuccessResult = true;
+          resultMessage = message;
         }
         signalDone!();
       }
@@ -782,7 +801,6 @@ function handleSDKMessage(
     }
 
     default:
-      // Log other message types for debugging
       if (options.debug) {
         debug(`Unhandled message type: ${message.type}`);
       }
