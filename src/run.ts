@@ -26,6 +26,7 @@ type Args = {
   localMcp?: boolean;
   ci?: boolean;
   apiKey?: string;
+  interactive?: boolean;
   menu?: boolean;
 };
 
@@ -56,6 +57,7 @@ export async function runWizard(argv: Args) {
     localMcp: finalArgs.localMcp ?? false,
     ci: finalArgs.ci ?? false,
     apiKey: finalArgs.apiKey,
+    interactive: finalArgs.interactive ?? false,
     menu: finalArgs.menu ?? false,
   };
 
@@ -63,6 +65,14 @@ export async function runWizard(argv: Args) {
 
   if (wizardOptions.ci) {
     clack.log.info(chalk.dim('Running in CI mode'));
+  }
+
+  if (wizardOptions.interactive) {
+    clack.log.info(
+      chalk.dim(
+        'Running in interactive mode. You will review the event plan before implementation',
+      ),
+    );
   }
 
   const integration =

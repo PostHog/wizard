@@ -31,6 +31,7 @@ describe('runAgent', () => {
     signup: false,
     localMcp: false,
     ci: false,
+    interactive: false,
     menu: false,
   };
 
@@ -249,6 +250,164 @@ describe('runAgent', () => {
 
       // clack.log.error should NOT have been called (errors suppressed for user)
       expect(mockClack.log.error).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('interactive approval flow', () => {
+    it('should trigger onApprovalNeeded callback when approval signal is detected', async () => {
+      const mockOnApproval = jest
+        .fn()
+        .mockResolvedValue(
+          'The user approved the plan. Proceed with implementation.',
+        );
+
+      function* mockGeneratorWithApproval() {
+        yield {
+          type: 'system',
+          subtype: 'init',
+          model: 'claude-opus-4-5-20251101',
+          tools: [],
+          mcp_servers: [],
+        };
+
+        yield {
+          type: 'assistant',
+          message: {
+            content: [
+              {
+                type: 'text',
+                text: '[WIZARD-APPROVAL-NEEDED]\n1. page_view | src/app.tsx:15 | Fires on route change\n[/WIZARD-APPROVAL-NEEDED]',
+              },
+            ],
+          },
+        };
+
+        yield {
+          type: 'result',
+          subtype: 'success',
+          is_error: false,
+          result: 'Agent completed successfully',
+        };
+      }
+
+      mockQuery.mockReturnValue(mockGeneratorWithApproval());
+
+      const result = await runAgent(
+        defaultAgentConfig,
+        'test prompt',
+        defaultOptions,
+        mockSpinner as unknown as ReturnType<typeof clack.spinner>,
+        {
+          successMessage: 'Test success',
+          errorMessage: 'Test error',
+          onApprovalNeeded: mockOnApproval,
+        },
+      );
+
+      expect(mockOnApproval).toHaveBeenCalledWith(
+        '1. page_view | src/app.tsx:15 | Fires on route change',
+      );
+      expect(result).toEqual({});
+    });
+
+    it('should skip approval when no callback is provided', async () => {
+      function* mockGeneratorWithApprovalSignalButNoCallback() {
+        yield {
+          type: 'system',
+          subtype: 'init',
+          model: 'claude-opus-4-5-20251101',
+          tools: [],
+          mcp_servers: [],
+        };
+
+        yield {
+          type: 'assistant',
+          message: {
+            content: [
+              {
+                type: 'text',
+                text: '[WIZARD-APPROVAL-NEEDED]\n1. page_view | src/app.tsx:15 | Fires on route change\n[/WIZARD-APPROVAL-NEEDED]',
+              },
+            ],
+          },
+        };
+
+        yield {
+          type: 'result',
+          subtype: 'success',
+          is_error: false,
+          result: 'Agent completed successfully',
+        };
+      }
+
+      mockQuery.mockReturnValue(mockGeneratorWithApprovalSignalButNoCallback());
+
+      // No onApprovalNeeded callback — should complete without blocking
+      const result = await runAgent(
+        defaultAgentConfig,
+        'test prompt',
+        defaultOptions,
+        mockSpinner as unknown as ReturnType<typeof clack.spinner>,
+        {
+          successMessage: 'Test success',
+          errorMessage: 'Test error',
+        },
+      );
+
+      expect(result).toEqual({});
+      expect(mockSpinner.stop).toHaveBeenCalledWith('Test success');
+    });
+
+    it('should handle approval callback errors gracefully', async () => {
+      const mockOnApproval = jest
+        .fn()
+        .mockRejectedValue(new Error('User cancelled'));
+
+      function* mockGeneratorWithApprovalError() {
+        yield {
+          type: 'system',
+          subtype: 'init',
+          model: 'claude-opus-4-5-20251101',
+          tools: [],
+          mcp_servers: [],
+        };
+
+        yield {
+          type: 'assistant',
+          message: {
+            content: [
+              {
+                type: 'text',
+                text: '[WIZARD-APPROVAL-NEEDED]\n1. page_view | src/app.tsx:15 | Fires on route change\n[/WIZARD-APPROVAL-NEEDED]',
+              },
+            ],
+          },
+        };
+
+        yield {
+          type: 'result',
+          subtype: 'success',
+          is_error: false,
+          result: 'Agent completed successfully',
+        };
+      }
+
+      mockQuery.mockReturnValue(mockGeneratorWithApprovalError());
+
+      const result = await runAgent(
+        defaultAgentConfig,
+        'test prompt',
+        defaultOptions,
+        mockSpinner as unknown as ReturnType<typeof clack.spinner>,
+        {
+          successMessage: 'Test success',
+          errorMessage: 'Test error',
+          onApprovalNeeded: mockOnApproval,
+        },
+      );
+
+      // Should still complete — error handler sends fallback message
+      expect(result).toEqual({});
     });
   });
 });
