@@ -26,6 +26,7 @@ describe('CLI argument parsing', () => {
     delete process.env.POSTHOG_WIZARD_CI;
     delete process.env.POSTHOG_WIZARD_API_KEY;
     delete process.env.POSTHOG_WIZARD_INSTALL_DIR;
+    delete process.env.POSTHOG_WIZARD_INTERACTIVE;
 
     // Mock process.exit to prevent test runner from exiting
     process.exit = jest.fn() as any;
@@ -251,6 +252,31 @@ describe('CLI argument parsing', () => {
 
       const args = getLastCallArgs(mockRunWizard);
       expect(args.apiKey).toBe('phx_test_key');
+    });
+  });
+
+  describe('--interactive flag', () => {
+    test('defaults to false when not specified', async () => {
+      await runCLI([]);
+
+      const args = getLastCallArgs(mockRunWizard);
+      expect(args.interactive).toBe(false);
+    });
+
+    test('can be set to true', async () => {
+      await runCLI(['--interactive']);
+
+      const args = getLastCallArgs(mockRunWizard);
+      expect(args.interactive).toBe(true);
+    });
+
+    test('respects POSTHOG_WIZARD_INTERACTIVE env var', async () => {
+      process.env.POSTHOG_WIZARD_INTERACTIVE = 'true';
+
+      await runCLI([]);
+
+      const args = getLastCallArgs(mockRunWizard);
+      expect(args.interactive).toBe(true);
     });
   });
 

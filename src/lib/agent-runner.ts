@@ -6,6 +6,7 @@ import {
 import type { WizardOptions } from '../utils/types';
 import {
   abort,
+  abortIfCancelled,
   askForAIConsent,
   confirmContinueIfNoOrDirtyGitRepo,
   ensurePackageIsInstalled,
@@ -27,6 +28,7 @@ import {
 } from './agent-interface';
 import { getCloudUrlFromRegion } from '../utils/urls';
 import chalk from 'chalk';
+import path from 'path';
 import * as semver from 'semver';
 import {
   addMCPServerToClientsStep,
@@ -165,6 +167,7 @@ export async function runAgentWizard(
       typescript: typeScriptDetected,
       projectApiKey,
       host,
+      interactive: options.interactive ?? false,
     },
     frameworkContext,
   );
@@ -203,6 +206,76 @@ export async function runAgentWizard(
       spinnerMessage: SPINNER_MESSAGE,
       successMessage: config.ui.successMessage,
       errorMessage: 'Integration failed',
+      onApprovalNeeded: options.interactive
+        ? async (planText: string) => {
+            spinner.stop('Event plan ready for review');
+
+            const events = parsePlanText(planText);
+
+            if (events.length === 0) {
+              await abort(
+                'The agent did not produce a valid event plan. Exiting.',
+                1,
+              );
+            }
+
+            clack.log.info(
+              chalk.cyan('Here are the events the agent plans to track:\n'),
+            );
+            for (const [i, event] of events.entries()) {
+              const fileDisplay = event.file
+                ? chalk.dim(` (${path.basename(event.file)})`)
+                : '';
+              clack.log.step(
+                `${i + 1}. ${chalk.bold(event.name)}${fileDisplay} — ${
+                  event.description
+                }`,
+              );
+            }
+
+            const action: string = await abortIfCancelled(
+              clack.select({
+                message: 'What would you like to do?',
+                options: [
+                  {
+                    value: 'approve',
+                    label: 'Approve and continue',
+                    hint: 'Implement all listed events',
+                  },
+                  {
+                    value: 'modify',
+                    label: 'Modify the plan',
+                    hint: 'Describe changes in text',
+                  },
+                ],
+              }),
+            );
+
+            if (action === 'approve') {
+              spinner.start('Implementing approved event plan...');
+              return {
+                approved: true,
+                feedback:
+                  'The user approved the plan. Proceed with implementation of all listed events.',
+              };
+            }
+
+            // action === 'modify'
+            const modifications: string = await abortIfCancelled(
+              clack.text({
+                message: 'How should the plan be modified?',
+                placeholder:
+                  'e.g., remove signup_clicked, rename page_view to route_changed, add checkout_started on payment page',
+              }),
+            );
+
+            spinner.start('Revising event plan...');
+            return {
+              approved: false,
+              feedback: `The user wants to modify the event plan:\n${modifications}\n\nApply these changes and output the UPDATED event plan using the EXACT same format between ${AgentSignals.APPROVAL_NEEDED} and ${AgentSignals.APPROVAL_END} markers. Do NOT implement yet — wait for the user to approve the updated plan.`,
+            };
+          }
+        : undefined,
     },
   );
 
@@ -256,6 +329,22 @@ ${chalk.cyan(config.metadata.docsUrl)}`;
     clack.outro(errorMessage);
     await analytics.shutdown('error');
     process.exit(1);
+  }
+
+  if (agentResult.error === AgentErrorType.APPROVAL_CANCELLED) {
+    analytics.capture(WIZARD_INTERACTION_EVENT_NAME, {
+      action: 'approval cancelled',
+      integration: config.metadata.integration,
+      error_type: AgentErrorType.APPROVAL_CANCELLED,
+    });
+
+    clack.outro(
+      `${chalk.yellow(
+        'Wizard cancelled.',
+      )} No changes were made to your project.`,
+    );
+    await analytics.shutdown('cancelled');
+    process.exit(0);
   }
 
   if (
@@ -360,6 +449,7 @@ function buildIntegrationPrompt(
     typescript: boolean;
     projectApiKey: string;
     host: string;
+    interactive: boolean;
   },
   frameworkContext: Record<string, unknown>,
 ): string {
@@ -403,7 +493,27 @@ STEP 3: Run the installation command using Bash:
 STEP 4: Load the installed skill's SKILL.md file to understand what references are available.
 
 STEP 5: Follow the skill's workflow files in sequence. Look for numbered workflow files in the references (e.g., files with patterns like "1.0-", "1.1-", "1.2-"). Start with the first one and proceed through each step until completion. Each workflow file will tell you what to do and which file comes next.
+${
+  context.interactive
+    ? `
+STEP 5.5 (INTERACTIVE APPROVAL — MANDATORY): Before writing ANY integration code, you MUST output your complete event tracking plan. Follow this format EXACTLY — every event on its own numbered line, with three pipe-separated fields:
 
+${AgentSignals.APPROVAL_NEEDED}
+1. {event_name} | {file_path}:{line_number} | {description of when this event fires}
+2. {event_name} | {file_path}:{line_number} | {description of when this event fires}
+${AgentSignals.APPROVAL_END}
+
+Rules:
+- Replace the {placeholders} with real values derived from this project's codebase
+- Every line MUST follow: NUMBER. EVENT_NAME | FILE_PATH:LINE | DESCRIPTION
+- Include the line number where you plan to insert the tracking code
+- Do NOT use markdown, extra text, or any other format between the markers
+- List ALL events you plan to implement — nothing should be left out
+
+Then STOP and wait for user feedback. Do not proceed to write integration code until you receive a follow-up message approving the plan. The user may remove events, add new ones, or rename events. If the user requests modifications, apply them and output the COMPLETE updated plan in the EXACT same format between the same ${AgentSignals.APPROVAL_NEEDED} and ${AgentSignals.APPROVAL_END} markers. Then STOP and wait again. Repeat this cycle until the user explicitly approves. Only after approval should you implement the approved events.
+`
+    : ''
+}
 STEP 6: Set up environment variables for PostHog using the env-file-tools MCP server (this runs locally — secret values never leave the machine):
    - Use check_env_keys to see which keys already exist in the project's .env file (e.g. .env.local or .env).
    - Use set_env_values to create or update the PostHog API key and host, using the appropriate naming convention for ${
@@ -414,4 +524,36 @@ STEP 6: Set up environment variables for PostHog using the env-file-tools MCP se
 Important: Look for lockfiles (pnpm-lock.yaml, package-lock.json, yarn.lock, bun.lockb) to determine the package manager (excluding the contents of node_modules). Do not manually edit package.json. Always install packages as a background task. Don't await completion; proceed with other work immediately after starting the installation. You must read a file immediately before attempting to write it, even if you have previously read it; failure to do so will cause a tool failure.
 
 `;
+}
+
+type PlanEvent = {
+  name: string;
+  file: string;
+  description: string;
+};
+
+/**
+ * Parses the agent's structured event plan output into individual events.
+ *
+ * Expects each line to follow the format the agent is prompted to use:
+ *   `1. event_name | file_path:line | description`
+ *
+ * Lines that don't match (blanks, markdown, extra commentary) are silently
+ * skipped so the parser is tolerant of minor LLM formatting deviations.
+ */
+function parsePlanText(planText: string): PlanEvent[] {
+  const events: PlanEvent[] = [];
+  for (const line of planText.split('\n')) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    const match = trimmed.match(/^\d+\.\s*(.+?)\s*\|\s*(.+?)\s*\|\s*(.+)$/);
+    if (match) {
+      events.push({
+        name: match[1].trim(),
+        file: match[2].trim(),
+        description: match[3].trim(),
+      });
+    }
+  }
+  return events;
 }

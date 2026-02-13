@@ -49,6 +49,12 @@ export const AgentSignals = {
   ERROR_RESOURCE_MISSING: '[ERROR-RESOURCE-MISSING]',
   /** Signal emitted when the agent provides a remark about its run */
   WIZARD_REMARK: '[WIZARD-REMARK]',
+  /** Signal emitted when the agent has an event plan ready for user approval */
+  APPROVAL_NEEDED: '[WIZARD-APPROVAL-NEEDED]',
+  /** End marker for the approval plan block */
+  APPROVAL_END: '[/WIZARD-APPROVAL-NEEDED]',
+  /** Signal emitted when the approval flow was cancelled or errored */
+  ERROR_APPROVAL_CANCELLED: '[ERROR-APPROVAL-CANCELLED]',
 } as const;
 
 export type AgentSignal = (typeof AgentSignals)[keyof typeof AgentSignals];
@@ -66,6 +72,8 @@ export enum AgentErrorType {
   RATE_LIMIT = 'WIZARD_RATE_LIMIT',
   /** Generic API error */
   API_ERROR = 'WIZARD_API_ERROR',
+  /** Approval flow was cancelled or errored */
+  APPROVAL_CANCELLED = 'WIZARD_APPROVAL_CANCELLED',
 }
 
 export type AgentConfig = {
@@ -415,6 +423,9 @@ export async function runAgent(
     spinnerMessage?: string;
     successMessage?: string;
     errorMessage?: string;
+    onApprovalNeeded?: (
+      planText: string,
+    ) => Promise<{ approved: boolean; feedback: string }>;
   },
 ): Promise<{ error?: AgentErrorType; message?: string }> {
   const {
@@ -422,6 +433,7 @@ export async function runAgent(
     spinnerMessage = 'Customizing your PostHog setup...',
     successMessage = 'PostHog integration complete',
     errorMessage = 'Integration failed',
+    onApprovalNeeded,
   } = config ?? {};
 
   const { query } = await getSDKModule();
@@ -442,6 +454,31 @@ export async function runAgent(
   // Track if we received a successful result (before any cleanup errors)
   let receivedSuccessResult = false;
 
+  // Interactive approval state: when --interactive is set, the agent outputs an event
+  // plan and pauses before writing code. Supports multiple rounds of plan review —
+  // each call to waitForFeedback() returns a new promise that resolves when
+  // sendFeedback() is called, allowing the approval loop to repeat until approved.
+  let _resolveFeedback:
+    | ((value: { approved: boolean; feedback: string }) => void)
+    | null = null;
+
+  function waitForFeedback(): Promise<{ approved: boolean; feedback: string }> {
+    return new Promise((resolve) => {
+      _resolveFeedback = resolve;
+    });
+  }
+
+  function sendFeedback(value: { approved: boolean; feedback: string }): void {
+    if (_resolveFeedback) {
+      const resolve = _resolveFeedback;
+      _resolveFeedback = null;
+      resolve(value);
+    }
+  }
+
+  // canUseTool blocks Write/Edit while awaitingApproval is true as a safety net.
+  let awaitingApproval = false;
+
   // Workaround for SDK bug: stdin closes before canUseTool responses can be sent.
   // The fix is to use an async generator for the prompt that stays open until
   // the result is received, keeping the stdin stream alive for permission responses.
@@ -459,6 +496,26 @@ export async function runAgent(
       message: { role: 'user', content: prompt },
       parent_tool_use_id: null,
     };
+
+    // In interactive mode, loop until the user approves the plan.
+    // Each iteration: wait for feedback → yield it → if modification, loop again.
+    if (onApprovalNeeded) {
+      while (true) {
+        const result = await waitForFeedback();
+        if (result.feedback) {
+          yield {
+            type: 'user',
+            session_id: '',
+            message: { role: 'user', content: result.feedback },
+            parent_tool_use_id: null,
+          };
+        }
+        if (result.approved) {
+          break;
+        }
+      }
+    }
+
     await resultReceived;
   };
 
@@ -542,6 +599,20 @@ export async function runAgent(
         },
         canUseTool: (toolName: string, input: unknown) => {
           logToFile('canUseTool called:', { toolName, input });
+
+          // Block Write/Edit while awaiting user approval of event plan
+          if (
+            awaitingApproval &&
+            (toolName === 'Write' || toolName === 'Edit')
+          ) {
+            logToFile(`Blocking ${toolName} while awaiting approval`);
+            return Promise.resolve({
+              behavior: 'deny' as const,
+              message:
+                'Waiting for user to review the event plan. Do not write or edit code until approval is received.',
+            });
+          }
+
           const result = wizardCanUseTool(
             toolName,
             input as Record<string, unknown>,
@@ -597,6 +668,18 @@ export async function runAgent(
         spinner,
         collectedText,
         receivedSuccessResult,
+        onApprovalNeeded
+          ? {
+              onApprovalNeeded,
+              isAwaiting: () => awaitingApproval,
+              setAwaiting: (v: boolean) => {
+                awaitingApproval = v;
+              },
+              resolve: (result: { approved: boolean; feedback: string }) => {
+                sendFeedback(result);
+              },
+            }
+          : undefined,
       );
 
       // Signal completion when result received
@@ -623,6 +706,12 @@ export async function runAgent(
       logToFile('Agent error: RESOURCE_MISSING');
       spinner.stop('Agent could not access setup resource');
       return { error: AgentErrorType.RESOURCE_MISSING };
+    }
+
+    if (outputText.includes(AgentSignals.ERROR_APPROVAL_CANCELLED)) {
+      logToFile('Agent error: APPROVAL_CANCELLED');
+      spinner.stop('Approval flow cancelled');
+      return { error: AgentErrorType.APPROVAL_CANCELLED };
     }
 
     // Check for API errors (rate limits, etc.)
@@ -700,6 +789,14 @@ function handleSDKMessage(
   spinner: ReturnType<typeof clack.spinner>,
   collectedText: string[],
   receivedSuccessResult = false,
+  approvalContext?: {
+    onApprovalNeeded: (
+      planText: string,
+    ) => Promise<{ approved: boolean; feedback: string }>;
+    isAwaiting: () => boolean;
+    setAwaiting: (v: boolean) => void;
+    resolve: (result: { approved: boolean; feedback: string }) => void;
+  },
 ): void {
   logToFile(`SDK Message: ${message.type}`, JSON.stringify(message, null, 2));
 
@@ -728,6 +825,44 @@ function handleSDKMessage(
             if (statusMatch) {
               spinner.stop(statusMatch[1].trim());
               spinner.start('Integrating PostHog...');
+            }
+
+            // Check for approval signal (interactive mode)
+            if (
+              approvalContext &&
+              !approvalContext.isAwaiting() &&
+              block.text.includes(AgentSignals.APPROVAL_NEEDED)
+            ) {
+              const startMarker = AgentSignals.APPROVAL_NEEDED;
+              const endMarker = AgentSignals.APPROVAL_END;
+              const text = block.text as string;
+              const startIdx = text.indexOf(startMarker) + startMarker.length;
+              const endIdx = text.indexOf(endMarker);
+              const planText =
+                endIdx > startIdx
+                  ? text.slice(startIdx, endIdx).trim()
+                  : text.slice(startIdx).trim();
+
+              logToFile('Approval signal detected, plan text:', planText);
+              approvalContext.setAwaiting(true);
+
+              approvalContext
+                .onApprovalNeeded(planText)
+                .then((result) => {
+                  approvalContext.setAwaiting(false);
+                  approvalContext.resolve(result);
+                  logToFile(
+                    `Approval feedback sent to agent (approved: ${result.approved})`,
+                  );
+                })
+                .catch((err) => {
+                  logToFile('Approval flow error:', err);
+                  approvalContext.setAwaiting(false);
+                  approvalContext.resolve({
+                    approved: true,
+                    feedback: `The approval flow was cancelled or encountered an error. Stop immediately — do not write or modify any files. You must emit: ${AgentSignals.ERROR_APPROVAL_CANCELLED} Approval cancelled by user or error.`,
+                  });
+                });
             }
           }
         }

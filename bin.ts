@@ -79,6 +79,12 @@ yargs(hideBin(process.argv))
         'PostHog personal API key (phx_xxx) for authentication\nenv: POSTHOG_WIZARD_API_KEY',
       type: 'string',
     },
+    interactive: {
+      default: false,
+      describe:
+        'Review and approve planned events before implementation\nenv: POSTHOG_WIZARD_INTERACTIVE',
+      type: 'boolean',
+    },
   })
   .command(
     ['$0'],

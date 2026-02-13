@@ -57,6 +57,11 @@ export type WizardOptions = {
   apiKey?: string;
 
   /**
+   * Enable interactive mode with event plan approval before implementation
+   */
+  interactive: boolean;
+
+  /**
    * Whether to show the menu for manual integration selection instead of auto-detecting.
    */
   menu: boolean;
