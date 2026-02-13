@@ -53,6 +53,8 @@ export const AgentSignals = {
   APPROVAL_NEEDED: '[WIZARD-APPROVAL-NEEDED]',
   /** End marker for the approval plan block */
   APPROVAL_END: '[/WIZARD-APPROVAL-NEEDED]',
+  /** Signal emitted when the approval flow was cancelled or errored */
+  ERROR_APPROVAL_CANCELLED: '[ERROR-APPROVAL-CANCELLED]',
 } as const;
 
 export type AgentSignal = (typeof AgentSignals)[keyof typeof AgentSignals];
@@ -70,6 +72,8 @@ export enum AgentErrorType {
   RATE_LIMIT = 'WIZARD_RATE_LIMIT',
   /** Generic API error */
   API_ERROR = 'WIZARD_API_ERROR',
+  /** Approval flow was cancelled or errored */
+  APPROVAL_CANCELLED = 'WIZARD_APPROVAL_CANCELLED',
 }
 
 export type AgentConfig = {
@@ -419,7 +423,9 @@ export async function runAgent(
     spinnerMessage?: string;
     successMessage?: string;
     errorMessage?: string;
-    onApprovalNeeded?: (planText: string) => Promise<string>;
+    onApprovalNeeded?: (
+      planText: string,
+    ) => Promise<{ approved: boolean; feedback: string }>;
   },
 ): Promise<{ error?: AgentErrorType; message?: string }> {
   const {
@@ -449,12 +455,26 @@ export async function runAgent(
   let receivedSuccessResult = false;
 
   // Interactive approval state: when --interactive is set, the agent outputs an event
-  // plan and pauses before writing code. We externalize the promise resolver so that
-  // handleSDKMessage can resolve it from the message loop once the user approves the plan.
-  let resolveApprovalFeedback: ((feedback: string) => void) | null = null;
-  const approvalFeedback = new Promise<string>((resolve) => {
-    resolveApprovalFeedback = resolve;
-  });
+  // plan and pauses before writing code. Supports multiple rounds of plan review —
+  // each call to waitForFeedback() returns a new promise that resolves when
+  // sendFeedback() is called, allowing the approval loop to repeat until approved.
+  let _resolveFeedback:
+    | ((value: { approved: boolean; feedback: string }) => void)
+    | null = null;
+
+  function waitForFeedback(): Promise<{ approved: boolean; feedback: string }> {
+    return new Promise((resolve) => {
+      _resolveFeedback = resolve;
+    });
+  }
+
+  function sendFeedback(value: { approved: boolean; feedback: string }): void {
+    if (_resolveFeedback) {
+      const resolve = _resolveFeedback;
+      _resolveFeedback = null;
+      resolve(value);
+    }
+  }
 
   // canUseTool blocks Write/Edit while awaitingApproval is true as a safety net.
   let awaitingApproval = false;
@@ -477,16 +497,22 @@ export async function runAgent(
       parent_tool_use_id: null,
     };
 
-    // In interactive mode, wait for user approval feedback and yield it as a second message
+    // In interactive mode, loop until the user approves the plan.
+    // Each iteration: wait for feedback → yield it → if modification, loop again.
     if (onApprovalNeeded) {
-      const feedback = await approvalFeedback;
-      if (feedback) {
-        yield {
-          type: 'user',
-          session_id: '',
-          message: { role: 'user', content: feedback },
-          parent_tool_use_id: null,
-        };
+      while (true) {
+        const result = await waitForFeedback();
+        if (result.feedback) {
+          yield {
+            type: 'user',
+            session_id: '',
+            message: { role: 'user', content: result.feedback },
+            parent_tool_use_id: null,
+          };
+        }
+        if (result.approved) {
+          break;
+        }
       }
     }
 
@@ -649,11 +675,8 @@ export async function runAgent(
               setAwaiting: (v: boolean) => {
                 awaitingApproval = v;
               },
-              resolve: (feedback: string) => {
-                if (resolveApprovalFeedback) {
-                  resolveApprovalFeedback(feedback);
-                  resolveApprovalFeedback = null;
-                }
+              resolve: (result: { approved: boolean; feedback: string }) => {
+                sendFeedback(result);
               },
             }
           : undefined,
@@ -683,6 +706,12 @@ export async function runAgent(
       logToFile('Agent error: RESOURCE_MISSING');
       spinner.stop('Agent could not access setup resource');
       return { error: AgentErrorType.RESOURCE_MISSING };
+    }
+
+    if (outputText.includes(AgentSignals.ERROR_APPROVAL_CANCELLED)) {
+      logToFile('Agent error: APPROVAL_CANCELLED');
+      spinner.stop('Approval flow cancelled');
+      return { error: AgentErrorType.APPROVAL_CANCELLED };
     }
 
     // Check for API errors (rate limits, etc.)
@@ -761,10 +790,12 @@ function handleSDKMessage(
   collectedText: string[],
   receivedSuccessResult = false,
   approvalContext?: {
-    onApprovalNeeded: (planText: string) => Promise<string>;
+    onApprovalNeeded: (
+      planText: string,
+    ) => Promise<{ approved: boolean; feedback: string }>;
     isAwaiting: () => boolean;
     setAwaiting: (v: boolean) => void;
-    resolve: (feedback: string) => void;
+    resolve: (result: { approved: boolean; feedback: string }) => void;
   },
 ): void {
   logToFile(`SDK Message: ${message.type}`, JSON.stringify(message, null, 2));
@@ -817,17 +848,20 @@ function handleSDKMessage(
 
               approvalContext
                 .onApprovalNeeded(planText)
-                .then((feedback) => {
+                .then((result) => {
                   approvalContext.setAwaiting(false);
-                  approvalContext.resolve(feedback);
-                  logToFile('Approval feedback sent to agent');
+                  approvalContext.resolve(result);
+                  logToFile(
+                    `Approval feedback sent to agent (approved: ${result.approved})`,
+                  );
                 })
                 .catch((err) => {
                   logToFile('Approval flow error:', err);
                   approvalContext.setAwaiting(false);
-                  approvalContext.resolve(
-                    'The user cancelled the approval. Proceed with the original plan.',
-                  );
+                  approvalContext.resolve({
+                    approved: true,
+                    feedback: `The approval flow was cancelled or encountered an error. Stop immediately — do not write or modify any files. You must emit: ${AgentSignals.ERROR_APPROVAL_CANCELLED} Approval cancelled by user or error.`,
+                  });
                 });
             }
           }

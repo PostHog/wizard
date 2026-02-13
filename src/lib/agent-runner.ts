@@ -251,25 +251,29 @@ export async function runAgentWizard(
               }),
             );
 
-            let feedbackMessage = '';
-
             if (action === 'approve') {
-              feedbackMessage =
-                'The user approved the plan. Proceed with implementation of all listed events.';
-            } else if (action === 'modify') {
-              const modifications: string = await abortIfCancelled(
-                clack.text({
-                  message: 'How should the plan be modified?',
-                  placeholder:
-                    'e.g., remove signup_clicked, rename page_view to route_changed, add checkout_started on payment page',
-                }),
-              );
-
-              feedbackMessage = `The user wants to modify the event plan:\n${modifications}\n\nApply these changes and implement only the resulting approved events.`;
+              spinner.start('Implementing approved event plan...');
+              return {
+                approved: true,
+                feedback:
+                  'The user approved the plan. Proceed with implementation of all listed events.',
+              };
             }
 
-            spinner.start('Implementing approved event plan...');
-            return feedbackMessage;
+            // action === 'modify'
+            const modifications: string = await abortIfCancelled(
+              clack.text({
+                message: 'How should the plan be modified?',
+                placeholder:
+                  'e.g., remove signup_clicked, rename page_view to route_changed, add checkout_started on payment page',
+              }),
+            );
+
+            spinner.start('Revising event plan...');
+            return {
+              approved: false,
+              feedback: `The user wants to modify the event plan:\n${modifications}\n\nApply these changes and output the UPDATED event plan using the EXACT same format between ${AgentSignals.APPROVAL_NEEDED} and ${AgentSignals.APPROVAL_END} markers. Do NOT implement yet — wait for the user to approve the updated plan.`,
+            };
           }
         : undefined,
     },
@@ -325,6 +329,22 @@ ${chalk.cyan(config.metadata.docsUrl)}`;
     clack.outro(errorMessage);
     await analytics.shutdown('error');
     process.exit(1);
+  }
+
+  if (agentResult.error === AgentErrorType.APPROVAL_CANCELLED) {
+    analytics.capture(WIZARD_INTERACTION_EVENT_NAME, {
+      action: 'approval cancelled',
+      integration: config.metadata.integration,
+      error_type: AgentErrorType.APPROVAL_CANCELLED,
+    });
+
+    clack.outro(
+      `${chalk.yellow(
+        'Wizard cancelled.',
+      )} No changes were made to your project.`,
+    );
+    await analytics.shutdown('cancelled');
+    process.exit(0);
   }
 
   if (
@@ -490,7 +510,7 @@ Rules:
 - Do NOT use markdown, extra text, or any other format between the markers
 - List ALL events you plan to implement — nothing should be left out
 
-Then STOP and wait for user feedback. Do not proceed to write integration code until you receive a follow-up message approving or modifying the plan. The user may remove events, add new ones, or rename events. Once you receive the feedback, implement only the approved events.
+Then STOP and wait for user feedback. Do not proceed to write integration code until you receive a follow-up message approving the plan. The user may remove events, add new ones, or rename events. If the user requests modifications, apply them and output the COMPLETE updated plan in the EXACT same format between the same ${AgentSignals.APPROVAL_NEEDED} and ${AgentSignals.APPROVAL_END} markers. Then STOP and wait again. Repeat this cycle until the user explicitly approves. Only after approval should you implement the approved events.
 `
     : ''
 }

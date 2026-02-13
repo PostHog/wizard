@@ -255,11 +255,10 @@ describe('runAgent', () => {
 
   describe('interactive approval flow', () => {
     it('should trigger onApprovalNeeded callback when approval signal is detected', async () => {
-      const mockOnApproval = jest
-        .fn()
-        .mockResolvedValue(
-          'The user approved the plan. Proceed with implementation.',
-        );
+      const mockOnApproval = jest.fn().mockResolvedValue({
+        approved: true,
+        feedback: 'The user approved the plan. Proceed with implementation.',
+      });
 
       function* mockGeneratorWithApproval() {
         yield {
@@ -408,6 +407,137 @@ describe('runAgent', () => {
 
       // Should still complete — error handler sends fallback message
       expect(result).toEqual({});
+    });
+
+    it('should support multiple rounds of approval (modify then approve)', async () => {
+      let callCount = 0;
+      const mockOnApproval = jest.fn().mockImplementation(() => {
+        callCount++;
+        if (callCount === 1) {
+          return Promise.resolve({
+            approved: false,
+            feedback:
+              'The user wants to modify: remove event_2. Output updated plan.',
+          });
+        }
+        return Promise.resolve({
+          approved: true,
+          feedback: 'The user approved the plan. Proceed with implementation.',
+        });
+      });
+
+      function* mockGeneratorWithTwoApprovalRounds() {
+        yield {
+          type: 'system',
+          subtype: 'init',
+          model: 'claude-opus-4-5-20251101',
+          tools: [],
+          mcp_servers: [],
+        };
+
+        // First plan
+        yield {
+          type: 'assistant',
+          message: {
+            content: [
+              {
+                type: 'text',
+                text: '[WIZARD-APPROVAL-NEEDED]\n1. event_1 | src/a.tsx:10 | desc1\n2. event_2 | src/b.tsx:20 | desc2\n[/WIZARD-APPROVAL-NEEDED]',
+              },
+            ],
+          },
+        };
+
+        // Revised plan after modification
+        yield {
+          type: 'assistant',
+          message: {
+            content: [
+              {
+                type: 'text',
+                text: '[WIZARD-APPROVAL-NEEDED]\n1. event_1 | src/a.tsx:10 | desc1\n[/WIZARD-APPROVAL-NEEDED]',
+              },
+            ],
+          },
+        };
+
+        yield {
+          type: 'result',
+          subtype: 'success',
+          is_error: false,
+          result: 'Agent completed successfully',
+        };
+      }
+
+      mockQuery.mockReturnValue(mockGeneratorWithTwoApprovalRounds());
+
+      const result = await runAgent(
+        defaultAgentConfig,
+        'test prompt',
+        defaultOptions,
+        mockSpinner as unknown as ReturnType<typeof clack.spinner>,
+        {
+          successMessage: 'Test success',
+          errorMessage: 'Test error',
+          onApprovalNeeded: mockOnApproval,
+        },
+      );
+
+      expect(mockOnApproval).toHaveBeenCalledTimes(2);
+      expect(result).toEqual({});
+    });
+
+    it('should return APPROVAL_CANCELLED error when agent emits the signal', async () => {
+      const mockOnApproval = jest.fn().mockResolvedValue({
+        approved: true,
+        feedback: 'Approved',
+      });
+
+      function* mockGeneratorWithApprovalCancelled() {
+        yield {
+          type: 'system',
+          subtype: 'init',
+          model: 'claude-opus-4-5-20251101',
+          tools: [],
+          mcp_servers: [],
+        };
+
+        yield {
+          type: 'assistant',
+          message: {
+            content: [
+              {
+                type: 'text',
+                text: '[ERROR-APPROVAL-CANCELLED] Approval cancelled by user or error.',
+              },
+            ],
+          },
+        };
+
+        yield {
+          type: 'result',
+          subtype: 'success',
+          is_error: false,
+          result: 'Agent completed',
+        };
+      }
+
+      mockQuery.mockReturnValue(mockGeneratorWithApprovalCancelled());
+
+      const result = await runAgent(
+        defaultAgentConfig,
+        'test prompt',
+        defaultOptions,
+        mockSpinner as unknown as ReturnType<typeof clack.spinner>,
+        {
+          successMessage: 'Test success',
+          errorMessage: 'Test error',
+          onApprovalNeeded: mockOnApproval,
+        },
+      );
+
+      expect(result).toEqual({ error: 'WIZARD_APPROVAL_CANCELLED' });
+      expect(mockSpinner.stop).toHaveBeenCalledWith('Approval flow cancelled');
     });
   });
 });
