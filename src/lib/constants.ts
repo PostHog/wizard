@@ -19,9 +19,11 @@ export enum Integration {
   sveltekit = 'sveltekit',
   swift = 'swift',
   android = 'android',
+  rails = 'rails',
 
   // Language fallbacks
   python = 'python',
+  ruby = 'ruby',
 }
 export interface Args {
   debug: boolean;
