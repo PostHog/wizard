@@ -1,6 +1,7 @@
 /* Django wizard using posthog-agent with PostHog MCP */
 import type { WizardOptions } from '../utils/types';
 import type { FrameworkConfig } from '../lib/framework-config';
+import { detectPythonPackageManagers } from '../lib/package-manager-detection';
 import { Integration } from '../lib/constants';
 import fg from 'fast-glob';
 import * as fs from 'node:fs';
@@ -100,6 +101,7 @@ export const DJANGO_AGENT_CONFIG: FrameworkConfig<DjangoContext> = {
 
       return false;
     },
+    detectPackageManager: detectPythonPackageManagers,
   },
 
   environment: {
@@ -119,8 +121,6 @@ export const DJANGO_AGENT_CONFIG: FrameworkConfig<DjangoContext> = {
   prompts: {
     projectTypeDetection:
       'This is a Python/Django project. Look for requirements.txt, pyproject.toml, setup.py, Pipfile, or manage.py to confirm.',
-    packageInstallation:
-      'Use pip, poetry, or pipenv based on existing config files (requirements.txt, pyproject.toml, Pipfile). Do not pin the posthog version - just add "posthog" without version constraints.',
     getAdditionalContextLines: (context) => {
       const projectTypeName = context.projectType
         ? getDjangoProjectTypeName(context.projectType)

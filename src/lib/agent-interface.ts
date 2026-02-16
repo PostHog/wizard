@@ -15,6 +15,11 @@ import {
 import { getLlmGatewayUrlFromHost } from '../utils/urls';
 import { LINTING_TOOLS } from './safe-tools';
 import { createEnvFileServer, ENV_FILE_TOOL_NAMES } from './env-file-tools';
+import {
+  createPackageManagerServer,
+  PACKAGE_MANAGER_TOOL_NAMES,
+} from './package-manager-tools';
+import type { PackageManagerDetector } from './package-manager-detection';
 
 // Dynamic import cache for ESM module
 let _sdkModule: any = null;
@@ -74,6 +79,7 @@ export type AgentConfig = {
   posthogApiKey: string;
   posthogApiHost: string;
   additionalMcpServers?: Record<string, { url: string }>;
+  detectPackageManager: PackageManagerDetector;
 };
 
 /**
@@ -366,6 +372,13 @@ export async function initializeAgent(
     const envFileServer = await createEnvFileServer(config.workingDirectory);
     mcpServers['env-file-tools'] = envFileServer;
 
+    // Add in-process package manager detection tool
+    const packageManagerServer = await createPackageManagerServer(
+      config.detectPackageManager,
+      config.workingDirectory,
+    );
+    mcpServers['package-manager-tools'] = packageManagerServer;
+
     const agentRunConfig: AgentRunConfig = {
       workingDirectory: config.workingDirectory,
       mcpServers,
@@ -522,6 +535,7 @@ export async function runAgent(
       'ListMcpResourcesTool',
       'Skill',
       ...ENV_FILE_TOOL_NAMES,
+      ...PACKAGE_MANAGER_TOOL_NAMES,
     ];
 
     const response = query({

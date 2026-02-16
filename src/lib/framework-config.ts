@@ -1,5 +1,6 @@
 import type { Integration } from './constants';
 import type { WizardOptions } from '../utils/types';
+import type { PackageManagerDetector } from './package-manager-detection';
 
 /**
  * Configuration interface for framework-specific agent integrations.
@@ -89,6 +90,9 @@ export interface FrameworkDetection {
 
   /** Detect whether this framework is present in the project. */
   detect: (options: Pick<WizardOptions, 'installDir'>) => Promise<boolean>;
+
+  /** Detect the project's package manager(s). Used by the in-process MCP tool. */
+  detectPackageManager: PackageManagerDetector;
 }
 
 /**
@@ -119,6 +123,14 @@ export interface AnalyticsConfig<
 }
 
 /**
+ * Default package installation instruction used when frameworks don't
+ * provide their own. Frameworks with specific needs (e.g., Swift SPM,
+ * Composer) override this in their config.
+ */
+export const DEFAULT_PACKAGE_INSTALLATION =
+  'Use the detect_package_manager tool to determine the package manager.';
+
+/**
  * Prompt configuration
  */
 export interface PromptConfig<
@@ -133,15 +145,18 @@ export interface PromptConfig<
 
   /**
    * How to detect the project type for this framework.
+   * Included in the agent prompt as project context.
    * e.g., "Look for package.json and lockfiles" or "Look for requirements.txt and manage.py"
    */
   projectTypeDetection: string;
 
   /**
    * How to install packages for this framework.
-   * e.g., "Use npm/yarn/pnpm based on lockfile" or "Use pip/poetry based on config files"
+   * Included in the agent prompt as project context.
+   * Defaults to DEFAULT_PACKAGE_INSTALLATION. Only override if the framework
+   * has specific installation guidance (e.g., Swift SPM, Composer).
    */
-  packageInstallation: string;
+  packageInstallation?: string;
 }
 
 /**

@@ -1,4 +1,5 @@
 import {
+  DEFAULT_PACKAGE_INSTALLATION,
   getWelcomeMessage,
   SPINNER_MESSAGE,
   type FrameworkConfig,
@@ -189,6 +190,7 @@ export async function runAgentWizard(
       posthogApiKey: accessToken,
       posthogApiHost: host,
       additionalMcpServers: config.metadata.additionalMcpServers,
+      detectPackageManager: config.detection.detectPackageManager,
     },
     options,
   );
@@ -380,7 +382,11 @@ Project context:
 - Framework: ${config.metadata.name} ${context.frameworkVersion}
 - TypeScript: ${context.typescript ? 'Yes' : 'No'}
 - PostHog API Key: ${context.projectApiKey}
-- PostHog Host: ${context.host}${additionalContext}
+- PostHog Host: ${context.host}
+- Project type: ${config.prompts.projectTypeDetection}
+- Package installation: ${
+    config.prompts.packageInstallation ?? DEFAULT_PACKAGE_INSTALLATION
+  }${additionalContext}
 
 Instructions (follow these steps IN ORDER - do not skip or reorder):
 
@@ -411,7 +417,7 @@ STEP 6: Set up environment variables for PostHog using the env-file-tools MCP se
    }. The tool will also ensure .gitignore coverage. Don't assume the presence of keys means the value is up to date. Write the correct value each time.
    - Reference these environment variables in the code files you create instead of hardcoding the API key and host.
 
-Important: Look for lockfiles (pnpm-lock.yaml, package-lock.json, yarn.lock, bun.lockb) to determine the package manager (excluding the contents of node_modules). Do not manually edit package.json. Always install packages as a background task. Don't await completion; proceed with other work immediately after starting the installation. You must read a file immediately before attempting to write it, even if you have previously read it; failure to do so will cause a tool failure.
+Important: Use the detect_package_manager tool (from the package-manager-tools MCP server) to determine which package manager the project uses. Do not manually search for lockfiles or config files. Do not manually edit package.json, requirements.txt, pyproject.toml, or similar dependency manifests. Always install packages as a background task. Don't await completion; proceed with other work immediately after starting the installation. You must read a file immediately before attempting to write it, even if you have previously read it; failure to do so will cause a tool failure.
 
 `;
 }

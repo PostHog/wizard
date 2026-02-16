@@ -1,6 +1,7 @@
 /* TanStack Router wizard using posthog-agent with PostHog MCP */
 import type { WizardOptions } from '../utils/types';
 import type { FrameworkConfig } from '../lib/framework-config';
+import { detectNodePackageManagers } from '../lib/package-manager-detection';
 import { Integration } from '../lib/constants';
 import {
   getPackageVersion,
@@ -56,6 +57,7 @@ export const TANSTACK_ROUTER_AGENT_CONFIG: FrameworkConfig<TanStackRouterContext
         }
         return hasPackageInstalled('@tanstack/react-router', packageJson);
       },
+      detectPackageManager: detectNodePackageManagers,
     },
 
     environment: {
@@ -75,8 +77,6 @@ export const TANSTACK_ROUTER_AGENT_CONFIG: FrameworkConfig<TanStackRouterContext
     prompts: {
       projectTypeDetection:
         'This is a JavaScript/TypeScript project. Look for package.json and lockfiles (package-lock.json, yarn.lock, pnpm-lock.yaml, bun.lockb) to confirm.',
-      packageInstallation:
-        'Look for lockfiles to determine the package manager (npm, yarn, pnpm, bun). Do not manually edit package.json.',
       getAdditionalContextLines: (context) => {
         const routerMode = context.routerMode;
         const modeName = routerMode
