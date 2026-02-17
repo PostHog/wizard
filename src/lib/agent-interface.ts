@@ -374,7 +374,7 @@ export async function initializeAgent(
     const agentRunConfig: AgentRunConfig = {
       workingDirectory: config.workingDirectory,
       mcpServers,
-      model: 'claude-opus-4-5-20251101',
+      model: 'anthropic/claude-sonnet-4-6',
     };
 
     logToFile('Agent config:', {
