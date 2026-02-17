@@ -138,11 +138,7 @@ async function detectNpmOrYarnWorkspace(
   // Detect yarn vs npm by lockfile
   const hasYarnLock = await fileExists(path.join(rootDir, 'yarn.lock'));
 
-  const type: WorkspaceType = hasTurbo
-    ? 'turbo'
-    : hasYarnLock
-      ? 'yarn'
-      : 'npm';
+  const type: WorkspaceType = hasTurbo ? 'turbo' : hasYarnLock ? 'yarn' : 'npm';
 
   const memberDirs = await resolveGlobPatterns(rootDir, patterns);
   if (memberDirs.length === 0) {
@@ -200,14 +196,11 @@ async function detectNxWorkspace(
   }
 
   // Nx projects can be defined via project.json files in subdirectories
-  const projectJsonPaths = await fg(
-    ['*/project.json', '*/*/project.json'],
-    {
-      cwd: rootDir,
-      ignore: IGNORE_PATTERNS,
-      onlyFiles: true,
-    },
-  );
+  const projectJsonPaths = await fg(['*/project.json', '*/*/project.json'], {
+    cwd: rootDir,
+    ignore: IGNORE_PATTERNS,
+    onlyFiles: true,
+  });
 
   if (projectJsonPaths.length === 0) {
     // Nx might use package.json workspaces — fall through to that detector
@@ -228,10 +221,7 @@ async function detectNxWorkspace(
  *
  * Only triggers if 2+ candidate directories are found.
  */
-async function detectHeuristic(
-  rootDir: string,
-): Promise<WorkspaceInfo | null> {
-
+async function detectHeuristic(rootDir: string): Promise<WorkspaceInfo | null> {
   // Find project indicators at depth 1 and 2 for ALL supported frameworks:
   // - JS/TS: package.json
   // - Python: manage.py, pyproject.toml, requirements.txt
@@ -272,14 +262,11 @@ async function detectHeuristic(
   );
 
   // Also check for .xcodeproj directories (Swift/iOS)
-  const xcodeprojDirs = await fg(
-    ['*/*.xcodeproj', '*/*/*.xcodeproj'],
-    {
-      cwd: rootDir,
-      ignore: IGNORE_PATTERNS,
-      onlyDirectories: true,
-    },
-  );
+  const xcodeprojDirs = await fg(['*/*.xcodeproj', '*/*/*.xcodeproj'], {
+    cwd: rootDir,
+    ignore: IGNORE_PATTERNS,
+    onlyDirectories: true,
+  });
 
   // Combine all indicators — get parent directories
   const allIndicators = [
@@ -290,9 +277,7 @@ async function detectHeuristic(
 
   // Deduplicate to unique directories
   const candidateDirs = [
-    ...new Set(
-      allIndicators.map((rel) => path.resolve(rootDir, rel)),
-    ),
+    ...new Set(allIndicators.map((rel) => path.resolve(rootDir, rel))),
   ];
 
   // Filter out the root itself (don't count root-level indicators)

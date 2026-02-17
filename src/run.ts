@@ -231,9 +231,11 @@ async function hasPostHogInstalled(dir: string): Promise<boolean> {
   }
 
   // Check Python projects via requirements*.txt and pyproject.toml
-  if (await fileContainsPosthog(path.join(dir, 'requirements.txt')) ||
-      await fileContainsPosthog(path.join(dir, 'requirements-dev.txt')) ||
-      await fileContainsPosthog(path.join(dir, 'pyproject.toml'))) {
+  if (
+    (await fileContainsPosthog(path.join(dir, 'requirements.txt'))) ||
+    (await fileContainsPosthog(path.join(dir, 'requirements-dev.txt'))) ||
+    (await fileContainsPosthog(path.join(dir, 'pyproject.toml')))
+  ) {
     return true;
   }
 
@@ -290,7 +292,11 @@ async function runMonorepoFlow(
     const totalProjects = selected.length;
 
     clack.log.step(
-      `\n${chalk.cyan(`[${projectNumber}/${totalProjects}]`)} Setting up PostHog for ${chalk.bold(project.frameworkName)} in ${chalk.cyan(project.relativePath)}`,
+      `\n${chalk.cyan(
+        `[${projectNumber}/${totalProjects}]`,
+      )} Setting up PostHog for ${chalk.bold(
+        project.frameworkName,
+      )} in ${chalk.cyan(project.relativePath)}`,
     );
 
     const projectOptions: WizardOptions = {
@@ -321,7 +327,9 @@ async function runMonorepoFlow(
         `[Monorepo] Error setting up ${project.relativePath}: ${errorMessage}`,
       );
       clack.log.error(
-        `Failed to set up ${project.frameworkName} in ${project.relativePath}: ${chalk.red(errorMessage)}`,
+        `Failed to set up ${project.frameworkName} in ${
+          project.relativePath
+        }: ${chalk.red(errorMessage)}`,
       );
       results.push({ project, success: false, error: errorMessage });
       // Continue to next project instead of aborting
@@ -349,10 +357,14 @@ async function selectMonorepoProjects(
 
   const selectedDirs: string[] = await abortIfCancelled(
     clack.multiselect({
-      message: `Which projects do you want to set up with PostHog? ${chalk.dim('(Toggle: Space, Confirm: Enter, Toggle All: A)')}`,
+      message: `Which projects do you want to set up with PostHog? ${chalk.dim(
+        '(Toggle: Space, Confirm: Enter, Toggle All: A)',
+      )}`,
       options: projects.map((p) => ({
         value: p.dir,
-        label: `${p.relativePath} → ${p.frameworkName}${p.alreadyConfigured ? chalk.dim(' (PostHog already configured)') : ''}`,
+        label: `${p.relativePath} → ${p.frameworkName}${
+          p.alreadyConfigured ? chalk.dim(' (PostHog already configured)') : ''
+        }`,
         hint: p.alreadyConfigured ? 'already configured' : undefined,
       })),
       initialValues: projects
@@ -374,9 +386,13 @@ function printMonorepoSummary(results: ProjectResult[]): void {
 
   const summaryLines = results.map((r) => {
     if (r.success) {
-      return `${chalk.green('✓')} ${r.project.relativePath} (${r.project.frameworkName})`;
+      return `${chalk.green('✓')} ${r.project.relativePath} (${
+        r.project.frameworkName
+      })`;
     }
-    return `${chalk.red('✗')} ${r.project.relativePath} (${r.project.frameworkName}) — ${r.error}`;
+    return `${chalk.red('✗')} ${r.project.relativePath} (${
+      r.project.frameworkName
+    }) — ${r.error}`;
   });
 
   const summaryTitle =
@@ -390,7 +406,9 @@ function printMonorepoSummary(results: ProjectResult[]): void {
 
   if (failed.length > 0) {
     clack.log.info(
-      `For failed projects, visit ${chalk.cyan('https://posthog.com/docs')} for manual setup instructions.`,
+      `For failed projects, visit ${chalk.cyan(
+        'https://posthog.com/docs',
+      )} for manual setup instructions.`,
     );
   }
 

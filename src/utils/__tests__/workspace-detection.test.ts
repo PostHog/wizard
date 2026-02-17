@@ -116,10 +116,7 @@ describe('detectWorkspaces — pnpm', () => {
   });
 
   it('labels as turbo when turbo.json is present', async () => {
-    await createFile(
-      'pnpm-workspace.yaml',
-      `packages:\n  - 'apps/*'\n`,
-    );
+    await createFile('pnpm-workspace.yaml', `packages:\n  - 'apps/*'\n`);
     await createFile('turbo.json', '{}');
     await createFile('apps/web/package.json', '{}');
 

@@ -335,7 +335,9 @@ Please report this error to: ${chalk.cyan('wizard@posthog.com')}`;
 
     clack.log.error(errorMessage);
     throw new DisplayedError(
-      `API error during ${config.metadata.name} setup: ${agentResult.message || 'Unknown error'}`,
+      `API error during ${config.metadata.name} setup: ${
+        agentResult.message || 'Unknown error'
+      }`,
     );
   }
 

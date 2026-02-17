@@ -11,9 +11,7 @@ import type { WizardMarker } from '../wizard-marker';
 let tmpDir: string;
 
 beforeEach(async () => {
-  tmpDir = await fs.promises.mkdtemp(
-    path.join(os.tmpdir(), 'wizard-marker-'),
-  );
+  tmpDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'wizard-marker-'));
 });
 
 afterEach(async () => {
