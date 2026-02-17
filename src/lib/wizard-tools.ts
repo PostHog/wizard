@@ -5,11 +5,6 @@
  * - check_env_keys: Check which env var keys exist in a .env file
  * - set_env_values: Create/update env vars in a .env file
  * - detect_package_manager: Detect the project's package manager(s)
- *
- * This module can be imported by other agent implementations:
- *
- *   import { createWizardToolsServer, WIZARD_TOOL_NAMES } from '@posthog/wizard/lib/wizard-tools';
- *   const server = await createWizardToolsServer({ workingDirectory, detectPackageManager });
  */
 
 import path from 'path';
