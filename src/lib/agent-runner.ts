@@ -410,14 +410,14 @@ STEP 4: Load the installed skill's SKILL.md file to understand what references a
 
 STEP 5: Follow the skill's workflow files in sequence. Look for numbered workflow files in the references (e.g., files with patterns like "1.0-", "1.1-", "1.2-"). Start with the first one and proceed through each step until completion. Each workflow file will tell you what to do and which file comes next.
 
-STEP 6: Set up environment variables for PostHog using the env-file-tools MCP server (this runs locally — secret values never leave the machine):
+STEP 6: Set up environment variables for PostHog using the wizard-tools MCP server (this runs locally — secret values never leave the machine):
    - Use check_env_keys to see which keys already exist in the project's .env file (e.g. .env.local or .env).
    - Use set_env_values to create or update the PostHog API key and host, using the appropriate naming convention for ${
      config.metadata.name
    }. The tool will also ensure .gitignore coverage. Don't assume the presence of keys means the value is up to date. Write the correct value each time.
    - Reference these environment variables in the code files you create instead of hardcoding the API key and host.
 
-Important: Use the detect_package_manager tool (from the package-manager-tools MCP server) to determine which package manager the project uses. Do not manually search for lockfiles or config files. Do not manually edit package.json, requirements.txt, pyproject.toml, or similar dependency manifests. Always install packages as a background task. Don't await completion; proceed with other work immediately after starting the installation. You must read a file immediately before attempting to write it, even if you have previously read it; failure to do so will cause a tool failure.
+Important: Use the detect_package_manager tool (from the wizard-tools MCP server) to determine which package manager the project uses. Do not manually search for lockfiles or config files. Do not manually edit package.json, requirements.txt, pyproject.toml, or similar dependency manifests. Always install packages as a background task. Don't await completion; proceed with other work immediately after starting the installation. You must read a file immediately before attempting to write it, even if you have previously read it; failure to do so will cause a tool failure.
 
 `;
 }

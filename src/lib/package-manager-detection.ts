@@ -3,7 +3,7 @@
  *
  * Provides a common interface (PackageManagerDetector) that each FrameworkConfig
  * implements, plus shared helpers for Node.js, Python, PHP, and Swift ecosystems.
- * The MCP tool in package-manager-tools.ts delegates to whatever detector the
+ * The MCP tool in wizard-tools.ts delegates to whatever detector the
  * current framework supplies.
  */
 

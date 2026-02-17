@@ -1,14 +1,27 @@
 /**
- * In-process MCP server that reads/writes .env files locally.
- * Secret values never leave the machine.
+ * Unified in-process MCP server for the PostHog wizard.
+ *
+ * Provides tools that run locally (secret values never leave the machine):
+ * - check_env_keys: Check which env var keys exist in a .env file
+ * - set_env_values: Create/update env vars in a .env file
+ * - detect_package_manager: Detect the project's package manager(s)
+ *
+ * This module can be imported by other agent implementations:
+ *
+ *   import { createWizardToolsServer, WIZARD_TOOL_NAMES } from '@posthog/wizard/lib/wizard-tools';
+ *   const server = await createWizardToolsServer({ workingDirectory, detectPackageManager });
  */
 
 import path from 'path';
 import fs from 'fs';
 import { z } from 'zod';
 import { logToFile } from '../utils/debug';
+import type { PackageManagerDetector } from './package-manager-detection';
 
-// Dynamic import cache for ESM module (same pattern as agent-interface.ts)
+// ---------------------------------------------------------------------------
+// SDK dynamic import (ESM module loaded once, cached)
+// ---------------------------------------------------------------------------
+
 let _sdkModule: any = null;
 async function getSDKModule(): Promise<any> {
   if (!_sdkModule) {
@@ -16,6 +29,22 @@ async function getSDKModule(): Promise<any> {
   }
   return _sdkModule;
 }
+
+// ---------------------------------------------------------------------------
+// Options for creating the wizard tools server
+// ---------------------------------------------------------------------------
+
+export interface WizardToolsOptions {
+  /** Root directory of the project being analyzed */
+  workingDirectory: string;
+
+  /** Framework-specific package manager detector */
+  detectPackageManager: PackageManagerDetector;
+}
+
+// ---------------------------------------------------------------------------
+// Env file helpers
+// ---------------------------------------------------------------------------
 
 /**
  * Resolve filePath relative to workingDirectory, rejecting path traversal.
@@ -58,13 +87,22 @@ function ensureGitignoreCoverage(
   }
 }
 
+// ---------------------------------------------------------------------------
+// Server factory
+// ---------------------------------------------------------------------------
+
+const SERVER_NAME = 'wizard-tools';
+
 /**
- * Create an in-process MCP server with env file tools.
+ * Create the unified in-process MCP server with all wizard tools.
  * Must be called asynchronously because the SDK is an ESM module loaded via dynamic import.
  */
-export async function createEnvFileServer(workingDirectory: string) {
+export async function createWizardToolsServer(options: WizardToolsOptions) {
+  const { workingDirectory, detectPackageManager } = options;
   const sdk = await getSDKModule();
   const { tool, createSdkMcpServer } = sdk;
+
+  // -- check_env_keys -------------------------------------------------------
 
   const checkEnvKeys = tool(
     'check_env_keys',
@@ -104,6 +142,8 @@ export async function createEnvFileServer(workingDirectory: string) {
       };
     },
   );
+
+  // -- set_env_values -------------------------------------------------------
 
   const setEnvValues = tool(
     'set_env_values',
@@ -177,15 +217,44 @@ export async function createEnvFileServer(workingDirectory: string) {
     },
   );
 
+  // -- detect_package_manager -----------------------------------------------
+
+  const detectPM = tool(
+    'detect_package_manager',
+    'Detect which package manager(s) the project uses. Returns the name, install command, and run command for each detected package manager. Call this before running any install commands.',
+    {},
+    async () => {
+      logToFile(`detect_package_manager: scanning ${workingDirectory}`);
+
+      const result = await detectPackageManager(workingDirectory);
+
+      logToFile(
+        `detect_package_manager: detected ${result.detected.length} package manager(s)`,
+      );
+
+      return {
+        content: [
+          {
+            type: 'text' as const,
+            text: JSON.stringify(result, null, 2),
+          },
+        ],
+      };
+    },
+  );
+
+  // -- Assemble server ------------------------------------------------------
+
   return createSdkMcpServer({
-    name: 'env-file-tools',
+    name: SERVER_NAME,
     version: '1.0.0',
-    tools: [checkEnvKeys, setEnvValues],
+    tools: [checkEnvKeys, setEnvValues, detectPM],
   });
 }
 
-/** Tool names exposed by the env file server, for use in allowedTools */
-export const ENV_FILE_TOOL_NAMES = [
-  'env-file-tools:check_env_keys',
-  'env-file-tools:set_env_values',
+/** Tool names exposed by the wizard-tools server, for use in allowedTools */
+export const WIZARD_TOOL_NAMES = [
+  `${SERVER_NAME}:check_env_keys`,
+  `${SERVER_NAME}:set_env_values`,
+  `${SERVER_NAME}:detect_package_manager`,
 ];
