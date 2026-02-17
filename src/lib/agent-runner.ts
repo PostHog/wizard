@@ -34,14 +34,91 @@ import {
 } from '../steps';
 import { checkAnthropicStatusWithPrompt } from '../utils/anthropic-status';
 import { enableDebugLogs } from '../utils/debug';
+import type { CloudRegion } from '../utils/types';
+
+/**
+ * Shared setup data gathered once and reused across multiple project runs
+ * in a monorepo. Kept in-memory only for the duration of the CLI session.
+ */
+export type SharedSetupData = {
+  cloudRegion: CloudRegion;
+  projectApiKey: string;
+  host: string;
+  accessToken: string;
+};
+
+/**
+ * Error that has already been displayed to the user via clack.
+ * Callers can skip redundant error logging when catching this.
+ */
+export class DisplayedError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'DisplayedError';
+  }
+}
+
+/**
+ * Run the shared setup phase (AI consent, service status check, cloud region,
+ * git check, and OAuth). Returns data needed by each per-project agent run.
+ *
+ * When `docsUrl` is provided, abort messages reference that URL.
+ * Otherwise falls back to the generic PostHog docs.
+ */
+export async function runSharedSetup(
+  options: WizardOptions,
+  docsUrl?: string,
+): Promise<SharedSetupData> {
+  if (options.debug) {
+    enableDebugLogs();
+  }
+
+  const fallbackUrl = docsUrl ?? 'https://posthog.com/docs';
+
+  clack.log.info(
+    `We're about to read your project using our LLM gateway.\n\n.env* file contents will not leave your machine.\n\nOther files will be read and edited to provide a fully-custom PostHog integration.`,
+  );
+
+  const aiConsent = await askForAIConsent(options);
+  if (!aiConsent) {
+    await abort(
+      `This wizard uses an LLM agent to intelligently modify your project. Please view the docs to set up PostHog manually instead: ${fallbackUrl}`,
+      0,
+    );
+  }
+
+  const statusOk = await checkAnthropicStatusWithPrompt({ ci: options.ci });
+  if (!statusOk) {
+    await abort(
+      `Please try again later, or set up PostHog manually: ${fallbackUrl}`,
+      0,
+    );
+  }
+
+  const cloudRegion = options.cloudRegion ?? (await askForCloudRegion());
+
+  await confirmContinueIfNoOrDirtyGitRepo(options);
+
+  const { projectApiKey, host, accessToken } = await getOrAskForProjectData({
+    ...options,
+    cloudRegion,
+  });
+
+  return { cloudRegion, projectApiKey, host, accessToken };
+}
 
 /**
  * Universal agent-powered wizard runner.
  * Handles the complete flow for any framework using PostHog MCP integration.
+ *
+ * When `sharedSetup` is provided (monorepo mode), skips the shared prompts
+ * (AI consent, status check, region, git check, OAuth) since they were
+ * already handled once for all projects.
  */
 export async function runAgentWizard(
   config: FrameworkConfig,
   options: WizardOptions,
+  sharedSetup?: SharedSetupData,
 ): Promise<void> {
   if (options.debug) {
     enableDebugLogs();
@@ -84,31 +161,10 @@ export async function runAgentWizard(
     clack.log.warn(config.metadata.preRunNotice);
   }
 
-  clack.log.info(
-    `We're about to read your project using our LLM gateway.\n\n.env* file contents will not leave your machine.\n\nOther files will be read and edited to provide a fully-custom PostHog integration.`,
-  );
+  const { cloudRegion, projectApiKey, host, accessToken } =
+    sharedSetup ?? (await runSharedSetup(options, config.metadata.docsUrl));
 
-  const aiConsent = await askForAIConsent(options);
-  if (!aiConsent) {
-    await abort(
-      `This wizard uses an LLM agent to intelligently modify your project. Please view the docs to set up ${config.metadata.name} manually instead: ${config.metadata.docsUrl}`,
-      0,
-    );
-  }
-
-  // Check Anthropic/Claude service status before proceeding
-  const statusOk = await checkAnthropicStatusWithPrompt({ ci: options.ci });
-  if (!statusOk) {
-    await abort(
-      `Please try again later, or set up ${config.metadata.name} manually: ${config.metadata.docsUrl}`,
-      0,
-    );
-  }
-
-  const cloudRegion = options.cloudRegion ?? (await askForCloudRegion());
   const typeScriptDetected = isUsingTypeScript(options);
-
-  await confirmContinueIfNoOrDirtyGitRepo(options);
 
   // Framework detection and version
   // Only check package.json for Node.js/JavaScript frameworks
@@ -138,12 +194,6 @@ export async function runAgentWizard(
   analytics.capture(WIZARD_INTERACTION_EVENT_NAME, {
     action: 'started agent integration',
     integration: config.metadata.integration,
-  });
-
-  // Get PostHog credentials
-  const { projectApiKey, host, accessToken } = await getOrAskForProjectData({
-    ...options,
-    cloudRegion,
   });
 
   // Gather framework-specific context (e.g., Next.js router, React Native platform)
@@ -228,9 +278,10 @@ Please try again, or set up ${
     } manually by following our documentation:
 ${chalk.cyan(config.metadata.docsUrl)}`;
 
-    clack.outro(errorMessage);
-    await analytics.shutdown('error');
-    process.exit(1);
+    clack.log.error(errorMessage);
+    throw new DisplayedError(
+      `Could not access the PostHog MCP server for ${config.metadata.name}`,
+    );
   }
 
   if (agentResult.error === AgentErrorType.RESOURCE_MISSING) {
@@ -253,9 +304,10 @@ Please try again, or set up ${
     } manually by following our documentation:
 ${chalk.cyan(config.metadata.docsUrl)}`;
 
-    clack.outro(errorMessage);
-    await analytics.shutdown('error');
-    process.exit(1);
+    clack.log.error(errorMessage);
+    throw new DisplayedError(
+      `Could not access setup resource for ${config.metadata.name}`,
+    );
   }
 
   if (
@@ -281,9 +333,10 @@ ${chalk.yellow(agentResult.message || 'Unknown error')}
 
 Please report this error to: ${chalk.cyan('wizard@posthog.com')}`;
 
-    clack.outro(errorMessage);
-    await analytics.shutdown('error');
-    process.exit(1);
+    clack.log.error(errorMessage);
+    throw new DisplayedError(
+      `API error during ${config.metadata.name} setup: ${agentResult.message || 'Unknown error'}`,
+    );
   }
 
   // Build environment variables from OAuth credentials
@@ -344,9 +397,15 @@ ${chalk.dim(
 
 ${chalk.dim(`How did this work for you? Drop us a line: wizard@posthog.com`)}`;
 
-  clack.outro(outroMessage);
-
-  await analytics.shutdown('success');
+  // In monorepo mode, use log.success instead of outro (the monorepo summary
+  // will draw the single outro bar). Also skip analytics.shutdown — the
+  // monorepo flow handles it once after all projects complete.
+  if (sharedSetup) {
+    clack.log.success(outroMessage);
+  } else {
+    clack.outro(outroMessage);
+    await analytics.shutdown('success');
+  }
 }
 
 /**
