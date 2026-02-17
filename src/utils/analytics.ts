@@ -41,6 +41,19 @@ export class Analytics {
     this.tags[key] = value;
   }
 
+  /**
+   * Remove all tags whose keys start with the given prefix.
+   * Used to clear framework-specific tags between monorepo project runs
+   * so tags from project A don't leak into project B's analytics events.
+   */
+  clearTagsWithPrefix(prefix: string) {
+    for (const key of Object.keys(this.tags)) {
+      if (key.startsWith(prefix)) {
+        delete this.tags[key];
+      }
+    }
+  }
+
   captureException(error: Error, properties: Record<string, unknown> = {}) {
     this.client.captureException(error, this.distinctId ?? this.anonymousId, {
       team: ANALYTICS_TEAM_TAG,
