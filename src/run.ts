@@ -20,11 +20,6 @@ import { logToFile } from './utils/debug';
 import { detectWorkspaces } from './utils/workspace-detection';
 import { tryGetPackageJson } from './utils/clack-utils';
 import { hasPackageInstalled } from './utils/package-json';
-import {
-  readWizardMarker,
-  writeWizardMarker,
-  classifyRerunReason,
-} from './utils/wizard-marker';
 
 EventEmitter.defaultMaxListeners = 50;
 
@@ -92,15 +87,8 @@ export async function runWizard(argv: Args) {
     clack.log.info(chalk.dim('Running in CI mode'));
   }
 
-  // Read previous wizard run marker and tag analytics with rerun context
-  const previousMarker = await readWizardMarker(resolvedInstallDir);
   const posthogInstalled = await hasPostHogInstalled(resolvedInstallDir);
-  const rerunReason = classifyRerunReason(previousMarker, posthogInstalled);
   analytics.setTag('posthog_already_installed', posthogInstalled);
-  analytics.setTag('rerun_reason', rerunReason);
-  if (previousMarker) {
-    analytics.setTag('previous_run_status', previousMarker.status);
-  }
 
   // If user specified --integration or --menu, skip monorepo detection
   if (!finalArgs.integration && !wizardOptions.menu) {
@@ -123,15 +111,7 @@ export async function runWizard(argv: Args) {
 
   try {
     await runAgentWizard(config, wizardOptions);
-    await writeWizardMarker(resolvedInstallDir, {
-      status: 'success',
-      integration,
-    });
   } catch (error) {
-    await writeWizardMarker(resolvedInstallDir, {
-      status: 'error',
-      integration,
-    });
 
     analytics.captureException(error as Error, {
       integration,
@@ -189,26 +169,26 @@ async function detectWorkspaceProjects(
     `[Monorepo] Detected ${workspace.type} workspace with ${workspace.memberDirs.length} members`,
   );
 
-  const projects: DetectedProject[] = [];
+  const results = await Promise.all(
+    workspace.memberDirs.map(async (memberDir) => {
+      const integration = await detectIntegration({ installDir: memberDir });
+      if (!integration) return null;
 
-  for (const memberDir of workspace.memberDirs) {
-    const integration = await detectIntegration({ installDir: memberDir });
-    if (integration) {
       const config = FRAMEWORK_REGISTRY[integration];
       const alreadyConfigured = await hasPostHogInstalled(memberDir);
       const relativePath = path.relative(options.installDir, memberDir);
 
-      projects.push({
+      return {
         dir: memberDir,
         relativePath,
         integration,
         frameworkName: config.metadata.name,
         alreadyConfigured,
-      });
-    }
-  }
+      } as DetectedProject;
+    }),
+  );
 
-  return projects;
+  return results.filter((r): r is DetectedProject => r !== null);
 }
 
 /**
@@ -283,6 +263,10 @@ async function runMonorepoFlow(
   // Run shared setup once (AI consent, region, git check, OAuth)
   const sharedSetup = await runSharedSetup(options);
 
+  clack.log.info(
+    `Setting up ${chalk.cyan(String(selected.length))} project${selected.length > 1 ? 's' : ''} sequentially`,
+  );
+
   // Run wizard for each selected project
   const results: ProjectResult[] = [];
 
@@ -307,20 +291,20 @@ async function runMonorepoFlow(
 
     const config = FRAMEWORK_REGISTRY[project.integration];
 
+    // Clear framework-specific tags from previous project to prevent leakage
+    if (i > 0) {
+      const prevIntegration = selected[i - 1].integration;
+      analytics.clearTagsWithPrefix(`${prevIntegration}-`);
+    }
     analytics.setTag('integration', project.integration);
 
     try {
       await runAgentWizard(config, projectOptions, sharedSetup);
-      await writeWizardMarker(project.dir, {
-        status: 'success',
-        integration: project.integration,
-      });
       results.push({ project, success: true });
+      clack.log.success(
+        chalk.dim(`✓ ${projectNumber}/${totalProjects} complete`),
+      );
     } catch (error) {
-      await writeWizardMarker(project.dir, {
-        status: 'error',
-        integration: project.integration,
-      });
       const errorMessage =
         error instanceof Error ? error.message : String(error);
       logToFile(
@@ -357,15 +341,11 @@ async function selectMonorepoProjects(
 
   const selectedDirs: string[] = await abortIfCancelled(
     clack.multiselect({
-      message: `Which projects do you want to set up with PostHog? ${chalk.dim(
-        '(Toggle: Space, Confirm: Enter, Toggle All: A)',
-      )}`,
+      message: 'Which projects do you want to set up with PostHog?',
       options: projects.map((p) => ({
         value: p.dir,
-        label: `${p.relativePath} → ${p.frameworkName}${
-          p.alreadyConfigured ? chalk.dim(' (PostHog already configured)') : ''
-        }`,
-        hint: p.alreadyConfigured ? 'already configured' : undefined,
+        label: `${p.relativePath} → ${p.frameworkName}`,
+        hint: p.alreadyConfigured ? 'PostHog already installed' : undefined,
       })),
       initialValues: projects
         .filter((p) => !p.alreadyConfigured)
