@@ -631,16 +631,22 @@ export async function runAgent(
     }
 
     // Check for API errors (rate limits, etc.)
+    // Extract just the API error line(s), not the entire output
+    const apiErrorMatch = outputText.match(/API Error: [^\n]+/g);
+    const apiErrorMessage = apiErrorMatch
+      ? apiErrorMatch.join('\n')
+      : 'Unknown API error';
+
     if (outputText.includes('API Error: 429')) {
       logToFile('Agent error: RATE_LIMIT');
       spinner.stop('Rate limit exceeded');
-      return { error: AgentErrorType.RATE_LIMIT, message: outputText };
+      return { error: AgentErrorType.RATE_LIMIT, message: apiErrorMessage };
     }
 
     if (outputText.includes('API Error:')) {
       logToFile('Agent error: API_ERROR');
       spinner.stop('API error occurred');
-      return { error: AgentErrorType.API_ERROR, message: outputText };
+      return { error: AgentErrorType.API_ERROR, message: apiErrorMessage };
     }
 
     return completeWithSuccess();

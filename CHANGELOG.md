@@ -1,5 +1,34 @@
 # Changelog
 
+## [1.32.1](https://github.com/PostHog/wizard/compare/v1.32.0...v1.32.1) (2026-02-12)
+
+
+### Bug Fixes
+
+* don't show the entire conversation in error message ([#273](https://github.com/PostHog/wizard/issues/273)) ([1cb52eb](https://github.com/PostHog/wizard/commit/1cb52ebd7dd67f2b2839c65b2920e19cc8816215))
+
+## [1.32.0](https://github.com/PostHog/wizard/compare/v1.31.2...v1.32.0) (2026-02-10)
+
+
+### Features
+
+* add basic python language skill ([#254](https://github.com/PostHog/wizard/issues/254)) ([e09a4f5](https://github.com/PostHog/wizard/commit/e09a4f55cdf7ba990e4811b626425834b3e88502))
+* Add Nuxt.js and Vue ([#260](https://github.com/PostHog/wizard/issues/260)) ([29668c9](https://github.com/PostHog/wizard/commit/29668c9c39d017ed90045299e2783f440227b432))
+* Android support ([#262](https://github.com/PostHog/wizard/issues/262)) ([747ec11](https://github.com/PostHog/wizard/commit/747ec112fa997478b6517d5fdc77bc012a59cda3))
+* angular support ([#264](https://github.com/PostHog/wizard/issues/264)) ([3f9c3a2](https://github.com/PostHog/wizard/commit/3f9c3a22d1def33df22a53b3222060f3ad8eb5a8))
+* astro support ([#267](https://github.com/PostHog/wizard/issues/267)) ([45fa91b](https://github.com/PostHog/wizard/commit/45fa91b06500ea98ccff51cca1203ca8e79f470a))
+* fastapi skill ([#251](https://github.com/PostHog/wizard/issues/251)) ([9872950](https://github.com/PostHog/wizard/commit/98729507fc5ecf7e517d1bfdb1dc8df54452c396))
+* react native and expo support ([#268](https://github.com/PostHog/wizard/issues/268)) ([e87a903](https://github.com/PostHog/wizard/commit/e87a9030fc96cf695d7bac373743bb58745b5d47))
+* SvelteKit support for wizard ([#261](https://github.com/PostHog/wizard/issues/261)) ([c04fc4a](https://github.com/PostHog/wizard/commit/c04fc4a5bb73285c70723ca5ab58ee67e0a9c0ea))
+* Swift integration support ([#259](https://github.com/PostHog/wizard/issues/259)) ([8a7e164](https://github.com/PostHog/wizard/commit/8a7e164e397de25ea675e7da899a47e1e1f3d107))
+* tanstack router and start support ([#252](https://github.com/PostHog/wizard/issues/252)) ([77509be](https://github.com/PostHog/wizard/commit/77509be0ea0b22876d92a3bd2479364fcaad957a))
+
+
+### Bug Fixes
+
+* django detection bug ([#258](https://github.com/PostHog/wizard/issues/258)) ([368d89f](https://github.com/PostHog/wizard/commit/368d89f08938ddfa7e05d4eb18bac04890fac65d))
+* Explicitly disallow reading .env file contents, add local-only .env write tool ([#263](https://github.com/PostHog/wizard/issues/263)) ([5e6bbe7](https://github.com/PostHog/wizard/commit/5e6bbe74b6c14172fcb4684e0d55cf73e502c8e7))
+
 ## [1.31.2](https://github.com/PostHog/wizard/compare/v1.31.1...v1.31.2) (2026-02-03)
 
 
