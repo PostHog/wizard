@@ -128,7 +128,10 @@ export interface AnalyticsConfig<
  * Composer) override this in their config.
  */
 export const DEFAULT_PACKAGE_INSTALLATION =
-  'Use the detect_package_manager tool to determine the package manager.';
+  'Use the detect_package_manager tool to determine the package manager. Do not manually edit package.json; the package manager handles it automatically.';
+
+export const PYTHON_PACKAGE_INSTALLATION =
+  'Use the detect_package_manager tool to determine the package manager. If the detected tool manages dependencies directly (e.g. uv add, poetry add), use it — it will update the manifest automatically. If using pip, you must also add the dependency to requirements.txt or the appropriate manifest file.';
 
 /**
  * Prompt configuration

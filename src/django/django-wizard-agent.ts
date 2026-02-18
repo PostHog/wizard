@@ -1,6 +1,7 @@
 /* Django wizard using posthog-agent with PostHog MCP */
 import type { WizardOptions } from '../utils/types';
 import type { FrameworkConfig } from '../lib/framework-config';
+import { PYTHON_PACKAGE_INSTALLATION } from '../lib/framework-config';
 import { detectPythonPackageManagers } from '../lib/package-manager-detection';
 import { Integration } from '../lib/constants';
 import fg from 'fast-glob';
@@ -119,6 +120,7 @@ export const DJANGO_AGENT_CONFIG: FrameworkConfig<DjangoContext> = {
   },
 
   prompts: {
+    packageInstallation: PYTHON_PACKAGE_INSTALLATION,
     projectTypeDetection:
       'This is a Python/Django project. Look for requirements.txt, pyproject.toml, setup.py, Pipfile, or manage.py to confirm.',
     getAdditionalContextLines: (context) => {

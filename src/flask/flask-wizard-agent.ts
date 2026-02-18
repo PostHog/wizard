@@ -1,6 +1,7 @@
 /* Flask wizard using posthog-agent with PostHog MCP */
 import type { WizardOptions } from '../utils/types';
 import type { FrameworkConfig } from '../lib/framework-config';
+import { PYTHON_PACKAGE_INSTALLATION } from '../lib/framework-config';
 import { detectPythonPackageManagers } from '../lib/package-manager-detection';
 import { Integration } from '../lib/constants';
 import fg from 'fast-glob';
@@ -127,6 +128,7 @@ export const FLASK_AGENT_CONFIG: FrameworkConfig<FlaskContext> = {
   },
 
   prompts: {
+    packageInstallation: PYTHON_PACKAGE_INSTALLATION,
     projectTypeDetection:
       'This is a Python/Flask project. Look for requirements.txt, pyproject.toml, setup.py, Pipfile, or app.py/wsgi.py to confirm.',
     getAdditionalContextLines: (context) => {

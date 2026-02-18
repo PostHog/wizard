@@ -1,6 +1,7 @@
 /* FastAPI wizard using posthog-agent with PostHog MCP */
 import type { WizardOptions } from '../utils/types';
 import type { FrameworkConfig } from '../lib/framework-config';
+import { PYTHON_PACKAGE_INSTALLATION } from '../lib/framework-config';
 import { detectPythonPackageManagers } from '../lib/package-manager-detection';
 import { enableDebugLogs } from '../utils/debug';
 import { runAgentWizard } from '../lib/agent-runner';
@@ -144,6 +145,7 @@ export const FASTAPI_AGENT_CONFIG: FrameworkConfig = {
   },
 
   prompts: {
+    packageInstallation: PYTHON_PACKAGE_INSTALLATION,
     projectTypeDetection:
       'This is a Python/FastAPI project. Look for requirements.txt, pyproject.toml, setup.py, Pipfile, or main.py/app.py to confirm.',
     getAdditionalContextLines: (context: any) => {
