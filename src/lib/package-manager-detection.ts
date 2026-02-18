@@ -195,3 +195,22 @@ export function swiftPackageManager(): Promise<PackageManagerInfo> {
       'Use Swift Package Manager. Add the dependency to Package.swift or via Xcode.',
   });
 }
+
+// ---------------------------------------------------------------------------
+// Android (Gradle) helper
+// ---------------------------------------------------------------------------
+
+const GRADLE: DetectedPackageManager = {
+  name: 'gradle',
+  label: 'Gradle',
+  installCommand: 'implementation',
+};
+
+export function gradlePackageManager(): Promise<PackageManagerInfo> {
+  return Promise.resolve({
+    detected: [GRADLE],
+    primary: GRADLE,
+    recommendation:
+      'Add dependencies to build.gradle(.kts) using implementation().',
+  });
+}
