@@ -1,6 +1,6 @@
 {
   "name": "@posthog/wizard",
-  "version": "1.32.1",
+  "version": "1.33.0",
   "homepage": "https://github.com/PostHog/wizard",
   "repository": "https://github.com/PostHog/wizard",
   "description": "The PostHog wizard helps you to configure your project",
