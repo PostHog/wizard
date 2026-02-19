@@ -44,7 +44,10 @@ export interface WizardToolsOptions {
 /**
  * Resolve filePath relative to workingDirectory, rejecting path traversal.
  */
-function resolveEnvPath(workingDirectory: string, filePath: string): string {
+export function resolveEnvPath(
+  workingDirectory: string,
+  filePath: string,
+): string {
   const resolved = path.resolve(workingDirectory, filePath);
   if (
     !resolved.startsWith(workingDirectory + path.sep) &&
@@ -61,7 +64,7 @@ function resolveEnvPath(workingDirectory: string, filePath: string): string {
  * Ensure the given env file basename is covered by .gitignore in the working directory.
  * Creates .gitignore if it doesn't exist; appends the entry if missing.
  */
-function ensureGitignoreCoverage(
+export function ensureGitignoreCoverage(
   workingDirectory: string,
   envFileName: string,
 ): void {
@@ -80,6 +83,54 @@ function ensureGitignoreCoverage(
   } else {
     fs.writeFileSync(gitignorePath, `${envFileName}\n`, 'utf8');
   }
+}
+
+/**
+ * Parse a .env file's content and return the set of defined key names.
+ */
+export function parseEnvKeys(content: string): Set<string> {
+  const keys = new Set<string>();
+  for (const line of content.split('\n')) {
+    const match = line.match(/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=/);
+    if (match) {
+      keys.add(match[1]);
+    }
+  }
+  return keys;
+}
+
+/**
+ * Merge key-value pairs into existing .env content.
+ * Updates existing keys in-place, appends new keys at the end.
+ */
+export function mergeEnvValues(
+  content: string,
+  values: Record<string, string>,
+): string {
+  let result = content;
+  const updatedKeys = new Set<string>();
+
+  for (const [key, value] of Object.entries(values)) {
+    const regex = new RegExp(`^(\\s*${key}\\s*=).*$`, 'm');
+    if (regex.test(result)) {
+      result = result.replace(regex, `$1${value}`);
+      updatedKeys.add(key);
+    }
+  }
+
+  const newKeys = Object.entries(values).filter(
+    ([key]) => !updatedKeys.has(key),
+  );
+  if (newKeys.length > 0) {
+    if (result.length > 0 && !result.endsWith('\n')) {
+      result += '\n';
+    }
+    for (const [key, value] of newKeys) {
+      result += `${key}=${value}\n`;
+    }
+  }
+
+  return result;
 }
 
 // ---------------------------------------------------------------------------
@@ -114,16 +165,9 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
       const resolved = resolveEnvPath(workingDirectory, args.filePath);
       logToFile(`check_env_keys: ${resolved}, keys: ${args.keys.join(', ')}`);
 
-      const existingKeys: Set<string> = new Set();
-      if (fs.existsSync(resolved)) {
-        const content = fs.readFileSync(resolved, 'utf8');
-        for (const line of content.split('\n')) {
-          const match = line.match(/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=/);
-          if (match) {
-            existingKeys.add(match[1]);
-          }
-        }
-      }
+      const existingKeys: Set<string> = fs.existsSync(resolved)
+        ? parseEnvKeys(fs.readFileSync(resolved, 'utf8'))
+        : new Set<string>();
 
       const results: Record<string, 'present' | 'missing'> = {};
       for (const key of args.keys) {
@@ -159,33 +203,10 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
         )}`,
       );
 
-      let content = '';
-      if (fs.existsSync(resolved)) {
-        content = fs.readFileSync(resolved, 'utf8');
-      }
-
-      const updatedKeys = new Set<string>();
-
-      for (const [key, value] of Object.entries(args.values)) {
-        const regex = new RegExp(`^(\\s*${key}\\s*=).*$`, 'm');
-        if (regex.test(content)) {
-          content = content.replace(regex, `$1${value}`);
-          updatedKeys.add(key);
-        }
-      }
-
-      // Append keys that weren't already in the file
-      const newKeys = Object.entries(args.values).filter(
-        ([key]) => !updatedKeys.has(key),
-      );
-      if (newKeys.length > 0) {
-        if (content.length > 0 && !content.endsWith('\n')) {
-          content += '\n';
-        }
-        for (const [key, value] of newKeys) {
-          content += `${key}=${value}\n`;
-        }
-      }
+      const existing = fs.existsSync(resolved)
+        ? fs.readFileSync(resolved, 'utf8')
+        : '';
+      const content = mergeEnvValues(existing, args.values);
 
       // Ensure parent directory exists
       const dir = path.dirname(resolved);
