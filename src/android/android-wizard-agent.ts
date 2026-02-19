@@ -10,6 +10,7 @@ import {
   getKotlinVersionBucket,
   getMinSdkVersion,
 } from './utils';
+import { gradlePackageManager } from '../lib/package-manager-detection';
 
 type AndroidContext = {
   kotlinVersion?: string;
@@ -36,6 +37,7 @@ export const ANDROID_AGENT_CONFIG: FrameworkConfig<AndroidContext> = {
     // This is actually pretty high for a minimum, but android apis aren't super stable.
     minimumVersion: '21.0.0',
     getInstalledVersion: (options: WizardOptions) => getMinSdkVersion(options),
+    detectPackageManager: gradlePackageManager,
     detect: async (options) => {
       const { installDir } = options;
 
