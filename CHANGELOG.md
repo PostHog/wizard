@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.33.0](https://github.com/PostHog/wizard/compare/v1.32.1...v1.33.0) (2026-02-19)
+
+
+### Features
+
+* Package manager detection tool ([#277](https://github.com/PostHog/wizard/issues/277)) ([8a6a4af](https://github.com/PostHog/wizard/commit/8a6a4af1ed837892c785307868192410731d3aeb))
+
 ## [1.32.1](https://github.com/PostHog/wizard/compare/v1.32.0...v1.32.1) (2026-02-12)
 
 
