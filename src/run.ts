@@ -108,14 +108,25 @@ export async function runWizard(argv: Args) {
   }
 }
 
+const DETECTION_TIMEOUT_MS = 5000;
+
 async function detectIntegration(
   options: Pick<WizardOptions, 'installDir'>,
 ): Promise<Integration | undefined> {
   for (const integration of Object.values(Integration)) {
     const config = FRAMEWORK_REGISTRY[integration];
-    const detected = await config.detection.detect(options);
-    if (detected) {
-      return integration;
+    try {
+      const detected = await Promise.race([
+        config.detection.detect(options),
+        new Promise<false>((resolve) =>
+          setTimeout(() => resolve(false), DETECTION_TIMEOUT_MS),
+        ),
+      ]);
+      if (detected) {
+        return integration;
+      }
+    } catch {
+      // Skip frameworks whose detection throws
     }
   }
 }
@@ -132,6 +143,10 @@ async function getIntegrationForSetup(
       );
       return detectedIntegration;
     }
+
+    clack.log.info(
+      "I couldn't detect your framework. Please choose one to get started.",
+    );
   }
 
   const integration: Integration = await abortIfCancelled(
