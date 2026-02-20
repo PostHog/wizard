@@ -57,9 +57,22 @@ export type WizardOptions = {
   apiKey?: string;
 
   /**
+   * PostHog project ID. When set (e.g. in CI with --project-id), the wizard uses this project
+   * instead of the default from the API key or OAuth.
+   */
+  projectId?: number;
+
+  /**
    * Whether to show the menu for manual integration selection instead of auto-detecting.
    */
   menu: boolean;
+
+  /**
+   * Whether to run in benchmark mode with per-phase token tracking.
+   * When enabled, the wizard runs each workflow phase as a separate agent call
+   * and writes detailed usage data to /tmp/posthog-wizard-benchmark.json.
+   */
+  benchmark: boolean;
 };
 
 export interface Feature {

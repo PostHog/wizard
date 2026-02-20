@@ -35,6 +35,7 @@ import {
 } from '../steps';
 import { checkAnthropicStatusWithPrompt } from '../utils/anthropic-status';
 import { enableDebugLogs } from '../utils/debug';
+import { createBenchmarkPipeline } from './middleware/benchmark';
 
 /**
  * Universal agent-powered wizard runner.
@@ -158,7 +159,6 @@ export async function runAgentWizard(
     analytics.setTag(key, value);
   });
 
-  // Build integration prompt
   const integrationPrompt = buildIntegrationPrompt(
     config,
     {
@@ -195,6 +195,10 @@ export async function runAgentWizard(
     options,
   );
 
+  const middleware = options.benchmark
+    ? createBenchmarkPipeline(spinner, options)
+    : undefined;
+
   const agentResult = await runAgent(
     agent,
     integrationPrompt,
@@ -206,6 +210,7 @@ export async function runAgentWizard(
       successMessage: config.ui.successMessage,
       errorMessage: 'Integration failed',
     },
+    middleware,
   );
 
   // Handle error cases detected in agent output
@@ -353,7 +358,6 @@ ${chalk.dim(`How did this work for you? Drop us a line: wizard@posthog.com`)}`;
 
 /**
  * Build the integration prompt for the agent.
- * Uses shared base prompt with optional framework-specific addendum.
  */
 function buildIntegrationPrompt(
   config: FrameworkConfig,
