@@ -1,6 +1,7 @@
 /* Generic Ruby language wizard using posthog-agent with PostHog MCP */
 import type { WizardOptions } from '../utils/types';
 import type { FrameworkConfig } from '../lib/framework-config';
+import { bundlerPackageManager } from '../lib/package-manager-detection';
 import { Integration } from '../lib/constants';
 import {
   getRubyVersion,
@@ -37,6 +38,7 @@ export const RUBY_AGENT_CONFIG: FrameworkConfig<RubyContext> = {
     getInstalledVersion: (options: WizardOptions) =>
       Promise.resolve(getRubyVersion(options)),
     detect: async (options) => isRubyProject(options),
+    detectPackageManager: bundlerPackageManager,
   },
 
   environment: {
