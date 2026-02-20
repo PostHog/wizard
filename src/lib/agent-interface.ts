@@ -337,16 +337,31 @@ export async function initializeAgent(
   clack.log.step('Initializing Claude agent...');
 
   try {
-    // Configure LLM gateway environment variables (inherited by SDK subprocess)
-    const gatewayUrl = getLlmGatewayUrlFromHost(config.posthogApiHost);
-    process.env.ANTHROPIC_BASE_URL = gatewayUrl;
-    process.env.ANTHROPIC_AUTH_TOKEN = config.posthogApiKey;
-    // Use CLAUDE_CODE_OAUTH_TOKEN to override any stored /login credentials
-    process.env.CLAUDE_CODE_OAUTH_TOKEN = config.posthogApiKey;
-    // Disable experimental betas (like input_examples) that the LLM gateway doesn't support
-    process.env.CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS = 'true';
+    // Configure LLM environment variables (inherited by SDK subprocess)
+    let baseUrl: string;
 
-    logToFile('Configured LLM gateway:', gatewayUrl);
+    if (options.anthropicKey) {
+      // BYOK: direct Anthropic API
+      baseUrl = 'https://api.anthropic.com';
+      process.env.ANTHROPIC_BASE_URL = baseUrl;
+      process.env.ANTHROPIC_API_KEY = options.anthropicKey;
+      delete process.env.ANTHROPIC_AUTH_TOKEN;
+      delete process.env.CLAUDE_CODE_OAUTH_TOKEN;
+
+      logToFile('Configured BYOK mode:', baseUrl);
+    } else {
+      // Default: LLM gateway
+      baseUrl = getLlmGatewayUrlFromHost(config.posthogApiHost);
+      process.env.ANTHROPIC_BASE_URL = baseUrl;
+      process.env.ANTHROPIC_AUTH_TOKEN = config.posthogApiKey;
+      // Use CLAUDE_CODE_OAUTH_TOKEN to override any stored /login credentials
+      process.env.CLAUDE_CODE_OAUTH_TOKEN = config.posthogApiKey;
+      // Disable experimental betas (like input_examples) that the LLM gateway doesn't support
+      process.env.CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS = 'true';
+      delete process.env.ANTHROPIC_API_KEY;
+
+      logToFile('Configured LLM gateway:', baseUrl);
+    }
 
     // Configure MCP server with PostHog authentication
     const mcpServers: McpServersConfig = {
@@ -380,7 +395,8 @@ export async function initializeAgent(
     logToFile('Agent config:', {
       workingDirectory: agentRunConfig.workingDirectory,
       posthogMcpUrl: config.posthogMcpUrl,
-      gatewayUrl,
+      mode: options.anthropicKey ? 'byok' : 'gateway',
+      baseUrl,
       apiKeyPresent: !!config.posthogApiKey,
     });
 
@@ -388,7 +404,8 @@ export async function initializeAgent(
       debug('Agent config:', {
         workingDirectory: agentRunConfig.workingDirectory,
         posthogMcpUrl: config.posthogMcpUrl,
-        gatewayUrl,
+        mode: options.anthropicKey ? 'byok' : 'gateway',
+        baseUrl,
         apiKeyPresent: !!config.posthogApiKey,
       });
     }
@@ -540,10 +557,10 @@ export async function runAgent(
         settingSources: ['project'],
         // Explicitly enable required tools including Skill
         allowedTools,
+        // Env var cleanup (ANTHROPIC_API_KEY, AUTH_TOKEN, etc.) is already handled
+        // by initializeAgent based on BYOK vs gateway mode
         env: {
           ...process.env,
-          // Prevent user's Anthropic API key from overriding the wizard's OAuth token
-          ANTHROPIC_API_KEY: undefined,
         },
         canUseTool: (toolName: string, input: unknown) => {
           logToFile('canUseTool called:', { toolName, input });

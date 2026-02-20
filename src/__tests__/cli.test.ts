@@ -25,6 +25,7 @@ describe('CLI argument parsing', () => {
     delete process.env.POSTHOG_WIZARD_DEFAULT;
     delete process.env.POSTHOG_WIZARD_CI;
     delete process.env.POSTHOG_WIZARD_API_KEY;
+    delete process.env.POSTHOG_WIZARD_ANTHROPIC_KEY;
     delete process.env.POSTHOG_WIZARD_INSTALL_DIR;
 
     // Mock process.exit to prevent test runner from exiting
@@ -251,6 +252,58 @@ describe('CLI argument parsing', () => {
 
       const args = getLastCallArgs(mockRunWizard);
       expect(args.apiKey).toBe('phx_test_key');
+    });
+  });
+
+  describe('--anthropic-key flag', () => {
+    test('is undefined when not specified', async () => {
+      await runCLI([]);
+
+      const args = getLastCallArgs(mockRunWizard);
+      expect(args.anthropicKey).toBeUndefined();
+    });
+
+    test('passes --anthropic-key to runWizard', async () => {
+      await runCLI(['--anthropic-key', 'sk-ant-test123']);
+
+      const args = getLastCallArgs(mockRunWizard);
+      expect(args.anthropicKey).toBe('sk-ant-test123');
+    });
+
+    test('works alongside --ci mode', async () => {
+      await runCLI([
+        '--ci',
+        '--region',
+        'us',
+        '--api-key',
+        'phx_test',
+        '--install-dir',
+        '/tmp/test',
+        '--anthropic-key',
+        'sk-ant-test123',
+      ]);
+
+      const args = getLastCallArgs(mockRunWizard);
+      expect(args.ci).toBe(true);
+      expect(args.anthropicKey).toBe('sk-ant-test123');
+    });
+
+    test('respects POSTHOG_WIZARD_ANTHROPIC_KEY env var', async () => {
+      process.env.POSTHOG_WIZARD_ANTHROPIC_KEY = 'sk-ant-env123';
+
+      await runCLI([]);
+
+      const args = getLastCallArgs(mockRunWizard);
+      expect(args.anthropicKey).toBe('sk-ant-env123');
+    });
+
+    test('CLI arg overrides POSTHOG_WIZARD_ANTHROPIC_KEY env var', async () => {
+      process.env.POSTHOG_WIZARD_ANTHROPIC_KEY = 'sk-ant-env123';
+
+      await runCLI(['--anthropic-key', 'sk-ant-cli456']);
+
+      const args = getLastCallArgs(mockRunWizard);
+      expect(args.anthropicKey).toBe('sk-ant-cli456');
     });
   });
 
