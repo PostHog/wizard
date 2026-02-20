@@ -1,6 +1,8 @@
 /* Generic Python language wizard using posthog-agent with PostHog MCP */
 import type { WizardOptions } from '../utils/types';
 import type { FrameworkConfig } from '../lib/framework-config';
+import { PYTHON_PACKAGE_INSTALLATION } from '../lib/framework-config';
+import { detectPythonPackageManagers } from '../lib/package-manager-detection';
 import { Integration } from '../lib/constants';
 import fg from 'fast-glob';
 import * as fs from 'node:fs';
@@ -136,6 +138,7 @@ export const PYTHON_AGENT_CONFIG: FrameworkConfig<PythonContext> = {
       // If we have Python config files but it's not Django or Flask, it's a generic Python project
       return true;
     },
+    detectPackageManager: detectPythonPackageManagers,
   },
 
   environment: {
@@ -158,10 +161,9 @@ export const PYTHON_AGENT_CONFIG: FrameworkConfig<PythonContext> = {
   },
 
   prompts: {
+    packageInstallation: PYTHON_PACKAGE_INSTALLATION,
     projectTypeDetection:
       'This is a generic Python project. Look for requirements.txt, pyproject.toml, setup.py, or Pipfile to confirm.',
-    packageInstallation:
-      'Use pip, poetry, or pipenv based on existing config files (requirements.txt, pyproject.toml, Pipfile). Do not pin the posthog version - just add "posthog" without version constraints.',
     getAdditionalContextLines: (context) => {
       const packageManagerName = context.packageManager
         ? getPackageManagerName(context.packageManager)

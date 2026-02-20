@@ -1,4 +1,5 @@
 import {
+  DEFAULT_PACKAGE_INSTALLATION,
   getWelcomeMessage,
   SPINNER_MESSAGE,
   type FrameworkConfig,
@@ -189,6 +190,7 @@ export async function runAgentWizard(
       posthogApiKey: accessToken,
       posthogApiHost: host,
       additionalMcpServers: config.metadata.additionalMcpServers,
+      detectPackageManager: config.detection.detectPackageManager,
     },
     options,
   );
@@ -380,7 +382,11 @@ Project context:
 - Framework: ${config.metadata.name} ${context.frameworkVersion}
 - TypeScript: ${context.typescript ? 'Yes' : 'No'}
 - PostHog API Key: ${context.projectApiKey}
-- PostHog Host: ${context.host}${additionalContext}
+- PostHog Host: ${context.host}
+- Project type: ${config.prompts.projectTypeDetection}
+- Package installation: ${
+    config.prompts.packageInstallation ?? DEFAULT_PACKAGE_INSTALLATION
+  }${additionalContext}
 
 Instructions (follow these steps IN ORDER - do not skip or reorder):
 
@@ -402,16 +408,16 @@ STEP 3: Run the installation command using Bash:
 
 STEP 4: Load the installed skill's SKILL.md file to understand what references are available.
 
-STEP 5: Follow the skill's workflow files in sequence. Look for numbered workflow files in the references (e.g., files with patterns like "1.0-", "1.1-", "1.2-"). Start with the first one and proceed through each step until completion. Each workflow file will tell you what to do and which file comes next.
+STEP 5: Follow the skill's workflow files in sequence. Look for numbered workflow files in the references (e.g., files with patterns like "1.0-", "1.1-", "1.2-"). Start with the first one and proceed through each step until completion. Each workflow file will tell you what to do and which file comes next. Never directly write PostHog keys directly to code files; always use environment variables.
 
-STEP 6: Set up environment variables for PostHog using the env-file-tools MCP server (this runs locally — secret values never leave the machine):
+STEP 6: Set up environment variables for PostHog using the wizard-tools MCP server (this runs locally — secret values never leave the machine):
    - Use check_env_keys to see which keys already exist in the project's .env file (e.g. .env.local or .env).
    - Use set_env_values to create or update the PostHog API key and host, using the appropriate naming convention for ${
      config.metadata.name
    }. The tool will also ensure .gitignore coverage. Don't assume the presence of keys means the value is up to date. Write the correct value each time.
    - Reference these environment variables in the code files you create instead of hardcoding the API key and host.
 
-Important: Look for lockfiles (pnpm-lock.yaml, package-lock.json, yarn.lock, bun.lockb) to determine the package manager (excluding the contents of node_modules). Do not manually edit package.json. Always install packages as a background task. Don't await completion; proceed with other work immediately after starting the installation. You must read a file immediately before attempting to write it, even if you have previously read it; failure to do so will cause a tool failure.
+Important: Use the detect_package_manager tool (from the wizard-tools MCP server) to determine which package manager the project uses. Do not manually search for lockfiles or config files. Always install packages as a background task. Don't await completion; proceed with other work immediately after starting the installation. You must read a file immediately before attempting to write it, even if you have previously read it; failure to do so will cause a tool failure.
 
 `;
 }
