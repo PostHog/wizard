@@ -4,8 +4,24 @@ import { prepareMessage } from './logging';
 import clack from './clack';
 
 let debugEnabled = false;
+let logFilePath = '/tmp/posthog-wizard.log';
+let logEnabled = true;
 
-export const LOG_FILE_PATH = '/tmp/posthog-wizard.log';
+export function getLogFilePath(): string {
+  return logFilePath;
+}
+
+/**
+ * Configure the log file path and enable/disable state.
+ * Call before initLogFile() to override defaults.
+ */
+export function configureLogFile(opts: {
+  path?: string;
+  enabled?: boolean;
+}): void {
+  if (opts.path !== undefined) logFilePath = opts.path;
+  if (opts.enabled !== undefined) logEnabled = opts.enabled;
+}
 
 /**
  * Initialize the log file with a run header.
@@ -13,26 +29,28 @@ export const LOG_FILE_PATH = '/tmp/posthog-wizard.log';
  * Fails silently to avoid crashing the wizard.
  */
 export function initLogFile() {
+  if (!logEnabled) return;
   try {
     const header = `\n${'='.repeat(
       60,
     )}\nPostHog Wizard Run: ${new Date().toISOString()}\n${'='.repeat(60)}\n`;
-    appendFileSync(LOG_FILE_PATH, header);
+    appendFileSync(logFilePath, header);
   } catch {
     // Silently ignore - logging is non-critical
   }
 }
 
 /**
- * Log a message to the file at /tmp/posthog-wizard.log.
- * Always writes regardless of debug flag.
+ * Log a message to the log file.
+ * Always writes regardless of debug flag (when logging is enabled).
  * Fails silently to avoid masking errors in catch blocks.
  */
 export function logToFile(...args: unknown[]) {
+  if (!logEnabled) return;
   try {
     const timestamp = new Date().toISOString();
     const msg = args.map((a) => prepareMessage(a)).join(' ');
-    appendFileSync(LOG_FILE_PATH, `[${timestamp}] ${msg}\n`);
+    appendFileSync(logFilePath, `[${timestamp}] ${msg}\n`);
   } catch {
     // Silently ignore logging failures to avoid masking original errors
   }

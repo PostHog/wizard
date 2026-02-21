@@ -26,8 +26,16 @@ type Args = {
   localMcp?: boolean;
   ci?: boolean;
   apiKey?: string;
+  projectId?: string;
   menu?: boolean;
+  benchmark?: boolean;
 };
+
+function parseProjectId(value: string | undefined): number | undefined {
+  if (value === undefined || value === '') return undefined;
+  const n = Number(value);
+  return Number.isInteger(n) && n > 0 ? n : undefined;
+}
 
 export async function runWizard(argv: Args) {
   const finalArgs = {
@@ -56,7 +64,9 @@ export async function runWizard(argv: Args) {
     localMcp: finalArgs.localMcp ?? false,
     ci: finalArgs.ci ?? false,
     apiKey: finalArgs.apiKey,
+    projectId: parseProjectId(finalArgs.projectId),
     menu: finalArgs.menu ?? false,
+    benchmark: finalArgs.benchmark ?? false,
   };
 
   clack.intro(`Welcome to the PostHog setup wizard ✨`);

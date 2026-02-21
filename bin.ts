@@ -18,7 +18,7 @@ if (!satisfies(process.version, NODE_VERSION_RANGE)) {
 }
 
 import { runMCPInstall, runMCPRemove } from './src/mcp';
-import type { CloudRegion, WizardOptions } from './src/utils/types';
+import type { CloudRegion } from './src/utils/types';
 import { runWizard } from './src/run';
 import { isNonInteractiveEnvironment } from './src/utils/environment';
 import clack from './src/utils/clack';
@@ -79,6 +79,11 @@ yargs(hideBin(process.argv))
         'PostHog personal API key (phx_xxx) for authentication\nenv: POSTHOG_WIZARD_API_KEY',
       type: 'string',
     },
+    'project-id': {
+      describe:
+        'PostHog project ID to use (optional; when not set, uses default from API key or OAuth)\nenv: POSTHOG_WIZARD_PROJECT_ID',
+      type: 'string',
+    },
   })
   .command(
     ['$0'],
@@ -113,6 +118,12 @@ yargs(hideBin(process.argv))
           default: false,
           describe:
             'Show menu for manual integration selection instead of auto-detecting\nenv: POSTHOG_WIZARD_MENU',
+          type: 'boolean',
+        },
+        benchmark: {
+          default: false,
+          describe:
+            'Run in benchmark mode with per-phase token tracking\nenv: POSTHOG_WIZARD_BENCHMARK',
           type: 'boolean',
         },
       });
@@ -155,7 +166,7 @@ yargs(hideBin(process.argv))
         process.exit(1);
       }
 
-      void runWizard(options as unknown as WizardOptions);
+      void runWizard(options as unknown as Parameters<typeof runWizard>[0]);
     },
   )
   .command('mcp <command>', 'MCP server management commands', (yargs) => {

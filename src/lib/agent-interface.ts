@@ -5,7 +5,7 @@
 
 import path from 'path';
 import clack from '../utils/clack';
-import { debug, logToFile, initLogFile, LOG_FILE_PATH } from '../utils/debug';
+import { debug, logToFile, initLogFile, getLogFilePath } from '../utils/debug';
 import type { WizardOptions } from '../utils/types';
 import { analytics } from '../utils/analytics';
 import {
@@ -50,6 +50,8 @@ export const AgentSignals = {
   ERROR_RESOURCE_MISSING: '[ERROR-RESOURCE-MISSING]',
   /** Signal emitted when the agent provides a remark about its run */
   WIZARD_REMARK: '[WIZARD-REMARK]',
+  /** Signal prefix for benchmark logging */
+  BENCHMARK: '[BENCHMARK]',
 } as const;
 
 export type AgentSignal = (typeof AgentSignals)[keyof typeof AgentSignals];
@@ -393,7 +395,7 @@ export async function initializeAgent(
       });
     }
 
-    clack.log.step(`Verbose logs: ${LOG_FILE_PATH}`);
+    clack.log.step(`Verbose logs: ${getLogFilePath()}`);
     clack.log.success("Agent initialized. Let's get cooking!");
     return agentRunConfig;
   } catch (error) {
@@ -421,6 +423,10 @@ export async function runAgent(
     successMessage?: string;
     errorMessage?: string;
   },
+  middleware?: {
+    onMessage(message: any): void;
+    finalize(resultMessage: any, totalDurationMs: number): any;
+  },
 ): Promise<{ error?: AgentErrorType; message?: string }> {
   const {
     estimatedDurationMinutes = 8,
@@ -446,6 +452,7 @@ export async function runAgent(
   const collectedText: string[] = [];
   // Track if we received a successful result (before any cleanup errors)
   let receivedSuccessResult = false;
+  let lastResultMessage: any = null;
 
   // Workaround for SDK bug: stdin closes before canUseTool responses can be sent.
   // The fix is to use an async generator for the prompt that stays open until
@@ -505,6 +512,7 @@ export async function runAgent(
       duration_ms: durationMs,
       duration_seconds: durationSeconds,
     });
+    middleware?.finalize(lastResultMessage, durationMs);
     spinner.stop(successMessage);
     return {};
   };
@@ -604,12 +612,15 @@ export async function runAgent(
         receivedSuccessResult,
       );
 
+      middleware?.onMessage(message);
+
       // Signal completion when result received
       if (message.type === 'result') {
         // Track successful results before any potential cleanup errors
         // The SDK may emit a second error result during cleanup due to a race condition
         if (message.subtype === 'success' && !message.is_error) {
           receivedSuccessResult = true;
+          lastResultMessage = message;
         }
         signalDone!();
       }
