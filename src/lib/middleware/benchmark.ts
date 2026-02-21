@@ -27,6 +27,10 @@ export interface StepUsage {
     output_tokens: number;
     cache_creation_input_tokens: number;
     cache_read_input_tokens: number;
+    cache_creation?: {
+      ephemeral_5m_input_tokens: number;
+      ephemeral_1h_input_tokens: number;
+    };
   };
   modelUsage: Record<string, unknown>;
   totalCostUsd: number;
@@ -49,6 +53,9 @@ export interface BenchmarkData {
     outputTokens: number;
     numTurns: number;
     totalCompactions: number;
+    totalCacheReadTokens: number;
+    totalCacheCreation5mTokens: number;
+    totalCacheCreation1hTokens: number;
   };
 }
 

@@ -1,44 +1,64 @@
-/**
- * Detects workflow phase transitions from SDK messages.
- *
- * Only triggers on tool_use file reads (file_path / path) that reference
- * a workflow file like "1.1-edit.md". Text mentions are ignored because
- * the agent references all phases during planning in 1.0-begin.
- */
+/** Phase transitions from [STATUS] in assistant text. Keep in sync with workflow "Status to report" bullets. */
 
-/** Matches "1.0-begin" from file paths */
-const WORKFLOW_FILE_RE = /(\d+\.\d+-[a-z]+)(?:\.md)?/;
+const PHASES_ORDER = [
+  '1.0-begin',
+  '1.1-edit',
+  '1.2-revise',
+  '1.3-conclude',
+] as const;
+
+const STATUS_PHRASES_BY_PHASE: Record<(typeof PHASES_ORDER)[number], string[]> =
+  {
+    '1.0-begin': [
+      'Checking project structure',
+      'Verifying PostHog dependencies',
+      'Generating events based on project',
+    ],
+    '1.1-edit': ['Inserting PostHog capture code'],
+    '1.2-revise': [
+      'Finding and correcting errors',
+      'Report details of any errors you fix',
+      'Linting, building and prettying',
+    ],
+    '1.3-conclude': ['Configured dashboard', 'Created setup report'],
+  };
 
 export class PhaseDetector {
-  private seenPhases = new Set<string>();
+  private currentPhase: 'setup' | (typeof PHASES_ORDER)[number] = 'setup';
 
-  /**
-   * Inspect an SDK message and return a new phase name if a transition
-   * is detected, or null if no transition occurred.
-   */
   detect(message: any): string | null {
     if (message.type !== 'assistant') return null;
+
+    const nextPhase = this.getNextPhase();
+    if (nextPhase === null) return null;
 
     const content = message.message?.content;
     if (!Array.isArray(content)) return null;
 
     for (const block of content) {
-      // Only detect from tool_use file reads — text mentions fire too early
-      if (block.type === 'tool_use') {
-        const filePath = block.input?.file_path ?? block.input?.path ?? '';
-        if (typeof filePath === 'string') {
-          const match = filePath.match(WORKFLOW_FILE_RE);
-          if (match && !this.seenPhases.has(match[1])) {
-            this.seenPhases.add(match[1]);
-            return match[1];
-          }
+      if (block.type !== 'text' || typeof block.text !== 'string') continue;
+      if (!block.text.includes('[STATUS]')) continue;
+
+      const phrases = STATUS_PHRASES_BY_PHASE[nextPhase];
+      for (const phrase of phrases) {
+        if (block.text.includes(phrase)) {
+          this.currentPhase = nextPhase;
+          return nextPhase;
         }
       }
     }
+
     return null;
   }
 
+  private getNextPhase(): (typeof PHASES_ORDER)[number] | null {
+    if (this.currentPhase === 'setup') return '1.0-begin';
+    const i = PHASES_ORDER.indexOf(this.currentPhase);
+    if (i < 0 || i >= PHASES_ORDER.length - 1) return null;
+    return PHASES_ORDER[i + 1];
+  }
+
   reset(): void {
-    this.seenPhases.clear();
+    this.currentPhase = 'setup';
   }
 }

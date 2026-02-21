@@ -1,8 +1,10 @@
 /**
  * Token tracking plugin for input/output tokens.
  *
- * Accumulates per-turn token usage, respecting the dedup flag from TurnCounterPlugin.
- * Publishes running totals and per-phase snapshots.
+ * Accumulates per-turn token usage (input_tokens + cache_read_input_tokens
+ * + cache_creation_input_tokens = total input; output_tokens = output).
+ * Respects the dedup flag from TurnCounterPlugin. Cache breakdown (r/5m/1h)
+ * is tracked by CacheTrackerPlugin for reporting and pricing.
  */
 
 import type { Middleware, MiddlewareContext, MiddlewareStore } from '../types';
@@ -20,6 +22,8 @@ export interface TokenData {
     phase: string;
     inputTokens: number;
     outputTokens: number;
+    /** Number of turns in this phase that had usage (SDK may not report all) */
+    messagesWithUsage: number;
   }>;
 }
 
@@ -35,8 +39,10 @@ export class TokenTrackerPlugin implements Middleware {
     phase: string;
     inputTokens: number;
     outputTokens: number;
+    messagesWithUsage: number;
   }> = [];
   private currentPhase = 'setup';
+  private phaseMessagesWithUsage = 0;
 
   onMessage(
     message: any,
@@ -50,13 +56,17 @@ export class TokenTrackerPlugin implements Middleware {
 
     const usage = message.message?.usage;
     if (usage) {
-      const input = usage.input_tokens ?? 0;
-      const output = usage.output_tokens ?? 0;
+      const input =
+        Number(usage.input_tokens ?? 0) +
+        Number(usage.cache_read_input_tokens ?? 0) +
+        Number(usage.cache_creation_input_tokens ?? 0);
+      const output = Number(usage.output_tokens ?? 0);
       this.phaseInput += input;
       this.phaseOutput += output;
       this.totalInput += input;
       this.totalOutput += output;
       this.lastUsage = usage;
+      this.phaseMessagesWithUsage += 1;
     }
 
     store.set('tokens', this.getData());
@@ -72,10 +82,12 @@ export class TokenTrackerPlugin implements Middleware {
       phase: fromPhase,
       inputTokens: this.phaseInput,
       outputTokens: this.phaseOutput,
+      messagesWithUsage: this.phaseMessagesWithUsage,
     });
     this.currentPhase = toPhase;
     this.phaseInput = 0;
     this.phaseOutput = 0;
+    this.phaseMessagesWithUsage = 0;
     store.set('tokens', this.getData());
   }
 
@@ -89,6 +101,7 @@ export class TokenTrackerPlugin implements Middleware {
       phase: this.currentPhase,
       inputTokens: this.phaseInput,
       outputTokens: this.phaseOutput,
+      messagesWithUsage: this.phaseMessagesWithUsage,
     });
     store.set('tokens', this.getData());
   }

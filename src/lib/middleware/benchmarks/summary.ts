@@ -1,7 +1,3 @@
-/**
- * Console summary plugin — prints benchmark phase-by-phase results.
- */
-
 import chalk from 'chalk';
 import clack from '../../../utils/clack';
 import { AgentSignals } from '../../agent-interface';
@@ -12,23 +8,85 @@ import type { CostData } from './cost-tracker';
 import type { DurationData } from './duration-tracker';
 import type { CompactionData } from './compaction-tracker';
 import type { ContextSizeData } from './context-size-tracker';
+import type { CacheData } from './cache-tracker';
 
-function formatDuration(ms: number): string {
-  const totalSeconds = Math.round(ms / 1000);
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
-  if (minutes > 0) return `${minutes}m ${seconds}s`;
-  return `${seconds}s`;
+function fmtDuration(ms: number): string {
+  const s = Math.round(ms / 1000);
+  const m = Math.floor(s / 60);
+  return m > 0 ? `${m}m ${s % 60}s` : `${s}s`;
 }
 
-function formatTokenCount(tokens: number): string {
-  if (tokens >= 1_000_000) return `${(tokens / 1_000_000).toFixed(1)}M`;
-  if (tokens >= 10_000) return `${Math.round(tokens / 1000)}K`;
-  return tokens.toLocaleString();
+function fmtTok(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `${(n / 1000).toFixed(1)}K`;
+  return n.toLocaleString();
 }
 
-function formatCost(usd: number): string {
+function fmtCost(usd: number): string {
+  if (usd > 0 && usd < 0.01) return `$${usd.toFixed(4)}`;
   return `$${usd.toFixed(2)}`;
+}
+
+interface PhaseStats {
+  phase: string;
+  durationMs: number;
+  turns: number;
+  inputTokens: number;
+  outputTokens: number;
+  cacheRead: number;
+  cacheCreation5m: number;
+  cacheCreation1h: number;
+  cost: number;
+  compactions: number;
+  contextOut: number | undefined;
+}
+
+function printPhase(s: PhaseStats): string {
+  const baseIn = Math.max(
+    0,
+    s.inputTokens - s.cacheRead - s.cacheCreation5m - s.cacheCreation1h,
+  );
+  return [
+    `${chalk.bold(s.phase)}: ${fmtDuration(s.durationMs)}, ${
+      s.turns
+    } turns, cost: ${fmtCost(s.cost)}`,
+    `  in: ${fmtTok(baseIn)}, out: ${fmtTok(
+      s.outputTokens,
+    )}, cache_read: ${fmtTok(s.cacheRead)}, cache_5m: ${fmtTok(
+      s.cacheCreation5m,
+    )}, cache_1h: ${fmtTok(s.cacheCreation1h)}`,
+    s.compactions > 0 ? `  ${s.compactions} compaction(s)` : null,
+    s.contextOut !== undefined ? `  ctx_out: ${fmtTok(s.contextOut)}` : null,
+  ]
+    .filter(Boolean)
+    .join('\n');
+}
+
+function getPhaseStats(i: number, ctx: MiddlewareContext): PhaseStats | null {
+  const duration = ctx.get<DurationData>('duration');
+  const dur = duration?.phaseSnapshots[i];
+  if (!dur) return null;
+
+  const tokens = ctx.get<TokenData>('tokens');
+  const turns = ctx.get<TurnData>('turns');
+  const cost = ctx.get<CostData>('cost');
+  const compactions = ctx.get<CompactionData>('compactions');
+  const contextSize = ctx.get<ContextSizeData>('contextSize');
+  const cache = ctx.get<CacheData>('cache');
+
+  return {
+    phase: dur.phase,
+    durationMs: dur.durationMs,
+    turns: turns?.phaseSnapshots[i]?.turns ?? 0,
+    inputTokens: tokens?.phaseSnapshots[i]?.inputTokens ?? 0,
+    outputTokens: tokens?.phaseSnapshots[i]?.outputTokens ?? 0,
+    cacheRead: cache?.phaseSnapshots[i]?.cacheReadTokens ?? 0,
+    cacheCreation5m: cache?.phaseSnapshots[i]?.cacheCreation5m ?? 0,
+    cacheCreation1h: cache?.phaseSnapshots[i]?.cacheCreation1h ?? 0,
+    cost: cost?.phaseCosts[i]?.cost ?? 0,
+    compactions: compactions?.phaseSnapshots[i]?.compactions ?? 0,
+    contextOut: contextSize?.phaseSnapshots[i]?.contextTokensOut,
+  };
 }
 
 export class SummaryPlugin implements Middleware {
@@ -46,45 +104,18 @@ export class SummaryPlugin implements Middleware {
     ctx: MiddlewareContext,
     _store: MiddlewareStore,
   ): void {
-    const tokens = ctx.get<TokenData>('tokens');
-    const turns = ctx.get<TurnData>('turns');
-    const cost = ctx.get<CostData>('cost');
     const duration = ctx.get<DurationData>('duration');
-    const compactions = ctx.get<CompactionData>('compactions');
-    const contextSize = ctx.get<ContextSizeData>('contextSize');
+    const idx = (duration?.phaseSnapshots.length ?? 1) - 1;
+    const stats = getPhaseStats(idx, ctx);
 
-    // Build per-phase summary from the latest snapshot
-    const durSnap = duration?.phaseSnapshots.at(-1);
-    const turnSnap = turns?.phaseSnapshots.at(-1);
-    const tokenSnap = tokens?.phaseSnapshots.at(-1);
-    const costSnap = cost?.phaseCosts.at(-1);
-    const compSnap = compactions?.phaseSnapshots.at(-1);
-    const ctxSnap = contextSize?.phaseSnapshots.at(-1);
-
-    const parts = [
-      durSnap ? formatDuration(durSnap.durationMs) : '',
-      `${turnSnap?.turns ?? 0} turns`,
-      `in: ${formatTokenCount(tokenSnap?.inputTokens ?? 0)}`,
-      `out: ${formatTokenCount(tokenSnap?.outputTokens ?? 0)}`,
-      `cost: ${formatCost(costSnap?.cost ?? 0)}`,
-    ];
-
-    if (ctxSnap?.contextTokensIn !== undefined) {
-      parts.push(`ctx in: ${formatTokenCount(ctxSnap.contextTokensIn)}`);
-    }
-    if (ctxSnap?.contextTokensOut !== undefined) {
-      parts.push(`ctx out: ${formatTokenCount(ctxSnap.contextTokensOut)}`);
+    if (stats) {
+      this.spinner.stop(
+        `${chalk.cyan(AgentSignals.BENCHMARK)} ${printPhase(stats)}`,
+      );
+    } else {
+      this.spinner.stop(`${chalk.cyan(AgentSignals.BENCHMARK)} ${fromPhase}`);
     }
 
-    if (compSnap && compSnap.compactions > 0) {
-      parts.push(`${compSnap.compactions} compaction(s)`);
-    }
-
-    this.spinner.stop(
-      `${chalk.cyan(AgentSignals.BENCHMARK)} ${chalk.bold(fromPhase)}: ${parts
-        .filter(Boolean)
-        .join(', ')}`,
-    );
     clack.log.info(
       `${chalk.cyan(AgentSignals.BENCHMARK)} Starting phase: ${chalk.bold(
         toPhase,
@@ -99,25 +130,30 @@ export class SummaryPlugin implements Middleware {
     ctx: MiddlewareContext,
     _store: MiddlewareStore,
   ): void {
-    const tokens = ctx.get<TokenData>('tokens');
-    const turns = ctx.get<TurnData>('turns');
-    const cost = ctx.get<CostData>('cost');
     const duration = ctx.get<DurationData>('duration');
-    const compactions = ctx.get<CompactionData>('compactions');
-    const contextSize = ctx.get<ContextSizeData>('contextSize');
+    const cost = ctx.get<CostData>('cost');
+    const tokens = ctx.get<TokenData>('tokens');
+    const cache = ctx.get<CacheData>('cache');
 
     const phaseCount = duration?.phaseSnapshots.length ?? 0;
     const totalCost = cost?.totalCost ?? 0;
-    const totalDurationStr = formatDuration(totalDurationMs);
 
     clack.log.info('');
     clack.log.info(
       `${chalk.green('◇')} ${chalk.cyan(
         AgentSignals.BENCHMARK,
-      )} ${phaseCount} phases completed in ${totalDurationStr}, cost: ${formatCost(
-        totalCost,
-      )}`,
+      )} ${phaseCount} phases in ${fmtDuration(
+        totalDurationMs,
+      )}, cost: ${fmtCost(totalCost)}`,
     );
+    clack.log.info(
+      `  total in: ${fmtTok(tokens?.totalInput ?? 0)}, out: ${fmtTok(
+        tokens?.totalOutput ?? 0,
+      )}, cache_read: ${fmtTok(cache?.totalRead ?? 0)}, cache_5m: ${fmtTok(
+        cache?.totalCreation5m ?? 0,
+      )}, cache_1h: ${fmtTok(cache?.totalCreation1h ?? 0)}`,
+    );
+    clack.log.info('');
     clack.log.info(
       `${chalk.blue('●')} ${chalk.cyan(
         AgentSignals.BENCHMARK,
@@ -126,40 +162,10 @@ export class SummaryPlugin implements Middleware {
 
     if (duration?.phaseSnapshots) {
       for (let i = 0; i < duration.phaseSnapshots.length; i++) {
-        const dur = duration.phaseSnapshots[i];
-        const turnSnap = turns?.phaseSnapshots[i];
-        const tokenSnap = tokens?.phaseSnapshots[i];
-        const costSnap = cost?.phaseCosts[i];
-        const compSnap = compactions?.phaseSnapshots[i];
-        const ctxSnap = contextSize?.phaseSnapshots[i];
-
-        const parts = [
-          dur.phase,
-          formatDuration(dur.durationMs),
-          `${turnSnap?.turns ?? 0} turns`,
-          `in: ${formatTokenCount(tokenSnap?.inputTokens ?? 0)}`,
-          `out: ${formatTokenCount(tokenSnap?.outputTokens ?? 0)}`,
-          `cost: ${formatCost(costSnap?.cost ?? 0)}`,
-        ];
-
-        if (ctxSnap?.contextTokensIn !== undefined) {
-          parts.push(`ctx in: ${formatTokenCount(ctxSnap.contextTokensIn)}`);
+        const stats = getPhaseStats(i, ctx);
+        if (stats) {
+          clack.log.info(printPhase(stats));
         }
-        if (ctxSnap?.contextTokensOut !== undefined) {
-          parts.push(`ctx out: ${formatTokenCount(ctxSnap.contextTokensOut)}`);
-        }
-
-        if (compSnap && compSnap.compactions > 0) {
-          parts.push(
-            `${compSnap.compactions} compaction(s) (pre: ${compSnap.preTokens
-              .map((t) => formatTokenCount(t))
-              .join(', ')})`,
-          );
-        } else {
-          parts.push('0 compactions');
-        }
-
-        clack.log.info(`${chalk.dim('  •')} ${parts.join(', ')}`);
       }
     }
 

@@ -94,6 +94,14 @@ export class JsonWriterPlugin implements Middleware {
           output_tokens: tokenSnap?.outputTokens ?? 0,
           cache_creation_input_tokens: cacheSnap?.cacheCreationTokens ?? 0,
           cache_read_input_tokens: cacheSnap?.cacheReadTokens ?? 0,
+          ...((cacheSnap?.cacheCreation5m ?? 0) +
+            (cacheSnap?.cacheCreation1h ?? 0) >
+            0 && {
+            cache_creation: {
+              ephemeral_5m_input_tokens: cacheSnap?.cacheCreation5m ?? 0,
+              ephemeral_1h_input_tokens: cacheSnap?.cacheCreation1h ?? 0,
+            },
+          }),
         },
         modelUsage: {},
         totalCostUsd: costSnap?.cost ?? 0,
@@ -120,6 +128,20 @@ export class JsonWriterPlugin implements Middleware {
     const totalTurns = turns?.totalTurns ?? 0;
     const totalCost = cost?.totalCost ?? 0;
     const totalCompactions = compactions?.totalCompactions ?? 0;
+    const fromModelUsage =
+      aggregateUsage.input_tokens +
+      aggregateUsage.cache_read_input_tokens +
+      aggregateUsage.cache_creation_input_tokens;
+    const inputTokens =
+      fromModelUsage > 0
+        ? fromModelUsage
+        : (tokens?.totalInput ?? 0) +
+          (cache?.totalRead ?? 0) +
+          (cache?.totalCreation ?? 0);
+    const outputTokens =
+      aggregateUsage.output_tokens > 0
+        ? aggregateUsage.output_tokens
+        : tokens?.totalOutput ?? 0;
 
     const benchmark: BenchmarkData = {
       timestamp: new Date().toISOString(),
@@ -127,13 +149,13 @@ export class JsonWriterPlugin implements Middleware {
       totals: {
         totalCostUsd: totalCost,
         durationMs: totalDurationMs,
-        inputTokens:
-          aggregateUsage.input_tokens +
-          aggregateUsage.cache_read_input_tokens +
-          aggregateUsage.cache_creation_input_tokens,
-        outputTokens: aggregateUsage.output_tokens,
+        inputTokens,
+        outputTokens,
         numTurns: resultMessage?.num_turns ?? totalTurns,
         totalCompactions,
+        totalCacheReadTokens: cache?.totalRead ?? 0,
+        totalCacheCreation5mTokens: cache?.totalCreation5m ?? 0,
+        totalCacheCreation1hTokens: cache?.totalCreation1h ?? 0,
       },
     };
 
