@@ -76,6 +76,7 @@ export const REACT_NATIVE_AGENT_CONFIG: FrameworkConfig<ReactNativeContext> = {
       const lines = [
         `Framework docs ID: ${frameworkId} (use posthog://docs/frameworks/${frameworkId} for documentation)`,
         `Variant: ${isExpo ? 'Expo' : 'React Native'}`,
+        'react-native-svg is a required peer dependency of posthog-react-native (used by the surveys feature) and must be installed alongside it.',
       ];
 
       if (isExpo) {
