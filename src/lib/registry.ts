@@ -16,8 +16,13 @@ import { LARAVEL_AGENT_CONFIG } from '../laravel/laravel-wizard-agent';
 import { SVELTEKIT_AGENT_CONFIG } from '../svelte/svelte-wizard-agent';
 import { SWIFT_AGENT_CONFIG } from '../swift/swift-wizard-agent';
 import { ANDROID_AGENT_CONFIG } from '../android/android-wizard-agent';
+import { RAILS_AGENT_CONFIG } from '../rails/rails-wizard-agent';
 import { PYTHON_AGENT_CONFIG } from '../python/python-wizard-agent';
+<<<<<<< js-node-skill
 import { JAVASCRIPT_NODE_AGENT_CONFIG } from '../javascript-node/javascript-node-wizard-agent';
+=======
+import { RUBY_AGENT_CONFIG } from '../ruby/ruby-wizard-agent';
+>>>>>>> main
 
 export const FRAMEWORK_REGISTRY: Record<Integration, FrameworkConfig> = {
   [Integration.nextjs]: NEXTJS_AGENT_CONFIG,
@@ -36,6 +41,11 @@ export const FRAMEWORK_REGISTRY: Record<Integration, FrameworkConfig> = {
   [Integration.sveltekit]: SVELTEKIT_AGENT_CONFIG,
   [Integration.swift]: SWIFT_AGENT_CONFIG,
   [Integration.android]: ANDROID_AGENT_CONFIG,
+  [Integration.rails]: RAILS_AGENT_CONFIG,
   [Integration.python]: PYTHON_AGENT_CONFIG,
+<<<<<<< js-node-skill
   [Integration.javascriptNode]: JAVASCRIPT_NODE_AGENT_CONFIG,
+=======
+  [Integration.ruby]: RUBY_AGENT_CONFIG,
+>>>>>>> main
 };

@@ -14,7 +14,8 @@ import {
 } from './constants';
 import { getLlmGatewayUrlFromHost } from '../utils/urls';
 import { LINTING_TOOLS } from './safe-tools';
-import { createEnvFileServer, ENV_FILE_TOOL_NAMES } from './env-file-tools';
+import { createWizardToolsServer, WIZARD_TOOL_NAMES } from './wizard-tools';
+import type { PackageManagerDetector } from './package-manager-detection';
 
 // Dynamic import cache for ESM module
 let _sdkModule: any = null;
@@ -74,6 +75,7 @@ export type AgentConfig = {
   posthogApiKey: string;
   posthogApiHost: string;
   additionalMcpServers?: Record<string, { url: string }>;
+  detectPackageManager: PackageManagerDetector;
 };
 
 /**
@@ -192,7 +194,7 @@ export function wizardCanUseTool(
 ):
   | { behavior: 'allow'; updatedInput: Record<string, unknown> }
   | { behavior: 'deny'; message: string } {
-  // Block direct reads/writes of .env files — use env-file-tools MCP instead
+  // Block direct reads/writes of .env files — use wizard-tools MCP instead
   if (toolName === 'Read' || toolName === 'Write' || toolName === 'Edit') {
     const filePath = typeof input.file_path === 'string' ? input.file_path : '';
     const basename = path.basename(filePath);
@@ -200,7 +202,7 @@ export function wizardCanUseTool(
       logToFile(`Denying ${toolName} on env file: ${filePath}`);
       return {
         behavior: 'deny',
-        message: `Direct ${toolName} of ${basename} is not allowed. Use the env-file-tools MCP server (check_env_keys / set_env_values) to read or modify environment variables.`,
+        message: `Direct ${toolName} of ${basename} is not allowed. Use the wizard-tools MCP server (check_env_keys / set_env_values) to read or modify environment variables.`,
       };
     }
     return { behavior: 'allow', updatedInput: input };
@@ -217,7 +219,7 @@ export function wizardCanUseTool(
         behavior: 'deny',
         message: `Grep on ${path.basename(
           grepPath,
-        )} is not allowed. Use the env-file-tools MCP server (check_env_keys) to check environment variables.`,
+        )} is not allowed. Use the wizard-tools MCP server (check_env_keys) to check environment variables.`,
       };
     }
     return { behavior: 'allow', updatedInput: input };
@@ -362,14 +364,17 @@ export async function initializeAgent(
       ),
     };
 
-    // Add in-process env file tools (secret values never leave the machine)
-    const envFileServer = await createEnvFileServer(config.workingDirectory);
-    mcpServers['env-file-tools'] = envFileServer;
+    // Add in-process wizard tools (env files, package manager detection)
+    const wizardToolsServer = await createWizardToolsServer({
+      workingDirectory: config.workingDirectory,
+      detectPackageManager: config.detectPackageManager,
+    });
+    mcpServers['wizard-tools'] = wizardToolsServer;
 
     const agentRunConfig: AgentRunConfig = {
       workingDirectory: config.workingDirectory,
       mcpServers,
-      model: 'claude-opus-4-5-20251101',
+      model: 'anthropic/claude-sonnet-4-6',
     };
 
     logToFile('Agent config:', {
@@ -521,7 +526,7 @@ export async function runAgent(
       'Bash',
       'ListMcpResourcesTool',
       'Skill',
-      ...ENV_FILE_TOOL_NAMES,
+      ...WIZARD_TOOL_NAMES,
     ];
 
     const response = query({

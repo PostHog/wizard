@@ -1,6 +1,7 @@
 /* React Native wizard using posthog-agent with PostHog MCP */
 import type { WizardOptions } from '../utils/types';
 import type { FrameworkConfig } from '../lib/framework-config';
+import { detectNodePackageManagers } from '../lib/package-manager-detection';
 import { Integration } from '../lib/constants';
 import {
   getPackageVersion,
@@ -47,6 +48,7 @@ export const REACT_NATIVE_AGENT_CONFIG: FrameworkConfig<ReactNativeContext> = {
         ? hasPackageInstalled('react-native', packageJson)
         : false;
     },
+    detectPackageManager: detectNodePackageManagers,
   },
 
   environment: {
@@ -67,8 +69,6 @@ export const REACT_NATIVE_AGENT_CONFIG: FrameworkConfig<ReactNativeContext> = {
   prompts: {
     projectTypeDetection:
       'This is a React Native project. Look for package.json, android/ and ios/ directories, and lockfiles to confirm. Check for expo in package.json to determine the variant.',
-    packageInstallation:
-      'Look for lockfiles to determine the package manager (npm, yarn, pnpm). Do not manually edit package.json.',
     getAdditionalContextLines: (context) => {
       const isExpo = context.variant === ReactNativeVariant.EXPO;
       const frameworkId = 'react-native';

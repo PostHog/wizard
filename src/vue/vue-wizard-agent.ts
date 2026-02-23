@@ -1,5 +1,6 @@
 /* Vue wizard using posthog-agent with PostHog MCP */
 import type { FrameworkConfig } from '../lib/framework-config';
+import { detectNodePackageManagers } from '../lib/package-manager-detection';
 import { Integration } from '../lib/constants';
 import {
   getPackageVersion,
@@ -35,6 +36,7 @@ export const VUE_AGENT_CONFIG: FrameworkConfig<VueContext> = {
       const packageJson = await tryGetPackageJson(options);
       return packageJson ? hasPackageInstalled('vue', packageJson) : false;
     },
+    detectPackageManager: detectNodePackageManagers,
   },
 
   environment: {
@@ -52,8 +54,6 @@ export const VUE_AGENT_CONFIG: FrameworkConfig<VueContext> = {
   prompts: {
     projectTypeDetection:
       'This is a JavaScript/TypeScript project. Look for package.json and lockfiles (package-lock.json, yarn.lock, pnpm-lock.yaml, bun.lockb) to confirm.',
-    packageInstallation:
-      'Look for lockfiles to determine the package manager (npm, yarn, pnpm, bun). Do not manually edit package.json.',
     getAdditionalContextLines: () => {
       const frameworkId = 'vue';
       return [

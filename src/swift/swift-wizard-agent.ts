@@ -1,6 +1,7 @@
 /* Swift wizard using posthog-agent with PostHog MCP */
 import type { WizardOptions } from '../utils/types';
 import type { FrameworkConfig } from '../lib/framework-config';
+import { swiftPackageManager } from '../lib/package-manager-detection';
 import { Integration } from '../lib/constants';
 import fg from 'fast-glob';
 import * as fs from 'node:fs';
@@ -68,6 +69,7 @@ export const SWIFT_AGENT_CONFIG: FrameworkConfig<SwiftContext> = {
 
       return false;
     },
+    detectPackageManager: swiftPackageManager,
   },
 
   environment: {

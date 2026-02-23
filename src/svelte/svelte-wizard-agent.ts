@@ -1,5 +1,6 @@
 /* SvelteKit wizard using posthog-agent with PostHog MCP */
 import type { FrameworkConfig } from '../lib/framework-config';
+import { detectNodePackageManagers } from '../lib/package-manager-detection';
 import { Integration } from '../lib/constants';
 import {
   getPackageVersion,
@@ -33,6 +34,7 @@ export const SVELTEKIT_AGENT_CONFIG: FrameworkConfig<SvelteKitContext> = {
         : false;
     },
     minimumVersion: '2.0.0',
+    detectPackageManager: detectNodePackageManagers,
   },
 
   environment: {
@@ -50,8 +52,6 @@ export const SVELTEKIT_AGENT_CONFIG: FrameworkConfig<SvelteKitContext> = {
   prompts: {
     projectTypeDetection:
       'This is a JavaScript/TypeScript project using SvelteKit. Look for package.json, svelte.config.js, and lockfiles (package-lock.json, yarn.lock, pnpm-lock.yaml, bun.lockb) to confirm.',
-    packageInstallation:
-      'Look for lockfiles to determine the package manager (npm, yarn, pnpm, bun). Do not manually edit package.json.',
     getAdditionalContextLines: () => [
       'Framework docs ID: sveltekit (use posthog://docs/frameworks/sveltekit for documentation)',
     ],
