@@ -22,6 +22,7 @@ export enum Integration {
 
   // Language fallbacks
   python = 'python',
+  javascriptNode = 'javascript_node',
 }
 export interface Args {
   debug: boolean;
