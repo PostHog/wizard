@@ -23,11 +23,8 @@ export enum Integration {
 
   // Language fallbacks
   python = 'python',
-<<<<<<< js-node-skill
-  javascriptNode = 'javascript_node',
-=======
   ruby = 'ruby',
->>>>>>> main
+  javascriptNode = 'javascript_node',
 }
 export interface Args {
   debug: boolean;
