@@ -143,10 +143,11 @@ export async function runAgentWizard(
   });
 
   // Get PostHog credentials
-  const { projectApiKey, host, accessToken } = await getOrAskForProjectData({
-    ...options,
-    cloudRegion,
-  });
+  const { projectApiKey, host, accessToken, projectId } =
+    await getOrAskForProjectData({
+      ...options,
+      cloudRegion,
+    });
 
   // Gather framework-specific context (e.g., Next.js router, React Native platform)
   const frameworkContext = config.metadata.gatherContext
@@ -166,6 +167,7 @@ export async function runAgentWizard(
       typescript: typeScriptDetected,
       projectApiKey,
       host,
+      projectId,
     },
     frameworkContext,
   );
@@ -366,6 +368,7 @@ function buildIntegrationPrompt(
     typescript: boolean;
     projectApiKey: string;
     host: string;
+    projectId: number;
   },
   frameworkContext: Record<string, unknown>,
 ): string {
@@ -383,6 +386,7 @@ function buildIntegrationPrompt(
   } project.
 
 Project context:
+- PostHog Project ID: ${context.projectId}
 - Framework: ${config.metadata.name} ${context.frameworkVersion}
 - TypeScript: ${context.typescript ? 'Yes' : 'No'}
 - PostHog API Key: ${context.projectApiKey}
