@@ -512,7 +512,11 @@ export async function runAgent(
       duration_ms: durationMs,
       duration_seconds: durationSeconds,
     });
-    middleware?.finalize(lastResultMessage, durationMs);
+    try {
+      middleware?.finalize(lastResultMessage, durationMs);
+    } catch (e) {
+      logToFile(`${AgentSignals.BENCHMARK} Middleware finalize error:`, e);
+    }
     spinner.stop(successMessage);
     return {};
   };
@@ -612,7 +616,11 @@ export async function runAgent(
         receivedSuccessResult,
       );
 
-      middleware?.onMessage(message);
+      try {
+        middleware?.onMessage(message);
+      } catch (e) {
+        logToFile(`${AgentSignals.BENCHMARK} Middleware onMessage error:`, e);
+      }
 
       // Signal completion when result received
       if (message.type === 'result') {
