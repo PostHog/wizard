@@ -2,6 +2,7 @@
 import type { FrameworkConfig } from '../lib/framework-config';
 import { Integration } from '../lib/constants';
 import { tryGetPackageJson } from '../utils/clack-utils';
+import { detectNodePackageManagers } from '../lib/package-manager-detection';
 
 type JavaScriptNodeContext = Record<string, unknown>;
 
@@ -19,6 +20,7 @@ export const JAVASCRIPT_NODE_AGENT_CONFIG: FrameworkConfig<JavaScriptNodeContext
       packageDisplayName: 'Node.js',
       usesPackageJson: false,
       getVersion: () => undefined,
+      detectPackageManager: detectNodePackageManagers,
       detect: async (options) => {
         const packageJson = await tryGetPackageJson(options);
         return !!packageJson;
