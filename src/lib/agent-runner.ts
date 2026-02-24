@@ -35,6 +35,7 @@ import {
 } from '../steps';
 import { checkAnthropicStatusWithPrompt } from '../utils/anthropic-status';
 import { enableDebugLogs } from '../utils/debug';
+import { createBenchmarkPipeline } from './middleware/benchmark';
 
 /**
  * Universal agent-powered wizard runner.
@@ -142,10 +143,11 @@ export async function runAgentWizard(
   });
 
   // Get PostHog credentials
-  const { projectApiKey, host, accessToken } = await getOrAskForProjectData({
-    ...options,
-    cloudRegion,
-  });
+  const { projectApiKey, host, accessToken, projectId } =
+    await getOrAskForProjectData({
+      ...options,
+      cloudRegion,
+    });
 
   // Gather framework-specific context (e.g., Next.js router, React Native platform)
   const frameworkContext = config.metadata.gatherContext
@@ -158,7 +160,6 @@ export async function runAgentWizard(
     analytics.setTag(key, value);
   });
 
-  // Build integration prompt
   const integrationPrompt = buildIntegrationPrompt(
     config,
     {
@@ -166,6 +167,7 @@ export async function runAgentWizard(
       typescript: typeScriptDetected,
       projectApiKey,
       host,
+      projectId,
     },
     frameworkContext,
   );
@@ -195,6 +197,10 @@ export async function runAgentWizard(
     options,
   );
 
+  const middleware = options.benchmark
+    ? createBenchmarkPipeline(spinner, options)
+    : undefined;
+
   const agentResult = await runAgent(
     agent,
     integrationPrompt,
@@ -206,6 +212,7 @@ export async function runAgentWizard(
       successMessage: config.ui.successMessage,
       errorMessage: 'Integration failed',
     },
+    middleware,
   );
 
   // Handle error cases detected in agent output
@@ -353,7 +360,6 @@ ${chalk.dim(`How did this work for you? Drop us a line: wizard@posthog.com`)}`;
 
 /**
  * Build the integration prompt for the agent.
- * Uses shared base prompt with optional framework-specific addendum.
  */
 function buildIntegrationPrompt(
   config: FrameworkConfig,
@@ -362,6 +368,7 @@ function buildIntegrationPrompt(
     typescript: boolean;
     projectApiKey: string;
     host: string;
+    projectId: number;
   },
   frameworkContext: Record<string, unknown>,
 ): string {
@@ -379,6 +386,7 @@ function buildIntegrationPrompt(
   } project.
 
 Project context:
+- PostHog Project ID: ${context.projectId}
 - Framework: ${config.metadata.name} ${context.frameworkVersion}
 - TypeScript: ${context.typescript ? 'Yes' : 'No'}
 - PostHog API Key: ${context.projectApiKey}
