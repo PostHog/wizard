@@ -5,7 +5,34 @@ import { Integration } from '../lib/constants';
 
 jest.mock('../lib/agent-runner');
 jest.mock('../utils/analytics');
-jest.mock('../utils/clack');
+jest.mock('../ui', () => ({
+  getUI: jest.fn().mockReturnValue({
+    log: {
+      info: jest.fn(),
+      warn: jest.fn(),
+      error: jest.fn(),
+      success: jest.fn(),
+      step: jest.fn(),
+    },
+    intro: jest.fn(),
+    outro: jest.fn(),
+    cancel: jest.fn(),
+    note: jest.fn(),
+    select: jest.fn(),
+    confirm: jest.fn(),
+    text: jest.fn(),
+    spinner: jest.fn().mockReturnValue({
+      start: jest.fn(),
+      stop: jest.fn(),
+      message: jest.fn(),
+    }),
+    isCancel: jest.fn().mockReturnValue(false),
+    pushStatus: jest.fn(),
+    syncTodos: jest.fn(),
+    startRun: jest.fn(),
+  }),
+  setUI: jest.fn(),
+}));
 
 const mockRunAgentWizard = runAgentWizard as jest.MockedFunction<
   typeof runAgentWizard

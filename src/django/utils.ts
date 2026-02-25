@@ -1,5 +1,5 @@
 import fg from 'fast-glob';
-import clack from '../utils/clack';
+import { getUI } from '../ui';
 import type { WizardOptions } from '../utils/types';
 import { createVersionBucket } from '../utils/semver';
 import * as fs from 'node:fs';
@@ -188,24 +188,24 @@ export async function getDjangoProjectType(
 
   // Check for Wagtail first (CMS)
   if (await hasWagtail({ installDir })) {
-    clack.log.info('Detected Django with Wagtail CMS');
+    getUI().log.info('Detected Django with Wagtail CMS');
     return DjangoProjectType.WAGTAIL;
   }
 
   // Check for Django REST Framework
   if (await hasDRF({ installDir })) {
-    clack.log.info('Detected Django REST Framework project');
+    getUI().log.info('Detected Django REST Framework project');
     return DjangoProjectType.DRF;
   }
 
   // Check for Django Channels
   if (await hasChannels({ installDir })) {
-    clack.log.info('Detected Django Channels project');
+    getUI().log.info('Detected Django Channels project');
     return DjangoProjectType.CHANNELS;
   }
 
   // Default to standard Django
-  clack.log.info('Detected standard Django project');
+  getUI().log.info('Detected standard Django project');
   return DjangoProjectType.STANDARD;
 }
 

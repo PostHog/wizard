@@ -1,10 +1,10 @@
-import { abortIfCancelled } from './utils/clack-utils';
+import { abortIfCancelled } from './utils/setup-utils';
 
 import type { CloudRegion, WizardOptions } from './utils/types';
 
 import { Integration } from './lib/constants';
 import { readEnvironment } from './utils/environment';
-import clack from './utils/clack';
+import { getUI } from './ui';
 import path from 'path';
 import { FRAMEWORK_REGISTRY } from './lib/registry';
 import { analytics } from './utils/analytics';
@@ -59,10 +59,10 @@ export async function runWizard(argv: Args) {
     menu: finalArgs.menu ?? false,
   };
 
-  clack.intro(`Welcome to the PostHog setup wizard ✨`);
+  getUI().intro(`Welcome to the PostHog setup wizard ✨`);
 
   if (wizardOptions.ci) {
-    clack.log.info(chalk.dim('Running in CI mode'));
+    getUI().log.info(chalk.dim('Running in CI mode'));
   }
 
   const integration =
@@ -92,7 +92,7 @@ export async function runWizard(argv: Args) {
       logToFile(`[Wizard run.ts] ERROR STACK: ${errorStack}`);
     }
 
-    clack.log.error(
+    getUI().log.error(
       `Something went wrong: ${chalk.red(
         errorMessage,
       )}\n\nYou can read the documentation at ${chalk.cyan(
@@ -101,7 +101,7 @@ export async function runWizard(argv: Args) {
     );
 
     if (wizardOptions.debug && errorStack) {
-      clack.log.info(chalk.dim(errorStack));
+      getUI().log.info(chalk.dim(errorStack));
     }
 
     process.exit(1);
@@ -138,19 +138,19 @@ async function getIntegrationForSetup(
     const detectedIntegration = await detectIntegration(options);
 
     if (detectedIntegration) {
-      clack.log.success(
+      getUI().log.success(
         `Detected integration: ${FRAMEWORK_REGISTRY[detectedIntegration].metadata.name}`,
       );
       return detectedIntegration;
     }
 
-    clack.log.info(
+    getUI().log.info(
       "I couldn't detect your framework. Please choose one to get started.",
     );
   }
 
   const integration: Integration = await abortIfCancelled(
-    clack.select({
+    getUI().select({
       message: 'What do you want to set up?',
       options: Object.values(Integration).map((value) => ({
         value,

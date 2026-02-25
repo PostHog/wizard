@@ -1,5 +1,5 @@
 import fg from 'fast-glob';
-import clack from '../utils/clack';
+import { getUI } from '../ui';
 import type { WizardOptions } from '../utils/types';
 import { createVersionBucket } from '../utils/semver';
 import * as fs from 'node:fs';
@@ -262,30 +262,30 @@ export async function getFlaskProjectType(
 
   // Check for Flask-RESTX first (most specific - includes Swagger)
   if (await hasFlaskRESTX({ installDir })) {
-    clack.log.info('Detected Flask-RESTX project');
+    getUI().log.info('Detected Flask-RESTX project');
     return FlaskProjectType.RESTX;
   }
 
   // Check for flask-smorest (OpenAPI-first)
   if (await hasFlaskSmorest({ installDir })) {
-    clack.log.info('Detected flask-smorest project');
+    getUI().log.info('Detected flask-smorest project');
     return FlaskProjectType.SMOREST;
   }
 
   // Check for Flask-RESTful
   if (await hasFlaskRESTful({ installDir })) {
-    clack.log.info('Detected Flask-RESTful project');
+    getUI().log.info('Detected Flask-RESTful project');
     return FlaskProjectType.RESTFUL;
   }
 
   // Check for Blueprints (large app structure)
   if (await hasBlueprints({ installDir })) {
-    clack.log.info('Detected Flask project with Blueprints');
+    getUI().log.info('Detected Flask project with Blueprints');
     return FlaskProjectType.BLUEPRINT;
   }
 
   // Default to standard Flask
-  clack.log.info('Detected standard Flask project');
+  getUI().log.info('Detected standard Flask project');
   return FlaskProjectType.STANDARD;
 }
 

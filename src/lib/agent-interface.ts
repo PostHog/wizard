@@ -4,7 +4,7 @@
  */
 
 import path from 'path';
-import clack from '../utils/clack';
+import { getUI, type SpinnerHandle } from '../ui';
 import { debug, logToFile, initLogFile, LOG_FILE_PATH } from '../utils/debug';
 import type { WizardOptions } from '../utils/types';
 import { analytics } from '../utils/analytics';
@@ -334,7 +334,7 @@ export async function initializeAgent(
   logToFile('Agent initialization starting');
   logToFile('Install directory:', options.installDir);
 
-  clack.log.step('Initializing Claude agent...');
+  getUI().log.step('Initializing Claude agent...');
 
   try {
     // Configure LLM gateway environment variables (inherited by SDK subprocess)
@@ -393,11 +393,13 @@ export async function initializeAgent(
       });
     }
 
-    clack.log.step(`Verbose logs: ${LOG_FILE_PATH}`);
-    clack.log.success("Agent initialized. Let's get cooking!");
+    getUI().log.step(`Verbose logs: ${LOG_FILE_PATH}`);
+    getUI().log.success("Agent initialized. Let's get cooking!");
     return agentRunConfig;
   } catch (error) {
-    clack.log.error(`Failed to initialize agent: ${(error as Error).message}`);
+    getUI().log.error(
+      `Failed to initialize agent: ${(error as Error).message}`,
+    );
     logToFile('Agent initialization error:', error);
     debug('Agent initialization error:', error);
     throw error;
@@ -414,7 +416,7 @@ export async function runAgent(
   agentConfig: AgentRunConfig,
   prompt: string,
   options: WizardOptions,
-  spinner: ReturnType<typeof clack.spinner>,
+  spinner: SpinnerHandle,
   config?: {
     estimatedDurationMinutes?: number;
     spinnerMessage?: string;
@@ -423,17 +425,12 @@ export async function runAgent(
   },
 ): Promise<{ error?: AgentErrorType; message?: string }> {
   const {
-    estimatedDurationMinutes = 8,
     spinnerMessage = 'Customizing your PostHog setup...',
     successMessage = 'PostHog integration complete',
     errorMessage = 'Integration failed',
   } = config ?? {};
 
   const { query } = await getSDKModule();
-
-  clack.log.step(
-    `This whole process should take about ${estimatedDurationMinutes} minutes including error checking and fixes.\n\nGrab some coffee!`,
-  );
 
   spinner.start(spinnerMessage);
 
@@ -685,7 +682,7 @@ export async function runAgent(
 
     // No API error found, re-throw the original exception
     spinner.stop(errorMessage);
-    clack.log.error(`Error: ${(error as Error).message}`);
+    getUI().log.error(`Error: ${(error as Error).message}`);
     logToFile('Agent run failed:', error);
     debug('Full error:', error);
     throw error;
@@ -702,7 +699,7 @@ export async function runAgent(
 function handleSDKMessage(
   message: SDKMessage,
   options: WizardOptions,
-  spinner: ReturnType<typeof clack.spinner>,
+  spinner: SpinnerHandle,
   collectedText: string[],
   receivedSuccessResult = false,
 ): void {
@@ -731,9 +728,20 @@ function handleSDKMessage(
             );
             const statusMatch = block.text.match(statusRegex);
             if (statusMatch) {
-              spinner.stop(statusMatch[1].trim());
-              spinner.start('Integrating PostHog...');
+              const statusText = statusMatch[1].trim();
+              getUI().pushStatus(statusText);
+              spinner.message(statusText);
             }
+          }
+
+          // Intercept TodoWrite tool_use blocks for task progression
+          if (
+            block.type === 'tool_use' &&
+            block.name === 'TodoWrite' &&
+            block.input?.todos &&
+            Array.isArray(block.input.todos)
+          ) {
+            getUI().syncTodos(block.input.todos);
           }
         }
       }
@@ -752,7 +760,7 @@ function handleSDKMessage(
         // mode race conditions). Full message already logged above via JSON dump.
         if (message.errors && !receivedSuccessResult) {
           for (const err of message.errors) {
-            clack.log.error(`Error: ${err}`);
+            getUI().log.error(`Error: ${err}`);
             logToFile('ERROR:', err);
           }
         }
@@ -767,7 +775,7 @@ function handleSDKMessage(
         // Full message already logged above via JSON dump.
         if (message.errors && !receivedSuccessResult) {
           for (const err of message.errors) {
-            clack.log.error(`Error: ${err}`);
+            getUI().log.error(`Error: ${err}`);
             logToFile('ERROR:', err);
           }
         }

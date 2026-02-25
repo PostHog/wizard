@@ -1,4 +1,4 @@
-import clack from './clack';
+import { getUI } from '../ui';
 import chalk from 'chalk';
 
 const CLAUDE_STATUS_URL = 'https://status.claude.com/api/v2/status.json';
@@ -50,7 +50,9 @@ export async function checkAnthropicStatus(): Promise<StatusCheckResult> {
 
     const data = (await response.json()) as ClaudeStatusResponse;
     const indicator = data.status.indicator;
-    const description = data.status.description;
+    const rawDesc = data.status.description;
+    const description =
+      rawDesc.charAt(0).toUpperCase() + rawDesc.slice(1).toLowerCase();
 
     switch (indicator) {
       case 'none':
@@ -87,44 +89,32 @@ export async function checkAnthropicStatusWithPrompt(
 ): Promise<boolean> {
   const result = await checkAnthropicStatus();
 
-  if (result.status === 'down') {
-    clack.log.error(
-      `${chalk.red(
-        'Claude/Anthropic services are currently experiencing issues.',
-      )}
+  const ui = getUI();
+
+  if (result.status === 'down' || result.status === 'degraded') {
+    const severity =
+      result.status === 'down' ? 'experiencing issues' : 'partially degraded';
+    ui.log.warn(
+      `${chalk.yellow(`Claude/Anthropic services are ${severity}.`)}
 
 ${chalk.yellow('Status:')} ${result.description}
 ${chalk.yellow('Status page:')} ${CLAUDE_STATUS_PAGE}
 
-The wizard relies on Claude to make changes to your project.
-Please check the status page and try again later.`,
-    );
-    return false;
-  }
-
-  if (result.status === 'degraded') {
-    clack.log.warn(
-      `${chalk.yellow('Claude/Anthropic services are partially degraded.')}
-
-${chalk.yellow('Status:')} ${result.description}
-${chalk.yellow('Status page:')} ${CLAUDE_STATUS_PAGE}
-
-The wizard may not work reliably while services are degraded.`,
+The wizard may not work reliably while services are affected.`,
     );
 
     // In CI mode, continue with a warning
     if (options.ci) {
-      clack.log.info('Continuing in CI mode despite degraded status...');
       return true;
     }
 
-    const shouldContinue = await clack.confirm({
+    const shouldContinue = await ui.confirm({
       message: 'Do you want to continue anyway?',
-      initialValue: false,
+      initialValue: true,
     });
 
-    if (clack.isCancel(shouldContinue) || !shouldContinue) {
-      clack.log.info('Wizard cancelled. Please try again later.');
+    if (ui.isCancel(shouldContinue) || !shouldContinue) {
+      ui.log.info('Wizard cancelled. Please try again later.');
       return false;
     }
 

@@ -1,8 +1,8 @@
 import fg from 'fast-glob';
 import fs from 'fs/promises';
 import path from 'path';
-import { abortIfCancelled } from '../utils/clack-utils';
-import clack from '../utils/clack';
+import { abortIfCancelled } from '../utils/setup-utils';
+import { getUI } from '../ui';
 import type { WizardOptions } from '../utils/types';
 import { Integration } from '../lib/constants';
 import { createVersionBucket } from '../utils/semver';
@@ -109,30 +109,30 @@ export async function getAstroRenderingMode({
 
   // Determine rendering mode based on findings
   if (usesViewTransitions) {
-    clack.log.info(`Detected Astro with View Transitions (ClientRouter) 🔄`);
+    getUI().log.info(`Detected Astro with View Transitions (ClientRouter) 🔄`);
     return AstroRenderingMode.VIEW_TRANSITIONS;
   }
 
   if (outputMode === 'server' && hasAdapter) {
-    clack.log.info(`Detected Astro SSR mode 🖥️`);
+    getUI().log.info(`Detected Astro SSR mode 🖥️`);
     return AstroRenderingMode.SSR;
   }
 
   // In Astro 5, 'static' is the default and supports per-page SSR opt-in when an adapter is present
   // This is the "hybrid" pattern even if output mode isn't explicitly set
   if (hasAdapter) {
-    clack.log.info(`Detected Astro hybrid mode 🔀`);
+    getUI().log.info(`Detected Astro hybrid mode 🔀`);
     return AstroRenderingMode.HYBRID;
   }
 
   if (!hasAdapter) {
-    clack.log.info(`Detected Astro static mode 📄`);
+    getUI().log.info(`Detected Astro static mode 📄`);
     return AstroRenderingMode.STATIC;
   }
 
   // If detection is ambiguous, ask the user
   const result: AstroRenderingMode = await abortIfCancelled(
-    clack.select({
+    getUI().select({
       message: 'What rendering mode is your Astro project using?',
       options: [
         {

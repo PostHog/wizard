@@ -1,7 +1,7 @@
 import { major } from 'semver';
 import fg from 'fast-glob';
-import { abortIfCancelled, getPackageDotJson } from '../utils/clack-utils';
-import clack from '../utils/clack';
+import { abortIfCancelled, getPackageDotJson } from '../utils/setup-utils';
+import { getUI } from '../ui';
 import type { WizardOptions } from '../utils/types';
 import { Integration } from '../lib/constants';
 import { getPackageVersion } from '../utils/package-json';
@@ -127,13 +127,13 @@ export async function getReactRouterMode(
 
   if (!reactRouterVersion) {
     // If we can't detect version, ask the user
-    clack.log.info(
+    getUI().log.info(
       `Learn more about React Router modes: ${chalk.cyan(
         'https://reactrouter.com/start/modes',
       )}`,
     );
     const result: ReactRouterMode = await abortIfCancelled(
-      clack.select({
+      getUI().select({
         message: 'What React Router version and mode are you using?',
         options: [
           {
@@ -164,7 +164,7 @@ export async function getReactRouterMode(
 
   // If v6, return V6
   if (majorVersion === 6) {
-    clack.log.info('Detected React Router v6');
+    getUI().log.info('Detected React Router v6');
     return ReactRouterMode.V6;
   }
 
@@ -173,32 +173,32 @@ export async function getReactRouterMode(
     // First check for framework mode (react-router.config.ts)
     const hasConfig = await hasReactRouterConfig({ installDir });
     if (hasConfig) {
-      clack.log.info('Detected React Router v7 - Framework mode');
+      getUI().log.info('Detected React Router v7 - Framework mode');
       return ReactRouterMode.V7_FRAMEWORK;
     }
 
     // Check for data mode (createBrowserRouter)
     const hasDataMode = await hasCreateBrowserRouter({ installDir });
     if (hasDataMode) {
-      clack.log.info('Detected React Router v7 - Data mode');
+      getUI().log.info('Detected React Router v7 - Data mode');
       return ReactRouterMode.V7_DATA;
     }
 
     // Check for declarative mode (BrowserRouter)
     const hasDeclarative = await hasDeclarativeRouter({ installDir });
     if (hasDeclarative) {
-      clack.log.info('Detected React Router v7 - Declarative mode');
+      getUI().log.info('Detected React Router v7 - Declarative mode');
       return ReactRouterMode.V7_DECLARATIVE;
     }
 
     // If v7 but can't detect mode, ask the user
-    clack.log.info(
+    getUI().log.info(
       `Learn more about React Router modes: ${chalk.cyan(
         'https://reactrouter.com/start/modes',
       )}`,
     );
     const result: ReactRouterMode = await abortIfCancelled(
-      clack.select({
+      getUI().select({
         message: 'What React Router v7 mode are you using?',
         options: [
           {
@@ -221,13 +221,13 @@ export async function getReactRouterMode(
   }
 
   // If version is not 6 or 7, default to asking
-  clack.log.info(
+  getUI().log.info(
     `Learn more about React Router modes: ${chalk.cyan(
       'https://reactrouter.com/start/modes',
     )}`,
   );
   const result: ReactRouterMode = await abortIfCancelled(
-    clack.select({
+    getUI().select({
       message: 'What React Router version and mode are you using?',
       options: [
         {

@@ -6,6 +6,23 @@ import yargs from 'yargs';
 import { hideBin } from 'yargs/helpers';
 import chalk from 'chalk';
 
+import { readFileSync } from 'fs';
+import { resolve, dirname } from 'path';
+
+const WIZARD_VERSION = (() => {
+  // npm/pnpm set this when running via package scripts
+  if (process.env.npm_package_version) return process.env.npm_package_version;
+  // Fallback: read package.json relative to this file
+  try {
+    const pkg = JSON.parse(
+      readFileSync(resolve(dirname(__filename), '..', 'package.json'), 'utf-8'),
+    );
+    return pkg.version ?? 'unknown';
+  } catch {
+    return 'unknown';
+  }
+})();
+
 const NODE_VERSION_RANGE = '>=18.17.0';
 
 // Have to run this above the other imports because they are importing clack that
@@ -21,7 +38,8 @@ import { runMCPInstall, runMCPRemove } from './src/mcp';
 import type { CloudRegion, WizardOptions } from './src/utils/types';
 import { runWizard } from './src/run';
 import { isNonInteractiveEnvironment } from './src/utils/environment';
-import clack from './src/utils/clack';
+import { getUI, setUI } from './src/ui';
+import { ConsoleUI } from './src/ui/console-ui';
 
 if (process.env.NODE_ENV === 'test') {
   void (async () => {
@@ -122,30 +140,35 @@ yargs(hideBin(process.argv))
 
       // CI mode validation and TTY check
       if (options.ci) {
+        // Use ConsoleUI for CI mode (no dependencies, auto-resolves prompts)
+        setUI(new ConsoleUI());
+
         // Validate required CI flags
         if (!options.region) {
-          clack.intro(chalk.inverse(`PostHog Wizard`));
-          clack.log.error('CI mode requires --region (us or eu)');
+          getUI().intro(chalk.inverse(`PostHog Wizard`));
+          getUI().log.error('CI mode requires --region (us or eu)');
           process.exit(1);
         }
         if (!options.apiKey) {
-          clack.intro(chalk.inverse(`PostHog Wizard`));
-          clack.log.error(
+          getUI().intro(chalk.inverse(`PostHog Wizard`));
+          getUI().log.error(
             'CI mode requires --api-key (personal API key phx_xxx)',
           );
           process.exit(1);
         }
         if (!options.installDir) {
-          clack.intro(chalk.inverse(`PostHog Wizard`));
-          clack.log.error(
+          getUI().intro(chalk.inverse(`PostHog Wizard`));
+          getUI().log.error(
             'CI mode requires --install-dir (directory to install PostHog in)',
           );
           process.exit(1);
         }
+
+        void runWizard(options as unknown as WizardOptions);
       } else if (isNonInteractiveEnvironment()) {
-        // Original TTY error for non-CI mode
-        clack.intro(chalk.inverse(`PostHog Wizard`));
-        clack.log.error(
+        // Non-interactive non-CI: error out
+        getUI().intro(chalk.inverse(`PostHog Wizard`));
+        getUI().log.error(
           'This installer requires an interactive terminal (TTY) to run.\n' +
             'It appears you are running in a non-interactive environment.\n' +
             'Please run the wizard in an interactive terminal.\n\n' +
@@ -153,9 +176,28 @@ yargs(hideBin(process.argv))
             '  npx @posthog/wizard --ci --region us --api-key phx_xxx',
         );
         process.exit(1);
-      }
+      } else {
+        // Interactive TTY: launch the Ink TUI
+        void (async () => {
+          let unmount: (() => void) | undefined;
+          try {
+            const { startTUI } = await import('./src/ui/tui/start-tui.js');
+            const tui = startTUI(WIZARD_VERSION);
+            unmount = tui.unmount;
+          } catch (err) {
+            // TUI unavailable (e.g., in test environment) — continue with default UI
+            if (process.env.DEBUG || process.env.POSTHOG_WIZARD_DEBUG) {
+              console.error('TUI init failed:', err); // eslint-disable-line no-console
+            }
+          }
 
-      void runWizard(options as unknown as WizardOptions);
+          try {
+            await runWizard(options as unknown as WizardOptions);
+          } finally {
+            unmount?.();
+          }
+        })();
+      }
     },
   )
   .command('mcp <command>', 'MCP server management commands', (yargs) => {

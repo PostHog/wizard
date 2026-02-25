@@ -1,6 +1,6 @@
 import { major, minVersion } from 'semver';
 import fg from 'fast-glob';
-import clack from '../utils/clack';
+import { getUI } from '../ui';
 import type { WizardOptions } from '../utils/types';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -167,18 +167,18 @@ export async function getFastAPIProjectType(
 
   // Check for fullstack pattern (templates)
   if (await hasTemplates({ installDir })) {
-    clack.log.info('Detected FastAPI fullstack project with templates');
+    getUI().log.info('Detected FastAPI fullstack project with templates');
     return FastAPIProjectType.FULLSTACK;
   }
 
   // Check for APIRouter (modular structure)
   if (await hasAPIRouter({ installDir })) {
-    clack.log.info('Detected FastAPI project with APIRouter');
+    getUI().log.info('Detected FastAPI project with APIRouter');
     return FastAPIProjectType.ROUTER;
   }
 
   // Default to standard FastAPI
-  clack.log.info('Detected standard FastAPI project');
+  getUI().log.info('Detected standard FastAPI project');
   return FastAPIProjectType.STANDARD;
 }
 

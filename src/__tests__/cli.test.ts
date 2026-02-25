@@ -9,6 +9,9 @@ jest.mock('../mcp', () => ({
   runMCPRemove: mockRunMCPRemove,
 }));
 jest.mock('semver', () => ({ satisfies: () => true }));
+jest.mock('../ui/tui/start-tui', () => ({
+  startTUI: () => ({ unmount: jest.fn(), store: {} }),
+}));
 
 describe('CLI argument parsing', () => {
   const originalArgv = process.argv;

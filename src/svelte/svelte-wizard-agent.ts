@@ -7,7 +7,7 @@ import {
   hasPackageInstalled,
   type PackageDotJson,
 } from '../utils/package-json';
-import { tryGetPackageJson } from '../utils/clack-utils';
+import { tryGetPackageJson } from '../utils/setup-utils';
 
 type SvelteKitContext = Record<string, unknown>;
 

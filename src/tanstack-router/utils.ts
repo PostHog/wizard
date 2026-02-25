@@ -1,6 +1,6 @@
 import fg from 'fast-glob';
-import { abortIfCancelled } from '../utils/clack-utils';
-import clack from '../utils/clack';
+import { abortIfCancelled } from '../utils/setup-utils';
+import { getUI } from '../ui';
 import type { WizardOptions } from '../utils/types';
 import { Integration } from '../lib/constants';
 import { hasPackageInstalled } from '../utils/package-json';
@@ -135,19 +135,19 @@ export async function getTanStackRouterMode(
 
   const isFileBased = await hasFileBasedRouting({ installDir });
   if (isFileBased) {
-    clack.log.info('Detected TanStack Router file-based routing');
+    getUI().log.info('Detected TanStack Router file-based routing');
     return TanStackRouterMode.FILE_BASED;
   }
 
   const isCodeBased = await hasCodeBasedRouting({ installDir });
   if (isCodeBased) {
-    clack.log.info('Detected TanStack Router code-based routing');
+    getUI().log.info('Detected TanStack Router code-based routing');
     return TanStackRouterMode.CODE_BASED;
   }
 
   // If we can't detect, ask the user
   const result: TanStackRouterMode = await abortIfCancelled(
-    clack.select({
+    getUI().select({
       message: 'What TanStack Router routing mode are you using?',
       options: [
         {

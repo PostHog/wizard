@@ -1,7 +1,7 @@
 import { createVersionBucket } from '../utils/semver';
-import { tryGetPackageJson } from '../utils/clack-utils';
+import { tryGetPackageJson } from '../utils/setup-utils';
 import { hasPackageInstalled } from '../utils/package-json';
-import clack from '../utils/clack';
+import { getUI } from '../ui';
 import type { WizardOptions } from '../utils/types';
 
 export const getReactNativeVersionBucket = createVersionBucket();
@@ -21,13 +21,13 @@ export async function detectReactNativeVariant(
   const packageJson = await tryGetPackageJson(options);
 
   if (packageJson && hasPackageInstalled('expo', packageJson)) {
-    clack.log.info(
+    getUI().log.info(
       `Detected ${getReactNativeVariantName(ReactNativeVariant.EXPO)} 📱`,
     );
     return ReactNativeVariant.EXPO;
   }
 
-  clack.log.info(
+  getUI().log.info(
     `Detected ${getReactNativeVariantName(ReactNativeVariant.REACT_NATIVE)} 📱`,
   );
   return ReactNativeVariant.REACT_NATIVE;

@@ -4,9 +4,9 @@ import axios from 'axios';
 import chalk from 'chalk';
 import opn from 'opn';
 import { z } from 'zod';
-import clack from './clack';
+import { getUI } from '../ui';
 import { ISSUES_URL, OAUTH_PORT } from '../lib/constants';
-import { abort } from './clack-utils';
+import { abort } from './setup-utils';
 import { analytics } from './analytics';
 import type { CloudRegion } from './types';
 import { getCloudUrlFromRegion, getOauthClientIdFromRegion } from './urls';
@@ -230,7 +230,7 @@ export async function performOAuthFlow(
     signupUrl.toString(),
   );
 
-  clack.log.info(
+  getUI().log.info(
     `${chalk.bold(
       "If the browser window didn't open automatically, please open the following link to be redirected to PostHog:",
     )}\n\n${chalk.cyan(urlToOpen)}${
@@ -248,7 +248,7 @@ export async function performOAuthFlow(
     });
   }
 
-  const loginSpinner = clack.spinner();
+  const loginSpinner = getUI().spinner();
   loginSpinner.start('Waiting for authorization...');
 
   try {
@@ -272,9 +272,9 @@ export async function performOAuthFlow(
     const error = e instanceof Error ? e : new Error('Unknown error');
 
     if (error.message.includes('timeout')) {
-      clack.log.error('Authorization timed out. Please try again.');
+      getUI().log.error('Authorization timed out. Please try again.');
     } else if (error.message.includes('access_denied')) {
-      clack.log.info(
+      getUI().log.info(
         `${chalk.yellow(
           'Authorization was cancelled.',
         )}\n\nYou denied access to PostHog. To use the wizard, you need to authorize access to your PostHog account.\n\n${chalk.dim(
@@ -282,7 +282,7 @@ export async function performOAuthFlow(
         )}`,
       );
     } else {
-      clack.log.error(
+      getUI().log.error(
         `${chalk.red('Authorization failed:')}\n\n${
           error.message
         }\n\n${chalk.dim(

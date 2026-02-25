@@ -1,4 +1,4 @@
-import { installPackage } from '../clack-utils';
+import { installPackage } from '../setup-utils';
 
 import * as ChildProcess from 'node:child_process';
 import type { PackageManager } from '../package-manager';
@@ -8,22 +8,32 @@ jest.mock('node:child_process', () => ({
   ...jest.requireActual('node:child_process'),
 }));
 
-jest.mock('@clack/prompts', () => ({
-  log: {
-    info: jest.fn(),
-    success: jest.fn(),
-    warn: jest.fn(),
-    error: jest.fn(),
-  },
-  text: jest.fn(),
-  confirm: jest.fn(),
-  cancel: jest.fn(),
-  outro: jest.fn(),
-  // passthrough for abortIfCancelled
-  isCancel: jest.fn().mockReturnValue(false),
-  spinner: jest
-    .fn()
-    .mockImplementation(() => ({ start: jest.fn(), stop: jest.fn() })),
+jest.mock('../../ui', () => ({
+  getUI: jest.fn().mockReturnValue({
+    log: {
+      info: jest.fn(),
+      success: jest.fn(),
+      warn: jest.fn(),
+      error: jest.fn(),
+      step: jest.fn(),
+    },
+    text: jest.fn(),
+    confirm: jest.fn(),
+    select: jest.fn(),
+    cancel: jest.fn(),
+    outro: jest.fn(),
+    intro: jest.fn(),
+    isCancel: jest.fn().mockReturnValue(false),
+    spinner: jest.fn().mockImplementation(() => ({
+      start: jest.fn(),
+      stop: jest.fn(),
+      message: jest.fn(),
+    })),
+    pushStatus: jest.fn(),
+    syncTodos: jest.fn(),
+    startRun: jest.fn(),
+    note: jest.fn(),
+  }),
 }));
 
 describe.skip('installPackage', () => {

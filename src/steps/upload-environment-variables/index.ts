@@ -1,8 +1,8 @@
 import type { Integration } from '../../lib/constants';
 import { traceStep } from '../../telemetry';
 import { analytics } from '../../utils/analytics';
-import clack from '../../utils/clack';
-import { abortIfCancelled } from '../../utils/clack-utils';
+import { getUI } from '../../ui';
+import { abortIfCancelled } from '../../utils/setup-utils';
 import type { WizardOptions } from '../../utils/types';
 import { EnvironmentProvider } from './EnvironmentProvider';
 import { VercelEnvironmentProvider } from './providers/vercel';
@@ -40,7 +40,7 @@ export const uploadEnvironmentVariablesStep = async (
   }
 
   const upload: boolean = await abortIfCancelled(
-    clack.select({
+    getUI().select({
       message: `It looks like you are using ${provider.name}. Would you like to upload the environment variables?`,
       options: [
         {

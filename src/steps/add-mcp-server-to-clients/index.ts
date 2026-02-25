@@ -1,9 +1,9 @@
 import type { Integration } from '../../lib/constants';
 import { traceStep } from '../../telemetry';
 import { analytics } from '../../utils/analytics';
-import clack from '../../utils/clack';
+import { getUI } from '../../ui';
 import chalk from 'chalk';
-import { abortIfCancelled, askForCloudRegion } from '../../utils/clack-utils';
+import { abortIfCancelled, askForCloudRegion } from '../../utils/setup-utils';
 import { MCPClient } from './MCPClient';
 import { CursorMCPClient } from './clients/cursor';
 import { ClaudeMCPClient } from './clients/claude';
@@ -56,9 +56,11 @@ export const addMCPServerToClientsStep = async ({
   local?: boolean;
   ci?: boolean;
 }): Promise<string[]> => {
+  const ui = getUI();
+
   // CI mode: skip MCP installation entirely (default to No)
   if (ci) {
-    clack.log.info('Skipping MCP installation (CI mode)');
+    ui.log.info('Skipping MCP installation (CI mode)');
     return [];
   }
 
@@ -66,7 +68,7 @@ export const addMCPServerToClientsStep = async ({
 
   const hasPermission = askPermission
     ? await abortIfCancelled(
-        clack.select({
+        ui.select({
           message: local
             ? 'Would you like to install the local development MCP server?'
             : 'Would you like to install the MCP server to use PostHog in your editor?',
@@ -83,9 +85,8 @@ export const addMCPServerToClientsStep = async ({
     return [];
   }
 
-  const { groupMultiselect } = await import('@clack/prompts');
   const selectedFeatures = await abortIfCancelled(
-    groupMultiselect({
+    ui.groupMultiselect({
       message: `Select which PostHog features to enable as tools: ${chalk.dim(
         '(Toggle: Space, Confirm: Enter, Toggle All: A, Cancel: CTRL + C)',
       )}`,
@@ -98,9 +99,8 @@ export const addMCPServerToClientsStep = async ({
 
   const supportedClients = await getSupportedClients();
 
-  const { multiselect } = await import('@clack/prompts');
   const selectedClientNames = await abortIfCancelled(
-    multiselect({
+    ui.multiselect({
       message: `Select which MCP clients to install the MCP server to: ${chalk.dim(
         '(Toggle: Space, Confirm: Enter, Toggle All: A, Cancel: CTRL + C)',
       )}`,
@@ -127,13 +127,13 @@ export const addMCPServerToClientsStep = async ({
   }
 
   if (installedClients.length > 0) {
-    clack.log.warn(
+    ui.log.warn(
       `The MCP server is already configured for:
   ${installedClients.map((c) => `- ${c.name}`).join('\n  ')}`,
     );
 
     const reinstall = await abortIfCancelled(
-      clack.select({
+      ui.select({
         message: 'Would you like to reinstall it?',
         options: [
           {
@@ -162,7 +162,7 @@ export const addMCPServerToClientsStep = async ({
     }
 
     await removeMCPServer(installedClients, local);
-    clack.log.info('Removed existing installation.');
+    ui.log.info('Removed existing installation.');
   }
 
   await traceStep('adding mcp servers', async () => {
@@ -175,7 +175,7 @@ export const addMCPServerToClientsStep = async ({
     );
   });
 
-  clack.log.success(
+  ui.log.success(
     `Added the MCP server to:
   ${clients.map((c) => `- ${c.name}`).join('\n  ')} `,
   );
@@ -205,9 +205,8 @@ export const removeMCPServerFromClientsStep = async ({
     return [];
   }
 
-  const { multiselect } = await import('@clack/prompts');
   const selectedClientNames = await abortIfCancelled(
-    multiselect({
+    getUI().multiselect({
       message: `Select which clients to remove the MCP server from: ${chalk.dim(
         '(Toggle: Space, Confirm: Enter, Toggle All: A, Cancel: CTRL + C)',
       )}`,

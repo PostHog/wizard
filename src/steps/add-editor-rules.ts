@@ -3,7 +3,7 @@ import chalk from 'chalk';
 import path from 'path';
 import { Integration } from '../lib/constants';
 import { analytics } from '../utils/analytics';
-import clack from '../utils/clack';
+import { getUI } from '../ui';
 import { traceStep } from '../telemetry';
 
 type AddEditorRulesStepOptions = {
@@ -56,7 +56,7 @@ export const addEditorRulesStep = async ({
         integration,
       });
 
-      clack.log.info(
+      getUI().log.info(
         `Added Cursor rules to ${chalk.bold.cyan(
           `.cursor/rules/posthog-integration.mdc`,
         )}`,

@@ -23,7 +23,7 @@ import {
   type Integration,
 } from '../lib/constants';
 import { analytics } from './analytics';
-import clack from './clack';
+import { getUI } from '../ui';
 import { getCloudUrlFromRegion, getHostFromRegion } from './urls';
 import { FRAMEWORK_REGISTRY } from '../lib/registry';
 import { performOAuthFlow } from './oauth';
@@ -62,7 +62,7 @@ export interface CliSetupConfigContent {
 export async function abort(message?: string, status?: number): Promise<never> {
   await analytics.shutdown('cancelled');
 
-  clack.outro(message ?? 'Wizard setup cancelled.');
+  getUI().outro(message ?? 'Wizard setup cancelled.');
   return process.exit(status ?? 1);
 }
 
@@ -74,7 +74,7 @@ export async function abortIfCancelled<T>(
   const resolvedInput = await input;
 
   if (
-    clack.isCancel(resolvedInput) ||
+    getUI().isCancel(resolvedInput) ||
     (typeof resolvedInput === 'symbol' &&
       resolvedInput.description === 'clack:cancel')
   ) {
@@ -82,7 +82,7 @@ export async function abortIfCancelled<T>(
       ? FRAMEWORK_REGISTRY[integration].metadata.docsUrl
       : 'https://posthog.com/docs';
 
-    clack.cancel(
+    getUI().cancel(
       `Wizard setup cancelled. You can read the documentation for ${
         integration ?? 'PostHog'
       } at ${chalk.cyan(docsUrl)} to continue with the setup manually.`,
@@ -97,9 +97,7 @@ export function printWelcome(options: {
   wizardName: string;
   message?: string;
 }): void {
-  // eslint-disable-next-line no-console
-  console.log('');
-  clack.intro(chalk.inverse(` ${options.wizardName} `));
+  getUI().intro(chalk.inverse(` ${options.wizardName} `));
 }
 
 export async function confirmContinueIfNoOrDirtyGitRepo(
@@ -112,7 +110,7 @@ export async function confirmContinueIfNoOrDirtyGitRepo(
         options.default || options.ci
           ? true
           : await abortIfCancelled(
-              clack.confirm({
+              getUI().confirm({
                 message:
                   'You are not inside a git repository. The wizard will create and update files. Do you want to continue anyway?',
               }),
@@ -131,14 +129,14 @@ export async function confirmContinueIfNoOrDirtyGitRepo(
     if (uncommittedOrUntrackedFiles.length) {
       // CI mode: auto-continue with dirty repo
       if (options.ci) {
-        clack.log.info(
+        getUI().log.info(
           `CI mode: continuing with uncommitted/untracked files in repo`,
         );
         analytics.setTag('continue-with-dirty-repo', true);
         return;
       }
 
-      clack.log.warn(
+      getUI().log.warn(
         `You have uncommitted or untracked files in your repo:
 
 ${uncommittedOrUntrackedFiles.join('\n')}
@@ -146,7 +144,7 @@ ${uncommittedOrUntrackedFiles.join('\n')}
 The wizard will create and update files.`,
       );
       const continueWithDirtyRepo = await abortIfCancelled(
-        clack.confirm({
+        getUI().confirm({
           message: 'Do you want to continue anyway?',
         }),
       );
@@ -198,7 +196,7 @@ export async function askForItemSelection(
 ): Promise<{ value: string; index: number }> {
   const selection: { value: string; index: number } | symbol =
     await abortIfCancelled(
-      clack.select({
+      getUI().select({
         maxItems: 12,
         message: message,
         options: items.map((item, index) => {
@@ -239,18 +237,18 @@ export async function confirmContinueIfPackageVersionNotSupported({
       return;
     }
 
-    clack.log.warn(
+    getUI().log.warn(
       `You have an unsupported version of ${packageName} installed:
 
   ${packageId}@${packageVersion}`,
     );
 
-    clack.note(
+    getUI().note(
       note ??
         `Please upgrade to ${acceptableVersions} if you wish to use the PostHog wizard.`,
     );
     const continueWithUnsupportedVersion = await abortIfCancelled(
-      clack.confirm({
+      getUI().confirm({
         message: 'Do you want to continue anyway?',
       }),
     );
@@ -319,7 +317,7 @@ export async function installPackage({
   return traceStep('install-package', async () => {
     if (alreadyInstalled && askBeforeUpdating) {
       const shouldUpdatePackage = await abortIfCancelled(
-        clack.confirm({
+        getUI().confirm({
           message: `The ${chalk.bold.cyan(
             packageNameDisplayLabel ?? packageName,
           )} package is already installed. Do you want to update it to the latest version?`,
@@ -331,7 +329,7 @@ export async function installPackage({
       }
     }
 
-    const sdkInstallSpinner = clack.spinner();
+    const sdkInstallSpinner = getUI().spinner();
 
     const pkgManager =
       packageManager || (await getPackageManager({ installDir }));
@@ -378,7 +376,7 @@ export async function installPackage({
       });
     } catch (e) {
       sdkInstallSpinner.stop('Installation failed.');
-      clack.log.error(
+      getUI().log.error(
         `${chalk.red(
           'Encountered the following error during installation:',
           // eslint-disable-next-line @typescript-eslint/restrict-template-expressions
@@ -428,7 +426,7 @@ export async function ensurePackageIsInstalled(
 
     if (!installed) {
       const continueWithoutPackage = await abortIfCancelled(
-        clack.confirm({
+        getUI().confirm({
           message: `${packageName} does not seem to be installed. Do you still want to continue?`,
           initialValue: false,
         }),
@@ -447,7 +445,7 @@ export async function getPackageDotJson({
   const packageJsonFileContents = await fs.promises
     .readFile(join(installDir, 'package.json'), 'utf8')
     .catch(() => {
-      clack.log.error(
+      getUI().log.error(
         'Could not find package.json. Make sure to run the wizard in the root of your app!',
       );
       return abort();
@@ -459,7 +457,7 @@ export async function getPackageDotJson({
     // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
     packageJson = JSON.parse(packageJsonFileContents);
   } catch {
-    clack.log.error(
+    getUI().log.error(
       `Unable to parse your ${chalk.cyan(
         'package.json',
       )}. Make sure it has a valid format!`,
@@ -504,7 +502,7 @@ export async function updatePackageDotJson(
       },
     );
   } catch {
-    clack.log.error(`Unable to update your ${chalk.cyan('package.json')}.`);
+    getUI().log.error(`Unable to update your ${chalk.cyan('package.json')}.`);
 
     await abort();
   }
@@ -528,7 +526,7 @@ export async function getPackageManager(
   if (options.ci) {
     const selectedPackageManager =
       detectedPackageManagers.length > 0 ? detectedPackageManagers[0] : npm;
-    clack.log.info(
+    getUI().log.info(
       `CI mode: auto-selected package manager: ${selectedPackageManager.label}`,
     );
     analytics.setTag('package-manager', selectedPackageManager.name);
@@ -548,7 +546,7 @@ export async function getPackageManager(
 
   const selectedPackageManager: PackageManager | symbol =
     await abortIfCancelled(
-      clack.select({
+      getUI().select({
         message,
         options: pkgOptions.map((packageManager) => ({
           value: packageManager,
@@ -593,7 +591,7 @@ export async function getOrAskForProjectData(
   // CI mode: bypass OAuth, use personal API key for LLM gateway
   if (_options.ci && _options.apiKey) {
     const host = getHostFromRegion(_options.cloudRegion);
-    clack.log.info('Using provided API key (CI mode - OAuth bypassed)');
+    getUI().log.info('Using provided API key (CI mode - OAuth bypassed)');
 
     const projectData = await fetchProjectDataWithApiKey(
       _options.apiKey,
@@ -618,12 +616,13 @@ export async function getOrAskForProjectData(
   );
 
   if (!projectApiKey) {
-    clack.log.error(`Didn't receive a project API key. This shouldn't happen :(
+    getUI().log
+      .error(`Didn't receive a project API key. This shouldn't happen :(
 
 Please let us know if you think this is a bug in the wizard:
 ${chalk.cyan(ISSUES_URL)}`);
 
-    clack.log
+    getUI().log
       .info(`In the meantime, we'll add a dummy project API key (${chalk.cyan(
       `"${DUMMY_PROJECT_API_KEY}"`,
     )}) for you to replace later.
@@ -691,7 +690,7 @@ async function askForWizardLogin(options: {
       step: 'wizard_login',
       has_scoped_teams: !!tokenResponse.scoped_teams,
     });
-    clack.log.error(error.message);
+    getUI().log.error(error.message);
     await abort();
   }
 
@@ -713,7 +712,7 @@ async function askForWizardLogin(options: {
     projectId: projectId!,
   };
 
-  clack.log.success(
+  getUI().log.success(
     `Login complete. ${options.signup ? 'Welcome to PostHog! 🎉' : ''}`,
   );
   analytics.setTag('opened-wizard-link', true);
@@ -739,7 +738,7 @@ export async function askForToolConfigPath(
   configFileName: string,
 ): Promise<string | undefined> {
   const hasConfig = await abortIfCancelled(
-    clack.confirm({
+    getUI().confirm({
       message: `Do you have a ${toolName} config file (e.g. ${chalk.cyan(
         configFileName,
       )})?`,
@@ -752,7 +751,7 @@ export async function askForToolConfigPath(
   }
 
   return await abortIfCancelled(
-    clack.text({
+    getUI().text({
       message: `Please enter the path to your ${toolName} config file:`,
       placeholder: join('.', configFileName),
       validate: (value) => {
@@ -797,7 +796,7 @@ export async function showCopyPasteInstructions(
   codeSnippet: string,
   hint?: string,
 ): Promise<void> {
-  clack.log.step(
+  getUI().log.step(
     `Add the following code to your ${chalk.cyan(basename(filename))} file:${
       hint ? chalk.dim(` (${chalk.dim(hint)})`) : ''
     }`,
@@ -810,7 +809,7 @@ export async function showCopyPasteInstructions(
   console.log(`\n${codeSnippet}\n`);
 
   await abortIfCancelled(
-    clack.select({
+    getUI().select({
       message: 'Did you apply the snippet above?',
       options: [{ label: 'Yes, continue!', value: true }],
       initialValue: true,
@@ -892,16 +891,16 @@ export async function createNewConfigFile(
   try {
     await fs.promises.writeFile(filepath, codeSnippet);
 
-    clack.log.success(`Added new ${prettyFilename} file.`);
+    getUI().log.success(`Added new ${prettyFilename} file.`);
 
     if (moreInformation) {
-      clack.log.info(chalk.gray(moreInformation));
+      getUI().log.info(chalk.gray(moreInformation));
     }
 
     return true;
   } catch (e) {
     debug(e);
-    clack.log.warn(
+    getUI().log.warn(
       `Could not create a new ${prettyFilename} file. Please create one manually and follow the instructions below.`,
     );
   }
@@ -917,7 +916,7 @@ export async function featureSelectionPrompt<F extends ReadonlyArray<Feature>>(
 
     for (const feature of features) {
       const selected = await abortIfCancelled(
-        clack.select({
+        getUI().select({
           message: feature.prompt,
           initialValue: true,
           options: [
@@ -947,7 +946,7 @@ export async function askShouldInstallPackage(
 ): Promise<boolean> {
   return traceStep(`ask-install-package`, () =>
     abortIfCancelled(
-      clack.confirm({
+      getUI().confirm({
         message: `Do you want to install ${chalk.cyan(pkgName)}?`,
       }),
     ),
@@ -960,7 +959,7 @@ export async function askShouldAddPackageOverride(
 ): Promise<boolean> {
   return traceStep(`ask-add-package-override`, () =>
     abortIfCancelled(
-      clack.confirm({
+      getUI().confirm({
         message: `Do you want to add an override for ${chalk.cyan(
           pkgName,
         )} version ${chalk.cyan(pkgVersion)}?`,
@@ -978,7 +977,7 @@ export async function askForAIConsent(
       options.default || options.ci
         ? true
         : await abortIfCancelled(
-            clack.select({
+            getUI().select({
               message:
                 'This setup wizard uses AI, are you happy to continue? ✨',
               options: [
@@ -1004,7 +1003,7 @@ export async function askForAIConsent(
 export async function askForCloudRegion(): Promise<CloudRegion> {
   return await traceStep('ask-for-cloud-region', async () => {
     const cloudRegion: CloudRegion = await abortIfCancelled(
-      clack.select({
+      getUI().select({
         message: 'Select your PostHog Cloud region',
         options: [
           {

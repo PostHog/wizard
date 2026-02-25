@@ -8,7 +8,7 @@ import {
   hasPackageInstalled,
   type PackageDotJson,
 } from '../utils/package-json';
-import { getPackageDotJson, tryGetPackageJson } from '../utils/clack-utils';
+import { getPackageDotJson, tryGetPackageJson } from '../utils/setup-utils';
 import {
   getReactRouterMode,
   getReactRouterModeName,

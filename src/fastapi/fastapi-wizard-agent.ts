@@ -6,7 +6,7 @@ import { detectPythonPackageManagers } from '../lib/package-manager-detection';
 import { enableDebugLogs } from '../utils/debug';
 import { runAgentWizard } from '../lib/agent-runner';
 import { Integration } from '../lib/constants';
-import clack from '../utils/clack';
+import { getUI } from '../ui';
 import chalk from 'chalk';
 import * as semver from 'semver';
 import {
@@ -219,11 +219,11 @@ export async function runFastAPIWizardAgent(
         FASTAPI_AGENT_CONFIG.metadata.unsupportedVersionDocsUrl ??
         FASTAPI_AGENT_CONFIG.metadata.docsUrl;
 
-      clack.log.warn(
+      getUI().log.warn(
         `Sorry: the wizard can't help you with FastAPI ${fastapiVersion}. Upgrade to FastAPI ${MINIMUM_FASTAPI_VERSION} or later, or check out the manual setup guide.`,
       );
-      clack.log.info(`Setup FastAPI manually: ${chalk.cyan(docsUrl)}`);
-      clack.outro('PostHog wizard will see you next time!');
+      getUI().log.info(`Setup FastAPI manually: ${chalk.cyan(docsUrl)}`);
+      getUI().outro('PostHog wizard will see you next time!');
       return;
     }
   }

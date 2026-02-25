@@ -1,5 +1,5 @@
 import fg from 'fast-glob';
-import clack from '../utils/clack';
+import { getUI } from '../ui';
 import type { WizardOptions } from '../utils/types';
 import { createVersionBucket } from '../utils/semver';
 import * as fs from 'node:fs';
@@ -170,16 +170,16 @@ export async function getLaravelProjectType(
 ): Promise<LaravelProjectType> {
   // Check for SPA/Reactive frameworks (important to detect - affects SDK needs)
   if (await hasInertia(options)) {
-    clack.log.info('Detected Laravel with Inertia.js');
+    getUI().log.info('Detected Laravel with Inertia.js');
     return LaravelProjectType.INERTIA;
   }
   if (await hasLivewire(options)) {
-    clack.log.info('Detected Laravel with Livewire');
+    getUI().log.info('Detected Laravel with Livewire');
     return LaravelProjectType.LIVEWIRE;
   }
 
   // Default to standard
-  clack.log.info('Detected standard Laravel project');
+  getUI().log.info('Detected standard Laravel project');
   return LaravelProjectType.STANDARD;
 }
 

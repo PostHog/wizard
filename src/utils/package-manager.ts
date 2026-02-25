@@ -2,7 +2,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { traceStep } from '../telemetry';
-import { getPackageDotJson, updatePackageDotJson } from './clack-utils';
+import { getPackageDotJson, updatePackageDotJson } from './setup-utils';
 import { analytics } from './analytics';
 import type { WizardOptions } from './types';
 

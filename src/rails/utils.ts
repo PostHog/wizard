@@ -1,5 +1,5 @@
 import fg from 'fast-glob';
-import clack from '../utils/clack';
+import { getUI } from '../ui';
 import type { WizardOptions } from '../utils/types';
 import { createVersionBucket } from '../utils/semver';
 import * as fs from 'node:fs';
@@ -94,7 +94,7 @@ export function getRailsProjectType(options: WizardOptions): RailsProjectType {
     try {
       const content = fs.readFileSync(appConfigPath, 'utf-8');
       if (content.includes('config.api_only = true')) {
-        clack.log.info('Detected Rails API-only project');
+        getUI().log.info('Detected Rails API-only project');
         return RailsProjectType.API;
       }
     } catch {
@@ -102,7 +102,7 @@ export function getRailsProjectType(options: WizardOptions): RailsProjectType {
     }
   }
 
-  clack.log.info('Detected standard Rails project');
+  getUI().log.info('Detected standard Rails project');
   return RailsProjectType.STANDARD;
 }
 

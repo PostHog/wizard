@@ -1,6 +1,6 @@
 import fg from 'fast-glob';
-import { abortIfCancelled } from '../utils/clack-utils';
-import clack from '../utils/clack';
+import { abortIfCancelled } from '../utils/setup-utils';
+import { getUI } from '../ui';
 import type { WizardOptions } from '../utils/types';
 import { Integration } from '../lib/constants';
 import { createVersionBucket } from '../utils/semver';
@@ -39,21 +39,21 @@ export async function getNextJsRouter({
   const hasAppDir = appMatches.length > 0;
 
   if (hasPagesDir && !hasAppDir) {
-    clack.log.info(
+    getUI().log.info(
       `Detected ${getNextJsRouterName(NextJsRouter.PAGES_ROUTER)} 📃`,
     );
     return NextJsRouter.PAGES_ROUTER;
   }
 
   if (hasAppDir && !hasPagesDir) {
-    clack.log.info(
+    getUI().log.info(
       `Detected ${getNextJsRouterName(NextJsRouter.APP_ROUTER)} 📱`,
     );
     return NextJsRouter.APP_ROUTER;
   }
 
   const result: NextJsRouter = await abortIfCancelled(
-    clack.select({
+    getUI().select({
       message: 'What router are you using?',
       options: [
         {

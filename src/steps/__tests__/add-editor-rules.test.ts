@@ -2,7 +2,7 @@ import * as fs from 'fs';
 import path from 'path';
 import { addEditorRulesStep } from '../add-editor-rules';
 import { analytics } from '../../utils/analytics';
-import clack from '../../utils/clack';
+
 import { Integration } from '../../lib/constants';
 import chalk from 'chalk';
 
@@ -23,13 +23,21 @@ jest.mock('../../utils/analytics', () => ({
   },
 }));
 
-jest.mock('../../utils/clack', () => ({
+const mockUI = {
   log: {
     info: jest.fn(),
+    warn: jest.fn(),
+    error: jest.fn(),
+    success: jest.fn(),
+    step: jest.fn(),
   },
   select: jest.fn().mockResolvedValue(true),
   isCancel: jest.fn((value: unknown): value is symbol => false),
   cancel: jest.fn(),
+};
+
+jest.mock('../../ui', () => ({
+  getUI: () => mockUI,
 }));
 
 describe('addEditorRules', () => {
@@ -45,10 +53,10 @@ describe('addEditorRules', () => {
   const writeFileMock = fs.promises.writeFile as jest.Mock;
   // eslint-disable-next-line @typescript-eslint/unbound-method
   const captureMock = analytics.capture as jest.Mock;
-  const infoMock = clack.log.info as jest.Mock;
-  const selectMock = clack.select as jest.Mock;
-  const isCancelMock = clack.isCancel as unknown as jest.Mock;
-  const cancelMock = clack.cancel as jest.Mock;
+  const infoMock = mockUI.log.info;
+  const selectMock = mockUI.select;
+  const isCancelMock = mockUI.isCancel as unknown as jest.Mock;
+  const cancelMock = mockUI.cancel;
 
   beforeEach(() => {
     // Reset all mocks before each test

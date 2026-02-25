@@ -15,11 +15,11 @@ import {
   isUsingTypeScript,
   printWelcome,
   askForCloudRegion,
-} from '../utils/clack-utils';
+} from '../utils/setup-utils';
 import type { PackageDotJson } from '../utils/package-json';
 import { analytics } from '../utils/analytics';
 import { WIZARD_INTERACTION_EVENT_NAME } from './constants';
-import clack from '../utils/clack';
+import { getUI } from '../ui';
 import {
   initializeAgent,
   runAgent,
@@ -56,13 +56,13 @@ export async function runAgentWizard(
       if (coerced && semver.lt(coerced, config.detection.minimumVersion)) {
         const docsUrl =
           config.metadata.unsupportedVersionDocsUrl ?? config.metadata.docsUrl;
-        clack.log.warn(
+        getUI().log.warn(
           `Sorry: the wizard can't help you with ${config.metadata.name} ${version}. Upgrade to ${config.metadata.name} ${config.detection.minimumVersion} or later, or check out the manual setup guide.`,
         );
-        clack.log.info(
+        getUI().log.info(
           `Setup ${config.metadata.name} manually: ${chalk.cyan(docsUrl)}`,
         );
-        clack.outro('PostHog wizard will see you next time!');
+        getUI().outro('PostHog wizard will see you next time!');
         return;
       }
     }
@@ -72,7 +72,7 @@ export async function runAgentWizard(
   printWelcome({ wizardName: getWelcomeMessage(config.metadata.name) });
 
   if (config.metadata.beta) {
-    clack.log.info(
+    getUI().log.info(
       `${chalk.yellow('[BETA]')} The ${
         config.metadata.name
       } wizard is in beta. Questions or feedback? Email ${chalk.cyan(
@@ -82,10 +82,10 @@ export async function runAgentWizard(
   }
 
   if (config.metadata.preRunNotice) {
-    clack.log.warn(config.metadata.preRunNotice);
+    getUI().log.warn(config.metadata.preRunNotice);
   }
 
-  clack.log.info(
+  getUI().log.info(
     `We're about to read your project using our LLM gateway.\n\n.env* file contents will not leave your machine.\n\nOther files will be read and edited to provide a fully-custom PostHog integration.`,
   );
 
@@ -171,7 +171,7 @@ export async function runAgentWizard(
   );
 
   // Initialize and run agent
-  const spinner = clack.spinner();
+  const spinner = getUI().spinner();
 
   // Determine MCP URL: CLI flag > env var > production default
   // Use EU subdomain for EU users to work around Claude Code's OAuth bug
@@ -182,6 +182,9 @@ export async function runAgentWizard(
       (cloudRegion === 'eu'
         ? 'https://mcp-eu.posthog.com/mcp'
         : 'https://mcp.posthog.com/mcp');
+
+  // Transition to run screen
+  getUI().startRun();
 
   const agent = await initializeAgent(
     {
@@ -230,7 +233,7 @@ Please try again, or set up ${
     } manually by following our documentation:
 ${chalk.cyan(config.metadata.docsUrl)}`;
 
-    clack.outro(errorMessage);
+    getUI().outro(errorMessage);
     await analytics.shutdown('error');
     process.exit(1);
   }
@@ -255,7 +258,7 @@ Please try again, or set up ${
     } manually by following our documentation:
 ${chalk.cyan(config.metadata.docsUrl)}`;
 
-    clack.outro(errorMessage);
+    getUI().outro(errorMessage);
     await analytics.shutdown('error');
     process.exit(1);
   }
@@ -283,7 +286,7 @@ ${chalk.yellow(agentResult.message || 'Unknown error')}
 
 Please report this error to: ${chalk.cyan('wizard@posthog.com')}`;
 
-    clack.outro(errorMessage);
+    getUI().outro(errorMessage);
     await analytics.shutdown('error');
     process.exit(1);
   }
@@ -346,7 +349,7 @@ ${chalk.dim(
 
 ${chalk.dim(`How did this work for you? Drop us a line: wizard@posthog.com`)}`;
 
-  clack.outro(outroMessage);
+  getUI().outro(outroMessage);
 
   await analytics.shutdown('success');
 }

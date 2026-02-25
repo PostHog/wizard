@@ -1,5 +1,5 @@
 import readEnv from 'read-env';
-import { getPackageDotJson } from './clack-utils';
+import { getPackageDotJson } from './setup-utils';
 import type { WizardOptions } from './types';
 import fg from 'fast-glob';
 import { IS_DEV } from '../lib/constants';

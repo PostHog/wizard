@@ -1,7 +1,7 @@
 import chalk from 'chalk';
 import { appendFileSync } from 'fs';
 import { prepareMessage } from './logging';
-import clack from './clack';
+import { getUI } from '../ui';
 
 let debugEnabled = false;
 
@@ -45,7 +45,7 @@ export function debug(...args: unknown[]) {
 
   const msg = args.map((a) => prepareMessage(a)).join(' ');
 
-  clack.log.info(chalk.dim(msg));
+  getUI().log.info(chalk.dim(msg));
 }
 
 export function enableDebugLogs() {

@@ -1,8 +1,8 @@
 import { runAgent } from '../agent-interface';
 import type { WizardOptions } from '../../utils/types';
+import type { SpinnerHandle } from '../../ui';
 
 // Mock dependencies
-jest.mock('../../utils/clack');
 jest.mock('../../utils/analytics');
 jest.mock('../../utils/debug');
 
@@ -12,15 +12,39 @@ jest.mock('@anthropic-ai/claude-agent-sdk', () => ({
   query: (...args: unknown[]) => mockQuery(...args),
 }));
 
-// Get mocked clack for spinner
-import clack from '../../utils/clack';
-const mockClack = clack as jest.Mocked<typeof clack>;
+// Mock the UI layer
+const mockUIInstance = {
+  log: {
+    step: jest.fn(),
+    success: jest.fn(),
+    error: jest.fn(),
+    warn: jest.fn(),
+    info: jest.fn(),
+  },
+  spinner: jest.fn(),
+  select: jest.fn(),
+  confirm: jest.fn(),
+  text: jest.fn(),
+  intro: jest.fn(),
+  outro: jest.fn(),
+  cancel: jest.fn(),
+  note: jest.fn(),
+  isCancel: jest.fn(),
+  pushStatus: jest.fn(),
+  startRun: jest.fn(),
+  syncTodos: jest.fn(),
+  groupMultiselect: jest.fn(),
+  multiselect: jest.fn(),
+};
+jest.mock('../../ui', () => ({
+  getUI: () => mockUIInstance,
+}));
 
 describe('runAgent', () => {
   let mockSpinner: {
     start: jest.Mock;
     stop: jest.Mock;
-    message: string;
+    message: jest.Mock;
   };
 
   const defaultOptions: WizardOptions = {
@@ -46,19 +70,12 @@ describe('runAgent', () => {
     mockSpinner = {
       start: jest.fn(),
       stop: jest.fn(),
-      message: '',
-    };
-
-    mockClack.spinner = jest.fn().mockReturnValue(mockSpinner);
-    mockClack.log = {
-      step: jest.fn(),
-      success: jest.fn(),
-      error: jest.fn(),
-      warn: jest.fn(),
-      warning: jest.fn(),
-      info: jest.fn(),
       message: jest.fn(),
     };
+
+    mockUIInstance.spinner.mockReturnValue(mockSpinner);
+    // Reset log mocks
+    Object.values(mockUIInstance.log).forEach((fn) => fn.mockReset());
   });
 
   describe('race condition handling', () => {
@@ -96,7 +113,7 @@ describe('runAgent', () => {
         defaultAgentConfig,
         'test prompt',
         defaultOptions,
-        mockSpinner as unknown as ReturnType<typeof clack.spinner>,
+        mockSpinner as unknown as SpinnerHandle,
         {
           successMessage: 'Test success',
           errorMessage: 'Test error',
@@ -131,7 +148,7 @@ describe('runAgent', () => {
           defaultAgentConfig,
           'test prompt',
           defaultOptions,
-          mockSpinner as unknown as ReturnType<typeof clack.spinner>,
+          mockSpinner as unknown as SpinnerHandle,
           {
             successMessage: 'Test success',
             errorMessage: 'Test error',
@@ -171,7 +188,7 @@ describe('runAgent', () => {
         defaultAgentConfig,
         'test prompt',
         defaultOptions,
-        mockSpinner as unknown as ReturnType<typeof clack.spinner>,
+        mockSpinner as unknown as SpinnerHandle,
         {
           successMessage: 'Test success',
           errorMessage: 'Test error',
@@ -236,7 +253,7 @@ describe('runAgent', () => {
         defaultAgentConfig,
         'test prompt',
         defaultOptions,
-        mockSpinner as unknown as ReturnType<typeof clack.spinner>,
+        mockSpinner as unknown as SpinnerHandle,
         {
           successMessage: 'Test success',
           errorMessage: 'Test error',
@@ -247,8 +264,8 @@ describe('runAgent', () => {
       expect(result).toEqual({});
       expect(mockSpinner.stop).toHaveBeenCalledWith('Test success');
 
-      // clack.log.error should NOT have been called (errors suppressed for user)
-      expect(mockClack.log.error).not.toHaveBeenCalled();
+      // ui.log.error should NOT have been called (errors suppressed for user)
+      expect(mockUIInstance.log.error).not.toHaveBeenCalled();
     });
   });
 });
