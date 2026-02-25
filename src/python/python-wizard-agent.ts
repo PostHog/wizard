@@ -1,4 +1,4 @@
-/* Generic Python language wizard using posthog-agent with PostHog MCP */
+/* Generic Python wizard using posthog-agent with PostHog MCP */
 import type { WizardOptions } from '../utils/types';
 import type { FrameworkConfig } from '../lib/framework-config';
 import { PYTHON_PACKAGE_INSTALLATION } from '../lib/framework-config';
