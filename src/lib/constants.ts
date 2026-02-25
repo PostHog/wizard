@@ -55,3 +55,12 @@ export const OAUTH_PORT = 8239;
 
 export const WIZARD_INTERACTION_EVENT_NAME = 'wizard interaction';
 export const WIZARD_REMARK_EVENT_NAME = 'wizard remark';
+
+/** Feature flag key whose value selects a variant from WIZARD_VARIANTS. */
+export const WIZARD_VARIANT_FLAG_KEY = 'wizard-variant';
+
+/** Variant key -> metadata for wizard run (VARIANT flag selects which entry to use). */
+export const WIZARD_VARIANTS: Record<string, Record<string, string>> = {
+  base: { VARIANT: 'base' },
+  subagents: { VARIANT: 'subagents' },
+};
