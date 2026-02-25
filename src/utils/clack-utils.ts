@@ -680,11 +680,18 @@ async function fetchProjectDataWithApiKey(
     );
   }
 
-  const projectData = await fetchProjectData(apiKey, projectId, cloudUrl);
-  return {
-    api_token: projectData.api_token,
-    id: projectId,
-  };
+  try {
+    const projectData = await fetchProjectData(apiKey, projectId, cloudUrl);
+    return {
+      api_token: projectData.api_token,
+      id: projectId,
+    };
+  } catch (error) {
+    throw new Error(
+      `Failed to fetch project data for project ${projectId} (resolved from your user's last selected project in the PostHog app). This can happen if your API key is scoped to a different project or organization.\n\nTry passing --project-id or setting the POSTHOG_WIZARD_PROJECT_ID environment variable explicitly.`,
+      { cause: error },
+    );
+  }
 }
 
 async function askForWizardLogin(options: {
