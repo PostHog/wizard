@@ -25,6 +25,7 @@ export enum Integration {
   python = 'python',
   ruby = 'ruby',
   javascriptNode = 'javascript_node',
+  javascript_web = 'javascript_web',
 }
 export interface Args {
   debug: boolean;
