@@ -170,16 +170,16 @@ export async function getLaravelProjectType(
 ): Promise<LaravelProjectType> {
   // Check for SPA/Reactive frameworks (important to detect - affects SDK needs)
   if (await hasInertia(options)) {
-    getUI().log.info('Detected Laravel with Inertia.js');
+    getUI().setSetupData({ detectedFramework: 'Laravel with Inertia.js' });
     return LaravelProjectType.INERTIA;
   }
   if (await hasLivewire(options)) {
-    getUI().log.info('Detected Laravel with Livewire');
+    getUI().setSetupData({ detectedFramework: 'Laravel with Livewire' });
     return LaravelProjectType.LIVEWIRE;
   }
 
   // Default to standard
-  getUI().log.info('Detected standard Laravel project');
+  getUI().setSetupData({ detectedFramework: 'Laravel' });
   return LaravelProjectType.STANDARD;
 }
 

@@ -4,12 +4,13 @@
  * Uses console.log with simple prefix icons. No dependencies.
  */
 
-import type {
-  WizardUI,
-  SpinnerHandle,
-  SelectOption,
-  GroupMultiselectOptions,
-  MultiselectOptions,
+import {
+  TaskStatus,
+  type WizardUI,
+  type SpinnerHandle,
+  type SelectOption,
+  type GroupMultiselectOptions,
+  type MultiselectOptions,
 } from './wizard-ui';
 
 export class ConsoleUI implements WizardUI {
@@ -54,6 +55,21 @@ export class ConsoleUI implements WizardUI {
     const values = opts.initialValues ?? opts.options.map((o) => o.value);
     console.log(`◇  ${opts.message} → [${values.length} selected]`);
     return values;
+  }
+
+  setSetupData(data: {
+    wizardLabel?: string;
+    detectedFramework?: string;
+    betaNotice?: string;
+    preRunNotice?: string;
+    disclosure?: string;
+  }): void {
+    if (data.wizardLabel) console.log(`┌  ${data.wizardLabel}`);
+    if (data.detectedFramework)
+      console.log(`✔  Detected integration: ${data.detectedFramework}`);
+    if (data.betaNotice) console.log(`│  ${data.betaNotice}`);
+    if (data.preRunNotice) console.log(`▲  ${data.preRunNotice}`);
+    if (data.disclosure) console.log(`│  ${data.disclosure}`);
   }
 
   intro(message: string): void {
@@ -119,8 +135,10 @@ export class ConsoleUI implements WizardUI {
   syncTodos(
     todos: Array<{ content: string; status: string; activeForm?: string }>,
   ): void {
-    const completed = todos.filter((t) => t.status === 'completed').length;
-    const inProgress = todos.find((t) => t.status === 'in_progress');
+    const completed = todos.filter(
+      (t) => t.status === TaskStatus.Completed,
+    ).length;
+    const inProgress = todos.find((t) => t.status === TaskStatus.InProgress);
     if (inProgress) {
       console.log(
         `◌  [${completed}/${todos.length}] ${

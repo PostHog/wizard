@@ -34,6 +34,7 @@ const mockUI = {
   select: jest.fn().mockResolvedValue(true),
   isCancel: jest.fn((value: unknown): value is symbol => false),
   cancel: jest.fn(),
+  setSetupData: jest.fn(),
 };
 
 jest.mock('../../ui', () => ({

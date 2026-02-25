@@ -135,13 +135,17 @@ export async function getTanStackRouterMode(
 
   const isFileBased = await hasFileBasedRouting({ installDir });
   if (isFileBased) {
-    getUI().log.info('Detected TanStack Router file-based routing');
+    getUI().setSetupData({
+      detectedFramework: 'TanStack Router file-based routing',
+    });
     return TanStackRouterMode.FILE_BASED;
   }
 
   const isCodeBased = await hasCodeBasedRouting({ installDir });
   if (isCodeBased) {
-    getUI().log.info('Detected TanStack Router code-based routing');
+    getUI().setSetupData({
+      detectedFramework: 'TanStack Router code-based routing',
+    });
     return TanStackRouterMode.CODE_BASED;
   }
 

@@ -39,16 +39,16 @@ export async function getNextJsRouter({
   const hasAppDir = appMatches.length > 0;
 
   if (hasPagesDir && !hasAppDir) {
-    getUI().log.info(
-      `Detected ${getNextJsRouterName(NextJsRouter.PAGES_ROUTER)} 📃`,
-    );
+    getUI().setSetupData({
+      detectedFramework: `${getNextJsRouterName(NextJsRouter.PAGES_ROUTER)} 📃`,
+    });
     return NextJsRouter.PAGES_ROUTER;
   }
 
   if (hasAppDir && !hasPagesDir) {
-    getUI().log.info(
-      `Detected ${getNextJsRouterName(NextJsRouter.APP_ROUTER)} 📱`,
-    );
+    getUI().setSetupData({
+      detectedFramework: `${getNextJsRouterName(NextJsRouter.APP_ROUTER)} 📱`,
+    });
     return NextJsRouter.APP_ROUTER;
   }
 

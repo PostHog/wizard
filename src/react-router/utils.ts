@@ -164,7 +164,7 @@ export async function getReactRouterMode(
 
   // If v6, return V6
   if (majorVersion === 6) {
-    getUI().log.info('Detected React Router v6');
+    getUI().setSetupData({ detectedFramework: 'React Router v6' });
     return ReactRouterMode.V6;
   }
 
@@ -173,21 +173,27 @@ export async function getReactRouterMode(
     // First check for framework mode (react-router.config.ts)
     const hasConfig = await hasReactRouterConfig({ installDir });
     if (hasConfig) {
-      getUI().log.info('Detected React Router v7 - Framework mode');
+      getUI().setSetupData({
+        detectedFramework: 'React Router v7 - Framework mode',
+      });
       return ReactRouterMode.V7_FRAMEWORK;
     }
 
     // Check for data mode (createBrowserRouter)
     const hasDataMode = await hasCreateBrowserRouter({ installDir });
     if (hasDataMode) {
-      getUI().log.info('Detected React Router v7 - Data mode');
+      getUI().setSetupData({
+        detectedFramework: 'React Router v7 - Data mode',
+      });
       return ReactRouterMode.V7_DATA;
     }
 
     // Check for declarative mode (BrowserRouter)
     const hasDeclarative = await hasDeclarativeRouter({ installDir });
     if (hasDeclarative) {
-      getUI().log.info('Detected React Router v7 - Declarative mode');
+      getUI().setSetupData({
+        detectedFramework: 'React Router v7 - Declarative mode',
+      });
       return ReactRouterMode.V7_DECLARATIVE;
     }
 

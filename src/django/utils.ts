@@ -188,24 +188,24 @@ export async function getDjangoProjectType(
 
   // Check for Wagtail first (CMS)
   if (await hasWagtail({ installDir })) {
-    getUI().log.info('Detected Django with Wagtail CMS');
+    getUI().setSetupData({ detectedFramework: 'Django with Wagtail CMS' });
     return DjangoProjectType.WAGTAIL;
   }
 
   // Check for Django REST Framework
   if (await hasDRF({ installDir })) {
-    getUI().log.info('Detected Django REST Framework project');
+    getUI().setSetupData({ detectedFramework: 'Django REST Framework' });
     return DjangoProjectType.DRF;
   }
 
   // Check for Django Channels
   if (await hasChannels({ installDir })) {
-    getUI().log.info('Detected Django Channels project');
+    getUI().setSetupData({ detectedFramework: 'Django Channels' });
     return DjangoProjectType.CHANNELS;
   }
 
   // Default to standard Django
-  getUI().log.info('Detected standard Django project');
+  getUI().setSetupData({ detectedFramework: 'Django' });
   return DjangoProjectType.STANDARD;
 }
 

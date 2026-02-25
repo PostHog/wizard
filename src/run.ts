@@ -138,9 +138,10 @@ async function getIntegrationForSetup(
     const detectedIntegration = await detectIntegration(options);
 
     if (detectedIntegration) {
-      getUI().log.success(
-        `Detected integration: ${FRAMEWORK_REGISTRY[detectedIntegration].metadata.name}`,
-      );
+      getUI().setSetupData({
+        detectedFramework:
+          FRAMEWORK_REGISTRY[detectedIntegration].metadata.name,
+      });
       return detectedIntegration;
     }
 

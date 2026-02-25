@@ -72,22 +72,18 @@ export async function runAgentWizard(
   printWelcome({ wizardName: getWelcomeMessage(config.metadata.name) });
 
   if (config.metadata.beta) {
-    getUI().log.info(
-      `${chalk.yellow('[BETA]')} The ${
-        config.metadata.name
-      } wizard is in beta. Questions or feedback? Email ${chalk.cyan(
-        'wizard@posthog.com',
-      )}`,
-    );
+    getUI().setSetupData({
+      betaNotice: `[BETA] The ${config.metadata.name} wizard is in beta. Questions or feedback? Email wizard@posthog.com`,
+    });
   }
 
   if (config.metadata.preRunNotice) {
-    getUI().log.warn(config.metadata.preRunNotice);
+    getUI().setSetupData({ preRunNotice: config.metadata.preRunNotice });
   }
 
-  getUI().log.info(
-    `We're about to read your project using our LLM gateway.\n\n.env* file contents will not leave your machine.\n\nOther files will be read and edited to provide a fully-custom PostHog integration.`,
-  );
+  getUI().setSetupData({
+    disclosure: `We're about to read your project using our LLM gateway.\n\n.env* file contents will not leave your machine.\n\nOther files will be read and edited to provide a fully-custom PostHog integration.`,
+  });
 
   const aiConsent = await askForAIConsent(options);
   if (!aiConsent) {

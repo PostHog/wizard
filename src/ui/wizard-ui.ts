@@ -5,6 +5,12 @@
  * Implementations: ClackUI (legacy/CI), InkUI (TUI), ConsoleUI (CI).
  */
 
+export enum TaskStatus {
+  Pending = 'pending',
+  InProgress = 'in_progress',
+  Completed = 'completed',
+}
+
 export interface SpinnerHandle {
   start(message?: string): void;
   stop(message?: string): void;
@@ -76,6 +82,15 @@ export interface WizardUI {
 
   // Cancel detection
   isCancel(value: unknown): value is symbol;
+
+  // Structured setup data (for TUI intro view)
+  setSetupData(data: {
+    wizardLabel?: string;
+    detectedFramework?: string;
+    betaNotice?: string;
+    preRunNotice?: string;
+    disclosure?: string;
+  }): void;
 
   // Status push (for TUI status panel)
   pushStatus(message: string): void;

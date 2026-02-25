@@ -30,6 +30,7 @@ const mockUIInstance = {
   cancel: jest.fn(),
   note: jest.fn(),
   isCancel: jest.fn(),
+  setSetupData: jest.fn(),
   pushStatus: jest.fn(),
   startRun: jest.fn(),
   syncTodos: jest.fn(),

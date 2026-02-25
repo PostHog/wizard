@@ -4,6 +4,9 @@
  */
 
 import { EventEmitter } from 'events';
+import { TaskStatus } from '../wizard-ui.js';
+
+export { TaskStatus };
 
 export type WizardPhase = 'setup' | 'running' | 'done';
 
@@ -39,8 +42,6 @@ export interface CompletedPrompt {
   message: string;
   answer: string;
 }
-
-export type TaskStatus = 'pending' | 'in_progress' | 'completed';
 
 export interface TaskItem {
   label: string;
@@ -144,7 +145,9 @@ export class WizardStore extends EventEmitter {
   updateTask(index: number, done: boolean): void {
     if (this.tasks[index]) {
       this.tasks[index].done = done;
-      this.tasks[index].status = done ? 'completed' : 'pending';
+      this.tasks[index].status = done
+        ? TaskStatus.Completed
+        : TaskStatus.Pending;
       this.bump();
     }
   }
@@ -160,8 +163,8 @@ export class WizardStore extends EventEmitter {
     const incoming = todos.map((t) => ({
       label: t.content,
       activeForm: t.activeForm,
-      status: (t.status as TaskStatus) || 'pending',
-      done: t.status === 'completed',
+      status: (t.status as TaskStatus) || TaskStatus.Pending,
+      done: t.status === TaskStatus.Completed,
     }));
 
     const incomingLabels = new Set(incoming.map((t) => t.label));

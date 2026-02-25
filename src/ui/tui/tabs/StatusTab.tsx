@@ -5,7 +5,7 @@
 
 import { Box, Text } from 'ink';
 import { useSyncExternalStore } from 'react';
-import type { WizardStore } from '../store.js';
+import { TaskStatus, type WizardStore } from '../store.js';
 import { PromptRenderer } from '../components/PromptRenderer.js';
 
 interface StatusTabProps {
@@ -31,26 +31,29 @@ export const StatusTab = ({ store }: StatusTabProps) => {
           <Text> </Text>
           {tasks.map((task, i) => {
             const icon =
-              task.status === 'completed'
+              task.status === TaskStatus.Completed
                 ? '\u25FC'
-                : task.status === 'in_progress'
+                : task.status === TaskStatus.InProgress
                 ? '\u25B6'
                 : '\u25FB';
             const color =
-              task.status === 'completed'
+              task.status === TaskStatus.Completed
                 ? 'green'
-                : task.status === 'in_progress'
+                : task.status === TaskStatus.InProgress
                 ? 'cyan'
                 : 'gray';
             const label =
-              task.status === 'in_progress' && task.activeForm
+              task.status === TaskStatus.InProgress && task.activeForm
                 ? task.activeForm
                 : task.label;
 
             return (
               <Text key={i}>
                 <Text color={color}>{icon}</Text>
-                <Text dimColor={task.status === 'pending'}> {label}</Text>
+                <Text dimColor={task.status === TaskStatus.Pending}>
+                  {' '}
+                  {label}
+                </Text>
               </Text>
             );
           })}

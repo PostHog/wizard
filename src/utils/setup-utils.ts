@@ -97,7 +97,7 @@ export function printWelcome(options: {
   wizardName: string;
   message?: string;
 }): void {
-  getUI().intro(chalk.inverse(` ${options.wizardName} `));
+  getUI().setSetupData({ wizardLabel: options.wizardName });
 }
 
 export async function confirmContinueIfNoOrDirtyGitRepo(

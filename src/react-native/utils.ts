@@ -21,14 +21,18 @@ export async function detectReactNativeVariant(
   const packageJson = await tryGetPackageJson(options);
 
   if (packageJson && hasPackageInstalled('expo', packageJson)) {
-    getUI().log.info(
-      `Detected ${getReactNativeVariantName(ReactNativeVariant.EXPO)} 📱`,
-    );
+    getUI().setSetupData({
+      detectedFramework: `${getReactNativeVariantName(
+        ReactNativeVariant.EXPO,
+      )} 📱`,
+    });
     return ReactNativeVariant.EXPO;
   }
 
-  getUI().log.info(
-    `Detected ${getReactNativeVariantName(ReactNativeVariant.REACT_NATIVE)} 📱`,
-  );
+  getUI().setSetupData({
+    detectedFramework: `${getReactNativeVariantName(
+      ReactNativeVariant.REACT_NATIVE,
+    )} 📱`,
+  });
   return ReactNativeVariant.REACT_NATIVE;
 }

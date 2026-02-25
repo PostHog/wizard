@@ -98,14 +98,18 @@ export class InkUI implements WizardUI {
     } as any);
   }
 
+  setSetupData(data: {
+    wizardLabel?: string;
+    detectedFramework?: string;
+    betaNotice?: string;
+    preRunNotice?: string;
+    disclosure?: string;
+  }): void {
+    this.store.setIntro(data);
+  }
+
   intro(message: string): void {
-    if (this.store.phase === 'setup') {
-      // Strip chalk.inverse formatting — extract label text
-      const plain = stripAnsi(message);
-      this.store.setIntro({ wizardLabel: plain.trim() });
-    } else {
-      this.store.pushStatus(message);
-    }
+    this.store.pushStatus(message);
   }
 
   outro(message: string): void {
@@ -130,41 +134,15 @@ export class InkUI implements WizardUI {
 
   log = {
     info: (message: string): void => {
-      if (this.store.phase === 'setup') {
-        const plain = stripAnsi(message);
-        // LLM gateway disclosure
-        if (plain.includes('LLM gateway') || plain.includes('.env*')) {
-          this.store.setIntro({ disclosure: plain });
-          return;
-        }
-        // Beta notice
-        if (plain.includes('[BETA]')) {
-          this.store.setIntro({ betaNotice: plain });
-          return;
-        }
-      }
       this.store.pushStatus(message);
     },
     warn: (message: string): void => {
-      if (this.store.phase === 'setup') {
-        // preRunNotice
-        this.store.setIntro({ preRunNotice: stripAnsi(message) });
-        return;
-      }
       this.store.pushStatus(message);
     },
     error: (message: string): void => {
       this.store.pushStatus(message);
     },
     success: (message: string): void => {
-      if (this.store.phase === 'setup') {
-        const plain = stripAnsi(message);
-        if (plain.includes('Detected integration:')) {
-          const name = plain.replace('Detected integration:', '').trim();
-          this.store.setIntro({ detectedFramework: name });
-          return;
-        }
-      }
       this.store.pushStatus(message);
     },
     step: (message: string): void => {

@@ -262,30 +262,30 @@ export async function getFlaskProjectType(
 
   // Check for Flask-RESTX first (most specific - includes Swagger)
   if (await hasFlaskRESTX({ installDir })) {
-    getUI().log.info('Detected Flask-RESTX project');
+    getUI().setSetupData({ detectedFramework: 'Flask-RESTX' });
     return FlaskProjectType.RESTX;
   }
 
   // Check for flask-smorest (OpenAPI-first)
   if (await hasFlaskSmorest({ installDir })) {
-    getUI().log.info('Detected flask-smorest project');
+    getUI().setSetupData({ detectedFramework: 'flask-smorest' });
     return FlaskProjectType.SMOREST;
   }
 
   // Check for Flask-RESTful
   if (await hasFlaskRESTful({ installDir })) {
-    getUI().log.info('Detected Flask-RESTful project');
+    getUI().setSetupData({ detectedFramework: 'Flask-RESTful' });
     return FlaskProjectType.RESTFUL;
   }
 
   // Check for Blueprints (large app structure)
   if (await hasBlueprints({ installDir })) {
-    getUI().log.info('Detected Flask project with Blueprints');
+    getUI().setSetupData({ detectedFramework: 'Flask with Blueprints' });
     return FlaskProjectType.BLUEPRINT;
   }
 
   // Default to standard Flask
-  getUI().log.info('Detected standard Flask project');
+  getUI().setSetupData({ detectedFramework: 'Flask' });
   return FlaskProjectType.STANDARD;
 }
 

@@ -27,6 +27,7 @@ jest.mock('../ui', () => ({
       message: jest.fn(),
     }),
     isCancel: jest.fn().mockReturnValue(false),
+    setSetupData: jest.fn(),
     pushStatus: jest.fn(),
     syncTodos: jest.fn(),
     startRun: jest.fn(),
