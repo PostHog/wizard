@@ -36,6 +36,27 @@ This skill follows the **Tabbed Wizard** pattern: a top-level tab bar for spatia
 awareness combined with guided content panels for each step. The architecture is
 standard React — components, hooks, state lifting — rendered to the terminal via Ink.
 
+### Layout primitives layer
+
+The project has a set of reusable layout primitives in `src/ui/tui/primitives/` that
+replace raw Ink/`@inkjs/ui` usage. **Always use these instead of building from scratch.**
+
+Key primitives:
+- **ScreenContainer** — top-level shell, routes between screens with wipe transitions
+- **TabContainer** — self-contained tabbed interface with status bar
+- **PickerMenu** — single/multi select (custom, not `@inkjs/ui`)
+- **ConfirmationInput** — continue/cancel buttons (custom, not `@inkjs/ui`)
+- **ProgressList** — task checklist with status icons
+- **DissolveTransition** — horizontal wipe with split-flap texture
+- **CardLayout / SplitView** — alignment and two-pane layout
+- **LogViewer / LoadingBox** — log tail and spinner
+
+See [references/PRIMITIVES.md](references/PRIMITIVES.md) for the full API and usage
+examples. Shared style constants (`Colors`, `Icons`, `HAlign`, `VAlign`) live in
+`src/ui/tui/styles.ts`.
+
+**Playground**: Run `pnpm try --playground` to see all primitives in action.
+
 ### Key dependencies
 
 ```
@@ -301,6 +322,7 @@ const { focusNext, focusPrevious } = useFocusManager();
 
 ## Reference files
 
+- [references/PRIMITIVES.md](references/PRIMITIVES.md) — **TUI layout primitives**: API reference for ScreenContainer, TabContainer, PickerMenu, ConfirmationInput, DissolveTransition, ProgressList, and all other custom components. Start here when building screens.
 - [references/INK-API.md](references/INK-API.md) — Complete Ink component and hook API reference
 - [references/INKJS-UI.md](references/INKJS-UI.md) — @inkjs/ui component catalog with examples
 - [references/TERMINAL-COMPAT.md](references/TERMINAL-COMPAT.md) — Terminal detection and graceful degradation

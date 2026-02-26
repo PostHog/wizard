@@ -57,7 +57,7 @@ const AppShell = ({ header, children, footer }) => {
 
 ```tsx
 const Panel = ({ title, children, borderColor = 'cyan' }) => (
-  <Box flexDirection="column" borderStyle="round" borderColor={borderColor}
+  <Box flexDirection="column" borderStyle="single" borderColor={borderColor}
        paddingX={1} paddingY={0}>
     {title && (
       <Box marginBottom={1}>
