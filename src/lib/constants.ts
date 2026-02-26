@@ -24,6 +24,8 @@ export enum Integration {
   // Language fallbacks
   python = 'python',
   ruby = 'ruby',
+  javascriptNode = 'javascript_node',
+  javascript_web = 'javascript_web',
 }
 export interface Args {
   debug: boolean;
@@ -70,3 +72,10 @@ export const POSTHOG_PROPERTY_HEADER_PREFIX = 'X-POSTHOG-PROPERTY-';
 
 /** HTTP header prefix for PostHog feature flags (full header name prefix). */
 export const POSTHOG_FLAG_HEADER_PREFIX = 'X-POSTHOG-FLAG-';
+/**
+ * User-Agent string for the wizard when making HTTP requests.
+ * Used for direct PostHog API calls and passed to the MCP server
+ * so it can identify requests originating from the wizard.
+ */
+import packageJson from '../../package.json';
+export const WIZARD_USER_AGENT = `posthog/wizard; version: ${packageJson.version}`;

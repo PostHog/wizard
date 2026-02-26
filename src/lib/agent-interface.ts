@@ -14,6 +14,7 @@ import {
   POSTHOG_PROPERTY_HEADER_PREFIX,
   WIZARD_VARIANT_FLAG_KEY,
   WIZARD_VARIANTS,
+  WIZARD_USER_AGENT,
 } from './constants';
 import { createCustomHeaders } from '../utils/custom-headers';
 import { getLlmGatewayUrlFromHost } from '../utils/urls';
@@ -408,6 +409,7 @@ export async function initializeAgent(
         url: config.posthogMcpUrl,
         headers: {
           Authorization: `Bearer ${config.posthogApiKey}`,
+          'User-Agent': WIZARD_USER_AGENT,
         },
       },
       ...Object.fromEntries(
