@@ -114,6 +114,11 @@ yargs(hideBin(process.argv))
             'Directory to install PostHog in\nenv: POSTHOG_WIZARD_INSTALL_DIR',
           type: 'string',
         },
+        playground: {
+          default: false,
+          describe: 'Launch the TUI primitives playground',
+          type: 'boolean',
+        },
         integration: {
           describe: 'Integration to set up',
           choices: [
@@ -176,6 +181,14 @@ yargs(hideBin(process.argv))
             '  npx @posthog/wizard --ci --region us --api-key phx_xxx',
         );
         process.exit(1);
+      } else if (options.playground) {
+        // Playground mode: launch the TUI primitives playground
+        void (async () => {
+          const { startPlayground } = await import(
+            './src/ui/tui/playground/start-playground.js'
+          );
+          startPlayground(WIZARD_VERSION);
+        })();
       } else {
         // Interactive TTY: launch the Ink TUI
         void (async () => {

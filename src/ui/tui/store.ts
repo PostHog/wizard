@@ -81,9 +81,14 @@ export class WizardStore extends EventEmitter {
   showTabBar = false;
   tabs: TabDefinition[] = [];
 
-  currentScreen: ScreenName = 'welcome';
+  screenStack: ScreenName[] = ['welcome'];
+  lastNavDirection: 'push' | 'pop' | null = null;
   outroData: OutroData | null = null;
   modalPrompt: PendingPrompt | null = null;
+
+  get currentScreen(): ScreenName {
+    return this.screenStack[this.screenStack.length - 1];
+  }
 
   private _version = 0;
 
@@ -200,12 +205,27 @@ export class WizardStore extends EventEmitter {
   }
 
   setScreen(screen: ScreenName): void {
-    this.currentScreen = screen;
+    this.lastNavDirection = 'push';
+    this.screenStack = [screen];
     if (screen === 'run') {
       this.phase = 'running';
       this.showTabBar = true;
     }
     this.bump();
+  }
+
+  pushScreen(screen: ScreenName): void {
+    this.lastNavDirection = 'push';
+    this.screenStack.push(screen);
+    this.bump();
+  }
+
+  popScreen(): void {
+    if (this.screenStack.length > 1) {
+      this.lastNavDirection = 'pop';
+      this.screenStack.pop();
+      this.bump();
+    }
   }
 
   setOutroData(data: OutroData): void {

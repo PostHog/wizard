@@ -1,4 +1,5 @@
 import { Box, Text, useStdout } from 'ink';
+import { Colors } from '../styles.js';
 
 const MIN_WIDTH = 80;
 const MAX_WIDTH = 120;
@@ -17,7 +18,7 @@ export const TitleBar = ({ version }: TitleBarProps) => {
 
   return (
     <Box>
-      <Text backgroundColor="yellow" color="black" bold>
+      <Text backgroundColor={Colors.accent} color="black" bold>
         {title}
         {padding}
         {FEEDBACK}

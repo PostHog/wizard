@@ -17,7 +17,7 @@ export const Modal = ({ store }: ModalProps) => {
   return (
     <Box
       flexDirection="column"
-      borderStyle="round"
+      borderStyle="single"
       borderColor="yellow"
       paddingX={2}
       paddingY={1}
