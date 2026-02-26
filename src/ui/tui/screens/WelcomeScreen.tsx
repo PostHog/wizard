@@ -20,7 +20,7 @@ export const WelcomeScreen = ({ store }: WelcomeScreenProps) => {
     () => store.getSnapshot(),
   );
 
-  const { pendingPrompt, completedPrompts } = store;
+  const { pendingPrompt, completedPrompts, loginUrl } = store;
 
   return (
     <Box flexDirection="column" paddingX={1} flexGrow={1}>
@@ -28,11 +28,20 @@ export const WelcomeScreen = ({ store }: WelcomeScreenProps) => {
 
       <CompletedPrompts prompts={completedPrompts} />
 
+      {loginUrl && (
+        <Box flexDirection="column" marginTop={1}>
+          <Text bold>
+            If the browser didn't open automatically, use this link:
+          </Text>
+          <Text color="cyan">{loginUrl}</Text>
+        </Box>
+      )}
+
       {pendingPrompt && (
         <PromptRenderer
           prompt={pendingPrompt}
           store={store}
-          marginTop={completedPrompts.length > 0 ? 1 : 0}
+          marginTop={completedPrompts.length > 0 || loginUrl ? 1 : 0}
         />
       )}
 

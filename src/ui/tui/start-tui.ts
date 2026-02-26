@@ -18,6 +18,7 @@ import { WelcomeScreen } from './screens/WelcomeScreen.js';
 import { RunScreen } from './screens/RunScreen.js';
 import { OutroScreen } from './screens/OutroScreen.js';
 import { McpScreen } from './screens/McpScreen.js';
+import { StatusScreen } from './screens/StatusScreen.js';
 
 // Tabs (used by RunScreen)
 import { StatusTab } from './tabs/StatusTab.js';
@@ -33,6 +34,7 @@ export function startTUI(version: string): {
 
   // Register screens
   registerScreen({ id: 'welcome', component: WelcomeScreen });
+  registerScreen({ id: 'status', component: StatusScreen });
   registerScreen({ id: 'run', component: RunScreen });
   registerScreen({ id: 'outro', component: OutroScreen });
   registerScreen({ id: 'mcp', component: McpScreen });

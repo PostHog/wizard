@@ -95,7 +95,11 @@ export interface WizardUI {
   // Status push (for TUI status panel)
   pushStatus(message: string): void;
 
+  // OAuth login URL display
+  setLoginUrl(url: string | null): void;
+
   // Screen transitions (TUI only, no-op for console)
+  showServiceStatus(data: { description: string; statusPageUrl: string }): void;
   startRun(): void;
 
   // Todo tracking from SDK TodoWrite events

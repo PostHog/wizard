@@ -81,10 +81,6 @@ export async function runAgentWizard(
     getUI().setSetupData({ preRunNotice: config.metadata.preRunNotice });
   }
 
-  getUI().setSetupData({
-    disclosure: `We're about to read your project using our LLM gateway.\n\n.env* file contents will not leave your machine.\n\nOther files will be read and edited to provide a fully-custom PostHog integration.`,
-  });
-
   const aiConsent = await askForAIConsent(options);
   if (!aiConsent) {
     await abort(
@@ -101,6 +97,11 @@ export async function runAgentWizard(
       0,
     );
   }
+
+  // Disclosure about what happens next — shown after all "should we proceed?" gates
+  getUI().setSetupData({
+    disclosure: `We're about to read your project using our LLM gateway.\n\n.env* file contents will not leave your machine.\n\nOther files will be read and edited to provide a fully-custom PostHog integration.`,
+  });
 
   const cloudRegion = options.cloudRegion ?? (await askForCloudRegion());
   const typeScriptDetected = isUsingTypeScript(options);

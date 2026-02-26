@@ -1,5 +1,4 @@
 import { getUI } from '../ui';
-import chalk from 'chalk';
 
 const CLAUDE_STATUS_URL = 'https://status.claude.com/api/v2/status.json';
 const CLAUDE_STATUS_PAGE = 'https://status.claude.com';
@@ -92,16 +91,10 @@ export async function checkAnthropicStatusWithPrompt(
   const ui = getUI();
 
   if (result.status === 'down' || result.status === 'degraded') {
-    const severity =
-      result.status === 'down' ? 'experiencing issues' : 'partially degraded';
-    ui.log.warn(
-      `${chalk.yellow(`Claude/Anthropic services are ${severity}.`)}
-
-${chalk.yellow('Status:')} ${result.description}
-${chalk.yellow('Status page:')} ${CLAUDE_STATUS_PAGE}
-
-The wizard may not work reliably while services are affected.`,
-    );
+    ui.showServiceStatus({
+      description: result.description,
+      statusPageUrl: CLAUDE_STATUS_PAGE,
+    });
 
     // In CI mode, continue with a warning
     if (options.ci) {

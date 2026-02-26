@@ -10,7 +10,7 @@ export { TaskStatus };
 
 export type WizardPhase = 'setup' | 'running' | 'done';
 
-export type ScreenName = 'welcome' | 'run' | 'outro' | 'mcp';
+export type ScreenName = 'welcome' | 'status' | 'run' | 'outro' | 'mcp';
 
 export interface OutroData {
   kind: 'success' | 'error' | 'cancel';
@@ -68,6 +68,12 @@ export class WizardStore extends EventEmitter {
   preRunNotice: string | null = null;
   disclosure: string | null = null;
 
+  /** Service status data — shown on the status screen when there's an outage */
+  serviceStatus: { description: string; statusPageUrl: string } | null = null;
+
+  /** OAuth login URL — shown on welcome screen while waiting for auth */
+  loginUrl: string | null = null;
+
   activeTab = 0;
   pendingPrompt: PendingPrompt | null = null;
   completedPrompts: CompletedPrompt[] = [];
@@ -117,6 +123,16 @@ export class WizardStore extends EventEmitter {
     if (fields.preRunNotice !== undefined)
       this.preRunNotice = fields.preRunNotice;
     if (fields.disclosure !== undefined) this.disclosure = fields.disclosure;
+    this.bump();
+  }
+
+  setServiceStatus(data: { description: string; statusPageUrl: string }): void {
+    this.serviceStatus = data;
+    this.bump();
+  }
+
+  setLoginUrl(url: string | null): void {
+    this.loginUrl = url;
     this.bump();
   }
 

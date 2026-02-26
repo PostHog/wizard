@@ -30,6 +30,8 @@ jest.mock('../ui', () => ({
     setSetupData: jest.fn(),
     pushStatus: jest.fn(),
     syncTodos: jest.fn(),
+    setLoginUrl: jest.fn(),
+    showServiceStatus: jest.fn(),
     startRun: jest.fn(),
   }),
   setUI: jest.fn(),

@@ -35,6 +35,8 @@ const mockUI = {
   isCancel: jest.fn((value: unknown): value is symbol => false),
   cancel: jest.fn(),
   setSetupData: jest.fn(),
+  setLoginUrl: jest.fn(),
+  showServiceStatus: jest.fn(),
 };
 
 jest.mock('../../ui', () => ({

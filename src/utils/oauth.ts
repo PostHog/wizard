@@ -230,17 +230,7 @@ export async function performOAuthFlow(
     signupUrl.toString(),
   );
 
-  getUI().log.info(
-    `${chalk.bold(
-      "If the browser window didn't open automatically, please open the following link to be redirected to PostHog:",
-    )}\n\n${chalk.cyan(urlToOpen)}${
-      config.signup
-        ? `\n\nIf you already have an account, you can use this link:\n\n${chalk.cyan(
-            localLoginUrl,
-          )}`
-        : ``
-    }`,
-  );
+  getUI().setLoginUrl(urlToOpen);
 
   if (process.env.NODE_ENV !== 'test') {
     opn(urlToOpen, { wait: false }).catch(() => {
@@ -262,6 +252,7 @@ export async function performOAuthFlow(
     const token = await exchangeCodeForToken(code, codeVerifier, config);
 
     server.close();
+    getUI().setLoginUrl(null);
     loginSpinner.stop('Authorization complete!');
 
     return token;

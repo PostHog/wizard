@@ -128,6 +128,27 @@ export class ConsoleUI implements WizardUI {
     console.log(`◇  ${message}`);
   }
 
+  setLoginUrl(url: string | null): void {
+    if (url) {
+      console.log(
+        `│  If the browser didn't open automatically, use this link:`,
+      );
+      console.log(`│  ${url}`);
+    }
+  }
+
+  showServiceStatus(data: {
+    description: string;
+    statusPageUrl: string;
+  }): void {
+    console.log(`▲  Claude/Anthropic services are experiencing issues.`);
+    console.log(`│  Status: ${data.description}`);
+    console.log(`│  Status page: ${data.statusPageUrl}`);
+    console.log(
+      `│  The wizard may not work reliably while services are affected.`,
+    );
+  }
+
   startRun(): void {
     // No-op in CI mode
   }

@@ -124,6 +124,18 @@ export class InkUI implements WizardUI {
     }
   }
 
+  setLoginUrl(url: string | null): void {
+    this.store.setLoginUrl(url);
+  }
+
+  showServiceStatus(data: {
+    description: string;
+    statusPageUrl: string;
+  }): void {
+    this.store.setServiceStatus(data);
+    this.store.setScreen('status');
+  }
+
   startRun(): void {
     this.store.setScreen('run');
   }
