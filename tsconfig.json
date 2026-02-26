@@ -7,6 +7,7 @@
     "types": ["node", "jest"],
     "typeRoots": ["./node_modules/@types", "./types"],
     "declaration": true,
+    "resolveJsonModule": true,
     "outDir": "dist"
   },
   "include": [
