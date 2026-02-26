@@ -11,6 +11,7 @@ import { analytics } from '../utils/analytics';
 import {
   WIZARD_INTERACTION_EVENT_NAME,
   WIZARD_REMARK_EVENT_NAME,
+  POSTHOG_PROPERTY_HEADER_PREFIX,
   WIZARD_VARIANT_FLAG_KEY,
   WIZARD_VARIANTS,
 } from './constants';
@@ -83,7 +84,6 @@ export type AgentConfig = {
   detectPackageManager: PackageManagerDetector;
   /** Feature flag key -> variant (evaluated at start of run). */
   wizardFlags?: Record<string, string>;
-  /** Metadata keys (e.g. VARIANT) -> value; sent as X-WIZARD-META-* headers. */
   wizardMetadata?: Record<string, string>;
 };
 
@@ -121,7 +121,9 @@ function buildAgentEnv(
   const headers = createCustomHeaders();
   for (const [key, value] of Object.entries(wizardMetadata)) {
     headers.add(
-      key.startsWith('WIZARD-META-') ? key : `WIZARD-META-${key}`,
+      key.startsWith(POSTHOG_PROPERTY_HEADER_PREFIX)
+        ? key
+        : `${POSTHOG_PROPERTY_HEADER_PREFIX}${key}`,
       value,
     );
   }

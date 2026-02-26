@@ -1,11 +1,7 @@
+import { POSTHOG_FLAG_HEADER_PREFIX } from '../lib/constants';
+
 /**
  * Builds a list of custom headers for ANTHROPIC_CUSTOM_HEADERS.
- * Each key is normalized to an X-* header name; encode() returns the string
- * expected by the env var (header lines separated by newlines).
- *
- * Use add() for arbitrary headers (e.g. X-WIZARD-META-*).
- * Use addFlag(flagKey, variant) for feature flags; they are sent as X-WIZARD-FLAG-*
- * and appear on PostHog events as $feature/<flagKey>.
  */
 export function createCustomHeaders(): {
   add(key: string, value: string): void;
@@ -23,12 +19,7 @@ export function createCustomHeaders(): {
     },
 
     addFlag(flagKey: string, variant: string): void {
-      const headerName =
-        'X-WIZARD-FLAG-' +
-        flagKey
-          .split('-')
-          .map((s) => s.toUpperCase())
-          .join('-');
+      const headerName = POSTHOG_FLAG_HEADER_PREFIX + flagKey.toUpperCase();
       entries.push({ key: headerName, value: variant });
     },
 

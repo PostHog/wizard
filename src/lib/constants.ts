@@ -64,3 +64,9 @@ export const WIZARD_VARIANTS: Record<string, Record<string, string>> = {
   base: { VARIANT: 'base' },
   subagents: { VARIANT: 'subagents' },
 };
+
+/** HTTP header prefix for PostHog properties (e.g. X-POSTHOG-PROPERTY-VARIANT). */
+export const POSTHOG_PROPERTY_HEADER_PREFIX = 'X-POSTHOG-PROPERTY-';
+
+/** HTTP header prefix for PostHog feature flags (full header name prefix). */
+export const POSTHOG_FLAG_HEADER_PREFIX = 'X-POSTHOG-FLAG-';
