@@ -63,4 +63,17 @@ export const WIZARD_REMARK_EVENT_NAME = 'wizard remark';
  * Used for direct PostHog API calls and passed to the MCP server
  * so it can identify requests originating from the wizard.
  */
-export const WIZARD_USER_AGENT = 'posthog/wizard';
+function getWizardVersion(): string {
+  // Path differs between source (src/lib/) and compiled (dist/src/lib/)
+  for (const relPath of ['../../package.json', '../../../package.json']) {
+    try {
+      const pkg = require(relPath) as { version?: string };
+      if (pkg.version) return pkg.version;
+    } catch {
+      // Expected when running from a different directory depth (source vs compiled)
+    }
+  }
+  return 'unknown';
+}
+
+export const WIZARD_USER_AGENT = `posthog/wizard; version: ${getWizardVersion()}`;
