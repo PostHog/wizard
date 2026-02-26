@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.35.2](https://github.com/PostHog/wizard/compare/v1.35.1...v1.35.2) (2026-02-26)
+
+
+### Bug Fixes
+
+* Fix release link ([#298](https://github.com/PostHog/wizard/issues/298)) ([8ecabff](https://github.com/PostHog/wizard/commit/8ecabffadb162b08df7ac66d32c7ee257e617e31))
+
 ## [1.35.1](https://github.com/PostHog/wizard/compare/v1.35.0...v1.35.1) (2026-02-26)
 
 
