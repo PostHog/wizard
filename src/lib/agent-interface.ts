@@ -152,7 +152,7 @@ function isSkillInstallCommand(command: string): boolean {
 
   const url = urlMatch[1];
   return (
-    url.startsWith('https://github.com/PostHog/examples/releases/') ||
+    url.startsWith('https://github.com/PostHog/context-mill/releases/') ||
     /^http:\/\/localhost:\d+\//.test(url)
   );
 }
