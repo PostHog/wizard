@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.35.1](https://github.com/PostHog/wizard/compare/v1.35.0...v1.35.1) (2026-02-26)
+
+
+### Bug Fixes
+
+* revert agent sdk ([#294](https://github.com/PostHog/wizard/issues/294)) ([03eea97](https://github.com/PostHog/wizard/commit/03eea971c92d0cdb85c3aeb483c5a85fc5b913a7))
+
 ## [1.35.0](https://github.com/PostHog/wizard/compare/v1.34.0...v1.35.0) (2026-02-26)
 
 
