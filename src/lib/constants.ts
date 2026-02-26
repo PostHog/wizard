@@ -57,3 +57,10 @@ export const OAUTH_PORT = 8239;
 
 export const WIZARD_INTERACTION_EVENT_NAME = 'wizard interaction';
 export const WIZARD_REMARK_EVENT_NAME = 'wizard remark';
+
+/**
+ * User-Agent string for the wizard when making HTTP requests.
+ * Used for direct PostHog API calls and passed to the MCP server
+ * so it can identify requests originating from the wizard.
+ */
+export const WIZARD_USER_AGENT = 'posthog/wizard';

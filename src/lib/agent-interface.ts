@@ -11,6 +11,7 @@ import { analytics } from '../utils/analytics';
 import {
   WIZARD_INTERACTION_EVENT_NAME,
   WIZARD_REMARK_EVENT_NAME,
+  WIZARD_USER_AGENT,
 } from './constants';
 import { getLlmGatewayUrlFromHost } from '../utils/urls';
 import { LINTING_TOOLS } from './safe-tools';
@@ -357,6 +358,7 @@ export async function initializeAgent(
         url: config.posthogMcpUrl,
         headers: {
           Authorization: `Bearer ${config.posthogApiKey}`,
+          'User-Agent': WIZARD_USER_AGENT,
         },
       },
       ...Object.fromEntries(
