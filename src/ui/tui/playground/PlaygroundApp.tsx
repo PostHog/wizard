@@ -2,7 +2,7 @@
  * PlaygroundApp — Root component for the primitives playground.
  *
  * Two screens mirroring the real wizard flow:
- *   welcome → (press enter) → run (tabbed demo view)
+ *   intro → (press enter) → run (tabbed demo view)
  */
 
 import { ScreenContainer, TabContainer } from '../primitives/index.js';
@@ -29,7 +29,7 @@ export const PlaygroundApp = ({ store }: PlaygroundAppProps) => {
     <ScreenContainer
       store={store}
       screens={{
-        welcome: <WelcomeDemo store={store} />,
+        intro: <WelcomeDemo store={store} />,
         run: (
           <TabContainer
             tabs={tabs}

@@ -1,7 +1,8 @@
 /**
  * InkUI — Ink-backed implementation of WizardUI.
- * Sets pendingPrompt in the store and returns a Promise for each prompt method.
- * React prompt components (rendered by StatusTab) resolve the Promise on user input.
+ *
+ * Setup prompts auto-accept — the IntroScreen owns user-facing input.
+ * Run phase is headless.
  */
 
 import type {
@@ -11,9 +12,7 @@ import type {
   GroupMultiselectOptions,
   MultiselectOptions,
 } from '../wizard-ui.js';
-import type { WizardStore, PendingPrompt } from './store.js';
-
-const CANCEL = Symbol('cancel');
+import type { WizardStore } from './store.js';
 
 // Strip ANSI escape codes (chalk formatting) from strings
 // eslint-disable-next-line no-control-regex
@@ -22,90 +21,63 @@ function stripAnsi(s: string): string {
   return s.replace(ANSI_RE, '');
 }
 
+const CANCEL = Symbol('cancel');
+
 export class InkUI implements WizardUI {
   constructor(private store: WizardStore) {}
 
-  private prompt<T>(
-    prompt: Omit<PendingPrompt<T>, 'resolve'>,
-  ): Promise<T | symbol> {
-    return new Promise((resolve) => {
-      this.store.setPendingPrompt({
-        ...prompt,
-        resolve: resolve as (value: unknown) => void,
-      });
-    });
-  }
+  // --- Prompt methods: auto-accept (screens own user input) ---
 
-  async select<T>(opts: {
+  select<T>(opts: {
     message: string;
     options: SelectOption<T>[];
     initialValue?: T;
     maxItems?: number;
   }): Promise<T | symbol> {
-    return this.prompt<T>({
-      type: 'select',
-      message: opts.message,
-      options: opts.options,
-      initialValue: opts.initialValue,
-      maxItems: opts.maxItems,
-    });
+    // Screens own user input — auto-decline anything the business logic asks
+    // during headless mode. Return last option (conventionally "No" / "Skip").
+    if (opts.initialValue !== undefined)
+      return Promise.resolve(opts.initialValue);
+    if (opts.options.length > 0)
+      return Promise.resolve(opts.options[opts.options.length - 1].value);
+    return Promise.resolve(CANCEL);
   }
 
-  async confirm(opts: {
+  confirm(_opts: {
     message: string;
     initialValue?: boolean;
   }): Promise<boolean | symbol> {
-    return this.prompt<boolean>({
-      type: 'confirm',
-      message: opts.message,
-      initialValue: opts.initialValue,
-    });
+    return Promise.resolve(_opts.initialValue ?? false);
   }
 
-  async text(opts: {
+  text(opts: {
     message: string;
     placeholder?: string;
     validate?: (value: string) => string | void;
   }): Promise<string | symbol> {
-    return this.prompt<string>({
-      type: 'text',
-      message: opts.message,
-      placeholder: opts.placeholder,
-      validate: opts.validate,
-    });
+    return Promise.resolve(opts.placeholder ?? '');
   }
 
-  async groupMultiselect<T>(
-    opts: GroupMultiselectOptions<T>,
+  groupMultiselect<T>(
+    _opts: GroupMultiselectOptions<T>,
   ): Promise<T[] | symbol> {
-    // Cast through any: PendingPrompt<T[]> nesting doesn't align with generic T
-    return this.prompt({
-      type: 'groupMultiselect',
-      message: opts.message,
-      groupOptions: opts.options,
-      initialValues: opts.initialValues,
-      required: opts.required,
-    } as any);
+    return Promise.resolve(_opts.initialValues ?? []);
   }
 
-  async multiselect<T>(opts: MultiselectOptions<T>): Promise<T[] | symbol> {
-    return this.prompt({
-      type: 'multiselect',
-      message: opts.message,
-      options: opts.options,
-      initialValues: opts.initialValues,
-      required: opts.required,
-    } as any);
+  multiselect<T>(_opts: MultiselectOptions<T>): Promise<T[] | symbol> {
+    return Promise.resolve(_opts.initialValues ?? []);
   }
 
-  setSetupData(data: {
+  // --- Lifecycle ---
+
+  setSetupData(_data: {
     wizardLabel?: string;
     detectedFramework?: string;
     betaNotice?: string;
     preRunNotice?: string;
     disclosure?: string;
   }): void {
-    this.store.setIntro(data);
+    // IntroScreen owns intro display — no-op
   }
 
   intro(message: string): void {
@@ -113,19 +85,17 @@ export class InkUI implements WizardUI {
   }
 
   outro(message: string): void {
-    // Always push to status so it's visible even if process.exit fires immediately
     this.store.pushStatus(stripAnsi(message));
 
-    if (this.store.outroData) {
-      this.store.setScreen('outro');
-    } else {
+    if (!this.store.outroData) {
       this.store.setOutroData({ kind: 'success', message: stripAnsi(message) });
-      this.store.setScreen('outro');
     }
+    // Route through McpScreen before showing the outro
+    this.store.setScreen('mcp');
   }
 
-  setLoginUrl(url: string | null): void {
-    this.store.setLoginUrl(url);
+  setLoginUrl(_url: string | null): void {
+    // No-op — IntroScreen could display this if needed
   }
 
   showServiceStatus(data: {
@@ -133,7 +103,7 @@ export class InkUI implements WizardUI {
     statusPageUrl: string;
   }): void {
     this.store.setServiceStatus(data);
-    this.store.setScreen('status');
+    this.store.pushScreen('outage');
   }
 
   startRun(): void {

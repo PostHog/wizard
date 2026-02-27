@@ -61,7 +61,7 @@ export const LogDemo = () => {
       </Text>
       <Text dimColor>Tailing {DEMO_LOG_PATH} (new line every 2s)</Text>
       <Box height={1} />
-      {ready && <LogViewer filePath={DEMO_LOG_PATH} maxLines={15} />}
+      {ready && <LogViewer filePath={DEMO_LOG_PATH} height={15} />}
     </Box>
   );
 };

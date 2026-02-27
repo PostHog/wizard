@@ -1,14 +1,13 @@
 /**
- * OutroScreen — Full-pane summary after the agent run.
+ * OutroScreen — Summary after the agent run.
  * Reads store.outroData to render success, error, or cancel view.
- * Post-run opt-in prompts render here via PromptRenderer.
+ * Keeps the process alive until the user presses a key to exit.
  */
 
-import { Box, Text } from 'ink';
+import { Box, Text, useInput } from 'ink';
 import { useSyncExternalStore } from 'react';
 import type { WizardStore } from '../store.js';
-import { CompletedPrompts } from '../components/CompletedPrompts.js';
-import { PromptRenderer } from '../components/PromptRenderer.js';
+import { Colors } from '../styles.js';
 
 interface OutroScreenProps {
   store: WizardStore;
@@ -20,18 +19,22 @@ export const OutroScreen = ({ store }: OutroScreenProps) => {
     () => store.getSnapshot(),
   );
 
-  const { outroData, pendingPrompt, completedPrompts } = store;
+  useInput(() => {
+    process.exit(0);
+  });
+
+  const { outroData } = store;
 
   if (!outroData) {
     return (
-      <Box flexDirection="column" paddingX={1} flexGrow={1}>
+      <Box flexDirection="column" flexGrow={1}>
         <Text dimColor>Finishing up...</Text>
       </Box>
     );
   }
 
   return (
-    <Box flexDirection="column" paddingX={1} flexGrow={1}>
+    <Box flexDirection="column" flexGrow={1}>
       {outroData.kind === 'success' && (
         <Box flexDirection="column">
           <Text color="green" bold>
@@ -111,17 +114,9 @@ export const OutroScreen = ({ store }: OutroScreenProps) => {
         </Box>
       )}
 
-      {/* Post-run completed prompts (env upload, MCP install) */}
-      {completedPrompts.length > 0 && (
-        <Box flexDirection="column" marginTop={1}>
-          <CompletedPrompts prompts={completedPrompts} />
-        </Box>
-      )}
-
-      {/* Post-run active prompt */}
-      {pendingPrompt && (
-        <PromptRenderer prompt={pendingPrompt} store={store} marginTop={1} />
-      )}
+      <Box marginTop={1}>
+        <Text color={Colors.muted}>Press any key to exit</Text>
+      </Box>
     </Box>
   );
 };

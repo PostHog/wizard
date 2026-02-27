@@ -1,32 +1,31 @@
 /**
- * StatusScreen — Shown when Claude/Anthropic services are degraded.
- * Displays the outage notice and a confirm prompt to continue.
- * Skipped entirely when services are operational.
+ * OutageScreen — Shown when Claude/Anthropic services are degraded.
+ * Displays the outage notice and a ConfirmationInput to continue or exit.
  */
 
 import { Box, Text } from 'ink';
 import { useSyncExternalStore } from 'react';
 import type { WizardStore } from '../store.js';
-import { PromptRenderer } from '../components/PromptRenderer.js';
+import { ConfirmationInput } from '../primitives/index.js';
 
-interface StatusScreenProps {
+interface OutageScreenProps {
   store: WizardStore;
 }
 
-export const StatusScreen = ({ store }: StatusScreenProps) => {
+export const OutageScreen = ({ store }: OutageScreenProps) => {
   useSyncExternalStore(
     (cb) => store.subscribe(cb),
     () => store.getSnapshot(),
   );
 
-  const { serviceStatus, pendingPrompt } = store;
+  const { serviceStatus } = store;
 
   if (!serviceStatus) {
     return null;
   }
 
   return (
-    <Box flexDirection="column" paddingX={1} flexGrow={1}>
+    <Box flexDirection="column" flexGrow={1}>
       <Box flexDirection="column" marginBottom={1}>
         <Text color="yellow" bold>
           {'\u26A0'} Claude/Anthropic services are experiencing issues.
@@ -45,7 +44,11 @@ export const StatusScreen = ({ store }: StatusScreenProps) => {
         </Text>
       </Box>
 
-      {pendingPrompt && <PromptRenderer prompt={pendingPrompt} store={store} />}
+      <ConfirmationInput
+        message="Continue anyway?"
+        onConfirm={() => store.popScreen()}
+        onCancel={() => process.exit(0)}
+      />
     </Box>
   );
 };

@@ -1,6 +1,9 @@
 /**
  * WizardStore — EventEmitter-backed reactive store for the TUI.
  * React components subscribe via useSyncExternalStore.
+ *
+ * Navigation stack + observable agent state (tasks, status messages).
+ * Screens own their own business logic and UI — no store-driven prompts.
  */
 
 import { EventEmitter } from 'events';
@@ -8,9 +11,9 @@ import { TaskStatus } from '../wizard-ui.js';
 
 export { TaskStatus };
 
-export type WizardPhase = 'setup' | 'running' | 'done';
+export type ScreenName = 'outage' | 'intro' | 'run' | 'mcp' | 'outro';
 
-export type ScreenName = 'welcome' | 'status' | 'run' | 'outro' | 'mcp';
+export type CloudRegion = 'us' | 'eu';
 
 export interface OutroData {
   kind: 'success' | 'error' | 'cancel';
@@ -21,28 +24,6 @@ export interface OutroData {
   continueUrl?: string;
 }
 
-export interface PendingPrompt<T = unknown> {
-  type: 'select' | 'confirm' | 'text' | 'multiselect' | 'groupMultiselect';
-  message: string;
-  options?: Array<{ value: T; label: string; hint?: string }>;
-  groupOptions?: Record<
-    string,
-    Array<{ value: T; label: string; hint?: string }>
-  >;
-  initialValue?: T;
-  initialValues?: T[];
-  required?: boolean;
-  maxItems?: number;
-  placeholder?: string;
-  validate?: (value: string) => string | void;
-  resolve: (value: T | T[] | symbol) => void;
-}
-
-export interface CompletedPrompt {
-  message: string;
-  answer: string;
-}
-
 export interface TaskItem {
   label: string;
   activeForm?: string;
@@ -51,40 +32,35 @@ export interface TaskItem {
   done: boolean;
 }
 
-export interface TabDefinition {
-  id: string;
-  label: string;
-}
-
 export class WizardStore extends EventEmitter {
   version = '';
-  phase: WizardPhase = 'setup';
   statusMessages: string[] = [];
 
-  /** Structured intro state — rendered by the StatusTab intro view */
-  detectedFramework: string | null = null;
-  wizardLabel: string | null = null;
-  betaNotice: string | null = null;
-  preRunNotice: string | null = null;
-  disclosure: string | null = null;
-
-  /** Service status data — shown on the status screen when there's an outage */
+  /** Service status data — shown on the outage screen when there's an outage */
   serviceStatus: { description: string; statusPageUrl: string } | null = null;
 
-  /** OAuth login URL — shown on welcome screen while waiting for auth */
-  loginUrl: string | null = null;
-
-  activeTab = 0;
-  pendingPrompt: PendingPrompt | null = null;
-  completedPrompts: CompletedPrompt[] = [];
   tasks: TaskItem[] = [];
-  showTabBar = false;
-  tabs: TabDefinition[] = [];
 
-  screenStack: ScreenName[] = ['welcome'];
+  /** Cloud region selected by IntroScreen — used by McpScreen for installation */
+  cloudRegion: CloudRegion | null = null;
+
+  screenStack: ScreenName[] = ['intro'];
   lastNavDirection: 'push' | 'pop' | null = null;
   outroData: OutroData | null = null;
-  modalPrompt: PendingPrompt | null = null;
+
+  /**
+   * Setup promise — IntroScreen resolves this when the user picks a region.
+   * bin.ts awaits it before calling runWizard.
+   */
+  private _resolveSetup!: (region: CloudRegion) => void;
+  readonly setupComplete: Promise<CloudRegion> = new Promise((resolve) => {
+    this._resolveSetup = resolve;
+  });
+
+  completeSetup(region: CloudRegion): void {
+    this.cloudRegion = region;
+    this._resolveSetup(region);
+  }
 
   get currentScreen(): ScreenName {
     return this.screenStack[this.screenStack.length - 1];
@@ -101,60 +77,13 @@ export class WizardStore extends EventEmitter {
     this.emit('change');
   }
 
-  setPhase(phase: WizardPhase): void {
-    this.phase = phase;
-    if (phase === 'running') {
-      this.showTabBar = true;
-    }
-    this.bump();
-  }
-
   pushStatus(message: string): void {
     this.statusMessages.push(message);
     this.bump();
   }
 
-  setIntro(fields: {
-    detectedFramework?: string;
-    wizardLabel?: string;
-    betaNotice?: string;
-    preRunNotice?: string;
-    disclosure?: string;
-  }): void {
-    if (fields.detectedFramework !== undefined)
-      this.detectedFramework = fields.detectedFramework;
-    if (fields.wizardLabel !== undefined) this.wizardLabel = fields.wizardLabel;
-    if (fields.betaNotice !== undefined) this.betaNotice = fields.betaNotice;
-    if (fields.preRunNotice !== undefined)
-      this.preRunNotice = fields.preRunNotice;
-    if (fields.disclosure !== undefined) this.disclosure = fields.disclosure;
-    this.bump();
-  }
-
   setServiceStatus(data: { description: string; statusPageUrl: string }): void {
     this.serviceStatus = data;
-    this.bump();
-  }
-
-  setLoginUrl(url: string | null): void {
-    this.loginUrl = url;
-    this.bump();
-  }
-
-  setActiveTab(index: number): void {
-    if (index >= 0 && index < this.tabs.length) {
-      this.activeTab = index;
-      this.bump();
-    }
-  }
-
-  setPendingPrompt(prompt: PendingPrompt | null): void {
-    this.pendingPrompt = prompt;
-    this.bump();
-  }
-
-  addCompletedPrompt(prompt: CompletedPrompt): void {
-    this.completedPrompts.push(prompt);
     this.bump();
   }
 
@@ -199,18 +128,9 @@ export class WizardStore extends EventEmitter {
     this.bump();
   }
 
-  registerTabs(tabs: TabDefinition[]): void {
-    this.tabs = tabs;
-    this.bump();
-  }
-
   setScreen(screen: ScreenName): void {
     this.lastNavDirection = 'push';
     this.screenStack = [screen];
-    if (screen === 'run') {
-      this.phase = 'running';
-      this.showTabBar = true;
-    }
     this.bump();
   }
 
@@ -230,11 +150,6 @@ export class WizardStore extends EventEmitter {
 
   setOutroData(data: OutroData): void {
     this.outroData = data;
-    this.bump();
-  }
-
-  setModalPrompt(prompt: PendingPrompt | null): void {
-    this.modalPrompt = prompt;
     this.bump();
   }
 

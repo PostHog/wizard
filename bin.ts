@@ -192,22 +192,25 @@ yargs(hideBin(process.argv))
       } else {
         // Interactive TTY: launch the Ink TUI
         void (async () => {
-          let unmount: (() => void) | undefined;
           try {
             const { startTUI } = await import('./src/ui/tui/start-tui.js');
             const tui = startTUI(WIZARD_VERSION);
-            unmount = tui.unmount;
+
+            // Wait for IntroScreen to collect the cloud region
+            const region = await tui.waitForSetup();
+
+            await runWizard({
+              ...options,
+              region,
+            } as unknown as WizardOptions);
+
+            // Keep the outro screen visible — let process.exit() handle cleanup
           } catch (err) {
             // TUI unavailable (e.g., in test environment) — continue with default UI
             if (process.env.DEBUG || process.env.POSTHOG_WIZARD_DEBUG) {
               console.error('TUI init failed:', err); // eslint-disable-line no-console
             }
-          }
-
-          try {
             await runWizard(options as unknown as WizardOptions);
-          } finally {
-            unmount?.();
           }
         })();
       }
