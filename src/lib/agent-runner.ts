@@ -61,6 +61,8 @@ export type AgentWizardMode = {
   concurrentFence?: boolean;
   /** Extra context lines appended to the agent prompt (e.g. workspace type). */
   additionalContext?: string[];
+  /** Called when the agent emits a [STATUS] progress message. */
+  onStatus?: (message: string) => void;
 };
 
 /** Run shared setup (AI consent, status check, region, git, OAuth). */
@@ -297,6 +299,7 @@ export async function runAgentWizard(
       errorMessage: 'Integration failed',
     },
     middleware,
+    mode?.onStatus,
   );
 
   // Handle error cases detected in agent output

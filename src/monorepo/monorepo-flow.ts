@@ -227,6 +227,13 @@ export async function runMonorepoFlow(
               additionalContext: workspaceType
                 ? [`This project is part of a ${workspaceType} monorepo.`]
                 : undefined,
+              onStatus: (statusMessage: string) => {
+                const label = project.relativePath || project.frameworkName;
+                progressSpinner.stop(`${chalk.cyan(label)}: ${statusMessage}`);
+                progressSpinner.start(
+                  `Instrumenting ${total} projects (${completed}/${total} done)`,
+                );
+              },
             });
             return { project, success: true } as ProjectResult;
           } catch (error) {
