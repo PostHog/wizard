@@ -53,6 +53,6 @@ jobs:
         if: steps.check.outputs.notify == 'true'
         uses: slackapi/slack-github-action@v2.0.0
         with:
-          webhook: ${{ secrets.SLACK_WEBHOOK_CHANNEL_WIZARD }}
+          webhook: ${{ secrets.SLACK_WEBHOOK_WIZARD_CHANNEL }}
           webhook-type: incoming-webhook
           payload: ${{ steps.check.outputs.payload }}
