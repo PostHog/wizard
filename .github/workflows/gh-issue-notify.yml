@@ -1,0 +1,56 @@
+name: Notify Slack for wizard issues
+on:
+  issues:
+    types: [opened]
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check issue and build payload
+        id: check
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const issue = context.payload.issue;
+
+            // Check if the issue belongs to integration autonomy
+            const EXCLUDED_PROJECTS = ['Integration autonomy'];
+
+            const { node } = await github.graphql(`
+              query($issueId: ID!) {
+                node(id: "${ issue.node_id }") {
+                  ... on Issue {
+                    projectItems(first: 10) {
+                      nodes {
+                        project { title }
+                      }
+                    }
+                  }
+                }
+              }
+            `, { issueId: issue.node_id });
+
+            const projects = (node?.projectItems?.nodes || []).map(n => n.project.title);
+            const isExcluded = projects.some(p => EXCLUDED_PROJECTS.includes(p));
+
+            if (isExcluded) {
+              core.info(`Skipping: issue belongs to excluded project (${projects.join(', ')})`);
+              core.setOutput('notify', 'false');
+              return;
+            }
+
+            const labels = (issue.labels || []).map(l => l.name).join(', ');
+            const payload = {
+              text: `New wizard issue: <${issue.html_url}|${issue.title}>\nBy: ${issue.user.login}\nLabels: ${labels || 'none'}`
+            };
+            core.setOutput('notify', 'true');
+            core.setOutput('payload', JSON.stringify(payload));
+
+      - name: Notify Slack
+        if: steps.check.outputs.notify == 'true'
+        uses: slackapi/slack-github-action@v2.0.0
+        with:
+          webhook: ${{ secrets.SLACK_WEBHOOK }}
+          webhook-type: incoming-webhook
+          payload: ${{ steps.check.outputs.payload }}
