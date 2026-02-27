@@ -1,6 +1,6 @@
 {
   "name": "@posthog/wizard",
-  "version": "1.34.0",
+  "version": "1.35.2",
   "homepage": "https://github.com/PostHog/wizard",
   "repository": "https://github.com/PostHog/wizard",
   "description": "The PostHog wizard helps you to configure your project",
@@ -92,7 +92,7 @@
   "packageManager": "pnpm@10.23.0+sha512.21c4e5698002ade97e4efe8b8b4a89a8de3c85a37919f957e7a0f30f38fbc5bbdd05980ffe29179b2fb6e6e691242e098d945d1601772cad0fef5fb6411e2a4b",
   "scripts": {
     "clean": "rm -rf ./dist",
-    "prebuild": "pnpm clean",
+    "prebuild": "pnpm clean && node scripts/generate-version.js",
     "build:watch": "pnpm tsc -w",
     "build": "pnpm tsc",
     "postbuild": "chmod +x ./dist/bin.js && cp -r scripts/** dist && cp -r src/utils/rules dist/src/utils && pnpm test:smoke",
