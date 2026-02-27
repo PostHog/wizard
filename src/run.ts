@@ -87,10 +87,10 @@ export async function runWizard(argv: Args) {
   // If user specified --integration or --menu, skip monorepo detection
   if (!finalArgs.integration && !wizardOptions.menu) {
     // Check for monorepo before single-framework detection
-    const monorepoProjects = await detectWorkspaceProjects(wizardOptions);
+    const workspaceResult = await detectWorkspaceProjects(wizardOptions);
 
-    if (monorepoProjects && monorepoProjects.length >= 2) {
-      await runMonorepoFlow(monorepoProjects, wizardOptions);
+    if (workspaceResult && workspaceResult.projects.length >= 2) {
+      await runMonorepoFlow(workspaceResult.projects, wizardOptions);
       return;
     }
   }
