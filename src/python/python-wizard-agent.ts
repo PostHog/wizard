@@ -8,6 +8,10 @@ import fg from 'fast-glob';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import {
+  PYTHON_DETECTION_IGNORES,
+  PYTHON_SOURCE_IGNORES,
+} from '../lib/glob-patterns';
+import {
   getPythonVersion,
   getPythonVersionBucket,
   detectPackageManager,
@@ -53,7 +57,7 @@ export const PYTHON_AGENT_CONFIG: FrameworkConfig<PythonContext> = {
         ],
         {
           cwd: installDir,
-          ignore: ['**/venv/**', '**/.venv/**', '**/env/**', '**/.env/**'],
+          ignore: PYTHON_DETECTION_IGNORES,
         },
       );
 
@@ -65,7 +69,7 @@ export const PYTHON_AGENT_CONFIG: FrameworkConfig<PythonContext> = {
       // Check for Django
       const managePyMatches = await fg('**/manage.py', {
         cwd: installDir,
-        ignore: ['**/venv/**', '**/.venv/**', '**/env/**', '**/.env/**'],
+        ignore: PYTHON_DETECTION_IGNORES,
       });
 
       for (const match of managePyMatches) {
@@ -107,13 +111,7 @@ export const PYTHON_AGENT_CONFIG: FrameworkConfig<PythonContext> = {
         ['**/app.py', '**/wsgi.py', '**/application.py', '**/__init__.py'],
         {
           cwd: installDir,
-          ignore: [
-            '**/venv/**',
-            '**/.venv/**',
-            '**/env/**',
-            '**/.env/**',
-            '**/__pycache__/**',
-          ],
+          ignore: PYTHON_SOURCE_IGNORES,
         },
       );
 

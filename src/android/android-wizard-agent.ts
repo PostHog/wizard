@@ -96,8 +96,6 @@ export const ANDROID_AGENT_CONFIG: FrameworkConfig<AndroidContext> = {
   prompts: {
     projectTypeDetection:
       'This is an Android/Kotlin project. Look for build.gradle or build.gradle.kts files, AndroidManifest.xml, and Kotlin source files (.kt) to confirm.',
-    packageInstallation:
-      'Add the PostHog Android SDK dependency to the app-level build.gradle(.kts) file. Use implementation("com.posthog:posthog-android:<VERSION>"). Check the existing dependency format (Groovy vs Kotlin DSL) and match it.',
     getAdditionalContextLines: (context) => {
       const lines = [
         `Framework docs ID: android (use posthog://docs/frameworks/android for documentation)`,

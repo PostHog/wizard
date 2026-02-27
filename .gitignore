@@ -35,3 +35,5 @@ plugins
 .vercel
 
 e2e-tests/fixtures/.tracking/*
+
+CLAUDE.local.md

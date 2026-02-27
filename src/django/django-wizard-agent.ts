@@ -7,6 +7,7 @@ import { Integration } from '../lib/constants';
 import fg from 'fast-glob';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import { PYTHON_DETECTION_IGNORES } from '../lib/glob-patterns';
 import {
   getDjangoVersion,
   getDjangoProjectType,
@@ -48,7 +49,7 @@ export const DJANGO_AGENT_CONFIG: FrameworkConfig<DjangoContext> = {
 
       const managePyMatches = await fg('**/manage.py', {
         cwd: installDir,
-        ignore: ['**/venv/**', '**/.venv/**', '**/env/**', '**/.env/**'],
+        ignore: PYTHON_DETECTION_IGNORES,
       });
 
       if (managePyMatches.length > 0) {
@@ -77,7 +78,7 @@ export const DJANGO_AGENT_CONFIG: FrameworkConfig<DjangoContext> = {
         ['**/requirements*.txt', '**/pyproject.toml', '**/setup.py'],
         {
           cwd: installDir,
-          ignore: ['**/venv/**', '**/.venv/**', '**/env/**', '**/.env/**'],
+          ignore: PYTHON_DETECTION_IGNORES,
         },
       );
 

@@ -21,11 +21,11 @@ export enum Integration {
   android = 'android',
   rails = 'rails',
 
-  // Language fallbacks
+  // Language fallbacks (order matters: more-specific before catch-all)
   python = 'python',
   ruby = 'ruby',
-  javascriptNode = 'javascript_node',
   javascript_web = 'javascript_web',
+  javascriptNode = 'javascript_node',
 }
 export interface Args {
   debug: boolean;
@@ -58,10 +58,6 @@ export const OAUTH_PORT = 8239;
 export const WIZARD_INTERACTION_EVENT_NAME = 'wizard interaction';
 export const WIZARD_REMARK_EVENT_NAME = 'wizard remark';
 
-/**
- * User-Agent string for the wizard when making HTTP requests.
- * Used for direct PostHog API calls and passed to the MCP server
- * so it can identify requests originating from the wizard.
- */
+/** User-Agent string for wizard HTTP requests. */
 import packageJson from '../../package.json';
 export const WIZARD_USER_AGENT = `posthog/wizard; version: ${packageJson.version}`;

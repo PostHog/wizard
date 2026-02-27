@@ -3,6 +3,9 @@ import type { FrameworkConfig } from '../lib/framework-config';
 import { Integration } from '../lib/constants';
 import { tryGetPackageJson } from '../utils/clack-utils';
 import { detectNodePackageManagers } from '../lib/package-manager-detection';
+import { hasPackageInstalled } from '../utils/package-json';
+import { FRAMEWORK_PACKAGES } from '../javascript-web/utils';
+import { hasLockfileOrDeps } from '../utils/js-detection';
 
 type JavaScriptNodeContext = Record<string, unknown>;
 
@@ -23,7 +26,22 @@ export const JAVASCRIPT_NODE_AGENT_CONFIG: FrameworkConfig<JavaScriptNodeContext
       detectPackageManager: detectNodePackageManagers,
       detect: async (options) => {
         const packageJson = await tryGetPackageJson(options);
-        return !!packageJson;
+        if (!packageJson) {
+          return false;
+        }
+
+        // Exclude projects with known framework packages (handled by
+        // their dedicated detectors earlier in the enum)
+        for (const frameworkPkg of FRAMEWORK_PACKAGES) {
+          if (hasPackageInstalled(frameworkPkg, packageJson)) {
+            return false;
+          }
+        }
+
+        // Catch-all for JS projects without browser signals (those
+        // matched javascript_web already). Require a lockfile or real
+        // dependencies so we don't match bare tooling package.json files.
+        return hasLockfileOrDeps(options.installDir, packageJson);
       },
     },
 
@@ -42,8 +60,6 @@ export const JAVASCRIPT_NODE_AGENT_CONFIG: FrameworkConfig<JavaScriptNodeContext
     prompts: {
       projectTypeDetection:
         'This is a server-side Node.js project. Look for package.json and lockfiles to confirm.',
-      packageInstallation:
-        'Use npm, yarn, pnpm, or bun based on the existing lockfile (package-lock.json, yarn.lock, pnpm-lock.yaml, bun.lockb). Install posthog-node as a regular dependency.',
       getAdditionalContextLines: () => [
         `Framework docs ID: javascript_node (use posthog://docs/frameworks/javascript_node for documentation)`,
       ],

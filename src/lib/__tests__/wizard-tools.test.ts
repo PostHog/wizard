@@ -47,6 +47,27 @@ describe('resolveEnvPath', () => {
     // edge case: filePath resolves to exactly workingDirectory
     expect(() => resolveEnvPath('/project', '.')).not.toThrow();
   });
+
+  it('strips redundant subdirectory prefix from relative path', () => {
+    // Agent passes "services/mcp/.env" when workingDir is already "/ws/services/mcp"
+    const result = resolveEnvPath('/ws/services/mcp', 'services/mcp/.env');
+    expect(result).toBe(path.resolve('/ws/services/mcp', '.env'));
+  });
+
+  it('strips single-level redundant prefix', () => {
+    const result = resolveEnvPath('/ws/frontend', 'frontend/.env.local');
+    expect(result).toBe(path.resolve('/ws/frontend', '.env.local'));
+  });
+
+  it('does not strip when there is no redundant prefix', () => {
+    const result = resolveEnvPath('/ws/services/mcp', '.env');
+    expect(result).toBe(path.resolve('/ws/services/mcp', '.env'));
+  });
+
+  it('does not strip legitimate nested paths', () => {
+    const result = resolveEnvPath('/ws/services/mcp', 'config/.env');
+    expect(result).toBe(path.resolve('/ws/services/mcp', 'config/.env'));
+  });
 });
 
 // ---------------------------------------------------------------------------

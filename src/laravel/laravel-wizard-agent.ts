@@ -114,8 +114,6 @@ export const LARAVEL_AGENT_CONFIG: FrameworkConfig<LaravelContext> = {
   prompts: {
     projectTypeDetection:
       'This is a PHP/Laravel project. Look for composer.json, artisan CLI, and app/ directory structure to confirm. Check for Laravel-specific packages like laravel/framework.',
-    packageInstallation:
-      'Use Composer to install packages. Run `composer require posthog/posthog-php` without pinning a specific version.',
     getAdditionalContextLines: (context) => {
       const projectTypeName = context.projectType
         ? getLaravelProjectTypeName(context.projectType)
@@ -133,17 +131,6 @@ export const LARAVEL_AGENT_CONFIG: FrameworkConfig<LaravelContext> = {
 
       if (context.bootstrapFile) {
         lines.push(`Bootstrap file: ${context.bootstrapFile}`);
-      }
-
-      // Add Laravel-specific guidance based on version structure
-      if (context.laravelStructure === 'latest') {
-        lines.push(
-          'Note: Laravel 11+ uses simplified bootstrap/app.php for middleware and providers',
-        );
-      } else {
-        lines.push(
-          'Note: Use app/Http/Kernel.php for middleware, app/Providers for service providers',
-        );
       }
 
       return lines;
