@@ -8,6 +8,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       issues: read
+      repository-projects: read
     steps:
       - name: Check issue and build payload
         id: check
@@ -21,7 +22,7 @@ jobs:
 
             const { node } = await github.graphql(`
               query($issueId: ID!) {
-                node(id: "${ issue.node_id }") {
+                node(id: $issueId) {
                   ... on Issue {
                     projectItems(first: 10) {
                       nodes {
