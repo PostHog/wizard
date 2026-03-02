@@ -14,8 +14,6 @@ import type { WizardStore } from '../store.js';
 import { ConfirmationInput, PickerMenu } from '../primitives/index.js';
 import { Colors } from '../styles.js';
 import type { McpInstaller, McpClientInfo } from '../services/mcp-installer.js';
-import { RunPhase } from '../../../lib/wizard-session.js';
-
 interface McpScreenProps {
   store: WizardStore;
   installer: McpInstaller;
@@ -31,7 +29,7 @@ enum Phase {
 }
 
 const markDone = (store: WizardStore) => {
-  store.setRunPhase(RunPhase.Done);
+  store.setMcpComplete();
 };
 
 export const McpScreen = ({ store, installer }: McpScreenProps) => {

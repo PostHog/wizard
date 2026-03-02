@@ -19,14 +19,12 @@ export type CloudRegion = 'us' | 'eu';
 export enum RunPhase {
   /** Still gathering input (intro, setup screens) */
   Idle = 'idle',
-  /** Main work is in progress (agent running, MCP installing) */
+  /** Main work is in progress */
   Running = 'running',
   /** Main work finished successfully */
   Completed = 'completed',
   /** Main work finished with an error */
   Error = 'error',
-  /** All post-run steps complete (env upload, MCP install) — ready for outro */
-  Done = 'done',
 }
 
 /** Outcome kind for the outro screen */
@@ -77,6 +75,9 @@ export interface WizardSession {
   runPhase: RunPhase;
   loginUrl: string | null;
 
+  // Screen completion
+  mcpComplete: boolean;
+
   // Runtime
   serviceStatus: { description: string; statusPageUrl: string } | null;
   outroData: OutroData | null;
@@ -117,6 +118,7 @@ export function buildSession(args: {
     detectedFrameworkLabel: null,
 
     runPhase: RunPhase.Idle,
+    mcpComplete: false,
     loginUrl: null,
     credentials: null,
     serviceStatus: null,

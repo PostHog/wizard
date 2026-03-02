@@ -115,6 +115,11 @@ export class WizardStore extends EventEmitter {
     this.emitChange();
   }
 
+  setMcpComplete(): void {
+    this.session.mcpComplete = true;
+    this.emitChange();
+  }
+
   setOutroData(data: OutroData): void {
     this.session.outroData = data;
     this.emitChange();

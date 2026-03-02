@@ -94,7 +94,7 @@ const FLOWS: Record<Flow, FlowEntry[]> = {
     },
     {
       screen: Screen.Mcp,
-      isComplete: (s) => s.runPhase === RunPhase.Done,
+      isComplete: (s) => s.mcpComplete,
     },
     { screen: Screen.Outro },
   ],
