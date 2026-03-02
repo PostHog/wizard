@@ -98,6 +98,11 @@ export class WizardStore extends EventEmitter {
     this.emitChange();
   }
 
+  setDetectionComplete(): void {
+    this.session.detectionComplete = true;
+    this.emitChange();
+  }
+
   setDetectedFramework(label: string): void {
     this.session.detectedFrameworkLabel = label;
     this.emitChange();

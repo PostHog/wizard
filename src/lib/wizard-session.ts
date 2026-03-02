@@ -63,6 +63,9 @@ export interface WizardSession {
   /** Human-readable label for the detected framework variant (e.g., "Django with Wagtail CMS") */
   detectedFrameworkLabel: string | null;
 
+  /** True once framework detection has run (whether it found something or not) */
+  detectionComplete: boolean;
+
   // From OAuth
   credentials: {
     accessToken: string;
@@ -116,6 +119,7 @@ export function buildSession(args: {
     frameworkContext: {},
     typescript: false,
     detectedFrameworkLabel: null,
+    detectionComplete: false,
 
     runPhase: RunPhase.Idle,
     mcpComplete: false,

@@ -18,7 +18,7 @@ export const TitleBar = ({ version }: TitleBarProps) => {
 
   return (
     <Box>
-      <Text backgroundColor={Colors.accent} color="black" bold>
+      <Text backgroundColor={Colors.accent} color="#000000" bold>
         {title}
         {padding}
         {FEEDBACK}

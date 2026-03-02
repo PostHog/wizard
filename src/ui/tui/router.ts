@@ -18,7 +18,6 @@ import { type WizardSession, RunPhase } from '../../lib/wizard-session.js';
 
 /** Screens that participate in linear flows */
 export enum Screen {
-  Boot = 'boot',
   Intro = 'intro',
   Setup = 'setup',
   Auth = 'auth',
@@ -70,10 +69,6 @@ function needsSetup(session: WizardSession): boolean {
 /** All flow pipelines. Add new screens by appending entries. */
 const FLOWS: Record<Flow, FlowEntry[]> = {
   [Flow.Wizard]: [
-    {
-      screen: Screen.Boot,
-      isComplete: (s) => s.frameworkConfig !== null,
-    },
     {
       screen: Screen.Intro,
       isComplete: (s) => s.cloudRegion !== null,

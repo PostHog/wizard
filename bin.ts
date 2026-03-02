@@ -216,15 +216,21 @@ yargs(hideBin(process.argv))
             });
             tui.store.session = session;
 
-            // Detect framework while BootScreen is showing.
-            // Detection + gatherContext run before IntroScreen appears,
-            // so IntroScreen has the friendly label and config available.
+            // Detect framework while IntroScreen shows its spinner.
+            // Runs concurrently — IntroScreen reacts when detection completes.
             const { FRAMEWORK_REGISTRY } = await import(
               './src/lib/registry.js'
             );
             const { detectIntegration } = await import('./src/run.js');
             const installDir = session.installDir ?? process.cwd();
-            const detectedIntegration = await detectIntegration(installDir);
+
+            const DETECTION_TIMEOUT_MS = 10000;
+            const detectedIntegration = await Promise.race([
+              detectIntegration(installDir),
+              new Promise<undefined>((resolve) =>
+                setTimeout(() => resolve(undefined), DETECTION_TIMEOUT_MS),
+              ),
+            ]);
 
             if (detectedIntegration) {
               const config = FRAMEWORK_REGISTRY[detectedIntegration];
@@ -232,16 +238,21 @@ yargs(hideBin(process.argv))
               // Run gatherContext for the friendly variant label
               if (config.metadata.gatherContext) {
                 try {
-                  const context = await config.metadata.gatherContext({
-                    installDir,
-                    debug: session.debug,
-                    forceInstall: session.forceInstall,
-                    default: false,
-                    signup: session.signup,
-                    localMcp: session.localMcp,
-                    ci: session.ci,
-                    menu: session.menu,
-                  });
+                  const context = await Promise.race([
+                    config.metadata.gatherContext({
+                      installDir,
+                      debug: session.debug,
+                      forceInstall: session.forceInstall,
+                      default: false,
+                      signup: session.signup,
+                      localMcp: session.localMcp,
+                      ci: session.ci,
+                      menu: session.menu,
+                    }),
+                    new Promise<Record<string, never>>((resolve) =>
+                      setTimeout(() => resolve({}), DETECTION_TIMEOUT_MS),
+                    ),
+                  ]);
                   for (const [key, value] of Object.entries(context)) {
                     if (!(key in session.frameworkContext)) {
                       tui.store.setFrameworkContext(key, value);
@@ -252,13 +263,15 @@ yargs(hideBin(process.argv))
                 }
               }
 
-              // Set config last — this is what resolves past BootScreen
               tui.store.setFrameworkConfig(detectedIntegration, config);
 
               if (!session.detectedFrameworkLabel) {
                 tui.store.setDetectedFramework(config.metadata.name);
               }
             }
+
+            // Signal detection is done — IntroScreen shows picker or results
+            tui.store.setDetectionComplete();
 
             // Wait for IntroScreen to collect the cloud region
             const region = await tui.waitForSetup();
