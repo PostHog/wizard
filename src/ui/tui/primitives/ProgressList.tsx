@@ -4,7 +4,9 @@
  */
 
 import { Box, Text } from 'ink';
+import { Spinner } from '@inkjs/ui';
 import { Colors, Icons } from '../styles.js';
+import { LoadingBox } from './LoadingBox.js';
 
 export interface ProgressItem {
   label: string;
@@ -29,6 +31,7 @@ export const ProgressList = ({ items, title }: ProgressListProps) => {
           <Text> </Text>
         </>
       )}
+      {items.length === 0 && <LoadingBox message="Starting up..." />}
       {items.map((item, i) => {
         const icon =
           item.status === 'completed'
@@ -55,7 +58,8 @@ export const ProgressList = ({ items, title }: ProgressListProps) => {
         );
       })}
       {total > 0 && (
-        <Box marginTop={1}>
+        <Box marginTop={1} gap={1}>
+          {completed < total && <Spinner />}
           <Text dimColor>
             Progress: {completed}/{total} completed
           </Text>

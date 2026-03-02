@@ -1,5 +1,5 @@
 /**
- * SplitView — Two-pane horizontal layout: 2/3 left, 1/3 right.
+ * SplitView — Two-pane horizontal layout: 50/50.
  */
 
 import { Box } from 'ink';
@@ -14,10 +14,10 @@ interface SplitViewProps {
 export const SplitView = ({ left, right, gap = 2 }: SplitViewProps) => {
   return (
     <Box flexDirection="row" flexGrow={1} gap={gap}>
-      <Box width="66%" flexDirection="column">
+      <Box width="50%" flexDirection="column">
         {left}
       </Box>
-      <Box width="34%" flexDirection="column">
+      <Box width="50%" flexDirection="column">
         {right}
       </Box>
     </Box>

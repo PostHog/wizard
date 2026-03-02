@@ -2,13 +2,13 @@
  * RunScreen — Tabbed observational view of the agent run.
  *
  * Two tabs:
- *   - Status: SplitView with ProgressList (left) + placeholder (right)
+ *   - Status: SplitView with TipsCard (left) + ProgressList (right)
  *   - Logs: LogViewer tailing the wizard log file
  *
  * No prompts — the agent runs headlessly.
  */
 
-import { Text } from 'ink';
+import { Box, Text } from 'ink';
 import { useSyncExternalStore } from 'react';
 import type { WizardStore } from '../store.js';
 import {
@@ -18,12 +18,28 @@ import {
   LogViewer,
 } from '../primitives/index.js';
 import type { ProgressItem } from '../primitives/index.js';
+import { Colors } from '../styles.js';
 
 const LOG_FILE = '/tmp/posthog-wizard.log';
 
 interface RunScreenProps {
   store: WizardStore;
 }
+
+const TipsCard = () => {
+  return (
+    <Box flexDirection="column" paddingX={1}>
+      <Text bold color={Colors.accent}>
+        Tip
+      </Text>
+      <Box height={1} />
+      <Text dimColor>
+        We'll put a call to action here based on what we've detected in their
+        project.
+      </Text>
+    </Box>
+  );
+};
 
 export const RunScreen = ({ store }: RunScreenProps) => {
   useSyncExternalStore(
@@ -48,18 +64,14 @@ export const RunScreen = ({ store }: RunScreenProps) => {
       label: 'Status',
       component: (
         <SplitView
-          left={<ProgressList items={progressItems} title="Tasks" />}
-          right={
-            <Text dimColor>
-              {lastStatus || 'Waiting for agent to start...'}
-            </Text>
-          }
+          left={<TipsCard />}
+          right={<ProgressList items={progressItems} title="Tasks" />}
         />
       ),
     },
     {
       id: 'logs',
-      label: 'All Logs',
+      label: 'All logs',
       component: <LogViewer filePath={LOG_FILE} />,
     },
   ];
