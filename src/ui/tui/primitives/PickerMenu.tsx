@@ -1,12 +1,13 @@
 /**
  * PickerMenu — Single and multi select.
  * Single mode: custom renderer with small triangle indicator.
- * Multi mode: wraps @inkjs/ui MultiSelect.
+ * Multi mode: checkbox glyphs with space to toggle.
  */
 
 import { Box, Text, useInput } from 'ink';
 import { useState } from 'react';
 import { Icons, Colors } from '../styles.js';
+import { PromptLabel } from './PromptLabel.js';
 
 interface PickerOption<T> {
   label: string;
@@ -18,6 +19,7 @@ interface PickerMenuProps<T> {
   message: string;
   options: PickerOption<T>[];
   mode?: 'single' | 'multi';
+  centered?: boolean;
   onSelect: (value: T | T[]) => void;
 }
 
@@ -25,6 +27,7 @@ export const PickerMenu = <T,>({
   message,
   options,
   mode = 'single',
+  centered = false,
   onSelect,
 }: PickerMenuProps<T>) => {
   if (mode === 'multi') {
@@ -32,13 +35,19 @@ export const PickerMenu = <T,>({
       <MultiPickerMenu
         message={message}
         options={options}
+        centered={centered}
         onSelect={onSelect}
       />
     );
   }
 
   return (
-    <SinglePickerMenu message={message} options={options} onSelect={onSelect} />
+    <SinglePickerMenu
+      message={message}
+      options={options}
+      centered={centered}
+      onSelect={onSelect}
+    />
   );
 };
 
@@ -46,10 +55,12 @@ export const PickerMenu = <T,>({
 const SinglePickerMenu = <T,>({
   message,
   options,
+  centered = false,
   onSelect,
 }: {
   message: string;
   options: PickerOption<T>[];
+  centered?: boolean;
   onSelect: (value: T | T[]) => void;
 }) => {
   const [focused, setFocused] = useState(0);
@@ -69,19 +80,12 @@ const SinglePickerMenu = <T,>({
     }
   });
 
+  const align = centered ? 'center' : undefined;
+
   return (
-    <Box flexDirection="column">
-      <Box
-        borderStyle="single"
-        borderColor={Colors.accent}
-        paddingX={1}
-        alignSelf="flex-start"
-      >
-        <Text bold color={Colors.accent}>
-          {message}
-        </Text>
-      </Box>
-      <Box flexDirection="column" marginLeft={2} marginTop={1}>
+    <Box flexDirection="column" alignItems={align}>
+      <PromptLabel message={message} />
+      <Box flexDirection="column" marginLeft={centered ? 0 : 2} marginTop={1}>
         {options.map((opt, i) => {
           const isFocused = i === focused;
           const label = opt.hint ? `${opt.label} (${opt.hint})` : opt.label;
@@ -112,10 +116,12 @@ const SinglePickerMenu = <T,>({
 const MultiPickerMenu = <T,>({
   message,
   options,
+  centered = false,
   onSelect,
 }: {
   message: string;
   options: PickerOption<T>[];
+  centered?: boolean;
   onSelect: (value: T | T[]) => void;
 }) => {
   const [focused, setFocused] = useState(0);
@@ -146,19 +152,10 @@ const MultiPickerMenu = <T,>({
   });
 
   return (
-    <Box flexDirection="column">
-      <Box
-        borderStyle="single"
-        borderColor={Colors.accent}
-        paddingX={1}
-        alignSelf="flex-start"
-      >
-        <Text bold color={Colors.accent}>
-          {message}
-        </Text>
-      </Box>
+    <Box flexDirection="column" alignItems={centered ? 'center' : undefined}>
+      <PromptLabel message={message} />
       <Text dimColor> (space to toggle, enter to submit)</Text>
-      <Box flexDirection="column" marginLeft={2} marginTop={1}>
+      <Box flexDirection="column" marginLeft={centered ? 0 : 2} marginTop={1}>
         {options.map((opt, i) => {
           const isFocused = i === focused;
           const isSelected = selected.has(i);

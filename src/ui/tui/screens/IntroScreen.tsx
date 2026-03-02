@@ -1,7 +1,7 @@
 /**
  * IntroScreen — Welcome + cloud region picker.
  *
- * Shows detected framework info and beta notices from session state.
+ * Centered layout showing framework detection, description, and region select.
  * Calls store.completeSetup(region) which unblocks bin.ts to start runWizard.
  */
 
@@ -10,7 +10,6 @@ import { useSyncExternalStore } from 'react';
 import type { WizardStore } from '../store.js';
 import type { CloudRegion } from '../../../lib/wizard-session.js';
 import { PickerMenu } from '../primitives/index.js';
-import { Colors } from '../styles.js';
 
 interface IntroScreenProps {
   store: WizardStore;
@@ -28,23 +27,31 @@ export const IntroScreen = ({ store }: IntroScreenProps) => {
     session.detectedFrameworkLabel ?? config?.metadata.name;
 
   return (
-    <Box flexDirection="column" flexGrow={1}>
-      <Box flexDirection="column" marginBottom={1}>
-        <Text bold color={Colors.accent}>
-          PostHog Setup Wizard
+    <Box
+      flexDirection="column"
+      flexGrow={1}
+      alignItems="center"
+      justifyContent="center"
+    >
+      <Box flexDirection="column" alignItems="center" marginBottom={1}>
+        <Text bold>
+          <Text color="#1D4AFF">{'\u2588'}</Text>
+          <Text color="#F54E00">{'\u2588'}</Text>
+          <Text color="#F9BD2B">{'\u2588'}</Text> Setup Wizard ready
         </Text>
 
         {frameworkLabel && (
-          <Text>
-            <Text color="green">{'\u2714'} </Text>
-            <Text>Detected: {frameworkLabel}</Text>
-          </Text>
+          <Box marginY={1}>
+            <Text>
+              <Text color="green">{'\u2714'} </Text>
+              <Text>{frameworkLabel}</Text>
+            </Text>
+          </Box>
         )}
 
         {config?.metadata.beta && (
           <Text color="yellow">
-            [BETA] The {config.metadata.name} wizard is in beta. Questions or
-            feedback? Email wizard@posthog.com
+            [BETA] The {config.metadata.name} wizard is in beta
           </Text>
         )}
 
@@ -56,10 +63,14 @@ export const IntroScreen = ({ store }: IntroScreenProps) => {
           We'll use AI to analyze your project and integrate PostHog.
         </Text>
         <Text dimColor>.env* file contents will not leave your machine.</Text>
+        <Box marginTop={1}>
+          <Text>Let's do two hours of work in eight minutes.</Text>
+        </Box>
       </Box>
 
       <PickerMenu<CloudRegion>
-        message="Select your PostHog cloud region"
+        centered
+        message="To continue, login: select your PostHog cloud region"
         options={[
           { label: 'US Cloud', value: 'us', hint: 'us.posthog.com' },
           { label: 'EU Cloud', value: 'eu', hint: 'eu.posthog.com' },

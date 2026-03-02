@@ -56,13 +56,6 @@ export const AuthScreen = ({ store }: AuthScreenProps) => {
         )}
       </Box>
 
-      <Box flexDirection="column" marginBottom={1}>
-        <Text dimColor>
-          We'll use AI to analyze your project and integrate PostHog.
-        </Text>
-        <Text dimColor>.env* file contents will not leave your machine.</Text>
-      </Box>
-
       <LoadingBox message="Waiting for authentication..." />
 
       {session.loginUrl && (

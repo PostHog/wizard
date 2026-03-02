@@ -1,11 +1,12 @@
 /**
- * ConfirmationInput — Continue/cancel with bordered prompt and button boxes.
- * Enter confirms, escape cancels.
+ * ConfirmationInput — Continue/cancel prompt.
+ * Enter confirms, escape cancels. Arrow keys toggle focus.
  */
 
 import { Box, Text, useInput } from 'ink';
 import { useState } from 'react';
-import { Colors } from '../styles.js';
+import { Icons, Colors } from '../styles.js';
+import { PromptLabel } from './PromptLabel.js';
 
 interface ConfirmationInputProps {
   message: string;
@@ -45,49 +46,24 @@ export const ConfirmationInput = ({
 
   return (
     <Box flexDirection="column">
-      <Box
-        borderStyle="single"
-        borderColor={Colors.accent}
-        paddingX={1}
-        alignSelf="flex-start"
-      >
-        <Text bold color={Colors.accent}>
-          {message}
-        </Text>
-      </Box>
-      <Box gap={1} marginTop={1} marginLeft={2}>
-        <Box
-          borderStyle="single"
-          borderColor={
+      <PromptLabel message={message} />
+      <Box gap={2} marginTop={1} marginLeft={2}>
+        <Text
+          bold={focused === FocusTarget.Continue}
+          color={
             focused === FocusTarget.Continue ? Colors.accent : Colors.muted
           }
-          paddingX={1}
         >
-          <Text
-            bold={focused === FocusTarget.Continue}
-            color={
-              focused === FocusTarget.Continue ? Colors.accent : Colors.muted
-            }
-          >
-            Continue [Enter]
-          </Text>
-        </Box>
-        <Box
-          borderStyle="single"
-          borderColor={
-            focused === FocusTarget.Cancel ? Colors.accent : Colors.muted
-          }
-          paddingX={1}
+          {focused === FocusTarget.Continue ? Icons.triangleSmallRight : ' '}{' '}
+          Continue [Enter]
+        </Text>
+        <Text
+          bold={focused === FocusTarget.Cancel}
+          color={focused === FocusTarget.Cancel ? Colors.accent : Colors.muted}
         >
-          <Text
-            bold={focused === FocusTarget.Cancel}
-            color={
-              focused === FocusTarget.Cancel ? Colors.accent : Colors.muted
-            }
-          >
-            Cancel [Esc]
-          </Text>
-        </Box>
+          {focused === FocusTarget.Cancel ? Icons.triangleSmallRight : ' '}{' '}
+          Cancel [Esc]
+        </Text>
       </Box>
     </Box>
   );
