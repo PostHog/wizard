@@ -7,13 +7,18 @@ import { useState } from 'react';
 import { PickerMenu, ConfirmationInput } from '../../primitives/index.js';
 import { Colors } from '../../styles.js';
 
-type DemoStep = 'single' | 'multi' | 'confirm' | 'done';
+enum DemoStep {
+  Single = 'single',
+  Multi = 'multi',
+  Confirm = 'confirm',
+  Done = 'done',
+}
 
 export const InputDemo = () => {
-  const [step, setStep] = useState<DemoStep>('single');
+  const [step, setStep] = useState<DemoStep>(DemoStep.Single);
   const [results, setResults] = useState<string[]>([]);
 
-  if (step === 'single') {
+  if (step === DemoStep.Single) {
     return (
       <Box flexDirection="column">
         <Text bold color={Colors.accent}>
@@ -29,14 +34,14 @@ export const InputDemo = () => {
           ]}
           onSelect={(value) => {
             setResults((prev) => [...prev, `Single: ${value}`]);
-            setStep('multi');
+            setStep(DemoStep.Multi);
           }}
         />
       </Box>
     );
   }
 
-  if (step === 'multi') {
+  if (step === DemoStep.Multi) {
     return (
       <Box flexDirection="column">
         <Text bold color={Colors.accent}>
@@ -55,14 +60,14 @@ export const InputDemo = () => {
           onSelect={(values) => {
             const arr = Array.isArray(values) ? values : [values];
             setResults((prev) => [...prev, `Multi: ${arr.join(', ')}`]);
-            setStep('confirm');
+            setStep(DemoStep.Confirm);
           }}
         />
       </Box>
     );
   }
 
-  if (step === 'confirm') {
+  if (step === DemoStep.Confirm) {
     return (
       <Box flexDirection="column">
         <Text bold color={Colors.accent}>
@@ -73,11 +78,11 @@ export const InputDemo = () => {
           message="Are you satisfied with your choices?"
           onConfirm={() => {
             setResults((prev) => [...prev, 'Confirmed: Yes']);
-            setStep('done');
+            setStep(DemoStep.Done);
           }}
           onCancel={() => {
             setResults((prev) => [...prev, 'Confirmed: No']);
-            setStep('done');
+            setStep(DemoStep.Done);
           }}
         />
       </Box>

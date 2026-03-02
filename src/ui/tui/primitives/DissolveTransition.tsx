@@ -78,7 +78,7 @@ export const DissolveTransition = ({
           setPhase(TransitionPhase.In);
           return 0;
         }
-        if (phase === 'in' && next >= FRAMES_PER_PHASE) {
+        if (phase === TransitionPhase.In && next >= FRAMES_PER_PHASE) {
           setPhase(TransitionPhase.Idle);
           return 0;
         }

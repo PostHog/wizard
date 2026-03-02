@@ -13,19 +13,26 @@ interface ConfirmationInputProps {
   onCancel: () => void;
 }
 
+enum FocusTarget {
+  Continue = 'continue',
+  Cancel = 'cancel',
+}
+
 export const ConfirmationInput = ({
   message,
   onConfirm,
   onCancel,
 }: ConfirmationInputProps) => {
-  const [focused, setFocused] = useState<'continue' | 'cancel'>('continue');
+  const [focused, setFocused] = useState<FocusTarget>(FocusTarget.Continue);
 
   useInput((_input, key) => {
     if (key.leftArrow || key.rightArrow) {
-      setFocused((f) => (f === 'continue' ? 'cancel' : 'continue'));
+      setFocused((f) =>
+        f === FocusTarget.Continue ? FocusTarget.Cancel : FocusTarget.Continue,
+      );
     }
     if (key.return) {
-      if (focused === 'continue') {
+      if (focused === FocusTarget.Continue) {
         onConfirm();
       } else {
         onCancel();
@@ -51,24 +58,32 @@ export const ConfirmationInput = ({
       <Box gap={1} marginTop={1} marginLeft={2}>
         <Box
           borderStyle="single"
-          borderColor={focused === 'continue' ? Colors.accent : Colors.muted}
+          borderColor={
+            focused === FocusTarget.Continue ? Colors.accent : Colors.muted
+          }
           paddingX={1}
         >
           <Text
-            bold={focused === 'continue'}
-            color={focused === 'continue' ? Colors.accent : Colors.muted}
+            bold={focused === FocusTarget.Continue}
+            color={
+              focused === FocusTarget.Continue ? Colors.accent : Colors.muted
+            }
           >
             Continue [Enter]
           </Text>
         </Box>
         <Box
           borderStyle="single"
-          borderColor={focused === 'cancel' ? Colors.accent : Colors.muted}
+          borderColor={
+            focused === FocusTarget.Cancel ? Colors.accent : Colors.muted
+          }
           paddingX={1}
         >
           <Text
-            bold={focused === 'cancel'}
-            color={focused === 'cancel' ? Colors.accent : Colors.muted}
+            bold={focused === FocusTarget.Cancel}
+            color={
+              focused === FocusTarget.Cancel ? Colors.accent : Colors.muted
+            }
           >
             Cancel [Esc]
           </Text>
