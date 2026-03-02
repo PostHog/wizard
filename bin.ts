@@ -18,7 +18,6 @@ if (!satisfies(process.version, NODE_VERSION_RANGE)) {
 }
 
 import { runMCPInstall, runMCPRemove } from './src/mcp';
-import type { CloudRegion } from './src/utils/types';
 import { runWizard } from './src/run';
 import { isNonInteractiveEnvironment } from './src/utils/environment';
 import clack from './src/utils/clack';
@@ -189,7 +188,6 @@ yargs(hideBin(process.argv))
           void runMCPInstall(
             options as unknown as {
               signup: boolean;
-              region?: CloudRegion;
               local?: boolean;
               debug?: boolean;
             },

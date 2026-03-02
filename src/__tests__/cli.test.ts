@@ -168,18 +168,10 @@ describe('CLI argument parsing', () => {
   });
 
   describe('mcp commands', () => {
-    test('mcp add region is undefined when not specified', async () => {
+    test('mcp add calls runMCPInstall', async () => {
       await runCLI(['mcp', 'add']);
 
-      const args = getLastCallArgs(mockRunMCPInstall);
-      expect(args.region).toBeUndefined();
-    });
-
-    test('mcp add respects --region flag', async () => {
-      await runCLI(['mcp', 'add', '--region', 'eu']);
-
-      const args = getLastCallArgs(mockRunMCPInstall);
-      expect(args.region).toBe('eu');
+      expect(mockRunMCPInstall).toHaveBeenCalled();
     });
 
     test('mcp commands inherit global flags', async () => {
