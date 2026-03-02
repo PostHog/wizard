@@ -7,6 +7,7 @@
 import { Box, Text, useInput } from 'ink';
 import { useSyncExternalStore } from 'react';
 import type { WizardStore } from '../store.js';
+import { OutroKind } from '../../../lib/wizard-session.js';
 import { Colors } from '../styles.js';
 
 interface OutroScreenProps {
@@ -35,7 +36,7 @@ export const OutroScreen = ({ store }: OutroScreenProps) => {
 
   return (
     <Box flexDirection="column" flexGrow={1}>
-      {outroData.kind === 'success' && (
+      {outroData.kind === OutroKind.Success && (
         <Box flexDirection="column">
           <Text color="green" bold>
             {'\u2714'} Successfully installed PostHog!
@@ -98,7 +99,7 @@ export const OutroScreen = ({ store }: OutroScreenProps) => {
         </Box>
       )}
 
-      {outroData.kind === 'error' && (
+      {outroData.kind === OutroKind.Error && (
         <Box flexDirection="column">
           <Text color="red" bold>
             {'\u2718'} {outroData.message || 'An error occurred'}
@@ -106,7 +107,7 @@ export const OutroScreen = ({ store }: OutroScreenProps) => {
         </Box>
       )}
 
-      {outroData.kind === 'cancel' && (
+      {outroData.kind === OutroKind.Cancel && (
         <Box flexDirection="column">
           <Text color="yellow">
             {'\u25A0'} {outroData.message || 'Cancelled'}

@@ -31,6 +31,12 @@ function randomGlyph(): string {
   return GLYPHS[Math.floor(Math.random() * GLYPHS.length)];
 }
 
+enum TransitionPhase {
+  Idle = 'idle',
+  Out = 'out',
+  In = 'in',
+}
+
 export const DissolveTransition = ({
   transitionKey,
   width,
@@ -39,7 +45,7 @@ export const DissolveTransition = ({
   direction = 'left',
   duration = 30,
 }: DissolveTransitionProps) => {
-  const [phase, setPhase] = useState<'idle' | 'out' | 'in'>('idle');
+  const [phase, setPhase] = useState<TransitionPhase>(TransitionPhase.Idle);
   const [frame, setFrame] = useState(0);
   const [activeDir, setActiveDir] = useState<WipeDirection>(direction);
   const prevKey = useRef(transitionKey);
@@ -53,27 +59,27 @@ export const DissolveTransition = ({
       prevKey.current = transitionKey;
       pendingChildren.current = children;
       setActiveDir(direction);
-      setPhase('out');
+      setPhase(TransitionPhase.Out);
       setFrame(0);
-    } else if (phase === 'idle') {
+    } else if (phase === TransitionPhase.Idle) {
       setDisplayChildren(children);
     }
   }, [transitionKey, children, width, height, phase, direction]);
 
   useEffect(() => {
-    if (phase === 'idle') return;
+    if (phase === TransitionPhase.Idle) return;
 
     const timer = setInterval(() => {
       setTick((t) => t + 1); // force re-render for new random glyphs
       setFrame((prev) => {
         const next = prev + 1;
-        if (phase === 'out' && next >= FRAMES_PER_PHASE) {
+        if (phase === TransitionPhase.Out && next >= FRAMES_PER_PHASE) {
           setDisplayChildren(pendingChildren.current);
-          setPhase('in');
+          setPhase(TransitionPhase.In);
           return 0;
         }
         if (phase === 'in' && next >= FRAMES_PER_PHASE) {
-          setPhase('idle');
+          setPhase(TransitionPhase.Idle);
           return 0;
         }
         return next;
@@ -83,7 +89,7 @@ export const DissolveTransition = ({
     return () => clearInterval(timer);
   }, [phase, duration]);
 
-  if (phase === 'idle') {
+  if (phase === TransitionPhase.Idle) {
     return <>{displayChildren}</>;
   }
 
@@ -109,7 +115,7 @@ export const DissolveTransition = ({
       const colProgress = (waveFront - colNorm + bandWidth) / bandWidth;
 
       let char: string;
-      if (phase === 'out') {
+      if (phase === TransitionPhase.Out) {
         if (colProgress >= 1) {
           char = '█';
         } else if (colProgress > 0) {

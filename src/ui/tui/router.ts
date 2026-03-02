@@ -12,36 +12,46 @@
  * No switch statements, no hardcoded transitions in business logic.
  */
 
-import type { WizardSession } from '../../lib/wizard-session.js';
+import { type WizardSession, RunPhase } from '../../lib/wizard-session.js';
 
 // ── Screen name taxonomy ──────────────────────────────────────────────
 
 /** Screens that participate in linear flows */
-export type FlowScreen =
-  | 'intro'
-  | 'setup'
-  | 'run'
-  | 'mcp'
-  | 'outro'
-  | 'mcp-add'
-  | 'mcp-remove';
+export enum Screen {
+  Intro = 'intro',
+  Setup = 'setup',
+  Run = 'run',
+  Mcp = 'mcp',
+  Outro = 'outro',
+  McpAdd = 'mcp-add',
+  McpRemove = 'mcp-remove',
+}
 
 /** Screens that interrupt flows as overlays */
-export type OverlayScreen = 'outage';
+export enum Overlay {
+  Outage = 'outage',
+}
 
 /** Union of all screen names */
-export type ScreenName = FlowScreen | OverlayScreen;
+export type ScreenName = Screen | Overlay;
+
+/** Named flows the router can run */
+export enum Flow {
+  Wizard = 'wizard',
+  McpAdd = 'mcp-add',
+  McpRemove = 'mcp-remove',
+}
 
 // ── Flow definitions ──────────────────────────────────────────────────
 
 export interface FlowEntry {
   /** Screen to show */
-  screen: FlowScreen;
+  screen: Screen;
   /** If provided, screen is skipped when this returns false. Omit = always show. */
   show?: (session: WizardSession) => boolean;
+  /** If provided, screen is considered complete when this returns true. */
+  isComplete?: (session: WizardSession) => boolean;
 }
-
-export type FlowName = 'wizard' | 'mcp-add' | 'mcp-remove';
 
 /**
  * Check if the SetupScreen is needed (unresolved framework questions).
@@ -56,43 +66,90 @@ function needsSetup(session: WizardSession): boolean {
 }
 
 /** All flow pipelines. Add new screens by appending entries. */
-const FLOWS: Record<FlowName, FlowEntry[]> = {
-  wizard: [
-    { screen: 'intro' },
-    { screen: 'setup', show: needsSetup },
-    { screen: 'run' },
-    { screen: 'mcp' },
-    { screen: 'outro' },
+const FLOWS: Record<Flow, FlowEntry[]> = {
+  [Flow.Wizard]: [
+    {
+      screen: Screen.Intro,
+      isComplete: (s) => s.cloudRegion !== null,
+    },
+    {
+      screen: Screen.Setup,
+      show: needsSetup,
+      isComplete: (s) => !needsSetup(s),
+    },
+    {
+      screen: Screen.Run,
+      isComplete: (s) =>
+        s.runPhase === RunPhase.Completed || s.runPhase === RunPhase.Error,
+    },
+    {
+      screen: Screen.Mcp,
+      isComplete: (s) => s.runPhase === RunPhase.Done,
+    },
+    { screen: Screen.Outro },
   ],
 
-  'mcp-add': [{ screen: 'mcp-add' }, { screen: 'outro' }],
+  [Flow.McpAdd]: [
+    {
+      screen: Screen.McpAdd,
+      isComplete: (s) => s.runPhase === RunPhase.Completed,
+    },
+    { screen: Screen.Outro },
+  ],
 
-  'mcp-remove': [{ screen: 'mcp-remove' }, { screen: 'outro' }],
+  [Flow.McpRemove]: [
+    {
+      screen: Screen.McpRemove,
+      isComplete: (s) => s.runPhase === RunPhase.Completed,
+    },
+    { screen: Screen.Outro },
+  ],
 };
 
 // ── Router ────────────────────────────────────────────────────────────
 
 export class WizardRouter {
   private flow: FlowEntry[];
-  private flowName: FlowName;
-  private cursor = 0;
-  private overlays: OverlayScreen[] = [];
+  private flowName: Flow;
+  private overlays: Overlay[] = [];
 
-  constructor(flowName: FlowName = 'wizard') {
+  constructor(flowName: Flow = Flow.Wizard) {
     this.flowName = flowName;
     this.flow = FLOWS[flowName];
   }
 
-  /** The screen that should be rendered right now. */
-  get activeScreen(): ScreenName {
+  /**
+   * Resolve which screen should be active based on session state.
+   * Walks the flow pipeline, skipping hidden entries and completed entries,
+   * returns the first incomplete screen.
+   */
+  resolve(session: WizardSession): ScreenName {
     if (this.overlays.length > 0) {
       return this.overlays[this.overlays.length - 1];
     }
-    return this.flow[this.cursor].screen;
+
+    for (const entry of this.flow) {
+      if (entry.show && !entry.show(session)) continue;
+      if (entry.isComplete && entry.isComplete(session)) continue;
+      return entry.screen;
+    }
+
+    // All entries complete — show the last screen (outro)
+    return this.flow[this.flow.length - 1].screen;
+  }
+
+  /** The screen that should be rendered right now. */
+  get activeScreen(): ScreenName {
+    // Overlays take priority — resolve() handles this too,
+    // but activeScreen is called before session is available in some paths
+    if (this.overlays.length > 0) {
+      return this.overlays[this.overlays.length - 1];
+    }
+    return this.flow[0].screen;
   }
 
   /** The name of the active flow. */
-  get activeFlow(): FlowName {
+  get activeFlow(): Flow {
     return this.flowName;
   }
 
@@ -101,37 +158,12 @@ export class WizardRouter {
     return this.overlays.length > 0;
   }
 
-  /** The current flow screen (ignoring overlays). */
-  get currentFlowScreen(): FlowScreen {
-    return this.flow[this.cursor].screen;
-  }
-
-  /**
-   * Advance to the next flow screen, skipping any where show() returns false.
-   * Returns the new active screen, or null if the flow is complete.
-   */
-  advance(session: WizardSession): ScreenName | null {
-    let next = this.cursor + 1;
-
-    while (next < this.flow.length) {
-      const entry = this.flow[next];
-      if (!entry.show || entry.show(session)) {
-        this.cursor = next;
-        return this.activeScreen;
-      }
-      next++;
-    }
-
-    // Flow complete
-    return null;
-  }
-
   /**
    * Push an overlay that interrupts the current flow.
    * The flow resumes when the overlay is dismissed via popOverlay().
    */
-  pushOverlay(screen: OverlayScreen): void {
-    this.overlays.push(screen);
+  pushOverlay(overlay: Overlay): void {
+    this.overlays.push(overlay);
   }
 
   /**
@@ -142,25 +174,7 @@ export class WizardRouter {
   }
 
   /**
-   * Jump the flow cursor to a specific screen.
-   * Use sparingly — prefer advance() for normal flow progression.
-   * Needed for error recovery (e.g., error boundary → outro).
-   */
-  jumpTo(screen: FlowScreen): void {
-    const idx = this.flow.findIndex((e) => e.screen === screen);
-    if (idx !== -1) {
-      this.cursor = idx;
-    }
-  }
-
-  /** Whether the flow has reached its terminal screen. */
-  get isComplete(): boolean {
-    return this.cursor >= this.flow.length - 1;
-  }
-
-  /**
    * Direction hint for screen transitions.
-   * Overlays always push (slide in), popOverlay pops (slide out).
    */
   private _lastDirection: 'push' | 'pop' | null = null;
 

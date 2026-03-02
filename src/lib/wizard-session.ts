@@ -15,8 +15,29 @@ import type { FrameworkConfig } from './framework-config';
 
 export type CloudRegion = 'us' | 'eu';
 
+/** Lifecycle phase of the main work (agent run, MCP install, etc.) */
+export enum RunPhase {
+  /** Still gathering input (intro, setup screens) */
+  Idle = 'idle',
+  /** Main work is in progress (agent running, MCP installing) */
+  Running = 'running',
+  /** Main work finished successfully */
+  Completed = 'completed',
+  /** Main work finished with an error */
+  Error = 'error',
+  /** All post-run steps complete (env upload, MCP install) — ready for outro */
+  Done = 'done',
+}
+
+/** Outcome kind for the outro screen */
+export enum OutroKind {
+  Success = 'success',
+  Error = 'error',
+  Cancel = 'cancel',
+}
+
 export interface OutroData {
-  kind: 'success' | 'error' | 'cancel';
+  kind: OutroKind;
   message?: string;
   changes?: string[];
   nextSteps?: string[];
@@ -48,6 +69,9 @@ export interface WizardSession {
     host: string;
     projectId: number;
   } | null;
+
+  // Lifecycle
+  runPhase: RunPhase;
 
   // Runtime
   serviceStatus: { description: string; statusPageUrl: string } | null;
@@ -87,6 +111,7 @@ export function buildSession(args: {
     frameworkContext: {},
     typescript: false,
 
+    runPhase: RunPhase.Idle,
     credentials: null,
     serviceStatus: null,
     outroData: null,

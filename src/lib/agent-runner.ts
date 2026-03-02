@@ -4,7 +4,7 @@ import {
   SPINNER_MESSAGE,
   type FrameworkConfig,
 } from './framework-config';
-import type { WizardSession } from './wizard-session';
+import { type WizardSession, OutroKind } from './wizard-session';
 import {
   getPackageDotJson,
   isUsingTypeScript,
@@ -344,7 +344,7 @@ Please report this error to: ${chalk.cyan('wizard@posthog.com')}`;
   ].filter(Boolean);
 
   session.outroData = {
-    kind: 'success',
+    kind: OutroKind.Success,
     changes,
     nextSteps,
     docsUrl: config.metadata.docsUrl,

@@ -11,7 +11,7 @@
 
 import type { ReactNode } from 'react';
 import type { WizardStore } from './store.js';
-import type { ScreenName } from './router.js';
+import { Screen, Overlay, type ScreenName } from './router.js';
 
 import { OutageScreen } from './screens/OutageScreen.js';
 import { IntroScreen } from './screens/IntroScreen.js';
@@ -38,17 +38,21 @@ export function createScreens(
 ): Record<ScreenName, ReactNode> {
   return {
     // Overlays
-    outage: <OutageScreen store={store} />,
+    [Overlay.Outage]: <OutageScreen store={store} />,
 
     // Wizard flow
-    intro: <IntroScreen store={store} />,
-    setup: <SetupScreen store={store} />,
-    run: <RunScreen store={store} />,
-    mcp: <McpScreen store={store} installer={services.mcpInstaller} />,
-    outro: <OutroScreen store={store} />,
+    [Screen.Intro]: <IntroScreen store={store} />,
+    [Screen.Setup]: <SetupScreen store={store} />,
+    [Screen.Run]: <RunScreen store={store} />,
+    [Screen.Mcp]: <McpScreen store={store} installer={services.mcpInstaller} />,
+    [Screen.Outro]: <OutroScreen store={store} />,
 
     // Standalone MCP flows
-    'mcp-add': <McpScreen store={store} installer={services.mcpInstaller} />,
-    'mcp-remove': <McpScreen store={store} installer={services.mcpInstaller} />,
+    [Screen.McpAdd]: (
+      <McpScreen store={store} installer={services.mcpInstaller} />
+    ),
+    [Screen.McpRemove]: (
+      <McpScreen store={store} installer={services.mcpInstaller} />
+    ),
   };
 }

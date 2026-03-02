@@ -264,7 +264,8 @@ yargs(hideBin(process.argv))
                 './src/lib/wizard-session.js'
               );
 
-              const tui = startTUI(WIZARD_VERSION, 'mcp-add');
+              const { Flow } = await import('./src/ui/tui/router.js');
+              const tui = startTUI(WIZARD_VERSION, Flow.McpAdd);
               const session = buildSession({
                 debug: options.debug,
                 region: options.region as CloudRegion | undefined,
@@ -307,7 +308,8 @@ yargs(hideBin(process.argv))
                 './src/lib/wizard-session.js'
               );
 
-              const tui = startTUI(WIZARD_VERSION, 'mcp-remove');
+              const { Flow } = await import('./src/ui/tui/router.js');
+              const tui = startTUI(WIZARD_VERSION, Flow.McpRemove);
               const session = buildSession({
                 debug: options.debug,
                 localMcp: options.local,

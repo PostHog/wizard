@@ -8,6 +8,7 @@
 import { Box, Text } from 'ink';
 import { Component, type ReactNode } from 'react';
 import type { WizardStore } from '../store.js';
+import { OutroKind, RunPhase } from '../../../lib/wizard-session.js';
 
 interface Props {
   store: WizardStore;
@@ -28,12 +29,13 @@ export class ScreenErrorBoundary extends Component<Props, State> {
   componentDidCatch(error: Error): void {
     const { store } = this.props;
 
-    // Push an error outro so the user sees what happened
+    // Set error state — the router will resolve to outro
     store.setOutroData({
-      kind: 'error',
+      kind: OutroKind.Error,
       message: `A screen crashed: ${error.message}`,
     });
-    store.jumpTo('outro');
+    store.session.runPhase = RunPhase.Error;
+    store.emitChange();
   }
 
   render(): ReactNode {

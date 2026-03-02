@@ -4,14 +4,14 @@
 
 import { render } from 'ink';
 import { createElement } from 'react';
-import { WizardStore, type CloudRegion, type FlowName } from './store.js';
+import { WizardStore, type CloudRegion, Flow } from './store.js';
 import { InkUI } from './ink-ui.js';
 import { setUI } from '../index.js';
 import { App } from './App.js';
 
 export function startTUI(
   version: string,
-  flow: FlowName = 'wizard',
+  flow: Flow = Flow.Wizard,
 ): {
   unmount: () => void;
   store: WizardStore;

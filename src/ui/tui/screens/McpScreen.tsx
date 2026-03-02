@@ -3,6 +3,8 @@
  *
  * Uses an McpInstaller service (passed via props) instead of
  * importing business logic directly. Testable, no dynamic imports.
+ *
+ * When done, sets session.runPhase = Done. The router resolves to outro.
  */
 
 import { Box, Text } from 'ink';
@@ -12,13 +14,26 @@ import type { WizardStore } from '../store.js';
 import { ConfirmationInput, PickerMenu } from '../primitives/index.js';
 import { Colors } from '../styles.js';
 import type { McpInstaller, McpClientInfo } from '../services/mcp-installer.js';
+import { RunPhase } from '../../../lib/wizard-session.js';
 
 interface McpScreenProps {
   store: WizardStore;
   installer: McpInstaller;
 }
 
-type Phase = 'detecting' | 'ask' | 'pick' | 'installing' | 'done' | 'none';
+enum Phase {
+  Detecting = 'detecting',
+  Ask = 'ask',
+  Pick = 'pick',
+  Installing = 'installing',
+  Done = 'done',
+  None = 'none',
+}
+
+const markDone = (store: WizardStore) => {
+  store.session.runPhase = RunPhase.Done;
+  store.emitChange();
+};
 
 export const McpScreen = ({ store, installer }: McpScreenProps) => {
   useSyncExternalStore(
@@ -26,7 +41,7 @@ export const McpScreen = ({ store, installer }: McpScreenProps) => {
     () => store.getSnapshot(),
   );
 
-  const [phase, setPhase] = useState<Phase>('detecting');
+  const [phase, setPhase] = useState<Phase>(Phase.Detecting);
   const [clients, setClients] = useState<McpClientInfo[]>([]);
   const [installed, setInstalled] = useState<string[]>([]);
 
@@ -35,15 +50,15 @@ export const McpScreen = ({ store, installer }: McpScreenProps) => {
       try {
         const detected = await installer.detectClients();
         if (detected.length === 0) {
-          setPhase('none');
-          setTimeout(() => store.advance(), 1500);
+          setPhase(Phase.None);
+          setTimeout(() => markDone(store), 1500);
         } else {
           setClients(detected);
-          setPhase('ask');
+          setPhase(Phase.Ask);
         }
       } catch {
-        setPhase('none');
-        setTimeout(() => store.advance(), 1500);
+        setPhase(Phase.None);
+        setTimeout(() => markDone(store), 1500);
       }
     })();
   }, [installer]); // eslint-disable-line
@@ -52,16 +67,16 @@ export const McpScreen = ({ store, installer }: McpScreenProps) => {
     if (clients.length === 1) {
       void doInstall(clients.map((c) => c.name));
     } else {
-      setPhase('pick');
+      setPhase(Phase.Pick);
     }
   };
 
   const handleSkip = () => {
-    store.advance();
+    markDone(store);
   };
 
   const doInstall = async (names: string[]) => {
-    setPhase('installing');
+    setPhase(Phase.Installing);
     try {
       const result = await installer.install(
         names,
@@ -71,8 +86,8 @@ export const McpScreen = ({ store, installer }: McpScreenProps) => {
     } catch {
       setInstalled([]);
     }
-    setPhase('done');
-    setTimeout(() => store.advance(), 2000);
+    setPhase(Phase.Done);
+    setTimeout(() => markDone(store), 2000);
   };
 
   return (
@@ -82,15 +97,15 @@ export const McpScreen = ({ store, installer }: McpScreenProps) => {
       </Text>
 
       <Box marginTop={1} flexDirection="column">
-        {phase === 'detecting' && (
+        {phase === Phase.Detecting && (
           <Text dimColor>Detecting supported editors...</Text>
         )}
 
-        {phase === 'none' && (
+        {phase === Phase.None && (
           <Text dimColor>No supported MCP clients detected. Skipping...</Text>
         )}
 
-        {phase === 'ask' && (
+        {phase === Phase.Ask && (
           <>
             <Text dimColor>
               Detected: {clients.map((c) => c.name).join(', ')}
@@ -105,7 +120,7 @@ export const McpScreen = ({ store, installer }: McpScreenProps) => {
           </>
         )}
 
-        {phase === 'pick' && (
+        {phase === Phase.Pick && (
           <PickerMenu
             message="Select editor to install MCP server"
             options={clients.map((c) => ({
@@ -120,11 +135,11 @@ export const McpScreen = ({ store, installer }: McpScreenProps) => {
           />
         )}
 
-        {phase === 'installing' && (
+        {phase === Phase.Installing && (
           <Text dimColor>Installing MCP server...</Text>
         )}
 
-        {phase === 'done' && (
+        {phase === Phase.Done && (
           <Box flexDirection="column">
             {installed.length > 0 ? (
               <>

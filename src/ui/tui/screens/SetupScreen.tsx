@@ -56,7 +56,7 @@ export const SetupScreen = ({ store }: SetupScreenProps) => {
         (q: SetupQuestion) => !(q.key in store.session.frameworkContext),
       );
       if (unresolved.length === 0) {
-        store.advance();
+        store.emitChange();
       }
     })();
   }, []);
@@ -112,7 +112,7 @@ export const SetupScreen = ({ store }: SetupScreenProps) => {
           );
 
           if (remaining.length === 0) {
-            store.advance();
+            store.emitChange();
           } else {
             setCurrentIndex((i) => i + 1);
           }

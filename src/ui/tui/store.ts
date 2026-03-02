@@ -2,9 +2,9 @@
  * WizardStore — EventEmitter-backed reactive store for the TUI.
  * React components subscribe via useSyncExternalStore.
  *
- * Navigation is delegated to WizardRouter (flow pipelines + overlay stack).
- * The store exposes advance(), pushOverlay(), popOverlay() and tracks
- * observable agent state (tasks, status messages).
+ * Navigation is delegated to WizardRouter.
+ * The active screen is derived from session state — not imperatively set.
+ * Overlays (outage, etc.) are the only imperative navigation.
  */
 
 import { EventEmitter } from 'events';
@@ -17,20 +17,13 @@ import {
 import {
   WizardRouter,
   type ScreenName,
-  type OverlayScreen,
-  type FlowScreen,
-  type FlowName,
+  Screen,
+  Overlay,
+  Flow,
 } from './router.js';
 
-export { TaskStatus };
-export type {
-  ScreenName,
-  OverlayScreen,
-  FlowScreen,
-  FlowName,
-  OutroData,
-  WizardSession,
-};
+export { TaskStatus, Screen, Overlay, Flow };
+export type { ScreenName, OutroData, WizardSession };
 export type CloudRegion = 'us' | 'eu';
 
 export interface TaskItem {
@@ -46,7 +39,7 @@ export class WizardStore extends EventEmitter {
   statusMessages: string[] = [];
   tasks: TaskItem[] = [];
 
-  /** Navigation router — owns flow cursor + overlay stack. */
+  /** Navigation router — resolves active screen from session state. */
   readonly router: WizardRouter;
 
   /** The single source of truth for every decision the wizard needs. */
@@ -61,7 +54,7 @@ export class WizardStore extends EventEmitter {
     this._resolveSetup = resolve;
   });
 
-  constructor(flow: FlowName = 'wizard') {
+  constructor(flow: Flow = Flow.Wizard) {
     super();
     this.router = new WizardRouter(flow);
   }
@@ -71,9 +64,12 @@ export class WizardStore extends EventEmitter {
     this._resolveSetup(region);
   }
 
-  /** The screen that should be rendered right now. */
+  /**
+   * The screen that should be rendered right now.
+   * Derived from session state via the router.
+   */
   get currentScreen(): ScreenName {
-    return this.router.activeScreen;
+    return this.router.resolve(this.session);
   }
 
   /** Direction hint for screen transitions. */
@@ -87,42 +83,14 @@ export class WizardStore extends EventEmitter {
     return this._version;
   }
 
-  private bump(): void {
+  /**
+   * Notify React that state has changed.
+   * The router re-resolves the active screen on next render.
+   */
+  emitChange(): void {
+    this.router._setDirection('push');
     this._version++;
     this.emit('change');
-  }
-
-  // ── Flow navigation ───────────────────────────────────────────────
-
-  /**
-   * Advance to the next flow screen, skipping any where show() is false.
-   * Screens call this when they're done.
-   */
-  advance(): void {
-    this.router._setDirection('push');
-    const next = this.router.advance(this.session);
-    if (next) {
-      this.bump();
-    }
-  }
-
-  /**
-   * Jump the flow cursor to a specific screen.
-   * Use for error recovery (e.g., error boundary → outro).
-   */
-  jumpTo(screen: FlowScreen): void {
-    this.router._setDirection('push');
-    this.router.jumpTo(screen);
-    this.bump();
-  }
-
-  /**
-   * Transition to the run screen. Called by InkUI.startRun().
-   */
-  startFlow(screen: FlowScreen): void {
-    this.router._setDirection('push');
-    this.router.jumpTo(screen);
-    this.bump();
   }
 
   // ── Overlay navigation ────────────────────────────────────────────
@@ -131,10 +99,11 @@ export class WizardStore extends EventEmitter {
    * Push an overlay that interrupts the current flow.
    * The flow resumes when the overlay is dismissed.
    */
-  pushOverlay(screen: OverlayScreen): void {
+  pushOverlay(overlay: Overlay): void {
     this.router._setDirection('push');
-    this.router.pushOverlay(screen);
-    this.bump();
+    this.router.pushOverlay(overlay);
+    this._version++;
+    this.emit('change');
   }
 
   /**
@@ -143,19 +112,20 @@ export class WizardStore extends EventEmitter {
   popOverlay(): void {
     this.router._setDirection('pop');
     this.router.popOverlay();
-    this.bump();
+    this._version++;
+    this.emit('change');
   }
 
   // ── Agent state ───────────────────────────────────────────────────
 
   pushStatus(message: string): void {
     this.statusMessages.push(message);
-    this.bump();
+    this.emitChange();
   }
 
   setTasks(tasks: TaskItem[]): void {
     this.tasks = tasks;
-    this.bump();
+    this.emitChange();
   }
 
   updateTask(index: number, done: boolean): void {
@@ -164,7 +134,7 @@ export class WizardStore extends EventEmitter {
       this.tasks[index].status = done
         ? TaskStatus.Completed
         : TaskStatus.Pending;
-      this.bump();
+      this.emitChange();
     }
   }
 
@@ -190,14 +160,14 @@ export class WizardStore extends EventEmitter {
     );
 
     this.tasks = [...retained, ...incoming];
-    this.bump();
+    this.emitChange();
   }
 
   // ── Outro ─────────────────────────────────────────────────────────
 
   setOutroData(data: OutroData): void {
     this.session.outroData = data;
-    this.bump();
+    this.emitChange();
   }
 
   // ── React integration ─────────────────────────────────────────────
