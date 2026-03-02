@@ -4,17 +4,20 @@
 
 import { render } from 'ink';
 import { createElement } from 'react';
-import { WizardStore, type CloudRegion } from './store.js';
+import { WizardStore, type CloudRegion, type FlowName } from './store.js';
 import { InkUI } from './ink-ui.js';
 import { setUI } from '../index.js';
 import { App } from './App.js';
 
-export function startTUI(version: string): {
+export function startTUI(
+  version: string,
+  flow: FlowName = 'wizard',
+): {
   unmount: () => void;
   store: WizardStore;
   waitForSetup: () => Promise<CloudRegion>;
 } {
-  const store = new WizardStore();
+  const store = new WizardStore(flow);
   store.version = version;
 
   // Swap in the InkUI

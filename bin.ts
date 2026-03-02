@@ -34,12 +34,11 @@ if (!satisfies(process.version, NODE_VERSION_RANGE)) {
   process.exit(1);
 }
 
-import { runMCPInstall, runMCPRemove } from './src/mcp';
-import type { CloudRegion, WizardOptions } from './src/utils/types';
+import type { CloudRegion } from './src/utils/types';
 import { runWizard } from './src/run';
 import { isNonInteractiveEnvironment } from './src/utils/environment';
 import { getUI, setUI } from './src/ui';
-import { ConsoleUI } from './src/ui/console-ui';
+import { LoggingUI } from './src/ui/logging-ui';
 
 if (process.env.NODE_ENV === 'test') {
   void (async () => {
@@ -145,8 +144,8 @@ yargs(hideBin(process.argv))
 
       // CI mode validation and TTY check
       if (options.ci) {
-        // Use ConsoleUI for CI mode (no dependencies, auto-resolves prompts)
-        setUI(new ConsoleUI());
+        // Use LoggingUI for CI mode (no dependencies, no prompts)
+        setUI(new LoggingUI());
 
         // Validate required CI flags
         if (!options.region) {
@@ -169,7 +168,7 @@ yargs(hideBin(process.argv))
           process.exit(1);
         }
 
-        void runWizard(options as unknown as WizardOptions);
+        void runWizard(options as Parameters<typeof runWizard>[0]);
       } else if (isNonInteractiveEnvironment()) {
         // Non-interactive non-CI: error out
         getUI().intro(chalk.inverse(`PostHog Wizard`));
@@ -194,15 +193,40 @@ yargs(hideBin(process.argv))
         void (async () => {
           try {
             const { startTUI } = await import('./src/ui/tui/start-tui.js');
+            const { buildSession } = await import(
+              './src/lib/wizard-session.js'
+            );
+
             const tui = startTUI(WIZARD_VERSION);
+
+            // Build session from CLI args and attach to store
+            const session = buildSession({
+              debug: options.debug as boolean | undefined,
+              forceInstall: options.forceInstall as boolean | undefined,
+              installDir: options.installDir as string | undefined,
+              ci: false,
+              signup: options.signup as boolean | undefined,
+              localMcp: options.localMcp as boolean | undefined,
+              apiKey: options.apiKey as string | undefined,
+              menu: options.menu as boolean | undefined,
+              region: options.region as CloudRegion | undefined,
+              integration: options.integration as Parameters<
+                typeof buildSession
+              >[0]['integration'],
+            });
+            tui.store.session = session;
 
             // Wait for IntroScreen to collect the cloud region
             const region = await tui.waitForSetup();
+            session.cloudRegion = region;
 
-            await runWizard({
-              ...options,
-              region,
-            } as unknown as WizardOptions);
+            await runWizard(
+              {
+                ...options,
+                region,
+              } as Parameters<typeof runWizard>[0],
+              session,
+            );
 
             // Keep the outro screen visible — let process.exit() handle cleanup
           } catch (err) {
@@ -210,7 +234,7 @@ yargs(hideBin(process.argv))
             if (process.env.DEBUG || process.env.POSTHOG_WIZARD_DEBUG) {
               console.error('TUI init failed:', err); // eslint-disable-line no-console
             }
-            await runWizard(options as unknown as WizardOptions);
+            await runWizard(options as Parameters<typeof runWizard>[0]);
           }
         })();
       }
@@ -233,14 +257,32 @@ yargs(hideBin(process.argv))
         },
         (argv) => {
           const options = { ...argv };
-          void runMCPInstall(
-            options as unknown as {
-              signup: boolean;
-              region?: CloudRegion;
-              local?: boolean;
-              debug?: boolean;
-            },
-          );
+          void (async () => {
+            try {
+              const { startTUI } = await import('./src/ui/tui/start-tui.js');
+              const { buildSession } = await import(
+                './src/lib/wizard-session.js'
+              );
+
+              const tui = startTUI(WIZARD_VERSION, 'mcp-add');
+              const session = buildSession({
+                debug: options.debug,
+                region: options.region as CloudRegion | undefined,
+                localMcp: options.local,
+              });
+              tui.store.session = session;
+            } catch {
+              // TUI unavailable — fallback to logging
+              setUI(new LoggingUI());
+              const { addMCPServerToClientsStep } = await import(
+                './src/steps/add-mcp-server-to-clients/index.js'
+              );
+              await addMCPServerToClientsStep({
+                cloudRegion: options.region as CloudRegion | undefined,
+                local: options.local,
+              });
+            }
+          })();
         },
       )
       .command(
@@ -258,7 +300,30 @@ yargs(hideBin(process.argv))
         },
         (argv) => {
           const options = { ...argv };
-          void runMCPRemove(options as { local?: boolean });
+          void (async () => {
+            try {
+              const { startTUI } = await import('./src/ui/tui/start-tui.js');
+              const { buildSession } = await import(
+                './src/lib/wizard-session.js'
+              );
+
+              const tui = startTUI(WIZARD_VERSION, 'mcp-remove');
+              const session = buildSession({
+                debug: options.debug,
+                localMcp: options.local,
+              });
+              tui.store.session = session;
+            } catch {
+              // TUI unavailable — fallback to logging
+              setUI(new LoggingUI());
+              const { removeMCPServerFromClientsStep } = await import(
+                './src/steps/add-mcp-server-to-clients/index.js'
+              );
+              await removeMCPServerFromClientsStep({
+                local: options.local,
+              });
+            }
+          })();
         },
       )
       .demandCommand(1, 'You must specify a subcommand (add or remove)')

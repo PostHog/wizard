@@ -11,6 +11,7 @@ export { PickerMenu } from './PickerMenu.js';
 export { ConfirmationInput } from './ConfirmationInput.js';
 export { LogViewer } from './LogViewer.js';
 export { ScreenContainer } from './ScreenContainer.js';
+export { ScreenErrorBoundary } from './ScreenErrorBoundary.js';
 export { TabContainer } from './TabContainer.js';
 export type { TabDefinition } from './TabContainer.js';
 export { DissolveTransition } from './DissolveTransition.js';

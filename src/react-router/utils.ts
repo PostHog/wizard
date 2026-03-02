@@ -1,21 +1,18 @@
 import { major } from 'semver';
 import fg from 'fast-glob';
-import { abortIfCancelled, getPackageDotJson } from '../utils/setup-utils';
-import { getUI } from '../ui';
+import { getPackageDotJson } from '../utils/setup-utils';
 import type { WizardOptions } from '../utils/types';
-import { Integration } from '../lib/constants';
 import { getPackageVersion } from '../utils/package-json';
 import { createVersionBucket } from '../utils/semver';
-import chalk from 'chalk';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as semver from 'semver';
 
 export enum ReactRouterMode {
-  V6 = 'v6', // React Router v6
-  V7_FRAMEWORK = 'v7-framework', // React Router v7 with react-router.config.ts
-  V7_DATA = 'v7-data', // React Router v7 with createBrowserRouter
-  V7_DECLARATIVE = 'v7-declarative', // React Router v7 with BrowserRouter
+  V6 = 'v6',
+  V7_FRAMEWORK = 'v7-framework',
+  V7_DATA = 'v7-data',
+  V7_DECLARATIVE = 'v7-declarative',
 }
 
 const IGNORE_PATTERNS = [
@@ -26,14 +23,8 @@ const IGNORE_PATTERNS = [
   '**/.next/**',
 ];
 
-/**
- * Get React Router version bucket for analytics
- */
 export const getReactRouterVersionBucket = createVersionBucket();
 
-/**
- * Check if react-router.config.ts exists (indicates framework mode - React Router v7)
- */
 async function hasReactRouterConfig({
   installDir,
 }: Pick<WizardOptions, 'installDir'>): Promise<boolean> {
@@ -42,13 +33,9 @@ async function hasReactRouterConfig({
     cwd: installDir,
     ignore: IGNORE_PATTERNS,
   });
-
   return configMatches.length > 0;
 }
 
-/**
- * Search for createBrowserRouter usage in source files
- */
 async function hasCreateBrowserRouter({
   installDir,
 }: Pick<WizardOptions, 'installDir'>): Promise<boolean> {
@@ -62,13 +49,10 @@ async function hasCreateBrowserRouter({
     try {
       const filePath = path.join(installDir, file);
       const content = fs.readFileSync(filePath, 'utf-8');
-
-      // Check for createBrowserRouter import or usage
       if (content.includes('createBrowserRouter')) {
         return true;
       }
     } catch {
-      // Skip files that can't be read
       continue;
     }
   }
@@ -76,9 +60,6 @@ async function hasCreateBrowserRouter({
   return false;
 }
 
-/**
- * Search for declarative BrowserRouter usage
- */
 async function hasDeclarativeRouter({
   installDir,
 }: Pick<WizardOptions, 'installDir'>): Promise<boolean> {
@@ -92,8 +73,6 @@ async function hasDeclarativeRouter({
     try {
       const filePath = path.join(installDir, file);
       const content = fs.readFileSync(filePath, 'utf-8');
-
-      // Check for BrowserRouter usage (JSX or import)
       if (
         content.includes('<BrowserRouter') ||
         (content.includes('BrowserRouter') &&
@@ -103,7 +82,6 @@ async function hasDeclarativeRouter({
         return true;
       }
     } catch {
-      // Skip files that can't be read
       continue;
     }
   }
@@ -112,156 +90,46 @@ async function hasDeclarativeRouter({
 }
 
 /**
- * Detect React Router mode
+ * Detect React Router mode. Pure — returns null if ambiguous.
  */
 export async function getReactRouterMode(
   options: WizardOptions,
-): Promise<ReactRouterMode> {
+): Promise<ReactRouterMode | null> {
   const { installDir } = options;
 
-  // First, get the React Router version
   const packageJson = await getPackageDotJson(options);
   const reactRouterVersion =
     getPackageVersion('react-router-dom', packageJson) ||
     getPackageVersion('react-router', packageJson);
 
   if (!reactRouterVersion) {
-    // If we can't detect version, ask the user
-    getUI().log.info(
-      `Learn more about React Router modes: ${chalk.cyan(
-        'https://reactrouter.com/start/modes',
-      )}`,
-    );
-    const result: ReactRouterMode = await abortIfCancelled(
-      getUI().select({
-        message: 'What React Router version and mode are you using?',
-        options: [
-          {
-            label: 'React Router v6',
-            value: ReactRouterMode.V6,
-          },
-          {
-            label: 'React Router v7 - Framework mode',
-            value: ReactRouterMode.V7_FRAMEWORK,
-          },
-          {
-            label: 'React Router v7 - Data mode',
-            value: ReactRouterMode.V7_DATA,
-          },
-          {
-            label: 'React Router v7 - Declarative mode',
-            value: ReactRouterMode.V7_DECLARATIVE,
-          },
-        ],
-      }),
-      Integration.reactRouter,
-    );
-    return result;
+    return null;
   }
 
   const coercedVersion = semver.coerce(reactRouterVersion);
   const majorVersion = coercedVersion ? major(coercedVersion) : null;
 
-  // If v6, return V6
   if (majorVersion === 6) {
-    getUI().setSetupData({ detectedFramework: 'React Router v6' });
     return ReactRouterMode.V6;
   }
 
-  // If v7, detect the mode
   if (majorVersion === 7) {
-    // First check for framework mode (react-router.config.ts)
     const hasConfig = await hasReactRouterConfig({ installDir });
-    if (hasConfig) {
-      getUI().setSetupData({
-        detectedFramework: 'React Router v7 - Framework mode',
-      });
-      return ReactRouterMode.V7_FRAMEWORK;
-    }
+    if (hasConfig) return ReactRouterMode.V7_FRAMEWORK;
 
-    // Check for data mode (createBrowserRouter)
     const hasDataMode = await hasCreateBrowserRouter({ installDir });
-    if (hasDataMode) {
-      getUI().setSetupData({
-        detectedFramework: 'React Router v7 - Data mode',
-      });
-      return ReactRouterMode.V7_DATA;
-    }
+    if (hasDataMode) return ReactRouterMode.V7_DATA;
 
-    // Check for declarative mode (BrowserRouter)
     const hasDeclarative = await hasDeclarativeRouter({ installDir });
-    if (hasDeclarative) {
-      getUI().setSetupData({
-        detectedFramework: 'React Router v7 - Declarative mode',
-      });
-      return ReactRouterMode.V7_DECLARATIVE;
-    }
+    if (hasDeclarative) return ReactRouterMode.V7_DECLARATIVE;
 
-    // If v7 but can't detect mode, ask the user
-    getUI().log.info(
-      `Learn more about React Router modes: ${chalk.cyan(
-        'https://reactrouter.com/start/modes',
-      )}`,
-    );
-    const result: ReactRouterMode = await abortIfCancelled(
-      getUI().select({
-        message: 'What React Router v7 mode are you using?',
-        options: [
-          {
-            label: 'Framework mode',
-            value: ReactRouterMode.V7_FRAMEWORK,
-          },
-          {
-            label: 'Data mode',
-            value: ReactRouterMode.V7_DATA,
-          },
-          {
-            label: 'Declarative mode',
-            value: ReactRouterMode.V7_DECLARATIVE,
-          },
-        ],
-      }),
-      Integration.reactRouter,
-    );
-    return result;
+    // v7 but can't detect mode
+    return null;
   }
 
-  // If version is not 6 or 7, default to asking
-  getUI().log.info(
-    `Learn more about React Router modes: ${chalk.cyan(
-      'https://reactrouter.com/start/modes',
-    )}`,
-  );
-  const result: ReactRouterMode = await abortIfCancelled(
-    getUI().select({
-      message: 'What React Router version and mode are you using?',
-      options: [
-        {
-          label: 'React Router v6',
-          value: ReactRouterMode.V6,
-        },
-        {
-          label: 'React Router v7 - Framework mode',
-          value: ReactRouterMode.V7_FRAMEWORK,
-        },
-        {
-          label: 'React Router v7 - Data mode',
-          value: ReactRouterMode.V7_DATA,
-        },
-        {
-          label: 'React Router v7 - Declarative mode',
-          value: ReactRouterMode.V7_DECLARATIVE,
-        },
-      ],
-    }),
-    Integration.reactRouter,
-  );
-  return result;
+  return null;
 }
 
-/**
- * Get human-readable name for React Router mode
- */
 export function getReactRouterModeName(mode: ReactRouterMode): string {
   switch (mode) {
     case ReactRouterMode.V6:

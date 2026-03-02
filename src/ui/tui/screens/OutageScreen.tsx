@@ -1,6 +1,6 @@
 /**
  * OutageScreen — Shown when Claude/Anthropic services are degraded.
- * Displays the outage notice and a ConfirmationInput to continue or exit.
+ * Reads session.serviceStatus and provides a ConfirmationInput to continue or exit.
  */
 
 import { Box, Text } from 'ink';
@@ -18,7 +18,7 @@ export const OutageScreen = ({ store }: OutageScreenProps) => {
     () => store.getSnapshot(),
   );
 
-  const { serviceStatus } = store;
+  const serviceStatus = store.session.serviceStatus;
 
   if (!serviceStatus) {
     return null;
@@ -46,7 +46,7 @@ export const OutageScreen = ({ store }: OutageScreenProps) => {
 
       <ConfirmationInput
         message="Continue anyway?"
-        onConfirm={() => store.popScreen()}
+        onConfirm={() => store.popOverlay()}
         onCancel={() => process.exit(0)}
       />
     </Box>

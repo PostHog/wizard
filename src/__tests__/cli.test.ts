@@ -1,16 +1,13 @@
 // Mock functions must be defined before imports
 const mockRunWizard = jest.fn();
-const mockRunMCPInstall = jest.fn();
-const mockRunMCPRemove = jest.fn();
 
 jest.mock('../run', () => ({ runWizard: mockRunWizard }));
-jest.mock('../mcp', () => ({
-  runMCPInstall: mockRunMCPInstall,
-  runMCPRemove: mockRunMCPRemove,
-}));
 jest.mock('semver', () => ({ satisfies: () => true }));
 jest.mock('../ui/tui/start-tui', () => ({
-  startTUI: () => ({ unmount: jest.fn(), store: {} }),
+  startTUI: () => ({ unmount: jest.fn(), store: { session: {} } }),
+}));
+jest.mock('../lib/wizard-session', () => ({
+  buildSession: (args: Record<string, unknown>) => args,
 }));
 
 describe('CLI argument parsing', () => {
@@ -170,29 +167,7 @@ describe('CLI argument parsing', () => {
     });
   });
 
-  describe('mcp commands', () => {
-    test('mcp add region is undefined when not specified', async () => {
-      await runCLI(['mcp', 'add']);
-
-      const args = getLastCallArgs(mockRunMCPInstall);
-      expect(args.region).toBeUndefined();
-    });
-
-    test('mcp add respects --region flag', async () => {
-      await runCLI(['mcp', 'add', '--region', 'eu']);
-
-      const args = getLastCallArgs(mockRunMCPInstall);
-      expect(args.region).toBe('eu');
-    });
-
-    test('mcp commands inherit global flags', async () => {
-      await runCLI(['mcp', 'add', '--no-default', '--debug']);
-
-      const args = getLastCallArgs(mockRunMCPInstall);
-      expect(args.default).toBe(false);
-      expect(args.debug).toBe(true);
-    });
-  });
+  // MCP commands now launch TUI — tested via integration tests
 
   describe('--ci flag', () => {
     test('defaults to false when not specified', async () => {

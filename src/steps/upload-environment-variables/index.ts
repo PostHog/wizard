@@ -2,8 +2,7 @@ import type { Integration } from '../../lib/constants';
 import { traceStep } from '../../telemetry';
 import { analytics } from '../../utils/analytics';
 import { getUI } from '../../ui';
-import { abortIfCancelled } from '../../utils/setup-utils';
-import type { WizardOptions } from '../../utils/types';
+import type { WizardSession } from '../../lib/wizard-session';
 import { EnvironmentProvider } from './EnvironmentProvider';
 import { VercelEnvironmentProvider } from './providers/vercel';
 
@@ -11,14 +10,14 @@ export const uploadEnvironmentVariablesStep = async (
   envVars: Record<string, string>,
   {
     integration,
-    options,
+    session,
   }: {
     integration: Integration;
-    options: WizardOptions;
+    session: WizardSession;
   },
 ): Promise<string[]> => {
   const providers: EnvironmentProvider[] = [
-    new VercelEnvironmentProvider(options),
+    new VercelEnvironmentProvider({ installDir: session.installDir }),
   ];
 
   let provider: EnvironmentProvider | null = null;
@@ -39,34 +38,8 @@ export const uploadEnvironmentVariablesStep = async (
     return [];
   }
 
-  const upload: boolean = await abortIfCancelled(
-    getUI().select({
-      message: `It looks like you are using ${provider.name}. Would you like to upload the environment variables?`,
-      options: [
-        {
-          value: true,
-          label: 'Yes',
-          hint: `Upload the environment variables to ${provider.name}`,
-        },
-        {
-          value: false,
-          label: 'No',
-          hint: `Skip uploading environment variables to ${provider.name} - you can do this later`,
-        },
-      ],
-    }),
-    integration,
-  );
-
-  if (!upload) {
-    analytics.capture('wizard interaction', {
-      action: 'not uploading environment variables',
-      reason: 'user declined to upload',
-      provider: provider.name,
-      integration,
-    });
-    return [];
-  }
+  // Auto-accept — the agent already wrote env vars via MCP tools
+  getUI().log.info(`Uploading environment variables to ${provider.name}...`);
 
   const results = await traceStep(
     'uploading environment variables',

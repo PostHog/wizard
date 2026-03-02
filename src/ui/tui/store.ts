@@ -2,27 +2,36 @@
  * WizardStore — EventEmitter-backed reactive store for the TUI.
  * React components subscribe via useSyncExternalStore.
  *
- * Navigation stack + observable agent state (tasks, status messages).
- * Screens own their own business logic and UI — no store-driven prompts.
+ * Navigation is delegated to WizardRouter (flow pipelines + overlay stack).
+ * The store exposes advance(), pushOverlay(), popOverlay() and tracks
+ * observable agent state (tasks, status messages).
  */
 
 import { EventEmitter } from 'events';
 import { TaskStatus } from '../wizard-ui.js';
+import {
+  type WizardSession,
+  type OutroData,
+  buildSession,
+} from '../../lib/wizard-session.js';
+import {
+  WizardRouter,
+  type ScreenName,
+  type OverlayScreen,
+  type FlowScreen,
+  type FlowName,
+} from './router.js';
 
 export { TaskStatus };
-
-export type ScreenName = 'outage' | 'intro' | 'run' | 'mcp' | 'outro';
-
+export type {
+  ScreenName,
+  OverlayScreen,
+  FlowScreen,
+  FlowName,
+  OutroData,
+  WizardSession,
+};
 export type CloudRegion = 'us' | 'eu';
-
-export interface OutroData {
-  kind: 'success' | 'error' | 'cancel';
-  message?: string;
-  changes?: string[];
-  nextSteps?: string[];
-  docsUrl?: string;
-  continueUrl?: string;
-}
 
 export interface TaskItem {
   label: string;
@@ -35,18 +44,13 @@ export interface TaskItem {
 export class WizardStore extends EventEmitter {
   version = '';
   statusMessages: string[] = [];
-
-  /** Service status data — shown on the outage screen when there's an outage */
-  serviceStatus: { description: string; statusPageUrl: string } | null = null;
-
   tasks: TaskItem[] = [];
 
-  /** Cloud region selected by IntroScreen — used by McpScreen for installation */
-  cloudRegion: CloudRegion | null = null;
+  /** Navigation router — owns flow cursor + overlay stack. */
+  readonly router: WizardRouter;
 
-  screenStack: ScreenName[] = ['intro'];
-  lastNavDirection: 'push' | 'pop' | null = null;
-  outroData: OutroData | null = null;
+  /** The single source of truth for every decision the wizard needs. */
+  session: WizardSession = buildSession({});
 
   /**
    * Setup promise — IntroScreen resolves this when the user picks a region.
@@ -57,13 +61,24 @@ export class WizardStore extends EventEmitter {
     this._resolveSetup = resolve;
   });
 
+  constructor(flow: FlowName = 'wizard') {
+    super();
+    this.router = new WizardRouter(flow);
+  }
+
   completeSetup(region: CloudRegion): void {
-    this.cloudRegion = region;
+    this.session.cloudRegion = region;
     this._resolveSetup(region);
   }
 
+  /** The screen that should be rendered right now. */
   get currentScreen(): ScreenName {
-    return this.screenStack[this.screenStack.length - 1];
+    return this.router.activeScreen;
+  }
+
+  /** Direction hint for screen transitions. */
+  get lastNavDirection(): 'push' | 'pop' | null {
+    return this.router.lastNavDirection;
   }
 
   private _version = 0;
@@ -77,13 +92,64 @@ export class WizardStore extends EventEmitter {
     this.emit('change');
   }
 
-  pushStatus(message: string): void {
-    this.statusMessages.push(message);
+  // ── Flow navigation ───────────────────────────────────────────────
+
+  /**
+   * Advance to the next flow screen, skipping any where show() is false.
+   * Screens call this when they're done.
+   */
+  advance(): void {
+    this.router._setDirection('push');
+    const next = this.router.advance(this.session);
+    if (next) {
+      this.bump();
+    }
+  }
+
+  /**
+   * Jump the flow cursor to a specific screen.
+   * Use for error recovery (e.g., error boundary → outro).
+   */
+  jumpTo(screen: FlowScreen): void {
+    this.router._setDirection('push');
+    this.router.jumpTo(screen);
     this.bump();
   }
 
-  setServiceStatus(data: { description: string; statusPageUrl: string }): void {
-    this.serviceStatus = data;
+  /**
+   * Transition to the run screen. Called by InkUI.startRun().
+   */
+  startFlow(screen: FlowScreen): void {
+    this.router._setDirection('push');
+    this.router.jumpTo(screen);
+    this.bump();
+  }
+
+  // ── Overlay navigation ────────────────────────────────────────────
+
+  /**
+   * Push an overlay that interrupts the current flow.
+   * The flow resumes when the overlay is dismissed.
+   */
+  pushOverlay(screen: OverlayScreen): void {
+    this.router._setDirection('push');
+    this.router.pushOverlay(screen);
+    this.bump();
+  }
+
+  /**
+   * Dismiss the topmost overlay. The flow screen underneath resumes.
+   */
+  popOverlay(): void {
+    this.router._setDirection('pop');
+    this.router.popOverlay();
+    this.bump();
+  }
+
+  // ── Agent state ───────────────────────────────────────────────────
+
+  pushStatus(message: string): void {
+    this.statusMessages.push(message);
     this.bump();
   }
 
@@ -119,7 +185,6 @@ export class WizardStore extends EventEmitter {
 
     const incomingLabels = new Set(incoming.map((t) => t.label));
 
-    // Keep completed tasks from before that aren't in the new list
     const retained = this.tasks.filter(
       (t) => t.done && !incomingLabels.has(t.label),
     );
@@ -128,30 +193,14 @@ export class WizardStore extends EventEmitter {
     this.bump();
   }
 
-  setScreen(screen: ScreenName): void {
-    this.lastNavDirection = 'push';
-    this.screenStack = [screen];
-    this.bump();
-  }
-
-  pushScreen(screen: ScreenName): void {
-    this.lastNavDirection = 'push';
-    this.screenStack.push(screen);
-    this.bump();
-  }
-
-  popScreen(): void {
-    if (this.screenStack.length > 1) {
-      this.lastNavDirection = 'pop';
-      this.screenStack.pop();
-      this.bump();
-    }
-  }
+  // ── Outro ─────────────────────────────────────────────────────────
 
   setOutroData(data: OutroData): void {
-    this.outroData = data;
+    this.session.outroData = data;
     this.bump();
   }
+
+  // ── React integration ─────────────────────────────────────────────
 
   subscribe(callback: () => void): () => void {
     this.on('change', callback);

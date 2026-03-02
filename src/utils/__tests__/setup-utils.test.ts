@@ -17,13 +17,9 @@ jest.mock('../../ui', () => ({
       error: jest.fn(),
       step: jest.fn(),
     },
-    text: jest.fn(),
-    confirm: jest.fn(),
-    select: jest.fn(),
     cancel: jest.fn(),
     outro: jest.fn(),
     intro: jest.fn(),
-    isCancel: jest.fn().mockReturnValue(false),
     spinner: jest.fn().mockImplementation(() => ({
       start: jest.fn(),
       stop: jest.fn(),
@@ -72,7 +68,6 @@ describe.skip('installPackage', () => {
       packageName: 'posthog-js',
       packageNameDisplayLabel: 'posthog-js',
       forceInstall: true,
-      askBeforeUpdating: false,
       packageManager: packageManagerMock,
       installDir: process.cwd(),
     });
@@ -113,7 +108,6 @@ describe.skip('installPackage', () => {
         packageName: 'posthog-js',
         packageNameDisplayLabel: 'posthog-js',
         forceInstall: flag,
-        askBeforeUpdating: false,
         packageManager: packageManagerMock,
         installDir: process.cwd(),
       });

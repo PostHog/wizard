@@ -1,10 +1,7 @@
 import fg from 'fast-glob';
 import fs from 'fs/promises';
 import path from 'path';
-import { abortIfCancelled } from '../utils/setup-utils';
-import { getUI } from '../ui';
 import type { WizardOptions } from '../utils/types';
-import { Integration } from '../lib/constants';
 import { createVersionBucket } from '../utils/semver';
 
 export const getAstroVersionBucket = createVersionBucket();
@@ -23,15 +20,11 @@ export const IGNORE_PATTERNS = [
 ];
 
 /**
- * Detect the Astro rendering mode by analyzing:
- * 1. astro.config.* for output mode
- * 2. Package.json for adapters
- * 3. Source files for view transitions usage
+ * Detect the Astro rendering mode. Pure — always resolves (Astro detection is reliable).
  */
 export async function getAstroRenderingMode({
   installDir,
 }: Pick<WizardOptions, 'installDir'>): Promise<AstroRenderingMode> {
-  // Check for astro config file
   const configMatches = await fg('astro.config.@(mjs|ts|js)', {
     dot: true,
     cwd: installDir,
@@ -42,7 +35,6 @@ export async function getAstroRenderingMode({
   let outputMode: string | null = null;
   let usesViewTransitions = false;
 
-  // Check package.json for adapters
   try {
     const packageJsonPath = path.join(installDir, 'package.json');
     const packageJsonContent = await fs.readFile(packageJsonPath, 'utf-8');
@@ -52,7 +44,6 @@ export async function getAstroRenderingMode({
       ...packageJson.devDependencies,
     };
 
-    // Check for Astro adapters (node, vercel, netlify, cloudflare, etc.)
     hasAdapter = Object.keys(allDeps).some(
       (dep) =>
         dep.startsWith('@astrojs/') &&
@@ -66,13 +57,10 @@ export async function getAstroRenderingMode({
     // package.json not found or invalid
   }
 
-  // Parse astro config for output mode
   if (configMatches.length > 0) {
     try {
       const configPath = path.join(installDir, configMatches[0]);
       const configContent = await fs.readFile(configPath, 'utf-8');
-
-      // Simple regex to detect output mode
       const outputMatch = configContent.match(/output:\s*['"](\w+)['"]/);
       if (outputMatch) {
         outputMode = outputMatch[1];
@@ -82,7 +70,6 @@ export async function getAstroRenderingMode({
     }
   }
 
-  // Check for view transitions usage
   const viewTransitionMatches = await fg('**/*.@(astro|ts|tsx|js|jsx)', {
     dot: true,
     cwd: installDir,
@@ -90,7 +77,6 @@ export async function getAstroRenderingMode({
   });
 
   for (const file of viewTransitionMatches.slice(0, 20)) {
-    // Check first 20 files
     try {
       const filePath = path.join(installDir, file);
       const content = await fs.readFile(filePath, 'utf-8');
@@ -107,62 +93,19 @@ export async function getAstroRenderingMode({
     }
   }
 
-  // Determine rendering mode based on findings
   if (usesViewTransitions) {
-    getUI().setSetupData({
-      detectedFramework: 'Astro with View Transitions (ClientRouter) 🔄',
-    });
     return AstroRenderingMode.VIEW_TRANSITIONS;
   }
 
   if (outputMode === 'server' && hasAdapter) {
-    getUI().setSetupData({ detectedFramework: 'Astro SSR mode 🖥️' });
     return AstroRenderingMode.SSR;
   }
 
-  // In Astro 5, 'static' is the default and supports per-page SSR opt-in when an adapter is present
-  // This is the "hybrid" pattern even if output mode isn't explicitly set
   if (hasAdapter) {
-    getUI().setSetupData({ detectedFramework: 'Astro hybrid mode 🔀' });
     return AstroRenderingMode.HYBRID;
   }
 
-  if (!hasAdapter) {
-    getUI().setSetupData({ detectedFramework: 'Astro static mode 📄' });
-    return AstroRenderingMode.STATIC;
-  }
-
-  // If detection is ambiguous, ask the user
-  const result: AstroRenderingMode = await abortIfCancelled(
-    getUI().select({
-      message: 'What rendering mode is your Astro project using?',
-      options: [
-        {
-          label: getAstroRenderingModeName(AstroRenderingMode.STATIC),
-          value: AstroRenderingMode.STATIC,
-          hint: 'Pre-rendered static HTML (default)',
-        },
-        {
-          label: getAstroRenderingModeName(AstroRenderingMode.VIEW_TRANSITIONS),
-          value: AstroRenderingMode.VIEW_TRANSITIONS,
-          hint: 'Static with ClientRouter for SPA-like navigation',
-        },
-        {
-          label: getAstroRenderingModeName(AstroRenderingMode.HYBRID),
-          value: AstroRenderingMode.HYBRID,
-          hint: 'Mostly static with some SSR pages',
-        },
-        {
-          label: getAstroRenderingModeName(AstroRenderingMode.SSR),
-          value: AstroRenderingMode.SSR,
-          hint: 'Full server-side rendering',
-        },
-      ],
-    }),
-    Integration.astro,
-  );
-
-  return result;
+  return AstroRenderingMode.STATIC;
 }
 
 export const getAstroRenderingModeName = (mode: AstroRenderingMode): string => {

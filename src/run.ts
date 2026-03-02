@@ -1,6 +1,5 @@
-import { abortIfCancelled } from './utils/setup-utils';
-
-import type { CloudRegion, WizardOptions } from './utils/types';
+import { type WizardSession, buildSession } from './lib/wizard-session';
+import type { CloudRegion } from './utils/types';
 
 import { Integration } from './lib/constants';
 import { readEnvironment } from './utils/environment';
@@ -29,7 +28,7 @@ type Args = {
   menu?: boolean;
 };
 
-export async function runWizard(argv: Args) {
+export async function runWizard(argv: Args, session?: WizardSession) {
   const finalArgs = {
     ...argv,
     ...readEnvironment(),
@@ -46,34 +45,66 @@ export async function runWizard(argv: Args) {
     resolvedInstallDir = process.cwd();
   }
 
-  const wizardOptions: WizardOptions = {
-    debug: finalArgs.debug ?? false,
-    forceInstall: finalArgs.forceInstall ?? false,
-    installDir: resolvedInstallDir,
-    cloudRegion: finalArgs.region ?? undefined,
-    default: finalArgs.default ?? false,
-    signup: finalArgs.signup ?? false,
-    localMcp: finalArgs.localMcp ?? false,
-    ci: finalArgs.ci ?? false,
-    apiKey: finalArgs.apiKey,
-    menu: finalArgs.menu ?? false,
-  };
+  // Build session if not provided (CI mode passes one pre-built)
+  if (!session) {
+    session = buildSession({
+      debug: finalArgs.debug,
+      forceInstall: finalArgs.forceInstall,
+      installDir: resolvedInstallDir,
+      ci: finalArgs.ci,
+      signup: finalArgs.signup,
+      localMcp: finalArgs.localMcp,
+      apiKey: finalArgs.apiKey,
+      menu: finalArgs.menu,
+      region: finalArgs.region,
+      integration: finalArgs.integration,
+    });
+  }
 
-  getUI().intro(`Welcome to the PostHog setup wizard ✨`);
+  session.installDir = resolvedInstallDir;
 
-  if (wizardOptions.ci) {
+  getUI().intro(`Welcome to the PostHog setup wizard`);
+
+  if (session.ci) {
     getUI().log.info(chalk.dim('Running in CI mode'));
   }
 
   const integration =
-    finalArgs.integration ?? (await getIntegrationForSetup(wizardOptions));
+    session.integration ?? (await detectAndResolveIntegration(session));
 
+  session.integration = integration;
   analytics.setTag('integration', integration);
 
   const config = FRAMEWORK_REGISTRY[integration];
+  session.frameworkConfig = config;
+
+  // Run auto-detection for gatherContext if the framework has it
+  // (SetupScreen handles disambiguation for unresolved questions)
+  if (config.metadata.gatherContext) {
+    try {
+      const context = await config.metadata.gatherContext({
+        installDir: session.installDir,
+        debug: session.debug,
+        forceInstall: session.forceInstall,
+        default: false,
+        signup: session.signup,
+        localMcp: session.localMcp,
+        ci: session.ci,
+        menu: session.menu,
+      });
+      // Merge detected context (don't overwrite CLI-provided values)
+      for (const [key, value] of Object.entries(context)) {
+        if (!(key in session.frameworkContext)) {
+          session.frameworkContext[key] = value;
+        }
+      }
+    } catch {
+      // Detection failed — SetupScreen or agent will handle it
+    }
+  }
 
   try {
-    await runAgentWizard(config, wizardOptions);
+    await runAgentWizard(config, session);
   } catch (error) {
     analytics.captureException(error as Error, {
       integration,
@@ -86,7 +117,6 @@ export async function runWizard(argv: Args) {
     const errorStack =
       error instanceof Error && error.stack ? error.stack : undefined;
 
-    // Log to file for debugging
     logToFile(`[Wizard run.ts] ERROR MESSAGE: ${errorMessage} `);
     if (errorStack) {
       logToFile(`[Wizard run.ts] ERROR STACK: ${errorStack}`);
@@ -100,7 +130,7 @@ export async function runWizard(argv: Args) {
       )} to set up PostHog manually.`,
     );
 
-    if (wizardOptions.debug && errorStack) {
+    if (session.debug && errorStack) {
       getUI().log.info(chalk.dim(errorStack));
     }
 
@@ -111,13 +141,13 @@ export async function runWizard(argv: Args) {
 const DETECTION_TIMEOUT_MS = 5000;
 
 async function detectIntegration(
-  options: Pick<WizardOptions, 'installDir'>,
+  installDir: string,
 ): Promise<Integration | undefined> {
   for (const integration of Object.values(Integration)) {
     const config = FRAMEWORK_REGISTRY[integration];
     try {
       const detected = await Promise.race([
-        config.detection.detect(options),
+        config.detection.detect({ installDir }),
         new Promise<false>((resolve) =>
           setTimeout(() => resolve(false), DETECTION_TIMEOUT_MS),
         ),
@@ -131,11 +161,11 @@ async function detectIntegration(
   }
 }
 
-async function getIntegrationForSetup(
-  options: Pick<WizardOptions, 'installDir' | 'menu'>,
-) {
-  if (!options.menu) {
-    const detectedIntegration = await detectIntegration(options);
+async function detectAndResolveIntegration(
+  session: WizardSession,
+): Promise<Integration> {
+  if (!session.menu) {
+    const detectedIntegration = await detectIntegration(session.installDir);
 
     if (detectedIntegration) {
       getUI().setSetupData({
@@ -150,15 +180,10 @@ async function getIntegrationForSetup(
     );
   }
 
-  const integration: Integration = await abortIfCancelled(
-    getUI().select({
-      message: 'What do you want to set up?',
-      options: Object.values(Integration).map((value) => ({
-        value,
-        label: FRAMEWORK_REGISTRY[value].metadata.name,
-      })),
-    }),
+  // Fallback: in TUI mode the IntroScreen would handle this,
+  // but for CI mode or when detection fails, abort with guidance.
+  getUI().log.error(
+    'Could not auto-detect your framework. Please specify --integration on the command line.',
   );
-
-  return integration;
+  process.exit(1);
 }

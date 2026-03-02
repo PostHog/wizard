@@ -28,7 +28,24 @@ export const NEXTJS_AGENT_CONFIG: FrameworkConfig<NextjsContext> = {
     unsupportedVersionDocsUrl: 'https://posthog.com/docs/libraries/next-js',
     gatherContext: async (options: WizardOptions) => {
       const router = await getNextJsRouter(options);
-      return { router };
+      // Return detected value or omit key (null = unresolved, SetupScreen asks)
+      return router ? { router } : {};
+    },
+    setup: {
+      questions: [
+        {
+          key: 'router',
+          message: 'Which Next.js router are you using?',
+          options: [
+            { label: 'App Router', value: NextJsRouter.APP_ROUTER },
+            { label: 'Pages Router', value: NextJsRouter.PAGES_ROUTER },
+          ],
+          detect: async (opts) => {
+            const result = await getNextJsRouter(opts);
+            return result;
+          },
+        },
+      ],
     },
   },
 

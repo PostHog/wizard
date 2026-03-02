@@ -5,6 +5,26 @@ import { Integration } from '../lib/constants';
 
 jest.mock('../lib/agent-runner');
 jest.mock('../utils/analytics');
+jest.mock('../lib/wizard-session', () => ({
+  buildSession: (args: Record<string, unknown>) => ({
+    debug: false,
+    forceInstall: false,
+    installDir: process.cwd(),
+    ci: false,
+    signup: false,
+    localMcp: false,
+    menu: false,
+    cloudRegion: null,
+    integration: null,
+    frameworkContext: {},
+    typescript: false,
+    credentials: null,
+    serviceStatus: null,
+    outroData: null,
+    frameworkConfig: null,
+    ...args,
+  }),
+}));
 jest.mock('../ui', () => ({
   getUI: jest.fn().mockReturnValue({
     log: {
@@ -18,15 +38,11 @@ jest.mock('../ui', () => ({
     outro: jest.fn(),
     cancel: jest.fn(),
     note: jest.fn(),
-    select: jest.fn(),
-    confirm: jest.fn(),
-    text: jest.fn(),
     spinner: jest.fn().mockReturnValue({
       start: jest.fn(),
       stop: jest.fn(),
       message: jest.fn(),
     }),
-    isCancel: jest.fn().mockReturnValue(false),
     setSetupData: jest.fn(),
     pushStatus: jest.fn(),
     syncTodos: jest.fn(),

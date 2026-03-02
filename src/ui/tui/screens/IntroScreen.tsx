@@ -2,12 +2,14 @@
  * IntroScreen — Welcome + cloud region picker.
  *
  * Self-contained: owns the region selection via PickerMenu.
- * Calls store.completeSetup(region) which unblocks bin.ts to start runWizard.
+ * Writes to session.cloudRegion and calls store.completeSetup(region)
+ * which unblocks bin.ts to start runWizard.
  */
 
 import { Box, Text } from 'ink';
 import { useSyncExternalStore } from 'react';
-import type { WizardStore, CloudRegion } from '../store.js';
+import type { WizardStore } from '../store.js';
+import type { CloudRegion } from '../../../lib/wizard-session.js';
 import { PickerMenu } from '../primitives/index.js';
 import { Colors } from '../styles.js';
 
@@ -41,6 +43,7 @@ export const IntroScreen = ({ store }: IntroScreenProps) => {
         ]}
         onSelect={(value) => {
           const region = Array.isArray(value) ? value[0] : value;
+          store.session.cloudRegion = region;
           store.completeSetup(region);
         }}
       />

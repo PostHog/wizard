@@ -1,62 +1,12 @@
-/* eslint-disable no-console, @typescript-eslint/require-await */
+/* eslint-disable no-console */
 /**
- * ConsoleUI — Minimal non-interactive implementation for CI mode.
- * Uses console.log with simple prefix icons. No dependencies.
+ * LoggingUI — Logging-only implementation for CI mode.
+ * No prompts, no TUI, no interactivity. Just console output.
  */
 
-import {
-  TaskStatus,
-  type WizardUI,
-  type SpinnerHandle,
-  type SelectOption,
-  type GroupMultiselectOptions,
-  type MultiselectOptions,
-} from './wizard-ui';
+import { TaskStatus, type WizardUI, type SpinnerHandle } from './wizard-ui';
 
-export class ConsoleUI implements WizardUI {
-  async select<T>(opts: {
-    message: string;
-    options: SelectOption<T>[];
-    initialValue?: T;
-  }): Promise<T | symbol> {
-    // Auto-resolve with initialValue or first option
-    const value = opts.initialValue ?? opts.options[0]?.value;
-    console.log(`◇  ${opts.message} → ${String(value)}`);
-    return value;
-  }
-
-  async confirm(opts: {
-    message: string;
-    initialValue?: boolean;
-  }): Promise<boolean | symbol> {
-    const value = opts.initialValue ?? true;
-    console.log(`◇  ${opts.message} → ${value ? 'Yes' : 'No'}`);
-    return value;
-  }
-
-  async text(opts: {
-    message: string;
-    placeholder?: string;
-  }): Promise<string | symbol> {
-    console.log(`◇  ${opts.message} → (default)`);
-    return opts.placeholder ?? '';
-  }
-
-  async groupMultiselect<T>(
-    opts: GroupMultiselectOptions<T>,
-  ): Promise<T[] | symbol> {
-    const all = Object.values(opts.options).flat();
-    const values = opts.initialValues ?? all.map((o) => o.value);
-    console.log(`◇  ${opts.message} → [${values.length} selected]`);
-    return values;
-  }
-
-  async multiselect<T>(opts: MultiselectOptions<T>): Promise<T[] | symbol> {
-    const values = opts.initialValues ?? opts.options.map((o) => o.value);
-    console.log(`◇  ${opts.message} → [${values.length} selected]`);
-    return values;
-  }
-
+export class LoggingUI implements WizardUI {
   setSetupData(data: {
     wizardLabel?: string;
     detectedFramework?: string;
@@ -118,10 +68,6 @@ export class ConsoleUI implements WizardUI {
         if (msg) console.log(`◌  ${msg}`);
       },
     };
-  }
-
-  isCancel(_value: unknown): _value is symbol {
-    return false; // CI never cancels
   }
 
   pushStatus(message: string): void {

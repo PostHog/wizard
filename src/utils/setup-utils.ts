@@ -1,33 +1,30 @@
 import * as childProcess from 'node:child_process';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
-import { basename, isAbsolute, join, relative } from 'node:path';
+import { isAbsolute, join, relative } from 'node:path';
 
 import chalk from 'chalk';
 import { traceStep } from '../telemetry';
 import { debug } from './debug';
-import { type PackageDotJson, hasPackageInstalled } from './package-json';
+import type { PackageDotJson } from './package-json';
 import {
   type PackageManager,
   detectAllPackageManagers,
-  packageManagers,
   NPM as npm,
 } from './package-manager';
-import { fulfillsVersionRange } from './semver';
-import type { CloudRegion, Feature, WizardOptions } from './types';
+import type { CloudRegion, WizardOptions } from './types';
 import { getPackageVersion } from './package-json';
 import {
   DEFAULT_HOST_URL,
   DUMMY_PROJECT_API_KEY,
   ISSUES_URL,
-  type Integration,
 } from '../lib/constants';
 import { analytics } from './analytics';
 import { getUI } from '../ui';
 import { getCloudUrlFromRegion, getHostFromRegion } from './urls';
-import { FRAMEWORK_REGISTRY } from '../lib/registry';
 import { performOAuthFlow } from './oauth';
 import { fetchUserData, fetchProjectData } from '../lib/api';
+import { fulfillsVersionRange } from './semver';
 
 interface ProjectData {
   projectApiKey: string;
@@ -66,96 +63,11 @@ export async function abort(message?: string, status?: number): Promise<never> {
   return process.exit(status ?? 1);
 }
 
-export async function abortIfCancelled<T>(
-  input: T | Promise<T>,
-  integration?: Integration,
-): Promise<Exclude<T, symbol>> {
-  await analytics.shutdown('cancelled');
-  const resolvedInput = await input;
-
-  if (
-    getUI().isCancel(resolvedInput) ||
-    (typeof resolvedInput === 'symbol' &&
-      resolvedInput.description === 'clack:cancel')
-  ) {
-    const docsUrl = integration
-      ? FRAMEWORK_REGISTRY[integration].metadata.docsUrl
-      : 'https://posthog.com/docs';
-
-    getUI().cancel(
-      `Wizard setup cancelled. You can read the documentation for ${
-        integration ?? 'PostHog'
-      } at ${chalk.cyan(docsUrl)} to continue with the setup manually.`,
-    );
-    process.exit(0);
-  } else {
-    return input as Exclude<T, symbol>;
-  }
-}
-
 export function printWelcome(options: {
   wizardName: string;
   message?: string;
 }): void {
   getUI().setSetupData({ wizardLabel: options.wizardName });
-}
-
-export async function confirmContinueIfNoOrDirtyGitRepo(
-  options: Pick<WizardOptions, 'default' | 'ci'>,
-): Promise<void> {
-  return traceStep('check-git-status', async () => {
-    if (!isInGitRepo()) {
-      // CI mode: auto-continue without git
-      const continueWithoutGit =
-        options.default || options.ci
-          ? true
-          : await abortIfCancelled(
-              getUI().confirm({
-                message:
-                  'You are not inside a git repository. The wizard will create and update files. Do you want to continue anyway?',
-              }),
-            );
-
-      analytics.setTag('continue-without-git', continueWithoutGit);
-
-      if (!continueWithoutGit) {
-        await abort(undefined, 0);
-      }
-      // return early to avoid checking for uncommitted files
-      return;
-    }
-
-    const uncommittedOrUntrackedFiles = getUncommittedOrUntrackedFiles();
-    if (uncommittedOrUntrackedFiles.length) {
-      // CI mode: auto-continue with dirty repo
-      if (options.ci) {
-        getUI().log.info(
-          `CI mode: continuing with uncommitted/untracked files in repo`,
-        );
-        analytics.setTag('continue-with-dirty-repo', true);
-        return;
-      }
-
-      getUI().log.warn(
-        `You have uncommitted or untracked files in your repo:
-
-${uncommittedOrUntrackedFiles.join('\n')}
-
-The wizard will create and update files.`,
-      );
-      const continueWithDirtyRepo = await abortIfCancelled(
-        getUI().confirm({
-          message: 'Do you want to continue anyway?',
-        }),
-      );
-
-      analytics.setTag('continue-with-dirty-repo', continueWithDirtyRepo);
-
-      if (!continueWithDirtyRepo) {
-        await abort(undefined, 0);
-      }
-    }
-  });
 }
 
 export function isInGitRepo() {
@@ -190,79 +102,6 @@ export function getUncommittedOrUntrackedFiles(): string[] {
   }
 }
 
-export async function askForItemSelection(
-  items: string[],
-  message: string,
-): Promise<{ value: string; index: number }> {
-  const selection: { value: string; index: number } | symbol =
-    await abortIfCancelled(
-      getUI().select({
-        maxItems: 12,
-        message: message,
-        options: items.map((item, index) => {
-          return {
-            value: { value: item, index: index },
-            label: item,
-          };
-        }),
-      }),
-    );
-
-  return selection;
-}
-
-export async function confirmContinueIfPackageVersionNotSupported({
-  packageId,
-  packageName,
-  packageVersion,
-  acceptableVersions,
-  note,
-}: {
-  packageId: string;
-  packageName: string;
-  packageVersion: string;
-  acceptableVersions: string;
-  note?: string;
-}): Promise<void> {
-  return traceStep(`check-package-version`, async () => {
-    analytics.setTag(`${packageName.toLowerCase()}-version`, packageVersion);
-    const isSupportedVersion = fulfillsVersionRange({
-      acceptableVersions,
-      version: packageVersion,
-      canBeLatest: true,
-    });
-
-    if (isSupportedVersion) {
-      analytics.setTag(`${packageName.toLowerCase()}-supported`, true);
-      return;
-    }
-
-    getUI().log.warn(
-      `You have an unsupported version of ${packageName} installed:
-
-  ${packageId}@${packageVersion}`,
-    );
-
-    getUI().note(
-      note ??
-        `Please upgrade to ${acceptableVersions} if you wish to use the PostHog wizard.`,
-    );
-    const continueWithUnsupportedVersion = await abortIfCancelled(
-      getUI().confirm({
-        message: 'Do you want to continue anyway?',
-      }),
-    );
-    analytics.setTag(
-      `${packageName.toLowerCase()}-continue-with-unsupported-version`,
-      continueWithUnsupportedVersion,
-    );
-
-    if (!continueWithUnsupportedVersion) {
-      await abort(undefined, 0);
-    }
-  });
-}
-
 export async function isReact19Installed({
   installDir,
 }: Pick<WizardOptions, 'installDir'>): Promise<boolean> {
@@ -279,7 +118,7 @@ export async function isReact19Installed({
       acceptableVersions: '>=19.0.0',
       canBeLatest: true,
     });
-  } catch (error) {
+  } catch {
     return false;
   }
 }
@@ -293,48 +132,26 @@ export async function isReact19Installed({
 export async function installPackage({
   packageName,
   alreadyInstalled,
-  askBeforeUpdating = true,
   packageNameDisplayLabel,
   packageManager,
   forceInstall = false,
   integration,
   installDir,
 }: {
-  /** The string that is passed to the package manager CLI as identifier to install (e.g. `posthog-js`, or `posthog-js@^1.100.0`) */
   packageName: string;
   alreadyInstalled: boolean;
-  askBeforeUpdating?: boolean;
-  /** Overrides what is shown in the installation logs in place of the `packageName` option. Useful if the `packageName` is ugly */
   packageNameDisplayLabel?: string;
   packageManager?: PackageManager;
-  /** Add force install flag to command to skip install precondition fails */
   forceInstall?: boolean;
-  /** The integration that is being used */
   integration?: string;
-  /** The directory to install the package in */
   installDir: string;
 }): Promise<{ packageManager?: PackageManager }> {
   return traceStep('install-package', async () => {
-    if (alreadyInstalled && askBeforeUpdating) {
-      const shouldUpdatePackage = await abortIfCancelled(
-        getUI().confirm({
-          message: `The ${chalk.bold.cyan(
-            packageNameDisplayLabel ?? packageName,
-          )} package is already installed. Do you want to update it to the latest version?`,
-        }),
-      );
-
-      if (!shouldUpdatePackage) {
-        return {};
-      }
-    }
-
     const sdkInstallSpinner = getUI().spinner();
 
     const pkgManager =
       packageManager || (await getPackageManager({ installDir }));
 
-    // Most packages aren't compatible with React 19 yet, skip strict peer dependency checks if needed.
     const isReact19 = await isReact19Installed({ installDir });
     const legacyPeerDepsFlag =
       isReact19 && pkgManager.name === 'npm' ? '--legacy-peer-deps' : '';
@@ -354,7 +171,6 @@ export async function installPackage({
           { cwd: installDir },
           (err, stdout, stderr) => {
             if (err) {
-              // Write a log file so we can better troubleshoot issues
               fs.writeFileSync(
                 join(
                   process.cwd(),
@@ -401,41 +217,6 @@ export async function installPackage({
     });
 
     return { packageManager: pkgManager };
-  });
-}
-
-/**
- * Checks if @param packageId is listed as a dependency in @param packageJson.
- * If not, it will ask users if they want to continue without the package.
- *
- * Use this function to check if e.g. a the framework of the SDK is installed
- *
- * @param packageJson the package.json object
- * @param packageId the npm name of the package
- * @param packageName a human readable name of the package
- */
-export async function ensurePackageIsInstalled(
-  packageJson: PackageDotJson,
-  packageId: string,
-  packageName: string,
-): Promise<void> {
-  return traceStep('ensure-package-installed', async () => {
-    const installed = hasPackageInstalled(packageId, packageJson);
-
-    analytics.setTag(`${packageName.toLowerCase()}-installed`, installed);
-
-    if (!installed) {
-      const continueWithoutPackage = await abortIfCancelled(
-        getUI().confirm({
-          message: `${packageName} does not seem to be installed. Do you still want to continue?`,
-          initialValue: false,
-        }),
-      );
-
-      if (!continueWithoutPackage) {
-        await abort(undefined, 0);
-      }
-    }
   });
 }
 
@@ -494,7 +275,6 @@ export async function updatePackageDotJson(
   try {
     await fs.promises.writeFile(
       join(installDir, 'package.json'),
-      // TODO: maybe figure out the original indentation
       JSON.stringify(packageDotJson, null, 2),
       {
         encoding: 'utf8',
@@ -508,6 +288,11 @@ export async function updatePackageDotJson(
   }
 }
 
+/**
+ * Detect and return the package manager. Pure — no prompts.
+ * Falls back to first detected or npm if ambiguous.
+ */
+// eslint-disable-next-line @typescript-eslint/require-await
 export async function getPackageManager(
   options: Pick<WizardOptions, 'installDir'> & { ci?: boolean },
 ): Promise<PackageManager> {
@@ -515,48 +300,15 @@ export async function getPackageManager(
     installDir: options.installDir,
   });
 
-  // If exactly one package manager detected, use it automatically
-  if (detectedPackageManagers.length === 1) {
-    const detectedPackageManager = detectedPackageManagers[0];
-    analytics.setTag('package-manager', detectedPackageManager.name);
-    return detectedPackageManager;
+  if (detectedPackageManagers.length >= 1) {
+    const selected = detectedPackageManagers[0];
+    analytics.setTag('package-manager', selected.name);
+    return selected;
   }
 
-  // CI mode: auto-select first detected or npm
-  if (options.ci) {
-    const selectedPackageManager =
-      detectedPackageManagers.length > 0 ? detectedPackageManagers[0] : npm;
-    getUI().log.info(
-      `CI mode: auto-selected package manager: ${selectedPackageManager.label}`,
-    );
-    analytics.setTag('package-manager', selectedPackageManager.name);
-    return selectedPackageManager;
-  }
-
-  // If multiple or no package managers detected, prompt user to select
-  const pkgOptions =
-    detectedPackageManagers.length > 0
-      ? detectedPackageManagers
-      : packageManagers;
-
-  const message =
-    detectedPackageManagers.length > 1
-      ? 'Multiple package managers detected. Please select one:'
-      : 'Please select your package manager.';
-
-  const selectedPackageManager: PackageManager | symbol =
-    await abortIfCancelled(
-      getUI().select({
-        message,
-        options: pkgOptions.map((packageManager) => ({
-          value: packageManager,
-          label: packageManager.label,
-        })),
-      }),
-    );
-
-  analytics.setTag('package-manager', selectedPackageManager.name);
-  return selectedPackageManager;
+  // No package manager detected — default to npm
+  analytics.setTag('package-manager', npm.name);
+  return npm;
 }
 
 export function isUsingTypeScript({
@@ -570,11 +322,7 @@ export function isUsingTypeScript({
 }
 
 /**
- *
- * Use this function to get project data for the wizard.
- *
- * @param options wizard options
- * @returns project data (token, url)
+ * Get project data for the wizard via OAuth or CI API key.
  */
 export async function getOrAskForProjectData(
   _options: Pick<WizardOptions, 'signup' | 'ci' | 'apiKey'> & {
@@ -600,8 +348,8 @@ export async function getOrAskForProjectData(
 
     return {
       host,
-      projectApiKey: projectData.api_token, // Project API key for SDK config
-      accessToken: _options.apiKey, // Personal API key for LLM gateway
+      projectApiKey: projectData.api_token,
+      accessToken: _options.apiKey,
       projectId: projectData.id,
     };
   }
@@ -638,9 +386,6 @@ ${chalk.cyan(`${cloudUrl}/settings/project#variables`)}`);
   };
 }
 
-/**
- * Fetch project data using a personal API key (for CI mode)
- */
 async function fetchProjectDataWithApiKey(
   apiKey: string,
   region: CloudRegion,
@@ -713,7 +458,7 @@ async function askForWizardLogin(options: {
   };
 
   getUI().log.success(
-    `Login complete. ${options.signup ? 'Welcome to PostHog! 🎉' : ''}`,
+    `Login complete. ${options.signup ? 'Welcome to PostHog!' : ''}`,
   );
   analytics.setTag('opened-wizard-link', true);
   analytics.setDistinctId(data.distinctId);
@@ -722,158 +467,7 @@ async function askForWizardLogin(options: {
 }
 
 /**
- * Asks users if they have a config file for @param tool (e.g. Vite).
- * If yes, asks users to specify the path to their config file.
- *
- * Use this helper function as a fallback mechanism if the lookup for
- * a config file with its most usual location/name fails.
- *
- * @param toolName Name of the tool for which we're looking for the config file
- * @param configFileName Name of the most common config file name (e.g. vite.config.js)
- *
- * @returns a user path to the config file or undefined if the user doesn't have a config file
- */
-export async function askForToolConfigPath(
-  toolName: string,
-  configFileName: string,
-): Promise<string | undefined> {
-  const hasConfig = await abortIfCancelled(
-    getUI().confirm({
-      message: `Do you have a ${toolName} config file (e.g. ${chalk.cyan(
-        configFileName,
-      )})?`,
-      initialValue: true,
-    }),
-  );
-
-  if (!hasConfig) {
-    return undefined;
-  }
-
-  return await abortIfCancelled(
-    getUI().text({
-      message: `Please enter the path to your ${toolName} config file:`,
-      placeholder: join('.', configFileName),
-      validate: (value) => {
-        if (!value) {
-          return 'Please enter a path.';
-        }
-
-        try {
-          fs.accessSync(value);
-        } catch {
-          return 'Could not access the file at this path.';
-        }
-      },
-    }),
-  );
-}
-
-/**
- * Prints copy/paste-able instructions to the console.
- * Afterwards asks the user if they added the code snippet to their file.
- *
- * While there's no point in providing a "no" answer here, it gives users time to fulfill the
- * task before the wizard continues with additional steps.
- *
- * Use this function if you want to show users instructions on how to add/modify
- * code in their file. This is helpful if automatic insertion failed or is not possible/feasible.
- *
- * @param filename the name of the file to which the code snippet should be applied.
- * If a path is provided, only the filename will be used.
- *
- * @param codeSnippet the snippet to be printed. Use {@link makeCodeSnippet}  to create the
- * diff-like format for visually highlighting unchanged or modified lines of code.
- *
- * @param hint (optional) a hint to be printed after the main instruction to add
- * the code from @param codeSnippet to their @param filename.
- *
- * TODO: refactor copy paste instructions across different wizards to use this function.
- *       this might require adding a custom message parameter to the function
- */
-export async function showCopyPasteInstructions(
-  filename: string,
-  codeSnippet: string,
-  hint?: string,
-): Promise<void> {
-  getUI().log.step(
-    `Add the following code to your ${chalk.cyan(basename(filename))} file:${
-      hint ? chalk.dim(` (${chalk.dim(hint)})`) : ''
-    }`,
-  );
-
-  // Padding the code snippet to be printed with a \n at the beginning and end
-  // This makes it easier to distinguish the snippet from the rest of the output
-  // Intentionally logging directly to console here so that the code can be copied/pasted directly
-  // eslint-disable-next-line no-console
-  console.log(`\n${codeSnippet}\n`);
-
-  await abortIfCancelled(
-    getUI().select({
-      message: 'Did you apply the snippet above?',
-      options: [{ label: 'Yes, continue!', value: true }],
-      initialValue: true,
-    }),
-  );
-}
-
-/**
- * Callback that exposes formatting helpers for a code snippet.
- * @param unchanged - Formats text as old code.
- * @param plus - Formats text as new code.
- * @param minus - Formats text as removed code.
- */
-type CodeSnippetFormatter = (
-  unchanged: (txt: string) => string,
-  plus: (txt: string) => string,
-  minus: (txt: string) => string,
-) => string;
-
-/**
- * Crafts a code snippet that can be used to e.g.
- * - print copy/paste instructions to the console
- * - create a new config file.
- *
- * @param colors set this to true if you want the final snippet to be colored.
- * This is useful for printing the snippet to the console as part of copy/paste instructions.
- *
- * @param callback the callback that returns the formatted code snippet.
- * It exposes takes the helper functions for marking code as unchanged, new or removed.
- * These functions no-op if no special formatting should be applied
- * and otherwise apply the appropriate formatting/coloring.
- * (@see {@link CodeSnippetFormatter})
- *
- * @see {@link showCopyPasteInstructions} for the helper with which to display the snippet in the console.
- *
- * @returns a string containing the final, formatted code snippet.
- */
-export function makeCodeSnippet(
-  colors: boolean,
-  callback: CodeSnippetFormatter,
-): string {
-  const unchanged = (txt: string) => (colors ? chalk.grey(txt) : txt);
-  const plus = (txt: string) => (colors ? chalk.greenBright(txt) : txt);
-  const minus = (txt: string) => (colors ? chalk.redBright(txt) : txt);
-
-  return callback(unchanged, plus, minus);
-}
-
-/**
- * Creates a new config file with the given @param filepath and @param codeSnippet.
- *
- * Use this function to create a new config file for users. This is useful
- * when users answered that they don't yet have a config file for a tool.
- *
- * (This doesn't mean that they don't yet have some other way of configuring
- * their tool but we can leave it up to them to figure out how to merge configs
- * here.)
- *
- * @param filepath absolute path to the new config file
- * @param codeSnippet the snippet to be inserted into the file
- * @param moreInformation (optional) the message to be printed after the file was created
- * For example, this can be a link to more information about configuring the tool.
- *
- * @returns true on success, false otherwise
+ * Creates a new config file with the given filepath and codeSnippet.
  */
 export async function createNewConfigFile(
   filepath: string,
@@ -906,120 +500,4 @@ export async function createNewConfigFile(
   }
 
   return false;
-}
-
-export async function featureSelectionPrompt<F extends ReadonlyArray<Feature>>(
-  features: F,
-): Promise<{ [key in F[number]['id']]: boolean }> {
-  return traceStep('feature-selection', async () => {
-    const selectedFeatures: Record<string, boolean> = {};
-
-    for (const feature of features) {
-      const selected = await abortIfCancelled(
-        getUI().select({
-          message: feature.prompt,
-          initialValue: true,
-          options: [
-            {
-              value: true,
-              label: 'Yes',
-              hint: feature.enabledHint,
-            },
-            {
-              value: false,
-              label: 'No',
-              hint: feature.disabledHint,
-            },
-          ],
-        }),
-      );
-
-      selectedFeatures[feature.id] = selected;
-    }
-
-    return selectedFeatures as { [key in F[number]['id']]: boolean };
-  });
-}
-
-export async function askShouldInstallPackage(
-  pkgName: string,
-): Promise<boolean> {
-  return traceStep(`ask-install-package`, () =>
-    abortIfCancelled(
-      getUI().confirm({
-        message: `Do you want to install ${chalk.cyan(pkgName)}?`,
-      }),
-    ),
-  );
-}
-
-export async function askShouldAddPackageOverride(
-  pkgName: string,
-  pkgVersion: string,
-): Promise<boolean> {
-  return traceStep(`ask-add-package-override`, () =>
-    abortIfCancelled(
-      getUI().confirm({
-        message: `Do you want to add an override for ${chalk.cyan(
-          pkgName,
-        )} version ${chalk.cyan(pkgVersion)}?`,
-      }),
-    ),
-  );
-}
-
-export async function askForAIConsent(
-  options: Pick<WizardOptions, 'default' | 'ci'>,
-) {
-  return await traceStep('ask-for-ai-consent', async () => {
-    // CI mode: auto-consent to AI
-    const aiConsent =
-      options.default || options.ci
-        ? true
-        : await abortIfCancelled(
-            getUI().select({
-              message:
-                'This setup wizard uses AI, are you happy to continue? ✨',
-              options: [
-                {
-                  label: 'Yes',
-                  value: true,
-                  hint: 'We will use AI to help you setup PostHog quickly',
-                },
-                {
-                  label: 'No',
-                  value: false,
-                  hint: "I don't like AI",
-                },
-              ],
-              initialValue: true,
-            }),
-          );
-
-    return aiConsent;
-  });
-}
-
-export async function askForCloudRegion(): Promise<CloudRegion> {
-  return await traceStep('ask-for-cloud-region', async () => {
-    const cloudRegion: CloudRegion = await abortIfCancelled(
-      getUI().select({
-        message: 'Select your PostHog Cloud region',
-        options: [
-          {
-            label: 'US 🇺🇸',
-            value: 'us',
-            hint: 'Your data will be stored in the US',
-          },
-          {
-            label: 'EU 🇪🇺',
-            value: 'eu',
-            hint: 'Your data will be stored in the EU',
-          },
-        ],
-      }),
-    );
-
-    return cloudRegion;
-  });
 }

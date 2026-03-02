@@ -2,7 +2,6 @@ import { execSync, spawn, spawnSync } from 'child_process';
 import { EnvironmentProvider } from '../EnvironmentProvider';
 import * as fs from 'fs';
 import * as path from 'path';
-import type { WizardOptions } from '../../../utils/types';
 import { getUI } from '../../../ui';
 import chalk from 'chalk';
 import { analytics } from '../../../utils/analytics';
@@ -11,7 +10,7 @@ export class VercelEnvironmentProvider extends EnvironmentProvider {
   name = 'Vercel';
   environments = ['production', 'preview', 'development'];
 
-  constructor(options: WizardOptions) {
+  constructor(options: { installDir: string }) {
     super(options);
   }
 

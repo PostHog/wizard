@@ -1,17 +1,11 @@
 /**
  * InkUI — Ink-backed implementation of WizardUI.
  *
- * Setup prompts auto-accept — the IntroScreen owns user-facing input.
+ * No prompt methods — screens own all user input.
  * Run phase is headless.
  */
 
-import type {
-  WizardUI,
-  SpinnerHandle,
-  SelectOption,
-  GroupMultiselectOptions,
-  MultiselectOptions,
-} from '../wizard-ui.js';
+import type { WizardUI, SpinnerHandle } from '../wizard-ui.js';
 import type { WizardStore } from './store.js';
 
 // Strip ANSI escape codes (chalk formatting) from strings
@@ -21,52 +15,8 @@ function stripAnsi(s: string): string {
   return s.replace(ANSI_RE, '');
 }
 
-const CANCEL = Symbol('cancel');
-
 export class InkUI implements WizardUI {
   constructor(private store: WizardStore) {}
-
-  // --- Prompt methods: auto-accept (screens own user input) ---
-
-  select<T>(opts: {
-    message: string;
-    options: SelectOption<T>[];
-    initialValue?: T;
-    maxItems?: number;
-  }): Promise<T | symbol> {
-    // Screens own user input — auto-decline anything the business logic asks
-    // during headless mode. Return last option (conventionally "No" / "Skip").
-    if (opts.initialValue !== undefined)
-      return Promise.resolve(opts.initialValue);
-    if (opts.options.length > 0)
-      return Promise.resolve(opts.options[opts.options.length - 1].value);
-    return Promise.resolve(CANCEL);
-  }
-
-  confirm(_opts: {
-    message: string;
-    initialValue?: boolean;
-  }): Promise<boolean | symbol> {
-    return Promise.resolve(_opts.initialValue ?? false);
-  }
-
-  text(opts: {
-    message: string;
-    placeholder?: string;
-    validate?: (value: string) => string | void;
-  }): Promise<string | symbol> {
-    return Promise.resolve(opts.placeholder ?? '');
-  }
-
-  groupMultiselect<T>(
-    _opts: GroupMultiselectOptions<T>,
-  ): Promise<T[] | symbol> {
-    return Promise.resolve(_opts.initialValues ?? []);
-  }
-
-  multiselect<T>(_opts: MultiselectOptions<T>): Promise<T[] | symbol> {
-    return Promise.resolve(_opts.initialValues ?? []);
-  }
 
   // --- Lifecycle ---
 
@@ -87,11 +37,14 @@ export class InkUI implements WizardUI {
   outro(message: string): void {
     this.store.pushStatus(stripAnsi(message));
 
-    if (!this.store.outroData) {
-      this.store.setOutroData({ kind: 'success', message: stripAnsi(message) });
+    if (!this.store.session.outroData) {
+      this.store.setOutroData({
+        kind: 'success',
+        message: stripAnsi(message),
+      });
     }
-    // Route through McpScreen before showing the outro
-    this.store.setScreen('mcp');
+    // The flow will advance through mcp → outro via store.advance()
+    // from the RunScreen/McpScreen. No need to jump here.
   }
 
   setLoginUrl(_url: string | null): void {
@@ -102,12 +55,12 @@ export class InkUI implements WizardUI {
     description: string;
     statusPageUrl: string;
   }): void {
-    this.store.setServiceStatus(data);
-    this.store.pushScreen('outage');
+    this.store.session.serviceStatus = data;
+    this.store.pushOverlay('outage');
   }
 
   startRun(): void {
-    this.store.setScreen('run');
+    this.store.startFlow('run');
   }
 
   cancel(message: string): void {
@@ -150,10 +103,6 @@ export class InkUI implements WizardUI {
     };
   }
 
-  isCancel(value: unknown): value is symbol {
-    return value === CANCEL;
-  }
-
   pushStatus(message: string): void {
     this.store.pushStatus(message);
   }
@@ -162,9 +111,5 @@ export class InkUI implements WizardUI {
     todos: Array<{ content: string; status: string; activeForm?: string }>,
   ): void {
     this.store.syncTodos(todos);
-  }
-
-  static get cancelSymbol(): symbol {
-    return CANCEL;
   }
 }

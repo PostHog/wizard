@@ -1,16 +1,13 @@
 import fg from 'fast-glob';
-import { abortIfCancelled } from '../utils/setup-utils';
-import { getUI } from '../ui';
 import type { WizardOptions } from '../utils/types';
-import { Integration } from '../lib/constants';
 import { hasPackageInstalled } from '../utils/package-json';
 import { createVersionBucket } from '../utils/semver';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 
 export enum TanStackRouterMode {
-  FILE_BASED = 'file-based', // Uses @tanstack/router-plugin with file-based route generation
-  CODE_BASED = 'code-based', // Manually defines routes with createRoute/createRootRoute
+  FILE_BASED = 'file-based',
+  CODE_BASED = 'code-based',
 }
 
 const IGNORE_PATTERNS = [
@@ -22,23 +19,11 @@ const IGNORE_PATTERNS = [
   '**/.output/**',
 ];
 
-/**
- * Get TanStack Router version bucket for analytics
- */
 export const getTanStackRouterVersionBucket = createVersionBucket();
 
-/**
- * Check if the project uses file-based routing.
- *
- * Detection signals (in order of reliability):
- * 1. Generated route tree file exists (routeTree.gen.ts) - definitive
- * 2. Router plugin in package.json (@tanstack/router-plugin or @tanstack/router-vite-plugin)
- * 3. createFileRoute usage in source files
- */
 async function hasFileBasedRouting({
   installDir,
 }: Pick<WizardOptions, 'installDir'>): Promise<boolean> {
-  // 1. Check for generated route tree file (most definitive signal)
   const generatedFiles = await fg('**/routeTree.gen.@(ts|tsx|js|jsx)', {
     dot: true,
     cwd: installDir,
@@ -49,7 +34,6 @@ async function hasFileBasedRouting({
     return true;
   }
 
-  // 2. Check package.json for the router plugin
   try {
     const packageJsonPath = path.join(installDir, 'package.json');
     const content = fs.readFileSync(packageJsonPath, 'utf-8');
@@ -65,7 +49,6 @@ async function hasFileBasedRouting({
     // package.json not found or unreadable
   }
 
-  // 3. Check for createFileRoute usage in source files
   const sourceFiles = await fg('**/*.@(ts|tsx|js|jsx)', {
     dot: true,
     cwd: installDir,
@@ -87,12 +70,6 @@ async function hasFileBasedRouting({
   return false;
 }
 
-/**
- * Check if the project uses code-based routing.
- *
- * Code-based routing uses createRoute() to manually define routes,
- * as opposed to file-based routing which uses createFileRoute().
- */
 async function hasCodeBasedRouting({
   installDir,
 }: Pick<WizardOptions, 'installDir'>): Promise<boolean> {
@@ -121,57 +98,30 @@ async function hasCodeBasedRouting({
     }
   }
 
-  // Code-based if createRoute is used without createFileRoute
   return hasCreateRoute && !hasCreateFileRoute;
 }
 
 /**
- * Detect TanStack Router mode (file-based vs code-based routing)
+ * Detect TanStack Router mode. Pure — returns null if ambiguous.
  */
 export async function getTanStackRouterMode(
   options: WizardOptions,
-): Promise<TanStackRouterMode> {
+): Promise<TanStackRouterMode | null> {
   const { installDir } = options;
 
   const isFileBased = await hasFileBasedRouting({ installDir });
   if (isFileBased) {
-    getUI().setSetupData({
-      detectedFramework: 'TanStack Router file-based routing',
-    });
     return TanStackRouterMode.FILE_BASED;
   }
 
   const isCodeBased = await hasCodeBasedRouting({ installDir });
   if (isCodeBased) {
-    getUI().setSetupData({
-      detectedFramework: 'TanStack Router code-based routing',
-    });
     return TanStackRouterMode.CODE_BASED;
   }
 
-  // If we can't detect, ask the user
-  const result: TanStackRouterMode = await abortIfCancelled(
-    getUI().select({
-      message: 'What TanStack Router routing mode are you using?',
-      options: [
-        {
-          label: 'File-based routing',
-          value: TanStackRouterMode.FILE_BASED,
-        },
-        {
-          label: 'Code-based routing',
-          value: TanStackRouterMode.CODE_BASED,
-        },
-      ],
-    }),
-    Integration.tanstackRouter,
-  );
-  return result;
+  return null;
 }
 
-/**
- * Get human-readable name for TanStack Router mode
- */
 export function getTanStackRouterModeName(mode: TanStackRouterMode): string {
   switch (mode) {
     case TanStackRouterMode.FILE_BASED:

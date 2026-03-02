@@ -4,17 +4,11 @@ import {
   SPINNER_MESSAGE,
   type FrameworkConfig,
 } from './framework-config';
-import type { WizardOptions } from '../utils/types';
+import type { WizardSession } from './wizard-session';
 import {
-  abort,
-  askForAIConsent,
-  confirmContinueIfNoOrDirtyGitRepo,
-  ensurePackageIsInstalled,
-  getOrAskForProjectData,
   getPackageDotJson,
   isUsingTypeScript,
-  printWelcome,
-  askForCloudRegion,
+  getOrAskForProjectData,
 } from '../utils/setup-utils';
 import type { PackageDotJson } from '../utils/package-json';
 import { analytics } from '../utils/analytics';
@@ -29,28 +23,37 @@ import {
 import { getCloudUrlFromRegion } from '../utils/urls';
 import chalk from 'chalk';
 import * as semver from 'semver';
-import {
-  addMCPServerToClientsStep,
-  uploadEnvironmentVariablesStep,
-} from '../steps';
-import { checkAnthropicStatusWithPrompt } from '../utils/anthropic-status';
+import { checkAnthropicStatus } from '../utils/anthropic-status';
 import { enableDebugLogs } from '../utils/debug';
 
 /**
  * Universal agent-powered wizard runner.
  * Handles the complete flow for any framework using PostHog MCP integration.
+ *
+ * All user decisions come from the session — no UI prompts.
  */
 export async function runAgentWizard(
   config: FrameworkConfig,
-  options: WizardOptions,
+  session: WizardSession,
 ): Promise<void> {
-  if (options.debug) {
+  if (session.debug) {
     enableDebugLogs();
   }
 
+  const cloudRegion = session.cloudRegion!;
+
   // Version check
   if (config.detection.minimumVersion && config.detection.getInstalledVersion) {
-    const version = await config.detection.getInstalledVersion(options);
+    const version = await config.detection.getInstalledVersion({
+      installDir: session.installDir,
+      debug: session.debug,
+      forceInstall: session.forceInstall,
+      default: false,
+      signup: session.signup,
+      localMcp: session.localMcp,
+      ci: session.ci,
+      menu: session.menu,
+    });
     if (version) {
       const coerced = semver.coerce(version);
       if (coerced && semver.lt(coerced, config.detection.minimumVersion)) {
@@ -68,8 +71,10 @@ export async function runAgentWizard(
     }
   }
 
-  // Setup phase
-  printWelcome({ wizardName: getWelcomeMessage(config.metadata.name) });
+  // Setup phase — informational only, no prompts
+  getUI().setSetupData({
+    wizardLabel: getWelcomeMessage(config.metadata.name),
+  });
 
   if (config.metadata.beta) {
     getUI().setSetupData({
@@ -81,49 +86,42 @@ export async function runAgentWizard(
     getUI().setSetupData({ preRunNotice: config.metadata.preRunNotice });
   }
 
-  const aiConsent = await askForAIConsent(options);
-  if (!aiConsent) {
-    await abort(
-      `This wizard uses an LLM agent to intelligently modify your project. Please view the docs to set up ${config.metadata.name} manually instead: ${config.metadata.docsUrl}`,
-      0,
-    );
+  // Check Anthropic/Claude service status (pure — no prompt)
+  const statusResult = await checkAnthropicStatus();
+  if (statusResult.status === 'down' || statusResult.status === 'degraded') {
+    session.serviceStatus = {
+      description: statusResult.description,
+      statusPageUrl: 'https://status.claude.com',
+    };
+    getUI().showServiceStatus(session.serviceStatus);
   }
 
-  // Check Anthropic/Claude service status before proceeding
-  const statusOk = await checkAnthropicStatusWithPrompt({ ci: options.ci });
-  if (!statusOk) {
-    await abort(
-      `Please try again later, or set up ${config.metadata.name} manually: ${config.metadata.docsUrl}`,
-      0,
-    );
-  }
-
-  // Disclosure about what happens next — shown after all "should we proceed?" gates
+  // Disclosure about what happens next
   getUI().setSetupData({
     disclosure: `We're about to read your project using our LLM gateway.\n\n.env* file contents will not leave your machine.\n\nOther files will be read and edited to provide a fully-custom PostHog integration.`,
   });
 
-  const cloudRegion = options.cloudRegion ?? (await askForCloudRegion());
-  const typeScriptDetected = isUsingTypeScript(options);
-
-  await confirmContinueIfNoOrDirtyGitRepo(options);
+  const typeScriptDetected = isUsingTypeScript({
+    installDir: session.installDir,
+  });
+  session.typescript = typeScriptDetected;
 
   // Framework detection and version
-  // Only check package.json for Node.js/JavaScript frameworks
   const usesPackageJson = config.detection.usesPackageJson !== false;
   let packageJson: PackageDotJson | null = null;
   let frameworkVersion: string | undefined;
 
   if (usesPackageJson) {
-    packageJson = await getPackageDotJson(options);
-    await ensurePackageIsInstalled(
-      packageJson,
-      config.detection.packageName,
-      config.detection.packageDisplayName,
-    );
+    packageJson = await getPackageDotJson({ installDir: session.installDir });
+    // Log warning if package not installed, but continue (agent handles it)
+    const { hasPackageInstalled } = await import('../utils/package-json.js');
+    if (!hasPackageInstalled(config.detection.packageName, packageJson)) {
+      getUI().log.warn(
+        `${config.detection.packageDisplayName} does not seem to be installed. Continuing anyway — the agent will handle it.`,
+      );
+    }
     frameworkVersion = config.detection.getVersion(packageJson);
   } else {
-    // For non-Node frameworks (e.g., Django), version is handled differently
     frameworkVersion = config.detection.getVersion(null);
   }
 
@@ -140,14 +138,16 @@ export async function runAgentWizard(
 
   // Get PostHog credentials
   const { projectApiKey, host, accessToken } = await getOrAskForProjectData({
-    ...options,
+    signup: session.signup,
+    ci: session.ci,
+    apiKey: session.apiKey,
     cloudRegion,
   });
 
-  // Gather framework-specific context (e.g., Next.js router, React Native platform)
-  const frameworkContext = config.metadata.gatherContext
-    ? await config.metadata.gatherContext(options)
-    : {};
+  session.credentials = { accessToken, projectApiKey, host, projectId: 0 };
+
+  // Framework context was already gathered by SetupScreen + detection
+  const frameworkContext = session.frameworkContext;
 
   // Set analytics tags from framework context
   const contextTags = config.analytics.getTags(frameworkContext);
@@ -171,9 +171,7 @@ export async function runAgentWizard(
   const spinner = getUI().spinner();
 
   // Determine MCP URL: CLI flag > env var > production default
-  // Use EU subdomain for EU users to work around Claude Code's OAuth bug
-  // See: https://github.com/anthropics/claude-code/issues/2267
-  const mcpUrl = options.localMcp
+  const mcpUrl = session.localMcp
     ? 'http://localhost:8787/mcp'
     : process.env.MCP_URL ||
       (cloudRegion === 'eu'
@@ -185,20 +183,38 @@ export async function runAgentWizard(
 
   const agent = await initializeAgent(
     {
-      workingDirectory: options.installDir,
+      workingDirectory: session.installDir,
       posthogMcpUrl: mcpUrl,
       posthogApiKey: accessToken,
       posthogApiHost: host,
       additionalMcpServers: config.metadata.additionalMcpServers,
       detectPackageManager: config.detection.detectPackageManager,
     },
-    options,
+    {
+      installDir: session.installDir,
+      debug: session.debug,
+      forceInstall: session.forceInstall,
+      default: false,
+      signup: session.signup,
+      localMcp: session.localMcp,
+      ci: session.ci,
+      menu: session.menu,
+    },
   );
 
   const agentResult = await runAgent(
     agent,
     integrationPrompt,
-    options,
+    {
+      installDir: session.installDir,
+      debug: session.debug,
+      forceInstall: session.forceInstall,
+      default: false,
+      signup: session.signup,
+      localMcp: session.localMcp,
+      ci: session.ci,
+      menu: session.menu,
+    },
     spinner,
     {
       estimatedDurationMinutes: config.ui.estimatedDurationMinutes,
@@ -220,7 +236,7 @@ export async function runAgentWizard(
     );
 
     const errorMessage = `
-${chalk.red('❌ Could not access the PostHog MCP server')}
+${chalk.red('Could not access the PostHog MCP server')}
 
 The wizard was unable to connect to the PostHog MCP server.
 This could be due to a network issue or a configuration problem.
@@ -246,7 +262,7 @@ ${chalk.cyan(config.metadata.docsUrl)}`;
     );
 
     const errorMessage = `
-${chalk.red('❌ Could not access the setup resource')}
+${chalk.red('Could not access the setup resource')}
 
 The wizard could not access the setup resource. This may indicate a version mismatch or a temporary service issue.
 
@@ -277,7 +293,7 @@ ${chalk.cyan(config.metadata.docsUrl)}`;
     });
 
     const errorMessage = `
-${chalk.red('❌ API Error')}
+${chalk.red('API Error')}
 
 ${chalk.yellow(agentResult.message || 'Unknown error')}
 
@@ -291,24 +307,22 @@ Please report this error to: ${chalk.cyan('wizard@posthog.com')}`;
   // Build environment variables from OAuth credentials
   const envVars = config.environment.getEnvVars(projectApiKey, host);
 
-  // Upload environment variables to hosting providers (if configured)
+  // Upload environment variables to hosting providers (auto-accept)
   let uploadedEnvVars: string[] = [];
   if (config.environment.uploadToHosting) {
+    const { uploadEnvironmentVariablesStep } = await import(
+      '../steps/index.js'
+    );
     uploadedEnvVars = await uploadEnvironmentVariablesStep(envVars, {
       integration: config.metadata.integration,
-      options,
+      session,
     });
   }
 
-  // Add MCP server to clients
-  await addMCPServerToClientsStep({
-    cloudRegion,
-    integration: config.metadata.integration,
-    ci: options.ci,
-  });
+  // MCP installation is handled by McpScreen — no prompt here
 
-  // Build outro message
-  const continueUrl = options.signup
+  // Build outro data and store it for OutroScreen
+  const continueUrl = session.signup
     ? `${getCloudUrlFromRegion(cloudRegion)}/products?source=wizard`
     : undefined;
 
@@ -329,24 +343,15 @@ Please report this error to: ${chalk.cyan('wizard@posthog.com')}`;
       : '',
   ].filter(Boolean);
 
-  const outroMessage = `
-${chalk.green('Successfully installed PostHog!')}
+  session.outroData = {
+    kind: 'success',
+    changes,
+    nextSteps,
+    docsUrl: config.metadata.docsUrl,
+    continueUrl,
+  };
 
-${chalk.cyan('What the agent did:')}
-${changes.map((change) => `• ${change}`).join('\n')}
-
-${chalk.yellow('Next steps:')}
-${nextSteps.map((step) => `• ${step}`).join('\n')}
-
-Learn more: ${chalk.cyan(config.metadata.docsUrl)}
-${continueUrl ? `\nContinue onboarding: ${chalk.cyan(continueUrl)}\n` : ``}
-${chalk.dim(
-  'Note: This wizard uses an LLM agent to analyze and modify your project. Please review the changes made.',
-)}
-
-${chalk.dim(`How did this work for you? Drop us a line: wizard@posthog.com`)}`;
-
-  getUI().outro(outroMessage);
+  getUI().outro(`Successfully installed PostHog!`);
 
   await analytics.shutdown('success');
 }

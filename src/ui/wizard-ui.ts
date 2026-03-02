@@ -2,7 +2,9 @@
  * WizardUI — abstraction layer for all user-facing operations.
  *
  * Business logic calls `getUI()` instead of importing Clack directly.
- * Implementations: ClackUI (legacy/CI), InkUI (TUI), ConsoleUI (CI).
+ * Implementations: InkUI (TUI), LoggingUI (CI).
+ *
+ * No prompt methods — the TUI screens own all user input.
  */
 
 export enum TaskStatus {
@@ -17,50 +19,7 @@ export interface SpinnerHandle {
   message(msg?: string): void;
 }
 
-export interface SelectOption<T> {
-  value: T;
-  label: string;
-  hint?: string;
-}
-
-export interface GroupMultiselectOptions<T> {
-  message: string;
-  options: Record<string, SelectOption<T>[]>;
-  initialValues?: T[];
-  required?: boolean;
-}
-
-export interface MultiselectOptions<T> {
-  message: string;
-  options: SelectOption<T>[];
-  initialValues?: T[];
-  required?: boolean;
-}
-
 export interface WizardUI {
-  // Prompts (async, blocking)
-  select<T>(opts: {
-    message: string;
-    options: SelectOption<T>[];
-    initialValue?: T;
-    maxItems?: number;
-  }): Promise<T | symbol>;
-
-  confirm(opts: {
-    message: string;
-    initialValue?: boolean;
-  }): Promise<boolean | symbol>;
-
-  text(opts: {
-    message: string;
-    placeholder?: string;
-    validate?: (value: string) => string | void;
-  }): Promise<string | symbol>;
-
-  groupMultiselect<T>(opts: GroupMultiselectOptions<T>): Promise<T[] | symbol>;
-
-  multiselect<T>(opts: MultiselectOptions<T>): Promise<T[] | symbol>;
-
   // Lifecycle messages
   intro(message: string): void;
   outro(message: string): void;
@@ -79,9 +38,6 @@ export interface WizardUI {
 
   // Spinner
   spinner(): SpinnerHandle;
-
-  // Cancel detection
-  isCancel(value: unknown): value is symbol;
 
   // Structured setup data (for TUI intro view)
   setSetupData(data: {

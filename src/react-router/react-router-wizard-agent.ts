@@ -28,7 +28,7 @@ export const REACT_ROUTER_AGENT_CONFIG: FrameworkConfig<ReactRouterContext> = {
     unsupportedVersionDocsUrl: 'https://posthog.com/docs/libraries/react',
     gatherContext: async (options: WizardOptions) => {
       const routerMode = await getReactRouterMode(options);
-      return { routerMode };
+      return routerMode ? { routerMode } : {};
     },
   },
 

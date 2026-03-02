@@ -1,6 +1,6 @@
 /**
  * OutroScreen — Summary after the agent run.
- * Reads store.outroData to render success, error, or cancel view.
+ * Reads store.session.outroData to render success, error, or cancel view.
  * Keeps the process alive until the user presses a key to exit.
  */
 
@@ -23,7 +23,7 @@ export const OutroScreen = ({ store }: OutroScreenProps) => {
     process.exit(0);
   });
 
-  const { outroData } = store;
+  const outroData = store.session.outroData;
 
   if (!outroData) {
     return (

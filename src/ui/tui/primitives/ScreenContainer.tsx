@@ -2,12 +2,16 @@
  * ScreenContainer — Renders TitleBar + routes between screens with transitions.
  * Takes a screens map and renders the one matching store.currentScreen.
  * Horizontal wipe plays on push (left) or pop (right).
+ *
+ * Each screen is wrapped in a ScreenErrorBoundary so that render crashes
+ * route to the outro screen with an error message instead of hanging.
  */
 
 import { Box, useStdout } from 'ink';
 import { useSyncExternalStore, type ReactNode } from 'react';
 import { TitleBar } from '../components/TitleBar.js';
 import { DissolveTransition } from './DissolveTransition.js';
+import { ScreenErrorBoundary } from './ScreenErrorBoundary.js';
 import type { WizardStore } from '../store.js';
 
 const MIN_WIDTH = 80;
@@ -42,7 +46,9 @@ export const ScreenContainer = ({ store, screens }: ScreenContainerProps) => {
           height={contentHeight}
           direction={direction}
         >
-          {activeScreen}
+          <ScreenErrorBoundary store={store}>
+            {activeScreen}
+          </ScreenErrorBoundary>
         </DissolveTransition>
       </Box>
     </Box>

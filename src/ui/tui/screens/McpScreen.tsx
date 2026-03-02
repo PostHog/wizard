@@ -1,7 +1,8 @@
 /**
  * McpScreen — MCP server installation flow.
- * Self-contained: detects supported clients, lets user pick, then installs.
- * Calls lower-level MCP functions directly — no store-driven prompts.
+ *
+ * Uses an McpInstaller service (passed via props) instead of
+ * importing business logic directly. Testable, no dynamic imports.
  */
 
 import { Box, Text } from 'ink';
@@ -10,91 +11,68 @@ import { useSyncExternalStore } from 'react';
 import type { WizardStore } from '../store.js';
 import { ConfirmationInput, PickerMenu } from '../primitives/index.js';
 import { Colors } from '../styles.js';
+import type { McpInstaller, McpClientInfo } from '../services/mcp-installer.js';
 
 interface McpScreenProps {
   store: WizardStore;
-}
-
-interface DetectedClient {
-  name: string;
-  install: (region?: string) => Promise<void>;
+  installer: McpInstaller;
 }
 
 type Phase = 'detecting' | 'ask' | 'pick' | 'installing' | 'done' | 'none';
 
-export const McpScreen = ({ store }: McpScreenProps) => {
+export const McpScreen = ({ store, installer }: McpScreenProps) => {
   useSyncExternalStore(
     (cb) => store.subscribe(cb),
     () => store.getSnapshot(),
   );
 
   const [phase, setPhase] = useState<Phase>('detecting');
-  const [clients, setClients] = useState<DetectedClient[]>([]);
+  const [clients, setClients] = useState<McpClientInfo[]>([]);
   const [installed, setInstalled] = useState<string[]>([]);
 
-  // Detect supported clients on mount
   useEffect(() => {
     void (async () => {
       try {
-        const { getSupportedClients } = await import(
-          '../../../steps/add-mcp-server-to-clients/index.js'
-        );
-        const supported = await getSupportedClients();
-        if (supported.length === 0) {
+        const detected = await installer.detectClients();
+        if (detected.length === 0) {
           setPhase('none');
+          setTimeout(() => store.advance(), 1500);
         } else {
-          const { ALL_FEATURE_VALUES } = await import(
-            '../../../steps/add-mcp-server-to-clients/defaults.js'
-          );
-          const features = [...ALL_FEATURE_VALUES];
-          setClients(
-            supported.map(
-              (c: {
-                name: string;
-                addServer: (...args: unknown[]) => Promise<void>;
-              }) => ({
-                name: c.name,
-                install: async (region?: string) => {
-                  await c.addServer(undefined, features, false, region);
-                },
-              }),
-            ),
-          );
+          setClients(detected);
           setPhase('ask');
         }
       } catch {
         setPhase('none');
+        setTimeout(() => store.advance(), 1500);
       }
     })();
-  }, []);
+  }, [installer]); // eslint-disable-line
 
   const handleConfirm = () => {
     if (clients.length === 1) {
-      // Only one client — install directly
-      void installClients(clients);
+      void doInstall(clients.map((c) => c.name));
     } else {
       setPhase('pick');
     }
   };
 
   const handleSkip = () => {
-    store.pushScreen('outro');
+    store.advance();
   };
 
-  const installClients = async (toInstall: DetectedClient[]) => {
+  const doInstall = async (names: string[]) => {
     setPhase('installing');
-    const names: string[] = [];
-    for (const client of toInstall) {
-      try {
-        await client.install(store.cloudRegion ?? undefined);
-        names.push(client.name);
-      } catch {
-        // Skip failed clients
-      }
+    try {
+      const result = await installer.install(
+        names,
+        store.session.cloudRegion ?? undefined,
+      );
+      setInstalled(result);
+    } catch {
+      setInstalled([]);
     }
-    setInstalled(names);
     setPhase('done');
-    setTimeout(() => store.pushScreen('outro'), 2000);
+    setTimeout(() => store.advance(), 2000);
   };
 
   return (
@@ -137,8 +115,7 @@ export const McpScreen = ({ store }: McpScreenProps) => {
             mode="multi"
             onSelect={(selected) => {
               const names = Array.isArray(selected) ? selected : [selected];
-              const toInstall = clients.filter((c) => names.includes(c.name));
-              void installClients(toInstall);
+              void doInstall(names);
             }}
           />
         )}
