@@ -2,16 +2,16 @@
 name: ink-tui-wizard
 description: >
   Build terminal user interfaces (TUIs) using Ink (React for CLIs) and @inkjs/ui
-  with a tabbed, step-based wizard pattern. Use when creating interactive CLI
+  with a reactive, session-driven wizard pattern. Use when creating interactive CLI
   installation wizards, setup flows, or multi-step terminal applications in
-  Node.js/TypeScript. Covers Ink components, Flexbox terminal layout, useInput
-  hooks, @inkjs/ui widgets, state management, progressive disclosure, and
-  graceful degradation across terminal environments.
+  Node.js/TypeScript. Covers reactive screen resolution, declarative flow pipelines,
+  overlay interrupts, session state management, Ink components, Flexbox terminal layout,
+  and graceful degradation across terminal environments.
 license: MIT
 compatibility: Requires Node.js 18+. Designed for Claude Code or similar coding agents.
 metadata:
   author: posthog
-  version: "0.1"
+  version: "0.2"
   domain: cli-tui
 ---
 
@@ -21,34 +21,56 @@ Build beautiful, interactive terminal wizard interfaces using Ink (React for CLI
 
 Ink is the dominant Node.js TUI framework — used by Claude Code (Anthropic), Gemini CLI
 (Google), GitHub Copilot CLI, Cloudflare Wrangler, Shopify CLI, Prisma, and many others.
-It has 35k+ GitHub stars.
 
 ## When to use this skill
 
 - Creating multi-step CLI installation or setup wizards
-- Building tabbed or pane-based terminal interfaces
+- Building reactive, session-driven terminal interfaces
 - Adding real-time progress, spinners, or status displays to CLI tools
 - Any Node.js/TypeScript CLI that needs more than sequential prompts
 
 ## Core architecture
 
-This skill follows the **Tabbed Wizard** pattern: a top-level tab bar for spatial
-awareness combined with guided content panels for each step. The architecture is
-standard React — components, hooks, state lifting — rendered to the terminal via Ink.
+This skill follows a **reactive session-driven** pattern: the rendered screen is a pure
+function of session state. Business logic sets state through store setters. The router
+derives which screen should be active. Nobody imperatively pushes screens around.
+
+See [references/ARCHITECTURE.md](references/ARCHITECTURE.md) for the full reactive
+architecture: session, router, store, screen resolution, overlays, and data flow.
+
+### Key concepts
+
+- **WizardSession** — single source of truth for all wizard decisions
+- **WizardRouter** — declarative flow pipelines with `isComplete` predicates per screen
+- **WizardStore** — EventEmitter with explicit setters that trigger React re-renders
+- **Screen registry** — factory function mapping screen names to components (App.tsx never changes)
+- **Services** — injected into screens via props (no dynamic imports in React components)
+- **Overlays** — interrupt stack for outage/error modals, orthogonal to flows
+
+### Adding a screen
+
+1. Create the component in `src/ui/tui/screens/`
+2. Add to `Screen` enum in `router.ts`
+3. Add a `FlowEntry` to the flow array with an `isComplete` predicate
+4. Register in `screen-registry.tsx`
+
+No other files change.
 
 ### Layout primitives layer
 
-The project has a set of reusable layout primitives in `src/ui/tui/primitives/` that
-replace raw Ink/`@inkjs/ui` usage. **Always use these instead of building from scratch.**
+The project has reusable layout primitives in `src/ui/tui/primitives/`.
+**Always use these instead of building from scratch.**
 
 Key primitives:
-- **ScreenContainer** — top-level shell, routes between screens with wipe transitions
+- **ScreenContainer** — top-level shell, routes between screens with wipe transitions, wraps each screen in ScreenErrorBoundary
+- **PromptLabel** — accent-colored `→` badge + message label. Used by all input primitives.
+- **PickerMenu** — single/multi select with `centered` prop support
+- **ConfirmationInput** — continue/cancel with arrow key toggle
+- **ProgressList** — task checklist with status icons, spinner on tally, LoadingBox when empty
 - **TabContainer** — self-contained tabbed interface with status bar
-- **PickerMenu** — single/multi select (custom, not `@inkjs/ui`)
-- **ConfirmationInput** — continue/cancel buttons (custom, not `@inkjs/ui`)
-- **ProgressList** — task checklist with status icons
 - **DissolveTransition** — horizontal wipe with split-flap texture
-- **CardLayout / SplitView** — alignment and two-pane layout
+- **SplitView** — 50/50 two-pane layout
+- **CardLayout** — centered content card
 - **LogViewer / LoadingBox** — log tail and spinner
 
 See [references/PRIMITIVES.md](references/PRIMITIVES.md) for the full API and usage
@@ -56,6 +78,16 @@ examples. Shared style constants (`Colors`, `Icons`, `HAlign`, `VAlign`) live in
 `src/ui/tui/styles.ts`.
 
 **Playground**: Run `pnpm try --playground` to see all primitives in action.
+
+### Enums everywhere
+
+All state comparisons use TypeScript enums — no string literals:
+
+- `Screen` — flow screen names (Intro, Setup, Auth, Run, Mcp, Outro, etc.)
+- `Overlay` — interrupt screen names (Outage)
+- `Flow` — named flow pipelines (Wizard, McpAdd, McpRemove)
+- `RunPhase` — lifecycle phase (Idle, Running, Completed, Error)
+- `OutroKind` — outro outcome (Success, Error, Cancel)
 
 ### Key dependencies
 
@@ -65,66 +97,54 @@ react                 # Peer dependency
 @inkjs/ui             # Official component library: Select, TextInput, Spinner,
                       # ProgressBar, ConfirmInput, MultiSelect, Badge,
                       # StatusMessage, Alert, OrderedList, UnorderedList
-                      # Includes ThemeProvider for customization
 figures               # Unicode/ASCII symbol fallbacks (cross-platform)
 ```
 
 **Do NOT use** the older standalone packages (`ink-text-input`, `ink-select-input`,
-`ink-spinner`). The `@inkjs/ui` package supersedes them with a unified, themeable API.
+`ink-spinner`). The `@inkjs/ui` package supersedes them.
 
 ### Project structure
 
 ```
-src/
-├── cli.tsx                 # Entry point, argument parsing
-├── app.tsx                 # Root <App /> component, tab state
-├── components/
-│   ├── TabBar.tsx          # Tab navigation bar
-│   ├── StatusBar.tsx       # Bottom help/status bar
-│   ├── StepIndicator.tsx   # Progress dots or checkmarks
-│   └── Panel.tsx           # Bordered content panel
-├── tabs/
-│   ├── SetupTab.tsx        # Framework/language selection
-│   ├── ConfigTab.tsx       # Configuration options
-│   ├── InstallTab.tsx      # Installation progress
-│   └── VerifyTab.tsx       # Post-install verification
-├── hooks/
-│   ├── useWizardState.ts   # Central wizard state management
-│   ├── useTerminalInfo.ts  # Terminal size, color support detection
-│   └── useKeyBindings.ts   # Global keyboard shortcut handler
-└── utils/
-    ├── detect-terminal.ts  # Terminal capability detection
-    └── logger.ts           # File-based debug logging (not stdout)
+src/ui/tui/
+├── App.tsx                    # Thin shell — calls screen registry factory
+├── store.ts                   # WizardStore: EventEmitter + session setters
+├── router.ts                  # WizardRouter: flow pipelines + overlay stack
+├── ink-ui.ts                  # InkUI: bridges getUI() calls to store setters
+├── start-tui.ts               # TUI startup: dark mode, store, renderer
+├── screen-registry.tsx         # Maps screen names to components + services
+├── styles.ts                  # Colors, Icons, alignment enums
+├── screens/
+│   ├── IntroScreen.tsx        # Detection → framework picker → region picker
+│   ├── SetupScreen.tsx        # Generic framework disambiguation
+│   ├── AuthScreen.tsx         # OAuth waiting state with login URL
+│   ├── RunScreen.tsx          # Split view: TipsCard + ProgressList, tabbed with logs
+│   ├── McpScreen.tsx          # MCP server installation via McpInstaller service
+│   ├── OutroScreen.tsx        # Success/error/cancel summary
+│   └── OutageScreen.tsx       # Service degradation overlay
+├── primitives/
+│   ├── ScreenContainer.tsx    # Screen routing + error boundary wrapper
+│   ├── ScreenErrorBoundary.tsx # Catches render crashes → error outro
+│   ├── PromptLabel.tsx        # → badge + accent label for input prompts
+│   ├── PickerMenu.tsx         # Single/multi select with centered support
+│   ├── ConfirmationInput.tsx  # Continue/cancel with arrow toggle
+│   ├── ProgressList.tsx       # Task checklist with spinner + LoadingBox
+│   ├── TabContainer.tsx       # Tabbed interface with status bar
+│   ├── SplitView.tsx          # 50/50 two-pane layout
+│   ├── DissolveTransition.tsx # Horizontal wipe animation
+│   ├── CardLayout.tsx         # Centered content card
+│   ├── LoadingBox.tsx         # Spinner with message
+│   └── LogViewer.tsx          # Log file tail viewer
+├── services/
+│   └── mcp-installer.ts      # McpInstaller interface + factory
+└── components/
+    └── TitleBar.tsx           # Top bar with version + feedback email
 ```
 
-## Step-by-step instructions
-
-### 1. Bootstrap the project
-
-```bash
-mkdir posthog-wizard && cd posthog-wizard
-npm init -y
-npm install ink react @inkjs/ui figures
-npm install -D typescript @types/react tsx
-```
-
-Use `tsx` for development (no Babel config needed):
-```bash
-npx tsx src/cli.tsx
-```
-
-Or scaffold with the official tool:
-```bash
-npx create-ink-app --typescript my-ink-cli
-```
-
-### 2. Understand Ink's rendering model
+## Ink rendering model
 
 Ink is `react-dom` but for terminals. It uses Yoga (Facebook's Flexbox engine) for layout.
-Every `<Box>` is a flex container (`display: flex` by default). All visible text MUST be
-inside `<Text>` — bare strings outside `<Text>` will throw.
-
-Key differences from browser React:
+Every `<Box>` is a flex container. All visible text MUST be inside `<Text>`.
 
 | Browser             | Ink                                            |
 | ------------------- | ---------------------------------------------- |
@@ -137,194 +157,21 @@ Key differences from browser React:
 | `display: block`    | `<Box flexDirection="column">`                 |
 | `display: flex`     | Default — every `<Box>` is already flex        |
 
-### 3. Build the root App component
+## Terminal compatibility
 
-The root component owns tab state and renders the three-zone layout:
-
-```tsx
-// app.tsx
-import React, { useState } from 'react';
-import { Box, Text, useApp, useInput, useStdout } from 'ink';
-
-const TABS = ['Setup', 'Config', 'Install', 'Verify'] as const;
-
-export const App = () => {
-  const { exit } = useApp();
-  const { stdout } = useStdout();
-  const [activeTab, setActiveTab] = useState(0);
-  const [completedTabs, setCompletedTabs] = useState<Set<number>>(new Set());
-
-  useInput((input, key) => {
-    if (key.leftArrow) setActiveTab(i => Math.max(0, i - 1));
-    if (key.rightArrow) setActiveTab(i => Math.min(TABS.length - 1, i + 1));
-    if (input === 'q') exit();
-  });
-
-  return (
-    <Box flexDirection="column" height={stdout.rows}>
-      {/* Tab bar */}
-      <Box gap={1} paddingX={1}>
-        {TABS.map((tab, i) => (
-          <Text
-            key={tab}
-            bold={i === activeTab}
-            color={completedTabs.has(i) ? 'green' : i === activeTab ? 'cyan' : 'gray'}
-          >
-            {completedTabs.has(i) ? '✓' : '○'} {tab}
-          </Text>
-        ))}
-      </Box>
-
-      {/* Divider */}
-      <Box paddingX={1}>
-        <Text dimColor>{'─'.repeat(Math.min(60, stdout.columns - 2))}</Text>
-      </Box>
-
-      {/* Active panel — fills remaining space */}
-      <Box flexDirection="column" flexGrow={1} paddingX={2} paddingY={1}>
-        {activeTab === 0 && <SetupTab />}
-        {activeTab === 1 && <ConfigTab />}
-        {activeTab === 2 && <InstallTab />}
-        {activeTab === 3 && <VerifyTab />}
-      </Box>
-
-      {/* Status bar */}
-      <Box paddingX={1} borderStyle="single" borderTop borderColor="gray"
-           borderBottom={false} borderLeft={false} borderRight={false}>
-        <Text dimColor>←/→ switch tabs · enter confirm · q quit</Text>
-      </Box>
-    </Box>
-  );
-};
-```
-
-### 4. Use @inkjs/ui components for tab content
-
-`@inkjs/ui` provides production-ready interactive components. See
-[references/INKJS-UI.md](references/INKJS-UI.md) for the full component catalog.
-
-```tsx
-// tabs/SetupTab.tsx
-import React from 'react';
-import { Box, Text } from 'ink';
-import { Select, StatusMessage } from '@inkjs/ui';
-
-const FRAMEWORKS = [
-  { label: 'Next.js', value: 'nextjs' },
-  { label: 'React (Vite)', value: 'react-vite' },
-  { label: 'Vue', value: 'vue' },
-  { label: 'Svelte', value: 'svelte' },
-  { label: 'Node.js (Express)', value: 'node-express' },
-];
-
-export const SetupTab = ({ onSelect }: { onSelect: (fw: string) => void }) => {
-  return (
-    <Box flexDirection="column" gap={1}>
-      <Text bold>Select your framework:</Text>
-      <Select options={FRAMEWORKS} onChange={onSelect} />
-      <StatusMessage variant="info">
-        PostHog supports all major frameworks
-      </StatusMessage>
-    </Box>
-  );
-};
-```
-
-### 5. Add installation progress with `<Static>`
-
-Use Ink's `<Static>` component for completed items that should not re-render,
-and live components below for in-progress work:
-
-```tsx
-import React, { useState, useEffect } from 'react';
-import { Box, Text, Static } from 'ink';
-import { Spinner, ProgressBar, StatusMessage } from '@inkjs/ui';
-
-const InstallTab = ({ config }) => {
-  const [completed, setCompleted] = useState([]);
-  const [current, setCurrent] = useState(null);
-  const [progress, setProgress] = useState(0);
-
-  useEffect(() => {
-    runInstallation(config, {
-      onStepStart: (step) => setCurrent(step),
-      onStepComplete: (step) => {
-        setCompleted(prev => [...prev, step]);
-        setCurrent(null);
-      },
-      onProgress: setProgress,
-    });
-  }, []);
-
-  return (
-    <Box flexDirection="column">
-      {/* Completed steps — rendered once, never re-rendered */}
-      <Static items={completed}>
-        {(step) => (
-          <Box key={step.id}>
-            <StatusMessage variant="success">{step.label}</StatusMessage>
-          </Box>
-        )}
-      </Static>
-
-      {/* Current step — live updates */}
-      {current && (
-        <Box gap={1}>
-          <Spinner label={current.label} />
-        </Box>
-      )}
-
-      {/* Progress bar */}
-      <Box width={40} marginTop={1}>
-        <ProgressBar value={progress} />
-      </Box>
-    </Box>
-  );
-};
-```
-
-### 6. Handle focus management
-
-Use Ink's built-in `useFocus` and `useFocusManager` for navigating between
-interactive elements within a tab:
-
-```tsx
-import { useFocus, useFocusManager } from 'ink';
-
-const FocusableItem = ({ label, onActivate }) => {
-  const { isFocused } = useFocus();
-  return (
-    <Text color={isFocused ? 'cyan' : undefined} bold={isFocused}>
-      {isFocused ? '>' : ' '} {label}
-    </Text>
-  );
-};
-
-// In parent, use useFocusManager to control focus programmatically:
-const { focusNext, focusPrevious } = useFocusManager();
-```
-
-## Common edge cases
-
-- **Small terminals**: Check `useStdout().stdout.columns` and `.rows`. If < 60 columns,
-  collapse tab labels to icons or abbreviations. If < 20 rows, switch to inline mode.
-- **Piped input**: Detect `!process.stdin.isTTY` and fall back to non-interactive defaults
-  or `@inquirer/prompts`.
-- **CI environments**: Detect `process.env.CI` and skip interactive elements entirely.
-- **Windows terminals**: Use the `figures` package for Unicode → ASCII fallbacks. Test in
-  PowerShell and CMD, not just Windows Terminal.
-- **SSH sessions**: Ink works over SSH but color support may vary. Respect `NO_COLOR`
-  and `FORCE_COLOR` environment variables.
-- **Ctrl+C handling**: Ink handles this via `useApp().exit()`. Ensure in-progress
-  installations have cleanup handlers via `useEffect` return functions.
-- **Text wrapping**: All text must be inside `<Text>`. Use `wrap="truncate"` on `<Text>`
-  (or `truncate-start`, `truncate-middle`) to control overflow behavior.
+- **Small terminals**: Check `useStdout().stdout.columns` and `.rows`
+- **Piped input**: Detect `!process.stdin.isTTY` and fall back to LoggingUI
+- **CI environments**: `--ci` flag uses LoggingUI (no TUI, no prompts)
+- **Dark mode**: `start-tui.ts` forces black background via ANSI escape codes
+- **True black text**: Use `color="#000000"` not `color="black"` (terminals render ANSI black as grey)
+- **Ctrl+C**: Ink handles via `useApp().exit()`
 
 ## Reference files
 
-- [references/PRIMITIVES.md](references/PRIMITIVES.md) — **TUI layout primitives**: API reference for ScreenContainer, TabContainer, PickerMenu, ConfirmationInput, DissolveTransition, ProgressList, and all other custom components. Start here when building screens.
+- [references/ARCHITECTURE.md](references/ARCHITECTURE.md) — **Reactive architecture**: session, router, store, screen resolution, overlays, data flow, enums, store setters, WizardUI bridge. **Read this first when working on screen flow or state.**
+- [references/PRIMITIVES.md](references/PRIMITIVES.md) — **TUI layout primitives**: API reference for ScreenContainer, PromptLabel, PickerMenu, ConfirmationInput, ProgressList, and all custom components.
 - [references/INK-API.md](references/INK-API.md) — Complete Ink component and hook API reference
 - [references/INKJS-UI.md](references/INKJS-UI.md) — @inkjs/ui component catalog with examples
 - [references/TERMINAL-COMPAT.md](references/TERMINAL-COMPAT.md) — Terminal detection and graceful degradation
-- [references/PATTERNS.md](references/PATTERNS.md) — Layout patterns, state management, and design recipes
+- [references/PATTERNS.md](references/PATTERNS.md) — Layout patterns and design recipes
 - [scripts/scaffold.sh](scripts/scaffold.sh) — Bootstrap a new Ink wizard project
