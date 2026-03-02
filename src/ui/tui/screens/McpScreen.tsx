@@ -31,8 +31,7 @@ enum Phase {
 }
 
 const markDone = (store: WizardStore) => {
-  store.session.runPhase = RunPhase.Done;
-  store.emitChange();
+  store.setRunPhase(RunPhase.Done);
 };
 
 export const McpScreen = ({ store, installer }: McpScreenProps) => {

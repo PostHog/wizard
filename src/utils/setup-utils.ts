@@ -63,13 +63,6 @@ export async function abort(message?: string, status?: number): Promise<never> {
   return process.exit(status ?? 1);
 }
 
-export function printWelcome(options: {
-  wizardName: string;
-  message?: string;
-}): void {
-  getUI().setSetupData({ wizardLabel: options.wizardName });
-}
-
 export function isInGitRepo() {
   try {
     childProcess.execSync('git rev-parse --is-inside-work-tree', {

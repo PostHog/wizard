@@ -20,6 +20,7 @@ import { type WizardSession, RunPhase } from '../../lib/wizard-session.js';
 export enum Screen {
   Intro = 'intro',
   Setup = 'setup',
+  Auth = 'auth',
   Run = 'run',
   Mcp = 'mcp',
   Outro = 'outro',
@@ -76,6 +77,10 @@ const FLOWS: Record<Flow, FlowEntry[]> = {
       screen: Screen.Setup,
       show: needsSetup,
       isComplete: (s) => !needsSetup(s),
+    },
+    {
+      screen: Screen.Auth,
+      isComplete: (s) => s.credentials !== null,
     },
     {
       screen: Screen.Run,

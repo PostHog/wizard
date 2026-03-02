@@ -7,21 +7,6 @@
 import { TaskStatus, type WizardUI, type SpinnerHandle } from './wizard-ui';
 
 export class LoggingUI implements WizardUI {
-  setSetupData(data: {
-    wizardLabel?: string;
-    detectedFramework?: string;
-    betaNotice?: string;
-    preRunNotice?: string;
-    disclosure?: string;
-  }): void {
-    if (data.wizardLabel) console.log(`┌  ${data.wizardLabel}`);
-    if (data.detectedFramework)
-      console.log(`✔  Detected integration: ${data.detectedFramework}`);
-    if (data.betaNotice) console.log(`│  ${data.betaNotice}`);
-    if (data.preRunNotice) console.log(`▲  ${data.preRunNotice}`);
-    if (data.disclosure) console.log(`│  ${data.disclosure}`);
-  }
-
   intro(message: string): void {
     console.log(`┌  ${message}`);
   }
@@ -74,6 +59,10 @@ export class LoggingUI implements WizardUI {
     console.log(`◇  ${message}`);
   }
 
+  setDetectedFramework(label: string): void {
+    console.log(`✔  Detected: ${label}`);
+  }
+
   setLoginUrl(url: string | null): void {
     if (url) {
       console.log(
@@ -97,6 +86,15 @@ export class LoggingUI implements WizardUI {
 
   startRun(): void {
     // No-op in CI mode
+  }
+
+  setCredentials(_credentials: {
+    accessToken: string;
+    projectApiKey: string;
+    host: string;
+    projectId: number;
+  }): void {
+    // No-op in CI mode — credentials are handled directly
   }
 
   syncTodos(

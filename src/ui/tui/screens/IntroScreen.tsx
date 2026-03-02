@@ -43,7 +43,6 @@ export const IntroScreen = ({ store }: IntroScreenProps) => {
         ]}
         onSelect={(value) => {
           const region = Array.isArray(value) ? value[0] : value;
-          store.session.cloudRegion = region;
           store.completeSetup(region);
         }}
       />

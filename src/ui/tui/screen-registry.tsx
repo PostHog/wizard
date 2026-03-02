@@ -16,6 +16,7 @@ import { Screen, Overlay, type ScreenName } from './router.js';
 import { OutageScreen } from './screens/OutageScreen.js';
 import { IntroScreen } from './screens/IntroScreen.js';
 import { SetupScreen } from './screens/SetupScreen.js';
+import { AuthScreen } from './screens/AuthScreen.js';
 import { RunScreen } from './screens/RunScreen.js';
 import { McpScreen } from './screens/McpScreen.js';
 import { OutroScreen } from './screens/OutroScreen.js';
@@ -43,6 +44,7 @@ export function createScreens(
     // Wizard flow
     [Screen.Intro]: <IntroScreen store={store} />,
     [Screen.Setup]: <SetupScreen store={store} />,
+    [Screen.Auth]: <AuthScreen store={store} />,
     [Screen.Run]: <RunScreen store={store} />,
     [Screen.Mcp]: <McpScreen store={store} installer={services.mcpInstaller} />,
     [Screen.Outro]: <OutroScreen store={store} />,

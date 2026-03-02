@@ -1,8 +1,9 @@
 /**
  * InkUI — Ink-backed implementation of WizardUI.
  *
- * No prompt methods — screens own all user input.
- * Navigation is reactive — InkUI sets session state, the router resolves the screen.
+ * Translates business logic calls into store setter calls.
+ * No direct session mutation. No imperative screen transitions.
+ * The router derives the active screen from session state.
  */
 
 import type { WizardUI, SpinnerHandle } from '../wizard-ui.js';
@@ -20,18 +21,6 @@ function stripAnsi(s: string): string {
 export class InkUI implements WizardUI {
   constructor(private store: WizardStore) {}
 
-  // --- Lifecycle ---
-
-  setSetupData(_data: {
-    wizardLabel?: string;
-    detectedFramework?: string;
-    betaNotice?: string;
-    preRunNotice?: string;
-    disclosure?: string;
-  }): void {
-    // IntroScreen owns intro display — no-op
-  }
-
   intro(message: string): void {
     this.store.pushStatus(message);
   }
@@ -46,28 +35,39 @@ export class InkUI implements WizardUI {
       });
     }
 
-    // Set phase to completed — the router will resolve to mcp or outro
+    // Signal that the main work is done — router resolves to mcp or outro
     if (this.store.session.runPhase === RunPhase.Running) {
-      this.store.session.runPhase = RunPhase.Completed;
+      this.store.setRunPhase(RunPhase.Completed);
     }
-    this.store.emitChange();
   }
 
-  setLoginUrl(_url: string | null): void {
-    // No-op — IntroScreen could display this if needed
+  setCredentials(credentials: {
+    accessToken: string;
+    projectApiKey: string;
+    host: string;
+    projectId: number;
+  }): void {
+    this.store.setCredentials(credentials);
+  }
+
+  setDetectedFramework(label: string): void {
+    this.store.setDetectedFramework(label);
+  }
+
+  setLoginUrl(url: string | null): void {
+    this.store.setLoginUrl(url);
   }
 
   showServiceStatus(data: {
     description: string;
     statusPageUrl: string;
   }): void {
-    this.store.session.serviceStatus = data;
+    this.store.setServiceStatus(data);
     this.store.pushOverlay(Overlay.Outage);
   }
 
   startRun(): void {
-    this.store.session.runPhase = RunPhase.Running;
-    this.store.emitChange();
+    this.store.setRunPhase(RunPhase.Running);
   }
 
   cancel(message: string): void {

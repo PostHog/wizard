@@ -94,7 +94,7 @@ export function getRailsProjectType(options: WizardOptions): RailsProjectType {
     try {
       const content = fs.readFileSync(appConfigPath, 'utf-8');
       if (content.includes('config.api_only = true')) {
-        getUI().setSetupData({ detectedFramework: 'Rails API-only' });
+        getUI().setDetectedFramework('Rails API-only');
         return RailsProjectType.API;
       }
     } catch {
@@ -102,7 +102,7 @@ export function getRailsProjectType(options: WizardOptions): RailsProjectType {
     }
   }
 
-  getUI().setSetupData({ detectedFramework: 'Rails' });
+  getUI().setDetectedFramework('Rails');
   return RailsProjectType.STANDARD;
 }
 

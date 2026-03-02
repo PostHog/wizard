@@ -167,20 +167,18 @@ export async function getFastAPIProjectType(
 
   // Check for fullstack pattern (templates)
   if (await hasTemplates({ installDir })) {
-    getUI().setSetupData({
-      detectedFramework: 'FastAPI fullstack with templates',
-    });
+    getUI().setDetectedFramework('FastAPI fullstack with templates');
     return FastAPIProjectType.FULLSTACK;
   }
 
   // Check for APIRouter (modular structure)
   if (await hasAPIRouter({ installDir })) {
-    getUI().setSetupData({ detectedFramework: 'FastAPI with APIRouter' });
+    getUI().setDetectedFramework('FastAPI with APIRouter');
     return FastAPIProjectType.ROUTER;
   }
 
   // Default to standard FastAPI
-  getUI().setSetupData({ detectedFramework: 'FastAPI' });
+  getUI().setDetectedFramework('FastAPI');
   return FastAPIProjectType.STANDARD;
 }
 

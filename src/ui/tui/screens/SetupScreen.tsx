@@ -43,7 +43,7 @@ export const SetupScreen = ({ store }: SetupScreenProps) => {
             installDir: store.session.installDir,
           });
           if (detected !== null) {
-            store.session.frameworkContext[q.key] = detected;
+            store.setFrameworkContext(q.key, detected);
           }
         } catch {
           // Detection failed — will ask the user
@@ -51,13 +51,8 @@ export const SetupScreen = ({ store }: SetupScreenProps) => {
       }
       setResolving(false);
 
-      // If all resolved, advance immediately
-      const unresolved = questions.filter(
-        (q: SetupQuestion) => !(q.key in store.session.frameworkContext),
-      );
-      if (unresolved.length === 0) {
-        store.emitChange();
-      }
+      // If all resolved, the router's isComplete predicate will
+      // resolve past this screen on the next render cycle.
     })();
   }, []);
 
@@ -102,7 +97,7 @@ export const SetupScreen = ({ store }: SetupScreenProps) => {
         }))}
         onSelect={(value) => {
           const selected = Array.isArray(value) ? value[0] : value;
-          store.session.frameworkContext[question.key] = selected;
+          store.setFrameworkContext(question.key, selected);
 
           // Check if more unresolved questions remain
           const remaining = unresolved.filter(
@@ -111,11 +106,11 @@ export const SetupScreen = ({ store }: SetupScreenProps) => {
               !(q.key in store.session.frameworkContext),
           );
 
-          if (remaining.length === 0) {
-            store.emitChange();
-          } else {
+          if (remaining.length > 0) {
             setCurrentIndex((i) => i + 1);
           }
+          // When no remaining questions, setFrameworkContext already
+          // triggered emitChange — router resolves past this screen.
         }}
       />
     </Box>

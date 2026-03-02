@@ -1,6 +1,5 @@
 import {
   DEFAULT_PACKAGE_INSTALLATION,
-  getWelcomeMessage,
   SPINNER_MESSAGE,
   type FrameworkConfig,
 } from './framework-config';
@@ -72,34 +71,19 @@ export async function runAgentWizard(
   }
 
   // Setup phase — informational only, no prompts
-  getUI().setSetupData({
-    wizardLabel: getWelcomeMessage(config.metadata.name),
-  });
-
-  if (config.metadata.beta) {
-    getUI().setSetupData({
-      betaNotice: `[BETA] The ${config.metadata.name} wizard is in beta. Questions or feedback? Email wizard@posthog.com`,
-    });
-  }
-
-  if (config.metadata.preRunNotice) {
-    getUI().setSetupData({ preRunNotice: config.metadata.preRunNotice });
-  }
+  // Beta notice, pre-run notice, and welcome label are all derivable
+  // from session.frameworkConfig — IntroScreen reads them directly.
 
   // Check Anthropic/Claude service status (pure — no prompt)
   const statusResult = await checkAnthropicStatus();
   if (statusResult.status === 'down' || statusResult.status === 'degraded') {
-    session.serviceStatus = {
+    getUI().showServiceStatus({
       description: statusResult.description,
       statusPageUrl: 'https://status.claude.com',
-    };
-    getUI().showServiceStatus(session.serviceStatus);
+    });
   }
 
-  // Disclosure about what happens next
-  getUI().setSetupData({
-    disclosure: `We're about to read your project using our LLM gateway.\n\n.env* file contents will not leave your machine.\n\nOther files will be read and edited to provide a fully-custom PostHog integration.`,
-  });
+  // Disclosure text is static — IntroScreen renders it directly.
 
   const typeScriptDetected = isUsingTypeScript({
     installDir: session.installDir,
@@ -145,6 +129,9 @@ export async function runAgentWizard(
   });
 
   session.credentials = { accessToken, projectApiKey, host, projectId: 0 };
+
+  // Notify TUI that credentials are available (resolves past AuthScreen)
+  getUI().setCredentials(session.credentials);
 
   // Framework context was already gathered by SetupScreen + detection
   const frameworkContext = session.frameworkContext;

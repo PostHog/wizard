@@ -1,10 +1,11 @@
 /**
  * WizardUI — abstraction layer for all user-facing operations.
  *
- * Business logic calls `getUI()` instead of importing Clack directly.
+ * Business logic calls `getUI()` instead of importing the store directly.
  * Implementations: InkUI (TUI), LoggingUI (CI).
  *
  * No prompt methods — the TUI screens own all user input.
+ * Session-mutating methods trigger reactive screen resolution in the TUI.
  */
 
 export enum TaskStatus {
@@ -20,12 +21,12 @@ export interface SpinnerHandle {
 }
 
 export interface WizardUI {
-  // Lifecycle messages
+  // ── Lifecycle messages ────────────────────────────────────────────
   intro(message: string): void;
   outro(message: string): void;
   cancel(message: string): void;
 
-  // Logging
+  // ── Logging ───────────────────────────────────────────────────────
   log: {
     info(message: string): void;
     warn(message: string): void;
@@ -35,30 +36,33 @@ export interface WizardUI {
   };
 
   note(message: string): void;
-
-  // Spinner
-  spinner(): SpinnerHandle;
-
-  // Structured setup data (for TUI intro view)
-  setSetupData(data: {
-    wizardLabel?: string;
-    detectedFramework?: string;
-    betaNotice?: string;
-    preRunNotice?: string;
-    disclosure?: string;
-  }): void;
-
-  // Status push (for TUI status panel)
   pushStatus(message: string): void;
 
-  // OAuth login URL display
-  setLoginUrl(url: string | null): void;
+  // ── Spinner ───────────────────────────────────────────────────────
+  spinner(): SpinnerHandle;
 
-  // Screen transitions (TUI only, no-op for console)
-  showServiceStatus(data: { description: string; statusPageUrl: string }): void;
+  // ── Session state (triggers reactive screen resolution in TUI) ────
+  /** Signal that the main work (agent run) has started. */
   startRun(): void;
 
-  // Todo tracking from SDK TodoWrite events
+  /** Store OAuth/API credentials. Resolves past AuthScreen in TUI. */
+  setCredentials(credentials: {
+    accessToken: string;
+    projectApiKey: string;
+    host: string;
+    projectId: number;
+  }): void;
+
+  /** Show service degradation (pushes outage overlay in TUI). */
+  showServiceStatus(data: { description: string; statusPageUrl: string }): void;
+
+  // ── Display state ──────────────────────────────────────────────────
+  /** Set the detected framework label (e.g., "Django with Wagtail CMS") */
+  setDetectedFramework(label: string): void;
+
+  setLoginUrl(url: string | null): void;
+
+  // ── Todo tracking from SDK TodoWrite events ───────────────────────
   syncTodos(
     todos: Array<{ content: string; status: string; activeForm?: string }>,
   ): void;

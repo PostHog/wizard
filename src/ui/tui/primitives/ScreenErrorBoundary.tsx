@@ -34,8 +34,7 @@ export class ScreenErrorBoundary extends Component<Props, State> {
       kind: OutroKind.Error,
       message: `A screen crashed: ${error.message}`,
     });
-    store.session.runPhase = RunPhase.Error;
-    store.emitChange();
+    store.setRunPhase(RunPhase.Error);
   }
 
   render(): ReactNode {

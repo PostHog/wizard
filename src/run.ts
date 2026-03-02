@@ -168,10 +168,9 @@ async function detectAndResolveIntegration(
     const detectedIntegration = await detectIntegration(session.installDir);
 
     if (detectedIntegration) {
-      getUI().setSetupData({
-        detectedFramework:
-          FRAMEWORK_REGISTRY[detectedIntegration].metadata.name,
-      });
+      getUI().setDetectedFramework(
+        FRAMEWORK_REGISTRY[detectedIntegration].metadata.name,
+      );
       return detectedIntegration;
     }
 

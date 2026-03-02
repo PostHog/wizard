@@ -5,6 +5,9 @@
  * Navigation is delegated to WizardRouter.
  * The active screen is derived from session state — not imperatively set.
  * Overlays (outage, etc.) are the only imperative navigation.
+ *
+ * All session mutations that affect screen resolution go through
+ * explicit setters so emitChange() is always called.
  */
 
 import { EventEmitter } from 'events';
@@ -12,6 +15,8 @@ import { TaskStatus } from '../wizard-ui.js';
 import {
   type WizardSession,
   type OutroData,
+  type CloudRegion,
+  RunPhase,
   buildSession,
 } from '../../lib/wizard-session.js';
 import {
@@ -22,9 +27,8 @@ import {
   Flow,
 } from './router.js';
 
-export { TaskStatus, Screen, Overlay, Flow };
-export type { ScreenName, OutroData, WizardSession };
-export type CloudRegion = 'us' | 'eu';
+export { TaskStatus, Screen, Overlay, Flow, RunPhase };
+export type { ScreenName, OutroData, WizardSession, CloudRegion };
 
 export interface TaskItem {
   label: string;
@@ -59,10 +63,60 @@ export class WizardStore extends EventEmitter {
     this.router = new WizardRouter(flow);
   }
 
+  // ── Session setters ─────────────────────────────────────────────
+  // Every setter that affects screen resolution calls emitChange().
+  // Business logic calls these instead of mutating session directly.
+
+  setCloudRegion(region: CloudRegion): void {
+    this.session.cloudRegion = region;
+    this.emitChange();
+  }
+
+  /** Also unblocks bin.ts via the setupComplete promise. */
   completeSetup(region: CloudRegion): void {
     this.session.cloudRegion = region;
     this._resolveSetup(region);
+    this.emitChange();
   }
+
+  setRunPhase(phase: RunPhase): void {
+    this.session.runPhase = phase;
+    this.emitChange();
+  }
+
+  setCredentials(credentials: WizardSession['credentials']): void {
+    this.session.credentials = credentials;
+    this.emitChange();
+  }
+
+  setDetectedFramework(label: string): void {
+    this.session.detectedFrameworkLabel = label;
+    this.emitChange();
+  }
+
+  setLoginUrl(url: string | null): void {
+    this.session.loginUrl = url;
+    this.emitChange();
+  }
+
+  setServiceStatus(
+    status: { description: string; statusPageUrl: string } | null,
+  ): void {
+    this.session.serviceStatus = status;
+    this.emitChange();
+  }
+
+  setOutroData(data: OutroData): void {
+    this.session.outroData = data;
+    this.emitChange();
+  }
+
+  setFrameworkContext(key: string, value: unknown): void {
+    this.session.frameworkContext[key] = value;
+    this.emitChange();
+  }
+
+  // ── Derived state ───────────────────────────────────────────────
 
   /**
    * The screen that should be rendered right now.
@@ -76,6 +130,8 @@ export class WizardStore extends EventEmitter {
   get lastNavDirection(): 'push' | 'pop' | null {
     return this.router.lastNavDirection;
   }
+
+  // ── Change notification ─────────────────────────────────────────
 
   private _version = 0;
 
@@ -93,12 +149,8 @@ export class WizardStore extends EventEmitter {
     this.emit('change');
   }
 
-  // ── Overlay navigation ────────────────────────────────────────────
+  // ── Overlay navigation ──────────────────────────────────────────
 
-  /**
-   * Push an overlay that interrupts the current flow.
-   * The flow resumes when the overlay is dismissed.
-   */
   pushOverlay(overlay: Overlay): void {
     this.router._setDirection('push');
     this.router.pushOverlay(overlay);
@@ -106,9 +158,6 @@ export class WizardStore extends EventEmitter {
     this.emit('change');
   }
 
-  /**
-   * Dismiss the topmost overlay. The flow screen underneath resumes.
-   */
   popOverlay(): void {
     this.router._setDirection('pop');
     this.router.popOverlay();
@@ -116,7 +165,7 @@ export class WizardStore extends EventEmitter {
     this.emit('change');
   }
 
-  // ── Agent state ───────────────────────────────────────────────────
+  // ── Agent observation state ─────────────────────────────────────
 
   pushStatus(message: string): void {
     this.statusMessages.push(message);
@@ -138,11 +187,6 @@ export class WizardStore extends EventEmitter {
     }
   }
 
-  /**
-   * Sync tasks from SDK TodoWrite tool_use blocks.
-   * Retains previously completed tasks that aren't in the new list
-   * (the agent resets its todo list on context compaction).
-   */
   syncTodos(
     todos: Array<{ content: string; status: string; activeForm?: string }>,
   ): void {
@@ -163,14 +207,7 @@ export class WizardStore extends EventEmitter {
     this.emitChange();
   }
 
-  // ── Outro ─────────────────────────────────────────────────────────
-
-  setOutroData(data: OutroData): void {
-    this.session.outroData = data;
-    this.emitChange();
-  }
-
-  // ── React integration ─────────────────────────────────────────────
+  // ── React integration ───────────────────────────────────────────
 
   subscribe(callback: () => void): () => void {
     this.on('change', callback);

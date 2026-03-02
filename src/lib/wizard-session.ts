@@ -62,6 +62,9 @@ export interface WizardSession {
   frameworkContext: Record<string, unknown>;
   typescript: boolean;
 
+  /** Human-readable label for the detected framework variant (e.g., "Django with Wagtail CMS") */
+  detectedFrameworkLabel: string | null;
+
   // From OAuth
   credentials: {
     accessToken: string;
@@ -72,6 +75,7 @@ export interface WizardSession {
 
   // Lifecycle
   runPhase: RunPhase;
+  loginUrl: string | null;
 
   // Runtime
   serviceStatus: { description: string; statusPageUrl: string } | null;
@@ -110,8 +114,10 @@ export function buildSession(args: {
     integration: args.integration ?? null,
     frameworkContext: {},
     typescript: false,
+    detectedFrameworkLabel: null,
 
     runPhase: RunPhase.Idle,
+    loginUrl: null,
     credentials: null,
     serviceStatus: null,
     outroData: null,
