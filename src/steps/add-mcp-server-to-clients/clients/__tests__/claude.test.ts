@@ -329,7 +329,6 @@ describe('ClaudeMCPClient', () => {
         'sse',
         undefined,
         undefined,
-        undefined,
       );
     });
 
@@ -341,7 +340,6 @@ describe('ClaudeMCPClient', () => {
       expect(getDefaultServerConfigMock).toHaveBeenCalledWith(
         undefined,
         'sse',
-        undefined,
         undefined,
         undefined,
       );
