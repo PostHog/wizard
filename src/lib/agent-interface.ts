@@ -16,6 +16,7 @@ import {
 import { getLlmGatewayUrlFromHost } from '../utils/urls';
 import { LINTING_TOOLS } from './safe-tools';
 import { createWizardToolsServer, WIZARD_TOOL_NAMES } from './wizard-tools';
+import { getWizardCommandments } from './commandments';
 import type { PackageManagerDetector } from './package-manager-detection';
 
 // Dynamic import cache for ESM module
@@ -554,6 +555,13 @@ export async function runAgent(
         settingSources: ['project'],
         // Explicitly enable required tools including Skill
         allowedTools,
+        systemPrompt: {
+          type: 'preset',
+          preset: 'claude_code',
+          // Append wizard-wide commandments (from YAML) rather than replacing
+          // the preset so we keep default Claude Code behaviors.
+          append: getWizardCommandments(),
+        },
         env: {
           ...process.env,
           // Prevent user's Anthropic API key from overriding the wizard's OAuth token
