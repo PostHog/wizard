@@ -22,13 +22,13 @@ export async function detectReactNativeVariant(
 
   if (packageJson && hasPackageInstalled('expo', packageJson)) {
     getUI().setDetectedFramework(
-      getReactNativeVariantName(ReactNativeVariant.EXPO),
+      `${getReactNativeVariantName(ReactNativeVariant.EXPO)} \u{1F4F1}`,
     );
     return ReactNativeVariant.EXPO;
   }
 
   getUI().setDetectedFramework(
-    getReactNativeVariantName(ReactNativeVariant.REACT_NATIVE),
+    `${getReactNativeVariantName(ReactNativeVariant.REACT_NATIVE)} \u{1F4F1}`,
   );
   return ReactNativeVariant.REACT_NATIVE;
 }

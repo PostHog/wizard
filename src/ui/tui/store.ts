@@ -89,6 +89,15 @@ export class WizardStore extends EventEmitter {
     this.emitChange();
   }
 
+  setFrameworkConfig(
+    integration: WizardSession['integration'],
+    config: WizardSession['frameworkConfig'],
+  ): void {
+    this.session.integration = integration;
+    this.session.frameworkConfig = config;
+    this.emitChange();
+  }
+
   setDetectedFramework(label: string): void {
     this.session.detectedFrameworkLabel = label;
     this.emitChange();

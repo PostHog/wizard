@@ -9,6 +9,7 @@ import {
   type PackageDotJson,
 } from '../utils/package-json';
 import { getPackageDotJson, tryGetPackageJson } from '../utils/setup-utils';
+import { getUI } from '../ui';
 import {
   getReactRouterMode,
   getReactRouterModeName,
@@ -28,7 +29,13 @@ export const REACT_ROUTER_AGENT_CONFIG: FrameworkConfig<ReactRouterContext> = {
     unsupportedVersionDocsUrl: 'https://posthog.com/docs/libraries/react',
     gatherContext: async (options: WizardOptions) => {
       const routerMode = await getReactRouterMode(options);
-      return routerMode ? { routerMode } : {};
+      if (routerMode) {
+        getUI().setDetectedFramework(
+          `React Router ${getReactRouterModeName(routerMode)}`,
+        );
+        return { routerMode };
+      }
+      return {};
     },
   },
 

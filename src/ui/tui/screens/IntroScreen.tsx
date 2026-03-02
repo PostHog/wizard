@@ -1,9 +1,8 @@
 /**
  * IntroScreen — Welcome + cloud region picker.
  *
- * Self-contained: owns the region selection via PickerMenu.
- * Writes to session.cloudRegion and calls store.completeSetup(region)
- * which unblocks bin.ts to start runWizard.
+ * Shows detected framework info and beta notices from session state.
+ * Calls store.completeSetup(region) which unblocks bin.ts to start runWizard.
  */
 
 import { Box, Text } from 'ink';
@@ -23,12 +22,36 @@ export const IntroScreen = ({ store }: IntroScreenProps) => {
     () => store.getSnapshot(),
   );
 
+  const { session } = store;
+  const config = session.frameworkConfig;
+  const frameworkLabel =
+    session.detectedFrameworkLabel ?? config?.metadata.name;
+
   return (
     <Box flexDirection="column" flexGrow={1}>
       <Box flexDirection="column" marginBottom={1}>
         <Text bold color={Colors.accent}>
           PostHog Setup Wizard
         </Text>
+
+        {frameworkLabel && (
+          <Text>
+            <Text color="green">{'\u2714'} </Text>
+            <Text>Detected: {frameworkLabel}</Text>
+          </Text>
+        )}
+
+        {config?.metadata.beta && (
+          <Text color="yellow">
+            [BETA] The {config.metadata.name} wizard is in beta. Questions or
+            feedback? Email wizard@posthog.com
+          </Text>
+        )}
+
+        {config?.metadata.preRunNotice && (
+          <Text color="yellow">{config.metadata.preRunNotice}</Text>
+        )}
+
         <Text dimColor>
           We'll use AI to analyze your project and integrate PostHog.
         </Text>

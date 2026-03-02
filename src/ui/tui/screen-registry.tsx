@@ -14,6 +14,7 @@ import type { WizardStore } from './store.js';
 import { Screen, Overlay, type ScreenName } from './router.js';
 
 import { OutageScreen } from './screens/OutageScreen.js';
+import { BootScreen } from './screens/BootScreen.js';
 import { IntroScreen } from './screens/IntroScreen.js';
 import { SetupScreen } from './screens/SetupScreen.js';
 import { AuthScreen } from './screens/AuthScreen.js';
@@ -42,6 +43,7 @@ export function createScreens(
     [Overlay.Outage]: <OutageScreen store={store} />,
 
     // Wizard flow
+    [Screen.Boot]: <BootScreen store={store} />,
     [Screen.Intro]: <IntroScreen store={store} />,
     [Screen.Setup]: <SetupScreen store={store} />,
     [Screen.Auth]: <AuthScreen store={store} />,

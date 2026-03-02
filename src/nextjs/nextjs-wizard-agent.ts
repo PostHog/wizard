@@ -9,6 +9,7 @@ import {
   type PackageDotJson,
 } from '../utils/package-json';
 import { getPackageDotJson, tryGetPackageJson } from '../utils/setup-utils';
+import { getUI } from '../ui';
 import {
   getNextJsRouter,
   getNextJsVersionBucket,
@@ -28,8 +29,15 @@ export const NEXTJS_AGENT_CONFIG: FrameworkConfig<NextjsContext> = {
     unsupportedVersionDocsUrl: 'https://posthog.com/docs/libraries/next-js',
     gatherContext: async (options: WizardOptions) => {
       const router = await getNextJsRouter(options);
-      // Return detected value or omit key (null = unresolved, SetupScreen asks)
-      return router ? { router } : {};
+      if (router) {
+        const emoji =
+          router === NextJsRouter.APP_ROUTER ? '\u{1F4F1}' : '\u{1F4C3}';
+        getUI().setDetectedFramework(
+          `Next.js ${getNextJsRouterName(router)} ${emoji}`,
+        );
+        return { router };
+      }
+      return {};
     },
     setup: {
       questions: [

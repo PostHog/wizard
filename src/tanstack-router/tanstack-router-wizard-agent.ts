@@ -9,6 +9,7 @@ import {
   type PackageDotJson,
 } from '../utils/package-json';
 import { getPackageDotJson, tryGetPackageJson } from '../utils/setup-utils';
+import { getUI } from '../ui';
 import {
   getTanStackRouterMode,
   getTanStackRouterModeName,
@@ -28,7 +29,13 @@ export const TANSTACK_ROUTER_AGENT_CONFIG: FrameworkConfig<TanStackRouterContext
       docsUrl: 'https://posthog.com/docs/libraries/react',
       gatherContext: async (options: WizardOptions) => {
         const routerMode = await getTanStackRouterMode(options);
-        return routerMode ? { routerMode } : {};
+        if (routerMode) {
+          getUI().setDetectedFramework(
+            `TanStack Router ${getTanStackRouterModeName(routerMode)}`,
+          );
+          return { routerMode };
+        }
+        return {};
       },
     },
 

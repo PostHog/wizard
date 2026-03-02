@@ -78,9 +78,11 @@ export async function runWizard(argv: Args, session?: WizardSession) {
   const config = FRAMEWORK_REGISTRY[integration];
   session.frameworkConfig = config;
 
-  // Run auto-detection for gatherContext if the framework has it
-  // (SetupScreen handles disambiguation for unresolved questions)
-  if (config.metadata.gatherContext) {
+  // Run gatherContext if the framework has it and it hasn't already run
+  // (bin.ts runs it early so IntroScreen can show the friendly label)
+  const contextAlreadyGathered =
+    Object.keys(session.frameworkContext).length > 0;
+  if (config.metadata.gatherContext && !contextAlreadyGathered) {
     try {
       const context = await config.metadata.gatherContext({
         installDir: session.installDir,
@@ -92,7 +94,6 @@ export async function runWizard(argv: Args, session?: WizardSession) {
         ci: session.ci,
         menu: session.menu,
       });
-      // Merge detected context (don't overwrite CLI-provided values)
       for (const [key, value] of Object.entries(context)) {
         if (!(key in session.frameworkContext)) {
           session.frameworkContext[key] = value;
@@ -140,7 +141,7 @@ export async function runWizard(argv: Args, session?: WizardSession) {
 
 const DETECTION_TIMEOUT_MS = 5000;
 
-async function detectIntegration(
+export async function detectIntegration(
   installDir: string,
 ): Promise<Integration | undefined> {
   for (const integration of Object.values(Integration)) {

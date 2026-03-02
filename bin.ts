@@ -216,6 +216,50 @@ yargs(hideBin(process.argv))
             });
             tui.store.session = session;
 
+            // Detect framework while BootScreen is showing.
+            // Detection + gatherContext run before IntroScreen appears,
+            // so IntroScreen has the friendly label and config available.
+            const { FRAMEWORK_REGISTRY } = await import(
+              './src/lib/registry.js'
+            );
+            const { detectIntegration } = await import('./src/run.js');
+            const installDir = session.installDir ?? process.cwd();
+            const detectedIntegration = await detectIntegration(installDir);
+
+            if (detectedIntegration) {
+              const config = FRAMEWORK_REGISTRY[detectedIntegration];
+
+              // Run gatherContext for the friendly variant label
+              if (config.metadata.gatherContext) {
+                try {
+                  const context = await config.metadata.gatherContext({
+                    installDir,
+                    debug: session.debug,
+                    forceInstall: session.forceInstall,
+                    default: false,
+                    signup: session.signup,
+                    localMcp: session.localMcp,
+                    ci: session.ci,
+                    menu: session.menu,
+                  });
+                  for (const [key, value] of Object.entries(context)) {
+                    if (!(key in session.frameworkContext)) {
+                      tui.store.setFrameworkContext(key, value);
+                    }
+                  }
+                } catch {
+                  // Detection failed — will show generic name
+                }
+              }
+
+              // Set config last — this is what resolves past BootScreen
+              tui.store.setFrameworkConfig(detectedIntegration, config);
+
+              if (!session.detectedFrameworkLabel) {
+                tui.store.setDetectedFramework(config.metadata.name);
+              }
+            }
+
             // Wait for IntroScreen to collect the cloud region
             const region = await tui.waitForSetup();
             session.cloudRegion = region;
