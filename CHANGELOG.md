@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.36.1](https://github.com/PostHog/wizard/compare/v1.36.0...v1.36.1) (2026-03-03)
+
+
+### Bug Fixes
+
+* remove region selection from MCP setup ([#308](https://github.com/PostHog/wizard/issues/308)) ([776a6d9](https://github.com/PostHog/wizard/commit/776a6d913459ab898b313e939d1f0341f18904f5))
+
 ## [1.36.0](https://github.com/PostHog/wizard/compare/v1.35.2...v1.36.0) (2026-03-03)
 
 
