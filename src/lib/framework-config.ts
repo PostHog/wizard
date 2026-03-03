@@ -74,7 +74,9 @@ export interface FrameworkDetection {
   getInstalledVersion?: (options: WizardOptions) => Promise<string | undefined>;
 
   /** Detect whether this framework is present in the project. */
-  detect: (options: Pick<WizardOptions, 'installDir'>) => Promise<boolean>;
+  detect: (
+    options: Pick<WizardOptions, 'installDir' | 'workspaceRootDir'>,
+  ) => Promise<boolean>;
 
   /** Detect the project's package manager(s). Used by the in-process MCP tool. */
   detectPackageManager: PackageManagerDetector;

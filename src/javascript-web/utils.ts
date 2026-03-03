@@ -21,6 +21,8 @@ export const FRAMEWORK_PACKAGES = [
   'nuxt',
   'vue',
   'react-router',
+  '@remix-run/react',
+  '@remix-run/node',
   '@tanstack/react-start',
   '@tanstack/react-router',
   'react-native',

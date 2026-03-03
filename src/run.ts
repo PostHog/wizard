@@ -145,7 +145,7 @@ export async function runWizard(argv: Args) {
 const DETECTION_TIMEOUT_MS = 5000;
 
 export async function detectIntegration(
-  options: Pick<WizardOptions, 'installDir'>,
+  options: Pick<WizardOptions, 'installDir' | 'workspaceRootDir'>,
 ): Promise<Integration | undefined> {
   for (const integration of Object.values(Integration)) {
     const config = FRAMEWORK_REGISTRY[integration];

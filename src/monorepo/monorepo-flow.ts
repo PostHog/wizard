@@ -71,7 +71,10 @@ export async function detectWorkspaceProjects(
 
   const results = await Promise.all(
     workspace.memberDirs.map(async (memberDir) => {
-      const integration = await detectIntegration({ installDir: memberDir });
+      const integration = await detectIntegration({
+        installDir: memberDir,
+        workspaceRootDir: workspace.rootDir,
+      });
       if (!integration) return null;
 
       // Filter out library packages for generic language-level integrations
@@ -161,6 +164,7 @@ export async function runMonorepoFlow(
     const projectOptions: WizardOptions = {
       ...options,
       installDir: project.dir,
+      workspaceRootDir: options.installDir,
       cloudRegion: sharedSetup.cloudRegion,
     };
 
@@ -344,6 +348,7 @@ async function runMonorepoSequential(
     const projectOptions: WizardOptions = {
       ...options,
       installDir: project.dir,
+      workspaceRootDir: options.installDir,
       cloudRegion: sharedSetup.cloudRegion,
     };
 

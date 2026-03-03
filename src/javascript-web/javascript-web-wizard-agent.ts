@@ -67,7 +67,13 @@ export const JAVASCRIPT_WEB_AGENT_CONFIG: FrameworkConfig<JavaScriptContext> = {
 
       const hasBrowserField = 'browser' in packageJson;
 
-      return hasHtmlEntry || hasBrowserField;
+      // Known browser frameworks without dedicated integrations
+      const BROWSER_FRAMEWORK_PACKAGES = ['gatsby'];
+      const hasBrowserFramework = BROWSER_FRAMEWORK_PACKAGES.some((pkg) =>
+        hasPackageInstalled(pkg, packageJson),
+      );
+
+      return hasHtmlEntry || hasBrowserField || hasBrowserFramework;
     },
   },
 
