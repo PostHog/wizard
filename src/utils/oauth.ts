@@ -5,7 +5,7 @@ import chalk from 'chalk';
 import opn from 'opn';
 import { z } from 'zod';
 import clack from './clack';
-import { ISSUES_URL, OAUTH_PORT } from '../lib/constants';
+import { ISSUES_URL, OAUTH_PORT, WIZARD_USER_AGENT } from '../lib/constants';
 import { abort } from './clack-utils';
 import { analytics } from './analytics';
 import type { CloudRegion } from './types';
@@ -187,6 +187,7 @@ async function exchangeCodeForToken(
     {
       headers: {
         'Content-Type': 'application/json',
+        'User-Agent': WIZARD_USER_AGENT,
       },
     },
   );

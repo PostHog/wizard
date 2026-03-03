@@ -579,7 +579,7 @@ export function isUsingTypeScript({
  * @returns project data (token, url)
  */
 export async function getOrAskForProjectData(
-  _options: Pick<WizardOptions, 'signup' | 'ci' | 'apiKey'> & {
+  _options: Pick<WizardOptions, 'signup' | 'ci' | 'apiKey' | 'projectId'> & {
     cloudRegion: CloudRegion;
   },
 ): Promise<{
@@ -595,10 +595,17 @@ export async function getOrAskForProjectData(
     const host = getHostFromRegion(_options.cloudRegion);
     clack.log.info('Using provided API key (CI mode - OAuth bypassed)');
 
-    const projectData = await fetchProjectDataWithApiKey(
-      _options.apiKey,
-      _options.cloudRegion,
-    );
+    const projectData =
+      _options.projectId != null
+        ? await fetchProjectDataById(
+            _options.apiKey,
+            _options.projectId,
+            _options.cloudRegion,
+          )
+        : await fetchProjectDataWithApiKey(
+            _options.apiKey,
+            _options.cloudRegion,
+          );
 
     return {
       host,
@@ -640,7 +647,24 @@ ${chalk.cyan(`${cloudUrl}/settings/project#variables`)}`);
 }
 
 /**
- * Fetch project data using a personal API key (for CI mode)
+ * Fetch project data for a specific project ID (for CI mode with --project-id).
+ */
+async function fetchProjectDataById(
+  apiKey: string,
+  projectId: number,
+  region: CloudRegion,
+): Promise<{ api_token: string; id: number }> {
+  const cloudUrl = getCloudUrlFromRegion(region);
+  const projectData = await fetchProjectData(apiKey, projectId, cloudUrl);
+  return {
+    api_token: projectData.api_token,
+    id: projectData.id,
+  };
+}
+
+/**
+ * Fetch project data using a personal API key (for CI mode).
+ * Uses the default project from /api/users/@me/ (user's current team).
  */
 async function fetchProjectDataWithApiKey(
   apiKey: string,
@@ -656,11 +680,18 @@ async function fetchProjectDataWithApiKey(
     );
   }
 
-  const projectData = await fetchProjectData(apiKey, projectId, cloudUrl);
-  return {
-    api_token: projectData.api_token,
-    id: projectId,
-  };
+  try {
+    const projectData = await fetchProjectData(apiKey, projectId, cloudUrl);
+    return {
+      api_token: projectData.api_token,
+      id: projectId,
+    };
+  } catch (error) {
+    throw new Error(
+      `Failed to fetch project data for project ${projectId} (resolved from your user's last selected project in the PostHog app). This can happen if your API key is scoped to a different project or organization.\n\nTry passing --project-id or setting the POSTHOG_WIZARD_PROJECT_ID environment variable explicitly.`,
+      { cause: error },
+    );
+  }
 }
 
 async function askForWizardLogin(options: {

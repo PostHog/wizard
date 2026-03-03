@@ -24,6 +24,8 @@ export enum Integration {
   // Language fallbacks
   python = 'python',
   ruby = 'ruby',
+  javascriptNode = 'javascript_node',
+  javascript_web = 'javascript_web',
 }
 export interface Args {
   debug: boolean;
@@ -55,3 +57,6 @@ export const OAUTH_PORT = 8239;
 
 export const WIZARD_INTERACTION_EVENT_NAME = 'wizard interaction';
 export const WIZARD_REMARK_EVENT_NAME = 'wizard remark';
+
+import { VERSION } from './version';
+export const WIZARD_USER_AGENT = `posthog/wizard; version: ${VERSION}`;
