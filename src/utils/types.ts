@@ -27,11 +27,6 @@ export type WizardOptions = {
   installDir: string;
 
   /**
-   * The cloud region to use.
-   */
-  cloudRegion?: CloudRegion;
-
-  /**
    * Whether to select the default option for all questions automatically.
    */
   default: boolean;

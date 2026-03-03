@@ -44,11 +44,6 @@ yargs(hideBin(process.argv))
       describe: 'Enable verbose logging\nenv: POSTHOG_WIZARD_DEBUG',
       type: 'boolean',
     },
-    region: {
-      describe: 'PostHog cloud region\nenv: POSTHOG_WIZARD_REGION',
-      choices: ['us', 'eu'],
-      type: 'string',
-    },
     default: {
       default: true,
       describe:
@@ -132,12 +127,6 @@ yargs(hideBin(process.argv))
 
       // CI mode validation and TTY check
       if (options.ci) {
-        // Validate required CI flags
-        if (!options.region) {
-          clack.intro(chalk.inverse(`PostHog Wizard`));
-          clack.log.error('CI mode requires --region (us or eu)');
-          process.exit(1);
-        }
         if (!options.apiKey) {
           clack.intro(chalk.inverse(`PostHog Wizard`));
           clack.log.error(
@@ -160,7 +149,7 @@ yargs(hideBin(process.argv))
             'It appears you are running in a non-interactive environment.\n' +
             'Please run the wizard in an interactive terminal.\n\n' +
             'For CI/CD environments, use --ci mode:\n' +
-            '  npx @posthog/wizard --ci --region us --api-key phx_xxx',
+            '  npx @posthog/wizard --ci --api-key phx_xxx --install-dir .',
         );
         process.exit(1);
       }

@@ -8,7 +8,6 @@ import type { WizardOptions } from '../utils/types';
 import {
   abort,
   askForAIConsent,
-  askForCloudRegion,
   confirmContinueIfNoOrDirtyGitRepo,
   ensurePackageIsInstalled,
   getOrAskForProjectData,
@@ -107,7 +106,6 @@ export async function runAgentWizard(
     );
   }
 
-  const cloudRegion = options.cloudRegion ?? (await askForCloudRegion());
   const typeScriptDetected = isUsingTypeScript(options);
 
   await confirmContinueIfNoOrDirtyGitRepo(options);
@@ -143,11 +141,8 @@ export async function runAgentWizard(
   });
 
   // Get PostHog credentials
-  const { projectApiKey, host, accessToken, projectId } =
-    await getOrAskForProjectData({
-      ...options,
-      cloudRegion,
-    });
+  const { projectApiKey, host, accessToken, projectId, cloudRegion } =
+    await getOrAskForProjectData(options);
 
   // Gather framework-specific context (e.g., Next.js router, React Native platform)
   const frameworkContext = config.metadata.gatherContext
