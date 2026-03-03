@@ -2,7 +2,6 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as jsonc from 'jsonc-parser';
 import { getDefaultServerConfig } from './defaults';
-import type { CloudRegion } from '../../utils/types';
 
 export type MCPServerConfig = Record<string, unknown>;
 
@@ -15,7 +14,6 @@ export abstract class MCPClient {
     apiKey?: string,
     selectedFeatures?: string[],
     local?: boolean,
-    region?: CloudRegion,
   ): Promise<{ success: boolean }>;
   abstract removeServer(local?: boolean): Promise<{ success: boolean }>;
   abstract isClientSupported(): Promise<boolean>;
@@ -37,15 +35,8 @@ export abstract class DefaultMCPClient extends MCPClient {
     type: 'sse' | 'streamable-http',
     selectedFeatures?: string[],
     local?: boolean,
-    region?: CloudRegion,
   ): MCPServerConfig {
-    return getDefaultServerConfig(
-      apiKey,
-      type,
-      selectedFeatures,
-      local,
-      region,
-    );
+    return getDefaultServerConfig(apiKey, type, selectedFeatures, local);
   }
 
   async isServerInstalled(local?: boolean): Promise<boolean> {
@@ -73,9 +64,8 @@ export abstract class DefaultMCPClient extends MCPClient {
     apiKey?: string,
     selectedFeatures?: string[],
     local?: boolean,
-    region?: CloudRegion,
   ): Promise<{ success: boolean }> {
-    return this._addServerType(apiKey, 'sse', selectedFeatures, local, region);
+    return this._addServerType(apiKey, 'sse', selectedFeatures, local);
   }
 
   async _addServerType(
@@ -83,7 +73,6 @@ export abstract class DefaultMCPClient extends MCPClient {
     type: 'sse' | 'streamable-http',
     selectedFeatures?: string[],
     local?: boolean,
-    region?: CloudRegion,
   ): Promise<{ success: boolean }> {
     try {
       const configPath = await this.getConfigPath();
@@ -105,7 +94,6 @@ export abstract class DefaultMCPClient extends MCPClient {
         type,
         selectedFeatures,
         local,
-        region,
       );
       const typedConfig = existingConfig as Record<string, any>;
       if (!typedConfig[serverPropertyName]) {

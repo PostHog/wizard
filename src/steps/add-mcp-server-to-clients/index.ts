@@ -3,11 +3,10 @@ import { traceStep } from '../../telemetry';
 import { analytics } from '../../utils/analytics';
 import clack from '../../utils/clack';
 import chalk from 'chalk';
-import { abortIfCancelled, askForCloudRegion } from '../../utils/clack-utils';
+import { abortIfCancelled } from '../../utils/clack-utils';
 import { MCPClient } from './MCPClient';
 import { CursorMCPClient } from './clients/cursor';
 import { ClaudeMCPClient } from './clients/claude';
-import type { CloudRegion } from '../../utils/types';
 import { ClaudeCodeMCPClient } from './clients/claude-code';
 import { VisualStudioCodeClient } from './clients/visual-studio-code';
 import { ZedClient } from './clients/zed';
@@ -45,13 +44,11 @@ export const getSupportedClients = async (): Promise<MCPClient[]> => {
 
 export const addMCPServerToClientsStep = async ({
   integration,
-  cloudRegion,
   askPermission = true,
   local = false,
   ci = false,
 }: {
   integration?: Integration;
-  cloudRegion?: CloudRegion;
   askPermission?: boolean;
   local?: boolean;
   ci?: boolean;
@@ -61,8 +58,6 @@ export const addMCPServerToClientsStep = async ({
     clack.log.info('Skipping MCP installation (CI mode)');
     return [];
   }
-
-  const region = cloudRegion ?? (await askForCloudRegion());
 
   const hasPermission = askPermission
     ? await abortIfCancelled(
@@ -171,7 +166,6 @@ export const addMCPServerToClientsStep = async ({
       undefined, // OAuth mode - no API key needed
       selectedFeatures,
       local,
-      region,
     );
   });
 
@@ -266,10 +260,9 @@ export const addMCPServer = async (
   personalApiKey?: string,
   selectedFeatures?: string[],
   local?: boolean,
-  region?: CloudRegion,
 ): Promise<void> => {
   for (const client of clients) {
-    await client.addServer(personalApiKey, selectedFeatures, local, region);
+    await client.addServer(personalApiKey, selectedFeatures, local);
   }
 };
 

@@ -2,12 +2,6 @@ import { KEYS } from './index';
 import type { WizardStep } from './framework-test-types';
 
 export const DEFAULT_WIZARD_STEPS: WizardStep[] = [
-  {
-    name: 'region',
-    waitFor: 'Select your PostHog Cloud region',
-    response: [KEYS.ENTER],
-    responseWaitFor: 'US',
-  },
   // {
   //   name: 'uncommitted',
   //   waitFor: 'You have uncommitted or untracked files in your repo:',
