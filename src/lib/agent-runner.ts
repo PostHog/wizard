@@ -95,15 +95,10 @@ export async function runSharedSetup(
     );
   }
 
-  const cloudRegion = options.cloudRegion ?? (await askForCloudRegion());
-
   await confirmContinueIfNoOrDirtyGitRepo(options);
 
-  const { projectApiKey, host, accessToken, projectId } =
-    await getOrAskForProjectData({
-      ...options,
-      cloudRegion,
-    });
+  const { projectApiKey, host, accessToken, projectId, cloudRegion } =
+    await getOrAskForProjectData(options);
 
   return { cloudRegion, projectApiKey, host, accessToken, projectId };
 }
@@ -322,7 +317,6 @@ export async function runAgentWizard(
 
   // Add MCP server to clients
   await addMCPServerToClientsStep({
-    cloudRegion,
     integration: config.metadata.integration,
     ci: options.ci,
   });
@@ -463,55 +457,6 @@ Please report this error to: ${chalk.cyan('wizard@posthog.com')}`;
       }`,
     );
   }
-
-  // Add MCP server to clients
-  await addMCPServerToClientsStep({
-    integration: config.metadata.integration,
-    ci: options.ci,
-  });
-
-  // Build outro message
-  const continueUrl = options.signup
-    ? `${getCloudUrlFromRegion(cloudRegion)}/products?source=wizard`
-    : undefined;
-
-  const changes = [
-    ...config.ui.getOutroChanges(frameworkContext),
-    Object.keys(envVars).length > 0
-      ? `Added environment variables to .env file`
-      : '',
-    uploadedEnvVars.length > 0
-      ? `Uploaded environment variables to your hosting provider`
-      : '',
-  ].filter(Boolean);
-
-  const nextSteps = [
-    ...config.ui.getOutroNextSteps(frameworkContext),
-    uploadedEnvVars.length === 0 && config.environment.uploadToHosting
-      ? `Upload your Project API key to your hosting provider`
-      : '',
-  ].filter(Boolean);
-
-  const outroMessage = `
-${chalk.green('Successfully installed PostHog!')}
-
-${chalk.cyan('What the agent did:')}
-${changes.map((change) => `• ${change}`).join('\n')}
-
-${chalk.yellow('Next steps:')}
-${nextSteps.map((step) => `• ${step}`).join('\n')}
-
-Learn more: ${chalk.cyan(config.metadata.docsUrl)}
-${continueUrl ? `\nContinue onboarding: ${chalk.cyan(continueUrl)}\n` : ``}
-${chalk.dim(
-  'Note: This wizard uses an LLM agent to analyze and modify your project. Please review the changes made.',
-)}
-
-${chalk.dim(`How did this work for you? Drop us a line: wizard@posthog.com`)}`;
-
-  clack.outro(outroMessage);
-
-  await analytics.shutdown('success');
 }
 
 /**

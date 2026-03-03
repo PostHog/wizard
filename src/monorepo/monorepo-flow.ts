@@ -165,7 +165,6 @@ export async function runMonorepoFlow(
       ...options,
       installDir: project.dir,
       workspaceRootDir: options.installDir,
-      cloudRegion: sharedSetup.cloudRegion,
     };
 
     clack.log.step(
@@ -349,7 +348,6 @@ async function runMonorepoSequential(
       ...options,
       installDir: project.dir,
       workspaceRootDir: options.installDir,
-      cloudRegion: sharedSetup.cloudRegion,
     };
 
     const config = FRAMEWORK_REGISTRY[project.integration];
@@ -426,7 +424,6 @@ async function runPostFlight(
 
   // Add MCP server to clients once (integration is only used for analytics)
   await addMCPServerToClientsStep({
-    cloudRegion: sharedSetup.cloudRegion,
     integration: successfulResults[0].project.integration,
     ci: options.ci,
   });
