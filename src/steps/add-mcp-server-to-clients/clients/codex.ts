@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { execSync, spawnSync } from 'node:child_process';
 
 import { DefaultMCPClient } from '../MCPClient';
-import { DefaultMCPClientConfig, getDefaultServerConfig } from '../defaults';
+import { buildMCPUrl, DefaultMCPClientConfig } from '../defaults';
 
 import { analytics } from '../../../utils/analytics';
 
@@ -57,27 +57,18 @@ export class CodexMCPClient extends DefaultMCPClient {
   }
 
   addServer(
-    apiKey: string,
+    apiKey?: string,
     selectedFeatures?: string[],
     local?: boolean,
   ): Promise<{ success: boolean }> {
-    const config = getDefaultServerConfig(
-      apiKey,
-      'sse',
-      selectedFeatures,
-      local,
-    );
     const serverName = local ? 'posthog-local' : 'posthog';
+    const url = buildMCPUrl('streamable-http', selectedFeatures, local);
 
-    const args = ['mcp', 'add', serverName];
+    const args = ['mcp', 'add', '--transport', 'http', serverName, url];
 
-    if (config.env) {
-      for (const [key, value] of Object.entries(config.env)) {
-        args.push('--env', `${key}=${value}`);
-      }
+    if (apiKey) {
+      args.push('--header', `Authorization: Bearer ${apiKey}`);
     }
-
-    args.push('--', config.command, ...(config.args ?? []));
 
     const result = spawnSync('codex', args, { stdio: 'ignore' });
 
