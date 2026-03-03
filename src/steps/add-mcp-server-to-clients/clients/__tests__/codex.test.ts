@@ -63,7 +63,7 @@ describe('CodexMCPClient', () => {
   });
 
   describe('addServer', () => {
-    it('invokes codex mcp add with native HTTP transport', async () => {
+    it('invokes codex mcp add with --url and --bearer-token-env-var', async () => {
       spawnSyncMock.mockReturnValue({ status: 0 });
 
       const client = new CodexMCPClient();
@@ -75,18 +75,22 @@ describe('CodexMCPClient', () => {
         [
           'mcp',
           'add',
-          '--transport',
-          'http',
           'posthog',
+          '--url',
           'https://mcp.posthog.com/mcp',
-          '--header',
-          'Authorization: Bearer phx_example',
+          '--bearer-token-env-var',
+          'POSTHOG_API_KEY',
         ],
-        { stdio: 'ignore' },
+        expect.objectContaining({
+          stdio: 'ignore',
+          env: expect.objectContaining({
+            POSTHOG_API_KEY: 'phx_example',
+          }),
+        }),
       );
     });
 
-    it('omits auth header in OAuth mode', async () => {
+    it('omits auth in OAuth mode', async () => {
       spawnSyncMock.mockReturnValue({ status: 0 });
 
       const client = new CodexMCPClient();
@@ -95,15 +99,8 @@ describe('CodexMCPClient', () => {
       expect(result).toEqual({ success: true });
       expect(spawnSyncMock).toHaveBeenCalledWith(
         'codex',
-        [
-          'mcp',
-          'add',
-          '--transport',
-          'http',
-          'posthog',
-          'https://mcp.posthog.com/mcp',
-        ],
-        { stdio: 'ignore' },
+        ['mcp', 'add', 'posthog', '--url', 'https://mcp.posthog.com/mcp'],
+        expect.objectContaining({ stdio: 'ignore' }),
       );
     });
 

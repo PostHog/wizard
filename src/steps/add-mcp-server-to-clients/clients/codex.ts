@@ -64,13 +64,15 @@ export class CodexMCPClient extends DefaultMCPClient {
     const serverName = local ? 'posthog-local' : 'posthog';
     const url = buildMCPUrl('streamable-http', selectedFeatures, local);
 
-    const args = ['mcp', 'add', '--transport', 'http', serverName, url];
+    const args = ['mcp', 'add', serverName, '--url', url];
 
+    const env = { ...process.env };
     if (apiKey) {
-      args.push('--header', `Authorization: Bearer ${apiKey}`);
+      env.POSTHOG_API_KEY = apiKey;
+      args.push('--bearer-token-env-var', 'POSTHOG_API_KEY');
     }
 
-    const result = spawnSync('codex', args, { stdio: 'ignore' });
+    const result = spawnSync('codex', args, { stdio: 'ignore', env });
 
     if (result.error || result.status !== 0) {
       analytics.captureException(
