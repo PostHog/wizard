@@ -55,6 +55,9 @@ export interface FrameworkDetection {
   /** Package name to check in package.json (e.g., "next", "react") */
   packageName: string;
 
+  /** Additional package names that also indicate this framework is installed (e.g., Remix for React Router). */
+  alternatePackageNames?: string[];
+
   /** Human-readable name for error messages (e.g., "Next.js") */
   packageDisplayName: string;
 

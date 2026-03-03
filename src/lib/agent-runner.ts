@@ -146,6 +146,7 @@ export async function runPreflight(
       packageJson,
       config.detection.packageName,
       config.detection.packageDisplayName,
+      config.detection.alternatePackageNames,
     );
     frameworkVersion = config.detection.getVersion(packageJson);
   } else {

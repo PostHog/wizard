@@ -34,6 +34,7 @@ export const REACT_ROUTER_AGENT_CONFIG: FrameworkConfig<ReactRouterContext> = {
 
   detection: {
     packageName: 'react-router',
+    alternatePackageNames: ['@remix-run/react', '@remix-run/node'],
     packageDisplayName: 'React Router',
     getVersion: (packageJson: unknown) =>
       getPackageVersion('react-router', packageJson as PackageDotJson),

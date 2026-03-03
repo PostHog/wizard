@@ -145,6 +145,12 @@ async function isLikelyJsApp(dir: string): Promise<boolean> {
       return false;
     }
 
+    // Filter out library packages "exports", "main", or "module" fields
+    // indicate a package that publishes code for consumption, not a runnable app.
+    if (pkg.exports || pkg.main || pkg.module) {
+      return false;
+    }
+
     const scripts = pkg.scripts ?? {};
     const appScripts = ['start', 'dev', 'serve', 'preview'];
     if (appScripts.some((s) => s in scripts)) {

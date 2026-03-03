@@ -420,9 +420,15 @@ export async function ensurePackageIsInstalled(
   packageJson: PackageDotJson,
   packageId: string,
   packageName: string,
+  alternatePackageIds?: string[],
 ): Promise<void> {
   return traceStep('ensure-package-installed', async () => {
-    const installed = hasPackageInstalled(packageId, packageJson);
+    const installed =
+      hasPackageInstalled(packageId, packageJson) ||
+      (alternatePackageIds?.some((id) =>
+        hasPackageInstalled(id, packageJson),
+      ) ??
+        false);
 
     analytics.setTag(`${packageName.toLowerCase()}-installed`, installed);
 
