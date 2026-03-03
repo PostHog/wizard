@@ -8,6 +8,10 @@ import fg from 'fast-glob';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import {
+  PYTHON_DETECTION_IGNORES,
+  PYTHON_SOURCE_IGNORES,
+} from '../lib/glob-patterns';
+import {
   getFlaskVersion,
   getFlaskProjectType,
   getFlaskProjectTypeName,
@@ -55,7 +59,7 @@ export const FLASK_AGENT_CONFIG: FrameworkConfig<FlaskContext> = {
         ],
         {
           cwd: installDir,
-          ignore: ['**/venv/**', '**/.venv/**', '**/env/**', '**/.env/**'],
+          ignore: PYTHON_DETECTION_IGNORES,
         },
       );
 
@@ -80,13 +84,7 @@ export const FLASK_AGENT_CONFIG: FrameworkConfig<FlaskContext> = {
         ['**/app.py', '**/wsgi.py', '**/application.py', '**/__init__.py'],
         {
           cwd: installDir,
-          ignore: [
-            '**/venv/**',
-            '**/.venv/**',
-            '**/env/**',
-            '**/.env/**',
-            '**/__pycache__/**',
-          ],
+          ignore: PYTHON_SOURCE_IGNORES,
         },
       );
 

@@ -21,11 +21,11 @@ export enum Integration {
   android = 'android',
   rails = 'rails',
 
-  // Language fallbacks
+  // Language fallbacks (order matters: more-specific before catch-all)
   python = 'python',
   ruby = 'ruby',
-  javascriptNode = 'javascript_node',
   javascript_web = 'javascript_web',
+  javascriptNode = 'javascript_node',
 }
 export interface Args {
   debug: boolean;

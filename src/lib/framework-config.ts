@@ -2,14 +2,7 @@ import type { Integration } from './constants';
 import type { WizardOptions } from '../utils/types';
 import type { PackageManagerDetector } from './package-manager-detection';
 
-/**
- * Configuration interface for framework-specific agent integrations.
- * Each framework exports a FrameworkConfig that the universal runner uses.
- *
- * The TContext generic represents the framework-specific context gathered
- * before the agent runs (e.g., router type for Next.js, project type for Django).
- * The runner threads this opaquely — all framework-specific logic stays inside the config.
- */
+/** Configuration for a framework-specific agent integration. TContext is framework-specific pre-agent context. */
 export interface FrameworkConfig<
   TContext extends Record<string, unknown> = Record<string, unknown>,
 > {
@@ -48,11 +41,7 @@ export interface FrameworkMetadata<
   /** Optional notice shown before the agent runs (e.g., "Close Xcode before proceeding"). */
   preRunNotice?: string;
 
-  /**
-   * Optional function to gather framework-specific context before agent runs.
-   * For Next.js: detects router type
-   * For React Native: detects Expo vs bare
-   */
+  /** Gather framework-specific context before agent runs (e.g. router type, platform). */
   gatherContext?: (options: WizardOptions) => Promise<TContext>;
 
   /** Optional additional MCP servers for this framework (e.g., Svelte MCP). */
@@ -66,6 +55,9 @@ export interface FrameworkDetection {
   /** Package name to check in package.json (e.g., "next", "react") */
   packageName: string;
 
+  /** Additional package names that also indicate this framework is installed (e.g., Remix for React Router). */
+  alternatePackageNames?: string[];
+
   /** Human-readable name for error messages (e.g., "Next.js") */
   packageDisplayName: string;
 
@@ -75,11 +67,7 @@ export interface FrameworkDetection {
   /** Optional: Convert version to analytics bucket (e.g., "15.x") */
   getVersionBucket?: (version: string) => string;
 
-  /**
-   * Whether this framework uses package.json (Node.js/JavaScript).
-   * If false, skips package.json checks (for Python, Go, etc.)
-   * Defaults to true if not specified.
-   */
+  /** Whether this framework uses package.json. Defaults to true. */
   usesPackageJson?: boolean;
 
   /** Minimum supported version. If set, runner checks before proceeding. */
@@ -89,7 +77,9 @@ export interface FrameworkDetection {
   getInstalledVersion?: (options: WizardOptions) => Promise<string | undefined>;
 
   /** Detect whether this framework is present in the project. */
-  detect: (options: Pick<WizardOptions, 'installDir'>) => Promise<boolean>;
+  detect: (
+    options: Pick<WizardOptions, 'installDir' | 'workspaceRootDir'>,
+  ) => Promise<boolean>;
 
   /** Detect the project's package manager(s). Used by the in-process MCP tool. */
   detectPackageManager: PackageManagerDetector;
@@ -102,10 +92,7 @@ export interface EnvironmentConfig {
   /** Whether to upload env vars to hosting providers post-agent */
   uploadToHosting: boolean;
 
-  /**
-   * Build the environment variables object for this framework.
-   * Returns the exact variable names and values to upload to hosting providers.
-   */
+  /** Build the env vars object for this framework. */
   getEnvVars: (apiKey: string, host: string) => Record<string, string>;
 }
 
@@ -122,13 +109,9 @@ export interface AnalyticsConfig<
   getEventProperties?: (context: TContext) => Record<string, string>;
 }
 
-/**
- * Default package installation instruction used when frameworks don't
- * provide their own. Frameworks with specific needs (e.g., Swift SPM,
- * Composer) override this in their config.
- */
+/** Default package installation instruction for the agent prompt. */
 export const DEFAULT_PACKAGE_INSTALLATION =
-  'Use the detect_package_manager tool to determine the package manager. Do not manually edit package.json; the package manager handles it automatically.';
+  'Use the detect_package_manager tool to determine the package manager. Do not manually edit dependency manifest files; let the package manager handle it.';
 
 export const PYTHON_PACKAGE_INSTALLATION =
   'Use the detect_package_manager tool to determine the package manager. If the detected tool manages dependencies directly (e.g. uv add, poetry add), use it — it will update the manifest automatically. If using pip, you must also add the dependency to requirements.txt or the appropriate manifest file.';
@@ -139,26 +122,13 @@ export const PYTHON_PACKAGE_INSTALLATION =
 export interface PromptConfig<
   TContext extends Record<string, unknown> = Record<string, unknown>,
 > {
-  /**
-   * Optional: Additional context lines to append to base prompt
-   * For Next.js: "- Router: app"
-   * For React Native: "- Platform: Expo"
-   */
+  /** Additional context lines to append to the agent prompt. */
   getAdditionalContextLines?: (context: TContext) => string[];
 
-  /**
-   * How to detect the project type for this framework.
-   * Included in the agent prompt as project context.
-   * e.g., "Look for package.json and lockfiles" or "Look for requirements.txt and manage.py"
-   */
+  /** Project type detection hint for the agent prompt. */
   projectTypeDetection: string;
 
-  /**
-   * How to install packages for this framework.
-   * Included in the agent prompt as project context.
-   * Defaults to DEFAULT_PACKAGE_INSTALLATION. Only override if the framework
-   * has specific installation guidance (e.g., Swift SPM, Composer).
-   */
+  /** Package installation instruction for the agent prompt. Defaults to DEFAULT_PACKAGE_INSTALLATION. */
   packageInstallation?: string;
 }
 

@@ -49,30 +49,31 @@ export const JAVASCRIPT_WEB_AGENT_CONFIG: FrameworkConfig<JavaScriptContext> = {
         }
       }
 
-      // Ensure this is actually a JS project, not just a package.json for tooling
-      const { installDir } = options;
+      // Require a positive browser signal — without one, the project is
+      // more likely a Node.js server/CLI/worker and should fall through
+      // to the javascript_node catch-all (posthog-node is the safer
+      // default since posthog-js crashes without window/document).
+      //
+      // Bundlers alone are NOT a reliable browser signal — Vite/esbuild
+      // are commonly used for server-side builds (Cloudflare Workers, SSR,
+      // Vitest, etc.). Instead we check for:
+      //  1. An HTML entry point (fundamental to browser apps)
+      //  2. A "browser" field in package.json (standard npm browser flag)
+      const hasHtmlEntry = [
+        'index.html',
+        'public/index.html',
+        'src/index.html',
+      ].some((f) => fs.existsSync(path.join(options.installDir, f)));
 
-      // Check for a lockfile
-      const hasLockfile = [
-        'package-lock.json',
-        'yarn.lock',
-        'pnpm-lock.yaml',
-        'bun.lockb',
-        'bun.lock',
-      ].some((lockfile) => fs.existsSync(path.join(installDir, lockfile)));
+      const hasBrowserField = 'browser' in packageJson;
 
-      if (hasLockfile) {
-        return true;
-      }
+      // Known browser frameworks without dedicated integrations
+      const BROWSER_FRAMEWORK_PACKAGES = ['gatsby'];
+      const hasBrowserFramework = BROWSER_FRAMEWORK_PACKAGES.some((pkg) =>
+        hasPackageInstalled(pkg, packageJson),
+      );
 
-      // Fallback: check if package.json has actual dependencies
-      const hasDeps =
-        (packageJson.dependencies &&
-          Object.keys(packageJson.dependencies).length > 0) ||
-        (packageJson.devDependencies &&
-          Object.keys(packageJson.devDependencies).length > 0);
-
-      return !!hasDeps;
+      return hasHtmlEntry || hasBrowserField || hasBrowserFramework;
     },
   },
 

@@ -9,9 +9,15 @@ import path from 'path';
 import { FRAMEWORK_REGISTRY } from './lib/registry';
 import { analytics } from './utils/analytics';
 import { runAgentWizard } from './lib/agent-runner';
+import { DisplayedError } from './lib/errors';
 import { EventEmitter } from 'events';
 import chalk from 'chalk';
 import { logToFile } from './utils/debug';
+import { hasPostHogInstalled } from './utils/posthog-detection';
+import {
+  detectWorkspaceProjects,
+  runMonorepoFlow,
+} from './monorepo/monorepo-flow';
 
 EventEmitter.defaultMaxListeners = 50;
 
@@ -73,6 +79,21 @@ export async function runWizard(argv: Args) {
     clack.log.info(chalk.dim('Running in CI mode'));
   }
 
+  const posthogInstalled = await hasPostHogInstalled(resolvedInstallDir);
+  analytics.setTag('posthog_already_installed', posthogInstalled);
+
+  // If user specified --integration or --menu, skip monorepo detection
+  if (!finalArgs.integration && !wizardOptions.menu) {
+    // Check for monorepo before single-framework detection
+    const workspaceResult = await detectWorkspaceProjects(wizardOptions);
+
+    if (workspaceResult && workspaceResult.projects.length >= 2) {
+      await runMonorepoFlow(workspaceResult.projects, wizardOptions);
+      return;
+    }
+  }
+
+  // Single-project flow
   const integration =
     finalArgs.integration ?? (await getIntegrationForSetup(wizardOptions));
 
@@ -100,16 +121,19 @@ export async function runWizard(argv: Args) {
       logToFile(`[Wizard run.ts] ERROR STACK: ${errorStack}`);
     }
 
-    clack.log.error(
-      `Something went wrong: ${chalk.red(
-        errorMessage,
-      )}\n\nYou can read the documentation at ${chalk.cyan(
-        config.metadata.docsUrl,
-      )} to set up PostHog manually.`,
-    );
+    // DisplayedError means agent-runner already showed the error to the user
+    if (!(error instanceof DisplayedError)) {
+      clack.log.error(
+        `Something went wrong: ${chalk.red(
+          errorMessage,
+        )}\n\nYou can read the documentation at ${chalk.cyan(
+          config.metadata.docsUrl,
+        )} to set up PostHog manually.`,
+      );
 
-    if (wizardOptions.debug && errorStack) {
-      clack.log.info(chalk.dim(errorStack));
+      if (wizardOptions.debug && errorStack) {
+        clack.log.info(chalk.dim(errorStack));
+      }
     }
 
     process.exit(1);
@@ -118,8 +142,8 @@ export async function runWizard(argv: Args) {
 
 const DETECTION_TIMEOUT_MS = 5000;
 
-async function detectIntegration(
-  options: Pick<WizardOptions, 'installDir'>,
+export async function detectIntegration(
+  options: Pick<WizardOptions, 'installDir' | 'workspaceRootDir'>,
 ): Promise<Integration | undefined> {
   for (const integration of Object.values(Integration)) {
     const config = FRAMEWORK_REGISTRY[integration];

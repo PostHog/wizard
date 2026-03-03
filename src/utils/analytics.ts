@@ -41,6 +41,15 @@ export class Analytics {
     this.tags[key] = value;
   }
 
+  /** Remove all tags whose keys start with `prefix`. */
+  clearTagsWithPrefix(prefix: string) {
+    for (const key of Object.keys(this.tags)) {
+      if (key.startsWith(prefix)) {
+        delete this.tags[key];
+      }
+    }
+  }
+
   captureException(error: Error, properties: Record<string, unknown> = {}) {
     this.client.captureException(error, this.distinctId ?? this.anonymousId, {
       team: ANALYTICS_TEAM_TAG,

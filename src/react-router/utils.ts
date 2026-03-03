@@ -119,11 +119,18 @@ export async function getReactRouterMode(
 ): Promise<ReactRouterMode> {
   const { installDir } = options;
 
-  // First, get the React Router version
+  // First, get the React Router version and check Remix packages — Remix v2 = RR v7)
   const packageJson = await getPackageDotJson(options);
+  const remixVersion = getPackageVersion('@remix-run/react', packageJson);
   const reactRouterVersion =
     getPackageVersion('react-router-dom', packageJson) ||
     getPackageVersion('react-router', packageJson);
+
+  // Remix v2 IS React Router v7 framework mode, skip version prompt
+  if (!reactRouterVersion && remixVersion) {
+    clack.log.info('Detected Remix app (React Router v7 - Framework mode)');
+    return ReactRouterMode.V7_FRAMEWORK;
+  }
 
   if (!reactRouterVersion) {
     // If we can't detect version, ask the user

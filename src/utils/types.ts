@@ -63,6 +63,12 @@ export type WizardOptions = {
   menu: boolean;
 
   /**
+   * Root directory of the monorepo workspace. When set, detection merges
+   * root package.json deps for projects with hoisted dependencies (e.g. Nx).
+   */
+  workspaceRootDir?: string;
+
+  /**
    * Whether to run in benchmark mode with per-phase token tracking.
    * When enabled, the wizard runs each workflow phase as a separate agent call
    * and writes detailed usage data to /tmp/posthog-wizard-benchmark.json.

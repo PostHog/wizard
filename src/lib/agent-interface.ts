@@ -430,6 +430,7 @@ export async function runAgent(
     onMessage(message: any): void;
     finalize(resultMessage: any, totalDurationMs: number): any;
   },
+  onStatus?: (message: string) => void,
 ): Promise<{ error?: AgentErrorType; message?: string }> {
   const {
     estimatedDurationMinutes = 8,
@@ -624,6 +625,7 @@ export async function runAgent(
         spinner,
         collectedText,
         receivedSuccessResult,
+        onStatus,
       );
 
       try {
@@ -734,6 +736,7 @@ function handleSDKMessage(
   spinner: ReturnType<typeof clack.spinner>,
   collectedText: string[],
   receivedSuccessResult = false,
+  onStatus?: (message: string) => void,
 ): void {
   logToFile(`SDK Message: ${message.type}`, JSON.stringify(message, null, 2));
 
@@ -760,8 +763,10 @@ function handleSDKMessage(
             );
             const statusMatch = block.text.match(statusRegex);
             if (statusMatch) {
-              spinner.stop(statusMatch[1].trim());
+              const statusMessage = statusMatch[1].trim();
+              spinner.stop(statusMessage);
               spinner.start('Integrating PostHog...');
+              onStatus?.(statusMessage);
             }
           }
         }

@@ -1,11 +1,4 @@
-/**
- * Unified in-process MCP server for the PostHog wizard.
- *
- * Provides tools that run locally (secret values never leave the machine):
- * - check_env_keys: Check which env var keys exist in a .env file
- * - set_env_values: Create/update env vars in a .env file
- * - detect_package_manager: Detect the project's package manager(s)
- */
+/** In-process MCP server providing env and package manager tools (secrets stay local). */
 
 import path from 'path';
 import fs from 'fs';
@@ -41,13 +34,33 @@ export interface WizardToolsOptions {
 // Env file helpers
 // ---------------------------------------------------------------------------
 
-/**
- * Resolve filePath relative to workingDirectory, rejecting path traversal.
- */
+/** Resolve filePath relative to workingDirectory, rejecting traversal and stripping redundant prefixes. */
 export function resolveEnvPath(
   workingDirectory: string,
   filePath: string,
 ): string {
+  // Defensive: strip redundant prefix if a relative filePath duplicates the
+  // tail of workingDirectory. E.g. workingDir="/ws/services/mcp",
+  // filePath="services/mcp/.env" → normalise to ".env".
+  // Only applies to relative paths (absolute paths skip this).
+  if (!path.isAbsolute(filePath)) {
+    const normalised = path.normalize(filePath);
+    const segments = normalised.split(path.sep).filter(Boolean);
+    if (segments.length > 1) {
+      for (let i = segments.length - 1; i >= 1; i--) {
+        const prefix = segments.slice(0, i).join(path.sep);
+        if (prefix && workingDirectory.endsWith(path.sep + prefix)) {
+          const stripped = segments.slice(i).join(path.sep);
+          logToFile(
+            `resolveEnvPath: stripped redundant prefix "${prefix}" from "${filePath}" → "${stripped}"`,
+          );
+          filePath = stripped;
+          break;
+        }
+      }
+    }
+  }
+
   const resolved = path.resolve(workingDirectory, filePath);
   if (
     !resolved.startsWith(workingDirectory + path.sep) &&
@@ -60,10 +73,7 @@ export function resolveEnvPath(
   return resolved;
 }
 
-/**
- * Ensure the given env file basename is covered by .gitignore in the working directory.
- * Creates .gitignore if it doesn't exist; appends the entry if missing.
- */
+/** Ensure the env file is covered by .gitignore (creates or appends as needed). */
 export function ensureGitignoreCoverage(
   workingDirectory: string,
   envFileName: string,
@@ -139,10 +149,7 @@ export function mergeEnvValues(
 
 const SERVER_NAME = 'wizard-tools';
 
-/**
- * Create the unified in-process MCP server with all wizard tools.
- * Must be called asynchronously because the SDK is an ESM module loaded via dynamic import.
- */
+/** Create the in-process MCP server with all wizard tools. */
 export async function createWizardToolsServer(options: WizardToolsOptions) {
   const { workingDirectory, detectPackageManager } = options;
   const sdk = await getSDKModule();
@@ -156,7 +163,9 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
     {
       filePath: z
         .string()
-        .describe('Path to the .env file, relative to the project root'),
+        .describe(
+          'Path to the .env file relative to the working directory (e.g. ".env", ".env.local"). Do NOT include subdirectory prefixes.',
+        ),
       keys: z
         .array(z.string())
         .describe('Environment variable key names to check'),
@@ -190,7 +199,9 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
     {
       filePath: z
         .string()
-        .describe('Path to the .env file, relative to the project root'),
+        .describe(
+          'Path to the .env file relative to the working directory (e.g. ".env", ".env.local"). Do NOT include subdirectory prefixes.',
+        ),
       values: z
         .record(z.string(), z.string())
         .describe('Key-value pairs to set'),

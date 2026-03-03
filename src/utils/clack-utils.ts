@@ -424,9 +424,15 @@ export async function ensurePackageIsInstalled(
   packageJson: PackageDotJson,
   packageId: string,
   packageName: string,
+  alternatePackageIds?: string[],
 ): Promise<void> {
   return traceStep('ensure-package-installed', async () => {
-    const installed = hasPackageInstalled(packageId, packageJson);
+    const installed =
+      hasPackageInstalled(packageId, packageJson) ||
+      (alternatePackageIds?.some((id) =>
+        hasPackageInstalled(id, packageJson),
+      ) ??
+        false);
 
     analytics.setTag(`${packageName.toLowerCase()}-installed`, installed);
 
@@ -481,13 +487,45 @@ export async function getPackageDotJson({
  */
 export async function tryGetPackageJson({
   installDir,
-}: Pick<WizardOptions, 'installDir'>): Promise<PackageDotJson | null> {
+  workspaceRootDir,
+}: Pick<
+  WizardOptions,
+  'installDir' | 'workspaceRootDir'
+>): Promise<PackageDotJson | null> {
   try {
     const packageJsonFileContents = await fs.promises.readFile(
       join(installDir, 'package.json'),
       'utf8',
     );
-    return JSON.parse(packageJsonFileContents) as PackageDotJson;
+    const localPkg = JSON.parse(packageJsonFileContents) as PackageDotJson;
+
+    // In Nx monorepos, all deps are hoisted to the root package.json.
+    // Per-project package.json files are stubs with zero deps. When a
+    // workspace root is available and the local file has no deps, merge
+    // the root's dependencies so framework detectors can match.
+    if (workspaceRootDir && workspaceRootDir !== installDir) {
+      const localDepCount =
+        Object.keys(localPkg.dependencies ?? {}).length +
+        Object.keys(localPkg.devDependencies ?? {}).length;
+      if (localDepCount === 0) {
+        try {
+          const rootRaw = await fs.promises.readFile(
+            join(workspaceRootDir, 'package.json'),
+            'utf8',
+          );
+          const rootPkg = JSON.parse(rootRaw) as PackageDotJson;
+          return {
+            ...localPkg,
+            dependencies: { ...rootPkg.dependencies },
+            devDependencies: { ...rootPkg.devDependencies },
+          };
+        } catch {
+          // Root package.json missing or invalid — fall through
+        }
+      }
+    }
+
+    return localPkg;
   } catch {
     return null;
   }

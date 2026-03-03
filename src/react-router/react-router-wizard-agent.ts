@@ -34,6 +34,7 @@ export const REACT_ROUTER_AGENT_CONFIG: FrameworkConfig<ReactRouterContext> = {
 
   detection: {
     packageName: 'react-router',
+    alternatePackageNames: ['@remix-run/react', '@remix-run/node'],
     packageDisplayName: 'React Router',
     getVersion: (packageJson: unknown) =>
       getPackageVersion('react-router', packageJson as PackageDotJson),
@@ -45,9 +46,12 @@ export const REACT_ROUTER_AGENT_CONFIG: FrameworkConfig<ReactRouterContext> = {
     },
     detect: async (options) => {
       const packageJson = await tryGetPackageJson(options);
-      return packageJson
-        ? hasPackageInstalled('react-router', packageJson)
-        : false;
+      if (!packageJson) return false;
+      return (
+        hasPackageInstalled('react-router', packageJson) ||
+        hasPackageInstalled('@remix-run/react', packageJson) ||
+        hasPackageInstalled('@remix-run/node', packageJson)
+      );
     },
     detectPackageManager: detectNodePackageManagers,
   },

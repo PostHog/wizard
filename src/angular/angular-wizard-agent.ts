@@ -60,8 +60,6 @@ export const ANGULAR_AGENT_CONFIG: FrameworkConfig<AngularContext> = {
 
       return [
         `Framework docs ID: ${frameworkId} (use posthog://docs/frameworks/${frameworkId} for documentation)`,
-        'Angular uses dependency injection for services. PostHog should be initialized as a service.',
-        'For standalone components, ensure PostHog is properly provided in the application config.',
       ];
     },
   },

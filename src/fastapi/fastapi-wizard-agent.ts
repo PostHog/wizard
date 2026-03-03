@@ -3,12 +3,7 @@ import type { WizardOptions } from '../utils/types';
 import type { FrameworkConfig } from '../lib/framework-config';
 import { PYTHON_PACKAGE_INSTALLATION } from '../lib/framework-config';
 import { detectPythonPackageManagers } from '../lib/package-manager-detection';
-import { enableDebugLogs } from '../utils/debug';
-import { runAgentWizard } from '../lib/agent-runner';
 import { Integration } from '../lib/constants';
-import clack from '../utils/clack';
-import chalk from 'chalk';
-import * as semver from 'semver';
 import {
   getFastAPIVersion,
   getFastAPIProjectType,
@@ -20,12 +15,14 @@ import {
 import fg from 'fast-glob';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import {
+  PYTHON_DETECTION_IGNORES,
+  PYTHON_SOURCE_IGNORES,
+} from '../lib/glob-patterns';
 
 /**
  * FastAPI framework configuration for the universal agent runner
  */
-const MINIMUM_FASTAPI_VERSION = '0.100.0';
-
 export const FASTAPI_AGENT_CONFIG: FrameworkConfig = {
   metadata: {
     name: 'FastAPI',
@@ -49,6 +46,7 @@ export const FASTAPI_AGENT_CONFIG: FrameworkConfig = {
       return undefined;
     },
     getVersionBucket: getFastAPIVersionBucket,
+    minimumVersion: '0.100.0',
     getInstalledVersion: getFastAPIVersion,
     detect: async (options) => {
       const { installDir } = options;
@@ -66,7 +64,7 @@ export const FASTAPI_AGENT_CONFIG: FrameworkConfig = {
         ],
         {
           cwd: installDir,
-          ignore: ['**/venv/**', '**/.venv/**', '**/env/**', '**/.env/**'],
+          ignore: PYTHON_DETECTION_IGNORES,
         },
       );
 
@@ -94,13 +92,7 @@ export const FASTAPI_AGENT_CONFIG: FrameworkConfig = {
         ['**/main.py', '**/app.py', '**/application.py', '**/__init__.py'],
         {
           cwd: installDir,
-          ignore: [
-            '**/venv/**',
-            '**/.venv/**',
-            '**/env/**',
-            '**/.env/**',
-            '**/__pycache__/**',
-          ],
+          ignore: PYTHON_SOURCE_IGNORES,
         },
       );
 
@@ -198,35 +190,3 @@ export const FASTAPI_AGENT_CONFIG: FrameworkConfig = {
     ],
   },
 };
-
-/**
- * FastAPI wizard powered by the universal agent runner.
- */
-export async function runFastAPIWizardAgent(
-  options: WizardOptions,
-): Promise<void> {
-  if (options.debug) {
-    enableDebugLogs();
-  }
-
-  // Check FastAPI version - agent wizard requires >= 0.100.0
-  const fastapiVersion = await getFastAPIVersion(options);
-
-  if (fastapiVersion) {
-    const coercedVersion = semver.coerce(fastapiVersion);
-    if (coercedVersion && semver.lt(coercedVersion, MINIMUM_FASTAPI_VERSION)) {
-      const docsUrl =
-        FASTAPI_AGENT_CONFIG.metadata.unsupportedVersionDocsUrl ??
-        FASTAPI_AGENT_CONFIG.metadata.docsUrl;
-
-      clack.log.warn(
-        `Sorry: the wizard can't help you with FastAPI ${fastapiVersion}. Upgrade to FastAPI ${MINIMUM_FASTAPI_VERSION} or later, or check out the manual setup guide.`,
-      );
-      clack.log.info(`Setup FastAPI manually: ${chalk.cyan(docsUrl)}`);
-      clack.outro('PostHog wizard will see you next time!');
-      return;
-    }
-  }
-
-  await runAgentWizard(FASTAPI_AGENT_CONFIG, options);
-}

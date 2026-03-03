@@ -62,8 +62,6 @@ export const RAILS_AGENT_CONFIG: FrameworkConfig<RailsContext> = {
   prompts: {
     projectTypeDetection:
       'This is a Ruby on Rails project. Look for Gemfile, config/application.rb, bin/rails, and config/routes.rb to confirm.',
-    packageInstallation:
-      "Use Bundler to install gems. Add `gem 'posthog-ruby'` and `gem 'posthog-rails'` to the Gemfile and run `bundle install`. Do not pin specific versions.",
     getAdditionalContextLines: (context) => {
       const projectTypeName = context.projectType
         ? getRailsProjectTypeName(context.projectType)
@@ -76,12 +74,6 @@ export const RAILS_AGENT_CONFIG: FrameworkConfig<RailsContext> = {
 
       if (context.initializersDir) {
         lines.push(`Initializers directory: ${context.initializersDir}`);
-      }
-
-      if (context.projectType === RailsProjectType.API) {
-        lines.push(
-          'Note: This is an API-only Rails app — skip frontend posthog-js integration',
-        );
       }
 
       return lines;
