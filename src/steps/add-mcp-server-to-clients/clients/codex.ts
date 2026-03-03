@@ -11,7 +11,7 @@ export const CodexMCPConfig = DefaultMCPClientConfig;
 export type CodexMCPConfig = z.infer<typeof DefaultMCPClientConfig>;
 
 export class CodexMCPClient extends DefaultMCPClient {
-  name = 'Codex CLI';
+  name = 'Codex';
 
   constructor() {
     super();
