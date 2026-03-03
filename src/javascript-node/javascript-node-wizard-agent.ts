@@ -3,12 +3,6 @@ import type { FrameworkConfig } from '../lib/framework-config';
 import { Integration } from '../lib/constants';
 import { tryGetPackageJson } from '../utils/clack-utils';
 import { detectNodePackageManagers } from '../lib/package-manager-detection';
-import { hasPackageInstalled } from '../utils/package-json';
-import {
-  FRAMEWORK_PACKAGES,
-  detectBundler,
-  hasIndexHtml,
-} from '../javascript-web/utils';
 
 type JavaScriptNodeContext = Record<string, unknown>;
 
@@ -29,31 +23,7 @@ export const JAVASCRIPT_NODE_AGENT_CONFIG: FrameworkConfig<JavaScriptNodeContext
       detectPackageManager: detectNodePackageManagers,
       detect: async (options) => {
         const packageJson = await tryGetPackageJson(options);
-        if (!packageJson) {
-          return false;
-        }
-
-        // Skip known JS frameworks – they have their own integrations.
-        for (const frameworkPkg of FRAMEWORK_PACKAGES) {
-          if (hasPackageInstalled(frameworkPkg, packageJson)) {
-            return false;
-          }
-        }
-
-        // Frontend heuristics (handled by javascript_web when detected):
-        // 1. index.html anywhere → frontend
-        if (hasIndexHtml(options)) {
-          return false;
-        }
-
-        // 2. bundler dependency → frontend
-        const bundler = detectBundler(options);
-        if (bundler) {
-          return false;
-        }
-
-        // 3. Otherwise → Node/Backend
-        return true;
+        return !!packageJson;
       },
     },
 
