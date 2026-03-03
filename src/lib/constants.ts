@@ -22,10 +22,10 @@ export enum Integration {
   rails = 'rails',
 
   // Language fallbacks
+  javascript_web = 'javascript_web',
   python = 'python',
   ruby = 'ruby',
   javascriptNode = 'javascript_node',
-  javascript_web = 'javascript_web',
 }
 export interface Args {
   debug: boolean;
