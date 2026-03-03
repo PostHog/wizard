@@ -24,7 +24,11 @@ import {
 } from '../lib/constants';
 import { analytics } from './analytics';
 import clack from './clack';
-import { getCloudUrlFromRegion, getHostFromRegion } from './urls';
+import {
+  detectRegionFromToken,
+  getCloudUrlFromRegion,
+  getHostFromRegion,
+} from './urls';
 import { FRAMEWORK_REGISTRY } from '../lib/registry';
 import { performOAuthFlow } from './oauth';
 import { fetchUserData, fetchProjectData } from '../lib/api';
@@ -617,52 +621,49 @@ export function isUsingTypeScript({
  * @returns project data (token, url)
  */
 export async function getOrAskForProjectData(
-  _options: Pick<WizardOptions, 'signup' | 'ci' | 'apiKey' | 'projectId'> & {
-    cloudRegion: CloudRegion;
-  },
+  _options: Pick<WizardOptions, 'signup' | 'ci' | 'apiKey' | 'projectId'>,
 ): Promise<{
   host: string;
   projectApiKey: string;
   accessToken: string;
   projectId: number;
+  cloudRegion: CloudRegion;
 }> {
-  const cloudUrl = getCloudUrlFromRegion(_options.cloudRegion);
-
   // CI mode: bypass OAuth, use personal API key for LLM gateway
   if (_options.ci && _options.apiKey) {
-    const host = getHostFromRegion(_options.cloudRegion);
     clack.log.info('Using provided API key (CI mode - OAuth bypassed)');
+
+    const cloudRegion = await detectRegionFromToken(_options.apiKey);
+    const host = getHostFromRegion(cloudRegion);
+    const cloudUrl = getCloudUrlFromRegion(cloudRegion);
 
     const projectData =
       _options.projectId != null
         ? await fetchProjectDataById(
             _options.apiKey,
             _options.projectId,
-            _options.cloudRegion,
+            cloudUrl,
           )
-        : await fetchProjectDataWithApiKey(
-            _options.apiKey,
-            _options.cloudRegion,
-          );
+        : await fetchProjectDataWithApiKey(_options.apiKey, cloudUrl);
 
     return {
       host,
-      projectApiKey: projectData.api_token, // Project API key for SDK config
-      accessToken: _options.apiKey, // Personal API key for LLM gateway
+      projectApiKey: projectData.api_token,
+      accessToken: _options.apiKey,
       projectId: projectData.id,
+      cloudRegion,
     };
   }
 
-  const { host, projectApiKey, accessToken, projectId } = await traceStep(
-    'login',
-    () =>
+  const { host, projectApiKey, accessToken, projectId, cloudRegion } =
+    await traceStep('login', () =>
       askForWizardLogin({
-        cloudRegion: _options.cloudRegion,
         signup: _options.signup,
       }),
-  );
+    );
 
   if (!projectApiKey) {
+    const cloudUrl = getCloudUrlFromRegion(cloudRegion);
     clack.log.error(`Didn't receive a project API key. This shouldn't happen :(
 
 Please let us know if you think this is a bug in the wizard:
@@ -681,6 +682,7 @@ ${chalk.cyan(`${cloudUrl}/settings/project#variables`)}`);
     host: host || DEFAULT_HOST_URL,
     projectApiKey: projectApiKey || DUMMY_PROJECT_API_KEY,
     projectId,
+    cloudRegion,
   };
 }
 
@@ -690,9 +692,8 @@ ${chalk.cyan(`${cloudUrl}/settings/project#variables`)}`);
 async function fetchProjectDataById(
   apiKey: string,
   projectId: number,
-  region: CloudRegion,
+  cloudUrl: string,
 ): Promise<{ api_token: string; id: number }> {
-  const cloudUrl = getCloudUrlFromRegion(region);
   const projectData = await fetchProjectData(apiKey, projectId, cloudUrl);
   return {
     api_token: projectData.api_token,
@@ -700,21 +701,16 @@ async function fetchProjectDataById(
   };
 }
 
-/**
- * Fetch project data using a personal API key (for CI mode).
- * Uses the default project from /api/users/@me/ (user's current team).
- */
 async function fetchProjectDataWithApiKey(
   apiKey: string,
-  region: CloudRegion,
+  cloudUrl: string,
 ): Promise<{ api_token: string; id: number }> {
-  const cloudUrl = getCloudUrlFromRegion(region);
   const userData = await fetchUserData(apiKey, cloudUrl);
   const projectId = userData.team?.id;
 
   if (!projectId) {
     throw new Error(
-      'Could not determine project ID from API key. Please ensure your API key has access to a project in this cloud region.',
+      'Could not determine project ID from API key. Please ensure your API key has access to a project.',
     );
   }
 
@@ -733,11 +729,9 @@ async function fetchProjectDataWithApiKey(
 }
 
 async function askForWizardLogin(options: {
-  cloudRegion: CloudRegion;
   signup: boolean;
-}): Promise<ProjectData> {
+}): Promise<ProjectData & { cloudRegion: CloudRegion }> {
   const tokenResponse = await performOAuthFlow({
-    cloudRegion: options.cloudRegion,
     scopes: [
       'user:read',
       'project:read',
@@ -764,8 +758,9 @@ async function askForWizardLogin(options: {
     await abort();
   }
 
-  const cloudUrl = getCloudUrlFromRegion(options.cloudRegion);
-  const host = getHostFromRegion(options.cloudRegion);
+  const cloudRegion = await detectRegionFromToken(tokenResponse.access_token);
+  const cloudUrl = getCloudUrlFromRegion(cloudRegion);
+  const host = getHostFromRegion(cloudRegion);
 
   const projectData = await fetchProjectData(
     tokenResponse.access_token,
@@ -774,12 +769,13 @@ async function askForWizardLogin(options: {
   );
   const userData = await fetchUserData(tokenResponse.access_token, cloudUrl);
 
-  const data: ProjectData = {
+  const data = {
     accessToken: tokenResponse.access_token,
     projectApiKey: projectData.api_token,
     host,
     distinctId: userData.distinct_id,
     projectId: projectId!,
+    cloudRegion,
   };
 
   clack.log.success(
@@ -1067,29 +1063,5 @@ export async function askForAIConsent(
           );
 
     return aiConsent;
-  });
-}
-
-export async function askForCloudRegion(): Promise<CloudRegion> {
-  return await traceStep('ask-for-cloud-region', async () => {
-    const cloudRegion: CloudRegion = await abortIfCancelled(
-      clack.select({
-        message: 'Select your PostHog Cloud region',
-        options: [
-          {
-            label: 'US 🇺🇸',
-            value: 'us',
-            hint: 'Your data will be stored in the US',
-          },
-          {
-            label: 'EU 🇪🇺',
-            value: 'eu',
-            hint: 'Your data will be stored in the EU',
-          },
-        ],
-      }),
-    );
-
-    return cloudRegion;
   });
 }

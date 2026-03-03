@@ -18,7 +18,6 @@ if (!satisfies(process.version, NODE_VERSION_RANGE)) {
 }
 
 import { runMCPInstall, runMCPRemove } from './src/mcp';
-import type { CloudRegion } from './src/utils/types';
 import { runWizard } from './src/run';
 import { isNonInteractiveEnvironment } from './src/utils/environment';
 import clack from './src/utils/clack';
@@ -44,11 +43,6 @@ yargs(hideBin(process.argv))
       default: false,
       describe: 'Enable verbose logging\nenv: POSTHOG_WIZARD_DEBUG',
       type: 'boolean',
-    },
-    region: {
-      describe: 'PostHog cloud region\nenv: POSTHOG_WIZARD_REGION',
-      choices: ['us', 'eu'],
-      type: 'string',
     },
     default: {
       default: true,
@@ -133,12 +127,6 @@ yargs(hideBin(process.argv))
 
       // CI mode validation and TTY check
       if (options.ci) {
-        // Validate required CI flags
-        if (!options.region) {
-          clack.intro(chalk.inverse(`PostHog Wizard`));
-          clack.log.error('CI mode requires --region (us or eu)');
-          process.exit(1);
-        }
         if (!options.apiKey) {
           clack.intro(chalk.inverse(`PostHog Wizard`));
           clack.log.error(
@@ -161,7 +149,7 @@ yargs(hideBin(process.argv))
             'It appears you are running in a non-interactive environment.\n' +
             'Please run the wizard in an interactive terminal.\n\n' +
             'For CI/CD environments, use --ci mode:\n' +
-            '  npx @posthog/wizard --ci --region us --api-key phx_xxx',
+            '  npx @posthog/wizard --ci --api-key phx_xxx --install-dir .',
         );
         process.exit(1);
       }
@@ -189,7 +177,6 @@ yargs(hideBin(process.argv))
           void runMCPInstall(
             options as unknown as {
               signup: boolean;
-              region?: CloudRegion;
               local?: boolean;
               debug?: boolean;
             },

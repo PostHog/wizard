@@ -28,24 +28,9 @@ describe('defaults', () => {
       );
     });
 
-    it('should use EU subdomain for EU region', () => {
-      const url = buildMCPUrl('streamable-http', undefined, false, 'eu');
-      expect(url).toBe('https://mcp-eu.posthog.com/mcp');
-    });
-
-    it('should not add region param for US region (default)', () => {
-      const url = buildMCPUrl('streamable-http', undefined, false, 'us');
-      expect(url).toBe('https://mcp.posthog.com/mcp');
-    });
-
     it('should not add region param in local mode', () => {
-      const url = buildMCPUrl('streamable-http', undefined, true, 'eu');
+      const url = buildMCPUrl('streamable-http', undefined, true);
       expect(url).toBe('http://localhost:8787/mcp');
-    });
-
-    it('should combine EU subdomain with features param', () => {
-      const url = buildMCPUrl('streamable-http', ['dashboards'], false, 'eu');
-      expect(url).toBe('https://mcp-eu.posthog.com/mcp?features=dashboards');
     });
   });
 
@@ -75,17 +60,6 @@ describe('defaults', () => {
       });
       expect(config).not.toHaveProperty('env');
     });
-
-    it('should use EU subdomain for EU users in OAuth mode', () => {
-      const config = getDefaultServerConfig(
-        undefined,
-        'streamable-http',
-        undefined,
-        false,
-        'eu',
-      );
-      expect(config.args).toContain('https://mcp-eu.posthog.com/mcp');
-    });
   });
 
   describe('getNativeHTTPServerConfig', () => {
@@ -108,17 +82,6 @@ describe('defaults', () => {
         url: 'https://mcp.posthog.com/mcp',
       });
       expect(config).not.toHaveProperty('headers');
-    });
-
-    it('should use EU subdomain for EU users', () => {
-      const config = getNativeHTTPServerConfig(
-        undefined,
-        'streamable-http',
-        undefined,
-        false,
-        'eu',
-      );
-      expect(config.url).toBe('https://mcp-eu.posthog.com/mcp');
     });
   });
 });

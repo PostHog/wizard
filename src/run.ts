@@ -1,6 +1,6 @@
 import { abortIfCancelled } from './utils/clack-utils';
 
-import type { CloudRegion, WizardOptions } from './utils/types';
+import type { WizardOptions } from './utils/types';
 
 import { Integration } from './lib/constants';
 import { readEnvironment } from './utils/environment';
@@ -26,7 +26,6 @@ type Args = {
   debug?: boolean;
   forceInstall?: boolean;
   installDir?: string;
-  region?: CloudRegion;
   default?: boolean;
   signup?: boolean;
   localMcp?: boolean;
@@ -64,7 +63,6 @@ export async function runWizard(argv: Args) {
     debug: finalArgs.debug ?? false,
     forceInstall: finalArgs.forceInstall ?? false,
     installDir: resolvedInstallDir,
-    cloudRegion: finalArgs.region ?? undefined,
     default: finalArgs.default ?? false,
     signup: finalArgs.signup ?? false,
     localMcp: finalArgs.localMcp ?? false,

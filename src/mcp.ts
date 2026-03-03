@@ -4,12 +4,10 @@ import {
   removeMCPServerFromClientsStep,
 } from './steps/add-mcp-server-to-clients';
 import clack from './utils/clack';
-import type { CloudRegion } from './utils/types';
 import { enableDebugLogs } from './utils/debug';
 
 export const runMCPInstall = async (options: {
   signup: boolean;
-  region?: CloudRegion;
   local?: boolean;
   debug?: boolean;
 }) => {
@@ -23,7 +21,6 @@ export const runMCPInstall = async (options: {
   );
 
   await addMCPServerToClientsStep({
-    cloudRegion: options.region,
     askPermission: false,
     local: options.local,
   });

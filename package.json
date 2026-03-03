@@ -1,6 +1,6 @@
 {
   "name": "@posthog/wizard",
-  "version": "1.35.2",
+  "version": "1.36.1",
   "homepage": "https://github.com/PostHog/wizard",
   "repository": "https://github.com/PostHog/wizard",
   "description": "The PostHog wizard helps you to configure your project",
@@ -32,7 +32,7 @@
     "definition": "dist/index.d.ts"
   },
   "dependencies": {
-    "@anthropic-ai/claude-agent-sdk": "~0.1.65",
+    "@anthropic-ai/claude-agent-sdk": "~0.2.63",
     "@clack/core": "^0.3.4",
     "@clack/prompts": "0.7.0",
     "@langchain/core": "^0.3.40",
@@ -45,7 +45,7 @@
     "lodash": "^4.17.21",
     "magicast": "^0.2.10",
     "opn": "^5.4.0",
-    "posthog-node": "^4.18.0",
+    "posthog-node": "^5.24.17",
     "read-env": "^1.3.0",
     "recast": "^0.23.3",
     "semver": "^7.5.3",
