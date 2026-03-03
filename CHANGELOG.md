@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.36.0](https://github.com/PostHog/wizard/compare/v1.35.2...v1.36.0) (2026-03-03)
+
+
+### Features
+
+* Commandments should be actual commandments ([#306](https://github.com/PostHog/wizard/issues/306)) ([458f68e](https://github.com/PostHog/wizard/commit/458f68e3faa4273ff568b1fed1864970c42e64bd))
+
+
+### Bug Fixes
+
+* wizard issue notify ([#302](https://github.com/PostHog/wizard/issues/302)) ([8821e8a](https://github.com/PostHog/wizard/commit/8821e8a9f8531eb44b4f7a00286c712143604e05))
+
 ## [1.35.2](https://github.com/PostHog/wizard/compare/v1.35.1...v1.35.2) (2026-02-26)
 
 
