@@ -119,7 +119,7 @@ export function buildWizardMetadata(
 function buildAgentEnv(
   wizardMetadata: Record<string, string>,
   wizardFlags: Record<string, string>,
-): Record<string, string> {
+): string {
   const headers = createCustomHeaders();
   for (const [key, value] of Object.entries(wizardMetadata)) {
     headers.add(
