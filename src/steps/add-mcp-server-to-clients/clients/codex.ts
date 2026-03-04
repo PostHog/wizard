@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { execSync, spawnSync } from 'node:child_process';
 
 import { DefaultMCPClient } from '../MCPClient';
-import { DefaultMCPClientConfig, getDefaultServerConfig } from '../defaults';
+import { buildMCPUrl, DefaultMCPClientConfig } from '../defaults';
 
 import { analytics } from '../../../utils/analytics';
 
@@ -11,7 +11,7 @@ export const CodexMCPConfig = DefaultMCPClientConfig;
 export type CodexMCPConfig = z.infer<typeof DefaultMCPClientConfig>;
 
 export class CodexMCPClient extends DefaultMCPClient {
-  name = 'Codex CLI';
+  name = 'Codex';
 
   constructor() {
     super();
@@ -57,29 +57,22 @@ export class CodexMCPClient extends DefaultMCPClient {
   }
 
   addServer(
-    apiKey: string,
+    apiKey?: string,
     selectedFeatures?: string[],
     local?: boolean,
   ): Promise<{ success: boolean }> {
-    const config = getDefaultServerConfig(
-      apiKey,
-      'sse',
-      selectedFeatures,
-      local,
-    );
     const serverName = local ? 'posthog-local' : 'posthog';
+    const url = buildMCPUrl('streamable-http', selectedFeatures, local);
 
-    const args = ['mcp', 'add', serverName];
+    const args = ['mcp', 'add', serverName, '--url', url];
 
-    if (config.env) {
-      for (const [key, value] of Object.entries(config.env)) {
-        args.push('--env', `${key}=${value}`);
-      }
+    const env = { ...process.env };
+    if (apiKey) {
+      env.POSTHOG_API_KEY = apiKey;
+      args.push('--bearer-token-env-var', 'POSTHOG_API_KEY');
     }
 
-    args.push('--', config.command, ...(config.args ?? []));
-
-    const result = spawnSync('codex', args, { stdio: 'ignore' });
+    const result = spawnSync('codex', args, { stdio: 'ignore', env });
 
     if (result.error || result.status !== 0) {
       analytics.captureException(
