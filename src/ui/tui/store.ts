@@ -1,5 +1,5 @@
 /**
- * WizardStore — EventEmitter-backed reactive store for the TUI.
+ * WizardStore — Nanostore-backed reactive store for the TUI.
  * React components subscribe via useSyncExternalStore.
  *
  * Navigation is delegated to WizardRouter.
@@ -10,7 +10,7 @@
  * explicit setters so emitChange() is always called.
  */
 
-import { EventEmitter } from 'events';
+import { atom, map } from 'nanostores';
 import { TaskStatus } from '../wizard-ui.js';
 import {
   type WizardSession,
@@ -38,16 +38,17 @@ export interface TaskItem {
   done: boolean;
 }
 
-export class WizardStore extends EventEmitter {
+export class WizardStore {
+  // ── Internal nanostore atoms ─────────────────────────────────────
+  private $session = map<WizardSession>(buildSession({}));
+  private $statusMessages = atom<string[]>([]);
+  private $tasks = atom<TaskItem[]>([]);
+  private $version = atom(0);
+
   version = '';
-  statusMessages: string[] = [];
-  tasks: TaskItem[] = [];
 
   /** Navigation router — resolves active screen from session state. */
   readonly router: WizardRouter;
-
-  /** The single source of truth for every decision the wizard needs. */
-  session: WizardSession = buildSession({});
 
   /**
    * Setup promise — IntroScreen resolves this when the user picks a region.
@@ -59,8 +60,25 @@ export class WizardStore extends EventEmitter {
   });
 
   constructor(flow: Flow = Flow.Wizard) {
-    super();
     this.router = new WizardRouter(flow);
+  }
+
+  // ── State accessors (read from atoms) ────────────────────────────
+
+  get session(): WizardSession {
+    return this.$session.get();
+  }
+
+  set session(value: WizardSession) {
+    this.$session.set(value);
+  }
+
+  get statusMessages(): string[] {
+    return this.$statusMessages.get();
+  }
+
+  get tasks(): TaskItem[] {
+    return this.$tasks.get();
   }
 
   // ── Session setters ─────────────────────────────────────────────
@@ -68,24 +86,24 @@ export class WizardStore extends EventEmitter {
   // Business logic calls these instead of mutating session directly.
 
   setCloudRegion(region: CloudRegion): void {
-    this.session.cloudRegion = region;
+    this.$session.setKey('cloudRegion', region);
     this.emitChange();
   }
 
   /** Also unblocks bin.ts via the setupComplete promise. */
   completeSetup(region: CloudRegion): void {
-    this.session.cloudRegion = region;
+    this.$session.setKey('cloudRegion', region);
     this._resolveSetup(region);
     this.emitChange();
   }
 
   setRunPhase(phase: RunPhase): void {
-    this.session.runPhase = phase;
+    this.$session.setKey('runPhase', phase);
     this.emitChange();
   }
 
   setCredentials(credentials: WizardSession['credentials']): void {
-    this.session.credentials = credentials;
+    this.$session.setKey('credentials', credentials);
     this.emitChange();
   }
 
@@ -93,45 +111,46 @@ export class WizardStore extends EventEmitter {
     integration: WizardSession['integration'],
     config: WizardSession['frameworkConfig'],
   ): void {
-    this.session.integration = integration;
-    this.session.frameworkConfig = config;
+    this.$session.setKey('integration', integration);
+    this.$session.setKey('frameworkConfig', config);
     this.emitChange();
   }
 
   setDetectionComplete(): void {
-    this.session.detectionComplete = true;
+    this.$session.setKey('detectionComplete', true);
     this.emitChange();
   }
 
   setDetectedFramework(label: string): void {
-    this.session.detectedFrameworkLabel = label;
+    this.$session.setKey('detectedFrameworkLabel', label);
     this.emitChange();
   }
 
   setLoginUrl(url: string | null): void {
-    this.session.loginUrl = url;
+    this.$session.setKey('loginUrl', url);
     this.emitChange();
   }
 
   setServiceStatus(
     status: { description: string; statusPageUrl: string } | null,
   ): void {
-    this.session.serviceStatus = status;
+    this.$session.setKey('serviceStatus', status);
     this.emitChange();
   }
 
   setMcpComplete(): void {
-    this.session.mcpComplete = true;
+    this.$session.setKey('mcpComplete', true);
     this.emitChange();
   }
 
   setOutroData(data: OutroData): void {
-    this.session.outroData = data;
+    this.$session.setKey('outroData', data);
     this.emitChange();
   }
 
   setFrameworkContext(key: string, value: unknown): void {
-    this.session.frameworkContext[key] = value;
+    const ctx = { ...this.$session.get().frameworkContext, [key]: value };
+    this.$session.setKey('frameworkContext', ctx);
     this.emitChange();
   }
 
@@ -152,10 +171,8 @@ export class WizardStore extends EventEmitter {
 
   // ── Change notification ─────────────────────────────────────────
 
-  private _version = 0;
-
   getVersion(): number {
-    return this._version;
+    return this.$version.get();
   }
 
   /**
@@ -164,8 +181,7 @@ export class WizardStore extends EventEmitter {
    */
   emitChange(): void {
     this.router._setDirection('push');
-    this._version++;
-    this.emit('change');
+    this.$version.set(this.$version.get() + 1);
   }
 
   // ── Overlay navigation ──────────────────────────────────────────
@@ -173,35 +189,37 @@ export class WizardStore extends EventEmitter {
   pushOverlay(overlay: Overlay): void {
     this.router._setDirection('push');
     this.router.pushOverlay(overlay);
-    this._version++;
-    this.emit('change');
+    this.$version.set(this.$version.get() + 1);
   }
 
   popOverlay(): void {
     this.router._setDirection('pop');
     this.router.popOverlay();
-    this._version++;
-    this.emit('change');
+    this.$version.set(this.$version.get() + 1);
   }
 
   // ── Agent observation state ─────────────────────────────────────
 
   pushStatus(message: string): void {
-    this.statusMessages.push(message);
+    this.$statusMessages.set([...this.$statusMessages.get(), message]);
     this.emitChange();
   }
 
   setTasks(tasks: TaskItem[]): void {
-    this.tasks = tasks;
+    this.$tasks.set(tasks);
     this.emitChange();
   }
 
   updateTask(index: number, done: boolean): void {
-    if (this.tasks[index]) {
-      this.tasks[index].done = done;
-      this.tasks[index].status = done
-        ? TaskStatus.Completed
-        : TaskStatus.Pending;
+    const tasks = this.$tasks.get();
+    if (tasks[index]) {
+      const updated = [...tasks];
+      updated[index] = {
+        ...updated[index],
+        done,
+        status: done ? TaskStatus.Completed : TaskStatus.Pending,
+      };
+      this.$tasks.set(updated);
       this.emitChange();
     }
   }
@@ -218,24 +236,21 @@ export class WizardStore extends EventEmitter {
 
     const incomingLabels = new Set(incoming.map((t) => t.label));
 
-    const retained = this.tasks.filter(
-      (t) => t.done && !incomingLabels.has(t.label),
-    );
+    const retained = this.$tasks
+      .get()
+      .filter((t) => t.done && !incomingLabels.has(t.label));
 
-    this.tasks = [...retained, ...incoming];
+    this.$tasks.set([...retained, ...incoming]);
     this.emitChange();
   }
 
   // ── React integration ───────────────────────────────────────────
 
   subscribe(callback: () => void): () => void {
-    this.on('change', callback);
-    return () => {
-      this.off('change', callback);
-    };
+    return this.$version.subscribe(() => callback());
   }
 
   getSnapshot(): number {
-    return this._version;
+    return this.$version.get();
   }
 }

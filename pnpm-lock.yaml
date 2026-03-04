@@ -44,6 +44,9 @@ importers:
       magicast:
         specifier: ^0.2.10
         version: 0.2.11
+      nanostores:
+        specifier: ^1.1.1
+        version: 1.1.1
       opn:
         specifier: ^5.4.0
         version: 5.5.0
@@ -2267,6 +2270,10 @@ packages:
   mute-stream@2.0.0:
     resolution: {integrity: sha512-WWdIxpyjEn+FhQJQQv9aQAYlHoNVdzIzUySNV1gHUPDSdZJ3yZn7pAAbQcV7B56Mvu881q9FZV+0Vx2xC44VWA==}
     engines: {node: ^18.17.0 || >=20.5.0}
+
+  nanostores@1.1.1:
+    resolution: {integrity: sha512-EYJqS25r2iBeTtGQCHidXl1VfZ1jXM7Q04zXJOrMlxVVmD0ptxJaNux92n1mJ7c5lN3zTq12MhH/8x59nP+qmg==}
+    engines: {node: ^20.0.0 || >=22.0.0}
 
   natural-compare-lite@1.4.0:
     resolution: {integrity: sha512-Tj+HTDSJJKaZnfiuw+iaF9skdPpTo2GtEly5JHnWV/hfv2Qj/9RKsGISQtLh2ox3l5EAGw487hnBee0sIJ6v2g==}
@@ -5418,6 +5425,8 @@ snapshots:
   mute-stream@0.0.7: {}
 
   mute-stream@2.0.0: {}
+
+  nanostores@1.1.1: {}
 
   natural-compare-lite@1.4.0: {}
 
