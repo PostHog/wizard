@@ -11,8 +11,12 @@ import { analytics } from '../utils/analytics';
 import {
   WIZARD_INTERACTION_EVENT_NAME,
   WIZARD_REMARK_EVENT_NAME,
+  POSTHOG_PROPERTY_HEADER_PREFIX,
+  WIZARD_VARIANT_FLAG_KEY,
+  WIZARD_VARIANTS,
   WIZARD_USER_AGENT,
 } from './constants';
+import { createCustomHeaders } from '../utils/custom-headers';
 import { getLlmGatewayUrlFromHost } from '../utils/urls';
 import { LINTING_TOOLS } from './safe-tools';
 import { createWizardToolsServer, WIZARD_TOOL_NAMES } from './wizard-tools';
@@ -80,6 +84,9 @@ export type AgentConfig = {
   posthogApiHost: string;
   additionalMcpServers?: Record<string, { url: string }>;
   detectPackageManager: PackageManagerDetector;
+  /** Feature flag key -> variant (evaluated at start of run). */
+  wizardFlags?: Record<string, string>;
+  wizardMetadata?: Record<string, string>;
 };
 
 /**
@@ -89,7 +96,47 @@ type AgentRunConfig = {
   workingDirectory: string;
   mcpServers: McpServersConfig;
   model: string;
+  wizardFlags?: Record<string, string>;
+  wizardMetadata?: Record<string, string>;
 };
+
+/**
+ * Select wizard metadata from WIZARD_VARIANTS using the variant feature flag.
+ * If the flag is missing or the value is not in config, returns the "base" variant (VARIANT: "base").
+ */
+export function buildWizardMetadata(
+  flags: Record<string, string> = {},
+): Record<string, string> {
+  const variantKey = flags[WIZARD_VARIANT_FLAG_KEY];
+  const variant =
+    (variantKey && WIZARD_VARIANTS[variantKey]) ?? WIZARD_VARIANTS['base'];
+  return { ...variant };
+}
+
+/**
+ * Build env for the SDK subprocess: process.env plus ANTHROPIC_CUSTOM_HEADERS from wizard metadata/flags.
+ */
+function buildAgentEnv(
+  wizardMetadata: Record<string, string>,
+  wizardFlags: Record<string, string>,
+): string {
+  const headers = createCustomHeaders();
+  for (const [key, value] of Object.entries(wizardMetadata)) {
+    headers.add(
+      key.startsWith(POSTHOG_PROPERTY_HEADER_PREFIX)
+        ? key
+        : `${POSTHOG_PROPERTY_HEADER_PREFIX}${key}`,
+      value,
+    );
+  }
+  for (const [flagKey, variant] of Object.entries(wizardFlags)) {
+    if (!flagKey.toLowerCase().startsWith('wizard')) continue;
+    headers.addFlag(flagKey, variant);
+  }
+  const encoded = headers.encode();
+  logToFile('ANTHROPIC_CUSTOM_HEADERS', encoded);
+  return encoded;
+}
 
 /**
  * Package managers that can be used to run commands.
@@ -380,6 +427,8 @@ export async function initializeAgent(
       workingDirectory: config.workingDirectory,
       mcpServers,
       model: 'anthropic/claude-sonnet-4-6',
+      wizardFlags: config.wizardFlags,
+      wizardMetadata: config.wizardMetadata,
     };
 
     logToFile('Agent config:', {
@@ -566,6 +615,10 @@ export async function runAgent(
           ...process.env,
           // Prevent user's Anthropic API key from overriding the wizard's OAuth token
           ANTHROPIC_API_KEY: undefined,
+          ANTHROPIC_CUSTOM_HEADERS: buildAgentEnv(
+            agentConfig.wizardMetadata ?? {},
+            agentConfig.wizardFlags ?? {},
+          ),
         },
         canUseTool: (toolName: string, input: unknown) => {
           logToFile('canUseTool called:', { toolName, input });

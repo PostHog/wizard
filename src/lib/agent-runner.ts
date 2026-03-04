@@ -24,6 +24,7 @@ import {
   runAgent,
   AgentSignals,
   AgentErrorType,
+  buildWizardMetadata,
 } from './agent-interface';
 import { getCloudUrlFromRegion } from '../utils/urls';
 import chalk from 'chalk';
@@ -170,6 +171,13 @@ export async function runAgentWizard(
   // Initialize and run agent
   const spinner = clack.spinner();
 
+  // Evaluate all feature flags at the start of the run so they can be sent to the LLM gateway
+  const wizardFlags = await analytics.getAllFlagsForWizard();
+  const wizardMetadata = buildWizardMetadata(wizardFlags);
+
+  // Determine MCP URL: CLI flag > env var > production default
+  // Use EU subdomain for EU users to work around Claude Code's OAuth bug
+  // See: https://github.com/anthropics/claude-code/issues/2267
   const mcpUrl = options.localMcp
     ? 'http://localhost:8787/mcp'
     : process.env.MCP_URL || 'https://mcp.posthog.com/mcp';
@@ -182,6 +190,8 @@ export async function runAgentWizard(
       posthogApiHost: host,
       additionalMcpServers: config.metadata.additionalMcpServers,
       detectPackageManager: config.detection.detectPackageManager,
+      wizardFlags,
+      wizardMetadata,
     },
     options,
   );
