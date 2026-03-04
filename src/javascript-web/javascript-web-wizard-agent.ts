@@ -10,6 +10,7 @@ import {
   FRAMEWORK_PACKAGES,
   detectJsPackageManager,
   detectBundler,
+  hasIndexHtml,
   type JavaScriptContext,
 } from './utils';
 import { detectNodePackageManagers } from '../lib/package-manager-detection';
@@ -49,30 +50,32 @@ export const JAVASCRIPT_WEB_AGENT_CONFIG: FrameworkConfig<JavaScriptContext> = {
         }
       }
 
-      // Ensure this is actually a JS project, not just a package.json for tooling
       const { installDir } = options;
 
-      // Check for a lockfile
+      // Has (index.html OR has a bundler) AND is a JavaScript project
+      const hasIndexHtmlFlag = hasIndexHtml(options);
+
+      const bundler = detectBundler(options);
+      const hasBundler = !!bundler;
+
       const hasLockfile = [
         'package-lock.json',
         'yarn.lock',
         'pnpm-lock.yaml',
         'bun.lockb',
         'bun.lock',
+        'deno.lock',
       ].some((lockfile) => fs.existsSync(path.join(installDir, lockfile)));
 
-      if (hasLockfile) {
+      // We only treat this as JS Web if there's BOTH:
+      // - a lockfile, and
+      // - at least one frontend signal (index.html or bundler)
+      if (hasLockfile && (hasIndexHtmlFlag || hasBundler)) {
         return true;
       }
 
-      // Fallback: check if package.json has actual dependencies
-      const hasDeps =
-        (packageJson.dependencies &&
-          Object.keys(packageJson.dependencies).length > 0) ||
-        (packageJson.devDependencies &&
-          Object.keys(packageJson.devDependencies).length > 0);
-
-      return !!hasDeps;
+      // Otherwise → Node/Backend (handled by javascriptNode fallback)
+      return false;
     },
   },
 

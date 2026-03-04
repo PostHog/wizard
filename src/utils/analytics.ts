@@ -13,6 +13,7 @@ export class Analytics {
   private distinctId?: string;
   private anonymousId: string;
   private appName = 'wizard';
+  private activeFlags: Record<string, string> | null = null;
 
   constructor() {
     this.client = new PostHog(ANALYTICS_POSTHOG_PUBLIC_PROJECT_WRITE_KEY, {
@@ -72,6 +73,34 @@ export class Analytics {
     } catch (error) {
       debug('Failed to get feature flag:', flagKey, error);
       return undefined;
+    }
+  }
+
+  /**
+   * Evaluate all feature flags for the current user at the start of a run.
+   * Result is cached; subsequent calls in the same run return the same map.
+   * Returns flag key -> string value (booleans become 'true'/'false').
+   */
+  async getAllFlagsForWizard(): Promise<Record<string, string>> {
+    if (this.activeFlags !== null) {
+      return this.activeFlags;
+    }
+    try {
+      const distinctId = this.distinctId ?? this.anonymousId;
+      const result = await this.client.getAllFlagsAndPayloads(distinctId, {
+        personProperties: { $app_name: this.appName },
+      });
+      const flags = result.featureFlags ?? {};
+      const out: Record<string, string> = {};
+      for (const [key, value] of Object.entries(flags)) {
+        if (value === undefined) continue;
+        out[key] = typeof value === 'boolean' ? String(value) : String(value);
+      }
+      this.activeFlags = out;
+      return out;
+    } catch (error) {
+      debug('Failed to get all feature flags:', error);
+      return {};
     }
   }
 
