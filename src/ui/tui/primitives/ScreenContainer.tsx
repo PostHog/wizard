@@ -7,9 +7,10 @@
  * route to the outro screen with an error message instead of hanging.
  */
 
-import { Box, useStdout } from 'ink';
+import { Box } from 'ink';
 import { useSyncExternalStore, type ReactNode } from 'react';
 import { TitleBar } from '../components/TitleBar.js';
+import { useStdoutDimensions } from '../hooks/useStdoutDimensions.js';
 import { DissolveTransition } from './DissolveTransition.js';
 import { ScreenErrorBoundary } from './ScreenErrorBoundary.js';
 import type { WizardStore } from '../store.js';
@@ -29,21 +30,21 @@ interface ScreenContainerProps {
 }
 
 export const ScreenContainer = ({ store, screens }: ScreenContainerProps) => {
-  const { stdout } = useStdout();
+  const [columns, rows] = useStdoutDimensions();
   useSyncExternalStore(
     (cb) => store.subscribe(cb),
     () => store.getSnapshot(),
   );
 
-  const terminalWidth = stdout.columns;
+  const terminalWidth = columns;
   const width = getContentWidth(terminalWidth);
-  const contentHeight = Math.max(5, stdout.rows - 3);
+  const contentHeight = Math.max(5, rows - 3);
   const contentAreaWidth = Math.max(10, width - 2);
   const direction = store.lastNavDirection === 'pop' ? 'right' : 'left';
   const activeScreen = screens[store.currentScreen] ?? null;
 
   const inner = (
-    <Box flexDirection="column" height={stdout.rows} width={width}>
+    <Box flexDirection="column" height={rows} width={width}>
       <TitleBar version={store.version} width={width} />
       <Box height={1} />
       <Box flexDirection="column" flexGrow={1} paddingX={1}>
@@ -64,7 +65,7 @@ export const ScreenContainer = ({ store, screens }: ScreenContainerProps) => {
   return (
     <Box
       flexDirection="column"
-      height={stdout.rows}
+      height={rows}
       width={terminalWidth}
       alignItems="center"
       justifyContent="flex-start"
