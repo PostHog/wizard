@@ -1,0 +1,378 @@
+/**
+ * YARA-equivalent content scanner for the PostHog wizard.
+ *
+ * Implements the rules defined in policies/yara/wizard.yar and
+ * policies/yara/RULES.md as TypeScript regex patterns. Scans tool
+ * inputs (pre-execution) and outputs (post-execution) for security
+ * violations including PII leakage, hardcoded secrets, prompt
+ * injection, and secret exfiltration.
+ *
+ * This is Layer 2 (L2) in the wizard's defense-in-depth model,
+ * complementing the prompt-based commandments (L0) and the
+ * canUseTool() allowlist (L1).
+ */
+
+// ─── Types ───────────────────────────────────────────────────────
+
+export type YaraSeverity = 'critical' | 'high' | 'medium' | 'low';
+
+export type YaraCategory =
+  | 'posthog_pii'
+  | 'posthog_hardcoded_key'
+  | 'posthog_autocapture'
+  | 'posthog_config'
+  | 'prompt_injection'
+  | 'exfiltration'
+  | 'filesystem_safety'
+  | 'supply_chain';
+
+export type HookPhase = 'PreToolUse' | 'PostToolUse';
+export type ToolTarget = 'Bash' | 'Write' | 'Edit' | 'Read' | 'Grep';
+
+export interface YaraRule {
+  /** Rule name matching the .yar file (e.g. 'pii_in_capture_call') */
+  name: string;
+  description: string;
+  severity: YaraSeverity;
+  category: YaraCategory;
+  /** Which hook+tool combinations this rule applies to */
+  appliesTo: Array<{ phase: HookPhase; tool: ToolTarget }>;
+  /** Compiled regex patterns — any match triggers the rule */
+  patterns: RegExp[];
+}
+
+export interface YaraMatch {
+  rule: YaraRule;
+  /** The matched substring */
+  matchedText: string;
+  /** Byte offset in the scanned content */
+  offset: number;
+}
+
+export type ScanResult =
+  | { matched: false }
+  | { matched: true; matches: YaraMatch[] };
+
+// ─── Rule Definitions ────────────────────────────────────────────
+//
+// Each rule mirrors the specification in policies/yara/wizard.yar
+// and policies/yara/RULES.md. Patterns are compiled once at module
+// load time for performance.
+
+const POST_WRITE_EDIT: Array<{ phase: HookPhase; tool: ToolTarget }> = [
+  { phase: 'PostToolUse', tool: 'Write' },
+  { phase: 'PostToolUse', tool: 'Edit' },
+];
+
+const POST_READ_GREP: Array<{ phase: HookPhase; tool: ToolTarget }> = [
+  { phase: 'PostToolUse', tool: 'Read' },
+  { phase: 'PostToolUse', tool: 'Grep' },
+];
+
+const PRE_BASH: Array<{ phase: HookPhase; tool: ToolTarget }> = [
+  { phase: 'PreToolUse', tool: 'Bash' },
+];
+
+// ── §1 PostHog API Violations ────────────────────────────────────
+
+const pii_in_capture_call: YaraRule = {
+  name: 'pii_in_capture_call',
+  description:
+    "Detects PII fields passed to posthog.capture() — violates 'NEVER send PII in capture()' commandment",
+  severity: 'high',
+  category: 'posthog_pii',
+  appliesTo: POST_WRITE_EDIT,
+  patterns: [
+    // Direct PII field names in capture/identify properties
+    /\.capture\s*\([^)]{0,200}email/i,
+    /\.capture\s*\([^)]{0,200}phone/i,
+    /\.capture\s*\([^)]{0,200}full[_\s]?name/i,
+    /\.capture\s*\([^)]{0,200}first[_\s]?name/i,
+    /\.capture\s*\([^)]{0,200}last[_\s]?name/i,
+    /\.capture\s*\([^)]{0,200}(street|mailing|home|billing)[_\s]?address/i,
+    /\.capture\s*\([^)]{0,200}(ssn|social[_\s]?security)/i,
+    /\.capture\s*\([^)]{0,200}(date[_\s]?of[_\s]?birth|dob|birthday)/i,
+    /\.capture\s*\([^)]{0,200}\$ip/,
+    // PII in identify() properties
+    /\.identify\s*\([^)]{0,200}email/i,
+    /\.identify\s*\([^)]{0,200}phone/i,
+    // PII in $set properties via capture
+    /\$set.*email/i,
+    /\$set.*phone/i,
+  ],
+};
+
+const hardcoded_posthog_key: YaraRule = {
+  name: 'hardcoded_posthog_key',
+  description:
+    "Detects hardcoded PostHog API keys in source — violates 'use environment variables' commandment",
+  severity: 'high',
+  category: 'posthog_hardcoded_key',
+  appliesTo: POST_WRITE_EDIT,
+  patterns: [
+    // PostHog project API key (phc_ prefix, 20+ alphanumeric chars)
+    /phc_[a-zA-Z0-9]{20,}/,
+    // PostHog personal API key (phx_ prefix)
+    /phx_[a-zA-Z0-9]{20,}/,
+    // Hardcoded key assignment patterns
+    /apiKey\s*[:=]\s*['"][a-zA-Z0-9_]{20,}['"]/,
+    /api_key\s*[:=]\s*['"][a-zA-Z0-9_]{20,}['"]/,
+    /POSTHOG_KEY\s*[:=]\s*['"][a-zA-Z0-9_]{20,}['"]/,
+  ],
+};
+
+const autocapture_disabled: YaraRule = {
+  name: 'autocapture_disabled',
+  description:
+    "Detects agent disabling autocapture — violates 'don't disable autocapture' commandment",
+  severity: 'medium',
+  category: 'posthog_autocapture',
+  appliesTo: POST_WRITE_EDIT,
+  patterns: [
+    /autocapture\s*:\s*false/,
+    /autocapture\s*:\s*'false'/,
+    /autocapture\s*:\s*"false"/,
+    /autocapture\s*=\s*False/,
+    /disable_autocapture\s*[:=]\s*(true|True|1)/,
+  ],
+};
+
+// ── §1b Additional PostHog config rules ──────────────────────────
+
+const hardcoded_posthog_host: YaraRule = {
+  name: 'hardcoded_posthog_host',
+  description:
+    'Detects hardcoded PostHog host URLs in source — should use environment variables',
+  severity: 'high',
+  category: 'posthog_hardcoded_key',
+  appliesTo: POST_WRITE_EDIT,
+  patterns: [/['"]https:\/\/(us|eu)\.i\.posthog\.com['"]/],
+};
+
+const session_recording_disabled: YaraRule = {
+  name: 'session_recording_disabled',
+  description: 'Detects agent disabling session recording',
+  severity: 'medium',
+  category: 'posthog_config',
+  appliesTo: POST_WRITE_EDIT,
+  patterns: [
+    /disable_session_recording\s*:\s*true/i,
+    /disable_session_recording\s*=\s*True/,
+  ],
+};
+
+const opt_out_capturing: YaraRule = {
+  name: 'opt_out_capturing',
+  description: 'Detects agent opting out of PostHog capturing entirely',
+  severity: 'medium',
+  category: 'posthog_config',
+  appliesTo: POST_WRITE_EDIT,
+  patterns: [/opt_out_capturing/i, /opted_out\s*[:=]\s*(true|True|1)/i],
+};
+
+// ── §2 Prompt Injection ──────────────────────────────────────────
+
+const prompt_injection_wizard_override: YaraRule = {
+  name: 'prompt_injection_wizard_override',
+  description:
+    'Detects prompt injection attempting to override wizard behavior in project files',
+  severity: 'critical',
+  category: 'prompt_injection',
+  appliesTo: POST_READ_GREP,
+  patterns: [
+    // Direct instruction override
+    /ignore previous instructions/i,
+    /disregard all/i,
+    /forget your instructions/i,
+    /override your rules/i,
+    // Role manipulation
+    /you are now/i,
+    /act as a different/i,
+    /new instructions:/i,
+    // Wizard-specific manipulation
+    /skip posthog/i,
+    /do not install posthog/i,
+    /remove posthog/i,
+    /uninstall posthog/i,
+    /delete the posthog/i,
+    // Tool abuse via file content
+    /run the following command/i,
+    /execute this shell command/i,
+  ],
+};
+
+const prompt_injection_base64: YaraRule = {
+  name: 'prompt_injection_base64',
+  description:
+    'Detects suspicious base64-encoded blocks in file content that may contain obfuscated prompt injection',
+  severity: 'critical',
+  category: 'prompt_injection',
+  appliesTo: POST_READ_GREP,
+  patterns: [
+    // Long base64 strings (100+ chars) in comments or string literals
+    // that aren't typical data URIs or legitimate base64 content
+    /(?:\/\/|#|\/\*)\s*[A-Za-z0-9+/]{100,}={0,2}/,
+  ],
+};
+
+// ── §3 Secret Exfiltration ───────────────────────────────────────
+
+const secret_exfiltration_via_command: YaraRule = {
+  name: 'secret_exfiltration_via_command',
+  description:
+    'Detects shell commands attempting to exfiltrate secrets or credentials',
+  severity: 'critical',
+  category: 'exfiltration',
+  appliesTo: PRE_BASH,
+  patterns: [
+    // curl/wget with environment variable secrets
+    /curl\s+.*\$\{?[A-Z_]*(KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL)/i,
+    /wget\s+.*\$\{?[A-Z_]*(KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL)/i,
+    // Piping secrets to network tools
+    /\|\s*curl/,
+    /\|\s*wget/,
+    /\|\s*nc\s/,
+    /\|\s*netcat\s/,
+    // Base64 encoding piped to network
+    /base64.*\|\s*(curl|wget|nc\s)/i,
+    // Reading .env and sending
+    /cat\s+.*\.env.*\|\s*(curl|wget)/,
+    // PostHog key exfiltration specifically
+    /curl.*phc_[a-zA-Z0-9]/,
+    /wget.*phc_[a-zA-Z0-9]/,
+  ],
+};
+
+// ── §4 Filesystem Safety ─────────────────────────────────────────
+
+const destructive_rm: YaraRule = {
+  name: 'destructive_rm',
+  description: 'Detects rm -rf or rm -r commands that could mass-delete files',
+  severity: 'critical',
+  category: 'filesystem_safety',
+  appliesTo: PRE_BASH,
+  patterns: [/\brm\s+(-[a-zA-Z]*r[a-zA-Z]*f|-[a-zA-Z]*f[a-zA-Z]*r)\b/],
+};
+
+const git_force_push: YaraRule = {
+  name: 'git_force_push',
+  description: 'Detects git push --force which can overwrite remote history',
+  severity: 'critical',
+  category: 'filesystem_safety',
+  appliesTo: PRE_BASH,
+  patterns: [/git\s+push\s+.*--force/, /git\s+push\s+.*-f\b/],
+};
+
+const git_reset_hard: YaraRule = {
+  name: 'git_reset_hard',
+  description:
+    'Detects git reset --hard which discards all uncommitted changes',
+  severity: 'critical',
+  category: 'filesystem_safety',
+  appliesTo: PRE_BASH,
+  patterns: [/git\s+reset\s+--hard/],
+};
+
+// ── §5 Supply Chain ──────────────────────────────────────────────
+
+const wrong_posthog_package: YaraRule = {
+  name: 'wrong_posthog_package',
+  description:
+    'Detects installing the wrong PostHog npm package — should be posthog-js or posthog-node',
+  severity: 'high',
+  category: 'supply_chain',
+  appliesTo: PRE_BASH,
+  patterns: [
+    // Match "npm install posthog" but not "posthog-js", "posthog-node", etc.
+    /npm\s+install\s+(?:--save\s+|--save-dev\s+|-[SD]\s+)*posthog(?!\s*-)/,
+    /pnpm\s+(?:add|install)\s+(?:--save\s+|--save-dev\s+|-[SD]\s+)*posthog(?!\s*-)/,
+    /yarn\s+add\s+(?:--dev\s+|-D\s+)*posthog(?!\s*-)/,
+    /bun\s+(?:add|install)\s+(?:--dev\s+|-[dD]\s+)*posthog(?!\s*-)/,
+  ],
+};
+
+const npm_install_global: YaraRule = {
+  name: 'npm_install_global',
+  description:
+    'Detects global npm installs — should never install packages globally',
+  severity: 'high',
+  category: 'supply_chain',
+  appliesTo: PRE_BASH,
+  patterns: [/npm\s+install\s+-g\b/, /npm\s+install\s+--global\b/],
+};
+
+// ─── Rule Registry ───────────────────────────────────────────────
+
+export const RULES: YaraRule[] = [
+  // §1 PostHog API violations
+  pii_in_capture_call,
+  hardcoded_posthog_key,
+  autocapture_disabled,
+  hardcoded_posthog_host,
+  session_recording_disabled,
+  opt_out_capturing,
+  // §2 Prompt injection
+  prompt_injection_wizard_override,
+  prompt_injection_base64,
+  // §3 Secret exfiltration
+  secret_exfiltration_via_command,
+  // §4 Filesystem safety
+  destructive_rm,
+  git_force_push,
+  git_reset_hard,
+  // §5 Supply chain
+  wrong_posthog_package,
+  npm_install_global,
+];
+
+// ─── Scan Engine ─────────────────────────────────────────────────
+
+/**
+ * Scan content against rules applicable to a given hook phase and tool.
+ * Returns all matching rules (one match per rule, first pattern wins).
+ */
+export function scan(
+  content: string,
+  phase: HookPhase,
+  tool: ToolTarget,
+): ScanResult {
+  const applicableRules = RULES.filter((r) =>
+    r.appliesTo.some((a) => a.phase === phase && a.tool === tool),
+  );
+
+  const matches: YaraMatch[] = [];
+  for (const rule of applicableRules) {
+    for (const pattern of rule.patterns) {
+      const match = pattern.exec(content);
+      if (match) {
+        matches.push({
+          rule,
+          matchedText: match[0],
+          offset: match.index,
+        });
+        break; // One match per rule is sufficient
+      }
+    }
+  }
+
+  return matches.length > 0 ? { matched: true, matches } : { matched: false };
+}
+
+/**
+ * Scan all files in a skill directory for prompt injection.
+ * Used for context-mill scanning after skill installation.
+ */
+export function scanSkillDirectory(
+  files: Array<{ path: string; content: string }>,
+): ScanResult {
+  const allMatches: YaraMatch[] = [];
+  for (const file of files) {
+    const result = scan(file.content, 'PostToolUse', 'Read');
+    if (result.matched) {
+      allMatches.push(...result.matches);
+    }
+  }
+  return allMatches.length > 0
+    ? { matched: true, matches: allMatches }
+    : { matched: false };
+}

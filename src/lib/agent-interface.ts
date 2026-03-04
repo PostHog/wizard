@@ -25,7 +25,10 @@ import { createCustomHeaders } from '../utils/custom-headers';
 import { getLlmGatewayUrlFromHost } from '../utils/urls';
 import { LINTING_TOOLS } from './safe-tools';
 import { createWizardToolsServer, WIZARD_TOOL_NAMES } from './wizard-tools';
-import { getWizardCommandments } from './commandments';
+import {
+  createPreToolUseYaraHooks,
+  createPostToolUseYaraHooks,
+} from './yara-hooks';
 import type { PackageManagerDetector } from './package-manager-detection';
 
 // Dynamic import cache for ESM module
@@ -330,7 +333,7 @@ const DANGEROUS_OPERATORS = /[;`$()]/;
  * 1. It installs to .claude/skills/
  * 2. It downloads from our GitHub releases or localhost (dev)
  */
-function isSkillInstallCommand(command: string): boolean {
+export function isSkillInstallCommand(command: string): boolean {
   if (!command.startsWith('mkdir -p .claude/skills/')) return false;
 
   const urlMatch = command.match(/curl -sL ['"]([^'"]+)['"]/);
@@ -739,13 +742,6 @@ export async function runAgent(
         settingSources: ['project'],
         // Explicitly enable required tools including Skill
         allowedTools,
-        systemPrompt: {
-          type: 'preset',
-          preset: 'claude_code',
-          // Append wizard-wide commandments (from YAML) rather than replacing
-          // the preset so we keep default Claude Code behaviors.
-          append: getWizardCommandments(),
-        },
         env: {
           ...process.env,
           // Prevent user's Anthropic API key from overriding the wizard's OAuth token
@@ -774,6 +770,8 @@ export async function runAgent(
         },
         // Stop hook: drain additional feature queue, then collect remark, then allow stop
         hooks: {
+          PreToolUse: createPreToolUseYaraHooks(),
+          PostToolUse: createPostToolUseYaraHooks(),
           Stop: [
             {
               hooks: [createStopHook(config?.additionalFeatureQueue ?? [])],
