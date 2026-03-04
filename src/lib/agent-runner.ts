@@ -14,7 +14,6 @@ import {
   getPackageDotJson,
   isUsingTypeScript,
   printWelcome,
-  askForCloudRegion,
 } from '../utils/clack-utils';
 import type { PackageDotJson } from '../utils/package-json';
 import { analytics } from '../utils/analytics';
@@ -108,7 +107,6 @@ export async function runAgentWizard(
     );
   }
 
-  const cloudRegion = options.cloudRegion ?? (await askForCloudRegion());
   const typeScriptDetected = isUsingTypeScript(options);
 
   await confirmContinueIfNoOrDirtyGitRepo(options);
@@ -144,11 +142,8 @@ export async function runAgentWizard(
   });
 
   // Get PostHog credentials
-  const { projectApiKey, host, accessToken, projectId } =
-    await getOrAskForProjectData({
-      ...options,
-      cloudRegion,
-    });
+  const { projectApiKey, host, accessToken, projectId, cloudRegion } =
+    await getOrAskForProjectData(options);
 
   // Gather framework-specific context (e.g., Next.js router, React Native platform)
   const frameworkContext = config.metadata.gatherContext
@@ -185,10 +180,7 @@ export async function runAgentWizard(
   // See: https://github.com/anthropics/claude-code/issues/2267
   const mcpUrl = options.localMcp
     ? 'http://localhost:8787/mcp'
-    : process.env.MCP_URL ||
-      (cloudRegion === 'eu'
-        ? 'https://mcp-eu.posthog.com/mcp'
-        : 'https://mcp.posthog.com/mcp');
+    : process.env.MCP_URL || 'https://mcp.posthog.com/mcp';
 
   const agent = await initializeAgent(
     {
@@ -316,7 +308,6 @@ Please report this error to: ${chalk.cyan('wizard@posthog.com')}`;
 
   // Add MCP server to clients
   await addMCPServerToClientsStep({
-    cloudRegion,
     integration: config.metadata.integration,
     ci: options.ci,
   });

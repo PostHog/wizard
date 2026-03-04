@@ -1,6 +1,6 @@
 {
   "name": "@posthog/wizard",
-  "version": "1.35.0",
+  "version": "1.36.1",
   "homepage": "https://github.com/PostHog/wizard",
   "repository": "https://github.com/PostHog/wizard",
   "description": "The PostHog wizard helps you to configure your project",
@@ -31,9 +31,8 @@
   "typescript": {
     "definition": "dist/index.d.ts"
   },
-  
   "dependencies": {
-    "@anthropic-ai/claude-agent-sdk": "0.2.50",
+    "@anthropic-ai/claude-agent-sdk": "~0.2.63",
     "@clack/core": "^0.3.4",
     "@clack/prompts": "0.7.0",
     "@langchain/core": "^0.3.40",
@@ -46,7 +45,7 @@
     "lodash": "^4.17.21",
     "magicast": "^0.2.10",
     "opn": "^5.4.0",
-    "posthog-node": "^4.18.0",
+    "posthog-node": "^5.24.17",
     "read-env": "^1.3.0",
     "recast": "^0.23.3",
     "semver": "^7.5.3",
@@ -93,7 +92,7 @@
   "packageManager": "pnpm@10.23.0+sha512.21c4e5698002ade97e4efe8b8b4a89a8de3c85a37919f957e7a0f30f38fbc5bbdd05980ffe29179b2fb6e6e691242e098d945d1601772cad0fef5fb6411e2a4b",
   "scripts": {
     "clean": "rm -rf ./dist",
-    "prebuild": "pnpm clean",
+    "prebuild": "pnpm clean && node scripts/generate-version.js",
     "build:watch": "pnpm tsc -w",
     "build": "pnpm tsc",
     "postbuild": "chmod +x ./dist/bin.js && cp -r scripts/** dist && cp -r src/utils/rules dist/src/utils && pnpm test:smoke",

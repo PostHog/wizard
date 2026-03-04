@@ -42,7 +42,6 @@ The following CLI arguments are available:
 | `--help`          | Show help                                                        | boolean |         |                                                      |                                |
 | `--version`       | Show version number                                              | boolean |         |                                                      |                                |
 | `--debug`         | Enable verbose logging                                           | boolean | `false` |                                                      | `POSTHOG_WIZARD_DEBUG`         |
-| `--region`        | PostHog cloud region (when not specified, prompts for selection) | string  |         | "us", "eu"                                           | `POSTHOG_WIZARD_REGION`        |
 | `--default`       | Use default options for all prompts                              | boolean | `true`  |                                                      | `POSTHOG_WIZARD_DEFAULT`       |
 | `--signup`        | Create a new PostHog account during setup                        | boolean | `false` |                                                      | `POSTHOG_WIZARD_SIGNUP`        |
 | `--integration`   | Integration to set up                                            | string  |         | "nextjs", "astro", "react", "svelte", "react-native", "tanstack-router", "tanstack-start" |                                |
@@ -61,7 +60,7 @@ The following CLI arguments are available:
 Run the wizard non-interactive executions with `--ci`:
 
 ```bash
-npx @posthog/wizard --ci --region us --api-key $POSTHOG_PERSONAL_API_KEY --install-dir .
+npx @posthog/wizard --ci --api-key $POSTHOG_PERSONAL_API_KEY --install-dir .
 ```
 
 When running in CI mode (`--ci`):
@@ -76,7 +75,6 @@ The CLI args override environment variables in CI mode.
 
 ### Required Flags for CI Mode
 
-- `--region`: Cloud region (`us` or `eu`)
 - `--api-key`: Personal API key (`phx_xxx`) from your [PostHog settings](https://app.posthog.com/settings/user-api-keys)
 - `--install-dir`: Directory to install PostHog in (e.g., `.` for current directory)
 

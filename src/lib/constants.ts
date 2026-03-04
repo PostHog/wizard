@@ -22,10 +22,10 @@ export enum Integration {
   rails = 'rails',
 
   // Language fallbacks
+  javascript_web = 'javascript_web',
   python = 'python',
   ruby = 'ruby',
   javascriptNode = 'javascript_node',
-  javascript_web = 'javascript_web',
 }
 export interface Args {
   debug: boolean;
@@ -53,6 +53,10 @@ export const DUMMY_PROJECT_API_KEY = '_YOUR_POSTHOG_PROJECT_API_KEY_';
 export const POSTHOG_US_CLIENT_ID = 'c4Rdw8DIxgtQfA80IiSnGKlNX8QN00cFWF00QQhM';
 export const POSTHOG_EU_CLIENT_ID = 'bx2C5sZRN03TkdjraCcetvQFPGH6N2Y9vRLkcKEy';
 export const POSTHOG_DEV_CLIENT_ID = 'DC5uRLVbGI02YQ82grxgnK6Qn12SXWpCqdPb60oZ';
+export const POSTHOG_PROXY_CLIENT_ID = POSTHOG_US_CLIENT_ID;
+export const POSTHOG_OAUTH_URL = IS_DEV
+  ? 'http://localhost:8010'
+  : 'https://oauth.posthog.com';
 export const OAUTH_PORT = 8239;
 
 export const WIZARD_INTERACTION_EVENT_NAME = 'wizard interaction';
@@ -77,5 +81,6 @@ export const POSTHOG_FLAG_HEADER_PREFIX = 'X-POSTHOG-FLAG-';
  * Used for direct PostHog API calls and passed to the MCP server
  * so it can identify requests originating from the wizard.
  */
-import packageJson from '../../package.json';
-export const WIZARD_USER_AGENT = `posthog/wizard; version: ${packageJson.version}`;
+
+import { VERSION } from './version';
+export const WIZARD_USER_AGENT = `posthog/wizard; version: ${VERSION}`;

@@ -1,9 +1,5 @@
-import {
-  IS_DEV,
-  POSTHOG_DEV_CLIENT_ID,
-  POSTHOG_EU_CLIENT_ID,
-  POSTHOG_US_CLIENT_ID,
-} from '../lib/constants';
+import axios from 'axios';
+import { IS_DEV, WIZARD_USER_AGENT } from '../lib/constants';
 import type { CloudRegion } from './types';
 
 export const getAssetHostFromHost = (host: string) => {
@@ -54,16 +50,30 @@ export const getCloudUrlFromRegion = (region: CloudRegion) => {
   return 'https://us.posthog.com';
 };
 
-export const getOauthClientIdFromRegion = (region: CloudRegion) => {
+export async function detectRegionFromToken(
+  accessToken: string,
+): Promise<CloudRegion> {
   if (IS_DEV) {
-    return POSTHOG_DEV_CLIENT_ID;
+    return 'us';
   }
 
-  if (region === 'us') {
-    return POSTHOG_US_CLIENT_ID;
-  }
-  return POSTHOG_EU_CLIENT_ID;
-};
+  const headers = {
+    Authorization: `Bearer ${accessToken}`,
+    'User-Agent': WIZARD_USER_AGENT,
+  };
+
+  const [usResult, euResult] = await Promise.allSettled([
+    axios.get('https://us.posthog.com/api/users/@me/', { headers }),
+    axios.get('https://eu.posthog.com/api/users/@me/', { headers }),
+  ]);
+
+  if (usResult.status === 'fulfilled') return 'us';
+  if (euResult.status === 'fulfilled') return 'eu';
+
+  throw new Error(
+    'Could not determine cloud region from access token. Please check your PostHog account.',
+  );
+}
 
 export const getLlmGatewayUrlFromHost = (host: string) => {
   if (host.includes('localhost')) {

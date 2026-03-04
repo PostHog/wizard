@@ -3,7 +3,6 @@ import { execSync, spawnSync } from 'node:child_process';
 
 import { DefaultMCPClient } from '../MCPClient';
 import { DefaultMCPClientConfig, getDefaultServerConfig } from '../defaults';
-import type { CloudRegion } from '../../../utils/types';
 
 import { analytics } from '../../../utils/analytics';
 
@@ -61,14 +60,12 @@ export class CodexMCPClient extends DefaultMCPClient {
     apiKey: string,
     selectedFeatures?: string[],
     local?: boolean,
-    region?: CloudRegion,
   ): Promise<{ success: boolean }> {
     const config = getDefaultServerConfig(
       apiKey,
       'sse',
       selectedFeatures,
       local,
-      region,
     );
     const serverName = local ? 'posthog-local' : 'posthog';
 
