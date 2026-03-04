@@ -118,7 +118,7 @@ export function buildWizardMetadata(
 function buildAgentEnv(
   wizardMetadata: Record<string, string>,
   wizardFlags: Record<string, string>,
-): NodeJS.ProcessEnv {
+): Record<string, string> {
   const headers = createCustomHeaders();
   for (const [key, value] of Object.entries(wizardMetadata)) {
     headers.add(
@@ -134,11 +134,7 @@ function buildAgentEnv(
   }
   const encoded = headers.encode();
   logToFile('ANTHROPIC_CUSTOM_HEADERS', encoded);
-  return {
-    ...process.env,
-    ANTHROPIC_API_KEY: undefined,
-    ANTHROPIC_CUSTOM_HEADERS: encoded,
-  };
+  return encoded;
 }
 
 /**
@@ -607,10 +603,15 @@ export async function runAgent(
         settingSources: ['project'],
         // Explicitly enable required tools including Skill
         allowedTools,
-        env: buildAgentEnv(
-          agentConfig.wizardMetadata ?? {},
-          agentConfig.wizardFlags ?? {},
-        ),
+        env: {
+          ...process.env,
+          // Prevent user's Anthropic API key from overriding the wizard's OAuth token
+          ANTHROPIC_API_KEY: undefined,
+          ANTHROPIC_CUSTOM_HEADERS: buildAgentEnv(
+            agentConfig.wizardMetadata ?? {},
+            agentConfig.wizardFlags ?? {},
+          ),
+        },
         canUseTool: (toolName: string, input: unknown) => {
           logToFile('canUseTool called:', { toolName, input });
           const result = wizardCanUseTool(
