@@ -247,7 +247,7 @@ export class WizardStore {
   // ── React integration ───────────────────────────────────────────
 
   subscribe(callback: () => void): () => void {
-    return this.$version.subscribe(() => callback());
+    return this.$version.listen(() => callback());
   }
 
   getSnapshot(): number {

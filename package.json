@@ -59,6 +59,9 @@
     "zod-to-json-schema": "^3.24.3"
   },
   "devDependencies": {
+    "@babel/core": "^7.29.0",
+    "@babel/plugin-transform-modules-commonjs": "^7.28.6",
+    "@babel/preset-env": "^7.29.0",
     "@babel/types": "~7.21.4",
     "@types/chai": "^4.3.17",
     "@types/glob": "^7.2.0",
@@ -73,6 +76,7 @@
     "@types/yargs": "^16.0.9",
     "@typescript-eslint/eslint-plugin": "^5.13.0",
     "@typescript-eslint/parser": "^5.13.0",
+    "babel-jest": "^29.7.0",
     "dotenv": "^16.4.7",
     "eslint": "^8.18.0",
     "eslint-config-prettier": "^8.3.0",
@@ -120,7 +124,8 @@
       "dist"
     ],
     "transform": {
-      "^.+\\.tsx?$": "ts-jest"
+      "^.+\\.tsx?$": "ts-jest",
+      "node_modules/.+\\.js$": "babel-jest"
     },
     "testRegex": "(/__tests__/.*|(\\.|/)(test|spec))\\.(jsx?|tsx?)$",
     "moduleFileExtensions": [
@@ -141,9 +146,11 @@
       "/e2e-tests/"
     ],
     "testEnvironment": "node",
+    "transformIgnorePatterns": [
+      "node_modules/(?!(.pnpm/nanostores|nanostores))"
+    ],
     "moduleNameMapper": {
       "^@anthropic-ai/claude-agent-sdk$": "<rootDir>/__mocks__/@anthropic-ai/claude-agent-sdk.ts",
-      "^nanostores$": "<rootDir>/__mocks__/nanostores.ts",
       "^(\\.{1,2}/.*)\\.js$": "$1"
     }
   },
