@@ -17,6 +17,12 @@ import type { WizardStore } from '../store.js';
 const MIN_WIDTH = 80;
 const MAX_WIDTH = 120;
 
+/** Use terminal width when small so we don't overflow; otherwise clamp to [MIN_WIDTH, MAX_WIDTH]. */
+function getContentWidth(terminalColumns: number): number {
+  if (terminalColumns < MIN_WIDTH) return terminalColumns;
+  return Math.min(MAX_WIDTH, terminalColumns);
+}
+
 interface ScreenContainerProps {
   store: WizardStore;
   screens: Record<string, ReactNode>;
@@ -29,20 +35,21 @@ export const ScreenContainer = ({ store, screens }: ScreenContainerProps) => {
     () => store.getSnapshot(),
   );
 
-  const width = Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, stdout.columns));
+  const terminalWidth = stdout.columns;
+  const width = getContentWidth(terminalWidth);
   const contentHeight = Math.max(5, stdout.rows - 3);
-  const contentWidth = Math.max(10, width - 2);
+  const contentAreaWidth = Math.max(10, width - 2);
   const direction = store.lastNavDirection === 'pop' ? 'right' : 'left';
   const activeScreen = screens[store.currentScreen] ?? null;
 
-  return (
+  const inner = (
     <Box flexDirection="column" height={stdout.rows} width={width}>
-      <TitleBar version={store.version} />
+      <TitleBar version={store.version} width={width} />
       <Box height={1} />
       <Box flexDirection="column" flexGrow={1} paddingX={1}>
         <DissolveTransition
           transitionKey={store.currentScreen}
-          width={contentWidth}
+          width={contentAreaWidth}
           height={contentHeight}
           direction={direction}
         >
@@ -51,6 +58,18 @@ export const ScreenContainer = ({ store, screens }: ScreenContainerProps) => {
           </ScreenErrorBoundary>
         </DissolveTransition>
       </Box>
+    </Box>
+  );
+
+  return (
+    <Box
+      flexDirection="column"
+      height={stdout.rows}
+      width={terminalWidth}
+      alignItems="center"
+      justifyContent="flex-start"
+    >
+      {inner}
     </Box>
   );
 };
