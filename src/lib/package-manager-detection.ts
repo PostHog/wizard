@@ -14,7 +14,7 @@ import {
 import {
   detectPackageManager as detectPythonPM,
   PythonPackageManager,
-} from '../python/utils';
+} from '../frameworks/python/utils';
 
 // ---------------------------------------------------------------------------
 // Common types
