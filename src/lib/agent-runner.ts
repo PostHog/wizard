@@ -325,17 +325,9 @@ Please report this error to: ${chalk.cyan('wizard@posthog.com')}`;
       : '',
   ].filter(Boolean);
 
-  const nextSteps = [
-    ...config.ui.getOutroNextSteps(frameworkContext),
-    uploadedEnvVars.length === 0 && config.environment.uploadToHosting
-      ? `Upload your project token to your hosting provider`
-      : '',
-  ].filter(Boolean);
-
   session.outroData = {
     kind: OutroKind.Success,
     changes,
-    nextSteps,
     docsUrl: config.metadata.docsUrl,
     continueUrl,
   };

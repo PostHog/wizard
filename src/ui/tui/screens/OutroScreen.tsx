@@ -62,14 +62,15 @@ export const OutroScreen = ({ store }: OutroScreenProps) => {
             </Box>
           )}
 
-          {outroData.nextSteps && outroData.nextSteps.length > 0 && (
+          {store.eventPlan.length > 0 && (
             <Box flexDirection="column" marginTop={1}>
-              <Text color="yellow" bold>
-                Next steps:
+              <Text color="cyan" bold>
+                Events added:
               </Text>
-              {outroData.nextSteps.map((step, i) => (
-                <Text key={i}>
-                  {'\u2022'} {step}
+              {store.eventPlan.map((event) => (
+                <Text key={event.name}>
+                  {'\u2022'} <Text bold>{event.name}</Text>
+                  <Text dimColor> {event.description}</Text>
                 </Text>
               ))}
             </Box>
