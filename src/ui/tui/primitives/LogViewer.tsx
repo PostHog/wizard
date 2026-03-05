@@ -3,9 +3,10 @@
  * Only renders the last N lines that fit on screen.
  */
 
-import { Box, Text, useStdout } from 'ink';
+import { Box, Text } from 'ink';
 import { useState, useEffect } from 'react';
 import * as fs from 'fs';
+import { useStdoutDimensions } from '../hooks/useStdoutDimensions.js';
 
 /** Rows consumed by TitleBar + spacer + ScreenContainer padding + status bar + tab bar */
 const CHROME_ROWS = 8;
@@ -17,8 +18,8 @@ interface LogViewerProps {
 }
 
 export const LogViewer = ({ filePath, height }: LogViewerProps) => {
-  const { stdout } = useStdout();
-  const visibleLines = height ?? Math.max(5, stdout.rows - CHROME_ROWS);
+  const [, rows] = useStdoutDimensions();
+  const visibleLines = height ?? Math.max(5, rows - CHROME_ROWS);
 
   const [lines, setLines] = useState<string[]>([]);
 
