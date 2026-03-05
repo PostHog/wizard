@@ -49,6 +49,7 @@ describe('CopilotCLIMCPClient', () => {
   const buildMCPUrlMock = buildMCPUrl as jest.Mock;
 
   const originalPlatform = process.platform;
+  const originalUserProfile = process.env.USERPROFILE;
 
   beforeEach(() => {
     client = new CopilotCLIMCPClient();
@@ -65,6 +66,12 @@ describe('CopilotCLIMCPClient', () => {
       value: originalPlatform,
       writable: true,
     });
+
+    if (originalUserProfile === undefined) {
+      delete process.env.USERPROFILE;
+    } else {
+      process.env.USERPROFILE = originalUserProfile;
+    }
   });
 
   describe('constructor', () => {
