@@ -25,7 +25,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: PostHog/wizard-workbench
-          path: ../wizard-workbench
+          path: wizard-workbench
 
       - name: Install pnpm
         uses: pnpm/action-setup@v2
@@ -45,6 +45,7 @@ jobs:
       - name: Run smoke test
         env:
           POSTHOG_PERSONAL_API_KEY: ${{ secrets.GH_APP_POSTHOG_WIZARD_CI_BOT_POSTHOG_PERSONAL_KEY }}
+          WIZARD_WORKBENCH_ROOT: ${{ github.workspace }}/wizard-workbench
         run: ./scripts/smoke-test-ci.sh "${{ inputs.app || 'next-js/15-app-router-todo' }}"
 
       - name: Upload artifacts
