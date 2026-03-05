@@ -99,9 +99,9 @@ const pii_in_capture_call: YaraRule = {
     /\.identify\s*\([^)]{0,200}(card[_\s]?number|cvv|credit[_\s]?card)/i,
     /\.identify\s*\([^)]{0,200}(date[_\s]?of[_\s]?birth|dob|birthday)/i,
     /\.identify\s*\([^)]{0,200}(street|mailing|home|billing)[_\s]?address/i,
-    // PII in $set properties via capture
-    /\$set.*email/i,
-    /\$set.*phone/i,
+    // PII in $set properties via capture (bound to same object)
+    /\$set[^}]{0,200}email/i,
+    /\$set[^}]{0,200}phone/i,
   ],
 };
 
@@ -178,20 +178,30 @@ const opt_out_capturing: YaraRule = {
 const prompt_injection_wizard_override: YaraRule = {
   name: 'prompt_injection_wizard_override',
   description:
-    'Detects prompt injection attempting to override wizard behavior in project files',
+    'Detects classic prompt injection attempting to override agent instructions',
   severity: 'critical',
   category: 'prompt_injection',
   appliesTo: POST_READ_GREP,
   patterns: [
-    // Direct instruction override
+    // Direct instruction override — classic injection patterns
     /ignore previous instructions/i,
     /disregard all/i,
     /forget your instructions/i,
     /override your rules/i,
     // Role manipulation
-    /you are now/i,
     /act as a different/i,
     /new instructions:/i,
+  ],
+};
+
+const prompt_injection_wizard_specific: YaraRule = {
+  name: 'prompt_injection_wizard_specific',
+  description:
+    'Detects wizard-specific manipulation or tool abuse attempts in project files',
+  severity: 'high',
+  category: 'prompt_injection',
+  appliesTo: POST_READ_GREP,
+  patterns: [
     // Wizard-specific manipulation
     /skip posthog/i,
     /do not install posthog/i,
@@ -201,6 +211,8 @@ const prompt_injection_wizard_override: YaraRule = {
     // Tool abuse via file content
     /run the following command/i,
     /execute this shell command/i,
+    // Role hijacking (broad — kept as high, not critical)
+    /you are now/i,
   ],
 };
 
@@ -316,6 +328,7 @@ export const RULES: YaraRule[] = [
   opt_out_capturing,
   // §2 Prompt injection
   prompt_injection_wizard_override,
+  prompt_injection_wizard_specific,
   prompt_injection_base64,
   // §3 Secret exfiltration
   secret_exfiltration_via_command,
