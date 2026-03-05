@@ -5,7 +5,10 @@
 #
 # Prerequisites:
 #   - POSTHOG_PERSONAL_API_KEY env var (or in .env)
-#   - ../wizard-workbench repo checked out (for the test app)
+#   - A wizard-workbench repo checked out (for the test app), pointed to by:
+#       - WIZARD_WORKBENCH_ROOT=/path/to/wizard-workbench
+#         or
+#       - ../wizard-workbench relative to this repo
 #
 # Usage:
 #   ./scripts/smoke-test-ci.sh                          # default: next-js/15-app-router-todo
@@ -28,11 +31,23 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 WIZARD_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-WORKBENCH_ROOT="$(cd "$WIZARD_ROOT/../wizard-workbench" 2>/dev/null && pwd)" || {
-  echo "ERROR: wizard-workbench not found at ../wizard-workbench"
-  echo "Clone it: git clone https://github.com/PostHog/wizard-workbench.git ../wizard-workbench"
-  exit 1
-}
+WORKBENCH_ROOT="${WIZARD_WORKBENCH_ROOT:-}"
+
+if [ -n "${WORKBENCH_ROOT}" ]; then
+  # Normalise and validate user-provided path
+  WORKBENCH_ROOT="$(cd "$WORKBENCH_ROOT" 2>/dev/null && pwd)" || {
+    echo "ERROR: wizard-workbench not found at WIZARD_WORKBENCH_ROOT=$WIZARD_WORKBENCH_ROOT"
+    exit 1
+  }
+else
+  WORKBENCH_ROOT="$(cd "$WIZARD_ROOT/../wizard-workbench" 2>/dev/null && pwd)" || {
+    echo "ERROR: wizard-workbench not found."
+    echo "Either set WIZARD_WORKBENCH_ROOT=/absolute/path/to/wizard-workbench"
+    echo "or clone it next to this repo:"
+    echo "  git clone https://github.com/PostHog/wizard-workbench.git ../wizard-workbench"
+    exit 1
+  }
+fi
 
 APP="${1:-next-js/15-app-router-todo}"
 APP_SRC="$WORKBENCH_ROOT/apps/$APP"
