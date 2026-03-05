@@ -318,7 +318,7 @@ export function isUsingTypeScript({
  * Get project data for the wizard via OAuth or CI API key.
  */
 export async function getOrAskForProjectData(
-  _options: Pick<WizardOptions, 'signup' | 'ci' | 'apiKey'> & {
+  _options: Pick<WizardOptions, 'signup' | 'ci' | 'apiKey' | 'projectId'> & {
     cloudRegion: CloudRegion;
   },
 ): Promise<{
@@ -357,17 +357,16 @@ export async function getOrAskForProjectData(
   );
 
   if (!projectApiKey) {
-    getUI().log
-      .error(`Didn't receive a project API key. This shouldn't happen :(
+    getUI().log.error(`Didn't receive a project token. This shouldn't happen :(
 
 Please let us know if you think this is a bug in the wizard:
 ${chalk.cyan(ISSUES_URL)}`);
 
     getUI().log
-      .info(`In the meantime, we'll add a dummy project API key (${chalk.cyan(
+      .info(`In the meantime, we'll add a dummy project token (${chalk.cyan(
       `"${DUMMY_PROJECT_API_KEY}"`,
     )}) for you to replace later.
-You can find your Project API key here:
+You can find your project token here:
 ${chalk.cyan(`${cloudUrl}/settings/project#variables`)}`);
   }
 
@@ -405,7 +404,6 @@ async function askForWizardLogin(options: {
   signup: boolean;
 }): Promise<ProjectData> {
   const tokenResponse = await performOAuthFlow({
-    cloudRegion: options.cloudRegion,
     scopes: [
       'user:read',
       'project:read',

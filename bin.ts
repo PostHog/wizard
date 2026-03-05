@@ -62,11 +62,6 @@ yargs(hideBin(process.argv))
       describe: 'Enable verbose logging\nenv: POSTHOG_WIZARD_DEBUG',
       type: 'boolean',
     },
-    region: {
-      describe: 'PostHog cloud region\nenv: POSTHOG_WIZARD_REGION',
-      choices: ['us', 'eu'],
-      type: 'string',
-    },
     default: {
       default: true,
       describe:
@@ -94,6 +89,11 @@ yargs(hideBin(process.argv))
     'api-key': {
       describe:
         'PostHog personal API key (phx_xxx) for authentication\nenv: POSTHOG_WIZARD_API_KEY',
+      type: 'string',
+    },
+    'project-id': {
+      describe:
+        'PostHog project ID to use (optional; when not set, uses default from API key or OAuth)\nenv: POSTHOG_WIZARD_PROJECT_ID',
       type: 'string',
     },
   })
@@ -137,6 +137,12 @@ yargs(hideBin(process.argv))
             'Show menu for manual integration selection instead of auto-detecting\nenv: POSTHOG_WIZARD_MENU',
           type: 'boolean',
         },
+        benchmark: {
+          default: false,
+          describe:
+            'Run in benchmark mode with per-phase token tracking\nenv: POSTHOG_WIZARD_BENCHMARK',
+          type: 'boolean',
+        },
       });
     },
     (argv) => {
@@ -146,13 +152,6 @@ yargs(hideBin(process.argv))
       if (options.ci) {
         // Use LoggingUI for CI mode (no dependencies, no prompts)
         setUI(new LoggingUI());
-
-        // Validate required CI flags
-        if (!options.region) {
-          getUI().intro(chalk.inverse(`PostHog Wizard`));
-          getUI().log.error('CI mode requires --region (us or eu)');
-          process.exit(1);
-        }
         if (!options.apiKey) {
           getUI().intro(chalk.inverse(`PostHog Wizard`));
           getUI().log.error(
@@ -177,7 +176,7 @@ yargs(hideBin(process.argv))
             'It appears you are running in a non-interactive environment.\n' +
             'Please run the wizard in an interactive terminal.\n\n' +
             'For CI/CD environments, use --ci mode:\n' +
-            '  npx @posthog/wizard --ci --region us --api-key phx_xxx',
+            '  npx @posthog/wizard --ci --api-key phx_xxx --install-dir .',
         );
         process.exit(1);
       } else if (options.playground) {
@@ -213,6 +212,8 @@ yargs(hideBin(process.argv))
               integration: options.integration as Parameters<
                 typeof buildSession
               >[0]['integration'],
+              benchmark: options.benchmark as boolean | undefined,
+              projectId: options.projectId as string | undefined,
             });
             tui.store.session = session;
 
@@ -248,6 +249,7 @@ yargs(hideBin(process.argv))
                       localMcp: session.localMcp,
                       ci: session.ci,
                       menu: session.menu,
+                      benchmark: session.benchmark,
                     }),
                     new Promise<Record<string, never>>((resolve) =>
                       setTimeout(() => resolve({}), DETECTION_TIMEOUT_MS),

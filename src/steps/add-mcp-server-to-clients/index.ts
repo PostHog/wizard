@@ -1,11 +1,11 @@
 import type { Integration } from '../../lib/constants';
+import type { CloudRegion } from '../../utils/types';
 import { traceStep } from '../../telemetry';
 import { analytics } from '../../utils/analytics';
 import { getUI } from '../../ui';
 import { MCPClient } from './MCPClient';
 import { CursorMCPClient } from './clients/cursor';
 import { ClaudeMCPClient } from './clients/claude';
-import type { CloudRegion } from '../../utils/types';
 import { ClaudeCodeMCPClient } from './clients/claude-code';
 import { VisualStudioCodeClient } from './clients/visual-studio-code';
 import { ZedClient } from './clients/zed';
@@ -47,7 +47,7 @@ export const getSupportedClients = async (): Promise<MCPClient[]> => {
  */
 export const addMCPServerToClientsStep = async ({
   integration,
-  cloudRegion,
+  cloudRegion: _cloudRegion,
   local = false,
   ci = false,
 }: {
@@ -80,7 +80,6 @@ export const addMCPServerToClientsStep = async ({
       undefined,
       [...ALL_FEATURE_VALUES],
       local,
-      cloudRegion,
     );
   });
 
@@ -149,10 +148,9 @@ export const addMCPServer = async (
   personalApiKey?: string,
   selectedFeatures?: string[],
   local?: boolean,
-  region?: CloudRegion,
 ): Promise<void> => {
   for (const client of clients) {
-    await client.addServer(personalApiKey, selectedFeatures, local, region);
+    await client.addServer(personalApiKey, selectedFeatures, local);
   }
 };
 

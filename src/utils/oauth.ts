@@ -5,11 +5,17 @@ import chalk from 'chalk';
 import opn from 'opn';
 import { z } from 'zod';
 import { getUI } from '../ui';
-import { ISSUES_URL, OAUTH_PORT } from '../lib/constants';
+import {
+  IS_DEV,
+  ISSUES_URL,
+  OAUTH_PORT,
+  POSTHOG_DEV_CLIENT_ID,
+  POSTHOG_OAUTH_URL,
+  POSTHOG_PROXY_CLIENT_ID,
+  WIZARD_USER_AGENT,
+} from '../lib/constants';
 import { abort } from './setup-utils';
 import { analytics } from './analytics';
-import type { CloudRegion } from './types';
-import { getCloudUrlFromRegion, getOauthClientIdFromRegion } from './urls';
 
 const OAUTH_CALLBACK_STYLES = `
   <style>
@@ -48,7 +54,6 @@ export type OAuthTokenResponse = z.infer<typeof OAuthTokenResponseSchema>;
 
 interface OAuthConfig {
   scopes: string[];
-  cloudRegion: CloudRegion;
   signup?: boolean;
 }
 
@@ -171,22 +176,22 @@ async function startCallbackServer(
 async function exchangeCodeForToken(
   code: string,
   codeVerifier: string,
-  config: OAuthConfig,
 ): Promise<OAuthTokenResponse> {
-  const cloudUrl = getCloudUrlFromRegion(config.cloudRegion);
+  const clientId = IS_DEV ? POSTHOG_DEV_CLIENT_ID : POSTHOG_PROXY_CLIENT_ID;
 
   const response = await axios.post(
-    `${cloudUrl}/oauth/token`,
+    `${POSTHOG_OAUTH_URL}/oauth/token`,
     {
       grant_type: 'authorization_code',
       code,
       redirect_uri: `http://localhost:${OAUTH_PORT}/callback`,
-      client_id: getOauthClientIdFromRegion(config.cloudRegion),
+      client_id: clientId,
       code_verifier: codeVerifier,
     },
     {
       headers: {
         'Content-Type': 'application/json',
+        'User-Agent': WIZARD_USER_AGENT,
       },
     },
   );
@@ -197,15 +202,12 @@ async function exchangeCodeForToken(
 export async function performOAuthFlow(
   config: OAuthConfig,
 ): Promise<OAuthTokenResponse> {
-  const cloudUrl = getCloudUrlFromRegion(config.cloudRegion);
+  const clientId = IS_DEV ? POSTHOG_DEV_CLIENT_ID : POSTHOG_PROXY_CLIENT_ID;
   const codeVerifier = generateCodeVerifier();
   const codeChallenge = generateCodeChallenge(codeVerifier);
 
-  const authUrl = new URL(`${cloudUrl}/oauth/authorize`);
-  authUrl.searchParams.set(
-    'client_id',
-    getOauthClientIdFromRegion(config.cloudRegion),
-  );
+  const authUrl = new URL(`${POSTHOG_OAUTH_URL}/oauth/authorize`);
+  authUrl.searchParams.set('client_id', clientId);
   authUrl.searchParams.set(
     'redirect_uri',
     `http://localhost:${OAUTH_PORT}/callback`,
@@ -217,7 +219,9 @@ export async function performOAuthFlow(
   authUrl.searchParams.set('required_access_level', 'project');
 
   const signupUrl = new URL(
-    `${cloudUrl}/signup?next=${encodeURIComponent(authUrl.toString())}`,
+    `${POSTHOG_OAUTH_URL}/signup?next=${encodeURIComponent(
+      authUrl.toString(),
+    )}`,
   );
 
   const localSignupUrl = `http://localhost:${OAUTH_PORT}/authorize?signup=true`;
@@ -249,7 +253,7 @@ export async function performOAuthFlow(
       ),
     ]);
 
-    const token = await exchangeCodeForToken(code, codeVerifier, config);
+    const token = await exchangeCodeForToken(code, codeVerifier);
 
     server.close();
     getUI().setLoginUrl(null);
@@ -284,7 +288,6 @@ export async function performOAuthFlow(
 
     analytics.captureException(error, {
       step: 'oauth_flow',
-      cloud_region: config.cloudRegion,
     });
 
     await abort();

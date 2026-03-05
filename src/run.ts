@@ -19,13 +19,15 @@ type Args = {
   debug?: boolean;
   forceInstall?: boolean;
   installDir?: string;
-  region?: CloudRegion;
   default?: boolean;
   signup?: boolean;
   localMcp?: boolean;
   ci?: boolean;
   apiKey?: string;
+  projectId?: string;
   menu?: boolean;
+  benchmark?: boolean;
+  region?: CloudRegion;
 };
 
 export async function runWizard(argv: Args, session?: WizardSession) {
@@ -58,6 +60,8 @@ export async function runWizard(argv: Args, session?: WizardSession) {
       menu: finalArgs.menu,
       region: finalArgs.region,
       integration: finalArgs.integration,
+      benchmark: finalArgs.benchmark,
+      projectId: finalArgs.projectId,
     });
   }
 
@@ -93,6 +97,7 @@ export async function runWizard(argv: Args, session?: WizardSession) {
         localMcp: session.localMcp,
         ci: session.ci,
         menu: session.menu,
+        benchmark: session.benchmark,
       });
       for (const [key, value] of Object.entries(context)) {
         if (!(key in session.frameworkContext)) {

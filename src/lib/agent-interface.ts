@@ -5,20 +5,26 @@
 
 import path from 'path';
 import { getUI, type SpinnerHandle } from '../ui';
-import { debug, logToFile, initLogFile, LOG_FILE_PATH } from '../utils/debug';
+import { debug, logToFile, initLogFile, getLogFilePath } from '../utils/debug';
 import type { WizardOptions } from '../utils/types';
 import { analytics } from '../utils/analytics';
 import {
   WIZARD_INTERACTION_EVENT_NAME,
   WIZARD_REMARK_EVENT_NAME,
+  POSTHOG_PROPERTY_HEADER_PREFIX,
+  WIZARD_VARIANT_FLAG_KEY,
+  WIZARD_VARIANTS,
+  WIZARD_USER_AGENT,
 } from './constants';
 import {
   type AdditionalFeature,
   ADDITIONAL_FEATURE_PROMPTS,
 } from './wizard-session';
+import { createCustomHeaders } from '../utils/custom-headers';
 import { getLlmGatewayUrlFromHost } from '../utils/urls';
 import { LINTING_TOOLS } from './safe-tools';
 import { createWizardToolsServer, WIZARD_TOOL_NAMES } from './wizard-tools';
+import { getWizardCommandments } from './commandments';
 import type { PackageManagerDetector } from './package-manager-detection';
 
 // Dynamic import cache for ESM module
@@ -54,6 +60,8 @@ export const AgentSignals = {
   ERROR_RESOURCE_MISSING: '[ERROR-RESOURCE-MISSING]',
   /** Signal emitted when the agent provides a remark about its run */
   WIZARD_REMARK: '[WIZARD-REMARK]',
+  /** Signal prefix for benchmark logging */
+  BENCHMARK: '[BENCHMARK]',
 } as const;
 
 export type AgentSignal = (typeof AgentSignals)[keyof typeof AgentSignals];
@@ -80,6 +88,9 @@ export type AgentConfig = {
   posthogApiHost: string;
   additionalMcpServers?: Record<string, { url: string }>;
   detectPackageManager: PackageManagerDetector;
+  /** Feature flag key -> variant (evaluated at start of run). */
+  wizardFlags?: Record<string, string>;
+  wizardMetadata?: Record<string, string>;
 };
 
 /**
@@ -143,7 +154,47 @@ type AgentRunConfig = {
   workingDirectory: string;
   mcpServers: McpServersConfig;
   model: string;
+  wizardFlags?: Record<string, string>;
+  wizardMetadata?: Record<string, string>;
 };
+
+/**
+ * Select wizard metadata from WIZARD_VARIANTS using the variant feature flag.
+ * If the flag is missing or the value is not in config, returns the "base" variant (VARIANT: "base").
+ */
+export function buildWizardMetadata(
+  flags: Record<string, string> = {},
+): Record<string, string> {
+  const variantKey = flags[WIZARD_VARIANT_FLAG_KEY];
+  const variant =
+    (variantKey && WIZARD_VARIANTS[variantKey]) ?? WIZARD_VARIANTS['base'];
+  return { ...variant };
+}
+
+/**
+ * Build env for the SDK subprocess: process.env plus ANTHROPIC_CUSTOM_HEADERS from wizard metadata/flags.
+ */
+function buildAgentEnv(
+  wizardMetadata: Record<string, string>,
+  wizardFlags: Record<string, string>,
+): string {
+  const headers = createCustomHeaders();
+  for (const [key, value] of Object.entries(wizardMetadata)) {
+    headers.add(
+      key.startsWith(POSTHOG_PROPERTY_HEADER_PREFIX)
+        ? key
+        : `${POSTHOG_PROPERTY_HEADER_PREFIX}${key}`,
+      value,
+    );
+  }
+  for (const [flagKey, variant] of Object.entries(wizardFlags)) {
+    if (!flagKey.toLowerCase().startsWith('wizard')) continue;
+    headers.addFlag(flagKey, variant);
+  }
+  const encoded = headers.encode();
+  logToFile('ANTHROPIC_CUSTOM_HEADERS', encoded);
+  return encoded;
+}
 
 /**
  * Package managers that can be used to run commands.
@@ -207,7 +258,7 @@ function isSkillInstallCommand(command: string): boolean {
 
   const url = urlMatch[1];
   return (
-    url.startsWith('https://github.com/PostHog/examples/releases/') ||
+    url.startsWith('https://github.com/PostHog/context-mill/releases/') ||
     /^http:\/\/localhost:\d+\//.test(url)
   );
 }
@@ -413,6 +464,7 @@ export async function initializeAgent(
         url: config.posthogMcpUrl,
         headers: {
           Authorization: `Bearer ${config.posthogApiKey}`,
+          'User-Agent': WIZARD_USER_AGENT,
         },
       },
       ...Object.fromEntries(
@@ -433,6 +485,8 @@ export async function initializeAgent(
       workingDirectory: config.workingDirectory,
       mcpServers,
       model: 'anthropic/claude-sonnet-4-6',
+      wizardFlags: config.wizardFlags,
+      wizardMetadata: config.wizardMetadata,
     };
 
     logToFile('Agent config:', {
@@ -451,7 +505,7 @@ export async function initializeAgent(
       });
     }
 
-    getUI().log.step(`Verbose logs: ${LOG_FILE_PATH}`);
+    getUI().log.step(`Verbose logs: ${getLogFilePath()}`);
     getUI().log.success("Agent initialized. Let's get cooking!");
     return agentRunConfig;
   } catch (error) {
@@ -482,6 +536,10 @@ export async function runAgent(
     errorMessage?: string;
     additionalFeatureQueue?: readonly AdditionalFeature[];
   },
+  middleware?: {
+    onMessage(message: any): void;
+    finalize(resultMessage: any, totalDurationMs: number): any;
+  },
 ): Promise<{ error?: AgentErrorType; message?: string }> {
   const {
     spinnerMessage = 'Customizing your PostHog setup...',
@@ -502,6 +560,7 @@ export async function runAgent(
   const collectedText: string[] = [];
   // Track if we received a successful result (before any cleanup errors)
   let receivedSuccessResult = false;
+  let lastResultMessage: any = null;
 
   // Workaround for SDK bug: stdin closes before canUseTool responses can be sent.
   // The fix is to use an async generator for the prompt that stays open until
@@ -561,6 +620,11 @@ export async function runAgent(
       duration_ms: durationMs,
       duration_seconds: durationSeconds,
     });
+    try {
+      middleware?.finalize(lastResultMessage, durationMs);
+    } catch (e) {
+      logToFile(`${AgentSignals.BENCHMARK} Middleware finalize error:`, e);
+    }
     spinner.stop(successMessage);
     return {};
   };
@@ -596,10 +660,21 @@ export async function runAgent(
         settingSources: ['project'],
         // Explicitly enable required tools including Skill
         allowedTools,
+        systemPrompt: {
+          type: 'preset',
+          preset: 'claude_code',
+          // Append wizard-wide commandments (from YAML) rather than replacing
+          // the preset so we keep default Claude Code behaviors.
+          append: getWizardCommandments(),
+        },
         env: {
           ...process.env,
           // Prevent user's Anthropic API key from overriding the wizard's OAuth token
           ANTHROPIC_API_KEY: undefined,
+          ANTHROPIC_CUSTOM_HEADERS: buildAgentEnv(
+            agentConfig.wizardMetadata ?? {},
+            agentConfig.wizardFlags ?? {},
+          ),
         },
         canUseTool: (toolName: string, input: unknown) => {
           logToFile('canUseTool called:', { toolName, input });
@@ -642,12 +717,19 @@ export async function runAgent(
         receivedSuccessResult,
       );
 
+      try {
+        middleware?.onMessage(message);
+      } catch (e) {
+        logToFile(`${AgentSignals.BENCHMARK} Middleware onMessage error:`, e);
+      }
+
       // Signal completion when result received
       if (message.type === 'result') {
         // Track successful results before any potential cleanup errors
         // The SDK may emit a second error result during cleanup due to a race condition
         if (message.subtype === 'success' && !message.is_error) {
           receivedSuccessResult = true;
+          lastResultMessage = message;
         }
         signalDone!();
       }

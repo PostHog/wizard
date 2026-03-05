@@ -13,6 +13,12 @@
 import type { Integration } from './constants';
 import type { FrameworkConfig } from './framework-config';
 
+function parseProjectIdArg(value: string | undefined): number | undefined {
+  if (value === undefined || value === '') return undefined;
+  const n = Number(value);
+  return Number.isInteger(n) && n > 0 ? n : undefined;
+}
+
 export type CloudRegion = 'us' | 'eu';
 
 /** Lifecycle phase of the main work (agent run, MCP install, etc.) */
@@ -74,6 +80,8 @@ export interface WizardSession {
   localMcp: boolean;
   apiKey?: string;
   menu: boolean;
+  benchmark: boolean;
+  projectId?: number;
 
   // From detection + screens
   cloudRegion: CloudRegion | null;
@@ -131,6 +139,8 @@ export function buildSession(args: {
   menu?: boolean;
   region?: CloudRegion;
   integration?: Integration;
+  benchmark?: boolean;
+  projectId?: string;
 }): WizardSession {
   return {
     debug: args.debug ?? false,
@@ -141,6 +151,8 @@ export function buildSession(args: {
     localMcp: args.localMcp ?? false,
     apiKey: args.apiKey,
     menu: args.menu ?? false,
+    benchmark: args.benchmark ?? false,
+    projectId: parseProjectIdArg(args.projectId),
 
     cloudRegion: args.region ?? null,
     integration: args.integration ?? null,

@@ -1,13 +1,8 @@
 import { CodexMCPClient } from '../codex';
-import { getDefaultServerConfig } from '../../defaults';
 
 jest.mock('node:child_process', () => ({
   execSync: jest.fn(),
   spawnSync: jest.fn(),
-}));
-
-jest.mock('../../defaults', () => ({
-  getDefaultServerConfig: jest.fn(),
 }));
 
 jest.mock('../../../../utils/analytics', () => ({
@@ -19,22 +14,12 @@ jest.mock('../../../../utils/analytics', () => ({
 describe('CodexMCPClient', () => {
   const { execSync, spawnSync } = require('node:child_process');
   const analytics = require('../../../../utils/analytics').analytics;
-  const getDefaultServerConfigMock = getDefaultServerConfig as jest.Mock;
 
   const spawnSyncMock = spawnSync as jest.Mock;
   const execSyncMock = execSync as jest.Mock;
 
-  const mockConfig = {
-    command: 'npx',
-    args: ['-y', 'mcp-remote@latest', 'https://example.com'],
-    env: {
-      POSTHOG_AUTH_HEADER: 'Bearer phx_example',
-    },
-  };
-
   beforeEach(() => {
     jest.clearAllMocks();
-    getDefaultServerConfigMock.mockReturnValue(mockConfig);
   });
 
   describe('isClientSupported', () => {
@@ -78,7 +63,7 @@ describe('CodexMCPClient', () => {
   });
 
   describe('addServer', () => {
-    it('invokes codex mcp add with expected arguments', async () => {
+    it('invokes codex mcp add with --url and --bearer-token-env-var', async () => {
       spawnSyncMock.mockReturnValue({ status: 0 });
 
       const client = new CodexMCPClient();
@@ -91,15 +76,31 @@ describe('CodexMCPClient', () => {
           'mcp',
           'add',
           'posthog',
-          '--env',
-          'POSTHOG_AUTH_HEADER=Bearer phx_example',
-          '--',
-          'npx',
-          '-y',
-          'mcp-remote@latest',
-          'https://example.com',
+          '--url',
+          'https://mcp.posthog.com/mcp',
+          '--bearer-token-env-var',
+          'POSTHOG_API_KEY',
         ],
-        { stdio: 'ignore' },
+        expect.objectContaining({
+          stdio: 'ignore',
+          env: expect.objectContaining({
+            POSTHOG_API_KEY: 'phx_example',
+          }),
+        }),
+      );
+    });
+
+    it('omits auth in OAuth mode', async () => {
+      spawnSyncMock.mockReturnValue({ status: 0 });
+
+      const client = new CodexMCPClient();
+      const result = await client.addServer(undefined);
+
+      expect(result).toEqual({ success: true });
+      expect(spawnSyncMock).toHaveBeenCalledWith(
+        'codex',
+        ['mcp', 'add', 'posthog', '--url', 'https://mcp.posthog.com/mcp'],
+        expect.objectContaining({ stdio: 'ignore' }),
       );
     });
 

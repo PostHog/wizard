@@ -1,5 +1,49 @@
 # Changelog
 
+## [1.36.1](https://github.com/PostHog/wizard/compare/v1.36.0...v1.36.1) (2026-03-03)
+
+
+### Bug Fixes
+
+* remove region selection from MCP setup ([#308](https://github.com/PostHog/wizard/issues/308)) ([776a6d9](https://github.com/PostHog/wizard/commit/776a6d913459ab898b313e939d1f0341f18904f5))
+
+## [1.36.0](https://github.com/PostHog/wizard/compare/v1.35.2...v1.36.0) (2026-03-03)
+
+
+### Features
+
+* Commandments should be actual commandments ([#306](https://github.com/PostHog/wizard/issues/306)) ([458f68e](https://github.com/PostHog/wizard/commit/458f68e3faa4273ff568b1fed1864970c42e64bd))
+
+
+### Bug Fixes
+
+* wizard issue notify ([#302](https://github.com/PostHog/wizard/issues/302)) ([8821e8a](https://github.com/PostHog/wizard/commit/8821e8a9f8531eb44b4f7a00286c712143604e05))
+
+## [1.35.2](https://github.com/PostHog/wizard/compare/v1.35.1...v1.35.2) (2026-02-26)
+
+
+### Bug Fixes
+
+* Fix release link ([#298](https://github.com/PostHog/wizard/issues/298)) ([8ecabff](https://github.com/PostHog/wizard/commit/8ecabffadb162b08df7ac66d32c7ee257e617e31))
+
+## [1.35.1](https://github.com/PostHog/wizard/compare/v1.35.0...v1.35.1) (2026-02-26)
+
+
+### Bug Fixes
+
+* revert agent sdk ([#294](https://github.com/PostHog/wizard/issues/294)) ([03eea97](https://github.com/PostHog/wizard/commit/03eea971c92d0cdb85c3aeb483c5a85fc5b913a7))
+
+## [1.35.0](https://github.com/PostHog/wizard/compare/v1.34.0...v1.35.0) (2026-02-26)
+
+
+### Features
+
+* add Node.js skill ([#283](https://github.com/PostHog/wizard/issues/283)) ([12a2a29](https://github.com/PostHog/wizard/commit/12a2a295be31720a291131a9bb4faba7a244c948))
+* benchmark tools ([#280](https://github.com/PostHog/wizard/issues/280)) ([0f79a24](https://github.com/PostHog/wizard/commit/0f79a24a7c76c0e11e679c56924cca96731db7eb))
+* js-web skill ([#272](https://github.com/PostHog/wizard/issues/272)) ([8435eb9](https://github.com/PostHog/wizard/commit/8435eb97fb05f03528bf45db7c1385fb04dde6b9))
+* pass project id ([#285](https://github.com/PostHog/wizard/issues/285)) ([c9d05c9](https://github.com/PostHog/wizard/commit/c9d05c9293448a66b43678afb559b8f859a87434))
+* **wizard:** Add User-Agent header to wizard HTTP requests ([#291](https://github.com/PostHog/wizard/issues/291)) ([edae68f](https://github.com/PostHog/wizard/commit/edae68f567986249d149bb0fcd90b9c83ed369b0))
+
 ## [1.34.0](https://github.com/PostHog/wizard/compare/v1.33.0...v1.34.0) (2026-02-20)
 
 

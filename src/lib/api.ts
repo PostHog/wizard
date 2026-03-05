@@ -1,6 +1,7 @@
 import axios, { AxiosError } from 'axios';
 import { z } from 'zod';
 import { analytics } from '../utils/analytics';
+import { WIZARD_USER_AGENT } from './constants';
 
 export const ApiUserSchema = z.object({
   distinct_id: z.string(),
@@ -48,6 +49,7 @@ export async function fetchUserData(
     const response = await axios.get(`${baseUrl}/api/users/@me/`, {
       headers: {
         Authorization: `Bearer ${accessToken}`,
+        'User-Agent': WIZARD_USER_AGENT,
       },
     });
 
@@ -71,6 +73,7 @@ export async function fetchProjectData(
     const response = await axios.get(`${baseUrl}/api/projects/${projectId}/`, {
       headers: {
         Authorization: `Bearer ${accessToken}`,
+        'User-Agent': WIZARD_USER_AGENT,
       },
     });
 

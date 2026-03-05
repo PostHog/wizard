@@ -10,6 +10,7 @@ import {
   getOrAskForProjectData,
 } from '../utils/setup-utils';
 import type { PackageDotJson } from '../utils/package-json';
+import type { WizardOptions } from '../utils/types';
 import { analytics } from '../utils/analytics';
 import { WIZARD_INTERACTION_EVENT_NAME } from './constants';
 import { getUI } from '../ui';
@@ -18,12 +19,33 @@ import {
   runAgent,
   AgentSignals,
   AgentErrorType,
+  buildWizardMetadata,
 } from './agent-interface';
 import { getCloudUrlFromRegion } from '../utils/urls';
 import chalk from 'chalk';
 import * as semver from 'semver';
 import { checkAnthropicStatus } from '../utils/anthropic-status';
 import { enableDebugLogs } from '../utils/debug';
+import { createBenchmarkPipeline } from './middleware/benchmark';
+
+/**
+ * Build a WizardOptions bag from a WizardSession (for code that still expects WizardOptions).
+ */
+function sessionToOptions(session: WizardSession): WizardOptions {
+  return {
+    installDir: session.installDir,
+    debug: session.debug,
+    forceInstall: session.forceInstall,
+    default: false,
+    signup: session.signup,
+    localMcp: session.localMcp,
+    ci: session.ci,
+    menu: session.menu,
+    benchmark: session.benchmark,
+    projectId: session.projectId,
+    apiKey: session.apiKey,
+  };
+}
 
 /**
  * Universal agent-powered wizard runner.
@@ -43,16 +65,9 @@ export async function runAgentWizard(
 
   // Version check
   if (config.detection.minimumVersion && config.detection.getInstalledVersion) {
-    const version = await config.detection.getInstalledVersion({
-      installDir: session.installDir,
-      debug: session.debug,
-      forceInstall: session.forceInstall,
-      default: false,
-      signup: session.signup,
-      localMcp: session.localMcp,
-      ci: session.ci,
-      menu: session.menu,
-    });
+    const version = await config.detection.getInstalledVersion(
+      sessionToOptions(session),
+    );
     if (version) {
       const coerced = semver.coerce(version);
       if (coerced && semver.lt(coerced, config.detection.minimumVersion)) {
@@ -121,14 +136,16 @@ export async function runAgentWizard(
   });
 
   // Get PostHog credentials
-  const { projectApiKey, host, accessToken } = await getOrAskForProjectData({
-    signup: session.signup,
-    ci: session.ci,
-    apiKey: session.apiKey,
-    cloudRegion,
-  });
+  const { projectApiKey, host, accessToken, projectId } =
+    await getOrAskForProjectData({
+      signup: session.signup,
+      ci: session.ci,
+      apiKey: session.apiKey,
+      cloudRegion,
+      projectId: session.projectId,
+    });
 
-  session.credentials = { accessToken, projectApiKey, host, projectId: 0 };
+  session.credentials = { accessToken, projectApiKey, host, projectId };
 
   // Notify TUI that credentials are available (resolves past AuthScreen)
   getUI().setCredentials(session.credentials);
@@ -142,7 +159,6 @@ export async function runAgentWizard(
     analytics.setTag(key, value);
   });
 
-  // Build integration prompt
   const integrationPrompt = buildIntegrationPrompt(
     config,
     {
@@ -150,6 +166,7 @@ export async function runAgentWizard(
       typescript: typeScriptDetected,
       projectApiKey,
       host,
+      projectId,
     },
     frameworkContext,
   );
@@ -157,13 +174,14 @@ export async function runAgentWizard(
   // Initialize and run agent
   const spinner = getUI().spinner();
 
+  // Evaluate all feature flags at the start of the run so they can be sent to the LLM gateway
+  const wizardFlags = await analytics.getAllFlagsForWizard();
+  const wizardMetadata = buildWizardMetadata(wizardFlags);
+
   // Determine MCP URL: CLI flag > env var > production default
   const mcpUrl = session.localMcp
     ? 'http://localhost:8787/mcp'
-    : process.env.MCP_URL ||
-      (cloudRegion === 'eu'
-        ? 'https://mcp-eu.posthog.com/mcp'
-        : 'https://mcp.posthog.com/mcp');
+    : process.env.MCP_URL || 'https://mcp.posthog.com/mcp';
 
   // Transition to run screen
   getUI().startRun();
@@ -176,32 +194,20 @@ export async function runAgentWizard(
       posthogApiHost: host,
       additionalMcpServers: config.metadata.additionalMcpServers,
       detectPackageManager: config.detection.detectPackageManager,
+      wizardFlags,
+      wizardMetadata,
     },
-    {
-      installDir: session.installDir,
-      debug: session.debug,
-      forceInstall: session.forceInstall,
-      default: false,
-      signup: session.signup,
-      localMcp: session.localMcp,
-      ci: session.ci,
-      menu: session.menu,
-    },
+    sessionToOptions(session),
   );
+
+  const middleware = session.benchmark
+    ? createBenchmarkPipeline(spinner, sessionToOptions(session))
+    : undefined;
 
   const agentResult = await runAgent(
     agent,
     integrationPrompt,
-    {
-      installDir: session.installDir,
-      debug: session.debug,
-      forceInstall: session.forceInstall,
-      default: false,
-      signup: session.signup,
-      localMcp: session.localMcp,
-      ci: session.ci,
-      menu: session.menu,
-    },
+    sessionToOptions(session),
     spinner,
     {
       estimatedDurationMinutes: config.ui.estimatedDurationMinutes,
@@ -210,6 +216,7 @@ export async function runAgentWizard(
       errorMessage: 'Integration failed',
       additionalFeatureQueue: session.additionalFeatureQueue,
     },
+    middleware,
   );
 
   // Handle error cases detected in agent output
@@ -327,7 +334,7 @@ Please report this error to: ${chalk.cyan('wizard@posthog.com')}`;
   const nextSteps = [
     ...config.ui.getOutroNextSteps(frameworkContext),
     uploadedEnvVars.length === 0 && config.environment.uploadToHosting
-      ? `Upload your Project API key to your hosting provider`
+      ? `Upload your project token to your hosting provider`
       : '',
   ].filter(Boolean);
 
@@ -346,7 +353,6 @@ Please report this error to: ${chalk.cyan('wizard@posthog.com')}`;
 
 /**
  * Build the integration prompt for the agent.
- * Uses shared base prompt with optional framework-specific addendum.
  */
 function buildIntegrationPrompt(
   config: FrameworkConfig,
@@ -355,6 +361,7 @@ function buildIntegrationPrompt(
     typescript: boolean;
     projectApiKey: string;
     host: string;
+    projectId: number;
   },
   frameworkContext: Record<string, unknown>,
 ): string {
@@ -372,6 +379,7 @@ function buildIntegrationPrompt(
   } project.
 
 Project context:
+- PostHog Project ID: ${context.projectId}
 - Framework: ${config.metadata.name} ${context.frameworkVersion}
 - TypeScript: ${context.typescript ? 'Yes' : 'No'}
 - PostHog API Key: ${context.projectApiKey}
