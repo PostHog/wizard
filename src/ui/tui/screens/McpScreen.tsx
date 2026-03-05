@@ -114,6 +114,8 @@ export const McpScreen = ({ store, installer }: McpScreenProps) => {
             <Box marginTop={1}>
               <ConfirmationInput
                 message="Install the PostHog MCP server to your editor?"
+                confirmLabel="Install MCP"
+                cancelLabel="No thanks"
                 onConfirm={handleConfirm}
                 onCancel={handleSkip}
               />

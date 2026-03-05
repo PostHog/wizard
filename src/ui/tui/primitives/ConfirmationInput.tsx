@@ -12,6 +12,8 @@ interface ConfirmationInputProps {
   message: string;
   onConfirm: () => void;
   onCancel: () => void;
+  confirmLabel?: string;
+  cancelLabel?: string;
 }
 
 enum FocusTarget {
@@ -23,6 +25,8 @@ export const ConfirmationInput = ({
   message,
   onConfirm,
   onCancel,
+  confirmLabel = 'Continue [Enter]',
+  cancelLabel = 'Cancel [Esc]',
 }: ConfirmationInputProps) => {
   const [focused, setFocused] = useState<FocusTarget>(FocusTarget.Continue);
 
@@ -55,14 +59,14 @@ export const ConfirmationInput = ({
           }
         >
           {focused === FocusTarget.Continue ? Icons.triangleSmallRight : ' '}{' '}
-          Continue [Enter]
+          {confirmLabel}
         </Text>
         <Text
           bold={focused === FocusTarget.Cancel}
           color={focused === FocusTarget.Cancel ? Colors.accent : Colors.muted}
         >
           {focused === FocusTarget.Cancel ? Icons.triangleSmallRight : ' '}{' '}
-          Cancel [Esc]
+          {cancelLabel}
         </Text>
       </Box>
     </Box>

@@ -58,14 +58,22 @@ interface Tip {
 
 const TIPS: Tip[] = [
   {
+    id: 'events',
+    title: 'Events are the bedrock of your PostHog data',
+    description:
+      'As people use your product, events build a picture of their behavior and satisfaction. Good events make great data.',
+    url: 'https://posthog.com/docs/new-to-posthog/getting-hogpilled',
+  },
+  {
     id: 'google-sheets',
-    title: 'PostHog loves Google Sheets',
-    description: 'Get your internal data in the mix:',
+    title: 'PostHog can read your favorite Google Sheet',
+    description:
+      'In case you were worried about copying and pasting... we got you:',
     url: 'https://posthog.com/docs/cdp/sources/google-sheets',
   },
   {
     id: 'stripe',
-    title: 'Make better decisions using your Stripe data',
+    title: 'You can track Stripe revenue with PostHog, too',
     description: 'Add Stripe as a data source while you wait:',
     url: 'https://app.posthog.com/project/data-warehouse/new-source?kind=Stripe',
     visible: (store) =>
