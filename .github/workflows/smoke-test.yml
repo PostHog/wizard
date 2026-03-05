@@ -44,7 +44,7 @@ jobs:
 
       - name: Run smoke test
         env:
-          POSTHOG_PERSONAL_API_KEY: ${{ secrets.POSTHOG_PERSONAL_API_KEY }}
+          POSTHOG_PERSONAL_API_KEY: ${{ secrets.GH_APP_POSTHOG_WIZARD_CI_BOT_POSTHOG_PERSONAL_KEY }}
         run: ./scripts/smoke-test-ci.sh "${{ inputs.app || 'next-js/15-app-router-todo' }}"
 
       - name: Upload artifacts
