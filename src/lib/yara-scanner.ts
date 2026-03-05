@@ -83,7 +83,7 @@ const pii_in_capture_call: YaraRule = {
   category: 'posthog_pii',
   appliesTo: POST_WRITE_EDIT,
   patterns: [
-    // Direct PII field names in capture/identify properties
+    // Direct PII field names in capture properties
     /\.capture\s*\([^)]{0,200}email/i,
     /\.capture\s*\([^)]{0,200}phone/i,
     /\.capture\s*\([^)]{0,200}full[_\s]?name/i,
@@ -93,9 +93,8 @@ const pii_in_capture_call: YaraRule = {
     /\.capture\s*\([^)]{0,200}(ssn|social[_\s]?security)/i,
     /\.capture\s*\([^)]{0,200}(date[_\s]?of[_\s]?birth|dob|birthday)/i,
     /\.capture\s*\([^)]{0,200}\$ip/,
-    // PII in identify() properties
-    /\.identify\s*\([^)]{0,200}email/i,
-    /\.identify\s*\([^)]{0,200}phone/i,
+    // Note: identify() is intentionally excluded for email/phone/name —
+    // setting user properties like email is a standard PostHog pattern.
     // PII in $set properties via capture
     /\$set.*email/i,
     /\$set.*phone/i,

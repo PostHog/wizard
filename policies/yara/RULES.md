@@ -44,7 +44,9 @@ An AI coding agent (Claude) that instruments a user's codebase with PostHog anal
 
 ### Category 1: PII leakage in analytics calls
 
-The agent should NEVER put personally identifiable information inside `capture()` or `identify()` calls. Scan **PostToolUse on Write/Edit** outputs.
+The agent should NEVER put personally identifiable information inside `capture()` calls. Scan **PostToolUse on Write/Edit** outputs.
+
+Note: `identify()` calls are exempt from email, phone, and name checks — setting user properties like email and name is a standard PostHog pattern (see [Identifying users docs](https://posthog.com/docs/product-analytics/identify)). However, highly sensitive PII (SSN, credit card, etc.) should still never appear in any analytics call.
 
 | Rule name | What to match | Why |
 |-----------|--------------|-----|
@@ -55,13 +57,12 @@ The agent should NEVER put personally identifiable information inside `capture()
 | `pii_ssn_in_capture` | `capture(` ... `ssn` or `social_security` ... `)` | SSN is PII |
 | `pii_credit_card` | `capture(` ... `card_number` or `cvv` or `credit_card` ... `)` | Payment info is PII |
 | `pii_ip_address` | `capture(` ... `ip_address` or `client_ip` or `remote_addr` ... `)` | IP addresses are PII |
-| `pii_in_identify` | `identify(` ... `email` or `phone` or `ssn` ... `)` | Same rules apply to identify() |
 
-**Pattern guidance:** Match broadly within the parens of `.capture(` and `.identify(` calls. Use case-insensitive matching. Examples:
+**Pattern guidance:** Match broadly within the parens of `.capture(` calls only. Use case-insensitive matching. Examples:
 
 ```
-$email = /\.(capture|identify)\([^)]{0,200}email[^)]*\)/ nocase
-$phone = /\.(capture|identify)\([^)]{0,200}phone[^)]*\)/ nocase
+$email = /\.capture\([^)]{0,200}email[^)]*\)/ nocase
+$phone = /\.capture\([^)]{0,200}phone[^)]*\)/ nocase
 ```
 
 **Applies to:** `PostToolUse:Write`, `PostToolUse:Edit`

@@ -71,10 +71,49 @@ describe('yara-scanner', () => {
       expect(result.matched).toBe(true);
     });
 
-    it('detects email in identify()', () => {
+    it('allows email in identify() — standard PostHog pattern', () => {
       const content = `posthog.identify(userId, { email: user.email })`;
       const result = scan(content, 'PostToolUse', 'Edit');
+      expect(result.matched).toBe(false);
+    });
+
+    it('allows name in identify() — standard PostHog pattern', () => {
+      const content = `posthog.identify('distinct_id', { email: 'max@hedgehogmail.com', name: 'Max Hedgehog' })`;
+      const result = scan(content, 'PostToolUse', 'Write');
+      expect(result.matched).toBe(false);
+    });
+
+    it('allows phone in identify() — used for user profiles', () => {
+      const content = `posthog.identify(userId, { phone: user.phone })`;
+      const result = scan(content, 'PostToolUse', 'Write');
+      expect(result.matched).toBe(false);
+    });
+
+    it('allows Kotlin identify with email and name', () => {
+      const content = `PostHog.identify(
+    distinctId = distinctID,
+    userProperties = mapOf(
+        "name" to "Max Hedgehog",
+        "email" to "max@hedgehogmail.com"
+    )
+)`;
+      const result = scan(content, 'PostToolUse', 'Write');
+      expect(result.matched).toBe(false);
+    });
+
+    it('allows Swift identify with email and name', () => {
+      const content = `PostHogSDK.shared.identify("distinct_id",
+                           userProperties: ["name": "Max Hedgehog", "email": "max@hedgehogmail.com"])`;
+      const result = scan(content, 'PostToolUse', 'Write');
+      expect(result.matched).toBe(false);
+    });
+
+    it('still detects email in capture() even when identify is nearby', () => {
+      const content = `posthog.identify(userId, { email: user.email })
+posthog.capture('signup', { email: user.email })`;
+      const result = scan(content, 'PostToolUse', 'Write');
       expect(result.matched).toBe(true);
+      expect(getMatches(result)[0].rule.name).toBe('pii_in_capture_call');
     });
 
     it('detects PII in $set', () => {
