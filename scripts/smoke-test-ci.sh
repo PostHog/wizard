@@ -72,7 +72,7 @@ echo "    Pack: $PACK_FILE"
 
 # ── Copy app to temp dir ────────────────────────────────────────────────────
 WORK_DIR=$(mktemp -d /tmp/wizard-smoke.XXXXXX)
-trap 'rm -rf "$WORK_DIR"' EXIT
+trap 'rm -rf "$WORK_DIR" /tmp/wizard-bin.*' EXIT
 
 echo "==> Copying $APP to $WORK_DIR..."
 cp -r "$APP_SRC/." "$WORK_DIR/"
@@ -95,6 +95,17 @@ else
   npm install 2>&1 | tail -3
 fi
 
+# ── Install wizard from tarball (isolated, like npx would) ────────────────
+echo "==> Installing wizard from tarball..."
+WIZARD_DIR=$(mktemp -d /tmp/wizard-bin.XXXXXX)
+(cd "$WIZARD_DIR" && npm init -y --silent >/dev/null 2>&1 && npm install "$PACK_PATH" 2>&1 | tail -3)
+
+WIZARD_BIN="$WIZARD_DIR/node_modules/.bin/wizard"
+if [ ! -f "$WIZARD_BIN" ]; then
+  echo "ERROR: wizard binary not found at $WIZARD_BIN after install"
+  exit 1
+fi
+
 # ── Run wizard in CI mode ───────────────────────────────────────────────────
 echo "==> Running wizard in CI mode..."
 echo "    App:        $APP"
@@ -105,7 +116,7 @@ fi
 echo ""
 
 CMD=(
-  node "$WIZARD_ROOT/dist/bin.js"
+  "$WIZARD_BIN"
   --ci
   --api-key "$API_KEY"
   --install-dir "$WORK_DIR"
