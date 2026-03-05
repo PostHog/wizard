@@ -197,3 +197,43 @@ To make your version of a tool usable with a one-line `npx` command:
 2. Run [`npm publish`](https://docs.npmjs.com/cli/v7/commands/npm-publish) from
    your project directory
 3. Now you can run it with `npx yourpackagename`
+
+# Health checks
+
+`src/lib/health-checks/` checks external status pages and PostHog-owned
+services before the wizard runs to decide whether it can proceed. The entry
+point is `evaluateWizardReadiness()`, which returns one of three values:
+
+| Decision            | Meaning                                                         |
+| ------------------- | --------------------------------------------------------------- |
+| `yes`               | All services healthy — proceed normally.                        |
+| `yes_with_warnings` | Some services degraded but no critical dependency is down.      |
+| `no`                | A critical dependency is down or degraded — do not run.         |
+
+### Module layout
+
+| File | Responsibility |
+| --- | --- |
+| `types.ts` | Enums, interfaces (`ServiceHealthStatus`, `AllServicesHealth`, etc.) |
+| `statuspage.ts` | Statuspage.io v2 API helpers + checks for Anthropic, PostHog, GitHub, npm, Cloudflare |
+| `endpoints.ts` | Direct endpoint checks for LLM Gateway (`/_liveness`) and MCP (`/`) |
+| `readiness.ts` | `checkAllExternalServices`, `evaluateWizardReadiness`, readiness config |
+| `index.ts` | Barrel re-export |
+| `testme.md` | Test running instructions and endpoint reference |
+
+## What blocks a run
+
+The `DEFAULT_WIZARD_READINESS_CONFIG` in `readiness.ts` controls this. It has
+two arrays:
+
+- **`downBlocksRun`** — if any of these report status **Down**, readiness is
+  **No**.
+- **`degradedBlocksRun`** — if any of these report **Degraded** (or worse),
+  readiness is **No**.
+
+### Current defaults
+
+```ts
+downBlocksRun: ['anthropic', 'posthogOverall', 'npmOverall', 'llmGateway', 'mcp'],
+degradedBlocksRun: ['anthropic'],
+```
