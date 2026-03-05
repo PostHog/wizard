@@ -1,34 +1,23 @@
 /**
- * DissolveTransition — Subdividing checkerboard wipe effect.
+ * DissolveTransition — Column-sweep inspired by TTE's Sweep effect.
  *
- * A checkerboard pattern sweeps right-to-left, covering old content with
- * increasingly fine blocks. Then the reverse reveals new content.
+ * Uses a SequenceEaser (in_out_circ) to activate columns with eased pacing.
+ * Each activated column cycles through shade characters (░▒▓█) independently.
+ * No random glyphs — just clean shade transitions.
  *
- * Out phase: large blocks appear on the right, sweep left, then subdivide
- * to fill remaining gaps until the screen is solid.
- * In phase: blocks disappear right-to-left, revealing new content.
+ * Out phase: columns sweep, building up shade chars until solid █ (covers old content).
+ * In phase: columns sweep in reverse, dissolving █ back through shades to empty (reveals new content).
  */
 
 import { Box, Text } from 'ink';
 import { useState, useEffect, useRef, type ReactNode } from 'react';
 
-const FRAMES_PER_PHASE = 16;
-
-/**
- * Subdivision levels — block sizes approximate squares in terminal (2:1 char ratio).
- * Each level's checkerboard fills gaps left by the previous level.
- */
-const LEVELS = [
-  { w: 8, h: 4 },
-  { w: 4, h: 2 },
-  { w: 2, h: 1 },
-  { w: 1, h: 1 },
-];
-
-/** Staggered start times for each level (0–1 range within a phase). */
-const LEVEL_START = [0, 0.15, 0.3, 0.45];
-/** Duration of each level's R→L sweep (as fraction of total phase). */
-const SWEEP_DURATION = 0.55;
+/** Shade characters in build-up order (light → solid). */
+const SHADES = ['░', '▒', '▓', '█'] as const;
+/** How many ticks each shade character displays before advancing. */
+const TICKS_PER_SHADE = 2;
+/** Total ticks a column needs to complete its shade cycle. */
+const SHADE_CYCLE_TICKS = SHADES.length * TICKS_PER_SHADE;
 
 export type WipeDirection = 'left' | 'right';
 
@@ -38,7 +27,14 @@ interface DissolveTransitionProps {
   height: number;
   children: ReactNode;
   direction?: WipeDirection;
-  duration?: number; // ms per frame, default 15
+  duration?: number;
+}
+
+function easeInOutCirc(t: number): number {
+  if (t < 0.5) {
+    return (1 - Math.sqrt(1 - 4 * t * t)) / 2;
+  }
+  return (Math.sqrt(1 - (2 * t - 2) ** 2) + 1) / 2;
 }
 
 enum TransitionPhase {
@@ -47,59 +43,23 @@ enum TransitionPhase {
   In = 'in',
 }
 
-/**
- * Has the sweep reached cell (r, c) at the given progress?
- * Checks all subdivision levels — if any level's checkerboard pattern
- * matches this cell AND the R→L sweep has reached it, returns true.
- */
-function isCellSwept(
-  r: number,
-  c: number,
-  width: number,
-  progress: number,
-  direction: WipeDirection,
-): boolean {
-  for (let l = 0; l < LEVELS.length; l++) {
-    const { w, h } = LEVELS[l];
-
-    // Checkerboard pattern: skip cells that don't match this level
-    if ((Math.floor(r / h) + Math.floor(c / w)) % 2 !== 0) continue;
-
-    // How far along is this level's sweep?
-    const levelProgress = Math.max(
-      0,
-      Math.min(1, (progress - LEVEL_START[l]) / SWEEP_DURATION),
-    );
-    if (levelProgress <= 0) continue;
-
-    // Column position normalized: 0 = leading edge, 1 = trailing edge
-    let colNorm: number;
-    if (direction === 'left') {
-      // R→L: rightmost columns are swept first
-      colNorm = width > 1 ? (width - 1 - c) / (width - 1) : 0;
-    } else {
-      colNorm = width > 1 ? c / (width - 1) : 0;
-    }
-
-    if (colNorm < levelProgress) return true;
-  }
-  return false;
-}
-
 export const DissolveTransition = ({
   transitionKey,
   width,
   height,
   children,
   direction = 'left',
-  duration = 15,
+  duration = 3,
 }: DissolveTransitionProps) => {
   const [phase, setPhase] = useState<TransitionPhase>(TransitionPhase.Idle);
-  const [frame, setFrame] = useState(0);
+  const [tick, setTick] = useState(0);
   const [activeDir, setActiveDir] = useState<WipeDirection>(direction);
   const prevKey = useRef(transitionKey);
   const pendingChildren = useRef<ReactNode>(children);
   const [displayChildren, setDisplayChildren] = useState<ReactNode>(children);
+
+  // Track when each column was activated (tick number), -1 means not yet.
+  const columnActivationTick = useRef<number[]>([]);
 
   useEffect(() => {
     if (transitionKey !== prevKey.current) {
@@ -107,7 +67,8 @@ export const DissolveTransition = ({
       pendingChildren.current = children;
       setActiveDir(direction);
       setPhase(TransitionPhase.Out);
-      setFrame(0);
+      setTick(0);
+      columnActivationTick.current = new Array(width).fill(-1);
     } else if (phase === TransitionPhase.Idle) {
       setDisplayChildren(children);
     }
@@ -117,43 +78,95 @@ export const DissolveTransition = ({
     if (phase === TransitionPhase.Idle) return;
 
     const timer = setInterval(() => {
-      setFrame((prev) => {
-        const next = prev + 1;
-        if (phase === TransitionPhase.Out && next >= FRAMES_PER_PHASE) {
-          setDisplayChildren(pendingChildren.current);
-          setPhase(TransitionPhase.In);
-          return 0;
-        }
-        if (phase === TransitionPhase.In && next >= FRAMES_PER_PHASE) {
-          setPhase(TransitionPhase.Idle);
-          return 0;
-        }
-        return next;
-      });
+      setTick((prev) => prev + 1);
     }, duration);
 
     return () => clearInterval(timer);
   }, [phase, duration]);
 
+  // Easer steps = width: roughly one column activates per tick.
+  // This keeps the sweep front tight (only a few columns in-flight at once).
+  const easerSteps = width;
+
+  // A phase ends when the easer has completed AND all columns have finished their shade cycle.
+  const maxTicks = easerSteps + SHADE_CYCLE_TICKS;
+
+  useEffect(() => {
+    if (phase === TransitionPhase.Idle) return;
+    if (tick >= maxTicks) {
+      if (phase === TransitionPhase.Out) {
+        setDisplayChildren(pendingChildren.current);
+        setPhase(TransitionPhase.In);
+        setTick(0);
+        columnActivationTick.current = new Array(width).fill(-1);
+      } else {
+        setPhase(TransitionPhase.Idle);
+      }
+    }
+  }, [tick, phase, maxTicks, width]);
+
   if (phase === TransitionPhase.Idle) {
     return <>{displayChildren}</>;
   }
 
-  const progress = (frame + 1) / FRAMES_PER_PHASE;
+  // --- SequenceEaser logic ---
+  // Map current tick to easer progress (0..1), apply easing,
+  // then determine how many columns should be activated.
+  const easerProgress = Math.min(tick / easerSteps, 1);
+  const easedValue = easeInOutCirc(easerProgress);
+  const activatedCount = Math.floor(easedValue * width);
 
+  // Build column order based on direction.
+  // "left" means sweep moves left-to-right; "right" means right-to-left.
+  // TTE's COLUMN_RIGHT_TO_LEFT activates rightmost first.
+  const columnOrder: number[] = [];
+  if (activeDir === 'left') {
+    for (let c = width - 1; c >= 0; c--) columnOrder.push(c);
+  } else {
+    for (let c = 0; c < width; c++) columnOrder.push(c);
+  }
+
+  // Activate columns that should be active but aren't yet.
+  for (let i = 0; i < activatedCount && i < columnOrder.length; i++) {
+    const col = columnOrder[i];
+    if (columnActivationTick.current[col] === -1) {
+      columnActivationTick.current[col] = tick;
+    }
+  }
+
+  // --- Render frame ---
   const rows: string[] = [];
   for (let r = 0; r < height; r++) {
     let row = '';
     for (let c = 0; c < width; c++) {
-      const swept = isCellSwept(r, c, width, progress, activeDir);
+      const activatedAt = columnActivationTick.current[c];
 
-      if (phase === TransitionPhase.Out) {
-        // Swept cells become covered (█), others stay empty
-        row += swept ? '█' : ' ';
+      let char: string;
+      if (activatedAt === -1) {
+        // Not yet activated
+        char = phase === TransitionPhase.Out ? ' ' : '█';
       } else {
-        // Swept cells become revealed (empty), others stay covered
-        row += swept ? ' ' : '█';
+        // Column is activated — determine shade based on ticks since activation
+        const age = tick - activatedAt;
+        const shadeIndex = Math.min(
+          Math.floor(age / TICKS_PER_SHADE),
+          SHADES.length - 1,
+        );
+
+        if (phase === TransitionPhase.Out) {
+          // Building up: ░ → ▒ → ▓ → █
+          char = SHADES[shadeIndex];
+        } else {
+          // Dissolving: █ → ▓ → ▒ → ░ → space
+          if (shadeIndex >= SHADES.length - 1 && age >= SHADE_CYCLE_TICKS) {
+            char = ' ';
+          } else {
+            char = SHADES[SHADES.length - 1 - shadeIndex];
+          }
+        }
       }
+
+      row += char;
     }
     rows.push(row);
   }
