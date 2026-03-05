@@ -11,7 +11,6 @@ import {
   getInstalledClients,
 } from '../../../steps/add-mcp-server-to-clients/index.js';
 import { ALL_FEATURE_VALUES } from '../../../steps/add-mcp-server-to-clients/defaults.js';
-import type { CloudRegion } from '../../../lib/wizard-session.js';
 
 export interface McpClientInfo {
   name: string;
@@ -22,7 +21,7 @@ export interface McpInstaller {
   detectClients(): Promise<McpClientInfo[]>;
 
   /** Install the PostHog MCP server to the given clients. Returns names of successfully installed clients. */
-  install(clientNames: string[], region?: CloudRegion): Promise<string[]>;
+  install(clientNames: string[]): Promise<string[]>;
 
   /** Remove the PostHog MCP server from all installed clients. Returns names of removed clients. */
   remove(): Promise<string[]>;
@@ -42,10 +41,7 @@ export function createMcpInstaller(): McpInstaller {
       return supported.map((c) => ({ name: c.name }));
     },
 
-    async install(
-      clientNames: string[],
-      region?: CloudRegion,
-    ): Promise<string[]> {
+    async install(clientNames: string[]): Promise<string[]> {
       const features = [...ALL_FEATURE_VALUES];
       const toInstall = cachedClients
         .filter((c) => clientNames.includes(c.name))
@@ -57,7 +53,7 @@ export function createMcpInstaller(): McpInstaller {
       const installed: string[] = [];
       for (const client of toInstall) {
         try {
-          await client.addServer(undefined, features, false, region);
+          await client.addServer(undefined, features, false);
           installed.push(client.name as string);
         } catch {
           // Skip failed clients

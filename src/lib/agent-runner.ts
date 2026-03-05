@@ -61,8 +61,6 @@ export async function runAgentWizard(
     enableDebugLogs();
   }
 
-  const cloudRegion = session.cloudRegion!;
-
   // Version check
   if (config.detection.minimumVersion && config.detection.getInstalledVersion) {
     const version = await config.detection.getInstalledVersion(
@@ -135,13 +133,12 @@ export async function runAgentWizard(
     integration: config.metadata.integration,
   });
 
-  // Get PostHog credentials
-  const { projectApiKey, host, accessToken, projectId } =
+  // Get PostHog credentials (region auto-detected from token)
+  const { projectApiKey, host, accessToken, projectId, cloudRegion } =
     await getOrAskForProjectData({
       signup: session.signup,
       ci: session.ci,
       apiKey: session.apiKey,
-      cloudRegion,
       projectId: session.projectId,
     });
 

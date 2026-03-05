@@ -101,7 +101,7 @@ describe('WizardStore', () => {
       const unsub = store.subscribe(cb);
 
       const v1 = store.getSnapshot();
-      store.setCloudRegion('us');
+      store.completeSetup();
       const v2 = store.getSnapshot();
 
       expect(v2).toBeGreaterThan(v1);
@@ -113,27 +113,15 @@ describe('WizardStore', () => {
   // ── Session setters ──────────────────────────────────────────────
 
   describe('session setters', () => {
-    it('setCloudRegion updates session and emits change', () => {
+    it('completeSetup sets setupConfirmed and resolves setupComplete promise', async () => {
       const store = createStore();
       const cb = jest.fn();
       store.subscribe(cb);
 
-      store.setCloudRegion('eu');
+      store.completeSetup();
 
-      expect(store.session.cloudRegion).toBe('eu');
-      expect(cb).toHaveBeenCalledTimes(1);
-    });
-
-    it('completeSetup sets region and resolves setupComplete promise', async () => {
-      const store = createStore();
-      const cb = jest.fn();
-      store.subscribe(cb);
-
-      store.completeSetup('us');
-
-      expect(store.session.cloudRegion).toBe('us');
-      const result = await store.setupComplete;
-      expect(result).toBe('us');
+      expect(store.session.setupConfirmed).toBe(true);
+      await store.setupComplete;
       expect(cb).toHaveBeenCalled();
     });
 
@@ -231,7 +219,7 @@ describe('WizardStore', () => {
       const cb = jest.fn();
       store.subscribe(cb);
 
-      store.setCloudRegion('us');
+      store.completeSetup();
       store.setRunPhase(RunPhase.Running);
       store.setCredentials(null);
       store.setDetectionComplete();
@@ -257,13 +245,13 @@ describe('WizardStore', () => {
 
     it('advances to auth after region is set', () => {
       const store = createStore();
-      store.setCloudRegion('us');
+      store.completeSetup();
       expect(store.currentScreen).toBe(Screen.Auth);
     });
 
     it('advances to run after credentials are set', () => {
       const store = createStore();
-      store.setCloudRegion('us');
+      store.completeSetup();
       store.setCredentials({
         accessToken: 'tok',
         projectApiKey: 'pk',
@@ -275,7 +263,7 @@ describe('WizardStore', () => {
 
     it('advances to mcp after run completes', () => {
       const store = createStore();
-      store.setCloudRegion('us');
+      store.completeSetup();
       store.setCredentials({
         accessToken: 'tok',
         projectApiKey: 'pk',
@@ -288,7 +276,7 @@ describe('WizardStore', () => {
 
     it('advances to outro after mcp completes', () => {
       const store = createStore();
-      store.setCloudRegion('us');
+      store.completeSetup();
       store.setCredentials({
         accessToken: 'tok',
         projectApiKey: 'pk',
@@ -532,7 +520,7 @@ describe('WizardStore', () => {
       const cb = jest.fn();
       store.subscribe(cb);
 
-      store.setCloudRegion('us');
+      store.completeSetup();
       store.setRunPhase(RunPhase.Running);
       store.pushStatus('msg1');
       store.pushStatus('msg2');
@@ -544,18 +532,18 @@ describe('WizardStore', () => {
 
     it('subscriber sees consistent state during a setter call', () => {
       const store = createStore();
-      const snapshots: { region: string | null; version: number }[] = [];
+      const snapshots: { confirmed: boolean; version: number }[] = [];
 
       store.subscribe(() => {
         snapshots.push({
-          region: store.session.cloudRegion,
+          confirmed: store.session.setupConfirmed,
           version: store.getSnapshot(),
         });
       });
 
-      store.setCloudRegion('eu');
+      store.completeSetup();
 
-      expect(snapshots).toEqual([{ region: 'eu', version: 1 }]);
+      expect(snapshots).toEqual([{ confirmed: true, version: 1 }]);
     });
 
     it('multiple subscribers all see the same state', () => {
@@ -566,7 +554,7 @@ describe('WizardStore', () => {
       store.subscribe(() => results.push(store.getSnapshot()));
       store.subscribe(() => results.push(store.getSnapshot()));
 
-      store.setCloudRegion('us');
+      store.completeSetup();
 
       // All 3 subscribers should see version 1
       expect(results).toEqual([1, 1, 1]);
@@ -580,16 +568,16 @@ describe('WizardStore', () => {
       store.subscribe(() => {
         versions.push(store.getSnapshot());
         if (
-          store.session.cloudRegion === 'us' &&
+          store.session.setupConfirmed &&
           store.session.runPhase === RunPhase.Idle
         ) {
           store.setRunPhase(RunPhase.Running);
         }
       });
 
-      store.setCloudRegion('us');
+      store.completeSetup();
 
-      // Should see version 1 (from setCloudRegion) and version 2 (from setRunPhase)
+      // Should see version 1 (from completeSetup) and version 2 (from setRunPhase)
       expect(versions).toEqual([1, 2]);
       expect(store.session.runPhase).toBe(RunPhase.Running);
     });
@@ -602,7 +590,7 @@ describe('WizardStore', () => {
         screens.push(store.currentScreen);
       });
 
-      store.setCloudRegion('us'); // -> auth
+      store.completeSetup(); // -> auth
       store.pushOverlay(Overlay.Outage); // -> outage
       store.setCredentials({
         // -> outage (overlay still on top)
@@ -744,7 +732,7 @@ describe('WizardStore', () => {
 
     it('screen advances to outro on RunPhase.Error too', () => {
       const store = createStore();
-      store.setCloudRegion('us');
+      store.completeSetup();
       store.setCredentials({
         accessToken: 'tok',
         projectApiKey: 'pk',
@@ -758,12 +746,11 @@ describe('WizardStore', () => {
 
     it('completeSetup can only resolve the promise once', async () => {
       const store = createStore();
-      store.completeSetup('us');
-      store.completeSetup('eu'); // second call — region updates but promise already resolved
+      store.completeSetup();
+      store.completeSetup(); // second call — promise already resolved
 
-      const result = await store.setupComplete;
-      expect(result).toBe('us'); // first resolution wins
-      expect(store.session.cloudRegion).toBe('eu'); // but session reflects latest
+      await store.setupComplete;
+      expect(store.session.setupConfirmed).toBe(true);
     });
 
     it('version property (string) is independent from internal _version counter', () => {
@@ -788,8 +775,8 @@ describe('WizardStore', () => {
 
       expect(store.currentScreen).toBe(Screen.Intro);
 
-      // Step 1: Pick region
-      store.completeSetup('us');
+      // Step 1: Confirm setup
+      store.completeSetup();
       expect(store.currentScreen).toBe(Screen.Auth);
 
       // Step 2: Authenticate
@@ -820,10 +807,11 @@ describe('WizardStore', () => {
   // ── setupComplete promise ────────────────────────────────────────
 
   describe('setupComplete', () => {
-    it('resolves with the region passed to completeSetup', async () => {
+    it('resolves when completeSetup is called', async () => {
       const store = createStore();
-      store.completeSetup('eu');
-      await expect(store.setupComplete).resolves.toBe('eu');
+      store.completeSetup();
+      await store.setupComplete;
+      expect(store.session.setupConfirmed).toBe(true);
     });
 
     it('is a promise that can be awaited before completeSetup is called', async () => {
@@ -838,7 +826,7 @@ describe('WizardStore', () => {
       await Promise.resolve(); // flush microtasks
       expect(resolved).toBe(false);
 
-      store.completeSetup('us');
+      store.completeSetup();
       await store.setupComplete;
       expect(resolved).toBe(true);
     });

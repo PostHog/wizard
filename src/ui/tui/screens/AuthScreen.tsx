@@ -24,7 +24,6 @@ export const AuthScreen = ({ store }: AuthScreenProps) => {
 
   const { session } = store;
   const config = session.frameworkConfig;
-  const regionLabel = session.cloudRegion === 'eu' ? 'EU Cloud' : 'US Cloud';
   const frameworkLabel =
     session.detectedFrameworkLabel ?? config?.metadata.name;
 
@@ -41,8 +40,6 @@ export const AuthScreen = ({ store }: AuthScreenProps) => {
             <Text>Detected: {frameworkLabel}</Text>
           </Text>
         )}
-
-        <Text dimColor>Region: {regionLabel}</Text>
 
         {config?.metadata.beta && (
           <Text color="yellow">

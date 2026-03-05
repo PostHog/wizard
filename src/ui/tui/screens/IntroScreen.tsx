@@ -1,18 +1,17 @@
 /**
- * IntroScreen — Welcome, framework detection, and cloud region picker.
+ * IntroScreen — Welcome, framework detection, and continue/cancel prompt.
  *
  * Three states:
  *   1. Detecting: spinner while bin.ts runs detection
- *   2. Detection failed: framework picker, then region picker
- *   3. Detection succeeded: show result, then region picker
+ *   2. Detection failed: framework picker, then continue/cancel
+ *   3. Detection succeeded: show result, then continue/cancel
  *
- * Calls store.completeSetup(region) which unblocks bin.ts to start runWizard.
+ * Calls store.completeSetup() which unblocks bin.ts to start runWizard.
  */
 
 import { Box, Text } from 'ink';
 import { useSyncExternalStore } from 'react';
 import type { WizardStore } from '../store.js';
-import type { CloudRegion } from '../../../lib/wizard-session.js';
 import { Integration } from '../../../lib/constants.js';
 import { PickerMenu, LoadingBox } from '../primitives/index.js';
 
@@ -33,8 +32,8 @@ export const IntroScreen = ({ store }: IntroScreenProps) => {
   const detecting = !session.detectionComplete;
   const needsFrameworkPick =
     session.detectionComplete && !session.frameworkConfig;
-  const showRegionPicker = session.frameworkConfig !== null && !detecting;
-  const showDescription = showRegionPicker;
+  const showContinue = session.frameworkConfig !== null && !detecting;
+  const showDescription = showContinue;
 
   return (
     <Box
@@ -99,17 +98,20 @@ export const IntroScreen = ({ store }: IntroScreenProps) => {
 
       {needsFrameworkPick && <FrameworkPicker store={store} />}
 
-      {showRegionPicker && (
-        <PickerMenu<CloudRegion>
+      {showContinue && (
+        <PickerMenu<'continue' | 'cancel'>
           centered
-          message="To continue, login: select your PostHog cloud region"
+          message="Ready to set up PostHog"
           options={[
-            { label: 'US Cloud', value: 'us', hint: 'us.posthog.com' },
-            { label: 'EU Cloud', value: 'eu', hint: 'eu.posthog.com' },
+            { label: 'Continue', value: 'continue' },
+            { label: 'Cancel', value: 'cancel' },
           ]}
           onSelect={(value) => {
-            const region = Array.isArray(value) ? value[0] : value;
-            store.completeSetup(region);
+            const choice = Array.isArray(value) ? value[0] : value;
+            if (choice === 'cancel') {
+              process.exit(0);
+            }
+            store.completeSetup();
           }}
         />
       )}

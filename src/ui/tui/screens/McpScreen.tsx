@@ -75,10 +75,7 @@ export const McpScreen = ({ store, installer }: McpScreenProps) => {
   const doInstall = async (names: string[]) => {
     setPhase(Phase.Installing);
     try {
-      const result = await installer.install(
-        names,
-        store.session.cloudRegion ?? undefined,
-      );
+      const result = await installer.install(names);
       setInstalled(result);
     } catch {
       setInstalled([]);

@@ -14,7 +14,7 @@ jest.mock('../lib/wizard-session', () => ({
     signup: false,
     localMcp: false,
     menu: false,
-    cloudRegion: null,
+    setupConfirmed: false,
     integration: null,
     frameworkContext: {},
     typescript: false,

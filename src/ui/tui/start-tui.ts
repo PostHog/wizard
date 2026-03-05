@@ -4,7 +4,7 @@
 
 import { render } from 'ink';
 import { createElement } from 'react';
-import { WizardStore, type CloudRegion, Flow } from './store.js';
+import { WizardStore, Flow } from './store.js';
 import { InkUI } from './ink-ui.js';
 import { setUI } from '../index.js';
 import { App } from './App.js';
@@ -20,7 +20,7 @@ export function startTUI(
 ): {
   unmount: () => void;
   store: WizardStore;
-  waitForSetup: () => Promise<CloudRegion>;
+  waitForSetup: () => Promise<void>;
 } {
   // Force dark background regardless of terminal theme
   process.stdout.write(FORCE_DARK);

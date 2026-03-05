@@ -34,7 +34,6 @@ if (!satisfies(process.version, NODE_VERSION_RANGE)) {
   process.exit(1);
 }
 
-import type { CloudRegion } from './src/utils/types';
 import { runWizard } from './src/run';
 import { isNonInteractiveEnvironment } from './src/utils/environment';
 import { getUI, setUI } from './src/ui';
@@ -208,7 +207,6 @@ yargs(hideBin(process.argv))
               localMcp: options.localMcp as boolean | undefined,
               apiKey: options.apiKey as string | undefined,
               menu: options.menu as boolean | undefined,
-              region: options.region as CloudRegion | undefined,
               integration: options.integration as Parameters<
                 typeof buildSession
               >[0]['integration'],
@@ -320,15 +318,11 @@ yargs(hideBin(process.argv))
             // Signal detection is done — IntroScreen shows picker or results
             tui.store.setDetectionComplete();
 
-            // Wait for IntroScreen to collect the cloud region
-            const region = await tui.waitForSetup();
-            session.cloudRegion = region;
+            // Wait for IntroScreen confirmation
+            await tui.waitForSetup();
 
             await runWizard(
-              {
-                ...options,
-                region,
-              } as Parameters<typeof runWizard>[0],
+              options as Parameters<typeof runWizard>[0],
               session,
             );
 
@@ -372,7 +366,6 @@ yargs(hideBin(process.argv))
               const tui = startTUI(WIZARD_VERSION, Flow.McpAdd);
               const session = buildSession({
                 debug: options.debug,
-                region: options.region as CloudRegion | undefined,
                 localMcp: options.local,
               });
               tui.store.session = session;
@@ -383,7 +376,6 @@ yargs(hideBin(process.argv))
                 './src/steps/add-mcp-server-to-clients/index.js'
               );
               await addMCPServerToClientsStep({
-                cloudRegion: options.region as CloudRegion | undefined,
                 local: options.local,
               });
             }

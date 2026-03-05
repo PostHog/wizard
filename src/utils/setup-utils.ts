@@ -21,7 +21,11 @@ import {
 } from '../lib/constants';
 import { analytics } from './analytics';
 import { getUI } from '../ui';
-import { getCloudUrlFromRegion, getHostFromRegion } from './urls';
+import {
+  getCloudUrlFromRegion,
+  getHostFromRegion,
+  detectRegionFromToken,
+} from './urls';
 import { performOAuthFlow } from './oauth';
 import { fetchUserData, fetchProjectData } from '../lib/api';
 import { fulfillsVersionRange } from './semver';
@@ -318,45 +322,49 @@ export function isUsingTypeScript({
  * Get project data for the wizard via OAuth or CI API key.
  */
 export async function getOrAskForProjectData(
-  _options: Pick<WizardOptions, 'signup' | 'ci' | 'apiKey' | 'projectId'> & {
-    cloudRegion: CloudRegion;
-  },
+  _options: Pick<WizardOptions, 'signup' | 'ci' | 'apiKey' | 'projectId'>,
 ): Promise<{
   host: string;
   projectApiKey: string;
   accessToken: string;
   projectId: number;
+  cloudRegion: CloudRegion;
 }> {
-  const cloudUrl = getCloudUrlFromRegion(_options.cloudRegion);
-
   // CI mode: bypass OAuth, use personal API key for LLM gateway
   if (_options.ci && _options.apiKey) {
-    const host = getHostFromRegion(_options.cloudRegion);
     getUI().log.info('Using provided API key (CI mode - OAuth bypassed)');
 
-    const projectData = await fetchProjectDataWithApiKey(
-      _options.apiKey,
-      _options.cloudRegion,
-    );
+    const cloudRegion = await detectRegionFromToken(_options.apiKey);
+    const host = getHostFromRegion(cloudRegion);
+    const cloudUrl = getCloudUrlFromRegion(cloudRegion);
+
+    const projectData =
+      _options.projectId != null
+        ? await fetchProjectDataById(
+            _options.apiKey,
+            _options.projectId,
+            cloudUrl,
+          )
+        : await fetchProjectDataWithApiKey(_options.apiKey, cloudUrl);
 
     return {
       host,
       projectApiKey: projectData.api_token,
       accessToken: _options.apiKey,
       projectId: projectData.id,
+      cloudRegion,
     };
   }
 
-  const { host, projectApiKey, accessToken, projectId } = await traceStep(
-    'login',
-    () =>
+  const { host, projectApiKey, accessToken, projectId, cloudRegion } =
+    await traceStep('login', () =>
       askForWizardLogin({
-        cloudRegion: _options.cloudRegion,
         signup: _options.signup,
       }),
-  );
+    );
 
   if (!projectApiKey) {
+    const cloudUrl = getCloudUrlFromRegion(cloudRegion);
     getUI().log.error(`Didn't receive a project token. This shouldn't happen :(
 
 Please let us know if you think this is a bug in the wizard:
@@ -375,14 +383,14 @@ ${chalk.cyan(`${cloudUrl}/settings/project#variables`)}`);
     host: host || DEFAULT_HOST_URL,
     projectApiKey: projectApiKey || DUMMY_PROJECT_API_KEY,
     projectId,
+    cloudRegion,
   };
 }
 
 async function fetchProjectDataWithApiKey(
   apiKey: string,
-  region: CloudRegion,
+  cloudUrl: string,
 ): Promise<{ api_token: string; id: number }> {
-  const cloudUrl = getCloudUrlFromRegion(region);
   const userData = await fetchUserData(apiKey, cloudUrl);
   const projectId = userData.team?.id;
 
@@ -399,10 +407,21 @@ async function fetchProjectDataWithApiKey(
   };
 }
 
+async function fetchProjectDataById(
+  apiKey: string,
+  projectId: number,
+  cloudUrl: string,
+): Promise<{ api_token: string; id: number }> {
+  const projectData = await fetchProjectData(apiKey, projectId, cloudUrl);
+  return {
+    api_token: projectData.api_token,
+    id: projectId,
+  };
+}
+
 async function askForWizardLogin(options: {
-  cloudRegion: CloudRegion;
   signup: boolean;
-}): Promise<ProjectData> {
+}): Promise<ProjectData & { cloudRegion: CloudRegion }> {
   const tokenResponse = await performOAuthFlow({
     scopes: [
       'user:read',
@@ -430,8 +449,9 @@ async function askForWizardLogin(options: {
     await abort();
   }
 
-  const cloudUrl = getCloudUrlFromRegion(options.cloudRegion);
-  const host = getHostFromRegion(options.cloudRegion);
+  const cloudRegion = await detectRegionFromToken(tokenResponse.access_token);
+  const cloudUrl = getCloudUrlFromRegion(cloudRegion);
+  const host = getHostFromRegion(cloudRegion);
 
   const projectData = await fetchProjectData(
     tokenResponse.access_token,
@@ -440,12 +460,13 @@ async function askForWizardLogin(options: {
   );
   const userData = await fetchUserData(tokenResponse.access_token, cloudUrl);
 
-  const data: ProjectData = {
+  const data = {
     accessToken: tokenResponse.access_token,
     projectApiKey: projectData.api_token,
     host,
     distinctId: userData.distinct_id,
     projectId: projectId!,
+    cloudRegion,
   };
 
   getUI().log.success(

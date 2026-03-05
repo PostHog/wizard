@@ -1,5 +1,4 @@
 import { type WizardSession, buildSession } from './lib/wizard-session';
-import type { CloudRegion } from './utils/types';
 
 import { Integration } from './lib/constants';
 import { readEnvironment } from './utils/environment';
@@ -27,7 +26,6 @@ type Args = {
   projectId?: string;
   menu?: boolean;
   benchmark?: boolean;
-  region?: CloudRegion;
 };
 
 export async function runWizard(argv: Args, session?: WizardSession) {
@@ -58,7 +56,6 @@ export async function runWizard(argv: Args, session?: WizardSession) {
       localMcp: finalArgs.localMcp,
       apiKey: finalArgs.apiKey,
       menu: finalArgs.menu,
-      region: finalArgs.region,
       integration: finalArgs.integration,
       benchmark: finalArgs.benchmark,
       projectId: finalArgs.projectId,

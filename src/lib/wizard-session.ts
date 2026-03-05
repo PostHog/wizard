@@ -84,7 +84,7 @@ export interface WizardSession {
   projectId?: number;
 
   // From detection + screens
-  cloudRegion: CloudRegion | null;
+  setupConfirmed: boolean;
   integration: Integration | null;
   frameworkContext: Record<string, unknown>;
   typescript: boolean;
@@ -137,7 +137,6 @@ export function buildSession(args: {
   localMcp?: boolean;
   apiKey?: string;
   menu?: boolean;
-  region?: CloudRegion;
   integration?: Integration;
   benchmark?: boolean;
   projectId?: string;
@@ -154,7 +153,7 @@ export function buildSession(args: {
     benchmark: args.benchmark ?? false,
     projectId: parseProjectIdArg(args.projectId),
 
-    cloudRegion: args.region ?? null,
+    setupConfirmed: false,
     integration: args.integration ?? null,
     frameworkContext: {},
     typescript: false,

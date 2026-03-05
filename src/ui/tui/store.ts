@@ -15,7 +15,6 @@ import { TaskStatus } from '../wizard-ui.js';
 import {
   type WizardSession,
   type OutroData,
-  type CloudRegion,
   type DiscoveredFeature,
   AdditionalFeature,
   RunPhase,
@@ -30,7 +29,7 @@ import {
 } from './router.js';
 
 export { TaskStatus, Screen, Overlay, Flow, RunPhase };
-export type { ScreenName, OutroData, WizardSession, CloudRegion };
+export type { ScreenName, OutroData, WizardSession };
 
 export interface TaskItem {
   label: string;
@@ -53,11 +52,11 @@ export class WizardStore {
   readonly router: WizardRouter;
 
   /**
-   * Setup promise — IntroScreen resolves this when the user picks a region.
+   * Setup promise — IntroScreen resolves this when the user confirms.
    * bin.ts awaits it before calling runWizard.
    */
-  private _resolveSetup!: (region: CloudRegion) => void;
-  readonly setupComplete: Promise<CloudRegion> = new Promise((resolve) => {
+  private _resolveSetup!: () => void;
+  readonly setupComplete: Promise<void> = new Promise((resolve) => {
     this._resolveSetup = resolve;
   });
 
@@ -87,15 +86,10 @@ export class WizardStore {
   // Every setter that affects screen resolution calls emitChange().
   // Business logic calls these instead of mutating session directly.
 
-  setCloudRegion(region: CloudRegion): void {
-    this.$session.setKey('cloudRegion', region);
-    this.emitChange();
-  }
-
-  /** Also unblocks bin.ts via the setupComplete promise. */
-  completeSetup(region: CloudRegion): void {
-    this.$session.setKey('cloudRegion', region);
-    this._resolveSetup(region);
+  /** Unblocks bin.ts via the setupComplete promise. */
+  completeSetup(): void {
+    this.$session.setKey('setupConfirmed', true);
+    this._resolveSetup();
     this.emitChange();
   }
 

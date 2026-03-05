@@ -71,7 +71,7 @@ const FLOWS: Record<Flow, FlowEntry[]> = {
   [Flow.Wizard]: [
     {
       screen: Screen.Intro,
-      isComplete: (s) => s.cloudRegion !== null,
+      isComplete: (s) => s.setupConfirmed,
     },
     {
       screen: Screen.Setup,
