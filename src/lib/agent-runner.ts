@@ -12,7 +12,6 @@ import {
 import type { PackageDotJson } from '../utils/package-json';
 import type { WizardOptions } from '../utils/types';
 import { analytics } from '../utils/analytics';
-import { WIZARD_INTERACTION_EVENT_NAME } from './constants';
 import { getUI } from '../ui';
 import {
   initializeAgent,
@@ -128,8 +127,7 @@ export async function runAgentWizard(
     analytics.setTag(`${config.metadata.integration}-version`, versionBucket);
   }
 
-  analytics.capture(WIZARD_INTERACTION_EVENT_NAME, {
-    action: 'started agent integration',
+  analytics.wizardCapture('agent started', {
     integration: config.metadata.integration,
   });
 
@@ -272,8 +270,7 @@ ${chalk.cyan(config.metadata.docsUrl)}`;
     agentResult.error === AgentErrorType.RATE_LIMIT ||
     agentResult.error === AgentErrorType.API_ERROR
   ) {
-    analytics.capture(WIZARD_INTERACTION_EVENT_NAME, {
-      action: 'api error',
+    analytics.wizardCapture('agent api error', {
       integration: config.metadata.integration,
       error_type: agentResult.error,
       error_message: agentResult.message,

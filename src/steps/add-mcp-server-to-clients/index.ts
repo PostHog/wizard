@@ -85,8 +85,7 @@ export const addMCPServerToClientsStep = async ({
   ${supportedClients.map((c) => `- ${c.name}`).join('\n  ')} `,
   );
 
-  analytics.capture('wizard interaction', {
-    action: 'added mcp servers',
+  analytics.wizardCapture('mcp servers added', {
     clients: supportedClients.map((c) => c.name),
     integration,
   });
@@ -103,8 +102,7 @@ export const removeMCPServerFromClientsStep = async ({
 }): Promise<string[]> => {
   const installedClients = await getInstalledClients(local);
   if (installedClients.length === 0) {
-    analytics.capture('wizard interaction', {
-      action: 'no mcp servers to remove',
+    analytics.wizardCapture('mcp no servers to remove', {
       integration,
     });
     return [];
@@ -116,8 +114,7 @@ export const removeMCPServerFromClientsStep = async ({
     return installedClients.map((c) => c.name);
   });
 
-  analytics.capture('wizard interaction', {
-    action: 'removed mcp servers',
+  analytics.wizardCapture('mcp servers removed', {
     clients: results,
     integration,
   });

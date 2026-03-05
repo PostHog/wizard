@@ -4,8 +4,27 @@ import {
   ANALYTICS_POSTHOG_PUBLIC_PROJECT_WRITE_KEY,
   ANALYTICS_TEAM_TAG,
 } from '../lib/constants';
+import type { WizardSession } from '../lib/wizard-session';
 import { v4 as uuidv4 } from 'uuid';
 import { debug } from './debug';
+
+/**
+ * Extract a standard property bag from the current session.
+ * Used by store-level analytics and available for ad-hoc captures.
+ */
+export function sessionProperties(
+  session: WizardSession,
+): Record<string, unknown> {
+  return {
+    integration: session.integration,
+    detected_framework: session.detectedFrameworkLabel,
+    typescript: session.typescript,
+    project_id: session.credentials?.projectId,
+    discovered_features: session.discoveredFeatures,
+    additional_features: session.additionalFeatureQueue,
+    run_phase: session.runPhase,
+  };
+}
 export class Analytics {
   private client: PostHog;
   private tags: Record<string, string | boolean | number | null | undefined> =
@@ -59,6 +78,14 @@ export class Analytics {
         ...properties,
       },
     });
+  }
+
+  /**
+   * Capture a wizard-specific event. Automatically prepends "wizard: " to the event name.
+   * All new wizard analytics should use this method instead of capture() directly.
+   */
+  wizardCapture(eventName: string, properties?: Record<string, unknown>): void {
+    this.capture(`wizard: ${eventName}`, properties);
   }
 
   async getFeatureFlag(flagKey: string): Promise<string | boolean | undefined> {

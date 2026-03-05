@@ -10,7 +10,7 @@
 import { Box, Text } from 'ink';
 import { useState, useEffect } from 'react';
 import { useSyncExternalStore } from 'react';
-import type { WizardStore } from '../store.js';
+import { type WizardStore, McpOutcome } from '../store.js';
 import { ConfirmationInput, PickerMenu } from '../primitives/index.js';
 import { Colors } from '../styles.js';
 import type { McpInstaller, McpClientInfo } from '../services/mcp-installer.js';
@@ -28,8 +28,12 @@ enum Phase {
   None = 'none',
 }
 
-const markDone = (store: WizardStore) => {
-  store.setMcpComplete();
+const markDone = (
+  store: WizardStore,
+  outcome: McpOutcome,
+  clients: string[] = [],
+) => {
+  store.setMcpComplete(outcome, clients);
 };
 
 export const McpScreen = ({ store, installer }: McpScreenProps) => {
@@ -48,14 +52,14 @@ export const McpScreen = ({ store, installer }: McpScreenProps) => {
         const detected = await installer.detectClients();
         if (detected.length === 0) {
           setPhase(Phase.None);
-          setTimeout(() => markDone(store), 1500);
+          setTimeout(() => markDone(store, McpOutcome.NoClients), 1500);
         } else {
           setClients(detected);
           setPhase(Phase.Ask);
         }
       } catch {
         setPhase(Phase.None);
-        setTimeout(() => markDone(store), 1500);
+        setTimeout(() => markDone(store, McpOutcome.Failed), 1500);
       }
     })();
   }, [installer]); // eslint-disable-line
@@ -69,19 +73,22 @@ export const McpScreen = ({ store, installer }: McpScreenProps) => {
   };
 
   const handleSkip = () => {
-    markDone(store);
+    markDone(store, McpOutcome.Skipped);
   };
 
   const doInstall = async (names: string[]) => {
     setPhase(Phase.Installing);
+    let result: string[] = [];
     try {
-      const result = await installer.install(names);
+      result = await installer.install(names);
       setInstalled(result);
     } catch {
       setInstalled([]);
     }
     setPhase(Phase.Done);
-    setTimeout(() => markDone(store), 2000);
+    const outcome =
+      result.length > 0 ? McpOutcome.Installed : McpOutcome.Failed;
+    setTimeout(() => markDone(store, outcome, result), 2000);
   };
 
   return (

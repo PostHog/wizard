@@ -54,6 +54,14 @@ export const ADDITIONAL_FEATURE_PROMPTS: Record<AdditionalFeature, string> = {
   [AdditionalFeature.LLM]: `Now integrate LLM analytics with PostHog. Use the PostHog MCP server to find the appropriate LLM analytics skill, install it, and follow its workflow. PostHog basics are already installed. Update the setup report markdown file when complete with additions from this task. `,
 };
 
+/** Outcome of the MCP server installation step */
+export enum McpOutcome {
+  NoClients = 'no_clients',
+  Skipped = 'skipped',
+  Installed = 'installed',
+  Failed = 'failed',
+}
+
 /** Outcome kind for the outro screen */
 export enum OutroKind {
   Success = 'success',
@@ -113,6 +121,8 @@ export interface WizardSession {
 
   // Screen completion
   mcpComplete: boolean;
+  mcpOutcome: McpOutcome | null;
+  mcpInstalledClients: string[];
 
   // Runtime
   serviceStatus: { description: string; statusPageUrl: string } | null;
@@ -164,6 +174,8 @@ export function buildSession(args: {
     discoveredFeatures: [],
     llmOptIn: false,
     mcpComplete: false,
+    mcpOutcome: null,
+    mcpInstalledClients: [],
     loginUrl: null,
     credentials: null,
     serviceStatus: null,

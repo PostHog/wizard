@@ -206,8 +206,7 @@ export async function installPackage({
       )} with ${chalk.bold(pkgManager.label)}.`,
     );
 
-    analytics.capture('wizard interaction', {
-      action: 'package installed',
+    analytics.wizardCapture('package installed', {
       package_name: packageName,
       package_manager: pkgManager.name,
       integration,

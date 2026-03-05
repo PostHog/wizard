@@ -59,7 +59,6 @@ export const POSTHOG_OAUTH_URL = IS_DEV
   : 'https://oauth.posthog.com';
 export const OAUTH_PORT = 8239;
 
-export const WIZARD_INTERACTION_EVENT_NAME = 'wizard interaction';
 export const WIZARD_REMARK_EVENT_NAME = 'wizard remark';
 
 /** Feature flag key whose value selects a variant from WIZARD_VARIANTS. */

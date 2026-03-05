@@ -17,6 +17,7 @@ import {
   type OutroData,
   type DiscoveredFeature,
   AdditionalFeature,
+  McpOutcome,
   RunPhase,
   buildSession,
 } from '../../lib/wizard-session.js';
@@ -27,8 +28,9 @@ import {
   Overlay,
   Flow,
 } from './router.js';
+import { analytics, sessionProperties } from '../../utils/analytics.js';
 
-export { TaskStatus, Screen, Overlay, Flow, RunPhase };
+export { TaskStatus, Screen, Overlay, Flow, RunPhase, McpOutcome };
 export type { ScreenName, OutroData, WizardSession };
 
 export interface TaskItem {
@@ -45,6 +47,9 @@ export class WizardStore {
   private $statusMessages = atom<string[]>([]);
   private $tasks = atom<TaskItem[]>([]);
   private $version = atom(0);
+
+  /** Last screen seen — used to detect screen transitions for analytics. */
+  private _lastScreen: ScreenName | null = null;
 
   version = '';
 
@@ -89,6 +94,7 @@ export class WizardStore {
   /** Unblocks bin.ts via the setupComplete promise. */
   completeSetup(): void {
     this.$session.setKey('setupConfirmed', true);
+    analytics.wizardCapture('setup confirmed', sessionProperties(this.session));
     this._resolveSetup();
     this.emitChange();
   }
@@ -100,6 +106,9 @@ export class WizardStore {
 
   setCredentials(credentials: WizardSession['credentials']): void {
     this.$session.setKey('credentials', credentials);
+    analytics.wizardCapture('auth complete', {
+      project_id: credentials?.projectId,
+    });
     this.emitChange();
   }
 
@@ -153,11 +162,22 @@ export class WizardStore {
     if (feature === AdditionalFeature.LLM) {
       this.session.llmOptIn = true;
     }
+    analytics.wizardCapture('feature enabled', { feature });
     this.emitChange();
   }
 
-  setMcpComplete(): void {
+  setMcpComplete(
+    outcome: McpOutcome = McpOutcome.Skipped,
+    installedClients: string[] = [],
+  ): void {
     this.$session.setKey('mcpComplete', true);
+    this.$session.setKey('mcpOutcome', outcome);
+    this.$session.setKey('mcpInstalledClients', installedClients);
+    analytics.wizardCapture('mcp complete', {
+      mcp_outcome: outcome,
+      mcp_installed_clients: installedClients,
+      ...sessionProperties(this.session),
+    });
     this.emitChange();
   }
 
@@ -200,6 +220,7 @@ export class WizardStore {
   emitChange(): void {
     this.router._setDirection('push');
     this.$version.set(this.$version.get() + 1);
+    this._detectTransition();
   }
 
   // ── Overlay navigation ──────────────────────────────────────────
@@ -208,12 +229,32 @@ export class WizardStore {
     this.router._setDirection('push');
     this.router.pushOverlay(overlay);
     this.$version.set(this.$version.get() + 1);
+    this._detectTransition();
   }
 
   popOverlay(): void {
     this.router._setDirection('pop');
     this.router.popOverlay();
     this.$version.set(this.$version.get() + 1);
+    this._detectTransition();
+  }
+
+  // ── Screen transition analytics ─────────────────────────────────
+
+  /**
+   * Detect screen transitions and fire analytics events.
+   * Called at the end of emitChange/pushOverlay/popOverlay.
+   */
+  private _detectTransition(): void {
+    const next = this.router.resolve(this.session);
+    const prev = this._lastScreen;
+    if (prev !== null && next !== prev) {
+      analytics.wizardCapture(`screen ${next}`, {
+        from_screen: prev,
+        ...sessionProperties(this.session),
+      });
+    }
+    this._lastScreen = next;
   }
 
   // ── Agent observation state ─────────────────────────────────────

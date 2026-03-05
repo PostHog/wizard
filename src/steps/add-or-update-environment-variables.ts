@@ -87,8 +87,7 @@ export async function addOrUpdateEnvironmentVariablesStep({
           )}. Please update them manually.`,
         );
 
-        analytics.capture('wizard interaction', {
-          action: 'failed to update environment variables',
+        analytics.wizardCapture('env vars error', {
           integration,
           error: error instanceof Error ? error.message : 'Unknown error',
         });
@@ -119,8 +118,7 @@ export async function addOrUpdateEnvironmentVariablesStep({
           )} with environment variables. Please add them manually.`,
         );
 
-        analytics.capture('wizard interaction', {
-          action: 'failed to create environment variables',
+        analytics.wizardCapture('env vars error', {
           integration,
           error: error instanceof Error ? error.message : 'Unknown error',
         });
@@ -167,8 +165,7 @@ export async function addOrUpdateEnvironmentVariablesStep({
             )} to include ${chalk.bold.cyan(envFileName)}.`,
           );
 
-          analytics.capture('wizard interaction', {
-            action: 'failed to update gitignore',
+          analytics.wizardCapture('env vars error', {
             integration,
             error: error instanceof Error ? error.message : 'Unknown error',
           });
@@ -202,8 +199,7 @@ export async function addOrUpdateEnvironmentVariablesStep({
           )} with environment files.`,
         );
 
-        analytics.capture('wizard interaction', {
-          action: 'failed to create gitignore',
+        analytics.wizardCapture('env vars error', {
           integration,
           error: error instanceof Error ? error.message : 'Unknown error',
         });
@@ -216,8 +212,7 @@ export async function addOrUpdateEnvironmentVariablesStep({
       }
     }
 
-    analytics.capture('wizard interaction', {
-      action: 'added environment variables',
+    analytics.wizardCapture('env vars added', {
       integration,
     });
 

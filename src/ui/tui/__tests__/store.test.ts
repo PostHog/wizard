@@ -5,16 +5,33 @@ import {
   Screen,
   Overlay,
   RunPhase,
+  McpOutcome,
 } from '../store.js';
-import { OutroKind } from '../../../lib/wizard-session.js';
+import { OutroKind, AdditionalFeature } from '../../../lib/wizard-session.js';
 import { buildSession } from '../../../lib/wizard-session.js';
 import { Integration } from '../../../lib/constants.js';
+import { analytics } from '../../../utils/analytics.js';
+
+jest.mock('../../../utils/analytics.js', () => ({
+  analytics: {
+    capture: jest.fn(),
+    wizardCapture: jest.fn(),
+    setTag: jest.fn(),
+    shutdown: jest.fn().mockResolvedValue(undefined),
+  },
+  sessionProperties: jest.fn(() => ({})),
+}));
 
 function createStore(flow?: Flow): WizardStore {
   return new WizardStore(flow);
 }
 
+const wizardCaptureMock = analytics.wizardCapture as jest.Mock;
+
 describe('WizardStore', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
   // ── Construction ─────────────────────────────────────────────────
 
   describe('constructor', () => {
@@ -191,11 +208,13 @@ describe('WizardStore', () => {
       expect(store.session.serviceStatus).toBeNull();
     });
 
-    it('setMcpComplete marks MCP step done', () => {
+    it('setMcpComplete marks MCP step done with outcome', () => {
       const store = createStore();
       expect(store.session.mcpComplete).toBe(false);
-      store.setMcpComplete();
+      store.setMcpComplete(McpOutcome.Installed, ['Cursor']);
       expect(store.session.mcpComplete).toBe(true);
+      expect(store.session.mcpOutcome).toBe(McpOutcome.Installed);
+      expect(store.session.mcpInstalledClients).toEqual(['Cursor']);
     });
 
     it('setOutroData sets outro information', () => {
@@ -232,6 +251,52 @@ describe('WizardStore', () => {
       store.setFrameworkConfig(null, null);
 
       expect(cb).toHaveBeenCalledTimes(11);
+    });
+  });
+
+  // ── Setter analytics events ────────────────────────────────────
+
+  describe('setter analytics events', () => {
+    it('completeSetup fires setup confirmed event', () => {
+      const store = createStore();
+      store.completeSetup();
+      expect(wizardCaptureMock).toHaveBeenCalledWith(
+        'setup confirmed',
+        expect.any(Object),
+      );
+    });
+
+    it('setCredentials fires auth complete event', () => {
+      const store = createStore();
+      store.setCredentials({
+        accessToken: 'tok',
+        projectApiKey: 'pk',
+        host: 'h',
+        projectId: 42,
+      });
+      expect(wizardCaptureMock).toHaveBeenCalledWith('auth complete', {
+        project_id: 42,
+      });
+    });
+
+    it('enableFeature fires feature enabled event', () => {
+      const store = createStore();
+      store.enableFeature(AdditionalFeature.LLM);
+      expect(wizardCaptureMock).toHaveBeenCalledWith('feature enabled', {
+        feature: AdditionalFeature.LLM,
+      });
+    });
+
+    it('setMcpComplete fires mcp complete event', () => {
+      const store = createStore();
+      store.setMcpComplete(McpOutcome.Installed, ['Cursor', 'VS Code']);
+      expect(wizardCaptureMock).toHaveBeenCalledWith(
+        'mcp complete',
+        expect.objectContaining({
+          mcp_outcome: McpOutcome.Installed,
+          mcp_installed_clients: ['Cursor', 'VS Code'],
+        }),
+      );
     });
   });
 

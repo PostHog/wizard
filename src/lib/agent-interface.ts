@@ -9,7 +9,6 @@ import { debug, logToFile, initLogFile, getLogFilePath } from '../utils/debug';
 import type { WizardOptions } from '../utils/types';
 import { analytics } from '../utils/analytics';
 import {
-  WIZARD_INTERACTION_EVENT_NAME,
   WIZARD_REMARK_EVENT_NAME,
   POSTHOG_PROPERTY_HEADER_PREFIX,
   WIZARD_VARIANT_FLAG_KEY,
@@ -355,8 +354,7 @@ export function wizardCanUseTool(
   if (DANGEROUS_OPERATORS.test(command)) {
     logToFile(`Denying bash command with dangerous operators: ${command}`);
     debug(`Denying bash command with dangerous operators: ${command}`);
-    analytics.capture(WIZARD_INTERACTION_EVENT_NAME, {
-      action: 'bash command denied',
+    analytics.wizardCapture('bash denied', {
       reason: 'dangerous operators',
       command,
     });
@@ -378,8 +376,7 @@ export function wizardCanUseTool(
     if (/[|&]/.test(baseCommand)) {
       logToFile(`Denying bash command with multiple pipes: ${command}`);
       debug(`Denying bash command with multiple pipes: ${command}`);
-      analytics.capture(WIZARD_INTERACTION_EVENT_NAME, {
-        action: 'bash command denied',
+      analytics.wizardCapture('bash denied', {
         reason: 'multiple pipes',
         command,
       });
@@ -400,8 +397,7 @@ export function wizardCanUseTool(
   if (/[|&]/.test(normalized)) {
     logToFile(`Denying bash command with pipe/&: ${command}`);
     debug(`Denying bash command with pipe/&: ${command}`);
-    analytics.capture(WIZARD_INTERACTION_EVENT_NAME, {
-      action: 'bash command denied',
+    analytics.wizardCapture('bash denied', {
       reason: 'disallowed pipe',
       command,
     });
@@ -420,8 +416,7 @@ export function wizardCanUseTool(
 
   logToFile(`Denying bash command: ${command}`);
   debug(`Denying bash command: ${command}`);
-  analytics.capture(WIZARD_INTERACTION_EVENT_NAME, {
-    action: 'bash command denied',
+  analytics.wizardCapture('bash denied', {
     reason: 'not in allowlist',
     command,
   });
@@ -615,8 +610,7 @@ export async function runAgent(
       }
     }
 
-    analytics.capture(WIZARD_INTERACTION_EVENT_NAME, {
-      action: 'agent integration completed',
+    analytics.wizardCapture('agent completed', {
       duration_ms: durationMs,
       duration_seconds: durationSeconds,
     });
