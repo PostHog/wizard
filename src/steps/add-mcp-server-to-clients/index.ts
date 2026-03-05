@@ -11,6 +11,7 @@ import { ClaudeCodeMCPClient } from './clients/claude-code';
 import { VisualStudioCodeClient } from './clients/visual-studio-code';
 import { ZedClient } from './clients/zed';
 import { CodexMCPClient } from './clients/codex';
+import { CopilotCLIMCPClient } from './clients/copilot-cli';
 import { AVAILABLE_FEATURES, ALL_FEATURE_VALUES } from './defaults';
 import { debug } from '../../utils/debug';
 
@@ -22,6 +23,7 @@ export const getSupportedClients = async (): Promise<MCPClient[]> => {
     new VisualStudioCodeClient(),
     new ZedClient(),
     new CodexMCPClient(),
+    new CopilotCLIMCPClient(),
   ];
   const supportedClients: MCPClient[] = [];
 
