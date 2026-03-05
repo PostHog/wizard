@@ -44,8 +44,8 @@ export const OutroScreen = ({ store }: OutroScreenProps) => {
 
           <Box marginTop={1}>
             <Text>
-              Check <Text bold>posthog-setup-report.md</Text> for details about
-              your integration
+              Check <Text bold>./posthog-setup-report.md</Text> for details
+              about your integration
             </Text>
           </Box>
 

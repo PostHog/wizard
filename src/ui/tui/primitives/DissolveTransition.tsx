@@ -1,20 +1,34 @@
 /**
- * DissolveTransition — Split-flap / digital rain wipe effect.
+ * DissolveTransition — Subdividing checkerboard wipe effect.
  *
- * A band of cycling random characters sweeps horizontally across the screen.
- * Behind the band: solid block (out phase) or clear (in phase).
- * Characters change every frame within the band, evoking a mechanical
- * split-flap display or Matrix-style digital rain.
+ * A checkerboard pattern sweeps right-to-left, covering old content with
+ * increasingly fine blocks. Then the reverse reveals new content.
+ *
+ * Out phase: large blocks appear on the right, sweep left, then subdivide
+ * to fill remaining gaps until the screen is solid.
+ * In phase: blocks disappear right-to-left, revealing new content.
  */
 
 import { Box, Text } from 'ink';
 import { useState, useEffect, useRef, type ReactNode } from 'react';
 
-// Character pool: half-width katakana, digits, box-drawing, symbols
-const GLYPHS =
-  'ｦｱｲｳｴｵｶｷｸｹｺｻｼｽｾｿﾀﾁﾂﾃﾅﾆﾇﾈﾉﾊﾋﾌﾍﾎﾏﾐﾑﾒﾓﾔﾕﾖﾗﾘﾙﾚﾛﾜﾝ0123456789:.<>╋╳╌╎═║╔╗╚╝░▒▓';
+const FRAMES_PER_PHASE = 16;
 
-const FRAMES_PER_PHASE = 5;
+/**
+ * Subdivision levels — block sizes approximate squares in terminal (2:1 char ratio).
+ * Each level's checkerboard fills gaps left by the previous level.
+ */
+const LEVELS = [
+  { w: 8, h: 4 },
+  { w: 4, h: 2 },
+  { w: 2, h: 1 },
+  { w: 1, h: 1 },
+];
+
+/** Staggered start times for each level (0–1 range within a phase). */
+const LEVEL_START = [0, 0.15, 0.3, 0.45];
+/** Duration of each level's R→L sweep (as fraction of total phase). */
+const SWEEP_DURATION = 0.55;
 
 export type WipeDirection = 'left' | 'right';
 
@@ -24,11 +38,7 @@ interface DissolveTransitionProps {
   height: number;
   children: ReactNode;
   direction?: WipeDirection;
-  duration?: number; // ms per frame, default 30
-}
-
-function randomGlyph(): string {
-  return GLYPHS[Math.floor(Math.random() * GLYPHS.length)];
+  duration?: number; // ms per frame, default 15
 }
 
 enum TransitionPhase {
@@ -37,13 +47,52 @@ enum TransitionPhase {
   In = 'in',
 }
 
+/**
+ * Has the sweep reached cell (r, c) at the given progress?
+ * Checks all subdivision levels — if any level's checkerboard pattern
+ * matches this cell AND the R→L sweep has reached it, returns true.
+ */
+function isCellSwept(
+  r: number,
+  c: number,
+  width: number,
+  progress: number,
+  direction: WipeDirection,
+): boolean {
+  for (let l = 0; l < LEVELS.length; l++) {
+    const { w, h } = LEVELS[l];
+
+    // Checkerboard pattern: skip cells that don't match this level
+    if ((Math.floor(r / h) + Math.floor(c / w)) % 2 !== 0) continue;
+
+    // How far along is this level's sweep?
+    const levelProgress = Math.max(
+      0,
+      Math.min(1, (progress - LEVEL_START[l]) / SWEEP_DURATION),
+    );
+    if (levelProgress <= 0) continue;
+
+    // Column position normalized: 0 = leading edge, 1 = trailing edge
+    let colNorm: number;
+    if (direction === 'left') {
+      // R→L: rightmost columns are swept first
+      colNorm = width > 1 ? (width - 1 - c) / (width - 1) : 0;
+    } else {
+      colNorm = width > 1 ? c / (width - 1) : 0;
+    }
+
+    if (colNorm < levelProgress) return true;
+  }
+  return false;
+}
+
 export const DissolveTransition = ({
   transitionKey,
   width,
   height,
   children,
   direction = 'left',
-  duration = 30,
+  duration = 15,
 }: DissolveTransitionProps) => {
   const [phase, setPhase] = useState<TransitionPhase>(TransitionPhase.Idle);
   const [frame, setFrame] = useState(0);
@@ -51,8 +100,6 @@ export const DissolveTransition = ({
   const prevKey = useRef(transitionKey);
   const pendingChildren = useRef<ReactNode>(children);
   const [displayChildren, setDisplayChildren] = useState<ReactNode>(children);
-  // Random seed changes each frame to cycle the glyphs
-  const [, setTick] = useState(0);
 
   useEffect(() => {
     if (transitionKey !== prevKey.current) {
@@ -70,7 +117,6 @@ export const DissolveTransition = ({
     if (phase === TransitionPhase.Idle) return;
 
     const timer = setInterval(() => {
-      setTick((t) => t + 1); // force re-render for new random glyphs
       setFrame((prev) => {
         const next = prev + 1;
         if (phase === TransitionPhase.Out && next >= FRAMES_PER_PHASE) {
@@ -93,59 +139,21 @@ export const DissolveTransition = ({
     return <>{displayChildren}</>;
   }
 
-  // Wave front sweeps across columns.
-  // The "band" is where random characters appear (the flipping zone).
-  // Behind the band: solid █ (out) or space (in).
-  // Ahead of the band: space (out) or █ (in).
-  const waveFront = (frame + 1) / FRAMES_PER_PHASE;
-  const bandWidth = 0.2; // narrow band
-  const glyphDensity = 0.08; // only ~8% of band cells get a glyph
+  const progress = (frame + 1) / FRAMES_PER_PHASE;
 
   const rows: string[] = [];
   for (let r = 0; r < height; r++) {
     let row = '';
     for (let c = 0; c < width; c++) {
-      let colNorm: number;
-      if (activeDir === 'left') {
-        colNorm = width > 1 ? (width - 1 - c) / (width - 1) : 0;
-      } else {
-        colNorm = width > 1 ? c / (width - 1) : 0;
-      }
+      const swept = isCellSwept(r, c, width, progress, activeDir);
 
-      const colProgress = (waveFront - colNorm + bandWidth) / bandWidth;
-
-      let char: string;
       if (phase === TransitionPhase.Out) {
-        if (colProgress >= 1) {
-          char = '█';
-        } else if (colProgress > 0) {
-          // Band: mostly shade blocks, rare glyph
-          if (Math.random() < glyphDensity) {
-            char = randomGlyph();
-          } else {
-            // Gradient through shades based on position in band
-            const shade = Math.floor(colProgress * 4);
-            char = ['░', '▒', '▓', '█'][shade];
-          }
-        } else {
-          char = ' ';
-        }
+        // Swept cells become covered (█), others stay empty
+        row += swept ? '█' : ' ';
       } else {
-        if (colProgress >= 1) {
-          char = ' ';
-        } else if (colProgress > 0) {
-          if (Math.random() < glyphDensity) {
-            char = randomGlyph();
-          } else {
-            const shade = Math.floor((1 - colProgress) * 4);
-            char = ['░', '▒', '▓', '█'][shade];
-          }
-        } else {
-          char = '█';
-        }
+        // Swept cells become revealed (empty), others stay covered
+        row += swept ? ' ' : '█';
       }
-
-      row += char;
     }
     rows.push(row);
   }
