@@ -33,6 +33,7 @@ type Args = {
   projectId?: string;
   menu?: boolean;
   benchmark?: boolean;
+  yaraReport?: boolean;
 };
 
 export async function runWizard(argv: Args, session?: WizardSession) {
@@ -66,6 +67,7 @@ export async function runWizard(argv: Args, session?: WizardSession) {
       integration: finalArgs.integration,
       benchmark: finalArgs.benchmark,
       projectId: finalArgs.projectId,
+      yaraReport: finalArgs.yaraReport,
     });
   }
 

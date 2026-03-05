@@ -74,6 +74,11 @@ export type WizardOptions = {
    * When not provided, the user will be prompted to select one.
    */
   cloudRegion?: CloudRegion;
+
+  /**
+   * Whether to print a YARA scanner summary after the agent run.
+   */
+  yaraReport: boolean;
 };
 
 export interface Feature {

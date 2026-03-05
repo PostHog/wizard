@@ -40,6 +40,72 @@ export interface HookCallbackMatcher {
   timeout?: number;
 }
 
+// ─── Scan Report Accumulator ─────────────────────────────────────
+
+type ScanAction = 'blocked' | 'reverted' | 'warned' | 'aborted';
+
+interface ScanReportEntry {
+  rule: string;
+  severity: string;
+  action: ScanAction;
+  phase: string;
+  tool: string;
+}
+
+let scanCount = 0;
+const scanViolations: ScanReportEntry[] = [];
+
+function recordScan(): void {
+  scanCount++;
+}
+
+function recordViolation(entry: ScanReportEntry): void {
+  scanViolations.push(entry);
+}
+
+/** Reset counters (for testing) */
+export function resetScanReport(): void {
+  scanCount = 0;
+  scanViolations.length = 0;
+}
+
+/** Format the scan report summary. Returns null if no scans occurred */
+export function formatScanReport(): string | null {
+  if (scanCount === 0) return null;
+
+  const lines: string[] = ['', '— YARA Scanner Summary —'];
+  const violationCount = scanViolations.length;
+  const cleanCount = scanCount - violationCount;
+
+  lines.push(
+    `✓ ${scanCount} tool calls scanned, ${violationCount} violation${
+      violationCount !== 1 ? 's' : ''
+    } detected`,
+  );
+
+  if (violationCount > 0) {
+    lines.push('');
+    for (const v of scanViolations) {
+      const tag = v.action.toUpperCase();
+      lines.push(
+        `  [${tag}] ${v.rule} (${v.severity.toUpperCase()}) — ${v.phase}:${
+          v.tool
+        }`,
+      );
+    }
+  }
+
+  if (cleanCount > 0) {
+    lines.push('');
+    lines.push(
+      `No violations: ✓ ${cleanCount} clean scan${cleanCount !== 1 ? 's' : ''}`,
+    );
+  }
+
+  lines.push('');
+  return lines.join('\n');
+}
+
 // ─── Logging ─────────────────────────────────────────────────────
 
 function logYaraMatch(phase: string, tool: string, match: YaraMatch): void {
@@ -80,11 +146,19 @@ export function createPreToolUseYaraHooks(): HookCallbackMatcher[] {
 
             if (!command) return Promise.resolve({});
 
+            recordScan();
             const result = scan(command, 'PreToolUse', 'Bash');
             if (!result.matched) return Promise.resolve({});
 
             const match = result.matches[0];
             logYaraMatch('PreToolUse', 'Bash', match);
+            recordViolation({
+              rule: match.rule.name,
+              severity: match.rule.severity,
+              action: 'blocked',
+              phase: 'PreToolUse',
+              tool: 'Bash',
+            });
 
             return Promise.resolve({
               decision: 'block',
@@ -132,12 +206,20 @@ export function createPostToolUseYaraHooks(): HookCallbackMatcher[] {
 
             if (!content) return Promise.resolve({});
 
+            recordScan();
             const tool = toolName;
             const result = scan(content, 'PostToolUse', tool);
             if (!result.matched) return Promise.resolve({});
 
             const match = result.matches[0];
             logYaraMatch('PostToolUse', tool, match);
+            recordViolation({
+              rule: match.rule.name,
+              severity: match.rule.severity,
+              action: 'reverted',
+              phase: 'PostToolUse',
+              tool,
+            });
 
             return Promise.resolve({
               hookSpecificOutput: {
@@ -173,6 +255,7 @@ export function createPostToolUseYaraHooks(): HookCallbackMatcher[] {
 
             if (!content) return Promise.resolve({});
 
+            recordScan();
             const tool = toolName;
             const result = scan(content, 'PostToolUse', tool);
             if (!result.matched) return Promise.resolve({});
@@ -181,6 +264,13 @@ export function createPostToolUseYaraHooks(): HookCallbackMatcher[] {
             logYaraMatch('PostToolUse', tool, match);
 
             if (match.rule.severity === 'critical') {
+              recordViolation({
+                rule: match.rule.name,
+                severity: match.rule.severity,
+                action: 'aborted',
+                phase: 'PostToolUse',
+                tool,
+              });
               // Prompt injection: abort the session — context is poisoned
               return Promise.resolve({
                 stopReason:
@@ -189,6 +279,13 @@ export function createPostToolUseYaraHooks(): HookCallbackMatcher[] {
               });
             }
 
+            recordViolation({
+              rule: match.rule.name,
+              severity: match.rule.severity,
+              action: 'warned',
+              phase: 'PostToolUse',
+              tool,
+            });
             return Promise.resolve({
               hookSpecificOutput: {
                 hookEventName: 'PostToolUse',
@@ -227,12 +324,20 @@ export function createPostToolUseYaraHooks(): HookCallbackMatcher[] {
 
             const skillDir = dirMatch[1];
             const cwd = (input.cwd as string) ?? process.cwd();
+            recordScan();
             const result = await scanSkillFiles(cwd, skillDir);
 
             if (!result.matched) return {};
 
             const match = result.matches[0];
             logYaraMatch('PostToolUse', 'Bash (skill install)', match);
+            recordViolation({
+              rule: match.rule.name,
+              severity: match.rule.severity,
+              action: 'aborted',
+              phase: 'PostToolUse',
+              tool: 'Bash (skill)',
+            });
 
             return {
               stopReason:

@@ -132,6 +132,13 @@ yargs(hideBin(process.argv))
             'Run in benchmark mode with per-phase token tracking\nenv: POSTHOG_WIZARD_BENCHMARK',
           type: 'boolean',
         },
+        'yara-report': {
+          default: false,
+          describe:
+            'Print YARA scanner summary after the agent run\nenv: POSTHOG_WIZARD_YARA_REPORT',
+          type: 'boolean',
+          hidden: true,
+        },
       });
     },
     (argv) => {

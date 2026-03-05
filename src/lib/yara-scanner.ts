@@ -1,11 +1,11 @@
 /**
- * YARA-equivalent content scanner for the PostHog wizard.
+ * YARA content scanner for the PostHog wizard.
  *
- * Implements the rules defined in policies/yara/wizard.yar and
- * policies/yara/RULES.md as TypeScript regex patterns. Scans tool
- * inputs (pre-execution) and outputs (post-execution) for security
- * violations including PII leakage, hardcoded secrets, prompt
- * injection, and secret exfiltration.
+ * This file is the single source of truth for all wizard YARA rules.
+ *
+ * Scans tool inputs (pre-execution) and outputs (post-execution) for
+ * security violations including PII leakage, hardcoded secrets,
+ * prompt injection, and secret exfiltration.
  *
  * This is Layer 2 (L2) in the wizard's defense-in-depth model,
  * complementing the prompt-based commandments (L0) and the
@@ -55,9 +55,8 @@ export type ScanResult =
 
 // ─── Rule Definitions ────────────────────────────────────────────
 //
-// Each rule mirrors the specification in policies/yara/wizard.yar
-// and policies/yara/RULES.md. Patterns are compiled once at module
-// load time for performance.
+// Patterns are compiled once at module load time for performance.
+// Design spec: policies/yara/RULES.md
 
 const POST_WRITE_EDIT: Array<{ phase: HookPhase; tool: ToolTarget }> = [
   { phase: 'PostToolUse', tool: 'Write' },
