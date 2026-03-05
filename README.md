@@ -197,3 +197,42 @@ To make your version of a tool usable with a one-line `npx` command:
 2. Run [`npm publish`](https://docs.npmjs.com/cli/v7/commands/npm-publish) from
    your project directory
 3. Now you can run it with `npx yourpackagename`
+
+## Smoke test helper (`scripts/smoke-test-ci.sh`)
+
+This repo includes a helper script to run a full end‑to‑end smoke test of the wizard packaged in a tarball against a real app from [`posthog/wizard-workbench`](https://github.com/PostHog/wizard-workbench). This will catch certain packaging issues that might not be caught by other tests.
+
+**Prerequisites**
+
+- Point to a `wizard-workbench` checkout either by:
+  - Setting `WIZARD_WORKBENCH_ROOT=/absolute/path/to/wizard-workbench`, or
+  - Cloning `wizard-workbench` next to this repo (so it lives at `../wizard-workbench`).
+- Set `POSTHOG_PERSONAL_API_KEY` either in your shell or in `../wizard-workbench/.env`.
+- (Optional) Set `POSTHOG_PROJECT_ID` to target a specific PostHog project.
+
+**Usage**
+
+```bash
+# Default app: next-js/15-app-router-todo
+./scripts/smoke-test-ci.sh
+
+# Specify a different app from wizard-workbench/apps
+./scripts/smoke-test-ci.sh next-js/15-pages-router-saas
+
+# With API key (and optional project ID) inline
+POSTHOG_PERSONAL_API_KEY=phx_your_key_here \
+POSTHOG_PROJECT_ID=12345 \
+./scripts/smoke-test-ci.sh next-js/15-pages-router-saas
+
+# Pointing at a custom wizard-workbench checkout
+WIZARD_WORKBENCH_ROOT=/path/to/wizard-workbench \
+./scripts/smoke-test-ci.sh
+```
+
+The script will:
+
+- Build and pack the wizard
+- Copy the selected app into a temp directory
+- Install dependencies for the app
+- Install the packed wizard tarball into an isolated temp project
+- Run `wizard` in `--ci` mode against the copied app and perform basic post‑install checks
