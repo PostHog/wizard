@@ -15,6 +15,7 @@ module.exports = {
   },
   ignorePatterns: [
     '.eslintrc.js',
+    'babel.config.js',
     'build/**',
     'dist/**',
     'esm/**',
