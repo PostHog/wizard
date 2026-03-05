@@ -11,6 +11,7 @@ export { PromptLabel } from './PromptLabel.js';
 export { PickerMenu } from './PickerMenu.js';
 export { ConfirmationInput } from './ConfirmationInput.js';
 export { LogViewer } from './LogViewer.js';
+export { EventPlanViewer } from './EventPlanViewer.js';
 export { ScreenContainer } from './ScreenContainer.js';
 export { ScreenErrorBoundary } from './ScreenErrorBoundary.js';
 export { TabContainer } from './TabContainer.js';

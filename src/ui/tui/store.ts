@@ -41,11 +41,17 @@ export interface TaskItem {
   done: boolean;
 }
 
+export interface PlannedEvent {
+  name: string;
+  description: string;
+}
+
 export class WizardStore {
   // ── Internal nanostore atoms ─────────────────────────────────────
   private $session = map<WizardSession>(buildSession({}));
   private $statusMessages = atom<string[]>([]);
   private $tasks = atom<TaskItem[]>([]);
+  private $eventPlan = atom<PlannedEvent[]>([]);
   private $version = atom(0);
 
   /** Last screen seen — used to detect screen transitions for analytics. */
@@ -85,6 +91,10 @@ export class WizardStore {
 
   get tasks(): TaskItem[] {
     return this.$tasks.get();
+  }
+
+  get eventPlan(): PlannedEvent[] {
+    return this.$eventPlan.get();
   }
 
   // ── Session setters ─────────────────────────────────────────────
@@ -281,6 +291,11 @@ export class WizardStore {
       this.$tasks.set(updated);
       this.emitChange();
     }
+  }
+
+  setEventPlan(events: PlannedEvent[]): void {
+    this.$eventPlan.set(events);
+    this.emitChange();
   }
 
   syncTodos(

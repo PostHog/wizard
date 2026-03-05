@@ -119,4 +119,8 @@ export class InkUI implements WizardUI {
   ): void {
     this.store.syncTodos(todos);
   }
+
+  setEventPlan(events: Array<{ name: string; description: string }>): void {
+    this.store.setEventPlan(events);
+  }
 }

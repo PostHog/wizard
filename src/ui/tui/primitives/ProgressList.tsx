@@ -31,7 +31,7 @@ export const ProgressList = ({ items, title }: ProgressListProps) => {
           <Text> </Text>
         </>
       )}
-      {items.length === 0 && <LoadingBox message="Starting up..." />}
+      {items.length === 0 && <LoadingBox message="Analyzing project..." />}
       {items.map((item, i) => {
         const icon =
           item.status === 'completed'

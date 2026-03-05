@@ -66,4 +66,7 @@ export interface WizardUI {
   syncTodos(
     todos: Array<{ content: string; status: string; activeForm?: string }>,
   ): void;
+
+  // ── Event plan from .posthog-events.json ────────────────────
+  setEventPlan(events: Array<{ name: string; description: string }>): void;
 }

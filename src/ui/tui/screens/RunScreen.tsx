@@ -17,6 +17,7 @@ import {
   SplitView,
   ProgressList,
   LogViewer,
+  EventPlanViewer,
 } from '../primitives/index.js';
 import type { ProgressItem } from '../primitives/index.js';
 import { Colors, Icons } from '../styles.js';
@@ -191,6 +192,15 @@ export const RunScreen = ({ store }: RunScreenProps) => {
         />
       ),
     },
+    ...(store.eventPlan.length > 0
+      ? [
+          {
+            id: 'events',
+            label: 'Event plan',
+            component: <EventPlanViewer events={store.eventPlan} />,
+          },
+        ]
+      : []),
     {
       id: 'logs',
       label: 'All logs',
