@@ -14,7 +14,7 @@ import type { WizardOptions } from '../utils/types';
 import { WIZARD_INTERACTION_EVENT_NAME } from './constants';
 import { analytics } from '../utils/analytics';
 import { getUI } from '../ui';
-import { formatScanReport } from './yara-hooks';
+import { formatScanReport, writeScanReport } from './yara-hooks';
 import {
   initializeAgent,
   runAgent,
@@ -340,10 +340,12 @@ export async function runAgentWizard(
   getUI().outro(`Successfully installed PostHog!`);
 
   if (options.yaraReport) {
-    const report = formatScanReport();
-    if (report) {
-      // eslint-disable-next-line no-console
-      console.log(report);
+    const reportPath = writeScanReport();
+    if (reportPath) {
+      const summary = formatScanReport();
+      getUI().log.info(
+        `YARA scan report: ${chalk.cyan(reportPath)}${summary ?? ''}`,
+      );
     }
   }
 

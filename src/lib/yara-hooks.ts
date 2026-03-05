@@ -106,6 +106,25 @@ export function formatScanReport(): string | null {
   return lines.join('\n');
 }
 
+const YARA_REPORT_PATH = '/tmp/posthog-wizard-yara-report.json';
+
+/** Write the scan report to a JSON file. Returns the file path, or null if no scans occurred. */
+export function writeScanReport(): string | null {
+  if (scanCount === 0) return null;
+
+  const report = {
+    summary: {
+      totalScans: scanCount,
+      violations: scanViolations.length,
+      clean: scanCount - scanViolations.length,
+    },
+    violations: scanViolations,
+  };
+
+  fs.writeFileSync(YARA_REPORT_PATH, JSON.stringify(report, null, 2));
+  return YARA_REPORT_PATH;
+}
+
 // ─── Logging ─────────────────────────────────────────────────────
 
 function logYaraMatch(phase: string, tool: string, match: YaraMatch): void {
