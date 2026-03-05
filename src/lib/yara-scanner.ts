@@ -93,8 +93,12 @@ const pii_in_capture_call: YaraRule = {
     /\.capture\s*\([^)]{0,200}(ssn|social[_\s]?security)/i,
     /\.capture\s*\([^)]{0,200}(date[_\s]?of[_\s]?birth|dob|birthday)/i,
     /\.capture\s*\([^)]{0,200}\$ip/,
-    // Note: identify() is intentionally excluded for email/phone/name —
-    // setting user properties like email is a standard PostHog pattern.
+    // identify() allows email/phone/name (standard PostHog user properties),
+    // but highly sensitive PII is still blocked in identify().
+    /\.identify\s*\([^)]{0,200}(ssn|social[_\s]?security)/i,
+    /\.identify\s*\([^)]{0,200}(card[_\s]?number|cvv|credit[_\s]?card)/i,
+    /\.identify\s*\([^)]{0,200}(date[_\s]?of[_\s]?birth|dob|birthday)/i,
+    /\.identify\s*\([^)]{0,200}(street|mailing|home|billing)[_\s]?address/i,
     // PII in $set properties via capture
     /\$set.*email/i,
     /\$set.*phone/i,

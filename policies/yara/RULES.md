@@ -57,12 +57,13 @@ Note: `identify()` calls are exempt from email, phone, and name checks — setti
 | `pii_ssn_in_capture` | `capture(` ... `ssn` or `social_security` ... `)` | SSN is PII |
 | `pii_credit_card` | `capture(` ... `card_number` or `cvv` or `credit_card` ... `)` | Payment info is PII |
 | `pii_ip_address` | `capture(` ... `ip_address` or `client_ip` or `remote_addr` ... `)` | IP addresses are PII |
+| `pii_sensitive_in_identify` | `identify(` ... `ssn`, `credit_card`, `dob`, `address` ... `)` | Highly sensitive PII should never appear in any analytics call |
 
-**Pattern guidance:** Match broadly within the parens of `.capture(` calls only. Use case-insensitive matching. Examples:
+**Pattern guidance:** Match broadly within the parens of `.capture(` calls. For `identify()`, only match highly sensitive fields (SSN, credit card, DOB, address). Use case-insensitive matching. Examples:
 
 ```
 $email = /\.capture\([^)]{0,200}email[^)]*\)/ nocase
-$phone = /\.capture\([^)]{0,200}phone[^)]*\)/ nocase
+$identify_ssn = /\.identify\([^)]{0,200}ssn[^)]*\)/ nocase
 ```
 
 **Applies to:** `PostToolUse:Write`, `PostToolUse:Edit`

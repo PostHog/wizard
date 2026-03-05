@@ -108,6 +108,31 @@ describe('yara-scanner', () => {
       expect(result.matched).toBe(false);
     });
 
+    it('detects SSN in identify() — sensitive PII never allowed', () => {
+      const content = `posthog.identify(userId, { ssn: user.ssn })`;
+      const result = scan(content, 'PostToolUse', 'Write');
+      expect(result.matched).toBe(true);
+      expect(getMatches(result)[0].rule.name).toBe('pii_in_capture_call');
+    });
+
+    it('detects credit card in identify()', () => {
+      const content = `posthog.identify(userId, { credit_card: user.cardNumber })`;
+      const result = scan(content, 'PostToolUse', 'Write');
+      expect(result.matched).toBe(true);
+    });
+
+    it('detects DOB in identify()', () => {
+      const content = `posthog.identify(userId, { date_of_birth: user.dob })`;
+      const result = scan(content, 'PostToolUse', 'Write');
+      expect(result.matched).toBe(true);
+    });
+
+    it('detects street address in identify()', () => {
+      const content = `posthog.identify(userId, { street_address: user.address })`;
+      const result = scan(content, 'PostToolUse', 'Write');
+      expect(result.matched).toBe(true);
+    });
+
     it('still detects email in capture() even when identify is nearby', () => {
       const content = `posthog.identify(userId, { email: user.email })
 posthog.capture('signup', { email: user.email })`;

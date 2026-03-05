@@ -43,9 +43,13 @@ rule pii_in_capture_call {
         $dob = /\.capture\s*\([^)]{0,200}(date[_\s]?of[_\s]?birth|dob|birthday)/i
         $ip = /\.capture\s*\([^)]{0,200}\$ip/
 
-        // Note: identify() is intentionally excluded for email/phone/name —
-        // setting user properties like email is a standard PostHog pattern.
+        // identify() allows email/phone/name (standard PostHog user properties),
+        // but highly sensitive PII is still blocked in identify().
         // See: https://posthog.com/docs/product-analytics/identify
+        $identify_ssn = /\.identify\s*\([^)]{0,200}(ssn|social[_\s]?security)/i
+        $identify_card = /\.identify\s*\([^)]{0,200}(card[_\s]?number|cvv|credit[_\s]?card)/i
+        $identify_dob = /\.identify\s*\([^)]{0,200}(date[_\s]?of[_\s]?birth|dob|birthday)/i
+        $identify_address = /\.identify\s*\([^)]{0,200}(street|mailing|home|billing)[_\s]?address/i
 
         // PII in $set properties via capture
         $set_email = /\$set.*email/i
@@ -54,6 +58,7 @@ rule pii_in_capture_call {
     condition:
         any of ($email, $phone, $fullname, $firstname, $lastname,
                 $address, $ssn, $dob, $ip) or
+        any of ($identify_ssn, $identify_card, $identify_dob, $identify_address) or
         any of ($set_email, $set_phone)
 }
 
