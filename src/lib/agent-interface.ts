@@ -12,6 +12,10 @@ import {
   WIZARD_INTERACTION_EVENT_NAME,
   WIZARD_REMARK_EVENT_NAME,
 } from './constants';
+import {
+  type AdditionalFeature,
+  ADDITIONAL_FEATURE_PROMPTS,
+} from './wizard-session';
 import { getLlmGatewayUrlFromHost } from '../utils/urls';
 import { LINTING_TOOLS } from './safe-tools';
 import { createWizardToolsServer, WIZARD_TOOL_NAMES } from './wizard-tools';
@@ -77,6 +81,60 @@ export type AgentConfig = {
   additionalMcpServers?: Record<string, { url: string }>;
   detectPackageManager: PackageManagerDetector;
 };
+
+/**
+ * Stop hook return type: either allow stop or block with a reason.
+ */
+export type StopHookResult =
+  | Record<string, never>
+  | { decision: 'block'; reason: string };
+
+/**
+ * Create a stop hook callback that drains the additional feature queue,
+ * then collects a remark, then allows stop.
+ *
+ * Three-phase logic using closure state:
+ *   Phase 1 — drain queue: block with each feature prompt in order
+ *   Phase 2 — collect remark (once): block with remark prompt
+ *   Phase 3 — allow stop: return {}
+ */
+export function createStopHook(
+  featureQueue: readonly AdditionalFeature[],
+): (input: { stop_hook_active: boolean }) => StopHookResult {
+  let featureIndex = 0;
+  let remarkRequested = false;
+
+  return (input: { stop_hook_active: boolean }): StopHookResult => {
+    logToFile('Stop hook triggered', {
+      stop_hook_active: input.stop_hook_active,
+      featureIndex,
+      remarkRequested,
+      queueLength: featureQueue.length,
+    });
+
+    // Phase 1: drain feature queue
+    if (featureIndex < featureQueue.length) {
+      const feature = featureQueue[featureIndex++];
+      const prompt = ADDITIONAL_FEATURE_PROMPTS[feature];
+      logToFile(`Stop hook: injecting feature prompt for ${feature}`);
+      return { decision: 'block', reason: prompt };
+    }
+
+    // Phase 2: collect remark (once)
+    if (!remarkRequested) {
+      remarkRequested = true;
+      logToFile('Stop hook: requesting reflection');
+      return {
+        decision: 'block',
+        reason: `Before concluding, provide a brief remark about what information or guidance would have been useful to have in the integration prompt or documentation for this run. Specifically cite anything that would have prevented tool failures, erroneous edits, or other wasted turns. Format your response exactly as: ${AgentSignals.WIZARD_REMARK} Your remark here`,
+      };
+    }
+
+    // Phase 3: allow stop
+    logToFile('Stop hook: allowing stop');
+    return {};
+  };
+}
 
 /**
  * Internal configuration object returned by initializeAgent
@@ -422,6 +480,7 @@ export async function runAgent(
     spinnerMessage?: string;
     successMessage?: string;
     errorMessage?: string;
+    additionalFeatureQueue?: readonly AdditionalFeature[];
   },
 ): Promise<{ error?: AgentErrorType; message?: string }> {
   const {
@@ -559,29 +618,11 @@ export async function runAgent(
             debug('CLI stderr:', data);
           }
         },
-        // Stop hook to have the agent reflect on its run
+        // Stop hook: drain additional feature queue, then collect remark, then allow stop
         hooks: {
           Stop: [
             {
-              hooks: [
-                (input: { stop_hook_active: boolean }) => {
-                  logToFile('Stop hook triggered', {
-                    stop_hook_active: input.stop_hook_active,
-                  });
-
-                  // Only ask for reflection on first stop (not after reflection is provided)
-                  if (input.stop_hook_active) {
-                    logToFile('Stop hook: allowing stop (already reflected)');
-                    return {}; // Allow stopping
-                  }
-
-                  logToFile('Stop hook: requesting reflection');
-                  return {
-                    decision: 'block',
-                    reason: `Before concluding, provide a brief remark about what information or guidance would have been useful to have in the integration prompt or documentation for this run. Specifically cite anything that would have prevented tool failures, erroneous edits, or other wasted turns. Format your response exactly as: ${AgentSignals.WIZARD_REMARK} Your remark here`,
-                  };
-                },
-              ],
+              hooks: [createStopHook(config?.additionalFeatureQueue ?? [])],
               timeout: 30,
             },
           ],

@@ -42,6 +42,13 @@ export const OutroScreen = ({ store }: OutroScreenProps) => {
             {'\u2714'} Successfully installed PostHog!
           </Text>
 
+          <Box marginTop={1}>
+            <Text>
+              Check <Text bold>posthog-setup-report.md</Text> for details about
+              your integration
+            </Text>
+          </Box>
+
           {outroData.changes && outroData.changes.length > 0 && (
             <Box flexDirection="column" marginTop={1}>
               <Text color="cyan" bold>

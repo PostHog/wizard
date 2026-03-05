@@ -27,6 +27,27 @@ export enum RunPhase {
   Error = 'error',
 }
 
+/** Features discovered by the feature-discovery subagent */
+export enum DiscoveredFeature {
+  Stripe = 'stripe',
+  LLM = 'llm',
+}
+
+/** Additional features the agent can integrate after the main setup */
+export enum AdditionalFeature {
+  LLM = 'llm',
+}
+
+/** Human-readable labels for additional features (used in TUI progress) */
+export const ADDITIONAL_FEATURE_LABELS: Record<AdditionalFeature, string> = {
+  [AdditionalFeature.LLM]: 'LLM analytics',
+};
+
+/** Agent prompts for each additional feature, injected via the stop hook */
+export const ADDITIONAL_FEATURE_PROMPTS: Record<AdditionalFeature, string> = {
+  [AdditionalFeature.LLM]: `Now integrate LLM analytics with PostHog. Use the PostHog MCP server to find the appropriate LLM analytics skill, install it, and follow its workflow. PostHog basics are already installed. Update the setup report markdown file when complete with additions from this task. `,
+};
+
 /** Outcome kind for the outro screen */
 export enum OutroKind {
   Success = 'success',
@@ -78,12 +99,19 @@ export interface WizardSession {
   runPhase: RunPhase;
   loginUrl: string | null;
 
+  // Feature discovery
+  discoveredFeatures: DiscoveredFeature[];
+  llmOptIn: boolean;
+
   // Screen completion
   mcpComplete: boolean;
 
   // Runtime
   serviceStatus: { description: string; statusPageUrl: string } | null;
   outroData: OutroData | null;
+
+  // Additional features queue (drained via stop hook after main integration)
+  additionalFeatureQueue: AdditionalFeature[];
 
   // Resolved framework config (set after integration is known)
   frameworkConfig: FrameworkConfig | null;
@@ -122,11 +150,14 @@ export function buildSession(args: {
     detectionComplete: false,
 
     runPhase: RunPhase.Idle,
+    discoveredFeatures: [],
+    llmOptIn: false,
     mcpComplete: false,
     loginUrl: null,
     credentials: null,
     serviceStatus: null,
     outroData: null,
+    additionalFeatureQueue: [],
     frameworkConfig: null,
   };
 }

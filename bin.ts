@@ -270,6 +270,51 @@ yargs(hideBin(process.argv))
               }
             }
 
+            // Feature discovery — deterministic scan of package.json deps
+            try {
+              const { readFileSync } = await import('fs');
+              const pkgPath = require('path').join(installDir, 'package.json');
+              const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8'));
+              const allDeps = {
+                ...pkg.dependencies,
+                ...pkg.devDependencies,
+              };
+              const depNames = Object.keys(allDeps);
+
+              const { DiscoveredFeature } = await import(
+                './src/lib/wizard-session.js'
+              );
+
+              if (
+                depNames.some((d) =>
+                  ['stripe', '@stripe/stripe-js'].includes(d),
+                )
+              ) {
+                tui.store.addDiscoveredFeature(DiscoveredFeature.Stripe);
+              }
+
+              // LLM SDK detection — sourced from PostHog LLM analytics skill
+              const LLM_PACKAGES = [
+                'openai',
+                '@anthropic-ai/sdk',
+                'ai',
+                '@ai-sdk/openai',
+                'langchain',
+                '@langchain/openai',
+                '@langchain/langgraph',
+                '@google/generative-ai',
+                '@google/genai',
+                '@instructor-ai/instructor',
+                '@mastra/core',
+                'portkey-ai',
+              ];
+              if (depNames.some((d) => LLM_PACKAGES.includes(d))) {
+                tui.store.addDiscoveredFeature(DiscoveredFeature.LLM);
+              }
+            } catch {
+              // No package.json or parse error — skip feature discovery
+            }
+
             // Signal detection is done — IntroScreen shows picker or results
             tui.store.setDetectionComplete();
 

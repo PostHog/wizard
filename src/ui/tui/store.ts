@@ -16,6 +16,8 @@ import {
   type WizardSession,
   type OutroData,
   type CloudRegion,
+  type DiscoveredFeature,
+  AdditionalFeature,
   RunPhase,
   buildSession,
 } from '../../lib/wizard-session.js';
@@ -117,6 +119,28 @@ export class WizardStore extends EventEmitter {
     status: { description: string; statusPageUrl: string } | null,
   ): void {
     this.session.serviceStatus = status;
+    this.emitChange();
+  }
+
+  addDiscoveredFeature(feature: DiscoveredFeature): void {
+    if (!this.session.discoveredFeatures.includes(feature)) {
+      this.session.discoveredFeatures.push(feature);
+      this.emitChange();
+    }
+  }
+
+  /**
+   * Enable an additional feature: enqueue it for the stop hook
+   * and set any feature-specific session flags.
+   */
+  enableFeature(feature: AdditionalFeature): void {
+    if (!this.session.additionalFeatureQueue.includes(feature)) {
+      this.session.additionalFeatureQueue.push(feature);
+    }
+    // Feature-specific flags
+    if (feature === AdditionalFeature.LLM) {
+      this.session.llmOptIn = true;
+    }
     this.emitChange();
   }
 
