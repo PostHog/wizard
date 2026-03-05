@@ -11,7 +11,7 @@ license: MIT
 compatibility: Requires Node.js 18+. Designed for Claude Code or similar coding agents.
 metadata:
   author: posthog
-  version: "0.2"
+  version: "0.3"
   domain: cli-tui
 ---
 
@@ -40,11 +40,12 @@ architecture: session, router, store, screen resolution, overlays, and data flow
 
 ### Key concepts
 
-- **WizardSession** — single source of truth for all wizard decisions
-- **WizardRouter** — declarative flow pipelines with `isComplete` predicates per screen
-- **WizardStore** — EventEmitter with explicit setters that trigger React re-renders
-- **Screen registry** — factory function mapping screen names to components (App.tsx never changes)
-- **Services** — injected into screens via props (no dynamic imports in React components)
+- **WizardSession** (`src/lib/wizard-session.ts`) — single source of truth for all wizard decisions
+- **WizardRouter** (`src/ui/tui/router.ts`) — declarative flow pipelines with `isComplete` predicates per screen
+- **WizardStore** (`src/ui/tui/store.ts`) — nanostores-backed reactive store with explicit setters that trigger React re-renders via `useSyncExternalStore`
+- **WizardUI** (`src/ui/wizard-ui.ts`) — interface bridging business logic to store; implemented by `InkUI` (TUI) and `LoggingUI` (CI)
+- **Screen registry** (`src/ui/tui/screen-registry.tsx`) — factory function mapping screen names to components (App.tsx never changes)
+- **Services** (`src/ui/tui/services/`) — injected into screens via props (no dynamic imports in React components)
 - **Overlays** — interrupt stack for outage/error modals, orthogonal to flows
 
 ### Adding a screen
@@ -56,38 +57,36 @@ architecture: session, router, store, screen resolution, overlays, and data flow
 
 No other files change.
 
-### Layout primitives layer
+### Adding store state
+
+Two patterns depending on the data:
+
+- **Session state** (affects screen resolution): add field to `WizardSession`, add setter to `WizardStore` that calls `emitChange()`, add method to `WizardUI` interface + both implementations
+- **Observation state** (display-only, e.g., agent progress): add private atom to `WizardStore`, add getter + setter, add method to `WizardUI` interface + both implementations
+
+Read `store.ts` for examples of both patterns.
+
+### Layout primitives
 
 The project has reusable layout primitives in `src/ui/tui/primitives/`.
 **Always use these instead of building from scratch.**
 
-Key primitives:
-- **ScreenContainer** — top-level shell, routes between screens with wipe transitions, wraps each screen in ScreenErrorBoundary
-- **PromptLabel** — accent-colored `→` badge + message label. Used by all input primitives.
-- **PickerMenu** — single/multi select with `centered` prop support
-- **ConfirmationInput** — continue/cancel with arrow key toggle
-- **ProgressList** — task checklist with status icons, spinner on tally, LoadingBox when empty
-- **TabContainer** — self-contained tabbed interface with status bar
-- **DissolveTransition** — horizontal wipe with split-flap texture
-- **SplitView** — 50/50 two-pane layout
-- **CardLayout** — centered content card
-- **LogViewer / LoadingBox** — log tail and spinner
+All primitives are barrel-exported from `src/ui/tui/primitives/index.ts`.
+See [references/PRIMITIVES.md](references/PRIMITIVES.md) for the catalog.
+Read each primitive's source file for its current props interface.
 
-See [references/PRIMITIVES.md](references/PRIMITIVES.md) for the full API and usage
-examples. Shared style constants (`Colors`, `Icons`, `HAlign`, `VAlign`) live in
+Shared style constants (`Colors`, `Icons`, `HAlign`, `VAlign`) live in
 `src/ui/tui/styles.ts`.
 
 **Playground**: Run `pnpm try --playground` to see all primitives in action.
 
 ### Enums everywhere
 
-All state comparisons use TypeScript enums — no string literals:
+All state comparisons use TypeScript enums — no string literals. See the source files for current values:
 
-- `Screen` — flow screen names (Intro, Setup, Auth, Run, Mcp, Outro, etc.)
-- `Overlay` — interrupt screen names (Outage)
-- `Flow` — named flow pipelines (Wizard, McpAdd, McpRemove)
-- `RunPhase` — lifecycle phase (Idle, Running, Completed, Error)
-- `OutroKind` — outro outcome (Success, Error, Cancel)
+- `Screen`, `Overlay`, `Flow` — in `router.ts`
+- `RunPhase`, `OutroKind` — in `wizard-session.ts`
+- `TaskStatus` — in `wizard-ui.ts`
 
 ### Key dependencies
 
@@ -108,35 +107,15 @@ figures               # Unicode/ASCII symbol fallbacks (cross-platform)
 ```
 src/ui/tui/
 ├── App.tsx                    # Thin shell — calls screen registry factory
-├── store.ts                   # WizardStore: EventEmitter + session setters
+├── store.ts                   # WizardStore: nanostores + session setters
 ├── router.ts                  # WizardRouter: flow pipelines + overlay stack
 ├── ink-ui.ts                  # InkUI: bridges getUI() calls to store setters
 ├── start-tui.ts               # TUI startup: dark mode, store, renderer
 ├── screen-registry.tsx         # Maps screen names to components + services
 ├── styles.ts                  # Colors, Icons, alignment enums
-├── screens/
-│   ├── IntroScreen.tsx        # Detection → framework picker → region picker
-│   ├── SetupScreen.tsx        # Generic framework disambiguation
-│   ├── AuthScreen.tsx         # OAuth waiting state with login URL
-│   ├── RunScreen.tsx          # Split view: TipsCard + ProgressList, tabbed with logs
-│   ├── McpScreen.tsx          # MCP server installation via McpInstaller service
-│   ├── OutroScreen.tsx        # Success/error/cancel summary
-│   └── OutageScreen.tsx       # Service degradation overlay
-├── primitives/
-│   ├── ScreenContainer.tsx    # Screen routing + error boundary wrapper
-│   ├── ScreenErrorBoundary.tsx # Catches render crashes → error outro
-│   ├── PromptLabel.tsx        # → badge + accent label for input prompts
-│   ├── PickerMenu.tsx         # Single/multi select with centered support
-│   ├── ConfirmationInput.tsx  # Continue/cancel with arrow toggle
-│   ├── ProgressList.tsx       # Task checklist with spinner + LoadingBox
-│   ├── TabContainer.tsx       # Tabbed interface with status bar
-│   ├── SplitView.tsx          # 50/50 two-pane layout
-│   ├── DissolveTransition.tsx # Horizontal wipe animation
-│   ├── CardLayout.tsx         # Centered content card
-│   ├── LoadingBox.tsx         # Spinner with message
-│   └── LogViewer.tsx          # Log file tail viewer
-├── services/
-│   └── mcp-installer.ts      # McpInstaller interface + factory
+├── screens/                   # One file per screen — read for current set
+├── primitives/                # Reusable layout components — read index.ts for exports
+├── services/                  # Injectable service interfaces
 └── components/
     └── TitleBar.tsx           # Top bar with version + feedback email
 ```
@@ -168,8 +147,8 @@ Every `<Box>` is a flex container. All visible text MUST be inside `<Text>`.
 
 ## Reference files
 
-- [references/ARCHITECTURE.md](references/ARCHITECTURE.md) — **Reactive architecture**: session, router, store, screen resolution, overlays, data flow, enums, store setters, WizardUI bridge. **Read this first when working on screen flow or state.**
-- [references/PRIMITIVES.md](references/PRIMITIVES.md) — **TUI layout primitives**: API reference for ScreenContainer, PromptLabel, PickerMenu, ConfirmationInput, ProgressList, and all custom components.
+- [references/ARCHITECTURE.md](references/ARCHITECTURE.md) — **Reactive architecture**: session, router, store, screen resolution, overlays, data flow. **Read this first when working on screen flow or state.**
+- [references/PRIMITIVES.md](references/PRIMITIVES.md) — **TUI layout primitives**: catalog of all custom components with source file pointers.
 - [references/INK-API.md](references/INK-API.md) — Complete Ink component and hook API reference
 - [references/INKJS-UI.md](references/INKJS-UI.md) — @inkjs/ui component catalog with examples
 - [references/TERMINAL-COMPAT.md](references/TERMINAL-COMPAT.md) — Terminal detection and graceful degradation

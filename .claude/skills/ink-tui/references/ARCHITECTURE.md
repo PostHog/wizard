@@ -4,26 +4,21 @@
 
 The rendered screen is a pure function of session state. Nobody imperatively pushes screens around. Business logic sets state through store setters, the router derives which screen should be active.
 
-## Session (src/lib/wizard-session.ts)
+## Session
 
-`WizardSession` is the single source of truth for every decision the wizard needs. It contains:
+**Source of truth:** `src/lib/wizard-session.ts` — read the `WizardSession` interface for current fields.
 
-- **CLI args**: `debug`, `forceInstall`, `installDir`, `ci`, `signup`, `localMcp`, `apiKey`, `menu`
-- **Detection**: `cloudRegion`, `integration`, `frameworkContext`, `typescript`, `detectedFrameworkLabel`, `detectionComplete`
-- **OAuth**: `credentials` (accessToken, projectApiKey, host, projectId)
-- **Lifecycle**: `runPhase` (Idle → Running → Completed | Error), `mcpComplete`
-- **Runtime**: `serviceStatus`, `outroData`, `loginUrl`, `frameworkConfig`
+`WizardSession` is the single source of truth for every decision the wizard needs: CLI args, detection results, OAuth credentials, lifecycle phase, and runtime display data.
 
 `buildSession(args)` creates a session from CLI args. Pre-TUI fields (`installDir`, `integration`, `frameworkConfig`) can be set directly. Reactive fields that affect screen resolution must go through store setters.
 
-### Enums
+Key enums (defined in `wizard-session.ts`):
+- `RunPhase` — lifecycle phase (Idle → Running → Completed | Error)
+- `OutroKind` — outro outcome (Success, Error, Cancel)
 
-```ts
-enum RunPhase { Idle, Running, Completed, Error }
-enum OutroKind { Success, Error, Cancel }
-```
+## Router
 
-## Router (src/ui/tui/router.ts)
+**Source of truth:** `src/ui/tui/router.ts` — read the flow arrays for current screen predicates.
 
 ### Screen resolution
 
@@ -55,24 +50,14 @@ interface FlowEntry {
 }
 ```
 
-The wizard flow:
-
-| Screen | isComplete | show |
-|--------|-----------|------|
-| Intro | `cloudRegion !== null` | always |
-| Setup | `!needsSetup(s)` | `needsSetup` |
-| Auth | `credentials !== null` | always |
-| Run | `runPhase === Completed \|\| Error` | always |
-| Mcp | `mcpComplete` | always |
-| Outro | (terminal) | always |
+See `router.ts` for the current wizard flow pipeline and `isComplete` predicates per screen.
 
 ### Enums
 
-```ts
-enum Screen { Intro, Setup, Auth, Run, Mcp, Outro, McpAdd, McpRemove }
-enum Overlay { Outage }
-enum Flow { Wizard, McpAdd, McpRemove }
-```
+See `router.ts` for current values:
+- `Screen` — flow screen names
+- `Overlay` — interrupt screen names
+- `Flow` — named flow pipelines
 
 ### Overlays
 
@@ -87,118 +72,80 @@ Overlays don't affect the flow. They're orthogonal.
 
 ### Adding a screen
 
-1. Add to `Screen` enum
+1. Add to `Screen` enum in `router.ts`
 2. Add a `FlowEntry` to the flow array with an `isComplete` predicate
 3. Create the component in `screens/`
 4. Register in `screen-registry.tsx`
 
 No other files change.
 
-## Store (src/ui/tui/store.ts)
+## Store
 
-`WizardStore` extends EventEmitter. React subscribes via `useSyncExternalStore`.
+**Source of truth:** `src/ui/tui/store.ts` — read the class for current setters, atoms, and accessors.
 
-### Session setters
+`WizardStore` uses nanostores atoms internally and exposes `subscribe()`/`getSnapshot()` for React's `useSyncExternalStore`.
 
-Every session mutation that affects screen resolution goes through an explicit setter:
+### Pattern: session setters
 
-| Setter | Session field | What resolves |
-|--------|--------------|---------------|
-| `setCloudRegion(region)` | `cloudRegion` | Past Intro |
-| `setRunPhase(phase)` | `runPhase` | Past Run (on Completed/Error) |
-| `setCredentials(creds)` | `credentials` | Past Auth |
-| `setFrameworkConfig(integration, config)` | `frameworkConfig` + `integration` | Past detection |
-| `setDetectionComplete()` | `detectionComplete` | IntroScreen shows results |
-| `setDetectedFramework(label)` | `detectedFrameworkLabel` | Display only |
-| `setLoginUrl(url)` | `loginUrl` | Display only |
-| `setServiceStatus(status)` | `serviceStatus` | Display only |
-| `setOutroData(data)` | `outroData` | Display only |
-| `setFrameworkContext(key, value)` | `frameworkContext[key]` | Past Setup |
-| `setMcpComplete()` | `mcpComplete` | Past Mcp |
-| `completeSetup(region)` | `cloudRegion` + unblocks bin.ts | Past Intro |
+Every session mutation that affects screen resolution goes through an explicit setter. Each setter mutates the field and calls `emitChange()`, which bumps a version counter and triggers React re-renders. On the next render, `store.currentScreen` calls `router.resolve(session)`.
 
-Each setter mutates the field and calls `emitChange()`, which bumps the version counter and triggers React re-renders. On the next render, `store.currentScreen` calls `router.resolve(session)`.
+Read the "Session setters" section of `store.ts` for the current list.
 
-### Other state
+### Pattern: observation state
 
-- `statusMessages: string[]` — agent log lines, fed by `pushStatus()`
-- `tasks: TaskItem[]` — agent progress, fed by `syncTodos()` and `setTasks()`
-- `version: string` — package version for TitleBar
+Agent-produced data (not part of session flow) is stored in separate atoms on the store:
 
-## WizardUI interface (src/ui/wizard-ui.ts)
+- `$statusMessages` / `pushStatus()` — agent log lines
+- `$tasks` / `syncTodos()`, `setTasks()` — agent task progress
+- `$eventPlan` / `setEventPlan()` — planned analytics events from `.posthog-events.json`
 
-The bridge between business logic and the store. Business logic calls `getUI()` methods, which translate to store setters in the TUI implementation (`InkUI`).
+These follow the same pattern: private atom → public getter → public setter that calls `emitChange()`.
 
-Session-mutating methods on WizardUI:
-- `startRun()` → `store.setRunPhase(Running)`
-- `setCredentials(creds)` → `store.setCredentials(creds)`
-- `showServiceStatus(data)` → `store.setServiceStatus(data)` + `store.pushOverlay(Outage)`
-- `outro(message)` → `store.setOutroData(...)` + `store.setRunPhase(Completed)`
-- `setDetectedFramework(label)` → `store.setDetectedFramework(label)`
-- `setLoginUrl(url)` → `store.setLoginUrl(url)`
+## WizardUI interface
 
-Logging methods (not session-mutating):
-- `log.info/warn/error/success/step()` → `store.pushStatus()`
-- `pushStatus()`, `spinner()`, `syncTodos()` — agent observation
+**Source of truth:** `src/ui/wizard-ui.ts` — read the interface for current methods.
 
-There are NO prompt methods. `select`, `confirm`, `text`, `multiselect`, `groupMultiselect` were deleted from the interface. Calling them is a compile error.
+The bridge between business logic and the store. Business logic calls `getUI()` methods, which translate to store setters in the TUI implementation (`InkUI` in `src/ui/tui/ink-ui.ts`).
 
-## Screen registry (src/ui/tui/screen-registry.tsx)
+Two categories of methods:
+- **Session-mutating** — trigger screen resolution (e.g., `startRun()`, `setCredentials()`, `outro()`)
+- **Observation** — display-only updates (e.g., `pushStatus()`, `syncTodos()`, `setEventPlan()`)
 
-Maps screen names to React components. App.tsx calls the factory:
+There are NO prompt methods. The TUI screens own all user input.
 
-```ts
-const services = createServices();        // McpInstaller, etc.
-const screens = createScreens(store, services);  // Record<ScreenName, ReactNode>
-```
+Both `InkUI` (TUI) and `LoggingUI` (`src/ui/logging-ui.ts`, CI mode) implement this interface.
 
-Adding a screen to the registry requires no changes to App.tsx.
+## Screen registry
 
-## Services (src/ui/tui/services/)
+**Source of truth:** `src/ui/tui/screen-registry.tsx`
 
-Screens receive services via props instead of importing business logic:
+Maps screen names to React components. App.tsx calls the factory. Adding a screen to the registry requires no changes to App.tsx.
 
-```ts
-interface McpInstaller {
-  detectClients(): Promise<McpClientInfo[]>;
-  install(names: string[], region?: CloudRegion): Promise<string[]>;
-  remove(): Promise<string[]>;
-}
-```
+## Services
 
-Services are created in the registry and injected into screens. Testable, swappable, no dynamic imports in React components.
+**Source of truth:** `src/ui/tui/services/`
 
-## Error boundaries (src/ui/tui/primitives/ScreenErrorBoundary.tsx)
+Screens receive services via props instead of importing business logic. Services are created in the registry and injected into screens. Testable, swappable, no dynamic imports in React components.
+
+## Error boundaries
 
 `ScreenContainer` wraps every screen in a `ScreenErrorBoundary`. On crash:
 1. Sets `outroData` with error message
 2. Sets `runPhase = Error`
 3. Router resolves to Outro
 
-## IntroScreen progressive states
-
-The IntroScreen handles three states in one component:
-
-1. **Detecting** (`!detectionComplete`): header says "Setup Wizard starting up", shows detection spinner
-2. **Detection failed** (`detectionComplete && !frameworkConfig`): shows framework picker
-3. **Ready** (`frameworkConfig !== null`): shows detected framework label, description, region picker
+See `src/ui/tui/primitives/ScreenErrorBoundary.tsx`.
 
 ## Dark mode
 
 `start-tui.ts` forces a black terminal background via ANSI escape codes on startup and resets on exit.
-
-## Shared UI components
-
-- **PromptLabel** — accent-colored `→` badge + message. Used by PickerMenu and ConfirmationInput.
-- **LoadingBox** — wraps `@inkjs/ui` Spinner with a message.
-- **ProgressList** — task checklist with spinner on the progress tally while incomplete, LoadingBox "Starting up..." when empty.
 
 ## Data flow summary
 
 ```
 Business logic         →  getUI().setX()
   → InkUI              →  store.setX()
-    → Store             →  session.x = value; emitChange()
+    → Store             →  atom.set(value); emitChange()
       → React re-render →  store.currentScreen → router.resolve(session)
         → Router        →  walks flow, returns first incomplete screen
 ```
