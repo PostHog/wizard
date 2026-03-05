@@ -10,7 +10,7 @@ importers:
     dependencies:
       '@anthropic-ai/claude-agent-sdk':
         specifier: ~0.2.63
-        version: 0.2.63(zod@3.24.2)
+        version: 0.2.66(zod@3.24.2)
       '@inkjs/ui':
         specifier: ^2.0.0
         version: 2.0.0(ink@6.8.0(@types/react@19.2.14)(react@19.2.4))
@@ -187,8 +187,8 @@ packages:
     resolution: {integrity: sha512-3NX/MpTdroi0aKz134A6RC2Gb2iXVECN4QaAXnvCIxxIm3C3AVB1mkUe8NaaiyvOpDfsrqWhYtj+Q6a62RrTsw==}
     engines: {node: '>=18'}
 
-  '@anthropic-ai/claude-agent-sdk@0.2.63':
-    resolution: {integrity: sha512-ZNiaQb/v6xkbrGt3dtq5J0DGY+AaOhoehUyposa3msvlAlkTHWNGR+NhbCcTE0ML1U91xhPqMAAwZIUqrlkKyQ==}
+  '@anthropic-ai/claude-agent-sdk@0.2.66':
+    resolution: {integrity: sha512-hJL+j35yIkhcryR0kkszLz00lsEWBMu3qx8hazIHh55QV2nnZ6cn3p6oi04/VT84J9YU90jfmDffTQ66RD7YZg==}
     engines: {node: '>=18.0.0'}
     peerDependencies:
       zod: ^4.0.0
@@ -3576,7 +3576,7 @@ snapshots:
       ansi-styles: 6.2.1
       is-fullwidth-code-point: 5.0.0
 
-  '@anthropic-ai/claude-agent-sdk@0.2.63(zod@3.24.2)':
+  '@anthropic-ai/claude-agent-sdk@0.2.66(zod@3.24.2)':
     dependencies:
       zod: 3.24.2
     optionalDependencies:

@@ -417,6 +417,8 @@ STEP 6: Set up environment variables for PostHog using the wizard-tools MCP serv
 
 Important: Use the detect_package_manager tool (from the wizard-tools MCP server) to determine which package manager the project uses. Do not manually search for lockfiles or config files. Always install packages as a background task. Don't await completion; proceed with other work immediately after starting the installation. You must read a file immediately before attempting to write it, even if you have previously read it; failure to do so will cause a tool failure.
 
+Task tracking: Use the TodoWrite tool to create and update a todo list that tracks your progress through the steps above. Create the list at the start with all major tasks, mark each as in_progress when you begin it, and completed when done.
+
 
 `;
 }
