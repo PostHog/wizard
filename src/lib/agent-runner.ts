@@ -49,6 +49,7 @@ function sessionToOptions(session: WizardSession): WizardOptions {
     benchmark: session.benchmark,
     projectId: session.projectId,
     apiKey: session.apiKey,
+    yaraReport: session.yaraReport,
   };
 }
 
