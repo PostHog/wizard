@@ -86,7 +86,7 @@ export const FLOWS: Record<Flow, FlowEntry[]> = {
   [Flow.McpAdd]: [
     {
       screen: Screen.McpAdd,
-      isComplete: (s) => s.runPhase === RunPhase.Completed,
+      isComplete: (s) => s.mcpComplete,
     },
     { screen: Screen.Outro },
   ],
@@ -94,7 +94,7 @@ export const FLOWS: Record<Flow, FlowEntry[]> = {
   [Flow.McpRemove]: [
     {
       screen: Screen.McpRemove,
-      isComplete: (s) => s.runPhase === RunPhase.Completed,
+      isComplete: (s) => s.mcpComplete,
     },
     { screen: Screen.Outro },
   ],
