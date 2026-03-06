@@ -60,7 +60,7 @@ export class LoggingUI implements WizardUI {
   }
 
   setDetectedFramework(label: string): void {
-    console.log(`✔  Detected: ${label}`);
+    console.log(`✔  Framework: ${label}`);
   }
 
   setLoginUrl(url: string | null): void {

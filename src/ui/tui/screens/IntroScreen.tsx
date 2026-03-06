@@ -9,8 +9,9 @@
  * Calls store.completeSetup() which unblocks bin.ts to start runWizard.
  */
 
+import path from 'path';
 import { Box, Text } from 'ink';
-import { useSyncExternalStore } from 'react';
+import { useState, useSyncExternalStore } from 'react';
 import type { WizardStore } from '../store.js';
 import { Integration } from '../../../lib/constants.js';
 import { PickerMenu, LoadingBox } from '../primitives/index.js';
@@ -25,6 +26,8 @@ export const IntroScreen = ({ store }: IntroScreenProps) => {
     () => store.getSnapshot(),
   );
 
+  const [pickingFramework, setPickingFramework] = useState(false);
+
   const { session } = store;
   const config = session.frameworkConfig;
   const frameworkLabel =
@@ -32,7 +35,8 @@ export const IntroScreen = ({ store }: IntroScreenProps) => {
   const detecting = !session.detectionComplete;
   const needsFrameworkPick =
     session.detectionComplete && !session.frameworkConfig;
-  const showContinue = session.frameworkConfig !== null && !detecting;
+  const showContinue =
+    session.frameworkConfig !== null && !detecting && !pickingFramework;
   const showDescription = showContinue;
 
   return (
@@ -47,42 +51,11 @@ export const IntroScreen = ({ store }: IntroScreenProps) => {
           <Text color="#1D4AFF">{'\u2588'}</Text>
           <Text color="#F54E00">{'\u2588'}</Text>
           <Text color="#F9BD2B">{'\u2588'}</Text>
-          {detecting ? ' Setup Wizard starting up' : ' Setup Wizard ready 🦔'}
+          {detecting ? ' PostHog Wizard starting up' : ' PostHog Wizard 🦔'}
         </Text>
 
-        {detecting && (
-          <Box marginY={1}>
-            <LoadingBox message="Detecting project framework..." />
-          </Box>
-        )}
-
-        {frameworkLabel && !detecting && (
-          <Box marginY={1}>
-            <Text>
-              <Text color="green">{'\u2714'} </Text>
-              <Text>{frameworkLabel}</Text>
-            </Text>
-          </Box>
-        )}
-
-        {needsFrameworkPick && (
-          <Box marginY={1}>
-            <Text dimColor>Could not auto-detect your framework.</Text>
-          </Box>
-        )}
-
-        {config?.metadata.beta && (
-          <Text color="yellow">
-            [BETA] The {config.metadata.name} wizard is in beta
-          </Text>
-        )}
-
-        {config?.metadata.preRunNotice && (
-          <Text color="yellow">{config.metadata.preRunNotice}</Text>
-        )}
-
         {showDescription && (
-          <>
+          <Box flexDirection="column" alignItems="center" marginTop={1}>
             <Text dimColor>
               We'll use AI to analyze your project and integrate PostHog.
             </Text>
@@ -90,37 +63,89 @@ export const IntroScreen = ({ store }: IntroScreenProps) => {
               .env* file contents will not leave your machine.
             </Text>
             <Box marginTop={1}>
-              <Text>Let's do two hours of work in eight minutes.</Text>
+              <Text>Let's do a few hours of work in a few minutes.</Text>
             </Box>
-          </>
+          </Box>
         )}
       </Box>
 
-      {needsFrameworkPick && <FrameworkPicker store={store} />}
+      {detecting && (
+        <Box marginY={1}>
+          <LoadingBox message="Detecting project framework..." />
+        </Box>
+      )}
 
-      {showContinue && (
-        <PickerMenu<'continue' | 'cancel'>
-          centered
-          message="Ready to set up PostHog"
-          options={[
-            { label: 'Continue', value: 'continue' },
-            { label: 'Cancel', value: 'cancel' },
-          ]}
-          onSelect={(value) => {
-            const choice = Array.isArray(value) ? value[0] : value;
-            if (choice === 'cancel') {
-              process.exit(0);
-            }
-            store.completeSetup();
-          }}
+      {needsFrameworkPick && (
+        <Box marginY={1}>
+          <Text dimColor>Could not auto-detect your framework.</Text>
+        </Box>
+      )}
+
+      {config?.metadata.preRunNotice && (
+        <Text color="yellow">{config.metadata.preRunNotice}</Text>
+      )}
+
+      {(needsFrameworkPick || pickingFramework) && (
+        <FrameworkPicker
+          store={store}
+          onComplete={() => setPickingFramework(false)}
         />
+      )}
+
+      {!detecting && !pickingFramework && (
+        <Box flexDirection="column">
+          <Text>
+            <Text>
+              Directory <Text color="green">{'\u2714'}</Text>{' '}
+            </Text>
+            <Text>
+              {'/'}
+              {path.basename(session.installDir)}{' '}
+            </Text>
+          </Text>
+          {frameworkLabel && (
+            <Text>
+              <Text>
+                Framework <Text color="green">{'\u2714'}</Text>{' '}
+              </Text>
+              <Text>
+                {frameworkLabel} {config?.metadata.beta && '[BETA]'}
+              </Text>
+            </Text>
+          )}
+          {showContinue && (
+            <PickerMenu
+              options={[
+                { label: 'Continue', value: 'continue' },
+                { label: 'Select another framework', value: 'framework' },
+                { label: 'Cancel', value: 'cancel' },
+              ]}
+              onSelect={(value) => {
+                const choice = Array.isArray(value) ? value[0] : value;
+                if (choice === 'cancel') {
+                  process.exit(0);
+                } else if (choice === 'framework') {
+                  setPickingFramework(true);
+                } else {
+                  store.completeSetup();
+                }
+              }}
+            />
+          )}
+        </Box>
       )}
     </Box>
   );
 };
 
 /** Framework picker shown when auto-detection fails. */
-const FrameworkPicker = ({ store }: { store: WizardStore }) => {
+const FrameworkPicker = ({
+  store,
+  onComplete,
+}: {
+  store: WizardStore;
+  onComplete?: () => void;
+}) => {
   // Build options from the framework registry (loaded dynamically to avoid circular deps)
   const options = Object.values(Integration).map((value) => ({
     label: value,
@@ -130,6 +155,7 @@ const FrameworkPicker = ({ store }: { store: WizardStore }) => {
   return (
     <PickerMenu<Integration>
       centered
+      columns={2}
       message="Select your framework"
       options={options}
       onSelect={(value) => {
@@ -139,6 +165,7 @@ const FrameworkPicker = ({ store }: { store: WizardStore }) => {
             const config = FRAMEWORK_REGISTRY[integration];
             store.setFrameworkConfig(integration, config);
             store.setDetectedFramework(config.metadata.name);
+            onComplete?.();
           },
         );
       }}

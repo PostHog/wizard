@@ -325,7 +325,7 @@ yargs(hideBin(process.argv))
 
             await runWizard(
               options as Parameters<typeof runWizard>[0],
-              session,
+              tui.store.session,
             );
 
             // Keep the outro screen visible — let process.exit() handle cleanup
