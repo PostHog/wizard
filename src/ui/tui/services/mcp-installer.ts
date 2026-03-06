@@ -11,6 +11,7 @@ import {
   getInstalledClients,
 } from '../../../steps/add-mcp-server-to-clients/index.js';
 import { ALL_FEATURE_VALUES } from '../../../steps/add-mcp-server-to-clients/defaults.js';
+import { logToFile } from '../../../utils/debug.js';
 
 export interface McpClientInfo {
   name: string;
@@ -48,15 +49,32 @@ export function createMcpInstaller(): McpInstaller {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         .map((c) => c.raw as any);
 
-      if (toInstall.length === 0) return [];
+      if (toInstall.length === 0) {
+        logToFile(
+          `[McpInstaller] No clients matched. clientNames=${JSON.stringify(
+            clientNames,
+          )}, cached=${JSON.stringify(cachedClients.map((c) => c.name))}`,
+        );
+        return [];
+      }
 
       const installed: string[] = [];
       for (const client of toInstall) {
         try {
-          await client.addServer(undefined, features, false);
-          installed.push(client.name as string);
-        } catch {
-          // Skip failed clients
+          const result = await client.addServer(undefined, features, false);
+          if (result?.success) {
+            installed.push(client.name as string);
+          } else {
+            logToFile(
+              `[McpInstaller] addServer returned success=false for ${client.name}`,
+            );
+          }
+        } catch (err) {
+          logToFile(
+            `[McpInstaller] addServer threw for ${client.name}: ${
+              err instanceof Error ? err.message : String(err)
+            }`,
+          );
         }
       }
       return installed;
