@@ -113,20 +113,42 @@ export function checkClaudeSettingsOverrides(
 }
 
 /**
- * Rename .claude/settings.json to .claude/settings.json.wizard-backup
- * so the blocking env overrides are no longer loaded by the SDK.
+ * Copy .claude/settings.json to .wizard-backup (overwriting if it exists),
+ * then remove the original so the SDK doesn't load the blocking overrides.
  */
 export function backupAndFixClaudeSettings(workingDirectory: string): boolean {
   for (const name of ['settings.json', 'settings']) {
     const filePath = path.join(workingDirectory, '.claude', name);
+    const backupPath = `${filePath}.wizard-backup`;
     try {
-      fs.renameSync(filePath, `${filePath}.wizard-backup`);
+      fs.copyFileSync(filePath, backupPath);
+      fs.unlinkSync(filePath);
       return true;
     } catch {
       // File doesn't exist — try next candidate
     }
   }
   return false;
+}
+
+/**
+ * Restore .claude/settings.json from .wizard-backup.
+ * Copies (not moves) so the backup is preserved.
+ */
+export function restoreClaudeSettings(workingDirectory: string): void {
+  for (const name of ['settings.json', 'settings']) {
+    const backup = path.join(
+      workingDirectory,
+      '.claude',
+      `${name}.wizard-backup`,
+    );
+    try {
+      fs.copyFileSync(backup, path.join(workingDirectory, '.claude', name));
+      return;
+    } catch {
+      // Backup doesn't exist — try next candidate
+    }
+  }
 }
 
 export type AgentConfig = {
@@ -897,6 +919,9 @@ export async function runAgent(
     debug('Full error:', error);
     throw error;
   } finally {
+    // Ensure settings are restored even if the run fails before the
+    // inline restore runs (e.g. query() itself throws).
+    restoreClaudeSettings(agentConfig.workingDirectory);
     eventPlanWatcher?.close();
     if (eventPlanInterval) clearInterval(eventPlanInterval);
   }

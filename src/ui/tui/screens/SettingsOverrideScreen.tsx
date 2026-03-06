@@ -1,6 +1,6 @@
 /**
- * SettingsOverrideScreen — Modal overlay when .claude/settings.json contains
- * env overrides that block the Wizard from reaching the LLM Gateway.
+ * SettingsOverrideScreen — Modal when .claude/settings.json contains env overrides
+ * that block the Wizard from reaching the PostHog LLM Gateway.
  */
 
 import { Box, Text } from 'ink';
@@ -43,14 +43,12 @@ export const SettingsOverrideScreen = ({
         paddingY={1}
         width={64}
       >
-        {/* Title */}
         <Box justifyContent="center" marginBottom={1}>
           <Text color="red" bold>
             {Icons.warning} Settings Conflict
           </Text>
         </Box>
 
-        {/* Body */}
         <Text>
           Your project&apos;s <Text bold>.claude/settings.json</Text> sets:
         </Text>
@@ -77,12 +75,10 @@ export const SettingsOverrideScreen = ({
           </Box>
         )}
 
-        {/* Divider */}
         <Box marginY={1}>
           <Text dimColor>{'─'.repeat(56)}</Text>
         </Box>
 
-        {/* Actions */}
         <ConfirmationInput
           message="Back up to .wizard-backup and continue?"
           confirmLabel="Backup & continue [Enter]"

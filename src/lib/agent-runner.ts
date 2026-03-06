@@ -21,6 +21,7 @@ import {
   buildWizardMetadata,
   checkClaudeSettingsOverrides,
   backupAndFixClaudeSettings,
+  restoreClaudeSettings,
 } from './agent-interface';
 import { getCloudUrlFromRegion } from '../utils/urls';
 import chalk from 'chalk';
@@ -189,7 +190,8 @@ export async function runAgentWizard(
     ? 'http://localhost:8787/mcp'
     : process.env.MCP_URL || 'https://mcp.posthog.com/mcp';
 
-  // Transition to run screen
+  const restoreSettings = () => restoreClaudeSettings(session.installDir);
+  getUI().onEnterScreen('mcp', restoreSettings);
   getUI().startRun();
 
   const agent = await initializeAgent(
@@ -247,6 +249,7 @@ Please try again, or set up ${
     } manually by following our documentation:
 ${chalk.cyan(config.metadata.docsUrl)}`;
 
+    restoreSettings();
     getUI().outro(errorMessage);
     await analytics.shutdown('error');
     process.exit(1);
@@ -272,6 +275,7 @@ Please try again, or set up ${
     } manually by following our documentation:
 ${chalk.cyan(config.metadata.docsUrl)}`;
 
+    restoreSettings();
     getUI().outro(errorMessage);
     await analytics.shutdown('error');
     process.exit(1);
@@ -299,6 +303,7 @@ ${chalk.yellow(agentResult.message || 'Unknown error')}
 
 Please report this error to: ${chalk.cyan('wizard@posthog.com')}`;
 
+    restoreSettings();
     getUI().outro(errorMessage);
     await analytics.shutdown('error');
     process.exit(1);

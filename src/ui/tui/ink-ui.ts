@@ -54,6 +54,13 @@ export class InkUI implements WizardUI {
     this.store.setDetectedFramework(label);
   }
 
+  onEnterScreen(screen: string, fn: () => void): void {
+    this.store.onEnterScreen(
+      screen as Parameters<WizardStore['onEnterScreen']>[0],
+      fn,
+    );
+  }
+
   setLoginUrl(url: string | null): void {
     this.store.setLoginUrl(url);
   }

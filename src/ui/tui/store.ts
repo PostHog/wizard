@@ -57,6 +57,9 @@ export class WizardStore {
   /** Last screen seen — used to detect screen transitions for analytics. */
   private _lastScreen: ScreenName | null = null;
 
+  /** Hooks run when transitioning onto a screen. */
+  private _enterScreenHooks = new Map<ScreenName, (() => void)[]>();
+
   version = '';
 
   /** Navigation router — resolves active screen from session state. */
@@ -287,13 +290,27 @@ export class WizardStore {
   // ── Screen transition analytics ─────────────────────────────────
 
   /**
-   * Detect screen transitions and fire analytics events.
+   * Register a callback to run when transitioning onto the given screen.
+   * Fires after every transition that lands on this screen.
+   */
+  onEnterScreen(screen: ScreenName, fn: () => void): void {
+    const list = this._enterScreenHooks.get(screen) ?? [];
+    list.push(fn);
+    this._enterScreenHooks.set(screen, list);
+  }
+
+  /**
+   * Detect screen transitions, run enter-screen hooks, and fire analytics.
    * Called at the end of emitChange/pushOverlay/popOverlay.
    */
   private _detectTransition(): void {
     const next = this.router.resolve(this.session);
     const prev = this._lastScreen;
     if (prev !== null && next !== prev) {
+      const hooks = this._enterScreenHooks.get(next);
+      if (hooks) {
+        for (const fn of hooks) fn();
+      }
       analytics.wizardCapture(`screen ${next}`, {
         from_screen: prev,
         ...sessionProperties(this.session),

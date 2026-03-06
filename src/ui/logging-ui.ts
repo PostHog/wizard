@@ -63,6 +63,10 @@ export class LoggingUI implements WizardUI {
     console.log(`✔  Detected: ${label}`);
   }
 
+  onEnterScreen(_screen: string, _fn: () => void): void {
+    // No screen transitions in CI
+  }
+
   setLoginUrl(url: string | null): void {
     if (url) {
       console.log(

@@ -66,6 +66,9 @@ export interface WizardUI {
   /** Set the detected framework label (e.g., "Django with Wagtail CMS") */
   setDetectedFramework(label: string): void;
 
+  /** Register a callback to run when the TUI transitions onto the given screen. */
+  onEnterScreen(screen: string, fn: () => void): void;
+
   setLoginUrl(url: string | null): void;
 
   // ── Todo tracking from SDK TodoWrite events ───────────────────────
