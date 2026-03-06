@@ -81,5 +81,8 @@ export const POSTHOG_FLAG_HEADER_PREFIX = 'X-POSTHOG-FLAG-';
  * so it can identify requests originating from the wizard.
  */
 
+/** Timeout for framework / project detection probes (ms). */
+export const DETECTION_TIMEOUT_MS = 10_000;
+
 import { VERSION } from './version';
 export const WIZARD_USER_AGENT = `posthog/wizard; version: ${VERSION}`;

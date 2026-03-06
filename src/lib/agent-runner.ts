@@ -399,7 +399,7 @@ STEP 5: Follow the skill's workflow files in sequence. Look for numbered workflo
 
 STEP 6: Set up environment variables for PostHog using the wizard-tools MCP server (this runs locally — secret values never leave the machine):
    - Use check_env_keys to see which keys already exist in the project's .env file (e.g. .env.local or .env).
-   - Use set_env_values to create or update the PostHog public token and host, using the appropriate naming convention for ${
+   - Use set_env_values to create or update the PostHog public token and host, using the appropriate environment variable naming convention for ${
      config.metadata.name
    }, which you'll find in example code. The tool will also ensure .gitignore coverage. Don't assume the presence of keys means the value is up to date. Write the correct value each time.
    - Reference these environment variables in the code files you create instead of hardcoding the public token and host.

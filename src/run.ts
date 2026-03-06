@@ -1,6 +1,6 @@
 import { type WizardSession, buildSession } from './lib/wizard-session';
 
-import { Integration } from './lib/constants';
+import { Integration, DETECTION_TIMEOUT_MS } from './lib/constants';
 import { readEnvironment } from './utils/environment';
 import { getUI } from './ui';
 import path from 'path';
@@ -140,8 +140,6 @@ export async function runWizard(argv: Args, session?: WizardSession) {
     process.exit(1);
   }
 }
-
-const DETECTION_TIMEOUT_MS = 5000;
 
 export async function detectIntegration(
   installDir: string,

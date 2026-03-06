@@ -223,7 +223,9 @@ yargs(hideBin(process.argv))
             const { detectIntegration } = await import('./src/run.js');
             const installDir = session.installDir ?? process.cwd();
 
-            const DETECTION_TIMEOUT_MS = 10000;
+            const { DETECTION_TIMEOUT_MS } = await import(
+              './src/lib/constants.js'
+            );
             const detectedIntegration = await Promise.race([
               detectIntegration(installDir),
               new Promise<undefined>((resolve) =>
