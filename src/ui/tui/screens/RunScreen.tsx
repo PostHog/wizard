@@ -62,18 +62,22 @@ const TIPS: Tip[] = [
     title: 'Events are the bedrock of your PostHog data',
     description:
       'As people use your product, events build a picture of their behavior and satisfaction. Good events make great data.',
-    url: 'https://posthog.com/docs/new-to-posthog/getting-hogpilled',
   },
   {
-    id: 'google-sheets',
-    title: 'PostHog can read your favorite Google Sheet',
+    id: 'persons',
+    title: 'You can also track people and groups with PostHog',
     description:
-      'In case you were worried about copying and pasting... we got you:',
-    url: 'https://posthog.com/docs/cdp/sources/google-sheets',
+      'Events can be associated with the humans who generate them, letting you understand a specific customer problem if they email about it.',
+  },
+  {
+    id: 'properties',
+    title: 'Get way more detail using properties',
+    description:
+      'Events and person records can have any properties you want. Track things like how they found your website, what subscription tier they choose, and much more.',
   },
   {
     id: 'stripe',
-    title: 'You can track Stripe revenue with PostHog, too',
+    title: 'You can track Stripe revenue with PostHog',
     description: 'Add Stripe as a data source while you wait:',
     url: 'https://app.posthog.com/project/data-warehouse/new-source?kind=Stripe',
     visible: (store) =>
@@ -116,7 +120,7 @@ const TipsCard = ({ store }: { store: WizardStore }) => {
   return (
     <Box flexDirection="column" paddingX={1}>
       <Text bold color={Colors.accent}>
-        Tips
+        Learn about PostHog
       </Text>
       <Box height={1} />
 

@@ -1,13 +1,38 @@
 /**
  * Flow pipelines — declarative screen sequences for each wizard flow.
  *
+ * Owns the Screen and Flow enums (re-exported by router.ts) to avoid
+ * circular imports between router ↔ flows.
+ *
  * Each entry defines a screen, optional visibility predicate, and
  * optional completion predicate. The router walks the active flow
  * to resolve which screen to show.
  */
 
 import { type WizardSession, RunPhase } from '../../lib/wizard-session.js';
-import { Screen, Flow } from './router.js';
+
+// ── Screen + Flow enums ──────────────────────────────────────────────
+
+/** Screens that participate in linear flows */
+export enum Screen {
+  Intro = 'intro',
+  Setup = 'setup',
+  Auth = 'auth',
+  Run = 'run',
+  Mcp = 'mcp',
+  Outro = 'outro',
+  McpAdd = 'mcp-add',
+  McpRemove = 'mcp-remove',
+}
+
+/** Named flows the router can run */
+export enum Flow {
+  Wizard = 'wizard',
+  McpAdd = 'mcp-add',
+  McpRemove = 'mcp-remove',
+}
+
+// ── Flow definitions ─────────────────────────────────────────────────
 
 export interface FlowEntry {
   /** Screen to show */

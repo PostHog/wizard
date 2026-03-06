@@ -13,23 +13,13 @@
  */
 
 import type { WizardSession } from '../../lib/wizard-session.js';
-import { FLOWS, type FlowEntry } from './flows.js';
+import { FLOWS, Screen, Flow, type FlowEntry } from './flows.js';
 
+// Re-export so existing imports from './router.js' keep working
+export { Screen, Flow };
 export type { FlowEntry };
 
 // ── Screen name taxonomy ──────────────────────────────────────────────
-
-/** Screens that participate in linear flows */
-export enum Screen {
-  Intro = 'intro',
-  Setup = 'setup',
-  Auth = 'auth',
-  Run = 'run',
-  Mcp = 'mcp',
-  Outro = 'outro',
-  McpAdd = 'mcp-add',
-  McpRemove = 'mcp-remove',
-}
 
 /** Screens that interrupt flows as overlays */
 export enum Overlay {
@@ -38,13 +28,6 @@ export enum Overlay {
 
 /** Union of all screen names */
 export type ScreenName = Screen | Overlay;
-
-/** Named flows the router can run */
-export enum Flow {
-  Wizard = 'wizard',
-  McpAdd = 'mcp-add',
-  McpRemove = 'mcp-remove',
-}
 
 // ── Router ────────────────────────────────────────────────────────────
 
