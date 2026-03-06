@@ -1,0 +1,58 @@
+name: Smoke Test
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      app:
+        description: 'App to test (e.g. next-js/15-app-router-todo)'
+        required: false
+        default: 'next-js/15-app-router-todo'
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  smoke-test:
+    name: Smoke Test (${{ inputs.app || 'next-js/15-app-router-todo' }})
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout wizard
+        uses: actions/checkout@v4
+
+      - name: Checkout wizard-workbench
+        uses: actions/checkout@v4
+        with:
+          repository: PostHog/wizard-workbench
+          path: wizard-workbench
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: 10.23.0
+          run_install: false
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: 'package.json'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run smoke test
+        env:
+          POSTHOG_PERSONAL_API_KEY: ${{ secrets.GH_APP_POSTHOG_WIZARD_CI_BOT_POSTHOG_PERSONAL_KEY }}
+          WIZARD_WORKBENCH_ROOT: ${{ github.workspace }}/wizard-workbench
+        run: ./scripts/smoke-test-ci.sh "${{ inputs.app || 'next-js/15-app-router-todo' }}"
+
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-test-artifacts
+          path: /tmp/wizard-smoke.*/**
+          if-no-files-found: ignore
