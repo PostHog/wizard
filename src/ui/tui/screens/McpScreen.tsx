@@ -1,10 +1,14 @@
 /**
- * McpScreen — MCP server installation flow.
+ * McpScreen — MCP server install/remove flow.
  *
  * Uses an McpInstaller service (passed via props) instead of
  * importing business logic directly. Testable, no dynamic imports.
  *
- * When done, sets session.runPhase = Done. The router resolves to outro.
+ * Supports two modes via the `mode` prop:
+ *   - 'install': detect clients → confirm → install
+ *   - 'remove': detect installed clients → confirm → remove
+ *
+ * When done, calls store.setMcpComplete(). The router resolves to outro.
  */
 
 import { Box, Text } from 'ink';
@@ -14,16 +18,22 @@ import { type WizardStore, McpOutcome } from '../store.js';
 import { ConfirmationInput, PickerMenu } from '../primitives/index.js';
 import { Colors } from '../styles.js';
 import type { McpInstaller, McpClientInfo } from '../services/mcp-installer.js';
+
+export type McpMode = 'install' | 'remove';
+
 interface McpScreenProps {
   store: WizardStore;
   installer: McpInstaller;
+  mode?: McpMode;
+  /** When true, exit the process after completion instead of routing to outro. */
+  standalone?: boolean;
 }
 
 enum Phase {
   Detecting = 'detecting',
   Ask = 'ask',
   Pick = 'pick',
-  Installing = 'installing',
+  Working = 'working',
   Done = 'done',
   None = 'none',
 }
@@ -32,19 +42,30 @@ const markDone = (
   store: WizardStore,
   outcome: McpOutcome,
   clients: string[] = [],
+  standalone = false,
 ) => {
   store.setMcpComplete(outcome, clients);
+  if (standalone) {
+    process.exit(0);
+  }
 };
 
-export const McpScreen = ({ store, installer }: McpScreenProps) => {
+export const McpScreen = ({
+  store,
+  installer,
+  mode = 'install',
+  standalone = false,
+}: McpScreenProps) => {
   useSyncExternalStore(
     (cb) => store.subscribe(cb),
     () => store.getSnapshot(),
   );
 
+  const isRemove = mode === 'remove';
+
   const [phase, setPhase] = useState<Phase>(Phase.Detecting);
   const [clients, setClients] = useState<McpClientInfo[]>([]);
-  const [installed, setInstalled] = useState<string[]>([]);
+  const [resultClients, setResultClients] = useState<string[]>([]);
 
   useEffect(() => {
     void (async () => {
@@ -52,20 +73,28 @@ export const McpScreen = ({ store, installer }: McpScreenProps) => {
         const detected = await installer.detectClients();
         if (detected.length === 0) {
           setPhase(Phase.None);
-          setTimeout(() => markDone(store, McpOutcome.NoClients), 1500);
+          setTimeout(
+            () => markDone(store, McpOutcome.NoClients, [], standalone),
+            1500,
+          );
         } else {
           setClients(detected);
           setPhase(Phase.Ask);
         }
       } catch {
         setPhase(Phase.None);
-        setTimeout(() => markDone(store, McpOutcome.Failed), 1500);
+        setTimeout(
+          () => markDone(store, McpOutcome.Failed, [], standalone),
+          1500,
+        );
       }
     })();
   }, [installer]); // eslint-disable-line
 
   const handleConfirm = () => {
-    if (clients.length === 1) {
+    if (isRemove) {
+      void doRemove();
+    } else if (clients.length === 1) {
       void doInstall(clients.map((c) => c.name));
     } else {
       setPhase(Phase.Pick);
@@ -73,28 +102,43 @@ export const McpScreen = ({ store, installer }: McpScreenProps) => {
   };
 
   const handleSkip = () => {
-    markDone(store, McpOutcome.Skipped);
+    markDone(store, McpOutcome.Skipped, [], standalone);
   };
 
   const doInstall = async (names: string[]) => {
-    setPhase(Phase.Installing);
+    setPhase(Phase.Working);
     let result: string[] = [];
     try {
       result = await installer.install(names);
-      setInstalled(result);
+      setResultClients(result);
     } catch {
-      setInstalled([]);
+      setResultClients([]);
     }
     setPhase(Phase.Done);
     const outcome =
       result.length > 0 ? McpOutcome.Installed : McpOutcome.Failed;
-    setTimeout(() => markDone(store, outcome, result), 2000);
+    setTimeout(() => markDone(store, outcome, result, standalone), 2000);
+  };
+
+  const doRemove = async () => {
+    setPhase(Phase.Working);
+    let result: string[] = [];
+    try {
+      result = await installer.remove();
+      setResultClients(result);
+    } catch {
+      setResultClients([]);
+    }
+    setPhase(Phase.Done);
+    const outcome =
+      result.length > 0 ? McpOutcome.Installed : McpOutcome.Failed;
+    setTimeout(() => markDone(store, outcome, result, standalone), 2000);
   };
 
   return (
     <Box flexDirection="column" flexGrow={1}>
       <Text bold color={Colors.accent}>
-        MCP Server Setup
+        MCP Server {isRemove ? 'Removal' : 'Setup'}
       </Text>
 
       <Box marginTop={1} flexDirection="column">
@@ -103,7 +147,10 @@ export const McpScreen = ({ store, installer }: McpScreenProps) => {
         )}
 
         {phase === Phase.None && (
-          <Text dimColor>No supported MCP clients detected. Skipping...</Text>
+          <Text dimColor>
+            No {isRemove ? 'installed' : 'supported'} MCP clients detected.
+            Skipping...
+          </Text>
         )}
 
         {phase === Phase.Ask && (
@@ -113,8 +160,12 @@ export const McpScreen = ({ store, installer }: McpScreenProps) => {
             </Text>
             <Box marginTop={1}>
               <ConfirmationInput
-                message="Install the PostHog MCP server to your editor?"
-                confirmLabel="Install MCP"
+                message={
+                  isRemove
+                    ? 'Remove the PostHog MCP server from your editor?'
+                    : 'Install the PostHog MCP server to your editor?'
+                }
+                confirmLabel={isRemove ? 'Remove MCP' : 'Install MCP'}
                 cancelLabel="No thanks"
                 onConfirm={handleConfirm}
                 onCancel={handleSkip}
@@ -138,18 +189,21 @@ export const McpScreen = ({ store, installer }: McpScreenProps) => {
           />
         )}
 
-        {phase === Phase.Installing && (
-          <Text dimColor>Installing MCP server...</Text>
+        {phase === Phase.Working && (
+          <Text dimColor>
+            {isRemove ? 'Removing' : 'Installing'} MCP server...
+          </Text>
         )}
 
         {phase === Phase.Done && (
           <Box flexDirection="column">
-            {installed.length > 0 ? (
+            {resultClients.length > 0 ? (
               <>
                 <Text color="green" bold>
-                  {'\u2714'} MCP server installed for:
+                  {'\u2714'} MCP server{' '}
+                  {isRemove ? 'removed from' : 'installed for'}:
                 </Text>
-                {installed.map((name, i) => (
+                {resultClients.map((name, i) => (
                   <Text key={i}>
                     {' '}
                     {'\u2022'} {name}
@@ -157,7 +211,9 @@ export const McpScreen = ({ store, installer }: McpScreenProps) => {
                 ))}
               </>
             ) : (
-              <Text dimColor>Installation skipped.</Text>
+              <Text dimColor>
+                {isRemove ? 'Removal' : 'Installation'} skipped.
+              </Text>
             )}
           </Box>
         )}

@@ -47,7 +47,7 @@ export const IntroScreen = ({ store }: IntroScreenProps) => {
           <Text color="#1D4AFF">{'\u2588'}</Text>
           <Text color="#F54E00">{'\u2588'}</Text>
           <Text color="#F9BD2B">{'\u2588'}</Text>
-          {detecting ? ' Setup Wizard starting up' : ' Setup Wizard ready'}
+          {detecting ? ' Setup Wizard starting up' : ' Setup Wizard ready 🦔'}
         </Text>
 
         {detecting && (

@@ -90,14 +90,18 @@ export const HNViewer = () => {
         });
 
         return (
-          <Box key={story.id}>
-            <Text color={Colors.accent} bold>
-              [{key}]{' '}
-            </Text>
-            <Text>{story.title} </Text>
-            <Text dimColor>
-              ({story.score}pts, {story.by}, {dateStr})
-            </Text>
+          <Box key={story.id} flexDirection="column">
+            <Box>
+              <Text color={Colors.accent} bold>
+                [{key}]
+              </Text>
+              <Text bold> {story.title}</Text>
+            </Box>
+            <Box marginLeft={4}>
+              <Text dimColor>
+                {story.score}pts • {story.by}, {dateStr}
+              </Text>
+            </Box>
           </Box>
         );
       })}
