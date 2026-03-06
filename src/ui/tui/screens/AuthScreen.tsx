@@ -37,7 +37,7 @@ export const AuthScreen = ({ store }: AuthScreenProps) => {
         {frameworkLabel && (
           <Text>
             <Text color="green">{'\u2714'} </Text>
-            <Text>Detected: {frameworkLabel}</Text>
+            <Text>Framework: {frameworkLabel}</Text>
           </Text>
         )}
 
