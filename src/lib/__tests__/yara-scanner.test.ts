@@ -526,8 +526,24 @@ posthog.capture('signup', { email: user.email })`;
       expect(result.matched).toBe(true);
     });
 
+    it('detects rm -r -f (separated flags)', () => {
+      const result = scan('rm -r -f /tmp/stuff', 'PreToolUse', 'Bash');
+      expect(result.matched).toBe(true);
+      expect(getMatches(result)[0].rule.name).toBe('destructive_rm');
+    });
+
+    it('detects rm -f -r (separated flags, reversed)', () => {
+      const result = scan('rm -f -r /tmp/stuff', 'PreToolUse', 'Bash');
+      expect(result.matched).toBe(true);
+    });
+
     it('does not trigger on rm without -rf', () => {
       const result = scan('rm file.txt', 'PreToolUse', 'Bash');
+      expect(result.matched).toBe(false);
+    });
+
+    it('does not trigger on rm -r without -f', () => {
+      const result = scan('rm -r dir/', 'PreToolUse', 'Bash');
       expect(result.matched).toBe(false);
     });
   });
@@ -723,6 +739,30 @@ posthog.capture('signup', { email: user.email })`;
           ]),
         );
       }
+    });
+  });
+
+  // ── Input size cap ──────────────────────────────────────────────
+
+  describe('input size cap', () => {
+    it('scans content within the size limit', () => {
+      const content = 'rm -rf / ' + 'x'.repeat(1000);
+      const result = scan(content, 'PreToolUse', 'Bash');
+      expect(result.matched).toBe(true);
+    });
+
+    it('truncates content beyond 100KB and still scans the prefix', () => {
+      // Malicious content at the start, then padding beyond 100KB
+      const content = 'rm -rf / ' + 'x'.repeat(200_000);
+      const result = scan(content, 'PreToolUse', 'Bash');
+      expect(result.matched).toBe(true);
+    });
+
+    it('does not match patterns beyond the 100KB truncation boundary', () => {
+      // Clean content for 100KB, then malicious content after
+      const content = 'x'.repeat(100_001) + 'rm -rf /';
+      const result = scan(content, 'PreToolUse', 'Bash');
+      expect(result.matched).toBe(false);
     });
   });
 });

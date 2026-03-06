@@ -265,7 +265,13 @@ const destructive_rm: YaraRule = {
   severity: 'critical',
   category: 'filesystem_safety',
   appliesTo: PRE_BASH,
-  patterns: [/\brm\s+(-[a-zA-Z]*r[a-zA-Z]*f|-[a-zA-Z]*f[a-zA-Z]*r)\b/],
+  patterns: [
+    // Combined flags: rm -rf, rm -fr, rm -rfi, etc.
+    /\brm\s+(-[a-zA-Z]*r[a-zA-Z]*f|-[a-zA-Z]*f[a-zA-Z]*r)\b/,
+    // Separated flags: rm -r -f, rm -f -r (with optional other flags)
+    /\brm\s+(-[a-zA-Z]*\s+)*-[a-zA-Z]*r[a-zA-Z]*\s+(-[a-zA-Z]*\s+)*-[a-zA-Z]*f\b/,
+    /\brm\s+(-[a-zA-Z]*\s+)*-[a-zA-Z]*f[a-zA-Z]*\s+(-[a-zA-Z]*\s+)*-[a-zA-Z]*r\b/,
+  ],
 };
 
 const git_force_push: YaraRule = {
@@ -342,6 +348,9 @@ export const RULES: YaraRule[] = [
 
 // ─── Scan Engine ─────────────────────────────────────────────────
 
+/** Maximum content length to scan (100 KB). Inputs beyond this are truncated. */
+const MAX_SCAN_LENGTH = 100_000;
+
 /**
  * Scan content against rules applicable to a given hook phase and tool.
  * Returns all matching rules (one match per rule, first pattern wins).
@@ -351,6 +360,11 @@ export function scan(
   phase: HookPhase,
   tool: ToolTarget,
 ): ScanResult {
+  // Cap input length to prevent pathological regex performance
+  const scanContent =
+    content.length > MAX_SCAN_LENGTH
+      ? content.slice(0, MAX_SCAN_LENGTH)
+      : content;
   const applicableRules = RULES.filter((r) =>
     r.appliesTo.some((a) => a.phase === phase && a.tool === tool),
   );
@@ -358,7 +372,7 @@ export function scan(
   const matches: YaraMatch[] = [];
   for (const rule of applicableRules) {
     for (const pattern of rule.patterns) {
-      const match = pattern.exec(content);
+      const match = pattern.exec(scanContent);
       if (match) {
         matches.push({
           rule,

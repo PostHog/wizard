@@ -143,6 +143,25 @@ function logYaraMatch(phase: string, tool: string, match: YaraMatch): void {
   });
 }
 
+// ─── Severity helpers ────────────────────────────────────────────
+
+const SEVERITY_RANK: Record<string, number> = {
+  critical: 4,
+  high: 3,
+  medium: 2,
+  low: 1,
+};
+
+/** Return the highest-severity match from a list of matches. */
+function highestSeverityMatch(matches: YaraMatch[]): YaraMatch {
+  return matches.reduce((worst, m) =>
+    (SEVERITY_RANK[m.rule.severity] ?? 0) >
+    (SEVERITY_RANK[worst.rule.severity] ?? 0)
+      ? m
+      : worst,
+  );
+}
+
 // ─── PreToolUse Hooks ────────────────────────────────────────────
 
 /**
@@ -169,7 +188,7 @@ export function createPreToolUseYaraHooks(): HookCallbackMatcher[] {
             const result = scan(command, 'PreToolUse', 'Bash');
             if (!result.matched) return Promise.resolve({});
 
-            const match = result.matches[0];
+            const match = highestSeverityMatch(result.matches);
             logYaraMatch('PreToolUse', 'Bash', match);
             recordViolation({
               rule: match.rule.name,
@@ -185,7 +204,11 @@ export function createPreToolUseYaraHooks(): HookCallbackMatcher[] {
             });
           } catch (error) {
             logToFile('[YARA] PreToolUse hook error:', error);
-            return Promise.resolve({});
+            // Fail closed: block the command if scanning fails
+            return Promise.resolve({
+              decision: 'block',
+              reason: '[YARA] Scanner error — command blocked as a precaution.',
+            });
           }
         },
       ],
@@ -230,7 +253,7 @@ export function createPostToolUseYaraHooks(): HookCallbackMatcher[] {
             const result = scan(content, 'PostToolUse', tool);
             if (!result.matched) return Promise.resolve({});
 
-            const match = result.matches[0];
+            const match = highestSeverityMatch(result.matches);
             logYaraMatch('PostToolUse', tool, match);
             recordViolation({
               rule: match.rule.name,
@@ -250,7 +273,14 @@ export function createPostToolUseYaraHooks(): HookCallbackMatcher[] {
             });
           } catch (error) {
             logToFile('[YARA] PostToolUse Write/Edit hook error:', error);
-            return Promise.resolve({});
+            // Fail closed: instruct the agent to revert if scanning fails
+            return Promise.resolve({
+              hookSpecificOutput: {
+                hookEventName: 'PostToolUse',
+                additionalContext:
+                  '[YARA] Scanner error — you MUST revert this change as a precaution.',
+              },
+            });
           }
         },
       ],
@@ -279,7 +309,7 @@ export function createPostToolUseYaraHooks(): HookCallbackMatcher[] {
             const result = scan(content, 'PostToolUse', tool);
             if (!result.matched) return Promise.resolve({});
 
-            const match = result.matches[0];
+            const match = highestSeverityMatch(result.matches);
             logYaraMatch('PostToolUse', tool, match);
 
             if (match.rule.severity === 'critical') {
@@ -313,7 +343,11 @@ export function createPostToolUseYaraHooks(): HookCallbackMatcher[] {
             });
           } catch (error) {
             logToFile('[YARA] PostToolUse Read/Grep hook error:', error);
-            return Promise.resolve({});
+            // Fail closed: terminate session if scanning fails on read content
+            return Promise.resolve({
+              stopReason:
+                '[YARA] Scanner error while scanning read content — session terminated as a precaution.',
+            });
           }
         },
       ],
@@ -348,7 +382,7 @@ export function createPostToolUseYaraHooks(): HookCallbackMatcher[] {
 
             if (!result.matched) return {};
 
-            const match = result.matches[0];
+            const match = highestSeverityMatch(result.matches);
             logYaraMatch('PostToolUse', 'Bash (skill install)', match);
             recordViolation({
               rule: match.rule.name,
@@ -365,7 +399,11 @@ export function createPostToolUseYaraHooks(): HookCallbackMatcher[] {
             };
           } catch (error) {
             logToFile('[YARA] PostToolUse skill install hook error:', error);
-            return {};
+            // Fail closed: terminate if skill scanning fails
+            return {
+              stopReason:
+                '[YARA] Scanner error while scanning skill files — session terminated as a precaution.',
+            };
           }
         },
       ],

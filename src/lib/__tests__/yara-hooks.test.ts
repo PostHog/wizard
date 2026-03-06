@@ -4,6 +4,7 @@ import {
 } from '../yara-hooks';
 
 // Mock dependencies
+jest.mock('../../utils/clack', () => ({}));
 jest.mock('../../utils/debug');
 jest.mock('../../utils/analytics');
 jest.mock('fs');
@@ -512,30 +513,35 @@ describe('yara-hooks', () => {
       });
     });
 
-    // ── Error resilience ──
+    // ── Error resilience (fail closed) ──
 
-    describe('error resilience', () => {
-      it('Write/Edit hook returns empty on error', async () => {
+    describe('error resilience (fail closed)', () => {
+      it('Write/Edit hook instructs revert on error', async () => {
         const hooks = createPostToolUseYaraHooks();
         const hook = hooks[0].hooks[0];
-        const result = await hook(
-          {
-            hook_event_name: 'PostToolUse',
-            tool_name: 'Write',
-            tool_input: null, // Will cause TypeError
-            tool_response: 'ok',
-            tool_use_id: 'test-e1',
-            session_id: 's1',
-            transcript_path: '/tmp/t',
-            cwd: '/tmp',
+        // Use a getter that throws to force into the catch block
+        const input = {
+          hook_event_name: 'PostToolUse',
+          tool_name: 'Write',
+          get tool_input(): any {
+            return {
+              get content(): string {
+                throw new Error('boom');
+              },
+            };
           },
-          'test-e1',
-          { signal: dummySignal },
-        );
-        expect(result).toEqual({});
+          tool_response: 'ok',
+          tool_use_id: 'test-e1',
+          session_id: 's1',
+          transcript_path: '/tmp/t',
+          cwd: '/tmp',
+        };
+        const result = await hook(input, 'test-e1', { signal: dummySignal });
+        const output = result.hookSpecificOutput as any;
+        expect(output.additionalContext).toContain('revert');
       });
 
-      it('Read/Grep hook returns empty on error', async () => {
+      it('Read/Grep hook terminates session on error', async () => {
         const hooks = createPostToolUseYaraHooks();
         const hook = hooks[1].hooks[0];
         // Force an error by making tool_response something that fails JSON.stringify
@@ -555,7 +561,7 @@ describe('yara-hooks', () => {
           'test-e2',
           { signal: dummySignal },
         );
-        expect(result).toEqual({});
+        expect(result.stopReason).toContain('Scanner error');
       });
     });
   });
