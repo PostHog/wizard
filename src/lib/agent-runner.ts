@@ -19,6 +19,8 @@ import {
   AgentSignals,
   AgentErrorType,
   buildWizardMetadata,
+  checkClaudeSettingsOverrides,
+  backupAndFixClaudeSettings,
 } from './agent-interface';
 import { getCloudUrlFromRegion } from '../utils/urls';
 import chalk from 'chalk';
@@ -93,6 +95,15 @@ export async function runAgentWizard(
       description: statusResult.description,
       statusPageUrl: 'https://status.claude.com',
     });
+  }
+
+  // Check for blocking env overrides in .claude/settings.json before login.
+  // These keys block the Wizard from accessing the PostHog LLM Gateway.
+  const blockingOverrideKeys = checkClaudeSettingsOverrides(session.installDir);
+  if (blockingOverrideKeys.length > 0) {
+    await getUI().showSettingsOverride(blockingOverrideKeys, () =>
+      backupAndFixClaudeSettings(session.installDir),
+    );
   }
 
   // Disclosure text is static — IntroScreen renders it directly.

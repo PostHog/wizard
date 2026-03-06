@@ -56,6 +56,12 @@ export interface WizardUI {
   /** Show service degradation (pushes outage overlay in TUI). */
   showServiceStatus(data: { description: string; statusPageUrl: string }): void;
 
+  /** Warn that .claude/settings.json overrides blocking env vars (pushes blocking overlay in TUI). */
+  showSettingsOverride(
+    keys: string[],
+    backupAndFix: () => boolean,
+  ): Promise<void>;
+
   // ── Display state ──────────────────────────────────────────────────
   /** Set the detected framework label (e.g., "Django with Wagtail CMS") */
   setDetectedFramework(label: string): void;

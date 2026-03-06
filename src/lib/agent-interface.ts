@@ -81,6 +81,54 @@ export enum AgentErrorType {
   API_ERROR = 'WIZARD_API_ERROR',
 }
 
+const BLOCKING_ENV_KEYS = ['ANTHROPIC_BASE_URL', 'ANTHROPIC_AUTH_TOKEN'];
+
+/**
+ * Check if .claude/settings.json in the project directory contains env
+ * overrides for blocking keys that block the Wizard from accessing the PostHog LLM Gateway.
+ * Returns the list of matched key names, or an empty array if none found.
+ */
+export function checkClaudeSettingsOverrides(
+  workingDirectory: string,
+): string[] {
+  const candidates = [
+    path.join(workingDirectory, '.claude', 'settings.json'),
+    path.join(workingDirectory, '.claude', 'settings'),
+  ];
+
+  for (const filePath of candidates) {
+    try {
+      const raw = fs.readFileSync(filePath, 'utf-8');
+      const parsed = JSON.parse(raw);
+      const envBlock = parsed?.env;
+      if (envBlock && typeof envBlock === 'object') {
+        return BLOCKING_ENV_KEYS.filter((key) => key in envBlock);
+      }
+    } catch {
+      // File doesn't exist or isn't valid JSON — skip
+    }
+  }
+
+  return [];
+}
+
+/**
+ * Rename .claude/settings.json to .claude/settings.json.wizard-backup
+ * so the blocking env overrides are no longer loaded by the SDK.
+ */
+export function backupAndFixClaudeSettings(workingDirectory: string): boolean {
+  for (const name of ['settings.json', 'settings']) {
+    const filePath = path.join(workingDirectory, '.claude', name);
+    try {
+      fs.renameSync(filePath, `${filePath}.wizard-backup`);
+      return true;
+    } catch {
+      // File doesn't exist — try next candidate
+    }
+  }
+  return false;
+}
+
 export type AgentConfig = {
   workingDirectory: string;
   posthogMcpUrl: string;
@@ -655,7 +703,8 @@ export async function runAgent(
         cwd: agentConfig.workingDirectory,
         permissionMode: 'acceptEdits',
         mcpServers: agentConfig.mcpServers,
-        settingSources: [],
+        // Load skills from project's .claude/skills/ directory
+        settingSources: ['project'],
         // Explicitly enable required tools including Skill
         allowedTools,
         systemPrompt: {

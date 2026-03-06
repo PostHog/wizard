@@ -84,6 +84,22 @@ export class LoggingUI implements WizardUI {
     );
   }
 
+  showSettingsOverride(
+    keys: string[],
+    _backupAndFix: () => boolean,
+  ): Promise<void> {
+    console.log(
+      `▲  Security warning: .claude/settings.json overrides detected`,
+    );
+    for (const key of keys) {
+      console.log(`│    • ${key}`);
+    }
+    console.log(
+      `│  These overrides prevent the Wizard from accessing the PostHog LLM Gateway.`,
+    );
+    return Promise.resolve();
+  }
+
   startRun(): void {
     // No-op in CI mode
   }

@@ -66,6 +66,13 @@ export class InkUI implements WizardUI {
     this.store.pushOverlay(Overlay.Outage);
   }
 
+  showSettingsOverride(
+    keys: string[],
+    backupAndFix: () => boolean,
+  ): Promise<void> {
+    return this.store.showSettingsOverride(keys, backupAndFix);
+  }
+
   startRun(): void {
     this.store.setRunPhase(RunPhase.Running);
   }
