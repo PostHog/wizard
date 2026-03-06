@@ -191,7 +191,7 @@ export async function runAgentWizard(
     : process.env.MCP_URL || 'https://mcp.posthog.com/mcp';
 
   const restoreSettings = () => restoreClaudeSettings(session.installDir);
-  getUI().onEnterScreen('mcp', restoreSettings);
+  getUI().onEnterScreen('outro', restoreSettings);
   getUI().startRun();
 
   const agent = await initializeAgent(
