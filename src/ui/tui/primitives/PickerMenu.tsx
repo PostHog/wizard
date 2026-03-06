@@ -63,7 +63,7 @@ const SinglePickerMenu = <T,>({
   columns = 1,
   onSelect,
 }: {
-  message: string;
+  message?: string;
   options: PickerOption<T>[];
   centered?: boolean;
   columns?: number;
@@ -158,7 +158,7 @@ const MultiPickerMenu = <T,>({
   columns = 1,
   onSelect,
 }: {
-  message: string;
+  message?: string;
   options: PickerOption<T>[];
   centered?: boolean;
   columns?: number;

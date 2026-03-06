@@ -9,7 +9,7 @@ import { Box, Text } from 'ink';
 import { Colors } from '../styles.js';
 
 interface PromptLabelProps {
-  message: string;
+  message?: string;
 }
 
 export const PromptLabel = ({ message }: PromptLabelProps) => {
