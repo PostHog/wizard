@@ -192,7 +192,7 @@ describe('CLI argument parsing', () => {
       expect(args.ci).toBe(true);
     });
 
-    test('requires --region when --ci is set', async () => {
+    test('does not require --region when --ci is set', async () => {
       await runCLI([
         '--ci',
         '--api-key',
@@ -201,7 +201,7 @@ describe('CLI argument parsing', () => {
         '/tmp/test',
       ]);
 
-      expect(process.exit).toHaveBeenCalledWith(1);
+      expect(process.exit).not.toHaveBeenCalledWith(1);
     });
 
     test('requires --api-key when --ci is set', async () => {

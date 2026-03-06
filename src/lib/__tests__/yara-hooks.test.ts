@@ -4,7 +4,6 @@ import {
 } from '../yara-hooks';
 
 // Mock dependencies
-jest.mock('../../utils/clack', () => ({}));
 jest.mock('../../utils/debug');
 jest.mock('../../utils/analytics');
 jest.mock('fs');
