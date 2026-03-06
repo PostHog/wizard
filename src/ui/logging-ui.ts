@@ -63,6 +63,10 @@ export class LoggingUI implements WizardUI {
     console.log(`✔  Framework: ${label}`);
   }
 
+  onEnterScreen(_screen: string, _fn: () => void): void {
+    // No screen transitions in CI
+  }
+
   setLoginUrl(url: string | null): void {
     if (url) {
       console.log(
@@ -82,6 +86,22 @@ export class LoggingUI implements WizardUI {
     console.log(
       `│  The wizard may not work reliably while services are affected.`,
     );
+  }
+
+  showSettingsOverride(
+    keys: string[],
+    _backupAndFix: () => boolean,
+  ): Promise<void> {
+    console.log(
+      `▲  Security warning: .claude/settings.json overrides detected`,
+    );
+    for (const key of keys) {
+      console.log(`│    • ${key}`);
+    }
+    console.log(
+      `│  These overrides prevent the Wizard from accessing the PostHog LLM Gateway.`,
+    );
+    return Promise.resolve();
   }
 
   startRun(): void {
