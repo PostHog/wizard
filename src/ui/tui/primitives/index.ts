@@ -16,5 +16,6 @@ export { ScreenContainer } from './ScreenContainer.js';
 export { ScreenErrorBoundary } from './ScreenErrorBoundary.js';
 export { TabContainer } from './TabContainer.js';
 export type { TabDefinition } from './TabContainer.js';
+export { HNViewer } from './HNViewer.js';
 export { DissolveTransition } from './DissolveTransition.js';
 export type { WipeDirection } from './DissolveTransition.js';

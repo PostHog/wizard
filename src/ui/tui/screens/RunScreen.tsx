@@ -18,6 +18,7 @@ import {
   ProgressList,
   LogViewer,
   EventPlanViewer,
+  HNViewer,
 } from '../primitives/index.js';
 import type { ProgressItem } from '../primitives/index.js';
 import { Colors, Icons } from '../styles.js';
@@ -217,6 +218,11 @@ export const RunScreen = ({ store }: RunScreenProps) => {
       id: 'logs',
       label: 'All logs',
       component: <LogViewer filePath={LOG_FILE} />,
+    },
+    {
+      id: 'hn',
+      label: 'HN',
+      component: <HNViewer />,
     },
   ];
 
