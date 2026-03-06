@@ -57,6 +57,9 @@ export class WizardStore {
   /** Last screen seen — used to detect screen transitions for analytics. */
   private _lastScreen: ScreenName | null = null;
 
+  /** Hooks run when transitioning onto a screen. */
+  private _enterScreenHooks = new Map<ScreenName, (() => void)[]>();
+
   version = '';
 
   /** Navigation router — resolves active screen from session state. */
@@ -70,6 +73,10 @@ export class WizardStore {
   readonly setupComplete: Promise<void> = new Promise((resolve) => {
     this._resolveSetup = resolve;
   });
+
+  /** Blocks agent execution until the settings-override overlay is dismissed. */
+  private _resolveSettingsOverride: (() => void) | null = null;
+  private _backupAndFixSettings: (() => boolean) | null = null;
 
   constructor(flow: Flow = Flow.Wizard) {
     this.router = new WizardRouter(flow);
@@ -151,6 +158,37 @@ export class WizardStore {
   ): void {
     this.$session.setKey('serviceStatus', status);
     this.emitChange();
+  }
+
+  /**
+   * Push the settings-override overlay and return a promise that blocks
+   * until the user dismisses it via backupAndFixSettingsOverride().
+   */
+  showSettingsOverride(
+    keys: string[],
+    backupAndFix: () => boolean,
+  ): Promise<void> {
+    this.$session.setKey('settingsOverrideKeys', keys);
+    this._backupAndFixSettings = backupAndFix;
+    this.pushOverlay(Overlay.SettingsOverride);
+    return new Promise((resolve) => {
+      this._resolveSettingsOverride = resolve;
+    });
+  }
+
+  /**
+   * Back up .claude/settings.json. Dismisses the overlay on success.
+   */
+  backupAndFixSettingsOverride(): boolean {
+    const ok = this._backupAndFixSettings?.() ?? false;
+    if (ok) {
+      this.$session.setKey('settingsOverrideKeys', null);
+      this.popOverlay();
+      this._resolveSettingsOverride?.();
+      this._resolveSettingsOverride = null;
+      this._backupAndFixSettings = null;
+    }
+    return ok;
   }
 
   addDiscoveredFeature(feature: DiscoveredFeature): void {
@@ -252,13 +290,27 @@ export class WizardStore {
   // ── Screen transition analytics ─────────────────────────────────
 
   /**
-   * Detect screen transitions and fire analytics events.
+   * Register a callback to run when transitioning onto the given screen.
+   * Fires after every transition that lands on this screen.
+   */
+  onEnterScreen(screen: ScreenName, fn: () => void): void {
+    const list = this._enterScreenHooks.get(screen) ?? [];
+    list.push(fn);
+    this._enterScreenHooks.set(screen, list);
+  }
+
+  /**
+   * Detect screen transitions, run enter-screen hooks, and fire analytics.
    * Called at the end of emitChange/pushOverlay/popOverlay.
    */
   private _detectTransition(): void {
     const next = this.router.resolve(this.session);
     const prev = this._lastScreen;
     if (prev !== null && next !== prev) {
+      const hooks = this._enterScreenHooks.get(next);
+      if (hooks) {
+        for (const fn of hooks) fn();
+      }
       analytics.wizardCapture(`screen ${next}`, {
         from_screen: prev,
         ...sessionProperties(this.session),

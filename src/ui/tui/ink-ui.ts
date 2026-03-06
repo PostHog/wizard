@@ -54,6 +54,13 @@ export class InkUI implements WizardUI {
     this.store.setDetectedFramework(label);
   }
 
+  onEnterScreen(screen: string, fn: () => void): void {
+    this.store.onEnterScreen(
+      screen as Parameters<WizardStore['onEnterScreen']>[0],
+      fn,
+    );
+  }
+
   setLoginUrl(url: string | null): void {
     this.store.setLoginUrl(url);
   }
@@ -64,6 +71,13 @@ export class InkUI implements WizardUI {
   }): void {
     this.store.setServiceStatus(data);
     this.store.pushOverlay(Overlay.Outage);
+  }
+
+  showSettingsOverride(
+    keys: string[],
+    backupAndFix: () => boolean,
+  ): Promise<void> {
+    return this.store.showSettingsOverride(keys, backupAndFix);
   }
 
   startRun(): void {

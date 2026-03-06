@@ -125,6 +125,7 @@ export interface WizardSession {
 
   // Runtime
   serviceStatus: { description: string; statusPageUrl: string } | null;
+  settingsOverrideKeys: string[] | null;
   outroData: OutroData | null;
 
   // Additional features queue (drained via stop hook after main integration)
@@ -178,6 +179,7 @@ export function buildSession(args: {
     loginUrl: null,
     credentials: null,
     serviceStatus: null,
+    settingsOverrideKeys: null,
     outroData: null,
     additionalFeatureQueue: [],
     frameworkConfig: null,

@@ -81,6 +81,76 @@ export enum AgentErrorType {
   API_ERROR = 'WIZARD_API_ERROR',
 }
 
+const BLOCKING_ENV_KEYS = ['ANTHROPIC_BASE_URL', 'ANTHROPIC_AUTH_TOKEN'];
+
+/**
+ * Check if .claude/settings.json in the project directory contains env
+ * overrides for blocking keys that block the Wizard from accessing the PostHog LLM Gateway.
+ * Returns the list of matched key names, or an empty array if none found.
+ */
+export function checkClaudeSettingsOverrides(
+  workingDirectory: string,
+): string[] {
+  const candidates = [
+    path.join(workingDirectory, '.claude', 'settings.json'),
+    path.join(workingDirectory, '.claude', 'settings'),
+  ];
+
+  for (const filePath of candidates) {
+    try {
+      const raw = fs.readFileSync(filePath, 'utf-8');
+      const parsed = JSON.parse(raw);
+      const envBlock = parsed?.env;
+      if (envBlock && typeof envBlock === 'object') {
+        return BLOCKING_ENV_KEYS.filter((key) => key in envBlock);
+      }
+    } catch {
+      // File doesn't exist or isn't valid JSON — skip
+    }
+  }
+
+  return [];
+}
+
+/**
+ * Copy .claude/settings.json to .wizard-backup (overwriting if it exists),
+ * then remove the original so the SDK doesn't load the blocking overrides.
+ */
+export function backupAndFixClaudeSettings(workingDirectory: string): boolean {
+  for (const name of ['settings.json', 'settings']) {
+    const filePath = path.join(workingDirectory, '.claude', name);
+    const backupPath = `${filePath}.wizard-backup`;
+    try {
+      fs.copyFileSync(filePath, backupPath);
+      fs.unlinkSync(filePath);
+      return true;
+    } catch {
+      // File doesn't exist — try next candidate
+    }
+  }
+  return false;
+}
+
+/**
+ * Restore .claude/settings.json from .wizard-backup.
+ * Copies (not moves) so the backup is preserved.
+ */
+export function restoreClaudeSettings(workingDirectory: string): void {
+  for (const name of ['settings.json', 'settings']) {
+    const backup = path.join(
+      workingDirectory,
+      '.claude',
+      `${name}.wizard-backup`,
+    );
+    try {
+      fs.copyFileSync(backup, path.join(workingDirectory, '.claude', name));
+      return;
+    } catch {
+      // Backup doesn't exist — try next candidate
+    }
+  }
+}
+
 export type AgentConfig = {
   workingDirectory: string;
   posthogMcpUrl: string;
@@ -849,6 +919,9 @@ export async function runAgent(
     debug('Full error:', error);
     throw error;
   } finally {
+    // Ensure settings are restored even if the run fails before the
+    // inline restore runs (e.g. query() itself throws).
+    restoreClaudeSettings(agentConfig.workingDirectory);
     eventPlanWatcher?.close();
     if (eventPlanInterval) clearInterval(eventPlanInterval);
   }

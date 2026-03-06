@@ -56,9 +56,18 @@ export interface WizardUI {
   /** Show service degradation (pushes outage overlay in TUI). */
   showServiceStatus(data: { description: string; statusPageUrl: string }): void;
 
+  /** Warn that .claude/settings.json overrides blocking env vars (pushes blocking overlay in TUI). */
+  showSettingsOverride(
+    keys: string[],
+    backupAndFix: () => boolean,
+  ): Promise<void>;
+
   // ── Display state ──────────────────────────────────────────────────
   /** Set the detected framework label (e.g., "Django with Wagtail CMS") */
   setDetectedFramework(label: string): void;
+
+  /** Register a callback to run when the TUI transitions onto the given screen. */
+  onEnterScreen(screen: string, fn: () => void): void;
 
   setLoginUrl(url: string | null): void;
 

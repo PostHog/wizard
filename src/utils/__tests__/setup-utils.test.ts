@@ -31,6 +31,7 @@ jest.mock('../../ui', () => ({
     syncTodos: jest.fn(),
     setLoginUrl: jest.fn(),
     showServiceStatus: jest.fn(),
+    showSettingsOverride: jest.fn(),
     startRun: jest.fn(),
     note: jest.fn(),
   }),
