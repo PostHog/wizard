@@ -1,4 +1,5 @@
 import { Box, Text } from 'ink';
+import { Colors } from '../styles.js';
 
 const FEEDBACK = 'Feedback: wizard@posthog.com ';
 const FEEDBACK_SHORT = ' wizard@posthog.com ';
@@ -21,7 +22,7 @@ export const TitleBar = ({ version, width }: TitleBarProps) => {
 
   return (
     <Box width={width} overflow="hidden">
-      <Text dimColor>
+      <Text backgroundColor={Colors.accent} color="black" bold>
         {title}
         {padding}
         {feedback}

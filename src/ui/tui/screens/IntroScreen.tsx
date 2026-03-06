@@ -27,6 +27,7 @@ export const IntroScreen = ({ store }: IntroScreenProps) => {
   );
 
   const [pickingFramework, setPickingFramework] = useState(false);
+  const [manuallySelected, setManuallySelected] = useState(false);
 
   const { session } = store;
   const config = session.frameworkConfig;
@@ -63,7 +64,7 @@ export const IntroScreen = ({ store }: IntroScreenProps) => {
               .env* file contents will not leave your machine.
             </Text>
             <Box marginTop={1}>
-              <Text>Let's do a few hours of work in a few minutes.</Text>
+              <Text>Let's do two hours of work in eight minutes.</Text>
             </Box>
           </Box>
         )}
@@ -109,7 +110,9 @@ export const IntroScreen = ({ store }: IntroScreenProps) => {
                 Framework <Text color="green">{'\u2714'}</Text>{' '}
               </Text>
               <Text>
-                {frameworkLabel} {config?.metadata.beta && '[BETA]'}
+                {frameworkLabel}
+                {!manuallySelected && ' (detected)'}{' '}
+                {config?.metadata.beta && '[BETA]'}
               </Text>
             </Text>
           )}
@@ -126,6 +129,7 @@ export const IntroScreen = ({ store }: IntroScreenProps) => {
                   process.exit(0);
                 } else if (choice === 'framework') {
                   setPickingFramework(true);
+                  setManuallySelected(true);
                 } else {
                   store.completeSetup();
                 }
