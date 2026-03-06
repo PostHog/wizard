@@ -117,7 +117,7 @@ export const IntroScreen = ({ store }: IntroScreenProps) => {
             <PickerMenu
               options={[
                 { label: 'Continue', value: 'continue' },
-                { label: 'Select another framework', value: 'framework' },
+                { label: 'Change framework', value: 'framework' },
                 { label: 'Cancel', value: 'cancel' },
               ]}
               onSelect={(value) => {
