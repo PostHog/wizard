@@ -20,22 +20,22 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout wizard
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
       - name: Checkout wizard-workbench
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           repository: PostHog/wizard-workbench
           path: wizard-workbench
 
       - name: Install pnpm
-        uses: pnpm/action-setup@v2
+        uses: pnpm/action-setup@eae0cfeb286e66ffb5155f1a79b90583a127a68b # v2
         with:
           version: 10.23.0
           run_install: false
 
       - name: Set up Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version-file: 'package.json'
           cache: 'pnpm'
@@ -47,11 +47,12 @@ jobs:
         env:
           POSTHOG_PERSONAL_API_KEY: ${{ secrets.GH_APP_POSTHOG_WIZARD_CI_BOT_POSTHOG_PERSONAL_KEY }}
           WIZARD_WORKBENCH_ROOT: ${{ github.workspace }}/wizard-workbench
-        run: ./scripts/smoke-test-ci.sh "${{ inputs.app || 'next-js/15-app-router-todo' }}"
+          SMOKE_TEST_APP: ${{ inputs.app || 'next-js/15-app-router-todo' }}
+        run: ./scripts/smoke-test-ci.sh "$SMOKE_TEST_APP"
 
       - name: Upload artifacts
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: smoke-test-artifacts
           path: /tmp/wizard-smoke.*/**
