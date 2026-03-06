@@ -655,8 +655,7 @@ export async function runAgent(
         cwd: agentConfig.workingDirectory,
         permissionMode: 'acceptEdits',
         mcpServers: agentConfig.mcpServers,
-        // Load skills from project's .claude/skills/ directory
-        settingSources: ['project'],
+        settingSources: [],
         // Explicitly enable required tools including Skill
         allowedTools,
         systemPrompt: {
