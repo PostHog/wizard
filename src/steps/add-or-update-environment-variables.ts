@@ -2,7 +2,7 @@ import chalk from 'chalk';
 import type { Integration } from '../lib/constants';
 import { traceStep } from '../telemetry';
 import { analytics } from '../utils/analytics';
-import clack from '../utils/clack';
+import { getUI } from '../ui';
 import { getDotGitignore } from '../utils/file-utils';
 import * as fs from 'fs';
 import path from 'path';
@@ -66,13 +66,13 @@ export async function addOrUpdateEnvironmentVariablesStep({
             encoding: 'utf8',
             flag: 'w',
           });
-          clack.log.success(
+          getUI().log.success(
             `Updated environment variables in ${chalk.bold.cyan(
               relativeEnvFilePath,
             )}`,
           );
         } else {
-          clack.log.success(
+          getUI().log.success(
             `${chalk.bold.cyan(
               relativeEnvFilePath,
             )} already has the necessary environment variables.`,
@@ -81,14 +81,13 @@ export async function addOrUpdateEnvironmentVariablesStep({
 
         addedEnvVariables = true;
       } catch (error) {
-        clack.log.warning(
+        getUI().log.warn(
           `Failed to update environment variables in ${chalk.bold.cyan(
             relativeEnvFilePath,
           )}. Please update them manually.`,
         );
 
-        analytics.capture('wizard interaction', {
-          action: 'failed to update environment variables',
+        analytics.wizardCapture('env vars error', {
           integration,
           error: error instanceof Error ? error.message : 'Unknown error',
         });
@@ -105,7 +104,7 @@ export async function addOrUpdateEnvironmentVariablesStep({
           encoding: 'utf8',
           flag: 'w',
         });
-        clack.log.success(
+        getUI().log.success(
           `Created ${chalk.bold.cyan(
             relativeEnvFilePath,
           )} with environment variables.`,
@@ -113,14 +112,13 @@ export async function addOrUpdateEnvironmentVariablesStep({
 
         addedEnvVariables = true;
       } catch (error) {
-        clack.log.warning(
+        getUI().log.warn(
           `Failed to create ${chalk.bold.cyan(
             relativeEnvFilePath,
           )} with environment variables. Please add them manually.`,
         );
 
-        analytics.capture('wizard interaction', {
-          action: 'failed to create environment variables',
+        analytics.wizardCapture('env vars error', {
           integration,
           error: error instanceof Error ? error.message : 'Unknown error',
         });
@@ -154,21 +152,20 @@ export async function addOrUpdateEnvironmentVariablesStep({
             encoding: 'utf8',
             flag: 'w',
           });
-          clack.log.success(
+          getUI().log.success(
             `Updated ${chalk.bold.cyan(
               '.gitignore',
             )} to include ${chalk.bold.cyan(envFileName)}.`,
           );
           addedGitignore = true;
         } catch (error) {
-          clack.log.warning(
+          getUI().log.warn(
             `Failed to update ${chalk.bold.cyan(
               '.gitignore',
             )} to include ${chalk.bold.cyan(envFileName)}.`,
           );
 
-          analytics.capture('wizard interaction', {
-            action: 'failed to update gitignore',
+          analytics.wizardCapture('env vars error', {
             integration,
             error: error instanceof Error ? error.message : 'Unknown error',
           });
@@ -191,19 +188,18 @@ export async function addOrUpdateEnvironmentVariablesStep({
             flag: 'w',
           },
         );
-        clack.log.success(
+        getUI().log.success(
           `Created ${chalk.bold.cyan('.gitignore')} with environment files.`,
         );
         addedGitignore = true;
       } catch (error) {
-        clack.log.warning(
+        getUI().log.warn(
           `Failed to create ${chalk.bold.cyan(
             '.gitignore',
           )} with environment files.`,
         );
 
-        analytics.capture('wizard interaction', {
-          action: 'failed to create gitignore',
+        analytics.wizardCapture('env vars error', {
           integration,
           error: error instanceof Error ? error.message : 'Unknown error',
         });
@@ -216,8 +212,7 @@ export async function addOrUpdateEnvironmentVariablesStep({
       }
     }
 
-    analytics.capture('wizard interaction', {
-      action: 'added environment variables',
+    analytics.wizardCapture('env vars added', {
       integration,
     });
 

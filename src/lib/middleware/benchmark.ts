@@ -8,7 +8,7 @@
  */
 
 import chalk from 'chalk';
-import clack from '../../utils/clack';
+import { getUI, type SpinnerHandle } from '../../ui';
 import { logToFile, getLogFilePath, configureLogFile } from '../../utils/debug';
 import { MiddlewarePipeline } from './pipeline';
 import { PhaseDetector } from './phase-detector';
@@ -66,7 +66,7 @@ export interface BenchmarkData {
  * Loads .benchmark-config.json from the install dir, falls back to defaults.
  */
 export function createBenchmarkPipeline(
-  spinner: ReturnType<typeof clack.spinner>,
+  spinner: SpinnerHandle,
   options: WizardOptions,
   configOverride?: BenchmarkConfig,
 ): MiddlewarePipeline {
@@ -84,10 +84,10 @@ export function createBenchmarkPipeline(
   });
 
   if (!config.output.suppressWizardLogs) {
-    clack.log.info(
+    getUI().log.info(
       `${chalk.cyan(AgentSignals.BENCHMARK)} Verbose logs: ${getLogFilePath()}`,
     );
-    clack.log.info(
+    getUI().log.info(
       `${chalk.cyan(
         AgentSignals.BENCHMARK,
       )} Benchmark data will be written to: ${config.output.benchmarkPath}`,

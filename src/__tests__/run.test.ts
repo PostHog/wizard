@@ -5,7 +5,54 @@ import { Integration } from '../lib/constants';
 
 jest.mock('../lib/agent-runner');
 jest.mock('../utils/analytics');
-jest.mock('../utils/clack');
+jest.mock('../lib/wizard-session', () => ({
+  buildSession: (args: Record<string, unknown>) => ({
+    debug: false,
+    forceInstall: false,
+    installDir: process.cwd(),
+    ci: false,
+    signup: false,
+    localMcp: false,
+    menu: false,
+    setupConfirmed: false,
+    integration: null,
+    frameworkContext: {},
+    typescript: false,
+    credentials: null,
+    serviceStatus: null,
+    outroData: null,
+    frameworkConfig: null,
+    ...args,
+  }),
+}));
+jest.mock('../ui', () => ({
+  getUI: jest.fn().mockReturnValue({
+    log: {
+      info: jest.fn(),
+      warn: jest.fn(),
+      error: jest.fn(),
+      success: jest.fn(),
+      step: jest.fn(),
+    },
+    intro: jest.fn(),
+    outro: jest.fn(),
+    cancel: jest.fn(),
+    note: jest.fn(),
+    spinner: jest.fn().mockReturnValue({
+      start: jest.fn(),
+      stop: jest.fn(),
+      message: jest.fn(),
+    }),
+    setDetectedFramework: jest.fn(),
+    setCredentials: jest.fn(),
+    pushStatus: jest.fn(),
+    syncTodos: jest.fn(),
+    setLoginUrl: jest.fn(),
+    showServiceStatus: jest.fn(),
+    startRun: jest.fn(),
+  }),
+  setUI: jest.fn(),
+}));
 
 const mockRunAgentWizard = runAgentWizard as jest.MockedFunction<
   typeof runAgentWizard

@@ -1,9 +1,7 @@
 import type { Integration } from '../../lib/constants';
 import { traceStep } from '../../telemetry';
 import { analytics } from '../../utils/analytics';
-import clack from '../../utils/clack';
-import chalk from 'chalk';
-import { abortIfCancelled } from '../../utils/clack-utils';
+import { getUI } from '../../ui';
 import { MCPClient } from './MCPClient';
 import { CursorMCPClient } from './clients/cursor';
 import { ClaudeMCPClient } from './clients/claude';
@@ -11,7 +9,7 @@ import { ClaudeCodeMCPClient } from './clients/claude-code';
 import { VisualStudioCodeClient } from './clients/visual-studio-code';
 import { ZedClient } from './clients/zed';
 import { CodexMCPClient } from './clients/codex';
-import { AVAILABLE_FEATURES, ALL_FEATURE_VALUES } from './defaults';
+import { ALL_FEATURE_VALUES } from './defaults';
 import { debug } from '../../utils/debug';
 
 export const getSupportedClients = async (): Promise<MCPClient[]> => {
@@ -42,145 +40,57 @@ export const getSupportedClients = async (): Promise<MCPClient[]> => {
   return supportedClients;
 };
 
+/**
+ * Add MCP server to clients. No prompts — pure orchestration.
+ * Prompts are handled by McpScreen (TUI) or auto-accepted (CI).
+ */
 export const addMCPServerToClientsStep = async ({
   integration,
-  askPermission = true,
   local = false,
   ci = false,
 }: {
   integration?: Integration;
-  askPermission?: boolean;
   local?: boolean;
   ci?: boolean;
 }): Promise<string[]> => {
-  // CI mode: skip MCP installation entirely (default to No)
+  const ui = getUI();
+
+  // CI mode: skip MCP installation entirely
   if (ci) {
-    clack.log.info('Skipping MCP installation (CI mode)');
+    ui.log.info('Skipping MCP installation (CI mode)');
     return [];
   }
-
-  const hasPermission = askPermission
-    ? await abortIfCancelled(
-        clack.select({
-          message: local
-            ? 'Would you like to install the local development MCP server?'
-            : 'Would you like to install the MCP server to use PostHog in your editor?',
-          options: [
-            { value: true, label: 'Yes' },
-            { value: false, label: 'No' },
-          ],
-        }),
-        integration,
-      )
-    : true;
-
-  if (!hasPermission) {
-    return [];
-  }
-
-  const { groupMultiselect } = await import('@clack/prompts');
-  const selectedFeatures = await abortIfCancelled(
-    groupMultiselect({
-      message: `Select which PostHog features to enable as tools: ${chalk.dim(
-        '(Toggle: Space, Confirm: Enter, Toggle All: A, Cancel: CTRL + C)',
-      )}`,
-      options: AVAILABLE_FEATURES,
-      initialValues: [...ALL_FEATURE_VALUES],
-      required: false,
-    }),
-    integration,
-  );
 
   const supportedClients = await getSupportedClients();
 
-  const { multiselect } = await import('@clack/prompts');
-  const selectedClientNames = await abortIfCancelled(
-    multiselect({
-      message: `Select which MCP clients to install the MCP server to: ${chalk.dim(
-        '(Toggle: Space, Confirm: Enter, Toggle All: A, Cancel: CTRL + C)',
-      )}`,
-      options: supportedClients.map((client) => ({
-        value: client.name,
-        label: client.name,
-      })),
-      initialValues: supportedClients.map((client) => client.name),
-      required: true,
-    }),
-    integration,
-  );
-
-  const clients = supportedClients.filter((client) =>
-    selectedClientNames.includes(client.name),
-  );
-
-  // Only check for existing installations in the clients the user selected
-  const installedClients = [];
-  for (const client of clients) {
-    if (await client.isServerInstalled(local)) {
-      installedClients.push(client);
-    }
+  if (supportedClients.length === 0) {
+    ui.log.info(
+      'No supported MCP clients detected. Skipping MCP installation.',
+    );
+    return [];
   }
 
-  if (installedClients.length > 0) {
-    clack.log.warn(
-      `The MCP server is already configured for:
-  ${installedClients.map((c) => `- ${c.name}`).join('\n  ')}`,
-    );
-
-    const reinstall = await abortIfCancelled(
-      clack.select({
-        message: 'Would you like to reinstall it?',
-        options: [
-          {
-            value: true,
-            label: 'Yes',
-            hint: 'Reinstall the MCP server',
-          },
-          {
-            value: false,
-            label: 'No',
-            hint: 'Keep the existing installation',
-          },
-        ],
-      }),
-      integration,
-    );
-
-    if (!reinstall) {
-      analytics.capture('wizard interaction', {
-        action: 'declined to reinstall mcp servers',
-        clients: installedClients.map((c) => c.name),
-        integration,
-      });
-
-      return [];
-    }
-
-    await removeMCPServer(installedClients, local);
-    clack.log.info('Removed existing installation.');
-  }
-
+  // Auto-install to all supported clients
   await traceStep('adding mcp servers', async () => {
     await addMCPServer(
-      clients,
-      undefined, // OAuth mode - no API key needed
-      selectedFeatures,
+      supportedClients,
+      undefined,
+      [...ALL_FEATURE_VALUES],
       local,
     );
   });
 
-  clack.log.success(
+  ui.log.success(
     `Added the MCP server to:
-  ${clients.map((c) => `- ${c.name}`).join('\n  ')} `,
+  ${supportedClients.map((c) => `- ${c.name}`).join('\n  ')} `,
   );
 
-  analytics.capture('wizard interaction', {
-    action: 'added mcp servers',
-    clients: clients.map((c) => c.name),
+  analytics.wizardCapture('mcp servers added', {
+    clients: supportedClients.map((c) => c.name),
     integration,
   });
 
-  return clients.map((c) => c.name);
+  return supportedClients.map((c) => c.name);
 };
 
 export const removeMCPServerFromClientsStep = async ({
@@ -192,47 +102,19 @@ export const removeMCPServerFromClientsStep = async ({
 }): Promise<string[]> => {
   const installedClients = await getInstalledClients(local);
   if (installedClients.length === 0) {
-    analytics.capture('wizard interaction', {
-      action: 'no mcp servers to remove',
+    analytics.wizardCapture('mcp no servers to remove', {
       integration,
     });
     return [];
   }
 
-  const { multiselect } = await import('@clack/prompts');
-  const selectedClientNames = await abortIfCancelled(
-    multiselect({
-      message: `Select which clients to remove the MCP server from: ${chalk.dim(
-        '(Toggle: Space, Confirm: Enter, Toggle All: A, Cancel: CTRL + C)',
-      )}`,
-      options: installedClients.map((client) => ({
-        value: client.name,
-        label: client.name,
-      })),
-      initialValues: installedClients.map((client) => client.name),
-    }),
-    integration,
-  );
-
-  const clientsToRemove = installedClients.filter((client) =>
-    selectedClientNames.includes(client.name),
-  );
-
-  if (clientsToRemove.length === 0) {
-    analytics.capture('wizard interaction', {
-      action: 'no mcp servers selected for removal',
-      integration,
-    });
-    return [];
-  }
-
+  // Auto-remove from all installed clients
   const results = await traceStep('removing mcp servers', async () => {
-    await removeMCPServer(clientsToRemove, local);
-    return clientsToRemove.map((c) => c.name);
+    await removeMCPServer(installedClients, local);
+    return installedClients.map((c) => c.name);
   });
 
-  analytics.capture('wizard interaction', {
-    action: 'removed mcp servers',
+  analytics.wizardCapture('mcp servers removed', {
     clients: results,
     integration,
   });

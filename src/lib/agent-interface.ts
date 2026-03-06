@@ -4,18 +4,22 @@
  */
 
 import path from 'path';
-import clack from '../utils/clack';
+import * as fs from 'fs';
+import { getUI, type SpinnerHandle } from '../ui';
 import { debug, logToFile, initLogFile, getLogFilePath } from '../utils/debug';
 import type { WizardOptions } from '../utils/types';
 import { analytics } from '../utils/analytics';
 import {
-  WIZARD_INTERACTION_EVENT_NAME,
   WIZARD_REMARK_EVENT_NAME,
   POSTHOG_PROPERTY_HEADER_PREFIX,
   WIZARD_VARIANT_FLAG_KEY,
   WIZARD_VARIANTS,
   WIZARD_USER_AGENT,
 } from './constants';
+import {
+  type AdditionalFeature,
+  ADDITIONAL_FEATURE_PROMPTS,
+} from './wizard-session';
 import { createCustomHeaders } from '../utils/custom-headers';
 import { getLlmGatewayUrlFromHost } from '../utils/urls';
 import { LINTING_TOOLS } from './safe-tools';
@@ -88,6 +92,60 @@ export type AgentConfig = {
   wizardFlags?: Record<string, string>;
   wizardMetadata?: Record<string, string>;
 };
+
+/**
+ * Stop hook return type: either allow stop or block with a reason.
+ */
+export type StopHookResult =
+  | Record<string, never>
+  | { decision: 'block'; reason: string };
+
+/**
+ * Create a stop hook callback that drains the additional feature queue,
+ * then collects a remark, then allows stop.
+ *
+ * Three-phase logic using closure state:
+ *   Phase 1 — drain queue: block with each feature prompt in order
+ *   Phase 2 — collect remark (once): block with remark prompt
+ *   Phase 3 — allow stop: return {}
+ */
+export function createStopHook(
+  featureQueue: readonly AdditionalFeature[],
+): (input: { stop_hook_active: boolean }) => StopHookResult {
+  let featureIndex = 0;
+  let remarkRequested = false;
+
+  return (input: { stop_hook_active: boolean }): StopHookResult => {
+    logToFile('Stop hook triggered', {
+      stop_hook_active: input.stop_hook_active,
+      featureIndex,
+      remarkRequested,
+      queueLength: featureQueue.length,
+    });
+
+    // Phase 1: drain feature queue
+    if (featureIndex < featureQueue.length) {
+      const feature = featureQueue[featureIndex++];
+      const prompt = ADDITIONAL_FEATURE_PROMPTS[feature];
+      logToFile(`Stop hook: injecting feature prompt for ${feature}`);
+      return { decision: 'block', reason: prompt };
+    }
+
+    // Phase 2: collect remark (once)
+    if (!remarkRequested) {
+      remarkRequested = true;
+      logToFile('Stop hook: requesting reflection');
+      return {
+        decision: 'block',
+        reason: `Before concluding, provide a brief remark about what information or guidance would have been useful to have in the integration prompt or documentation for this run. Specifically cite anything that would have prevented tool failures, erroneous edits, or other wasted turns. Format your response exactly as: ${AgentSignals.WIZARD_REMARK} Your remark here`,
+      };
+    }
+
+    // Phase 3: allow stop
+    logToFile('Stop hook: allowing stop');
+    return {};
+  };
+}
 
 /**
  * Internal configuration object returned by initializeAgent
@@ -297,8 +355,7 @@ export function wizardCanUseTool(
   if (DANGEROUS_OPERATORS.test(command)) {
     logToFile(`Denying bash command with dangerous operators: ${command}`);
     debug(`Denying bash command with dangerous operators: ${command}`);
-    analytics.capture(WIZARD_INTERACTION_EVENT_NAME, {
-      action: 'bash command denied',
+    analytics.wizardCapture('bash denied', {
       reason: 'dangerous operators',
       command,
     });
@@ -320,8 +377,7 @@ export function wizardCanUseTool(
     if (/[|&]/.test(baseCommand)) {
       logToFile(`Denying bash command with multiple pipes: ${command}`);
       debug(`Denying bash command with multiple pipes: ${command}`);
-      analytics.capture(WIZARD_INTERACTION_EVENT_NAME, {
-        action: 'bash command denied',
+      analytics.wizardCapture('bash denied', {
         reason: 'multiple pipes',
         command,
       });
@@ -342,8 +398,7 @@ export function wizardCanUseTool(
   if (/[|&]/.test(normalized)) {
     logToFile(`Denying bash command with pipe/&: ${command}`);
     debug(`Denying bash command with pipe/&: ${command}`);
-    analytics.capture(WIZARD_INTERACTION_EVENT_NAME, {
-      action: 'bash command denied',
+    analytics.wizardCapture('bash denied', {
       reason: 'disallowed pipe',
       command,
     });
@@ -362,8 +417,7 @@ export function wizardCanUseTool(
 
   logToFile(`Denying bash command: ${command}`);
   debug(`Denying bash command: ${command}`);
-  analytics.capture(WIZARD_INTERACTION_EVENT_NAME, {
-    action: 'bash command denied',
+  analytics.wizardCapture('bash denied', {
     reason: 'not in allowlist',
     command,
   });
@@ -385,7 +439,7 @@ export async function initializeAgent(
   logToFile('Agent initialization starting');
   logToFile('Install directory:', options.installDir);
 
-  clack.log.step('Initializing Claude agent...');
+  getUI().log.step('Initializing Claude agent...');
 
   try {
     // Configure LLM gateway environment variables (inherited by SDK subprocess)
@@ -447,11 +501,13 @@ export async function initializeAgent(
       });
     }
 
-    clack.log.step(`Verbose logs: ${getLogFilePath()}`);
-    clack.log.success("Agent initialized. Let's get cooking!");
+    getUI().log.step(`Verbose logs: ${getLogFilePath()}`);
+    getUI().log.success("Agent initialized. Let's get cooking!");
     return agentRunConfig;
   } catch (error) {
-    clack.log.error(`Failed to initialize agent: ${(error as Error).message}`);
+    getUI().log.error(
+      `Failed to initialize agent: ${(error as Error).message}`,
+    );
     logToFile('Agent initialization error:', error);
     debug('Agent initialization error:', error);
     throw error;
@@ -468,12 +524,13 @@ export async function runAgent(
   agentConfig: AgentRunConfig,
   prompt: string,
   options: WizardOptions,
-  spinner: ReturnType<typeof clack.spinner>,
+  spinner: SpinnerHandle,
   config?: {
     estimatedDurationMinutes?: number;
     spinnerMessage?: string;
     successMessage?: string;
     errorMessage?: string;
+    additionalFeatureQueue?: readonly AdditionalFeature[];
   },
   middleware?: {
     onMessage(message: any): void;
@@ -481,17 +538,12 @@ export async function runAgent(
   },
 ): Promise<{ error?: AgentErrorType; message?: string }> {
   const {
-    estimatedDurationMinutes = 8,
     spinnerMessage = 'Customizing your PostHog setup...',
     successMessage = 'PostHog integration complete',
     errorMessage = 'Integration failed',
   } = config ?? {};
 
   const { query } = await getSDKModule();
-
-  clack.log.step(
-    `This whole process should take about ${estimatedDurationMinutes} minutes including error checking and fixes.\n\nGrab some coffee!`,
-  );
 
   spinner.start(spinnerMessage);
 
@@ -559,8 +611,7 @@ export async function runAgent(
       }
     }
 
-    analytics.capture(WIZARD_INTERACTION_EVENT_NAME, {
-      action: 'agent integration completed',
+    analytics.wizardCapture('agent completed', {
       duration_ms: durationMs,
       duration_seconds: durationSeconds,
     });
@@ -572,6 +623,10 @@ export async function runAgent(
     spinner.stop(successMessage);
     return {};
   };
+
+  // Event plan file watcher — cleaned up in finally block
+  let eventPlanWatcher: fs.FSWatcher | undefined;
+  let eventPlanInterval: ReturnType<typeof setInterval> | undefined;
 
   try {
     // Tools needed for the wizard:
@@ -637,35 +692,57 @@ export async function runAgent(
             debug('CLI stderr:', data);
           }
         },
-        // Stop hook to have the agent reflect on its run
+        // Stop hook: drain additional feature queue, then collect remark, then allow stop
         hooks: {
           Stop: [
             {
-              hooks: [
-                (input: { stop_hook_active: boolean }) => {
-                  logToFile('Stop hook triggered', {
-                    stop_hook_active: input.stop_hook_active,
-                  });
-
-                  // Only ask for reflection on first stop (not after reflection is provided)
-                  if (input.stop_hook_active) {
-                    logToFile('Stop hook: allowing stop (already reflected)');
-                    return {}; // Allow stopping
-                  }
-
-                  logToFile('Stop hook: requesting reflection');
-                  return {
-                    decision: 'block',
-                    reason: `Before concluding, provide a brief remark about what information or guidance would have been useful to have in the integration prompt or documentation for this run. Specifically cite anything that would have prevented tool failures, erroneous edits, or other wasted turns. Format your response exactly as: ${AgentSignals.WIZARD_REMARK} Your remark here`,
-                  };
-                },
-              ],
+              hooks: [createStopHook(config?.additionalFeatureQueue ?? [])],
               timeout: 30,
             },
           ],
         },
       },
     });
+
+    // Watch for .posthog-events.json and feed into the store
+    const eventPlanPath = path.join(
+      agentConfig.workingDirectory,
+      '.posthog-events.json',
+    );
+    const readEventPlan = () => {
+      try {
+        const content = fs.readFileSync(eventPlanPath, 'utf-8');
+        const parsed = JSON.parse(content);
+        if (Array.isArray(parsed)) {
+          getUI().setEventPlan(
+            parsed.map((e: Record<string, unknown>) => ({
+              name: (e.name ?? e.event ?? '') as string,
+              description: (e.description ?? '') as string,
+            })),
+          );
+        }
+      } catch {
+        // File doesn't exist or isn't valid JSON yet
+      }
+    };
+
+    try {
+      eventPlanWatcher = fs.watch(eventPlanPath, () => readEventPlan());
+      readEventPlan();
+    } catch {
+      // File doesn't exist yet — poll until it appears
+      eventPlanInterval = setInterval(() => {
+        try {
+          fs.accessSync(eventPlanPath);
+          readEventPlan();
+          clearInterval(eventPlanInterval);
+          eventPlanInterval = undefined;
+          eventPlanWatcher = fs.watch(eventPlanPath, () => readEventPlan());
+        } catch {
+          // Still waiting
+        }
+      }, 1000);
+    }
 
     // Process the async generator
     for await (const message of response) {
@@ -767,10 +844,13 @@ export async function runAgent(
 
     // No API error found, re-throw the original exception
     spinner.stop(errorMessage);
-    clack.log.error(`Error: ${(error as Error).message}`);
+    getUI().log.error(`Error: ${(error as Error).message}`);
     logToFile('Agent run failed:', error);
     debug('Full error:', error);
     throw error;
+  } finally {
+    eventPlanWatcher?.close();
+    if (eventPlanInterval) clearInterval(eventPlanInterval);
   }
 }
 
@@ -784,7 +864,7 @@ export async function runAgent(
 function handleSDKMessage(
   message: SDKMessage,
   options: WizardOptions,
-  spinner: ReturnType<typeof clack.spinner>,
+  spinner: SpinnerHandle,
   collectedText: string[],
   receivedSuccessResult = false,
 ): void {
@@ -813,9 +893,20 @@ function handleSDKMessage(
             );
             const statusMatch = block.text.match(statusRegex);
             if (statusMatch) {
-              spinner.stop(statusMatch[1].trim());
-              spinner.start('Integrating PostHog...');
+              const statusText = statusMatch[1].trim();
+              getUI().pushStatus(statusText);
+              spinner.message(statusText);
             }
+          }
+
+          // Intercept TodoWrite tool_use blocks for task progression
+          if (
+            block.type === 'tool_use' &&
+            block.name === 'TodoWrite' &&
+            block.input?.todos &&
+            Array.isArray(block.input.todos)
+          ) {
+            getUI().syncTodos(block.input.todos);
           }
         }
       }
@@ -834,7 +925,7 @@ function handleSDKMessage(
         // mode race conditions). Full message already logged above via JSON dump.
         if (message.errors && !receivedSuccessResult) {
           for (const err of message.errors) {
-            clack.log.error(`Error: ${err}`);
+            getUI().log.error(`Error: ${err}`);
             logToFile('ERROR:', err);
           }
         }
@@ -849,7 +940,7 @@ function handleSDKMessage(
         // Full message already logged above via JSON dump.
         if (message.errors && !receivedSuccessResult) {
           for (const err of message.errors) {
-            clack.log.error(`Error: ${err}`);
+            getUI().log.error(`Error: ${err}`);
             logToFile('ERROR:', err);
           }
         }

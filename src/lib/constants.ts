@@ -59,7 +59,6 @@ export const POSTHOG_OAUTH_URL = IS_DEV
   : 'https://oauth.posthog.com';
 export const OAUTH_PORT = 8239;
 
-export const WIZARD_INTERACTION_EVENT_NAME = 'wizard interaction';
 export const WIZARD_REMARK_EVENT_NAME = 'wizard remark';
 
 /** Feature flag key whose value selects a variant from WIZARD_VARIANTS. */
@@ -81,6 +80,9 @@ export const POSTHOG_FLAG_HEADER_PREFIX = 'X-POSTHOG-FLAG-';
  * Used for direct PostHog API calls and passed to the MCP server
  * so it can identify requests originating from the wizard.
  */
+
+/** Timeout for framework / project detection probes (ms). */
+export const DETECTION_TIMEOUT_MS = 10_000;
 
 import { VERSION } from './version';
 export const WIZARD_USER_AGENT = `posthog/wizard; version: ${VERSION}`;

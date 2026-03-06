@@ -33,19 +33,21 @@
   },
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "~0.2.63",
-    "@clack/core": "^0.3.4",
-    "@clack/prompts": "0.7.0",
+    "@inkjs/ui": "^2.0.0",
     "@langchain/core": "^0.3.40",
     "axios": "1.7.4",
     "chalk": "^2.4.1",
     "fast-glob": "^3.3.3",
     "glob": "9.3.5",
+    "ink": "^6.8.0",
     "inquirer": "^6.2.0",
     "jsonc-parser": "^3.3.1",
     "lodash": "^4.17.21",
     "magicast": "^0.2.10",
+    "nanostores": "^1.1.1",
     "opn": "^5.4.0",
     "posthog-node": "^5.24.17",
+    "react": "^19.2.4",
     "read-env": "^1.3.0",
     "recast": "^0.23.3",
     "semver": "^7.5.3",
@@ -57,6 +59,9 @@
     "zod-to-json-schema": "^3.24.3"
   },
   "devDependencies": {
+    "@babel/core": "^7.29.0",
+    "@babel/plugin-transform-modules-commonjs": "^7.28.6",
+    "@babel/preset-env": "^7.29.0",
     "@babel/types": "~7.21.4",
     "@types/chai": "^4.3.17",
     "@types/glob": "^7.2.0",
@@ -65,11 +70,13 @@
     "@types/lodash": "^4.17.15",
     "@types/node": "^18.19.76",
     "@types/opn": "5.1.0",
+    "@types/react": "^19.2.14",
     "@types/rimraf": "^3.0.2",
     "@types/semver": "^7.3.7",
     "@types/yargs": "^16.0.9",
     "@typescript-eslint/eslint-plugin": "^5.13.0",
     "@typescript-eslint/parser": "^5.13.0",
+    "babel-jest": "^29.7.0",
     "dotenv": "^16.4.7",
     "eslint": "^8.18.0",
     "eslint-config-prettier": "^8.3.0",
@@ -95,7 +102,7 @@
     "prebuild": "pnpm clean && node scripts/generate-version.js",
     "build:watch": "pnpm tsc -w",
     "build": "pnpm tsc",
-    "postbuild": "chmod +x ./dist/bin.js && cp -r scripts/** dist && cp -r src/utils/rules dist/src/utils && pnpm test:smoke",
+    "postbuild": "chmod +x ./dist/bin.js && cp -r scripts/** dist && cp -r src/utils/rules dist/src/utils && cp src/ui/tui/package.json dist/src/ui/tui/package.json && pnpm test:smoke",
     "test:smoke": "node -e \"require('./dist/bin.js')\" 2>&1 | head -5 | grep -q 'PostHog Wizard' || (echo 'Smoke test failed: compiled binary crashed on load' && exit 1)",
     "lint": "pnpm lint:prettier && pnpm lint:eslint",
     "lint:prettier": "prettier --check \"{lib,src,test}/**/*.ts\"",
@@ -117,7 +124,8 @@
       "dist"
     ],
     "transform": {
-      "^.+\\.tsx?$": "ts-jest"
+      "^.+\\.tsx?$": "ts-jest",
+      "node_modules/.+\\.js$": "babel-jest"
     },
     "testRegex": "(/__tests__/.*|(\\.|/)(test|spec))\\.(jsx?|tsx?)$",
     "moduleFileExtensions": [
@@ -138,8 +146,12 @@
       "/e2e-tests/"
     ],
     "testEnvironment": "node",
+    "transformIgnorePatterns": [
+      "node_modules/(?!(.pnpm/nanostores|nanostores))"
+    ],
     "moduleNameMapper": {
-      "^@anthropic-ai/claude-agent-sdk$": "<rootDir>/__mocks__/@anthropic-ai/claude-agent-sdk.ts"
+      "^@anthropic-ai/claude-agent-sdk$": "<rootDir>/__mocks__/@anthropic-ai/claude-agent-sdk.ts",
+      "^(\\.{1,2}/.*)\\.js$": "$1"
     }
   },
   "lint-staged": {

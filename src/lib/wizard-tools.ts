@@ -196,6 +196,22 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
         .describe('Key-value pairs to set'),
     },
     (args: { filePath: string; values: Record<string, string> }) => {
+      // Block the wrong key name — the correct key is NEXT_PUBLIC_POSTHOG_KEY or similar
+      const forbidden = Object.keys(args.values).find(
+        (k) => k.toUpperCase() === 'POSTHOG_API_KEY',
+      );
+      if (forbidden) {
+        return {
+          content: [
+            {
+              type: 'text' as const,
+              text: `Error: "${forbidden}" is not a valid PostHog env var name. Use the project-specific key name from your framework's integration guide (e.g. NEXT_PUBLIC_POSTHOG_KEY).`,
+            },
+          ],
+          isError: true,
+        };
+      }
+
       const resolved = resolveEnvPath(workingDirectory, args.filePath);
       logToFile(
         `set_env_values: ${resolved}, keys: ${Object.keys(args.values).join(

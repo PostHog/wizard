@@ -3,6 +3,23 @@ import type { WizardOptions } from '../utils/types';
 import type { PackageManagerDetector } from './package-manager-detection';
 
 /**
+ * A setup question that the SetupScreen renders for framework disambiguation.
+ * If detect() returns a value, the question is auto-resolved and not shown.
+ */
+export interface SetupQuestion {
+  /** Stored in session.frameworkContext[key] */
+  key: string;
+  /** Displayed to user, e.g. "Which router are you using?" */
+  message: string;
+  /** Picker options */
+  options: Array<{ label: string; value: string; hint?: string }>;
+  /** Auto-detect; null = ask the user */
+  detect: (
+    options: Pick<WizardOptions, 'installDir'>,
+  ) => Promise<string | null>;
+}
+
+/**
  * Configuration interface for framework-specific agent integrations.
  * Each framework exports a FrameworkConfig that the universal runner uses.
  *
@@ -57,6 +74,15 @@ export interface FrameworkMetadata<
 
   /** Optional additional MCP servers for this framework (e.g., Svelte MCP). */
   additionalMcpServers?: Record<string, { url: string }>;
+
+  /**
+   * Setup questions for framework disambiguation.
+   * The SetupScreen iterates unresolved questions and renders a PickerMenu for each.
+   * If all questions are auto-resolved (or none defined), the screen is skipped.
+   */
+  setup?: {
+    questions: SetupQuestion[];
+  };
 }
 
 /**

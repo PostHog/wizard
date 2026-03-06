@@ -1,24 +1,18 @@
 import {
   DEFAULT_PACKAGE_INSTALLATION,
-  getWelcomeMessage,
   SPINNER_MESSAGE,
   type FrameworkConfig,
 } from './framework-config';
-import type { WizardOptions } from '../utils/types';
+import { type WizardSession, OutroKind } from './wizard-session';
 import {
-  abort,
-  askForAIConsent,
-  confirmContinueIfNoOrDirtyGitRepo,
-  ensurePackageIsInstalled,
-  getOrAskForProjectData,
   getPackageDotJson,
   isUsingTypeScript,
-  printWelcome,
-} from '../utils/clack-utils';
+  getOrAskForProjectData,
+} from '../utils/setup-utils';
 import type { PackageDotJson } from '../utils/package-json';
+import type { WizardOptions } from '../utils/types';
 import { analytics } from '../utils/analytics';
-import { WIZARD_INTERACTION_EVENT_NAME } from './constants';
-import clack from '../utils/clack';
+import { getUI } from '../ui';
 import {
   initializeAgent,
   runAgent,
@@ -29,104 +23,101 @@ import {
 import { getCloudUrlFromRegion } from '../utils/urls';
 import chalk from 'chalk';
 import * as semver from 'semver';
-import {
-  addMCPServerToClientsStep,
-  uploadEnvironmentVariablesStep,
-} from '../steps';
-import { checkAnthropicStatusWithPrompt } from '../utils/anthropic-status';
+import { checkAnthropicStatus } from '../utils/anthropic-status';
 import { enableDebugLogs } from '../utils/debug';
 import { createBenchmarkPipeline } from './middleware/benchmark';
 
 /**
+ * Build a WizardOptions bag from a WizardSession (for code that still expects WizardOptions).
+ */
+function sessionToOptions(session: WizardSession): WizardOptions {
+  return {
+    installDir: session.installDir,
+    debug: session.debug,
+    forceInstall: session.forceInstall,
+    default: false,
+    signup: session.signup,
+    localMcp: session.localMcp,
+    ci: session.ci,
+    menu: session.menu,
+    benchmark: session.benchmark,
+    projectId: session.projectId,
+    apiKey: session.apiKey,
+  };
+}
+
+/**
  * Universal agent-powered wizard runner.
  * Handles the complete flow for any framework using PostHog MCP integration.
+ *
+ * All user decisions come from the session — no UI prompts.
  */
 export async function runAgentWizard(
   config: FrameworkConfig,
-  options: WizardOptions,
+  session: WizardSession,
 ): Promise<void> {
-  if (options.debug) {
+  if (session.debug) {
     enableDebugLogs();
   }
 
   // Version check
   if (config.detection.minimumVersion && config.detection.getInstalledVersion) {
-    const version = await config.detection.getInstalledVersion(options);
+    const version = await config.detection.getInstalledVersion(
+      sessionToOptions(session),
+    );
     if (version) {
       const coerced = semver.coerce(version);
       if (coerced && semver.lt(coerced, config.detection.minimumVersion)) {
         const docsUrl =
           config.metadata.unsupportedVersionDocsUrl ?? config.metadata.docsUrl;
-        clack.log.warn(
+        getUI().log.warn(
           `Sorry: the wizard can't help you with ${config.metadata.name} ${version}. Upgrade to ${config.metadata.name} ${config.detection.minimumVersion} or later, or check out the manual setup guide.`,
         );
-        clack.log.info(
+        getUI().log.info(
           `Setup ${config.metadata.name} manually: ${chalk.cyan(docsUrl)}`,
         );
-        clack.outro('PostHog wizard will see you next time!');
+        getUI().outro('PostHog wizard will see you next time!');
         return;
       }
     }
   }
 
-  // Setup phase
-  printWelcome({ wizardName: getWelcomeMessage(config.metadata.name) });
+  // Setup phase — informational only, no prompts
+  // Beta notice, pre-run notice, and welcome label are all derivable
+  // from session.frameworkConfig — IntroScreen reads them directly.
 
-  if (config.metadata.beta) {
-    clack.log.info(
-      `${chalk.yellow('[BETA]')} The ${
-        config.metadata.name
-      } wizard is in beta. Questions or feedback? Email ${chalk.cyan(
-        'wizard@posthog.com',
-      )}`,
-    );
+  // Check Anthropic/Claude service status (pure — no prompt)
+  const statusResult = await checkAnthropicStatus();
+  if (statusResult.status === 'down' || statusResult.status === 'degraded') {
+    getUI().showServiceStatus({
+      description: statusResult.description,
+      statusPageUrl: 'https://status.claude.com',
+    });
   }
 
-  if (config.metadata.preRunNotice) {
-    clack.log.warn(config.metadata.preRunNotice);
-  }
+  // Disclosure text is static — IntroScreen renders it directly.
 
-  clack.log.info(
-    `We're about to read your project using our LLM gateway.\n\n.env* file contents will not leave your machine.\n\nOther files will be read and edited to provide a fully-custom PostHog integration.`,
-  );
-
-  const aiConsent = await askForAIConsent(options);
-  if (!aiConsent) {
-    await abort(
-      `This wizard uses an LLM agent to intelligently modify your project. Please view the docs to set up ${config.metadata.name} manually instead: ${config.metadata.docsUrl}`,
-      0,
-    );
-  }
-
-  // Check Anthropic/Claude service status before proceeding
-  const statusOk = await checkAnthropicStatusWithPrompt({ ci: options.ci });
-  if (!statusOk) {
-    await abort(
-      `Please try again later, or set up ${config.metadata.name} manually: ${config.metadata.docsUrl}`,
-      0,
-    );
-  }
-
-  const typeScriptDetected = isUsingTypeScript(options);
-
-  await confirmContinueIfNoOrDirtyGitRepo(options);
+  const typeScriptDetected = isUsingTypeScript({
+    installDir: session.installDir,
+  });
+  session.typescript = typeScriptDetected;
 
   // Framework detection and version
-  // Only check package.json for Node.js/JavaScript frameworks
   const usesPackageJson = config.detection.usesPackageJson !== false;
   let packageJson: PackageDotJson | null = null;
   let frameworkVersion: string | undefined;
 
   if (usesPackageJson) {
-    packageJson = await getPackageDotJson(options);
-    await ensurePackageIsInstalled(
-      packageJson,
-      config.detection.packageName,
-      config.detection.packageDisplayName,
-    );
+    packageJson = await getPackageDotJson({ installDir: session.installDir });
+    // Log warning if package not installed, but continue (agent handles it)
+    const { hasPackageInstalled } = await import('../utils/package-json.js');
+    if (!hasPackageInstalled(config.detection.packageName, packageJson)) {
+      getUI().log.warn(
+        `${config.detection.packageDisplayName} does not seem to be installed. Continuing anyway — the agent will handle it.`,
+      );
+    }
     frameworkVersion = config.detection.getVersion(packageJson);
   } else {
-    // For non-Node frameworks (e.g., Django), version is handled differently
     frameworkVersion = config.detection.getVersion(null);
   }
 
@@ -136,19 +127,26 @@ export async function runAgentWizard(
     analytics.setTag(`${config.metadata.integration}-version`, versionBucket);
   }
 
-  analytics.capture(WIZARD_INTERACTION_EVENT_NAME, {
-    action: 'started agent integration',
+  analytics.wizardCapture('agent started', {
     integration: config.metadata.integration,
   });
 
-  // Get PostHog credentials
+  // Get PostHog credentials (region auto-detected from token)
   const { projectApiKey, host, accessToken, projectId, cloudRegion } =
-    await getOrAskForProjectData(options);
+    await getOrAskForProjectData({
+      signup: session.signup,
+      ci: session.ci,
+      apiKey: session.apiKey,
+      projectId: session.projectId,
+    });
 
-  // Gather framework-specific context (e.g., Next.js router, React Native platform)
-  const frameworkContext = config.metadata.gatherContext
-    ? await config.metadata.gatherContext(options)
-    : {};
+  session.credentials = { accessToken, projectApiKey, host, projectId };
+
+  // Notify TUI that credentials are available (resolves past AuthScreen)
+  getUI().setCredentials(session.credentials);
+
+  // Framework context was already gathered by SetupScreen + detection
+  const frameworkContext = session.frameworkContext;
 
   // Set analytics tags from framework context
   const contextTags = config.analytics.getTags(frameworkContext);
@@ -169,22 +167,23 @@ export async function runAgentWizard(
   );
 
   // Initialize and run agent
-  const spinner = clack.spinner();
+  const spinner = getUI().spinner();
 
   // Evaluate all feature flags at the start of the run so they can be sent to the LLM gateway
   const wizardFlags = await analytics.getAllFlagsForWizard();
   const wizardMetadata = buildWizardMetadata(wizardFlags);
 
   // Determine MCP URL: CLI flag > env var > production default
-  // Use EU subdomain for EU users to work around Claude Code's OAuth bug
-  // See: https://github.com/anthropics/claude-code/issues/2267
-  const mcpUrl = options.localMcp
+  const mcpUrl = session.localMcp
     ? 'http://localhost:8787/mcp'
     : process.env.MCP_URL || 'https://mcp.posthog.com/mcp';
 
+  // Transition to run screen
+  getUI().startRun();
+
   const agent = await initializeAgent(
     {
-      workingDirectory: options.installDir,
+      workingDirectory: session.installDir,
       posthogMcpUrl: mcpUrl,
       posthogApiKey: accessToken,
       posthogApiHost: host,
@@ -193,23 +192,24 @@ export async function runAgentWizard(
       wizardFlags,
       wizardMetadata,
     },
-    options,
+    sessionToOptions(session),
   );
 
-  const middleware = options.benchmark
-    ? createBenchmarkPipeline(spinner, options)
+  const middleware = session.benchmark
+    ? createBenchmarkPipeline(spinner, sessionToOptions(session))
     : undefined;
 
   const agentResult = await runAgent(
     agent,
     integrationPrompt,
-    options,
+    sessionToOptions(session),
     spinner,
     {
       estimatedDurationMinutes: config.ui.estimatedDurationMinutes,
       spinnerMessage: SPINNER_MESSAGE,
       successMessage: config.ui.successMessage,
       errorMessage: 'Integration failed',
+      additionalFeatureQueue: session.additionalFeatureQueue,
     },
     middleware,
   );
@@ -226,7 +226,7 @@ export async function runAgentWizard(
     );
 
     const errorMessage = `
-${chalk.red('❌ Could not access the PostHog MCP server')}
+${chalk.red('Could not access the PostHog MCP server')}
 
 The wizard was unable to connect to the PostHog MCP server.
 This could be due to a network issue or a configuration problem.
@@ -236,7 +236,7 @@ Please try again, or set up ${
     } manually by following our documentation:
 ${chalk.cyan(config.metadata.docsUrl)}`;
 
-    clack.outro(errorMessage);
+    getUI().outro(errorMessage);
     await analytics.shutdown('error');
     process.exit(1);
   }
@@ -252,7 +252,7 @@ ${chalk.cyan(config.metadata.docsUrl)}`;
     );
 
     const errorMessage = `
-${chalk.red('❌ Could not access the setup resource')}
+${chalk.red('Could not access the setup resource')}
 
 The wizard could not access the setup resource. This may indicate a version mismatch or a temporary service issue.
 
@@ -261,7 +261,7 @@ Please try again, or set up ${
     } manually by following our documentation:
 ${chalk.cyan(config.metadata.docsUrl)}`;
 
-    clack.outro(errorMessage);
+    getUI().outro(errorMessage);
     await analytics.shutdown('error');
     process.exit(1);
   }
@@ -270,8 +270,7 @@ ${chalk.cyan(config.metadata.docsUrl)}`;
     agentResult.error === AgentErrorType.RATE_LIMIT ||
     agentResult.error === AgentErrorType.API_ERROR
   ) {
-    analytics.capture(WIZARD_INTERACTION_EVENT_NAME, {
-      action: 'api error',
+    analytics.wizardCapture('agent api error', {
       integration: config.metadata.integration,
       error_type: agentResult.error,
       error_message: agentResult.message,
@@ -283,13 +282,13 @@ ${chalk.cyan(config.metadata.docsUrl)}`;
     });
 
     const errorMessage = `
-${chalk.red('❌ API Error')}
+${chalk.red('API Error')}
 
 ${chalk.yellow(agentResult.message || 'Unknown error')}
 
 Please report this error to: ${chalk.cyan('wizard@posthog.com')}`;
 
-    clack.outro(errorMessage);
+    getUI().outro(errorMessage);
     await analytics.shutdown('error');
     process.exit(1);
   }
@@ -297,23 +296,22 @@ Please report this error to: ${chalk.cyan('wizard@posthog.com')}`;
   // Build environment variables from OAuth credentials
   const envVars = config.environment.getEnvVars(projectApiKey, host);
 
-  // Upload environment variables to hosting providers (if configured)
+  // Upload environment variables to hosting providers (auto-accept)
   let uploadedEnvVars: string[] = [];
   if (config.environment.uploadToHosting) {
+    const { uploadEnvironmentVariablesStep } = await import(
+      '../steps/index.js'
+    );
     uploadedEnvVars = await uploadEnvironmentVariablesStep(envVars, {
       integration: config.metadata.integration,
-      options,
+      session,
     });
   }
 
-  // Add MCP server to clients
-  await addMCPServerToClientsStep({
-    integration: config.metadata.integration,
-    ci: options.ci,
-  });
+  // MCP installation is handled by McpScreen — no prompt here
 
-  // Build outro message
-  const continueUrl = options.signup
+  // Build outro data and store it for OutroScreen
+  const continueUrl = session.signup
     ? `${getCloudUrlFromRegion(cloudRegion)}/products?source=wizard`
     : undefined;
 
@@ -327,31 +325,14 @@ Please report this error to: ${chalk.cyan('wizard@posthog.com')}`;
       : '',
   ].filter(Boolean);
 
-  const nextSteps = [
-    ...config.ui.getOutroNextSteps(frameworkContext),
-    uploadedEnvVars.length === 0 && config.environment.uploadToHosting
-      ? `Upload your Project API key to your hosting provider`
-      : '',
-  ].filter(Boolean);
+  session.outroData = {
+    kind: OutroKind.Success,
+    changes,
+    docsUrl: config.metadata.docsUrl,
+    continueUrl,
+  };
 
-  const outroMessage = `
-${chalk.green('Successfully installed PostHog!')}
-
-${chalk.cyan('What the agent did:')}
-${changes.map((change) => `• ${change}`).join('\n')}
-
-${chalk.yellow('Next steps:')}
-${nextSteps.map((step) => `• ${step}`).join('\n')}
-
-Learn more: ${chalk.cyan(config.metadata.docsUrl)}
-${continueUrl ? `\nContinue onboarding: ${chalk.cyan(continueUrl)}\n` : ``}
-${chalk.dim(
-  'Note: This wizard uses an LLM agent to analyze and modify your project. Please review the changes made.',
-)}
-
-${chalk.dim(`How did this work for you? Drop us a line: wizard@posthog.com`)}`;
-
-  clack.outro(outroMessage);
+  getUI().outro(`Successfully installed PostHog!`);
 
   await analytics.shutdown('success');
 }
@@ -387,7 +368,7 @@ Project context:
 - PostHog Project ID: ${context.projectId}
 - Framework: ${config.metadata.name} ${context.frameworkVersion}
 - TypeScript: ${context.typescript ? 'Yes' : 'No'}
-- PostHog API Key: ${context.projectApiKey}
+- PostHog public token: ${context.projectApiKey}
 - PostHog Host: ${context.host}
 - Project type: ${config.prompts.projectTypeDetection}
 - Package installation: ${
@@ -414,16 +395,17 @@ STEP 3: Run the installation command using Bash:
 
 STEP 4: Load the installed skill's SKILL.md file to understand what references are available.
 
-STEP 5: Follow the skill's workflow files in sequence. Look for numbered workflow files in the references (e.g., files with patterns like "1.0-", "1.1-", "1.2-"). Start with the first one and proceed through each step until completion. Each workflow file will tell you what to do and which file comes next. Never directly write PostHog keys directly to code files; always use environment variables.
+STEP 5: Follow the skill's workflow files in sequence. Look for numbered workflow files in the references (e.g., files with patterns like "1.0-", "1.1-", "1.2-"). Start with the first one and proceed through each step until completion. Each workflow file will tell you what to do and which file comes next. Never directly write PostHog tokens directly to code files; always use environment variables.
 
 STEP 6: Set up environment variables for PostHog using the wizard-tools MCP server (this runs locally — secret values never leave the machine):
    - Use check_env_keys to see which keys already exist in the project's .env file (e.g. .env.local or .env).
-   - Use set_env_values to create or update the PostHog API key and host, using the appropriate naming convention for ${
+   - Use set_env_values to create or update the PostHog public token and host, using the appropriate environment variable naming convention for ${
      config.metadata.name
-   }. The tool will also ensure .gitignore coverage. Don't assume the presence of keys means the value is up to date. Write the correct value each time.
-   - Reference these environment variables in the code files you create instead of hardcoding the API key and host.
+   }, which you'll find in example code. The tool will also ensure .gitignore coverage. Don't assume the presence of keys means the value is up to date. Write the correct value each time.
+   - Reference these environment variables in the code files you create instead of hardcoding the public token and host.
 
 Important: Use the detect_package_manager tool (from the wizard-tools MCP server) to determine which package manager the project uses. Do not manually search for lockfiles or config files. Always install packages as a background task. Don't await completion; proceed with other work immediately after starting the installation. You must read a file immediately before attempting to write it, even if you have previously read it; failure to do so will cause a tool failure.
+
 
 `;
 }

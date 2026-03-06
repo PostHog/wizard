@@ -2,8 +2,7 @@ import { execSync, spawn, spawnSync } from 'child_process';
 import { EnvironmentProvider } from '../EnvironmentProvider';
 import * as fs from 'fs';
 import * as path from 'path';
-import type { WizardOptions } from '../../../utils/types';
-import clack from '../../../utils/clack';
+import { getUI } from '../../../ui';
 import chalk from 'chalk';
 import { analytics } from '../../../utils/analytics';
 
@@ -11,7 +10,7 @@ export class VercelEnvironmentProvider extends EnvironmentProvider {
   name = 'Vercel';
   environments = ['production', 'preview', 'development'];
 
-  constructor(options: WizardOptions) {
+  constructor(options: { installDir: string }) {
     super(options);
   }
 
@@ -132,7 +131,7 @@ export class VercelEnvironmentProvider extends EnvironmentProvider {
     const results: Record<string, boolean> = {};
 
     for (const [key, value] of Object.entries(vars)) {
-      const spinner = clack.spinner();
+      const spinner = getUI().spinner();
 
       spinner.start(`Uploading ${chalk.cyan(key)} to ${this.name}...`);
       await Promise.all(

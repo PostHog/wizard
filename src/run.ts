@@ -1,10 +1,8 @@
-import { abortIfCancelled } from './utils/clack-utils';
+import { type WizardSession, buildSession } from './lib/wizard-session';
 
-import type { WizardOptions } from './utils/types';
-
-import { Integration } from './lib/constants';
+import { Integration, DETECTION_TIMEOUT_MS } from './lib/constants';
 import { readEnvironment } from './utils/environment';
-import clack from './utils/clack';
+import { getUI } from './ui';
 import path from 'path';
 import { FRAMEWORK_REGISTRY } from './lib/registry';
 import { analytics } from './utils/analytics';
@@ -30,13 +28,7 @@ type Args = {
   benchmark?: boolean;
 };
 
-function parseProjectId(value: string | undefined): number | undefined {
-  if (value === undefined || value === '') return undefined;
-  const n = Number(value);
-  return Number.isInteger(n) && n > 0 ? n : undefined;
-}
-
-export async function runWizard(argv: Args) {
+export async function runWizard(argv: Args, session?: WizardSession) {
   const finalArgs = {
     ...argv,
     ...readEnvironment(),
@@ -53,35 +45,69 @@ export async function runWizard(argv: Args) {
     resolvedInstallDir = process.cwd();
   }
 
-  const wizardOptions: WizardOptions = {
-    debug: finalArgs.debug ?? false,
-    forceInstall: finalArgs.forceInstall ?? false,
-    installDir: resolvedInstallDir,
-    default: finalArgs.default ?? false,
-    signup: finalArgs.signup ?? false,
-    localMcp: finalArgs.localMcp ?? false,
-    ci: finalArgs.ci ?? false,
-    apiKey: finalArgs.apiKey,
-    projectId: parseProjectId(finalArgs.projectId),
-    menu: finalArgs.menu ?? false,
-    benchmark: finalArgs.benchmark ?? false,
-  };
+  // Build session if not provided (CI mode passes one pre-built)
+  if (!session) {
+    session = buildSession({
+      debug: finalArgs.debug,
+      forceInstall: finalArgs.forceInstall,
+      installDir: resolvedInstallDir,
+      ci: finalArgs.ci,
+      signup: finalArgs.signup,
+      localMcp: finalArgs.localMcp,
+      apiKey: finalArgs.apiKey,
+      menu: finalArgs.menu,
+      integration: finalArgs.integration,
+      benchmark: finalArgs.benchmark,
+      projectId: finalArgs.projectId,
+    });
+  }
 
-  clack.intro(`Welcome to the PostHog setup wizard ✨`);
+  session.installDir = resolvedInstallDir;
 
-  if (wizardOptions.ci) {
-    clack.log.info(chalk.dim('Running in CI mode'));
+  getUI().intro(`Welcome to the PostHog setup wizard`);
+
+  if (session.ci) {
+    getUI().log.info(chalk.dim('Running in CI mode'));
   }
 
   const integration =
-    finalArgs.integration ?? (await getIntegrationForSetup(wizardOptions));
+    session.integration ?? (await detectAndResolveIntegration(session));
 
+  session.integration = integration;
   analytics.setTag('integration', integration);
 
   const config = FRAMEWORK_REGISTRY[integration];
+  session.frameworkConfig = config;
+
+  // Run gatherContext if the framework has it and it hasn't already run
+  // (bin.ts runs it early so IntroScreen can show the friendly label)
+  const contextAlreadyGathered =
+    Object.keys(session.frameworkContext).length > 0;
+  if (config.metadata.gatherContext && !contextAlreadyGathered) {
+    try {
+      const context = await config.metadata.gatherContext({
+        installDir: session.installDir,
+        debug: session.debug,
+        forceInstall: session.forceInstall,
+        default: false,
+        signup: session.signup,
+        localMcp: session.localMcp,
+        ci: session.ci,
+        menu: session.menu,
+        benchmark: session.benchmark,
+      });
+      for (const [key, value] of Object.entries(context)) {
+        if (!(key in session.frameworkContext)) {
+          session.frameworkContext[key] = value;
+        }
+      }
+    } catch {
+      // Detection failed — SetupScreen or agent will handle it
+    }
+  }
 
   try {
-    await runAgentWizard(config, wizardOptions);
+    await runAgentWizard(config, session);
   } catch (error) {
     analytics.captureException(error as Error, {
       integration,
@@ -94,13 +120,12 @@ export async function runWizard(argv: Args) {
     const errorStack =
       error instanceof Error && error.stack ? error.stack : undefined;
 
-    // Log to file for debugging
     logToFile(`[Wizard run.ts] ERROR MESSAGE: ${errorMessage} `);
     if (errorStack) {
       logToFile(`[Wizard run.ts] ERROR STACK: ${errorStack}`);
     }
 
-    clack.log.error(
+    getUI().log.error(
       `Something went wrong: ${chalk.red(
         errorMessage,
       )}\n\nYou can read the documentation at ${chalk.cyan(
@@ -108,24 +133,22 @@ export async function runWizard(argv: Args) {
       )} to set up PostHog manually.`,
     );
 
-    if (wizardOptions.debug && errorStack) {
-      clack.log.info(chalk.dim(errorStack));
+    if (session.debug && errorStack) {
+      getUI().log.info(chalk.dim(errorStack));
     }
 
     process.exit(1);
   }
 }
 
-const DETECTION_TIMEOUT_MS = 5000;
-
-async function detectIntegration(
-  options: Pick<WizardOptions, 'installDir'>,
+export async function detectIntegration(
+  installDir: string,
 ): Promise<Integration | undefined> {
   for (const integration of Object.values(Integration)) {
     const config = FRAMEWORK_REGISTRY[integration];
     try {
       const detected = await Promise.race([
-        config.detection.detect(options),
+        config.detection.detect({ installDir }),
         new Promise<false>((resolve) =>
           setTimeout(() => resolve(false), DETECTION_TIMEOUT_MS),
         ),
@@ -139,33 +162,28 @@ async function detectIntegration(
   }
 }
 
-async function getIntegrationForSetup(
-  options: Pick<WizardOptions, 'installDir' | 'menu'>,
-) {
-  if (!options.menu) {
-    const detectedIntegration = await detectIntegration(options);
+async function detectAndResolveIntegration(
+  session: WizardSession,
+): Promise<Integration> {
+  if (!session.menu) {
+    const detectedIntegration = await detectIntegration(session.installDir);
 
     if (detectedIntegration) {
-      clack.log.success(
-        `Detected integration: ${FRAMEWORK_REGISTRY[detectedIntegration].metadata.name}`,
+      getUI().setDetectedFramework(
+        FRAMEWORK_REGISTRY[detectedIntegration].metadata.name,
       );
       return detectedIntegration;
     }
 
-    clack.log.info(
+    getUI().log.info(
       "I couldn't detect your framework. Please choose one to get started.",
     );
   }
 
-  const integration: Integration = await abortIfCancelled(
-    clack.select({
-      message: 'What do you want to set up?',
-      options: Object.values(Integration).map((value) => ({
-        value,
-        label: FRAMEWORK_REGISTRY[value].metadata.name,
-      })),
-    }),
+  // Fallback: in TUI mode the IntroScreen would handle this,
+  // but for CI mode or when detection fails, abort with guidance.
+  getUI().log.error(
+    'Could not auto-detect your framework. Please specify --integration on the command line.',
   );
-
-  return integration;
+  process.exit(1);
 }

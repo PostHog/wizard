@@ -20,6 +20,8 @@ const WIZARD_COMMANDMENTS = [
   'Prefer minimal, targeted edits that achieve the requested behavior while preserving existing structure and style. Avoid large refactors, broad reformatting, or unrelated changes unless explicitly requested.',
 
   'Do not spawn subagents unless explicitly instructed to do so.',
+
+  'Use the TodoWrite tool to track your progress. Create a todo list at the start describing the high-level areas of work, mark each as in_progress when you begin it, and completed when done.',
 ].join('\n');
 
 export function getWizardCommandments(): string {

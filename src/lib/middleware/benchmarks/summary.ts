@@ -1,5 +1,5 @@
 import chalk from 'chalk';
-import clack from '../../../utils/clack';
+import { getUI, type SpinnerHandle } from '../../../ui';
 import { AgentSignals } from '../../agent-interface';
 import type { Middleware, MiddlewareContext, MiddlewareStore } from '../types';
 import type { TokenData } from './token-tracker';
@@ -92,9 +92,9 @@ function getPhaseStats(i: number, ctx: MiddlewareContext): PhaseStats | null {
 export class SummaryPlugin implements Middleware {
   readonly name = 'summary';
 
-  private spinner: ReturnType<typeof clack.spinner>;
+  private spinner: SpinnerHandle;
 
-  constructor(spinner: ReturnType<typeof clack.spinner>) {
+  constructor(spinner: SpinnerHandle) {
     this.spinner = spinner;
   }
 
@@ -116,7 +116,7 @@ export class SummaryPlugin implements Middleware {
       this.spinner.stop(`${chalk.cyan(AgentSignals.BENCHMARK)} ${fromPhase}`);
     }
 
-    clack.log.info(
+    getUI().log.info(
       `${chalk.cyan(AgentSignals.BENCHMARK)} Starting phase: ${chalk.bold(
         toPhase,
       )}`,
@@ -138,23 +138,23 @@ export class SummaryPlugin implements Middleware {
     const phaseCount = duration?.phaseSnapshots.length ?? 0;
     const totalCost = cost?.totalCost ?? 0;
 
-    clack.log.info('');
-    clack.log.info(
+    getUI().log.info('');
+    getUI().log.info(
       `${chalk.green('◇')} ${chalk.cyan(
         AgentSignals.BENCHMARK,
       )} ${phaseCount} phases in ${fmtDuration(
         totalDurationMs,
       )}, cost: ${fmtCost(totalCost)}`,
     );
-    clack.log.info(
+    getUI().log.info(
       `  total in: ${fmtTok(tokens?.totalInput ?? 0)}, out: ${fmtTok(
         tokens?.totalOutput ?? 0,
       )}, cache_read: ${fmtTok(cache?.totalRead ?? 0)}, cache_5m: ${fmtTok(
         cache?.totalCreation5m ?? 0,
       )}, cache_1h: ${fmtTok(cache?.totalCreation1h ?? 0)}`,
     );
-    clack.log.info('');
-    clack.log.info(
+    getUI().log.info('');
+    getUI().log.info(
       `${chalk.blue('●')} ${chalk.cyan(
         AgentSignals.BENCHMARK,
       )} Summary by phase:`,
@@ -164,11 +164,11 @@ export class SummaryPlugin implements Middleware {
       for (let i = 0; i < duration.phaseSnapshots.length; i++) {
         const stats = getPhaseStats(i, ctx);
         if (stats) {
-          clack.log.info(printPhase(stats));
+          getUI().log.info(printPhase(stats));
         }
       }
     }
 
-    clack.log.info('');
+    getUI().log.info('');
   }
 }

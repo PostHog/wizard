@@ -5,7 +5,7 @@
  * and can publish data to a shared store for downstream middleware to read.
  */
 
-import type clack from '../../utils/clack';
+import type { SpinnerHandle } from '../../ui';
 
 export type SDKMessage = any;
 
@@ -54,7 +54,7 @@ export interface Middleware {
 
 /** Options bag passed to middleware factories during construction */
 export interface MiddlewareFactoryOptions {
-  spinner?: ReturnType<typeof clack.spinner>;
+  spinner?: SpinnerHandle;
   outputPath?: string;
   phased?: boolean;
 }

@@ -1,12 +1,12 @@
 import type { Integration } from '../lib/constants';
 import { traceStep } from '../telemetry';
 import { analytics } from '../utils/analytics';
-import clack from '../utils/clack';
+import { getUI } from '../ui';
 import {
   getPackageDotJson,
   getUncommittedOrUntrackedFiles,
   isInGitRepo,
-} from '../utils/clack-utils';
+} from '../utils/setup-utils';
 import { hasPackageInstalled } from '../utils/package-json';
 import type { WizardOptions } from '../utils/types';
 import * as childProcess from 'node:child_process';
@@ -44,7 +44,7 @@ export async function runPrettierStep({
       return;
     }
 
-    const prettierSpinner = clack.spinner();
+    const prettierSpinner = getUI().spinner();
     prettierSpinner.start('Running Prettier on your files.');
 
     try {
@@ -69,8 +69,7 @@ export async function runPrettierStep({
 
     prettierSpinner.stop('Prettier has formatted your files.');
 
-    analytics.capture('wizard interaction', {
-      action: 'ran prettier',
+    analytics.wizardCapture('ran prettier', {
       integration,
     });
   });

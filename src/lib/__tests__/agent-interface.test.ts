@@ -1,8 +1,12 @@
-import { runAgent } from '../agent-interface';
+import { runAgent, createStopHook } from '../agent-interface';
 import type { WizardOptions } from '../../utils/types';
+import type { SpinnerHandle } from '../../ui';
+import {
+  AdditionalFeature,
+  ADDITIONAL_FEATURE_PROMPTS,
+} from '../wizard-session';
 
 // Mock dependencies
-jest.mock('../../utils/clack');
 jest.mock('../../utils/analytics');
 jest.mock('../../utils/debug');
 
@@ -12,15 +16,43 @@ jest.mock('@anthropic-ai/claude-agent-sdk', () => ({
   query: (...args: unknown[]) => mockQuery(...args),
 }));
 
-// Get mocked clack for spinner
-import clack from '../../utils/clack';
-const mockClack = clack as jest.Mocked<typeof clack>;
+// Mock the UI layer
+const mockUIInstance = {
+  log: {
+    step: jest.fn(),
+    success: jest.fn(),
+    error: jest.fn(),
+    warn: jest.fn(),
+    info: jest.fn(),
+  },
+  spinner: jest.fn(),
+  select: jest.fn(),
+  confirm: jest.fn(),
+  text: jest.fn(),
+  intro: jest.fn(),
+  outro: jest.fn(),
+  cancel: jest.fn(),
+  note: jest.fn(),
+  isCancel: jest.fn(),
+  setDetectedFramework: jest.fn(),
+  setCredentials: jest.fn(),
+  pushStatus: jest.fn(),
+  setLoginUrl: jest.fn(),
+  showServiceStatus: jest.fn(),
+  startRun: jest.fn(),
+  syncTodos: jest.fn(),
+  groupMultiselect: jest.fn(),
+  multiselect: jest.fn(),
+};
+jest.mock('../../ui', () => ({
+  getUI: () => mockUIInstance,
+}));
 
 describe('runAgent', () => {
   let mockSpinner: {
     start: jest.Mock;
     stop: jest.Mock;
-    message: string;
+    message: jest.Mock;
   };
 
   const defaultOptions: WizardOptions = {
@@ -47,19 +79,12 @@ describe('runAgent', () => {
     mockSpinner = {
       start: jest.fn(),
       stop: jest.fn(),
-      message: '',
-    };
-
-    mockClack.spinner = jest.fn().mockReturnValue(mockSpinner);
-    mockClack.log = {
-      step: jest.fn(),
-      success: jest.fn(),
-      error: jest.fn(),
-      warn: jest.fn(),
-      warning: jest.fn(),
-      info: jest.fn(),
       message: jest.fn(),
     };
+
+    mockUIInstance.spinner.mockReturnValue(mockSpinner);
+    // Reset log mocks
+    Object.values(mockUIInstance.log).forEach((fn) => fn.mockReset());
   });
 
   describe('race condition handling', () => {
@@ -97,7 +122,7 @@ describe('runAgent', () => {
         defaultAgentConfig,
         'test prompt',
         defaultOptions,
-        mockSpinner as unknown as ReturnType<typeof clack.spinner>,
+        mockSpinner as unknown as SpinnerHandle,
         {
           successMessage: 'Test success',
           errorMessage: 'Test error',
@@ -132,7 +157,7 @@ describe('runAgent', () => {
           defaultAgentConfig,
           'test prompt',
           defaultOptions,
-          mockSpinner as unknown as ReturnType<typeof clack.spinner>,
+          mockSpinner as unknown as SpinnerHandle,
           {
             successMessage: 'Test success',
             errorMessage: 'Test error',
@@ -172,7 +197,7 @@ describe('runAgent', () => {
         defaultAgentConfig,
         'test prompt',
         defaultOptions,
-        mockSpinner as unknown as ReturnType<typeof clack.spinner>,
+        mockSpinner as unknown as SpinnerHandle,
         {
           successMessage: 'Test success',
           errorMessage: 'Test error',
@@ -237,7 +262,7 @@ describe('runAgent', () => {
         defaultAgentConfig,
         'test prompt',
         defaultOptions,
-        mockSpinner as unknown as ReturnType<typeof clack.spinner>,
+        mockSpinner as unknown as SpinnerHandle,
         {
           successMessage: 'Test success',
           errorMessage: 'Test error',
@@ -248,8 +273,82 @@ describe('runAgent', () => {
       expect(result).toEqual({});
       expect(mockSpinner.stop).toHaveBeenCalledWith('Test success');
 
-      // clack.log.error should NOT have been called (errors suppressed for user)
-      expect(mockClack.log.error).not.toHaveBeenCalled();
+      // ui.log.error should NOT have been called (errors suppressed for user)
+      expect(mockUIInstance.log.error).not.toHaveBeenCalled();
     });
+  });
+});
+
+describe('createStopHook', () => {
+  const hookInput = { stop_hook_active: false };
+
+  it('empty queue: first call blocks for remark, second allows stop', () => {
+    const hook = createStopHook([]);
+
+    // First call → remark prompt
+    const first = hook(hookInput);
+    expect(first).toHaveProperty('decision', 'block');
+    expect((first as { reason: string }).reason).toContain('WIZARD-REMARK');
+
+    // Second call → allow stop
+    const second = hook(hookInput);
+    expect(second).toEqual({});
+  });
+
+  it('single feature: feature prompt, then remark, then allow stop', () => {
+    const hook = createStopHook([AdditionalFeature.LLM]);
+
+    // First call → LLM feature prompt
+    const first = hook(hookInput);
+    expect(first).toHaveProperty('decision', 'block');
+    expect((first as { reason: string }).reason).toBe(
+      ADDITIONAL_FEATURE_PROMPTS[AdditionalFeature.LLM],
+    );
+
+    // Second call → remark prompt
+    const second = hook(hookInput);
+    expect(second).toHaveProperty('decision', 'block');
+    expect((second as { reason: string }).reason).toContain('WIZARD-REMARK');
+
+    // Third call → allow stop
+    const third = hook(hookInput);
+    expect(third).toEqual({});
+  });
+
+  it('multiple queue entries: drains all, then remark, then allow stop', () => {
+    // Queue the same feature twice to exercise multi-item draining
+    const hook = createStopHook([AdditionalFeature.LLM, AdditionalFeature.LLM]);
+
+    // First call → LLM prompt
+    const first = hook(hookInput);
+    expect(first).toHaveProperty('decision', 'block');
+    expect((first as { reason: string }).reason).toBe(
+      ADDITIONAL_FEATURE_PROMPTS[AdditionalFeature.LLM],
+    );
+
+    // Second call → LLM prompt again
+    const second = hook(hookInput);
+    expect(second).toHaveProperty('decision', 'block');
+    expect((second as { reason: string }).reason).toBe(
+      ADDITIONAL_FEATURE_PROMPTS[AdditionalFeature.LLM],
+    );
+
+    // Third call → remark prompt
+    const third = hook(hookInput);
+    expect(third).toHaveProperty('decision', 'block');
+    expect((third as { reason: string }).reason).toContain('WIZARD-REMARK');
+
+    // Fourth call → allow stop
+    const fourth = hook(hookInput);
+    expect(fourth).toEqual({});
+  });
+
+  it('allow stop is idempotent after all phases complete', () => {
+    const hook = createStopHook([]);
+
+    hook(hookInput); // remark
+    hook(hookInput); // allow
+    const extra = hook(hookInput); // still allow
+    expect(extra).toEqual({});
   });
 });

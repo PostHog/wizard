@@ -6,7 +6,7 @@
  */
 
 import fs from 'fs';
-import clack from '../../../utils/clack';
+import { getUI } from '../../../ui';
 import chalk from 'chalk';
 import { logToFile } from '../../../utils/debug';
 import { AgentSignals } from '../../agent-interface';
@@ -167,7 +167,7 @@ export class JsonWriterPlugin implements Middleware {
     try {
       fs.writeFileSync(this.outputPath, JSON.stringify(data, null, 2));
       logToFile(`Benchmark data written to ${this.outputPath}`);
-      clack.log.info(
+      getUI().log.info(
         `${chalk.blue('●')} ${chalk.cyan(
           AgentSignals.BENCHMARK,
         )} Results written to ${this.outputPath}`,
