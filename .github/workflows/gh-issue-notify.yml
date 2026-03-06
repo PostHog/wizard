@@ -12,7 +12,7 @@ jobs:
     steps:
       - name: Check issue and build payload
         id: check
-        uses: actions/github-script@v7
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
         with:
           script: |
             const issue = context.payload.issue;
@@ -52,7 +52,7 @@ jobs:
 
       - name: Notify Slack
         if: steps.check.outputs.notify == 'true'
-        uses: slackapi/slack-github-action@v2.0.0
+        uses: slackapi/slack-github-action@485a9d42d3a73031f12ec201c457e2162c45d02d # v2.0.0
         with:
           webhook: ${{ secrets.SLACK_WEBHOOK_WIZARD_CHANNEL }}
           webhook-type: incoming-webhook
