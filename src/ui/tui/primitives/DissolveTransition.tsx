@@ -19,6 +19,10 @@ const TICKS_PER_SHADE = 2;
 /** Total ticks a column needs to complete its shade cycle. */
 const SHADE_CYCLE_TICKS = SHADES.length * TICKS_PER_SHADE;
 
+const SPRINKLES = ['🦔', '✨'];
+/** Probability that a settled cell shows an emoji instead of a shade block. */
+const SPRINKLE_CHANCE = 0.01;
+
 export type WipeDirection = 'left' | 'right';
 
 interface DissolveTransitionProps {
@@ -49,7 +53,7 @@ export const DissolveTransition = ({
   height,
   children,
   direction = 'left',
-  duration = 3,
+  duration = 2,
 }: DissolveTransitionProps) => {
   const [phase, setPhase] = useState<TransitionPhase>(TransitionPhase.Idle);
   const [tick, setTick] = useState(0);
@@ -164,6 +168,14 @@ export const DissolveTransition = ({
             char = SHADES[SHADES.length - 1 - shadeIndex];
           }
         }
+
+        // Sprinkle emojis on settled cells
+        const settled =
+          (phase === TransitionPhase.Out && char === '█') ||
+          (phase === TransitionPhase.In && char === ' ');
+        if (settled && Math.random() < SPRINKLE_CHANCE) {
+          char = SPRINKLES[Math.floor(Math.random() * SPRINKLES.length)];
+        }
       }
 
       row += char;
@@ -174,9 +186,7 @@ export const DissolveTransition = ({
   return (
     <Box flexDirection="column" flexGrow={1}>
       {rows.map((row, i) => (
-        <Text key={i} dimColor>
-          {row}
-        </Text>
+        <Text key={i}>{row}</Text>
       ))}
     </Box>
   );

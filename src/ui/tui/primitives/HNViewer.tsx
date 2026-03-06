@@ -27,7 +27,7 @@ export const HNViewer = () => {
     void (async () => {
       try {
         const res = await fetch(`${HN_API}/topstories.json`);
-        const ids: number[] = await res.json();
+        const ids = (await res.json()) as number[];
         const top10 = ids.slice(0, 10);
 
         const items = await Promise.all(

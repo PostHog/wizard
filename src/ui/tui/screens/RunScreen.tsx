@@ -86,15 +86,15 @@ const TIPS: Tip[] = [
   },
   {
     id: 'llm',
-    title: 'LLM integration detected',
+    title: 'PostHog can also help you track your LLM costs',
     description: '',
     visible: (store) =>
       store.session.discoveredFeatures.includes(DiscoveredFeature.LLM),
     toggle: {
       key: 'l',
       feature: AdditionalFeature.LLM,
-      enabledLabel: 'LLM analytics setup queued',
-      prompt: 'PostHog can track LLM usage and costs.',
+      enabledLabel: 'LLM analytics setup queued next',
+      prompt: 'We detected LLM dependencies in your project.',
       isEnabled: (store) => store.session.llmOptIn,
     },
   },
