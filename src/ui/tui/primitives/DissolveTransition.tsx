@@ -3,7 +3,6 @@
  *
  * Uses a SequenceEaser (in_out_circ) to activate columns with eased pacing.
  * Each activated column cycles through shade characters (░▒▓█) independently.
- * No random glyphs — just clean shade transitions.
  *
  * Out phase: columns sweep, building up shade chars until solid █ (covers old content).
  * In phase: columns sweep in reverse, dissolving █ back through shades to empty (reveals new content).
@@ -18,10 +17,6 @@ const SHADES = ['░', '▒', '▓', '█'] as const;
 const TICKS_PER_SHADE = 2;
 /** Total ticks a column needs to complete its shade cycle. */
 const SHADE_CYCLE_TICKS = SHADES.length * TICKS_PER_SHADE;
-
-const SPRINKLES = ['🦔', '✨'];
-/** Probability that a settled cell shows an emoji instead of a shade block. */
-const SPRINKLE_CHANCE = 0.01;
 
 export type WipeDirection = 'left' | 'right';
 
@@ -168,14 +163,6 @@ export const DissolveTransition = ({
             char = SHADES[SHADES.length - 1 - shadeIndex];
           }
         }
-
-        // Sprinkle emojis on settled cells
-        const settled =
-          (phase === TransitionPhase.Out && char === '█') ||
-          (phase === TransitionPhase.In && char === ' ');
-        if (settled && Math.random() < SPRINKLE_CHANCE) {
-          char = SPRINKLES[Math.floor(Math.random() * SPRINKLES.length)];
-        }
       }
 
       row += char;
@@ -186,7 +173,9 @@ export const DissolveTransition = ({
   return (
     <Box flexDirection="column" flexGrow={1}>
       {rows.map((row, i) => (
-        <Text key={i}>{row}</Text>
+        <Text key={i} dimColor>
+          {row}
+        </Text>
       ))}
     </Box>
   );
