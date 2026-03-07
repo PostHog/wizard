@@ -216,7 +216,7 @@ export const RunScreen = ({ store }: RunScreenProps) => {
       : []),
     {
       id: 'logs',
-      label: 'All logs',
+      label: 'Tail logs',
       component: <LogViewer filePath={LOG_FILE} />,
     },
     {
