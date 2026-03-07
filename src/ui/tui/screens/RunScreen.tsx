@@ -189,10 +189,8 @@ export const RunScreen = ({ store }: RunScreenProps) => {
     });
   }
 
-  const lastStatus =
-    store.statusMessages.length > 0
-      ? store.statusMessages[store.statusMessages.length - 1]
-      : undefined;
+  const statuses =
+    store.statusMessages.length > 0 ? store.statusMessages : undefined;
 
   const tabs = [
     {
@@ -226,5 +224,5 @@ export const RunScreen = ({ store }: RunScreenProps) => {
     },
   ];
 
-  return <TabContainer tabs={tabs} statusMessage={lastStatus} />;
+  return <TabContainer tabs={tabs} statusMessage={statuses} expandableStatus />;
 };

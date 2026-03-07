@@ -322,7 +322,10 @@ export class WizardStore {
   // ── Agent observation state ─────────────────────────────────────
 
   pushStatus(message: string): void {
-    this.$statusMessages.set([...this.$statusMessages.get(), message]);
+    const msgs = this.$statusMessages.get();
+    // Skip consecutive duplicate messages
+    if (msgs.length > 0 && msgs[msgs.length - 1] === message) return;
+    this.$statusMessages.set([...msgs, message]);
     this.emitChange();
   }
 
