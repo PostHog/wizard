@@ -102,7 +102,8 @@ export async function isReact19Installed({
   installDir,
 }: Pick<WizardOptions, 'installDir'>): Promise<boolean> {
   try {
-    const packageJson = await getPackageDotJson({ installDir });
+    const packageJson = await tryGetPackageJson({ installDir });
+    if (!packageJson) return false;
     const reactVersion = getPackageVersion('react', packageJson);
 
     if (!reactVersion) {
@@ -215,6 +216,11 @@ export async function installPackage({
   });
 }
 
+/**
+ * Get package.json or abort the wizard if not found.
+ * Only use where package.json is required (e.g., package install, overrides).
+ * For detection/version-checks, use tryGetPackageJson() instead.
+ */
 export async function getPackageDotJson({
   installDir,
 }: Pick<WizardOptions, 'installDir'>): Promise<PackageDotJson> {

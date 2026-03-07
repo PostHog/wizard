@@ -8,7 +8,7 @@ import {
   hasPackageInstalled,
   type PackageDotJson,
 } from '../../utils/package-json';
-import { getPackageDotJson, tryGetPackageJson } from '../../utils/setup-utils';
+import { tryGetPackageJson } from '../../utils/setup-utils';
 import { getUI } from '../../ui';
 import {
   getReactRouterMode,
@@ -47,8 +47,10 @@ export const REACT_ROUTER_AGENT_CONFIG: FrameworkConfig<ReactRouterContext> = {
     getVersionBucket: getReactRouterVersionBucket,
     minimumVersion: '6.0.0',
     getInstalledVersion: async (options: WizardOptions) => {
-      const packageJson = await getPackageDotJson(options);
-      return getPackageVersion('react-router', packageJson);
+      const packageJson = await tryGetPackageJson(options);
+      return packageJson
+        ? getPackageVersion('react-router', packageJson)
+        : undefined;
     },
     detect: async (options) => {
       const packageJson = await tryGetPackageJson(options);

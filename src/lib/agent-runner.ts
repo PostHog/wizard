@@ -5,7 +5,7 @@ import {
 } from './framework-config';
 import { type WizardSession, OutroKind } from './wizard-session';
 import {
-  getPackageDotJson,
+  tryGetPackageJson,
   isUsingTypeScript,
   getOrAskForProjectData,
 } from '../utils/setup-utils';
@@ -121,15 +121,21 @@ export async function runAgentWizard(
   let frameworkVersion: string | undefined;
 
   if (usesPackageJson) {
-    packageJson = await getPackageDotJson({ installDir: session.installDir });
-    // Log warning if package not installed, but continue (agent handles it)
-    const { hasPackageInstalled } = await import('../utils/package-json.js');
-    if (!hasPackageInstalled(config.detection.packageName, packageJson)) {
+    packageJson = await tryGetPackageJson({ installDir: session.installDir });
+    if (packageJson) {
+      // Log warning if package not installed, but continue (agent handles it)
+      const { hasPackageInstalled } = await import('../utils/package-json.js');
+      if (!hasPackageInstalled(config.detection.packageName, packageJson)) {
+        getUI().log.warn(
+          `${config.detection.packageDisplayName} does not seem to be installed. Continuing anyway — the agent will handle it.`,
+        );
+      }
+      frameworkVersion = config.detection.getVersion(packageJson);
+    } else {
       getUI().log.warn(
-        `${config.detection.packageDisplayName} does not seem to be installed. Continuing anyway — the agent will handle it.`,
+        'Could not find package.json. Continuing anyway — the agent will handle it.',
       );
     }
-    frameworkVersion = config.detection.getVersion(packageJson);
   } else {
     frameworkVersion = config.detection.getVersion(null);
   }

@@ -8,7 +8,7 @@ import {
   hasPackageInstalled,
   type PackageDotJson,
 } from '../../utils/package-json';
-import { getPackageDotJson, tryGetPackageJson } from '../../utils/setup-utils';
+import { tryGetPackageJson } from '../../utils/setup-utils';
 import {
   detectReactNativeVariant,
   getReactNativeVariantName,
@@ -39,8 +39,10 @@ export const REACT_NATIVE_AGENT_CONFIG: FrameworkConfig<ReactNativeContext> = {
     getVersionBucket: getReactNativeVersionBucket,
     minimumVersion: '0.73.0',
     getInstalledVersion: async (options: WizardOptions) => {
-      const packageJson = await getPackageDotJson(options);
-      return getPackageVersion('react-native', packageJson);
+      const packageJson = await tryGetPackageJson(options);
+      return packageJson
+        ? getPackageVersion('react-native', packageJson)
+        : undefined;
     },
     detect: async (options) => {
       const packageJson = await tryGetPackageJson(options);
