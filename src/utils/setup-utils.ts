@@ -29,6 +29,7 @@ import {
 import { performOAuthFlow } from './oauth';
 import { fetchUserData, fetchProjectData } from '../lib/api';
 import { fulfillsVersionRange } from './semver';
+import { wizardAbort } from './wizard-abort';
 
 interface ProjectData {
   projectApiKey: string;
@@ -60,11 +61,9 @@ export interface CliSetupConfigContent {
   url?: string;
 }
 
+/** @deprecated Use wizardAbort() directly for new code. */
 export async function abort(message?: string, status?: number): Promise<never> {
-  await analytics.shutdown('cancelled');
-
-  getUI().outro(message ?? 'Wizard setup cancelled.');
-  return process.exit(status ?? 1);
+  return wizardAbort({ message, exitCode: status });
 }
 
 export function isInGitRepo() {

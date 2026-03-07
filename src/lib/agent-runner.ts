@@ -29,6 +29,7 @@ import * as semver from 'semver';
 import { checkAnthropicStatus } from '../utils/anthropic-status';
 import { enableDebugLogs } from '../utils/debug';
 import { createBenchmarkPipeline } from './middleware/benchmark';
+import { wizardAbort, WizardError } from '../utils/wizard-abort';
 
 /**
  * Build a WizardOptions bag from a WizardSession (for code that still expects WizardOptions).
@@ -229,56 +230,25 @@ export async function runAgentWizard(
 
   // Handle error cases detected in agent output
   if (agentResult.error === AgentErrorType.MCP_MISSING) {
-    analytics.captureException(
-      new Error('Agent could not access PostHog MCP server'),
-      {
+    await wizardAbort({
+      message: `Could not access the PostHog MCP server\n\nThe wizard was unable to connect to the PostHog MCP server.\nThis could be due to a network issue or a configuration problem.\n\nPlease try again, or set up ${config.metadata.name} manually by following our documentation:\n${config.metadata.docsUrl}`,
+      error: new WizardError('Agent could not access PostHog MCP server', {
         integration: config.metadata.integration,
         error_type: AgentErrorType.MCP_MISSING,
         signal: AgentSignals.ERROR_MCP_MISSING,
-      },
-    );
-
-    const errorMessage = `
-${chalk.red('Could not access the PostHog MCP server')}
-
-The wizard was unable to connect to the PostHog MCP server.
-This could be due to a network issue or a configuration problem.
-
-Please try again, or set up ${
-      config.metadata.name
-    } manually by following our documentation:
-${chalk.cyan(config.metadata.docsUrl)}`;
-
-    restoreSettings();
-    getUI().outro(errorMessage);
-    await analytics.shutdown('error');
-    process.exit(1);
+      }),
+    });
   }
 
   if (agentResult.error === AgentErrorType.RESOURCE_MISSING) {
-    analytics.captureException(
-      new Error('Agent could not access setup resource'),
-      {
+    await wizardAbort({
+      message: `Could not access the setup resource\n\nThe wizard could not access the setup resource. This may indicate a version mismatch or a temporary service issue.\n\nPlease try again, or set up ${config.metadata.name} manually by following our documentation:\n${config.metadata.docsUrl}`,
+      error: new WizardError('Agent could not access setup resource', {
         integration: config.metadata.integration,
         error_type: AgentErrorType.RESOURCE_MISSING,
         signal: AgentSignals.ERROR_RESOURCE_MISSING,
-      },
-    );
-
-    const errorMessage = `
-${chalk.red('Could not access the setup resource')}
-
-The wizard could not access the setup resource. This may indicate a version mismatch or a temporary service issue.
-
-Please try again, or set up ${
-      config.metadata.name
-    } manually by following our documentation:
-${chalk.cyan(config.metadata.docsUrl)}`;
-
-    restoreSettings();
-    getUI().outro(errorMessage);
-    await analytics.shutdown('error');
-    process.exit(1);
+      }),
+    });
   }
 
   if (
@@ -291,22 +261,15 @@ ${chalk.cyan(config.metadata.docsUrl)}`;
       error_message: agentResult.message,
     });
 
-    analytics.captureException(new Error(`API error: ${agentResult.message}`), {
-      integration: config.metadata.integration,
-      error_type: agentResult.error,
+    await wizardAbort({
+      message: `API Error\n\n${
+        agentResult.message || 'Unknown error'
+      }\n\nPlease report this error to: wizard@posthog.com`,
+      error: new WizardError(`API error: ${agentResult.message}`, {
+        integration: config.metadata.integration,
+        error_type: agentResult.error,
+      }),
     });
-
-    const errorMessage = `
-${chalk.red('API Error')}
-
-${chalk.yellow(agentResult.message || 'Unknown error')}
-
-Please report this error to: ${chalk.cyan('wizard@posthog.com')}`;
-
-    restoreSettings();
-    getUI().outro(errorMessage);
-    await analytics.shutdown('error');
-    process.exit(1);
   }
 
   // Build environment variables from OAuth credentials
