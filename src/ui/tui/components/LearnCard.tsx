@@ -224,27 +224,6 @@ const TAIL_BLOCKS: ContentBlock[] = [
   { content: 'Then decide what to build next.', pause: 3000 },
 
   { type: 'clear', pause: 3000 },
-
-  {
-    content: 'You can also track people and groups with PostHog.',
-    pause: 3000,
-  },
-
-  {
-    content:
-      'Events can be associated with the humans who generate them, letting you understand a specific customer problem if they email about it.',
-    pause: 5000,
-  },
-
-  { type: 'clear', pause: 3000 },
-
-  { content: 'Get way more detail using properties.', pause: 3000 },
-
-  {
-    content:
-      'Events and person records can have any properties you want. Track things like how they found your website, what subscription tier they choose, and much more.',
-    pause: 5000,
-  },
 ];
 
 /** Fixed chrome: ScreenContainer (3) + TabContainer tab bar (2) */
