@@ -9,15 +9,12 @@ import { Box, Text } from 'ink';
 import { Colors } from '../styles.js';
 
 interface PromptLabelProps {
-  message: string;
+  message?: string;
 }
 
 export const PromptLabel = ({ message }: PromptLabelProps) => {
   return (
     <Box>
-      <Text backgroundColor={Colors.accent} color="#000000" bold>
-        {' \u2192 '}
-      </Text>
       <Text bold color={Colors.accent}>
         {' '}
         {message}

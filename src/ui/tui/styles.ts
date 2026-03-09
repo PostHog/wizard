@@ -16,7 +16,7 @@ export enum VAlign {
 
 export const Colors = {
   primary: 'cyan',
-  accent: '#F9BD2B',
+  accent: '#F54E00',
   success: 'green',
   error: 'red',
   muted: 'gray',

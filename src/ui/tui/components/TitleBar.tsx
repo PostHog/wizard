@@ -10,7 +10,7 @@ interface TitleBarProps {
 }
 
 export const TitleBar = ({ version, width }: TitleBarProps) => {
-  const fullTitle = ` PostHog Setup Wizard v${version}`;
+  const fullTitle = ` PostHog Wizard v${version}`;
   const needShort = width < fullTitle.length + FEEDBACK.length;
   const feedback = needShort ? FEEDBACK_SHORT : FEEDBACK;
   const title =
@@ -22,7 +22,7 @@ export const TitleBar = ({ version, width }: TitleBarProps) => {
 
   return (
     <Box width={width} overflow="hidden">
-      <Text backgroundColor={Colors.accent} color="#000000" bold>
+      <Text backgroundColor={Colors.accent} color="black" bold>
         {title}
         {padding}
         {feedback}
