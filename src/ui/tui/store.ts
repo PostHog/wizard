@@ -53,6 +53,7 @@ export class WizardStore {
   private $statusExpanded = atom(false);
   private $tasks = atom<TaskItem[]>([]);
   private $eventPlan = atom<PlannedEvent[]>([]);
+  private $learnCardBlockIdx = atom(0);
   private $version = atom(0);
 
   /** Last screen seen — used to detect screen transitions for analytics. */
@@ -368,6 +369,14 @@ export class WizardStore {
   setEventPlan(events: PlannedEvent[]): void {
     this.$eventPlan.set(events);
     this.emitChange();
+  }
+
+  get learnCardBlockIdx(): number {
+    return this.$learnCardBlockIdx.get();
+  }
+
+  setLearnCardBlockIdx(idx: number): void {
+    this.$learnCardBlockIdx.set(idx);
   }
 
   syncTodos(

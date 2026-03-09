@@ -97,6 +97,10 @@ interface ContentSequencerProps {
   blockInterval?: number;
   /** Delay in ms before the first block appears. */
   startDelay?: number;
+  /** Resume from a previously persisted block index. */
+  initialBlockIdx?: number;
+  /** Called whenever the active block index advances. */
+  onBlockChange?: (idx: number) => void;
 }
 
 export const ContentSequencer = ({
@@ -110,13 +114,18 @@ export const ContentSequencer = ({
   lineInterval = 200,
   blockInterval = 3200,
   startDelay = 0,
+  initialBlockIdx = 0,
+  onBlockChange,
 }: ContentSequencerProps) => {
-  const [activeIdx, setActiveIdx] = useState(startDelay > 0 ? -1 : 0);
+  const resuming = initialBlockIdx > 0;
+  const [activeIdx, setActiveIdx] = useState(
+    resuming ? initialBlockIdx : startDelay > 0 ? -1 : 0,
+  );
   const transitionTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Initial delay before first block
+  // Initial delay before first block (skip when resuming)
   useEffect(() => {
-    if (startDelay <= 0 || activeIdx !== -1) return;
+    if (resuming || startDelay <= 0 || activeIdx !== -1) return;
     const timer = setTimeout(() => setActiveIdx(0), startDelay);
     return () => clearTimeout(timer);
   }, [startDelay, activeIdx]);
@@ -142,10 +151,14 @@ export const ContentSequencer = ({
       const pause = getBlockPause(blocks[blockIndex], blockInterval);
       transitionTimer.current = setTimeout(() => {
         transitionTimer.current = null;
-        setActiveIdx((i) => i + 1);
+        setActiveIdx((i) => {
+          const next = i + 1;
+          onBlockChange?.(next);
+          return next;
+        });
       }, pause);
     },
-    [activeIdx, blocks, blockInterval],
+    [activeIdx, blocks, blockInterval, onBlockChange],
   );
 
   // Find the most recent completed clear block — nothing before it renders.

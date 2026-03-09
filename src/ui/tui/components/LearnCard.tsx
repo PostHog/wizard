@@ -326,6 +326,8 @@ export const LearnCard = ({ store }: LearnCardProps) => {
         maxHeight={maxHeight}
         availableWidth={paneWidth}
         startDelay={2000}
+        initialBlockIdx={store?.learnCardBlockIdx ?? 0}
+        onBlockChange={(idx) => store?.setLearnCardBlockIdx(idx)}
       />
     </Box>
   );
