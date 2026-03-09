@@ -21,7 +21,7 @@ import { computeVisibleRange } from './layout-helpers.js';
 export type ContentBlock =
   | string
   | { type: 'lines'; lines: ReactNode[]; interval?: number; pause?: number }
-  | { type: 'node'; content: ReactNode; pause?: number };
+  | { type: 'node'; content: ReactNode; pause?: number; persist?: boolean };
 
 /** Resolve the pause after a block completes. */
 export function getBlockPause(
@@ -97,8 +97,13 @@ export const ContentSequencer = ({
         const active = i === activeIdx;
         const completed = i < activeIdx;
 
-        // Completed node blocks don't render (can't dim Box content)
-        if (completed && typeof block !== 'string' && block.type === 'node') {
+        // Completed node blocks don't render unless persist is set
+        if (
+          completed &&
+          typeof block !== 'string' &&
+          block.type === 'node' &&
+          !block.persist
+        ) {
           return null;
         }
 
@@ -186,6 +191,7 @@ const BlockRenderer = ({
       <NodeBlock
         content={block.content}
         active={active}
+        completed={completed}
         onComplete={onComplete}
       />
     );

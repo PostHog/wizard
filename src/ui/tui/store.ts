@@ -114,6 +114,13 @@ export class WizardStore {
     this.emitChange();
   }
 
+  setStatusExpanded(expanded: boolean): void {
+    if (this.$statusExpanded.get() !== expanded) {
+      this.$statusExpanded.set(expanded);
+      this.emitChange();
+    }
+  }
+
   // ── Session setters ─────────────────────────────────────────────
   // Every setter that affects screen resolution calls emitChange().
   // Business logic calls these instead of mutating session directly.
