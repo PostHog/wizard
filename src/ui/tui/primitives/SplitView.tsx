@@ -13,11 +13,11 @@ interface SplitViewProps {
 
 export const SplitView = ({ left, right, gap = 2 }: SplitViewProps) => {
   return (
-    <Box flexDirection="row" flexGrow={1} gap={gap}>
-      <Box width="50%" flexDirection="column">
+    <Box flexDirection="row" flexGrow={1} flexShrink={1} gap={gap}>
+      <Box width="50%" flexDirection="column" overflow="hidden">
         {left}
       </Box>
-      <Box width="50%" flexDirection="column">
+      <Box width="50%" flexDirection="column" overflow="hidden">
         {right}
       </Box>
     </Box>
