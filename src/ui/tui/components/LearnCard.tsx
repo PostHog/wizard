@@ -7,16 +7,93 @@ import { Box, Text, useInput } from 'ink';
 import { useState } from 'react';
 import { Colors } from '../styles.js';
 import {
-  TextReveal,
+  ContentSequencer,
   TextRevealMode,
   TEXT_REVEAL_MODE_LABELS,
   TEXT_REVEAL_MODE_COUNT,
 } from '../primitives/index.js';
+import type { ContentBlock } from '../primitives/index.js';
 
-const PARAGRAPHS = [
+const CONTENT: ContentBlock[] = [
+  'Hello there. Thanks for trying out the Wizard.',
+
+  "Wondering what it does? Let's show you around.",
+
+  {
+    type: 'lines',
+    interval: 250,
+    pause: 4000,
+    lines: [
+      <Text color="cyan">{'  ┌──────────────────────────────┐'}</Text>,
+      <Text color="cyan">
+        {'  │ '}
+        <Text bold color="white">
+          Your App
+        </Text>
+        {'                     │'}
+      </Text>,
+      <Text color="cyan">
+        {'  │   ↓ '}
+        <Text dimColor>posthog.capture()</Text>
+        {'        │'}
+      </Text>,
+      <Text color="yellow">
+        {'  │ '}
+        <Text bold>PostHog JS SDK</Text>
+        {'               │'}
+      </Text>,
+      <Text color="cyan">
+        {'  │   ↓ '}
+        <Text dimColor>HTTP POST</Text>
+        {'                │'}
+      </Text>,
+      <Text color={Colors.accent}>
+        {'  │ '}
+        <Text bold>PostHog Cloud</Text>
+        {'                │'}
+      </Text>,
+      <Text color="cyan">
+        {'  │   ↓ '}
+        <Text dimColor>query + visualize</Text>
+        {'        │'}
+      </Text>,
+      <Text color="green">
+        {'  │ '}
+        <Text bold>Dashboards & Insights</Text>
+        {'        │'}
+      </Text>,
+      <Text color="cyan">{'  └──────────────────────────────┘'}</Text>,
+    ],
+  },
+
   'Events are the foundation of analytics in PostHog. Every time a user performs an action — clicking a button, viewing a page, submitting a form — an event is captured. These events build a living picture of how people actually use your product, not how you imagine they do.',
 
   'Properties add depth to every event. You can attach any metadata you want: which page they were on, what experiment variant they saw, whether they were on mobile or desktop, their subscription tier. The richer your properties, the more powerful your analysis becomes.',
+
+  {
+    type: 'node',
+    pause: 5000,
+    content: (
+      <Box flexDirection="column">
+        <Text bold color={Colors.accent}>
+          {'◆ '}
+          <Text color="white">The PostHog product suite</Text>
+        </Text>
+        <Text>
+          {' '}
+          <Text color="cyan">Analytics</Text> ·{' '}
+          <Text color="yellow">Session Replay</Text> ·{' '}
+          <Text color="green">Feature Flags</Text>
+        </Text>
+        <Text>
+          {' '}
+          <Text color="magenta">Experiments</Text> ·{' '}
+          <Text color={Colors.accent}>Surveys</Text> ·{' '}
+          <Text color="blue">Data Warehouse</Text>
+        </Text>
+      </Box>
+    ),
+  },
 
   'Persons tie events to real humans. When a user signs up, you can identify them and stitch together their anonymous browsing history with their authenticated sessions. Now when a customer emails about a bug, you can replay exactly what they experienced.',
 
@@ -50,7 +127,7 @@ export const LearnCard = () => {
         <Text color={Colors.accent}>[p]</Text> to switch
       </Text>
       <Box height={1} />
-      <TextReveal key={mode} paragraphs={PARAGRAPHS} mode={mode} />
+      <ContentSequencer blocks={CONTENT} mode={mode} />
     </Box>
   );
 };

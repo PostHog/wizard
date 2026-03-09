@@ -19,10 +19,11 @@ export type { TabDefinition } from './TabContainer.js';
 export { HNViewer } from './HNViewer.js';
 export { DissolveTransition } from './DissolveTransition.js';
 export type { WipeDirection } from './DissolveTransition.js';
+export { ContentSequencer } from './ContentSequencer.js';
+export type { ContentBlock } from './ContentSequencer.js';
 export {
-  TextReveal,
   TextRevealMode,
   TEXT_REVEAL_MODE_LABELS,
   TEXT_REVEAL_MODE_COUNT,
   TEXT_REVEAL_MODE_DEFAULTS,
-} from './TextReveal.js';
+} from './TextBlock.js';
