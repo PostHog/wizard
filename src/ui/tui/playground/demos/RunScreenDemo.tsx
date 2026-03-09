@@ -4,10 +4,19 @@
  * are pre-populated so conditional tips appear.
  */
 
-import { useEffect, useRef } from 'react';
-import { RunScreen } from '../../screens/RunScreen.js';
+import { useEffect, useRef, useSyncExternalStore } from 'react';
 import { WizardStore, TaskStatus } from '../../store.js';
 import { DiscoveredFeature } from '../../../../lib/wizard-session.js';
+import {
+  TabContainer,
+  SplitView,
+  ProgressList,
+  LogViewer,
+  EventPlanViewer,
+  HNViewer,
+} from '../../primitives/index.js';
+import type { ProgressItem } from '../../primitives/index.js';
+import { LearnCard } from '../../components/LearnCard.js';
 
 const MOCK_TASKS = [
   {
@@ -136,5 +145,51 @@ export const RunScreenDemo = ({ store }: RunScreenDemoProps) => {
     return () => clearInterval(timer);
   }, []);
 
-  return <RunScreen store={store} />;
+  useSyncExternalStore(
+    (cb) => store.subscribe(cb),
+    () => store.getSnapshot(),
+  );
+
+  const progressItems: ProgressItem[] = store.tasks.map((t) => ({
+    label: t.label,
+    activeForm: t.activeForm,
+    status: t.status,
+  }));
+
+  const statuses =
+    store.statusMessages.length > 0 ? store.statusMessages : undefined;
+
+  const tabs = [
+    {
+      id: 'status',
+      label: 'Status',
+      component: (
+        <SplitView
+          left={<LearnCard />}
+          right={<ProgressList items={progressItems} title="Tasks" />}
+        />
+      ),
+    },
+    ...(store.eventPlan.length > 0
+      ? [
+          {
+            id: 'events',
+            label: 'Event plan',
+            component: <EventPlanViewer events={store.eventPlan} />,
+          },
+        ]
+      : []),
+    {
+      id: 'logs',
+      label: 'Tail logs',
+      component: <LogViewer filePath="/tmp/posthog-wizard.log" />,
+    },
+    {
+      id: 'hn',
+      label: 'HN',
+      component: <HNViewer />,
+    },
+  ];
+
+  return <TabContainer tabs={tabs} statusMessage={statuses} expandableStatus />;
 };

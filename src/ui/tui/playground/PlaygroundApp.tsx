@@ -20,15 +20,15 @@ interface PlaygroundAppProps {
 
 export const PlaygroundApp = ({ store }: PlaygroundAppProps) => {
   const tabs = [
+    { id: 'layout', label: 'Layout', component: <LayoutDemo /> },
+    { id: 'input', label: 'Input', component: <InputDemo /> },
+    { id: 'progress', label: 'Progress', component: <ProgressDemo /> },
+    { id: 'logs', label: 'Logs', component: <LogDemo /> },
     {
       id: 'run',
       label: 'RunScreen',
       component: <RunScreenDemo store={store} />,
     },
-    { id: 'layout', label: 'Layout', component: <LayoutDemo /> },
-    { id: 'input', label: 'Input', component: <InputDemo /> },
-    { id: 'progress', label: 'Progress', component: <ProgressDemo /> },
-    { id: 'logs', label: 'Logs', component: <LogDemo /> },
   ];
 
   return (
