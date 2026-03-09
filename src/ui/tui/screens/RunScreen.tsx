@@ -2,11 +2,11 @@
  * RunScreen — Tabbed observational view of the agent run.
  *
  * Two tabs:
- *   - Status: SplitView with TipsCard (left) + ProgressList (right)
+ *   - Status: SplitView with LearnCard (left) + ProgressList (right)
  *   - Logs: LogViewer tailing the wizard log file
  *
  * No prompts — the agent runs headlessly.
- * TipsCard reactively shows tips based on discovered features.
+ * LearnCard shows animated educational content and reacts to discovered features.
  */
 
 import { useSyncExternalStore } from 'react';
@@ -22,7 +22,7 @@ import {
 } from '../primitives/index.js';
 import type { ProgressItem } from '../primitives/index.js';
 import { ADDITIONAL_FEATURE_LABELS } from '../../../lib/wizard-session.js';
-import { TipsCard } from '../components/TipsCard.js';
+import { LearnCard } from '../components/LearnCard.js';
 import { useStdoutDimensions } from '../hooks/useStdoutDimensions.js';
 
 const LOG_FILE = '/tmp/posthog-wizard.log';
@@ -62,17 +62,17 @@ export const RunScreen = ({ store }: RunScreenProps) => {
   const statuses =
     store.statusMessages.length > 0 ? store.statusMessages : undefined;
 
-  const tipsCard = <TipsCard store={store} />;
+  const learnCard = <LearnCard store={store} />;
   const progressList = <ProgressList items={progressItems} title="Tasks" />;
 
-  // On narrow terminals, drop the tips pane and show only progress
+  // On narrow terminals, drop the learn pane and show only progress
   const statusComponent =
     columns < 80 ? (
       <Box flexDirection="column" flexGrow={1}>
         {progressList}
       </Box>
     ) : (
-      <SplitView left={tipsCard} right={progressList} />
+      <SplitView left={learnCard} right={progressList} />
     );
 
   const tabs = [

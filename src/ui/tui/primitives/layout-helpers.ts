@@ -7,6 +7,11 @@
  */
 
 import type { ContentBlock } from './ContentSequencer.js';
+import {
+  isLinesBlock,
+  isClearBlock,
+  isObjectBlock,
+} from './ContentSequencer.js';
 
 /**
  * Estimate the number of terminal rows a content block will occupy,
@@ -20,12 +25,17 @@ export function estimateBlockHeight(
     return wordWrap(block, availableWidth).length + 1; // +1 for marginBottom
   }
 
-  if (block.type === 'lines') {
+  if (isClearBlock(block)) return 0;
+
+  if (isLinesBlock(block)) {
     return block.lines.length + 1;
   }
 
-  if (block.type === 'node') {
-    return 4; // conservative fixed estimate
+  if (isObjectBlock(block)) {
+    if (typeof block.content === 'string') {
+      return wordWrap(block.content, availableWidth).length + 1;
+    }
+    return 4; // conservative fixed estimate for ReactNode
   }
 
   return 1;
@@ -52,6 +62,8 @@ export function computeVisibleRange(
   let start = activeIdx;
 
   for (let i = activeIdx - 1; i >= 0; i--) {
+    // Clear blocks act as a hard boundary — don't show anything before them
+    if (isClearBlock(blocks[i])) break;
     const h = estimateBlockHeight(blocks[i], availableWidth);
     if (totalHeight + h > budget) break;
     totalHeight += h;

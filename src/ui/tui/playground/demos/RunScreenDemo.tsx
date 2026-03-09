@@ -165,7 +165,7 @@ export const RunScreenDemo = ({ store }: RunScreenDemoProps) => {
       label: 'Status',
       component: (
         <SplitView
-          left={<LearnCard store={store} interactive />}
+          left={<LearnCard store={store} />}
           right={<ProgressList items={progressItems} title="Tasks" />}
         />
       ),

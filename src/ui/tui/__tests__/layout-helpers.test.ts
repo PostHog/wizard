@@ -27,7 +27,7 @@ describe('estimateBlockHeight', () => {
   });
 
   it('returns a fixed estimate for node blocks', () => {
-    const block: ContentBlock = { type: 'node', content: null };
+    const block: ContentBlock = { content: null };
     const height = estimateBlockHeight(block, 40);
     expect(height).toBeGreaterThanOrEqual(2);
     expect(height).toBeLessThanOrEqual(6);

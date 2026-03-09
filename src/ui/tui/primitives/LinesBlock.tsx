@@ -59,12 +59,7 @@ export const LinesBlock = ({
           );
         }
         if (li >= revealedCount || li < visibleStart) return null;
-        const isCurrent = li === revealedCount - 1;
-        return (
-          <Box key={li}>
-            {isCurrent ? <>{line}</> : <Text dimColor>{line}</Text>}
-          </Box>
-        );
+        return <Box key={li}>{line}</Box>;
       })}
     </Box>
   );

@@ -1,19 +1,14 @@
 /**
  * LearnCard — PostHog educational content with animated text reveal.
- * Press [p] to cycle through animation modes.
  */
 
-import { Box, Text, useInput } from 'ink';
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { Box, Text } from 'ink';
+import { useEffect, useMemo, useRef } from 'react';
 import { Colors } from '../styles.js';
 import type { WizardStore } from '../store.js';
-import {
-  ContentSequencer,
-  TextRevealMode,
-  TEXT_REVEAL_MODE_LABELS,
-  TEXT_REVEAL_MODE_COUNT,
-} from '../primitives/index.js';
+import { ContentSequencer, TextRevealMode } from '../primitives/index.js';
 import type { ContentBlock } from '../primitives/index.js';
+import { DiscoveredFeature } from '../../../lib/wizard-session.js';
 import { useStdoutDimensions } from '../hooks/useStdoutDimensions.js';
 import { COLLAPSED_COUNT, EXPANDED_COUNT } from '../primitives/TabContainer.js';
 
@@ -24,7 +19,7 @@ import { COLLAPSED_COUNT, EXPANDED_COUNT } from '../primitives/TabContainer.js';
  */
 const StatusPeek = ({
   store,
-  duration = 3000,
+  duration = 5000,
   peekedRef,
 }: {
   store?: WizardStore;
@@ -43,16 +38,19 @@ const StatusPeek = ({
 
   return (
     <Text>
-      To check the status of the Wizard, look below. You can always press{' '}
-      <Text color={Colors.accent}>S</Text> to expand or collapse the status.
+      Press{' '}
+      <Text color={Colors.accent} bold>
+        S
+      </Text>{' '}
+      to expand or collapse the status report below.
     </Text>
   );
 };
 
 const STATIC_LINES_BLOCK: ContentBlock = {
   type: 'lines',
-  interval: 250,
-  pause: 4000,
+  interval: 500,
+  pause: 8000,
   lines: [
     <Text color="cyan">{'  ┌──────────────────────────────┐'}</Text>,
     <Text color="cyan">
@@ -64,17 +62,17 @@ const STATIC_LINES_BLOCK: ContentBlock = {
     </Text>,
     <Text color="cyan">
       {'  │   ↓ '}
-      <Text dimColor>posthog.capture()</Text>
+      <Text>posthog.capture()</Text>
       {'        │'}
     </Text>,
     <Text color="yellow">
       {'  │ '}
-      <Text bold>PostHog JS SDK</Text>
-      {'               │'}
+      <Text bold>PostHog SDK</Text>
+      {'                 │'}
     </Text>,
     <Text color="cyan">
       {'  │   ↓ '}
-      <Text dimColor>HTTP POST</Text>
+      <Text>HTTP POST</Text>
       {'                │'}
     </Text>,
     <Text color={Colors.accent}>
@@ -84,7 +82,7 @@ const STATIC_LINES_BLOCK: ContentBlock = {
     </Text>,
     <Text color="cyan">
       {'  │   ↓ '}
-      <Text dimColor>query + visualize</Text>
+      <Text>query + visualize</Text>
       {'        │'}
     </Text>,
     <Text color="green">
@@ -96,87 +94,224 @@ const STATIC_LINES_BLOCK: ContentBlock = {
   ],
 };
 
-const SUITE_BLOCK: ContentBlock = {
-  type: 'node',
-  pause: 5000,
-  content: (
-    <Box flexDirection="column">
-      <Text bold color={Colors.accent}>
-        {'◆ '}
-        <Text color="white">The PostHog product suite</Text>
+const FUNNEL_BLOCK: ContentBlock = {
+  type: 'lines',
+  interval: 350,
+  pause: 8000,
+  lines: [
+    <Text bold>{'  Funnel · ride conversion'}</Text>,
+    <Text> </Text>,
+    // Step 1
+    <Text>
+      {'  '}
+      <Text bold>1</Text>
+      {'  app_launched'}
+      {'                '}
+      <Text bold color="green">
+        100.00%
       </Text>
-      <Text>
-        {' '}
-        <Text color="cyan">Analytics</Text> ·{' '}
-        <Text color="yellow">Session Replay</Text> ·{' '}
-        <Text color="green">Feature Flags</Text>
+    </Text>,
+    <Text color="cyan">{'     ██████████████████████████████'}</Text>,
+    <Text dimColor>{'     → 1,200 users'}</Text>,
+    <Text> </Text>,
+    // Step 2
+    <Text>
+      {'  '}
+      <Text bold>2</Text>
+      {'  ride_requested'}
+      {'       '}
+      <Text dimColor>{'avg 2m 30s'}</Text>
+      {'   '}
+      <Text bold color="green">
+        72.00%
       </Text>
-      <Text>
-        {' '}
-        <Text color="magenta">Experiments</Text> ·{' '}
-        <Text color={Colors.accent}>Surveys</Text> ·{' '}
-        <Text color="blue">Data Warehouse</Text>
+    </Text>,
+    <Text>
+      {'     '}
+      <Text color="cyan">{'██████████████████████'}</Text>
+      <Text dimColor>{'░░░░░░░░░'}</Text>
+    </Text>,
+    <Text>
+      {'     '}
+      <Text dimColor>→ 864 users</Text>
+      {'  '}
+      <Text color="red">↘</Text>
+      <Text dimColor>{' 336 (28%) dropped off'}</Text>
+    </Text>,
+    <Text> </Text>,
+    // Step 3
+    <Text>
+      {'  '}
+      <Text bold>3</Text>
+      {'  ride_accepted'}
+      {'        '}
+      <Text dimColor>{'avg 5m 12s'}</Text>
+      {'   '}
+      <Text bold color="green">
+        51.00%
       </Text>
-    </Box>
-  ),
+    </Text>,
+    <Text>
+      {'     '}
+      <Text color="cyan">{'██████████████████'}</Text>
+      <Text dimColor>{'░░░░░░░░░░░░░'}</Text>
+    </Text>,
+    <Text>
+      {'     '}
+      <Text dimColor>→ 612 users</Text>
+      {'  '}
+      <Text color="red">↘</Text>
+      <Text dimColor>{' 252 (29%) dropped off'}</Text>
+    </Text>,
+    <Text> </Text>,
+    // Step 4
+    <Text>
+      {'  '}
+      <Text bold>4</Text>
+      {'  ride_started'}
+      {'         '}
+      <Text dimColor>{'avg 1m 45s'}</Text>
+      {'   '}
+      <Text bold color="green">
+        38.00%
+      </Text>
+    </Text>,
+    <Text>
+      {'     '}
+      <Text color="cyan">{'█████████████'}</Text>
+      <Text dimColor>{'░░░░░░░░░░░░░░░░░░'}</Text>
+    </Text>,
+    <Text>
+      {'     '}
+      <Text dimColor>→ 456 users</Text>
+      {'  '}
+      <Text color="red">↘</Text>
+      <Text dimColor>{' 156 (25%) dropped off'}</Text>
+    </Text>,
+  ],
 };
 
 const TAIL_BLOCKS: ContentBlock[] = [
-  'Events are the foundation of analytics in PostHog. Every time a user performs an action — clicking a button, viewing a page, submitting a form — an event is captured. These events build a living picture of how people actually use your product, not how you imagine they do.',
+  {
+    content: 'Events are the foundation of analytics in PostHog.',
+    pause: 4000,
+  },
 
-  'Properties add depth to every event. You can attach any metadata you want: which page they were on, what experiment variant they saw, whether they were on mobile or desktop, their subscription tier. The richer your properties, the more powerful your analysis becomes.',
+  {
+    content:
+      'Every time an action is performed in your codebase — clicking a button, viewing a page, or submitting a form — an event is captured.',
+    pause: 6000,
+  },
 
-  SUITE_BLOCK,
+  { content: "Here's the flow.", pause: 2000 },
 
-  'Persons tie events to real humans. When a user signs up, you can identify them and stitch together their anonymous browsing history with their authenticated sessions. Now when a customer emails about a bug, you can replay exactly what they experienced.',
+  STATIC_LINES_BLOCK,
 
-  'Groups let you analyze at the company level, not just the individual. If you are building B2B software, you probably care about how Acme Corp uses your product, not just what Jane from Acme did on Tuesday. Groups make that easy.',
+  { type: 'clear', pause: 3000 },
 
-  'Feature flags let you ship code without shipping risk. Wrap new functionality in a flag, roll it out to 5% of users, watch the metrics, then go to 100% when you are confident. Or kill it instantly if something goes wrong — no deploy needed.',
+  {
+    content:
+      'With enough data and signal, you can answer powerful questions about your product.',
+    pause: 4000,
+  },
 
-  'Session replay shows you exactly what users see and do. Instead of guessing why a conversion funnel drops off at step 3, you can watch real sessions and see the confusion first-hand. It is the fastest path from "something is wrong" to "I know exactly what is wrong."',
+  { content: 'And create insights.', pause: 2000 },
 
-  'Experiments take the guesswork out of product decisions. Set up an A/B test, define your goal metric, and let PostHog tell you which variant wins with statistical significance. No more shipping features based on gut feeling alone.',
+  FUNNEL_BLOCK,
 
-  'The data warehouse connects PostHog to everything else. Pull in Stripe revenue data, Hubspot CRM records, or your own database tables. Join them with your event data and suddenly you can answer questions like "do users who came from Google Ads have higher lifetime value?"',
+  { type: 'clear', pause: 3000 },
+
+  { content: 'Then decide what to build next.', pause: 3000 },
+
+  { type: 'clear', pause: 3000 },
+
+  {
+    content: 'You can also track people and groups with PostHog.',
+    pause: 3000,
+  },
+
+  {
+    content:
+      'Events can be associated with the humans who generate them, letting you understand a specific customer problem if they email about it.',
+    pause: 5000,
+  },
+
+  { type: 'clear', pause: 3000 },
+
+  { content: 'Get way more detail using properties.', pause: 3000 },
+
+  {
+    content:
+      'Events and person records can have any properties you want. Track things like how they found your website, what subscription tier they choose, and much more.',
+    pause: 5000,
+  },
 ];
 
 /** Fixed chrome: ScreenContainer (3) + TabContainer tab bar (2) */
 const FIXED_CHROME = 5;
-const HEADER_ROWS = 3; // title + mode label + spacer
+const HEADER_ROWS = 2; // title + spacer
 const MIN_CONTENT_ROWS = 6;
 
 interface LearnCardProps {
   store?: WizardStore;
-  /** Enable [p] key to cycle animation modes and reset. Playground only. */
-  interactive?: boolean;
 }
 
-export const LearnCard = ({ store, interactive = false }: LearnCardProps) => {
-  const [mode, setMode] = useState<TextRevealMode>(TextRevealMode.Typewriter);
-  const [resetKey, setResetKey] = useState(0);
+export const LearnCard = ({ store }: LearnCardProps) => {
   const peekedRef = useRef(false);
   const [columns, rows] = useStdoutDimensions();
 
-  useInput((input) => {
-    if (interactive && input === 'p') {
-      setMode((m) => ((m + 1) % TEXT_REVEAL_MODE_COUNT) as TextRevealMode);
-      setResetKey((k) => k + 1);
-    }
-  });
-
   const blocks = useMemo<ContentBlock[]>(
     () => [
-      'Welcome.',
-      "The Wizard is an agentic CLI tool that handles the entire PostHog integration process on your behalf. As we speak, it's completing the following tasks on the right -->",
       {
-        type: 'node',
+        content: 'Welcome.',
+        pause: 3000,
+        mode: TextRevealMode.Typewriter,
+        animationInterval: 160,
+      },
+      { content: 'The Wizard is an agent.', pause: 3000 },
+      {
+        content: 'It handles the entire PostHog setup process on your behalf.',
+        pause: 4000,
+      },
+      {
+        content: "As we speak, it's working on the tasks shown on the right.",
+        pause: 4000,
+      },
+      {
         pause: 5000,
         persist: true,
         content: <StatusPeek store={store} peekedRef={peekedRef} />,
       },
-      STATIC_LINES_BLOCK,
+      { type: 'clear', pause: 3000 },
       ...TAIL_BLOCKS,
+      ...(store?.session.discoveredFeatures.includes(DiscoveredFeature.Stripe)
+        ? [
+            { type: 'clear' as const, pause: 3000 },
+            {
+              content: 'You can track Stripe revenue with PostHog.',
+              pause: 3000,
+            },
+            {
+              content:
+                'Add Stripe as a data source in your PostHog project under Data Warehouse to join revenue data with your product analytics.',
+              pause: 5000,
+            },
+          ]
+        : []),
+      ...(store?.session.discoveredFeatures.includes(DiscoveredFeature.LLM)
+        ? [
+            { type: 'clear' as const, pause: 3000 },
+            {
+              content: 'PostHog can also help you track your LLM costs.',
+              pause: 3000,
+            },
+            {
+              content:
+                'We detected LLM dependencies in your project. LLM analytics lets you monitor token usage, latency, and costs across your AI features.',
+              pause: 5000,
+            },
+          ]
+        : []),
     ],
     [store],
   );
@@ -203,21 +338,15 @@ export const LearnCard = ({ store, interactive = false }: LearnCardProps) => {
       display={tooSmall ? 'none' : 'flex'}
     >
       <Text bold color={Colors.accent}>
-        Learn about PostHog
+        Learn
       </Text>
-      {interactive && (
-        <Text dimColor>
-          Text style: <Text bold>{TEXT_REVEAL_MODE_LABELS[mode]}</Text>{' '}
-          <Text color={Colors.accent}>[p]</Text> to switch
-        </Text>
-      )}
       <Box height={1} />
       <ContentSequencer
-        key={resetKey}
         blocks={blocks}
-        mode={mode}
+        mode={TextRevealMode.SentenceBySentence}
         maxHeight={maxHeight}
         availableWidth={paneWidth}
+        startDelay={2000}
       />
     </Box>
   );
