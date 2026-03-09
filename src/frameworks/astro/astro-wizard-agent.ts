@@ -8,7 +8,7 @@ import {
   hasPackageInstalled,
   type PackageDotJson,
 } from '../../utils/package-json';
-import { getPackageDotJson, tryGetPackageJson } from '../../utils/setup-utils';
+import { tryGetPackageJson } from '../../utils/setup-utils';
 import { getUI } from '../../ui';
 import {
   getAstroRenderingMode,
@@ -43,8 +43,8 @@ export const ASTRO_AGENT_CONFIG: FrameworkConfig<AstroContext> = {
     getVersionBucket: getAstroVersionBucket,
     minimumVersion: '4.0.0',
     getInstalledVersion: async (options: WizardOptions) => {
-      const packageJson = await getPackageDotJson(options);
-      return getPackageVersion('astro', packageJson);
+      const packageJson = await tryGetPackageJson(options);
+      return packageJson ? getPackageVersion('astro', packageJson) : undefined;
     },
     detect: async (options) => {
       const packageJson = await tryGetPackageJson(options);

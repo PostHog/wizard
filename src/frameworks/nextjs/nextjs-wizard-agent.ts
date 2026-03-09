@@ -8,7 +8,7 @@ import {
   hasPackageInstalled,
   type PackageDotJson,
 } from '../../utils/package-json';
-import { getPackageDotJson, tryGetPackageJson } from '../../utils/setup-utils';
+import { tryGetPackageJson } from '../../utils/setup-utils';
 import { getUI } from '../../ui';
 import {
   getNextJsRouter,
@@ -65,8 +65,8 @@ export const NEXTJS_AGENT_CONFIG: FrameworkConfig<NextjsContext> = {
     getVersionBucket: getNextJsVersionBucket,
     minimumVersion: '15.3.0',
     getInstalledVersion: async (options: WizardOptions) => {
-      const packageJson = await getPackageDotJson(options);
-      return getPackageVersion('next', packageJson);
+      const packageJson = await tryGetPackageJson(options);
+      return packageJson ? getPackageVersion('next', packageJson) : undefined;
     },
     detect: async (options) => {
       const packageJson = await tryGetPackageJson(options);

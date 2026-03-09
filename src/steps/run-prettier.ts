@@ -3,7 +3,7 @@ import { traceStep } from '../telemetry';
 import { analytics } from '../utils/analytics';
 import { getUI } from '../ui';
 import {
-  getPackageDotJson,
+  tryGetPackageJson,
   getUncommittedOrUntrackedFiles,
   isInGitRepo,
 } from '../utils/setup-utils';
@@ -35,7 +35,8 @@ export async function runPrettierStep({
       return;
     }
 
-    const packageJson = await getPackageDotJson({ installDir });
+    const packageJson = await tryGetPackageJson({ installDir });
+    if (!packageJson) return;
     const prettierInstalled = hasPackageInstalled('prettier', packageJson);
 
     analytics.setTag('prettier-installed', prettierInstalled);

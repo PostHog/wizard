@@ -8,7 +8,7 @@ import {
   hasPackageInstalled,
   type PackageDotJson,
 } from '../../utils/package-json';
-import { getPackageDotJson, tryGetPackageJson } from '../../utils/setup-utils';
+import { tryGetPackageJson } from '../../utils/setup-utils';
 import { createVersionBucket } from '../../utils/semver';
 
 const getNuxtVersionBucket = createVersionBucket();
@@ -24,7 +24,8 @@ export const NUXT_AGENT_CONFIG: FrameworkConfig<NuxtContext> = {
     docsUrl: 'https://posthog.com/docs/libraries/nuxt',
     beta: true,
     gatherContext: async (options: WizardOptions) => {
-      const packageJson = await getPackageDotJson(options);
+      const packageJson = await tryGetPackageJson(options);
+      if (!packageJson) return {};
       const version = getPackageVersion('nuxt', packageJson);
       const versionBucket = getNuxtVersionBucket(version);
       return { versionBucket };
@@ -38,8 +39,8 @@ export const NUXT_AGENT_CONFIG: FrameworkConfig<NuxtContext> = {
       getPackageVersion('nuxt', packageJson as PackageDotJson),
     getVersionBucket: getNuxtVersionBucket,
     getInstalledVersion: async (options: WizardOptions) => {
-      const packageJson = await getPackageDotJson(options);
-      return getPackageVersion('nuxt', packageJson);
+      const packageJson = await tryGetPackageJson(options);
+      return packageJson ? getPackageVersion('nuxt', packageJson) : undefined;
     },
     detect: async (options) => {
       const packageJson = await tryGetPackageJson(options);

@@ -1,5 +1,5 @@
 import readEnv from 'read-env';
-import { getPackageDotJson } from './setup-utils';
+import { tryGetPackageJson } from './setup-utils';
 import type { WizardOptions } from './types';
 import fg from 'fast-glob';
 import { IS_DEV } from '../lib/constants';
@@ -25,7 +25,8 @@ export function readEnvironment(): Record<string, unknown> {
 export async function detectEnvVarPrefix(
   options: WizardOptions,
 ): Promise<string> {
-  const packageJson = await getPackageDotJson(options);
+  const packageJson = await tryGetPackageJson(options);
+  if (!packageJson) return 'VITE_PUBLIC_';
 
   const deps = { ...packageJson.dependencies, ...packageJson.devDependencies };
   const has = (name: string) => name in deps;

@@ -1,6 +1,6 @@
 import { major } from 'semver';
 import fg from 'fast-glob';
-import { getPackageDotJson } from '../../utils/setup-utils';
+import { tryGetPackageJson } from '../../utils/setup-utils';
 import type { WizardOptions } from '../../utils/types';
 import { getPackageVersion } from '../../utils/package-json';
 import { createVersionBucket } from '../../utils/semver';
@@ -97,7 +97,9 @@ export async function getReactRouterMode(
 ): Promise<ReactRouterMode | null> {
   const { installDir } = options;
 
-  const packageJson = await getPackageDotJson(options);
+  const packageJson = await tryGetPackageJson(options);
+  if (!packageJson) return null;
+
   const reactRouterVersion =
     getPackageVersion('react-router-dom', packageJson) ||
     getPackageVersion('react-router', packageJson);
