@@ -8,7 +8,7 @@ import {
   hasPackageInstalled,
   type PackageDotJson,
 } from '../../utils/package-json';
-import { getPackageDotJson, tryGetPackageJson } from '../../utils/setup-utils';
+import { tryGetPackageJson } from '../../utils/setup-utils';
 import { getTanStackStartVersionBucket } from './utils';
 
 type TanStackStartContext = Record<string, unknown>;
@@ -32,8 +32,10 @@ export const TANSTACK_START_AGENT_CONFIG: FrameworkConfig<TanStackStartContext> 
       getVersionBucket: getTanStackStartVersionBucket,
       minimumVersion: '1.0.0',
       getInstalledVersion: async (options: WizardOptions) => {
-        const packageJson = await getPackageDotJson(options);
-        return getPackageVersion('@tanstack/react-start', packageJson);
+        const packageJson = await tryGetPackageJson(options);
+        return packageJson
+          ? getPackageVersion('@tanstack/react-start', packageJson)
+          : undefined;
       },
       detect: async (options) => {
         const packageJson = await tryGetPackageJson(options);

@@ -8,7 +8,7 @@ import {
   hasPackageInstalled,
   type PackageDotJson,
 } from '../../utils/package-json';
-import { getPackageDotJson, tryGetPackageJson } from '../../utils/setup-utils';
+import { tryGetPackageJson } from '../../utils/setup-utils';
 import { getUI } from '../../ui';
 import {
   getTanStackRouterMode,
@@ -50,8 +50,10 @@ export const TANSTACK_ROUTER_AGENT_CONFIG: FrameworkConfig<TanStackRouterContext
       getVersionBucket: getTanStackRouterVersionBucket,
       minimumVersion: '1.0.0',
       getInstalledVersion: async (options: WizardOptions) => {
-        const packageJson = await getPackageDotJson(options);
-        return getPackageVersion('@tanstack/react-router', packageJson);
+        const packageJson = await tryGetPackageJson(options);
+        return packageJson
+          ? getPackageVersion('@tanstack/react-router', packageJson)
+          : undefined;
       },
       detect: async (options) => {
         const packageJson = await tryGetPackageJson(options);

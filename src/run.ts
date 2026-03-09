@@ -10,6 +10,7 @@ import { runAgentWizard } from './lib/agent-runner';
 import { EventEmitter } from 'events';
 import chalk from 'chalk';
 import { logToFile } from './utils/debug';
+import { wizardAbort } from './utils/wizard-abort';
 
 EventEmitter.defaultMaxListeners = 50;
 
@@ -109,13 +110,6 @@ export async function runWizard(argv: Args, session?: WizardSession) {
   try {
     await runAgentWizard(config, session);
   } catch (error) {
-    analytics.captureException(error as Error, {
-      integration,
-      arguments: JSON.stringify(finalArgs),
-    });
-
-    await analytics.shutdown('error');
-
     const errorMessage = error instanceof Error ? error.message : String(error);
     const errorStack =
       error instanceof Error && error.stack ? error.stack : undefined;
@@ -125,19 +119,12 @@ export async function runWizard(argv: Args, session?: WizardSession) {
       logToFile(`[Wizard run.ts] ERROR STACK: ${errorStack}`);
     }
 
-    getUI().log.error(
-      `Something went wrong: ${chalk.red(
-        errorMessage,
-      )}\n\nYou can read the documentation at ${chalk.cyan(
-        config.metadata.docsUrl,
-      )} to set up PostHog manually.`,
-    );
+    const debugInfo = session.debug && errorStack ? `\n\n${errorStack}` : '';
 
-    if (session.debug && errorStack) {
-      getUI().log.info(chalk.dim(errorStack));
-    }
-
-    process.exit(1);
+    await wizardAbort({
+      message: `Something went wrong: ${errorMessage}\n\nYou can read the documentation at ${config.metadata.docsUrl} to set up PostHog manually.${debugInfo}`,
+      error: error as Error,
+    });
   }
 }
 
@@ -182,8 +169,8 @@ async function detectAndResolveIntegration(
 
   // Fallback: in TUI mode the IntroScreen would handle this,
   // but for CI mode or when detection fails, abort with guidance.
-  getUI().log.error(
-    'Could not auto-detect your framework. Please specify --integration on the command line.',
-  );
-  process.exit(1);
+  return wizardAbort({
+    message:
+      'Could not auto-detect your framework. Please specify --integration on the command line.',
+  });
 }

@@ -7,7 +7,7 @@ import {
   hasPackageInstalled,
   type PackageDotJson,
 } from '../../utils/package-json';
-import { getPackageDotJson, tryGetPackageJson } from '../../utils/setup-utils';
+import { tryGetPackageJson } from '../../utils/setup-utils';
 import { createVersionBucket } from '../../utils/semver';
 
 const getVueVersionBucket = createVersionBucket();
@@ -29,8 +29,8 @@ export const VUE_AGENT_CONFIG: FrameworkConfig<VueContext> = {
       getPackageVersion('vue', packageJson as PackageDotJson),
     getVersionBucket: getVueVersionBucket,
     getInstalledVersion: async (options) => {
-      const packageJson = await getPackageDotJson(options);
-      return getPackageVersion('vue', packageJson);
+      const packageJson = await tryGetPackageJson(options);
+      return packageJson ? getPackageVersion('vue', packageJson) : undefined;
     },
     detect: async (options) => {
       const packageJson = await tryGetPackageJson(options);

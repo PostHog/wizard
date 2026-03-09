@@ -89,10 +89,7 @@ describe('runWizard error handling', () => {
 
     await expect(runWizard(testArgs)).rejects.toThrow('process.exit called');
 
-    expect(mockAnalytics.captureException).toHaveBeenCalledWith(testError, {
-      integration: Integration.nextjs,
-      arguments: JSON.stringify(testArgs),
-    });
+    expect(mockAnalytics.captureException).toHaveBeenCalledWith(testError, {});
 
     expect(mockAnalytics.shutdown).toHaveBeenCalledWith('error');
   });

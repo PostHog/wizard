@@ -8,7 +8,7 @@ import {
   hasPackageInstalled,
   type PackageDotJson,
 } from '../../utils/package-json';
-import { getPackageDotJson, tryGetPackageJson } from '../../utils/setup-utils';
+import { tryGetPackageJson } from '../../utils/setup-utils';
 import { getAngularVersionBucket } from './utils';
 
 type AngularContext = Record<string, unknown>;
@@ -28,8 +28,10 @@ export const ANGULAR_AGENT_CONFIG: FrameworkConfig<AngularContext> = {
     getVersionBucket: getAngularVersionBucket,
     minimumVersion: '19.0.0',
     getInstalledVersion: async (options: WizardOptions) => {
-      const packageJson = await getPackageDotJson(options);
-      return getPackageVersion('@angular/core', packageJson);
+      const packageJson = await tryGetPackageJson(options);
+      return packageJson
+        ? getPackageVersion('@angular/core', packageJson)
+        : undefined;
     },
     detect: async (options) => {
       const packageJson = await tryGetPackageJson(options);
