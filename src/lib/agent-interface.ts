@@ -20,6 +20,7 @@ import {
   type AdditionalFeature,
   ADDITIONAL_FEATURE_PROMPTS,
 } from './wizard-session';
+import { registerCleanup } from '../utils/wizard-abort';
 import { createCustomHeaders } from '../utils/custom-headers';
 import { getLlmGatewayUrlFromHost } from '../utils/urls';
 import { LINTING_TOOLS } from './safe-tools';
@@ -120,9 +121,17 @@ export function backupAndFixClaudeSettings(workingDirectory: string): boolean {
   for (const name of ['settings.json', 'settings']) {
     const filePath = path.join(workingDirectory, '.claude', name);
     const backupPath = `${filePath}.wizard-backup`;
+    analytics.wizardCapture('backedup-claude-settings');
     try {
       fs.copyFileSync(filePath, backupPath);
       fs.unlinkSync(filePath);
+      registerCleanup(() => {
+        try {
+          restoreClaudeSettings(workingDirectory);
+        } catch (error) {
+          analytics.captureException(error);
+        }
+      });
       return true;
     } catch {
       // File doesn't exist — try next candidate
@@ -144,9 +153,10 @@ export function restoreClaudeSettings(workingDirectory: string): void {
     );
     try {
       fs.copyFileSync(backup, path.join(workingDirectory, '.claude', name));
+      analytics.wizardCapture('restored-claude-settings');
       return;
-    } catch {
-      // Backup doesn't exist — try next candidate
+    } catch (error) {
+      analytics.captureException(error);
     }
   }
 }
@@ -919,9 +929,6 @@ export async function runAgent(
     debug('Full error:', error);
     throw error;
   } finally {
-    // Ensure settings are restored even if the run fails before the
-    // inline restore runs (e.g. query() itself throws).
-    restoreClaudeSettings(agentConfig.workingDirectory);
     eventPlanWatcher?.close();
     if (eventPlanInterval) clearInterval(eventPlanInterval);
   }
