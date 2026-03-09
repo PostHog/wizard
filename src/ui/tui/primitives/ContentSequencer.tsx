@@ -101,6 +101,8 @@ interface ContentSequencerProps {
   initialBlockIdx?: number;
   /** Called whenever the active block index advances. */
   onBlockChange?: (idx: number) => void;
+  /** Called once when the last block completes (after its pause). */
+  onSequenceComplete?: () => void;
 }
 
 export const ContentSequencer = ({
@@ -116,6 +118,7 @@ export const ContentSequencer = ({
   startDelay = 0,
   initialBlockIdx = 0,
   onBlockChange,
+  onSequenceComplete,
 }: ContentSequencerProps) => {
   const resuming = initialBlockIdx > 0;
   const [activeIdx, setActiveIdx] = useState(
@@ -143,8 +146,17 @@ export const ContentSequencer = ({
     (blockIndex: number) => {
       // Only the active block can trigger advancement
       if (blockIndex !== activeIdx) return;
-      // Don't advance past the last block
-      if (activeIdx >= blocks.length - 1) return;
+      // Last block — fire sequence-complete after its pause, don't advance
+      if (activeIdx >= blocks.length - 1) {
+        if (onSequenceComplete && !transitionTimer.current) {
+          const pause = getBlockPause(blocks[blockIndex], blockInterval);
+          transitionTimer.current = setTimeout(() => {
+            transitionTimer.current = null;
+            onSequenceComplete();
+          }, pause);
+        }
+        return;
+      }
       // Don't double-trigger
       if (transitionTimer.current) return;
 
@@ -158,11 +170,14 @@ export const ContentSequencer = ({
         });
       }, pause);
     },
-    [activeIdx, blocks, blockInterval, onBlockChange],
+    [activeIdx, blocks, blockInterval, onBlockChange, onSequenceComplete],
   );
 
-  // Find the most recent completed clear block — nothing before it renders.
+  // Find the most recent clear block — nothing before it renders.
+  // When the active block IS a clear block, immediately hide all prior content
+  // so the pause shows a blank screen (not dim prior text).
   const clearFloor = useMemo(() => {
+    if (activeIdx >= 0 && isClearBlock(blocks[activeIdx])) return activeIdx;
     for (let i = activeIdx - 1; i >= 0; i--) {
       if (isClearBlock(blocks[i])) return i + 1;
     }

@@ -3,7 +3,7 @@
  * Each line can contain colors, bold, ASCII art — any JSX.
  */
 
-import { Box, Text } from 'ink';
+import { Box } from 'ink';
 import { useState, useEffect, type ReactNode } from 'react';
 
 interface LinesBlockProps {
@@ -52,11 +52,7 @@ export const LinesBlock = ({
       {lines.map((line, li) => {
         if (completed) {
           if (li < visibleStart) return null;
-          return (
-            <Box key={li}>
-              <Text dimColor>{line}</Text>
-            </Box>
-          );
+          return <Box key={li}>{line}</Box>;
         }
         if (li >= revealedCount || li < visibleStart) return null;
         return <Box key={li}>{line}</Box>;

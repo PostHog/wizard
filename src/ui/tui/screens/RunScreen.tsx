@@ -23,6 +23,7 @@ import {
 import type { ProgressItem } from '../primitives/index.js';
 import { ADDITIONAL_FEATURE_LABELS } from '../../../lib/wizard-session.js';
 import { LearnCard } from '../components/LearnCard.js';
+import { TipsCard } from '../components/TipsCard.js';
 import { useStdoutDimensions } from '../hooks/useStdoutDimensions.js';
 
 const LOG_FILE = '/tmp/posthog-wizard.log';
@@ -62,7 +63,11 @@ export const RunScreen = ({ store }: RunScreenProps) => {
   const statuses =
     store.statusMessages.length > 0 ? store.statusMessages : undefined;
 
-  const learnCard = <LearnCard store={store} />;
+  const leftPane = store.learnCardComplete ? (
+    <TipsCard store={store} />
+  ) : (
+    <LearnCard store={store} onComplete={() => store.setLearnCardComplete()} />
+  );
   const progressList = <ProgressList items={progressItems} title="Tasks" />;
 
   // On narrow terminals, drop the learn pane and show only progress
@@ -72,7 +77,7 @@ export const RunScreen = ({ store }: RunScreenProps) => {
         {progressList}
       </Box>
     ) : (
-      <SplitView left={learnCard} right={progressList} />
+      <SplitView left={leftPane} right={progressList} />
     );
 
   const tabs = [

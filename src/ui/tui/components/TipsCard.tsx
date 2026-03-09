@@ -41,12 +41,6 @@ interface Tip {
 
 const TIPS: Tip[] = [
   {
-    id: 'events',
-    title: 'Events are the bedrock of your PostHog data',
-    description:
-      'As people use your product, events build a picture of their behavior and satisfaction. Good events make great data.',
-  },
-  {
     id: 'persons',
     title: 'You can also track people and groups with PostHog',
     description:
@@ -99,7 +93,7 @@ export const TipsCard = ({ store }: { store: WizardStore }) => {
   return (
     <Box flexDirection="column" paddingX={1}>
       <Text bold color={Colors.accent}>
-        Learn about PostHog
+        Tips
       </Text>
       <Box height={1} />
 

@@ -17,6 +17,7 @@ import {
 } from '../../primitives/index.js';
 import type { ProgressItem } from '../../primitives/index.js';
 import { LearnCard } from '../../components/LearnCard.js';
+import { TipsCard } from '../../components/TipsCard.js';
 
 const MOCK_TASKS = [
   {
@@ -165,7 +166,16 @@ export const RunScreenDemo = ({ store }: RunScreenDemoProps) => {
       label: 'Status',
       component: (
         <SplitView
-          left={<LearnCard store={store} />}
+          left={
+            store.learnCardComplete ? (
+              <TipsCard store={store} />
+            ) : (
+              <LearnCard
+                store={store}
+                onComplete={() => store.setLearnCardComplete()}
+              />
+            )
+          }
           right={<ProgressList items={progressItems} title="Tasks" />}
         />
       ),
