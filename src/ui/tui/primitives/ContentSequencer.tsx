@@ -11,10 +11,11 @@
  */
 
 import { Box } from 'ink';
-import { useState, useCallback, useRef, type ReactNode } from 'react';
+import { useState, useCallback, useRef, useMemo, type ReactNode } from 'react';
 import { TextBlock, type TextRevealMode } from './TextBlock.js';
 import { LinesBlock } from './LinesBlock.js';
 import { NodeBlock } from './NodeBlock.js';
+import { computeVisibleRange } from './layout-helpers.js';
 
 /** A content block in the sequence. */
 export type ContentBlock =
@@ -34,6 +35,10 @@ export function getBlockPause(
 interface ContentSequencerProps {
   blocks: ContentBlock[];
   mode: TextRevealMode;
+  /** Row budget for visible content. When set, older blocks are evicted. */
+  maxHeight?: number;
+  /** Available text width in columns (for height estimation). */
+  availableWidth?: number;
   bullet?: ReactNode;
   animationInterval?: number;
   sentenceInterval?: number;
@@ -44,6 +49,8 @@ interface ContentSequencerProps {
 export const ContentSequencer = ({
   blocks,
   mode,
+  maxHeight,
+  availableWidth,
   bullet,
   animationInterval,
   sentenceInterval,
@@ -52,6 +59,14 @@ export const ContentSequencer = ({
 }: ContentSequencerProps) => {
   const [activeIdx, setActiveIdx] = useState(0);
   const transitionTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Compute visible range reactively (re-evaluates on resize, block advance, etc.)
+  const [visibleStart, visibleEnd] = useMemo(() => {
+    if (maxHeight == null || availableWidth == null) {
+      return [0, activeIdx] as [number, number];
+    }
+    return computeVisibleRange(blocks, activeIdx, availableWidth, maxHeight);
+  }, [blocks, activeIdx, maxHeight, availableWidth]);
 
   const handleComplete = useCallback(
     (blockIndex: number) => {
@@ -74,7 +89,11 @@ export const ContentSequencer = ({
   return (
     <Box flexDirection="column">
       {blocks.map((block, i) => {
+        // Not yet reached
         if (i > activeIdx) return null;
+        // Evicted by viewport
+        if (i < visibleStart || i > visibleEnd) return null;
+
         const active = i === activeIdx;
         const completed = i < activeIdx;
 
@@ -95,6 +114,8 @@ export const ContentSequencer = ({
               animationInterval={animationInterval}
               sentenceInterval={sentenceInterval}
               lineInterval={lineInterval}
+              maxHeight={maxHeight}
+              availableWidth={availableWidth}
             />
           </Box>
         );
@@ -113,6 +134,8 @@ interface BlockRendererProps {
   animationInterval?: number;
   sentenceInterval?: number;
   lineInterval: number;
+  maxHeight?: number;
+  availableWidth?: number;
 }
 
 const BlockRenderer = ({
@@ -125,6 +148,8 @@ const BlockRenderer = ({
   animationInterval,
   sentenceInterval,
   lineInterval,
+  maxHeight,
+  availableWidth,
 }: BlockRendererProps) => {
   if (typeof block === 'string') {
     return (
@@ -137,6 +162,8 @@ const BlockRenderer = ({
         bullet={bullet}
         animationInterval={animationInterval}
         sentenceInterval={sentenceInterval}
+        maxHeight={maxHeight}
+        availableWidth={availableWidth}
       />
     );
   }
@@ -149,6 +176,7 @@ const BlockRenderer = ({
         active={active}
         completed={completed}
         onComplete={onComplete}
+        maxHeight={maxHeight}
       />
     );
   }

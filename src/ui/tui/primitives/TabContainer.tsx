@@ -6,6 +6,7 @@
 import { Box, Text, useInput } from 'ink';
 import { useState, type ReactNode } from 'react';
 import { Colors, Icons } from '../styles.js';
+import type { WizardStore } from '../store.js';
 
 export interface TabDefinition {
   id: string;
@@ -13,23 +14,29 @@ export interface TabDefinition {
   component: ReactNode;
 }
 
-const COLLAPSED_COUNT = 2;
-const EXPANDED_COUNT = 10;
+export const COLLAPSED_COUNT = 2;
+export const EXPANDED_COUNT = 10;
 
 interface TabContainerProps {
   tabs: TabDefinition[];
   statusMessage?: string | string[];
   /** Enable expand/collapse on the status box via 's' key */
   expandableStatus?: boolean;
+  /** Store reference — required when expandableStatus is true so status state is shared. */
+  store?: WizardStore;
 }
 
 export const TabContainer = ({
   tabs,
   statusMessage,
   expandableStatus = false,
+  store,
 }: TabContainerProps) => {
   const [activeTab, setActiveTab] = useState(0);
-  const [statusExpanded, setStatusExpanded] = useState(false);
+  // Fallback to local state when no store is provided
+  const [localExpanded, setLocalExpanded] = useState(false);
+
+  const statusExpanded = store ? store.statusExpanded : localExpanded;
 
   useInput((input, key) => {
     if (key.leftArrow) {
@@ -39,7 +46,11 @@ export const TabContainer = ({
       setActiveTab((prev) => Math.min(tabs.length - 1, prev + 1));
     }
     if (expandableStatus && input === 's') {
-      setStatusExpanded((prev) => !prev);
+      if (store) {
+        store.toggleStatusExpanded();
+      } else {
+        setLocalExpanded((prev) => !prev);
+      }
     }
   });
 

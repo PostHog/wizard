@@ -22,6 +22,12 @@ export type { WipeDirection } from './DissolveTransition.js';
 export { ContentSequencer } from './ContentSequencer.js';
 export type { ContentBlock } from './ContentSequencer.js';
 export {
+  estimateBlockHeight,
+  computeVisibleRange,
+  wordWrap,
+  wrapAndTruncate,
+} from './layout-helpers.js';
+export {
   TextRevealMode,
   TEXT_REVEAL_MODE_LABELS,
   TEXT_REVEAL_MODE_COUNT,

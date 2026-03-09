@@ -165,7 +165,7 @@ export const RunScreenDemo = ({ store }: RunScreenDemoProps) => {
       label: 'Status',
       component: (
         <SplitView
-          left={<LearnCard />}
+          left={<LearnCard store={store} />}
           right={<ProgressList items={progressItems} title="Tasks" />}
         />
       ),
@@ -191,5 +191,12 @@ export const RunScreenDemo = ({ store }: RunScreenDemoProps) => {
     },
   ];
 
-  return <TabContainer tabs={tabs} statusMessage={statuses} expandableStatus />;
+  return (
+    <TabContainer
+      tabs={tabs}
+      statusMessage={statuses}
+      expandableStatus
+      store={store}
+    />
+  );
 };

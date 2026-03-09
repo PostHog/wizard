@@ -50,6 +50,7 @@ export class WizardStore {
   // ── Internal nanostore atoms ─────────────────────────────────────
   private $session = map<WizardSession>(buildSession({}));
   private $statusMessages = atom<string[]>([]);
+  private $statusExpanded = atom(false);
   private $tasks = atom<TaskItem[]>([]);
   private $eventPlan = atom<PlannedEvent[]>([]);
   private $version = atom(0);
@@ -102,6 +103,15 @@ export class WizardStore {
 
   get eventPlan(): PlannedEvent[] {
     return this.$eventPlan.get();
+  }
+
+  get statusExpanded(): boolean {
+    return this.$statusExpanded.get();
+  }
+
+  toggleStatusExpanded(): void {
+    this.$statusExpanded.set(!this.$statusExpanded.get());
+    this.emitChange();
   }
 
   // ── Session setters ─────────────────────────────────────────────

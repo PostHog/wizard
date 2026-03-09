@@ -6,6 +6,7 @@
 import { Box, Text, useInput } from 'ink';
 import { useState } from 'react';
 import { Colors } from '../styles.js';
+import type { WizardStore } from '../store.js';
 import {
   ContentSequencer,
   TextRevealMode,
@@ -13,6 +14,8 @@ import {
   TEXT_REVEAL_MODE_COUNT,
 } from '../primitives/index.js';
 import type { ContentBlock } from '../primitives/index.js';
+import { useStdoutDimensions } from '../hooks/useStdoutDimensions.js';
+import { COLLAPSED_COUNT, EXPANDED_COUNT } from '../primitives/TabContainer.js';
 
 const CONTENT: ContentBlock[] = [
   'Hello there. Thanks for trying out the Wizard.',
@@ -108,8 +111,18 @@ const CONTENT: ContentBlock[] = [
   'The data warehouse connects PostHog to everything else. Pull in Stripe revenue data, Hubspot CRM records, or your own database tables. Join them with your event data and suddenly you can answer questions like "do users who came from Google Ads have higher lifetime value?"',
 ];
 
-export const LearnCard = () => {
+/** Fixed chrome: ScreenContainer (3) + TabContainer tab bar (2) */
+const FIXED_CHROME = 5;
+const HEADER_ROWS = 3; // title + mode label + spacer
+const MIN_CONTENT_ROWS = 6;
+
+interface LearnCardProps {
+  store?: WizardStore;
+}
+
+export const LearnCard = ({ store }: LearnCardProps) => {
   const [mode, setMode] = useState<TextRevealMode>(TextRevealMode.Typewriter);
+  const [columns, rows] = useStdoutDimensions();
 
   useInput((input) => {
     if (input === 'p') {
@@ -117,8 +130,27 @@ export const LearnCard = () => {
     }
   });
 
+  // Dynamic status bar height: messages + border when present
+  const hasStatus = store ? store.statusMessages.length > 0 : false;
+  const statusBarRows = hasStatus
+    ? (store!.statusExpanded ? EXPANDED_COUNT : COLLAPSED_COUNT) + 1
+    : 0;
+
+  const contentHeight = rows - FIXED_CHROME - statusBarRows;
+  const tooSmall = contentHeight < MIN_CONTENT_ROWS;
+
+  const maxHeight = Math.max(1, contentHeight - HEADER_ROWS);
+  // Half of clamped content width, minus paddingX on both sides
+  const paneWidth = Math.floor((Math.min(120, columns) - 2) / 2) - 2;
+
+  // Always render so ContentSequencer stays mounted (preserves activeIdx).
+  // When too small, hide visually via display="none".
   return (
-    <Box flexDirection="column" paddingX={1}>
+    <Box
+      flexDirection="column"
+      paddingX={1}
+      display={tooSmall ? 'none' : 'flex'}
+    >
       <Text bold color={Colors.accent}>
         Learn about PostHog
       </Text>
@@ -127,7 +159,12 @@ export const LearnCard = () => {
         <Text color={Colors.accent}>[p]</Text> to switch
       </Text>
       <Box height={1} />
-      <ContentSequencer blocks={CONTENT} mode={mode} />
+      <ContentSequencer
+        blocks={CONTENT}
+        mode={mode}
+        maxHeight={maxHeight}
+        availableWidth={paneWidth}
+      />
     </Box>
   );
 };

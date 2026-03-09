@@ -20,6 +20,7 @@ import {
   sentenceEndChars,
   sentenceEndWords,
 } from './text-helpers.js';
+import { wrapAndTruncate } from './layout-helpers.js';
 
 export enum TextRevealMode {
   Typewriter = 0,
@@ -57,6 +58,10 @@ interface TextBlockProps {
   bullet?: ReactNode;
   animationInterval?: number;
   sentenceInterval?: number;
+  /** Max rows this block may occupy. When exceeded, top lines are truncated. */
+  maxHeight?: number;
+  /** Available text width in columns (for truncation wrapping). */
+  availableWidth?: number;
 }
 
 export const TextBlock = ({
@@ -68,6 +73,8 @@ export const TextBlock = ({
   bullet,
   animationInterval,
   sentenceInterval = 1600,
+  maxHeight,
+  availableWidth,
 }: TextBlockProps) => {
   const speed = animationInterval ?? TEXT_REVEAL_MODE_DEFAULTS[mode];
 
@@ -147,12 +154,22 @@ export const TextBlock = ({
     sentenceWordEnds,
   ]);
 
+  // Pre-wrap text ourselves to avoid Ink's native wrap leaving leading spaces
+  // on continuation lines. When maxHeight is set, also truncates to last N rows.
+  const wrap = (visibleText: string): string => {
+    if (availableWidth == null) return visibleText;
+    if (maxHeight == null) {
+      return wrapAndTruncate(visibleText, availableWidth, Infinity);
+    }
+    return wrapAndTruncate(visibleText, availableWidth, maxHeight);
+  };
+
   // Completed: dimmed text
   if (completed) {
     return (
       <Text dimColor>
         {bullet}
-        {text}
+        {wrap(text)}
       </Text>
     );
   }
@@ -161,10 +178,11 @@ export const TextBlock = ({
   if (mode === TextRevealMode.Typewriter) {
     const revealed = text.slice(0, animIdx);
     const atSentenceEnd = /[.!?]\s*$/.test(revealed);
+    const display = atSentenceEnd ? revealed.trimEnd() : revealed;
     return (
       <Text>
         {bullet}
-        {atSentenceEnd ? revealed.trimEnd() : revealed}
+        {wrap(display)}
         <Text color={Colors.muted}>{'\u258C'}</Text>
       </Text>
     );
@@ -175,7 +193,7 @@ export const TextBlock = ({
     return (
       <Text>
         {bullet}
-        {visible}
+        {wrap(visible)}
       </Text>
     );
   }
@@ -184,7 +202,7 @@ export const TextBlock = ({
     return (
       <Text>
         {bullet}
-        {text}
+        {wrap(text)}
       </Text>
     );
   }
@@ -194,7 +212,7 @@ export const TextBlock = ({
     return (
       <Text>
         {bullet}
-        {visible}
+        {wrap(visible)}
       </Text>
     );
   }

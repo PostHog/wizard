@@ -10,6 +10,7 @@
  */
 
 import { useSyncExternalStore } from 'react';
+import { Box } from 'ink';
 import type { WizardStore } from '../store.js';
 import {
   TabContainer,
@@ -22,6 +23,7 @@ import {
 import type { ProgressItem } from '../primitives/index.js';
 import { ADDITIONAL_FEATURE_LABELS } from '../../../lib/wizard-session.js';
 import { TipsCard } from '../components/TipsCard.js';
+import { useStdoutDimensions } from '../hooks/useStdoutDimensions.js';
 
 const LOG_FILE = '/tmp/posthog-wizard.log';
 
@@ -34,6 +36,8 @@ export const RunScreen = ({ store }: RunScreenProps) => {
     (cb) => store.subscribe(cb),
     () => store.getSnapshot(),
   );
+
+  const [columns] = useStdoutDimensions();
 
   const progressItems: ProgressItem[] = store.tasks.map((t) => ({
     label: t.label,
@@ -58,16 +62,24 @@ export const RunScreen = ({ store }: RunScreenProps) => {
   const statuses =
     store.statusMessages.length > 0 ? store.statusMessages : undefined;
 
+  const tipsCard = <TipsCard store={store} />;
+  const progressList = <ProgressList items={progressItems} title="Tasks" />;
+
+  // On narrow terminals, drop the tips pane and show only progress
+  const statusComponent =
+    columns < 80 ? (
+      <Box flexDirection="column" flexGrow={1}>
+        {progressList}
+      </Box>
+    ) : (
+      <SplitView left={tipsCard} right={progressList} />
+    );
+
   const tabs = [
     {
       id: 'status',
       label: 'Status',
-      component: (
-        <SplitView
-          left={<TipsCard store={store} />}
-          right={<ProgressList items={progressItems} title="Tasks" />}
-        />
-      ),
+      component: statusComponent,
     },
     ...(store.eventPlan.length > 0
       ? [
@@ -90,5 +102,12 @@ export const RunScreen = ({ store }: RunScreenProps) => {
     },
   ];
 
-  return <TabContainer tabs={tabs} statusMessage={statuses} expandableStatus />;
+  return (
+    <TabContainer
+      tabs={tabs}
+      statusMessage={statuses}
+      expandableStatus
+      store={store}
+    />
+  );
 };

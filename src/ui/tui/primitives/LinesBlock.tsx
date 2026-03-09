@@ -12,6 +12,8 @@ interface LinesBlockProps {
   active: boolean;
   completed: boolean;
   onComplete: () => void;
+  /** Max rows this block may occupy. When exceeded, top lines are truncated. */
+  maxHeight?: number;
 }
 
 export const LinesBlock = ({
@@ -20,6 +22,7 @@ export const LinesBlock = ({
   active,
   completed,
   onComplete,
+  maxHeight,
 }: LinesBlockProps) => {
   const [revealedCount, setRevealedCount] = useState(0);
 
@@ -38,17 +41,24 @@ export const LinesBlock = ({
     if (active && revealedCount >= lines.length) onComplete();
   }, [active, revealedCount, lines.length, onComplete]);
 
+  // When maxHeight is set, only show the last maxHeight lines
+  const visibleStart =
+    maxHeight != null
+      ? Math.max(0, (completed ? lines.length : revealedCount) - maxHeight)
+      : 0;
+
   return (
     <Box flexDirection="column">
       {lines.map((line, li) => {
         if (completed) {
+          if (li < visibleStart) return null;
           return (
             <Box key={li}>
               <Text dimColor>{line}</Text>
             </Box>
           );
         }
-        if (li >= revealedCount) return null;
+        if (li >= revealedCount || li < visibleStart) return null;
         const isCurrent = li === revealedCount - 1;
         return (
           <Box key={li}>
