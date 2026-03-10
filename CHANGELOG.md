@@ -1,5 +1,25 @@
 # Changelog
 
+## [2.0.0](https://github.com/PostHog/wizard/compare/v1.36.1...v2.0.0) (2026-03-10)
+
+
+### ⚠ BREAKING CHANGES
+
+* Text run screen ([#328](https://github.com/PostHog/wizard/issues/328))
+
+### Features
+
+* Handle analytics ([#289](https://github.com/PostHog/wizard/issues/289)) ([7f8dcba](https://github.com/PostHog/wizard/commit/7f8dcbad9f0e7daf7b5cb97461ff82a3c3067b8c))
+* Let's make a nice TUI ([#309](https://github.com/PostHog/wizard/issues/309)) ([b6eced6](https://github.com/PostHog/wizard/commit/b6eced684dcf59a52fd0837bfb5370e828d59256))
+* Text run screen ([#328](https://github.com/PostHog/wizard/issues/328)) ([777761b](https://github.com/PostHog/wizard/commit/777761b6b88427c69cbba05e0299c80a1adb7123))
+* use native HTTP transport for Codex CLI ([#312](https://github.com/PostHog/wizard/issues/312)) ([c6276b4](https://github.com/PostHog/wizard/commit/c6276b42d9d75754d65b3bd64f699dd4ebe6d08f))
+
+
+### Bug Fixes
+
+* 401 authentication_error on wizard runs. ([#324](https://github.com/PostHog/wizard/issues/324)) ([3dda544](https://github.com/PostHog/wizard/commit/3dda54452a3d6f6a7457efbb4be0bb4e0563e139))
+* JS web detection ([#313](https://github.com/PostHog/wizard/issues/313)) ([5c9948a](https://github.com/PostHog/wizard/commit/5c9948abfb2604770d15c7c222688d6e28f3eac0))
+
 ## [1.36.1](https://github.com/PostHog/wizard/compare/v1.36.0...v1.36.1) (2026-03-03)
 
 
