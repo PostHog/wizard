@@ -438,8 +438,8 @@ async function scanSkillFiles(
     try {
       const content = fs.readFileSync(filePath, 'utf-8');
       fileContents.push({ path: filePath, content });
-    } catch {
-      // Skip unreadable files
+    } catch (err) {
+      logToFile(`[YARA] Could not read skill file ${filePath}:`, err);
     }
   }
 

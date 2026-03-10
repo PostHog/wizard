@@ -83,6 +83,8 @@ export enum AgentErrorType {
   RATE_LIMIT = 'WIZARD_RATE_LIMIT',
   /** Generic API error */
   API_ERROR = 'WIZARD_API_ERROR',
+  /** YARA scanner terminated the session */
+  YARA_VIOLATION = 'WIZARD_YARA_VIOLATION',
 }
 
 const BLOCKING_ENV_KEYS = ['ANTHROPIC_BASE_URL', 'ANTHROPIC_AUTH_TOKEN'];
@@ -867,6 +869,16 @@ export async function runAgent(
       return { error: AgentErrorType.RESOURCE_MISSING };
     }
 
+    // Check for YARA scanner terminations
+    if (
+      outputText.includes('[YARA CRITICAL]') ||
+      outputText.includes('[YARA] Scanner error')
+    ) {
+      logToFile('Agent error: YARA_VIOLATION');
+      spinner.stop('Security violation detected');
+      return { error: AgentErrorType.YARA_VIOLATION };
+    }
+
     // Check for API errors (rate limits, etc.)
     // Extract just the API error line(s), not the entire output
     const apiErrorMatch = outputText.match(/API Error: [^\n]+/g);
@@ -899,8 +911,18 @@ export async function runAgent(
       return completeWithSuccess(error as Error);
     }
 
-    // Check if we collected an API error before the exception was thrown
+    // Check if we collected an error before the exception was thrown
     const outputText = collectedText.join('\n');
+
+    // Check for YARA scanner terminations
+    if (
+      outputText.includes('[YARA CRITICAL]') ||
+      outputText.includes('[YARA] Scanner error')
+    ) {
+      logToFile('Agent error (caught): YARA_VIOLATION');
+      spinner.stop('Security violation detected');
+      return { error: AgentErrorType.YARA_VIOLATION };
+    }
 
     // Extract just the API error line(s), not the entire output
     const apiErrorMatch = outputText.match(/API Error: [^\n]+/g);

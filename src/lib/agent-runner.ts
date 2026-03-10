@@ -31,7 +31,11 @@ import * as semver from 'semver';
 import { checkAnthropicStatus } from '../utils/anthropic-status';
 import { enableDebugLogs, initLogFile, logToFile } from '../utils/debug';
 import { createBenchmarkPipeline } from './middleware/benchmark';
-import { wizardAbort, WizardError } from '../utils/wizard-abort';
+import {
+  wizardAbort,
+  WizardError,
+  registerCleanup,
+} from '../utils/wizard-abort';
 
 /**
  * Build a WizardOptions bag from a WizardSession (for code that still expects WizardOptions).
@@ -212,6 +216,20 @@ export async function runAgentWizard(
 
   const restoreSettings = () => restoreClaudeSettings(session.installDir);
   getUI().onEnterScreen('outro', restoreSettings);
+
+  // Register YARA report as cleanup so it fires on any exit path (including wizardAbort)
+  if (session.yaraReport) {
+    registerCleanup(() => {
+      const reportPath = writeScanReport();
+      if (reportPath) {
+        const summary = formatScanReport();
+        getUI().log.info(
+          `YARA scan report: ${chalk.cyan(reportPath)}${summary ?? ''}`,
+        );
+      }
+    });
+  }
+
   getUI().startRun();
 
   const agent = await initializeAgent(
@@ -266,6 +284,17 @@ export async function runAgentWizard(
         integration: config.metadata.integration,
         error_type: AgentErrorType.RESOURCE_MISSING,
         signal: AgentSignals.ERROR_RESOURCE_MISSING,
+      }),
+    });
+  }
+
+  if (agentResult.error === AgentErrorType.YARA_VIOLATION) {
+    await wizardAbort({
+      message:
+        'Security violation detected\n\nThe YARA scanner terminated the session after detecting a security violation.\nThis may indicate prompt injection, poisoned skill files, or a policy breach.\n\nPlease report this to: wizard@posthog.com',
+      error: new WizardError('YARA scanner terminated session', {
+        integration: config.metadata.integration,
+        error_type: AgentErrorType.YARA_VIOLATION,
       }),
     });
   }
@@ -339,16 +368,6 @@ export async function runAgentWizard(
   };
 
   getUI().outro(`Successfully installed PostHog!`);
-
-  if (options.yaraReport) {
-    const reportPath = writeScanReport();
-    if (reportPath) {
-      const summary = formatScanReport();
-      getUI().log.info(
-        `YARA scan report: ${chalk.cyan(reportPath)}${summary ?? ''}`,
-      );
-    }
-  }
 
   await analytics.shutdown('success');
 }
