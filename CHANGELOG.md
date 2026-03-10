@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.0.1](https://github.com/PostHog/wizard/compare/v2.0.0...v2.0.1) (2026-03-10)
+
+
+### Bug Fixes
+
+* versions ([#330](https://github.com/PostHog/wizard/issues/330)) ([fa61742](https://github.com/PostHog/wizard/commit/fa61742fccb7dc9635ab55dac33862eb34dc54ea))
+
 ## [2.0.0](https://github.com/PostHog/wizard/compare/v1.36.1...v2.0.0) (2026-03-10)
 
 
