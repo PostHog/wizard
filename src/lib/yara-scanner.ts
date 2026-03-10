@@ -7,6 +7,9 @@
  * security violations including PII leakage, hardcoded secrets,
  * prompt injection, and secret exfiltration.
  *
+ * We use YARA-style regex rules rather than the real YARA C library to
+ * avoid native binary dependencies in an npx-distributed npm package.
+ *
  * This is Layer 2 (L2) in the wizard's defense-in-depth model,
  * complementing the prompt-based commandments (L0) and the
  * canUseTool() allowlist (L1).
