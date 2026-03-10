@@ -104,6 +104,7 @@ export async function runWizard(argv: Args, session?: WizardSession) {
         ci: session.ci,
         menu: session.menu,
         benchmark: session.benchmark,
+        yaraReport: session.yaraReport,
       });
       for (const [key, value] of Object.entries(context)) {
         if (!(key in session.frameworkContext)) {

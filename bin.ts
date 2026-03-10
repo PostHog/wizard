@@ -23,6 +23,8 @@ import { runWizard } from './src/run';
 import { isNonInteractiveEnvironment } from './src/utils/environment';
 import { getUI, setUI } from './src/ui';
 import { LoggingUI } from './src/ui/logging-ui';
+import type { Integration } from './src/lib/constants';
+import type { FrameworkConfig } from './src/lib/framework-config';
 
 if (process.env.NODE_ENV === 'test') {
   void (async () => {
@@ -187,7 +189,7 @@ yargs(hideBin(process.argv))
           const { startPlayground } = await import(
             './src/ui/tui/playground/start-playground.js'
           );
-          startPlayground(WIZARD_VERSION);
+          (startPlayground as (version: string) => void)(WIZARD_VERSION);
         })();
       } else {
         // Interactive TTY: launch the Ink TUI
@@ -214,21 +216,26 @@ yargs(hideBin(process.argv))
                 typeof buildSession
               >[0]['integration'],
               benchmark: options.benchmark as boolean | undefined,
+              yaraReport: options.yaraReport as boolean | undefined,
               projectId: options.projectId as string | undefined,
             });
             tui.store.session = session;
 
             // Detect framework while IntroScreen shows its spinner.
             // Runs concurrently — IntroScreen reacts when detection completes.
-            const { FRAMEWORK_REGISTRY } = await import(
+            const { FRAMEWORK_REGISTRY } = (await import(
               './src/lib/registry.js'
-            );
-            const { detectIntegration } = await import('./src/run.js');
+            )) as { FRAMEWORK_REGISTRY: Record<Integration, FrameworkConfig> };
+            const { detectIntegration } = (await import('./src/run.js')) as {
+              detectIntegration: (
+                installDir: string,
+              ) => Promise<Integration | undefined>;
+            };
             const installDir = session.installDir ?? process.cwd();
 
-            const { DETECTION_TIMEOUT_MS } = await import(
+            const { DETECTION_TIMEOUT_MS } = (await import(
               './src/lib/constants.js'
-            );
+            )) as { DETECTION_TIMEOUT_MS: number };
             const detectedIntegration = await Promise.race([
               detectIntegration(installDir),
               new Promise<undefined>((resolve) =>
@@ -253,6 +260,7 @@ yargs(hideBin(process.argv))
                       ci: session.ci,
                       menu: session.menu,
                       benchmark: session.benchmark,
+                      yaraReport: session.yaraReport,
                     }),
                     new Promise<Record<string, never>>((resolve) =>
                       setTimeout(() => resolve({}), DETECTION_TIMEOUT_MS),

@@ -121,9 +121,21 @@ export function writeScanReport(): string | null {
     violations: scanViolations,
   };
 
-  fs.writeFileSync(YARA_REPORT_PATH, JSON.stringify(report, null, 2));
+  try {
+    fs.writeFileSync(YARA_REPORT_PATH, JSON.stringify(report, null, 2));
+  } catch (err) {
+    logToFile('[YARA] Failed to write scan report:', err);
+    return null;
+  }
   return YARA_REPORT_PATH;
 }
+
+// ─── Hook Timeouts (ms) ─────────────────────────────────────────
+
+/** Timeout for synchronous scan hooks (PreToolUse, PostToolUse Write/Edit/Read) */
+const HOOK_TIMEOUT_MS = 5;
+/** Timeout for skill install hook (involves filesystem I/O) */
+const SKILL_SCAN_HOOK_TIMEOUT_MS = 30;
 
 // ─── Logging ─────────────────────────────────────────────────────
 
@@ -212,7 +224,7 @@ export function createPreToolUseYaraHooks(): HookCallbackMatcher[] {
           }
         },
       ],
-      timeout: 5,
+      timeout: HOOK_TIMEOUT_MS,
     },
   ];
 }
@@ -284,7 +296,7 @@ export function createPostToolUseYaraHooks(): HookCallbackMatcher[] {
           }
         },
       ],
-      timeout: 5,
+      timeout: HOOK_TIMEOUT_MS,
     },
 
     // ── Read/Grep prompt injection scanning ──
@@ -351,7 +363,7 @@ export function createPostToolUseYaraHooks(): HookCallbackMatcher[] {
           }
         },
       ],
-      timeout: 5,
+      timeout: HOOK_TIMEOUT_MS,
     },
 
     // ── Context-mill skill install scanning ──
@@ -407,7 +419,7 @@ export function createPostToolUseYaraHooks(): HookCallbackMatcher[] {
           }
         },
       ],
-      timeout: 30,
+      timeout: SKILL_SCAN_HOOK_TIMEOUT_MS,
     },
   ];
 }
