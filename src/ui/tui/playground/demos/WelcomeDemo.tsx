@@ -13,7 +13,7 @@ interface WelcomeDemoProps {
 export const WelcomeDemo = ({ store }: WelcomeDemoProps) => {
   useInput((_input, key) => {
     if (key.return) {
-      store.emitChange();
+      store.completeSetup();
     }
   });
 

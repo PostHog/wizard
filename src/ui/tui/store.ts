@@ -50,8 +50,11 @@ export class WizardStore {
   // ── Internal nanostore atoms ─────────────────────────────────────
   private $session = map<WizardSession>(buildSession({}));
   private $statusMessages = atom<string[]>([]);
+  private $statusExpanded = atom(false);
   private $tasks = atom<TaskItem[]>([]);
   private $eventPlan = atom<PlannedEvent[]>([]);
+  private $learnCardBlockIdx = atom(0);
+  private $learnCardComplete = atom(false);
   private $version = atom(0);
 
   /** Last screen seen — used to detect screen transitions for analytics. */
@@ -102,6 +105,22 @@ export class WizardStore {
 
   get eventPlan(): PlannedEvent[] {
     return this.$eventPlan.get();
+  }
+
+  get statusExpanded(): boolean {
+    return this.$statusExpanded.get();
+  }
+
+  toggleStatusExpanded(): void {
+    this.$statusExpanded.set(!this.$statusExpanded.get());
+    this.emitChange();
+  }
+
+  setStatusExpanded(expanded: boolean): void {
+    if (this.$statusExpanded.get() !== expanded) {
+      this.$statusExpanded.set(expanded);
+      this.emitChange();
+    }
   }
 
   // ── Session setters ─────────────────────────────────────────────
@@ -322,7 +341,10 @@ export class WizardStore {
   // ── Agent observation state ─────────────────────────────────────
 
   pushStatus(message: string): void {
-    this.$statusMessages.set([...this.$statusMessages.get(), message]);
+    const msgs = this.$statusMessages.get();
+    // Skip consecutive duplicate messages
+    if (msgs.length > 0 && msgs[msgs.length - 1] === message) return;
+    this.$statusMessages.set([...msgs, message]);
     this.emitChange();
   }
 
@@ -347,6 +369,23 @@ export class WizardStore {
 
   setEventPlan(events: PlannedEvent[]): void {
     this.$eventPlan.set(events);
+    this.emitChange();
+  }
+
+  get learnCardBlockIdx(): number {
+    return this.$learnCardBlockIdx.get();
+  }
+
+  setLearnCardBlockIdx(idx: number): void {
+    this.$learnCardBlockIdx.set(idx);
+  }
+
+  get learnCardComplete(): boolean {
+    return this.$learnCardComplete.get();
+  }
+
+  setLearnCardComplete(): void {
+    this.$learnCardComplete.set(true);
     this.emitChange();
   }
 

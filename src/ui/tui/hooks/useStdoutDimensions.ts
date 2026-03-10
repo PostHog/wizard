@@ -13,19 +13,25 @@ import { useState, useEffect } from 'react';
 export function useStdoutDimensions(): [number, number] {
   const { stdout } = useStdout();
   const [size, setSize] = useState<[number, number]>(() => [
-    stdout.columns,
-    stdout.rows,
+    stdout.columns || 80,
+    stdout.rows || 24,
   ]);
 
   useEffect(() => {
-    setSize([stdout.columns, stdout.rows]);
+    const cols = stdout.columns || 80;
+    const rows = stdout.rows || 24;
+    setSize([cols, rows]);
 
     const stream = stdout as NodeJS.WriteStream & {
       on?(event: string, fn: () => void): void;
     };
     if (typeof stream.on !== 'function') return;
 
-    const onResize = () => setSize([stdout.columns, stdout.rows]);
+    const onResize = () => {
+      const c = stdout.columns || 80;
+      const r = stdout.rows || 24;
+      if (c > 0 && r > 0) setSize([c, r]);
+    };
     stream.on('resize', onResize);
     return () => {
       stream.off?.('resize', onResize);

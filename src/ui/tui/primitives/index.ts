@@ -19,3 +19,22 @@ export type { TabDefinition } from './TabContainer.js';
 export { HNViewer } from './HNViewer.js';
 export { DissolveTransition } from './DissolveTransition.js';
 export type { WipeDirection } from './DissolveTransition.js';
+export { ContentSequencer } from './ContentSequencer.js';
+export type {
+  ContentBlock,
+  ContentObjectBlock,
+  ContentLinesBlock,
+  ContentClearBlock,
+} from './ContentSequencer.js';
+export {
+  estimateBlockHeight,
+  computeVisibleRange,
+  wordWrap,
+  wrapAndTruncate,
+} from './layout-helpers.js';
+export {
+  TextRevealMode,
+  TEXT_REVEAL_MODE_LABELS,
+  TEXT_REVEAL_MODE_COUNT,
+  TEXT_REVEAL_MODE_DEFAULTS,
+} from './TextBlock.js';

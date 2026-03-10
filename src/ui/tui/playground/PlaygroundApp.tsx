@@ -12,6 +12,7 @@ import { LayoutDemo } from './demos/LayoutDemo.js';
 import { InputDemo } from './demos/InputDemo.js';
 import { ProgressDemo } from './demos/ProgressDemo.js';
 import { LogDemo } from './demos/LogDemo.js';
+import { RunScreenDemo } from './demos/RunScreenDemo.js';
 
 interface PlaygroundAppProps {
   store: WizardStore;
@@ -23,6 +24,11 @@ export const PlaygroundApp = ({ store }: PlaygroundAppProps) => {
     { id: 'input', label: 'Input', component: <InputDemo /> },
     { id: 'progress', label: 'Progress', component: <ProgressDemo /> },
     { id: 'logs', label: 'Logs', component: <LogDemo /> },
+    {
+      id: 'run',
+      label: 'RunScreen',
+      component: <RunScreenDemo store={store} />,
+    },
   ];
 
   return (

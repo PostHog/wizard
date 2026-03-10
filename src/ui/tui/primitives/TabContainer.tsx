@@ -6,6 +6,7 @@
 import { Box, Text, useInput } from 'ink';
 import { useState, type ReactNode } from 'react';
 import { Colors, Icons } from '../styles.js';
+import type { WizardStore } from '../store.js';
 
 export interface TabDefinition {
   id: string;
@@ -13,35 +14,68 @@ export interface TabDefinition {
   component: ReactNode;
 }
 
+export const COLLAPSED_COUNT = 2;
+export const EXPANDED_COUNT = 10;
+
 interface TabContainerProps {
   tabs: TabDefinition[];
-  statusMessage?: string;
+  statusMessage?: string | string[];
+  /** Enable expand/collapse on the status box via 's' key */
+  expandableStatus?: boolean;
+  /** Store reference — required when expandableStatus is true so status state is shared. */
+  store?: WizardStore;
 }
 
-export const TabContainer = ({ tabs, statusMessage }: TabContainerProps) => {
+export const TabContainer = ({
+  tabs,
+  statusMessage,
+  expandableStatus = false,
+  store,
+}: TabContainerProps) => {
   const [activeTab, setActiveTab] = useState(0);
+  // Fallback to local state when no store is provided
+  const [localExpanded, setLocalExpanded] = useState(false);
 
-  useInput((_input, key) => {
+  const statusExpanded = store ? store.statusExpanded : localExpanded;
+
+  useInput((input, key) => {
     if (key.leftArrow) {
       setActiveTab((prev) => Math.max(0, prev - 1));
     }
     if (key.rightArrow) {
       setActiveTab((prev) => Math.min(tabs.length - 1, prev + 1));
     }
+    if (expandableStatus && input === 's') {
+      if (store) {
+        store.toggleStatusExpanded();
+      } else {
+        setLocalExpanded((prev) => !prev);
+      }
+    }
   });
 
   const current = tabs[activeTab];
 
+  const allMessages = statusMessage
+    ? Array.isArray(statusMessage)
+      ? statusMessage
+      : [statusMessage]
+    : [];
+  const visibleCount =
+    expandableStatus && statusExpanded ? EXPANDED_COUNT : COLLAPSED_COUNT;
+  const visibleMessages = allMessages.slice(-visibleCount);
+
   return (
     <Box flexDirection="column" flexGrow={1}>
-      {/* Active tab content */}
-      <Box flexDirection="column" flexGrow={1}>
+      {/* Active tab content — overflow hidden so expanded status eats into this area */}
+      <Box flexDirection="column" flexGrow={1} flexShrink={1} overflow="hidden">
         {current?.component}
       </Box>
 
       {/* Status bar */}
-      {statusMessage && (
+      {visibleMessages.length > 0 && (
         <Box
+          flexDirection="column"
           borderStyle="single"
           borderTop
           borderBottom={false}
@@ -51,9 +85,14 @@ export const TabContainer = ({ tabs, statusMessage }: TabContainerProps) => {
           paddingX={1}
           overflow="hidden"
         >
-          <Text color={Colors.muted}>
-            {Icons.diamondOpen} {statusMessage}
-          </Text>
+          {visibleMessages.map((msg, i, arr) => {
+            const isCurrent = i === arr.length - 1;
+            return (
+              <Text key={i} color={Colors.muted} dimColor={!isCurrent}>
+                {isCurrent ? Icons.diamond : '\u250A'} {msg}
+              </Text>
+            );
+          })}
         </Box>
       )}
 

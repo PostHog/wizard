@@ -29,6 +29,9 @@ export class ScreenErrorBoundary extends Component<Props, State> {
   componentDidCatch(error: Error): void {
     const { store } = this.props;
 
+    // eslint-disable-next-line no-console
+    console.error('[ScreenErrorBoundary]', error.message, error.stack);
+
     // Set error state — the router will resolve to outro
     store.setOutroData({
       kind: OutroKind.Error,

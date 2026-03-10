@@ -68,7 +68,11 @@ export const DissolveTransition = ({
       setPhase(TransitionPhase.Out);
       setTick(0);
       columnActivationTick.current = new Array(width).fill(-1);
-    } else if (phase === TransitionPhase.Idle) {
+    } else if (phase !== TransitionPhase.Idle) {
+      // Terminal resized mid-transition — abort and show new content immediately
+      setPhase(TransitionPhase.Idle);
+      setDisplayChildren(children);
+    } else {
       setDisplayChildren(children);
     }
   }, [transitionKey, children, width, height, phase, direction]);
