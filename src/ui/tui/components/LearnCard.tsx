@@ -456,7 +456,10 @@ export const LearnCard = ({ store, onComplete }: LearnCardProps) => {
 
       { type: 'clear', pause: 1000 },
 
-      { content: 'Use that signal to decide what to build next.', pause: 4000 },
+      {
+        content: 'Use those signals to decide what to build next.',
+        pause: 4000,
+      },
 
       { content: 'PostHog has all the dev tools you need.', pause: 3000 },
 

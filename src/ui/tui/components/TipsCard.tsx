@@ -44,7 +44,7 @@ const TIPS: Tip[] = [
     id: 'persons',
     title: 'You can also track people and groups with PostHog',
     description:
-      'Events can be associated with the humans who generate them, letting you understand a specific customer problem if they email about it.',
+      "Events can be associated with the humans who generate them, letting you understand a specific user or customer's situation.",
   },
   {
     id: 'properties',
