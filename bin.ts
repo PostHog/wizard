@@ -150,11 +150,9 @@ yargs(hideBin(process.argv))
       if (options.ci) {
         // Use LoggingUI for CI mode (no dependencies, no prompts)
         setUI(new LoggingUI());
-        // Validate required CI flags
+        // Default region to 'us' if not specified
         if (!options.region) {
-          getUI().intro(chalk.inverse(`PostHog Wizard`));
-          getUI().log.error('CI mode requires --region (us or eu)');
-          process.exit(1);
+          options.region = 'us';
         }
         if (!options.apiKey) {
           getUI().intro(`PostHog Wizard`);
