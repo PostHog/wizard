@@ -6,22 +6,9 @@ import yargs from 'yargs';
 import { hideBin } from 'yargs/helpers';
 import chalk from 'chalk';
 
-import { readFileSync } from 'fs';
-import { resolve, dirname } from 'path';
+import { VERSION } from './src/lib/version.js';
 
-const WIZARD_VERSION = (() => {
-  // npm/pnpm set this when running via package scripts
-  if (process.env.npm_package_version) return process.env.npm_package_version;
-  // Fallback: read package.json relative to this file
-  try {
-    const pkg = JSON.parse(
-      readFileSync(resolve(dirname(__filename), '..', 'package.json'), 'utf-8'),
-    );
-    return pkg.version ?? 'unknown';
-  } catch {
-    return 'unknown';
-  }
-})();
+const WIZARD_VERSION = VERSION;
 
 const NODE_VERSION_RANGE = '>=18.17.0';
 
