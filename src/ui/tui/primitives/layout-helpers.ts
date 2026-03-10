@@ -6,12 +6,8 @@
  * within a given height budget.
  */
 
-import type { ContentBlock } from './ContentSequencer.js';
-import {
-  isLinesBlock,
-  isClearBlock,
-  isObjectBlock,
-} from './ContentSequencer.js';
+import type { ContentBlock } from './content-types.js';
+import { isLinesBlock, isClearBlock, isObjectBlock } from './content-types.js';
 
 /**
  * Estimate the number of terminal rows a content block will occupy,

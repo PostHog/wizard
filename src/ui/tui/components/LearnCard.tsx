@@ -35,7 +35,7 @@ const StatusPeekTrigger = ({
     }, duration);
   }, [store, duration, peekedRef]);
 
-  return <Text>You can view the wizard&apos;s status below.</Text>;
+  return <Text>You can view the Wizard&apos;s status below.</Text>;
 };
 
 const POSTHOG_DATA_FLOW: ContentBlock = {
