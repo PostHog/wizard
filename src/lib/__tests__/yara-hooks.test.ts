@@ -9,8 +9,8 @@ jest.mock('../../utils/analytics');
 jest.mock('fs');
 jest.mock('fast-glob');
 
-// Mock isSkillInstallCommand from agent-interface
-jest.mock('../agent-interface', () => ({
+// Mock isSkillInstallCommand from skill-install (extracted to break circular dep)
+jest.mock('../skill-install', () => ({
   isSkillInstallCommand: (command: string) =>
     command.startsWith('mkdir -p .claude/skills/') &&
     command.includes('curl -sL') &&

@@ -18,7 +18,7 @@ import { scan, scanSkillDirectory } from './yara-scanner';
 import type { YaraMatch, ScanResult } from './yara-scanner';
 import { logToFile } from '../utils/debug';
 import { analytics } from '../utils/analytics';
-import { isSkillInstallCommand } from './agent-interface';
+import { isSkillInstallCommand } from './skill-install';
 
 // ─── Types ───────────────────────────────────────────────────────
 // Using loose types to avoid tight coupling to SDK version.
@@ -132,9 +132,9 @@ export function writeScanReport(): string | null {
 // ─── Hook Timeouts (ms) ─────────────────────────────────────────
 
 /** Timeout for synchronous scan hooks (PreToolUse, PostToolUse Write/Edit/Read) */
-const HOOK_TIMEOUT_MS = 5;
+const HOOK_TIMEOUT_MS = 60;
 /** Timeout for skill install hook (involves filesystem I/O) */
-const SKILL_SCAN_HOOK_TIMEOUT_MS = 30;
+const SKILL_SCAN_HOOK_TIMEOUT_MS = 120;
 
 // ─── Logging ─────────────────────────────────────────────────────
 

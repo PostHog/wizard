@@ -172,7 +172,12 @@ const opt_out_capturing: YaraRule = {
   severity: 'medium',
   category: 'posthog_config',
   appliesTo: POST_WRITE_EDIT,
-  patterns: [/opt_out_capturing/i, /opted_out\s*[:=]\s*(true|True|1)/i],
+  patterns: [
+    // Match opt_out_capturing as a config property (in init options), not as a method call.
+    // posthog.opt_out_capturing() is a legitimate GDPR-required API.
+    /opt_out_capturing\s*[:=]\s*(true|True|1)/i,
+    /opted_out\s*[:=]\s*(true|True|1)/i,
+  ],
 };
 
 // ── §2 Prompt Injection ──────────────────────────────────────────
@@ -213,8 +218,9 @@ const prompt_injection_wizard_specific: YaraRule = {
     // Tool abuse via file content
     /run the following command/i,
     /execute this shell command/i,
-    // Role hijacking (broad — kept as high, not critical)
-    /you are now/i,
+    // Role hijacking — require "you are now a" to avoid false positives
+    // on legitimate phrases like "you are now ready to..."
+    /you are now a\s/i,
   ],
 };
 

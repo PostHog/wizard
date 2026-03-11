@@ -29,6 +29,7 @@ import {
   createPreToolUseYaraHooks,
   createPostToolUseYaraHooks,
 } from './yara-hooks';
+import { isSkillInstallCommand } from './skill-install';
 import { getWizardCommandments } from './commandments';
 import type { PackageManagerDetector } from './package-manager-detection';
 
@@ -330,24 +331,8 @@ const SAFE_SCRIPTS = [
  */
 const DANGEROUS_OPERATORS = /[;`$()]/;
 
-/**
- * Check if command is a PostHog skill installation from MCP.
- * We control the MCP server, so we only need to verify:
- * 1. It installs to .claude/skills/
- * 2. It downloads from our GitHub releases or localhost (dev)
- */
-export function isSkillInstallCommand(command: string): boolean {
-  if (!command.startsWith('mkdir -p .claude/skills/')) return false;
-
-  const urlMatch = command.match(/curl -sL ['"]([^'"]+)['"]/);
-  if (!urlMatch) return false;
-
-  const url = urlMatch[1];
-  return (
-    url.startsWith('https://github.com/PostHog/context-mill/releases/') ||
-    /^http:\/\/localhost:\d+\//.test(url)
-  );
-}
+// Re-export for backwards compatibility — canonical source is skill-install.ts
+export { isSkillInstallCommand } from './skill-install';
 
 /**
  * Check if command is an allowed package manager command.
@@ -898,16 +883,6 @@ export async function runAgent(
       logToFile('Agent error: RESOURCE_MISSING');
       spinner.stop('Agent could not access setup resource');
       return { error: AgentErrorType.RESOURCE_MISSING };
-    }
-
-    // Check for YARA scanner terminations
-    if (
-      outputText.includes('[YARA CRITICAL]') ||
-      outputText.includes('[YARA] Scanner error')
-    ) {
-      logToFile('Agent error: YARA_VIOLATION');
-      spinner.stop('Security violation detected');
-      return { error: AgentErrorType.YARA_VIOLATION };
     }
 
     // Check for API errors (rate limits, etc.)
