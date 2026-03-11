@@ -15,6 +15,7 @@ import { Screen, Overlay, type ScreenName } from './router.js';
 
 import { OutageScreen } from './screens/OutageScreen.js';
 import { SettingsOverrideScreen } from './screens/SettingsOverrideScreen.js';
+import { PortConflictScreen } from './screens/PortConflictScreen.js';
 import { IntroScreen } from './screens/IntroScreen.js';
 import { SetupScreen } from './screens/SetupScreen.js';
 import { AuthScreen } from './screens/AuthScreen.js';
@@ -42,6 +43,7 @@ export function createScreens(
     // Overlays
     [Overlay.Outage]: <OutageScreen store={store} />,
     [Overlay.SettingsOverride]: <SettingsOverrideScreen store={store} />,
+    [Overlay.PortConflict]: <PortConflictScreen store={store} />,
 
     // Wizard flow
     [Screen.Intro]: <IntroScreen store={store} />,

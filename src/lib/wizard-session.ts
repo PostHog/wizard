@@ -126,6 +126,7 @@ export interface WizardSession {
   // Runtime
   serviceStatus: { description: string; statusPageUrl: string } | null;
   settingsOverrideKeys: string[] | null;
+  portConflictProcess: { command: string; pid: string; user: string } | null;
   outroData: OutroData | null;
 
   // Additional features queue (drained via stop hook after main integration)
@@ -180,6 +181,7 @@ export function buildSession(args: {
     credentials: null,
     serviceStatus: null,
     settingsOverrideKeys: null,
+    portConflictProcess: null,
     outroData: null,
     additionalFeatureQueue: [],
     frameworkConfig: null,
