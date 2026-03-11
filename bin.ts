@@ -257,6 +257,40 @@ yargs(hideBin(process.argv))
               if (!session.detectedFrameworkLabel) {
                 tui.store.setDetectedFramework(config.metadata.name);
               }
+
+              // Early version check — surface on IntroScreen before user proceeds
+              if (
+                config.detection.minimumVersion &&
+                config.detection.getInstalledVersion
+              ) {
+                const semver = await import('semver');
+                const version = await config.detection.getInstalledVersion({
+                  installDir,
+                  debug: session.debug,
+                  forceInstall: session.forceInstall,
+                  default: false,
+                  signup: session.signup,
+                  localMcp: session.localMcp,
+                  ci: session.ci,
+                  menu: session.menu,
+                  benchmark: session.benchmark,
+                });
+                if (version) {
+                  const coerced = semver.coerce(version);
+                  if (
+                    coerced &&
+                    semver.lt(coerced, config.detection.minimumVersion)
+                  ) {
+                    tui.store.setUnsupportedVersion({
+                      current: version,
+                      minimum: config.detection.minimumVersion,
+                      docsUrl:
+                        config.metadata.unsupportedVersionDocsUrl ??
+                        config.metadata.docsUrl,
+                    });
+                  }
+                }
+              }
             }
 
             // Feature discovery — deterministic scan of package.json deps

@@ -24,7 +24,7 @@ import {
   restoreClaudeSettings,
 } from './agent-interface';
 import { getCloudUrlFromRegion } from '../utils/urls';
-import chalk from 'chalk';
+
 import * as semver from 'semver';
 import { checkAnthropicStatus } from '../utils/anthropic-status';
 import { enableDebugLogs } from '../utils/debug';
@@ -74,14 +74,13 @@ export async function runAgentWizard(
       if (coerced && semver.lt(coerced, config.detection.minimumVersion)) {
         const docsUrl =
           config.metadata.unsupportedVersionDocsUrl ?? config.metadata.docsUrl;
-        getUI().log.warn(
-          `Sorry: the wizard can't help you with ${config.metadata.name} ${version}. Upgrade to ${config.metadata.name} ${config.detection.minimumVersion} or later, or check out the manual setup guide.`,
-        );
-        getUI().log.info(
-          `Setup ${config.metadata.name} manually: ${chalk.cyan(docsUrl)}`,
-        );
-        getUI().outro('PostHog wizard will see you next time!');
-        return;
+        await wizardAbort({
+          message:
+            `Sorry: the wizard can't help you with ${config.metadata.name} ${version}. ` +
+            `Upgrade to ${config.metadata.name} ${config.detection.minimumVersion} or later, ` +
+            `or check out the manual setup guide.\n\n` +
+            `Setup ${config.metadata.name} manually: ${docsUrl}`,
+        });
       }
     }
   }

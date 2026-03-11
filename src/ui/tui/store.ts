@@ -157,6 +157,7 @@ export class WizardStore {
   ): void {
     this.$session.setKey('integration', integration);
     this.$session.setKey('frameworkConfig', config);
+    this.$session.setKey('unsupportedVersion', null);
     this.emitChange();
   }
 
@@ -167,6 +168,15 @@ export class WizardStore {
 
   setDetectedFramework(label: string): void {
     this.$session.setKey('detectedFrameworkLabel', label);
+    this.emitChange();
+  }
+
+  setUnsupportedVersion(info: {
+    current: string;
+    minimum: string;
+    docsUrl: string;
+  }): void {
+    this.$session.setKey('unsupportedVersion', info);
     this.emitChange();
   }
 

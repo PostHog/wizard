@@ -36,8 +36,12 @@ export const IntroScreen = ({ store }: IntroScreenProps) => {
   const detecting = !session.detectionComplete;
   const needsFrameworkPick =
     session.detectionComplete && !session.frameworkConfig;
+  const unsupported = session.unsupportedVersion;
   const showContinue =
-    session.frameworkConfig !== null && !detecting && !pickingFramework;
+    session.frameworkConfig !== null &&
+    !detecting &&
+    !pickingFramework &&
+    !unsupported;
   const showDescription = showContinue;
 
   return (
@@ -115,6 +119,35 @@ export const IntroScreen = ({ store }: IntroScreenProps) => {
                 {config?.metadata.beta && '[BETA]'}
               </Text>
             </Text>
+          )}
+          {unsupported && (
+            <Box flexDirection="column" marginTop={1}>
+              <Text color="#DC9300">
+                Version {unsupported.current} is not supported by the wizard.
+                Please upgrade to {unsupported.minimum} or later.
+              </Text>
+              <Text dimColor>Manual setup guide: {unsupported.docsUrl}</Text>
+              <Box marginTop={1}>
+                <Text dimColor>
+                  Did we get this wrong? You can also select another framework.
+                </Text>
+              </Box>
+              <PickerMenu
+                options={[
+                  { label: 'Select another framework', value: 'framework' },
+                  { label: 'Exit', value: 'exit' },
+                ]}
+                onSelect={(value) => {
+                  const choice = Array.isArray(value) ? value[0] : value;
+                  if (choice === 'framework') {
+                    setPickingFramework(true);
+                    setManuallySelected(true);
+                  } else {
+                    process.exit(0);
+                  }
+                }}
+              />
+            </Box>
           )}
           {showContinue && (
             <PickerMenu

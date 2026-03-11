@@ -102,6 +102,13 @@ export interface WizardSession {
   /** True once framework detection has run (whether it found something or not) */
   detectionComplete: boolean;
 
+  /** Set when the detected framework version is too old for the wizard */
+  unsupportedVersion: {
+    current: string;
+    minimum: string;
+    docsUrl: string;
+  } | null;
+
   // From OAuth
   credentials: {
     accessToken: string;
@@ -170,6 +177,7 @@ export function buildSession(args: {
     typescript: false,
     detectedFrameworkLabel: null,
     detectionComplete: false,
+    unsupportedVersion: null,
 
     runPhase: RunPhase.Idle,
     discoveredFeatures: [],
