@@ -5,7 +5,7 @@
 
 ### Bug Fixes
 
-* Blocked port, incompatible version UI, and detect the actual version of a framework ([#332](https://github.com/PostHog/wizard/issues/332)) ([f1cf38c](https://github.com/PostHog/wizard/commit/f1cf38c4497daa6b8c8c11c5462d15d5ca7ac41e))
+* Handle blocked port, reliably present incompatible version UI, and detect the actual version of a framework ([#332](https://github.com/PostHog/wizard/issues/332)) ([f1cf38c](https://github.com/PostHog/wizard/commit/f1cf38c4497daa6b8c8c11c5462d15d5ca7ac41e))
 
 ## [2.0.1](https://github.com/PostHog/wizard/compare/v2.0.0...v2.0.1) (2026-03-10)
 
