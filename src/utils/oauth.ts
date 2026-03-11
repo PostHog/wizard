@@ -2,7 +2,6 @@ import * as crypto from 'node:crypto';
 import * as http from 'node:http';
 import { execSync } from 'node:child_process';
 import axios from 'axios';
-import chalk from 'chalk';
 import { logToFile } from './debug';
 import opn from 'opn';
 import { z } from 'zod';
@@ -316,19 +315,11 @@ export async function performOAuthFlow(
       getUI().log.error('Authorization timed out. Please try again.');
     } else if (error.message.includes('access_denied')) {
       getUI().log.info(
-        `${chalk.yellow(
-          'Authorization was cancelled.',
-        )}\n\nYou denied access to PostHog. To use the wizard, you need to authorize access to your PostHog account.\n\n${chalk.dim(
-          'You can try again by re-running the wizard.',
-        )}`,
+        `Authorization was cancelled.\n\nYou denied access to PostHog. To use the wizard, you need to authorize access to your PostHog account.\n\nYou can try again by re-running the wizard.`,
       );
     } else {
       getUI().log.error(
-        `${chalk.red('Authorization failed:')}\n\n${
-          error.message
-        }\n\n${chalk.dim(
-          `If you think this is a bug in the PostHog wizard, please create an issue:\n${ISSUES_URL}`,
-        )}`,
+        `Authorization failed:\n\n${error.message}\n\nIf you think this is a bug in the PostHog wizard, please create an issue:\n${ISSUES_URL}`,
       );
     }
 

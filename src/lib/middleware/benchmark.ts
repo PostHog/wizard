@@ -7,7 +7,6 @@
  *   pipeline.finalize(resultMessage, durationMs);
  */
 
-import chalk from 'chalk';
 import { getUI, type SpinnerHandle } from '../../ui';
 import { logToFile, getLogFilePath, configureLogFile } from '../../utils/debug';
 import { MiddlewarePipeline } from './pipeline';
@@ -85,12 +84,10 @@ export function createBenchmarkPipeline(
 
   if (!config.output.suppressWizardLogs) {
     getUI().log.info(
-      `${chalk.cyan(AgentSignals.BENCHMARK)} Verbose logs: ${getLogFilePath()}`,
+      `${AgentSignals.BENCHMARK} Verbose logs: ${getLogFilePath()}`,
     );
     getUI().log.info(
-      `${chalk.cyan(
-        AgentSignals.BENCHMARK,
-      )} Benchmark data will be written to: ${config.output.benchmarkPath}`,
+      `${AgentSignals.BENCHMARK} Benchmark data will be written to: ${config.output.benchmarkPath}`,
     );
   }
 

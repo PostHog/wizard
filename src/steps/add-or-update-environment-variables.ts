@@ -1,4 +1,3 @@
-import chalk from 'chalk';
 import type { Integration } from '../lib/constants';
 import { traceStep } from '../telemetry';
 import { analytics } from '../utils/analytics';
@@ -67,24 +66,18 @@ export async function addOrUpdateEnvironmentVariablesStep({
             flag: 'w',
           });
           getUI().log.success(
-            `Updated environment variables in ${chalk.bold.cyan(
-              relativeEnvFilePath,
-            )}`,
+            `Updated environment variables in ${relativeEnvFilePath}`,
           );
         } else {
           getUI().log.success(
-            `${chalk.bold.cyan(
-              relativeEnvFilePath,
-            )} already has the necessary environment variables.`,
+            `${relativeEnvFilePath} already has the necessary environment variables.`,
           );
         }
 
         addedEnvVariables = true;
       } catch (error) {
         getUI().log.warn(
-          `Failed to update environment variables in ${chalk.bold.cyan(
-            relativeEnvFilePath,
-          )}. Please update them manually.`,
+          `Failed to update environment variables in ${relativeEnvFilePath}. Please update them manually.`,
         );
 
         analytics.wizardCapture('env vars error', {
@@ -105,17 +98,13 @@ export async function addOrUpdateEnvironmentVariablesStep({
           flag: 'w',
         });
         getUI().log.success(
-          `Created ${chalk.bold.cyan(
-            relativeEnvFilePath,
-          )} with environment variables.`,
+          `Created ${relativeEnvFilePath} with environment variables.`,
         );
 
         addedEnvVariables = true;
       } catch (error) {
         getUI().log.warn(
-          `Failed to create ${chalk.bold.cyan(
-            relativeEnvFilePath,
-          )} with environment variables. Please add them manually.`,
+          `Failed to create ${relativeEnvFilePath} with environment variables. Please add them manually.`,
         );
 
         analytics.wizardCapture('env vars error', {
@@ -152,17 +141,11 @@ export async function addOrUpdateEnvironmentVariablesStep({
             encoding: 'utf8',
             flag: 'w',
           });
-          getUI().log.success(
-            `Updated ${chalk.bold.cyan(
-              '.gitignore',
-            )} to include ${chalk.bold.cyan(envFileName)}.`,
-          );
+          getUI().log.success(`Updated .gitignore to include ${envFileName}.`);
           addedGitignore = true;
         } catch (error) {
           getUI().log.warn(
-            `Failed to update ${chalk.bold.cyan(
-              '.gitignore',
-            )} to include ${chalk.bold.cyan(envFileName)}.`,
+            `Failed to update .gitignore to include ${envFileName}.`,
           );
 
           analytics.wizardCapture('env vars error', {
@@ -188,16 +171,10 @@ export async function addOrUpdateEnvironmentVariablesStep({
             flag: 'w',
           },
         );
-        getUI().log.success(
-          `Created ${chalk.bold.cyan('.gitignore')} with environment files.`,
-        );
+        getUI().log.success(`Created .gitignore with environment files.`);
         addedGitignore = true;
       } catch (error) {
-        getUI().log.warn(
-          `Failed to create ${chalk.bold.cyan(
-            '.gitignore',
-          )} with environment files.`,
-        );
+        getUI().log.warn(`Failed to create .gitignore with environment files.`);
 
         analytics.wizardCapture('env vars error', {
           integration,

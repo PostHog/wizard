@@ -1,4 +1,3 @@
-import chalk from 'chalk';
 import { getUI, type SpinnerHandle } from '../../../ui';
 import { AgentSignals } from '../../agent-interface';
 import type { Middleware, MiddlewareContext, MiddlewareStore } from '../types';
@@ -47,7 +46,7 @@ function printPhase(s: PhaseStats): string {
     s.inputTokens - s.cacheRead - s.cacheCreation5m - s.cacheCreation1h,
   );
   return [
-    `${chalk.bold(s.phase)}: ${fmtDuration(s.durationMs)}, ${
+    `${s.phase}: ${fmtDuration(s.durationMs)}, ${
       s.turns
     } turns, cost: ${fmtCost(s.cost)}`,
     `  in: ${fmtTok(baseIn)}, out: ${fmtTok(
@@ -109,18 +108,12 @@ export class SummaryPlugin implements Middleware {
     const stats = getPhaseStats(idx, ctx);
 
     if (stats) {
-      this.spinner.stop(
-        `${chalk.cyan(AgentSignals.BENCHMARK)} ${printPhase(stats)}`,
-      );
+      this.spinner.stop(`${AgentSignals.BENCHMARK} ${printPhase(stats)}`);
     } else {
-      this.spinner.stop(`${chalk.cyan(AgentSignals.BENCHMARK)} ${fromPhase}`);
+      this.spinner.stop(`${AgentSignals.BENCHMARK} ${fromPhase}`);
     }
 
-    getUI().log.info(
-      `${chalk.cyan(AgentSignals.BENCHMARK)} Starting phase: ${chalk.bold(
-        toPhase,
-      )}`,
-    );
+    getUI().log.info(`${AgentSignals.BENCHMARK} Starting phase: ${toPhase}`);
     this.spinner.start(`Integrating PostHog (${toPhase})...`);
   }
 
@@ -140,9 +133,7 @@ export class SummaryPlugin implements Middleware {
 
     getUI().log.info('');
     getUI().log.info(
-      `${chalk.green('◇')} ${chalk.cyan(
-        AgentSignals.BENCHMARK,
-      )} ${phaseCount} phases in ${fmtDuration(
+      `◇ ${AgentSignals.BENCHMARK} ${phaseCount} phases in ${fmtDuration(
         totalDurationMs,
       )}, cost: ${fmtCost(totalCost)}`,
     );
@@ -154,11 +145,7 @@ export class SummaryPlugin implements Middleware {
       )}, cache_1h: ${fmtTok(cache?.totalCreation1h ?? 0)}`,
     );
     getUI().log.info('');
-    getUI().log.info(
-      `${chalk.blue('●')} ${chalk.cyan(
-        AgentSignals.BENCHMARK,
-      )} Summary by phase:`,
-    );
+    getUI().log.info(`● ${AgentSignals.BENCHMARK} Summary by phase:`);
 
     if (duration?.phaseSnapshots) {
       for (let i = 0; i < duration.phaseSnapshots.length; i++) {

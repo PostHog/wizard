@@ -3,7 +3,6 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import { isAbsolute, join, relative } from 'node:path';
 
-import chalk from 'chalk';
 import { traceStep } from '../telemetry';
 import { debug } from './debug';
 import type { PackageDotJson } from './package-json';
@@ -154,9 +153,9 @@ export async function installPackage({
       isReact19 && pkgManager.name === 'npm' ? '--legacy-peer-deps' : '';
 
     sdkInstallSpinner.start(
-      `${alreadyInstalled ? 'Updating' : 'Installing'} ${chalk.bold.cyan(
-        packageNameDisplayLabel ?? packageName,
-      )} with ${chalk.bold(pkgManager.label)}.`,
+      `${alreadyInstalled ? 'Updating' : 'Installing'} ${
+        packageNameDisplayLabel ?? packageName
+      } with ${pkgManager.label}.`,
     );
 
     try {
@@ -190,20 +189,16 @@ export async function installPackage({
     } catch (e) {
       sdkInstallSpinner.stop('Installation failed.');
       getUI().log.error(
-        `${chalk.red(
-          'Encountered the following error during installation:',
-          // eslint-disable-next-line @typescript-eslint/restrict-template-expressions
-        )}\n\n${e}\n\n${chalk.dim(
-          `The wizard has created a \`posthog-wizard-installation-error-*.log\` file. If you think this issue is caused by the PostHog wizard, create an issue on GitHub and include the log file's content:\n${ISSUES_URL}`,
-        )}`,
+        // eslint-disable-next-line @typescript-eslint/restrict-template-expressions
+        `Encountered the following error during installation:\n\n${e}\n\nThe wizard has created a \`posthog-wizard-installation-error-*.log\` file. If you think this issue is caused by the PostHog wizard, create an issue on GitHub and include the log file's content:\n${ISSUES_URL}`,
       );
       await abort();
     }
 
     sdkInstallSpinner.stop(
-      `${alreadyInstalled ? 'Updated' : 'Installed'} ${chalk.bold.cyan(
-        packageNameDisplayLabel ?? packageName,
-      )} with ${chalk.bold(pkgManager.label)}.`,
+      `${alreadyInstalled ? 'Updated' : 'Installed'} ${
+        packageNameDisplayLabel ?? packageName
+      } with ${pkgManager.label}.`,
     );
 
     analytics.wizardCapture('package installed', {
@@ -240,9 +235,7 @@ export async function getPackageDotJson({
     packageJson = JSON.parse(packageJsonFileContents);
   } catch {
     getUI().log.error(
-      `Unable to parse your ${chalk.cyan(
-        'package.json',
-      )}. Make sure it has a valid format!`,
+      `Unable to parse your package.json. Make sure it has a valid format!`,
     );
 
     await abort();
@@ -283,7 +276,7 @@ export async function updatePackageDotJson(
       },
     );
   } catch {
-    getUI().log.error(`Unable to update your ${chalk.cyan('package.json')}.`);
+    getUI().log.error(`Unable to update your package.json.`);
 
     await abort();
   }
@@ -372,14 +365,12 @@ export async function getOrAskForProjectData(
     getUI().log.error(`Didn't receive a project token. This shouldn't happen :(
 
 Please let us know if you think this is a bug in the wizard:
-${chalk.cyan(ISSUES_URL)}`);
+${ISSUES_URL}`);
 
     getUI().log
-      .info(`In the meantime, we'll add a dummy project token (${chalk.cyan(
-      `"${DUMMY_PROJECT_API_KEY}"`,
-    )}) for you to replace later.
+      .info(`In the meantime, we'll add a dummy project token ("${DUMMY_PROJECT_API_KEY}") for you to replace later.
 You can find your project token here:
-${chalk.cyan(`${cloudUrl}/settings/project#variables`)}`);
+${cloudUrl}/settings/project#variables`);
   }
 
   return {
@@ -496,7 +487,7 @@ export async function createNewConfigFile(
     return false;
   }
 
-  const prettyFilename = chalk.cyan(relative(installDir, filepath));
+  const prettyFilename = relative(installDir, filepath);
 
   try {
     await fs.promises.writeFile(filepath, codeSnippet);
@@ -504,7 +495,7 @@ export async function createNewConfigFile(
     getUI().log.success(`Added new ${prettyFilename} file.`);
 
     if (moreInformation) {
-      getUI().log.info(chalk.gray(moreInformation));
+      getUI().log.info(moreInformation);
     }
 
     return true;

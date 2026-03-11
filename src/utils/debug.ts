@@ -1,4 +1,3 @@
-import chalk from 'chalk';
 import { appendFileSync } from 'fs';
 import { prepareMessage } from './logging';
 import { getUI } from '../ui';
@@ -63,7 +62,7 @@ export function debug(...args: unknown[]) {
 
   const msg = args.map((a) => prepareMessage(a)).join(' ');
 
-  getUI().log.info(chalk.dim(msg));
+  getUI().log.info(msg);
 }
 
 export function enableDebugLogs() {
