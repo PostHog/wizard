@@ -5,6 +5,7 @@ import { detectNodePackageManagers } from '../../lib/package-manager-detection';
 import { Integration } from '../../lib/constants';
 import {
   getPackageVersion,
+  getInstalledPackageVersion,
   hasPackageInstalled,
   type PackageDotJson,
 } from '../../utils/package-json';
@@ -27,12 +28,10 @@ export const ANGULAR_AGENT_CONFIG: FrameworkConfig<AngularContext> = {
       getPackageVersion('@angular/core', packageJson as PackageDotJson),
     getVersionBucket: getAngularVersionBucket,
     minimumVersion: '19.0.0',
-    getInstalledVersion: async (options: WizardOptions) => {
-      const packageJson = await tryGetPackageJson(options);
-      return packageJson
-        ? getPackageVersion('@angular/core', packageJson)
-        : undefined;
-    },
+    getInstalledVersion: (options: WizardOptions) =>
+      Promise.resolve(
+        getInstalledPackageVersion('@angular/core', options.installDir),
+      ),
     detect: async (options) => {
       const packageJson = await tryGetPackageJson(options);
       return packageJson

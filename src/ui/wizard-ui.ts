@@ -56,6 +56,13 @@ export interface WizardUI {
   /** Show service degradation (pushes outage overlay in TUI). */
   showServiceStatus(data: { description: string; statusPageUrl: string }): void;
 
+  /** Warn that another process is blocking the OAuth port (pushes overlay in TUI). */
+  showPortConflict(processInfo: {
+    command: string;
+    pid: string;
+    user: string;
+  }): Promise<void>;
+
   /** Warn that .claude/settings.json overrides blocking env vars (pushes blocking overlay in TUI). */
   showSettingsOverride(
     keys: string[],

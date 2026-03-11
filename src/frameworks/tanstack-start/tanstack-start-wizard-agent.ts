@@ -5,6 +5,7 @@ import { detectNodePackageManagers } from '../../lib/package-manager-detection';
 import { Integration } from '../../lib/constants';
 import {
   getPackageVersion,
+  getInstalledPackageVersion,
   hasPackageInstalled,
   type PackageDotJson,
 } from '../../utils/package-json';
@@ -31,12 +32,13 @@ export const TANSTACK_START_AGENT_CONFIG: FrameworkConfig<TanStackStartContext> 
         ),
       getVersionBucket: getTanStackStartVersionBucket,
       minimumVersion: '1.0.0',
-      getInstalledVersion: async (options: WizardOptions) => {
-        const packageJson = await tryGetPackageJson(options);
-        return packageJson
-          ? getPackageVersion('@tanstack/react-start', packageJson)
-          : undefined;
-      },
+      getInstalledVersion: (options: WizardOptions) =>
+        Promise.resolve(
+          getInstalledPackageVersion(
+            '@tanstack/react-start',
+            options.installDir,
+          ),
+        ),
       detect: async (options) => {
         const packageJson = await tryGetPackageJson(options);
         return packageJson

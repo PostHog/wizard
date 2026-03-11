@@ -102,6 +102,13 @@ export interface WizardSession {
   /** True once framework detection has run (whether it found something or not) */
   detectionComplete: boolean;
 
+  /** Set when the detected framework version is too old for the wizard */
+  unsupportedVersion: {
+    current: string;
+    minimum: string;
+    docsUrl: string;
+  } | null;
+
   // From OAuth
   credentials: {
     accessToken: string;
@@ -126,6 +133,7 @@ export interface WizardSession {
   // Runtime
   serviceStatus: { description: string; statusPageUrl: string } | null;
   settingsOverrideKeys: string[] | null;
+  portConflictProcess: { command: string; pid: string; user: string } | null;
   outroData: OutroData | null;
 
   // Additional features queue (drained via stop hook after main integration)
@@ -169,6 +177,7 @@ export function buildSession(args: {
     typescript: false,
     detectedFrameworkLabel: null,
     detectionComplete: false,
+    unsupportedVersion: null,
 
     runPhase: RunPhase.Idle,
     discoveredFeatures: [],
@@ -180,6 +189,7 @@ export function buildSession(args: {
     credentials: null,
     serviceStatus: null,
     settingsOverrideKeys: null,
+    portConflictProcess: null,
     outroData: null,
     additionalFeatureQueue: [],
     frameworkConfig: null,

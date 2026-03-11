@@ -1,3 +1,6 @@
+import { readFileSync } from 'fs';
+import path from 'path';
+
 export type PackageDotJson = {
   version?: string;
   scripts?: Record<string, string | undefined>;
@@ -38,6 +41,28 @@ export function hasPackageInstalled(
   packageJson: PackageDotJson,
 ): boolean {
   return getPackageVersion(packageName, packageJson) !== undefined;
+}
+
+/**
+ * Read the actual installed version from node_modules/[packageName]/package.json.
+ * Returns the real semver (e.g. "15.5.9"), not the range from the project's package.json.
+ */
+export function getInstalledPackageVersion(
+  packageName: string,
+  installDir: string,
+): string | undefined {
+  try {
+    const pkgPath = path.join(
+      installDir,
+      'node_modules',
+      packageName,
+      'package.json',
+    );
+    const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8'));
+    return pkg.version;
+  } catch {
+    return undefined;
+  }
 }
 
 export function getPackageVersion(

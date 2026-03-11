@@ -4,8 +4,6 @@ import { red } from './src/utils/logging';
 
 import yargs from 'yargs';
 import { hideBin } from 'yargs/helpers';
-import chalk from 'chalk';
-
 import { VERSION } from './src/lib/version.js';
 
 const WIZARD_VERSION = VERSION;
@@ -139,14 +137,14 @@ yargs(hideBin(process.argv))
         // Use LoggingUI for CI mode (no dependencies, no prompts)
         setUI(new LoggingUI());
         if (!options.apiKey) {
-          getUI().intro(chalk.inverse(`PostHog Wizard`));
+          getUI().intro(`PostHog Wizard`);
           getUI().log.error(
             'CI mode requires --api-key (personal API key phx_xxx)',
           );
           process.exit(1);
         }
         if (!options.installDir) {
-          getUI().intro(chalk.inverse(`PostHog Wizard`));
+          getUI().intro(`PostHog Wizard`);
           getUI().log.error(
             'CI mode requires --install-dir (directory to install PostHog in)',
           );
@@ -156,7 +154,7 @@ yargs(hideBin(process.argv))
         void runWizard(options as Parameters<typeof runWizard>[0]);
       } else if (isNonInteractiveEnvironment()) {
         // Non-interactive non-CI: error out
-        getUI().intro(chalk.inverse(`PostHog Wizard`));
+        getUI().intro(`PostHog Wizard`);
         getUI().log.error(
           'This installer requires an interactive terminal (TTY) to run.\n' +
             'It appears you are running in a non-interactive environment.\n' +
@@ -256,6 +254,40 @@ yargs(hideBin(process.argv))
 
               if (!session.detectedFrameworkLabel) {
                 tui.store.setDetectedFramework(config.metadata.name);
+              }
+
+              // Early version check — surface on IntroScreen before user proceeds
+              if (
+                config.detection.minimumVersion &&
+                config.detection.getInstalledVersion
+              ) {
+                const semver = await import('semver');
+                const version = await config.detection.getInstalledVersion({
+                  installDir,
+                  debug: session.debug,
+                  forceInstall: session.forceInstall,
+                  default: false,
+                  signup: session.signup,
+                  localMcp: session.localMcp,
+                  ci: session.ci,
+                  menu: session.menu,
+                  benchmark: session.benchmark,
+                });
+                if (version) {
+                  const coerced = semver.coerce(version);
+                  if (
+                    coerced &&
+                    semver.lt(coerced, config.detection.minimumVersion)
+                  ) {
+                    tui.store.setUnsupportedVersion({
+                      current: version,
+                      minimum: config.detection.minimumVersion,
+                      docsUrl:
+                        config.metadata.unsupportedVersionDocsUrl ??
+                        config.metadata.docsUrl,
+                    });
+                  }
+                }
               }
             }
 

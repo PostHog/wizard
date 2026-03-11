@@ -1,7 +1,8 @@
 import * as crypto from 'node:crypto';
 import * as http from 'node:http';
+import { execSync } from 'node:child_process';
 import axios from 'axios';
-import chalk from 'chalk';
+import { logToFile } from './debug';
 import opn from 'opn';
 import { z } from 'zod';
 import { getUI } from '../ui';
@@ -173,6 +174,48 @@ async function startCallbackServer(
   });
 }
 
+function getPortProcessInfo(): { command: string; pid: string; user: string } {
+  try {
+    const output = execSync(`lsof -i :${OAUTH_PORT} -sTCP:LISTEN 2>/dev/null`, {
+      encoding: 'utf-8',
+      timeout: 3000,
+    }).trim();
+    const lines = output.split('\n');
+    // First line is header, second is the process
+    if (lines.length < 2)
+      return { command: 'unknown', pid: 'unknown', user: 'unknown' };
+    const fields = lines[1].split(/\s+/);
+    // lsof columns: COMMAND PID USER FD TYPE DEVICE SIZE/OFF NODE NAME
+    const command = fields[0] ?? 'unknown';
+    const pid = fields[1] ?? 'unknown';
+    const user = fields[2] ?? 'unknown';
+    return { command, pid, user };
+  } catch {
+    return { command: 'unknown', pid: 'unknown', user: 'unknown' };
+  }
+}
+
+async function startCallbackServerWithRetry(
+  authUrl: string,
+  signupUrl: string,
+): ReturnType<typeof startCallbackServer> {
+  try {
+    return await startCallbackServer(authUrl, signupUrl);
+  } catch (e) {
+    const isPortInUse =
+      e instanceof Error &&
+      'code' in e &&
+      (e as NodeJS.ErrnoException).code === 'EADDRINUSE';
+    if (!isPortInUse) throw e;
+
+    const processInfo = getPortProcessInfo();
+    await getUI().showPortConflict(processInfo);
+
+    // User killed the process — retry once
+    return startCallbackServer(authUrl, signupUrl);
+  }
+}
+
 async function exchangeCodeForToken(
   code: string,
   codeVerifier: string,
@@ -229,10 +272,12 @@ export async function performOAuthFlow(
 
   const urlToOpen = config.signup ? localSignupUrl : localLoginUrl;
 
-  const { server, waitForCallback } = await startCallbackServer(
+  logToFile('[oauth] starting callback server');
+  const { server, waitForCallback } = await startCallbackServerWithRetry(
     authUrl.toString(),
     signupUrl.toString(),
   );
+  logToFile('[oauth] callback server ready, showing login URL');
 
   getUI().setLoginUrl(urlToOpen);
 
@@ -270,19 +315,11 @@ export async function performOAuthFlow(
       getUI().log.error('Authorization timed out. Please try again.');
     } else if (error.message.includes('access_denied')) {
       getUI().log.info(
-        `${chalk.yellow(
-          'Authorization was cancelled.',
-        )}\n\nYou denied access to PostHog. To use the wizard, you need to authorize access to your PostHog account.\n\n${chalk.dim(
-          'You can try again by re-running the wizard.',
-        )}`,
+        `Authorization was cancelled.\n\nYou denied access to PostHog. To use the wizard, you need to authorize access to your PostHog account.\n\nYou can try again by re-running the wizard.`,
       );
     } else {
       getUI().log.error(
-        `${chalk.red('Authorization failed:')}\n\n${
-          error.message
-        }\n\n${chalk.dim(
-          `If you think this is a bug in the PostHog wizard, please create an issue:\n${ISSUES_URL}`,
-        )}`,
+        `Authorization failed:\n\n${error.message}\n\nIf you think this is a bug in the PostHog wizard, please create an issue:\n${ISSUES_URL}`,
       );
     }
 

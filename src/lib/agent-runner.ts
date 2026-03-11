@@ -24,10 +24,10 @@ import {
   restoreClaudeSettings,
 } from './agent-interface';
 import { getCloudUrlFromRegion } from '../utils/urls';
-import chalk from 'chalk';
+
 import * as semver from 'semver';
 import { checkAnthropicStatus } from '../utils/anthropic-status';
-import { enableDebugLogs } from '../utils/debug';
+import { enableDebugLogs, initLogFile, logToFile } from '../utils/debug';
 import { createBenchmarkPipeline } from './middleware/benchmark';
 import { wizardAbort, WizardError } from '../utils/wizard-abort';
 
@@ -60,38 +60,42 @@ export async function runAgentWizard(
   config: FrameworkConfig,
   session: WizardSession,
 ): Promise<void> {
+  initLogFile();
+  logToFile(`[agent-runner] START integration=${config.metadata.integration}`);
+
   if (session.debug) {
     enableDebugLogs();
   }
 
   // Version check
   if (config.detection.minimumVersion && config.detection.getInstalledVersion) {
+    logToFile('[agent-runner] checking version');
     const version = await config.detection.getInstalledVersion(
       sessionToOptions(session),
     );
     if (version) {
+      logToFile(
+        `[agent-runner] version=${version} minimum=${config.detection.minimumVersion}`,
+      );
       const coerced = semver.coerce(version);
       if (coerced && semver.lt(coerced, config.detection.minimumVersion)) {
         const docsUrl =
           config.metadata.unsupportedVersionDocsUrl ?? config.metadata.docsUrl;
-        getUI().log.warn(
-          `Sorry: the wizard can't help you with ${config.metadata.name} ${version}. Upgrade to ${config.metadata.name} ${config.detection.minimumVersion} or later, or check out the manual setup guide.`,
-        );
-        getUI().log.info(
-          `Setup ${config.metadata.name} manually: ${chalk.cyan(docsUrl)}`,
-        );
-        getUI().outro('PostHog wizard will see you next time!');
-        return;
+        await wizardAbort({
+          message:
+            `Sorry: the wizard can't help you with ${config.metadata.name} ${version}. ` +
+            `Upgrade to ${config.metadata.name} ${config.detection.minimumVersion} or later, ` +
+            `or check out the manual setup guide.\n\n` +
+            `Setup ${config.metadata.name} manually: ${docsUrl}`,
+        });
       }
     }
   }
 
-  // Setup phase — informational only, no prompts
-  // Beta notice, pre-run notice, and welcome label are all derivable
-  // from session.frameworkConfig — IntroScreen reads them directly.
-
   // Check Anthropic/Claude service status (pure — no prompt)
+  logToFile('[agent-runner] checking anthropic status');
   const statusResult = await checkAnthropicStatus();
+  logToFile(`[agent-runner] anthropic status=${statusResult.status}`);
   if (statusResult.status === 'down' || statusResult.status === 'degraded') {
     getUI().showServiceStatus({
       description: statusResult.description,
@@ -100,15 +104,18 @@ export async function runAgentWizard(
   }
 
   // Check for blocking env overrides in .claude/settings.json before login.
-  // These keys block the Wizard from accessing the PostHog LLM Gateway.
   const blockingOverrideKeys = checkClaudeSettingsOverrides(session.installDir);
+  logToFile(
+    `[agent-runner] settings overrides: ${
+      blockingOverrideKeys.length > 0 ? blockingOverrideKeys.join(', ') : 'none'
+    }`,
+  );
   if (blockingOverrideKeys.length > 0) {
     await getUI().showSettingsOverride(blockingOverrideKeys, () =>
       backupAndFixClaudeSettings(session.installDir),
     );
+    logToFile('[agent-runner] settings override resolved');
   }
-
-  // Disclosure text is static — IntroScreen renders it directly.
 
   const typeScriptDetected = isUsingTypeScript({
     installDir: session.installDir,
@@ -123,7 +130,6 @@ export async function runAgentWizard(
   if (usesPackageJson) {
     packageJson = await tryGetPackageJson({ installDir: session.installDir });
     if (packageJson) {
-      // Log warning if package not installed, but continue (agent handles it)
       const { hasPackageInstalled } = await import('../utils/package-json.js');
       if (!hasPackageInstalled(config.detection.packageName, packageJson)) {
         getUI().log.warn(
@@ -151,6 +157,7 @@ export async function runAgentWizard(
   });
 
   // Get PostHog credentials (region auto-detected from token)
+  logToFile('[agent-runner] starting OAuth');
   const { projectApiKey, host, accessToken, projectId, cloudRegion } =
     await getOrAskForProjectData({
       signup: session.signup,

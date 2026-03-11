@@ -5,6 +5,7 @@ import { detectNodePackageManagers } from '../../lib/package-manager-detection';
 import { Integration } from '../../lib/constants';
 import {
   getPackageVersion,
+  getInstalledPackageVersion,
   hasPackageInstalled,
   type PackageDotJson,
 } from '../../utils/package-json';
@@ -64,10 +65,8 @@ export const NEXTJS_AGENT_CONFIG: FrameworkConfig<NextjsContext> = {
       getPackageVersion('next', packageJson as PackageDotJson),
     getVersionBucket: getNextJsVersionBucket,
     minimumVersion: '15.3.0',
-    getInstalledVersion: async (options: WizardOptions) => {
-      const packageJson = await tryGetPackageJson(options);
-      return packageJson ? getPackageVersion('next', packageJson) : undefined;
-    },
+    getInstalledVersion: (options: WizardOptions) =>
+      Promise.resolve(getInstalledPackageVersion('next', options.installDir)),
     detect: async (options) => {
       const packageJson = await tryGetPackageJson(options);
       return packageJson ? hasPackageInstalled('next', packageJson) : false;

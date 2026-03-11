@@ -4,6 +4,7 @@ import { detectNodePackageManagers } from '../../lib/package-manager-detection';
 import { Integration } from '../../lib/constants';
 import {
   getPackageVersion,
+  getInstalledPackageVersion,
   hasPackageInstalled,
   type PackageDotJson,
 } from '../../utils/package-json';
@@ -28,10 +29,8 @@ export const VUE_AGENT_CONFIG: FrameworkConfig<VueContext> = {
     getVersion: (packageJson: unknown) =>
       getPackageVersion('vue', packageJson as PackageDotJson),
     getVersionBucket: getVueVersionBucket,
-    getInstalledVersion: async (options) => {
-      const packageJson = await tryGetPackageJson(options);
-      return packageJson ? getPackageVersion('vue', packageJson) : undefined;
-    },
+    getInstalledVersion: (options) =>
+      Promise.resolve(getInstalledPackageVersion('vue', options.installDir)),
     detect: async (options) => {
       const packageJson = await tryGetPackageJson(options);
       return packageJson ? hasPackageInstalled('vue', packageJson) : false;

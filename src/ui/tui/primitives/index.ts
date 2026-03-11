@@ -10,6 +10,7 @@ export type { ProgressItem } from './ProgressList.js';
 export { PromptLabel } from './PromptLabel.js';
 export { PickerMenu } from './PickerMenu.js';
 export { ConfirmationInput } from './ConfirmationInput.js';
+export { Divider } from './Divider.js';
 export { LogViewer } from './LogViewer.js';
 export { EventPlanViewer } from './EventPlanViewer.js';
 export { ScreenContainer } from './ScreenContainer.js';

@@ -7,7 +7,6 @@
 
 import fs from 'fs';
 import { getUI } from '../../../ui';
-import chalk from 'chalk';
 import { logToFile } from '../../../utils/debug';
 import { AgentSignals } from '../../agent-interface';
 import type { Middleware, MiddlewareContext, MiddlewareStore } from '../types';
@@ -168,9 +167,7 @@ export class JsonWriterPlugin implements Middleware {
       fs.writeFileSync(this.outputPath, JSON.stringify(data, null, 2));
       logToFile(`Benchmark data written to ${this.outputPath}`);
       getUI().log.info(
-        `${chalk.blue('●')} ${chalk.cyan(
-          AgentSignals.BENCHMARK,
-        )} Results written to ${this.outputPath}`,
+        `● ${AgentSignals.BENCHMARK} Results written to ${this.outputPath}`,
       );
     } catch (error) {
       logToFile('Failed to write benchmark data:', error);

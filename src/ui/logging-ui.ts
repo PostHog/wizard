@@ -88,6 +88,14 @@ export class LoggingUI implements WizardUI {
     );
   }
 
+  showPortConflict(_processInfo: {
+    command: string;
+    pid: string;
+    user: string;
+  }): Promise<void> {
+    return Promise.resolve();
+  }
+
   showSettingsOverride(
     keys: string[],
     _backupAndFix: () => boolean,

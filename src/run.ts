@@ -8,7 +8,6 @@ import { FRAMEWORK_REGISTRY } from './lib/registry';
 import { analytics } from './utils/analytics';
 import { runAgentWizard } from './lib/agent-runner';
 import { EventEmitter } from 'events';
-import chalk from 'chalk';
 import { logToFile } from './utils/debug';
 import { wizardAbort } from './utils/wizard-abort';
 
@@ -68,7 +67,7 @@ export async function runWizard(argv: Args, session?: WizardSession) {
   getUI().intro(`Welcome to the PostHog setup wizard`);
 
   if (session.ci) {
-    getUI().log.info(chalk.dim('Running in CI mode'));
+    getUI().log.info('Running in CI mode');
   }
 
   const integration =

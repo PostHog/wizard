@@ -73,6 +73,14 @@ export class InkUI implements WizardUI {
     this.store.pushOverlay(Overlay.Outage);
   }
 
+  showPortConflict(processInfo: {
+    command: string;
+    pid: string;
+    user: string;
+  }): Promise<void> {
+    return this.store.showPortConflict(processInfo);
+  }
+
   showSettingsOverride(
     keys: string[],
     backupAndFix: () => boolean,

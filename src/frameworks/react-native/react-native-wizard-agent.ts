@@ -5,6 +5,7 @@ import { detectNodePackageManagers } from '../../lib/package-manager-detection';
 import { Integration } from '../../lib/constants';
 import {
   getPackageVersion,
+  getInstalledPackageVersion,
   hasPackageInstalled,
   type PackageDotJson,
 } from '../../utils/package-json';
@@ -38,12 +39,10 @@ export const REACT_NATIVE_AGENT_CONFIG: FrameworkConfig<ReactNativeContext> = {
       getPackageVersion('react-native', packageJson as PackageDotJson),
     getVersionBucket: getReactNativeVersionBucket,
     minimumVersion: '0.73.0',
-    getInstalledVersion: async (options: WizardOptions) => {
-      const packageJson = await tryGetPackageJson(options);
-      return packageJson
-        ? getPackageVersion('react-native', packageJson)
-        : undefined;
-    },
+    getInstalledVersion: (options: WizardOptions) =>
+      Promise.resolve(
+        getInstalledPackageVersion('react-native', options.installDir),
+      ),
     detect: async (options) => {
       const packageJson = await tryGetPackageJson(options);
       return packageJson

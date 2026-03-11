@@ -5,6 +5,7 @@ import { detectNodePackageManagers } from '../../lib/package-manager-detection';
 import { Integration } from '../../lib/constants';
 import {
   getPackageVersion,
+  getInstalledPackageVersion,
   hasPackageInstalled,
   type PackageDotJson,
 } from '../../utils/package-json';
@@ -46,12 +47,10 @@ export const REACT_ROUTER_AGENT_CONFIG: FrameworkConfig<ReactRouterContext> = {
       getPackageVersion('react-router', packageJson as PackageDotJson),
     getVersionBucket: getReactRouterVersionBucket,
     minimumVersion: '6.0.0',
-    getInstalledVersion: async (options: WizardOptions) => {
-      const packageJson = await tryGetPackageJson(options);
-      return packageJson
-        ? getPackageVersion('react-router', packageJson)
-        : undefined;
-    },
+    getInstalledVersion: (options: WizardOptions) =>
+      Promise.resolve(
+        getInstalledPackageVersion('react-router', options.installDir),
+      ),
     detect: async (options) => {
       const packageJson = await tryGetPackageJson(options);
       return packageJson

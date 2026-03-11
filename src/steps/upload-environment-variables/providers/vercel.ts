@@ -3,7 +3,6 @@ import { EnvironmentProvider } from '../EnvironmentProvider';
 import * as fs from 'fs';
 import * as path from 'path';
 import { getUI } from '../../../ui';
-import chalk from 'chalk';
 import { analytics } from '../../../utils/analytics';
 
 export class VercelEnvironmentProvider extends EnvironmentProvider {
@@ -105,9 +104,7 @@ export class VercelEnvironmentProvider extends EnvironmentProvider {
         ) {
           reject(
             new Error(
-              `❌ Environment variable ${chalk.cyan(key)} already exists in ${
-                this.name
-              }. Please upload it manually.`,
+              `❌ Environment variable ${key} already exists in ${this.name}. Please upload it manually.`,
             ),
           );
         } else if (code === 0) {
@@ -115,9 +112,7 @@ export class VercelEnvironmentProvider extends EnvironmentProvider {
         } else {
           reject(
             new Error(
-              `❌ Failed to upload environment variable ${chalk.cyan(key)} to ${
-                this.name
-              }. Please upload it manually.`,
+              `❌ Failed to upload environment variable ${key} to ${this.name}. Please upload it manually.`,
             ),
           );
         }
@@ -133,14 +128,14 @@ export class VercelEnvironmentProvider extends EnvironmentProvider {
     for (const [key, value] of Object.entries(vars)) {
       const spinner = getUI().spinner();
 
-      spinner.start(`Uploading ${chalk.cyan(key)} to ${this.name}...`);
+      spinner.start(`Uploading ${key} to ${this.name}...`);
       await Promise.all(
         this.environments.map((environment) =>
           this.uploadEnvironmentVariable(key, value, environment),
         ),
       )
         .then(() => {
-          spinner.stop(`✅ Uploaded ${chalk.cyan(key)} to ${this.name}`);
+          spinner.stop(`✅ Uploaded ${key} to ${this.name}`);
           results[key] = true;
         })
         .catch((err) => {

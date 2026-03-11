@@ -81,6 +81,9 @@ export class WizardStore {
   private _resolveSettingsOverride: (() => void) | null = null;
   private _backupAndFixSettings: (() => boolean) | null = null;
 
+  /** Blocks OAuth flow until the port-conflict overlay is dismissed. */
+  private _resolvePortConflict: (() => void) | null = null;
+
   constructor(flow: Flow = Flow.Wizard) {
     this.router = new WizardRouter(flow);
   }
@@ -154,6 +157,7 @@ export class WizardStore {
   ): void {
     this.$session.setKey('integration', integration);
     this.$session.setKey('frameworkConfig', config);
+    this.$session.setKey('unsupportedVersion', null);
     this.emitChange();
   }
 
@@ -164,6 +168,15 @@ export class WizardStore {
 
   setDetectedFramework(label: string): void {
     this.$session.setKey('detectedFrameworkLabel', label);
+    this.emitChange();
+  }
+
+  setUnsupportedVersion(info: {
+    current: string;
+    minimum: string;
+    docsUrl: string;
+  }): void {
+    this.$session.setKey('unsupportedVersion', info);
     this.emitChange();
   }
 
@@ -193,6 +206,30 @@ export class WizardStore {
     return new Promise((resolve) => {
       this._resolveSettingsOverride = resolve;
     });
+  }
+
+  /**
+   * Push the port-conflict overlay and return a promise that blocks
+   * until the user kills the blocking process or exits.
+   */
+  showPortConflict(processInfo: {
+    command: string;
+    pid: string;
+    user: string;
+  }): Promise<void> {
+    this.$session.setKey('portConflictProcess', processInfo);
+    this.pushOverlay(Overlay.PortConflict);
+    return new Promise((resolve) => {
+      this._resolvePortConflict = resolve;
+    });
+  }
+
+  /** Dismiss the port-conflict overlay after the user kills the process. */
+  resolvePortConflict(): void {
+    this.$session.setKey('portConflictProcess', null);
+    this.popOverlay();
+    this._resolvePortConflict?.();
+    this._resolvePortConflict = null;
   }
 
   /**
