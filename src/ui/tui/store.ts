@@ -15,6 +15,7 @@ import { TaskStatus } from '../wizard-ui.js';
 import {
   type WizardSession,
   type OutroData,
+  type ReadinessOutageInfo,
   type DiscoveredFeature,
   AdditionalFeature,
   McpOutcome,
@@ -50,8 +51,11 @@ export class WizardStore {
   // ── Internal nanostore atoms ─────────────────────────────────────
   private $session = map<WizardSession>(buildSession({}));
   private $statusMessages = atom<string[]>([]);
+  private $statusExpanded = atom(false);
   private $tasks = atom<TaskItem[]>([]);
   private $eventPlan = atom<PlannedEvent[]>([]);
+  private $learnCardBlockIdx = atom(0);
+  private $learnCardComplete = atom(false);
   private $version = atom(0);
 
   /** Last screen seen — used to detect screen transitions for analytics. */
@@ -78,6 +82,9 @@ export class WizardStore {
   private _resolveSettingsOverride: (() => void) | null = null;
   private _backupAndFixSettings: (() => boolean) | null = null;
 
+  /** Resolves when the outage overlay is dismissed via "Continue anyway". */
+  private _resolveOutageDismissed: (() => void) | null = null;
+
   constructor(flow: Flow = Flow.Wizard) {
     this.router = new WizardRouter(flow);
   }
@@ -102,6 +109,22 @@ export class WizardStore {
 
   get eventPlan(): PlannedEvent[] {
     return this.$eventPlan.get();
+  }
+
+  get statusExpanded(): boolean {
+    return this.$statusExpanded.get();
+  }
+
+  toggleStatusExpanded(): void {
+    this.$statusExpanded.set(!this.$statusExpanded.get());
+    this.emitChange();
+  }
+
+  setStatusExpanded(expanded: boolean): void {
+    if (this.$statusExpanded.get() !== expanded) {
+      this.$statusExpanded.set(expanded);
+      this.emitChange();
+    }
   }
 
   // ── Session setters ─────────────────────────────────────────────
@@ -158,6 +181,57 @@ export class WizardStore {
   ): void {
     this.$session.setKey('serviceStatus', status);
     this.emitChange();
+  }
+
+  setReadinessOutage(info: ReadinessOutageInfo | null): void {
+    this.$session.setKey('readinessOutage', info);
+    this.emitChange();
+  }
+
+  setReadinessGatePassed(): void {
+    this.$session.setKey('readinessGatePassed', true);
+    this.emitChange();
+  }
+
+  /**
+   * Show the readiness outage overlay and return a promise that resolves
+   * when the user chooses "Continue anyway". Never resolves if user exits.
+   */
+  showReadinessOutage(info: ReadinessOutageInfo): Promise<void> {
+    this.$session.setKey('readinessOutage', info);
+    this.pushOverlay(Overlay.Outage);
+    return new Promise((resolve) => {
+      this._resolveOutageDismissed = resolve;
+    });
+  }
+
+  /**
+   * Dismiss the outage overlay (user chose "Continue anyway").
+   * Resolves the promise returned by showReadinessOutage.
+   */
+  dismissOutageOverlay(): void {
+    if (this._resolveOutageDismissed) {
+      this._resolveOutageDismissed();
+      this._resolveOutageDismissed = null;
+    }
+    this.$session.setKey('readinessOutage', null);
+    this.$session.setKey('serviceStatus', null);
+    this.popOverlay();
+  }
+
+  /** Promise that resolves when the outage overlay is dismissed. Used by tests. */
+  getOutageDismissedPromise(): Promise<void> {
+    if (!this.router.hasOverlay) {
+      return Promise.resolve();
+    }
+    return new Promise((resolve) => {
+      const unsub = this.$version.listen(() => {
+        if (!this.router.hasOverlay) {
+          unsub();
+          resolve();
+        }
+      });
+    });
   }
 
   /**
@@ -322,7 +396,10 @@ export class WizardStore {
   // ── Agent observation state ─────────────────────────────────────
 
   pushStatus(message: string): void {
-    this.$statusMessages.set([...this.$statusMessages.get(), message]);
+    const msgs = this.$statusMessages.get();
+    // Skip consecutive duplicate messages
+    if (msgs.length > 0 && msgs[msgs.length - 1] === message) return;
+    this.$statusMessages.set([...msgs, message]);
     this.emitChange();
   }
 
@@ -347,6 +424,23 @@ export class WizardStore {
 
   setEventPlan(events: PlannedEvent[]): void {
     this.$eventPlan.set(events);
+    this.emitChange();
+  }
+
+  get learnCardBlockIdx(): number {
+    return this.$learnCardBlockIdx.get();
+  }
+
+  setLearnCardBlockIdx(idx: number): void {
+    this.$learnCardBlockIdx.set(idx);
+  }
+
+  get learnCardComplete(): boolean {
+    return this.$learnCardComplete.get();
+  }
+
+  setLearnCardComplete(): void {
+    this.$learnCardComplete.set(true);
     this.emitChange();
   }
 

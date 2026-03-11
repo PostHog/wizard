@@ -73,6 +73,12 @@ export class InkUI implements WizardUI {
     this.store.pushOverlay(Overlay.Outage);
   }
 
+  async showReadinessOutage(
+    info: Parameters<WizardStore['showReadinessOutage']>[0],
+  ): Promise<void> {
+    return this.store.showReadinessOutage(info);
+  }
+
   showSettingsOverride(
     keys: string[],
     backupAndFix: () => boolean,

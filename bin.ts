@@ -14,10 +14,20 @@ const WIZARD_VERSION = (() => {
   if (process.env.npm_package_version) return process.env.npm_package_version;
   // Fallback: read package.json relative to this file
   try {
-    const pkg = JSON.parse(
+    const pkgRaw = JSON.parse(
       readFileSync(resolve(dirname(__filename), '..', 'package.json'), 'utf-8'),
-    );
-    return pkg.version ?? 'unknown';
+    ) as unknown;
+
+    if (
+      typeof pkgRaw === 'object' &&
+      pkgRaw !== null &&
+      'version' in pkgRaw &&
+      typeof (pkgRaw as { version: unknown }).version === 'string'
+    ) {
+      return (pkgRaw as { version: string }).version;
+    }
+
+    return 'unknown';
   } catch {
     return 'unknown';
   }

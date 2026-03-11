@@ -21,7 +21,7 @@ import { checkLlmGatewayHealth, checkMcpHealth } from './endpoints';
 // Service labels (used in human-readable reason strings)
 // ---------------------------------------------------------------------------
 
-const SERVICE_LABELS: Record<HealthCheckKey, string> = {
+export const SERVICE_LABELS: Record<HealthCheckKey, string> = {
   anthropic: 'Anthropic',
   posthogOverall: 'PostHog',
   posthogComponents: 'PostHog (components)',
@@ -50,13 +50,7 @@ export interface WizardReadinessConfig {
  * Adjust these arrays to change what blocks a wizard run.
  */
 export const DEFAULT_WIZARD_READINESS_CONFIG: WizardReadinessConfig = {
-  downBlocksRun: [
-    'anthropic',
-    'posthogOverall',
-    'npmOverall',
-    'llmGateway',
-    'mcp',
-  ],
+  downBlocksRun: ['anthropic', 'llmGateway', 'mcp', 'github'],
   degradedBlocksRun: ['anthropic'],
 };
 

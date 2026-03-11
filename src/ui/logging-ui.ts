@@ -88,6 +88,15 @@ export class LoggingUI implements WizardUI {
     );
   }
 
+  async showReadinessOutage(_info: {
+    decision: 'yes' | 'no' | 'yes_with_warnings';
+    reasons: string[];
+    services: Array<{ label: string; status: 'healthy' | 'degraded' | 'down' }>;
+  }): Promise<void> {
+    // In CI mode we abort before reaching this; no-op for interface compliance.
+    return Promise.resolve();
+  }
+
   showSettingsOverride(
     keys: string[],
     _backupAndFix: () => boolean,

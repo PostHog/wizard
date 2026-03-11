@@ -234,7 +234,7 @@ two arrays:
 ### Current defaults
 
 ```ts
-downBlocksRun: ['anthropic', 'posthogOverall', 'npmOverall', 'llmGateway', 'mcp'],
+downBlocksRun: ['anthropic', 'llmGateway', 'mcp', 'github'],
 degradedBlocksRun: ['anthropic'],
 ```
 

@@ -60,7 +60,7 @@ export const FLOWS: Record<Flow, FlowEntry[]> = {
   [Flow.Wizard]: [
     {
       screen: Screen.Intro,
-      isComplete: (s) => s.setupConfirmed,
+      isComplete: (s) => s.setupConfirmed && s.readinessGatePassed,
     },
     {
       screen: Screen.Setup,

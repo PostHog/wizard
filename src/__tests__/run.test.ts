@@ -20,10 +20,27 @@ jest.mock('../lib/wizard-session', () => ({
     typescript: false,
     credentials: null,
     serviceStatus: null,
+    readinessOutage: null,
     outroData: null,
     frameworkConfig: null,
     ...args,
   }),
+}));
+jest.mock('../lib/health-checks', () => ({
+  evaluateWizardReadiness: jest.fn().mockResolvedValue({
+    decision: 'yes',
+    health: {
+      llmGateway: { status: 'healthy' },
+      mcp: { status: 'healthy' },
+    },
+    reasons: [],
+  }),
+  WizardReadiness: {
+    Yes: 'yes',
+    No: 'no',
+    YesWithWarnings: 'yes_with_warnings',
+  },
+  DEFAULT_WIZARD_READINESS_CONFIG: {},
 }));
 jest.mock('../ui', () => ({
   getUI: jest.fn().mockReturnValue({
@@ -49,6 +66,8 @@ jest.mock('../ui', () => ({
     syncTodos: jest.fn(),
     setLoginUrl: jest.fn(),
     showServiceStatus: jest.fn(),
+    setReadinessOutageInfo: jest.fn(),
+    showReadinessOutage: jest.fn().mockResolvedValue(undefined),
     showSettingsOverride: jest.fn(),
     startRun: jest.fn(),
   }),

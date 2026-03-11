@@ -77,6 +77,18 @@ export interface OutroData {
   continueUrl?: string;
 }
 
+/** Result of the wizard readiness check; drives the outage screen when decision is no/yes_with_warnings. */
+export interface ReadinessOutageInfo {
+  decision: 'yes' | 'no' | 'yes_with_warnings';
+  reasons: string[];
+  services: Array<{ label: string; status: 'healthy' | 'degraded' | 'down' }>;
+  componentDetails?: Array<{
+    serviceLabel: string;
+    items: Array<{ name: string; status: string }>;
+  }>;
+  posthogSubItems?: Array<{ label: string; status: string }>;
+}
+
 export interface WizardSession {
   // From CLI args
   debug: boolean;
@@ -125,6 +137,10 @@ export interface WizardSession {
 
   // Runtime
   serviceStatus: { description: string; statusPageUrl: string } | null;
+  /** Set when readiness check completes; drives OutageScreen when decision is no/yes_with_warnings. */
+  readinessOutage: ReadinessOutageInfo | null;
+  /** True once readiness check passed (yes or yes_with_warnings). Gates flow advancement past Intro. */
+  readinessGatePassed: boolean;
   settingsOverrideKeys: string[] | null;
   outroData: OutroData | null;
 
@@ -179,6 +195,8 @@ export function buildSession(args: {
     loginUrl: null,
     credentials: null,
     serviceStatus: null,
+    readinessOutage: null,
+    readinessGatePassed: false,
     settingsOverrideKeys: null,
     outroData: null,
     additionalFeatureQueue: [],

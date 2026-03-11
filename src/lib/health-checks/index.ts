@@ -27,4 +27,5 @@ export {
   WizardReadiness,
   type WizardReadinessResult,
   evaluateWizardReadiness,
+  SERVICE_LABELS,
 } from './readiness';

@@ -6,11 +6,13 @@ import { getUI } from './ui';
 import path from 'path';
 import { FRAMEWORK_REGISTRY } from './lib/registry';
 import { analytics } from './utils/analytics';
+import { logToFile } from './utils/debug';
 import { runAgentWizard } from './lib/agent-runner';
 import { EventEmitter } from 'events';
 import chalk from 'chalk';
-import { logToFile } from './utils/debug';
 import { wizardAbort } from './utils/wizard-abort';
+import { evaluateWizardReadiness } from './lib/health-checks';
+import { mapReadinessToOutageInfo } from './lib/readiness-utils';
 
 EventEmitter.defaultMaxListeners = 50;
 
@@ -71,6 +73,18 @@ export async function runWizard(argv: Args, session?: WizardSession) {
     getUI().log.info(chalk.dim('Running in CI mode'));
   }
 
+  // Run health check. If blocked, show outage screen (TUI) or abort (CI).
+  const readiness = await evaluateWizardReadiness();
+  if (readiness.decision === 'no') {
+    if (session.ci) {
+      getUI().log.error(
+        'Critical services are unavailable. Run the wizard when services are healthy.',
+      );
+      process.exit(1);
+    }
+    await getUI().showReadinessOutage(mapReadinessToOutageInfo(readiness));
+  }
+
   const integration =
     session.integration ?? (await detectAndResolveIntegration(session));
 
@@ -81,7 +95,6 @@ export async function runWizard(argv: Args, session?: WizardSession) {
   session.frameworkConfig = config;
 
   // Run gatherContext if the framework has it and it hasn't already run
-  // (bin.ts runs it early so IntroScreen can show the friendly label)
   const contextAlreadyGathered =
     Object.keys(session.frameworkContext).length > 0;
   if (config.metadata.gatherContext && !contextAlreadyGathered) {

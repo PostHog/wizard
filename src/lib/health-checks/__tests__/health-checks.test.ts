@@ -939,7 +939,7 @@ describe('health-checks', () => {
       expect(result.health.mcp.status).toBe(ServiceHealthStatus.Down);
     });
 
-    it('returns No when npm overall is down (downBlocksRun)', async () => {
+    it('does not block when npm overall is down (no longer in downBlocksRun)', async () => {
       const body = makeStatuspageStatus({
         pageId: 'wyvgptkd90hm',
         pageName: 'npm',
@@ -958,8 +958,8 @@ describe('health-checks', () => {
       const result = await evaluateWizardReadiness(
         DEFAULT_WIZARD_READINESS_CONFIG,
       );
-      expect(result.decision).toBe(WizardReadiness.No);
       expect(result.health.npmOverall.status).toBe(ServiceHealthStatus.Down);
+      expect(result.decision).toBe(WizardReadiness.YesWithWarnings);
     });
 
     it('returns YesWithWarnings when a non-blocking service is degraded', async () => {

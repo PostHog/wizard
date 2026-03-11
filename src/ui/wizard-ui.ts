@@ -56,6 +56,22 @@ export interface WizardUI {
   /** Show service degradation (pushes outage overlay in TUI). */
   showServiceStatus(data: { description: string; statusPageUrl: string }): void;
 
+  /**
+   * Show blocking readiness outage (critical services down).
+   * Returns a promise that resolves when user chooses "Continue anyway".
+   * Never resolves if user exits.
+   */
+  showReadinessOutage(info: {
+    decision: 'yes' | 'no' | 'yes_with_warnings';
+    reasons: string[];
+    services: Array<{ label: string; status: 'healthy' | 'degraded' | 'down' }>;
+    componentDetails?: Array<{
+      serviceLabel: string;
+      items: Array<{ name: string; status: string }>;
+    }>;
+    posthogSubItems?: Array<{ label: string; status: string }>;
+  }): Promise<void>;
+
   /** Warn that .claude/settings.json overrides blocking env vars (pushes blocking overlay in TUI). */
   showSettingsOverride(
     keys: string[],

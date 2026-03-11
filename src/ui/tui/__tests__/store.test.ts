@@ -7,7 +7,11 @@ import {
   RunPhase,
   McpOutcome,
 } from '../store.js';
-import { OutroKind, AdditionalFeature } from '../../../lib/wizard-session.js';
+import {
+  OutroKind,
+  AdditionalFeature,
+  type ReadinessOutageInfo,
+} from '../../../lib/wizard-session.js';
 import { buildSession } from '../../../lib/wizard-session.js';
 import { Integration } from '../../../lib/constants.js';
 import { analytics } from '../../../utils/analytics.js';
@@ -208,6 +212,17 @@ describe('WizardStore', () => {
       expect(store.session.serviceStatus).toBeNull();
     });
 
+    it('setReadinessOutage sets readinessOutage and notifies', () => {
+      const store = createStore();
+      const info: ReadinessOutageInfo = {
+        decision: 'no',
+        reasons: ['GitHub: down'],
+        services: [{ label: 'GitHub', status: 'down' }],
+      };
+      store.setReadinessOutage(info);
+      expect(store.session.readinessOutage).toEqual(info);
+    });
+
     it('setMcpComplete marks MCP step done with outcome', () => {
       const store = createStore();
       expect(store.session.mcpComplete).toBe(false);
@@ -239,6 +254,7 @@ describe('WizardStore', () => {
       store.subscribe(cb);
 
       store.completeSetup();
+      store.setReadinessGatePassed();
       store.setRunPhase(RunPhase.Running);
       store.setCredentials(null);
       store.setDetectionComplete();
@@ -250,7 +266,7 @@ describe('WizardStore', () => {
       store.setFrameworkContext('k', 'v');
       store.setFrameworkConfig(null, null);
 
-      expect(cb).toHaveBeenCalledTimes(11);
+      expect(cb).toHaveBeenCalledTimes(12);
     });
   });
 
@@ -308,15 +324,23 @@ describe('WizardStore', () => {
       expect(store.currentScreen).toBe(Screen.Intro);
     });
 
-    it('advances to auth after region is set', () => {
+    it('stays on intro after completeSetup when readiness gate has not passed', () => {
       const store = createStore();
       store.completeSetup();
+      expect(store.currentScreen).toBe(Screen.Intro);
+    });
+
+    it('advances to auth after completeSetup and readiness gate passed', () => {
+      const store = createStore();
+      store.completeSetup();
+      store.setReadinessGatePassed();
       expect(store.currentScreen).toBe(Screen.Auth);
     });
 
     it('advances to run after credentials are set', () => {
       const store = createStore();
       store.completeSetup();
+      store.setReadinessGatePassed();
       store.setCredentials({
         accessToken: 'tok',
         projectApiKey: 'pk',
@@ -329,6 +353,7 @@ describe('WizardStore', () => {
     it('advances to mcp after run completes', () => {
       const store = createStore();
       store.completeSetup();
+      store.setReadinessGatePassed();
       store.setCredentials({
         accessToken: 'tok',
         projectApiKey: 'pk',
@@ -342,6 +367,7 @@ describe('WizardStore', () => {
     it('advances to outro after mcp completes', () => {
       const store = createStore();
       store.completeSetup();
+      store.setReadinessGatePassed();
       store.setCredentials({
         accessToken: 'tok',
         projectApiKey: 'pk',
@@ -413,6 +439,21 @@ describe('WizardStore', () => {
       store.pushOverlay(Overlay.Outage);
       store.popOverlay();
       expect(store.lastNavDirection).toBe('pop');
+    });
+
+    it('getOutageDismissedPromise resolves when popOverlay after Outage', async () => {
+      const store = createStore();
+      store.pushOverlay(Overlay.Outage);
+      const p = store.getOutageDismissedPromise();
+      let resolved = false;
+      void p.then(() => {
+        resolved = true;
+      });
+      await new Promise((r) => setImmediate(r));
+      expect(resolved).toBe(false);
+      store.popOverlay();
+      await p;
+      expect(resolved).toBe(true);
     });
   });
 
@@ -655,7 +696,8 @@ describe('WizardStore', () => {
         screens.push(store.currentScreen);
       });
 
-      store.completeSetup(); // -> auth
+      store.completeSetup();
+      store.setReadinessGatePassed(); // -> auth
       store.pushOverlay(Overlay.Outage); // -> outage
       store.setCredentials({
         // -> outage (overlay still on top)
@@ -667,7 +709,8 @@ describe('WizardStore', () => {
       store.popOverlay(); // -> run
 
       expect(screens).toEqual([
-        Screen.Auth,
+        Screen.Intro, // completeSetup alone doesn't advance (readiness not passed)
+        Screen.Auth, // readiness gate passed
         Overlay.Outage,
         Overlay.Outage,
         Screen.Run,
@@ -798,6 +841,7 @@ describe('WizardStore', () => {
     it('screen advances to outro on RunPhase.Error too', () => {
       const store = createStore();
       store.completeSetup();
+      store.setReadinessGatePassed();
       store.setCredentials({
         accessToken: 'tok',
         projectApiKey: 'pk',
@@ -840,8 +884,10 @@ describe('WizardStore', () => {
 
       expect(store.currentScreen).toBe(Screen.Intro);
 
-      // Step 1: Confirm setup
+      // Step 1: Confirm setup + readiness gate
       store.completeSetup();
+      expect(store.currentScreen).toBe(Screen.Intro); // blocked until readiness passes
+      store.setReadinessGatePassed();
       expect(store.currentScreen).toBe(Screen.Auth);
 
       // Step 2: Authenticate
@@ -864,8 +910,8 @@ describe('WizardStore', () => {
       store.setMcpComplete();
       expect(store.currentScreen).toBe(Screen.Outro);
 
-      // Verify version was bumped for each setter call
-      expect(store.getVersion()).toBe(5);
+      // Verify version was bumped for each setter call (6 now: completeSetup + readinessGate + 4 others)
+      expect(store.getVersion()).toBe(6);
     });
   });
 

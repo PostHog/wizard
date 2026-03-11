@@ -82,6 +82,11 @@ export class WizardRouter {
     return this.overlays.length > 0;
   }
 
+  /** Top of overlay stack, if any. */
+  get currentOverlay(): Overlay | undefined {
+    return this.overlays[this.overlays.length - 1];
+  }
+
   /**
    * Push an overlay that interrupts the current flow.
    * The flow resumes when the overlay is dismissed via popOverlay().

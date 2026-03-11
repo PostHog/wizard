@@ -14,6 +14,7 @@ import { useStdoutDimensions } from '../hooks/useStdoutDimensions.js';
 import { DissolveTransition } from './DissolveTransition.js';
 import { ScreenErrorBoundary } from './ScreenErrorBoundary.js';
 import type { WizardStore } from '../store.js';
+import { Overlay } from '../router.js';
 
 const MIN_WIDTH = 80;
 const MAX_WIDTH = 120;
@@ -42,22 +43,29 @@ export const ScreenContainer = ({ store, screens }: ScreenContainerProps) => {
   const contentAreaWidth = Math.max(10, width - 2);
   const direction = store.lastNavDirection === 'pop' ? 'right' : 'left';
   const activeScreen = screens[store.currentScreen] ?? null;
+  const isOutageOverlay = store.currentScreen === Overlay.Outage;
+
+  const content = (
+    <ScreenErrorBoundary store={store}>{activeScreen}</ScreenErrorBoundary>
+  );
 
   const inner = (
     <Box flexDirection="column" height={rows} width={width}>
       <TitleBar version={store.version} width={width} />
       <Box height={1} />
       <Box flexDirection="column" flexGrow={1} paddingX={1}>
-        <DissolveTransition
-          transitionKey={store.currentScreen}
-          width={contentAreaWidth}
-          height={contentHeight}
-          direction={direction}
-        >
-          <ScreenErrorBoundary store={store}>
-            {activeScreen}
-          </ScreenErrorBoundary>
-        </DissolveTransition>
+        {isOutageOverlay ? (
+          content
+        ) : (
+          <DissolveTransition
+            transitionKey={store.currentScreen}
+            width={contentAreaWidth}
+            height={contentHeight}
+            direction={direction}
+          >
+            {content}
+          </DissolveTransition>
+        )}
       </Box>
     </Box>
   );
