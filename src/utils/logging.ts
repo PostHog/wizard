@@ -1,5 +1,3 @@
-import Chalk from 'chalk';
-
 export function prepareMessage(msg: unknown): string {
   if (typeof msg === 'string') {
     return msg;
@@ -20,25 +18,26 @@ export function nl(): void {
 }
 
 export function green(msg: string): void {
-  return l(Chalk.green(prepareMessage(msg)));
+  return l(prepareMessage(msg));
 }
 
 export function red(msg: string): void {
-  return l(Chalk.red(prepareMessage(msg)));
+  return l(prepareMessage(msg));
 }
 
 export function dim(msg: string): void {
-  return l(Chalk.dim(prepareMessage(msg)));
+  return l(prepareMessage(msg));
 }
 
 export function yellow(msg: string): void {
-  return l(Chalk.yellow(prepareMessage(msg)));
+  return l(prepareMessage(msg));
 }
 
 export function cyan(msg: string): void {
-  return l(Chalk.cyan(prepareMessage(msg)));
+  return l(prepareMessage(msg));
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function debug(msg: any): void {
-  return l(Chalk.italic.yellow(prepareMessage(msg)));
+  return l(prepareMessage(msg));
 }
