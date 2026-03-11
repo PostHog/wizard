@@ -85,6 +85,38 @@ Real-time log file tail. Watches a file with `fs.watch` and displays the latest 
 
 Spinner with message. Uses `@inkjs/ui` Spinner.
 
+### Divider
+`src/ui/tui/primitives/Divider.tsx`
+
+Responsive horizontal rule. Uses `measureElement` to measure its parent's width, then fills with a repeating character (`─` by default). Props: `dimColor` (default `true`), `char` (default `'─'`).
+
+---
+
+## Responsive layout with measureElement
+
+Ink provides `measureElement(ref)` to get the pixel-equivalent `{ width, height }` of a rendered element. Use it with a `useRef` + `useEffect` to build components that adapt to their container size:
+
+```tsx
+import { Box, Text, measureElement } from 'ink';
+import { useRef, useState, useEffect } from 'react';
+
+const ref = useRef(null);
+const [width, setWidth] = useState(0);
+
+useEffect(() => {
+  if (ref.current) {
+    const { width: measured } = measureElement(ref.current);
+    setWidth(measured);
+  }
+}, []);
+
+<Box ref={ref} width="100%">
+  <Text>{'─'.repeat(width)}</Text>
+</Box>
+```
+
+See `Divider.tsx` for a working example. For terminal resize reactivity, combine with the `useStdoutDimensions` hook from `src/ui/tui/hooks/useStdoutDimensions.ts`.
+
 ---
 
 ## Design conventions
