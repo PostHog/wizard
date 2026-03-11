@@ -3,6 +3,7 @@ import * as http from 'node:http';
 import { execSync } from 'node:child_process';
 import axios from 'axios';
 import chalk from 'chalk';
+import { logToFile } from './debug';
 import opn from 'opn';
 import { z } from 'zod';
 import { getUI } from '../ui';
@@ -272,10 +273,12 @@ export async function performOAuthFlow(
 
   const urlToOpen = config.signup ? localSignupUrl : localLoginUrl;
 
+  logToFile('[oauth] starting callback server');
   const { server, waitForCallback } = await startCallbackServerWithRetry(
     authUrl.toString(),
     signupUrl.toString(),
   );
+  logToFile('[oauth] callback server ready, showing login URL');
 
   getUI().setLoginUrl(urlToOpen);
 
