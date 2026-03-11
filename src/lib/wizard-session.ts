@@ -88,6 +88,7 @@ export interface WizardSession {
   apiKey?: string;
   menu: boolean;
   benchmark: boolean;
+  yaraReport: boolean;
   projectId?: number;
 
   // From detection + screens
@@ -160,6 +161,7 @@ export function buildSession(args: {
   menu?: boolean;
   integration?: Integration;
   benchmark?: boolean;
+  yaraReport?: boolean;
   projectId?: string;
   yaraReport?: boolean;
 }): WizardSession {
@@ -173,6 +175,7 @@ export function buildSession(args: {
     apiKey: args.apiKey,
     menu: args.menu ?? false,
     benchmark: args.benchmark ?? false,
+    yaraReport: args.yaraReport ?? false,
     projectId: parseProjectIdArg(args.projectId),
 
     setupConfirmed: false,

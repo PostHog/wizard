@@ -18,7 +18,6 @@ import { scan, scanSkillDirectory } from './yara-scanner';
 import type { YaraMatch, ScanResult } from './yara-scanner';
 import { logToFile } from '../utils/debug';
 import { analytics } from '../utils/analytics';
-import { WIZARD_INTERACTION_EVENT_NAME } from './constants';
 import { isSkillInstallCommand } from './agent-interface';
 
 // ─── Types ───────────────────────────────────────────────────────
@@ -145,8 +144,7 @@ function logYaraMatch(phase: string, tool: string, match: YaraMatch): void {
       `(severity: ${match.rule.severity}, category: ${match.rule.category}): ` +
       `"${match.matchedText.substring(0, 100)}"`,
   );
-  analytics.capture(WIZARD_INTERACTION_EVENT_NAME, {
-    action: 'yara rule matched',
+  analytics.wizardCapture('yara rule matched', {
     rule: match.rule.name,
     severity: match.rule.severity,
     category: match.rule.category,

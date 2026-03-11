@@ -14,7 +14,6 @@ import type { WizardOptions } from '../utils/types';
 import { WIZARD_INTERACTION_EVENT_NAME } from './constants';
 import { analytics } from '../utils/analytics';
 import { getUI } from '../ui';
-import { formatScanReport, writeScanReport } from './yara-hooks';
 import {
   initializeAgent,
   runAgent,
@@ -31,11 +30,13 @@ import * as semver from 'semver';
 import { checkAnthropicStatus } from '../utils/anthropic-status';
 import { enableDebugLogs, initLogFile, logToFile } from '../utils/debug';
 import { createBenchmarkPipeline } from './middleware/benchmark';
+import chalk from 'chalk';
 import {
   wizardAbort,
   WizardError,
   registerCleanup,
 } from '../utils/wizard-abort';
+import { formatScanReport, writeScanReport } from './yara-hooks';
 
 /**
  * Build a WizardOptions bag from a WizardSession (for code that still expects WizardOptions).
@@ -318,6 +319,30 @@ export async function runAgentWizard(
         error_type: agentResult.error,
       }),
     });
+  }
+
+  if (agentResult.error === AgentErrorType.YARA_VIOLATION) {
+    await wizardAbort({
+      message:
+        'The wizard stopped early due to a safety check\n\n' +
+        'Something unexpected was detected in your project files. No changes were made.\n' +
+        'You can safely re-run the wizard, or reach out at: wizard@posthog.com',
+      error: new WizardError('YARA scanner terminated session', {
+        integration: config.metadata.integration,
+        error_type: AgentErrorType.YARA_VIOLATION,
+      }),
+    });
+  }
+
+  // YARA scan report (hidden flag for testing/CI)
+  if (session.yaraReport) {
+    const reportPath = writeScanReport();
+    if (reportPath) {
+      const summary = formatScanReport();
+      getUI().log.info(
+        `YARA scan report: ${reportPath}${summary ?? ''}`,
+      );
+    }
   }
 
   // Build environment variables from OAuth credentials

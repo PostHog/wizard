@@ -29,6 +29,7 @@ import {
   createPreToolUseYaraHooks,
   createPostToolUseYaraHooks,
 } from './yara-hooks';
+import { getWizardCommandments } from './commandments';
 import type { PackageManagerDetector } from './package-manager-detection';
 
 // Dynamic import cache for ESM module
@@ -83,7 +84,7 @@ export enum AgentErrorType {
   RATE_LIMIT = 'WIZARD_RATE_LIMIT',
   /** Generic API error */
   API_ERROR = 'WIZARD_API_ERROR',
-  /** YARA scanner terminated the session */
+  /** YARA scanner detected a security violation */
   YARA_VIOLATION = 'WIZARD_YARA_VIOLATION',
 }
 
@@ -600,6 +601,25 @@ export async function initializeAgent(
 }
 
 /**
+ * Check agent output for YARA scanner violations.
+ * Used in both the success and catch paths of runAgent.
+ */
+function checkYaraViolation(
+  outputText: string,
+  spinner: SpinnerHandle,
+): { error: AgentErrorType } | null {
+  if (
+    outputText.includes('[YARA CRITICAL]') ||
+    outputText.includes('[YARA] Scanner error')
+  ) {
+    logToFile('Agent error: YARA_VIOLATION');
+    spinner.stop('Security violation detected');
+    return { error: AgentErrorType.YARA_VIOLATION };
+  }
+  return null;
+}
+
+/**
  * Execute an agent with the provided prompt and options
  * Handles the full lifecycle: spinner, execution, error handling
  *
@@ -762,6 +782,13 @@ export async function runAgent(
           logToFile('canUseTool result:', result);
           return Promise.resolve(result);
         },
+        systemPrompt: {
+          type: 'preset',
+          preset: 'claude_code',
+          // Append wizard-wide commandments rather than replacing
+          // the preset so we keep default Claude Code behaviors.
+          append: getWizardCommandments(),
+        },
         tools: { type: 'preset', preset: 'claude_code' },
         // Capture stderr from CLI subprocess for debugging
         stderr: (data: string) => {
@@ -856,6 +883,10 @@ export async function runAgent(
 
     const outputText = collectedText.join('\n');
 
+    // Check for YARA scanner violations
+    const yaraResult = checkYaraViolation(outputText, spinner);
+    if (yaraResult) return yaraResult;
+
     // Check for error markers in the agent's output
     if (outputText.includes(AgentSignals.ERROR_MCP_MISSING)) {
       logToFile('Agent error: MCP_MISSING');
@@ -914,15 +945,9 @@ export async function runAgent(
     // Check if we collected an error before the exception was thrown
     const outputText = collectedText.join('\n');
 
-    // Check for YARA scanner terminations
-    if (
-      outputText.includes('[YARA CRITICAL]') ||
-      outputText.includes('[YARA] Scanner error')
-    ) {
-      logToFile('Agent error (caught): YARA_VIOLATION');
-      spinner.stop('Security violation detected');
-      return { error: AgentErrorType.YARA_VIOLATION };
-    }
+    // Check for YARA scanner violations
+    const yaraResult = checkYaraViolation(outputText, spinner);
+    if (yaraResult) return yaraResult;
 
     // Extract just the API error line(s), not the entire output
     const apiErrorMatch = outputText.match(/API Error: [^\n]+/g);

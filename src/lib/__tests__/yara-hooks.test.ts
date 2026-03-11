@@ -336,7 +336,7 @@ describe('yara-hooks', () => {
         expect(result.stopReason).toContain('YARA CRITICAL');
       });
 
-      it('returns additionalContext for high-severity prompt injection', async () => {
+      it('returns additionalContext for medium-severity prompt injection', async () => {
         const hooks = createPostToolUseYaraHooks();
         const hook = hooks[1].hooks[0];
         const result = await hook(

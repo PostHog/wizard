@@ -66,6 +66,7 @@ export async function runWizard(argv: Args, session?: WizardSession) {
       menu: finalArgs.menu,
       integration: finalArgs.integration,
       benchmark: finalArgs.benchmark,
+      yaraReport: finalArgs.yaraReport,
       projectId: finalArgs.projectId,
       yaraReport: finalArgs.yaraReport,
     });

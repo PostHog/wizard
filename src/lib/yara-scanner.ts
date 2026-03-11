@@ -200,7 +200,7 @@ const prompt_injection_wizard_specific: YaraRule = {
   name: 'prompt_injection_wizard_specific',
   description:
     'Detects wizard-specific manipulation or tool abuse attempts in project files',
-  severity: 'high',
+  severity: 'medium',
   category: 'prompt_injection',
   appliesTo: POST_READ_GREP,
   patterns: [
@@ -245,9 +245,9 @@ const secret_exfiltration_via_command: YaraRule = {
     // curl/wget with environment variable secrets
     /curl\s+.*\$\{?[A-Z_]*(KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL)/i,
     /wget\s+.*\$\{?[A-Z_]*(KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL)/i,
-    // Piping secrets to network tools
-    /\|\s*curl/,
-    /\|\s*wget/,
+    // Piping sensitive content to network tools
+    /(\$\{?[A-Z_]*(KEY|TOKEN|SECRET|PASSWORD)|\.env|credentials)\S*.*\|\s*curl/i,
+    /(\$\{?[A-Z_]*(KEY|TOKEN|SECRET|PASSWORD)|\.env|credentials)\S*.*\|\s*wget/i,
     /\|\s*nc\s/,
     /\|\s*netcat\s/,
     // Base64 encoding piped to network
