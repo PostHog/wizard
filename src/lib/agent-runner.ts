@@ -26,7 +26,10 @@ import {
 import { getCloudUrlFromRegion } from '../utils/urls';
 
 import * as semver from 'semver';
-import { checkAnthropicStatus } from '../utils/anthropic-status';
+import {
+  evaluateWizardReadiness,
+  WizardReadiness,
+} from './health-checks/readiness';
 import { enableDebugLogs, initLogFile, logToFile } from '../utils/debug';
 import { createBenchmarkPipeline } from './middleware/benchmark';
 import { wizardAbort, WizardError } from '../utils/wizard-abort';
@@ -92,15 +95,16 @@ export async function runAgentWizard(
     }
   }
 
-  // Check Anthropic/Claude service status (pure — no prompt)
-  logToFile('[agent-runner] checking anthropic status');
-  const statusResult = await checkAnthropicStatus();
-  logToFile(`[agent-runner] anthropic status=${statusResult.status}`);
-  if (statusResult.status === 'down' || statusResult.status === 'degraded') {
-    getUI().showServiceStatus({
-      description: statusResult.description,
-      statusPageUrl: 'https://status.claude.com',
-    });
+  // Check all external service health (skip if TUI already ran it in bin.ts)
+  if (!session.readinessResult) {
+    logToFile('[agent-runner] evaluating wizard readiness');
+    const readiness = await evaluateWizardReadiness();
+    logToFile(`[agent-runner] readiness=${readiness.decision}`);
+    if (readiness.decision === WizardReadiness.No) {
+      await getUI().showBlockingOutage(readiness);
+    } else if (readiness.decision === WizardReadiness.YesWithWarnings) {
+      getUI().setReadinessWarnings(readiness);
+    }
   }
 
   // Check for blocking env overrides in .claude/settings.json before login.

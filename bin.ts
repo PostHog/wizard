@@ -200,8 +200,9 @@ yargs(hideBin(process.argv))
             });
             tui.store.session = session;
 
-            // Detect framework while IntroScreen shows its spinner.
-            // Runs concurrently — IntroScreen reacts when detection completes.
+            // Health check already fired in store constructor — runs
+            // concurrently with detection below. If blocking, the outage
+            // overlay pushes on top of whatever screen is active.
             const { FRAMEWORK_REGISTRY } = await import(
               './src/lib/registry.js'
             );
@@ -211,6 +212,7 @@ yargs(hideBin(process.argv))
             const { DETECTION_TIMEOUT_MS } = await import(
               './src/lib/constants.js'
             );
+
             const detectedIntegration = await Promise.race([
               detectIntegration(installDir),
               new Promise<undefined>((resolve) =>
@@ -341,6 +343,12 @@ yargs(hideBin(process.argv))
 
             // Wait for IntroScreen confirmation
             await tui.waitForSetup();
+
+            // Ensure health check has completed before starting the wizard.
+            // The flow gate on Intro (readinessResult !== null) keeps the
+            // TUI on IntroScreen until this resolves. If blocking, the
+            // outage overlay was already pushed in the .then() callback.
+            await tui.store.healthGateComplete;
 
             await runWizard(
               options as Parameters<typeof runWizard>[0],

@@ -53,8 +53,15 @@ export interface WizardUI {
     projectId: number;
   }): void;
 
-  /** Show service degradation (pushes outage overlay in TUI). */
-  showServiceStatus(data: { description: string; statusPageUrl: string }): void;
+  /** Show blocking service outage (pushes outage overlay in TUI). Blocks until dismissed. */
+  showBlockingOutage(
+    result: import('../lib/health-checks/readiness.js').WizardReadinessResult,
+  ): Promise<void>;
+
+  /** Store non-blocking readiness warnings (shown as Health tab in RunScreen). */
+  setReadinessWarnings(
+    result: import('../lib/health-checks/readiness.js').WizardReadinessResult,
+  ): void;
 
   /** Warn that another process is blocking the OAuth port (pushes overlay in TUI). */
   showPortConflict(processInfo: {

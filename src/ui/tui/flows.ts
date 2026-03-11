@@ -10,12 +10,14 @@
  */
 
 import { type WizardSession, RunPhase } from '../../lib/wizard-session.js';
+import { WizardReadiness } from '../../lib/health-checks/readiness.js';
 
 // ── Screen + Flow enums ──────────────────────────────────────────────
 
 /** Screens that participate in linear flows */
 export enum Screen {
   Intro = 'intro',
+  HealthCheck = 'health-check',
   Setup = 'setup',
   Auth = 'auth',
   Run = 'run',
@@ -61,6 +63,15 @@ export const FLOWS: Record<Flow, FlowEntry[]> = {
     {
       screen: Screen.Intro,
       isComplete: (s) => s.setupConfirmed,
+    },
+    {
+      screen: Screen.HealthCheck,
+      isComplete: (s) => {
+        if (!s.readinessResult) return false;
+        if (s.readinessResult.decision === WizardReadiness.No)
+          return s.outageDismissed;
+        return true;
+      },
     },
     {
       screen: Screen.Setup,

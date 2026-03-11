@@ -8,6 +8,7 @@ import {
   McpOutcome,
 } from '../store.js';
 import { OutroKind, AdditionalFeature } from '../../../lib/wizard-session.js';
+import { WizardReadiness } from '../../../lib/health-checks/readiness.js';
 import { buildSession } from '../../../lib/wizard-session.js';
 import { Integration } from '../../../lib/constants.js';
 import { analytics } from '../../../utils/analytics.js';
@@ -20,6 +21,20 @@ jest.mock('../../../utils/analytics.js', () => ({
     shutdown: jest.fn().mockResolvedValue(undefined),
   },
   sessionProperties: jest.fn(() => ({})),
+}));
+
+jest.mock('../../../lib/health-checks/readiness.js', () => ({
+  evaluateWizardReadiness: jest.fn().mockResolvedValue({
+    decision: 'yes',
+    health: {},
+    reasons: [],
+  }),
+  WizardReadiness: {
+    Yes: 'yes',
+    No: 'no',
+    YesWithWarnings: 'yes-with-warnings',
+  },
+  SERVICE_LABELS: {},
 }));
 
 function createStore(flow?: Flow): WizardStore {
@@ -195,17 +210,18 @@ describe('WizardStore', () => {
       expect(store.session.loginUrl).toBeNull();
     });
 
-    it('setServiceStatus sets status info', () => {
+    it('setReadinessResult sets readiness info', () => {
       const store = createStore();
-      const status = {
-        description: 'Major outage',
-        statusPageUrl: 'https://status.posthog.com',
+      const result = {
+        decision: WizardReadiness.No,
+        health: {} as never,
+        reasons: ['Anthropic: down'],
       };
-      store.setServiceStatus(status);
-      expect(store.session.serviceStatus).toEqual(status);
+      store.setReadinessResult(result);
+      expect(store.session.readinessResult).toEqual(result);
 
-      store.setServiceStatus(null);
-      expect(store.session.serviceStatus).toBeNull();
+      store.setReadinessResult(null);
+      expect(store.session.readinessResult).toBeNull();
     });
 
     it('setMcpComplete marks MCP step done with outcome', () => {
@@ -244,7 +260,7 @@ describe('WizardStore', () => {
       store.setDetectionComplete();
       store.setDetectedFramework('React');
       store.setLoginUrl('url');
-      store.setServiceStatus(null);
+      store.setReadinessResult(null);
       store.setMcpComplete();
       store.setOutroData({ kind: OutroKind.Success });
       store.setFrameworkContext('k', 'v');
@@ -308,15 +324,31 @@ describe('WizardStore', () => {
       expect(store.currentScreen).toBe(Screen.Intro);
     });
 
-    it('advances to auth after region is set', () => {
+    it('advances to health check after setup confirmed', () => {
       const store = createStore();
       store.completeSetup();
+      expect(store.currentScreen).toBe(Screen.HealthCheck);
+    });
+
+    it('advances to auth after health check passes', () => {
+      const store = createStore();
+      store.completeSetup();
+      store.setReadinessResult({
+        decision: WizardReadiness.Yes,
+        health: {} as never,
+        reasons: [],
+      });
       expect(store.currentScreen).toBe(Screen.Auth);
     });
 
     it('advances to run after credentials are set', () => {
       const store = createStore();
       store.completeSetup();
+      store.setReadinessResult({
+        decision: WizardReadiness.Yes,
+        health: {} as never,
+        reasons: [],
+      });
       store.setCredentials({
         accessToken: 'tok',
         projectApiKey: 'pk',
@@ -369,13 +401,13 @@ describe('WizardStore', () => {
   describe('overlay navigation', () => {
     it('pushOverlay shows the overlay over the current screen', () => {
       const store = createStore();
-      store.pushOverlay(Overlay.Outage);
-      expect(store.currentScreen).toBe(Overlay.Outage);
+      store.pushOverlay(Overlay.SettingsOverride);
+      expect(store.currentScreen).toBe(Overlay.SettingsOverride);
     });
 
     it('popOverlay returns to the underlying screen', () => {
       const store = createStore();
-      store.pushOverlay(Overlay.Outage);
+      store.pushOverlay(Overlay.SettingsOverride);
       store.popOverlay();
       expect(store.currentScreen).toBe(Screen.Intro);
     });
@@ -385,7 +417,7 @@ describe('WizardStore', () => {
       const cb = jest.fn();
       store.subscribe(cb);
 
-      store.pushOverlay(Overlay.Outage);
+      store.pushOverlay(Overlay.SettingsOverride);
 
       expect(cb).toHaveBeenCalledTimes(1);
       expect(store.getVersion()).toBe(1);
@@ -393,7 +425,7 @@ describe('WizardStore', () => {
 
     it('popOverlay emits change and increments version', () => {
       const store = createStore();
-      store.pushOverlay(Overlay.Outage);
+      store.pushOverlay(Overlay.SettingsOverride);
 
       const cb = jest.fn();
       store.subscribe(cb);
@@ -404,13 +436,13 @@ describe('WizardStore', () => {
 
     it('pushOverlay sets direction to push', () => {
       const store = createStore();
-      store.pushOverlay(Overlay.Outage);
+      store.pushOverlay(Overlay.SettingsOverride);
       expect(store.lastNavDirection).toBe('push');
     });
 
     it('popOverlay sets direction to pop', () => {
       const store = createStore();
-      store.pushOverlay(Overlay.Outage);
+      store.pushOverlay(Overlay.SettingsOverride);
       store.popOverlay();
       expect(store.lastNavDirection).toBe('pop');
     });
@@ -655,22 +687,22 @@ describe('WizardStore', () => {
         screens.push(store.currentScreen);
       });
 
-      store.completeSetup(); // -> auth
-      store.pushOverlay(Overlay.Outage); // -> outage
+      store.completeSetup(); // -> health-check
+      store.pushOverlay(Overlay.SettingsOverride); // -> settings-override
       store.setCredentials({
-        // -> outage (overlay still on top)
+        // -> settings-override (overlay still on top)
         accessToken: 'tok',
         projectApiKey: 'pk',
         host: 'h',
         projectId: 1,
       });
-      store.popOverlay(); // -> run
+      store.popOverlay(); // -> health-check (readinessResult still null)
 
       expect(screens).toEqual([
-        Screen.Auth,
-        Overlay.Outage,
-        Overlay.Outage,
-        Screen.Run,
+        Screen.HealthCheck,
+        Overlay.SettingsOverride,
+        Overlay.SettingsOverride,
+        Screen.HealthCheck,
       ]);
     });
 
@@ -842,9 +874,17 @@ describe('WizardStore', () => {
 
       // Step 1: Confirm setup
       store.completeSetup();
+      expect(store.currentScreen).toBe(Screen.HealthCheck);
+
+      // Step 2: Health check passes
+      store.setReadinessResult({
+        decision: WizardReadiness.Yes,
+        health: {} as never,
+        reasons: [],
+      });
       expect(store.currentScreen).toBe(Screen.Auth);
 
-      // Step 2: Authenticate
+      // Step 3: Authenticate
       store.setCredentials({
         accessToken: 'tok',
         projectApiKey: 'pk',
@@ -853,19 +893,19 @@ describe('WizardStore', () => {
       });
       expect(store.currentScreen).toBe(Screen.Run);
 
-      // Step 3: Start and complete run
+      // Step 4: Start and complete run
       store.setRunPhase(RunPhase.Running);
       expect(store.currentScreen).toBe(Screen.Run);
 
       store.setRunPhase(RunPhase.Completed);
       expect(store.currentScreen).toBe(Screen.Mcp);
 
-      // Step 4: Complete MCP
+      // Step 5: Complete MCP
       store.setMcpComplete();
       expect(store.currentScreen).toBe(Screen.Outro);
 
       // Verify version was bumped for each setter call
-      expect(store.getVersion()).toBe(5);
+      expect(store.getVersion()).toBe(6);
     });
   });
 

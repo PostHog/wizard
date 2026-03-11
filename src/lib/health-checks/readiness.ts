@@ -21,7 +21,7 @@ import { checkLlmGatewayHealth, checkMcpHealth } from './endpoints';
 // Service labels (used in human-readable reason strings)
 // ---------------------------------------------------------------------------
 
-const SERVICE_LABELS: Record<HealthCheckKey, string> = {
+export const SERVICE_LABELS: Record<HealthCheckKey, string> = {
   anthropic: 'Anthropic',
   posthogOverall: 'PostHog',
   posthogComponents: 'PostHog (components)',
