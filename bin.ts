@@ -4,8 +4,6 @@ import { red } from './src/utils/logging';
 
 import yargs from 'yargs';
 import { hideBin } from 'yargs/helpers';
-import chalk from 'chalk';
-
 import { VERSION } from './src/lib/version.js';
 
 const WIZARD_VERSION = VERSION;
@@ -139,14 +137,14 @@ yargs(hideBin(process.argv))
         // Use LoggingUI for CI mode (no dependencies, no prompts)
         setUI(new LoggingUI());
         if (!options.apiKey) {
-          getUI().intro(chalk.inverse(`PostHog Wizard`));
+          getUI().intro(`PostHog Wizard`);
           getUI().log.error(
             'CI mode requires --api-key (personal API key phx_xxx)',
           );
           process.exit(1);
         }
         if (!options.installDir) {
-          getUI().intro(chalk.inverse(`PostHog Wizard`));
+          getUI().intro(`PostHog Wizard`);
           getUI().log.error(
             'CI mode requires --install-dir (directory to install PostHog in)',
           );
@@ -156,7 +154,7 @@ yargs(hideBin(process.argv))
         void runWizard(options as Parameters<typeof runWizard>[0]);
       } else if (isNonInteractiveEnvironment()) {
         // Non-interactive non-CI: error out
-        getUI().intro(chalk.inverse(`PostHog Wizard`));
+        getUI().intro(`PostHog Wizard`);
         getUI().log.error(
           'This installer requires an interactive terminal (TTY) to run.\n' +
             'It appears you are running in a non-interactive environment.\n' +
