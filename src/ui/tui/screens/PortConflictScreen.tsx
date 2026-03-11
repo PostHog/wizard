@@ -8,7 +8,7 @@ import { Box, Text } from 'ink';
 import { useState, useSyncExternalStore } from 'react';
 import { execSync } from 'node:child_process';
 import type { WizardStore } from '../store.js';
-import { ConfirmationInput } from '../primitives/index.js';
+import { ConfirmationInput, Divider } from '../primitives/index.js';
 import { OAUTH_PORT } from '../../../lib/constants.js';
 
 interface PortConflictScreenProps {
@@ -73,7 +73,7 @@ export const PortConflictScreen = ({ store }: PortConflictScreenProps) => {
         )}
 
         <Box marginY={1}>
-          <Text dimColor>{'─'.repeat(64)}</Text>
+          <Divider />
         </Box>
 
         <ConfirmationInput
