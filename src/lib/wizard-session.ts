@@ -142,9 +142,6 @@ export interface WizardSession {
 
   // Resolved framework config (set after integration is known)
   frameworkConfig: FrameworkConfig | null;
-
-  // YARA scanning
-  yaraReport: boolean;
 }
 
 /**
@@ -163,7 +160,6 @@ export function buildSession(args: {
   benchmark?: boolean;
   yaraReport?: boolean;
   projectId?: string;
-  yaraReport?: boolean;
 }): WizardSession {
   return {
     debug: args.debug ?? false,
@@ -200,6 +196,5 @@ export function buildSession(args: {
     outroData: null,
     additionalFeatureQueue: [],
     frameworkConfig: null,
-    yaraReport: args.yaraReport ?? false,
   };
 }
