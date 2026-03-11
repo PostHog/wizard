@@ -138,16 +138,18 @@ const SKILL_SCAN_HOOK_TIMEOUT_MS = 30;
 
 // ─── Logging ─────────────────────────────────────────────────────
 
-function logYaraMatch(phase: string, tool: string, match: YaraMatch): void {
+function logYaraMatch(phase: string, tool: string, match: YaraMatch, action: ScanAction): void {
   logToFile(
-    `[YARA] ${phase}:${tool} matched rule "${match.rule.name}" ` +
-      `(severity: ${match.rule.severity}, category: ${match.rule.category}): ` +
-      `"${match.matchedText.substring(0, 100)}"`,
+    `[YARA] ${phase}:${tool} [${action.toUpperCase()}] rule "${match.rule.name}" ` +
+      `(severity: ${match.rule.severity}, category: ${match.rule.category})\n` +
+      `  Description: ${match.rule.description}\n` +
+      `  Matched text: "${match.matchedText.substring(0, 200)}"`,
   );
   analytics.wizardCapture('yara rule matched', {
     rule: match.rule.name,
     severity: match.rule.severity,
     category: match.rule.category,
+    action,
     phase,
     tool,
   });
@@ -199,7 +201,7 @@ export function createPreToolUseYaraHooks(): HookCallbackMatcher[] {
             if (!result.matched) return Promise.resolve({});
 
             const match = highestSeverityMatch(result.matches);
-            logYaraMatch('PreToolUse', 'Bash', match);
+            logYaraMatch('PreToolUse', 'Bash', match, 'blocked');
             recordViolation({
               rule: match.rule.name,
               severity: match.rule.severity,
@@ -264,7 +266,7 @@ export function createPostToolUseYaraHooks(): HookCallbackMatcher[] {
             if (!result.matched) return Promise.resolve({});
 
             const match = highestSeverityMatch(result.matches);
-            logYaraMatch('PostToolUse', tool, match);
+            logYaraMatch('PostToolUse', tool, match, 'reverted');
             recordViolation({
               rule: match.rule.name,
               severity: match.rule.severity,
@@ -320,9 +322,9 @@ export function createPostToolUseYaraHooks(): HookCallbackMatcher[] {
             if (!result.matched) return Promise.resolve({});
 
             const match = highestSeverityMatch(result.matches);
-            logYaraMatch('PostToolUse', tool, match);
 
             if (match.rule.severity === 'critical') {
+              logYaraMatch('PostToolUse', tool, match, 'aborted');
               recordViolation({
                 rule: match.rule.name,
                 severity: match.rule.severity,
@@ -338,6 +340,7 @@ export function createPostToolUseYaraHooks(): HookCallbackMatcher[] {
               });
             }
 
+            logYaraMatch('PostToolUse', tool, match, 'warned');
             recordViolation({
               rule: match.rule.name,
               severity: match.rule.severity,
@@ -393,7 +396,7 @@ export function createPostToolUseYaraHooks(): HookCallbackMatcher[] {
             if (!result.matched) return {};
 
             const match = highestSeverityMatch(result.matches);
-            logYaraMatch('PostToolUse', 'Bash (skill install)', match);
+            logYaraMatch('PostToolUse', 'Bash (skill install)', match, 'aborted');
             recordViolation({
               rule: match.rule.name,
               severity: match.rule.severity,
