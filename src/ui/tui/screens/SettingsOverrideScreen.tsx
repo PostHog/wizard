@@ -6,7 +6,7 @@
 import { Box, Text } from 'ink';
 import { useState, useSyncExternalStore } from 'react';
 import type { WizardStore } from '../store.js';
-import { ConfirmationInput } from '../primitives/index.js';
+import { ConfirmationInput, ModalOverlay } from '../primitives/index.js';
 import { Icons } from '../styles.js';
 
 interface SettingsOverrideScreenProps {
@@ -29,56 +29,12 @@ export const SettingsOverrideScreen = ({
   }
 
   return (
-    <Box
-      flexDirection="column"
-      flexGrow={1}
-      alignItems="center"
-      justifyContent="center"
-    >
-      <Box
-        flexDirection="column"
-        borderStyle="round"
-        borderColor="red"
-        paddingX={3}
-        paddingY={1}
-        width={64}
-      >
-        <Box justifyContent="center" marginBottom={1}>
-          <Text color="red" bold>
-            {Icons.warning} Settings Conflict
-          </Text>
-        </Box>
-
-        <Text>
-          Your project&apos;s <Text bold>.claude/settings.json</Text> sets:
-        </Text>
-        <Box flexDirection="column" marginY={1} paddingLeft={2}>
-          {keys.map((key) => (
-            <Text key={key}>
-              {Icons.bullet}{' '}
-              <Text color="yellow" bold>
-                {key}
-              </Text>
-            </Text>
-          ))}
-        </Box>
-        <Text dimColor>
-          These overrides prevent the Wizard from reaching the PostHog LLM
-          Gateway. We can back up the file and continue.
-        </Text>
-
-        {feedback && (
-          <Box marginTop={1}>
-            <Text color="yellow">
-              {Icons.warning} {feedback}
-            </Text>
-          </Box>
-        )}
-
-        <Box marginY={1}>
-          <Text dimColor>{'─'.repeat(56)}</Text>
-        </Box>
-
+    <ModalOverlay
+      borderColor="red"
+      title={`${Icons.warning} Settings conflict`}
+      width={64}
+      feedback={feedback ? `${Icons.warning} ${feedback}` : null}
+      footer={
         <ConfirmationInput
           message="Back up to .wizard-backup and continue?"
           confirmLabel="Backup & continue [Enter]"
@@ -91,7 +47,25 @@ export const SettingsOverrideScreen = ({
           }}
           onCancel={() => process.exit(1)}
         />
+      }
+    >
+      <Text>
+        Your project&apos;s <Text bold>.claude/settings.json</Text> sets:
+      </Text>
+      <Box flexDirection="column" marginY={1} paddingLeft={2}>
+        {keys.map((key) => (
+          <Text key={key}>
+            {Icons.bullet}{' '}
+            <Text color="yellow" bold>
+              {key}
+            </Text>
+          </Text>
+        ))}
       </Box>
-    </Box>
+      <Text dimColor>
+        These overrides prevent the Wizard from reaching the PostHog LLM
+        Gateway. We can back up the file and continue.
+      </Text>
+    </ModalOverlay>
   );
 };

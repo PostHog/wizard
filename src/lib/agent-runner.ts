@@ -11,6 +11,7 @@ import {
 } from '../utils/setup-utils';
 import type { PackageDotJson } from '../utils/package-json';
 import type { WizardOptions } from '../utils/types';
+import { WIZARD_INTERACTION_EVENT_NAME } from './constants';
 import { analytics } from '../utils/analytics';
 import { getUI } from '../ui';
 import {
@@ -26,10 +27,18 @@ import {
 import { getCloudUrlFromRegion } from '../utils/urls';
 
 import * as semver from 'semver';
-import { checkAnthropicStatus } from '../utils/anthropic-status';
+import {
+  evaluateWizardReadiness,
+  WizardReadiness,
+} from './health-checks/readiness';
 import { enableDebugLogs, initLogFile, logToFile } from '../utils/debug';
 import { createBenchmarkPipeline } from './middleware/benchmark';
-import { wizardAbort, WizardError } from '../utils/wizard-abort';
+import {
+  wizardAbort,
+  WizardError,
+  registerCleanup,
+} from '../utils/wizard-abort';
+import { formatScanReport, writeScanReport } from './yara-hooks';
 
 /**
  * Build a WizardOptions bag from a WizardSession (for code that still expects WizardOptions).
@@ -47,6 +56,7 @@ function sessionToOptions(session: WizardSession): WizardOptions {
     benchmark: session.benchmark,
     projectId: session.projectId,
     apiKey: session.apiKey,
+    yaraReport: session.yaraReport,
   };
 }
 
@@ -92,15 +102,16 @@ export async function runAgentWizard(
     }
   }
 
-  // Check Anthropic/Claude service status (pure — no prompt)
-  logToFile('[agent-runner] checking anthropic status');
-  const statusResult = await checkAnthropicStatus();
-  logToFile(`[agent-runner] anthropic status=${statusResult.status}`);
-  if (statusResult.status === 'down' || statusResult.status === 'degraded') {
-    getUI().showServiceStatus({
-      description: statusResult.description,
-      statusPageUrl: 'https://status.claude.com',
-    });
+  // Check all external service health (skip if TUI already ran it in bin.ts)
+  if (!session.readinessResult) {
+    logToFile('[agent-runner] evaluating wizard readiness');
+    const readiness = await evaluateWizardReadiness();
+    logToFile(`[agent-runner] readiness=${readiness.decision}`);
+    if (readiness.decision === WizardReadiness.No) {
+      await getUI().showBlockingOutage(readiness);
+    } else if (readiness.decision === WizardReadiness.YesWithWarnings) {
+      getUI().setReadinessWarnings(readiness);
+    }
   }
 
   // Check for blocking env overrides in .claude/settings.json before login.
@@ -202,7 +213,10 @@ export async function runAgentWizard(
   // Determine MCP URL: CLI flag > env var > production default
   const mcpUrl = session.localMcp
     ? 'http://localhost:8787/mcp'
-    : process.env.MCP_URL || 'https://mcp.posthog.com/mcp';
+    : process.env.MCP_URL ||
+      (cloudRegion === 'eu'
+        ? 'https://mcp-eu.posthog.com/mcp'
+        : 'https://mcp.posthog.com/mcp');
 
   // Skills server URL (context-mill dev server or GitHub releases)
   const skillsBaseUrl = session.localMcp
@@ -211,6 +225,18 @@ export async function runAgentWizard(
 
   const restoreSettings = () => restoreClaudeSettings(session.installDir);
   getUI().onEnterScreen('outro', restoreSettings);
+
+  // Register YARA report as cleanup so it fires on any exit path (including wizardAbort)
+  if (session.yaraReport) {
+    registerCleanup(() => {
+      const reportPath = writeScanReport();
+      if (reportPath) {
+        const summary = formatScanReport();
+        getUI().log.info(`YARA scan report: ${reportPath}${summary ?? ''}`);
+      }
+    });
+  }
+
   getUI().startRun();
 
   const agent = await initializeAgent(
@@ -270,6 +296,17 @@ export async function runAgentWizard(
     });
   }
 
+  if (agentResult.error === AgentErrorType.YARA_VIOLATION) {
+    await wizardAbort({
+      message:
+        'Security violation detected\n\nThe YARA scanner terminated the session after detecting a security violation.\nThis may indicate prompt injection, poisoned skill files, or a policy breach.\n\nPlease report this to: wizard@posthog.com',
+      error: new WizardError('YARA scanner terminated session', {
+        integration: config.metadata.integration,
+        error_type: AgentErrorType.YARA_VIOLATION,
+      }),
+    });
+  }
+
   if (
     agentResult.error === AgentErrorType.RATE_LIMIT ||
     agentResult.error === AgentErrorType.API_ERROR
@@ -304,6 +341,14 @@ export async function runAgentWizard(
       integration: config.metadata.integration,
       session,
     });
+    if (uploadedEnvVars.length > 0) {
+      analytics.capture(WIZARD_INTERACTION_EVENT_NAME, {
+        action: 'wizard_env_vars_uploaded',
+        integration: config.metadata.integration,
+        variable_count: uploadedEnvVars.length,
+        variable_keys: uploadedEnvVars,
+      });
+    }
   }
 
   // MCP installation is handled by McpScreen — no prompt here

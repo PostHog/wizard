@@ -21,7 +21,7 @@ import { checkLlmGatewayHealth, checkMcpHealth } from './endpoints';
 // Service labels (used in human-readable reason strings)
 // ---------------------------------------------------------------------------
 
-const SERVICE_LABELS: Record<HealthCheckKey, string> = {
+export const SERVICE_LABELS: Record<HealthCheckKey, string> = {
   anthropic: 'Anthropic',
   posthogOverall: 'PostHog',
   posthogComponents: 'PostHog (components)',
@@ -141,42 +141,111 @@ function describeComponents(label: string, h: ComponentHealthResult): string {
   return `${label} components impacted: ${shown.join(', ')}${suffix}`;
 }
 
+const READINESS_TIMEOUT_MS = 10_000;
+
 export async function evaluateWizardReadiness(
   config: WizardReadinessConfig = DEFAULT_WIZARD_READINESS_CONFIG,
 ): Promise<WizardReadinessResult> {
-  const health = await checkAllExternalServices();
-  const reasons: string[] = [];
+  try {
+    const health = await Promise.race([
+      checkAllExternalServices(),
+      new Promise<AllServicesHealth>((resolve) =>
+        setTimeout(
+          () => resolve(allUnknown('Health check timed out')),
+          READINESS_TIMEOUT_MS,
+        ),
+      ),
+    ]);
 
-  for (const key of Object.keys(health) as HealthCheckKey[]) {
-    const result = health[key];
-    const label = SERVICE_LABELS[key];
+    const reasons: string[] = [];
 
-    reasons.push(describeResult(label, result));
+    for (const key of Object.keys(health) as HealthCheckKey[]) {
+      const result = health[key];
+      const label = SERVICE_LABELS[key];
 
-    if ('degradedOrDownComponents' in result) {
-      reasons.push(describeComponents(label, result));
+      reasons.push(describeResult(label, result));
+
+      if ('degradedOrDownComponents' in result) {
+        reasons.push(describeComponents(label, result));
+      }
     }
-  }
 
-  const blocked =
-    config.downBlocksRun.some(
-      (k) => health[k].status === ServiceHealthStatus.Down,
-    ) ||
-    (config.degradedBlocksRun ?? []).some(
-      (k) => health[k].status !== ServiceHealthStatus.Healthy,
+    if (getBlockingServiceKeys(health, config).length > 0) {
+      return { decision: WizardReadiness.No, health, reasons };
+    }
+
+    const hasWarnings = Object.values(health).some(
+      (h) => h.status !== ServiceHealthStatus.Healthy,
     );
 
-  if (blocked) {
-    return { decision: WizardReadiness.No, health, reasons };
+    if (hasWarnings) {
+      return { decision: WizardReadiness.YesWithWarnings, health, reasons };
+    }
+
+    return { decision: WizardReadiness.Yes, health, reasons };
+  } catch {
+    // Health checks must never block the wizard run
+    return {
+      decision: WizardReadiness.Yes,
+      health: allUnknown('Unexpected error'),
+      reasons: ['Health check failed unexpectedly — proceeding anyway'],
+    };
   }
+}
 
-  const hasWarnings = Object.values(health).some(
-    (h) => h.status !== ServiceHealthStatus.Healthy,
-  );
+// ---------------------------------------------------------------------------
+// Blocking service detection
+// ---------------------------------------------------------------------------
 
-  if (hasWarnings) {
-    return { decision: WizardReadiness.YesWithWarnings, health, reasons };
-  }
+/** Keys that are component-level detail, not top-level services. */
+const COMPONENT_KEYS: HealthCheckKey[] = [
+  'posthogComponents',
+  'npmComponents',
+  'cloudflareComponents',
+];
 
-  return { decision: WizardReadiness.Yes, health, reasons };
+/**
+ * Get the keys of services that would block a wizard run per the given config.
+ */
+export function getBlockingServiceKeys(
+  health: AllServicesHealth,
+  config: WizardReadinessConfig = DEFAULT_WIZARD_READINESS_CONFIG,
+): HealthCheckKey[] {
+  return (Object.keys(health) as HealthCheckKey[]).filter((key) => {
+    if (COMPONENT_KEYS.includes(key)) return false;
+    const result = health[key];
+    if (
+      config.downBlocksRun.includes(key) &&
+      result.status === ServiceHealthStatus.Down
+    ) {
+      return true;
+    }
+    if (
+      (config.degradedBlocksRun ?? []).includes(key) &&
+      result.status !== ServiceHealthStatus.Healthy
+    ) {
+      return true;
+    }
+    return false;
+  });
+}
+
+/** Build an AllServicesHealth where every service is Degraded with the given error. */
+function allUnknown(error: string): AllServicesHealth {
+  const base: BaseHealthResult = {
+    status: ServiceHealthStatus.Degraded,
+    error,
+  };
+  return {
+    anthropic: base,
+    posthogOverall: base,
+    posthogComponents: { ...base },
+    github: base,
+    npmOverall: base,
+    npmComponents: { ...base },
+    cloudflareOverall: base,
+    cloudflareComponents: { ...base },
+    llmGateway: base,
+    mcp: base,
+  };
 }

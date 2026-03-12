@@ -13,6 +13,8 @@ import { InputDemo } from './demos/InputDemo.js';
 import { ProgressDemo } from './demos/ProgressDemo.js';
 import { LogDemo } from './demos/LogDemo.js';
 import { RunScreenDemo } from './demos/RunScreenDemo.js';
+import { HealthCheckDemo } from './demos/HealthCheckDemo.js';
+import { ModalDemo } from './demos/ModalDemo.js';
 
 interface PlaygroundAppProps {
   store: WizardStore;
@@ -28,6 +30,16 @@ export const PlaygroundApp = ({ store }: PlaygroundAppProps) => {
       id: 'run',
       label: 'RunScreen',
       component: <RunScreenDemo store={store} />,
+    },
+    {
+      id: 'health',
+      label: 'HealthCheck',
+      component: <HealthCheckDemo />,
+    },
+    {
+      id: 'modal',
+      label: 'Modal',
+      component: <ModalDemo />,
     },
   ];
 

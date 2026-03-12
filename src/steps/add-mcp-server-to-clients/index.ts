@@ -48,10 +48,12 @@ export const addMCPServerToClientsStep = async ({
   integration,
   local = false,
   ci = false,
+  cloudRegion: _cloudRegion,
 }: {
   integration?: Integration;
   local?: boolean;
   ci?: boolean;
+  cloudRegion?: import('../../utils/types').CloudRegion;
 }): Promise<string[]> => {
   const ui = getUI();
 

@@ -13,7 +13,7 @@ import type { ReactNode } from 'react';
 import type { WizardStore } from './store.js';
 import { Screen, Overlay, type ScreenName } from './router.js';
 
-import { OutageScreen } from './screens/OutageScreen.js';
+import { HealthCheckScreen } from './screens/health/HealthCheckScreen.js';
 import { SettingsOverrideScreen } from './screens/SettingsOverrideScreen.js';
 import { PortConflictScreen } from './screens/PortConflictScreen.js';
 import { IntroScreen } from './screens/IntroScreen.js';
@@ -41,12 +41,12 @@ export function createScreens(
 ): Record<ScreenName, ReactNode> {
   return {
     // Overlays
-    [Overlay.Outage]: <OutageScreen store={store} />,
     [Overlay.SettingsOverride]: <SettingsOverrideScreen store={store} />,
     [Overlay.PortConflict]: <PortConflictScreen store={store} />,
 
     // Wizard flow
     [Screen.Intro]: <IntroScreen store={store} />,
+    [Screen.HealthCheck]: <HealthCheckScreen store={store} />,
     [Screen.Setup]: <SetupScreen store={store} />,
     [Screen.Auth]: <AuthScreen store={store} />,
     [Screen.Run]: <RunScreen store={store} />,

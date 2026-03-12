@@ -38,7 +38,8 @@ const mockUIInstance = {
   setCredentials: jest.fn(),
   pushStatus: jest.fn(),
   setLoginUrl: jest.fn(),
-  showServiceStatus: jest.fn(),
+  showBlockingOutage: jest.fn(),
+  setReadinessWarnings: jest.fn(),
   showSettingsOverride: jest.fn(),
   startRun: jest.fn(),
   syncTodos: jest.fn(),
@@ -66,6 +67,7 @@ describe('runAgent', () => {
     ci: false,
     menu: false,
     benchmark: false,
+    yaraReport: false,
   };
 
   const defaultAgentConfig = {

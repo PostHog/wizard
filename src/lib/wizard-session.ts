@@ -12,6 +12,7 @@
 
 import type { Integration } from './constants';
 import type { FrameworkConfig } from './framework-config';
+import type { WizardReadinessResult } from './health-checks/readiness';
 
 function parseProjectIdArg(value: string | undefined): number | undefined {
   if (value === undefined || value === '') return undefined;
@@ -88,6 +89,7 @@ export interface WizardSession {
   apiKey?: string;
   menu: boolean;
   benchmark: boolean;
+  yaraReport: boolean;
   projectId?: number;
 
   // From detection + screens
@@ -131,7 +133,8 @@ export interface WizardSession {
   mcpInstalledClients: string[];
 
   // Runtime
-  serviceStatus: { description: string; statusPageUrl: string } | null;
+  readinessResult: WizardReadinessResult | null;
+  outageDismissed: boolean;
   settingsOverrideKeys: string[] | null;
   portConflictProcess: { command: string; pid: string; user: string } | null;
   outroData: OutroData | null;
@@ -157,6 +160,7 @@ export function buildSession(args: {
   menu?: boolean;
   integration?: Integration;
   benchmark?: boolean;
+  yaraReport?: boolean;
   projectId?: string;
 }): WizardSession {
   return {
@@ -169,6 +173,7 @@ export function buildSession(args: {
     apiKey: args.apiKey,
     menu: args.menu ?? false,
     benchmark: args.benchmark ?? false,
+    yaraReport: args.yaraReport ?? false,
     projectId: parseProjectIdArg(args.projectId),
 
     setupConfirmed: false,
@@ -187,7 +192,8 @@ export function buildSession(args: {
     mcpInstalledClients: [],
     loginUrl: null,
     credentials: null,
-    serviceStatus: null,
+    readinessResult: null,
+    outageDismissed: false,
     settingsOverrideKeys: null,
     portConflictProcess: null,
     outroData: null,
