@@ -8,7 +8,6 @@
 
 import type { WizardUI, SpinnerHandle } from '../wizard-ui.js';
 import type { WizardStore } from './store.js';
-import { Overlay } from './router.js';
 import { RunPhase, OutroKind } from '../../lib/wizard-session.js';
 
 // Strip ANSI escape codes (chalk formatting) from strings
@@ -65,12 +64,19 @@ export class InkUI implements WizardUI {
     this.store.setLoginUrl(url);
   }
 
-  showServiceStatus(data: {
-    description: string;
-    statusPageUrl: string;
-  }): void {
-    this.store.setServiceStatus(data);
-    this.store.pushOverlay(Overlay.Outage);
+  showBlockingOutage(
+    result: import('../../lib/health-checks/readiness.js').WizardReadinessResult,
+  ): Promise<void> {
+    // In the TUI, the HealthCheckScreen handles outage display.
+    // This is only called from agent-runner for the CI fallback path.
+    this.store.setReadinessResult(result);
+    return Promise.resolve();
+  }
+
+  setReadinessWarnings(
+    result: import('../../lib/health-checks/readiness.js').WizardReadinessResult,
+  ): void {
+    this.store.setReadinessResult(result);
   }
 
   showPortConflict(processInfo: {

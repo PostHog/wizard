@@ -234,6 +234,7 @@ yargs(hideBin(process.argv))
             const { DETECTION_TIMEOUT_MS } = (await import(
               './src/lib/constants.js'
             )) as { DETECTION_TIMEOUT_MS: number };
+
             const detectedIntegration = await Promise.race([
               detectIntegration(installDir),
               new Promise<undefined>((resolve) =>
@@ -366,6 +367,12 @@ yargs(hideBin(process.argv))
 
             // Wait for IntroScreen confirmation
             await tui.waitForSetup();
+
+            // Ensure health check has completed before starting the wizard.
+            // The flow gate on Intro (readinessResult !== null) keeps the
+            // TUI on IntroScreen until this resolves. If blocking, the
+            // outage overlay was already pushed in the .then() callback.
+            await tui.store.healthGateComplete;
 
             await runWizard(
               options as Parameters<typeof runWizard>[0],

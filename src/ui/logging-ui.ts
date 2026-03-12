@@ -76,16 +76,26 @@ export class LoggingUI implements WizardUI {
     }
   }
 
-  showServiceStatus(data: {
-    description: string;
-    statusPageUrl: string;
-  }): void {
-    console.log(`▲  Claude/Anthropic services are experiencing issues.`);
-    console.log(`│  Status: ${data.description}`);
-    console.log(`│  Status page: ${data.statusPageUrl}`);
+  showBlockingOutage(
+    result: import('../lib/health-checks/readiness.js').WizardReadinessResult,
+  ): Promise<void> {
+    console.log(`▲  Service health issues detected — blocking outage.`);
+    for (const reason of result.reasons) {
+      console.log(`│  ${reason}`);
+    }
     console.log(
       `│  The wizard may not work reliably while services are affected.`,
     );
+    return Promise.resolve();
+  }
+
+  setReadinessWarnings(
+    result: import('../lib/health-checks/readiness.js').WizardReadinessResult,
+  ): void {
+    console.log(`▲  Service health warnings detected.`);
+    for (const reason of result.reasons) {
+      console.log(`│  ${reason}`);
+    }
   }
 
   showPortConflict(_processInfo: {

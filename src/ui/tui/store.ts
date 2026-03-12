@@ -4,7 +4,7 @@
  *
  * Navigation is delegated to WizardRouter.
  * The active screen is derived from session state — not imperatively set.
- * Overlays (outage, etc.) are the only imperative navigation.
+ * Overlays (settings-override, port-conflict) are the only imperative navigation.
  *
  * All session mutations that affect screen resolution go through
  * explicit setters so emitChange() is always called.
@@ -29,6 +29,10 @@ import {
   Flow,
 } from './router.js';
 import { analytics, sessionProperties } from '../../utils/analytics.js';
+import {
+  evaluateWizardReadiness,
+  WizardReadiness,
+} from '../../lib/health-checks/readiness.js';
 
 export { TaskStatus, Screen, Overlay, Flow, RunPhase, McpOutcome };
 export type { ScreenName, OutroData, WizardSession };
@@ -84,8 +88,47 @@ export class WizardStore {
   /** Blocks OAuth flow until the port-conflict overlay is dismissed. */
   private _resolvePortConflict: (() => void) | null = null;
 
+  /**
+   * Resolves when the health-check screen is done — either auto-advanced
+   * (healthy) or user-dismissed (outage). bin.ts awaits this before runWizard().
+   */
+  private _resolveHealthGate!: () => void;
+  readonly healthGateComplete: Promise<void> = new Promise((resolve) => {
+    this._resolveHealthGate = resolve;
+  });
+
   constructor(flow: Flow = Flow.Wizard) {
     this.router = new WizardRouter(flow);
+
+    // Fire health check immediately for Wizard flow so results arrive
+    // while the user is still on IntroScreen.
+    if (flow === Flow.Wizard) {
+      this._initHealthCheck();
+    } else {
+      this._resolveHealthGate();
+    }
+  }
+
+  /**
+   * Kick off the health check. Stores the result and resolves the
+   * health gate if non-blocking.
+   */
+  private _initHealthCheck(): void {
+    evaluateWizardReadiness()
+      .then((readiness) => {
+        this.setReadinessResult(readiness);
+        if (readiness.decision !== WizardReadiness.No) {
+          this._resolveHealthGate();
+        }
+      })
+      .catch(() => {
+        this.setReadinessResult({
+          decision: WizardReadiness.Yes,
+          health: {} as never,
+          reasons: [],
+        });
+        this._resolveHealthGate();
+      });
   }
 
   // ── State accessors (read from atoms) ────────────────────────────
@@ -185,10 +228,19 @@ export class WizardStore {
     this.emitChange();
   }
 
-  setServiceStatus(
-    status: { description: string; statusPageUrl: string } | null,
+  setReadinessResult(
+    result:
+      | import('../../lib/health-checks/readiness.js').WizardReadinessResult
+      | null,
   ): void {
-    this.$session.setKey('serviceStatus', status);
+    this.$session.setKey('readinessResult', result);
+    this.emitChange();
+  }
+
+  /** User dismissed the blocking outage screen. Unblocks bin.ts. */
+  dismissOutage(): void {
+    this.$session.setKey('outageDismissed', true);
+    this._resolveHealthGate();
     this.emitChange();
   }
 

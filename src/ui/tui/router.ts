@@ -23,7 +23,6 @@ export type { FlowEntry };
 
 /** Screens that interrupt flows as overlays */
 export enum Overlay {
-  Outage = 'outage',
   SettingsOverride = 'settings-override',
   PortConflict = 'port-conflict',
 }
