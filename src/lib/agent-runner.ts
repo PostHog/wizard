@@ -223,9 +223,7 @@ export async function runAgentWizard(
       const reportPath = writeScanReport();
       if (reportPath) {
         const summary = formatScanReport();
-        getUI().log.info(
-          `YARA scan report: ${reportPath}${summary ?? ''}`,
-        );
+        getUI().log.info(`YARA scan report: ${reportPath}${summary ?? ''}`);
       }
     });
   }

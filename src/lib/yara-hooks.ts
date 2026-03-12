@@ -138,9 +138,16 @@ const SKILL_SCAN_HOOK_TIMEOUT_MS = 120;
 
 // ─── Logging ─────────────────────────────────────────────────────
 
-function logYaraMatch(phase: string, tool: string, match: YaraMatch, action: ScanAction): void {
+function logYaraMatch(
+  phase: string,
+  tool: string,
+  match: YaraMatch,
+  action: ScanAction,
+): void {
   logToFile(
-    `[YARA] ${phase}:${tool} [${action.toUpperCase()}] rule "${match.rule.name}" ` +
+    `[YARA] ${phase}:${tool} [${action.toUpperCase()}] rule "${
+      match.rule.name
+    }" ` +
       `(severity: ${match.rule.severity}, category: ${match.rule.category})\n` +
       `  Description: ${match.rule.description}\n` +
       `  Matched text: "${match.matchedText.substring(0, 200)}"`,
@@ -396,7 +403,12 @@ export function createPostToolUseYaraHooks(): HookCallbackMatcher[] {
             if (!result.matched) return {};
 
             const match = highestSeverityMatch(result.matches);
-            logYaraMatch('PostToolUse', 'Bash (skill install)', match, 'aborted');
+            logYaraMatch(
+              'PostToolUse',
+              'Bash (skill install)',
+              match,
+              'aborted',
+            );
             recordViolation({
               rule: match.rule.name,
               severity: match.rule.severity,
