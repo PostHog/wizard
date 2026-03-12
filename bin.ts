@@ -233,7 +233,7 @@ yargs(hideBin(process.argv))
 
             const { DETECTION_TIMEOUT_MS } = (await import(
               './src/lib/constants.js'
-            );
+            )) as { DETECTION_TIMEOUT_MS: number };
 
             const detectedIntegration = await Promise.race([
               detectIntegration(installDir),
