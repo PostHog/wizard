@@ -20,7 +20,7 @@ export const HealthWarningsTab = ({ store }: HealthWarningsTabProps) => {
   return (
     <Box flexDirection="column" paddingX={1}>
       <Text bold color="#DC9300">
-        {Icons.warning} Service Warnings
+        {Icons.warning} Service warnings
       </Text>
       <Box height={1} />
 
