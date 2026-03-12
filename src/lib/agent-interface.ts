@@ -737,6 +737,8 @@ export async function runAgent(
               '~/.local/share/pnpm/store/**', // pnpm global store (Linux)
               '~/.pnpm-store/**', // pnpm alternate store
               '~/.npm/**', // npm cache
+              '~/.yarn/**', // yarn classic cache
+              '~/.yarn/berry/**', // yarn berry cache
             ],
           },
           network: {
