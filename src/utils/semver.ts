@@ -7,6 +7,27 @@ import {
   validRange,
 } from 'semver';
 
+/**
+ * Version strings from package.json that are not semver ranges.
+ * URLs, git refs, dist-tags, local paths, workspace protocol, npm aliases, etc.
+ * These should be rejected early — we can't determine a clear version from them.
+ */
+function isNonSemverVersion(version: string): boolean {
+  const v = version.trim();
+  return (
+    v === '' ||
+    v.startsWith('http://') ||
+    v.startsWith('https://') ||
+    v.startsWith('git+') ||
+    v.startsWith('git://') ||
+    v.startsWith('file:') ||
+    v.startsWith('npm:') ||
+    v.startsWith('workspace:') ||
+    v.startsWith('/') ||
+    v.includes('/') // user/repo shorthand
+  );
+}
+
 export function fulfillsVersionRange({
   version,
   acceptableVersions,
@@ -18,6 +39,10 @@ export function fulfillsVersionRange({
 }): boolean {
   if (version === 'latest') {
     return canBeLatest;
+  }
+
+  if (isNonSemverVersion(version)) {
+    return false;
   }
 
   let cleanedUserVersion, isRange;
@@ -58,6 +83,10 @@ export function createVersionBucket(minMajorVersion?: number) {
   return (version: string | undefined): string => {
     if (!version) {
       return 'none';
+    }
+
+    if (isNonSemverVersion(version)) {
+      return 'unknown';
     }
 
     try {
