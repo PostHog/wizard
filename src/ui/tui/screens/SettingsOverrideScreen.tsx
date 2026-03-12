@@ -31,7 +31,7 @@ export const SettingsOverrideScreen = ({
   return (
     <ModalOverlay
       borderColor="red"
-      title={`${Icons.warning} Settings Conflict`}
+      title={`${Icons.warning} Settings conflict`}
       width={64}
       feedback={feedback ? `${Icons.warning} ${feedback}` : null}
       footer={
