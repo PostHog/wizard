@@ -361,6 +361,11 @@ describe('WizardStore', () => {
     it('advances to mcp after run completes', () => {
       const store = createStore();
       store.completeSetup();
+      store.setReadinessResult({
+        decision: WizardReadiness.Yes,
+        health: {} as never,
+        reasons: [],
+      });
       store.setCredentials({
         accessToken: 'tok',
         projectApiKey: 'pk',
@@ -374,6 +379,11 @@ describe('WizardStore', () => {
     it('advances to outro after mcp completes', () => {
       const store = createStore();
       store.completeSetup();
+      store.setReadinessResult({
+        decision: WizardReadiness.Yes,
+        health: {} as never,
+        reasons: [],
+      });
       store.setCredentials({
         accessToken: 'tok',
         projectApiKey: 'pk',
@@ -830,6 +840,11 @@ describe('WizardStore', () => {
     it('screen advances to outro on RunPhase.Error too', () => {
       const store = createStore();
       store.completeSetup();
+      store.setReadinessResult({
+        decision: WizardReadiness.Yes,
+        health: {} as never,
+        reasons: [],
+      });
       store.setCredentials({
         accessToken: 'tok',
         projectApiKey: 'pk',
