@@ -168,6 +168,8 @@ export type AgentConfig = {
   posthogApiHost: string;
   additionalMcpServers?: Record<string, { url: string }>;
   detectPackageManager: PackageManagerDetector;
+  /** Base URL for the skills server (context-mill dev or GitHub releases) */
+  skillsBaseUrl: string;
   /** Feature flag key -> variant (evaluated at start of run). */
   wizardFlags?: Record<string, string>;
   wizardMetadata?: Record<string, string>;
@@ -521,10 +523,11 @@ export async function initializeAgent(
       ),
     };
 
-    // Add in-process wizard tools (env files, package manager detection)
+    // Add in-process wizard tools (env files, package manager detection, skill loading)
     const wizardToolsServer = await createWizardToolsServer({
       workingDirectory: config.workingDirectory,
       detectPackageManager: config.detectPackageManager,
+      skillsBaseUrl: config.skillsBaseUrl,
     });
     mcpServers['wizard-tools'] = wizardToolsServer;
 
@@ -728,6 +731,12 @@ export async function runAgent(
               '//tmp/**',
               '//private/tmp',
               '//private/tmp/**',
+              // Package manager stores — allow writes so pnpm/npm can
+              // install packages without breaking the user's existing setup
+              '~/Library/pnpm/store/**', // pnpm global store (macOS)
+              '~/.local/share/pnpm/store/**', // pnpm global store (Linux)
+              '~/.pnpm-store/**', // pnpm alternate store
+              '~/.npm/**', // npm cache
             ],
           },
           network: {
