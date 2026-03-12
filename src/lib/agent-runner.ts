@@ -30,7 +30,6 @@ import * as semver from 'semver';
 import { checkAnthropicStatus } from '../utils/anthropic-status';
 import { enableDebugLogs, initLogFile, logToFile } from '../utils/debug';
 import { createBenchmarkPipeline } from './middleware/benchmark';
-import chalk from 'chalk';
 import {
   wizardAbort,
   WizardError,
@@ -225,7 +224,7 @@ export async function runAgentWizard(
       if (reportPath) {
         const summary = formatScanReport();
         getUI().log.info(
-          `YARA scan report: ${chalk.cyan(reportPath)}${summary ?? ''}`,
+          `YARA scan report: ${reportPath}${summary ?? ''}`,
         );
       }
     });

@@ -296,6 +296,7 @@ yargs(hideBin(process.argv))
                   ci: session.ci,
                   menu: session.menu,
                   benchmark: session.benchmark,
+                  yaraReport: session.yaraReport,
                 });
                 if (version) {
                   const coerced = semver.coerce(version);
