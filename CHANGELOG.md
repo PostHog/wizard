@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.1.0](https://github.com/PostHog/wizard/compare/v2.0.2...v2.1.0) (2026-03-12)
+
+
+### Features
+
+* add YARA scanning ([#305](https://github.com/PostHog/wizard/issues/305)) ([6f4fb52](https://github.com/PostHog/wizard/commit/6f4fb52bbf8bbc05854bbf9d26feb01552da29dc))
+
+
+### Bug Fixes
+
+* unit tests for package.json semver handling ([#334](https://github.com/PostHog/wizard/issues/334)) ([e60235e](https://github.com/PostHog/wizard/commit/e60235e6ce117ca9bb4e1482f06e28a713599eb9))
+
 ## [2.0.2](https://github.com/PostHog/wizard/compare/v2.0.1...v2.0.2) (2026-03-11)
 
 
