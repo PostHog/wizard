@@ -373,17 +373,17 @@ STEP 1: List available skills from the PostHog MCP server using ListMcpResources
     AgentSignals.ERROR_MCP_MISSING
   } Could not access the PostHog MCP server and halt.
 
-   Review the skill descriptions and choose the one that best matches this project's framework and configuration.
-   If no suitable skill is found, or you cannot access the MCP server, you emit: ${
+   Choose a skill from the \`integration/\` category (URIs starting with \`posthog://skills/integration/\`) that matches this project's framework. Do NOT pick skills from other categories (llm-analytics, error-tracking, feature-flags, omnibus, etc.) — those are handled separately.
+   If no suitable integration skill is found, or you cannot access the MCP server, you emit: ${
      AgentSignals.ERROR_RESOURCE_MISSING
    } Could not find a suitable skill for this project.
 
-STEP 2: Fetch the chosen skill resource (e.g., posthog://skills/{skill-id}).
-   The resource returns a shell command to install the skill.
+STEP 2: Fetch the chosen skill resource (e.g., posthog://skills/integration/{framework}).
+   The resource returns a download URL for the skill zip file.
 
-STEP 3: Run the installation command using Bash:
-   - Execute the EXACT command returned by the resource (do not modify it)
-   - This will download and extract the skill to .claude/skills/{skill-id}/
+STEP 3: Install the skill using the install_skill tool from the wizard-tools MCP server:
+   - Pass the download URL from step 2 and a skill ID (the last path segment of the URI, e.g., "nextjs-app-router")
+   - Do NOT run any shell commands to install skills
 
 STEP 4: Load the installed skill's SKILL.md file to understand what references are available.
 

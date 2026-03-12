@@ -9,6 +9,7 @@
 
 import path from 'path';
 import fs from 'fs';
+import { execFileSync } from 'child_process';
 import { z } from 'zod';
 import { logToFile } from '../utils/debug';
 import type { PackageManagerDetector } from './package-manager-detection';
@@ -275,12 +276,100 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
     },
   );
 
+  // -- install_skill --------------------------------------------------------
+
+  const installSkill = tool(
+    'install_skill',
+    'Download and install a PostHog skill from a URL. Extracts the zip to .claude/skills/<skillId>/.',
+    {
+      url: z.string().describe('URL of the skill zip file'),
+      skillId: z
+        .string()
+        .describe('Skill identifier (directory name under .claude/skills/)'),
+    },
+    (args: { url: string; skillId: string }) => {
+      if (
+        !args.url.startsWith(
+          'https://github.com/PostHog/context-mill/releases/',
+        ) &&
+        !/^http:\/\/localhost:\d+\//.test(args.url)
+      ) {
+        return {
+          content: [
+            {
+              type: 'text' as const,
+              text: 'Error: Only PostHog context-mill URLs are allowed.',
+            },
+          ],
+          isError: true,
+        };
+      }
+
+      if (!/^[a-z0-9][a-z0-9-]*$/.test(args.skillId)) {
+        return {
+          content: [
+            {
+              type: 'text' as const,
+              text: 'Error: skillId must be lowercase alphanumeric with hyphens.',
+            },
+          ],
+          isError: true,
+        };
+      }
+
+      const skillDir = path.join(
+        workingDirectory,
+        '.claude',
+        'skills',
+        args.skillId,
+      );
+      const tmpFile = `/tmp/posthog-skill-${args.skillId}.zip`;
+
+      try {
+        fs.mkdirSync(skillDir, { recursive: true });
+        execFileSync('curl', ['-sL', args.url, '-o', tmpFile], {
+          timeout: 30000,
+        });
+        execFileSync('unzip', ['-o', tmpFile, '-d', skillDir], {
+          timeout: 30000,
+        });
+        try {
+          fs.unlinkSync(tmpFile);
+        } catch {
+          /* ignore cleanup errors */
+        }
+
+        logToFile(`install_skill: installed ${args.skillId} from ${args.url}`);
+
+        return {
+          content: [
+            {
+              type: 'text' as const,
+              text: `Skill installed to .claude/skills/${args.skillId}/`,
+            },
+          ],
+        };
+      } catch (err: any) {
+        logToFile(`install_skill error: ${err.message}`);
+        return {
+          content: [
+            {
+              type: 'text' as const,
+              text: `Error installing skill: ${err.message}`,
+            },
+          ],
+          isError: true,
+        };
+      }
+    },
+  );
+
   // -- Assemble server ------------------------------------------------------
 
   return createSdkMcpServer({
     name: SERVER_NAME,
     version: '1.0.0',
-    tools: [checkEnvKeys, setEnvValues, detectPM],
+    tools: [checkEnvKeys, setEnvValues, detectPM, installSkill],
   });
 }
 
@@ -289,4 +378,5 @@ export const WIZARD_TOOL_NAMES = [
   `${SERVER_NAME}:check_env_keys`,
   `${SERVER_NAME}:set_env_values`,
   `${SERVER_NAME}:detect_package_manager`,
+  `${SERVER_NAME}:install_skill`,
 ];

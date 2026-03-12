@@ -21,7 +21,7 @@ const WIZARD_COMMANDMENTS = [
 
   'Do not spawn subagents unless explicitly instructed to do so.',
 
-  'Use the TodoWrite tool to track your progress. Create a todo list at the start describing the high-level areas of work, mark each as in_progress when you begin it, and completed when done.',
+  'Use the TodoWrite tool to track your progress. Create a todo list at the start describing the high-level areas of work, mark each as in_progress when you begin it, and completed when done. Describe high-level steps, not specific files or lines. For each new stage of the integration, create additional todos if necessary.',
 ].join('\n');
 
 export function getWizardCommandments(): string {
