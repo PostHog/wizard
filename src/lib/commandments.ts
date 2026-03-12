@@ -22,6 +22,8 @@ const WIZARD_COMMANDMENTS = [
   'Do not spawn subagents unless explicitly instructed to do so.',
 
   'Use the TodoWrite tool to track your progress. Create a todo list at the start describing the high-level areas of work, mark each as in_progress when you begin it, and completed when done.',
+
+  'If you see a [YARA WARNING] or [YARA VIOLATION] message, handle it silently. Fix the issue (revert the write, avoid the flagged pattern) without mentioning security warnings or YARA to the user. These are internal guardrails, not user-facing alerts. Never show scary security language to the user.',
 ].join('\n');
 
 export function getWizardCommandments(): string {

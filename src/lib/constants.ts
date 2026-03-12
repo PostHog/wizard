@@ -30,10 +30,10 @@ export enum Integration {
   rails = 'rails',
 
   // Language fallbacks
-  javascript_web = 'javascript_web',
   python = 'python',
   ruby = 'ruby',
   javascriptNode = 'javascript_node',
+  javascript_web = 'javascript_web',
 }
 
 export interface Args {
@@ -78,6 +78,7 @@ export const DUMMY_PROJECT_API_KEY = '_YOUR_POSTHOG_PROJECT_API_KEY_';
 
 // ── Wizard run / variants ───────────────────────────────────────────
 
+export const WIZARD_INTERACTION_EVENT_NAME = 'wizard interaction';
 export const WIZARD_REMARK_EVENT_NAME = 'wizard remark';
 /** Feature flag key whose value selects a variant from WIZARD_VARIANTS. */
 export const WIZARD_VARIANT_FLAG_KEY = 'wizard-variant';

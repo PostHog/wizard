@@ -68,6 +68,17 @@ export type WizardOptions = {
    * and writes detailed usage data to /tmp/posthog-wizard-benchmark.json.
    */
   benchmark: boolean;
+
+  /**
+   * Cloud region for the PostHog instance (US or EU).
+   * When not provided, the user will be prompted to select one.
+   */
+  cloudRegion?: CloudRegion;
+
+  /**
+   * Whether to print a YARA scanner summary after the agent run.
+   */
+  yaraReport: boolean;
 };
 
 export interface Feature {

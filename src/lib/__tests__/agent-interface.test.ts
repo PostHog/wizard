@@ -66,6 +66,7 @@ describe('runAgent', () => {
     ci: false,
     menu: false,
     benchmark: false,
+    yaraReport: false,
   };
 
   const defaultAgentConfig = {

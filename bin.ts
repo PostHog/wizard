@@ -23,6 +23,8 @@ import { runWizard } from './src/run';
 import { isNonInteractiveEnvironment } from './src/utils/environment';
 import { getUI, setUI } from './src/ui';
 import { LoggingUI } from './src/ui/logging-ui';
+import type { Integration } from './src/lib/constants';
+import type { FrameworkConfig } from './src/lib/framework-config';
 
 if (process.env.NODE_ENV === 'test') {
   void (async () => {
@@ -45,6 +47,11 @@ yargs(hideBin(process.argv))
       default: false,
       describe: 'Enable verbose logging\nenv: POSTHOG_WIZARD_DEBUG',
       type: 'boolean',
+    },
+    region: {
+      describe: 'PostHog cloud region\nenv: POSTHOG_WIZARD_REGION',
+      choices: ['us', 'eu'],
+      type: 'string',
     },
     default: {
       default: true,
@@ -127,6 +134,13 @@ yargs(hideBin(process.argv))
             'Run in benchmark mode with per-phase token tracking\nenv: POSTHOG_WIZARD_BENCHMARK',
           type: 'boolean',
         },
+        'yara-report': {
+          default: false,
+          describe:
+            'Print YARA scanner summary after the agent run\nenv: POSTHOG_WIZARD_YARA_REPORT',
+          type: 'boolean',
+          hidden: true,
+        },
       });
     },
     (argv) => {
@@ -136,6 +150,10 @@ yargs(hideBin(process.argv))
       if (options.ci) {
         // Use LoggingUI for CI mode (no dependencies, no prompts)
         setUI(new LoggingUI());
+        // Default region to 'us' if not specified
+        if (!options.region) {
+          options.region = 'us';
+        }
         if (!options.apiKey) {
           getUI().intro(`PostHog Wizard`);
           getUI().log.error(
@@ -160,7 +178,7 @@ yargs(hideBin(process.argv))
             'It appears you are running in a non-interactive environment.\n' +
             'Please run the wizard in an interactive terminal.\n\n' +
             'For CI/CD environments, use --ci mode:\n' +
-            '  npx @posthog/wizard --ci --api-key phx_xxx --install-dir .',
+            '  npx @posthog/wizard --ci --region us --api-key phx_xxx',
         );
         process.exit(1);
       } else if (options.playground) {
@@ -169,7 +187,7 @@ yargs(hideBin(process.argv))
           const { startPlayground } = await import(
             './src/ui/tui/playground/start-playground.js'
           );
-          startPlayground(WIZARD_VERSION);
+          (startPlayground as (version: string) => void)(WIZARD_VERSION);
         })();
       } else {
         // Interactive TTY: launch the Ink TUI
@@ -196,21 +214,26 @@ yargs(hideBin(process.argv))
                 typeof buildSession
               >[0]['integration'],
               benchmark: options.benchmark as boolean | undefined,
+              yaraReport: options.yaraReport as boolean | undefined,
               projectId: options.projectId as string | undefined,
             });
             tui.store.session = session;
 
             // Detect framework while IntroScreen shows its spinner.
             // Runs concurrently — IntroScreen reacts when detection completes.
-            const { FRAMEWORK_REGISTRY } = await import(
+            const { FRAMEWORK_REGISTRY } = (await import(
               './src/lib/registry.js'
-            );
-            const { detectIntegration } = await import('./src/run.js');
+            )) as { FRAMEWORK_REGISTRY: Record<Integration, FrameworkConfig> };
+            const { detectIntegration } = (await import('./src/run.js')) as {
+              detectIntegration: (
+                installDir: string,
+              ) => Promise<Integration | undefined>;
+            };
             const installDir = session.installDir ?? process.cwd();
 
-            const { DETECTION_TIMEOUT_MS } = await import(
+            const { DETECTION_TIMEOUT_MS } = (await import(
               './src/lib/constants.js'
-            );
+            )) as { DETECTION_TIMEOUT_MS: number };
             const detectedIntegration = await Promise.race([
               detectIntegration(installDir),
               new Promise<undefined>((resolve) =>
@@ -235,6 +258,7 @@ yargs(hideBin(process.argv))
                       ci: session.ci,
                       menu: session.menu,
                       benchmark: session.benchmark,
+                      yaraReport: session.yaraReport,
                     }),
                     new Promise<Record<string, never>>((resolve) =>
                       setTimeout(() => resolve({}), DETECTION_TIMEOUT_MS),
@@ -272,6 +296,7 @@ yargs(hideBin(process.argv))
                   ci: session.ci,
                   menu: session.menu,
                   benchmark: session.benchmark,
+                  yaraReport: session.yaraReport,
                 });
                 if (version) {
                   const coerced = semver.coerce(version);
