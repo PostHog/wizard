@@ -1,6 +1,12 @@
 import { type WizardSession, buildSession } from './lib/wizard-session';
 
-import { Integration, DETECTION_TIMEOUT_MS } from './lib/constants';
+import type { CloudRegion } from './utils/types';
+
+import {
+  Integration,
+  DETECTION_TIMEOUT_MS,
+  WIZARD_INTERACTION_EVENT_NAME,
+} from './lib/constants';
 import { readEnvironment } from './utils/environment';
 import { getUI } from './ui';
 import path from 'path';
@@ -18,6 +24,7 @@ type Args = {
   debug?: boolean;
   forceInstall?: boolean;
   installDir?: string;
+  region?: CloudRegion;
   default?: boolean;
   signup?: boolean;
   localMcp?: boolean;
@@ -26,6 +33,7 @@ type Args = {
   projectId?: string;
   menu?: boolean;
   benchmark?: boolean;
+  yaraReport?: boolean;
 };
 
 export async function runWizard(argv: Args, session?: WizardSession) {
@@ -58,6 +66,7 @@ export async function runWizard(argv: Args, session?: WizardSession) {
       menu: finalArgs.menu,
       integration: finalArgs.integration,
       benchmark: finalArgs.benchmark,
+      yaraReport: finalArgs.yaraReport,
       projectId: finalArgs.projectId,
     });
   }
@@ -95,6 +104,7 @@ export async function runWizard(argv: Args, session?: WizardSession) {
         ci: session.ci,
         menu: session.menu,
         benchmark: session.benchmark,
+        yaraReport: session.yaraReport,
       });
       for (const [key, value] of Object.entries(context)) {
         if (!(key in session.frameworkContext)) {
@@ -158,9 +168,17 @@ async function detectAndResolveIntegration(
       getUI().setDetectedFramework(
         FRAMEWORK_REGISTRY[detectedIntegration].metadata.name,
       );
+      analytics.capture(WIZARD_INTERACTION_EVENT_NAME, {
+        action: 'wizard_framework_detected',
+        integration: detectedIntegration,
+        framework_name: FRAMEWORK_REGISTRY[detectedIntegration].metadata.name,
+      });
       return detectedIntegration;
     }
 
+    analytics.capture(WIZARD_INTERACTION_EVENT_NAME, {
+      action: 'wizard_framework_detection_failed',
+    });
     getUI().log.info(
       "I couldn't detect your framework. Please choose one to get started.",
     );
