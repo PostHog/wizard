@@ -36,6 +36,9 @@ export interface WizardToolsOptions {
 
   /** Framework-specific package manager detector */
   detectPackageManager: PackageManagerDetector;
+
+  /** Base URL for the skills server (e.g. http://localhost:8765 or GitHub releases URL) */
+  skillsBaseUrl: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -145,9 +148,35 @@ const SERVER_NAME = 'wizard-tools';
  * Must be called asynchronously because the SDK is an ESM module loaded via dynamic import.
  */
 export async function createWizardToolsServer(options: WizardToolsOptions) {
-  const { workingDirectory, detectPackageManager } = options;
+  const { workingDirectory, detectPackageManager, skillsBaseUrl } = options;
   const sdk = await getSDKModule();
   const { tool, createSdkMcpServer } = sdk;
+
+  // Pre-fetch skill menu so category names are available in the tool schema
+  type SkillEntry = { id: string; name: string; downloadUrl: string };
+  let cachedSkillMenu: Record<string, SkillEntry[]> = {};
+  let categoryNames: [string, ...string[]] = ['integration'];
+
+  try {
+    const menuUrl = `${skillsBaseUrl}/skill-menu.json`;
+    logToFile(`wizard-tools: pre-fetching skill menu from ${menuUrl}`);
+    const resp = await fetch(menuUrl);
+    if (resp.ok) {
+      const data = (await resp.json()) as {
+        categories: Record<string, SkillEntry[]>;
+      };
+      cachedSkillMenu = data.categories;
+      const keys = Object.keys(cachedSkillMenu);
+      if (keys.length > 0) {
+        categoryNames = keys as [string, ...string[]];
+      }
+      logToFile(`wizard-tools: loaded skill menu (${keys.length} categories)`);
+    } else {
+      logToFile(`wizard-tools: skill menu fetch failed: ${resp.status}`);
+    }
+  } catch (err: any) {
+    logToFile(`wizard-tools: skill menu fetch error: ${err.message}`);
+  }
 
   // -- check_env_keys -------------------------------------------------------
 
@@ -276,41 +305,74 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
     },
   );
 
-  // -- install_skill --------------------------------------------------------
+  // -- load_skill_menu ------------------------------------------------------
 
-  const installSkill = tool(
-    'install_skill',
-    'Download and install a PostHog skill from a URL. Extracts the zip to .claude/skills/<skillId>/.',
+  const loadSkillMenu = tool(
+    'load_skill_menu',
+    'Load available PostHog skills for a category. Returns skill IDs and names. Call this first, then use install_skill with the chosen ID.',
     {
-      url: z.string().describe('URL of the skill zip file'),
-      skillId: z
-        .string()
-        .describe('Skill identifier (directory name under .claude/skills/)'),
+      category: z.enum(categoryNames).describe('Skill category'),
     },
-    (args: { url: string; skillId: string }) => {
-      if (
-        !args.url.startsWith(
-          'https://github.com/PostHog/context-mill/releases/',
-        ) &&
-        !/^http:\/\/localhost:\d+\//.test(args.url)
-      ) {
+    (args: { category: string }) => {
+      const skills = cachedSkillMenu[args.category];
+      if (!skills || skills.length === 0) {
         return {
           content: [
             {
               type: 'text' as const,
-              text: 'Error: Only PostHog context-mill URLs are allowed.',
+              text: `No skills found for category "${args.category}".`,
             },
           ],
           isError: true,
         };
       }
 
+      const menuText = skills.map((s) => `- ${s.id}: ${s.name}`).join('\n');
+
+      logToFile(
+        `load_skill_menu: returning ${skills.length} skills for "${args.category}"`,
+      );
+
+      return {
+        content: [{ type: 'text' as const, text: menuText }],
+      };
+    },
+  );
+
+  // -- install_skill --------------------------------------------------------
+
+  const installSkill = tool(
+    'install_skill',
+    'Download and install a PostHog skill by ID. Call load_skill_menu first to see available skills. Extracts the skill to .claude/skills/<skillId>/.',
+    {
+      skillId: z
+        .string()
+        .describe(
+          'Skill ID from the skill menu (e.g., "integration-nextjs-app-router")',
+        ),
+    },
+    (args: { skillId: string }) => {
       if (!/^[a-z0-9][a-z0-9-]*$/.test(args.skillId)) {
         return {
           content: [
             {
               type: 'text' as const,
               text: 'Error: skillId must be lowercase alphanumeric with hyphens.',
+            },
+          ],
+          isError: true,
+        };
+      }
+
+      // Look up download URL from cached menu
+      const allSkills: SkillEntry[] = Object.values(cachedSkillMenu).flat();
+      const skill = allSkills.find((s) => s.id === args.skillId);
+      if (!skill) {
+        return {
+          content: [
+            {
+              type: 'text' as const,
+              text: `Error: skill "${args.skillId}" not found. Use load_skill_menu to see available skills.`,
             },
           ],
           isError: true,
@@ -327,7 +389,7 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
 
       try {
         fs.mkdirSync(skillDir, { recursive: true });
-        execFileSync('curl', ['-sL', args.url, '-o', tmpFile], {
+        execFileSync('curl', ['-sL', skill.downloadUrl, '-o', tmpFile], {
           timeout: 30000,
         });
         execFileSync('unzip', ['-o', tmpFile, '-d', skillDir], {
@@ -339,7 +401,9 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
           /* ignore cleanup errors */
         }
 
-        logToFile(`install_skill: installed ${args.skillId} from ${args.url}`);
+        logToFile(
+          `install_skill: installed ${args.skillId} from ${skill.downloadUrl}`,
+        );
 
         return {
           content: [
@@ -369,7 +433,7 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
   return createSdkMcpServer({
     name: SERVER_NAME,
     version: '1.0.0',
-    tools: [checkEnvKeys, setEnvValues, detectPM, installSkill],
+    tools: [checkEnvKeys, setEnvValues, detectPM, loadSkillMenu, installSkill],
   });
 }
 
@@ -378,5 +442,6 @@ export const WIZARD_TOOL_NAMES = [
   `${SERVER_NAME}:check_env_keys`,
   `${SERVER_NAME}:set_env_values`,
   `${SERVER_NAME}:detect_package_manager`,
+  `${SERVER_NAME}:load_skill_menu`,
   `${SERVER_NAME}:install_skill`,
 ];
