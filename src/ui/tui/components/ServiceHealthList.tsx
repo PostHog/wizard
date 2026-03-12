@@ -92,9 +92,6 @@ export const ServiceHealthList = ({
               <Text bold={result.status !== ServiceHealthStatus.Healthy}>
                 {label}
               </Text>
-              {result.status !== ServiceHealthStatus.Healthy && (
-                <Text dimColor> — {result.status}</Text>
-              )}
             </Text>
             {affectedComponents.length > 0 && (
               <Box flexDirection="column" paddingLeft={3}>
@@ -117,16 +114,3 @@ export const ServiceHealthList = ({
     </Box>
   );
 };
-
-/**
- * Get the keys of services that caused a blocking readiness=No decision.
- */
-export function getBlockingServiceKeys(
-  health: AllServicesHealth,
-): HealthCheckKey[] {
-  return (Object.keys(health) as HealthCheckKey[]).filter((key) => {
-    if (COMPONENT_KEYS.includes(key)) return false;
-    const result = health[key];
-    return result.status !== ServiceHealthStatus.Healthy;
-  });
-}

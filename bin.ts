@@ -200,9 +200,6 @@ yargs(hideBin(process.argv))
             });
             tui.store.session = session;
 
-            // Health check already fired in store constructor — runs
-            // concurrently with detection below. If blocking, the outage
-            // overlay pushes on top of whatever screen is active.
             const { FRAMEWORK_REGISTRY } = await import(
               './src/lib/registry.js'
             );

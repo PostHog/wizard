@@ -16,10 +16,8 @@ import {
   ModalOverlay,
 } from '../../primitives/index.js';
 import { Icons } from '../../styles.js';
-import {
-  ServiceHealthList,
-  getBlockingServiceKeys,
-} from '../../components/ServiceHealthList.js';
+import { ServiceHealthList } from '../../components/ServiceHealthList.js';
+import { getBlockingServiceKeys } from '../../../../lib/health-checks/readiness.js';
 import { wizardAbort } from '../../../../utils/wizard-abort.js';
 
 interface HealthCheckScreenProps {

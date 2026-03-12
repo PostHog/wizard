@@ -22,10 +22,8 @@ import {
 } from '../primitives/index.js';
 import type { ProgressItem } from '../primitives/index.js';
 import { ADDITIONAL_FEATURE_LABELS } from '../../../lib/wizard-session.js';
-import { WizardReadiness } from '../../../lib/health-checks/readiness.js';
 import { LearnCard } from '../components/LearnCard.js';
 import { TipsCard } from '../components/TipsCard.js';
-import { HealthWarningsTab } from './health/HealthWarningsTab.js';
 import { useStdoutDimensions } from '../hooks/useStdoutDimensions.js';
 
 const LOG_FILE = '/tmp/posthog-wizard.log';
@@ -107,16 +105,6 @@ export const RunScreen = ({ store }: RunScreenProps) => {
       label: 'HN',
       component: <HNViewer />,
     },
-    ...(store.session.readinessResult?.decision ===
-    WizardReadiness.YesWithWarnings
-      ? [
-          {
-            id: 'health',
-            label: '\u26A0 Health',
-            component: <HealthWarningsTab store={store} />,
-          },
-        ]
-      : []),
   ];
 
   return (
