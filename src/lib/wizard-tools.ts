@@ -120,9 +120,6 @@ export interface WizardToolsOptions {
 
   /** Base URL for the skills server (e.g. http://localhost:8765 or GitHub releases URL) */
   skillsBaseUrl: string;
-
-  /** Pre-fetched skill menu (avoids re-fetching if already available) */
-  cachedSkillMenu?: SkillMenu | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -236,18 +233,12 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
   const sdk = await getSDKModule();
   const { tool, createSdkMcpServer } = sdk;
 
-  // Use pre-fetched skill menu if available, otherwise fetch now
   let skillMenuCategories: Record<string, SkillEntry[]> = {};
   let categoryNames: [string, ...string[]] = ['integration'];
 
-  if (options.cachedSkillMenu) {
-    skillMenuCategories = options.cachedSkillMenu.categories;
-    logToFile('wizard-tools: using pre-fetched skill menu');
-  } else {
-    const menu = await fetchSkillMenu(skillsBaseUrl);
-    if (menu) {
-      skillMenuCategories = menu.categories;
-    }
+  const menu = await fetchSkillMenu(skillsBaseUrl);
+  if (menu) {
+    skillMenuCategories = menu.categories;
   }
 
   const keys = Object.keys(skillMenuCategories);
