@@ -233,15 +233,16 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
   const sdk = await getSDKModule();
   const { tool, createSdkMcpServer } = sdk;
 
-  let skillMenuCategories: Record<string, SkillEntry[]> = {};
+  // Pre-fetch skill menu so category names are available in the tool schema
+  let cachedSkillMenu: Record<string, SkillEntry[]> = {};
   let categoryNames: [string, ...string[]] = ['integration'];
 
   const menu = await fetchSkillMenu(skillsBaseUrl);
   if (menu) {
-    skillMenuCategories = menu.categories;
+    cachedSkillMenu = menu.categories;
   }
 
-  const keys = Object.keys(skillMenuCategories);
+  const keys = Object.keys(cachedSkillMenu);
   if (keys.length > 0) {
     categoryNames = keys as [string, ...string[]];
   }
@@ -382,7 +383,7 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
       category: z.enum(categoryNames).describe('Skill category'),
     },
     (args: { category: string }) => {
-      const skills = skillMenuCategories[args.category];
+      const skills = cachedSkillMenu[args.category];
       if (!skills || skills.length === 0) {
         return {
           content: [
@@ -432,29 +433,8 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
         };
       }
 
-      // Skip re-download if skill directory already exists
-      const skillDir = path.join(
-        workingDirectory,
-        '.claude',
-        'skills',
-        args.skillId,
-      );
-      if (fs.existsSync(skillDir)) {
-        logToFile(
-          `install_skill: ${args.skillId} already exists, skipping download`,
-        );
-        return {
-          content: [
-            {
-              type: 'text' as const,
-              text: `Skill already installed at .claude/skills/${args.skillId}/`,
-            },
-          ],
-        };
-      }
-
       // Look up download URL from cached menu
-      const allSkills: SkillEntry[] = Object.values(skillMenuCategories).flat();
+      const allSkills: SkillEntry[] = Object.values(cachedSkillMenu).flat();
       const skill = allSkills.find((s) => s.id === args.skillId);
       if (!skill) {
         return {
