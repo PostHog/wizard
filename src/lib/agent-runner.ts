@@ -102,6 +102,11 @@ export async function runAgentWizard(
     }
   }
 
+  // Compute skills server URL (needed for agent tool calls)
+  const skillsBaseUrl = session.localMcp
+    ? 'http://localhost:8765'
+    : 'https://github.com/PostHog/context-mill/releases/latest/download';
+
   // Check all external service health (skip if TUI already ran it in bin.ts)
   if (!session.readinessResult) {
     logToFile('[agent-runner] evaluating wizard readiness');
@@ -217,11 +222,6 @@ export async function runAgentWizard(
       (cloudRegion === 'eu'
         ? 'https://mcp-eu.posthog.com/mcp'
         : 'https://mcp.posthog.com/mcp');
-
-  // Skills server URL (context-mill dev server or GitHub releases)
-  const skillsBaseUrl = session.localMcp
-    ? 'http://localhost:8765'
-    : 'https://github.com/PostHog/context-mill/releases/latest/download';
 
   const restoreSettings = () => restoreClaudeSettings(session.installDir);
   getUI().onEnterScreen('outro', restoreSettings);
