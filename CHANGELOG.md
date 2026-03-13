@@ -6,6 +6,7 @@
 ### Features
 
 * Full service warnings ([#336](https://github.com/PostHog/wizard/issues/336)) ([c1e02d1](https://github.com/PostHog/wizard/commit/c1e02d10bff586531e6fd37d4d3ff2f4718f9a2c))
+* More aggressive sandboxing https://github.com/PostHog/wizard/pull/339
 
 ## [2.1.0](https://github.com/PostHog/wizard/compare/v2.0.2...v2.1.0) (2026-03-12)
 
