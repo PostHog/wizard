@@ -59,9 +59,11 @@ export const ProgressList = ({ items, title }: ProgressListProps) => {
       })}
       {total > 0 && (
         <Box marginTop={1} gap={1}>
-          {completed < total && <Spinner />}
+          <Spinner />
           <Text dimColor>
-            Progress: {completed}/{total} completed
+            {completed < total
+              ? `Progress: ${completed}/${total} completed`
+              : 'Cleaning up...'}
           </Text>
         </Box>
       )}
