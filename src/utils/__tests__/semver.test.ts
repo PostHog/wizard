@@ -1,4 +1,4 @@
-import { createVersionBucket } from '../semver';
+import { createVersionBucket, fulfillsVersionRange } from '../semver';
 
 describe('createVersionBucket', () => {
   describe('without minimum threshold', () => {
@@ -134,9 +134,60 @@ describe('createVersionBucket', () => {
       expect(getVersionBucket('1.0.0+build.123')).toBe('1.x');
     });
 
-    it('handles whitespace-only string (semver treats as version 0)', () => {
-      // Note: semver's minVersion treats whitespace as a valid range matching version 0
-      expect(getVersionBucket('   ')).toBe('0.x');
+    it('returns "unknown" for whitespace-only string', () => {
+      expect(getVersionBucket('   ')).toBe('unknown');
+    });
+  });
+
+  describe('non-semver package.json version formats', () => {
+    const getVersionBucket = createVersionBucket();
+
+    it('returns "unknown" and never throws', () => {
+      const cases = [
+        'https://github.com/user/repo/tarball/main',
+        'git+https://github.com/user/repo.git',
+        'user/repo',
+        'file:../my-lib',
+        'workspace:*',
+        'npm:@scope/pkg@^1.0.0',
+        'next',
+        'canary',
+      ];
+      for (const v of cases) {
+        expect(getVersionBucket(v)).toBe('unknown');
+      }
+    });
+  });
+});
+
+describe('fulfillsVersionRange', () => {
+  const check = (
+    version: string,
+    acceptable = '>=15.0.0',
+    canBeLatest = false,
+  ) =>
+    fulfillsVersionRange({
+      version,
+      acceptableVersions: acceptable,
+      canBeLatest,
+    });
+
+  describe('non-semver package.json version formats', () => {
+    it('rejects non-semver versions without throwing', () => {
+      const cases = [
+        'https://github.com/user/repo/tarball/main',
+        'git+https://github.com/user/repo.git',
+        'user/repo',
+        'file:../my-lib',
+        'workspace:*',
+        'npm:@scope/pkg@^1.0.0',
+        '',
+        'next',
+        'canary',
+      ];
+      for (const v of cases) {
+        expect(check(v)).toBe(false);
+      }
     });
   });
 });
