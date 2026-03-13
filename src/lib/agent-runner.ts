@@ -102,6 +102,11 @@ export async function runAgentWizard(
     }
   }
 
+  // Compute skills server URL (needed for agent tool calls)
+  const skillsBaseUrl = session.localMcp
+    ? 'http://localhost:8765'
+    : 'https://github.com/PostHog/context-mill/releases/latest/download';
+
   // Check all external service health (skip if TUI already ran it in bin.ts)
   if (!session.readinessResult) {
     logToFile('[agent-runner] evaluating wizard readiness');
@@ -242,6 +247,7 @@ export async function runAgentWizard(
       posthogApiHost: host,
       additionalMcpServers: config.metadata.additionalMcpServers,
       detectPackageManager: config.detection.detectPackageManager,
+      skillsBaseUrl,
       wizardFlags,
       wizardMetadata,
     },
@@ -414,27 +420,24 @@ Project context:
 
 Instructions (follow these steps IN ORDER - do not skip or reorder):
 
-STEP 1: List available skills from the PostHog MCP server using ListMcpResourcesTool. If this tool is not available or you cannot access the MCP server, you must emit: ${
-    AgentSignals.ERROR_MCP_MISSING
-  } Could not access the PostHog MCP server and halt.
+STEP 1: Call load_skill_menu (from the wizard-tools MCP server) to see available skills.
+   If the tool fails, emit: ${
+     AgentSignals.ERROR_MCP_MISSING
+   } Could not load skill menu and halt.
 
-   Review the skill descriptions and choose the one that best matches this project's framework and configuration.
-   If no suitable skill is found, or you cannot access the MCP server, you emit: ${
+   Choose a skill from the \`integration\` category that matches this project's framework. Do NOT pick skills from other categories (llm-analytics, error-tracking, feature-flags, omnibus, etc.) — those are handled separately.
+   If no suitable integration skill is found, emit: ${
      AgentSignals.ERROR_RESOURCE_MISSING
    } Could not find a suitable skill for this project.
 
-STEP 2: Fetch the chosen skill resource (e.g., posthog://skills/{skill-id}).
-   The resource returns a shell command to install the skill.
+STEP 2: Call install_skill (from the wizard-tools MCP server) with the chosen skill ID (e.g., "integration-nextjs-app-router").
+   Do NOT run any shell commands to install skills.
 
-STEP 3: Run the installation command using Bash:
-   - Execute the EXACT command returned by the resource (do not modify it)
-   - This will download and extract the skill to .claude/skills/{skill-id}/
+STEP 3: Load the installed skill's SKILL.md file to understand what references are available.
 
-STEP 4: Load the installed skill's SKILL.md file to understand what references are available.
+STEP 4: Follow the skill's workflow files in sequence. Look for numbered workflow files in the references (e.g., files with patterns like "1.0-", "1.1-", "1.2-"). Start with the first one and proceed through each step until completion. Each workflow file will tell you what to do and which file comes next. Never directly write PostHog tokens directly to code files; always use environment variables.
 
-STEP 5: Follow the skill's workflow files in sequence. Look for numbered workflow files in the references (e.g., files with patterns like "1.0-", "1.1-", "1.2-"). Start with the first one and proceed through each step until completion. Each workflow file will tell you what to do and which file comes next. Never directly write PostHog tokens directly to code files; always use environment variables.
-
-STEP 6: Set up environment variables for PostHog using the wizard-tools MCP server (this runs locally — secret values never leave the machine):
+STEP 5: Set up environment variables for PostHog using the wizard-tools MCP server (this runs locally — secret values never leave the machine):
    - Use check_env_keys to see which keys already exist in the project's .env file (e.g. .env.local or .env).
    - Use set_env_values to create or update the PostHog public token and host, using the appropriate environment variable naming convention for ${
      config.metadata.name

@@ -43,6 +43,7 @@ const MOCK_HEALTH: AllServicesHealth = {
   cloudflareComponents: { status: ServiceHealthStatus.Healthy },
   llmGateway: HEALTHY,
   mcp: HEALTHY,
+  githubReleases: HEALTHY,
 };
 
 export const HealthCheckDemo = () => {

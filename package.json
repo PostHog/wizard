@@ -1,6 +1,6 @@
 {
   "name": "@posthog/wizard",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "homepage": "https://github.com/PostHog/wizard",
   "repository": "https://github.com/PostHog/wizard",
   "description": "The PostHog wizard helps you to configure your project",
@@ -32,7 +32,7 @@
     "definition": "dist/index.d.ts"
   },
   "dependencies": {
-    "@anthropic-ai/claude-agent-sdk": "0.2.7",
+    "@anthropic-ai/claude-agent-sdk": "0.2.73",
     "@inkjs/ui": "^2.0.0",
     "@langchain/core": "^0.3.40",
     "axios": "1.7.4",

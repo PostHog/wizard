@@ -31,6 +31,7 @@ export interface AllServicesHealth {
   cloudflareComponents: ComponentHealthResult;
   llmGateway: BaseHealthResult;
   mcp: BaseHealthResult;
+  githubReleases: BaseHealthResult;
 }
 
 export type HealthCheckKey = keyof AllServicesHealth;
