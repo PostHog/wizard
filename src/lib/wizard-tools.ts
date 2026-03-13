@@ -27,6 +27,87 @@ async function getSDKModule(): Promise<any> {
 }
 
 // ---------------------------------------------------------------------------
+// Skill types
+// ---------------------------------------------------------------------------
+
+export type SkillEntry = { id: string; name: string; downloadUrl: string };
+
+export interface SkillMenu {
+  categories: Record<string, SkillEntry[]>;
+}
+
+// ---------------------------------------------------------------------------
+// Standalone skill helpers (usable before the MCP server is created)
+// ---------------------------------------------------------------------------
+
+/**
+ * Fetch the skill menu from the skills server.
+ * Returns parsed data on success, `null` on failure.
+ */
+export async function fetchSkillMenu(
+  skillsBaseUrl: string,
+): Promise<SkillMenu | null> {
+  try {
+    const menuUrl = `${skillsBaseUrl}/skill-menu.json`;
+    logToFile(`fetchSkillMenu: fetching from ${menuUrl}`);
+    const resp = await fetch(menuUrl);
+    if (resp.ok) {
+      const data = (await resp.json()) as SkillMenu;
+      logToFile(
+        `fetchSkillMenu: loaded (${
+          Object.keys(data.categories).length
+        } categories)`,
+      );
+      return data;
+    }
+    logToFile(`fetchSkillMenu: failed with HTTP ${resp.status}`);
+    return null;
+  } catch (err: any) {
+    logToFile(`fetchSkillMenu: error: ${err.message}`);
+    return null;
+  }
+}
+
+/**
+ * Download and extract a skill.
+ * By default installs to `<installDir>/.claude/skills/<id>/`.
+ * Pass `skillsRoot` to override the base directory (e.g. `.posthog/skills`).
+ */
+export function downloadSkill(
+  skillEntry: SkillEntry,
+  installDir: string,
+  skillsRoot?: string,
+): { success: boolean; error?: string } {
+  const skillDir = skillsRoot
+    ? path.join(installDir, skillsRoot, skillEntry.id)
+    : path.join(installDir, '.claude', 'skills', skillEntry.id);
+  const tmpFile = `/tmp/posthog-skill-${skillEntry.id}.zip`;
+
+  try {
+    fs.mkdirSync(skillDir, { recursive: true });
+    execFileSync('curl', ['-sL', skillEntry.downloadUrl, '-o', tmpFile], {
+      timeout: 30000,
+    });
+    execFileSync('unzip', ['-o', tmpFile, '-d', skillDir], {
+      timeout: 30000,
+    });
+    try {
+      fs.unlinkSync(tmpFile);
+    } catch {
+      /* ignore cleanup errors */
+    }
+
+    logToFile(
+      `downloadSkill: installed ${skillEntry.id} from ${skillEntry.downloadUrl}`,
+    );
+    return { success: true };
+  } catch (err: any) {
+    logToFile(`downloadSkill: error: ${err.message}`);
+    return { success: false, error: err.message };
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Options for creating the wizard tools server
 // ---------------------------------------------------------------------------
 
@@ -39,6 +120,9 @@ export interface WizardToolsOptions {
 
   /** Base URL for the skills server (e.g. http://localhost:8765 or GitHub releases URL) */
   skillsBaseUrl: string;
+
+  /** Pre-fetched skill menu (avoids re-fetching if already available) */
+  cachedSkillMenu?: SkillMenu | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -152,30 +236,23 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
   const sdk = await getSDKModule();
   const { tool, createSdkMcpServer } = sdk;
 
-  // Pre-fetch skill menu so category names are available in the tool schema
-  type SkillEntry = { id: string; name: string; downloadUrl: string };
-  let cachedSkillMenu: Record<string, SkillEntry[]> = {};
+  // Use pre-fetched skill menu if available, otherwise fetch now
+  let skillMenuCategories: Record<string, SkillEntry[]> = {};
   let categoryNames: [string, ...string[]] = ['integration'];
 
-  try {
-    const menuUrl = `${skillsBaseUrl}/skill-menu.json`;
-    logToFile(`wizard-tools: pre-fetching skill menu from ${menuUrl}`);
-    const resp = await fetch(menuUrl);
-    if (resp.ok) {
-      const data = (await resp.json()) as {
-        categories: Record<string, SkillEntry[]>;
-      };
-      cachedSkillMenu = data.categories;
-      const keys = Object.keys(cachedSkillMenu);
-      if (keys.length > 0) {
-        categoryNames = keys as [string, ...string[]];
-      }
-      logToFile(`wizard-tools: loaded skill menu (${keys.length} categories)`);
-    } else {
-      logToFile(`wizard-tools: skill menu fetch failed: ${resp.status}`);
+  if (options.cachedSkillMenu) {
+    skillMenuCategories = options.cachedSkillMenu.categories;
+    logToFile('wizard-tools: using pre-fetched skill menu');
+  } else {
+    const menu = await fetchSkillMenu(skillsBaseUrl);
+    if (menu) {
+      skillMenuCategories = menu.categories;
     }
-  } catch (err: any) {
-    logToFile(`wizard-tools: skill menu fetch error: ${err.message}`);
+  }
+
+  const keys = Object.keys(skillMenuCategories);
+  if (keys.length > 0) {
+    categoryNames = keys as [string, ...string[]];
   }
 
   // -- check_env_keys -------------------------------------------------------
@@ -314,7 +391,7 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
       category: z.enum(categoryNames).describe('Skill category'),
     },
     (args: { category: string }) => {
-      const skills = cachedSkillMenu[args.category];
+      const skills = skillMenuCategories[args.category];
       if (!skills || skills.length === 0) {
         return {
           content: [
@@ -364,8 +441,29 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
         };
       }
 
+      // Skip re-download if skill directory already exists
+      const skillDir = path.join(
+        workingDirectory,
+        '.claude',
+        'skills',
+        args.skillId,
+      );
+      if (fs.existsSync(skillDir)) {
+        logToFile(
+          `install_skill: ${args.skillId} already exists, skipping download`,
+        );
+        return {
+          content: [
+            {
+              type: 'text' as const,
+              text: `Skill already installed at .claude/skills/${args.skillId}/`,
+            },
+          ],
+        };
+      }
+
       // Look up download URL from cached menu
-      const allSkills: SkillEntry[] = Object.values(cachedSkillMenu).flat();
+      const allSkills: SkillEntry[] = Object.values(skillMenuCategories).flat();
       const skill = allSkills.find((s) => s.id === args.skillId);
       if (!skill) {
         return {
@@ -379,32 +477,8 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
         };
       }
 
-      const skillDir = path.join(
-        workingDirectory,
-        '.claude',
-        'skills',
-        args.skillId,
-      );
-      const tmpFile = `/tmp/posthog-skill-${args.skillId}.zip`;
-
-      try {
-        fs.mkdirSync(skillDir, { recursive: true });
-        execFileSync('curl', ['-sL', skill.downloadUrl, '-o', tmpFile], {
-          timeout: 30000,
-        });
-        execFileSync('unzip', ['-o', tmpFile, '-d', skillDir], {
-          timeout: 30000,
-        });
-        try {
-          fs.unlinkSync(tmpFile);
-        } catch {
-          /* ignore cleanup errors */
-        }
-
-        logToFile(
-          `install_skill: installed ${args.skillId} from ${skill.downloadUrl}`,
-        );
-
+      const result = downloadSkill(skill, workingDirectory);
+      if (result.success) {
         return {
           content: [
             {
@@ -413,13 +487,12 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
             },
           ],
         };
-      } catch (err: any) {
-        logToFile(`install_skill error: ${err.message}`);
+      } else {
         return {
           content: [
             {
               type: 'text' as const,
-              text: `Error installing skill: ${err.message}`,
+              text: `Error installing skill: ${result.error}`,
             },
           ],
           isError: true,

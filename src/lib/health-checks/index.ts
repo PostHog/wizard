@@ -18,7 +18,11 @@ export {
   checkCloudflareComponentHealth,
 } from './statuspage';
 
-export { checkLlmGatewayHealth, checkMcpHealth } from './endpoints';
+export {
+  checkLlmGatewayHealth,
+  checkMcpHealth,
+  checkGithubReleasesHealth,
+} from './endpoints';
 
 export {
   type WizardReadinessConfig,

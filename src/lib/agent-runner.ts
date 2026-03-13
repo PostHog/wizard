@@ -32,6 +32,7 @@ import {
   WizardReadiness,
 } from './health-checks/readiness';
 import { enableDebugLogs, initLogFile, logToFile } from '../utils/debug';
+import { fetchSkillMenu, downloadSkill } from './wizard-tools';
 import { createBenchmarkPipeline } from './middleware/benchmark';
 import {
   wizardAbort,
@@ -100,6 +101,41 @@ export async function runAgentWizard(
         });
       }
     }
+  }
+
+  // Compute skills server URL early (needed for pre-fetch and health checks)
+  const skillsBaseUrl = session.localMcp
+    ? 'http://localhost:8765'
+    : 'https://github.com/PostHog/context-mill/releases/latest/download';
+
+  // Pre-fetch skill menu (doubles as a health signal for the skills server)
+  logToFile('[agent-runner] pre-fetching skill menu');
+  const skillMenu = await fetchSkillMenu(skillsBaseUrl);
+  session.skillMenu = skillMenu;
+
+  if (skillMenu) {
+    // Pre-install matching integration skill(s)
+    const integrationSkills = skillMenu.categories['integration'] ?? [];
+    const prefix = `integration-${config.metadata.integration}`;
+    const matchingSkills = integrationSkills.filter((s) =>
+      s.id.startsWith(prefix),
+    );
+    for (const skill of matchingSkills) {
+      logToFile(`[agent-runner] pre-installing skill: ${skill.id}`);
+      const result = downloadSkill(skill, session.installDir);
+      if (result.success) {
+        session.preinstalledSkills.push(skill.id);
+      } else {
+        logToFile(
+          `[agent-runner] pre-install failed for ${skill.id}: ${result.error}`,
+        );
+      }
+    }
+    logToFile(
+      `[agent-runner] pre-installed skills: ${
+        session.preinstalledSkills.join(', ') || 'none'
+      }`,
+    );
   }
 
   // Check all external service health (skip if TUI already ran it in bin.ts)
@@ -218,11 +254,6 @@ export async function runAgentWizard(
         ? 'https://mcp-eu.posthog.com/mcp'
         : 'https://mcp.posthog.com/mcp');
 
-  // Skills server URL (context-mill dev server or GitHub releases)
-  const skillsBaseUrl = session.localMcp
-    ? 'http://localhost:8765'
-    : 'https://github.com/PostHog/context-mill/releases/latest/download';
-
   const restoreSettings = () => restoreClaudeSettings(session.installDir);
   getUI().onEnterScreen('outro', restoreSettings);
 
@@ -248,6 +279,7 @@ export async function runAgentWizard(
       additionalMcpServers: config.metadata.additionalMcpServers,
       detectPackageManager: config.detection.detectPackageManager,
       skillsBaseUrl,
+      cachedSkillMenu: session.skillMenu,
       wizardFlags,
       wizardMetadata,
     },

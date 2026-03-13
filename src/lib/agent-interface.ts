@@ -24,7 +24,11 @@ import { registerCleanup } from '../utils/wizard-abort';
 import { createCustomHeaders } from '../utils/custom-headers';
 import { getLlmGatewayUrlFromHost } from '../utils/urls';
 import { LINTING_TOOLS } from './safe-tools';
-import { createWizardToolsServer, WIZARD_TOOL_NAMES } from './wizard-tools';
+import {
+  createWizardToolsServer,
+  WIZARD_TOOL_NAMES,
+  type SkillMenu,
+} from './wizard-tools';
 import {
   createPreToolUseYaraHooks,
   createPostToolUseYaraHooks,
@@ -176,6 +180,8 @@ export type AgentConfig = {
   detectPackageManager: PackageManagerDetector;
   /** Base URL for the skills server (context-mill dev or GitHub releases) */
   skillsBaseUrl: string;
+  /** Pre-fetched skill menu (avoids re-fetching in the MCP server) */
+  cachedSkillMenu?: SkillMenu | null;
   /** Feature flag key -> variant (evaluated at start of run). */
   wizardFlags?: Record<string, string>;
   wizardMetadata?: Record<string, string>;
@@ -537,6 +543,7 @@ export async function initializeAgent(
       workingDirectory: config.workingDirectory,
       detectPackageManager: config.detectPackageManager,
       skillsBaseUrl: config.skillsBaseUrl,
+      cachedSkillMenu: config.cachedSkillMenu,
     });
     mcpServers['wizard-tools'] = wizardToolsServer;
 

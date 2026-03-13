@@ -13,6 +13,7 @@
 import type { Integration } from './constants';
 import type { FrameworkConfig } from './framework-config';
 import type { WizardReadinessResult } from './health-checks/readiness';
+import type { SkillMenu } from './wizard-tools';
 
 function parseProjectIdArg(value: string | undefined): number | undefined {
   if (value === undefined || value === '') return undefined;
@@ -144,6 +145,10 @@ export interface WizardSession {
 
   // Resolved framework config (set after integration is known)
   frameworkConfig: FrameworkConfig | null;
+
+  // Pre-installed skills (fetched before health checks)
+  preinstalledSkills: string[];
+  skillMenu: SkillMenu | null;
 }
 
 /**
@@ -199,5 +204,7 @@ export function buildSession(args: {
     outroData: null,
     additionalFeatureQueue: [],
     frameworkConfig: null,
+    preinstalledSkills: [],
+    skillMenu: null,
   };
 }

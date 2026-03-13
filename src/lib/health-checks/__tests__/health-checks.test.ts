@@ -241,6 +241,8 @@ const URLS = {
   cloudflareSummary: 'https://www.cloudflarestatus.com/api/v2/summary.json',
   llmGatewayLiveness: 'https://gateway.us.posthog.com/_liveness',
   mcpLanding: 'https://mcp.posthog.com/',
+  githubReleasesSkillMenu:
+    'https://github.com/PostHog/context-mill/releases/latest/download/skill-menu.json',
 } as const;
 
 // ---------------------------------------------------------------------------
@@ -288,6 +290,10 @@ const HEALTHY_RESPONSES: Record<string, { body: string; contentType: string }> =
     [URLS.mcpLanding]: {
       body: MCP_LANDING_HTML,
       contentType: 'text/html; charset=utf-8',
+    },
+    [URLS.githubReleasesSkillMenu]: {
+      body: JSON.stringify({ categories: { integration: [] } }),
+      contentType: 'application/json',
     },
   };
 
@@ -839,7 +845,7 @@ describe('health-checks', () => {
   // -----------------------------------------------------------------------
 
   describe('checkAllExternalServices', () => {
-    it('returns all 10 service keys when everything is healthy', async () => {
+    it('returns all 11 service keys when everything is healthy', async () => {
       const health = await checkAllExternalServices();
       const keys = Object.keys(health);
       expect(keys).toEqual(
@@ -854,23 +860,25 @@ describe('health-checks', () => {
           'cloudflareComponents',
           'llmGateway',
           'mcp',
+          'githubReleases',
         ]),
       );
-      expect(keys).toHaveLength(10);
+      expect(keys).toHaveLength(11);
       for (const val of Object.values(health)) {
         expect(val.status).toBe(ServiceHealthStatus.Healthy);
       }
     });
 
-    it('fires all 10 fetch calls in parallel', async () => {
+    it('fires all 11 fetch calls in parallel', async () => {
       await checkAllExternalServices();
       const calledUrls = (global.fetch as jest.Mock).mock.calls.map(
         (c: unknown[]) =>
           typeof c[0] === 'string' ? c[0] : (c[0] as URL).toString(),
       );
-      expect(calledUrls).toHaveLength(10);
+      expect(calledUrls).toHaveLength(11);
       expect(calledUrls).toContain(URLS.llmGatewayLiveness);
       expect(calledUrls).toContain(URLS.mcpLanding);
+      expect(calledUrls).toContain(URLS.githubReleasesSkillMenu);
     });
   });
 

@@ -49,3 +49,8 @@ export const checkLlmGatewayHealth = (): Promise<BaseHealthResult> =>
 
 export const checkMcpHealth = (): Promise<BaseHealthResult> =>
   fetchEndpointHealth('https://mcp.posthog.com/');
+
+export const checkGithubReleasesHealth = (): Promise<BaseHealthResult> =>
+  fetchEndpointHealth(
+    'https://github.com/PostHog/context-mill/releases/latest/download/skill-menu.json',
+  );

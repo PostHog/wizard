@@ -15,7 +15,12 @@ import {
   checkCloudflareOverallHealth,
   checkCloudflareComponentHealth,
 } from './statuspage';
-import { checkLlmGatewayHealth, checkMcpHealth } from './endpoints';
+import {
+  checkLlmGatewayHealth,
+  checkMcpHealth,
+  checkGithubReleasesHealth,
+} from './endpoints';
+import { logToFile } from '../../utils/debug';
 
 // ---------------------------------------------------------------------------
 // Service labels (used in human-readable reason strings)
@@ -32,6 +37,7 @@ export const SERVICE_LABELS: Record<HealthCheckKey, string> = {
   cloudflareComponents: 'Cloudflare (components)',
   llmGateway: 'LLM Gateway',
   mcp: 'MCP',
+  githubReleases: 'GitHub Releases',
 };
 
 // ---------------------------------------------------------------------------
@@ -56,6 +62,7 @@ export const DEFAULT_WIZARD_READINESS_CONFIG: WizardReadinessConfig = {
     'npmOverall',
     'llmGateway',
     'mcp',
+    'githubReleases',
   ],
   degradedBlocksRun: ['anthropic'],
 };
@@ -76,6 +83,7 @@ export async function checkAllExternalServices(): Promise<AllServicesHealth> {
     cloudflareComponents,
     llmGateway,
     mcp,
+    githubReleases,
   ] = await Promise.all([
     checkAnthropicHealth(),
     checkPosthogOverallHealth(),
@@ -87,7 +95,9 @@ export async function checkAllExternalServices(): Promise<AllServicesHealth> {
     checkCloudflareComponentHealth(),
     checkLlmGatewayHealth(),
     checkMcpHealth(),
+    checkGithubReleasesHealth(),
   ]);
+
   return {
     anthropic,
     posthogOverall,
@@ -99,6 +109,7 @@ export async function checkAllExternalServices(): Promise<AllServicesHealth> {
     cloudflareComponents,
     llmGateway,
     mcp,
+    githubReleases,
   };
 }
 
@@ -170,7 +181,9 @@ export async function evaluateWizardReadiness(
       }
     }
 
-    if (getBlockingServiceKeys(health, config).length > 0) {
+    const blockingKeys = getBlockingServiceKeys(health, config);
+    if (blockingKeys.length > 0) {
+      logToFile(`[health-checks] blocked by: ${blockingKeys.join(', ')}`);
       return { decision: WizardReadiness.No, health, reasons };
     }
 
@@ -183,7 +196,10 @@ export async function evaluateWizardReadiness(
     }
 
     return { decision: WizardReadiness.Yes, health, reasons };
-  } catch {
+  } catch (err) {
+    logToFile(
+      `[health-checks] error: ${err instanceof Error ? err.message : err}`,
+    );
     // Health checks must never block the wizard run
     return {
       decision: WizardReadiness.Yes,
@@ -247,5 +263,6 @@ function allUnknown(error: string): AllServicesHealth {
     cloudflareComponents: { ...base },
     llmGateway: base,
     mcp: base,
+    githubReleases: base,
   };
 }
