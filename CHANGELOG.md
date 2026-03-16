@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.3.0](https://github.com/PostHog/wizard/compare/v2.2.0...v2.3.0) (2026-03-16)
+
+
+### Features
+
+* If outage, show sensible fallbacks ([#340](https://github.com/PostHog/wizard/issues/340)) ([8bcba83](https://github.com/PostHog/wizard/commit/8bcba83197da1ff7d5a39b1a023707eb67013c6d))
+
+
+### Bug Fixes
+
+* Skills allow underscore ([#342](https://github.com/PostHog/wizard/issues/342)) ([10a291b](https://github.com/PostHog/wizard/commit/10a291be0f1e72a7df6e74730aab7467ea85eaa6))
+
 ## [2.2.0](https://github.com/PostHog/wizard/compare/v2.1.0...v2.2.0) (2026-03-13)
 
 
