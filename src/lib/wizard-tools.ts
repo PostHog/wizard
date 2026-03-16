@@ -421,7 +421,7 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
         ),
     },
     (args: { skillId: string }) => {
-      if (!/^[a-z0-9][a-z0-9-]*$/.test(args.skillId)) {
+      if (!/^[a-z0-9][a-z0-9_-]*$/.test(args.skillId)) {
         return {
           content: [
             {
