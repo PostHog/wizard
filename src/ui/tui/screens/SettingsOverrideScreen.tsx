@@ -1,13 +1,24 @@
-/**
- * SettingsOverrideScreen — Modal when .claude/settings.json contains env overrides
- * that block the Wizard from reaching the PostHog LLM Gateway.
- */
-
 import { Box, Text } from 'ink';
 import { useState, useSyncExternalStore } from 'react';
 import type { WizardStore } from '../store.js';
 import { ConfirmationInput, ModalOverlay } from '../primitives/index.js';
 import { Icons } from '../styles.js';
+import type { SettingsConflictSource } from '../../../lib/agent-interface.js';
+
+function sourcePath(source: SettingsConflictSource): string {
+  switch (source) {
+    case 'user':
+      return '~/.claude/settings.json';
+    case 'user-local':
+      return '~/.claude/settings.local.json';
+    case 'project':
+      return '.claude/settings.json';
+    case 'project-local':
+      return '.claude/settings.local.json';
+    default:
+      return source;
+  }
+}
 
 interface SettingsOverrideScreenProps {
   store: WizardStore;
@@ -22,9 +33,9 @@ export const SettingsOverrideScreen = ({
   );
 
   const [feedback, setFeedback] = useState<string | null>(null);
-  const keys = store.session.settingsOverrideKeys;
+  const conflicts = store.session.settingsConflicts?.filter((c) => c.writable);
 
-  if (!keys || keys.length === 0) {
+  if (!conflicts || conflicts.length === 0) {
     return null;
   }
 
@@ -49,19 +60,24 @@ export const SettingsOverrideScreen = ({
         />
       }
     >
-      <Text>
-        Your project&apos;s <Text bold>.claude/settings.json</Text> sets:
-      </Text>
-      <Box flexDirection="column" marginY={1} paddingLeft={2}>
-        {keys.map((key) => (
-          <Text key={key}>
-            {Icons.bullet}{' '}
-            <Text color="yellow" bold>
-              {key}
-            </Text>
+      {conflicts.map((conflict) => (
+        <Box key={conflict.source} flexDirection="column" marginBottom={1}>
+          <Text>
+            Your settings file at{' '}
+            <Text bold>{sourcePath(conflict.source)}</Text> sets:
           </Text>
-        ))}
-      </Box>
+          <Box flexDirection="column" paddingLeft={2}>
+            {conflict.keys.map((key) => (
+              <Text key={key}>
+                {Icons.bullet}{' '}
+                <Text color="yellow" bold>
+                  {key}
+                </Text>
+              </Text>
+            ))}
+          </Box>
+        </Box>
+      ))}
       <Text dimColor>
         These overrides prevent the Wizard from reaching the PostHog LLM
         Gateway. We can back up the file and continue.

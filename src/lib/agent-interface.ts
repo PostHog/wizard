@@ -88,12 +88,67 @@ export enum AgentErrorType {
   YARA_VIOLATION = 'WIZARD_YARA_VIOLATION',
 }
 
-const BLOCKING_ENV_KEYS = ['ANTHROPIC_BASE_URL', 'ANTHROPIC_AUTH_TOKEN'];
+const BLOCKING_ENV_KEYS = [
+  'ANTHROPIC_API_KEY',
+  'ANTHROPIC_BASE_URL',
+  'ANTHROPIC_AUTH_TOKEN',
+];
+const BLOCKING_SETTINGS_KEYS = ['apiKeyHelper'];
+
+/** Where a settings conflict was found. */
+export type SettingsConflictSource =
+  | 'project'
+  | 'project-local'
+  | 'user'
+  | 'user-local'
+  | 'managed';
+
+/** A single settings conflict detected during startup. */
+export interface SettingsConflict {
+  /** Where the conflict was found. */
+  source: SettingsConflictSource;
+  /** The blocking keys found (e.g. 'ANTHROPIC_BASE_URL', 'apiKeyHelper'). */
+  keys: string[];
+  /** Whether the wizard can back up / remove this file. Managed settings are read-only. */
+  writable: boolean;
+}
+
+/**
+ * Check a single settings file for blocking env keys and top-level settings keys.
+ * Returns matched key names, or an empty array if none found.
+ */
+function checkSettingsFile(filePath: string): string[] {
+  try {
+    const raw = fs.readFileSync(filePath, 'utf-8');
+    const parsed = JSON.parse(raw);
+    const matched: string[] = [];
+
+    // Check env block for blocking env keys
+    const envBlock = parsed?.env;
+    if (envBlock && typeof envBlock === 'object') {
+      matched.push(...BLOCKING_ENV_KEYS.filter((key) => key in envBlock));
+    }
+
+    // Check top-level settings keys
+    matched.push(
+      ...BLOCKING_SETTINGS_KEYS.filter(
+        (key) => key in parsed && parsed[key] !== '' && parsed[key] != null,
+      ),
+    );
+
+    return matched;
+  } catch {
+    // File doesn't exist or isn't valid JSON — skip
+    return [];
+  }
+}
 
 /**
  * Check if .claude/settings.json in the project directory contains env
  * overrides for blocking keys that block the Wizard from accessing the PostHog LLM Gateway.
  * Returns the list of matched key names, or an empty array if none found.
+ *
+ * @deprecated Use {@link checkAllSettingsConflicts} for comprehensive detection.
  */
 export function checkClaudeSettingsOverrides(
   workingDirectory: string,
@@ -104,19 +159,87 @@ export function checkClaudeSettingsOverrides(
   ];
 
   for (const filePath of candidates) {
-    try {
-      const raw = fs.readFileSync(filePath, 'utf-8');
-      const parsed = JSON.parse(raw);
-      const envBlock = parsed?.env;
-      if (envBlock && typeof envBlock === 'object') {
-        return BLOCKING_ENV_KEYS.filter((key) => key in envBlock);
-      }
-    } catch {
-      // File doesn't exist or isn't valid JSON — skip
-    }
+    const matched = checkSettingsFile(filePath);
+    if (matched.length > 0) return matched;
   }
 
   return [];
+}
+
+/**
+ * Managed settings path on macOS.
+ * IT/MDM-deployed settings — readable by all users, writable only by root.
+ */
+const MANAGED_SETTINGS_PATH =
+  '/Library/Application Support/ClaudeCode/managed-settings.json';
+
+/**
+ * Check ALL settings sources for blocking keys that conflict with the wizard's
+ * proxy auth. Returns an array of conflicts, one per source where issues were found.
+ *
+ * Sources checked (in Claude Code precedence order):
+ *   1. Managed settings (/Library/Application Support/ClaudeCode/managed-settings.json)
+ *   2. User settings (~/.claude/settings.json)
+ *   3. User-local settings (~/.claude/settings.local.json)
+ *   4. Project settings (<workingDir>/.claude/settings.json)
+ *   5. Project-local settings (<workingDir>/.claude/settings.local.json)
+ */
+export function checkAllSettingsConflicts(
+  workingDirectory: string,
+): SettingsConflict[] {
+  const conflicts: SettingsConflict[] = [];
+
+  const sources: {
+    source: SettingsConflictSource;
+    paths: string[];
+    writable: boolean;
+  }[] = [
+    {
+      source: 'managed',
+      paths: [MANAGED_SETTINGS_PATH],
+      writable: false,
+    },
+    {
+      source: 'user',
+      paths: [
+        path.join(process.env.HOME || '~', '.claude', 'settings.json'),
+        path.join(process.env.HOME || '~', '.claude', 'settings'),
+      ],
+      writable: true,
+    },
+    {
+      source: 'user-local',
+      paths: [
+        path.join(process.env.HOME || '~', '.claude', 'settings.local.json'),
+      ],
+      writable: true,
+    },
+    {
+      source: 'project',
+      paths: [
+        path.join(workingDirectory, '.claude', 'settings.json'),
+        path.join(workingDirectory, '.claude', 'settings'),
+      ],
+      writable: true,
+    },
+    {
+      source: 'project-local',
+      paths: [path.join(workingDirectory, '.claude', 'settings.local.json')],
+      writable: true,
+    },
+  ];
+
+  for (const { source, paths, writable } of sources) {
+    for (const filePath of paths) {
+      const keys = checkSettingsFile(filePath);
+      if (keys.length > 0) {
+        conflicts.push({ source, keys, writable });
+        break; // Only one conflict per source (settings.json vs settings fallback)
+      }
+    }
+  }
+
+  return conflicts;
 }
 
 /**

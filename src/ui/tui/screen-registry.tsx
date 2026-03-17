@@ -15,6 +15,7 @@ import { Screen, Overlay, type ScreenName } from './router.js';
 
 import { HealthCheckScreen } from './screens/health/HealthCheckScreen.js';
 import { SettingsOverrideScreen } from './screens/SettingsOverrideScreen.js';
+import { ManagedSettingsScreen } from './screens/ManagedSettingsScreen.js';
 import { PortConflictScreen } from './screens/PortConflictScreen.js';
 import { IntroScreen } from './screens/IntroScreen.js';
 import { SetupScreen } from './screens/SetupScreen.js';
@@ -42,6 +43,7 @@ export function createScreens(
   return {
     // Overlays
     [Overlay.SettingsOverride]: <SettingsOverrideScreen store={store} />,
+    [Overlay.ManagedSettings]: <ManagedSettingsScreen store={store} />,
     [Overlay.PortConflict]: <PortConflictScreen store={store} />,
 
     // Wizard flow

@@ -13,6 +13,7 @@
 import type { Integration } from './constants';
 import type { FrameworkConfig } from './framework-config';
 import type { WizardReadinessResult } from './health-checks/readiness';
+import type { SettingsConflict } from './agent-interface';
 
 function parseProjectIdArg(value: string | undefined): number | undefined {
   if (value === undefined || value === '') return undefined;
@@ -136,6 +137,7 @@ export interface WizardSession {
   readinessResult: WizardReadinessResult | null;
   outageDismissed: boolean;
   settingsOverrideKeys: string[] | null;
+  settingsConflicts: SettingsConflict[] | null;
   portConflictProcess: { command: string; pid: string; user: string } | null;
   outroData: OutroData | null;
 
@@ -195,6 +197,7 @@ export function buildSession(args: {
     readinessResult: null,
     outageDismissed: false,
     settingsOverrideKeys: null,
+    settingsConflicts: null,
     portConflictProcess: null,
     outroData: null,
     additionalFeatureQueue: [],

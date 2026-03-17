@@ -21,6 +21,7 @@ import {
   RunPhase,
   buildSession,
 } from '../../lib/wizard-session.js';
+import type { SettingsConflict } from '../../lib/agent-interface.js';
 import {
   WizardRouter,
   type ScreenName,
@@ -249,12 +250,21 @@ export class WizardStore {
    * until the user dismisses it via backupAndFixSettingsOverride().
    */
   showSettingsOverride(
-    keys: string[],
+    conflicts: SettingsConflict[],
     backupAndFix: () => boolean,
   ): Promise<void> {
-    this.$session.setKey('settingsOverrideKeys', keys);
+    const allKeys = conflicts.flatMap((c) => c.keys);
+    this.$session.setKey('settingsOverrideKeys', allKeys);
+    this.$session.setKey('settingsConflicts', conflicts);
     this._backupAndFixSettings = backupAndFix;
-    this.pushOverlay(Overlay.SettingsOverride);
+
+    const hasReadOnly = conflicts.some((c) => !c.writable);
+    if (hasReadOnly) {
+      this.pushOverlay(Overlay.ManagedSettings);
+    } else {
+      this.pushOverlay(Overlay.SettingsOverride);
+    }
+
     return new Promise((resolve) => {
       this._resolveSettingsOverride = resolve;
     });
@@ -291,6 +301,7 @@ export class WizardStore {
     const ok = this._backupAndFixSettings?.() ?? false;
     if (ok) {
       this.$session.setKey('settingsOverrideKeys', null);
+      this.$session.setKey('settingsConflicts', null);
       this.popOverlay();
       this._resolveSettingsOverride?.();
       this._resolveSettingsOverride = null;

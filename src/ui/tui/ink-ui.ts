@@ -8,6 +8,7 @@
 
 import type { WizardUI, SpinnerHandle } from '../wizard-ui.js';
 import type { WizardStore } from './store.js';
+import type { SettingsConflict } from '../../lib/agent-interface.js';
 import { RunPhase, OutroKind } from '../../lib/wizard-session.js';
 
 // Strip ANSI escape codes (chalk formatting) from strings
@@ -88,10 +89,10 @@ export class InkUI implements WizardUI {
   }
 
   showSettingsOverride(
-    keys: string[],
+    conflicts: SettingsConflict[],
     backupAndFix: () => boolean,
   ): Promise<void> {
-    return this.store.showSettingsOverride(keys, backupAndFix);
+    return this.store.showSettingsOverride(conflicts, backupAndFix);
   }
 
   startRun(): void {

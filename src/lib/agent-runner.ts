@@ -20,7 +20,7 @@ import {
   AgentSignals,
   AgentErrorType,
   buildWizardMetadata,
-  checkClaudeSettingsOverrides,
+  checkAllSettingsConflicts,
   backupAndFixClaudeSettings,
   restoreClaudeSettings,
 } from './agent-interface';
@@ -119,15 +119,35 @@ export async function runAgentWizard(
     }
   }
 
-  // Check for blocking env overrides in .claude/settings.json before login.
-  const blockingOverrideKeys = checkClaudeSettingsOverrides(session.installDir);
+  // Check ALL settings sources for blocking overrides before login.
+  const settingsConflicts = checkAllSettingsConflicts(session.installDir);
   logToFile(
-    `[agent-runner] settings overrides: ${
-      blockingOverrideKeys.length > 0 ? blockingOverrideKeys.join(', ') : 'none'
+    `[agent-runner] settings conflicts: ${
+      settingsConflicts.length > 0
+        ? settingsConflicts
+            .map((c) => `${c.source}(${c.keys.join(',')})`)
+            .join('; ')
+        : 'none'
     }`,
   );
-  if (blockingOverrideKeys.length > 0) {
-    await getUI().showSettingsOverride(blockingOverrideKeys, () =>
+
+  if (settingsConflicts.length > 0) {
+    // Capture analytics for each conflict variation
+    for (const conflict of settingsConflicts) {
+      const level =
+        conflict.source === 'managed'
+          ? 'org'
+          : conflict.source === 'user-local' ||
+            conflict.source === 'project-local'
+          ? 'local'
+          : conflict.source;
+      analytics.wizardCapture('settings conflict detected', {
+        level,
+        keys: conflict.keys,
+      });
+    }
+
+    await getUI().showSettingsOverride(settingsConflicts, () =>
       backupAndFixClaudeSettings(session.installDir),
     );
     logToFile('[agent-runner] settings override resolved');

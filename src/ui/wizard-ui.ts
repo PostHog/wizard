@@ -8,6 +8,8 @@
  * Session-mutating methods trigger reactive screen resolution in the TUI.
  */
 
+import type { SettingsConflict } from '../lib/agent-interface';
+
 export enum TaskStatus {
   Pending = 'pending',
   InProgress = 'in_progress',
@@ -70,9 +72,8 @@ export interface WizardUI {
     user: string;
   }): Promise<void>;
 
-  /** Warn that .claude/settings.json overrides blocking env vars (pushes blocking overlay in TUI). */
   showSettingsOverride(
-    keys: string[],
+    conflicts: SettingsConflict[],
     backupAndFix: () => boolean,
   ): Promise<void>;
 
