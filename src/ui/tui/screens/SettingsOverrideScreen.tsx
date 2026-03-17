@@ -50,7 +50,7 @@ export const SettingsOverrideScreen = ({
       }
     >
       <Text>
-        Your project&apos;s <Text bold>.claude/settings.json</Text> sets:
+        Your <Text bold>.claude/settings.json</Text> sets:
       </Text>
       <Box flexDirection="column" marginY={1} paddingLeft={2}>
         {keys.map((key) => (
@@ -63,8 +63,8 @@ export const SettingsOverrideScreen = ({
         ))}
       </Box>
       <Text dimColor>
-        These overrides prevent the Wizard from reaching the PostHog LLM
-        Gateway. We can back up the file and continue.
+        These settings override credentials and prevent the Wizard from reaching
+        the PostHog LLM Gateway. We can back up the file and continue.
       </Text>
     </ModalOverlay>
   );
