@@ -92,7 +92,7 @@ const BLOCKING_ENV_KEYS = ['ANTHROPIC_BASE_URL', 'ANTHROPIC_AUTH_TOKEN'];
 
 /**
  * Check if .claude/settings.json in the project directory contains env
- * overrides for blocking keys that block the Wizard from accessing the PostHog LLM Gateway.
+ * overrides or apiKeyHelper that block the Wizard from accessing the PostHog LLM Gateway.
  * Returns the list of matched key names, or an empty array if none found.
  */
 export function checkClaudeSettingsOverrides(
@@ -107,9 +107,19 @@ export function checkClaudeSettingsOverrides(
     try {
       const raw = fs.readFileSync(filePath, 'utf-8');
       const parsed = JSON.parse(raw);
+      const matched: string[] = [];
+
       const envBlock = parsed?.env;
       if (envBlock && typeof envBlock === 'object') {
-        return BLOCKING_ENV_KEYS.filter((key) => key in envBlock);
+        matched.push(...BLOCKING_ENV_KEYS.filter((key) => key in envBlock));
+      }
+
+      if (parsed?.apiKeyHelper) {
+        matched.push('apiKeyHelper');
+      }
+
+      if (matched.length > 0) {
+        return matched;
       }
     } catch {
       // File doesn't exist or isn't valid JSON — skip
