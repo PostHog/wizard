@@ -13,19 +13,12 @@ import { ConfirmationInput, ModalOverlay } from '../primitives/index.js';
 import { Icons } from '../styles.js';
 import type { SettingsConflict } from '../../../lib/agent-interface.js';
 
-/** Human-readable label for each conflict source. */
 function sourceLabel(source: SettingsConflict['source']): string {
   switch (source) {
     case 'managed':
       return 'Managed settings (IT/org-managed)';
-    case 'user':
-      return '~/.claude/settings.json';
-    case 'user-local':
-      return '~/.claude/settings.local.json';
     case 'project':
       return '.claude/settings.json';
-    case 'project-local':
-      return '.claude/settings.local.json';
     default:
       return source;
   }

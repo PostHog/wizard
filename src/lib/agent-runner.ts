@@ -134,13 +134,7 @@ export async function runAgentWizard(
   if (settingsConflicts.length > 0) {
     // Capture analytics for each conflict variation
     for (const conflict of settingsConflicts) {
-      const level =
-        conflict.source === 'managed'
-          ? 'org'
-          : conflict.source === 'user-local' ||
-            conflict.source === 'project-local'
-          ? 'local'
-          : conflict.source;
+      const level = conflict.source === 'managed' ? 'org' : conflict.source;
       analytics.wizardCapture('settings conflict detected', {
         level,
         keys: conflict.keys,

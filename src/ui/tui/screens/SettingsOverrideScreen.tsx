@@ -7,14 +7,10 @@ import type { SettingsConflictSource } from '../../../lib/agent-interface.js';
 
 function sourcePath(source: SettingsConflictSource): string {
   switch (source) {
-    case 'user':
-      return '~/.claude/settings.json';
-    case 'user-local':
-      return '~/.claude/settings.local.json';
     case 'project':
       return '.claude/settings.json';
-    case 'project-local':
-      return '.claude/settings.local.json';
+    case 'managed':
+      return '/Library/Application Support/ClaudeCode/managed-settings.json';
     default:
       return source;
   }

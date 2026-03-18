@@ -96,12 +96,7 @@ const BLOCKING_ENV_KEYS = [
 const BLOCKING_SETTINGS_KEYS = ['apiKeyHelper'];
 
 /** Where a settings conflict was found. */
-export type SettingsConflictSource =
-  | 'project'
-  | 'project-local'
-  | 'user'
-  | 'user-local'
-  | 'managed';
+export type SettingsConflictSource = 'project' | 'managed';
 
 /** A single settings conflict detected during startup. */
 export interface SettingsConflict {
@@ -174,15 +169,8 @@ const MANAGED_SETTINGS_PATH =
   '/Library/Application Support/ClaudeCode/managed-settings.json';
 
 /**
- * Check ALL settings sources for blocking keys that conflict with the wizard's
- * proxy auth. Returns an array of conflicts, one per source where issues were found.
- *
- * Sources checked (in Claude Code precedence order):
- *   1. Managed settings (/Library/Application Support/ClaudeCode/managed-settings.json)
- *   2. User settings (~/.claude/settings.json)
- *   3. User-local settings (~/.claude/settings.local.json)
- *   4. Project settings (<workingDir>/.claude/settings.json)
- *   5. Project-local settings (<workingDir>/.claude/settings.local.json)
+ * Check project and org-managed settings for blocking keys that conflict
+ * with the wizard's proxy auth.
  */
 export function checkAllSettingsConflicts(
   workingDirectory: string,
@@ -200,31 +188,11 @@ export function checkAllSettingsConflicts(
       writable: false,
     },
     {
-      source: 'user',
-      paths: [
-        path.join(process.env.HOME || '~', '.claude', 'settings.json'),
-        path.join(process.env.HOME || '~', '.claude', 'settings'),
-      ],
-      writable: true,
-    },
-    {
-      source: 'user-local',
-      paths: [
-        path.join(process.env.HOME || '~', '.claude', 'settings.local.json'),
-      ],
-      writable: true,
-    },
-    {
       source: 'project',
       paths: [
         path.join(workingDirectory, '.claude', 'settings.json'),
         path.join(workingDirectory, '.claude', 'settings'),
       ],
-      writable: true,
-    },
-    {
-      source: 'project-local',
-      paths: [path.join(workingDirectory, '.claude', 'settings.local.json')],
       writable: true,
     },
   ];
