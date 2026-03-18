@@ -75,8 +75,8 @@ export const SettingsOverrideScreen = ({
         </Box>
       ))}
       <Text dimColor>
-        These overrides prevent the Wizard from reaching the PostHog LLM
-        Gateway. We can back up the file and continue.
+        These settings override credentials and prevent the Wizard from reaching
+        the PostHog LLM Gateway. We can back up the file and continue.
       </Text>
     </ModalOverlay>
   );

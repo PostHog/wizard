@@ -140,7 +140,7 @@ function checkSettingsFile(filePath: string): string[] {
 
 /**
  * Check if .claude/settings.json in the project directory contains env
- * overrides for blocking keys that block the Wizard from accessing the PostHog LLM Gateway.
+ * overrides or apiKeyHelper that block the Wizard from accessing the PostHog LLM Gateway.
  * Returns the list of matched key names, or an empty array if none found.
  *
  * @deprecated Use {@link checkAllSettingsConflicts} for comprehensive detection.
