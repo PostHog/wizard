@@ -95,6 +95,10 @@ export class InkUI implements WizardUI {
     return this.store.showSettingsOverride(conflicts, backupAndFix);
   }
 
+  showAuthError(): void {
+    this.store.showAuthError();
+  }
+
   startRun(): void {
     this.store.setRunPhase(RunPhase.Running);
   }
