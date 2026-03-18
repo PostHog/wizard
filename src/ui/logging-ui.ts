@@ -5,6 +5,7 @@
  */
 
 import { TaskStatus, type WizardUI, type SpinnerHandle } from './wizard-ui';
+import type { SettingsConflict } from '../lib/agent-interface';
 
 export class LoggingUI implements WizardUI {
   intro(message: string): void {
@@ -107,18 +108,9 @@ export class LoggingUI implements WizardUI {
   }
 
   showSettingsOverride(
-    keys: string[],
+    _conflicts: SettingsConflict[],
     _backupAndFix: () => boolean,
   ): Promise<void> {
-    console.log(
-      `▲  Security warning: .claude/settings.json overrides detected`,
-    );
-    for (const key of keys) {
-      console.log(`│    • ${key}`);
-    }
-    console.log(
-      `│  These overrides prevent the Wizard from accessing the PostHog LLM Gateway.`,
-    );
     return Promise.resolve();
   }
 
