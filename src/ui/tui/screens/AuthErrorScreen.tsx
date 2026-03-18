@@ -22,7 +22,7 @@ export const AuthErrorScreen = () => {
       <Box flexDirection="column" marginTop={1}>
         <Text>
           The Wizard couldn't authenticate against the PostHog LLM Gateway. If
-          you use Claude Code, its credentials are likely conflicting with the
+          you use Claude Code, its credentials might conflict with the
           Wizard.
         </Text>
       </Box>
