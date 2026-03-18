@@ -76,6 +76,9 @@ export interface WizardUI {
     backupAndFix: () => boolean,
   ): Promise<void>;
 
+  /** Show auth error overlay when Anthropic API returns 401. */
+  showAuthError(): void;
+
   // ── Display state ──────────────────────────────────────────────────
   /** Set the detected framework label (e.g., "Django with Wagtail CMS") */
   setDetectedFramework(label: string): void;

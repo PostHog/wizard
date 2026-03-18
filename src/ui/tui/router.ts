@@ -25,6 +25,7 @@ export type { FlowEntry };
 export enum Overlay {
   SettingsOverride = 'settings-override',
   PortConflict = 'port-conflict',
+  AuthError = 'auth-error',
 }
 
 /** Union of all screen names */

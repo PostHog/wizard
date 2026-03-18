@@ -122,6 +122,14 @@ export class LoggingUI implements WizardUI {
     return Promise.resolve();
   }
 
+  showAuthError(): void {
+    console.log(`✖  Authentication failed (401)`);
+    console.log(
+      `│  Claude Code auth is conflicting with the wizard. Please try again after logging out:`,
+    );
+    console.log(`│    claude auth logout`);
+  }
+
   startRun(): void {
     // No-op in CI mode
   }

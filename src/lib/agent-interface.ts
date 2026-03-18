@@ -20,7 +20,11 @@ import {
   type AdditionalFeature,
   ADDITIONAL_FEATURE_PROMPTS,
 } from './wizard-session';
-import { registerCleanup } from '../utils/wizard-abort';
+import {
+  registerCleanup,
+  wizardAbort,
+  WizardError,
+} from '../utils/wizard-abort';
 import { createCustomHeaders } from '../utils/custom-headers';
 import { getLlmGatewayUrlFromHost } from '../utils/urls';
 import { LINTING_TOOLS } from './safe-tools';
@@ -209,6 +213,7 @@ export type StopHookResult =
  */
 export function createStopHook(
   featureQueue: readonly AdditionalFeature[],
+  collectedText?: string[],
 ): (input: { stop_hook_active: boolean }) => StopHookResult {
   let featureIndex = 0;
   let remarkRequested = false;
@@ -220,6 +225,16 @@ export function createStopHook(
       remarkRequested,
       queueLength: featureQueue.length,
     });
+
+    // On API errors, allow stop immediately — blocking with remark/feature
+    // prompts would just fail again. The auth error screen is shown separately.
+    if (collectedText) {
+      const text = collectedText.join('\n');
+      if (text.includes('API Error:')) {
+        logToFile('Stop hook: API error detected, allowing immediate stop');
+        return {};
+      }
+    }
 
     // Phase 1: drain feature queue
     if (featureIndex < featureQueue.length) {
@@ -821,7 +836,12 @@ export async function runAgent(
           PostToolUse: createPostToolUseYaraHooks(),
           Stop: [
             {
-              hooks: [createStopHook(config?.additionalFeatureQueue ?? [])],
+              hooks: [
+                createStopHook(
+                  config?.additionalFeatureQueue ?? [],
+                  collectedText,
+                ),
+              ],
               timeout: 30,
             },
           ],
@@ -880,6 +900,21 @@ export async function runAgent(
         collectedText,
         receivedSuccessResult,
       );
+
+      // 401: show auth error screen and exit immediately
+      if (
+        message.type === 'assistant' &&
+        collectedText.join('\n').includes('API Error: 401')
+      ) {
+        signalDone!();
+        spinner.stop('Authentication failed');
+        logToFile('Agent error: 401, showing auth error screen');
+        getUI().showAuthError();
+        await wizardAbort({
+          message: 'Authentication failed (401)',
+          error: new WizardError('Authentication failed'),
+        });
+      }
 
       try {
         middleware?.onMessage(message);

@@ -22,6 +22,7 @@ import { AuthScreen } from './screens/AuthScreen.js';
 import { RunScreen } from './screens/RunScreen.js';
 import { McpScreen } from './screens/McpScreen.js';
 import { OutroScreen } from './screens/OutroScreen.js';
+import { AuthErrorScreen } from './screens/AuthErrorScreen.js';
 import { createMcpInstaller } from './services/mcp-installer.js';
 import type { McpInstaller } from './services/mcp-installer.js';
 
@@ -43,6 +44,7 @@ export function createScreens(
     // Overlays
     [Overlay.SettingsOverride]: <SettingsOverrideScreen store={store} />,
     [Overlay.PortConflict]: <PortConflictScreen store={store} />,
+    [Overlay.AuthError]: <AuthErrorScreen />,
 
     // Wizard flow
     [Screen.Intro]: <IntroScreen store={store} />,

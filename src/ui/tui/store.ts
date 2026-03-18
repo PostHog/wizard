@@ -299,6 +299,11 @@ export class WizardStore {
     return ok;
   }
 
+  /** Push the auth-error overlay (no dismiss — user must exit). */
+  showAuthError(): void {
+    this.pushOverlay(Overlay.AuthError);
+  }
+
   addDiscoveredFeature(feature: DiscoveredFeature): void {
     if (!this.session.discoveredFeatures.includes(feature)) {
       this.session.discoveredFeatures.push(feature);
