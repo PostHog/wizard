@@ -6,7 +6,7 @@ PostHog is already integrated into this Astro project. The configuration include
 
 - PostHog initialization in `src/components/posthog.astro`
 - Layout setup in `src/layouts/PostHogLayout.astro`
-- Environment variables for API key and host
+- Environment variables for project token and host
 
 ## Key Guidelines
 
@@ -17,7 +17,7 @@ PostHog is already integrated into this Astro project. The configuration include
 
 ### Environment Variables
 - Use `PUBLIC_` prefix for client-side environment variables in Astro
-- `PUBLIC_POSTHOG_KEY` - Your PostHog project API key
+- `PUBLIC_POSTHOG_PROJECT_TOKEN` - Your PostHog project token
 - `PUBLIC_POSTHOG_HOST` - Your PostHog instance URL
 
 ### Best Practices

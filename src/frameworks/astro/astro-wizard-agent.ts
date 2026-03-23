@@ -55,7 +55,7 @@ export const ASTRO_AGENT_CONFIG: FrameworkConfig<AstroContext> = {
   environment: {
     uploadToHosting: true,
     getEnvVars: (apiKey: string, host: string) => ({
-      PUBLIC_POSTHOG_KEY: apiKey,
+      PUBLIC_POSTHOG_PROJECT_TOKEN: apiKey,
       PUBLIC_POSTHOG_HOST: host,
     }),
   },

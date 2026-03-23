@@ -75,7 +75,7 @@ export const SWIFT_AGENT_CONFIG: FrameworkConfig<SwiftContext> = {
   environment: {
     uploadToHosting: false,
     getEnvVars: (apiKey: string, host: string) => ({
-      POSTHOG_API_KEY: apiKey,
+      POSTHOG_PROJECT_TOKEN: apiKey,
       POSTHOG_HOST: host,
     }),
   },
@@ -123,7 +123,7 @@ export const SWIFT_AGENT_CONFIG: FrameworkConfig<SwiftContext> = {
       return changes;
     },
     getOutroNextSteps: () => [
-      'Set POSTHOG_API_KEY and POSTHOG_HOST in your Xcode scheme environment variables',
+      'Set POSTHOG_PROJECT_TOKEN and POSTHOG_HOST in your Xcode scheme environment variables',
       'Build and run your app to see PostHog in action',
       'Visit your PostHog dashboard to see incoming events',
     ],

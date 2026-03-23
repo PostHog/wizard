@@ -99,7 +99,7 @@ export const LARAVEL_AGENT_CONFIG: FrameworkConfig<LaravelContext> = {
   environment: {
     uploadToHosting: false,
     getEnvVars: (apiKey: string, host: string) => ({
-      POSTHOG_API_KEY: apiKey,
+      POSTHOG_PROJECT_TOKEN: apiKey,
       POSTHOG_HOST: host,
     }),
   },

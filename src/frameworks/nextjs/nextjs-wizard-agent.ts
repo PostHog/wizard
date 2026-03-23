@@ -77,7 +77,7 @@ export const NEXTJS_AGENT_CONFIG: FrameworkConfig<NextjsContext> = {
   environment: {
     uploadToHosting: true,
     getEnvVars: (apiKey: string, host: string) => ({
-      NEXT_PUBLIC_POSTHOG_KEY: apiKey,
+      NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN: apiKey,
       NEXT_PUBLIC_POSTHOG_HOST: host,
     }),
   },
