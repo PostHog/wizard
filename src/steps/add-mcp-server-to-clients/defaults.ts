@@ -29,7 +29,7 @@ export const AVAILABLE_FEATURES = {
     {
       value: 'insights',
       label: 'Insights',
-      hint: 'Analytics insights and SQL queries',
+      hint: 'Analytics insights',
     },
     {
       value: 'experiments',
@@ -37,18 +37,103 @@ export const AVAILABLE_FEATURES = {
       hint: 'A/B testing experiments',
     },
     {
-      value: 'llm-analytics',
+      value: 'surveys',
+      label: 'Surveys',
+      hint: 'Survey management',
+    },
+    {
+      value: 'annotations',
+      label: 'Annotations',
+      hint: 'Annotation management',
+    },
+    {
+      value: 'sql',
+      label: 'SQL',
+      hint: 'SQL query execution',
+    },
+  ],
+  'AI Engineering': [
+    {
+      value: 'llm_analytics',
       label: 'LLM Analytics',
       hint: 'LLM usage and cost tracking',
+    },
+    {
+      value: 'prompts',
+      label: 'Prompts',
+      hint: 'LLM prompt management',
+    },
+    {
+      value: 'logs',
+      label: 'Logs',
+      hint: 'Log querying',
     },
   ],
   'Development Tools': [
     {
-      value: 'error-tracking',
+      value: 'error_tracking',
       label: 'Error Tracking',
       hint: 'Error monitoring and debugging',
     },
-    { value: 'flags', label: 'Feature Flags', hint: 'Feature flag management' },
+    {
+      value: 'flags',
+      label: 'Feature Flags',
+      hint: 'Feature flag management',
+    },
+    {
+      value: 'early_access_features',
+      label: 'Early Access Features',
+      hint: 'Early access feature management',
+    },
+    {
+      value: 'cohorts',
+      label: 'Cohorts',
+      hint: 'Cohort management',
+    },
+  ],
+  'Data Management': [
+    {
+      value: 'events',
+      label: 'Events',
+      hint: 'Event and property definitions',
+    },
+    {
+      value: 'persons',
+      label: 'Persons',
+      hint: 'Person and group management',
+    },
+    {
+      value: 'actions',
+      label: 'Actions',
+      hint: 'Action definitions',
+    },
+    {
+      value: 'data_warehouse',
+      label: 'Data Warehouse',
+      hint: 'Data warehouse management',
+    },
+    {
+      value: 'data_schema',
+      label: 'Data Schema',
+      hint: 'Data schema exploration',
+    },
+  ],
+  'CDP & Automation': [
+    {
+      value: 'hog_functions',
+      label: 'Hog Functions',
+      hint: 'CDP function management',
+    },
+    {
+      value: 'hog_function_templates',
+      label: 'Hog Function Templates',
+      hint: 'CDP function template browsing',
+    },
+    {
+      value: 'workflows',
+      label: 'Workflows',
+      hint: 'Workflow management',
+    },
   ],
   'Platform & Management': [
     {
@@ -60,6 +145,36 @@ export const AVAILABLE_FEATURES = {
       value: 'docs',
       label: 'Documentation',
       hint: 'PostHog documentation search',
+    },
+    {
+      value: 'notebooks',
+      label: 'Notebooks',
+      hint: 'Notebook management',
+    },
+    {
+      value: 'alerts',
+      label: 'Alerts',
+      hint: 'Alert management',
+    },
+    {
+      value: 'activity_logs',
+      label: 'Activity Logs',
+      hint: 'Activity log viewing',
+    },
+    {
+      value: 'search',
+      label: 'Search',
+      hint: 'Entity search across the project',
+    },
+    {
+      value: 'reverse_proxy',
+      label: 'Reverse Proxy',
+      hint: 'Reverse proxy record management',
+    },
+    {
+      value: 'debug',
+      label: 'Debug',
+      hint: 'Debug and diagnostic tools',
     },
   ],
 };
