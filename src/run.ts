@@ -14,7 +14,7 @@ import { FRAMEWORK_REGISTRY } from './lib/registry';
 import { analytics } from './utils/analytics';
 import { runAgentWizard } from './lib/agent-runner';
 import { EventEmitter } from 'events';
-import { logToFile } from './utils/debug';
+import { logToFile, configureLogFileFromEnvironment } from './utils/debug';
 import { wizardAbort } from './utils/wizard-abort';
 
 EventEmitter.defaultMaxListeners = 50;
@@ -37,6 +37,9 @@ type Args = {
 };
 
 export async function runWizard(argv: Args, session?: WizardSession) {
+  // Apply log file env overrides for all modes (CI, benchmark, and interactive).
+  configureLogFileFromEnvironment();
+
   const finalArgs = {
     ...argv,
     ...readEnvironment(),
