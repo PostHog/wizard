@@ -1,5 +1,18 @@
 # Changelog
 
+## [2.4.0](https://github.com/PostHog/wizard/compare/v2.3.0...v2.4.0) (2026-03-18)
+
+
+### Features
+
+* Add managed settings screen ([#345](https://github.com/PostHog/wizard/issues/345)) ([b0d3615](https://github.com/PostHog/wizard/commit/b0d36153fcfec52be331d4004e7f8691c53fa7ee))
+
+
+### Bug Fixes
+
+* Also handle API key helper ([#343](https://github.com/PostHog/wizard/issues/343)) ([3e7ebe7](https://github.com/PostHog/wizard/commit/3e7ebe782136086e346a5b1fe0f8cdbe06e2faf8))
+* Handle 401s better ([#346](https://github.com/PostHog/wizard/issues/346)) ([c41418a](https://github.com/PostHog/wizard/commit/c41418a1997a65201e825a998879527987a9b2cd))
+
 ## [2.3.0](https://github.com/PostHog/wizard/compare/v2.2.0...v2.3.0) (2026-03-16)
 
 
