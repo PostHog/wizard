@@ -64,8 +64,11 @@ export function loadBenchmarkConfig(installDir: string): BenchmarkConfig {
     if (process.env.POSTHOG_WIZARD_BENCHMARK_FILE) {
       config.output.benchmarkPath = process.env.POSTHOG_WIZARD_BENCHMARK_FILE;
     }
-    if (process.env.POSTHOG_WIZARD_LOG_FILE) {
-      config.output.logPath = process.env.POSTHOG_WIZARD_LOG_FILE;
+    if (process.env.POSTHOG_WIZARD_LOG_DIR) {
+      config.output.logPath = path.join(
+        process.env.POSTHOG_WIZARD_LOG_DIR,
+        'posthog-wizard.log',
+      );
     }
 
     // If benchmark output is disabled, disable the jsonWriter plugin
@@ -83,8 +86,11 @@ export function loadBenchmarkConfig(installDir: string): BenchmarkConfig {
     if (process.env.POSTHOG_WIZARD_BENCHMARK_FILE) {
       config.output.benchmarkPath = process.env.POSTHOG_WIZARD_BENCHMARK_FILE;
     }
-    if (process.env.POSTHOG_WIZARD_LOG_FILE) {
-      config.output.logPath = process.env.POSTHOG_WIZARD_LOG_FILE;
+    if (process.env.POSTHOG_WIZARD_LOG_DIR) {
+      config.output.logPath = path.join(
+        process.env.POSTHOG_WIZARD_LOG_DIR,
+        'posthog-wizard.log',
+      );
     }
 
     return config;
