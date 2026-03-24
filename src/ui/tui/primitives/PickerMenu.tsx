@@ -166,6 +166,7 @@ const MultiPickerMenu = <T,>({
 }) => {
   const [focused, setFocused] = useState(0);
   const [selected, setSelected] = useState<Set<number>>(new Set());
+  const [showHint, setShowHint] = useState(false);
   const rows = Math.ceil(options.length / columns);
 
   useInput((_input, key) => {
@@ -196,6 +197,7 @@ const MultiPickerMenu = <T,>({
       setFocused(Math.min(nextCol * rows + row, options.length - 1));
     }
     if (_input === ' ') {
+      setShowHint(false);
       setSelected((prev) => {
         const next = new Set(prev);
         if (next.has(focused)) {
@@ -207,6 +209,10 @@ const MultiPickerMenu = <T,>({
       });
     }
     if (key.return) {
+      if (selected.size === 0) {
+        setShowHint(true);
+        return;
+      }
       const values = [...selected].sort().map((i) => options[i].value);
       onSelect(values);
     }
@@ -221,6 +227,12 @@ const MultiPickerMenu = <T,>({
     <Box flexDirection="column" alignItems={centered ? 'center' : undefined}>
       <PromptLabel message={message} />
       <Text dimColor> (space to toggle, enter to submit)</Text>
+      {showHint && (
+        <Text color="yellow">
+          {' '}
+          Please select at least one option, use space to toggle
+        </Text>
+      )}
       <Box
         flexDirection="row"
         gap={4}
