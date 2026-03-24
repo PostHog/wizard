@@ -131,12 +131,13 @@ export class ClaudeCodeMCPClient extends DefaultMCPClient {
     try {
       execSync(command);
     } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      // "already exists" means a previous install succeeded, treat as success
+      if (msg.includes('already exists')) {
+        return Promise.resolve({ success: true });
+      }
       analytics.captureException(
-        new Error(
-          `Failed to add server to Claude Code: ${
-            error instanceof Error ? error.message : String(error)
-          }`,
-        ),
+        new Error(`Failed to add server to Claude Code: ${msg}`),
       );
       return Promise.resolve({ success: false });
     }
