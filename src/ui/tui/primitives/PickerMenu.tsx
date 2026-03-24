@@ -230,7 +230,7 @@ const MultiPickerMenu = <T,>({
       {showHint && (
         <Text color="yellow">
           {' '}
-          Please select at least one option, use space to toggle
+          Select at least one option, use space to toggle
         </Text>
       )}
       <Box
