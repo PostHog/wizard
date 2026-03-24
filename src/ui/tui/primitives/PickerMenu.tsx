@@ -207,8 +207,16 @@ const MultiPickerMenu = <T,>({
       });
     }
     if (key.return) {
-      const values = [...selected].sort().map((i) => options[i].value);
-      onSelect(values);
+      if (selected.size === 0) {
+        // Nothing toggled, select hovered
+        const hovered = options[focused];
+        if (hovered) {
+          onSelect(hovered.value);
+        }
+      } else {
+        const values = [...selected].sort().map((i) => options[i].value);
+        onSelect(values);
+      }
     }
   });
 
@@ -220,7 +228,7 @@ const MultiPickerMenu = <T,>({
   return (
     <Box flexDirection="column" alignItems={centered ? 'center' : undefined}>
       <PromptLabel message={message} />
-      <Text dimColor> (space to toggle, enter to submit)</Text>
+      <Text dimColor> (space to multi-select, enter to confirm)</Text>
       <Box
         flexDirection="row"
         gap={4}
