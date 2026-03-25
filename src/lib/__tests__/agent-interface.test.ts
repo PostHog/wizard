@@ -369,6 +369,18 @@ describe('getOpenAIRunnerConfig', () => {
 
     expect(getOpenAIMaxTurns()).toBe(50);
   });
+
+  it('supports an unlimited max turns override', () => {
+    process.env.WIZARD_OPENAI_MAX_TURNS = 'unlimited';
+
+    expect(getOpenAIMaxTurns()).toBe(Number.MAX_SAFE_INTEGER);
+  });
+
+  it('treats 0 as unlimited max turns', () => {
+    process.env.OPENAI_MAX_TURNS = '0';
+
+    expect(getOpenAIMaxTurns()).toBe(Number.MAX_SAFE_INTEGER);
+  });
 });
 
 describe('createStopHook', () => {

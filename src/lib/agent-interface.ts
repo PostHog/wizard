@@ -164,6 +164,17 @@ export function getOpenAIMaxTurns(): number {
     return 50;
   }
 
+  const normalized = rawValue.trim().toLowerCase();
+  if (
+    normalized === '0' ||
+    normalized === 'none' ||
+    normalized === 'unlimited' ||
+    normalized === 'infinite' ||
+    normalized === 'infinity'
+  ) {
+    return Number.MAX_SAFE_INTEGER;
+  }
+
   const parsed = Number(rawValue);
   if (!Number.isInteger(parsed) || parsed < 1) {
     return 50;
