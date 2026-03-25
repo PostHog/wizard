@@ -28,7 +28,11 @@ import {
 import { createCustomHeaders } from '../utils/custom-headers';
 import { getLlmGatewayUrlFromHost } from '../utils/urls';
 import { LINTING_TOOLS } from './safe-tools';
-import { createWizardToolsServer, WIZARD_TOOL_NAMES } from './wizard-tools';
+import {
+  createWizardToolsServer,
+  ensureWizardArtifactGitignoreCoverage,
+  WIZARD_TOOL_NAMES,
+} from './wizard-tools';
 import {
   createPreToolUseYaraHooks,
   createPostToolUseYaraHooks,
@@ -836,6 +840,12 @@ export async function runAgent(
       ...WIZARD_TOOL_NAMES,
     ];
 
+    try {
+      ensureWizardArtifactGitignoreCoverage(agentConfig.workingDirectory);
+    } catch (error) {
+      logToFile('Failed to ensure wizard artifact gitignore coverage:', error);
+    }
+
     const response = query({
       prompt: createPromptStream(),
       options: {
@@ -928,6 +938,13 @@ export async function runAgent(
           ],
         },
       },
+    });
+
+    getUI().setRunInterruptHandler(async () => {
+      spinner.message(
+        'Wrapping up the main setup and moving to queued extras...',
+      );
+      await response.interrupt();
     });
 
     // Watch for .posthog-events.json and feed into the store
@@ -1098,6 +1115,7 @@ export async function runAgent(
     debug('Full error:', error);
     throw error;
   } finally {
+    getUI().setRunInterruptHandler(null);
     eventPlanWatcher?.close();
     if (eventPlanInterval) clearInterval(eventPlanInterval);
   }

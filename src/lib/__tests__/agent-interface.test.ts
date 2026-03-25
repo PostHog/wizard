@@ -42,6 +42,7 @@ const mockUIInstance = {
   setReadinessWarnings: jest.fn(),
   showSettingsOverride: jest.fn(),
   startRun: jest.fn(),
+  setRunInterruptHandler: jest.fn(),
   syncTodos: jest.fn(),
   groupMultiselect: jest.fn(),
   multiselect: jest.fn(),
@@ -91,6 +92,53 @@ describe('runAgent', () => {
   });
 
   describe('race condition handling', () => {
+    it('registers and clears a run interrupt handler around the query', async () => {
+      async function* mockGenerator() {
+        yield {
+          type: 'system',
+          subtype: 'init',
+          model: 'claude-opus-4-5-20251101',
+          tools: [],
+          mcp_servers: [],
+        };
+
+        yield {
+          type: 'result',
+          subtype: 'success',
+          is_error: false,
+          result: 'Agent completed successfully',
+        };
+      }
+
+      const response = mockGenerator() as AsyncGenerator & {
+        interrupt: jest.Mock;
+      };
+      response.interrupt = jest.fn().mockResolvedValue(undefined);
+      mockQuery.mockReturnValue(response);
+
+      await runAgent(
+        defaultAgentConfig,
+        'test prompt',
+        defaultOptions,
+        mockSpinner as unknown as SpinnerHandle,
+        {
+          successMessage: 'Test success',
+          errorMessage: 'Test error',
+        },
+      );
+
+      expect(mockUIInstance.setRunInterruptHandler).toHaveBeenCalledWith(
+        expect.any(Function),
+      );
+      const interruptHandler =
+        mockUIInstance.setRunInterruptHandler.mock.calls[0][0];
+      await interruptHandler();
+      expect(response.interrupt).toHaveBeenCalledTimes(1);
+      expect(mockUIInstance.setRunInterruptHandler).toHaveBeenLastCalledWith(
+        null,
+      );
+    });
+
     it('should return success when agent completes successfully then SDK cleanup fails', async () => {
       // This simulates the race condition:
       // 1. Agent completes with success result
@@ -314,6 +362,23 @@ describe('createStopHook', () => {
     expect((second as { reason: string }).reason).toContain('WIZARD-REMARK');
 
     // Third call → allow stop
+    const third = hook(hookInput);
+    expect(third).toEqual({});
+  });
+
+  it('supports the Amplitude migration follow-up prompt', () => {
+    const hook = createStopHook([AdditionalFeature.AmplitudeMigration]);
+
+    const first = hook(hookInput);
+    expect(first).toHaveProperty('decision', 'block');
+    expect((first as { reason: string }).reason).toBe(
+      ADDITIONAL_FEATURE_PROMPTS[AdditionalFeature.AmplitudeMigration],
+    );
+
+    const second = hook(hookInput);
+    expect(second).toHaveProperty('decision', 'block');
+    expect((second as { reason: string }).reason).toContain('WIZARD-REMARK');
+
     const third = hook(hookInput);
     expect(third).toEqual({});
   });

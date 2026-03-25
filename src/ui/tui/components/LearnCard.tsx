@@ -2,14 +2,18 @@
  * LearnCard — PostHog educational content with animated text reveal.
  */
 
-import { Box, Text } from 'ink';
-import { useEffect, useMemo, useRef } from 'react';
+import { Box, Text, useInput } from 'ink';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Colors } from '../styles.js';
 import type { WizardStore } from '../store.js';
 import { ContentSequencer, TextRevealMode } from '../primitives/index.js';
 import type { ContentBlock } from '../primitives/index.js';
 import { useStdoutDimensions } from '../hooks/useStdoutDimensions.js';
 import { COLLAPSED_COUNT, EXPANDED_COUNT } from '../primitives/TabContainer.js';
+import {
+  getLearnSectionIndex,
+  getLearnSectionStartIndices,
+} from './learn-card-navigation.js';
 
 /**
  * StatusPeekTrigger — Fires the status bar expansion once, renders nothing.
@@ -336,6 +340,7 @@ const FUNNEL_BLOCK: ContentBlock = {
 /** Fixed chrome: ScreenContainer (3) + TabContainer tab bar (2) */
 const FIXED_CHROME = 5;
 const HEADER_ROWS = 2; // title + spacer
+const FOOTER_ROWS = 1;
 const MIN_CONTENT_ROWS = 6;
 
 interface LearnCardProps {
@@ -346,6 +351,10 @@ interface LearnCardProps {
 export const LearnCard = ({ store, onComplete }: LearnCardProps) => {
   const peekedRef = useRef(false);
   const [columns, rows] = useStdoutDimensions();
+  const initialBlockIdx = store?.learnCardBlockIdx ?? 0;
+  const [resumeBlockIdx, setResumeBlockIdx] = useState(initialBlockIdx);
+  const [currentBlockIdx, setCurrentBlockIdx] = useState(initialBlockIdx);
+  const [sequenceVersion, setSequenceVersion] = useState(0);
 
   const blocks = useMemo<ContentBlock[]>(
     () => [
@@ -468,6 +477,46 @@ export const LearnCard = ({ store, onComplete }: LearnCardProps) => {
     [store],
   );
 
+  const sectionStarts = useMemo(
+    () => getLearnSectionStartIndices(blocks),
+    [blocks],
+  );
+
+  const currentSectionIdx = useMemo(
+    () => getLearnSectionIndex(sectionStarts, currentBlockIdx),
+    [sectionStarts, currentBlockIdx],
+  );
+
+  const jumpToSection = useCallback(
+    (sectionIdx: number) => {
+      const targetBlockIdx = sectionStarts[sectionIdx];
+      if (targetBlockIdx == null) return;
+
+      setResumeBlockIdx(targetBlockIdx);
+      setCurrentBlockIdx(targetBlockIdx);
+      store?.setLearnCardBlockIdx(targetBlockIdx);
+      setSequenceVersion((v) => v + 1);
+    },
+    [sectionStarts, store],
+  );
+
+  useInput((input) => {
+    const key = input.toLowerCase();
+
+    if (key === 'n') {
+      if (currentSectionIdx >= sectionStarts.length - 1) {
+        onComplete?.();
+        return;
+      }
+      jumpToSection(currentSectionIdx + 1);
+      return;
+    }
+
+    if (key === 'p') {
+      jumpToSection(Math.max(0, currentSectionIdx - 1));
+    }
+  });
+
   // Dynamic status bar height: messages + border when present
   const hasStatus = store ? store.statusMessages.length > 0 : false;
   const statusBarRows = hasStatus
@@ -477,7 +526,7 @@ export const LearnCard = ({ store, onComplete }: LearnCardProps) => {
   const contentHeight = rows - FIXED_CHROME - statusBarRows;
   const tooSmall = contentHeight < MIN_CONTENT_ROWS;
 
-  const maxHeight = Math.max(1, contentHeight - HEADER_ROWS);
+  const maxHeight = Math.max(1, contentHeight - HEADER_ROWS - FOOTER_ROWS);
   // Half of clamped content width, minus paddingX on both sides
   const paneWidth = Math.floor((Math.min(120, columns) - 2) / 2) - 2;
 
@@ -486,6 +535,7 @@ export const LearnCard = ({ store, onComplete }: LearnCardProps) => {
   return (
     <Box
       flexDirection="column"
+      flexGrow={1}
       paddingX={1}
       display={tooSmall ? 'none' : 'flex'}
     >
@@ -493,16 +543,36 @@ export const LearnCard = ({ store, onComplete }: LearnCardProps) => {
         Learn
       </Text>
       <Box height={1} />
-      <ContentSequencer
-        blocks={blocks}
-        mode={TextRevealMode.SentenceBySentence}
-        maxHeight={maxHeight}
-        availableWidth={paneWidth}
-        startDelay={2000}
-        initialBlockIdx={store?.learnCardBlockIdx ?? 0}
-        onBlockChange={(idx) => store?.setLearnCardBlockIdx(idx)}
-        onSequenceComplete={onComplete}
-      />
+      <Box flexDirection="column" flexGrow={1} justifyContent="space-between">
+        <ContentSequencer
+          key={sequenceVersion}
+          blocks={blocks}
+          mode={TextRevealMode.SentenceBySentence}
+          maxHeight={maxHeight}
+          availableWidth={paneWidth}
+          startDelay={2000}
+          initialBlockIdx={resumeBlockIdx}
+          onBlockChange={(idx) => {
+            setCurrentBlockIdx(idx);
+            store?.setLearnCardBlockIdx(idx);
+          }}
+          onSequenceComplete={onComplete}
+        />
+        <Box justifyContent="flex-start">
+          <Text dimColor>
+            Prev{' '}
+            <Text color={Colors.accent} bold>
+              P
+            </Text>{' '}
+            Next{' '}
+            <Text color={Colors.accent} bold>
+              N
+            </Text>
+            {sectionStarts.length > 0 &&
+              ` ${currentSectionIdx + 1}/${sectionStarts.length}`}
+          </Text>
+        </Box>
+      </Box>
     </Box>
   );
 };

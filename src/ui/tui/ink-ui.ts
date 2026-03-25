@@ -103,6 +103,10 @@ export class InkUI implements WizardUI {
     this.store.setRunPhase(RunPhase.Running);
   }
 
+  setRunInterruptHandler(handler: (() => Promise<void>) | null): void {
+    this.store.setRunInterruptHandler(handler);
+  }
+
   cancel(message: string): void {
     this.store.pushStatus(message);
   }

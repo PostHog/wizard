@@ -328,35 +328,14 @@ yargs(hideBin(process.argv))
               };
               const depNames = Object.keys(allDeps);
 
-              const { DiscoveredFeature } = await import(
-                './src/lib/wizard-session.js'
+              const { discoverFeaturesFromDependencyNames } = await import(
+                './src/lib/discovered-features.js'
               );
 
-              if (
-                depNames.some((d) =>
-                  ['stripe', '@stripe/stripe-js'].includes(d),
-                )
-              ) {
-                tui.store.addDiscoveredFeature(DiscoveredFeature.Stripe);
-              }
-
-              // LLM SDK detection — sourced from PostHog LLM analytics skill
-              const LLM_PACKAGES = [
-                'openai',
-                '@anthropic-ai/sdk',
-                'ai',
-                '@ai-sdk/openai',
-                'langchain',
-                '@langchain/openai',
-                '@langchain/langgraph',
-                '@google/generative-ai',
-                '@google/genai',
-                '@instructor-ai/instructor',
-                '@mastra/core',
-                'portkey-ai',
-              ];
-              if (depNames.some((d) => LLM_PACKAGES.includes(d))) {
-                tui.store.addDiscoveredFeature(DiscoveredFeature.LLM);
+              for (const feature of discoverFeaturesFromDependencyNames(
+                depNames,
+              )) {
+                tui.store.addDiscoveredFeature(feature);
               }
             } catch {
               // No package.json or parse error — skip feature discovery

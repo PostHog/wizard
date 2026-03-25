@@ -60,6 +60,7 @@ export class WizardStore {
   private $eventPlan = atom<PlannedEvent[]>([]);
   private $learnCardBlockIdx = atom(0);
   private $learnCardComplete = atom(false);
+  private $skipToQueuedFeaturesRequested = atom(false);
   private $version = atom(0);
 
   /** Last screen seen — used to detect screen transitions for analytics. */
@@ -88,6 +89,9 @@ export class WizardStore {
 
   /** Blocks OAuth flow until the port-conflict overlay is dismissed. */
   private _resolvePortConflict: (() => void) | null = null;
+
+  /** Live interrupt hook for the current agent run. */
+  private _runInterruptHandler: (() => Promise<void>) | null = null;
 
   /**
    * Resolves when the health-check screen is done — either auto-advanced
@@ -322,20 +326,74 @@ export class WizardStore {
     }
   }
 
-  /**
-   * Enable an additional feature: enqueue it for the stop hook
-   * and set any feature-specific session flags.
-   */
+  /** Enable an additional feature by enqueueing it for the stop hook. */
   enableFeature(feature: AdditionalFeature): void {
     if (!this.session.additionalFeatureQueue.includes(feature)) {
       this.session.additionalFeatureQueue.push(feature);
     }
-    // Feature-specific flags
-    if (feature === AdditionalFeature.LLM) {
-      this.session.llmOptIn = true;
-    }
     analytics.wizardCapture('feature enabled', { feature });
     this.emitChange();
+  }
+
+  setRunInterruptHandler(handler: (() => Promise<void>) | null): void {
+    const changed = this._runInterruptHandler !== handler;
+    this._runInterruptHandler = handler;
+    const resetSkipRequest =
+      handler === null && this.$skipToQueuedFeaturesRequested.get();
+
+    if (resetSkipRequest) {
+      this.$skipToQueuedFeaturesRequested.set(false);
+    }
+
+    if (changed || resetSkipRequest) {
+      this.emitChange();
+    }
+  }
+
+  get canSkipToQueuedFeatures(): boolean {
+    return (
+      this.session.runPhase === RunPhase.Running &&
+      this.session.additionalFeatureQueue.length > 0 &&
+      this._runInterruptHandler !== null
+    );
+  }
+
+  get skipToQueuedFeaturesRequested(): boolean {
+    return this.$skipToQueuedFeaturesRequested.get();
+  }
+
+  requestSkipToQueuedFeatures(): boolean {
+    if (
+      !this.canSkipToQueuedFeatures ||
+      this.$skipToQueuedFeaturesRequested.get()
+    ) {
+      return false;
+    }
+
+    const handler = this._runInterruptHandler;
+    if (!handler) {
+      return false;
+    }
+
+    this.$skipToQueuedFeaturesRequested.set(true);
+    analytics.wizardCapture('skip to queued features requested', {
+      queued_feature_count: this.session.additionalFeatureQueue.length,
+      queued_features: this.session.additionalFeatureQueue,
+    });
+    this.emitChange();
+
+    void handler().catch((error) => {
+      this.$skipToQueuedFeaturesRequested.set(false);
+      analytics.wizardCapture('skip to queued features failed', {
+        error_message:
+          error instanceof Error ? error.message : 'Unknown interrupt error',
+      });
+      this.pushStatus(
+        'Could not skip to queued extras yet. Continuing the current setup.',
+      );
+    });
+
+    return true;
   }
 
   setMcpComplete(

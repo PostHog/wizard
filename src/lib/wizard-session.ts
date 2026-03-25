@@ -35,25 +35,29 @@ export enum RunPhase {
   Error = 'error',
 }
 
-/** Features discovered by the feature-discovery subagent */
+/** Features discovered during the startup repo scan */
 export enum DiscoveredFeature {
   Stripe = 'stripe',
   LLM = 'llm',
+  Amplitude = 'amplitude',
 }
 
 /** Additional features the agent can integrate after the main setup */
 export enum AdditionalFeature {
   LLM = 'llm',
+  AmplitudeMigration = 'amplitude_migration',
 }
 
 /** Human-readable labels for additional features (used in TUI progress) */
 export const ADDITIONAL_FEATURE_LABELS: Record<AdditionalFeature, string> = {
   [AdditionalFeature.LLM]: 'LLM analytics',
+  [AdditionalFeature.AmplitudeMigration]: 'Amplitude migration',
 };
 
 /** Agent prompts for each additional feature, injected via the stop hook */
 export const ADDITIONAL_FEATURE_PROMPTS: Record<AdditionalFeature, string> = {
   [AdditionalFeature.LLM]: `Now integrate LLM analytics with PostHog. Use the PostHog MCP server to find the appropriate LLM analytics skill, install it, and follow its workflow. PostHog basics are already installed. Update the setup report markdown file when complete with additions from this task. `,
+  [AdditionalFeature.AmplitudeMigration]: `Now completely migrate this project from Amplitude to PostHog analytics. Treat this as a replacement, not a dual-write setup. Reuse the framework-specific PostHog implementation pattern established by the main integration flow in this same run. If you need to confirm the correct PostHog product analytics setup for this framework, reopen the installed integration skill in .claude/skills and follow its SKILL.md plus the relevant workflow references before changing application code. First verify that PostHog product analytics are fully and correctly implemented for this framework; if the main integration left anything incomplete, finish that work before removing Amplitude. Then audit the repository for Amplitude SDK packages, imports, initialization, identify or group calls, event capture calls, wrapper utilities, and Amplitude-specific environment variables or configuration. Replace them with PostHog equivalents while preserving existing event names, relevant property names, and analytics coverage unless there is a clear reason not to. Remove Amplitude dependencies, imports, dead helper code, stale configuration, and obsolete environment variables when they are no longer used. Before finishing, verify there are no remaining runtime Amplitude references in the repository except lockfiles or intentionally retained docs or historical notes, and explicitly mention any leftovers in the setup report. Update the setup report markdown file when complete with additions from this task. `,
 };
 
 /** Outcome of the MCP server installation step */
@@ -127,7 +131,6 @@ export interface WizardSession {
 
   // Feature discovery
   discoveredFeatures: DiscoveredFeature[];
-  llmOptIn: boolean;
 
   // Screen completion
   mcpComplete: boolean;
@@ -191,7 +194,6 @@ export function buildSession(args: {
 
     runPhase: RunPhase.Idle,
     discoveredFeatures: [],
-    llmOptIn: false,
     mcpComplete: false,
     mcpOutcome: null,
     mcpInstalledClients: [],

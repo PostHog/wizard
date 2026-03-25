@@ -71,17 +71,37 @@ const TIPS: Tip[] = [
       feature: AdditionalFeature.LLM,
       enabledLabel: 'LLM analytics setup queued next',
       prompt: 'We detected LLM dependencies in your project.',
-      isEnabled: (store) => store.session.llmOptIn,
+      isEnabled: (store) =>
+        store.session.additionalFeatureQueue.includes(AdditionalFeature.LLM),
+    },
+  },
+  {
+    id: 'amplitude',
+    title: 'We can migrate this project from Amplitude to PostHog',
+    description: '',
+    visible: (store) =>
+      store.session.discoveredFeatures.includes(DiscoveredFeature.Amplitude),
+    toggle: {
+      key: 'a',
+      feature: AdditionalFeature.AmplitudeMigration,
+      enabledLabel: 'Amplitude migration queued next',
+      prompt: 'We detected Amplitude dependencies in your project.',
+      isEnabled: (store) =>
+        store.session.additionalFeatureQueue.includes(
+          AdditionalFeature.AmplitudeMigration,
+        ),
     },
   },
 ];
 
 export const TipsCard = ({ store }: { store: WizardStore }) => {
   useInput((input) => {
+    const key = input.toLowerCase();
+
     for (const tip of TIPS) {
       if (
         tip.toggle &&
-        input.toLowerCase() === tip.toggle.key &&
+        key === tip.toggle.key &&
         (!tip.visible || tip.visible(store)) &&
         !tip.toggle.isEnabled(store)
       ) {
@@ -89,6 +109,22 @@ export const TipsCard = ({ store }: { store: WizardStore }) => {
       }
     }
   });
+
+  const visibleToggleKeys = TIPS.filter(
+    (tip) => tip.toggle && (!tip.visible || tip.visible(store)),
+  ).map((tip) => tip.toggle!.key.toUpperCase());
+
+  const queuePrompt =
+    visibleToggleKeys.length > 0
+      ? visibleToggleKeys.length === 1
+        ? visibleToggleKeys[0]
+        : visibleToggleKeys.join(' or ')
+      : null;
+
+  const skipHintVisible =
+    store.canSkipToQueuedFeatures ||
+    store.skipToQueuedFeaturesRequested ||
+    queuePrompt !== null;
 
   return (
     <Box flexDirection="column" paddingX={1}>
@@ -131,6 +167,37 @@ export const TipsCard = ({ store }: { store: WizardStore }) => {
           )}
         </Box>
       ))}
+
+      {skipHintVisible && (
+        <Box marginTop={1}>
+          {store.skipToQueuedFeaturesRequested ? (
+            <Text color={Colors.success}>
+              {Icons.check} Skipping the rest of the main setup. Queued extras
+              will run next.
+            </Text>
+          ) : store.canSkipToQueuedFeatures ? (
+            <Text dimColor>
+              Press{' '}
+              <Text bold color={Colors.accent}>
+                X
+              </Text>{' '}
+              to skip the rest of the main setup and jump to the queued extras.
+            </Text>
+          ) : (
+            <Text dimColor>
+              Enable{' '}
+              <Text bold color={Colors.accent}>
+                {queuePrompt}
+              </Text>{' '}
+              first, then press{' '}
+              <Text bold color={Colors.accent}>
+                X
+              </Text>{' '}
+              to skip the rest of the main setup and jump to the queued extras.
+            </Text>
+          )}
+        </Box>
+      )}
     </Box>
   );
 };
