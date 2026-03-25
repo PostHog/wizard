@@ -315,7 +315,7 @@ describe('getOpenAIRunnerConfig', () => {
       apiKey: 'phx_test_token',
       baseURL: 'https://gateway.eu.posthog.com/wizard',
       model: 'gpt-5.4',
-      maxTurns: 50,
+      maxTurns: Number.MAX_SAFE_INTEGER,
       authMode: 'posthog_gateway',
     });
   });
@@ -334,7 +334,7 @@ describe('getOpenAIRunnerConfig', () => {
       apiKey: 'sk-test',
       baseURL: 'https://example.com/v1',
       model: 'gpt-5.4-mini',
-      maxTurns: 50,
+      maxTurns: Number.MAX_SAFE_INTEGER,
       authMode: 'direct_openai',
     });
   });
@@ -367,7 +367,7 @@ describe('getOpenAIRunnerConfig', () => {
   it('falls back to the default max turns when the override is invalid', () => {
     process.env.OPENAI_MAX_TURNS = 'not-a-number';
 
-    expect(getOpenAIMaxTurns()).toBe(50);
+    expect(getOpenAIMaxTurns()).toBe(Number.MAX_SAFE_INTEGER);
   });
 
   it('supports an unlimited max turns override', () => {

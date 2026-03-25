@@ -161,7 +161,7 @@ export function getOpenAIMaxTurns(): number {
   const rawValue =
     process.env.WIZARD_OPENAI_MAX_TURNS || process.env.OPENAI_MAX_TURNS;
   if (!rawValue) {
-    return 50;
+    return Number.MAX_SAFE_INTEGER;
   }
 
   const normalized = rawValue.trim().toLowerCase();
@@ -177,7 +177,7 @@ export function getOpenAIMaxTurns(): number {
 
   const parsed = Number(rawValue);
   if (!Number.isInteger(parsed) || parsed < 1) {
-    return 50;
+    return Number.MAX_SAFE_INTEGER;
   }
 
   return parsed;
