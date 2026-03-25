@@ -170,21 +170,6 @@ export function ensureGitignoreCoverage(
   }
 }
 
-const WIZARD_ARTIFACT_GITIGNORE_ENTRIES = [
-  '.posthog-events.json',
-  '.claude/skills/',
-  '.claude/*.wizard-backup',
-  '.pnpm-store/',
-] as const;
-
-export function ensureWizardArtifactGitignoreCoverage(
-  workingDirectory: string,
-): void {
-  for (const entry of WIZARD_ARTIFACT_GITIGNORE_ENTRIES) {
-    ensureGitignoreCoverage(workingDirectory, entry);
-  }
-}
-
 /**
  * Parse a .env file's content and return the set of defined key names.
  */

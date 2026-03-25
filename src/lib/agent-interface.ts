@@ -28,11 +28,7 @@ import {
 import { createCustomHeaders } from '../utils/custom-headers';
 import { getLlmGatewayUrlFromHost } from '../utils/urls';
 import { LINTING_TOOLS } from './safe-tools';
-import {
-  createWizardToolsServer,
-  ensureWizardArtifactGitignoreCoverage,
-  WIZARD_TOOL_NAMES,
-} from './wizard-tools';
+import { createWizardToolsServer, WIZARD_TOOL_NAMES } from './wizard-tools';
 import {
   createPreToolUseYaraHooks,
   createPostToolUseYaraHooks,
@@ -839,12 +835,6 @@ export async function runAgent(
       'Skill',
       ...WIZARD_TOOL_NAMES,
     ];
-
-    try {
-      ensureWizardArtifactGitignoreCoverage(agentConfig.workingDirectory);
-    } catch (error) {
-      logToFile('Failed to ensure wizard artifact gitignore coverage:', error);
-    }
 
     const response = query({
       prompt: createPromptStream(),

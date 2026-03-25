@@ -4,7 +4,6 @@ import * as os from 'os';
 import {
   resolveEnvPath,
   ensureGitignoreCoverage,
-  ensureWizardArtifactGitignoreCoverage,
   parseEnvKeys,
   mergeEnvValues,
 } from '../wizard-tools';
@@ -206,37 +205,5 @@ describe('ensureGitignoreCoverage', () => {
     const content = fs.readFileSync(path.join(tmpDir, '.gitignore'), 'utf8');
     // Should not duplicate — the trim check should match
     expect(content).toBe('  .env.local  \n');
-  });
-});
-
-describe('ensureWizardArtifactGitignoreCoverage', () => {
-  let tmpDir: string;
-
-  beforeEach(() => {
-    tmpDir = makeTmpDir();
-  });
-  afterEach(() => cleanup(tmpDir));
-
-  it('adds the wizard artifact entries to .gitignore', () => {
-    ensureWizardArtifactGitignoreCoverage(tmpDir);
-    const content = fs.readFileSync(path.join(tmpDir, '.gitignore'), 'utf8');
-
-    expect(content).toBe(
-      '.posthog-events.json\n.claude/skills/\n.claude/*.wizard-backup\n.pnpm-store/\n',
-    );
-  });
-
-  it('does not duplicate existing wizard artifact entries', () => {
-    fs.writeFileSync(
-      path.join(tmpDir, '.gitignore'),
-      '.posthog-events.json\n.pnpm-store/\n',
-    );
-
-    ensureWizardArtifactGitignoreCoverage(tmpDir);
-    const content = fs.readFileSync(path.join(tmpDir, '.gitignore'), 'utf8');
-
-    expect(content).toBe(
-      '.posthog-events.json\n.pnpm-store/\n.claude/skills/\n.claude/*.wizard-backup\n',
-    );
   });
 });

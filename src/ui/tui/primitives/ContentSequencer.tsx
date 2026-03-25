@@ -88,15 +88,6 @@ export const ContentSequencer = ({
   );
   const transitionTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  useEffect(() => {
-    return () => {
-      if (transitionTimer.current) {
-        clearTimeout(transitionTimer.current);
-        transitionTimer.current = null;
-      }
-    };
-  }, []);
-
   // Initial delay before first block (skip when resuming)
   useEffect(() => {
     if (resuming || startDelay <= 0 || activeIdx !== -1) return;
