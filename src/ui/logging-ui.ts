@@ -126,10 +126,6 @@ export class LoggingUI implements WizardUI {
     // No-op in CI mode
   }
 
-  setRunInterruptHandler(_handler: (() => Promise<void>) | null): void {
-    // No-op in CI mode
-  }
-
   setCredentials(_credentials: {
     accessToken: string;
     projectApiKey: string;

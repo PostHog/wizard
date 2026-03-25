@@ -111,7 +111,8 @@ const TIPS: Tip[] = [
   },
   {
     id: 'launchdarkly',
-    title: 'We can migrate this project from LaunchDarkly to PostHog feature flags',
+    title:
+      'We can migrate this project from LaunchDarkly to PostHog feature flags',
     description: '',
     visible: (store) =>
       store.session.discoveredFeatures.includes(DiscoveredFeature.LaunchDarkly),
@@ -128,7 +129,8 @@ const TIPS: Tip[] = [
   },
   {
     id: 'braintrust',
-    title: 'We can migrate this project from Braintrust to PostHog LLM analytics',
+    title:
+      'We can migrate this project from Braintrust to PostHog LLM analytics',
     description: '',
     visible: (store) =>
       store.session.discoveredFeatures.includes(DiscoveredFeature.Braintrust),
@@ -160,22 +162,6 @@ export const TipsCard = ({ store }: { store: WizardStore }) => {
       }
     }
   });
-
-  const visibleToggleKeys = TIPS.filter(
-    (tip) => tip.toggle && (!tip.visible || tip.visible(store)),
-  ).map((tip) => tip.toggle!.key.toUpperCase());
-
-  const queuePrompt =
-    visibleToggleKeys.length > 0
-      ? visibleToggleKeys.length === 1
-        ? visibleToggleKeys[0]
-        : visibleToggleKeys.join(' or ')
-      : null;
-
-  const skipHintVisible =
-    store.canSkipToQueuedFeatures ||
-    store.skipToQueuedFeaturesRequested ||
-    queuePrompt !== null;
 
   return (
     <Box flexDirection="column" paddingX={1}>
@@ -218,37 +204,6 @@ export const TipsCard = ({ store }: { store: WizardStore }) => {
           )}
         </Box>
       ))}
-
-      {skipHintVisible && (
-        <Box marginTop={1}>
-          {store.skipToQueuedFeaturesRequested ? (
-            <Text color={Colors.success}>
-              {Icons.check} Skipping the rest of the main setup. Queued extras
-              will run next.
-            </Text>
-          ) : store.canSkipToQueuedFeatures ? (
-            <Text dimColor>
-              Press{' '}
-              <Text bold color={Colors.accent}>
-                X
-              </Text>{' '}
-              to skip the rest of the main setup and jump to the queued extras.
-            </Text>
-          ) : (
-            <Text dimColor>
-              Enable{' '}
-              <Text bold color={Colors.accent}>
-                {queuePrompt}
-              </Text>{' '}
-              first, then press{' '}
-              <Text bold color={Colors.accent}>
-                X
-              </Text>{' '}
-              to skip the rest of the main setup and jump to the queued extras.
-            </Text>
-          )}
-        </Box>
-      )}
     </Box>
   );
 };

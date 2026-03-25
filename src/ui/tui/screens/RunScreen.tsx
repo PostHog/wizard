@@ -10,7 +10,7 @@
  */
 
 import { useSyncExternalStore } from 'react';
-import { Box, useInput } from 'ink';
+import { Box } from 'ink';
 import type { WizardStore } from '../store.js';
 import {
   TabContainer,
@@ -37,12 +37,6 @@ export const RunScreen = ({ store }: RunScreenProps) => {
     (cb) => store.subscribe(cb),
     () => store.getSnapshot(),
   );
-
-  useInput((input) => {
-    if (input.toLowerCase() === 'x') {
-      store.requestSkipToQueuedFeatures();
-    }
-  });
 
   const [columns] = useStdoutDimensions();
 

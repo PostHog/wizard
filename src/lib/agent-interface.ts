@@ -940,13 +940,6 @@ export async function runAgent(
       },
     });
 
-    getUI().setRunInterruptHandler(async () => {
-      spinner.message(
-        'Wrapping up the main setup and moving to queued extras...',
-      );
-      await response.interrupt();
-    });
-
     // Watch for .posthog-events.json and feed into the store
     const eventPlanPath = path.join(
       agentConfig.workingDirectory,
@@ -1115,7 +1108,6 @@ export async function runAgent(
     debug('Full error:', error);
     throw error;
   } finally {
-    getUI().setRunInterruptHandler(null);
     eventPlanWatcher?.close();
     if (eventPlanInterval) clearInterval(eventPlanInterval);
   }

@@ -314,40 +314,6 @@ describe('WizardStore', () => {
       ]);
     });
 
-    it('requestSkipToQueuedFeatures interrupts the current run once', () => {
-      const store = createStore();
-      const interrupt = jest.fn().mockResolvedValue(undefined);
-
-      store.setRunPhase(RunPhase.Running);
-      store.enableFeature(AdditionalFeature.LLM);
-      store.setRunInterruptHandler(interrupt);
-
-      expect(store.canSkipToQueuedFeatures).toBe(true);
-      expect(store.skipToQueuedFeaturesRequested).toBe(false);
-
-      expect(store.requestSkipToQueuedFeatures()).toBe(true);
-      expect(store.skipToQueuedFeaturesRequested).toBe(true);
-      expect(interrupt).toHaveBeenCalledTimes(1);
-
-      expect(store.requestSkipToQueuedFeatures()).toBe(false);
-      expect(interrupt).toHaveBeenCalledTimes(1);
-    });
-
-    it('clearing the run interrupt handler resets skip state', () => {
-      const store = createStore();
-      const interrupt = jest.fn().mockResolvedValue(undefined);
-
-      store.setRunPhase(RunPhase.Running);
-      store.enableFeature(AdditionalFeature.LLM);
-      store.setRunInterruptHandler(interrupt);
-      store.requestSkipToQueuedFeatures();
-
-      store.setRunInterruptHandler(null);
-
-      expect(store.canSkipToQueuedFeatures).toBe(false);
-      expect(store.skipToQueuedFeaturesRequested).toBe(false);
-    });
-
     it('setMcpComplete fires mcp complete event', () => {
       const store = createStore();
       store.setMcpComplete(McpOutcome.Installed, ['Cursor', 'VS Code']);

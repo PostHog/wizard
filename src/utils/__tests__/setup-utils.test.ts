@@ -34,7 +34,6 @@ jest.mock('../../ui', () => ({
     setReadinessWarnings: jest.fn(),
     showSettingsOverride: jest.fn(),
     startRun: jest.fn(),
-    setRunInterruptHandler: jest.fn(),
     note: jest.fn(),
   }),
 }));

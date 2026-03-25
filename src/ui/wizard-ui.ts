@@ -47,13 +47,6 @@ export interface WizardUI {
   /** Signal that the main work (agent run) has started. */
   startRun(): void;
 
-  /**
-   * Register or clear a live interrupt handler for the current agent run.
-   * The TUI uses this to skip the remainder of the main setup and jump to
-   * any queued follow-up features.
-   */
-  setRunInterruptHandler(handler: (() => Promise<void>) | null): void;
-
   /** Store OAuth/API credentials. Resolves past AuthScreen in TUI. */
   setCredentials(credentials: {
     accessToken: string;
