@@ -13,6 +13,7 @@
 import type { Integration } from './constants';
 import type { FrameworkConfig } from './framework-config';
 import type { WizardReadinessResult } from './health-checks/readiness';
+import type { SettingsConflict } from './agent-interface';
 
 function parseProjectIdArg(value: string | undefined): number | undefined {
   if (value === undefined || value === '') return undefined;
@@ -86,6 +87,7 @@ export interface WizardSession {
   ci: boolean;
   signup: boolean;
   localMcp: boolean;
+  mcpFeatures?: string[];
   apiKey?: string;
   menu: boolean;
   benchmark: boolean;
@@ -136,6 +138,7 @@ export interface WizardSession {
   readinessResult: WizardReadinessResult | null;
   outageDismissed: boolean;
   settingsOverrideKeys: string[] | null;
+  settingsConflicts: SettingsConflict[] | null;
   portConflictProcess: { command: string; pid: string; user: string } | null;
   outroData: OutroData | null;
 
@@ -156,6 +159,7 @@ export function buildSession(args: {
   ci?: boolean;
   signup?: boolean;
   localMcp?: boolean;
+  mcpFeatures?: string[];
   apiKey?: string;
   menu?: boolean;
   integration?: Integration;
@@ -170,6 +174,7 @@ export function buildSession(args: {
     ci: args.ci ?? false,
     signup: args.signup ?? false,
     localMcp: args.localMcp ?? false,
+    mcpFeatures: args.mcpFeatures,
     apiKey: args.apiKey,
     menu: args.menu ?? false,
     benchmark: args.benchmark ?? false,
@@ -195,6 +200,7 @@ export function buildSession(args: {
     readinessResult: null,
     outageDismissed: false,
     settingsOverrideKeys: null,
+    settingsConflicts: null,
     portConflictProcess: null,
     outroData: null,
     additionalFeatureQueue: [],

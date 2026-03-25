@@ -9,6 +9,7 @@ export { ProgressList } from './ProgressList.js';
 export type { ProgressItem } from './ProgressList.js';
 export { PromptLabel } from './PromptLabel.js';
 export { PickerMenu } from './PickerMenu.js';
+export { GroupedPickerMenu } from './GroupedPickerMenu.js';
 export { ConfirmationInput } from './ConfirmationInput.js';
 export { Divider } from './Divider.js';
 export { ModalOverlay } from './ModalOverlay.js';

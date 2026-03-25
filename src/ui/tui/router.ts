@@ -24,7 +24,9 @@ export type { FlowEntry };
 /** Screens that interrupt flows as overlays */
 export enum Overlay {
   SettingsOverride = 'settings-override',
+  ManagedSettings = 'managed-settings',
   PortConflict = 'port-conflict',
+  AuthError = 'auth-error',
 }
 
 /** Union of all screen names */

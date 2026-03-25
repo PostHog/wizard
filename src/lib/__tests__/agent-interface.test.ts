@@ -354,4 +354,32 @@ describe('createStopHook', () => {
     const extra = hook(hookInput); // still allow
     expect(extra).toEqual({});
   });
+
+  it('allows stop immediately on API error (401)', () => {
+    const collectedText = [
+      'Failed to authenticate. API Error: 401 {"detail":"Authentication required"}',
+    ];
+    const hook = createStopHook([AdditionalFeature.LLM], collectedText);
+
+    const result = hook(hookInput);
+    expect(result).toEqual({});
+  });
+
+  it('allows stop immediately on generic API error', () => {
+    const collectedText = ['API Error: 500 Internal Server Error'];
+    const hook = createStopHook([AdditionalFeature.LLM], collectedText);
+
+    const result = hook(hookInput);
+    expect(result).toEqual({});
+  });
+
+  it('proceeds normally when collectedText has no API error', () => {
+    const collectedText = ['Some normal agent output'];
+    const hook = createStopHook([], collectedText);
+
+    // First call → remark prompt (normal behavior)
+    const first = hook(hookInput);
+    expect(first).toHaveProperty('decision', 'block');
+    expect((first as { reason: string }).reason).toContain('WIZARD-REMARK');
+  });
 });

@@ -404,10 +404,19 @@ yargs(hideBin(process.argv))
                 'Add local development MCP server (http://localhost:8787)',
               type: 'boolean',
             },
+            features: {
+              describe:
+                'Comma-separated list of features to enable (default: all)',
+              type: 'string',
+            },
           });
         },
         (argv) => {
           const options = { ...argv };
+          const mcpFeatures = options.features
+            ?.split(',')
+            .map((s) => s.trim())
+            .filter(Boolean);
           void (async () => {
             try {
               const { startTUI } = await import('./src/ui/tui/start-tui.js');
@@ -420,6 +429,7 @@ yargs(hideBin(process.argv))
               const session = buildSession({
                 debug: options.debug,
                 localMcp: options.local,
+                mcpFeatures,
               });
               tui.store.session = session;
             } catch {
@@ -430,6 +440,7 @@ yargs(hideBin(process.argv))
               );
               await addMCPServerToClientsStep({
                 local: options.local,
+                features: mcpFeatures,
               });
             }
           })();
