@@ -92,6 +92,57 @@ const TIPS: Tip[] = [
         ),
     },
   },
+  {
+    id: 'sentry',
+    title: 'We can migrate this project from Sentry to PostHog error tracking',
+    description: '',
+    visible: (store) =>
+      store.session.discoveredFeatures.includes(DiscoveredFeature.Sentry),
+    toggle: {
+      key: 'e',
+      feature: AdditionalFeature.SentryMigration,
+      enabledLabel: 'Sentry migration queued next',
+      prompt: 'We detected Sentry dependencies in your project.',
+      isEnabled: (store) =>
+        store.session.additionalFeatureQueue.includes(
+          AdditionalFeature.SentryMigration,
+        ),
+    },
+  },
+  {
+    id: 'launchdarkly',
+    title: 'We can migrate this project from LaunchDarkly to PostHog feature flags',
+    description: '',
+    visible: (store) =>
+      store.session.discoveredFeatures.includes(DiscoveredFeature.LaunchDarkly),
+    toggle: {
+      key: 'f',
+      feature: AdditionalFeature.LaunchDarklyMigration,
+      enabledLabel: 'LaunchDarkly migration queued next',
+      prompt: 'We detected LaunchDarkly dependencies in your project.',
+      isEnabled: (store) =>
+        store.session.additionalFeatureQueue.includes(
+          AdditionalFeature.LaunchDarklyMigration,
+        ),
+    },
+  },
+  {
+    id: 'braintrust',
+    title: 'We can migrate this project from Braintrust to PostHog LLM analytics',
+    description: '',
+    visible: (store) =>
+      store.session.discoveredFeatures.includes(DiscoveredFeature.Braintrust),
+    toggle: {
+      key: 'b',
+      feature: AdditionalFeature.BraintrustMigration,
+      enabledLabel: 'Braintrust migration queued next',
+      prompt: 'We detected Braintrust dependencies in your project.',
+      isEnabled: (store) =>
+        store.session.additionalFeatureQueue.includes(
+          AdditionalFeature.BraintrustMigration,
+        ),
+    },
+  },
 ];
 
 export const TipsCard = ({ store }: { store: WizardStore }) => {

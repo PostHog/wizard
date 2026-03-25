@@ -31,6 +31,39 @@ const AMPLITUDE_PACKAGES = [
   '@amplitude/unified',
 ];
 
+const SENTRY_PACKAGES = [
+  '@sentry/browser',
+  '@sentry/react',
+  '@sentry/nextjs',
+  '@sentry/node',
+  '@sentry/vue',
+  '@sentry/sveltekit',
+  '@sentry/angular',
+  '@sentry/react-native',
+  '@sentry/capacitor',
+  '@sentry/cloudflare',
+  '@sentry/vercel-edge',
+  '@sentry/astro',
+  '@sentry/nuxt',
+];
+
+const LAUNCHDARKLY_PACKAGES = [
+  'launchdarkly-js-client-sdk',
+  'launchdarkly-react-client-sdk',
+  'launchdarkly-node-server-sdk',
+  'launchdarkly-node-client-sdk',
+  'launchdarkly-vue-client-sdk',
+  '@launchdarkly/node-server-sdk',
+  '@launchdarkly/js-server-sdk-common',
+];
+
+const BRAINTRUST_PACKAGES = [
+  'braintrust',
+  '@braintrust/core',
+  '@braintrust/proxy',
+  'autoevals',
+];
+
 const FEATURE_PACKAGE_MAP: Array<{
   feature: DiscoveredFeature;
   packages: string[];
@@ -46,6 +79,18 @@ const FEATURE_PACKAGE_MAP: Array<{
   {
     feature: DiscoveredFeature.Amplitude,
     packages: AMPLITUDE_PACKAGES,
+  },
+  {
+    feature: DiscoveredFeature.Sentry,
+    packages: SENTRY_PACKAGES,
+  },
+  {
+    feature: DiscoveredFeature.LaunchDarkly,
+    packages: LAUNCHDARKLY_PACKAGES,
+  },
+  {
+    feature: DiscoveredFeature.Braintrust,
+    packages: BRAINTRUST_PACKAGES,
   },
 ];
 

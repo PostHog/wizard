@@ -383,6 +383,57 @@ describe('createStopHook', () => {
     expect(third).toEqual({});
   });
 
+  it('supports the Sentry migration follow-up prompt', () => {
+    const hook = createStopHook([AdditionalFeature.SentryMigration]);
+
+    const first = hook(hookInput);
+    expect(first).toHaveProperty('decision', 'block');
+    expect((first as { reason: string }).reason).toBe(
+      ADDITIONAL_FEATURE_PROMPTS[AdditionalFeature.SentryMigration],
+    );
+
+    const second = hook(hookInput);
+    expect(second).toHaveProperty('decision', 'block');
+    expect((second as { reason: string }).reason).toContain('WIZARD-REMARK');
+
+    const third = hook(hookInput);
+    expect(third).toEqual({});
+  });
+
+  it('supports the LaunchDarkly migration follow-up prompt', () => {
+    const hook = createStopHook([AdditionalFeature.LaunchDarklyMigration]);
+
+    const first = hook(hookInput);
+    expect(first).toHaveProperty('decision', 'block');
+    expect((first as { reason: string }).reason).toBe(
+      ADDITIONAL_FEATURE_PROMPTS[AdditionalFeature.LaunchDarklyMigration],
+    );
+
+    const second = hook(hookInput);
+    expect(second).toHaveProperty('decision', 'block');
+    expect((second as { reason: string }).reason).toContain('WIZARD-REMARK');
+
+    const third = hook(hookInput);
+    expect(third).toEqual({});
+  });
+
+  it('supports the Braintrust migration follow-up prompt', () => {
+    const hook = createStopHook([AdditionalFeature.BraintrustMigration]);
+
+    const first = hook(hookInput);
+    expect(first).toHaveProperty('decision', 'block');
+    expect((first as { reason: string }).reason).toBe(
+      ADDITIONAL_FEATURE_PROMPTS[AdditionalFeature.BraintrustMigration],
+    );
+
+    const second = hook(hookInput);
+    expect(second).toHaveProperty('decision', 'block');
+    expect((second as { reason: string }).reason).toContain('WIZARD-REMARK');
+
+    const third = hook(hookInput);
+    expect(third).toEqual({});
+  });
+
   it('multiple queue entries: drains all, then remark, then allow stop', () => {
     // Queue the same feature twice to exercise multi-item draining
     const hook = createStopHook([AdditionalFeature.LLM, AdditionalFeature.LLM]);

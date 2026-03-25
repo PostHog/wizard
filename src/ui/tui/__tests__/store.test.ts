@@ -306,11 +306,11 @@ describe('WizardStore', () => {
     it('enableFeature queues a newly enabled feature once', () => {
       const store = createStore();
 
-      store.enableFeature(AdditionalFeature.AmplitudeMigration);
-      store.enableFeature(AdditionalFeature.AmplitudeMigration);
+      store.enableFeature(AdditionalFeature.BraintrustMigration);
+      store.enableFeature(AdditionalFeature.BraintrustMigration);
 
       expect(store.session.additionalFeatureQueue).toEqual([
-        AdditionalFeature.AmplitudeMigration,
+        AdditionalFeature.BraintrustMigration,
       ]);
     });
 

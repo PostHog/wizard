@@ -20,17 +20,41 @@ describe('discoverFeaturesFromDependencyNames', () => {
     ).toContain(DiscoveredFeature.Amplitude);
   });
 
+  it('detects Sentry usage from known packages', () => {
+    expect(discoverFeaturesFromDependencyNames(['@sentry/react'])).toContain(
+      DiscoveredFeature.Sentry,
+    );
+  });
+
+  it('detects LaunchDarkly usage from known packages', () => {
+    expect(
+      discoverFeaturesFromDependencyNames(['launchdarkly-react-client-sdk']),
+    ).toContain(DiscoveredFeature.LaunchDarkly);
+  });
+
+  it('detects Braintrust usage from known packages', () => {
+    expect(discoverFeaturesFromDependencyNames(['braintrust'])).toContain(
+      DiscoveredFeature.Braintrust,
+    );
+  });
+
   it('returns multiple discovered features when multiple package families match', () => {
     expect(
       discoverFeaturesFromDependencyNames([
         'stripe',
         '@amplitude/analytics-node',
         '@anthropic-ai/sdk',
+        '@sentry/nextjs',
+        'launchdarkly-js-client-sdk',
+        '@braintrust/core',
       ]),
     ).toEqual([
       DiscoveredFeature.Stripe,
       DiscoveredFeature.LLM,
       DiscoveredFeature.Amplitude,
+      DiscoveredFeature.Sentry,
+      DiscoveredFeature.LaunchDarkly,
+      DiscoveredFeature.Braintrust,
     ]);
   });
 
