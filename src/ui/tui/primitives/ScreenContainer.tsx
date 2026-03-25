@@ -45,7 +45,11 @@ export const ScreenContainer = ({ store, screens }: ScreenContainerProps) => {
 
   const inner = (
     <Box flexDirection="column" height={rows} width={width}>
-      <TitleBar version={store.version} width={width} />
+      <TitleBar
+        version={store.version}
+        width={width}
+        provider={store.session.agentProvider}
+      />
       <Box height={1} />
       <Box flexDirection="column" flexGrow={1} paddingX={1}>
         <DissolveTransition

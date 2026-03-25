@@ -327,9 +327,9 @@ export async function getOrAskForProjectData(
   projectId: number;
   cloudRegion: CloudRegion;
 }> {
-  // CI mode: bypass OAuth, use personal API key for LLM gateway
-  if (_options.ci && _options.apiKey) {
-    getUI().log.info('Using provided API key (CI mode - OAuth bypassed)');
+  // Bypass OAuth when a personal API key is provided
+  if (_options.apiKey) {
+    getUI().log.info('Using provided API key (OAuth bypassed)');
 
     const cloudRegion = await detectRegionFromToken(_options.apiKey);
     const host = getHostFromRegion(cloudRegion);

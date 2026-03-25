@@ -7,6 +7,7 @@ import {
 } from './types';
 import {
   checkAnthropicHealth,
+  checkOpenAIHealth,
   checkPosthogOverallHealth,
   checkPosthogComponentHealth,
   checkGithubHealth,
@@ -28,6 +29,7 @@ import { logToFile } from '../../utils/debug';
 
 export const SERVICE_LABELS: Record<HealthCheckKey, string> = {
   anthropic: 'Anthropic',
+  openai: 'OpenAI',
   posthogOverall: 'PostHog',
   posthogComponents: 'PostHog (components)',
   github: 'GitHub',
@@ -51,6 +53,9 @@ export interface WizardReadinessConfig {
   degradedBlocksRun?: HealthCheckKey[];
 }
 
+export type ReadinessProvider = 'claude' | 'openai';
+export type OpenAIReadinessMode = 'posthog_gateway' | 'direct_openai';
+
 /**
  * See README section "Health checks" for the full rationale.
  * Adjust these arrays to change what blocks a wizard run.
@@ -67,6 +72,30 @@ export const DEFAULT_WIZARD_READINESS_CONFIG: WizardReadinessConfig = {
   degradedBlocksRun: ['anthropic'],
 };
 
+export function getReadinessConfigForProvider(
+  provider: ReadinessProvider,
+  options?: {
+    openaiMode?: OpenAIReadinessMode;
+  },
+): WizardReadinessConfig {
+  if (provider !== 'openai') {
+    return DEFAULT_WIZARD_READINESS_CONFIG;
+  }
+
+  const useGateway = options?.openaiMode !== 'direct_openai';
+  return {
+    downBlocksRun: [
+      'openai',
+      'posthogOverall',
+      'npmOverall',
+      ...(useGateway ? (['llmGateway'] as HealthCheckKey[]) : []),
+      'mcp',
+      'githubReleases',
+    ],
+    degradedBlocksRun: ['openai'],
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Aggregate check
 // ---------------------------------------------------------------------------
@@ -74,6 +103,7 @@ export const DEFAULT_WIZARD_READINESS_CONFIG: WizardReadinessConfig = {
 export async function checkAllExternalServices(): Promise<AllServicesHealth> {
   const [
     anthropic,
+    openai,
     posthogOverall,
     posthogComponents,
     github,
@@ -86,6 +116,7 @@ export async function checkAllExternalServices(): Promise<AllServicesHealth> {
     githubReleases,
   ] = await Promise.all([
     checkAnthropicHealth(),
+    checkOpenAIHealth(),
     checkPosthogOverallHealth(),
     checkPosthogComponentHealth(),
     checkGithubHealth(),
@@ -100,6 +131,7 @@ export async function checkAllExternalServices(): Promise<AllServicesHealth> {
 
   return {
     anthropic,
+    openai,
     posthogOverall,
     posthogComponents,
     github,
@@ -254,6 +286,7 @@ function allUnknown(error: string): AllServicesHealth {
   };
   return {
     anthropic: base,
+    openai: base,
     posthogOverall: base,
     posthogComponents: { ...base },
     github: base,

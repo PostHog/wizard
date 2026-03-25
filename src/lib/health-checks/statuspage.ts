@@ -123,6 +123,9 @@ async function fetchStatuspageSummary(
 export const checkAnthropicHealth = (): Promise<BaseHealthResult> =>
   fetchStatuspageIndicator('https://status.claude.com/api/v2/status.json');
 
+export const checkOpenAIHealth = (): Promise<BaseHealthResult> =>
+  fetchStatuspageIndicator('https://status.openai.com/api/v2/status.json');
+
 export const checkPosthogOverallHealth = (): Promise<BaseHealthResult> =>
   fetchStatuspageIndicator('https://www.posthogstatus.com/api/v2/status.json');
 

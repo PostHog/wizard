@@ -22,6 +22,7 @@ export interface ComponentHealthResult extends BaseHealthResult {
 
 export interface AllServicesHealth {
   anthropic: BaseHealthResult;
+  openai: BaseHealthResult;
   posthogOverall: BaseHealthResult;
   posthogComponents: ComponentHealthResult;
   github: BaseHealthResult;

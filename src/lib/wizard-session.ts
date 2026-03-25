@@ -22,6 +22,20 @@ function parseProjectIdArg(value: string | undefined): number | undefined {
 }
 
 export type CloudRegion = 'us' | 'eu';
+export type AgentProvider = 'claude' | 'openai';
+export type OpenAIAuthMode = 'posthog_gateway' | 'direct_openai';
+
+function parseAgentProvider(): AgentProvider {
+  return process.env.WIZARD_AGENT_PROVIDER?.toLowerCase() === 'openai'
+    ? 'openai'
+    : 'claude';
+}
+
+function parseOpenAIAuthMode(): OpenAIAuthMode {
+  return process.env.WIZARD_OPENAI_API_KEY || process.env.OPENAI_API_KEY
+    ? 'direct_openai'
+    : 'posthog_gateway';
+}
 
 /** Lifecycle phase of the main work (agent run, MCP install, etc.) */
 export enum RunPhase {
@@ -93,6 +107,8 @@ export interface WizardSession {
   benchmark: boolean;
   yaraReport: boolean;
   projectId?: number;
+  agentProvider: AgentProvider;
+  openaiAuthMode: OpenAIAuthMode;
 
   // From detection + screens
   setupConfirmed: boolean;
@@ -180,6 +196,8 @@ export function buildSession(args: {
     benchmark: args.benchmark ?? false,
     yaraReport: args.yaraReport ?? false,
     projectId: parseProjectIdArg(args.projectId),
+    agentProvider: parseAgentProvider(),
+    openaiAuthMode: parseOpenAIAuthMode(),
 
     setupConfirmed: false,
     integration: args.integration ?? null,

@@ -22,6 +22,7 @@ const HEALTHY = { status: ServiceHealthStatus.Healthy } as const;
 
 const MOCK_HEALTH: AllServicesHealth = {
   anthropic: { status: ServiceHealthStatus.Down, rawIndicator: 'major' },
+  openai: HEALTHY,
   posthogOverall: HEALTHY,
   posthogComponents: { status: ServiceHealthStatus.Healthy },
   github: HEALTHY,

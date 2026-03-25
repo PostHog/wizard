@@ -151,6 +151,32 @@ users of the wizard, no training delays or other ambiguity.
 
 ## Running locally
 
+### Experimental OpenAI runner
+
+The wizard uses the Claude runner by default. To use the experimental OpenAI
+Agents SDK path instead, set:
+
+```bash
+export WIZARD_AGENT_PROVIDER=openai
+export OPENAI_MODEL=gpt-5.4
+```
+
+By default this uses the same PostHog login or personal API key flow as the
+Claude runner and routes requests through the PostHog LLM gateway. You do not
+need to set an OpenAI API key for that path.
+
+Optional direct OpenAI-compatible override:
+
+```bash
+export WIZARD_OPENAI_API_KEY=your_openai_api_key
+export OPENAI_BASE_URL=https://your-openai-compatible-endpoint
+```
+
+You can use `OPENAI_API_KEY` instead of `WIZARD_OPENAI_API_KEY`. If either
+OpenAI API key variable is set, the wizard will use that credential directly
+instead of the PostHog gateway. `WIZARD_OPENAI_API_KEY` overrides
+`OPENAI_API_KEY` when both are set.
+
 ### Quick test without linking
 
 ```bash

@@ -19,6 +19,7 @@ import {
   runAgent,
   AgentSignals,
   AgentErrorType,
+  getWizardAgentProvider,
   buildWizardMetadata,
   checkAllSettingsConflicts,
   backupAndFixClaudeSettings,
@@ -29,6 +30,7 @@ import { getCloudUrlFromRegion } from '../utils/urls';
 import * as semver from 'semver';
 import {
   evaluateWizardReadiness,
+  getReadinessConfigForProvider,
   WizardReadiness,
 } from './health-checks/readiness';
 import { enableDebugLogs, initLogFile, logToFile } from '../utils/debug';
@@ -106,11 +108,16 @@ export async function runAgentWizard(
   const skillsBaseUrl = session.localMcp
     ? 'http://localhost:8765'
     : 'https://github.com/PostHog/context-mill/releases/latest/download';
+  const agentProvider = getWizardAgentProvider();
 
   // Check all external service health (skip if TUI already ran it in bin.ts)
   if (!session.readinessResult) {
     logToFile('[agent-runner] evaluating wizard readiness');
-    const readiness = await evaluateWizardReadiness();
+    const readiness = await evaluateWizardReadiness(
+      getReadinessConfigForProvider(agentProvider, {
+        openaiMode: session.openaiAuthMode,
+      }),
+    );
     logToFile(`[agent-runner] readiness=${readiness.decision}`);
     if (readiness.decision === WizardReadiness.No) {
       await getUI().showBlockingOutage(readiness);
@@ -120,7 +127,10 @@ export async function runAgentWizard(
   }
 
   // Check ALL settings sources for blocking overrides before login.
-  const settingsConflicts = checkAllSettingsConflicts(session.installDir);
+  const settingsConflicts =
+    agentProvider === 'claude'
+      ? checkAllSettingsConflicts(session.installDir)
+      : [];
   logToFile(
     `[agent-runner] settings conflicts: ${
       settingsConflicts.length > 0
@@ -237,8 +247,10 @@ export async function runAgentWizard(
         ? 'https://mcp-eu.posthog.com/mcp'
         : 'https://mcp.posthog.com/mcp');
 
-  const restoreSettings = () => restoreClaudeSettings(session.installDir);
-  getUI().onEnterScreen('outro', restoreSettings);
+  if (agentProvider === 'claude') {
+    const restoreSettings = () => restoreClaudeSettings(session.installDir);
+    getUI().onEnterScreen('outro', restoreSettings);
+  }
 
   // Register YARA report as cleanup so it fires on any exit path (including wizardAbort)
   if (session.yaraReport) {
@@ -268,9 +280,15 @@ export async function runAgentWizard(
     sessionToOptions(session),
   );
 
-  const middleware = session.benchmark
-    ? createBenchmarkPipeline(spinner, sessionToOptions(session))
-    : undefined;
+  const middleware =
+    session.benchmark && agentProvider === 'claude'
+      ? createBenchmarkPipeline(spinner, sessionToOptions(session))
+      : undefined;
+  if (session.benchmark && agentProvider === 'openai') {
+    getUI().log.warn(
+      'Benchmark mode is currently only wired for the Claude runner. Continuing without benchmark output.',
+    );
+  }
 
   const agentResult = await runAgent(
     agent,
@@ -417,7 +435,7 @@ function buildIntegrationPrompt(
       ? '\n' + additionalLines.map((line) => `- ${line}`).join('\n')
       : '';
 
-  return `You have access to the PostHog MCP server which provides skills to integrate PostHog into this ${
+  return `You have access to PostHog tools and local wizard tools to integrate PostHog into this ${
     config.metadata.name
   } project.
 
@@ -434,7 +452,7 @@ Project context:
 
 Instructions (follow these steps IN ORDER - do not skip or reorder):
 
-STEP 1: Call load_skill_menu (from the wizard-tools MCP server) to see available skills.
+STEP 1: Call load_skill_menu from the wizard tools to see available skills.
    If the tool fails, emit: ${
      AgentSignals.ERROR_MCP_MISSING
    } Could not load skill menu and halt.
@@ -444,21 +462,21 @@ STEP 1: Call load_skill_menu (from the wizard-tools MCP server) to see available
      AgentSignals.ERROR_RESOURCE_MISSING
    } Could not find a suitable skill for this project.
 
-STEP 2: Call install_skill (from the wizard-tools MCP server) with the chosen skill ID (e.g., "integration-nextjs-app-router").
+STEP 2: Call install_skill from the wizard tools with the chosen skill ID (e.g., "integration-nextjs-app-router").
    Do NOT run any shell commands to install skills.
 
 STEP 3: Load the installed skill's SKILL.md file to understand what references are available.
 
 STEP 4: Follow the skill's workflow files in sequence. Look for numbered workflow files in the references (e.g., files with patterns like "1.0-", "1.1-", "1.2-"). Start with the first one and proceed through each step until completion. Each workflow file will tell you what to do and which file comes next. Never directly write PostHog tokens directly to code files; always use environment variables.
 
-STEP 5: Set up environment variables for PostHog using the wizard-tools MCP server (this runs locally — secret values never leave the machine):
+STEP 5: Set up environment variables for PostHog using the wizard tools (this runs locally — secret values never leave the machine):
    - Use check_env_keys to see which keys already exist in the project's .env file (e.g. .env.local or .env).
    - Use set_env_values to create or update the PostHog public token and host, using the appropriate environment variable naming convention for ${
      config.metadata.name
    }, which you'll find in example code. The tool will also ensure .gitignore coverage. Don't assume the presence of keys means the value is up to date. Write the correct value each time.
    - Reference these environment variables in the code files you create instead of hardcoding the public token and host.
 
-Important: Use the detect_package_manager tool (from the wizard-tools MCP server) to determine which package manager the project uses. Do not manually search for lockfiles or config files. Always install packages as a background task. Don't await completion; proceed with other work immediately after starting the installation. You must read a file immediately before attempting to write it, even if you have previously read it; failure to do so will cause a tool failure.
+Important: Use the detect_package_manager tool from the wizard tools to determine which package manager the project uses. Do not manually search for lockfiles or config files. Always install packages as a background task. Don't await completion; proceed with other work immediately after starting the installation. You must read a file immediately before attempting to write it, even if you have previously read it; failure to do so will cause a tool failure.
 
 
 `;

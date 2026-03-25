@@ -32,6 +32,7 @@ import {
 import { analytics, sessionProperties } from '../../utils/analytics.js';
 import {
   evaluateWizardReadiness,
+  getReadinessConfigForProvider,
   WizardReadiness,
 } from '../../lib/health-checks/readiness.js';
 
@@ -115,7 +116,11 @@ export class WizardStore {
    * health gate if non-blocking.
    */
   private _initHealthCheck(): void {
-    evaluateWizardReadiness()
+    evaluateWizardReadiness(
+      getReadinessConfigForProvider(this.session.agentProvider, {
+        openaiMode: this.session.openaiAuthMode,
+      }),
+    )
       .then((readiness) => {
         this.setReadinessResult(readiness);
         if (readiness.decision !== WizardReadiness.No) {

@@ -23,19 +23,34 @@ jest.mock('../../../utils/analytics.js', () => ({
   sessionProperties: jest.fn(() => ({})),
 }));
 
-jest.mock('../../../lib/health-checks/readiness.js', () => ({
-  evaluateWizardReadiness: jest.fn().mockResolvedValue({
+jest.mock('../../../lib/health-checks/readiness.js', () => {
+  const evaluateWizardReadiness = jest.fn().mockResolvedValue({
     decision: 'yes',
     health: {},
     reasons: [],
-  }),
-  WizardReadiness: {
-    Yes: 'yes',
-    No: 'no',
-    YesWithWarnings: 'yes-with-warnings',
-  },
-  SERVICE_LABELS: {},
-}));
+  });
+  const getReadinessConfigForProvider = jest.fn(() => ({
+    downBlocksRun: [],
+  }));
+
+  return {
+    evaluateWizardReadiness,
+    getReadinessConfigForProvider,
+    WizardReadiness: {
+      Yes: 'yes',
+      No: 'no',
+      YesWithWarnings: 'yes-with-warnings',
+    },
+    SERVICE_LABELS: {},
+  };
+});
+
+const readinessMocks = jest.requireMock(
+  '../../../lib/health-checks/readiness.js',
+);
+const mockEvaluateWizardReadiness = readinessMocks.evaluateWizardReadiness;
+const mockGetReadinessConfigForProvider =
+  readinessMocks.getReadinessConfigForProvider;
 
 function createStore(flow?: Flow): WizardStore {
   return new WizardStore(flow);
@@ -46,6 +61,9 @@ const wizardCaptureMock = analytics.wizardCapture as jest.Mock;
 describe('WizardStore', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    delete process.env.WIZARD_AGENT_PROVIDER;
+    delete process.env.WIZARD_OPENAI_API_KEY;
+    delete process.env.OPENAI_API_KEY;
   });
   // ── Construction ─────────────────────────────────────────────────
 
@@ -72,6 +90,16 @@ describe('WizardStore', () => {
       const store = createStore();
       expect(store.getVersion()).toBe(0);
       expect(store.getSnapshot()).toBe(0);
+    });
+
+    it('uses provider-aware readiness config during startup health checks', () => {
+      process.env.WIZARD_AGENT_PROVIDER = 'openai';
+      createStore();
+
+      expect(mockGetReadinessConfigForProvider).toHaveBeenCalledWith('openai', {
+        openaiMode: 'posthog_gateway',
+      });
+      expect(mockEvaluateWizardReadiness).toHaveBeenCalled();
     });
   });
 

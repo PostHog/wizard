@@ -1,6 +1,6 @@
 /**
  * Shared agent interface for PostHog wizards
- * Uses Claude Agent SDK directly with PostHog LLM gateway
+ * Uses Claude Agent SDK by default, with an experimental OpenAI Agents SDK path.
  */
 
 import path from 'path';
@@ -29,6 +29,8 @@ import { createCustomHeaders } from '../utils/custom-headers';
 import { getLlmGatewayUrlFromHost } from '../utils/urls';
 import { LINTING_TOOLS } from './safe-tools';
 import { createWizardToolsServer, WIZARD_TOOL_NAMES } from './wizard-tools';
+import { createOpenAIFunctionTools } from './openai-function-tools';
+import { applyOpenAIResponsesUsageCompatPatch } from './openai-sdk-compat';
 import {
   createPreToolUseYaraHooks,
   createPostToolUseYaraHooks,
@@ -45,6 +47,22 @@ async function getSDKModule(): Promise<any> {
   return _sdkModule;
 }
 
+let _openaiSdkModule: any = null;
+async function getOpenAISDKModule(): Promise<any> {
+  if (!_openaiSdkModule) {
+    _openaiSdkModule = await import('@openai/agents');
+  }
+  return _openaiSdkModule;
+}
+
+let _openaiClientModule: any = null;
+async function getOpenAIClientModule(): Promise<any> {
+  if (!_openaiClientModule) {
+    _openaiClientModule = await import('openai');
+  }
+  return _openaiClientModule;
+}
+
 /**
  * Get the path to the bundled Claude Code CLI from the SDK package.
  * This ensures we use the SDK's bundled version rather than the user's installed Claude Code.
@@ -59,6 +77,8 @@ function getClaudeCodeExecutablePath(): string {
 // syntax which prettier cannot parse. See PR discussion for details.
 type SDKMessage = any;
 type McpServersConfig = any;
+
+export type AgentProvider = 'claude' | 'openai';
 
 export const AgentSignals = {
   /** Signal emitted when the agent reports progress to the user */
@@ -90,6 +110,66 @@ export enum AgentErrorType {
   API_ERROR = 'WIZARD_API_ERROR',
   /** YARA scanner detected a security violation */
   YARA_VIOLATION = 'WIZARD_YARA_VIOLATION',
+}
+
+export function getWizardAgentProvider(): AgentProvider {
+  const provider = process.env.WIZARD_AGENT_PROVIDER?.toLowerCase();
+  return provider === 'openai' ? 'openai' : 'claude';
+}
+
+export function getOpenAIRunnerConfig(config: {
+  posthogApiKey: string;
+  posthogApiHost: string;
+}): {
+  apiKey: string;
+  baseURL?: string;
+  model: string;
+  maxTurns: number;
+  authMode: 'posthog_gateway' | 'direct_openai';
+} {
+  const directApiKey =
+    process.env.WIZARD_OPENAI_API_KEY || process.env.OPENAI_API_KEY;
+  const directBaseURL = process.env.OPENAI_BASE_URL;
+  const maxTurns = getOpenAIMaxTurns();
+
+  if (directApiKey) {
+    return {
+      apiKey: directApiKey,
+      baseURL: directBaseURL,
+      model: process.env.OPENAI_MODEL || 'gpt-5.4',
+      maxTurns,
+      authMode: 'direct_openai',
+    };
+  }
+
+  if (directBaseURL) {
+    throw new Error(
+      'OPENAI_BASE_URL was provided without OPENAI_API_KEY or WIZARD_OPENAI_API_KEY. Set both to bypass the PostHog gateway, or unset OPENAI_BASE_URL to use the default PostHog-authenticated OpenAI path.',
+    );
+  }
+
+  return {
+    apiKey: config.posthogApiKey,
+    baseURL: getLlmGatewayUrlFromHost(config.posthogApiHost),
+    model: process.env.OPENAI_MODEL || 'gpt-5.4',
+    maxTurns,
+    authMode: 'posthog_gateway',
+  };
+}
+
+export function getOpenAIMaxTurns(): number {
+  const rawValue =
+    process.env.WIZARD_OPENAI_MAX_TURNS || process.env.OPENAI_MAX_TURNS;
+  if (!rawValue) {
+    return 50;
+  }
+
+  const parsed = Number(rawValue);
+  if (!Number.isInteger(parsed) || parsed < 1) {
+    return 50;
+  }
+
+  return parsed;
 }
 
 const BLOCKING_ENV_KEYS = [
@@ -345,9 +425,13 @@ export function createStopHook(
  * Internal configuration object returned by initializeAgent
  */
 type AgentRunConfig = {
+  provider?: AgentProvider;
   workingDirectory: string;
-  mcpServers: McpServersConfig;
   model: string;
+  maxTurns?: number;
+  mcpServers: McpServersConfig;
+  agent?: any;
+  runner?: any;
   wizardFlags?: Record<string, string>;
   wizardMetadata?: Record<string, string>;
 };
@@ -365,13 +449,10 @@ export function buildWizardMetadata(
   return { ...variant };
 }
 
-/**
- * Build env for the SDK subprocess: process.env plus ANTHROPIC_CUSTOM_HEADERS from wizard metadata/flags.
- */
-function buildAgentEnv(
+function buildWizardHeaders(
   wizardMetadata: Record<string, string>,
   wizardFlags: Record<string, string>,
-): string {
+): ReturnType<typeof createCustomHeaders> {
   const headers = createCustomHeaders();
   for (const [key, value] of Object.entries(wizardMetadata)) {
     headers.add(
@@ -385,9 +466,57 @@ function buildAgentEnv(
     if (!flagKey.toLowerCase().startsWith('wizard')) continue;
     headers.addFlag(flagKey, variant);
   }
+  return headers;
+}
+
+/**
+ * Build env for the SDK subprocess: process.env plus ANTHROPIC_CUSTOM_HEADERS from wizard metadata/flags.
+ */
+function buildAgentEnv(
+  wizardMetadata: Record<string, string>,
+  wizardFlags: Record<string, string>,
+): string {
+  const headers = buildWizardHeaders(wizardMetadata, wizardFlags);
   const encoded = headers.encode();
   logToFile('ANTHROPIC_CUSTOM_HEADERS', encoded);
   return encoded;
+}
+
+function buildOpenAIDefaultHeaders(
+  wizardMetadata: Record<string, string>,
+  wizardFlags: Record<string, string>,
+): Record<string, string> {
+  const headers = buildWizardHeaders(wizardMetadata, wizardFlags);
+  const objectHeaders = headers.toObject();
+  logToFile('OPENAI_DEFAULT_HEADERS', JSON.stringify(objectHeaders, null, 2));
+  return objectHeaders;
+}
+
+function buildOpenAIInstructions(): string {
+  return [
+    'You are the PostHog Wizard coding agent.',
+    'Use the provided file tools for reading, searching, and editing the local project.',
+    'Prefer Read, Grep, and Glob over Bash for code inspection.',
+    `Report notable phase changes using lines that begin exactly with ${AgentSignals.STATUS}.`,
+    getWizardCommandments(),
+  ].join('\n');
+}
+
+function captureWizardRemark(outputText: string): void {
+  const remarkRegex = new RegExp(
+    `${AgentSignals.WIZARD_REMARK.replace(
+      /[.*+?^${}()|[\]\\]/g,
+      '\\$&',
+    )}\\s*(.+?)(?:\\n|$)`,
+    's',
+  );
+  const remarkMatch = outputText.match(remarkRegex);
+  if (remarkMatch && remarkMatch[1]) {
+    const remark = remarkMatch[1].trim();
+    if (remark) {
+      analytics.capture(WIZARD_REMARK_EVENT_NAME, { remark });
+    }
+  }
 }
 
 /**
@@ -595,80 +724,209 @@ export function wizardCanUseTool(
   };
 }
 
-/**
- * Initialize agent configuration for the LLM gateway
- */
-export async function initializeAgent(
+async function initializeClaudeAgent(
   config: AgentConfig,
   options: WizardOptions,
 ): Promise<AgentRunConfig> {
-  // Initialize log file for this run
-  initLogFile();
-  logToFile('Agent initialization starting');
-  logToFile('Install directory:', options.installDir);
-
   getUI().log.step('Initializing Claude agent...');
 
-  try {
-    // Configure LLM gateway environment variables (inherited by SDK subprocess)
-    const gatewayUrl = getLlmGatewayUrlFromHost(config.posthogApiHost);
-    process.env.ANTHROPIC_BASE_URL = gatewayUrl;
-    process.env.ANTHROPIC_AUTH_TOKEN = config.posthogApiKey;
-    // Use CLAUDE_CODE_OAUTH_TOKEN to override any stored /login credentials
-    process.env.CLAUDE_CODE_OAUTH_TOKEN = config.posthogApiKey;
-    // Disable experimental betas (like input_examples) that the LLM gateway doesn't support
-    process.env.CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS = 'true';
+  const gatewayUrl = getLlmGatewayUrlFromHost(config.posthogApiHost);
+  process.env.ANTHROPIC_BASE_URL = gatewayUrl;
+  process.env.ANTHROPIC_AUTH_TOKEN = config.posthogApiKey;
+  process.env.CLAUDE_CODE_OAUTH_TOKEN = config.posthogApiKey;
+  process.env.CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS = 'true';
 
-    logToFile('Configured LLM gateway:', gatewayUrl);
+  logToFile('Configured LLM gateway:', gatewayUrl);
 
-    // Configure MCP server with PostHog authentication
-    const mcpServers: McpServersConfig = {
-      'posthog-wizard': {
-        type: 'http',
-        url: config.posthogMcpUrl,
-        headers: {
-          Authorization: `Bearer ${config.posthogApiKey}`,
-          'User-Agent': WIZARD_USER_AGENT,
-        },
+  const mcpServers: McpServersConfig = {
+    'posthog-wizard': {
+      type: 'http',
+      url: config.posthogMcpUrl,
+      headers: {
+        Authorization: `Bearer ${config.posthogApiKey}`,
+        'User-Agent': WIZARD_USER_AGENT,
       },
-      ...Object.fromEntries(
-        Object.entries(config.additionalMcpServers ?? {}).map(
-          ([name, { url }]) => [name, { type: 'http', url }],
-        ),
+    },
+    ...Object.fromEntries(
+      Object.entries(config.additionalMcpServers ?? {}).map(
+        ([name, { url }]) => [name, { type: 'http', url }],
       ),
-    };
+    ),
+  };
 
-    // Add in-process wizard tools (env files, package manager detection, skill loading)
-    const wizardToolsServer = await createWizardToolsServer({
-      workingDirectory: config.workingDirectory,
-      detectPackageManager: config.detectPackageManager,
-      skillsBaseUrl: config.skillsBaseUrl,
-    });
-    mcpServers['wizard-tools'] = wizardToolsServer;
+  const wizardToolsServer = await createWizardToolsServer({
+    workingDirectory: config.workingDirectory,
+    detectPackageManager: config.detectPackageManager,
+    skillsBaseUrl: config.skillsBaseUrl,
+  });
+  mcpServers['wizard-tools'] = wizardToolsServer;
 
-    const agentRunConfig: AgentRunConfig = {
-      workingDirectory: config.workingDirectory,
-      mcpServers,
-      model: 'anthropic/claude-sonnet-4-6',
-      wizardFlags: config.wizardFlags,
-      wizardMetadata: config.wizardMetadata,
-    };
+  const agentRunConfig: AgentRunConfig = {
+    provider: 'claude',
+    workingDirectory: config.workingDirectory,
+    mcpServers,
+    model: 'anthropic/claude-sonnet-4-6',
+    wizardFlags: config.wizardFlags,
+    wizardMetadata: config.wizardMetadata,
+  };
 
-    logToFile('Agent config:', {
+  logToFile('Claude agent config:', {
+    workingDirectory: agentRunConfig.workingDirectory,
+    posthogMcpUrl: config.posthogMcpUrl,
+    gatewayUrl,
+    apiKeyPresent: !!config.posthogApiKey,
+  });
+
+  if (options.debug) {
+    debug('Claude agent config:', {
       workingDirectory: agentRunConfig.workingDirectory,
       posthogMcpUrl: config.posthogMcpUrl,
       gatewayUrl,
       apiKeyPresent: !!config.posthogApiKey,
     });
+  }
 
-    if (options.debug) {
-      debug('Agent config:', {
-        workingDirectory: agentRunConfig.workingDirectory,
-        posthogMcpUrl: config.posthogMcpUrl,
-        gatewayUrl,
-        apiKeyPresent: !!config.posthogApiKey,
-      });
-    }
+  return agentRunConfig;
+}
+
+async function initializeOpenAIAgent(
+  config: AgentConfig,
+  options: WizardOptions,
+): Promise<AgentRunConfig> {
+  const openAISDK = await getOpenAISDKModule();
+  applyOpenAIResponsesUsageCompatPatch(openAISDK);
+  const { Agent, Runner, MCPServerStreamableHttp, OpenAIProvider, tool } =
+    openAISDK;
+  const { default: OpenAI } = await getOpenAIClientModule();
+  const openaiConfig = getOpenAIRunnerConfig(config);
+
+  getUI().log.step(`Initializing OpenAI agent (${openaiConfig.model})...`);
+
+  const mcpServers = [
+    new MCPServerStreamableHttp({
+      name: 'posthog-wizard',
+      url: config.posthogMcpUrl,
+      requestInit: {
+        headers: {
+          Authorization: `Bearer ${config.posthogApiKey}`,
+          'User-Agent': WIZARD_USER_AGENT,
+        },
+      },
+    }),
+    ...Object.entries(config.additionalMcpServers ?? {}).map(
+      ([name, { url }]) =>
+        new MCPServerStreamableHttp({
+          name,
+          url,
+        }),
+    ),
+  ];
+
+  await Promise.all(mcpServers.map((server: any) => server.connect()));
+
+  const tools = await createOpenAIFunctionTools({
+    tool,
+    workingDirectory: config.workingDirectory,
+    detectPackageManager: config.detectPackageManager,
+    skillsBaseUrl: config.skillsBaseUrl,
+    checkToolAccess: (toolName, input) => {
+      const result = wizardCanUseTool(toolName, input);
+      if (result.behavior === 'deny') {
+        throw new Error(result.message);
+      }
+    },
+    mcpMissingSignal: AgentSignals.ERROR_MCP_MISSING,
+  });
+
+  const openaiClient = new OpenAI({
+    apiKey: openaiConfig.apiKey,
+    baseURL: openaiConfig.baseURL,
+    defaultHeaders:
+      openaiConfig.authMode === 'posthog_gateway'
+        ? buildOpenAIDefaultHeaders(
+            config.wizardMetadata ?? {},
+            config.wizardFlags ?? {},
+          )
+        : undefined,
+  });
+
+  const provider = new OpenAIProvider({
+    openAIClient: openaiClient,
+    useResponses: true,
+  });
+
+  const agent = new Agent({
+    name: 'PostHog Wizard',
+    instructions: buildOpenAIInstructions(),
+    model: openaiConfig.model,
+    modelSettings: {
+      parallelToolCalls: false,
+      reasoning: { effort: 'low' },
+      text: { verbosity: 'low' },
+    },
+    tools,
+    mcpServers,
+  });
+
+  const runner = new Runner({
+    modelProvider: provider,
+    tracingDisabled: true,
+    workflowName: 'posthog-wizard',
+  });
+
+  const agentRunConfig: AgentRunConfig = {
+    provider: 'openai',
+    workingDirectory: config.workingDirectory,
+    mcpServers,
+    agent,
+    runner,
+    model: openaiConfig.model,
+    maxTurns: openaiConfig.maxTurns,
+    wizardFlags: config.wizardFlags,
+    wizardMetadata: config.wizardMetadata,
+  };
+
+  logToFile('OpenAI agent config:', {
+    workingDirectory: agentRunConfig.workingDirectory,
+    posthogMcpUrl: config.posthogMcpUrl,
+    model: openaiConfig.model,
+    maxTurns: openaiConfig.maxTurns,
+    apiKeyPresent: !!openaiConfig.apiKey,
+    baseURL: openaiConfig.baseURL,
+    authMode: openaiConfig.authMode,
+  });
+
+  if (options.debug) {
+    debug('OpenAI agent config:', {
+      workingDirectory: agentRunConfig.workingDirectory,
+      posthogMcpUrl: config.posthogMcpUrl,
+      model: openaiConfig.model,
+      maxTurns: openaiConfig.maxTurns,
+      apiKeyPresent: !!openaiConfig.apiKey,
+      baseURL: openaiConfig.baseURL,
+      authMode: openaiConfig.authMode,
+    });
+  }
+
+  return agentRunConfig;
+}
+
+/**
+ * Initialize agent configuration for the selected provider.
+ */
+export async function initializeAgent(
+  config: AgentConfig,
+  options: WizardOptions,
+): Promise<AgentRunConfig> {
+  initLogFile();
+  logToFile('Agent initialization starting');
+  logToFile('Install directory:', options.installDir);
+
+  try {
+    const agentRunConfig =
+      getWizardAgentProvider() === 'openai'
+        ? await initializeOpenAIAgent(config, options)
+        : await initializeClaudeAgent(config, options);
 
     getUI().log.step(`Verbose logs: ${getLogFilePath()}`);
     getUI().log.success("Agent initialized. Let's get cooking!");
@@ -693,6 +951,7 @@ function checkYaraViolation(
 ): { error: AgentErrorType } | null {
   if (
     outputText.includes('[YARA CRITICAL]') ||
+    outputText.includes('[YARA VIOLATION]') ||
     outputText.includes('[YARA] Scanner error')
   ) {
     logToFile('Agent error: YARA_VIOLATION');
@@ -708,7 +967,275 @@ function checkYaraViolation(
  *
  * @returns An object containing any error detected in the agent's output
  */
+function handleOpenAIStreamEvent(
+  event: any,
+  options: WizardOptions,
+  spinner: SpinnerHandle,
+  collectedText: string[],
+): void {
+  logToFile(
+    `OpenAI Stream Event: ${event.type}`,
+    JSON.stringify(event, null, 2),
+  );
+
+  if (options.debug) {
+    debug(`OpenAI stream event type: ${event.type}`);
+  }
+
+  if (event.type !== 'run_item_stream_event') {
+    return;
+  }
+
+  if (event.name !== 'message_output_created') {
+    return;
+  }
+
+  const rawItem = event.item?.rawItem;
+  const content = rawItem?.content;
+  if (!Array.isArray(content)) {
+    return;
+  }
+
+  for (const block of content) {
+    if (block.type !== 'output_text' || typeof block.text !== 'string') {
+      continue;
+    }
+
+    collectedText.push(block.text);
+
+    const statusRegex = new RegExp(
+      `^.*${AgentSignals.STATUS.replace(
+        /[.*+?^${}()|[\]\\]/g,
+        '\\$&',
+      )}\\s*(.+?)$`,
+      'm',
+    );
+    const statusMatch = block.text.match(statusRegex);
+    if (statusMatch) {
+      const statusText = statusMatch[1].trim();
+      getUI().pushStatus(statusText);
+      spinner.message(statusText);
+    }
+  }
+}
+
+async function runOpenAIAgent(
+  agentConfig: AgentRunConfig,
+  prompt: string,
+  options: WizardOptions,
+  spinner: SpinnerHandle,
+  config?: {
+    estimatedDurationMinutes?: number;
+    spinnerMessage?: string;
+    successMessage?: string;
+    errorMessage?: string;
+    additionalFeatureQueue?: readonly AdditionalFeature[];
+  },
+  middleware?: {
+    onMessage(message: any): void;
+    finalize(resultMessage: any, totalDurationMs: number): any;
+  },
+): Promise<{ error?: AgentErrorType; message?: string }> {
+  const {
+    spinnerMessage = 'Customizing your PostHog setup...',
+    successMessage = 'PostHog integration complete',
+    errorMessage = 'Integration failed',
+  } = config ?? {};
+
+  spinner.start(spinnerMessage);
+  logToFile('Starting OpenAI agent run');
+  logToFile('Prompt:', prompt);
+
+  const startTime = Date.now();
+  const collectedText: string[] = [];
+  let streamResult: any = null;
+
+  let eventPlanWatcher: fs.FSWatcher | undefined;
+  let eventPlanInterval: ReturnType<typeof setInterval> | undefined;
+
+  const eventPlanPath = path.join(
+    agentConfig.workingDirectory,
+    '.posthog-events.json',
+  );
+  const readEventPlan = () => {
+    try {
+      const content = fs.readFileSync(eventPlanPath, 'utf-8');
+      const parsed = JSON.parse(content);
+      if (Array.isArray(parsed)) {
+        getUI().setEventPlan(
+          parsed.map((e: Record<string, unknown>) => ({
+            name: (e.name ?? e.event ?? '') as string,
+            description: (e.description ?? '') as string,
+          })),
+        );
+      }
+    } catch {
+      // File doesn't exist or isn't valid JSON yet.
+    }
+  };
+
+  try {
+    try {
+      eventPlanWatcher = fs.watch(eventPlanPath, () => readEventPlan());
+      readEventPlan();
+    } catch {
+      eventPlanInterval = setInterval(() => {
+        try {
+          fs.accessSync(eventPlanPath);
+          readEventPlan();
+          clearInterval(eventPlanInterval);
+          eventPlanInterval = undefined;
+          eventPlanWatcher = fs.watch(eventPlanPath, () => readEventPlan());
+        } catch {
+          // Still waiting for the plan file.
+        }
+      }, 1000);
+    }
+
+    const stream = await agentConfig.runner.run(agentConfig.agent, prompt, {
+      stream: true,
+      maxTurns: agentConfig.maxTurns,
+    });
+
+    for await (const event of stream) {
+      handleOpenAIStreamEvent(event, options, spinner, collectedText);
+      try {
+        middleware?.onMessage(event);
+      } catch (e) {
+        logToFile(`${AgentSignals.BENCHMARK} Middleware onMessage error:`, e);
+      }
+    }
+
+    await stream.completed;
+    if (stream.error) {
+      throw stream.error;
+    }
+
+    streamResult = stream;
+
+    if (
+      typeof stream.finalOutput === 'string' &&
+      !collectedText.includes(stream.finalOutput)
+    ) {
+      collectedText.push(stream.finalOutput);
+    }
+
+    const outputText = collectedText.join('\n');
+    const yaraResult = checkYaraViolation(outputText, spinner);
+    if (yaraResult) return yaraResult;
+
+    if (outputText.includes(AgentSignals.ERROR_MCP_MISSING)) {
+      logToFile('Agent error: MCP_MISSING');
+      spinner.stop('Agent could not access PostHog MCP');
+      return { error: AgentErrorType.MCP_MISSING };
+    }
+
+    if (outputText.includes(AgentSignals.ERROR_RESOURCE_MISSING)) {
+      logToFile('Agent error: RESOURCE_MISSING');
+      spinner.stop('Agent could not access setup resource');
+      return { error: AgentErrorType.RESOURCE_MISSING };
+    }
+
+    captureWizardRemark(outputText);
+
+    const durationMs = Date.now() - startTime;
+    analytics.wizardCapture('agent completed', {
+      duration_ms: durationMs,
+      duration_seconds: Math.round(durationMs / 1000),
+    });
+    try {
+      middleware?.finalize(streamResult, durationMs);
+    } catch (e) {
+      logToFile(`${AgentSignals.BENCHMARK} Middleware finalize error:`, e);
+    }
+    spinner.stop(successMessage);
+    return {};
+  } catch (error) {
+    const outputText = collectedText.join('\n');
+    const yaraResult = checkYaraViolation(outputText, spinner);
+    if (yaraResult) return yaraResult;
+
+    const message = (error as Error)?.message || String(error);
+    if (message.includes(AgentSignals.ERROR_MCP_MISSING)) {
+      spinner.stop('Agent could not access PostHog MCP');
+      return { error: AgentErrorType.MCP_MISSING };
+    }
+    if (message.includes(AgentSignals.ERROR_RESOURCE_MISSING)) {
+      spinner.stop('Agent could not access setup resource');
+      return { error: AgentErrorType.RESOURCE_MISSING };
+    }
+    if (message.includes('429')) {
+      spinner.stop('Rate limit exceeded');
+      return { error: AgentErrorType.RATE_LIMIT, message };
+    }
+
+    spinner.stop(errorMessage);
+    logToFile('OpenAI agent run failed:', error);
+    getUI().log.error(`Error: ${message}`);
+    return { error: AgentErrorType.API_ERROR, message };
+  } finally {
+    eventPlanWatcher?.close();
+    if (eventPlanInterval) clearInterval(eventPlanInterval);
+
+    await Promise.all(
+      (agentConfig.mcpServers ?? []).map(async (server: any) => {
+        if (typeof server?.close === 'function') {
+          try {
+            await server.close();
+          } catch (error) {
+            logToFile('Failed to close OpenAI MCP server:', error);
+          }
+        }
+      }),
+    );
+
+    try {
+      await agentConfig.runner?.config?.modelProvider?.close?.();
+    } catch (error) {
+      logToFile('Failed to close OpenAI model provider:', error);
+    }
+  }
+}
+
 export async function runAgent(
+  agentConfig: AgentRunConfig,
+  prompt: string,
+  options: WizardOptions,
+  spinner: SpinnerHandle,
+  config?: {
+    estimatedDurationMinutes?: number;
+    spinnerMessage?: string;
+    successMessage?: string;
+    errorMessage?: string;
+    additionalFeatureQueue?: readonly AdditionalFeature[];
+  },
+  middleware?: {
+    onMessage(message: any): void;
+    finalize(resultMessage: any, totalDurationMs: number): any;
+  },
+): Promise<{ error?: AgentErrorType; message?: string }> {
+  if (agentConfig.provider === 'openai') {
+    return runOpenAIAgent(
+      agentConfig,
+      prompt,
+      options,
+      spinner,
+      config,
+      middleware,
+    );
+  }
+
+  return runClaudeAgent(
+    agentConfig,
+    prompt,
+    options,
+    spinner,
+    config,
+    middleware,
+  );
+}
+
+async function runClaudeAgent(
   agentConfig: AgentRunConfig,
   prompt: string,
   options: WizardOptions,
@@ -782,22 +1309,8 @@ export async function runAgent(
       logToFile(`Agent run completed in ${durationSeconds}s`);
     }
 
-    // Extract and capture the agent's reflection on the run
     const outputText = collectedText.join('\n');
-    const remarkRegex = new RegExp(
-      `${AgentSignals.WIZARD_REMARK.replace(
-        /[.*+?^${}()|[\]\\]/g,
-        '\\$&',
-      )}\\s*(.+?)(?:\\n|$)`,
-      's',
-    );
-    const remarkMatch = outputText.match(remarkRegex);
-    if (remarkMatch && remarkMatch[1]) {
-      const remark = remarkMatch[1].trim();
-      if (remark) {
-        analytics.capture(WIZARD_REMARK_EVENT_NAME, { remark });
-      }
-    }
+    captureWizardRemark(outputText);
 
     analytics.wizardCapture('agent completed', {
       duration_ms: durationMs,

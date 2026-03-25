@@ -26,10 +26,12 @@ import {
   checkMcpHealth,
   checkNpmComponentHealth,
   checkNpmOverallHealth,
+  checkOpenAIHealth,
   checkPosthogComponentHealth,
   checkPosthogOverallHealth,
   DEFAULT_WIZARD_READINESS_CONFIG,
   evaluateWizardReadiness,
+  getReadinessConfigForProvider,
   ServiceHealthStatus,
   WizardReadiness,
 } from '../index';
@@ -108,6 +110,14 @@ const ANTHROPIC_STATUS_HEALTHY = makeStatuspageStatus({
   pageId: 'tymt9n04zgry',
   pageName: 'Claude',
   pageUrl: 'https://status.claude.com',
+  indicator: 'none',
+  description: 'All Systems Operational',
+});
+
+const OPENAI_STATUS_HEALTHY = makeStatuspageStatus({
+  pageId: '01JMDK9XYNY6RXSED6SDWW50WY',
+  pageName: 'OpenAI',
+  pageUrl: 'https://status.openai.com/',
   indicator: 'none',
   description: 'All Systems Operational',
 });
@@ -232,6 +242,7 @@ const MCP_LANDING_HTML =
 
 const URLS = {
   anthropicStatus: 'https://status.claude.com/api/v2/status.json',
+  openaiStatus: 'https://status.openai.com/api/v2/status.json',
   posthogStatus: 'https://www.posthogstatus.com/api/v2/status.json',
   posthogSummary: 'https://www.posthogstatus.com/api/v2/summary.json',
   githubStatus: 'https://www.githubstatus.com/api/v2/status.json',
@@ -253,6 +264,10 @@ const HEALTHY_RESPONSES: Record<string, { body: string; contentType: string }> =
   {
     [URLS.anthropicStatus]: {
       body: JSON.stringify(ANTHROPIC_STATUS_HEALTHY),
+      contentType: 'application/json',
+    },
+    [URLS.openaiStatus]: {
+      body: JSON.stringify(OPENAI_STATUS_HEALTHY),
       contentType: 'application/json',
     },
     [URLS.posthogStatus]: {
@@ -443,6 +458,14 @@ describe('health-checks', () => {
       const result = await checkAnthropicHealth();
       expect(result.status).toBe(ServiceHealthStatus.Degraded);
       expect(result.error).toBe('getaddrinfo ENOTFOUND status.claude.com');
+    });
+  });
+
+  describe('checkOpenAIHealth', () => {
+    it('returns healthy for indicator=none ("All Systems Operational")', async () => {
+      const result = await checkOpenAIHealth();
+      expect(result.status).toBe(ServiceHealthStatus.Healthy);
+      expect(result.rawIndicator).toBe('none');
     });
   });
 
@@ -845,12 +868,13 @@ describe('health-checks', () => {
   // -----------------------------------------------------------------------
 
   describe('checkAllExternalServices', () => {
-    it('returns all 11 service keys when everything is healthy', async () => {
+    it('returns all 12 service keys when everything is healthy', async () => {
       const health = await checkAllExternalServices();
       const keys = Object.keys(health);
       expect(keys).toEqual(
         expect.arrayContaining([
           'anthropic',
+          'openai',
           'posthogOverall',
           'posthogComponents',
           'github',
@@ -863,19 +887,20 @@ describe('health-checks', () => {
           'githubReleases',
         ]),
       );
-      expect(keys).toHaveLength(11);
+      expect(keys).toHaveLength(12);
       for (const val of Object.values(health)) {
         expect(val.status).toBe(ServiceHealthStatus.Healthy);
       }
     });
 
-    it('fires all 11 fetch calls in parallel', async () => {
+    it('fires all 12 fetch calls in parallel', async () => {
       await checkAllExternalServices();
       const calledUrls = (global.fetch as jest.Mock).mock.calls.map(
         (c: unknown[]) =>
           typeof c[0] === 'string' ? c[0] : (c[0] as URL).toString(),
       );
-      expect(calledUrls).toHaveLength(11);
+      expect(calledUrls).toHaveLength(12);
+      expect(calledUrls).toContain(URLS.openaiStatus);
       expect(calledUrls).toContain(URLS.llmGatewayLiveness);
       expect(calledUrls).toContain(URLS.mcpLanding);
       expect(calledUrls).toContain(URLS.githubReleasesSkillMenu);
@@ -915,6 +940,29 @@ describe('health-checks', () => {
       );
       expect(result.decision).toBe(WizardReadiness.No);
       expect(result.health.anthropic.status).toBe(ServiceHealthStatus.Degraded);
+    });
+
+    it('returns No when OpenAI is degraded for the OpenAI provider config', async () => {
+      const body = makeStatuspageStatus({
+        pageId: '01JMDK9XYNY6RXSED6SDWW50WY',
+        pageName: 'OpenAI',
+        pageUrl: 'https://status.openai.com/',
+        indicator: 'minor',
+        description: 'Minor Service Outage',
+      });
+      (global.fetch as jest.Mock).mockImplementation(
+        overrideFetch({
+          [URLS.openaiStatus]: () =>
+            Promise.resolve(
+              new Response(JSON.stringify(body), { status: 200 }),
+            ),
+        }),
+      );
+      const result = await evaluateWizardReadiness(
+        getReadinessConfigForProvider('openai'),
+      );
+      expect(result.decision).toBe(WizardReadiness.No);
+      expect(result.health.openai.status).toBe(ServiceHealthStatus.Degraded);
     });
 
     it('returns No when LLM Gateway is down (downBlocksRun)', async () => {
@@ -998,6 +1046,7 @@ describe('health-checks', () => {
       );
       expect(result.reasons.length).toBeGreaterThan(0);
       expect(result.reasons.some((r) => r.includes('Anthropic'))).toBe(true);
+      expect(result.reasons.some((r) => r.includes('OpenAI'))).toBe(true);
       expect(result.reasons.some((r) => r.includes('PostHog'))).toBe(true);
       expect(result.reasons.some((r) => r.includes('GitHub'))).toBe(true);
       expect(result.reasons.some((r) => r.includes('npm'))).toBe(true);

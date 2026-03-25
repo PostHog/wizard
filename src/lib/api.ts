@@ -5,26 +5,16 @@ import { WIZARD_USER_AGENT } from './constants';
 
 export const ApiUserSchema = z.object({
   distinct_id: z.string(),
-  organizations: z.array(
-    z.object({
-      id: z.string().uuid(),
-    }),
-  ),
-  team: z.object({
-    id: z.number(),
-    organization: z.string().uuid(),
-  }),
-  organization: z.object({
-    id: z.string().uuid(),
-  }),
+  team: z
+    .object({
+      id: z.number(),
+    })
+    .optional(),
 });
 
 export const ApiProjectSchema = z.object({
   id: z.number(),
-  uuid: z.string().uuid(),
-  organization: z.string().uuid(),
   api_token: z.string(),
-  name: z.string(),
 });
 
 export type ApiUser = z.infer<typeof ApiUserSchema>;

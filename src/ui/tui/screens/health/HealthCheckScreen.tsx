@@ -17,7 +17,10 @@ import {
 } from '../../primitives/index.js';
 import { Colors, Icons } from '../../styles.js';
 import { ServiceHealthList } from '../../components/ServiceHealthList.js';
-import { getBlockingServiceKeys } from '../../../../lib/health-checks/readiness.js';
+import {
+  getBlockingServiceKeys,
+  getReadinessConfigForProvider,
+} from '../../../../lib/health-checks/readiness.js';
 import { ServiceHealthStatus } from '../../../../lib/health-checks/types.js';
 import { wizardAbort } from '../../../../utils/wizard-abort.js';
 import { fetchSkillMenu, downloadSkill } from '../../../../lib/wizard-tools.js';
@@ -87,19 +90,34 @@ export const HealthCheckScreen = ({ store }: HealthCheckScreenProps) => {
 
   // Healthy or warnings — isComplete returns true, router skips past.
   // This branch only renders for a single frame before advancing.
-  const blockingKeys = getBlockingServiceKeys(result.health);
+  const readinessConfig = getReadinessConfigForProvider(
+    store.session.agentProvider,
+    {
+      openaiMode: store.session.openaiAuthMode,
+    },
+  );
+  const blockingKeys = getBlockingServiceKeys(result.health, readinessConfig);
   if (blockingKeys.length === 0) return null;
 
   const isGithubReleasesDown = blockingKeys.includes('githubReleases');
   const canDownloadSkills =
     result.health.githubReleases.status === ServiceHealthStatus.Healthy;
   const integration = store.session.integration;
+  const providerServiceKey =
+    store.session.agentProvider === 'openai' ? 'openai' : 'anthropic';
+  const isProviderDown = blockingKeys.includes(providerServiceKey);
+  const providerLabel =
+    store.session.agentProvider === 'openai' ? 'OpenAI' : 'Anthropic';
 
-  const title = `Ongoing service disruptions`;
+  const title = isProviderDown
+    ? `${providerLabel} service disruption`
+    : 'Ongoing service disruptions';
 
   const docsUrl = store.session.frameworkConfig?.metadata.docsUrl;
   const description = isGithubReleasesDown
     ? "The Wizard can't download necessary skills from GitHub Releases right now."
+    : isProviderDown
+    ? `${providerLabel} is reporting an ongoing disruption, so the Wizard may not work reliably right now.`
     : 'The Wizard may not work reliably while services are affected.';
 
   const handleDownloadAndExit = async () => {

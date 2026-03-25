@@ -1,4 +1,9 @@
-import { runAgent, createStopHook } from '../agent-interface';
+import {
+  runAgent,
+  createStopHook,
+  getOpenAIRunnerConfig,
+  getOpenAIMaxTurns,
+} from '../agent-interface';
 import type { WizardOptions } from '../../utils/types';
 import type { SpinnerHandle } from '../../ui';
 import {
@@ -279,6 +284,90 @@ describe('runAgent', () => {
       // ui.log.error should NOT have been called (errors suppressed for user)
       expect(mockUIInstance.log.error).not.toHaveBeenCalled();
     });
+  });
+});
+
+describe('getOpenAIRunnerConfig', () => {
+  const envSnapshot = { ...process.env };
+
+  beforeEach(() => {
+    jest.resetModules();
+    process.env = { ...envSnapshot };
+    delete process.env.WIZARD_OPENAI_API_KEY;
+    delete process.env.OPENAI_API_KEY;
+    delete process.env.OPENAI_BASE_URL;
+    delete process.env.OPENAI_MODEL;
+    delete process.env.WIZARD_OPENAI_MAX_TURNS;
+    delete process.env.OPENAI_MAX_TURNS;
+  });
+
+  afterAll(() => {
+    process.env = envSnapshot;
+  });
+
+  it('defaults to the PostHog gateway using the wizard access token', () => {
+    const result = getOpenAIRunnerConfig({
+      posthogApiKey: 'phx_test_token',
+      posthogApiHost: 'https://eu.i.posthog.com',
+    });
+
+    expect(result).toEqual({
+      apiKey: 'phx_test_token',
+      baseURL: 'https://gateway.eu.posthog.com/wizard',
+      model: 'gpt-5.4',
+      maxTurns: 50,
+      authMode: 'posthog_gateway',
+    });
+  });
+
+  it('uses direct OpenAI credentials when explicitly configured', () => {
+    process.env.WIZARD_OPENAI_API_KEY = 'sk-test';
+    process.env.OPENAI_BASE_URL = 'https://example.com/v1';
+    process.env.OPENAI_MODEL = 'gpt-5.4-mini';
+
+    const result = getOpenAIRunnerConfig({
+      posthogApiKey: 'phx_test_token',
+      posthogApiHost: 'https://us.i.posthog.com',
+    });
+
+    expect(result).toEqual({
+      apiKey: 'sk-test',
+      baseURL: 'https://example.com/v1',
+      model: 'gpt-5.4-mini',
+      maxTurns: 50,
+      authMode: 'direct_openai',
+    });
+  });
+
+  it('rejects OPENAI_BASE_URL without an explicit OpenAI API key override', () => {
+    process.env.OPENAI_BASE_URL = 'https://example.com/v1';
+
+    expect(() =>
+      getOpenAIRunnerConfig({
+        posthogApiKey: 'phx_test_token',
+        posthogApiHost: 'https://us.i.posthog.com',
+      }),
+    ).toThrow(
+      'OPENAI_BASE_URL was provided without OPENAI_API_KEY or WIZARD_OPENAI_API_KEY.',
+    );
+  });
+
+  it('uses an explicit OpenAI max turns override when configured', () => {
+    process.env.WIZARD_OPENAI_MAX_TURNS = '80';
+
+    expect(getOpenAIMaxTurns()).toBe(80);
+    expect(
+      getOpenAIRunnerConfig({
+        posthogApiKey: 'phx_test_token',
+        posthogApiHost: 'https://eu.i.posthog.com',
+      }).maxTurns,
+    ).toBe(80);
+  });
+
+  it('falls back to the default max turns when the override is invalid', () => {
+    process.env.OPENAI_MAX_TURNS = 'not-a-number';
+
+    expect(getOpenAIMaxTurns()).toBe(50);
   });
 });
 
