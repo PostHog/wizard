@@ -230,6 +230,13 @@ yargs(hideBin(process.argv))
               ) => Promise<Integration | undefined>;
             };
             const installDir = session.installDir ?? process.cwd();
+            const discoveredFeaturesPromise = import(
+              './src/lib/discovered-features.js'
+            )
+              .then(({ discoverFeaturesFromInstallDir }) =>
+                discoverFeaturesFromInstallDir(installDir),
+              )
+              .catch(() => []);
 
             const { DETECTION_TIMEOUT_MS } = (await import(
               './src/lib/constants.js'
@@ -317,28 +324,8 @@ yargs(hideBin(process.argv))
               }
             }
 
-            // Feature discovery — deterministic scan of package.json deps
-            try {
-              const { readFileSync } = await import('fs');
-              const pkgPath = require('path').join(installDir, 'package.json');
-              const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8'));
-              const allDeps = {
-                ...pkg.dependencies,
-                ...pkg.devDependencies,
-              };
-              const depNames = Object.keys(allDeps);
-
-              const { discoverFeaturesFromDependencyNames } = await import(
-                './src/lib/discovered-features.js'
-              );
-
-              for (const feature of discoverFeaturesFromDependencyNames(
-                depNames,
-              )) {
-                tui.store.addDiscoveredFeature(feature);
-              }
-            } catch {
-              // No package.json or parse error — skip feature discovery
+            for (const feature of await discoveredFeaturesPromise) {
+              tui.store.addDiscoveredFeature(feature);
             }
 
             // Signal detection is done — IntroScreen shows picker or results

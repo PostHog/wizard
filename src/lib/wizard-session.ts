@@ -54,6 +54,14 @@ export enum AdditionalFeature {
   BraintrustMigration = 'braintrust_migration',
 }
 
+/** Additional features that represent competitor migrations. */
+export const MIGRATION_ADDITIONAL_FEATURES = [
+  AdditionalFeature.AmplitudeMigration,
+  AdditionalFeature.SentryMigration,
+  AdditionalFeature.LaunchDarklyMigration,
+  AdditionalFeature.BraintrustMigration,
+] as const;
+
 /** Human-readable labels for additional features (used in TUI progress) */
 export const ADDITIONAL_FEATURE_LABELS: Record<AdditionalFeature, string> = {
   [AdditionalFeature.LLM]: 'LLM analytics',

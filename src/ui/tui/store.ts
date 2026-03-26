@@ -17,6 +17,7 @@ import {
   type OutroData,
   type DiscoveredFeature,
   AdditionalFeature,
+  MIGRATION_ADDITIONAL_FEATURES,
   McpOutcome,
   RunPhase,
   buildSession,
@@ -50,6 +51,10 @@ export interface PlannedEvent {
   name: string;
   description: string;
 }
+
+const MIGRATION_FEATURE_SET = new Set<AdditionalFeature>(
+  MIGRATION_ADDITIONAL_FEATURES,
+);
 
 export class WizardStore {
   // ── Internal nanostore atoms ─────────────────────────────────────
@@ -328,6 +333,22 @@ export class WizardStore {
       this.session.additionalFeatureQueue.push(feature);
     }
     analytics.wizardCapture('feature enabled', { feature });
+    this.emitChange();
+  }
+
+  /**
+   * Replace the queued migration features while preserving any other
+   * additional features that were enabled separately (for example LLM).
+   */
+  setMigrationFeatures(features: AdditionalFeature[]): void {
+    const retained = this.session.additionalFeatureQueue.filter(
+      (feature) => !MIGRATION_FEATURE_SET.has(feature),
+    );
+    const selected = MIGRATION_ADDITIONAL_FEATURES.filter((feature) =>
+      features.includes(feature),
+    );
+
+    this.$session.setKey('additionalFeatureQueue', [...retained, ...selected]);
     this.emitChange();
   }
 

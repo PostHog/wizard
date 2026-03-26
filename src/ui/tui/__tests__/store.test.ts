@@ -314,6 +314,29 @@ describe('WizardStore', () => {
       ]);
     });
 
+    it('setMigrationFeatures replaces only migration features', () => {
+      const store = createStore();
+
+      store.enableFeature(AdditionalFeature.LLM);
+      store.enableFeature(AdditionalFeature.BraintrustMigration);
+      store.setMigrationFeatures([
+        AdditionalFeature.AmplitudeMigration,
+        AdditionalFeature.SentryMigration,
+      ]);
+
+      expect(store.session.additionalFeatureQueue).toEqual([
+        AdditionalFeature.LLM,
+        AdditionalFeature.AmplitudeMigration,
+        AdditionalFeature.SentryMigration,
+      ]);
+
+      store.setMigrationFeatures([]);
+
+      expect(store.session.additionalFeatureQueue).toEqual([
+        AdditionalFeature.LLM,
+      ]);
+    });
+
     it('setMcpComplete fires mcp complete event', () => {
       const store = createStore();
       store.setMcpComplete(McpOutcome.Installed, ['Cursor', 'VS Code']);

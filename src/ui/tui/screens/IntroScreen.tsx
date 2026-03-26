@@ -14,7 +14,13 @@ import { Box, Text } from 'ink';
 import { useState, useSyncExternalStore } from 'react';
 import type { WizardStore } from '../store.js';
 import { Integration } from '../../../lib/constants.js';
-import { PickerMenu, LoadingBox } from '../primitives/index.js';
+import { AdditionalFeature } from '../../../lib/wizard-session.js';
+import { getCompetitorMigrationOptions } from '../../../lib/discovered-features.js';
+import {
+  GroupedPickerMenu,
+  PickerMenu,
+  LoadingBox,
+} from '../primitives/index.js';
 
 interface IntroScreenProps {
   store: WizardStore;
@@ -28,6 +34,8 @@ export const IntroScreen = ({ store }: IntroScreenProps) => {
 
   const [pickingFramework, setPickingFramework] = useState(false);
   const [manuallySelected, setManuallySelected] = useState(false);
+  const [migrationSelectionComplete, setMigrationSelectionComplete] =
+    useState(false);
 
   const { session } = store;
   const config = session.frameworkConfig;
@@ -37,12 +45,30 @@ export const IntroScreen = ({ store }: IntroScreenProps) => {
   const needsFrameworkPick =
     session.detectionComplete && !session.frameworkConfig;
   const unsupported = session.unsupportedVersion;
+  const migrationOptions = getCompetitorMigrationOptions(
+    session.discoveredFeatures,
+  );
+  const selectedMigrations = migrationOptions.filter((option) =>
+    session.additionalFeatureQueue.includes(option.additionalFeature),
+  );
+  const needsMigrationSelection =
+    migrationOptions.length > 0 &&
+    session.frameworkConfig !== null &&
+    !detecting &&
+    !pickingFramework &&
+    !unsupported &&
+    !migrationSelectionComplete;
   const showContinue =
     session.frameworkConfig !== null &&
     !detecting &&
     !pickingFramework &&
+    !unsupported &&
+    !needsMigrationSelection;
+  const showDescription =
+    session.frameworkConfig !== null &&
+    !detecting &&
+    !pickingFramework &&
     !unsupported;
-  const showDescription = showContinue;
 
   return (
     <Box
@@ -93,7 +119,10 @@ export const IntroScreen = ({ store }: IntroScreenProps) => {
       {(needsFrameworkPick || pickingFramework) && (
         <FrameworkPicker
           store={store}
-          onComplete={() => setPickingFramework(false)}
+          onComplete={() => {
+            setPickingFramework(false);
+            setManuallySelected(true);
+          }}
         />
       )}
 
@@ -120,6 +149,22 @@ export const IntroScreen = ({ store }: IntroScreenProps) => {
               </Text>
             </Text>
           )}
+          {migrationOptions.length > 0 &&
+            migrationSelectionComplete &&
+            !unsupported && (
+              <Text>
+                <Text>
+                  Queued follow-up work <Text color="green">{'\u2714'}</Text>{' '}
+                </Text>
+                <Text>
+                  {selectedMigrations.length > 0
+                    ? selectedMigrations
+                        .map((option) => option.label)
+                        .join(', ')
+                    : 'None'}
+                </Text>
+              </Text>
+            )}
           {unsupported && (
             <Box flexDirection="column" marginTop={1}>
               <Text color="#DC9300">
@@ -149,10 +194,43 @@ export const IntroScreen = ({ store }: IntroScreenProps) => {
               />
             </Box>
           )}
+          {needsMigrationSelection && (
+            <Box flexDirection="column" marginTop={1}>
+              <Text>We found a few existing tools in this project.</Text>
+              <Text dimColor>
+                Choose any follow-up work you'd like us to queue after the main
+                setup finishes.
+              </Text>
+              <Box marginTop={1}>
+                <GroupedPickerMenu
+                  message="Which follow-up work should we queue?"
+                  groups={{
+                    'Optional follow-up work': migrationOptions.map(
+                      (option) => ({
+                        label: option.label,
+                        value: option.additionalFeature,
+                        hint: option.hint,
+                      }),
+                    ),
+                  }}
+                  initialSelected={selectedMigrations.map(
+                    (option) => option.additionalFeature,
+                  )}
+                  onSelect={(values) => {
+                    store.setMigrationFeatures(values as AdditionalFeature[]);
+                    setMigrationSelectionComplete(true);
+                  }}
+                />
+              </Box>
+            </Box>
+          )}
           {showContinue && (
             <PickerMenu
               options={[
                 { label: 'Continue', value: 'continue' },
+                ...(migrationOptions.length > 0
+                  ? [{ label: 'Review selections', value: 'migrations' }]
+                  : []),
                 { label: 'Change framework', value: 'framework' },
                 { label: 'Cancel', value: 'cancel' },
               ]}
@@ -160,6 +238,8 @@ export const IntroScreen = ({ store }: IntroScreenProps) => {
                 const choice = Array.isArray(value) ? value[0] : value;
                 if (choice === 'cancel') {
                   process.exit(0);
+                } else if (choice === 'migrations') {
+                  setMigrationSelectionComplete(false);
                 } else if (choice === 'framework') {
                   setPickingFramework(true);
                   setManuallySelected(true);
