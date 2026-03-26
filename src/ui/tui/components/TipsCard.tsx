@@ -19,7 +19,7 @@ interface Tip {
   /** Title line */
   title: string;
   /** Description shown below the title */
-  description: string;
+  description?: string;
   /** Optional URL shown after the description */
   url?: string;
   /** When provided, the tip is only shown if this returns true */
@@ -63,7 +63,6 @@ const TIPS: Tip[] = [
   {
     id: 'llm',
     title: 'PostHog can also help you track your LLM costs',
-    description: '',
     visible: (store) =>
       store.session.discoveredFeatures.includes(DiscoveredFeature.LLM),
     toggle: {
@@ -73,6 +72,72 @@ const TIPS: Tip[] = [
       prompt: 'We detected LLM dependencies in your project.',
       isEnabled: (store) =>
         store.session.additionalFeatureQueue.includes(AdditionalFeature.LLM),
+    },
+  },
+  {
+    id: 'amplitude',
+    title: 'We can migrate this project from Amplitude to PostHog',
+    visible: (store) =>
+      store.session.discoveredFeatures.includes(DiscoveredFeature.Amplitude),
+    toggle: {
+      key: 'a',
+      feature: AdditionalFeature.AmplitudeMigration,
+      enabledLabel: 'Amplitude migration queued next',
+      prompt: 'We detected Amplitude dependencies in your project.',
+      isEnabled: (store) =>
+        store.session.additionalFeatureQueue.includes(
+          AdditionalFeature.AmplitudeMigration,
+        ),
+    },
+  },
+  {
+    id: 'sentry',
+    title: 'We can migrate this project from Sentry to PostHog error tracking',
+    visible: (store) =>
+      store.session.discoveredFeatures.includes(DiscoveredFeature.Sentry),
+    toggle: {
+      key: 'e',
+      feature: AdditionalFeature.SentryMigration,
+      enabledLabel: 'Sentry migration queued next',
+      prompt: 'We detected Sentry dependencies in your project.',
+      isEnabled: (store) =>
+        store.session.additionalFeatureQueue.includes(
+          AdditionalFeature.SentryMigration,
+        ),
+    },
+  },
+  {
+    id: 'launchdarkly',
+    title:
+      'We can migrate this project from LaunchDarkly to PostHog feature flags',
+    visible: (store) =>
+      store.session.discoveredFeatures.includes(DiscoveredFeature.LaunchDarkly),
+    toggle: {
+      key: 'f',
+      feature: AdditionalFeature.LaunchDarklyMigration,
+      enabledLabel: 'LaunchDarkly migration queued next',
+      prompt: 'We detected LaunchDarkly dependencies in your project.',
+      isEnabled: (store) =>
+        store.session.additionalFeatureQueue.includes(
+          AdditionalFeature.LaunchDarklyMigration,
+        ),
+    },
+  },
+  {
+    id: 'braintrust',
+    title:
+      'We can migrate this project from Braintrust to PostHog LLM analytics',
+    visible: (store) =>
+      store.session.discoveredFeatures.includes(DiscoveredFeature.Braintrust),
+    toggle: {
+      key: 'b',
+      feature: AdditionalFeature.BraintrustMigration,
+      enabledLabel: 'Braintrust migration queued next',
+      prompt: 'We detected Braintrust dependencies in your project.',
+      isEnabled: (store) =>
+        store.session.additionalFeatureQueue.includes(
+          AdditionalFeature.BraintrustMigration,
+        ),
     },
   },
 ];
@@ -101,39 +166,47 @@ export const TipsCard = ({ store }: { store: WizardStore }) => {
       <Box height={1} />
 
       {TIPS.filter((tip) => !tip.visible || tip.visible(store)).map((tip) => (
-        <Box key={tip.id} flexDirection="column" marginBottom={1}>
-          <Text>
-            <Text color={Colors.accent}>{Icons.diamond} </Text>
-            <Text bold>{tip.title}</Text>
-          </Text>
+        <TipRow key={tip.id} store={store} tip={tip} />
+      ))}
+    </Box>
+  );
+};
 
-          {tip.toggle ? (
-            tip.toggle.isEnabled(store) ? (
-              <Text color={Colors.success}>
-                {Icons.check} {tip.toggle.enabledLabel}
-              </Text>
-            ) : (
-              <Text dimColor>
-                {tip.toggle.prompt} Press{' '}
-                <Text bold color={Colors.accent}>
-                  {tip.toggle.key.toUpperCase()}
-                </Text>{' '}
-                to enable.
-              </Text>
-            )
+const TipRow = ({ store, tip }: { store: WizardStore; tip: Tip }) => {
+  return (
+    <Box flexDirection="column" marginBottom={1}>
+      <Text>
+        <Text color={Colors.accent}>{Icons.diamond} </Text>
+        <Text bold>{tip.title}</Text>
+      </Text>
+
+      {tip.toggle ? (
+        <Box flexDirection="column" marginLeft={2}>
+          {tip.toggle.isEnabled(store) ? (
+            <Text color={Colors.success}>
+              {Icons.check} {tip.toggle.enabledLabel}
+            </Text>
           ) : (
             <Text dimColor>
-              {tip.description}
-              {tip.url && (
-                <>
-                  {' '}
-                  <Text color="cyan">{tip.url}</Text>
-                </>
-              )}
+              {tip.toggle.prompt} Press{' '}
+              <Text bold color={Colors.accent}>
+                {tip.toggle.key.toUpperCase()}
+              </Text>{' '}
+              to enable.
             </Text>
           )}
         </Box>
-      ))}
+      ) : (
+        <Text dimColor>
+          {tip.description}
+          {tip.url && (
+            <>
+              {' '}
+              <Text color="cyan">{tip.url}</Text>
+            </>
+          )}
+        </Text>
+      )}
     </Box>
   );
 };

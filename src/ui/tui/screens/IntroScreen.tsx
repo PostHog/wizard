@@ -17,6 +17,10 @@ import { Integration } from '../../../lib/constants.js';
 import { AdditionalFeature } from '../../../lib/wizard-session.js';
 import { getCompetitorMigrationOptions } from '../../../lib/discovered-features.js';
 import {
+  getMigrationPricingCardByAdditionalFeature,
+  getMigrationPricingSelectionDetailLines,
+} from '../../../lib/competitor-pricing.js';
+import {
   GroupedPickerMenu,
   PickerMenu,
   LoadingBox,
@@ -48,6 +52,18 @@ export const IntroScreen = ({ store }: IntroScreenProps) => {
   const migrationOptions = getCompetitorMigrationOptions(
     session.discoveredFeatures,
   );
+  const migrationPickerOptions = migrationOptions.map((option) => {
+    const pricing = getMigrationPricingCardByAdditionalFeature(
+      option.additionalFeature,
+    );
+
+    return {
+      label: option.label,
+      value: option.additionalFeature,
+      hint: option.hint,
+      details: pricing ? getMigrationPricingSelectionDetailLines(pricing) : [],
+    };
+  });
   const selectedMigrations = migrationOptions.filter((option) =>
     session.additionalFeatureQueue.includes(option.additionalFeature),
   );
@@ -154,7 +170,7 @@ export const IntroScreen = ({ store }: IntroScreenProps) => {
             !unsupported && (
               <Text>
                 <Text>
-                  Selected extra work <Text color="green">{'\u2714'}</Text>{' '}
+                  Queued migrations <Text color="green">{'\u2714'}</Text>{' '}
                 </Text>
                 <Text>
                   {selectedMigrations.length > 0
@@ -198,20 +214,18 @@ export const IntroScreen = ({ store }: IntroScreenProps) => {
             <Box flexDirection="column" marginTop={1}>
               <Text>We found a few existing tools in this project.</Text>
               <Text dimColor>
-                Choose any migration or extra PostHog work you'd like us to
-                include in this run.
+                Choose any migrations you'd like us to queue after the main
+                setup finishes.
+              </Text>
+              <Text dimColor>
+                Pricing is shown here so you can decide before any migrations
+                are queued.
               </Text>
               <Box marginTop={1}>
                 <GroupedPickerMenu
-                  message="Which extra work should we include in this run?"
+                  message="Which migrations should we queue?"
                   groups={{
-                    'Optional migration / extra work': migrationOptions.map(
-                      (option) => ({
-                        label: option.label,
-                        value: option.additionalFeature,
-                        hint: option.hint,
-                      }),
-                    ),
+                    'Optional migrations': migrationPickerOptions,
                   }}
                   initialSelected={selectedMigrations.map(
                     (option) => option.additionalFeature,
@@ -229,7 +243,7 @@ export const IntroScreen = ({ store }: IntroScreenProps) => {
               options={[
                 { label: 'Continue', value: 'continue' },
                 ...(migrationOptions.length > 0
-                  ? [{ label: 'Review selections', value: 'migrations' }]
+                  ? [{ label: 'Review migrations', value: 'migrations' }]
                   : []),
                 { label: 'Change framework', value: 'framework' },
                 { label: 'Cancel', value: 'cancel' },

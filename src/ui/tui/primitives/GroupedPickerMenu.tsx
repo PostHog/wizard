@@ -11,10 +11,23 @@ import { useState, useMemo } from 'react';
 import { Icons, Colors } from '../styles.js';
 import { PromptLabel } from './PromptLabel.js';
 
+type DetailPart = {
+  text: string;
+  bold?: boolean;
+  color?: 'success';
+};
+
+type DetailLine = {
+  text?: string;
+  bold?: boolean;
+  parts?: DetailPart[];
+};
+
 interface GroupOption {
   value: string;
   label: string;
   hint?: string;
+  details?: DetailLine[];
 }
 
 interface GroupedPickerMenuProps {
@@ -26,7 +39,13 @@ interface GroupedPickerMenuProps {
 
 type Row =
   | { kind: 'header'; label: string }
-  | { kind: 'option'; value: string; label: string; hint?: string };
+  | {
+      kind: 'option';
+      value: string;
+      label: string;
+      hint?: string;
+      details?: DetailLine[];
+    };
 
 export const GroupedPickerMenu = ({
   message,
@@ -48,14 +67,17 @@ export const GroupedPickerMenu = ({
 
   // Indices of selectable (non-header) rows
   const selectableIndices = useMemo(
-    () => rows.map((r, i) => (r.kind === 'option' ? i : -1)).filter((i) => i >= 0),
+    () =>
+      rows.map((r, i) => (r.kind === 'option' ? i : -1)).filter((i) => i >= 0),
     [rows],
   );
 
   // All option values for toggle-all
   const allValues = useMemo(
     () =>
-      rows.filter((r): r is Row & { kind: 'option' } => r.kind === 'option').map((r) => r.value),
+      rows
+        .filter((r): r is Row & { kind: 'option' } => r.kind === 'option')
+        .map((r) => r.value),
     [rows],
   );
 
@@ -68,10 +90,14 @@ export const GroupedPickerMenu = ({
 
   useInput((input, key) => {
     if (key.upArrow) {
-      setFocusedSelectable((prev) => (prev > 0 ? prev - 1 : selectableIndices.length - 1));
+      setFocusedSelectable((prev) =>
+        prev > 0 ? prev - 1 : selectableIndices.length - 1,
+      );
     }
     if (key.downArrow) {
-      setFocusedSelectable((prev) => (prev < selectableIndices.length - 1 ? prev + 1 : 0));
+      setFocusedSelectable((prev) =>
+        prev < selectableIndices.length - 1 ? prev + 1 : 0,
+      );
     }
     if (input === ' ') {
       const row = rows[focusedRowIdx];
@@ -103,7 +129,10 @@ export const GroupedPickerMenu = ({
   return (
     <Box flexDirection="column">
       <PromptLabel message={message} />
-      <Text dimColor> (space to toggle, a to toggle all, enter to confirm)</Text>
+      <Text dimColor>
+        {' '}
+        (space to toggle, a to toggle all, enter to confirm)
+      </Text>
       <Box flexDirection="column" marginTop={1} marginLeft={2}>
         {rows.map((row, idx) => {
           if (row.kind === 'header') {
@@ -120,22 +149,57 @@ export const GroupedPickerMenu = ({
           const isSelected = selected.has(row.value);
           const checkbox = isSelected ? Icons.squareFilled : Icons.squareOpen;
           const label = row.hint ? `${row.label} (${row.hint})` : row.label;
+          const detailDimColor = !isFocused && !isSelected;
 
           return (
-            <Box key={row.value} gap={1} marginLeft={1}>
-              <Text
-                color={isSelected ? 'white' : Colors.muted}
-                dimColor={!isFocused && !isSelected}
-              >
-                {checkbox}
-              </Text>
-              <Text
-                color={isFocused ? Colors.accent : undefined}
-                bold={isFocused}
-                dimColor={!isFocused}
-              >
-                {label}
-              </Text>
+            <Box key={row.value} flexDirection="column" marginLeft={1}>
+              <Box gap={1}>
+                <Text
+                  color={isSelected ? 'white' : Colors.muted}
+                  dimColor={detailDimColor}
+                >
+                  {checkbox}
+                </Text>
+                <Text
+                  color={isFocused ? Colors.accent : undefined}
+                  bold={isFocused}
+                  dimColor={!isFocused}
+                >
+                  {label}
+                </Text>
+              </Box>
+              {row.details?.map((detail) => (
+                <Box
+                  key={`${row.value}-${
+                    detail.text ??
+                    detail.parts?.map((part) => part.text).join('')
+                  }`}
+                  marginLeft={4}
+                >
+                  <Text>
+                    {detail.parts ? (
+                      detail.parts.map((part, index) => (
+                        <Text
+                          key={`${row.value}-${index}-${part.text}`}
+                          color={
+                            part.color === 'success'
+                              ? Colors.success
+                              : undefined
+                          }
+                          dimColor={detailDimColor}
+                          bold={part.bold}
+                        >
+                          {part.text}
+                        </Text>
+                      ))
+                    ) : (
+                      <Text dimColor={detailDimColor} bold={detail.bold}>
+                        {detail.text}
+                      </Text>
+                    )}
+                  </Text>
+                </Box>
+              ))}
             </Box>
           );
         })}
