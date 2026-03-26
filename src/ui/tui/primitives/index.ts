@@ -7,6 +7,8 @@ export { SplitView } from './SplitView.js';
 export { LoadingBox } from './LoadingBox.js';
 export { ProgressList } from './ProgressList.js';
 export type { ProgressItem } from './ProgressList.js';
+export { ScrollableProgress } from './ScrollableProgress.js';
+export type { ProgressGroup } from './ScrollableProgress.js';
 export { PromptLabel } from './PromptLabel.js';
 export { PickerMenu } from './PickerMenu.js';
 export { GroupedPickerMenu } from './GroupedPickerMenu.js';

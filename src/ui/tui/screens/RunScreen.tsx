@@ -10,17 +10,16 @@
  */
 
 import { useSyncExternalStore } from 'react';
-import { Box } from 'ink';
 import type { WizardStore } from '../store.js';
 import {
   TabContainer,
   SplitView,
-  ProgressList,
+  ScrollableProgress,
   LogViewer,
   EventPlanViewer,
   HNViewer,
 } from '../primitives/index.js';
-import type { ProgressItem } from '../primitives/index.js';
+import type { ProgressItem, ProgressGroup } from '../primitives/index.js';
 import { ADDITIONAL_FEATURE_LABELS } from '../../../lib/wizard-session.js';
 import { LearnCard } from '../components/LearnCard.js';
 import { TipsCard } from '../components/TipsCard.js';
@@ -32,13 +31,16 @@ interface RunScreenProps {
   store: WizardStore;
 }
 
+/** Rows consumed by TitleBar + spacer + ScreenContainer padding + status bar + tab bar */
+const CHROME_ROWS = 8;
+
 export const RunScreen = ({ store }: RunScreenProps) => {
   useSyncExternalStore(
     (cb) => store.subscribe(cb),
     () => store.getSnapshot(),
   );
 
-  const [columns] = useStdoutDimensions();
+  const [columns, rows] = useStdoutDimensions();
 
   const progressItems: ProgressItem[] = store.tasks.map((t) => ({
     label: t.label,
@@ -63,23 +65,27 @@ export const RunScreen = ({ store }: RunScreenProps) => {
   const statuses =
     store.statusMessages.length > 0 ? store.statusMessages : undefined;
 
-  // Build per-migration progress groups
-  const migrationGroups: Array<{
-    label: string;
-    items: ProgressItem[];
-    status: 'running' | 'completed' | 'failed';
-  }> = [];
+  // Build progress groups: base tasks + per-migration groups
+  const progressGroups: ProgressGroup[] = [
+    { title: 'Tasks', items: progressItems },
+  ];
   for (const [feature, data] of store.migrationTasks) {
-    migrationGroups.push({
-      label: ADDITIONAL_FEATURE_LABELS[feature],
+    progressGroups.push({
+      title: ADDITIONAL_FEATURE_LABELS[feature],
       items: data.tasks.map((t) => ({
         label: t.label,
         activeForm: t.activeForm,
         status: t.status,
       })),
-      status: data.status,
+      failed: data.status === 'failed',
     });
   }
+
+  // Compute available height for the progress pane
+  const statusRows = statuses
+    ? Math.min(store.statusExpanded ? 10 : 2, statuses.length) + 2
+    : 0;
+  const availableHeight = Math.max(8, rows - CHROME_ROWS - statusRows);
 
   const leftPane = store.learnCardComplete ? (
     <TipsCard store={store} />
@@ -88,19 +94,7 @@ export const RunScreen = ({ store }: RunScreenProps) => {
   );
 
   const progressPane = (
-    <Box flexDirection="column" flexGrow={1}>
-      <ProgressList items={progressItems} title="Tasks" />
-      {migrationGroups.map((group) => (
-        <Box key={group.label} flexDirection="column" marginTop={1}>
-          <ProgressList
-            items={group.items}
-            title={`${group.label}${
-              group.status === 'failed' ? ' (failed)' : ''
-            }`}
-          />
-        </Box>
-      ))}
-    </Box>
+    <ScrollableProgress groups={progressGroups} maxHeight={availableHeight} />
   );
 
   // On narrow terminals, drop the learn pane and show only progress
