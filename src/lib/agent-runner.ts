@@ -67,6 +67,7 @@ import {
   MIGRATION_ADDITIONAL_FEATURES,
   type AdditionalFeature,
 } from './wizard-session';
+import { preloadSkills, formatSkillsForPrompt } from './skill-preloader';
 
 /**
  * Build a WizardOptions bag from a WizardSession (for code that still expects WizardOptions).
@@ -443,6 +444,19 @@ export async function runAgentWizard(
     );
   }
 
+  // Pre-install and pre-read skills so the agent can skip discovery.
+  // Runs in parallel with the codebase audit.
+  getUI().pushStatus('Pre-loading PostHog skills for this framework...');
+  const preloadedSkills = await preloadSkills(
+    session.installDir,
+    skillsBaseUrl,
+    config.metadata.integration,
+    runScope,
+  );
+  const skillsContext = formatSkillsForPrompt(preloadedSkills);
+  const projectContext = generateProjectContext(session.installDir);
+  const canSkipDiscovery = preloadedSkills.length > 0;
+
   if (
     !scopeChangedSinceCachedRun &&
     hasMigrations &&
@@ -536,7 +550,91 @@ export async function runAgentWizard(
 
       await handleAgentResultOrAbort(agentResult, config);
     }
+  } else if (canSkipDiscovery && !cachedSession) {
+    // Skills are pre-installed — skip discovery entirely and go straight to execution.
+    // The agent gets all skill content and project context in its initial prompt.
+    const enrichedPrompt = `${integrationPrompt}
+
+${skillsContext}
+
+${projectContext}
+
+Skills have been pre-installed to .claude/skills/ — do not call load_skill_menu or install_skill. The skill content is provided above. Start implementing immediately.
+
+Create a TodoWrite task list for the full scope, then execute the work. You may edit project files, set environment variables, and install packages as required by the workflow.`;
+
+    getUI().pushStatus(
+      'Skills pre-loaded. Starting implementation directly...',
+    );
+
+    if (hasMigrations) {
+      const executionResult = await runAgent(
+        agent,
+        enrichedPrompt,
+        sessionToOptions(session),
+        spinner,
+        {
+          estimatedDurationMinutes: config.ui.estimatedDurationMinutes,
+          spinnerMessage: 'Implementing the base setup with Claude Sonnet...',
+          successMessage: 'Base setup complete',
+          errorMessage: 'Integration failed',
+          modelOverride: agent.model,
+          stageMode: 'direct_execution',
+          additionalFeatureQueue: baseScope.selectedFeatures,
+          useBaseStopHook: true,
+          onCachedSessionUpdated: persistCachedSession,
+        },
+        middleware,
+      );
+
+      await handleAgentResultOrAbort(executionResult, config);
+
+      const baseSession = loadAgentSessionCache(
+        session.installDir,
+        config.metadata.integration,
+        runScopeKey,
+      );
+
+      if (baseSession?.sessionId) {
+        persistCachedSession({
+          sessionId: baseSession.sessionId,
+          runStage: 'base_complete',
+          todos: [],
+          eventPlan: [],
+        });
+
+        migrationResults = await runParallelMigrations(
+          agent,
+          baseSession.sessionId,
+          migrationFeatures,
+          auditManifestPromise,
+          sessionToOptions(session),
+          config,
+        );
+      }
+    } else {
+      const executionResult = await runAgent(
+        agent,
+        enrichedPrompt,
+        sessionToOptions(session),
+        spinner,
+        {
+          estimatedDurationMinutes: config.ui.estimatedDurationMinutes,
+          spinnerMessage: 'Implementing PostHog with Claude Sonnet...',
+          successMessage: config.ui.successMessage,
+          errorMessage: 'Integration failed',
+          modelOverride: agent.model,
+          stageMode: 'direct_execution',
+          additionalFeatureQueue: session.additionalFeatureQueue,
+          onCachedSessionUpdated: persistCachedSession,
+        },
+        middleware,
+      );
+
+      await handleAgentResultOrAbort(executionResult, config);
+    }
   } else {
+    // Fallback: discovery → execution flow (cached sessions or skills not pre-loadable)
     const discoveryStatus = scopeChangedSinceCachedRun
       ? 'Reusing prior project context and reconciling it with the updated selected work...'
       : cachedSession

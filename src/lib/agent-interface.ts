@@ -591,7 +591,12 @@ type AgentRunConfig = {
   wizardMetadata?: Record<string, string>;
 };
 
-type AgentStageMode = 'full' | 'discovery' | 'execution' | 'execution_resume';
+type AgentStageMode =
+  | 'full'
+  | 'discovery'
+  | 'execution'
+  | 'execution_resume'
+  | 'direct_execution';
 
 const IMPLEMENTATION_MODEL = 'anthropic/claude-sonnet-4-6';
 
@@ -1002,7 +1007,9 @@ export async function runAgent(
       ? 'execution'
       : config?.resumeRunStage ?? 'discovery';
   const effectivePrompt =
-    stageMode === 'execution_resume'
+    stageMode === 'direct_execution'
+      ? prompt
+      : stageMode === 'execution_resume'
       ? buildExecutionResumePrompt(prompt, config?.additionalFeatureQueue ?? [])
       : stageMode === 'execution'
       ? buildExecutionStagePrompt(config?.additionalFeatureQueue ?? [])
