@@ -151,6 +151,20 @@ export class LoggingUI implements WizardUI {
     }
   }
 
+  syncMigrationTodos(
+    _migration: import('../lib/wizard-session.js').AdditionalFeature,
+    _todos: Array<{ content: string; status: string; activeForm?: string }>,
+  ): void {
+    // No-op in CI mode — migration progress is logged via pushStatus
+  }
+
+  setMigrationStatus(
+    _migration: import('../lib/wizard-session.js').AdditionalFeature,
+    _status: 'running' | 'completed' | 'failed',
+  ): void {
+    // No-op in CI mode
+  }
+
   setEventPlan(_events: Array<{ name: string; description: string }>): void {
     // No-op in CI mode
   }

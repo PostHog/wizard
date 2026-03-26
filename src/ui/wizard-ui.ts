@@ -94,6 +94,17 @@ export interface WizardUI {
     todos: Array<{ content: string; status: string; activeForm?: string }>,
   ): void;
 
+  // ── Per-migration todo tracking ──────────────────────────────────
+  syncMigrationTodos(
+    migration: import('../lib/wizard-session.js').AdditionalFeature,
+    todos: Array<{ content: string; status: string; activeForm?: string }>,
+  ): void;
+
+  setMigrationStatus(
+    migration: import('../lib/wizard-session.js').AdditionalFeature,
+    status: 'running' | 'completed' | 'failed',
+  ): void;
+
   // ── Event plan from .posthog-events.json ────────────────────
   setEventPlan(events: Array<{ name: string; description: string }>): void;
 }

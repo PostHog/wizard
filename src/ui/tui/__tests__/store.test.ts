@@ -985,4 +985,111 @@ describe('WizardStore', () => {
       expect(resolved).toBe(true);
     });
   });
+
+  describe('syncMigrationTodos', () => {
+    it('creates a migration task group', () => {
+      const store = createStore();
+      store.syncMigrationTodos(AdditionalFeature.AmplitudeMigration, [
+        { content: 'Audit Amplitude usage', status: 'in_progress' },
+        { content: 'Remove Amplitude SDK', status: 'pending' },
+      ]);
+
+      const group = store.migrationTasks.get(
+        AdditionalFeature.AmplitudeMigration,
+      );
+      expect(group).toBeDefined();
+      expect(group!.tasks).toHaveLength(2);
+      expect(group!.tasks[0].label).toBe('Audit Amplitude usage');
+      expect(group!.tasks[0].status).toBe(TaskStatus.InProgress);
+      expect(group!.status).toBe('running');
+    });
+
+    it('tracks multiple migrations independently', () => {
+      const store = createStore();
+      store.syncMigrationTodos(AdditionalFeature.AmplitudeMigration, [
+        { content: 'Audit Amplitude', status: 'completed' },
+      ]);
+      store.syncMigrationTodos(AdditionalFeature.SentryMigration, [
+        { content: 'Audit Sentry', status: 'in_progress' },
+      ]);
+
+      expect(store.migrationTasks.size).toBe(2);
+      expect(
+        store.migrationTasks.get(AdditionalFeature.AmplitudeMigration)!.tasks,
+      ).toHaveLength(1);
+      expect(
+        store.migrationTasks.get(AdditionalFeature.SentryMigration)!.tasks,
+      ).toHaveLength(1);
+    });
+
+    it('retains completed tasks not in new sync', () => {
+      const store = createStore();
+      store.syncMigrationTodos(AdditionalFeature.SentryMigration, [
+        { content: 'Step 1', status: 'completed' },
+        { content: 'Step 2', status: 'in_progress' },
+      ]);
+
+      // Sync again with only Step 2 (Step 1 completed and not in new list)
+      store.syncMigrationTodos(AdditionalFeature.SentryMigration, [
+        { content: 'Step 2', status: 'completed' },
+      ]);
+
+      const tasks = store.migrationTasks.get(
+        AdditionalFeature.SentryMigration,
+      )!.tasks;
+      expect(tasks).toHaveLength(2);
+      expect(tasks[0].label).toBe('Step 1');
+      expect(tasks[0].done).toBe(true);
+    });
+
+    it('does not affect base tasks', () => {
+      const store = createStore();
+      store.syncTodos([{ content: 'Base task', status: 'in_progress' }]);
+      store.syncMigrationTodos(AdditionalFeature.AmplitudeMigration, [
+        { content: 'Migration task', status: 'pending' },
+      ]);
+
+      expect(store.tasks).toHaveLength(1);
+      expect(store.tasks[0].label).toBe('Base task');
+    });
+  });
+
+  describe('setMigrationStatus', () => {
+    it('sets status on an existing migration group', () => {
+      const store = createStore();
+      store.syncMigrationTodos(AdditionalFeature.SentryMigration, [
+        { content: 'Task', status: 'completed' },
+      ]);
+      store.setMigrationStatus(AdditionalFeature.SentryMigration, 'completed');
+
+      expect(
+        store.migrationTasks.get(AdditionalFeature.SentryMigration)!.status,
+      ).toBe('completed');
+    });
+
+    it('creates an empty group if no todos were synced yet', () => {
+      const store = createStore();
+      store.setMigrationStatus(AdditionalFeature.AmplitudeMigration, 'running');
+
+      const group = store.migrationTasks.get(
+        AdditionalFeature.AmplitudeMigration,
+      );
+      expect(group).toBeDefined();
+      expect(group!.tasks).toHaveLength(0);
+      expect(group!.status).toBe('running');
+    });
+
+    it('sets failed status', () => {
+      const store = createStore();
+      store.setMigrationStatus(
+        AdditionalFeature.LaunchDarklyMigration,
+        'failed',
+      );
+
+      expect(
+        store.migrationTasks.get(AdditionalFeature.LaunchDarklyMigration)!
+          .status,
+      ).toBe('failed');
+    });
+  });
 });

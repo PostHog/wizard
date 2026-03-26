@@ -153,6 +153,20 @@ export class InkUI implements WizardUI {
     this.store.syncTodos(todos);
   }
 
+  syncMigrationTodos(
+    migration: import('../../lib/wizard-session.js').AdditionalFeature,
+    todos: Array<{ content: string; status: string; activeForm?: string }>,
+  ): void {
+    this.store.syncMigrationTodos(migration, todos);
+  }
+
+  setMigrationStatus(
+    migration: import('../../lib/wizard-session.js').AdditionalFeature,
+    status: 'running' | 'completed' | 'failed',
+  ): void {
+    this.store.setMigrationStatus(migration, status);
+  }
+
   setEventPlan(events: Array<{ name: string; description: string }>): void {
     this.store.setEventPlan(events);
   }

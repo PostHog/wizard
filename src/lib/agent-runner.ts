@@ -20,12 +20,15 @@ import { getUI } from '../ui';
 import {
   initializeAgent,
   runAgent,
+  runMigrationAgent,
+  runPostMigrationCleanup,
   AgentSignals,
   AgentErrorType,
   buildWizardMetadata,
   checkAllSettingsConflicts,
   backupAndFixClaudeSettings,
   restoreClaudeSettings,
+  type MigrationResult,
 } from './agent-interface';
 import { getCloudUrlFromRegion } from '../utils/urls';
 
@@ -49,10 +52,21 @@ import {
 import {
   buildRunScope,
   getRunScopeKey,
+  splitRunScope,
   RUN_WORK_AREA_LABELS,
   RunWorkArea,
   type WizardRunScope,
 } from './run-scope';
+import {
+  scanCodebaseForCompetitors,
+  formatAuditForPrompt,
+  getCompetitorsFromFeatures,
+  generateProjectContext,
+} from './codebase-audit';
+import {
+  MIGRATION_ADDITIONAL_FEATURES,
+  type AdditionalFeature,
+} from './wizard-session';
 
 /**
  * Build a WizardOptions bag from a WizardSession (for code that still expects WizardOptions).
@@ -387,7 +401,7 @@ export async function runAgentWizard(
     eventPlan,
   }: {
     sessionId: string;
-    runStage: 'discovery' | 'execution';
+    runStage: 'discovery' | 'execution' | 'base_complete';
     todos: Array<{ content: string; status: string; activeForm?: string }>;
     eventPlan: Array<{ name: string; description: string }>;
   }) => {
@@ -402,32 +416,126 @@ export async function runAgentWizard(
     );
   };
 
-  if (!scopeChangedSinceCachedRun && cachedSession?.runStage === 'execution') {
+  // Determine whether to split migrations out for parallel execution
+  const migrationSet = new Set<AdditionalFeature>(
+    MIGRATION_ADDITIONAL_FEATURES as unknown as AdditionalFeature[],
+  );
+  const hasMigrations = session.additionalFeatureQueue.some((f) =>
+    migrationSet.has(f),
+  );
+  const { baseScope, migrationFeatures } = splitRunScope(runScope);
+  let migrationResults: MigrationResult[] = [];
+
+  // Pre-compute codebase audit for migration agents (no LLM, runs in parallel
+  // with the agent initialization above). Only scan for selected competitors.
+  let auditManifestPromise: ReturnType<
+    typeof scanCodebaseForCompetitors
+  > | null = null;
+  if (hasMigrations) {
+    const competitors = getCompetitorsFromFeatures(migrationFeatures);
+    logToFile(
+      '[agent-runner] Starting codebase audit for competitors:',
+      competitors,
+    );
+    auditManifestPromise = scanCodebaseForCompetitors(
+      session.installDir,
+      competitors,
+    );
+  }
+
+  if (
+    !scopeChangedSinceCachedRun &&
+    hasMigrations &&
+    cachedSession?.runStage === 'base_complete'
+  ) {
+    // Base setup already completed in a prior run — skip straight to migrations
+    getUI().pushStatus(
+      'Base setup already complete from a prior run. Running migrations...',
+    );
+
+    migrationResults = await runParallelMigrations(
+      agent,
+      cachedSession.sessionId,
+      migrationFeatures,
+      auditManifestPromise,
+      sessionToOptions(session),
+      config,
+    );
+  } else if (
+    !scopeChangedSinceCachedRun &&
+    cachedSession?.runStage === 'execution'
+  ) {
     getUI().pushStatus(
       'Reopening the prior implementation session and refreshing the task list if needed...',
     );
-    const agentResult = await runAgent(
-      agent,
-      integrationPrompt,
-      sessionToOptions(session),
-      spinner,
-      {
-        estimatedDurationMinutes: config.ui.estimatedDurationMinutes,
-        spinnerMessage:
-          'Reusing prior project analysis and resuming implementation with Claude Sonnet...',
-        successMessage: config.ui.successMessage,
-        errorMessage: 'Integration failed',
-        modelOverride: agent.model,
-        stageMode: 'execution_resume',
-        additionalFeatureQueue: session.additionalFeatureQueue,
-        resumeSessionId: cachedSession.sessionId,
-        resumeRunStage: 'execution',
-        onCachedSessionUpdated: persistCachedSession,
-      },
-      middleware,
-    );
 
-    await handleAgentResultOrAbort(agentResult, config);
+    if (hasMigrations) {
+      // Resume base setup only (migrations excluded), then fork for migrations
+      const agentResult = await runAgent(
+        agent,
+        integrationPrompt,
+        sessionToOptions(session),
+        spinner,
+        {
+          estimatedDurationMinutes: config.ui.estimatedDurationMinutes,
+          spinnerMessage:
+            'Reusing prior project analysis and resuming base setup with Claude Sonnet...',
+          successMessage: 'Base setup complete',
+          errorMessage: 'Integration failed',
+          modelOverride: agent.model,
+          stageMode: 'execution_resume',
+          additionalFeatureQueue: baseScope.selectedFeatures,
+          useBaseStopHook: true,
+          resumeSessionId: cachedSession.sessionId,
+          resumeRunStage: 'execution',
+          onCachedSessionUpdated: persistCachedSession,
+        },
+        middleware,
+      );
+
+      await handleAgentResultOrAbort(agentResult, config);
+
+      // Mark base as complete for future re-runs
+      persistCachedSession({
+        sessionId: cachedSession.sessionId,
+        runStage: 'base_complete',
+        todos: [],
+        eventPlan: [],
+      });
+
+      // Run migrations in parallel after base setup
+      migrationResults = await runParallelMigrations(
+        agent,
+        cachedSession.sessionId,
+        migrationFeatures,
+        auditManifestPromise,
+        sessionToOptions(session),
+        config,
+      );
+    } else {
+      const agentResult = await runAgent(
+        agent,
+        integrationPrompt,
+        sessionToOptions(session),
+        spinner,
+        {
+          estimatedDurationMinutes: config.ui.estimatedDurationMinutes,
+          spinnerMessage:
+            'Reusing prior project analysis and resuming implementation with Claude Sonnet...',
+          successMessage: config.ui.successMessage,
+          errorMessage: 'Integration failed',
+          modelOverride: agent.model,
+          stageMode: 'execution_resume',
+          additionalFeatureQueue: session.additionalFeatureQueue,
+          resumeSessionId: cachedSession.sessionId,
+          resumeRunStage: 'execution',
+          onCachedSessionUpdated: persistCachedSession,
+        },
+        middleware,
+      );
+
+      await handleAgentResultOrAbort(agentResult, config);
+    }
   } else {
     const discoveryStatus = scopeChangedSinceCachedRun
       ? 'Reusing prior project context and reconciling it with the updated selected work...'
@@ -491,28 +599,73 @@ export async function runAgentWizard(
       'Preparing the full-scope task list for this run before making code changes...',
     );
 
-    const executionResult = await runAgent(
-      agent,
-      integrationPrompt,
-      sessionToOptions(session),
-      spinner,
-      {
-        estimatedDurationMinutes: config.ui.estimatedDurationMinutes,
-        spinnerMessage:
-          'Switching to Claude Sonnet to implement the requested work...',
-        successMessage: config.ui.successMessage,
-        errorMessage: 'Integration failed',
-        modelOverride: agent.model,
-        stageMode: 'execution',
-        additionalFeatureQueue: session.additionalFeatureQueue,
-        resumeSessionId: executionSessionId,
-        resumeRunStage: 'execution',
-        onCachedSessionUpdated: persistCachedSession,
-      },
-      middleware,
-    );
+    if (hasMigrations) {
+      // Run base setup only (migrations excluded from prompt)
+      const executionResult = await runAgent(
+        agent,
+        integrationPrompt,
+        sessionToOptions(session),
+        spinner,
+        {
+          estimatedDurationMinutes: config.ui.estimatedDurationMinutes,
+          spinnerMessage:
+            'Switching to Claude Sonnet to implement the base setup...',
+          successMessage: 'Base setup complete',
+          errorMessage: 'Integration failed',
+          modelOverride: agent.model,
+          stageMode: 'execution',
+          additionalFeatureQueue: baseScope.selectedFeatures,
+          useBaseStopHook: true,
+          resumeSessionId: executionSessionId,
+          resumeRunStage: 'execution',
+          onCachedSessionUpdated: persistCachedSession,
+        },
+        middleware,
+      );
 
-    await handleAgentResultOrAbort(executionResult, config);
+      await handleAgentResultOrAbort(executionResult, config);
+
+      // Mark base as complete for future re-runs
+      persistCachedSession({
+        sessionId: executionSessionId!,
+        runStage: 'base_complete',
+        todos: [],
+        eventPlan: [],
+      });
+
+      // Run migrations in parallel after base setup
+      migrationResults = await runParallelMigrations(
+        agent,
+        executionSessionId!,
+        migrationFeatures,
+        auditManifestPromise,
+        sessionToOptions(session),
+        config,
+      );
+    } else {
+      const executionResult = await runAgent(
+        agent,
+        integrationPrompt,
+        sessionToOptions(session),
+        spinner,
+        {
+          estimatedDurationMinutes: config.ui.estimatedDurationMinutes,
+          spinnerMessage:
+            'Switching to Claude Sonnet to implement the requested work...',
+          successMessage: config.ui.successMessage,
+          errorMessage: 'Integration failed',
+          modelOverride: agent.model,
+          stageMode: 'execution',
+          additionalFeatureQueue: session.additionalFeatureQueue,
+          resumeSessionId: executionSessionId,
+          resumeRunStage: 'execution',
+          onCachedSessionUpdated: persistCachedSession,
+        },
+        middleware,
+      );
+
+      await handleAgentResultOrAbort(executionResult, config);
+    }
   }
 
   // Build environment variables from OAuth credentials
@@ -545,6 +698,13 @@ export async function runAgentWizard(
     ? `${getCloudUrlFromRegion(cloudRegion)}/products?source=wizard`
     : undefined;
 
+  const migrationChangeLines = migrationResults.map((r) => {
+    const label = ADDITIONAL_FEATURE_LABELS[r.feature];
+    return r.success
+      ? `${label} completed`
+      : `${label} failed — re-run the wizard to retry`;
+  });
+
   const changes = [
     ...config.ui.getOutroChanges(frameworkContext),
     Object.keys(envVars).length > 0
@@ -553,6 +713,7 @@ export async function runAgentWizard(
     uploadedEnvVars.length > 0
       ? `Uploaded environment variables to your hosting provider`
       : '',
+    ...migrationChangeLines,
   ].filter(Boolean);
 
   session.outroData = {
@@ -565,6 +726,173 @@ export async function runAgentWizard(
   getUI().outro(`Successfully installed PostHog!`);
 
   await analytics.shutdown('success');
+}
+
+/**
+ * Run selected migrations in parallel as forked agent sessions.
+ *
+ * Each migration forks from the base execution session so it inherits
+ * the full project context and installed skills. Individual migration
+ * failures are reported but do not abort the wizard — the base setup
+ * has already succeeded.
+ */
+async function runParallelMigrations(
+  agentConfig: Awaited<ReturnType<typeof initializeAgent>>,
+  baseSessionId: string,
+  migrationFeatures: AdditionalFeature[],
+  auditManifestPromise: ReturnType<typeof scanCodebaseForCompetitors> | null,
+  options: import('../utils/types').WizardOptions,
+  config: FrameworkConfig,
+): Promise<MigrationResult[]> {
+  if (migrationFeatures.length === 0) return [];
+
+  const auditManifest = auditManifestPromise ? await auditManifestPromise : {};
+  const projectContext = generateProjectContext(agentConfig.workingDirectory);
+
+  const migrationLabels = migrationFeatures
+    .map((f) => ADDITIONAL_FEATURE_LABELS[f])
+    .join(', ');
+
+  logToFile('[agent-runner] Starting parallel migrations:', migrationLabels);
+  getUI().pushStatus(
+    `Base setup complete. Running ${migrationFeatures.length} migration${
+      migrationFeatures.length > 1 ? 's' : ''
+    } in parallel: ${migrationLabels}...`,
+  );
+
+  const migrationPromises = migrationFeatures.map((feature) => {
+    const competitors = getCompetitorsFromFeatures([feature]);
+    const auditContext =
+      competitors.length > 0
+        ? formatAuditForPrompt(auditManifest, competitors[0])
+        : '';
+
+    getUI().setMigrationStatus(feature, 'running');
+    return runMigrationAgent(
+      agentConfig,
+      baseSessionId,
+      feature,
+      auditContext,
+      projectContext,
+      options,
+      {
+        onTodoSync: (todos) => {
+          getUI().syncMigrationTodos(feature, todos);
+        },
+        onStatus: (status) => {
+          getUI().pushStatus(
+            `[${ADDITIONAL_FEATURE_LABELS[feature]}] ${status}`,
+          );
+        },
+      },
+    );
+  });
+
+  const results = await Promise.allSettled(migrationPromises);
+  const migrationResults: MigrationResult[] = [];
+
+  for (let i = 0; i < results.length; i++) {
+    const result = results[i];
+    const feature = migrationFeatures[i];
+    const label = ADDITIONAL_FEATURE_LABELS[feature];
+
+    if (result.status === 'fulfilled') {
+      migrationResults.push(result.value);
+
+      analytics.wizardCapture('agent migration completed', {
+        migration: feature,
+        integration: config.metadata.integration,
+        success: result.value.success,
+        duration_ms: result.value.durationMs,
+        error_type: result.value.error,
+      });
+
+      if (result.value.remark) {
+        analytics.capture('wizard agent remark', {
+          remark: result.value.remark,
+          migration: feature,
+        });
+      }
+
+      if (result.value.success) {
+        logToFile(`[agent-runner] ${label}: completed successfully`);
+        getUI().setMigrationStatus(feature, 'completed');
+      } else {
+        logToFile(
+          `[agent-runner] ${label}: failed — ${
+            result.value.error ?? result.value.errorMessage
+          }`,
+        );
+        getUI().setMigrationStatus(feature, 'failed');
+      }
+    } else {
+      logToFile(`[agent-runner] ${label}: rejected — ${result.reason}`);
+      getUI().setMigrationStatus(feature, 'failed');
+      migrationResults.push({
+        feature,
+        success: false,
+        errorMessage: String(result.reason),
+        durationMs: 0,
+      });
+    }
+  }
+
+  // Report summary
+  const succeeded = migrationResults.filter((r) => r.success).length;
+  const total = migrationResults.length;
+
+  if (succeeded === total) {
+    getUI().pushStatus(
+      `All ${total} migration${total > 1 ? 's' : ''} completed successfully.`,
+    );
+  } else {
+    const failed = migrationResults
+      .filter((r) => !r.success)
+      .map((r) => ADDITIONAL_FEATURE_LABELS[r.feature])
+      .join(', ');
+    getUI().pushStatus(
+      `${succeeded}/${total} migrations completed. Failed: ${failed}`,
+    );
+    getUI().log.warn(
+      `Some migrations failed: ${failed}. You can re-run the wizard to retry.`,
+    );
+  }
+
+  // Post-migration cleanup: the migration agents were told to skip package
+  // install, lint/format, and setup report updates. Run a single cleanup
+  // agent that handles all deferred housekeeping in one pass.
+  if (succeeded > 0) {
+    const completedLabels = migrationResults
+      .filter((r) => r.success)
+      .map((r) => ADDITIONAL_FEATURE_LABELS[r.feature]);
+
+    getUI().pushStatus(
+      'Running post-migration cleanup (install, lint, setup report)...',
+    );
+    logToFile(
+      '[agent-runner] Starting post-migration cleanup for:',
+      completedLabels,
+    );
+
+    const cleanupResult = await runPostMigrationCleanup(
+      agentConfig,
+      baseSessionId,
+      completedLabels,
+      options,
+    );
+
+    if (cleanupResult.success) {
+      getUI().pushStatus('Post-migration cleanup complete.');
+    } else {
+      logToFile(
+        '[agent-runner] Cleanup had issues:',
+        cleanupResult.errorMessage,
+      );
+      getUI().pushStatus('Post-migration cleanup finished with warnings.');
+    }
+  }
+
+  return migrationResults;
 }
 
 /**

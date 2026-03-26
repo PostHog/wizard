@@ -20,7 +20,7 @@ export interface CachedPlannedEvent {
   description: string;
 }
 
-export type CachedRunStage = 'discovery' | 'execution';
+export type CachedRunStage = 'discovery' | 'execution' | 'base_complete';
 
 export interface AgentSessionCacheEntry {
   version: number;
@@ -97,7 +97,9 @@ function isReusableCacheEntry(
     entry.projectFingerprint === projectFingerprint &&
     typeof entry.scopeKey === 'string' &&
     typeof entry.sessionId === 'string' &&
-    (entry.runStage === 'discovery' || entry.runStage === 'execution') &&
+    (entry.runStage === 'discovery' ||
+      entry.runStage === 'execution' ||
+      entry.runStage === 'base_complete') &&
     typeof entry.updatedAt === 'string' &&
     Array.isArray(entry.todos) &&
     entry.todos.every(isValidTodo) &&

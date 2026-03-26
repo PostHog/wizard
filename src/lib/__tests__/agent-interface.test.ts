@@ -1,4 +1,9 @@
-import { runAgent, createStopHook } from '../agent-interface';
+import {
+  runAgent,
+  createStopHook,
+  createBaseStopHook,
+  createMigrationStopHook,
+} from '../agent-interface';
 import type { WizardOptions } from '../../utils/types';
 import type { SpinnerHandle } from '../../ui';
 import {
@@ -771,5 +776,77 @@ describe('createStopHook', () => {
     expect((first as { reason: string }).reason).toContain(
       'You are now in stage 2 of 2 for this wizard run.',
     );
+  });
+});
+
+describe('createBaseStopHook', () => {
+  const hookInput = { stop_hook_active: true };
+
+  it('has two phases: execution prompt then allow stop', () => {
+    const hook = createBaseStopHook([]);
+
+    // Phase 1: inject execution prompt
+    const first = hook(hookInput);
+    expect(first).toHaveProperty('decision', 'block');
+    expect((first as { reason: string }).reason).toContain(
+      'Migration work (replacing competitor SDKs) will be handled by separate agents',
+    );
+
+    // Phase 2: allow stop (no remark collection)
+    const second = hook(hookInput);
+    expect(second).toEqual({});
+  });
+
+  it('skips execution prompt when initialStage is execution', () => {
+    const hook = createBaseStopHook([], undefined, {
+      initialStage: 'execution',
+    });
+
+    // First call directly allows stop (no execution prompt needed)
+    const first = hook(hookInput);
+    expect(first).toEqual({});
+  });
+
+  it('allows immediate stop on API errors', () => {
+    const collectedText = ['API Error: 429'];
+    const hook = createBaseStopHook([], collectedText);
+
+    const result = hook(hookInput);
+    expect(result).toEqual({});
+  });
+
+  it('calls onEnterExecutionStage when injecting execution prompt', () => {
+    const onEnterExecutionStage = jest.fn();
+    const hook = createBaseStopHook([], undefined, {
+      onEnterExecutionStage,
+    });
+
+    hook(hookInput);
+    expect(onEnterExecutionStage).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('createMigrationStopHook', () => {
+  const hookInput = { stop_hook_active: true };
+
+  it('has two phases: remark collection then allow stop', () => {
+    const hook = createMigrationStopHook();
+
+    // Phase 1: collect remark
+    const first = hook(hookInput);
+    expect(first).toHaveProperty('decision', 'block');
+    expect((first as { reason: string }).reason).toContain('WIZARD-REMARK');
+
+    // Phase 2: allow stop
+    const second = hook(hookInput);
+    expect(second).toEqual({});
+  });
+
+  it('allows immediate stop on API errors', () => {
+    const collectedText = ['API Error: 500'];
+    const hook = createMigrationStopHook(collectedText);
+
+    const result = hook(hookInput);
+    expect(result).toEqual({});
   });
 });

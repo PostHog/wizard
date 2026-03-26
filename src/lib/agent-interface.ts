@@ -448,6 +448,139 @@ export function createStopHook(
 }
 
 /**
+ * Stop hook for the base setup phase when migrations will run separately.
+ * Two phases only:
+ *   Phase 1 — inject execution prompt (base setup only, no migrations)
+ *   Phase 2 — allow stop
+ * No remark collection — that happens after migrations complete.
+ */
+export function createBaseStopHook(
+  baseFeatures: readonly AdditionalFeature[],
+  collectedText?: string[],
+  options?: {
+    initialStage?: CachedRunStage;
+    onEnterExecutionStage?: () => void;
+  },
+): (input: { stop_hook_active: boolean }) => StopHookResult {
+  let executionPromptRequested = options?.initialStage === 'execution';
+  const executionPrompt = buildBaseExecutionStagePrompt(baseFeatures);
+
+  return (input: { stop_hook_active: boolean }): StopHookResult => {
+    logToFile('Base stop hook triggered', {
+      stop_hook_active: input.stop_hook_active,
+      executionPromptRequested,
+    });
+
+    if (collectedText) {
+      const text = collectedText.join('\n');
+      if (text.includes('API Error:')) {
+        logToFile(
+          'Base stop hook: API error detected, allowing immediate stop',
+        );
+        return {};
+      }
+    }
+
+    if (!executionPromptRequested) {
+      executionPromptRequested = true;
+      options?.onEnterExecutionStage?.();
+      logToFile('Base stop hook: injecting base execution prompt');
+      return { decision: 'block', reason: executionPrompt };
+    }
+
+    logToFile('Base stop hook: allowing stop');
+    return {};
+  };
+}
+
+/**
+ * Stop hook for individual migration agents.
+ * Two phases:
+ *   Phase 1 — collect remark
+ *   Phase 2 — allow stop
+ */
+export function createMigrationStopHook(
+  collectedText?: string[],
+): (input: { stop_hook_active: boolean }) => StopHookResult {
+  let remarkRequested = false;
+
+  return (input: { stop_hook_active: boolean }): StopHookResult => {
+    logToFile('Migration stop hook triggered', {
+      stop_hook_active: input.stop_hook_active,
+      remarkRequested,
+    });
+
+    if (collectedText) {
+      const text = collectedText.join('\n');
+      if (text.includes('API Error:')) {
+        logToFile(
+          'Migration stop hook: API error detected, allowing immediate stop',
+        );
+        return {};
+      }
+    }
+
+    if (!remarkRequested) {
+      remarkRequested = true;
+      logToFile('Migration stop hook: requesting reflection');
+      return {
+        decision: 'block',
+        reason: `Before concluding, provide a brief remark about what information or guidance would have been useful to have in the integration prompt or documentation for this migration. Specifically cite anything that would have prevented tool failures, erroneous edits, or other wasted turns. Format your response exactly as: ${AgentSignals.WIZARD_REMARK} Your remark here`,
+      };
+    }
+
+    logToFile('Migration stop hook: allowing stop');
+    return {};
+  };
+}
+
+/**
+ * Build the execution prompt for the base setup phase only.
+ * Migrations are explicitly excluded — they run as separate forked agents.
+ */
+function buildBaseExecutionStagePrompt(
+  nonMigrationFeatures: readonly AdditionalFeature[],
+): string {
+  const runScope = buildRunScope(nonMigrationFeatures);
+  const additionalWorkSection =
+    nonMigrationFeatures.length > 0
+      ? `Additional requested work for this run:\n\n${nonMigrationFeatures
+          .map(
+            (feature, index) =>
+              `${index + 1}. ${
+                ADDITIONAL_FEATURE_LABELS[feature]
+              }: ${ADDITIONAL_FEATURE_PROMPTS[feature].trim()}`,
+          )
+          .join('\n\n')}`
+      : 'There is no additional follow-up work queued for this run.';
+  const scopeGuardrail = runScope.workAreas.includes(
+    RunWorkArea.ProductAnalytics,
+  )
+    ? ''
+    : '\nProduct analytics is not part of this run unless one of the selected migrations explicitly requires it. Do not add generic event capture or unrelated analytics setup.';
+
+  return `You are now in stage 2 of 2 for this wizard run. Reuse the discovery work you just completed and execute the requested setup scope from the earlier prompt.
+
+Before you do substantial implementation work, synthesize the full requested scope for this run. Create or refresh the TodoWrite task list only now, once that scope is clear. Build a single high-level task list for the whole run, then execute the work in intermediate stages and keep TodoWrite aligned with the current stage.
+
+You may now edit project files, set environment variables, and install packages as required by the workflow.${scopeGuardrail}
+
+Migration work (replacing competitor SDKs) will be handled by separate agents after this base setup completes. Focus only on getting the PostHog integration working correctly.
+
+${additionalWorkSection}`;
+}
+
+/** Result of a single migration agent run. */
+export interface MigrationResult {
+  feature: AdditionalFeature;
+  success: boolean;
+  error?: AgentErrorType;
+  errorMessage?: string;
+  remark?: string;
+  durationMs: number;
+}
+
+/**
  * Internal configuration object returned by initializeAgent
  */
 type AgentRunConfig = {
@@ -836,6 +969,8 @@ export async function runAgent(
     resumeSessionId?: string;
     resumeRunStage?: CachedRunStage;
     resumeScopeChanged?: boolean;
+    /** Use base stop hook (no remark) when running base setup before parallel migrations. */
+    useBaseStopHook?: boolean;
     onCachedSessionUpdated?: (snapshot: {
       sessionId: string;
       runStage: CachedRunStage;
@@ -1086,7 +1221,7 @@ export async function runAgent(
             debug('CLI stderr:', data);
           }
         },
-        // Stop hook: drain additional feature queue, then collect remark, then allow stop
+        // Stop hook: advance stages, collect remark, then allow stop
         hooks: {
           PreToolUse: createPreToolUseYaraHooks(),
           PostToolUse: createPostToolUseYaraHooks(),
@@ -1095,23 +1230,41 @@ export async function runAgent(
                 Stop: [
                   {
                     hooks: [
-                      createStopHook(
-                        config?.additionalFeatureQueue ?? [],
-                        collectedText,
-                        {
-                          initialStage:
-                            stageMode === 'full'
-                              ? currentRunStage
-                              : 'execution',
-                          onEnterExecutionStage:
-                            stageMode === 'full'
-                              ? () => {
-                                  currentRunStage = 'execution';
-                                  persistCachedSession();
-                                }
-                              : undefined,
-                        },
-                      ),
+                      config?.useBaseStopHook
+                        ? createBaseStopHook(
+                            config?.additionalFeatureQueue ?? [],
+                            collectedText,
+                            {
+                              initialStage:
+                                stageMode === 'full'
+                                  ? currentRunStage
+                                  : 'execution',
+                              onEnterExecutionStage:
+                                stageMode === 'full'
+                                  ? () => {
+                                      currentRunStage = 'execution';
+                                      persistCachedSession();
+                                    }
+                                  : undefined,
+                            },
+                          )
+                        : createStopHook(
+                            config?.additionalFeatureQueue ?? [],
+                            collectedText,
+                            {
+                              initialStage:
+                                stageMode === 'full'
+                                  ? currentRunStage
+                                  : 'execution',
+                              onEnterExecutionStage:
+                                stageMode === 'full'
+                                  ? () => {
+                                      currentRunStage = 'execution';
+                                      persistCachedSession();
+                                    }
+                                  : undefined,
+                            },
+                          ),
                     ],
                     timeout: 30,
                   },
@@ -1479,5 +1632,463 @@ function handleSDKMessage(
         debug(`Unhandled message type: ${message.type}`);
       }
       break;
+  }
+}
+
+/**
+ * Run post-migration cleanup as a single forked agent session.
+ *
+ * Handles deferred housekeeping that was skipped during parallel migrations:
+ * package install, setup report update, and lint/format.
+ */
+export async function runPostMigrationCleanup(
+  agentConfig: AgentRunConfig,
+  baseSessionId: string,
+  completedMigrations: string[],
+  _options: WizardOptions,
+): Promise<{ success: boolean; errorMessage?: string }> {
+  const startTime = Date.now();
+  const collectedText: string[] = [];
+  let receivedSuccessResult = false;
+
+  logToFile('[cleanup] Starting post-migration cleanup');
+
+  const { query } = await getSDKModule();
+
+  const migrationList = completedMigrations.map((m) => `- ${m}`).join('\n');
+  const cleanupPrompt = `The following migrations just completed in parallel:\n${migrationList}\n\nPerform these post-migration cleanup tasks:\n1. Run the package manager install command (e.g., pnpm install) to sync the lockfile after dependency removals.\n2. Update the setup report markdown file (posthog-setup-report.md) with a consolidated summary of all completed migrations.\n3. Run lint and format commands if available to ensure code consistency.\n\nDo not re-do any migration work. Only handle these deferred cleanup tasks.`;
+
+  let signalDone: () => void;
+  const resultReceived = new Promise<void>((resolve) => {
+    signalDone = resolve;
+  });
+
+  const createPromptStream = async function* () {
+    yield {
+      type: 'user',
+      session_id: '',
+      message: { role: 'user', content: cleanupPrompt },
+      parent_tool_use_id: null,
+    };
+    await resultReceived;
+  };
+
+  const allowedTools = [
+    'Read',
+    'Write',
+    'Edit',
+    'Glob',
+    'Grep',
+    'Bash',
+    'ListMcpResourcesTool',
+    'Skill',
+    ...WIZARD_TOOL_NAMES,
+  ];
+
+  try {
+    const response = query({
+      prompt: createPromptStream(),
+      options: {
+        model: agentConfig.model,
+        cwd: agentConfig.workingDirectory,
+        resume: baseSessionId,
+        forkSession: true,
+        permissionMode: 'acceptEdits',
+        mcpServers: agentConfig.mcpServers,
+        settingSources: ['project'],
+        allowedTools,
+        sandbox: {
+          enabled: true,
+          allowUnsandboxedCommands: false,
+          filesystem: {
+            allowWrite: [
+              '/' + agentConfig.workingDirectory,
+              '/' + agentConfig.workingDirectory + '/**',
+              '//tmp',
+              '//tmp/**',
+              '//private/tmp',
+              '//private/tmp/**',
+              '~/Library/pnpm/store/**',
+              '~/.local/share/pnpm/store/**',
+              '~/.pnpm-store/**',
+              '~/.npm/**',
+              '~/.yarn/**',
+              '~/.yarn/berry/**',
+            ],
+          },
+          network: {
+            allowedDomains: [
+              'github.com',
+              'api.github.com',
+              'raw.githubusercontent.com',
+              'release-assets.githubusercontent.com',
+              'objects.githubusercontent.com',
+            ],
+          },
+        },
+        env: {
+          ...process.env,
+          ANTHROPIC_API_KEY: undefined,
+          ANTHROPIC_CUSTOM_HEADERS: buildAgentEnv(
+            agentConfig.wizardMetadata ?? {},
+            agentConfig.wizardFlags ?? {},
+          ),
+        },
+        canUseTool: (toolName: string, input: unknown) => {
+          logToFile('[cleanup] canUseTool:', { toolName, input });
+          const result = wizardCanUseTool(
+            toolName,
+            input as Record<string, unknown>,
+          );
+          return Promise.resolve(result);
+        },
+        systemPrompt: {
+          type: 'preset',
+          preset: 'claude_code',
+          append: getWizardCommandments(),
+        },
+        tools: { type: 'preset', preset: 'claude_code' },
+        stderr: (data: string) => {
+          logToFile('[cleanup] CLI stderr:', data);
+        },
+        hooks: {
+          PreToolUse: createPreToolUseYaraHooks(),
+          PostToolUse: createPostToolUseYaraHooks(),
+          // No stop hook phases — allow stop immediately after work
+        },
+      },
+    });
+
+    for await (const message of response) {
+      logToFile(
+        `[cleanup] SDK Message: ${message.type}`,
+        JSON.stringify(message, null, 2),
+      );
+
+      if (message.type === 'assistant') {
+        const content = message.message?.content;
+        if (Array.isArray(content)) {
+          for (const block of content) {
+            if (block.type === 'text' && typeof block.text === 'string') {
+              collectedText.push(block.text);
+            }
+          }
+        }
+      }
+
+      if (message.type === 'result') {
+        if (typeof message.result === 'string') {
+          collectedText.push(message.result);
+        }
+        if (message.subtype === 'success' && !message.is_error) {
+          receivedSuccessResult = true;
+        }
+        signalDone!();
+      }
+    }
+
+    const durationMs = Date.now() - startTime;
+    logToFile(`[cleanup] Completed in ${Math.round(durationMs / 1000)}s`);
+    return { success: true };
+  } catch (error) {
+    signalDone!();
+
+    if (receivedSuccessResult) {
+      return { success: true };
+    }
+
+    logToFile('[cleanup] Failed:', error);
+    return {
+      success: false,
+      errorMessage: (error as Error).message,
+    };
+  }
+}
+
+/**
+ * Run a single migration as a forked agent session.
+ *
+ * Forks from the base execution session so the migration agent inherits the
+ * project context and installed skills without repeating discovery. Each
+ * migration runs independently — failures do not affect other migrations.
+ */
+export async function runMigrationAgent(
+  agentConfig: AgentRunConfig,
+  baseSessionId: string,
+  migration: AdditionalFeature,
+  auditContext: string,
+  projectContext: string,
+  options: WizardOptions,
+  callbacks: {
+    onTodoSync: (
+      todos: Array<{ content: string; status: string; activeForm?: string }>,
+    ) => void;
+    onStatus: (status: string) => void;
+  },
+): Promise<MigrationResult> {
+  const startTime = Date.now();
+  const label = ADDITIONAL_FEATURE_LABELS[migration];
+  const migrationPrompt = ADDITIONAL_FEATURE_PROMPTS[migration];
+  const collectedText: string[] = [];
+  let receivedSuccessResult = false;
+
+  logToFile(`[migration] Starting ${label}`, {
+    migration,
+    baseSessionId,
+  });
+
+  const { query } = await getSDKModule();
+
+  const fullPrompt = `${auditContext}${
+    projectContext ? `\n\n${projectContext}` : ''
+  }
+
+${migrationPrompt.trim()}
+
+The PostHog integration has already been set up by a prior agent run. The installed skills in .claude/skills/ are available for reference. Focus exclusively on this migration — do not modify the base PostHog setup unless required to complete the migration.
+
+IMPORTANT — deferred housekeeping:
+- Do NOT run package install commands (npm install, pnpm install, yarn, etc.) to sync the lockfile. A single install will run after all migrations complete.
+- Do NOT update the setup report markdown file (posthog-setup-report.md). A consolidated report update will happen after all migrations complete.
+- Do NOT run lint or format commands. A single lint/format pass will run after all migrations complete.
+- Focus only on: replacing code references, removing imports, deleting dead helper files, and cleaning up environment variables.`;
+
+  let signalDone: () => void;
+  const resultReceived = new Promise<void>((resolve) => {
+    signalDone = resolve;
+  });
+
+  const createPromptStream = async function* () {
+    yield {
+      type: 'user',
+      session_id: '',
+      message: { role: 'user', content: fullPrompt },
+      parent_tool_use_id: null,
+    };
+    await resultReceived;
+  };
+
+  const allowedTools = [
+    'Read',
+    'Write',
+    'Edit',
+    'Glob',
+    'Grep',
+    'Bash',
+    'ListMcpResourcesTool',
+    'Skill',
+    ...WIZARD_TOOL_NAMES,
+  ];
+
+  try {
+    const response = query({
+      prompt: createPromptStream(),
+      options: {
+        model: agentConfig.model,
+        cwd: agentConfig.workingDirectory,
+        resume: baseSessionId,
+        forkSession: true,
+        permissionMode: 'acceptEdits',
+        mcpServers: agentConfig.mcpServers,
+        settingSources: ['project'],
+        allowedTools,
+        sandbox: {
+          enabled: true,
+          allowUnsandboxedCommands: false,
+          filesystem: {
+            allowWrite: [
+              '/' + agentConfig.workingDirectory,
+              '/' + agentConfig.workingDirectory + '/**',
+              '//tmp',
+              '//tmp/**',
+              '//private/tmp',
+              '//private/tmp/**',
+              '~/Library/pnpm/store/**',
+              '~/.local/share/pnpm/store/**',
+              '~/.pnpm-store/**',
+              '~/.npm/**',
+              '~/.yarn/**',
+              '~/.yarn/berry/**',
+            ],
+          },
+          network: {
+            allowedDomains: [
+              'github.com',
+              'api.github.com',
+              'raw.githubusercontent.com',
+              'release-assets.githubusercontent.com',
+              'objects.githubusercontent.com',
+            ],
+          },
+        },
+        env: {
+          ...process.env,
+          ANTHROPIC_API_KEY: undefined,
+          ANTHROPIC_CUSTOM_HEADERS: buildAgentEnv(
+            agentConfig.wizardMetadata ?? {},
+            agentConfig.wizardFlags ?? {},
+          ),
+        },
+        canUseTool: (toolName: string, input: unknown) => {
+          logToFile(`[migration:${label}] canUseTool:`, { toolName, input });
+          const result = wizardCanUseTool(
+            toolName,
+            input as Record<string, unknown>,
+          );
+          logToFile(`[migration:${label}] canUseTool result:`, result);
+          return Promise.resolve(result);
+        },
+        systemPrompt: {
+          type: 'preset',
+          preset: 'claude_code',
+          append: getWizardCommandments(),
+        },
+        tools: { type: 'preset', preset: 'claude_code' },
+        stderr: (data: string) => {
+          logToFile(`[migration:${label}] CLI stderr:`, data);
+        },
+        hooks: {
+          PreToolUse: createPreToolUseYaraHooks(),
+          PostToolUse: createPostToolUseYaraHooks(),
+          Stop: [
+            {
+              hooks: [createMigrationStopHook(collectedText)],
+              timeout: 30,
+            },
+          ],
+        },
+      },
+    });
+
+    for await (const message of response) {
+      logToFile(
+        `[migration:${label}] SDK Message: ${message.type}`,
+        JSON.stringify(message, null, 2),
+      );
+
+      // Extract text and TodoWrite updates
+      if (message.type === 'assistant') {
+        const content = message.message?.content;
+        if (Array.isArray(content)) {
+          for (const block of content) {
+            if (block.type === 'text' && typeof block.text === 'string') {
+              collectedText.push(block.text);
+
+              const statusRegex = new RegExp(
+                `^.*${AgentSignals.STATUS.replace(
+                  /[.*+?^${}()|[\]\\]/g,
+                  '\\$&',
+                )}\\s*(.+?)$`,
+                'm',
+              );
+              const statusMatch = block.text.match(statusRegex);
+              if (statusMatch) {
+                callbacks.onStatus(statusMatch[1].trim());
+              }
+            }
+
+            if (
+              block.type === 'tool_use' &&
+              block.name === 'TodoWrite' &&
+              block.input?.todos &&
+              Array.isArray(block.input.todos)
+            ) {
+              callbacks.onTodoSync(block.input.todos);
+            }
+          }
+        }
+      }
+
+      if (message.type === 'result') {
+        if (typeof message.result === 'string') {
+          collectedText.push(message.result);
+        }
+        if (message.subtype === 'success' && !message.is_error) {
+          receivedSuccessResult = true;
+        }
+        signalDone!();
+      }
+    }
+
+    const outputText = collectedText.join('\n');
+    const durationMs = Date.now() - startTime;
+
+    // Extract remark
+    const remarkRegex = new RegExp(
+      `${AgentSignals.WIZARD_REMARK.replace(
+        /[.*+?^${}()|[\]\\]/g,
+        '\\$&',
+      )}\\s*(.+?)(?:\\n|$)`,
+      's',
+    );
+    const remarkMatch = outputText.match(remarkRegex);
+    const remark = remarkMatch?.[1]?.trim();
+
+    // Check for errors
+    if (outputText.includes(AgentSignals.ERROR_MCP_MISSING)) {
+      return {
+        feature: migration,
+        success: false,
+        error: AgentErrorType.MCP_MISSING,
+        durationMs,
+        remark,
+      };
+    }
+
+    if (outputText.includes('API Error: 429')) {
+      const apiErrorMatch = outputText.match(/API Error: [^\n]+/g);
+      return {
+        feature: migration,
+        success: false,
+        error: AgentErrorType.RATE_LIMIT,
+        errorMessage: apiErrorMatch?.join('\n'),
+        durationMs,
+        remark,
+      };
+    }
+
+    if (outputText.includes('API Error:')) {
+      const apiErrorMatch = outputText.match(/API Error: [^\n]+/g);
+      return {
+        feature: migration,
+        success: false,
+        error: AgentErrorType.API_ERROR,
+        errorMessage: apiErrorMatch?.join('\n'),
+        durationMs,
+        remark,
+      };
+    }
+
+    logToFile(
+      `[migration] ${label} completed in ${Math.round(durationMs / 1000)}s`,
+    );
+    return {
+      feature: migration,
+      success: true,
+      durationMs,
+      remark,
+    };
+  } catch (error) {
+    signalDone!();
+
+    if (receivedSuccessResult) {
+      logToFile(
+        `[migration] ${label} ignoring post-completion error`,
+        (error as Error).message,
+      );
+      return {
+        feature: migration,
+        success: true,
+        durationMs: Date.now() - startTime,
+      };
+    }
+
+    logToFile(`[migration] ${label} failed:`, error);
+    return {
+      feature: migration,
+      success: false,
+      errorMessage: (error as Error).message,
+      durationMs: Date.now() - startTime,
+    };
   }
 }

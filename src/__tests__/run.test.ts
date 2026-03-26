@@ -5,27 +5,31 @@ import { Integration } from '../lib/constants';
 
 jest.mock('../lib/agent-runner');
 jest.mock('../utils/analytics');
-jest.mock('../lib/wizard-session', () => ({
-  buildSession: (args: Record<string, unknown>) => ({
-    debug: false,
-    forceInstall: false,
-    installDir: process.cwd(),
-    ci: false,
-    signup: false,
-    localMcp: false,
-    menu: false,
-    setupConfirmed: false,
-    integration: null,
-    frameworkContext: {},
-    typescript: false,
-    credentials: null,
-    readinessResult: null,
-    outageDismissed: false,
-    outroData: null,
-    frameworkConfig: null,
-    ...args,
-  }),
-}));
+jest.mock('../lib/wizard-session', () => {
+  const actual = jest.requireActual('../lib/wizard-session');
+  return {
+    ...actual,
+    buildSession: (args: Record<string, unknown>) => ({
+      debug: false,
+      forceInstall: false,
+      installDir: process.cwd(),
+      ci: false,
+      signup: false,
+      localMcp: false,
+      menu: false,
+      setupConfirmed: false,
+      integration: null,
+      frameworkContext: {},
+      typescript: false,
+      credentials: null,
+      readinessResult: null,
+      outageDismissed: false,
+      outroData: null,
+      frameworkConfig: null,
+      ...args,
+    }),
+  };
+});
 jest.mock('../ui', () => ({
   getUI: jest.fn().mockReturnValue({
     log: {

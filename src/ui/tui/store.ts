@@ -62,6 +62,12 @@ export class WizardStore {
   private $statusMessages = atom<string[]>([]);
   private $statusExpanded = atom(false);
   private $tasks = atom<TaskItem[]>([]);
+  private $migrationTasks = atom<
+    Map<
+      AdditionalFeature,
+      { tasks: TaskItem[]; status: 'running' | 'completed' | 'failed' }
+    >
+  >(new Map());
   private $eventPlan = atom<PlannedEvent[]>([]);
   private $learnCardBlockIdx = atom(0);
   private $learnCardComplete = atom(false);
@@ -153,6 +159,13 @@ export class WizardStore {
 
   get tasks(): TaskItem[] {
     return this.$tasks.get();
+  }
+
+  get migrationTasks(): Map<
+    AdditionalFeature,
+    { tasks: TaskItem[]; status: 'running' | 'completed' | 'failed' }
+  > {
+    return this.$migrationTasks.get();
   }
 
   get eventPlan(): PlannedEvent[] {
@@ -525,6 +538,49 @@ export class WizardStore {
       .filter((t) => t.done && !incomingLabels.has(t.label));
 
     this.$tasks.set([...retained, ...incoming]);
+    this.emitChange();
+  }
+
+  syncMigrationTodos(
+    migration: AdditionalFeature,
+    todos: Array<{ content: string; status: string; activeForm?: string }>,
+  ): void {
+    const incoming = todos.map((t) => ({
+      label: t.content,
+      activeForm: t.activeForm,
+      status: (t.status as TaskStatus) || TaskStatus.Pending,
+      done: t.status === TaskStatus.Completed,
+    }));
+
+    const current = this.$migrationTasks.get();
+    const updated = new Map(current);
+    const existing = updated.get(migration);
+
+    const incomingLabels = new Set(incoming.map((t) => t.label));
+    const retained = (existing?.tasks ?? []).filter(
+      (t) => t.done && !incomingLabels.has(t.label),
+    );
+
+    updated.set(migration, {
+      tasks: [...retained, ...incoming],
+      status: existing?.status ?? 'running',
+    });
+    this.$migrationTasks.set(updated);
+    this.emitChange();
+  }
+
+  setMigrationStatus(
+    migration: AdditionalFeature,
+    status: 'running' | 'completed' | 'failed',
+  ): void {
+    const current = this.$migrationTasks.get();
+    const updated = new Map(current);
+    const existing = updated.get(migration);
+    updated.set(migration, {
+      tasks: existing?.tasks ?? [],
+      status,
+    });
+    this.$migrationTasks.set(updated);
     this.emitChange();
   }
 

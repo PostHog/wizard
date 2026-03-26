@@ -1,4 +1,7 @@
-import { AdditionalFeature } from './wizard-session';
+import {
+  AdditionalFeature,
+  MIGRATION_ADDITIONAL_FEATURES,
+} from './wizard-session';
 
 export enum RunWorkArea {
   ProductAnalytics = 'product_analytics',
@@ -64,6 +67,30 @@ export function buildRunScope(
   return {
     workAreas: WORK_AREA_ORDER.filter((workArea) => workAreaSet.has(workArea)),
     selectedFeatures: canonicalFeatures,
+  };
+}
+
+/**
+ * Split a run scope into the base setup scope (framework integration only)
+ * and the migration features that will run as separate parallel agents.
+ */
+export function splitRunScope(scope: WizardRunScope): {
+  baseScope: WizardRunScope;
+  migrationFeatures: AdditionalFeature[];
+} {
+  const migrationSet = new Set<AdditionalFeature>(
+    MIGRATION_ADDITIONAL_FEATURES,
+  );
+  const migrationFeatures = scope.selectedFeatures.filter((f) =>
+    migrationSet.has(f),
+  );
+  const baseFeatures = scope.selectedFeatures.filter(
+    (f) => !migrationSet.has(f),
+  );
+
+  return {
+    baseScope: buildRunScope(baseFeatures),
+    migrationFeatures,
   };
 }
 

@@ -63,21 +63,52 @@ export const RunScreen = ({ store }: RunScreenProps) => {
   const statuses =
     store.statusMessages.length > 0 ? store.statusMessages : undefined;
 
+  // Build per-migration progress groups
+  const migrationGroups: Array<{
+    label: string;
+    items: ProgressItem[];
+    status: 'running' | 'completed' | 'failed';
+  }> = [];
+  for (const [feature, data] of store.migrationTasks) {
+    migrationGroups.push({
+      label: ADDITIONAL_FEATURE_LABELS[feature],
+      items: data.tasks.map((t) => ({
+        label: t.label,
+        activeForm: t.activeForm,
+        status: t.status,
+      })),
+      status: data.status,
+    });
+  }
+
   const leftPane = store.learnCardComplete ? (
     <TipsCard store={store} />
   ) : (
     <LearnCard store={store} onComplete={() => store.setLearnCardComplete()} />
   );
-  const progressList = <ProgressList items={progressItems} title="Tasks" />;
+
+  const progressPane = (
+    <Box flexDirection="column" flexGrow={1}>
+      <ProgressList items={progressItems} title="Tasks" />
+      {migrationGroups.map((group) => (
+        <Box key={group.label} flexDirection="column" marginTop={1}>
+          <ProgressList
+            items={group.items}
+            title={`${group.label}${
+              group.status === 'failed' ? ' (failed)' : ''
+            }`}
+          />
+        </Box>
+      ))}
+    </Box>
+  );
 
   // On narrow terminals, drop the learn pane and show only progress
   const statusComponent =
     columns < 80 ? (
-      <Box flexDirection="column" flexGrow={1}>
-        {progressList}
-      </Box>
+      progressPane
     ) : (
-      <SplitView left={leftPane} right={progressList} />
+      <SplitView left={leftPane} right={progressPane} />
     );
 
   const tabs = [

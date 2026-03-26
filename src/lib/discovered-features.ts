@@ -93,6 +93,7 @@ const BRAINTRUST_PACKAGES = [
   'braintrust',
   '@braintrust/core',
   '@braintrust/proxy',
+  '@braintrust/otel',
   'autoevals',
 ];
 

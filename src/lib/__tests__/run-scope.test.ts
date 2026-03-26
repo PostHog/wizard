@@ -1,5 +1,10 @@
 import { AdditionalFeature } from '../wizard-session';
-import { buildRunScope, getRunScopeKey, RunWorkArea } from '../run-scope';
+import {
+  buildRunScope,
+  getRunScopeKey,
+  splitRunScope,
+  RunWorkArea,
+} from '../run-scope';
 
 describe('run-scope', () => {
   it('defaults to product analytics when no extra features are selected', () => {
@@ -41,6 +46,49 @@ describe('run-scope', () => {
         AdditionalFeature.AmplitudeMigration,
         AdditionalFeature.SentryMigration,
       ],
+    });
+  });
+
+  describe('splitRunScope', () => {
+    it('separates migrations from non-migration features', () => {
+      const scope = buildRunScope([
+        AdditionalFeature.LLM,
+        AdditionalFeature.AmplitudeMigration,
+        AdditionalFeature.SentryMigration,
+      ]);
+      const { baseScope, migrationFeatures } = splitRunScope(scope);
+
+      expect(baseScope.selectedFeatures).toEqual([AdditionalFeature.LLM]);
+      expect(baseScope.workAreas).toEqual([RunWorkArea.LlmAnalytics]);
+      expect(migrationFeatures).toEqual([
+        AdditionalFeature.AmplitudeMigration,
+        AdditionalFeature.SentryMigration,
+      ]);
+    });
+
+    it('returns empty migrations when no migrations selected', () => {
+      const scope = buildRunScope([AdditionalFeature.LLM]);
+      const { baseScope, migrationFeatures } = splitRunScope(scope);
+
+      expect(baseScope.selectedFeatures).toEqual([AdditionalFeature.LLM]);
+      expect(migrationFeatures).toEqual([]);
+    });
+
+    it('defaults base scope to product analytics when only migrations selected', () => {
+      const scope = buildRunScope([AdditionalFeature.SentryMigration]);
+      const { baseScope, migrationFeatures } = splitRunScope(scope);
+
+      expect(baseScope.workAreas).toEqual([RunWorkArea.ProductAnalytics]);
+      expect(baseScope.selectedFeatures).toEqual([]);
+      expect(migrationFeatures).toEqual([AdditionalFeature.SentryMigration]);
+    });
+
+    it('handles empty scope', () => {
+      const scope = buildRunScope([]);
+      const { baseScope, migrationFeatures } = splitRunScope(scope);
+
+      expect(baseScope.workAreas).toEqual([RunWorkArea.ProductAnalytics]);
+      expect(migrationFeatures).toEqual([]);
     });
   });
 
