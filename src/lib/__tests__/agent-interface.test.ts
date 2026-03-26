@@ -337,8 +337,19 @@ describe('runAgent', () => {
           }),
         }),
       );
+      const firstPrompt = await mockQuery.mock.calls[0][0].prompt.next();
+      expect(firstPrompt.value.message.content).toContain(
+        'You are in stage 1 of 2 for this wizard run.',
+      );
+      expect(firstPrompt.value.message.content).toContain(
+        'Earlier TodoWrite items may be stale',
+      );
+      expect(firstPrompt.value.message.content).toContain(
+        'Do not create or refresh the TodoWrite task list yet.',
+      );
       expect(onCachedSessionUpdated).toHaveBeenCalledWith({
         sessionId: 'new-session-id',
+        runStage: 'execution',
         todos: [
           {
             content: 'Analyze project',
@@ -355,6 +366,224 @@ describe('runAgent', () => {
           activeForm: 'Analyzing project',
         },
       ]);
+      expect(mockUIInstance.pushStatus).toHaveBeenCalledWith(
+        'Task list ready. Starting the implementation work...',
+      );
+    });
+
+    it('should resume directly into execution when the cached run had already entered execution', async () => {
+      function* mockGeneratorWithExecutionResume() {
+        yield {
+          type: 'result',
+          subtype: 'success',
+          is_error: false,
+          result: 'Agent completed successfully',
+          session_id: 'resumed-execution-session',
+        };
+      }
+
+      mockQuery.mockReturnValue(mockGeneratorWithExecutionResume());
+
+      await runAgent(
+        defaultAgentConfig,
+        'test prompt',
+        defaultOptions,
+        mockSpinner as unknown as SpinnerHandle,
+        {
+          successMessage: 'Test success',
+          errorMessage: 'Test error',
+          resumeSessionId: 'cached-session-id',
+          resumeRunStage: 'execution',
+        },
+      );
+
+      const firstPrompt = await mockQuery.mock.calls[0][0].prompt.next();
+      expect(firstPrompt.value.message.content).toContain(
+        'had already entered the execution stage',
+      );
+      expect(firstPrompt.value.message.content).toContain(
+        'Continue implementation from that scope instead of repeating broad project analysis',
+      );
+      expect(firstPrompt.value.message.content).not.toContain(
+        'You are in stage 1 of 2 for this wizard run.',
+      );
+    });
+
+    it('should reuse prior analysis without broad rediscovery when the selected work changes', async () => {
+      function* mockGeneratorWithScopeChangeResume() {
+        yield {
+          type: 'result',
+          subtype: 'success',
+          is_error: false,
+          result: 'Agent completed successfully',
+          session_id: 'scope-change-session',
+        };
+      }
+
+      mockQuery.mockReturnValue(mockGeneratorWithScopeChangeResume());
+
+      await runAgent(
+        defaultAgentConfig,
+        'test prompt',
+        defaultOptions,
+        mockSpinner as unknown as SpinnerHandle,
+        {
+          successMessage: 'Test success',
+          errorMessage: 'Test error',
+          resumeSessionId: 'cached-session-id',
+          resumeRunStage: 'discovery',
+          resumeScopeChanged: true,
+        },
+      );
+
+      const firstPrompt = await mockQuery.mock.calls[0][0].prompt.next();
+      expect(firstPrompt.value.message.content).toContain(
+        'different selected extra work',
+      );
+      expect(firstPrompt.value.message.content).toContain(
+        'Do not repeat broad project analysis',
+      );
+      expect(firstPrompt.value.message.content).toContain(
+        'Do not create or refresh the TodoWrite task list yet.',
+      );
+    });
+
+    it('should surface compacting status for resumed sessions', async () => {
+      function* mockGeneratorWithCompactionStatus() {
+        yield {
+          type: 'system',
+          subtype: 'status',
+          status: 'compacting',
+          session_id: 'compacting-session',
+        };
+
+        yield {
+          type: 'result',
+          subtype: 'success',
+          is_error: false,
+          result: 'Agent completed successfully',
+          session_id: 'compacting-session',
+        };
+      }
+
+      mockQuery.mockReturnValue(mockGeneratorWithCompactionStatus());
+
+      await runAgent(
+        defaultAgentConfig,
+        'test prompt',
+        defaultOptions,
+        mockSpinner as unknown as SpinnerHandle,
+        {
+          successMessage: 'Test success',
+          errorMessage: 'Test error',
+          resumeSessionId: 'cached-session-id',
+          resumeRunStage: 'discovery',
+        },
+      );
+
+      expect(mockUIInstance.pushStatus).toHaveBeenCalledWith(
+        'Condensing the reused session context so the run can continue...',
+      );
+      expect(mockSpinner.message).toHaveBeenCalledWith(
+        'Condensing the reused session context so the run can continue...',
+      );
+    });
+
+    it('should support a discovery-only stage on an override model without the stop hook', async () => {
+      function* mockDiscoveryOnlyGenerator() {
+        yield {
+          type: 'result',
+          subtype: 'success',
+          is_error: false,
+          result: 'Discovery complete',
+          session_id: 'discovery-only-session',
+        };
+      }
+
+      mockQuery.mockReturnValue(mockDiscoveryOnlyGenerator());
+
+      await runAgent(
+        defaultAgentConfig,
+        'test prompt',
+        defaultOptions,
+        mockSpinner as unknown as SpinnerHandle,
+        {
+          successMessage: 'Discovery success',
+          errorMessage: 'Discovery error',
+          stageMode: 'discovery',
+          modelOverride: 'anthropic/claude-haiku-4-5',
+        },
+      );
+
+      expect(mockQuery).toHaveBeenCalledWith(
+        expect.objectContaining({
+          options: expect.objectContaining({
+            model: 'anthropic/claude-haiku-4-5',
+            hooks: expect.not.objectContaining({
+              Stop: expect.anything(),
+            }),
+          }),
+        }),
+      );
+
+      const firstPrompt = await mockQuery.mock.calls[0][0].prompt.next();
+      expect(firstPrompt.value.message.content).toContain(
+        'You are in stage 1 of 2 for this wizard run.',
+      );
+      expect(firstPrompt.value.message.content).not.toContain(
+        'You are now in stage 2 of 2 for this wizard run.',
+      );
+    });
+
+    it('should support an execution-only stage prompt for the implementation pass', async () => {
+      function* mockExecutionOnlyGenerator() {
+        yield {
+          type: 'result',
+          subtype: 'success',
+          is_error: false,
+          result: 'Execution complete',
+          session_id: 'execution-only-session',
+        };
+      }
+
+      mockQuery.mockReturnValue(mockExecutionOnlyGenerator());
+
+      await runAgent(
+        defaultAgentConfig,
+        'test prompt',
+        defaultOptions,
+        mockSpinner as unknown as SpinnerHandle,
+        {
+          successMessage: 'Execution success',
+          errorMessage: 'Execution error',
+          stageMode: 'execution',
+          resumeSessionId: 'cached-discovery-session',
+          additionalFeatureQueue: [AdditionalFeature.SentryMigration],
+        },
+      );
+
+      expect(mockQuery).toHaveBeenCalledWith(
+        expect.objectContaining({
+          options: expect.objectContaining({
+            resume: 'cached-discovery-session',
+            forkSession: true,
+          }),
+        }),
+      );
+
+      const firstPrompt = await mockQuery.mock.calls[0][0].prompt.next();
+      expect(firstPrompt.value.message.content).toContain(
+        'You are now in stage 2 of 2 for this wizard run.',
+      );
+      expect(firstPrompt.value.message.content).toContain(
+        'Create or refresh the TodoWrite task list only now',
+      );
+      expect(firstPrompt.value.message.content).toContain(
+        ADDITIONAL_FEATURE_PROMPTS[AdditionalFeature.SentryMigration].trim(),
+      );
+      expect(firstPrompt.value.message.content).not.toContain(
+        'You are in stage 1 of 2 for this wizard run.',
+      );
     });
   });
 });
@@ -362,27 +591,17 @@ describe('runAgent', () => {
 describe('createStopHook', () => {
   const hookInput = { stop_hook_active: false };
 
-  it('empty queue: first call blocks for remark, second allows stop', () => {
+  it('empty queue: first call blocks for execution, second for remark, third allows stop', () => {
     const hook = createStopHook([]);
 
-    // First call → remark prompt
+    // First call → execution prompt
     const first = hook(hookInput);
     expect(first).toHaveProperty('decision', 'block');
-    expect((first as { reason: string }).reason).toContain('WIZARD-REMARK');
-
-    // Second call → allow stop
-    const second = hook(hookInput);
-    expect(second).toEqual({});
-  });
-
-  it('single feature: feature prompt, then remark, then allow stop', () => {
-    const hook = createStopHook([AdditionalFeature.LLM]);
-
-    // First call → LLM feature prompt
-    const first = hook(hookInput);
-    expect(first).toHaveProperty('decision', 'block');
-    expect((first as { reason: string }).reason).toBe(
-      ADDITIONAL_FEATURE_PROMPTS[AdditionalFeature.LLM],
+    expect((first as { reason: string }).reason).toContain(
+      'You are now in stage 2 of 2 for this wizard run.',
+    );
+    expect((first as { reason: string }).reason).toContain(
+      'Create or refresh the TodoWrite task list only now',
     );
 
     // Second call → remark prompt
@@ -395,13 +614,36 @@ describe('createStopHook', () => {
     expect(third).toEqual({});
   });
 
-  it('supports the Amplitude migration follow-up prompt', () => {
+  it('single feature: execution prompt includes the feature, then remark, then allow stop', () => {
+    const hook = createStopHook([AdditionalFeature.LLM]);
+
+    // First call → execution prompt with LLM feature
+    const first = hook(hookInput);
+    expect(first).toHaveProperty('decision', 'block');
+    expect((first as { reason: string }).reason).toContain(
+      'Create or refresh the TodoWrite task list only now',
+    );
+    expect((first as { reason: string }).reason).toContain(
+      ADDITIONAL_FEATURE_PROMPTS[AdditionalFeature.LLM].trim(),
+    );
+
+    // Second call → remark prompt
+    const second = hook(hookInput);
+    expect(second).toHaveProperty('decision', 'block');
+    expect((second as { reason: string }).reason).toContain('WIZARD-REMARK');
+
+    // Third call → allow stop
+    const third = hook(hookInput);
+    expect(third).toEqual({});
+  });
+
+  it('supports the Amplitude migration in the execution-stage prompt', () => {
     const hook = createStopHook([AdditionalFeature.AmplitudeMigration]);
 
     const first = hook(hookInput);
     expect(first).toHaveProperty('decision', 'block');
-    expect((first as { reason: string }).reason).toBe(
-      ADDITIONAL_FEATURE_PROMPTS[AdditionalFeature.AmplitudeMigration],
+    expect((first as { reason: string }).reason).toContain(
+      ADDITIONAL_FEATURE_PROMPTS[AdditionalFeature.AmplitudeMigration].trim(),
     );
 
     const second = hook(hookInput);
@@ -412,13 +654,13 @@ describe('createStopHook', () => {
     expect(third).toEqual({});
   });
 
-  it('supports the Sentry migration follow-up prompt', () => {
+  it('supports the Sentry migration in the execution-stage prompt', () => {
     const hook = createStopHook([AdditionalFeature.SentryMigration]);
 
     const first = hook(hookInput);
     expect(first).toHaveProperty('decision', 'block');
-    expect((first as { reason: string }).reason).toBe(
-      ADDITIONAL_FEATURE_PROMPTS[AdditionalFeature.SentryMigration],
+    expect((first as { reason: string }).reason).toContain(
+      ADDITIONAL_FEATURE_PROMPTS[AdditionalFeature.SentryMigration].trim(),
     );
 
     const second = hook(hookInput);
@@ -429,13 +671,15 @@ describe('createStopHook', () => {
     expect(third).toEqual({});
   });
 
-  it('supports the LaunchDarkly migration follow-up prompt', () => {
+  it('supports the LaunchDarkly migration in the execution-stage prompt', () => {
     const hook = createStopHook([AdditionalFeature.LaunchDarklyMigration]);
 
     const first = hook(hookInput);
     expect(first).toHaveProperty('decision', 'block');
-    expect((first as { reason: string }).reason).toBe(
-      ADDITIONAL_FEATURE_PROMPTS[AdditionalFeature.LaunchDarklyMigration],
+    expect((first as { reason: string }).reason).toContain(
+      ADDITIONAL_FEATURE_PROMPTS[
+        AdditionalFeature.LaunchDarklyMigration
+      ].trim(),
     );
 
     const second = hook(hookInput);
@@ -446,13 +690,13 @@ describe('createStopHook', () => {
     expect(third).toEqual({});
   });
 
-  it('supports the Braintrust migration follow-up prompt', () => {
+  it('supports the Braintrust migration in the execution-stage prompt', () => {
     const hook = createStopHook([AdditionalFeature.BraintrustMigration]);
 
     const first = hook(hookInput);
     expect(first).toHaveProperty('decision', 'block');
-    expect((first as { reason: string }).reason).toBe(
-      ADDITIONAL_FEATURE_PROMPTS[AdditionalFeature.BraintrustMigration],
+    expect((first as { reason: string }).reason).toContain(
+      ADDITIONAL_FEATURE_PROMPTS[AdditionalFeature.BraintrustMigration].trim(),
     );
 
     const second = hook(hookInput);
@@ -463,37 +707,36 @@ describe('createStopHook', () => {
     expect(third).toEqual({});
   });
 
-  it('multiple queue entries: drains all, then remark, then allow stop', () => {
-    // Queue the same feature twice to exercise multi-item draining
-    const hook = createStopHook([AdditionalFeature.LLM, AdditionalFeature.LLM]);
+  it('multiple queue entries: execution prompt includes all requested work, then remark, then allow stop', () => {
+    const hook = createStopHook([
+      AdditionalFeature.LLM,
+      AdditionalFeature.AmplitudeMigration,
+    ]);
 
-    // First call → LLM prompt
+    // First call → combined execution prompt
     const first = hook(hookInput);
     expect(first).toHaveProperty('decision', 'block');
-    expect((first as { reason: string }).reason).toBe(
-      ADDITIONAL_FEATURE_PROMPTS[AdditionalFeature.LLM],
+    expect((first as { reason: string }).reason).toContain(
+      ADDITIONAL_FEATURE_PROMPTS[AdditionalFeature.LLM].trim(),
+    );
+    expect((first as { reason: string }).reason).toContain(
+      ADDITIONAL_FEATURE_PROMPTS[AdditionalFeature.AmplitudeMigration].trim(),
     );
 
-    // Second call → LLM prompt again
+    // Second call → remark prompt
     const second = hook(hookInput);
     expect(second).toHaveProperty('decision', 'block');
-    expect((second as { reason: string }).reason).toBe(
-      ADDITIONAL_FEATURE_PROMPTS[AdditionalFeature.LLM],
-    );
+    expect((second as { reason: string }).reason).toContain('WIZARD-REMARK');
 
-    // Third call → remark prompt
+    // Third call → allow stop
     const third = hook(hookInput);
-    expect(third).toHaveProperty('decision', 'block');
-    expect((third as { reason: string }).reason).toContain('WIZARD-REMARK');
-
-    // Fourth call → allow stop
-    const fourth = hook(hookInput);
-    expect(fourth).toEqual({});
+    expect(third).toEqual({});
   });
 
   it('allow stop is idempotent after all phases complete', () => {
     const hook = createStopHook([]);
 
+    hook(hookInput); // execution
     hook(hookInput); // remark
     hook(hookInput); // allow
     const extra = hook(hookInput); // still allow
@@ -522,9 +765,11 @@ describe('createStopHook', () => {
     const collectedText = ['Some normal agent output'];
     const hook = createStopHook([], collectedText);
 
-    // First call → remark prompt (normal behavior)
+    // First call → execution prompt (normal behavior)
     const first = hook(hookInput);
     expect(first).toHaveProperty('decision', 'block');
-    expect((first as { reason: string }).reason).toContain('WIZARD-REMARK');
+    expect((first as { reason: string }).reason).toContain(
+      'You are now in stage 2 of 2 for this wizard run.',
+    );
   });
 });

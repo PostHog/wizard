@@ -327,7 +327,7 @@ export class WizardStore {
     }
   }
 
-  /** Enable an additional feature by enqueueing it for the stop hook. */
+  /** Enable additional work so it is included in the current run scope. */
   enableFeature(feature: AdditionalFeature): void {
     if (!this.session.additionalFeatureQueue.includes(feature)) {
       this.session.additionalFeatureQueue.push(feature);

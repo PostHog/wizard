@@ -6,7 +6,7 @@ import type { Integration } from './constants';
 import { computeProjectFingerprint } from './project-fingerprint';
 import { logToFile } from '../utils/debug';
 
-const CACHE_VERSION = 1;
+const CACHE_VERSION = 2;
 const MAX_CACHE_AGE_MS = 90 * 24 * 60 * 60 * 1000;
 
 export interface CachedAgentTodo {
@@ -20,15 +20,23 @@ export interface CachedPlannedEvent {
   description: string;
 }
 
+export type CachedRunStage = 'discovery' | 'execution';
+
 export interface AgentSessionCacheEntry {
   version: number;
   installDir: string;
   integration: Integration;
   projectFingerprint: string;
+  scopeKey: string;
   sessionId: string;
+  runStage: CachedRunStage;
   todos: CachedAgentTodo[];
   eventPlan?: CachedPlannedEvent[];
   updatedAt: string;
+}
+
+interface LoadAgentSessionCacheOptions {
+  allowScopeMismatch?: boolean;
 }
 
 function getCacheDir(): string {
@@ -73,7 +81,7 @@ function isValidPlannedEvent(value: unknown): value is CachedPlannedEvent {
   );
 }
 
-function isValidCacheEntry(
+function isReusableCacheEntry(
   value: unknown,
   installDir: string,
   integration: Integration,
@@ -87,7 +95,9 @@ function isValidCacheEntry(
     entry.installDir === normalizeInstallDir(installDir) &&
     entry.integration === integration &&
     entry.projectFingerprint === projectFingerprint &&
+    typeof entry.scopeKey === 'string' &&
     typeof entry.sessionId === 'string' &&
+    (entry.runStage === 'discovery' || entry.runStage === 'execution') &&
     typeof entry.updatedAt === 'string' &&
     Array.isArray(entry.todos) &&
     entry.todos.every(isValidTodo) &&
@@ -100,6 +110,8 @@ function isValidCacheEntry(
 export function loadAgentSessionCache(
   installDir: string,
   integration: Integration,
+  scopeKey: string,
+  options?: LoadAgentSessionCacheOptions,
 ): AgentSessionCacheEntry | null {
   const cachePath = getCacheFilePath(installDir, integration);
   const projectFingerprint = computeProjectFingerprint(installDir);
@@ -109,12 +121,23 @@ export function loadAgentSessionCache(
     const parsed = JSON.parse(raw) as unknown;
 
     if (
-      !isValidCacheEntry(parsed, installDir, integration, projectFingerprint)
+      !isReusableCacheEntry(parsed, installDir, integration, projectFingerprint)
     ) {
       logToFile('Agent session cache miss: fingerprint or metadata mismatch', {
         installDir: normalizeInstallDir(installDir),
         integration,
         cachePath,
+      });
+      return null;
+    }
+
+    if (parsed.scopeKey !== scopeKey && !options?.allowScopeMismatch) {
+      logToFile('Agent session cache miss: scope mismatch', {
+        installDir: normalizeInstallDir(installDir),
+        integration,
+        cachePath,
+        cachedScopeKey: parsed.scopeKey,
+        requestedScopeKey: scopeKey,
       });
       return null;
     }
@@ -138,6 +161,7 @@ export function loadAgentSessionCache(
       integration,
       cachePath,
       sessionId: parsed.sessionId,
+      scopeMatch: parsed.scopeKey === scopeKey,
     });
     return parsed;
   } catch {
@@ -148,7 +172,9 @@ export function loadAgentSessionCache(
 export function saveAgentSessionCache(
   installDir: string,
   integration: Integration,
+  scopeKey: string,
   sessionId: string,
+  runStage: CachedRunStage,
   todos: CachedAgentTodo[],
   eventPlan: CachedPlannedEvent[] = [],
 ): void {
@@ -164,7 +190,9 @@ export function saveAgentSessionCache(
           installDir: normalizeInstallDir(installDir),
           integration,
           projectFingerprint: computeProjectFingerprint(installDir),
+          scopeKey,
           sessionId,
+          runStage,
           todos,
           eventPlan,
           updatedAt: new Date().toISOString(),

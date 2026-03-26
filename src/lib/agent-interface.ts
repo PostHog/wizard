@@ -18,8 +18,10 @@ import {
 } from './constants';
 import {
   type AdditionalFeature,
+  ADDITIONAL_FEATURE_LABELS,
   ADDITIONAL_FEATURE_PROMPTS,
 } from './wizard-session';
+import { buildRunScope, RUN_WORK_AREA_LABELS, RunWorkArea } from './run-scope';
 import {
   registerCleanup,
   wizardAbort,
@@ -38,6 +40,7 @@ import type { PackageManagerDetector } from './package-manager-detection';
 import type {
   CachedAgentTodo,
   CachedPlannedEvent,
+  CachedRunStage,
 } from './agent-session-cache';
 
 // Dynamic import cache for ESM module
@@ -288,25 +291,124 @@ export type StopHookResult =
   | { decision: 'block'; reason: string };
 
 /**
- * Create a stop hook callback that drains the additional feature queue,
- * then collects a remark, then allows stop.
+ * Build the initial discovery-stage prompt for an agent run.
+ * This keeps the first turn read-only so the agent can understand the full
+ * implementation scope before it creates a TodoWrite plan.
+ */
+function buildDiscoveryStagePrompt(
+  prompt: string,
+  isResumedRun: boolean,
+  featureQueue: readonly AdditionalFeature[],
+  options?: {
+    scopeChanged?: boolean;
+  },
+): string {
+  const runScope = buildRunScope(featureQueue);
+  const resumePrefix = options?.scopeChanged
+    ? 'This wizard run is being re-run for the same project with different selected extra work. Reuse the prior session context, installed skills, and repo analysis when they still match the current repository. Treat the previous task list and previous scope-specific conclusions as stale. Do not repeat broad project analysis; only do lightweight verification needed to reconcile the updated run scope before moving to execution.\n\n'
+    : isResumedRun
+    ? 'This wizard run is being re-run for the same project. Reuse the prior session context and repo analysis when it still matches the current repository, but treat earlier conclusions as hints rather than ground truth. Prefer lightweight verification over repeating broad exploratory reads when the earlier session already established the project structure. Earlier TodoWrite items may be stale, so wait until the execution stage to create or refresh the task list for this run.\n\n'
+    : '';
+  const scopeSummary =
+    runScope.workAreas.length > 0
+      ? `Requested work areas for this run: ${runScope.workAreas
+          .map((workArea) => RUN_WORK_AREA_LABELS[workArea])
+          .join(', ')}.`
+      : '';
+  const productAnalyticsGuardrail = runScope.workAreas.includes(
+    RunWorkArea.ProductAnalytics,
+  )
+    ? ''
+    : '\n- Product analytics is not part of this run unless a selected migration explicitly requires it. Do not plan or perform generic analytics setup.';
+
+  return `${resumePrefix}You are in stage 1 of 2 for this wizard run. This stage is discovery and planning only.
+
+- ${scopeSummary}
+- Even if later instructions describe implementation steps, defer them until stage 2.
+- You may load the skill menu, install the relevant skill, read the installed skill, inspect the workflow references, and analyze the repository as needed.
+- Do not create or refresh the TodoWrite task list yet.
+- Do not edit project files, set environment variables, or install packages in this stage.
+- Do not decide to add unrequested PostHog product areas on your own.${productAnalyticsGuardrail}
+- Once you have enough context to execute the full run, stop so the wizard can provide the execution stage.
+
+${prompt}`;
+}
+
+function buildExecutionResumePrompt(
+  prompt: string,
+  featureQueue: readonly AdditionalFeature[],
+): string {
+  const executionPrompt = buildExecutionStagePrompt(featureQueue);
+
+  return `This wizard run is being re-run for the same project after it had already entered the execution stage. Reuse the prior session context, project analysis, installed skills, and requested run scope when they still match the repository. Continue implementation from that scope instead of repeating broad project analysis. Refresh the TodoWrite task list only if it no longer matches the remaining work.
+
+${executionPrompt}
+
+Original run instructions:
+
+${prompt}`;
+}
+
+/**
+ * Build the execution-stage follow-up prompt for an agent run.
+ * This prompt arrives only after the discovery stage completes, so TodoWrite
+ * can reflect the full scope of work, including any queued follow-up features.
+ */
+function buildExecutionStagePrompt(
+  featureQueue: readonly AdditionalFeature[],
+): string {
+  const runScope = buildRunScope(featureQueue);
+  const additionalWorkSection =
+    featureQueue.length > 0
+      ? `Additional requested work for this run:\n\n${featureQueue
+          .map(
+            (feature, index) =>
+              `${index + 1}. ${
+                ADDITIONAL_FEATURE_LABELS[feature]
+              }: ${ADDITIONAL_FEATURE_PROMPTS[feature].trim()}`,
+          )
+          .join('\n\n')}`
+      : 'There is no additional follow-up work queued for this run.';
+  const scopeGuardrail = runScope.workAreas.includes(
+    RunWorkArea.ProductAnalytics,
+  )
+    ? ''
+    : '\nProduct analytics is not part of this run unless one of the selected migrations explicitly requires it. Do not add generic event capture or unrelated analytics setup.';
+
+  return `You are now in stage 2 of 2 for this wizard run. Reuse the discovery work you just completed and execute the requested setup scope from the earlier prompt.
+
+Before you do substantial implementation work, synthesize the full requested scope for this run. Create or refresh the TodoWrite task list only now, once that scope is clear. Build a single high-level task list for the whole run, then execute the work in intermediate stages and keep TodoWrite aligned with the current stage.
+
+You may now edit project files, set environment variables, and install packages as required by the workflow.${scopeGuardrail} If a migration or follow-up task becomes unblocked partway through the framework work, handle it then instead of postponing all migration work until the very end.
+
+${additionalWorkSection}`;
+}
+
+/**
+ * Create a stop hook callback that advances the run from discovery to
+ * execution, then collects a remark, then allows stop.
  *
  * Three-phase logic using closure state:
- *   Phase 1 — drain queue: block with each feature prompt in order
+ *   Phase 1 — execution prompt: block once with the full execution prompt
  *   Phase 2 — collect remark (once): block with remark prompt
  *   Phase 3 — allow stop: return {}
  */
 export function createStopHook(
   featureQueue: readonly AdditionalFeature[],
   collectedText?: string[],
+  options?: {
+    initialStage?: CachedRunStage;
+    onEnterExecutionStage?: () => void;
+  },
 ): (input: { stop_hook_active: boolean }) => StopHookResult {
-  let featureIndex = 0;
+  let executionPromptRequested = options?.initialStage === 'execution';
   let remarkRequested = false;
+  const executionPrompt = buildExecutionStagePrompt(featureQueue);
 
   return (input: { stop_hook_active: boolean }): StopHookResult => {
     logToFile('Stop hook triggered', {
       stop_hook_active: input.stop_hook_active,
-      featureIndex,
+      executionPromptRequested,
       remarkRequested,
       queueLength: featureQueue.length,
     });
@@ -321,12 +423,12 @@ export function createStopHook(
       }
     }
 
-    // Phase 1: drain feature queue
-    if (featureIndex < featureQueue.length) {
-      const feature = featureQueue[featureIndex++];
-      const prompt = ADDITIONAL_FEATURE_PROMPTS[feature];
-      logToFile(`Stop hook: injecting feature prompt for ${feature}`);
-      return { decision: 'block', reason: prompt };
+    // Phase 1: inject the execution prompt once the discovery stage ends
+    if (!executionPromptRequested) {
+      executionPromptRequested = true;
+      options?.onEnterExecutionStage?.();
+      logToFile('Stop hook: injecting execution-stage prompt');
+      return { decision: 'block', reason: executionPrompt };
     }
 
     // Phase 2: collect remark (once)
@@ -355,6 +457,10 @@ type AgentRunConfig = {
   wizardFlags?: Record<string, string>;
   wizardMetadata?: Record<string, string>;
 };
+
+type AgentStageMode = 'full' | 'discovery' | 'execution' | 'execution_resume';
+
+const IMPLEMENTATION_MODEL = 'anthropic/claude-sonnet-4-6';
 
 /**
  * Select wizard metadata from WIZARD_VARIANTS using the variant feature flag.
@@ -653,7 +759,7 @@ export async function initializeAgent(
     const agentRunConfig: AgentRunConfig = {
       workingDirectory: config.workingDirectory,
       mcpServers,
-      model: 'anthropic/claude-sonnet-4-6',
+      model: IMPLEMENTATION_MODEL,
       wizardFlags: config.wizardFlags,
       wizardMetadata: config.wizardMetadata,
     };
@@ -722,10 +828,17 @@ export async function runAgent(
     spinnerMessage?: string;
     successMessage?: string;
     errorMessage?: string;
+    modelOverride?: string;
+    stageMode?: AgentStageMode;
+    finalizeMiddleware?: boolean;
+    captureCompletionAnalytics?: boolean;
     additionalFeatureQueue?: readonly AdditionalFeature[];
     resumeSessionId?: string;
+    resumeRunStage?: CachedRunStage;
+    resumeScopeChanged?: boolean;
     onCachedSessionUpdated?: (snapshot: {
       sessionId: string;
+      runStage: CachedRunStage;
       todos: CachedAgentTodo[];
       eventPlan: CachedPlannedEvent[];
     }) => void;
@@ -740,6 +853,7 @@ export async function runAgent(
     successMessage = 'PostHog integration complete',
     errorMessage = 'Integration failed',
   } = config ?? {};
+  const stageMode = config?.stageMode ?? 'full';
 
   const { query } = await getSDKModule();
 
@@ -748,9 +862,30 @@ export async function runAgent(
   const cliPath = getClaudeCodeExecutablePath();
   logToFile('Starting agent run');
   logToFile('Claude Code executable:', cliPath);
-  const effectivePrompt = config?.resumeSessionId
-    ? `This wizard run is being re-run for the same project. Reuse the prior session context and repo analysis when it still matches the current repository, but treat earlier conclusions as hints rather than ground truth. Refresh the TodoWrite task list for this run before doing substantial work so the visible tasks match the current repository state. Prefer lightweight verification over repeating broad exploratory reads when the earlier session already established the project structure.\n\n${prompt}`
-    : prompt;
+  let currentRunStage: CachedRunStage =
+    stageMode === 'execution' || stageMode === 'execution_resume'
+      ? 'execution'
+      : config?.resumeRunStage ?? 'discovery';
+  const effectivePrompt =
+    stageMode === 'execution_resume'
+      ? buildExecutionResumePrompt(prompt, config?.additionalFeatureQueue ?? [])
+      : stageMode === 'execution'
+      ? buildExecutionStagePrompt(config?.additionalFeatureQueue ?? [])
+      : stageMode === 'discovery'
+      ? buildDiscoveryStagePrompt(
+          prompt,
+          Boolean(config?.resumeSessionId),
+          config?.additionalFeatureQueue ?? [],
+          { scopeChanged: config?.resumeScopeChanged },
+        )
+      : config?.resumeSessionId && currentRunStage === 'execution'
+      ? buildExecutionResumePrompt(prompt, config?.additionalFeatureQueue ?? [])
+      : buildDiscoveryStagePrompt(
+          prompt,
+          Boolean(config?.resumeSessionId),
+          config?.additionalFeatureQueue ?? [],
+          { scopeChanged: config?.resumeScopeChanged },
+        );
   logToFile('Prompt:', effectivePrompt);
   if (config?.resumeSessionId) {
     logToFile('Resuming cached session:', config.resumeSessionId);
@@ -761,6 +896,10 @@ export async function runAgent(
   let activeSessionId = config?.resumeSessionId;
   let latestTodos: CachedAgentTodo[] = [];
   let latestEventPlan: CachedPlannedEvent[] = [];
+  const progressState = {
+    taskListAnnounced: false,
+    compactingAnnounced: false,
+  };
   // Track if we received a successful result (before any cleanup errors)
   let receivedSuccessResult = false;
   let lastResultMessage: any = null;
@@ -769,6 +908,7 @@ export async function runAgent(
     if (!activeSessionId) return;
     config?.onCachedSessionUpdated?.({
       sessionId: activeSessionId,
+      runStage: currentRunStage,
       todos: latestTodos,
       eventPlan: latestEventPlan,
     });
@@ -827,15 +967,19 @@ export async function runAgent(
       }
     }
 
-    analytics.wizardCapture('agent completed', {
-      duration_ms: durationMs,
-      duration_seconds: durationSeconds,
-    });
+    if (config?.captureCompletionAnalytics !== false) {
+      analytics.wizardCapture('agent completed', {
+        duration_ms: durationMs,
+        duration_seconds: durationSeconds,
+      });
+    }
     persistCachedSession();
-    try {
-      middleware?.finalize(lastResultMessage, durationMs);
-    } catch (e) {
-      logToFile(`${AgentSignals.BENCHMARK} Middleware finalize error:`, e);
+    if (config?.finalizeMiddleware !== false) {
+      try {
+        middleware?.finalize(lastResultMessage, durationMs);
+      } catch (e) {
+        logToFile(`${AgentSignals.BENCHMARK} Middleware finalize error:`, e);
+      }
     }
     spinner.stop(successMessage);
     return {};
@@ -868,7 +1012,7 @@ export async function runAgent(
     const response = query({
       prompt: createPromptStream(),
       options: {
-        model: agentConfig.model,
+        model: config?.modelOverride ?? agentConfig.model,
         cwd: agentConfig.workingDirectory,
         resume: config?.resumeSessionId,
         forkSession: Boolean(config?.resumeSessionId),
@@ -946,17 +1090,34 @@ export async function runAgent(
         hooks: {
           PreToolUse: createPreToolUseYaraHooks(),
           PostToolUse: createPostToolUseYaraHooks(),
-          Stop: [
-            {
-              hooks: [
-                createStopHook(
-                  config?.additionalFeatureQueue ?? [],
-                  collectedText,
-                ),
-              ],
-              timeout: 30,
-            },
-          ],
+          ...(stageMode !== 'discovery'
+            ? {
+                Stop: [
+                  {
+                    hooks: [
+                      createStopHook(
+                        config?.additionalFeatureQueue ?? [],
+                        collectedText,
+                        {
+                          initialStage:
+                            stageMode === 'full'
+                              ? currentRunStage
+                              : 'execution',
+                          onEnterExecutionStage:
+                            stageMode === 'full'
+                              ? () => {
+                                  currentRunStage = 'execution';
+                                  persistCachedSession();
+                                }
+                              : undefined,
+                        },
+                      ),
+                    ],
+                    timeout: 30,
+                  },
+                ],
+              }
+            : {}),
         },
       },
     });
@@ -1017,6 +1178,9 @@ export async function runAgent(
           setSessionId: (sessionId) => {
             activeSessionId = sessionId;
           },
+          setRunStage: (runStage) => {
+            currentRunStage = runStage;
+          },
           setTodos: (todos) => {
             latestTodos = todos;
           },
@@ -1024,6 +1188,7 @@ export async function runAgent(
             latestEventPlan = eventPlan;
           },
         },
+        progressState,
       );
 
       // 401: show auth error screen and exit immediately
@@ -1170,8 +1335,13 @@ function handleSDKMessage(
   cacheState?: {
     persistCachedSession: () => void;
     setSessionId: (sessionId: string) => void;
+    setRunStage: (runStage: CachedRunStage) => void;
     setTodos: (todos: CachedAgentTodo[]) => void;
     setEventPlan: (eventPlan: CachedPlannedEvent[]) => void;
+  },
+  progressState?: {
+    taskListAnnounced: boolean;
+    compactingAnnounced: boolean;
   },
 ): void {
   logToFile(`SDK Message: ${message.type}`, JSON.stringify(message, null, 2));
@@ -1217,6 +1387,14 @@ function handleSDKMessage(
             block.input?.todos &&
             Array.isArray(block.input.todos)
           ) {
+            if (progressState && !progressState.taskListAnnounced) {
+              progressState.taskListAnnounced = true;
+              const taskListStatus =
+                'Task list ready. Starting the implementation work...';
+              getUI().pushStatus(taskListStatus);
+              spinner.message(taskListStatus);
+            }
+            cacheState?.setRunStage('execution');
             cacheState?.setTodos(
               block.input.todos.map(
                 (todo: {
@@ -1280,6 +1458,17 @@ function handleSDKMessage(
           tools: message.tools?.length,
           mcpServers: message.mcp_servers,
         });
+      } else if (
+        message.subtype === 'status' &&
+        message.status === 'compacting' &&
+        progressState &&
+        !progressState.compactingAnnounced
+      ) {
+        progressState.compactingAnnounced = true;
+        const compactingStatus =
+          'Condensing the reused session context so the run can continue...';
+        getUI().pushStatus(compactingStatus);
+        spinner.message(compactingStatus);
       }
       break;
     }

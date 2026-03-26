@@ -21,7 +21,9 @@ const WIZARD_COMMANDMENTS = [
 
   'Do not spawn subagents unless explicitly instructed to do so.',
 
-  'After reading the integration skill, use the TodoWrite tool to track your progress. Create a todo list at the describing the high-level areas of work, mark each as in_progress when you begin it, and completed when done. Describe high-level tasks from the workflow ("inserting event tracking code", etc), not specific files or lines. For each new stage of the integration, create additional todos if necessary. Create a final "wrapping up" step and mark it completed when the integration is complete.',
+  'Use the TodoWrite tool to track your progress once the wizard has given you the execution stage for the full run. Do not create or refresh TodoWrite during a discovery-only stage. When the full scope is clear, create a high-level todo list that covers the whole run, mark items in_progress when you begin them and completed when done, and keep the list aligned with the current stage. Describe high-level tasks from the workflow ("inserting event tracking code", etc), not specific files or lines. Create a final "wrapping up" step and mark it completed when the integration is complete.',
+
+  'Emit concise progress updates using the exact format [STATUS] Your message whenever you start a meaningful milestone. At minimum, send statuses when you begin repository analysis, when you reconcile reused project context, when you choose or install the relevant skill, when you prepare the full-scope TodoWrite task list, when you begin implementing a major todo, and when you start verification. Keep each status short, concrete, and user-facing.',
 
   'Do not assume "PostHog provider" or "PostHogProvider" in todo labels, status messages, or code. Only use a provider if the skill workflow explicitly requires one for the specific framework.',
 

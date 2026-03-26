@@ -154,7 +154,7 @@ export const IntroScreen = ({ store }: IntroScreenProps) => {
             !unsupported && (
               <Text>
                 <Text>
-                  Queued follow-up work <Text color="green">{'\u2714'}</Text>{' '}
+                  Selected extra work <Text color="green">{'\u2714'}</Text>{' '}
                 </Text>
                 <Text>
                   {selectedMigrations.length > 0
@@ -198,14 +198,14 @@ export const IntroScreen = ({ store }: IntroScreenProps) => {
             <Box flexDirection="column" marginTop={1}>
               <Text>We found a few existing tools in this project.</Text>
               <Text dimColor>
-                Choose any follow-up work you'd like us to queue after the main
-                setup finishes.
+                Choose any migration or extra PostHog work you'd like us to
+                include in this run.
               </Text>
               <Box marginTop={1}>
                 <GroupedPickerMenu
-                  message="Which follow-up work should we queue?"
+                  message="Which extra work should we include in this run?"
                   groups={{
-                    'Optional follow-up work': migrationOptions.map(
+                    'Optional migration / extra work': migrationOptions.map(
                       (option) => ({
                         label: option.label,
                         value: option.additionalFeature,

@@ -1,9 +1,12 @@
 import {
   DEFAULT_PACKAGE_INSTALLATION,
-  SPINNER_MESSAGE,
   type FrameworkConfig,
 } from './framework-config';
-import { type WizardSession, OutroKind } from './wizard-session';
+import {
+  ADDITIONAL_FEATURE_LABELS,
+  type WizardSession,
+  OutroKind,
+} from './wizard-session';
 import {
   tryGetPackageJson,
   isUsingTypeScript,
@@ -43,6 +46,13 @@ import {
   loadAgentSessionCache,
   saveAgentSessionCache,
 } from './agent-session-cache';
+import {
+  buildRunScope,
+  getRunScopeKey,
+  RUN_WORK_AREA_LABELS,
+  RunWorkArea,
+  type WizardRunScope,
+} from './run-scope';
 
 /**
  * Build a WizardOptions bag from a WizardSession (for code that still expects WizardOptions).
@@ -62,6 +72,65 @@ function sessionToOptions(session: WizardSession): WizardOptions {
     apiKey: session.apiKey,
     yaraReport: session.yaraReport,
   };
+}
+
+async function handleAgentResultOrAbort(
+  agentResult: { error?: AgentErrorType; message?: string },
+  config: FrameworkConfig,
+): Promise<void> {
+  if (agentResult.error === AgentErrorType.MCP_MISSING) {
+    await wizardAbort({
+      message: `Could not access the PostHog MCP server\n\nThe wizard was unable to connect to the PostHog MCP server.\nThis could be due to a network issue or a configuration problem.\n\nPlease try again, or set up ${config.metadata.name} manually by following our documentation:\n${config.metadata.docsUrl}`,
+      error: new WizardError('Agent could not access PostHog MCP server', {
+        integration: config.metadata.integration,
+        error_type: AgentErrorType.MCP_MISSING,
+        signal: AgentSignals.ERROR_MCP_MISSING,
+      }),
+    });
+  }
+
+  if (agentResult.error === AgentErrorType.RESOURCE_MISSING) {
+    await wizardAbort({
+      message: `Could not access the setup resource\n\nThe wizard could not access the setup resource. This may indicate a version mismatch or a temporary service issue.\n\nPlease try again, or set up ${config.metadata.name} manually by following our documentation:\n${config.metadata.docsUrl}`,
+      error: new WizardError('Agent could not access setup resource', {
+        integration: config.metadata.integration,
+        error_type: AgentErrorType.RESOURCE_MISSING,
+        signal: AgentSignals.ERROR_RESOURCE_MISSING,
+      }),
+    });
+  }
+
+  if (agentResult.error === AgentErrorType.YARA_VIOLATION) {
+    await wizardAbort({
+      message:
+        'Security violation detected\n\nThe YARA scanner terminated the session after detecting a security violation.\nThis may indicate prompt injection, poisoned skill files, or a policy breach.\n\nPlease report this to: wizard@posthog.com',
+      error: new WizardError('YARA scanner terminated session', {
+        integration: config.metadata.integration,
+        error_type: AgentErrorType.YARA_VIOLATION,
+      }),
+    });
+  }
+
+  if (
+    agentResult.error === AgentErrorType.RATE_LIMIT ||
+    agentResult.error === AgentErrorType.API_ERROR
+  ) {
+    analytics.wizardCapture('agent api error', {
+      integration: config.metadata.integration,
+      error_type: agentResult.error,
+      error_message: agentResult.message,
+    });
+
+    await wizardAbort({
+      message: `API Error\n\n${
+        agentResult.message || 'Unknown error'
+      }\n\nPlease report this error to: wizard@posthog.com`,
+      error: new WizardError(`API error: ${agentResult.message}`, {
+        integration: config.metadata.integration,
+        error_type: agentResult.error,
+      }),
+    });
+  }
 }
 
 /**
@@ -214,6 +283,8 @@ export async function runAgentWizard(
     analytics.setTag(key, value);
   });
 
+  const runScope = buildRunScope(session.additionalFeatureQueue);
+  const runScopeKey = getRunScopeKey(runScope);
   const integrationPrompt = buildIntegrationPrompt(
     config,
     {
@@ -224,6 +295,7 @@ export async function runAgentWizard(
       projectId,
     },
     frameworkContext,
+    runScope,
   );
 
   // Initialize and run agent
@@ -244,14 +316,35 @@ export async function runAgentWizard(
   const restoreSettings = () => restoreClaudeSettings(session.installDir);
   getUI().onEnterScreen('outro', restoreSettings);
 
-  const cachedSession = loadAgentSessionCache(
+  const exactCachedSession = loadAgentSessionCache(
     session.installDir,
     config.metadata.integration,
+    runScopeKey,
   );
-  if (cachedSession?.todos.length) {
+  const fallbackCachedSession =
+    exactCachedSession ??
+    loadAgentSessionCache(
+      session.installDir,
+      config.metadata.integration,
+      runScopeKey,
+      { allowScopeMismatch: true },
+    );
+  const cachedSession = exactCachedSession ?? fallbackCachedSession;
+  const scopeChangedSinceCachedRun =
+    cachedSession != null && cachedSession.scopeKey !== runScopeKey;
+
+  if (
+    !scopeChangedSinceCachedRun &&
+    cachedSession?.runStage === 'execution' &&
+    cachedSession.todos.length
+  ) {
     getUI().syncTodos(cachedSession.todos);
   }
-  if (cachedSession?.eventPlan?.length) {
+  if (
+    !scopeChangedSinceCachedRun &&
+    cachedSession?.runStage === 'execution' &&
+    cachedSession.eventPlan?.length
+  ) {
     getUI().setEventPlan(cachedSession.eventPlan);
   }
 
@@ -287,84 +380,139 @@ export async function runAgentWizard(
     ? createBenchmarkPipeline(spinner, sessionToOptions(session))
     : undefined;
 
-  const agentResult = await runAgent(
-    agent,
-    integrationPrompt,
-    sessionToOptions(session),
-    spinner,
-    {
-      estimatedDurationMinutes: config.ui.estimatedDurationMinutes,
-      spinnerMessage: SPINNER_MESSAGE,
-      successMessage: config.ui.successMessage,
-      errorMessage: 'Integration failed',
-      additionalFeatureQueue: session.additionalFeatureQueue,
-      resumeSessionId: cachedSession?.sessionId,
-      onCachedSessionUpdated: ({ sessionId, todos, eventPlan }) => {
-        saveAgentSessionCache(
-          session.installDir,
-          config.metadata.integration,
-          sessionId,
-          todos,
-          eventPlan,
-        );
+  const persistCachedSession = ({
+    sessionId,
+    runStage,
+    todos,
+    eventPlan,
+  }: {
+    sessionId: string;
+    runStage: 'discovery' | 'execution';
+    todos: Array<{ content: string; status: string; activeForm?: string }>;
+    eventPlan: Array<{ name: string; description: string }>;
+  }) => {
+    saveAgentSessionCache(
+      session.installDir,
+      config.metadata.integration,
+      runScopeKey,
+      sessionId,
+      runStage,
+      todos,
+      eventPlan,
+    );
+  };
+
+  if (!scopeChangedSinceCachedRun && cachedSession?.runStage === 'execution') {
+    getUI().pushStatus(
+      'Reopening the prior implementation session and refreshing the task list if needed...',
+    );
+    const agentResult = await runAgent(
+      agent,
+      integrationPrompt,
+      sessionToOptions(session),
+      spinner,
+      {
+        estimatedDurationMinutes: config.ui.estimatedDurationMinutes,
+        spinnerMessage:
+          'Reusing prior project analysis and resuming implementation with Claude Sonnet...',
+        successMessage: config.ui.successMessage,
+        errorMessage: 'Integration failed',
+        modelOverride: agent.model,
+        stageMode: 'execution_resume',
+        additionalFeatureQueue: session.additionalFeatureQueue,
+        resumeSessionId: cachedSession.sessionId,
+        resumeRunStage: 'execution',
+        onCachedSessionUpdated: persistCachedSession,
       },
-    },
-    middleware,
-  );
+      middleware,
+    );
 
-  // Handle error cases detected in agent output
-  if (agentResult.error === AgentErrorType.MCP_MISSING) {
-    await wizardAbort({
-      message: `Could not access the PostHog MCP server\n\nThe wizard was unable to connect to the PostHog MCP server.\nThis could be due to a network issue or a configuration problem.\n\nPlease try again, or set up ${config.metadata.name} manually by following our documentation:\n${config.metadata.docsUrl}`,
-      error: new WizardError('Agent could not access PostHog MCP server', {
-        integration: config.metadata.integration,
-        error_type: AgentErrorType.MCP_MISSING,
-        signal: AgentSignals.ERROR_MCP_MISSING,
-      }),
-    });
-  }
+    await handleAgentResultOrAbort(agentResult, config);
+  } else {
+    const discoveryStatus = scopeChangedSinceCachedRun
+      ? 'Reusing prior project context and reconciling it with the updated selected work...'
+      : cachedSession
+      ? 'Reopening the prior project analysis and checking what still applies...'
+      : 'Reviewing the repository and gathering the full scope for this run...';
+    getUI().pushStatus(discoveryStatus);
 
-  if (agentResult.error === AgentErrorType.RESOURCE_MISSING) {
-    await wizardAbort({
-      message: `Could not access the setup resource\n\nThe wizard could not access the setup resource. This may indicate a version mismatch or a temporary service issue.\n\nPlease try again, or set up ${config.metadata.name} manually by following our documentation:\n${config.metadata.docsUrl}`,
-      error: new WizardError('Agent could not access setup resource', {
-        integration: config.metadata.integration,
-        error_type: AgentErrorType.RESOURCE_MISSING,
-        signal: AgentSignals.ERROR_RESOURCE_MISSING,
-      }),
-    });
-  }
+    const discoverySpinnerMessage = scopeChangedSinceCachedRun
+      ? 'Reusing prior project analysis with Claude Sonnet and updating the selected work...'
+      : cachedSession
+      ? 'Reusing prior project analysis with Claude Sonnet...'
+      : 'Analyzing your project with Claude Sonnet...';
 
-  if (agentResult.error === AgentErrorType.YARA_VIOLATION) {
-    await wizardAbort({
-      message:
-        'Security violation detected\n\nThe YARA scanner terminated the session after detecting a security violation.\nThis may indicate prompt injection, poisoned skill files, or a policy breach.\n\nPlease report this to: wizard@posthog.com',
-      error: new WizardError('YARA scanner terminated session', {
-        integration: config.metadata.integration,
-        error_type: AgentErrorType.YARA_VIOLATION,
-      }),
-    });
-  }
+    const discoveryResult = await runAgent(
+      agent,
+      integrationPrompt,
+      sessionToOptions(session),
+      spinner,
+      {
+        estimatedDurationMinutes: config.ui.estimatedDurationMinutes,
+        spinnerMessage: discoverySpinnerMessage,
+        successMessage: 'Project analysis complete',
+        errorMessage: 'Project analysis failed',
+        modelOverride: agent.model,
+        stageMode: 'discovery',
+        finalizeMiddleware: false,
+        captureCompletionAnalytics: false,
+        additionalFeatureQueue: session.additionalFeatureQueue,
+        resumeSessionId: cachedSession?.sessionId,
+        resumeRunStage: 'discovery',
+        resumeScopeChanged: scopeChangedSinceCachedRun,
+        onCachedSessionUpdated: persistCachedSession,
+      },
+      middleware,
+    );
 
-  if (
-    agentResult.error === AgentErrorType.RATE_LIMIT ||
-    agentResult.error === AgentErrorType.API_ERROR
-  ) {
-    analytics.wizardCapture('agent api error', {
-      integration: config.metadata.integration,
-      error_type: agentResult.error,
-      error_message: agentResult.message,
-    });
+    await handleAgentResultOrAbort(discoveryResult, config);
 
-    await wizardAbort({
-      message: `API Error\n\n${
-        agentResult.message || 'Unknown error'
-      }\n\nPlease report this error to: wizard@posthog.com`,
-      error: new WizardError(`API error: ${agentResult.message}`, {
-        integration: config.metadata.integration,
-        error_type: agentResult.error,
-      }),
-    });
+    const executionSession = loadAgentSessionCache(
+      session.installDir,
+      config.metadata.integration,
+      runScopeKey,
+    );
+
+    if (!executionSession?.sessionId) {
+      await wizardAbort({
+        message:
+          'Project analysis finished, but the wizard could not resume the implementation session.\n\nPlease try running the wizard again.',
+        error: new WizardError('Missing cached session after discovery stage', {
+          integration: config.metadata.integration,
+        }),
+      });
+    }
+    const executionSessionId = executionSession?.sessionId;
+
+    getUI().pushStatus(
+      'Initial analysis complete. Starting the implementation pass on Claude Sonnet...',
+    );
+    getUI().pushStatus(
+      'Preparing the full-scope task list for this run before making code changes...',
+    );
+
+    const executionResult = await runAgent(
+      agent,
+      integrationPrompt,
+      sessionToOptions(session),
+      spinner,
+      {
+        estimatedDurationMinutes: config.ui.estimatedDurationMinutes,
+        spinnerMessage:
+          'Switching to Claude Sonnet to implement the requested work...',
+        successMessage: config.ui.successMessage,
+        errorMessage: 'Integration failed',
+        modelOverride: agent.model,
+        stageMode: 'execution',
+        additionalFeatureQueue: session.additionalFeatureQueue,
+        resumeSessionId: executionSessionId,
+        resumeRunStage: 'execution',
+        onCachedSessionUpdated: persistCachedSession,
+      },
+      middleware,
+    );
+
+    await handleAgentResultOrAbort(executionResult, config);
   }
 
   // Build environment variables from OAuth credentials
@@ -432,6 +580,7 @@ function buildIntegrationPrompt(
     projectId: number;
   },
   frameworkContext: Record<string, unknown>,
+  runScope: WizardRunScope,
 ): string {
   const additionalLines = config.prompts.getAdditionalContextLines
     ? config.prompts.getAdditionalContextLines(frameworkContext)
@@ -441,6 +590,57 @@ function buildIntegrationPrompt(
     additionalLines.length > 0
       ? '\n' + additionalLines.map((line) => `- ${line}`).join('\n')
       : '';
+
+  const workAreaDetails: Record<
+    RunWorkArea,
+    { label: string; skillCategory: string }
+  > = {
+    [RunWorkArea.ProductAnalytics]: {
+      label: RUN_WORK_AREA_LABELS[RunWorkArea.ProductAnalytics],
+      skillCategory: 'integration',
+    },
+    [RunWorkArea.ErrorTracking]: {
+      label: RUN_WORK_AREA_LABELS[RunWorkArea.ErrorTracking],
+      skillCategory: 'error-tracking',
+    },
+    [RunWorkArea.FeatureFlags]: {
+      label: RUN_WORK_AREA_LABELS[RunWorkArea.FeatureFlags],
+      skillCategory: 'feature-flags',
+    },
+    [RunWorkArea.LlmAnalytics]: {
+      label: RUN_WORK_AREA_LABELS[RunWorkArea.LlmAnalytics],
+      skillCategory: 'llm-analytics',
+    },
+  };
+
+  const requestedWorkAreas = runScope.workAreas
+    .map((workArea) => {
+      const detail = workAreaDetails[workArea];
+      return `- ${detail.label} (skill category: \`${detail.skillCategory}\`)`;
+    })
+    .join('\n');
+
+  const selectedFeatures =
+    runScope.selectedFeatures.length > 0
+      ? runScope.selectedFeatures
+          .map((feature) => `- ${ADDITIONAL_FEATURE_LABELS[feature]}`)
+          .join('\n')
+      : '- None';
+
+  const nonRequestedWorkAreaLabels = Object.entries(workAreaDetails)
+    .filter(
+      ([workArea]) => !runScope.workAreas.includes(workArea as RunWorkArea),
+    )
+    .map(([, detail]) => detail.label);
+  const nonRequestedGuardrail =
+    nonRequestedWorkAreaLabels.length > 0
+      ? `Do not implement unrelated PostHog areas that were not requested for this run (${nonRequestedWorkAreaLabels.join(
+          ', ',
+        )}). In particular, do not add generic product analytics/event capture work unless Product analytics is explicitly requested.`
+      : 'Do not install or use extra PostHog skill categories beyond the requested work areas for this run.';
+  const requestedSkillCategories = runScope.workAreas
+    .map((workArea) => workAreaDetails[workArea].skillCategory)
+    .join(', ');
 
   return `You have access to the PostHog MCP server which provides skills to integrate PostHog into this ${
     config.metadata.name
@@ -457,6 +657,15 @@ Project context:
     config.prompts.packageInstallation ?? DEFAULT_PACKAGE_INSTALLATION
   }${additionalContext}
 
+Requested work areas for this run:
+${requestedWorkAreas}
+
+Selected migrations or follow-up features:
+${selectedFeatures}
+
+Scope guardrail:
+- ${nonRequestedGuardrail}
+
 Instructions (follow these steps IN ORDER - do not skip or reorder):
 
 STEP 1: Call load_skill_menu (from the wizard-tools MCP server) to see available skills.
@@ -464,19 +673,22 @@ STEP 1: Call load_skill_menu (from the wizard-tools MCP server) to see available
      AgentSignals.ERROR_MCP_MISSING
    } Could not load skill menu and halt.
 
-   Choose a skill from the \`integration\` category that matches this project's framework. Do NOT pick skills from other categories (llm-analytics, error-tracking, feature-flags, omnibus, etc.) — those are handled separately.
-   If no suitable integration skill is found, emit: ${
+STEP 2: Choose the framework-matching skill or skills for the requested work areas only.
+   Use only these skill categories: ${requestedSkillCategories}.
+   For each requested work area, choose the matching skill category listed above and skip all unrelated categories.
+   If Product analytics is not requested, do not install an \`integration\` skill just to do generic analytics setup.
+   If no suitable skill is found for a requested work area, emit: ${
      AgentSignals.ERROR_RESOURCE_MISSING
    } Could not find a suitable skill for this project.
 
-STEP 2: Call install_skill (from the wizard-tools MCP server) with the chosen skill ID (e.g., "integration-nextjs-app-router").
+STEP 3: Call install_skill (from the wizard-tools MCP server) for each chosen skill ID.
    Do NOT run any shell commands to install skills.
 
-STEP 3: Load the installed skill's SKILL.md file to understand what references are available.
+STEP 4: Load each installed skill's SKILL.md file to understand what references are available.
 
-STEP 4: Follow the skill's workflow files in sequence. Look for numbered workflow files in the references (e.g., files with patterns like "1.0-", "1.1-", "1.2-"). Start with the first one and proceed through each step until completion. Each workflow file will tell you what to do and which file comes next. Never directly write PostHog tokens directly to code files; always use environment variables.
+STEP 5: Follow the skill workflow files in sequence for the requested work areas only. Look for numbered workflow files in the references (e.g., files with patterns like "1.0-", "1.1-", "1.2-"). Start with the first one and proceed through each step until completion. Each workflow file will tell you what to do and which file comes next. Never directly write PostHog tokens directly to code files; always use environment variables.
 
-STEP 5: Set up environment variables for PostHog using the wizard-tools MCP server (this runs locally — secret values never leave the machine):
+STEP 6: Set up environment variables for PostHog using the wizard-tools MCP server when the selected skills require them (this runs locally — secret values never leave the machine):
    - Use check_env_keys to see which keys already exist in the project's .env file (e.g. .env.local or .env).
    - Use set_env_values to create or update the PostHog public token and host, using the appropriate environment variable naming convention for ${
      config.metadata.name
