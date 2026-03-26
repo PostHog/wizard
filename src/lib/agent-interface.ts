@@ -35,6 +35,10 @@ import {
 } from './yara-hooks';
 import { getWizardCommandments } from './commandments';
 import type { PackageManagerDetector } from './package-manager-detection';
+import type {
+  CachedAgentTodo,
+  CachedPlannedEvent,
+} from './agent-session-cache';
 
 // Dynamic import cache for ESM module
 let _sdkModule: any = null;
@@ -719,6 +723,12 @@ export async function runAgent(
     successMessage?: string;
     errorMessage?: string;
     additionalFeatureQueue?: readonly AdditionalFeature[];
+    resumeSessionId?: string;
+    onCachedSessionUpdated?: (snapshot: {
+      sessionId: string;
+      todos: CachedAgentTodo[];
+      eventPlan: CachedPlannedEvent[];
+    }) => void;
   },
   middleware?: {
     onMessage(message: any): void;
@@ -738,13 +748,31 @@ export async function runAgent(
   const cliPath = getClaudeCodeExecutablePath();
   logToFile('Starting agent run');
   logToFile('Claude Code executable:', cliPath);
-  logToFile('Prompt:', prompt);
+  const effectivePrompt = config?.resumeSessionId
+    ? `This wizard run is being re-run for the same project. Reuse the prior session context and repo analysis when it still matches the current repository, but treat earlier conclusions as hints rather than ground truth. Refresh the TodoWrite task list for this run before doing substantial work so the visible tasks match the current repository state. Prefer lightweight verification over repeating broad exploratory reads when the earlier session already established the project structure.\n\n${prompt}`
+    : prompt;
+  logToFile('Prompt:', effectivePrompt);
+  if (config?.resumeSessionId) {
+    logToFile('Resuming cached session:', config.resumeSessionId);
+  }
 
   const startTime = Date.now();
   const collectedText: string[] = [];
+  let activeSessionId = config?.resumeSessionId;
+  let latestTodos: CachedAgentTodo[] = [];
+  let latestEventPlan: CachedPlannedEvent[] = [];
   // Track if we received a successful result (before any cleanup errors)
   let receivedSuccessResult = false;
   let lastResultMessage: any = null;
+
+  const persistCachedSession = () => {
+    if (!activeSessionId) return;
+    config?.onCachedSessionUpdated?.({
+      sessionId: activeSessionId,
+      todos: latestTodos,
+      eventPlan: latestEventPlan,
+    });
+  };
 
   // Workaround for SDK bug: stdin closes before canUseTool responses can be sent.
   // The fix is to use an async generator for the prompt that stays open until
@@ -760,7 +788,7 @@ export async function runAgent(
     yield {
       type: 'user',
       session_id: '',
-      message: { role: 'user', content: prompt },
+      message: { role: 'user', content: effectivePrompt },
       parent_tool_use_id: null,
     };
     await resultReceived;
@@ -803,6 +831,7 @@ export async function runAgent(
       duration_ms: durationMs,
       duration_seconds: durationSeconds,
     });
+    persistCachedSession();
     try {
       middleware?.finalize(lastResultMessage, durationMs);
     } catch (e) {
@@ -841,6 +870,8 @@ export async function runAgent(
       options: {
         model: agentConfig.model,
         cwd: agentConfig.workingDirectory,
+        resume: config?.resumeSessionId,
+        forkSession: Boolean(config?.resumeSessionId),
         permissionMode: 'acceptEdits',
         mcpServers: agentConfig.mcpServers,
         // Load skills from project's .claude/skills/ directory
@@ -940,12 +971,13 @@ export async function runAgent(
         const content = fs.readFileSync(eventPlanPath, 'utf-8');
         const parsed = JSON.parse(content);
         if (Array.isArray(parsed)) {
-          getUI().setEventPlan(
-            parsed.map((e: Record<string, unknown>) => ({
-              name: (e.name ?? e.event ?? '') as string,
-              description: (e.description ?? '') as string,
-            })),
-          );
+          const events = parsed.map((e: Record<string, unknown>) => ({
+            name: (e.name ?? e.event ?? '') as string,
+            description: (e.description ?? '') as string,
+          }));
+          latestEventPlan = events;
+          getUI().setEventPlan(events);
+          persistCachedSession();
         }
       } catch {
         // File doesn't exist or isn't valid JSON yet
@@ -980,6 +1012,18 @@ export async function runAgent(
         spinner,
         collectedText,
         receivedSuccessResult,
+        {
+          persistCachedSession,
+          setSessionId: (sessionId) => {
+            activeSessionId = sessionId;
+          },
+          setTodos: (todos) => {
+            latestTodos = todos;
+          },
+          setEventPlan: (eventPlan) => {
+            latestEventPlan = eventPlan;
+          },
+        },
       );
 
       // 401: show auth error screen and exit immediately
@@ -1025,12 +1069,14 @@ export async function runAgent(
     if (outputText.includes(AgentSignals.ERROR_MCP_MISSING)) {
       logToFile('Agent error: MCP_MISSING');
       spinner.stop('Agent could not access PostHog MCP');
+      persistCachedSession();
       return { error: AgentErrorType.MCP_MISSING };
     }
 
     if (outputText.includes(AgentSignals.ERROR_RESOURCE_MISSING)) {
       logToFile('Agent error: RESOURCE_MISSING');
       spinner.stop('Agent could not access setup resource');
+      persistCachedSession();
       return { error: AgentErrorType.RESOURCE_MISSING };
     }
 
@@ -1044,12 +1090,14 @@ export async function runAgent(
     if (outputText.includes('API Error: 429')) {
       logToFile('Agent error: RATE_LIMIT');
       spinner.stop('Rate limit exceeded');
+      persistCachedSession();
       return { error: AgentErrorType.RATE_LIMIT, message: apiErrorMessage };
     }
 
     if (outputText.includes('API Error:')) {
       logToFile('Agent error: API_ERROR');
       spinner.stop('API error occurred');
+      persistCachedSession();
       return { error: AgentErrorType.API_ERROR, message: apiErrorMessage };
     }
 
@@ -1082,16 +1130,19 @@ export async function runAgent(
     if (outputText.includes('API Error: 429')) {
       logToFile('Agent error (caught): RATE_LIMIT');
       spinner.stop('Rate limit exceeded');
+      persistCachedSession();
       return { error: AgentErrorType.RATE_LIMIT, message: apiErrorMessage };
     }
 
     if (outputText.includes('API Error:')) {
       logToFile('Agent error (caught): API_ERROR');
       spinner.stop('API error occurred');
+      persistCachedSession();
       return { error: AgentErrorType.API_ERROR, message: apiErrorMessage };
     }
 
     // No API error found, re-throw the original exception
+    persistCachedSession();
     spinner.stop(errorMessage);
     getUI().log.error(`Error: ${(error as Error).message}`);
     logToFile('Agent run failed:', error);
@@ -1116,11 +1167,22 @@ function handleSDKMessage(
   spinner: SpinnerHandle,
   collectedText: string[],
   receivedSuccessResult = false,
+  cacheState?: {
+    persistCachedSession: () => void;
+    setSessionId: (sessionId: string) => void;
+    setTodos: (todos: CachedAgentTodo[]) => void;
+    setEventPlan: (eventPlan: CachedPlannedEvent[]) => void;
+  },
 ): void {
   logToFile(`SDK Message: ${message.type}`, JSON.stringify(message, null, 2));
 
   if (options.debug) {
     debug(`SDK Message type: ${message.type}`);
+  }
+
+  if (typeof (message as { session_id?: unknown }).session_id === 'string') {
+    cacheState?.setSessionId((message as { session_id: string }).session_id);
+    cacheState?.persistCachedSession();
   }
 
   switch (message.type) {
@@ -1155,6 +1217,20 @@ function handleSDKMessage(
             block.input?.todos &&
             Array.isArray(block.input.todos)
           ) {
+            cacheState?.setTodos(
+              block.input.todos.map(
+                (todo: {
+                  content: string;
+                  status: string;
+                  activeForm?: string;
+                }) => ({
+                  content: todo.content,
+                  status: todo.status,
+                  activeForm: todo.activeForm,
+                }),
+              ),
+            );
+            cacheState?.persistCachedSession();
             getUI().syncTodos(block.input.todos);
           }
         }

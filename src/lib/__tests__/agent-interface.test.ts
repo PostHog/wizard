@@ -279,6 +279,83 @@ describe('runAgent', () => {
       // ui.log.error should NOT have been called (errors suppressed for user)
       expect(mockUIInstance.log.error).not.toHaveBeenCalled();
     });
+
+    it('should resume from a cached session and persist updated todos', async () => {
+      function* mockGeneratorWithResume() {
+        yield {
+          type: 'assistant',
+          session_id: 'new-session-id',
+          message: {
+            content: [
+              {
+                type: 'tool_use',
+                name: 'TodoWrite',
+                input: {
+                  todos: [
+                    {
+                      content: 'Analyze project',
+                      status: 'in_progress',
+                      activeForm: 'Analyzing project',
+                    },
+                  ],
+                },
+              },
+            ],
+          },
+        };
+
+        yield {
+          type: 'result',
+          subtype: 'success',
+          is_error: false,
+          result: 'Agent completed successfully',
+          session_id: 'new-session-id',
+        };
+      }
+
+      mockQuery.mockReturnValue(mockGeneratorWithResume());
+      const onCachedSessionUpdated = jest.fn();
+
+      await runAgent(
+        defaultAgentConfig,
+        'test prompt',
+        defaultOptions,
+        mockSpinner as unknown as SpinnerHandle,
+        {
+          successMessage: 'Test success',
+          errorMessage: 'Test error',
+          resumeSessionId: 'cached-session-id',
+          onCachedSessionUpdated,
+        },
+      );
+
+      expect(mockQuery).toHaveBeenCalledWith(
+        expect.objectContaining({
+          options: expect.objectContaining({
+            resume: 'cached-session-id',
+            forkSession: true,
+          }),
+        }),
+      );
+      expect(onCachedSessionUpdated).toHaveBeenCalledWith({
+        sessionId: 'new-session-id',
+        todos: [
+          {
+            content: 'Analyze project',
+            status: 'in_progress',
+            activeForm: 'Analyzing project',
+          },
+        ],
+        eventPlan: [],
+      });
+      expect(mockUIInstance.syncTodos).toHaveBeenCalledWith([
+        {
+          content: 'Analyze project',
+          status: 'in_progress',
+          activeForm: 'Analyzing project',
+        },
+      ]);
+    });
   });
 });
 

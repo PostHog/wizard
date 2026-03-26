@@ -39,6 +39,10 @@ import {
   registerCleanup,
 } from '../utils/wizard-abort';
 import { formatScanReport, writeScanReport } from './yara-hooks';
+import {
+  loadAgentSessionCache,
+  saveAgentSessionCache,
+} from './agent-session-cache';
 
 /**
  * Build a WizardOptions bag from a WizardSession (for code that still expects WizardOptions).
@@ -240,6 +244,17 @@ export async function runAgentWizard(
   const restoreSettings = () => restoreClaudeSettings(session.installDir);
   getUI().onEnterScreen('outro', restoreSettings);
 
+  const cachedSession = loadAgentSessionCache(
+    session.installDir,
+    config.metadata.integration,
+  );
+  if (cachedSession?.todos.length) {
+    getUI().syncTodos(cachedSession.todos);
+  }
+  if (cachedSession?.eventPlan?.length) {
+    getUI().setEventPlan(cachedSession.eventPlan);
+  }
+
   // Register YARA report as cleanup so it fires on any exit path (including wizardAbort)
   if (session.yaraReport) {
     registerCleanup(() => {
@@ -283,6 +298,16 @@ export async function runAgentWizard(
       successMessage: config.ui.successMessage,
       errorMessage: 'Integration failed',
       additionalFeatureQueue: session.additionalFeatureQueue,
+      resumeSessionId: cachedSession?.sessionId,
+      onCachedSessionUpdated: ({ sessionId, todos, eventPlan }) => {
+        saveAgentSessionCache(
+          session.installDir,
+          config.metadata.integration,
+          sessionId,
+          todos,
+          eventPlan,
+        );
+      },
     },
     middleware,
   );
