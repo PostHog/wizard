@@ -1825,7 +1825,7 @@ export async function runMigrationAgent(
   migration: AdditionalFeature,
   auditContext: string,
   projectContext: string,
-  options: WizardOptions,
+  _options: WizardOptions,
   callbacks: {
     onTodoSync: (
       todos: Array<{ content: string; status: string; activeForm?: string }>,
