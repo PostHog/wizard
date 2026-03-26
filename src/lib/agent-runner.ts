@@ -187,7 +187,7 @@ export async function runAgentWizard(
   });
 
   // Get PostHog credentials (region auto-detected from token)
-  logToFile('[agent-runner] starting OAuth');
+  logToFile('[agent-runner] resolving authentication');
   const { projectApiKey, host, accessToken, projectId, cloudRegion } =
     await getOrAskForProjectData({
       signup: session.signup,

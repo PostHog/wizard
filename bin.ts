@@ -79,7 +79,7 @@ yargs(hideBin(process.argv))
     },
     'api-key': {
       describe:
-        'PostHog personal API key (phx_xxx) for authentication\nenv: POSTHOG_WIZARD_API_KEY',
+        'PostHog personal API key (phx_xxx) for authentication; skips OAuth\nenv: POSTHOG_WIZARD_API_KEY',
       type: 'string',
     },
     'project-id': {

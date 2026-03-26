@@ -316,7 +316,7 @@ export function isUsingTypeScript({
 }
 
 /**
- * Get project data for the wizard via OAuth or CI API key.
+ * Get project data for the wizard via OAuth or a supplied personal API key.
  */
 export async function getOrAskForProjectData(
   _options: Pick<WizardOptions, 'signup' | 'ci' | 'apiKey' | 'projectId'>,
@@ -327,9 +327,9 @@ export async function getOrAskForProjectData(
   projectId: number;
   cloudRegion: CloudRegion;
 }> {
-  // CI mode: bypass OAuth, use personal API key for LLM gateway
-  if (_options.ci && _options.apiKey) {
-    getUI().log.info('Using provided API key (CI mode - OAuth bypassed)');
+  // Supplied API key: bypass OAuth and derive project access directly.
+  if (_options.apiKey) {
+    getUI().log.info('Using provided API key (OAuth bypassed)');
 
     const cloudRegion = await detectRegionFromToken(_options.apiKey);
     const host = getHostFromRegion(cloudRegion);

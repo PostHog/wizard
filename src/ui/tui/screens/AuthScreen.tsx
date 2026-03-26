@@ -1,8 +1,8 @@
 /**
- * AuthScreen — Shown while waiting for OAuth authentication.
+ * AuthScreen — Shown while wizard credentials are being resolved.
  *
  * Displays framework detection results, beta/disclosure notices,
- * a waiting spinner, and the login URL when available.
+ * a waiting spinner, and the login URL when OAuth is in use.
  * The router resolves past this screen once session.credentials is set.
  */
 
@@ -53,7 +53,7 @@ export const AuthScreen = ({ store }: AuthScreenProps) => {
         )}
       </Box>
 
-      <LoadingBox message="Waiting for authentication..." />
+      <LoadingBox message="Resolving PostHog credentials..." />
 
       {session.loginUrl && (
         <Box marginTop={1} flexDirection="column">

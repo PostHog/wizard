@@ -49,7 +49,9 @@ The following CLI arguments are available:
 | `--force-install` | Force install packages even if peer dependency checks fail       | boolean | `false` |                                                      | `POSTHOG_WIZARD_FORCE_INSTALL` |
 | `--install-dir`   | Directory to install PostHog in                                  | string  |         |                                                      | `POSTHOG_WIZARD_INSTALL_DIR`   |
 | `--ci`            | Enable CI mode for non-interactive execution                     | boolean | `false` |                                                      | `POSTHOG_WIZARD_CI`            |
-| `--api-key`       | PostHog personal API key (phx_xxx) for authentication            | string  |         |                                                      | `POSTHOG_WIZARD_API_KEY`       |
+| `--api-key`       | PostHog personal API key (phx_xxx) for authentication; skips OAuth | string  |         |                                                      | `POSTHOG_WIZARD_API_KEY`       |
+
+Using `--api-key` or `POSTHOG_WIZARD_API_KEY` bypasses the OAuth browser flow in both interactive runs and CI mode.
 
 > Note: A large amount of the scaffolding for this came from the amazing Sentry
 > wizard, which you can find [here](https://github.com/getsentry/sentry-wizard)
