@@ -21,7 +21,9 @@ const WIZARD_COMMANDMENTS = [
 
   'Do not spawn subagents unless explicitly instructed to do so.',
 
-  'After reading the integration skill, use the TodoWrite tool to track your progress. Create a todo list at the describing the high-level areas of work, mark each as in_progress when you begin it, and completed when done. Describe high-level tasks from the workflow ("inserting event tracking code", etc), not specific files or lines. For each new stage of the integration, create additional todos if necessary. Create a final "wrapping up" step and mark it completed when the integration is complete.',
+  'After reading the integration skill\'s SKILL.md, use the TodoWrite tool to create one todo for EACH numbered workflow file listed (e.g. "Follow 1.0-begin", "Follow 1.1-edit", "Follow 1.2-revise", "Follow 1.3-conclude"). Mark each as in_progress when you begin it, and completed only after fully executing that step. Within each workflow step you may add sub-todos as needed. The final workflow file generates a setup report — it must not be skipped. If you have incomplete workflow-file todos, you are not done.',
+
+  'You MUST read and follow every numbered workflow file listed in SKILL.md, in sequence, through to the final one. The last workflow step generates the setup report — never stop before completing it. If unsure which workflow files remain, re-read SKILL.md or check your todo list.',
 
   'Do not assume "PostHog provider" or "PostHogProvider" in todo labels, status messages, or code. Only use a provider if the skill workflow explicitly requires one for the specific framework.',
 
