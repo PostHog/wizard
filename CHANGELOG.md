@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.5.0](https://github.com/PostHog/wizard/compare/v2.4.0...v2.5.0) (2026-03-24)
+
+
+### Features
+
+* **mcp:** Allowing to specify MCP features ([#350](https://github.com/PostHog/wizard/issues/350)) ([5b3499a](https://github.com/PostHog/wizard/commit/5b3499a22288b8d601379b4db8ba563bdc59b8c8))
+
+
+### Bug Fixes
+
+* Better node engine pins ([#353](https://github.com/PostHog/wizard/issues/353)) ([86e1878](https://github.com/PostHog/wizard/commit/86e18787badf5732b9cac0c5a16c3f283d8850b3))
+
 ## [2.4.0](https://github.com/PostHog/wizard/compare/v2.3.0...v2.4.0) (2026-03-18)
 
 
