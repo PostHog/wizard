@@ -27,8 +27,18 @@ export const ApiProjectSchema = z.object({
   name: z.string(),
 });
 
+export const ApiPromptSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  prompt: z.unknown(),
+  version: z.number(),
+  created_at: z.string(),
+  updated_at: z.string(),
+});
+
 export type ApiUser = z.infer<typeof ApiUserSchema>;
 export type ApiProject = z.infer<typeof ApiProjectSchema>;
+export type ApiPrompt = z.infer<typeof ApiPromptSchema>;
 
 class ApiError extends Error {
   constructor(
@@ -84,6 +94,48 @@ export async function fetchProjectData(
       endpoint: `/api/projects/${projectId}/`,
       baseUrl,
       projectId,
+    });
+    throw apiError;
+  }
+}
+
+export async function fetchPrompts(
+  accessToken: string,
+  teamId: number,
+  baseUrl: string,
+): Promise<ApiPrompt[]> {
+  const prompts: ApiPrompt[] = [];
+  let url:
+    | string
+    | null = `${baseUrl}/api/environments/${teamId}/llm_prompts/?limit=200`;
+
+  const pageSchema = z.object({
+    results: z.array(ApiPromptSchema),
+    next: z.string().nullable().optional(),
+  });
+
+  try {
+    while (url) {
+      const response = await axios.get(url, {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'User-Agent': WIZARD_USER_AGENT,
+        },
+      });
+
+      const parsed = pageSchema.parse(response.data);
+
+      prompts.push(...parsed.results);
+      url = parsed.next ?? null;
+    }
+
+    return prompts;
+  } catch (error) {
+    const apiError = handleApiError(error, 'fetch prompts');
+    analytics.captureException(apiError, {
+      endpoint: `/api/environments/${teamId}/llm_prompts/`,
+      baseUrl,
+      teamId,
     });
     throw apiError;
   }

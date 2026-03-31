@@ -21,6 +21,8 @@ interface PickerMenuProps<T> {
   mode?: 'single' | 'multi';
   centered?: boolean;
   columns?: 1 | 2 | 3 | 4;
+  /** Indices to pre-select in multi mode. */
+  initialSelected?: Set<number>;
   onSelect: (value: T | T[]) => void;
 }
 
@@ -30,6 +32,7 @@ export const PickerMenu = <T,>({
   mode = 'single',
   centered = false,
   columns = 1,
+  initialSelected,
   onSelect,
 }: PickerMenuProps<T>) => {
   if (mode === 'multi') {
@@ -39,6 +42,7 @@ export const PickerMenu = <T,>({
         options={options}
         centered={centered}
         columns={columns}
+        initialSelected={initialSelected}
         onSelect={onSelect}
       />
     );
@@ -156,16 +160,20 @@ const MultiPickerMenu = <T,>({
   options,
   centered = false,
   columns = 1,
+  initialSelected,
   onSelect,
 }: {
   message?: string;
   options: PickerOption<T>[];
   centered?: boolean;
   columns?: number;
+  initialSelected?: Set<number>;
   onSelect: (value: T | T[]) => void;
 }) => {
   const [focused, setFocused] = useState(0);
-  const [selected, setSelected] = useState<Set<number>>(new Set());
+  const [selected, setSelected] = useState<Set<number>>(
+    initialSelected ?? new Set(),
+  );
   const rows = Math.ceil(options.length / columns);
 
   useInput((_input, key) => {
@@ -207,8 +215,8 @@ const MultiPickerMenu = <T,>({
       });
     }
     if (key.return) {
-      if (selected.size === 0) {
-        // Nothing toggled, select hovered
+      if (selected.size === 0 && !initialSelected) {
+        // Nothing toggled and no pre-selection, select hovered
         const hovered = options[focused];
         if (hovered) {
           onSelect(hovered.value);

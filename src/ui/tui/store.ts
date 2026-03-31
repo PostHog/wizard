@@ -353,6 +353,11 @@ export class WizardStore {
     this.emitChange();
   }
 
+  setPromptSyncComplete(): void {
+    this.$session.setKey('promptSyncComplete', true);
+    this.emitChange();
+  }
+
   setOutroData(data: OutroData): void {
     this.$session.setKey('outroData', data);
     this.emitChange();

@@ -26,14 +26,19 @@ import { OutroScreen } from './screens/OutroScreen.js';
 import { AuthErrorScreen } from './screens/AuthErrorScreen.js';
 import { createMcpInstaller } from './services/mcp-installer.js';
 import type { McpInstaller } from './services/mcp-installer.js';
+import { PromptSyncScreen } from './screens/PromptSyncScreen.js';
+import { createPromptSyncer } from './services/prompt-syncer.js';
+import type { PromptSyncer } from './services/prompt-syncer.js';
 
 export interface ScreenServices {
   mcpInstaller: McpInstaller;
+  promptSyncer: PromptSyncer;
 }
 
 export function createServices(): ScreenServices {
   return {
     mcpInstaller: createMcpInstaller(),
+    promptSyncer: createPromptSyncer(),
   };
 }
 
@@ -66,6 +71,15 @@ export function createScreens(
         store={store}
         installer={services.mcpInstaller}
         mode="remove"
+        standalone
+      />
+    ),
+
+    // Standalone Prompt Sync flow
+    [Screen.PromptSync]: (
+      <PromptSyncScreen
+        store={store}
+        syncer={services.promptSyncer}
         standalone
       />
     ),

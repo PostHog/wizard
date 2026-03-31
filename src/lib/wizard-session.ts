@@ -147,6 +147,13 @@ export interface WizardSession {
 
   // Resolved framework config (set after integration is known)
   frameworkConfig: FrameworkConfig | null;
+
+  // Prompt sync
+  promptSyncComplete: boolean;
+  promptSyncClients?: string[];
+  promptSyncDirName?: string;
+  promptSyncAll?: boolean;
+  promptSyncGlobal?: boolean;
 }
 
 /**
@@ -166,6 +173,10 @@ export function buildSession(args: {
   benchmark?: boolean;
   yaraReport?: boolean;
   projectId?: string;
+  promptSyncClients?: string[];
+  promptSyncDirName?: string;
+  promptSyncAll?: boolean;
+  promptSyncGlobal?: boolean;
 }): WizardSession {
   return {
     debug: args.debug ?? false,
@@ -205,5 +216,10 @@ export function buildSession(args: {
     outroData: null,
     additionalFeatureQueue: [],
     frameworkConfig: null,
+    promptSyncComplete: false,
+    promptSyncClients: args.promptSyncClients,
+    promptSyncDirName: args.promptSyncDirName,
+    promptSyncAll: args.promptSyncAll,
+    promptSyncGlobal: args.promptSyncGlobal,
   };
 }

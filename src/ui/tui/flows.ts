@@ -25,6 +25,7 @@ export enum Screen {
   Outro = 'outro',
   McpAdd = 'mcp-add',
   McpRemove = 'mcp-remove',
+  PromptSync = 'prompt-sync',
 }
 
 /** Named flows the router can run */
@@ -32,6 +33,7 @@ export enum Flow {
   Wizard = 'wizard',
   McpAdd = 'mcp-add',
   McpRemove = 'mcp-remove',
+  PromptSync = 'prompt-sync',
 }
 
 // ── Flow definitions ─────────────────────────────────────────────────
@@ -106,6 +108,14 @@ export const FLOWS: Record<Flow, FlowEntry[]> = {
     {
       screen: Screen.McpRemove,
       isComplete: (s) => s.mcpComplete,
+    },
+    { screen: Screen.Outro },
+  ],
+
+  [Flow.PromptSync]: [
+    {
+      screen: Screen.PromptSync,
+      isComplete: (s) => s.promptSyncComplete,
     },
     { screen: Screen.Outro },
   ],

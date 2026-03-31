@@ -491,6 +491,92 @@ yargs(hideBin(process.argv))
       .demandCommand(1, 'You must specify a subcommand (add or remove)')
       .help();
   })
+  .command('prompt <command>', 'LLM prompt management commands', (yargs) => {
+    return yargs
+      .command(
+        'sync',
+        'Sync PostHog LLM prompts as Claude Code / Cursor skills',
+        (yargs) => {
+          return yargs.options({
+            global: {
+              default: false,
+              describe:
+                'Sync to user-level directories instead of project-level',
+              type: 'boolean',
+            },
+            clients: {
+              describe:
+                'Clients to sync to (comma-separated: claude-code,cursor)',
+              type: 'string',
+            },
+            'dir-name': {
+              describe: 'Directory name for synced prompts',
+              type: 'string',
+              default: 'posthog-prompts',
+            },
+            all: {
+              default: false,
+              describe: 'Sync all prompts without interactive selection',
+              type: 'boolean',
+            },
+          });
+        },
+        (argv) => {
+          const options = { ...argv };
+          const clientSlugs = (options.clients )
+            ?.split(',')
+            .map((s) => s.trim())
+            .filter(Boolean);
+          void (async () => {
+            try {
+              const { startTUI } = await import(
+                './src/ui/tui/start-tui.js'
+              );
+              const { buildSession } = await import(
+                './src/lib/wizard-session.js'
+              );
+              const { Flow } = await import('./src/ui/tui/router.js');
+              const tui = startTUI(WIZARD_VERSION, Flow.PromptSync);
+              const session = buildSession({
+                debug: options.debug,
+                apiKey: options.apiKey as string | undefined,
+                promptSyncClients: clientSlugs,
+                promptSyncDirName: options.dirName as string | undefined,
+                promptSyncAll: options.all ,
+                promptSyncGlobal: options.global ,
+              });
+              tui.store.session = session;
+            } catch {
+              // TUI unavailable — fallback to non-interactive
+              setUI(new LoggingUI());
+              getUI().intro('PostHog Wizard');
+              try {
+                const { syncPromptsStep } = await import(
+                  './src/steps/sync-prompts/index.js'
+                );
+                await syncPromptsStep({
+                  apiKey: options.apiKey as string | undefined,
+                  projectId: options.projectId
+                    ? Number(options.projectId)
+                    : undefined,
+                  global: options.global ,
+                  debug: options.debug ,
+                  clients: clientSlugs,
+                  dirName: options.dirName as string | undefined,
+                });
+              } catch (error) {
+                getUI().log.error(
+                  error instanceof Error ? error.message : 'Unexpected error',
+                );
+                process.exit(1);
+              }
+            }
+          })();
+        },
+      )
+      .demandCommand(1, 'You must specify a subcommand (sync)')
+      .help();
+  })
   .help()
   .alias('help', 'h')
   .version()
