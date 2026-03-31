@@ -2,6 +2,8 @@ onlyBuiltDependencies:
   - esbuild
   - msw
 minimumReleaseAge: 1440
+blockExoticSubdeps: true
+trustPolicy: no-downgrade
 
 packages:
   - '!e2e-tests/**'
