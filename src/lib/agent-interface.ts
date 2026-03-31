@@ -882,8 +882,6 @@ export async function runAgent(
           ...process.env,
           // Prevent user's Anthropic API key from overriding the wizard's OAuth token
           ANTHROPIC_API_KEY: undefined,
-          // Allow launching from within another Claude Code session (e.g. server mode testing)
-          CLAUDECODE: undefined,
           // Defer MCP tool schemas to avoid bloating the system prompt.
           // The posthog-wizard MCP exposes many query tools with large schemas;
           // without deferral these consume ~113k tokens upfront, leaving
