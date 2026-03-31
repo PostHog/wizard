@@ -41,7 +41,7 @@ export const VUE_AGENT_CONFIG: FrameworkConfig<VueContext> = {
   environment: {
     uploadToHosting: true,
     getEnvVars: (apiKey: string, host: string) => ({
-      VITE_POSTHOG_KEY: apiKey,
+      VITE_POSTHOG_PROJECT_TOKEN: apiKey,
       VITE_POSTHOG_HOST: host,
     }),
   },
