@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.6.0](https://github.com/PostHog/wizard/compare/v2.5.0...v2.6.0) (2026-03-31)
+
+
+### Features
+
+* support API key from .env for MCP server configuration ([#356](https://github.com/PostHog/wizard/issues/356)) ([4cdf4ba](https://github.com/PostHog/wizard/commit/4cdf4babc385da7a02f5e7d8ef363fc33c024987))
+
 ## [2.5.0](https://github.com/PostHog/wizard/compare/v2.4.0...v2.5.0) (2026-03-24)
 
 
