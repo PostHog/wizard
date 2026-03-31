@@ -129,7 +129,7 @@ export const McpScreen = ({
     setPhase(Phase.Working);
     let result: string[] = [];
     try {
-      result = await installer.install(names, features);
+      result = await installer.install(names, features, store.session.apiKey);
       setResultClients(result);
     } catch {
       setResultClients([]);

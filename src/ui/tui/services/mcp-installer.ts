@@ -22,7 +22,11 @@ export interface McpInstaller {
   detectClients(): Promise<McpClientInfo[]>;
 
   /** Install the PostHog MCP server to the given clients. Returns names of successfully installed clients. */
-  install(clientNames: string[], features?: string[]): Promise<string[]>;
+  install(
+    clientNames: string[],
+    features?: string[],
+    apiKey?: string,
+  ): Promise<string[]>;
 
   /** Remove the PostHog MCP server from all installed clients. Returns names of removed clients. */
   remove(): Promise<string[]>;
@@ -45,6 +49,7 @@ export function createMcpInstaller(): McpInstaller {
     async install(
       clientNames: string[],
       features?: string[],
+      apiKey?: string,
     ): Promise<string[]> {
       const resolvedFeatures = features ?? [...ALL_FEATURE_VALUES];
       const toInstall = cachedClients
@@ -65,7 +70,7 @@ export function createMcpInstaller(): McpInstaller {
       for (const client of toInstall) {
         try {
           const result = await client.addServer(
-            undefined,
+            apiKey,
             resolvedFeatures,
             false,
           );
