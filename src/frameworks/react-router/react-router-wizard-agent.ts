@@ -63,7 +63,7 @@ export const REACT_ROUTER_AGENT_CONFIG: FrameworkConfig<ReactRouterContext> = {
   environment: {
     uploadToHosting: false,
     getEnvVars: (apiKey: string, host: string) => ({
-      REACT_APP_POSTHOG_KEY: apiKey,
+      REACT_APP_POSTHOG_PROJECT_TOKEN: apiKey,
       REACT_APP_POSTHOG_HOST: host,
     }),
   },

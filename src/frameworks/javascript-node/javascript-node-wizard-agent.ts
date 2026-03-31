@@ -30,7 +30,7 @@ export const JAVASCRIPT_NODE_AGENT_CONFIG: FrameworkConfig<JavaScriptNodeContext
     environment: {
       uploadToHosting: false,
       getEnvVars: (apiKey: string, host: string) => ({
-        POSTHOG_API_KEY: apiKey,
+        POSTHOG_PROJECT_TOKEN: apiKey,
         POSTHOG_HOST: host,
       }),
     },
