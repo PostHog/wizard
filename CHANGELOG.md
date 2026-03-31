@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.6.1](https://github.com/PostHog/wizard/compare/v2.6.0...v2.6.1) (2026-03-31)
+
+
+### Bug Fixes
+
+* Enable tool search ([#361](https://github.com/PostHog/wizard/issues/361)) ([1745905](https://github.com/PostHog/wizard/commit/17459057291b795cbe03842873f26bf54b28e84b))
+
 ## [2.6.0](https://github.com/PostHog/wizard/compare/v2.5.0...v2.6.0) (2026-03-31)
 
 
