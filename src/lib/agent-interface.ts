@@ -744,6 +744,7 @@ export async function runAgent(
   const collectedText: string[] = [];
   // Track if we received a successful result (before any cleanup errors)
   let receivedSuccessResult = false;
+  let loggedInitialContext = false;
   let lastResultMessage: any = null;
 
   // Workaround for SDK bug: stdin closes before canUseTool responses can be sent.
@@ -978,6 +979,34 @@ export async function runAgent(
 
     // Process the async generator
     for await (const message of response) {
+      // Log initial context size on the first assistant response so we can
+      // detect sudden shifts in starting context (e.g. MCP schema bloat).
+      if (!loggedInitialContext && message.type === 'assistant') {
+        const usage = message.message?.usage as
+          | {
+              input_tokens?: number;
+              cache_creation_input_tokens?: number;
+              cache_read_input_tokens?: number;
+            }
+          | undefined;
+        if (usage) {
+          const input = usage.input_tokens ?? 0;
+          const cacheCreation = usage.cache_creation_input_tokens ?? 0;
+          const cacheRead = usage.cache_read_input_tokens ?? 0;
+          const initialTokens = input + cacheCreation + cacheRead;
+          logToFile(
+            `Initial context: ${initialTokens} tokens (input=${input}, cache_creation=${cacheCreation}, cache_read=${cacheRead})`,
+          );
+          analytics.wizardCapture('agent initial context', {
+            initial_tokens: initialTokens,
+            input_tokens: input,
+            cache_creation_input_tokens: cacheCreation,
+            cache_read_input_tokens: cacheRead,
+          });
+        }
+        loggedInitialContext = true;
+      }
+
       // Pass receivedSuccessResult so handleSDKMessage can suppress user-facing error
       // output for post-success cleanup errors while still logging them to file
       handleSDKMessage(
@@ -1106,6 +1135,16 @@ export async function runAgent(
   } finally {
     eventPlanWatcher?.close();
     if (eventPlanInterval) clearInterval(eventPlanInterval);
+
+    // Always capture run duration, even on abort/error, so we can alert on
+    // long runs where the user gave up before completion.
+    if (!receivedSuccessResult) {
+      const durationMs = Date.now() - startTime;
+      analytics.wizardCapture('agent aborted', {
+        duration_ms: durationMs,
+        duration_seconds: Math.round(durationMs / 1000),
+      });
+    }
   }
 }
 
