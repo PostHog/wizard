@@ -1105,6 +1105,16 @@ export async function runAgent(
   } finally {
     eventPlanWatcher?.close();
     if (eventPlanInterval) clearInterval(eventPlanInterval);
+
+    // Always capture run duration, even on abort/error, so we can alert on
+    // long runs where the user gave up before completion.
+    if (!receivedSuccessResult) {
+      const durationMs = Date.now() - startTime;
+      analytics.wizardCapture('agent aborted', {
+        duration_ms: durationMs,
+        duration_seconds: Math.round(durationMs / 1000),
+      });
+    }
   }
 }
 
