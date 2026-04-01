@@ -4,12 +4,16 @@
  * Renders groups of options with bold category labels.
  * Arrow keys navigate selectable items (headers are skipped),
  * space toggles, "a" toggles all, enter submits.
+ *
+ * When content exceeds available terminal height, the list scrolls
+ * to keep the focused item visible with ↑/↓ indicators.
  */
 
 import { Box, Text, useInput } from 'ink';
 import { useState, useMemo } from 'react';
 import { Icons, Colors } from '../styles.js';
 import { PromptLabel } from './PromptLabel.js';
+import { useStdoutDimensions } from '../hooks/useStdoutDimensions.js';
 
 interface GroupOption {
   value: string;
@@ -28,12 +32,89 @@ type Row =
   | { kind: 'header'; label: string }
   | { kind: 'option'; value: string; label: string; hint?: string };
 
+/** Truncate text with "…" if it exceeds maxWidth. */
+function truncateWithEllipsis(text: string, maxWidth: number): string {
+  if (text.length <= maxWidth) return text;
+  return text.slice(0, maxWidth - 1) + '…';
+}
+
+/** Rows consumed by chrome outside this component (title bar, screen padding, etc.) */
+const CHROME_OVERHEAD = 10;
+/** Rows used by the prompt label, hint text, and marginTop before content. */
+const MENU_CHROME = 3;
+
+/** Count the visual rows occupied by rows[start..end), accounting for header margins. */
+function countVisualRows(rows: Row[], start: number, end: number): number {
+  let count = 0;
+  for (let i = start; i < end && i < rows.length; i++) {
+    if (rows[i].kind === 'header' && i > start) count += 1; // marginTop gap
+    count += 1;
+  }
+  return count;
+}
+
+/** From scrollOffset, find how many flat rows fit in the visual budget. */
+function computeVisibleEnd(
+  rows: Row[],
+  scrollOffset: number,
+  budget: number,
+): number {
+  let visualCount = 0;
+  let i = scrollOffset;
+  while (i < rows.length) {
+    const cost = rows[i].kind === 'header' && i > scrollOffset ? 2 : 1;
+    if (visualCount + cost > budget) break;
+    visualCount += cost;
+    i++;
+  }
+  return i;
+}
+
+/** Adjust scroll offset to keep focusedRowIdx visible within the viewport. */
+function adjustScrollOffset(
+  currentOffset: number,
+  focusedRowIdx: number,
+  rows: Row[],
+  viewportBudget: number,
+): number {
+  const visibleEnd = computeVisibleEnd(rows, currentOffset, viewportBudget);
+
+  // Already visible
+  if (focusedRowIdx >= currentOffset && focusedRowIdx < visibleEnd) {
+    return currentOffset;
+  }
+
+  // Focus moved above viewport — scroll up, including group header if adjacent
+  if (focusedRowIdx < currentOffset) {
+    let newOffset = focusedRowIdx;
+    if (newOffset > 0 && rows[newOffset - 1]?.kind === 'header') {
+      newOffset--;
+    }
+    return Math.max(0, newOffset);
+  }
+
+  // Focus moved below viewport — scroll down minimally
+  let newOffset = currentOffset + 1;
+  while (newOffset < rows.length) {
+    const end = computeVisibleEnd(rows, newOffset, viewportBudget);
+    if (focusedRowIdx < end) break;
+    newOffset++;
+  }
+  return Math.min(newOffset, Math.max(0, rows.length - 1));
+}
+
 export const GroupedPickerMenu = ({
   message,
   groups,
   initialSelected,
   onSelect,
 }: GroupedPickerMenuProps) => {
+  const [termCols, termRows] = useStdoutDimensions();
+
+  // Available width for option labels, after subtracting layout chrome:
+  // paddingX(2) + marginLeft(2) + option marginLeft(1) + gap(1) + checkbox(2) = 8
+  const labelWidth = Math.max(10, Math.min(termCols, 120) - 8);
+
   // Build a flat row list with headers interleaved
   const rows = useMemo<Row[]>(() => {
     const result: Row[] = [];
@@ -48,14 +129,19 @@ export const GroupedPickerMenu = ({
 
   // Indices of selectable (non-header) rows
   const selectableIndices = useMemo(
-    () => rows.map((r, i) => (r.kind === 'option' ? i : -1)).filter((i) => i >= 0),
+    () =>
+      rows
+        .map((r, i) => (r.kind === 'option' ? i : -1))
+        .filter((i) => i >= 0),
     [rows],
   );
 
   // All option values for toggle-all
   const allValues = useMemo(
     () =>
-      rows.filter((r): r is Row & { kind: 'option' } => r.kind === 'option').map((r) => r.value),
+      rows
+        .filter((r): r is Row & { kind: 'option' } => r.kind === 'option')
+        .map((r) => r.value),
     [rows],
   );
 
@@ -63,18 +149,45 @@ export const GroupedPickerMenu = ({
   const [selected, setSelected] = useState<Set<string>>(
     () => new Set(initialSelected ?? allValues),
   );
+  const [scrollOffset, setScrollOffset] = useState(0);
 
   const focusedRowIdx = selectableIndices[focusedSelectable] ?? 0;
 
+  // Viewport budget: how many visual rows can be shown
+  const viewportBudget = Math.max(5, termRows - CHROME_OVERHEAD - MENU_CHROME);
+  const totalVisual = countVisualRows(rows, 0, rows.length);
+  const needsScroll = totalVisual > viewportBudget;
+  const effectiveBudget = needsScroll ? viewportBudget - 2 : viewportBudget;
+
   useInput((input, key) => {
+    let newFocused = focusedSelectable;
+
     if (key.upArrow) {
-      setFocusedSelectable((prev) => (prev > 0 ? prev - 1 : selectableIndices.length - 1));
+      newFocused =
+        focusedSelectable > 0
+          ? focusedSelectable - 1
+          : selectableIndices.length - 1;
     }
     if (key.downArrow) {
-      setFocusedSelectable((prev) => (prev < selectableIndices.length - 1 ? prev + 1 : 0));
+      newFocused =
+        focusedSelectable < selectableIndices.length - 1
+          ? focusedSelectable + 1
+          : 0;
     }
+
+    if (newFocused !== focusedSelectable) {
+      setFocusedSelectable(newFocused);
+      if (needsScroll) {
+        const newFocusedRowIdx = selectableIndices[newFocused] ?? 0;
+        setScrollOffset((prev) =>
+          adjustScrollOffset(prev, newFocusedRowIdx, rows, effectiveBudget),
+        );
+      }
+    }
+
     if (input === ' ') {
-      const row = rows[focusedRowIdx];
+      const targetRowIdx = selectableIndices[newFocused] ?? 0;
+      const row = rows[targetRowIdx];
       if (row?.kind === 'option') {
         setSelected((prev) => {
           const next = new Set(prev);
@@ -100,15 +213,41 @@ export const GroupedPickerMenu = ({
     }
   });
 
+  // Determine visible slice
+  const visibleStart = needsScroll ? scrollOffset : 0;
+  const visibleEnd = needsScroll
+    ? computeVisibleEnd(rows, visibleStart, effectiveBudget)
+    : rows.length;
+  const visibleRows = rows.slice(visibleStart, visibleEnd);
+  const hiddenAbove = needsScroll
+    ? selectableIndices.filter((s) => s < visibleStart).length
+    : 0;
+  const hiddenBelow = needsScroll
+    ? selectableIndices.filter((s) => s >= visibleEnd).length
+    : 0;
+
   return (
     <Box flexDirection="column">
       <PromptLabel message={message} />
-      <Text dimColor> (space to toggle, a to toggle all, enter to confirm)</Text>
+      <Text dimColor>
+        {' '}
+        (space to toggle, a to toggle all, enter to confirm)
+      </Text>
       <Box flexDirection="column" marginTop={1} marginLeft={2}>
-        {rows.map((row, idx) => {
+        {needsScroll && (
+          <Text dimColor>
+            {hiddenAbove > 0 ? `↑ ${hiddenAbove} more` : ' '}
+          </Text>
+        )}
+        {visibleRows.map((row, relIdx) => {
+          const absIdx = visibleStart + relIdx;
+
           if (row.kind === 'header') {
             return (
-              <Box key={`h-${idx}`} marginTop={idx > 0 ? 1 : 0}>
+              <Box
+                key={`h-${absIdx}`}
+                marginTop={relIdx > 0 && absIdx > 0 ? 1 : 0}
+              >
                 <Text bold dimColor>
                   {row.label}
                 </Text>
@@ -116,10 +255,11 @@ export const GroupedPickerMenu = ({
             );
           }
 
-          const isFocused = focusedRowIdx === idx;
+          const isFocused = focusedRowIdx === absIdx;
           const isSelected = selected.has(row.value);
           const checkbox = isSelected ? Icons.squareFilled : Icons.squareOpen;
-          const label = row.hint ? `${row.label} (${row.hint})` : row.label;
+          const fullLabel = row.hint ? `${row.label} (${row.hint})` : row.label;
+          const label = truncateWithEllipsis(fullLabel, labelWidth);
 
           return (
             <Box key={row.value} gap={1} marginLeft={1}>
@@ -129,16 +269,24 @@ export const GroupedPickerMenu = ({
               >
                 {checkbox}
               </Text>
-              <Text
-                color={isFocused ? Colors.accent : undefined}
-                bold={isFocused}
-                dimColor={!isFocused}
-              >
-                {label}
-              </Text>
+              <Box flexGrow={1} flexShrink={1} overflow="hidden">
+                <Text
+                  color={isFocused ? Colors.accent : undefined}
+                  bold={isFocused}
+                  dimColor={!isFocused}
+                  wrap="truncate"
+                >
+                  {label}
+                </Text>
+              </Box>
             </Box>
           );
         })}
+        {needsScroll && (
+          <Text dimColor>
+            {hiddenBelow > 0 ? `↓ ${hiddenBelow} more` : ' '}
+          </Text>
+        )}
       </Box>
     </Box>
   );
