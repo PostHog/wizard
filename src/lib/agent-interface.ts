@@ -842,6 +842,7 @@ export async function runAgent(
         model: agentConfig.model,
         cwd: agentConfig.workingDirectory,
         permissionMode: 'acceptEdits',
+        betas: ['context-1m-2025-08-07'],
         mcpServers: agentConfig.mcpServers,
         // Load skills from project's .claude/skills/ directory
         settingSources: ['project'],
