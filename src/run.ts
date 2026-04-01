@@ -16,6 +16,7 @@ import { runAgentWizard } from './lib/agent-runner';
 import { EventEmitter } from 'events';
 import { logToFile } from './utils/debug';
 import { wizardAbort } from './utils/wizard-abort';
+import { readApiKeyFromEnv } from './utils/env-api-key';
 
 EventEmitter.defaultMaxListeners = 50;
 
@@ -40,6 +41,7 @@ export async function runWizard(argv: Args, session?: WizardSession) {
   const finalArgs = {
     ...argv,
     ...readEnvironment(),
+    apiKey: argv.apiKey ?? readApiKeyFromEnv(),
   };
 
   let resolvedInstallDir: string;
