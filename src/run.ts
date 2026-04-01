@@ -41,6 +41,7 @@ export async function runWizard(argv: Args, session?: WizardSession) {
   const finalArgs = {
     ...argv,
     ...readEnvironment(),
+    apiKey: argv.apiKey ?? readApiKeyFromEnv(),
   };
 
   let resolvedInstallDir: string;
@@ -63,7 +64,7 @@ export async function runWizard(argv: Args, session?: WizardSession) {
       ci: finalArgs.ci,
       signup: finalArgs.signup,
       localMcp: finalArgs.localMcp,
-      apiKey: finalArgs.apiKey ?? readApiKeyFromEnv(),
+      apiKey: finalArgs.apiKey,
       menu: finalArgs.menu,
       integration: finalArgs.integration,
       benchmark: finalArgs.benchmark,
