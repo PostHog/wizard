@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.6.2](https://github.com/PostHog/wizard/compare/v2.6.1...v2.6.2) (2026-04-01)
+
+
+### Bug Fixes
+
+* Also log abort durations ([#364](https://github.com/PostHog/wizard/issues/364)) ([744a510](https://github.com/PostHog/wizard/commit/744a5109a609e677f852caead0d6c77bd401b153))
+* prevent GroupedPickerMenu overflow with scrolling and text truncation ([#365](https://github.com/PostHog/wizard/issues/365)) ([cb0c6b9](https://github.com/PostHog/wizard/commit/cb0c6b94bb5553e875859e00e6b2fd0611929bec))
+
 ## [2.6.1](https://github.com/PostHog/wizard/compare/v2.6.0...v2.6.1) (2026-03-31)
 
 
