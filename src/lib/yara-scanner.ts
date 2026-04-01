@@ -122,7 +122,7 @@ const hardcoded_posthog_key: YaraRule = {
     // Hardcoded key assignment patterns
     /apiKey\s*[:=]\s*['"][a-zA-Z0-9_]{20,}['"]/,
     /api_key\s*[:=]\s*['"][a-zA-Z0-9_]{20,}['"]/,
-    /POSTHOG_KEY\s*[:=]\s*['"][a-zA-Z0-9_]{20,}['"]/,
+    /POSTHOG_PROJECT_TOKEN\s*[:=]\s*['"][a-zA-Z0-9_]{20,}['"]/,
   ],
 };
 

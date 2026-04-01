@@ -5,7 +5,7 @@
  * importing business logic directly. Testable, no dynamic imports.
  *
  * Supports two modes via the `mode` prop:
- *   - 'install': detect clients → confirm → install
+ *   - 'install': detect clients → confirm → [pick clients] → pick features → install
  *   - 'remove': detect installed clients → confirm → remove
  *
  * When done, calls store.setMcpComplete(). The router resolves to outro.
@@ -15,9 +15,17 @@ import { Box, Text } from 'ink';
 import { useState, useEffect } from 'react';
 import { useSyncExternalStore } from 'react';
 import { type WizardStore, McpOutcome } from '../store.js';
-import { ConfirmationInput, PickerMenu } from '../primitives/index.js';
+import {
+  ConfirmationInput,
+  PickerMenu,
+  GroupedPickerMenu,
+} from '../primitives/index.js';
 import { Colors } from '../styles.js';
 import type { McpInstaller, McpClientInfo } from '../services/mcp-installer.js';
+import {
+  AVAILABLE_FEATURES,
+  ALL_FEATURE_VALUES,
+} from '../../../steps/add-mcp-server-to-clients/defaults.js';
 
 export type McpMode = 'install' | 'remove';
 
@@ -33,6 +41,7 @@ enum Phase {
   Detecting = 'detecting',
   Ask = 'ask',
   Pick = 'pick',
+  FeatureSelect = 'feature-select',
   Working = 'working',
   Done = 'done',
   None = 'none',
@@ -65,6 +74,7 @@ export const McpScreen = ({
 
   const [phase, setPhase] = useState<Phase>(Phase.Detecting);
   const [clients, setClients] = useState<McpClientInfo[]>([]);
+  const [selectedClientNames, setSelectedClientNames] = useState<string[]>([]);
   const [resultClients, setResultClients] = useState<string[]>([]);
 
   useEffect(() => {
@@ -91,11 +101,21 @@ export const McpScreen = ({
     })();
   }, [installer]); // eslint-disable-line
 
+  const proceedToFeatureSelectOrInstall = (clientNames: string[]) => {
+    setSelectedClientNames(clientNames);
+    // Skip feature picker if CLI already specified features
+    if (store.session.mcpFeatures) {
+      void doInstall(clientNames, store.session.mcpFeatures);
+    } else {
+      setPhase(Phase.FeatureSelect);
+    }
+  };
+
   const handleConfirm = () => {
     if (isRemove) {
       void doRemove();
     } else if (clients.length === 1) {
-      void doInstall(clients.map((c) => c.name));
+      proceedToFeatureSelectOrInstall(clients.map((c) => c.name));
     } else {
       setPhase(Phase.Pick);
     }
@@ -105,11 +125,11 @@ export const McpScreen = ({
     markDone(store, McpOutcome.Skipped, [], standalone);
   };
 
-  const doInstall = async (names: string[]) => {
+  const doInstall = async (names: string[], features?: string[]) => {
     setPhase(Phase.Working);
     let result: string[] = [];
     try {
-      result = await installer.install(names);
+      result = await installer.install(names, features, store.session.apiKey);
       setResultClients(result);
     } catch {
       setResultClients([]);
@@ -184,7 +204,18 @@ export const McpScreen = ({
             mode="multi"
             onSelect={(selected) => {
               const names = Array.isArray(selected) ? selected : [selected];
-              void doInstall(names);
+              proceedToFeatureSelectOrInstall(names);
+            }}
+          />
+        )}
+
+        {phase === Phase.FeatureSelect && (
+          <GroupedPickerMenu
+            message="Select features to enable"
+            groups={AVAILABLE_FEATURES}
+            initialSelected={[...ALL_FEATURE_VALUES]}
+            onSelect={(features) => {
+              void doInstall(selectedClientNames, features);
             }}
           />
         )}

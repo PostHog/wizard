@@ -404,11 +404,31 @@ yargs(hideBin(process.argv))
                 'Add local development MCP server (http://localhost:8787)',
               type: 'boolean',
             },
+            features: {
+              describe:
+                'Comma-separated list of features to enable (default: all)',
+              type: 'string',
+            },
+            'api-key': {
+              describe:
+                'PostHog personal API key (phx_xxx) for MCP authentication',
+              type: 'string',
+            },
           });
         },
         (argv) => {
           const options = { ...argv };
+          const mcpFeatures = options.features
+            ?.split(',')
+            .map((s) => s.trim())
+            .filter(Boolean);
           void (async () => {
+            const { readApiKeyFromEnv } = await import(
+              './src/utils/env-api-key.js'
+            );
+            const apiKey =
+              (options.apiKey as string | undefined) || readApiKeyFromEnv();
+
             try {
               const { startTUI } = await import('./src/ui/tui/start-tui.js');
               const { buildSession } = await import(
@@ -420,6 +440,8 @@ yargs(hideBin(process.argv))
               const session = buildSession({
                 debug: options.debug,
                 localMcp: options.local,
+                mcpFeatures,
+                apiKey,
               });
               tui.store.session = session;
             } catch {
@@ -430,6 +452,8 @@ yargs(hideBin(process.argv))
               );
               await addMCPServerToClientsStep({
                 local: options.local,
+                features: mcpFeatures,
+                apiKey,
               });
             }
           })();

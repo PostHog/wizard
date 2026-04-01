@@ -51,7 +51,7 @@ export const NUXT_AGENT_CONFIG: FrameworkConfig<NuxtContext> = {
   environment: {
     uploadToHosting: true,
     getEnvVars: (apiKey: string, host: string) => ({
-      NUXT_PUBLIC_POSTHOG_KEY: apiKey,
+      NUXT_PUBLIC_POSTHOG_PROJECT_TOKEN: apiKey,
       NUXT_PUBLIC_POSTHOG_HOST: host,
     }),
   },

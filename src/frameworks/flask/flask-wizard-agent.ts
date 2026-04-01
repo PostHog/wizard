@@ -116,7 +116,7 @@ export const FLASK_AGENT_CONFIG: FrameworkConfig<FlaskContext> = {
   environment: {
     uploadToHosting: false,
     getEnvVars: (apiKey: string, host: string) => ({
-      POSTHOG_API_KEY: apiKey,
+      POSTHOG_PROJECT_TOKEN: apiKey,
       POSTHOG_HOST: host,
     }),
   },

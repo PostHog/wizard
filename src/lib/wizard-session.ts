@@ -87,6 +87,7 @@ export interface WizardSession {
   ci: boolean;
   signup: boolean;
   localMcp: boolean;
+  mcpFeatures?: string[];
   apiKey?: string;
   menu: boolean;
   benchmark: boolean;
@@ -158,6 +159,7 @@ export function buildSession(args: {
   ci?: boolean;
   signup?: boolean;
   localMcp?: boolean;
+  mcpFeatures?: string[];
   apiKey?: string;
   menu?: boolean;
   integration?: Integration;
@@ -172,6 +174,7 @@ export function buildSession(args: {
     ci: args.ci ?? false,
     signup: args.signup ?? false,
     localMcp: args.localMcp ?? false,
+    mcpFeatures: args.mcpFeatures,
     apiKey: args.apiKey,
     menu: args.menu ?? false,
     benchmark: args.benchmark ?? false,

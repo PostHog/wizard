@@ -1,5 +1,31 @@
 # Changelog
 
+## [2.6.1](https://github.com/PostHog/wizard/compare/v2.6.0...v2.6.1) (2026-03-31)
+
+
+### Bug Fixes
+
+* Enable tool search ([#361](https://github.com/PostHog/wizard/issues/361)) ([1745905](https://github.com/PostHog/wizard/commit/17459057291b795cbe03842873f26bf54b28e84b))
+
+## [2.6.0](https://github.com/PostHog/wizard/compare/v2.5.0...v2.6.0) (2026-03-31)
+
+
+### Features
+
+* support API key from .env for MCP server configuration ([#356](https://github.com/PostHog/wizard/issues/356)) ([4cdf4ba](https://github.com/PostHog/wizard/commit/4cdf4babc385da7a02f5e7d8ef363fc33c024987))
+
+## [2.5.0](https://github.com/PostHog/wizard/compare/v2.4.0...v2.5.0) (2026-03-24)
+
+
+### Features
+
+* **mcp:** Allowing to specify MCP features ([#350](https://github.com/PostHog/wizard/issues/350)) ([5b3499a](https://github.com/PostHog/wizard/commit/5b3499a22288b8d601379b4db8ba563bdc59b8c8))
+
+
+### Bug Fixes
+
+* Better node engine pins ([#353](https://github.com/PostHog/wizard/issues/353)) ([86e1878](https://github.com/PostHog/wizard/commit/86e18787badf5732b9cac0c5a16c3f283d8850b3))
+
 ## [2.4.0](https://github.com/PostHog/wizard/compare/v2.3.0...v2.4.0) (2026-03-18)
 
 

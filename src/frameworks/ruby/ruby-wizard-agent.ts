@@ -44,7 +44,7 @@ export const RUBY_AGENT_CONFIG: FrameworkConfig<RubyContext> = {
   environment: {
     uploadToHosting: false,
     getEnvVars: (apiKey: string, host: string) => ({
-      POSTHOG_API_KEY: apiKey,
+      POSTHOG_PROJECT_TOKEN: apiKey,
       POSTHOG_HOST: host,
     }),
   },
@@ -86,7 +86,7 @@ export const RUBY_AGENT_CONFIG: FrameworkConfig<RubyContext> = {
         `Use PostHog::Client.new for scripts and standalone applications:`,
         ``,
         `client = PostHog::Client.new(`,
-        `  api_key: ENV['POSTHOG_API_KEY'],`,
+        `  api_key: ENV['POSTHOG_PROJECT_TOKEN'],`,
         `  host: ENV['POSTHOG_HOST'] || 'https://us.i.posthog.com'`,
         `)`,
         ``,

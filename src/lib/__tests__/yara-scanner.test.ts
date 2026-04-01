@@ -188,14 +188,14 @@ posthog.capture('signup', { email: user.email })`;
       expect(result.matched).toBe(true);
     });
 
-    it('detects POSTHOG_KEY assignment', () => {
-      const content = `POSTHOG_KEY = 'abcdefghijklmnopqrstuvwxyz1234'`;
+    it('detects POSTHOG_PROJECT_TOKEN assignment', () => {
+      const content = `POSTHOG_PROJECT_TOKEN = 'abcdefghijklmnopqrstuvwxyz1234'`;
       const result = scan(content, 'PostToolUse', 'Write');
       expect(result.matched).toBe(true);
     });
 
     it('does not trigger on env var reference', () => {
-      const content = `posthog.init(process.env.NEXT_PUBLIC_POSTHOG_KEY)`;
+      const content = `posthog.init(process.env.NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN)`;
       const result = scan(content, 'PostToolUse', 'Write');
       expect(result.matched).toBe(false);
     });

@@ -49,11 +49,15 @@ export const addMCPServerToClientsStep = async ({
   local = false,
   ci = false,
   cloudRegion: _cloudRegion,
+  features,
+  apiKey,
 }: {
   integration?: Integration;
   local?: boolean;
   ci?: boolean;
   cloudRegion?: import('../../utils/types').CloudRegion;
+  features?: string[];
+  apiKey?: string;
 }): Promise<string[]> => {
   const ui = getUI();
 
@@ -76,8 +80,8 @@ export const addMCPServerToClientsStep = async ({
   await traceStep('adding mcp servers', async () => {
     await addMCPServer(
       supportedClients,
-      undefined,
-      [...ALL_FEATURE_VALUES],
+      apiKey,
+      features ?? [...ALL_FEATURE_VALUES],
       local,
     );
   });

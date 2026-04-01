@@ -74,7 +74,7 @@ export const TANSTACK_ROUTER_AGENT_CONFIG: FrameworkConfig<TanStackRouterContext
     environment: {
       uploadToHosting: false,
       getEnvVars: (apiKey: string, host: string) => ({
-        VITE_PUBLIC_POSTHOG_KEY: apiKey,
+        VITE_PUBLIC_POSTHOG_PROJECT_TOKEN: apiKey,
         VITE_PUBLIC_POSTHOG_HOST: host,
       }),
     },
