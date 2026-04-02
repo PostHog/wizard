@@ -102,9 +102,15 @@ Once you know WHAT value is the distinct_id (e.g. \`email\`, \`user.id\`, \`user
 
 If the distinct_id is not available at a Stripe call site, apply Tenet 2: add it as an optional parameter from a caller that has it. If no caller has it, skip that site and add a TODO.
 
+Once determined, emit: ${
+    AgentSignals.STATUS
+  } Identified distinct_id — updating Stripe customer creation...
+
 ## Instructions
 
-Follow these steps IN ORDER:
+Follow these steps IN ORDER. Emit a \`${
+    AgentSignals.STATUS
+  }\` message at the start of each step so the user can see progress.
 
 ### STEP 1: Update Stripe Customer Creation
 
@@ -122,6 +128,10 @@ Rules:
 - If the distinct_id is not in scope, thread it as an optional parameter from the caller (Tenet 2). If no caller has it, skip this site and add \`// TODO: pass PostHog distinct_id here\`.
 - If the call already has a metadata object, ADD the \`posthog_person_distinct_id\` key to it. Do NOT overwrite existing metadata.
 - Preserve all existing arguments and code structure.
+
+After modifying customer creation, emit: ${
+    AgentSignals.STATUS
+  } Customer creation updated — adding metadata for existing customers...
 
 ### STEP 2: Add Customer Update for Existing Customers
 
@@ -141,6 +151,10 @@ Rules:
 - Same as Step 1: if the distinct_id is not in scope, thread it or skip with a TODO (Tenet 2). Never substitute a different identifier (Tenet 1).
 - Respect existing Stripe abstraction layers (Tenet 4).
 ${checkoutNote}
+
+After modifying existing customer handling, emit: ${
+    AgentSignals.STATUS
+  } Verifying changes...
 
 ### STEP 3: Verify
 
