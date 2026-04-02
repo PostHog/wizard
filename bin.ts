@@ -504,6 +504,49 @@ yargs(hideBin(process.argv))
       .demandCommand(1, 'You must specify a subcommand (add or remove)')
       .help();
   })
+  .command(
+    'setup-revenue-analytics',
+    'Set up Stripe revenue analytics with PostHog',
+    (yargs) => {
+      return yargs.options({
+        'install-dir': {
+          describe:
+            'Directory of the project to set up\nenv: POSTHOG_WIZARD_INSTALL_DIR',
+          type: 'string',
+        },
+      });
+    },
+    (argv) => {
+      const options = { ...argv };
+
+      void (async () => {
+        // Always use LoggingUI for this subcommand (simple linear flow)
+        setUI(new LoggingUI());
+
+        const { readApiKeyFromEnv } = await import(
+          './src/utils/env-api-key.js'
+        );
+        const { buildSession } = await import('./src/lib/wizard-session.js');
+        const { runSetupRevenueAnalytics } = await import(
+          './src/setup-revenue-analytics/index.js'
+        );
+
+        const apiKey =
+          (options.apiKey as string | undefined) || readApiKeyFromEnv();
+
+        const session = buildSession({
+          debug: options.debug as boolean | undefined,
+          installDir: options.installDir as string | undefined,
+          ci: options.ci as boolean | undefined,
+          localMcp: options.localMcp as boolean | undefined,
+          apiKey,
+          projectId: options.projectId as string | undefined,
+        });
+
+        await runSetupRevenueAnalytics(session);
+      })();
+    },
+  )
   .help()
   .alias('help', 'h')
   .version()
