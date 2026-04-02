@@ -43,8 +43,8 @@ const IDENTIFY_PATTERNS: Record<Language, RegExp[]> = {
   ],
   python: [
     /posthog\.identify\(\s*([^\s,)]+)/,
-    /posthog\.capture\(\s*([^\s,)]+)/,
     /distinct_id\s*=\s*([^\s,)]+)/,
+    /posthog\.capture\(\s*([^\s,)]+)/,
   ],
   ruby: [
     /posthog\.identify\(\s*\{\s*distinct_id:\s*([^\s,}]+)/,
