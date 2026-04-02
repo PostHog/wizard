@@ -376,7 +376,7 @@ describe('WizardStore', () => {
       expect(store.currentScreen).toBe(Screen.Mcp);
     });
 
-    it('advances to outro after mcp completes', () => {
+    it('advances to skills after mcp completes', () => {
       const store = createStore();
       store.completeSetup();
       store.setReadinessResult({
@@ -392,6 +392,26 @@ describe('WizardStore', () => {
       });
       store.setRunPhase(RunPhase.Completed);
       store.setMcpComplete();
+      expect(store.currentScreen).toBe(Screen.Skills);
+    });
+
+    it('advances to outro after skills completes', () => {
+      const store = createStore();
+      store.completeSetup();
+      store.setReadinessResult({
+        decision: WizardReadiness.Yes,
+        health: {} as never,
+        reasons: [],
+      });
+      store.setCredentials({
+        accessToken: 'tok',
+        projectApiKey: 'pk',
+        host: 'h',
+        projectId: 1,
+      });
+      store.setRunPhase(RunPhase.Completed);
+      store.setMcpComplete();
+      store.setSkillsComplete(true);
       expect(store.currentScreen).toBe(Screen.Outro);
     });
 
@@ -917,10 +937,14 @@ describe('WizardStore', () => {
 
       // Step 5: Complete MCP
       store.setMcpComplete();
+      expect(store.currentScreen).toBe(Screen.Skills);
+
+      // Step 6: Complete Skills
+      store.setSkillsComplete(true);
       expect(store.currentScreen).toBe(Screen.Outro);
 
       // Verify version was bumped for each setter call
-      expect(store.getVersion()).toBe(6);
+      expect(store.getVersion()).toBe(7);
     });
   });
 
