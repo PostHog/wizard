@@ -53,18 +53,37 @@ describe('buildRevenueAnalyticsPrompt', () => {
     expect(prompt).toContain('v14.21.0');
   });
 
-  test('includes detected distinct_id expression', () => {
+  test('includes detected distinct_id expression and source line', () => {
     const prompt = buildRevenueAnalyticsPrompt(makeContext());
     expect(prompt).toContain('`user.id`');
     expect(prompt).toContain('src/analytics.ts');
+    expect(prompt).toContain('posthog.identify(user.id)');
   });
 
-  test('instructs agent to ask when distinct_id not detected', () => {
+  test('instructs agent to search codebase when distinct_id not detected', () => {
     const prompt = buildRevenueAnalyticsPrompt(
       makeContext({ distinctId: null }),
     );
     expect(prompt).toContain('Not automatically detected');
-    expect(prompt).toContain('MUST search the codebase');
+    expect(prompt).toContain('Search the codebase');
+  });
+
+  test('explains how to find distinct_id from posthog.identify', () => {
+    const prompt = buildRevenueAnalyticsPrompt(makeContext());
+    expect(prompt).toContain('posthog.identify(');
+    expect(prompt).toContain('FIRST ARGUMENT is the distinct_id');
+  });
+
+  test('warns not to invent properties', () => {
+    const prompt = buildRevenueAnalyticsPrompt(makeContext());
+    expect(prompt).toContain('Do NOT invent');
+    expect(prompt).toContain('user.posthogDistinctId');
+  });
+
+  test('uses <POSTHOG_DISTINCT_ID> placeholder in code examples', () => {
+    const prompt = buildRevenueAnalyticsPrompt(makeContext());
+    expect(prompt).toContain('<POSTHOG_DISTINCT_ID>');
+    expect(prompt).toContain('Replace `<POSTHOG_DISTINCT_ID>` with the actual');
   });
 
   test('includes customer creation locations', () => {

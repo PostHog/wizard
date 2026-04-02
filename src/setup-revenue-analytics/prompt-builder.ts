@@ -24,12 +24,8 @@ export function buildRevenueAnalyticsPrompt(context: PromptContext): string {
   const { language, stripeDetection, posthogDetection, stripeDocs } = context;
 
   const distinctIdSection = posthogDetection.distinctIdExpression
-    ? `- PostHog distinct_id expression: \`${posthogDetection.distinctIdExpression}\` (found in ${posthogDetection.sourceFile})`
-    : `- PostHog distinct_id: **Not automatically detected**. Before making changes, you MUST search the codebase to find how the user is identified. Look for:
-  - \`posthog.identify(...)\` calls — the first argument is the distinct_id
-  - \`posthog.capture(...)\` calls — look for \`distinctId\` or \`distinct_id\` properties
-  - User ID patterns in auth/session code (e.g., \`user.id\`, \`req.user.id\`, \`request.user.pk\`, \`session.userId\`, \`currentUser.id\`)
-  If you truly cannot find it, use a clear TODO placeholder: \`"TODO_POSTHOG_DISTINCT_ID"\` so the user can fill it in.`;
+    ? `- PostHog distinct_id: \`${posthogDetection.distinctIdExpression}\` (found in ${posthogDetection.sourceFile}: \`${posthogDetection.sourceLine}\`)`
+    : `- PostHog distinct_id: **Not automatically detected**.`;
 
   const customerCreationSection =
     stripeDetection.customerCreationCalls.length > 0
@@ -50,9 +46,7 @@ export function buildRevenueAnalyticsPrompt(context: PromptContext): string {
 IMPORTANT — Stripe Checkout detected:
 This project uses checkout.Session.create, which means Stripe may auto-create customers.
 If there is no explicit Customer.create call, you need to handle this in the checkout.session.completed webhook handler instead.
-In the webhook handler, after receiving the session object, update the customer with the PostHog metadata:
-
-${stripeDocs.customerUpdate.fullExample}
+In the webhook handler, after receiving the session object, update the customer with the PostHog metadata.
 
 Tip: Set client_reference_id to the internal user ID when creating Checkout Sessions. This lets you look up the user in your database when the webhook fires.`
     : '';
@@ -75,6 +69,29 @@ ${customerCreationSection}
 ### Charge/payment locations:
 ${chargeSection}
 
+## CRITICAL FIRST STEP: Determine the PostHog distinct_id value
+
+Before writing ANY code, you must determine what this project uses as the PostHog distinct_id. This is the value that must go into \`posthog_person_distinct_id\` metadata on Stripe customers.
+
+${
+  posthogDetection.distinctIdExpression
+    ? `The pre-scan detected \`${posthogDetection.distinctIdExpression}\` (from \`${posthogDetection.sourceLine}\`). Verify this is correct by reading the file, then determine how to access the same value at each Stripe call site.`
+    : `Search the codebase for how the distinct_id is set.`
+}
+
+How to find it:
+1. Search for \`posthog.identify(\` — the FIRST ARGUMENT is the distinct_id. This is the most reliable source.
+   Example: \`posthog.identify(email, { ... })\` → the distinct_id is \`email\`
+   Example: \`posthog.identify(user.id, { ... })\` → the distinct_id is \`user.id\`
+2. Search for \`posthog.capture(\` or \`client.capture(\` — look for \`distinctId\` or \`distinct_id\` in the arguments.
+3. Search for \`posthog.get_distinct_id()\` — the variable it's assigned to tells you what holds the distinct_id.
+
+Once you know WHAT value is the distinct_id (e.g. \`email\`, \`user.id\`, \`userId\`), determine HOW to access that same value at each Stripe call site. The variable name may differ between files — trace the data flow. For example:
+- Frontend calls \`posthog.identify(email)\` → backend receives email as a parameter → use that parameter at the Stripe call site
+- If the value isn't directly available, you may need to pass it through or look it up
+
+Do NOT invent properties like \`user.posthogDistinctId\` — this field does not exist. Use the actual value from the codebase.
+
 ## Instructions
 
 Follow these steps IN ORDER:
@@ -83,31 +100,28 @@ Follow these steps IN ORDER:
 
 For each Stripe Customer.create call, add \`posthog_person_distinct_id\` to the metadata.
 
-**Pattern for this language:**
+**API pattern (replace \`<POSTHOG_DISTINCT_ID>\` with the actual value):**
 \`\`\`
 ${stripeDocs.customerCreate.fullExample}
 \`\`\`
 
 Rules:
+- Replace \`<POSTHOG_DISTINCT_ID>\` with the actual distinct_id expression available at this call site.
 - If the call already has a metadata object, ADD the \`posthog_person_distinct_id\` key to it. Do NOT overwrite existing metadata.
-- If the call does not have a metadata object, add one with the \`posthog_person_distinct_id\` key.
-- Use the PostHog distinct_id expression detected above${
-    posthogDetection.distinctIdExpression
-      ? ` (\`${posthogDetection.distinctIdExpression}\`)`
-      : ''
-  } as the value. Adapt it to the variable scope at the call site.
+- If the call does not have a metadata object, add one.
 - Preserve all existing arguments and code structure.
 
 ### STEP 2: Add Customer Update Before Charges
 
-For each charge/payment call (PaymentIntent.create, Subscription.create, Invoice.create, checkout.Session.create), add a Stripe Customer.update/modify call BEFORE the charge. This ensures existing customers (created before Step 1) get tagged.
+For each charge/payment call (PaymentIntent.create, Subscription.create, Invoice.create, checkout.Session.create), add a Stripe Customer.update/modify call BEFORE the charge.
 
-**Pattern for this language:**
+**API pattern (replace \`<POSTHOG_DISTINCT_ID>\` with the actual value):**
 \`\`\`
 ${stripeDocs.customerUpdate.fullExample}
 \`\`\`
 
 Rules:
+- Replace \`<POSTHOG_DISTINCT_ID>\` with the actual distinct_id expression available at this call site.
 - Add the update call immediately before the charge call.
 - Extract the customer ID from the charge call's arguments (it's usually a \`customer\` field).
 - The update only sets metadata — do not modify the charge/payment logic itself.
@@ -119,7 +133,7 @@ ${checkoutNote}
 After making all changes, read each modified file to verify:
 - No syntax errors
 - Existing code logic is preserved
-- The metadata field is correctly set
+- The metadata field uses the correct distinct_id value (NOT a made-up property)
 - Imports are present if needed
 
 ## Constraints
@@ -127,8 +141,9 @@ After making all changes, read each modified file to verify:
 - Do NOT modify the charge/payment logic itself — only add metadata to customer creation and add customer.update calls before charges.
 - Do NOT remove any existing code.
 - Do NOT add new packages or dependencies.
+- Do NOT invent new properties or fields. Use only values that already exist in the codebase.
 - Preserve all imports and error handling.
-- If you cannot determine the distinct_id expression from context, add a \`TODO\` comment: \`// TODO: Replace with your PostHog distinct_id\`
+- If you truly cannot determine the distinct_id after searching, use \`"TODO_POSTHOG_DISTINCT_ID"\` as a string placeholder.
 
 When done, emit: ${
     AgentSignals.STATUS
