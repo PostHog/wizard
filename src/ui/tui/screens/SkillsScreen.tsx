@@ -61,7 +61,7 @@ export const SkillsScreen = ({ store }: SkillsScreenProps) => {
           <>
             <Text dimColor>
               The wizard installed skills to .claude/skills/ that help AI coding
-              agents work with PostHog in your project.
+              agents integrate PostHog into your project.
             </Text>
             <Box marginTop={1}>
               <ConfirmationInput
