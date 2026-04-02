@@ -139,19 +139,15 @@ function detectStripePackage(
   const checks = STRIPE_PACKAGES[language];
   for (const { file, pattern } of checks) {
     try {
-      if (file.includes('*')) {
-        const matches = fg.sync(file, { cwd: installDir, deep: 2 });
-        for (const match of matches) {
-          const content = fs.readFileSync(
-            path.join(installDir, match),
-            'utf-8',
-          );
-          if (pattern.test(content)) return match;
-        }
-      } else {
-        const filePath = path.join(installDir, file);
-        const content = fs.readFileSync(filePath, 'utf-8');
-        if (pattern.test(content)) return file;
+      const globPattern = file.includes('*') ? file : `**/${file}`;
+      const matches = fg.sync(globPattern, {
+        cwd: installDir,
+        deep: 3,
+        ignore: IGNORE_DIRS,
+      });
+      for (const match of matches) {
+        const content = fs.readFileSync(path.join(installDir, match), 'utf-8');
+        if (pattern.test(content)) return match;
       }
     } catch {
       continue;
@@ -160,20 +156,26 @@ function detectStripePackage(
   return null;
 }
 
+/**
+ * Extract Stripe SDK version from lockfiles / dependency declarations.
+ * Searches relative to the directory where the package file was found,
+ * supporting monorepos where the package file may be in a subdirectory.
+ */
 function extractStripeVersion(
   installDir: string,
   language: Language,
+  packageFile: string,
 ): string | null {
+  const packageDir = path.join(installDir, path.dirname(packageFile));
   try {
     switch (language) {
       case 'node': {
-        // Try package-lock.json first
         for (const lockfile of [
           'package-lock.json',
           'yarn.lock',
           'pnpm-lock.yaml',
         ]) {
-          const lockPath = path.join(installDir, lockfile);
+          const lockPath = path.join(packageDir, lockfile);
           if (!fs.existsSync(lockPath)) continue;
           const content = fs.readFileSync(lockPath, 'utf-8');
 
@@ -191,9 +193,8 @@ function extractStripeVersion(
             if (match) return match[1];
           }
         }
-        // Fallback to package.json version range
         const pkgJson = JSON.parse(
-          fs.readFileSync(path.join(installDir, 'package.json'), 'utf-8'),
+          fs.readFileSync(path.join(packageDir, 'package.json'), 'utf-8'),
         );
         const ver =
           pkgJson.dependencies?.stripe ?? pkgJson.devDependencies?.stripe;
@@ -201,7 +202,7 @@ function extractStripeVersion(
       }
       case 'python': {
         for (const lockfile of ['requirements.txt', 'poetry.lock', 'uv.lock']) {
-          const lockPath = path.join(installDir, lockfile);
+          const lockPath = path.join(packageDir, lockfile);
           if (!fs.existsSync(lockPath)) continue;
           const content = fs.readFileSync(lockPath, 'utf-8');
           const match = content.match(/stripe[=~>=<]+([0-9][0-9.]*)/i);
@@ -210,7 +211,7 @@ function extractStripeVersion(
         return null;
       }
       case 'ruby': {
-        const lockPath = path.join(installDir, 'Gemfile.lock');
+        const lockPath = path.join(packageDir, 'Gemfile.lock');
         if (fs.existsSync(lockPath)) {
           const content = fs.readFileSync(lockPath, 'utf-8');
           const match = content.match(/stripe\s+\(([^)]+)\)/);
@@ -219,7 +220,7 @@ function extractStripeVersion(
         return null;
       }
       case 'php': {
-        const lockPath = path.join(installDir, 'composer.lock');
+        const lockPath = path.join(packageDir, 'composer.lock');
         if (fs.existsSync(lockPath)) {
           const parsed = JSON.parse(fs.readFileSync(lockPath, 'utf-8'));
           const pkg = parsed.packages?.find(
@@ -230,7 +231,7 @@ function extractStripeVersion(
         return null;
       }
       case 'go': {
-        const sumPath = path.join(installDir, 'go.sum');
+        const sumPath = path.join(packageDir, 'go.sum');
         if (fs.existsSync(sumPath)) {
           const content = fs.readFileSync(sumPath, 'utf-8');
           const match = content.match(
@@ -246,7 +247,7 @@ function extractStripeVersion(
           'build.gradle.kts',
           'pom.xml',
         ]) {
-          const filePath = path.join(installDir, buildFile);
+          const filePath = path.join(packageDir, buildFile);
           if (!fs.existsSync(filePath)) continue;
           const content = fs.readFileSync(filePath, 'utf-8');
           const match = content.match(/stripe-java[:'"\s]+([0-9][0-9.]*)/);
@@ -312,7 +313,7 @@ export function detectStripe(
   const packageFile = detectStripePackage(installDir, language);
   if (!packageFile) return null;
 
-  const sdkVersion = extractStripeVersion(installDir, language);
+  const sdkVersion = extractStripeVersion(installDir, language, packageFile);
 
   const customerCreationCalls = scanForPatterns(
     installDir,

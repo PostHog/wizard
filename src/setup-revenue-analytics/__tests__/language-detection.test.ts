@@ -114,4 +114,38 @@ describe('detectLanguageFromFiles', () => {
     fs.writeFileSync(path.join(tmpDir, 'requirements.txt'), 'stripe');
     expect(await detectLanguageFromFiles(tmpDir)).toBe('node');
   });
+
+  describe('monorepo support', () => {
+    test('detects node from subdirectory package.json', async () => {
+      fs.mkdirSync(path.join(tmpDir, 'backend'), { recursive: true });
+      fs.writeFileSync(path.join(tmpDir, 'backend', 'package.json'), '{}');
+      expect(await detectLanguageFromFiles(tmpDir)).toBe('node');
+    });
+
+    test('detects python from subdirectory requirements.txt', async () => {
+      fs.mkdirSync(path.join(tmpDir, 'server'), { recursive: true });
+      fs.writeFileSync(
+        path.join(tmpDir, 'server', 'requirements.txt'),
+        'django',
+      );
+      expect(await detectLanguageFromFiles(tmpDir)).toBe('python');
+    });
+
+    test('detects ruby from nested Gemfile', async () => {
+      fs.mkdirSync(path.join(tmpDir, 'api'), { recursive: true });
+      fs.writeFileSync(path.join(tmpDir, 'api', 'Gemfile'), "gem 'rails'");
+      expect(await detectLanguageFromFiles(tmpDir)).toBe('ruby');
+    });
+
+    test('ignores node_modules subdirectories', async () => {
+      fs.mkdirSync(path.join(tmpDir, 'node_modules', 'stripe'), {
+        recursive: true,
+      });
+      fs.writeFileSync(
+        path.join(tmpDir, 'node_modules', 'stripe', 'package.json'),
+        '{}',
+      );
+      expect(await detectLanguageFromFiles(tmpDir)).toBeNull();
+    });
+  });
 });

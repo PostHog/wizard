@@ -280,4 +280,73 @@ require github.com/stripe/stripe-go/v76 v76.0.0`,
       }
     });
   });
+
+  describe('monorepo support', () => {
+    test('detects Stripe from subdirectory package.json', () => {
+      const { dir, cleanup } = createFixture({
+        'backend/package.json': JSON.stringify({
+          dependencies: { stripe: '^14.0.0' },
+        }),
+      });
+      try {
+        const result = detectStripe(dir, 'node');
+        expect(result).not.toBeNull();
+        expect(result!.sdkPackage).toBe('backend/package.json');
+      } finally {
+        cleanup();
+      }
+    });
+
+    test('extracts version from subdirectory lockfile', () => {
+      const { dir, cleanup } = createFixture({
+        'backend/package.json': JSON.stringify({
+          dependencies: { stripe: '^14.0.0' },
+        }),
+        'backend/package-lock.json': JSON.stringify({
+          packages: { 'node_modules/stripe': { version: '14.21.0' } },
+        }),
+      });
+      try {
+        const result = detectStripe(dir, 'node');
+        expect(result).not.toBeNull();
+        expect(result!.sdkVersion).toBe('14.21.0');
+      } finally {
+        cleanup();
+      }
+    });
+
+    test('finds customer creation calls in subdirectory', () => {
+      const { dir, cleanup } = createFixture({
+        'backend/package.json': JSON.stringify({
+          dependencies: { stripe: '^14.0.0' },
+        }),
+        'backend/src/billing.ts': `const customer = await stripe.customers.create({
+  email: user.email,
+});`,
+      });
+      try {
+        const result = detectStripe(dir, 'node');
+        expect(result).not.toBeNull();
+        expect(result!.customerCreationCalls).toHaveLength(1);
+        expect(result!.customerCreationCalls[0].file).toBe(
+          'backend/src/billing.ts',
+        );
+      } finally {
+        cleanup();
+      }
+    });
+
+    test('detects Python Stripe in subdirectory', () => {
+      const { dir, cleanup } = createFixture({
+        'server/requirements.txt': 'stripe>=5.0.0\nflask',
+      });
+      try {
+        const result = detectStripe(dir, 'python');
+        expect(result).not.toBeNull();
+        expect(result!.sdkPackage).toBe('server/requirements.txt');
+      } finally {
+        cleanup();
+      }
+    });
+  });
 });

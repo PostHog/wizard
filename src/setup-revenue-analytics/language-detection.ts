@@ -40,19 +40,36 @@ interface LanguageIndicator {
 }
 
 const LANGUAGE_INDICATORS: LanguageIndicator[] = [
-  { language: 'node', patterns: ['package.json'] },
+  { language: 'node', patterns: ['**/package.json'] },
   {
     language: 'python',
-    patterns: ['requirements.txt', 'pyproject.toml', 'Pipfile', 'setup.py'],
+    patterns: [
+      '**/requirements.txt',
+      '**/pyproject.toml',
+      '**/Pipfile',
+      '**/setup.py',
+    ],
   },
-  { language: 'ruby', patterns: ['Gemfile'] },
-  { language: 'php', patterns: ['composer.json'] },
-  { language: 'go', patterns: ['go.mod'] },
+  { language: 'ruby', patterns: ['**/Gemfile'] },
+  { language: 'php', patterns: ['**/composer.json'] },
+  { language: 'go', patterns: ['**/go.mod'] },
   {
     language: 'java',
-    patterns: ['build.gradle', 'build.gradle.kts', 'pom.xml'],
+    patterns: ['**/build.gradle', '**/build.gradle.kts', '**/pom.xml'],
   },
-  { language: 'dotnet', patterns: ['*.csproj', '*.sln'] },
+  { language: 'dotnet', patterns: ['**/*.csproj', '**/*.sln'] },
+];
+
+const IGNORE_DIRS = [
+  '**/node_modules/**',
+  '**/venv/**',
+  '**/.venv/**',
+  '**/env/**',
+  '**/.env/**',
+  '**/vendor/**',
+  '**/dist/**',
+  '**/build/**',
+  '**/.git/**',
 ];
 
 export function languageFromIntegration(
@@ -67,8 +84,9 @@ export async function detectLanguageFromFiles(
   for (const { language, patterns } of LANGUAGE_INDICATORS) {
     const matches = await fg(patterns, {
       cwd: installDir,
-      deep: 1,
+      deep: 3,
       onlyFiles: true,
+      ignore: IGNORE_DIRS,
     });
     if (matches.length > 0) {
       return language;
