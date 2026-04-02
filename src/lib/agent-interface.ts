@@ -1188,7 +1188,6 @@ function handleSDKMessage(
             const statusMatch = block.text.match(statusRegex);
             if (statusMatch) {
               const statusText = statusMatch[1].trim();
-              getUI().pushStatus(statusText);
               spinner.message(statusText);
             }
           }
