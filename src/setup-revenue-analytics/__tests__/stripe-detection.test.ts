@@ -139,6 +139,37 @@ const session = await stripe.checkout.sessions.create({
       }
     });
 
+    test('detects Stripe from uv.lock', () => {
+      const { dir, cleanup } = createFixture({
+        'uv.lock': `[[package]]
+name = "stripe"
+version = "11.4.1"
+source = { registry = "https://pypi.org/simple" }`,
+      });
+      try {
+        const result = detectStripe(dir, 'python');
+        expect(result).not.toBeNull();
+        expect(result!.sdkPackage).toBe('uv.lock');
+      } finally {
+        cleanup();
+      }
+    });
+
+    test('detects Stripe from poetry.lock', () => {
+      const { dir, cleanup } = createFixture({
+        'poetry.lock': `[[package]]
+name = "stripe"
+version = "11.4.1"`,
+      });
+      try {
+        const result = detectStripe(dir, 'python');
+        expect(result).not.toBeNull();
+        expect(result!.sdkPackage).toBe('poetry.lock');
+      } finally {
+        cleanup();
+      }
+    });
+
     test('finds Python customer creation', () => {
       const { dir, cleanup } = createFixture({
         'requirements.txt': 'stripe>=5.0.0',

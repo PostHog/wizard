@@ -18,6 +18,8 @@ const STRIPE_PACKAGES: Record<Language, { file: string; pattern: RegExp }[]> = {
     { file: 'requirements.txt', pattern: /^stripe([>=~!<\s]|$)/m },
     { file: 'pyproject.toml', pattern: /["']stripe["']/ },
     { file: 'Pipfile', pattern: /stripe/ },
+    { file: 'uv.lock', pattern: /name\s*=\s*["']stripe["']/ },
+    { file: 'poetry.lock', pattern: /name\s*=\s*["']stripe["']/ },
   ],
   ruby: [{ file: 'Gemfile', pattern: /['"]stripe['"]/ }],
   php: [{ file: 'composer.json', pattern: /"stripe\/stripe-php"/ }],
