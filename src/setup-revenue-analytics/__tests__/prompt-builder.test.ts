@@ -63,8 +63,8 @@ describe('buildRevenueAnalyticsPrompt', () => {
     const prompt = buildRevenueAnalyticsPrompt(
       makeContext({ distinctId: null }),
     );
-    expect(prompt).toContain('Not detected');
-    expect(prompt).toContain('MUST ask the user');
+    expect(prompt).toContain('Not automatically detected');
+    expect(prompt).toContain('MUST search the codebase');
   });
 
   test('includes customer creation locations', () => {

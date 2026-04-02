@@ -104,7 +104,7 @@ export async function runSetupRevenueAnalytics(
     );
   } else {
     getUI().log.warn(
-      'Could not detect PostHog distinct_id usage. The agent will ask you during setup.',
+      'Could not detect PostHog distinct_id usage. The agent will search your codebase to find it.',
     );
   }
 

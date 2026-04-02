@@ -25,7 +25,11 @@ export function buildRevenueAnalyticsPrompt(context: PromptContext): string {
 
   const distinctIdSection = posthogDetection.distinctIdExpression
     ? `- PostHog distinct_id expression: \`${posthogDetection.distinctIdExpression}\` (found in ${posthogDetection.sourceFile})`
-    : `- PostHog distinct_id: **Not detected** — you MUST ask the user what expression they use for their PostHog distinct_id (e.g., user.id, request.user.pk, session.userId). Do not proceed until you know this value.`;
+    : `- PostHog distinct_id: **Not automatically detected**. Before making changes, you MUST search the codebase to find how the user is identified. Look for:
+  - \`posthog.identify(...)\` calls — the first argument is the distinct_id
+  - \`posthog.capture(...)\` calls — look for \`distinctId\` or \`distinct_id\` properties
+  - User ID patterns in auth/session code (e.g., \`user.id\`, \`req.user.id\`, \`request.user.pk\`, \`session.userId\`, \`currentUser.id\`)
+  If you truly cannot find it, use a clear TODO placeholder: \`"TODO_POSTHOG_DISTINCT_ID"\` so the user can fill it in.`;
 
   const customerCreationSection =
     stripeDetection.customerCreationCalls.length > 0
