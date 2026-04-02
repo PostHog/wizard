@@ -74,16 +74,42 @@ describe('buildRevenueAnalyticsPrompt', () => {
     expect(prompt).toContain('FIRST ARGUMENT is the distinct_id');
   });
 
-  test('warns not to invent properties', () => {
-    const prompt = buildRevenueAnalyticsPrompt(makeContext());
-    expect(prompt).toContain('Do NOT invent');
-    expect(prompt).toContain('user.posthogDistinctId');
-  });
-
   test('uses <POSTHOG_DISTINCT_ID> placeholder in code examples', () => {
     const prompt = buildRevenueAnalyticsPrompt(makeContext());
     expect(prompt).toContain('<POSTHOG_DISTINCT_ID>');
     expect(prompt).toContain('Replace `<POSTHOG_DISTINCT_ID>` with the actual');
+  });
+
+  describe('guiding tenets', () => {
+    test('includes never-fabricate tenet', () => {
+      const prompt = buildRevenueAnalyticsPrompt(makeContext());
+      expect(prompt).toContain('Never fabricate the value');
+      expect(prompt).toContain('A wrong value is worse than no value');
+    });
+
+    test('includes thread-the-value tenet', () => {
+      const prompt = buildRevenueAnalyticsPrompt(makeContext());
+      expect(prompt).toContain("Thread the value, don't invent it");
+      expect(prompt).toContain('optional parameter');
+    });
+
+    test('includes minimize-api-calls tenet', () => {
+      const prompt = buildRevenueAnalyticsPrompt(makeContext());
+      expect(prompt).toContain('Minimize extra API calls');
+      expect(prompt).toContain('network round-trip');
+    });
+
+    test('includes follow-abstractions tenet', () => {
+      const prompt = buildRevenueAnalyticsPrompt(makeContext());
+      expect(prompt).toContain('Follow existing Stripe abstraction patterns');
+      expect(prompt).toContain('utility/service layer');
+    });
+
+    test('warns against fabricating user.posthogDistinctId', () => {
+      const prompt = buildRevenueAnalyticsPrompt(makeContext());
+      expect(prompt).toContain('user.posthogDistinctId');
+      expect(prompt).toContain('does not exist');
+    });
   });
 
   test('includes customer creation locations', () => {
@@ -136,7 +162,7 @@ describe('buildRevenueAnalyticsPrompt', () => {
 
   test('includes constraints section', () => {
     const prompt = buildRevenueAnalyticsPrompt(makeContext());
-    expect(prompt).toContain('Do NOT modify the charge/payment logic');
+    expect(prompt).toContain('Do NOT modify charge/payment logic');
     expect(prompt).toContain('Do NOT remove any existing code');
   });
 
