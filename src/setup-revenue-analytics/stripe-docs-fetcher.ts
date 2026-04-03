@@ -64,9 +64,15 @@ function extractCodeBlock(html: string, language: Language): string | null {
 }
 
 function decodeHtmlEntities(text: string): string {
-  // Strip HTML tags BEFORE decoding entities so that decoded content
-  // (e.g. &lt;script → <script) cannot form new injectable tags.
-  const stripped = text.replace(/<[^>]+>/g, '');
+  // Loop tag stripping until stable — a single pass misses tags
+  // reconstructed from nested fragments (e.g. <scr<script>ipt>).
+  let stripped = text;
+  let prev: string;
+  do {
+    prev = stripped;
+    stripped = stripped.replace(/<[^>]+>/g, '');
+  } while (stripped !== prev);
+
   return stripped
     .replace(/&amp;/g, '&')
     .replace(/&lt;/g, '<')

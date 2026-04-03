@@ -7,7 +7,13 @@
 // Re-implement as a standalone to test the logic in isolation.
 // This mirrors the implementation in stripe-docs-fetcher.ts exactly.
 function decodeHtmlEntities(text: string): string {
-  const stripped = text.replace(/<[^>]+>/g, '');
+  let stripped = text;
+  let prev: string;
+  do {
+    prev = stripped;
+    stripped = stripped.replace(/<[^>]+>/g, '');
+  } while (stripped !== prev);
+
   return stripped
     .replace(/&amp;/g, '&')
     .replace(/&lt;/g, '<')
@@ -34,6 +40,14 @@ describe('decodeHtmlEntities', () => {
     expect(decodeHtmlEntities('<span>hello</span>')).toBe('hello');
     expect(decodeHtmlEntities('<a href="url">link</a>')).toBe('link');
     expect(decodeHtmlEntities('before<br/>after')).toBe('beforeafter');
+  });
+
+  test('strips nested/reconstructed tags via loop', () => {
+    // <scr<script>ipt> is matched as one tag, leaving harmless "ipt>" text.
+    // The key point: no executable <script> tag survives.
+    const result = decodeHtmlEntities('<scr<script>ipt>alert(1)</script>');
+    expect(result).not.toContain('<script');
+    expect(result).toContain('alert(1)');
   });
 
   test('strips tags before decoding entities to prevent injection', () => {
