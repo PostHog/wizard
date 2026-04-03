@@ -15,12 +15,12 @@ function decodeHtmlEntities(text: string): string {
   } while (stripped !== prev);
 
   return stripped
-    .replace(/&amp;/g, '&')
     .replace(/&lt;/g, '<')
     .replace(/&gt;/g, '>')
     .replace(/&quot;/g, '"')
     .replace(/&#39;/g, "'")
-    .replace(/&#x27;/g, "'");
+    .replace(/&#x27;/g, "'")
+    .replace(/&amp;/g, '&');
 }
 
 describe('decodeHtmlEntities', () => {
@@ -59,10 +59,11 @@ describe('decodeHtmlEntities', () => {
   });
 
   test('handles double-encoded entities', () => {
-    // &amp;lt; → strip tags (none present) → decode &amp; → &lt; → decode &lt; → <
-    // Double-encoded content fully decodes. This is fine because the output
-    // is used as plain text in the agent prompt, not rendered as HTML.
-    expect(decodeHtmlEntities('&amp;lt;script&amp;gt;')).toBe('<script>');
+    // &amp;lt; → strip tags (none present) → decode &lt; → < (NO)
+    // We intentionally decode &amp; last, so &amp;lt;script&amp;gt; becomes
+    // &lt;script&gt; rather than <script>. This avoids double-unescaping
+    // and matches safer, standards-compliant behavior.
+    expect(decodeHtmlEntities('&amp;lt;script&amp;gt;')).toBe('&lt;script&gt;');
   });
 
   test('handles mixed content', () => {
