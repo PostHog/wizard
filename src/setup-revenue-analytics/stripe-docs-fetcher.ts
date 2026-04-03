@@ -64,14 +64,16 @@ function extractCodeBlock(html: string, language: Language): string | null {
 }
 
 function decodeHtmlEntities(text: string): string {
-  return text
+  // Strip HTML tags BEFORE decoding entities so that decoded content
+  // (e.g. &lt;script → <script) cannot form new injectable tags.
+  const stripped = text.replace(/<[^>]+>/g, '');
+  return stripped
     .replace(/&amp;/g, '&')
     .replace(/&lt;/g, '<')
     .replace(/&gt;/g, '>')
     .replace(/&quot;/g, '"')
     .replace(/&#39;/g, "'")
-    .replace(/&#x27;/g, "'")
-    .replace(/<[^>]+>/g, ''); // Strip remaining HTML tags
+    .replace(/&#x27;/g, "'");
 }
 
 async function fetchPage(url: string): Promise<string | null> {
