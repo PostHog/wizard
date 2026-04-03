@@ -353,6 +353,20 @@ export class WizardStore {
     this.emitChange();
   }
 
+  setSkillsComplete(kept: boolean): void {
+    this.$session.setKey('skillsComplete', true);
+    analytics.wizardCapture('skills complete', {
+      skills_kept: kept,
+      ...sessionProperties(this.session),
+    });
+    this.emitChange();
+  }
+
+  setOutroDismissed(): void {
+    this.$session.setKey('outroDismissed', true);
+    this.emitChange();
+  }
+
   setOutroData(data: OutroData): void {
     this.$session.setKey('outroData', data);
     this.emitChange();

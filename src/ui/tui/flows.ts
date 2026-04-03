@@ -22,6 +22,7 @@ export enum Screen {
   Auth = 'auth',
   Run = 'run',
   Mcp = 'mcp',
+  Skills = 'skills',
   Outro = 'outro',
   McpAdd = 'mcp-add',
   McpRemove = 'mcp-remove',
@@ -91,7 +92,11 @@ export const FLOWS: Record<Flow, FlowEntry[]> = {
       screen: Screen.Mcp,
       isComplete: (s) => s.mcpComplete,
     },
-    { screen: Screen.Outro },
+    {
+      screen: Screen.Outro,
+      isComplete: (s) => s.outroDismissed,
+    },
+    { screen: Screen.Skills },
   ],
 
   [Flow.McpAdd]: [

@@ -262,11 +262,13 @@ describe('WizardStore', () => {
       store.setLoginUrl('url');
       store.setReadinessResult(null);
       store.setMcpComplete();
+      store.setOutroDismissed();
+      store.setSkillsComplete(true);
       store.setOutroData({ kind: OutroKind.Success });
       store.setFrameworkContext('k', 'v');
       store.setFrameworkConfig(null, null);
 
-      expect(cb).toHaveBeenCalledTimes(11);
+      expect(cb).toHaveBeenCalledTimes(13);
     });
   });
 
@@ -393,6 +395,26 @@ describe('WizardStore', () => {
       store.setRunPhase(RunPhase.Completed);
       store.setMcpComplete();
       expect(store.currentScreen).toBe(Screen.Outro);
+    });
+
+    it('advances to skills after outro dismissed', () => {
+      const store = createStore();
+      store.completeSetup();
+      store.setReadinessResult({
+        decision: WizardReadiness.Yes,
+        health: {} as never,
+        reasons: [],
+      });
+      store.setCredentials({
+        accessToken: 'tok',
+        projectApiKey: 'pk',
+        host: 'h',
+        projectId: 1,
+      });
+      store.setRunPhase(RunPhase.Completed);
+      store.setMcpComplete();
+      store.setOutroDismissed();
+      expect(store.currentScreen).toBe(Screen.Skills);
     });
 
     it('starts at McpAdd for McpAdd flow', () => {
@@ -919,8 +941,12 @@ describe('WizardStore', () => {
       store.setMcpComplete();
       expect(store.currentScreen).toBe(Screen.Outro);
 
+      // Step 6: Dismiss outro
+      store.setOutroDismissed();
+      expect(store.currentScreen).toBe(Screen.Skills);
+
       // Verify version was bumped for each setter call
-      expect(store.getVersion()).toBe(6);
+      expect(store.getVersion()).toBe(7);
     });
   });
 
