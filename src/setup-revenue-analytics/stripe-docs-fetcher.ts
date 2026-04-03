@@ -74,12 +74,12 @@ function decodeHtmlEntities(text: string): string {
   } while (stripped !== prev);
 
   return stripped
-    .replace(/&amp;/g, '&')
     .replace(/&lt;/g, '<')
     .replace(/&gt;/g, '>')
     .replace(/&quot;/g, '"')
     .replace(/&#39;/g, "'")
-    .replace(/&#x27;/g, "'");
+    .replace(/&#x27;/g, "'")
+    .replace(/&amp;/g, '&');
 }
 
 async function fetchPage(url: string): Promise<string | null> {
