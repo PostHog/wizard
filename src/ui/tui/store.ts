@@ -362,6 +362,11 @@ export class WizardStore {
     this.emitChange();
   }
 
+  setOutroDismissed(): void {
+    this.$session.setKey('outroDismissed', true);
+    this.emitChange();
+  }
+
   setOutroData(data: OutroData): void {
     this.$session.setKey('outroData', data);
     this.emitChange();

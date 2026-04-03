@@ -134,6 +134,7 @@ export interface WizardSession {
   mcpOutcome: McpOutcome | null;
   mcpInstalledClients: string[];
   skillsComplete: boolean;
+  outroDismissed: boolean;
 
   // Runtime
   readinessResult: WizardReadinessResult | null;
@@ -197,6 +198,7 @@ export function buildSession(args: {
     mcpOutcome: null,
     mcpInstalledClients: [],
     skillsComplete: false,
+    outroDismissed: false,
     loginUrl: null,
     credentials: null,
     readinessResult: null,

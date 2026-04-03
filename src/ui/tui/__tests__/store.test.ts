@@ -262,11 +262,13 @@ describe('WizardStore', () => {
       store.setLoginUrl('url');
       store.setReadinessResult(null);
       store.setMcpComplete();
+      store.setOutroDismissed();
+      store.setSkillsComplete(true);
       store.setOutroData({ kind: OutroKind.Success });
       store.setFrameworkContext('k', 'v');
       store.setFrameworkConfig(null, null);
 
-      expect(cb).toHaveBeenCalledTimes(11);
+      expect(cb).toHaveBeenCalledTimes(13);
     });
   });
 
@@ -376,7 +378,7 @@ describe('WizardStore', () => {
       expect(store.currentScreen).toBe(Screen.Mcp);
     });
 
-    it('advances to skills after mcp completes', () => {
+    it('advances to outro after mcp completes', () => {
       const store = createStore();
       store.completeSetup();
       store.setReadinessResult({
@@ -392,10 +394,10 @@ describe('WizardStore', () => {
       });
       store.setRunPhase(RunPhase.Completed);
       store.setMcpComplete();
-      expect(store.currentScreen).toBe(Screen.Skills);
+      expect(store.currentScreen).toBe(Screen.Outro);
     });
 
-    it('advances to outro after skills completes', () => {
+    it('advances to skills after outro dismissed', () => {
       const store = createStore();
       store.completeSetup();
       store.setReadinessResult({
@@ -411,8 +413,8 @@ describe('WizardStore', () => {
       });
       store.setRunPhase(RunPhase.Completed);
       store.setMcpComplete();
-      store.setSkillsComplete(true);
-      expect(store.currentScreen).toBe(Screen.Outro);
+      store.setOutroDismissed();
+      expect(store.currentScreen).toBe(Screen.Skills);
     });
 
     it('starts at McpAdd for McpAdd flow', () => {
@@ -937,11 +939,11 @@ describe('WizardStore', () => {
 
       // Step 5: Complete MCP
       store.setMcpComplete();
-      expect(store.currentScreen).toBe(Screen.Skills);
-
-      // Step 6: Complete Skills
-      store.setSkillsComplete(true);
       expect(store.currentScreen).toBe(Screen.Outro);
+
+      // Step 6: Dismiss outro
+      store.setOutroDismissed();
+      expect(store.currentScreen).toBe(Screen.Skills);
 
       // Verify version was bumped for each setter call
       expect(store.getVersion()).toBe(7);

@@ -21,7 +21,7 @@ export const OutroScreen = ({ store }: OutroScreenProps) => {
   );
 
   useInput(() => {
-    process.exit(0);
+    store.setOutroDismissed();
   });
 
   const outroData = store.session.outroData;
@@ -124,7 +124,7 @@ export const OutroScreen = ({ store }: OutroScreenProps) => {
       )}
 
       <Box marginTop={1}>
-        <Text color={Colors.muted}>Press any key to exit</Text>
+        <Text color={Colors.muted}>Press any key to continue</Text>
       </Box>
     </Box>
   );

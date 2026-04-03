@@ -93,10 +93,10 @@ export const FLOWS: Record<Flow, FlowEntry[]> = {
       isComplete: (s) => s.mcpComplete,
     },
     {
-      screen: Screen.Skills,
-      isComplete: (s) => s.skillsComplete,
+      screen: Screen.Outro,
+      isComplete: (s) => s.outroDismissed,
     },
-    { screen: Screen.Outro },
+    { screen: Screen.Skills },
   ],
 
   [Flow.McpAdd]: [
