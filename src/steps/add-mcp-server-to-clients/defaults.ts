@@ -63,17 +63,17 @@ export const AVAILABLE_FEATURES = {
       label: 'Prompts',
       hint: 'LLM prompt management',
     },
-    {
-      value: 'logs',
-      label: 'Logs',
-      hint: 'Log querying',
-    },
   ],
   'Development Tools': [
     {
       value: 'error_tracking',
       label: 'Error Tracking',
       hint: 'Error monitoring and debugging',
+    },
+    {
+      value: 'logs',
+      label: 'Logs',
+      hint: 'Log querying',
     },
     {
       value: 'flags',
