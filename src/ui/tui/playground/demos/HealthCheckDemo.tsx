@@ -77,7 +77,7 @@ export const HealthCheckDemo = () => {
       footer={
         <Box marginLeft={2}>
           <Text dimColor>
-            Continue [Enter] / Exit [Esc] (disabled in playground)
+            Continue [Space] / Exit [Esc] (disabled in playground)
           </Text>
         </Box>
       }

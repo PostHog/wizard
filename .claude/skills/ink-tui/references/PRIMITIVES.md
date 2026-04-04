@@ -39,13 +39,13 @@ Tabs array can be built conditionally — see `RunScreen.tsx` for an example of 
 
 Single and multi select. Fully custom renderers — does NOT use `@inkjs/ui` Select/MultiSelect.
 
-- **Single select**: `▸` triangle cursor on focused item, enter selects
-- **Multi select** (`mode="multi"`): `◻`/`◼` toggles with space, enter submits
+- **Single select**: `▸` triangle cursor on focused item, space selects
+- **Multi select** (`mode="multi"`): `◻`/`◼` toggles with enter, space submits
 
 ### ConfirmationInput
 `src/ui/tui/primitives/ConfirmationInput.tsx`
 
-Continue/cancel prompt with two bordered button boxes. Left/right arrows switch focus, enter activates focused, escape always cancels.
+Continue/cancel prompt with two bordered button boxes. Left/right arrows or enter switch focus, space activates focused, escape always cancels.
 
 ### DissolveTransition
 `src/ui/tui/primitives/DissolveTransition.tsx`

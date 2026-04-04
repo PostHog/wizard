@@ -5,7 +5,7 @@ export const DEFAULT_WIZARD_STEPS: WizardStep[] = [
   // {
   //   name: 'uncommitted',
   //   waitFor: 'You have uncommitted or untracked files in your repo:',
-  //   response: [KEYS.DOWN, KEYS.ENTER],
+  //   response: [KEYS.DOWN, KEYS.SPACE],
   //   timeout: 2000,
   //   optional: true,
   // },
@@ -13,7 +13,7 @@ export const DEFAULT_WIZARD_STEPS: WizardStep[] = [
     name: 'mcp',
     waitFor:
       'Would you like to install the PostHog MCP server to use PostHog in your editor?',
-    response: [KEYS.DOWN, KEYS.ENTER],
+    response: [KEYS.DOWN, KEYS.SPACE],
     responseWaitFor: 'No',
   },
   {

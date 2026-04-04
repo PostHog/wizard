@@ -154,7 +154,7 @@ export const HealthCheckScreen = ({ store }: HealthCheckScreenProps) => {
         ) : (
           <ConfirmationInput
             message="Continue anyway?"
-            confirmLabel="Continue [Enter]"
+            confirmLabel="Continue [Space]"
             cancelLabel={cancelLabel}
             onConfirm={() => store.dismissOutage()}
             onCancel={handleCancel}

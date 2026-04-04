@@ -35,7 +35,7 @@ export const PortConflictScreen = ({ store }: PortConflictScreenProps) => {
       footer={
         <ConfirmationInput
           message="Kill process and continue?"
-          confirmLabel="Kill & continue [Enter]"
+          confirmLabel="Kill & continue [Space]"
           cancelLabel="Exit [Esc]"
           onConfirm={() => {
             try {

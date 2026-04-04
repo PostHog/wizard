@@ -44,7 +44,7 @@ export const SettingsOverrideScreen = ({
       footer={
         <ConfirmationInput
           message="Back up to .wizard-backup and continue?"
-          confirmLabel="Backup & continue [Enter]"
+          confirmLabel="Backup & continue [Space]"
           cancelLabel="Exit [Esc]"
           onConfirm={() => {
             const ok = store.backupAndFixSettingsOverride();
