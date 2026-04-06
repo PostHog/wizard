@@ -7,11 +7,14 @@ import { Box, Text } from 'ink';
 import { Spinner } from '@inkjs/ui';
 import { Colors, Icons } from '../styles.js';
 import { LoadingBox } from './LoadingBox.js';
+import { TaskStatus } from '../../wizard-ui.js';
 
 export interface ProgressItem {
   label: string;
   activeForm?: string;
-  status: 'pending' | 'in_progress' | 'completed';
+  status: TaskStatus;
+  /** Nesting depth — 0 = top-level, 1 = nested under a stage, etc. */
+  indent?: number;
 }
 
 interface ProgressListProps {
@@ -34,26 +37,29 @@ export const ProgressList = ({ items, title }: ProgressListProps) => {
       {items.length === 0 && <LoadingBox message="Analyzing project..." />}
       {items.map((item, i) => {
         const icon =
-          item.status === 'completed'
+          item.status === TaskStatus.Completed
             ? Icons.squareFilled
-            : item.status === 'in_progress'
+            : item.status === TaskStatus.InProgress
             ? Icons.triangleRight
             : Icons.squareOpen;
         const color =
-          item.status === 'completed'
+          item.status === TaskStatus.Completed
             ? Colors.success
-            : item.status === 'in_progress'
+            : item.status === TaskStatus.InProgress
             ? Colors.primary
             : Colors.muted;
         const label =
-          item.status === 'in_progress' && item.activeForm
+          item.status === TaskStatus.InProgress && item.activeForm
             ? item.activeForm
             : item.label;
 
+        const pad = item.indent ? '  '.repeat(item.indent) : '';
+
         return (
           <Text key={i}>
+            <Text>{pad}</Text>
             <Text color={color}>{icon}</Text>
-            <Text dimColor={item.status === 'pending'}> {label}</Text>
+            <Text dimColor={item.status === TaskStatus.Pending}> {label}</Text>
           </Text>
         );
       })}

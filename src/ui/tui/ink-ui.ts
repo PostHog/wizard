@@ -9,6 +9,7 @@
 import type { WizardUI, SpinnerHandle } from '../wizard-ui.js';
 import type { WizardStore } from './store.js';
 import type { SettingsConflict } from '../../lib/agent-interface.js';
+import type { WizardWorkflowQueue } from '../../lib/workflow-queue.js';
 import { RunPhase, OutroKind } from '../../lib/wizard-session.js';
 
 // Strip ANSI escape codes (chalk formatting) from strings
@@ -155,5 +156,17 @@ export class InkUI implements WizardUI {
 
   setEventPlan(events: Array<{ name: string; description: string }>): void {
     this.store.setEventPlan(events);
+  }
+
+  setWorkQueue(queue: WizardWorkflowQueue): void {
+    this.store.workQueue = queue;
+  }
+
+  setCurrentQueueItem(item: { id: string; label: string } | null): void {
+    this.store.setCurrentQueueItem(item);
+  }
+
+  completeQueueItem(item: { id: string; label: string }): void {
+    this.store.completeQueueItem(item);
   }
 }

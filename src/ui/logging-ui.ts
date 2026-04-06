@@ -6,6 +6,7 @@
 
 import { TaskStatus, type WizardUI, type SpinnerHandle } from './wizard-ui';
 import type { SettingsConflict } from '../lib/agent-interface';
+import type { WizardWorkflowQueue } from '../lib/workflow-queue';
 
 export class LoggingUI implements WizardUI {
   intro(message: string): void {
@@ -152,6 +153,18 @@ export class LoggingUI implements WizardUI {
   }
 
   setEventPlan(_events: Array<{ name: string; description: string }>): void {
+    // No-op in CI mode
+  }
+
+  setWorkQueue(_queue: WizardWorkflowQueue): void {
+    // No-op in CI mode
+  }
+
+  setCurrentQueueItem(_item: { id: string; label: string } | null): void {
+    // No-op in CI mode
+  }
+
+  completeQueueItem(_item: { id: string; label: string }): void {
     // No-op in CI mode
   }
 }

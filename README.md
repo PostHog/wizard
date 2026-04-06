@@ -198,6 +198,93 @@ To make your version of a tool usable with a one-line `npx` command:
    your project directory
 3. Now you can run it with `npx yourpackagename`
 
+# Workflow queue
+
+The wizard executes agent work through a queue-backed runner. Instead of one monolithic prompt, each workflow step is a separate continued query.
+
+## How it works
+
+1. **Bootstrap** runs first as a standalone query — installs the skill and emits the skill ID.
+2. The runner reads `SKILL.md` from the installed skill and parses the `workflow` array from its YAML frontmatter to discover the step list.
+3. A `WizardWorkflowQueue` is seeded from those steps plus an `env-vars` step at the end.
+4. The runner pops items from the queue and issues one continued query per item, preserving the conversation across steps.
+
+## SKILL.md frontmatter format
+
+The skill generator in `context-mill` writes a `workflow` array into each integration skill's frontmatter:
+
+```yaml
+---
+name: integration-nextjs-app-router
+workflow:
+  - step_id: 1.0-begin
+    reference: basic-integration-1.0-begin.md
+    title: PostHog Setup - Begin
+    next:
+      - basic-integration-1.1-edit.md
+  - step_id: 1.1-edit
+    reference: basic-integration-1.1-edit.md
+    title: PostHog Setup - Edit
+    next:
+      - basic-integration-1.2-revise.md
+  # ...
+---
+```
+
+- `step_id` — unique identifier for the step
+- `reference` — filename in the skill's `references/` directory
+- `title` — human-readable label shown in the TUI progress list
+- `next` — array of next step references (for future parallelization)
+
+## Queue item types
+
+```typescript
+type WizardWorkflowQueueItem =
+  | { id: 'bootstrap'; kind: 'bootstrap'; label: string }
+  | { id: string; kind: 'workflow'; referenceFilename: string; label: string }
+  | { id: 'env-vars'; kind: 'env-vars'; label: string };
+```
+
+## Enqueueing work dynamically
+
+The queue is exposed to the UI via `store.workQueue`. To add work during a run:
+
+```typescript
+// Insert at front of queue (runs next)
+store.workQueue.enqueueNext({
+  id: 'my-task',
+  kind: 'workflow',
+  referenceFilename: 'my-reference.md',
+  label: 'My custom step',
+});
+
+// Append to end of queue
+store.workQueue.enqueue({
+  id: 'my-task',
+  kind: 'workflow',
+  referenceFilename: 'my-reference.md',
+  label: 'My custom step',
+});
+```
+
+The queue is reactive — mutations trigger UI re-renders. Items enqueued while the runner loop is active will be picked up when the current step finishes.
+
+## TUI progress display
+
+The RunScreen shows a stage-grouped progress list:
+
+```
+☑ PostHog Setup - Begin
+▶ PostHog Setup - Edit
+  ☑ Add PostHog to auth.ts
+  ▶ Add PostHog to checkout.ts
+○ PostHog Setup - Revise
+○ PostHog Setup - Conclusion
+○ Environment variables
+```
+
+Stage headers come from queue item labels. Nested tasks come from the agent's `TodoWrite` calls. Tasks reset when the runner advances to a new stage.
+
 # Health checks
 
 `src/lib/health-checks/` checks external status pages and PostHog-owned

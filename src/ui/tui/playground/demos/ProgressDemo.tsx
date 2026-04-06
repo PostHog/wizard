@@ -7,30 +7,35 @@ import { Box, Text } from 'ink';
 import { useState, useEffect } from 'react';
 import { ProgressList, LoadingBox } from '../../primitives/index.js';
 import type { ProgressItem } from '../../primitives/index.js';
+import { TaskStatus } from '../../../wizard-ui.js';
 import { Colors } from '../../styles.js';
 
 const INITIAL_ITEMS: ProgressItem[] = [
   {
     label: 'Detect framework',
     activeForm: 'Detecting framework',
-    status: 'pending',
+    status: TaskStatus.Pending,
   },
   {
     label: 'Install dependencies',
     activeForm: 'Installing dependencies',
-    status: 'pending',
+    status: TaskStatus.Pending,
   },
   {
     label: 'Configure PostHog',
     activeForm: 'Configuring PostHog',
-    status: 'pending',
+    status: TaskStatus.Pending,
   },
   {
     label: 'Add analytics provider',
     activeForm: 'Adding analytics provider',
-    status: 'pending',
+    status: TaskStatus.Pending,
   },
-  { label: 'Verify setup', activeForm: 'Verifying setup', status: 'pending' },
+  {
+    label: 'Verify setup',
+    activeForm: 'Verifying setup',
+    status: TaskStatus.Pending,
+  },
 ];
 
 export const ProgressDemo = () => {
@@ -52,9 +57,9 @@ export const ProgressDemo = () => {
 
     setItems(
       INITIAL_ITEMS.map((item, i) => {
-        if (i < cycle) return { ...item, status: 'completed' as const };
-        if (i === cycle) return { ...item, status: 'in_progress' as const };
-        return { ...item, status: 'pending' as const };
+        if (i < cycle) return { ...item, status: TaskStatus.Completed };
+        if (i === cycle) return { ...item, status: TaskStatus.InProgress };
+        return { ...item, status: TaskStatus.Pending };
       }),
     );
   }, [tick]);

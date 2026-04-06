@@ -2,30 +2,48 @@ export type WizardWorkflowQueueItem =
   | {
       id: 'bootstrap';
       kind: 'bootstrap';
+      label: string;
     }
   | {
       id: string;
       kind: 'workflow';
       referenceFilename: string;
+      label: string;
     }
   | {
       id: 'env-vars';
       kind: 'env-vars';
+      label: string;
     };
 
 export class WizardWorkflowQueue {
   private items: WizardWorkflowQueueItem[];
+  private onChange?: () => void;
 
   constructor(items: WizardWorkflowQueueItem[] = []) {
     this.items = [...items];
   }
 
+  /** Register a listener that fires on any queue mutation. */
+  setOnChange(fn: () => void): void {
+    this.onChange = fn;
+  }
+
   enqueue(item: WizardWorkflowQueueItem): void {
     this.items.push(item);
+    this.onChange?.();
+  }
+
+  /** Insert an item at the front of the queue (next to run). */
+  enqueueNext(item: WizardWorkflowQueueItem): void {
+    this.items.unshift(item);
+    this.onChange?.();
   }
 
   dequeue(): WizardWorkflowQueueItem | undefined {
-    return this.items.shift();
+    const item = this.items.shift();
+    this.onChange?.();
+    return item;
   }
 
   peek(): WizardWorkflowQueueItem | undefined {
@@ -50,12 +68,14 @@ export interface WorkflowStepSeed {
   stepId: string;
   /** Filename inside the skill's references/ dir, e.g. "basic-integration-1.0-begin.md" */
   referenceFilename: string;
+  /** Human-readable title from SKILL.md frontmatter, e.g. "PostHog Setup - Edit" */
+  title: string;
 }
 
 /**
  * Parse workflow steps from SKILL.md content.
  *
- * Extracts `step_id` and `reference` from the YAML frontmatter's
+ * Extracts `step_id`, `reference`, and `title` from the YAML frontmatter's
  * `workflow` array. Uses simple regex — no YAML library needed
  * since we control the output format in skill-generator.
  */
@@ -67,12 +87,13 @@ export function parseWorkflowStepsFromSkillMd(
   const frontmatter = fmMatch[1];
 
   const steps: WorkflowStepSeed[] = [];
-  const entryRegex = /step_id:\s*(.+)\n\s*reference:\s*(.+)/g;
+  const entryRegex = /step_id:\s*(.+)\n\s*reference:\s*(.+)\n\s*title:\s*(.+)/g;
   let match;
   while ((match = entryRegex.exec(frontmatter)) !== null) {
     steps.push({
       stepId: match[1].trim(),
       referenceFilename: match[2].trim(),
+      title: match[3].trim(),
     });
   }
   return steps;
@@ -86,15 +107,16 @@ export function createInitialWizardWorkflowQueue(
   steps: WorkflowStepSeed[],
 ): WizardWorkflowQueue {
   const items: WizardWorkflowQueueItem[] = [
-    { id: 'bootstrap', kind: 'bootstrap' },
+    { id: 'bootstrap', kind: 'bootstrap', label: 'Preparing integration' },
     ...steps.map(
       (step): WizardWorkflowQueueItem => ({
         id: `workflow:${step.stepId}`,
         kind: 'workflow',
         referenceFilename: step.referenceFilename,
+        label: step.title,
       }),
     ),
-    { id: 'env-vars', kind: 'env-vars' },
+    { id: 'env-vars', kind: 'env-vars', label: 'Environment variables' },
   ];
   return new WizardWorkflowQueue(items);
 }
@@ -112,9 +134,10 @@ export function createPostBootstrapQueue(
         id: `workflow:${step.stepId}`,
         kind: 'workflow',
         referenceFilename: step.referenceFilename,
+        label: step.title,
       }),
     ),
-    { id: 'env-vars', kind: 'env-vars' },
+    { id: 'env-vars', kind: 'env-vars', label: 'Environment variables' },
   ];
   return new WizardWorkflowQueue(items);
 }

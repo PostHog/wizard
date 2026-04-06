@@ -9,6 +9,7 @@
  */
 
 import type { SettingsConflict } from '../lib/agent-interface';
+import type { WizardWorkflowQueue } from '../lib/workflow-queue';
 
 export enum TaskStatus {
   Pending = 'pending',
@@ -96,4 +97,11 @@ export interface WizardUI {
 
   // ── Event plan from .posthog-events.json ────────────────────
   setEventPlan(events: Array<{ name: string; description: string }>): void;
+
+  // ── Work queue (for dynamic task enqueue from UI) ──────────
+  setWorkQueue(queue: WizardWorkflowQueue): void;
+
+  // ── Queue stage tracking ──────────────────────────────────
+  setCurrentQueueItem(item: { id: string; label: string } | null): void;
+  completeQueueItem(item: { id: string; label: string }): void;
 }
