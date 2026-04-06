@@ -1,6 +1,8 @@
 import {
   WizardWorkflowQueue,
   createInitialWizardWorkflowQueue,
+  createPostBootstrapQueue,
+  parseWorkflowStepsFromSkillMd,
   type WorkflowStepSeed,
 } from '../workflow-queue';
 
@@ -70,6 +72,22 @@ describe('WizardWorkflowQueue', () => {
     ]);
   });
 
+  it('createPostBootstrapQueue omits bootstrap', () => {
+    const queue = createPostBootstrapQueue(BASIC_INTEGRATION_STEPS);
+    const items = queue.toArray();
+
+    expect(items[0]).toEqual({
+      id: 'workflow:1.0-begin',
+      kind: 'workflow',
+      referenceFilename: 'basic-integration-1.0-begin.md',
+    });
+    expect(items[items.length - 1]).toEqual({
+      id: 'env-vars',
+      kind: 'env-vars',
+    });
+    expect(items.find((i) => i.id === 'bootstrap')).toBeUndefined();
+  });
+
   it('supports enqueue and dequeue operations', () => {
     const queue = new WizardWorkflowQueue();
 
@@ -89,5 +107,76 @@ describe('WizardWorkflowQueue', () => {
       referenceFilename: 'basic-integration-1.0-begin.md',
     });
     expect(queue).toHaveLength(0);
+  });
+});
+
+describe('parseWorkflowStepsFromSkillMd', () => {
+  it('parses workflow steps from SKILL.md frontmatter', () => {
+    const skillMd = `---
+name: integration-nextjs-app-router
+description: PostHog integration for Next.js App Router applications
+metadata:
+  author: PostHog
+  version: dev
+workflow:
+  - step_id: 1.0-begin
+    reference: basic-integration-1.0-begin.md
+    title: PostHog Setup - Begin
+    next:
+      - basic-integration-1.1-edit.md
+  - step_id: 1.1-edit
+    reference: basic-integration-1.1-edit.md
+    title: PostHog Setup - Edit
+    next:
+      - basic-integration-1.2-revise.md
+  - step_id: 1.2-revise
+    reference: basic-integration-1.2-revise.md
+    title: PostHog Setup - Revise
+    next:
+      - basic-integration-1.3-conclude.md
+  - step_id: 1.3-conclude
+    reference: basic-integration-1.3-conclude.md
+    title: PostHog Setup - Conclusion
+    next: []
+---
+
+# PostHog integration for Next.js App Router
+`;
+
+    const steps = parseWorkflowStepsFromSkillMd(skillMd);
+
+    expect(steps).toEqual([
+      {
+        stepId: '1.0-begin',
+        referenceFilename: 'basic-integration-1.0-begin.md',
+      },
+      {
+        stepId: '1.1-edit',
+        referenceFilename: 'basic-integration-1.1-edit.md',
+      },
+      {
+        stepId: '1.2-revise',
+        referenceFilename: 'basic-integration-1.2-revise.md',
+      },
+      {
+        stepId: '1.3-conclude',
+        referenceFilename: 'basic-integration-1.3-conclude.md',
+      },
+    ]);
+  });
+
+  it('returns empty array when no frontmatter', () => {
+    expect(parseWorkflowStepsFromSkillMd('# No frontmatter')).toEqual([]);
+  });
+
+  it('returns empty array when no workflow key', () => {
+    const skillMd = `---
+name: feature-flags-nextjs
+description: docs only
+---
+
+# Feature flags
+`;
+    expect(parseWorkflowStepsFromSkillMd(skillMd)).toEqual([]);
   });
 });

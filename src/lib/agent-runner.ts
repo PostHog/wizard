@@ -1,3 +1,5 @@
+import fs from 'fs';
+import path from 'path';
 import {
   DEFAULT_PACKAGE_INSTALLATION,
   type FrameworkConfig,
@@ -39,9 +41,9 @@ import {
 } from '../utils/wizard-abort';
 import { formatScanReport, writeScanReport } from './yara-hooks';
 import {
-  createInitialWizardWorkflowQueue,
+  createPostBootstrapQueue,
+  parseWorkflowStepsFromSkillMd,
   type WizardWorkflowQueueItem,
-  type WorkflowStepSeed,
 } from './workflow-queue';
 
 const WIZARD_SKILL_ID_SIGNAL = '[WIZARD-SKILL-ID]';
@@ -274,76 +276,106 @@ export async function runAgentWizard(
     ? createBenchmarkPipeline(spinner, sessionToOptions(session))
     : undefined;
 
-  // TODO: S5 — seed from context-mill workflow manifest instead of this static list
-  const workflowSteps: WorkflowStepSeed[] = [
-    {
-      stepId: '1.0-begin',
-      referenceFilename: 'basic-integration-1.0-begin.md',
-    },
-    { stepId: '1.1-edit', referenceFilename: 'basic-integration-1.1-edit.md' },
-    {
-      stepId: '1.2-revise',
-      referenceFilename: 'basic-integration-1.2-revise.md',
-    },
-    {
-      stepId: '1.3-conclude',
-      referenceFilename: 'basic-integration-1.3-conclude.md',
-    },
-  ];
-  const queue = createInitialWizardWorkflowQueue(workflowSteps);
-  let queuedSessionId: string | undefined;
-  let installedSkillId: string | undefined;
-  let agentResult: Awaited<ReturnType<typeof runAgent>> = {};
+  // ── Step 1: Bootstrap — install the skill and get its ID ──
 
-  while (queue.length > 0) {
-    const queueItem = queue.dequeue()!;
-    const prompt = buildQueuedPrompt(
-      queueItem,
-      config,
-      promptContext,
-      frameworkContext,
+  let agentResult = await runAgent(
+    agent,
+    buildBootstrapPrompt(config, promptContext, frameworkContext),
+    sessionToOptions(session),
+    spinner,
+    {
+      estimatedDurationMinutes: config.ui.estimatedDurationMinutes,
+      spinnerMessage: 'Preparing integration...',
+      successMessage: 'Integration prepared',
+      errorMessage: 'Integration failed during bootstrap',
+      additionalFeatureQueue: [],
+      requestRemark: false,
+      captureOutputText: true,
+      captureSessionId: true,
+      finalizeMiddleware: false,
+    },
+    middleware,
+  );
+
+  const queuedSessionId = agentResult.sessionId;
+  const installedSkillId =
+    extractInstalledSkillId(agentResult.outputText ?? '') ?? undefined;
+
+  if (!installedSkillId) {
+    await wizardAbort({
+      message:
+        'The wizard could not determine which integration skill was installed during bootstrap.',
+      error: new WizardError('Bootstrap step did not emit installed skill id'),
+    });
+  }
+
+  // ── Step 2: Read SKILL.md and seed the queue from its frontmatter ──
+
+  if (!agentResult.error && installedSkillId) {
+    const skillMdPath = path.join(
+      session.installDir,
+      '.claude',
+      'skills',
       installedSkillId,
+      'SKILL.md',
     );
+    const skillMdContent = fs.readFileSync(skillMdPath, 'utf-8');
+    const workflowSteps = parseWorkflowStepsFromSkillMd(skillMdContent);
 
-    agentResult = await runAgent(
-      agent,
-      prompt,
-      sessionToOptions(session),
-      spinner,
-      {
-        estimatedDurationMinutes: config.ui.estimatedDurationMinutes,
-        spinnerMessage: getQueueSpinnerMessage(queueItem),
-        successMessage: getQueueSuccessMessage(queueItem, config),
-        errorMessage: `Integration failed during ${queueItem.id}`,
-        additionalFeatureQueue:
-          queueItem.id === 'env-vars' ? session.additionalFeatureQueue : [],
-        resumeSessionId: queuedSessionId,
-        requestRemark: queueItem.id === 'env-vars',
-        captureOutputText: queueItem.kind === 'bootstrap',
-        captureSessionId: true,
-        finalizeMiddleware: queue.length === 0,
-      },
-      middleware,
-    );
-
-    queuedSessionId = agentResult.sessionId ?? queuedSessionId;
-
-    if (queueItem.kind === 'bootstrap') {
-      installedSkillId =
-        extractInstalledSkillId(agentResult.outputText ?? '') ?? undefined;
-      if (!installedSkillId) {
-        await wizardAbort({
-          message:
-            'The wizard could not determine which integration skill was installed during bootstrap.',
-          error: new WizardError(
-            'Bootstrap step did not emit installed skill id',
-          ),
-        });
-      }
+    if (workflowSteps.length === 0) {
+      logToFile(
+        '[agent-runner] No workflow steps found in SKILL.md frontmatter, aborting',
+      );
+      await wizardAbort({
+        message:
+          'The installed skill does not contain workflow steps in its metadata.',
+        error: new WizardError('No workflow steps in SKILL.md frontmatter'),
+      });
     }
 
-    if (agentResult.error) {
-      break;
+    logToFile(
+      `[agent-runner] Seeded queue from SKILL.md: ${workflowSteps
+        .map((s) => s.stepId)
+        .join(', ')}`,
+    );
+
+    // ── Step 3: Execute workflow steps + env-vars from the queue ──
+
+    const queue = createPostBootstrapQueue(workflowSteps);
+
+    while (queue.length > 0) {
+      const queueItem = queue.dequeue()!;
+      const prompt = buildQueuedPrompt(
+        queueItem,
+        config,
+        promptContext,
+        installedSkillId,
+      );
+
+      agentResult = await runAgent(
+        agent,
+        prompt,
+        sessionToOptions(session),
+        spinner,
+        {
+          estimatedDurationMinutes: config.ui.estimatedDurationMinutes,
+          spinnerMessage: getQueueSpinnerMessage(queueItem),
+          successMessage: getQueueSuccessMessage(queueItem, config),
+          errorMessage: `Integration failed during ${queueItem.id}`,
+          additionalFeatureQueue:
+            queueItem.id === 'env-vars' ? session.additionalFeatureQueue : [],
+          resumeSessionId: queuedSessionId,
+          requestRemark: queueItem.id === 'env-vars',
+          captureOutputText: false,
+          captureSessionId: false,
+          finalizeMiddleware: queue.length === 0,
+        },
+        middleware,
+      );
+
+      if (agentResult.error) {
+        break;
+      }
     }
   }
 
@@ -467,17 +499,9 @@ function buildQueuedPrompt(
     host: string;
     projectId: number;
   },
-  frameworkContext: Record<string, unknown>,
-  installedSkillId?: string,
+  installedSkillId: string,
 ): string {
-  if (queueItem.kind === 'bootstrap') {
-    return buildBootstrapPrompt(config, context, frameworkContext);
-  }
-
   if (queueItem.kind === 'workflow') {
-    if (!installedSkillId) {
-      throw new Error('Workflow step requires installed skill id');
-    }
     return buildWorkflowStepPrompt(
       queueItem.referenceFilename,
       installedSkillId,
