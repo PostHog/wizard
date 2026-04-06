@@ -21,6 +21,7 @@ import {
   HNViewer,
 } from '../primitives/index.js';
 import type { ProgressItem } from '../primitives/index.js';
+import { TaskStatus } from '../../wizard-ui.js';
 import { ADDITIONAL_FEATURE_LABELS } from '../../../lib/wizard-session.js';
 import { LearnCard } from '../components/LearnCard.js';
 import { TipsCard } from '../components/TipsCard.js';
@@ -40,23 +41,53 @@ export const RunScreen = ({ store }: RunScreenProps) => {
 
   const [columns] = useStdoutDimensions();
 
-  const progressItems: ProgressItem[] = store.tasks.map((t) => ({
-    label: t.label,
-    activeForm: t.activeForm,
-    status: t.status,
-  }));
+  // Build stage-grouped progress items
+  const progressItems: ProgressItem[] = [];
+  const current = store.currentQueueItem;
+  const completed = store.completedQueueItems;
+  const pendingQueue = store.workQueue?.toArray() ?? [];
 
-  // When all tasks are done but the queue has features, show a transitional item
-  const queue = store.session.additionalFeatureQueue;
-  const allDone =
-    progressItems.length > 0 &&
-    progressItems.every((t) => t.status === 'completed');
-  if (allDone && queue.length > 0) {
-    const nextLabel = ADDITIONAL_FEATURE_LABELS[queue[0]];
+  // Completed stages
+  for (const item of completed) {
+    progressItems.push({
+      label: item.label,
+      status: TaskStatus.Completed,
+    });
+  }
+
+  // Current stage header + nested agent tasks
+  if (current) {
+    progressItems.push({
+      label: current.label,
+      activeForm: current.label,
+      status: TaskStatus.InProgress,
+    });
+    // Nest agent tasks under current stage
+    for (const t of store.tasks) {
+      progressItems.push({
+        label: t.label,
+        activeForm: t.activeForm,
+        status: t.status,
+        indent: 1,
+      });
+    }
+  }
+
+  // Pending queue items
+  for (const item of pendingQueue) {
+    progressItems.push({
+      label: item.label,
+      status: TaskStatus.Pending,
+    });
+  }
+
+  // Additional features waiting
+  const featureQueue = store.session.additionalFeatureQueue;
+  for (const feature of featureQueue) {
+    const nextLabel = ADDITIONAL_FEATURE_LABELS[feature];
     progressItems.push({
       label: `Set up ${nextLabel}`,
-      activeForm: `Setting up ${nextLabel}...`,
-      status: 'in_progress',
+      status: TaskStatus.Pending,
     });
   }
 

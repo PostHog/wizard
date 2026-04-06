@@ -342,9 +342,13 @@ export async function runAgentWizard(
     // ── Step 3: Execute workflow steps + env-vars from the queue ──
 
     const queue = createPostBootstrapQueue(workflowSteps);
+    getUI().setWorkQueue(queue);
 
     while (queue.length > 0) {
       const queueItem = queue.dequeue()!;
+
+      getUI().setCurrentQueueItem({ id: queueItem.id, label: queueItem.label });
+
       const prompt = buildQueuedPrompt(
         queueItem,
         config,
@@ -373,10 +377,13 @@ export async function runAgentWizard(
         middleware,
       );
 
+      getUI().completeQueueItem({ id: queueItem.id, label: queueItem.label });
+
       if (agentResult.error) {
         break;
       }
     }
+    getUI().setCurrentQueueItem(null);
   }
 
   // Handle error cases detected in agent output

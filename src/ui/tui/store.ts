@@ -34,6 +34,7 @@ import {
   evaluateWizardReadiness,
   WizardReadiness,
 } from '../../lib/health-checks/readiness.js';
+import type { WizardWorkflowQueue } from '../../lib/workflow-queue.js';
 
 export { TaskStatus, Screen, Overlay, Flow, RunPhase, McpOutcome };
 export type { ScreenName, OutroData, WizardSession };
@@ -58,6 +59,8 @@ export class WizardStore {
   private $statusExpanded = atom(false);
   private $tasks = atom<TaskItem[]>([]);
   private $eventPlan = atom<PlannedEvent[]>([]);
+  private $currentQueueItem = atom<{ id: string; label: string } | null>(null);
+  private $completedQueueItems = atom<{ id: string; label: string }[]>([]);
   private $learnCardBlockIdx = atom(0);
   private $learnCardComplete = atom(false);
   private $version = atom(0);
@@ -69,6 +72,22 @@ export class WizardStore {
   private _enterScreenHooks = new Map<ScreenName, (() => void)[]>();
 
   version = '';
+
+  /**
+   * Live reference to the workflow queue.
+   * Set by the agent runner so the UI can dynamically enqueue work.
+   */
+  private _workQueue: WizardWorkflowQueue | null = null;
+
+  get workQueue() {
+    return this._workQueue;
+  }
+
+  set workQueue(queue: WizardWorkflowQueue | null) {
+    this._workQueue = queue;
+    // Re-render when the queue changes (enqueue/dequeue)
+    queue?.setOnChange(() => this.emitChange());
+  }
 
   /** Navigation router — resolves active screen from session state. */
   readonly router: WizardRouter;
@@ -152,6 +171,30 @@ export class WizardStore {
 
   get eventPlan(): PlannedEvent[] {
     return this.$eventPlan.get();
+  }
+
+  get currentQueueItem(): { id: string; label: string } | null {
+    return this.$currentQueueItem.get();
+  }
+
+  get completedQueueItems(): { id: string; label: string }[] {
+    return this.$completedQueueItems.get();
+  }
+
+  setCurrentQueueItem(item: { id: string; label: string } | null): void {
+    this.$currentQueueItem.set(item);
+    // Clear agent tasks when transitioning to a new stage —
+    // each stage gets a fresh task list from TodoWrite
+    this.$tasks.set([]);
+    this.emitChange();
+  }
+
+  completeQueueItem(item: { id: string; label: string }): void {
+    const completed = this.$completedQueueItems.get();
+    if (!completed.some((c) => c.id === item.id)) {
+      this.$completedQueueItems.set([...completed, item]);
+    }
+    this.emitChange();
   }
 
   get statusExpanded(): boolean {
@@ -520,6 +563,7 @@ export class WizardStore {
 
     const incomingLabels = new Set(incoming.map((t) => t.label));
 
+    // Keep completed tasks that aren't being updated by the incoming list
     const retained = this.$tasks
       .get()
       .filter((t) => t.done && !incomingLabels.has(t.label));
