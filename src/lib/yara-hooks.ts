@@ -19,6 +19,7 @@ import type { YaraMatch, ScanResult } from './yara-scanner';
 import { logToFile } from '../utils/debug';
 import { analytics } from '../utils/analytics';
 import { isSkillInstallCommand } from './skill-install';
+import { AgentSignals } from './agent-interface';
 
 // ─── Types ───────────────────────────────────────────────────────
 // Using loose types to avoid tight coupling to SDK version.
@@ -226,7 +227,7 @@ export function createPreToolUseYaraHooks(): HookCallbackMatcher[] {
             // Fail closed: block the command if scanning fails
             return Promise.resolve({
               decision: 'block',
-              reason: '[YARA] Scanner error — command blocked as a precaution.',
+              reason: `${AgentSignals.YARA_SCANNER_ERROR} — command blocked as a precaution.`,
             });
           }
         },
@@ -296,8 +297,7 @@ export function createPostToolUseYaraHooks(): HookCallbackMatcher[] {
             return Promise.resolve({
               hookSpecificOutput: {
                 hookEventName: 'PostToolUse',
-                additionalContext:
-                  '[YARA] Scanner error — you MUST revert this change as a precaution.',
+                additionalContext: `${AgentSignals.YARA_SCANNER_ERROR} — you MUST revert this change as a precaution.`,
               },
             });
           }
@@ -342,7 +342,7 @@ export function createPostToolUseYaraHooks(): HookCallbackMatcher[] {
               // Prompt injection: abort the session — context is poisoned
               return Promise.resolve({
                 stopReason:
-                  `[YARA CRITICAL] ${match.rule.name}: Prompt injection detected in file content. ` +
+                  `${AgentSignals.YARA_CRITICAL} ${match.rule.name}: Prompt injection detected in file content. ` +
                   `Agent context is potentially poisoned. Session terminated for safety.`,
               });
             }
@@ -365,8 +365,7 @@ export function createPostToolUseYaraHooks(): HookCallbackMatcher[] {
             logToFile('[YARA] PostToolUse Read/Grep hook error:', error);
             // Fail closed: terminate session if scanning fails on read content
             return Promise.resolve({
-              stopReason:
-                '[YARA] Scanner error while scanning read content — session terminated as a precaution.',
+              stopReason: `${AgentSignals.YARA_SCANNER_ERROR} while scanning read content — session terminated as a precaution.`,
             });
           }
         },
@@ -419,15 +418,14 @@ export function createPostToolUseYaraHooks(): HookCallbackMatcher[] {
 
             return {
               stopReason:
-                `[YARA CRITICAL] Poisoned skill detected in ${skillDir}: ${match.rule.name}. ` +
+                `${AgentSignals.YARA_CRITICAL} Poisoned skill detected in ${skillDir}: ${match.rule.name}. ` +
                 `The downloaded skill contains potential prompt injection. Session terminated for safety.`,
             };
           } catch (error) {
             logToFile('[YARA] PostToolUse skill install hook error:', error);
             // Fail closed: terminate if skill scanning fails
             return {
-              stopReason:
-                '[YARA] Scanner error while scanning skill files — session terminated as a precaution.',
+              stopReason: `${AgentSignals.YARA_SCANNER_ERROR} while scanning skill files — session terminated as a precaution.`,
             };
           }
         },
