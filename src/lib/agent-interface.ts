@@ -71,6 +71,10 @@ export const AgentSignals = {
   WIZARD_REMARK: '[WIZARD-REMARK]',
   /** Signal prefix for benchmark logging */
   BENCHMARK: '[BENCHMARK]',
+  /** Signal emitted by YARA scanner on critical security violation */
+  YARA_CRITICAL: '[YARA CRITICAL]',
+  /** Signal emitted by YARA scanner on scanner error */
+  YARA_SCANNER_ERROR: '[YARA] Scanner error',
 } as const;
 
 export type AgentSignal = (typeof AgentSignals)[keyof typeof AgentSignals];
@@ -295,9 +299,13 @@ export type StopHookResult =
 export function createStopHook(
   featureQueue: readonly AdditionalFeature[],
   collectedText?: string[],
+  options?: {
+    requestRemark?: boolean;
+  },
 ): (input: { stop_hook_active: boolean }) => StopHookResult {
   let featureIndex = 0;
   let remarkRequested = false;
+  const requestRemark = options?.requestRemark ?? true;
 
   return (input: { stop_hook_active: boolean }): StopHookResult => {
     logToFile('Stop hook triggered', {
@@ -326,7 +334,7 @@ export function createStopHook(
     }
 
     // Phase 2: collect remark (once)
-    if (!remarkRequested) {
+    if (requestRemark && !remarkRequested) {
       remarkRequested = true;
       logToFile('Stop hook: requesting reflection');
       return {
@@ -692,8 +700,8 @@ function checkYaraViolation(
   spinner: SpinnerHandle,
 ): { error: AgentErrorType } | null {
   if (
-    outputText.includes('[YARA CRITICAL]') ||
-    outputText.includes('[YARA] Scanner error')
+    outputText.includes(AgentSignals.YARA_CRITICAL) ||
+    outputText.includes(AgentSignals.YARA_SCANNER_ERROR)
   ) {
     logToFile('Agent error: YARA_VIOLATION');
     spinner.stop('Security violation detected');
@@ -719,16 +727,31 @@ export async function runAgent(
     successMessage?: string;
     errorMessage?: string;
     additionalFeatureQueue?: readonly AdditionalFeature[];
+    resumeSessionId?: string;
+    requestRemark?: boolean;
+    captureOutputText?: boolean;
+    captureSessionId?: boolean;
+    finalizeMiddleware?: boolean;
   },
   middleware?: {
     onMessage(message: any): void;
     finalize(resultMessage: any, totalDurationMs: number): any;
   },
-): Promise<{ error?: AgentErrorType; message?: string }> {
+): Promise<{
+  error?: AgentErrorType;
+  message?: string;
+  sessionId?: string;
+  outputText?: string;
+}> {
   const {
     spinnerMessage = 'Customizing your PostHog setup...',
     successMessage = 'PostHog integration complete',
     errorMessage = 'Integration failed',
+    resumeSessionId,
+    requestRemark = true,
+    captureOutputText = false,
+    captureSessionId = false,
+    finalizeMiddleware = true,
   } = config ?? {};
 
   const { query } = await getSDKModule();
@@ -742,6 +765,7 @@ export async function runAgent(
 
   const startTime = Date.now();
   const collectedText: string[] = [];
+  let sessionId: string | undefined;
   // Track if we received a successful result (before any cleanup errors)
   let receivedSuccessResult = false;
   let loggedInitialContext = false;
@@ -760,7 +784,7 @@ export async function runAgent(
   const createPromptStream = async function* () {
     yield {
       type: 'user',
-      session_id: '',
+      session_id: resumeSessionId ?? '',
       message: { role: 'user', content: prompt },
       parent_tool_use_id: null,
     };
@@ -770,7 +794,12 @@ export async function runAgent(
   // Helper to handle successful completion (used in normal path and race condition recovery)
   const completeWithSuccess = (
     suppressedError?: Error,
-  ): { error?: AgentErrorType; message?: string } => {
+  ): {
+    error?: AgentErrorType;
+    message?: string;
+    sessionId?: string;
+    outputText?: string;
+  } => {
     const durationMs = Date.now() - startTime;
     const durationSeconds = Math.round(durationMs / 1000);
 
@@ -804,13 +833,18 @@ export async function runAgent(
       duration_ms: durationMs,
       duration_seconds: durationSeconds,
     });
-    try {
-      middleware?.finalize(lastResultMessage, durationMs);
-    } catch (e) {
-      logToFile(`${AgentSignals.BENCHMARK} Middleware finalize error:`, e);
+    if (finalizeMiddleware) {
+      try {
+        middleware?.finalize(lastResultMessage, durationMs);
+      } catch (e) {
+        logToFile(`${AgentSignals.BENCHMARK} Middleware finalize error:`, e);
+      }
     }
     spinner.stop(successMessage);
-    return {};
+    return {
+      ...(captureSessionId && sessionId ? { sessionId } : {}),
+      ...(captureOutputText ? { outputText } : {}),
+    };
   };
 
   // Event plan file watcher — cleaned up in finally block
@@ -840,6 +874,7 @@ export async function runAgent(
     const response = query({
       prompt: createPromptStream(),
       options: {
+        resume: resumeSessionId,
         model: agentConfig.model,
         cwd: agentConfig.workingDirectory,
         permissionMode: 'acceptEdits',
@@ -928,6 +963,7 @@ export async function runAgent(
                 createStopHook(
                   config?.additionalFeatureQueue ?? [],
                   collectedText,
+                  { requestRemark },
                 ),
               ],
               timeout: 30,
@@ -979,6 +1015,15 @@ export async function runAgent(
 
     // Process the async generator
     for await (const message of response) {
+      if (
+        message &&
+        typeof message === 'object' &&
+        'session_id' in message &&
+        typeof message.session_id === 'string'
+      ) {
+        sessionId = message.session_id;
+      }
+
       // Log initial context size on the first assistant response so we can
       // detect sudden shifts in starting context (e.g. MCP schema bloat).
       if (!loggedInitialContext && message.type === 'assistant') {
@@ -1060,13 +1105,21 @@ export async function runAgent(
     if (outputText.includes(AgentSignals.ERROR_MCP_MISSING)) {
       logToFile('Agent error: MCP_MISSING');
       spinner.stop('Agent could not access PostHog MCP');
-      return { error: AgentErrorType.MCP_MISSING };
+      return {
+        error: AgentErrorType.MCP_MISSING,
+        sessionId,
+        outputText,
+      };
     }
 
     if (outputText.includes(AgentSignals.ERROR_RESOURCE_MISSING)) {
       logToFile('Agent error: RESOURCE_MISSING');
       spinner.stop('Agent could not access setup resource');
-      return { error: AgentErrorType.RESOURCE_MISSING };
+      return {
+        error: AgentErrorType.RESOURCE_MISSING,
+        sessionId,
+        outputText,
+      };
     }
 
     // Check for API errors (rate limits, etc.)
@@ -1079,13 +1132,23 @@ export async function runAgent(
     if (outputText.includes('API Error: 429')) {
       logToFile('Agent error: RATE_LIMIT');
       spinner.stop('Rate limit exceeded');
-      return { error: AgentErrorType.RATE_LIMIT, message: apiErrorMessage };
+      return {
+        error: AgentErrorType.RATE_LIMIT,
+        message: apiErrorMessage,
+        sessionId,
+        outputText,
+      };
     }
 
     if (outputText.includes('API Error:')) {
       logToFile('Agent error: API_ERROR');
       spinner.stop('API error occurred');
-      return { error: AgentErrorType.API_ERROR, message: apiErrorMessage };
+      return {
+        error: AgentErrorType.API_ERROR,
+        message: apiErrorMessage,
+        sessionId,
+        outputText,
+      };
     }
 
     return completeWithSuccess();
@@ -1117,13 +1180,23 @@ export async function runAgent(
     if (outputText.includes('API Error: 429')) {
       logToFile('Agent error (caught): RATE_LIMIT');
       spinner.stop('Rate limit exceeded');
-      return { error: AgentErrorType.RATE_LIMIT, message: apiErrorMessage };
+      return {
+        error: AgentErrorType.RATE_LIMIT,
+        message: apiErrorMessage,
+        sessionId,
+        outputText,
+      };
     }
 
     if (outputText.includes('API Error:')) {
       logToFile('Agent error (caught): API_ERROR');
       spinner.stop('API error occurred');
-      return { error: AgentErrorType.API_ERROR, message: apiErrorMessage };
+      return {
+        error: AgentErrorType.API_ERROR,
+        message: apiErrorMessage,
+        sessionId,
+        outputText,
+      };
     }
 
     // No API error found, re-throw the original exception

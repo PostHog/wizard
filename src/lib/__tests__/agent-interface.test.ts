@@ -279,6 +279,61 @@ describe('runAgent', () => {
       // ui.log.error should NOT have been called (errors suppressed for user)
       expect(mockUIInstance.log.error).not.toHaveBeenCalled();
     });
+
+    it('passes resume to the SDK and returns the active session id', async () => {
+      function* mockGeneratorWithSessionId() {
+        yield {
+          type: 'system',
+          subtype: 'init',
+          model: 'claude-opus-4-5-20251101',
+          tools: [],
+          mcp_servers: [],
+          session_id: 'session-123',
+        };
+
+        yield {
+          type: 'assistant',
+          session_id: 'session-123',
+          message: {
+            content: [{ type: 'text', text: '[STATUS] Working through queue' }],
+          },
+        };
+
+        yield {
+          type: 'result',
+          subtype: 'success',
+          is_error: false,
+          session_id: 'session-123',
+          result: 'Queued step complete',
+        };
+      }
+
+      mockQuery.mockReturnValue(mockGeneratorWithSessionId());
+
+      const result = await runAgent(
+        defaultAgentConfig,
+        'queued prompt',
+        defaultOptions,
+        mockSpinner as unknown as SpinnerHandle,
+        {
+          successMessage: 'Queued success',
+          resumeSessionId: 'session-123',
+          requestRemark: false,
+          captureOutputText: true,
+          captureSessionId: true,
+        },
+      );
+
+      expect(mockQuery).toHaveBeenCalledWith(
+        expect.objectContaining({
+          options: expect.objectContaining({
+            resume: 'session-123',
+          }),
+        }),
+      );
+      expect(result.sessionId).toBe('session-123');
+      expect(result.outputText).toContain('Queued step complete');
+    });
   });
 });
 
@@ -381,5 +436,11 @@ describe('createStopHook', () => {
     const first = hook(hookInput);
     expect(first).toHaveProperty('decision', 'block');
     expect((first as { reason: string }).reason).toContain('WIZARD-REMARK');
+  });
+
+  it('can skip the remark collection phase for intermediate queued steps', () => {
+    const hook = createStopHook([], [], { requestRemark: false });
+
+    expect(hook(hookInput)).toEqual({});
   });
 });

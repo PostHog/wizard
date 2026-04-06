@@ -1,6 +1,5 @@
 import {
   DEFAULT_PACKAGE_INSTALLATION,
-  SPINNER_MESSAGE,
   type FrameworkConfig,
 } from './framework-config';
 import { type WizardSession, OutroKind } from './wizard-session';
@@ -39,6 +38,13 @@ import {
   registerCleanup,
 } from '../utils/wizard-abort';
 import { formatScanReport, writeScanReport } from './yara-hooks';
+import {
+  createInitialWizardWorkflowQueue,
+  type WizardWorkflowQueueItem,
+  type WorkflowStepSeed,
+} from './workflow-queue';
+
+const WIZARD_SKILL_ID_SIGNAL = '[WIZARD-SKILL-ID]';
 
 /**
  * Build a WizardOptions bag from a WizardSession (for code that still expects WizardOptions).
@@ -210,17 +216,13 @@ export async function runAgentWizard(
     analytics.setTag(key, value);
   });
 
-  const integrationPrompt = buildIntegrationPrompt(
-    config,
-    {
-      frameworkVersion: frameworkVersion || 'latest',
-      typescript: typeScriptDetected,
-      projectApiKey,
-      host,
-      projectId,
-    },
-    frameworkContext,
-  );
+  const promptContext = {
+    frameworkVersion: frameworkVersion || 'latest',
+    typescript: typeScriptDetected,
+    projectApiKey,
+    host,
+    projectId,
+  };
 
   // Initialize and run agent
   const spinner = getUI().spinner();
@@ -272,20 +274,78 @@ export async function runAgentWizard(
     ? createBenchmarkPipeline(spinner, sessionToOptions(session))
     : undefined;
 
-  const agentResult = await runAgent(
-    agent,
-    integrationPrompt,
-    sessionToOptions(session),
-    spinner,
+  // TODO: S5 — seed from context-mill workflow manifest instead of this static list
+  const workflowSteps: WorkflowStepSeed[] = [
     {
-      estimatedDurationMinutes: config.ui.estimatedDurationMinutes,
-      spinnerMessage: SPINNER_MESSAGE,
-      successMessage: config.ui.successMessage,
-      errorMessage: 'Integration failed',
-      additionalFeatureQueue: session.additionalFeatureQueue,
+      stepId: '1.0-begin',
+      referenceFilename: 'basic-integration-1.0-begin.md',
     },
-    middleware,
-  );
+    { stepId: '1.1-edit', referenceFilename: 'basic-integration-1.1-edit.md' },
+    {
+      stepId: '1.2-revise',
+      referenceFilename: 'basic-integration-1.2-revise.md',
+    },
+    {
+      stepId: '1.3-conclude',
+      referenceFilename: 'basic-integration-1.3-conclude.md',
+    },
+  ];
+  const queue = createInitialWizardWorkflowQueue(workflowSteps);
+  let queuedSessionId: string | undefined;
+  let installedSkillId: string | undefined;
+  let agentResult: Awaited<ReturnType<typeof runAgent>> = {};
+
+  while (queue.length > 0) {
+    const queueItem = queue.dequeue()!;
+    const prompt = buildQueuedPrompt(
+      queueItem,
+      config,
+      promptContext,
+      frameworkContext,
+      installedSkillId,
+    );
+
+    agentResult = await runAgent(
+      agent,
+      prompt,
+      sessionToOptions(session),
+      spinner,
+      {
+        estimatedDurationMinutes: config.ui.estimatedDurationMinutes,
+        spinnerMessage: getQueueSpinnerMessage(queueItem),
+        successMessage: getQueueSuccessMessage(queueItem, config),
+        errorMessage: `Integration failed during ${queueItem.id}`,
+        additionalFeatureQueue:
+          queueItem.id === 'env-vars' ? session.additionalFeatureQueue : [],
+        resumeSessionId: queuedSessionId,
+        requestRemark: queueItem.id === 'env-vars',
+        captureOutputText: queueItem.kind === 'bootstrap',
+        captureSessionId: true,
+        finalizeMiddleware: queue.length === 0,
+      },
+      middleware,
+    );
+
+    queuedSessionId = agentResult.sessionId ?? queuedSessionId;
+
+    if (queueItem.kind === 'bootstrap') {
+      installedSkillId =
+        extractInstalledSkillId(agentResult.outputText ?? '') ?? undefined;
+      if (!installedSkillId) {
+        await wizardAbort({
+          message:
+            'The wizard could not determine which integration skill was installed during bootstrap.',
+          error: new WizardError(
+            'Bootstrap step did not emit installed skill id',
+          ),
+        });
+      }
+    }
+
+    if (agentResult.error) {
+      break;
+    }
+  }
 
   // Handle error cases detected in agent output
   if (agentResult.error === AgentErrorType.MCP_MISSING) {
@@ -397,7 +457,37 @@ export async function runAgentWizard(
 /**
  * Build the integration prompt for the agent.
  */
-function buildIntegrationPrompt(
+function buildQueuedPrompt(
+  queueItem: WizardWorkflowQueueItem,
+  config: FrameworkConfig,
+  context: {
+    frameworkVersion: string;
+    typescript: boolean;
+    projectApiKey: string;
+    host: string;
+    projectId: number;
+  },
+  frameworkContext: Record<string, unknown>,
+  installedSkillId?: string,
+): string {
+  if (queueItem.kind === 'bootstrap') {
+    return buildBootstrapPrompt(config, context, frameworkContext);
+  }
+
+  if (queueItem.kind === 'workflow') {
+    if (!installedSkillId) {
+      throw new Error('Workflow step requires installed skill id');
+    }
+    return buildWorkflowStepPrompt(
+      queueItem.referenceFilename,
+      installedSkillId,
+    );
+  }
+
+  return buildEnvVarPrompt(config, context);
+}
+
+function buildProjectContextBlock(
   config: FrameworkConfig,
   context: {
     frameworkVersion: string;
@@ -417,11 +507,7 @@ function buildIntegrationPrompt(
       ? '\n' + additionalLines.map((line) => `- ${line}`).join('\n')
       : '';
 
-  return `You have access to the PostHog MCP server which provides skills to integrate PostHog into this ${
-    config.metadata.name
-  } project.
-
-Project context:
+  return `Project context:
 - PostHog Project ID: ${context.projectId}
 - Framework: ${config.metadata.name} ${context.frameworkVersion}
 - TypeScript: ${context.typescript ? 'Yes' : 'No'}
@@ -430,9 +516,25 @@ Project context:
 - Project type: ${config.prompts.projectTypeDetection}
 - Package installation: ${
     config.prompts.packageInstallation ?? DEFAULT_PACKAGE_INSTALLATION
-  }${additionalContext}
+  }${additionalContext}`;
+}
 
-Instructions (follow these steps IN ORDER - do not skip or reorder):
+function buildBootstrapPrompt(
+  config: FrameworkConfig,
+  context: {
+    frameworkVersion: string;
+    typescript: boolean;
+    projectApiKey: string;
+    host: string;
+    projectId: number;
+  },
+  frameworkContext: Record<string, unknown>,
+): string {
+  return `You have access to the PostHog MCP server which provides skills to integrate PostHog into this ${
+    config.metadata.name
+  } project.
+
+${buildProjectContextBlock(config, context, frameworkContext)}
 
 STEP 1: Call load_skill_menu (from the wizard-tools MCP server) to see available skills.
    If the tool fails, emit: ${
@@ -449,17 +551,95 @@ STEP 2: Call install_skill (from the wizard-tools MCP server) with the chosen sk
 
 STEP 3: Load the installed skill's SKILL.md file to understand what references are available.
 
-STEP 4: Follow the skill's workflow files in sequence. Look for numbered workflow files in the references (e.g., files with patterns like "1.0-", "1.1-", "1.2-"). Start with the first one and proceed through each step until completion. Each workflow file will tell you what to do and which file comes next. Never directly write PostHog tokens directly to code files; always use environment variables.
+STEP 4: When preparation is complete, emit exactly one line in this format:
+${WIZARD_SKILL_ID_SIGNAL} <installed-skill-id>
 
-STEP 5: Set up environment variables for PostHog using the wizard-tools MCP server (this runs locally — secret values never leave the machine):
-   - Use check_env_keys to see which keys already exist in the project's .env file (e.g. .env.local or .env).
-   - Use set_env_values to create or update the PostHog public token and host, using the appropriate environment variable naming convention for ${
-     config.metadata.name
-   }, which you'll find in example code. The tool will also ensure .gitignore coverage. Don't assume the presence of keys means the value is up to date. Write the correct value each time.
-   - Reference these environment variables in the code files you create instead of hardcoding the public token and host.
-
-Important: Use the detect_package_manager tool (from the wizard-tools MCP server) to determine which package manager the project uses. Do not manually search for lockfiles or config files. Always install packages as a background task. Don't await completion; proceed with other work immediately after starting the installation. You must read a file immediately before attempting to write it, even if you have previously read it; failure to do so will cause a tool failure.
-
+Important:
+- Do NOT execute any of the workflow reference files yet.
+- Do NOT set up environment variables yet.
+- Stop after preparation is complete.
+- Use the detect_package_manager tool (from the wizard-tools MCP server) to determine which package manager the project uses. Do not manually search for lockfiles or config files. Always install packages as a background task. Don't await completion; proceed with other work immediately after starting the installation. You must read a file immediately before attempting to write it, even if you have previously read it; failure to do so will cause a tool failure.
 
 `;
+}
+
+function buildWorkflowStepPrompt(
+  referenceFilename: string,
+  installedSkillId: string,
+): string {
+  return `Continue the existing conversation.
+
+Read and follow this workflow reference:
+\`.claude/skills/${installedSkillId}/references/${referenceFilename}\`
+
+Important:
+- Complete only this workflow step.
+- Do NOT continue to any other workflow file.
+- Do NOT set up environment variables yet.
+- Stop when this step is complete.`;
+}
+
+function buildEnvVarPrompt(
+  config: FrameworkConfig,
+  context: {
+    frameworkVersion: string;
+    typescript: boolean;
+    projectApiKey: string;
+    host: string;
+    projectId: number;
+  },
+): string {
+  return `Continue the existing conversation.
+
+Execute the final queued environment-variable setup step for this ${
+    config.metadata.name
+  } project.
+
+${buildProjectContextBlock(config, context, {})}
+
+Set up environment variables for PostHog using the wizard-tools MCP server (this runs locally — secret values never leave the machine):
+- Use check_env_keys to see which keys already exist in the project's .env file (e.g. .env.local or .env).
+- Use set_env_values to create or update the PostHog public token and host, using the appropriate environment variable naming convention for ${
+    config.metadata.name
+  }, which you'll find in example code. The tool will also ensure .gitignore coverage. Don't assume the presence of keys means the value is up to date. Write the correct value each time.
+- Reference these environment variables in the code files you create instead of hardcoding the public token and host.
+
+Stop after the environment-variable setup step is complete.`;
+}
+
+function getQueueSpinnerMessage(queueItem: WizardWorkflowQueueItem): string {
+  switch (queueItem.kind) {
+    case 'bootstrap':
+      return 'Preparing integration...';
+    case 'workflow':
+      return `Running step ${queueItem.id.replace('workflow:', '')}...`;
+    case 'env-vars':
+      return 'Finalizing environment variables...';
+  }
+}
+
+function getQueueSuccessMessage(
+  queueItem: WizardWorkflowQueueItem,
+  config: FrameworkConfig,
+): string {
+  switch (queueItem.kind) {
+    case 'bootstrap':
+      return 'Integration prepared';
+    case 'workflow':
+      return `Step ${queueItem.id.replace('workflow:', '')} complete`;
+    case 'env-vars':
+      return config.ui.successMessage;
+  }
+}
+
+export function extractInstalledSkillId(outputText: string): string | null {
+  const match = outputText.match(
+    new RegExp(
+      `${WIZARD_SKILL_ID_SIGNAL.replace(
+        /[.*+?^${}()|[\]\\]/g,
+        '\\$&',
+      )}\\s+([A-Za-z0-9._-]+)`,
+    ),
+  );
+  return match?.[1] ?? null;
 }
