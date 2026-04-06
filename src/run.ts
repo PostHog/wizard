@@ -31,6 +31,7 @@ type Args = {
   localMcp?: boolean;
   ci?: boolean;
   apiKey?: string;
+  email?: string;
   projectId?: string;
   menu?: boolean;
   benchmark?: boolean;
@@ -68,6 +69,7 @@ export async function runWizard(argv: Args, session?: WizardSession) {
       signup: finalArgs.signup,
       localMcp: finalArgs.localMcp,
       apiKey: finalArgs.apiKey,
+      email: finalArgs.email,
       menu: finalArgs.menu,
       integration: finalArgs.integration,
       benchmark: finalArgs.benchmark,

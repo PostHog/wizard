@@ -193,6 +193,7 @@ export async function runAgentWizard(
       signup: session.signup,
       ci: session.ci,
       apiKey: session.apiKey,
+      email: session.email,
       projectId: session.projectId,
     });
 

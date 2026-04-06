@@ -87,6 +87,11 @@ yargs(hideBin(process.argv))
         'PostHog project ID to use (optional; when not set, uses default from API key or OAuth)\nenv: POSTHOG_WIZARD_PROJECT_ID',
       type: 'string',
     },
+    email: {
+      describe:
+        'Email address for account creation (used with --signup)\nenv: POSTHOG_WIZARD_EMAIL',
+      type: 'string',
+    },
   })
   .command(
     ['$0'],

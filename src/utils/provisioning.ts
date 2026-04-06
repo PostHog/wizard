@@ -123,6 +123,7 @@ export async function provisionNewAccount(
         'API-Version': API_VERSION,
         'User-Agent': WIZARD_USER_AGENT,
       },
+      timeout: 30_000,
     },
   );
 
@@ -164,6 +165,7 @@ export async function provisionNewAccount(
         'API-Version': API_VERSION,
         'User-Agent': WIZARD_USER_AGENT,
       },
+      timeout: 30_000,
     },
   );
 

@@ -320,7 +320,9 @@ export function isUsingTypeScript({
  * Get project data for the wizard via OAuth or CI API key.
  */
 export async function getOrAskForProjectData(
-  _options: Pick<WizardOptions, 'signup' | 'ci' | 'apiKey' | 'projectId'>,
+  _options: Pick<WizardOptions, 'signup' | 'ci' | 'apiKey' | 'projectId'> & {
+    email?: string;
+  },
 ): Promise<{
   host: string;
   projectApiKey: string;
@@ -358,6 +360,7 @@ export async function getOrAskForProjectData(
     await traceStep('login', () =>
       askForWizardLogin({
         signup: _options.signup,
+        email: _options.email,
       }),
     );
 
@@ -417,9 +420,10 @@ async function fetchProjectDataById(
 
 async function askForWizardLogin(options: {
   signup: boolean;
+  email?: string;
 }): Promise<ProjectData & { cloudRegion: CloudRegion }> {
   if (options.signup) {
-    return askForProvisioningSignup();
+    return askForProvisioningSignup(options.email);
   }
 
   const tokenResponse = await performOAuthFlow({
@@ -476,25 +480,13 @@ async function askForWizardLogin(options: {
   return data;
 }
 
-async function askForProvisioningSignup(): Promise<
-  ProjectData & { cloudRegion: CloudRegion }
-> {
-  const readline = await import('node:readline/promises');
-  const rl = readline.createInterface({
-    input: process.stdin,
-    output: process.stdout,
-  });
-
-  let email: string;
-  try {
-    email = await rl.question('Email address: ');
-    email = email.trim();
-  } finally {
-    rl.close();
-  }
-
+async function askForProvisioningSignup(
+  email?: string,
+): Promise<ProjectData & { cloudRegion: CloudRegion }> {
   if (!email || !email.includes('@')) {
-    getUI().log.error('A valid email address is required.');
+    getUI().log.error(
+      'Email is required for signup. Use --email your@email.com with --signup.',
+    );
     await abort();
     throw new Error('unreachable');
   }
@@ -518,7 +510,7 @@ async function askForProvisioningSignup(): Promise<
       projectApiKey: result.projectApiKey,
       host,
       distinctId: email,
-      projectId: Number(result.projectId),
+      projectId: parseInt(result.projectId, 10),
       cloudRegion,
     };
   } catch (error) {
