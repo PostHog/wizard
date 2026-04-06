@@ -88,6 +88,7 @@
     "rimraf": "^3.0.2",
     "ts-jest": "^29.1.0",
     "ts-node": "^10.9.1",
+    "tsc-alias": "^1.8.16",
     "tsx": "^4.20.3",
     "typescript": "^5.0.4"
   },
@@ -100,7 +101,7 @@
     "clean": "rm -rf ./dist",
     "prebuild": "pnpm clean && node scripts/generate-version.js",
     "build:watch": "pnpm tsc -w",
-    "build": "pnpm tsc",
+    "build": "pnpm tsc && tsc-alias",
     "postbuild": "chmod +x ./dist/bin.js && cp -r scripts/** dist && cp -r src/utils/rules dist/src/utils && cp src/ui/tui/package.json dist/src/ui/tui/package.json && pnpm test:smoke",
     "test:smoke": "node -e \"require('./dist/bin.js')\" 2>&1 | head -5 | grep -q 'PostHog Wizard' || (echo 'Smoke test failed: compiled binary crashed on load' && exit 1)",
     "lint": "pnpm lint:prettier && pnpm lint:eslint",
@@ -150,7 +151,11 @@
     ],
     "moduleNameMapper": {
       "^@anthropic-ai/claude-agent-sdk$": "<rootDir>/__mocks__/@anthropic-ai/claude-agent-sdk.ts",
-      "^(\\.{1,2}/.*)\\.js$": "$1"
+      "^(\\.{1,2}/.*)\\.js$": "$1",
+      "^@lib/(.*)$": "<rootDir>/src/lib/$1",
+      "^@utils/(.*)$": "<rootDir>/src/utils/$1",
+      "^@ui/(.*)$": "<rootDir>/src/ui/$1",
+      "^@tui/(.*)$": "<rootDir>/src/ui/tui/$1"
     }
   },
   "lint-staged": {

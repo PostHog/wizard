@@ -11,7 +11,7 @@
  */
 
 import { atom, map } from 'nanostores';
-import { TaskStatus } from '../wizard-ui.js';
+import { TaskStatus } from '@ui/wizard-ui.js';
 import {
   type WizardSession,
   type OutroData,
@@ -20,21 +20,21 @@ import {
   McpOutcome,
   RunPhase,
   buildSession,
-} from '../../lib/wizard-session.js';
-import type { SettingsConflict } from '../../lib/agent-interface.js';
+} from '@lib/wizard-session.js';
+import type { SettingsConflict } from '@lib/agent-interface.js';
 import {
   WizardRouter,
   type ScreenName,
   Screen,
   Overlay,
   Flow,
-} from './router.js';
-import { analytics, sessionProperties } from '../../utils/analytics.js';
+} from '@tui/router.js';
+import { analytics, sessionProperties } from '@utils/analytics.js';
 import {
   evaluateWizardReadiness,
   WizardReadiness,
-} from '../../lib/health-checks/readiness.js';
-import type { WizardWorkflowQueue } from '../../lib/workflow-queue.js';
+} from '@lib/health-checks/readiness.js';
+import type { WizardWorkflowQueue } from '@lib/workflow-queue.js';
 
 export { TaskStatus, Screen, Overlay, Flow, RunPhase, McpOutcome };
 export type { ScreenName, OutroData, WizardSession };

@@ -4,9 +4,9 @@
  * No prompts, no TUI, no interactivity. Just console output.
  */
 
-import { TaskStatus, type WizardUI, type SpinnerHandle } from './wizard-ui';
-import type { SettingsConflict } from '../lib/agent-interface';
-import type { WizardWorkflowQueue } from '../lib/workflow-queue';
+import { TaskStatus, type WizardUI, type SpinnerHandle } from '@ui/wizard-ui';
+import type { SettingsConflict } from '@lib/agent-interface';
+import type { WizardWorkflowQueue } from '@lib/workflow-queue';
 
 export class LoggingUI implements WizardUI {
   intro(message: string): void {

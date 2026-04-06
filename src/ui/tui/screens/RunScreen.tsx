@@ -11,7 +11,7 @@
 
 import { useSyncExternalStore } from 'react';
 import { Box } from 'ink';
-import type { WizardStore } from '../store.js';
+import type { WizardStore } from '@tui/store.js';
 import {
   TabContainer,
   SplitView,
@@ -19,13 +19,13 @@ import {
   LogViewer,
   EventPlanViewer,
   HNViewer,
-} from '../primitives/index.js';
-import type { ProgressItem } from '../primitives/index.js';
-import { TaskStatus } from '../../wizard-ui.js';
-import { ADDITIONAL_FEATURE_LABELS } from '../../../lib/wizard-session.js';
-import { LearnCard } from '../components/LearnCard.js';
-import { TipsCard } from '../components/TipsCard.js';
-import { useStdoutDimensions } from '../hooks/useStdoutDimensions.js';
+} from '@tui/primitives/index.js';
+import type { ProgressItem } from '@tui/primitives/index.js';
+import { TaskStatus } from '@ui/wizard-ui.js';
+import { ADDITIONAL_FEATURE_LABELS } from '@lib/wizard-session.js';
+import { LearnCard } from '@tui/components/LearnCard.js';
+import { TipsCard } from '@tui/components/TipsCard.js';
+import { useStdoutDimensions } from '@tui/hooks/useStdoutDimensions.js';
 
 const LOG_FILE = '/tmp/posthog-wizard.log';
 

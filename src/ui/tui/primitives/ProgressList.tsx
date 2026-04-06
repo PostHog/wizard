@@ -5,9 +5,9 @@
 
 import { Box, Text } from 'ink';
 import { Spinner } from '@inkjs/ui';
-import { Colors, Icons } from '../styles.js';
+import { Colors, Icons } from '@tui/styles.js';
 import { LoadingBox } from './LoadingBox.js';
-import { TaskStatus } from '../../wizard-ui.js';
+import { TaskStatus } from '@ui/wizard-ui.js';
 
 export interface ProgressItem {
   label: string;

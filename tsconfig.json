@@ -8,7 +8,14 @@
     "typeRoots": ["./node_modules/@types", "./types"],
     "declaration": true,
     "resolveJsonModule": true,
-    "outDir": "dist"
+    "outDir": "dist",
+    "baseUrl": ".",
+    "paths": {
+      "@lib/*": ["./src/lib/*"],
+      "@utils/*": ["./src/utils/*"],
+      "@ui/*": ["./src/ui/*"],
+      "@tui/*": ["./src/ui/tui/*"]
+    }
   },
   "include": [
     "__tests__",
