@@ -1,7 +1,15 @@
 import fg from 'fast-glob';
-import fs from 'fs';
-import path from 'path';
 import { logToFile } from '../utils/debug';
+import { tryGetPackageJson } from '../utils/setup-utils';
+
+const CLOUDFLARE_PACKAGES = [
+  '@react-router/cloudflare',
+  '@astrojs/cloudflare',
+  '@sveltejs/adapter-cloudflare',
+  '@sveltejs/adapter-cloudflare-workers',
+  '@cloudflare/workers-types',
+  'wrangler',
+];
 
 /**
  * Detect whether the project targets Cloudflare Workers.
@@ -27,35 +35,25 @@ export async function detectCloudflareTarget(
   }
 
   // Check for Cloudflare adapter/platform packages in deps
-  try {
-    const packageJsonPath = path.join(installDir, 'package.json');
-    const content = fs.readFileSync(packageJsonPath, 'utf-8');
-    const packageJson = JSON.parse(content);
-    const allDeps = {
-      ...packageJson.dependencies,
-      ...packageJson.devDependencies,
-    };
+  const packageJson = await tryGetPackageJson({ installDir });
+  if (!packageJson) return false;
 
-    const cloudflarePackages = Object.keys(allDeps).filter(
-      (dep) =>
-        dep === '@react-router/cloudflare' ||
-        dep === '@astrojs/cloudflare' ||
-        dep === '@sveltejs/adapter-cloudflare' ||
-        dep === '@sveltejs/adapter-cloudflare-workers' ||
-        dep === '@cloudflare/workers-types' ||
-        dep === 'wrangler',
+  const allDeps = {
+    ...packageJson.dependencies,
+    ...packageJson.devDependencies,
+  };
+
+  const cloudflarePackages = Object.keys(allDeps).filter((dep) =>
+    CLOUDFLARE_PACKAGES.includes(dep),
+  );
+
+  if (cloudflarePackages.length > 0) {
+    logToFile(
+      `[cloudflare-detection] detected via packages: ${cloudflarePackages.join(
+        ', ',
+      )}`,
     );
-
-    if (cloudflarePackages.length > 0) {
-      logToFile(
-        `[cloudflare-detection] detected via packages: ${cloudflarePackages.join(
-          ', ',
-        )}`,
-      );
-      return true;
-    }
-  } catch {
-    // package.json not found or invalid
+    return true;
   }
 
   return false;
