@@ -39,6 +39,10 @@ import {
   registerCleanup,
 } from '../utils/wizard-abort';
 import { formatScanReport, writeScanReport } from './yara-hooks';
+import {
+  detectCloudflareTarget,
+  fetchCloudflareReference,
+} from './cloudflare-detection';
 
 /**
  * Build a WizardOptions bag from a WizardSession (for code that still expects WizardOptions).
@@ -210,6 +214,15 @@ export async function runAgentWizard(
     analytics.setTag(key, value);
   });
 
+  // Detect Cloudflare Workers target and fetch runtime reference if needed
+  const isCloudflare = await detectCloudflareTarget(session.installDir);
+  let cloudflareReference: string | null = null;
+  if (isCloudflare) {
+    logToFile('[agent-runner] Cloudflare Workers target detected');
+    analytics.setTag('cloudflare', 'true');
+    cloudflareReference = await fetchCloudflareReference(skillsBaseUrl);
+  }
+
   const integrationPrompt = buildIntegrationPrompt(
     config,
     {
@@ -220,6 +233,7 @@ export async function runAgentWizard(
       projectId,
     },
     frameworkContext,
+    cloudflareReference,
   );
 
   // Initialize and run agent
@@ -407,6 +421,7 @@ function buildIntegrationPrompt(
     projectId: number;
   },
   frameworkContext: Record<string, unknown>,
+  cloudflareReference?: string | null,
 ): string {
   const additionalLines = config.prompts.getAdditionalContextLines
     ? config.prompts.getAdditionalContextLines(frameworkContext)
@@ -416,6 +431,10 @@ function buildIntegrationPrompt(
     additionalLines.length > 0
       ? '\n' + additionalLines.map((line) => `- ${line}`).join('\n')
       : '';
+
+  const runtimeOverrides = cloudflareReference
+    ? `\n\n---\n\n${cloudflareReference}`
+    : '';
 
   return `You have access to the PostHog MCP server which provides skills to integrate PostHog into this ${
     config.metadata.name
@@ -459,7 +478,7 @@ STEP 5: Set up environment variables for PostHog using the wizard-tools MCP serv
    - Reference these environment variables in the code files you create instead of hardcoding the public token and host.
 
 Important: Use the detect_package_manager tool (from the wizard-tools MCP server) to determine which package manager the project uses. Do not manually search for lockfiles or config files. Always install packages as a background task. Don't await completion; proceed with other work immediately after starting the installation. You must read a file immediately before attempting to write it, even if you have previously read it; failure to do so will cause a tool failure.
-
+${runtimeOverrides}
 
 `;
 }
