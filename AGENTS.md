@@ -1,57 +1,36 @@
-# PostHog Wizard Development Guide
-
-## Codebase Structure
-
-- Entry point: `bin.ts` (CLI arg parsing, Node version check, UI selection)
-- Core runner: `src/run.ts` (wizard orchestration)
-- Frameworks: `src/frameworks/<name>/` -- each exports a `FrameworkConfig` (see `src/lib/framework-config.ts`)
-- Steps: `src/steps/` -- shared post-install steps (env vars, MCP server setup, prettier)
-- UI layer: `src/ui/` -- Ink-based TUI (`src/ui/tui/`) and logging fallback (`src/ui/logging-ui.ts`)
-- Agent runner: `src/lib/agent-runner.ts`, `src/lib/wizard-session.ts` -- Claude Agent SDK orchestration
-- Constants: `src/lib/constants.ts` -- `Integration` enum, framework detection order
-- Registry: `src/lib/registry.ts` -- maps integrations to framework configs
-- Tests: colocated in `src/**/__tests__/` directories
+# AGENTS.md
 
 ## Commands
 
-- Build: `pnpm build` (runs `tsc`, copies scripts/rules/package.json, runs smoke test)
-- Test: `pnpm test` (builds first, then runs Jest)
-- Test watch: `pnpm test:watch`
-- Lint: `pnpm lint` (Prettier + ESLint)
-- Fix: `pnpm fix` (auto-fix lint issues)
-- Dev: `pnpm try` (runs `tsx bin.ts` directly without building)
-- E2E: `pnpm test:e2e` (builds, then runs `e2e-tests/run.sh`)
-- Smoke test: `pnpm test:smoke` (verifies compiled binary loads without crashing)
+- **Build**: `pnpm build` (tsc + copies assets + smoke test)
+- **Test**: `pnpm test` (builds first, then Jest)
+- **Single test**: `pnpm test:watch -- --testPathPattern=<pattern>`
+- **Lint**: `pnpm lint` (Prettier + ESLint)
+- **Fix**: `pnpm fix` (auto-fix lint issues)
+- **Dev**: `pnpm try --install-dir=<path>` (run without building via tsx)
+- **E2E**: `pnpm test:e2e`
 
-## Commits and Pull Requests
+## Architecture
 
-Use [conventional commits](https://www.conventionalcommits.org/en/v1.0.0/). PR titles are validated by CI.
+The PostHog wizard is a CLI tool (`npx @posthog/wizard`) that uses AI agents to add PostHog to user projects.
 
-Prefixes: `feat`, `fix`, `docs`, `test`, `ci`, `refactor`, `perf`, `chore`, `revert`
+**Core flow**: `bin.ts` (CLI entry, arg parsing) -> `src/run.ts` (orchestration) -> detects framework via `src/lib/registry.ts` -> runs framework-specific agent from `src/frameworks/<name>/`
 
-Keep the first line under 50 characters, subject only, no body.
+**Key abstractions**:
+- `FrameworkConfig` (`src/lib/framework-config.ts`) -- interface every framework implements (detection, prompts, env config, UI)
+- `Integration` enum (`src/lib/constants.ts`) -- detection order matters: frameworks before language fallbacks
+- `WizardSession` (`src/lib/wizard-session.ts`) -- session state threaded through the agent run
+- Agent runner (`src/lib/agent-runner.ts`) -- LLM agent orchestration
 
-## Code Style
+**UI layer**: Ink-based TUI (`src/ui/tui/`) with a logging fallback (`src/ui/logging-ui.ts`) for non-interactive environments.
 
-- TypeScript required, no `any` types in production code
-- Use Zod for runtime validation of external data (API responses, file contents)
-- Tests use Jest with `ts-jest`, colocated in `__tests__/` directories
-- Naming: camelCase for variables/functions, PascalCase for types/classes
-- Imports: use `.js` extension for relative imports (Node16 module resolution)
+**Steps** (`src/steps/`) -- shared post-install operations (env vars, MCP server setup, prettier formatting).
 
-## Adding a New Framework
+**Health checks** (`src/lib/health-checks/`) -- `evaluateWizardReadiness()` checks external service status before running.
 
-1. Create `src/frameworks/<name>/` with a file exporting a `FrameworkConfig`
-2. Add the integration to the `Integration` enum in `src/lib/constants.ts` (detection order matters: frameworks before language fallbacks)
-3. Register it in `src/lib/registry.ts`
-4. Add tests in `src/frameworks/<name>/__tests__/`
+## Conventions
 
-See an existing framework like `src/frameworks/nextjs/` for the pattern.
-
-## CI
-
-- Every workflow job must declare `timeout-minutes`
-- Build & test runs on Node 20.20.0, 22.22.0, and 24
-- PRs trigger: build, lint, unit tests, conventional commit validation
-- Main branch: build, publish (if version bumped), smoke test, release-please
-- `/wizard-ci <app>` PR comment triggers integration tests against [wizard-workbench](https://github.com/PostHog/wizard-workbench)
+- Conventional commits, PR titles validated by CI
+- `.js` extension required for relative imports (Node16 module resolution)
+- Tests colocated in `src/**/__tests__/` using Jest with ts-jest
+- Every CI workflow job must declare `timeout-minutes`
