@@ -154,12 +154,13 @@
     }
   },
   "lint-staged": {
+    ".claude/settings.json": "sh -c 'printf \"\\n\\033[31mDo not commit .claude/settings.json — use .claude/settings.local.json (gitignored).\\nUnstage with: git restore --staged .claude/settings.json\\033[0m\\n\\n\" >&2 && exit 1'",
     "*.{js,ts,tsx,jsx}": "pnpm fix"
   },
   "author": "PostHog",
   "license": "MIT",
   "volta": {
-    "node": "20.20.0",
+    "node": "24.14.1",
     "pnpm": "10.23.0"
   }
 }
