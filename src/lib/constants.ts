@@ -57,6 +57,7 @@ export const DEFAULT_HOST_URL = IS_DEV
   ? 'http://localhost:8010'
   : 'https://us.i.posthog.com';
 export const ISSUES_URL = 'https://github.com/posthog/wizard/issues';
+export const CONTEXT_MILL_URL = 'https://github.com/PostHog/context-mill';
 
 // ── Analytics (internal) ──────────────────────────────────────────────
 
