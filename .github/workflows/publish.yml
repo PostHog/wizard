@@ -14,6 +14,7 @@ jobs:
   check-package-version:
     name: Check package version and detect an update
     runs-on: ubuntu-24.04
+    timeout-minutes: 5
     outputs:
       committed-version: ${{ steps.check-package-version.outputs.committed-version }}
       published-version: ${{ steps.check-package-version.outputs.published-version }}
@@ -29,6 +30,7 @@ jobs:
   release:
     name: Publish release if new version
     runs-on: ubuntu-24.04
+    timeout-minutes: 10
     needs: check-package-version
     if: needs.check-package-version.outputs.is-new-version == 'true'
     env:
