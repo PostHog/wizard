@@ -24,6 +24,7 @@ jobs:
   post-welcome:
     if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - name: Fetch available apps from wizard-workbench
         id: fetch-apps
@@ -144,6 +145,7 @@ jobs:
       github.event.issue.pull_request &&
       startsWith(github.event.comment.body, '/wizard-ci')
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - name: Generate GitHub App token
         id: app-token

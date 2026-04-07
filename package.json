@@ -108,7 +108,7 @@
     "lint:eslint": "eslint . --cache --format stylish",
     "fix": "pnpm fix:eslint && pnpm fix:prettier",
     "fix:prettier": "prettier --write \"{lib,src,test}/**/*.ts\"",
-    "fix:eslint": "eslint . --format stylish --fix",
+    "fix:eslint": "eslint . --cache --format stylish --fix",
     "test": "pnpm build && jest",
     "test:e2e": "pnpm build && ./e2e-tests/run.sh",
     "test:e2e-record": "export RECORD_FIXTURES=true && pnpm build && ./e2e-tests/run.sh",
@@ -154,12 +154,16 @@
     }
   },
   "lint-staged": {
-    "*.{js,ts,tsx,jsx}": "pnpm fix"
+    ".claude/settings.json": "sh -c 'printf \"\\n\\033[31mDo not commit .claude/settings.json — use .claude/settings.local.json (gitignored).\\nUnstage with: git restore --staged .claude/settings.json\\033[0m\\n\\n\" >&2 && exit 1'",
+    "*.{js,ts,tsx,jsx}": [
+      "eslint --cache --fix",
+      "prettier --write"
+    ]
   },
   "author": "PostHog",
   "license": "MIT",
   "volta": {
-    "node": "20.20.0",
+    "node": "24.14.1",
     "pnpm": "10.23.0"
   }
 }
