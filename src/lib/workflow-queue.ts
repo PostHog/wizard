@@ -100,28 +100,6 @@ export function parseWorkflowStepsFromSkillMd(
 }
 
 /**
- * Build the initial queue from an ordered list of workflow steps.
- * The queue is always: bootstrap → workflow steps → env-vars.
- */
-export function createInitialWizardWorkflowQueue(
-  steps: WorkflowStepSeed[],
-): WizardWorkflowQueue {
-  const items: WizardWorkflowQueueItem[] = [
-    { id: 'bootstrap', kind: 'bootstrap', label: 'Preparing integration' },
-    ...steps.map(
-      (step): WizardWorkflowQueueItem => ({
-        id: `workflow:${step.stepId}`,
-        kind: 'workflow',
-        referenceFilename: step.referenceFilename,
-        label: step.title,
-      }),
-    ),
-    { id: 'env-vars', kind: 'env-vars', label: 'Environment variables' },
-  ];
-  return new WizardWorkflowQueue(items);
-}
-
-/**
  * Build a queue with only workflow steps + env-vars (no bootstrap).
  * Used after bootstrap has already run and SKILL.md has been parsed.
  */

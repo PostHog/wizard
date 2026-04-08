@@ -218,28 +218,22 @@ The workflow is converted to `FlowEntry[]` via `workflowToFlowEntries()` and fed
 
 ### 3. Agent runner (`src/lib/agent-runner.ts`)
 
-Once gates resolve, `runAgentWizard()` runs. This is where the queue takes over:
+Once gates resolve, `runAgentWizard()` runs. It initializes the agent, evaluates feature flags, then forks based on `wizard-queued-workflow`:
 
-**Bootstrap query** — A standalone query tells the agent to load the skill menu, pick and install a skill, read SKILL.md, and emit the installed skill ID via `[WIZARD-SKILL-ID] <id>`. The model does NOT know about the queue — it just prepares the skill.
+**Flag OFF (legacy)** — `runSingleQueryFlow()` in `src/lib/legacy/single-query-runner.ts` sends a single monolithic prompt (from `legacy/integration-prompt.ts`) that does everything in one agent conversation. This is the original behavior.
 
-**SKILL.md parsing** — After bootstrap, the runner reads `.claude/skills/<id>/SKILL.md` from disk and parses the `workflow` array from its YAML frontmatter using `parseWorkflowStepsFromSkillMd()`. This produces a `WorkflowStepSeed[]` with step ids, reference filenames, and display titles.
+**Flag ON (queued workflow)** — `runQueuedWorkflow()` in `src/lib/queued-workflow-runner.ts`:
 
-**Queue seeding** — `createPostBootstrapQueue(steps)` builds a `WizardWorkflowQueue` from the parsed steps plus an `env-vars` step at the end. The queue is set on the store via `getUI().setWorkQueue(queue)` so the TUI can display it and dynamically enqueue new work.
+1. **Bootstrap query** — installs the skill and emits `[WIZARD-SKILL-ID] <id>`
+2. **SKILL.md parsing** — reads `workflow[]` from YAML frontmatter → `WorkflowStepSeed[]`
+3. **Queue seeding** — `createPostBootstrapQueue(steps)` builds a `WizardWorkflowQueue`
+4. **Execution loop** — pops items, sends per-step prompts, continues the same conversation via `resumeSessionId`
 
-**Execution loop** — The runner pops items from the queue one at a time:
-```
-while (queue.length > 0) {
-  dequeue → setCurrentQueueItem → build prompt → runAgent → completeQueueItem
-}
-```
-
-Each `runAgent` call continues the same conversation via `resumeSessionId`. The model sees one prompt per step — either "read and follow this reference file" (for workflow items) or "set up environment variables" (for env-vars). The stop hook only fires the remark/feature-queue on the last item.
+The skill format (v1 vs v2) is also controlled by the flag. v1 skills have continuation links in reference bodies. v2 skills have `workflow[]` frontmatter and no continuation links.
 
 ### 4. TUI progress tracking
 
-During the run, the RunScreen displays a stage-grouped progress list. Stage headers come from queue item labels (which come from SKILL.md frontmatter titles). Nested tasks come from the agent's `TodoWrite` tool calls. When the runner advances to a new queue item, `setCurrentQueueItem()` fires, the store clears the task list, and the previous item moves to the completed list.
-
-The queue is reactive on the store — `enqueue()` and `dequeue()` trigger `emitChange()` which re-renders the UI immediately.
+The RunScreen shows a flat task list from `store.tasks`, populated by the agent's `TodoWrite` tool calls. This is identical in both legacy and queued modes. The queue drives agent execution behind the scenes but doesn't affect the task display.
 
 ### 5. Post-run (`agent-runner.ts` after loop)
 
@@ -255,27 +249,26 @@ bin.ts
   │     │
   │     └─ Workflow (WorkflowStep[])
   │           │
-  │           └─ workflowToFlowEntries() → FlowEntry[] → Router (screen resolution)
+  │           └─ workflowToFlowEntries() → FlowEntry[] → Router
   │
   ├─ await setupComplete (gate)
   ├─ await healthGateComplete (gate)
   │
   └─ runAgentWizard()
         │
-        ├─ Bootstrap query → skill installed → [WIZARD-SKILL-ID]
+        ├─ initializeAgent (skillFormat: v1 or v2 based on flag)
         │
-        ├─ Read SKILL.md → parseWorkflowStepsFromSkillMd() → WorkflowStepSeed[]
-        │
-        ├─ createPostBootstrapQueue(steps) → WizardWorkflowQueue
-        │     │
-        │     └─ setWorkQueue(queue) → store (reactive, UI can enqueue)
-        │
-        └─ while (queue.length > 0)
+        └─ if wizard-queued-workflow?
               │
-              ├─ dequeue → setCurrentQueueItem
-              ├─ buildWorkflowStepPrompt / buildEnvVarPrompt
-              ├─ runAgent (continued conversation)
-              └─ completeQueueItem
+              ├─ YES → runQueuedWorkflow() [queued-workflow-runner.ts]
+              │    ├─ Bootstrap → [WIZARD-SKILL-ID]
+              │    ├─ Parse SKILL.md frontmatter → WorkflowStepSeed[]
+              │    ├─ createPostBootstrapQueue → WizardWorkflowQueue
+              │    └─ while (queue.length > 0)
+              │         dequeue → prompt → runAgent (continued) → complete
+              │
+              └─ NO → runSingleQueryFlow() [legacy/single-query-runner.ts]
+                   └─ buildIntegrationPrompt → single runAgent call
 ```
 
 # Workflow queue
@@ -289,18 +282,20 @@ The skill generator in `context-mill` writes a `workflow` array into each integr
 name: integration-nextjs-app-router
 workflow:
   - step_id: 1.0-begin
-    reference: basic-integration-1.0-begin.md
-    title: PostHog Setup - Begin
+    reference: basic-integration-v2-1.0-begin.md
+    title: Analyze project and plan events
     next:
-      - basic-integration-1.1-edit.md
+      - basic-integration-v2-1.1-edit.md
   - step_id: 1.1-edit
-    reference: basic-integration-1.1-edit.md
-    title: PostHog Setup - Edit
+    reference: basic-integration-v2-1.1-edit.md
+    title: Implement PostHog
     next:
-      - basic-integration-1.2-revise.md
+      - basic-integration-v2-1.2-revise.md
   # ...
 ---
 ```
+
+Only v2 skills (served from `basic-integration-v2/`) have this frontmatter. v1 skills use continuation links in the reference file bodies instead.
 
 - `step_id` — unique identifier for the step
 - `reference` — filename in the skill's `references/` directory
@@ -342,19 +337,17 @@ The queue is reactive — mutations trigger UI re-renders. Items enqueued while 
 
 ## TUI progress display
 
-The RunScreen shows a stage-grouped progress list:
+The RunScreen shows a flat task list from the agent's `TodoWrite` calls — identical in both legacy and queued modes:
 
 ```
-☑ PostHog Setup - Begin
-▶ PostHog Setup - Edit
-  ☑ Add PostHog to auth.ts
-  ▶ Add PostHog to checkout.ts
-○ PostHog Setup - Revise
-○ PostHog Setup - Conclusion
-○ Environment variables
+☑ Analyze project structure and plan events
+▶ Installing posthog-node and implementing PostHog
+○ Review and fix errors
+○ Set up environment variables
+○ Create PostHog dashboard and wrap up
 ```
 
-Stage headers come from queue item labels. Nested tasks come from the agent's `TodoWrite` calls. Tasks reset when the runner advances to a new stage.
+The queue drives execution behind the scenes but the task list is entirely agent-controlled.
 
 ## Defining a workflow
 
