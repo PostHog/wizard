@@ -214,6 +214,7 @@ yargs(hideBin(process.argv))
               signup: options.signup as boolean | undefined,
               localMcp: options.localMcp as boolean | undefined,
               apiKey: options.apiKey as string | undefined,
+              email: options.email,
               menu: options.menu as boolean | undefined,
               integration: options.integration as Parameters<
                 typeof buildSession
