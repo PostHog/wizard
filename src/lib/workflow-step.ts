@@ -6,7 +6,6 @@ import type { WizardSession } from './wizard-session';
  * It can own:
  * - a screen in the TUI (optional — some steps are headless)
  * - agent work via a workflow reference (optional — some steps are UI-only)
- * - local state needs (selectors it depends on)
  * - completion and visibility predicates
  *
  * The current PostHog integration flow is one ordered list of steps.
@@ -15,6 +14,9 @@ import type { WizardSession } from './wizard-session';
 export interface WorkflowStep {
   /** Unique identifier for this step */
   id: string;
+
+  /** Human-readable label for progress display */
+  label: string;
 
   /**
    * TUI screen this step owns, if any.
@@ -35,32 +37,33 @@ export interface WorkflowStep {
   isComplete?: (session: WizardSession) => boolean;
 
   /**
-   * Workflow reference filename this step executes, if any.
-   * When set, the runner issues a continued query for this reference.
-   * e.g. "basic-integration-1.0-begin.md"
-   */
-  workflowReference?: string;
-
-  /**
    * Whether this step blocks downstream code via a gate promise.
    * e.g. "setup" and "health-check" gate bin.ts before runWizard().
    */
   gate?: 'setup' | 'health';
-
-  /**
-   * Hook called when the step becomes active.
-   */
-  onEnter?: () => void;
-
-  /**
-   * Hook called when the step completes.
-   */
-  onComplete?: () => void;
 }
 
 /**
  * An ordered list of workflow steps that defines a wizard flow.
- * The first flow is the current PostHog integration.
- * Future flows register different step lists.
  */
 export type Workflow = WorkflowStep[];
+
+/**
+ * Convert a Workflow into the FlowEntry shape the router expects.
+ * This is the bridge between the new WorkflowStep model and the
+ * existing router — lets us adopt WorkflowSteps without rewriting
+ * the router.
+ */
+export function workflowToFlowEntries(workflow: Workflow): Array<{
+  screen: string;
+  show?: (session: WizardSession) => boolean;
+  isComplete?: (session: WizardSession) => boolean;
+}> {
+  return workflow
+    .filter((step) => step.screen != null)
+    .map((step) => ({
+      screen: step.screen!,
+      show: step.show,
+      isComplete: step.isComplete,
+    }));
+}
