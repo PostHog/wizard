@@ -10,15 +10,11 @@
 import * as crypto from 'node:crypto';
 import axios from 'axios';
 import { z } from 'zod';
-import {
-  IS_DEV,
-  POSTHOG_DEV_CLIENT_ID,
-  WIZARD_USER_AGENT,
-} from '../lib/constants';
+import { IS_DEV, WIZARD_USER_AGENT } from '../lib/constants';
 import { logToFile } from './debug';
 import { analytics } from './analytics';
 
-const WIZARD_CLIENT_ID = IS_DEV ? POSTHOG_DEV_CLIENT_ID : 'posthog-wizard';
+const WIZARD_CLIENT_ID = 'posthog-wizard';
 const API_VERSION = '0.1d';
 
 const PROVISIONING_BASE_URL = IS_DEV
