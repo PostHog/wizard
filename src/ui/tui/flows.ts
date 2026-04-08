@@ -9,8 +9,9 @@
  * to resolve which screen to show.
  */
 
-import { type WizardSession, RunPhase } from '../../lib/wizard-session.js';
-import { WizardReadiness } from '../../lib/health-checks/readiness.js';
+import type { WizardSession } from '../../lib/wizard-session.js';
+import { workflowToFlowEntries } from '../../lib/workflow-step.js';
+import { POSTHOG_INTEGRATION_WORKFLOW } from '../../lib/workflows/posthog-integration.js';
 
 // ── Screen + Flow enums ──────────────────────────────────────────────
 
@@ -47,57 +48,15 @@ export interface FlowEntry {
 }
 
 /**
- * Check if the SetupScreen is needed (unresolved framework questions).
+ * All flow pipelines.
+ *
+ * The Wizard flow is derived from the PostHog integration workflow definition.
+ * MCP add/remove flows are standalone since they don't go through the agent runner.
  */
-function needsSetup(session: WizardSession): boolean {
-  const config = session.frameworkConfig;
-  if (!config?.metadata.setup?.questions) return false;
-
-  return config.metadata.setup.questions.some(
-    (q: { key: string }) => !(q.key in session.frameworkContext),
-  );
-}
-
-/** All flow pipelines. Add new screens by appending entries. */
 export const FLOWS: Record<Flow, FlowEntry[]> = {
-  [Flow.Wizard]: [
-    {
-      screen: Screen.Intro,
-      isComplete: (s) => s.setupConfirmed,
-    },
-    {
-      screen: Screen.HealthCheck,
-      isComplete: (s) => {
-        if (!s.readinessResult) return false;
-        if (s.readinessResult.decision === WizardReadiness.No)
-          return s.outageDismissed;
-        return true;
-      },
-    },
-    {
-      screen: Screen.Setup,
-      show: needsSetup,
-      isComplete: (s) => !needsSetup(s),
-    },
-    {
-      screen: Screen.Auth,
-      isComplete: (s) => s.credentials !== null,
-    },
-    {
-      screen: Screen.Run,
-      isComplete: (s) =>
-        s.runPhase === RunPhase.Completed || s.runPhase === RunPhase.Error,
-    },
-    {
-      screen: Screen.Mcp,
-      isComplete: (s) => s.mcpComplete,
-    },
-    {
-      screen: Screen.Outro,
-      isComplete: (s) => s.outroDismissed,
-    },
-    { screen: Screen.Skills },
-  ],
+  [Flow.Wizard]: workflowToFlowEntries(
+    POSTHOG_INTEGRATION_WORKFLOW,
+  ) as FlowEntry[],
 
   [Flow.McpAdd]: [
     {
