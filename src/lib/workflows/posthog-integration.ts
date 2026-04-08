@@ -6,10 +6,10 @@
  * so the existing router continues to work unchanged.
  */
 
-import type { Workflow } from '@lib/workflow-step';
-import type { WizardSession } from '@lib/wizard-session';
-import { RunPhase } from '@lib/wizard-session';
-import { WizardReadiness } from '@lib/health-checks/readiness';
+import type { Workflow } from '../workflow-step.js';
+import type { WizardSession } from '../wizard-session.js';
+import { RunPhase } from '../wizard-session.js';
+import { WizardReadiness } from '../health-checks/readiness.js';
 
 function needsSetup(session: WizardSession): boolean {
   const config = session.frameworkConfig;
