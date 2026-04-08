@@ -75,26 +75,25 @@ export async function fetchSkillMenu(
 
 /**
  * Download and extract a skill.
- * By default installs to `<installDir>/.claude/skills/<id>/`.
- * Pass `skillsRoot` to override the base directory (e.g. `.posthog/skills`).
+ * Installs to `<installDir>/.claude/skills/<id>/` by default, or `<installDir>/<skillsRoot>/<id>/` if specified.
+ * When `useV2` is true, downloads the v2 variant (workflow frontmatter) if available.
  */
 export function downloadSkill(
   skillEntry: SkillEntry,
   installDir: string,
   skillsRoot?: string,
-  format: 'v1' | 'v2' = 'v1',
+  useV2 = false,
 ): { success: boolean; error?: string } {
   const skillDir = skillsRoot
     ? path.join(installDir, skillsRoot, skillEntry.id)
     : path.join(installDir, '.claude', 'skills', skillEntry.id);
   const tmpFile = `/tmp/posthog-skill-${skillEntry.id}.zip`;
+  const url =
+    useV2 && skillEntry.downloadUrlV2
+      ? skillEntry.downloadUrlV2
+      : skillEntry.downloadUrl;
 
   try {
-    const url =
-      format === 'v2' && skillEntry.downloadUrlV2
-        ? skillEntry.downloadUrlV2
-        : skillEntry.downloadUrl;
-
     fs.mkdirSync(skillDir, { recursive: true });
     execFileSync('curl', ['-sL', url, '-o', tmpFile], {
       timeout: 30000,
@@ -108,9 +107,7 @@ export function downloadSkill(
       /* ignore cleanup errors */
     }
 
-    logToFile(
-      `downloadSkill: installed ${skillEntry.id} (${format}) from ${url}`,
-    );
+    logToFile(`downloadSkill: installed ${skillEntry.id} from ${url}`);
     return { success: true };
   } catch (err: any) {
     logToFile(`downloadSkill: error: ${err.message}`);
@@ -132,8 +129,8 @@ export interface WizardToolsOptions {
   /** Base URL for the skills server (e.g. http://localhost:8765 or GitHub releases URL) */
   skillsBaseUrl: string;
 
-  /** Skill format: v1 (continuation links in body) or v2 (workflow frontmatter). Default: v1. */
-  skillFormat?: 'v1' | 'v2';
+  /** When true, download v2 skills (workflow frontmatter) instead of v1 (continuation links). */
+  useV2Skills?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -247,7 +244,7 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
     workingDirectory,
     detectPackageManager,
     skillsBaseUrl,
-    skillFormat = 'v1',
+    useV2Skills = false,
   } = options;
   const sdk = await getSDKModule();
   const { tool, createSdkMcpServer } = sdk;
@@ -471,7 +468,7 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
         skill,
         workingDirectory,
         undefined,
-        skillFormat,
+        useV2Skills,
       );
       if (result.success) {
         return {
