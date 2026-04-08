@@ -41,53 +41,23 @@ export const RunScreen = ({ store }: RunScreenProps) => {
 
   const [columns] = useStdoutDimensions();
 
-  // Build stage-grouped progress items
-  const progressItems: ProgressItem[] = [];
-  const current = store.currentQueueItem;
-  const completed = store.completedQueueItems;
-  const pendingQueue = store.workQueue?.toArray() ?? [];
+  const progressItems: ProgressItem[] = store.tasks.map((t) => ({
+    label: t.label,
+    activeForm: t.activeForm,
+    status: t.status,
+  }));
 
-  // Completed stages
-  for (const item of completed) {
-    progressItems.push({
-      label: item.label,
-      status: TaskStatus.Completed,
-    });
-  }
-
-  // Current stage header + nested agent tasks
-  if (current) {
-    progressItems.push({
-      label: current.label,
-      activeForm: current.label,
-      status: TaskStatus.InProgress,
-    });
-    // Nest agent tasks under current stage
-    for (const t of store.tasks) {
-      progressItems.push({
-        label: t.label,
-        activeForm: t.activeForm,
-        status: t.status,
-        indent: 1,
-      });
-    }
-  }
-
-  // Pending queue items
-  for (const item of pendingQueue) {
-    progressItems.push({
-      label: item.label,
-      status: TaskStatus.Pending,
-    });
-  }
-
-  // Additional features waiting
+  // When all tasks are done but the queue has features, show a transitional item
   const featureQueue = store.session.additionalFeatureQueue;
-  for (const feature of featureQueue) {
-    const nextLabel = ADDITIONAL_FEATURE_LABELS[feature];
+  const allDone =
+    progressItems.length > 0 &&
+    progressItems.every((t) => t.status === TaskStatus.Completed);
+  if (allDone && featureQueue.length > 0) {
+    const nextLabel = ADDITIONAL_FEATURE_LABELS[featureQueue[0]];
     progressItems.push({
       label: `Set up ${nextLabel}`,
-      status: TaskStatus.Pending,
+      activeForm: `Setting up ${nextLabel}...`,
+      status: TaskStatus.InProgress,
     });
   }
 
@@ -99,7 +69,9 @@ export const RunScreen = ({ store }: RunScreenProps) => {
   ) : (
     <LearnCard store={store} onComplete={() => store.setLearnCardComplete()} />
   );
-  const progressList = <ProgressList items={progressItems} title="Tasks" />;
+  const progressList = (
+    <ProgressList items={progressItems} title="Upcoming tasks" />
+  );
 
   // On narrow terminals, drop the learn pane and show only progress
   const statusComponent =

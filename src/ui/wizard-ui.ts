@@ -8,8 +8,8 @@
  * Session-mutating methods trigger reactive screen resolution in the TUI.
  */
 
-import type { SettingsConflict } from '../lib/agent-interface';
-import type { WizardWorkflowQueue } from '../lib/workflow-queue';
+import type { SettingsConflict } from '../lib/agent-interface.js';
+import type { WizardWorkflowQueue } from '../lib/workflow-queue.js';
 
 export enum TaskStatus {
   Pending = 'pending',

@@ -30,7 +30,12 @@ async function getSDKModule(): Promise<any> {
 // Skill types
 // ---------------------------------------------------------------------------
 
-export type SkillEntry = { id: string; name: string; downloadUrl: string };
+export type SkillEntry = {
+  id: string;
+  name: string;
+  downloadUrl: string;
+  downloadUrlV2?: string;
+};
 
 export interface SkillMenu {
   categories: Record<string, SkillEntry[]>;
@@ -70,22 +75,27 @@ export async function fetchSkillMenu(
 
 /**
  * Download and extract a skill.
- * By default installs to `<installDir>/.claude/skills/<id>/`.
- * Pass `skillsRoot` to override the base directory (e.g. `.posthog/skills`).
+ * Installs to `<installDir>/.claude/skills/<id>/` by default, or `<installDir>/<skillsRoot>/<id>/` if specified.
+ * When `useV2` is true, downloads the v2 variant (workflow frontmatter) if available.
  */
 export function downloadSkill(
   skillEntry: SkillEntry,
   installDir: string,
   skillsRoot?: string,
+  useV2 = false,
 ): { success: boolean; error?: string } {
   const skillDir = skillsRoot
     ? path.join(installDir, skillsRoot, skillEntry.id)
     : path.join(installDir, '.claude', 'skills', skillEntry.id);
   const tmpFile = `/tmp/posthog-skill-${skillEntry.id}.zip`;
+  const url =
+    useV2 && skillEntry.downloadUrlV2
+      ? skillEntry.downloadUrlV2
+      : skillEntry.downloadUrl;
 
   try {
     fs.mkdirSync(skillDir, { recursive: true });
-    execFileSync('curl', ['-sL', skillEntry.downloadUrl, '-o', tmpFile], {
+    execFileSync('curl', ['-sL', url, '-o', tmpFile], {
       timeout: 30000,
     });
     execFileSync('unzip', ['-o', tmpFile, '-d', skillDir], {
@@ -97,9 +107,7 @@ export function downloadSkill(
       /* ignore cleanup errors */
     }
 
-    logToFile(
-      `downloadSkill: installed ${skillEntry.id} from ${skillEntry.downloadUrl}`,
-    );
+    logToFile(`downloadSkill: installed ${skillEntry.id} from ${url}`);
     return { success: true };
   } catch (err: any) {
     logToFile(`downloadSkill: error: ${err.message}`);
@@ -120,6 +128,9 @@ export interface WizardToolsOptions {
 
   /** Base URL for the skills server (e.g. http://localhost:8765 or GitHub releases URL) */
   skillsBaseUrl: string;
+
+  /** When true, download v2 skills (workflow frontmatter) instead of v1 (continuation links). */
+  useV2Skills?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -229,7 +240,12 @@ const SERVER_NAME = 'wizard-tools';
  * Must be called asynchronously because the SDK is an ESM module loaded via dynamic import.
  */
 export async function createWizardToolsServer(options: WizardToolsOptions) {
-  const { workingDirectory, detectPackageManager, skillsBaseUrl } = options;
+  const {
+    workingDirectory,
+    detectPackageManager,
+    skillsBaseUrl,
+    useV2Skills = false,
+  } = options;
   const sdk = await getSDKModule();
   const { tool, createSdkMcpServer } = sdk;
 
@@ -448,7 +464,12 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
         };
       }
 
-      const result = downloadSkill(skill, workingDirectory);
+      const result = downloadSkill(
+        skill,
+        workingDirectory,
+        undefined,
+        useV2Skills,
+      );
       if (result.success) {
         return {
           content: [

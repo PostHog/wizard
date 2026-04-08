@@ -1,6 +1,5 @@
 import {
   WizardWorkflowQueue,
-  createInitialWizardWorkflowQueue,
   createPostBootstrapQueue,
   parseWorkflowStepsFromSkillMd,
   type WorkflowStepSeed,
@@ -30,73 +29,7 @@ const BASIC_INTEGRATION_STEPS: WorkflowStepSeed[] = [
 ];
 
 describe('WizardWorkflowQueue', () => {
-  it('seeds a queue from workflow steps in the expected order', () => {
-    const queue = createInitialWizardWorkflowQueue(BASIC_INTEGRATION_STEPS);
-
-    expect(queue.toArray()).toEqual([
-      { id: 'bootstrap', kind: 'bootstrap', label: 'Preparing integration' },
-      {
-        id: 'workflow:1.0-begin',
-        kind: 'workflow',
-        referenceFilename: 'basic-integration-1.0-begin.md',
-        label: 'PostHog Setup - Begin',
-      },
-      {
-        id: 'workflow:1.1-edit',
-        kind: 'workflow',
-        referenceFilename: 'basic-integration-1.1-edit.md',
-        label: 'PostHog Setup - Edit',
-      },
-      {
-        id: 'workflow:1.2-revise',
-        kind: 'workflow',
-        referenceFilename: 'basic-integration-1.2-revise.md',
-        label: 'PostHog Setup - Revise',
-      },
-      {
-        id: 'workflow:1.3-conclude',
-        kind: 'workflow',
-        referenceFilename: 'basic-integration-1.3-conclude.md',
-        label: 'PostHog Setup - Conclusion',
-      },
-      { id: 'env-vars', kind: 'env-vars', label: 'Environment variables' },
-    ]);
-  });
-
-  it('builds a queue from arbitrary steps, not just basic-integration', () => {
-    const customSteps: WorkflowStepSeed[] = [
-      {
-        stepId: 'setup',
-        referenceFilename: 'feature-flags-setup.md',
-        title: 'Setup',
-      },
-      {
-        stepId: 'verify',
-        referenceFilename: 'feature-flags-verify.md',
-        title: 'Verify',
-      },
-    ];
-    const queue = createInitialWizardWorkflowQueue(customSteps);
-
-    expect(queue.toArray()).toEqual([
-      { id: 'bootstrap', kind: 'bootstrap', label: 'Preparing integration' },
-      {
-        id: 'workflow:setup',
-        kind: 'workflow',
-        referenceFilename: 'feature-flags-setup.md',
-        label: 'Setup',
-      },
-      {
-        id: 'workflow:verify',
-        kind: 'workflow',
-        referenceFilename: 'feature-flags-verify.md',
-        label: 'Verify',
-      },
-      { id: 'env-vars', kind: 'env-vars', label: 'Environment variables' },
-    ]);
-  });
-
-  it('createPostBootstrapQueue omits bootstrap', () => {
+  it('createPostBootstrapQueue builds queue without bootstrap', () => {
     const queue = createPostBootstrapQueue(BASIC_INTEGRATION_STEPS);
     const items = queue.toArray();
 

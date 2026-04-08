@@ -23,8 +23,12 @@ interface ProgressListProps {
 }
 
 export const ProgressList = ({ items, title }: ProgressListProps) => {
-  const completed = items.filter((t) => t.status === 'completed').length;
-  const total = items.length;
+  // Only count top-level items (not indented sub-tasks) for progress
+  const topLevel = items.filter((t) => !t.indent);
+  const completed = topLevel.filter(
+    (t) => t.status === TaskStatus.Completed,
+  ).length;
+  const total = topLevel.length;
 
   return (
     <Box flexDirection="column">
@@ -69,7 +73,7 @@ export const ProgressList = ({ items, title }: ProgressListProps) => {
           <Text dimColor>
             {completed < total
               ? `Progress: ${completed}/${total} completed`
-              : 'Cleaning up...'}
+              : 'Thinking about next steps...'}
           </Text>
         </Box>
       )}

@@ -198,212 +198,71 @@ To make your version of a tool usable with a one-line `npx` command:
    your project directory
 3. Now you can run it with `npx yourpackagename`
 
-# Wizard execution flow
-
-## Full lifecycle
-
-When a user runs `npx @posthog/wizard`, here's what happens end-to-end:
-
-### 1. CLI parsing and framework detection (`bin.ts` → `src/run.ts`)
-
-`bin.ts` parses CLI args, checks Node version, and calls `runWizard()` in `src/run.ts`. The run function detects the project framework (Next.js, React, etc.) by inspecting `package.json` and project structure, then loads the matching `FrameworkConfig` from `src/frameworks/`.
-
-### 2. TUI startup and UI flow (`src/ui/tui/start-tui.ts`)
-
-The TUI renders and the user progresses through screens. Screen order is driven by a `Workflow` — an ordered list of `WorkflowStep` objects defined in `src/lib/workflows/posthog-integration.ts`. Each step declares which screen it owns and when that screen is complete.
-
-The workflow is converted to `FlowEntry[]` via `workflowToFlowEntries()` and fed to the router. The router walks the entries, skipping completed/hidden screens, and returns the first incomplete one. This is reactive — every session mutation re-resolves the active screen.
-
-**Gate steps** block downstream code. The `intro` step has `gate: 'setup'` — `bin.ts` awaits `store.setupComplete` before proceeding. The `health-check` step has `gate: 'health'` — `bin.ts` awaits `store.healthGateComplete`.
-
-### 3. Agent runner (`src/lib/agent-runner.ts`)
-
-Once gates resolve, `runAgentWizard()` runs. This is where the queue takes over:
-
-**Bootstrap query** — A standalone query tells the agent to load the skill menu, pick and install a skill, read SKILL.md, and emit the installed skill ID via `[WIZARD-SKILL-ID] <id>`. The model does NOT know about the queue — it just prepares the skill.
-
-**SKILL.md parsing** — After bootstrap, the runner reads `.claude/skills/<id>/SKILL.md` from disk and parses the `workflow` array from its YAML frontmatter using `parseWorkflowStepsFromSkillMd()`. This produces a `WorkflowStepSeed[]` with step ids, reference filenames, and display titles.
-
-**Queue seeding** — `createPostBootstrapQueue(steps)` builds a `WizardWorkflowQueue` from the parsed steps plus an `env-vars` step at the end. The queue is set on the store via `getUI().setWorkQueue(queue)` so the TUI can display it and dynamically enqueue new work.
-
-**Execution loop** — The runner pops items from the queue one at a time:
-```
-while (queue.length > 0) {
-  dequeue → setCurrentQueueItem → build prompt → runAgent → completeQueueItem
-}
-```
-
-Each `runAgent` call continues the same conversation via `resumeSessionId`. The model sees one prompt per step — either "read and follow this reference file" (for workflow items) or "set up environment variables" (for env-vars). The stop hook only fires the remark/feature-queue on the last item.
-
-### 4. TUI progress tracking
-
-During the run, the RunScreen displays a stage-grouped progress list. Stage headers come from queue item labels (which come from SKILL.md frontmatter titles). Nested tasks come from the agent's `TodoWrite` tool calls. When the runner advances to a new queue item, `setCurrentQueueItem()` fires, the store clears the task list, and the previous item moves to the completed list.
-
-The queue is reactive on the store — `enqueue()` and `dequeue()` trigger `emitChange()` which re-renders the UI immediately.
-
-### 5. Post-run (`agent-runner.ts` after loop)
-
-After the queue drains: error handling, env var upload to hosting providers, outro data construction, analytics shutdown.
-
-## Data flow diagram
+# Execution flow
 
 ```
-bin.ts
-  │
-  ├─ Framework detection → FrameworkConfig
-  ├─ TUI startup → WizardStore + Router
-  │     │
-  │     └─ Workflow (WorkflowStep[])
-  │           │
-  │           └─ workflowToFlowEntries() → FlowEntry[] → Router (screen resolution)
-  │
-  ├─ await setupComplete (gate)
-  ├─ await healthGateComplete (gate)
-  │
-  └─ runAgentWizard()
-        │
-        ├─ Bootstrap query → skill installed → [WIZARD-SKILL-ID]
-        │
-        ├─ Read SKILL.md → parseWorkflowStepsFromSkillMd() → WorkflowStepSeed[]
-        │
-        ├─ createPostBootstrapQueue(steps) → WizardWorkflowQueue
-        │     │
-        │     └─ setWorkQueue(queue) → store (reactive, UI can enqueue)
-        │
-        └─ while (queue.length > 0)
-              │
-              ├─ dequeue → setCurrentQueueItem
-              ├─ buildWorkflowStepPrompt / buildEnvVarPrompt
-              ├─ runAgent (continued conversation)
-              └─ completeQueueItem
+bin.ts → detect framework → start TUI → await gates → runAgentWizard()
+                                                            │
+                                                   wizard-queued-workflow flag?
+                                                      │              │
+                                                     ON              OFF
+                                                      │              │
+                                          queued-workflow-runner   legacy/single-query-runner
+                                                      │              │
+                                            bootstrap query      one big prompt
+                                            parse SKILL.md       (does everything)
+                                            queue loop
+                                            per-step prompts
 ```
 
-# Workflow queue
+## 1. CLI + framework detection
 
-## SKILL.md frontmatter format
+`bin.ts` → `src/run.ts` → detects framework → loads `FrameworkConfig`.
 
-The skill generator in `context-mill` writes a `workflow` array into each integration skill's frontmatter:
+## 2. TUI screens
 
-```yaml
----
-name: integration-nextjs-app-router
-workflow:
-  - step_id: 1.0-begin
-    reference: basic-integration-1.0-begin.md
-    title: PostHog Setup - Begin
-    next:
-      - basic-integration-1.1-edit.md
-  - step_id: 1.1-edit
-    reference: basic-integration-1.1-edit.md
-    title: PostHog Setup - Edit
-    next:
-      - basic-integration-1.2-revise.md
-  # ...
----
-```
+Screen flow is a `Workflow` (`WorkflowStep[]`) defined in `src/lib/workflows/posthog-integration.ts`. Converted to `FlowEntry[]` via `workflowToFlowEntries()` for the router. Gate steps (`setup`, `health`) block the agent runner until the user completes them.
 
-- `step_id` — unique identifier for the step
-- `reference` — filename in the skill's `references/` directory
-- `title` — human-readable label shown in the TUI progress list
-- `next` — array of next step references (for future parallelization)
+## 3. Agent runner
 
-## Queue item types
+`agent-runner.ts` initializes the agent, then forks on the `wizard-queued-workflow` feature flag.
 
-```typescript
-type WizardWorkflowQueueItem =
-  | { id: 'bootstrap'; kind: 'bootstrap'; label: string }
-  | { id: string; kind: 'workflow'; referenceFilename: string; label: string }
-  | { id: 'env-vars'; kind: 'env-vars'; label: string };
-```
+**Flag OFF** → `legacy/single-query-runner.ts` — one prompt, one `runAgent` call. Skills downloaded as v1 (continuation links in reference bodies).
 
-## Enqueueing work dynamically
+**Flag ON** → `queued-workflow-runner.ts` — bootstrap installs the skill, SKILL.md frontmatter is parsed into a queue, then each step runs as a continued conversation. Skills downloaded as v2 (workflow metadata in frontmatter, no continuation links).
 
-The queue is exposed to the UI via `store.workQueue`. To add work during a run:
+## 4. Queued workflow detail
 
-```typescript
-// Insert at front of queue (runs next)
-store.workQueue.enqueueNext({
-  id: 'my-task',
-  kind: 'workflow',
-  referenceFilename: 'my-reference.md',
-  label: 'My custom step',
-});
+1. **Bootstrap** — installs skill, emits `[WIZARD-SKILL-ID] <id>`
+2. **Parse SKILL.md** — `parseWorkflowStepsFromSkillMd()` extracts `workflow[]` from frontmatter
+3. **Seed queue** — `createPostBootstrapQueue(steps)` builds a `WizardWorkflowQueue`
+4. **Execute** — dequeue → build prompt → `runAgent` with `resumeSessionId` → repeat
 
-// Append to end of queue
-store.workQueue.enqueue({
-  id: 'my-task',
-  kind: 'workflow',
-  referenceFilename: 'my-reference.md',
-  label: 'My custom step',
-});
-```
+The queue is reactive on the store — UI or business logic can `enqueue()` / `enqueueNext()` during the run.
 
-The queue is reactive — mutations trigger UI re-renders. Items enqueued while the runner loop is active will be picked up when the current step finishes.
+## 5. v1 vs v2 skills
 
-## TUI progress display
+Controlled by the `wizard-queued-workflow` flag. The `install_skill` MCP tool checks `useV2Skills` and picks the right download URL.
 
-The RunScreen shows a stage-grouped progress list:
+| | v1 (legacy) | v2 (queued) |
+|---|---|---|
+| Source files | `llm-prompts/basic-integration/` | `llm-prompts/basic-integration-v2/` |
+| Step ordering | Continuation links in body | `workflow[]` in SKILL.md frontmatter |
+| `next` defined in | Computed by generator | Workflow file frontmatter |
+| Served from | `dist/skills/` | `dist/basic-integration-v2/` |
 
-```
-☑ PostHog Setup - Begin
-▶ PostHog Setup - Edit
-  ☑ Add PostHog to auth.ts
-  ▶ Add PostHog to checkout.ts
-○ PostHog Setup - Revise
-○ PostHog Setup - Conclusion
-○ Environment variables
-```
+## 6. Key files
 
-Stage headers come from queue item labels. Nested tasks come from the agent's `TodoWrite` calls. Tasks reset when the runner advances to a new stage.
-
-## Defining a workflow
-
-A workflow is an ordered list of `WorkflowStep` objects. Each step can own a screen, agent work, or both.
-
-```typescript
-// src/lib/workflow-step.ts
-interface WorkflowStep {
-  id: string;                                        // unique step id
-  label: string;                                     // shown in progress list
-  screen?: string;                                   // TUI screen (e.g. 'intro', 'run')
-  show?: (session: WizardSession) => boolean;        // visibility predicate
-  isComplete?: (session: WizardSession) => boolean;  // completion predicate
-  gate?: 'setup' | 'health';                         // blocks downstream code
-}
-```
-
-The current PostHog integration workflow is defined in `src/lib/workflows/posthog-integration.ts`:
-
-```typescript
-export const POSTHOG_INTEGRATION_WORKFLOW: Workflow = [
-  { id: 'intro',   label: 'Welcome',        screen: 'intro',   gate: 'setup', isComplete: ... },
-  { id: 'health',  label: 'Health check',   screen: 'health-check', gate: 'health', ... },
-  { id: 'setup',   label: 'Setup',          screen: 'setup',   show: needsSetup, ... },
-  { id: 'auth',    label: 'Authentication', screen: 'auth',    isComplete: ... },
-  { id: 'run',     label: 'Integration',    screen: 'run',     isComplete: ... },
-  { id: 'mcp',     label: 'MCP servers',    screen: 'mcp',     isComplete: ... },
-  { id: 'outro',   label: 'Done',           screen: 'outro',   isComplete: ... },
-  { id: 'skills',  label: 'Skills',         screen: 'skills' },
-];
-```
-
-### Creating a new workflow
-
-1. Create a new file in `src/lib/workflows/` (e.g. `feature-flags.ts`)
-2. Export a `Workflow` array with your steps
-3. Each step with a `screen` field needs a matching component in the screen registry
-4. The flow engine converts your workflow to `FlowEntry[]` via `workflowToFlowEntries()` — the existing router handles the rest
-5. Agent work steps are seeded from SKILL.md frontmatter at runtime, not from the workflow definition
-
-### How the pieces connect
-
-```
-WorkflowStep[]  ──workflowToFlowEntries()──>  FlowEntry[]  ──>  Router (screen resolution)
-                                                                      │
-SKILL.md frontmatter  ──parseWorkflowStepsFromSkillMd()──>  Queue  ──>  Agent runner (per-step queries)
-```
-
-The workflow definition owns the UI flow. The SKILL.md frontmatter owns the agent work sequence. Both run during the same wizard session.
+| File | Purpose |
+|---|---|
+| `src/lib/agent-runner.ts` | Shared setup, flag fork, error handling |
+| `src/lib/queued-workflow-runner.ts` | New flow: bootstrap → queue → per-step prompts |
+| `src/lib/legacy/single-query-runner.ts` | Old flow: one prompt, one call |
+| `src/lib/legacy/integration-prompt.ts` | Old flow: prompt builder |
+| `src/lib/workflow-queue.ts` | Queue, parser, seed functions |
+| `src/lib/workflow-step.ts` | `WorkflowStep` interface, `workflowToFlowEntries()` |
+| `src/lib/workflows/posthog-integration.ts` | TUI screen flow as `WorkflowStep[]` |
+| `src/lib/wizard-tools.ts` | MCP tools including `install_skill` (v1/v2) |
 
 # Health checks
 

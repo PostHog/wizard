@@ -651,6 +651,7 @@ export async function initializeAgent(
       workingDirectory: config.workingDirectory,
       detectPackageManager: config.detectPackageManager,
       skillsBaseUrl: config.skillsBaseUrl,
+      useV2Skills: config.wizardFlags?.['wizard-queued-workflow'] === 'true',
     });
     mcpServers['wizard-tools'] = wizardToolsServer;
 
