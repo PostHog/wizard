@@ -322,6 +322,7 @@ export function isUsingTypeScript({
 export async function getOrAskForProjectData(
   _options: Pick<WizardOptions, 'signup' | 'ci' | 'apiKey' | 'projectId'> & {
     email?: string;
+    region?: CloudRegion;
   },
 ): Promise<{
   host: string;
@@ -361,6 +362,7 @@ export async function getOrAskForProjectData(
       askForWizardLogin({
         signup: _options.signup,
         email: _options.email,
+        region: _options.region,
       }),
     );
 
@@ -421,9 +423,10 @@ async function fetchProjectDataById(
 async function askForWizardLogin(options: {
   signup: boolean;
   email?: string;
+  region?: CloudRegion;
 }): Promise<ProjectData & { cloudRegion: CloudRegion }> {
   if (options.signup) {
-    return askForProvisioningSignup(options.email);
+    return askForProvisioningSignup(options.email, options.region);
   }
 
   const tokenResponse = await performOAuthFlow({
@@ -482,6 +485,7 @@ async function askForWizardLogin(options: {
 
 async function askForProvisioningSignup(
   email?: string,
+  region?: CloudRegion,
 ): Promise<ProjectData & { cloudRegion: CloudRegion }> {
   if (!email || !email.includes('@')) {
     getUI().log.error(
@@ -495,7 +499,8 @@ async function askForProvisioningSignup(
   spinner.start('Creating your PostHog account...');
 
   try {
-    const result = await provisionNewAccount(email, '', 'US');
+    const provisionRegion = (region ?? 'us').toUpperCase() as 'US' | 'EU';
+    const result = await provisionNewAccount(email, '', provisionRegion);
 
     spinner.stop('Account created!');
     getUI().log.success('Welcome to PostHog!');
@@ -510,7 +515,7 @@ async function askForProvisioningSignup(
       projectApiKey: result.projectApiKey,
       host,
       distinctId: email,
-      projectId: parseInt(result.projectId, 10),
+      projectId: parseInt(result.projectId, 10) || 0,
       cloudRegion,
     };
   } catch (error) {

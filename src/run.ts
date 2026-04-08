@@ -70,6 +70,7 @@ export async function runWizard(argv: Args, session?: WizardSession) {
       localMcp: finalArgs.localMcp,
       apiKey: finalArgs.apiKey,
       email: finalArgs.email,
+      region: finalArgs.region,
       menu: finalArgs.menu,
       integration: finalArgs.integration,
       benchmark: finalArgs.benchmark,

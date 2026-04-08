@@ -194,6 +194,7 @@ export async function runAgentWizard(
       ci: session.ci,
       apiKey: session.apiKey,
       email: session.email,
+      region: session.region,
       projectId: session.projectId,
     });
 
