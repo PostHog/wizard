@@ -14,7 +14,7 @@ import type { PackageDotJson } from '../utils/package-json';
 import type { WizardOptions } from '../utils/types';
 import { WIZARD_INTERACTION_EVENT_NAME } from './constants';
 import { analytics } from '../utils/analytics';
-import { getUI } from '../ui';
+import { getUI, type SpinnerHandle } from '../ui';
 import {
   initializeAgent,
   runAgent,
@@ -45,6 +45,7 @@ import {
   parseWorkflowStepsFromSkillMd,
   type WizardWorkflowQueueItem,
 } from './workflow-queue';
+import { runSingleQueryFlow } from './legacy/single-query-runner';
 
 const WIZARD_SKILL_ID_SIGNAL = '[WIZARD-SKILL-ID]';
 
@@ -276,114 +277,34 @@ export async function runAgentWizard(
     ? createBenchmarkPipeline(spinner, sessionToOptions(session))
     : undefined;
 
-  // ── Step 1: Bootstrap — install the skill and get its ID ──
+  // ── Feature flag: queued workflow vs old single-query flow ──
+  const useQueuedWorkflow = wizardFlags['wizard-queued-workflow'] === 'true';
+  logToFile(`[agent-runner] wizard-queued-workflow=${useQueuedWorkflow}`);
 
-  let agentResult = await runAgent(
-    agent,
-    buildBootstrapPrompt(config, promptContext, frameworkContext),
-    sessionToOptions(session),
-    spinner,
-    {
-      estimatedDurationMinutes: config.ui.estimatedDurationMinutes,
-      spinnerMessage: 'Preparing integration...',
-      successMessage: 'Integration prepared',
-      errorMessage: 'Integration failed during bootstrap',
-      additionalFeatureQueue: [],
-      requestRemark: false,
-      captureOutputText: true,
-      captureSessionId: true,
-      finalizeMiddleware: false,
-    },
-    middleware,
-  );
+  let agentResult: Awaited<ReturnType<typeof runAgent>>;
 
-  const queuedSessionId = agentResult.sessionId;
-  const installedSkillId =
-    extractInstalledSkillId(agentResult.outputText ?? '') ?? undefined;
-
-  if (!installedSkillId) {
-    await wizardAbort({
-      message:
-        'The wizard could not determine which integration skill was installed during bootstrap.',
-      error: new WizardError('Bootstrap step did not emit installed skill id'),
+  if (useQueuedWorkflow) {
+    agentResult = await runQueuedWorkflow(
+      agent,
+      config,
+      session,
+      promptContext,
+      frameworkContext,
+      spinner,
+      middleware,
+    );
+  } else {
+    // OLD FLOW — single monolithic prompt (see legacy/ folder)
+    agentResult = await runSingleQueryFlow({
+      agent,
+      config,
+      session,
+      options: sessionToOptions(session),
+      spinner,
+      promptContext,
+      frameworkContext,
+      middleware,
     });
-  }
-
-  // ── Step 2: Read SKILL.md and seed the queue from its frontmatter ──
-
-  if (!agentResult.error && installedSkillId) {
-    const skillMdPath = path.join(
-      session.installDir,
-      '.claude',
-      'skills',
-      installedSkillId,
-      'SKILL.md',
-    );
-    const skillMdContent = fs.readFileSync(skillMdPath, 'utf-8');
-    const workflowSteps = parseWorkflowStepsFromSkillMd(skillMdContent);
-
-    if (workflowSteps.length === 0) {
-      logToFile(
-        '[agent-runner] No workflow steps found in SKILL.md frontmatter, aborting',
-      );
-      await wizardAbort({
-        message:
-          'The installed skill does not contain workflow steps in its metadata.',
-        error: new WizardError('No workflow steps in SKILL.md frontmatter'),
-      });
-    }
-
-    logToFile(
-      `[agent-runner] Seeded queue from SKILL.md: ${workflowSteps
-        .map((s) => s.stepId)
-        .join(', ')}`,
-    );
-
-    // ── Step 3: Execute workflow steps + env-vars from the queue ──
-
-    const queue = createPostBootstrapQueue(workflowSteps);
-    getUI().setWorkQueue(queue);
-
-    while (queue.length > 0) {
-      const queueItem = queue.dequeue()!;
-
-      getUI().setCurrentQueueItem({ id: queueItem.id, label: queueItem.label });
-
-      const prompt = buildQueuedPrompt(
-        queueItem,
-        config,
-        promptContext,
-        installedSkillId,
-      );
-
-      agentResult = await runAgent(
-        agent,
-        prompt,
-        sessionToOptions(session),
-        spinner,
-        {
-          estimatedDurationMinutes: config.ui.estimatedDurationMinutes,
-          spinnerMessage: getQueueSpinnerMessage(queueItem),
-          successMessage: getQueueSuccessMessage(queueItem, config),
-          errorMessage: `Integration failed during ${queueItem.id}`,
-          additionalFeatureQueue:
-            queueItem.id === 'env-vars' ? session.additionalFeatureQueue : [],
-          resumeSessionId: queuedSessionId,
-          requestRemark: queueItem.id === 'env-vars',
-          captureOutputText: false,
-          captureSessionId: false,
-          finalizeMiddleware: queue.length === 0,
-        },
-        middleware,
-      );
-
-      getUI().completeQueueItem({ id: queueItem.id, label: queueItem.label });
-
-      if (agentResult.error) {
-        break;
-      }
-    }
-    getUI().setCurrentQueueItem(null);
   }
 
   // Handle error cases detected in agent output
@@ -493,19 +414,141 @@ export async function runAgentWizard(
   await analytics.shutdown('success');
 }
 
-/**
- * Build the integration prompt for the agent.
- */
+// ── NEW FLOW: Queued workflow (wizard-queued-workflow=true) ──────────
+
+type PromptContext = {
+  frameworkVersion: string;
+  typescript: boolean;
+  projectApiKey: string;
+  host: string;
+  projectId: number;
+};
+
+async function runQueuedWorkflow(
+  agent: Awaited<ReturnType<typeof initializeAgent>>,
+  config: FrameworkConfig,
+  session: WizardSession,
+  promptContext: PromptContext,
+  frameworkContext: Record<string, unknown>,
+  spinner: SpinnerHandle,
+  middleware?: Parameters<typeof runAgent>[5],
+): Promise<Awaited<ReturnType<typeof runAgent>>> {
+  // Step 1: Bootstrap — install the skill and get its ID
+  let agentResult = await runAgent(
+    agent,
+    buildBootstrapPrompt(config, promptContext, frameworkContext),
+    sessionToOptions(session),
+    spinner,
+    {
+      estimatedDurationMinutes: config.ui.estimatedDurationMinutes,
+      spinnerMessage: 'Preparing integration...',
+      successMessage: 'Integration prepared',
+      errorMessage: 'Integration failed during bootstrap',
+      additionalFeatureQueue: [],
+      requestRemark: false,
+      captureOutputText: true,
+      captureSessionId: true,
+      finalizeMiddleware: false,
+    },
+    middleware,
+  );
+
+  const queuedSessionId = agentResult.sessionId;
+  const installedSkillId =
+    extractInstalledSkillId(agentResult.outputText ?? '') ?? undefined;
+
+  if (!installedSkillId) {
+    await wizardAbort({
+      message:
+        'The wizard could not determine which integration skill was installed during bootstrap.',
+      error: new WizardError('Bootstrap step did not emit installed skill id'),
+    });
+  }
+
+  // Step 2: Read SKILL.md and seed the queue from its frontmatter
+  if (!agentResult.error && installedSkillId) {
+    const skillMdPath = path.join(
+      session.installDir,
+      '.claude',
+      'skills',
+      installedSkillId,
+      'SKILL.md',
+    );
+    const skillMdContent = fs.readFileSync(skillMdPath, 'utf-8');
+    const workflowSteps = parseWorkflowStepsFromSkillMd(skillMdContent);
+
+    if (workflowSteps.length === 0) {
+      logToFile(
+        '[agent-runner] No workflow steps found in SKILL.md frontmatter, aborting',
+      );
+      await wizardAbort({
+        message:
+          'The installed skill does not contain workflow steps in its metadata.',
+        error: new WizardError('No workflow steps in SKILL.md frontmatter'),
+      });
+    }
+
+    logToFile(
+      `[agent-runner] Seeded queue from SKILL.md: ${workflowSteps
+        .map((s) => s.stepId)
+        .join(', ')}`,
+    );
+
+    // Step 3: Execute workflow steps + env-vars from the queue
+    const queue = createPostBootstrapQueue(workflowSteps);
+    getUI().setWorkQueue(queue);
+
+    while (queue.length > 0) {
+      const queueItem = queue.dequeue()!;
+
+      getUI().setCurrentQueueItem({ id: queueItem.id, label: queueItem.label });
+
+      const prompt = buildQueuedPrompt(
+        queueItem,
+        config,
+        promptContext,
+        installedSkillId,
+      );
+
+      agentResult = await runAgent(
+        agent,
+        prompt,
+        sessionToOptions(session),
+        spinner,
+        {
+          estimatedDurationMinutes: config.ui.estimatedDurationMinutes,
+          spinnerMessage: getQueueSpinnerMessage(queueItem),
+          successMessage: getQueueSuccessMessage(queueItem, config),
+          errorMessage: `Integration failed during ${queueItem.id}`,
+          additionalFeatureQueue:
+            queueItem.id === 'env-vars' ? session.additionalFeatureQueue : [],
+          resumeSessionId: queuedSessionId,
+          requestRemark: queueItem.id === 'env-vars',
+          captureOutputText: false,
+          captureSessionId: false,
+          finalizeMiddleware: queue.length === 0,
+        },
+        middleware,
+      );
+
+      getUI().completeQueueItem({ id: queueItem.id, label: queueItem.label });
+
+      if (agentResult.error) {
+        break;
+      }
+    }
+    getUI().setCurrentQueueItem(null);
+  }
+
+  return agentResult;
+}
+
+// ── Queued workflow prompt builders ─────────────────────────────────
+
 function buildQueuedPrompt(
   queueItem: WizardWorkflowQueueItem,
   config: FrameworkConfig,
-  context: {
-    frameworkVersion: string;
-    typescript: boolean;
-    projectApiKey: string;
-    host: string;
-    projectId: number;
-  },
+  context: PromptContext,
   installedSkillId: string,
 ): string {
   if (queueItem.kind === 'workflow') {
@@ -520,13 +563,7 @@ function buildQueuedPrompt(
 
 function buildProjectContextBlock(
   config: FrameworkConfig,
-  context: {
-    frameworkVersion: string;
-    typescript: boolean;
-    projectApiKey: string;
-    host: string;
-    projectId: number;
-  },
+  context: PromptContext,
   frameworkContext: Record<string, unknown>,
 ): string {
   const additionalLines = config.prompts.getAdditionalContextLines
@@ -552,13 +589,7 @@ function buildProjectContextBlock(
 
 function buildBootstrapPrompt(
   config: FrameworkConfig,
-  context: {
-    frameworkVersion: string;
-    typescript: boolean;
-    projectApiKey: string;
-    host: string;
-    projectId: number;
-  },
+  context: PromptContext,
   frameworkContext: Record<string, unknown>,
 ): string {
   return `You have access to the PostHog MCP server which provides skills to integrate PostHog into this ${
@@ -603,6 +634,8 @@ function buildWorkflowStepPrompt(
 Read and follow this workflow reference:
 \`.claude/skills/${installedSkillId}/references/${referenceFilename}\`
 
+Before starting work, use TodoWrite to create your task plan. Update it as you complete each task.
+
 Important:
 - Complete only this workflow step.
 - Do NOT continue to any other workflow file.
@@ -612,13 +645,7 @@ Important:
 
 function buildEnvVarPrompt(
   config: FrameworkConfig,
-  context: {
-    frameworkVersion: string;
-    typescript: boolean;
-    projectApiKey: string;
-    host: string;
-    projectId: number;
-  },
+  context: PromptContext,
 ): string {
   return `Continue the existing conversation.
 

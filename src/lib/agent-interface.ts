@@ -647,10 +647,15 @@ export async function initializeAgent(
     };
 
     // Add in-process wizard tools (env files, package manager detection, skill loading)
+    // Use v2 skill format when the queued workflow flag is on
+    const skillFormat =
+      config.wizardFlags?.['wizard-queued-workflow'] === 'true' ? 'v2' : 'v1';
+
     const wizardToolsServer = await createWizardToolsServer({
       workingDirectory: config.workingDirectory,
       detectPackageManager: config.detectPackageManager,
       skillsBaseUrl: config.skillsBaseUrl,
+      skillFormat,
     });
     mcpServers['wizard-tools'] = wizardToolsServer;
 

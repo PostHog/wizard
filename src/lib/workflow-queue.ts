@@ -130,7 +130,7 @@ export function createPostBootstrapQueue(
 ): WizardWorkflowQueue {
   const items: WizardWorkflowQueueItem[] = [
     ...steps.map(
-      (step): WizardWorkflowQueueItem => ({
+      (step, _): WizardWorkflowQueueItem => ({
         id: `workflow:${step.stepId}`,
         kind: 'workflow',
         referenceFilename: step.referenceFilename,

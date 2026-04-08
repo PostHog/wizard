@@ -183,9 +183,6 @@ export class WizardStore {
 
   setCurrentQueueItem(item: { id: string; label: string } | null): void {
     this.$currentQueueItem.set(item);
-    // Clear agent tasks when transitioning to a new stage —
-    // each stage gets a fresh task list from TodoWrite
-    this.$tasks.set([]);
     this.emitChange();
   }
 

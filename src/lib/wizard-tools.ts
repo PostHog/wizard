@@ -30,7 +30,12 @@ async function getSDKModule(): Promise<any> {
 // Skill types
 // ---------------------------------------------------------------------------
 
-export type SkillEntry = { id: string; name: string; downloadUrl: string };
+export type SkillEntry = {
+  id: string;
+  name: string;
+  downloadUrl: string;
+  downloadUrlV2?: string;
+};
 
 export interface SkillMenu {
   categories: Record<string, SkillEntry[]>;
@@ -77,6 +82,7 @@ export function downloadSkill(
   skillEntry: SkillEntry,
   installDir: string,
   skillsRoot?: string,
+  format: 'v1' | 'v2' = 'v1',
 ): { success: boolean; error?: string } {
   const skillDir = skillsRoot
     ? path.join(installDir, skillsRoot, skillEntry.id)
@@ -84,8 +90,13 @@ export function downloadSkill(
   const tmpFile = `/tmp/posthog-skill-${skillEntry.id}.zip`;
 
   try {
+    const url =
+      format === 'v2' && skillEntry.downloadUrlV2
+        ? skillEntry.downloadUrlV2
+        : skillEntry.downloadUrl;
+
     fs.mkdirSync(skillDir, { recursive: true });
-    execFileSync('curl', ['-sL', skillEntry.downloadUrl, '-o', tmpFile], {
+    execFileSync('curl', ['-sL', url, '-o', tmpFile], {
       timeout: 30000,
     });
     execFileSync('unzip', ['-o', tmpFile, '-d', skillDir], {
@@ -98,7 +109,7 @@ export function downloadSkill(
     }
 
     logToFile(
-      `downloadSkill: installed ${skillEntry.id} from ${skillEntry.downloadUrl}`,
+      `downloadSkill: installed ${skillEntry.id} (${format}) from ${url}`,
     );
     return { success: true };
   } catch (err: any) {
@@ -120,6 +131,9 @@ export interface WizardToolsOptions {
 
   /** Base URL for the skills server (e.g. http://localhost:8765 or GitHub releases URL) */
   skillsBaseUrl: string;
+
+  /** Skill format: v1 (continuation links in body) or v2 (workflow frontmatter). Default: v1. */
+  skillFormat?: 'v1' | 'v2';
 }
 
 // ---------------------------------------------------------------------------
@@ -229,7 +243,12 @@ const SERVER_NAME = 'wizard-tools';
  * Must be called asynchronously because the SDK is an ESM module loaded via dynamic import.
  */
 export async function createWizardToolsServer(options: WizardToolsOptions) {
-  const { workingDirectory, detectPackageManager, skillsBaseUrl } = options;
+  const {
+    workingDirectory,
+    detectPackageManager,
+    skillsBaseUrl,
+    skillFormat = 'v1',
+  } = options;
   const sdk = await getSDKModule();
   const { tool, createSdkMcpServer } = sdk;
 
@@ -448,7 +467,12 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
         };
       }
 
-      const result = downloadSkill(skill, workingDirectory);
+      const result = downloadSkill(
+        skill,
+        workingDirectory,
+        undefined,
+        skillFormat,
+      );
       if (result.success) {
         return {
           content: [
