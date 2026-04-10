@@ -33,6 +33,8 @@ plugins
 .vscode/launch.json
 .env
 .vercel
+.claude/settings.json
+.claude/settings.local.json
 
 e2e-tests/fixtures/.tracking/*
 

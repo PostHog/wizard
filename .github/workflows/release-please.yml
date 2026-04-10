@@ -8,6 +8,7 @@ name: release-please
 jobs:
   release-please:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - name: Get app token
         id: app-token

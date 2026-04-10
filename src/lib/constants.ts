@@ -102,3 +102,6 @@ export const POSTHOG_FLAG_HEADER_PREFIX = 'X-POSTHOG-FLAG-';
 
 /** Timeout for framework / project detection probes (ms). */
 export const DETECTION_TIMEOUT_MS = 10_000;
+
+/** Timeout for the OAuth authorization flow (ms). */
+export const OAUTH_TIMEOUT_MS = 360_000;
