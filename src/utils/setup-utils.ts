@@ -1,7 +1,7 @@
 import * as childProcess from 'node:child_process';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
-import { isAbsolute, join, relative } from 'node:path';
+import { basename, isAbsolute, join, relative } from 'node:path';
 
 import { traceStep } from '../telemetry';
 import { debug } from './debug';
@@ -500,7 +500,13 @@ async function askForProvisioningSignup(
 
   try {
     const provisionRegion = (region ?? 'us').toUpperCase() as 'US' | 'EU';
-    const result = await provisionNewAccount(email, '', provisionRegion);
+    const projectName = basename(process.cwd());
+    const result = await provisionNewAccount(
+      email,
+      '',
+      provisionRegion,
+      projectName,
+    );
 
     spinner.stop('Account created!');
     getUI().log.success('Welcome to PostHog!');

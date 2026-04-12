@@ -95,6 +95,7 @@ export async function provisionNewAccount(
   email: string,
   name: string,
   region: 'US' | 'EU' = 'US',
+  projectName?: string,
 ): Promise<ProvisioningResult> {
   const codeVerifier = generateCodeVerifier();
   const codeChallenge = generateCodeChallenge(codeVerifier);
@@ -111,7 +112,10 @@ export async function provisionNewAccount(
       client_id: WIZARD_CLIENT_ID,
       code_challenge: codeChallenge,
       code_challenge_method: 'S256',
-      configuration: { region },
+      configuration: {
+        region,
+        ...(name ? { organization_name: `${name}'s Organization` } : {}),
+      },
     },
     {
       headers: {
@@ -172,7 +176,10 @@ export async function provisionNewAccount(
   // Step 3: Provision resources
   const resourceRes = await axios.post(
     `${PROVISIONING_BASE_URL}/api/agentic/provisioning/resources`,
-    { service_id: 'analytics' },
+    {
+      service_id: 'analytics',
+      ...(projectName ? { configuration: { project_name: projectName } } : {}),
+    },
     {
       headers: {
         'Content-Type': 'application/json',

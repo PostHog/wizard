@@ -72,7 +72,10 @@ describe('provisionNewAccount', () => {
       email: 'user@example.com',
       name: 'Test User',
       code_challenge_method: 'S256',
-      configuration: { region: 'US' },
+      configuration: {
+        region: 'US',
+        organization_name: "Test User's Organization",
+      },
     });
     expect(
       (accountCall[1] as Record<string, unknown>).code_challenge,
