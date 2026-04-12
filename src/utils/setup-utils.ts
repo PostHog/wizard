@@ -501,9 +501,10 @@ async function askForProvisioningSignup(
   try {
     const provisionRegion = (region ?? 'us').toUpperCase() as 'US' | 'EU';
     const projectName = basename(process.cwd());
+    const userName = email.split('@')[0] ?? '';
     const result = await provisionNewAccount(
       email,
-      '',
+      userName,
       provisionRegion,
       projectName,
     );

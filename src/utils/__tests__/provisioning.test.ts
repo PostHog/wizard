@@ -182,6 +182,75 @@ describe('provisionNewAccount', () => {
     expect(result.host).toBe('https://eu.posthog.com');
   });
 
+  it('sends project name in resources configuration', async () => {
+    mockedAxios.post
+      .mockResolvedValueOnce({
+        data: { id: 'req_p', type: 'oauth', oauth: { code: 'code_p' } },
+      })
+      .mockResolvedValueOnce({
+        data: {
+          token_type: 'bearer',
+          access_token: 'pha_p',
+          refresh_token: 'phr_p',
+          expires_in: 3600,
+        },
+      })
+      .mockResolvedValueOnce({
+        data: {
+          status: 'complete',
+          id: '50',
+          service_id: 'analytics',
+          complete: {
+            access_configuration: {
+              api_key: 'phc_p',
+              host: 'https://us.posthog.com',
+            },
+          },
+        },
+      });
+
+    await provisionNewAccount('proj@example.com', '', 'US', 'my-cool-app');
+
+    const resourceCall = mockedAxios.post.mock.calls[2];
+    expect(resourceCall[1]).toMatchObject({
+      service_id: 'analytics',
+      configuration: { project_name: 'my-cool-app' },
+    });
+  });
+
+  it('omits project name when not provided', async () => {
+    mockedAxios.post
+      .mockResolvedValueOnce({
+        data: { id: 'req_np', type: 'oauth', oauth: { code: 'code_np' } },
+      })
+      .mockResolvedValueOnce({
+        data: {
+          token_type: 'bearer',
+          access_token: 'pha_np',
+          refresh_token: 'phr_np',
+          expires_in: 3600,
+        },
+      })
+      .mockResolvedValueOnce({
+        data: {
+          status: 'complete',
+          id: '51',
+          service_id: 'analytics',
+          complete: {
+            access_configuration: {
+              api_key: 'phc_np',
+              host: 'https://us.posthog.com',
+            },
+          },
+        },
+      });
+
+    await provisionNewAccount('noproj@example.com', '');
+
+    const resourceCall = mockedAxios.post.mock.calls[2];
+    expect(resourceCall[1]).toEqual({ service_id: 'analytics' });
+  });
+
   it('includes timeouts on all requests', async () => {
     mockedAxios.post
       .mockResolvedValueOnce({
