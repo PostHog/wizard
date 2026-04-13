@@ -22,6 +22,7 @@ import { ServiceHealthStatus } from '../../../../lib/health-checks/types.js';
 import { wizardAbort } from '../../../../utils/wizard-abort.js';
 import { fetchSkillMenu, downloadSkill } from '../../../../lib/wizard-tools.js';
 import { REMOTE_SKILLS_BASE_URL } from '../../../../lib/constants.js';
+import { canContinueBlockingOutage } from './outage-behavior.js';
 
 interface HealthCheckScreenProps {
   store: WizardStore;
@@ -92,6 +93,10 @@ export const HealthCheckScreen = ({ store }: HealthCheckScreenProps) => {
   if (blockingKeys.length === 0) return null;
 
   const isGithubReleasesDown = blockingKeys.includes('githubReleases');
+  const canContinue = canContinueBlockingOutage({
+    isGithubReleasesDown,
+    signup: store.session.signup,
+  });
   const canDownloadSkills =
     result.health.githubReleases.status === ServiceHealthStatus.Healthy;
   const integration = store.session.integration;
@@ -100,7 +105,9 @@ export const HealthCheckScreen = ({ store }: HealthCheckScreenProps) => {
 
   const docsUrl = store.session.frameworkConfig?.metadata.docsUrl;
   const description = isGithubReleasesDown
-    ? "The Wizard can't download necessary skills from GitHub Releases right now."
+    ? store.session.signup
+      ? "PostHog account creation can continue, but the Wizard can't download necessary skills from GitHub Releases right now."
+      : "The Wizard can't download necessary skills from GitHub Releases right now."
     : 'The Wizard may not work reliably while services are affected.';
 
   const handleDownloadAndExit = async () => {
@@ -138,7 +145,7 @@ export const HealthCheckScreen = ({ store }: HealthCheckScreenProps) => {
       title={title}
       width={72}
       footer={
-        isGithubReleasesDown ? (
+        !canContinue ? (
           <ConfirmationInput
             message=""
             confirmLabel=""
