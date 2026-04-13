@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.8.0](https://github.com/PostHog/wizard/compare/v2.7.0...v2.8.0) (2026-04-13)
+
+
+### Features
+
+* add provisioning API signup flow for new users ([#377](https://github.com/PostHog/wizard/issues/377)) ([c101aeb](https://github.com/PostHog/wizard/commit/c101aeb5a091e3824acaf9f93a4e1d4da1e07c8a))
+
 ## [2.7.0](https://github.com/PostHog/wizard/compare/v2.6.2...v2.7.0) (2026-04-08)
 
 
