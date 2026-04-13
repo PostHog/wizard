@@ -14,7 +14,7 @@ import { IS_DEV, WIZARD_USER_AGENT } from '../lib/constants';
 import { logToFile } from './debug';
 import { analytics } from './analytics';
 
-const WIZARD_CLIENT_ID = 'posthog-wizard';
+const WIZARD_CLIENT_ID = 'c4Rdw8DIxgtQfA80IiSnGKlNX8QN00cFWF00QQhM';
 const API_VERSION = '0.1d';
 
 const PROVISIONING_BASE_URL = IS_DEV
