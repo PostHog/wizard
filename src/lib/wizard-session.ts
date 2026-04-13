@@ -77,6 +77,8 @@ export interface OutroData {
   changes?: string[];
   docsUrl?: string;
   continueUrl?: string;
+  /** Report file the agent wrote (e.g. "posthog-setup-report.md") */
+  reportFile?: string;
 }
 
 export interface WizardSession {

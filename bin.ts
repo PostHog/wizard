@@ -372,7 +372,7 @@ yargs(hideBin(process.argv))
             // The flow gate on Intro (readinessResult !== null) keeps the
             // TUI on IntroScreen until this resolves. If blocking, the
             // outage overlay was already pushed in the .then() callback.
-            await tui.store.healthGateComplete;
+            await tui.store.getGate('health-check');
 
             await runWizard(
               options as Parameters<typeof runWizard>[0],
@@ -504,6 +504,110 @@ yargs(hideBin(process.argv))
       .demandCommand(1, 'You must specify a subcommand (add or remove)')
       .help();
   })
+  .command(
+    'revenue',
+    'Set up PostHog revenue analytics (e.g. Stripe integration)',
+    (yargs) => {
+      return yargs.options({
+        debug: {
+          default: false,
+          describe: 'Enable verbose logging',
+          type: 'boolean',
+        },
+        'install-dir': {
+          describe: 'Directory to install in',
+          type: 'string',
+        },
+        'local-mcp': {
+          default: false,
+          describe: 'Use local MCP server',
+          type: 'boolean',
+        },
+        benchmark: {
+          default: false,
+          describe: 'Run in benchmark mode',
+          type: 'boolean',
+        },
+        'yara-report': {
+          default: false,
+          describe: 'Print YARA scanner summary',
+          type: 'boolean',
+          hidden: true,
+        },
+      });
+    },
+    (argv) => {
+      const options = { ...argv };
+
+      void (async () => {
+        try {
+          const installDir = (options.installDir as string) || process.cwd();
+
+          const { startTUI } = await import('./src/ui/tui/start-tui.js');
+          const { buildSession } = await import('./src/lib/wizard-session.js');
+          const { Flow } = await import('./src/ui/tui/router.js');
+
+          const tui = startTUI(WIZARD_VERSION, Flow.Revenue);
+
+          const session = buildSession({
+            debug: options.debug,
+            localMcp: options.localMcp as boolean | undefined,
+            installDir,
+            ci: false,
+            benchmark: options.benchmark as boolean | undefined,
+            yaraReport: options.yaraReport as boolean | undefined,
+          });
+          tui.store.session = session;
+
+          // Run detection after session is assigned (needs correct installDir).
+          // This checks for PostHog + Stripe SDKs and downloads the skill.
+          // Results are stored in frameworkContext, which resolves the detect gate.
+          const { detectRevenuePrerequisites } = await import(
+            './src/lib/workflows/revenue-analytics.js'
+          );
+          await detectRevenuePrerequisites(tui.store.session, (k, v) =>
+            tui.store.setFrameworkContext(k, v),
+          );
+
+          // Gate should be resolved now — await is just for safety
+          await tui.store.getGate('detect');
+
+          // Wait for the intro screen — it handles both the success state
+          // (detected SDKs + confirm) and the error state (detectError + exit).
+          await tui.store.getGate('intro');
+
+          const { runRevenueWizard } = await import(
+            './src/lib/revenue-runner.js'
+          );
+          await runRevenueWizard(tui.store.session);
+
+          // Outro is now visible. Wait for the user to press a key to dismiss.
+          // Revenue flow has no skills step after outro, so we exit here.
+          tui.store.onEnterScreen('outro' as any, () => {
+            // Screen is already outro — listen for dismissal
+          });
+          await new Promise<void>((resolve) => {
+            const unsub = tui.store.subscribe(() => {
+              if (tui.store.session.outroDismissed) {
+                unsub();
+                resolve();
+              }
+            });
+            // Check if already dismissed
+            if (tui.store.session.outroDismissed) {
+              unsub();
+              resolve();
+            }
+          });
+          process.exit(0);
+        } catch (err) {
+          if (process.env.DEBUG || process.env.POSTHOG_WIZARD_DEBUG) {
+            console.error('TUI init failed:', err); // eslint-disable-line no-console
+          }
+        }
+      })();
+    },
+  )
   .help()
   .alias('help', 'h')
   .version()

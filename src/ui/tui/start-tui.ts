@@ -51,6 +51,6 @@ export function startTUI(
       cleanup();
     },
     store,
-    waitForSetup: () => store.setupComplete,
+    waitForSetup: () => store.getGate('intro'),
   };
 }

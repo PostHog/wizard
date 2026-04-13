@@ -39,15 +39,16 @@ export const OutroScreen = ({ store }: OutroScreenProps) => {
       {outroData.kind === OutroKind.Success && (
         <Box flexDirection="column">
           <Text color="green" bold>
-            {'\u2714'} Successfully installed PostHog!
+            {'\u2714'} {outroData.message || 'Done!'}
           </Text>
 
-          <Box marginTop={1}>
-            <Text>
-              Check <Text bold>./posthog-setup-report.md</Text> for details
-              about your integration
-            </Text>
-          </Box>
+          {outroData.reportFile && (
+            <Box marginTop={1}>
+              <Text>
+                Check <Text bold>./{outroData.reportFile}</Text> for details
+              </Text>
+            </Box>
+          )}
 
           {outroData.changes && outroData.changes.length > 0 && (
             <Box flexDirection="column" marginTop={1}>

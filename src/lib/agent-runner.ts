@@ -384,12 +384,14 @@ export async function runAgentWizard(
 
   session.outroData = {
     kind: OutroKind.Success,
+    message: 'Successfully installed PostHog!',
+    reportFile: 'posthog-setup-report.md',
     changes,
     docsUrl: config.metadata.docsUrl,
     continueUrl,
   };
 
-  getUI().outro(`Successfully installed PostHog!`);
+  getUI().outro('Successfully installed PostHog!');
 
   await analytics.shutdown('success');
 }

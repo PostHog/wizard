@@ -162,7 +162,7 @@ describe('WizardStore', () => {
   // ── Session setters ──────────────────────────────────────────────
 
   describe('session setters', () => {
-    it('completeSetup sets setupConfirmed and resolves setupComplete promise', async () => {
+    it('completeSetup sets setupConfirmed and resolves intro gate', async () => {
       const store = createStore();
       const cb = jest.fn();
       store.subscribe(cb);
@@ -170,7 +170,7 @@ describe('WizardStore', () => {
       store.completeSetup();
 
       expect(store.session.setupConfirmed).toBe(true);
-      await store.setupComplete;
+      await store.getGate('intro');
       expect(cb).toHaveBeenCalled();
     });
 
@@ -900,7 +900,7 @@ describe('WizardStore', () => {
       store.completeSetup();
       store.completeSetup(); // second call — promise already resolved
 
-      await store.setupComplete;
+      await store.getGate('intro');
       expect(store.session.setupConfirmed).toBe(true);
     });
 
@@ -967,13 +967,13 @@ describe('WizardStore', () => {
     });
   });
 
-  // ── healthGateComplete promise ────────────────────────────────────
+  // ── health-check gate ────────────────────────────────────────────
 
-  describe('healthGateComplete', () => {
+  describe('health-check gate', () => {
     it('resolves immediately for non-Wizard flows', async () => {
       const store = createStore(Flow.McpAdd);
 
-      await expect(store.healthGateComplete).resolves.toBeUndefined();
+      await expect(store.getGate('health-check')).resolves.toBeUndefined();
     });
 
     it('resolves automatically when readiness is non-blocking', async () => {
@@ -986,7 +986,7 @@ describe('WizardStore', () => {
       const store = createStore();
       let resolved = false;
 
-      void store.healthGateComplete.then(() => {
+      void store.getGate('health-check').then(() => {
         resolved = true;
       });
 
@@ -1010,7 +1010,7 @@ describe('WizardStore', () => {
       const store = createStore();
       let resolved = false;
 
-      void store.healthGateComplete.then(() => {
+      void store.getGate('health-check').then(() => {
         resolved = true;
       });
 
@@ -1020,7 +1020,7 @@ describe('WizardStore', () => {
       expect(store.currentScreen).toBe(Screen.Intro);
 
       store.dismissOutage();
-      await store.healthGateComplete;
+      await store.getGate('health-check');
 
       expect(resolved).toBe(true);
       expect(store.session.outageDismissed).toBe(true);
@@ -1077,13 +1077,13 @@ describe('WizardStore', () => {
     });
   });
 
-  // ── setupComplete promise ────────────────────────────────────────
+  // ── intro gate ──────────────────────────────────────────────────
 
-  describe('setupComplete', () => {
+  describe('intro gate', () => {
     it('resolves when completeSetup is called', async () => {
       const store = createStore();
       store.completeSetup();
-      await store.setupComplete;
+      await store.getGate('intro');
       expect(store.session.setupConfirmed).toBe(true);
     });
 
@@ -1091,7 +1091,7 @@ describe('WizardStore', () => {
       const store = createStore();
 
       let resolved = false;
-      void store.setupComplete.then(() => {
+      void store.getGate('intro').then(() => {
         resolved = true;
       });
 
@@ -1100,7 +1100,7 @@ describe('WizardStore', () => {
       expect(resolved).toBe(false);
 
       store.completeSetup();
-      await store.setupComplete;
+      await store.getGate('intro');
       expect(resolved).toBe(true);
     });
   });
