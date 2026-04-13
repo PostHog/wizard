@@ -1,4 +1,5 @@
 import type { WizardSession } from './wizard-session';
+import type { WizardReadinessResult } from './health-checks/readiness.js';
 
 /**
  * A workflow step is the primary unit of the wizard's execution model.
@@ -18,9 +19,7 @@ import type { WizardSession } from './wizard-session';
  */
 export interface StoreInitContext {
   get session(): WizardSession;
-  setReadinessResult(
-    result: import('./health-checks/readiness.js').WizardReadinessResult | null,
-  ): void;
+  setReadinessResult(result: WizardReadinessResult | null): void;
   setFrameworkContext(key: string, value: unknown): void;
   emitChange(): void;
 }
@@ -45,16 +44,15 @@ export interface WorkflowStep {
   show?: (session: WizardSession) => boolean;
 
   /**
-   * Whether this step is complete.
-   * The flow engine advances past complete steps.
+   * Exit condition for the screen. Router advances when true.
+   * Defaults to `gate` if unset.
    */
   isComplete?: (session: WizardSession) => boolean;
 
   /**
-   * If present, creates a gate promise keyed by step.id on the store.
-   * The promise resolves when this predicate returns true for the
-   * current session state. Checked after every emitChange().
-   * bin.ts awaits store.getGate(stepId) before proceeding to the runner.
+   * Define a gate if your screen needs to await user interactions.
+   * bin.ts can `await store.getGate(stepId)` to pause until the
+   * predicate becomes true.
    */
   gate?: (session: WizardSession) => boolean;
 
@@ -72,10 +70,16 @@ export interface WorkflowStep {
 export type Workflow = WorkflowStep[];
 
 /**
- * Convert a Workflow into the FlowEntry shape the router expects.
- * This is the bridge between the new WorkflowStep model and the
- * existing router — lets us adopt WorkflowSteps without rewriting
- * the router.
+ * Project a Workflow into the narrower FlowEntry shape the router consumes.
+ *
+ * Two things happen here:
+ *   1. Headless steps (no `screen`) are filtered out. The router walks
+ *      visible screens; gate-only steps like `detect` are store concerns.
+ *   2. The step is narrowed to just { screen, show, isComplete } — the
+ *      router has no business touching gate, onInit, id, or label.
+ *
+ * This intentional separation keeps the router focused on one question:
+ * "Which screen should be rendered right now?"
  */
 export function workflowToFlowEntries(workflow: Workflow): Array<{
   screen: string;
@@ -87,6 +91,9 @@ export function workflowToFlowEntries(workflow: Workflow): Array<{
     .map((step) => ({
       screen: step.screen!,
       show: step.show,
-      isComplete: step.isComplete,
+      // `isComplete` defaults to `gate` — for most steps they're the same
+      // predicate (e.g. intro: setupConfirmed unblocks bin.ts AND finishes
+      // the screen). Only override when the two conditions diverge.
+      isComplete: step.isComplete ?? step.gate,
     }));
 }

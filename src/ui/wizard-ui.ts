@@ -9,6 +9,7 @@
  */
 
 import type { SettingsConflict } from '../lib/agent-interface';
+import type { WizardReadinessResult } from '../lib/health-checks/readiness.js';
 
 export enum TaskStatus {
   Pending = 'pending',
@@ -56,14 +57,10 @@ export interface WizardUI {
   }): void;
 
   /** Show blocking service outage (pushes outage overlay in TUI). Blocks until dismissed. */
-  showBlockingOutage(
-    result: import('../lib/health-checks/readiness.js').WizardReadinessResult,
-  ): Promise<void>;
+  showBlockingOutage(result: WizardReadinessResult): Promise<void>;
 
   /** Store non-blocking readiness warnings (shown as Health tab in RunScreen). */
-  setReadinessWarnings(
-    result: import('../lib/health-checks/readiness.js').WizardReadinessResult,
-  ): void;
+  setReadinessWarnings(result: WizardReadinessResult): void;
 
   /** Warn that another process is blocking the OAuth port (pushes overlay in TUI). */
   showPortConflict(processInfo: {

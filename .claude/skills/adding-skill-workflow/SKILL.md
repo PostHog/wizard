@@ -28,11 +28,10 @@ Key files:
 
 ## How It Works
 
-### Store gates
+### Gates and isComplete
 
-Each workflow step can define a `gate` predicate. The store creates a promise for each gate and checks all predicates after every `emitChange()`. `bin.ts` awaits gates via `store.getGate(stepId)`.
-
-Steps without a gate don't create promises. `store.getGate('nonexistent')` resolves immediately.
+- **`isComplete`** — exit condition for the screen. Router advances past the step when true. Defaults to `gate` if unset.
+- **`gate`** — define this if your screen needs to await user interactions. bin.ts pauses on `await store.getGate(stepId)` until the predicate becomes true.
 
 ### Detect step pattern
 

@@ -6,6 +6,7 @@
 
 import { TaskStatus, type WizardUI, type SpinnerHandle } from './wizard-ui';
 import type { SettingsConflict } from '../lib/agent-interface';
+import type { WizardReadinessResult } from '../lib/health-checks/readiness.js';
 
 export class LoggingUI implements WizardUI {
   intro(message: string): void {
@@ -77,9 +78,7 @@ export class LoggingUI implements WizardUI {
     }
   }
 
-  showBlockingOutage(
-    result: import('../lib/health-checks/readiness.js').WizardReadinessResult,
-  ): Promise<void> {
+  showBlockingOutage(result: WizardReadinessResult): Promise<void> {
     console.log(`▲  Service health issues detected — blocking outage.`);
     for (const reason of result.reasons) {
       console.log(`│  ${reason}`);
@@ -90,9 +89,7 @@ export class LoggingUI implements WizardUI {
     return Promise.resolve();
   }
 
-  setReadinessWarnings(
-    result: import('../lib/health-checks/readiness.js').WizardReadinessResult,
-  ): void {
+  setReadinessWarnings(result: WizardReadinessResult): void {
     console.log(`▲  Service health warnings detected.`);
     for (const reason of result.reasons) {
       console.log(`│  ${reason}`);

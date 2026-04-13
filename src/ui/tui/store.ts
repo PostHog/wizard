@@ -2,14 +2,12 @@
  * WizardStore — Nanostore-backed reactive store for the TUI.
  * React components subscribe via useSyncExternalStore.
  *
- * Navigation is delegated to WizardRouter.
- * The active screen is derived from session state — not imperatively set.
- * Overlays (settings-override, port-conflict) are the only imperative navigation.
+ * The active screen is derived from session state — WizardRouter walks
+ * the flow and shows the first step whose `isComplete` is still false.
  *
- * Gate promises are derived from workflow step definitions.
- * Each step with a `gate` predicate creates a promise that resolves
- * when the predicate returns true. Steps with `onInit` fire async work
- * during construction.
+ * Define a step `gate` if your screen needs to await user interactions.
+ * bin.ts calls `await store.getGate(stepId)` to pause until the gate
+ * predicate becomes true.
  *
  * All session mutations that affect screen resolution go through
  * explicit setters so emitChange() is always called.
@@ -27,6 +25,7 @@ import {
   buildSession,
 } from '../../lib/wizard-session.js';
 import type { SettingsConflict } from '../../lib/agent-interface.js';
+import type { WizardReadinessResult } from '../../lib/health-checks/readiness.js';
 import {
   WizardRouter,
   type ScreenName,
@@ -122,12 +121,13 @@ export class WizardStore {
       }
     }
 
-    // Run onInit callbacks with a minimal context interface
-    // eslint-disable-next-line @typescript-eslint/no-this-alias
-    const self = this;
+    // Run onInit callbacks with a minimal context interface.
+    // Arrow functions capture `this` from _initFromWorkflow so we don't
+    // need to alias it.
+    const getSession = (): WizardSession => this.session;
     const ctx: StoreInitContext = {
       get session() {
-        return self.session;
+        return getSession();
       },
       setReadinessResult: (r) => this.setReadinessResult(r),
       setFrameworkContext: (k, v) => this.setFrameworkContext(k, v),
@@ -141,18 +141,29 @@ export class WizardStore {
   // ── Gate API ────────────────────────────────────────────────────
 
   /**
-   * Get a gate promise by step ID.
-   * Returns an immediately-resolved promise if the gate doesn't exist
-   * (e.g. the workflow doesn't have that step).
+   * Get a gate promise by step ID — the primary blocking checkpoint API
+   * for bin.ts. `await store.getGate('...')` parks the caller until the
+   * corresponding workflow step's gate predicate flips to true (if the
+   * predicate stays false, the caller stays parked indefinitely — the
+   * TUI keeps rendering so the user can resolve whatever is blocking).
+   *
+   * If the workflow doesn't define a step with this ID, or the step
+   * has no `gate` predicate, this returns an already-resolved promise
+   * so bin.ts flows straight through. This lets workflows opt in to
+   * gates on a per-step basis without bin.ts needing to know which
+   * gates exist in which flow.
    */
   getGate(stepId: string): Promise<void> {
     return this._gates.get(stepId)?.promise ?? Promise.resolve();
   }
 
   /**
-   * Check all gate predicates against the current session.
-   * Resolves any gate whose predicate returns true.
-   * Called after every emitChange().
+   * Re-evaluate every gate predicate against the current session and
+   * resolve any whose predicate now returns true. Called after every
+   * emitChange(), so gates unblock as soon as the session mutation
+   * that satisfies them lands. Gates only resolve once — a predicate
+   * that goes true → false → true will NOT re-block a caller that
+   * already awaited through.
    */
   private _checkGates(): void {
     for (const [, gate] of this._gates) {
@@ -259,11 +270,7 @@ export class WizardStore {
     this.emitChange();
   }
 
-  setReadinessResult(
-    result:
-      | import('../../lib/health-checks/readiness.js').WizardReadinessResult
-      | null,
-  ): void {
+  setReadinessResult(result: WizardReadinessResult | null): void {
     this.$session.setKey('readinessResult', result);
     this.emitChange();
   }

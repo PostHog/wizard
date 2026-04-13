@@ -23,10 +23,10 @@ function needsSetup(session: WizardSession): boolean {
   );
 }
 
-function healthCheckReady(s: WizardSession): boolean {
-  if (!s.readinessResult) return false;
-  if (s.readinessResult.decision === WizardReadiness.No)
-    return s.outageDismissed;
+function healthCheckReady(session: WizardSession): boolean {
+  if (!session.readinessResult) return false;
+  if (session.readinessResult.decision === WizardReadiness.No)
+    return session.outageDismissed;
   return true;
 }
 
@@ -35,15 +35,13 @@ export const POSTHOG_INTEGRATION_WORKFLOW: Workflow = [
     id: 'intro',
     label: 'Welcome',
     screen: 'intro',
-    gate: (s) => s.setupConfirmed,
-    isComplete: (s) => s.setupConfirmed,
+    gate: (session) => session.setupConfirmed,
   },
   {
     id: 'health-check',
     label: 'Health check',
     screen: 'health-check',
     gate: healthCheckReady,
-    isComplete: healthCheckReady,
     onInit: (ctx) => {
       evaluateWizardReadiness()
         .then((readiness) => {
@@ -63,32 +61,33 @@ export const POSTHOG_INTEGRATION_WORKFLOW: Workflow = [
     label: 'Setup',
     screen: 'setup',
     show: needsSetup,
-    isComplete: (s) => !needsSetup(s),
+    isComplete: (session) => !needsSetup(session),
   },
   {
     id: 'auth',
     label: 'Authentication',
     screen: 'auth',
-    isComplete: (s) => s.credentials !== null,
+    isComplete: (session) => session.credentials !== null,
   },
   {
     id: 'run',
     label: 'Integration',
     screen: 'run',
-    isComplete: (s) =>
-      s.runPhase === RunPhase.Completed || s.runPhase === RunPhase.Error,
+    isComplete: (session) =>
+      session.runPhase === RunPhase.Completed ||
+      session.runPhase === RunPhase.Error,
   },
   {
     id: 'mcp',
     label: 'MCP servers',
     screen: 'mcp',
-    isComplete: (s) => s.mcpComplete,
+    isComplete: (session) => session.mcpComplete,
   },
   {
     id: 'outro',
     label: 'Done',
     screen: 'outro',
-    isComplete: (s) => s.outroDismissed,
+    isComplete: (session) => session.outroDismissed,
   },
   {
     id: 'skills',

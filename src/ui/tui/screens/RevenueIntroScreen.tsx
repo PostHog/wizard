@@ -14,10 +14,175 @@ import { Box, Text } from 'ink';
 import { useSyncExternalStore } from 'react';
 import type { WizardStore } from '../store.js';
 import { PickerMenu } from '../primitives/index.js';
+import {
+  POSTHOG_SDKS,
+  STRIPE_SDKS,
+  type RevenueDetectError,
+} from '../../../lib/workflows/revenue-analytics.js';
 
 interface RevenueIntroScreenProps {
   store: WizardStore;
 }
+
+const WizardTitle = () => (
+  <Text bold>
+    <Text color="#1D4AFF">{'\u2588'}</Text>
+    <Text color="#F54E00">{'\u2588'}</Text>
+    <Text color="#F9BD2B">{'\u2588'}</Text>
+    {' Revenue Analytics Wizard 💸'}
+  </Text>
+);
+
+const DetectErrorView = ({ error }: { error: RevenueDetectError }) => (
+  <Box
+    flexDirection="column"
+    flexGrow={1}
+    alignItems="center"
+    justifyContent="center"
+  >
+    <Box flexDirection="column" alignItems="center" marginBottom={1}>
+      <WizardTitle />
+    </Box>
+
+    <Box flexDirection="column" marginBottom={1}>
+      <Text color="red" bold>
+        {'\u2718'} Cannot set up revenue analytics
+      </Text>
+      <Box marginTop={1} flexDirection="column">
+        <DetectErrorBody error={error} />
+      </Box>
+    </Box>
+
+    <PickerMenu
+      options={[{ label: 'Exit', value: 'exit' }]}
+      onSelect={() => process.exit(1)}
+    />
+  </Box>
+);
+
+const DetectErrorBody = ({ error }: { error: RevenueDetectError }) => {
+  switch (error.kind) {
+    case 'bad-directory': {
+      const reasonText = {
+        missing: 'does not exist',
+        'not-dir': 'is not a directory',
+        unreadable: 'could not be accessed',
+      }[error.reason];
+      return (
+        <>
+          <Text>This path {reasonText}:</Text>
+          <Text dimColor>
+            {'  '}
+            {error.path}
+          </Text>
+        </>
+      );
+    }
+
+    case 'no-package-json':
+      return (
+        <>
+          <Text>No package.json found in this directory.</Text>
+          <Text dimColor>
+            Revenue analytics currently supports Node.js / TypeScript projects.
+          </Text>
+          <Text dimColor>Run this command from your project root.</Text>
+        </>
+      );
+
+    case 'no-sdks':
+      return (
+        <>
+          <Text>
+            Neither PostHog nor Stripe SDKs detected (scanned{' '}
+            {error.scannedCount} package.json file
+            {error.scannedCount === 1 ? '' : 's'}).
+          </Text>
+          <Box marginTop={1} flexDirection="column">
+            <Text>Revenue analytics requires:</Text>
+            <Text dimColor>
+              {'  \u2022'} A PostHog SDK ({POSTHOG_SDKS.slice(0, 3).join(', ')},
+              …)
+            </Text>
+            <Text dimColor>
+              {'  \u2022'} A Stripe SDK ({STRIPE_SDKS.join(', ')})
+            </Text>
+          </Box>
+          <Box marginTop={1}>
+            <Text dimColor>
+              Install Stripe and run <Text bold>npx @posthog/wizard</Text> to
+              set up PostHog.
+            </Text>
+          </Box>
+        </>
+      );
+
+    case 'missing-posthog':
+      return (
+        <>
+          <Text>
+            Found Stripe ({error.foundStripe.join(', ')}) but no PostHog SDK.
+          </Text>
+          <Box marginTop={1}>
+            <Text dimColor>
+              Run <Text bold>npx @posthog/wizard</Text> first to set up the base
+              PostHog integration.
+            </Text>
+          </Box>
+        </>
+      );
+
+    case 'missing-stripe':
+      return (
+        <>
+          <Text>
+            Found PostHog ({error.foundPosthog.join(', ')}) but no Stripe SDK.
+          </Text>
+          <Text dimColor>
+            Revenue analytics currently supports Stripe only.
+          </Text>
+          <Box marginTop={1} flexDirection="column">
+            <Text dimColor>Install one of:</Text>
+            {STRIPE_SDKS.map((sdk) => (
+              <Text key={sdk} dimColor>
+                {'  \u2022'} {sdk}
+              </Text>
+            ))}
+          </Box>
+        </>
+      );
+
+    case 'skill-menu-failed':
+      return (
+        <>
+          <Text>Could not fetch the skill menu from context-mill.</Text>
+          <Text dimColor>Check your network connection and try again.</Text>
+        </>
+      );
+
+    case 'skill-not-found':
+      return (
+        <>
+          <Text>
+            Could not find the <Text bold>{error.skillId}</Text> skill in the
+            context-mill menu.
+          </Text>
+          <Text dimColor>Please try again later.</Text>
+        </>
+      );
+
+    case 'skill-install-failed':
+      return (
+        <>
+          <Text>Failed to install the revenue analytics skill.</Text>
+          <Text dimColor>
+            {'  '}
+            {error.message}
+          </Text>
+        </>
+      );
+  }
+};
 
 export const RevenueIntroScreen = ({ store }: RevenueIntroScreenProps) => {
   useSyncExternalStore(
@@ -27,7 +192,7 @@ export const RevenueIntroScreen = ({ store }: RevenueIntroScreenProps) => {
 
   const { session } = store;
   const detectError = session.frameworkContext.detectError as
-    | string
+    | RevenueDetectError
     | undefined;
   const detectedPosthogSdks =
     (session.frameworkContext.detectedPosthogSdks as string[] | undefined) ??
@@ -39,41 +204,7 @@ export const RevenueIntroScreen = ({ store }: RevenueIntroScreenProps) => {
     [];
 
   if (detectError) {
-    return (
-      <Box
-        flexDirection="column"
-        flexGrow={1}
-        alignItems="center"
-        justifyContent="center"
-      >
-        <Box flexDirection="column" alignItems="center" marginBottom={1}>
-          <Text bold>
-            <Text color="#1D4AFF">{'\u2588'}</Text>
-            <Text color="#F54E00">{'\u2588'}</Text>
-            <Text color="#F9BD2B">{'\u2588'}</Text>
-            {' Revenue Analytics Wizard 💸'}
-          </Text>
-        </Box>
-
-        <Box flexDirection="column" marginBottom={1}>
-          <Text color="red" bold>
-            {'\u2718'} Cannot set up revenue analytics
-          </Text>
-          <Box marginTop={1} flexDirection="column">
-            {detectError.split('\n').map((line, i) => (
-              <Text key={i} dimColor={line.startsWith('  ')}>
-                {line}
-              </Text>
-            ))}
-          </Box>
-        </Box>
-
-        <PickerMenu
-          options={[{ label: 'Exit', value: 'exit' }]}
-          onSelect={() => process.exit(1)}
-        />
-      </Box>
-    );
+    return <DetectErrorView error={detectError} />;
   }
 
   return (
@@ -84,12 +215,7 @@ export const RevenueIntroScreen = ({ store }: RevenueIntroScreenProps) => {
       justifyContent="center"
     >
       <Box flexDirection="column" alignItems="center" marginBottom={1}>
-        <Text bold>
-          <Text color="#1D4AFF">{'\u2588'}</Text>
-          <Text color="#F54E00">{'\u2588'}</Text>
-          <Text color="#F9BD2B">{'\u2588'}</Text>
-          {' Revenue Analytics Wizard 💸'}
-        </Text>
+        <WizardTitle />
 
         <Box flexDirection="column" alignItems="center" marginTop={1}>
           <Box marginTop={1}>

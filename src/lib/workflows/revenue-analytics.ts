@@ -12,13 +12,14 @@
 import type { Workflow } from '../workflow-step.js';
 import type { WizardSession } from '../wizard-session.js';
 import { RunPhase } from '../wizard-session.js';
+import type { Dirent } from 'fs';
 import { readFileSync, readdirSync, existsSync, statSync } from 'fs';
 import { join, relative } from 'path';
 import { fetchSkillMenu, downloadSkill } from '../wizard-tools.js';
 import { logToFile } from '../../utils/debug.js';
 import { IGNORED_DIRS } from '../../utils/file-utils.js';
 
-const POSTHOG_SDKS = [
+export const POSTHOG_SDKS = [
   'posthog-js',
   'posthog-node',
   'posthog-react-native',
@@ -26,7 +27,11 @@ const POSTHOG_SDKS = [
   'posthog-ios',
 ];
 
-const STRIPE_SDKS = ['stripe', '@stripe/stripe-js', '@stripe/react-stripe-js'];
+export const STRIPE_SDKS = [
+  'stripe',
+  '@stripe/stripe-js',
+  '@stripe/react-stripe-js',
+];
 
 const SKILL_ID = 'revenue-analytics-setup';
 
@@ -38,6 +43,24 @@ interface PackageMatch {
 }
 
 /**
+ * Structured detection errors. The screen renders each kind into JSX
+ * with proper formatting — keeps error data separate from presentation.
+ */
+export type RevenueDetectError =
+  | {
+      kind: 'bad-directory';
+      path: string;
+      reason: 'missing' | 'not-dir' | 'unreadable';
+    }
+  | { kind: 'no-package-json' }
+  | { kind: 'no-sdks'; scannedCount: number }
+  | { kind: 'missing-posthog'; foundStripe: string[] }
+  | { kind: 'missing-stripe'; foundPosthog: string[] }
+  | { kind: 'skill-menu-failed' }
+  | { kind: 'skill-not-found'; skillId: string }
+  | { kind: 'skill-install-failed'; message: string };
+
+/**
  * Recursively find all package.json files under installDir (max depth 5),
  * skipping common ignored directories. Returns matches with detected SDKs.
  */
@@ -47,7 +70,7 @@ function findPackageJsons(installDir: string, maxDepth = 3): PackageMatch[] {
   function scan(dir: string, depth: number): void {
     if (depth > maxDepth) return;
 
-    let entries: import('fs').Dirent[];
+    let entries: Dirent[];
     try {
       entries = readdirSync(dir, { withFileTypes: true });
     } catch {
@@ -99,27 +122,23 @@ export async function detectRevenuePrerequisites(
   session: WizardSession,
   setFrameworkContext: (key: string, value: unknown) => void,
 ): Promise<void> {
+  const fail = (error: RevenueDetectError) =>
+    setFrameworkContext('detectError', error);
+
   const installDir = session.installDir;
 
-  // Verify the install directory exists
+  // Verify the install directory exists and is readable
   if (!existsSync(installDir)) {
-    setFrameworkContext(
-      'detectError',
-      `Directory does not exist:\n  ${installDir}`,
-    );
+    fail({ kind: 'bad-directory', path: installDir, reason: 'missing' });
     return;
   }
-
   try {
     if (!statSync(installDir).isDirectory()) {
-      setFrameworkContext('detectError', `Not a directory:\n  ${installDir}`);
+      fail({ kind: 'bad-directory', path: installDir, reason: 'not-dir' });
       return;
     }
   } catch {
-    setFrameworkContext(
-      'detectError',
-      `Could not access directory:\n  ${installDir}`,
-    );
+    fail({ kind: 'bad-directory', path: installDir, reason: 'unreadable' });
     return;
   }
 
@@ -127,12 +146,7 @@ export async function detectRevenuePrerequisites(
   const matches = findPackageJsons(installDir);
 
   if (matches.length === 0) {
-    setFrameworkContext(
-      'detectError',
-      'No package.json found in this directory.\n' +
-        'Revenue analytics is currently supported for Node.js / TypeScript projects.\n' +
-        'Run this command from your project root.',
-    );
+    fail({ kind: 'no-package-json' });
     return;
   }
 
@@ -148,40 +162,17 @@ export async function detectRevenuePrerequisites(
   const detectedStripeSdks = [...allStripeSdks];
 
   if (detectedPosthogSdks.length === 0 && detectedStripeSdks.length === 0) {
-    setFrameworkContext(
-      'detectError',
-      `Neither PostHog nor Stripe SDKs detected.\n` +
-        `Scanned ${matches.length} package.json file(s).\n\n` +
-        `Revenue analytics requires:\n` +
-        `  • A PostHog SDK (${POSTHOG_SDKS.slice(0, 3).join(', ')}, ...)\n` +
-        `  • A Stripe SDK (${STRIPE_SDKS.join(', ')})\n\n` +
-        `Install Stripe and run \`npx @posthog/wizard\` first to set up PostHog.`,
-    );
+    fail({ kind: 'no-sdks', scannedCount: matches.length });
     return;
   }
 
   if (detectedPosthogSdks.length === 0) {
-    setFrameworkContext(
-      'detectError',
-      `No PostHog SDK detected.\n` +
-        `Found Stripe (${detectedStripeSdks.join(
-          ', ',
-        )}) but no PostHog SDK.\n\n` +
-        `Run \`npx @posthog/wizard\` first to set up the base PostHog integration.`,
-    );
+    fail({ kind: 'missing-posthog', foundStripe: detectedStripeSdks });
     return;
   }
 
   if (detectedStripeSdks.length === 0) {
-    setFrameworkContext(
-      'detectError',
-      `No Stripe SDK detected.\n` +
-        `Found PostHog (${detectedPosthogSdks.join(
-          ', ',
-        )}) but no Stripe SDK.\n\n` +
-        `Revenue analytics currently supports Stripe only.\n` +
-        `Install one of: ${STRIPE_SDKS.join(', ')}`,
-    );
+    fail({ kind: 'missing-stripe', foundPosthog: detectedPosthogSdks });
     return;
   }
 
@@ -206,29 +197,23 @@ export async function detectRevenuePrerequisites(
   try {
     const menu = await fetchSkillMenu(skillsBaseUrl);
     if (!menu) {
-      setFrameworkContext(
-        'detectError',
-        'Could not fetch the skill menu.\nPlease check your network connection and try again.',
-      );
+      fail({ kind: 'skill-menu-failed' });
       return;
     }
 
     const allSkills = Object.values(menu.categories).flat();
     const skill = allSkills.find((s) => s.id === SKILL_ID);
     if (!skill) {
-      setFrameworkContext(
-        'detectError',
-        `Could not find the "${SKILL_ID}" skill.\nPlease try again.`,
-      );
+      fail({ kind: 'skill-not-found', skillId: SKILL_ID });
       return;
     }
 
     const installResult = downloadSkill(skill, installDir);
     if (!installResult.success) {
-      setFrameworkContext(
-        'detectError',
-        `Failed to install skill: ${installResult.error}\nPlease try again.`,
-      );
+      fail({
+        kind: 'skill-install-failed',
+        message: installResult.error ?? 'unknown error',
+      });
       return;
     }
 
@@ -236,45 +221,35 @@ export async function detectRevenuePrerequisites(
     logToFile(`[revenue-detect] skill installed at ${skillPath}`);
     setFrameworkContext('skillPath', skillPath);
   } catch (err: any) {
-    setFrameworkContext('detectError', `Skill download failed: ${err.message}`);
+    fail({ kind: 'skill-install-failed', message: err.message });
   }
 }
 
 export const REVENUE_ANALYTICS_WORKFLOW: Workflow = [
   {
-    id: 'detect',
-    label: 'Detecting prerequisites',
-    // No screen — headless step. Gate blocks bin.ts until detection is done.
-    // Detection is triggered by bin.ts calling detectRevenuePrerequisites()
-    // after the session is assigned to the store.
-    gate: (s) =>
-      s.frameworkContext.skillPath != null ||
-      s.frameworkContext.detectError != null,
-  },
-  {
     id: 'intro',
     label: 'Welcome',
     screen: 'revenue-intro',
-    gate: (s) => s.setupConfirmed,
-    isComplete: (s) => s.setupConfirmed,
+    gate: (session) => session.setupConfirmed,
   },
   {
     id: 'auth',
     label: 'Authentication',
     screen: 'auth',
-    isComplete: (s) => s.credentials !== null,
+    isComplete: (session) => session.credentials !== null,
   },
   {
     id: 'run',
     label: 'Revenue analytics',
     screen: 'run',
-    isComplete: (s) =>
-      s.runPhase === RunPhase.Completed || s.runPhase === RunPhase.Error,
+    isComplete: (session) =>
+      session.runPhase === RunPhase.Completed ||
+      session.runPhase === RunPhase.Error,
   },
   {
     id: 'outro',
     label: 'Done',
     screen: 'outro',
-    isComplete: (s) => s.outroDismissed,
+    isComplete: (session) => session.outroDismissed,
   },
 ];
