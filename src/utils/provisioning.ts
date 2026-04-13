@@ -95,7 +95,7 @@ export async function provisionNewAccount(
   email: string,
   name: string,
   region: 'US' | 'EU' = 'US',
-  projectName?: string,
+  opts?: { orgName?: string; projectName?: string },
 ): Promise<ProvisioningResult> {
   const codeVerifier = generateCodeVerifier();
   const codeChallenge = generateCodeChallenge(codeVerifier);
@@ -114,7 +114,7 @@ export async function provisionNewAccount(
       code_challenge_method: 'S256',
       configuration: {
         region,
-        ...(name ? { organization_name: `${name}'s Organization` } : {}),
+        ...(opts?.orgName ? { organization_name: opts.orgName } : {}),
       },
     },
     {
@@ -178,7 +178,9 @@ export async function provisionNewAccount(
     `${PROVISIONING_BASE_URL}/api/agentic/provisioning/resources`,
     {
       service_id: 'analytics',
-      ...(projectName ? { configuration: { project_name: projectName } } : {}),
+      ...(opts?.projectName
+        ? { configuration: { project_name: opts.projectName } }
+        : {}),
     },
     {
       headers: {

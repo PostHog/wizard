@@ -51,7 +51,15 @@ describe('provisionNewAccount', () => {
       },
     });
 
-    const result = await provisionNewAccount('user@example.com', 'Test User');
+    const result = await provisionNewAccount(
+      'user@example.com',
+      'Test User',
+      'US',
+      {
+        orgName: 'acme-corp',
+        projectName: 'my-app',
+      },
+    );
 
     expect(result).toEqual({
       accessToken: 'pha_test_access',
@@ -74,7 +82,7 @@ describe('provisionNewAccount', () => {
       code_challenge_method: 'S256',
       configuration: {
         region: 'US',
-        organization_name: "Test User's Organization",
+        organization_name: 'acme-corp',
       },
     });
     expect(
@@ -88,9 +96,13 @@ describe('provisionNewAccount', () => {
     expect(tokenCall[1]).toContain('code_verifier=');
     expect(tokenCall[1]).toContain('grant_type=authorization_code');
 
-    // Verify resources call uses bearer token
+    // Verify resources call uses bearer token and project name
     const resourceCall = mockedAxios.post.mock.calls[2];
     expect(resourceCall[0]).toContain('/resources');
+    expect(resourceCall[1]).toMatchObject({
+      service_id: 'analytics',
+      configuration: { project_name: 'my-app' },
+    });
     expect(resourceCall[2]?.headers?.Authorization).toBe(
       'Bearer pha_test_access',
     );
@@ -209,7 +221,9 @@ describe('provisionNewAccount', () => {
         },
       });
 
-    await provisionNewAccount('proj@example.com', '', 'US', 'my-cool-app');
+    await provisionNewAccount('proj@example.com', '', 'US', {
+      projectName: 'my-cool-app',
+    });
 
     const resourceCall = mockedAxios.post.mock.calls[2];
     expect(resourceCall[1]).toMatchObject({
