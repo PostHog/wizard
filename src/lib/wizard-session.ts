@@ -89,6 +89,8 @@ export interface WizardSession {
   localMcp: boolean;
   mcpFeatures?: string[];
   apiKey?: string;
+  email?: string;
+  region?: CloudRegion;
   menu: boolean;
   benchmark: boolean;
   yaraReport: boolean;
@@ -163,6 +165,8 @@ export function buildSession(args: {
   localMcp?: boolean;
   mcpFeatures?: string[];
   apiKey?: string;
+  email?: string;
+  region?: CloudRegion;
   menu?: boolean;
   integration?: Integration;
   benchmark?: boolean;
@@ -178,6 +182,8 @@ export function buildSession(args: {
     localMcp: args.localMcp ?? false,
     mcpFeatures: args.mcpFeatures,
     apiKey: args.apiKey,
+    email: args.email,
+    region: args.region,
     menu: args.menu ?? false,
     benchmark: args.benchmark ?? false,
     yaraReport: args.yaraReport ?? false,
