@@ -1,12 +1,8 @@
 /**
  * Revenue analytics workflow.
  *
- * Launched via `wizard revenue`. The detect step checks for PostHog + Stripe
- * SDKs and downloads the skill. Auth and run follow.
- *
- * Detection runs via detectRevenuePrerequisites() called from bin.ts AFTER
- * the session is assigned (onInit fires during store construction, before
- * session is set, so it can't be used for session-dependent detection).
+ * The detect step checks for PostHog + Stripe SDKs. The skill install
+ * and agent run live in the bootstrap runner (see skill-runner.ts).
  */
 
 import type { Workflow } from '../workflow-step.js';
@@ -15,8 +11,6 @@ import { RunPhase } from '../wizard-session.js';
 import type { Dirent } from 'fs';
 import { readFileSync, readdirSync, existsSync, statSync } from 'fs';
 import { join, relative } from 'path';
-import { fetchSkillMenu, downloadSkill } from '../wizard-tools.js';
-import { logToFile } from '../../utils/debug.js';
 import { IGNORED_DIRS } from '../../utils/file-utils.js';
 
 export const POSTHOG_SDKS = [
@@ -32,8 +26,6 @@ export const STRIPE_SDKS = [
   '@stripe/stripe-js',
   '@stripe/react-stripe-js',
 ];
-
-const SKILL_ID = 'revenue-analytics-setup';
 
 interface PackageMatch {
   /** Path to the package.json relative to installDir */
@@ -55,13 +47,10 @@ export type RevenueDetectError =
   | { kind: 'no-package-json' }
   | { kind: 'no-sdks'; scannedCount: number }
   | { kind: 'missing-posthog'; foundStripe: string[] }
-  | { kind: 'missing-stripe'; foundPosthog: string[] }
-  | { kind: 'skill-menu-failed' }
-  | { kind: 'skill-not-found'; skillId: string }
-  | { kind: 'skill-install-failed'; message: string };
+  | { kind: 'missing-stripe'; foundPosthog: string[] };
 
 /**
- * Recursively find all package.json files under installDir (max depth 5),
+ * Recursively find all package.json files under installDir (max depth 3),
  * skipping common ignored directories. Returns matches with detected SDKs.
  */
 function findPackageJsons(installDir: string, maxDepth = 3): PackageMatch[] {
@@ -85,12 +74,14 @@ function findPackageJsons(installDir: string, maxDepth = 3): PackageMatch[] {
 
       if (entry.isFile() && entry.name === 'package.json') {
         try {
-          const pkg = JSON.parse(readFileSync(fullPath, 'utf-8'));
-          const allDeps = {
-            ...pkg.dependencies,
-            ...pkg.devDependencies,
+          const pkg = JSON.parse(readFileSync(fullPath, 'utf-8')) as {
+            dependencies?: Record<string, string>;
+            devDependencies?: Record<string, string>;
           };
-          const depNames = Object.keys(allDeps);
+          const depNames = [
+            ...Object.keys(pkg.dependencies ?? {}),
+            ...Object.keys(pkg.devDependencies ?? {}),
+          ];
           const posthogSdks = depNames.filter((d) => POSTHOG_SDKS.includes(d));
           const stripeSdks = depNames.filter((d) => STRIPE_SDKS.includes(d));
           matches.push({
@@ -112,16 +103,16 @@ function findPackageJsons(installDir: string, maxDepth = 3): PackageMatch[] {
 }
 
 /**
- * Check prerequisites and download the revenue analytics skill.
- * Stores `skillPath` or `detectError` in session.frameworkContext.
+ * Scan `session.installDir` for PostHog + Stripe SDKs. Writes detection
+ * results into frameworkContext via the callback — either the detected
+ * SDK lists (for the intro screen) or a `RevenueDetectError` on failure.
  *
- * Must be called AFTER the session is assigned to the store,
- * so it reads the correct installDir.
+ * The skill install happens later in the bootstrap runner, not here.
  */
-export async function detectRevenuePrerequisites(
+function detectRevenuePrerequisites(
   session: WizardSession,
   setFrameworkContext: (key: string, value: unknown) => void,
-): Promise<void> {
+): void {
   const fail = (error: RevenueDetectError) =>
     setFrameworkContext('detectError', error);
 
@@ -184,48 +175,19 @@ export async function detectRevenuePrerequisites(
       .filter((m) => m.posthogSdks.length > 0 || m.stripeSdks.length > 0)
       .map((m) => m.path),
   );
-
-  // Both found — download the skill
-  const skillsBaseUrl = session.localMcp
-    ? 'http://localhost:8765'
-    : 'https://github.com/PostHog/context-mill/releases/latest/download';
-
-  logToFile(
-    `[revenue-detect] prerequisites met, fetching skill menu from ${skillsBaseUrl}`,
-  );
-
-  try {
-    const menu = await fetchSkillMenu(skillsBaseUrl);
-    if (!menu) {
-      fail({ kind: 'skill-menu-failed' });
-      return;
-    }
-
-    const allSkills = Object.values(menu.categories).flat();
-    const skill = allSkills.find((s) => s.id === SKILL_ID);
-    if (!skill) {
-      fail({ kind: 'skill-not-found', skillId: SKILL_ID });
-      return;
-    }
-
-    const installResult = downloadSkill(skill, installDir);
-    if (!installResult.success) {
-      fail({
-        kind: 'skill-install-failed',
-        message: installResult.error ?? 'unknown error',
-      });
-      return;
-    }
-
-    const skillPath = `.claude/skills/${SKILL_ID}`;
-    logToFile(`[revenue-detect] skill installed at ${skillPath}`);
-    setFrameworkContext('skillPath', skillPath);
-  } catch (err: any) {
-    fail({ kind: 'skill-install-failed', message: err.message });
-  }
 }
 
 export const REVENUE_ANALYTICS_WORKFLOW: Workflow = [
+  {
+    id: 'detect',
+    label: 'Detecting prerequisites',
+    // Headless step: no screen, no gate. onReady fires after bin.ts
+    // assigns the session — the hook scans for PostHog + Stripe SDKs
+    // and writes the results (or a detectError) to frameworkContext
+    // for the intro screen to render.
+    onReady: (ctx) =>
+      detectRevenuePrerequisites(ctx.session, ctx.setFrameworkContext),
+  },
   {
     id: 'intro',
     label: 'Welcome',

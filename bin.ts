@@ -559,16 +559,9 @@ yargs(hideBin(process.argv))
           });
           tui.store.session = session;
 
-          // Run detection after session is assigned (needs correct installDir).
-          // Checks for PostHog + Stripe SDKs and downloads the skill. Results
-          // are stored in frameworkContext so the intro screen can render them
-          // (or render the detectError state).
-          const { detectRevenuePrerequisites } = await import(
-            './src/lib/workflows/revenue-analytics.js'
-          );
-          await detectRevenuePrerequisites(tui.store.session, (k, v) =>
-            tui.store.setFrameworkContext(k, v),
-          );
+          // Run any workflow-declared pre-flow work (e.g. prerequisite
+          // detection + skill download for the revenue flow).
+          await tui.store.runReadyHooks();
 
           // Wait for the intro screen — it handles both the success state
           // (detected SDKs + confirm) and the error state (detectError + exit).

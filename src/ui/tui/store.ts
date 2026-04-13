@@ -34,7 +34,10 @@ import {
   Flow,
 } from './router.js';
 import { analytics, sessionProperties } from '../../utils/analytics.js';
-import type { StoreInitContext } from '../../lib/workflow-step.js';
+import type {
+  StoreInitContext,
+  WorkflowReadyContext,
+} from '../../lib/workflow-step.js';
 import { WORKFLOW_STEPS } from './flows.js';
 
 export { TaskStatus, Screen, Overlay, Flow, RunPhase, McpOutcome };
@@ -135,6 +138,26 @@ export class WizardStore {
     };
     for (const step of steps) {
       step.onInit?.(ctx);
+    }
+  }
+
+  /**
+   * Run all `onReady` hooks declared by the current flow's steps, in
+   * order. Must be called after `store.session = session` so hooks see
+   * the real installDir. bin.ts calls this generically — it doesn't
+   * need to know which workflow has which pre-flow work.
+   */
+  async runReadyHooks(): Promise<void> {
+    const steps = WORKFLOW_STEPS[this.router.activeFlow];
+    if (!steps) return;
+    const ctx: WorkflowReadyContext = {
+      session: this.session,
+      setFrameworkContext: (k, v) => this.setFrameworkContext(k, v),
+    };
+    for (const step of steps) {
+      if (step.onReady) {
+        await step.onReady(ctx);
+      }
     }
   }
 

@@ -11,7 +11,7 @@ import {
 } from '../utils/setup-utils';
 import type { PackageDotJson } from '../utils/package-json';
 import type { WizardOptions } from '../utils/types';
-import { WIZARD_INTERACTION_EVENT_NAME } from './constants';
+import { WIZARD_INTERACTION_EVENT_NAME, getSkillsBaseUrl } from './constants';
 import { analytics } from '../utils/analytics';
 import { getUI } from '../ui';
 import {
@@ -102,10 +102,7 @@ export async function runAgentWizard(
     }
   }
 
-  // Compute skills server URL (needed for agent tool calls)
-  const skillsBaseUrl = session.localMcp
-    ? 'http://localhost:8765'
-    : 'https://github.com/PostHog/context-mill/releases/latest/download';
+  const skillsBaseUrl = getSkillsBaseUrl(session.localMcp);
 
   // Check all external service health (skip if TUI already ran it in bin.ts)
   if (!session.readinessResult) {

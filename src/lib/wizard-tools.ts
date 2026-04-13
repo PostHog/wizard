@@ -107,6 +107,51 @@ export function downloadSkill(
   }
 }
 
+/**
+ * Structured result for installSkillById.
+ * - `ok`: the skill was fetched and extracted; `path` is where it lives
+ *   relative to installDir.
+ * - `menu-fetch-failed`: couldn't fetch or parse the skill menu.
+ * - `skill-not-found`: the menu didn't contain a skill with this id.
+ * - `download-failed`: found the skill but download/extract failed;
+ *   `message` has the underlying error.
+ */
+export type InstallSkillResult =
+  | { kind: 'ok'; path: string }
+  | { kind: 'menu-fetch-failed' }
+  | { kind: 'skill-not-found'; skillId: string }
+  | { kind: 'download-failed'; message: string };
+
+/**
+ * High-level "install a skill by ID" helper. Fetches the skill menu,
+ * finds the skill, downloads and extracts it. Workflows should use this
+ * instead of composing fetchSkillMenu + downloadSkill themselves.
+ */
+export async function installSkillById(
+  skillId: string,
+  installDir: string,
+  skillsBaseUrl: string,
+  skillsRoot?: string,
+): Promise<InstallSkillResult> {
+  const menu = await fetchSkillMenu(skillsBaseUrl);
+  if (!menu) return { kind: 'menu-fetch-failed' };
+
+  const skill = Object.values(menu.categories)
+    .flat()
+    .find((s) => s.id === skillId);
+  if (!skill) return { kind: 'skill-not-found', skillId };
+
+  const result = downloadSkill(skill, installDir, skillsRoot);
+  if (!result.success) {
+    return { kind: 'download-failed', message: result.error ?? 'unknown' };
+  }
+
+  const relPath = skillsRoot
+    ? `${skillsRoot}/${skillId}`
+    : `.claude/skills/${skillId}`;
+  return { kind: 'ok', path: relPath };
+}
+
 // ---------------------------------------------------------------------------
 // Options for creating the wizard tools server
 // ---------------------------------------------------------------------------

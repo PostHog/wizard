@@ -1,12 +1,9 @@
 /**
  * Generic skill bootstrap runner.
  *
- * Receives a path to an already-installed skill and runs the agent against it.
- * Skill selection and download is the caller's responsibility — different
- * workflows need different detection logic (e.g. framework detection for
- * integration, payment provider detection for revenue).
- *
- * Used by revenue-runner and any future skill-based workflows.
+ * Given a skill ID, installs it from context-mill and runs the agent
+ * against it. Callers (like revenue-runner) just pass config — the
+ * whole install + OAuth + run + outro pipeline lives here.
  */
 
 import { existsSync } from 'fs';
@@ -38,18 +35,16 @@ import {
 } from '../utils/wizard-abort';
 import { formatScanReport, writeScanReport } from './yara-hooks';
 import { detectNodePackageManagers } from './package-manager-detection';
+import { getSkillsBaseUrl } from './constants';
+import { installSkillById, type InstallSkillResult } from './wizard-tools';
 import type { WizardOptions } from '../utils/types';
 
 /**
  * Configuration for a skill-based workflow.
- *
- * The caller is responsible for selecting and installing the skill
- * before calling runSkillBootstrap. This config tells the runner
- * where the skill lives and how to present the results.
  */
 export interface SkillBootstrapConfig {
-  /** Path to the installed skill relative to installDir (e.g. '.claude/skills/revenue-analytics-stripe') */
-  skillPath: string;
+  /** Context-mill skill ID to install (e.g. 'revenue-analytics-setup') */
+  skillId: string;
   /** Analytics integration label */
   integrationLabel: string;
   /** Extra context prepended to the agent prompt */
@@ -92,9 +87,7 @@ export async function runSkillBootstrap(
     enableDebugLogs();
   }
 
-  const skillsBaseUrl = session.localMcp
-    ? 'http://localhost:8765'
-    : 'https://github.com/PostHog/context-mill/releases/latest/download';
+  const skillsBaseUrl = getSkillsBaseUrl(session.localMcp);
 
   // Health check
   if (!session.readinessResult) {
@@ -164,7 +157,18 @@ export async function runSkillBootstrap(
     });
   }
 
-  logToFile(`[skill-runner] using skill at ${config.skillPath}`);
+  // Install the skill from context-mill before running the agent.
+  logToFile(`[skill-runner] installing skill ${config.skillId}`);
+  const installResult = await installSkillById(
+    config.skillId,
+    session.installDir,
+    skillsBaseUrl,
+  );
+  if (installResult.kind !== 'ok') {
+    await abortOnInstallFailure(config.integrationLabel, installResult);
+    return;
+  }
+  logToFile(`[skill-runner] skill installed at ${installResult.path}`);
 
   getUI().startRun();
 
@@ -186,7 +190,13 @@ export async function runSkillBootstrap(
     ? createBenchmarkPipeline(spinner, sessionToOptions(session))
     : undefined;
 
-  const prompt = buildBootstrapPrompt(config, projectId, projectApiKey, host);
+  const prompt = buildBootstrapPrompt(
+    config,
+    installResult.path,
+    projectId,
+    projectApiKey,
+    host,
+  );
 
   const agentResult = await runAgent(
     agent,
@@ -255,11 +265,11 @@ export async function runSkillBootstrap(
  */
 function buildBootstrapPrompt(
   config: SkillBootstrapConfig,
+  skillPath: string,
   projectId: number,
   projectApiKey: string,
   host: string,
 ): string {
-  const { skillPath } = config;
   return `You have access to the PostHog MCP server.${
     config.promptContext ? ' ' + config.promptContext : ''
   }
@@ -280,4 +290,33 @@ After completing the skill workflow, write a brief markdown report to ./${
 
 Important: You must read a file immediately before attempting to write it, even if you have previously read it; failure to do so will cause a tool failure.
 `;
+}
+
+/**
+ * Map an installSkillById failure to a user-facing error message and abort.
+ */
+async function abortOnInstallFailure(
+  integrationLabel: string,
+  result: InstallSkillResult,
+): Promise<void> {
+  if (result.kind === 'ok') return;
+
+  const message = (() => {
+    switch (result.kind) {
+      case 'menu-fetch-failed':
+        return 'Could not fetch the skill menu from context-mill.\nCheck your network connection and try again.';
+      case 'skill-not-found':
+        return `Could not find the "${result.skillId}" skill in the context-mill menu.\nPlease try again later.`;
+      case 'download-failed':
+        return `Failed to install skill: ${result.message}\nPlease try again.`;
+    }
+  })();
+
+  await wizardAbort({
+    message,
+    error: new WizardError(`Skill install failed: ${result.kind}`, {
+      integration: integrationLabel,
+      error_type: result.kind,
+    }),
+  });
 }

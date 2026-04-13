@@ -1,19 +1,17 @@
 /**
  * Revenue analytics wizard runner.
  *
- * The detect workflow step has already verified prerequisites (PostHog + Stripe)
- * and downloaded the skill. This runner reads the skill path from the session
- * and hands off to the generic skill bootstrap runner.
+ * Thin config wrapper around the generic skill bootstrap runner.
+ * The revenue workflow's detect step has already verified prerequisites
+ * (PostHog + Stripe); the bootstrap runner handles skill install + agent run.
  */
 
 import { runSkillBootstrap } from './skill-runner';
 import type { WizardSession } from './wizard-session';
 
 export async function runRevenueWizard(session: WizardSession): Promise<void> {
-  const skillPath = session.frameworkContext.skillPath as string;
-
   await runSkillBootstrap(session, {
-    skillPath,
+    skillId: 'revenue-analytics-setup',
     integrationLabel: 'revenue-analytics',
     promptContext: 'Set up revenue analytics for this project.',
     successMessage: 'Revenue analytics configured!',

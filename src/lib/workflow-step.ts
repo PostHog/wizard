@@ -13,15 +13,24 @@ import type { WizardReadinessResult } from './health-checks/readiness.js';
  * Future flows (e.g. revenue analytics) register a different step list.
  */
 /**
- * Minimal interface passed to onInit callbacks.
- * Avoids circular dependency with WizardStore while giving steps
- * enough access to kick off async work (e.g. health checks).
+ * Context passed to onInit callbacks — fires during store construction,
+ * before bin.ts has assigned the real session.
  */
 export interface StoreInitContext {
-  get session(): WizardSession;
-  setReadinessResult(result: WizardReadinessResult | null): void;
-  setFrameworkContext(key: string, value: unknown): void;
-  emitChange(): void;
+  readonly session: WizardSession;
+  readonly setReadinessResult: (result: WizardReadinessResult | null) => void;
+  readonly setFrameworkContext: (key: string, value: unknown) => void;
+  readonly emitChange: () => void;
+}
+
+/**
+ * Context passed to onReady callbacks — fires after bin.ts has assigned
+ * the real session, so reading `session.installDir` returns the target
+ * project. Use for async pre-flow work like prerequisite detection.
+ */
+export interface WorkflowReadyContext {
+  readonly session: WizardSession;
+  readonly setFrameworkContext: (key: string, value: unknown) => void;
 }
 
 export interface WorkflowStep {
@@ -57,11 +66,20 @@ export interface WorkflowStep {
   gate?: (session: WizardSession) => boolean;
 
   /**
-   * Called once during store construction. For steps that need to kick
-   * off async work early (e.g. health checks that run while the user
-   * is still on the intro screen).
+   * Called once during store construction, with the default session.
+   * Use for session-independent fire-and-forget work that should start
+   * as early as possible (e.g. health check kicked off while the user
+   * is still reading the intro screen).
    */
   onInit?: (ctx: StoreInitContext) => void;
+
+  /**
+   * Called once after bin.ts has assigned the real session to the store,
+   * before any gate is awaited. Awaited in sequence with other steps'
+   * onReady callbacks. Use for session-dependent pre-flow work like
+   * scanning the installDir for prerequisites. May be sync or async.
+   */
+  onReady?: (ctx: WorkflowReadyContext) => void | Promise<void>;
 }
 
 /**

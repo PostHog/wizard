@@ -151,36 +151,6 @@ const DetectErrorBody = ({ error }: { error: RevenueDetectError }) => {
           </Box>
         </>
       );
-
-    case 'skill-menu-failed':
-      return (
-        <>
-          <Text>Could not fetch the skill menu from context-mill.</Text>
-          <Text dimColor>Check your network connection and try again.</Text>
-        </>
-      );
-
-    case 'skill-not-found':
-      return (
-        <>
-          <Text>
-            Could not find the <Text bold>{error.skillId}</Text> skill in the
-            context-mill menu.
-          </Text>
-          <Text dimColor>Please try again later.</Text>
-        </>
-      );
-
-    case 'skill-install-failed':
-      return (
-        <>
-          <Text>Failed to install the revenue analytics skill.</Text>
-          <Text dimColor>
-            {'  '}
-            {error.message}
-          </Text>
-        </>
-      );
   }
 };
 
