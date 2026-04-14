@@ -36,7 +36,7 @@ export enum Screen {
 
 /** Named flows the router can run */
 export enum Flow {
-  CoreIntegration = 'core-integration',
+  PostHogIntegration = 'posthog-integration',
   RevenueAnalytics = 'revenue-analytics',
   AgentSkill = 'agent-skill',
   McpAdd = 'mcp-add',

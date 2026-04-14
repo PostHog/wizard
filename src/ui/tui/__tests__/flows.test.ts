@@ -14,7 +14,7 @@ describe('FLOWS', () => {
   describe('Wizard setup predicate', () => {
     it('hides setup when there are no setup questions', () => {
       const session = buildSession({});
-      const entry = getEntry(Flow.CoreIntegration, Screen.Setup);
+      const entry = getEntry(Flow.PostHogIntegration, Screen.Setup);
 
       expect(entry.show?.(session)).toBe(false);
       expect(entry.isComplete?.(session)).toBe(true);
@@ -22,7 +22,7 @@ describe('FLOWS', () => {
 
     it('shows setup when framework questions are missing answers', () => {
       const session = buildSession({});
-      const entry = getEntry(Flow.CoreIntegration, Screen.Setup);
+      const entry = getEntry(Flow.PostHogIntegration, Screen.Setup);
 
       session.frameworkConfig = {
         metadata: {
@@ -39,7 +39,7 @@ describe('FLOWS', () => {
 
     it('marks setup complete once all required answers are present', () => {
       const session = buildSession({});
-      const entry = getEntry(Flow.CoreIntegration, Screen.Setup);
+      const entry = getEntry(Flow.PostHogIntegration, Screen.Setup);
 
       session.frameworkConfig = {
         metadata: {
@@ -61,14 +61,14 @@ describe('FLOWS', () => {
   describe('Wizard health-check predicate', () => {
     it('stays incomplete before readiness exists', () => {
       const session = buildSession({});
-      const entry = getEntry(Flow.CoreIntegration, Screen.HealthCheck);
+      const entry = getEntry(Flow.PostHogIntegration, Screen.HealthCheck);
 
       expect(entry.isComplete?.(session)).toBe(false);
     });
 
     it('stays incomplete for blocking readiness until outage is dismissed', () => {
       const session = buildSession({});
-      const entry = getEntry(Flow.CoreIntegration, Screen.HealthCheck);
+      const entry = getEntry(Flow.PostHogIntegration, Screen.HealthCheck);
 
       session.readinessResult = {
         decision: WizardReadiness.No,
@@ -85,7 +85,7 @@ describe('FLOWS', () => {
 
     it('completes immediately for non-blocking readiness', () => {
       const session = buildSession({});
-      const entry = getEntry(Flow.CoreIntegration, Screen.HealthCheck);
+      const entry = getEntry(Flow.PostHogIntegration, Screen.HealthCheck);
 
       session.readinessResult = {
         decision: WizardReadiness.YesWithWarnings,
@@ -100,7 +100,7 @@ describe('FLOWS', () => {
   describe('Wizard run predicate', () => {
     it('stays incomplete while run is idle or running', () => {
       const session = buildSession({});
-      const entry = getEntry(Flow.CoreIntegration, Screen.Run);
+      const entry = getEntry(Flow.PostHogIntegration, Screen.Run);
 
       session.runPhase = RunPhase.Idle;
       expect(entry.isComplete?.(session)).toBe(false);
@@ -111,7 +111,7 @@ describe('FLOWS', () => {
 
     it('completes when run finishes or errors', () => {
       const session = buildSession({});
-      const entry = getEntry(Flow.CoreIntegration, Screen.Run);
+      const entry = getEntry(Flow.PostHogIntegration, Screen.Run);
 
       session.runPhase = RunPhase.Completed;
       expect(entry.isComplete?.(session)).toBe(true);

@@ -95,7 +95,7 @@ export class WizardStore {
   /** Blocks OAuth flow until the port-conflict overlay is dismissed. */
   private _resolvePortConflict: (() => void) | null = null;
 
-  constructor(flow: Flow = Flow.CoreIntegration) {
+  constructor(flow: Flow = Flow.PostHogIntegration) {
     this.router = new WizardRouter(flow);
     this._initFromWorkflow(flow);
   }

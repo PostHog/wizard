@@ -39,7 +39,7 @@ export class WizardRouter {
   private flowName: Flow;
   private overlays: Overlay[] = [];
 
-  constructor(flowName: Flow = Flow.CoreIntegration) {
+  constructor(flowName: Flow = Flow.PostHogIntegration) {
     this.flowName = flowName;
     this.flow = FLOWS[flowName];
   }

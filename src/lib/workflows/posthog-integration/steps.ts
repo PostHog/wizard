@@ -13,7 +13,7 @@ import {
   evaluateWizardReadiness,
   WizardReadiness,
 } from '../../health-checks/readiness.js';
-import { detectCoreIntegration } from './detect.js';
+import { detectPostHogIntegration } from './detect.js';
 
 function needsSetup(session: WizardSession): boolean {
   const config = session.frameworkConfig;
@@ -39,7 +39,7 @@ export const POSTHOG_INTEGRATION_WORKFLOW: Workflow = [
     // session — runs framework detection, context gathering, version
     // check, and feature discovery. Results are written to the store
     // for the IntroScreen to render.
-    onReady: (ctx) => detectCoreIntegration(ctx),
+    onReady: (ctx) => detectPostHogIntegration(ctx),
   },
   {
     id: 'intro',

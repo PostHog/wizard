@@ -20,7 +20,7 @@ import { POSTHOG_INTEGRATION_WORKFLOW } from './steps.js';
 export const posthogIntegrationConfig: WorkflowConfig = {
   command: 'integrate',
   description: 'Set up PostHog SDK integration',
-  flowKey: 'core-integration',
+  flowKey: 'posthog-integration',
   steps: POSTHOG_INTEGRATION_WORKFLOW,
 
   run: async (session: WizardSession): Promise<WorkflowRun> => {

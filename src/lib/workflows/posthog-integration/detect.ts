@@ -18,7 +18,7 @@ import {
   checkFrameworkVersion,
 } from '../../detection/index.js';
 
-export async function detectCoreIntegration(
+export async function detectPostHogIntegration(
   ctx: WorkflowReadyContext,
 ): Promise<void> {
   const session = ctx.session;
