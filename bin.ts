@@ -24,6 +24,7 @@ import { getUI, setUI } from './src/ui';
 import { LoggingUI } from './src/ui/logging-ui';
 import { getSubcommandWorkflows } from './src/lib/workflows/workflow-registry';
 import type { WorkflowConfig } from './src/lib/workflows/workflow-step';
+import type { WizardSession } from './src/lib/wizard-session';
 
 if (process.env.NODE_ENV === 'test') {
   void (async () => {
@@ -181,133 +182,54 @@ const cli = yargs(hideBin(process.argv))
 
       // CI mode validation and TTY check
       if (options.ci) {
-        // Use LoggingUI for CI mode (no dependencies, no prompts)
-        setUI(new LoggingUI());
-        // Default region to 'us' if not specified
-        if (!options.region) {
-          options.region = 'us';
-        }
-        if (!options.apiKey) {
-          getUI().intro(`PostHog Wizard`);
-          getUI().log.error(
-            'CI mode requires --api-key (personal API key phx_xxx)',
-          );
-          process.exit(1);
-        }
-        if (!options.installDir) {
-          getUI().intro(`PostHog Wizard`);
-          getUI().log.error(
-            'CI mode requires --install-dir (directory to install PostHog in)',
-          );
-          process.exit(1);
-        }
-
         void (async () => {
-          const path = await import('path');
-          const { buildSession } = await import('./src/lib/wizard-session.js');
-          const { readEnvironment } = await import(
-            './src/utils/environment.js'
-          );
-          const { readApiKeyFromEnv } = await import(
-            './src/utils/env-api-key.js'
-          );
-          const { configureLogFileFromEnvironment } = await import(
-            './src/utils/debug.js'
+          const { posthogIntegrationConfig } = await import(
+            './src/lib/workflows/posthog-integration/index.js'
           );
           const { FRAMEWORK_REGISTRY } = await import('./src/lib/registry.js');
           const { detectFramework, gatherFrameworkContext } = await import(
             './src/lib/detection/index.js'
           );
           const { analytics } = await import('./src/utils/analytics.js');
-          const { posthogIntegrationConfig } = await import(
-            './src/lib/workflows/posthog-integration/index.js'
-          );
           const { wizardAbort } = await import('./src/utils/wizard-abort.js');
-          const { logToFile } = await import('./src/utils/debug.js');
 
-          configureLogFileFromEnvironment();
-
-          const env = readEnvironment();
-          const apiKey =
-            (options.apiKey as string) ?? readApiKeyFromEnv() ?? undefined;
-          const installDir = path.isAbsolute(options.installDir as string)
-            ? (options.installDir as string)
-            : path.join(process.cwd(), options.installDir as string);
-
-          const session = buildSession({
-            debug: options.debug as boolean | undefined,
-            forceInstall: options.forceInstall as boolean | undefined,
-            installDir,
-            ci: true,
-            signup: options.signup as boolean | undefined,
-            localMcp: options.localMcp as boolean | undefined,
-            apiKey,
-            menu: options.menu as boolean | undefined,
-            integration: options.integration as any,
-            benchmark: options.benchmark as boolean | undefined,
-            yaraReport: options.yaraReport as boolean | undefined,
-            projectId: options.projectId as string | undefined,
-            ...env,
-          });
-
-          getUI().intro('Welcome to the PostHog setup wizard');
-          getUI().log.info('Running in CI mode');
-
-          // Detect framework
-          const integration =
-            session.integration ?? (await detectFramework(installDir));
-          if (!integration) {
-            return wizardAbort({
-              message:
-                'Could not auto-detect your framework. Please specify --integration on the command line.',
-            });
-          }
-          session.integration = integration;
-          analytics.setTag('integration', integration);
-
-          const frameworkConfig = FRAMEWORK_REGISTRY[integration];
-          session.frameworkConfig = frameworkConfig;
-
-          // Gather context
-          const context = await gatherFrameworkContext(frameworkConfig, {
-            installDir,
-            debug: session.debug,
-            forceInstall: session.forceInstall,
-            default: false,
-            signup: session.signup,
-            localMcp: session.localMcp,
-            ci: true,
-            menu: session.menu,
-            benchmark: session.benchmark,
-            yaraReport: session.yaraReport,
-          });
-          for (const [key, value] of Object.entries(context)) {
-            if (!(key in session.frameworkContext)) {
-              session.frameworkContext[key] = value;
+          // preRun: honor --integration, else auto-detect, then gather
+          // framework context. Bypasses onReady hooks by design.
+          runWizardCI(posthogIntegrationConfig, options, async (session) => {
+            const integration =
+              session.integration ??
+              (await detectFramework(session.installDir));
+            if (!integration) {
+              await wizardAbort({
+                message:
+                  'Could not auto-detect your framework. Please specify --integration on the command line.',
+              });
+              return;
             }
-          }
+            session.integration = integration;
+            analytics.setTag('integration', integration);
 
-          try {
-            const { runAgent } = await import(
-              './src/lib/agent/agent-runner.js'
-            );
-            await runAgent(posthogIntegrationConfig, session);
-          } catch (error) {
-            const errorMessage =
-              error instanceof Error ? error.message : String(error);
-            const errorStack =
-              error instanceof Error && error.stack ? error.stack : undefined;
+            const frameworkConfig = FRAMEWORK_REGISTRY[integration];
+            session.frameworkConfig = frameworkConfig;
 
-            logToFile(`[bin.ts CI] ERROR: ${errorMessage}`);
-            if (errorStack) logToFile(`[bin.ts CI] STACK: ${errorStack}`);
-
-            const debugInfo =
-              session.debug && errorStack ? `\n\n${errorStack}` : '';
-            await wizardAbort({
-              message: `Something went wrong: ${errorMessage}\n\nYou can read the documentation at ${frameworkConfig.metadata.docsUrl} to set up PostHog manually.${debugInfo}`,
-              error: error as Error,
+            const context = await gatherFrameworkContext(frameworkConfig, {
+              installDir: session.installDir,
+              debug: session.debug,
+              forceInstall: session.forceInstall,
+              default: false,
+              signup: session.signup,
+              localMcp: session.localMcp,
+              ci: true,
+              menu: session.menu,
+              benchmark: session.benchmark,
+              yaraReport: session.yaraReport,
             });
-          }
+            for (const [key, value] of Object.entries(context)) {
+              if (!(key in session.frameworkContext)) {
+                session.frameworkContext[key] = value;
+              }
+            }
+          });
         })();
       } else if (isNonInteractiveEnvironment()) {
         // Non-interactive non-CI: error out
@@ -481,7 +403,14 @@ for (const wfConfig of getSubcommandWorkflows()) {
     wfConfig.command!,
     wfConfig.description,
     (y) => y.options(skillSubcommandOptions),
-    (argv) => runWizard(wfConfig, { ...argv }),
+    (argv) => {
+      const options = { ...argv };
+      if (options.ci) {
+        runWizardCI(wfConfig, options);
+      } else {
+        runWizard(wfConfig, options);
+      }
+    },
   );
 }
 
@@ -558,6 +487,140 @@ function runWizard(
       if (process.env.DEBUG || process.env.POSTHOG_WIZARD_DEBUG) {
         console.error('TUI init failed:', err); // eslint-disable-line no-console
       }
+    }
+  })();
+}
+
+/**
+ * CI-mode pipeline shared by every non-interactive entry point.
+ *
+ * Validates flags, builds a `ci:true` session, runs `preRun` (or the
+ * workflow's `onReady` hooks by default), executes `runAgent`, and
+ * routes any failure through `wizardAbort`. `wizardAbort` owns all
+ * exits — never add a raw `process.exit` here.
+ */
+function runWizardCI(
+  config: WorkflowConfig,
+  options: Record<string, unknown>,
+  preRun?: (session: WizardSession) => Promise<void>,
+): void {
+  setUI(new LoggingUI());
+  if (!options.region) options.region = 'us';
+  if (!options.apiKey) {
+    getUI().intro('PostHog Wizard');
+    getUI().log.error('CI mode requires --api-key (personal API key phx_xxx)');
+    process.exit(1);
+  }
+  if (!options.installDir) {
+    getUI().intro('PostHog Wizard');
+    getUI().log.error(
+      'CI mode requires --install-dir (directory to install in)',
+    );
+    process.exit(1);
+  }
+
+  void (async () => {
+    const path = await import('path');
+    const { buildSession } = await import('./src/lib/wizard-session.js');
+    const { readEnvironment } = await import('./src/utils/environment.js');
+    const { readApiKeyFromEnv } = await import('./src/utils/env-api-key.js');
+    const { configureLogFileFromEnvironment, logToFile } = await import(
+      './src/utils/debug.js'
+    );
+    const { wizardAbort, WizardError } = await import(
+      './src/utils/wizard-abort.js'
+    );
+
+    configureLogFileFromEnvironment();
+
+    const env = readEnvironment();
+    const apiKey =
+      (options.apiKey as string) ?? readApiKeyFromEnv() ?? undefined;
+    const installDir = path.isAbsolute(options.installDir as string)
+      ? (options.installDir as string)
+      : path.join(process.cwd(), options.installDir as string);
+
+    const session = buildSession({
+      debug: options.debug as boolean | undefined,
+      forceInstall: options.forceInstall as boolean | undefined,
+      installDir,
+      ci: true,
+      signup: options.signup as boolean | undefined,
+      localMcp: options.localMcp as boolean | undefined,
+      apiKey,
+      menu: options.menu as boolean | undefined,
+      integration: options.integration as any, // eslint-disable-line @typescript-eslint/no-explicit-any
+      projectId: options.projectId as string | undefined,
+      benchmark: options.benchmark as boolean | undefined,
+      yaraReport: options.yaraReport as boolean | undefined,
+      ...env,
+    });
+    session.workflowLabel = config.flowKey;
+    const runDef = typeof config.run === 'object' ? config.run : null;
+    session.skillId = runDef?.skillId ?? null;
+
+    getUI().intro('Welcome to the PostHog setup wizard');
+    getUI().log.info(`Running ${config.flowKey} in CI mode`);
+
+    try {
+      if (preRun) {
+        await preRun(session);
+      } else {
+        // Run onReady hooks against a minimal store-less context.
+        const readyCtx = {
+          session,
+          setFrameworkContext: (key: string, value: unknown) => {
+            session.frameworkContext[key] = value;
+          },
+          setFrameworkConfig: () => undefined,
+          setDetectedFramework: () => undefined,
+          setUnsupportedVersion: () => undefined,
+          addDiscoveredFeature: () => undefined,
+          setDetectionComplete: () => undefined,
+        };
+        for (const step of config.steps) {
+          if (step.onReady) {
+            await step.onReady(readyCtx);
+          }
+        }
+
+        // Surface detectError written by the workflow's detect hook.
+        const detectError = session.frameworkContext.detectError as
+          | { kind: string; [k: string]: unknown }
+          | undefined;
+        if (detectError) {
+          await wizardAbort({
+            message: `Prerequisites not met: ${detectError.kind}\n\nSee ${
+              runDef?.docsUrl ?? 'https://posthog.com/docs'
+            }`,
+            error: new WizardError(`${config.flowKey} prerequisites failed`, {
+              integration: config.flowKey,
+              detect_error_kind: detectError.kind,
+            }),
+          });
+        }
+      }
+
+      const { runAgent } = await import('./src/lib/agent/agent-runner.js');
+      await runAgent(config, session);
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
+      const errorStack =
+        error instanceof Error && error.stack ? error.stack : undefined;
+
+      logToFile(`[bin.ts CI] ERROR: ${errorMessage}`);
+      if (errorStack) logToFile(`[bin.ts CI] STACK: ${errorStack}`);
+
+      const debugInfo = session.debug && errorStack ? `\n\n${errorStack}` : '';
+      const docsUrl =
+        session.frameworkConfig?.metadata.docsUrl ??
+        runDef?.docsUrl ??
+        'https://posthog.com/docs';
+      await wizardAbort({
+        message: `Something went wrong: ${errorMessage}\n\nYou can read the documentation at ${docsUrl} to set up manually.${debugInfo}`,
+        error: error as Error,
+      });
     }
   })();
 }

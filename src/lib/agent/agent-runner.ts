@@ -64,6 +64,17 @@ export type { PromptContext };
 export type { Credentials };
 
 /**
+ * A known `[ABORT] <reason>` case. First matching entry is rendered on
+ * the error outro; unmatched aborts use a generic fallback.
+ */
+export interface AbortCase {
+  match: RegExp;
+  message: string;
+  body: string;
+  docsUrl?: string;
+}
+
+/**
  * Unified agent run configuration.
  *
  * Every workflow provides one of these — either as a static object
@@ -88,6 +99,8 @@ export interface WorkflowRun {
   docsUrl: string;
   errorMessage?: string;
   additionalFeatureQueue?: readonly AdditionalFeature[];
+  /** Known `[ABORT] <reason>` cases this workflow can render. */
+  abortCases?: AbortCase[];
   /** Runs after agent completes, before outro (e.g. env var upload). */
   postRun?: (session: WizardSession, credentials: Credentials) => Promise<void>;
   /** Custom outro data. Omit for default built from successMessage/reportFile/docsUrl. */
@@ -306,6 +319,37 @@ export async function runWorkflow(
   );
 
   // 9. Error handling (full set from both runners)
+  if (agentResult.error === AgentErrorType.ABORT) {
+    const reason = agentResult.message ?? '';
+    const matched = config.abortCases?.find((c) => c.match.test(reason));
+    const outroData: WizardSession['outroData'] = matched
+      ? {
+          kind: OutroKind.Error,
+          message: matched.message,
+          body: matched.body,
+          docsUrl: matched.docsUrl,
+        }
+      : {
+          kind: OutroKind.Error,
+          message: `${config.integrationLabel} aborted`,
+          body: reason || 'The agent aborted the workflow.',
+          docsUrl: config.docsUrl,
+        };
+    analytics.wizardCapture('agent aborted', {
+      integration: config.integrationLabel,
+      reason,
+      matched: matched?.message ?? null,
+    });
+    await wizardAbort({
+      outroData,
+      error: new WizardError(`Agent aborted: ${reason}`, {
+        integration: config.integrationLabel,
+        error_type: AgentErrorType.ABORT,
+        reason,
+      }),
+    });
+  }
+
   if (agentResult.error === AgentErrorType.MCP_MISSING) {
     await wizardAbort({
       message:

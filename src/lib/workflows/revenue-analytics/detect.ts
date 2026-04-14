@@ -10,6 +10,7 @@ import { readFileSync, readdirSync, existsSync, statSync } from 'fs';
 import { join, relative } from 'path';
 import { IGNORED_DIRS } from '../../../utils/file-utils.js';
 import type { WizardSession } from '../../wizard-session.js';
+import type { AbortCase } from '../../agent/agent-runner.js';
 
 export const POSTHOG_SDKS = [
   'posthog-js',
@@ -46,6 +47,30 @@ export type RevenueDetectError =
   | { kind: 'no-sdks'; scannedCount: number }
   | { kind: 'missing-posthog'; foundStripe: string[] }
   | { kind: 'missing-stripe'; foundPosthog: string[] };
+
+/** `[ABORT] <reason>` cases the revenue analytics skill can emit. */
+export const REVENUE_ABORT_CASES: AbortCase[] = [
+  {
+    // Skill emits: [ABORT] Could not find a PostHog distinct_id
+    match: /^could not find a posthog distinct_id$/i,
+    message: 'Could not find a PostHog distinct_id',
+    body:
+      'The agent could not find PostHog distinct_id usage in your codebase. ' +
+      'Your users must be identified in PostHog before they can be tagged in Stripe. ' +
+      'Please identify your users and try again.',
+    docsUrl: 'https://posthog.com/docs/product-analytics/identify',
+  },
+  {
+    // Skill emits: [ABORT] Could not find a Stripe integration
+    match: /^could not find a stripe integration$/i,
+    message: 'Could not find a Stripe integration',
+    body:
+      'The Wizard could not find an existing Stripe customer, charge, ' +
+      'subscription, or other Stripe operations. Please run the Revenue ' +
+      'Analytics Wizard on a project with an existing Stripe integration.',
+    docsUrl: 'https://posthog.com/docs/revenue-analytics',
+  },
+];
 
 /**
  * Recursively find all package.json files under installDir (max depth 3),

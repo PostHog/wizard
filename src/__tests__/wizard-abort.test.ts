@@ -10,7 +10,7 @@ import { analytics } from '../utils/analytics';
 jest.mock('../utils/analytics');
 jest.mock('../ui', () => ({
   getUI: jest.fn().mockReturnValue({
-    outro: jest.fn(),
+    outroError: jest.fn(),
   }),
 }));
 
@@ -34,25 +34,27 @@ describe('wizardAbort', () => {
     jest.restoreAllMocks();
   });
 
-  it('calls analytics.shutdown, getUI().outro, and process.exit in order', async () => {
+  it('calls analytics.shutdown, getUI().outroError, and process.exit in order', async () => {
     const callOrder: string[] = [];
     mockAnalytics.shutdown.mockImplementation(async () => {
       callOrder.push('shutdown');
     });
-    getUI().outro.mockImplementation(() => {
-      callOrder.push('outro');
+    getUI().outroError.mockImplementation(() => {
+      callOrder.push('outroError');
     });
 
     await expect(wizardAbort()).rejects.toThrow('process.exit called');
 
-    expect(callOrder).toEqual(['shutdown', 'outro']);
+    expect(callOrder).toEqual(['shutdown', 'outroError']);
     expect(process.exit).toHaveBeenCalledWith(1);
   });
 
   it('uses default message and exit code when called with no options', async () => {
     await expect(wizardAbort()).rejects.toThrow('process.exit called');
 
-    expect(getUI().outro).toHaveBeenCalledWith('Wizard setup cancelled.');
+    expect(getUI().outroError).toHaveBeenCalledWith(
+      expect.objectContaining({ message: 'Wizard setup cancelled.' }),
+    );
     expect(mockAnalytics.shutdown).toHaveBeenCalledWith('cancelled');
     expect(process.exit).toHaveBeenCalledWith(1);
   });
@@ -62,8 +64,30 @@ describe('wizardAbort', () => {
       wizardAbort({ message: 'Custom failure', exitCode: 2 }),
     ).rejects.toThrow('process.exit called');
 
-    expect(getUI().outro).toHaveBeenCalledWith('Custom failure');
+    expect(getUI().outroError).toHaveBeenCalledWith(
+      expect.objectContaining({ message: 'Custom failure' }),
+    );
     expect(process.exit).toHaveBeenCalledWith(2);
+  });
+
+  it('passes through structured outroData when provided', async () => {
+    await expect(
+      wizardAbort({
+        outroData: {
+          kind: 'error' as never,
+          message: 'Agent aborted',
+          body: 'reason',
+          docsUrl: 'https://posthog.com/docs',
+        },
+      }),
+    ).rejects.toThrow('process.exit called');
+
+    expect(getUI().outroError).toHaveBeenCalledWith({
+      kind: 'error',
+      message: 'Agent aborted',
+      body: 'reason',
+      docsUrl: 'https://posthog.com/docs',
+    });
   });
 
   it('captures error in analytics and shuts down as error when error is provided', async () => {
@@ -103,13 +127,18 @@ describe('wizardAbort', () => {
     mockAnalytics.shutdown.mockImplementation(async () => {
       callOrder.push('shutdown');
     });
-    getUI().outro.mockImplementation(() => {
-      callOrder.push('outro');
+    getUI().outroError.mockImplementation(() => {
+      callOrder.push('outroError');
     });
 
     await expect(wizardAbort()).rejects.toThrow('process.exit called');
 
-    expect(callOrder).toEqual(['cleanup1', 'cleanup2', 'shutdown', 'outro']);
+    expect(callOrder).toEqual([
+      'cleanup1',
+      'cleanup2',
+      'shutdown',
+      'outroError',
+    ]);
   });
 
   it('does not block exit when a cleanup function throws', async () => {
@@ -123,7 +152,7 @@ describe('wizardAbort', () => {
     await expect(wizardAbort()).rejects.toThrow('process.exit called');
 
     expect(mockAnalytics.shutdown).toHaveBeenCalled();
-    expect(getUI().outro).toHaveBeenCalled();
+    expect(getUI().outroError).toHaveBeenCalled();
     expect(process.exit).toHaveBeenCalledWith(1);
   });
 
@@ -158,7 +187,9 @@ describe('abort() delegates to wizardAbort()', () => {
 
     await expect(abort('Test abort', 3)).rejects.toThrow('process.exit called');
 
-    expect(getUI().outro).toHaveBeenCalledWith('Test abort');
+    expect(getUI().outroError).toHaveBeenCalledWith(
+      expect.objectContaining({ message: 'Test abort' }),
+    );
     expect(process.exit).toHaveBeenCalledWith(3);
   });
 
@@ -167,7 +198,9 @@ describe('abort() delegates to wizardAbort()', () => {
 
     await expect(abort()).rejects.toThrow('process.exit called');
 
-    expect(getUI().outro).toHaveBeenCalledWith('Wizard setup cancelled.');
+    expect(getUI().outroError).toHaveBeenCalledWith(
+      expect.objectContaining({ message: 'Wizard setup cancelled.' }),
+    );
     expect(process.exit).toHaveBeenCalledWith(1);
   });
 });

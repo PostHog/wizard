@@ -80,7 +80,11 @@ export enum OutroKind {
 
 export interface OutroData {
   kind: OutroKind;
+  /** Main headline (green check for Success, red X for Error, etc.) */
   message?: string;
+  /** Free-form body text shown under the headline. Use \n for paragraph breaks. */
+  body?: string;
+  /** Success-only: bulleted list of "what the agent did" */
   changes?: string[];
   docsUrl?: string;
   continueUrl?: string;
