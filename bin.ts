@@ -76,13 +76,8 @@ function runAgentWorkflow(
       await tui.store.runReadyHooks();
       await tui.store.getGate('intro');
 
-      const { runWorkflow, bootstrapToRunConfig } = await import(
-        './src/lib/agent/agent-runner.js'
-      );
-      const runConfig = config.buildRunConfig
-        ? await config.buildRunConfig(tui.store.session)
-        : bootstrapToRunConfig(config.bootstrap!);
-      await runWorkflow(tui.store.session, runConfig);
+      const { runAgent } = await import('./src/lib/agent/agent-runner.js');
+      await runAgent(config, tui.store.session);
 
       tui.store.onEnterScreen('outro' as any, () => {
         // Screen is already outro — listen for dismissal
@@ -284,9 +279,6 @@ const cli = yargs(hideBin(process.argv))
             './src/lib/detection/index.js'
           );
           const { analytics } = await import('./src/utils/analytics.js');
-          const { runWorkflow } = await import(
-            './src/lib/agent/agent-runner.js'
-          );
           const { posthogIntegrationConfig } = await import(
             './src/lib/workflows/posthog-integration/index.js'
           );
@@ -356,10 +348,10 @@ const cli = yargs(hideBin(process.argv))
           }
 
           try {
-            const runConfig = await posthogIntegrationConfig.buildRunConfig!(
-              session,
+            const { runAgent } = await import(
+              './src/lib/agent/agent-runner.js'
             );
-            await runWorkflow(session, runConfig);
+            await runAgent(posthogIntegrationConfig, session);
           } catch (error) {
             const errorMessage =
               error instanceof Error ? error.message : String(error);

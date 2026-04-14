@@ -1,9 +1,6 @@
 import type { WizardSession, DiscoveredFeature } from '../wizard-session';
 import type { WizardReadinessResult } from '../health-checks/readiness.js';
-import type {
-  SkillBootstrapConfig,
-  WorkflowRunConfig,
-} from '../agent/agent-runner.js';
+import type { WorkflowRun } from '../agent/agent-runner.js';
 import type { Integration } from '../constants.js';
 import type { FrameworkConfig } from '../framework-config.js';
 
@@ -122,11 +119,8 @@ export interface WorkflowConfig {
   flowKey: string;
   /** The ordered step list */
   steps: Workflow;
-  /** The SkillBootstrapConfig, if this is a skill-based workflow */
-  bootstrap?: SkillBootstrapConfig;
-  /** Build a WorkflowRunConfig for workflows that need custom agent behavior.
-   *  Mutually exclusive with bootstrap — use one or the other. */
-  buildRunConfig?: (session: WizardSession) => Promise<WorkflowRunConfig>;
+  /** Agent run config. Static object or async function for dynamic config. */
+  run?: WorkflowRun | ((session: WizardSession) => Promise<WorkflowRun>);
   /** Prerequisites: other workflow flowKeys that must have run first */
   requires?: string[];
 }

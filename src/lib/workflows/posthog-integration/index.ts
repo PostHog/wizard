@@ -1,5 +1,5 @@
 import type { WorkflowConfig } from '../workflow-step.js';
-import type { WorkflowRunConfig } from '../../agent/agent-runner.js';
+import type { WorkflowRun } from '../../agent/agent-runner.js';
 import type { WizardSession } from '../../wizard-session.js';
 import { OutroKind } from '../../wizard-session.js';
 import { AgentSignals } from '../../agent/agent-interface.js';
@@ -23,9 +23,7 @@ export const posthogIntegrationConfig: WorkflowConfig = {
   flowKey: 'core-integration',
   steps: POSTHOG_INTEGRATION_WORKFLOW,
 
-  buildRunConfig: async (
-    session: WizardSession,
-  ): Promise<WorkflowRunConfig> => {
+  run: async (session: WizardSession): Promise<WorkflowRun> => {
     const config = session.frameworkConfig!;
 
     const typeScriptDetected = isUsingTypeScript({
@@ -83,7 +81,7 @@ export const posthogIntegrationConfig: WorkflowConfig = {
       errorMessage: 'Integration failed',
       additionalFeatureQueue: session.additionalFeatureQueue,
 
-      buildPrompt: (ctx) => {
+      customPrompt: (ctx) => {
         const additionalLines = config.prompts.getAdditionalContextLines
           ? config.prompts.getAdditionalContextLines(frameworkContext)
           : [];

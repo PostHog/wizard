@@ -6,10 +6,10 @@ export const revenueAnalyticsConfig: WorkflowConfig = {
   description: 'Set up PostHog revenue analytics (e.g. Stripe integration)',
   flowKey: 'revenue-analytics',
   steps: REVENUE_ANALYTICS_WORKFLOW,
-  bootstrap: {
+  run: {
     skillId: 'revenue-analytics-setup',
     integrationLabel: 'revenue-analytics',
-    promptContext: 'Set up revenue analytics for this project.',
+    customPrompt: () => 'Set up revenue analytics for this project.',
     successMessage: 'Revenue analytics configured!',
     reportFile: 'posthog-revenue-report.md',
     docsUrl: 'https://posthog.com/docs/revenue-analytics',

@@ -1,8 +1,8 @@
 /**
  * Unified workflow runner.
  *
- * Replaces both agent-runner.ts and skill-runner.ts with a single
- * configurable pipeline. Each workflow provides a WorkflowRunConfig
+ * Single configurable pipeline for all workflows. Each workflow
+ * provides a WorkflowRun (via the `run` field on WorkflowConfig)
  * that controls:
  *   - Whether a skill is pre-installed or discovered at runtime
  *   - How the agent prompt is built
@@ -26,7 +26,7 @@ import { analytics } from '../../utils/analytics';
 import { getUI } from '../../ui';
 import {
   initializeAgent,
-  runAgent,
+  runAgent as executeAgent,
   AgentErrorType,
   AgentSignals,
   buildWizardMetadata,
@@ -53,6 +53,8 @@ import { getSkillsBaseUrl } from '../constants';
 import { installSkillById, type InstallSkillResult } from '../wizard-tools';
 import type { WizardOptions } from '../../utils/types';
 
+import type { WorkflowConfig } from '../workflows/workflow-step';
+
 // ── Types ────────────────────────────────────────────────────────────
 
 /**
@@ -69,7 +71,7 @@ export interface PromptContext {
 /**
  * Credentials returned by OAuth, stored on the session.
  */
-interface Credentials {
+export interface Credentials {
   accessToken: string;
   projectApiKey: string;
   host: string;
@@ -77,63 +79,87 @@ interface Credentials {
 }
 
 /**
- * Configuration for a single workflow run. Each workflow builds one of
- * these — either directly via `buildRunConfig`, or indirectly via
- * `SkillBootstrapConfig` which is expanded by `bootstrapToRunConfig`.
+ * Unified agent run configuration.
+ *
+ * Every workflow provides one of these — either as a static object
+ * or via a function that builds one from the session. The runner
+ * assembles the final prompt from `prompt` + `skillId`.
  */
-export interface WorkflowRunConfig {
-  /** Analytics label for this run (e.g. 'revenue-analytics', 'nextjs') */
+export interface WorkflowRun {
+  /** Analytics label (e.g. 'revenue-analytics', 'nextjs') */
   integrationLabel: string;
-
-  /**
-   * Context-mill skill ID to pre-install before the agent runs.
-   * Omit to let the agent discover and install skills at runtime.
-   */
+  /** Skill ID to pre-install. Omit for agent-driven skill discovery. */
   skillId?: string;
-
-  /**
-   * Build the agent prompt. Pure string construction — reads project
-   * credentials and skill path from context, no auth dependency.
-   */
-  buildPrompt: (ctx: PromptContext) => string;
-
-  /** Additional MCP servers to attach to the agent (e.g., Svelte MCP). */
+  /** Additional workflow-specific prompt instructions. Appended after the default project prompt. */
+  customPrompt?: (ctx: PromptContext) => string;
+  /** Additional MCP servers (e.g. Svelte MCP) */
   additionalMcpServers?: Record<string, { url: string }>;
-
-  /** Package manager detector override. Defaults to detectNodePackageManagers. */
+  /** Package manager detector. Defaults to detectNodePackageManagers. */
   detectPackageManager?: PackageManagerDetector;
-
-  /** Spinner message during agent run */
   spinnerMessage: string;
-  /** Outro success message */
   successMessage: string;
-  /** Estimated duration in minutes */
   estimatedDurationMinutes: number;
-  /** Report file the agent should write */
   reportFile: string;
-  /** Docs URL for the outro */
   docsUrl: string;
-  /** Error message prefix for agent failures */
   errorMessage?: string;
-
-  /** Feature queue for additional integrations (e.g., LLM, Stripe) */
   additionalFeatureQueue?: readonly AdditionalFeature[];
-
-  /**
-   * Post-agent hooks. Runs after the agent completes successfully,
-   * before outro. Use for env var upload, analytics tags, etc.
-   */
+  /** Runs after agent completes, before outro (e.g. env var upload). */
   postRun?: (session: WizardSession, credentials: Credentials) => Promise<void>;
-
-  /**
-   * Build outro data. If omitted, a default outro is built from
-   * successMessage, reportFile, and docsUrl.
-   */
+  /** Custom outro data. Omit for default built from successMessage/reportFile/docsUrl. */
   buildOutroData?: (
     session: WizardSession,
     credentials: Credentials,
     cloudRegion: import('../../utils/types').CloudRegion | undefined,
   ) => WizardSession['outroData'];
+}
+
+// ── Prompt resolution ────────────────────────────────────────────────
+
+function defaultProjectPrompt(ctx: PromptContext): string {
+  return `You have access to the PostHog MCP server.
+
+Project context:
+- PostHog Project ID: ${ctx.projectId}
+- PostHog public token: ${ctx.projectApiKey}
+- PostHog Host: ${ctx.host}`;
+}
+
+function skillPrompt(skillPath: string, reportFile: string): string {
+  return `A PostHog skill has been installed at ${skillPath}/. Read ${skillPath}/SKILL.md and follow its instructions completely.
+
+After completing the skill workflow, write a brief markdown report to ./${reportFile} summarizing:
+- What changes were made to the project
+- Which files were modified or created
+- Any manual steps the user should take next
+
+Important: You must read a file immediately before attempting to write it, even if you have previously read it; failure to do so will cause a tool failure.`;
+}
+
+/**
+ * Assemble the final agent prompt from the workflow's config.
+ *
+ * Three sections, always in this order:
+ *   1. Default project prompt — credentials and base context (always included)
+ *   2. Custom prompt — additional workflow-specific instructions (if prompt set)
+ *   3. Skill prompt — "follow SKILL.md" instructions (if a skill was installed)
+ */
+function assemblePrompt(runDef: WorkflowRun, ctx: PromptContext): string {
+  const parts: string[] = [];
+
+  // Always include the default project prompt
+  parts.push(defaultProjectPrompt(ctx));
+
+  // Additional workflow-specific instructions
+  if (runDef.customPrompt) {
+    parts.push(runDef.customPrompt(ctx));
+  }
+
+  // Skill prompt (appended when a skill was pre-installed)
+  if (ctx.skillPath) {
+    parts.push(skillPrompt(ctx.skillPath, runDef.reportFile));
+  }
+
+  return parts.join('\n\n');
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────
@@ -158,15 +184,37 @@ function sessionToOptions(session: WizardSession): WizardOptions {
 // ── Runner ───────────────────────────────────────────────────────────
 
 /**
+ * Resolve a WorkflowConfig's agent run definition and execute the pipeline.
+ * Entry point for bin.ts — handles buildRunConfig, bootstrap, and (future) run field.
+ */
+export async function runAgent(
+  workflowConfig: WorkflowConfig,
+  session: WizardSession,
+): Promise<void> {
+  if (!workflowConfig.run) {
+    throw new Error(
+      `Workflow "${workflowConfig.flowKey}" has no run configuration.`,
+    );
+  }
+
+  const runDef =
+    typeof workflowConfig.run === 'function'
+      ? await workflowConfig.run(session)
+      : workflowConfig.run;
+
+  await runWorkflow(session, runDef);
+}
+
+/**
  * Run a workflow's agent pipeline.
  *
  * This is the single execution path for all workflows — both skill-based
  * (revenue analytics) and framework-based (core integration). The
- * `WorkflowRunConfig` controls what varies between them.
+ * `WorkflowRun` controls what varies between them.
  */
 export async function runWorkflow(
   session: WizardSession,
-  config: WorkflowRunConfig,
+  config: WorkflowRun,
 ): Promise<void> {
   // 1. Init logging + debug
   initLogFile();
@@ -298,7 +346,7 @@ export async function runWorkflow(
     : undefined;
 
   // 7. Build prompt
-  const prompt = config.buildPrompt({
+  const prompt = assemblePrompt(config, {
     projectId,
     projectApiKey,
     host,
@@ -306,7 +354,7 @@ export async function runWorkflow(
   });
 
   // 8. Run agent
-  const agentResult = await runAgent(
+  const agentResult = await executeAgent(
     agent,
     prompt,
     sessionToOptions(session),
@@ -421,71 +469,6 @@ export async function runWorkflow(
 
   // 12. Analytics shutdown
   await analytics.shutdown('success');
-}
-
-// ── SkillBootstrapConfig ─────────────────────────────────────────────
-
-/**
- * Configuration for a skill-based workflow.
- * Shorthand that gets expanded into a WorkflowRunConfig via bootstrapToRunConfig.
- */
-export interface SkillBootstrapConfig {
-  /** Context-mill skill ID to install (e.g. 'revenue-analytics-setup') */
-  skillId: string;
-  /** Analytics integration label */
-  integrationLabel: string;
-  /** Extra context prepended to the agent prompt */
-  promptContext?: string;
-  /** Outro success message */
-  successMessage: string;
-  /** Report file the agent should write */
-  reportFile: string;
-  /** Docs URL for the outro */
-  docsUrl: string;
-  /** Spinner message during agent run */
-  spinnerMessage: string;
-  /** Estimated duration in minutes */
-  estimatedDurationMinutes: number;
-}
-
-/**
- * Convert a SkillBootstrapConfig (the shorthand used by skill-based
- * workflows) into a full WorkflowRunConfig.
- */
-export function bootstrapToRunConfig(
-  bootstrap: SkillBootstrapConfig,
-): WorkflowRunConfig {
-  return {
-    integrationLabel: bootstrap.integrationLabel,
-    skillId: bootstrap.skillId,
-    buildPrompt: (ctx) => {
-      const lines = [
-        `You have access to the PostHog MCP server.${
-          bootstrap.promptContext ? ' ' + bootstrap.promptContext : ''
-        }`,
-        '',
-        'Project context:',
-        `- PostHog Project ID: ${ctx.projectId}`,
-        `- PostHog public token: ${ctx.projectApiKey}`,
-        `- PostHog Host: ${ctx.host}`,
-        '',
-        `A PostHog skill has been installed at ${ctx.skillPath}/. Read ${ctx.skillPath}/SKILL.md and follow its instructions completely.`,
-        '',
-        `After completing the skill workflow, write a brief markdown report to ./${bootstrap.reportFile} summarizing:`,
-        '- What changes were made to the project',
-        '- Which files were modified or created',
-        '- Any manual steps the user should take next',
-        '',
-        'Important: You must read a file immediately before attempting to write it, even if you have previously read it; failure to do so will cause a tool failure.',
-      ];
-      return lines.join('\n');
-    },
-    spinnerMessage: bootstrap.spinnerMessage,
-    successMessage: bootstrap.successMessage,
-    estimatedDurationMinutes: bootstrap.estimatedDurationMinutes,
-    reportFile: bootstrap.reportFile,
-    docsUrl: bootstrap.docsUrl,
-  };
 }
 
 // ── Shared error helpers ─────────────────────────────────────────────
