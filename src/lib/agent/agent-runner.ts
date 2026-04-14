@@ -19,6 +19,7 @@ import { join } from 'path';
 import {
   type WizardSession,
   type AdditionalFeature,
+  type Credentials,
   OutroKind,
 } from '../wizard-session';
 import { getOrAskForProjectData } from '../../utils/setup-utils';
@@ -54,29 +55,13 @@ import { installSkillById, type InstallSkillResult } from '../wizard-tools';
 import type { WizardOptions } from '../../utils/types';
 
 import type { WorkflowConfig } from '../workflows/workflow-step';
+import { assemblePrompt, type PromptContext } from './agent-prompt';
+
+export type { PromptContext };
 
 // ── Types ────────────────────────────────────────────────────────────
 
-/**
- * Values available to prompt builders after OAuth completes.
- */
-export interface PromptContext {
-  projectId: number;
-  projectApiKey: string;
-  host: string;
-  /** Set when skillId was provided and the skill was installed successfully. */
-  skillPath?: string;
-}
-
-/**
- * Credentials returned by OAuth, stored on the session.
- */
-export interface Credentials {
-  accessToken: string;
-  projectApiKey: string;
-  host: string;
-  projectId: number;
-}
+export type { Credentials };
 
 /**
  * Unified agent run configuration.
@@ -111,55 +96,6 @@ export interface WorkflowRun {
     credentials: Credentials,
     cloudRegion: import('../../utils/types').CloudRegion | undefined,
   ) => WizardSession['outroData'];
-}
-
-// ── Prompt resolution ────────────────────────────────────────────────
-
-function defaultProjectPrompt(ctx: PromptContext): string {
-  return `You have access to the PostHog MCP server.
-
-Project context:
-- PostHog Project ID: ${ctx.projectId}
-- PostHog public token: ${ctx.projectApiKey}
-- PostHog Host: ${ctx.host}`;
-}
-
-function skillPrompt(skillPath: string, reportFile: string): string {
-  return `A PostHog skill has been installed at ${skillPath}/. Read ${skillPath}/SKILL.md and follow its instructions completely.
-
-After completing the skill workflow, write a brief markdown report to ./${reportFile} summarizing:
-- What changes were made to the project
-- Which files were modified or created
-- Any manual steps the user should take next
-
-Important: You must read a file immediately before attempting to write it, even if you have previously read it; failure to do so will cause a tool failure.`;
-}
-
-/**
- * Assemble the final agent prompt from the workflow's config.
- *
- * Three sections, always in this order:
- *   1. Default project prompt — credentials and base context (always included)
- *   2. Custom prompt — additional workflow-specific instructions (if prompt set)
- *   3. Skill prompt — "follow SKILL.md" instructions (if a skill was installed)
- */
-function assemblePrompt(runDef: WorkflowRun, ctx: PromptContext): string {
-  const parts: string[] = [];
-
-  // Always include the default project prompt
-  parts.push(defaultProjectPrompt(ctx));
-
-  // Additional workflow-specific instructions
-  if (runDef.customPrompt) {
-    parts.push(runDef.customPrompt(ctx));
-  }
-
-  // Skill prompt (appended when a skill was pre-installed)
-  if (ctx.skillPath) {
-    parts.push(skillPrompt(ctx.skillPath, runDef.reportFile));
-  }
-
-  return parts.join('\n\n');
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────

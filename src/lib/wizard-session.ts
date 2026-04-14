@@ -15,6 +15,13 @@ import type { FrameworkConfig } from './framework-config';
 import type { WizardReadinessResult } from './health-checks/readiness';
 import type { SettingsConflict } from './agent/agent-interface';
 
+export interface Credentials {
+  accessToken: string;
+  projectApiKey: string;
+  host: string;
+  projectId: number;
+}
+
 function parseProjectIdArg(value: string | undefined): number | undefined {
   if (value === undefined || value === '') return undefined;
   const n = Number(value);
@@ -116,12 +123,7 @@ export interface WizardSession {
   } | null;
 
   // From OAuth
-  credentials: {
-    accessToken: string;
-    projectApiKey: string;
-    host: string;
-    projectId: number;
-  } | null;
+  credentials: Credentials | null;
 
   // Lifecycle
   runPhase: RunPhase;
