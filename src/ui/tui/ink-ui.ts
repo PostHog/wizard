@@ -68,7 +68,7 @@ export class InkUI implements WizardUI {
 
   showBlockingOutage(result: WizardReadinessResult): Promise<void> {
     // In the TUI, the HealthCheckScreen handles outage display.
-    // This is only called from agent-runner for the CI fallback path.
+    // This is only called from workflow-runner for the CI fallback path.
     this.store.setReadinessResult(result);
     return Promise.resolve();
   }

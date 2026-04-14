@@ -423,20 +423,37 @@ export async function runWorkflow(
   await analytics.shutdown('success');
 }
 
-// ── SkillBootstrapConfig adapter ─────────────────────────────────────
+// ── SkillBootstrapConfig ─────────────────────────────────────────────
 
 /**
- * Re-export the SkillBootstrapConfig type so workflow-step.ts can
- * import it from here instead of skill-runner.ts.
+ * Configuration for a skill-based workflow.
+ * Shorthand that gets expanded into a WorkflowRunConfig via bootstrapToRunConfig.
  */
-export type { SkillBootstrapConfig } from './skill-runner';
+export interface SkillBootstrapConfig {
+  /** Context-mill skill ID to install (e.g. 'revenue-analytics-setup') */
+  skillId: string;
+  /** Analytics integration label */
+  integrationLabel: string;
+  /** Extra context prepended to the agent prompt */
+  promptContext?: string;
+  /** Outro success message */
+  successMessage: string;
+  /** Report file the agent should write */
+  reportFile: string;
+  /** Docs URL for the outro */
+  docsUrl: string;
+  /** Spinner message during agent run */
+  spinnerMessage: string;
+  /** Estimated duration in minutes */
+  estimatedDurationMinutes: number;
+}
 
 /**
  * Convert a SkillBootstrapConfig (the shorthand used by skill-based
  * workflows) into a full WorkflowRunConfig.
  */
 export function bootstrapToRunConfig(
-  bootstrap: import('./skill-runner').SkillBootstrapConfig,
+  bootstrap: SkillBootstrapConfig,
 ): WorkflowRunConfig {
   return {
     integrationLabel: bootstrap.integrationLabel,
