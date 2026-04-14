@@ -48,8 +48,8 @@ import {
   registerCleanup,
 } from '../../utils/wizard-abort';
 import { formatScanReport, writeScanReport } from '../yara-hooks';
-import { detectNodePackageManagers } from '../package-manager-detection';
-import type { PackageManagerDetector } from '../package-manager-detection';
+import { detectNodePackageManagers } from '../detection/package-manager';
+import type { PackageManagerDetector } from '../detection/package-manager';
 import { getSkillsBaseUrl } from '../constants';
 import { installSkillById, type InstallSkillResult } from '../wizard-tools';
 import type { WizardOptions } from '../../utils/types';

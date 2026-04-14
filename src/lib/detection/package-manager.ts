@@ -10,11 +10,11 @@
 import {
   detectAllPackageManagers,
   type PackageManager,
-} from '../utils/package-manager';
+} from '../../utils/package-manager';
 import {
   detectPackageManager as detectPythonPM,
   PythonPackageManager,
-} from '../frameworks/python/utils';
+} from '../../frameworks/python/utils';
 
 // ---------------------------------------------------------------------------
 // Common types

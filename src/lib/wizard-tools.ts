@@ -12,7 +12,7 @@ import fs from 'fs';
 import { execFileSync } from 'child_process';
 import { z } from 'zod';
 import { logToFile } from '../utils/debug';
-import type { PackageManagerDetector } from './package-manager-detection';
+import type { PackageManagerDetector } from './detection/package-manager';
 
 // ---------------------------------------------------------------------------
 // SDK dynamic import (ESM module loaded once, cached)

@@ -2,7 +2,7 @@
 import type { FrameworkConfig } from '../../lib/framework-config';
 import { Integration } from '../../lib/constants';
 import { tryGetPackageJson } from '../../utils/setup-utils';
-import { detectNodePackageManagers } from '../../lib/package-manager-detection';
+import { detectNodePackageManagers } from '../../lib/detection/package-manager';
 
 type JavaScriptNodeContext = Record<string, unknown>;
 

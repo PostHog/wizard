@@ -38,8 +38,8 @@ import {
   createPreToolUseYaraHooks,
   createPostToolUseYaraHooks,
 } from '../yara-hooks';
-import { getWizardCommandments } from '../commandments';
-import type { PackageManagerDetector } from '../package-manager-detection';
+import { getWizardCommandments } from './commandments';
+import type { PackageManagerDetector } from '../detection/package-manager';
 
 // Dynamic import cache for ESM module
 let _sdkModule: any = null;
