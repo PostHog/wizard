@@ -77,7 +77,7 @@ describe('WizardStore', () => {
 
     it('defaults to Wizard flow', () => {
       const store = createStore();
-      expect(store.router.activeFlow).toBe(Flow.Wizard);
+      expect(store.router.activeFlow).toBe(Flow.CoreIntegration);
     });
 
     it('accepts a custom flow', () => {

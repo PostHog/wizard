@@ -7,12 +7,12 @@
  */
 
 import type { Workflow } from '../workflow-step.js';
-import type { WizardSession } from '../wizard-session.js';
-import { RunPhase } from '../wizard-session.js';
+import type { WizardSession } from '../../wizard-session.js';
+import { RunPhase } from '../../wizard-session.js';
 import {
   evaluateWizardReadiness,
   WizardReadiness,
-} from '../health-checks/readiness.js';
+} from '../../health-checks/readiness.js';
 
 function needsSetup(session: WizardSession): boolean {
   const config = session.frameworkConfig;

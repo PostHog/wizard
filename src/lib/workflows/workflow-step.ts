@@ -1,5 +1,6 @@
-import type { WizardSession } from './wizard-session';
-import type { WizardReadinessResult } from './health-checks/readiness.js';
+import type { WizardSession } from '../wizard-session';
+import type { WizardReadinessResult } from '../health-checks/readiness.js';
+import type { SkillBootstrapConfig } from '../skill-runner.js';
 
 /**
  * A workflow step is the primary unit of the wizard's execution model.
@@ -86,6 +87,27 @@ export interface WorkflowStep {
  * An ordered list of workflow steps that defines a wizard flow.
  */
 export type Workflow = WorkflowStep[];
+
+/**
+ * Uniform configuration for a wizard workflow.
+ *
+ * Each workflow directory exports one of these. The system uses it
+ * for CLI registration, flow/step wiring, and skill bootstrap.
+ */
+export interface WorkflowConfig {
+  /** CLI command name (e.g. 'revenue'). Omit for the default flow. */
+  command?: string;
+  /** CLI description shown in --help */
+  description: string;
+  /** Unique flow key — matches the Flow enum value */
+  flowKey: string;
+  /** The ordered step list */
+  steps: Workflow;
+  /** The SkillBootstrapConfig, if this is a skill-based workflow */
+  bootstrap?: SkillBootstrapConfig;
+  /** Prerequisites: other workflow flowKeys that must have run first */
+  requires?: string[];
+}
 
 /**
  * Project a Workflow into the narrower FlowEntry shape the router consumes.

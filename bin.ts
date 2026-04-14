@@ -25,6 +25,8 @@ import { getUI, setUI } from './src/ui';
 import { LoggingUI } from './src/ui/logging-ui';
 import type { Integration } from './src/lib/constants';
 import type { FrameworkConfig } from './src/lib/framework-config';
+import { getSubcommandWorkflows } from './src/lib/workflows/workflow-registry';
+import type { WorkflowConfig } from './src/lib/workflows/workflow-step';
 
 if (process.env.NODE_ENV === 'test') {
   void (async () => {
@@ -39,7 +41,95 @@ if (process.env.NODE_ENV === 'test') {
   })();
 }
 
-yargs(hideBin(process.argv))
+/**
+ * Shared handler for skill-based workflow subcommands.
+ * Starts the TUI, runs ready hooks, waits for the intro gate,
+ * runs skill bootstrap, and waits for outro dismissal.
+ */
+function runSkillWorkflow(
+  config: WorkflowConfig,
+  options: Record<string, unknown>,
+): void {
+  void (async () => {
+    try {
+      const installDir = (options.installDir as string) || process.cwd();
+
+      const { startTUI } = await import('./src/ui/tui/start-tui.js');
+      const { buildSession } = await import('./src/lib/wizard-session.js');
+
+      // flowKey values match Flow enum values by convention
+      const tui = startTUI(WIZARD_VERSION, config.flowKey as any);
+
+      const session = buildSession({
+        debug: options.debug as boolean | undefined,
+        localMcp: options.localMcp as boolean | undefined,
+        installDir,
+        ci: false,
+        benchmark: options.benchmark as boolean | undefined,
+        yaraReport: options.yaraReport as boolean | undefined,
+      });
+      tui.store.session = session;
+
+      await tui.store.runReadyHooks();
+      await tui.store.getGate('intro');
+
+      const { runSkillBootstrap } = await import('./src/lib/skill-runner.js');
+      await runSkillBootstrap(tui.store.session, config.bootstrap!);
+
+      tui.store.onEnterScreen('outro' as any, () => {
+        // Screen is already outro — listen for dismissal
+      });
+      await new Promise<void>((resolve) => {
+        const unsub = tui.store.subscribe(() => {
+          if (tui.store.session.outroDismissed) {
+            unsub();
+            resolve();
+          }
+        });
+        if (tui.store.session.outroDismissed) {
+          unsub();
+          resolve();
+        }
+      });
+      process.exit(0);
+    } catch (err) {
+      if (process.env.DEBUG || process.env.POSTHOG_WIZARD_DEBUG) {
+        console.error('TUI init failed:', err); // eslint-disable-line no-console
+      }
+    }
+  })();
+}
+
+/** Shared yargs options for skill-based workflow subcommands. */
+const skillSubcommandOptions = {
+  debug: {
+    default: false,
+    describe: 'Enable verbose logging',
+    type: 'boolean' as const,
+  },
+  'install-dir': {
+    describe: 'Directory to install in',
+    type: 'string' as const,
+  },
+  'local-mcp': {
+    default: false,
+    describe: 'Use local MCP server',
+    type: 'boolean' as const,
+  },
+  benchmark: {
+    default: false,
+    describe: 'Run in benchmark mode',
+    type: 'boolean' as const,
+  },
+  'yara-report': {
+    default: false,
+    describe: 'Print YARA scanner summary',
+    type: 'boolean' as const,
+    hidden: true,
+  },
+};
+
+const cli = yargs(hideBin(process.argv))
   .env('POSTHOG_WIZARD')
   // global options
   .options({
@@ -503,102 +593,19 @@ yargs(hideBin(process.argv))
       )
       .demandCommand(1, 'You must specify a subcommand (add or remove)')
       .help();
-  })
-  .command(
-    'revenue',
-    'Set up PostHog revenue analytics (e.g. Stripe integration)',
-    (yargs) => {
-      return yargs.options({
-        debug: {
-          default: false,
-          describe: 'Enable verbose logging',
-          type: 'boolean',
-        },
-        'install-dir': {
-          describe: 'Directory to install in',
-          type: 'string',
-        },
-        'local-mcp': {
-          default: false,
-          describe: 'Use local MCP server',
-          type: 'boolean',
-        },
-        benchmark: {
-          default: false,
-          describe: 'Run in benchmark mode',
-          type: 'boolean',
-        },
-        'yara-report': {
-          default: false,
-          describe: 'Print YARA scanner summary',
-          type: 'boolean',
-          hidden: true,
-        },
-      });
-    },
-    (argv) => {
-      const options = { ...argv };
+  });
 
-      void (async () => {
-        try {
-          const installDir = (options.installDir as string) || process.cwd();
+// ── Skill-based workflow subcommands (derived from registry) ─────────
+for (const wfConfig of getSubcommandWorkflows()) {
+  cli.command(
+    wfConfig.command!,
+    wfConfig.description,
+    (y) => y.options(skillSubcommandOptions),
+    (argv) => runSkillWorkflow(wfConfig, { ...argv }),
+  );
+}
 
-          const { startTUI } = await import('./src/ui/tui/start-tui.js');
-          const { buildSession } = await import('./src/lib/wizard-session.js');
-          const { Flow } = await import('./src/ui/tui/router.js');
-
-          const tui = startTUI(WIZARD_VERSION, Flow.Revenue);
-
-          const session = buildSession({
-            debug: options.debug,
-            localMcp: options.localMcp as boolean | undefined,
-            installDir,
-            ci: false,
-            benchmark: options.benchmark as boolean | undefined,
-            yaraReport: options.yaraReport as boolean | undefined,
-          });
-          tui.store.session = session;
-
-          // Run any workflow-declared pre-flow work (e.g. prerequisite
-          // detection + skill download for the revenue flow).
-          await tui.store.runReadyHooks();
-
-          // Wait for the intro screen — it handles both the success state
-          // (detected SDKs + confirm) and the error state (detectError + exit).
-          await tui.store.getGate('intro');
-
-          const { runRevenueWizard } = await import(
-            './src/lib/revenue-runner.js'
-          );
-          await runRevenueWizard(tui.store.session);
-
-          // Outro is now visible. Wait for the user to press a key to dismiss.
-          // Revenue flow has no skills step after outro, so we exit here.
-          tui.store.onEnterScreen('outro' as any, () => {
-            // Screen is already outro — listen for dismissal
-          });
-          await new Promise<void>((resolve) => {
-            const unsub = tui.store.subscribe(() => {
-              if (tui.store.session.outroDismissed) {
-                unsub();
-                resolve();
-              }
-            });
-            // Check if already dismissed
-            if (tui.store.session.outroDismissed) {
-              unsub();
-              resolve();
-            }
-          });
-          process.exit(0);
-        } catch (err) {
-          if (process.env.DEBUG || process.env.POSTHOG_WIZARD_DEBUG) {
-            console.error('TUI init failed:', err); // eslint-disable-line no-console
-          }
-        }
-      })();
-    },
-  )
+cli
   .help()
   .alias('help', 'h')
   .version()

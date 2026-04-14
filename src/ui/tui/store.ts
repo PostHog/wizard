@@ -37,7 +37,7 @@ import { analytics, sessionProperties } from '../../utils/analytics.js';
 import type {
   StoreInitContext,
   WorkflowReadyContext,
-} from '../../lib/workflow-step.js';
+} from '../../lib/workflows/workflow-step.js';
 import { WORKFLOW_STEPS } from './flows.js';
 
 export { TaskStatus, Screen, Overlay, Flow, RunPhase, McpOutcome };
@@ -95,7 +95,7 @@ export class WizardStore {
   /** Blocks OAuth flow until the port-conflict overlay is dismissed. */
   private _resolvePortConflict: (() => void) | null = null;
 
-  constructor(flow: Flow = Flow.Wizard) {
+  constructor(flow: Flow = Flow.CoreIntegration) {
     this.router = new WizardRouter(flow);
     this._initFromWorkflow(flow);
   }
