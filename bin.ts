@@ -38,71 +38,6 @@ if (process.env.NODE_ENV === 'test') {
   })();
 }
 
-/**
- * Shared handler for skill-based workflow subcommands.
- * Starts the TUI, runs ready hooks, waits for the intro gate,
- * runs skill bootstrap, and waits for outro dismissal.
- */
-function runAgentWorkflow(
-  config: WorkflowConfig,
-  options: Record<string, unknown>,
-): void {
-  void (async () => {
-    try {
-      const installDir = (options.installDir as string) || process.cwd();
-
-      const { startTUI } = await import('./src/ui/tui/start-tui.js');
-      const { buildSession } = await import('./src/lib/wizard-session.js');
-
-      // flowKey values match Flow enum values by convention
-      const tui = startTUI(WIZARD_VERSION, config.flowKey as any);
-
-      const session = buildSession({
-        debug: options.debug as boolean | undefined,
-        forceInstall: options.forceInstall as boolean | undefined,
-        localMcp: options.localMcp as boolean | undefined,
-        installDir,
-        ci: false,
-        signup: options.signup as boolean | undefined,
-        apiKey: options.apiKey as string | undefined,
-        projectId: options.projectId as string | undefined,
-        menu: options.menu as boolean | undefined,
-        integration: options.integration as any,
-        benchmark: options.benchmark as boolean | undefined,
-        yaraReport: options.yaraReport as boolean | undefined,
-      });
-      tui.store.session = session;
-
-      await tui.store.runReadyHooks();
-      await tui.store.getGate('intro');
-
-      const { runAgent } = await import('./src/lib/agent/agent-runner.js');
-      await runAgent(config, tui.store.session);
-
-      tui.store.onEnterScreen('outro' as any, () => {
-        // Screen is already outro — listen for dismissal
-      });
-      await new Promise<void>((resolve) => {
-        const unsub = tui.store.subscribe(() => {
-          if (tui.store.session.outroDismissed) {
-            unsub();
-            resolve();
-          }
-        });
-        if (tui.store.session.outroDismissed) {
-          unsub();
-          resolve();
-        }
-      });
-      process.exit(0);
-    } catch (err) {
-      if (process.env.DEBUG || process.env.POSTHOG_WIZARD_DEBUG) {
-        console.error('TUI init failed:', err); // eslint-disable-line no-console
-      }
-    }
-  })();
-}
-
 /** Shared yargs options for skill-based workflow subcommands. */
 const skillSubcommandOptions = {
   debug: {
@@ -233,6 +168,11 @@ const cli = yargs(hideBin(process.argv))
             'Print YARA scanner summary after the agent run\nenv: POSTHOG_WIZARD_YARA_REPORT',
           type: 'boolean',
           hidden: true,
+        },
+        skill: {
+          describe:
+            'Run a specific context-mill skill by ID\nenv: POSTHOG_WIZARD_SKILL',
+          type: 'string',
         },
       });
     },
@@ -388,6 +328,27 @@ const cli = yargs(hideBin(process.argv))
           );
           (startPlayground as (version: string) => void)(WIZARD_VERSION);
         })();
+      } else if (options.skill) {
+        // Run a specific skill by ID
+        void (async () => {
+          const { createSkillWorkflow } = await import(
+            './src/lib/workflows/agent-skill/index.js'
+          );
+          const skillId = options.skill as string;
+          const config = createSkillWorkflow({
+            skillId,
+            command: 'skill',
+            flowKey: 'agent-skill',
+            description: `Run skill: ${skillId}`,
+            integrationLabel: skillId,
+            successMessage: `${skillId} completed!`,
+            reportFile: `posthog-${skillId}-report.md`,
+            docsUrl: 'https://posthog.com/docs',
+            spinnerMessage: `Running ${skillId}...`,
+            estimatedDurationMinutes: 5,
+          });
+          runWizard(config, options);
+        })();
       } else {
         // Interactive TTY: run core-integration through the unified workflow path.
         // Same codepath as `npx @posthog/wizard integrate`.
@@ -395,7 +356,7 @@ const cli = yargs(hideBin(process.argv))
           const { posthogIntegrationConfig } = await import(
             './src/lib/workflows/posthog-integration/index.js'
           );
-          runAgentWorkflow(posthogIntegrationConfig, options);
+          runWizard(posthogIntegrationConfig, options);
         })();
       }
     },
@@ -520,7 +481,7 @@ for (const wfConfig of getSubcommandWorkflows()) {
     wfConfig.command!,
     wfConfig.description,
     (y) => y.options(skillSubcommandOptions),
-    (argv) => runAgentWorkflow(wfConfig, { ...argv }),
+    (argv) => runWizard(wfConfig, { ...argv }),
   );
 }
 
@@ -530,3 +491,68 @@ cli
   .version()
   .alias('version', 'v')
   .wrap(process.stdout.isTTY ? yargs.terminalWidth() : 80).argv;
+
+/**
+ * Run a full wizard workflow in the TUI. Handles the full lifecycle: start TUI,
+ * build session, run detection, wait for intro gate, execute the
+ * agent pipeline, wait for outro dismissal, then exit.
+ */
+function runWizard(
+  config: WorkflowConfig,
+  options: Record<string, unknown>,
+): void {
+  void (async () => {
+    try {
+      const installDir = (options.installDir as string) || process.cwd();
+
+      const { startTUI } = await import('./src/ui/tui/start-tui.js');
+      const { buildSession } = await import('./src/lib/wizard-session.js');
+
+      // flowKey values match Flow enum values by convention
+      const tui = startTUI(WIZARD_VERSION, config.flowKey as any);
+
+      const session = buildSession({
+        debug: options.debug as boolean | undefined,
+        forceInstall: options.forceInstall as boolean | undefined,
+        localMcp: options.localMcp as boolean | undefined,
+        installDir,
+        ci: false,
+        signup: options.signup as boolean | undefined,
+        apiKey: options.apiKey as string | undefined,
+        projectId: options.projectId as string | undefined,
+        menu: options.menu as boolean | undefined,
+        integration: options.integration as any,
+        benchmark: options.benchmark as boolean | undefined,
+        yaraReport: options.yaraReport as boolean | undefined,
+      });
+      tui.store.session = session;
+
+      await tui.store.runReadyHooks();
+      await tui.store.getGate('intro');
+
+      const { runAgent } = await import('./src/lib/agent/agent-runner.js');
+      await runAgent(config, tui.store.session);
+
+      tui.store.onEnterScreen('outro' as any, () => {
+        // Screen is already outro — listen for dismissal
+      });
+      await new Promise<void>((resolve) => {
+        const unsub = tui.store.subscribe(() => {
+          if (tui.store.session.outroDismissed) {
+            unsub();
+            resolve();
+          }
+        });
+        if (tui.store.session.outroDismissed) {
+          unsub();
+          resolve();
+        }
+      });
+      process.exit(0);
+    } catch (err) {
+      if (process.env.DEBUG || process.env.POSTHOG_WIZARD_DEBUG) {
+        console.error('TUI init failed:', err); // eslint-disable-line no-console
+      }
+    }
+  })();
+}
