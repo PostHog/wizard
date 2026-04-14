@@ -6,8 +6,9 @@
  */
 
 import type { Workflow } from '../workflow-step.js';
-import type { WizardSession, OutroData } from '../wizard-session.js';
-import { RunPhase, OutroKind } from '../wizard-session.js';
+import type { AbortCase } from '../skill-runner.js';
+import type { WizardSession } from '../wizard-session.js';
+import { RunPhase } from '../wizard-session.js';
 import type { Dirent } from 'fs';
 import { readFileSync, readdirSync, existsSync, statSync } from 'fs';
 import { join, relative } from 'path';
@@ -50,45 +51,33 @@ export type RevenueDetectError =
   | { kind: 'missing-stripe'; foundPosthog: string[] };
 
 /**
- * Map an `[ABORT] <reason>` message from the agent into the full OutroData
- * the error screen renders. The skill runner uses this as-is — no merging,
- * no runner defaults. The workflow owns the rendering.
+ * Abort cases the revenue analytics workflow knows how to render. The
+ * skill runner matches the agent's `[ABORT] <reason>` against these in
+ * order and renders the first hit on the error outro. Unmatched aborts
+ * fall through to the skill runner's generic fallback.
  */
-export function revenueAbortToOutro(reason: string): OutroData {
-  const r = reason.toLowerCase();
-
-  if (r.includes('distinct_id') || r.includes('distinct id')) {
-    return {
-      kind: OutroKind.Error,
-      message: 'Could not find a PostHog distinct_id',
-      body:
-        'The agent could not find PostHog distinct_id usage in your codebase. ' +
-        'Your users must be identified in PostHog before they can be tagged in Stripe. ' +
-        'Please identify your users and try again.',
-      docsUrl: 'https://posthog.com/docs/product-analytics/identify',
-    };
-  }
-
-  if (r.includes('stripe')) {
-    return {
-      kind: OutroKind.Error,
-      message: 'Could not find a Stripe integration',
-      body:
-        'The Wizard could not find an existing Stripe customer, charge, ' +
-        'subscription, or other Stripe operations. Please run the Revenue ' +
-        'Analytics Wizard on a project with an existing Stripe integration.',
-      docsUrl: 'https://posthog.com/docs/revenue-analytics',
-    };
-  }
-
-  // Fallback for unknown revenue abort reasons
-  return {
-    kind: OutroKind.Error,
-    message: 'Revenue analytics setup aborted',
-    body: reason,
+export const REVENUE_ABORT_CASES: AbortCase[] = [
+  {
+    // Skill emits: [ABORT] Could not find a PostHog distinct_id
+    match: /^could not find a posthog distinct_id$/i,
+    message: 'Could not find a PostHog distinct_id',
+    body:
+      'The agent could not find PostHog distinct_id usage in your codebase. ' +
+      'Your users must be identified in PostHog before they can be tagged in Stripe. ' +
+      'Please identify your users and try again.',
+    docsUrl: 'https://posthog.com/docs/product-analytics/identify',
+  },
+  {
+    // Skill emits: [ABORT] Could not find a Stripe integration
+    match: /^could not find a stripe integration$/i,
+    message: 'Could not find a Stripe integration',
+    body:
+      'The Wizard could not find an existing Stripe customer, charge, ' +
+      'subscription, or other Stripe operations. Please run the Revenue ' +
+      'Analytics Wizard on a project with an existing Stripe integration.',
     docsUrl: 'https://posthog.com/docs/revenue-analytics',
-  };
-}
+  },
+];
 
 /**
  * Recursively find all package.json files under installDir (max depth 3),

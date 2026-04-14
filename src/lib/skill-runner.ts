@@ -44,6 +44,25 @@ import { installSkillById, type InstallSkillResult } from './wizard-tools';
 import type { WizardOptions } from '../utils/types';
 
 /**
+ * A single abort case. Workflows declare a list of these; when the agent
+ * emits `[ABORT] <reason>`, the resolver picks the first case whose `match`
+ * regex hits the reason, and renders its contents on the error outro.
+ *
+ * Flat, declarative, data-only — no callbacks. Keeps workflow-specific
+ * error catalogs readable (just a list of {match, message, body, docs}).
+ */
+export interface AbortCase {
+  /** Regex tested against the raw abort reason. First match wins. */
+  match: RegExp;
+  /** Red headline on the error outro. */
+  message: string;
+  /** Prose body under the headline. */
+  body: string;
+  /** Optional "Docs: <url>" link. */
+  docsUrl?: string;
+}
+
+/**
  * Configuration for a skill-based workflow.
  */
 export interface SkillBootstrapConfig {
@@ -57,22 +76,45 @@ export interface SkillBootstrapConfig {
   successMessage: string;
   /** Report file the agent should write */
   reportFile: string;
-  /** Docs URL for the outro */
+  /** Docs URL for the success outro */
   docsUrl: string;
   /** Spinner message during agent run */
   spinnerMessage: string;
   /** Estimated duration in minutes */
   estimatedDurationMinutes: number;
   /**
-   * Optional abort handler. When the agent emits `[ABORT] <reason>`, the
-   * middleware force-kills the SDK query and this callback is invoked to
-   * produce the full OutroData the error screen will render. The workflow
-   * owns the entire rendering — no merging, no defaults from the runner.
-   *
-   * Must return `kind: OutroKind.Error` (the TypeScript type enforces it).
-   * If not specified, aborts fall through to a generic error outro.
+   * Ordered list of abort cases. When the agent emits `[ABORT] <reason>`,
+   * the first case whose `match` regex hits renders on the error outro.
+   * If no case matches, a generic fallback is shown with the raw reason.
    */
-  onAbort?: (reason: string) => OutroData;
+  abortCases?: AbortCase[];
+}
+
+/**
+ * Resolve an abort reason against a workflow's declared abort cases.
+ * Returns full OutroData for the error screen.
+ */
+function resolveAbort(
+  reason: string,
+  cases: AbortCase[] | undefined,
+  fallback: { integrationLabel: string; docsUrl: string },
+): OutroData {
+  for (const c of cases ?? []) {
+    if (c.match.test(reason)) {
+      return {
+        kind: OutroKind.Error,
+        message: c.message,
+        body: c.body,
+        docsUrl: c.docsUrl,
+      };
+    }
+  }
+  return {
+    kind: OutroKind.Error,
+    message: `${fallback.integrationLabel} setup aborted`,
+    body: reason,
+    docsUrl: fallback.docsUrl,
+  };
 }
 
 function sessionToOptions(session: WizardSession): WizardOptions {
@@ -254,9 +296,9 @@ export async function runSkillBootstrap(
     });
   }
 
-  // Agent emitted [ABORT] — the workflow's onAbort owns the full error
-  // outro rendering. bin.ts waits for outroDismissed then exits with
-  // code 1 based on outroData.kind.
+  // Agent emitted [ABORT] — resolve against the workflow's declared
+  // abort cases. bin.ts waits for outroDismissed then exits with code 1
+  // based on outroData.kind.
   if (agentResult.error === AgentErrorType.ABORT) {
     const reason = agentResult.message ?? 'Unknown reason';
     logToFile(`[skill-runner] abort: ${reason}`);
@@ -264,12 +306,10 @@ export async function runSkillBootstrap(
       integration: config.integrationLabel,
       reason,
     });
-    const outroData: OutroData = config.onAbort?.(reason) ?? {
-      kind: OutroKind.Error,
-      message: `${config.integrationLabel} setup aborted`,
-      body: reason,
+    const outroData = resolveAbort(reason, config.abortCases, {
+      integrationLabel: config.integrationLabel,
       docsUrl: config.docsUrl,
-    };
+    });
     getUI().outroError(outroData);
     await analytics.shutdown('error');
     return;
