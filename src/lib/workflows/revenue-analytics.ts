@@ -109,7 +109,7 @@ function findPackageJsons(installDir: string, maxDepth = 3): PackageMatch[] {
  *
  * The skill install happens later in the bootstrap runner, not here.
  */
-function detectRevenuePrerequisites(
+export function detectRevenuePrerequisites(
   session: WizardSession,
   setFrameworkContext: (key: string, value: unknown) => void,
 ): void {

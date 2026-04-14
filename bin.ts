@@ -539,6 +539,70 @@ yargs(hideBin(process.argv))
     (argv) => {
       const options = { ...argv };
 
+      // CI mode: validate required flags, use LoggingUI, skip the TUI entirely
+      if (options.ci) {
+        setUI(new LoggingUI());
+        if (!options.region) {
+          options.region = 'us';
+        }
+        if (!options.apiKey) {
+          getUI().intro(`PostHog Wizard`);
+          getUI().log.error(
+            'CI mode requires --api-key (personal API key phx_xxx)',
+          );
+          process.exit(1);
+        }
+        if (!options.installDir) {
+          getUI().intro(`PostHog Wizard`);
+          getUI().log.error(
+            'CI mode requires --install-dir (directory to install PostHog in)',
+          );
+          process.exit(1);
+        }
+
+        void (async () => {
+          const { buildSession } = await import('./src/lib/wizard-session.js');
+          const session = buildSession({
+            debug: options.debug as boolean | undefined,
+            installDir: options.installDir as string,
+            ci: true,
+            apiKey: options.apiKey as string,
+            localMcp: options.localMcp as boolean | undefined,
+            benchmark: options.benchmark as boolean | undefined,
+            yaraReport: options.yaraReport as boolean | undefined,
+            projectId: options.projectId as string | undefined,
+          });
+
+          // Run detection inline (no store / TUI to register an onReady hook on)
+          const { detectRevenuePrerequisites } = await import(
+            './src/lib/workflows/revenue-analytics.js'
+          );
+          detectRevenuePrerequisites(session, (k: string, v: unknown) => {
+            session.frameworkContext = {
+              ...session.frameworkContext,
+              [k]: v,
+            };
+          });
+          const detectError = session.frameworkContext.detectError;
+          if (detectError) {
+            getUI().log.error(
+              typeof detectError === 'string'
+                ? detectError
+                : JSON.stringify(detectError),
+            );
+            process.exit(1);
+          }
+
+          const { runRevenueWizard } = await import(
+            './src/lib/revenue-runner.js'
+          );
+          await runRevenueWizard(session);
+          process.exit(0);
+        })();
+        return;
+      }
+
+      // Interactive TTY: launch the Ink TUI
       void (async () => {
         try {
           const installDir = (options.installDir as string) || process.cwd();
