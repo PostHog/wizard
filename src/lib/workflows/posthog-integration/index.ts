@@ -1,8 +1,8 @@
 import type { WorkflowConfig } from '../workflow-step.js';
-import type { WorkflowRunConfig } from '../../workflow-runner.js';
+import type { WorkflowRunConfig } from '../../agent/agent-runner.js';
 import type { WizardSession } from '../../wizard-session.js';
 import { OutroKind } from '../../wizard-session.js';
-import { AgentSignals } from '../../agent-interface.js';
+import { AgentSignals } from '../../agent/agent-interface.js';
 import {
   DEFAULT_PACKAGE_INSTALLATION,
   SPINNER_MESSAGE,

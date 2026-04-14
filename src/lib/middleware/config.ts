@@ -8,7 +8,7 @@
 import fs from 'fs';
 import path from 'path';
 import { logToFile } from '../../utils/debug';
-import { AgentSignals } from '../agent-interface';
+import { AgentSignals } from '../agent/agent-interface';
 
 export interface BenchmarkConfig {
   /** Enable/disable individual metric plugins */

@@ -2,7 +2,7 @@
  * Revenue analytics workflow step list.
  *
  * The detect step checks for PostHog + Stripe SDKs. The skill install
- * and agent run live in the workflow runner (see workflow-runner.ts).
+ * and agent run live in the workflow runner (see agent-runner.ts).
  */
 
 import type { Workflow } from '../workflow-step.js';

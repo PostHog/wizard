@@ -20,10 +20,10 @@ import {
   type WizardSession,
   type AdditionalFeature,
   OutroKind,
-} from './wizard-session';
-import { getOrAskForProjectData } from '../utils/setup-utils';
-import { analytics } from '../utils/analytics';
-import { getUI } from '../ui';
+} from '../wizard-session';
+import { getOrAskForProjectData } from '../../utils/setup-utils';
+import { analytics } from '../../utils/analytics';
+import { getUI } from '../../ui';
 import {
   initializeAgent,
   runAgent,
@@ -34,24 +34,24 @@ import {
   backupAndFixClaudeSettings,
   restoreClaudeSettings,
 } from './agent-interface';
-import { getCloudUrlFromRegion } from '../utils/urls';
+import { getCloudUrlFromRegion } from '../../utils/urls';
 import {
   evaluateWizardReadiness,
   WizardReadiness,
-} from './health-checks/readiness';
-import { enableDebugLogs, initLogFile, logToFile } from '../utils/debug';
-import { createBenchmarkPipeline } from './middleware/benchmark';
+} from '../health-checks/readiness';
+import { enableDebugLogs, initLogFile, logToFile } from '../../utils/debug';
+import { createBenchmarkPipeline } from '../middleware/benchmark';
 import {
   wizardAbort,
   WizardError,
   registerCleanup,
-} from '../utils/wizard-abort';
-import { formatScanReport, writeScanReport } from './yara-hooks';
-import { detectNodePackageManagers } from './package-manager-detection';
-import type { PackageManagerDetector } from './package-manager-detection';
-import { getSkillsBaseUrl } from './constants';
-import { installSkillById, type InstallSkillResult } from './wizard-tools';
-import type { WizardOptions } from '../utils/types';
+} from '../../utils/wizard-abort';
+import { formatScanReport, writeScanReport } from '../yara-hooks';
+import { detectNodePackageManagers } from '../package-manager-detection';
+import type { PackageManagerDetector } from '../package-manager-detection';
+import { getSkillsBaseUrl } from '../constants';
+import { installSkillById, type InstallSkillResult } from '../wizard-tools';
+import type { WizardOptions } from '../../utils/types';
 
 // ── Types ────────────────────────────────────────────────────────────
 
@@ -132,7 +132,7 @@ export interface WorkflowRunConfig {
   buildOutroData?: (
     session: WizardSession,
     credentials: Credentials,
-    cloudRegion: import('../utils/types').CloudRegion | undefined,
+    cloudRegion: import('../../utils/types').CloudRegion | undefined,
   ) => WizardSession['outroData'];
 }
 
@@ -170,7 +170,7 @@ export async function runWorkflow(
 ): Promise<void> {
   // 1. Init logging + debug
   initLogFile();
-  logToFile(`[workflow-runner] START ${config.integrationLabel}`);
+  logToFile(`[agent-runner] START ${config.integrationLabel}`);
 
   if (session.debug) {
     enableDebugLogs();
@@ -180,9 +180,9 @@ export async function runWorkflow(
 
   // 2. Health check (guarded — skip if TUI already ran it)
   if (!session.readinessResult) {
-    logToFile('[workflow-runner] evaluating wizard readiness');
+    logToFile('[agent-runner] evaluating wizard readiness');
     const readiness = await evaluateWizardReadiness();
-    logToFile(`[workflow-runner] readiness=${readiness.decision}`);
+    logToFile(`[agent-runner] readiness=${readiness.decision}`);
     if (readiness.decision === WizardReadiness.No) {
       await getUI().showBlockingOutage(readiness);
     } else if (readiness.decision === WizardReadiness.YesWithWarnings) {
@@ -193,7 +193,7 @@ export async function runWorkflow(
   // 3. Settings conflicts
   const settingsConflicts = checkAllSettingsConflicts(session.installDir);
   logToFile(
-    `[workflow-runner] settings conflicts: ${
+    `[agent-runner] settings conflicts: ${
       settingsConflicts.length > 0
         ? settingsConflicts
             .map((c) => `${c.source}(${c.keys.join(',')})`)
@@ -213,7 +213,7 @@ export async function runWorkflow(
     await getUI().showSettingsOverride(settingsConflicts, () =>
       backupAndFixClaudeSettings(session.installDir),
     );
-    logToFile('[workflow-runner] settings override resolved');
+    logToFile('[agent-runner] settings override resolved');
   }
 
   analytics.wizardCapture('agent started', {
@@ -221,7 +221,7 @@ export async function runWorkflow(
   });
 
   // 4. OAuth
-  logToFile('[workflow-runner] starting OAuth');
+  logToFile('[agent-runner] starting OAuth');
   const { projectApiKey, host, accessToken, projectId, cloudRegion } =
     await getOrAskForProjectData({
       signup: session.signup,
@@ -236,7 +236,7 @@ export async function runWorkflow(
   // 5. Skill install (if skillId provided)
   let skillPath: string | undefined;
   if (config.skillId) {
-    logToFile(`[workflow-runner] installing skill ${config.skillId}`);
+    logToFile(`[agent-runner] installing skill ${config.skillId}`);
     const installResult = await installSkillById(
       config.skillId,
       session.installDir,
@@ -247,7 +247,7 @@ export async function runWorkflow(
       return;
     }
     skillPath = installResult.path;
-    logToFile(`[workflow-runner] skill installed at ${skillPath}`);
+    logToFile(`[agent-runner] skill installed at ${skillPath}`);
   }
 
   // 6. Initialize agent

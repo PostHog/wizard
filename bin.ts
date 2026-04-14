@@ -77,7 +77,7 @@ function runAgentWorkflow(
       await tui.store.getGate('intro');
 
       const { runWorkflow, bootstrapToRunConfig } = await import(
-        './src/lib/workflow-runner.js'
+        './src/lib/agent/agent-runner.js'
       );
       const runConfig = config.buildRunConfig
         ? await config.buildRunConfig(tui.store.session)
@@ -284,7 +284,9 @@ const cli = yargs(hideBin(process.argv))
             './src/lib/detection/index.js'
           );
           const { analytics } = await import('./src/utils/analytics.js');
-          const { runWorkflow } = await import('./src/lib/workflow-runner.js');
+          const { runWorkflow } = await import(
+            './src/lib/agent/agent-runner.js'
+          );
           const { posthogIntegrationConfig } = await import(
             './src/lib/workflows/posthog-integration/index.js'
           );

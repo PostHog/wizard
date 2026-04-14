@@ -8,7 +8,7 @@
 
 import type { WizardUI, SpinnerHandle } from '../wizard-ui.js';
 import type { WizardStore } from './store.js';
-import type { SettingsConflict } from '../../lib/agent-interface.js';
+import type { SettingsConflict } from '../../lib/agent/agent-interface.js';
 import type { WizardReadinessResult } from '../../lib/health-checks/readiness.js';
 import { RunPhase, OutroKind } from '../../lib/wizard-session.js';
 
@@ -68,7 +68,7 @@ export class InkUI implements WizardUI {
 
   showBlockingOutage(result: WizardReadinessResult): Promise<void> {
     // In the TUI, the HealthCheckScreen handles outage display.
-    // This is only called from workflow-runner for the CI fallback path.
+    // This is only called from agent-runner for the CI fallback path.
     this.store.setReadinessResult(result);
     return Promise.resolve();
   }

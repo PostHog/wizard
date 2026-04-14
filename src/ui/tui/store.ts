@@ -24,7 +24,7 @@ import {
   RunPhase,
   buildSession,
 } from '../../lib/wizard-session.js';
-import type { SettingsConflict } from '../../lib/agent-interface.js';
+import type { SettingsConflict } from '../../lib/agent/agent-interface.js';
 import type { WizardReadinessResult } from '../../lib/health-checks/readiness.js';
 import {
   WizardRouter,

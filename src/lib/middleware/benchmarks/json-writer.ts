@@ -8,7 +8,7 @@
 import fs from 'fs';
 import { getUI } from '../../../ui';
 import { logToFile } from '../../../utils/debug';
-import { AgentSignals } from '../../agent-interface';
+import { AgentSignals } from '../../agent/agent-interface';
 import type { Middleware, MiddlewareContext, MiddlewareStore } from '../types';
 import type { TokenData } from './token-tracker';
 import type { CacheData } from './cache-tracker';

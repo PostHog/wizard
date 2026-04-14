@@ -1,5 +1,5 @@
 import { getUI, type SpinnerHandle } from '../../../ui';
-import { AgentSignals } from '../../agent-interface';
+import { AgentSignals } from '../../agent/agent-interface';
 import type { Middleware, MiddlewareContext, MiddlewareStore } from '../types';
 import type { TokenData } from './token-tracker';
 import type { TurnData } from './turn-counter';

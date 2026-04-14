@@ -3,7 +3,7 @@ import type { WizardReadinessResult } from '../health-checks/readiness.js';
 import type {
   SkillBootstrapConfig,
   WorkflowRunConfig,
-} from '../workflow-runner.js';
+} from '../agent/agent-runner.js';
 import type { Integration } from '../constants.js';
 import type { FrameworkConfig } from '../framework-config.js';
 
