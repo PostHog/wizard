@@ -6,8 +6,8 @@
  */
 
 import type { Workflow } from '../workflow-step.js';
-import type { WizardSession } from '../wizard-session.js';
-import { RunPhase } from '../wizard-session.js';
+import type { WizardSession, OutroData } from '../wizard-session.js';
+import { RunPhase, OutroKind } from '../wizard-session.js';
 import type { Dirent } from 'fs';
 import { readFileSync, readdirSync, existsSync, statSync } from 'fs';
 import { join, relative } from 'path';
@@ -48,6 +48,47 @@ export type RevenueDetectError =
   | { kind: 'no-sdks'; scannedCount: number }
   | { kind: 'missing-posthog'; foundStripe: string[] }
   | { kind: 'missing-stripe'; foundPosthog: string[] };
+
+/**
+ * Map an `[ABORT] <reason>` message from the agent into the full OutroData
+ * the error screen renders. The skill runner uses this as-is — no merging,
+ * no runner defaults. The workflow owns the rendering.
+ */
+export function revenueAbortToOutro(reason: string): OutroData {
+  const r = reason.toLowerCase();
+
+  if (r.includes('distinct_id') || r.includes('distinct id')) {
+    return {
+      kind: OutroKind.Error,
+      message: 'Could not find a PostHog distinct_id',
+      body:
+        'The agent could not find PostHog distinct_id usage in your codebase. ' +
+        'Your users must be identified in PostHog before they can be tagged in Stripe. ' +
+        'Please identify your users and try again.',
+      docsUrl: 'https://posthog.com/docs/product-analytics/identify',
+    };
+  }
+
+  if (r.includes('stripe')) {
+    return {
+      kind: OutroKind.Error,
+      message: 'Could not find a Stripe integration',
+      body:
+        'The Wizard could not find an existing Stripe customer, charge, ' +
+        'subscription, or other Stripe operations. Please run the Revenue ' +
+        'Analytics Wizard on a project with an existing Stripe integration.',
+      docsUrl: 'https://posthog.com/docs/revenue-analytics',
+    };
+  }
+
+  // Fallback for unknown revenue abort reasons
+  return {
+    kind: OutroKind.Error,
+    message: 'Revenue analytics setup aborted',
+    body: reason,
+    docsUrl: 'https://posthog.com/docs/revenue-analytics',
+  };
+}
 
 /**
  * Recursively find all package.json files under installDir (max depth 3),

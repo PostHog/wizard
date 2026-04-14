@@ -10,6 +10,7 @@ import type { WizardUI, SpinnerHandle } from '../wizard-ui.js';
 import type { WizardStore } from './store.js';
 import type { SettingsConflict } from '../../lib/agent-interface.js';
 import type { WizardReadinessResult } from '../../lib/health-checks/readiness.js';
+import type { OutroData } from '../../lib/wizard-session.js';
 import { RunPhase, OutroKind } from '../../lib/wizard-session.js';
 
 // Strip ANSI escape codes (chalk formatting) from strings
@@ -39,6 +40,14 @@ export class InkUI implements WizardUI {
     // Signal that the main work is done — router resolves to mcp or outro
     if (this.store.session.runPhase === RunPhase.Running) {
       this.store.setRunPhase(RunPhase.Completed);
+    }
+  }
+
+  outroError(data: OutroData): void {
+    this.store.setOutroData(data);
+    // Advance router past the run step so the outro screen renders
+    if (this.store.session.runPhase !== RunPhase.Error) {
+      this.store.setRunPhase(RunPhase.Error);
     }
   }
 

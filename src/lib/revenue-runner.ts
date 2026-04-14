@@ -2,11 +2,12 @@
  * Revenue analytics wizard runner.
  *
  * Thin config wrapper around the generic skill bootstrap runner.
- * The revenue workflow's detect step has already verified prerequisites
- * (PostHog + Stripe); the bootstrap runner handles skill install + agent run.
+ * All revenue-specific logic (prerequisite detection, abort handling,
+ * SDK lists, error types) lives in `workflows/revenue-analytics.ts`.
  */
 
 import { runSkillBootstrap } from './skill-runner';
+import { revenueAbortToOutro } from './workflows/revenue-analytics';
 import type { WizardSession } from './wizard-session';
 
 export async function runRevenueWizard(session: WizardSession): Promise<void> {
@@ -19,5 +20,6 @@ export async function runRevenueWizard(session: WizardSession): Promise<void> {
     docsUrl: 'https://posthog.com/docs/revenue-analytics',
     spinnerMessage: 'Setting up revenue analytics...',
     estimatedDurationMinutes: 5,
+    onAbort: revenueAbortToOutro,
   });
 }

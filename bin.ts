@@ -654,7 +654,11 @@ yargs(hideBin(process.argv))
               resolve();
             }
           });
-          process.exit(0);
+          // Exit 1 if the outro ended up in an error state (e.g. agent abort)
+          const { OutroKind } = await import('./src/lib/wizard-session.js');
+          const exitCode =
+            tui.store.session.outroData?.kind === OutroKind.Error ? 1 : 0;
+          process.exit(exitCode);
         } catch (err) {
           if (process.env.DEBUG || process.env.POSTHOG_WIZARD_DEBUG) {
             console.error('TUI init failed:', err); // eslint-disable-line no-console

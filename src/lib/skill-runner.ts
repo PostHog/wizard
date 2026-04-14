@@ -8,7 +8,11 @@
 
 import { existsSync } from 'fs';
 import { join } from 'path';
-import { type WizardSession, OutroKind } from './wizard-session';
+import {
+  type WizardSession,
+  type OutroData,
+  OutroKind,
+} from './wizard-session';
 import { getOrAskForProjectData } from '../utils/setup-utils';
 import { analytics } from '../utils/analytics';
 import { getUI } from '../ui';
@@ -59,6 +63,16 @@ export interface SkillBootstrapConfig {
   spinnerMessage: string;
   /** Estimated duration in minutes */
   estimatedDurationMinutes: number;
+  /**
+   * Optional abort handler. When the agent emits `[ABORT] <reason>`, the
+   * middleware force-kills the SDK query and this callback is invoked to
+   * produce the full OutroData the error screen will render. The workflow
+   * owns the entire rendering — no merging, no defaults from the runner.
+   *
+   * Must return `kind: OutroKind.Error` (the TypeScript type enforces it).
+   * If not specified, aborts fall through to a generic error outro.
+   */
+  onAbort?: (reason: string) => OutroData;
 }
 
 function sessionToOptions(session: WizardSession): WizardOptions {
@@ -238,6 +252,27 @@ export async function runSkillBootstrap(
         error_type: agentResult.error,
       }),
     });
+  }
+
+  // Agent emitted [ABORT] — the workflow's onAbort owns the full error
+  // outro rendering. bin.ts waits for outroDismissed then exits with
+  // code 1 based on outroData.kind.
+  if (agentResult.error === AgentErrorType.ABORT) {
+    const reason = agentResult.message ?? 'Unknown reason';
+    logToFile(`[skill-runner] abort: ${reason}`);
+    analytics.wizardCapture('agent aborted', {
+      integration: config.integrationLabel,
+      reason,
+    });
+    const outroData: OutroData = config.onAbort?.(reason) ?? {
+      kind: OutroKind.Error,
+      message: `${config.integrationLabel} setup aborted`,
+      body: reason,
+      docsUrl: config.docsUrl,
+    };
+    getUI().outroError(outroData);
+    await analytics.shutdown('error');
+    return;
   }
 
   // Outro — check if agent wrote the report

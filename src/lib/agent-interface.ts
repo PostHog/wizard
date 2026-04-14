@@ -67,6 +67,12 @@ export const AgentSignals = {
   ERROR_MCP_MISSING: '[ERROR-MCP-MISSING]',
   /** Signal emitted when the agent cannot access the setup resource */
   ERROR_RESOURCE_MISSING: '[ERROR-RESOURCE-MISSING]',
+  /**
+   * Signal emitted when the agent cannot complete the workflow and is
+   * aborting intentionally (distinct from errors). Format: "[ABORT] <reason>".
+   * Workflows can declare an onAbort handler to render a custom screen.
+   */
+  ABORT: '[ABORT]',
   /** Signal emitted when the agent provides a remark about its run */
   WIZARD_REMARK: '[WIZARD-REMARK]',
   /** Signal prefix for benchmark logging */
@@ -90,6 +96,8 @@ export enum AgentErrorType {
   API_ERROR = 'WIZARD_API_ERROR',
   /** YARA scanner detected a security violation */
   YARA_VIOLATION = 'WIZARD_YARA_VIOLATION',
+  /** Agent intentionally aborted the workflow (emitted [ABORT] <reason>) */
+  ABORT = 'WIZARD_ABORT',
 }
 
 const BLOCKING_ENV_KEYS = [
@@ -817,6 +825,12 @@ export async function runAgent(
   let eventPlanWatcher: fs.FSWatcher | undefined;
   let eventPlanInterval: ReturnType<typeof setInterval> | undefined;
 
+  // Abort controller — lets us force-kill the SDK query when we detect an
+  // [ABORT] signal in the agent's output. Also stashes the reason so the
+  // runner can surface it via outroData after we unwind.
+  const abortController = new AbortController();
+  let abortReason: string | null = null;
+
   try {
     // Tools needed for the wizard:
     // - File operations: Read, Write, Edit
@@ -840,6 +854,7 @@ export async function runAgent(
     const response = query({
       prompt: createPromptStream(),
       options: {
+        abortController,
         model: agentConfig.model,
         cwd: agentConfig.workingDirectory,
         permissionMode: 'acceptEdits',
@@ -1017,6 +1032,29 @@ export async function runAgent(
         receivedSuccessResult,
       );
 
+      // [ABORT] detection: the skill emits "[ABORT] <reason>" when it
+      // cannot complete the workflow. Kill the SDK query immediately —
+      // the prompt doesn't need to cooperate with "and exit" because the
+      // abort is enforced here. The reason is surfaced via the returned
+      // AgentErrorType.ABORT so the runner can render a custom screen.
+      if (!abortReason && message.type === 'assistant') {
+        const content = message.message?.content;
+        if (Array.isArray(content)) {
+          for (const block of content) {
+            if (block.type === 'text' && typeof block.text === 'string') {
+              const match = block.text.match(/\[ABORT\]\s*(.+?)(?:\n|$)/);
+              if (match) {
+                abortReason = match[1].trim();
+                logToFile(`Agent emitted [ABORT]: ${abortReason}`);
+                abortController.abort();
+                signalDone!();
+                break;
+              }
+            }
+          }
+        }
+      }
+
       // 401: show auth error screen and exit immediately
       if (
         message.type === 'assistant' &&
@@ -1048,6 +1086,13 @@ export async function runAgent(
         }
         signalDone!();
       }
+    }
+
+    // If the middleware caught an [ABORT] and aborted the SDK query, surface
+    // it as a structured error before checking other signals.
+    if (abortReason) {
+      spinner.stop('Wizard aborted');
+      return { error: AgentErrorType.ABORT, message: abortReason };
     }
 
     const outputText = collectedText.join('\n');
@@ -1092,6 +1137,13 @@ export async function runAgent(
   } catch (error) {
     // Signal done to unblock the async generator
     signalDone!();
+
+    // If the middleware caught an [ABORT] and triggered abortController.abort(),
+    // the SDK will throw an AbortError — surface it as a clean abort result.
+    if (abortReason) {
+      spinner.stop('Wizard aborted');
+      return { error: AgentErrorType.ABORT, message: abortReason };
+    }
 
     // If we already received a successful result, the error is from SDK cleanup
     // This happens due to a race condition: the SDK tries to send a cleanup command
