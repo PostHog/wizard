@@ -82,10 +82,10 @@ function runSkillWorkflow(
       const { runWorkflow, bootstrapToRunConfig } = await import(
         './src/lib/workflow-runner.js'
       );
-      await runWorkflow(
-        tui.store.session,
-        bootstrapToRunConfig(config.bootstrap!),
-      );
+      const runConfig = config.buildRunConfig
+        ? await config.buildRunConfig(tui.store.session)
+        : bootstrapToRunConfig(config.bootstrap!);
+      await runWorkflow(tui.store.session, runConfig);
 
       tui.store.onEnterScreen('outro' as any, () => {
         // Screen is already outro — listen for dismissal

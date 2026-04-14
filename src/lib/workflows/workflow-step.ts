@@ -1,6 +1,11 @@
-import type { WizardSession } from '../wizard-session';
+import type { WizardSession, DiscoveredFeature } from '../wizard-session';
 import type { WizardReadinessResult } from '../health-checks/readiness.js';
-import type { SkillBootstrapConfig } from '../workflow-runner.js';
+import type {
+  SkillBootstrapConfig,
+  WorkflowRunConfig,
+} from '../workflow-runner.js';
+import type { Integration } from '../constants.js';
+import type { FrameworkConfig } from '../framework-config.js';
 
 /**
  * A workflow step is the primary unit of the wizard's execution model.
@@ -32,6 +37,20 @@ export interface StoreInitContext {
 export interface WorkflowReadyContext {
   readonly session: WizardSession;
   readonly setFrameworkContext: (key: string, value: unknown) => void;
+
+  // Detection-specific methods — used by core-integration's detect step
+  readonly setFrameworkConfig: (
+    integration: Integration,
+    config: FrameworkConfig,
+  ) => void;
+  readonly setDetectedFramework: (label: string) => void;
+  readonly setUnsupportedVersion: (info: {
+    current: string;
+    minimum: string;
+    docsUrl: string;
+  }) => void;
+  readonly addDiscoveredFeature: (feature: DiscoveredFeature) => void;
+  readonly setDetectionComplete: () => void;
 }
 
 export interface WorkflowStep {
@@ -105,6 +124,9 @@ export interface WorkflowConfig {
   steps: Workflow;
   /** The SkillBootstrapConfig, if this is a skill-based workflow */
   bootstrap?: SkillBootstrapConfig;
+  /** Build a WorkflowRunConfig for workflows that need custom agent behavior.
+   *  Mutually exclusive with bootstrap — use one or the other. */
+  buildRunConfig?: (session: WizardSession) => Promise<WorkflowRunConfig>;
   /** Prerequisites: other workflow flowKeys that must have run first */
   requires?: string[];
 }

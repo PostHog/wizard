@@ -153,6 +153,11 @@ export class WizardStore {
     const ctx: WorkflowReadyContext = {
       session: this.session,
       setFrameworkContext: (k, v) => this.setFrameworkContext(k, v),
+      setFrameworkConfig: (i, c) => this.setFrameworkConfig(i, c),
+      setDetectedFramework: (l) => this.setDetectedFramework(l),
+      setUnsupportedVersion: (info) => this.setUnsupportedVersion(info),
+      addDiscoveredFeature: (f) => this.addDiscoveredFeature(f),
+      setDetectionComplete: () => this.setDetectionComplete(),
     };
     for (const step of steps) {
       if (step.onReady) {
