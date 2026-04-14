@@ -113,6 +113,20 @@ export const OutroScreen = ({ store }: OutroScreenProps) => {
           <Text color="red" bold>
             {'\u2718'} {outroData.message || 'An error occurred'}
           </Text>
+
+          {outroData.body && (
+            <Box marginTop={1}>
+              <Text dimColor>{outroData.body}</Text>
+            </Box>
+          )}
+
+          {outroData.docsUrl && (
+            <Box marginTop={1}>
+              <Text>
+                Docs: <Text color="cyan">{outroData.docsUrl}</Text>
+              </Text>
+            </Box>
+          )}
         </Box>
       )}
 

@@ -7,6 +7,7 @@
 import { TaskStatus, type WizardUI, type SpinnerHandle } from './wizard-ui';
 import type { SettingsConflict } from '../lib/agent/agent-interface';
 import type { WizardReadinessResult } from '../lib/health-checks/readiness.js';
+import type { OutroData } from '../lib/wizard-session';
 
 export class LoggingUI implements WizardUI {
   intro(message: string): void {
@@ -15,6 +16,12 @@ export class LoggingUI implements WizardUI {
 
   outro(message: string): void {
     console.log(`└  ${message}`);
+  }
+
+  outroError(data: OutroData): void {
+    console.log(`✖  ${data.message ?? 'Wizard aborted'}`);
+    if (data.body) console.log(`│  ${data.body}`);
+    if (data.docsUrl) console.log(`│  Docs: ${data.docsUrl}`);
   }
 
   cancel(message: string): void {

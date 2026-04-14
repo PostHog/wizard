@@ -10,6 +10,7 @@
 
 import type { SettingsConflict } from '../lib/agent/agent-interface';
 import type { WizardReadinessResult } from '../lib/health-checks/readiness.js';
+import type { OutroData } from '../lib/wizard-session';
 
 export enum TaskStatus {
   Pending = 'pending',
@@ -26,7 +27,15 @@ export interface SpinnerHandle {
 export interface WizardUI {
   // ── Lifecycle messages ────────────────────────────────────────────
   intro(message: string): void;
+  /** Success outro with a plain text message. */
   outro(message: string): void;
+  /**
+   * Error outro. Sets structured outroData and transitions run phase so
+   * the router advances to the outro screen. Use for abort/failure paths
+   * that need a custom error render — do NOT build the outroData by
+   * mutating session directly (nanostore holds a shallow copy).
+   */
+  outroError(data: OutroData): void;
   cancel(message: string): void;
 
   // ── Logging ───────────────────────────────────────────────────────

@@ -1,5 +1,6 @@
 import type { WorkflowConfig } from '../workflow-step.js';
 import { REVENUE_ANALYTICS_WORKFLOW } from './steps.js';
+import { REVENUE_ABORT_CASES } from './detect.js';
 
 export const revenueAnalyticsConfig: WorkflowConfig = {
   command: 'revenue',
@@ -15,6 +16,7 @@ export const revenueAnalyticsConfig: WorkflowConfig = {
     docsUrl: 'https://posthog.com/docs/revenue-analytics',
     spinnerMessage: 'Setting up revenue analytics...',
     estimatedDurationMinutes: 5,
+    abortCases: REVENUE_ABORT_CASES,
   },
   requires: ['posthog-integration'],
 };
