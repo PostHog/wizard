@@ -1,6 +1,6 @@
 import type { WizardSession } from '../wizard-session';
 import type { WizardReadinessResult } from '../health-checks/readiness.js';
-import type { SkillBootstrapConfig } from '../skill-runner.js';
+import type { SkillBootstrapConfig } from '../workflow-runner.js';
 
 /**
  * A workflow step is the primary unit of the wizard's execution model.

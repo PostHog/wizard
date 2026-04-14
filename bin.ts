@@ -79,8 +79,13 @@ function runSkillWorkflow(
       await tui.store.runReadyHooks();
       await tui.store.getGate('intro');
 
-      const { runSkillBootstrap } = await import('./src/lib/skill-runner.js');
-      await runSkillBootstrap(tui.store.session, config.bootstrap!);
+      const { runWorkflow, bootstrapToRunConfig } = await import(
+        './src/lib/workflow-runner.js'
+      );
+      await runWorkflow(
+        tui.store.session,
+        bootstrapToRunConfig(config.bootstrap!),
+      );
 
       tui.store.onEnterScreen('outro' as any, () => {
         // Screen is already outro — listen for dismissal
