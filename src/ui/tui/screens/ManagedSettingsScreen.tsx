@@ -11,7 +11,7 @@ import { useSyncExternalStore } from 'react';
 import type { WizardStore } from '../store.js';
 import { ConfirmationInput, ModalOverlay } from '../primitives/index.js';
 import { Icons } from '../styles.js';
-import type { SettingsConflict } from '../../../lib/agent-interface.js';
+import type { SettingsConflict } from '../../../lib/agent/agent-interface.js';
 
 function sourceLabel(source: SettingsConflict['source']): string {
   switch (source) {

@@ -24,7 +24,7 @@ import {
   RunPhase,
   buildSession,
 } from '../../lib/wizard-session.js';
-import type { SettingsConflict } from '../../lib/agent-interface.js';
+import type { SettingsConflict } from '../../lib/agent/agent-interface.js';
 import type { WizardReadinessResult } from '../../lib/health-checks/readiness.js';
 import {
   WizardRouter,
@@ -37,7 +37,7 @@ import { analytics, sessionProperties } from '../../utils/analytics.js';
 import type {
   StoreInitContext,
   WorkflowReadyContext,
-} from '../../lib/workflow-step.js';
+} from '../../lib/workflows/workflow-step.js';
 import { WORKFLOW_STEPS } from './flows.js';
 
 export { TaskStatus, Screen, Overlay, Flow, RunPhase, McpOutcome };
@@ -95,7 +95,7 @@ export class WizardStore {
   /** Blocks OAuth flow until the port-conflict overlay is dismissed. */
   private _resolvePortConflict: (() => void) | null = null;
 
-  constructor(flow: Flow = Flow.Wizard) {
+  constructor(flow: Flow = Flow.CoreIntegration) {
     this.router = new WizardRouter(flow);
     this._initFromWorkflow(flow);
   }
@@ -153,6 +153,11 @@ export class WizardStore {
     const ctx: WorkflowReadyContext = {
       session: this.session,
       setFrameworkContext: (k, v) => this.setFrameworkContext(k, v),
+      setFrameworkConfig: (i, c) => this.setFrameworkConfig(i, c),
+      setDetectedFramework: (l) => this.setDetectedFramework(l),
+      setUnsupportedVersion: (info) => this.setUnsupportedVersion(info),
+      addDiscoveredFeature: (f) => this.addDiscoveredFeature(f),
+      setDetectionComplete: () => this.setDetectionComplete(),
     };
     for (const step of steps) {
       if (step.onReady) {

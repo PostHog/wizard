@@ -7,12 +7,13 @@
  */
 
 import type { Workflow } from '../workflow-step.js';
-import type { WizardSession } from '../wizard-session.js';
-import { RunPhase } from '../wizard-session.js';
+import type { WizardSession } from '../../wizard-session.js';
+import { RunPhase } from '../../wizard-session.js';
 import {
   evaluateWizardReadiness,
   WizardReadiness,
-} from '../health-checks/readiness.js';
+} from '../../health-checks/readiness.js';
+import { detectCoreIntegration } from './detect.js';
 
 function needsSetup(session: WizardSession): boolean {
   const config = session.frameworkConfig;
@@ -31,6 +32,15 @@ function healthCheckReady(session: WizardSession): boolean {
 }
 
 export const POSTHOG_INTEGRATION_WORKFLOW: Workflow = [
+  {
+    id: 'detect',
+    label: 'Detecting framework',
+    // Headless step: no screen. onReady fires after bin.ts assigns the
+    // session — runs framework detection, context gathering, version
+    // check, and feature discovery. Results are written to the store
+    // for the IntroScreen to render.
+    onReady: (ctx) => detectCoreIntegration(ctx),
+  },
   {
     id: 'intro',
     label: 'Welcome',

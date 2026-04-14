@@ -5,7 +5,7 @@
  */
 
 import { TaskStatus, type WizardUI, type SpinnerHandle } from './wizard-ui';
-import type { SettingsConflict } from '../lib/agent-interface';
+import type { SettingsConflict } from '../lib/agent/agent-interface';
 import type { WizardReadinessResult } from '../lib/health-checks/readiness.js';
 import type { OutroData } from '../lib/wizard-session';
 
