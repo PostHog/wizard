@@ -68,7 +68,14 @@ export const RunScreen = ({ store }: RunScreenProps) => {
   ) : (
     <LearnCard store={store} onComplete={() => store.setLearnCardComplete()} />
   );
-  const progressList = <ProgressList items={progressItems} title="Tasks" />;
+  const progressList = (
+    <ProgressList
+      items={progressItems}
+      title="Tasks"
+      workflowLabel={store.session.workflowLabel}
+      skillId={store.session.skillId}
+    />
+  );
 
   // On narrow terminals, drop the learn pane and show only progress
   const statusComponent =

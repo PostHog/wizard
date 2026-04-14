@@ -13,7 +13,14 @@
 import type { Integration } from './constants';
 import type { FrameworkConfig } from './framework-config';
 import type { WizardReadinessResult } from './health-checks/readiness';
-import type { SettingsConflict } from './agent-interface';
+import type { SettingsConflict } from './agent/agent-interface';
+
+export interface Credentials {
+  accessToken: string;
+  projectApiKey: string;
+  host: string;
+  projectId: number;
+}
 
 function parseProjectIdArg(value: string | undefined): number | undefined {
   if (value === undefined || value === '') return undefined;
@@ -116,12 +123,7 @@ export interface WizardSession {
   } | null;
 
   // From OAuth
-  credentials: {
-    accessToken: string;
-    projectApiKey: string;
-    host: string;
-    projectId: number;
-  } | null;
+  credentials: Credentials | null;
 
   // Lifecycle
   runPhase: RunPhase;
@@ -148,6 +150,10 @@ export interface WizardSession {
 
   // Additional features queue (drained via stop hook after main integration)
   additionalFeatureQueue: AdditionalFeature[];
+
+  // Workflow metadata (set by runWizard in bin.ts)
+  workflowLabel: string | null;
+  skillId: string | null;
 
   // Resolved framework config (set after integration is known)
   frameworkConfig: FrameworkConfig | null;
@@ -210,6 +216,8 @@ export function buildSession(args: {
     portConflictProcess: null,
     outroData: null,
     additionalFeatureQueue: [],
+    workflowLabel: null,
+    skillId: null,
     frameworkConfig: null,
   };
 }

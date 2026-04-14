@@ -5,36 +5,41 @@
 
 import path from 'path';
 import * as fs from 'fs';
-import { getUI, type SpinnerHandle } from '../ui';
-import { debug, logToFile, initLogFile, getLogFilePath } from '../utils/debug';
-import type { WizardOptions } from '../utils/types';
-import { analytics } from '../utils/analytics';
+import { getUI, type SpinnerHandle } from '../../ui';
+import {
+  debug,
+  logToFile,
+  initLogFile,
+  getLogFilePath,
+} from '../../utils/debug';
+import type { WizardOptions } from '../../utils/types';
+import { analytics } from '../../utils/analytics';
 import {
   WIZARD_REMARK_EVENT_NAME,
   POSTHOG_PROPERTY_HEADER_PREFIX,
   WIZARD_VARIANT_FLAG_KEY,
   WIZARD_VARIANTS,
   WIZARD_USER_AGENT,
-} from './constants';
+} from '../constants';
 import {
   type AdditionalFeature,
   ADDITIONAL_FEATURE_PROMPTS,
-} from './wizard-session';
+} from '../wizard-session';
 import {
   registerCleanup,
   wizardAbort,
   WizardError,
-} from '../utils/wizard-abort';
-import { createCustomHeaders } from '../utils/custom-headers';
-import { getLlmGatewayUrlFromHost } from '../utils/urls';
-import { LINTING_TOOLS } from './safe-tools';
-import { createWizardToolsServer, WIZARD_TOOL_NAMES } from './wizard-tools';
+} from '../../utils/wizard-abort';
+import { createCustomHeaders } from '../../utils/custom-headers';
+import { getLlmGatewayUrlFromHost } from '../../utils/urls';
+import { LINTING_TOOLS } from '../safe-tools';
+import { createWizardToolsServer, WIZARD_TOOL_NAMES } from '../wizard-tools';
 import {
   createPreToolUseYaraHooks,
   createPostToolUseYaraHooks,
-} from './yara-hooks';
-import { getWizardCommandments } from './commandments';
-import type { PackageManagerDetector } from './package-manager-detection';
+} from '../yara-hooks';
+import { getWizardCommandments } from '../commandments';
+import type { PackageManagerDetector } from '../package-manager-detection';
 
 // Dynamic import cache for ESM module
 let _sdkModule: any = null;
@@ -438,7 +443,7 @@ const SAFE_SCRIPTS = [
 const DANGEROUS_OPERATORS = /[;`$()]/;
 
 // Re-export for backwards compatibility — canonical source is skill-install.ts
-export { isSkillInstallCommand } from './skill-install';
+export { isSkillInstallCommand } from '../skill-install';
 
 /**
  * Check if command is an allowed package manager command.

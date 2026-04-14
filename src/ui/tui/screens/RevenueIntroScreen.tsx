@@ -18,7 +18,7 @@ import {
   POSTHOG_SDKS,
   STRIPE_SDKS,
   type RevenueDetectError,
-} from '../../../lib/workflows/revenue-analytics.js';
+} from '../../../lib/workflows/revenue-analytics/index.js';
 
 interface RevenueIntroScreenProps {
   store: WizardStore;

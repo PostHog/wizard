@@ -20,7 +20,7 @@ const FORCE_DARK = BG_BLACK + CLEAR_SCREEN + CURSOR_HOME;
 
 export function startTUI(
   version: string,
-  flow: Flow = Flow.Wizard,
+  flow: Flow = Flow.CoreIntegration,
 ): {
   unmount: () => void;
   store: WizardStore;

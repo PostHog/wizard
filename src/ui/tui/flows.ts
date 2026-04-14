@@ -4,17 +4,18 @@
  * Owns the Screen and Flow enums (re-exported by router.ts) to avoid
  * circular imports between router ↔ flows.
  *
- * Each flow is derived from a Workflow definition via workflowToFlowEntries().
- * MCP add/remove flows are standalone since they don't go through the agent runner.
+ * Workflow-based flows are derived from WORKFLOW_REGISTRY via
+ * workflowToFlowEntries(). MCP add/remove flows are standalone since
+ * they don't go through the agent runner.
  */
 
 import type { WizardSession } from '../../lib/wizard-session.js';
 import {
   workflowToFlowEntries,
   type Workflow,
-} from '../../lib/workflow-step.js';
-import { POSTHOG_INTEGRATION_WORKFLOW } from '../../lib/workflows/posthog-integration.js';
-import { REVENUE_ANALYTICS_WORKFLOW } from '../../lib/workflows/revenue-analytics.js';
+} from '../../lib/workflows/workflow-step.js';
+import { WORKFLOW_REGISTRY } from '../../lib/workflows/workflow-registry.js';
+import { AGENT_SKILL_STEPS } from '../../lib/workflows/agent-skill/index.js';
 
 // ── Screen + Flow enums ──────────────────────────────────────────────
 
@@ -35,8 +36,9 @@ export enum Screen {
 
 /** Named flows the router can run */
 export enum Flow {
-  Wizard = 'wizard',
-  Revenue = 'revenue',
+  CoreIntegration = 'core-integration',
+  RevenueAnalytics = 'revenue-analytics',
+  AgentSkill = 'agent-skill',
   McpAdd = 'mcp-add',
   McpRemove = 'mcp-remove',
 }
@@ -52,27 +54,35 @@ export interface FlowEntry {
   isComplete?: (session: WizardSession) => boolean;
 }
 
+// ── Derived from WORKFLOW_REGISTRY ───────────────────────────────────
+
 /** Raw workflow step arrays — used by the store for gate/onInit definitions. */
 export const WORKFLOW_STEPS: Partial<Record<Flow, Workflow>> = {
-  [Flow.Wizard]: POSTHOG_INTEGRATION_WORKFLOW,
-  [Flow.Revenue]: REVENUE_ANALYTICS_WORKFLOW,
+  ...(Object.fromEntries(
+    WORKFLOW_REGISTRY.map((c) => [c.flowKey, c.steps]),
+  ) as Partial<Record<Flow, Workflow>>),
+  [Flow.AgentSkill]: AGENT_SKILL_STEPS,
 };
 
 /**
  * All flow pipelines.
  *
- * Integration and Revenue flows are derived from their workflow definitions.
+ * Workflow-based flows are derived from the registry.
  * MCP add/remove flows are standalone.
  */
 export const FLOWS: Record<Flow, FlowEntry[]> = {
-  [Flow.Wizard]: workflowToFlowEntries(
-    POSTHOG_INTEGRATION_WORKFLOW,
-  ) as FlowEntry[],
+  // Derive workflow flows from registry
+  ...(Object.fromEntries(
+    WORKFLOW_REGISTRY.map((c) => [
+      c.flowKey,
+      workflowToFlowEntries(c.steps) as FlowEntry[],
+    ]),
+  ) as Record<Flow, FlowEntry[]>),
 
-  [Flow.Revenue]: workflowToFlowEntries(
-    REVENUE_ANALYTICS_WORKFLOW,
-  ) as FlowEntry[],
+  // Generic agent skill flow
+  [Flow.AgentSkill]: workflowToFlowEntries(AGENT_SKILL_STEPS) as FlowEntry[],
 
+  // Standalone MCP flows
   [Flow.McpAdd]: [
     {
       screen: Screen.McpAdd,

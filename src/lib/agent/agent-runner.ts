@@ -1,0 +1,436 @@
+/**
+ * Unified workflow runner.
+ *
+ * Single configurable pipeline for all workflows. Each workflow
+ * provides a WorkflowRun (via the `run` field on WorkflowConfig)
+ * that controls:
+ *   - Whether a skill is pre-installed or discovered at runtime
+ *   - How the agent prompt is built
+ *   - What MCP servers and package manager detector to use
+ *   - What happens after the agent completes
+ *
+ * The pipeline itself is fixed:
+ *   init → health check → settings → OAuth → [skill install] →
+ *   agent init → prompt → run → errors → [postRun] → outro
+ */
+
+import { existsSync } from 'fs';
+import { join } from 'path';
+import {
+  type WizardSession,
+  type AdditionalFeature,
+  type Credentials,
+  OutroKind,
+} from '../wizard-session';
+import { getOrAskForProjectData } from '../../utils/setup-utils';
+import { analytics } from '../../utils/analytics';
+import { getUI } from '../../ui';
+import {
+  initializeAgent,
+  runAgent as executeAgent,
+  AgentErrorType,
+  AgentSignals,
+  buildWizardMetadata,
+  checkAllSettingsConflicts,
+  backupAndFixClaudeSettings,
+  restoreClaudeSettings,
+} from './agent-interface';
+import { getCloudUrlFromRegion } from '../../utils/urls';
+import {
+  evaluateWizardReadiness,
+  WizardReadiness,
+} from '../health-checks/readiness';
+import { enableDebugLogs, initLogFile, logToFile } from '../../utils/debug';
+import { createBenchmarkPipeline } from '../middleware/benchmark';
+import {
+  wizardAbort,
+  WizardError,
+  registerCleanup,
+} from '../../utils/wizard-abort';
+import { formatScanReport, writeScanReport } from '../yara-hooks';
+import { detectNodePackageManagers } from '../package-manager-detection';
+import type { PackageManagerDetector } from '../package-manager-detection';
+import { getSkillsBaseUrl } from '../constants';
+import { installSkillById, type InstallSkillResult } from '../wizard-tools';
+import type { WizardOptions } from '../../utils/types';
+
+import type { WorkflowConfig } from '../workflows/workflow-step';
+import { assemblePrompt, type PromptContext } from './agent-prompt';
+
+export type { PromptContext };
+
+// ── Types ────────────────────────────────────────────────────────────
+
+export type { Credentials };
+
+/**
+ * Unified agent run configuration.
+ *
+ * Every workflow provides one of these — either as a static object
+ * or via a function that builds one from the session. The runner
+ * assembles the final prompt from `prompt` + `skillId`.
+ */
+export interface WorkflowRun {
+  /** Analytics label (e.g. 'revenue-analytics', 'nextjs') */
+  integrationLabel: string;
+  /** Skill ID to pre-install. Omit for agent-driven skill discovery. */
+  skillId?: string;
+  /** Additional workflow-specific prompt instructions. Appended after the default project prompt. */
+  customPrompt?: (ctx: PromptContext) => string;
+  /** Additional MCP servers (e.g. Svelte MCP) */
+  additionalMcpServers?: Record<string, { url: string }>;
+  /** Package manager detector. Defaults to detectNodePackageManagers. */
+  detectPackageManager?: PackageManagerDetector;
+  spinnerMessage: string;
+  successMessage: string;
+  estimatedDurationMinutes: number;
+  reportFile: string;
+  docsUrl: string;
+  errorMessage?: string;
+  additionalFeatureQueue?: readonly AdditionalFeature[];
+  /** Runs after agent completes, before outro (e.g. env var upload). */
+  postRun?: (session: WizardSession, credentials: Credentials) => Promise<void>;
+  /** Custom outro data. Omit for default built from successMessage/reportFile/docsUrl. */
+  buildOutroData?: (
+    session: WizardSession,
+    credentials: Credentials,
+    cloudRegion: import('../../utils/types').CloudRegion | undefined,
+  ) => WizardSession['outroData'];
+}
+
+// ── Helpers ──────────────────────────────────────────────────────────
+
+function sessionToOptions(session: WizardSession): WizardOptions {
+  return {
+    installDir: session.installDir,
+    debug: session.debug,
+    forceInstall: session.forceInstall,
+    default: false,
+    signup: session.signup,
+    localMcp: session.localMcp,
+    ci: session.ci,
+    menu: session.menu,
+    benchmark: session.benchmark,
+    projectId: session.projectId,
+    apiKey: session.apiKey,
+    yaraReport: session.yaraReport,
+  };
+}
+
+// ── Runner ───────────────────────────────────────────────────────────
+
+/**
+ * Resolve a WorkflowConfig's agent run definition and execute the pipeline.
+ * Entry point for bin.ts — handles buildRunConfig, bootstrap, and (future) run field.
+ */
+export async function runAgent(
+  workflowConfig: WorkflowConfig,
+  session: WizardSession,
+): Promise<void> {
+  if (!workflowConfig.run) {
+    throw new Error(
+      `Workflow "${workflowConfig.flowKey}" has no run configuration.`,
+    );
+  }
+
+  const runDef =
+    typeof workflowConfig.run === 'function'
+      ? await workflowConfig.run(session)
+      : workflowConfig.run;
+
+  await runWorkflow(session, runDef);
+}
+
+/**
+ * Run a workflow's agent pipeline.
+ *
+ * This is the single execution path for all workflows — both skill-based
+ * (revenue analytics) and framework-based (core integration). The
+ * `WorkflowRun` controls what varies between them.
+ */
+export async function runWorkflow(
+  session: WizardSession,
+  config: WorkflowRun,
+): Promise<void> {
+  // 1. Init logging + debug
+  initLogFile();
+  logToFile(`[agent-runner] START ${config.integrationLabel}`);
+
+  if (session.debug) {
+    enableDebugLogs();
+  }
+
+  const skillsBaseUrl = getSkillsBaseUrl(session.localMcp);
+
+  // 2. Health check (guarded — skip if TUI already ran it)
+  if (!session.readinessResult) {
+    logToFile('[agent-runner] evaluating wizard readiness');
+    const readiness = await evaluateWizardReadiness();
+    logToFile(`[agent-runner] readiness=${readiness.decision}`);
+    if (readiness.decision === WizardReadiness.No) {
+      await getUI().showBlockingOutage(readiness);
+    } else if (readiness.decision === WizardReadiness.YesWithWarnings) {
+      getUI().setReadinessWarnings(readiness);
+    }
+  }
+
+  // 3. Settings conflicts
+  const settingsConflicts = checkAllSettingsConflicts(session.installDir);
+  logToFile(
+    `[agent-runner] settings conflicts: ${
+      settingsConflicts.length > 0
+        ? settingsConflicts
+            .map((c) => `${c.source}(${c.keys.join(',')})`)
+            .join('; ')
+        : 'none'
+    }`,
+  );
+
+  if (settingsConflicts.length > 0) {
+    for (const conflict of settingsConflicts) {
+      const level = conflict.source === 'managed' ? 'org' : conflict.source;
+      analytics.wizardCapture('settings conflict detected', {
+        level,
+        keys: conflict.keys,
+      });
+    }
+    await getUI().showSettingsOverride(settingsConflicts, () =>
+      backupAndFixClaudeSettings(session.installDir),
+    );
+    logToFile('[agent-runner] settings override resolved');
+  }
+
+  analytics.wizardCapture('agent started', {
+    integration: config.integrationLabel,
+  });
+
+  // 4. OAuth
+  logToFile('[agent-runner] starting OAuth');
+  const { projectApiKey, host, accessToken, projectId, cloudRegion } =
+    await getOrAskForProjectData({
+      signup: session.signup,
+      ci: session.ci,
+      apiKey: session.apiKey,
+      projectId: session.projectId,
+    });
+
+  session.credentials = { accessToken, projectApiKey, host, projectId };
+  getUI().setCredentials(session.credentials);
+
+  // 5. Skill install (if skillId provided)
+  let skillPath: string | undefined;
+  if (config.skillId) {
+    logToFile(`[agent-runner] installing skill ${config.skillId}`);
+    const installResult = await installSkillById(
+      config.skillId,
+      session.installDir,
+      skillsBaseUrl,
+    );
+    if (installResult.kind !== 'ok') {
+      await abortOnInstallFailure(config.integrationLabel, installResult);
+      return;
+    }
+    skillPath = installResult.path;
+    logToFile(`[agent-runner] skill installed at ${skillPath}`);
+  }
+
+  // 6. Initialize agent
+  const spinner = getUI().spinner();
+  const wizardFlags = await analytics.getAllFlagsForWizard();
+  const wizardMetadata = buildWizardMetadata(wizardFlags);
+
+  const mcpUrl = session.localMcp
+    ? 'http://localhost:8787/mcp'
+    : process.env.MCP_URL ||
+      (cloudRegion === 'eu'
+        ? 'https://mcp-eu.posthog.com/mcp'
+        : 'https://mcp.posthog.com/mcp');
+
+  const restoreSettings = () => restoreClaudeSettings(session.installDir);
+  getUI().onEnterScreen('outro', restoreSettings);
+
+  if (session.yaraReport) {
+    registerCleanup(() => {
+      const reportPath = writeScanReport();
+      if (reportPath) {
+        const summary = formatScanReport();
+        getUI().log.info(`YARA scan report: ${reportPath}${summary ?? ''}`);
+      }
+    });
+  }
+
+  getUI().startRun();
+
+  const agent = await initializeAgent(
+    {
+      workingDirectory: session.installDir,
+      posthogMcpUrl: mcpUrl,
+      posthogApiKey: accessToken,
+      posthogApiHost: host,
+      additionalMcpServers: config.additionalMcpServers,
+      detectPackageManager:
+        config.detectPackageManager ?? detectNodePackageManagers,
+      skillsBaseUrl,
+      wizardFlags,
+      wizardMetadata,
+    },
+    sessionToOptions(session),
+  );
+
+  const middleware = session.benchmark
+    ? createBenchmarkPipeline(spinner, sessionToOptions(session))
+    : undefined;
+
+  // 7. Build prompt
+  const prompt = assemblePrompt(config, {
+    projectId,
+    projectApiKey,
+    host,
+    skillPath,
+  });
+
+  // 8. Run agent
+  const agentResult = await executeAgent(
+    agent,
+    prompt,
+    sessionToOptions(session),
+    spinner,
+    {
+      estimatedDurationMinutes: config.estimatedDurationMinutes,
+      spinnerMessage: config.spinnerMessage,
+      successMessage: config.successMessage,
+      errorMessage: config.errorMessage ?? `${config.integrationLabel} failed`,
+      additionalFeatureQueue: config.additionalFeatureQueue ?? [],
+    },
+    middleware,
+  );
+
+  // 9. Error handling (full set from both runners)
+  if (agentResult.error === AgentErrorType.MCP_MISSING) {
+    await wizardAbort({
+      message:
+        'Could not access the PostHog MCP server\n\n' +
+        'The wizard was unable to connect to the PostHog MCP server.\n' +
+        'This could be due to a network issue or a configuration problem.\n\n' +
+        `Please try again, or check the documentation:\n${config.docsUrl}`,
+      error: new WizardError('Agent could not access PostHog MCP server', {
+        integration: config.integrationLabel,
+        error_type: AgentErrorType.MCP_MISSING,
+        signal: AgentSignals.ERROR_MCP_MISSING,
+      }),
+    });
+  }
+
+  if (agentResult.error === AgentErrorType.RESOURCE_MISSING) {
+    await wizardAbort({
+      message:
+        'Could not access the setup resource\n\n' +
+        'This may indicate a version mismatch or a temporary service issue.\n\n' +
+        `Please try again, or check the documentation:\n${config.docsUrl}`,
+      error: new WizardError('Agent could not access setup resource', {
+        integration: config.integrationLabel,
+        error_type: AgentErrorType.RESOURCE_MISSING,
+        signal: AgentSignals.ERROR_RESOURCE_MISSING,
+      }),
+    });
+  }
+
+  if (agentResult.error === AgentErrorType.YARA_VIOLATION) {
+    await wizardAbort({
+      message:
+        'Security violation detected.\nPlease report this to: wizard@posthog.com',
+      error: new WizardError('YARA scanner terminated session', {
+        integration: config.integrationLabel,
+        error_type: AgentErrorType.YARA_VIOLATION,
+      }),
+    });
+  }
+
+  if (
+    agentResult.error === AgentErrorType.RATE_LIMIT ||
+    agentResult.error === AgentErrorType.API_ERROR
+  ) {
+    analytics.wizardCapture('agent api error', {
+      integration: config.integrationLabel,
+      error_type: agentResult.error,
+      error_message: agentResult.message,
+    });
+
+    await wizardAbort({
+      message: `API Error\n\n${
+        agentResult.message || 'Unknown error'
+      }\n\nPlease report this to: wizard@posthog.com`,
+      error: new WizardError(`API error: ${agentResult.message}`, {
+        integration: config.integrationLabel,
+        error_type: agentResult.error,
+      }),
+    });
+  }
+
+  // 10. Post-run hooks
+  if (config.postRun) {
+    await config.postRun(session, {
+      accessToken,
+      projectApiKey,
+      host,
+      projectId,
+    });
+  }
+
+  // 11. Outro
+  if (config.buildOutroData) {
+    session.outroData = config.buildOutroData(
+      session,
+      { accessToken, projectApiKey, host, projectId },
+      cloudRegion,
+    );
+  } else {
+    const continueUrl = session.signup
+      ? `${getCloudUrlFromRegion(cloudRegion)}/products?source=wizard`
+      : undefined;
+
+    const reportPath = join(session.installDir, config.reportFile);
+    const reportExists = existsSync(reportPath);
+
+    session.outroData = {
+      kind: OutroKind.Success,
+      message: config.successMessage,
+      reportFile: reportExists ? config.reportFile : undefined,
+      docsUrl: config.docsUrl,
+      continueUrl,
+    };
+  }
+
+  getUI().outro(config.successMessage);
+
+  // 12. Analytics shutdown
+  await analytics.shutdown('success');
+}
+
+// ── Shared error helpers ─────────────────────────────────────────────
+
+async function abortOnInstallFailure(
+  integrationLabel: string,
+  result: InstallSkillResult,
+): Promise<void> {
+  if (result.kind === 'ok') return;
+
+  const message = (() => {
+    switch (result.kind) {
+      case 'menu-fetch-failed':
+        return 'Could not fetch the skill menu from context-mill.\nCheck your network connection and try again.';
+      case 'skill-not-found':
+        return `Could not find the "${result.skillId}" skill in the context-mill menu.\nPlease try again later.`;
+      case 'download-failed':
+        return `Failed to install skill: ${result.message}\nPlease try again.`;
+    }
+  })();
+
+  await wizardAbort({
+    message,
+    error: new WizardError(`Skill install failed: ${result.kind}`, {
+      integration: integrationLabel,
+      error_type: result.kind,
+    }),
+  });
+}

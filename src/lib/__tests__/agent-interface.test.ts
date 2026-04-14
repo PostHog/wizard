@@ -1,4 +1,4 @@
-import { runAgent, createStopHook } from '../agent-interface';
+import { runAgent, createStopHook } from '../agent/agent-interface';
 import type { WizardOptions } from '../../utils/types';
 import type { SpinnerHandle } from '../../ui';
 import {
