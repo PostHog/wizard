@@ -151,6 +151,10 @@ export interface WizardSession {
   // Additional features queue (drained via stop hook after main integration)
   additionalFeatureQueue: AdditionalFeature[];
 
+  // Workflow metadata (set by runWizard in bin.ts)
+  workflowLabel: string | null;
+  skillId: string | null;
+
   // Resolved framework config (set after integration is known)
   frameworkConfig: FrameworkConfig | null;
 }
@@ -212,6 +216,8 @@ export function buildSession(args: {
     portConflictProcess: null,
     outroData: null,
     additionalFeatureQueue: [],
+    workflowLabel: null,
+    skillId: null,
     frameworkConfig: null,
   };
 }

@@ -525,6 +525,11 @@ function runWizard(
         benchmark: options.benchmark as boolean | undefined,
         yaraReport: options.yaraReport as boolean | undefined,
       });
+      // Set workflow metadata for TUI display
+      session.workflowLabel = config.flowKey;
+      const runDef = typeof config.run === 'object' ? config.run : null;
+      session.skillId = runDef?.skillId ?? null;
+
       tui.store.session = session;
 
       await tui.store.runReadyHooks();
