@@ -27,6 +27,12 @@ import type { Integration } from './src/lib/constants';
 import type { FrameworkConfig } from './src/lib/framework-config';
 import { getSubcommandWorkflows } from './src/lib/workflows/workflow-registry';
 import type { WorkflowConfig } from './src/lib/workflows/workflow-step';
+import {
+  detectFramework,
+  discoverFeatures,
+  gatherFrameworkContext,
+  checkFrameworkVersion,
+} from './src/lib/detection';
 
 if (process.env.NODE_ENV === 'test') {
   void (async () => {
@@ -314,54 +320,34 @@ const cli = yargs(hideBin(process.argv))
             const { FRAMEWORK_REGISTRY } = (await import(
               './src/lib/registry.js'
             )) as { FRAMEWORK_REGISTRY: Record<Integration, FrameworkConfig> };
-            const { detectIntegration } = (await import('./src/run.js')) as {
-              detectIntegration: (
-                installDir: string,
-              ) => Promise<Integration | undefined>;
-            };
             const installDir = session.installDir ?? process.cwd();
 
-            const { DETECTION_TIMEOUT_MS } = (await import(
-              './src/lib/constants.js'
-            )) as { DETECTION_TIMEOUT_MS: number };
-
-            const detectedIntegration = await Promise.race([
-              detectIntegration(installDir),
-              new Promise<undefined>((resolve) =>
-                setTimeout(() => resolve(undefined), DETECTION_TIMEOUT_MS),
-              ),
-            ]);
+            const detectedIntegration = await detectFramework(installDir);
 
             if (detectedIntegration) {
               const config = FRAMEWORK_REGISTRY[detectedIntegration];
 
-              // Run gatherContext for the friendly variant label
-              if (config.metadata.gatherContext) {
-                try {
-                  const context = await Promise.race([
-                    config.metadata.gatherContext({
-                      installDir,
-                      debug: session.debug,
-                      forceInstall: session.forceInstall,
-                      default: false,
-                      signup: session.signup,
-                      localMcp: session.localMcp,
-                      ci: session.ci,
-                      menu: session.menu,
-                      benchmark: session.benchmark,
-                      yaraReport: session.yaraReport,
-                    }),
-                    new Promise<Record<string, never>>((resolve) =>
-                      setTimeout(() => resolve({}), DETECTION_TIMEOUT_MS),
-                    ),
-                  ]);
-                  for (const [key, value] of Object.entries(context)) {
-                    if (!(key in session.frameworkContext)) {
-                      tui.store.setFrameworkContext(key, value);
-                    }
-                  }
-                } catch {
-                  // Detection failed — will show generic name
+              const sessionOptions = {
+                installDir,
+                debug: session.debug,
+                forceInstall: session.forceInstall,
+                default: false,
+                signup: session.signup,
+                localMcp: session.localMcp,
+                ci: session.ci,
+                menu: session.menu,
+                benchmark: session.benchmark,
+                yaraReport: session.yaraReport,
+              };
+
+              // Gather framework-specific context (e.g., router type)
+              const context = await gatherFrameworkContext(
+                config,
+                sessionOptions,
+              );
+              for (const [key, value] of Object.entries(context)) {
+                if (!(key in session.frameworkContext)) {
+                  tui.store.setFrameworkContext(key, value);
                 }
               }
 
@@ -372,84 +358,18 @@ const cli = yargs(hideBin(process.argv))
               }
 
               // Early version check — surface on IntroScreen before user proceeds
-              if (
-                config.detection.minimumVersion &&
-                config.detection.getInstalledVersion
-              ) {
-                const semver = await import('semver');
-                const version = await config.detection.getInstalledVersion({
-                  installDir,
-                  debug: session.debug,
-                  forceInstall: session.forceInstall,
-                  default: false,
-                  signup: session.signup,
-                  localMcp: session.localMcp,
-                  ci: session.ci,
-                  menu: session.menu,
-                  benchmark: session.benchmark,
-                  yaraReport: session.yaraReport,
-                });
-                if (version) {
-                  const coerced = semver.coerce(version);
-                  if (
-                    coerced &&
-                    semver.lt(coerced, config.detection.minimumVersion)
-                  ) {
-                    tui.store.setUnsupportedVersion({
-                      current: version,
-                      minimum: config.detection.minimumVersion,
-                      docsUrl:
-                        config.metadata.unsupportedVersionDocsUrl ??
-                        config.metadata.docsUrl,
-                    });
-                  }
-                }
+              const versionResult = await checkFrameworkVersion(
+                config,
+                sessionOptions,
+              );
+              if (versionResult.supported !== true) {
+                tui.store.setUnsupportedVersion(versionResult.supported);
               }
             }
 
-            // Feature discovery — deterministic scan of package.json deps
-            try {
-              const { readFileSync } = await import('fs');
-              const pkgPath = require('path').join(installDir, 'package.json');
-              const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8'));
-              const allDeps = {
-                ...pkg.dependencies,
-                ...pkg.devDependencies,
-              };
-              const depNames = Object.keys(allDeps);
-
-              const { DiscoveredFeature } = await import(
-                './src/lib/wizard-session.js'
-              );
-
-              if (
-                depNames.some((d) =>
-                  ['stripe', '@stripe/stripe-js'].includes(d),
-                )
-              ) {
-                tui.store.addDiscoveredFeature(DiscoveredFeature.Stripe);
-              }
-
-              // LLM SDK detection — sourced from PostHog LLM analytics skill
-              const LLM_PACKAGES = [
-                'openai',
-                '@anthropic-ai/sdk',
-                'ai',
-                '@ai-sdk/openai',
-                'langchain',
-                '@langchain/openai',
-                '@langchain/langgraph',
-                '@google/generative-ai',
-                '@google/genai',
-                '@instructor-ai/instructor',
-                '@mastra/core',
-                'portkey-ai',
-              ];
-              if (depNames.some((d) => LLM_PACKAGES.includes(d))) {
-                tui.store.addDiscoveredFeature(DiscoveredFeature.LLM);
-              }
-            } catch {
-              // No package.json or parse error — skip feature discovery
+            // Feature discovery — scan deps for Stripe, LLM, etc.
+            for (const feature of discoverFeatures(installDir)) {
+              tui.store.addDiscoveredFeature(feature);
             }
 
             // Signal detection is done — IntroScreen shows picker or results

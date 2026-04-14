@@ -2,11 +2,7 @@ import { type WizardSession, buildSession } from './lib/wizard-session';
 
 import type { CloudRegion } from './utils/types';
 
-import {
-  Integration,
-  DETECTION_TIMEOUT_MS,
-  WIZARD_INTERACTION_EVENT_NAME,
-} from './lib/constants';
+import { Integration, WIZARD_INTERACTION_EVENT_NAME } from './lib/constants';
 import { readEnvironment } from './utils/environment';
 import { getUI } from './ui';
 import path from 'path';
@@ -17,6 +13,7 @@ import { EventEmitter } from 'events';
 import { logToFile, configureLogFileFromEnvironment } from './utils/debug';
 import { wizardAbort } from './utils/wizard-abort';
 import { readApiKeyFromEnv } from './utils/env-api-key';
+import { detectFramework, gatherFrameworkContext } from './lib/detection';
 
 EventEmitter.defaultMaxListeners = 50;
 
@@ -85,7 +82,8 @@ export async function runWizard(argv: Args, session?: WizardSession) {
   }
 
   const integration =
-    session.integration ?? (await detectAndResolveIntegration(session));
+    session.integration ??
+    (await detectAndResolveIntegration(session.installDir, session.menu));
 
   session.integration = integration;
   analytics.setTag('integration', integration);
@@ -97,27 +95,23 @@ export async function runWizard(argv: Args, session?: WizardSession) {
   // (bin.ts runs it early so IntroScreen can show the friendly label)
   const contextAlreadyGathered =
     Object.keys(session.frameworkContext).length > 0;
-  if (config.metadata.gatherContext && !contextAlreadyGathered) {
-    try {
-      const context = await config.metadata.gatherContext({
-        installDir: session.installDir,
-        debug: session.debug,
-        forceInstall: session.forceInstall,
-        default: false,
-        signup: session.signup,
-        localMcp: session.localMcp,
-        ci: session.ci,
-        menu: session.menu,
-        benchmark: session.benchmark,
-        yaraReport: session.yaraReport,
-      });
-      for (const [key, value] of Object.entries(context)) {
-        if (!(key in session.frameworkContext)) {
-          session.frameworkContext[key] = value;
-        }
+  if (!contextAlreadyGathered) {
+    const context = await gatherFrameworkContext(config, {
+      installDir: session.installDir,
+      debug: session.debug,
+      forceInstall: session.forceInstall,
+      default: false,
+      signup: session.signup,
+      localMcp: session.localMcp,
+      ci: session.ci,
+      menu: session.menu,
+      benchmark: session.benchmark,
+      yaraReport: session.yaraReport,
+    });
+    for (const [key, value] of Object.entries(context)) {
+      if (!(key in session.frameworkContext)) {
+        session.frameworkContext[key] = value;
       }
-    } catch {
-      // Detection failed — SetupScreen or agent will handle it
     }
   }
 
@@ -142,32 +136,12 @@ export async function runWizard(argv: Args, session?: WizardSession) {
   }
 }
 
-export async function detectIntegration(
-  installDir: string,
-): Promise<Integration | undefined> {
-  for (const integration of Object.values(Integration)) {
-    const config = FRAMEWORK_REGISTRY[integration];
-    try {
-      const detected = await Promise.race([
-        config.detection.detect({ installDir }),
-        new Promise<false>((resolve) =>
-          setTimeout(() => resolve(false), DETECTION_TIMEOUT_MS),
-        ),
-      ]);
-      if (detected) {
-        return integration;
-      }
-    } catch {
-      // Skip frameworks whose detection throws
-    }
-  }
-}
-
 async function detectAndResolveIntegration(
-  session: WizardSession,
+  installDir: string,
+  menu?: boolean,
 ): Promise<Integration> {
-  if (!session.menu) {
-    const detectedIntegration = await detectIntegration(session.installDir);
+  if (!menu) {
+    const detectedIntegration = await detectFramework(installDir);
 
     if (detectedIntegration) {
       getUI().setDetectedFramework(
