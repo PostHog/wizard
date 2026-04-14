@@ -64,10 +64,8 @@ export type { PromptContext };
 export type { Credentials };
 
 /**
- * An abort case the workflow knows how to render. The runner matches the
- * agent's `[ABORT] <reason>` against `match` in order and renders the
- * first hit on the error outro. Unmatched aborts fall through to a
- * generic fallback.
+ * A known `[ABORT] <reason>` case. First matching entry is rendered on
+ * the error outro; unmatched aborts use a generic fallback.
  */
 export interface AbortCase {
   match: RegExp;
@@ -342,9 +340,14 @@ export async function runWorkflow(
       reason,
       matched: matched?.message ?? null,
     });
-    getUI().outroError(outroData);
-    await analytics.shutdown('success');
-    return;
+    await wizardAbort({
+      outroData,
+      error: new WizardError(`Agent aborted: ${reason}`, {
+        integration: config.integrationLabel,
+        error_type: AgentErrorType.ABORT,
+        reason,
+      }),
+    });
   }
 
   if (agentResult.error === AgentErrorType.MCP_MISSING) {

@@ -8,6 +8,7 @@
  */
 import { analytics } from './analytics';
 import { getUI } from '../ui';
+import { OutroKind, type OutroData } from '../lib/wizard-session';
 
 export class WizardError extends Error {
   constructor(
@@ -21,6 +22,8 @@ export class WizardError extends Error {
 
 interface WizardAbortOptions {
   message?: string;
+  /** Structured error data. Renders via `outroError` instead of `outro`. */
+  outroData?: OutroData;
   error?: Error | WizardError;
   exitCode?: number;
 }
@@ -40,6 +43,7 @@ export async function wizardAbort(
 ): Promise<never> {
   const {
     message = 'Wizard setup cancelled.',
+    outroData,
     error,
     exitCode = 1,
   } = options ?? {};
@@ -63,8 +67,9 @@ export async function wizardAbort(
   // 3. Shutdown analytics
   await analytics.shutdown(error ? 'error' : 'cancelled');
 
-  // 4. Display message to user
-  getUI().outro(message);
+  // 4. Render the error outro. Synthesize OutroData from `message`
+  //    when the caller didn't provide structured data.
+  getUI().outroError(outroData ?? { kind: OutroKind.Error, message });
 
   // 5. Exit (fires 'exit' event so TUI cleanup runs)
   return process.exit(exitCode);

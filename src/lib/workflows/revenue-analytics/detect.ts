@@ -48,12 +48,7 @@ export type RevenueDetectError =
   | { kind: 'missing-posthog'; foundStripe: string[] }
   | { kind: 'missing-stripe'; foundPosthog: string[] };
 
-/**
- * Abort cases the revenue analytics workflow knows how to render. The
- * skill runner matches the agent's `[ABORT] <reason>` against these in
- * order and renders the first hit on the error outro. Unmatched aborts
- * fall through to the skill runner's generic fallback.
- */
+/** `[ABORT] <reason>` cases the revenue analytics skill can emit. */
 export const REVENUE_ABORT_CASES: AbortCase[] = [
   {
     // Skill emits: [ABORT] Could not find a PostHog distinct_id
