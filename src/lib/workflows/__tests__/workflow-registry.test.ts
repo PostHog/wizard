@@ -21,7 +21,9 @@ describe('getWorkflowConfig', () => {
     expect(getWorkflowConfig('posthog-integration')?.flowKey).toBe(
       'posthog-integration',
     );
-    expect(getWorkflowConfig('revenue-analytics')?.command).toBe('revenue');
+    expect(getWorkflowConfig('revenue-analytics-setup')?.command).toBe(
+      'revenue',
+    );
     expect(getWorkflowConfig('nonexistent')).toBeUndefined();
   });
 });

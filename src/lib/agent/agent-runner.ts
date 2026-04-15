@@ -82,7 +82,7 @@ export interface AbortCase {
  * assembles the final prompt from `prompt` + `skillId`.
  */
 export interface WorkflowRun {
-  /** Analytics label (e.g. 'revenue-analytics', 'nextjs') */
+  /** Analytics label (e.g. 'revenue-analytics-setup', 'nextjs') */
   integrationLabel: string;
   /** Skill ID to pre-install. Omit for agent-driven skill discovery. */
   skillId?: string;

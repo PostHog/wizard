@@ -5,7 +5,7 @@ How to add a new workflow to the wizard (like revenue analytics) that installs a
 ## Prerequisites
 
 - A skill published to context-mill with a `SKILL.md` and workflow files
-- The skill registered in the skill menu under a category (e.g. `revenue-analytics`)
+- The skill registered in the skill menu under a category (e.g. `revenue-analytics-setup`)
 
 ## Steps
 
@@ -186,7 +186,7 @@ export async function runRevenueWizard(session: WizardSession): Promise<void> {
 
   await runSkillBootstrap(session, {
     skillPath,
-    integrationLabel: 'revenue-analytics',
+    integrationLabel: 'revenue-analytics-setup',
     promptContext: 'Set up revenue analytics for this project.',
     successMessage: 'Revenue analytics configured!',
     reportFile: 'posthog-revenue-report.md',

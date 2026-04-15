@@ -5,11 +5,11 @@ import { REVENUE_ABORT_CASES } from './detect.js';
 export const revenueAnalyticsConfig: WorkflowConfig = {
   command: 'revenue',
   description: 'Set up PostHog revenue analytics (e.g. Stripe integration)',
-  flowKey: 'revenue-analytics',
+  flowKey: 'revenue-analytics-setup',
   steps: REVENUE_ANALYTICS_WORKFLOW,
   run: {
     skillId: 'revenue-analytics-setup',
-    integrationLabel: 'revenue-analytics',
+    integrationLabel: 'revenue-analytics-setup',
     customPrompt: () => 'Set up revenue analytics for this project.',
     successMessage: 'Revenue analytics configured!',
     reportFile: 'posthog-revenue-report.md',
