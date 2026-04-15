@@ -120,6 +120,10 @@ jobs:
             }
 
             bodyParts.push('');
+            bodyParts.push('**Run revenue analytics (requires Stripe + PostHog):**');
+            bodyParts.push('- `/wizard-ci revenue stripe/stripe-saas-demo`');
+            bodyParts.push('- `/wizard-ci revenue stripe/stripe-next-js-saas-starter`');
+            bodyParts.push('');
             bodyParts.push('Results will be posted here when complete.');
 
             const body = bodyParts.join('\n');
@@ -172,9 +176,27 @@ jobs:
               return;
             }
 
-            const comment = context.payload.comment.body;
-            const match = comment.match(/\/wizard-ci\s+(\S+)/);
-            const app = match ? match[1] : 'all';
+            // Grammar: /wizard-ci [command] <app>
+            // - `/wizard-ci all` → command=default, app=all
+            // - `/wizard-ci next-js/foo` → command=default, app=next-js/foo
+            // - `/wizard-ci revenue stripe/stripe-saas-demo` → command=revenue, app=stripe/stripe-saas-demo
+            const KNOWN_COMMANDS = new Set(['revenue']);
+            const tokens = context.payload.comment.body
+              .replace(/^\/wizard-ci\s+/, '')
+              .trim()
+              .split(/\s+/)
+              .filter(Boolean);
+
+            let command = 'default';
+            let app = 'all';
+            if (tokens.length === 1) {
+              app = tokens[0];
+            } else if (tokens.length >= 2 && KNOWN_COMMANDS.has(tokens[0])) {
+              command = tokens[0];
+              app = tokens[1];
+            } else if (tokens.length >= 2) {
+              app = tokens[0];
+            }
 
             // React with rocket to show we're processing
             await github.rest.reactions.createForIssueComment({
@@ -190,7 +212,8 @@ jobs:
               repo: 'wizard-workbench',
               event_type: 'wizard-ci-trigger',
               client_payload: {
-                app: app,
+                app,
+                command,
                 source: 'wizard-pr',
                 source_repo: 'wizard',
                 source_pr_number: context.payload.issue.number,
@@ -201,4 +224,4 @@ jobs:
               }
             });
 
-            console.log(`Triggered wizard-ci for app: ${app}`);
+            console.log(`Triggered wizard-ci for command: ${command}, app: ${app}`);
