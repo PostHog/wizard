@@ -1,5 +1,26 @@
 # Changelog
 
+## [2.8.0](https://github.com/PostHog/wizard/compare/v2.7.0...v2.8.0) (2026-04-13)
+
+
+### Features
+
+* add provisioning API signup flow for new users ([#377](https://github.com/PostHog/wizard/issues/377)) ([c101aeb](https://github.com/PostHog/wizard/commit/c101aeb5a091e3824acaf9f93a4e1d4da1e07c8a))
+
+## [2.7.0](https://github.com/PostHog/wizard/compare/v2.6.2...v2.7.0) (2026-04-08)
+
+
+### Features
+
+* Ask to remove skills if successful ([#371](https://github.com/PostHog/wizard/issues/371)) ([05c97cc](https://github.com/PostHog/wizard/commit/05c97ccc6c248ff283c166670f9b577218821a02))
+
+
+### Bug Fixes
+
+* Cloudflare detection and context augmentation ([#370](https://github.com/PostHog/wizard/issues/370)) ([e719244](https://github.com/PostHog/wizard/commit/e719244de8a28bfe56caae97bbe3e681cc4c68e5))
+* Group MCP Logs under Development Tools ([#374](https://github.com/PostHog/wizard/issues/374)) ([56ba4c7](https://github.com/PostHog/wizard/commit/56ba4c778527fd5f687fdd942344c4cc360b3f4f))
+* wire up readApiKeyFromEnv to session builder ([#363](https://github.com/PostHog/wizard/issues/363)) ([752cb2f](https://github.com/PostHog/wizard/commit/752cb2fe552d4749c3b908831b0877176f6a9a93))
+
 ## [2.6.2](https://github.com/PostHog/wizard/compare/v2.6.1...v2.6.2) (2026-04-01)
 
 

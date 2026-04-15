@@ -10,6 +10,7 @@ import {
   IS_DEV,
   ISSUES_URL,
   OAUTH_PORT,
+  OAUTH_TIMEOUT_MS,
   POSTHOG_DEV_CLIENT_ID,
   POSTHOG_OAUTH_URL,
   POSTHOG_PROXY_CLIENT_ID,
@@ -294,7 +295,10 @@ export async function performOAuthFlow(
     const code = await Promise.race([
       waitForCallback(),
       new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error('Authorization timed out')), 60_000),
+        setTimeout(
+          () => reject(new Error('Authorization timed out')),
+          OAUTH_TIMEOUT_MS,
+        ),
       ),
     ]);
 

@@ -26,6 +26,7 @@ import {
   detectRegionFromToken,
 } from './urls';
 import { performOAuthFlow } from './oauth';
+import { provisionNewAccount } from './provisioning';
 import { fetchUserData, fetchProjectData } from '../lib/api';
 import { fulfillsVersionRange } from './semver';
 import { wizardAbort } from './wizard-abort';
@@ -319,7 +320,10 @@ export function isUsingTypeScript({
  * Get project data for the wizard via OAuth or CI API key.
  */
 export async function getOrAskForProjectData(
-  _options: Pick<WizardOptions, 'signup' | 'ci' | 'apiKey' | 'projectId'>,
+  _options: Pick<WizardOptions, 'signup' | 'ci' | 'apiKey' | 'projectId'> & {
+    email?: string;
+    region?: CloudRegion;
+  },
 ): Promise<{
   host: string;
   projectApiKey: string;
@@ -357,6 +361,8 @@ export async function getOrAskForProjectData(
     await traceStep('login', () =>
       askForWizardLogin({
         signup: _options.signup,
+        email: _options.email,
+        region: _options.region,
       }),
     );
 
@@ -416,7 +422,13 @@ async function fetchProjectDataById(
 
 async function askForWizardLogin(options: {
   signup: boolean;
+  email?: string;
+  region?: CloudRegion;
 }): Promise<ProjectData & { cloudRegion: CloudRegion }> {
+  if (options.signup) {
+    return askForProvisioningSignup(options.email, options.region);
+  }
+
   const tokenResponse = await performOAuthFlow({
     scopes: [
       'user:read',
@@ -427,7 +439,7 @@ async function askForWizardLogin(options: {
       'insight:write',
       'query:read',
     ],
-    signup: options.signup,
+    signup: false,
   });
 
   const projectId = tokenResponse.scoped_teams?.[0];
@@ -464,13 +476,67 @@ async function askForWizardLogin(options: {
     cloudRegion,
   };
 
-  getUI().log.success(
-    `Login complete. ${options.signup ? 'Welcome to PostHog!' : ''}`,
-  );
+  getUI().log.success('Login complete.');
   analytics.setTag('opened-wizard-link', true);
   analytics.setDistinctId(data.distinctId);
 
   return data;
+}
+
+async function askForProvisioningSignup(
+  email?: string,
+  region?: CloudRegion,
+): Promise<ProjectData & { cloudRegion: CloudRegion }> {
+  if (!email || !email.includes('@')) {
+    getUI().log.error(
+      'Email is required for signup. Use --email your@email.com with --signup.',
+    );
+    await abort();
+    throw new Error('unreachable');
+  }
+
+  const spinner = getUI().spinner();
+  spinner.start('Creating your PostHog account...');
+
+  try {
+    const provisionRegion = (region ?? 'us').toUpperCase() as 'US' | 'EU';
+    const result = await provisionNewAccount(email, '', provisionRegion);
+
+    spinner.stop('Account created!');
+    getUI().log.success('Welcome to PostHog!');
+
+    const host = result.host;
+    const cloudRegion: CloudRegion = host.includes('eu.') ? 'eu' : 'us';
+
+    analytics.setTag('provisioning-signup', true);
+
+    return {
+      accessToken: result.accessToken,
+      projectApiKey: result.projectApiKey,
+      host,
+      distinctId: email,
+      projectId: parseInt(result.projectId, 10) || 0,
+      cloudRegion,
+    };
+  } catch (error) {
+    spinner.stop('Account creation failed.');
+    const message = error instanceof Error ? error.message : 'Unknown error';
+
+    if (message.includes('already associated')) {
+      getUI().log.info(
+        'This email already has a PostHog account. Switching to login flow...',
+      );
+      return askForWizardLogin({ signup: false });
+    }
+
+    getUI().log.error(`Failed to create account: ${message}`);
+    analytics.captureException(
+      error instanceof Error ? error : new Error(message),
+      { step: 'provisioning_signup' },
+    );
+    await abort();
+    throw error;
+  }
 }
 
 /**

@@ -2,7 +2,7 @@ name: 'Build & Test'
 on:
   push:
     branches:
-      - master
+      - main
       - release/**
   pull_request:
 
@@ -10,6 +10,7 @@ jobs:
   job_build:
     name: Build
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
       - name: Install pnpm
@@ -39,6 +40,7 @@ jobs:
     name: Lint
     needs: job_build
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
       - name: Install pnpm
@@ -60,6 +62,7 @@ jobs:
     name: Node (${{ matrix.node }}) Unit Tests
     needs: job_build
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:

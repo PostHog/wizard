@@ -52,6 +52,11 @@ export type WizardOptions = {
   apiKey?: string;
 
   /**
+   * Email address for account creation (used with --signup)
+   */
+  email?: string;
+
+  /**
    * PostHog project ID. When set (e.g. in CI with --project-id), the wizard uses this project
    * instead of the default from the API key or OAuth.
    */
