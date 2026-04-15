@@ -17,7 +17,7 @@ import { HealthCheckScreen } from './screens/health/HealthCheckScreen.js';
 import { SettingsOverrideScreen } from './screens/SettingsOverrideScreen.js';
 import { ManagedSettingsScreen } from './screens/ManagedSettingsScreen.js';
 import { PortConflictScreen } from './screens/PortConflictScreen.js';
-import { IntroScreen } from './screens/IntroScreen.js';
+import { PostHogIntegrationIntroScreen } from './screens/PostHogIntegrationIntroScreen.js';
 import { RevenueIntroScreen } from './screens/RevenueIntroScreen.js';
 import { SetupScreen } from './screens/SetupScreen.js';
 import { AuthScreen } from './screens/AuthScreen.js';
@@ -51,7 +51,7 @@ export function createScreens(
     [Overlay.AuthError]: <AuthErrorScreen />,
 
     // Wizard flow
-    [Screen.Intro]: <IntroScreen store={store} />,
+    [Screen.Intro]: <PostHogIntegrationIntroScreen store={store} />,
     [Screen.RevenueIntro]: <RevenueIntroScreen store={store} />,
     [Screen.HealthCheck]: <HealthCheckScreen store={store} />,
     [Screen.Setup]: <SetupScreen store={store} />,

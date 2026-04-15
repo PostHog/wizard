@@ -17,16 +17,9 @@ export interface ProgressItem {
 interface ProgressListProps {
   items: ProgressItem[];
   title?: string;
-  workflowLabel?: string | null;
-  skillId?: string | null;
 }
 
-export const ProgressList = ({
-  items,
-  title,
-  workflowLabel,
-  skillId,
-}: ProgressListProps) => {
+export const ProgressList = ({ items, title }: ProgressListProps) => {
   const completed = items.filter((t) => t.status === 'completed').length;
   const total = items.length;
 
@@ -72,12 +65,6 @@ export const ProgressList = ({
               ? `Progress: ${completed}/${total} completed`
               : 'Cleaning up...'}
           </Text>
-        </Box>
-      )}
-      {(workflowLabel || skillId) && (
-        <Box flexDirection="column" marginTop={2}>
-          {workflowLabel && <Text dimColor>workflow: {workflowLabel}</Text>}
-          {skillId && <Text dimColor>skill: {skillId}</Text>}
         </Box>
       )}
     </Box>
