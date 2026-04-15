@@ -1,7 +1,7 @@
 /**
  * PickerMenu — Single and multi select.
  * Single mode: custom renderer with small triangle indicator.
- * Multi mode: checkbox glyphs with space to toggle.
+ * Multi mode: checkbox glyphs with Enter to toggle, Space to confirm.
  */
 
 import { Box, Text, useInput } from 'ink';
@@ -99,7 +99,7 @@ const SinglePickerMenu = <T,>({
       const nextCol = col < columns - 1 ? col + 1 : 0;
       setFocused(Math.min(nextCol * rows + row, options.length - 1));
     }
-    if (key.return) {
+    if (_input === ' ') {
       const selected = options[focused];
       if (selected) {
         onSelect(selected.value);
@@ -195,7 +195,7 @@ const MultiPickerMenu = <T,>({
       const nextCol = col < columns - 1 ? col + 1 : 0;
       setFocused(Math.min(nextCol * rows + row, options.length - 1));
     }
-    if (_input === ' ') {
+    if (key.return) {
       setSelected((prev) => {
         const next = new Set(prev);
         if (next.has(focused)) {
@@ -206,7 +206,7 @@ const MultiPickerMenu = <T,>({
         return next;
       });
     }
-    if (key.return) {
+    if (_input === ' ') {
       if (selected.size === 0) {
         // Nothing toggled, select hovered
         const hovered = options[focused];
@@ -228,7 +228,7 @@ const MultiPickerMenu = <T,>({
   return (
     <Box flexDirection="column" alignItems={centered ? 'center' : undefined}>
       <PromptLabel message={message} />
-      <Text dimColor> (space to multi-select, enter to confirm)</Text>
+      <Text dimColor> (enter to multi-select, space to confirm)</Text>
       <Box
         flexDirection="row"
         gap={4}

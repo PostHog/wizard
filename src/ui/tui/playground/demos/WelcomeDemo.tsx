@@ -1,5 +1,5 @@
 /**
- * WelcomeDemo — Splash screen. Press enter to push the tabbed view.
+ * WelcomeDemo — Splash screen. Press space to push the tabbed view.
  */
 
 import { Box, Text, useInput } from 'ink';
@@ -12,7 +12,7 @@ interface WelcomeDemoProps {
 
 export const WelcomeDemo = ({ store }: WelcomeDemoProps) => {
   useInput((_input, key) => {
-    if (key.return) {
+    if (_input === ' ') {
       store.completeSetup();
     }
   });
@@ -34,7 +34,7 @@ export const WelcomeDemo = ({ store }: WelcomeDemoProps) => {
       </Text>
       <Box height={1} />
       <Text color={Colors.primary}>
-        Press enter to continue {Icons.triangleRight}
+        Press space to continue {Icons.triangleRight}
       </Text>
     </Box>
   );

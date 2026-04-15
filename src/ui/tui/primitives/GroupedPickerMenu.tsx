@@ -3,7 +3,7 @@
  *
  * Renders groups of options with bold category labels.
  * Arrow keys navigate selectable items (headers are skipped),
- * space toggles, "a" toggles all, enter submits.
+ * enter toggles, "a" toggles all, space submits.
  *
  * When content exceeds available terminal height, the list scrolls
  * to keep the focused item visible with ↑/↓ indicators.
@@ -185,7 +185,7 @@ export const GroupedPickerMenu = ({
       }
     }
 
-    if (input === ' ') {
+    if (key.return) {
       const targetRowIdx = selectableIndices[newFocused] ?? 0;
       const row = rows[targetRowIdx];
       if (row?.kind === 'option') {
@@ -208,7 +208,7 @@ export const GroupedPickerMenu = ({
         return new Set(allValues);
       });
     }
-    if (key.return) {
+    if (input === ' ') {
       onSelect([...selected]);
     }
   });
@@ -231,7 +231,7 @@ export const GroupedPickerMenu = ({
       <PromptLabel message={message} />
       <Text dimColor>
         {' '}
-        (space to toggle, a to toggle all, enter to confirm)
+        (enter to toggle, a to toggle all, space to confirm)
       </Text>
       <Box flexDirection="column" marginTop={1} marginLeft={2}>
         {needsScroll && (

@@ -1,6 +1,6 @@
 /**
  * ConfirmationInput — Continue/cancel prompt.
- * Enter confirms, escape cancels. Arrow keys toggle focus.
+ * Space confirms the focused action, Enter or arrow keys move focus. Escape cancels.
  */
 
 import { Box, Text, useInput } from 'ink';
@@ -25,18 +25,18 @@ export const ConfirmationInput = ({
   message,
   onConfirm,
   onCancel,
-  confirmLabel = 'Continue [Enter]',
+  confirmLabel = 'Continue [Space]',
   cancelLabel = 'Cancel [Esc]',
 }: ConfirmationInputProps) => {
   const [focused, setFocused] = useState<FocusTarget>(FocusTarget.Continue);
 
   useInput((_input, key) => {
-    if (key.leftArrow || key.rightArrow) {
+    if (key.leftArrow || key.rightArrow || key.return) {
       setFocused((f) =>
         f === FocusTarget.Continue ? FocusTarget.Cancel : FocusTarget.Continue,
       );
     }
-    if (key.return) {
+    if (_input === ' ') {
       if (focused === FocusTarget.Continue) {
         onConfirm();
       } else {

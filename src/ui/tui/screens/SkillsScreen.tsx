@@ -124,7 +124,7 @@ export const SkillsScreen = ({ store }: SkillsScreenProps) => {
             <Box marginTop={1}>
               <ConfirmationInput
                 message="Keep the installed skills?"
-                confirmLabel="Keep [Enter]"
+                confirmLabel="Keep [Space]"
                 cancelLabel="Remove [Esc]"
                 onConfirm={handleKeep}
                 onCancel={() => void handleRemove()}
