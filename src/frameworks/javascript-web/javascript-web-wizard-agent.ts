@@ -13,7 +13,7 @@ import {
   hasIndexHtml,
   type JavaScriptContext,
 } from './utils';
-import { detectNodePackageManagers } from '../../lib/package-manager-detection';
+import { detectNodePackageManagers } from '../../lib/detection/package-manager';
 
 export const JAVASCRIPT_WEB_AGENT_CONFIG: FrameworkConfig<JavaScriptContext> = {
   metadata: {

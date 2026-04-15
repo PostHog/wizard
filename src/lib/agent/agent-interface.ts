@@ -5,36 +5,41 @@
 
 import path from 'path';
 import * as fs from 'fs';
-import { getUI, type SpinnerHandle } from '../ui';
-import { debug, logToFile, initLogFile, getLogFilePath } from '../utils/debug';
-import type { WizardOptions } from '../utils/types';
-import { analytics } from '../utils/analytics';
+import { getUI, type SpinnerHandle } from '../../ui';
+import {
+  debug,
+  logToFile,
+  initLogFile,
+  getLogFilePath,
+} from '../../utils/debug';
+import type { WizardOptions } from '../../utils/types';
+import { analytics } from '../../utils/analytics';
 import {
   WIZARD_REMARK_EVENT_NAME,
   POSTHOG_PROPERTY_HEADER_PREFIX,
   WIZARD_VARIANT_FLAG_KEY,
   WIZARD_VARIANTS,
   WIZARD_USER_AGENT,
-} from './constants';
+} from '../constants';
 import {
   type AdditionalFeature,
   ADDITIONAL_FEATURE_PROMPTS,
-} from './wizard-session';
+} from '../wizard-session';
 import {
   registerCleanup,
   wizardAbort,
   WizardError,
-} from '../utils/wizard-abort';
-import { createCustomHeaders } from '../utils/custom-headers';
-import { getLlmGatewayUrlFromHost } from '../utils/urls';
-import { LINTING_TOOLS } from './safe-tools';
-import { createWizardToolsServer, WIZARD_TOOL_NAMES } from './wizard-tools';
+} from '../../utils/wizard-abort';
+import { createCustomHeaders } from '../../utils/custom-headers';
+import { getLlmGatewayUrlFromHost } from '../../utils/urls';
+import { LINTING_TOOLS } from '../safe-tools';
+import { createWizardToolsServer, WIZARD_TOOL_NAMES } from '../wizard-tools';
 import {
   createPreToolUseYaraHooks,
   createPostToolUseYaraHooks,
-} from './yara-hooks';
+} from '../yara-hooks';
 import { getWizardCommandments } from './commandments';
-import type { PackageManagerDetector } from './package-manager-detection';
+import type { PackageManagerDetector } from '../detection/package-manager';
 
 // Dynamic import cache for ESM module
 let _sdkModule: any = null;
@@ -59,6 +64,7 @@ function getClaudeCodeExecutablePath(): string {
 // syntax which prettier cannot parse. See PR discussion for details.
 type SDKMessage = any;
 type McpServersConfig = any;
+type AbortCaseMatcher = { match: RegExp };
 
 export const AgentSignals = {
   /** Signal emitted when the agent reports progress to the user */
@@ -67,6 +73,12 @@ export const AgentSignals = {
   ERROR_MCP_MISSING: '[ERROR-MCP-MISSING]',
   /** Signal emitted when the agent cannot access the setup resource */
   ERROR_RESOURCE_MISSING: '[ERROR-RESOURCE-MISSING]',
+  /**
+   * Signal emitted when the agent cannot complete the workflow and is
+   * aborting intentionally (distinct from errors). Format: "[ABORT] <reason>".
+   * Workflows can declare an onAbort handler to render a custom screen.
+   */
+  ABORT: '[ABORT]',
   /** Signal emitted when the agent provides a remark about its run */
   WIZARD_REMARK: '[WIZARD-REMARK]',
   /** Signal prefix for benchmark logging */
@@ -90,6 +102,8 @@ export enum AgentErrorType {
   API_ERROR = 'WIZARD_API_ERROR',
   /** YARA scanner detected a security violation */
   YARA_VIOLATION = 'WIZARD_YARA_VIOLATION',
+  /** Agent intentionally aborted the workflow (emitted [ABORT] <reason>) */
+  ABORT = 'WIZARD_ABORT',
 }
 
 const BLOCKING_ENV_KEYS = [
@@ -438,7 +452,7 @@ const SAFE_SCRIPTS = [
 const DANGEROUS_OPERATORS = /[;`$()]/;
 
 // Re-export for backwards compatibility — canonical source is skill-install.ts
-export { isSkillInstallCommand } from './skill-install';
+export { isSkillInstallCommand } from '../skill-install';
 
 /**
  * Check if command is an allowed package manager command.
@@ -719,6 +733,7 @@ export async function runAgent(
     successMessage?: string;
     errorMessage?: string;
     additionalFeatureQueue?: readonly AdditionalFeature[];
+    abortCases?: readonly AbortCaseMatcher[];
   },
   middleware?: {
     onMessage(message: any): void;
@@ -729,6 +744,7 @@ export async function runAgent(
     spinnerMessage = 'Customizing your PostHog setup...',
     successMessage = 'PostHog integration complete',
     errorMessage = 'Integration failed',
+    abortCases = [],
   } = config ?? {};
 
   const { query } = await getSDKModule();
@@ -817,6 +833,12 @@ export async function runAgent(
   let eventPlanWatcher: fs.FSWatcher | undefined;
   let eventPlanInterval: ReturnType<typeof setInterval> | undefined;
 
+  // Abort controller — lets us force-kill the SDK query when we detect an
+  // [ABORT] signal in the agent's output. Also stashes the reason so the
+  // runner can surface it via outroData after we unwind.
+  const abortController = new AbortController();
+  let abortReason: string | null = null;
+
   try {
     // Tools needed for the wizard:
     // - File operations: Read, Write, Edit
@@ -840,6 +862,7 @@ export async function runAgent(
     const response = query({
       prompt: createPromptStream(),
       options: {
+        abortController,
         model: agentConfig.model,
         cwd: agentConfig.workingDirectory,
         permissionMode: 'acceptEdits',
@@ -1017,6 +1040,33 @@ export async function runAgent(
         receivedSuccessResult,
       );
 
+      // [ABORT] detection: the skill emits "[ABORT] <reason>" when it
+      // cannot complete the workflow. Kill the SDK query immediately —
+      // the prompt doesn't need to cooperate with "and exit" because the
+      // abort is enforced here. The reason is surfaced via the returned
+      // AgentErrorType.ABORT so the runner can render a custom screen.
+      if (
+        abortCases.length > 0 &&
+        !abortReason &&
+        message.type === 'assistant'
+      ) {
+        const content = message.message?.content;
+        if (Array.isArray(content)) {
+          for (const block of content) {
+            if (block.type === 'text' && typeof block.text === 'string') {
+              const match = block.text.match(/\[ABORT\]\s*(.+?)(?:\n|$)/);
+              if (match) {
+                abortReason = match[1].trim();
+                logToFile(`Agent emitted [ABORT]: ${abortReason}`);
+                abortController.abort();
+                signalDone!();
+                break;
+              }
+            }
+          }
+        }
+      }
+
       // 401: show auth error screen and exit immediately
       if (
         message.type === 'assistant' &&
@@ -1048,6 +1098,13 @@ export async function runAgent(
         }
         signalDone!();
       }
+    }
+
+    // If the middleware caught an [ABORT] and aborted the SDK query, surface
+    // it as a structured error before checking other signals.
+    if (abortReason) {
+      spinner.stop('Wizard aborted');
+      return { error: AgentErrorType.ABORT, message: abortReason };
     }
 
     const outputText = collectedText.join('\n');
@@ -1092,6 +1149,13 @@ export async function runAgent(
   } catch (error) {
     // Signal done to unblock the async generator
     signalDone!();
+
+    // If the middleware caught an [ABORT] and triggered abortController.abort(),
+    // the SDK will throw an AbortError — surface it as a clean abort result.
+    if (abortReason) {
+      spinner.stop('Wizard aborted');
+      return { error: AgentErrorType.ABORT, message: abortReason };
+    }
 
     // If we already received a successful result, the error is from SDK cleanup
     // This happens due to a race condition: the SDK tries to send a cleanup command

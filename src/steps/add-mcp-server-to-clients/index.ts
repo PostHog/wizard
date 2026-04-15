@@ -1,4 +1,5 @@
 import type { Integration } from '../../lib/constants';
+import type { CloudRegion } from '../../utils/types';
 import { traceStep } from '../../telemetry';
 import { analytics } from '../../utils/analytics';
 import { getUI } from '../../ui';
@@ -55,7 +56,7 @@ export const addMCPServerToClientsStep = async ({
   integration?: Integration;
   local?: boolean;
   ci?: boolean;
-  cloudRegion?: import('../../utils/types').CloudRegion;
+  cloudRegion?: CloudRegion;
   features?: string[];
   apiKey?: string;
 }): Promise<string[]> => {

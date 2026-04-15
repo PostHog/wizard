@@ -7,13 +7,13 @@ import {
   composerPackageManager,
   swiftPackageManager,
   gradlePackageManager,
-} from '../package-manager-detection';
+} from '../package-manager';
 
-jest.mock('../../utils/debug');
-jest.mock('../../telemetry', () => ({
+jest.mock('../../../utils/debug');
+jest.mock('../../../telemetry', () => ({
   traceStep: (_name: string, fn: () => unknown) => fn(),
 }));
-jest.mock('../../utils/analytics', () => ({
+jest.mock('../../../utils/analytics', () => ({
   analytics: { setTag: jest.fn() },
 }));
 

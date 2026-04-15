@@ -8,7 +8,9 @@
  * Session-mutating methods trigger reactive screen resolution in the TUI.
  */
 
-import type { SettingsConflict } from '../lib/agent-interface';
+import type { SettingsConflict } from '../lib/agent/agent-interface';
+import type { WizardReadinessResult } from '../lib/health-checks/readiness.js';
+import type { OutroData } from '../lib/wizard-session';
 
 export enum TaskStatus {
   Pending = 'pending',
@@ -25,7 +27,15 @@ export interface SpinnerHandle {
 export interface WizardUI {
   // ── Lifecycle messages ────────────────────────────────────────────
   intro(message: string): void;
+  /** Success outro with a plain text message. */
   outro(message: string): void;
+  /**
+   * Error outro. Sets structured outroData and transitions run phase so
+   * the router advances to the outro screen. Use for abort/failure paths
+   * that need a custom error render — do NOT build the outroData by
+   * mutating session directly (nanostore holds a shallow copy).
+   */
+  outroError(data: OutroData): void;
   cancel(message: string): void;
 
   // ── Logging ───────────────────────────────────────────────────────
@@ -56,14 +66,10 @@ export interface WizardUI {
   }): void;
 
   /** Show blocking service outage (pushes outage overlay in TUI). Blocks until dismissed. */
-  showBlockingOutage(
-    result: import('../lib/health-checks/readiness.js').WizardReadinessResult,
-  ): Promise<void>;
+  showBlockingOutage(result: WizardReadinessResult): Promise<void>;
 
   /** Store non-blocking readiness warnings (shown as Health tab in RunScreen). */
-  setReadinessWarnings(
-    result: import('../lib/health-checks/readiness.js').WizardReadinessResult,
-  ): void;
+  setReadinessWarnings(result: WizardReadinessResult): void;
 
   /** Warn that another process is blocking the OAuth port (pushes overlay in TUI). */
   showPortConflict(processInfo: {

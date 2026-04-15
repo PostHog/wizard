@@ -59,6 +59,20 @@ export const DEFAULT_HOST_URL = IS_DEV
 export const ISSUES_URL = 'https://github.com/posthog/wizard/issues';
 export const CONTEXT_MILL_URL = 'https://github.com/PostHog/context-mill';
 
+/** Remote base URL for fetching the skill menu + downloading skills. */
+export const REMOTE_SKILLS_BASE_URL =
+  'https://github.com/PostHog/context-mill/releases/latest/download';
+/** Local base URL when `--local-mcp` is set (served by context-mill dev server). */
+export const LOCAL_SKILLS_BASE_URL = 'http://localhost:8765';
+
+/**
+ * Pick the skills base URL based on the session's localMcp flag.
+ * Single source of truth — do not inline this ternary anywhere.
+ */
+export function getSkillsBaseUrl(localMcp: boolean): string {
+  return localMcp ? LOCAL_SKILLS_BASE_URL : REMOTE_SKILLS_BASE_URL;
+}
+
 // ── Analytics (internal) ──────────────────────────────────────────────
 
 export const ANALYTICS_POSTHOG_PUBLIC_PROJECT_WRITE_KEY = 'sTMFPsFhdP1Ssg';

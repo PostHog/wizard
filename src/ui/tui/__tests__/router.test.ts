@@ -9,7 +9,7 @@ function baseWizardSession() {
 describe('WizardRouter', () => {
   describe('resolve', () => {
     it('returns the first incomplete visible screen for the wizard flow', () => {
-      const router = new WizardRouter(Flow.Wizard);
+      const router = new WizardRouter(Flow.PostHogIntegration);
       const session = baseWizardSession();
 
       expect(router.resolve(session)).toBe(Screen.Intro);
@@ -31,7 +31,7 @@ describe('WizardRouter', () => {
     });
 
     it('skips the setup screen when there are no unanswered framework questions', () => {
-      const router = new WizardRouter(Flow.Wizard);
+      const router = new WizardRouter(Flow.PostHogIntegration);
       const session = baseWizardSession();
 
       session.setupConfirmed = true;
@@ -53,7 +53,7 @@ describe('WizardRouter', () => {
     });
 
     it('returns the last flow screen when every entry is complete', () => {
-      const router = new WizardRouter(Flow.Wizard);
+      const router = new WizardRouter(Flow.PostHogIntegration);
       const session = baseWizardSession();
 
       session.setupConfirmed = true;
@@ -75,7 +75,7 @@ describe('WizardRouter', () => {
     });
 
     it('gives the topmost overlay precedence over the flow screen', () => {
-      const router = new WizardRouter(Flow.Wizard);
+      const router = new WizardRouter(Flow.PostHogIntegration);
       const session = baseWizardSession();
 
       router.pushOverlay(Overlay.SettingsOverride);
@@ -96,7 +96,7 @@ describe('WizardRouter', () => {
     });
 
     it('returns the top overlay when overlays are active', () => {
-      const router = new WizardRouter(Flow.Wizard);
+      const router = new WizardRouter(Flow.PostHogIntegration);
 
       router.pushOverlay(Overlay.ManagedSettings);
 

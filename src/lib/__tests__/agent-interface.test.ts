@@ -1,4 +1,4 @@
-import { runAgent, createStopHook } from '../agent-interface';
+import { runAgent, createStopHook } from '../agent/agent-interface';
 import type { WizardOptions } from '../../utils/types';
 import type { SpinnerHandle } from '../../ui';
 import {
@@ -278,6 +278,45 @@ describe('runAgent', () => {
 
       // ui.log.error should NOT have been called (errors suppressed for user)
       expect(mockUIInstance.log.error).not.toHaveBeenCalled();
+    });
+
+    it('should ignore abort requests when no abort cases are registered', async () => {
+      function* mockGeneratorWithAbortText() {
+        yield {
+          type: 'assistant',
+          message: {
+            content: [
+              {
+                type: 'text',
+                text: '[ABORT] Could not find a Stripe integration',
+              },
+            ],
+          },
+        };
+
+        yield {
+          type: 'result',
+          subtype: 'success',
+          is_error: false,
+          result: 'Agent completed successfully',
+        };
+      }
+
+      mockQuery.mockReturnValue(mockGeneratorWithAbortText());
+
+      const result = await runAgent(
+        defaultAgentConfig,
+        'test prompt',
+        defaultOptions,
+        mockSpinner as unknown as SpinnerHandle,
+        {
+          successMessage: 'Test success',
+          errorMessage: 'Test error',
+        },
+      );
+
+      expect(result).toEqual({});
+      expect(mockSpinner.stop).toHaveBeenCalledWith('Test success');
     });
   });
 });

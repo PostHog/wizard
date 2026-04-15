@@ -19,12 +19,12 @@ if (!satisfies(process.version, NODE_VERSION_RANGE)) {
   process.exit(1);
 }
 
-import { runWizard } from './src/run';
 import { isNonInteractiveEnvironment } from './src/utils/environment';
 import { getUI, setUI } from './src/ui';
 import { LoggingUI } from './src/ui/logging-ui';
-import type { Integration } from './src/lib/constants';
-import type { FrameworkConfig } from './src/lib/framework-config';
+import { getSubcommandWorkflows } from './src/lib/workflows/workflow-registry';
+import type { WorkflowConfig } from './src/lib/workflows/workflow-step';
+import type { WizardSession } from './src/lib/wizard-session';
 
 if (process.env.NODE_ENV === 'test') {
   void (async () => {
@@ -39,7 +39,36 @@ if (process.env.NODE_ENV === 'test') {
   })();
 }
 
-yargs(hideBin(process.argv))
+/** Shared yargs options for skill-based workflow subcommands. */
+const skillSubcommandOptions = {
+  debug: {
+    default: false,
+    describe: 'Enable verbose logging',
+    type: 'boolean' as const,
+  },
+  'install-dir': {
+    describe: 'Directory to install in',
+    type: 'string' as const,
+  },
+  'local-mcp': {
+    default: false,
+    describe: 'Use local MCP server',
+    type: 'boolean' as const,
+  },
+  benchmark: {
+    default: false,
+    describe: 'Run in benchmark mode',
+    type: 'boolean' as const,
+  },
+  'yara-report': {
+    default: false,
+    describe: 'Print YARA scanner summary',
+    type: 'boolean' as const,
+    hidden: true,
+  },
+};
+
+const cli = yargs(hideBin(process.argv))
   .env('POSTHOG_WIZARD')
   // global options
   .options({
@@ -85,11 +114,6 @@ yargs(hideBin(process.argv))
     'project-id': {
       describe:
         'PostHog project ID to use (optional; when not set, uses default from API key or OAuth)\nenv: POSTHOG_WIZARD_PROJECT_ID',
-      type: 'string',
-    },
-    email: {
-      describe:
-        'Email address for account creation (used with --signup)\nenv: POSTHOG_WIZARD_EMAIL',
       type: 'string',
     },
   })
@@ -146,6 +170,11 @@ yargs(hideBin(process.argv))
           type: 'boolean',
           hidden: true,
         },
+        skill: {
+          describe:
+            'Run a specific context-mill skill by ID\nenv: POSTHOG_WIZARD_SKILL',
+          type: 'string',
+        },
       });
     },
     (argv) => {
@@ -153,28 +182,74 @@ yargs(hideBin(process.argv))
 
       // CI mode validation and TTY check
       if (options.ci) {
-        // Use LoggingUI for CI mode (no dependencies, no prompts)
-        setUI(new LoggingUI());
-        // Default region to 'us' if not specified
-        if (!options.region) {
-          options.region = 'us';
-        }
+        if (!options.region) options.region = 'us';
         if (!options.apiKey) {
-          getUI().intro(`PostHog Wizard`);
+          setUI(new LoggingUI());
+          getUI().intro('PostHog Wizard');
           getUI().log.error(
             'CI mode requires --api-key (personal API key phx_xxx)',
           );
           process.exit(1);
+          return;
         }
         if (!options.installDir) {
-          getUI().intro(`PostHog Wizard`);
+          setUI(new LoggingUI());
+          getUI().intro('PostHog Wizard');
           getUI().log.error(
-            'CI mode requires --install-dir (directory to install PostHog in)',
+            'CI mode requires --install-dir (directory to install in)',
           );
           process.exit(1);
+          return;
         }
+        void (async () => {
+          const { posthogIntegrationConfig } = await import(
+            './src/lib/workflows/posthog-integration/index.js'
+          );
+          const { FRAMEWORK_REGISTRY } = await import('./src/lib/registry.js');
+          const { detectFramework, gatherFrameworkContext } = await import(
+            './src/lib/detection/index.js'
+          );
+          const { analytics } = await import('./src/utils/analytics.js');
+          const { wizardAbort } = await import('./src/utils/wizard-abort.js');
 
-        void runWizard(options as Parameters<typeof runWizard>[0]);
+          // preRun: honor --integration, else auto-detect, then gather
+          // framework context. Bypasses onReady hooks by design.
+          runWizardCI(posthogIntegrationConfig, options, async (session) => {
+            const integration =
+              session.integration ??
+              (await detectFramework(session.installDir));
+            if (!integration) {
+              await wizardAbort({
+                message:
+                  'Could not auto-detect your framework. Please specify --integration on the command line.',
+              });
+              return;
+            }
+            session.integration = integration;
+            analytics.setTag('integration', integration);
+
+            const frameworkConfig = FRAMEWORK_REGISTRY[integration];
+            session.frameworkConfig = frameworkConfig;
+
+            const context = await gatherFrameworkContext(frameworkConfig, {
+              installDir: session.installDir,
+              debug: session.debug,
+              forceInstall: session.forceInstall,
+              default: false,
+              signup: session.signup,
+              localMcp: session.localMcp,
+              ci: true,
+              menu: session.menu,
+              benchmark: session.benchmark,
+              yaraReport: session.yaraReport,
+            });
+            for (const [key, value] of Object.entries(context)) {
+              if (!(key in session.frameworkContext)) {
+                session.frameworkContext[key] = value;
+              }
+            }
+          });
+        })();
       } else if (isNonInteractiveEnvironment()) {
         // Non-interactive non-CI: error out
         getUI().intro(`PostHog Wizard`);
@@ -194,205 +269,35 @@ yargs(hideBin(process.argv))
           );
           (startPlayground as (version: string) => void)(WIZARD_VERSION);
         })();
-      } else {
-        // Interactive TTY: launch the Ink TUI
+      } else if (options.skill) {
+        // Run a specific skill by ID
         void (async () => {
-          try {
-            const { startTUI } = await import('./src/ui/tui/start-tui.js');
-            const { buildSession } = await import(
-              './src/lib/wizard-session.js'
-            );
-
-            const tui = startTUI(WIZARD_VERSION);
-
-            // Build session from CLI args and attach to store
-            const session = buildSession({
-              debug: options.debug as boolean | undefined,
-              forceInstall: options.forceInstall as boolean | undefined,
-              installDir: options.installDir as string | undefined,
-              ci: false,
-              signup: options.signup as boolean | undefined,
-              localMcp: options.localMcp as boolean | undefined,
-              apiKey: options.apiKey as string | undefined,
-              email: options.email,
-              menu: options.menu as boolean | undefined,
-              integration: options.integration as Parameters<
-                typeof buildSession
-              >[0]['integration'],
-              benchmark: options.benchmark as boolean | undefined,
-              yaraReport: options.yaraReport as boolean | undefined,
-              projectId: options.projectId as string | undefined,
-            });
-            tui.store.session = session;
-
-            // Detect framework while IntroScreen shows its spinner.
-            // Runs concurrently — IntroScreen reacts when detection completes.
-            const { FRAMEWORK_REGISTRY } = (await import(
-              './src/lib/registry.js'
-            )) as { FRAMEWORK_REGISTRY: Record<Integration, FrameworkConfig> };
-            const { detectIntegration } = (await import('./src/run.js')) as {
-              detectIntegration: (
-                installDir: string,
-              ) => Promise<Integration | undefined>;
-            };
-            const installDir = session.installDir ?? process.cwd();
-
-            const { DETECTION_TIMEOUT_MS } = (await import(
-              './src/lib/constants.js'
-            )) as { DETECTION_TIMEOUT_MS: number };
-
-            const detectedIntegration = await Promise.race([
-              detectIntegration(installDir),
-              new Promise<undefined>((resolve) =>
-                setTimeout(() => resolve(undefined), DETECTION_TIMEOUT_MS),
-              ),
-            ]);
-
-            if (detectedIntegration) {
-              const config = FRAMEWORK_REGISTRY[detectedIntegration];
-
-              // Run gatherContext for the friendly variant label
-              if (config.metadata.gatherContext) {
-                try {
-                  const context = await Promise.race([
-                    config.metadata.gatherContext({
-                      installDir,
-                      debug: session.debug,
-                      forceInstall: session.forceInstall,
-                      default: false,
-                      signup: session.signup,
-                      localMcp: session.localMcp,
-                      ci: session.ci,
-                      menu: session.menu,
-                      benchmark: session.benchmark,
-                      yaraReport: session.yaraReport,
-                    }),
-                    new Promise<Record<string, never>>((resolve) =>
-                      setTimeout(() => resolve({}), DETECTION_TIMEOUT_MS),
-                    ),
-                  ]);
-                  for (const [key, value] of Object.entries(context)) {
-                    if (!(key in session.frameworkContext)) {
-                      tui.store.setFrameworkContext(key, value);
-                    }
-                  }
-                } catch {
-                  // Detection failed — will show generic name
-                }
-              }
-
-              tui.store.setFrameworkConfig(detectedIntegration, config);
-
-              if (!session.detectedFrameworkLabel) {
-                tui.store.setDetectedFramework(config.metadata.name);
-              }
-
-              // Early version check — surface on IntroScreen before user proceeds
-              if (
-                config.detection.minimumVersion &&
-                config.detection.getInstalledVersion
-              ) {
-                const semver = await import('semver');
-                const version = await config.detection.getInstalledVersion({
-                  installDir,
-                  debug: session.debug,
-                  forceInstall: session.forceInstall,
-                  default: false,
-                  signup: session.signup,
-                  localMcp: session.localMcp,
-                  ci: session.ci,
-                  menu: session.menu,
-                  benchmark: session.benchmark,
-                  yaraReport: session.yaraReport,
-                });
-                if (version) {
-                  const coerced = semver.coerce(version);
-                  if (
-                    coerced &&
-                    semver.lt(coerced, config.detection.minimumVersion)
-                  ) {
-                    tui.store.setUnsupportedVersion({
-                      current: version,
-                      minimum: config.detection.minimumVersion,
-                      docsUrl:
-                        config.metadata.unsupportedVersionDocsUrl ??
-                        config.metadata.docsUrl,
-                    });
-                  }
-                }
-              }
-            }
-
-            // Feature discovery — deterministic scan of package.json deps
-            try {
-              const { readFileSync } = await import('fs');
-              const pkgPath = require('path').join(installDir, 'package.json');
-              const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8'));
-              const allDeps = {
-                ...pkg.dependencies,
-                ...pkg.devDependencies,
-              };
-              const depNames = Object.keys(allDeps);
-
-              const { DiscoveredFeature } = await import(
-                './src/lib/wizard-session.js'
-              );
-
-              if (
-                depNames.some((d) =>
-                  ['stripe', '@stripe/stripe-js'].includes(d),
-                )
-              ) {
-                tui.store.addDiscoveredFeature(DiscoveredFeature.Stripe);
-              }
-
-              // LLM SDK detection — sourced from PostHog LLM analytics skill
-              const LLM_PACKAGES = [
-                'openai',
-                '@anthropic-ai/sdk',
-                'ai',
-                '@ai-sdk/openai',
-                'langchain',
-                '@langchain/openai',
-                '@langchain/langgraph',
-                '@google/generative-ai',
-                '@google/genai',
-                '@instructor-ai/instructor',
-                '@mastra/core',
-                'portkey-ai',
-              ];
-              if (depNames.some((d) => LLM_PACKAGES.includes(d))) {
-                tui.store.addDiscoveredFeature(DiscoveredFeature.LLM);
-              }
-            } catch {
-              // No package.json or parse error — skip feature discovery
-            }
-
-            // Signal detection is done — IntroScreen shows picker or results
-            tui.store.setDetectionComplete();
-
-            // Wait for IntroScreen confirmation
-            await tui.waitForSetup();
-
-            // Ensure health check has completed before starting the wizard.
-            // The flow gate on Intro (readinessResult !== null) keeps the
-            // TUI on IntroScreen until this resolves. If blocking, the
-            // outage overlay was already pushed in the .then() callback.
-            await tui.store.healthGateComplete;
-
-            await runWizard(
-              options as Parameters<typeof runWizard>[0],
-              tui.store.session,
-            );
-
-            // Keep the outro screen visible — let process.exit() handle cleanup
-          } catch (err) {
-            // TUI unavailable (e.g., in test environment) — continue with default UI
-            if (process.env.DEBUG || process.env.POSTHOG_WIZARD_DEBUG) {
-              console.error('TUI init failed:', err); // eslint-disable-line no-console
-            }
-            await runWizard(options as Parameters<typeof runWizard>[0]);
-          }
+          const { createSkillWorkflow } = await import(
+            './src/lib/workflows/agent-skill/index.js'
+          );
+          const skillId = options.skill as string;
+          const config = createSkillWorkflow({
+            skillId,
+            command: 'skill',
+            flowKey: 'agent-skill',
+            description: `Run skill: ${skillId}`,
+            integrationLabel: skillId,
+            successMessage: `${skillId} completed!`,
+            reportFile: `posthog-${skillId}-report.md`,
+            docsUrl: 'https://posthog.com/docs',
+            spinnerMessage: `Running ${skillId}...`,
+            estimatedDurationMinutes: 5,
+          });
+          runWizard(config, options);
+        })();
+      } else {
+        // Interactive TTY: run core-integration through the unified workflow path.
+        // Same codepath as `npx @posthog/wizard integrate`.
+        void (async () => {
+          const { posthogIntegrationConfig } = await import(
+            './src/lib/workflows/posthog-integration/index.js'
+          );
+          runWizard(posthogIntegrationConfig, options);
         })();
       }
     },
@@ -509,9 +414,232 @@ yargs(hideBin(process.argv))
       )
       .demandCommand(1, 'You must specify a subcommand (add or remove)')
       .help();
-  })
+  });
+
+// ── Skill-based workflow subcommands (derived from registry) ─────────
+for (const wfConfig of getSubcommandWorkflows()) {
+  cli.command(
+    wfConfig.command!,
+    wfConfig.description,
+    (y) => y.options(skillSubcommandOptions),
+    (argv) => {
+      const options = { ...argv };
+      if (options.ci) {
+        runWizardCI(wfConfig, options);
+      } else {
+        runWizard(wfConfig, options);
+      }
+    },
+  );
+}
+
+cli
   .help()
   .alias('help', 'h')
   .version()
   .alias('version', 'v')
   .wrap(process.stdout.isTTY ? yargs.terminalWidth() : 80).argv;
+
+/**
+ * Run a full wizard workflow in the TUI. Handles the full lifecycle: start TUI,
+ * build session, run detection, wait for intro gate, execute the
+ * agent pipeline, wait for outro dismissal, then exit.
+ */
+function runWizard(
+  config: WorkflowConfig,
+  options: Record<string, unknown>,
+): void {
+  void (async () => {
+    try {
+      const installDir = (options.installDir as string) || process.cwd();
+
+      const { startTUI } = await import('./src/ui/tui/start-tui.js');
+      const { buildSession } = await import('./src/lib/wizard-session.js');
+
+      // flowKey values match Flow enum values by convention
+      const tui = startTUI(WIZARD_VERSION, config.flowKey as any);
+
+      const session = buildSession({
+        debug: options.debug as boolean | undefined,
+        forceInstall: options.forceInstall as boolean | undefined,
+        localMcp: options.localMcp as boolean | undefined,
+        installDir,
+        ci: false,
+        signup: options.signup as boolean | undefined,
+        apiKey: options.apiKey as string | undefined,
+        projectId: options.projectId as string | undefined,
+        menu: options.menu as boolean | undefined,
+        integration: options.integration as any,
+        benchmark: options.benchmark as boolean | undefined,
+        yaraReport: options.yaraReport as boolean | undefined,
+      });
+      // Set workflow metadata for TUI display
+      session.workflowLabel = config.flowKey;
+      const runDef = typeof config.run === 'object' ? config.run : null;
+      session.skillId = runDef?.skillId ?? null;
+
+      tui.store.session = session;
+
+      await tui.store.runReadyHooks();
+      await tui.store.getGate('intro');
+
+      const { runAgent } = await import('./src/lib/agent/agent-runner.js');
+      await runAgent(config, tui.store.session);
+
+      tui.store.onEnterScreen('outro' as any, () => {
+        // Screen is already outro — listen for dismissal
+      });
+      await new Promise<void>((resolve) => {
+        const unsub = tui.store.subscribe(() => {
+          if (tui.store.session.outroDismissed) {
+            unsub();
+            resolve();
+          }
+        });
+        if (tui.store.session.outroDismissed) {
+          unsub();
+          resolve();
+        }
+      });
+      process.exit(0);
+    } catch (err) {
+      if (process.env.DEBUG || process.env.POSTHOG_WIZARD_DEBUG) {
+        console.error('TUI init failed:', err); // eslint-disable-line no-console
+      }
+    }
+  })();
+}
+
+/**
+ * CI-mode pipeline shared by every non-interactive entry point.
+ *
+ * Validates flags, builds a `ci:true` session, runs `preRun` (or the
+ * workflow's `onReady` hooks by default), executes `runAgent`, and
+ * routes any failure through `wizardAbort`. `wizardAbort` owns all
+ * exits — never add a raw `process.exit` here.
+ */
+function runWizardCI(
+  config: WorkflowConfig,
+  options: Record<string, unknown>,
+  preRun?: (session: WizardSession) => Promise<void>,
+): void {
+  setUI(new LoggingUI());
+  if (!options.region) options.region = 'us';
+  if (!options.apiKey) {
+    getUI().intro('PostHog Wizard');
+    getUI().log.error('CI mode requires --api-key (personal API key phx_xxx)');
+    process.exit(1);
+  }
+  if (!options.installDir) {
+    getUI().intro('PostHog Wizard');
+    getUI().log.error(
+      'CI mode requires --install-dir (directory to install in)',
+    );
+    process.exit(1);
+  }
+
+  void (async () => {
+    const path = await import('path');
+    const { buildSession } = await import('./src/lib/wizard-session.js');
+    const { readEnvironment } = await import('./src/utils/environment.js');
+    const { readApiKeyFromEnv } = await import('./src/utils/env-api-key.js');
+    const { configureLogFileFromEnvironment, logToFile } = await import(
+      './src/utils/debug.js'
+    );
+    const { wizardAbort, WizardError } = await import(
+      './src/utils/wizard-abort.js'
+    );
+
+    configureLogFileFromEnvironment();
+
+    const env = readEnvironment();
+    const apiKey =
+      (options.apiKey as string) ?? readApiKeyFromEnv() ?? undefined;
+    const installDir = path.isAbsolute(options.installDir as string)
+      ? (options.installDir as string)
+      : path.join(process.cwd(), options.installDir as string);
+
+    const session = buildSession({
+      debug: options.debug as boolean | undefined,
+      forceInstall: options.forceInstall as boolean | undefined,
+      installDir,
+      ci: true,
+      signup: options.signup as boolean | undefined,
+      localMcp: options.localMcp as boolean | undefined,
+      apiKey,
+      menu: options.menu as boolean | undefined,
+      integration: options.integration as any, // eslint-disable-line @typescript-eslint/no-explicit-any
+      projectId: options.projectId as string | undefined,
+      benchmark: options.benchmark as boolean | undefined,
+      yaraReport: options.yaraReport as boolean | undefined,
+      ...env,
+    });
+    session.workflowLabel = config.flowKey;
+    const runDef = typeof config.run === 'object' ? config.run : null;
+    session.skillId = runDef?.skillId ?? null;
+
+    getUI().intro('Welcome to the PostHog setup wizard');
+    getUI().log.info(`Running ${config.flowKey} in CI mode`);
+
+    try {
+      if (preRun) {
+        await preRun(session);
+      } else {
+        // Run onReady hooks against a minimal store-less context.
+        const readyCtx = {
+          session,
+          setFrameworkContext: (key: string, value: unknown) => {
+            session.frameworkContext[key] = value;
+          },
+          setFrameworkConfig: () => undefined,
+          setDetectedFramework: () => undefined,
+          setUnsupportedVersion: () => undefined,
+          addDiscoveredFeature: () => undefined,
+          setDetectionComplete: () => undefined,
+        };
+        for (const step of config.steps) {
+          if (step.onReady) {
+            await step.onReady(readyCtx);
+          }
+        }
+
+        // Surface detectError written by the workflow's detect hook.
+        const detectError = session.frameworkContext.detectError as
+          | { kind: string; [k: string]: unknown }
+          | undefined;
+        if (detectError) {
+          await wizardAbort({
+            message: `Prerequisites not met: ${detectError.kind}\n\nSee ${
+              runDef?.docsUrl ?? 'https://posthog.com/docs'
+            }`,
+            error: new WizardError(`${config.flowKey} prerequisites failed`, {
+              integration: config.flowKey,
+              detect_error_kind: detectError.kind,
+            }),
+          });
+        }
+      }
+
+      const { runAgent } = await import('./src/lib/agent/agent-runner.js');
+      await runAgent(config, session);
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
+      const errorStack =
+        error instanceof Error && error.stack ? error.stack : undefined;
+
+      logToFile(`[bin.ts CI] ERROR: ${errorMessage}`);
+      if (errorStack) logToFile(`[bin.ts CI] STACK: ${errorStack}`);
+
+      const debugInfo = session.debug && errorStack ? `\n\n${errorStack}` : '';
+      const docsUrl =
+        session.frameworkConfig?.metadata.docsUrl ??
+        runDef?.docsUrl ??
+        'https://posthog.com/docs';
+      await wizardAbort({
+        message: `Something went wrong: ${errorMessage}\n\nYou can read the documentation at ${docsUrl} to set up manually.${debugInfo}`,
+        error: error as Error,
+      });
+    }
+  })();
+}

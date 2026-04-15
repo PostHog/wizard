@@ -15,7 +15,7 @@ import { loadBenchmarkConfig } from './config';
 import { createPluginsFromConfig } from './benchmarks';
 import type { BenchmarkConfig } from './config';
 import type { WizardOptions } from '../../utils/types';
-import { AgentSignals } from '../agent-interface';
+import { AgentSignals } from '../agent/agent-interface';
 
 // ── Types ──────────────────────────────────────────────────────────────
 
