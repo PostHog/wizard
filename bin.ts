@@ -182,6 +182,25 @@ const cli = yargs(hideBin(process.argv))
 
       // CI mode validation and TTY check
       if (options.ci) {
+        if (!options.region) options.region = 'us';
+        if (!options.apiKey) {
+          setUI(new LoggingUI());
+          getUI().intro('PostHog Wizard');
+          getUI().log.error(
+            'CI mode requires --api-key (personal API key phx_xxx)',
+          );
+          process.exit(1);
+          return;
+        }
+        if (!options.installDir) {
+          setUI(new LoggingUI());
+          getUI().intro('PostHog Wizard');
+          getUI().log.error(
+            'CI mode requires --install-dir (directory to install in)',
+          );
+          process.exit(1);
+          return;
+        }
         void (async () => {
           const { posthogIntegrationConfig } = await import(
             './src/lib/workflows/posthog-integration/index.js'
