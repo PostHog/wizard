@@ -8,7 +8,10 @@ import {
   McpOutcome,
 } from '../store.js';
 import { OutroKind, AdditionalFeature } from '../../../lib/wizard-session.js';
-import { WizardReadiness } from '../../../lib/health-checks/readiness.js';
+import {
+  WizardReadiness,
+  evaluateWizardReadiness,
+} from '../../../lib/health-checks/readiness.js';
 import { buildSession } from '../../../lib/wizard-session.js';
 import { Integration } from '../../../lib/constants.js';
 import { analytics } from '../../../utils/analytics.js';
@@ -42,10 +45,24 @@ function createStore(flow?: Flow): WizardStore {
 }
 
 const wizardCaptureMock = analytics.wizardCapture as jest.Mock;
+const evaluateWizardReadinessMock =
+  evaluateWizardReadiness as jest.MockedFunction<
+    typeof evaluateWizardReadiness
+  >;
+
+async function flushMicrotasks(): Promise<void> {
+  await Promise.resolve();
+  await Promise.resolve();
+}
 
 describe('WizardStore', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    evaluateWizardReadinessMock.mockResolvedValue({
+      decision: WizardReadiness.Yes,
+      health: {} as never,
+      reasons: [],
+    });
   });
   // ── Construction ─────────────────────────────────────────────────
 
@@ -947,6 +964,116 @@ describe('WizardStore', () => {
 
       // Verify version was bumped for each setter call
       expect(store.getVersion()).toBe(7);
+    });
+  });
+
+  // ── healthGateComplete promise ────────────────────────────────────
+
+  describe('healthGateComplete', () => {
+    it('resolves immediately for non-Wizard flows', async () => {
+      const store = createStore(Flow.McpAdd);
+
+      await expect(store.healthGateComplete).resolves.toBeUndefined();
+    });
+
+    it('resolves automatically when readiness is non-blocking', async () => {
+      evaluateWizardReadinessMock.mockResolvedValueOnce({
+        decision: WizardReadiness.Yes,
+        health: {} as never,
+        reasons: [],
+      });
+
+      const store = createStore();
+      let resolved = false;
+
+      void store.healthGateComplete.then(() => {
+        resolved = true;
+      });
+
+      await flushMicrotasks();
+
+      expect(resolved).toBe(true);
+      expect(store.session.readinessResult).toEqual({
+        decision: WizardReadiness.Yes,
+        health: {} as never,
+        reasons: [],
+      });
+    });
+
+    it('stays pending for blocking readiness until outage is dismissed', async () => {
+      evaluateWizardReadinessMock.mockResolvedValueOnce({
+        decision: WizardReadiness.No,
+        health: {} as never,
+        reasons: ['Anthropic: down'],
+      });
+
+      const store = createStore();
+      let resolved = false;
+
+      void store.healthGateComplete.then(() => {
+        resolved = true;
+      });
+
+      await flushMicrotasks();
+
+      expect(resolved).toBe(false);
+      expect(store.currentScreen).toBe(Screen.Intro);
+
+      store.dismissOutage();
+      await store.healthGateComplete;
+
+      expect(resolved).toBe(true);
+      expect(store.session.outageDismissed).toBe(true);
+    });
+  });
+
+  // ── Screen transition analytics ───────────────────────────────────
+
+  describe('screen transition analytics', () => {
+    it('fires when a real screen transition occurs after the initial screen', () => {
+      const store = createStore();
+
+      store.completeSetup();
+      wizardCaptureMock.mockClear();
+
+      store.setReadinessResult({
+        decision: WizardReadiness.Yes,
+        health: {} as never,
+        reasons: [],
+      });
+
+      expect(wizardCaptureMock).toHaveBeenCalledWith(
+        'screen auth',
+        expect.objectContaining({
+          from_screen: Screen.HealthCheck,
+        }),
+      );
+    });
+
+    it('does not fire a screen event when the visible screen stays the same', () => {
+      const store = createStore();
+      store.completeSetup();
+      store.setReadinessResult({
+        decision: WizardReadiness.Yes,
+        health: {} as never,
+        reasons: [],
+      });
+      store.setCredentials({
+        accessToken: 'tok',
+        projectApiKey: 'pk',
+        host: 'h',
+        projectId: 1,
+      });
+      wizardCaptureMock.mockClear();
+
+      store.setRunPhase(RunPhase.Running);
+
+      expect(store.currentScreen).toBe(Screen.Run);
+      expect(
+        wizardCaptureMock.mock.calls.some(
+          ([event]) => typeof event === 'string' && event.startsWith('screen '),
+        ),
+      ).toBe(false);
     });
   });
 
