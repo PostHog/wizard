@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.9.0](https://github.com/PostHog/wizard/compare/v2.8.0...v2.9.0) (2026-04-15)
+
+
+### Features
+
+* agent harness can run arbitrary workflows ([#385](https://github.com/PostHog/wizard/issues/385)) ([34aa648](https://github.com/PostHog/wizard/commit/34aa6483510dd0f4428beef41618d0e4b6e24fc6))
+
 ## [2.8.0](https://github.com/PostHog/wizard/compare/v2.7.0...v2.8.0) (2026-04-13)
 
 
