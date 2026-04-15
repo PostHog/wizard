@@ -49,11 +49,12 @@ describe('createSkillWorkflow', () => {
 });
 
 describe('AGENT_SKILL_STEPS', () => {
-  it('is auth → run → outro, all with screens and working predicates', () => {
+  it('is auth → run → outro → skills, all with screens and working predicates', () => {
     expect(AGENT_SKILL_STEPS.map((s) => s.id)).toEqual([
       'auth',
       'run',
       'outro',
+      'skills',
     ]);
 
     const session = buildSession({});

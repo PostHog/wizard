@@ -46,4 +46,9 @@ export const REVENUE_ANALYTICS_WORKFLOW: Workflow = [
     screen: 'outro',
     isComplete: (session) => session.outroDismissed,
   },
+  {
+    id: 'skills',
+    label: 'Skills',
+    screen: 'skills',
+  },
 ];
