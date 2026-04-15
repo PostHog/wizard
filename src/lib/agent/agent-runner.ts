@@ -314,6 +314,7 @@ export async function runWorkflow(
       successMessage: config.successMessage,
       errorMessage: config.errorMessage ?? `${config.integrationLabel} failed`,
       additionalFeatureQueue: config.additionalFeatureQueue ?? [],
+      abortCases: config.abortCases,
     },
     middleware,
   );

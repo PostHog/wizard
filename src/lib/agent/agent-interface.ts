@@ -64,6 +64,7 @@ function getClaudeCodeExecutablePath(): string {
 // syntax which prettier cannot parse. See PR discussion for details.
 type SDKMessage = any;
 type McpServersConfig = any;
+type AbortCaseMatcher = { match: RegExp };
 
 export const AgentSignals = {
   /** Signal emitted when the agent reports progress to the user */
@@ -732,6 +733,7 @@ export async function runAgent(
     successMessage?: string;
     errorMessage?: string;
     additionalFeatureQueue?: readonly AdditionalFeature[];
+    abortCases?: readonly AbortCaseMatcher[];
   },
   middleware?: {
     onMessage(message: any): void;
@@ -742,6 +744,7 @@ export async function runAgent(
     spinnerMessage = 'Customizing your PostHog setup...',
     successMessage = 'PostHog integration complete',
     errorMessage = 'Integration failed',
+    abortCases = [],
   } = config ?? {};
 
   const { query } = await getSDKModule();
@@ -1042,7 +1045,11 @@ export async function runAgent(
       // the prompt doesn't need to cooperate with "and exit" because the
       // abort is enforced here. The reason is surfaced via the returned
       // AgentErrorType.ABORT so the runner can render a custom screen.
-      if (!abortReason && message.type === 'assistant') {
+      if (
+        abortCases.length > 0 &&
+        !abortReason &&
+        message.type === 'assistant'
+      ) {
         const content = message.message?.content;
         if (Array.isArray(content)) {
           for (const block of content) {
