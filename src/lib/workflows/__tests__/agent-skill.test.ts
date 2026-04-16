@@ -49,8 +49,9 @@ describe('createSkillWorkflow', () => {
 });
 
 describe('AGENT_SKILL_STEPS', () => {
-  it('is auth → run → outro → skills, all with screens and working predicates', () => {
+  it('is intro → auth → run → outro → skills, all with screens and working predicates', () => {
     expect(AGENT_SKILL_STEPS.map((s) => s.id)).toEqual([
+      'intro',
       'auth',
       'run',
       'outro',
@@ -58,12 +59,19 @@ describe('AGENT_SKILL_STEPS', () => {
     ]);
 
     const session = buildSession({});
-    const [auth, run, outro] = AGENT_SKILL_STEPS;
+    const [intro, auth, run, outro] = AGENT_SKILL_STEPS;
+
+    // Intro gate starts closed
+    expect(intro.gate!(session)).toBe(false);
 
     // All incomplete initially
     expect(auth.isComplete!(session)).toBe(false);
     expect(run.isComplete!(session)).toBe(false);
     expect(outro.isComplete!(session)).toBe(false);
+
+    // Intro gate opens after setup confirmed
+    session.setupConfirmed = true;
+    expect(intro.gate!(session)).toBe(true);
 
     // Completing each
     session.credentials = {
