@@ -1,8 +1,8 @@
 /**
  * Generic agent skill step list.
  *
- * Minimal flow: intro → auth → run → outro.
- * No detection, no setup, no MCP, no skills screen.
+ * Minimal flow: auth → run → outro → skills.
+ * No detection, no setup, no MCP.
  */
 
 import type { Workflow } from '../workflow-step.js';
@@ -34,5 +34,10 @@ export const AGENT_SKILL_STEPS: Workflow = [
     label: 'Done',
     screen: 'outro',
     isComplete: (session) => session.outroDismissed,
+  },
+  {
+    id: 'skills',
+    label: 'Skills',
+    screen: 'skills',
   },
 ];

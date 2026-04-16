@@ -80,8 +80,11 @@ export const KeepSkillsScreen = ({ store }: KeepSkillsScreenProps) => {
       // Best-effort removal
     }
     setPhase(Phase.Done);
-    store.setSkillsComplete(false);
-    process.exit(0);
+    // Give React a tick to paint the "Skills removed." message before exit
+    setTimeout(() => {
+      store.setSkillsComplete(false);
+      process.exit(0);
+    }, 600);
   };
 
   return (

@@ -486,17 +486,14 @@ function runWizard(
       const { runAgent } = await import('./src/lib/agent/agent-runner.js');
       await runAgent(config, tui.store.session);
 
-      tui.store.onEnterScreen('outro' as any, () => {
-        // Screen is already outro — listen for dismissal
-      });
       await new Promise<void>((resolve) => {
         const unsub = tui.store.subscribe(() => {
-          if (tui.store.session.outroDismissed) {
+          if (tui.store.session.skillsComplete) {
             unsub();
             resolve();
           }
         });
-        if (tui.store.session.outroDismissed) {
+        if (tui.store.session.skillsComplete) {
           unsub();
           resolve();
         }
