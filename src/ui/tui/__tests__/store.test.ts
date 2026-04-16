@@ -919,7 +919,7 @@ describe('WizardStore', () => {
   // ── Full wizard flow simulation ──────────────────────────────────
 
   describe('full wizard flow', () => {
-    it('walks through the entire wizard flow correctly', () => {
+    it('walks through the posthog integration flow correctly', () => {
       const store = createStore();
       const screenHistory: string[] = [];
       store.subscribe(() => screenHistory.push(store.currentScreen));
@@ -964,6 +964,66 @@ describe('WizardStore', () => {
 
       // Verify version was bumped for each setter call
       expect(store.getVersion()).toBe(7);
+    });
+
+    it('walks through the revenue analytics flow correctly', () => {
+      const store = createStore(Flow.RevenueAnalyticsSetup);
+
+      expect(store.currentScreen).toBe(Screen.RevenueIntro);
+
+      // Step 1: Confirm intro
+      store.completeSetup();
+      expect(store.currentScreen).toBe(Screen.Auth);
+
+      // Step 2: Authenticate
+      store.setCredentials({
+        accessToken: 'tok',
+        projectApiKey: 'pk',
+        host: 'https://app.posthog.com',
+        projectId: 1,
+      });
+      expect(store.currentScreen).toBe(Screen.Run);
+
+      // Step 3: Start and complete run
+      store.setRunPhase(RunPhase.Running);
+      expect(store.currentScreen).toBe(Screen.Run);
+
+      store.setRunPhase(RunPhase.Completed);
+      expect(store.currentScreen).toBe(Screen.Outro);
+
+      // Step 4: Dismiss outro
+      store.setOutroDismissed();
+      expect(store.currentScreen).toBe('skills');
+    });
+
+    it('walks through the agent skill flow correctly', () => {
+      const store = createStore(Flow.AgentSkill);
+
+      expect(store.currentScreen).toBe(Screen.AgentSkillIntro);
+
+      // Step 1: Confirm intro
+      store.completeSetup();
+      expect(store.currentScreen).toBe(Screen.Auth);
+
+      // Step 2: Authenticate
+      store.setCredentials({
+        accessToken: 'tok',
+        projectApiKey: 'pk',
+        host: 'https://app.posthog.com',
+        projectId: 1,
+      });
+      expect(store.currentScreen).toBe(Screen.Run);
+
+      // Step 3: Start and complete run
+      store.setRunPhase(RunPhase.Running);
+      expect(store.currentScreen).toBe(Screen.Run);
+
+      store.setRunPhase(RunPhase.Completed);
+      expect(store.currentScreen).toBe(Screen.Outro);
+
+      // Step 4: Dismiss outro
+      store.setOutroDismissed();
+      expect(store.currentScreen).toBe('skills');
     });
   });
 
