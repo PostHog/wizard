@@ -20,7 +20,6 @@ import { Colors } from '../styles.js';
 import {
   fetchSkillsMenu,
   installSkill,
-  skillDisplayName,
   MENU_URL,
   type SkillEntry,
 } from '../../../lib/skills-registry.js';
@@ -94,7 +93,7 @@ export const SkillsInstallScreen = ({ store }: SkillsInstallScreenProps) => {
       const entry = entryMap.get(id);
       if (!entry) continue;
 
-      const displayName = skillDisplayName(id);
+      const displayName = entry.name;
       setCurrentSkill(displayName);
 
       const result = await installSkill(entry, installDir ?? process.cwd());
@@ -110,7 +109,7 @@ export const SkillsInstallScreen = ({ store }: SkillsInstallScreenProps) => {
   const groups: Record<string, Array<{ value: string; label: string }>> = {
     'PostHog Docs': skills.map((s) => ({
       value: s.id,
-      label: skillDisplayName(s.id),
+      label: s.name,
     })),
   };
 
@@ -141,6 +140,7 @@ export const SkillsInstallScreen = ({ store }: SkillsInstallScreenProps) => {
           <GroupedPickerMenu
             message="Select skills to install"
             groups={groups}
+            columns={2}
             initialSelected={[]}
             onSelect={(values) => void handleSelect(values)}
           />

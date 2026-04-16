@@ -14,8 +14,9 @@
  */
 
 import fs from 'fs';
+import os from 'os';
 import path from 'path';
-import { unzipSync } from 'fflate';
+import { execFileSync } from 'node:child_process';
 
 const BASE_URL =
   process.env.POSTHOG_WIZARD_SKILLS_BASE_URL ??
@@ -88,21 +89,6 @@ export async function fetchSkillsMenu(
 }
 
 // ---------------------------------------------------------------------------
-// Display helpers
-// ---------------------------------------------------------------------------
-
-/**
- * Derive a human-readable label from a skill ID.
- * "posthog-feature-flags" → "Feature Flags"
- */
-export function skillDisplayName(id: string): string {
-  return id
-    .replace(/^posthog-/, '')
-    .replace(/-/g, ' ')
-    .replace(/\b\w/g, (c) => c.toUpperCase());
-}
-
-// ---------------------------------------------------------------------------
 // Installation
 // ---------------------------------------------------------------------------
 
@@ -123,6 +109,9 @@ export async function installSkill(
   entry: SkillEntry,
   installDir: string,
 ): Promise<InstallResult> {
+  const skillsBase = path.join(installDir, '.claude', 'skills');
+  const tmpFile = path.join(os.tmpdir(), `posthog-skill-${entry.id}.zip`);
+
   // Download
   const zipBytes = await fetchBytes(entry.downloadUrl);
   if (!zipBytes) {
@@ -132,10 +121,26 @@ export async function installSkill(
     };
   }
 
-  // Extract
-  let files: Record<string, Uint8Array>;
   try {
-    files = unzipSync(zipBytes);
+    // Write ZIP to a temp file so the system unzip command can read it
+    fs.mkdirSync(skillsBase, { recursive: true });
+    fs.writeFileSync(tmpFile, zipBytes);
+
+    // Extract into .claude/skills/
+    execFileSync('unzip', ['-o', tmpFile, '-d', skillsBase], {
+      timeout: 30000,
+    });
+
+    // Count extracted files
+    const skillDir = path.join(skillsBase, entry.id);
+    const filesWritten = fs.existsSync(skillDir)
+      ? fs.readdirSync(skillDir, { recursive: true }).filter((f) => {
+          const fullPath = path.join(skillDir, String(f));
+          return fs.statSync(fullPath).isFile();
+        }).length
+      : 0;
+
+    return { success: true, filesWritten };
   } catch (err) {
     return {
       success: false,
@@ -143,28 +148,12 @@ export async function installSkill(
         err instanceof Error ? err.message : String(err)
       }`,
     };
-  }
-
-  // Write to .claude/skills/
-  const skillsBase = path.join(installDir, '.claude', 'skills');
-  let filesWritten = 0;
-
-  try {
-    for (const [filePath, data] of Object.entries(files)) {
-      if (filePath.endsWith('/')) continue; // directory entries have no content
-      const dest = path.join(skillsBase, filePath);
-      fs.mkdirSync(path.dirname(dest), { recursive: true });
-      fs.writeFileSync(dest, data);
-      filesWritten++;
+  } finally {
+    // Clean up temp file
+    try {
+      fs.unlinkSync(tmpFile);
+    } catch {
+      /* ignore cleanup errors */
     }
-  } catch (err) {
-    return {
-      success: false,
-      error: `Failed to write files: ${
-        err instanceof Error ? err.message : String(err)
-      }`,
-    };
   }
-
-  return { success: true, filesWritten };
 }
