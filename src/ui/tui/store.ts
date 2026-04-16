@@ -518,6 +518,7 @@ export class WizardStore {
       }
       analytics.wizardCapture(`screen ${next}`, {
         from_screen: prev,
+        workflow: this.router.activeFlow,
         ...sessionProperties(this.session),
       });
     }
