@@ -1,3 +1,4 @@
+import { REMOTE_SKILLS_BASE_URL } from '../constants';
 import { ServiceHealthStatus, type BaseHealthResult } from './types';
 
 // ---------------------------------------------------------------------------
@@ -51,6 +52,4 @@ export const checkMcpHealth = (): Promise<BaseHealthResult> =>
   fetchEndpointHealth('https://mcp.posthog.com/');
 
 export const checkGithubReleasesHealth = (): Promise<BaseHealthResult> =>
-  fetchEndpointHealth(
-    'https://github.com/PostHog/context-mill/releases/latest/download/skill-menu.json',
-  );
+  fetchEndpointHealth(`${REMOTE_SKILLS_BASE_URL}/skill-menu.json`);

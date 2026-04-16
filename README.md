@@ -33,6 +33,17 @@ npx @posthog/wizard mcp add
 npx @posthog/wizard mcp remove
 ```
 
+## Revenue Analytics
+
+Wire up an existing PostHog + Stripe project for revenue analytics:
+
+```bash
+npx @posthog/wizard revenue
+```
+
+Requires PostHog and Stripe SDKs already installed. Supports `--ci` with the
+same flags as the main wizard.
+
 # Options
 
 The following CLI arguments are available:
