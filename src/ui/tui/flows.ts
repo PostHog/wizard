@@ -29,7 +29,7 @@ export enum Screen {
   Auth = 'auth',
   Run = 'run',
   Mcp = 'mcp',
-  Skills = 'skills',
+  KeepSkills = 'keep-skills',
   Outro = 'outro',
   McpAdd = 'mcp-add',
   McpRemove = 'mcp-remove',

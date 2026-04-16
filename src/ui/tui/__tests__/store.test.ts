@@ -431,7 +431,7 @@ describe('WizardStore', () => {
       store.setRunPhase(RunPhase.Completed);
       store.setMcpComplete();
       store.setOutroDismissed();
-      expect(store.currentScreen).toBe(Screen.Skills);
+      expect(store.currentScreen).toBe(Screen.KeepSkills);
     });
 
     it('starts at McpAdd for McpAdd flow', () => {
@@ -960,7 +960,7 @@ describe('WizardStore', () => {
 
       // Step 6: Dismiss outro
       store.setOutroDismissed();
-      expect(store.currentScreen).toBe(Screen.Skills);
+      expect(store.currentScreen).toBe(Screen.KeepSkills);
 
       // Verify version was bumped for each setter call
       expect(store.getVersion()).toBe(7);
