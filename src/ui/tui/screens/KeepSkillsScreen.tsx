@@ -1,5 +1,5 @@
 /**
- * SkillsScreen — Ask whether to keep installed skills in .claude/skills/.
+ * KeepSkillsScreen — Ask whether to keep installed skills in .claude/skills/.
  *
  * Shown after the outro summary so users see the agent's output first,
  * then decide whether to keep the skills that powered it.
@@ -17,7 +17,7 @@ import { ConfirmationInput } from '../primitives/index.js';
 import { Colors } from '../styles.js';
 import { CONTEXT_MILL_URL } from '../../../lib/constants.js';
 
-interface SkillsScreenProps {
+interface KeepSkillsScreenProps {
   store: WizardStore;
 }
 
@@ -33,7 +33,7 @@ enum Phase {
   Done = 'done',
 }
 
-export const SkillsScreen = ({ store }: SkillsScreenProps) => {
+export const KeepSkillsScreen = ({ store }: KeepSkillsScreenProps) => {
   useSyncExternalStore(
     (cb) => store.subscribe(cb),
     () => store.getSnapshot(),

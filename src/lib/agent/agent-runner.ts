@@ -215,6 +215,8 @@ export async function runWorkflow(
 
   analytics.wizardCapture('agent started', {
     integration: config.integrationLabel,
+    workflow: config.integrationLabel,
+    skill_id: config.skillId ?? null,
   });
 
   // 4. OAuth

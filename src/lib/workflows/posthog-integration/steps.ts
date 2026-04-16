@@ -100,8 +100,8 @@ export const POSTHOG_INTEGRATION_WORKFLOW: Workflow = [
     isComplete: (session) => session.outroDismissed,
   },
   {
-    id: 'skills',
-    label: 'Skills',
-    screen: 'skills',
+    id: 'keep-skills',
+    label: 'Keep Skills',
+    screen: 'keep-skills',
   },
 ];

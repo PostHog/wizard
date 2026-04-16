@@ -10,6 +10,12 @@ import { RunPhase } from '../../wizard-session.js';
 
 export const AGENT_SKILL_STEPS: Workflow = [
   {
+    id: 'intro',
+    label: 'Welcome',
+    screen: 'agent-skill-intro',
+    gate: (session) => session.setupConfirmed,
+  },
+  {
     id: 'auth',
     label: 'Authentication',
     screen: 'auth',
