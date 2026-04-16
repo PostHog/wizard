@@ -210,6 +210,7 @@ export class WizardStore {
 
   set session(value: WizardSession) {
     this.$session.set(value);
+    this.emitChange();
   }
 
   get statusMessages(): string[] {

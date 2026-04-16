@@ -48,21 +48,17 @@ export const RevenueIntroScreen = ({ store }: RevenueIntroScreenProps) => {
   // ── Detection rows ─────────────────────────────────────────────────
 
   const detectionRows: DetectionRow[] = [];
-
-  if (!showingMoreInfo) {
-    if (detectedPosthogSdks.length > 0) {
-      detectionRows.push({
-        label: 'PostHog SDK',
-        value: detectedPosthogSdks.join(', '),
-      });
-    }
-
-    if (detectedStripeSdks.length > 0) {
-      detectionRows.push({
-        label: 'Stripe SDK',
-        value: detectedStripeSdks.join(', '),
-      });
-    }
+  if (detectedPosthogSdks.length > 0) {
+    detectionRows.push({
+      label: 'PostHog SDK',
+      value: detectedPosthogSdks.join(', '),
+    });
+  }
+  if (detectedStripeSdks.length > 0) {
+    detectionRows.push({
+      label: 'Stripe SDK',
+      value: detectedStripeSdks.join(', '),
+    });
   }
 
   // ── Body ────────────────────────────────────────────────────────────
@@ -143,6 +139,7 @@ export const RevenueIntroScreen = ({ store }: RevenueIntroScreenProps) => {
     <IntroScreenLayout
       installDir={session.installDir}
       body={body}
+      showDetection={!showingMoreInfo}
       detectionRows={detectionRows}
       errorView={errorView}
       workflowLabel={session.workflowLabel}

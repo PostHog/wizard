@@ -31,7 +31,10 @@ interface IntroScreenLayoutProps {
   /** Free-form content below the title (copy, spinners, pickers, notices) */
   body?: ReactNode;
 
-  /** Detection row items rendered as "Label ✔ value suffix" */
+  /** Show the detection block (Directory, detection rows, Workflow, Skill). Default true. */
+  showDetection?: boolean;
+
+  /** Extra detection row items rendered as "Label ✔ value suffix" */
   detectionRows?: DetectionRow[];
 
   /** Content rendered between detection rows and the menu */
@@ -65,6 +68,7 @@ export const IntroScreenLayout = ({
   installDir,
   title = 'PostHog Wizard 🦔',
   body,
+  showDetection = true,
   detectionRows,
   children,
   menuOptions,
@@ -127,7 +131,7 @@ export const IntroScreenLayout = ({
 
         {children}
 
-        {detectionRows && detectionRows.length > 0 && (
+        {showDetection && (
           <Box flexDirection="column" marginTop={1}>
             <Text>
               <Text>
@@ -139,7 +143,7 @@ export const IntroScreenLayout = ({
               </Text>
             </Text>
 
-            {detectionRows.map((row) => (
+            {detectionRows?.map((row) => (
               <Text key={row.label}>
                 <Text>
                   {row.label} <Text color="green">{'\u2714'}</Text>{' '}
@@ -153,13 +157,15 @@ export const IntroScreenLayout = ({
 
             {workflowLabel && (
               <Text>
-                Workflow <Text color="green">{'\u2714'}</Text> {workflowLabel}
+                Workflow{'  '}
+                <Text color="green">{'\u2714'}</Text> {workflowLabel}
               </Text>
             )}
 
             {workflowLabel === 'agent-skill' && skillId && (
               <Text>
-                Skill <Text color="green">{'\u2714'}</Text> {skillId}
+                Skill{'     '}
+                <Text color="green">{'\u2714'}</Text> {skillId}
               </Text>
             )}
           </Box>

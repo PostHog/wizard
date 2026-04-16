@@ -23,6 +23,7 @@ import { AGENT_SKILL_STEPS } from '../../lib/workflows/agent-skill/index.js';
 export enum Screen {
   Intro = 'intro',
   RevenueIntro = 'revenue-intro',
+  AgentSkillIntro = 'agent-skill-intro',
   HealthCheck = 'health-check',
   Setup = 'setup',
   Auth = 'auth',

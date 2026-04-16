@@ -149,7 +149,7 @@ export const PostHogIntegrationIntroScreen = ({
   // ── Detection rows ─────────────────────────────────────────────────
 
   const detectionRows: DetectionRow[] = [];
-  if (showContinue && frameworkLabel) {
+  if (frameworkLabel) {
     const suffixParts: string[] = [];
     if (!manuallySelected) suffixParts.push('(detected)');
     if (config?.metadata.beta) suffixParts.push('[BETA]');
@@ -238,6 +238,7 @@ export const PostHogIntegrationIntroScreen = ({
       installDir={session.installDir}
       title={title}
       body={body}
+      showDetection={showContinue}
       detectionRows={detectionRows}
       menuOptions={unsupported ? null : menuOptions}
       onSelect={handleSelect}
