@@ -15,6 +15,7 @@ import { LogDemo } from './demos/LogDemo.js';
 import { RunScreenDemo } from './demos/RunScreenDemo.js';
 import { HealthCheckDemo } from './demos/HealthCheckDemo.js';
 import { ModalDemo } from './demos/ModalDemo.js';
+import { McpDemo } from './demos/McpDemo.js';
 
 interface PlaygroundAppProps {
   store: WizardStore;
@@ -40,6 +41,11 @@ export const PlaygroundApp = ({ store }: PlaygroundAppProps) => {
       id: 'modal',
       label: 'Modal',
       component: <ModalDemo />,
+    },
+    {
+      id: 'mcp',
+      label: 'MCP',
+      component: <McpDemo store={store} />,
     },
   ];
 
