@@ -56,6 +56,7 @@ import type { WizardOptions } from '../../utils/types';
 import type { WorkflowConfig } from '../workflows/workflow-step';
 import { assemblePrompt, type PromptContext } from './agent-prompt';
 import { requestDeepLink } from '../../utils/provisioning';
+import opn from 'opn';
 
 export type { PromptContext };
 
@@ -454,13 +455,14 @@ export async function runWorkflow(
 
   getUI().outro(config.successMessage);
 
-  if (session.signup && session.outroData?.continueUrl) {
-    try {
-      const opn = (await import('opn')).default;
-      await opn(session.outroData.continueUrl, { wait: false });
-    } catch {
-      // Browser open failed - URL is still shown in the outro screen
-    }
+  if (
+    session.signup &&
+    session.outroData?.continueUrl &&
+    process.env.NODE_ENV !== 'test'
+  ) {
+    opn(session.outroData.continueUrl, { wait: false }).catch(() => {
+      // opn throws in environments without a browser
+    });
   }
 
   // 12. Analytics shutdown
