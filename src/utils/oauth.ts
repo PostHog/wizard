@@ -9,7 +9,7 @@ import { getUI } from '../ui';
 import {
   IS_DEV,
   ISSUES_URL,
-  OAUTH_PORT,
+  OAUTH_PORTS,
   OAUTH_TIMEOUT_MS,
   POSTHOG_DEV_CLIENT_ID,
   POSTHOG_OAUTH_URL,
@@ -59,6 +59,22 @@ interface OAuthConfig {
   signup?: boolean;
 }
 
+function getLocalOAuthOrigin(port: number): string {
+  return `http://localhost:${port}`;
+}
+
+function getCallbackUrl(port: number): string {
+  return `${getLocalOAuthOrigin(port)}/callback`;
+}
+
+function getLocalLoginUrl(port: number): string {
+  return `${getLocalOAuthOrigin(port)}/authorize`;
+}
+
+function getLocalSignupUrl(port: number): string {
+  return `${getLocalLoginUrl(port)}?signup=true`;
+}
+
 function generateCodeVerifier(): string {
   return crypto.randomBytes(32).toString('base64url');
 }
@@ -70,7 +86,9 @@ function generateCodeChallenge(verifier: string): string {
 async function startCallbackServer(
   authUrl: string,
   signupUrl: string,
+  port: number,
 ): Promise<{
+  port: number;
   server: http.Server;
   waitForCallback: () => Promise<string>;
 }> {
@@ -90,7 +108,7 @@ async function startCallbackServer(
         res.end();
         return;
       }
-      const url = new URL(req.url, `http://localhost:${OAUTH_PORT}`);
+      const url = new URL(req.url, getLocalOAuthOrigin(port));
 
       if (url.pathname === '/authorize') {
         const isSignup = url.searchParams.get('signup') === 'true';
@@ -167,59 +185,52 @@ async function startCallbackServer(
       }
     });
 
-    server.listen(OAUTH_PORT, () => {
-      resolve({ server, waitForCallback });
+    server.listen(port, () => {
+      resolve({ port, server, waitForCallback });
     });
 
     server.on('error', reject);
   });
 }
 
-function getPortProcessInfo(): { command: string; pid: string; user: string } {
+function getPortProcessInfo(port: number): {
+  command: string;
+  pid: string;
+  port: number;
+  user: string;
+} {
   try {
-    const output = execSync(`lsof -i :${OAUTH_PORT} -sTCP:LISTEN 2>/dev/null`, {
+    const output = execSync(`lsof -i :${port} -sTCP:LISTEN 2>/dev/null`, {
       encoding: 'utf-8',
       timeout: 3000,
     }).trim();
     const lines = output.split('\n');
     // First line is header, second is the process
     if (lines.length < 2)
-      return { command: 'unknown', pid: 'unknown', user: 'unknown' };
+      return { command: 'unknown', pid: 'unknown', port, user: 'unknown' };
     const fields = lines[1].split(/\s+/);
     // lsof columns: COMMAND PID USER FD TYPE DEVICE SIZE/OFF NODE NAME
     const command = fields[0] ?? 'unknown';
     const pid = fields[1] ?? 'unknown';
     const user = fields[2] ?? 'unknown';
-    return { command, pid, user };
+    return { command, pid, port, user };
   } catch {
-    return { command: 'unknown', pid: 'unknown', user: 'unknown' };
+    return { command: 'unknown', pid: 'unknown', port, user: 'unknown' };
   }
 }
 
-async function startCallbackServerWithRetry(
-  authUrl: string,
-  signupUrl: string,
-): ReturnType<typeof startCallbackServer> {
-  try {
-    return await startCallbackServer(authUrl, signupUrl);
-  } catch (e) {
-    const isPortInUse =
-      e instanceof Error &&
-      'code' in e &&
-      (e as NodeJS.ErrnoException).code === 'EADDRINUSE';
-    if (!isPortInUse) throw e;
-
-    const processInfo = getPortProcessInfo();
-    await getUI().showPortConflict(processInfo);
-
-    // User killed the process — retry once
-    return startCallbackServer(authUrl, signupUrl);
-  }
+function isPortInUseError(error: unknown): boolean {
+  return (
+    error instanceof Error &&
+    'code' in error &&
+    (error as NodeJS.ErrnoException).code === 'EADDRINUSE'
+  );
 }
 
 async function exchangeCodeForToken(
   code: string,
   codeVerifier: string,
+  callbackUrl: string,
 ): Promise<OAuthTokenResponse> {
   const clientId = IS_DEV ? POSTHOG_DEV_CLIENT_ID : POSTHOG_PROXY_CLIENT_ID;
 
@@ -228,7 +239,7 @@ async function exchangeCodeForToken(
     {
       grant_type: 'authorization_code',
       code,
-      redirect_uri: `http://localhost:${OAUTH_PORT}/callback`,
+      redirect_uri: callbackUrl,
       client_id: clientId,
       code_verifier: codeVerifier,
     },
@@ -249,89 +260,122 @@ export async function performOAuthFlow(
   const clientId = IS_DEV ? POSTHOG_DEV_CLIENT_ID : POSTHOG_PROXY_CLIENT_ID;
   const codeVerifier = generateCodeVerifier();
   const codeChallenge = generateCodeChallenge(codeVerifier);
+  let shouldRetry = false;
 
-  const authUrl = new URL(`${POSTHOG_OAUTH_URL}/oauth/authorize`);
-  authUrl.searchParams.set('client_id', clientId);
-  authUrl.searchParams.set(
-    'redirect_uri',
-    `http://localhost:${OAUTH_PORT}/callback`,
-  );
-  authUrl.searchParams.set('response_type', 'code');
-  authUrl.searchParams.set('code_challenge', codeChallenge);
-  authUrl.searchParams.set('code_challenge_method', 'S256');
-  authUrl.searchParams.set('scope', config.scopes.join(' '));
-  authUrl.searchParams.set('required_access_level', 'project');
+  do {
+    shouldRetry = false;
+    let lastProcessInfo: {
+      command: string;
+      pid: string;
+      port: number;
+      user: string;
+    } | null = null;
 
-  const signupUrl = new URL(
-    `${POSTHOG_OAUTH_URL}/signup?next=${encodeURIComponent(
-      authUrl.toString(),
-    )}`,
-  );
+    for (const port of OAUTH_PORTS) {
+      const callbackUrl = getCallbackUrl(port);
+      const authUrl = new URL(`${POSTHOG_OAUTH_URL}/oauth/authorize`);
+      authUrl.searchParams.set('client_id', clientId);
+      authUrl.searchParams.set('redirect_uri', callbackUrl);
+      authUrl.searchParams.set('response_type', 'code');
+      authUrl.searchParams.set('code_challenge', codeChallenge);
+      authUrl.searchParams.set('code_challenge_method', 'S256');
+      authUrl.searchParams.set('scope', config.scopes.join(' '));
+      authUrl.searchParams.set('required_access_level', 'project');
 
-  const localSignupUrl = `http://localhost:${OAUTH_PORT}/authorize?signup=true`;
-  const localLoginUrl = `http://localhost:${OAUTH_PORT}/authorize`;
-
-  const urlToOpen = config.signup ? localSignupUrl : localLoginUrl;
-
-  logToFile('[oauth] starting callback server');
-  const { server, waitForCallback } = await startCallbackServerWithRetry(
-    authUrl.toString(),
-    signupUrl.toString(),
-  );
-  logToFile('[oauth] callback server ready, showing login URL');
-
-  getUI().setLoginUrl(urlToOpen);
-
-  if (process.env.NODE_ENV !== 'test') {
-    opn(urlToOpen, { wait: false }).catch(() => {
-      // opn throws in environments without a browser
-    });
-  }
-
-  const loginSpinner = getUI().spinner();
-  loginSpinner.start('Waiting for authorization...');
-
-  try {
-    const code = await Promise.race([
-      waitForCallback(),
-      new Promise<never>((_, reject) =>
-        setTimeout(
-          () => reject(new Error('Authorization timed out')),
-          OAUTH_TIMEOUT_MS,
-        ),
-      ),
-    ]);
-
-    const token = await exchangeCodeForToken(code, codeVerifier);
-
-    server.close();
-    getUI().setLoginUrl(null);
-    loginSpinner.stop('Authorization complete!');
-
-    return token;
-  } catch (e) {
-    loginSpinner.stop('Authorization failed.');
-    server.close();
-
-    const error = e instanceof Error ? e : new Error('Unknown error');
-
-    if (error.message.includes('timeout')) {
-      getUI().log.error('Authorization timed out. Please try again.');
-    } else if (error.message.includes('access_denied')) {
-      getUI().log.info(
-        `Authorization was cancelled.\n\nYou denied access to PostHog. To use the wizard, you need to authorize access to your PostHog account.\n\nYou can try again by re-running the wizard.`,
+      const signupUrl = new URL(
+        `${POSTHOG_OAUTH_URL}/signup?next=${encodeURIComponent(
+          authUrl.toString(),
+        )}`,
       );
-    } else {
-      getUI().log.error(
-        `Authorization failed:\n\n${error.message}\n\nIf you think this is a bug in the PostHog wizard, please create an issue:\n${ISSUES_URL}`,
-      );
+      const localSignupUrl = getLocalSignupUrl(port);
+      const localLoginUrl = getLocalLoginUrl(port);
+      const urlToOpen = config.signup ? localSignupUrl : localLoginUrl;
+
+      logToFile(`[oauth] attempting callback server on port ${port}`);
+
+      let server: http.Server;
+      let waitForCallback: () => Promise<string>;
+      try {
+        ({ server, waitForCallback } = await startCallbackServer(
+          authUrl.toString(),
+          signupUrl.toString(),
+          port,
+        ));
+      } catch (e) {
+        if (!isPortInUseError(e)) throw e;
+        lastProcessInfo = getPortProcessInfo(port);
+        continue;
+      }
+
+      logToFile('[oauth] callback server ready, showing login URL');
+
+      getUI().setLoginUrl(urlToOpen);
+
+      if (process.env.NODE_ENV !== 'test') {
+        opn(urlToOpen, { wait: false }).catch(() => {
+          // opn throws in environments without a browser
+        });
+      }
+
+      const loginSpinner = getUI().spinner();
+      loginSpinner.start('Waiting for authorization...');
+
+      try {
+        const code = await Promise.race([
+          waitForCallback(),
+          new Promise<never>((_, reject) =>
+            setTimeout(
+              () => reject(new Error('Authorization timed out')),
+              OAUTH_TIMEOUT_MS,
+            ),
+          ),
+        ]);
+
+        const token = await exchangeCodeForToken(
+          code,
+          codeVerifier,
+          callbackUrl,
+        );
+
+        server.close();
+        getUI().setLoginUrl(null);
+        loginSpinner.stop('Authorization complete!');
+
+        return token;
+      } catch (e) {
+        loginSpinner.stop('Authorization failed.');
+        server.close();
+
+        const error = e instanceof Error ? e : new Error('Unknown error');
+
+        if (error.message.includes('timeout')) {
+          getUI().log.error('Authorization timed out. Please try again.');
+        } else if (error.message.includes('access_denied')) {
+          getUI().log.info(
+            `Authorization was cancelled.\n\nYou denied access to PostHog. To use the wizard, you need to authorize access to your PostHog account.\n\nYou can try again by re-running the wizard.`,
+          );
+        } else {
+          getUI().log.error(
+            `Authorization failed:\n\n${error.message}\n\nIf you think this is a bug in the PostHog wizard, please create an issue:\n${ISSUES_URL}`,
+          );
+        }
+
+        analytics.captureException(error, {
+          step: 'oauth_flow',
+        });
+
+        await abort();
+        throw error;
+      }
     }
 
-    analytics.captureException(error, {
-      step: 'oauth_flow',
-    });
+    if (!lastProcessInfo) {
+      throw new Error('No OAuth callback ports configured');
+    }
 
-    await abort();
-    throw error;
-  }
+    await getUI().showPortConflict(lastProcessInfo);
+    shouldRetry = true;
+  } while (shouldRetry);
+
+  throw new Error('OAuth port retry loop exited unexpectedly');
 }

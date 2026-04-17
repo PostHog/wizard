@@ -9,7 +9,6 @@ import { useState, useSyncExternalStore } from 'react';
 import { execSync } from 'node:child_process';
 import type { WizardStore } from '../store.js';
 import { ConfirmationInput, ModalOverlay } from '../primitives/index.js';
-import { OAUTH_PORT } from '../../../lib/constants.js';
 
 interface PortConflictScreenProps {
   store: WizardStore;
@@ -29,7 +28,7 @@ export const PortConflictScreen = ({ store }: PortConflictScreenProps) => {
   return (
     <ModalOverlay
       borderColor="#DC9300"
-      title={`Port ${OAUTH_PORT} in use`}
+      title={`Port ${processInfo.port} in use`}
       width={72}
       feedback={feedback}
       footer={
@@ -39,13 +38,13 @@ export const PortConflictScreen = ({ store }: PortConflictScreenProps) => {
           cancelLabel="Exit [Esc]"
           onConfirm={() => {
             try {
-              execSync(`lsof -ti :${OAUTH_PORT} | xargs kill`, {
+              execSync(`lsof -ti :${processInfo.port} | xargs kill`, {
                 stdio: 'ignore',
               });
               store.resolvePortConflict();
             } catch {
               setFeedback(
-                `Could not kill the process. Try running: lsof -ti :${OAUTH_PORT} | xargs kill`,
+                `Could not kill the process. Try running: lsof -ti :${processInfo.port} | xargs kill`,
               );
             }
           }}

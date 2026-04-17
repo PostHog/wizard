@@ -342,6 +342,7 @@ export class WizardStore {
   showPortConflict(processInfo: {
     command: string;
     pid: string;
+    port: number;
     user: string;
   }): Promise<void> {
     this.$session.setKey('portConflictProcess', processInfo);
