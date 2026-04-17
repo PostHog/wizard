@@ -32,6 +32,11 @@ export const AVAILABLE_FEATURES = {
       hint: 'Analytics insights',
     },
     {
+      value: 'product_analytics',
+      label: 'Product Analytics',
+      hint: 'Insight CRUD management',
+    },
+    {
       value: 'experiments',
       label: 'Experiments',
       hint: 'A/B testing experiments',
@@ -45,6 +50,11 @@ export const AVAILABLE_FEATURES = {
       value: 'annotations',
       label: 'Annotations',
       hint: 'Annotation management',
+    },
+    {
+      value: 'replay',
+      label: 'Session Replay',
+      hint: 'Session recording management',
     },
     {
       value: 'sql',
@@ -113,6 +123,11 @@ export const AVAILABLE_FEATURES = {
       hint: 'Data warehouse management',
     },
     {
+      value: 'endpoints',
+      label: 'Endpoints',
+      hint: 'Data warehouse endpoint management',
+    },
+    {
       value: 'data_schema',
       label: 'Data Schema',
       hint: 'Data schema exploration',
@@ -157,9 +172,24 @@ export const AVAILABLE_FEATURES = {
       hint: 'Alert management',
     },
     {
-      value: 'activity_logs',
-      label: 'Activity Logs',
-      hint: 'Activity log viewing',
+      value: 'platform_features',
+      label: 'Platform Features',
+      hint: 'Activity logs, approvals, comments, and roles',
+    },
+    {
+      value: 'integrations',
+      label: 'Integrations',
+      hint: 'Connected integration management',
+    },
+    {
+      value: 'conversations',
+      label: 'Conversations',
+      hint: 'Support ticket management',
+    },
+    {
+      value: 'core',
+      label: 'Subscriptions',
+      hint: 'Scheduled insight and dashboard deliveries',
     },
     {
       value: 'search',

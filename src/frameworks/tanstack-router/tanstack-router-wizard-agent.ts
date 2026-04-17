@@ -1,7 +1,7 @@
 /* TanStack Router wizard using posthog-agent with PostHog MCP */
 import type { WizardOptions } from '../../utils/types';
 import type { FrameworkConfig } from '../../lib/framework-config';
-import { detectNodePackageManagers } from '../../lib/package-manager-detection';
+import { detectNodePackageManagers } from '../../lib/detection/package-manager';
 import { Integration } from '../../lib/constants';
 import {
   getPackageVersion,

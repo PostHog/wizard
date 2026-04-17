@@ -21,6 +21,7 @@ import { getBlockingServiceKeys } from '../../../../lib/health-checks/readiness.
 import { ServiceHealthStatus } from '../../../../lib/health-checks/types.js';
 import { wizardAbort } from '../../../../utils/wizard-abort.js';
 import { fetchSkillMenu, downloadSkill } from '../../../../lib/wizard-tools.js';
+import { REMOTE_SKILLS_BASE_URL } from '../../../../lib/constants.js';
 
 interface HealthCheckScreenProps {
   store: WizardStore;
@@ -105,9 +106,7 @@ export const HealthCheckScreen = ({ store }: HealthCheckScreenProps) => {
   const handleDownloadAndExit = async () => {
     if (downloading) return;
     setDownloading(true);
-    const skillsBaseUrl =
-      'https://github.com/PostHog/context-mill/releases/latest/download';
-    const menu = await fetchSkillMenu(skillsBaseUrl);
+    const menu = await fetchSkillMenu(REMOTE_SKILLS_BASE_URL);
     if (menu) {
       const prefix = `integration-${integration}`;
       const skills = (menu.categories['integration'] ?? []).filter((s) =>

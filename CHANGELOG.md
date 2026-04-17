@@ -1,5 +1,20 @@
 # Changelog
 
+## [2.9.1](https://github.com/PostHog/wizard/compare/v2.9.0...v2.9.1) (2026-04-16)
+
+
+### Bug Fixes
+
+* delete skills ([#391](https://github.com/PostHog/wizard/issues/391)) ([1370547](https://github.com/PostHog/wizard/commit/1370547704801e793c43b64f5d1a076cb2cbcd26))
+* MCP input for windows + playground ([#395](https://github.com/PostHog/wizard/issues/395)) ([62e4bf5](https://github.com/PostHog/wizard/commit/62e4bf5c844f86b1769b29893d3383e9276d0087))
+
+## [2.9.0](https://github.com/PostHog/wizard/compare/v2.8.0...v2.9.0) (2026-04-15)
+
+
+### Features
+
+* agent harness can run arbitrary workflows ([#385](https://github.com/PostHog/wizard/issues/385)) ([34aa648](https://github.com/PostHog/wizard/commit/34aa6483510dd0f4428beef41618d0e4b6e24fc6))
+
 ## [2.8.0](https://github.com/PostHog/wizard/compare/v2.7.0...v2.8.0) (2026-04-13)
 
 

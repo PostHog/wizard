@@ -2,9 +2,12 @@
  * WizardStore — Nanostore-backed reactive store for the TUI.
  * React components subscribe via useSyncExternalStore.
  *
- * Navigation is delegated to WizardRouter.
- * The active screen is derived from session state — not imperatively set.
- * Overlays (settings-override, port-conflict) are the only imperative navigation.
+ * The active screen is derived from session state — WizardRouter walks
+ * the flow and shows the first step whose `isComplete` is still false.
+ *
+ * Define a step `gate` if your screen needs to await user interactions.
+ * bin.ts calls `await store.getGate(stepId)` to pause until the gate
+ * predicate becomes true.
  *
  * All session mutations that affect screen resolution go through
  * explicit setters so emitChange() is always called.
@@ -21,7 +24,8 @@ import {
   RunPhase,
   buildSession,
 } from '../../lib/wizard-session.js';
-import type { SettingsConflict } from '../../lib/agent-interface.js';
+import type { SettingsConflict } from '../../lib/agent/agent-interface.js';
+import type { WizardReadinessResult } from '../../lib/health-checks/readiness.js';
 import {
   WizardRouter,
   type ScreenName,
@@ -30,10 +34,11 @@ import {
   Flow,
 } from './router.js';
 import { analytics, sessionProperties } from '../../utils/analytics.js';
-import {
-  evaluateWizardReadiness,
-  WizardReadiness,
-} from '../../lib/health-checks/readiness.js';
+import type {
+  StoreInitContext,
+  WorkflowReadyContext,
+} from '../../lib/workflows/workflow-step.js';
+import { WORKFLOW_STEPS } from './flows.js';
 
 export { TaskStatus, Screen, Overlay, Flow, RunPhase, McpOutcome };
 export type { ScreenName, OutroData, WizardSession };
@@ -49,6 +54,13 @@ export interface TaskItem {
 export interface PlannedEvent {
   name: string;
   description: string;
+}
+
+interface GateEntry {
+  predicate: (session: WizardSession) => boolean;
+  promise: Promise<void>;
+  resolve: () => void;
+  resolved: boolean;
 }
 
 export class WizardStore {
@@ -68,19 +80,13 @@ export class WizardStore {
   /** Hooks run when transitioning onto a screen. */
   private _enterScreenHooks = new Map<ScreenName, (() => void)[]>();
 
+  /** Gate promises derived from workflow step definitions. */
+  private _gates = new Map<string, GateEntry>();
+
   version = '';
 
   /** Navigation router — resolves active screen from session state. */
   readonly router: WizardRouter;
-
-  /**
-   * Setup promise — IntroScreen resolves this when the user confirms.
-   * bin.ts awaits it before calling runWizard.
-   */
-  private _resolveSetup!: () => void;
-  readonly setupComplete: Promise<void> = new Promise((resolve) => {
-    this._resolveSetup = resolve;
-  });
 
   /** Blocks agent execution until the settings-override overlay is dismissed. */
   private _resolveSettingsOverride: (() => void) | null = null;
@@ -89,47 +95,111 @@ export class WizardStore {
   /** Blocks OAuth flow until the port-conflict overlay is dismissed. */
   private _resolvePortConflict: (() => void) | null = null;
 
-  /**
-   * Resolves when the health-check screen is done — either auto-advanced
-   * (healthy) or user-dismissed (outage). bin.ts awaits this before runWizard().
-   */
-  private _resolveHealthGate!: () => void;
-  readonly healthGateComplete: Promise<void> = new Promise((resolve) => {
-    this._resolveHealthGate = resolve;
-  });
-
-  constructor(flow: Flow = Flow.Wizard) {
+  constructor(flow: Flow = Flow.PostHogIntegration) {
     this.router = new WizardRouter(flow);
+    this._initFromWorkflow(flow);
+  }
 
-    // Fire health check immediately for Wizard flow so results arrive
-    // while the user is still on IntroScreen.
-    if (flow === Flow.Wizard) {
-      this._initHealthCheck();
-    } else {
-      this._resolveHealthGate();
+  /**
+   * Scan workflow steps for gate predicates and onInit callbacks.
+   * Creates gate promises and fires init work.
+   */
+  private _initFromWorkflow(flow: Flow): void {
+    const steps = WORKFLOW_STEPS[flow];
+    if (!steps) return;
+
+    // Create gate promises from steps that define them
+    for (const step of steps) {
+      if (step.gate) {
+        let resolve!: () => void;
+        const promise = new Promise<void>((r) => {
+          resolve = r;
+        });
+        this._gates.set(step.id, {
+          predicate: step.gate,
+          promise,
+          resolve,
+          resolved: false,
+        });
+      }
+    }
+
+    // Run onInit callbacks with a minimal context interface.
+    // Arrow functions capture `this` from _initFromWorkflow so we don't
+    // need to alias it.
+    const getSession = (): WizardSession => this.session;
+    const ctx: StoreInitContext = {
+      get session() {
+        return getSession();
+      },
+      setReadinessResult: (r) => this.setReadinessResult(r),
+      setFrameworkContext: (k, v) => this.setFrameworkContext(k, v),
+      emitChange: () => this.emitChange(),
+    };
+    for (const step of steps) {
+      step.onInit?.(ctx);
     }
   }
 
   /**
-   * Kick off the health check. Stores the result and resolves the
-   * health gate if non-blocking.
+   * Run all `onReady` hooks declared by the current flow's steps, in
+   * order. Must be called after `store.session = session` so hooks see
+   * the real installDir. bin.ts calls this generically — it doesn't
+   * need to know which workflow has which pre-flow work.
    */
-  private _initHealthCheck(): void {
-    evaluateWizardReadiness()
-      .then((readiness) => {
-        this.setReadinessResult(readiness);
-        if (readiness.decision !== WizardReadiness.No) {
-          this._resolveHealthGate();
-        }
-      })
-      .catch(() => {
-        this.setReadinessResult({
-          decision: WizardReadiness.Yes,
-          health: {} as never,
-          reasons: [],
-        });
-        this._resolveHealthGate();
-      });
+  async runReadyHooks(): Promise<void> {
+    const steps = WORKFLOW_STEPS[this.router.activeFlow];
+    if (!steps) return;
+    const ctx: WorkflowReadyContext = {
+      session: this.session,
+      setFrameworkContext: (k, v) => this.setFrameworkContext(k, v),
+      setFrameworkConfig: (i, c) => this.setFrameworkConfig(i, c),
+      setDetectedFramework: (l) => this.setDetectedFramework(l),
+      setUnsupportedVersion: (info) => this.setUnsupportedVersion(info),
+      addDiscoveredFeature: (f) => this.addDiscoveredFeature(f),
+      setDetectionComplete: () => this.setDetectionComplete(),
+    };
+    for (const step of steps) {
+      if (step.onReady) {
+        await step.onReady(ctx);
+      }
+    }
+  }
+
+  // ── Gate API ────────────────────────────────────────────────────
+
+  /**
+   * Get a gate promise by step ID — the primary blocking checkpoint API
+   * for bin.ts. `await store.getGate('...')` parks the caller until the
+   * corresponding workflow step's gate predicate flips to true (if the
+   * predicate stays false, the caller stays parked indefinitely — the
+   * TUI keeps rendering so the user can resolve whatever is blocking).
+   *
+   * If the workflow doesn't define a step with this ID, or the step
+   * has no `gate` predicate, this returns an already-resolved promise
+   * so bin.ts flows straight through. This lets workflows opt in to
+   * gates on a per-step basis without bin.ts needing to know which
+   * gates exist in which flow.
+   */
+  getGate(stepId: string): Promise<void> {
+    return this._gates.get(stepId)?.promise ?? Promise.resolve();
+  }
+
+  /**
+   * Re-evaluate every gate predicate against the current session and
+   * resolve any whose predicate now returns true. Called after every
+   * emitChange(), so gates unblock as soon as the session mutation
+   * that satisfies them lands. Gates only resolve once — a predicate
+   * that goes true → false → true will NOT re-block a caller that
+   * already awaited through.
+   */
+  private _checkGates(): void {
+    for (const [, gate] of this._gates) {
+      if (!gate.resolved && gate.predicate(this.session)) {
+        gate.resolved = true;
+        gate.resolve();
+      }
+    }
   }
 
   // ── State accessors (read from atoms) ────────────────────────────
@@ -140,6 +210,7 @@ export class WizardStore {
 
   set session(value: WizardSession) {
     this.$session.set(value);
+    this.emitChange();
   }
 
   get statusMessages(): string[] {
@@ -174,11 +245,10 @@ export class WizardStore {
   // Every setter that affects screen resolution calls emitChange().
   // Business logic calls these instead of mutating session directly.
 
-  /** Unblocks bin.ts via the setupComplete promise. */
+  /** Sets setupConfirmed. Gate resolves via _checkGates(). */
   completeSetup(): void {
     this.$session.setKey('setupConfirmed', true);
     analytics.wizardCapture('setup confirmed', sessionProperties(this.session));
-    this._resolveSetup();
     this.emitChange();
   }
 
@@ -229,19 +299,14 @@ export class WizardStore {
     this.emitChange();
   }
 
-  setReadinessResult(
-    result:
-      | import('../../lib/health-checks/readiness.js').WizardReadinessResult
-      | null,
-  ): void {
+  setReadinessResult(result: WizardReadinessResult | null): void {
     this.$session.setKey('readinessResult', result);
     this.emitChange();
   }
 
-  /** User dismissed the blocking outage screen. Unblocks bin.ts. */
+  /** User dismissed the blocking outage screen. Gate resolves via _checkGates(). */
   dismissOutage(): void {
     this.$session.setKey('outageDismissed', true);
-    this._resolveHealthGate();
     this.emitChange();
   }
 
@@ -402,10 +467,12 @@ export class WizardStore {
   /**
    * Notify React that state has changed.
    * The router re-resolves the active screen on next render.
+   * Gate predicates are checked and resolved if ready.
    */
   emitChange(): void {
     this.router._setDirection('push');
     this.$version.set(this.$version.get() + 1);
+    this._checkGates();
     this._detectTransition();
   }
 
@@ -451,6 +518,7 @@ export class WizardStore {
       }
       analytics.wizardCapture(`screen ${next}`, {
         from_screen: prev,
+        workflow: this.router.activeFlow,
         ...sessionProperties(this.session),
       });
     }

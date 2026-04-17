@@ -11,7 +11,7 @@
  * When done, calls store.setMcpComplete(). The router resolves to outro.
  */
 
-import { Box, Text } from 'ink';
+import { Box, Text, useInput } from 'ink';
 import { useState, useEffect } from 'react';
 import { useSyncExternalStore } from 'react';
 import { type WizardStore, McpOutcome } from '../store.js';
@@ -69,6 +69,10 @@ export const McpScreen = ({
     (cb) => store.subscribe(cb),
     () => store.getSnapshot(),
   );
+
+  // Keep stdin active from mount so Windows cmd.exe doesn't drop
+  // the first keypress when ConfirmationInput appears after detection.
+  useInput(() => undefined);
 
   const isRemove = mode === 'remove';
 

@@ -10,7 +10,7 @@ import {
   getKotlinVersionBucket,
   getMinSdkVersion,
 } from './utils';
-import { gradlePackageManager } from '../../lib/package-manager-detection';
+import { gradlePackageManager } from '../../lib/detection/package-manager';
 
 type AndroidContext = {
   kotlinVersion?: string;

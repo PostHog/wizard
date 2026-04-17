@@ -17,12 +17,14 @@ import { HealthCheckScreen } from './screens/health/HealthCheckScreen.js';
 import { SettingsOverrideScreen } from './screens/SettingsOverrideScreen.js';
 import { ManagedSettingsScreen } from './screens/ManagedSettingsScreen.js';
 import { PortConflictScreen } from './screens/PortConflictScreen.js';
-import { IntroScreen } from './screens/IntroScreen.js';
+import { PostHogIntegrationIntroScreen } from './screens/PostHogIntegrationIntroScreen.js';
+import { RevenueIntroScreen } from './screens/RevenueIntroScreen.js';
+import { AgentSkillIntroScreen } from './screens/AgentSkillIntroScreen.js';
 import { SetupScreen } from './screens/SetupScreen.js';
 import { AuthScreen } from './screens/AuthScreen.js';
 import { RunScreen } from './screens/RunScreen.js';
 import { McpScreen } from './screens/McpScreen.js';
-import { SkillsScreen } from './screens/SkillsScreen.js';
+import { KeepSkillsScreen } from './screens/KeepSkillsScreen.js';
 import { OutroScreen } from './screens/OutroScreen.js';
 import { AuthErrorScreen } from './screens/AuthErrorScreen.js';
 import { createMcpInstaller } from './services/mcp-installer.js';
@@ -50,13 +52,15 @@ export function createScreens(
     [Overlay.AuthError]: <AuthErrorScreen />,
 
     // Wizard flow
-    [Screen.Intro]: <IntroScreen store={store} />,
+    [Screen.Intro]: <PostHogIntegrationIntroScreen store={store} />,
+    [Screen.RevenueIntro]: <RevenueIntroScreen store={store} />,
+    [Screen.AgentSkillIntro]: <AgentSkillIntroScreen store={store} />,
     [Screen.HealthCheck]: <HealthCheckScreen store={store} />,
     [Screen.Setup]: <SetupScreen store={store} />,
     [Screen.Auth]: <AuthScreen store={store} />,
     [Screen.Run]: <RunScreen store={store} />,
     [Screen.Mcp]: <McpScreen store={store} installer={services.mcpInstaller} />,
-    [Screen.Skills]: <SkillsScreen store={store} />,
+    [Screen.KeepSkills]: <KeepSkillsScreen store={store} />,
     [Screen.Outro]: <OutroScreen store={store} />,
 
     // Standalone MCP flows

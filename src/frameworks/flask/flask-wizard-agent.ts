@@ -2,7 +2,7 @@
 import type { WizardOptions } from '../../utils/types';
 import type { FrameworkConfig } from '../../lib/framework-config';
 import { PYTHON_PACKAGE_INSTALLATION } from '../../lib/framework-config';
-import { detectPythonPackageManagers } from '../../lib/package-manager-detection';
+import { detectPythonPackageManagers } from '../../lib/detection/package-manager';
 import { Integration } from '../../lib/constants';
 import fg from 'fast-glob';
 import * as fs from 'node:fs';
