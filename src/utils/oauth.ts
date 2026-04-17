@@ -282,11 +282,9 @@ export async function performOAuthFlow(
 
   getUI().setLoginUrl(urlToOpen);
 
-  if (process.env.NODE_ENV !== 'test') {
-    opn(urlToOpen, { wait: false }).catch(() => {
-      // opn throws in environments without a browser
-    });
-  }
+  opn(urlToOpen, { wait: false }).catch(() => {
+    // opn throws in environments without a browser
+  });
 
   const loginSpinner = getUI().spinner();
   loginSpinner.start('Waiting for authorization...');

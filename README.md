@@ -160,6 +160,46 @@ This also allows us to pick up the bill on behalf of our customers.
 When we make improvements to this process, these are available instantly to all
 users of the wizard, no training delays or other ambiguity.
 
+## Build system
+
+Built with [tsdown](https://tsdown.dev/) (Rolldown). `pnpm build` bundles `bin.ts` into ESM chunks in `dist/`, inlining all local source and keeping npm dependencies external.
+
+### Environment variables
+
+**Build-time (locked).** `NODE_ENV` is replaced with `"production"` at compile time. It cannot be overridden at runtime. All URLs, OAuth client IDs, and dev-mode code paths resolve to their production values unconditionally.
+
+To add a new build-time constant, add it to `env` in `tsdown.config.ts` and export it from `src/env.ts`.
+
+**Runtime (allowlisted).** Runtime env reads go through `runtimeEnv()` in `src/env.ts`, which only accepts keys in the `RuntimeEnvKey` union:
+
+| Variable | Purpose |
+|---|---|
+| `POSTHOG_WIZARD_BENCHMARK_CONFIG` | Path to benchmark config file |
+| `POSTHOG_WIZARD_BENCHMARK_FILE` | Output path for benchmark results |
+| `POSTHOG_WIZARD_LOG_DIR` | Log directory override |
+| `POSTHOG_WIZARD_DEBUG` / `DEBUG` | Enable debug output |
+| `MCP_URL` | Override MCP server URL |
+| `POSTHOG_API_KEY` | API key for MCP subprocess auth |
+| `TERM`, `TERM_PROGRAM`, `CI`, etc. | Terminal/platform detection |
+| `APPDATA`, `XDG_CONFIG_HOME` | Platform path resolution |
+
+To add a new runtime env var, add its key to `RuntimeEnvKey` in `src/env.ts`.
+
+**Direct `process.env` access** is only used for subprocess environment writes (e.g. `agent-interface.ts` setting `ANTHROPIC_BASE_URL`), vendored code, and tests.
+
+### Import aliases
+
+Path aliases defined in `tsconfig.build.json`, resolved by tsdown:
+
+| Alias | Maps to |
+|---|---|
+| `@env` | `src/env.ts` |
+| `@lib/*` | `src/lib/*` |
+| `@utils/*` | `src/utils/*` |
+| `@ui/*` | `src/ui/*` |
+| `@steps/*` | `src/steps/*` |
+| `@frameworks/*` | `src/frameworks/*` |
+
 ## Running locally
 
 ### Quick test without linking

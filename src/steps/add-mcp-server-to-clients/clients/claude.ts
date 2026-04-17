@@ -2,6 +2,7 @@ import { DefaultMCPClient } from '../MCPClient';
 import * as path from 'path';
 import * as os from 'os';
 import { DefaultMCPClientConfig } from '../defaults';
+import { runtimeEnv } from '@env';
 import { z } from 'zod';
 
 export const ClaudeMCPConfig = DefaultMCPClientConfig;
@@ -41,7 +42,7 @@ export class ClaudeMCPClient extends DefaultMCPClient {
     if (isWindows) {
       return Promise.resolve(
         path.join(
-          process.env.APPDATA || '',
+          runtimeEnv('APPDATA') || '',
           'Claude',
           'claude_desktop_config.json',
         ),
