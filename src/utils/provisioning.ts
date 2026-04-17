@@ -10,11 +10,16 @@
 import * as crypto from 'node:crypto';
 import axios from 'axios';
 import { z } from 'zod';
-import { IS_DEV, WIZARD_USER_AGENT } from '../lib/constants';
+import {
+  IS_DEV,
+  POSTHOG_DEV_CLIENT_ID,
+  POSTHOG_US_CLIENT_ID,
+  WIZARD_USER_AGENT,
+} from '../lib/constants';
 import { logToFile } from './debug';
 import { analytics } from './analytics';
 
-const WIZARD_CLIENT_ID = 'posthog-wizard';
+const WIZARD_CLIENT_ID = IS_DEV ? POSTHOG_DEV_CLIENT_ID : POSTHOG_US_CLIENT_ID;
 const API_VERSION = '0.1d';
 
 const PROVISIONING_BASE_URL = IS_DEV
@@ -95,6 +100,7 @@ export async function provisionNewAccount(
   email: string,
   name: string,
   region: 'US' | 'EU' = 'US',
+  opts?: { orgName?: string; projectName?: string },
 ): Promise<ProvisioningResult> {
   const codeVerifier = generateCodeVerifier();
   const codeChallenge = generateCodeChallenge(codeVerifier);
@@ -111,7 +117,10 @@ export async function provisionNewAccount(
       client_id: WIZARD_CLIENT_ID,
       code_challenge: codeChallenge,
       code_challenge_method: 'S256',
-      configuration: { region },
+      configuration: {
+        region,
+        ...(opts?.orgName ? { organization_name: opts.orgName } : {}),
+      },
     },
     {
       headers: {
@@ -172,7 +181,12 @@ export async function provisionNewAccount(
   // Step 3: Provision resources
   const resourceRes = await axios.post(
     `${PROVISIONING_BASE_URL}/api/agentic/provisioning/resources`,
-    { service_id: 'analytics' },
+    {
+      service_id: 'analytics',
+      ...(opts?.projectName
+        ? { configuration: { project_name: opts.projectName } }
+        : {}),
+    },
     {
       headers: {
         'Content-Type': 'application/json',
