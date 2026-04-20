@@ -1,7 +1,7 @@
 import * as childProcess from 'node:child_process';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
-import { isAbsolute, join, relative } from 'node:path';
+import { basename, isAbsolute, join, relative } from 'node:path';
 
 import { traceStep } from '../telemetry';
 import { debug } from './debug';
@@ -75,6 +75,65 @@ export function isInGitRepo() {
   } catch {
     return false;
   }
+}
+
+const FREEMAIL_DOMAINS = new Set([
+  'gmail.com',
+  'googlemail.com',
+  'hotmail.com',
+  'outlook.com',
+  'yahoo.com',
+  'icloud.com',
+  'me.com',
+  'mail.com',
+  'protonmail.com',
+  'proton.me',
+  'live.com',
+  'aol.com',
+  'yandex.com',
+  'zoho.com',
+  'gmx.com',
+  'fastmail.com',
+]);
+
+function parseGitRemote(): { org: string; repo: string } | null {
+  try {
+    const url = childProcess
+      .execSync('git remote get-url origin', {
+        stdio: ['ignore', 'pipe', 'ignore'],
+      })
+      .toString()
+      .trim();
+    // git@github.com:acme-corp/my-app.git or https://github.com/acme-corp/my-app.git
+    const match = url.match(/[/:]([\w.-]+)\/([\w.-]+?)(?:\.git)?$/);
+    if (match) return { org: match[1], repo: match[2] };
+  } catch {
+    // not in a git repo or no remote
+  }
+  return null;
+}
+
+export function detectOrgAndProject(email: string): {
+  orgName: string | undefined;
+  projectName: string | undefined;
+} {
+  const remote = parseGitRemote();
+
+  // Project name: git repo name > directory name
+  const projectName = remote?.repo || basename(process.cwd()) || undefined;
+
+  // Org name: git remote org > email domain (skip freemail)
+  let orgName: string | undefined;
+  if (remote?.org) {
+    orgName = remote.org;
+  } else {
+    const domain = email.split('@')[1]?.toLowerCase();
+    if (domain && !FREEMAIL_DOMAINS.has(domain)) {
+      orgName = domain.split('.')[0];
+    }
+  }
+
+  return { orgName, projectName };
 }
 
 export function getUncommittedOrUntrackedFiles(): string[] {
@@ -500,7 +559,11 @@ async function askForProvisioningSignup(
 
   try {
     const provisionRegion = (region ?? 'us').toUpperCase() as 'US' | 'EU';
-    const result = await provisionNewAccount(email, '', provisionRegion);
+    const { orgName, projectName } = detectOrgAndProject(email);
+    const result = await provisionNewAccount(email, '', provisionRegion, {
+      orgName,
+      projectName,
+    });
 
     spinner.stop('Account created!');
     getUI().log.success('Welcome to PostHog!');

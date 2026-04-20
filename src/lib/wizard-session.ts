@@ -151,7 +151,12 @@ export interface WizardSession {
   outageDismissed: boolean;
   settingsOverrideKeys: string[] | null;
   settingsConflicts: SettingsConflict[] | null;
-  portConflictProcess: { command: string; pid: string; user: string } | null;
+  portConflictProcess: {
+    command: string;
+    pid: string;
+    port: number;
+    user: string;
+  } | null;
   outroData: OutroData | null;
 
   // Additional features queue (drained via stop hook after main integration)

@@ -106,6 +106,7 @@ export class LoggingUI implements WizardUI {
   showPortConflict(_processInfo: {
     command: string;
     pid: string;
+    port: number;
     user: string;
   }): Promise<void> {
     return Promise.resolve();
