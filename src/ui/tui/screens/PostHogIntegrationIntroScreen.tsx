@@ -15,6 +15,7 @@ import type { WizardStore } from '../store.js';
 import { Integration } from '../../../lib/constants.js';
 import { PickerMenu, LoadingBox } from '../primitives/index.js';
 import { IntroScreenLayout, type DetectionRow } from './IntroScreenLayout.js';
+import { CONTEXT_MILL_URL } from '../../../lib/constants.js';
 
 /** Framework picker shown when auto-detection fails. */
 const FrameworkPicker = ({
@@ -117,7 +118,10 @@ export const PostHogIntegrationIntroScreen = ({
   } else if (showingMoreInfo) {
     body = (
       <Box flexDirection="column" width={56}>
-        <Text>The wizard is an agent that executes PostHog tasks.</Text>
+        <Text>
+          The wizard is an agent that executes PostHog tasks. Its code is open
+          source: <Text color="cyan">https://github.com/PostHog/wizard</Text>
+        </Text>
         <Box flexDirection="column" marginTop={1}>
           <Text>
             The{' '}
@@ -133,6 +137,12 @@ export const PostHogIntegrationIntroScreen = ({
           <Text>{`\u2022`} Web Analytics</Text>
           <Text>{`\u2022`} Session Replay</Text>
           <Text>{`\u2022`} Error Tracking</Text>
+        </Box>
+        <Box flexDirection="column" marginTop={1}>
+          <Text>
+            If you prefer your own AI setup, download the skill:{' '}
+            <Text color="cyan">{CONTEXT_MILL_URL}/releases</Text>
+          </Text>
         </Box>
       </Box>
     );
@@ -237,6 +247,7 @@ export const PostHogIntegrationIntroScreen = ({
     <IntroScreenLayout
       installDir={session.installDir}
       title={title}
+      showSubtitle={!showingMoreInfo}
       body={body}
       showDetection={showContinue}
       detectionRows={detectionRows}
