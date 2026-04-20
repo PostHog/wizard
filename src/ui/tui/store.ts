@@ -337,7 +337,7 @@ export class WizardStore {
 
   /**
    * Push the port-conflict overlay and return a promise that blocks
-   * until the user kills the blocking process or exits.
+   * until the user frees the ports and retries, or exits.
    */
   showPortConflict(processInfo: {
     command: string;
@@ -352,7 +352,7 @@ export class WizardStore {
     });
   }
 
-  /** Dismiss the port-conflict overlay after the user kills the process. */
+  /** Dismiss the port-conflict overlay and retry the OAuth port loop. */
   resolvePortConflict(): void {
     this.$session.setKey('portConflictProcess', null);
     this.popOverlay();
