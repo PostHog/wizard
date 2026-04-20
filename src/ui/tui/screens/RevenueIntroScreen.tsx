@@ -65,7 +65,10 @@ export const RevenueIntroScreen = ({ store }: RevenueIntroScreenProps) => {
 
   const body = showingMoreInfo ? (
     <Box flexDirection="column" width={56}>
-      <Text>The wizard is an agent that executes PostHog tasks.</Text>
+      <Text>
+        The wizard is an agent that executes PostHog tasks. Its code is open
+        source: <Text color="cyan">https://github.com/PostHog/wizard</Text>.
+      </Text>
       <Box flexDirection="column" marginTop={1}>
         <Text>
           The{' '}
@@ -138,6 +141,7 @@ export const RevenueIntroScreen = ({ store }: RevenueIntroScreenProps) => {
   return (
     <IntroScreenLayout
       installDir={session.installDir}
+      showSubtitle={!showingMoreInfo}
       body={body}
       showDetection={!showingMoreInfo}
       detectionRows={detectionRows}
