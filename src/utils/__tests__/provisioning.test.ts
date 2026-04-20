@@ -6,6 +6,11 @@ jest.mock('../debug', () => ({ logToFile: jest.fn() }));
 jest.mock('../analytics', () => ({
   analytics: { captureException: jest.fn() },
 }));
+jest.mock('../../lib/constants', () => ({
+  ...jest.requireActual('../../lib/constants'),
+  IS_DEV: false,
+  WIZARD_USER_AGENT: 'posthog-wizard/test',
+}));
 
 const mockedAxios = axios as jest.Mocked<typeof axios>;
 
@@ -88,7 +93,9 @@ describe('provisionNewAccount', () => {
     expect(
       (accountCall[1] as Record<string, unknown>).code_challenge,
     ).toBeTruthy();
-    expect((accountCall[1] as Record<string, unknown>).client_id).toBeTruthy();
+    expect((accountCall[1] as Record<string, unknown>).client_id).toBe(
+      'https://us.posthog.com/api/oauth/wizard/client-metadata',
+    );
 
     // Verify token exchange includes code_verifier
     const tokenCall = mockedAxios.post.mock.calls[1];
@@ -158,7 +165,7 @@ describe('provisionNewAccount', () => {
     );
   });
 
-  it('sends correct region parameter', async () => {
+  it('routes EU requests to eu.posthog.com', async () => {
     mockedAxios.post
       .mockResolvedValueOnce({
         data: { id: 'req_5', type: 'oauth', oauth: { code: 'code_5' } },
@@ -188,10 +195,17 @@ describe('provisionNewAccount', () => {
     const result = await provisionNewAccount('eu@example.com', '', 'EU');
 
     const accountCall = mockedAxios.post.mock.calls[0];
+    expect(accountCall[0]).toContain('https://eu.posthog.com');
     expect((accountCall[1] as Record<string, unknown>).configuration).toEqual({
       region: 'EU',
     });
     expect(result.host).toBe('https://eu.posthog.com');
+
+    const tokenCall = mockedAxios.post.mock.calls[1];
+    expect(tokenCall[0]).toContain('https://eu.posthog.com');
+
+    const resourceCall = mockedAxios.post.mock.calls[2];
+    expect(resourceCall[0]).toContain('https://eu.posthog.com');
   });
 
   it('sends project name in resources configuration', async () => {
