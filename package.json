@@ -21,11 +21,11 @@
     "access": "public"
   },
   "files": [
-    "dist/bin.*",
-    "dist/src",
+    "dist",
     "package.json",
     "README.md"
   ],
+  "type": "module",
   "main": "dist/index.js",
   "typings": "dist/index.d.ts",
   "typescript": {
@@ -88,6 +88,7 @@
     "rimraf": "^3.0.2",
     "ts-jest": "^29.1.0",
     "ts-node": "^10.9.1",
+    "tsdown": "^0.21.9",
     "tsx": "^4.20.3",
     "typescript": "^5.0.4"
   },
@@ -98,11 +99,12 @@
   "packageManager": "pnpm@10.23.0+sha512.21c4e5698002ade97e4efe8b8b4a89a8de3c85a37919f957e7a0f30f38fbc5bbdd05980ffe29179b2fb6e6e691242e098d945d1601772cad0fef5fb6411e2a4b",
   "scripts": {
     "clean": "rm -rf ./dist",
-    "prebuild": "pnpm clean && node scripts/generate-version.js",
-    "build:watch": "pnpm tsc -w",
-    "build": "pnpm tsc",
-    "postbuild": "chmod +x ./dist/bin.js && cp -r scripts/** dist && cp -r src/utils/rules dist/src/utils && cp src/ui/tui/package.json dist/src/ui/tui/package.json && pnpm test:smoke",
-    "test:smoke": "node -e \"require('./dist/bin.js')\" 2>&1 | head -5 | grep -q 'PostHog Wizard' || (echo 'Smoke test failed: compiled binary crashed on load' && exit 1)",
+    "prebuild": "pnpm clean && node scripts/generate-version.cjs",
+    "build:watch": "tsdown --watch",
+    "build": "tsdown",
+    "typecheck": "tsc --noEmit",
+    "postbuild": "chmod +x ./dist/bin.js && cp -r scripts/** dist && pnpm test:smoke",
+    "test:smoke": "node --input-type=module -e \"import './dist/bin.js'\" 2>&1 | head -5 | grep -q 'PostHog Wizard' || (echo 'Smoke test failed: compiled binary crashed on load' && exit 1)",
     "lint": "pnpm lint:prettier && pnpm lint:eslint",
     "lint:prettier": "prettier --check \"{lib,src,test}/**/*.ts\"",
     "lint:eslint": "eslint . --cache --format stylish",
@@ -150,6 +152,12 @@
     ],
     "moduleNameMapper": {
       "^@anthropic-ai/claude-agent-sdk$": "<rootDir>/__mocks__/@anthropic-ai/claude-agent-sdk.ts",
+      "^@env$": "<rootDir>/src/env.ts",
+      "^@lib/(.*)$": "<rootDir>/src/lib/$1",
+      "^@utils/(.*)$": "<rootDir>/src/utils/$1",
+      "^@ui/(.*)$": "<rootDir>/src/ui/$1",
+      "^@steps/(.*)$": "<rootDir>/src/steps/$1",
+      "^@frameworks/(.*)$": "<rootDir>/src/frameworks/$1",
       "^(\\.{1,2}/.*)\\.js$": "$1"
     }
   },

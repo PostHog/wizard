@@ -43,9 +43,8 @@ export interface Args {
 
 // ── Environment ──────────────────────────────────────────────────────
 
-export const IS_DEV = ['test', 'development'].includes(
-  process.env.NODE_ENV ?? '',
-);
+import { IS_DEV } from '@env';
+export { IS_DEV };
 export const DEBUG = false;
 
 // ── URLs ─────────────────────────────────────────────────────────────

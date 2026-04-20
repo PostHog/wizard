@@ -3,6 +3,7 @@ import * as path from 'path';
 import * as os from 'os';
 import { DefaultMCPClient, MCPServerConfig } from '../MCPClient';
 import { buildMCPUrl } from '../defaults';
+import { runtimeEnv } from '@env';
 
 export const ZedMCPConfig = z
   .object({
@@ -54,7 +55,7 @@ export class ZedClient extends DefaultMCPClient {
 
     if (isLinux) {
       // https://zed.dev/docs/configuring-zed#settings-files
-      const xdgConfigHome = process.env.XDG_CONFIG_HOME;
+      const xdgConfigHome = runtimeEnv('XDG_CONFIG_HOME');
       if (xdgConfigHome) {
         return Promise.resolve(
           path.join(xdgConfigHome, 'zed', 'settings.json'),

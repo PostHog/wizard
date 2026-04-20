@@ -3,6 +3,7 @@ import * as path from 'path';
 import * as os from 'os';
 import { DefaultMCPClient, MCPServerConfig } from '../MCPClient';
 import { buildMCPUrl } from '../defaults';
+import { runtimeEnv } from '@env';
 
 export const VisualStudioCodeMCPConfig = z
   .object({
@@ -64,7 +65,7 @@ export class VisualStudioCodeClient extends DefaultMCPClient {
 
     if (isWindows) {
       return Promise.resolve(
-        path.join(process.env.APPDATA || '', 'Code', 'User', 'mcp.json'),
+        path.join(runtimeEnv('APPDATA') || '', 'Code', 'User', 'mcp.json'),
       );
     }
 
