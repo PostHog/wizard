@@ -16,6 +16,7 @@ import {
   POSTHOG_PROXY_CLIENT_ID,
   WIZARD_USER_AGENT,
 } from '../lib/constants';
+import { NODE_ENV } from '@env';
 import { abort } from './setup-utils';
 import { analytics } from './analytics';
 
@@ -311,7 +312,7 @@ export async function performOAuthFlow(
 
       getUI().setLoginUrl(urlToOpen);
 
-      if (process.env.NODE_ENV !== 'test') {
+      if (NODE_ENV !== 'test') {
         opn(urlToOpen, { wait: false }).catch(() => {
           // opn throws in environments without a browser
         });
