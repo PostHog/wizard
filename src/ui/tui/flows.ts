@@ -33,6 +33,7 @@ export enum Screen {
   Outro = 'outro',
   McpAdd = 'mcp-add',
   McpRemove = 'mcp-remove',
+  SkillsInstall = 'skills-install',
 }
 
 /** Named flows the router can run */
@@ -42,6 +43,7 @@ export enum Flow {
   AgentSkill = 'agent-skill',
   McpAdd = 'mcp-add',
   McpRemove = 'mcp-remove',
+  SkillsInstall = 'skills-install',
 }
 
 // ── Flow definitions ─────────────────────────────────────────────────
@@ -99,4 +101,6 @@ export const FLOWS: Record<Flow, FlowEntry[]> = {
     },
     { screen: Screen.Outro },
   ],
+
+  [Flow.SkillsInstall]: [{ screen: Screen.SkillsInstall }],
 };

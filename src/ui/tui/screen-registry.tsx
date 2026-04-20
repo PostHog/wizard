@@ -25,6 +25,7 @@ import { AuthScreen } from './screens/AuthScreen.js';
 import { RunScreen } from './screens/RunScreen.js';
 import { McpScreen } from './screens/McpScreen.js';
 import { KeepSkillsScreen } from './screens/KeepSkillsScreen.js';
+import { SkillsInstallScreen } from './screens/SkillsInstallScreen.js';
 import { OutroScreen } from './screens/OutroScreen.js';
 import { AuthErrorScreen } from './screens/AuthErrorScreen.js';
 import { createMcpInstaller } from './services/mcp-installer.js';
@@ -62,6 +63,9 @@ export function createScreens(
     [Screen.Mcp]: <McpScreen store={store} installer={services.mcpInstaller} />,
     [Screen.KeepSkills]: <KeepSkillsScreen store={store} />,
     [Screen.Outro]: <OutroScreen store={store} />,
+
+    // Standalone skills install flow
+    [Screen.SkillsInstall]: <SkillsInstallScreen store={store} />,
 
     // Standalone MCP flows
     [Screen.McpAdd]: (

@@ -306,6 +306,50 @@ const cli = yargs(hideBin(process.argv))
       }
     },
   )
+  .command('skills <command>', 'Skills management commands', (yargs) => {
+    return yargs
+      .command(
+        'install',
+        'Fetch PostHog skills from GitHub Releases and install selected skills into .claude/skills/',
+        (yargs) => {
+          return yargs.options({
+            'install-dir': {
+              describe:
+                'Directory to install skills in (defaults to current directory).\nSkills are written to {dir}/.claude/skills/ and are scoped to that project.\nTo install globally across all projects, pass your home directory: --install-dir ~\nenv: POSTHOG_WIZARD_INSTALL_DIR',
+              type: 'string',
+            },
+          });
+        },
+        (argv) => {
+          const options = { ...argv };
+          void (async () => {
+            try {
+              const { startTUI } = await import('./src/ui/tui/start-tui.js');
+              const { buildSession } = await import(
+                './src/lib/wizard-session.js'
+              );
+              const { Flow } = await import('./src/ui/tui/router.js');
+
+              const tui = startTUI(WIZARD_VERSION, Flow.SkillsInstall);
+              const session = buildSession({
+                debug: options.debug as boolean | undefined,
+                installDir: options.installDir as string | undefined,
+              });
+              tui.store.session = session;
+            } catch {
+              setUI(new LoggingUI());
+              getUI().log.error(
+                'Skills install requires an interactive terminal (TTY).\n' +
+                  'Please run this command in an interactive terminal.',
+              );
+              process.exit(1);
+            }
+          })();
+        },
+      )
+      .demandCommand(1, 'You must specify a subcommand (install)')
+      .help();
+  })
   .command('mcp <command>', 'MCP server management commands', (yargs) => {
     return yargs
       .command(
