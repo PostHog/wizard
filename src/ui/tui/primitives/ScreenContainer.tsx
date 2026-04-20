@@ -5,13 +5,18 @@
  *
  * Each screen is wrapped in a ScreenErrorBoundary so that render crashes
  * route to the outro screen with an error message instead of hanging.
+ *
+ * A KeyboardHintsBar at the bottom shows context-aware shortcut hints
+ * that auto-dismiss 3s after the first keypress.
  */
 
 import { Box } from 'ink';
 import { useSyncExternalStore, type ReactNode } from 'react';
 import { TitleBar } from '../components/TitleBar.js';
 import { useStdoutDimensions } from '../hooks/useStdoutDimensions.js';
+import { KeyboardHintsProvider } from '../hooks/useKeyboardHints.js';
 import { DissolveTransition } from './DissolveTransition.js';
+import { KeyboardHintsBar } from './KeyboardHintsBar.js';
 import { ScreenErrorBoundary } from './ScreenErrorBoundary.js';
 import type { WizardStore } from '../store.js';
 
@@ -38,29 +43,10 @@ export const ScreenContainer = ({ store, screens }: ScreenContainerProps) => {
 
   const terminalWidth = columns;
   const width = getContentWidth(terminalWidth);
-  const contentHeight = Math.max(5, rows - 3);
+  const contentHeight = Math.max(5, rows - 4);
   const contentAreaWidth = Math.max(10, width - 2);
   const direction = store.lastNavDirection === 'pop' ? 'right' : 'left';
   const activeScreen = screens[store.currentScreen] ?? null;
-
-  const inner = (
-    <Box flexDirection="column" height={rows} width={width}>
-      <TitleBar version={store.version} width={width} />
-      <Box height={1} />
-      <Box flexDirection="column" flexGrow={1} paddingX={1}>
-        <DissolveTransition
-          transitionKey={store.currentScreen}
-          width={contentAreaWidth}
-          height={contentHeight}
-          direction={direction}
-        >
-          <ScreenErrorBoundary store={store}>
-            {activeScreen}
-          </ScreenErrorBoundary>
-        </DissolveTransition>
-      </Box>
-    </Box>
-  );
 
   return (
     <Box
@@ -70,7 +56,25 @@ export const ScreenContainer = ({ store, screens }: ScreenContainerProps) => {
       alignItems="center"
       justifyContent="flex-start"
     >
-      {inner}
+      <KeyboardHintsProvider>
+        <Box flexDirection="column" height={rows} width={width}>
+          <TitleBar version={store.version} width={width} />
+          <Box height={1} />
+          <Box flexDirection="column" flexGrow={1} paddingX={1}>
+            <DissolveTransition
+              transitionKey={store.currentScreen}
+              width={contentAreaWidth}
+              height={contentHeight}
+              direction={direction}
+            >
+              <ScreenErrorBoundary store={store}>
+                {activeScreen}
+              </ScreenErrorBoundary>
+            </DissolveTransition>
+          </Box>
+          <KeyboardHintsBar />
+        </Box>
+      </KeyboardHintsProvider>
     </Box>
   );
 };

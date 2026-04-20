@@ -6,14 +6,18 @@
  * space toggles, "a" toggles all, enter submits.
  *
  * When content exceeds available terminal height, the list scrolls
- * to keep the focused item visible with ↑/↓ indicators.
+ * to keep the focused item visible with up/down indicators.
+ *
+ * Key bindings are declared via useKeyBindings, which auto-registers
+ * hints in the KeyboardHintsBar.
  */
 
-import { Box, Text, useInput } from 'ink';
+import { Box, Text } from 'ink';
 import { useState, useMemo } from 'react';
 import { Icons, Colors } from '../styles.js';
 import { PromptLabel } from './PromptLabel.js';
 import { useStdoutDimensions } from '../hooks/useStdoutDimensions.js';
+import { useKeyBindings, KeyMatch } from '../hooks/useKeyBindings.js';
 
 interface GroupOption {
   value: string;
@@ -32,16 +36,16 @@ type Row =
   | { kind: 'header'; label: string }
   | { kind: 'option'; value: string; label: string; hint?: string };
 
-/** Truncate text with "…" if it exceeds maxWidth. */
+/** Truncate text with "\u2026" if it exceeds maxWidth. */
 function truncateWithEllipsis(text: string, maxWidth: number): string {
   if (text.length <= maxWidth) return text;
-  return text.slice(0, maxWidth - 1) + '…';
+  return text.slice(0, maxWidth - 1) + '\u2026';
 }
 
 /** Rows consumed by chrome outside this component (title bar, screen padding, etc.) */
 const CHROME_OVERHEAD = 10;
-/** Rows used by the prompt label, hint text, and marginTop before content. */
-const MENU_CHROME = 3;
+/** Rows used by the prompt label + marginTop before content (hint text moved to KeyboardHintsBar). */
+const MENU_CHROME = 2;
 
 /** Count the visual rows occupied by rows[start..end), accounting for header margins. */
 function countVisualRows(rows: Row[], start: number, end: number): number {
@@ -130,9 +134,7 @@ export const GroupedPickerMenu = ({
   // Indices of selectable (non-header) rows
   const selectableIndices = useMemo(
     () =>
-      rows
-        .map((r, i) => (r.kind === 'option' ? i : -1))
-        .filter((i) => i >= 0),
+      rows.map((r, i) => (r.kind === 'option' ? i : -1)).filter((i) => i >= 0),
     [rows],
   );
 
@@ -159,59 +161,81 @@ export const GroupedPickerMenu = ({
   const needsScroll = totalVisual > viewportBudget;
   const effectiveBudget = needsScroll ? viewportBudget - 2 : viewportBudget;
 
-  useInput((input, key) => {
-    let newFocused = focusedSelectable;
+  useKeyBindings('grouped-picker', [
+    {
+      match: [KeyMatch.UpArrow, KeyMatch.DownArrow],
+      label: '\u2191\u2193',
+      action: 'navigate',
+      handler: (_input, key) => {
+        let newFocused = focusedSelectable;
 
-    if (key.upArrow) {
-      newFocused =
-        focusedSelectable > 0
-          ? focusedSelectable - 1
-          : selectableIndices.length - 1;
-    }
-    if (key.downArrow) {
-      newFocused =
-        focusedSelectable < selectableIndices.length - 1
-          ? focusedSelectable + 1
-          : 0;
-    }
-
-    if (newFocused !== focusedSelectable) {
-      setFocusedSelectable(newFocused);
-      if (needsScroll) {
-        const newFocusedRowIdx = selectableIndices[newFocused] ?? 0;
-        setScrollOffset((prev) =>
-          adjustScrollOffset(prev, newFocusedRowIdx, rows, effectiveBudget),
-        );
-      }
-    }
-
-    if (input === ' ') {
-      const targetRowIdx = selectableIndices[newFocused] ?? 0;
-      const row = rows[targetRowIdx];
-      if (row?.kind === 'option') {
-        setSelected((prev) => {
-          const next = new Set(prev);
-          if (next.has(row.value)) {
-            next.delete(row.value);
-          } else {
-            next.add(row.value);
-          }
-          return next;
-        });
-      }
-    }
-    if (input === 'a') {
-      setSelected((prev) => {
-        if (prev.size === allValues.length) {
-          return new Set();
+        if (key.upArrow) {
+          newFocused =
+            focusedSelectable > 0
+              ? focusedSelectable - 1
+              : selectableIndices.length - 1;
         }
-        return new Set(allValues);
-      });
-    }
-    if (key.return) {
-      onSelect([...selected]);
-    }
-  });
+        if (key.downArrow) {
+          newFocused =
+            focusedSelectable < selectableIndices.length - 1
+              ? focusedSelectable + 1
+              : 0;
+        }
+
+        if (newFocused !== focusedSelectable) {
+          setFocusedSelectable(newFocused);
+          if (needsScroll) {
+            const newFocusedRowIdx = selectableIndices[newFocused] ?? 0;
+            setScrollOffset((prev) =>
+              adjustScrollOffset(prev, newFocusedRowIdx, rows, effectiveBudget),
+            );
+          }
+        }
+      },
+    },
+    {
+      match: KeyMatch.Space,
+      label: 'space',
+      action: 'toggle',
+      handler: () => {
+        const targetRowIdx = selectableIndices[focusedSelectable] ?? 0;
+        const row = rows[targetRowIdx];
+        if (row?.kind === 'option') {
+          setSelected((prev) => {
+            const next = new Set(prev);
+            if (next.has(row.value)) {
+              next.delete(row.value);
+            } else {
+              next.add(row.value);
+            }
+            return next;
+          });
+        }
+      },
+    },
+    {
+      match: 'a',
+      label: 'a',
+      action: 'toggle all',
+      priority: 11,
+      handler: () => {
+        setSelected((prev) => {
+          if (prev.size === allValues.length) {
+            return new Set();
+          }
+          return new Set(allValues);
+        });
+      },
+    },
+    {
+      match: KeyMatch.Return,
+      label: 'enter',
+      action: 'confirm',
+      handler: () => {
+        onSelect([...selected]);
+      },
+    },
+  ]);
 
   // Determine visible slice
   const visibleStart = needsScroll ? scrollOffset : 0;
@@ -229,14 +253,10 @@ export const GroupedPickerMenu = ({
   return (
     <Box flexDirection="column">
       <PromptLabel message={message} />
-      <Text dimColor>
-        {' '}
-        (space to toggle, a to toggle all, enter to confirm)
-      </Text>
       <Box flexDirection="column" marginTop={1} marginLeft={2}>
         {needsScroll && (
           <Text dimColor>
-            {hiddenAbove > 0 ? `↑ ${hiddenAbove} more` : ' '}
+            {hiddenAbove > 0 ? `\u2191 ${hiddenAbove} more` : ' '}
           </Text>
         )}
         {visibleRows.map((row, relIdx) => {
@@ -284,7 +304,7 @@ export const GroupedPickerMenu = ({
         })}
         {needsScroll && (
           <Text dimColor>
-            {hiddenBelow > 0 ? `↓ ${hiddenBelow} more` : ' '}
+            {hiddenBelow > 0 ? `\u2193 ${hiddenBelow} more` : ' '}
           </Text>
         )}
       </Box>

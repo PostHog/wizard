@@ -1,11 +1,19 @@
 /**
  * TabContainer — Self-contained tabbed interface.
  * Absorbs BottomTabBar + StatusPanel functionality.
+ *
+ * Key bindings are declared via useKeyBindings, which auto-registers
+ * hints in the KeyboardHintsBar.
  */
 
-import { Box, Text, useInput } from 'ink';
-import { useState, type ReactNode } from 'react';
+import { Box, Text } from 'ink';
+import { useState, useMemo, type ReactNode } from 'react';
 import { Colors, Icons } from '../styles.js';
+import {
+  useKeyBindings,
+  KeyMatch,
+  type KeyBinding,
+} from '../hooks/useKeyBindings.js';
 import type { WizardStore } from '../store.js';
 
 export interface TabDefinition {
@@ -38,21 +46,41 @@ export const TabContainer = ({
 
   const statusExpanded = store ? store.statusExpanded : localExpanded;
 
-  useInput((input, key) => {
-    if (key.leftArrow) {
-      setActiveTab((prev) => Math.max(0, prev - 1));
+  const bindings = useMemo<KeyBinding[]>(() => {
+    const b: KeyBinding[] = [
+      {
+        match: [KeyMatch.LeftArrow, KeyMatch.RightArrow],
+        label: '\u2190\u2192',
+        action: 'switch tab',
+        handler: (_input, key) => {
+          if (key.leftArrow) {
+            setActiveTab((prev) => Math.max(0, prev - 1));
+          }
+          if (key.rightArrow) {
+            setActiveTab((prev) => Math.min(tabs.length - 1, prev + 1));
+          }
+        },
+      },
+    ];
+    if (expandableStatus) {
+      b.push({
+        match: 's',
+        label: 's',
+        action: 'toggle status',
+        priority: 12,
+        handler: () => {
+          if (store) {
+            store.toggleStatusExpanded();
+          } else {
+            setLocalExpanded((prev) => !prev);
+          }
+        },
+      });
     }
-    if (key.rightArrow) {
-      setActiveTab((prev) => Math.min(tabs.length - 1, prev + 1));
-    }
-    if (expandableStatus && input === 's') {
-      if (store) {
-        store.toggleStatusExpanded();
-      } else {
-        setLocalExpanded((prev) => !prev);
-      }
-    }
-  });
+    return b;
+  }, [tabs.length, expandableStatus, store]);
+
+  useKeyBindings('tab-container', bindings);
 
   const current = tabs[activeTab];
 
