@@ -20,6 +20,7 @@ export { ScreenErrorBoundary } from './ScreenErrorBoundary.js';
 export { TabContainer } from './TabContainer.js';
 export type { TabDefinition } from './TabContainer.js';
 export { HNViewer } from './HNViewer.js';
+export { KeyboardHintsBar } from './KeyboardHintsBar.js';
 export { DissolveTransition } from './DissolveTransition.js';
 export type { WipeDirection } from './DissolveTransition.js';
 export { ContentSequencer } from './ContentSequencer.js';
