@@ -89,6 +89,7 @@ export class InkUI implements WizardUI {
   showPortConflict(processInfo: {
     command: string;
     pid: string;
+    port: number;
     user: string;
   }): Promise<void> {
     return this.store.showPortConflict(processInfo);

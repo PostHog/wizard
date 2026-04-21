@@ -43,9 +43,8 @@ export interface Args {
 
 // ── Environment ──────────────────────────────────────────────────────
 
-export const IS_DEV = ['test', 'development'].includes(
-  process.env.NODE_ENV ?? '',
-);
+import { IS_DEV } from '@env';
+export { IS_DEV };
 export const DEBUG = false;
 
 // ── URLs ─────────────────────────────────────────────────────────────
@@ -84,7 +83,7 @@ export const ANALYTICS_TEAM_TAG = 'docs-and-wizard';
 export const POSTHOG_OAUTH_URL = IS_DEV
   ? 'http://localhost:8010'
   : 'https://oauth.posthog.com';
-export const OAUTH_PORT = 8239;
+export const OAUTH_PORTS = [8239, 8238, 8240, 8237, 8236, 8235] as const;
 export const POSTHOG_US_CLIENT_ID = 'c4Rdw8DIxgtQfA80IiSnGKlNX8QN00cFWF00QQhM';
 export const POSTHOG_EU_CLIENT_ID = 'bx2C5sZRN03TkdjraCcetvQFPGH6N2Y9vRLkcKEy';
 export const POSTHOG_DEV_CLIENT_ID = 'DC5uRLVbGI02YQ82grxgnK6Qn12SXWpCqdPb60oZ';

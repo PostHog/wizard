@@ -2,6 +2,7 @@ import { appendFileSync } from 'fs';
 import path from 'path';
 import { prepareMessage } from './logging';
 import { getUI } from '../ui';
+import { runtimeEnv } from '@env';
 
 let debugEnabled = false;
 let logFilePath = '/tmp/posthog-wizard.log';
@@ -29,7 +30,7 @@ export function configureLogFile(opts: {
  * Uses POSTHOG_WIZARD_LOG_DIR when set, joined with posthog-wizard.log.
  */
 export function configureLogFileFromEnvironment(): void {
-  const envLogDir = process.env.POSTHOG_WIZARD_LOG_DIR;
+  const envLogDir = runtimeEnv('POSTHOG_WIZARD_LOG_DIR');
   if (envLogDir) {
     configureLogFile({ path: path.join(envLogDir, 'posthog-wizard.log') });
   }
