@@ -51,9 +51,4 @@ export const REVENUE_ANALYTICS_WORKFLOW: Workflow = [
     label: 'Skills',
     screen: 'keep-skills',
   },
-  {
-    id: 'exit',
-    label: 'Exit',
-    screen: 'exit',
-  },
 ];
