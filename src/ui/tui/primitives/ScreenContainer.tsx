@@ -6,21 +6,12 @@
  * Each screen is wrapped in a ScreenErrorBoundary so that render crashes
  * route to the outro screen with an error message instead of hanging.
  *
- * Provides KeyboardHintsProvider context. The hints bar renders below
- * screen content but above any navigation chrome (e.g. tab bar).
- * Screens that have nav chrome (like TabContainer) push it into
- * navChromeRef so ScreenContainer can render it below the hints bar.
+ * Provides KeyboardHintsProvider context. The hints bar is rendered below
+ * screen content (inside the transition area) so all screens get it.
  */
 
 import { Box } from 'ink';
-import {
-  createContext,
-  useContext,
-  useState,
-  useCallback,
-  useSyncExternalStore,
-  type ReactNode,
-} from 'react';
+import { useSyncExternalStore, type ReactNode } from 'react';
 import { TitleBar } from '../components/TitleBar.js';
 import { useStdoutDimensions } from '../hooks/useStdoutDimensions.js';
 import { KeyboardHintsProvider } from '../hooks/useKeyboardHints.js';
@@ -38,24 +29,6 @@ function getContentWidth(terminalColumns: number): number {
   return Math.min(MAX_WIDTH, terminalColumns);
 }
 
-// ── Nav chrome slot ──────────────────────────────────────────────────
-// Screens like TabContainer set nav chrome (tab bar, status bar) via
-// this context. ScreenContainer renders it below the hints bar.
-
-interface NavChromeContextValue {
-  setNavChrome(node: ReactNode): void;
-  clearNavChrome(): void;
-}
-
-export const NavChromeContext = createContext<NavChromeContextValue>({
-  setNavChrome: () => undefined,
-  clearNavChrome: () => undefined,
-});
-
-export const useNavChrome = () => useContext(NavChromeContext);
-
-// ── ScreenContainer ─────────────────────────────────────────────────
-
 interface ScreenContainerProps {
   store: WizardStore;
   screens: Record<string, ReactNode>;
@@ -63,17 +36,10 @@ interface ScreenContainerProps {
 
 export const ScreenContainer = ({ store, screens }: ScreenContainerProps) => {
   const [columns, rows] = useStdoutDimensions();
-  const [navChrome, setNavChromeState] = useState<ReactNode>(null);
   useSyncExternalStore(
     (cb) => store.subscribe(cb),
     () => store.getSnapshot(),
   );
-
-  const setNavChrome = useCallback(
-    (node: ReactNode) => setNavChromeState(node),
-    [],
-  );
-  const clearNavChrome = useCallback(() => setNavChromeState(null), []);
 
   const terminalWidth = columns;
   const width = getContentWidth(terminalWidth);
@@ -95,7 +61,6 @@ export const ScreenContainer = ({ store, screens }: ScreenContainerProps) => {
         >
           <ScreenErrorBoundary store={store}>
             <Box flexDirection="column" height={contentHeight}>
-              {/* Screen content */}
               <Box
                 flexDirection="column"
                 flexGrow={1}
@@ -104,11 +69,8 @@ export const ScreenContainer = ({ store, screens }: ScreenContainerProps) => {
               >
                 {activeScreen}
               </Box>
-              {/* Hints bar — below content, above nav */}
               <Box height={1} />
               <KeyboardHintsBar />
-              {/* Nav chrome pushed up by screens like TabContainer */}
-              {navChrome}
             </Box>
           </ScreenErrorBoundary>
         </DissolveTransition>
@@ -124,11 +86,7 @@ export const ScreenContainer = ({ store, screens }: ScreenContainerProps) => {
       alignItems="center"
       justifyContent="flex-start"
     >
-      <KeyboardHintsProvider>
-        <NavChromeContext.Provider value={{ setNavChrome, clearNavChrome }}>
-          {inner}
-        </NavChromeContext.Provider>
-      </KeyboardHintsProvider>
+      <KeyboardHintsProvider>{inner}</KeyboardHintsProvider>
     </Box>
   );
 };
