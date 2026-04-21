@@ -26,6 +26,7 @@ import { RunScreen } from './screens/RunScreen.js';
 import { McpScreen } from './screens/McpScreen.js';
 import { KeepSkillsScreen } from './screens/KeepSkillsScreen.js';
 import { OutroScreen } from './screens/OutroScreen.js';
+import { ExitScreen } from './screens/ExitScreen.js';
 import { AuthErrorScreen } from './screens/AuthErrorScreen.js';
 import { createMcpInstaller } from './services/mcp-installer.js';
 import type { McpInstaller } from './services/mcp-installer.js';
@@ -62,6 +63,7 @@ export function createScreens(
     [Screen.Mcp]: <McpScreen store={store} installer={services.mcpInstaller} />,
     [Screen.KeepSkills]: <KeepSkillsScreen store={store} />,
     [Screen.Outro]: <OutroScreen store={store} />,
+    [Screen.Exit]: <ExitScreen />,
 
     // Standalone MCP flows
     [Screen.McpAdd]: (

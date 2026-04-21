@@ -56,6 +56,7 @@ describe('AGENT_SKILL_STEPS', () => {
       'run',
       'outro',
       'skills',
+      'exit',
     ]);
 
     const session = buildSession({});

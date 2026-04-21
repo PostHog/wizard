@@ -104,4 +104,9 @@ export const POSTHOG_INTEGRATION_WORKFLOW: Workflow = [
     label: 'Keep Skills',
     screen: 'keep-skills',
   },
+  {
+    id: 'exit',
+    label: 'Exit',
+    screen: 'exit',
+  },
 ];
