@@ -31,6 +31,7 @@ export enum Screen {
   Mcp = 'mcp',
   KeepSkills = 'keep-skills',
   Outro = 'outro',
+  Exit = 'exit',
   McpAdd = 'mcp-add',
   McpRemove = 'mcp-remove',
 }
@@ -90,6 +91,7 @@ export const FLOWS: Record<Flow, FlowEntry[]> = {
       isComplete: (s) => s.mcpComplete,
     },
     { screen: Screen.Outro },
+    { screen: Screen.Exit },
   ],
 
   [Flow.McpRemove]: [
@@ -98,5 +100,6 @@ export const FLOWS: Record<Flow, FlowEntry[]> = {
       isComplete: (s) => s.mcpComplete,
     },
     { screen: Screen.Outro },
+    { screen: Screen.Exit },
   ],
 };

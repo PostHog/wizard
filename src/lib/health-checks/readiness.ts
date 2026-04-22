@@ -7,14 +7,16 @@ import {
 } from './types';
 import {
   checkAnthropicHealth,
-  checkPosthogOverallHealth,
-  checkPosthogComponentHealth,
   checkGithubHealth,
   checkNpmOverallHealth,
   checkNpmComponentHealth,
   checkCloudflareOverallHealth,
   checkCloudflareComponentHealth,
 } from './statuspage';
+import {
+  checkPosthogOverallHealth,
+  checkPosthogComponentHealth,
+} from './incidentio';
 import {
   checkLlmGatewayHealth,
   checkMcpHealth,
@@ -58,7 +60,6 @@ export interface WizardReadinessConfig {
 export const DEFAULT_WIZARD_READINESS_CONFIG: WizardReadinessConfig = {
   downBlocksRun: [
     'anthropic',
-    'posthogOverall',
     'npmOverall',
     'llmGateway',
     'mcp',
