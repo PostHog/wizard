@@ -253,7 +253,9 @@ const cli = yargs(hideBin(process.argv))
               }
             }
           });
-        })();
+        })().catch(() => {
+          process.exit(1);
+        });
       } else if (isNonInteractiveEnvironment()) {
         // Non-interactive non-CI: error out
         getUI().intro(`PostHog Wizard`);
@@ -642,5 +644,7 @@ function runWizardCI(
         error: error as Error,
       });
     }
-  })();
+  })().catch(() => {
+    process.exit(1);
+  });
 }
