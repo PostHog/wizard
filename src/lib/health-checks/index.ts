@@ -16,6 +16,7 @@ export {
   checkNpmComponentHealth,
   checkCloudflareOverallHealth,
   checkCloudflareComponentHealth,
+  resetPosthogHealthCache,
 } from './statuspage';
 
 export {
