@@ -60,7 +60,6 @@ export interface WizardReadinessConfig {
 export const DEFAULT_WIZARD_READINESS_CONFIG: WizardReadinessConfig = {
   downBlocksRun: [
     'anthropic',
-    'posthogOverall',
     'npmOverall',
     'llmGateway',
     'mcp',
