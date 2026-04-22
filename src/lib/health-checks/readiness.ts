@@ -7,14 +7,16 @@ import {
 } from './types';
 import {
   checkAnthropicHealth,
-  checkPosthogOverallHealth,
-  checkPosthogComponentHealth,
   checkGithubHealth,
   checkNpmOverallHealth,
   checkNpmComponentHealth,
   checkCloudflareOverallHealth,
   checkCloudflareComponentHealth,
 } from './statuspage';
+import {
+  checkPosthogOverallHealth,
+  checkPosthogComponentHealth,
+} from './incidentio';
 import {
   checkLlmGatewayHealth,
   checkMcpHealth,
