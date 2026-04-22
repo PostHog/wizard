@@ -8,6 +8,9 @@ import { WizardStore, Flow } from './store.js';
 import { InkUI } from './ink-ui.js';
 import { setUI } from '../index.js';
 import { App } from './App.js';
+import { TaskStreamPush } from '../../lib/task-stream/index.js';
+import { FileDestination } from '../../lib/task-stream/destinations/file.js';
+import { PostHogDestination } from '../../lib/task-stream/destinations/posthog.js';
 
 // ANSI escape sequences
 const RESET_ATTRS = '\x1b[0m';
@@ -45,8 +48,16 @@ export function startTUI(
   };
   process.on('exit', cleanup);
 
+  const taskStream = new TaskStreamPush({
+    store,
+    workflowId: 'onboarding',
+    skillId: 'posthog_integration',
+    destinations: [new FileDestination(), new PostHogDestination()],
+  });
+
   return {
     unmount: () => {
+      taskStream.flush();
       inkUnmount();
       cleanup();
     },
