@@ -12,14 +12,17 @@ import axios from 'axios';
 import { z } from 'zod';
 import {
   IS_DEV,
-  POSTHOG_DEV_CLIENT_ID,
-  POSTHOG_US_CLIENT_ID,
+  POSTHOG_EU_PROVISIONING_APP_ID,
+  POSTHOG_US_PROVISIONING_APP_ID,
   WIZARD_USER_AGENT,
 } from '../lib/constants';
 import { logToFile } from './debug';
 import { analytics } from './analytics';
 
-const WIZARD_CLIENT_ID = IS_DEV ? POSTHOG_DEV_CLIENT_ID : POSTHOG_US_CLIENT_ID;
+const PROVISIONING_APP_IDS: Record<string, string> = {
+  US: POSTHOG_US_PROVISIONING_APP_ID,
+  EU: POSTHOG_EU_PROVISIONING_APP_ID,
+};
 const API_VERSION = '0.1d';
 
 const PROVISIONING_BASE_URL = IS_DEV
@@ -114,7 +117,7 @@ export async function provisionNewAccount(
       id: crypto.randomUUID(),
       email,
       name,
-      client_id: WIZARD_CLIENT_ID,
+      client_id: PROVISIONING_APP_IDS[region] ?? PROVISIONING_APP_IDS['US'],
       code_challenge: codeChallenge,
       code_challenge_method: 'S256',
       configuration: {

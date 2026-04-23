@@ -88,6 +88,8 @@ export const POSTHOG_US_CLIENT_ID = 'c4Rdw8DIxgtQfA80IiSnGKlNX8QN00cFWF00QQhM';
 export const POSTHOG_EU_CLIENT_ID = 'bx2C5sZRN03TkdjraCcetvQFPGH6N2Y9vRLkcKEy';
 export const POSTHOG_DEV_CLIENT_ID = 'DC5uRLVbGI02YQ82grxgnK6Qn12SXWpCqdPb60oZ';
 export const POSTHOG_PROXY_CLIENT_ID = POSTHOG_US_CLIENT_ID;
+export const POSTHOG_US_PROVISIONING_APP_ID = '019a0c79-b69d-0000-f31b-b41345208c9d';
+export const POSTHOG_EU_PROVISIONING_APP_ID = '019a12d0-6edd-0000-0458-86616af3a3db';
 export const DUMMY_PROJECT_API_KEY = '_YOUR_POSTHOG_PROJECT_TOKEN_';
 
 // ── Wizard run / variants ───────────────────────────────────────────
