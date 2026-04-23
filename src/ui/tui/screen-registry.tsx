@@ -14,6 +14,8 @@ import type { WizardStore } from './store.js';
 import { Screen, Overlay, type ScreenName } from './router.js';
 
 import { HealthCheckScreen } from './screens/health/HealthCheckScreen.js';
+import { HealthIntroScreen } from './screens/health/HealthIntroScreen.js';
+import { HealthReportScreen } from './screens/health/HealthReportScreen.js';
 import { SettingsOverrideScreen } from './screens/SettingsOverrideScreen.js';
 import { ManagedSettingsScreen } from './screens/ManagedSettingsScreen.js';
 import { PortConflictScreen } from './screens/PortConflictScreen.js';
@@ -57,6 +59,8 @@ export function createScreens(
     [Screen.RevenueIntro]: <RevenueIntroScreen store={store} />,
     [Screen.AgentSkillIntro]: <AgentSkillIntroScreen store={store} />,
     [Screen.HealthCheck]: <HealthCheckScreen store={store} />,
+    [Screen.HealthIntro]: <HealthIntroScreen store={store} />,
+    [Screen.HealthReport]: <HealthReportScreen store={store} />,
     [Screen.Setup]: <SetupScreen store={store} />,
     [Screen.Auth]: <AuthScreen store={store} />,
     [Screen.Run]: <RunScreen store={store} />,

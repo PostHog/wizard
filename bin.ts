@@ -487,17 +487,43 @@ function runWizard(
       await tui.store.runReadyHooks();
       await tui.store.getGate('intro');
 
-      const { runAgent } = await import('./src/lib/agent/agent-runner.js');
-      await runAgent(config, tui.store.session);
+      const isDisplayOnly = config.run == null;
+
+      if (isDisplayOnly) {
+        const { getOrAskForProjectData } = await import(
+          './src/utils/setup-utils.js'
+        );
+        const { projectApiKey, host, accessToken, projectId } =
+          await getOrAskForProjectData({
+            signup: session.signup,
+            ci: session.ci,
+            apiKey: session.apiKey,
+            projectId: session.projectId,
+          });
+        tui.store.setCredentials({
+          accessToken,
+          projectApiKey,
+          host,
+          projectId,
+        });
+      } else {
+        const { runAgent } = await import('./src/lib/agent/agent-runner.js');
+        await runAgent(config, tui.store.session);
+      }
+
+      const isDone = (): boolean =>
+        isDisplayOnly
+          ? tui.store.session.outroDismissed
+          : tui.store.session.skillsComplete;
 
       await new Promise<void>((resolve) => {
         const unsub = tui.store.subscribe(() => {
-          if (tui.store.session.skillsComplete) {
+          if (isDone()) {
             unsub();
             resolve();
           }
         });
-        if (tui.store.session.skillsComplete) {
+        if (isDone()) {
           unsub();
           resolve();
         }
