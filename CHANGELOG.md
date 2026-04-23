@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.10.3](https://github.com/PostHog/wizard/compare/v2.10.2...v2.10.3) (2026-04-23)
+
+
+### Bug Fixes
+
+* pass email and region from CLI to session ([#418](https://github.com/PostHog/wizard/issues/418)) ([268c26f](https://github.com/PostHog/wizard/commit/268c26fbdb38528bf3f880497abf4a44e575a8e3))
+
 ## [2.10.2](https://github.com/PostHog/wizard/compare/v2.10.1...v2.10.2) (2026-04-23)
 
 
