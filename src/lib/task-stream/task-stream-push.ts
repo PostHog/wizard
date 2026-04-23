@@ -5,13 +5,13 @@
 
 import type { WizardStore, TaskItem } from '../../ui/tui/store';
 import { TaskStatus } from '../../ui/wizard-ui';
+import { RunPhase } from '../wizard-session';
 import {
   type TaskStreamDestination,
   type TaskStreamUpdate,
   type StreamTask,
   StreamTaskStatus,
   StreamEvent,
-  TERMINAL_PHASES,
 } from './types';
 
 const STATUS_MAP: Record<TaskStatus, StreamTaskStatus> = {
@@ -81,8 +81,10 @@ export class TaskStreamPush {
     if (!this.created) {
       this.created = true;
       event = StreamEvent.Create;
-    } else if (TERMINAL_PHASES.has(payload.run_phase)) {
+    } else if (payload.run_phase === RunPhase.Completed) {
       event = StreamEvent.Complete;
+    } else if (payload.run_phase === RunPhase.Error) {
+      event = StreamEvent.Error;
     } else {
       event = StreamEvent.Update;
     }
