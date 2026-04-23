@@ -4,6 +4,7 @@
  */
 
 import type { WizardStore, TaskItem } from '../../ui/tui/store';
+import { TaskStatus } from '../../ui/wizard-ui';
 import {
   type TaskStreamDestination,
   type TaskStreamUpdate,
@@ -13,12 +14,17 @@ import {
   TERMINAL_PHASES,
 } from './types';
 
+const STATUS_MAP: Record<TaskStatus, StreamTaskStatus> = {
+  [TaskStatus.Pending]: StreamTaskStatus.Pending,
+  [TaskStatus.InProgress]: StreamTaskStatus.InProgress,
+  [TaskStatus.Completed]: StreamTaskStatus.Completed,
+};
+
 function buildTasks(items: TaskItem[]): StreamTask[] {
   return items.map((item, i) => ({
     id: String(i),
     title: item.label,
-    status:
-      (item.status as string as StreamTaskStatus) ?? StreamTaskStatus.Pending,
+    status: STATUS_MAP[item.status] ?? StreamTaskStatus.Pending,
   }));
 }
 
@@ -37,8 +43,7 @@ export class TaskStreamPush {
   private readonly workflowId: string;
   private readonly skillId: string;
 
-  private lastTasks: TaskItem[] = [];
-  private lastEventPlan: unknown[] = [];
+  private readonly unsubscribe: () => void;
   private created = false;
 
   constructor(opts: TaskStreamPushOptions) {
@@ -49,7 +54,13 @@ export class TaskStreamPush {
     this.startedAt = new Date().toISOString();
     this.sessionId = `${this.workflowId}-${this.skillId}-${this.startedAt}`;
 
-    this.store.subscribe(() => this.onChange());
+    this.unsubscribe = this.store.subscribe(() => this.onChange());
+  }
+
+  /** Detach from the store and send a final push. */
+  async dispose(): Promise<void> {
+    this.unsubscribe();
+    await this.push();
   }
 
   async push(): Promise<void> {
@@ -76,18 +87,13 @@ export class TaskStreamPush {
       event = StreamEvent.Update;
     }
 
-    this.lastTasks = tasks;
-    this.lastEventPlan = eventPlan;
-
-    // eslint-disable-next-line @typescript-eslint/no-empty-function
     await Promise.all(
+      // eslint-disable-next-line @typescript-eslint/no-empty-function
       this.destinations.map((d) => d.send(event, payload).catch(() => {})),
     );
   }
 
   private onChange(): void {
-    const { tasks, eventPlan } = this.store;
-    if (tasks === this.lastTasks && eventPlan === this.lastEventPlan) return;
     void this.push();
   }
 }

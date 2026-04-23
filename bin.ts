@@ -502,6 +502,7 @@ function runWizard(
           resolve();
         }
       });
+      await tui.unmount();
       process.exit(0);
     } catch (err) {
       if (runtimeEnv('DEBUG') || runtimeEnv('POSTHOG_WIZARD_DEBUG')) {

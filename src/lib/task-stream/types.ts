@@ -7,7 +7,7 @@
  * transport with a different workflow_id / skill_id pair.
  */
 
-import type { RunPhase } from '../wizard-session';
+import { RunPhase } from '../wizard-session';
 
 export enum StreamTaskStatus {
   Pending = 'pending',
@@ -24,8 +24,8 @@ export enum StreamEvent {
 }
 
 export const TERMINAL_PHASES: ReadonlySet<RunPhase> = new Set([
-  'completed' as RunPhase,
-  'error' as RunPhase,
+  RunPhase.Completed,
+  RunPhase.Error,
 ]);
 
 export interface StreamTask {

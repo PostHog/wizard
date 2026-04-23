@@ -14,7 +14,7 @@
  */
 
 import { atom, map } from 'nanostores';
-import { TaskStatus } from '../wizard-ui.js';
+import { TaskStatus, isTaskStatus } from '../wizard-ui.js';
 import {
   type WizardSession,
   type OutroData,
@@ -580,12 +580,15 @@ export class WizardStore {
   syncTodos(
     todos: Array<{ content: string; status: string; activeForm?: string }>,
   ): void {
-    const incoming = todos.map((t) => ({
-      label: t.content,
-      activeForm: t.activeForm,
-      status: (t.status as TaskStatus) || TaskStatus.Pending,
-      done: t.status === TaskStatus.Completed,
-    }));
+    const incoming = todos.map((t) => {
+      const status = isTaskStatus(t.status) ? t.status : TaskStatus.Pending;
+      return {
+        label: t.content,
+        activeForm: t.activeForm,
+        status,
+        done: status === TaskStatus.Completed,
+      };
+    });
 
     const incomingLabels = new Set(incoming.map((t) => t.label));
 

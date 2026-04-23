@@ -51,15 +51,15 @@ export function startTUI(
 
   const taskStream = new TaskStreamPush({
     store,
-    workflowId: 'onboarding',
-    skillId: 'posthog_integration',
+    workflowId: flow,
+    skillId: flow,
     destinations: [new FileDestination(), new PostHogDestination()],
   });
 
   return {
     unmount: async () => {
       try {
-        await taskStream.push();
+        await taskStream.dispose();
       } catch (error) {
         analytics.captureException(error as Error);
       }
