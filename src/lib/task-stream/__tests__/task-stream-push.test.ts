@@ -12,6 +12,7 @@ function createMockStore(overrides: Partial<MockStoreState> = {}) {
   const listeners: Listener[] = [];
   const state: MockStoreState = {
     runPhase: RunPhase.Idle,
+    skillId: 'test-skill',
     tasks: [],
     eventPlan: [],
     ...overrides,
@@ -19,7 +20,7 @@ function createMockStore(overrides: Partial<MockStoreState> = {}) {
 
   const store = {
     get session() {
-      return { runPhase: state.runPhase };
+      return { runPhase: state.runPhase, skillId: state.skillId };
     },
     get tasks() {
       return state.tasks;
@@ -51,6 +52,7 @@ function createMockStore(overrides: Partial<MockStoreState> = {}) {
 
 interface MockStoreState {
   runPhase: RunPhase;
+  skillId: string | null;
   tasks: TaskItem[];
   eventPlan: unknown[];
 }
@@ -77,7 +79,6 @@ function createPush(
   const push = new TaskStreamPush({
     store,
     workflowId: 'test-workflow',
-    skillId: 'test-skill',
     destinations: [d],
   });
   return { push, dest: d };
@@ -195,7 +196,6 @@ describe('TaskStreamPush', () => {
       const push = new TaskStreamPush({
         store,
         workflowId: 'w',
-        skillId: 's',
         destinations: [bad, good],
       });
 
@@ -217,7 +217,6 @@ describe('TaskStreamPush', () => {
       const push = new TaskStreamPush({
         store,
         workflowId: 'w',
-        skillId: 's',
         destinations: [bad],
       });
 
@@ -226,15 +225,6 @@ describe('TaskStreamPush', () => {
   });
 
   describe('dispose', () => {
-    it('unsubscribes from the store', async () => {
-      const store = createMockStore();
-      const { push } = createPush(store);
-
-      expect(store._listenerCount()).toBe(1);
-      await push.dispose();
-      expect(store._listenerCount()).toBe(0);
-    });
-
     it('sends a final push', async () => {
       const store = createMockStore();
       const { push, dest } = createPush(store);
@@ -244,17 +234,26 @@ describe('TaskStreamPush', () => {
       expect(dest.calls).toHaveLength(1);
     });
 
-    it('no more pushes fire after dispose', async () => {
+    it('sends COMPLETE when runPhase is completed at dispose time', async () => {
       const store = createMockStore();
       const { push, dest } = createPush(store);
 
-      await push.dispose(); // sends 1
+      await push.push();
+      store._set({ runPhase: RunPhase.Completed });
+      await push.dispose();
 
-      store._emit();
-      await new Promise((r) => setTimeout(r, 0));
+      expect(dest.calls[1][0]).toBe(StreamEvent.Complete);
+    });
 
-      // Only the dispose push, no onChange push
-      expect(dest.calls).toHaveLength(1);
+    it('sends ERROR when runPhase is error at dispose time', async () => {
+      const store = createMockStore();
+      const { push, dest } = createPush(store);
+
+      await push.push();
+      store._set({ runPhase: RunPhase.Error });
+      await push.dispose();
+
+      expect(dest.calls[1][0]).toBe(StreamEvent.Error);
     });
   });
 });

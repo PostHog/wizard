@@ -292,7 +292,7 @@ const cli = yargs(hideBin(process.argv))
             spinnerMessage: `Running ${skillId}...`,
             estimatedDurationMinutes: 5,
           });
-          runWizard(config, options);
+          runWizard(config, { ...options, skillId });
         })();
       } else {
         // Interactive TTY: run core-integration through the unified workflow path.
@@ -459,8 +459,15 @@ function runWizard(
 
       const { startTUI } = await import('./src/ui/tui/start-tui.js');
       const { buildSession } = await import('./src/lib/wizard-session.js');
+      const { TaskStreamPush } = await import('./src/lib/task-stream/index.js');
+      const { FileDestination } = await import(
+        './src/lib/task-stream/destinations/file.js'
+      );
+      const { PostHogDestination } = await import(
+        './src/lib/task-stream/destinations/posthog.js'
+      );
+      const { analytics } = await import('./src/utils/analytics.js');
 
-      // flowKey values match Flow enum values by convention
       const tui = startTUI(WIZARD_VERSION, config.flowKey as any);
 
       const session = buildSession({
@@ -477,12 +484,20 @@ function runWizard(
         benchmark: options.benchmark as boolean | undefined,
         yaraReport: options.yaraReport as boolean | undefined,
       });
-      // Set workflow metadata for TUI display
       session.workflowLabel = config.flowKey;
-      const runDef = typeof config.run === 'object' ? config.run : null;
-      session.skillId = runDef?.skillId ?? null;
+      if (options.skillId) {
+        session.skillId = options.skillId as string;
+      }
 
       tui.store.session = session;
+
+      // Task stream — pushes state to external consumers on task changes
+      const taskStream = new TaskStreamPush({
+        store: tui.store,
+        workflowId: config.flowKey,
+        destinations: [new FileDestination(), new PostHogDestination()],
+      });
+      tui.store.onTasksChanged = () => void taskStream.push();
 
       await tui.store.runReadyHooks();
       await tui.store.getGate('intro');
@@ -502,7 +517,13 @@ function runWizard(
           resolve();
         }
       });
-      await tui.unmount();
+
+      try {
+        await taskStream.dispose();
+      } catch (error) {
+        analytics.captureException(error as Error);
+      }
+      tui.unmount();
       process.exit(0);
     } catch (err) {
       if (runtimeEnv('DEBUG') || runtimeEnv('POSTHOG_WIZARD_DEBUG')) {
@@ -578,7 +599,6 @@ function runWizardCI(
     });
     session.workflowLabel = config.flowKey;
     const runDef = typeof config.run === 'object' ? config.run : null;
-    session.skillId = runDef?.skillId ?? null;
 
     getUI().intro('Welcome to the PostHog setup wizard');
     getUI().log.info(`Running ${config.flowKey} in CI mode`);

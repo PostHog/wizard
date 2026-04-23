@@ -74,6 +74,7 @@ export class WizardStore {
   private $learnCardComplete = atom(false);
   private $version = atom(0);
 
+  private _onTasksChanged: (() => void) | null = null;
   /** Last screen seen — used to detect screen transitions for analytics. */
   private _lastScreen: ScreenName | null = null;
 
@@ -598,6 +599,12 @@ export class WizardStore {
 
     this.$tasks.set([...retained, ...incoming]);
     this.emitChange();
+    this._onTasksChanged?.();
+  }
+
+  /** Register a listener for task state changes (e.g. task stream push). */
+  set onTasksChanged(fn: () => void) {
+    this._onTasksChanged = fn;
   }
 
   // ── React integration ───────────────────────────────────────────

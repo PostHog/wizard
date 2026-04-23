@@ -31,7 +31,6 @@ function buildTasks(items: TaskItem[]): StreamTask[] {
 export interface TaskStreamPushOptions {
   store: WizardStore;
   workflowId: string;
-  skillId: string;
   destinations: TaskStreamDestination[];
 }
 
@@ -39,37 +38,36 @@ export class TaskStreamPush {
   private readonly store: WizardStore;
   private readonly destinations: TaskStreamDestination[];
   private readonly startedAt: string;
-  private readonly sessionId: string;
   private readonly workflowId: string;
-  private readonly skillId: string;
 
-  private readonly unsubscribe: () => void;
+  private sessionId: string | null = null;
   private created = false;
 
   constructor(opts: TaskStreamPushOptions) {
     this.store = opts.store;
     this.workflowId = opts.workflowId;
-    this.skillId = opts.skillId;
     this.destinations = opts.destinations;
     this.startedAt = new Date().toISOString();
-    this.sessionId = `${this.workflowId}-${this.skillId}-${this.startedAt}`;
-
-    this.unsubscribe = this.store.subscribe(() => this.onChange());
   }
 
-  /** Detach from the store and send a final push. */
+  /** Send a final push. */
   async dispose(): Promise<void> {
-    this.unsubscribe();
     await this.push();
   }
 
   async push(): Promise<void> {
     const { session, tasks, eventPlan } = this.store;
+    const skillId = session.skillId ?? this.workflowId;
+
+    // Lock session ID on first push so it stays stable
+    if (!this.sessionId) {
+      this.sessionId = `${this.workflowId}-${skillId}-${this.startedAt}`;
+    }
 
     const payload: TaskStreamUpdate = {
       session_id: this.sessionId,
       workflow_id: this.workflowId,
-      skill_id: this.skillId,
+      skill_id: skillId,
       started_at: this.startedAt,
       run_phase: session.runPhase,
       tasks: buildTasks(tasks),
@@ -93,9 +91,5 @@ export class TaskStreamPush {
       // eslint-disable-next-line @typescript-eslint/no-empty-function
       this.destinations.map((d) => d.send(event, payload).catch(() => {})),
     );
-  }
-
-  private onChange(): void {
-    void this.push();
   }
 }

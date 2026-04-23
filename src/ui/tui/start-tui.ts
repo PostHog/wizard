@@ -8,10 +8,6 @@ import { WizardStore, Flow } from './store.js';
 import { InkUI } from './ink-ui.js';
 import { setUI } from '../index.js';
 import { App } from './App.js';
-import { TaskStreamPush } from '../../lib/task-stream/index.js';
-import { FileDestination } from '../../lib/task-stream/destinations/file.js';
-import { PostHogDestination } from '../../lib/task-stream/destinations/posthog.js';
-import { analytics } from '../../utils/analytics.js';
 
 // ANSI escape sequences
 const RESET_ATTRS = '\x1b[0m';
@@ -26,7 +22,7 @@ export function startTUI(
   version: string,
   flow: Flow = Flow.PostHogIntegration,
 ): {
-  unmount: () => Promise<void>;
+  unmount: () => void;
   store: WizardStore;
   waitForSetup: () => Promise<void>;
 } {
@@ -36,33 +32,18 @@ export function startTUI(
   const store = new WizardStore(flow);
   store.version = version;
 
-  // Swap in the InkUI
   const inkUI = new InkUI(store);
   setUI(inkUI);
 
-  // Render the Ink app
   const { unmount: inkUnmount } = render(createElement(App, { store }));
 
-  // Reset terminal on exit
   const cleanup = () => {
     process.stdout.write(RESET_ATTRS + CLEAR_SCREEN + CURSOR_HOME);
   };
   process.on('exit', cleanup);
 
-  const taskStream = new TaskStreamPush({
-    store,
-    workflowId: flow,
-    skillId: flow,
-    destinations: [new FileDestination(), new PostHogDestination()],
-  });
-
   return {
-    unmount: async () => {
-      try {
-        await taskStream.dispose();
-      } catch (error) {
-        analytics.captureException(error as Error);
-      }
+    unmount: () => {
       inkUnmount();
       cleanup();
     },
