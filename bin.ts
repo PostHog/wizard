@@ -438,35 +438,68 @@ cli.command(
           choices: ['us', 'eu'] as const,
           default: 'us',
         },
+        name: {
+          describe: 'Name for the new account',
+          type: 'string' as const,
+          default: '',
+        },
+        json: {
+          describe:
+            'Emit JSON result to stdout (defaults to true when stdout is not a TTY)',
+          type: 'boolean' as const,
+        },
       })
+      .example('wizard provision --email matt+test@posthog.com --region us', '')
       .example(
-        'wizard provision --email matt+test@posthog.com --region us',
+        'wizard provision --email user@example.com --region eu --json',
         '',
       );
   },
   (argv) => {
-    setUI(new LoggingUI());
-    const email = argv.email as string;
-    const region = (argv.region as string).toUpperCase() as 'US' | 'EU';
+    const email = argv.email;
+    const region = argv.region.toUpperCase() as 'US' | 'EU';
+    const name = argv.name ?? '';
+    const jsonMode =
+      argv.json === undefined ? !process.stdout.isTTY : argv.json;
+
+    if (!jsonMode) {
+      setUI(new LoggingUI());
+    }
 
     void (async () => {
       try {
         const { provisionNewAccount } = await import(
           './src/utils/provisioning.js'
         );
-        getUI().log.info(`Provisioning account for ${email} in ${region}...`);
-        const result = await provisionNewAccount(email, '', region);
-        getUI().log.success('Account provisioned successfully:');
-        getUI().log.info(`  API Key:    ${result.projectApiKey}`);
-        getUI().log.info(`  Host:       ${result.host}`);
-        getUI().log.info(`  Project ID: ${result.projectId}`);
-        if (result.personalApiKey) {
-          getUI().log.info(`  Personal API Key: ${result.personalApiKey}`);
+        if (!jsonMode) {
+          getUI().log.info(`Provisioning account for ${email} in ${region}...`);
+        }
+        const result = await provisionNewAccount(email, name, region);
+        if (jsonMode) {
+          process.stdout.write(`${JSON.stringify(result)}\n`);
+        } else {
+          getUI().log.success('Account provisioned successfully:');
+          getUI().log.info(`  API Key:       ${result.projectApiKey}`);
+          getUI().log.info(`  Host:          ${result.host}`);
+          getUI().log.info(`  Project ID:    ${result.projectId}`);
+          getUI().log.info(`  Account ID:    ${result.accountId}`);
+          getUI().log.info(`  Access Token:  ${result.accessToken}`);
+          getUI().log.info(`  Refresh Token: ${result.refreshToken}`);
+          if (result.personalApiKey) {
+            getUI().log.info(`  Personal API Key: ${result.personalApiKey}`);
+          }
         }
         process.exit(0);
       } catch (error) {
         const msg = error instanceof Error ? error.message : String(error);
-        getUI().log.error(`Provisioning failed: ${msg}`);
+        const code = msg.includes('already associated')
+          ? 'email_exists'
+          : 'provisioning_failed';
+        if (jsonMode) {
+          process.stderr.write(`${JSON.stringify({ error: msg, code })}\n`);
+        } else {
+          getUI().log.error(`Provisioning failed: ${msg}`);
+        }
         process.exit(1);
       }
     })();

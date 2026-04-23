@@ -44,6 +44,30 @@ npx @posthog/wizard revenue
 Requires PostHog and Stripe SDKs already installed. Supports `--ci` with the
 same flags as the main wizard.
 
+## Headless Provisioning
+
+Create a new PostHog account from a non-interactive environment (agents, CI,
+scripts). No TTY, no browser, no framework detection — just the 3-call PKCE
+signup flow with a structured result:
+
+```bash
+# Human-readable (when stdout is a TTY)
+npx @posthog/wizard provision --email user@example.com --region us
+
+# Machine-readable — auto when stdout is piped, or force with --json
+npx @posthog/wizard provision --email user@example.com --region eu --json
+```
+
+Success prints the full `ProvisioningResult` (`projectApiKey`, `host`,
+`projectId`, `accountId`, `accessToken`, `refreshToken`, and
+`personalApiKey` if present). Failure exits 1; in `--json` mode the error
+is emitted to stderr as `{"error":"...","code":"..."}`, with `code` set to
+`email_exists` when the address is already registered.
+
+> ⚠️ **The JSON result contains live credentials.** Pipe it into a secrets
+> store — do not let it be captured by shared CI logs. Mask the step output
+> or redirect stdout to a file your job then reads and discards.
+
 # Options
 
 The following CLI arguments are available:
