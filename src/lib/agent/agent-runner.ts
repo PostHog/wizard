@@ -194,9 +194,7 @@ export async function runWorkflow(
       const blockingLabels = blockingKeys.map(
         (k) => `${SERVICE_LABELS[k]} (${readiness.health[k].status})`,
       );
-      logToFile(
-        `[agent-runner] blocked by: ${blockingLabels.join(', ')}`,
-      );
+      logToFile(`[agent-runner] blocked by: ${blockingLabels.join(', ')}`);
 
       await getUI().showBlockingOutage(readiness);
 

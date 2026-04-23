@@ -111,9 +111,7 @@ export class LoggingUI implements WizardUI {
     for (const reason of result.reasons) {
       console.log(`│  ${reason}`);
     }
-    console.log(
-      `│  The wizard cannot start while these services are down.`,
-    );
+    console.log(`│  The wizard cannot start while these services are down.`);
     return Promise.resolve();
   }
 
