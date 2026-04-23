@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.10.2](https://github.com/PostHog/wizard/compare/v2.10.1...v2.10.2) (2026-04-23)
+
+
+### Bug Fixes
+
+* add --email CLI flag for signup provisioning ([#414](https://github.com/PostHog/wizard/issues/414)) ([e324fbe](https://github.com/PostHog/wizard/commit/e324fbe199e01135241c16cb76c85ce014fecca9))
+
 ## [2.10.1](https://github.com/PostHog/wizard/compare/v2.10.0...v2.10.1) (2026-04-23)
 
 

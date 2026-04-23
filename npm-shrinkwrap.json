@@ -1,12 +1,12 @@
 {
   "name": "@posthog/wizard",
-  "version": "2.10.1",
+  "version": "2.10.2",
   "lockfileVersion": 3,
   "requires": true,
   "packages": {
     "": {
       "name": "@posthog/wizard",
-      "version": "2.10.1",
+      "version": "2.10.2",
       "dependencies": {
         "@anthropic-ai/claude-agent-sdk": "0.2.73",
         "@inkjs/ui": "^2.0.0",
