@@ -60,6 +60,12 @@ export const AgentSkillIntroScreen = ({
   if (showingMoreInfo) {
     body = (
       <Box flexDirection="column" width={56}>
+        <Box flexDirection="column" marginBottom={1}>
+          <Text>
+            The wizard is an agent that executes PostHog tasks. Its code is open
+            source: <Text color="cyan">https://github.com/PostHog/wizard</Text>
+          </Text>
+        </Box>
         <Text>
           Skill:{' '}
           <Text italic color="cyan">
@@ -119,6 +125,7 @@ export const AgentSkillIntroScreen = ({
   return (
     <IntroScreenLayout
       installDir={session.installDir}
+      showSubtitle={!showingMoreInfo}
       body={body}
       showDetection={isMainMenu}
       workflowLabel={session.workflowLabel}

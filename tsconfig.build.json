@@ -6,7 +6,8 @@
     "strictNullChecks": true,
     "noFallthroughCasesInSwitch": true,
     "lib": ["ES2022"],
-    "module": "node16",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
     "target": "ES2022",
     "skipLibCheck": true,
     "types": [],
@@ -15,6 +16,14 @@
     "sourceMap": true,
     "inlineSources": true,
     "esModuleInterop": true,
-    "jsx": "react-jsx"
+    "jsx": "react-jsx",
+    "paths": {
+      "@env": ["./src/env.ts"],
+      "@lib/*": ["./src/lib/*"],
+      "@utils/*": ["./src/utils/*"],
+      "@ui/*": ["./src/ui/*"],
+      "@steps/*": ["./src/steps/*"],
+      "@frameworks/*": ["./src/frameworks/*"]
+    }
   }
 }

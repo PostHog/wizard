@@ -51,6 +51,7 @@ import { formatScanReport, writeScanReport } from '../yara-hooks';
 import { detectNodePackageManagers } from '../detection/package-manager';
 import type { PackageManagerDetector } from '../detection/package-manager';
 import { getSkillsBaseUrl } from '../constants';
+import { runtimeEnv } from '@env';
 import { installSkillById, type InstallSkillResult } from '../wizard-tools';
 import type { WizardOptions } from '../../utils/types';
 
@@ -258,7 +259,7 @@ export async function runWorkflow(
 
   const mcpUrl = session.localMcp
     ? 'http://localhost:8787/mcp'
-    : process.env.MCP_URL ||
+    : runtimeEnv('MCP_URL') ||
       (cloudRegion === 'eu'
         ? 'https://mcp-eu.posthog.com/mcp'
         : 'https://mcp.posthog.com/mcp');

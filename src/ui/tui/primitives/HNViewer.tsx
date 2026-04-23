@@ -5,9 +5,10 @@
  * Each story has a [1]–[0] numeral; typing it opens the HN comments page.
  */
 
-import { Box, Text, useInput } from 'ink';
+import { Box, Text } from 'ink';
 import { useState, useEffect } from 'react';
 import { Colors } from '../styles.js';
+import { useKeyBindings } from '../hooks/useKeyBindings.js';
 
 const HN_API = 'https://hacker-news.firebaseio.com/v0';
 
@@ -45,19 +46,15 @@ export const HNViewer = () => {
     })();
   }, []);
 
-  useInput((input) => {
-    // Map keys 1–9 → index 0–8, key 0 → index 9
-    const num = parseInt(input, 10);
-    if (isNaN(num)) return;
-    const index = num === 0 ? 9 : num - 1;
-    const story = stories[index];
-    if (!story) return;
-
-    const url = `https://news.ycombinator.com/item?id=${story.id}`;
-    void import('child_process').then(({ exec }) => {
-      exec(`open "${url}" 2>/dev/null || xdg-open "${url}" 2>/dev/null`);
-    });
-  });
+  useKeyBindings('hn-viewer', [
+    {
+      match: ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0'],
+      label: 'number keys',
+      action: 'open story',
+      priority: 5,
+      handler: (input) => openStory(input, stories),
+    },
+  ]);
 
   if (loading) {
     return (
@@ -108,3 +105,16 @@ export const HNViewer = () => {
     </Box>
   );
 };
+
+function openStory(input: string, stories: HNStory[]): void {
+  const num = parseInt(input, 10);
+  if (isNaN(num)) return;
+  const index = num === 0 ? 9 : num - 1;
+  const story = stories[index];
+  if (!story) return;
+
+  const url = `https://news.ycombinator.com/item?id=${story.id}`;
+  void import('child_process').then(({ exec }) => {
+    exec(`open "${url}" 2>/dev/null || xdg-open "${url}" 2>/dev/null`);
+  });
+}

@@ -25,7 +25,11 @@ import { LoggingUI } from './src/ui/logging-ui';
 import { getSubcommandWorkflows } from './src/lib/workflows/workflow-registry';
 import type { WorkflowConfig } from './src/lib/workflows/workflow-step';
 import type { WizardSession } from './src/lib/wizard-session';
+import { runtimeEnv } from '@env';
 
+// Test mock server — only loaded when NODE_ENV is 'test'.
+// In production builds, tsdown replaces process.env.NODE_ENV with 'production',
+// making this block dead code.
 if (process.env.NODE_ENV === 'test') {
   void (async () => {
     try {
@@ -249,7 +253,9 @@ const cli = yargs(hideBin(process.argv))
               }
             }
           });
-        })();
+        })().catch(() => {
+          process.exit(1);
+        });
       } else if (isNonInteractiveEnvironment()) {
         // Non-interactive non-CI: error out
         getUI().intro(`PostHog Wizard`);
@@ -438,7 +444,7 @@ cli
   .alias('help', 'h')
   .version()
   .alias('version', 'v')
-  .wrap(process.stdout.isTTY ? yargs.terminalWidth() : 80).argv;
+  .wrap(process.stdout.isTTY ? cli.terminalWidth() : 80).argv;
 
 /**
  * Run a full wizard workflow in the TUI. Handles the full lifecycle: start TUI,
@@ -500,7 +506,7 @@ function runWizard(
       });
       process.exit(0);
     } catch (err) {
-      if (process.env.DEBUG || process.env.POSTHOG_WIZARD_DEBUG) {
+      if (runtimeEnv('DEBUG') || runtimeEnv('POSTHOG_WIZARD_DEBUG')) {
         console.error('TUI init failed:', err); // eslint-disable-line no-console
       }
     }
@@ -638,5 +644,7 @@ function runWizardCI(
         error: error as Error,
       });
     }
-  })();
+  })().catch(() => {
+    process.exit(1);
+  });
 }

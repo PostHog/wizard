@@ -5,13 +5,18 @@
  *
  * Each screen is wrapped in a ScreenErrorBoundary so that render crashes
  * route to the outro screen with an error message instead of hanging.
+ *
+ * Provides KeyboardHintsProvider context. The hints bar is rendered below
+ * screen content (inside the transition area) so all screens get it.
  */
 
 import { Box } from 'ink';
 import { useSyncExternalStore, type ReactNode } from 'react';
 import { TitleBar } from '../components/TitleBar.js';
 import { useStdoutDimensions } from '../hooks/useStdoutDimensions.js';
+import { KeyboardHintsProvider } from '../hooks/useKeyboardHints.js';
 import { DissolveTransition } from './DissolveTransition.js';
+import { KeyboardHintsBar } from './KeyboardHintsBar.js';
 import { ScreenErrorBoundary } from './ScreenErrorBoundary.js';
 import type { WizardStore } from '../store.js';
 
@@ -55,7 +60,18 @@ export const ScreenContainer = ({ store, screens }: ScreenContainerProps) => {
           direction={direction}
         >
           <ScreenErrorBoundary store={store}>
-            {activeScreen}
+            <Box flexDirection="column" height={contentHeight}>
+              <Box
+                flexDirection="column"
+                flexGrow={1}
+                flexShrink={1}
+                overflow="hidden"
+              >
+                {activeScreen}
+              </Box>
+              <Box height={1} />
+              <KeyboardHintsBar />
+            </Box>
           </ScreenErrorBoundary>
         </DissolveTransition>
       </Box>
@@ -70,7 +86,7 @@ export const ScreenContainer = ({ store, screens }: ScreenContainerProps) => {
       alignItems="center"
       justifyContent="flex-start"
     >
-      {inner}
+      <KeyboardHintsProvider>{inner}</KeyboardHintsProvider>
     </Box>
   );
 };

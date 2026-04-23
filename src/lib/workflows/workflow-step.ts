@@ -142,7 +142,7 @@ export function workflowToFlowEntries(workflow: Workflow): Array<{
   show?: (session: WizardSession) => boolean;
   isComplete?: (session: WizardSession) => boolean;
 }> {
-  return workflow
+  const entries = workflow
     .filter((step) => step.screen != null)
     .map((step) => ({
       screen: step.screen!,
@@ -152,4 +152,9 @@ export function workflowToFlowEntries(workflow: Workflow): Array<{
       // the screen). Only override when the two conditions diverge.
       isComplete: step.isComplete ?? step.gate,
     }));
+
+  // Every workflow ends with the exit screen.
+  entries.push({ screen: 'exit', show: undefined, isComplete: undefined });
+
+  return entries;
 }

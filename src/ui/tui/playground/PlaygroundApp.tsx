@@ -16,6 +16,7 @@ import { RunScreenDemo } from './demos/RunScreenDemo.js';
 import { HealthCheckDemo } from './demos/HealthCheckDemo.js';
 import { ModalDemo } from './demos/ModalDemo.js';
 import { McpDemo } from './demos/McpDemo.js';
+import { KeyboardHintsDemo } from './demos/KeyboardHintsDemo.js';
 
 interface PlaygroundAppProps {
   store: WizardStore;
@@ -46,6 +47,11 @@ export const PlaygroundApp = ({ store }: PlaygroundAppProps) => {
       id: 'mcp',
       label: 'MCP',
       component: <McpDemo store={store} />,
+    },
+    {
+      id: 'hints',
+      label: 'KeyHints',
+      component: <KeyboardHintsDemo />,
     },
   ];
 

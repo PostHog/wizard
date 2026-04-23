@@ -2,12 +2,20 @@
  * PickerMenu — Single and multi select.
  * Single mode: custom renderer with small triangle indicator.
  * Multi mode: checkbox glyphs with space to toggle.
+ *
+ * Key bindings are declared via useKeyBindings, which auto-registers
+ * hints in the KeyboardHintsBar.
  */
 
-import { Box, Text, useInput } from 'ink';
+import { Box, Text } from 'ink';
 import { useState } from 'react';
 import { Icons, Colors } from '../styles.js';
 import { PromptLabel } from './PromptLabel.js';
+import {
+  useKeyBindings,
+  KeyMatch,
+  type KeyBinding,
+} from '../hooks/useKeyBindings.js';
 
 interface PickerOption<T> {
   label: string;
@@ -72,40 +80,67 @@ const SinglePickerMenu = <T,>({
   const [focused, setFocused] = useState(0);
   const rows = Math.ceil(options.length / columns);
 
-  useInput((_input, key) => {
-    const col = Math.floor(focused / rows);
-    const row = focused % rows;
+  const bindings: KeyBinding[] = [
+    {
+      match: [KeyMatch.UpArrow, KeyMatch.DownArrow],
+      label: '\u2191\u2193',
+      action: 'navigate',
+      handler: (_input, key) => {
+        const col = Math.floor(focused / rows);
+        const row = focused % rows;
 
-    if (key.upArrow) {
-      if (row > 0) {
-        setFocused(col * rows + row - 1);
-      } else {
-        setFocused(Math.min(col * rows + rows - 1, options.length - 1));
-      }
-    }
-    if (key.downArrow) {
-      const next = col * rows + row + 1;
-      if (next < options.length && row + 1 < rows) {
-        setFocused(next);
-      } else {
-        setFocused(col * rows);
-      }
-    }
-    if (key.leftArrow && columns > 1) {
-      const prevCol = col > 0 ? col - 1 : columns - 1;
-      setFocused(Math.min(prevCol * rows + row, options.length - 1));
-    }
-    if (key.rightArrow && columns > 1) {
-      const nextCol = col < columns - 1 ? col + 1 : 0;
-      setFocused(Math.min(nextCol * rows + row, options.length - 1));
-    }
-    if (key.return) {
-      const selected = options[focused];
-      if (selected) {
-        onSelect(selected.value);
-      }
-    }
-  });
+        if (key.upArrow) {
+          if (row > 0) {
+            setFocused(col * rows + row - 1);
+          } else {
+            setFocused(Math.min(col * rows + rows - 1, options.length - 1));
+          }
+        }
+        if (key.downArrow) {
+          const next = col * rows + row + 1;
+          if (next < options.length && row + 1 < rows) {
+            setFocused(next);
+          } else {
+            setFocused(col * rows);
+          }
+        }
+      },
+    },
+    {
+      match: KeyMatch.Return,
+      label: 'enter',
+      action: 'select',
+      handler: () => {
+        const selected = options[focused];
+        if (selected) {
+          onSelect(selected.value);
+        }
+      },
+    },
+  ];
+
+  if (columns > 1) {
+    bindings.splice(1, 0, {
+      match: [KeyMatch.LeftArrow, KeyMatch.RightArrow],
+      label: '\u2190\u2192',
+      action: 'navigate',
+      handler: (_input, key) => {
+        const col = Math.floor(focused / rows);
+        const row = focused % rows;
+
+        if (key.leftArrow) {
+          const prevCol = col > 0 ? col - 1 : columns - 1;
+          setFocused(Math.min(prevCol * rows + row, options.length - 1));
+        }
+        if (key.rightArrow) {
+          const nextCol = col < columns - 1 ? col + 1 : 0;
+          setFocused(Math.min(nextCol * rows + row, options.length - 1));
+        }
+      },
+    });
+  }
+
+  useKeyBindings('single-picker', bindings);
 
   // Chunk options into columns (column-first ordering)
   const columnArrays: PickerOption<T>[][] = [];
@@ -168,57 +203,88 @@ const MultiPickerMenu = <T,>({
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const rows = Math.ceil(options.length / columns);
 
-  useInput((_input, key) => {
-    const col = Math.floor(focused / rows);
-    const row = focused % rows;
+  const bindings: KeyBinding[] = [
+    {
+      match: [KeyMatch.UpArrow, KeyMatch.DownArrow],
+      label: '\u2191\u2193',
+      action: 'navigate',
+      handler: (_input, key) => {
+        const col = Math.floor(focused / rows);
+        const row = focused % rows;
 
-    if (key.upArrow) {
-      if (row > 0) {
-        setFocused(col * rows + row - 1);
-      } else {
-        setFocused(Math.min(col * rows + rows - 1, options.length - 1));
-      }
-    }
-    if (key.downArrow) {
-      const next = col * rows + row + 1;
-      if (next < options.length && row + 1 < rows) {
-        setFocused(next);
-      } else {
-        setFocused(col * rows);
-      }
-    }
-    if (key.leftArrow && columns > 1) {
-      const prevCol = col > 0 ? col - 1 : columns - 1;
-      setFocused(Math.min(prevCol * rows + row, options.length - 1));
-    }
-    if (key.rightArrow && columns > 1) {
-      const nextCol = col < columns - 1 ? col + 1 : 0;
-      setFocused(Math.min(nextCol * rows + row, options.length - 1));
-    }
-    if (_input === ' ') {
-      setSelected((prev) => {
-        const next = new Set(prev);
-        if (next.has(focused)) {
-          next.delete(focused);
+        if (key.upArrow) {
+          if (row > 0) {
+            setFocused(col * rows + row - 1);
+          } else {
+            setFocused(Math.min(col * rows + rows - 1, options.length - 1));
+          }
+        }
+        if (key.downArrow) {
+          const next = col * rows + row + 1;
+          if (next < options.length && row + 1 < rows) {
+            setFocused(next);
+          } else {
+            setFocused(col * rows);
+          }
+        }
+      },
+    },
+    {
+      match: KeyMatch.Space,
+      label: 'space',
+      action: 'toggle',
+      handler: () => {
+        setSelected((prev) => {
+          const next = new Set(prev);
+          if (next.has(focused)) {
+            next.delete(focused);
+          } else {
+            next.add(focused);
+          }
+          return next;
+        });
+      },
+    },
+    {
+      match: KeyMatch.Return,
+      label: 'enter',
+      action: 'confirm',
+      handler: () => {
+        if (selected.size === 0) {
+          const hovered = options[focused];
+          if (hovered) {
+            onSelect(hovered.value);
+          }
         } else {
-          next.add(focused);
+          const values = [...selected].sort().map((i) => options[i].value);
+          onSelect(values);
         }
-        return next;
-      });
-    }
-    if (key.return) {
-      if (selected.size === 0) {
-        // Nothing toggled, select hovered
-        const hovered = options[focused];
-        if (hovered) {
-          onSelect(hovered.value);
+      },
+    },
+  ];
+
+  if (columns > 1) {
+    bindings.splice(1, 0, {
+      match: [KeyMatch.LeftArrow, KeyMatch.RightArrow],
+      label: '\u2190\u2192',
+      action: 'navigate',
+      handler: (_input, key) => {
+        const col = Math.floor(focused / rows);
+        const row = focused % rows;
+
+        if (key.leftArrow) {
+          const prevCol = col > 0 ? col - 1 : columns - 1;
+          setFocused(Math.min(prevCol * rows + row, options.length - 1));
         }
-      } else {
-        const values = [...selected].sort().map((i) => options[i].value);
-        onSelect(values);
-      }
-    }
-  });
+        if (key.rightArrow) {
+          const nextCol = col < columns - 1 ? col + 1 : 0;
+          setFocused(Math.min(nextCol * rows + row, options.length - 1));
+        }
+      },
+    });
+  }
+
+  useKeyBindings('multi-picker', bindings);
 
   const columnArrays: PickerOption<T>[][] = [];
   for (let c = 0; c < columns; c++) {
@@ -228,7 +294,6 @@ const MultiPickerMenu = <T,>({
   return (
     <Box flexDirection="column" alignItems={centered ? 'center' : undefined}>
       <PromptLabel message={message} />
-      <Text dimColor> (space to multi-select, enter to confirm)</Text>
       <Box
         flexDirection="row"
         gap={4}
