@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.10.1](https://github.com/PostHog/wizard/compare/v2.10.0...v2.10.1) (2026-04-23)
+
+
+### Bug Fixes
+
+* pass email and region to provisioning signup flow ([#403](https://github.com/PostHog/wizard/issues/403)) ([2f75cee](https://github.com/PostHog/wizard/commit/2f75cee1ba80bae07ae3795edc1c3087919264ca))
+* Remove hacky desktop connection, stand alone mcp install ([#408](https://github.com/PostHog/wizard/issues/408)) ([176b496](https://github.com/PostHog/wizard/commit/176b496e9860bebc28953638085e137738ba2362))
+
 ## [2.10.0](https://github.com/PostHog/wizard/compare/v2.9.1...v2.10.0) (2026-04-22)
 
 
