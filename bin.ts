@@ -479,6 +479,7 @@ function runWizard(
         signup: options.signup as boolean | undefined,
         apiKey: options.apiKey as string | undefined,
         projectId: options.projectId as string | undefined,
+        email: options.email as string | undefined,
         menu: options.menu as boolean | undefined,
         integration: options.integration as any,
         benchmark: options.benchmark as boolean | undefined,
@@ -575,6 +576,7 @@ function runWizardCI(
       signup: options.signup as boolean | undefined,
       localMcp: options.localMcp as boolean | undefined,
       apiKey,
+      email: options.email as string | undefined,
       menu: options.menu as boolean | undefined,
       integration: options.integration as any, // eslint-disable-line @typescript-eslint/no-explicit-any
       projectId: options.projectId as string | undefined,
