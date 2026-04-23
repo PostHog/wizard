@@ -17,7 +17,7 @@ import {
 } from '../../primitives/index.js';
 import { Colors, Icons } from '../../styles.js';
 import { ServiceHealthList } from '../../components/ServiceHealthList.js';
-import { getBlockingServiceKeys } from '../../../../lib/health-checks/readiness.js';
+import { getBlockingServiceKeys, SIGNUP_WIZARD_READINESS_CONFIG } from '../../../../lib/health-checks/readiness.js';
 import { ServiceHealthStatus } from '../../../../lib/health-checks/types.js';
 import { wizardAbort } from '../../../../utils/wizard-abort.js';
 import { fetchSkillMenu, downloadSkill } from '../../../../lib/wizard-tools.js';
@@ -88,7 +88,10 @@ export const HealthCheckScreen = ({ store }: HealthCheckScreenProps) => {
 
   // Healthy or warnings — isComplete returns true, router skips past.
   // This branch only renders for a single frame before advancing.
-  const blockingKeys = getBlockingServiceKeys(result.health);
+  const readinessConfig = store.session.signup
+    ? SIGNUP_WIZARD_READINESS_CONFIG
+    : undefined;
+  const blockingKeys = getBlockingServiceKeys(result.health, readinessConfig);
   if (blockingKeys.length === 0) return null;
 
   const isGithubReleasesDown = blockingKeys.includes('githubReleases');

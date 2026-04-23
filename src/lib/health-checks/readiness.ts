@@ -68,6 +68,16 @@ export const DEFAULT_WIZARD_READINESS_CONFIG: WizardReadinessConfig = {
   degradedBlocksRun: ['anthropic'],
 };
 
+/**
+ * Reduced readiness config for --signup provisioning flows.
+ *
+ * Provisioning only needs PostHog and the LLM Gateway - it doesn't
+ * use Anthropic directly, npm, GitHub Releases, or MCP.
+ */
+export const SIGNUP_WIZARD_READINESS_CONFIG: WizardReadinessConfig = {
+  downBlocksRun: ['posthogOverall', 'llmGateway'],
+};
+
 // ---------------------------------------------------------------------------
 // Aggregate check
 // ---------------------------------------------------------------------------
