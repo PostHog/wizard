@@ -11,6 +11,7 @@ import { App } from './App.js';
 import { TaskStreamPush } from '../../lib/task-stream/index.js';
 import { FileDestination } from '../../lib/task-stream/destinations/file.js';
 import { PostHogDestination } from '../../lib/task-stream/destinations/posthog.js';
+import { analytics } from '../../utils/analytics.js';
 
 // ANSI escape sequences
 const RESET_ATTRS = '\x1b[0m';
@@ -57,7 +58,11 @@ export function startTUI(
 
   return {
     unmount: async () => {
-      await taskStream.push();
+      try {
+        await taskStream.push();
+      } catch (error) {
+        analytics.captureException(error as Error);
+      }
       inkUnmount();
       cleanup();
     },
