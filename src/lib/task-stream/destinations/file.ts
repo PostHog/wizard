@@ -14,7 +14,7 @@ export class FileDestination implements TaskStreamDestination {
     try {
       appendFileSync(
         TASK_STREAM_LOG,
-        `[${event}] ${JSON.stringify(payload)}\n`,
+        `[${event}] ${JSON.stringify(payload, null, 2)}\n`,
       );
     } catch {
       // Non-critical

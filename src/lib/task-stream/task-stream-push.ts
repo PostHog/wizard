@@ -27,21 +27,18 @@ export interface TaskStreamPushOptions {
   workflowId: string;
   skillId: string;
   destinations: TaskStreamDestination[];
-  /** Debounce interval in ms. Defaults to 300. */
-  debounceMs?: number;
 }
 
 export class TaskStreamPush {
   private readonly store: WizardStore;
   private readonly destinations: TaskStreamDestination[];
-  private readonly debounceMs: number;
   private readonly startedAt: string;
   private readonly sessionId: string;
   private readonly workflowId: string;
   private readonly skillId: string;
 
-  private timer: ReturnType<typeof setTimeout> | null = null;
-  private dirty = false;
+  private lastTasks: TaskItem[] = [];
+  private lastEventPlan: unknown[] = [];
   private created = false;
 
   constructor(opts: TaskStreamPushOptions) {
@@ -49,23 +46,13 @@ export class TaskStreamPush {
     this.workflowId = opts.workflowId;
     this.skillId = opts.skillId;
     this.destinations = opts.destinations;
-    this.debounceMs = opts.debounceMs ?? 300;
     this.startedAt = new Date().toISOString();
     this.sessionId = `${this.workflowId}-${this.skillId}-${this.startedAt}`;
 
     this.store.subscribe(() => this.onChange());
   }
 
-  /** Flush any pending state before the process exits. */
-  flush(): void {
-    if (!this.dirty) return;
-    this.dirty = false;
-
-    if (this.timer) {
-      clearTimeout(this.timer);
-      this.timer = null;
-    }
-
+  async push(): Promise<void> {
     const { session, tasks, eventPlan } = this.store;
 
     const payload: TaskStreamUpdate = {
@@ -89,19 +76,18 @@ export class TaskStreamPush {
       event = StreamEvent.Update;
     }
 
-    for (const dest of this.destinations) {
-      // eslint-disable-next-line @typescript-eslint/no-empty-function
-      dest.send(event, payload).catch(() => {});
-    }
+    this.lastTasks = tasks;
+    this.lastEventPlan = eventPlan;
+
+    // eslint-disable-next-line @typescript-eslint/no-empty-function
+    await Promise.all(
+      this.destinations.map((d) => d.send(event, payload).catch(() => {})),
+    );
   }
 
   private onChange(): void {
-    this.dirty = true;
-
-    if (this.timer) return;
-    this.timer = setTimeout(() => {
-      this.timer = null;
-      this.flush();
-    }, this.debounceMs);
+    const { tasks, eventPlan } = this.store;
+    if (tasks === this.lastTasks && eventPlan === this.lastEventPlan) return;
+    void this.push();
   }
 }

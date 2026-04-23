@@ -25,7 +25,7 @@ export function startTUI(
   version: string,
   flow: Flow = Flow.PostHogIntegration,
 ): {
-  unmount: () => void;
+  unmount: () => Promise<void>;
   store: WizardStore;
   waitForSetup: () => Promise<void>;
 } {
@@ -56,8 +56,8 @@ export function startTUI(
   });
 
   return {
-    unmount: () => {
-      taskStream.flush();
+    unmount: async () => {
+      await taskStream.push();
       inkUnmount();
       cleanup();
     },
