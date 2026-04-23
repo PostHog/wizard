@@ -1,10 +1,12 @@
 // Mock functions must be defined before imports (jest hoists jest.mock calls;
 // variables starting with "mock" are allowed in the factory scope).
-const mockProvisionNewAccount = jest.fn();
+// Name-scoped to this file because .test.ts files share TS project scope when
+// they have no top-level imports/exports.
+const mockProvisionNewAccountSubcmd = jest.fn();
 
 jest.mock('semver', () => ({ satisfies: () => true }));
 jest.mock('../utils/provisioning', () => ({
-  provisionNewAccount: mockProvisionNewAccount,
+  provisionNewAccount: mockProvisionNewAccountSubcmd,
 }));
 // Same supporting mocks as src/__tests__/cli.test.ts — bin.ts imports these
 // at module load regardless of which subcommand yargs dispatches.
@@ -139,15 +141,15 @@ describe('wizard provision subcommand', () => {
   test('exits non-zero without calling the API when --email is missing', async () => {
     setTTY(true);
     await runCLI([]);
-    expect(mockProvisionNewAccount).not.toHaveBeenCalled();
+    expect(mockProvisionNewAccountSubcmd).not.toHaveBeenCalled();
     expect(process.exit).toHaveBeenCalledWith(1);
   });
 
   test('uppercases --region before calling provisionNewAccount', async () => {
     setTTY(true);
-    mockProvisionNewAccount.mockResolvedValue(successResult);
+    mockProvisionNewAccountSubcmd.mockResolvedValue(successResult);
     await runCLI(['--email', 'user@example.com', '--region', 'eu']);
-    expect(mockProvisionNewAccount).toHaveBeenCalledWith(
+    expect(mockProvisionNewAccountSubcmd).toHaveBeenCalledWith(
       'user@example.com',
       '',
       'EU',
@@ -156,7 +158,7 @@ describe('wizard provision subcommand', () => {
 
   test('forwards --name to provisionNewAccount', async () => {
     setTTY(true);
-    mockProvisionNewAccount.mockResolvedValue(successResult);
+    mockProvisionNewAccountSubcmd.mockResolvedValue(successResult);
     await runCLI([
       '--email',
       'user@example.com',
@@ -165,7 +167,7 @@ describe('wizard provision subcommand', () => {
       '--region',
       'us',
     ]);
-    expect(mockProvisionNewAccount).toHaveBeenCalledWith(
+    expect(mockProvisionNewAccountSubcmd).toHaveBeenCalledWith(
       'user@example.com',
       'Test User',
       'US',
@@ -174,7 +176,7 @@ describe('wizard provision subcommand', () => {
 
   test('--json emits a single JSON object of the full ProvisioningResult', async () => {
     setTTY(true);
-    mockProvisionNewAccount.mockResolvedValue(successResult);
+    mockProvisionNewAccountSubcmd.mockResolvedValue(successResult);
     await runCLI(['--email', 'user@example.com', '--json']);
     const out = stdoutChunks.join('').trim();
     expect(JSON.parse(out)).toEqual(successResult);
@@ -184,7 +186,7 @@ describe('wizard provision subcommand', () => {
 
   test('auto-enables JSON output when stdout is not a TTY', async () => {
     setTTY(false);
-    mockProvisionNewAccount.mockResolvedValue(successResult);
+    mockProvisionNewAccountSubcmd.mockResolvedValue(successResult);
     await runCLI(['--email', 'user@example.com']);
     const out = stdoutChunks.join('').trim();
     expect(JSON.parse(out)).toEqual(successResult);
@@ -192,7 +194,7 @@ describe('wizard provision subcommand', () => {
 
   test('uses human-readable output when TTY and --json not set', async () => {
     setTTY(true);
-    mockProvisionNewAccount.mockResolvedValue(successResult);
+    mockProvisionNewAccountSubcmd.mockResolvedValue(successResult);
     await runCLI(['--email', 'user@example.com']);
     expect(stdoutChunks.join('')).toBe('');
     // LoggingUI writes via console.log
@@ -205,7 +207,7 @@ describe('wizard provision subcommand', () => {
 
   test('emits email_exists code when email is already associated', async () => {
     setTTY(false);
-    mockProvisionNewAccount.mockRejectedValue(
+    mockProvisionNewAccountSubcmd.mockRejectedValue(
       new Error(
         'This email is already associated with a PostHog account. Please use the login flow instead.',
       ),
@@ -220,7 +222,9 @@ describe('wizard provision subcommand', () => {
 
   test('uses provisioning_failed code for other errors', async () => {
     setTTY(false);
-    mockProvisionNewAccount.mockRejectedValue(new Error('network unreachable'));
+    mockProvisionNewAccountSubcmd.mockRejectedValue(
+      new Error('network unreachable'),
+    );
     await runCLI(['--email', 'user@example.com']);
     const parsed = JSON.parse(stderrChunks.join('').trim()) as {
       error: string;

@@ -179,6 +179,16 @@ const cli = yargs(hideBin(process.argv))
             'Run a specific context-mill skill by ID\nenv: POSTHOG_WIZARD_SKILL',
           type: 'string',
         },
+        email: {
+          describe:
+            'Email for account creation with --ci --signup\nenv: POSTHOG_WIZARD_EMAIL',
+          type: 'string',
+        },
+        name: {
+          describe:
+            'Name for account creation with --ci --signup\nenv: POSTHOG_WIZARD_NAME',
+          type: 'string',
+        },
       });
     },
     (argv) => {
@@ -187,15 +197,6 @@ const cli = yargs(hideBin(process.argv))
       // CI mode validation and TTY check
       if (options.ci) {
         if (!options.region) options.region = 'us';
-        if (!options.apiKey) {
-          setUI(new LoggingUI());
-          getUI().intro('PostHog Wizard');
-          getUI().log.error(
-            'CI mode requires --api-key (personal API key phx_xxx)',
-          );
-          process.exit(1);
-          return;
-        }
         if (!options.installDir) {
           setUI(new LoggingUI());
           getUI().intro('PostHog Wizard');
@@ -205,7 +206,72 @@ const cli = yargs(hideBin(process.argv))
           process.exit(1);
           return;
         }
+        if (!options.apiKey && !options.signup) {
+          setUI(new LoggingUI());
+          getUI().intro('PostHog Wizard');
+          getUI().log.error(
+            'CI mode requires --api-key (personal API key phx_xxx). ' +
+              'To create a new account instead, use --signup --email you@example.com.',
+          );
+          process.exit(1);
+          return;
+        }
+        if (!options.apiKey && options.signup && !options.email) {
+          setUI(new LoggingUI());
+          getUI().intro('PostHog Wizard');
+          getUI().log.error(
+            'CI --signup requires --email to create a new account.',
+          );
+          process.exit(1);
+          return;
+        }
         void (async () => {
+          // If --signup but no existing key, provision a new account first and
+          // use its personal API key for the rest of the CI install.
+          if (!options.apiKey && options.signup) {
+            setUI(new LoggingUI());
+            getUI().intro('PostHog Wizard');
+            try {
+              const { provisionNewAccount } = await import(
+                './src/utils/provisioning.js'
+              );
+              const signupRegion = (options.region as string).toUpperCase() as
+                | 'US'
+                | 'EU';
+              getUI().log.info(
+                `Provisioning new PostHog account for ${String(
+                  options.email,
+                )} in ${signupRegion}...`,
+              );
+              const result = await provisionNewAccount(
+                options.email as string,
+                options.name ?? '',
+                signupRegion,
+              );
+              if (!result.personalApiKey) {
+                getUI().log.error(
+                  'Provisioning succeeded but no personal API key was returned — cannot continue install.',
+                );
+                process.exit(1);
+                return;
+              }
+              getUI().log.success('Account ready.');
+              getUI().log.info(`  Project API Key:  ${result.projectApiKey}`);
+              getUI().log.info(`  Personal API Key: ${result.personalApiKey}`);
+              getUI().log.info(`  Host:             ${result.host}`);
+              options.apiKey = result.personalApiKey;
+              if (options.projectId == null) {
+                options.projectId = result.projectId;
+              }
+            } catch (error) {
+              const msg =
+                error instanceof Error ? error.message : String(error);
+              getUI().log.error(`Provisioning failed: ${msg}`);
+              process.exit(1);
+              return;
+            }
+          }
+
           const { posthogIntegrationConfig } = await import(
             './src/lib/workflows/posthog-integration/index.js'
           );
