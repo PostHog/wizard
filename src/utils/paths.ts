@@ -1,8 +1,8 @@
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-// use tmpdir for windows compatibility!
-const TMP = tmpdir();
+// /tmp is stable and discoverable on macOS/Linux; Windows needs os.tmpdir()
+const TMP = process.platform === 'win32' ? tmpdir() : '/tmp';
 
 export const WIZARD_LOG_FILE = join(TMP, 'posthog-wizard.log');
 export const WIZARD_BENCHMARK_FILE = join(TMP, 'posthog-wizard-benchmark.json');
