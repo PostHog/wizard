@@ -4,8 +4,7 @@ import type {
   TaskStreamUpdate,
   StreamEvent,
 } from '../types';
-
-const TASK_STREAM_LOG = '/tmp/posthog-task-stream.log';
+import { WIZARD_TASK_STREAM_LOG } from '../../../utils/paths';
 
 export class FileDestination implements TaskStreamDestination {
   readonly name = 'file';
@@ -13,7 +12,7 @@ export class FileDestination implements TaskStreamDestination {
   send(event: StreamEvent, payload: TaskStreamUpdate): Promise<void> {
     try {
       appendFileSync(
-        TASK_STREAM_LOG,
+        WIZARD_TASK_STREAM_LOG,
         `[${event}] ${JSON.stringify(payload, null, 2)}\n`,
       );
     } catch {
