@@ -422,6 +422,57 @@ const cli = yargs(hideBin(process.argv))
       .help();
   });
 
+cli.command(
+  'provision',
+  'Create a new PostHog account (headless, no TUI)',
+  (yargs) => {
+    return yargs
+      .options({
+        email: {
+          describe: 'Email address for the new account',
+          type: 'string' as const,
+          demandOption: true,
+        },
+        region: {
+          describe: 'Cloud region (us or eu)',
+          choices: ['us', 'eu'] as const,
+          default: 'us',
+        },
+      })
+      .example(
+        'wizard provision --email matt+test@posthog.com --region us',
+        '',
+      );
+  },
+  (argv) => {
+    setUI(new LoggingUI());
+    const email = argv.email as string;
+    const region = (argv.region as string).toUpperCase() as 'US' | 'EU';
+
+    void (async () => {
+      try {
+        const { provisionNewAccount } = await import(
+          './src/utils/provisioning.js'
+        );
+        getUI().log.info(`Provisioning account for ${email} in ${region}...`);
+        const result = await provisionNewAccount(email, '', region);
+        getUI().log.success('Account provisioned successfully:');
+        getUI().log.info(`  API Key:    ${result.projectApiKey}`);
+        getUI().log.info(`  Host:       ${result.host}`);
+        getUI().log.info(`  Project ID: ${result.projectId}`);
+        if (result.personalApiKey) {
+          getUI().log.info(`  Personal API Key: ${result.personalApiKey}`);
+        }
+        process.exit(0);
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : String(error);
+        getUI().log.error(`Provisioning failed: ${msg}`);
+        process.exit(1);
+      }
+    })();
+  },
+);
+
 // ── Skill-based workflow subcommands (derived from registry) ─────────
 for (const wfConfig of getSubcommandWorkflows()) {
   cli.command(
