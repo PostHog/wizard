@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.10.4](https://github.com/PostHog/wizard/compare/v2.10.3...v2.10.4) (2026-04-24)
+
+
+### Bug Fixes
+
+* outro/exit clash ([#420](https://github.com/PostHog/wizard/issues/420)) ([17b2c82](https://github.com/PostHog/wizard/commit/17b2c8275a9c68bf6addd535b2f2841cade3e6a3))
+
 ## [2.10.3](https://github.com/PostHog/wizard/compare/v2.10.2...v2.10.3) (2026-04-23)
 
 
