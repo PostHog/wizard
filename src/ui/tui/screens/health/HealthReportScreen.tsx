@@ -12,6 +12,7 @@ import {
 } from '../../../../lib/workflows/posthog-health/index.js';
 import { getUiHostFromHost } from '../../../../utils/urls.js';
 import { OutroKind } from '../../../../lib/wizard-session.js';
+import { ApiError } from '../../../../lib/api.js';
 
 interface HealthReportScreenProps {
   store: WizardStore;
@@ -67,7 +68,12 @@ export const HealthReportScreen = ({ store }: HealthReportScreenProps) => {
         }
       } catch (err) {
         if (!cancelled) {
-          const message = err instanceof Error ? err.message : String(err);
+          const message =
+            err instanceof ApiError && err.statusCode === 401
+              ? 'Your PostHog session has expired. Re-run the wizard to sign in again.'
+              : err instanceof Error
+              ? err.message
+              : String(err);
           setState({ kind: 'error', message });
         }
       }
@@ -105,7 +111,7 @@ export const HealthReportScreen = ({ store }: HealthReportScreenProps) => {
           <Text dimColor>{state.message}</Text>
         </Box>
         <PickerMenu
-          options={[{ label: 'Exit', value: 'exit' }]}
+          options={[{ label: 'Continue', value: 'continue' }]}
           onSelect={() => {
             store.setOutroData({
               kind: OutroKind.Error,
@@ -173,7 +179,6 @@ export const HealthReportScreen = ({ store }: HealthReportScreenProps) => {
               issues.length === 1 ? '' : 's'
             }.`,
             body: 'Open the dashboard in PostHog to dismiss or resolve issues.',
-            docsUrl: DOCS_URL,
             continueUrl: healthUrl,
           });
         }}
@@ -220,11 +225,15 @@ const IssueRow = ({ issue }: { issue: HealthIssue }) => {
 };
 
 function buildReport(issues: HealthIssue[]): Report {
-  const by_severity: Record<string, number> = {};
+  const by_severity: Record<HealthIssueSeverity, number> = {
+    critical: 0,
+    warning: 0,
+    info: 0,
+  };
   const by_kind: Record<string, number> = {};
   const grouped: Partial<Record<HealthIssueSeverity, HealthIssue[]>> = {};
   for (const issue of issues) {
-    by_severity[issue.severity] = (by_severity[issue.severity] ?? 0) + 1;
+    by_severity[issue.severity] += 1;
     by_kind[issue.kind] = (by_kind[issue.kind] ?? 0) + 1;
     (grouped[issue.severity] ??= []).push(issue);
   }

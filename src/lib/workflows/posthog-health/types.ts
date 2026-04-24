@@ -15,7 +15,6 @@ export const HealthIssueSchema = z.object({
   severity: HealthIssueSeveritySchema,
   status: HealthIssueStatusSchema,
   dismissed: z.boolean(),
-  payload: z.record(z.unknown()).nullable().optional(),
   created_at: z.string(),
   updated_at: z.string(),
   resolved_at: z.string().nullable().optional(),
@@ -32,9 +31,8 @@ export type HealthIssueListResponse = z.infer<
   typeof HealthIssueListResponseSchema
 >;
 
-export const HealthIssueSummarySchema = z.object({
-  total: z.number(),
-  by_severity: z.record(z.number()),
-  by_kind: z.record(z.number()),
-});
-export type HealthIssueSummary = z.infer<typeof HealthIssueSummarySchema>;
+export interface HealthIssueSummary {
+  total: number;
+  by_severity: Record<HealthIssueSeverity, number>;
+  by_kind: Record<string, number>;
+}
