@@ -71,14 +71,13 @@ export function createScreens(
 
     // Standalone MCP flows
     [Screen.McpAdd]: (
-      <McpScreen store={store} installer={services.mcpInstaller} standalone />
+      <McpScreen store={store} installer={services.mcpInstaller} />
     ),
     [Screen.McpRemove]: (
       <McpScreen
         store={store}
         installer={services.mcpInstaller}
         mode="remove"
-        standalone
       />
     ),
   };

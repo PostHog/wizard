@@ -28,6 +28,7 @@ import {
   checkNpmOverallHealth,
   checkPosthogComponentHealth,
   checkPosthogOverallHealth,
+  resetPosthogHealthCache,
   DEFAULT_WIZARD_READINESS_CONFIG,
   evaluateWizardReadiness,
   ServiceHealthStatus,
@@ -180,44 +181,14 @@ const CLOUDFLARE_SUMMARY_HEALTHY = makeStatuspageSummary({
   ],
 });
 
-const POSTHOG_STATUS_HEALTHY = makeStatuspageStatus({
-  pageId: 'qf5jlnph3bcy',
-  pageName: 'PostHog',
-  pageUrl: 'https://status.posthog.com',
-  indicator: 'none',
-  description: 'All Systems Operational',
-});
-
-const POSTHOG_SUMMARY_HEALTHY = makeStatuspageSummary({
-  pageId: 'qf5jlnph3bcy',
-  pageName: 'PostHog',
-  pageUrl: 'https://status.posthog.com',
-  indicator: 'none',
-  description: 'All Systems Operational',
-  components: [
-    {
-      id: 'us-cloud',
-      name: 'US Cloud',
-      status: 'operational',
-      position: 1,
-      description: null,
-    },
-    {
-      id: 'eu-cloud',
-      name: 'EU Cloud',
-      status: 'operational',
-      position: 2,
-      description: null,
-    },
-    {
-      id: 'posthog-com',
-      name: 'PostHog.com',
-      status: 'operational',
-      position: 3,
-      description: null,
-    },
-  ],
-});
+// PostHog incident.io v1 API mock data
+const POSTHOG_INCIDENTIO_HEALTHY = {
+  page_title: 'PostHog',
+  page_url: 'https://www.posthogstatus.com/',
+  ongoing_incidents: [],
+  in_progress_maintenances: [],
+  scheduled_maintenances: [],
+};
 
 // LLM Gateway /_liveness response (from posthog/services/llm-gateway/src/llm_gateway/api/health.py)
 const LLM_GATEWAY_LIVENESS_BODY = JSON.stringify({ status: 'alive' });
@@ -232,8 +203,7 @@ const MCP_LANDING_HTML =
 
 const URLS = {
   anthropicStatus: 'https://status.claude.com/api/v2/status.json',
-  posthogStatus: 'https://www.posthogstatus.com/api/v2/status.json',
-  posthogSummary: 'https://www.posthogstatus.com/api/v2/summary.json',
+  posthogIncidentIo: 'https://www.posthogstatus.com/api/v1/summary',
   githubStatus: 'https://www.githubstatus.com/api/v2/status.json',
   npmStatus: 'https://status.npmjs.org/api/v2/status.json',
   npmSummary: 'https://status.npmjs.org/api/v2/summary.json',
@@ -255,12 +225,8 @@ const HEALTHY_RESPONSES: Record<string, { body: string; contentType: string }> =
       body: JSON.stringify(ANTHROPIC_STATUS_HEALTHY),
       contentType: 'application/json',
     },
-    [URLS.posthogStatus]: {
-      body: JSON.stringify(POSTHOG_STATUS_HEALTHY),
-      contentType: 'application/json',
-    },
-    [URLS.posthogSummary]: {
-      body: JSON.stringify(POSTHOG_SUMMARY_HEALTHY),
+    [URLS.posthogIncidentIo]: {
+      body: JSON.stringify(POSTHOG_INCIDENTIO_HEALTHY),
       contentType: 'application/json',
     },
     [URLS.githubStatus]: {
@@ -338,6 +304,7 @@ describe('health-checks', () => {
 
   beforeEach(() => {
     jest.restoreAllMocks();
+    resetPosthogHealthCache();
     (global as any).fetch = jest.fn(allHealthyFetchMock);
   });
 
@@ -447,10 +414,72 @@ describe('health-checks', () => {
   });
 
   describe('checkPosthogOverallHealth', () => {
-    it('returns healthy for indicator=none', async () => {
+    it('returns healthy when no ongoing incidents', async () => {
       const result = await checkPosthogOverallHealth();
       expect(result.status).toBe(ServiceHealthStatus.Healthy);
-      expect(result.rawIndicator).toBe('none');
+    });
+
+    it('returns down when an incident has full_outage impact', async () => {
+      const body = {
+        ...POSTHOG_INCIDENTIO_HEALTHY,
+        ongoing_incidents: [
+          {
+            id: '01KA9JH0ZB14TFA8VD4CFC3AYN',
+            name: 'Major service outage',
+            status: 'identified',
+            current_worst_impact: 'full_outage',
+            affected_components: [
+              {
+                id: 'c1',
+                name: 'App',
+                group_name: 'US Cloud',
+                current_status: 'full_outage',
+              },
+            ],
+            url: 'https://www.posthogstatus.com/incidents/test',
+            last_update_at: '2026-04-22T00:00:00Z',
+            last_update_message: 'Investigating',
+          },
+        ],
+      };
+      (global.fetch as jest.Mock).mockImplementation(
+        overrideFetch({
+          [URLS.posthogIncidentIo]: () =>
+            Promise.resolve(
+              new Response(JSON.stringify(body), { status: 200 }),
+            ),
+        }),
+      );
+      const result = await checkPosthogOverallHealth();
+      expect(result.status).toBe(ServiceHealthStatus.Down);
+    });
+
+    it('returns degraded when an incident has partial_outage impact', async () => {
+      const body = {
+        ...POSTHOG_INCIDENTIO_HEALTHY,
+        ongoing_incidents: [
+          {
+            id: '01KA9JH0ZB14TFA8VD4CFC3AYN',
+            name: 'Partial outage',
+            status: 'investigating',
+            current_worst_impact: 'partial_outage',
+            affected_components: [],
+            url: 'https://www.posthogstatus.com/incidents/test',
+            last_update_at: '2026-04-22T00:00:00Z',
+            last_update_message: 'Investigating',
+          },
+        ],
+      };
+      (global.fetch as jest.Mock).mockImplementation(
+        overrideFetch({
+          [URLS.posthogIncidentIo]: () =>
+            Promise.resolve(
+              new Response(JSON.stringify(body), { status: 200 }),
+            ),
+        }),
+      );
+      const result = await checkPosthogOverallHealth();
+      expect(result.status).toBe(ServiceHealthStatus.Degraded);
     });
   });
 
@@ -500,39 +529,44 @@ describe('health-checks', () => {
   // -----------------------------------------------------------------------
 
   describe('checkPosthogComponentHealth', () => {
-    it('reports all operational when every component is operational', async () => {
+    it('reports healthy when no ongoing incidents', async () => {
       const result = await checkPosthogComponentHealth();
       expect(result.status).toBe(ServiceHealthStatus.Healthy);
       expect(result.degradedOrDownComponents).toBeUndefined();
     });
 
-    it('reports degraded when a component has partial_outage', async () => {
-      const body = makeStatuspageSummary({
-        pageId: 'qf5jlnph3bcy',
-        pageName: 'PostHog',
-        pageUrl: 'https://status.posthog.com',
-        indicator: 'major',
-        description: 'Partial System Outage',
-        components: [
+    it('reports affected components from ongoing incidents', async () => {
+      const body = {
+        ...POSTHOG_INCIDENTIO_HEALTHY,
+        ongoing_incidents: [
           {
-            id: 'us-cloud',
-            name: 'US Cloud',
-            status: 'partial_outage',
-            position: 1,
-            description: null,
-          },
-          {
-            id: 'eu-cloud',
-            name: 'EU Cloud',
-            status: 'operational',
-            position: 2,
-            description: null,
+            id: 'inc1',
+            name: 'US Cloud outage',
+            status: 'identified',
+            current_worst_impact: 'full_outage',
+            affected_components: [
+              {
+                id: 'c1',
+                name: 'App',
+                group_name: 'US Cloud 🇺🇸',
+                current_status: 'full_outage',
+              },
+              {
+                id: 'c2',
+                name: 'Event Ingestion',
+                group_name: 'US Cloud 🇺🇸',
+                current_status: 'full_outage',
+              },
+            ],
+            url: 'https://www.posthogstatus.com/incidents/test',
+            last_update_at: '2026-04-22T00:00:00Z',
+            last_update_message: 'Investigating',
           },
         ],
-      });
+      };
       (global.fetch as jest.Mock).mockImplementation(
         overrideFetch({
-          [URLS.posthogSummary]: () =>
+          [URLS.posthogIncidentIo]: () =>
             Promise.resolve(
               new Response(JSON.stringify(body), { status: 200 }),
             ),
@@ -540,43 +574,44 @@ describe('health-checks', () => {
       );
       const result = await checkPosthogComponentHealth();
       expect(result.status).toBe(ServiceHealthStatus.Degraded);
-      expect(result.degradedOrDownComponents).toHaveLength(1);
-      expect(result.degradedOrDownComponents![0].name).toBe('US Cloud');
-      expect(result.degradedOrDownComponents![0].rawStatus).toBe(
-        'partial_outage',
+      expect(result.degradedOrDownComponents).toHaveLength(2);
+      expect(result.degradedOrDownComponents![0].name).toBe(
+        'US Cloud 🇺🇸 — App',
       );
       expect(result.degradedOrDownComponents![0].status).toBe(
         ServiceHealthStatus.Down,
       );
+      expect(result.degradedOrDownComponents![1].status).toBe(
+        ServiceHealthStatus.Down,
+      );
     });
 
-    it('reports degraded when a component has degraded_performance', async () => {
-      const body = makeStatuspageSummary({
-        pageId: 'qf5jlnph3bcy',
-        pageName: 'PostHog',
-        pageUrl: 'https://status.posthog.com',
-        indicator: 'minor',
-        description: 'Degraded System Performance',
-        components: [
+    it('reports degraded for degraded_performance components', async () => {
+      const body = {
+        ...POSTHOG_INCIDENTIO_HEALTHY,
+        ongoing_incidents: [
           {
-            id: 'us-cloud',
-            name: 'US Cloud',
-            status: 'degraded_performance',
-            position: 1,
-            description: null,
-          },
-          {
-            id: 'eu-cloud',
-            name: 'EU Cloud',
-            status: 'operational',
-            position: 2,
-            description: null,
+            id: 'inc1',
+            name: 'Slowness',
+            status: 'investigating',
+            current_worst_impact: 'degraded_performance',
+            affected_components: [
+              {
+                id: 'c1',
+                name: 'App',
+                group_name: 'EU Cloud',
+                current_status: 'degraded_performance',
+              },
+            ],
+            url: 'https://www.posthogstatus.com/incidents/test',
+            last_update_at: '2026-04-22T00:00:00Z',
+            last_update_message: 'Investigating',
           },
         ],
-      });
+      };
       (global.fetch as jest.Mock).mockImplementation(
         overrideFetch({
-          [URLS.posthogSummary]: () =>
+          [URLS.posthogIncidentIo]: () =>
             Promise.resolve(
               new Response(JSON.stringify(body), { status: 200 }),
             ),
@@ -587,78 +622,6 @@ describe('health-checks', () => {
       expect(result.degradedOrDownComponents![0].rawStatus).toBe(
         'degraded_performance',
       );
-      expect(result.degradedOrDownComponents![0].status).toBe(
-        ServiceHealthStatus.Degraded,
-      );
-    });
-
-    it('reports degraded when a component has major_outage', async () => {
-      const body = makeStatuspageSummary({
-        pageId: 'qf5jlnph3bcy',
-        pageName: 'PostHog',
-        pageUrl: 'https://status.posthog.com',
-        indicator: 'critical',
-        description: 'Major Service Outage',
-        components: [
-          {
-            id: 'us-cloud',
-            name: 'US Cloud',
-            status: 'major_outage',
-            position: 1,
-            description: null,
-          },
-          {
-            id: 'eu-cloud',
-            name: 'EU Cloud',
-            status: 'major_outage',
-            position: 2,
-            description: null,
-          },
-        ],
-      });
-      (global.fetch as jest.Mock).mockImplementation(
-        overrideFetch({
-          [URLS.posthogSummary]: () =>
-            Promise.resolve(
-              new Response(JSON.stringify(body), { status: 200 }),
-            ),
-        }),
-      );
-      const result = await checkPosthogComponentHealth();
-      expect(result.status).toBe(ServiceHealthStatus.Degraded);
-      expect(result.degradedOrDownComponents).toHaveLength(2);
-      expect(result.degradedOrDownComponents![0].status).toBe(
-        ServiceHealthStatus.Down,
-      );
-    });
-
-    it('handles under_maintenance as degraded', async () => {
-      const body = makeStatuspageSummary({
-        pageId: 'qf5jlnph3bcy',
-        pageName: 'PostHog',
-        pageUrl: 'https://status.posthog.com',
-        indicator: 'minor',
-        description: 'Scheduled Maintenance',
-        components: [
-          {
-            id: 'us-cloud',
-            name: 'US Cloud',
-            status: 'under_maintenance',
-            position: 1,
-            description: null,
-          },
-        ],
-      });
-      (global.fetch as jest.Mock).mockImplementation(
-        overrideFetch({
-          [URLS.posthogSummary]: () =>
-            Promise.resolve(
-              new Response(JSON.stringify(body), { status: 200 }),
-            ),
-        }),
-      );
-      const result = await checkPosthogComponentHealth();
-      expect(result.status).toBe(ServiceHealthStatus.Degraded);
       expect(result.degradedOrDownComponents![0].status).toBe(
         ServiceHealthStatus.Degraded,
       );
@@ -869,13 +832,15 @@ describe('health-checks', () => {
       }
     });
 
-    it('fires all 11 fetch calls in parallel', async () => {
+    it('fires all fetch calls in parallel', async () => {
       await checkAllExternalServices();
       const calledUrls = (global.fetch as jest.Mock).mock.calls.map(
         (c: unknown[]) =>
           typeof c[0] === 'string' ? c[0] : (c[0] as URL).toString(),
       );
-      expect(calledUrls).toHaveLength(11);
+      // PostHog uses a single incident.io endpoint for both overall + components
+      expect(calledUrls).toHaveLength(10);
+      expect(calledUrls).toContain(URLS.posthogIncidentIo);
       expect(calledUrls).toContain(URLS.llmGatewayLiveness);
       expect(calledUrls).toContain(URLS.mcpLanding);
       expect(calledUrls).toContain(URLS.githubReleasesSkillMenu);

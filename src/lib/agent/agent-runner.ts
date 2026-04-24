@@ -228,6 +228,8 @@ export async function runWorkflow(
       ci: session.ci,
       apiKey: session.apiKey,
       projectId: session.projectId,
+      email: session.email,
+      region: session.region,
     });
 
   session.credentials = { accessToken, projectApiKey, host, projectId };
