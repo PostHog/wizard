@@ -1,10 +1,10 @@
 import type { Workflow } from '../workflow-step.js';
 
-export const POSTHOG_HEALTH_WORKFLOW: Workflow = [
+export const POSTHOG_DOCTOR_WORKFLOW: Workflow = [
   {
     id: 'intro',
     label: 'Welcome',
-    screen: 'health-intro',
+    screen: 'doctor-intro',
     gate: (session) => session.setupConfirmed,
   },
   {
@@ -15,8 +15,8 @@ export const POSTHOG_HEALTH_WORKFLOW: Workflow = [
   },
   {
     id: 'report',
-    label: 'Health report',
-    screen: 'health-report',
+    label: 'Doctor report',
+    screen: 'doctor-report',
     isComplete: (session) => session.outroData !== null,
   },
   {

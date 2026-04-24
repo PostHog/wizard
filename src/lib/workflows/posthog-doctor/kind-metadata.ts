@@ -1,6 +1,3 @@
-// Keep in sync with posthog/posthog/api/health_issue.py — see the
-// `kind` serializer docstring for the canonical list.
-
 import { POSTHOG_DOCS_URL } from '../../constants';
 
 export interface KindMeta {

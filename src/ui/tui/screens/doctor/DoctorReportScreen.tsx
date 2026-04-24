@@ -9,13 +9,13 @@ import {
   type HealthIssue,
   type HealthIssueSeverity,
   type HealthIssueSummary,
-} from '../../../../lib/workflows/posthog-health/index.js';
+} from '../../../../lib/workflows/posthog-doctor/index.js';
 import { getUiHostFromHost } from '../../../../utils/urls.js';
 import { OutroKind } from '../../../../lib/wizard-session.js';
 import { ApiError } from '../../../../lib/api.js';
 import { POSTHOG_DOCS_URL } from '../../../../lib/constants.js';
 
-interface HealthReportScreenProps {
+interface DoctorReportScreenProps {
   store: WizardStore;
 }
 
@@ -43,7 +43,7 @@ const SEVERITY_LABEL: Record<HealthIssueSeverity, string> = {
   info: 'Info',
 };
 
-export const HealthReportScreen = ({ store }: HealthReportScreenProps) => {
+export const DoctorReportScreen = ({ store }: DoctorReportScreenProps) => {
   useSyncExternalStore(
     (cb) => store.subscribe(cb),
     () => store.getSnapshot(),
@@ -190,7 +190,7 @@ export const HealthReportScreen = ({ store }: HealthReportScreenProps) => {
 const Header = ({ host, projectId }: { host: string; projectId: number }) => (
   <Box flexDirection="column">
     <Text bold color={Colors.accent}>
-      PostHog Health Report
+      PostHog Doctor Report
     </Text>
     <Text dimColor>
       Project {projectId} {Icons.bullet} {host}

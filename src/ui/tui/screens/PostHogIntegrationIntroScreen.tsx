@@ -23,7 +23,7 @@ import { IntroScreenLayout, type DetectionRow } from './IntroScreenLayout.js';
 import { releaseTerminal } from '../start-tui.js';
 import { analytics } from '../../../utils/analytics.js';
 
-const TOOLS = [{ label: 'Project health check', command: 'health' }] as const;
+const TOOLS = [{ label: 'Project doctor', command: 'doctor' }] as const;
 
 type View = 'default' | 'more-info' | 'tools';
 

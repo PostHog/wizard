@@ -5,7 +5,7 @@ import {
   UNKNOWN_KIND_META,
 } from '../kind-metadata';
 
-describe('posthog-health schema', () => {
+describe('posthog-doctor schema', () => {
   const canned = {
     results: [
       {

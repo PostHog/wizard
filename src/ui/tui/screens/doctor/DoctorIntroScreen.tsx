@@ -4,11 +4,11 @@ import type { WizardStore } from '../../store.js';
 import { PickerMenu } from '../../primitives/index.js';
 import { Colors, Icons } from '../../styles.js';
 
-interface HealthIntroScreenProps {
+interface DoctorIntroScreenProps {
   store: WizardStore;
 }
 
-export const HealthIntroScreen = ({ store }: HealthIntroScreenProps) => {
+export const DoctorIntroScreen = ({ store }: DoctorIntroScreenProps) => {
   useSyncExternalStore(
     (cb) => store.subscribe(cb),
     () => store.getSnapshot(),
@@ -18,7 +18,7 @@ export const HealthIntroScreen = ({ store }: HealthIntroScreenProps) => {
     <Box flexDirection="column">
       <Box flexDirection="column" marginBottom={1}>
         <Text bold color={Colors.accent}>
-          PostHog Health Check
+          PostHog Doctor
         </Text>
         <Text dimColor>
           Scan your project configuration for issues that may need attention.
