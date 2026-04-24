@@ -28,14 +28,20 @@ function needsSetup(session: WizardSession): boolean {
 
 function healthCheckReady(session: WizardSession): boolean {
   if (!session.readinessResult) return false;
+
+  if (session.signup) {
+    const hardBlocking = getBlockingServiceKeys(
+      session.readinessResult.health,
+      SIGNUP_WIZARD_READINESS_CONFIG,
+    );
+    const defaultBlocking = getBlockingServiceKeys(
+      session.readinessResult.health,
+    );
+    if (hardBlocking.length === 0 && defaultBlocking.length === 0) return true;
+    return session.outageDismissed;
+  }
+
   if (session.readinessResult.decision === WizardReadiness.No) {
-    if (session.signup) {
-      const blockingKeys = getBlockingServiceKeys(
-        session.readinessResult.health,
-        SIGNUP_WIZARD_READINESS_CONFIG,
-      );
-      if (blockingKeys.length === 0) return true;
-    }
     return session.outageDismissed;
   }
   return true;
