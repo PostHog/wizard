@@ -90,7 +90,6 @@ export const FLOWS: Record<Flow, FlowEntry[]> = {
       screen: Screen.McpAdd,
       isComplete: (s) => s.mcpComplete,
     },
-    { screen: Screen.Outro },
     { screen: Screen.Exit },
   ],
 
@@ -99,7 +98,6 @@ export const FLOWS: Record<Flow, FlowEntry[]> = {
       screen: Screen.McpRemove,
       isComplete: (s) => s.mcpComplete,
     },
-    { screen: Screen.Outro },
     { screen: Screen.Exit },
   ],
 };
