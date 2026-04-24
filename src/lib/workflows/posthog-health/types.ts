@@ -34,5 +34,4 @@ export type HealthIssueListResponse = z.infer<
 export interface HealthIssueSummary {
   total: number;
   by_severity: Record<HealthIssueSeverity, number>;
-  by_kind: Record<string, number>;
 }

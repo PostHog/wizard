@@ -13,6 +13,7 @@ import {
 import { getUiHostFromHost } from '../../../../utils/urls.js';
 import { OutroKind } from '../../../../lib/wizard-session.js';
 import { ApiError } from '../../../../lib/api.js';
+import { POSTHOG_DOCS_URL } from '../../../../lib/constants.js';
 
 interface HealthReportScreenProps {
   store: WizardStore;
@@ -41,8 +42,6 @@ const SEVERITY_LABEL: Record<HealthIssueSeverity, string> = {
   warning: 'Warning',
   info: 'Info',
 };
-
-const DOCS_URL = 'https://posthog.com/docs';
 
 export const HealthReportScreen = ({ store }: HealthReportScreenProps) => {
   useSyncExternalStore(
@@ -117,7 +116,7 @@ export const HealthReportScreen = ({ store }: HealthReportScreenProps) => {
               kind: OutroKind.Error,
               message: 'Failed to fetch health issues',
               body: state.message,
-              docsUrl: DOCS_URL,
+              docsUrl: POSTHOG_DOCS_URL,
             });
           }}
         />
@@ -142,7 +141,7 @@ export const HealthReportScreen = ({ store }: HealthReportScreenProps) => {
             store.setOutroData({
               kind: OutroKind.Success,
               message: 'No active issues — your project looks healthy.',
-              docsUrl: DOCS_URL,
+              docsUrl: POSTHOG_DOCS_URL,
               continueUrl: healthUrl,
             });
           }}
@@ -179,6 +178,7 @@ export const HealthReportScreen = ({ store }: HealthReportScreenProps) => {
               issues.length === 1 ? '' : 's'
             }.`,
             body: 'Open the dashboard in PostHog to dismiss or resolve issues.',
+            docsUrl: POSTHOG_DOCS_URL,
             continueUrl: healthUrl,
           });
         }}
@@ -230,15 +230,13 @@ function buildReport(issues: HealthIssue[]): Report {
     warning: 0,
     info: 0,
   };
-  const by_kind: Record<string, number> = {};
   const grouped: Partial<Record<HealthIssueSeverity, HealthIssue[]>> = {};
   for (const issue of issues) {
     by_severity[issue.severity] += 1;
-    by_kind[issue.kind] = (by_kind[issue.kind] ?? 0) + 1;
     (grouped[issue.severity] ??= []).push(issue);
   }
   return {
-    summary: { total: issues.length, by_severity, by_kind },
+    summary: { total: issues.length, by_severity },
     grouped,
   };
 }
