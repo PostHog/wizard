@@ -38,6 +38,6 @@ export const AGENT_SKILL_STEPS: Workflow = [
   {
     id: 'skills',
     label: 'Skills',
-    screen: 'skills',
+    screen: 'keep-skills',
   },
 ];

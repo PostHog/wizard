@@ -993,7 +993,7 @@ describe('WizardStore', () => {
 
       // Step 4: Dismiss outro
       store.setOutroDismissed();
-      expect(store.currentScreen).toBe('skills');
+      expect(store.currentScreen).toBe('keep-skills');
     });
 
     it('walks through the agent skill flow correctly', () => {
@@ -1023,7 +1023,7 @@ describe('WizardStore', () => {
 
       // Step 4: Dismiss outro
       store.setOutroDismissed();
-      expect(store.currentScreen).toBe('skills');
+      expect(store.currentScreen).toBe('keep-skills');
     });
   });
 

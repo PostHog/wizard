@@ -11,7 +11,12 @@ describe('workflowToFlowEntries', () => {
     ];
 
     const entries = workflowToFlowEntries(workflow);
-    expect(entries.map((e) => e.screen)).toEqual(['intro', 'run', 'outro']);
+    expect(entries.map((e) => e.screen)).toEqual([
+      'intro',
+      'run',
+      'outro',
+      'exit',
+    ]);
   });
 
   it('falls back isComplete to gate, preferring explicit isComplete', () => {

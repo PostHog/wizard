@@ -1,4 +1,9 @@
-import readEnv from 'read-env';
+import readEnvModule from 'read-env';
+
+const readEnv =
+  typeof readEnvModule === 'function'
+    ? readEnvModule
+    : (readEnvModule as any).default;
 import { tryGetPackageJson } from './setup-utils';
 import type { WizardOptions } from './types';
 import fg from 'fast-glob';

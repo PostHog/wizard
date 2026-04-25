@@ -9,14 +9,18 @@ export {
 
 export {
   checkAnthropicHealth,
-  checkPosthogOverallHealth,
-  checkPosthogComponentHealth,
   checkGithubHealth,
   checkNpmOverallHealth,
   checkNpmComponentHealth,
   checkCloudflareOverallHealth,
   checkCloudflareComponentHealth,
 } from './statuspage';
+
+export {
+  checkPosthogOverallHealth,
+  checkPosthogComponentHealth,
+  resetPosthogHealthCache,
+} from './incidentio';
 
 export {
   checkLlmGatewayHealth,
