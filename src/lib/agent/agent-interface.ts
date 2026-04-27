@@ -40,6 +40,7 @@ import {
 } from '../yara-hooks';
 import { getWizardCommandments } from './commandments';
 import type { PackageManagerDetector } from '../detection/package-manager';
+import type { WorkflowFileWatcherContext } from './agent-runner';
 
 // Dynamic import cache for ESM module
 let _sdkModule: any = null;
@@ -736,10 +737,7 @@ export async function runAgent(
     abortCases?: readonly AbortCaseMatcher[];
     fileWatchers?: ReadonlyArray<{
       filename: string;
-      onUpdate: (
-        parsed: unknown,
-        ctx: { setFrameworkContext: (key: string, value: unknown) => void },
-      ) => void;
+      onUpdate: (parsed: unknown, ctx: WorkflowFileWatcherContext) => void;
     }>;
   },
   middleware?: {
@@ -836,12 +834,7 @@ export async function runAgent(
     return {};
   };
 
-  // Event plan file watcher — cleaned up in finally block
-  let eventPlanWatcher: fs.FSWatcher | undefined;
-  let eventPlanInterval: ReturnType<typeof setInterval> | undefined;
-
-  // Workflow-declared file watchers (e.g. .posthog-audit-checks.json).
-  // Cleaned up in finally block alongside the event plan watcher.
+  // Workflow-declared file watchers (cleaned up in finally block).
   const workflowWatchers: fs.FSWatcher[] = [];
   const workflowIntervals: Array<ReturnType<typeof setInterval>> = [];
 
@@ -972,46 +965,6 @@ export async function runAgent(
       },
     });
 
-    // Watch for .posthog-events.json and feed into the store
-    const eventPlanPath = path.join(
-      agentConfig.workingDirectory,
-      '.posthog-events.json',
-    );
-    const readEventPlan = () => {
-      try {
-        const content = fs.readFileSync(eventPlanPath, 'utf-8');
-        const parsed = JSON.parse(content);
-        if (Array.isArray(parsed)) {
-          getUI().setEventPlan(
-            parsed.map((e: Record<string, unknown>) => ({
-              name: (e.name ?? e.event ?? '') as string,
-              description: (e.description ?? '') as string,
-            })),
-          );
-        }
-      } catch {
-        // File doesn't exist or isn't valid JSON yet
-      }
-    };
-
-    try {
-      eventPlanWatcher = fs.watch(eventPlanPath, () => readEventPlan());
-      readEventPlan();
-    } catch {
-      // File doesn't exist yet — poll until it appears
-      eventPlanInterval = setInterval(() => {
-        try {
-          fs.accessSync(eventPlanPath);
-          readEventPlan();
-          clearInterval(eventPlanInterval);
-          eventPlanInterval = undefined;
-          eventPlanWatcher = fs.watch(eventPlanPath, () => readEventPlan());
-        } catch {
-          // Still waiting
-        }
-      }, 1000);
-    }
-
     // Workflow-declared file watchers. fs.watch alone is unreliable for
     // atomic-rename writes (which is how Claude rewrites files), so each
     // spec gets fs.watch *plus* a continuous mtime-polled re-read. The
@@ -1019,6 +972,9 @@ export async function runAgent(
     const watcherCtx = {
       setFrameworkContext: (key: string, value: unknown) =>
         getUI().setFrameworkContext(key, value),
+      setEventPlan: (
+        events: ReadonlyArray<{ name: string; description: string }>,
+      ) => getUI().setEventPlan([...events]),
     };
     for (const spec of config?.fileWatchers ?? []) {
       const watchPath = path.join(agentConfig.workingDirectory, spec.filename);
@@ -1257,8 +1213,6 @@ export async function runAgent(
     debug('Full error:', error);
     throw error;
   } finally {
-    eventPlanWatcher?.close();
-    if (eventPlanInterval) clearInterval(eventPlanInterval);
     for (const w of workflowWatchers) w.close();
     for (const i of workflowIntervals) clearInterval(i);
 

@@ -115,16 +115,21 @@ export interface WorkflowRun {
   fileWatchers?: ReadonlyArray<WorkflowFileWatcher>;
 }
 
+/** Setters exposed to a WorkflowFileWatcher's onUpdate callback. */
+export interface WorkflowFileWatcherContext {
+  setFrameworkContext: (key: string, value: unknown) => void;
+  setEventPlan: (
+    events: ReadonlyArray<{ name: string; description: string }>,
+  ) => void;
+}
+
 /** A file the runner watches and pipes JSON updates from. */
 export interface WorkflowFileWatcher {
   /** Filename relative to installDir, e.g. ".posthog-audit-checks.json". */
   filename: string;
   /** Called whenever the file becomes valid JSON. `parsed` is the raw
    *  JSON.parse result — the watcher should validate/coerce. */
-  onUpdate: (
-    parsed: unknown,
-    ctx: { setFrameworkContext: (key: string, value: unknown) => void },
-  ) => void;
+  onUpdate: (parsed: unknown, ctx: WorkflowFileWatcherContext) => void;
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────

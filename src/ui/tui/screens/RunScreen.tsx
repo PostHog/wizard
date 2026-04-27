@@ -1,12 +1,12 @@
 /**
- * RunScreen — Tabbed observational view of the agent run.
+ * RunScreen — Default observational view of the agent run.
  *
- * The tab list is workflow-driven via `getWorkflowRunScreenTabs`. Each entry
- * is either a built-in tab id (resolved by `builtInTab` below) or a full
- * workflow-contributed tab spec. No prompts — the agent runs headlessly.
+ * Tabs: Status (LearnCard + ProgressList), Event plan (when present),
+ * Tail logs, HN. Workflows that need a different tab list ship their own
+ * screen component (see audit/AuditRunScreen.tsx).
  */
 
-import { useSyncExternalStore, type ReactNode } from 'react';
+import { useSyncExternalStore } from 'react';
 import { Box } from 'ink';
 import type { WizardStore } from '../store.js';
 import {
@@ -22,7 +22,6 @@ import { ADDITIONAL_FEATURE_LABELS } from '../../../lib/wizard-session.js';
 import { LearnCard } from '../components/LearnCard.js';
 import { TipsCard } from '../components/TipsCard.js';
 import { useStdoutDimensions } from '../hooks/useStdoutDimensions.js';
-import { getWorkflowRunScreenTabs } from '../../../lib/workflows/workflow-renderers.js';
 
 const LOG_FILE = '/tmp/posthog-wizard.log';
 
@@ -78,42 +77,24 @@ export const RunScreen = ({ store }: RunScreenProps) => {
       <SplitView left={leftPane} right={progressList} />
     );
 
-  const builtInTab = (id: 'status' | 'event-plan' | 'logs' | 'hn') => {
-    switch (id) {
-      case 'status':
-        return { id: 'status', label: 'Status', component: statusComponent };
-      case 'event-plan':
-        return store.eventPlan.length > 0
-          ? {
-              id: 'events',
-              label: 'Event plan',
-              component: <EventPlanViewer events={store.eventPlan} />,
-            }
-          : null;
-      case 'logs':
-        return {
-          id: 'logs',
-          label: 'Tail logs',
-          component: <LogViewer filePath={LOG_FILE} />,
-        };
-      case 'hn':
-        return { id: 'hn', label: 'HN', component: <HNViewer /> };
-    }
-  };
-
-  const tabs: Array<{ id: string; label: string; component: ReactNode }> = [];
-  for (const spec of getWorkflowRunScreenTabs(store.router.activeFlow)) {
-    if (typeof spec === 'string') {
-      const built = builtInTab(spec);
-      if (built) tabs.push(built);
-    } else if (spec.show(store.session)) {
-      tabs.push({
-        id: spec.id,
-        label: spec.label,
-        component: spec.render({ session: store.session, tasks: store.tasks }),
-      });
-    }
-  }
+  const tabs = [
+    { id: 'status', label: 'Status', component: statusComponent },
+    ...(store.eventPlan.length > 0
+      ? [
+          {
+            id: 'events',
+            label: 'Event plan',
+            component: <EventPlanViewer events={store.eventPlan} />,
+          },
+        ]
+      : []),
+    {
+      id: 'logs',
+      label: 'Tail logs',
+      component: <LogViewer filePath={LOG_FILE} />,
+    },
+    { id: 'hn', label: 'HN', component: <HNViewer /> },
+  ];
 
   return (
     <TabContainer

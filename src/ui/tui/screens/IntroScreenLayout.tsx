@@ -28,12 +28,8 @@ interface IntroScreenLayoutProps {
   /** Title text after the colored blocks, e.g. "PostHog Wizard 🦔" */
   title?: string;
 
-  /** Show the subtitle copy ("We'll use AI…" / ".env*…"). Default true. */
+  /** Show the default "We'll use AI…" / ".env*…" subtitle. Default true. */
   showSubtitle?: boolean;
-
-  /** Override the default subtitle content. When provided, replaces the
-   *  default "We'll use AI…" / ".env*…" copy. Ignored if showSubtitle is false. */
-  subtitle?: ReactNode;
 
   /** Free-form content below the title (copy, spinners, pickers, notices) */
   body?: ReactNode;
@@ -75,7 +71,6 @@ export const IntroScreenLayout = ({
   installDir,
   title = 'PostHog Wizard 🦔',
   showSubtitle = true,
-  subtitle,
   body,
   showDetection = true,
   detectionRows,
@@ -124,16 +119,12 @@ export const IntroScreenLayout = ({
 
           {showSubtitle && (
             <Box flexDirection="column" alignItems="center" marginTop={1}>
-              {subtitle ?? (
-                <>
-                  <Text dimColor>
-                    We'll use AI to analyze your project and complete work.
-                  </Text>
-                  <Text dimColor>
-                    .env* file contents will not leave your machine.
-                  </Text>
-                </>
-              )}
+              <Text dimColor>
+                We'll use AI to analyze your project and complete work.
+              </Text>
+              <Text dimColor>
+                .env* file contents will not leave your machine.
+              </Text>
             </Box>
           )}
 

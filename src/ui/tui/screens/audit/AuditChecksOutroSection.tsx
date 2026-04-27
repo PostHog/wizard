@@ -1,25 +1,12 @@
 import { Box, Text } from 'ink';
-import type { AuditCheck, AuditStatus } from './types.js';
+import {
+  AUDIT_SEVERITY_STYLE,
+  type AuditCheck,
+} from '../../../../lib/workflows/audit/types.js';
 
 interface AuditChecksOutroSectionProps {
   checks: AuditCheck[];
 }
-
-const SEVERITY_COLOR: Record<AuditStatus, string> = {
-  pending: 'gray',
-  pass: 'green',
-  error: 'red',
-  warning: 'yellow',
-  suggestion: 'cyan',
-};
-
-const SEVERITY_GLYPH: Record<AuditStatus, string> = {
-  pending: '◌',
-  pass: '✔',
-  error: '✘',
-  warning: '⚠',
-  suggestion: '•',
-};
 
 const MAX_VISIBLE = 6;
 
@@ -49,16 +36,17 @@ export const AuditChecksOutroSection = ({
         <Text color="green">{'•'} No issues found.</Text>
       ) : (
         <>
-          {visible.map((item) => (
-            <Box key={item.id}>
-              <Text color={SEVERITY_COLOR[item.status]}>
-                {SEVERITY_GLYPH[item.status]}{' '}
-              </Text>
-              <Text bold>{item.label}</Text>
-              <Text dimColor> ({item.area})</Text>
-              {item.file && <Text dimColor> {item.file}</Text>}
-            </Box>
-          ))}
+          {visible.map((item) => {
+            const style = AUDIT_SEVERITY_STYLE[item.status];
+            return (
+              <Box key={item.id}>
+                <Text color={style.color}>{style.glyph} </Text>
+                <Text bold>{item.label}</Text>
+                <Text dimColor> ({item.area})</Text>
+                {item.file && <Text dimColor> {item.file}</Text>}
+              </Box>
+            );
+          })}
           {hidden > 0 && (
             <Text dimColor>… and {hidden} more — see the report.</Text>
           )}

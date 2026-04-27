@@ -1,38 +1,8 @@
-import type { ReactNode } from 'react';
 import type { WizardSession, DiscoveredFeature } from '../wizard-session';
 import type { WizardReadinessResult } from '../health-checks/readiness.js';
 import type { WorkflowRun } from '../agent/agent-runner.js';
 import type { Integration } from '../constants.js';
 import type { FrameworkConfig } from '../framework-config.js';
-import type { TaskStatus } from '../../ui/wizard-ui.js';
-
-/**
- * Live state passed to a workflow's tab renderer on every update.
- * Includes the agent's TodoWrite list so tabs can surface "what the
- * agent is working on" without subscribing to the store directly.
- */
-export interface RunScreenTabContext {
-  session: WizardSession;
-  tasks: ReadonlyArray<{
-    label: string;
-    activeForm?: string;
-    status: TaskStatus;
-  }>;
-}
-
-/**
- * A tab a workflow contributes to the RunScreen. Defined in the workflow's
- * React-side `extras.tsx` and registered via `workflow-renderers.tsx`
- * (kept separate from `workflow-registry.ts` so unit tests of the metadata
- * registry don't need to transform `ink` / React). The tab is gated by
- * `show(session)` so the workflow can defer surfacing it until it has data.
- */
-export interface WorkflowRunScreenTab {
-  id: string;
-  label: string;
-  show: (session: WizardSession) => boolean;
-  render: (ctx: RunScreenTabContext) => ReactNode;
-}
 
 /**
  * A workflow step is the primary unit of the wizard's execution model.

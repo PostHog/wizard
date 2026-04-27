@@ -1,8 +1,8 @@
 /**
- * AgentSkillIntroScreen — Intro screen for the generic agent-skill workflow.
+ * AgentSkillIntroScreen — Default intro for generic agent-skill workflows.
  *
- * Main menu: one-liner body, detection rows, continue/cancel.
- * More info: skill name, download URL fetched from the skill menu.
+ * Workflows that need a different intro ship their own screen component
+ * (see audit/AuditIntroScreen.tsx).
  */
 
 import { Box, Text } from 'ink';
@@ -12,7 +12,6 @@ import type { WizardStore } from '../store.js';
 import { IntroScreenLayout } from './IntroScreenLayout.js';
 import { fetchSkillMenu, type SkillEntry } from '../../../lib/wizard-tools.js';
 import { getSkillsBaseUrl } from '../../../lib/constants.js';
-import { getWorkflowIntro } from '../../../lib/workflows/workflow-renderers.js';
 
 interface AgentSkillIntroScreenProps {
   store: WizardStore;
@@ -32,10 +31,7 @@ export const AgentSkillIntroScreen = ({
 
   const { session } = store;
   const skillId = session.skillId ?? 'unknown';
-  const isMainMenu = !showingMoreInfo;
-  const intro = getWorkflowIntro(store.router.activeFlow);
 
-  // Fetch skill entry from the menu when more-info is first opened
   useEffect(() => {
     if (!showingMoreInfo || skillEntry || fetchFailed) return;
 
@@ -54,8 +50,6 @@ export const AgentSkillIntroScreen = ({
       }
     });
   }, [showingMoreInfo, skillEntry, fetchFailed, skillId, session.localMcp]);
-
-  // ── Body ─────────────────────────────────────────────────────────────
 
   let body: ReactNode;
 
@@ -88,8 +82,6 @@ export const AgentSkillIntroScreen = ({
         </Box>
       </Box>
     );
-  } else if (intro?.body) {
-    body = intro.body;
   } else {
     body = (
       <Text>
@@ -102,55 +94,31 @@ export const AgentSkillIntroScreen = ({
     );
   }
 
-  // ── Menu ─────────────────────────────────────────────────────────────
-
-  const extraOptions = intro?.extraMenuOptions ?? [];
-
   const menuOptions = showingMoreInfo
     ? [{ label: 'Back', value: 'back' }]
     : [
         { label: 'Continue', value: 'continue' },
-        ...extraOptions,
         { label: 'More info', value: 'more-info' },
         { label: 'Cancel', value: 'cancel' },
       ];
 
-  const handleSelect = async (value: string) => {
-    if (value === 'cancel') {
-      process.exit(0);
-    } else if (value === 'more-info') {
-      setShowingMoreInfo(true);
-    } else if (value === 'back') {
-      setShowingMoreInfo(false);
-    } else if (
-      intro?.onExtraSelect &&
-      extraOptions.some((o) => o.value === value)
-    ) {
-      const consumed = await intro.onExtraSelect(value, session);
-      if (!consumed) store.completeSetup();
-    } else {
-      store.completeSetup();
-    }
+  const handleSelect = (value: string) => {
+    if (value === 'cancel') process.exit(0);
+    else if (value === 'more-info') setShowingMoreInfo(true);
+    else if (value === 'back') setShowingMoreInfo(false);
+    else store.completeSetup();
   };
-
-  // ── Render ───────────────────────────────────────────────────────────
-
-  const showSubtitle = !showingMoreInfo && !intro?.hideSubtitle;
 
   return (
     <IntroScreenLayout
       installDir={session.installDir}
-      title={intro?.title}
-      showSubtitle={showSubtitle}
-      subtitle={intro?.subtitle}
+      showSubtitle={!showingMoreInfo}
       body={body}
-      showDetection={isMainMenu}
+      showDetection={!showingMoreInfo}
       workflowLabel={session.workflowLabel}
       skillId={session.skillId}
       menuOptions={menuOptions}
-      onSelect={(value) => {
-        void handleSelect(value);
-      }}
+      onSelect={handleSelect}
     />
   );
 };

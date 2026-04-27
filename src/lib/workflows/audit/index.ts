@@ -1,8 +1,12 @@
 import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { createSkillWorkflow } from '../agent-skill/index.js';
+import {
+  AGENT_SKILL_STEPS,
+  createSkillWorkflow,
+} from '../agent-skill/index.js';
 import { OutroKind } from '../../wizard-session.js';
+import type { Workflow, WorkflowConfig } from '../workflow-step.js';
 import { AUDIT_ABORT_CASES } from './detect.js';
 import {
   AUDIT_CHECKS_FILE,
@@ -35,7 +39,21 @@ function openReport(absolutePath: string): void {
   }
 }
 
-export const auditConfig = createSkillWorkflow({
+/** Audit reuses the agent-skill step pipeline but swaps in audit-specific
+ *  screens for intro / run / outro. The screen names are registered in
+ *  `screen-registry.tsx`. */
+const AUDIT_SCREEN_BY_STEP: Record<string, string> = {
+  intro: 'audit-intro',
+  run: 'audit-run',
+  outro: 'audit-outro',
+};
+
+const auditSteps: Workflow = AGENT_SKILL_STEPS.map((step) => {
+  const override = AUDIT_SCREEN_BY_STEP[step.id];
+  return override ? { ...step, screen: override } : step;
+});
+
+const baseConfig = createSkillWorkflow({
   skillId: 'audit',
   command: 'audit',
   flowKey: 'audit',
@@ -74,3 +92,5 @@ export const auditConfig = createSkillWorkflow({
   ],
   abortCases: AUDIT_ABORT_CASES,
 });
+
+export const auditConfig: WorkflowConfig = { ...baseConfig, steps: auditSteps };
