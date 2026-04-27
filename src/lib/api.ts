@@ -30,7 +30,7 @@ export const ApiProjectSchema = z.object({
 export type ApiUser = z.infer<typeof ApiUserSchema>;
 export type ApiProject = z.infer<typeof ApiProjectSchema>;
 
-class ApiError extends Error {
+export class ApiError extends Error {
   constructor(
     message: string,
     public readonly statusCode?: number,
@@ -89,7 +89,7 @@ export async function fetchProjectData(
   }
 }
 
-function handleApiError(error: unknown, operation: string): ApiError {
+export function handleApiError(error: unknown, operation: string): ApiError {
   if (axios.isAxiosError(error)) {
     const axiosError = error as AxiosError<{ detail?: string }>;
     const status = axiosError.response?.status;

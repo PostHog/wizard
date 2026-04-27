@@ -25,6 +25,7 @@ import { LoggingUI } from './src/ui/logging-ui';
 import { getSubcommandWorkflows } from './src/lib/workflows/workflow-registry';
 import type { WorkflowConfig } from './src/lib/workflows/workflow-step';
 import type { WizardSession } from './src/lib/wizard-session';
+import { POSTHOG_DOCS_URL } from './src/lib/constants';
 import { runtimeEnv } from '@env';
 
 // Test mock server — only loaded when NODE_ENV is 'test'.
@@ -295,7 +296,7 @@ const cli = yargs(hideBin(process.argv))
             integrationLabel: skillId,
             successMessage: `${skillId} completed!`,
             reportFile: `posthog-${skillId}-report.md`,
-            docsUrl: 'https://posthog.com/docs',
+            docsUrl: POSTHOG_DOCS_URL,
             spinnerMessage: `Running ${skillId}...`,
             estimatedDurationMinutes: 5,
           });
@@ -495,17 +496,43 @@ function runWizard(
       await tui.store.runReadyHooks();
       await tui.store.getGate('intro');
 
-      const { runAgent } = await import('./src/lib/agent/agent-runner.js');
-      await runAgent(config, tui.store.session);
+      const skipAgent = config.run == null;
+
+      if (skipAgent) {
+        const { getOrAskForProjectData } = await import(
+          './src/utils/setup-utils.js'
+        );
+        const { projectApiKey, host, accessToken, projectId } =
+          await getOrAskForProjectData({
+            signup: session.signup,
+            ci: session.ci,
+            apiKey: session.apiKey,
+            projectId: session.projectId,
+          });
+        tui.store.setCredentials({
+          accessToken,
+          projectApiKey,
+          host,
+          projectId,
+        });
+      } else {
+        const { runAgent } = await import('./src/lib/agent/agent-runner.js');
+        await runAgent(config, tui.store.session);
+      }
+
+      const isDone = (): boolean =>
+        skipAgent
+          ? tui.store.session.outroDismissed
+          : tui.store.session.skillsComplete;
 
       await new Promise<void>((resolve) => {
         const unsub = tui.store.subscribe(() => {
-          if (tui.store.session.skillsComplete) {
+          if (isDone()) {
             unsub();
             resolve();
           }
         });
-        if (tui.store.session.skillsComplete) {
+        if (isDone()) {
           unsub();
           resolve();
         }
@@ -620,7 +647,7 @@ function runWizardCI(
         if (detectError) {
           await wizardAbort({
             message: `Prerequisites not met: ${detectError.kind}\n\nSee ${
-              runDef?.docsUrl ?? 'https://posthog.com/docs'
+              runDef?.docsUrl ?? POSTHOG_DOCS_URL
             }`,
             error: new WizardError(`${config.flowKey} prerequisites failed`, {
               integration: config.flowKey,
@@ -645,7 +672,7 @@ function runWizardCI(
       const docsUrl =
         session.frameworkConfig?.metadata.docsUrl ??
         runDef?.docsUrl ??
-        'https://posthog.com/docs';
+        POSTHOG_DOCS_URL;
       await wizardAbort({
         message: `Something went wrong: ${errorMessage}\n\nYou can read the documentation at ${docsUrl} to set up manually.${debugInfo}`,
         error: error as Error,

@@ -57,6 +57,7 @@ export const DEFAULT_HOST_URL = IS_DEV
   : 'https://us.i.posthog.com';
 export const ISSUES_URL = 'https://github.com/posthog/wizard/issues';
 export const CONTEXT_MILL_URL = 'https://github.com/PostHog/context-mill';
+export const POSTHOG_DOCS_URL = 'https://posthog.com/docs';
 
 /** Remote base URL for fetching the skill menu + downloading skills. */
 export const REMOTE_SKILLS_BASE_URL =
@@ -96,6 +97,8 @@ export const WIZARD_INTERACTION_EVENT_NAME = 'wizard interaction';
 export const WIZARD_REMARK_EVENT_NAME = 'wizard remark';
 /** Feature flag key whose value selects a variant from WIZARD_VARIANTS. */
 export const WIZARD_VARIANT_FLAG_KEY = 'wizard-variant';
+/** Feature flag key that gates the intro-screen "Tools" menu. */
+export const WIZARD_TOOLS_MENU_FLAG_KEY = 'wizard-tools-menu';
 /** Variant key -> metadata for wizard run (VARIANT flag selects which entry to use). */
 export const WIZARD_VARIANTS: Record<string, Record<string, string>> = {
   base: { VARIANT: 'base' },
