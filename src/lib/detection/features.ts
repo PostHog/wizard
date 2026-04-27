@@ -60,28 +60,28 @@ function discoverNodeFeatures(
   installDir: string,
   features: DiscoveredFeature[],
 ): void {
-  const text = safeRead(installDir, 'package.json');
-  if (!text) return;
+  const packageJsonText = safeRead(installDir, 'package.json');
+  if (!packageJsonText) return;
 
-  let pkg: {
+  let packageJson: {
     dependencies?: Record<string, string>;
     devDependencies?: Record<string, string>;
   };
   try {
-    pkg = JSON.parse(text);
+    packageJson = JSON.parse(packageJsonText);
   } catch {
     return;
   }
 
   const depNames = Object.keys({
-    ...pkg.dependencies,
-    ...pkg.devDependencies,
+    ...packageJson.dependencies,
+    ...packageJson.devDependencies,
   });
 
-  if (depNames.some((d) => STRIPE_PACKAGES.includes(d))) {
+  if (depNames.some((depName) => STRIPE_PACKAGES.includes(depName))) {
     features.push(DiscoveredFeature.Stripe);
   }
-  if (depNames.some((d) => LLM_PACKAGES.includes(d))) {
+  if (depNames.some((depName) => LLM_PACKAGES.includes(depName))) {
     features.push(DiscoveredFeature.LLM);
   }
 }
@@ -92,18 +92,18 @@ function discoverPythonFeatures(
 ): void {
   if (features.includes(DiscoveredFeature.LLM)) return;
 
-  const deps: string[] = [];
+  const depNames: string[] = [];
 
-  const req = safeRead(installDir, 'requirements.txt');
-  if (req) deps.push(...parseRequirementsTxt(req));
+  const requirementsTxt = safeRead(installDir, 'requirements.txt');
+  if (requirementsTxt) depNames.push(...parseRequirementsTxt(requirementsTxt));
 
-  const pyproj = safeRead(installDir, 'pyproject.toml');
-  if (pyproj) deps.push(...parsePyprojectToml(pyproj));
+  const pyprojectToml = safeRead(installDir, 'pyproject.toml');
+  if (pyprojectToml) depNames.push(...parsePyprojectToml(pyprojectToml));
 
   const pipfile = safeRead(installDir, 'Pipfile');
-  if (pipfile) deps.push(...parsePipfile(pipfile));
+  if (pipfile) depNames.push(...parsePipfile(pipfile));
 
-  if (deps.some((d) => PYTHON_LLM_PACKAGES.includes(d))) {
+  if (depNames.some((depName) => PYTHON_LLM_PACKAGES.includes(depName))) {
     features.push(DiscoveredFeature.LLM);
   }
 }
@@ -123,59 +123,64 @@ function normalizePyName(name: string): string {
 export function parseRequirementsTxt(content: string): string[] {
   return content
     .split('\n')
-    .map((l) => l.trim())
-    .filter((l) => l && !l.startsWith('#') && !l.startsWith('-'))
-    .map((l) => l.replace(/\[[^\]]*\]/, ''))
-    .map((l) => l.split(/[<>=!~;\s]/)[0])
+    .map((line) => line.trim())
+    .filter((line) => line && !line.startsWith('#') && !line.startsWith('-'))
+    .map((line) => line.replace(/\[[^\]]*\]/, ''))
+    .map((line) => line.split(/[<>=!~;\s]/)[0])
     .filter(Boolean)
     .map(normalizePyName);
 }
 
 // Pragmatic, not a full TOML parser — only the dep shapes we care about.
 export function parsePyprojectToml(content: string): string[] {
-  const deps: string[] = [];
+  const depNames: string[] = [];
 
-  for (const m of content.matchAll(/dependencies\s*=\s*\[([^\]]*)\]/g)) {
-    for (const s of m[1].matchAll(/["']([^"']+)["']/g)) {
-      const raw = s[1].replace(/\[[^\]]*\]/, '');
-      const name = raw.split(/[<>=!~;\s]/)[0];
-      if (name) deps.push(normalizePyName(name));
+  for (const arrayMatch of content.matchAll(
+    /dependencies\s*=\s*\[([^\]]*)\]/g,
+  )) {
+    const arrayBody = arrayMatch[1];
+    for (const quotedMatch of arrayBody.matchAll(/["']([^"']+)["']/g)) {
+      const depSpec = quotedMatch[1];
+      const name = depSpec.replace(/\[[^\]]*\]/, '').split(/[<>=!~;\s]/)[0];
+      if (name) depNames.push(normalizePyName(name));
     }
   }
 
-  const poetryRe =
+  const poetrySectionRe =
     /\[tool\.poetry\.(?:dev-dependencies|dependencies|group\.[^.\]]+\.dependencies)\]([\s\S]*?)(?=\n\[|$)/g;
-  for (const m of content.matchAll(poetryRe)) {
-    deps.push(...extractTomlSectionKeys(m[1], { skip: ['python'] }));
+  for (const sectionMatch of content.matchAll(poetrySectionRe)) {
+    const sectionBody = sectionMatch[1];
+    depNames.push(...extractTomlSectionKeys(sectionBody, { skip: ['python'] }));
   }
 
-  return deps;
+  return depNames;
 }
 
 export function parsePipfile(content: string): string[] {
-  const deps: string[] = [];
-  const re = /\[(packages|dev-packages)\]([\s\S]*?)(?=\n\[|$)/g;
-  for (const m of content.matchAll(re)) {
-    deps.push(...extractTomlSectionKeys(m[2]));
+  const depNames: string[] = [];
+  const sectionRe = /\[(packages|dev-packages)\]([\s\S]*?)(?=\n\[|$)/g;
+  for (const sectionMatch of content.matchAll(sectionRe)) {
+    const sectionBody = sectionMatch[2];
+    depNames.push(...extractTomlSectionKeys(sectionBody));
   }
-  return deps;
+  return depNames;
 }
 
 function extractTomlSectionKeys(
-  body: string,
+  sectionBody: string,
   opts: { skip?: string[] } = {},
 ): string[] {
-  const skip = new Set(opts.skip ?? []);
-  const out: string[] = [];
-  for (const line of body.split('\n')) {
+  const skipNames = new Set(opts.skip ?? []);
+  const depNames: string[] = [];
+  for (const line of sectionBody.split('\n')) {
     const trimmed = line.trim();
     if (!trimmed || trimmed.startsWith('#')) continue;
-    const eq = trimmed.indexOf('=');
-    if (eq <= 0) continue;
-    const name = trimmed.slice(0, eq).trim();
+    const equalsIndex = trimmed.indexOf('=');
+    if (equalsIndex <= 0) continue;
+    const name = trimmed.slice(0, equalsIndex).trim();
     if (!/^[a-zA-Z0-9._-]+$/.test(name)) continue;
-    if (skip.has(name.toLowerCase())) continue;
-    out.push(normalizePyName(name));
+    if (skipNames.has(name.toLowerCase())) continue;
+    depNames.push(normalizePyName(name));
   }
-  return out;
+  return depNames;
 }
