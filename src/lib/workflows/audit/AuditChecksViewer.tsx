@@ -1,4 +1,5 @@
 import { Box, Text } from 'ink';
+import { Spinner } from '@inkjs/ui';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useStdoutDimensions } from '../../../ui/tui/hooks/useStdoutDimensions.js';
 import { MAX_WIDTH } from '../../../ui/tui/primitives/ScreenContainer.js';
@@ -8,9 +9,30 @@ import {
 } from '../../../ui/tui/hooks/useKeyBindings.js';
 import type { AuditCheck, AuditStatus } from './types.js';
 
+type AuditTaskStatus = 'pending' | 'in_progress' | 'completed';
+
+interface AuditTaskItem {
+  label: string;
+  activeForm?: string;
+  status: AuditTaskStatus;
+}
+
 interface AuditChecksViewerProps {
   checks: AuditCheck[];
+  tasks: ReadonlyArray<AuditTaskItem>;
 }
+
+const Legend = () => (
+  <Text>
+    <Text color="green">✔ pass</Text>
+    <Text dimColor>{'   ·   '}</Text>
+    <Text color="red">✘ error</Text>
+    <Text dimColor>{'   ·   '}</Text>
+    <Text color="yellow">⚠ warning</Text>
+    <Text dimColor>{'   ·   '}</Text>
+    <Text color="cyan">• suggestion</Text>
+  </Text>
+);
 
 interface SeverityStyle {
   glyph: string;
@@ -28,8 +50,11 @@ const STYLE: Record<AuditStatus, SeverityStyle> = {
 /** Terminal rows used by chrome outside this component
  *  (TitleBar, spacer, screen padding, status bar, tab bar). */
 const CHROME_ROWS = 10;
-/** Rows used by this component's own header / footer (title + blank + divider + blank + columns + blank + scroll markers). */
-const VIEWER_CHROME = 8;
+/** Rows used by this component's own header / footer
+ *  (title, divider, column headers, scroll-up marker, scroll-down marker,
+ *  legend, "more checks…" tagline). The "Working on…" banner adds one
+ *  more row when present. */
+const VIEWER_CHROME_BASE = 7;
 
 const COL_AREA_WIDTH = 18;
 const COL_LABEL_MIN = 28;
@@ -60,20 +85,27 @@ function counts(checks: AuditCheck[]): Record<AuditStatus, number> {
   return out;
 }
 
-export const AuditChecksViewer = ({ checks }: AuditChecksViewerProps) => {
-  const [rawCols, rows] = useStdoutDimensions();
+export const AuditChecksViewer = ({
+  checks,
+  tasks,
+}: AuditChecksViewerProps) => {
+  // First in-progress task, else first pending — drives the "Working on…" banner.
+  const activeTask =
+    tasks.find((t) => t.status === 'in_progress') ??
+    tasks.find((t) => t.status === 'pending');
+  const [rawCols, termRows] = useStdoutDimensions();
   const cols = getViewerWidth(rawCols);
-  const visibleHeight = Math.max(5, rows - CHROME_ROWS - VIEWER_CHROME);
+  const viewerChrome = VIEWER_CHROME_BASE + (activeTask ? 1 : 0);
+  const visibleHeight = Math.max(5, termRows - CHROME_ROWS - viewerChrome);
 
-  // Sort: pending last (so completed items stay grouped at top), then
-  // by area to keep phases visually adjacent.
+  // Pending at the top, resolved below by severity, then by area.
   const sorted = useMemo(() => {
     const order: Record<AuditStatus, number> = {
-      error: 0,
-      warning: 1,
-      suggestion: 2,
-      pass: 3,
-      pending: 4,
+      pending: 0,
+      error: 1,
+      warning: 2,
+      suggestion: 3,
+      pass: 4,
     };
     return [...checks].sort((a, b) => {
       const da = order[a.status] - order[b.status];
@@ -86,13 +118,41 @@ export const AuditChecksViewer = ({ checks }: AuditChecksViewerProps) => {
   const c = counts(checks);
 
   const [offset, setOffset] = useState(0);
+  const [expanded, setExpanded] = useState(false);
+  // Sticky-to-top: the viewport tracks offset 0 until the user scrolls down.
   const stickyRef = useRef(true);
 
-  const maxOffset = Math.max(0, sorted.length - visibleHeight);
+  type RenderRow =
+    | { kind: 'item'; item: AuditCheck }
+    | { kind: 'detail'; item: AuditCheck }
+    | { kind: 'separator' }
+    | { kind: 'section'; label: 'Up next' | 'Complete' };
+  const rows = useMemo<RenderRow[]>(() => {
+    const pending = sorted.filter((it) => it.status === 'pending');
+    const done = sorted.filter((it) => it.status !== 'pending');
+    const out: RenderRow[] = [];
+    const pushItem = (item: AuditCheck) => {
+      out.push({ kind: 'item', item });
+      if (expanded && item.details) out.push({ kind: 'detail', item });
+    };
+    out.push({ kind: 'section', label: 'Up next' });
+    for (const it of pending) pushItem(it);
+    out.push({ kind: 'separator' }, { kind: 'separator' });
+    out.push({ kind: 'section', label: 'Complete' });
+    for (const it of done) pushItem(it);
+    return out;
+  }, [sorted, expanded]);
+
+  const hasExpandable = useMemo(
+    () => sorted.some((c) => Boolean(c.details)),
+    [sorted],
+  );
+
+  const maxOffset = Math.max(0, rows.length - visibleHeight);
 
   useEffect(() => {
     if (stickyRef.current) {
-      setOffset(maxOffset);
+      setOffset(0);
     } else if (offset > maxOffset) {
       setOffset(maxOffset);
     }
@@ -105,15 +165,15 @@ export const AuditChecksViewer = ({ checks }: AuditChecksViewerProps) => {
       action: 'scroll',
       handler: (_input, key) => {
         if (key.upArrow) {
-          stickyRef.current = false;
-          setOffset((prev) => Math.max(0, prev - 1));
-        }
-        if (key.downArrow) {
           setOffset((prev) => {
-            const next = Math.min(maxOffset, prev + 1);
-            stickyRef.current = next >= maxOffset;
+            const next = Math.max(0, prev - 1);
+            stickyRef.current = next === 0;
             return next;
           });
+        }
+        if (key.downArrow) {
+          stickyRef.current = false;
+          setOffset((prev) => Math.min(maxOffset, prev + 1));
         }
       },
     },
@@ -122,8 +182,11 @@ export const AuditChecksViewer = ({ checks }: AuditChecksViewerProps) => {
       label: 'u',
       action: 'page up',
       handler: () => {
-        stickyRef.current = false;
-        setOffset((prev) => Math.max(0, prev - visibleHeight));
+        setOffset((prev) => {
+          const next = Math.max(0, prev - visibleHeight);
+          stickyRef.current = next === 0;
+          return next;
+        });
       },
     },
     {
@@ -131,47 +194,72 @@ export const AuditChecksViewer = ({ checks }: AuditChecksViewerProps) => {
       label: 'd',
       action: 'page down',
       handler: () => {
-        setOffset((prev) => {
-          const next = Math.min(maxOffset, prev + visibleHeight);
-          stickyRef.current = next >= maxOffset;
-          return next;
-        });
+        stickyRef.current = false;
+        setOffset((prev) => Math.min(maxOffset, prev + visibleHeight));
       },
     },
+    ...(hasExpandable
+      ? [
+          {
+            match: 'e' as const,
+            label: 'e',
+            action: expanded ? 'collapse details' : 'expand details',
+            handler: () => setExpanded((prev) => !prev),
+          },
+        ]
+      : []),
   ]);
 
   const padding = 2;
   const statusWidth = 2;
-  const fixedExceptFile =
+  // FILE is fixed at its minimum width; CHECK flexes to consume the rest of
+  // the row so long labels stay readable instead of getting truncated.
+  const fileWidth = COL_FILE_MIN;
+  const fixedExceptLabel =
     padding +
     statusWidth +
     COL_GAP +
     COL_AREA_WIDTH +
     COL_GAP +
-    COL_LABEL_MIN +
+    fileWidth +
     COL_GAP;
-  const fileWidth = Math.max(COL_FILE_MIN, cols - fixedExceptFile - COL_GAP);
+  const labelWidth = Math.max(COL_LABEL_MIN, cols - fixedExceptLabel - COL_GAP);
 
   if (total === 0) {
+    const emptyBlockWidth = Math.min(64, Math.max(40, cols - 4));
     return (
       <Box
         flexDirection="column"
         paddingX={1}
-        height={visibleHeight + VIEWER_CHROME}
+        height={visibleHeight + viewerChrome}
+        justifyContent="center"
+        alignItems="center"
       >
-        <Text bold>Audit checks</Text>
-        <Box height={1} />
-        <Text dimColor>
-          Waiting for the agent to record checks. Items appear here as each
-          phase progresses (Installation → Identification → Capture).
-        </Text>
+        <Box flexDirection="column" width={emptyBlockWidth}>
+          <Box gap={1}>
+            <Spinner />
+            <Text bold>Preparing audit</Text>
+          </Box>
+          <Box height={2} />
+          <Text dimColor>The agent is gathering checks for this project.</Text>
+          <Box height={1} />
+          <Text dimColor>
+            Each check appears here the moment it's queued, then resolves to:
+          </Text>
+          <Box height={1} />
+          <Legend />
+          <Box height={2} />
+          <Text dimColor>Your integration will be checked in this order:</Text>
+          <Box height={1} />
+          <Text dimColor>Installation → Identification → Capture → Report</Text>
+        </Box>
       </Box>
     );
   }
 
-  const visible = sorted.slice(offset, offset + visibleHeight);
+  const visibleRows = rows.slice(offset, offset + visibleHeight);
   const hiddenAbove = offset;
-  const hiddenBelow = Math.max(0, sorted.length - offset - visibleHeight);
+  const hiddenBelow = Math.max(0, rows.length - offset - visibleHeight);
 
   const dividerWidth = Math.max(20, cols - padding);
   const divider = '─'.repeat(dividerWidth);
@@ -180,10 +268,19 @@ export const AuditChecksViewer = ({ checks }: AuditChecksViewerProps) => {
     <Box
       flexDirection="column"
       paddingX={1}
-      height={visibleHeight + VIEWER_CHROME}
+      height={visibleHeight + viewerChrome}
     >
+      {activeTask && (
+        <Box gap={1}>
+          <Spinner />
+          <Text>
+            <Text dimColor>Working on </Text>
+            <Text bold>{activeTask.activeForm ?? activeTask.label}</Text>
+          </Text>
+        </Box>
+      )}
       <Text bold>
-        Audit checks{' '}
+        Up next{' '}
         <Text dimColor>
           ({total} total · {c.pending} pending · {c.error} errors · {c.warning}{' '}
           warnings · {c.suggestion} suggestions · {c.pass} passes)
@@ -201,7 +298,7 @@ export const AuditChecksViewer = ({ checks }: AuditChecksViewerProps) => {
             AREA
           </Text>
         </Box>
-        <Box width={COL_LABEL_MIN + COL_GAP}>
+        <Box width={labelWidth + COL_GAP}>
           <Text dimColor bold>
             CHECK
           </Text>
@@ -214,22 +311,55 @@ export const AuditChecksViewer = ({ checks }: AuditChecksViewerProps) => {
       </Box>
       <Text dimColor>{hiddenAbove > 0 ? `↑ ${hiddenAbove} more` : ' '}</Text>
       <Box flexDirection="column" height={visibleHeight} overflow="hidden">
-        {visible.map((item, i) => {
+        {visibleRows.map((row, i) => {
+          const key = `${offset + i}`;
+          if (row.kind === 'separator') {
+            return (
+              <Box key={key} flexShrink={0}>
+                <Text> </Text>
+              </Box>
+            );
+          }
+          if (row.kind === 'section') {
+            return (
+              <Box key={`${key}-section-${row.label}`} flexShrink={0}>
+                <Text bold color="cyan">
+                  {row.label}
+                </Text>
+              </Box>
+            );
+          }
+          if (row.kind === 'detail') {
+            // Indent under the CHECK column; wrap continuation aligns with the prefix.
+            const indent = statusWidth + COL_GAP + COL_AREA_WIDTH + COL_GAP;
+            const detailWidth = Math.max(20, cols - indent - padding);
+            return (
+              <Box key={`${key}-detail-${row.item.id}`} flexShrink={0}>
+                <Box width={indent} />
+                <Box width={detailWidth}>
+                  <Text dimColor italic wrap="wrap">
+                    {`↳ ${row.item.details ?? ''}`}
+                  </Text>
+                </Box>
+              </Box>
+            );
+          }
+          const item = row.item;
           const style = STYLE[item.status];
           return (
-            <Box key={`${offset + i}-${item.id}`} flexShrink={0}>
+            <Box key={`${key}-${item.id}`} flexShrink={0}>
               <Box width={statusWidth + COL_GAP}>
                 <Text color={style.color}>{style.glyph}</Text>
               </Box>
               <Box width={COL_AREA_WIDTH + COL_GAP}>
                 <Text dimColor>{truncate(item.area, COL_AREA_WIDTH)}</Text>
               </Box>
-              <Box width={COL_LABEL_MIN + COL_GAP}>
+              <Box width={labelWidth + COL_GAP}>
                 <Text
                   bold={item.status !== 'pending'}
                   dimColor={item.status === 'pending'}
                 >
-                  {truncate(item.label, COL_LABEL_MIN)}
+                  {truncate(item.label, labelWidth)}
                 </Text>
               </Box>
               <Box width={fileWidth}>
@@ -240,6 +370,10 @@ export const AuditChecksViewer = ({ checks }: AuditChecksViewerProps) => {
         })}
       </Box>
       <Text dimColor>{hiddenBelow > 0 ? `↓ ${hiddenBelow} more` : ' '}</Text>
+      <Legend />
+      <Text dimColor italic>
+        more checks will be added as your project is explored
+      </Text>
     </Box>
   );
 };

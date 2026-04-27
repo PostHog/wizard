@@ -12,6 +12,7 @@ import type { WizardStore } from '../store.js';
 import { IntroScreenLayout } from './IntroScreenLayout.js';
 import { fetchSkillMenu, type SkillEntry } from '../../../lib/wizard-tools.js';
 import { getSkillsBaseUrl } from '../../../lib/constants.js';
+import { getWorkflowIntro } from '../../../lib/workflows/workflow-renderers.js';
 
 interface AgentSkillIntroScreenProps {
   store: WizardStore;
@@ -32,6 +33,7 @@ export const AgentSkillIntroScreen = ({
   const { session } = store;
   const skillId = session.skillId ?? 'unknown';
   const isMainMenu = !showingMoreInfo;
+  const intro = getWorkflowIntro(store.router.activeFlow);
 
   // Fetch skill entry from the menu when more-info is first opened
   useEffect(() => {
@@ -86,6 +88,8 @@ export const AgentSkillIntroScreen = ({
         </Box>
       </Box>
     );
+  } else if (intro?.body) {
+    body = intro.body;
   } else {
     body = (
       <Text>
@@ -100,21 +104,30 @@ export const AgentSkillIntroScreen = ({
 
   // ── Menu ─────────────────────────────────────────────────────────────
 
+  const extraOptions = intro?.extraMenuOptions ?? [];
+
   const menuOptions = showingMoreInfo
     ? [{ label: 'Back', value: 'back' }]
     : [
         { label: 'Continue', value: 'continue' },
+        ...extraOptions,
         { label: 'More info', value: 'more-info' },
         { label: 'Cancel', value: 'cancel' },
       ];
 
-  const handleSelect = (value: string) => {
+  const handleSelect = async (value: string) => {
     if (value === 'cancel') {
       process.exit(0);
     } else if (value === 'more-info') {
       setShowingMoreInfo(true);
     } else if (value === 'back') {
       setShowingMoreInfo(false);
+    } else if (
+      intro?.onExtraSelect &&
+      extraOptions.some((o) => o.value === value)
+    ) {
+      const consumed = await intro.onExtraSelect(value, session);
+      if (!consumed) store.completeSetup();
     } else {
       store.completeSetup();
     }
@@ -122,16 +135,22 @@ export const AgentSkillIntroScreen = ({
 
   // ── Render ───────────────────────────────────────────────────────────
 
+  const showSubtitle = !showingMoreInfo && !intro?.hideSubtitle;
+
   return (
     <IntroScreenLayout
       installDir={session.installDir}
-      showSubtitle={!showingMoreInfo}
+      title={intro?.title}
+      showSubtitle={showSubtitle}
+      subtitle={intro?.subtitle}
       body={body}
       showDetection={isMainMenu}
       workflowLabel={session.workflowLabel}
       skillId={session.skillId}
       menuOptions={menuOptions}
-      onSelect={handleSelect}
+      onSelect={(value) => {
+        void handleSelect(value);
+      }}
     />
   );
 };

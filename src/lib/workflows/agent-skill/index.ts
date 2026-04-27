@@ -20,7 +20,7 @@
  */
 
 import type { WorkflowConfig } from '../workflow-step.js';
-import type { WorkflowRun } from '../../agent/agent-runner.js';
+import type { WorkflowRun, AbortCase } from '../../agent/agent-runner.js';
 import { AGENT_SKILL_STEPS } from './steps.js';
 
 export interface SkillWorkflowOptions {
@@ -47,6 +47,8 @@ export interface SkillWorkflowOptions {
   buildOutroData?: WorkflowRun['buildOutroData'];
   /** Files the agent runner watches in parallel with the agent process. */
   fileWatchers?: WorkflowRun['fileWatchers'];
+  /** Known `[ABORT] <reason>` cases the skill can emit. */
+  abortCases?: AbortCase[];
 }
 
 export function createSkillWorkflow(
@@ -68,6 +70,7 @@ export function createSkillWorkflow(
       estimatedDurationMinutes: opts.estimatedDurationMinutes,
       buildOutroData: opts.buildOutroData,
       fileWatchers: opts.fileWatchers,
+      abortCases: opts.abortCases,
     },
     requires: opts.requires,
   };

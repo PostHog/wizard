@@ -3,6 +3,7 @@ import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { createSkillWorkflow } from '../agent-skill/index.js';
 import { OutroKind } from '../../wizard-session.js';
+import { AUDIT_ABORT_CASES } from './detect.js';
 import {
   AUDIT_CHECKS_FILE,
   AUDIT_CHECKS_KEY,
@@ -11,17 +12,26 @@ import {
 
 const REPORT_FILE = 'posthog-audit-report.md';
 
+const PLATFORM_OPEN_CMD: Record<NodeJS.Platform, string> = {
+  darwin: 'open',
+  win32: 'start',
+  aix: 'xdg-open',
+  android: 'xdg-open',
+  freebsd: 'xdg-open',
+  haiku: 'xdg-open',
+  linux: 'xdg-open',
+  openbsd: 'xdg-open',
+  sunos: 'xdg-open',
+  netbsd: 'xdg-open',
+  cygwin: 'xdg-open',
+};
+
 function openReport(absolutePath: string): void {
-  const cmd =
-    process.platform === 'darwin'
-      ? 'open'
-      : process.platform === 'win32'
-      ? 'start'
-      : 'xdg-open';
+  const cmd = PLATFORM_OPEN_CMD[process.platform] ?? 'xdg-open';
   try {
     spawn(cmd, [absolutePath], { detached: true, stdio: 'ignore' }).unref();
   } catch {
-    // best-effort; ignore failures
+    // Best-effort; user can still open the file manually.
   }
 }
 
@@ -62,4 +72,5 @@ export const auditConfig = createSkillWorkflow({
       },
     },
   ],
+  abortCases: AUDIT_ABORT_CASES,
 });

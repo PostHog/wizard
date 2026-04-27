@@ -1012,17 +1012,22 @@ export async function runAgent(
       }, 1000);
     }
 
-    // Workflow-declared file watchers — same fs.watch + polling fallback
-    // pattern as the legacy event-plan watcher above. Each spec pushes
-    // parsed JSON into frameworkContext via the UI bridge.
+    // Workflow-declared file watchers. fs.watch alone is unreliable for
+    // atomic-rename writes (which is how Claude rewrites files), so each
+    // spec gets fs.watch *plus* a continuous mtime-polled re-read. The
+    // poll catches missed events; the watch keeps latency low when it works.
     const watcherCtx = {
       setFrameworkContext: (key: string, value: unknown) =>
         getUI().setFrameworkContext(key, value),
     };
     for (const spec of config?.fileWatchers ?? []) {
       const watchPath = path.join(agentConfig.workingDirectory, spec.filename);
-      const read = () => {
+      let lastMtimeMs = 0;
+      const read = (force = false) => {
         try {
+          const stat = fs.statSync(watchPath);
+          if (!force && stat.mtimeMs === lastMtimeMs) return;
+          lastMtimeMs = stat.mtimeMs;
           const content = fs.readFileSync(watchPath, 'utf-8');
           const parsed = JSON.parse(content);
           spec.onUpdate(parsed, watcherCtx);
@@ -1030,23 +1035,28 @@ export async function runAgent(
           // File missing or not yet valid JSON
         }
       };
+      // Always poll — fs.watch misses atomic-rename writes on macOS.
+      const pollInterval = setInterval(() => read(), 5000);
+      workflowIntervals.push(pollInterval);
+      // Best-effort fs.watch for low-latency updates when it does fire.
       try {
-        workflowWatchers.push(fs.watch(watchPath, () => read()));
-        read();
+        workflowWatchers.push(fs.watch(watchPath, () => read(true)));
+        read(true);
       } catch {
-        const interval = setInterval(() => {
+        // File doesn't exist yet — the poll will pick it up and the next
+        // try-catch on watch attaches once the file appears.
+        const attachInterval = setInterval(() => {
           try {
             fs.accessSync(watchPath);
-            read();
-            clearInterval(interval);
-            const idx = workflowIntervals.indexOf(interval);
+            clearInterval(attachInterval);
+            const idx = workflowIntervals.indexOf(attachInterval);
             if (idx >= 0) workflowIntervals.splice(idx, 1);
-            workflowWatchers.push(fs.watch(watchPath, () => read()));
+            workflowWatchers.push(fs.watch(watchPath, () => read(true)));
           } catch {
             // Still waiting
           }
         }, 1000);
-        workflowIntervals.push(interval);
+        workflowIntervals.push(attachInterval);
       }
     }
 
