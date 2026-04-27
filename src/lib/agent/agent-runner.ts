@@ -110,6 +110,21 @@ export interface WorkflowRun {
     credentials: Credentials,
     cloudRegion: import('../../utils/types').CloudRegion | undefined,
   ) => WizardSession['outroData'];
+  /** Files the runner watches in parallel with the agent process so workflows
+   *  can ingest agent-emitted JSON into frameworkContext live. */
+  fileWatchers?: ReadonlyArray<WorkflowFileWatcher>;
+}
+
+/** A file the runner watches and pipes JSON updates from. */
+export interface WorkflowFileWatcher {
+  /** Filename relative to installDir, e.g. ".posthog-audit-checks.json". */
+  filename: string;
+  /** Called whenever the file becomes valid JSON. `parsed` is the raw
+   *  JSON.parse result — the watcher should validate/coerce. */
+  onUpdate: (
+    parsed: unknown,
+    ctx: { setFrameworkContext: (key: string, value: unknown) => void },
+  ) => void;
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────
@@ -318,6 +333,7 @@ export async function runWorkflow(
       errorMessage: config.errorMessage ?? `${config.integrationLabel} failed`,
       additionalFeatureQueue: config.additionalFeatureQueue ?? [],
       abortCases: config.abortCases,
+      fileWatchers: config.fileWatchers,
     },
     middleware,
   );

@@ -9,6 +9,7 @@ import { useSyncExternalStore } from 'react';
 import type { WizardStore } from '../store.js';
 import { OutroKind } from '../../../lib/wizard-session.js';
 import { Colors } from '../styles.js';
+import { getWorkflowOutroSection } from '../../../lib/workflows/workflow-renderers.js';
 
 interface OutroScreenProps {
   store: WizardStore;
@@ -25,6 +26,10 @@ export const OutroScreen = ({ store }: OutroScreenProps) => {
   });
 
   const outroData = store.session.outroData;
+  const workflowOutroNode = getWorkflowOutroSection(
+    store.router.activeFlow,
+    store.session,
+  );
 
   if (!outroData) {
     return (
@@ -41,6 +46,12 @@ export const OutroScreen = ({ store }: OutroScreenProps) => {
           <Text color="green" bold>
             {'\u2714'} {outroData.message || 'Done!'}
           </Text>
+
+          {outroData.body && (
+            <Box marginTop={1}>
+              <Text dimColor>{outroData.body}</Text>
+            </Box>
+          )}
 
           {outroData.reportFile && (
             <Box marginTop={1}>
@@ -76,6 +87,8 @@ export const OutroScreen = ({ store }: OutroScreenProps) => {
               ))}
             </Box>
           )}
+
+          {workflowOutroNode}
 
           {outroData.docsUrl && (
             <Box marginTop={1}>

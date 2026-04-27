@@ -25,6 +25,7 @@ import { ADDITIONAL_FEATURE_LABELS } from '../../../lib/wizard-session.js';
 import { LearnCard } from '../components/LearnCard.js';
 import { TipsCard } from '../components/TipsCard.js';
 import { useStdoutDimensions } from '../hooks/useStdoutDimensions.js';
+import { getWorkflowRunScreenTabs } from '../../../lib/workflows/workflow-renderers.js';
 
 const LOG_FILE = '/tmp/posthog-wizard.log';
 
@@ -80,6 +81,14 @@ export const RunScreen = ({ store }: RunScreenProps) => {
       <SplitView left={leftPane} right={progressList} />
     );
 
+  const workflowTabs = getWorkflowRunScreenTabs(store.router.activeFlow)
+    .filter((tab) => tab.show(store.session))
+    .map((tab) => ({
+      id: tab.id,
+      label: tab.label,
+      component: tab.render(store.session),
+    }));
+
   const tabs = [
     {
       id: 'status',
@@ -95,6 +104,7 @@ export const RunScreen = ({ store }: RunScreenProps) => {
           },
         ]
       : []),
+    ...workflowTabs,
     {
       id: 'logs',
       label: 'Tail logs',

@@ -734,6 +734,13 @@ export async function runAgent(
     errorMessage?: string;
     additionalFeatureQueue?: readonly AdditionalFeature[];
     abortCases?: readonly AbortCaseMatcher[];
+    fileWatchers?: ReadonlyArray<{
+      filename: string;
+      onUpdate: (
+        parsed: unknown,
+        ctx: { setFrameworkContext: (key: string, value: unknown) => void },
+      ) => void;
+    }>;
   },
   middleware?: {
     onMessage(message: any): void;
@@ -832,6 +839,11 @@ export async function runAgent(
   // Event plan file watcher — cleaned up in finally block
   let eventPlanWatcher: fs.FSWatcher | undefined;
   let eventPlanInterval: ReturnType<typeof setInterval> | undefined;
+
+  // Workflow-declared file watchers (e.g. .posthog-audit-checks.json).
+  // Cleaned up in finally block alongside the event plan watcher.
+  const workflowWatchers: fs.FSWatcher[] = [];
+  const workflowIntervals: Array<ReturnType<typeof setInterval>> = [];
 
   // Abort controller — lets us force-kill the SDK query when we detect an
   // [ABORT] signal in the agent's output. Also stashes the reason so the
@@ -998,6 +1010,44 @@ export async function runAgent(
           // Still waiting
         }
       }, 1000);
+    }
+
+    // Workflow-declared file watchers — same fs.watch + polling fallback
+    // pattern as the legacy event-plan watcher above. Each spec pushes
+    // parsed JSON into frameworkContext via the UI bridge.
+    const watcherCtx = {
+      setFrameworkContext: (key: string, value: unknown) =>
+        getUI().setFrameworkContext(key, value),
+    };
+    for (const spec of config?.fileWatchers ?? []) {
+      const watchPath = path.join(agentConfig.workingDirectory, spec.filename);
+      const read = () => {
+        try {
+          const content = fs.readFileSync(watchPath, 'utf-8');
+          const parsed = JSON.parse(content);
+          spec.onUpdate(parsed, watcherCtx);
+        } catch {
+          // File missing or not yet valid JSON
+        }
+      };
+      try {
+        workflowWatchers.push(fs.watch(watchPath, () => read()));
+        read();
+      } catch {
+        const interval = setInterval(() => {
+          try {
+            fs.accessSync(watchPath);
+            read();
+            clearInterval(interval);
+            const idx = workflowIntervals.indexOf(interval);
+            if (idx >= 0) workflowIntervals.splice(idx, 1);
+            workflowWatchers.push(fs.watch(watchPath, () => read()));
+          } catch {
+            // Still waiting
+          }
+        }, 1000);
+        workflowIntervals.push(interval);
+      }
     }
 
     // Process the async generator
@@ -1199,6 +1249,8 @@ export async function runAgent(
   } finally {
     eventPlanWatcher?.close();
     if (eventPlanInterval) clearInterval(eventPlanInterval);
+    for (const w of workflowWatchers) w.close();
+    for (const i of workflowIntervals) clearInterval(i);
 
     // Always capture run duration, even on abort/error, so we can alert on
     // long runs where the user gave up before completion.

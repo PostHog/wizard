@@ -103,4 +103,7 @@ export interface WizardUI {
 
   // ── Event plan from .posthog-events.json ────────────────────
   setEventPlan(events: Array<{ name: string; description: string }>): void;
+
+  // ── Generic frameworkContext setter for workflow file watchers ─────
+  setFrameworkContext(key: string, value: unknown): void;
 }

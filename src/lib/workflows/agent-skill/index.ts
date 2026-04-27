@@ -20,6 +20,7 @@
  */
 
 import type { WorkflowConfig } from '../workflow-step.js';
+import type { WorkflowRun } from '../../agent/agent-runner.js';
 import { AGENT_SKILL_STEPS } from './steps.js';
 
 export interface SkillWorkflowOptions {
@@ -42,6 +43,10 @@ export interface SkillWorkflowOptions {
   estimatedDurationMinutes: number;
   /** Other workflow flowKeys that must be satisfied first */
   requires?: string[];
+  /** Override the default outro. Receives the same args as WorkflowRun.buildOutroData. */
+  buildOutroData?: WorkflowRun['buildOutroData'];
+  /** Files the agent runner watches in parallel with the agent process. */
+  fileWatchers?: WorkflowRun['fileWatchers'];
 }
 
 export function createSkillWorkflow(
@@ -61,6 +66,8 @@ export function createSkillWorkflow(
       docsUrl: opts.docsUrl,
       spinnerMessage: opts.spinnerMessage,
       estimatedDurationMinutes: opts.estimatedDurationMinutes,
+      buildOutroData: opts.buildOutroData,
+      fileWatchers: opts.fileWatchers,
     },
     requires: opts.requires,
   };

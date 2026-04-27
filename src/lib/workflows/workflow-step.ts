@@ -1,8 +1,25 @@
+import type { ReactNode } from 'react';
 import type { WizardSession, DiscoveredFeature } from '../wizard-session';
 import type { WizardReadinessResult } from '../health-checks/readiness.js';
 import type { WorkflowRun } from '../agent/agent-runner.js';
 import type { Integration } from '../constants.js';
 import type { FrameworkConfig } from '../framework-config.js';
+
+/**
+ * A tab a workflow contributes to the RunScreen, beyond the built-in
+ * Status / Logs / HN tabs. The tab is gated by `show(session)` so the
+ * workflow only surfaces it once it has data to display.
+ *
+ * Defined in the workflow's React-side `extras.tsx` and registered via
+ * `workflow-renderers.tsx` (kept separate from `workflow-registry.ts`
+ * so unit tests can load the registry without dragging in `ink`/React).
+ */
+export interface WorkflowRunScreenTab {
+  id: string;
+  label: string;
+  show: (session: WizardSession) => boolean;
+  render: (session: WizardSession) => ReactNode;
+}
 
 /**
  * A workflow step is the primary unit of the wizard's execution model.
