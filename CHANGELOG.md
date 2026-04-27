@@ -1,5 +1,51 @@
 # Changelog
 
+## [2.10.4](https://github.com/PostHog/wizard/compare/v2.10.3...v2.10.4) (2026-04-24)
+
+
+### Bug Fixes
+
+* outro/exit clash ([#420](https://github.com/PostHog/wizard/issues/420)) ([17b2c82](https://github.com/PostHog/wizard/commit/17b2c8275a9c68bf6addd535b2f2841cade3e6a3))
+
+## [2.10.3](https://github.com/PostHog/wizard/compare/v2.10.2...v2.10.3) (2026-04-23)
+
+
+### Bug Fixes
+
+* pass email and region from CLI to session ([#418](https://github.com/PostHog/wizard/issues/418)) ([268c26f](https://github.com/PostHog/wizard/commit/268c26fbdb38528bf3f880497abf4a44e575a8e3))
+
+## [2.10.2](https://github.com/PostHog/wizard/compare/v2.10.1...v2.10.2) (2026-04-23)
+
+
+### Bug Fixes
+
+* add --email CLI flag for signup provisioning ([#414](https://github.com/PostHog/wizard/issues/414)) ([e324fbe](https://github.com/PostHog/wizard/commit/e324fbe199e01135241c16cb76c85ce014fecca9))
+
+## [2.10.1](https://github.com/PostHog/wizard/compare/v2.10.0...v2.10.1) (2026-04-23)
+
+
+### Bug Fixes
+
+* pass email and region to provisioning signup flow ([#403](https://github.com/PostHog/wizard/issues/403)) ([2f75cee](https://github.com/PostHog/wizard/commit/2f75cee1ba80bae07ae3795edc1c3087919264ca))
+* Remove hacky desktop connection, stand alone mcp install ([#408](https://github.com/PostHog/wizard/issues/408)) ([176b496](https://github.com/PostHog/wizard/commit/176b496e9860bebc28953638085e137738ba2362))
+
+## [2.10.0](https://github.com/PostHog/wizard/compare/v2.9.1...v2.10.0) (2026-04-22)
+
+
+### Features
+
+* hints for keys ([#404](https://github.com/PostHog/wizard/issues/404)) ([52a9968](https://github.com/PostHog/wizard/commit/52a9968eb89107a178b2a475c89f336e2fa807f8))
+* pass org and project names to provisioning API ([#384](https://github.com/PostHog/wizard/issues/384)) ([4f4ae09](https://github.com/PostHog/wizard/commit/4f4ae09120b2dd633c427e2f16b06a3e9327493c))
+* use alternate buffer ([#407](https://github.com/PostHog/wizard/issues/407)) ([cd3871e](https://github.com/PostHog/wizard/commit/cd3871e2a7245b270edfcf9462cd515743939fa6))
+
+
+### Bug Fixes
+
+* add urls to open source repos ([#405](https://github.com/PostHog/wizard/issues/405)) ([569de91](https://github.com/PostHog/wizard/commit/569de91c6180234dd20bef99ed24d01e03d58fcc))
+* Backup ports ([#400](https://github.com/PostHog/wizard/issues/400)) ([0a94ae4](https://github.com/PostHog/wizard/commit/0a94ae4e3dfac0da8b6bf1350bc27b33aaead183))
+* flickering under very specific conditions ([#406](https://github.com/PostHog/wizard/issues/406)) ([84bddae](https://github.com/PostHog/wizard/commit/84bddaeb963534d2dd15e7a934f28fd9d53a9030))
+* We use a different status page now ([#409](https://github.com/PostHog/wizard/issues/409)) ([9c3d3b2](https://github.com/PostHog/wizard/commit/9c3d3b2ca99f76f5672ce4565e9c8cfbc92ac5d1))
+
 ## [2.9.1](https://github.com/PostHog/wizard/compare/v2.9.0...v2.9.1) (2026-04-16)
 
 
