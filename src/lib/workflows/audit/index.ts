@@ -4,11 +4,6 @@ import {
 } from '../agent-skill/index.js';
 import type { Workflow, WorkflowConfig } from '../workflow-step.js';
 import { AUDIT_ABORT_CASES } from './detect.js';
-import {
-  AUDIT_CHECKS_FILE,
-  AUDIT_CHECKS_KEY,
-  coerceAuditChecks,
-} from './types.js';
 
 const REPORT_FILE = 'posthog-audit-report.md';
 
@@ -41,14 +36,6 @@ const baseConfig = createSkillWorkflow({
   spinnerMessage: 'Auditing PostHog integration...',
   estimatedDurationMinutes: 5,
   requires: ['posthog-integration'],
-  fileWatchers: [
-    {
-      filename: AUDIT_CHECKS_FILE,
-      onUpdate: (parsed, ctx) => {
-        ctx.setFrameworkContext(AUDIT_CHECKS_KEY, coerceAuditChecks(parsed));
-      },
-    },
-  ],
   abortCases: AUDIT_ABORT_CASES,
 });
 

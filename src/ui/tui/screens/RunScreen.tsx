@@ -7,6 +7,7 @@
  */
 
 import { useSyncExternalStore } from 'react';
+import { join } from 'node:path';
 import { Box } from 'ink';
 import type { WizardStore } from '../store.js';
 import {
@@ -22,8 +23,10 @@ import { ADDITIONAL_FEATURE_LABELS } from '../../../lib/wizard-session.js';
 import { LearnCard } from '../components/LearnCard.js';
 import { TipsCard } from '../components/TipsCard.js';
 import { useStdoutDimensions } from '../hooks/useStdoutDimensions.js';
+import { useFileWatcher } from '../hooks/file-watcher.js';
 
 const LOG_FILE = '/tmp/posthog-wizard.log';
+const EVENT_PLAN_FILE = '.posthog-events.json';
 
 interface RunScreenProps {
   store: WizardStore;
@@ -34,6 +37,18 @@ export const RunScreen = ({ store }: RunScreenProps) => {
     (cb) => store.subscribe(cb),
     () => store.getSnapshot(),
   );
+
+  // Mirror the agent's `.posthog-events.json` plan into the store so the
+  // Event plan tab appears as soon as the agent emits the file.
+  useFileWatcher(join(store.session.installDir, EVENT_PLAN_FILE), (parsed) => {
+    if (!Array.isArray(parsed)) return;
+    store.setEventPlan(
+      parsed.map((e: Record<string, unknown>) => ({
+        name: (e.name ?? e.event ?? '') as string,
+        description: (e.description ?? '') as string,
+      })),
+    );
+  });
 
   const [columns] = useStdoutDimensions();
 

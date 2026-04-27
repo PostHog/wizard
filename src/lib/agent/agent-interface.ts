@@ -40,7 +40,6 @@ import {
 } from '../yara-hooks';
 import { getWizardCommandments } from './commandments';
 import type { PackageManagerDetector } from '../detection/package-manager';
-import type { WorkflowFileWatcherContext } from './agent-runner';
 
 // Dynamic import cache for ESM module
 let _sdkModule: any = null;
@@ -735,10 +734,6 @@ export async function runAgent(
     errorMessage?: string;
     additionalFeatureQueue?: readonly AdditionalFeature[];
     abortCases?: readonly AbortCaseMatcher[];
-    fileWatchers?: ReadonlyArray<{
-      filename: string;
-      onUpdate: (parsed: unknown, ctx: WorkflowFileWatcherContext) => void;
-    }>;
   },
   middleware?: {
     onMessage(message: any): void;
@@ -833,10 +828,6 @@ export async function runAgent(
     spinner.stop(successMessage);
     return {};
   };
-
-  // Workflow-declared file watchers (cleaned up in finally block).
-  const workflowWatchers: fs.FSWatcher[] = [];
-  const workflowIntervals: Array<ReturnType<typeof setInterval>> = [];
 
   // Abort controller — lets us force-kill the SDK query when we detect an
   // [ABORT] signal in the agent's output. Also stashes the reason so the
@@ -964,57 +955,6 @@ export async function runAgent(
         },
       },
     });
-
-    // Workflow-declared file watchers. fs.watch alone is unreliable for
-    // atomic-rename writes (which is how Claude rewrites files), so each
-    // spec gets fs.watch *plus* a continuous mtime-polled re-read. The
-    // poll catches missed events; the watch keeps latency low when it works.
-    const watcherCtx = {
-      setFrameworkContext: (key: string, value: unknown) =>
-        getUI().setFrameworkContext(key, value),
-      setEventPlan: (
-        events: ReadonlyArray<{ name: string; description: string }>,
-      ) => getUI().setEventPlan([...events]),
-    };
-    for (const spec of config?.fileWatchers ?? []) {
-      const watchPath = path.join(agentConfig.workingDirectory, spec.filename);
-      let lastMtimeMs = 0;
-      const read = (force = false) => {
-        try {
-          const stat = fs.statSync(watchPath);
-          if (!force && stat.mtimeMs === lastMtimeMs) return;
-          lastMtimeMs = stat.mtimeMs;
-          const content = fs.readFileSync(watchPath, 'utf-8');
-          const parsed = JSON.parse(content);
-          spec.onUpdate(parsed, watcherCtx);
-        } catch {
-          // File missing or not yet valid JSON
-        }
-      };
-      // Always poll — fs.watch misses atomic-rename writes on macOS.
-      const pollInterval = setInterval(() => read(), 5000);
-      workflowIntervals.push(pollInterval);
-      // Best-effort fs.watch for low-latency updates when it does fire.
-      try {
-        workflowWatchers.push(fs.watch(watchPath, () => read(true)));
-        read(true);
-      } catch {
-        // File doesn't exist yet — the poll will pick it up and the next
-        // try-catch on watch attaches once the file appears.
-        const attachInterval = setInterval(() => {
-          try {
-            fs.accessSync(watchPath);
-            clearInterval(attachInterval);
-            const idx = workflowIntervals.indexOf(attachInterval);
-            if (idx >= 0) workflowIntervals.splice(idx, 1);
-            workflowWatchers.push(fs.watch(watchPath, () => read(true)));
-          } catch {
-            // Still waiting
-          }
-        }, 1000);
-        workflowIntervals.push(attachInterval);
-      }
-    }
 
     // Process the async generator
     for await (const message of response) {
@@ -1213,9 +1153,6 @@ export async function runAgent(
     debug('Full error:', error);
     throw error;
   } finally {
-    for (const w of workflowWatchers) w.close();
-    for (const i of workflowIntervals) clearInterval(i);
-
     // Always capture run duration, even on abort/error, so we can alert on
     // long runs where the user gave up before completion.
     if (!receivedSuccessResult) {

@@ -81,21 +81,6 @@ export const posthogIntegrationConfig: WorkflowConfig = {
       errorMessage: 'Integration failed',
       additionalFeatureQueue: session.additionalFeatureQueue,
 
-      fileWatchers: [
-        {
-          filename: '.posthog-events.json',
-          onUpdate: (parsed, ctx) => {
-            if (!Array.isArray(parsed)) return;
-            ctx.setEventPlan(
-              parsed.map((e: Record<string, unknown>) => ({
-                name: (e.name ?? e.event ?? '') as string,
-                description: (e.description ?? '') as string,
-              })),
-            );
-          },
-        },
-      ],
-
       customPrompt: (ctx) => {
         const additionalLines = config.prompts.getAdditionalContextLines
           ? config.prompts.getAdditionalContextLines(frameworkContext)

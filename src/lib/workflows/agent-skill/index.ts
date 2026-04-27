@@ -45,8 +45,6 @@ export interface SkillWorkflowOptions {
   requires?: string[];
   /** Override the default outro. Receives the same args as WorkflowRun.buildOutroData. */
   buildOutroData?: WorkflowRun['buildOutroData'];
-  /** Files the agent runner watches in parallel with the agent process. */
-  fileWatchers?: WorkflowRun['fileWatchers'];
   /** Known `[ABORT] <reason>` cases the skill can emit. */
   abortCases?: AbortCase[];
 }
@@ -69,7 +67,6 @@ export function createSkillWorkflow(
       spinnerMessage: opts.spinnerMessage,
       estimatedDurationMinutes: opts.estimatedDurationMinutes,
       buildOutroData: opts.buildOutroData,
-      fileWatchers: opts.fileWatchers,
       abortCases: opts.abortCases,
     },
     requires: opts.requires,
