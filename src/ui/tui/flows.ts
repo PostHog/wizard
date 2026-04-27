@@ -25,6 +25,8 @@ export enum Screen {
   RevenueIntro = 'revenue-intro',
   AgentSkillIntro = 'agent-skill-intro',
   HealthCheck = 'health-check',
+  DoctorIntro = 'doctor-intro',
+  DoctorReport = 'doctor-report',
   Setup = 'setup',
   Auth = 'auth',
   Run = 'run',
@@ -40,6 +42,7 @@ export enum Screen {
 export enum Flow {
   PostHogIntegration = 'posthog-integration',
   RevenueAnalyticsSetup = 'revenue-analytics-setup',
+  PosthogDoctor = 'posthog-doctor',
   AgentSkill = 'agent-skill',
   McpAdd = 'mcp-add',
   McpRemove = 'mcp-remove',
