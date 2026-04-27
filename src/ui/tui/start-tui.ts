@@ -25,7 +25,6 @@ const GREEN = '\x1b[32m';
 const BOLD = '\x1b[1m';
 const DIM = '\x1b[2m';
 
-/** Reset attrs and leave the alt screen, restoring the previous terminal content. */
 export function releaseTerminal(): void {
   process.stdout.write(RESET_ATTRS + LEAVE_ALT_SCREEN);
 }
