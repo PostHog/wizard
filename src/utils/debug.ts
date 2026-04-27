@@ -3,9 +3,10 @@ import path from 'path';
 import { prepareMessage } from './logging';
 import { getUI } from '../ui';
 import { runtimeEnv } from '@env';
+import { WIZARD_LOG_FILE } from './paths';
 
 let debugEnabled = false;
-let logFilePath = '/tmp/posthog-wizard.log';
+let logFilePath = WIZARD_LOG_FILE;
 let logEnabled = true;
 
 export function getLogFilePath(): string {

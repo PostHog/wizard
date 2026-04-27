@@ -58,11 +58,9 @@ export function startTUI(
   const store = new WizardStore(flow);
   store.version = version;
 
-  // Swap in the InkUI
   const inkUI = new InkUI(store);
   setUI(inkUI);
 
-  // Render the Ink app
   const { unmount: inkUnmount } = render(createElement(App, { store }));
 
   // On exit: unmount Ink, leave alt screen (restores previous content),

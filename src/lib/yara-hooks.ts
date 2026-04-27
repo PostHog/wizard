@@ -105,7 +105,7 @@ export function formatScanReport(): string | null {
   return lines.join('\n');
 }
 
-const YARA_REPORT_PATH = '/tmp/posthog-wizard-yara-report.json';
+import { WIZARD_YARA_REPORT_FILE } from '../utils/paths';
 
 /** Write the scan report to a JSON file. Returns the file path, or null if no scans occurred. */
 export function writeScanReport(): string | null {
@@ -121,12 +121,12 @@ export function writeScanReport(): string | null {
   };
 
   try {
-    fs.writeFileSync(YARA_REPORT_PATH, JSON.stringify(report, null, 2));
+    fs.writeFileSync(WIZARD_YARA_REPORT_FILE, JSON.stringify(report, null, 2));
   } catch (err) {
     logToFile('[YARA] Failed to write scan report:', err);
     return null;
   }
-  return YARA_REPORT_PATH;
+  return WIZARD_YARA_REPORT_FILE;
 }
 
 // ─── Hook Timeouts (ms) ─────────────────────────────────────────
