@@ -15,11 +15,11 @@ import { isPluginCapable, PluginCapable } from './plugin-client';
 
 export const getSupportedClients = async (): Promise<MCPClient[]> => {
   const allClients = [
-    new CursorMCPClient(),
     new ClaudeCodeMCPClient(),
+    new CodexMCPClient(),
+    new CursorMCPClient(),
     new VisualStudioCodeClient(),
     new ZedClient(),
-    new CodexMCPClient(),
   ];
   const supportedClients: MCPClient[] = [];
 
