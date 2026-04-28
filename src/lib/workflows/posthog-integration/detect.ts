@@ -51,6 +51,7 @@ export async function detectPostHogIntegration(
     }
 
     ctx.setFrameworkConfig(detectedIntegration, config);
+    session.skillId = detectedIntegration;
 
     if (!session.detectedFrameworkLabel) {
       ctx.setDetectedFramework(config.metadata.name);

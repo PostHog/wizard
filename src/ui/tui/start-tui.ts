@@ -25,6 +25,10 @@ const GREEN = '\x1b[32m';
 const BOLD = '\x1b[1m';
 const DIM = '\x1b[2m';
 
+export function releaseTerminal(): void {
+  process.stdout.write(RESET_ATTRS + LEAVE_ALT_SCREEN);
+}
+
 function getExitLine(store: WizardStore): string {
   const outro = store.session.outroData;
   const label = store.session.workflowLabel ?? 'Wizard';
@@ -54,11 +58,9 @@ export function startTUI(
   const store = new WizardStore(flow);
   store.version = version;
 
-  // Swap in the InkUI
   const inkUI = new InkUI(store);
   setUI(inkUI);
 
-  // Render the Ink app
   const { unmount: inkUnmount } = render(createElement(App, { store }));
 
   // On exit: unmount Ink, leave alt screen (restores previous content),
@@ -68,7 +70,7 @@ export function startTUI(
     if (cleaned) return;
     cleaned = true;
     inkUnmount();
-    process.stdout.write(RESET_ATTRS + LEAVE_ALT_SCREEN);
+    releaseTerminal();
     process.stdout.write(getExitLine(store) + '\n');
   };
   process.on('exit', cleanup);

@@ -168,6 +168,7 @@ export async function runWorkflow(
 ): Promise<void> {
   // 1. Init logging + debug
   initLogFile();
+  session.skillId = config.skillId ?? config.integrationLabel;
   logToFile(`[agent-runner] START ${config.integrationLabel}`);
 
   if (session.debug) {
@@ -228,6 +229,8 @@ export async function runWorkflow(
       ci: session.ci,
       apiKey: session.apiKey,
       projectId: session.projectId,
+      email: session.email,
+      region: session.region,
     });
 
   session.credentials = { accessToken, projectApiKey, host, projectId };

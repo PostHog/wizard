@@ -5,7 +5,6 @@ import { analytics } from '../../utils/analytics';
 import { getUI } from '../../ui';
 import { MCPClient } from './MCPClient';
 import { CursorMCPClient } from './clients/cursor';
-import { ClaudeMCPClient } from './clients/claude';
 import { ClaudeCodeMCPClient } from './clients/claude-code';
 import { VisualStudioCodeClient } from './clients/visual-studio-code';
 import { ZedClient } from './clients/zed';
@@ -16,7 +15,6 @@ import { debug } from '../../utils/debug';
 export const getSupportedClients = async (): Promise<MCPClient[]> => {
   const allClients = [
     new CursorMCPClient(),
-    new ClaudeMCPClient(),
     new ClaudeCodeMCPClient(),
     new VisualStudioCodeClient(),
     new ZedClient(),

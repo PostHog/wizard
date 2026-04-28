@@ -14,7 +14,7 @@
  */
 
 import { atom, map } from 'nanostores';
-import { TaskStatus } from '../wizard-ui.js';
+import { TaskStatus, isTaskStatus } from '../wizard-ui.js';
 import {
   type WizardSession,
   type OutroData,
@@ -74,6 +74,7 @@ export class WizardStore {
   private $learnCardComplete = atom(false);
   private $version = atom(0);
 
+  private _onTasksChanged: (() => void) | null = null;
   /** Last screen seen — used to detect screen transitions for analytics. */
   private _lastScreen: ScreenName | null = null;
 
@@ -580,12 +581,15 @@ export class WizardStore {
   syncTodos(
     todos: Array<{ content: string; status: string; activeForm?: string }>,
   ): void {
-    const incoming = todos.map((t) => ({
-      label: t.content,
-      activeForm: t.activeForm,
-      status: (t.status as TaskStatus) || TaskStatus.Pending,
-      done: t.status === TaskStatus.Completed,
-    }));
+    const incoming = todos.map((t) => {
+      const status = isTaskStatus(t.status) ? t.status : TaskStatus.Pending;
+      return {
+        label: t.content,
+        activeForm: t.activeForm,
+        status,
+        done: status === TaskStatus.Completed,
+      };
+    });
 
     const incomingLabels = new Set(incoming.map((t) => t.label));
 
@@ -595,6 +599,12 @@ export class WizardStore {
 
     this.$tasks.set([...retained, ...incoming]);
     this.emitChange();
+    this._onTasksChanged?.();
+  }
+
+  /** Register a listener for task state changes (e.g. task stream push). */
+  set onTasksChanged(fn: () => void) {
+    this._onTasksChanged = fn;
   }
 
   // ── React integration ───────────────────────────────────────────
