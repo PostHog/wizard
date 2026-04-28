@@ -35,6 +35,7 @@ plugins
 .vercel
 .claude/settings.json
 .claude/settings.local.json
+.claude/worktrees/
 
 e2e-tests/fixtures/.tracking/*
 
