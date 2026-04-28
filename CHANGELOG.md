@@ -1,5 +1,26 @@
 # Changelog
 
+## [2.10.4](https://github.com/PostHog/wizard/compare/v2.10.3...v2.10.4) (2026-04-24)
+
+
+### Bug Fixes
+
+* outro/exit clash ([#420](https://github.com/PostHog/wizard/issues/420)) ([17b2c82](https://github.com/PostHog/wizard/commit/17b2c8275a9c68bf6addd535b2f2841cade3e6a3))
+
+## [2.10.3](https://github.com/PostHog/wizard/compare/v2.10.2...v2.10.3) (2026-04-23)
+
+
+### Bug Fixes
+
+* pass email and region from CLI to session ([#418](https://github.com/PostHog/wizard/issues/418)) ([268c26f](https://github.com/PostHog/wizard/commit/268c26fbdb38528bf3f880497abf4a44e575a8e3))
+
+## [2.10.2](https://github.com/PostHog/wizard/compare/v2.10.1...v2.10.2) (2026-04-23)
+
+
+### Bug Fixes
+
+* add --email CLI flag for signup provisioning ([#414](https://github.com/PostHog/wizard/issues/414)) ([e324fbe](https://github.com/PostHog/wizard/commit/e324fbe199e01135241c16cb76c85ce014fecca9))
+
 ## [2.10.1](https://github.com/PostHog/wizard/compare/v2.10.0...v2.10.1) (2026-04-23)
 
 

@@ -168,6 +168,7 @@ export async function runWorkflow(
 ): Promise<void> {
   // 1. Init logging + debug
   initLogFile();
+  session.skillId = config.skillId ?? config.integrationLabel;
   logToFile(`[agent-runner] START ${config.integrationLabel}`);
 
   if (session.debug) {
