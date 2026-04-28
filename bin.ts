@@ -365,6 +365,7 @@ const cli = yargs(hideBin(process.argv))
                 localMcp: options.local,
                 mcpFeatures,
                 apiKey,
+                region: options.region as 'us' | 'eu' | undefined,
               });
               tui.store.session = session;
             } catch {
@@ -377,6 +378,7 @@ const cli = yargs(hideBin(process.argv))
                 local: options.local,
                 features: mcpFeatures,
                 apiKey,
+                cloudRegion: options.region as 'us' | 'eu' | undefined,
               });
             }
           })();

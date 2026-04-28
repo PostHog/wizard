@@ -1,5 +1,6 @@
 import { DefaultMCPClient } from '../MCPClient';
 import { buildMCPUrl, DefaultMCPClientConfig } from '../defaults';
+import type { CloudRegion } from '../../../utils/types';
 import { z } from 'zod';
 import { execSync } from 'child_process';
 import { analytics } from '../../../utils/analytics';
@@ -114,6 +115,7 @@ export class ClaudeCodeMCPClient extends DefaultMCPClient {
     apiKey?: string,
     selectedFeatures?: string[],
     local?: boolean,
+    region?: CloudRegion,
   ): Promise<{ success: boolean }> {
     const claudeBinary = this.findClaudeBinary();
     if (!claudeBinary) {
@@ -121,7 +123,7 @@ export class ClaudeCodeMCPClient extends DefaultMCPClient {
     }
 
     const serverName = local ? 'posthog-local' : 'posthog';
-    const url = buildMCPUrl('streamable-http', selectedFeatures, local);
+    const url = buildMCPUrl('streamable-http', selectedFeatures, local, region);
 
     // OAuth mode: no auth header
     const authArgs = apiKey ? `--header "Authorization: Bearer ${apiKey}"` : '';

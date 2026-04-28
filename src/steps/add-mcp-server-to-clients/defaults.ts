@@ -1,4 +1,5 @@
 import z from 'zod';
+import type { CloudRegion } from '../../utils/types';
 
 export const DefaultMCPClientConfig = z
   .object({
@@ -219,8 +220,13 @@ export const buildMCPUrl = (
   type: MCPServerType,
   selectedFeatures?: string[],
   local?: boolean,
+  region?: CloudRegion,
 ) => {
-  const host = local ? 'http://localhost:8787' : 'https://mcp.posthog.com';
+  const host = local
+    ? 'http://localhost:8787'
+    : region === 'eu'
+    ? 'https://mcp-eu.posthog.com'
+    : 'https://mcp.posthog.com';
   const baseUrl = `${host}/${type === 'sse' ? 'sse' : 'mcp'}`;
 
   const isAllFeaturesSelected =
@@ -247,9 +253,10 @@ export const getNativeHTTPServerConfig = (
   type: MCPServerType,
   selectedFeatures?: string[],
   local?: boolean,
+  region?: CloudRegion,
 ) => {
   const config: Record<string, unknown> = {
-    url: buildMCPUrl(type, selectedFeatures, local),
+    url: buildMCPUrl(type, selectedFeatures, local, region),
   };
 
   // Only add auth header if API key is provided (not OAuth mode)
@@ -267,8 +274,9 @@ export const getDefaultServerConfig = (
   type: MCPServerType,
   selectedFeatures?: string[],
   local?: boolean,
+  region?: CloudRegion,
 ) => {
-  const urlWithFeatures = buildMCPUrl(type, selectedFeatures, local);
+  const urlWithFeatures = buildMCPUrl(type, selectedFeatures, local, region);
 
   // OAuth mode: no auth header, let MCP handle OAuth
   if (!apiKey) {

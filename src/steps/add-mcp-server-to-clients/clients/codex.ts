@@ -3,6 +3,7 @@ import { execSync, spawnSync } from 'node:child_process';
 
 import { DefaultMCPClient } from '../MCPClient';
 import { buildMCPUrl, DefaultMCPClientConfig } from '../defaults';
+import type { CloudRegion } from '../../../utils/types';
 
 import { analytics } from '../../../utils/analytics';
 
@@ -60,9 +61,10 @@ export class CodexMCPClient extends DefaultMCPClient {
     apiKey?: string,
     selectedFeatures?: string[],
     local?: boolean,
+    region?: CloudRegion,
   ): Promise<{ success: boolean }> {
     const serverName = local ? 'posthog-local' : 'posthog';
-    const url = buildMCPUrl('streamable-http', selectedFeatures, local);
+    const url = buildMCPUrl('streamable-http', selectedFeatures, local, region);
 
     const args = ['mcp', 'add', serverName, '--url', url];
 

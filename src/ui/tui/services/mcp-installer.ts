@@ -12,6 +12,7 @@ import {
 } from '../../../steps/add-mcp-server-to-clients/index.js';
 import { ALL_FEATURE_VALUES } from '../../../steps/add-mcp-server-to-clients/defaults.js';
 import { logToFile } from '../../../utils/debug.js';
+import type { CloudRegion } from '../../../utils/types.js';
 
 export interface McpClientInfo {
   name: string;
@@ -26,6 +27,7 @@ export interface McpInstaller {
     clientNames: string[],
     features?: string[],
     apiKey?: string,
+    region?: CloudRegion,
   ): Promise<string[]>;
 
   /** Remove the PostHog MCP server from all installed clients. Returns names of removed clients. */
@@ -50,6 +52,7 @@ export function createMcpInstaller(): McpInstaller {
       clientNames: string[],
       features?: string[],
       apiKey?: string,
+      region?: CloudRegion,
     ): Promise<string[]> {
       const resolvedFeatures = features ?? [...ALL_FEATURE_VALUES];
       const toInstall = cachedClients
@@ -73,6 +76,7 @@ export function createMcpInstaller(): McpInstaller {
             apiKey,
             resolvedFeatures,
             false,
+            region,
           );
           if (result?.success) {
             installed.push(client.name as string);
