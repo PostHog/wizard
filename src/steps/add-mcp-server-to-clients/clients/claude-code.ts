@@ -1,5 +1,6 @@
 import { DefaultMCPClient } from '../MCPClient';
 import { buildMCPUrl, DefaultMCPClientConfig } from '../defaults';
+import { PluginCapable, PluginInstallResult } from '../plugin-client';
 import { z } from 'zod';
 import { execSync } from 'child_process';
 import { analytics } from '../../../utils/analytics';
@@ -12,7 +13,10 @@ export const ClaudeCodeMCPConfig = DefaultMCPClientConfig;
 
 export type ClaudeCodeMCPConfig = z.infer<typeof DefaultMCPClientConfig>;
 
-export class ClaudeCodeMCPClient extends DefaultMCPClient {
+export class ClaudeCodeMCPClient
+  extends DefaultMCPClient
+  implements PluginCapable
+{
   name = 'Claude Code';
   private claudeBinaryPath: string | null = null;
 
@@ -168,5 +172,40 @@ export class ClaudeCodeMCPClient extends DefaultMCPClient {
     }
 
     return Promise.resolve({ success: true });
+  }
+
+  supportsPlugin(): boolean {
+    return this.findClaudeBinary() !== null;
+  }
+
+  isPluginInstalled(): Promise<boolean> {
+    const binary = this.findClaudeBinary();
+    if (!binary) return Promise.resolve(false);
+    try {
+      const output = execSync(`${binary} plugin list`, {
+        stdio: 'pipe',
+      }).toString();
+      return Promise.resolve(output.toLowerCase().includes('posthog'));
+    } catch {
+      return Promise.resolve(false);
+    }
+  }
+
+  installPlugin(): Promise<PluginInstallResult> {
+    const binary = this.findClaudeBinary();
+    if (!binary) return Promise.resolve({ success: false });
+    try {
+      execSync(`${binary} plugin install posthog`, { stdio: 'pipe' });
+      return Promise.resolve({ success: true });
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      if (msg.includes('already installed') || msg.includes('already exists')) {
+        return Promise.resolve({ success: true, alreadyInstalled: true });
+      }
+      analytics.captureException(
+        new Error(`Claude Code plugin install failed: ${msg}`),
+      );
+      return Promise.resolve({ success: false });
+    }
   }
 }

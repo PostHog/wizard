@@ -3,6 +3,7 @@ import { execSync, spawnSync } from 'node:child_process';
 
 import { DefaultMCPClient } from '../MCPClient';
 import { buildMCPUrl, DefaultMCPClientConfig } from '../defaults';
+import { PluginCapable, PluginInstallResult } from '../plugin-client';
 
 import { analytics } from '../../../utils/analytics';
 
@@ -10,7 +11,7 @@ export const CodexMCPConfig = DefaultMCPClientConfig;
 
 export type CodexMCPConfig = z.infer<typeof DefaultMCPClientConfig>;
 
-export class CodexMCPClient extends DefaultMCPClient {
+export class CodexMCPClient extends DefaultMCPClient implements PluginCapable {
   name = 'Codex';
 
   constructor() {
@@ -98,6 +99,46 @@ export class CodexMCPClient extends DefaultMCPClient {
     }
 
     return Promise.resolve({ success: true });
+  }
+
+  supportsPlugin(): boolean {
+    try {
+      execSync('codex --version', { stdio: 'ignore' });
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  isPluginInstalled(): Promise<boolean> {
+    try {
+      const result = spawnSync('codex', ['plugin', 'list'], {
+        encoding: 'utf-8',
+      });
+      if (result.error || result.status !== 0) return Promise.resolve(false);
+      return Promise.resolve(
+        (result.stdout ?? '').toLowerCase().includes('posthog'),
+      );
+    } catch {
+      return Promise.resolve(false);
+    }
+  }
+
+  installPlugin(): Promise<PluginInstallResult> {
+    const result = spawnSync(
+      'codex',
+      ['plugin', 'marketplace', 'add', 'PostHog/ai-plugin'],
+      { encoding: 'utf-8' },
+    );
+    if (result.status === 0) return Promise.resolve({ success: true });
+    const stderr = result.stderr ?? '';
+    if (stderr.includes('already installed')) {
+      return Promise.resolve({ success: true, alreadyInstalled: true });
+    }
+    analytics.captureException(
+      new Error(`Codex plugin install failed: ${stderr}`),
+    );
+    return Promise.resolve({ success: false });
   }
 }
 
