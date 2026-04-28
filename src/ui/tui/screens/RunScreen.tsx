@@ -26,7 +26,7 @@ import { LearnCard } from '../components/LearnCard.js';
 import { TipsCard } from '../components/TipsCard.js';
 import { useStdoutDimensions } from '../hooks/useStdoutDimensions.js';
 
-const LOG_FILE = '/tmp/posthog-wizard.log';
+import { WIZARD_LOG_FILE } from '../../../utils/paths.js';
 
 interface RunScreenProps {
   store: WizardStore;
@@ -98,7 +98,7 @@ export const RunScreen = ({ store }: RunScreenProps) => {
     {
       id: 'logs',
       label: 'Tail logs',
-      component: <LogViewer filePath={LOG_FILE} />,
+      component: <LogViewer filePath={WIZARD_LOG_FILE} />,
     },
     {
       id: 'hn',

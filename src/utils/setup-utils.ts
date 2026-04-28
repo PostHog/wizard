@@ -497,6 +497,7 @@ async function askForWizardLogin(options: {
       'dashboard:write',
       'insight:write',
       'query:read',
+      'health_issue:read',
     ],
     signup: false,
   });

@@ -18,6 +18,10 @@ export enum TaskStatus {
   Completed = 'completed',
 }
 
+export function isTaskStatus(value: string): value is TaskStatus {
+  return (Object.values(TaskStatus) as string[]).includes(value);
+}
+
 export interface SpinnerHandle {
   start(message?: string): void;
   stop(message?: string): void;

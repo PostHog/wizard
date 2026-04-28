@@ -25,6 +25,7 @@ import { LoggingUI } from './src/ui/logging-ui';
 import { getSubcommandWorkflows } from './src/lib/workflows/workflow-registry';
 import type { WorkflowConfig } from './src/lib/workflows/workflow-step';
 import type { WizardSession } from './src/lib/wizard-session';
+import { POSTHOG_DOCS_URL } from './src/lib/constants';
 import { runtimeEnv } from '@env';
 
 // Test mock server — only loaded when NODE_ENV is 'test'.
@@ -295,11 +296,11 @@ const cli = yargs(hideBin(process.argv))
             integrationLabel: skillId,
             successMessage: `${skillId} completed!`,
             reportFile: `posthog-${skillId}-report.md`,
-            docsUrl: 'https://posthog.com/docs',
+            docsUrl: POSTHOG_DOCS_URL,
             spinnerMessage: `Running ${skillId}...`,
             estimatedDurationMinutes: 5,
           });
-          runWizard(config, options);
+          runWizard(config, { ...options, skillId });
         })();
       } else {
         // Interactive TTY: run core-integration through the unified workflow path.
@@ -466,8 +467,15 @@ function runWizard(
 
       const { startTUI } = await import('./src/ui/tui/start-tui.js');
       const { buildSession } = await import('./src/lib/wizard-session.js');
+      const { TaskStreamPush } = await import('./src/lib/task-stream/index.js');
+      const { FileDestination } = await import(
+        './src/lib/task-stream/destinations/file.js'
+      );
+      const { PostHogDestination } = await import(
+        './src/lib/task-stream/destinations/posthog.js'
+      );
+      const { analytics } = await import('./src/utils/analytics.js');
 
-      // flowKey values match Flow enum values by convention
       const tui = startTUI(WIZARD_VERSION, config.flowKey as any);
 
       const session = buildSession({
@@ -485,31 +493,72 @@ function runWizard(
         benchmark: options.benchmark as boolean | undefined,
         yaraReport: options.yaraReport as boolean | undefined,
       });
-      // Set workflow metadata for TUI display
       session.workflowLabel = config.flowKey;
-      const runDef = typeof config.run === 'object' ? config.run : null;
-      session.skillId = runDef?.skillId ?? null;
+      if (options.skillId) {
+        session.skillId = options.skillId as string;
+      }
 
       tui.store.session = session;
+
+      // Task stream — pushes state to external consumers on task changes
+      const taskStream = new TaskStreamPush({
+        store: tui.store,
+        workflowId: config.flowKey,
+        destinations: [new FileDestination(), new PostHogDestination()],
+      });
+      tui.store.onTasksChanged = () => void taskStream.push();
 
       await tui.store.runReadyHooks();
       await tui.store.getGate('intro');
 
-      const { runAgent } = await import('./src/lib/agent/agent-runner.js');
-      await runAgent(config, tui.store.session);
+      const skipAgent = config.run == null;
+
+      if (skipAgent) {
+        const { getOrAskForProjectData } = await import(
+          './src/utils/setup-utils.js'
+        );
+        const { projectApiKey, host, accessToken, projectId } =
+          await getOrAskForProjectData({
+            signup: session.signup,
+            ci: session.ci,
+            apiKey: session.apiKey,
+            projectId: session.projectId,
+          });
+        tui.store.setCredentials({
+          accessToken,
+          projectApiKey,
+          host,
+          projectId,
+        });
+      } else {
+        const { runAgent } = await import('./src/lib/agent/agent-runner.js');
+        await runAgent(config, tui.store.session);
+      }
+
+      const isDone = (): boolean =>
+        skipAgent
+          ? tui.store.session.outroDismissed
+          : tui.store.session.skillsComplete;
 
       await new Promise<void>((resolve) => {
         const unsub = tui.store.subscribe(() => {
-          if (tui.store.session.skillsComplete) {
+          if (isDone()) {
             unsub();
             resolve();
           }
         });
-        if (tui.store.session.skillsComplete) {
+        if (isDone()) {
           unsub();
           resolve();
         }
       });
+
+      try {
+        await taskStream.dispose();
+      } catch (error) {
+        analytics.captureException(error as Error);
+      }
+      tui.unmount();
       process.exit(0);
     } catch (err) {
       if (runtimeEnv('DEBUG') || runtimeEnv('POSTHOG_WIZARD_DEBUG')) {
@@ -586,7 +635,6 @@ function runWizardCI(
     });
     session.workflowLabel = config.flowKey;
     const runDef = typeof config.run === 'object' ? config.run : null;
-    session.skillId = runDef?.skillId ?? null;
 
     getUI().intro('Welcome to the PostHog setup wizard');
     getUI().log.info(`Running ${config.flowKey} in CI mode`);
@@ -620,7 +668,7 @@ function runWizardCI(
         if (detectError) {
           await wizardAbort({
             message: `Prerequisites not met: ${detectError.kind}\n\nSee ${
-              runDef?.docsUrl ?? 'https://posthog.com/docs'
+              runDef?.docsUrl ?? POSTHOG_DOCS_URL
             }`,
             error: new WizardError(`${config.flowKey} prerequisites failed`, {
               integration: config.flowKey,
@@ -645,7 +693,7 @@ function runWizardCI(
       const docsUrl =
         session.frameworkConfig?.metadata.docsUrl ??
         runDef?.docsUrl ??
-        'https://posthog.com/docs';
+        POSTHOG_DOCS_URL;
       await wizardAbort({
         message: `Something went wrong: ${errorMessage}\n\nYou can read the documentation at ${docsUrl} to set up manually.${debugInfo}`,
         error: error as Error,

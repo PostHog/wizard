@@ -10,6 +10,7 @@ import path from 'path';
 import { logToFile } from '../../utils/debug';
 import { AgentSignals } from '../agent/agent-interface';
 import { runtimeEnv } from '@env';
+import { WIZARD_BENCHMARK_FILE, WIZARD_LOG_FILE } from '../../utils/paths';
 
 export interface BenchmarkConfig {
   /** Enable/disable individual metric plugins */
@@ -41,9 +42,9 @@ const DEFAULT_CONFIG: BenchmarkConfig = {
     jsonWriter: true,
   },
   output: {
-    benchmarkPath: '/tmp/posthog-wizard-benchmark.json',
+    benchmarkPath: WIZARD_BENCHMARK_FILE,
     benchmarkEnabled: true,
-    logPath: '/tmp/posthog-wizard.log',
+    logPath: WIZARD_LOG_FILE,
     logEnabled: true,
     suppressWizardLogs: false,
   },

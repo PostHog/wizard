@@ -9,13 +9,35 @@
  */
 
 import { Box, Text } from 'ink';
+import { spawnSync } from 'node:child_process';
 import type { ReactNode } from 'react';
-import { useState, useSyncExternalStore } from 'react';
+import { useEffect, useState, useSyncExternalStore } from 'react';
 import type { WizardStore } from '../store.js';
-import { Integration } from '../../../lib/constants.js';
+import {
+  CONTEXT_MILL_URL,
+  Integration,
+  WIZARD_TOOLS_MENU_FLAG_KEY,
+} from '../../../lib/constants.js';
 import { PickerMenu, LoadingBox } from '../primitives/index.js';
 import { IntroScreenLayout, type DetectionRow } from './IntroScreenLayout.js';
-import { CONTEXT_MILL_URL } from '../../../lib/constants.js';
+import { releaseTerminal } from '../start-tui.js';
+import { analytics } from '../../../utils/analytics.js';
+
+const TOOLS = [
+  { label: 'Troubleshoot Integration', command: 'doctor' },
+] as const;
+
+type View = 'default' | 'more-info' | 'tools';
+
+function launchTool(command: string, installDir: string): never {
+  releaseTerminal();
+  const result = spawnSync(
+    process.execPath,
+    [process.argv[1], command, `--install-dir=${installDir}`],
+    { stdio: 'inherit' },
+  );
+  process.exit(result.status ?? 0);
+}
 
 /** Framework picker shown when auto-detection fails. */
 const FrameworkPicker = ({
@@ -65,7 +87,19 @@ export const PostHogIntegrationIntroScreen = ({
 
   const [pickingFramework, setPickingFramework] = useState(false);
   const [manuallySelected, setManuallySelected] = useState(false);
-  const [showingMoreInfo, setShowingMoreInfo] = useState(false);
+  const [view, setView] = useState<View>('default');
+  const [toolsEnabled, setToolsEnabled] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    void analytics.getAllFlagsForWizard().then((flags) => {
+      const value = flags[WIZARD_TOOLS_MENU_FLAG_KEY];
+      if (!cancelled && value && value !== 'false') setToolsEnabled(true);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const { session } = store;
   const config = session.frameworkConfig;
@@ -79,7 +113,7 @@ export const PostHogIntegrationIntroScreen = ({
     session.frameworkConfig !== null &&
     !detecting &&
     !pickingFramework &&
-    !showingMoreInfo &&
+    view === 'default' &&
     !unsupported;
 
   // ── Title ──────────────────────────────────────────────────────────
@@ -115,7 +149,7 @@ export const PostHogIntegrationIntroScreen = ({
         onComplete={() => setPickingFramework(false)}
       />
     );
-  } else if (showingMoreInfo) {
+  } else if (view === 'more-info') {
     body = (
       <Box flexDirection="column" width={56} flexShrink={0}>
         <Text>
@@ -215,27 +249,40 @@ export const PostHogIntegrationIntroScreen = ({
 
   let menuOptions: { label: string; value: string }[] | null = null;
 
-  if (showingMoreInfo) {
+  if (view === 'tools') {
+    menuOptions = [
+      ...TOOLS.map((t) => ({ label: t.label, value: t.command })),
+      { label: 'Back', value: 'back' },
+    ];
+  } else if (view === 'more-info') {
     menuOptions = [{ label: 'Back', value: 'back' }];
   } else if (showContinue) {
     menuOptions = [
       { label: 'Continue', value: 'continue' },
       { label: 'Change framework', value: 'framework' },
+      ...(toolsEnabled ? [{ label: 'Tools', value: 'tools' }] : []),
       { label: 'More info', value: 'more-info' },
       { label: 'Cancel', value: 'cancel' },
     ];
   }
 
   const handleSelect = (value: string) => {
+    if (view === 'tools') {
+      if (value === 'back') setView('default');
+      else launchTool(value, session.installDir);
+      return;
+    }
     if (value === 'cancel') {
       process.exit(0);
     } else if (value === 'framework') {
       setPickingFramework(true);
       setManuallySelected(true);
     } else if (value === 'more-info') {
-      setShowingMoreInfo(true);
+      setView('more-info');
+    } else if (value === 'tools') {
+      setView('tools');
     } else if (value === 'back') {
-      setShowingMoreInfo(false);
+      setView('default');
     } else {
       store.completeSetup();
     }
@@ -247,7 +294,7 @@ export const PostHogIntegrationIntroScreen = ({
     <IntroScreenLayout
       installDir={session.installDir}
       title={title}
-      showSubtitle={!showingMoreInfo}
+      showSubtitle={view === 'default'}
       body={body}
       showDetection={showContinue}
       detectionRows={detectionRows}
