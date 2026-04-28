@@ -9,7 +9,7 @@ export interface PluginCapable {
   installPlugin(): Promise<PluginInstallResult>;
 }
 
-export function isPluginCapable(client: unknown): client is PluginCapable {
+export function isPluginCapable<T>(client: T): client is T & PluginCapable {
   return (
     typeof client === 'object' &&
     client !== null &&

@@ -73,6 +73,7 @@ export const McpScreen = ({
   const [clients, setClients] = useState<McpClientInfo[]>([]);
   const [selectedClientNames, setSelectedClientNames] = useState<string[]>([]);
   const [resultClients, setResultClients] = useState<string[]>([]);
+  const [pluginClients, setPluginClients] = useState<string[]>([]);
 
   useEffect(() => {
     void (async () => {
@@ -118,17 +119,28 @@ export const McpScreen = ({
 
   const doInstall = async (names: string[], features?: string[]) => {
     setPhase(Phase.Working);
-    let result: string[] = [];
+    let mcpResult: string[] = [];
+    let pluginResult: string[] = [];
     try {
-      result = await installer.install(names, features, store.session.apiKey);
-      setResultClients(result);
+      mcpResult = await installer.install(
+        names,
+        features,
+        store.session.apiKey,
+      );
     } catch {
-      setResultClients([]);
+      // mcpResult stays []
     }
+    try {
+      pluginResult = await installer.installPlugins(names);
+    } catch {
+      // best-effort — plugin failure does not affect MCP outcome
+    }
+    setResultClients(mcpResult);
+    setPluginClients(pluginResult);
     setPhase(Phase.Done);
     const outcome =
-      result.length > 0 ? McpOutcome.Installed : McpOutcome.Failed;
-    setTimeout(() => markDone(store, outcome, result), 2000);
+      mcpResult.length > 0 ? McpOutcome.Installed : McpOutcome.Failed;
+    setTimeout(() => markDone(store, outcome, mcpResult), 2000);
   };
 
   const doRemove = async () => {
@@ -171,12 +183,12 @@ export const McpScreen = ({
             </Text>
             <Box marginTop={1}>
               <ConfirmationInput
-                message={
-                  isRemove
-                    ? 'Remove the PostHog MCP server from your editor?'
-                    : 'Install the PostHog MCP server to your editor?'
-                }
-                confirmLabel={isRemove ? 'Remove MCP' : 'Install MCP'}
+                message={`${
+                  isRemove ? 'Remove' : 'Install'
+                } the PostHog MCP server${
+                  clients.some((c) => c.supportsPlugin) ? ' and plugin' : ''
+                }?`}
+                confirmLabel={isRemove ? 'Remove' : 'Install'}
                 cancelLabel="No thanks"
                 onConfirm={handleConfirm}
                 onCancel={handleSkip}
@@ -222,7 +234,8 @@ export const McpScreen = ({
             {resultClients.length > 0 ? (
               <>
                 <Text color="green" bold>
-                  {'\u2714'} MCP server{' '}
+                  {'\u2714'} MCP server
+                  {!isRemove && pluginClients.length > 0 ? ' and plugin' : ''}{' '}
                   {isRemove ? 'removed from' : 'installed for'}:
                 </Text>
                 {resultClients.map((name, i) => (
