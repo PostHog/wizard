@@ -77,14 +77,17 @@ export const AuditChecksViewer = ({
         height={layout.visibleHeight}
         overflow="hidden"
       >
+        <Box height={1} />
         <Text bold color="cyan">
           Pending
         </Text>
+        <Box height={1} />
         {pending.map(renderItem)}
         <Box height={2} />
         <Text bold color="cyan">
           Complete
         </Text>
+        <Box height={1} />
         {complete.map(renderItem)}
       </Box>
       <Footer />
