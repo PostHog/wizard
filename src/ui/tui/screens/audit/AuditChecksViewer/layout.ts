@@ -5,9 +5,9 @@ import { MAX_WIDTH } from '../../../primitives/ScreenContainer.js';
 export const CHROME_ROWS = 10;
 
 /** Rows used by the viewer's own header / footer
- *  (title, divider, column headers, scroll-up marker, scroll-down marker,
- *  legend, "more checks…" tagline). The "Working on…" banner adds one more. */
-export const VIEWER_CHROME_BASE = 7;
+ *  (title, divider, column headers, legend, "more checks…" tagline). The
+ *  "Working on…" banner adds one more when present. */
+export const VIEWER_CHROME_BASE = 5;
 
 export const COL_AREA_WIDTH = 18;
 export const COL_LABEL_MIN = 28;

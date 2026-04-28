@@ -31,6 +31,7 @@ export const AUDIT_SEVERITY_STYLE: Record<AuditStatus, AuditSeverityStyle> = {
 };
 
 export const AUDIT_CHECKS_FILE = '.posthog-audit-checks.json';
+export const AUDIT_REPORT_FILE = 'posthog-audit-report.md';
 export const AUDIT_CHECKS_KEY = 'auditChecks';
 
 export function getAuditChecks(session: WizardSession): AuditCheck[] {

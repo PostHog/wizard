@@ -20,7 +20,7 @@ export const EmptyState = ({ cols, height }: EmptyStateProps) => {
       <Box flexDirection="column" width={blockWidth}>
         <Box gap={1}>
           <Spinner />
-          <Text bold>Preparing audit</Text>
+          <Text bold>Loading audit skills</Text>
         </Box>
         <Box height={2} />
         <Text dimColor>The agent is gathering checks for this project.</Text>

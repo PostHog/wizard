@@ -24,9 +24,9 @@ import { LearnCard } from '../components/LearnCard.js';
 import { TipsCard } from '../components/TipsCard.js';
 import { useStdoutDimensions } from '../hooks/useStdoutDimensions.js';
 import { useFileWatcher } from '../hooks/file-watcher.js';
+import { EVENT_PLAN_FILE } from '../../../lib/workflows/posthog-integration/index.js';
 
 const LOG_FILE = '/tmp/posthog-wizard.log';
-const EVENT_PLAN_FILE = '.posthog-events.json';
 
 interface RunScreenProps {
   store: WizardStore;

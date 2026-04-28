@@ -51,6 +51,21 @@ export class InkUI implements WizardUI {
     }
   }
 
+  waitForOutroDismissed(): Promise<void> {
+    return new Promise((resolve) => {
+      if (this.store.session.outroDismissed) {
+        resolve();
+        return;
+      }
+      const unsub = this.store.subscribe(() => {
+        if (this.store.session.outroDismissed) {
+          unsub();
+          resolve();
+        }
+      });
+    });
+  }
+
   setCredentials(credentials: {
     accessToken: string;
     projectApiKey: string;

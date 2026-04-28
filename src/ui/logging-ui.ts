@@ -24,6 +24,10 @@ export class LoggingUI implements WizardUI {
     if (data.docsUrl) console.log(`│  Docs: ${data.docsUrl}`);
   }
 
+  waitForOutroDismissed(): Promise<void> {
+    return Promise.resolve();
+  }
+
   cancel(message: string): void {
     console.log(`■  ${message}`);
   }

@@ -11,6 +11,7 @@ jest.mock('../utils/analytics');
 jest.mock('../ui', () => ({
   getUI: jest.fn().mockReturnValue({
     outroError: jest.fn(),
+    waitForOutroDismissed: jest.fn().mockResolvedValue(undefined),
   }),
 }));
 

@@ -4,8 +4,7 @@ import {
 } from '../agent-skill/index.js';
 import type { Workflow, WorkflowConfig } from '../workflow-step.js';
 import { AUDIT_ABORT_CASES } from './detect.js';
-
-const REPORT_FILE = 'posthog-audit-report.md';
+import { AUDIT_REPORT_FILE } from './types.js';
 
 /** Audit reuses the agent-skill step pipeline but swaps in audit-specific
  *  screens for intro / run / outro. The screen names are registered in
@@ -31,7 +30,7 @@ const baseConfig = createSkillWorkflow({
   customPrompt:
     'Run a comprehensive audit of the existing PostHog integration. Follow the skill workflow steps in order. Do not modify any project files — only create the final audit report.',
   successMessage: 'Audit complete!',
-  reportFile: REPORT_FILE,
+  reportFile: AUDIT_REPORT_FILE,
   docsUrl: 'https://posthog.com/docs/product-analytics/best-practices',
   spinnerMessage: 'Auditing PostHog integration...',
   estimatedDurationMinutes: 5,
