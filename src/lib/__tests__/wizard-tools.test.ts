@@ -6,7 +6,9 @@ import {
   ensureGitignoreCoverage,
   parseEnvKeys,
   mergeEnvValues,
+  __test,
 } from '../wizard-tools';
+import type { AuditCheck } from '../workflows/audit/types';
 
 function makeTmpDir(): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'wizard-tools-'));
@@ -205,5 +207,194 @@ describe('ensureGitignoreCoverage', () => {
     const content = fs.readFileSync(path.join(tmpDir, '.gitignore'), 'utf8');
     // Should not duplicate — the trim check should match
     expect(content).toBe('  .env.local  \n');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Audit ledger helpers
+// ---------------------------------------------------------------------------
+
+const seedChecks: AuditCheck[] = [
+  {
+    id: 'sdk-installed',
+    area: 'Installation',
+    label: 'PostHog SDK installed',
+    status: 'pending',
+  },
+  {
+    id: 'sdk-up-to-date',
+    area: 'Installation',
+    label: 'SDK up to date',
+    status: 'pending',
+  },
+  {
+    id: 'init-correct',
+    area: 'Installation',
+    label: 'Init is correct',
+    status: 'pending',
+  },
+];
+
+describe('writeLedgerAtomic', () => {
+  let tmpDir: string;
+  beforeEach(() => {
+    tmpDir = makeTmpDir();
+  });
+  afterEach(() => {
+    cleanup(tmpDir);
+  });
+
+  it('writes the ledger as JSON', () => {
+    const target = path.join(tmpDir, __test.AUDIT_CHECKS_FILE);
+    __test.writeLedgerAtomic(target, seedChecks);
+    const parsed = JSON.parse(fs.readFileSync(target, 'utf8'));
+    expect(parsed).toHaveLength(3);
+    expect(parsed[0].id).toBe('sdk-installed');
+  });
+
+  it('leaves no .tmp file after a successful write', () => {
+    const target = path.join(tmpDir, __test.AUDIT_CHECKS_FILE);
+    __test.writeLedgerAtomic(target, seedChecks);
+    expect(fs.existsSync(`${target}.tmp`)).toBe(false);
+  });
+
+  it('replaces an existing ledger', () => {
+    const target = path.join(tmpDir, __test.AUDIT_CHECKS_FILE);
+    __test.writeLedgerAtomic(target, seedChecks);
+    __test.writeLedgerAtomic(target, [seedChecks[0]]);
+    const parsed = JSON.parse(fs.readFileSync(target, 'utf8'));
+    expect(parsed).toHaveLength(1);
+  });
+});
+
+describe('readLedger', () => {
+  let tmpDir: string;
+  beforeEach(() => {
+    tmpDir = makeTmpDir();
+  });
+  afterEach(() => {
+    cleanup(tmpDir);
+  });
+
+  it('returns [] when the file does not exist', () => {
+    expect(__test.readLedger(path.join(tmpDir, 'missing.json'))).toEqual([]);
+  });
+
+  it('returns [] when the file is invalid JSON', () => {
+    const target = path.join(tmpDir, 'bad.json');
+    fs.writeFileSync(target, '{not json');
+    expect(__test.readLedger(target)).toEqual([]);
+  });
+
+  it('round-trips a written ledger', () => {
+    const target = path.join(tmpDir, __test.AUDIT_CHECKS_FILE);
+    __test.writeLedgerAtomic(target, seedChecks);
+    expect(__test.readLedger(target)).toEqual(seedChecks);
+  });
+});
+
+describe('applyAuditUpdates', () => {
+  it('patches status by id', () => {
+    const { next, unknown } = __test.applyAuditUpdates(seedChecks, [
+      { id: 'sdk-installed', status: 'pass' },
+    ]);
+    expect(unknown).toEqual([]);
+    expect(next.find((c) => c.id === 'sdk-installed')?.status).toBe('pass');
+    // unrelated entries unchanged
+    expect(next.find((c) => c.id === 'init-correct')?.status).toBe('pending');
+  });
+
+  it('attaches optional file and details', () => {
+    const { next } = __test.applyAuditUpdates(seedChecks, [
+      {
+        id: 'init-correct',
+        status: 'error',
+        file: 'src/index.ts:1',
+        details: 'no init found',
+      },
+    ]);
+    const updated = next.find((c) => c.id === 'init-correct')!;
+    expect(updated.file).toBe('src/index.ts:1');
+    expect(updated.details).toBe('no init found');
+  });
+
+  it('reports unknown ids without mutating the ledger', () => {
+    const { next, unknown } = __test.applyAuditUpdates(seedChecks, [
+      { id: 'does-not-exist', status: 'pass' },
+    ]);
+    expect(unknown).toEqual(['does-not-exist']);
+    expect(next).toEqual(seedChecks);
+  });
+
+  it('applies a batch of patches in one call', () => {
+    const { next, unknown } = __test.applyAuditUpdates(seedChecks, [
+      { id: 'sdk-installed', status: 'pass' },
+      { id: 'sdk-up-to-date', status: 'warning' },
+    ]);
+    expect(unknown).toEqual([]);
+    expect(next.find((c) => c.id === 'sdk-installed')?.status).toBe('pass');
+    expect(next.find((c) => c.id === 'sdk-up-to-date')?.status).toBe('warning');
+  });
+});
+
+describe('makeMutex', () => {
+  it('runs single tasks sequentially', async () => {
+    const run = __test.makeMutex();
+    const order: number[] = [];
+    await Promise.all([
+      run(async () => {
+        await new Promise((r) => setTimeout(r, 10));
+        order.push(1);
+      }),
+      run(() => {
+        order.push(2);
+      }),
+      run(() => {
+        order.push(3);
+      }),
+    ]);
+    expect(order).toEqual([1, 2, 3]);
+  });
+
+  it('serializes concurrent read-modify-writes without losing updates', async () => {
+    const tmpDir = makeTmpDir();
+    try {
+      const target = path.join(tmpDir, __test.AUDIT_CHECKS_FILE);
+      __test.writeLedgerAtomic(target, seedChecks);
+
+      const run = __test.makeMutex();
+      const apply = (id: string, status: AuditCheck['status']) =>
+        run(() => {
+          const current = __test.readLedger(target);
+          const { next } = __test.applyAuditUpdates(current, [{ id, status }]);
+          __test.writeLedgerAtomic(target, next);
+        });
+
+      await Promise.all([
+        apply('sdk-installed', 'pass'),
+        apply('sdk-up-to-date', 'warning'),
+        apply('init-correct', 'error'),
+      ]);
+
+      const final = __test.readLedger(target);
+      expect(final.find((c) => c.id === 'sdk-installed')?.status).toBe('pass');
+      expect(final.find((c) => c.id === 'sdk-up-to-date')?.status).toBe(
+        'warning',
+      );
+      expect(final.find((c) => c.id === 'init-correct')?.status).toBe('error');
+    } finally {
+      cleanup(tmpDir);
+    }
+  });
+
+  it('continues running after a task throws', async () => {
+    const run = __test.makeMutex();
+    await expect(
+      run(() => {
+        throw new Error('boom');
+      }),
+    ).rejects.toThrow('boom');
+    const result = await run(() => 42);
+    expect(result).toBe(42);
   });
 });

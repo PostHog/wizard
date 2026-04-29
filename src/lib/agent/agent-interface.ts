@@ -850,6 +850,7 @@ export async function runAgent(
       'Glob',
       'Grep',
       'Bash',
+      'Task',
       'ListMcpResourcesTool',
       'Skill',
       ...WIZARD_TOOL_NAMES,

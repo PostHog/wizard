@@ -39,7 +39,7 @@ export const AuditRunScreen = ({ store }: AuditRunScreenProps) => {
       component: (
         <AuditChecksViewer
           checks={getAuditChecks(store.session)}
-          tasks={store.tasks}
+          currentStatus={store.statusMessages.at(-1)}
         />
       ),
     },

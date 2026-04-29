@@ -11,24 +11,18 @@ import { Footer } from './Footer.js';
 import { Header, statusCounts } from './Header.js';
 import { computeLayout } from './layout.js';
 import { sortChecks } from './sort.js';
-import type { AuditTaskItem } from './types.js';
 
 interface AuditChecksViewerProps {
   checks: AuditCheck[];
-  tasks: ReadonlyArray<AuditTaskItem>;
+  currentStatus: string | undefined;
 }
 
 export const AuditChecksViewer = ({
   checks,
-  tasks,
+  currentStatus,
 }: AuditChecksViewerProps) => {
-  // First in-progress task, else first pending — drives the "Working on…" banner.
-  const activeTask =
-    tasks.find((t) => t.status === 'in_progress') ??
-    tasks.find((t) => t.status === 'pending');
-
   const [rawCols, termRows] = useStdoutDimensions();
-  const layout = computeLayout(rawCols, termRows, Boolean(activeTask));
+  const layout = computeLayout(rawCols, termRows, Boolean(currentStatus));
   const totalHeight = layout.visibleHeight + layout.viewerChrome;
 
   // Pending at top, complete below — split here once and the JSX below
@@ -66,7 +60,7 @@ export const AuditChecksViewer = ({
 
   return (
     <Box flexDirection="column" paddingX={1} height={totalHeight}>
-      {activeTask && <ActiveTaskBanner task={activeTask} />}
+      {currentStatus && <ActiveTaskBanner status={currentStatus} />}
       <Header
         total={checks.length}
         counts={statusCounts(checks)}
