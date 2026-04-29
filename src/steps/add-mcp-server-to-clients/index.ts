@@ -11,14 +11,15 @@ import { ZedClient } from './clients/zed';
 import { CodexMCPClient } from './clients/codex';
 import { ALL_FEATURE_VALUES } from './defaults';
 import { debug } from '../../utils/debug';
+import { isPluginCapable, PluginCapable } from './plugin-client';
 
 export const getSupportedClients = async (): Promise<MCPClient[]> => {
   const allClients = [
-    new CursorMCPClient(),
     new ClaudeCodeMCPClient(),
+    new CodexMCPClient(),
+    new CursorMCPClient(),
     new VisualStudioCodeClient(),
     new ZedClient(),
-    new CodexMCPClient(),
   ];
   const supportedClients: MCPClient[] = [];
 
@@ -151,6 +152,27 @@ export const addMCPServer = async (
   for (const client of clients) {
     await client.addServer(personalApiKey, selectedFeatures, local);
   }
+};
+
+export const getSupportedPluginClients = (
+  clients: MCPClient[],
+): Array<MCPClient & PluginCapable> => {
+  return clients.filter(isPluginCapable).filter((c) => c.supportsPlugin());
+};
+
+export const installPlugins = async (
+  clients: Array<MCPClient & PluginCapable>,
+): Promise<string[]> => {
+  const installed: string[] = [];
+  for (const client of clients) {
+    try {
+      const result = await client.installPlugin();
+      if (result.success) installed.push(client.name);
+    } catch (err) {
+      debug(`[installPlugins] installPlugin threw for ${client.name}: ${err}`);
+    }
+  }
+  return installed;
 };
 
 export const removeMCPServer = async (

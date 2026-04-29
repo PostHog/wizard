@@ -10,9 +10,9 @@ import { McpScreen } from '../../screens/McpScreen.js';
 import type { McpInstaller } from '../../services/mcp-installer.js';
 
 const MOCK_CLIENTS = [
-  { name: 'VS Code' },
-  { name: 'Cursor' },
-  { name: 'Windsurf' },
+  { name: 'Claude Code', supportsPlugin: true },
+  { name: 'Cursor', supportsPlugin: true },
+  { name: 'VS Code', supportsPlugin: false },
 ];
 
 function createMockInstaller(): McpInstaller {
@@ -24,6 +24,12 @@ function createMockInstaller(): McpInstaller {
     async install(clientNames) {
       await new Promise((r) => setTimeout(r, 1500));
       return clientNames;
+    },
+    async installPlugins(clientNames) {
+      await new Promise((r) => setTimeout(r, 800));
+      return clientNames.filter(
+        (name) => MOCK_CLIENTS.find((c) => c.name === name)?.supportsPlugin,
+      );
     },
     async remove() {
       await new Promise((r) => setTimeout(r, 1000));

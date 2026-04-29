@@ -9,12 +9,17 @@ import {
   getSupportedClients,
   removeMCPServer,
   getInstalledClients,
+  getSupportedPluginClients,
+  installPlugins as runPluginInstall,
 } from '../../../steps/add-mcp-server-to-clients/index.js';
 import { ALL_FEATURE_VALUES } from '../../../steps/add-mcp-server-to-clients/defaults.js';
+import { isPluginCapable } from '../../../steps/add-mcp-server-to-clients/plugin-client.js';
 import { logToFile } from '../../../utils/debug.js';
+import { analytics } from '../../../utils/analytics.js';
 
 export interface McpClientInfo {
   name: string;
+  supportsPlugin: boolean;
 }
 
 export interface McpInstaller {
@@ -30,6 +35,9 @@ export interface McpInstaller {
 
   /** Remove the PostHog MCP server from all installed clients. Returns names of removed clients. */
   remove(): Promise<string[]>;
+
+  /** Install the PostHog AI plugin to supported clients. Best-effort: failures do not affect MCP outcome. */
+  installPlugins(clientNames: string[]): Promise<string[]>;
 }
 
 /**
@@ -43,7 +51,10 @@ export function createMcpInstaller(): McpInstaller {
     async detectClients(): Promise<McpClientInfo[]> {
       const supported = await getSupportedClients();
       cachedClients = supported.map((c) => ({ name: c.name, raw: c }));
-      return supported.map((c) => ({ name: c.name }));
+      return supported.map((c) => ({
+        name: c.name,
+        supportsPlugin: isPluginCapable(c) && c.supportsPlugin(),
+      }));
     },
 
     async install(
@@ -97,6 +108,23 @@ export function createMcpInstaller(): McpInstaller {
       if (installed.length === 0) return [];
       await removeMCPServer(installed);
       return installed.map((c) => c.name);
+    },
+
+    async installPlugins(clientNames: string[]): Promise<string[]> {
+      const rawClients = cachedClients
+        .filter((c) => clientNames.includes(c.name))
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        .map((c) => c.raw as any);
+
+      const pluginClients = getSupportedPluginClients(rawClients);
+      const installed = await runPluginInstall(pluginClients);
+
+      analytics.wizardCapture('mcp plugins installed', {
+        clients: installed,
+        attempted: pluginClients.map((c) => c.name),
+      });
+
+      return installed;
     },
   };
 }
