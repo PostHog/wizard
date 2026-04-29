@@ -64,7 +64,7 @@ export const RevenueIntroScreen = ({ store }: RevenueIntroScreenProps) => {
   // ── Body ────────────────────────────────────────────────────────────
 
   const body = showingMoreInfo ? (
-    <Box flexDirection="column" width={56}>
+    <Box flexDirection="column" width={56} flexShrink={0}>
       <Text>
         The wizard is an agent that executes PostHog tasks. Its code is open
         source: <Text color="cyan">https://github.com/PostHog/wizard</Text>.
