@@ -5,13 +5,11 @@ import { MAX_WIDTH } from '../../../primitives/ScreenContainer.js';
 export const CHROME_ROWS = 10;
 
 /** Rows used by the viewer's own header / footer
- *  (title, divider, column headers, legend, "more checks…" tagline). The
- *  "Working on…" banner adds one more when present. */
-export const VIEWER_CHROME_BASE = 5;
+ *  (column headers, legend, count summary). */
+export const VIEWER_CHROME_BASE = 3;
 
 export const COL_AREA_WIDTH = 18;
 export const COL_LABEL_MIN = 28;
-export const COL_FILE_MIN = 24;
 export const COL_GAP = 2;
 
 export interface ViewerLayout {
@@ -22,7 +20,6 @@ export interface ViewerLayout {
   statusWidth: number;
   areaWidth: number;
   labelWidth: number;
-  fileWidth: number;
   colGap: number;
   dividerWidth: number;
   detailIndent: number;
@@ -36,31 +33,20 @@ function getViewerWidth(rawCols: number): number {
   return Math.min(MAX_WIDTH, rawCols) - 2;
 }
 
-export function computeLayout(
-  rawCols: number,
-  termRows: number,
-  hasActiveTask: boolean,
-): ViewerLayout {
+export function computeLayout(rawCols: number, termRows: number): ViewerLayout {
   const cols = getViewerWidth(rawCols);
   const padding = 2;
   const statusWidth = 2;
-  const fileWidth = COL_FILE_MIN;
 
-  // FILE is fixed at its minimum width; CHECK flexes to consume the rest of
-  // the row so long labels stay readable instead of getting truncated.
+  // CHECK flexes to consume the rest of the row so long labels stay readable
+  // instead of getting truncated.
   const fixedExceptLabel =
-    padding +
-    statusWidth +
-    COL_GAP +
-    COL_AREA_WIDTH +
-    COL_GAP +
-    fileWidth +
-    COL_GAP;
-  const labelWidth = Math.max(COL_LABEL_MIN, cols - fixedExceptLabel - COL_GAP);
+    padding + statusWidth + COL_GAP + COL_AREA_WIDTH + COL_GAP + COL_GAP;
+  const labelWidth = Math.max(COL_LABEL_MIN, cols - fixedExceptLabel);
 
   const detailIndent = statusWidth + COL_GAP + COL_AREA_WIDTH + COL_GAP;
 
-  const viewerChrome = VIEWER_CHROME_BASE + (hasActiveTask ? 1 : 0);
+  const viewerChrome = VIEWER_CHROME_BASE;
   const visibleHeight = Math.max(5, termRows - CHROME_ROWS - viewerChrome);
 
   return {
@@ -71,7 +57,6 @@ export function computeLayout(
     statusWidth,
     areaWidth: COL_AREA_WIDTH,
     labelWidth,
-    fileWidth,
     colGap: COL_GAP,
     dividerWidth: Math.max(20, cols - padding),
     detailIndent,

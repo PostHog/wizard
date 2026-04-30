@@ -1,11 +1,15 @@
-import { Text } from 'ink';
 import { Legend } from './Legend.js';
+import { Summary } from './Header.js';
+import type { AuditStatus } from '../../../../../lib/workflows/audit/types.js';
 
-export const Footer = () => (
+interface FooterProps {
+  total: number;
+  counts: Record<AuditStatus, number>;
+}
+
+export const Footer = ({ total, counts }: FooterProps) => (
   <>
     <Legend />
-    <Text dimColor italic>
-      more checks will be added as your project is explored
-    </Text>
+    <Summary total={total} counts={counts} />
   </>
 );

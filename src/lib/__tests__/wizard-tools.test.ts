@@ -6,6 +6,7 @@ import {
   ensureGitignoreCoverage,
   parseEnvKeys,
   mergeEnvValues,
+  WIZARD_TOOL_NAMES,
   __test,
 } from '../wizard-tools';
 import type { AuditCheck } from '../workflows/audit/types';
@@ -235,6 +236,21 @@ const seedChecks: AuditCheck[] = [
   },
 ];
 
+const addedChecks: AuditCheck[] = [
+  {
+    id: 'feature-flags-evaluation',
+    area: 'Feature Flags',
+    label: 'Feature flag evaluation reviewed',
+    status: 'pending',
+  },
+  {
+    id: 'replay-enabled',
+    area: 'Session Replay',
+    label: 'Replay recording enabled',
+    status: 'pending',
+  },
+];
+
 describe('writeLedgerAtomic', () => {
   let tmpDir: string;
   beforeEach(() => {
@@ -337,6 +353,85 @@ describe('applyAuditUpdates', () => {
   });
 });
 
+describe('applyAuditAdditions', () => {
+  it('appends checks after existing entries', () => {
+    const { next, duplicates } = __test.applyAuditAdditions(
+      seedChecks,
+      addedChecks,
+    );
+    expect(duplicates).toEqual([]);
+    expect(next.map((c) => c.id)).toEqual([
+      'sdk-installed',
+      'sdk-up-to-date',
+      'init-correct',
+      'feature-flags-evaluation',
+      'replay-enabled',
+    ]);
+  });
+
+  it('reports duplicate ids from the existing ledger without mutating', () => {
+    const { next, duplicates } = __test.applyAuditAdditions(seedChecks, [
+      { ...addedChecks[0], id: 'sdk-installed' },
+    ]);
+    expect(duplicates).toEqual(['sdk-installed']);
+    expect(next).toEqual(seedChecks);
+  });
+
+  it('reports duplicate ids within additions without mutating', () => {
+    const { next, duplicates } = __test.applyAuditAdditions(seedChecks, [
+      addedChecks[0],
+      { ...addedChecks[1], id: addedChecks[0].id },
+    ]);
+    expect(duplicates).toEqual(['feature-flags-evaluation']);
+    expect(next).toEqual(seedChecks);
+  });
+});
+
+describe('appendAuditChecksToLedger', () => {
+  let tmpDir: string;
+  beforeEach(() => {
+    tmpDir = makeTmpDir();
+  });
+  afterEach(() => {
+    cleanup(tmpDir);
+  });
+
+  it('returns a missing-ledger error before seed', () => {
+    const target = path.join(tmpDir, __test.AUDIT_CHECKS_FILE);
+    const result = __test.appendAuditChecksToLedger(target, addedChecks);
+    expect(result).toEqual({ ok: false, reason: 'missing-ledger' });
+    expect(fs.existsSync(target)).toBe(false);
+  });
+
+  it('writes appended checks to a seeded ledger', () => {
+    const target = path.join(tmpDir, __test.AUDIT_CHECKS_FILE);
+    __test.writeLedgerAtomic(target, seedChecks);
+    const result = __test.appendAuditChecksToLedger(target, addedChecks);
+    expect(result).toEqual({ ok: true, added: 2 });
+    expect(__test.readLedger(target).map((c) => c.id)).toEqual([
+      'sdk-installed',
+      'sdk-up-to-date',
+      'init-correct',
+      'feature-flags-evaluation',
+      'replay-enabled',
+    ]);
+  });
+
+  it('rejects duplicate ids and leaves the ledger unchanged', () => {
+    const target = path.join(tmpDir, __test.AUDIT_CHECKS_FILE);
+    __test.writeLedgerAtomic(target, seedChecks);
+    const result = __test.appendAuditChecksToLedger(target, [
+      { ...addedChecks[0], id: 'sdk-installed' },
+    ]);
+    expect(result).toEqual({
+      ok: false,
+      reason: 'duplicate-ids',
+      ids: ['sdk-installed'],
+    });
+    expect(__test.readLedger(target)).toEqual(seedChecks);
+  });
+});
+
 describe('makeMutex', () => {
   it('runs single tasks sequentially', async () => {
     const run = __test.makeMutex();
@@ -387,6 +482,36 @@ describe('makeMutex', () => {
     }
   });
 
+  it('serializes concurrent add and resolve operations', async () => {
+    const tmpDir = makeTmpDir();
+    try {
+      const target = path.join(tmpDir, __test.AUDIT_CHECKS_FILE);
+      __test.writeLedgerAtomic(target, seedChecks);
+
+      const run = __test.makeMutex();
+      await Promise.all([
+        run(() => {
+          const current = __test.readLedger(target);
+          const { next } = __test.applyAuditUpdates(current, [
+            { id: 'sdk-installed', status: 'pass' },
+          ]);
+          __test.writeLedgerAtomic(target, next);
+        }),
+        run(() => {
+          __test.appendAuditChecksToLedger(target, [addedChecks[0]]);
+        }),
+      ]);
+
+      const final = __test.readLedger(target);
+      expect(final.find((c) => c.id === 'sdk-installed')?.status).toBe('pass');
+      expect(final.find((c) => c.id === addedChecks[0].id)).toEqual(
+        addedChecks[0],
+      );
+    } finally {
+      cleanup(tmpDir);
+    }
+  });
+
   it('continues running after a task throws', async () => {
     const run = __test.makeMutex();
     await expect(
@@ -396,5 +521,11 @@ describe('makeMutex', () => {
     ).rejects.toThrow('boom');
     const result = await run(() => 42);
     expect(result).toBe(42);
+  });
+});
+
+describe('WIZARD_TOOL_NAMES', () => {
+  it('exposes the audit add-checks tool', () => {
+    expect(WIZARD_TOOL_NAMES).toContain('wizard-tools:audit_add_checks');
   });
 });

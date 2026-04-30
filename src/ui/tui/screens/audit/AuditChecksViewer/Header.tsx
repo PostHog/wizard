@@ -6,9 +6,12 @@ import type {
 import type { ViewerLayout } from './layout.js';
 
 interface HeaderProps {
+  layout: ViewerLayout;
+}
+
+interface SummaryProps {
   total: number;
   counts: Record<AuditStatus, number>;
-  layout: ViewerLayout;
 }
 
 function statusCounts(checks: AuditCheck[]): Record<AuditStatus, number> {
@@ -25,41 +28,30 @@ function statusCounts(checks: AuditCheck[]): Record<AuditStatus, number> {
 
 export { statusCounts };
 
-export const Header = ({ total, counts, layout }: HeaderProps) => {
-  const divider = '─'.repeat(layout.dividerWidth);
-  return (
-    <>
-      <Text bold>
-        Up next{' '}
-        <Text dimColor>
-          ({total} total · {counts.pending} pending · {counts.error} errors ·{' '}
-          {counts.warning} warnings · {counts.suggestion} suggestions ·{' '}
-          {counts.pass} passes)
-        </Text>
+export const Header = ({ layout }: HeaderProps) => (
+  <Box>
+    <Box width={layout.statusWidth + layout.colGap}>
+      <Text dimColor bold>
+        {' '}
       </Text>
-      <Text dimColor>{divider}</Text>
-      <Box>
-        <Box width={layout.statusWidth + layout.colGap}>
-          <Text dimColor bold>
-            {' '}
-          </Text>
-        </Box>
-        <Box width={layout.areaWidth + layout.colGap}>
-          <Text dimColor bold>
-            AREA
-          </Text>
-        </Box>
-        <Box width={layout.labelWidth + layout.colGap}>
-          <Text dimColor bold>
-            CHECK
-          </Text>
-        </Box>
-        <Box width={layout.fileWidth}>
-          <Text dimColor bold>
-            FILE
-          </Text>
-        </Box>
-      </Box>
-    </>
-  );
-};
+    </Box>
+    <Box width={layout.areaWidth + layout.colGap}>
+      <Text dimColor bold>
+        AREA
+      </Text>
+    </Box>
+    <Box width={layout.labelWidth + layout.colGap}>
+      <Text dimColor bold>
+        CHECK
+      </Text>
+    </Box>
+  </Box>
+);
+
+export const Summary = ({ total, counts }: SummaryProps) => (
+  <Text dimColor>
+    {total} total · {counts.pending} pending · {counts.error} errors ·{' '}
+    {counts.warning} warnings · {counts.suggestion} suggestions · {counts.pass}{' '}
+    passes
+  </Text>
+);

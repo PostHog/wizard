@@ -11,10 +11,17 @@ interface DetailRowProps {
 export const DetailRow = ({ item, layout }: DetailRowProps) => (
   <Box flexShrink={0}>
     <Box width={layout.detailIndent} />
-    <Box width={layout.detailWidth}>
-      <Text dimColor italic wrap="wrap">
-        {`↳ ${item.details ?? ''}`}
-      </Text>
+    <Box flexDirection="column" width={layout.detailWidth}>
+      {item.file && (
+        <Text dimColor wrap="wrap">
+          {`↳ File: ${item.file}`}
+        </Text>
+      )}
+      {item.details && (
+        <Text dimColor italic wrap="wrap">
+          {`${item.file ? '  ' : '↳ '}Details: ${item.details}`}
+        </Text>
+      )}
     </Box>
   </Box>
 );

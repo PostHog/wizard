@@ -28,9 +28,6 @@ export const CheckRow = ({ item, layout }: CheckRowProps) => {
           {truncate(item.label, layout.labelWidth)}
         </Text>
       </Box>
-      <Box width={layout.fileWidth}>
-        <Text dimColor>{truncate(item.file ?? '', layout.fileWidth - 1)}</Text>
-      </Box>
     </Box>
   );
 };
