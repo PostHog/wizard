@@ -3,11 +3,7 @@ import path from 'path';
 import { logToFile } from '../../../utils/debug';
 import { AUDIT_CHECKS_FILE, type AuditCheck } from './types.js';
 
-/**
- * Static seed list: the 9 data-integrity checks the audit always runs.
- * Lives in the wizard so the workflow can drop the ledger on disk before
- * the agent starts — no agent turn wasted on an `audit_seed_checks` call.
- */
+/** The 9 data-integrity checks the audit runs. */
 export const AUDIT_SEED_CHECKS: AuditCheck[] = [
   {
     id: 'sdk-installed',
@@ -65,11 +61,7 @@ export const AUDIT_SEED_CHECKS: AuditCheck[] = [
   },
 ];
 
-/**
- * Atomically write the audit ledger to <installDir>/.posthog-audit-checks.json.
- * Mirrors the `audit_seed_checks` MCP tool's behavior so concurrent writers
- * (e.g. resolve calls from the agent) see a consistent file mtime.
- */
+/** Atomically write the seeded ledger to the project's audit checks file. */
 export function seedAuditLedger(installDir: string): void {
   const target = path.join(installDir, AUDIT_CHECKS_FILE);
   const tmp = `${target}.tmp`;

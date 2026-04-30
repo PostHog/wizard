@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useState, useSyncExternalStore } from 'react';
 import { join } from 'node:path';
 import { Box } from 'ink';
 import type { WizardStore } from '../../store.js';
@@ -12,6 +12,7 @@ import { useStdoutDimensions } from '../../hooks/useStdoutDimensions.js';
 import { useFileWatcher } from '../../hooks/file-watcher.js';
 import { AuditChecksViewer } from './AuditChecksViewer/AuditChecksViewer.js';
 import { AuditLearnCard } from './AuditLearnCard.js';
+import { buildShuffledPlaylist } from './learnCard/index.js';
 import { PendingChecksList } from './PendingChecksList.js';
 import {
   AUDIT_CHECKS_FILE,
@@ -21,6 +22,7 @@ import {
 } from '../../../../lib/workflows/audit/types.js';
 
 const LOG_FILE = '/tmp/posthog-wizard.log';
+const TIP_DURATION_MS = 15_000;
 
 interface AuditRunScreenProps {
   store: WizardStore;
@@ -32,8 +34,7 @@ export const AuditRunScreen = ({ store }: AuditRunScreenProps) => {
     () => store.getSnapshot(),
   );
 
-  // Mirror the agent's `.posthog-audit-checks.json` ledger into the store so
-  // the Audit plan tab reflects updates within the poll interval.
+  // Mirror the agent's audit ledger into the store.
   useFileWatcher(join(store.session.installDir, AUDIT_CHECKS_FILE), (parsed) =>
     store.setFrameworkContext(AUDIT_CHECKS_KEY, coerceAuditChecks(parsed)),
   );
@@ -45,14 +46,65 @@ export const AuditRunScreen = ({ store }: AuditRunScreenProps) => {
   const checks = getAuditChecks(store.session);
   const pendingChecksList = <PendingChecksList checks={checks} />;
 
-  // On narrow terminals, drop the slideshow pane and show only the checks list.
+  // Slideshow state lives on this screen so the auto-advance timer survives
+  // tab switches that unmount AuditLearnCard. The playlist is shuffled once
+  // at mount; advancing past the end reshuffles into a new pass so every tip
+  // is shown before any repeats.
+  const [playlist, setPlaylist] = useState(buildShuffledPlaylist);
+  const [tipIndex, setTipIndex] = useState(0);
+  const [isPlaying, setIsPlaying] = useState(true);
+
+  const advance = useCallback(
+    (direction: 1 | -1) => {
+      setTipIndex((current) => {
+        const next = current + direction;
+        if (next >= playlist.length) {
+          setPlaylist(buildShuffledPlaylist());
+          return 0;
+        }
+        if (next < 0) return playlist.length - 1;
+        return next;
+      });
+    },
+    [playlist.length],
+  );
+
+  const takeOver = useCallback(
+    (direction: 1 | -1) => {
+      setIsPlaying(false);
+      advance(direction);
+    },
+    [advance],
+  );
+
+  const togglePlay = useCallback(() => {
+    setIsPlaying((p) => !p);
+  }, []);
+
+  useEffect(() => {
+    if (!isPlaying) return;
+    const timer = setTimeout(() => advance(1), TIP_DURATION_MS);
+    return () => clearTimeout(timer);
+  }, [advance, isPlaying, tipIndex]);
+
+  const tip = playlist[tipIndex];
+  const learnCard = (
+    <AuditLearnCard
+      tip={tip}
+      isPlaying={isPlaying}
+      onAdvance={takeOver}
+      onTogglePlay={togglePlay}
+    />
+  );
+
+  // Narrow terminals: drop the slideshow pane.
   const statusComponent =
     columns < 80 ? (
       <Box flexDirection="column" flexGrow={1}>
         {pendingChecksList}
       </Box>
     ) : (
-      <SplitView left={<AuditLearnCard />} right={pendingChecksList} />
+      <SplitView left={learnCard} right={pendingChecksList} />
     );
 
   const tabs = [

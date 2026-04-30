@@ -1,7 +1,11 @@
+import { useCallback, useEffect, useState } from 'react';
 import { SplitView } from '../../primitives/index.js';
 import type { AuditCheck } from '../../../../lib/workflows/audit/types.js';
 import { AuditLearnCard } from '../../screens/audit/AuditLearnCard.js';
+import { buildShuffledPlaylist } from '../../screens/audit/learnCard/index.js';
 import { PendingChecksList } from '../../screens/audit/PendingChecksList.js';
+
+const TIP_DURATION_MS = 15_000;
 
 const MOCK_AUDIT_CHECKS: AuditCheck[] = [
   {
@@ -42,9 +46,55 @@ const MOCK_AUDIT_CHECKS: AuditCheck[] = [
   },
 ];
 
-export const AuditLearnDemo = () => (
-  <SplitView
-    left={<AuditLearnCard />}
-    right={<PendingChecksList checks={MOCK_AUDIT_CHECKS} />}
-  />
-);
+export const AuditLearnDemo = () => {
+  const [playlist, setPlaylist] = useState(buildShuffledPlaylist);
+  const [tipIndex, setTipIndex] = useState(0);
+  const [isPlaying, setIsPlaying] = useState(true);
+
+  const advance = useCallback(
+    (direction: 1 | -1) => {
+      setTipIndex((current) => {
+        const next = current + direction;
+        if (next >= playlist.length) {
+          setPlaylist(buildShuffledPlaylist());
+          return 0;
+        }
+        if (next < 0) return playlist.length - 1;
+        return next;
+      });
+    },
+    [playlist.length],
+  );
+
+  const takeOver = useCallback(
+    (direction: 1 | -1) => {
+      setIsPlaying(false);
+      advance(direction);
+    },
+    [advance],
+  );
+
+  const togglePlay = useCallback(() => {
+    setIsPlaying((p) => !p);
+  }, []);
+
+  useEffect(() => {
+    if (!isPlaying) return;
+    const timer = setTimeout(() => advance(1), TIP_DURATION_MS);
+    return () => clearTimeout(timer);
+  }, [advance, isPlaying, tipIndex]);
+
+  return (
+    <SplitView
+      left={
+        <AuditLearnCard
+          tip={playlist[tipIndex]}
+          isPlaying={isPlaying}
+          onAdvance={takeOver}
+          onTogglePlay={togglePlay}
+        />
+      }
+      right={<PendingChecksList checks={MOCK_AUDIT_CHECKS} />}
+    />
+  );
+};

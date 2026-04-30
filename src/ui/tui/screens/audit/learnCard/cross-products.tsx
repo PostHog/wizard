@@ -1,6 +1,7 @@
 import { Box, Text } from 'ink';
 import { Colors } from '../../../styles.js';
 import { SlideFrame, VisualBox } from './SlideFrame.js';
+import { buildMaxUrl, OpenInMaxLink } from './maxLink.js';
 
 const MiniBar = ({
   label,
@@ -54,75 +55,93 @@ export const FunnelCriticalPathSlide = () => (
   </SlideFrame>
 );
 
-export const FeatureFlagIdentitySlide = () => (
-  <Box flexDirection="column">
-    <VisualBox>
-      <Box flexDirection="column">
-        <Text bold color={Colors.accent}>
-          Replay filters
-        </Text>
-        <Box height={1} />
-        <Text color="gray">{'┌ Search suggested filters...     ≡ ┐'}</Text>
-        <Text color="gray">{'└──────────────────────────────────┘'}</Text>
-        <Box height={1} />
-        <Text bold>Applied filters</Text>
-        <Text>
-          <Text color="cyan">{'[ Last 3 days ▾ ]'}</Text>
-          <Text>{'  '}</Text>
-          <Text color="cyan">{'[ > 5 active seconds ▾ ]'}</Text>
-        </Text>
-        <Text>
-          <Text color="cyan">
-            {'[ Feature: show-super-cool-cta = true × ]'}
+const FEATURE_FLAG_IDENTITY_PROMPT =
+  'Find all session replays where the show-super-cool-cta flag evaluated to true.';
+
+export const FeatureFlagIdentitySlide = Object.assign(
+  () => (
+    <Box flexDirection="column">
+      <VisualBox>
+        <Box flexDirection="column">
+          <Text bold color={Colors.accent}>
+            Replay filters
           </Text>
-        </Text>
+          <Box height={1} />
+          <Text color="gray">{'┌ Search suggested filters...     ≡ ┐'}</Text>
+          <Text color="gray">{'└──────────────────────────────────┘'}</Text>
+          <Box height={1} />
+          <Text bold>Applied filters</Text>
+          <Text>
+            <Text color="cyan">{'[ Last 3 days ▾ ]'}</Text>
+            <Text>{'  '}</Text>
+            <Text color="cyan">{'[ > 5 active seconds ▾ ]'}</Text>
+          </Text>
+          <Text>
+            <Text color="cyan">
+              {'[ Feature: show-super-cool-cta = true × ]'}
+            </Text>
+          </Text>
+        </Box>
+      </VisualBox>
+      <Text>
+        Session Replay can filter recordings by feature flag variant, so flag
+        rollouts are easier to debug when analytics and replay share data.
+      </Text>
+      <Box height={1} />
+      <Text>
+        Try asking PostHog AI to find all session replays where the
+        show-super-cool-cta flag evaluated to <Text color="cyan">`true`</Text>.
+      </Text>
+      <Box marginTop={1}>
+        <OpenInMaxLink />
       </Box>
-    </VisualBox>
-    <Text>
-      Session Replay can filter recordings by feature flag variant, so flag
-      rollouts are easier to debug when analytics and replay share data.
-    </Text>
-    <Box height={1} />
-    <Text>
-      Try asking PostHog AI to find all session replays where the
-      show-super-cool-cta flag evaluated to <Text color="cyan">`true`</Text>.
-    </Text>
-  </Box>
+    </Box>
+  ),
+  { link: buildMaxUrl(FEATURE_FLAG_IDENTITY_PROMPT) },
 );
 
-export const ExperimentExposureSlide = () => (
-  <Box flexDirection="column">
-    <VisualBox>
-      <Box flexDirection="column">
-        <Text bold color={Colors.accent}>
-          From chart to users
-        </Text>
-        <Box height={1} />
-        <Text>
-          <Text color="cyan">funnel step 2</Text>
-          <Text dimColor>{'   ──▶   '}</Text>
-          <Text color="green">12 replays</Text>
-        </Text>
-        <Text>
-          <Text color="cyan">retention dip</Text>
-          <Text dimColor>{'   ──▶   '}</Text>
-          <Text color="green">watch list</Text>
-        </Text>
+const EXPERIMENT_EXPOSURE_PROMPT =
+  'Surface the users behind my biggest funnel drop and pull up their replays.';
+
+export const ExperimentExposureSlide = Object.assign(
+  () => (
+    <Box flexDirection="column">
+      <VisualBox>
+        <Box flexDirection="column">
+          <Text bold color={Colors.accent}>
+            From chart to users
+          </Text>
+          <Box height={1} />
+          <Text>
+            <Text color="cyan">funnel step 2</Text>
+            <Text dimColor>{'   ──▶   '}</Text>
+            <Text color="green">12 replays</Text>
+          </Text>
+          <Text>
+            <Text color="cyan">retention dip</Text>
+            <Text dimColor>{'   ──▶   '}</Text>
+            <Text color="green">watch list</Text>
+          </Text>
+        </Box>
+      </VisualBox>
+      <Text>
+        Click a funnel, retention chart, or user path and jump straight to
+        replays for the users behind that data point.
+      </Text>
+      <Box height={1} />
+      <Text>
+        Try asking PostHog AI to{' '}
+        <Text color="cyan">
+          surface the users behind your biggest funnel drop
+        </Text>{' '}
+        and pull up their replays.
+      </Text>
+      <Box marginTop={1}>
+        <OpenInMaxLink />
       </Box>
-    </VisualBox>
-    <Text>
-      Click a funnel, retention chart, or user path and jump straight to replays
-      for the users behind that data point.
-    </Text>
-    <Box height={1} />
-    <Text>
-      Try asking PostHog AI to{' '}
-      <Text color="cyan">
-        surface the users behind your biggest funnel drop
-      </Text>{' '}
-      and pull up their replays.
-    </Text>
-  </Box>
+    </Box>
+  ),
+  { link: buildMaxUrl(EXPERIMENT_EXPOSURE_PROMPT) },
 );
 
 export const ReplayAccessSlide = () => (

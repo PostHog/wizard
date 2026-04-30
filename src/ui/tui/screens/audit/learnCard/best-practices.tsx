@@ -1,6 +1,7 @@
 import { Box, Text } from 'ink';
 import { Colors } from '../../../styles.js';
 import { SlideFrame } from './SlideFrame.js';
+import { buildMaxUrl, OpenInMaxLink } from './maxLink.js';
 
 const mark = (ok: boolean) => (
   <Text color={ok ? 'green' : 'red'}>{ok ? '✓' : '×'}</Text>
@@ -117,23 +118,23 @@ const PropertiesVisual = () => (
     <Text bold color={Colors.accent}>
       Event shape
     </Text>
+    <Box height={1} />
     <Box>
       <Box flexDirection="column" width={24}>
         <Text color="green" bold>
           Good
         </Text>
         <ExampleRow ok label="page_viewed" />
-        <Text dimColor>{'    { page_name }'}</Text>
-        <ExampleRow ok label="feature_used" />
-        <Text dimColor>{'    { feature_name }'}</Text>
+        <Text dimColor>{'    properties:'}</Text>
+        <Text dimColor>{'      { page_name }'}</Text>
       </Box>
       <Box flexDirection="column" width={22}>
         <Text color="red" bold>
           Bad
         </Text>
         <ExampleRow ok={false} label="page_/pricing" />
-        <ExampleRow ok={false} label="export_csv_used" />
-        <ExampleRow ok={false} label="button_4512" />
+        <ExampleRow ok={false} label="page_/checkout" />
+        <ExampleRow ok={false} label="page_/settings" />
       </Box>
     </Box>
   </Box>
@@ -192,18 +193,33 @@ const ActivationVisual = () => (
 const BackendTrackingVisual = () => (
   <Box flexDirection="column" marginBottom={1}>
     <Text bold color={Colors.accent}>
-      Server-side
+      Where does the event fire?
     </Text>
-    <Text dimColor>{'browser can miss critical events'}</Text>
+    <Box height={1} />
     <Text>
-      <Text color="gray">{'client '}</Text>
-      <Text color="red">✕</Text>
-      <Text dimColor>{' adblock / tab closed / flaky net'}</Text>
+      <Text color="gray">signup</Text>
+      <Text dimColor>{'    '}</Text>
+      <Text color="red">client ✕</Text>
+      <Text dimColor>{'    '}</Text>
+      <Text color="green">server ✓</Text>
     </Text>
     <Text>
-      <Text color="gray">{'server '}</Text>
-      <Text color="green">✓</Text>
-      <Text dimColor>{' signup, payment, upgrade, invite'}</Text>
+      <Text color="gray">payment</Text>
+      <Text dimColor>{'   '}</Text>
+      <Text color="red">client ✕</Text>
+      <Text dimColor>{'    '}</Text>
+      <Text color="green">server ✓</Text>
+    </Text>
+    <Text>
+      <Text color="gray">upgrade</Text>
+      <Text dimColor>{'   '}</Text>
+      <Text color="red">client ✕</Text>
+      <Text dimColor>{'    '}</Text>
+      <Text color="green">server ✓</Text>
+    </Text>
+    <Box height={1} />
+    <Text dimColor>
+      browsers drop events: adblock, closed tabs, flaky networks
     </Text>
   </Box>
 );
@@ -239,29 +255,33 @@ const ReplayDropoffVisual = () => (
     <Text bold color={Colors.accent}>
       Drop-off replay
     </Text>
-    <Text color="gray">{'┌ checkout step ─────────────────┐'}</Text>
+    <Box height={1} />
+    <Text color="gray">{'┌ checkout step ───────────────────────┐'}</Text>
     <Text>
       <Text color="gray">{'│ '}</Text>
       <Text>cart_submit</Text>
-      <Text dimColor>{' recorded'}</Text>
-      <Text color="gray">{'                  │'}</Text>
+      <Text dimColor>{' recorded                       '}</Text>
+      <Text color="gray">│</Text>
     </Text>
     <Text>
       <Text color="gray">{'│ '}</Text>
       <Text color="red">Pay button disabled</Text>
-      <Text color="gray">{'             │'}</Text>
+      <Text dimColor>{'                  '}</Text>
+      <Text color="gray">│</Text>
     </Text>
     <Text>
       <Text color="gray">{'│ '}</Text>
-      <Text dimColor>{'console: missing price_id'}</Text>
-      <Text color="gray">{'          │'}</Text>
+      <Text dimColor>console: missing price_id</Text>
+      <Text dimColor>{'            '}</Text>
+      <Text color="gray">│</Text>
     </Text>
     <Text>
       <Text color="gray">{'│ '}</Text>
       <Text color="red">user exits checkout</Text>
-      <Text color="gray">{'              │'}</Text>
+      <Text dimColor>{'                  '}</Text>
+      <Text color="gray">│</Text>
     </Text>
-    <Text color="gray">{'└────────────────────────────────┘'}</Text>
+    <Text color="gray">{'└──────────────────────────────────────┘'}</Text>
   </Box>
 );
 
@@ -321,10 +341,21 @@ export const CoreFlowEvaluationSlide = () => (
   </SlideFrame>
 );
 
-export const DropoffQuestionSlide = () => (
-  <SlideFrame visual={<ReplayDropoffVisual />}>
-    Reviewing your funnel should answer one human question: where do users drop
-    off in the core flow, and why? Try asking PostHog AI to help you build
-    funnels and watch replays.
-  </SlideFrame>
+const DROPOFF_QUESTION_PROMPT =
+  'Help me build a funnel for my core product flow and explain where users drop off and why.';
+
+export const DropoffQuestionSlide = Object.assign(
+  () => (
+    <Box flexDirection="column">
+      <SlideFrame visual={<ReplayDropoffVisual />}>
+        Reviewing your funnel should answer one human question: where do users
+        drop off in the core flow, and why? Try asking PostHog AI to help you
+        build funnels and watch replays.
+      </SlideFrame>
+      <Box marginTop={1}>
+        <OpenInMaxLink />
+      </Box>
+    </Box>
+  ),
+  { link: buildMaxUrl(DROPOFF_QUESTION_PROMPT) },
 );

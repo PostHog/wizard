@@ -102,15 +102,15 @@ export interface AuditLearnTip {
   link?: string;
 }
 
+/** A slide may attach its follow-link as a static `link` property. */
+type Slide = ComponentType & { link?: string };
+
 interface SlideEntry {
   Slide: ComponentType;
   link?: string;
 }
 
-const slideEntry = (Slide: ComponentType, link?: string): SlideEntry => ({
-  Slide,
-  link,
-});
+const slideEntry = (Slide: Slide): SlideEntry => ({ Slide, link: Slide.link });
 
 export const AUDIT_LEARN_CATEGORY_ORDER: AuditLearnCategory[] = [
   'best-practices',
@@ -137,7 +137,7 @@ export const AUDIT_LEARN_TIPS_BY_CATEGORY: Record<
   'cross-products': [
     slideEntry(FunnelCriticalPathSlide),
     slideEntry(FeatureFlagIdentitySlide),
-    slideEntry(ExperimentExposureSlide, 'https://us.posthog.com/max'),
+    slideEntry(ExperimentExposureSlide),
     slideEntry(ReplayAccessSlide),
     slideEntry(SourceMapsSlide),
     slideEntry(RevenueJourneySlide),
@@ -179,35 +179,31 @@ function shuffle<T>(array: readonly T[]): T[] {
 }
 
 /**
- * Build the playback order: cycle categories in fixed order, but pick from
- * each category's slides in a randomized within-category sequence so reruns
- * surface different examples first.
+ * Return a fresh playlist containing every tip exactly once. Walks the
+ * categories in fixed AUDIT_LEARN_CATEGORY_ORDER, picking a random
+ * unseen tip from each category per round, until every tip has been
+ * placed. No repeats until the queue is exhausted; call again to
+ * reshuffle when starting a new pass.
  */
-export const AUDIT_LEARN_TIPS: AuditLearnTip[] = (() => {
-  const shuffledByCategory = Object.fromEntries(
+export const buildShuffledPlaylist = (): AuditLearnTip[] => {
+  const queues = new Map(
     AUDIT_LEARN_CATEGORY_ORDER.map((category) => [
       category,
       shuffle(AUDIT_LEARN_TIPS_BY_CATEGORY[category]),
     ]),
-  ) as Record<AuditLearnCategory, SlideEntry[]>;
-
-  const maxTips = Math.max(
+  );
+  const playlist: AuditLearnTip[] = [];
+  const maxRounds = Math.max(
     ...AUDIT_LEARN_CATEGORY_ORDER.map(
       (category) => AUDIT_LEARN_TIPS_BY_CATEGORY[category].length,
     ),
   );
-  const tips: AuditLearnTip[] = [];
-
-  for (let index = 0; index < maxTips; index += 1) {
+  for (let round = 0; round < maxRounds; round += 1) {
     for (const category of AUDIT_LEARN_CATEGORY_ORDER) {
-      const entry = shuffledByCategory[category][index];
-      if (entry) tips.push({ category, Slide: entry.Slide, link: entry.link });
+      const entry = queues.get(category)?.[round];
+      if (entry)
+        playlist.push({ category, Slide: entry.Slide, link: entry.link });
     }
   }
-
-  return tips;
-})();
-
-export const AUDIT_LEARN_SLIDES: ComponentType[] = AUDIT_LEARN_TIPS.map(
-  ({ Slide }) => Slide,
-);
+  return playlist;
+};
