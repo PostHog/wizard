@@ -80,29 +80,15 @@ export class VisualStudioCodeClient extends DefaultMCPClient {
 
   getServerConfig(
     apiKey: string,
-    type: 'sse' | 'streamable-http',
     selectedFeatures?: string[],
     local?: boolean,
   ): MCPServerConfig {
     return {
       type: 'http',
-      url: buildMCPUrl(type, selectedFeatures, local),
+      url: buildMCPUrl(selectedFeatures, local),
       headers: {
         Authorization: `Bearer ${apiKey}`,
       },
     };
-  }
-
-  async addServer(
-    apiKey: string,
-    selectedFeatures?: string[],
-    local?: boolean,
-  ): Promise<{ success: boolean }> {
-    return this._addServerType(
-      apiKey,
-      'streamable-http',
-      selectedFeatures,
-      local,
-    );
   }
 }

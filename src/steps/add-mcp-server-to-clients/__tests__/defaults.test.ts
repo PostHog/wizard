@@ -6,43 +6,33 @@ import {
 
 describe('defaults', () => {
   describe('buildMCPUrl', () => {
-    it('should build base URL for streamable-http type', () => {
-      const url = buildMCPUrl('streamable-http');
+    it('should build base URL', () => {
+      const url = buildMCPUrl();
       expect(url).toBe('https://mcp.posthog.com/mcp');
     });
 
-    it('should build base URL for sse type', () => {
-      const url = buildMCPUrl('sse');
-      expect(url).toBe('https://mcp.posthog.com/sse');
-    });
-
     it('should use localhost for local mode', () => {
-      const url = buildMCPUrl('streamable-http', undefined, true);
+      const url = buildMCPUrl(undefined, true);
       expect(url).toBe('http://localhost:8787/mcp');
     });
 
     it('should add features param when not all features selected', () => {
-      const url = buildMCPUrl('streamable-http', ['dashboards', 'insights']);
+      const url = buildMCPUrl(['dashboards', 'insights']);
       expect(url).toBe(
         'https://mcp.posthog.com/mcp?features=dashboards,insights',
       );
-    });
-
-    it('should not add region param in local mode', () => {
-      const url = buildMCPUrl('streamable-http', undefined, true);
-      expect(url).toBe('http://localhost:8787/mcp');
     });
   });
 
   describe('getDefaultServerConfig', () => {
     it('should return config with auth header when API key provided', () => {
-      const config = getDefaultServerConfig('phx_test123', 'sse');
+      const config = getDefaultServerConfig('phx_test123');
       expect(config).toEqual({
         command: 'npx',
         args: [
           '-y',
           'mcp-remote@latest',
-          'https://mcp.posthog.com/sse',
+          'https://mcp.posthog.com/mcp',
           '--header',
           'Authorization:${POSTHOG_AUTH_HEADER}',
         ],
@@ -53,10 +43,10 @@ describe('defaults', () => {
     });
 
     it('should return config without auth header for OAuth mode (no API key)', () => {
-      const config = getDefaultServerConfig(undefined, 'sse');
+      const config = getDefaultServerConfig(undefined);
       expect(config).toEqual({
         command: 'npx',
-        args: ['-y', 'mcp-remote@latest', 'https://mcp.posthog.com/sse'],
+        args: ['-y', 'mcp-remote@latest', 'https://mcp.posthog.com/mcp'],
       });
       expect(config).not.toHaveProperty('env');
     });
@@ -64,10 +54,7 @@ describe('defaults', () => {
 
   describe('getNativeHTTPServerConfig', () => {
     it('should return config with headers when API key provided', () => {
-      const config = getNativeHTTPServerConfig(
-        'phx_test123',
-        'streamable-http',
-      );
+      const config = getNativeHTTPServerConfig('phx_test123');
       expect(config).toEqual({
         url: 'https://mcp.posthog.com/mcp',
         headers: {
@@ -77,7 +64,7 @@ describe('defaults', () => {
     });
 
     it('should return config without headers for OAuth mode (no API key)', () => {
-      const config = getNativeHTTPServerConfig(undefined, 'streamable-http');
+      const config = getNativeHTTPServerConfig(undefined);
       expect(config).toEqual({
         url: 'https://mcp.posthog.com/mcp',
       });
