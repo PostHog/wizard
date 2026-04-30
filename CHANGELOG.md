@@ -1,5 +1,20 @@
 # Changelog
 
+## [2.11.0](https://github.com/PostHog/wizard/compare/v2.10.4...v2.11.0) (2026-04-30)
+
+
+### Features
+
+* Add health checks to wizard ([#422](https://github.com/PostHog/wizard/issues/422)) ([55765b7](https://github.com/PostHog/wizard/commit/55765b72e47db07ca6990d1e4aa7ea3b453ef9b1))
+* detect LLM usage in Python ([#424](https://github.com/PostHog/wizard/issues/424)) ([38cdfc4](https://github.com/PostHog/wizard/commit/38cdfc42f3a563cf2bcda84eb9f7f4166eab0374))
+* messages to the heavens ([#410](https://github.com/PostHog/wizard/issues/410)) ([fe1114a](https://github.com/PostHog/wizard/commit/fe1114a2f6f98add453c73934ff2e2503ea23d4c))
+
+
+### Bug Fixes
+
+* **mcp:** drop /sse transport, always install /mcp ([#429](https://github.com/PostHog/wizard/issues/429)) ([4fcbf8a](https://github.com/PostHog/wizard/commit/4fcbf8a4933bab5a4cf7068ad3e0a43e5adb650d))
+* prevent intro screen squish ([#423](https://github.com/PostHog/wizard/issues/423)) ([8008343](https://github.com/PostHog/wizard/commit/80083438b17244862bc74c22342b3fc95c28fbde))
+
 ## [2.10.4](https://github.com/PostHog/wizard/compare/v2.10.3...v2.10.4) (2026-04-24)
 
 
