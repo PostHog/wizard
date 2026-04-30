@@ -169,7 +169,28 @@ export const AUDIT_LEARN_TIPS_BY_CATEGORY: Record<
   ],
 };
 
+function shuffle<T>(array: readonly T[]): T[] {
+  const result = [...array];
+  for (let i = result.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [result[i], result[j]] = [result[j], result[i]];
+  }
+  return result;
+}
+
+/**
+ * Build the playback order: cycle categories in fixed order, but pick from
+ * each category's slides in a randomized within-category sequence so reruns
+ * surface different examples first.
+ */
 export const AUDIT_LEARN_TIPS: AuditLearnTip[] = (() => {
+  const shuffledByCategory = Object.fromEntries(
+    AUDIT_LEARN_CATEGORY_ORDER.map((category) => [
+      category,
+      shuffle(AUDIT_LEARN_TIPS_BY_CATEGORY[category]),
+    ]),
+  ) as Record<AuditLearnCategory, SlideEntry[]>;
+
   const maxTips = Math.max(
     ...AUDIT_LEARN_CATEGORY_ORDER.map(
       (category) => AUDIT_LEARN_TIPS_BY_CATEGORY[category].length,
@@ -179,7 +200,7 @@ export const AUDIT_LEARN_TIPS: AuditLearnTip[] = (() => {
 
   for (let index = 0; index < maxTips; index += 1) {
     for (const category of AUDIT_LEARN_CATEGORY_ORDER) {
-      const entry = AUDIT_LEARN_TIPS_BY_CATEGORY[category][index];
+      const entry = shuffledByCategory[category][index];
       if (entry) tips.push({ category, Slide: entry.Slide, link: entry.link });
     }
   }

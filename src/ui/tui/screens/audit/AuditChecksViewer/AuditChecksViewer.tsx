@@ -57,23 +57,20 @@ export const AuditChecksViewer = ({ checks }: AuditChecksViewerProps) => {
 
   return (
     <Box flexDirection="column" paddingX={1} height={totalHeight}>
+      <Text bold>Audit plan</Text>
+      <Text dimColor>
+        Read-only review of installation, identification, and event capture
+      </Text>
+      <Box height={1} />
       <Header layout={layout} />
+      <Text dimColor>{'─'.repeat(layout.dividerWidth)}</Text>
       <Box
         flexDirection="column"
         height={layout.visibleHeight}
         overflow="hidden"
       >
-        <Box height={1} />
-        <Text bold color="cyan">
-          Pending
-        </Text>
-        <Box height={1} />
         {pending.map(renderItem)}
-        <Box height={2} />
-        <Text bold color="cyan">
-          Complete
-        </Text>
-        <Box height={1} />
+        {pending.length > 0 && complete.length > 0 && <Box height={1} />}
         {complete.map(renderItem)}
       </Box>
       <Footer total={checks.length} counts={statusCounts(checks)} />

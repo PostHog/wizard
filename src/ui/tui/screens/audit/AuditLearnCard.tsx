@@ -36,21 +36,69 @@ const openLink = (url: string) => {
   spawn(cmd, args, { detached: true, stdio: 'ignore' }).unref();
 };
 
+/**
+ * Module-level slideshow state survives unmount/remount (e.g. when the user
+ * switches tabs). Without this, the 15s auto-advance timer would reset every
+ * time the Status tab loses focus.
+ *
+ * `currentTipStartedAt` records when the active slide was first shown
+ * (in playing time). On pause we snapshot how much had elapsed; on resume
+ * we shift the timestamp so the elapsed time picks up where it left off.
+ */
+let savedTipIndex = 0;
+let savedIsPlaying = true;
+let currentTipStartedAt = Date.now();
+let pausedElapsed: number | null = null;
+
+const elapsedSinceCurrentTip = (): number => {
+  if (pausedElapsed != null) return pausedElapsed;
+  return Date.now() - currentTipStartedAt;
+};
+
 export const AuditLearnCard = () => {
-  const [tipIndex, setTipIndex] = useState(0);
-  const [isPlaying, setIsPlaying] = useState(true);
+  const [tipIndex, setTipIndexState] = useState(savedTipIndex);
+  const [isPlaying, setIsPlayingState] = useState(savedIsPlaying);
   const [columns, rows] = useStdoutDimensions();
 
-  const advanceTip = useCallback((direction: 1 | -1) => {
-    setTipIndex((current) => wrapTipIndex(current + direction));
+  const setTipIndex = useCallback((next: (current: number) => number) => {
+    setTipIndexState((current) => {
+      const computed = next(current);
+      savedTipIndex = computed;
+      currentTipStartedAt = Date.now();
+      pausedElapsed = null;
+      return computed;
+    });
   }, []);
+
+  const setIsPlaying = useCallback((next: (current: boolean) => boolean) => {
+    setIsPlayingState((current) => {
+      const computed = next(current);
+      if (computed && !current) {
+        // Resume: shift start so already-elapsed time is preserved.
+        currentTipStartedAt = Date.now() - (pausedElapsed ?? 0);
+        pausedElapsed = null;
+      } else if (!computed && current) {
+        // Pause: snapshot elapsed.
+        pausedElapsed = Date.now() - currentTipStartedAt;
+      }
+      savedIsPlaying = computed;
+      return computed;
+    });
+  }, []);
+
+  const advanceTip = useCallback(
+    (direction: 1 | -1) => {
+      setTipIndex((current) => wrapTipIndex(current + direction));
+    },
+    [setTipIndex],
+  );
 
   const takeOverSlideshow = useCallback(
     (direction: 1 | -1) => {
-      setIsPlaying(false);
+      setIsPlaying(() => false);
       advanceTip(direction);
     },
-    [advanceTip],
+    [advanceTip, setIsPlaying],
   );
 
   const currentLink = AUDIT_LEARN_TIPS[tipIndex]?.link;
@@ -70,7 +118,8 @@ export const AuditLearnCard = () => {
 
   useEffect(() => {
     if (!isPlaying) return;
-    const timer = setTimeout(() => advanceTip(1), TIP_DURATION_MS);
+    const remaining = Math.max(0, TIP_DURATION_MS - elapsedSinceCurrentTip());
+    const timer = setTimeout(() => advanceTip(1), remaining);
     return () => clearTimeout(timer);
   }, [advanceTip, isPlaying, tipIndex]);
 
