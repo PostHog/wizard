@@ -2,7 +2,7 @@ import z from 'zod';
 import * as path from 'path';
 import * as os from 'os';
 import { DefaultMCPClient, MCPServerConfig } from '../MCPClient';
-import { buildMCPUrl } from '../defaults';
+import { getNativeHTTPServerConfig } from '../defaults';
 import { runtimeEnv } from '@env';
 
 export const VisualStudioCodeMCPConfig = z
@@ -79,30 +79,13 @@ export class VisualStudioCodeClient extends DefaultMCPClient {
   }
 
   getServerConfig(
-    apiKey: string,
-    type: 'sse' | 'streamable-http',
+    apiKey: string | undefined,
     selectedFeatures?: string[],
     local?: boolean,
   ): MCPServerConfig {
     return {
       type: 'http',
-      url: buildMCPUrl(type, selectedFeatures, local),
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-      },
+      ...getNativeHTTPServerConfig(apiKey, selectedFeatures, local),
     };
-  }
-
-  async addServer(
-    apiKey: string,
-    selectedFeatures?: string[],
-    local?: boolean,
-  ): Promise<{ success: boolean }> {
-    return this._addServerType(
-      apiKey,
-      'streamable-http',
-      selectedFeatures,
-      local,
-    );
   }
 }

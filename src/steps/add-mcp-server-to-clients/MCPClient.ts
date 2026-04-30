@@ -32,11 +32,10 @@ export abstract class DefaultMCPClient extends MCPClient {
 
   getServerConfig(
     apiKey: string | undefined,
-    type: 'sse' | 'streamable-http',
     selectedFeatures?: string[],
     local?: boolean,
   ): MCPServerConfig {
-    return getDefaultServerConfig(apiKey, type, selectedFeatures, local);
+    return getDefaultServerConfig(apiKey, selectedFeatures, local);
   }
 
   async isServerInstalled(local?: boolean): Promise<boolean> {
@@ -65,15 +64,6 @@ export abstract class DefaultMCPClient extends MCPClient {
     selectedFeatures?: string[],
     local?: boolean,
   ): Promise<{ success: boolean }> {
-    return this._addServerType(apiKey, 'sse', selectedFeatures, local);
-  }
-
-  async _addServerType(
-    apiKey: string | undefined,
-    type: 'sse' | 'streamable-http',
-    selectedFeatures?: string[],
-    local?: boolean,
-  ): Promise<{ success: boolean }> {
     try {
       const configPath = await this.getConfigPath();
       const configDir = path.dirname(configPath);
@@ -91,7 +81,6 @@ export abstract class DefaultMCPClient extends MCPClient {
 
       const newServerConfig = this.getServerConfig(
         apiKey,
-        type,
         selectedFeatures,
         local,
       );
