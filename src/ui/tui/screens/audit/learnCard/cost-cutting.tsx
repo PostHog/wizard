@@ -1,4 +1,5 @@
 import { Box, Text } from 'ink';
+import { LearnMoreLabel } from './maxLink.js';
 
 const PRODUCT_COSTS_DOCS =
   'https://posthog.com/docs/product-analytics/cutting-costs';
@@ -12,9 +13,7 @@ const CostTip = ({ children }: { children: string }) => (
   <Box flexDirection="column">
     <Text>{children}</Text>
     <Box height={1} />
-    <Text color="cyan" bold underline>
-      Learn more in the docs ↗
-    </Text>
+    <LearnMoreLabel />
   </Box>
 );
 

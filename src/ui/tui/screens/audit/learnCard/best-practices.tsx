@@ -1,7 +1,7 @@
 import { Box, Text } from 'ink';
 import { Colors } from '../../../styles.js';
 import { SlideFrame } from './SlideFrame.js';
-import { buildMaxUrl, OpenInMaxLink } from './maxLink.js';
+import { buildMaxUrl, TryItLabel } from './maxLink.js';
 
 const mark = (ok: boolean) => (
   <Text color={ok ? 'green' : 'red'}>{ok ? '✓' : '×'}</Text>
@@ -353,7 +353,7 @@ export const DropoffQuestionSlide = Object.assign(
         build funnels and watch replays.
       </SlideFrame>
       <Box marginTop={1}>
-        <OpenInMaxLink />
+        <TryItLabel />
       </Box>
     </Box>
   ),

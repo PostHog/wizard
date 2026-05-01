@@ -1,7 +1,7 @@
 import { Box, Text } from 'ink';
 import { Colors } from '../../../styles.js';
 import { SlideFrame, VisualBox } from './SlideFrame.js';
-import { buildMaxUrl, OpenInMaxLink } from './maxLink.js';
+import { buildMaxUrl, TryItLabel } from './maxLink.js';
 
 const MiniBar = ({
   label,
@@ -92,9 +92,8 @@ export const FeatureFlagIdentitySlide = Object.assign(
         Try asking PostHog AI to find all session replays where the
         show-super-cool-cta flag evaluated to <Text color="cyan">`true`</Text>.
       </Text>
-      <Box marginTop={1}>
-        <OpenInMaxLink />
-      </Box>
+      <Box height={1} />
+      <TryItLabel />
     </Box>
   ),
   { link: buildMaxUrl(FEATURE_FLAG_IDENTITY_PROMPT) },
@@ -136,9 +135,8 @@ export const ExperimentExposureSlide = Object.assign(
         </Text>{' '}
         and pull up their replays.
       </Text>
-      <Box marginTop={1}>
-        <OpenInMaxLink />
-      </Box>
+      <Box height={1} />
+      <TryItLabel />
     </Box>
   ),
   { link: buildMaxUrl(EXPERIMENT_EXPOSURE_PROMPT) },

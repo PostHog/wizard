@@ -42,6 +42,7 @@ export const AuditLearnCard = ({
 }: AuditLearnCardProps) => {
   const [columns, rows] = useStdoutDimensions();
   const currentLink = tip.link;
+  const linkVerb = tip.category === 'cost-cutting' ? 'Learn more' : 'Try it';
 
   useInput((input) => {
     const key = input.toLowerCase();
@@ -84,7 +85,7 @@ export const AuditLearnCard = ({
           {currentLink && (
             <>
               {'  '}
-              <Text color={Colors.accent}>O</Text> open link
+              <Text color={Colors.accent}>O</Text> {linkVerb}
             </>
           )}
         </Text>
