@@ -14,6 +14,7 @@ import fs from 'fs';
 import { execFileSync } from 'child_process';
 import { z } from 'zod';
 import { logToFile } from '../utils/debug';
+import { skillTmpPath } from '../utils/paths';
 import type { PackageManagerDetector } from './detection/package-manager';
 import {
   AUDIT_CHECKS_FILE,
@@ -89,7 +90,7 @@ export function downloadSkill(
   const skillDir = skillsRoot
     ? path.join(installDir, skillsRoot, skillEntry.id)
     : path.join(installDir, '.claude', 'skills', skillEntry.id);
-  const tmpFile = `/tmp/posthog-skill-${skillEntry.id}.zip`;
+  const tmpFile = skillTmpPath(skillEntry.id);
 
   try {
     fs.mkdirSync(skillDir, { recursive: true });

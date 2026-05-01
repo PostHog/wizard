@@ -28,6 +28,8 @@ export enum Screen {
   AuditRun = 'audit-run',
   AuditOutro = 'audit-outro',
   HealthCheck = 'health-check',
+  DoctorIntro = 'doctor-intro',
+  DoctorReport = 'doctor-report',
   Setup = 'setup',
   Auth = 'auth',
   Run = 'run',
@@ -44,6 +46,7 @@ export enum Flow {
   PostHogIntegration = 'posthog-integration',
   RevenueAnalyticsSetup = 'revenue-analytics-setup',
   Audit = 'audit',
+  PosthogDoctor = 'posthog-doctor',
   AgentSkill = 'agent-skill',
   McpAdd = 'mcp-add',
   McpRemove = 'mcp-remove',
@@ -94,7 +97,6 @@ export const FLOWS: Record<Flow, FlowEntry[]> = {
       screen: Screen.McpAdd,
       isComplete: (s) => s.mcpComplete,
     },
-    { screen: Screen.Outro },
     { screen: Screen.Exit },
   ],
 
@@ -103,7 +105,6 @@ export const FLOWS: Record<Flow, FlowEntry[]> = {
       screen: Screen.McpRemove,
       isComplete: (s) => s.mcpComplete,
     },
-    { screen: Screen.Outro },
     { screen: Screen.Exit },
   ],
 };

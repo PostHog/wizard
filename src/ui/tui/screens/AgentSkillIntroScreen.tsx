@@ -55,7 +55,7 @@ export const AgentSkillIntroScreen = ({
 
   if (showingMoreInfo) {
     body = (
-      <Box flexDirection="column" width={56}>
+      <Box flexDirection="column" width={56} flexShrink={0}>
         <Box flexDirection="column" marginBottom={1}>
           <Text>
             The wizard is an agent that executes PostHog tasks. Its code is open

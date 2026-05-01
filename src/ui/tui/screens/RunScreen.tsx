@@ -26,7 +26,7 @@ import { useStdoutDimensions } from '../hooks/useStdoutDimensions.js';
 import { useFileWatcher } from '../hooks/file-watcher.js';
 import { EVENT_PLAN_FILE } from '../../../lib/workflows/posthog-integration/index.js';
 
-const LOG_FILE = '/tmp/posthog-wizard.log';
+import { WIZARD_LOG_FILE } from '../../../utils/paths.js';
 
 interface RunScreenProps {
   store: WizardStore;
@@ -106,7 +106,7 @@ export const RunScreen = ({ store }: RunScreenProps) => {
     {
       id: 'logs',
       label: 'Tail logs',
-      component: <LogViewer filePath={LOG_FILE} />,
+      component: <LogViewer filePath={WIZARD_LOG_FILE} />,
     },
     { id: 'hn', label: 'HN', component: <HNViewer /> },
   ];

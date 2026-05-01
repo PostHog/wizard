@@ -14,6 +14,7 @@ import { ProgressDemo } from './demos/ProgressDemo.js';
 import { LogDemo } from './demos/LogDemo.js';
 import { RunScreenDemo } from './demos/RunScreenDemo.js';
 import { HealthCheckDemo } from './demos/HealthCheckDemo.js';
+import { DoctorReportDemo } from './demos/DoctorReportDemo.js';
 import { ModalDemo } from './demos/ModalDemo.js';
 import { McpDemo } from './demos/McpDemo.js';
 import { KeyboardHintsDemo } from './demos/KeyboardHintsDemo.js';
@@ -38,6 +39,11 @@ export const PlaygroundApp = ({ store }: PlaygroundAppProps) => {
       id: 'health',
       label: 'HealthCheck',
       component: <HealthCheckDemo />,
+    },
+    {
+      id: 'doctor',
+      label: 'Doctor',
+      component: <DoctorReportDemo />,
     },
     {
       id: 'modal',

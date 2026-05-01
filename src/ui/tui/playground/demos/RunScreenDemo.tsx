@@ -18,6 +18,7 @@ import {
 import type { ProgressItem } from '../../primitives/index.js';
 import { LearnCard } from '../../components/LearnCard.js';
 import { TipsCard } from '../../components/TipsCard.js';
+import { WIZARD_LOG_FILE } from '../../../../utils/paths.js';
 
 const MOCK_TASKS = [
   {
@@ -192,7 +193,7 @@ export const RunScreenDemo = ({ store }: RunScreenDemoProps) => {
     {
       id: 'logs',
       label: 'Tail logs',
-      component: <LogViewer filePath="/tmp/posthog-wizard.log" />,
+      component: <LogViewer filePath={WIZARD_LOG_FILE} />,
     },
     {
       id: 'hn',

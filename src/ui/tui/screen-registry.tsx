@@ -13,6 +13,8 @@ import type { WizardStore } from './store.js';
 import { Screen, Overlay, type ScreenName } from './router.js';
 
 import { HealthCheckScreen } from './screens/health/HealthCheckScreen.js';
+import { DoctorIntroScreen } from './screens/doctor/DoctorIntroScreen.js';
+import { DoctorReportScreen } from './screens/doctor/DoctorReportScreen.js';
 import { SettingsOverrideScreen } from './screens/SettingsOverrideScreen.js';
 import { ManagedSettingsScreen } from './screens/ManagedSettingsScreen.js';
 import { PortConflictScreen } from './screens/PortConflictScreen.js';
@@ -62,6 +64,8 @@ export function createScreens(
     [Screen.AuditRun]: <AuditRunScreen store={store} />,
     [Screen.AuditOutro]: <AuditOutroScreen store={store} />,
     [Screen.HealthCheck]: <HealthCheckScreen store={store} />,
+    [Screen.DoctorIntro]: <DoctorIntroScreen store={store} />,
+    [Screen.DoctorReport]: <DoctorReportScreen store={store} />,
     [Screen.Setup]: <SetupScreen store={store} />,
     [Screen.Auth]: <AuthScreen store={store} />,
     [Screen.Run]: <RunScreen store={store} />,
@@ -72,14 +76,13 @@ export function createScreens(
 
     // Standalone MCP flows
     [Screen.McpAdd]: (
-      <McpScreen store={store} installer={services.mcpInstaller} standalone />
+      <McpScreen store={store} installer={services.mcpInstaller} />
     ),
     [Screen.McpRemove]: (
       <McpScreen
         store={store}
         installer={services.mcpInstaller}
         mode="remove"
-        standalone
       />
     ),
   };

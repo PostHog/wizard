@@ -27,23 +27,9 @@ export class CursorMCPClient extends DefaultMCPClient {
 
   getServerConfig(
     apiKey: string | undefined,
-    type: 'sse' | 'streamable-http',
     selectedFeatures?: string[],
     local?: boolean,
   ): MCPServerConfig {
-    return getNativeHTTPServerConfig(apiKey, type, selectedFeatures, local);
-  }
-
-  async addServer(
-    apiKey?: string,
-    selectedFeatures?: string[],
-    local?: boolean,
-  ): Promise<{ success: boolean }> {
-    return this._addServerType(
-      apiKey,
-      'streamable-http',
-      selectedFeatures,
-      local,
-    );
+    return getNativeHTTPServerConfig(apiKey, selectedFeatures, local);
   }
 }
