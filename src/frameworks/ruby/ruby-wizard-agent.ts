@@ -3,6 +3,8 @@ import type { WizardOptions } from '../../utils/types';
 import type { FrameworkConfig } from '../../lib/framework-config';
 import { bundlerPackageManager } from '../../lib/detection/package-manager';
 import { Integration } from '../../lib/constants';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 import {
   getRubyVersion,
   getRubyVersionBucket,
@@ -14,6 +16,8 @@ import {
 
 type RubyContext = {
   packageManager?: RubyPackageManager;
+  entryPoint?: string;
+  detectedPatterns?: string[];
 };
 
 export const RUBY_AGENT_CONFIG: FrameworkConfig<RubyContext> = {
@@ -23,8 +27,59 @@ export const RUBY_AGENT_CONFIG: FrameworkConfig<RubyContext> = {
     beta: true,
     docsUrl: 'https://posthog.com/docs/libraries/ruby',
     gatherContext: (options: WizardOptions) => {
+      const { installDir } = options;
       const packageManager = detectPackageManager(options);
-      return Promise.resolve({ packageManager });
+      const context: RubyContext = { packageManager };
+
+      // Detect entry point
+      const entryPointCandidates = [
+        'app.rb',
+        'main.rb',
+        'run.rb',
+        'lib/main.rb',
+        'bin/main',
+        'exe/main',
+      ];
+      for (const candidate of entryPointCandidates) {
+        if (fs.existsSync(path.join(installDir, candidate))) {
+          context.entryPoint = candidate;
+          break;
+        }
+      }
+
+      // Detect patterns from Gemfile
+      let gemfileContent = '';
+      try {
+        gemfileContent = fs.readFileSync(
+          path.join(installDir, 'Gemfile'),
+          'utf-8',
+        );
+      } catch {
+        /* no Gemfile */
+      }
+
+      const patternMarkers: Record<string, string[]> = {
+        'Sinatra web app': ['sinatra'],
+        'Grape API': ['grape'],
+        'Hanami web app': ['hanami'],
+        'background worker': ['sidekiq', 'resque'],
+        CLI: ['thor', 'gli'],
+        database: ['sequel', 'activerecord'],
+      };
+
+      const patterns = Object.entries(patternMarkers)
+        .filter(([, gems]) =>
+          gems.some((gem) =>
+            new RegExp(`\\b${gem}\\b`, 'i').test(gemfileContent),
+          ),
+        )
+        .map(([label]) => label);
+
+      if (patterns.length > 0) {
+        context.detectedPatterns = patterns;
+      }
+
+      return Promise.resolve(context);
     },
   },
 
@@ -62,7 +117,7 @@ export const RUBY_AGENT_CONFIG: FrameworkConfig<RubyContext> = {
 
   prompts: {
     projectTypeDetection:
-      'This is a Ruby project. Look for Gemfile, *.gemspec, .ruby-version, or *.rb files to confirm.',
+      'This is a Ruby project. Check the additional context lines below for detected patterns and entry points.',
     packageInstallation:
       "Use Bundler if a Gemfile is present (add `gem 'posthog-ruby'` and run `bundle install`). Otherwise use `gem install posthog-ruby`. Do not pin a specific version.",
     getAdditionalContextLines: (context) => {
@@ -70,42 +125,70 @@ export const RUBY_AGENT_CONFIG: FrameworkConfig<RubyContext> = {
         ? getPackageManagerName(context.packageManager)
         : 'unknown';
 
-      const lines = [
-        `Package manager: ${packageManagerName}`,
+      const lines: string[] = [];
+
+      lines.push(`Package manager: ${packageManagerName}`);
+
+      if (context.entryPoint) {
+        lines.push(`Entry point: ${context.entryPoint}`);
+      }
+
+      if (context.detectedPatterns && context.detectedPatterns.length > 0) {
+        lines.push(`Detected patterns: ${context.detectedPatterns.join(', ')}`);
+      }
+
+      lines.push(
         `Framework docs ID: ruby (use posthog://docs/frameworks/ruby for documentation)`,
-        `Project type: Generic Ruby application (CLI, script, gem, worker, etc.)`,
-        ``,
-        `## CRITICAL: Ruby PostHog Best Practices`,
-        ``,
-        `### 1. Gem Name vs Require`,
+      );
+      lines.push(``);
+      lines.push(
+        `Integration approach: Explore the project's file structure to understand its architecture, then integrate posthog-ruby in the way that best fits the project's existing patterns.`,
+      );
+      lines.push(``);
+      lines.push(`## CRITICAL: Ruby PostHog Best Practices`);
+      lines.push(``);
+      lines.push(`### 1. Gem Name vs Require`);
+      lines.push(
         `The gem is named posthog-ruby but you require it as 'posthog':`,
-        `  gem 'posthog-ruby'  # in Gemfile`,
+      );
+      lines.push(`  gem 'posthog-ruby'  # in Gemfile`);
+      lines.push(
         `  require 'posthog'   # in code (NOT require 'posthog-ruby')`,
-        ``,
-        `### 2. Use Instance-Based API (REQUIRED for scripts/CLIs)`,
+      );
+      lines.push(``);
+      lines.push(`### 2. Use Instance-Based API (REQUIRED for scripts/CLIs)`);
+      lines.push(
         `Use PostHog::Client.new for scripts and standalone applications:`,
-        ``,
-        `client = PostHog::Client.new(`,
-        `  api_key: ENV['POSTHOG_PROJECT_TOKEN'],`,
-        `  host: ENV['POSTHOG_HOST'] || 'https://us.i.posthog.com'`,
-        `)`,
-        ``,
-        `### 3. MUST Call shutdown Before Exit`,
+      );
+      lines.push(``);
+      lines.push(`client = PostHog::Client.new(`);
+      lines.push(`  api_key: ENV['POSTHOG_PROJECT_TOKEN'],`);
+      lines.push(`  host: ENV['POSTHOG_HOST'] || 'https://us.i.posthog.com'`);
+      lines.push(`)`);
+      lines.push(``);
+      lines.push(`### 3. MUST Call shutdown Before Exit`);
+      lines.push(
         `In scripts and CLIs, you MUST call client.shutdown or events will be lost:`,
-        ``,
-        `begin`,
+      );
+      lines.push(``);
+      lines.push(`begin`);
+      lines.push(
         `  client.capture(distinct_id: 'user_123', event: 'my_event')`,
-        `ensure`,
-        `  client.shutdown`,
-        `end`,
-        ``,
-        `### 4. capture_exception Takes Positional Args`,
+      );
+      lines.push(`ensure`);
+      lines.push(`  client.shutdown`);
+      lines.push(`end`);
+      lines.push(``);
+      lines.push(`### 4. capture_exception Takes Positional Args`);
+      lines.push(
         `client.capture_exception(exception, distinct_id, additional_properties)`,
-        `Do NOT use keyword arguments for capture_exception.`,
-        ``,
-        `### 5. NEVER Send PII`,
+      );
+      lines.push(`Do NOT use keyword arguments for capture_exception.`);
+      lines.push(``);
+      lines.push(`### 5. NEVER Send PII`);
+      lines.push(
         `Do NOT include emails, names, phone numbers, or user content in event properties.`,
-      ];
+      );
 
       return lines;
     },

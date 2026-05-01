@@ -7,6 +7,9 @@ export type JavaScriptContext = {
   packageManagerName?: string;
   hasTypeScript?: boolean;
   hasBundler?: string;
+  isVanilla?: boolean;
+  htmlEntryPoint?: string;
+  hasSrcDir?: boolean;
 };
 
 const INDEX_HTML_MAX_DEPTH = 6;
@@ -65,7 +68,10 @@ export function detectBundler(
       path.join(options.installDir, 'package.json'),
       'utf-8',
     );
-    const pkg = JSON.parse(content);
+    const pkg = JSON.parse(content) as {
+      dependencies?: Record<string, string>;
+      devDependencies?: Record<string, string>;
+    };
     const allDeps: Record<string, string> = {
       ...pkg.dependencies,
       ...pkg.devDependencies,
@@ -126,4 +132,50 @@ export function hasIndexHtml(
   }
 
   return search(root, 0);
+}
+
+/**
+ * Detect a vanilla web project (HTML/CSS/JS with no package manager).
+ * Returns the path to the first HTML file found at the root, or undefined.
+ */
+export function detectVanillaWeb(
+  options: Pick<WizardOptions, 'installDir'>,
+): string | undefined {
+  const root = options.installDir;
+
+  let entries: fs.Dirent[];
+  try {
+    entries = fs.readdirSync(root, { withFileTypes: true });
+  } catch {
+    return undefined;
+  }
+
+  for (const entry of entries) {
+    if (entry.isFile() && entry.name.toLowerCase().endsWith('.html')) {
+      try {
+        const content = fs.readFileSync(path.join(root, entry.name), 'utf-8');
+        if (/<script/i.test(content)) {
+          return entry.name;
+        }
+      } catch {
+        continue;
+      }
+    }
+  }
+
+  return undefined;
+}
+
+/**
+ * Check whether the project has a src/ directory.
+ */
+export function hasSrcDirectory(
+  options: Pick<WizardOptions, 'installDir'>,
+): boolean {
+  try {
+    const srcPath = path.join(options.installDir, 'src');
+    return fs.existsSync(srcPath) && fs.statSync(srcPath).isDirectory();
+  } catch {
+    return false;
+  }
 }

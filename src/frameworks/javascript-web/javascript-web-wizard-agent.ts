@@ -11,6 +11,8 @@ import {
   detectJsPackageManager,
   detectBundler,
   hasIndexHtml,
+  detectVanillaWeb,
+  hasSrcDirectory,
   type JavaScriptContext,
 } from './utils';
 import { detectNodePackageManagers } from '../../lib/detection/package-manager';
@@ -27,7 +29,16 @@ export const JAVASCRIPT_WEB_AGENT_CONFIG: FrameworkConfig<JavaScriptContext> = {
         path.join(options.installDir, 'tsconfig.json'),
       );
       const hasBundler = detectBundler(options);
-      return Promise.resolve({ packageManagerName, hasTypeScript, hasBundler });
+      const vanillaHtml = detectVanillaWeb(options);
+      const hasSrcDir = hasSrcDirectory(options);
+      return Promise.resolve({
+        packageManagerName,
+        hasTypeScript,
+        hasBundler,
+        isVanilla: !!vanillaHtml,
+        htmlEntryPoint: vanillaHtml ?? undefined,
+        hasSrcDir,
+      });
     },
   },
 
@@ -39,8 +50,11 @@ export const JAVASCRIPT_WEB_AGENT_CONFIG: FrameworkConfig<JavaScriptContext> = {
     detectPackageManager: detectNodePackageManagers,
     detect: async (options) => {
       const packageJson = await tryGetPackageJson(options);
+
+      // Path 1: Vanilla web project (no package.json at all)
       if (!packageJson) {
-        return false;
+        const vanillaHtml = detectVanillaWeb(options);
+        return !!vanillaHtml;
       }
 
       // Exclude projects with known framework packages
@@ -52,9 +66,8 @@ export const JAVASCRIPT_WEB_AGENT_CONFIG: FrameworkConfig<JavaScriptContext> = {
 
       const { installDir } = options;
 
-      // Has (index.html OR has a bundler) AND is a JavaScript project
+      // Path 2: Bundled web project (package.json + lockfile + frontend signal)
       const hasIndexHtmlFlag = hasIndexHtml(options);
-
       const bundler = detectBundler(options);
       const hasBundler = !!bundler;
 
@@ -67,9 +80,6 @@ export const JAVASCRIPT_WEB_AGENT_CONFIG: FrameworkConfig<JavaScriptContext> = {
         'deno.lock',
       ].some((lockfile) => fs.existsSync(path.join(installDir, lockfile)));
 
-      // We only treat this as JS Web if there's BOTH:
-      // - a lockfile, and
-      // - at least one frontend signal (index.html or bundler)
       if (hasLockfile && (hasIndexHtmlFlag || hasBundler)) {
         return true;
       }
@@ -95,26 +105,52 @@ export const JAVASCRIPT_WEB_AGENT_CONFIG: FrameworkConfig<JavaScriptContext> = {
       if (context.hasBundler) {
         tags.bundler = context.hasBundler;
       }
+      if (context.isVanilla) {
+        tags.projectVariant = 'vanilla';
+      }
       return tags;
     },
   },
 
   prompts: {
     projectTypeDetection:
-      'This is a JavaScript/TypeScript project. Look for package.json and lockfiles (package-lock.json, yarn.lock, pnpm-lock.yaml, bun.lockb) to confirm.',
+      'This is a client-side web project. It may use a package manager and bundler, or it may be a vanilla HTML/CSS/JS site — check the additional context lines below.',
     packageInstallation:
-      'Look for lockfiles to determine the package manager (npm, yarn, pnpm, bun). Do not manually edit package.json.',
+      'Check the additional context below for whether a package manager is available. If no package manager is detected, use a CDN script tag for posthog-js instead of npm install.',
     getAdditionalContextLines: (context) => {
-      const lines = [
-        `Package manager: ${context.packageManagerName ?? 'unknown'}`,
-        `Has TypeScript: ${context.hasTypeScript ? 'yes' : 'no'}`,
-        `Framework docs ID: js (use posthog://docs/frameworks/js for documentation if available)`,
-        `Project type: Generic JavaScript/TypeScript application (no specific framework detected)`,
-      ];
+      const lines: string[] = [];
 
-      if (context.hasBundler) {
-        lines.unshift(`Bundler: ${context.hasBundler}`);
+      if (context.isVanilla) {
+        lines.push(
+          `Project type: Vanilla web (no package manager — use CDN script tag for posthog-js)`,
+        );
+        if (context.htmlEntryPoint) {
+          lines.push(`HTML entry point: ${context.htmlEntryPoint}`);
+        }
+      } else {
+        lines.push(
+          `Project type: JavaScript/TypeScript web application (no specific framework detected)`,
+        );
+        lines.push(
+          `Package manager: ${context.packageManagerName ?? 'unknown'}`,
+        );
+        if (context.hasBundler) {
+          lines.push(`Bundler: ${context.hasBundler}`);
+        }
+        lines.push(`Has TypeScript: ${context.hasTypeScript ? 'yes' : 'no'}`);
       }
+
+      if (context.hasSrcDir) {
+        lines.push(`Project structure: has src/ directory`);
+      }
+
+      lines.push(
+        `Framework docs ID: js (use posthog://docs/frameworks/js for documentation if available)`,
+      );
+      lines.push(``);
+      lines.push(
+        `Integration approach: No specific framework was detected. Explore the project's file structure to understand its architecture, then integrate posthog-js in the way that best fits the project's existing patterns.`,
+      );
 
       return lines;
     },
@@ -124,6 +160,14 @@ export const JAVASCRIPT_WEB_AGENT_CONFIG: FrameworkConfig<JavaScriptContext> = {
     successMessage: 'PostHog integration complete',
     estimatedDurationMinutes: 5,
     getOutroChanges: (context) => {
+      if (context.isVanilla) {
+        return [
+          `Analyzed your vanilla web project structure`,
+          `Added posthog-js via script tag`,
+          `Created PostHog initialization code`,
+          `Configured autocapture, error tracking, and event capture`,
+        ];
+      }
       const packageManagerName =
         context.packageManagerName ?? 'package manager';
       return [

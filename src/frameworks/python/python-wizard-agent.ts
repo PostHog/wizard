@@ -17,6 +17,9 @@ import {
 
 type PythonContext = {
   packageManager?: PythonPackageManager;
+  entryPoint?: string;
+  projectLayout?: string;
+  detectedPatterns?: string[];
 };
 
 export const PYTHON_AGENT_CONFIG: FrameworkConfig<PythonContext> = {
@@ -26,8 +29,76 @@ export const PYTHON_AGENT_CONFIG: FrameworkConfig<PythonContext> = {
     beta: true,
     docsUrl: 'https://posthog.com/docs/libraries/python',
     gatherContext: async (options: WizardOptions) => {
+      const { installDir } = options;
       const packageManager = await detectPackageManager(options);
-      return { packageManager };
+      const context: PythonContext = { packageManager };
+
+      // Detect entry point
+      const entryPointCandidates = [
+        'main.py',
+        'app.py',
+        'run.py',
+        'cli.py',
+        'manage.py',
+        'src/main.py',
+        'src/app.py',
+      ];
+      for (const candidate of entryPointCandidates) {
+        if (fs.existsSync(path.join(installDir, candidate))) {
+          context.entryPoint = candidate;
+          break;
+        }
+      }
+
+      // Detect project layout
+      if (fs.existsSync(path.join(installDir, 'src'))) {
+        context.projectLayout = 'src layout';
+      } else if (fs.existsSync(path.join(installDir, 'lib'))) {
+        context.projectLayout = 'lib layout';
+      } else {
+        context.projectLayout = 'flat layout';
+      }
+
+      // Detect patterns from dependencies
+      const depFiles = [
+        'requirements.txt',
+        'pyproject.toml',
+        'Pipfile',
+        'setup.cfg',
+      ];
+      let depContent = '';
+      for (const depFile of depFiles) {
+        try {
+          depContent +=
+            fs.readFileSync(path.join(installDir, depFile), 'utf-8') + '\n';
+        } catch {
+          /* skip */
+        }
+      }
+
+      const patternMarkers: Record<string, string[]> = {
+        CLI: ['click', 'typer', 'argparse'],
+        'background worker': ['celery', 'rq', 'dramatiq'],
+        'database (ORM)': ['sqlalchemy', 'peewee', 'tortoise-orm'],
+        'async web framework': ['aiohttp', 'tornado', 'sanic', 'starlette'],
+        'data/ML': ['pandas', 'numpy', 'scikit'],
+      };
+
+      const patterns = Object.entries(patternMarkers)
+        .filter(([, pkgs]) =>
+          pkgs.some((pkg) => new RegExp(`\\b${pkg}\\b`, 'i').test(depContent)),
+        )
+        .map(([label]) => label);
+
+      if (fs.existsSync(path.join(installDir, 'Dockerfile'))) {
+        patterns.push('containerized');
+      }
+
+      if (patterns.length > 0) {
+        context.detectedPatterns = patterns;
+      }
+
+      return context;
     },
   },
 
@@ -163,17 +234,37 @@ export const PYTHON_AGENT_CONFIG: FrameworkConfig<PythonContext> = {
   prompts: {
     packageInstallation: PYTHON_PACKAGE_INSTALLATION,
     projectTypeDetection:
-      'This is a generic Python project. Look for requirements.txt, pyproject.toml, setup.py, or Pipfile to confirm.',
+      'This is a Python project. Check the additional context lines below for detected patterns and entry points.',
     getAdditionalContextLines: (context) => {
       const packageManagerName = context.packageManager
         ? getPackageManagerName(context.packageManager)
         : 'unknown';
 
-      return [
-        `Package manager: ${packageManagerName}`,
+      const lines: string[] = [];
+
+      lines.push(`Package manager: ${packageManagerName}`);
+
+      if (context.entryPoint) {
+        lines.push(`Entry point: ${context.entryPoint}`);
+      }
+
+      if (context.projectLayout) {
+        lines.push(`Project structure: ${context.projectLayout}`);
+      }
+
+      if (context.detectedPatterns && context.detectedPatterns.length > 0) {
+        lines.push(`Detected patterns: ${context.detectedPatterns.join(', ')}`);
+      }
+
+      lines.push(
         `Framework docs ID: python (use posthog://docs/frameworks/python for documentation)`,
-        `Project type: Generic Python application (CLI, script, worker, data pipeline, etc.)`,
-      ];
+      );
+      lines.push(``);
+      lines.push(
+        `Integration approach: No specific web framework was detected. Explore the project's file structure to understand its architecture, then integrate the PostHog Python SDK in the way that best fits the project's existing patterns. Look for the entry point, request handlers, authentication flows, and error handling to find the right integration points.`,
+      );
+
+      return lines;
     },
   },
 
