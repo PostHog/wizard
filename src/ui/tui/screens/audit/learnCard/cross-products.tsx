@@ -67,7 +67,7 @@ export const FeatureFlagIdentitySlide = Object.assign(
             Replay filters
           </Text>
           <Box height={1} />
-          <Text color="gray">{'┌ Search suggested filters...     ≡ ┐'}</Text>
+          <Text color="gray">{'┌ Search suggested filters...    ≡ ┐'}</Text>
           <Text color="gray">{'└──────────────────────────────────┘'}</Text>
           <Box height={1} />
           <Text bold>Applied filters</Text>
@@ -93,7 +93,7 @@ export const FeatureFlagIdentitySlide = Object.assign(
         show-super-cool-cta flag evaluated to <Text color="cyan">`true`</Text>.
       </Text>
       <Box marginTop={1}>
-        <OpenInMaxLink />
+        <OpenInMaxLink url={buildMaxUrl(FEATURE_FLAG_IDENTITY_PROMPT)} />
       </Box>
     </Box>
   ),
@@ -137,7 +137,7 @@ export const ExperimentExposureSlide = Object.assign(
         and pull up their replays.
       </Text>
       <Box marginTop={1}>
-        <OpenInMaxLink />
+        <OpenInMaxLink url={buildMaxUrl(EXPERIMENT_EXPOSURE_PROMPT)} />
       </Box>
     </Box>
   ),
@@ -273,13 +273,13 @@ export const InsightToActionSlide = () => (
           <Text color="green">test</Text>
           <Text dimColor>{' ┐'}</Text>
         </Text>
-        <Text dimColor>{'  ▲                                  │'}</Text>
+        <Text dimColor>{'▲                            │'}</Text>
         <Text>
-          <Text dimColor>{'  └─ '}</Text>
+          <Text dimColor>{'└─ '}</Text>
           <Text color="green">guide</Text>
-          <Text dimColor>{' ←─ '}</Text>
+          <Text dimColor>{' ← '}</Text>
           <Text color="green">prove</Text>
-          <Text dimColor>{' ───────────── ┘'}</Text>
+          <Text dimColor>{' ────────────┘'}</Text>
         </Text>
       </Box>
     }

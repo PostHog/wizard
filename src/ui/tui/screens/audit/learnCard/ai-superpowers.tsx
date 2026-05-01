@@ -1,13 +1,15 @@
 import { Box, Text } from 'ink';
-import { buildMaxUrl } from './maxLink.js';
+import { buildMaxUrl, TerminalLink } from './maxLink.js';
 
 const PostHogAiPrompt = ({ prompt }: { prompt: string }) => (
   <Box flexDirection="column">
     <Text>Try asking PostHog AI</Text>
     <Box height={1} />
-    <Text color="cyan" bold underline>
-      "{prompt}" ↗
-    </Text>
+    <TerminalLink url={buildMaxUrl(prompt)}>
+      <Text color="cyan" bold underline>
+        "{prompt}" ↗
+      </Text>
+    </TerminalLink>
   </Box>
 );
 
