@@ -20,8 +20,7 @@ import {
   coerceAuditChecks,
   getAuditChecks,
 } from '../../../../lib/workflows/audit/types.js';
-
-const LOG_FILE = '/tmp/posthog-wizard.log';
+import { WIZARD_LOG_FILE } from '../../../../utils/paths.js';
 
 interface AuditRunScreenProps {
   store: WizardStore;
@@ -67,7 +66,7 @@ export const AuditRunScreen = ({ store }: AuditRunScreenProps) => {
     {
       id: 'logs',
       label: 'Tail logs',
-      component: <LogViewer filePath={LOG_FILE} />,
+      component: <LogViewer filePath={WIZARD_LOG_FILE} />,
     },
     { id: 'hn', label: 'HN', component: <HNViewer /> },
   ];

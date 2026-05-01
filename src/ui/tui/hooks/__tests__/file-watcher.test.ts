@@ -1,7 +1,7 @@
 import { mkdtempSync, rmSync, writeFileSync, renameSync, unlinkSync } from 'fs';
 import { tmpdir } from 'os';
 import path from 'path';
-import { startFileWatcher, type FileWatcherHandle } from './file-watcher.js';
+import { startFileWatcher, type FileWatcherHandle } from '../file-watcher.js';
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 

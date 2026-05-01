@@ -2,11 +2,9 @@ import {
   AGENT_SKILL_STEPS,
   createSkillWorkflow,
 } from '../agent-skill/index.js';
-import type {
-  Workflow,
-  WorkflowConfig,
-  WorkflowReadyContext,
-} from '../workflow-step.js';
+import type { Workflow, WorkflowConfig } from '../workflow-step.js';
+import type { WorkflowRun } from '../../agent/agent-runner.js';
+import type { WizardSession } from '../../wizard-session.js';
 import { AUDIT_ABORT_CASES } from './detect.js';
 import { AUDIT_CHECKS_KEY, AUDIT_REPORT_FILE } from './types.js';
 import { AUDIT_SEED_CHECKS, seedAuditLedger } from './seed.js';
@@ -18,10 +16,9 @@ const AUDIT_SCREEN_BY_STEP: Record<string, string> = {
   outro: 'audit-outro',
 };
 
-/** Write the seeded ledger so the agent doesn't have to. */
-const seedOnIntro = (ctx: WorkflowReadyContext): void => {
-  seedAuditLedger(ctx.session.installDir);
-  ctx.setFrameworkContext(AUDIT_CHECKS_KEY, AUDIT_SEED_CHECKS);
+const seedBeforeAuditRun = (session: WizardSession): void => {
+  seedAuditLedger(session.installDir);
+  session.frameworkContext[AUDIT_CHECKS_KEY] = AUDIT_SEED_CHECKS;
 };
 
 const withAuditScreens = (steps: Workflow): Workflow =>
@@ -30,12 +27,7 @@ const withAuditScreens = (steps: Workflow): Workflow =>
     return override ? { ...step, screen: override } : step;
   });
 
-const withSeedHook = (steps: Workflow): Workflow =>
-  steps.map((step) =>
-    step.id === 'intro' ? { ...step, onReady: seedOnIntro } : step,
-  );
-
-const auditSteps: Workflow = withSeedHook(withAuditScreens(AGENT_SKILL_STEPS));
+const auditSteps: Workflow = withAuditScreens(AGENT_SKILL_STEPS);
 
 const baseConfig = createSkillWorkflow({
   skillId: 'audit',
@@ -56,4 +48,20 @@ const baseConfig = createSkillWorkflow({
   abortCases: AUDIT_ABORT_CASES,
 });
 
-export const auditConfig: WorkflowConfig = { ...baseConfig, steps: auditSteps };
+const auditRun = async (session: WizardSession): Promise<WorkflowRun> => {
+  seedBeforeAuditRun(session);
+
+  if (!baseConfig.run) {
+    throw new Error('Audit workflow has no run configuration.');
+  }
+
+  return typeof baseConfig.run === 'function'
+    ? baseConfig.run(session)
+    : baseConfig.run;
+};
+
+export const auditConfig: WorkflowConfig = {
+  ...baseConfig,
+  steps: auditSteps,
+  run: auditRun,
+};

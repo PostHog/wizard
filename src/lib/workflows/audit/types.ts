@@ -39,35 +39,14 @@ export function getAuditChecks(session: WizardSession): AuditCheck[] {
   return Array.isArray(raw) ? (raw as AuditCheck[]) : [];
 }
 
-const VALID_STATUS: ReadonlySet<AuditStatus> = new Set([
-  'pending',
-  'pass',
-  'error',
-  'warning',
-  'suggestion',
-]);
-
+/**
+ * Read the audit checks ledger off disk. Validation lives at write time —
+ * every writer (`audit_seed_checks` / `audit_add_checks` / `audit_resolve_checks`
+ * MCP tools, `seedAuditLedger`) zod-parses entries before the atomic write,
+ * so by the time the file watcher fires we trust the shape and only guard
+ * against the file not being a JSON array (corrupted / hand-edited / not yet
+ * seeded).
+ */
 export function coerceAuditChecks(parsed: unknown): AuditCheck[] {
-  if (!Array.isArray(parsed)) return [];
-  const out: AuditCheck[] = [];
-  for (const entry of parsed) {
-    if (!entry || typeof entry !== 'object') continue;
-    const e = entry as Record<string, unknown>;
-    const status = e.status;
-    if (typeof status !== 'string' || !VALID_STATUS.has(status as AuditStatus))
-      continue;
-    const id = typeof e.id === 'string' ? e.id : '';
-    const area = typeof e.area === 'string' ? e.area : 'Other';
-    const label = typeof e.label === 'string' ? e.label : '';
-    if (!id || !label) continue;
-    out.push({
-      id,
-      area,
-      label,
-      status: status as AuditStatus,
-      file: typeof e.file === 'string' ? e.file : undefined,
-      details: typeof e.details === 'string' ? e.details : undefined,
-    });
-  }
-  return out;
+  return Array.isArray(parsed) ? (parsed as AuditCheck[]) : [];
 }

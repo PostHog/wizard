@@ -1,6 +1,16 @@
 /**
- * AuditAreaPane — left-pane slide for whatever area the agent is currently
- * checking. Active area = the area of the first pending check.
+ * AuditAreaPane — left-pane slide that follows whatever area the agent is
+ * currently checking, plus a wrap-up state once every check is resolved
+ * and the agent has moved on to writing the report.
+ *
+ * Three states, gated top-down on the ledger:
+ *   1. firstPending defined          → render the slide for that area
+ *   2. checks empty                  → blank (the seed hook fires before
+ *                                       this screen mounts in practice;
+ *                                       this is just defensive)
+ *   3. all checks non-pending        → "writing report" wrap-up
+ *
+ * Pressing `O` opens the active slide's docs URL.
  */
 
 import { Fragment } from 'react';
@@ -10,21 +20,7 @@ import { Colors } from '../../styles.js';
 import { type AuditCheck } from '../../../../lib/workflows/audit/types.js';
 import { AUDIT_AREA_SLIDES, type AreaSlide } from './slides/index.js';
 
-const openLink = (url: string) => {
-  const cmd =
-    process.platform === 'darwin'
-      ? 'open'
-      : process.platform === 'win32'
-      ? 'cmd'
-      : 'xdg-open';
-  const args = process.platform === 'win32' ? ['/c', 'start', '', url] : [url];
-  spawn(cmd, args, { detached: true, stdio: 'ignore' }).unref();
-};
-
-interface AuditAreaPaneProps {
-  checks: AuditCheck[];
-  reportPath: string;
-}
+// ── Helpers ──────────────────────────────────────────────────────────
 
 const FINDING_STATUSES: AuditCheck['status'][] = [
   'error',
@@ -40,9 +36,27 @@ const fallbackSlide = (area: string): AreaSlide => ({
   docsUrl: '',
 });
 
+const openLink = (url: string) => {
+  const cmd =
+    process.platform === 'darwin'
+      ? 'open'
+      : process.platform === 'win32'
+      ? 'cmd'
+      : 'xdg-open';
+  const args = process.platform === 'win32' ? ['/c', 'start', '', url] : [url];
+  spawn(cmd, args, { detached: true, stdio: 'ignore' }).unref();
+};
+
+// ── Component ────────────────────────────────────────────────────────
+
+interface AuditAreaPaneProps {
+  checks: AuditCheck[];
+  reportPath: string;
+}
+
 export const AuditAreaPane = ({ checks, reportPath }: AuditAreaPaneProps) => {
-  const firstPending = checks.find((c) => c.status === 'pending');
-  const activeArea = firstPending?.area;
+  const pendingChecks = checks.filter((c) => c.status === 'pending');
+  const activeArea = pendingChecks[0]?.area;
   const slide = activeArea
     ? AUDIT_AREA_SLIDES.find((s) => s.area === activeArea) ??
       fallbackSlide(activeArea)
@@ -54,60 +68,80 @@ export const AuditAreaPane = ({ checks, reportPath }: AuditAreaPaneProps) => {
     }
   });
 
-  if (!slide) {
-    return (
-      <Box flexDirection="column" paddingX={1}>
-        <Text bold color={Colors.accent}>
-          We've wrapped up the review.
-        </Text>
-        <Box height={1} />
-        <Text>
-          To help you get the most out of your PostHog integration, we're
-          preparing a report for you at <Text color="cyan">{reportPath}</Text>.
-        </Text>
-        <Box height={1} />
-        <Text>
-          We'll cover what we checked and suggest where we can improve the
-          existing integration.
-        </Text>
-        <Box height={1} />
-        <Text dimColor>Hang tight!</Text>
-      </Box>
-    );
+  // Active area — agent is still resolving checks for this slide's area.
+  if (slide) {
+    const hasFindings = checks.some(isFinding);
+    return <ActiveSlide slide={slide} hasFindings={hasFindings} />;
   }
 
-  const hasFindings = checks.some(isFinding);
+  // Ledger empty — the seed hook fires synchronously at intro `onReady`,
+  // so this only happens if the seed file write failed. Render nothing
+  // rather than misleading the user with a "wrapped up" message.
+  if (checks.length === 0) {
+    return null;
+  }
 
-  return (
-    <Box flexDirection="column" paddingX={1}>
-      <Text bold color={Colors.accent}>
-        Verifying {slide.area.toLowerCase()}
-      </Text>
-      <Box height={1} />
-
-      {slide.visual}
-      {slide.intro.map((paragraph, i) => (
-        <Fragment key={i}>
-          {i > 0 && <Box height={1} />}
-          <Text>{paragraph}</Text>
-        </Fragment>
-      ))}
-
-      <Box marginTop={1}>
-        <Text dimColor>
-          {slide.docsUrl && (
-            <>
-              [<Text color={Colors.accent}>O</Text>] Learn more
-            </>
-          )}
-          {hasFindings && (
-            <>
-              {slide.docsUrl && '  '}[<Text color={Colors.accent}>→</Text>] View
-              issues
-            </>
-          )}
-        </Text>
-      </Box>
-    </Box>
-  );
+  // Every check is resolved and the agent is composing the report.
+  return <WritingReport reportPath={reportPath} />;
 };
+
+// ── States ───────────────────────────────────────────────────────────
+
+const ActiveSlide = ({
+  slide,
+  hasFindings,
+}: {
+  slide: AreaSlide;
+  hasFindings: boolean;
+}) => (
+  <Box flexDirection="column" paddingX={1}>
+    <Text bold color={Colors.accent}>
+      Verifying {slide.area.toLowerCase()}
+    </Text>
+    <Box height={1} />
+
+    {slide.visual}
+    {slide.intro.map((paragraph, i) => (
+      <Fragment key={i}>
+        {i > 0 && <Box height={1} />}
+        <Text>{paragraph}</Text>
+      </Fragment>
+    ))}
+
+    <Box marginTop={1}>
+      <Text dimColor>
+        {slide.docsUrl && (
+          <>
+            [<Text color={Colors.accent}>O</Text>] Learn more
+          </>
+        )}
+        {hasFindings && (
+          <>
+            {slide.docsUrl && '  '}[<Text color={Colors.accent}>→</Text>] View
+            issues
+          </>
+        )}
+      </Text>
+    </Box>
+  </Box>
+);
+
+const WritingReport = ({ reportPath }: { reportPath: string }) => (
+  <Box flexDirection="column" paddingX={1}>
+    <Text bold color={Colors.accent}>
+      We've wrapped up the review.
+    </Text>
+    <Box height={1} />
+    <Text>
+      To help you get the most out of your PostHog integration, we're preparing
+      a report for you at <Text color="cyan">{reportPath}</Text>.
+    </Text>
+    <Box height={1} />
+    <Text>
+      We'll cover what we checked and suggest where we can improve the existing
+      integration.
+    </Text>
+    <Box height={1} />
+    <Text dimColor>Hang tight!</Text>
+  </Box>
+);

@@ -1,9 +1,9 @@
-import { sep } from 'node:path';
 import { Box, Text } from 'ink';
 import {
   AUDIT_SEVERITY_STYLE,
   type AuditCheck,
 } from '../../../../lib/workflows/audit/types.js';
+import { relativeToInstallDir } from '../../../../utils/paths.js';
 
 interface AuditChecksOutroSectionProps {
   checks: AuditCheck[];
@@ -11,12 +11,6 @@ interface AuditChecksOutroSectionProps {
 }
 
 const MAX_VISIBLE = 6;
-
-/** Strip an absolute installDir prefix so paths render as `index.js:12` not `/Users/.../index.js:12`. */
-const relativeFile = (file: string, installDir: string): string => {
-  const prefix = installDir.endsWith(sep) ? installDir : installDir + sep;
-  return file.startsWith(prefix) ? file.slice(prefix.length) : file;
-};
 
 export const AuditChecksOutroSection = ({
   checks,
@@ -57,7 +51,7 @@ export const AuditChecksOutroSection = ({
                 {item.file && (
                   <Text dimColor>
                     {'  '}
-                    {relativeFile(item.file, installDir)}
+                    {relativeToInstallDir(item.file, installDir)}
                   </Text>
                 )}
               </Box>
