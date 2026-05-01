@@ -3,7 +3,7 @@ import path from 'path';
 import { logToFile } from '../../../utils/debug';
 import { AUDIT_CHECKS_FILE, type AuditCheck } from './types.js';
 
-/** The 9 data-integrity checks the audit runs. */
+/** The 10 data-integrity checks the audit runs. */
 export const AUDIT_SEED_CHECKS: AuditCheck[] = [
   {
     id: 'sdk-installed',
@@ -39,6 +39,12 @@ export const AUDIT_SEED_CHECKS: AuditCheck[] = [
     id: 'cross-runtime-distinct-id',
     area: 'Identification',
     label: 'Same distinct_id across client and server',
+    status: 'pending',
+  },
+  {
+    id: 'identify-reset-on-logout',
+    area: 'Identification',
+    label: 'reset() called on logout / account switch',
     status: 'pending',
   },
   {

@@ -1,12 +1,9 @@
 /**
  * AuditOutroScreen — Audit-specific post-run summary. Renders the standard
  * success / error / cancel views with the audit checks summary inlined into
- * the success body, plus auto-opens the report file on mount.
+ * the success body. The report path is hardcoded to AUDIT_REPORT_FILE.
  */
 
-import { useEffect } from 'react';
-import { existsSync } from 'node:fs';
-import { join } from 'node:path';
 import { Box, Text, useInput } from 'ink';
 import { useSyncExternalStore } from 'react';
 import type { WizardStore } from '../../store.js';
@@ -14,7 +11,6 @@ import { OutroKind } from '../../../../lib/wizard-session.js';
 import { Colors } from '../../styles.js';
 import { getAuditChecks } from '../../../../lib/workflows/audit/types.js';
 import { AuditChecksOutroSection } from './AuditChecksOutroSection.js';
-import { openReport } from './openReport.js';
 
 interface AuditOutroScreenProps {
   store: WizardStore;
@@ -32,13 +28,6 @@ export const AuditOutroScreen = ({ store }: AuditOutroScreenProps) => {
 
   const outroData = store.session.outroData;
 
-  // Auto-open the report when the success view first appears.
-  useEffect(() => {
-    if (outroData?.kind !== OutroKind.Success || !outroData.reportFile) return;
-    const path = join(store.session.installDir, outroData.reportFile);
-    if (existsSync(path)) openReport(path);
-  }, [outroData?.kind, outroData?.reportFile, store.session.installDir]);
-
   if (!outroData) {
     return (
       <Box flexDirection="column" flexGrow={1}>
@@ -54,15 +43,6 @@ export const AuditOutroScreen = ({ store }: AuditOutroScreenProps) => {
           <Text color="green" bold>
             ✔ {outroData.message || 'Audit complete!'}
           </Text>
-
-          {outroData.reportFile && (
-            <Box marginTop={1}>
-              <Text>
-                View report at <Text bold>./{outroData.reportFile}</Text>
-                <Text dimColor> — opening it now.</Text>
-              </Text>
-            </Box>
-          )}
 
           <AuditChecksOutroSection
             checks={getAuditChecks(store.session)}

@@ -46,7 +46,8 @@ const baseConfig = createSkillWorkflow({
   integrationLabel: 'audit',
   customPrompt:
     'Run a comprehensive audit of the existing PostHog integration. Follow the skill workflow steps in order. Do not modify any project files — only create the final audit report.',
-  successMessage: 'Audit complete!',
+  successMessage:
+    'Audit complete! You can view the audit report at ./posthog-audit-report.md',
   reportFile: AUDIT_REPORT_FILE,
   docsUrl: 'https://posthog.com/docs/product-analytics/best-practices',
   spinnerMessage: 'Auditing PostHog integration...',

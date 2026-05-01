@@ -36,7 +36,7 @@ function getExitLine(store: WizardStore): string {
   if (outro?.kind === OutroKind.Success) {
     const message = outro.message ?? `${label} completed successfully.`;
     const reportSuffix = outro.reportFile
-      ? ` View report at ./${outro.reportFile}`
+      ? ` You can view the audit report at ./${outro.reportFile}`
       : '';
     return `${GREEN}${BOLD}\u2714${RESET_ATTRS} ${message}${reportSuffix}`;
   }
