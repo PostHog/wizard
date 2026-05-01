@@ -6,9 +6,10 @@
 > have any feedback, please drop an email to **[wizard@posthog.com](mailto:wizard@posthog.com)**.
 
 <h1>PostHog wizard ✨</h1>
-<h4>The PostHog wizard helps you quickly add PostHog to your project using AI.</h4>
 
-![Wizard clip](https://res.cloudinary.com/dmukukwp6/image/upload/q_auto,f_auto/pasted_image_2026_05_01_T19_48_00_164_Z_a5c5313dd8.png)
+The PostHog wizard helps you quickly add PostHog to your project using AI.
+
+![Wizard clip](https://res.cloudinary.com/dmukukwp6/image/upload/q_auto,f_auto/pasted_image_2026_05_01_T19_53_26_002_Z_398f697f5c.png)
 
 # Usage
 
