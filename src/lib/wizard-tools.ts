@@ -99,6 +99,7 @@ export function downloadSkill(
     execFileSync('unzip', ['-o', tmpFile, '-d', skillDir], {
       timeout: 30000,
     });
+    fs.writeFileSync(path.join(skillDir, '.posthog-wizard'), '');
     try {
       fs.unlinkSync(tmpFile);
     } catch {

@@ -353,7 +353,7 @@ export const DropoffQuestionSlide = Object.assign(
         build funnels and watch replays.
       </SlideFrame>
       <Box marginTop={1}>
-        <OpenInMaxLink url={buildMaxUrl(DROPOFF_QUESTION_PROMPT)} />
+        <OpenInMaxLink />
       </Box>
     </Box>
   ),

@@ -1,5 +1,4 @@
 import { Box, Text } from 'ink';
-import { TerminalLink } from './maxLink.js';
 
 const PRODUCT_COSTS_DOCS =
   'https://posthog.com/docs/product-analytics/cutting-costs';
@@ -9,21 +8,19 @@ const USE_CASE_SELLING_DOCS =
 const AI_LLM_OBSERVABILITY_DOCS =
   'https://posthog.com/handbook/growth/use-case-selling/ai-llm-observability';
 
-const CostTip = ({ url, children }: { url: string; children: string }) => (
+const CostTip = ({ children }: { children: string }) => (
   <Box flexDirection="column">
     <Text>{children}</Text>
     <Box height={1} />
-    <TerminalLink url={url}>
-      <Text color="cyan" bold underline>
-        Learn more in the docs ↗
-      </Text>
-    </TerminalLink>
+    <Text color="cyan" bold underline>
+      Learn more in the docs ↗
+    </Text>
   </Box>
 );
 
 /** Build a docs-link slide that carries its href as the open-link target. */
 const costTipSlide = (link: string, copy: string) =>
-  Object.assign(() => <CostTip url={link}>{copy}</CostTip>, { link });
+  Object.assign(() => <CostTip>{copy}</CostTip>, { link });
 
 export const AnonymousEventsSlide = costTipSlide(
   `${PRODUCT_COSTS_DOCS}#use-anonymous-events`,

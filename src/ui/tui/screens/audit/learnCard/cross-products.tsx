@@ -93,7 +93,7 @@ export const FeatureFlagIdentitySlide = Object.assign(
         show-super-cool-cta flag evaluated to <Text color="cyan">`true`</Text>.
       </Text>
       <Box marginTop={1}>
-        <OpenInMaxLink url={buildMaxUrl(FEATURE_FLAG_IDENTITY_PROMPT)} />
+        <OpenInMaxLink />
       </Box>
     </Box>
   ),
@@ -137,7 +137,7 @@ export const ExperimentExposureSlide = Object.assign(
         and pull up their replays.
       </Text>
       <Box marginTop={1}>
-        <OpenInMaxLink url={buildMaxUrl(EXPERIMENT_EXPOSURE_PROMPT)} />
+        <OpenInMaxLink />
       </Box>
     </Box>
   ),
