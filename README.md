@@ -2,11 +2,13 @@
   <img alt="posthoglogo" src="https://user-images.githubusercontent.com/65415371/205059737-c8a4f836-4889-4654-902e-f302b187b6a0.png">
 </p>
 
-> **⚠️ Experimental:** This wizard is still in an experimental phase. If you
+
 > have any feedback, please drop an email to **[wizard@posthog.com](mailto:wizard@posthog.com)**.
 
 <h1>PostHog wizard ✨</h1>
 <h4>The PostHog wizard helps you quickly add PostHog to your project using AI.</h4>
+
+![Wizard clip](https://res.cloudinary.com/dmukukwp6/image/upload/q_auto,f_auto/pasted_image_2026_05_01_T19_48_00_164_Z_a5c5313dd8.png)
 
 # Usage
 
@@ -16,9 +18,10 @@ To use the wizard, you can run it directly using:
 npx @posthog/wizard
 ```
 
-Currently the wizard can be used for **React, NextJS, Svelte, Astro and React
-Native** projects. If you have other integrations you would like the wizard to
+Currently the wizard can be used for over 16 frameworks for frontend, backend, and mobile applications. If you have other integrations you would like the wizard to
 support, please open a [GitHub issue](https://github.com/posthog/wizard/issues)!
+
+Visit our [docs](https://posthog.com/docs/ai-engineering/ai-wizard) to learn more. 
 
 ## MCP Commands
 
@@ -62,9 +65,6 @@ The following CLI arguments are available:
 | `--ci`            | Enable CI mode for non-interactive execution                     | boolean | `false` |                                                      | `POSTHOG_WIZARD_CI`            |
 | `--api-key`       | PostHog personal API key (phx_xxx) for authentication            | string  |         |                                                      | `POSTHOG_WIZARD_API_KEY`       |
 
-> Note: A large amount of the scaffolding for this came from the amazing Sentry
-> wizard, which you can find [here](https://github.com/getsentry/sentry-wizard)
-> 💖
 
 # CI Mode
 
