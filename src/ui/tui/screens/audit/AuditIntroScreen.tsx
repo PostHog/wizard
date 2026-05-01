@@ -19,7 +19,12 @@ export const AuditIntroScreen = ({ store }: AuditIntroScreenProps) => {
   const body = showingMoreInfo ? (
     <Box flexDirection="column" width={56}>
       <Text>
-        The audit reads your project's PostHog integration and writes a report.
+        The audit reviews your project's PostHog integration against best
+        practices to help you capture high-quality events and writes a report
+        for suggested actions. Nothing in your project will be modified.
+      </Text>
+      <Box marginTop={1}></Box>
+      <Text>
         Source: <Text color="cyan">https://github.com/PostHog/wizard</Text>
       </Text>
       <Box marginTop={1}>
@@ -32,7 +37,7 @@ export const AuditIntroScreen = ({ store }: AuditIntroScreenProps) => {
       </Box>
     </Box>
   ) : (
-    <Box flexDirection="column" alignItems="center">
+    <Box flexDirection="column" alignItems="flex-start">
       <Text dimColor>
         Read-only review of your existing PostHog integration against best
         practices.

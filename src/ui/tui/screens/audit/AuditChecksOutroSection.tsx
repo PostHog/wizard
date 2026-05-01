@@ -1,3 +1,4 @@
+import { sep } from 'node:path';
 import { Box, Text } from 'ink';
 import {
   AUDIT_SEVERITY_STYLE,
@@ -6,12 +7,20 @@ import {
 
 interface AuditChecksOutroSectionProps {
   checks: AuditCheck[];
+  installDir: string;
 }
 
 const MAX_VISIBLE = 6;
 
+/** Strip an absolute installDir prefix so paths render as `index.js:12` not `/Users/.../index.js:12`. */
+const relativeFile = (file: string, installDir: string): string => {
+  const prefix = installDir.endsWith(sep) ? installDir : installDir + sep;
+  return file.startsWith(prefix) ? file.slice(prefix.length) : file;
+};
+
 export const AuditChecksOutroSection = ({
   checks,
+  installDir,
 }: AuditChecksOutroSectionProps) => {
   if (checks.length === 0) return null;
 
@@ -39,11 +48,18 @@ export const AuditChecksOutroSection = ({
           {visible.map((item) => {
             const style = AUDIT_SEVERITY_STYLE[item.status];
             return (
-              <Box key={item.id}>
-                <Text color={style.color}>{style.glyph} </Text>
-                <Text bold>{item.label}</Text>
-                <Text dimColor> ({item.area})</Text>
-                {item.file && <Text dimColor> {item.file}</Text>}
+              <Box key={item.id} flexDirection="column" marginTop={1}>
+                <Text>
+                  <Text color={style.color}>{style.glyph}</Text>{' '}
+                  <Text bold>{item.label}</Text>{' '}
+                  <Text dimColor>({item.area})</Text>
+                </Text>
+                {item.file && (
+                  <Text dimColor>
+                    {'  '}
+                    {relativeFile(item.file, installDir)}
+                  </Text>
+                )}
               </Box>
             );
           })}

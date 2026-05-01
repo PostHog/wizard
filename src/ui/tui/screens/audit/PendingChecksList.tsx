@@ -1,5 +1,8 @@
 import { Box, Text } from 'ink';
-import type { AuditCheck } from '../../../../lib/workflows/audit/types.js';
+import {
+  AUDIT_SEVERITY_STYLE,
+  type AuditCheck,
+} from '../../../../lib/workflows/audit/types.js';
 import { Colors, Icons } from '../../styles.js';
 import { LoadingBox } from '../../primitives/index.js';
 import { useStdoutDimensions } from '../../hooks/useStdoutDimensions.js';
@@ -61,12 +64,10 @@ const GroupHeader = ({
 };
 
 const CheckRow = ({ check }: { check: AuditCheck }) => {
-  const icon =
-    check.status === 'pending' ? Icons.squareOpen : Icons.squareFilled;
-  const color = check.status === 'pending' ? Colors.muted : Colors.success;
+  const { glyph, color } = AUDIT_SEVERITY_STYLE[check.status];
   return (
     <Text>
-      <Text color={color}>{icon}</Text>
+      <Text color={color}>{glyph}</Text>
       <Text dimColor={check.status === 'pending'}> {check.label}</Text>
     </Text>
   );

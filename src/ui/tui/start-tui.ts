@@ -34,9 +34,11 @@ function getExitLine(store: WizardStore): string {
   const label = store.session.workflowLabel ?? 'Wizard';
 
   if (outro?.kind === OutroKind.Success) {
-    return `${GREEN}${BOLD}\u2714${RESET_ATTRS} ${
-      outro.message ?? `${label} completed successfully.`
-    }`;
+    const message = outro.message ?? `${label} completed successfully.`;
+    const reportSuffix = outro.reportFile
+      ? ` View report at ./${outro.reportFile}`
+      : '';
+    return `${GREEN}${BOLD}\u2714${RESET_ATTRS} ${message}${reportSuffix}`;
   }
 
   return `${DIM}${label} exited.${RESET_ATTRS}`;

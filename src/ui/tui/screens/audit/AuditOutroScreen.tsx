@@ -58,16 +58,16 @@ export const AuditOutroScreen = ({ store }: AuditOutroScreenProps) => {
           {outroData.reportFile && (
             <Box marginTop={1}>
               <Text>
-                Report saved to{' '}
-                <Text bold>
-                  {join(store.session.installDir, outroData.reportFile)}
-                </Text>
+                View report at <Text bold>./{outroData.reportFile}</Text>
                 <Text dimColor> — opening it now.</Text>
               </Text>
             </Box>
           )}
 
-          <AuditChecksOutroSection checks={getAuditChecks(store.session)} />
+          <AuditChecksOutroSection
+            checks={getAuditChecks(store.session)}
+            installDir={store.session.installDir}
+          />
 
           {outroData.docsUrl && (
             <Box marginTop={1}>

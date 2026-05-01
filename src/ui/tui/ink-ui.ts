@@ -30,12 +30,17 @@ export class InkUI implements WizardUI {
   outro(message: string): void {
     this.store.pushStatus(stripAnsi(message));
 
-    if (!this.store.session.outroData) {
-      this.store.setOutroData({
+    // agent-runner mutates session.outroData directly before calling outro().
+    // Direct mutation doesn't notify nanostore subscribers, so re-set the
+    // value through setOutroData() to push it to React. If there's no
+    // pre-built outroData, fall back to a minimal success record.
+    const existing = this.store.session.outroData;
+    this.store.setOutroData(
+      existing ?? {
         kind: OutroKind.Success,
         message: stripAnsi(message),
-      });
-    }
+      },
+    );
 
     // Signal that the main work is done — router resolves to mcp or outro
     if (this.store.session.runPhase === RunPhase.Running) {

@@ -44,19 +44,19 @@ export const AUDIT_SEED_CHECKS: AuditCheck[] = [
   {
     id: 'capture-event-names-static',
     area: 'Event Capture',
-    label: 'Event names are static strings',
+    label: 'Event names are static and consistent',
     status: 'pending',
   },
   {
-    id: 'capture-anon-distinct-id',
+    id: 'capture-uses-proxy',
     area: 'Event Capture',
-    label: 'Truly anonymous events disable person processing',
+    label: 'Captures route through a reverse proxy',
     status: 'pending',
   },
   {
     id: 'capture-growth-events',
     area: 'Event Capture',
-    label: 'Signup / activation / purchase tracked',
+    label: 'Key activation events captured',
     status: 'pending',
   },
 ];

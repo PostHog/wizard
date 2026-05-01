@@ -20,14 +20,22 @@ export const AuditChecksViewer = ({ checks }: AuditChecksViewerProps) => {
   const layout = computeLayout(rawCols, termRows);
   const totalHeight = layout.visibleHeight + layout.viewerChrome;
 
-  // Pending at top, complete below — split here once and the JSX below
-  // structurally renders the two sections in order.
+  // Issues + passes on top, pending at the bottom. The JSX renders the two
+  // sections in that order with a blank-line separator between them.
   const sorted = useMemo(() => sortChecks(checks), [checks]);
+  const resolved = sorted.filter((c) => c.status !== 'pending');
   const pending = sorted.filter((c) => c.status === 'pending');
-  const complete = sorted.filter((c) => c.status !== 'pending');
 
-  const [expanded, setExpanded] = useState(false);
   const hasExpandable = sorted.some((c) => Boolean(c.details || c.file));
+  const hasIssues = sorted.some(
+    (c) =>
+      c.status === 'error' ||
+      c.status === 'warning' ||
+      c.status === 'suggestion',
+  );
+  // Auto-expand when there are issues to show — users land on this tab via
+  // the "View issues" hint specifically to read the details.
+  const [expanded, setExpanded] = useState(hasIssues && hasExpandable);
   useKeyBindings(
     'audit-checks-viewer',
     hasExpandable
@@ -69,9 +77,9 @@ export const AuditChecksViewer = ({ checks }: AuditChecksViewerProps) => {
         height={layout.visibleHeight}
         overflow="hidden"
       >
+        {resolved.map(renderItem)}
+        {resolved.length > 0 && pending.length > 0 && <Box height={1} />}
         {pending.map(renderItem)}
-        {pending.length > 0 && complete.length > 0 && <Box height={1} />}
-        {complete.map(renderItem)}
       </Box>
       <Footer total={checks.length} counts={statusCounts(checks)} />
     </Box>
