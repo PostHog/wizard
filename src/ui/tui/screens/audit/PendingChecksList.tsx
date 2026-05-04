@@ -42,17 +42,18 @@ function groupIcon(group: Group): { icon: string; color: string } {
 const GroupHeader = ({
   group,
   showIcon,
+  isActive,
 }: {
   group: Group;
   showIcon: boolean;
+  isActive: boolean;
 }) => {
   const complete = group.checks.filter((c) => c.status !== 'pending').length;
   const total = group.checks.length;
-  const inProgress = complete < total;
   const { icon, color } = groupIcon(group);
   return (
     <Box>
-      {inProgress ? (
+      {isActive ? (
         <Box marginRight={1}>
           <Spinner />
         </Box>
@@ -97,6 +98,9 @@ export const PendingChecksList = ({ checks }: PendingChecksListProps) => {
   }
 
   const groups = groupByArea(checks);
+  const activeIndex = groups.findIndex((g) =>
+    g.checks.some((c) => c.status === 'pending'),
+  );
   const collapsed = termRows < COLLAPSE_BELOW_ROWS;
 
   return (
@@ -104,8 +108,13 @@ export const PendingChecksList = ({ checks }: PendingChecksListProps) => {
       <Text bold>Checks</Text>
       <Text> </Text>
       {collapsed
-        ? groups.map((group) => (
-            <GroupHeader key={group.area} group={group} showIcon />
+        ? groups.map((group, i) => (
+            <GroupHeader
+              key={group.area}
+              group={group}
+              showIcon
+              isActive={i === activeIndex}
+            />
           ))
         : groups.map((group, i) => (
             <Box
@@ -113,7 +122,11 @@ export const PendingChecksList = ({ checks }: PendingChecksListProps) => {
               flexDirection="column"
               marginTop={i === 0 ? 0 : 1}
             >
-              <GroupHeader group={group} showIcon={false} />
+              <GroupHeader
+                group={group}
+                showIcon={false}
+                isActive={i === activeIndex}
+              />
               {group.checks.map((c) => (
                 <CheckRow key={c.id} check={c} />
               ))}
