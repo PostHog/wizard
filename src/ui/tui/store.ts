@@ -14,7 +14,11 @@
  */
 
 import { atom, map } from 'nanostores';
-import { TaskStatus, isTaskStatus } from '../wizard-ui.js';
+import {
+  TaskStatus,
+  isTaskStatus,
+  type AuthErrorDetail,
+} from '../wizard-ui.js';
 import {
   type WizardSession,
   type OutroData,
@@ -378,11 +382,7 @@ export class WizardStore {
   }
 
   /** Push the auth-error overlay (no dismiss — user must exit). */
-  showAuthError(detail?: {
-    hasSettingsConflict: boolean;
-    logFilePath: string;
-    ci: boolean;
-  }): void {
+  showAuthError(detail?: AuthErrorDetail): void {
     this.$session.setKey('authErrorDetail', detail ?? null);
     this.pushOverlay(Overlay.AuthError);
   }

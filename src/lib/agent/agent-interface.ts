@@ -1059,7 +1059,6 @@ export async function runAgent(
         getUI().showAuthError({
           hasSettingsConflict,
           logFilePath: getLogFilePath(),
-          ci: options.ci,
         });
         await wizardAbort({
           message: 'Authentication failed (401)',

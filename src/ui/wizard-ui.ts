@@ -41,7 +41,6 @@ export interface SpinnerHandle {
 export interface AuthErrorDetail {
   hasSettingsConflict: boolean;
   logFilePath: string;
-  ci: boolean;
 }
 
 export interface WizardUI {

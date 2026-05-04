@@ -154,7 +154,6 @@ export interface WizardSession {
   authErrorDetail: {
     hasSettingsConflict: boolean;
     logFilePath: string;
-    ci: boolean;
   } | null;
   portConflictProcess: {
     command: string;
