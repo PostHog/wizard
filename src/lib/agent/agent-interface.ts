@@ -634,6 +634,21 @@ export async function initializeAgent(
     process.env.CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS = 'true';
 
     logToFile('Configured LLM gateway:', gatewayUrl);
+    logToFile(
+      'API key prefix:',
+      config.posthogApiKey
+        ? `${config.posthogApiKey.slice(0, 4)}***`
+        : '(missing)',
+    );
+    const initConflicts = checkAllSettingsConflicts(options.installDir);
+    logToFile(
+      'Settings conflicts at agent init:',
+      initConflicts.length > 0
+        ? initConflicts
+            .map((c) => `${c.source}(${c.keys.join(',')})`)
+            .join('; ')
+        : 'none',
+    );
 
     // Configure MCP server with PostHog authentication
     const mcpServers: McpServersConfig = {
@@ -1031,8 +1046,21 @@ export async function runAgent(
       ) {
         signalDone!();
         spinner.stop('Authentication failed');
-        logToFile('Agent error: 401, showing auth error screen');
-        getUI().showAuthError();
+        // Re-check at error time: a settings conflict can be the *real* cause
+        // of a 401, distinct from bad PAT / wrong region / expired key.
+        // Only the conflict case warrants telling the user to log out of
+        // Claude Code.
+        const conflicts = checkAllSettingsConflicts(options.installDir);
+        const hasSettingsConflict = conflicts.length > 0;
+        logToFile('Agent error: 401, showing auth error screen', {
+          hasSettingsConflict,
+          conflicts,
+        });
+        getUI().showAuthError({
+          hasSettingsConflict,
+          logFilePath: getLogFilePath(),
+          ci: options.ci,
+        });
         await wizardAbort({
           message: 'Authentication failed (401)',
           error: new WizardError('Authentication failed'),

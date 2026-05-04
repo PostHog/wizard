@@ -211,6 +211,26 @@ const cli = yargs(hideBin(process.argv))
           process.exit(1);
           return;
         }
+        // Warn (don't fail) on unexpected key prefix — `phx_` is the personal
+        // API key the LLM Gateway expects. We don't hard-fail because future
+        // PostHog releases may introduce new prefixes.
+        const apiKeyValue = String(options.apiKey);
+        if (!apiKeyValue.startsWith('phx_')) {
+          setUI(new LoggingUI());
+          getUI().intro('PostHog Wizard');
+          const prefix = apiKeyValue.slice(0, 4);
+          let hint = '';
+          if (prefix === 'pha_') {
+            hint =
+              ' (pha_ is an OAuth access token — CI mode wants a personal API key)';
+          } else if (prefix === 'phc_') {
+            hint =
+              ' (phc_ is a project/client key — CI mode wants a personal API key)';
+          }
+          getUI().log.warn(
+            `--api-key does not start with "phx_"${hint}. Continuing anyway, but the LLM Gateway may reject it with a 401.`,
+          );
+        }
         void (async () => {
           const { posthogIntegrationConfig } = await import(
             './src/lib/workflows/posthog-integration/index.js'

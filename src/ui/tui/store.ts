@@ -378,7 +378,12 @@ export class WizardStore {
   }
 
   /** Push the auth-error overlay (no dismiss — user must exit). */
-  showAuthError(): void {
+  showAuthError(detail?: {
+    hasSettingsConflict: boolean;
+    logFilePath: string;
+    ci: boolean;
+  }): void {
+    this.$session.setKey('authErrorDetail', detail ?? null);
     this.pushOverlay(Overlay.AuthError);
   }
 

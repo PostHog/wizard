@@ -28,6 +28,22 @@ export interface SpinnerHandle {
   message(msg?: string): void;
 }
 
+/**
+ * Context passed to `showAuthError` so the screen can pick the right copy.
+ *
+ * `hasSettingsConflict` is true when a Claude Code settings.json /
+ * managed-settings file actually overrides the LLM Gateway auth — the
+ * Wizard's pre-flight check missed it or it appeared after startup.
+ * When false, the 401 has a different cause (bad PAT prefix, missing
+ * scope, expired key, region mismatch) and we should not advise the
+ * user to log out of Claude Code.
+ */
+export interface AuthErrorDetail {
+  hasSettingsConflict: boolean;
+  logFilePath: string;
+  ci: boolean;
+}
+
 export interface WizardUI {
   // ── Lifecycle messages ────────────────────────────────────────────
   intro(message: string): void;
@@ -93,7 +109,7 @@ export interface WizardUI {
   ): Promise<void>;
 
   /** Show auth error overlay when Anthropic API returns 401. */
-  showAuthError(): void;
+  showAuthError(detail?: AuthErrorDetail): void;
 
   // ── Display state ──────────────────────────────────────────────────
   /** Set the detected framework label (e.g., "Django with Wagtail CMS") */
