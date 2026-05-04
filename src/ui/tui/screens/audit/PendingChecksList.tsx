@@ -1,4 +1,5 @@
 import { Box, Text } from 'ink';
+import { Spinner } from '@inkjs/ui';
 import {
   AUDIT_SEVERITY_STYLE,
   type AuditCheck,
@@ -47,19 +48,26 @@ const GroupHeader = ({
 }) => {
   const complete = group.checks.filter((c) => c.status !== 'pending').length;
   const total = group.checks.length;
+  const inProgress = complete < total;
   const { icon, color } = groupIcon(group);
   return (
-    <Text>
-      {showIcon && (
+    <Box>
+      {inProgress ? (
+        <Box marginRight={1}>
+          <Spinner />
+        </Box>
+      ) : showIcon ? (
         <Text>
           <Text color={color}>{icon}</Text>{' '}
         </Text>
-      )}
-      <Text bold>{group.area}</Text>{' '}
-      <Text dimColor>
-        ({complete}/{total})
+      ) : null}
+      <Text>
+        <Text bold>{group.area}</Text>{' '}
+        <Text dimColor>
+          ({complete}/{total})
+        </Text>
       </Text>
-    </Text>
+    </Box>
   );
 };
 
