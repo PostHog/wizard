@@ -2,6 +2,9 @@ import { Box, Text } from 'ink';
 import { useState, useSyncExternalStore } from 'react';
 import type { WizardStore } from '../../store.js';
 import { IntroScreenLayout } from '../IntroScreenLayout.js';
+import { SkillSourceInfo, useSkillEntry } from '../SkillSourceInfo.js';
+
+const AUDIT_SKILL_ID = 'audit';
 
 interface AuditIntroScreenProps {
   store: WizardStore;
@@ -15,34 +18,40 @@ export const AuditIntroScreen = ({ store }: AuditIntroScreenProps) => {
 
   const [showingMoreInfo, setShowingMoreInfo] = useState(false);
   const { session } = store;
+  const { skillEntry, fetchFailed } = useSkillEntry(
+    AUDIT_SKILL_ID,
+    session.localMcp,
+  );
 
   const body = showingMoreInfo ? (
     <Box flexDirection="column" width={56}>
+      <Box marginBottom={1}>
+        <Text>
+          The wizard is an agent that executes PostHog tasks. Its code is open
+          source: <Text color="cyan">https://github.com/PostHog/wizard</Text>
+        </Text>
+      </Box>
+
       <Text>
-        The audit reviews your project's PostHog integration against best
+        The{' '}
+        <Text color="cyan" italic>
+          {AUDIT_SKILL_ID}
+        </Text>{' '}
+        workflow reviews your project's PostHog integration against best
         practices to help you capture high-quality events and writes a report
         for suggested actions. Nothing in your project will be modified.
       </Text>
-      <Box marginTop={1}></Box>
-      <Text>
-        Source: <Text color="cyan">https://github.com/PostHog/wizard</Text>
-      </Text>
       <Box marginTop={1}>
-        <Text dimColor>
-          Skill:{' '}
-          <Text italic color="cyan">
-            audit
-          </Text>
-        </Text>
+        <SkillSourceInfo
+          skillId={AUDIT_SKILL_ID}
+          skillEntry={skillEntry}
+          fetchFailed={fetchFailed}
+        />
       </Box>
     </Box>
   ) : (
-    <Box flexDirection="column" alignItems="flex-start">
-      <Text dimColor>
-        Read-only review of your existing PostHog integration against best
-        practices.
-      </Text>
-      <Text>Nothing in your project will be modified.</Text>
+    <Box flexDirection="column" alignItems="center">
+      <Text>Let's review your existing PostHog setup for best practices.</Text>
     </Box>
   );
 
@@ -64,8 +73,6 @@ export const AuditIntroScreen = ({ store }: AuditIntroScreenProps) => {
   return (
     <IntroScreenLayout
       installDir={session.installDir}
-      title="PostHog Audit 🔍"
-      showSubtitle={false}
       body={body}
       showDetection={!showingMoreInfo}
       workflowLabel={session.workflowLabel}

@@ -7,11 +7,10 @@
 
 import { Box, Text } from 'ink';
 import type { ReactNode } from 'react';
-import { useState, useEffect, useSyncExternalStore } from 'react';
+import { useState, useSyncExternalStore } from 'react';
 import type { WizardStore } from '../store.js';
 import { IntroScreenLayout } from './IntroScreenLayout.js';
-import { fetchSkillMenu, type SkillEntry } from '../../../lib/wizard-tools.js';
-import { getSkillsBaseUrl } from '../../../lib/constants.js';
+import { SkillSourceInfo, useSkillEntry } from './SkillSourceInfo.js';
 
 interface AgentSkillIntroScreenProps {
   store: WizardStore;
@@ -26,30 +25,10 @@ export const AgentSkillIntroScreen = ({
   );
 
   const [showingMoreInfo, setShowingMoreInfo] = useState(false);
-  const [skillEntry, setSkillEntry] = useState<SkillEntry | null>(null);
-  const [fetchFailed, setFetchFailed] = useState(false);
 
   const { session } = store;
   const skillId = session.skillId ?? 'unknown';
-
-  useEffect(() => {
-    if (!showingMoreInfo || skillEntry || fetchFailed) return;
-
-    const baseUrl = getSkillsBaseUrl(session.localMcp);
-    void fetchSkillMenu(baseUrl).then((menu) => {
-      if (!menu) {
-        setFetchFailed(true);
-        return;
-      }
-      const allSkills = Object.values(menu.categories).flat();
-      const match = allSkills.find((s) => s.id === skillId);
-      if (match) {
-        setSkillEntry(match);
-      } else {
-        setFetchFailed(true);
-      }
-    });
-  }, [showingMoreInfo, skillEntry, fetchFailed, skillId, session.localMcp]);
+  const { skillEntry, fetchFailed } = useSkillEntry(skillId, session.localMcp);
 
   let body: ReactNode;
 
@@ -62,19 +41,11 @@ export const AgentSkillIntroScreen = ({
             source: <Text color="cyan">https://github.com/PostHog/wizard</Text>
           </Text>
         </Box>
-        <Text>
-          Skill:{' '}
-          <Text italic color="cyan">
-            {skillEntry?.id ?? skillId}
-          </Text>
-        </Text>
-        <Text>
-          URL:{' '}
-          <Text color="cyan">
-            {skillEntry?.downloadUrl ??
-              (fetchFailed ? 'unavailable' : 'Loading...')}
-          </Text>
-        </Text>
+        <SkillSourceInfo
+          skillId={skillId}
+          skillEntry={skillEntry}
+          fetchFailed={fetchFailed}
+        />
         <Box marginTop={1}>
           <Text dimColor>
             {skillEntry?.name ?? (fetchFailed ? skillId : 'Loading...')}
