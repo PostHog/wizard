@@ -25,7 +25,6 @@ import {
 import type { AuditCheck } from '../../../../../lib/workflows/audit/types.js';
 import { CheckRow } from './CheckRow.js';
 import { DetailRow } from './DetailRow.js';
-import { EmptyState } from './EmptyState.js';
 import { Footer } from './Footer.js';
 import { Header, statusCounts } from './Header.js';
 import { computeLayout } from './layout.js';
@@ -127,10 +126,6 @@ export const AuditChecksViewer = ({ checks }: AuditChecksViewerProps) => {
   useKeyBindings('audit-checks-viewer', bindings);
 
   // ── Render ─────────────────────────────────────────────────────────
-  if (checks.length === 0) {
-    return <EmptyState cols={layout.cols} height={totalHeight} />;
-  }
-
   const visibleRows = allRows.slice(
     clampedOffset,
     clampedOffset + layout.visibleHeight,
