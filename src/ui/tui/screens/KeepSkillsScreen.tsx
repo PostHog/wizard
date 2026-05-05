@@ -10,8 +10,10 @@
 import { Box, Text } from 'ink';
 import { useState, useEffect } from 'react';
 import { useSyncExternalStore } from 'react';
-import { readdir, rm } from 'node:fs/promises';
+import { readdir, rm, access } from 'node:fs/promises';
 import { join } from 'node:path';
+
+const WIZARD_MARKER = '.posthog-wizard';
 import type { WizardStore } from '../store.js';
 import { ConfirmationInput } from '../primitives/index.js';
 import { Colors } from '../styles.js';
@@ -51,7 +53,14 @@ export const KeepSkillsScreen = ({ store }: KeepSkillsScreenProps) => {
         const dirs = entries.filter((e) => e.isDirectory());
         const result: SkillEntry[] = [];
         for (const dir of dirs) {
-          const children = await readdir(join(skillsDir, dir.name));
+          try {
+            await access(join(skillsDir, dir.name, WIZARD_MARKER));
+          } catch {
+            continue;
+          }
+          const children = (await readdir(join(skillsDir, dir.name))).filter(
+            (c) => c !== WIZARD_MARKER,
+          );
           result.push({ name: dir.name, children });
         }
         if (result.length === 0) {
@@ -74,10 +83,23 @@ export const KeepSkillsScreen = ({ store }: KeepSkillsScreenProps) => {
 
   const handleRemove = async () => {
     setPhase(Phase.Removing);
+    for (const skill of skills) {
+      try {
+        await rm(join(skillsDir, skill.name), {
+          recursive: true,
+          force: true,
+        });
+      } catch {
+        // Best-effort removal
+      }
+    }
     try {
-      await rm(skillsDir, { recursive: true, force: true });
+      const remaining = await readdir(skillsDir);
+      if (remaining.length === 0) {
+        await rm(skillsDir, { recursive: true, force: true });
+      }
     } catch {
-      // Best-effort removal
+      // Best-effort cleanup
     }
     setPhase(Phase.Done);
     // Give React a tick to paint the "Skills removed." message before exit

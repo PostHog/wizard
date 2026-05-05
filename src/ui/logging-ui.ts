@@ -24,6 +24,10 @@ export class LoggingUI implements WizardUI {
     if (data.docsUrl) console.log(`│  Docs: ${data.docsUrl}`);
   }
 
+  waitForOutroDismissed(): Promise<void> {
+    return Promise.resolve();
+  }
+
   cancel(message: string): void {
     console.log(`■  ${message}`);
   }
@@ -157,6 +161,10 @@ export class LoggingUI implements WizardUI {
   }
 
   setEventPlan(_events: Array<{ name: string; description: string }>): void {
+    // No-op in CI mode
+  }
+
+  setFrameworkContext(_key: string, _value: unknown): void {
     // No-op in CI mode
   }
 }

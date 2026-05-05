@@ -21,7 +21,7 @@ import { ScreenErrorBoundary } from './ScreenErrorBoundary.js';
 import type { WizardStore } from '../store.js';
 
 const MIN_WIDTH = 80;
-const MAX_WIDTH = 120;
+export const MAX_WIDTH = 120;
 
 /** Use terminal width when small so we don't overflow; otherwise clamp to [MIN_WIDTH, MAX_WIDTH]. */
 function getContentWidth(terminalColumns: number): number {

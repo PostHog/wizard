@@ -20,6 +20,7 @@
  */
 
 import type { WorkflowConfig } from '../workflow-step.js';
+import type { WorkflowRun, AbortCase } from '../../agent/agent-runner.js';
 import { AGENT_SKILL_STEPS } from './steps.js';
 
 export interface SkillWorkflowOptions {
@@ -42,6 +43,10 @@ export interface SkillWorkflowOptions {
   estimatedDurationMinutes: number;
   /** Other workflow flowKeys that must be satisfied first */
   requires?: string[];
+  /** Override the default outro. Receives the same args as WorkflowRun.buildOutroData. */
+  buildOutroData?: WorkflowRun['buildOutroData'];
+  /** Known `[ABORT] <reason>` cases the skill can emit. */
+  abortCases?: AbortCase[];
 }
 
 export function createSkillWorkflow(
@@ -61,6 +66,8 @@ export function createSkillWorkflow(
       docsUrl: opts.docsUrl,
       spinnerMessage: opts.spinnerMessage,
       estimatedDurationMinutes: opts.estimatedDurationMinutes,
+      buildOutroData: opts.buildOutroData,
+      abortCases: opts.abortCases,
     },
     requires: opts.requires,
   };
