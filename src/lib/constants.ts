@@ -93,9 +93,19 @@ export const DUMMY_PROJECT_API_KEY = '_YOUR_POSTHOG_PROJECT_TOKEN_';
 
 /**
  * Scopes the wizard requests during the agentic provisioning signup flow.
+ *
+ * Each entry is justified by what the wizard's agent step does after signup:
+ * - user:read         identify the user for analytics + agent context
+ * - project:read      look up the freshly-provisioned project
+ * - llm_gateway:read  authenticate to gateway.{us,eu}.posthog.com/wizard
+ *                     (the agent's LLM calls — without this scope, every
+ *                     agent message returns 401)
+ * - query:read        run HogQL queries when the agent needs data
+ * - dashboard:write   create the onboarding dashboard during setup
+ * - insight:write     create the onboarding insights during setup
+ *
  * Must be a subset of `ALLOWED_PROVISIONING_SCOPES` in
- * `ee/api/agentic_provisioning/views.py` on the backend — `llm_gateway:read`
- * is required for the agent step to call the LLM gateway.
+ * `ee/api/agentic_provisioning/views.py` on the backend.
  */
 export const WIZARD_PROVISIONING_SCOPES = [
   'user:read',
@@ -108,8 +118,10 @@ export const WIZARD_PROVISIONING_SCOPES = [
 
 /**
  * Scopes the wizard requests during the OAuth login flow. Superset of
- * `WIZARD_PROVISIONING_SCOPES` — `introspection` and `health_issue:read` are
- * not in the provisioning allowlist and only apply to the login path.
+ * `WIZARD_PROVISIONING_SCOPES` with two scopes that only apply to the login
+ * path and are not in the provisioning allowlist:
+ * - introspection      lets the wizard introspect its own token
+ * - health_issue:read  used by `wizard doctor`
  */
 export const WIZARD_OAUTH_SCOPES = [
   ...WIZARD_PROVISIONING_SCOPES,
