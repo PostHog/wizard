@@ -101,22 +101,32 @@ describe('CodexMCPClient', () => {
   });
 
   describe('removeServer', () => {
-    it('invokes the resolved binary with mcp remove and returns success', async () => {
-      spawnSyncMock.mockReturnValue({ status: 0 });
+    it('delegates to uninstallPlugin — invokes plugin marketplace remove and returns success', async () => {
+      spawnSyncMock.mockReturnValue({ status: 0, stderr: '' });
       const client = new CodexMCPClient();
       await expect(client.removeServer()).resolves.toEqual({ success: true });
       expect(spawnSyncMock).toHaveBeenCalledWith(
         CODEX_PATH,
-        ['mcp', 'remove', 'posthog'],
-        { stdio: 'ignore' },
+        ['plugin', 'marketplace', 'remove', 'PostHog/ai-plugin'],
+        { encoding: 'utf-8' },
       );
     });
 
-    it('returns false and captures exception on failure', async () => {
-      spawnSyncMock.mockReturnValue({ status: 1 });
+    it('returns false and captures exception on unexpected failure', async () => {
+      spawnSyncMock.mockReturnValue({ status: 1, stderr: 'network timeout' });
       const client = new CodexMCPClient();
       await expect(client.removeServer()).resolves.toEqual({ success: false });
       expect(analytics.captureException).toHaveBeenCalled();
+    });
+
+    it('treats "not installed" stderr as success', async () => {
+      spawnSyncMock.mockReturnValue({
+        status: 1,
+        stderr: "Error: marketplace 'posthog' is not installed",
+      });
+      const client = new CodexMCPClient();
+      await expect(client.removeServer()).resolves.toEqual({ success: true });
+      expect(analytics.captureException).not.toHaveBeenCalled();
     });
   });
 
@@ -174,6 +184,58 @@ describe('CodexMCPClient', () => {
           message: expect.stringContaining('network timeout'),
         }),
       );
+    });
+  });
+
+  describe('uninstallPlugin', () => {
+    it('returns success on exit 0 using resolved binary path', async () => {
+      spawnSyncMock.mockReturnValue({ status: 0, stderr: '' });
+      const client = new CodexMCPClient();
+      await expect(client.uninstallPlugin()).resolves.toEqual({
+        success: true,
+      });
+      expect(spawnSyncMock).toHaveBeenCalledWith(
+        CODEX_PATH,
+        ['plugin', 'marketplace', 'remove', 'PostHog/ai-plugin'],
+        { encoding: 'utf-8' },
+      );
+    });
+
+    it.each([
+      ['not installed', "marketplace 'posthog' is not installed"],
+      ['not found', 'marketplace not found'],
+      ['does not exist', "marketplace 'posthog' does not exist"],
+      ['no such marketplace', 'no such marketplace: posthog'],
+    ])('treats "%s" stderr as success', async (_label, stderr) => {
+      spawnSyncMock.mockReturnValue({ status: 1, stderr });
+      const client = new CodexMCPClient();
+      await expect(client.uninstallPlugin()).resolves.toEqual({
+        success: true,
+      });
+      expect(analytics.captureException).not.toHaveBeenCalled();
+    });
+
+    it('returns failure and captures exception on unexpected stderr', async () => {
+      spawnSyncMock.mockReturnValue({ status: 1, stderr: 'network timeout' });
+      const client = new CodexMCPClient();
+      await expect(client.uninstallPlugin()).resolves.toEqual({
+        success: false,
+      });
+      expect(analytics.captureException).toHaveBeenCalledWith(
+        expect.objectContaining({
+          message: expect.stringContaining('network timeout'),
+        }),
+      );
+    });
+
+    it('returns failure when no binary is found', async () => {
+      execSyncMock.mockImplementation(() => {
+        throw new Error('not found');
+      });
+      const client = new CodexMCPClient();
+      await expect(client.uninstallPlugin()).resolves.toEqual({
+        success: false,
+      });
     });
   });
 });

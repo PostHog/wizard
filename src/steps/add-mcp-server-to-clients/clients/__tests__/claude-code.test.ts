@@ -137,4 +137,110 @@ describe('ClaudeCodeMCPClient — plugin methods', () => {
       await expect(client.installPlugin()).resolves.toEqual({ success: false });
     });
   });
+
+  describe('uninstallPlugin', () => {
+    it('returns success on exit 0 and shells out to plugin uninstall', async () => {
+      const calls: string[] = [];
+      execSyncMock.mockImplementation((cmd: string) => {
+        calls.push(String(cmd));
+        return Buffer.from('');
+      });
+      const client = new ClaudeCodeMCPClient();
+      await expect(client.uninstallPlugin()).resolves.toEqual({
+        success: true,
+      });
+      expect(calls.some((c) => c.includes('plugin uninstall posthog'))).toBe(
+        true,
+      );
+    });
+
+    it('treats "not installed" stderr as success', async () => {
+      execSyncMock.mockImplementation((cmd: string) => {
+        if (String(cmd).includes('plugin uninstall')) {
+          throw new Error('Error: posthog is not installed');
+        }
+        return Buffer.from('');
+      });
+      const client = new ClaudeCodeMCPClient();
+      await expect(client.uninstallPlugin()).resolves.toEqual({
+        success: true,
+      });
+      expect(analytics.captureException).not.toHaveBeenCalled();
+    });
+
+    it('treats "not found" stderr as success', async () => {
+      execSyncMock.mockImplementation((cmd: string) => {
+        if (String(cmd).includes('plugin uninstall')) {
+          throw new Error('plugin posthog not found');
+        }
+        return Buffer.from('');
+      });
+      const client = new ClaudeCodeMCPClient();
+      await expect(client.uninstallPlugin()).resolves.toEqual({
+        success: true,
+      });
+      expect(analytics.captureException).not.toHaveBeenCalled();
+    });
+
+    it('treats "does not exist" stderr as success', async () => {
+      execSyncMock.mockImplementation((cmd: string) => {
+        if (String(cmd).includes('plugin uninstall')) {
+          throw new Error('plugin "posthog" does not exist');
+        }
+        return Buffer.from('');
+      });
+      const client = new ClaudeCodeMCPClient();
+      await expect(client.uninstallPlugin()).resolves.toEqual({
+        success: true,
+      });
+      expect(analytics.captureException).not.toHaveBeenCalled();
+    });
+
+    it('returns failure and captures exception on unexpected error', async () => {
+      execSyncMock.mockImplementation((cmd: string) => {
+        if (String(cmd).includes('plugin uninstall')) {
+          throw new Error('network timeout');
+        }
+        return Buffer.from('');
+      });
+      const client = new ClaudeCodeMCPClient();
+      await expect(client.uninstallPlugin()).resolves.toEqual({
+        success: false,
+      });
+      expect(analytics.captureException).toHaveBeenCalledWith(
+        expect.objectContaining({
+          message: expect.stringContaining('network timeout'),
+        }),
+      );
+    });
+
+    it('returns failure when no binary is found', async () => {
+      execSyncMock.mockImplementation(() => {
+        throw new Error('not found');
+      });
+      const client = new ClaudeCodeMCPClient();
+      await expect(client.uninstallPlugin()).resolves.toEqual({
+        success: false,
+      });
+    });
+  });
+
+  describe('removeServer', () => {
+    it('delegates to uninstallPlugin — returns success on exit 0', async () => {
+      execSyncMock.mockImplementation(() => Buffer.from(''));
+      const client = new ClaudeCodeMCPClient();
+      await expect(client.removeServer()).resolves.toEqual({ success: true });
+    });
+
+    it('delegates to uninstallPlugin — returns failure on unexpected error', async () => {
+      execSyncMock.mockImplementation((cmd: string) => {
+        if (String(cmd).includes('plugin uninstall')) {
+          throw new Error('network timeout');
+        }
+        return Buffer.from('');
+      });
+      const client = new ClaudeCodeMCPClient();
+      await expect(client.removeServer()).resolves.toEqual({ success: false });
+    });
+  });
 });

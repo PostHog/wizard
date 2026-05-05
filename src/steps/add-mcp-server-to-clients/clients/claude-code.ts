@@ -98,29 +98,8 @@ export class ClaudeCodeMCPClient
     return { success: result.success };
   }
 
-  removeServer(local?: boolean): Promise<{ success: boolean }> {
-    const claudeBinary = this.findClaudeBinary();
-    if (!claudeBinary) {
-      return Promise.resolve({ success: false });
-    }
-
-    const serverName = local ? 'posthog-local' : 'posthog';
-    const command = `${claudeBinary} mcp remove --scope user ${serverName}`;
-
-    try {
-      execSync(command);
-    } catch (error) {
-      analytics.captureException(
-        new Error(
-          `Failed to remove server from Claude Code: ${
-            error instanceof Error ? error.message : String(error)
-          }`,
-        ),
-      );
-      return Promise.resolve({ success: false });
-    }
-
-    return Promise.resolve({ success: true });
+  async removeServer(_local?: boolean): Promise<{ success: boolean }> {
+    return this.uninstallPlugin();
   }
 
   supportsPlugin(): boolean {
@@ -153,6 +132,31 @@ export class ClaudeCodeMCPClient
       }
       analytics.captureException(
         new Error(`Claude Code plugin install failed: ${msg}`),
+      );
+      return Promise.resolve({ success: false });
+    }
+  }
+
+  uninstallPlugin(): Promise<{ success: boolean }> {
+    const binary = this.findClaudeBinary();
+    if (!binary) return Promise.resolve({ success: false });
+    try {
+      execSync(`${binary} plugin uninstall posthog`, { stdio: 'pipe' });
+      return Promise.resolve({ success: true });
+    } catch (error) {
+      const msg = (
+        error instanceof Error ? error.message : String(error)
+      ).toLowerCase();
+      if (
+        msg.includes('not installed') ||
+        msg.includes('not found') ||
+        msg.includes('does not exist') ||
+        msg.includes('no such plugin')
+      ) {
+        return Promise.resolve({ success: true });
+      }
+      analytics.captureException(
+        new Error(`Claude Code plugin uninstall failed: ${msg}`),
       );
       return Promise.resolve({ success: false });
     }
