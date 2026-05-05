@@ -89,6 +89,9 @@ describe('provisionNewAccount', () => {
       (accountCall[1] as Record<string, unknown>).code_challenge,
     ).toBeTruthy();
     expect((accountCall[1] as Record<string, unknown>).client_id).toBeTruthy();
+    expect((accountCall[1] as Record<string, unknown>).scopes).toEqual(
+      expect.arrayContaining(['llm_gateway:read', 'project:read', 'user:read']),
+    );
 
     // Verify token exchange includes code_verifier
     const tokenCall = mockedAxios.post.mock.calls[1];

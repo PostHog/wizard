@@ -91,6 +91,32 @@ export const POSTHOG_DEV_CLIENT_ID = 'DC5uRLVbGI02YQ82grxgnK6Qn12SXWpCqdPb60oZ';
 export const POSTHOG_PROXY_CLIENT_ID = POSTHOG_US_CLIENT_ID;
 export const DUMMY_PROJECT_API_KEY = '_YOUR_POSTHOG_PROJECT_TOKEN_';
 
+/**
+ * Scopes the wizard requests during the agentic provisioning signup flow.
+ * Must be a subset of `ALLOWED_PROVISIONING_SCOPES` in
+ * `ee/api/agentic_provisioning/views.py` on the backend — `llm_gateway:read`
+ * is required for the agent step to call the LLM gateway.
+ */
+export const WIZARD_PROVISIONING_SCOPES = [
+  'user:read',
+  'project:read',
+  'llm_gateway:read',
+  'dashboard:write',
+  'insight:write',
+  'query:read',
+] as const;
+
+/**
+ * Scopes the wizard requests during the OAuth login flow. Superset of
+ * `WIZARD_PROVISIONING_SCOPES` — `introspection` and `health_issue:read` are
+ * not in the provisioning allowlist and only apply to the login path.
+ */
+export const WIZARD_OAUTH_SCOPES = [
+  ...WIZARD_PROVISIONING_SCOPES,
+  'introspection',
+  'health_issue:read',
+] as const;
+
 // ── Wizard run / variants ───────────────────────────────────────────
 
 export const WIZARD_INTERACTION_EVENT_NAME = 'wizard interaction';

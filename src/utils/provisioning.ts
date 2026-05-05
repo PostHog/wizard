@@ -14,6 +14,7 @@ import {
   IS_DEV,
   POSTHOG_DEV_CLIENT_ID,
   POSTHOG_US_CLIENT_ID,
+  WIZARD_PROVISIONING_SCOPES,
   WIZARD_USER_AGENT,
 } from '../lib/constants';
 import { logToFile } from './debug';
@@ -117,6 +118,7 @@ export async function provisionNewAccount(
       client_id: WIZARD_CLIENT_ID,
       code_challenge: codeChallenge,
       code_challenge_method: 'S256',
+      scopes: WIZARD_PROVISIONING_SCOPES,
       configuration: {
         region,
         ...(opts?.orgName ? { organization_name: opts.orgName } : {}),
