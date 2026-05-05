@@ -69,8 +69,14 @@ export async function wizardAbort(
 
   // 4. Render the error outro. Synthesize OutroData from `message`
   //    when the caller didn't provide structured data.
-  getUI().outroError(outroData ?? { kind: OutroKind.Error, message });
+  const ui = getUI();
+  ui.outroError(outroData ?? { kind: OutroKind.Error, message });
 
-  // 5. Exit (fires 'exit' event so TUI cleanup runs)
+  // 5. Wait for the user to dismiss the outro screen. In a TUI this gives
+  //    them time to read the error; in non-TUI environments it resolves
+  //    immediately.
+  await ui.waitForOutroDismissed();
+
+  // 6. Exit (fires 'exit' event so TUI cleanup runs)
   return process.exit(exitCode);
 }

@@ -18,6 +18,7 @@ import { DoctorReportDemo } from './demos/DoctorReportDemo.js';
 import { ModalDemo } from './demos/ModalDemo.js';
 import { McpDemo } from './demos/McpDemo.js';
 import { KeyboardHintsDemo } from './demos/KeyboardHintsDemo.js';
+import { AuditChecksDemo } from './demos/AuditChecksDemo.js';
 
 interface PlaygroundAppProps {
   store: WizardStore;
@@ -58,6 +59,11 @@ export const PlaygroundApp = ({ store }: PlaygroundAppProps) => {
       id: 'hints',
       label: 'KeyHints',
       component: <KeyboardHintsDemo />,
+    },
+    {
+      id: 'audit-checks',
+      label: 'Audit checks',
+      component: <AuditChecksDemo />,
     },
   ];
 

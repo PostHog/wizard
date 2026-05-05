@@ -14,8 +14,6 @@
  *   agent init → prompt → run → errors → [postRun] → outro
  */
 
-import { existsSync } from 'fs';
-import { join } from 'path';
 import {
   type WizardSession,
   type AdditionalFeature,
@@ -440,13 +438,10 @@ export async function runWorkflow(
       ? `${getCloudUrlFromRegion(cloudRegion)}/products?source=wizard`
       : undefined;
 
-    const reportPath = join(session.installDir, config.reportFile);
-    const reportExists = existsSync(reportPath);
-
     session.outroData = {
       kind: OutroKind.Success,
       message: config.successMessage,
-      reportFile: reportExists ? config.reportFile : undefined,
+      reportFile: config.reportFile,
       docsUrl: config.docsUrl,
       continueUrl,
     };

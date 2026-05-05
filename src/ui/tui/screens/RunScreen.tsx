@@ -1,15 +1,13 @@
 /**
- * RunScreen — Tabbed observational view of the agent run.
+ * RunScreen — Default observational view of the agent run.
  *
- * Two tabs:
- *   - Status: SplitView with LearnCard (left) + ProgressList (right)
- *   - Logs: LogViewer tailing the wizard log file
- *
- * No prompts — the agent runs headlessly.
- * LearnCard shows animated educational content and reacts to discovered features.
+ * Tabs: Status (LearnCard + ProgressList), Event plan (when present),
+ * Tail logs, HN. Workflows that need a different tab list ship their own
+ * screen component (see audit/AuditRunScreen.tsx).
  */
 
 import { useSyncExternalStore } from 'react';
+import { join } from 'node:path';
 import { Box } from 'ink';
 import type { WizardStore } from '../store.js';
 import {
@@ -25,6 +23,8 @@ import { ADDITIONAL_FEATURE_LABELS } from '../../../lib/wizard-session.js';
 import { LearnCard } from '../components/LearnCard.js';
 import { TipsCard } from '../components/TipsCard.js';
 import { useStdoutDimensions } from '../hooks/useStdoutDimensions.js';
+import { useFileWatcher } from '../hooks/file-watcher.js';
+import { EVENT_PLAN_FILE } from '../../../lib/workflows/posthog-integration/index.js';
 
 import { WIZARD_LOG_FILE } from '../../../utils/paths.js';
 
@@ -37,6 +37,18 @@ export const RunScreen = ({ store }: RunScreenProps) => {
     (cb) => store.subscribe(cb),
     () => store.getSnapshot(),
   );
+
+  // Mirror the agent's `.posthog-events.json` plan into the store so the
+  // Event plan tab appears as soon as the agent emits the file.
+  useFileWatcher(join(store.session.installDir, EVENT_PLAN_FILE), (parsed) => {
+    if (!Array.isArray(parsed)) return;
+    store.setEventPlan(
+      parsed.map((e: Record<string, unknown>) => ({
+        name: (e.name ?? e.event ?? '') as string,
+        description: (e.description ?? '') as string,
+      })),
+    );
+  });
 
   const [columns] = useStdoutDimensions();
 
@@ -81,11 +93,7 @@ export const RunScreen = ({ store }: RunScreenProps) => {
     );
 
   const tabs = [
-    {
-      id: 'status',
-      label: 'Status',
-      component: statusComponent,
-    },
+    { id: 'status', label: 'Status', component: statusComponent },
     ...(store.eventPlan.length > 0
       ? [
           {
@@ -100,11 +108,7 @@ export const RunScreen = ({ store }: RunScreenProps) => {
       label: 'Tail logs',
       component: <LogViewer filePath={WIZARD_LOG_FILE} />,
     },
-    {
-      id: 'hn',
-      label: 'HN',
-      component: <HNViewer />,
-    },
+    { id: 'hn', label: 'HN', component: <HNViewer /> },
   ];
 
   return (

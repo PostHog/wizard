@@ -14,12 +14,12 @@ import type { ReactNode } from 'react';
 import { useEffect, useState, useSyncExternalStore } from 'react';
 import type { WizardStore } from '../store.js';
 import {
-  CONTEXT_MILL_URL,
   Integration,
   WIZARD_TOOLS_MENU_FLAG_KEY,
 } from '../../../lib/constants.js';
 import { PickerMenu, LoadingBox } from '../primitives/index.js';
 import { IntroScreenLayout, type DetectionRow } from './IntroScreenLayout.js';
+import { SkillSourceInfo, useSkillEntry } from './SkillSourceInfo.js';
 import { releaseTerminal } from '../start-tui.js';
 import { analytics } from '../../../utils/analytics.js';
 
@@ -105,6 +105,10 @@ export const PostHogIntegrationIntroScreen = ({
   const config = session.frameworkConfig;
   const frameworkLabel =
     session.detectedFrameworkLabel ?? config?.metadata.name;
+  const { skillEntry, fetchFailed } = useSkillEntry(
+    session.skillId,
+    session.localMcp,
+  );
   const detecting = !session.detectionComplete;
   const needsFrameworkPick =
     session.detectionComplete && !session.frameworkConfig;
@@ -173,10 +177,14 @@ export const PostHogIntegrationIntroScreen = ({
           <Text>{`\u2022`} Error Tracking</Text>
         </Box>
         <Box flexDirection="column" marginTop={1}>
-          <Text>
-            If you prefer your own AI setup, download the skill:{' '}
-            <Text color="cyan">{CONTEXT_MILL_URL}/releases</Text>
-          </Text>
+          <Text>If you prefer your own AI setup, download the skill:</Text>
+          <Box marginTop={1}>
+            <SkillSourceInfo
+              skillId={session.skillId}
+              skillEntry={skillEntry}
+              fetchFailed={fetchFailed}
+            />
+          </Box>
         </Box>
       </Box>
     );

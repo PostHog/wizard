@@ -17,6 +17,9 @@ import { getUI } from '../../../ui/index.js';
 import { getCloudUrlFromRegion } from '../../../utils/urls.js';
 import { POSTHOG_INTEGRATION_WORKFLOW } from './steps.js';
 
+export const SETUP_REPORT_FILE = 'posthog-setup-report.md';
+export const EVENT_PLAN_FILE = '.posthog-events.json';
+
 export const posthogIntegrationConfig: WorkflowConfig = {
   command: 'integrate',
   description: 'Set up PostHog SDK integration',
@@ -76,7 +79,7 @@ export const posthogIntegrationConfig: WorkflowConfig = {
       spinnerMessage: SPINNER_MESSAGE,
       successMessage: config.ui.successMessage,
       estimatedDurationMinutes: config.ui.estimatedDurationMinutes,
-      reportFile: 'posthog-setup-report.md',
+      reportFile: SETUP_REPORT_FILE,
       docsUrl: config.metadata.docsUrl,
       errorMessage: 'Integration failed',
       additionalFeatureQueue: session.additionalFeatureQueue,
@@ -184,7 +187,7 @@ Important: Use the detect_package_manager tool (from the wizard-tools MCP server
         return {
           kind: OutroKind.Success as const,
           message: 'Successfully installed PostHog!',
-          reportFile: 'posthog-setup-report.md',
+          reportFile: SETUP_REPORT_FILE,
           changes,
           docsUrl: config.metadata.docsUrl,
           continueUrl,
