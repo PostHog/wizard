@@ -39,12 +39,19 @@ export const AuditRunScreen = ({ store }: AuditRunScreenProps) => {
 
   const statuses =
     store.statusMessages.length > 0 ? store.statusMessages : undefined;
+  const latestStatus = statuses?.[statuses.length - 1];
 
   const [columns] = useStdoutDimensions();
   const checks = getAuditChecks(store.session);
   const reportPath = `./${AUDIT_REPORT_FILE}`;
   const pendingChecksList = <PendingChecksList checks={checks} />;
-  const areaPane = <AuditAreaPane checks={checks} reportPath={reportPath} />;
+  const areaPane = (
+    <AuditAreaPane
+      checks={checks}
+      reportPath={reportPath}
+      latestStatus={latestStatus}
+    />
+  );
 
   // Narrow terminals: drop the area pane.
   const statusComponent =

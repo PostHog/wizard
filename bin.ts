@@ -428,12 +428,27 @@ const cli = yargs(hideBin(process.argv))
       .help();
   });
 
+// Audit-only options. `--areas` constrains the run to a subset of audit
+// areas (Installation, Identification, Web Analytics, …). When omitted
+// the agent runs everything its discovery determines applies.
+const auditSubcommandOptions = {
+  areas: {
+    describe:
+      'Comma-separated audit areas to constrain the run to (e.g. "Web Analytics, Feature Flags"). See --help for the full list.',
+    type: 'string' as const,
+  },
+};
+
 // ── Skill-based workflow subcommands (derived from registry) ─────────
 for (const wfConfig of getSubcommandWorkflows()) {
+  const isAudit = wfConfig.command === 'audit';
   cli.command(
     wfConfig.command!,
     wfConfig.description,
-    (y) => y.options(skillSubcommandOptions),
+    (y) =>
+      isAudit
+        ? y.options({ ...skillSubcommandOptions, ...auditSubcommandOptions })
+        : y.options(skillSubcommandOptions),
     (argv) => {
       const options = { ...argv };
       if (options.ci) {
@@ -478,6 +493,8 @@ function runWizard(
 
       const tui = startTUI(WIZARD_VERSION, config.flowKey as any);
 
+      const auditAreas = await maybeParseAuditAreas(config, options);
+
       const session = buildSession({
         debug: options.debug as boolean | undefined,
         forceInstall: options.forceInstall as boolean | undefined,
@@ -492,6 +509,7 @@ function runWizard(
         integration: options.integration as any,
         benchmark: options.benchmark as boolean | undefined,
         yaraReport: options.yaraReport as boolean | undefined,
+        auditAreas,
       });
       session.workflowLabel = config.flowKey;
       if (options.skillId) {
@@ -618,6 +636,8 @@ function runWizardCI(
       ? (options.installDir as string)
       : path.join(process.cwd(), options.installDir as string);
 
+    const auditAreas = await maybeParseAuditAreas(config, options);
+
     const session = buildSession({
       debug: options.debug as boolean | undefined,
       forceInstall: options.forceInstall as boolean | undefined,
@@ -632,6 +652,7 @@ function runWizardCI(
       projectId: options.projectId as string | undefined,
       benchmark: options.benchmark as boolean | undefined,
       yaraReport: options.yaraReport as boolean | undefined,
+      auditAreas,
       ...env,
     });
     session.workflowLabel = config.flowKey;
@@ -703,4 +724,31 @@ function runWizardCI(
   })().catch(() => {
     process.exit(1);
   });
+}
+
+/**
+ * Parse `--areas` into a typed AuditArea[]. Returns `undefined` when the
+ * workflow isn't audit or no flag was passed. Logs a hint listing every
+ * allowed area when unknown values are passed (and ignores them).
+ */
+async function maybeParseAuditAreas(
+  config: WorkflowConfig,
+  options: Record<string, unknown>,
+): Promise<import('./src/lib/workflows/audit/areas').AuditArea[] | undefined> {
+  if (config.command !== 'audit') return undefined;
+  const areasArg = options.areas as string | undefined;
+  if (!areasArg) return undefined;
+
+  const { parseAuditAreas, formatAreasHint } = await import(
+    './src/lib/workflows/audit/areas.js'
+  );
+  const { areas, unknown } = parseAuditAreas(areasArg);
+  if (unknown.length > 0) {
+    getUI().log.warn(
+      `Ignoring unknown audit area(s): ${unknown.join(
+        ', ',
+      )}. Allowed areas: ${formatAreasHint()}.`,
+    );
+  }
+  return areas.length > 0 ? areas : undefined;
 }
