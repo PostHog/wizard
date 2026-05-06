@@ -55,8 +55,6 @@ import type { WizardOptions } from '../../utils/types';
 
 import type { WorkflowConfig } from '../workflows/workflow-step';
 import { assemblePrompt, type PromptContext } from './agent-prompt';
-import { requestDeepLink } from '../../utils/provisioning';
-import opn from 'opn';
 
 export type { PromptContext };
 
@@ -436,13 +434,9 @@ export async function runWorkflow(
       cloudRegion,
     );
   } else {
-    let continueUrl: string | undefined;
-    if (session.signup) {
-      const deepLink = await requestDeepLink(accessToken, host);
-      continueUrl =
-        deepLink ??
-        `${getCloudUrlFromRegion(cloudRegion)}/products?source=wizard`;
-    }
+    const continueUrl = session.signup
+      ? `${getCloudUrlFromRegion(cloudRegion)}/products?source=wizard`
+      : undefined;
 
     session.outroData = {
       kind: OutroKind.Success,
@@ -454,16 +448,6 @@ export async function runWorkflow(
   }
 
   getUI().outro(config.successMessage);
-
-  if (
-    session.signup &&
-    session.outroData?.continueUrl &&
-    process.env.NODE_ENV !== 'test'
-  ) {
-    opn(session.outroData.continueUrl, { wait: false }).catch(() => {
-      // opn throws in environments without a browser
-    });
-  }
 
   // 12. Analytics shutdown
   await analytics.shutdown('success');
