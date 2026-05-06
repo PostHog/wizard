@@ -225,7 +225,7 @@ const cli = yargs(hideBin(process.argv))
               ' (pha_ is an OAuth access token — CI mode expects a personal API key)';
           } else if (prefix === 'phc_') {
             hint =
-              ' (phc_ is a project/client key — CI mode wants a personal API key)';
+              ' (phc_ is a project/client key — CI mode expects a personal API key)';
           }
           getUI().log.warn(
             `--api-key does not start with "phx_"${hint}. Continuing anyway, but the LLM Gateway may reject it with a 401.`,
