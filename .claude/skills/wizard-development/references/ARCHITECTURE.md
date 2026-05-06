@@ -36,7 +36,7 @@ Every wizard run — framework integration, revenue analytics, audit, generic sk
 
 ### What the runner does NOT know
 
-The runner doesn't know what framework is being integrated. It doesn't know what skills exist. It doesn't know what env vars are called. It doesn't know what the outro should say. All of that comes from `WorkflowRun` and `FrameworkConfig` — configuration, not code.
+The `agent-runner.ts` doesn't know what framework is being integrated. It doesn't know what skills exist. It doesn't know what env vars are called. It doesn't know what the outro should say. All of that comes from `WorkflowRun` and `FrameworkConfig` — configuration, not code.
 
 ## Session data flow
 
