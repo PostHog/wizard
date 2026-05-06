@@ -135,6 +135,8 @@ When you're adding something that doesn't have a precedent in the codebase, ask 
 
 **New post-agent step:** If you need to do something after the agent completes (upload env vars, install MCP servers, etc.), use the `postRun` hook on `WorkflowRun`. The hook receives the session and credentials. It runs after the agent succeeds but before the outro. It doesn't modify the runner pipeline — it's a callback on the workflow configuration.
 
+**Custom workflow outro:** Set `buildOutroData` on the `WorkflowRun`. The function receives the session, credentials, and cloud region; returns an `OutroData` object that drives the outro screen. Use this for workflow-specific success messages, change lists, dashboard URLs, or seasonal copy. The runner uses sensible defaults from `successMessage`/`reportFile`/`docsUrl` when `buildOutroData` is omitted.
+
 **New environment variable convention:** Each framework's `FrameworkConfig.environment.getEnvVars()` returns the env var names and values. The naming convention is framework-specific (e.g., `NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN` for Next.js, `PUBLIC_POSTHOG_PROJECT_TOKEN` for SvelteKit). If you need a new convention, add it to the framework config. The runner doesn't know or care what the env vars are called.
 
 ## What to watch for
@@ -165,4 +167,5 @@ If the codebase is growing faster than the capability it delivers, the boundarie
 
 - [references/ARCHITECTURE.md](references/ARCHITECTURE.md) — Pipeline anatomy, data flow, security boundaries, screen resolution, MCP topology, middleware pipeline. **Read when you need to understand where a new concern hooks in.**
 - [references/ANTI-PATTERNS.md](references/ANTI-PATTERNS.md) — Concrete failure modes with alternatives: inlining product logic, bloating commandments, building recovery instead of prevention, imperative navigation, bundling mismatched-rate knowledge. **Read when evaluating whether a proposed change fits.**
+- [references/MAINTAINING-SKILLS.md](references/MAINTAINING-SKILLS.md) — How to keep the skills under `.claude/skills/` accurate over time: drift sources, review checklist, review triggers, patterns that age well, the deletion question, versioning convention. **Read when making any major architecture change in this repo.**
 
