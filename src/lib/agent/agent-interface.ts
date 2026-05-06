@@ -380,7 +380,9 @@ export function buildWizardMetadata(
 }
 
 /**
- * Build env for the SDK subprocess: process.env plus ANTHROPIC_CUSTOM_HEADERS from wizard metadata/flags.
+ * Build env for the SDK subprocess: process.env plus ANTHROPIC_CUSTOM_HEADERS, which always
+ * includes `x-posthog-use-bedrock-fallback: true` so the LLM gateway falls back to Bedrock on
+ * Anthropic 5xx, plus any wizard metadata/flags.
  */
 function buildAgentEnv(
   wizardMetadata: Record<string, string>,
