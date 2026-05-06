@@ -222,7 +222,7 @@ const cli = yargs(hideBin(process.argv))
           let hint = '';
           if (prefix === 'pha_') {
             hint =
-              ' (pha_ is an OAuth access token — CI mode expects a personal API key)';```
+              ' (pha_ is an OAuth access token — CI mode expects a personal API key)';
           } else if (prefix === 'phc_') {
             hint =
               ' (phc_ is a project/client key — CI mode wants a personal API key)';
