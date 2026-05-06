@@ -139,6 +139,25 @@ When you're adding something that doesn't have a precedent in the codebase, ask 
 
 **New environment variable convention:** Each framework's `FrameworkConfig.environment.getEnvVars()` returns the env var names and values. The naming convention is framework-specific (e.g., `NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN` for Next.js, `PUBLIC_POSTHOG_PROJECT_TOKEN` for SvelteKit). If you need a new convention, add it to the framework config. The runner doesn't know or care what the env vars are called.
 
+## Tests
+
+Tests use vitest and live in `__tests__/` directories adjacent to the source they cover. The architecture is test-friendly because most hot zones are pure functions: router resolution, gate predicates, detection logic, prompt assembly, YARA rule matching, factory output. Test these directly — no mocking, no fixtures.
+
+What to test when extending the system:
+
+- **New factory or typed interface:** add contract tests in a sibling `__tests__/` that lock down shape and defaults. Future readers (and future skill writers) lean on these as the durable record of what the abstraction guarantees.
+- **New gate or `isComplete` predicate:** test the predicate as a pure function with mutated `buildSession({})` results. Don't try to integration-test the router around it.
+- **New YARA rule:** test a matching string and at least one near-miss to catch regex over-matching.
+- **New detection function:** test against fixture inputs (parsed `package.json` shapes, file contents). Detection is pure — no install dir mocking needed if you call the parser directly.
+
+What NOT to test:
+
+- The agent run itself, the SDK call, real network calls. These are integration concerns; the unit boundary stops at "the configuration the runner consumes is correct."
+- The TUI's full render output. Test screen resolution (router predicates) and store setters; trust Ink to render.
+- Things the type system already guarantees. If the compiler catches it, a test for it is redundant.
+
+Verify your changes with `pnpm build && pnpm test && pnpm fix` before finishing. If you can't write a clean test for what you're adding, that's often a signal that the boundary is in the wrong place.
+
 ## What to watch for
 
 These are the early warning signs that a change is drifting from the discipline:
