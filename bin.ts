@@ -185,11 +185,6 @@ const cli = yargs(hideBin(process.argv))
             'Run a specific context-mill skill by ID\nenv: POSTHOG_WIZARD_SKILL',
           type: 'string',
         },
-        email: {
-          describe:
-            'Email for account creation with --ci --signup\nenv: POSTHOG_WIZARD_EMAIL',
-          type: 'string',
-        },
         name: {
           describe:
             'Name for account creation with --ci --signup\nenv: POSTHOG_WIZARD_NAME',
