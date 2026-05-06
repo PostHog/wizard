@@ -312,6 +312,7 @@ export async function runWorkflow(
       skillsBaseUrl,
       wizardFlags,
       wizardMetadata,
+      auditAreas: session.auditAreas,
     },
     sessionToOptions(session),
   );

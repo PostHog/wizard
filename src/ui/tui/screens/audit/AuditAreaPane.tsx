@@ -1,16 +1,25 @@
 /**
- * AuditAreaPane — left-pane slide that follows whatever area the agent is
- * currently checking, plus a wrap-up state once every check is resolved
- * and the agent has moved on to writing the report.
+ * AuditAreaPane — left-pane content that follows the agent's progress.
  *
- * Three states, gated top-down on the ledger:
- *   1. firstPending defined          → render the slide for that area
- *   2. checks empty                  → blank (the seed hook fires before
- *                                       this screen mounts in practice;
- *                                       this is just defensive)
- *   3. all checks non-pending        → "writing report" wrap-up
+ * Five states, gated top-down on the ledger + latest status string:
+ *   1. a basic area has a pending check → render that area's slide
+ *      (Installation / Identification / Event Capture)
+ *   2. ledger empty                     → blank (defensive — the seed
+ *                                          hook fires synchronously)
+ *   3. status indicates report writing  → "wrapped up" wrap-up
+ *   4. discoverable areas exist in
+ *      the ledger                       → "running expert subagents in
+ *                                          parallel: <list>" (variant B)
+ *   5. otherwise (basic resolved, no
+ *      discoverable areas yet)          → "essentials checked, dispatching
+ *                                          experts" (variant A)
  *
- * Pressing `O` opens the active slide's docs URL.
+ * The discovery / second-wave dispatch can leave the ledger fully resolved
+ * for several seconds while the dispatch agent decides what comes next.
+ * Variants A and B fill that window with truthful messaging until either
+ * new pending checks arrive or the report-writing status fires.
+ *
+ * Pressing `O` opens the active basic-area slide's docs URL.
  */
 
 import { Fragment } from 'react';
@@ -18,7 +27,19 @@ import { Box, Text, useInput } from 'ink';
 import { spawn } from 'node:child_process';
 import { Colors } from '../../styles.js';
 import { type AuditCheck } from '../../../../lib/workflows/audit/types.js';
+import { AUDIT_CORE_CHECKS } from '../../../../lib/workflows/audit/seed.js';
+import { AUDIT_SPECIALISTS } from '../../../../lib/workflows/audit/specialists.js';
 import { AUDIT_AREA_SLIDES, type AreaSlide } from './slides/index.js';
+
+/**
+ * Areas owned by the basic / pre-seeded specialists (Installation,
+ * Identification, Event Capture). Anything else is discoverable —
+ * second-wave content the runner enrolls mid-run.
+ */
+const BASIC_AREAS: ReadonlySet<string> = new Set([
+  ...AUDIT_CORE_CHECKS.map((c) => c.area),
+  ...AUDIT_SPECIALISTS.map((s) => s.area),
+]);
 
 // ── Helpers ──────────────────────────────────────────────────────────
 
@@ -52,11 +73,33 @@ const openLink = (url: string) => {
 interface AuditAreaPaneProps {
   checks: AuditCheck[];
   reportPath: string;
+  /** Latest `[STATUS]` line emitted by the agent, if any. */
+  latestStatus?: string;
 }
 
-export const AuditAreaPane = ({ checks, reportPath }: AuditAreaPaneProps) => {
-  const pendingChecks = checks.filter((c) => c.status === 'pending');
-  const activeArea = pendingChecks[0]?.area;
+/**
+ * Heuristic: does the latest status line indicate the agent has reached
+ * the report-writing phase? Matches the canonical `[STATUS] Writing audit
+ * report` line emitted from `references/aggregation.md` (and a couple of
+ * close paraphrases the model occasionally produces).
+ */
+function isWritingReportStatus(status: string | undefined): boolean {
+  if (!status) return false;
+  return /\b(writing|composing|preparing).*(audit )?report\b/i.test(status);
+}
+
+export const AuditAreaPane = ({
+  checks,
+  reportPath,
+  latestStatus,
+}: AuditAreaPaneProps) => {
+  // Pending check that belongs to a basic area. While any of these are
+  // pending, the active-area slide takes precedence — discoverable
+  // specialists run in parallel after the basic ones finish.
+  const basicPending = checks.find(
+    (c) => c.status === 'pending' && BASIC_AREAS.has(c.area),
+  );
+  const activeArea = basicPending?.area;
   const slide = activeArea
     ? AUDIT_AREA_SLIDES.find((s) => s.area === activeArea) ??
       fallbackSlide(activeArea)
@@ -68,21 +111,34 @@ export const AuditAreaPane = ({ checks, reportPath }: AuditAreaPaneProps) => {
     }
   });
 
-  // Active area — agent is still resolving checks for this slide's area.
   if (slide) {
     const hasFindings = checks.some(isFinding);
     return <ActiveSlide slide={slide} hasFindings={hasFindings} />;
   }
 
-  // Ledger empty — the seed hook fires synchronously at intro `onReady`,
-  // so this only happens if the seed file write failed. Render nothing
-  // rather than misleading the user with a "wrapped up" message.
+  // Ledger empty — defensive only; the seed hook fires synchronously.
   if (checks.length === 0) {
     return null;
   }
 
-  // Every check is resolved and the agent is composing the report.
-  return <WritingReport reportPath={reportPath} />;
+  if (isWritingReportStatus(latestStatus)) {
+    return <WritingReport reportPath={reportPath} />;
+  }
+
+  // Distinct discoverable areas the runner has enrolled, in first-seen
+  // order. Empty until the dispatch agent picks specialists and the
+  // runner calls `audit_add_checks`.
+  const discoverAreas: string[] = [];
+  for (const check of checks) {
+    if (!BASIC_AREAS.has(check.area) && !discoverAreas.includes(check.area)) {
+      discoverAreas.push(check.area);
+    }
+  }
+
+  if (discoverAreas.length > 0) {
+    return <RunningSubagents areas={discoverAreas} />;
+  }
+  return <DispatchingSubagents />;
 };
 
 // ── States ───────────────────────────────────────────────────────────
@@ -123,6 +179,39 @@ const ActiveSlide = ({
         )}
       </Text>
     </Box>
+  </Box>
+);
+
+const DispatchingSubagents = () => (
+  <Box flexDirection="column" paddingX={1}>
+    <Text bold color={Colors.accent}>
+      Essentials checked
+    </Text>
+    <Box height={1} />
+    <Text>
+      We've just checked your integration essentials. We're now going to run
+      expert subagents to check your product integration in more detail.
+    </Text>
+  </Box>
+);
+
+const RunningSubagents = ({ areas }: { areas: string[] }) => (
+  <Box flexDirection="column" paddingX={1}>
+    <Text bold color={Colors.accent}>
+      Running expert subagents
+    </Text>
+    <Box height={1} />
+    <Text>
+      We're running subagents to check against best practices for these products
+      in parallel:
+    </Text>
+    <Box height={1} />
+    {areas.map((area) => (
+      <Text key={area}>
+        <Text dimColor>{'  - '}</Text>
+        {area}
+      </Text>
+    ))}
   </Box>
 );
 

@@ -22,6 +22,7 @@ import {
   type AuditCheck,
   type AuditStatus,
 } from './workflows/audit/types';
+import { ALL_AUDIT_AREAS, type AuditArea } from './workflows/audit/areas';
 
 // ---------------------------------------------------------------------------
 // SDK dynamic import (ESM module loaded once, cached)
@@ -175,6 +176,13 @@ export interface WizardToolsOptions {
 
   /** Base URL for the skills server (e.g. http://localhost:8765 or GitHub releases URL) */
   skillsBaseUrl: string;
+
+  /**
+   * Audit-only: subset of audit areas the run is constrained to.
+   * Surfaced via the `audit_get_areas` MCP tool. Omit / pass `[]` for
+   * an unconstrained run.
+   */
+  auditAreas?: ReadonlyArray<AuditArea>;
 }
 
 // ---------------------------------------------------------------------------
@@ -432,6 +440,7 @@ const SERVER_NAME = 'wizard-tools';
  */
 export async function createWizardToolsServer(options: WizardToolsOptions) {
   const { workingDirectory, detectPackageManager, skillsBaseUrl } = options;
+  const auditAreas: ReadonlyArray<AuditArea> = options.auditAreas ?? [];
   const sdk = await getSDKModule();
   const { tool, createSdkMcpServer } = sdk;
 
@@ -811,6 +820,35 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
     },
   );
 
+  // -- audit_get_areas ------------------------------------------------------
+
+  const auditGetAreas = tool(
+    'audit_get_areas',
+    `Return the audit areas the wizard is constraining this run to. An empty array means the run is unconstrained — the agent should run every area its discovery determines applies. When non-empty, the agent must skip any area not in the list. Allowed values (canonical capitalization): ${ALL_AUDIT_AREAS.join(
+      ', ',
+    )}.`,
+    {},
+    () => {
+      logToFile(
+        `audit_get_areas: returning ${auditAreas.length} area(s)${
+          auditAreas.length > 0 ? ` [${auditAreas.join(', ')}]` : ''
+        }`,
+      );
+      return Promise.resolve({
+        content: [
+          {
+            type: 'text' as const,
+            text: JSON.stringify({
+              areas: [...auditAreas],
+              allowed: [...ALL_AUDIT_AREAS],
+              constrained: auditAreas.length > 0,
+            }),
+          },
+        ],
+      });
+    },
+  );
+
   // -- Assemble server ------------------------------------------------------
 
   return createSdkMcpServer({
@@ -825,6 +863,7 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
       auditSeedChecks,
       auditAddChecks,
       auditResolveChecks,
+      auditGetAreas,
     ],
   });
 }
@@ -839,6 +878,7 @@ export const WIZARD_TOOL_NAMES = [
   `${SERVER_NAME}:audit_seed_checks`,
   `${SERVER_NAME}:audit_add_checks`,
   `${SERVER_NAME}:audit_resolve_checks`,
+  `${SERVER_NAME}:audit_get_areas`,
 ];
 
 // ---------------------------------------------------------------------------

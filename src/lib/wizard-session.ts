@@ -14,6 +14,7 @@ import type { Integration } from './constants';
 import type { FrameworkConfig } from './framework-config';
 import type { WizardReadinessResult } from './health-checks/readiness';
 import type { SettingsConflict } from './agent/agent-interface';
+import type { AuditArea } from './workflows/audit/areas';
 
 export interface Credentials {
   accessToken: string;
@@ -168,6 +169,13 @@ export interface WizardSession {
 
   // Resolved framework config (set after integration is known)
   frameworkConfig: FrameworkConfig | null;
+
+  /**
+   * Audit-only: area-level constraint from `--areas`. Empty / undefined
+   * means the run is unconstrained. Surfaced to the agent via the
+   * `audit_get_areas` MCP tool.
+   */
+  auditAreas?: AuditArea[];
 }
 
 /**
@@ -189,6 +197,7 @@ export function buildSession(args: {
   benchmark?: boolean;
   yaraReport?: boolean;
   projectId?: string;
+  auditAreas?: AuditArea[];
 }): WizardSession {
   return {
     debug: args.debug ?? false,
@@ -234,5 +243,6 @@ export function buildSession(args: {
     workflowLabel: null,
     skillId: null,
     frameworkConfig: null,
+    auditAreas: args.auditAreas,
   };
 }

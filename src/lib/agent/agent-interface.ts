@@ -288,6 +288,11 @@ export type AgentConfig = {
   /** Feature flag key -> variant (evaluated at start of run). */
   wizardFlags?: Record<string, string>;
   wizardMetadata?: Record<string, string>;
+  /**
+   * Audit-only: areas the wizard is constraining the run to. Surfaced
+   * to the agent via the `audit_get_areas` MCP tool.
+   */
+  auditAreas?: ReadonlyArray<import('../workflows/audit/areas').AuditArea>;
 };
 
 /**
@@ -657,6 +662,7 @@ export async function initializeAgent(
       workingDirectory: config.workingDirectory,
       detectPackageManager: config.detectPackageManager,
       skillsBaseUrl: config.skillsBaseUrl,
+      auditAreas: config.auditAreas,
     });
     mcpServers['wizard-tools'] = wizardToolsServer;
 

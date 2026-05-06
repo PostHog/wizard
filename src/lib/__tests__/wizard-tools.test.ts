@@ -298,4 +298,8 @@ describe('WIZARD_TOOL_NAMES', () => {
   it('exposes audit_add_checks so future workflows can append checks through the MCP server', () => {
     expect(WIZARD_TOOL_NAMES).toContain('wizard-tools:audit_add_checks');
   });
+
+  it('exposes audit_get_areas so the agent can fetch the wizard-supplied area constraint at runtime', () => {
+    expect(WIZARD_TOOL_NAMES).toContain('wizard-tools:audit_get_areas');
+  });
 });

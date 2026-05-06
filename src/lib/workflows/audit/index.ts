@@ -7,7 +7,7 @@ import type { WorkflowRun } from '../../agent/agent-runner.js';
 import type { WizardSession } from '../../wizard-session.js';
 import { AUDIT_ABORT_CASES } from './detect.js';
 import { AUDIT_CHECKS_KEY, AUDIT_REPORT_FILE } from './types.js';
-import { AUDIT_SEED_CHECKS, seedAuditLedger } from './seed.js';
+import { seedAuditLedger } from './seed.js';
 
 /** Audit-specific screens for the shared agent-skill pipeline. */
 const AUDIT_SCREEN_BY_STEP: Record<string, string> = {
@@ -16,9 +16,14 @@ const AUDIT_SCREEN_BY_STEP: Record<string, string> = {
   outro: 'audit-outro',
 };
 
+const BASE_AUDIT_PROMPT =
+  'Run a comprehensive audit of the existing PostHog integration. ' +
+  'Follow the skill workflow steps in order. ' +
+  'Do not modify any project files — only create the final audit report.';
+
 const seedBeforeAuditRun = (session: WizardSession): void => {
-  seedAuditLedger(session.installDir);
-  session.frameworkContext[AUDIT_CHECKS_KEY] = AUDIT_SEED_CHECKS;
+  const checks = seedAuditLedger(session.installDir);
+  session.frameworkContext[AUDIT_CHECKS_KEY] = checks;
 };
 
 const withAuditScreens = (steps: Workflow): Workflow =>
@@ -36,8 +41,7 @@ const baseConfig = createSkillWorkflow({
   description:
     'Audit an existing PostHog integration for correctness and best practices',
   integrationLabel: 'audit',
-  customPrompt:
-    'Run a comprehensive audit of the existing PostHog integration. Follow the skill workflow steps in order. Do not modify any project files — only create the final audit report.',
+  customPrompt: BASE_AUDIT_PROMPT,
   successMessage:
     'Audit complete! You can view the audit report at ./posthog-audit-report.md',
   reportFile: AUDIT_REPORT_FILE,
