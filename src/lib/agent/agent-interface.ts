@@ -387,6 +387,7 @@ function buildAgentEnv(
   wizardFlags: Record<string, string>,
 ): string {
   const headers = createCustomHeaders();
+  headers.add('x-posthog-use-bedrock-fallback', 'true');
   for (const [key, value] of Object.entries(wizardMetadata)) {
     headers.add(
       key.startsWith(POSTHOG_PROPERTY_HEADER_PREFIX)
