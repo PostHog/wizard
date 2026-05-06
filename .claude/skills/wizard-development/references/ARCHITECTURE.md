@@ -144,7 +144,7 @@ This boundary means the runner, the agent interface, and the OAuth flow don't kn
 
 The agent has access to two MCP servers:
 
-- **posthog-wizard** — remote, HTTP-based. The PostHog MCP server at `mcp.posthog.com/mcp` (or `mcp-eu.posthog.com/mcp`). Provides query tools for PostHog data, dashboard creation, etc. Authenticated via Bearer token. Tool schemas are deferred (`ENABLE_TOOL_SEARCH: 'auto:0'`) to avoid bloating the system prompt.
+- **posthog-wizard** — remote, HTTP-based. The PostHog MCP server at `mcp.posthog.com/mcp` (or `mcp-eu.posthog.com/mcp`). Provides query tools for PostHog data, dashboard creation, etc. Authenticated via Bearer token. Tool schemas are deferred (`ENABLE_TOOL_SEARCH: 'auto:0'`) to avoid bloating the system prompt. It's almost never the right move to add tools here, unless a server-side component is the only path forward.
 
 - **wizard-tools** — local, in-process. Created by `createWizardToolsServer()` in `wizard-tools.ts`. Provides `check_env_keys`, `set_env_values`, `detect_package_manager`, `load_skill_menu`, `install_skill`. Runs in the wizard process — secret values never leave the machine.
 
@@ -164,4 +164,3 @@ MiddlewarePipeline
 Each middleware has a `name` and optional lifecycle hooks. A shared store (`MiddlewareContext.get` / `MiddlewareStore.set`) lets upstream middleware publish data that downstream middleware reads. Phase detection is automatic (from SDK message content) or explicit (`pipeline.startPhase()`).
 
 To add a middleware: implement the `Middleware` interface, add it to the pipeline construction in `agent-runner.ts`. The pipeline dispatches in order.
-
