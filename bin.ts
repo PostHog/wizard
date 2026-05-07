@@ -185,6 +185,11 @@ const cli = yargs(hideBin(process.argv))
             'Run a specific context-mill skill by ID\nenv: POSTHOG_WIZARD_SKILL',
           type: 'string',
         },
+        name: {
+          describe:
+            'Name for account creation with --ci --signup\nenv: POSTHOG_WIZARD_NAME',
+          type: 'string',
+        },
       });
     },
     (argv) => {
@@ -193,15 +198,6 @@ const cli = yargs(hideBin(process.argv))
       // CI mode validation and TTY check
       if (options.ci) {
         if (!options.region) options.region = 'us';
-        if (!options.apiKey) {
-          setUI(new LoggingUI());
-          getUI().intro('PostHog Wizard');
-          getUI().log.error(
-            'CI mode requires --api-key (personal API key phx_xxx)',
-          );
-          process.exit(1);
-          return;
-        }
         if (!options.installDir) {
           setUI(new LoggingUI());
           getUI().intro('PostHog Wizard');
@@ -211,27 +207,93 @@ const cli = yargs(hideBin(process.argv))
           process.exit(1);
           return;
         }
-        // Warn (don't fail) on unexpected key prefix — `phx_` is the personal
-        // API key the LLM Gateway expects. We don't hard-fail because future
-        // PostHog releases may introduce new prefixes.
-        const apiKeyValue = String(options.apiKey);
-        if (!apiKeyValue.startsWith('phx_')) {
+        if (!options.apiKey && !options.signup) {
           setUI(new LoggingUI());
           getUI().intro('PostHog Wizard');
-          const prefix = apiKeyValue.slice(0, 4);
-          let hint = '';
-          if (prefix === 'pha_') {
-            hint =
-              ' (pha_ is an OAuth access token — CI mode expects a personal API key)';
-          } else if (prefix === 'phc_') {
-            hint =
-              ' (phc_ is a project/client key — CI mode expects a personal API key)';
-          }
-          getUI().log.warn(
-            `--api-key does not start with "phx_"${hint}. Continuing anyway, but the LLM Gateway may reject it with a 401.`,
+          getUI().log.error(
+            'CI mode requires --api-key (personal API key phx_xxx). ' +
+              'To create a new account instead, use --signup --email you@example.com.',
           );
+          process.exit(1);
+          return;
+        }
+        if (!options.apiKey && options.signup && !options.email) {
+          setUI(new LoggingUI());
+          getUI().intro('PostHog Wizard');
+          getUI().log.error(
+            'CI --signup requires --email to create a new account.',
+          );
+          process.exit(1);
+          return;
+        }
+        // Warn (don't fail) on unexpected key prefix — `phx_` is the personal
+        // API key the LLM Gateway expects.
+        if (options.apiKey) {
+          const apiKeyValue = String(options.apiKey);
+          if (!apiKeyValue.startsWith('phx_')) {
+            setUI(new LoggingUI());
+            getUI().intro('PostHog Wizard');
+            const prefix = apiKeyValue.slice(0, 4);
+            let hint = '';
+            if (prefix === 'pha_') {
+              hint =
+                ' (pha_ is an OAuth access token — CI mode expects a personal API key)';
+            } else if (prefix === 'phc_') {
+              hint =
+                ' (phc_ is a project/client key — CI mode expects a personal API key)';
+            }
+            getUI().log.warn(
+              `--api-key does not start with "phx_"${hint}. Continuing anyway, but the LLM Gateway may reject it with a 401.`,
+            );
+          }
         }
         void (async () => {
+          // If --signup but no existing key, provision a new account first and
+          // use its personal API key for the rest of the CI install.
+          if (!options.apiKey && options.signup) {
+            setUI(new LoggingUI());
+            getUI().intro('PostHog Wizard');
+            try {
+              const { provisionNewAccount } = await import(
+                './src/utils/provisioning.js'
+              );
+              const signupRegion = (options.region as string).toUpperCase() as
+                | 'US'
+                | 'EU';
+              getUI().log.info(
+                `Provisioning new PostHog account for ${String(
+                  options.email,
+                )} in ${signupRegion}...`,
+              );
+              const result = await provisionNewAccount(
+                options.email as string,
+                options.name ?? '',
+                signupRegion,
+              );
+              if (!result.personalApiKey) {
+                getUI().log.error(
+                  'Provisioning succeeded but no personal API key was returned — cannot continue install.',
+                );
+                process.exit(1);
+                return;
+              }
+              getUI().log.success('Account ready.');
+              getUI().log.info(`  Project API Key:  ${result.projectApiKey}`);
+              getUI().log.info(`  Personal API Key: ${result.personalApiKey}`);
+              getUI().log.info(`  Host:             ${result.host}`);
+              options.apiKey = result.personalApiKey;
+              if (options.projectId == null) {
+                options.projectId = result.projectId;
+              }
+            } catch (error) {
+              const msg =
+                error instanceof Error ? error.message : String(error);
+              getUI().log.error(`Provisioning failed: ${msg}`);
+              process.exit(1);
+              return;
+            }
+          }
+
           const { posthogIntegrationConfig } = await import(
             './src/lib/workflows/posthog-integration/index.js'
           );
@@ -447,6 +509,90 @@ const cli = yargs(hideBin(process.argv))
       .demandCommand(1, 'You must specify a subcommand (add or remove)')
       .help();
   });
+
+cli.command(
+  'provision',
+  'Create a new PostHog account (headless, no TUI)',
+  (yargs) => {
+    return yargs
+      .options({
+        email: {
+          describe: 'Email address for the new account',
+          type: 'string' as const,
+          demandOption: true,
+        },
+        region: {
+          describe: 'Cloud region (us or eu)',
+          choices: ['us', 'eu'] as const,
+          default: 'us',
+        },
+        name: {
+          describe: 'Name for the new account',
+          type: 'string' as const,
+          default: '',
+        },
+        json: {
+          describe:
+            'Emit JSON result to stdout (defaults to true when stdout is not a TTY)',
+          type: 'boolean' as const,
+        },
+      })
+      .example('wizard provision --email matt+test@posthog.com --region us', '')
+      .example(
+        'wizard provision --email user@example.com --region eu --json',
+        '',
+      );
+  },
+  (argv) => {
+    const email = argv.email;
+    const region = argv.region.toUpperCase() as 'US' | 'EU';
+    const name = argv.name ?? '';
+    const jsonMode =
+      argv.json === undefined ? !process.stdout.isTTY : argv.json;
+
+    if (!jsonMode) {
+      setUI(new LoggingUI());
+    }
+
+    void (async () => {
+      try {
+        const { provisionNewAccount } = await import(
+          './src/utils/provisioning.js'
+        );
+        if (!jsonMode) {
+          getUI().log.info(`Provisioning account for ${email} in ${region}...`);
+        }
+        const result = await provisionNewAccount(email, name, region);
+        if (jsonMode) {
+          process.stdout.write(`${JSON.stringify(result)}\n`);
+        } else {
+          getUI().log.success('Account provisioned successfully:');
+          getUI().log.info(`  API Key:       ${result.projectApiKey}`);
+          getUI().log.info(`  Host:          ${result.host}`);
+          getUI().log.info(`  Project ID:    ${result.projectId}`);
+          getUI().log.info(`  Account ID:    ${result.accountId}`);
+          getUI().log.info(`  Access Token:  ${result.accessToken}`);
+          getUI().log.info(`  Refresh Token: ${result.refreshToken}`);
+          if (result.personalApiKey) {
+            getUI().log.info(`  Personal API Key: ${result.personalApiKey}`);
+          }
+        }
+        process.exit(0);
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : String(error);
+        const code = msg.includes('already associated')
+          ? 'email_exists'
+          : 'provisioning_failed';
+        if (jsonMode) {
+          process.stderr.write(`${JSON.stringify({ error: msg, code })}\n`);
+        } else {
+          getUI().log.error(`Provisioning failed: ${msg}`);
+        }
+        process.exit(1);
+      }
+    })();
+  },
+);
 
 // ── Skill-based workflow subcommands (derived from registry) ─────────
 for (const wfConfig of getSubcommandWorkflows()) {
