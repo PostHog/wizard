@@ -26,46 +26,46 @@ describe('createMcpInstaller — installPlugins', () => {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { analytics } = require('../../../utils/analytics.js');
 
-  const mockClaudeClient = { name: 'Claude Code' };
+  const mockCodexClient = { name: 'Codex' };
   const mockCursorClient = { name: 'Cursor' };
 
   beforeEach(() => {
     jest.clearAllMocks();
     mcpModule.getSupportedClients.mockResolvedValue([
-      mockClaudeClient,
+      mockCodexClient,
       mockCursorClient,
     ]);
   });
 
   it('calls installPlugins on plugin-capable clients and returns installed names', async () => {
-    mcpModule.getSupportedPluginClients.mockReturnValue([mockClaudeClient]);
-    mcpModule.installPlugins.mockResolvedValue(['Claude Code']);
+    mcpModule.getSupportedPluginClients.mockReturnValue([mockCodexClient]);
+    mcpModule.installPlugins.mockResolvedValue(['Codex']);
 
     const installer = createMcpInstaller();
     await installer.detectClients();
-    const result = await installer.installPlugins(['Claude Code', 'Cursor']);
+    const result = await installer.installPlugins(['Codex', 'Cursor']);
 
     expect(mcpModule.getSupportedPluginClients).toHaveBeenCalledWith([
-      mockClaudeClient,
+      mockCodexClient,
       mockCursorClient,
     ]);
-    expect(mcpModule.installPlugins).toHaveBeenCalledWith([mockClaudeClient]);
-    expect(result).toEqual(['Claude Code']);
+    expect(mcpModule.installPlugins).toHaveBeenCalledWith([mockCodexClient]);
+    expect(result).toEqual(['Codex']);
   });
 
   it('emits mcp plugins installed analytics with clients and attempted', async () => {
-    mcpModule.getSupportedPluginClients.mockReturnValue([mockClaudeClient]);
-    mcpModule.installPlugins.mockResolvedValue(['Claude Code']);
+    mcpModule.getSupportedPluginClients.mockReturnValue([mockCodexClient]);
+    mcpModule.installPlugins.mockResolvedValue(['Codex']);
 
     const installer = createMcpInstaller();
     await installer.detectClients();
-    await installer.installPlugins(['Claude Code']);
+    await installer.installPlugins(['Codex']);
 
     expect(analytics.wizardCapture).toHaveBeenCalledWith(
       'mcp plugins installed',
       {
-        clients: ['Claude Code'],
-        attempted: ['Claude Code'],
+        clients: ['Codex'],
+        attempted: ['Codex'],
       },
     );
   });
@@ -76,7 +76,7 @@ describe('createMcpInstaller — installPlugins', () => {
 
     const installer = createMcpInstaller();
     await installer.detectClients();
-    const result = await installer.installPlugins(['Claude Code']);
+    const result = await installer.installPlugins(['Codex']);
 
     expect(result).toEqual([]);
     expect(analytics.wizardCapture).toHaveBeenCalledWith(
@@ -94,24 +94,24 @@ describe('createMcpInstaller — installPlugins', () => {
 
     const installer = createMcpInstaller();
     await installer.detectClients();
-    await installer.installPlugins(['Claude Code']); // Cursor excluded
+    await installer.installPlugins(['Codex']); // Cursor excluded
 
     expect(mcpModule.getSupportedPluginClients).toHaveBeenCalledWith([
-      mockClaudeClient,
+      mockCodexClient,
     ]);
   });
 
   it('returns partial success when plugin install fails for some clients', async () => {
     mcpModule.getSupportedPluginClients.mockReturnValue([
-      mockClaudeClient,
+      mockCodexClient,
       mockCursorClient,
     ]);
-    mcpModule.installPlugins.mockResolvedValue(['Claude Code']); // Cursor failed
+    mcpModule.installPlugins.mockResolvedValue(['Codex']); // Cursor failed
 
     const installer = createMcpInstaller();
     await installer.detectClients();
-    const result = await installer.installPlugins(['Claude Code', 'Cursor']);
+    const result = await installer.installPlugins(['Codex', 'Cursor']);
 
-    expect(result).toEqual(['Claude Code']);
+    expect(result).toEqual(['Codex']);
   });
 });

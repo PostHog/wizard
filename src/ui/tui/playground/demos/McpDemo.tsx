@@ -10,7 +10,7 @@ import { McpScreen } from '../../screens/McpScreen.js';
 import type { McpInstaller } from '../../services/mcp-installer.js';
 
 const MOCK_CLIENTS = [
-  { name: 'Claude Code', supportsPlugin: true },
+  { name: 'Codex', supportsPlugin: true },
   { name: 'Cursor', supportsPlugin: true },
   { name: 'VS Code', supportsPlugin: false },
 ];
