@@ -81,9 +81,7 @@ export class CodexMCPClient extends DefaultMCPClient implements PluginCapable {
       if (stderr.toLowerCase().includes('already')) {
         return { success: true };
       }
-      analytics.captureException(
-        new Error(`Codex MCP add failed: ${stderr}`),
-      );
+      analytics.captureException(new Error(`Codex MCP add failed: ${stderr}`));
       return { success: false };
     }
     return { success: true };
