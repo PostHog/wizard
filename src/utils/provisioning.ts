@@ -216,3 +216,42 @@ export async function provisionNewAccount(
     accountId: tokenData.account?.id ?? '',
   };
 }
+
+/**
+ * Request a one-time deep link URL that logs the user into PostHog
+ * and redirects to their project dashboard.
+ */
+export async function requestDeepLink(
+  accessToken: string,
+  host: string,
+): Promise<string | null> {
+  try {
+    const baseUrl = host
+      .replace('us.i.posthog.com', 'us.posthog.com')
+      .replace('eu.i.posthog.com', 'eu.posthog.com');
+
+    const res = await axios.post(
+      `${baseUrl}/api/agentic/provisioning/deep_links`,
+      { purpose: 'dashboard' },
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${accessToken}`,
+          'API-Version': API_VERSION,
+          'User-Agent': WIZARD_USER_AGENT,
+        },
+        timeout: 10_000,
+      },
+    );
+
+    const url = res.data?.url;
+    if (typeof url === 'string') {
+      logToFile(`[provisioning] deep link created: ${url}`);
+      return url;
+    }
+    return null;
+  } catch {
+    logToFile('[provisioning] deep link request failed, skipping');
+    return null;
+  }
+}
