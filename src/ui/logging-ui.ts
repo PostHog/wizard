@@ -11,7 +11,11 @@ import {
   type AuthErrorDetail,
 } from './wizard-ui';
 import type { SettingsConflict } from '../lib/agent/agent-interface';
-import type { WizardReadinessResult } from '../lib/health-checks/readiness.js';
+import {
+  type WizardReadinessResult,
+  getBlockingServiceKeys,
+  SERVICE_LABELS,
+} from '../lib/health-checks/readiness.js';
 import type { OutroData } from '../lib/wizard-session';
 
 export class LoggingUI implements WizardUI {
@@ -96,12 +100,23 @@ export class LoggingUI implements WizardUI {
 
   showBlockingOutage(result: WizardReadinessResult): Promise<void> {
     console.log(`▲  Service health issues detected — blocking outage.`);
+    const blockingKeys = getBlockingServiceKeys(result.health);
+    if (blockingKeys.length > 0) {
+      console.log(`│`);
+      console.log(`│  Blocking services:`);
+      for (const key of blockingKeys) {
+        const status = result.health[key].status;
+        const error = result.health[key].error;
+        const label = SERVICE_LABELS[key];
+        const detail = error ? ` — ${error}` : '';
+        console.log(`│    ✖ ${label}: ${status}${detail}`);
+      }
+      console.log(`│`);
+    }
     for (const reason of result.reasons) {
       console.log(`│  ${reason}`);
     }
-    console.log(
-      `│  The wizard may not work reliably while services are affected.`,
-    );
+    console.log(`│  The wizard cannot start while these services are down.`);
     return Promise.resolve();
   }
 

@@ -12,6 +12,8 @@ import { RunPhase } from '../../wizard-session.js';
 import {
   evaluateWizardReadiness,
   WizardReadiness,
+  SIGNUP_WIZARD_READINESS_CONFIG,
+  getBlockingServiceKeys,
 } from '../../health-checks/readiness.js';
 import { detectPostHogIntegration } from './detect.js';
 
@@ -26,8 +28,22 @@ function needsSetup(session: WizardSession): boolean {
 
 function healthCheckReady(session: WizardSession): boolean {
   if (!session.readinessResult) return false;
-  if (session.readinessResult.decision === WizardReadiness.No)
+
+  if (session.signup) {
+    const hardBlocking = getBlockingServiceKeys(
+      session.readinessResult.health,
+      SIGNUP_WIZARD_READINESS_CONFIG,
+    );
+    const defaultBlocking = getBlockingServiceKeys(
+      session.readinessResult.health,
+    );
+    if (hardBlocking.length === 0 && defaultBlocking.length === 0) return true;
     return session.outageDismissed;
+  }
+
+  if (session.readinessResult.decision === WizardReadiness.No) {
+    return session.outageDismissed;
+  }
   return true;
 }
 
