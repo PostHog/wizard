@@ -1,5 +1,5 @@
 import { DefaultMCPClient } from '../MCPClient';
-import { DefaultMCPClientConfig } from '../defaults';
+import { DefaultMCPClientConfig, buildMCPUrl } from '../defaults';
 import { PluginCapable, PluginInstallResult } from '../plugin-client';
 import { z } from 'zod';
 import { execSync } from 'child_process';
@@ -85,17 +85,63 @@ export class ClaudeCodeMCPClient
     }
   }
 
-  isServerInstalled(): Promise<boolean> {
-    return this.isPluginInstalled();
+  async isServerInstalled(local?: boolean): Promise<boolean> {
+    const binary = this.findClaudeBinary();
+    if (!binary) return false;
+    const serverName = local ? 'posthog-local' : 'posthog';
+    try {
+      const output = execSync(`${binary} mcp list`, { stdio: 'pipe' })
+        .toString()
+        .toLowerCase();
+      return output.includes(serverName);
+    } catch {
+      return false;
+    }
   }
 
   getConfigPath(): Promise<string> {
     throw new Error('Not implemented');
   }
 
-  async addServer(): Promise<{ success: boolean }> {
-    const result = await this.installPlugin();
-    return { success: result.success };
+  async addServer(
+    apiKey?: string,
+    selectedFeatures?: string[],
+    local?: boolean,
+  ): Promise<{ success: boolean }> {
+    const binary = this.findClaudeBinary();
+    if (!binary) return { success: false };
+
+    const serverName = local ? 'posthog-local' : 'posthog';
+    const url = buildMCPUrl(selectedFeatures, local);
+    const args = [
+      'mcp',
+      'add',
+      '--transport',
+      'http',
+      '--scope',
+      'user',
+      serverName,
+      url,
+    ];
+    if (apiKey) {
+      args.push('--header', `Authorization: Bearer ${apiKey}`);
+    }
+
+    try {
+      execSync(`${binary} ${args.map((a) => JSON.stringify(a)).join(' ')}`, {
+        stdio: 'pipe',
+      });
+      return { success: true };
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      if (msg.includes('already exists')) {
+        return { success: true };
+      }
+      analytics.captureException(
+        new Error(`Claude Code MCP add failed: ${msg}`),
+      );
+      return { success: false };
+    }
   }
 
   removeServer(local?: boolean): Promise<{ success: boolean }> {

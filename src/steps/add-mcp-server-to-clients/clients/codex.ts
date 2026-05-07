@@ -5,7 +5,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 
 import { DefaultMCPClient } from '../MCPClient';
-import { DefaultMCPClientConfig } from '../defaults';
+import { DefaultMCPClientConfig, buildMCPUrl } from '../defaults';
 import { PluginCapable, PluginInstallResult } from '../plugin-client';
 
 import { analytics } from '../../../utils/analytics';
@@ -46,13 +46,47 @@ export class CodexMCPClient extends DefaultMCPClient implements PluginCapable {
     throw new Error('Not implemented');
   }
 
-  isServerInstalled(): Promise<boolean> {
-    return this.isPluginInstalled();
+  isServerInstalled(local?: boolean): Promise<boolean> {
+    const binary = this.findCodexBinary();
+    if (!binary) return Promise.resolve(false);
+    const serverName = local ? 'posthog-local' : 'posthog';
+    const result = spawnSync(binary, ['mcp', 'list'], { encoding: 'utf-8' });
+    if (result.status !== 0) return Promise.resolve(false);
+    return Promise.resolve(
+      (result.stdout ?? '').toLowerCase().includes(serverName),
+    );
   }
 
-  async addServer(): Promise<{ success: boolean }> {
-    const result = await this.installPlugin();
-    return { success: result.success };
+  async addServer(
+    apiKey?: string,
+    selectedFeatures?: string[],
+    local?: boolean,
+  ): Promise<{ success: boolean }> {
+    const binary = this.findCodexBinary();
+    if (!binary) return { success: false };
+
+    const serverName = local ? 'posthog-local' : 'posthog';
+    const url = buildMCPUrl(selectedFeatures, local);
+    const args = ['mcp', 'add', serverName, '--url', url];
+    const env = { ...process.env };
+    if (apiKey) {
+      const tokenVar = 'POSTHOG_AUTH_HEADER';
+      env[tokenVar] = `Bearer ${apiKey}`;
+      args.push('--bearer-token-env-var', tokenVar);
+    }
+
+    const result = spawnSync(binary, args, { encoding: 'utf-8', env });
+    if (result.status !== 0) {
+      const stderr = result.stderr ?? '';
+      if (stderr.toLowerCase().includes('already')) {
+        return { success: true };
+      }
+      analytics.captureException(
+        new Error(`Codex MCP add failed: ${stderr}`),
+      );
+      return { success: false };
+    }
+    return { success: true };
   }
 
   removeServer(): Promise<{ success: boolean }> {

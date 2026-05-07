@@ -144,27 +144,60 @@ export const McpScreen = ({
     setPhase(Phase.Working);
     let mcpResult: string[] = [];
     let pluginResult: string[] = [];
-    try {
-      mcpResult = await installer.install(
-        names,
-        features,
-        store.session.apiKey,
-      );
-    } catch {
-      // mcpResult stays []
+
+    const pluginCapableSet = new Set(
+      clients.filter((c) => c.supportsPlugin).map((c) => c.name),
+    );
+    const pluginCapableNames = names.filter((n) => pluginCapableSet.has(n));
+    const directNames = names.filter((n) => !pluginCapableSet.has(n));
+
+    if (installMode === 'all') {
+      // Plugin-capable clients get the plugin (which bundles MCP).
+      // Non-plugin-capable clients get a direct MCP config write.
+      try {
+        mcpResult = await installer.install(
+          directNames,
+          features,
+          store.session.apiKey,
+        );
+      } catch {
+        // mcpResult stays []
+      }
+      try {
+        pluginResult = await installer.installPlugins(pluginCapableNames);
+      } catch {
+        // best-effort
+      }
+    } else {
+      // 'custom' — MCP-only for every selected client. Plugin install is
+      // skipped so the user's feature selection is actually respected.
+      try {
+        mcpResult = await installer.install(
+          names,
+          features,
+          store.session.apiKey,
+        );
+      } catch {
+        // mcpResult stays []
+      }
     }
-    try {
-      pluginResult = await installer.installPlugins(names);
-    } catch {
-      // best-effort — plugin failure does not affect MCP outcome
-    }
+
     setResultClients(mcpResult);
     setPluginClients(pluginResult);
     setPhase(Phase.Done);
-    const outcome =
-      mcpResult.length > 0 ? McpOutcome.Installed : McpOutcome.Failed;
+    const succeeded = mcpResult.length + pluginResult.length > 0;
+    const outcome = succeeded ? McpOutcome.Installed : McpOutcome.Failed;
     const featuresReport = reportFeatures(features ?? [...ALL_FEATURE_VALUES]);
-    setTimeout(() => markDone(store, outcome, mcpResult, featuresReport), 2000);
+    setTimeout(
+      () =>
+        markDone(
+          store,
+          outcome,
+          [...mcpResult, ...pluginResult],
+          featuresReport,
+        ),
+      2000,
+    );
   };
 
   const doRemove = async () => {
@@ -213,10 +246,15 @@ export const McpScreen = ({
                   }?`}
                   options={[
                     {
-                      label: 'Install with all features (recommended)',
+                      label: 'Install with all features',
                       value: 'all',
+                      hint: 'recommended',
                     },
-                    { label: 'Customize features', value: 'custom' },
+                    {
+                      label: 'Customize features',
+                      value: 'custom',
+                      hint: 'MCP only',
+                    },
                     { label: 'No thanks', value: 'skip' },
                   ]}
                   mode="single"
@@ -243,10 +281,20 @@ export const McpScreen = ({
 
         {phase === Phase.Pick && (
           <PickerMenu
-            message="Select editor to install MCP server"
+            message={
+              installMode === 'all'
+                ? 'Select editor to install'
+                : 'Select editor to install MCP server'
+            }
             options={clients.map((c) => ({
               label: c.name,
               value: c.name,
+              hint:
+                installMode === 'all'
+                  ? c.supportsPlugin
+                    ? 'plugin'
+                    : 'MCP'
+                  : undefined,
             }))}
             mode="multi"
             onSelect={(selected) => {
@@ -260,7 +308,7 @@ export const McpScreen = ({
           <GroupedPickerMenu
             message="Select features to enable"
             groups={AVAILABLE_FEATURES}
-            initialSelected={[...ALL_FEATURE_VALUES]}
+            initialSelected={[]}
             onSelect={(features) => {
               void doInstall(selectedClientNames, features);
             }}
@@ -275,21 +323,35 @@ export const McpScreen = ({
 
         {phase === Phase.Done && (
           <Box flexDirection="column">
-            {resultClients.length > 0 ? (
+            {resultClients.length + pluginClients.length > 0 ? (
               <>
-                <Text color="green" bold>
-                  {'\u2714'} MCP server
-                  {!isRemove && pluginClients.length > 0
-                    ? ' and plugin'
-                    : ''}{' '}
-                  {isRemove ? 'removed from' : 'installed for'}:
-                </Text>
-                {resultClients.map((name, i) => (
-                  <Text key={i}>
-                    {' '}
-                    {'\u2022'} {name}
-                  </Text>
-                ))}
+                {pluginClients.length > 0 && (
+                  <>
+                    <Text color="green" bold>
+                      {'\u2714'} Plugin installed for:
+                    </Text>
+                    {pluginClients.map((name, i) => (
+                      <Text key={`p-${i}`}>
+                        {' '}
+                        {'\u2022'} {name}
+                      </Text>
+                    ))}
+                  </>
+                )}
+                {resultClients.length > 0 && (
+                  <>
+                    <Text color="green" bold>
+                      {'\u2714'} MCP server{' '}
+                      {isRemove ? 'removed from' : 'installed for'}:
+                    </Text>
+                    {resultClients.map((name, i) => (
+                      <Text key={`m-${i}`}>
+                        {' '}
+                        {'\u2022'} {name}
+                      </Text>
+                    ))}
+                  </>
+                )}
               </>
             ) : (
               <Text dimColor>
