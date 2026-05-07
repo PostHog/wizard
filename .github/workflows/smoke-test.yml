@@ -41,6 +41,18 @@ jobs:
           node-version-file: 'package.json'
           cache: 'pnpm'
 
+      # TODO: Remove once @posthog/warlock is published to npm
+      - name: Generate token for private dependencies
+        id: app-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.GH_APP_POSTHOG_WIZARD_CI_BOT_APP_ID }}
+          private-key: ${{ secrets.GH_APP_POSTHOG_WIZARD_CI_BOT_PRIVATE_KEY }}
+          repositories: warlock
+      - name: Configure git auth for private deps
+        env:
+          APP_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: git config --global url."https://x-access-token:${APP_TOKEN}@github.com/".insteadOf "https://github.com/"
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 

@@ -48,7 +48,7 @@ import {
   WizardError,
   registerCleanup,
 } from '../../utils/wizard-abort';
-import { formatScanReport, writeScanReport } from '../yara-hooks';
+import { captureWarlockSummary } from '../yara-hooks';
 import { detectNodePackageManagers } from '../detection/package-manager';
 import type { PackageManagerDetector } from '../detection/package-manager';
 import { getSkillsBaseUrl } from '../constants';
@@ -128,7 +128,6 @@ function sessionToOptions(session: WizardSession): WizardOptions {
     benchmark: session.benchmark,
     projectId: session.projectId,
     apiKey: session.apiKey,
-    yaraReport: session.yaraReport,
   };
 }
 
@@ -288,15 +287,7 @@ export async function runWorkflow(
   const restoreSettings = () => restoreClaudeSettings(session.installDir);
   getUI().onEnterScreen('outro', restoreSettings);
 
-  if (session.yaraReport) {
-    registerCleanup(() => {
-      const reportPath = writeScanReport();
-      if (reportPath) {
-        const summary = formatScanReport();
-        getUI().log.info(`YARA scan report: ${reportPath}${summary ?? ''}`);
-      }
-    });
-  }
+  registerCleanup(() => captureWarlockSummary());
 
   getUI().startRun();
 
@@ -471,7 +462,8 @@ export async function runWorkflow(
 
   getUI().outro(config.successMessage);
 
-  // 12. Analytics shutdown
+  // 12. Capture security scan summary + analytics shutdown
+  captureWarlockSummary();
   await analytics.shutdown('success');
 }
 

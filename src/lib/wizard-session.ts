@@ -106,7 +106,6 @@ export interface WizardSession {
   region?: CloudRegion;
   menu: boolean;
   benchmark: boolean;
-  yaraReport: boolean;
   projectId?: number;
 
   // From detection + screens
@@ -187,7 +186,6 @@ export function buildSession(args: {
   menu?: boolean;
   integration?: Integration;
   benchmark?: boolean;
-  yaraReport?: boolean;
   projectId?: string;
 }): WizardSession {
   return {
@@ -203,7 +201,6 @@ export function buildSession(args: {
     region: args.region,
     menu: args.menu ?? false,
     benchmark: args.benchmark ?? false,
-    yaraReport: args.yaraReport ?? false,
     projectId: parseProjectIdArg(args.projectId),
 
     setupConfirmed: false,

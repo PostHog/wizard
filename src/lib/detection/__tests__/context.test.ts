@@ -12,7 +12,6 @@ const baseOptions: WizardOptions = {
   ci: false,
   menu: false,
   benchmark: false,
-  yaraReport: false,
 };
 
 describe('gatherFrameworkContext', () => {

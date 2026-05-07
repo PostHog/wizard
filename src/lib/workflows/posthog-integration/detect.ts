@@ -39,7 +39,6 @@ export async function detectPostHogIntegration(
       ci: session.ci,
       menu: session.menu,
       benchmark: session.benchmark,
-      yaraReport: session.yaraReport,
     };
 
     // Gather framework-specific context (e.g., router type)

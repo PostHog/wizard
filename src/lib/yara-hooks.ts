@@ -1,29 +1,24 @@
 /**
- * YARA hook wiring for the Claude Agent SDK.
+ * Security hook wiring for the Claude Agent SDK.
  *
- * Creates PreToolUse and PostToolUse hook callback arrays that
- * integrate the YARA scanner into the wizard's agent loop. These
- * hooks are registered in the SDK's query() options alongside the
- * existing Stop hook.
+ * Uses @posthog/warlock for YARA-based content scanning and LLM triage.
+ * Hooks are registered in the SDK's query() options.
  *
  * PreToolUse hooks block dangerous commands before execution.
- * PostToolUse hooks detect violations in written code and prompt
- * injection in read content, and scan context-mill skill downloads.
+ * PostToolUse hooks detect violations in written code, prompt
+ * injection in read content, and scan skill downloads.
  */
 
 import fs from 'fs';
 import path from 'path';
 import fg from 'fast-glob';
-import { scan, scanSkillDirectory } from './yara-scanner';
-import type { YaraMatch, ScanResult } from './yara-scanner';
+import { scan, triageMatches } from '@posthog/warlock';
+import type { ScanMatch, TriageMatch } from '@posthog/warlock';
 import { logToFile } from '../utils/debug';
 import { analytics } from '../utils/analytics';
 import { isSkillInstallCommand } from './skill-install';
 
 // ─── Types ───────────────────────────────────────────────────────
-// Using loose types to avoid tight coupling to SDK version.
-// The SDK hook types are: HookCallbackMatcher[], where each matcher
-// has { matcher?: string, hooks: HookCallback[], timeout?: number }
 
 type HookInput = Record<string, unknown>;
 type HookOutput = Record<string, unknown>;
@@ -37,6 +32,99 @@ export interface HookCallbackMatcher {
   matcher?: string;
   hooks: HookCallback[];
   timeout?: number;
+}
+
+// ─── LLM triage ────────────────────────────────────────
+
+function createTriageProvider(): ((prompt: string) => Promise<string>) | null {
+  const baseUrl = process.env.ANTHROPIC_BASE_URL;
+  const apiKey = process.env.ANTHROPIC_AUTH_TOKEN;
+  if (!baseUrl || !apiKey) return null;
+
+  return async (prompt: string): Promise<string> => {
+    const res = await fetch(`${baseUrl}/v1/messages`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 16384,
+        messages: [{ role: 'user', content: prompt }],
+      }),
+    });
+    const data = (await res.json()) as {
+      content: Array<{ text: string }>;
+    };
+    return data.content[0].text;
+  };
+}
+
+let _triageProvider: ((prompt: string) => Promise<string>) | null | undefined;
+
+function getTriageProvider(): ((prompt: string) => Promise<string>) | null {
+  if (_triageProvider === undefined) {
+    _triageProvider = createTriageProvider();
+  }
+  return _triageProvider;
+}
+
+// ─── Scan + triage helper ───────────────────────────────────────
+
+async function scanAndTriage(
+  content: string,
+  scanContext: string,
+): Promise<TriageMatch[]> {
+  const result = await scan(content);
+  if (!result.matched) {
+    logToFile(`[WARLOCK] scan (${scanContext}): clean`);
+    return [];
+  }
+
+  const relevant = result.matches.filter(
+    (m) => m.metadata.scan_context === scanContext,
+  );
+  if (relevant.length === 0) {
+    logToFile(
+      `[WARLOCK] scan (${scanContext}): ${result.matches.length} match(es) but none for this context`,
+    );
+    return [];
+  }
+
+  const rules = relevant.map((m) => m.rule).join(', ');
+  logToFile(
+    `[WARLOCK] scan (${scanContext}): ${relevant.length} match(es) — ${rules}`,
+  );
+
+  const provider = getTriageProvider();
+  if (!provider) {
+    logToFile(`[WARLOCK] triage skipped — no LLM provider available`);
+    return relevant.map((m) => ({
+      ...m,
+      triage: {
+        verdict: 'true_positive' as const,
+        reason: 'No LLM available for triage',
+      },
+    }));
+  }
+
+  logToFile(`[WARLOCK] triaging ${relevant.length} match(es) via LLM`);
+  const triaged = await triageMatches(content, relevant, provider);
+  const tp = triaged.filter((m) => m.triage.verdict === 'true_positive').length;
+  const fp = triaged.filter(
+    (m) => m.triage.verdict === 'false_positive',
+  ).length;
+  logToFile(
+    `[WARLOCK] triage complete — ${tp} true positive(s), ${fp} false positive(s)`,
+  );
+
+  return triaged;
+}
+
+function getTruePositives(triaged: TriageMatch[]): TriageMatch[] {
+  return triaged.filter((m) => m.triage.verdict === 'true_positive');
 }
 
 // ─── Scan Report Accumulator ─────────────────────────────────────
@@ -62,100 +150,68 @@ function recordViolation(entry: ScanReportEntry): void {
   scanViolations.push(entry);
 }
 
+/** Current scan counts for UI display */
+export function getScanCounts(): { scans: number; blocked: number } {
+  const blocked = scanViolations.filter(
+    (v) =>
+      v.action === 'blocked' ||
+      v.action === 'aborted' ||
+      v.action === 'reverted',
+  ).length;
+  return { scans: scanCount, blocked };
+}
+
 /** Reset counters (for testing) */
 export function resetScanReport(): void {
   scanCount = 0;
   scanViolations.length = 0;
 }
 
-/** Format the scan report summary. Returns null if no scans occurred */
-export function formatScanReport(): string | null {
-  if (scanCount === 0) return null;
+/** Send scan summary to PostHog as an analytics event */
+export function captureWarlockSummary(): void {
+  if (scanCount === 0) return;
 
-  const lines: string[] = ['', '— YARA Scanner Summary —'];
-  const violationCount = scanViolations.length;
-  const cleanCount = scanCount - violationCount;
-
-  lines.push(
-    `✓ ${scanCount} tool calls scanned, ${violationCount} violation${
-      violationCount !== 1 ? 's' : ''
-    } detected`,
+  const violations = scanViolations.length;
+  const clean = scanCount - violations;
+  logToFile(
+    `[WARLOCK] session summary — ${scanCount} scans, ${violations} violation(s), ${clean} clean`,
   );
-
-  if (violationCount > 0) {
-    lines.push('');
-    for (const v of scanViolations) {
-      const tag = v.action.toUpperCase();
-      lines.push(
-        `  [${tag}] ${v.rule} (${v.severity.toUpperCase()}) — ${v.phase}:${
-          v.tool
-        }`,
-      );
-    }
-  }
-
-  if (cleanCount > 0) {
-    lines.push('');
-    lines.push(
-      `No violations: ✓ ${cleanCount} clean scan${cleanCount !== 1 ? 's' : ''}`,
-    );
-  }
-
-  lines.push('');
-  return lines.join('\n');
-}
-
-import { WIZARD_YARA_REPORT_FILE } from '../utils/paths';
-
-/** Write the scan report to a JSON file. Returns the file path, or null if no scans occurred. */
-export function writeScanReport(): string | null {
-  if (scanCount === 0) return null;
-
-  const report = {
-    summary: {
-      totalScans: scanCount,
-      violations: scanViolations.length,
-      clean: scanCount - scanViolations.length,
-    },
-    violations: scanViolations,
-  };
-
-  try {
-    fs.writeFileSync(WIZARD_YARA_REPORT_FILE, JSON.stringify(report, null, 2));
-  } catch (err) {
-    logToFile('[YARA] Failed to write scan report:', err);
-    return null;
-  }
-  return WIZARD_YARA_REPORT_FILE;
+  analytics.wizardCapture('warlock session summary', {
+    total_scans: scanCount,
+    violations,
+    clean,
+    violation_details: scanViolations,
+  });
 }
 
 // ─── Hook Timeouts (ms) ─────────────────────────────────────────
 
-/** Timeout for synchronous scan hooks (PreToolUse, PostToolUse Write/Edit/Read) */
-const HOOK_TIMEOUT_MS = 60;
-/** Timeout for skill install hook (involves filesystem I/O) */
-const SKILL_SCAN_HOOK_TIMEOUT_MS = 120;
+/** Timeout for hooks that may call LLM triage */
+const HOOK_TIMEOUT_MS = 15_000;
+/** Timeout for skill install hook (filesystem I/O + triage) */
+const SKILL_SCAN_HOOK_TIMEOUT_MS = 30_000;
 
 // ─── Logging ─────────────────────────────────────────────────────
 
-function logYaraMatch(
+function logMatch(
   phase: string,
   tool: string,
-  match: YaraMatch,
+  match: TriageMatch | ScanMatch,
   action: ScanAction,
 ): void {
+  const verdict = 'triage' in match ? match.triage.verdict : 'untriaged';
   logToFile(
-    `[YARA] ${phase}:${tool} [${action.toUpperCase()}] rule "${
-      match.rule.name
+    `[WARLOCK] ${phase}:${tool} [${action.toUpperCase()}] rule "${
+      match.rule
     }" ` +
-      `(severity: ${match.rule.severity}, category: ${match.rule.category})\n` +
-      `  Description: ${match.rule.description}\n` +
-      `  Matched text: "${match.matchedText.substring(0, 200)}"`,
+      `(severity: ${match.metadata.severity}, verdict: ${verdict})\n` +
+      `  Description: ${match.metadata.description}`,
   );
-  analytics.wizardCapture('yara rule matched', {
-    rule: match.rule.name,
-    severity: match.rule.severity,
-    category: match.rule.category,
+  analytics.wizardCapture('warlock rule matched', {
+    rule: match.rule,
+    severity: match.metadata.severity as string,
+    category: match.metadata.category as string,
+    verdict,
     action,
     phase,
     tool,
@@ -171,11 +227,12 @@ const SEVERITY_RANK: Record<string, number> = {
   low: 1,
 };
 
-/** Return the highest-severity match from a list of matches. */
-function highestSeverityMatch(matches: YaraMatch[]): YaraMatch {
+function highestSeverity(
+  matches: Array<TriageMatch | ScanMatch>,
+): TriageMatch | ScanMatch {
   return matches.reduce((worst, m) =>
-    (SEVERITY_RANK[m.rule.severity] ?? 0) >
-    (SEVERITY_RANK[worst.rule.severity] ?? 0)
+    (SEVERITY_RANK[m.metadata.severity as string] ?? 0) >
+    (SEVERITY_RANK[worst.metadata.severity as string] ?? 0)
       ? m
       : worst,
   );
@@ -183,198 +240,8 @@ function highestSeverityMatch(matches: YaraMatch[]): YaraMatch {
 
 // ─── PreToolUse Hooks ────────────────────────────────────────────
 
-/**
- * Create PreToolUse hook matchers for YARA scanning.
- * Scans Bash commands before execution for exfiltration,
- * destructive operations, and supply chain violations.
- */
 export function createPreToolUseYaraHooks(): HookCallbackMatcher[] {
   return [
-    {
-      hooks: [
-        (input: HookInput): Promise<HookOutput> => {
-          try {
-            const toolName = input.tool_name as string;
-            if (toolName !== 'Bash') return Promise.resolve({});
-
-            const toolInput = input.tool_input as Record<string, unknown>;
-            const command =
-              typeof toolInput?.command === 'string' ? toolInput.command : '';
-
-            if (!command) return Promise.resolve({});
-
-            recordScan();
-            const result = scan(command, 'PreToolUse', 'Bash');
-            if (!result.matched) return Promise.resolve({});
-
-            const match = highestSeverityMatch(result.matches);
-            logYaraMatch('PreToolUse', 'Bash', match, 'blocked');
-            recordViolation({
-              rule: match.rule.name,
-              severity: match.rule.severity,
-              action: 'blocked',
-              phase: 'PreToolUse',
-              tool: 'Bash',
-            });
-
-            return Promise.resolve({
-              decision: 'block',
-              reason: `[YARA] ${match.rule.name}: ${match.rule.description}. Command blocked for security.`,
-            });
-          } catch (error) {
-            logToFile('[YARA] PreToolUse hook error:', error);
-            // Fail closed: block the command if scanning fails
-            return Promise.resolve({
-              decision: 'block',
-              reason: '[YARA] Scanner error — command blocked as a precaution.',
-            });
-          }
-        },
-      ],
-      timeout: HOOK_TIMEOUT_MS,
-    },
-  ];
-}
-
-// ─── PostToolUse Hooks ───────────────────────────────────────────
-
-/**
- * Create PostToolUse hook matchers for YARA scanning.
- *
- * Three matchers:
- * 1. Write/Edit — scan written content for PII, secrets, config violations
- * 2. Read/Grep — scan read content for prompt injection
- * 3. Bash (skill install) — scan downloaded skill files for poisoned content
- */
-export function createPostToolUseYaraHooks(): HookCallbackMatcher[] {
-  return [
-    // ── Write/Edit content scanning ──
-    {
-      hooks: [
-        (input: HookInput): Promise<HookOutput> => {
-          try {
-            const toolName = input.tool_name as string;
-            if (toolName !== 'Write' && toolName !== 'Edit')
-              return Promise.resolve({});
-
-            const toolInput = input.tool_input as Record<string, unknown>;
-            // For Write, scan the content being written
-            // For Edit, scan the new_str (replacement text)
-            const content =
-              toolName === 'Write'
-                ? (toolInput?.content as string) ?? ''
-                : (toolInput?.new_str as string) ?? '';
-
-            if (!content) return Promise.resolve({});
-
-            recordScan();
-            const tool = toolName;
-            const result = scan(content, 'PostToolUse', tool);
-            if (!result.matched) return Promise.resolve({});
-
-            const match = highestSeverityMatch(result.matches);
-            logYaraMatch('PostToolUse', tool, match, 'reverted');
-            recordViolation({
-              rule: match.rule.name,
-              severity: match.rule.severity,
-              action: 'reverted',
-              phase: 'PostToolUse',
-              tool,
-            });
-
-            return Promise.resolve({
-              hookSpecificOutput: {
-                hookEventName: 'PostToolUse',
-                additionalContext:
-                  `[YARA VIOLATION] ${match.rule.name}: ${match.rule.description}. ` +
-                  `You MUST revert this change immediately. The content you just wrote violates security policy.`,
-              },
-            });
-          } catch (error) {
-            logToFile('[YARA] PostToolUse Write/Edit hook error:', error);
-            // Fail closed: instruct the agent to revert if scanning fails
-            return Promise.resolve({
-              hookSpecificOutput: {
-                hookEventName: 'PostToolUse',
-                additionalContext:
-                  '[YARA] Scanner error — you MUST revert this change as a precaution.',
-              },
-            });
-          }
-        },
-      ],
-      timeout: HOOK_TIMEOUT_MS,
-    },
-
-    // ── Read/Grep prompt injection scanning ──
-    {
-      hooks: [
-        (input: HookInput): Promise<HookOutput> => {
-          try {
-            const toolName = input.tool_name as string;
-            if (toolName !== 'Read' && toolName !== 'Grep')
-              return Promise.resolve({});
-
-            const toolResponse = input.tool_response;
-            const content =
-              typeof toolResponse === 'string'
-                ? toolResponse
-                : JSON.stringify(toolResponse ?? '');
-
-            if (!content) return Promise.resolve({});
-
-            recordScan();
-            const tool = toolName;
-            const result = scan(content, 'PostToolUse', tool);
-            if (!result.matched) return Promise.resolve({});
-
-            const match = highestSeverityMatch(result.matches);
-
-            if (match.rule.severity === 'critical') {
-              logYaraMatch('PostToolUse', tool, match, 'aborted');
-              recordViolation({
-                rule: match.rule.name,
-                severity: match.rule.severity,
-                action: 'aborted',
-                phase: 'PostToolUse',
-                tool,
-              });
-              // Prompt injection: abort the session — context is poisoned
-              return Promise.resolve({
-                stopReason:
-                  `[YARA CRITICAL] ${match.rule.name}: Prompt injection detected in file content. ` +
-                  `Agent context is potentially poisoned. Session terminated for safety.`,
-              });
-            }
-
-            logYaraMatch('PostToolUse', tool, match, 'warned');
-            recordViolation({
-              rule: match.rule.name,
-              severity: match.rule.severity,
-              action: 'warned',
-              phase: 'PostToolUse',
-              tool,
-            });
-            return Promise.resolve({
-              hookSpecificOutput: {
-                hookEventName: 'PostToolUse',
-                additionalContext: `[YARA WARNING] ${match.rule.name}: ${match.rule.description}`,
-              },
-            });
-          } catch (error) {
-            logToFile('[YARA] PostToolUse Read/Grep hook error:', error);
-            // Fail closed: terminate session if scanning fails on read content
-            return Promise.resolve({
-              stopReason:
-                '[YARA] Scanner error while scanning read content — session terminated as a precaution.',
-            });
-          }
-        },
-      ],
-      timeout: HOOK_TIMEOUT_MS,
-    },
-
-    // ── Context-mill skill install scanning ──
     {
       hooks: [
         async (input: HookInput): Promise<HookOutput> => {
@@ -385,11 +252,176 @@ export function createPostToolUseYaraHooks(): HookCallbackMatcher[] {
             const toolInput = input.tool_input as Record<string, unknown>;
             const command =
               typeof toolInput?.command === 'string' ? toolInput.command : '';
+            if (!command) return {};
 
-            // Only scan after skill install commands
+            recordScan();
+            const triaged = await scanAndTriage(command, 'command');
+            const threats = getTruePositives(triaged);
+            if (threats.length === 0) return {};
+
+            const match = highestSeverity(threats);
+            logMatch('PreToolUse', 'Bash', match, 'blocked');
+            recordViolation({
+              rule: match.rule,
+              severity: match.metadata.severity as string,
+              action: 'blocked',
+              phase: 'PreToolUse',
+              tool: 'Bash',
+            });
+
+            return {
+              decision: 'block',
+              reason: `[WARLOCK] ${match.rule}: ${match.metadata.description}. Command blocked for security.`,
+            };
+          } catch (error) {
+            logToFile('[WARLOCK] PreToolUse hook error:', error);
+            return {
+              decision: 'block',
+              reason:
+                '[WARLOCK] Scanner error — command blocked as a precaution.',
+            };
+          }
+        },
+      ],
+      timeout: HOOK_TIMEOUT_MS,
+    },
+  ];
+}
+
+// ─── PostToolUse Hooks ───────────────────────────────────────────
+
+export function createPostToolUseYaraHooks(): HookCallbackMatcher[] {
+  return [
+    // ── Write/Edit content scanning ──
+    {
+      hooks: [
+        async (input: HookInput): Promise<HookOutput> => {
+          try {
+            const toolName = input.tool_name as string;
+            if (toolName !== 'Write' && toolName !== 'Edit') return {};
+
+            const toolInput = input.tool_input as Record<string, unknown>;
+            const content =
+              toolName === 'Write'
+                ? (toolInput?.content as string) ?? ''
+                : (toolInput?.new_str as string) ?? '';
+            if (!content) return {};
+
+            recordScan();
+            const triaged = await scanAndTriage(content, 'output');
+            const threats = getTruePositives(triaged);
+            if (threats.length === 0) return {};
+
+            const match = highestSeverity(threats);
+            logMatch('PostToolUse', toolName, match, 'reverted');
+            recordViolation({
+              rule: match.rule,
+              severity: match.metadata.severity as string,
+              action: 'reverted',
+              phase: 'PostToolUse',
+              tool: toolName,
+            });
+
+            return {
+              hookSpecificOutput: {
+                hookEventName: 'PostToolUse',
+                additionalContext:
+                  `[WARLOCK VIOLATION] ${match.rule}: ${match.metadata.description}. ` +
+                  `You MUST revert this change immediately. The content you just wrote violates security policy.`,
+              },
+            };
+          } catch (error) {
+            logToFile('[WARLOCK] PostToolUse Write/Edit hook error:', error);
+            return {
+              hookSpecificOutput: {
+                hookEventName: 'PostToolUse',
+                additionalContext:
+                  '[WARLOCK] Scanner error — you MUST revert this change as a precaution.',
+              },
+            };
+          }
+        },
+      ],
+      timeout: HOOK_TIMEOUT_MS,
+    },
+
+    // ── Read/Grep prompt injection scanning ──
+    {
+      hooks: [
+        async (input: HookInput): Promise<HookOutput> => {
+          try {
+            const toolName = input.tool_name as string;
+            if (toolName !== 'Read' && toolName !== 'Grep') return {};
+
+            const toolResponse = input.tool_response;
+            const content =
+              typeof toolResponse === 'string'
+                ? toolResponse
+                : JSON.stringify(toolResponse ?? '');
+            if (!content) return {};
+
+            recordScan();
+            const triaged = await scanAndTriage(content, 'input');
+            const threats = getTruePositives(triaged);
+            if (threats.length === 0) return {};
+
+            const match = highestSeverity(threats);
+
+            if ((match.metadata.severity as string) === 'critical') {
+              logMatch('PostToolUse', toolName, match, 'aborted');
+              recordViolation({
+                rule: match.rule,
+                severity: match.metadata.severity as string,
+                action: 'aborted',
+                phase: 'PostToolUse',
+                tool: toolName,
+              });
+              return {
+                stopReason:
+                  `[WARLOCK CRITICAL] ${match.rule}: Prompt injection detected in file content. ` +
+                  `Agent context is potentially poisoned. Session terminated for safety.`,
+              };
+            }
+
+            logMatch('PostToolUse', toolName, match, 'warned');
+            recordViolation({
+              rule: match.rule,
+              severity: match.metadata.severity as string,
+              action: 'warned',
+              phase: 'PostToolUse',
+              tool: toolName,
+            });
+            return {
+              hookSpecificOutput: {
+                hookEventName: 'PostToolUse',
+                additionalContext: `[WARLOCK WARNING] ${match.rule}: ${match.metadata.description}`,
+              },
+            };
+          } catch (error) {
+            logToFile('[WARLOCK] PostToolUse Read/Grep hook error:', error);
+            return {
+              stopReason:
+                '[WARLOCK] Scanner error while scanning read content — session terminated as a precaution.',
+            };
+          }
+        },
+      ],
+      timeout: HOOK_TIMEOUT_MS,
+    },
+
+    // ── Skill install scanning ──
+    {
+      hooks: [
+        async (input: HookInput): Promise<HookOutput> => {
+          try {
+            const toolName = input.tool_name as string;
+            if (toolName !== 'Bash') return {};
+
+            const toolInput = input.tool_input as Record<string, unknown>;
+            const command =
+              typeof toolInput?.command === 'string' ? toolInput.command : '';
             if (!isSkillInstallCommand(command)) return {};
 
-            // Extract skill directory from command
             const dirMatch = command.match(
               /mkdir -p (.claude\/skills\/[^\s&]+)/,
             );
@@ -400,18 +432,14 @@ export function createPostToolUseYaraHooks(): HookCallbackMatcher[] {
             recordScan();
             const result = await scanSkillFiles(cwd, skillDir);
 
-            if (!result.matched) return {};
+            const threats = getTruePositives(result);
+            if (threats.length === 0) return {};
 
-            const match = highestSeverityMatch(result.matches);
-            logYaraMatch(
-              'PostToolUse',
-              'Bash (skill install)',
-              match,
-              'aborted',
-            );
+            const match = highestSeverity(threats);
+            logMatch('PostToolUse', 'Bash (skill install)', match, 'aborted');
             recordViolation({
-              rule: match.rule.name,
-              severity: match.rule.severity,
+              rule: match.rule,
+              severity: match.metadata.severity as string,
               action: 'aborted',
               phase: 'PostToolUse',
               tool: 'Bash (skill)',
@@ -419,15 +447,14 @@ export function createPostToolUseYaraHooks(): HookCallbackMatcher[] {
 
             return {
               stopReason:
-                `[YARA CRITICAL] Poisoned skill detected in ${skillDir}: ${match.rule.name}. ` +
+                `[WARLOCK CRITICAL] Poisoned skill detected in ${skillDir}: ${match.rule}. ` +
                 `The downloaded skill contains potential prompt injection. Session terminated for safety.`,
             };
           } catch (error) {
-            logToFile('[YARA] PostToolUse skill install hook error:', error);
-            // Fail closed: terminate if skill scanning fails
+            logToFile('[WARLOCK] PostToolUse skill install hook error:', error);
             return {
               stopReason:
-                '[YARA] Scanner error while scanning skill files — session terminated as a precaution.',
+                '[WARLOCK] Scanner error while scanning skill files — session terminated as a precaution.',
             };
           }
         },
@@ -439,18 +466,15 @@ export function createPostToolUseYaraHooks(): HookCallbackMatcher[] {
 
 // ─── Skill File Scanner ──────────────────────────────────────────
 
-/**
- * Read and scan all text files in a skill directory for prompt injection.
- */
 async function scanSkillFiles(
   cwd: string,
   skillDir: string,
-): Promise<ScanResult> {
+): Promise<TriageMatch[]> {
   const absoluteDir = path.resolve(cwd, skillDir);
 
   if (!fs.existsSync(absoluteDir)) {
-    logToFile(`[YARA] Skill directory does not exist: ${absoluteDir}`);
-    return { matched: false };
+    logToFile(`[WARLOCK] Skill directory does not exist: ${absoluteDir}`);
+    return [];
   }
 
   const files = await fg('**/*.{md,txt,yaml,yml,json,js,ts,py,rb,sh}', {
@@ -458,23 +482,42 @@ async function scanSkillFiles(
     absolute: true,
   });
 
-  const fileContents: Array<{ path: string; content: string }> = [];
+  const allContent: string[] = [];
+  const allMatches: ScanMatch[] = [];
+
   for (const filePath of files) {
     try {
       const content = fs.readFileSync(filePath, 'utf-8');
-      fileContents.push({ path: filePath, content });
+      const result = await scan(content);
+      if (result.matched) {
+        const relevant = result.matches.filter(
+          (m) => m.metadata.scan_context === 'input',
+        );
+        allMatches.push(...relevant);
+        if (relevant.length > 0) allContent.push(content);
+      }
     } catch (err) {
-      logToFile(`[YARA] Could not read skill file ${filePath}:`, err);
+      logToFile(`[WARLOCK] Could not read skill file ${filePath}:`, err);
     }
   }
 
-  if (fileContents.length === 0) {
-    logToFile(`[YARA] No text files found in skill directory: ${absoluteDir}`);
-    return { matched: false };
-  }
+  if (allMatches.length === 0) return [];
 
   logToFile(
-    `[YARA] Scanning ${fileContents.length} files in skill directory: ${skillDir}`,
+    `[WARLOCK] Scanning ${files.length} files in skill directory: ${skillDir}`,
   );
-  return scanSkillDirectory(fileContents);
+
+  const provider = getTriageProvider();
+  if (!provider) {
+    return allMatches.map((m) => ({
+      ...m,
+      triage: {
+        verdict: 'true_positive' as const,
+        reason: 'No LLM available for triage',
+      },
+    }));
+  }
+
+  const combinedContent = allContent.join('\n---\n');
+  return triageMatches(combinedContent, allMatches, provider);
 }

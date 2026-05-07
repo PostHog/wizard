@@ -1,6 +1,7 @@
 onlyBuiltDependencies:
   - esbuild
   - msw
+  - "@posthog/warlock"
 minimumReleaseAge: 1440
 blockExoticSubdeps: true
 trustPolicy: no-downgrade
