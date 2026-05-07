@@ -61,17 +61,27 @@ export const AVAILABLE_FEATURES = {
       label: 'SQL',
       hint: 'SQL query execution',
     },
+    {
+      value: 'web_analytics',
+      label: 'Web Analytics',
+      hint: 'Web analytics queries and digests',
+    },
+    {
+      value: 'customer_analytics',
+      label: 'Usage metrics',
+      hint: 'Customer usage metric tracking',
+    },
+    {
+      value: 'signals',
+      label: 'Signals',
+      hint: 'Signal reports and source configs',
+    },
   ],
   'AI Engineering': [
     {
       value: 'llm_analytics',
       label: 'LLM Analytics',
       hint: 'LLM usage and cost tracking',
-    },
-    {
-      value: 'prompts',
-      label: 'Prompts',
-      hint: 'LLM prompt management',
     },
   ],
   'Development Tools': [
@@ -99,6 +109,16 @@ export const AVAILABLE_FEATURES = {
       value: 'cohorts',
       label: 'Cohorts',
       hint: 'Cohort management',
+    },
+    {
+      value: 'sdk_doctor',
+      label: 'SDK Doctor',
+      hint: 'SDK health diagnostics',
+    },
+    {
+      value: 'tracing',
+      label: 'APM Tracing',
+      hint: 'Distributed trace and span queries',
     },
   ],
   'Data Management': [
@@ -131,6 +151,11 @@ export const AVAILABLE_FEATURES = {
       value: 'data_schema',
       label: 'Data Schema',
       hint: 'Data schema exploration',
+    },
+    {
+      value: 'batch_exports',
+      label: 'Batch Exports',
+      hint: 'Scheduled data exports',
     },
   ],
   'CDP & Automation': [
