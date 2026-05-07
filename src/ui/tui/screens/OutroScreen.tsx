@@ -1,7 +1,9 @@
 /**
- * OutroScreen — Summary after the agent run.
- * Reads store.session.outroData to render success, error, or cancel view.
- * Keeps the process alive until the user presses a key to exit.
+ * OutroScreen — Default post-run summary.
+ *
+ * Renders the success / error / cancel views from `outroData`. Workflows
+ * that need a different success view (e.g. with extra summary content)
+ * ship their own screen component (see audit/AuditOutroScreen.tsx).
  */
 
 import { Box, Text, useInput } from 'ink';
@@ -39,8 +41,14 @@ export const OutroScreen = ({ store }: OutroScreenProps) => {
       {outroData.kind === OutroKind.Success && (
         <Box flexDirection="column">
           <Text color="green" bold>
-            {'\u2714'} {outroData.message || 'Done!'}
+            ✔ {outroData.message || 'Done!'}
           </Text>
+
+          {outroData.body && (
+            <Box marginTop={1}>
+              <Text dimColor>{outroData.body}</Text>
+            </Box>
+          )}
 
           {outroData.reportFile && (
             <Box marginTop={1}>
@@ -56,9 +64,7 @@ export const OutroScreen = ({ store }: OutroScreenProps) => {
                 What the agent did:
               </Text>
               {outroData.changes.map((change, i) => (
-                <Text key={i}>
-                  {'\u2022'} {change}
-                </Text>
+                <Text key={i}>• {change}</Text>
               ))}
             </Box>
           )}
@@ -70,7 +76,7 @@ export const OutroScreen = ({ store }: OutroScreenProps) => {
               </Text>
               {store.eventPlan.map((event) => (
                 <Text key={event.name}>
-                  {'\u2022'} <Text bold>{event.name}</Text>
+                  • <Text bold>{event.name}</Text>
                   <Text dimColor> {event.description}</Text>
                 </Text>
               ))}
@@ -100,18 +106,16 @@ export const OutroScreen = ({ store }: OutroScreenProps) => {
               project. Please review the changes made.
             </Text>
           </Box>
-          <Box>
-            <Text dimColor>
-              How did this work for you? Drop us a line: wizard@posthog.com
-            </Text>
-          </Box>
+          <Text dimColor>
+            How did this work for you? Drop us a line: wizard@posthog.com
+          </Text>
         </Box>
       )}
 
       {outroData.kind === OutroKind.Error && (
         <Box flexDirection="column">
           <Text color="red" bold>
-            {'\u2718'} {outroData.message || 'An error occurred'}
+            ✘ {outroData.message || 'An error occurred'}
           </Text>
 
           {outroData.body && (
@@ -132,9 +136,7 @@ export const OutroScreen = ({ store }: OutroScreenProps) => {
 
       {outroData.kind === OutroKind.Cancel && (
         <Box flexDirection="column">
-          <Text color="yellow">
-            {'\u25A0'} {outroData.message || 'Cancelled'}
-          </Text>
+          <Text color="yellow">■ {outroData.message || 'Cancelled'}</Text>
         </Box>
       )}
 

@@ -213,15 +213,9 @@ export const ALL_FEATURE_VALUES = Object.values(AVAILABLE_FEATURES)
   .flat()
   .map((feature) => feature.value);
 
-type MCPServerType = 'sse' | 'streamable-http';
-
-export const buildMCPUrl = (
-  type: MCPServerType,
-  selectedFeatures?: string[],
-  local?: boolean,
-) => {
+export const buildMCPUrl = (selectedFeatures?: string[], local?: boolean) => {
   const host = local ? 'http://localhost:8787' : 'https://mcp.posthog.com';
-  const baseUrl = `${host}/${type === 'sse' ? 'sse' : 'mcp'}`;
+  const baseUrl = `${host}/mcp`;
 
   const isAllFeaturesSelected =
     selectedFeatures &&
@@ -244,12 +238,11 @@ export const buildMCPUrl = (
 
 export const getNativeHTTPServerConfig = (
   apiKey: string | undefined,
-  type: MCPServerType,
   selectedFeatures?: string[],
   local?: boolean,
 ) => {
   const config: Record<string, unknown> = {
-    url: buildMCPUrl(type, selectedFeatures, local),
+    url: buildMCPUrl(selectedFeatures, local),
   };
 
   // Only add auth header if API key is provided (not OAuth mode)
@@ -264,11 +257,10 @@ export const getNativeHTTPServerConfig = (
 
 export const getDefaultServerConfig = (
   apiKey: string | undefined,
-  type: MCPServerType,
   selectedFeatures?: string[],
   local?: boolean,
 ) => {
-  const urlWithFeatures = buildMCPUrl(type, selectedFeatures, local);
+  const urlWithFeatures = buildMCPUrl(selectedFeatures, local);
 
   // OAuth mode: no auth header, let MCP handle OAuth
   if (!apiKey) {

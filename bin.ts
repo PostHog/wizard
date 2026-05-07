@@ -655,6 +655,7 @@ function runWizard(
 
       await tui.store.runReadyHooks();
       await tui.store.getGate('intro');
+      await tui.store.getGate('health-check');
 
       const skipAgent = config.run == null;
 

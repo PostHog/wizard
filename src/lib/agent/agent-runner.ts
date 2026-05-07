@@ -14,8 +14,6 @@
  *   agent init → prompt → run → errors → [postRun] → outro
  */
 
-import { existsSync } from 'fs';
-import { join } from 'path';
 import {
   type WizardSession,
   type AdditionalFeature,
@@ -39,6 +37,9 @@ import { getCloudUrlFromRegion } from '../../utils/urls';
 import {
   evaluateWizardReadiness,
   WizardReadiness,
+  SIGNUP_WIZARD_READINESS_CONFIG,
+  getBlockingServiceKeys,
+  SERVICE_LABELS,
 } from '../health-checks/readiness';
 import { enableDebugLogs, initLogFile, logToFile } from '../../utils/debug';
 import { createBenchmarkPipeline } from '../middleware/benchmark';
@@ -180,10 +181,29 @@ export async function runWorkflow(
   // 2. Health check (guarded — skip if TUI already ran it)
   if (!session.readinessResult) {
     logToFile('[agent-runner] evaluating wizard readiness');
-    const readiness = await evaluateWizardReadiness();
+    const readinessConfig = session.signup
+      ? SIGNUP_WIZARD_READINESS_CONFIG
+      : undefined;
+    const readiness = await evaluateWizardReadiness(readinessConfig);
     logToFile(`[agent-runner] readiness=${readiness.decision}`);
     if (readiness.decision === WizardReadiness.No) {
+      const blockingKeys = getBlockingServiceKeys(
+        readiness.health,
+        readinessConfig,
+      );
+      const blockingLabels = blockingKeys.map(
+        (k) => `${SERVICE_LABELS[k]} (${readiness.health[k].status})`,
+      );
+      logToFile(`[agent-runner] blocked by: ${blockingLabels.join(', ')}`);
+
       await getUI().showBlockingOutage(readiness);
+
+      await wizardAbort({
+        message:
+          'Cannot start — external services are down:\n' +
+          blockingLabels.map((l) => `  - ${l}`).join('\n') +
+          '\n\nPlease try again later.',
+      });
     } else if (readiness.decision === WizardReadiness.YesWithWarnings) {
       getUI().setReadinessWarnings(readiness);
     }
@@ -440,13 +460,10 @@ export async function runWorkflow(
       ? `${getCloudUrlFromRegion(cloudRegion)}/products?source=wizard`
       : undefined;
 
-    const reportPath = join(session.installDir, config.reportFile);
-    const reportExists = existsSync(reportPath);
-
     session.outroData = {
       kind: OutroKind.Success,
       message: config.successMessage,
-      reportFile: reportExists ? config.reportFile : undefined,
+      reportFile: config.reportFile,
       docsUrl: config.docsUrl,
       continueUrl,
     };

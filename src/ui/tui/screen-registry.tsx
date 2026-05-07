@@ -2,11 +2,10 @@
  * Screen registry — maps screen names to React components.
  *
  * Adding a new screen:
- *   1. Create the component in screens/
- *   2. Add an entry here
- *   3. Add the screen name to the router flow (router.ts)
- *
- * App.tsx never needs to change.
+ *   1. Create the component in screens/ (or screens/<workflow>/).
+ *   2. Add a `Screen` enum entry in flows.ts.
+ *   3. Add an entry here.
+ *   4. Reference the screen by name in the workflow's `steps` array.
  */
 
 import type { ReactNode } from 'react';
@@ -22,6 +21,9 @@ import { PortConflictScreen } from './screens/PortConflictScreen.js';
 import { PostHogIntegrationIntroScreen } from './screens/PostHogIntegrationIntroScreen.js';
 import { RevenueIntroScreen } from './screens/RevenueIntroScreen.js';
 import { AgentSkillIntroScreen } from './screens/AgentSkillIntroScreen.js';
+import { AuditIntroScreen } from './screens/audit/AuditIntroScreen.js';
+import { AuditRunScreen } from './screens/audit/AuditRunScreen.js';
+import { AuditOutroScreen } from './screens/audit/AuditOutroScreen.js';
 import { SetupScreen } from './screens/SetupScreen.js';
 import { AuthScreen } from './screens/AuthScreen.js';
 import { RunScreen } from './screens/RunScreen.js';
@@ -58,6 +60,9 @@ export function createScreens(
     [Screen.Intro]: <PostHogIntegrationIntroScreen store={store} />,
     [Screen.RevenueIntro]: <RevenueIntroScreen store={store} />,
     [Screen.AgentSkillIntro]: <AgentSkillIntroScreen store={store} />,
+    [Screen.AuditIntro]: <AuditIntroScreen store={store} />,
+    [Screen.AuditRun]: <AuditRunScreen store={store} />,
+    [Screen.AuditOutro]: <AuditOutroScreen store={store} />,
     [Screen.HealthCheck]: <HealthCheckScreen store={store} />,
     [Screen.DoctorIntro]: <DoctorIntroScreen store={store} />,
     [Screen.DoctorReport]: <DoctorReportScreen store={store} />,

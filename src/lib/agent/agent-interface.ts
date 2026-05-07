@@ -380,13 +380,16 @@ export function buildWizardMetadata(
 }
 
 /**
- * Build env for the SDK subprocess: process.env plus ANTHROPIC_CUSTOM_HEADERS from wizard metadata/flags.
+ * Build env for the SDK subprocess: process.env plus ANTHROPIC_CUSTOM_HEADERS, which always
+ * includes `x-posthog-use-bedrock-fallback: true` so the LLM gateway falls back to Bedrock on
+ * Anthropic 5xx, plus any wizard metadata/flags.
  */
 function buildAgentEnv(
   wizardMetadata: Record<string, string>,
   wizardFlags: Record<string, string>,
 ): string {
   const headers = createCustomHeaders();
+  headers.add('x-posthog-use-bedrock-fallback', 'true');
   for (const [key, value] of Object.entries(wizardMetadata)) {
     headers.add(
       key.startsWith(POSTHOG_PROPERTY_HEADER_PREFIX)
@@ -829,10 +832,6 @@ export async function runAgent(
     return {};
   };
 
-  // Event plan file watcher — cleaned up in finally block
-  let eventPlanWatcher: fs.FSWatcher | undefined;
-  let eventPlanInterval: ReturnType<typeof setInterval> | undefined;
-
   // Abort controller — lets us force-kill the SDK query when we detect an
   // [ABORT] signal in the agent's output. Also stashes the reason so the
   // runner can surface it via outroData after we unwind.
@@ -854,6 +853,7 @@ export async function runAgent(
       'Glob',
       'Grep',
       'Bash',
+      'Task',
       'ListMcpResourcesTool',
       'Skill',
       ...WIZARD_TOOL_NAMES,
@@ -959,46 +959,6 @@ export async function runAgent(
         },
       },
     });
-
-    // Watch for .posthog-events.json and feed into the store
-    const eventPlanPath = path.join(
-      agentConfig.workingDirectory,
-      '.posthog-events.json',
-    );
-    const readEventPlan = () => {
-      try {
-        const content = fs.readFileSync(eventPlanPath, 'utf-8');
-        const parsed = JSON.parse(content);
-        if (Array.isArray(parsed)) {
-          getUI().setEventPlan(
-            parsed.map((e: Record<string, unknown>) => ({
-              name: (e.name ?? e.event ?? '') as string,
-              description: (e.description ?? '') as string,
-            })),
-          );
-        }
-      } catch {
-        // File doesn't exist or isn't valid JSON yet
-      }
-    };
-
-    try {
-      eventPlanWatcher = fs.watch(eventPlanPath, () => readEventPlan());
-      readEventPlan();
-    } catch {
-      // File doesn't exist yet — poll until it appears
-      eventPlanInterval = setInterval(() => {
-        try {
-          fs.accessSync(eventPlanPath);
-          readEventPlan();
-          clearInterval(eventPlanInterval);
-          eventPlanInterval = undefined;
-          eventPlanWatcher = fs.watch(eventPlanPath, () => readEventPlan());
-        } catch {
-          // Still waiting
-        }
-      }, 1000);
-    }
 
     // Process the async generator
     for await (const message of response) {
@@ -1197,9 +1157,6 @@ export async function runAgent(
     debug('Full error:', error);
     throw error;
   } finally {
-    eventPlanWatcher?.close();
-    if (eventPlanInterval) clearInterval(eventPlanInterval);
-
     // Always capture run duration, even on abort/error, so we can alert on
     // long runs where the user gave up before completion.
     if (!receivedSuccessResult) {

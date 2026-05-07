@@ -326,7 +326,6 @@ describe('ClaudeMCPClient', () => {
 
       expect(getDefaultServerConfigMock).toHaveBeenCalledWith(
         mockApiKey,
-        'sse',
         undefined,
         undefined,
       );
@@ -339,7 +338,6 @@ describe('ClaudeMCPClient', () => {
 
       expect(getDefaultServerConfigMock).toHaveBeenCalledWith(
         undefined,
-        'sse',
         undefined,
         undefined,
       );

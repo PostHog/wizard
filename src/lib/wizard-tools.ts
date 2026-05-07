@@ -5,6 +5,8 @@
  * - check_env_keys: Check which env var keys exist in a .env file
  * - set_env_values: Create/update env vars in a .env file
  * - detect_package_manager: Detect the project's package manager(s)
+ * - load_skill_menu / install_skill: Skill installation
+ * - audit_seed_checks / audit_add_checks / audit_resolve_checks: Audit ledger ownership
  */
 
 import path from 'path';
@@ -14,6 +16,12 @@ import { z } from 'zod';
 import { logToFile } from '../utils/debug';
 import { skillTmpPath } from '../utils/paths';
 import type { PackageManagerDetector } from './detection/package-manager';
+import {
+  AUDIT_CHECKS_FILE,
+  coerceAuditChecks,
+  type AuditCheck,
+  type AuditStatus,
+} from './workflows/audit/types';
 
 // ---------------------------------------------------------------------------
 // SDK dynamic import (ESM module loaded once, cached)
@@ -92,6 +100,7 @@ export function downloadSkill(
     execFileSync('unzip', ['-o', tmpFile, '-d', skillDir], {
       timeout: 30000,
     });
+    fs.writeFileSync(path.join(skillDir, '.posthog-wizard'), '');
     try {
       fs.unlinkSync(tmpFile);
     } catch {
@@ -262,6 +271,153 @@ export function mergeEnvValues(
   }
 
   return result;
+}
+
+// ---------------------------------------------------------------------------
+// Audit ledger helpers
+// ---------------------------------------------------------------------------
+
+const AUDIT_STATUSES: readonly AuditStatus[] = [
+  'pending',
+  'pass',
+  'error',
+  'warning',
+  'suggestion',
+];
+
+const auditCheckSchema = z.object({
+  id: z.string().min(1),
+  area: z.string().min(1),
+  label: z.string().min(1),
+  status: z.enum(AUDIT_STATUSES as [AuditStatus, ...AuditStatus[]]),
+  file: z.string().optional(),
+  details: z.string().optional(),
+});
+
+const auditUpdateSchema = z.object({
+  id: z.string().min(1),
+  status: z.enum(AUDIT_STATUSES as [AuditStatus, ...AuditStatus[]]),
+  file: z.string().optional(),
+  details: z.string().optional(),
+});
+
+/**
+ * Atomically write JSON: write to .tmp then rename. The rename is what bumps
+ * the file's mtime, which is what the UI's file watcher polls on.
+ */
+function writeLedgerAtomic(targetPath: string, checks: AuditCheck[]): void {
+  const tmpPath = `${targetPath}.tmp`;
+  fs.writeFileSync(tmpPath, JSON.stringify(checks, null, 2), 'utf8');
+  fs.renameSync(tmpPath, targetPath);
+}
+
+/**
+ * Apply a batch of patches to the ledger by id. Returns the new array and the
+ * list of update ids that didn't match any existing check.
+ */
+function applyAuditUpdates(
+  current: AuditCheck[],
+  updates: Array<{
+    id: string;
+    status: AuditStatus;
+    file?: string;
+    details?: string;
+  }>,
+): { next: AuditCheck[]; unknown: string[] } {
+  const byId = new Map(current.map((c) => [c.id, c]));
+  const unknown: string[] = [];
+
+  for (const u of updates) {
+    const existing = byId.get(u.id);
+    if (!existing) {
+      unknown.push(u.id);
+      continue;
+    }
+    byId.set(u.id, {
+      ...existing,
+      status: u.status,
+      ...(u.file !== undefined ? { file: u.file } : {}),
+      ...(u.details !== undefined ? { details: u.details } : {}),
+    });
+  }
+
+  return {
+    next: current.map((c) => byId.get(c.id) ?? c),
+    unknown,
+  };
+}
+
+/**
+ * Append new checks to a seeded ledger. Duplicate ids are reported without
+ * mutating the current ledger, including duplicates inside the additions.
+ */
+function applyAuditAdditions(
+  current: AuditCheck[],
+  additions: AuditCheck[],
+): { next: AuditCheck[]; duplicates: string[] } {
+  const existingIds = new Set(current.map((c) => c.id));
+  const additionIds = new Set<string>();
+  const duplicates: string[] = [];
+
+  for (const check of additions) {
+    if (existingIds.has(check.id) || additionIds.has(check.id)) {
+      duplicates.push(check.id);
+      continue;
+    }
+    additionIds.add(check.id);
+  }
+
+  if (duplicates.length > 0) {
+    return { next: current, duplicates };
+  }
+
+  return { next: [...current, ...additions], duplicates: [] };
+}
+
+function readLedger(targetPath: string): AuditCheck[] {
+  if (!fs.existsSync(targetPath)) return [];
+  try {
+    const parsed = JSON.parse(fs.readFileSync(targetPath, 'utf8'));
+    return coerceAuditChecks(parsed);
+  } catch {
+    return [];
+  }
+}
+
+type AppendAuditChecksResult =
+  | { ok: true; added: number }
+  | { ok: false; reason: 'missing-ledger' }
+  | { ok: false; reason: 'duplicate-ids'; ids: string[] };
+
+function appendAuditChecksToLedger(
+  targetPath: string,
+  additions: AuditCheck[],
+): AppendAuditChecksResult {
+  if (!fs.existsSync(targetPath)) {
+    return { ok: false, reason: 'missing-ledger' };
+  }
+
+  const current = readLedger(targetPath);
+  const { next, duplicates } = applyAuditAdditions(current, additions);
+  if (duplicates.length > 0) {
+    return { ok: false, reason: 'duplicate-ids', ids: duplicates };
+  }
+
+  writeLedgerAtomic(targetPath, next);
+  return { ok: true, added: additions.length };
+}
+
+/**
+ * Single async mutex shared by audit tools — guarantees a read-modify-write
+ * cycle on the ledger is atomic across concurrent tool calls (e.g. future subagents).
+ */
+function makeMutex() {
+  let chain: Promise<unknown> = Promise.resolve();
+  return async function run<T>(fn: () => Promise<T> | T): Promise<T> {
+    const next = chain.then(() => fn());
+    chain = next.catch(() => undefined);
+    return next;
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -518,12 +674,158 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
     },
   );
 
+  // -- audit_seed_checks ----------------------------------------------------
+
+  const auditLedgerPath = path.join(workingDirectory, AUDIT_CHECKS_FILE);
+  const auditMutex = makeMutex();
+
+  const auditSeedChecks = tool(
+    'audit_seed_checks',
+    'Seed the audit ledger at .posthog-audit-checks.json with the full set of pending checks. Call this once at the start of the audit. Atomically replaces any existing ledger.',
+    {
+      checks: z
+        .array(auditCheckSchema)
+        .describe('Full pending checklist to write to the ledger'),
+    },
+    async (args: { checks: AuditCheck[] }) => {
+      return auditMutex(() => {
+        writeLedgerAtomic(auditLedgerPath, args.checks);
+        logToFile(`audit_seed_checks: wrote ${args.checks.length} entries`);
+        return {
+          content: [
+            {
+              type: 'text' as const,
+              text: `Seeded ${args.checks.length} audit checks.`,
+            },
+          ],
+        };
+      });
+    },
+  );
+
+  // -- audit_add_checks -----------------------------------------------------
+
+  const auditAddChecks = tool(
+    'audit_add_checks',
+    'Append one or more pending checks to the existing audit ledger at .posthog-audit-checks.json. Call audit_seed_checks first. Atomically rejects duplicate ids without changing the ledger.',
+    {
+      checks: z
+        .array(auditCheckSchema)
+        .min(1)
+        .describe('Additional checks to append to the existing ledger'),
+    },
+    async (args: { checks: AuditCheck[] }) => {
+      return auditMutex(() => {
+        const result = appendAuditChecksToLedger(auditLedgerPath, args.checks);
+
+        if (!result.ok) {
+          if (result.reason === 'missing-ledger') {
+            return {
+              content: [
+                {
+                  type: 'text' as const,
+                  text: 'Error: audit ledger does not exist. Run audit_seed_checks first.',
+                },
+              ],
+              isError: true,
+            };
+          }
+
+          return {
+            content: [
+              {
+                type: 'text' as const,
+                text: `Error: duplicate check id(s): ${result.ids.join(
+                  ', ',
+                )}. Check ids must be unique.`,
+              },
+            ],
+            isError: true,
+          };
+        }
+
+        logToFile(`audit_add_checks: added ${result.added} entries`);
+        return {
+          content: [
+            {
+              type: 'text' as const,
+              text: `Added ${result.added} audit check(s).`,
+            },
+          ],
+        };
+      });
+    },
+  );
+
+  // -- audit_resolve_checks -------------------------------------------------
+
+  const auditResolveChecks = tool(
+    'audit_resolve_checks',
+    "Resolve one or more audit checks by id. Patches each entry's status (and optional file/details) and writes the ledger back atomically. Concurrent calls serialize.",
+    {
+      updates: z
+        .array(auditUpdateSchema)
+        .min(1)
+        .describe('Patches to apply, keyed by check id'),
+    },
+    async (args: {
+      updates: Array<{
+        id: string;
+        status: AuditStatus;
+        file?: string;
+        details?: string;
+      }>;
+    }) => {
+      return auditMutex(() => {
+        const current = readLedger(auditLedgerPath);
+        const { next, unknown } = applyAuditUpdates(current, args.updates);
+
+        if (unknown.length > 0) {
+          return {
+            content: [
+              {
+                type: 'text' as const,
+                text: `Error: unknown check id(s): ${unknown.join(
+                  ', ',
+                )}. Run audit_seed_checks first or check the id.`,
+              },
+            ],
+            isError: true,
+          };
+        }
+
+        writeLedgerAtomic(auditLedgerPath, next);
+        logToFile(
+          `audit_resolve_checks: applied ${args.updates.length} update(s)`,
+        );
+
+        return {
+          content: [
+            {
+              type: 'text' as const,
+              text: `Resolved ${args.updates.length} check(s).`,
+            },
+          ],
+        };
+      });
+    },
+  );
+
   // -- Assemble server ------------------------------------------------------
 
   return createSdkMcpServer({
     name: SERVER_NAME,
     version: '1.0.0',
-    tools: [checkEnvKeys, setEnvValues, detectPM, loadSkillMenu, installSkill],
+    tools: [
+      checkEnvKeys,
+      setEnvValues,
+      detectPM,
+      loadSkillMenu,
+      installSkill,
+      auditSeedChecks,
+      auditAddChecks,
+      auditResolveChecks,
+    ],
   });
 }
 
@@ -534,4 +836,21 @@ export const WIZARD_TOOL_NAMES = [
   `${SERVER_NAME}:detect_package_manager`,
   `${SERVER_NAME}:load_skill_menu`,
   `${SERVER_NAME}:install_skill`,
+  `${SERVER_NAME}:audit_seed_checks`,
+  `${SERVER_NAME}:audit_add_checks`,
+  `${SERVER_NAME}:audit_resolve_checks`,
 ];
+
+// ---------------------------------------------------------------------------
+// Test-only exports
+// ---------------------------------------------------------------------------
+
+export const __test = {
+  writeLedgerAtomic,
+  readLedger,
+  applyAuditAdditions,
+  appendAuditChecksToLedger,
+  applyAuditUpdates,
+  makeMutex,
+  AUDIT_CHECKS_FILE,
+};

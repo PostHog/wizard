@@ -1,5 +1,6 @@
 import { DefaultMCPClient } from '../MCPClient';
-import { buildMCPUrl, DefaultMCPClientConfig } from '../defaults';
+import { DefaultMCPClientConfig } from '../defaults';
+import { PluginCapable, PluginInstallResult } from '../plugin-client';
 import { z } from 'zod';
 import { execSync } from 'child_process';
 import { analytics } from '../../../utils/analytics';
@@ -12,7 +13,10 @@ export const ClaudeCodeMCPConfig = DefaultMCPClientConfig;
 
 export type ClaudeCodeMCPConfig = z.infer<typeof DefaultMCPClientConfig>;
 
-export class ClaudeCodeMCPClient extends DefaultMCPClient {
+export class ClaudeCodeMCPClient
+  extends DefaultMCPClient
+  implements PluginCapable
+{
   name = 'Claude Code';
   private claudeBinaryPath: string | null = null;
 
@@ -81,68 +85,17 @@ export class ClaudeCodeMCPClient extends DefaultMCPClient {
     }
   }
 
-  isServerInstalled(local?: boolean): Promise<boolean> {
-    try {
-      const claudeBinary = this.findClaudeBinary();
-      if (!claudeBinary) {
-        return Promise.resolve(false);
-      }
-
-      // check if specific server name exists in output
-      const output = execSync(`${claudeBinary} mcp list`, {
-        stdio: 'pipe',
-      });
-
-      const outputStr = output.toString();
-      const serverName = local ? 'posthog-local' : 'posthog';
-
-      if (outputStr.includes(serverName)) {
-        return Promise.resolve(true);
-      }
-    } catch {
-      //
-    }
-
-    return Promise.resolve(false);
+  isServerInstalled(): Promise<boolean> {
+    return this.isPluginInstalled();
   }
 
   getConfigPath(): Promise<string> {
     throw new Error('Not implemented');
   }
 
-  addServer(
-    apiKey?: string,
-    selectedFeatures?: string[],
-    local?: boolean,
-  ): Promise<{ success: boolean }> {
-    const claudeBinary = this.findClaudeBinary();
-    if (!claudeBinary) {
-      return Promise.resolve({ success: false });
-    }
-
-    const serverName = local ? 'posthog-local' : 'posthog';
-    const url = buildMCPUrl('streamable-http', selectedFeatures, local);
-
-    // OAuth mode: no auth header
-    const authArgs = apiKey ? `--header "Authorization: Bearer ${apiKey}"` : '';
-    const command =
-      `${claudeBinary} mcp add --transport http ${serverName} ${url} ${authArgs} -s user`.trim();
-
-    try {
-      execSync(command);
-    } catch (error) {
-      const msg = error instanceof Error ? error.message : String(error);
-      // "already exists" means a previous install succeeded, treat as success
-      if (msg.includes('already exists')) {
-        return Promise.resolve({ success: true });
-      }
-      analytics.captureException(
-        new Error(`Failed to add server to Claude Code: ${msg}`),
-      );
-      return Promise.resolve({ success: false });
-    }
-
-    return Promise.resolve({ success: true });
+  async addServer(): Promise<{ success: boolean }> {
+    const result = await this.installPlugin();
+    return { success: result.success };
   }
 
   removeServer(local?: boolean): Promise<{ success: boolean }> {
@@ -168,5 +121,40 @@ export class ClaudeCodeMCPClient extends DefaultMCPClient {
     }
 
     return Promise.resolve({ success: true });
+  }
+
+  supportsPlugin(): boolean {
+    return this.findClaudeBinary() !== null;
+  }
+
+  isPluginInstalled(): Promise<boolean> {
+    const binary = this.findClaudeBinary();
+    if (!binary) return Promise.resolve(false);
+    try {
+      const output = execSync(`${binary} plugin list`, {
+        stdio: 'pipe',
+      }).toString();
+      return Promise.resolve(output.toLowerCase().includes('posthog'));
+    } catch {
+      return Promise.resolve(false);
+    }
+  }
+
+  installPlugin(): Promise<PluginInstallResult> {
+    const binary = this.findClaudeBinary();
+    if (!binary) return Promise.resolve({ success: false });
+    try {
+      execSync(`${binary} plugin install posthog`, { stdio: 'pipe' });
+      return Promise.resolve({ success: true });
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      if (msg.includes('already installed') || msg.includes('already exists')) {
+        return Promise.resolve({ success: true, alreadyInstalled: true });
+      }
+      analytics.captureException(
+        new Error(`Claude Code plugin install failed: ${msg}`),
+      );
+      return Promise.resolve({ success: false });
+    }
   }
 }

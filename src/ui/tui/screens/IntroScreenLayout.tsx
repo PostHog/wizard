@@ -28,7 +28,7 @@ interface IntroScreenLayoutProps {
   /** Title text after the colored blocks, e.g. "PostHog Wizard 🦔" */
   title?: string;
 
-  /** Show the subtitle copy ("We'll use AI…" / ".env*…"). Default true. */
+  /** Show the default "We'll use AI…" / ".env*…" subtitle. Default true. */
   showSubtitle?: boolean;
 
   /** Free-form content below the title (copy, spinners, pickers, notices) */

@@ -40,6 +40,10 @@ export interface WizardUI {
    * mutating session directly (nanostore holds a shallow copy).
    */
   outroError(data: OutroData): void;
+  /** Resolves when the user dismisses the outro screen (presses any key).
+   *  Lets the abort path wait for the user to read the error before the
+   *  process exits. Resolves immediately in non-TUI environments. */
+  waitForOutroDismissed(): Promise<void>;
   cancel(message: string): void;
 
   // ── Logging ───────────────────────────────────────────────────────
@@ -107,4 +111,7 @@ export interface WizardUI {
 
   // ── Event plan from .posthog-events.json ────────────────────
   setEventPlan(events: Array<{ name: string; description: string }>): void;
+
+  // ── Generic frameworkContext setter for workflow file watchers ─────
+  setFrameworkContext(key: string, value: unknown): void;
 }
