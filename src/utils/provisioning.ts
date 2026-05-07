@@ -10,21 +10,23 @@
 import * as crypto from 'node:crypto';
 import axios from 'axios';
 import { z } from 'zod';
-import {
-  IS_DEV,
-  POSTHOG_DEV_CLIENT_ID,
-  POSTHOG_US_CLIENT_ID,
-  WIZARD_USER_AGENT,
-} from '../lib/constants';
+import { IS_DEV, WIZARD_USER_AGENT } from '../lib/constants';
 import { logToFile } from './debug';
 import { analytics } from './analytics';
 
-const WIZARD_CLIENT_ID = IS_DEV ? POSTHOG_DEV_CLIENT_ID : POSTHOG_US_CLIENT_ID;
+const WIZARD_CLIENT_ID =
+  'https://us.posthog.com/api/oauth/wizard/client-metadata';
 const API_VERSION = '0.1d';
 
-const PROVISIONING_BASE_URL = IS_DEV
-  ? 'http://localhost:8010'
-  : 'https://us.posthog.com';
+const REGION_URLS: Record<string, string> = {
+  US: 'https://us.posthog.com',
+  EU: 'https://eu.posthog.com',
+};
+
+function getBaseUrl(region: 'US' | 'EU'): string {
+  if (IS_DEV) return 'http://localhost:8010';
+  return REGION_URLS[region];
+}
 
 function generateCodeVerifier(): string {
   return crypto.randomBytes(32).toString('base64url');
@@ -105,11 +107,13 @@ export async function provisionNewAccount(
   const codeVerifier = generateCodeVerifier();
   const codeChallenge = generateCodeChallenge(codeVerifier);
 
+  const baseUrl = getBaseUrl(region);
+
   logToFile('[provisioning] starting account creation');
 
   // Step 1: Create account
   const accountRes = await axios.post(
-    `${PROVISIONING_BASE_URL}/api/agentic/provisioning/account_requests`,
+    `${baseUrl}/api/agentic/provisioning/account_requests`,
     {
       id: crypto.randomUUID(),
       email,
@@ -158,7 +162,7 @@ export async function provisionNewAccount(
 
   // Step 2: Exchange code for tokens
   const tokenRes = await axios.post(
-    `${PROVISIONING_BASE_URL}/api/agentic/oauth/token`,
+    `${baseUrl}/api/agentic/oauth/token`,
     new URLSearchParams({
       grant_type: 'authorization_code',
       code,
@@ -180,7 +184,7 @@ export async function provisionNewAccount(
 
   // Step 3: Provision resources
   const resourceRes = await axios.post(
-    `${PROVISIONING_BASE_URL}/api/agentic/provisioning/resources`,
+    `${baseUrl}/api/agentic/provisioning/resources`,
     {
       service_id: 'analytics',
       ...(opts?.projectName
