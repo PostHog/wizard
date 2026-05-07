@@ -85,17 +85,17 @@ export class ClaudeCodeMCPClient
     }
   }
 
-  async isServerInstalled(local?: boolean): Promise<boolean> {
+  isServerInstalled(local?: boolean): Promise<boolean> {
     const binary = this.findClaudeBinary();
-    if (!binary) return false;
+    if (!binary) return Promise.resolve(false);
     const serverName = local ? 'posthog-local' : 'posthog';
     try {
       const output = execSync(`${binary} mcp list`, { stdio: 'pipe' })
         .toString()
         .toLowerCase();
-      return output.includes(serverName);
+      return Promise.resolve(output.includes(serverName));
     } catch {
-      return false;
+      return Promise.resolve(false);
     }
   }
 
@@ -103,13 +103,13 @@ export class ClaudeCodeMCPClient
     throw new Error('Not implemented');
   }
 
-  async addServer(
+  addServer(
     apiKey?: string,
     selectedFeatures?: string[],
     local?: boolean,
   ): Promise<{ success: boolean }> {
     const binary = this.findClaudeBinary();
-    if (!binary) return { success: false };
+    if (!binary) return Promise.resolve({ success: false });
 
     const serverName = local ? 'posthog-local' : 'posthog';
     const url = buildMCPUrl(selectedFeatures, local);
@@ -131,16 +131,16 @@ export class ClaudeCodeMCPClient
       execSync(`${binary} ${args.map((a) => JSON.stringify(a)).join(' ')}`, {
         stdio: 'pipe',
       });
-      return { success: true };
+      return Promise.resolve({ success: true });
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
       if (msg.includes('already exists')) {
-        return { success: true };
+        return Promise.resolve({ success: true });
       }
       analytics.captureException(
         new Error(`Claude Code MCP add failed: ${msg}`),
       );
-      return { success: false };
+      return Promise.resolve({ success: false });
     }
   }
 

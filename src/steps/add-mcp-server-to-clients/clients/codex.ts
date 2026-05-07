@@ -57,13 +57,13 @@ export class CodexMCPClient extends DefaultMCPClient implements PluginCapable {
     );
   }
 
-  async addServer(
+  addServer(
     apiKey?: string,
     selectedFeatures?: string[],
     local?: boolean,
   ): Promise<{ success: boolean }> {
     const binary = this.findCodexBinary();
-    if (!binary) return { success: false };
+    if (!binary) return Promise.resolve({ success: false });
 
     const serverName = local ? 'posthog-local' : 'posthog';
     const url = buildMCPUrl(selectedFeatures, local);
@@ -79,12 +79,12 @@ export class CodexMCPClient extends DefaultMCPClient implements PluginCapable {
     if (result.status !== 0) {
       const stderr = result.stderr ?? '';
       if (stderr.toLowerCase().includes('already')) {
-        return { success: true };
+        return Promise.resolve({ success: true });
       }
       analytics.captureException(new Error(`Codex MCP add failed: ${stderr}`));
-      return { success: false };
+      return Promise.resolve({ success: false });
     }
-    return { success: true };
+    return Promise.resolve({ success: true });
   }
 
   removeServer(): Promise<{ success: boolean }> {
