@@ -213,14 +213,13 @@ export const ALL_FEATURE_VALUES = Object.values(AVAILABLE_FEATURES)
   .flat()
   .map((feature) => feature.value);
 
+export const isAllFeaturesSelected = (features: string[]): boolean =>
+  features.length === ALL_FEATURE_VALUES.length &&
+  ALL_FEATURE_VALUES.every((feature) => features.includes(feature));
+
 export const buildMCPUrl = (selectedFeatures?: string[], local?: boolean) => {
   const host = local ? 'http://localhost:8787' : 'https://mcp.posthog.com';
   const baseUrl = `${host}/mcp`;
-
-  const isAllFeaturesSelected =
-    selectedFeatures &&
-    selectedFeatures.length === ALL_FEATURE_VALUES.length &&
-    ALL_FEATURE_VALUES.every((feature) => selectedFeatures.includes(feature));
 
   const params: string[] = [];
 
@@ -228,7 +227,7 @@ export const buildMCPUrl = (selectedFeatures?: string[], local?: boolean) => {
   if (
     selectedFeatures &&
     selectedFeatures.length > 0 &&
-    !isAllFeaturesSelected
+    !isAllFeaturesSelected(selectedFeatures)
   ) {
     params.push(`features=${selectedFeatures.join(',')}`);
   }

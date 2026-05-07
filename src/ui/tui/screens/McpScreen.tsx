@@ -25,6 +25,7 @@ import type { McpInstaller, McpClientInfo } from '../services/mcp-installer.js';
 import {
   AVAILABLE_FEATURES,
   ALL_FEATURE_VALUES,
+  isAllFeaturesSelected,
 } from '../../../steps/add-mcp-server-to-clients/defaults.js';
 
 export type McpMode = 'install' | 'remove';
@@ -49,9 +50,13 @@ const markDone = (
   store: WizardStore,
   outcome: McpOutcome,
   clients: string[] = [],
+  featuresSelected?: 'all' | string[],
 ) => {
-  store.setMcpComplete(outcome, clients);
+  store.setMcpComplete(outcome, clients, featuresSelected);
 };
+
+const reportFeatures = (features: string[]): 'all' | string[] =>
+  isAllFeaturesSelected(features) ? 'all' : features;
 
 export const McpScreen = ({
   store,
@@ -74,6 +79,7 @@ export const McpScreen = ({
   const [selectedClientNames, setSelectedClientNames] = useState<string[]>([]);
   const [resultClients, setResultClients] = useState<string[]>([]);
   const [pluginClients, setPluginClients] = useState<string[]>([]);
+  const [installMode, setInstallMode] = useState<'all' | 'custom'>('custom');
 
   useEffect(() => {
     void (async () => {
@@ -93,10 +99,14 @@ export const McpScreen = ({
     })();
   }, [installer]); // eslint-disable-line
 
-  const proceedToFeatureSelectOrInstall = (clientNames: string[]) => {
+  const proceedAfterClientPick = (
+    clientNames: string[],
+    chosenMode: 'all' | 'custom',
+  ) => {
     setSelectedClientNames(clientNames);
-    // Skip feature picker if CLI already specified features
-    if (store.session.mcpFeatures) {
+    if (chosenMode === 'all') {
+      void doInstall(clientNames, [...ALL_FEATURE_VALUES]);
+    } else if (store.session.mcpFeatures) {
       void doInstall(clientNames, store.session.mcpFeatures);
     } else {
       setPhase(Phase.FeatureSelect);
@@ -107,7 +117,20 @@ export const McpScreen = ({
     if (isRemove) {
       void doRemove();
     } else if (clients.length === 1) {
-      proceedToFeatureSelectOrInstall(clients.map((c) => c.name));
+      proceedAfterClientPick([clients[0]!.name], 'custom');
+    } else {
+      setPhase(Phase.Pick);
+    }
+  };
+
+  const handleTriStateChoice = (choice: 'all' | 'custom' | 'skip') => {
+    if (choice === 'skip') {
+      handleSkip();
+      return;
+    }
+    setInstallMode(choice);
+    if (clients.length === 1) {
+      proceedAfterClientPick([clients[0]!.name], choice);
     } else {
       setPhase(Phase.Pick);
     }
@@ -140,7 +163,8 @@ export const McpScreen = ({
     setPhase(Phase.Done);
     const outcome =
       mcpResult.length > 0 ? McpOutcome.Installed : McpOutcome.Failed;
-    setTimeout(() => markDone(store, outcome, mcpResult), 2000);
+    const featuresReport = reportFeatures(features ?? [...ALL_FEATURE_VALUES]);
+    setTimeout(() => markDone(store, outcome, mcpResult, featuresReport), 2000);
   };
 
   const doRemove = async () => {
@@ -182,17 +206,37 @@ export const McpScreen = ({
               Detected: {clients.map((c) => c.name).join(', ')}
             </Text>
             <Box marginTop={1}>
-              <ConfirmationInput
-                message={`${
-                  isRemove ? 'Remove' : 'Install'
-                } the PostHog MCP server${
-                  clients.some((c) => c.supportsPlugin) ? ' and plugin' : ''
-                }?`}
-                confirmLabel={isRemove ? 'Remove' : 'Install'}
-                cancelLabel="No thanks"
-                onConfirm={handleConfirm}
-                onCancel={handleSkip}
-              />
+              {!isRemove && !store.session.mcpFeatures ? (
+                <PickerMenu
+                  message={`Install the PostHog MCP server${
+                    clients.some((c) => c.supportsPlugin) ? ' and plugin' : ''
+                  }?`}
+                  options={[
+                    {
+                      label: 'Install with all features (recommended)',
+                      value: 'all',
+                    },
+                    { label: 'Customize features', value: 'custom' },
+                    { label: 'No thanks', value: 'skip' },
+                  ]}
+                  mode="single"
+                  onSelect={(choice) =>
+                    handleTriStateChoice(choice as 'all' | 'custom' | 'skip')
+                  }
+                />
+              ) : (
+                <ConfirmationInput
+                  message={`${
+                    isRemove ? 'Remove' : 'Install'
+                  } the PostHog MCP server${
+                    clients.some((c) => c.supportsPlugin) ? ' and plugin' : ''
+                  }?`}
+                  confirmLabel={isRemove ? 'Remove' : 'Install'}
+                  cancelLabel="No thanks"
+                  onConfirm={handleConfirm}
+                  onCancel={handleSkip}
+                />
+              )}
             </Box>
           </>
         )}
@@ -207,7 +251,7 @@ export const McpScreen = ({
             mode="multi"
             onSelect={(selected) => {
               const names = Array.isArray(selected) ? selected : [selected];
-              proceedToFeatureSelectOrInstall(names);
+              proceedAfterClientPick(names, installMode);
             }}
           />
         )}
@@ -235,7 +279,9 @@ export const McpScreen = ({
               <>
                 <Text color="green" bold>
                   {'\u2714'} MCP server
-                  {!isRemove && pluginClients.length > 0 ? ' and plugin' : ''}{' '}
+                  {!isRemove && pluginClients.length > 0
+                    ? ' and plugin'
+                    : ''}{' '}
                   {isRemove ? 'removed from' : 'installed for'}:
                 </Text>
                 {resultClients.map((name, i) => (

@@ -408,13 +408,19 @@ export class WizardStore {
   setMcpComplete(
     outcome: McpOutcome = McpOutcome.Skipped,
     installedClients: string[] = [],
+    featuresSelected?: 'all' | string[],
   ): void {
     this.$session.setKey('mcpComplete', true);
     this.$session.setKey('mcpOutcome', outcome);
     this.$session.setKey('mcpInstalledClients', installedClients);
+    const featuresPayload =
+      outcome === McpOutcome.Installed && featuresSelected !== undefined
+        ? { mcp_features_selected: featuresSelected }
+        : {};
     analytics.wizardCapture('mcp complete', {
       mcp_outcome: outcome,
       mcp_installed_clients: installedClients,
+      ...featuresPayload,
       ...sessionProperties(this.session),
     });
     this.emitChange();

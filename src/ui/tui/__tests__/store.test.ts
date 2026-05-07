@@ -333,6 +333,37 @@ describe('WizardStore', () => {
         }),
       );
     });
+
+    it('setMcpComplete includes mcp_features_selected when installed', () => {
+      const store = createStore();
+      store.setMcpComplete(McpOutcome.Installed, ['Cursor'], 'all');
+      expect(wizardCaptureMock).toHaveBeenCalledWith(
+        'mcp complete',
+        expect.objectContaining({ mcp_features_selected: 'all' }),
+      );
+
+      wizardCaptureMock.mockClear();
+      store.setMcpComplete(
+        McpOutcome.Installed,
+        ['Cursor'],
+        ['dashboards', 'insights'],
+      );
+      expect(wizardCaptureMock).toHaveBeenCalledWith(
+        'mcp complete',
+        expect.objectContaining({
+          mcp_features_selected: ['dashboards', 'insights'],
+        }),
+      );
+    });
+
+    it('setMcpComplete omits mcp_features_selected when not installed', () => {
+      const store = createStore();
+      store.setMcpComplete(McpOutcome.Skipped, [], 'all');
+      const call = wizardCaptureMock.mock.calls.find(
+        ([event]) => event === 'mcp complete',
+      );
+      expect(call?.[1]).not.toHaveProperty('mcp_features_selected');
+    });
   });
 
   // ── Screen resolution (derived state) ────────────────────────────
