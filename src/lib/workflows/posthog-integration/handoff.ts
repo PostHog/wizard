@@ -117,12 +117,14 @@ const KNOWN_QUIRKS_BY_INTEGRATION: Record<Integration, string[]> = {
 };
 
 /**
- * Quirks that only apply when LLM analytics is being installed in the same
- * run AND the project is JS/TS (the only stack `@posthog/ai` ships for).
+ * The "hand this to your coding agent" prompt — the load-bearing piece of
+ * the handoff doc. Exported so the wizard's TUI / CLI can surface the same
+ * string for copy-paste, and so tests can assert it without scraping the
+ * rendered markdown.
  */
-const LLM_ANALYTICS_QUIRKS_FOR_JS: readonly string[] = [
-  "`@posthog/ai`'s `PostHogAnthropic` only intercepts `messages.create()`. Don't use `messages.stream(...)` — it bypasses the wrapper and crashes at runtime when the SDK calls `.withResponse()` on the wrapped value. Use `messages.create({ stream: true, ... })` and iterate the lower-level events instead.",
-];
+export function buildCodingAgentPrompt(ctx: NextStepsContext): string {
+  return `Read \`${ctx.reportFile}\` and \`${NEXT_STEPS_FILE}\`. Verify each item in the "Verify before merging" checklist. Apply any fixes for items that fail. Update the project glue listed in this file if it applies. Open a PR with the changes plus a summary of what was verified.`;
+}
 
 /**
  * Build the markdown content. Pure function so it is trivial to unit-test
@@ -139,28 +141,27 @@ export function buildNextStepsMarkdown(ctx: NextStepsContext): string {
   const isJs = JS_INTEGRATIONS.has(integration);
   const wantsSourceMaps = SOURCE_MAP_INTEGRATIONS.has(integration);
 
-  const baseQuirks = KNOWN_QUIRKS_BY_INTEGRATION[integration];
-  const llmQuirks =
-    llmAnalyticsQueued && isJs ? [...LLM_ANALYTICS_QUIRKS_FOR_JS] : [];
-  const allQuirks = [...baseQuirks, ...llmQuirks];
+  // No LLM quirks are baked in here. The wizard can pick between multiple
+  // LLM-analytics implementation strategies for the same JS framework
+  // (e.g. `@posthog/ai`'s `PostHogAnthropic` wrapper vs OpenTelemetry
+  // auto-instrumentation), and a quirk list that assumes a single strategy
+  // would be wrong half the time. Strategy-specific guidance lives in the
+  // agent-written setup report (`reportFile`), which describes what THIS
+  // run did. This handoff stays strategy-agnostic.
+  const allQuirks = KNOWN_QUIRKS_BY_INTEGRATION[integration];
 
   const verifyItems = [
     'Run a production build to catch lint and type issues from generated code.',
     isJs
-      ? 'Run unit tests — wizard-rewritten routes may have outdated mocks (e.g. tests that mocked the bare SDK now need to mock the wrapped client).'
+      ? 'Run unit tests — wizard-rewritten or wizard-instrumented call sites may need updated mocks.'
       : 'Run unit / integration tests.',
     'Smoke-test one capture call in the running app and confirm the event appears in PostHog.',
     'Smoke-test the identify path and confirm the distinct id matches your user model — including the *returning visitor* path that auto-redirects past your auth submit handler.',
   ];
   if (llmAnalyticsQueued) {
     verifyItems.push(
-      'Smoke-test one streaming and one non-streaming LLM call and confirm `$ai_generation` events appear in PostHog.',
+      `Smoke-test one streaming and one non-streaming LLM call and confirm \`$ai_generation\` events appear in PostHog. (See \`${reportFile}\` for the specific LLM-analytics approach this run used.)`,
     );
-    if (isJs) {
-      verifyItems.push(
-        'Search for any remaining direct LLM SDK constructors (`new Anthropic()`, etc.) or non-type imports of `@anthropic-ai/sdk` and migrate them to the wrapped client. Automated detection can miss non-standard import shapes.',
-      );
-    }
   }
 
   const envCallout =
@@ -206,13 +207,15 @@ export function buildNextStepsMarkdown(ctx: NextStepsContext): string {
     '',
     '## Token-absent behavior',
     '',
-    'By default the SDK logs warnings and may retry sends if the project token is unset. If you have CI / e2e environments without PostHog, consider noop-shimming the wizard-generated PostHog client wrapper so missing config is silent and safe.',
+    'By default the SDK logs warnings and may retry sends if the project token is unset. If you have CI / e2e environments without PostHog, consider noop-shimming the wizard-generated PostHog client setup so missing config is silent and safe.',
     '',
     '## Hand this to your coding agent',
     '',
-    'Copy and run:',
+    'Copy the prompt below into your coding agent (single fenced block, triple-click to select):',
     '',
-    `> Read \`${reportFile}\` and \`${NEXT_STEPS_FILE}\`. Verify each item in the "Verify before merging" checklist. Apply any fixes for items that fail. Update the project glue listed in this file if it applies. Open a PR with the changes plus a summary of what was verified.`,
+    '```',
+    buildCodingAgentPrompt(ctx),
+    '```',
     '',
   ].join('\n');
 }

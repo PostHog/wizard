@@ -7,6 +7,7 @@ import { buildSession } from '../../../wizard-session.js';
 import {
   NEXT_STEPS_FILE,
   NEXT_STEPS_HANDOFF_KEY,
+  buildCodingAgentPrompt,
   buildHandoffBullet,
   buildNextStepsMarkdown,
   getNextStepsHandoff,
@@ -62,73 +63,64 @@ describe('buildNextStepsMarkdown', () => {
     expect(md).not.toContain('NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN');
   });
 
-  it('omits LLM smoke-test items when llmAnalyticsQueued is false', () => {
+  it('omits the LLM smoke-test bullet when llmAnalyticsQueued is false', () => {
     const md = buildNextStepsMarkdown(ctx({ llmAnalyticsQueued: false }));
     expect(md).not.toContain('$ai_generation');
-    expect(md).not.toContain('@anthropic-ai/sdk');
-    expect(md).not.toContain('messages.stream');
   });
 
-  it('includes LLM smoke-test items when llmAnalyticsQueued is true on a JS integration', () => {
-    const md = buildNextStepsMarkdown(
-      ctx({ integration: Integration.nextjs, llmAnalyticsQueued: true }),
-    );
-    expect(md).toContain('$ai_generation');
-    expect(md).toMatch(/Search for any remaining direct LLM SDK constructors/);
-  });
-
-  it('skips the JS-only Anthropic-grep step on non-JS integrations even when LLM is queued', () => {
-    const md = buildNextStepsMarkdown(
-      ctx({
-        frameworkName: 'Django',
-        integration: Integration.django,
-        llmAnalyticsQueued: true,
-      }),
-    );
-    // Generic LLM smoke-test stays.
-    expect(md).toContain('$ai_generation');
-    // JS-specific grep is dropped — Django users don't import @anthropic-ai/sdk.
-    expect(md).not.toContain('@anthropic-ai/sdk');
-    expect(md).not.toContain('new Anthropic()');
-  });
-
-  it('emits the LLM streaming quirk only on JS integrations with LLM queued', () => {
+  it('includes a strategy-agnostic LLM smoke-test bullet when llmAnalyticsQueued is true', () => {
+    // The wizard can pick between multiple LLM-analytics strategies for
+    // the same JS framework (PostHogAnthropic wrapper vs OTel
+    // auto-instrumentation). The handoff bullet must not assume a
+    // strategy — only the strategy-agnostic `$ai_generation` smoke-test
+    // appears, and it points the reader at the report for specifics.
     const jsLlm = buildNextStepsMarkdown(
       ctx({ integration: Integration.nextjs, llmAnalyticsQueued: true }),
     );
-    expect(jsLlm).toMatch(/\n- `@posthog\/ai`'s `PostHogAnthropic`/);
-
-    const jsNoLlm = buildNextStepsMarkdown(
-      ctx({ integration: Integration.nextjs, llmAnalyticsQueued: false }),
+    expect(jsLlm).toContain('$ai_generation');
+    expect(jsLlm).toMatch(
+      /See `posthog-setup-report\.md` for the specific LLM-analytics approach/,
     );
-    expect(jsNoLlm).not.toContain('PostHogAnthropic');
 
-    const nonJsLlm = buildNextStepsMarkdown(
+    const djangoLlm = buildNextStepsMarkdown(
       ctx({
         frameworkName: 'Django',
         integration: Integration.django,
         llmAnalyticsQueued: true,
       }),
     );
-    expect(nonJsLlm).not.toContain('PostHogAnthropic');
+    expect(djangoLlm).toContain('$ai_generation');
   });
 
-  it('falls back to a "no quirks recorded" stub linking the issue tracker when the merged quirk list is empty', () => {
-    const md = buildNextStepsMarkdown(
-      ctx({ integration: Integration.swift, llmAnalyticsQueued: false }),
-    );
-    expect(md).toContain('No additional quirks recorded for this integration');
-    expect(md).toContain('https://github.com/PostHog/wizard/issues');
-  });
-
-  it('renders quirks with a leading hyphen-bullet (regression catch for .join changes)', () => {
-    // Today the registry has one quirk renderable in one path (LLM-on-JS).
-    // Verify the rendered shape — a regression to `.join(', ')` or any
-    // other separator would corrupt the bullet list invisibly.
+  it('does not bake any strategy-specific LLM advice into the handoff', () => {
+    // Regression catch: do not re-introduce wrapper-vs-OTel-specific
+    // guidance here (it belongs in the agent-written setup report).
     const md = buildNextStepsMarkdown(
       ctx({ integration: Integration.nextjs, llmAnalyticsQueued: true }),
     );
-    expect(md).toMatch(/\n- `@posthog\/ai`/);
+    expect(md).not.toContain('PostHogAnthropic');
+    expect(md).not.toContain('messages.stream');
+    expect(md).not.toContain('new Anthropic()');
+    expect(md).not.toContain('@anthropic-ai/sdk');
+  });
+
+  it('renders the "no quirks recorded" stub on every integration today', () => {
+    // No quirks are registered yet; the stub should be the default
+    // render across every integration. Will need updating when the
+    // wizard team registers strategy-agnostic quirks.
+    for (const integration of [
+      Integration.nextjs,
+      Integration.django,
+      Integration.swift,
+    ]) {
+      const md = buildNextStepsMarkdown(
+        ctx({ integration, llmAnalyticsQueued: true }),
+      );
+      expect(md).toContain(
+        'No additional quirks recorded for this integration',
+      );
+      expect(md).toContain('https://github.com/PostHog/wizard/issues');
+    }
   });
 
   it('drops the source-maps glue item on backend-only integrations', () => {
@@ -173,6 +165,36 @@ describe('buildNextStepsMarkdown', () => {
     const none = buildNextStepsMarkdown(ctx({ envVarNames: [] }));
     expect(none).toContain('the env vars the wizard added');
     expect(none).not.toMatch(/placeholders?\b/);
+  });
+});
+
+describe('buildCodingAgentPrompt', () => {
+  it('returns a single-paragraph prompt naming both files', () => {
+    const prompt = buildCodingAgentPrompt(ctx());
+    expect(prompt).toContain('`posthog-setup-report.md`');
+    expect(prompt).toContain('`posthog-next-steps.md`');
+    // Single paragraph — no embedded newlines, so triple-click selection
+    // works in any editor / terminal.
+    expect(prompt).not.toMatch(/\n/);
+  });
+
+  it('respects an alternate reportFile name', () => {
+    const prompt = buildCodingAgentPrompt(
+      ctx({ reportFile: 'posthog-revenue-report.md' }),
+    );
+    expect(prompt).toContain('`posthog-revenue-report.md`');
+    expect(prompt).not.toContain('`posthog-setup-report.md`');
+  });
+});
+
+describe('coding-agent prompt embedding in the handoff doc', () => {
+  it('wraps the agent prompt in a fenced code block, not a blockquote', () => {
+    // Fenced code blocks select cleanly with triple-click; the previous
+    // blockquote (`> `) form pulled in the prefix on copy.
+    const md = buildNextStepsMarkdown(ctx());
+    const prompt = buildCodingAgentPrompt(ctx());
+    expect(md).toContain(`\`\`\`\n${prompt}\n\`\`\``);
+    expect(md).not.toMatch(/\n> Read `posthog-setup-report\.md`/);
   });
 });
 
