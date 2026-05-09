@@ -21,6 +21,7 @@ import type { CloudRegion } from '../../../utils/types.js';
 import { POSTHOG_INTEGRATION_WORKFLOW } from './steps.js';
 import { getContentBlocks } from './content/index.js';
 import {
+  NEXT_STEPS_FILE,
   buildHandoffBullet,
   getNextStepsHandoff,
   setNextStepsHandoff,
@@ -188,7 +189,7 @@ Important: Use the detect_package_manager tool (from the wizard-tools MCP server
         setNextStepsHandoff(sess, handoff);
         if (!handoff.ok) {
           getUI().log.warn(
-            `Could not write posthog-next-steps.md: ${handoff.error}`,
+            `Could not write ${NEXT_STEPS_FILE}: ${handoff.error}`,
           );
           analytics.wizardCapture('next steps file write failed', {
             integration: config.metadata.integration,
