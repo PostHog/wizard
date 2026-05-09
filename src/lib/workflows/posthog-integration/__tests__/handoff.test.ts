@@ -3,11 +3,17 @@ import os from 'os';
 import path from 'path';
 
 import { Integration } from '../../../constants.js';
+import { buildSession } from '../../../wizard-session.js';
 import {
   NEXT_STEPS_FILE,
+  NEXT_STEPS_HANDOFF_KEY,
+  buildHandoffBullet,
   buildNextStepsMarkdown,
+  getNextStepsHandoff,
+  setNextStepsHandoff,
   writeNextStepsFile,
   type NextStepsContext,
+  type NextStepsHandoffStatus,
 } from '../handoff.js';
 
 function ctx(overrides: Partial<NextStepsContext> = {}): NextStepsContext {
@@ -115,17 +121,13 @@ describe('buildNextStepsMarkdown', () => {
     expect(md).toContain('https://github.com/PostHog/wizard/issues');
   });
 
-  it('renders multiple quirks as separate bullet items, not joined with commas', () => {
-    // Today only one quirk is registered, but the rendering path uses
-    // join('\n') and a `- ` prefix per item. A regression to `.join(', ')`
-    // (or any other separator) would corrupt the markdown invisibly. Build
-    // a synthetic two-quirk list by stacking LLM + a registered base
-    // quirk in the future; for now, verify the bullet shape on the one
-    // present quirk so a regex change shows up.
+  it('renders quirks with a leading hyphen-bullet (regression catch for .join changes)', () => {
+    // Today the registry has one quirk renderable in one path (LLM-on-JS).
+    // Verify the rendered shape — a regression to `.join(', ')` or any
+    // other separator would corrupt the bullet list invisibly.
     const md = buildNextStepsMarkdown(
       ctx({ integration: Integration.nextjs, llmAnalyticsQueued: true }),
     );
-    // Bullet must start at column 0 with `- ` and the quirk text.
     expect(md).toMatch(/\n- `@posthog\/ai`/);
   });
 
@@ -141,6 +143,96 @@ describe('buildNextStepsMarkdown', () => {
       ctx({ integration: Integration.nextjs }),
     );
     expect(next).toContain('posthog-cli sourcemap');
+  });
+
+  it('drops the source-maps glue item on react-native (JS but not browser-bundled)', () => {
+    // react-native is in JS_INTEGRATIONS but NOT in SOURCE_MAP_INTEGRATIONS.
+    // A future refactor that consolidates the two sets would silently start
+    // emitting `posthog-cli sourcemap` advice for RN; this test pins it.
+    const md = buildNextStepsMarkdown(
+      ctx({
+        frameworkName: 'React Native',
+        integration: Integration.reactNative,
+      }),
+    );
+    expect(md).not.toContain('posthog-cli sourcemap');
+  });
+
+  it('uses singular "placeholder" for one env var, plural for many, and a generic fallback for none', () => {
+    // The placeholder/placeholders branch in `envCallout` is easy to flip
+    // (off-by-one when refactoring `length === 1 ? '' : 's'`). The
+    // length === 0 branch is dead-code unless someone wires a stack with
+    // no env vars; assert all three so a regression surfaces immediately.
+    const one = buildNextStepsMarkdown(ctx({ envVarNames: ['POSTHOG_KEY'] }));
+    expect(one).toMatch(/`POSTHOG_KEY` placeholder\b/);
+    expect(one).not.toMatch(/placeholders\b/);
+
+    const many = buildNextStepsMarkdown(ctx({ envVarNames: ['A', 'B'] }));
+    expect(many).toMatch(/`A` \/ `B` placeholders\b/);
+
+    const none = buildNextStepsMarkdown(ctx({ envVarNames: [] }));
+    expect(none).toContain('the env vars the wizard added');
+    expect(none).not.toMatch(/placeholders?\b/);
+  });
+});
+
+describe('buildHandoffBullet', () => {
+  it('renders a "Wrote ..." line for ok:true', () => {
+    const bullet = buildHandoffBullet({ ok: true, path: '/tmp/x.md' });
+    expect(bullet).toBe(
+      `Wrote ${NEXT_STEPS_FILE} with verification + handoff steps`,
+    );
+  });
+
+  it('renders a "Could NOT write ..." line for ok:false, embedding the error', () => {
+    const bullet = buildHandoffBullet({ ok: false, error: 'EACCES' });
+    expect(bullet).toBe(
+      `Could NOT write ${NEXT_STEPS_FILE} (EACCES) — handoff steps are missing`,
+    );
+  });
+
+  it('renders an empty string for undefined so .filter(Boolean) drops it cleanly', () => {
+    expect(buildHandoffBullet(undefined)).toBe('');
+  });
+});
+
+describe('handoff status accessors', () => {
+  function fakeSession() {
+    // buildSession asks for the bare minimum — installDir is the only field
+    // it requires us to pass through, but we don't touch the filesystem.
+    return buildSession({ installDir: os.tmpdir() });
+  }
+
+  it('round-trips set + get on the same session', () => {
+    const session = fakeSession();
+    const status: NextStepsHandoffStatus = { ok: true, path: '/tmp/x.md' };
+    setNextStepsHandoff(session, status);
+    expect(getNextStepsHandoff(session)).toEqual(status);
+  });
+
+  it('returns undefined when nothing has been stashed', () => {
+    expect(getNextStepsHandoff(fakeSession())).toBeUndefined();
+  });
+
+  it('returns undefined when frameworkContext holds a value with the wrong shape', () => {
+    // Defense-in-depth: if any other code overwrites the key with a
+    // differently-shaped value (string, mismatched discriminant, missing
+    // required field), `getNextStepsHandoff` rejects rather than passing
+    // garbage to `buildHandoffBullet`.
+    const cases: unknown[] = [
+      'a string',
+      42,
+      null,
+      { ok: 'yes' }, // wrong discriminant type
+      { ok: true }, // missing path
+      { ok: false }, // missing error
+      { ok: true, path: 123 }, // wrong path type
+    ];
+    for (const bogus of cases) {
+      const session = fakeSession();
+      session.frameworkContext[NEXT_STEPS_HANDOFF_KEY] = bogus;
+      expect(getNextStepsHandoff(session)).toBeUndefined();
+    }
   });
 });
 

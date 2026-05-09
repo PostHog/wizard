@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 
 import { Integration } from '../../constants.js';
+import type { WizardSession } from '../../wizard-session.js';
 
 /**
  * The handoff document the wizard writes alongside the agent-generated setup
@@ -23,7 +24,7 @@ export const NEXT_STEPS_FILE = 'posthog-next-steps.md';
 export interface NextStepsContext {
   /** Display name of the framework, e.g. "Next.js". */
   frameworkName: string;
-  /** Internal integration identifier; used for keyed lookups + conditionals. */
+  /** Integration enum value — drives quirk lookup, JS-vs-non-JS branching, and source-maps inclusion. */
   integration: Integration;
   /** File the agent wrote describing what changed. Linked from the handoff. */
   reportFile: string;
@@ -32,6 +33,23 @@ export interface NextStepsContext {
   /** True when LLM analytics is queued to install in the same run. */
   llmAnalyticsQueued: boolean;
 }
+
+/**
+ * Result shape returned by `writeNextStepsFile` and stashed on
+ * `WizardSession.frameworkContext` for `buildOutroData` to read. Exported so
+ * the producer (`writeNextStepsFile`) and consumer (`buildHandoffBullet` +
+ * any future reader) cannot drift apart.
+ */
+export type NextStepsHandoffStatus =
+  | { ok: true; path: string }
+  | { ok: false; error: string };
+
+/**
+ * `frameworkContext` key under which `setNextStepsHandoff` stashes the
+ * write result. Stored on `frameworkContext` because that's the existing
+ * pattern (see `DASHBOARD_DEEP_LINK_KEY`, `AUDIT_CHECKS_KEY`).
+ */
+export const NEXT_STEPS_HANDOFF_KEY = 'nextStepsHandoff';
 
 /** Integrations whose project source is JavaScript / TypeScript. */
 const JS_INTEGRATIONS: ReadonlySet<Integration> = new Set([
@@ -49,7 +67,12 @@ const JS_INTEGRATIONS: ReadonlySet<Integration> = new Set([
   Integration.javascript_web,
 ]);
 
-/** Integrations that produce minified browser bundles where source maps help. */
+/**
+ * Integrations that produce minified browser bundles where source maps help.
+ * Note: `SOURCE_MAP_INTEGRATIONS ⊆ JS_INTEGRATIONS` — a non-JS source-map case
+ * would break that subset assumption and require the rendering logic to be
+ * revisited.
+ */
 const SOURCE_MAP_INTEGRATIONS: ReadonlySet<Integration> = new Set([
   Integration.nextjs,
   Integration.nuxt,
@@ -198,14 +221,15 @@ export function buildNextStepsMarkdown(ctx: NextStepsContext): string {
  * Write `posthog-next-steps.md` into the install directory. Best-effort: if
  * the write fails (read-only fs, missing dir, etc.) we surface the error to
  * the caller rather than aborting the wizard run, so a successful integration
- * isn't undone by a failed follow-up file. Note that `buildNextStepsMarkdown`
- * runs OUTSIDE the try block — only the `fs.writeFileSync` call may throw —
- * so a programmer error in template construction still propagates loudly.
+ * isn't undone by a failed follow-up file. The try block is intentionally
+ * narrow — it covers only the disk write, so a programmer error in template
+ * construction (a missing field, a thrown helper) still propagates loudly
+ * instead of being swallowed as `{ ok: false, error: ... }`.
  */
 export function writeNextStepsFile(
   installDir: string,
   ctx: NextStepsContext,
-): { ok: true; path: string } | { ok: false; error: string } {
+): NextStepsHandoffStatus {
   const filePath = path.join(installDir, NEXT_STEPS_FILE);
   const content = buildNextStepsMarkdown(ctx);
   try {
@@ -217,4 +241,62 @@ export function writeNextStepsFile(
       error: err instanceof Error ? err.message : String(err),
     };
   }
+}
+
+/**
+ * Type guard for runtime-shaped `NextStepsHandoffStatus`. Used by
+ * `getNextStepsHandoff` to defend against `frameworkContext` ever holding a
+ * differently-shaped value at the same key — keeps the unsafe `as` cast
+ * confined to one place behind a real check.
+ */
+function isNextStepsHandoffStatus(
+  value: unknown,
+): value is NextStepsHandoffStatus {
+  if (typeof value !== 'object' || value === null) return false;
+  if (!('ok' in value) || typeof (value as { ok: unknown }).ok !== 'boolean') {
+    return false;
+  }
+  if ((value as NextStepsHandoffStatus).ok) {
+    return typeof (value as { path?: unknown }).path === 'string';
+  }
+  return typeof (value as { error?: unknown }).error === 'string';
+}
+
+/**
+ * Read the stashed handoff result from a session. Returns `undefined` when
+ * `setNextStepsHandoff` was never called or when `frameworkContext` holds an
+ * unexpected shape — `buildHandoffBullet` translates `undefined` to a silent
+ * drop, so a missing key never produces a misleading outro line.
+ */
+export function getNextStepsHandoff(
+  session: WizardSession,
+): NextStepsHandoffStatus | undefined {
+  const raw = session.frameworkContext[NEXT_STEPS_HANDOFF_KEY];
+  return isNextStepsHandoffStatus(raw) ? raw : undefined;
+}
+
+/** Stash the handoff result on a session for `buildOutroData` to read. */
+export function setNextStepsHandoff(
+  session: WizardSession,
+  status: NextStepsHandoffStatus,
+): void {
+  session.frameworkContext[NEXT_STEPS_HANDOFF_KEY] = status;
+}
+
+/**
+ * Render the outro bullet line for a stashed handoff status. Three states:
+ *  - `ok: true`  — celebrate the new file.
+ *  - `ok: false` — surface the failure where the user will actually see it
+ *                  (the warn line in `postRun` scrolls past as the outro
+ *                  screen renders).
+ *  - `undefined` — empty string; `.filter(Boolean)` in the caller drops it
+ *                  so workflows that never wrote the handoff stay quiet.
+ */
+export function buildHandoffBullet(
+  status: NextStepsHandoffStatus | undefined,
+): string {
+  if (!status) return '';
+  return status.ok
+    ? `Wrote ${NEXT_STEPS_FILE} with verification + handoff steps`
+    : `Could NOT write ${NEXT_STEPS_FILE} (${status.error}) — handoff steps are missing`;
 }
