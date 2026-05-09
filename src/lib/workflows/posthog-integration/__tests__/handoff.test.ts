@@ -8,6 +8,7 @@ import {
   NEXT_STEPS_FILE,
   NEXT_STEPS_HANDOFF_KEY,
   buildCodingAgentPrompt,
+  buildCopyPasteBlock,
   buildHandoffBullet,
   buildNextStepsMarkdown,
   getNextStepsHandoff,
@@ -32,7 +33,7 @@ function ctx(overrides: Partial<NextStepsContext> = {}): NextStepsContext {
 }
 
 describe('buildNextStepsMarkdown', () => {
-  it('renders the headline, the manifest pointer, and the four required sections', () => {
+  it('renders the headline, the manifest pointer, and the required sections', () => {
     const md = buildNextStepsMarkdown(ctx());
 
     expect(md).toMatch(/^# PostHog setup: next steps/);
@@ -40,18 +41,12 @@ describe('buildNextStepsMarkdown', () => {
     expect(md).toContain('## Verify before merging');
     expect(md).toContain('## Known SDK quirks');
     expect(md).toContain('## Project glue we did NOT touch');
-    expect(md).toContain('## Hand this to your coding agent');
+    expect(md).toContain('## Token-absent behavior');
   });
 
-  it('embeds both filenames in the agent-handoff block on a single line', () => {
-    // The agent-handoff block is the load-bearing part of the file: a
-    // regression that drops it would silently defeat the whole purpose.
-    // Asserting both filenames appear on the same line catches a regression
-    // that just keeps the manifest pointer at the top of the file.
+  it('points the reader at the wizard run output for the agent prompt', () => {
     const md = buildNextStepsMarkdown(ctx());
-    expect(md).toMatch(
-      /Read `posthog-setup-report\.md` and `posthog-next-steps\.md`/,
-    );
+    expect(md).toMatch(/coding agent[\s\S]*wizard.*run/i);
   });
 
   it('lists the configured env var names verbatim in the project glue section', () => {
@@ -187,14 +182,37 @@ describe('buildCodingAgentPrompt', () => {
   });
 });
 
-describe('coding-agent prompt embedding in the handoff doc', () => {
-  it('wraps the agent prompt in a fenced code block, not a blockquote', () => {
-    // Fenced code blocks select cleanly with triple-click; the previous
-    // blockquote (`> `) form pulled in the prefix on copy.
+describe('handoff doc does NOT embed the agent prompt', () => {
+  it('omits the "Hand this to your coding agent" section entirely', () => {
+    // Embedding the prompt inside the file it instructs an agent to read
+    // is a circular reference: the agent re-tokenizes the same prompt
+    // every time it re-reads the file. The prompt lives in the wizard's
+    // terminal output instead.
     const md = buildNextStepsMarkdown(ctx());
-    const prompt = buildCodingAgentPrompt(ctx());
-    expect(md).toContain(`\`\`\`\n${prompt}\n\`\`\``);
-    expect(md).not.toMatch(/\n> Read `posthog-setup-report\.md`/);
+    expect(md).not.toContain('## Hand this to your coding agent');
+    expect(md).not.toContain(
+      'Read `posthog-setup-report.md` and `posthog-next-steps.md`',
+    );
+    // Sanity: the prompt builder still works — it's just sourced from the
+    // wizard's CLI, not from a doc-embedded copy.
+    expect(buildCodingAgentPrompt(ctx())).toContain(
+      'Read `posthog-setup-report.md` and `posthog-next-steps.md`',
+    );
+  });
+});
+
+describe('buildCopyPasteBlock', () => {
+  it('frames the prompt with rules for terminal-scrollback visibility', () => {
+    const block = buildCopyPasteBlock('PROMPT BODY');
+    const lines = block.split('\n');
+    // First and last lines are horizontal rules.
+    expect(lines[0]).toMatch(/^─+$/);
+    expect(lines[lines.length - 1]).toMatch(/^─+$/);
+    // Header line names the action.
+    expect(block).toContain('Copy this into your coding agent');
+    // Body is on its own line, surrounded by blanks so triple-click on
+    // the prompt line selects just the prompt.
+    expect(block).toContain('\n\nPROMPT BODY\n\n');
   });
 });
 

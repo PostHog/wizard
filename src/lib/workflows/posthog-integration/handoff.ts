@@ -117,13 +117,34 @@ const KNOWN_QUIRKS_BY_INTEGRATION: Record<Integration, string[]> = {
 };
 
 /**
- * The "hand this to your coding agent" prompt — the load-bearing piece of
- * the handoff doc. Exported so the wizard's TUI / CLI can surface the same
- * string for copy-paste, and so tests can assert it without scraping the
- * rendered markdown.
+ * The "hand this to your coding agent" prompt — the actionable string the
+ * user can paste into their agent so it reads both wizard-emitted files
+ * and finishes the integration. Deliberately NOT embedded in the handoff
+ * markdown (that would be a circular reference, and would burn tokens
+ * every time the agent re-reads the file). The wizard's CLI / TUI surfaces
+ * this string at run time instead.
  */
 export function buildCodingAgentPrompt(ctx: NextStepsContext): string {
   return `Read \`${ctx.reportFile}\` and \`${NEXT_STEPS_FILE}\`. Verify each item in the "Verify before merging" checklist. Apply any fixes for items that fail. Update the project glue listed in this file if it applies. Open a PR with the changes plus a summary of what was verified.`;
+}
+
+/**
+ * Wrap the agent prompt in a visually-distinct copy-paste block for terminal
+ * scrollback. The header + footer sit at column 0 with a thin rule, and the
+ * prompt body is left-flush so triple-click selects only the prompt itself
+ * (not the framing).
+ */
+export function buildCopyPasteBlock(prompt: string): string {
+  const rule = '─'.repeat(78);
+  return [
+    rule,
+    'Copy this into your coding agent (triple-click to select):',
+    rule,
+    '',
+    prompt,
+    '',
+    rule,
+  ].join('\n');
 }
 
 /**
@@ -187,7 +208,7 @@ export function buildNextStepsMarkdown(ctx: NextStepsContext): string {
     '',
     `The wizard finished installing PostHog into your ${frameworkName} project. The companion file \`${reportFile}\` is the *manifest* of what changed; this file is the *handoff* — verification steps, known SDK quirks, and project glue we intentionally did not touch.`,
     '',
-    'Hand both files to your coding agent (or work through them yourself) before merging.',
+    'Work through the checklist below before merging. If you are handing this to a coding agent, the wizard printed a copy-paste-ready prompt at the end of its run.',
     '',
     '## Verify before merging',
     '',
@@ -208,14 +229,6 @@ export function buildNextStepsMarkdown(ctx: NextStepsContext): string {
     '## Token-absent behavior',
     '',
     'By default the SDK logs warnings and may retry sends if the project token is unset. If you have CI / e2e environments without PostHog, consider noop-shimming the wizard-generated PostHog client setup so missing config is silent and safe.',
-    '',
-    '## Hand this to your coding agent',
-    '',
-    'Copy the prompt below into your coding agent (single fenced block, triple-click to select):',
-    '',
-    '```',
-    buildCodingAgentPrompt(ctx),
-    '```',
     '',
   ].join('\n');
 }

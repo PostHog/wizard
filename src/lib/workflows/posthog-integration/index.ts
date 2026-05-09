@@ -22,6 +22,8 @@ import { POSTHOG_INTEGRATION_WORKFLOW } from './steps.js';
 import { getContentBlocks } from './content/index.js';
 import {
   NEXT_STEPS_FILE,
+  buildCodingAgentPrompt,
+  buildCopyPasteBlock,
   buildHandoffBullet,
   getNextStepsHandoff,
   setNextStepsHandoff,
@@ -245,7 +247,8 @@ Important: Use the detect_package_manager tool (from the wizard-tools MCP server
         // Pull the handoff write result that postRun stashed on the
         // session and render the matching success/failure (or absent)
         // bullet via the helper in ./handoff.ts.
-        const handoffBullet = buildHandoffBullet(getNextStepsHandoff(sess));
+        const handoffStatus = getNextStepsHandoff(sess);
+        const handoffBullet = buildHandoffBullet(handoffStatus);
 
         const changes = [
           ...config.ui.getOutroChanges(frameworkContext),
@@ -255,6 +258,25 @@ Important: Use the detect_package_manager tool (from the wizard-tools MCP server
           handoffBullet,
         ].filter(Boolean);
 
+        // If the handoff write succeeded, surface the coding-agent prompt
+        // in the user's terminal scrollback (after the TUI alternate
+        // screen tears down) so they can triple-click to copy. The doc
+        // intentionally does NOT embed this prompt — it would be a
+        // circular reference in something the agent reads.
+        const postExitMessage = handoffStatus?.ok
+          ? buildCopyPasteBlock(
+              buildCodingAgentPrompt({
+                frameworkName: config.metadata.name,
+                integration: config.metadata.integration,
+                reportFile: SETUP_REPORT_FILE,
+                envVarNames: Object.keys(envVars),
+                llmAnalyticsQueued: sess.additionalFeatureQueue.includes(
+                  AdditionalFeature.LLM,
+                ),
+              }),
+            )
+          : undefined;
+
         return {
           kind: OutroKind.Success as const,
           message: 'Successfully installed PostHog!',
@@ -262,6 +284,7 @@ Important: Use the detect_package_manager tool (from the wizard-tools MCP server
           changes,
           docsUrl: config.metadata.docsUrl,
           continueUrl,
+          postExitMessage,
         };
       },
     };
