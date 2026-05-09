@@ -13,6 +13,7 @@ import { InkUI } from './ink-ui.js';
 import { setUI } from '../index.js';
 import { App } from './App.js';
 import { OutroKind } from '../../lib/wizard-session.js';
+import { getPostExitMessage } from '../../lib/post-exit-message.js';
 
 // ANSI escape sequences
 const RESET_ATTRS = '\x1b[0m';
@@ -75,6 +76,16 @@ export function startTUI(
     inkUnmount();
     releaseTerminal();
     process.stdout.write(getExitLine(store) + '\n');
+    // Print any post-exit message a workflow stashed via
+    // `setPostExitMessage`. Inside cleanup, gated by `cleaned`, so it
+    // covers every exit path (explicit unmount from bin.ts and screens
+    // that call `process.exit` directly). See
+    // `lib/post-exit-message.ts` for why this reads frameworkContext
+    // and not outroData.
+    const postExit = getPostExitMessage(store.session);
+    if (postExit) {
+      process.stdout.write(`\n${postExit}\n`);
+    }
   };
   process.on('exit', cleanup);
 

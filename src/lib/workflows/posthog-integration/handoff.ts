@@ -117,15 +117,13 @@ const KNOWN_QUIRKS_BY_INTEGRATION: Record<Integration, string[]> = {
 };
 
 /**
- * The "hand this to your coding agent" prompt — the actionable string the
- * user can paste into their agent so it reads both wizard-emitted files
- * and finishes the integration. Deliberately NOT embedded in the handoff
- * markdown (that would be a circular reference, and would burn tokens
- * every time the agent re-reads the file). The wizard's CLI / TUI surfaces
- * this string at run time instead.
+ * Returns the prompt the user pastes into their coding agent. Surfaced via
+ * the TUI's post-exit message (see ../../post-exit-message.ts), not
+ * embedded in the handoff doc — see the regression test in
+ * `__tests__/handoff.test.ts` for why.
  */
-export function buildCodingAgentPrompt(ctx: NextStepsContext): string {
-  return `Read \`${ctx.reportFile}\` and \`${NEXT_STEPS_FILE}\`. Verify each item in the "Verify before merging" checklist. Apply any fixes for items that fail. Update the project glue listed in this file if it applies. Open a PR with the changes plus a summary of what was verified.`;
+export function buildCodingAgentPrompt(reportFile: string): string {
+  return `Read \`${reportFile}\` and \`${NEXT_STEPS_FILE}\`. Verify each item in the "Verify before merging" checklist. Apply any fixes for items that fail. Update the project glue listed in this file if it applies. Open a PR with the changes plus a summary of what was verified.`;
 }
 
 /**

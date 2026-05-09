@@ -92,15 +92,6 @@ export interface OutroData {
   reportFile?: string;
   /** PostHog dashboard URL the workflow created on the user's behalf. */
   dashboardUrl?: string;
-  /**
-   * Optional block printed to stdout AFTER the TUI unmounts, so it lands in
-   * the user's terminal scrollback for triple-click copy. Use for things the
-   * user needs to grab persistently (e.g. a copy-paste-ready prompt for a
-   * coding agent). The TUI's alternate screen erases anything printed
-   * during the run; this field is the workflow-agnostic way to surface
-   * post-exit text.
-   */
-  postExitMessage?: string;
 }
 
 /** A single question rendered by the WizardAsk overlay. */

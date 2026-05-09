@@ -165,7 +165,7 @@ describe('buildNextStepsMarkdown', () => {
 
 describe('buildCodingAgentPrompt', () => {
   it('returns a single-paragraph prompt naming both files', () => {
-    const prompt = buildCodingAgentPrompt(ctx());
+    const prompt = buildCodingAgentPrompt('posthog-setup-report.md');
     expect(prompt).toContain('`posthog-setup-report.md`');
     expect(prompt).toContain('`posthog-next-steps.md`');
     // Single paragraph — no embedded newlines, so triple-click selection
@@ -173,10 +173,8 @@ describe('buildCodingAgentPrompt', () => {
     expect(prompt).not.toMatch(/\n/);
   });
 
-  it('respects an alternate reportFile name', () => {
-    const prompt = buildCodingAgentPrompt(
-      ctx({ reportFile: 'posthog-revenue-report.md' }),
-    );
+  it('honors the supplied reportFile name', () => {
+    const prompt = buildCodingAgentPrompt('posthog-revenue-report.md');
     expect(prompt).toContain('`posthog-revenue-report.md`');
     expect(prompt).not.toContain('`posthog-setup-report.md`');
   });
@@ -195,7 +193,7 @@ describe('handoff doc does NOT embed the agent prompt', () => {
     );
     // Sanity: the prompt builder still works — it's just sourced from the
     // wizard's CLI, not from a doc-embedded copy.
-    expect(buildCodingAgentPrompt(ctx())).toContain(
+    expect(buildCodingAgentPrompt('posthog-setup-report.md')).toContain(
       'Read `posthog-setup-report.md` and `posthog-next-steps.md`',
     );
   });

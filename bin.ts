@@ -733,16 +733,12 @@ function runWizard(
       } catch (error) {
         analytics.captureException(error as Error);
       }
-      // Capture before unmount — store goes out of scope after.
-      const postExitMessage = tui.store.session.outroData?.postExitMessage;
+      // tui.unmount() drains any post-exit message stashed via
+      // setPostExitMessage(...) to scrollback as part of its cleanup
+      // (see start-tui.ts + lib/post-exit-message.ts), so any
+      // copy-paste-ready prompt the workflow stashed lands in the
+      // user's terminal regardless of which screen exits the process.
       tui.unmount();
-      // After tui.unmount() the alternate screen is gone, so anything we
-      // print here lands in the user's normal scrollback (where they can
-      // triple-click to copy). Workflows opt into this surface via
-      // `outroData.postExitMessage`.
-      if (postExitMessage) {
-        process.stdout.write(`\n${postExitMessage}\n`);
-      }
       process.exit(0);
     } catch (err) {
       if (runtimeEnv('DEBUG') || runtimeEnv('POSTHOG_WIZARD_DEBUG')) {
