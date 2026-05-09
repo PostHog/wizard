@@ -20,6 +20,20 @@ import { requestDeepLink } from '../../../utils/provisioning.js';
 import type { CloudRegion } from '../../../utils/types.js';
 import { POSTHOG_INTEGRATION_WORKFLOW } from './steps.js';
 import { getContentBlocks } from './content/index.js';
+import { NEXT_STEPS_FILE, writeNextStepsFile } from './handoff.js';
+import { AdditionalFeature } from '../../wizard-session.js';
+
+/**
+ * Key under which `postRun` stashes the result of `writeNextStepsFile` so
+ * `buildOutroData` can render the matching success/failure bullet without
+ * re-doing the write. Stored on `sess.frameworkContext` because that's the
+ * existing pattern (see `DASHBOARD_DEEP_LINK_KEY`).
+ */
+const NEXT_STEPS_HANDOFF_KEY = 'nextStepsHandoff';
+
+type NextStepsHandoffStatus =
+  | { ok: true; path: string }
+  | { ok: false; error: string };
 
 const DASHBOARD_DEEP_LINK_KEY = 'dashboardDeepLink';
 
@@ -160,10 +174,38 @@ Important: Use the detect_package_manager tool (from the wizard-tools MCP server
       },
 
       postRun: async (sess, credentials) => {
+        // Compute env vars first so we can pass the actual variable names
+        // (which differ per framework) into the handoff doc.
         const envVars = config.environment.getEnvVars(
           credentials.projectApiKey,
           credentials.host,
         );
+
+        // Drop the next-steps handoff doc next to the agent-generated
+        // manifest. See ./handoff.ts for the rationale and content. Stash
+        // the result on `frameworkContext` so `buildOutroData` can render
+        // a truthful success/failure bullet for it.
+        const handoff = writeNextStepsFile(sess.installDir, {
+          frameworkName: config.metadata.name,
+          integration: config.metadata.integration,
+          reportFile: SETUP_REPORT_FILE,
+          envVarNames: Object.keys(envVars),
+          llmAnalyticsQueued: sess.additionalFeatureQueue.includes(
+            AdditionalFeature.LLM,
+          ),
+        });
+        sess.frameworkContext[NEXT_STEPS_HANDOFF_KEY] =
+          handoff as NextStepsHandoffStatus;
+        if (!handoff.ok) {
+          getUI().log.warn(
+            `Could not write ${NEXT_STEPS_FILE}: ${handoff.error}`,
+          );
+          analytics.wizardCapture('next steps file write failed', {
+            integration: config.metadata.integration,
+            error: handoff.error,
+          });
+        }
+
         if (config.environment.uploadToHosting) {
           const { uploadEnvironmentVariablesStep } = await import(
             '../../../steps/index.js'
@@ -209,11 +251,24 @@ Important: Use the detect_package_manager tool (from the wizard-tools MCP server
         const deepLink = sess.frameworkContext[DASHBOARD_DEEP_LINK_KEY];
         const continueUrl = resolveContinueUrl(sess, cloudRegion, deepLink);
 
+        // Pull the handoff write result that postRun stashed on the
+        // session. If the write failed, surface the failure on the outro
+        // screen instead of silently asserting success.
+        const handoffStatus = sess.frameworkContext[NEXT_STEPS_HANDOFF_KEY] as
+          | NextStepsHandoffStatus
+          | undefined;
+        const handoffBullet = handoffStatus?.ok
+          ? `Wrote ${NEXT_STEPS_FILE} with verification + handoff steps`
+          : handoffStatus
+          ? `Could NOT write ${NEXT_STEPS_FILE} (${handoffStatus.error}) — handoff steps are missing`
+          : '';
+
         const changes = [
           ...config.ui.getOutroChanges(frameworkContext),
           Object.keys(envVars).length > 0
             ? 'Added environment variables to .env file'
             : '',
+          handoffBullet,
         ].filter(Boolean);
 
         return {
