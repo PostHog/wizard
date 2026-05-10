@@ -90,6 +90,8 @@ export interface OutroData {
   continueUrl?: string;
   /** Report file the agent wrote (e.g. "posthog-setup-report.md") */
   reportFile?: string;
+  /** PostHog dashboard URL the workflow created on the user's behalf. */
+  dashboardUrl?: string;
 }
 
 export interface WizardSession {

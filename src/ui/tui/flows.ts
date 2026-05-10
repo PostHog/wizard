@@ -46,6 +46,7 @@ export enum Flow {
   PostHogIntegration = 'posthog-integration',
   RevenueAnalyticsSetup = 'revenue-analytics-setup',
   Audit = 'audit',
+  EventsAudit = 'events-audit',
   PosthogDoctor = 'posthog-doctor',
   AgentSkill = 'agent-skill',
   McpAdd = 'mcp-add',

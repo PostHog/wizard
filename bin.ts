@@ -496,6 +496,8 @@ function runWizard(
       session.workflowLabel = config.flowKey;
       if (options.skillId) {
         session.skillId = options.skillId as string;
+      } else if (config.skillId) {
+        session.skillId = config.skillId;
       }
 
       tui.store.session = session;
@@ -635,6 +637,9 @@ function runWizardCI(
       ...env,
     });
     session.workflowLabel = config.flowKey;
+    if (config.skillId) {
+      session.skillId = config.skillId;
+    }
     const runDef = typeof config.run === 'object' ? config.run : null;
 
     getUI().intro('Welcome to the PostHog setup wizard');
