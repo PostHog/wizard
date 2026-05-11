@@ -63,6 +63,8 @@ jobs:
         env:
           APP_TOKEN: ${{ steps.app-token.outputs.token }}
         run: git config --global url."https://x-access-token:${APP_TOKEN}@github.com/".insteadOf "https://github.com/"
+      - name: Clone and build warlock
+        run: git clone https://github.com/PostHog/warlock.git ../warlock && cd ../warlock && pnpm install && pnpm build
       - name: Install package.json dependencies with pnpm
         run: pnpm install --frozen-lockfile
 
