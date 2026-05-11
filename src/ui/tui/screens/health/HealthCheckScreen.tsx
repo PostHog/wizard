@@ -17,7 +17,10 @@ import {
 } from '../../primitives/index.js';
 import { Colors, Icons } from '../../styles.js';
 import { ServiceHealthList } from '../../components/ServiceHealthList.js';
-import { getBlockingServiceKeys } from '../../../../lib/health-checks/readiness.js';
+import {
+  getBlockingServiceKeys,
+  SIGNUP_WIZARD_READINESS_CONFIG,
+} from '../../../../lib/health-checks/readiness.js';
 import { ServiceHealthStatus } from '../../../../lib/health-checks/types.js';
 import { wizardAbort } from '../../../../utils/wizard-abort.js';
 import { fetchSkillMenu, downloadSkill } from '../../../../lib/wizard-tools.js';
@@ -86,22 +89,41 @@ export const HealthCheckScreen = ({ store }: HealthCheckScreenProps) => {
     );
   }
 
-  // Healthy or warnings — isComplete returns true, router skips past.
-  // This branch only renders for a single frame before advancing.
-  const blockingKeys = getBlockingServiceKeys(result.health);
-  if (blockingKeys.length === 0) return null;
+  const isSignup = store.session.signup;
+  const blockingKeys = getBlockingServiceKeys(
+    result.health,
+    isSignup ? SIGNUP_WIZARD_READINESS_CONFIG : undefined,
+  );
 
-  const isGithubReleasesDown = blockingKeys.includes('githubReleases');
+  // Signup has a narrower block list (only posthog + llm-gateway), so
+  // services like Anthropic can be degraded without blocking. Surface
+  // those as dismissable warnings instead of silently proceeding.
+  const warningKeys = isSignup
+    ? getBlockingServiceKeys(result.health).filter(
+        (k) => !blockingKeys.includes(k),
+      )
+    : [];
+
+  const hasHardBlock = blockingKeys.length > 0;
+  const displayKeys = hasHardBlock ? blockingKeys : warningKeys;
+  if (displayKeys.length === 0) return null;
+
+  const isGithubReleasesDown =
+    hasHardBlock && blockingKeys.includes('githubReleases');
   const canDownloadSkills =
     result.health.githubReleases.status === ServiceHealthStatus.Healthy;
   const integration = store.session.integration;
 
-  const title = `Ongoing service disruptions`;
+  const title = hasHardBlock
+    ? 'Ongoing service disruptions'
+    : 'Service disruption detected';
 
   const docsUrl = store.session.frameworkConfig?.metadata.docsUrl;
   const description = isGithubReleasesDown
     ? "The Wizard can't download necessary skills from GitHub Releases right now."
-    : 'The Wizard may not work reliably while services are affected.';
+    : hasHardBlock
+    ? 'The Wizard cannot start while these services are down.'
+    : 'Some services are degraded. You can continue, but parts of the wizard may not work reliably.';
 
   const handleDownloadAndExit = async () => {
     if (downloading) return;
@@ -131,10 +153,9 @@ export const HealthCheckScreen = ({ store }: HealthCheckScreenProps) => {
         : 'Download skills & Exit [Esc]'
       : 'Exit [Esc]';
 
-  // Blocking outage — show service list with Continue/Exit
   return (
     <ModalOverlay
-      borderColor="red"
+      borderColor={hasHardBlock ? 'red' : 'yellow'}
       title={title}
       width={72}
       footer={
@@ -173,7 +194,7 @@ export const HealthCheckScreen = ({ store }: HealthCheckScreenProps) => {
 
         <ServiceHealthList
           health={result.health}
-          filterKeys={blockingKeys}
+          filterKeys={displayKeys}
           showHealthy={false}
         />
       </Box>

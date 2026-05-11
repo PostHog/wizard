@@ -17,6 +17,7 @@ import {
   DEFAULT_HOST_URL,
   DUMMY_PROJECT_API_KEY,
   ISSUES_URL,
+  WIZARD_OAUTH_SCOPES,
 } from '../lib/constants';
 import { analytics } from './analytics';
 import { getUI } from '../ui';
@@ -489,16 +490,7 @@ async function askForWizardLogin(options: {
   }
 
   const tokenResponse = await performOAuthFlow({
-    scopes: [
-      'user:read',
-      'project:read',
-      'introspection',
-      'llm_gateway:read',
-      'dashboard:write',
-      'insight:write',
-      'query:read',
-      'health_issue:read',
-    ],
+    scopes: [...WIZARD_OAUTH_SCOPES],
     signup: false,
   });
 

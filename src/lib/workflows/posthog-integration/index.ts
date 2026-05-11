@@ -1,3 +1,4 @@
+import opn from 'opn';
 import type { WorkflowConfig } from '../workflow-step.js';
 import type { WorkflowRun } from '../../agent/agent-runner.js';
 import type { WizardSession } from '../../wizard-session.js';
@@ -15,7 +16,23 @@ import { analytics } from '../../../utils/analytics.js';
 import { WIZARD_INTERACTION_EVENT_NAME } from '../../constants.js';
 import { getUI } from '../../../ui/index.js';
 import { getCloudUrlFromRegion } from '../../../utils/urls.js';
+import { requestDeepLink } from '../../../utils/provisioning.js';
+import type { CloudRegion } from '../../../utils/types.js';
 import { POSTHOG_INTEGRATION_WORKFLOW } from './steps.js';
+
+const DASHBOARD_DEEP_LINK_KEY = 'dashboardDeepLink';
+
+function resolveContinueUrl(
+  sess: WizardSession,
+  cloudRegion: CloudRegion | undefined,
+  deepLink: unknown,
+): string | undefined {
+  if (!sess.signup) return undefined;
+  if (typeof deepLink === 'string' && deepLink) return deepLink;
+  if (cloudRegion)
+    return `${getCloudUrlFromRegion(cloudRegion)}/products?source=wizard`;
+  return undefined;
+}
 
 export const SETUP_REPORT_FILE = 'posthog-setup-report.md';
 export const EVENT_PLAN_FILE = '.posthog-events.json';
@@ -165,6 +182,21 @@ Important: Use the detect_package_manager tool (from the wizard-tools MCP server
             });
           }
         }
+
+        if (sess.signup) {
+          const deepLink = await requestDeepLink(
+            credentials.accessToken,
+            credentials.host,
+          );
+          if (deepLink) {
+            sess.frameworkContext[DASHBOARD_DEEP_LINK_KEY] = deepLink;
+            if (process.env.NODE_ENV !== 'test') {
+              opn(deepLink, { wait: false }).catch(() => {
+                // opn throws in environments without a browser
+              });
+            }
+          }
+        }
       },
 
       buildOutroData: (sess, credentials, cloudRegion) => {
@@ -172,10 +204,8 @@ Important: Use the detect_package_manager tool (from the wizard-tools MCP server
           credentials.projectApiKey,
           credentials.host,
         );
-        const continueUrl =
-          sess.signup && cloudRegion
-            ? `${getCloudUrlFromRegion(cloudRegion)}/products?source=wizard`
-            : undefined;
+        const deepLink = sess.frameworkContext[DASHBOARD_DEEP_LINK_KEY];
+        const continueUrl = resolveContinueUrl(sess, cloudRegion, deepLink);
 
         const changes = [
           ...config.ui.getOutroChanges(frameworkContext),
