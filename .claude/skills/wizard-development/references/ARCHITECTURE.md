@@ -87,16 +87,18 @@ Three layers, each enforced at a different point in the tool-use lifecycle:
 ```
 Agent wants to use a tool
     ↓
-canUseTool() [L1]           → allow/deny before execution
-    ↓                          (bash allowlist, .env file fencing)
-PreToolUse YARA hooks [L2]  → scan input, block if matched
-    ↓                          (exfiltration, destructive ops, supply chain)
+canUseTool() [L1]            → allow/deny before execution
+    ↓                           (bash allowlist, .env file fencing)
+PreToolUse warlock hook [L2] → scan input, block if matched
+    ↓                           (exfiltration, destructive ops, supply chain)
 Tool executes
     ↓
-PostToolUse YARA hooks [L2] → scan output, instruct revert or terminate
-    ↓                          (PII in capture, hardcoded keys, prompt injection)
+PostToolUse warlock hook [L2] → scan output, instruct revert or terminate
+    ↓                           (PII in capture, hardcoded keys, prompt injection)
 Result returned to agent
 ```
+
+The L2 detection layer is the [warlock](https://github.com/PostHog/warlock) sibling repo — an engine-only YARA-X scanner that returns matches with `category`, `severity`, and `action` (recommendation: `block` / `revert` / `warn`). The wizard wires it into the SDK's PreToolUse/PostToolUse hooks (`src/lib/yara-hooks.ts`) and decides how to respond per match. Adding a new detection means contributing a rule to warlock, not editing wizard code. (A legacy in-repo regex scanner at `src/lib/yara-scanner.ts` is being retired as warlock takes over.)
 
 The sandbox (filesystem + network scoping) is configured once in the SDK `query()` call and enforced by the SDK runtime — not by wizard code.
 

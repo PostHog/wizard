@@ -13,7 +13,7 @@ Each domain has a dedicated boundary:
 - **Frameworks** → `FrameworkConfig` in `src/frameworks/<name>/`
 - **Integration knowledge** → markdown skills in the
 [context-mill](https://github.com/PostHog/context-mill) repo
-- **Security policy** → YARA rules in `src/lib/yara-scanner.ts`
+- **Security policy** → YARA-X rules in the [warlock](https://github.com/PostHog/warlock) sibling repo. The wizard wires the scanner via PostToolUse/PreToolUse hooks (`src/lib/yara-hooks.ts`); the rule content itself lives in warlock.
 - **Workflows** → step arrays in `src/lib/workflows/`
 - **TUI** → screen components and primitives in `src/ui/tui/`
 
@@ -64,6 +64,7 @@ pnpm build && pnpm test && pnpm fix
 publishes the markdown skills the wizard agent uses for framework-specific integration knowledge. Skills are decoupled from the wizard release cycle so docs and integration patterns can update independently.
 - **[wizard-workbench](https://github.com/PostHog/wizard-workbench)** — the
 development and testing environment. Houses framework test apps (Next.js, React Router, Django, Flask, Laravel, SvelteKit, Swift, TanStack, FastAPI) with no PostHog installed, plus an `mprocs`-driven local dev stack that runs context-mill + MCP + the wizard together with hot reload. Use this to develop and test wizard changes against real projects.
+- **[warlock](https://github.com/PostHog/warlock)** — the security scanner engine for PostHog's agentic flows. Bundles YARA-X rules for prompt injection, exfiltration, destructive operations, supply chain attacks, hardcoded secrets, and PII. Engine-only: it returns matches with category/severity/action metadata; the wizard decides how to respond. New security rules belong in warlock, not in the wizard.
 
 ## Repository conventions
 

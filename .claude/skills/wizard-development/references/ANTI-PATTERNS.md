@@ -37,9 +37,9 @@ Each section describes a pattern that looks reasonable in isolation but degrades
 
 **What happens next:** The recovery infrastructure works — sort of. The circuit breaker fires after 47 denied commands instead of preventing the first one. The checkpoint system adds 300 lines of state serialization. The self-heal module adds 250 lines of heuristic pattern matching. Each module is tested independently but their interactions are not — a checkpoint saved during a self-heal cycle can restore to a state that triggers the circuit breaker. The recovery code becomes its own source of bugs, and the bugs are harder to diagnose because they involve interactions between three systems that were each designed in isolation.
 
-**The cost:** Recovery is O(n) in the number of failure modes. Each new failure mode needs new recovery code. Prevention is O(1) — a YARA rule, a canUseTool entry, or a skill content improvement addresses the root cause once. The codebase grows linearly with recovery and stays constant with prevention.
+**The cost:** Recovery is O(n) in the number of failure modes. Each new failure mode needs new recovery code. Prevention is O(1) — a warlock rule, a canUseTool entry, or a skill content improvement addresses the root cause once. The codebase grows linearly with recovery and stays constant with prevention.
 
-**What to do instead:** For each failure mode, ask: can I prevent this at the boundary? A command that should never run → add it to the canUseTool deny list. A pattern that should never appear in written code → add a YARA rule. A mistake the agent keeps making → improve the skill content or add a one-line commandment. Reserve recovery infrastructure for truly unpredictable failures (network outages, API rate limits) — not for agent behavior that can be shaped by better boundaries.
+**What to do instead:** For each failure mode, ask: can I prevent this at the boundary? A command that should never run → add it to the canUseTool deny list. A pattern that should never appear in written code → add a rule to warlock (the sibling repo that ships the YARA-X scanner). A mistake the agent keeps making → improve the skill content or add a one-line commandment. Reserve recovery infrastructure for truly unpredictable failures (network outages, API rate limits) — not for agent behavior that can be shaped by better boundaries.
 
 ---
 

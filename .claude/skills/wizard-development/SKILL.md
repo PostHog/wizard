@@ -34,7 +34,7 @@ The knowledge — what PostHog needs from a Next.js project, how to detect Svelt
 |---|---|---|
 | Frameworks | `FrameworkConfig` (~70-120 lines) | Detection, env vars, prompts |
 | Docs | Skill markdown in context-mill | Workflow steps, example code |
-| Security | YARA rules in `yara-scanner.ts` | Regex patterns, severity levels |
+| Security | YARA-X rules in the [warlock](https://github.com/PostHog/warlock) sibling repo | Rule content (patterns, severity, category). Wizard wires the engine via hooks. |
 | Context | Step array in `workflows/` | Gates, screens, predicates |
 | UI | Screen component + primitives | Ink, store getters, layout |
 | Agent development | Runner, store, detection loop, tools | The machinery itself |
@@ -71,7 +71,7 @@ Three prevention layers:
 
 - **L1 — canUseTool allowlist** (`agent-interface.ts`): Blocks dangerous bash commands before execution. The `wizard-tools` MCP fences `.env` files so the agent never sees secret values.
 
-- **L2 — YARA scanner** (`yara-scanner.ts` + `yara-hooks.ts`): Regex rules running as pre/post tool-use hooks. Catches PII in capture calls, hardcoded keys, prompt injection, secret exfiltration, supply chain attacks. Critical violations terminate the session. **Fails closed** — scanner error means block, not pass.
+- **L2 — warlock scanner** (rules live in [warlock](https://github.com/PostHog/warlock); wizard wires hooks in `yara-hooks.ts`): Real YARA-X rules running as pre/post tool-use hooks. Catches PII in capture calls, hardcoded keys, prompt injection, secret exfiltration, supply chain attacks, destructive operations. The scanner is engine-only — it returns matches with category/severity/action metadata; the wizard decides how to respond. Critical violations terminate the session. **Fails closed** — scanner error means block, not pass. (Note: the wizard still ships a legacy hand-rolled regex scanner at `src/lib/yara-scanner.ts` during the warlock migration. New rules go in warlock; the in-repo scanner is being retired.)
 
 **The test:** When the agent misbehaves, does the system prevent the damage or detect it afterward? Does the system fail closed on uncertainty?
 
@@ -111,7 +111,7 @@ The five principles above cover the existing patterns. But the wizard will need 
 
 When you're adding something that doesn't have a precedent in the codebase, ask these questions in order:
 
-1. **Which domain does this belong to?** If it's framework-specific, it goes in `FrameworkConfig`. If it's integration knowledge, it goes in skill content. If it's a security constraint, it goes in YARA rules. If you can't name a specific domain from the table above, the concern may not be well-defined yet.
+1. **Which domain does this belong to?** If it's framework-specific, it goes in `FrameworkConfig`. If it's integration knowledge, it goes in skill content. If it's a security constraint, it goes in a warlock rule (the sibling repo). If you can't name a specific domain from the table above, the concern may not be well-defined yet.
 
 2. **Does this change at a different rate than the code around it?** Knowledge that updates weekly shouldn't live in code that releases monthly. If the concern changes faster than its container, it needs a decoupled delivery mechanism (like context-mill skills). If it changes slower, it can live in code.
 
@@ -125,7 +125,7 @@ When you're adding something that doesn't have a precedent in the codebase, ask 
 
 **New agent tool (in-process MCP):** Add it to `wizard-tools.ts` alongside `check_env_keys`, `set_env_values`, etc. The tool runs locally — secret values never leave the machine. Register the tool name in `WIZARD_TOOL_NAMES` so the SDK allowlist includes it. Follow the existing tool pattern: zod schema, path-traversal protection, logging.
 
-**New security rule:** Add a `YaraRule` object to the `RULES` array in `yara-scanner.ts`. Each rule has a name, description, severity, category, `appliesTo` (which hook+tool combinations), and `patterns` (compiled regex). One match per rule is sufficient. The hooks in `yara-hooks.ts` don't need to change — they iterate the rules array automatically.
+**New security rule:** Contribute the rule to [warlock](https://github.com/PostHog/warlock), not to the wizard. Warlock is the YARA-X engine that backs the wizard's security scanning; it's an append-only sibling repo with its own contribution process. Add a `.yar` file under `src/scanner/rules/` with a meta block (description, severity, category, scan_context, action) and a test under `src/scanner/__tests__/rules/`. The wizard's hooks in `yara-hooks.ts` automatically pick up new rules when it bumps its warlock dependency — wizard-side changes are unnecessary unless the response to a new category needs different handling. Filter consumed matches by `category` and `severity` (the append-only API contract), not by individual rule names.
 
 **New detection signal:** If you need to detect something about the project beyond framework identity (e.g., Stripe presence, LLM SDK usage), add it to `detection/features.ts`. The `discoverFeatures()` function returns an array of `DiscoveredFeature` enums. The intro screen and workflow can read discovered features from the session. Detection functions are pure — no store mutations, no UI calls.
 
@@ -141,13 +141,13 @@ When you're adding something that doesn't have a precedent in the codebase, ask 
 
 ## Tests
 
-Tests use vitest and live in `__tests__/` directories adjacent to the source they cover. The architecture is test-friendly because most hot zones are pure functions: router resolution, gate predicates, detection logic, prompt assembly, YARA rule matching, factory output. Test these directly — no mocking, no fixtures.
+Tests use vitest and live in `__tests__/` directories adjacent to the source they cover. The architecture is test-friendly because most hot zones are pure functions: router resolution, gate predicates, detection logic, prompt assembly, hook wiring, factory output. Test these directly — no mocking, no fixtures. (Security rule matching is tested in the warlock repo, not here.)
 
 What to test when extending the system:
 
 - **New factory or typed interface:** add contract tests in a sibling `__tests__/` that lock down shape and defaults. Future readers (and future skill writers) lean on these as the durable record of what the abstraction guarantees.
 - **New gate or `isComplete` predicate:** test the predicate as a pure function with mutated `buildSession({})` results. Don't try to integration-test the router around it.
-- **New YARA rule:** test a matching string and at least one near-miss to catch regex over-matching.
+- **New warlock rule:** tests live alongside the rule in the warlock repo (`src/scanner/__tests__/rules/`). Cover at least one matching string and one near-miss to catch over-matching. The wizard doesn't need tests for rules it merely consumes.
 - **New detection function:** test against fixture inputs (parsed `package.json` shapes, file contents). Detection is pure — no install dir mocking needed if you call the parser directly.
 
 What NOT to test:
@@ -168,7 +168,7 @@ These are the early warning signs that a change is drifting from the discipline:
 
 - **The commandments are getting long.** Commandments are per-turn system prompt — every token counts. If a rule needs explanation, move the explanation to a skill reference file and leave only the invariant in the commandment.
 
-- **You're building recovery infrastructure.** If you're writing retry logic, checkpoint saving, or self-heal code, ask whether a prevention layer (YARA rule, canUseTool rule, skill content improvement) would eliminate the failure mode instead of recovering from it.
+- **You're building recovery infrastructure.** If you're writing retry logic, checkpoint saving, or self-heal code, ask whether a prevention layer (warlock rule, canUseTool rule, skill content improvement) would eliminate the failure mode instead of recovering from it.
 
 - **You're adding imperative UI transitions.** If you're writing `goTo`, `navigate`, or `if (screen === X) show Y`, the session state doesn't accurately represent what the user should see. Fix the state model and let the router derive the screen.
 
