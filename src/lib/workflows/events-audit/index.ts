@@ -54,9 +54,11 @@ Project context:
           sess.signup && cloudUrl
             ? `${cloudUrl}/products?source=wizard`
             : undefined;
-        // The events-audit skill creates a dashboard for the user; until the
-        // skill emits the concrete URL we link to the dashboards index.
-        const dashboardUrl = cloudUrl ? `${cloudUrl}/dashboard` : undefined;
+        // The agent emits `[DASHBOARD_URL] <url>` once it creates the
+        // dashboard; the SDK-message interceptor stores it on the session.
+        // Fall back to the dashboards index if nothing was emitted.
+        const dashboardUrl =
+          sess.dashboardUrl ?? (cloudUrl ? `${cloudUrl}/dashboard` : undefined);
 
         return {
           kind: OutroKind.Success as const,

@@ -184,6 +184,10 @@ export class InkUI implements WizardUI {
     this.store.setEventPlan(events);
   }
 
+  setDashboardUrl(url: string): void {
+    this.store.setDashboardUrl(url);
+  }
+
   setFrameworkContext(key: string, value: unknown): void {
     this.store.setFrameworkContext(key, value);
   }

@@ -94,6 +94,14 @@ export interface OutroData {
   dashboardUrl?: string;
 }
 
+/**
+ * PostHog dashboard URL emitted by the agent during a workflow run.
+ * Populated via the `[DASHBOARD_URL]` text marker in agent assistant messages
+ * — see `handleSDKMessage` in `agent/agent-interface.ts`. Read by workflows
+ * (e.g. events-audit) inside `buildOutroData` to surface a dashboard link
+ * the agent actually created.
+ */
+
 export interface WizardSession {
   // From CLI args
   debug: boolean;
@@ -160,6 +168,7 @@ export interface WizardSession {
     user: string;
   } | null;
   outroData: OutroData | null;
+  dashboardUrl: string | null;
 
   // Additional features queue (drained via stop hook after main integration)
   additionalFeatureQueue: AdditionalFeature[];
@@ -232,6 +241,7 @@ export function buildSession(args: {
     settingsConflicts: null,
     portConflictProcess: null,
     outroData: null,
+    dashboardUrl: null,
     additionalFeatureQueue: [],
     workflowLabel: null,
     skillId: null,

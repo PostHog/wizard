@@ -179,6 +179,10 @@ export class LoggingUI implements WizardUI {
     // No-op in CI mode
   }
 
+  setDashboardUrl(_url: string): void {
+    // No-op in CI mode
+  }
+
   setFrameworkContext(_key: string, _value: unknown): void {
     // No-op in CI mode
   }

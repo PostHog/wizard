@@ -112,6 +112,9 @@ export interface WizardUI {
   // ── Event plan from .posthog-events.json ────────────────────
   setEventPlan(events: Array<{ name: string; description: string }>): void;
 
+  // ── Dashboard URL emitted by the agent via [DASHBOARD_URL] marker ──
+  setDashboardUrl(url: string): void;
+
   // ── Generic frameworkContext setter for workflow file watchers ─────
   setFrameworkContext(key: string, value: unknown): void;
 }
