@@ -127,7 +127,8 @@
     ],
     "transform": {
       "^.+\\.tsx?$": "ts-jest",
-      "node_modules/.+\\.js$": "babel-jest"
+      "node_modules/.+\\.js$": "babel-jest",
+      ".+/warlock/.+\\.js$": "babel-jest"
     },
     "testRegex": "(/__tests__/.*|(\\.|/)(test|spec))\\.(jsx?|tsx?)$",
     "moduleFileExtensions": [
@@ -149,7 +150,7 @@
     ],
     "testEnvironment": "node",
     "transformIgnorePatterns": [
-      "node_modules/(?!(.pnpm/nanostores|nanostores))"
+      "node_modules/(?!(.pnpm/nanostores|nanostores|@posthog/warlock))"
     ],
     "moduleNameMapper": {
       "^@anthropic-ai/claude-agent-sdk$": "<rootDir>/__mocks__/@anthropic-ai/claude-agent-sdk.ts",
