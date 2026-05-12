@@ -49,23 +49,41 @@ describe('createMcpInstaller — installPlugins', () => {
       mockClaudeClient,
       mockCursorClient,
     ]);
-    expect(mcpModule.installPlugins).toHaveBeenCalledWith([mockClaudeClient]);
+    expect(mcpModule.installPlugins).toHaveBeenCalledWith(
+      [mockClaudeClient],
+      'user',
+    );
     expect(result).toEqual(['Claude Code']);
   });
 
-  it('emits mcp plugins installed analytics with clients and attempted', async () => {
+  it('forwards the chosen plugin scope to the orchestrator', async () => {
     mcpModule.getSupportedPluginClients.mockReturnValue([mockClaudeClient]);
     mcpModule.installPlugins.mockResolvedValue(['Claude Code']);
 
     const installer = createMcpInstaller();
     await installer.detectClients();
-    await installer.installPlugins(['Claude Code']);
+    await installer.installPlugins(['Claude Code'], 'both');
+
+    expect(mcpModule.installPlugins).toHaveBeenCalledWith(
+      [mockClaudeClient],
+      'both',
+    );
+  });
+
+  it('emits mcp plugins installed analytics with clients, attempted, and scope', async () => {
+    mcpModule.getSupportedPluginClients.mockReturnValue([mockClaudeClient]);
+    mcpModule.installPlugins.mockResolvedValue(['Claude Code']);
+
+    const installer = createMcpInstaller();
+    await installer.detectClients();
+    await installer.installPlugins(['Claude Code'], 'project');
 
     expect(analytics.wizardCapture).toHaveBeenCalledWith(
       'mcp plugins installed',
       {
         clients: ['Claude Code'],
         attempted: ['Claude Code'],
+        scope: 'project',
       },
     );
   });
@@ -84,6 +102,7 @@ describe('createMcpInstaller — installPlugins', () => {
       {
         clients: [],
         attempted: [],
+        scope: 'user',
       },
     );
   });

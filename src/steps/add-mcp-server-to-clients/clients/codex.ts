@@ -6,7 +6,11 @@ import * as path from 'node:path';
 
 import { DefaultMCPClient } from '../MCPClient';
 import { DefaultMCPClientConfig } from '../defaults';
-import { PluginCapable, PluginInstallResult } from '../plugin-client';
+import {
+  PluginCapable,
+  PluginInstallResult,
+  PluginScope,
+} from '../plugin-client';
 
 import { analytics } from '../../../utils/analytics';
 
@@ -90,7 +94,7 @@ export class CodexMCPClient extends DefaultMCPClient implements PluginCapable {
     }
   }
 
-  installPlugin(): Promise<PluginInstallResult> {
+  installPlugin(_scope?: PluginScope): Promise<PluginInstallResult> {
     const binary = this.findCodexBinary();
     if (!binary) return Promise.resolve({ success: false });
 

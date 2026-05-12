@@ -11,7 +11,12 @@ import { ZedClient } from './clients/zed';
 import { CodexMCPClient } from './clients/codex';
 import { ALL_FEATURE_VALUES } from './defaults';
 import { debug } from '../../utils/debug';
-import { isPluginCapable, PluginCapable } from './plugin-client';
+import {
+  DEFAULT_PLUGIN_SCOPE,
+  isPluginCapable,
+  PluginCapable,
+  PluginScope,
+} from './plugin-client';
 
 export const getSupportedClients = async (): Promise<MCPClient[]> => {
   const allClients = [
@@ -162,11 +167,12 @@ export const getSupportedPluginClients = (
 
 export const installPlugins = async (
   clients: Array<MCPClient & PluginCapable>,
+  scope: PluginScope = DEFAULT_PLUGIN_SCOPE,
 ): Promise<string[]> => {
   const installed: string[] = [];
   for (const client of clients) {
     try {
-      const result = await client.installPlugin();
+      const result = await client.installPlugin(scope);
       if (result.success) installed.push(client.name);
     } catch (err) {
       debug(`[installPlugins] installPlugin threw for ${client.name}: ${err}`);

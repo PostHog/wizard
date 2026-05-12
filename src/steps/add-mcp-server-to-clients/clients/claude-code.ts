@@ -1,6 +1,11 @@
 import { DefaultMCPClient } from '../MCPClient';
 import { DefaultMCPClientConfig } from '../defaults';
-import { PluginCapable, PluginInstallResult } from '../plugin-client';
+import {
+  DEFAULT_PLUGIN_SCOPE,
+  PluginCapable,
+  PluginInstallResult,
+  PluginScope,
+} from '../plugin-client';
 import { z } from 'zod';
 import { execSync } from 'child_process';
 import { analytics } from '../../../utils/analytics';
@@ -161,18 +166,20 @@ export class ClaudeCodeMCPClient
     }
   }
 
-  installPlugin(): Promise<PluginInstallResult> {
+  installPlugin(
+    scope: PluginScope = DEFAULT_PLUGIN_SCOPE,
+  ): Promise<PluginInstallResult> {
     const binary = this.findClaudeBinary();
     if (!binary) return Promise.resolve({ success: false });
 
-    const userResult = this.installPluginInScope(binary, 'user');
-    const projectResult = this.installPluginInScope(binary, 'project');
+    const scopes: Array<'user' | 'project'> =
+      scope === 'both' ? ['user', 'project'] : [scope];
+
+    const results = scopes.map((s) => this.installPluginInScope(binary, s));
 
     return Promise.resolve({
-      success: userResult.success || projectResult.success,
-      alreadyInstalled: Boolean(
-        userResult.alreadyInstalled && projectResult.alreadyInstalled,
-      ),
+      success: results.some((r) => r.success),
+      alreadyInstalled: results.every((r) => r.alreadyInstalled === true),
     });
   }
 }

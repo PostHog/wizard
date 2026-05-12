@@ -13,7 +13,11 @@ import {
   installPlugins as runPluginInstall,
 } from '../../../steps/add-mcp-server-to-clients/index.js';
 import { ALL_FEATURE_VALUES } from '../../../steps/add-mcp-server-to-clients/defaults.js';
-import { isPluginCapable } from '../../../steps/add-mcp-server-to-clients/plugin-client.js';
+import {
+  DEFAULT_PLUGIN_SCOPE,
+  isPluginCapable,
+  PluginScope,
+} from '../../../steps/add-mcp-server-to-clients/plugin-client.js';
 import { logToFile } from '../../../utils/debug.js';
 import { analytics } from '../../../utils/analytics.js';
 
@@ -37,7 +41,7 @@ export interface McpInstaller {
   remove(): Promise<string[]>;
 
   /** Install the PostHog AI plugin to supported clients. Best-effort: failures do not affect MCP outcome. */
-  installPlugins(clientNames: string[]): Promise<string[]>;
+  installPlugins(clientNames: string[], scope?: PluginScope): Promise<string[]>;
 }
 
 /**
@@ -110,18 +114,22 @@ export function createMcpInstaller(): McpInstaller {
       return installed.map((c) => c.name);
     },
 
-    async installPlugins(clientNames: string[]): Promise<string[]> {
+    async installPlugins(
+      clientNames: string[],
+      scope: PluginScope = DEFAULT_PLUGIN_SCOPE,
+    ): Promise<string[]> {
       const rawClients = cachedClients
         .filter((c) => clientNames.includes(c.name))
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         .map((c) => c.raw as any);
 
       const pluginClients = getSupportedPluginClients(rawClients);
-      const installed = await runPluginInstall(pluginClients);
+      const installed = await runPluginInstall(pluginClients, scope);
 
       analytics.wizardCapture('mcp plugins installed', {
         clients: installed,
         attempted: pluginClients.map((c) => c.name),
+        scope,
       });
 
       return installed;

@@ -14,6 +14,8 @@
 import { Box, Text, useInput } from 'ink';
 import { useState, useEffect } from 'react';
 import { useSyncExternalStore } from 'react';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 import { type WizardStore, McpOutcome } from '../store.js';
 import {
   ConfirmationInput,
@@ -26,8 +28,20 @@ import {
   AVAILABLE_FEATURES,
   ALL_FEATURE_VALUES,
 } from '../../../steps/add-mcp-server-to-clients/defaults.js';
+import {
+  DEFAULT_PLUGIN_SCOPE,
+  PluginScope,
+} from '../../../steps/add-mcp-server-to-clients/plugin-client.js';
 
 export type McpMode = 'install' | 'remove';
+
+const hasGitDirectory = (): boolean => {
+  try {
+    return fs.existsSync(path.join(process.cwd(), '.git'));
+  } catch {
+    return false;
+  }
+};
 
 interface McpScreenProps {
   store: WizardStore;
@@ -40,6 +54,7 @@ enum Phase {
   Ask = 'ask',
   Pick = 'pick',
   FeatureSelect = 'feature-select',
+  PluginScopeSelect = 'plugin-scope-select',
   Working = 'working',
   Done = 'done',
   None = 'none',
@@ -72,8 +87,12 @@ export const McpScreen = ({
   const [phase, setPhase] = useState<Phase>(Phase.Detecting);
   const [clients, setClients] = useState<McpClientInfo[]>([]);
   const [selectedClientNames, setSelectedClientNames] = useState<string[]>([]);
+  const [selectedFeatures, setSelectedFeatures] = useState<
+    string[] | undefined
+  >(undefined);
   const [resultClients, setResultClients] = useState<string[]>([]);
   const [pluginClients, setPluginClients] = useState<string[]>([]);
+  const gitRepoDetected = hasGitDirectory();
 
   useEffect(() => {
     void (async () => {
@@ -93,11 +112,27 @@ export const McpScreen = ({
     })();
   }, [installer]); // eslint-disable-line
 
+  const anyClientSupportsPlugin = (names: string[]): boolean =>
+    clients.some((c) => names.includes(c.name) && c.supportsPlugin);
+
+  const proceedAfterFeatures = (names: string[], features: string[]) => {
+    setSelectedClientNames(names);
+    setSelectedFeatures(features);
+    // Only ask about plugin scope when there is a real choice:
+    // at least one selected client supports the plugin AND we're in a git repo.
+    // Otherwise the only sensible option is the user-scope default.
+    if (anyClientSupportsPlugin(names) && gitRepoDetected) {
+      setPhase(Phase.PluginScopeSelect);
+    } else {
+      void doInstall(names, features, DEFAULT_PLUGIN_SCOPE);
+    }
+  };
+
   const proceedToFeatureSelectOrInstall = (clientNames: string[]) => {
     setSelectedClientNames(clientNames);
     // Skip feature picker if CLI already specified features
     if (store.session.mcpFeatures) {
-      void doInstall(clientNames, store.session.mcpFeatures);
+      proceedAfterFeatures(clientNames, store.session.mcpFeatures);
     } else {
       setPhase(Phase.FeatureSelect);
     }
@@ -117,7 +152,11 @@ export const McpScreen = ({
     markDone(store, McpOutcome.Skipped);
   };
 
-  const doInstall = async (names: string[], features?: string[]) => {
+  const doInstall = async (
+    names: string[],
+    features?: string[],
+    pluginScope: PluginScope = DEFAULT_PLUGIN_SCOPE,
+  ) => {
     setPhase(Phase.Working);
     let mcpResult: string[] = [];
     let pluginResult: string[] = [];
@@ -131,7 +170,7 @@ export const McpScreen = ({
       // mcpResult stays []
     }
     try {
-      pluginResult = await installer.installPlugins(names);
+      pluginResult = await installer.installPlugins(names, pluginScope);
     } catch {
       // best-effort — plugin failure does not affect MCP outcome
     }
@@ -218,7 +257,40 @@ export const McpScreen = ({
             groups={AVAILABLE_FEATURES}
             initialSelected={[...ALL_FEATURE_VALUES]}
             onSelect={(features) => {
-              void doInstall(selectedClientNames, features);
+              proceedAfterFeatures(selectedClientNames, features);
+            }}
+          />
+        )}
+
+        {phase === Phase.PluginScopeSelect && (
+          <PickerMenu<PluginScope>
+            message="Where should the PostHog plugin be installed?"
+            options={[
+              {
+                label: 'User (global, default)',
+                value: 'user',
+                hint: 'Available across all your projects',
+              },
+              {
+                label: 'Project (shared)',
+                value: 'project',
+                hint: 'Committed via .claude/settings.json so your team gets it',
+              },
+              {
+                label: 'Both',
+                value: 'both',
+                hint: 'Install globally and share with the project',
+              },
+            ]}
+            onSelect={(value) => {
+              const scope = (Array.isArray(value) ? value[0] : value) as
+                | PluginScope
+                | undefined;
+              void doInstall(
+                selectedClientNames,
+                selectedFeatures,
+                scope ?? DEFAULT_PLUGIN_SCOPE,
+              );
             }}
           />
         )}
@@ -235,7 +307,9 @@ export const McpScreen = ({
               <>
                 <Text color="green" bold>
                   {'\u2714'} MCP server
-                  {!isRemove && pluginClients.length > 0 ? ' and plugin' : ''}{' '}
+                  {!isRemove && pluginClients.length > 0
+                    ? ' and plugin'
+                    : ''}{' '}
                   {isRemove ? 'removed from' : 'installed for'}:
                 </Text>
                 {resultClients.map((name, i) => (
