@@ -361,6 +361,33 @@ export class WizardStore {
     this._resolvePortConflict = null;
   }
 
+  /** Resolver for showUserPrompt — set when the overlay is pushed, cleared on dismissal. */
+  private _resolveUserPrompt: ((answer: string | string[]) => void) | null =
+    null;
+
+  /**
+   * Push the user-prompt overlay (used by the prompt_user MCP tool) and
+   * return a promise that resolves with the user's answer once the screen
+   * calls resolveUserPrompt(). Same pattern as showPortConflict.
+   */
+  showUserPrompt(
+    data: NonNullable<WizardSession['userPromptData']>,
+  ): Promise<string | string[]> {
+    this.$session.setKey('userPromptData', data);
+    this.pushOverlay(Overlay.UserPrompt);
+    return new Promise((resolve) => {
+      this._resolveUserPrompt = resolve;
+    });
+  }
+
+  /** Dismiss the user-prompt overlay and resolve the awaiting MCP tool call. */
+  resolveUserPrompt(answer: string | string[]): void {
+    this.$session.setKey('userPromptData', null);
+    this.popOverlay();
+    this._resolveUserPrompt?.(answer);
+    this._resolveUserPrompt = null;
+  }
+
   /**
    * Back up .claude/settings.json. Dismisses the overlay on success.
    */

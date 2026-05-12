@@ -41,6 +41,7 @@ const mockUIInstance = {
   showBlockingOutage: jest.fn(),
   setReadinessWarnings: jest.fn(),
   showSettingsOverride: jest.fn(),
+  showUserPrompt: jest.fn(),
   startRun: jest.fn(),
   syncTodos: jest.fn(),
   groupMultiselect: jest.fn(),

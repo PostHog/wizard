@@ -6,6 +6,7 @@
  * - set_env_values: Create/update env vars in a .env file
  * - detect_package_manager: Detect the project's package manager(s)
  * - load_skill_menu / install_skill: Skill installation
+ * - prompt_user: Ask the user a question via a wizard TUI modal
  * - audit_seed_checks / audit_add_checks / audit_resolve_checks: Audit ledger ownership
  */
 
@@ -14,6 +15,7 @@ import fs from 'fs';
 import { execFileSync } from 'child_process';
 import { z } from 'zod';
 import { logToFile } from '../utils/debug';
+import { getUI } from '../ui';
 import { skillTmpPath } from '../utils/paths';
 import type { PackageManagerDetector } from './detection/package-manager';
 import {
@@ -683,6 +685,98 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
     },
   );
 
+  // -- prompt_user ----------------------------------------------------------
+
+  const promptUser = tool(
+    'prompt_user',
+    `Ask the user a question via a modal in the wizard TUI. Use this at decision points where the user owns the choice (picking targets, choosing among options, supplying a value). The call blocks until the user answers; the answer is returned as a JSON-encoded string in the tool result text.
+
+Modes and example invocations:
+
+- mode "single" — pick exactly one option:
+  { "title": "Which env file?", "message": "Where should we write keys?", "mode": "single", "options": [{ "label": ".env.local", "value": ".env.local" }, { "label": ".env", "value": ".env" }] }
+  Returns the chosen value as a JSON string, e.g. "\\".env.local\\"".
+
+- mode "multi" — pick zero or more options:
+  { "title": "Select migration targets", "message": "Pick the ones you want to migrate.", "mode": "multi", "options": [{ "label": "LaunchDarkly", "value": "launchdarkly" }, { "label": "Amplitude", "value": "amplitude" }] }
+  Returns a JSON array of selected values, e.g. "[\\"launchdarkly\\"]" or "[]".
+
+- mode "text" — free-form text input:
+  { "title": "Project name", "message": "Enter a name for this project.", "mode": "text", "placeholder": "my-project" }
+  Returns the entered text as a JSON string, e.g. "\\"my-project\\"".
+
+Required: title, message, mode. options[] is required for single/multi and ignored for text. placeholder is text-only and optional. Always pass a clear title and message — the user sees them verbatim.`,
+    {
+      title: z.string().describe('Modal heading shown to the user.'),
+      message: z
+        .string()
+        .describe('Question or prompt body shown above the input.'),
+      mode: z
+        .enum(['single', 'multi', 'text'])
+        .describe(
+          "'single' = pick one option, 'multi' = pick zero or more options, 'text' = free-form text input.",
+        ),
+      options: z
+        .array(
+          z.object({
+            label: z.string(),
+            value: z.string(),
+            hint: z.string().optional(),
+          }),
+        )
+        .optional()
+        .describe(
+          'Required for single/multi modes. Each entry: { label: human-readable text, value: machine id returned to you, hint?: short trailing context shown in parentheses next to the label }. Ignored in text mode.',
+        ),
+      placeholder: z
+        .string()
+        .optional()
+        .describe('Placeholder shown inside the text input. text mode only.'),
+    },
+    async (args: {
+      title: string;
+      message: string;
+      mode: 'single' | 'multi' | 'text';
+      options?: { label: string; value: string }[];
+      placeholder?: string;
+    }) => {
+      if (
+        (args.mode === 'single' || args.mode === 'multi') &&
+        (!args.options || args.options.length === 0)
+      ) {
+        return {
+          content: [
+            {
+              type: 'text' as const,
+              text: 'Error: prompt_user requires non-empty options for single/multi mode.',
+            },
+          ],
+          isError: true,
+        };
+      }
+
+      logToFile(`prompt_user: mode=${args.mode}, title="${args.title}"`);
+      try {
+        const answer = await getUI().showUserPrompt(args);
+        logToFile(`prompt_user: answer=${JSON.stringify(answer)}`);
+        return {
+          content: [{ type: 'text' as const, text: JSON.stringify(answer) }],
+        };
+      } catch (err: any) {
+        logToFile(`prompt_user: error=${err?.message ?? err}`);
+        return {
+          content: [
+            {
+              type: 'text' as const,
+              text: `Error: ${err?.message ?? 'prompt_user failed'}`,
+            },
+          ],
+          isError: true,
+        };
+      }
+    },
+  );
+
   // -- audit_seed_checks ----------------------------------------------------
 
   const auditLedgerPath = path.join(workingDirectory, AUDIT_CHECKS_FILE);
@@ -860,6 +954,7 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
       detectPM,
       loadSkillMenu,
       installSkill,
+      promptUser,
       auditSeedChecks,
       auditAddChecks,
       auditResolveChecks,
@@ -875,6 +970,7 @@ export const WIZARD_TOOL_NAMES = [
   `${SERVER_NAME}:detect_package_manager`,
   `${SERVER_NAME}:load_skill_menu`,
   `${SERVER_NAME}:install_skill`,
+  `${SERVER_NAME}:prompt_user`,
   `${SERVER_NAME}:audit_seed_checks`,
   `${SERVER_NAME}:audit_add_checks`,
   `${SERVER_NAME}:audit_resolve_checks`,

@@ -122,6 +122,16 @@ export class InkUI implements WizardUI {
     return this.store.showSettingsOverride(conflicts, backupAndFix);
   }
 
+  showUserPrompt(data: {
+    title: string;
+    message: string;
+    mode: 'single' | 'multi' | 'text';
+    options?: { label: string; value: string; hint?: string }[];
+    placeholder?: string;
+  }): Promise<string | string[]> {
+    return this.store.showUserPrompt(data);
+  }
+
   showAuthError(): void {
     this.store.showAuthError();
   }

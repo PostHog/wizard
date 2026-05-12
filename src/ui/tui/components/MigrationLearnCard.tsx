@@ -1,8 +1,9 @@
 /**
- * LearnCard — PostHog educational content with animated text reveal.
+ * MigrationLearnCard — Slideshow shown during the migration flow.
  *
- * Default variant for the integration flow. The migration flow uses
- * MigrationLearnCard as a sibling component.
+ * Sibling to LearnCard. Self-contained: holds its own block defs and
+ * rendering shell so the migration narrative can evolve independently
+ * of the integration deck. Free-tier numbers come from posthog.com/pricing.md.
  */
 
 import { Box, Text } from 'ink';
@@ -14,10 +15,6 @@ import type { ContentBlock } from '../primitives/index.js';
 import { useStdoutDimensions } from '../hooks/useStdoutDimensions.js';
 import { COLLAPSED_COUNT, EXPANDED_COUNT } from '../primitives/TabContainer.js';
 
-/**
- * StatusPeekTrigger — Fires the status bar expansion once, renders nothing.
- * The peek is guarded by peekedRef so re-mounts are safe.
- */
 const StatusPeekTrigger = ({
   store,
   duration = 10000,
@@ -31,8 +28,6 @@ const StatusPeekTrigger = ({
     if (peekedRef.current) return;
     peekedRef.current = true;
     store?.setStatusExpanded(true);
-    // No cleanup — the store call is safe after unmount and the component
-    // may be evicted before the timer fires (non-persist NodeBlock).
     setTimeout(() => {
       store?.setStatusExpanded(false);
     }, duration);
@@ -41,78 +36,138 @@ const StatusPeekTrigger = ({
   return <Text>You can view the Wizard&apos;s status below.</Text>;
 };
 
-const POSTHOG_DATA_FLOW: ContentBlock = {
+/**
+ * Vendor cost stack — the multi-tool baseline a typical migration target has
+ * before consolidating onto PostHog. Numbers from each vendor's published
+ * starter pricing.
+ */
+const VENDOR_STACK_BLOCK: ContentBlock = {
+  type: 'lines',
+  interval: 600,
+  pause: 9000,
+  lines: [
+    <Text bold>{'  Typical pre-migration stack'}</Text>,
+    <Text> </Text>,
+    <Text>
+      <Text color="gray">{'  Sentry'}</Text>
+      <Text>{'         error tracking      '}</Text>
+      <Text color="red">{'$26/mo+'}</Text>
+    </Text>,
+    <Text>
+      <Text color="gray">{'  LaunchDarkly'}</Text>
+      <Text>{'   feature flags       '}</Text>
+      <Text color="red">{'$8.33/mo+'}</Text>
+    </Text>,
+    <Text>
+      <Text color="gray">{'  Amplitude'}</Text>
+      <Text>{'      product analytics   '}</Text>
+      <Text color="red">{'$49/mo+'}</Text>
+    </Text>,
+    <Text>
+      <Text color="gray">{'  Braintrust'}</Text>
+      <Text>{'     LLM analytics       '}</Text>
+      <Text color="red">{'$50/mo+'}</Text>
+    </Text>,
+    <Text color="gray">{'  ─────────────────────────────────────'}</Text>,
+    <Text>
+      <Text>{'  Total'}</Text>
+      <Text>{'                              '}</Text>
+      <Text bold color="red">
+        {'$133/mo+'}
+      </Text>
+    </Text>,
+    <Text dimColor>{'  plus ~450KB of JavaScript SDKs'}</Text>,
+  ],
+};
+
+/**
+ * PostHog free-tier highlights — the numbers a migrating team gets back when
+ * they consolidate. Sourced from posthog.com/pricing.md.
+ */
+const FREE_TIER_BLOCK: ContentBlock = {
+  type: 'lines',
+  interval: 400,
+  pause: 9000,
+  lines: [
+    <Text bold>{'  Free every month, on every product'}</Text>,
+    <Text> </Text>,
+    <Text>
+      <Text color={Colors.accent}>{'  1,000,000  '}</Text>
+      <Text>events </Text>
+      <Text dimColor>product analytics</Text>
+    </Text>,
+    <Text>
+      <Text color={Colors.accent}>{'  1,000,000  '}</Text>
+      <Text>requests </Text>
+      <Text dimColor>feature flags + experiments</Text>
+    </Text>,
+    <Text>
+      <Text color={Colors.accent}>{'      5,000  '}</Text>
+      <Text>recordings </Text>
+      <Text dimColor>session replay</Text>
+    </Text>,
+    <Text>
+      <Text color={Colors.accent}>{'    100,000  '}</Text>
+      <Text>exceptions </Text>
+      <Text dimColor>error tracking</Text>
+    </Text>,
+    <Text>
+      <Text color={Colors.accent}>{'    100,000  '}</Text>
+      <Text>events </Text>
+      <Text dimColor>LLM analytics</Text>
+    </Text>,
+    <Text>
+      <Text color={Colors.accent}>{'      50 GB  '}</Text>
+      <Text>logs </Text>
+      <Text dimColor>logs</Text>
+    </Text>,
+    <Text>
+      <Text color={Colors.accent}>{'      1,500  '}</Text>
+      <Text>responses </Text>
+      <Text dimColor>surveys</Text>
+    </Text>,
+    <Text>
+      <Text color={Colors.accent}>{'  1,000,000  '}</Text>
+      <Text>rows </Text>
+      <Text dimColor>data warehouse</Text>
+    </Text>,
+  ],
+};
+
+/**
+ * Pricing structure block — what happens after the free tier.
+ */
+const PRICING_STRUCTURE_BLOCK: ContentBlock = {
   type: 'lines',
   interval: 500,
   pause: 8000,
-  // Box is 30 chars wide between │ borders.
-  // Labels: 1-char indent. Arrows: "   ↓ " (5). Sub-items: "   │   " (7).
   lines: [
-    <Text color="gray">{'  ┌──────────────────────────────┐'}</Text>,
+    <Text bold>{'  After the free tier'}</Text>,
+    <Text> </Text>,
     <Text>
-      <Text color="gray">{'  │ '}</Text>
-      <Text bold color="cyan">
-        Your App
-      </Text>
-      <Text color="gray">{'                     │'}</Text>
+      <Text color={Colors.accent}>{'  $0 '}</Text>
+      <Text>base price · pay only for what you use</Text>
     </Text>,
     <Text>
-      <Text color="gray">{'  │   │ '}</Text>
-      <Text>posthog.capture()</Text>
-      <Text color="gray">{'        │'}</Text>
+      <Text color={Colors.accent}>{'  ◆ '}</Text>
+      <Text>per-event prices decrease with volume</Text>
     </Text>,
     <Text>
-      <Text color="gray">{'  │   │  '}</Text>
-      <Text dimColor>custom events</Text>
-      <Text color="gray">{'           │'}</Text>
+      <Text color={Colors.accent}>{'  ◆ '}</Text>
+      <Text>no per-seat charges — your whole team is included</Text>
     </Text>,
     <Text>
-      <Text color="gray">{'  │   │  '}</Text>
-      <Text dimColor>custom properties</Text>
-      <Text color="gray">{'       │'}</Text>
+      <Text color={Colors.accent}>{'  ◆ '}</Text>
+      <Text>web analytics bundled with product analytics</Text>
     </Text>,
     <Text>
-      <Text color="gray">{'  │   │  '}</Text>
-      <Text dimColor>person profiles</Text>
-      <Text color="gray">{'         │'}</Text>
+      <Text color={Colors.accent}>{'  ◆ '}</Text>
+      <Text>experiments bundled with feature flags</Text>
     </Text>,
     <Text>
-      <Text color="gray">{'  │   ↓  '}</Text>
-      <Text dimColor>groups</Text>
-      <Text color="gray">{'                  │'}</Text>
+      <Text color={Colors.accent}>{'  ◆ '}</Text>
+      <Text>revenue analytics bundled with data warehouse</Text>
     </Text>,
-    <Text>
-      <Text color="gray">{'  │ '}</Text>
-      <Text bold color={Colors.accent}>
-        PostHog SDK
-      </Text>
-      <Text color="gray">{'                  │'}</Text>
-    </Text>,
-    <Text>
-      <Text color="gray">{'  │   ↓ '}</Text>
-      <Text>HTTP</Text>
-      <Text color="gray">{'                     │'}</Text>
-    </Text>,
-    <Text>
-      <Text color="gray">{'  │ '}</Text>
-      <Text bold color={Colors.accent}>
-        PostHog Cloud
-      </Text>
-      <Text color="gray">{'                │'}</Text>
-    </Text>,
-    <Text>
-      <Text color="gray">{'  │   ↓ '}</Text>
-      <Text>query + visualize</Text>
-      <Text color="gray">{'        │'}</Text>
-    </Text>,
-    <Text>
-      <Text color="gray">{'  │ '}</Text>
-      <Text bold color="green">
-        Dashboards & Insights
-      </Text>
-      <Text color="gray">{'        │'}</Text>
-    </Text>,
-    <Text color="gray">{'  └──────────────────────────────┘'}</Text>,
   ],
 };
 
@@ -183,7 +238,6 @@ const LINE_CHART_BLOCK: ContentBlock = {
   lines: [
     <Text bold>{'  Trends · user signups (monthly)'}</Text>,
     <Text> </Text>,
-    // 10k
     <Text>
       <Text color="gray">{'  10k ┤'}</Text>
       {'                          '}
@@ -195,7 +249,6 @@ const LINE_CHART_BLOCK: ContentBlock = {
       {'                         '}
       <Text color="cyan">{'╭╯'}</Text>
     </Text>,
-    // 7.5k
     <Text>
       <Text color="gray">{' 7.5k ┤'}</Text>
       {'                        '}
@@ -206,7 +259,6 @@ const LINE_CHART_BLOCK: ContentBlock = {
       {'                      '}
       <Text color="cyan">{'╭─╯'}</Text>
     </Text>,
-    // 5k
     <Text>
       <Text color="gray">{'   5k ┤'}</Text>
       {'                    '}
@@ -217,7 +269,6 @@ const LINE_CHART_BLOCK: ContentBlock = {
       {'                 '}
       <Text color="cyan">{'╭──╯'}</Text>
     </Text>,
-    // 2.5k
     <Text>
       <Text color="gray">{' 2.5k ┤'}</Text>
       {'             '}
@@ -228,12 +279,10 @@ const LINE_CHART_BLOCK: ContentBlock = {
       {'      '}
       <Text color="cyan">{'╭──────╯'}</Text>
     </Text>,
-    // 0
     <Text>
       <Text color="gray">{'    0 ┤'}</Text>
       <Text color="cyan">{'──────╯'}</Text>
     </Text>,
-    // X-axis
     <Text color="gray">{'      └┬─────┬─────┬─────┬─────┬──'}</Text>,
     <Text dimColor>{'       May   Aug   Nov   Feb   May'}</Text>,
   ],
@@ -246,7 +295,6 @@ const FUNNEL_BLOCK: ContentBlock = {
   lines: [
     <Text bold>{'  Funnel · ride conversion'}</Text>,
     <Text> </Text>,
-    // Step 1
     <Text>
       {'  '}
       <Text bold>1</Text>
@@ -259,7 +307,6 @@ const FUNNEL_BLOCK: ContentBlock = {
     <Text color="cyan">{'     ██████████████████████████████'}</Text>,
     <Text dimColor>{'     → 1,200 users'}</Text>,
     <Text> </Text>,
-    // Step 2
     <Text>
       {'  '}
       <Text bold>2</Text>
@@ -284,7 +331,6 @@ const FUNNEL_BLOCK: ContentBlock = {
       <Text dimColor>{' 336 (28%)'}</Text>
     </Text>,
     <Text> </Text>,
-    // Step 3
     <Text>
       {'  '}
       <Text bold>3</Text>
@@ -309,7 +355,6 @@ const FUNNEL_BLOCK: ContentBlock = {
       <Text dimColor>{' 252 (29%)'}</Text>
     </Text>,
     <Text> </Text>,
-    // Step 4
     <Text>
       {'  '}
       <Text bold>4</Text>
@@ -341,19 +386,22 @@ const FIXED_CHROME = 5;
 const HEADER_ROWS = 2; // title + spacer
 const MIN_CONTENT_ROWS = 6;
 
-interface LearnCardProps {
+interface MigrationLearnCardProps {
   store?: WizardStore;
   onComplete?: () => void;
 }
 
-export const LearnCard = ({ store, onComplete }: LearnCardProps) => {
+export const MigrationLearnCard = ({
+  store,
+  onComplete,
+}: MigrationLearnCardProps) => {
   const peekedRef = useRef(false);
   const [columns, rows] = useStdoutDimensions();
 
   const blocks = useMemo<ContentBlock[]>(
     () => [
       {
-        content: 'Welcome.',
+        content: 'Migrating to PostHog.',
         pause: 3000,
         mode: TextRevealMode.Typewriter,
         animationInterval: 160,
@@ -362,13 +410,8 @@ export const LearnCard = ({ store, onComplete }: LearnCardProps) => {
       { content: 'The Wizard is an agent.', pause: 4000 },
 
       {
-        content: 'It handles the entire PostHog setup process on your behalf.',
-        pause: 5000,
-      },
-
-      {
         content:
-          "As we speak, it's building a plan to set up PostHog in your project.",
+          'It moves your existing analytics, flag, and observability calls onto PostHog while you watch.',
         pause: 6000,
       },
 
@@ -395,83 +438,61 @@ export const LearnCard = ({ store, onComplete }: LearnCardProps) => {
 
       { type: 'clear', pause: 2000 },
 
-      {
-        content: 'It takes about eight minutes.',
-        pause: 2000,
-      },
+      { content: 'It takes about five minutes.', pause: 2000 },
 
       {
-        content: 'So grab some coffee ☕️.',
-        pause: 2000,
+        content: 'So stick around — here’s what you’re moving onto.',
+        pause: 4000,
       },
 
+      { type: 'clear', pause: 1500 },
+
       {
-        content: 'Or stick around and learn about PostHog.',
+        content:
+          'PostHog replaces multi-vendor stacks with one SDK and one dashboard.',
         pause: 5000,
       },
 
-      { type: 'clear', pause: 3000 },
+      { content: 'Here’s the math.', pause: 1500 },
+
+      VENDOR_STACK_BLOCK,
+
+      { type: 'clear', pause: 1500 },
+
+      { content: 'Same data, fewer vendors.', pause: 3000 },
+
+      PRODUCT_SUITE_BLOCK,
+
+      { type: 'clear', pause: 1500 },
 
       {
-        content: 'Events are the foundation of the PostHog platform.',
+        content: 'Pricing is usage-based, with a generous free tier.',
         pause: 4000,
       },
 
-      {
-        content:
-          'Every time an action is performed in your codebase — like button clicks, function calls, or thrown errors — we can capture an event.',
-        pause: 6000,
-      },
+      FREE_TIER_BLOCK,
 
-      {
-        content:
-          'Events are sent to PostHog and joined with other product data.',
-        pause: 6000,
-      },
+      { type: 'clear', pause: 1500 },
 
-      { type: 'clear', pause: 1000 },
+      PRICING_STRUCTURE_BLOCK,
 
-      { content: "Here's the flow.", pause: 1000 },
+      { type: 'clear', pause: 1500 },
 
-      POSTHOG_DATA_FLOW,
+      { content: 'You still get every analysis you had before.', pause: 4000 },
 
-      { type: 'clear', pause: 2000 },
-
-      {
-        content:
-          'With enough event data, you can answer powerful questions about your product.',
-        pause: 4000,
-      },
-
-      { content: 'And create insights.', pause: 4000 },
-
-      { type: 'clear', pause: 500 },
-
-      { content: 'Like trends to measure growth.', pause: 2500 },
+      { content: 'Trends to measure growth.', pause: 2500 },
 
       LINE_CHART_BLOCK,
 
       { type: 'clear', pause: 500 },
 
-      { content: 'Or funnels to reveal bottlenecks.', pause: 2500 },
+      { content: 'Funnels to reveal bottlenecks.', pause: 2500 },
 
       FUNNEL_BLOCK,
-
-      { type: 'clear', pause: 1000 },
-
-      {
-        content: 'Use those signals to decide what to build next.',
-        pause: 4000,
-      },
-
-      { content: 'PostHog has all the dev tools you need.', pause: 3000 },
-
-      PRODUCT_SUITE_BLOCK,
     ],
     [store],
   );
 
-  // Dynamic status bar height: messages + border when present
   const hasStatus = store ? store.statusMessages.length > 0 : false;
   const statusBarRows = hasStatus
     ? (store?.statusExpanded ? EXPANDED_COUNT : COLLAPSED_COUNT) + 1
@@ -481,11 +502,8 @@ export const LearnCard = ({ store, onComplete }: LearnCardProps) => {
   const tooSmall = contentHeight < MIN_CONTENT_ROWS;
 
   const maxHeight = Math.max(1, contentHeight - HEADER_ROWS);
-  // Half of clamped content width, minus paddingX on both sides
   const paneWidth = Math.floor((Math.min(120, columns) - 2) / 2) - 2;
 
-  // Always render so ContentSequencer stays mounted (preserves activeIdx).
-  // When too small, hide visually via display="none".
   return (
     <Box
       flexDirection="column"

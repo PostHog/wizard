@@ -23,6 +23,7 @@ import { AGENT_SKILL_STEPS } from '../../lib/workflows/agent-skill/index.js';
 export enum Screen {
   Intro = 'intro',
   RevenueIntro = 'revenue-intro',
+  MigrationIntro = 'migration-intro',
   AgentSkillIntro = 'agent-skill-intro',
   AuditIntro = 'audit-intro',
   AuditRun = 'audit-run',
@@ -45,6 +46,7 @@ export enum Screen {
 export enum Flow {
   PostHogIntegration = 'posthog-integration',
   RevenueAnalyticsSetup = 'revenue-analytics-setup',
+  Migration = 'migration',
   Audit = 'audit',
   PosthogDoctor = 'posthog-doctor',
   AgentSkill = 'agent-skill',

@@ -158,6 +158,13 @@ export interface WizardSession {
     port: number;
     user: string;
   } | null;
+  userPromptData: {
+    title: string;
+    message: string;
+    mode: 'single' | 'multi' | 'text';
+    options?: { label: string; value: string; hint?: string }[];
+    placeholder?: string;
+  } | null;
   outroData: OutroData | null;
 
   // Additional features queue (drained via stop hook after main integration)
@@ -238,6 +245,7 @@ export function buildSession(args: {
     settingsOverrideKeys: null,
     settingsConflicts: null,
     portConflictProcess: null,
+    userPromptData: null,
     outroData: null,
     additionalFeatureQueue: [],
     workflowLabel: null,

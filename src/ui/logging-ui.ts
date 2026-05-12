@@ -138,6 +138,34 @@ export class LoggingUI implements WizardUI {
     return Promise.resolve();
   }
 
+  showUserPrompt(data: {
+    title: string;
+    message: string;
+    mode: 'single' | 'multi' | 'text';
+    options?: { label: string; value: string; hint?: string }[];
+    placeholder?: string;
+  }): Promise<string | string[]> {
+    if (data.mode === 'text') {
+      return Promise.reject(
+        new Error(
+          'showUserPrompt: text mode is not supported in non-interactive (CI) runs. Provide the value via a CLI flag or environment variable instead.',
+        ),
+      );
+    }
+    const values = (data.options ?? []).map((o) => o.value);
+    if (values.length === 0) {
+      return Promise.reject(
+        new Error(
+          'showUserPrompt: picker mode invoked with no options in non-interactive run.',
+        ),
+      );
+    }
+    if (data.mode === 'single') {
+      return Promise.resolve(values[0]);
+    }
+    return Promise.resolve(values);
+  }
+
   showAuthError(): void {
     console.log(`✖  Authentication failed (401)`);
     console.log(

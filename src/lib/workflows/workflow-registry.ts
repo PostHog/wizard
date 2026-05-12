@@ -16,12 +16,14 @@ import { posthogIntegrationConfig } from './posthog-integration/index.js';
 import { revenueAnalyticsConfig } from './revenue-analytics/index.js';
 import { auditConfig } from './audit/index.js';
 import { posthogDoctorConfig } from './posthog-doctor/index.js';
+import { migrationConfig } from './migration/index.js';
 
 export const WORKFLOW_REGISTRY: WorkflowConfig[] = [
   posthogIntegrationConfig,
   revenueAnalyticsConfig,
   auditConfig,
   posthogDoctorConfig,
+  migrationConfig,
 ];
 
 /** Look up a workflow config by its flowKey. */

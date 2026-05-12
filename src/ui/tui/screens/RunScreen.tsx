@@ -21,7 +21,9 @@ import {
 import type { ProgressItem } from '../primitives/index.js';
 import { ADDITIONAL_FEATURE_LABELS } from '../../../lib/wizard-session.js';
 import { LearnCard } from '../components/LearnCard.js';
+import { MigrationLearnCard } from '../components/MigrationLearnCard.js';
 import { TipsCard } from '../components/TipsCard.js';
+import { Flow } from '../router.js';
 import { useStdoutDimensions } from '../hooks/useStdoutDimensions.js';
 import { useFileWatcher } from '../hooks/file-watcher.js';
 import { EVENT_PLAN_FILE } from '../../../lib/workflows/posthog-integration/index.js';
@@ -75,8 +77,14 @@ export const RunScreen = ({ store }: RunScreenProps) => {
   const statuses =
     store.statusMessages.length > 0 ? store.statusMessages : undefined;
 
+  const isMigration = store.router.activeFlow === Flow.Migration;
   const leftPane = store.learnCardComplete ? (
     <TipsCard store={store} />
+  ) : isMigration ? (
+    <MigrationLearnCard
+      store={store}
+      onComplete={() => store.setLearnCardComplete()}
+    />
   ) : (
     <LearnCard store={store} onComplete={() => store.setLearnCardComplete()} />
   );

@@ -92,6 +92,20 @@ export interface WizardUI {
     backupAndFix: () => boolean,
   ): Promise<void>;
 
+  /**
+   * Show a modal asking the user a question. Drives the prompt_user MCP
+   * tool — the agent calls it, the modal pops, the user picks/types, the
+   * answer flows back to the agent. CI mode degrades to a deterministic
+   * default (see LoggingUI.showUserPrompt).
+   */
+  showUserPrompt(data: {
+    title: string;
+    message: string;
+    mode: 'single' | 'multi' | 'text';
+    options?: { label: string; value: string; hint?: string }[];
+    placeholder?: string;
+  }): Promise<string | string[]>;
+
   /** Show auth error overlay when Anthropic API returns 401. */
   showAuthError(): void;
 
