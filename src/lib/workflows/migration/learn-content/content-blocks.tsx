@@ -18,10 +18,12 @@ import { PRICING_STRUCTURE_BLOCK } from './pricing-structure.js';
 import { PRODUCT_SUITE_BLOCK } from './product-suite.js';
 import { LINE_CHART_BLOCK } from './line-chart.js';
 import { FUNNEL_BLOCK } from './funnel.js';
+import { COMPETITOR_BLOCK } from './competitor.js';
+import { DID_YOU_KNOW_BLOCK } from './did-you-know-block.js';
 
 export const getContentBlocks = (store?: WizardStore): ContentBlock[] => [
   {
-    content: 'Migrating to PostHog.',
+    content: 'Hello.',
     pause: 3000,
     mode: TextRevealMode.Typewriter,
     animationInterval: 160,
@@ -30,10 +32,25 @@ export const getContentBlocks = (store?: WizardStore): ContentBlock[] => [
   { content: 'The Wizard is an agent.', pause: 4000 },
 
   {
-    content:
-      'It moves your existing analytics, flag, and observability calls onto PostHog while you watch.',
+    content: "As we speak, it's making a PostHog migration plan to...",
     pause: 6000,
   },
+
+  { type: 'clear', pause: 2000 },
+
+  {
+    content: 'Destroy our competitors.',
+    pause: 2000,
+  },
+  COMPETITOR_BLOCK,
+
+  { type: 'clear', pause: 2000 },
+
+  {
+    content: 'Did you know?',
+    pause: 3000,
+  },
+  ...DID_YOU_KNOW_BLOCK,
 
   { type: 'clear', pause: 2000 },
 
@@ -68,8 +85,7 @@ export const getContentBlocks = (store?: WizardStore): ContentBlock[] => [
   { type: 'clear', pause: 1500 },
 
   {
-    content:
-      'PostHog replaces multi-vendor stacks with one SDK and one dashboard.',
+    content: 'PostHog replaces multi-vendor stacks with one platform.',
     pause: 5000,
   },
 
@@ -79,7 +95,7 @@ export const getContentBlocks = (store?: WizardStore): ContentBlock[] => [
 
   { type: 'clear', pause: 1500 },
 
-  { content: 'Same data, fewer vendors.', pause: 3000 },
+  { content: 'All the dev and AI tools you need in one place.', pause: 3000 },
 
   PRODUCT_SUITE_BLOCK,
 

@@ -18,7 +18,7 @@ import {
 import type { ProgressItem } from '../../primitives/index.js';
 import { LearnCard } from '../../components/LearnCard.js';
 import { TipsCard } from '../../components/TipsCard.js';
-import { getContentBlocks as getIntegrationContentBlocks } from '../../../../lib/workflows/posthog-integration/learn-content/content-blocks.js';
+import { getContentBlocks as getMigrationContentBlocks } from '../../../../lib/workflows/migration/learn-content/content-blocks.js';
 import { WIZARD_LOG_FILE } from '../../../../utils/paths.js';
 
 const MOCK_TASKS = [
@@ -162,7 +162,7 @@ export const RunScreenDemo = ({ store }: RunScreenDemoProps) => {
   const statuses =
     store.statusMessages.length > 0 ? store.statusMessages : undefined;
 
-  const learnBlocks = getIntegrationContentBlocks(store);
+  const learnBlocks = getMigrationContentBlocks(store);
 
   const tabs = [
     {
