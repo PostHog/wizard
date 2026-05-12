@@ -79,13 +79,29 @@ describe('ClaudeCodeMCPClient — plugin methods', () => {
   });
 
   describe('installPlugin', () => {
-    it('returns success on exit 0', async () => {
-      execSyncMock.mockImplementation(() => Buffer.from(''));
+    it('installs into both user and project scopes and returns success', async () => {
+      const installCalls: string[] = [];
+      execSyncMock.mockImplementation((cmd: string) => {
+        if (String(cmd).includes('plugin install')) {
+          installCalls.push(String(cmd));
+        }
+        return Buffer.from('');
+      });
       const client = new ClaudeCodeMCPClient();
-      await expect(client.installPlugin()).resolves.toEqual({ success: true });
+      await expect(client.installPlugin()).resolves.toEqual({
+        success: true,
+        alreadyInstalled: false,
+      });
+      expect(installCalls).toEqual(
+        expect.arrayContaining([
+          expect.stringContaining('--scope user'),
+          expect.stringContaining('--scope project'),
+        ]),
+      );
+      expect(installCalls).toHaveLength(2);
     });
 
-    it('returns success with alreadyInstalled when stderr contains "already installed"', async () => {
+    it('returns success with alreadyInstalled when both scopes report already installed', async () => {
       execSyncMock.mockImplementation((cmd: string) => {
         if (String(cmd).includes('plugin install')) {
           throw new Error('already installed');
@@ -99,7 +115,7 @@ describe('ClaudeCodeMCPClient — plugin methods', () => {
       });
     });
 
-    it('returns success with alreadyInstalled when stderr contains "already exists"', async () => {
+    it('returns success with alreadyInstalled when both scopes report already exists', async () => {
       execSyncMock.mockImplementation((cmd: string) => {
         if (String(cmd).includes('plugin install')) {
           throw new Error('already exists');
@@ -113,7 +129,26 @@ describe('ClaudeCodeMCPClient — plugin methods', () => {
       });
     });
 
-    it('returns failure and captures exception on unexpected error', async () => {
+    it('returns success when only one scope fails', async () => {
+      execSyncMock.mockImplementation((cmd: string) => {
+        if (String(cmd).includes('--scope project')) {
+          throw new Error('network timeout');
+        }
+        return Buffer.from('');
+      });
+      const client = new ClaudeCodeMCPClient();
+      await expect(client.installPlugin()).resolves.toEqual({
+        success: true,
+        alreadyInstalled: false,
+      });
+      expect(analytics.captureException).toHaveBeenCalledWith(
+        expect.objectContaining({
+          message: expect.stringContaining('scope=project'),
+        }),
+      );
+    });
+
+    it('returns failure when both scopes fail with unexpected error', async () => {
       execSyncMock.mockImplementation((cmd: string) => {
         if (String(cmd).includes('plugin install')) {
           throw new Error('network timeout');
@@ -121,10 +156,18 @@ describe('ClaudeCodeMCPClient — plugin methods', () => {
         return Buffer.from('');
       });
       const client = new ClaudeCodeMCPClient();
-      await expect(client.installPlugin()).resolves.toEqual({ success: false });
+      await expect(client.installPlugin()).resolves.toEqual({
+        success: false,
+        alreadyInstalled: false,
+      });
       expect(analytics.captureException).toHaveBeenCalledWith(
         expect.objectContaining({
-          message: expect.stringContaining('network timeout'),
+          message: expect.stringContaining('scope=user'),
+        }),
+      );
+      expect(analytics.captureException).toHaveBeenCalledWith(
+        expect.objectContaining({
+          message: expect.stringContaining('scope=project'),
         }),
       );
     });

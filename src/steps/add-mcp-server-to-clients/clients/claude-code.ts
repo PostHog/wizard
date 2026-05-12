@@ -140,21 +140,39 @@ export class ClaudeCodeMCPClient
     }
   }
 
-  installPlugin(): Promise<PluginInstallResult> {
-    const binary = this.findClaudeBinary();
-    if (!binary) return Promise.resolve({ success: false });
+  private installPluginInScope(
+    binary: string,
+    scope: 'user' | 'project',
+  ): PluginInstallResult {
     try {
-      execSync(`${binary} plugin install posthog`, { stdio: 'pipe' });
-      return Promise.resolve({ success: true });
+      execSync(`${binary} plugin install posthog --scope ${scope}`, {
+        stdio: 'pipe',
+      });
+      return { success: true };
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
       if (msg.includes('already installed') || msg.includes('already exists')) {
-        return Promise.resolve({ success: true, alreadyInstalled: true });
+        return { success: true, alreadyInstalled: true };
       }
       analytics.captureException(
-        new Error(`Claude Code plugin install failed: ${msg}`),
+        new Error(`Claude Code plugin install failed (scope=${scope}): ${msg}`),
       );
-      return Promise.resolve({ success: false });
+      return { success: false };
     }
+  }
+
+  installPlugin(): Promise<PluginInstallResult> {
+    const binary = this.findClaudeBinary();
+    if (!binary) return Promise.resolve({ success: false });
+
+    const userResult = this.installPluginInScope(binary, 'user');
+    const projectResult = this.installPluginInScope(binary, 'project');
+
+    return Promise.resolve({
+      success: userResult.success || projectResult.success,
+      alreadyInstalled: Boolean(
+        userResult.alreadyInstalled && projectResult.alreadyInstalled,
+      ),
+    });
   }
 }
