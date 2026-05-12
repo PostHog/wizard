@@ -6,7 +6,7 @@
  * screen component (see audit/AuditRunScreen.tsx).
  */
 
-import { useSyncExternalStore } from 'react';
+import { useMemo, useSyncExternalStore } from 'react';
 import { join } from 'node:path';
 import { Box } from 'ink';
 import type { WizardStore } from '../store.js';
@@ -18,17 +18,28 @@ import {
   EventPlanViewer,
   HNViewer,
 } from '../primitives/index.js';
-import type { ProgressItem } from '../primitives/index.js';
+import type { ProgressItem, ContentBlock } from '../primitives/index.js';
 import { ADDITIONAL_FEATURE_LABELS } from '../../../lib/wizard-session.js';
 import { LearnCard } from '../components/LearnCard.js';
-import { MigrationLearnCard } from '../components/MigrationLearnCard.js';
 import { TipsCard } from '../components/TipsCard.js';
 import { Flow } from '../router.js';
 import { useStdoutDimensions } from '../hooks/useStdoutDimensions.js';
 import { useFileWatcher } from '../hooks/file-watcher.js';
 import { EVENT_PLAN_FILE } from '../../../lib/workflows/posthog-integration/index.js';
+import { getContentBlocks as getIntegrationContentBlocks } from '../../../lib/workflows/posthog-integration/learn-content/content-blocks.js';
+import { getContentBlocks as getMigrationContentBlocks } from '../../../lib/workflows/migration/learn-content/content-blocks.js';
 
 import { WIZARD_LOG_FILE } from '../../../utils/paths.js';
+
+/**
+ * Per-flow Learn-pane scripts. Any flow not listed here falls back to the
+ * posthog-integration script.
+ */
+const LEARN_CONTENT_BY_FLOW: Partial<
+  Record<Flow, (store?: WizardStore) => ContentBlock[]>
+> = {
+  [Flow.Migration]: getMigrationContentBlocks,
+};
 
 interface RunScreenProps {
   store: WizardStore;
@@ -77,16 +88,21 @@ export const RunScreen = ({ store }: RunScreenProps) => {
   const statuses =
     store.statusMessages.length > 0 ? store.statusMessages : undefined;
 
-  const isMigration = store.router.activeFlow === Flow.Migration;
+  const learnBlocks = useMemo(() => {
+    const getBlocks =
+      LEARN_CONTENT_BY_FLOW[store.router.activeFlow] ??
+      getIntegrationContentBlocks;
+    return getBlocks(store);
+  }, [store, store.router.activeFlow]);
+
   const leftPane = store.learnCardComplete ? (
     <TipsCard store={store} />
-  ) : isMigration ? (
-    <MigrationLearnCard
+  ) : (
+    <LearnCard
       store={store}
+      blocks={learnBlocks}
       onComplete={() => store.setLearnCardComplete()}
     />
-  ) : (
-    <LearnCard store={store} onComplete={() => store.setLearnCardComplete()} />
   );
   const progressList = <ProgressList items={progressItems} title="Tasks" />;
 
