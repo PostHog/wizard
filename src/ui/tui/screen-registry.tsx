@@ -20,6 +20,7 @@ import { PortConflictScreen } from './screens/PortConflictScreen.js';
 import { PostHogIntegrationIntroScreen } from './screens/PostHogIntegrationIntroScreen.js';
 import { RevenueIntroScreen } from './screens/RevenueIntroScreen.js';
 import { AgentSkillIntroScreen } from './screens/AgentSkillIntroScreen.js';
+import { ConciergeIntroScreen } from './screens/ConciergeIntroScreen.js';
 import { SetupScreen } from './screens/SetupScreen.js';
 import { AuthScreen } from './screens/AuthScreen.js';
 import { RunScreen } from './screens/RunScreen.js';
@@ -56,6 +57,7 @@ export function createScreens(
     [Screen.Intro]: <PostHogIntegrationIntroScreen store={store} />,
     [Screen.RevenueIntro]: <RevenueIntroScreen store={store} />,
     [Screen.AgentSkillIntro]: <AgentSkillIntroScreen store={store} />,
+    [Screen.ConciergeIntro]: <ConciergeIntroScreen store={store} />,
     [Screen.HealthCheck]: <HealthCheckScreen store={store} />,
     [Screen.Setup]: <SetupScreen store={store} />,
     [Screen.Auth]: <AuthScreen store={store} />,

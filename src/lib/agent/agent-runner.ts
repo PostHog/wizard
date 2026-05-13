@@ -87,6 +87,8 @@ export interface WorkflowRun {
   integrationLabel: string;
   /** Skill ID to pre-install. Omit for agent-driven skill discovery. */
   skillId?: string;
+  /** When true, the agent runs without Write/Edit tools and with a locked-down filesystem sandbox. */
+  readOnly?: boolean;
   /** Additional workflow-specific prompt instructions. Appended after the default project prompt. */
   customPrompt?: (ctx: PromptContext) => string;
   /** Additional MCP servers (e.g. Svelte MCP) */
@@ -222,15 +224,27 @@ export async function runWorkflow(
 
   // 4. OAuth
   logToFile('[agent-runner] starting OAuth');
-  const { projectApiKey, host, accessToken, projectId, cloudRegion } =
-    await getOrAskForProjectData({
-      signup: session.signup,
-      ci: session.ci,
-      apiKey: session.apiKey,
-      projectId: session.projectId,
-    });
+  const {
+    projectApiKey,
+    host,
+    accessToken,
+    projectId,
+    distinctId,
+    cloudRegion,
+  } = await getOrAskForProjectData({
+    signup: session.signup,
+    ci: session.ci,
+    apiKey: session.apiKey,
+    projectId: session.projectId,
+  });
 
-  session.credentials = { accessToken, projectApiKey, host, projectId };
+  session.credentials = {
+    accessToken,
+    projectApiKey,
+    host,
+    projectId,
+    distinctId,
+  };
   getUI().setCredentials(session.credentials);
 
   // 5. Skill install (if skillId provided)
@@ -289,6 +303,7 @@ export async function runWorkflow(
       skillsBaseUrl,
       wizardFlags,
       wizardMetadata,
+      readOnly: config.readOnly,
     },
     sessionToOptions(session),
   );
@@ -422,6 +437,7 @@ export async function runWorkflow(
       projectApiKey,
       host,
       projectId,
+      distinctId,
     });
   }
 
@@ -429,7 +445,7 @@ export async function runWorkflow(
   if (config.buildOutroData) {
     session.outroData = config.buildOutroData(
       session,
-      { accessToken, projectApiKey, host, projectId },
+      { accessToken, projectApiKey, host, projectId, distinctId },
       cloudRegion,
     );
   } else {

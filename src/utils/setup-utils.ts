@@ -388,6 +388,7 @@ export async function getOrAskForProjectData(
   projectApiKey: string;
   accessToken: string;
   projectId: number;
+  distinctId?: string;
   cloudRegion: CloudRegion;
 }> {
   // CI mode: bypass OAuth, use personal API key for LLM gateway
@@ -416,14 +417,20 @@ export async function getOrAskForProjectData(
     };
   }
 
-  const { host, projectApiKey, accessToken, projectId, cloudRegion } =
-    await traceStep('login', () =>
-      askForWizardLogin({
-        signup: _options.signup,
-        email: _options.email,
-        region: _options.region,
-      }),
-    );
+  const {
+    host,
+    projectApiKey,
+    accessToken,
+    projectId,
+    distinctId,
+    cloudRegion,
+  } = await traceStep('login', () =>
+    askForWizardLogin({
+      signup: _options.signup,
+      email: _options.email,
+      region: _options.region,
+    }),
+  );
 
   if (!projectApiKey) {
     const cloudUrl = getCloudUrlFromRegion(cloudRegion);
@@ -443,6 +450,7 @@ ${cloudUrl}/settings/project#variables`);
     host: host || DEFAULT_HOST_URL,
     projectApiKey: projectApiKey || DUMMY_PROJECT_API_KEY,
     projectId,
+    distinctId,
     cloudRegion,
   };
 }

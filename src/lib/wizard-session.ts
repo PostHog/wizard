@@ -20,6 +20,7 @@ export interface Credentials {
   projectApiKey: string;
   host: string;
   projectId: number;
+  distinctId?: string;
 }
 
 function parseProjectIdArg(value: string | undefined): number | undefined {

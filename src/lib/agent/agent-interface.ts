@@ -288,6 +288,8 @@ export type AgentConfig = {
   /** Feature flag key -> variant (evaluated at start of run). */
   wizardFlags?: Record<string, string>;
   wizardMetadata?: Record<string, string>;
+  /** When true, strip Write/Edit from allowedTools and lock the filesystem sandbox. */
+  readOnly?: boolean;
 };
 
 /**
@@ -364,6 +366,7 @@ type AgentRunConfig = {
   model: string;
   wizardFlags?: Record<string, string>;
   wizardMetadata?: Record<string, string>;
+  readOnly?: boolean;
 };
 
 /**
@@ -666,6 +669,7 @@ export async function initializeAgent(
       model: 'anthropic/claude-sonnet-4-6',
       wizardFlags: config.wizardFlags,
       wizardMetadata: config.wizardMetadata,
+      readOnly: config.readOnly,
     };
 
     logToFile('Agent config:', {
@@ -841,16 +845,14 @@ export async function runAgent(
 
   try {
     // Tools needed for the wizard:
-    // - File operations: Read, Write, Edit
+    // - File operations: Read, Write, Edit (Write/Edit stripped when readOnly)
     // - Search: Glob, Grep
     // - Commands: Bash (with restrictions via canUseTool)
     // - MCP discovery: ListMcpResourcesTool (to find available skills)
     // - Skills: Skill (to load installed PostHog skills)
     // MCP tools (PostHog) come from mcpServers, not allowedTools
-    const allowedTools = [
+    const baseTools = [
       'Read',
-      'Write',
-      'Edit',
       'Glob',
       'Grep',
       'Bash',
@@ -858,6 +860,9 @@ export async function runAgent(
       'Skill',
       ...WIZARD_TOOL_NAMES,
     ];
+    const allowedTools = agentConfig.readOnly
+      ? baseTools
+      : [...baseTools, 'Write', 'Edit'];
 
     const response = query({
       prompt: createPromptStream(),
@@ -876,22 +881,24 @@ export async function runAgent(
           enabled: true,
           allowUnsandboxedCommands: false,
           filesystem: {
-            allowWrite: [
-              '/' + agentConfig.workingDirectory,
-              '/' + agentConfig.workingDirectory + '/**',
-              '//tmp',
-              '//tmp/**',
-              '//private/tmp',
-              '//private/tmp/**',
-              // Package manager stores — allow writes so pnpm/npm can
-              // install packages without breaking the user's existing setup
-              '~/Library/pnpm/store/**', // pnpm global store (macOS)
-              '~/.local/share/pnpm/store/**', // pnpm global store (Linux)
-              '~/.pnpm-store/**', // pnpm alternate store
-              '~/.npm/**', // npm cache
-              '~/.yarn/**', // yarn classic cache
-              '~/.yarn/berry/**', // yarn berry cache
-            ],
+            allowWrite: agentConfig.readOnly
+              ? []
+              : [
+                  '/' + agentConfig.workingDirectory,
+                  '/' + agentConfig.workingDirectory + '/**',
+                  '//tmp',
+                  '//tmp/**',
+                  '//private/tmp',
+                  '//private/tmp/**',
+                  // Package manager stores — allow writes so pnpm/npm can
+                  // install packages without breaking the user's existing setup
+                  '~/Library/pnpm/store/**', // pnpm global store (macOS)
+                  '~/.local/share/pnpm/store/**', // pnpm global store (Linux)
+                  '~/.pnpm-store/**', // pnpm alternate store
+                  '~/.npm/**', // npm cache
+                  '~/.yarn/**', // yarn classic cache
+                  '~/.yarn/berry/**', // yarn berry cache
+                ],
           },
           network: {
             allowedDomains: [

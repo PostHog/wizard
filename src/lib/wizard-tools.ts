@@ -517,12 +517,70 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
     },
   );
 
+  // -- write_report ---------------------------------------------------------
+
+  const writeReport = tool(
+    'write_report',
+    'Write a markdown report to a file under the project directory. Use this instead of Write/Edit when running in read-only workflows.',
+    {
+      filePath: z
+        .string()
+        .describe(
+          'Path relative to the project root (e.g., "posthog-concierge-report.md")',
+        ),
+      content: z
+        .string()
+        .describe(
+          'Full markdown content to write. Overwrites any existing file at this path.',
+        ),
+    },
+    (args: { filePath: string; content: string }) => {
+      const root = path.resolve(workingDirectory);
+      const resolved = path.resolve(root, args.filePath);
+      if (resolved !== root && !resolved.startsWith(root + path.sep)) {
+        return {
+          content: [
+            {
+              type: 'text' as const,
+              text: 'Error: filePath must stay inside the project directory.',
+            },
+          ],
+          isError: true,
+        };
+      }
+
+      logToFile(`write_report: ${resolved} (${args.content.length} bytes)`);
+
+      const dir = path.dirname(resolved);
+      if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true });
+      }
+      fs.writeFileSync(resolved, args.content, 'utf8');
+
+      return {
+        content: [
+          {
+            type: 'text' as const,
+            text: `Wrote ${args.content.length} bytes to ${args.filePath}`,
+          },
+        ],
+      };
+    },
+  );
+
   // -- Assemble server ------------------------------------------------------
 
   return createSdkMcpServer({
     name: SERVER_NAME,
     version: '1.0.0',
-    tools: [checkEnvKeys, setEnvValues, detectPM, loadSkillMenu, installSkill],
+    tools: [
+      checkEnvKeys,
+      setEnvValues,
+      detectPM,
+      loadSkillMenu,
+      installSkill,
+      writeReport,
+    ],
   });
 }
 
@@ -533,4 +591,5 @@ export const WIZARD_TOOL_NAMES = [
   `${SERVER_NAME}:detect_package_manager`,
   `${SERVER_NAME}:load_skill_menu`,
   `${SERVER_NAME}:install_skill`,
+  `${SERVER_NAME}:write_report`,
 ];

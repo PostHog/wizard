@@ -24,6 +24,7 @@ export enum Screen {
   Intro = 'intro',
   RevenueIntro = 'revenue-intro',
   AgentSkillIntro = 'agent-skill-intro',
+  ConciergeIntro = 'concierge-intro',
   HealthCheck = 'health-check',
   Setup = 'setup',
   Auth = 'auth',
@@ -41,6 +42,7 @@ export enum Flow {
   PostHogIntegration = 'posthog-integration',
   RevenueAnalyticsSetup = 'revenue-analytics-setup',
   AgentSkill = 'agent-skill',
+  Concierge = 'concierge',
   McpAdd = 'mcp-add',
   McpRemove = 'mcp-remove',
 }
