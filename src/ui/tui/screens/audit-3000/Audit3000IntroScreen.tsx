@@ -3,13 +3,9 @@ import { useEffect, useState, useSyncExternalStore } from 'react';
 import type { WizardStore } from '../../store.js';
 import { IntroScreenLayout } from '../IntroScreenLayout.js';
 import { SkillSourceInfo, useSkillEntry } from '../SkillSourceInfo.js';
+import { NEON_BLUE, NEON_GOLD, NEON_PINK } from './arcade-colors.js';
 
 const AUDIT3000_SKILL_ID = 'audit-3000';
-
-// PostHog brand palette, tuned for the arcade panel.
-const NEON_PINK = '#F54E00';
-const NEON_BLUE = '#1D4AFF';
-const NEON_GOLD = '#F9BD2B';
 
 const ArcadeBanner = () => {
   // Blink the "INSERT COIN" tagline once per 600ms — classic attract-mode

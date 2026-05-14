@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from 'react';
+import { useState, useSyncExternalStore } from 'react';
 import { join } from 'node:path';
 import { Box } from 'ink';
 import type { WizardStore } from '../../store.js';
@@ -13,6 +13,8 @@ import { useFileWatcher } from '../../hooks/file-watcher.js';
 import { AuditChecksViewer } from '../audit/AuditChecksViewer/AuditChecksViewer.js';
 import { Audit3000AreaPane } from './Audit3000AreaPane.js';
 import { Audit3000ChecksPanel } from './Audit3000ChecksPanel.js';
+import { HedgehogRunner } from './HedgehogRunner.js';
+import { initialState } from './hedgehog-runner-engine.js';
 import {
   AUDIT_CHECKS_FILE,
   AUDIT_CHECKS_KEY,
@@ -45,6 +47,10 @@ export const Audit3000RunScreen = ({ store }: Audit3000RunScreenProps) => {
     store.statusMessages.length > 0 ? store.statusMessages : undefined;
 
   const [columns] = useStdoutDimensions();
+  // Game state is lifted here so it survives tab switches — the HedgehogRunner
+  // unmounts whenever the user views another tab, but the score / position /
+  // obstacles stay frozen until they switch back.
+  const [gameState, setGameState] = useState(() => initialState());
   const checks = getAuditChecks(store.session);
   const reportFile =
     getWorkflowConfig(store.router.activeFlow)?.reportFile ??
@@ -71,6 +77,11 @@ export const Audit3000RunScreen = ({ store }: Audit3000RunScreenProps) => {
       id: 'audit-checks',
       label: 'Hi-score table',
       component: <AuditChecksViewer checks={checks} />,
+    },
+    {
+      id: 'play',
+      label: 'Play',
+      component: <HedgehogRunner state={gameState} onChange={setGameState} />,
     },
     {
       id: 'logs',
