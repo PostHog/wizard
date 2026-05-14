@@ -2,12 +2,18 @@
  * LetterCard — Renders the concierge notification's long-form letter on the
  * left of the run screen. Wraps text to the available width and scrolls one
  * visual row at a time via up/down (or a page at a time via page-up/down).
+ *
+ * Layout mirrors LogViewer: content fills the viewport, the scroll indicator
+ * sits at the bottom in a dim line.
  */
 
 import { useMemo, useState } from 'react';
 import { Box, Text, useInput } from 'ink';
 import { Colors } from '../styles.js';
 import { useStdoutDimensions } from '../hooks/useStdoutDimensions.js';
+
+/** Rows consumed by title bar + spacer + tab bar + status line + indicator. */
+const CHROME_ROWS = 10;
 
 interface LetterCardProps {
   /** Full body of the letter. May contain `\n` and `\r\n`. */
@@ -18,7 +24,7 @@ interface LetterCardProps {
 function wrapParagraph(paragraph: string, width: number): string[] {
   if (paragraph.length === 0) return [''];
   const out: string[] = [];
-  for (const word of paragraph.split(/\s+/)) {
+  for (const word of paragraph.split(/\s+/).filter(Boolean)) {
     if (out.length === 0) {
       out.push(word);
       continue;
@@ -38,26 +44,27 @@ function wrapParagraph(paragraph: string, width: number): string[] {
       out.push(remaining);
     }
   }
-  return out;
+  return out.length === 0 ? [''] : out;
 }
 
 function wrapAll(text: string, width: number): string[] {
   const normalized = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
   const rows: string[] = [];
   for (const paragraph of normalized.split('\n')) {
-    const wrapped = wrapParagraph(paragraph, Math.max(1, width));
-    for (const row of wrapped) rows.push(row);
+    for (const row of wrapParagraph(paragraph, Math.max(1, width))) {
+      rows.push(row);
+    }
   }
   return rows;
 }
 
 export const LetterCard = ({ letter }: LetterCardProps) => {
   const [columns, rows] = useStdoutDimensions();
-  // SplitView gives the left pane roughly half the terminal width; subtract
-  // a couple of columns for our paddingX={1} on each side.
-  const wrapWidth = Math.max(20, Math.floor(columns / 2) - 4);
-  // Leave room for the header + scroll indicator + the run-screen chrome.
-  const viewportHeight = Math.max(4, rows - 10);
+  // SplitView splits (columns - gap) in half; subtract a small buffer so Ink
+  // doesn't re-wrap rows sitting at the boundary (the re-wrap was clipping
+  // the first character of long rows in the previous layout).
+  const wrapWidth = Math.max(20, Math.floor((columns - 2) / 2) - 4);
+  const viewportHeight = Math.max(4, rows - CHROME_ROWS);
 
   const wrapped = useMemo(
     () => wrapAll(letter, wrapWidth),
@@ -76,28 +83,32 @@ export const LetterCard = ({ letter }: LetterCardProps) => {
 
   const clampedOffset = Math.min(offset, maxOffset);
   const visible = wrapped.slice(clampedOffset, clampedOffset + viewportHeight);
+  const lastRow = Math.min(wrapped.length, clampedOffset + viewportHeight);
   const canScrollUp = clampedOffset > 0;
   const canScrollDown = clampedOffset < maxOffset;
 
   return (
-    <Box flexDirection="column" paddingX={1}>
-      <Box marginBottom={1}>
-        <Text bold>Letter</Text>
-        <Text dimColor>
-          {'  '}
-          {canScrollUp ? '↑' : ' '}
-          {canScrollDown ? '↓' : ' '} {clampedOffset + 1}–
-          {Math.min(wrapped.length, clampedOffset + viewportHeight)} /{' '}
-          {wrapped.length}
-          {maxOffset > 0 ? '  (↑↓ scroll)' : ''}
-        </Text>
-      </Box>
+    <Box flexDirection="column" flexGrow={1}>
       <Box flexDirection="column" height={viewportHeight}>
         {visible.map((row, i) => (
-          <Text key={`${clampedOffset}-${i}`} color={Colors.muted}>
+          <Text
+            key={`${clampedOffset}-${i}`}
+            color={Colors.muted}
+            wrap="truncate"
+          >
             {row || ' '}
           </Text>
         ))}
+      </Box>
+      <Box>
+        <Text dimColor>
+          Letter {clampedOffset + 1}–{lastRow} / {wrapped.length}
+          {maxOffset > 0
+            ? `  ${canScrollUp ? '↑' : ' '}${
+                canScrollDown ? '↓' : ' '
+              } (↑↓ scroll)`
+            : ''}
+        </Text>
       </Box>
     </Box>
   );

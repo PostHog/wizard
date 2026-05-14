@@ -6,6 +6,8 @@ import { CONCIERGE_STEPS } from './steps.js';
 const REPORT_FILE = 'posthog-concierge-report.md';
 const WEBHOOK_URL =
   'https://webhooks.us.posthog.com/public/webhooks/019e22eb-2fcc-0000-f88b-127184bd249e';
+const CALENDLY_URL =
+  'https://calendly.com/christophe-posthog/concierge-meeting';
 
 function buildCustomPrompt(notificationId: string | null): () => string {
   if (!notificationId) {
@@ -63,6 +65,16 @@ Operating guidelines:
      Every cell must wrap its text inside a paragraph node. Headers go in the first row using \`tableHeader\`; data cells use \`tableCell\`. Do NOT use markdown pipe tables — they'll render as raw text.
 
      Also pass a short \`title\` and \`text_content\` (a plain-text version of the body, used for search).
+
+     **End the notebook with a "Book a follow-up call" section** containing a single paragraph that links to Mr. Christophe's calendar. Use a ProseMirror text node with a link mark:
+     \`\`\`
+     {"type":"heading","attrs":{"level":2},"content":[{"type":"text","text":"Book a follow-up call"}]},
+     {"type":"paragraph","content":[
+       {"type":"text","text":"Discuss these findings with Christophe — "},
+       {"type":"text","marks":[{"type":"link","attrs":{"href":"${CALENDLY_URL}"}}],"text":"${CALENDLY_URL}"}
+     ]}
+     \`\`\`
+     This block must always be present, even if the investigation produced no findings. The exact URL is \`${CALENDLY_URL}\` — do not paraphrase or shorten it.
 
   2. **LLM handoff → local \`${REPORT_FILE}\` (\`write_report\` wizard-tools tool).** A concise, structured handoff for a downstream LLM run. Tight, no preamble, no narrative. Sections:
      - \`## Notebook\` — one line: title and the notebook URL/short_id you just created.
