@@ -1,25 +1,21 @@
 /**
  * Audit-3000 left pane on the Run screen. Arcade-flavoured fork of the
  * audit workflow's `PendingChecksList`: a running score banner sits on
- * top, then the standard grouped check ledger underneath.
+ * top, then the area-level "level" headers underneath.
  *
- * The grouped check rendering is intentionally near-identical to the
- * original so wide and narrow terminals behave the same; the arcade
- * dressing lives entirely in the `ScoreBanner` and group level labels.
+ * Per-check rows are deliberately omitted here — the Hi-score Table tab
+ * has the full check-by-check breakdown. This pane is the at-a-glance
+ * stage overview.
  */
 
 import { Box, Text } from 'ink';
 import { Spinner } from '@inkjs/ui';
 import {
-  AUDIT_SEVERITY_STYLE,
   type AuditCheck,
   type AuditStatus,
 } from '../../../../lib/workflows/audit/types.js';
 import { Colors, Icons } from '../../styles.js';
 import { LoadingBox } from '../../primitives/index.js';
-import { useStdoutDimensions } from '../../hooks/useStdoutDimensions.js';
-
-const COLLAPSE_BELOW_ROWS = 24;
 
 const NEON_PINK = '#F54E00';
 const NEON_GOLD = '#F9BD2B';
@@ -132,19 +128,7 @@ const GroupHeader = ({
   );
 };
 
-const CheckRow = ({ check }: { check: AuditCheck }) => {
-  const { glyph, color } = AUDIT_SEVERITY_STYLE[check.status];
-  return (
-    <Text>
-      <Text color={color}>{glyph}</Text>
-      <Text dimColor={check.status === 'pending'}> {check.label}</Text>
-    </Text>
-  );
-};
-
 export const Audit3000ChecksPanel = ({ checks }: Audit3000ChecksPanelProps) => {
-  const [, termRows] = useStdoutDimensions();
-
   if (checks.length === 0) {
     return (
       <Box flexDirection="column">
@@ -159,7 +143,6 @@ export const Audit3000ChecksPanel = ({ checks }: Audit3000ChecksPanelProps) => {
   const activeIndex = groups.findIndex((g) =>
     g.checks.some((c) => c.status === 'pending'),
   );
-  const collapsed = termRows < COLLAPSE_BELOW_ROWS;
 
   return (
     <Box flexDirection="column">
@@ -168,33 +151,21 @@ export const Audit3000ChecksPanel = ({ checks }: Audit3000ChecksPanelProps) => {
       </Text>
       <Text> </Text>
       <ScoreBanner checks={checks} />
-      {collapsed
-        ? groups.map((group, i) => (
-            <GroupHeader
-              key={group.area}
-              group={group}
-              level={i + 1}
-              showIcon
-              isActive={i === activeIndex}
-            />
-          ))
-        : groups.map((group, i) => (
-            <Box
-              key={group.area}
-              flexDirection="column"
-              marginTop={i === 0 ? 0 : 1}
-            >
-              <GroupHeader
-                group={group}
-                level={i + 1}
-                showIcon={false}
-                isActive={i === activeIndex}
-              />
-              {group.checks.map((c) => (
-                <CheckRow key={c.id} check={c} />
-              ))}
-            </Box>
-          ))}
+      {groups.map((group, i) => (
+        <GroupHeader
+          key={group.area}
+          group={group}
+          level={i + 1}
+          showIcon
+          isActive={i === activeIndex}
+        />
+      ))}
+      <Box marginTop={1}>
+        <Text dimColor>
+          Full breakdown: <Text color={NEON_GOLD}>Hi-score table (report)</Text>{' '}
+          tab
+        </Text>
+      </Box>
     </Box>
   );
 };

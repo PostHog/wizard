@@ -75,7 +75,7 @@ export const Audit3000RunScreen = ({ store }: Audit3000RunScreenProps) => {
     { id: 'status', label: 'Arcade', component: statusComponent },
     {
       id: 'audit-checks',
-      label: 'Hi-score table',
+      label: 'Hi-score table (report)',
       component: <AuditChecksViewer checks={checks} />,
     },
     {
