@@ -666,7 +666,7 @@ export async function initializeAgent(
     const agentRunConfig: AgentRunConfig = {
       workingDirectory: config.workingDirectory,
       mcpServers,
-      model: 'anthropic/claude-sonnet-4-6',
+      model: 'anthropic/claude-opus-4-7',
       wizardFlags: config.wizardFlags,
       wizardMetadata: config.wizardMetadata,
     };
