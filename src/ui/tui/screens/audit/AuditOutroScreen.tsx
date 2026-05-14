@@ -1,9 +1,11 @@
 /**
  * AuditOutroScreen — Audit-specific post-run summary. Renders the standard
  * success / error / cancel views with the audit checks summary inlined into
- * the success body. The report path is hardcoded to AUDIT_REPORT_FILE.
+ * the success body. The report path shown in the success headline comes from
+ * the workflow's `successMessage`, so this screen is workflow-agnostic.
  */
 
+import { join } from 'node:path';
 import { Box, Text, useInput } from 'ink';
 import { useSyncExternalStore } from 'react';
 import type { WizardStore } from '../../store.js';
@@ -43,6 +45,21 @@ export const AuditOutroScreen = ({ store }: AuditOutroScreenProps) => {
           <Text color="green" bold>
             ✔ {outroData.message || 'Audit complete!'}
           </Text>
+
+          {outroData.reportFile && (
+            <Box flexDirection="column" marginTop={1}>
+              <Text color="cyan" bold>
+                Report saved to:
+              </Text>
+              <Text>
+                {join(store.session.installDir, outroData.reportFile)}
+              </Text>
+              <Text dimColor>
+                A markdown file in your project folder — open it in any editor
+                to read the full audit.
+              </Text>
+            </Box>
+          )}
 
           <AuditChecksOutroSection
             checks={getAuditChecks(store.session)}

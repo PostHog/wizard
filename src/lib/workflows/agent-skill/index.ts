@@ -57,6 +57,7 @@ export function createSkillWorkflow(
     description: opts.description,
     flowKey: opts.flowKey,
     steps: AGENT_SKILL_STEPS,
+    reportFile: opts.reportFile,
     run: {
       skillId: opts.skillId,
       integrationLabel: opts.integrationLabel,

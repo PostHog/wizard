@@ -24,6 +24,7 @@ import { AgentSkillIntroScreen } from './screens/AgentSkillIntroScreen.js';
 import { AuditIntroScreen } from './screens/audit/AuditIntroScreen.js';
 import { AuditRunScreen } from './screens/audit/AuditRunScreen.js';
 import { AuditOutroScreen } from './screens/audit/AuditOutroScreen.js';
+import { Audit3000IntroScreen } from './screens/audit-3000/Audit3000IntroScreen.js';
 import { SetupScreen } from './screens/SetupScreen.js';
 import { AuthScreen } from './screens/AuthScreen.js';
 import { RunScreen } from './screens/RunScreen.js';
@@ -63,6 +64,7 @@ export function createScreens(
     [Screen.AuditIntro]: <AuditIntroScreen store={store} />,
     [Screen.AuditRun]: <AuditRunScreen store={store} />,
     [Screen.AuditOutro]: <AuditOutroScreen store={store} />,
+    [Screen.Audit3000Intro]: <Audit3000IntroScreen store={store} />,
     [Screen.HealthCheck]: <HealthCheckScreen store={store} />,
     [Screen.DoctorIntro]: <DoctorIntroScreen store={store} />,
     [Screen.DoctorReport]: <DoctorReportScreen store={store} />,
