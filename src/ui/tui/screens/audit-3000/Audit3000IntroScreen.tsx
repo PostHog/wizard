@@ -1,10 +1,67 @@
 import { Box, Text } from 'ink';
-import { useState, useSyncExternalStore } from 'react';
+import { useEffect, useState, useSyncExternalStore } from 'react';
 import type { WizardStore } from '../../store.js';
 import { IntroScreenLayout } from '../IntroScreenLayout.js';
 import { SkillSourceInfo, useSkillEntry } from '../SkillSourceInfo.js';
 
 const AUDIT3000_SKILL_ID = 'audit-3000';
+
+// PostHog brand palette, tuned for the arcade panel.
+const NEON_PINK = '#F54E00';
+const NEON_BLUE = '#1D4AFF';
+const NEON_GOLD = '#F9BD2B';
+
+const ArcadeBanner = () => {
+  // Blink the "INSERT COIN" tagline once per 600ms — classic attract-mode
+  // pacing without burning Ink with rapid re-renders.
+  const [blinkOn, setBlinkOn] = useState(true);
+  useEffect(() => {
+    const id = setInterval(() => setBlinkOn((v) => !v), 600);
+    return () => clearInterval(id);
+  }, []);
+
+  const top = '\u250F' + '\u2501'.repeat(32) + '\u2513';
+  const bottom = '\u2517' + '\u2501'.repeat(32) + '\u251B';
+
+  return (
+    <Box flexDirection="column" alignItems="center">
+      <Text bold color={NEON_PINK}>
+        {top}
+      </Text>
+      <Text>
+        <Text bold color={NEON_PINK}>
+          {'\u2503'}
+        </Text>
+        <Text bold color={NEON_GOLD}>
+          {'   A U D I T  '}
+        </Text>
+        <Text bold color={NEON_BLUE}>
+          {'-'}
+        </Text>
+        <Text bold color={NEON_GOLD}>
+          {'  3 0 0 0      '}
+        </Text>
+        <Text bold color={NEON_PINK}>
+          {'\u2503'}
+        </Text>
+      </Text>
+      <Text>
+        <Text bold color={NEON_PINK}>
+          {'\u2503'}
+        </Text>
+        <Text dimColor={!blinkOn} color={NEON_BLUE}>
+          {'   \u25B6 INSERT COIN TO PLAY \u25C0   '}
+        </Text>
+        <Text bold color={NEON_PINK}>
+          {'\u2503'}
+        </Text>
+      </Text>
+      <Text bold color={NEON_PINK}>
+        {bottom}
+      </Text>
+    </Box>
+  );
+};
 
 interface Audit3000IntroScreenProps {
   store: WizardStore;
@@ -37,11 +94,11 @@ export const Audit3000IntroScreen = ({ store }: Audit3000IntroScreenProps) => {
         <Text color="cyan" italic>
           {AUDIT3000_SKILL_ID}
         </Text>{' '}
-        workflow reviews your PostHog integration against best practices — SDK
-        install, identification, event capture, event quality, and stale
-        feature-flag hygiene — and writes a report with suggested actions. When
-        enrichment is available, it also produces a separate company profile +
-        use-case match. Nothing in your project is modified.
+        workflow reviews your PostHog integration across 23 checks — SDK
+        install, identification, event capture, event quality, stale feature
+        flag hygiene, and use-case expansion across 8 PostHog products. When
+        enrichment is available it also produces a company profile and use-case
+        match. Nothing in your project is modified.
       </Text>
       <Box marginTop={1}>
         <SkillSourceInfo
@@ -53,17 +110,20 @@ export const Audit3000IntroScreen = ({ store }: Audit3000IntroScreenProps) => {
     </Box>
   ) : (
     <Box flexDirection="column" alignItems="center">
-      <Text>
-        Let's run a deep review of your PostHog setup and surface concrete next
-        steps.
-      </Text>
+      <ArcadeBanner />
+      <Box marginTop={1} flexDirection="column" alignItems="center">
+        <Text bold>23 checks. 6 levels. 1 final report.</Text>
+        <Text dimColor>
+          High-score your PostHog integration before the boss fight.
+        </Text>
+      </Box>
     </Box>
   );
 
   const menuOptions = showingMoreInfo
     ? [{ label: 'Back', value: 'back' }]
     : [
-        { label: 'Continue', value: 'continue' },
+        { label: 'PRESS START', value: 'continue' },
         { label: 'More info', value: 'more-info' },
         { label: 'Cancel', value: 'cancel' },
       ];

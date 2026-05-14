@@ -18,8 +18,9 @@ import { logToFile } from '../../../utils/debug';
 
 const AUDIT3000_REPORT_FILE = 'posthog-audit-3000-report.md';
 
-// Five extra checks the v3000 audit adds on top of the base 10.
-// IDs must match those referenced in the audit-3000 skill's step files.
+// Extra checks the v3000 audit adds on top of the base 10. IDs must match
+// those referenced in the audit-3000 skill's step files (Event Quality,
+// stale feature-flag review, and per-product use-case expansion).
 const AUDIT3000_EXTRA_CHECKS: AuditCheck[] = [
   {
     id: 'event-naming-standardization',
@@ -51,6 +52,54 @@ const AUDIT3000_EXTRA_CHECKS: AuditCheck[] = [
     label: 'Stale feature flags reviewed',
     status: 'pending',
   },
+  {
+    id: 'expansion-product-analytics',
+    area: 'Use Case: Expansion',
+    label: 'Product analytics coverage',
+    status: 'pending',
+  },
+  {
+    id: 'expansion-error-tracking',
+    area: 'Use Case: Expansion',
+    label: 'Error tracking coverage',
+    status: 'pending',
+  },
+  {
+    id: 'expansion-llm-observability',
+    area: 'Use Case: Expansion',
+    label: 'LLM observability coverage',
+    status: 'pending',
+  },
+  {
+    id: 'expansion-session-replay',
+    area: 'Use Case: Expansion',
+    label: 'Session replay coverage',
+    status: 'pending',
+  },
+  {
+    id: 'expansion-feature-flags',
+    area: 'Use Case: Expansion',
+    label: 'Feature flags coverage',
+    status: 'pending',
+  },
+  {
+    id: 'expansion-surveys',
+    area: 'Use Case: Expansion',
+    label: 'Surveys coverage',
+    status: 'pending',
+  },
+  {
+    id: 'expansion-logs',
+    area: 'Use Case: Expansion',
+    label: 'Logs coverage',
+    status: 'pending',
+  },
+  {
+    id: 'expansion-web-analytics',
+    area: 'Use Case: Expansion',
+    label: 'Web analytics coverage',
+    status: 'pending',
+  },
 ];
 
 const AUDIT3000_SEED_CHECKS: AuditCheck[] = [
@@ -58,13 +107,12 @@ const AUDIT3000_SEED_CHECKS: AuditCheck[] = [
   ...AUDIT3000_EXTRA_CHECKS,
 ];
 
-// Intro is custom; run/outro reuse the audit screens. Those screens read
-// the report path from WorkflowConfig.reportFile, so the v3000 label is
-// rendered correctly without forking the screens.
+// Audit-3000 has its own arcade-flavoured intro / run / outro screens. The
+// shared audit screens stay reserved for the original `audit` workflow.
 const AUDIT3000_SCREEN_BY_STEP: Record<string, string> = {
   intro: 'audit-3000-intro',
-  run: 'audit-run',
-  outro: 'audit-outro',
+  run: 'audit-3000-run',
+  outro: 'audit-3000-outro',
 };
 
 const seedAudit3000Ledger = (installDir: string): void => {

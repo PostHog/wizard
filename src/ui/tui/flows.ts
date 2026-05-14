@@ -28,6 +28,8 @@ export enum Screen {
   AuditRun = 'audit-run',
   AuditOutro = 'audit-outro',
   Audit3000Intro = 'audit-3000-intro',
+  Audit3000Run = 'audit-3000-run',
+  Audit3000Outro = 'audit-3000-outro',
   HealthCheck = 'health-check',
   DoctorIntro = 'doctor-intro',
   DoctorReport = 'doctor-report',
