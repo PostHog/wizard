@@ -31,12 +31,43 @@ export const ConciergeIntroScreen = ({ store }: ConciergeIntroScreenProps) => {
 
   if (showingMoreInfo) {
     body = (
-      <Box flexDirection="column" width={56}>
-        <Text dimColor>TODO(concierge): more-info body</Text>
+      <Box flexDirection="column" width={64}>
+        <Text>
+          A concierge investigation is a read-only inquiry into a single
+          question Mr. Christophe is curious about — typically a funnel,
+          retention, or experiment matter.
+        </Text>
+        <Box marginTop={1}>
+          <Text>
+            With your permission I shall: read the saved insights and dashboards
+            already in your project; query for cohort and timing signals; layer
+            in qualitative evidence such as session replays, surveys, and error
+            tracking; and prepare two outputs — a PostHog notebook for the next
+            conversation, and a concise local report (a markdown file for LLMs)
+            for any agent that follows.
+          </Text>
+        </Box>
+        <Box marginTop={1}>
+          <Text dimColor>Nothing in your local files shall be altered.</Text>
+        </Box>
       </Box>
     );
   } else {
-    body = <Text>TODO(concierge): intro body</Text>;
+    body = (
+      <Box flexDirection="column" width={64}>
+        <Text>
+          Mr. Christophe has entrusted me with a concierge investigation for
+          you.
+        </Text>
+        <Box marginTop={1}>
+          <Text>
+            I shall examine your PostHog project, prepare a notebook with my
+            findings, and leave a brief dossier for any successor (a markdown
+            file for LLMs) — all without modifying your local files.
+          </Text>
+        </Box>
+      </Box>
+    );
   }
 
   // ── Menu ─────────────────────────────────────────────────────────────

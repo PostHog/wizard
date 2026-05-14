@@ -116,7 +116,8 @@ async function fireConciergeWebhook(
 
 export const conciergeConfig: WorkflowConfig = {
   command: 'concierge',
-  description: 'TODO(concierge): description',
+  description:
+    "I'm your personal concierge to help you investigate before you next chat with Mr. Christophe",
   flowKey: 'concierge',
   steps: CONCIERGE_STEPS,
   run: (session) =>
@@ -124,11 +125,13 @@ export const conciergeConfig: WorkflowConfig = {
       integrationLabel: 'concierge',
       readOnly: true,
       customPrompt: buildCustomPrompt(session.notificationId),
-      successMessage: 'TODO(concierge): successMessage',
+      successMessage:
+        "Your concierge has completed investigations. We've also shared results with Mr. Christophe for your next chat.",
       reportFile: REPORT_FILE,
       docsUrl: 'https://posthog.com/docs',
-      spinnerMessage: 'TODO(concierge): spinnerMessage',
-      estimatedDurationMinutes: 5,
+      spinnerMessage:
+        'Your concierge is attending to your investigation. The agent will report back, promptly (8 minutes)',
+      estimatedDurationMinutes: 8,
       postRun: fireConciergeWebhook,
     }),
 };
