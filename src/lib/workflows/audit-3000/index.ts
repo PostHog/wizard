@@ -20,8 +20,10 @@ const AUDIT3000_REPORT_FILE = 'posthog-audit-3000-report.md';
 
 // Extra checks the v3000 audit adds on top of the base 10. IDs must match
 // those referenced in the audit-3000 skill's step files (Event Quality,
-// stale feature-flag review, and per-product use-case expansion).
+// stale feature-flag review, session replay [fix + optimize], per-product
+// use-case expansion, and phase markers for the post-flags chain).
 const AUDIT3000_EXTRA_CHECKS: AuditCheck[] = [
+  // ── Event Quality (Step 5) ──
   {
     id: 'event-naming-standardization',
     area: 'Event Quality',
@@ -46,12 +48,64 @@ const AUDIT3000_EXTRA_CHECKS: AuditCheck[] = [
     label: 'Captured events match insights / dashboards usage',
     status: 'pending',
   },
+  // ── Feature Flags (Step 6) ──
   {
     id: 'stale-feature-flags-reviewed',
     area: 'Feature Flags',
     label: 'Stale feature flags reviewed',
     status: 'pending',
   },
+  // ── Session Replay — fix (Step 6b) ──
+  {
+    id: 'replay-minimum-duration-set',
+    area: 'Session Replay',
+    label: 'Minimum duration set on init',
+    status: 'pending',
+  },
+  {
+    id: 'replay-mask-config',
+    area: 'Session Replay',
+    label: 'Mask config covers sensitive surfaces',
+    status: 'pending',
+  },
+  {
+    id: 'replay-disabled-in-test-envs',
+    area: 'Session Replay',
+    label: 'Disabled in test / CI environments',
+    status: 'pending',
+  },
+  {
+    id: 'replay-strict-minimum-duration',
+    area: 'Session Replay',
+    label: 'Strict minimum duration enforced',
+    status: 'pending',
+  },
+  // ── Session Replay — optimize (Step 6b cost wave) ──
+  {
+    id: 'replay-sampling-rate',
+    area: 'Session Replay — Optimize',
+    label: 'Sampling rate tuned for cost',
+    status: 'pending',
+  },
+  {
+    id: 'replay-triggers-configured',
+    area: 'Session Replay — Optimize',
+    label: 'Triggers configured (event / URL / flag)',
+    status: 'pending',
+  },
+  {
+    id: 'replay-network-recording-filtered',
+    area: 'Session Replay — Optimize',
+    label: 'Network recording filtered',
+    status: 'pending',
+  },
+  {
+    id: 'replay-mobile-sampling',
+    area: 'Session Replay — Optimize',
+    label: 'Mobile sampling configured',
+    status: 'pending',
+  },
+  // ── Use Case: Expansion (Step 9) ──
   {
     id: 'expansion-product-analytics',
     area: 'Use Case: Expansion',
@@ -98,6 +152,28 @@ const AUDIT3000_EXTRA_CHECKS: AuditCheck[] = [
     id: 'expansion-web-analytics',
     area: 'Use Case: Expansion',
     label: 'Web analytics coverage',
+    status: 'pending',
+  },
+  // ── Additional Sections (Steps 7, 8, 10 phase markers) ──
+  // Tracked in the ledger so the UI can surface "did it run / was it
+  // skipped" alongside the regular checks. use-case-expansion is omitted
+  // because the eight `expansion-*` checks above cover that phase.
+  {
+    id: 'customer-enrichment',
+    area: 'Additional Sections',
+    label: 'Customer enrichment (Harmonic + PDL)',
+    status: 'pending',
+  },
+  {
+    id: 'use-case-match',
+    area: 'Additional Sections',
+    label: 'Use-case match',
+    status: 'pending',
+  },
+  {
+    id: 'final-report',
+    area: 'Additional Sections',
+    label: 'Final audit report written',
     status: 'pending',
   },
 ];

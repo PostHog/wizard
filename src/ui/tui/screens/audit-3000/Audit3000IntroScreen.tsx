@@ -94,12 +94,25 @@ export const Audit3000IntroScreen = ({ store }: Audit3000IntroScreenProps) => {
         <Text color="cyan" italic>
           {AUDIT3000_SKILL_ID}
         </Text>{' '}
-        workflow reviews your PostHog integration across 23 checks — SDK
+        workflow reviews your PostHog integration across 34 checks — SDK
         install, identification, event capture, event quality, stale feature
-        flag hygiene, and use-case expansion across 8 PostHog products. When
-        enrichment is available it also produces a company profile and use-case
-        match. Nothing in your project is modified.
+        flag hygiene, session replay (fix + optimize), and use-case expansion
+        across 8 PostHog products. When enrichment is available it also produces
+        a company profile and use-case match. Nothing in your project is
+        modified.
       </Text>
+      <Box marginTop={1}>
+        <Text>
+          Results stream live to the{' '}
+          <Text color="cyan" bold>
+            Hi-score Table
+          </Text>{' '}
+          tab during the run — that&apos;s your live report. When the audit
+          finishes, the same report is also exported to{' '}
+          <Text color="cyan">./posthog-audit-3000-report.md</Text> in your
+          project folder.
+        </Text>
+      </Box>
       <Box marginTop={1}>
         <SkillSourceInfo
           skillId={AUDIT3000_SKILL_ID}
@@ -112,10 +125,16 @@ export const Audit3000IntroScreen = ({ store }: Audit3000IntroScreenProps) => {
     <Box flexDirection="column" alignItems="center">
       <ArcadeBanner />
       <Box marginTop={1} flexDirection="column" alignItems="center">
-        <Text bold>23 checks. 6 levels. 1 final report.</Text>
+        <Text bold>34 checks. 9 levels. 1 final report.</Text>
         <Text dimColor>
           High-score your PostHog integration before the boss fight.
         </Text>
+        <Box marginTop={1}>
+          <Text dimColor>
+            Live report: <Text color={NEON_GOLD}>Hi-score Table</Text> tab ·
+            Export: ./posthog-audit-3000-report.md
+          </Text>
+        </Box>
       </Box>
     </Box>
   );
