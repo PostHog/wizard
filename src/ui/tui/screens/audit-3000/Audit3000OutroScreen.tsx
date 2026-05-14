@@ -137,7 +137,7 @@ export const Audit3000OutroScreen = ({ store }: Audit3000OutroScreenProps) => {
   if (!outroData) {
     return (
       <Box flexDirection="column" flexGrow={1}>
-        <Text dimColor>Counting your tokens\u2026</Text>
+        <Text dimColor>{'Counting your tokens\u2026'}</Text>
       </Box>
     );
   }
