@@ -667,10 +667,12 @@ export async function initializeAgent(
 
     // audit-3000 needs Opus 4.7's depth for the multi-phase audit chain;
     // every other workflow runs on Sonnet 4.6.
+    // Bare model IDs (no `anthropic/` prefix) so the LLM gateway's Bedrock
+    // fallback can match map_to_bedrock_model()'s strict lookup.
     const model =
       config.integrationLabel === 'audit-3000'
-        ? 'anthropic/claude-opus-4-7'
-        : 'anthropic/claude-sonnet-4-6';
+        ? 'claude-opus-4-6'
+        : 'claude-sonnet-4-6';
 
     const agentRunConfig: AgentRunConfig = {
       workingDirectory: config.workingDirectory,
