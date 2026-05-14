@@ -288,6 +288,8 @@ export type AgentConfig = {
   /** Feature flag key -> variant (evaluated at start of run). */
   wizardFlags?: Record<string, string>;
   wizardMetadata?: Record<string, string>;
+  /** Workflow identifier — selects the model for that workflow. */
+  integrationLabel?: string;
 };
 
 /**
@@ -663,10 +665,17 @@ export async function initializeAgent(
     });
     mcpServers['wizard-tools'] = wizardToolsServer;
 
+    // audit-3000 needs Opus 4.7's depth for the multi-phase audit chain;
+    // every other workflow runs on Sonnet 4.6.
+    const model =
+      config.integrationLabel === 'audit-3000'
+        ? 'anthropic/claude-opus-4-7'
+        : 'anthropic/claude-sonnet-4-6';
+
     const agentRunConfig: AgentRunConfig = {
       workingDirectory: config.workingDirectory,
       mcpServers,
-      model: 'anthropic/claude-opus-4-7',
+      model,
       wizardFlags: config.wizardFlags,
       wizardMetadata: config.wizardMetadata,
     };
