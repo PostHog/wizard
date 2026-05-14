@@ -50,6 +50,31 @@ function parseNotificationBody(
   }
 }
 
+/**
+ * Turn a raw MCP/Django error into one short readable line. The server
+ * returns an HTML traceback on 5xx and verbose multi-line blocks on other
+ * failures — neither renders sensibly in the screen's two-line error box.
+ */
+function summarizeError(raw: string, notificationId: string | null): string {
+  const statusMatch = raw.match(/Status Code:\s*(\d{3})/);
+  const status = statusMatch ? Number(statusMatch[1]) : null;
+  const idLabel = notificationId ?? '(unknown id)';
+  if (status === 404) {
+    return `Notification ${idLabel} not found. Double-check the id and the project you authenticated against.`;
+  }
+  if (status === 401 || status === 403) {
+    return `Authentication failed (${status}). Re-run OAuth — your token may be missing the \`notification:read\` scope.`;
+  }
+  if (status === 500) {
+    return `PostHog returned 500 for id "${idLabel}" (len=${idLabel.length}). Check /tmp/posthog-wizard.log for the exact id the wizard sent — a character may have been dropped between the prompt and the request.`;
+  }
+  const stripped = raw
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return stripped.length > 200 ? stripped.slice(0, 200) + '…' : stripped;
+}
+
 export const DownloadSkillScreen = ({ store }: DownloadSkillScreenProps) => {
   useSyncExternalStore(
     (cb) => store.subscribe(cb),
@@ -71,7 +96,9 @@ export const DownloadSkillScreen = ({ store }: DownloadSkillScreenProps) => {
         region: session.region,
       });
       logToFile(
-        `[download-skill] fetching notification ${session.notificationId} via ${mcpUrl}`,
+        `[download-skill] fetching notification id=${JSON.stringify(
+          session.notificationId,
+        )} (len=${session.notificationId?.length ?? 0}) via ${mcpUrl}`,
       );
       try {
         const record = await callMcpTool<NotificationRecord>({
@@ -99,9 +126,11 @@ export const DownloadSkillScreen = ({ store }: DownloadSkillScreenProps) => {
         logToFile(`[download-skill] skill written to ${result.path}`);
         store.setSkillDownloaded(result.path);
       } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        logToFile(`[download-skill] failed: ${message}`);
-        store.setSkillDownloadError(message);
+        const raw = err instanceof Error ? err.message : String(err);
+        logToFile(`[download-skill] failed: ${raw}`);
+        store.setSkillDownloadError(
+          summarizeError(raw, session.notificationId),
+        );
       }
     })();
   }, [
