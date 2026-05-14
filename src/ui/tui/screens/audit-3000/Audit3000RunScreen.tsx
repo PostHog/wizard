@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from 'react';
+import { useState, useSyncExternalStore } from 'react';
 import { join } from 'node:path';
 import { Box } from 'ink';
 import type { WizardStore } from '../../store.js';
@@ -10,30 +10,35 @@ import {
 } from '../../primitives/index.js';
 import { useStdoutDimensions } from '../../hooks/useStdoutDimensions.js';
 import { useFileWatcher } from '../../hooks/file-watcher.js';
-import { AuditChecksViewer } from './AuditChecksViewer/AuditChecksViewer.js';
-import { AuditAreaPane } from './AuditAreaPane.js';
-import { PendingChecksList } from './PendingChecksList.js';
+import { AuditChecksViewer } from '../audit/AuditChecksViewer/AuditChecksViewer.js';
+import { Audit3000AreaPane } from './Audit3000AreaPane.js';
+import { Audit3000ChecksPanel } from './Audit3000ChecksPanel.js';
+import { HedgehogRunner } from './HedgehogRunner.js';
+import { initialState } from './hedgehog-runner-engine.js';
 import {
   AUDIT_CHECKS_FILE,
   AUDIT_CHECKS_KEY,
-  AUDIT_REPORT_FILE,
   coerceAuditChecks,
   getAuditChecks,
 } from '../../../../lib/workflows/audit/types.js';
 import { getWorkflowConfig } from '../../../../lib/workflows/workflow-registry.js';
 import { WIZARD_LOG_FILE } from '../../../../utils/paths.js';
 
-interface AuditRunScreenProps {
+const AUDIT_3000_REPORT_FILE_FALLBACK = 'posthog-audit-3000-report.md';
+
+interface Audit3000RunScreenProps {
   store: WizardStore;
 }
 
-export const AuditRunScreen = ({ store }: AuditRunScreenProps) => {
+export const Audit3000RunScreen = ({ store }: Audit3000RunScreenProps) => {
   useSyncExternalStore(
     (cb) => store.subscribe(cb),
     () => store.getSnapshot(),
   );
 
-  // Mirror the agent's audit ledger into the store.
+  // Mirror the agent's audit ledger into the store. The audit-3000 skill
+  // writes to the same `.posthog-audit-checks.json` path the original
+  // audit uses, so the file watcher key is shared.
   useFileWatcher(join(store.session.installDir, AUDIT_CHECKS_FILE), (parsed) =>
     store.setFrameworkContext(AUDIT_CHECKS_KEY, coerceAuditChecks(parsed)),
   );
@@ -42,29 +47,41 @@ export const AuditRunScreen = ({ store }: AuditRunScreenProps) => {
     store.statusMessages.length > 0 ? store.statusMessages : undefined;
 
   const [columns] = useStdoutDimensions();
+  // Game state is lifted here so it survives tab switches — the HedgehogRunner
+  // unmounts whenever the user views another tab, but the score / position /
+  // obstacles stay frozen until they switch back.
+  const [gameState, setGameState] = useState(() => initialState());
   const checks = getAuditChecks(store.session);
   const reportFile =
-    getWorkflowConfig(store.router.activeFlow)?.reportFile ?? AUDIT_REPORT_FILE;
+    getWorkflowConfig(store.router.activeFlow)?.reportFile ??
+    AUDIT_3000_REPORT_FILE_FALLBACK;
   const reportPath = `./${reportFile}`;
-  const pendingChecksList = <PendingChecksList checks={checks} />;
-  const areaPane = <AuditAreaPane checks={checks} reportPath={reportPath} />;
+  const checksPanel = <Audit3000ChecksPanel checks={checks} />;
+  const areaPane = (
+    <Audit3000AreaPane checks={checks} reportPath={reportPath} />
+  );
 
   // Narrow terminals: drop the area pane.
   const statusComponent =
     columns < 80 ? (
       <Box flexDirection="column" flexGrow={1}>
-        {pendingChecksList}
+        {checksPanel}
       </Box>
     ) : (
-      <SplitView left={areaPane} right={pendingChecksList} />
+      <SplitView left={areaPane} right={checksPanel} />
     );
 
   const tabs = [
-    { id: 'status', label: 'Status', component: statusComponent },
+    { id: 'status', label: 'Arcade', component: statusComponent },
     {
       id: 'audit-checks',
-      label: 'Audit plan',
+      label: 'Hi-score table (report)',
       component: <AuditChecksViewer checks={checks} />,
+    },
+    {
+      id: 'play',
+      label: 'Play',
+      component: <HedgehogRunner state={gameState} onChange={setGameState} />,
     },
     {
       id: 'logs',
