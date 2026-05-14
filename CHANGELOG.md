@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.13.1](https://github.com/PostHog/wizard/compare/v2.13.0...v2.13.1) (2026-05-14)
+
+
+### Bug Fixes
+
+* bedrock fallback ([#454](https://github.com/PostHog/wizard/issues/454)) ([66ba2df](https://github.com/PostHog/wizard/commit/66ba2df3b972f0fb416f4092b5b3fa1ae589849b))
+
 ## [2.13.0](https://github.com/PostHog/wizard/compare/v2.12.0...v2.13.0) (2026-05-14)
 
 
