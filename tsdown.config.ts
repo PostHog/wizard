@@ -12,7 +12,8 @@ export default defineConfig({
   // After build, setting NODE_ENV at runtime has zero effect on the wizard.
   // To add a new build-time constant, add it here AND in src/env.ts.
   env: {
-    NODE_ENV: 'production',
+    NODE_ENV: process.env.NODE_ENV ?? 'production',
+    POSTHOG_LLM_GATEWAY_URL: process.env.POSTHOG_LLM_GATEWAY_URL ?? '',
   },
 
   // Keep npm dependencies external — they're installed at runtime.

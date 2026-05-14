@@ -505,6 +505,9 @@ async function askForWizardLogin(options: {
       'dashboard:write',
       'insight:write',
       'query:read',
+      'notification:read',
+      'notebook:read',
+      'notebook:write',
     ],
     signup: false,
   });

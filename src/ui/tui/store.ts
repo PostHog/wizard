@@ -265,6 +265,37 @@ export class WizardStore {
     this.emitChange();
   }
 
+  setNotificationLetter(letter: string | null): void {
+    this.$session.setKey('notificationLetter', letter);
+    this.emitChange();
+  }
+
+  setSkillDownloaded(skillPath: string): void {
+    this.$session.setKey('notificationSkillPath', skillPath);
+    this.$session.setKey('skillDownloaded', true);
+    this.$session.setKey('skillDownloadError', null);
+    this.emitChange();
+  }
+
+  setSkillDownloadError(error: string): void {
+    this.$session.setKey('skillDownloadError', error);
+    this.emitChange();
+  }
+
+  setConciergeSummary(args: {
+    notebookUrl: string;
+    notebookShortId: string;
+  }): void {
+    this.$session.setKey('notebookUrl', args.notebookUrl);
+    this.$session.setKey('notebookShortId', args.notebookShortId);
+    this.emitChange();
+  }
+
+  dismissConciergeSummary(): void {
+    this.$session.setKey('conciergeSummaryDismissed', true);
+    this.emitChange();
+  }
+
   setFrameworkConfig(
     integration: WizardSession['integration'],
     config: WizardSession['frameworkConfig'],

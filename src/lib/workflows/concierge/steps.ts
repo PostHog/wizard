@@ -21,12 +21,30 @@ export const CONCIERGE_STEPS: Workflow = [
     isComplete: (session) => session.credentials !== null,
   },
   {
+    id: 'download-skill',
+    label: 'Downloading skill',
+    screen: 'download-skill',
+    show: (session) => session.notificationId !== null,
+    isComplete: (session) => session.skillDownloaded,
+    gate: (session) => session.skillDownloaded,
+  },
+  {
     id: 'run',
     label: 'Running',
     screen: 'run',
     isComplete: (session) =>
       session.runPhase === RunPhase.Completed ||
       session.runPhase === RunPhase.Error,
+  },
+  {
+    id: 'concierge-summary',
+    label: 'Summary',
+    screen: 'concierge-summary',
+    show: (session) =>
+      session.notificationId !== null &&
+      session.runPhase === RunPhase.Completed,
+    isComplete: (session) => session.conciergeSummaryDismissed,
+    gate: (session) => session.conciergeSummaryDismissed,
   },
   {
     id: 'outro',

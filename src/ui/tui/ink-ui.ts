@@ -60,6 +60,13 @@ export class InkUI implements WizardUI {
     this.store.setCredentials(credentials);
   }
 
+  setConciergeSummary(args: {
+    notebookUrl: string;
+    notebookShortId: string;
+  }): void {
+    this.store.setConciergeSummary(args);
+  }
+
   setDetectedFramework(label: string): void {
     this.store.setDetectedFramework(label);
   }

@@ -140,6 +140,13 @@ export class LoggingUI implements WizardUI {
     // No-op in CI mode — credentials are handled directly
   }
 
+  setConciergeSummary(_args: {
+    notebookUrl: string;
+    notebookShortId: string;
+  }): void {
+    // No-op in CI mode — no summary screen
+  }
+
   syncTodos(
     todos: Array<{ content: string; status: string; activeForm?: string }>,
   ): void {

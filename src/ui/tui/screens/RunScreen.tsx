@@ -23,6 +23,7 @@ import {
 import type { ProgressItem } from '../primitives/index.js';
 import { ADDITIONAL_FEATURE_LABELS } from '../../../lib/wizard-session.js';
 import { LearnCard } from '../components/LearnCard.js';
+import { LetterCard } from '../components/LetterCard.js';
 import { TipsCard } from '../components/TipsCard.js';
 import { useStdoutDimensions } from '../hooks/useStdoutDimensions.js';
 
@@ -63,7 +64,10 @@ export const RunScreen = ({ store }: RunScreenProps) => {
   const statuses =
     store.statusMessages.length > 0 ? store.statusMessages : undefined;
 
-  const leftPane = store.learnCardComplete ? (
+  const letter = store.session.notificationLetter;
+  const leftPane = letter ? (
+    <LetterCard letter={letter} />
+  ) : store.learnCardComplete ? (
     <TipsCard store={store} />
   ) : (
     <LearnCard store={store} onComplete={() => store.setLearnCardComplete()} />

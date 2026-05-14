@@ -660,6 +660,7 @@ export async function initializeAgent(
       workingDirectory: config.workingDirectory,
       detectPackageManager: config.detectPackageManager,
       skillsBaseUrl: config.skillsBaseUrl,
+      setConciergeSummary: (args) => getUI().setConciergeSummary(args),
     });
     mcpServers['wizard-tools'] = wizardToolsServer;
 

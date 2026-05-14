@@ -70,6 +70,11 @@ const skillSubcommandOptions = {
     type: 'boolean' as const,
     hidden: true,
   },
+  id: {
+    describe:
+      'Notification UUID. When set, the concierge fetches the notification via the PostHog API and shows a preview before running.',
+    type: 'string' as const,
+  },
 };
 
 const cli = yargs(hideBin(process.argv))
@@ -478,6 +483,7 @@ function runWizard(
         integration: options.integration as any,
         benchmark: options.benchmark as boolean | undefined,
         yaraReport: options.yaraReport as boolean | undefined,
+        notificationId: options.id as string | undefined,
       });
       // Set workflow metadata for TUI display
       session.workflowLabel = config.flowKey;
@@ -575,6 +581,7 @@ function runWizardCI(
       projectId: options.projectId as string | undefined,
       benchmark: options.benchmark as boolean | undefined,
       yaraReport: options.yaraReport as boolean | undefined,
+      notificationId: options.id as string | undefined,
       ...env,
     });
     session.workflowLabel = config.flowKey;

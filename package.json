@@ -32,7 +32,9 @@
     "definition": "dist/index.d.ts"
   },
   "dependencies": {
-    "@anthropic-ai/claude-agent-sdk": "0.2.73",
+    "@anthropic-ai/claude-agent-sdk": "0.2.137",
+    "@modelcontextprotocol/sdk": "1.29.0",
+    "yaml": "2.7.1",
     "@inkjs/ui": "^2.0.0",
     "@langchain/core": "^0.3.40",
     "axios": "1.7.4",
@@ -54,7 +56,7 @@
     "xcode": "3.0.1",
     "xml-js": "^1.6.11",
     "yargs": "^16.2.0",
-    "zod": "^3.24.2",
+    "zod": "^3.25.0",
     "zod-to-json-schema": "^3.24.3"
   },
   "devDependencies": {

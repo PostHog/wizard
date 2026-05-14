@@ -152,6 +152,39 @@ export async function installSkillById(
   return { kind: 'ok', path: relPath };
 }
 
+/**
+ * Write a skill to disk directly from a Markdown body. Used for skills that
+ * arrive as inline content (e.g. via a PostHog notification payload) rather
+ * than as a remote ZIP.
+ *
+ * Writes `<installDir>/.claude/skills/<skillId>/SKILL.md` (or under
+ * `<skillsRoot>` when provided). Returns the same relative path shape as
+ * `installSkillById` so callers can swap freely.
+ */
+export function installSkillFromContent(
+  skillId: string,
+  content: string,
+  installDir: string,
+  skillsRoot?: string,
+): InstallSkillResult {
+  const skillDir = skillsRoot
+    ? path.join(installDir, skillsRoot, skillId)
+    : path.join(installDir, '.claude', 'skills', skillId);
+  try {
+    fs.mkdirSync(skillDir, { recursive: true });
+    fs.writeFileSync(path.join(skillDir, 'SKILL.md'), content, 'utf8');
+    logToFile(`installSkillFromContent: wrote ${skillId} (${content.length}b)`);
+  } catch (err) {
+    const message = (err as Error).message;
+    logToFile(`installSkillFromContent: error: ${message}`);
+    return { kind: 'download-failed', message };
+  }
+  const relPath = skillsRoot
+    ? `${skillsRoot}/${skillId}`
+    : `.claude/skills/${skillId}`;
+  return { kind: 'ok', path: relPath };
+}
+
 // ---------------------------------------------------------------------------
 // Options for creating the wizard tools server
 // ---------------------------------------------------------------------------
@@ -165,6 +198,16 @@ export interface WizardToolsOptions {
 
   /** Base URL for the skills server (e.g. http://localhost:8765 or GitHub releases URL) */
   skillsBaseUrl: string;
+
+  /**
+   * Callback invoked when the agent calls the `set_concierge_summary` tool
+   * to report the notebook it just created. The concierge summary screen
+   * reads these fields from the session and opens the notebook URL.
+   */
+  setConciergeSummary?: (args: {
+    notebookUrl: string;
+    notebookShortId: string;
+  }) => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -274,7 +317,12 @@ const SERVER_NAME = 'wizard-tools';
  * Must be called asynchronously because the SDK is an ESM module loaded via dynamic import.
  */
 export async function createWizardToolsServer(options: WizardToolsOptions) {
-  const { workingDirectory, detectPackageManager, skillsBaseUrl } = options;
+  const {
+    workingDirectory,
+    detectPackageManager,
+    skillsBaseUrl,
+    setConciergeSummary,
+  } = options;
   const sdk = await getSDKModule();
   const { tool, createSdkMcpServer } = sdk;
 
@@ -517,6 +565,44 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
     },
   );
 
+  // -- set_concierge_summary ------------------------------------------------
+
+  const setSummary = tool(
+    'set_concierge_summary',
+    "Report the notebook the agent just created via the posthog-wizard `notebooks-create` tool so the wizard can show a summary screen and open the notebook in the user's browser. Call this exactly once, after the notebook is created and after the local report is written.",
+    {
+      notebook_url: z
+        .string()
+        .url()
+        .describe(
+          'Absolute URL of the notebook (the `posthog_url` field returned by notebooks-create).',
+        ),
+      notebook_short_id: z
+        .string()
+        .describe('Notebook short_id returned by notebooks-create.'),
+    },
+    (args: { notebook_url: string; notebook_short_id: string }) => {
+      if (setConciergeSummary) {
+        setConciergeSummary({
+          notebookUrl: args.notebook_url,
+          notebookShortId: args.notebook_short_id,
+        });
+      } else {
+        logToFile(
+          '[set_concierge_summary] no callback configured; URL dropped',
+        );
+      }
+      return {
+        content: [
+          {
+            type: 'text' as const,
+            text: `Summary recorded — notebook ${args.notebook_short_id} will be shown to the user.`,
+          },
+        ],
+      };
+    },
+  );
+
   // -- write_report ---------------------------------------------------------
 
   const writeReport = tool(
@@ -579,6 +665,7 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
       detectPM,
       loadSkillMenu,
       installSkill,
+      setSummary,
       writeReport,
     ],
   });
@@ -591,5 +678,6 @@ export const WIZARD_TOOL_NAMES = [
   `${SERVER_NAME}:detect_package_manager`,
   `${SERVER_NAME}:load_skill_menu`,
   `${SERVER_NAME}:install_skill`,
+  `${SERVER_NAME}:set_concierge_summary`,
   `${SERVER_NAME}:write_report`,
 ];

@@ -23,7 +23,9 @@ import { AgentSkillIntroScreen } from './screens/AgentSkillIntroScreen.js';
 import { ConciergeIntroScreen } from './screens/ConciergeIntroScreen.js';
 import { SetupScreen } from './screens/SetupScreen.js';
 import { AuthScreen } from './screens/AuthScreen.js';
+import { DownloadSkillScreen } from './screens/DownloadSkillScreen.js';
 import { RunScreen } from './screens/RunScreen.js';
+import { ConciergeSummaryScreen } from './screens/ConciergeSummaryScreen.js';
 import { McpScreen } from './screens/McpScreen.js';
 import { KeepSkillsScreen } from './screens/KeepSkillsScreen.js';
 import { OutroScreen } from './screens/OutroScreen.js';
@@ -61,7 +63,9 @@ export function createScreens(
     [Screen.HealthCheck]: <HealthCheckScreen store={store} />,
     [Screen.Setup]: <SetupScreen store={store} />,
     [Screen.Auth]: <AuthScreen store={store} />,
+    [Screen.DownloadSkill]: <DownloadSkillScreen store={store} />,
     [Screen.Run]: <RunScreen store={store} />,
+    [Screen.ConciergeSummary]: <ConciergeSummaryScreen store={store} />,
     [Screen.Mcp]: <McpScreen store={store} installer={services.mcpInstaller} />,
     [Screen.KeepSkills]: <KeepSkillsScreen store={store} />,
     [Screen.Outro]: <OutroScreen store={store} />,

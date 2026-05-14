@@ -65,6 +65,15 @@ export interface WizardUI {
     projectId: number;
   }): void;
 
+  /**
+   * Capture the notebook the concierge agent created so the post-run summary
+   * screen can open it in the user's browser. No-op outside the TUI.
+   */
+  setConciergeSummary(args: {
+    notebookUrl: string;
+    notebookShortId: string;
+  }): void;
+
   /** Show blocking service outage (pushes outage overlay in TUI). Blocks until dismissed. */
   showBlockingOutage(result: WizardReadinessResult): Promise<void>;
 

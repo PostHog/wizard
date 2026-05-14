@@ -23,6 +23,15 @@ export const NODE_ENV = process.env.NODE_ENV as string;
 export const IS_DEV =
   process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test';
 
+/**
+ * Optional override for the LLM gateway URL. When set at build time, bypasses
+ * the host-based routing in `getLlmGatewayUrlFromHost`. Useful for pointing
+ * the wizard at a local PostHog while still using the remote gateway (or vice
+ * versa).
+ */
+export const LLM_GATEWAY_URL_OVERRIDE = process.env
+  .POSTHOG_LLM_GATEWAY_URL as string;
+
 // ── Runtime environment ──────────────────────────────────────────────
 
 /**

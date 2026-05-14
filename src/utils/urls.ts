@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { LLM_GATEWAY_URL_OVERRIDE } from '../env';
 import { IS_DEV, WIZARD_USER_AGENT } from '../lib/constants';
 import type { CloudRegion } from './types';
 
@@ -76,6 +77,10 @@ export async function detectRegionFromToken(
 }
 
 export const getLlmGatewayUrlFromHost = (host: string) => {
+  if (LLM_GATEWAY_URL_OVERRIDE) {
+    return LLM_GATEWAY_URL_OVERRIDE;
+  }
+
   if (host.includes('localhost')) {
     return 'http://localhost:3308/wizard';
   }

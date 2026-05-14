@@ -167,6 +167,20 @@ export interface WizardSession {
   workflowLabel: string | null;
   skillId: string | null;
 
+  // Concierge: notification UUID passed via --id, the long-form letter
+  // body extracted from the notification payload (rendered on the run screen),
+  // the on-disk skill path the agent should read, and the download gate.
+  // After the agent run, the notebook short_id/url + dismissal flag drive
+  // the post-run summary card.
+  notificationId: string | null;
+  notificationLetter: string | null;
+  notificationSkillPath: string | null;
+  skillDownloaded: boolean;
+  skillDownloadError: string | null;
+  notebookUrl: string | null;
+  notebookShortId: string | null;
+  conciergeSummaryDismissed: boolean;
+
   // Resolved framework config (set after integration is known)
   frameworkConfig: FrameworkConfig | null;
 }
@@ -190,6 +204,7 @@ export function buildSession(args: {
   benchmark?: boolean;
   yaraReport?: boolean;
   projectId?: string;
+  notificationId?: string;
 }): WizardSession {
   return {
     debug: args.debug ?? false,
@@ -234,6 +249,14 @@ export function buildSession(args: {
     additionalFeatureQueue: [],
     workflowLabel: null,
     skillId: null,
+    notificationId: args.notificationId ?? null,
+    notificationLetter: null,
+    notificationSkillPath: null,
+    skillDownloaded: false,
+    skillDownloadError: null,
+    notebookUrl: null,
+    notebookShortId: null,
+    conciergeSummaryDismissed: false,
     frameworkConfig: null,
   };
 }
