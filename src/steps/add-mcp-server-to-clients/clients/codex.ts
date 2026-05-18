@@ -6,9 +6,14 @@ import * as path from 'node:path';
 
 import { DefaultMCPClient } from '../MCPClient';
 import { DefaultMCPClientConfig } from '../defaults';
-import { PluginCapable, PluginInstallResult } from '../plugin-client';
+import {
+  PluginCapable,
+  PluginInstallResult,
+  isExternalClientConfigError,
+} from '../plugin-client';
 
 import { analytics } from '../../../utils/analytics';
+import { debug } from '../../../utils/debug';
 
 export const CodexMCPConfig = DefaultMCPClientConfig;
 
@@ -60,12 +65,19 @@ export class CodexMCPClient extends DefaultMCPClient implements PluginCapable {
     if (!binary) return Promise.resolve({ success: false });
 
     const result = spawnSync(binary, ['mcp', 'remove', 'posthog'], {
-      stdio: 'ignore',
+      encoding: 'utf-8',
     });
 
     if (result.error || result.status !== 0) {
+      const stderr = result.stderr ?? '';
+      if (isExternalClientConfigError(stderr)) {
+        debug(
+          `Codex mcp remove skipped: existing Codex config is malformed. ${stderr.trim()}`,
+        );
+        return Promise.resolve({ success: false });
+      }
       analytics.captureException(
-        new Error('Failed to remove server from Codex CLI.'),
+        new Error(`Failed to remove server from Codex CLI: ${stderr}`),
       );
       return Promise.resolve({ success: false });
     }
@@ -122,8 +134,15 @@ export class CodexMCPClient extends DefaultMCPClient implements PluginCapable {
     }
 
     if (result.status !== 0) {
+      const stderr = result.stderr ?? '';
+      if (isExternalClientConfigError(stderr)) {
+        debug(
+          `Codex plugin install skipped: existing Codex config is malformed. ${stderr.trim()}`,
+        );
+        return Promise.resolve({ success: false });
+      }
       analytics.captureException(
-        new Error(`Codex plugin install failed: ${result.stderr ?? ''}`),
+        new Error(`Codex plugin install failed: ${stderr}`),
       );
       return Promise.resolve({ success: false });
     }

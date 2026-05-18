@@ -1,6 +1,10 @@
 import { DefaultMCPClient } from '../MCPClient';
 import { DefaultMCPClientConfig } from '../defaults';
-import { PluginCapable, PluginInstallResult } from '../plugin-client';
+import {
+  PluginCapable,
+  PluginInstallResult,
+  isExternalClientConfigError,
+} from '../plugin-client';
 import { z } from 'zod';
 import { execSync } from 'child_process';
 import { analytics } from '../../../utils/analytics';
@@ -110,12 +114,16 @@ export class ClaudeCodeMCPClient
     try {
       execSync(command);
     } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      if (isExternalClientConfigError(msg)) {
+        debug(
+          `  Claude Code mcp remove skipped: existing ~/.claude config has invalid plugin entries. ` +
+            `Fix them with 'claude plugin list' and retry.`,
+        );
+        return Promise.resolve({ success: false });
+      }
       analytics.captureException(
-        new Error(
-          `Failed to remove server from Claude Code: ${
-            error instanceof Error ? error.message : String(error)
-          }`,
-        ),
+        new Error(`Failed to remove server from Claude Code: ${msg}`),
       );
       return Promise.resolve({ success: false });
     }
@@ -150,6 +158,13 @@ export class ClaudeCodeMCPClient
       const msg = error instanceof Error ? error.message : String(error);
       if (msg.includes('already installed') || msg.includes('already exists')) {
         return Promise.resolve({ success: true, alreadyInstalled: true });
+      }
+      if (isExternalClientConfigError(msg)) {
+        debug(
+          `  Claude Code plugin install skipped: existing ~/.claude config has invalid plugin entries. ` +
+            `Fix them with 'claude plugin list' and retry.`,
+        );
+        return Promise.resolve({ success: false });
       }
       analytics.captureException(
         new Error(`Claude Code plugin install failed: ${msg}`),
