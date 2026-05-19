@@ -14,6 +14,7 @@ import fs from 'fs';
 import { execFileSync } from 'child_process';
 import { z } from 'zod';
 import { logToFile } from '../utils/debug';
+import { analytics } from '../utils/analytics';
 import { skillTmpPath } from '../utils/paths';
 import type { PackageManagerDetector } from './detection/package-manager';
 import {
@@ -184,6 +185,53 @@ export interface WizardToolsOptions {
    * CI/dev environments.
    */
   askBridge?: WizardAskBridge;
+
+  /**
+   * Per-run cap on `wizard_ask` invocations. Defaults to {@link DEFAULT_ASK_MAX_QUESTIONS}.
+   * The 4th call always returns a "batch your questions" error regardless
+   * of this cap — see {@link ASK_BATCH_THRESHOLD}.
+   */
+  askMaxQuestions?: number;
+}
+
+/** Default per-run cap on wizard_ask calls when no override is provided. */
+export const DEFAULT_ASK_MAX_QUESTIONS = 10;
+/** Calls past this number always return a batch-it error. */
+export const ASK_BATCH_THRESHOLD = 3;
+
+export type AskCapDecision =
+  | { kind: 'ok' }
+  | {
+      kind: 'capped';
+      reason: 'max_questions' | 'adjacency';
+      message: string;
+    };
+
+/**
+ * Pure decision function for the wizard_ask caps. Returns whether the
+ * upcoming call should proceed and, if not, the error message to surface
+ * to the agent. Extracted so the policy can be unit-tested without
+ * spinning up an MCP server.
+ */
+export function evaluateAskCap(
+  callCount: number,
+  maxQuestions: number,
+): AskCapDecision {
+  if (callCount >= maxQuestions) {
+    return {
+      kind: 'capped',
+      reason: 'max_questions',
+      message: `Error: wizard_ask cap reached (${maxQuestions} calls in this run). Proceed with sensible defaults using the answers you already have, or emit [ABORT] requirements-incomplete.`,
+    };
+  }
+  if (callCount >= ASK_BATCH_THRESHOLD) {
+    return {
+      kind: 'capped',
+      reason: 'adjacency',
+      message: `Error: too many wizard_ask calls in a row (${callCount} so far). Batch the remaining questions into a single call — the schema accepts up to 8 questions per invocation.`,
+    };
+  }
+  return { kind: 'ok' };
 }
 
 // ---------------------------------------------------------------------------
@@ -440,10 +488,18 @@ const SERVER_NAME = 'wizard-tools';
  * Must be called asynchronously because the SDK is an ESM module loaded via dynamic import.
  */
 export async function createWizardToolsServer(options: WizardToolsOptions) {
-  const { workingDirectory, detectPackageManager, skillsBaseUrl, askBridge } =
-    options;
+  const {
+    workingDirectory,
+    detectPackageManager,
+    skillsBaseUrl,
+    askBridge,
+    askMaxQuestions = DEFAULT_ASK_MAX_QUESTIONS,
+  } = options;
   const sdk = await getSDKModule();
   const { tool, createSdkMcpServer } = sdk;
+
+  // Per-server counter for wizard_ask call accounting (adjacency + total cap).
+  let askCallCount = 0;
 
   // Pre-fetch skill menu so category names are available in the tool schema
   let cachedSkillMenu: Record<string, SkillEntry[]> = {};
@@ -870,6 +926,19 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
         };
       }
 
+      const capDecision = evaluateAskCap(askCallCount, askMaxQuestions);
+      if (capDecision.kind === 'capped') {
+        analytics.wizardCapture('wizard_ask capped', {
+          reason: capDecision.reason,
+          call_count: askCallCount,
+          max_questions: askMaxQuestions,
+        });
+        return {
+          content: [{ type: 'text' as const, text: capDecision.message }],
+          isError: true,
+        };
+      }
+
       // Validate that single/multi questions include options. The schema
       // alone can't enforce a per-kind requirement.
       for (const q of args.questions) {
@@ -904,6 +973,8 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
         }
         ids.add(q.id);
       }
+
+      askCallCount += 1;
 
       try {
         const answers = await askBridge.request({ questions: args.questions });

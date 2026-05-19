@@ -564,6 +564,17 @@ describe('WizardStore', () => {
       expect(() => store.cancelPendingQuestion()).not.toThrow();
       expect(store.session.pendingQuestion).toBeNull();
     });
+
+    it('fires `wizard_ask shown` analytics with source, question_count, and kinds', () => {
+      const store = createStore();
+      void store.requestQuestion(pending);
+
+      expect(wizardCaptureMock).toHaveBeenCalledWith('wizard_ask shown', {
+        source: 'creating-product-tours',
+        question_count: 2,
+        kinds: ['text', 'single'],
+      });
+    });
   });
 
   // ── Agent observation state ──────────────────────────────────────

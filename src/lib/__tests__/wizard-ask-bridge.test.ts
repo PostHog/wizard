@@ -1,5 +1,21 @@
-import { createWizardAskBridge } from '../wizard-ask-bridge';
+import {
+  CANCELLED_SENTINEL,
+  createWizardAskBridge,
+} from '../wizard-ask-bridge';
+import { analytics } from '../../utils/analytics';
 import type { AskAnswers, PendingQuestion } from '../wizard-session';
+
+jest.mock('../../utils/analytics', () => ({
+  analytics: {
+    wizardCapture: jest.fn(),
+  },
+}));
+
+const wizardCaptureMock = analytics.wizardCapture as jest.Mock;
+
+beforeEach(() => {
+  wizardCaptureMock.mockClear();
+});
 
 describe('createWizardAskBridge', () => {
   it('forwards questions to showQuestion and resolves with the captured answers', async () => {
@@ -81,5 +97,103 @@ describe('createWizardAskBridge', () => {
 
     expect(captured[0].source).toBe('first-skill');
     expect(captured[1].source).toBe('second-skill');
+  });
+
+  describe('analytics', () => {
+    it('emits `wizard_ask answered` with duration and question count', async () => {
+      let resolveAnswers!: (answers: AskAnswers) => void;
+      const bridge = createWizardAskBridge({
+        getSource: () => 'product-tours',
+        showQuestion: () =>
+          new Promise<AskAnswers>((r) => {
+            resolveAnswers = r;
+          }),
+      });
+
+      const p = bridge.request({
+        questions: [
+          { id: 'a', prompt: 'A', kind: 'text' },
+          { id: 'b', prompt: 'B', kind: 'text' },
+        ],
+      });
+      resolveAnswers({ a: 'x', b: 'y' });
+      await p;
+
+      expect(wizardCaptureMock).toHaveBeenCalledWith(
+        'wizard_ask answered',
+        expect.objectContaining({
+          source: 'product-tours',
+          question_count: 2,
+          duration_ms: expect.any(Number),
+        }),
+      );
+    });
+
+    it('emits `wizard_ask cancelled` when every field comes back as the cancelled sentinel', async () => {
+      const bridge = createWizardAskBridge({
+        getSource: () => 'product-tours',
+        showQuestion: () =>
+          Promise.resolve({ a: CANCELLED_SENTINEL, b: CANCELLED_SENTINEL }),
+      });
+
+      await bridge.request({
+        questions: [
+          { id: 'a', prompt: 'A', kind: 'text' },
+          { id: 'b', prompt: 'B', kind: 'text' },
+        ],
+      });
+
+      const cancelledCall = wizardCaptureMock.mock.calls.find(
+        ([name]) => name === 'wizard_ask cancelled',
+      );
+      expect(cancelledCall).toBeDefined();
+      expect(cancelledCall?.[1]).toMatchObject({
+        source: 'product-tours',
+        question_count: 2,
+        timed_out: false,
+      });
+
+      // It is cancelled, not answered.
+      expect(
+        wizardCaptureMock.mock.calls.some(
+          ([name]) => name === 'wizard_ask answered',
+        ),
+      ).toBe(false);
+    });
+  });
+
+  describe('timeout', () => {
+    it('resolves every field with the cancelled sentinel when the user does not answer in time', async () => {
+      jest.useFakeTimers();
+      try {
+        // showQuestion intentionally never resolves — the timeout has to win.
+        const bridge = createWizardAskBridge({
+          getSource: () => 'product-tours',
+          showQuestion: () => new Promise<AskAnswers>(() => undefined),
+          timeoutMs: 1000,
+        });
+
+        const promise = bridge.request({
+          questions: [
+            { id: 'goal', prompt: 'Goal?', kind: 'text' },
+            { id: 'audience', prompt: 'Who?', kind: 'text' },
+          ],
+        });
+
+        jest.advanceTimersByTime(1000);
+
+        await expect(promise).resolves.toEqual({
+          goal: CANCELLED_SENTINEL,
+          audience: CANCELLED_SENTINEL,
+        });
+
+        const cancelledCall = wizardCaptureMock.mock.calls.find(
+          ([name]) => name === 'wizard_ask cancelled',
+        );
+        expect(cancelledCall?.[1]).toMatchObject({ timed_out: true });
+      } finally {
+        jest.useRealTimers();
+      }
+    });
   });
 });

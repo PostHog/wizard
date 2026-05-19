@@ -386,6 +386,11 @@ export class WizardStore {
     }
     this.$session.setKey('pendingQuestion', question);
     this.pushOverlay(Overlay.WizardAsk);
+    analytics.wizardCapture('wizard_ask shown', {
+      source: question.source,
+      question_count: question.questions.length,
+      kinds: question.questions.map((q) => q.kind),
+    });
     return new Promise<AskAnswers>((resolve) => {
       this._resolvePendingQuestion = resolve;
     });

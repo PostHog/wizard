@@ -12,6 +12,7 @@
  */
 import { randomUUID } from 'crypto';
 
+import { analytics } from '../utils/analytics';
 import type {
   AskAnswers,
   AskQuestion,
@@ -36,11 +37,39 @@ export interface WizardAskBridgeOptions {
   getSource: () => string;
   /** Opens the overlay and resolves once the user submits or cancels. */
   showQuestion: (question: PendingQuestion) => Promise<AskAnswers>;
+  /**
+   * Per-question timeout in milliseconds. When the user takes longer than
+   * this to answer, every unanswered field resolves with the
+   * {@link CANCELLED_SENTINEL} value. Defaults to {@link DEFAULT_ASK_TIMEOUT_MS}.
+   */
+  timeoutMs?: number;
+}
+
+/** Sentinel returned for unanswered fields on cancellation or timeout. */
+export const CANCELLED_SENTINEL = '__cancelled__';
+
+/** Default per-question timeout (5 minutes). */
+export const DEFAULT_ASK_TIMEOUT_MS = 5 * 60 * 1000;
+
+function buildCancelledAnswers(questions: AskQuestion[]): AskAnswers {
+  const out: AskAnswers = {};
+  for (const q of questions) {
+    out[q.id] = CANCELLED_SENTINEL;
+  }
+  return out;
+}
+
+function isFullyCancelled(answers: AskAnswers): boolean {
+  const values = Object.values(answers);
+  if (values.length === 0) return false;
+  return values.every((v) => v === CANCELLED_SENTINEL);
 }
 
 export function createWizardAskBridge(
   opts: WizardAskBridgeOptions,
 ): WizardAskBridge {
+  const timeoutMs = opts.timeoutMs ?? DEFAULT_ASK_TIMEOUT_MS;
+
   return {
     async request({ questions }) {
       const pending: PendingQuestion = {
@@ -48,7 +77,46 @@ export function createWizardAskBridge(
         questions,
         source: opts.getSource(),
       };
-      return opts.showQuestion(pending);
+
+      const startedAt = Date.now();
+      let timer: ReturnType<typeof setTimeout> | undefined;
+
+      // Race the user against the timeout. Whichever fires first wins; the
+      // other branch is harmless because the overlay still resolves via the
+      // store when the user eventually submits (and the answers are simply
+      // discarded).
+      const timeoutPromise = new Promise<AskAnswers>((resolve) => {
+        timer = setTimeout(() => {
+          resolve(buildCancelledAnswers(questions));
+        }, timeoutMs);
+      });
+
+      try {
+        const answers = await Promise.race([
+          opts.showQuestion(pending),
+          timeoutPromise,
+        ]);
+        const durationMs = Date.now() - startedAt;
+
+        if (isFullyCancelled(answers)) {
+          analytics.wizardCapture('wizard_ask cancelled', {
+            source: pending.source,
+            question_count: questions.length,
+            duration_ms: durationMs,
+            timed_out: durationMs >= timeoutMs,
+          });
+        } else {
+          analytics.wizardCapture('wizard_ask answered', {
+            source: pending.source,
+            question_count: questions.length,
+            duration_ms: durationMs,
+          });
+        }
+
+        return answers;
+      } finally {
+        if (timer) clearTimeout(timer);
+      }
     },
   };
 }
