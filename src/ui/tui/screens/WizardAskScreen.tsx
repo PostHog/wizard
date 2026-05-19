@@ -74,7 +74,14 @@ export const WizardAskScreen = ({ store }: WizardAskScreenProps) => {
         <Text>{question.prompt}</Text>
       </Box>
       <Box marginTop={1}>
-        <QuestionInput question={question} onSubmit={submit} />
+        {/* `key` forces React to remount the input when the question changes
+            so per-question internal state (typed buffer, picker focus) doesn't
+            bleed across questions. */}
+        <QuestionInput
+          key={`${pending.id}:${question.id}`}
+          question={question}
+          onSubmit={submit}
+        />
       </Box>
     </ModalOverlay>
   );
@@ -118,10 +125,18 @@ const QuestionInput = ({ question, onSubmit }: QuestionInputProps) => {
 
     case 'text':
       return (
-        <TextInput
-          placeholder="Type your answer and press enter"
-          onSubmit={(value) => onSubmit(value)}
-        />
+        <Box flexDirection="column">
+          <TextInput
+            placeholder="Type your answer"
+            onSubmit={(value) => onSubmit(value)}
+          />
+          <Box marginTop={1} justifyContent="flex-end">
+            <Text>
+              <Text color={Colors.accent}>ENTER</Text>
+              <Text dimColor> submit</Text>
+            </Text>
+          </Box>
+        </Box>
       );
   }
 };
