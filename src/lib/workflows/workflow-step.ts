@@ -123,6 +123,12 @@ export interface WorkflowConfig {
   run?: WorkflowRun | ((session: WizardSession) => Promise<WorkflowRun>);
   /** Prerequisites: other workflow flowKeys that must have run first */
   requires?: string[];
+  /**
+   * Path (relative to installDir) of the report file the workflow writes.
+   * Mirrors `run.reportFile` but lifted to the top level so UI screens can
+   * read it synchronously without resolving a deferred `run` function.
+   */
+  reportFile?: string;
 }
 
 /**

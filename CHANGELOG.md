@@ -1,5 +1,35 @@
 # Changelog
 
+## [2.13.1](https://github.com/PostHog/wizard/compare/v2.13.0...v2.13.1) (2026-05-14)
+
+
+### Bug Fixes
+
+* bedrock fallback ([#454](https://github.com/PostHog/wizard/issues/454)) ([66ba2df](https://github.com/PostHog/wizard/commit/66ba2df3b972f0fb416f4092b5b3fa1ae589849b))
+
+## [2.13.0](https://github.com/PostHog/wizard/compare/v2.12.0...v2.13.0) (2026-05-14)
+
+
+### Features
+
+* add audit-3000 wizard command ([#452](https://github.com/PostHog/wizard/issues/452)) ([8e434f4](https://github.com/PostHog/wizard/commit/8e434f40111ad8347e753b335b379c065501d60b))
+
+## [2.12.0](https://github.com/PostHog/wizard/compare/v2.11.0...v2.12.0) (2026-05-07)
+
+
+### Features
+
+* Audit ([#425](https://github.com/PostHog/wizard/issues/425)) ([bbd07f9](https://github.com/PostHog/wizard/commit/bbd07f9864e5ea701af4d08f63fce42164185ba6))
+* enable AWS Bedrock fallback for wizard agent requests ([#439](https://github.com/PostHog/wizard/issues/439)) ([cbf6b04](https://github.com/PostHog/wizard/commit/cbf6b049666b49784e131ee2ceb595c58cfc4cee))
+* headless provision subcommand + --ci --signup for agents ([#415](https://github.com/PostHog/wizard/issues/415)) ([7afca9f](https://github.com/PostHog/wizard/commit/7afca9f40a62b9dc2e3f6d2aac08d3c2963f7a9b))
+* open PostHog dashboard after signup ([#398](https://github.com/PostHog/wizard/issues/398)) ([b9a1888](https://github.com/PostHog/wizard/commit/b9a188860ffb310162b183b6dbc3aef2f6429281))
+
+
+### Bug Fixes
+
+* request llm_gateway:read scope during signup provisioning ([#435](https://github.com/PostHog/wizard/issues/435)) ([4a2d511](https://github.com/PostHog/wizard/commit/4a2d5115e343df79f5c067d16abea0db892f8864))
+* skip non-essential health checks for signup and show clear errors on outages ([#413](https://github.com/PostHog/wizard/issues/413)) ([44bac37](https://github.com/PostHog/wizard/commit/44bac37bde1ea0e80e79bbc0a7833d62fd8d73ca))
+
 ## [2.11.0](https://github.com/PostHog/wizard/compare/v2.10.4...v2.11.0) (2026-04-30)
 
 
