@@ -226,6 +226,27 @@ const cli = yargs(hideBin(process.argv))
           process.exit(1);
           return;
         }
+        // Warn (don't fail) on unexpected key prefix — `phx_` is the personal
+        // API key the LLM Gateway expects.
+        if (options.apiKey) {
+          const apiKeyValue = String(options.apiKey);
+          if (!apiKeyValue.startsWith('phx_')) {
+            setUI(new LoggingUI());
+            getUI().intro('PostHog Wizard');
+            const prefix = apiKeyValue.slice(0, 4);
+            let hint = '';
+            if (prefix === 'pha_') {
+              hint =
+                ' (pha_ is an OAuth access token — CI mode expects a personal API key)';
+            } else if (prefix === 'phc_') {
+              hint =
+                ' (phc_ is a project/client key — CI mode expects a personal API key)';
+            }
+            getUI().log.warn(
+              `--api-key does not start with "phx_"${hint}. Continuing anyway, but the LLM Gateway may reject it with a 401.`,
+            );
+          }
+        }
         void (async () => {
           // If --signup but no existing key, provision a new account first and
           // use its personal API key for the rest of the CI install.

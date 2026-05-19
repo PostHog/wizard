@@ -57,7 +57,7 @@ export function createScreens(
     [Overlay.SettingsOverride]: <SettingsOverrideScreen store={store} />,
     [Overlay.ManagedSettings]: <ManagedSettingsScreen store={store} />,
     [Overlay.PortConflict]: <PortConflictScreen store={store} />,
-    [Overlay.AuthError]: <AuthErrorScreen />,
+    [Overlay.AuthError]: <AuthErrorScreen store={store} />,
 
     // Wizard flow
     [Screen.Intro]: <PostHogIntegrationIntroScreen store={store} />,
