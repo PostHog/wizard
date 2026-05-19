@@ -290,6 +290,8 @@ export type AgentConfig = {
   wizardMetadata?: Record<string, string>;
   /** Workflow identifier — selects the model for that workflow. */
   integrationLabel?: string;
+  /** Bridge that drives the `wizard_ask` overlay. Omit in non-interactive hosts. */
+  askBridge?: import('../wizard-ask-bridge').WizardAskBridge;
 };
 
 /**
@@ -677,6 +679,7 @@ export async function initializeAgent(
       workingDirectory: config.workingDirectory,
       detectPackageManager: config.detectPackageManager,
       skillsBaseUrl: config.skillsBaseUrl,
+      askBridge: config.askBridge,
     });
     mcpServers['wizard-tools'] = wizardToolsServer;
 

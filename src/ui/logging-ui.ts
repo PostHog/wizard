@@ -16,7 +16,11 @@ import {
   getBlockingServiceKeys,
   SERVICE_LABELS,
 } from '../lib/health-checks/readiness.js';
-import type { OutroData } from '../lib/wizard-session';
+import type {
+  AskAnswers,
+  OutroData,
+  PendingQuestion,
+} from '../lib/wizard-session';
 
 export class LoggingUI implements WizardUI {
   intro(message: string): void {
@@ -141,6 +145,15 @@ export class LoggingUI implements WizardUI {
     _backupAndFix: () => boolean,
   ): Promise<void> {
     return Promise.resolve();
+  }
+
+  requestQuestion(_question: PendingQuestion): Promise<AskAnswers> {
+    return Promise.reject(
+      new Error(
+        'wizard_ask is not available in CI / non-interactive mode. ' +
+          'Re-run the wizard without --ci to answer interactively.',
+      ),
+    );
   }
 
   showAuthError(detail?: AuthErrorDetail): void {

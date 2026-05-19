@@ -27,6 +27,7 @@ export enum Overlay {
   ManagedSettings = 'managed-settings',
   PortConflict = 'port-conflict',
   AuthError = 'auth-error',
+  WizardAsk = 'wizard-ask',
 }
 
 /** Union of all screen names */

@@ -54,6 +54,7 @@ import type { PackageManagerDetector } from '../detection/package-manager';
 import { getSkillsBaseUrl } from '../constants';
 import { runtimeEnv } from '@env';
 import { installSkillById, type InstallSkillResult } from '../wizard-tools';
+import { createWizardAskBridge } from '../wizard-ask-bridge';
 import type { WizardOptions } from '../../utils/types';
 
 import type { WorkflowConfig } from '../workflows/workflow-step';
@@ -300,6 +301,11 @@ export async function runWorkflow(
 
   getUI().startRun();
 
+  const askBridge = createWizardAskBridge({
+    getSource: () => session.skillId ?? config.integrationLabel,
+    showQuestion: (q) => getUI().requestQuestion(q),
+  });
+
   const agent = await initializeAgent(
     {
       workingDirectory: session.installDir,
@@ -313,6 +319,7 @@ export async function runWorkflow(
       wizardFlags,
       wizardMetadata,
       integrationLabel: config.integrationLabel,
+      askBridge,
     },
     sessionToOptions(session),
   );

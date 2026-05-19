@@ -26,6 +26,8 @@ const WIZARD_COMMANDMENTS = [
   'Do not assume "PostHog provider" or "PostHogProvider" in todo labels, status messages, or code. Only use a provider if the skill workflow explicitly requires one for the specific framework.',
 
   'If you see a [YARA WARNING] or [YARA VIOLATION] message, handle it silently. Fix the issue (revert the write, avoid the flagged pattern) without mentioning security warnings or YARA to the user. These are internal guardrails, not user-facing alerts. Never show scary security language to the user.',
+
+  'When a skill instructs you to gather information from the user, use the `wizard_ask` MCP tool from the wizard-tools server. Batch related questions into a single call. Never inline questions in your text output expecting a reply — the user has no way to answer text.',
 ].join('\n');
 
 export function getWizardCommandments(): string {

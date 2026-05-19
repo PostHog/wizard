@@ -10,7 +10,11 @@ import type { WizardUI, SpinnerHandle, AuthErrorDetail } from '../wizard-ui.js';
 import type { WizardStore } from './store.js';
 import type { SettingsConflict } from '../../lib/agent/agent-interface.js';
 import type { WizardReadinessResult } from '../../lib/health-checks/readiness.js';
-import type { OutroData } from '../../lib/wizard-session.js';
+import type {
+  AskAnswers,
+  OutroData,
+  PendingQuestion,
+} from '../../lib/wizard-session.js';
 import { RunPhase, OutroKind } from '../../lib/wizard-session.js';
 
 // Strip ANSI escape codes (chalk formatting) from strings
@@ -124,6 +128,10 @@ export class InkUI implements WizardUI {
 
   showAuthError(detail?: AuthErrorDetail): void {
     this.store.showAuthError(detail);
+  }
+
+  requestQuestion(question: PendingQuestion): Promise<AskAnswers> {
+    return this.store.requestQuestion(question);
   }
 
   startRun(): void {
