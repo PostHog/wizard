@@ -347,7 +347,36 @@ export const LearnCard = ({ store, onComplete }: LearnCardProps) => {
   const peekedRef = useRef(false);
   const [columns, rows] = useStdoutDimensions();
 
-  const blocks = useMemo<ContentBlock[]>(
+  // Skill-runner workflows (audit, revenue-analytics, future ones) don't need
+  // the full PostHog onboarding narrative — they're not running an integration.
+  // Show a short three-line sequence and let TipsCard take over instead.
+  const isSkillWorkflow =
+    store?.session.workflowLabel != null &&
+    store.session.workflowLabel !== 'posthog-integration';
+  const skillId = store?.session.skillId ?? 'unknown';
+
+  const skillBlocks = useMemo<ContentBlock[]>(
+    () => [
+      {
+        content: 'Welcome.',
+        pause: 3000,
+        mode: TextRevealMode.Typewriter,
+        animationInterval: 160,
+      },
+      { content: 'The Wizard is an agent.', pause: 4000 },
+      {
+        pause: 60000,
+        content: (
+          <Text>
+            Running the <Text color="cyan">{skillId}</Text> skill...
+          </Text>
+        ),
+      },
+    ],
+    [skillId],
+  );
+
+  const integrationBlocks = useMemo<ContentBlock[]>(
     () => [
       {
         content: 'Welcome.',
@@ -467,6 +496,8 @@ export const LearnCard = ({ store, onComplete }: LearnCardProps) => {
     ],
     [store],
   );
+
+  const blocks = isSkillWorkflow ? skillBlocks : integrationBlocks;
 
   // Dynamic status bar height: messages + border when present
   const hasStatus = store ? store.statusMessages.length > 0 : false;

@@ -125,12 +125,16 @@ const QuestionInput = ({ question, onSubmit }: QuestionInputProps) => {
 
     case 'text':
       return (
-        <Box flexDirection="column">
+        // `width="100%"` on both the column and the hint row anchors them to
+        // the modal's content width — without it, Ink/Yoga shrinks the column
+        // to fit its widest child, so the right-aligned hint walks left/right
+        // as the typed text changes width.
+        <Box flexDirection="column" width="100%">
           <TextInput
             placeholder="Type your answer"
             onSubmit={(value) => onSubmit(value)}
           />
-          <Box marginTop={1} justifyContent="flex-end">
+          <Box marginTop={1} width="100%" justifyContent="flex-end">
             <Text>
               <Text color={Colors.accent}>ENTER</Text>
               <Text dimColor> submit</Text>
