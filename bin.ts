@@ -1,6 +1,5 @@
 #!/usr/bin/env node
 import { satisfies } from 'semver';
-import { red } from './src/utils/logging';
 
 import yargs from 'yargs';
 import { hideBin } from 'yargs/helpers';
@@ -13,7 +12,8 @@ const NODE_VERSION_RANGE = '>=18.17.0';
 // Have to run this above the other imports because they are importing clack that
 // has the problematic imports.
 if (!satisfies(process.version, NODE_VERSION_RANGE)) {
-  red(
+  // eslint-disable-next-line no-console
+  console.log(
     `PostHog wizard requires Node.js ${NODE_VERSION_RANGE}. You are using Node.js ${process.version}. Please upgrade your Node.js version.`,
   );
   process.exit(1);
