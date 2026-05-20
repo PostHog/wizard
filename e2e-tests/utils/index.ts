@@ -3,7 +3,6 @@ import * as path from 'path';
 
 import { spawn, execSync } from 'child_process';
 import type { ChildProcess } from 'child_process';
-import { dim, green, red } from '../../src/utils/logging';
 
 export const KEYS = {
   UP: '\u001b[A',
@@ -17,15 +16,12 @@ export const KEYS = {
 export const TEST_ARGS = {};
 
 export const log = {
-  success: (message: string) => {
-    green(`[SUCCESS] ${message}`);
-  },
-  info: (message: string) => {
-    dim(`[INFO] ${message}`);
-  },
-  error: (message: string) => {
-    red(`[ERROR] ${message}`);
-  },
+  // eslint-disable-next-line no-console
+  success: (message: string) => console.log(`[SUCCESS] ${message}`),
+  // eslint-disable-next-line no-console
+  info: (message: string) => console.log(`[INFO] ${message}`),
+  // eslint-disable-next-line no-console
+  error: (message: unknown) => console.log(`[ERROR] ${String(message)}`),
 };
 
 export class WizardTestEnv {
