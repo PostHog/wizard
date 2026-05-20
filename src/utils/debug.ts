@@ -1,9 +1,14 @@
 import { appendFileSync } from 'fs';
 import path from 'path';
-import { prepareMessage } from './logging';
 import { getUI } from '../ui';
 import { runtimeEnv } from '@env';
 import { WIZARD_LOG_FILE } from './paths';
+
+function formatLogValue(value: unknown): string {
+  if (typeof value === 'string') return value;
+  if (value instanceof Error) return value.stack ?? '';
+  return JSON.stringify(value, null, 2);
+}
 
 let debugEnabled = false;
 let logFilePath = WIZARD_LOG_FILE;
@@ -63,7 +68,7 @@ export function logToFile(...args: unknown[]) {
   if (!logEnabled) return;
   try {
     const timestamp = new Date().toISOString();
-    const msg = args.map((a) => prepareMessage(a)).join(' ');
+    const msg = args.map((a) => formatLogValue(a)).join(' ');
     appendFileSync(logFilePath, `[${timestamp}] ${msg}\n`);
   } catch {
     // Silently ignore logging failures to avoid masking original errors
@@ -75,7 +80,7 @@ export function debug(...args: unknown[]) {
     return;
   }
 
-  const msg = args.map((a) => prepareMessage(a)).join(' ');
+  const msg = args.map((a) => formatLogValue(a)).join(' ');
 
   getUI().log.info(msg);
 }

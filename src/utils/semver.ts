@@ -28,6 +28,20 @@ function isNonSemverVersion(version: string): boolean {
   );
 }
 
+type ClassifiedVersion =
+  | { kind: 'exact'; value: string }
+  | { kind: 'range'; value: string };
+
+function classifyVersion(version: string): ClassifiedVersion | null {
+  const exact = valid(version);
+  if (exact) return { kind: 'exact', value: exact };
+
+  const range = validRange(version);
+  if (range) return { kind: 'range', value: range };
+
+  return null;
+}
+
 export function fulfillsVersionRange({
   version,
   acceptableVersions,
@@ -37,31 +51,15 @@ export function fulfillsVersionRange({
   acceptableVersions: string;
   canBeLatest: boolean;
 }): boolean {
-  if (version === 'latest') {
-    return canBeLatest;
-  }
+  if (version === 'latest') return canBeLatest;
+  if (isNonSemverVersion(version)) return false;
 
-  if (isNonSemverVersion(version)) {
-    return false;
-  }
+  const classified = classifyVersion(version);
+  if (!classified) return false;
 
-  let cleanedUserVersion, isRange;
-
-  if (valid(version)) {
-    cleanedUserVersion = valid(version);
-    isRange = false;
-  } else if (validRange(version)) {
-    cleanedUserVersion = validRange(version);
-    isRange = true;
-  }
-
-  return (
-    // If the given version is a bogus format, this will still be undefined and we'll automatically reject it
-    !!cleanedUserVersion &&
-    (isRange
-      ? subset(cleanedUserVersion, acceptableVersions)
-      : satisfies(cleanedUserVersion, acceptableVersions))
-  );
+  return classified.kind === 'range'
+    ? subset(classified.value, acceptableVersions)
+    : satisfies(classified.value, acceptableVersions);
 }
 
 /**
