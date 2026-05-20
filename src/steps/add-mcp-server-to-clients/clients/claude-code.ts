@@ -105,22 +105,40 @@ export class ClaudeCodeMCPClient
     }
 
     const serverName = local ? 'posthog-local' : 'posthog';
-    const command = `${claudeBinary} mcp remove --scope user ${serverName}`;
+    let success = true;
 
+    // Current install path (#428): plugin-based. "not installed" is a no-op.
     try {
-      execSync(command);
+      execSync(`${claudeBinary} plugin uninstall posthog`, { stdio: 'pipe' });
     } catch (error) {
-      analytics.captureException(
-        new Error(
-          `Failed to remove server from Claude Code: ${
-            error instanceof Error ? error.message : String(error)
-          }`,
-        ),
-      );
-      return Promise.resolve({ success: false });
+      const msg = error instanceof Error ? error.message : String(error);
+      if (!msg.includes('not installed') && !msg.includes('not found')) {
+        analytics.captureException(
+          new Error(`Failed to uninstall Claude Code plugin: ${msg}`),
+        );
+        success = false;
+      }
     }
 
-    return Promise.resolve({ success: true });
+    // Legacy install path (pre-#428): user-scoped MCP entry. "not found" is a no-op.
+    try {
+      execSync(`${claudeBinary} mcp remove --scope user ${serverName}`, {
+        stdio: 'pipe',
+      });
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      if (
+        !msg.includes('No user-scoped MCP server found') &&
+        !msg.includes('not found')
+      ) {
+        analytics.captureException(
+          new Error(`Failed to remove server from Claude Code: ${msg}`),
+        );
+        success = false;
+      }
+    }
+
+    return Promise.resolve({ success });
   }
 
   supportsPlugin(): boolean {
