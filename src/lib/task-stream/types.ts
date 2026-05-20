@@ -4,7 +4,12 @@
  *
  * The schema is intentionally generic: onboarding is the first consumer,
  * but migrations, audits, and single-task installs can reuse the same
- * transport with a different program_id / skill_id pair.
+ * transport with a different workflow_id / skill_id pair.
+ *
+ * Naming note: the backend's public DTO field is `workflow_id` (URL
+ * query, regex validation, SSE channel name). The wizard CLI uses
+ * "program" terminology internally, so the field is named programId
+ * on TaskStreamPush but serialised to `workflow_id` here.
  */
 
 import type { RunPhase } from '@lib/wizard-session';
@@ -41,11 +46,11 @@ export interface TaskStreamError {
  * Every run is a new session_id. The wizard never updates an old session —
  * re-running the same program + skill is a new row with a newer timestamp.
  * Consumers get the current view by picking the latest session for a given
- * (program_id, skill_id) pair.
+ * (workflow_id, skill_id) pair.
  */
 export interface TaskStreamUpdate {
   session_id: string;
-  program_id: string;
+  workflow_id: string;
   skill_id: string;
   started_at: string;
   run_phase: RunPhase;

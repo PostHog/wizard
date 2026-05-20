@@ -129,6 +129,12 @@ const cli = yargs(hideBin(process.argv))
         'Email address for signup (used with --signup)\nenv: POSTHOG_WIZARD_EMAIL',
       type: 'string',
     },
+    'no-telemetry': {
+      default: false,
+      describe:
+        'Disable pushing wizard run state to PostHog\nenv: POSTHOG_WIZARD_NO_TELEMETRY',
+      type: 'boolean',
+    },
   })
   .command(
     ['$0'],
@@ -639,7 +645,7 @@ function runWizard(
       const installDir = (options.installDir as string) || process.cwd();
 
       const { startTUI } = await import('@ui/tui/start-tui');
-      const { buildSession } = await import('@lib/wizard-session');
+      const { buildSession, RunPhase } = await import('@lib/wizard-session');
       const { TaskStreamPush } = await import('@lib/task-stream/index');
       const { FileDestination } = await import(
         '@lib/task-stream/destinations/file'
@@ -648,6 +654,9 @@ function runWizard(
         '@lib/task-stream/destinations/posthog'
       );
       const { analytics } = await import('@utils/analytics');
+      const { logToFile } = await import('@utils/debug');
+      type AnyDestination =
+        import('@lib/task-stream/types').TaskStreamDestination;
 
       const tui = startTUI(WIZARD_VERSION, config.id as any);
 
@@ -665,6 +674,7 @@ function runWizard(
         integration: options.integration as any,
         benchmark: options.benchmark as boolean | undefined,
         yaraReport: options.yaraReport as boolean | undefined,
+        noTelemetry: options.noTelemetry as boolean | undefined,
       });
       session.programLabel = config.id;
       if (options.skillId) {
@@ -675,13 +685,53 @@ function runWizard(
 
       tui.store.session = session;
 
-      // Task stream — pushes state to external consumers on task changes
+      // Task stream — subscribes to store changes and pushes run state
+      // to external consumers (file log + PostHog backend). The PostHog
+      // destination is omitted when --no-telemetry is set so no HTTP
+      // request is ever issued.
+      const taskStreamEnabled = !session.noTelemetry;
+      const destinations: AnyDestination[] = [new FileDestination()];
+      if (taskStreamEnabled) {
+        destinations.push(
+          new PostHogDestination({
+            getCredentials: () => {
+              const creds = tui.store.session.credentials;
+              if (!creds) return null;
+              return {
+                host: creds.host,
+                projectId: creds.projectId,
+                auth: { kind: 'oauth_session', token: creds.accessToken },
+              };
+            },
+            onError: (err) => logToFile('[task-stream-push]', err.message),
+          }),
+        );
+      }
       const taskStream = new TaskStreamPush({
         store: tui.store,
         programId: config.id,
-        destinations: [new FileDestination(), new PostHogDestination()],
+        destinations,
+        enabled: taskStreamEnabled,
       });
-      tui.store.onTasksChanged = () => void taskStream.push();
+      taskStream.attach();
+
+      // Flush a terminal-phase push on Ctrl-C so the web app sees the
+      // run ended in error rather than hanging on the last "running"
+      // snapshot. A second signal during shutdown still exits normally
+      // because process.exit is the last line.
+      let signalled = false;
+      const onSignal = (): void => {
+        if (signalled) return;
+        signalled = true;
+        if (tui.store.session.runPhase === RunPhase.Running) {
+          tui.store.setRunPhase(RunPhase.Error);
+        }
+        void taskStream.shutdown(2000).finally(() => {
+          process.exit(130);
+        });
+      };
+      process.on('SIGINT', onSignal);
+      process.on('SIGTERM', onSignal);
 
       await tui.store.runReadyHooks();
       await tui.store.getGate('intro');
@@ -730,10 +780,12 @@ function runWizard(
       });
 
       try {
-        await taskStream.dispose();
+        await taskStream.shutdown(2000);
       } catch (error) {
         analytics.captureException(error as Error);
       }
+      process.off('SIGINT', onSignal);
+      process.off('SIGTERM', onSignal);
       tui.unmount();
       process.exit(0);
     } catch (err) {
@@ -807,6 +859,7 @@ function runWizardCI(
       projectId: options.projectId as string | undefined,
       benchmark: options.benchmark as boolean | undefined,
       yaraReport: options.yaraReport as boolean | undefined,
+      noTelemetry: options.noTelemetry as boolean | undefined,
       ...env,
     });
     session.programLabel = config.id;
