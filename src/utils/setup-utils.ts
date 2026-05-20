@@ -4,7 +4,7 @@ import * as os from 'node:os';
 import { basename, isAbsolute, join, relative } from 'node:path';
 import { promisify } from 'node:util';
 
-import { traceStep } from '../telemetry';
+import { withProgress } from '../telemetry';
 import { debug } from './debug';
 import type { PackageDotJson } from './package-json';
 import {
@@ -206,7 +206,7 @@ export async function installPackage({
   integration?: string;
   installDir: string;
 }): Promise<{ packageManager?: PackageManager }> {
-  return traceStep('install-package', async () => {
+  return withProgress('install-package', async () => {
     const sdkInstallSpinner = getUI().spinner();
 
     const pkgManager =
@@ -414,7 +414,7 @@ export async function getOrAskForProjectData(
   }
 
   const { host, projectApiKey, accessToken, projectId, cloudRegion } =
-    await traceStep('login', () =>
+    await withProgress('login', () =>
       askForWizardLogin({
         signup: _options.signup,
         email: _options.email,

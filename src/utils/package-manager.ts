@@ -1,6 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { traceStep } from '../telemetry';
+import { withProgress } from '../telemetry';
 import { getPackageDotJson, updatePackageDotJson } from './setup-utils';
 import type { PackageDotJson } from './package-json';
 import { analytics } from './analytics';
@@ -170,7 +170,7 @@ export const packageManagers: PackageManager[] = [
 export function detectAllPackageManagers({
   installDir,
 }: InstallDir): PackageManager[] {
-  return traceStep('detect-package-manager', () => {
+  return withProgress('detect-package-manager', () => {
     const detected = packageManagers.filter((pm) => pm.detect({ installDir }));
 
     if (detected.length === 0) {
