@@ -48,6 +48,46 @@ npx @posthog/wizard revenue
 Requires PostHog and Stripe SDKs already installed. Supports `--ci` with the
 same flags as the main wizard.
 
+## Headless signup + install (agents / CI)
+
+For a fully non-interactive first-run (no existing PostHog account, no TTY,
+no browser), combine `--ci --signup --email`. The wizard provisions a new
+account, uses the returned personal API key to run the normal CI install,
+and wires PostHog into the project at `--install-dir`:
+
+```bash
+npx @posthog/wizard --ci --signup \
+  --email you@example.com \
+  --install-dir .
+```
+
+Optional flags: `--name "Your Name"`, `--region eu` (default `us`),
+`--integration nextjs` (else auto-detected).
+
+### Provision only
+
+If you just want credentials — for tests, pre-flight checks, or wiring up
+PostHog yourself — use the `provision` subcommand, which emits a structured
+`ProvisioningResult` and does nothing else:
+
+```bash
+# Human-readable (when stdout is a TTY)
+npx @posthog/wizard provision --email user@example.com --region us
+
+# Machine-readable — auto when stdout is piped, or force with --json
+npx @posthog/wizard provision --email user@example.com --region eu --json
+```
+
+Success prints the full `ProvisioningResult` (`projectApiKey`, `host`,
+`projectId`, `accountId`, `accessToken`, `refreshToken`, and
+`personalApiKey` if present). Failure exits 1; in `--json` mode the error
+is emitted to stderr as `{"error":"...","code":"..."}`, with `code` set to
+`email_exists` when the address is already registered.
+
+> ⚠️ **Output contains live credentials.** Pipe it into a secrets store —
+> do not let it be captured by shared CI logs. Mask the step output or
+> redirect stdout to a file your job reads and discards.
+
 # Options
 
 The following CLI arguments are available:

@@ -14,7 +14,11 @@
  */
 
 import { atom, map } from 'nanostores';
-import { TaskStatus, isTaskStatus } from '../wizard-ui.js';
+import {
+  TaskStatus,
+  isTaskStatus,
+  type AuthErrorDetail,
+} from '../wizard-ui.js';
 import {
   type WizardSession,
   type OutroData,
@@ -378,7 +382,8 @@ export class WizardStore {
   }
 
   /** Push the auth-error overlay (no dismiss — user must exit). */
-  showAuthError(): void {
+  showAuthError(detail?: AuthErrorDetail): void {
+    this.$session.setKey('authErrorDetail', detail ?? null);
     this.pushOverlay(Overlay.AuthError);
   }
 

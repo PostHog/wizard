@@ -86,13 +86,6 @@ export type WizardOptions = {
   yaraReport: boolean;
 };
 
-export interface Feature {
-  id: string;
-  prompt: string;
-  enabledHint?: string;
-  disabledHint?: string;
-}
-
 export type FileChange = {
   filePath: string;
   oldContent?: string;

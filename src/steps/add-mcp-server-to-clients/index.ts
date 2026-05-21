@@ -1,6 +1,6 @@
 import type { Integration } from '../../lib/constants';
 import type { CloudRegion } from '../../utils/types';
-import { traceStep } from '../../telemetry';
+import { withProgress } from '../../telemetry';
 import { analytics } from '../../utils/analytics';
 import { getUI } from '../../ui';
 import { MCPClient } from './MCPClient';
@@ -77,7 +77,7 @@ export const addMCPServerToClientsStep = async ({
   }
 
   // Auto-install to all supported clients
-  await traceStep('adding mcp servers', async () => {
+  await withProgress('adding mcp servers', async () => {
     await addMCPServer(
       supportedClients,
       apiKey,
@@ -115,7 +115,7 @@ export const removeMCPServerFromClientsStep = async ({
   }
 
   // Auto-remove from all installed clients
-  const results = await traceStep('removing mcp servers', async () => {
+  const results = await withProgress('removing mcp servers', async () => {
     await removeMCPServer(installedClients, local);
     return installedClients.map((c) => c.name);
   });

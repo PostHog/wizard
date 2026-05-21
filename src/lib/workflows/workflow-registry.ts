@@ -16,6 +16,7 @@ import { posthogIntegrationConfig } from './posthog-integration/index.js';
 import { revenueAnalyticsConfig } from './revenue-analytics/index.js';
 import { auditConfig } from './audit/index.js';
 import { eventsAuditConfig } from './events-audit/index.js';
+import { audit3000Config } from './audit-3000/index.js';
 import { posthogDoctorConfig } from './posthog-doctor/index.js';
 
 export const WORKFLOW_REGISTRY: WorkflowConfig[] = [
@@ -23,6 +24,7 @@ export const WORKFLOW_REGISTRY: WorkflowConfig[] = [
   revenueAnalyticsConfig,
   auditConfig,
   eventsAuditConfig,
+  audit3000Config,
   posthogDoctorConfig,
 ];
 

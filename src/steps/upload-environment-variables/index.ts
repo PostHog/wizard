@@ -1,5 +1,5 @@
 import type { Integration } from '../../lib/constants';
-import { traceStep } from '../../telemetry';
+import { withProgress } from '../../telemetry';
 import { analytics } from '../../utils/analytics';
 import { getUI } from '../../ui';
 import type { WizardSession } from '../../lib/wizard-session';
@@ -40,7 +40,7 @@ export const uploadEnvironmentVariablesStep = async (
   // Auto-accept — the agent already wrote env vars via MCP tools
   getUI().log.info(`Uploading environment variables to ${provider.name}...`);
 
-  const results = await traceStep(
+  const results = await withProgress(
     'uploading environment variables',
     async () => {
       return await provider.uploadEnvVars(envVars);

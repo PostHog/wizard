@@ -1,172 +1,160 @@
 ---
 name: adding-skill-workflow
-description: Create a new skill-based workflow for the PostHog wizard. Use when adding a new workflow type (like revenue analytics, error tracking, feature flags) that installs a context-mill skill and runs an agent. Covers workflow steps, detection, flow registration, runner, custom screens, and CLI command.
+description: Create a new skill-based workflow for the PostHog wizard. Use when adding a workflow type (like revenue analytics, audit, error tracking) that installs a context-mill skill and runs an agent against it. Covers the createSkillWorkflow factory for the common case, customization via WorkflowRun, and advanced patterns for custom screens or detection.
 compatibility: Designed for Claude Code working on the PostHog wizard codebase.
 metadata:
   author: posthog
-  version: "1.1"
+  version: "2.0"
 ---
 
 # Adding a Skill-Based Workflow
 
-## Architecture Overview
+A skill-based workflow installs a context-mill skill and runs the agent against it. Examples in the codebase: the `audit` workflow (clean factory call), the `revenue-analytics` workflow (factory + custom intro screen + detect step).
 
-Skill-based workflows (like revenue analytics) follow a different path from framework integrations. Instead of the agent runner building a prompt from a `FrameworkConfig`, a skill-based workflow:
+Before reading this, read `wizard-development/SKILL.md` for the architectural context — particularly principle 4 ("New capability is a new workflow, not a new branch").
 
-1. **Detects prerequisites** and downloads a skill from context-mill
-2. **Runs the agent** against the installed skill using the generic `skill-runner.ts`
-3. **Shows results** via data-driven outro (no hardcoded messages)
+## Architecture
 
-Key files:
-- `src/lib/workflow-step.ts` — `WorkflowStep` interface with `gate`, `onInit`, `StoreInitContext`
-- `src/lib/skill-runner.ts` — Generic runner: takes a skill path, builds bootstrap prompt, runs agent
-- `src/lib/wizard-tools.ts` — `fetchSkillMenu()` and `downloadSkill()` for installing skills via code
-- `src/utils/file-utils.ts` — Shared `IGNORED_DIRS` for project-tree scans
-- `src/ui/tui/flows.ts` — `Flow` enum, `Screen` enum, `WORKFLOW_STEPS`, `FLOWS` maps
-- `src/ui/tui/screen-registry.tsx` — Maps screen IDs to React components
-- `src/ui/tui/store.ts` — Gate system derived from workflow step definitions
+The wizard's runner pipeline is fixed. What varies between workflows is a `WorkflowRun` configuration object that controls the skill ID, prompt, success message, abort cases, and post-run hooks. A `WorkflowConfig` ties together: the CLI command, the step list, and the `WorkflowRun`. The workflow registry derives all downstream wiring — CLI subcommands, TUI flows, the router — from a single array. **Adding a workflow is configuration, not code.**
 
-## How It Works
+## The common case: `createSkillWorkflow`
 
-### Gates and isComplete
+For workflows that just install a skill and let the agent run it (most workflows), use the factory in `agent-skill/index.ts`:
 
-- **`isComplete`** — exit condition for the screen. Router advances past the step when true. Defaults to `gate` if unset.
-- **`gate`** — define this if your screen needs to await user interactions. bin.ts pauses on `await store.getGate(stepId)` until the predicate becomes true.
+```ts
+// src/lib/workflows/error-tracking/index.ts
+import { createSkillWorkflow } from '../agent-skill/index.js';
 
-### Detect step pattern
-
-Detection is split into two pieces:
-
-1. **A headless `detect` workflow step** with a gate predicate that resolves once `frameworkContext.skillPath` or `frameworkContext.detectError` is set.
-2. **An exported `detect*Prerequisites()` async function** that bin.ts calls AFTER the session is assigned to the store.
-
-**Why not `onInit`?** Because `onInit` fires during store construction (inside `_initFromWorkflow`), which runs BEFORE `tui.store.session = session` in bin.ts. Any `onInit` that reads `session.installDir` would get the default `process.cwd()`, not the app directory. `onInit` is fine for session-independent work like the integration flow's health check.
-
-```typescript
-// In your workflow file
-export async function detectYourPrerequisites(
-  session: WizardSession,
-  setFrameworkContext: (key: string, value: unknown) => void,
-): Promise<void> {
-  // Verify session.installDir, scan for required artifacts, fetch + download
-  // the skill. On failure: setFrameworkContext('detectError', '...').
-  // On success: setFrameworkContext('skillPath', '.claude/skills/...').
-  // Optionally store any data the intro screen should render.
-}
-
-export const YOUR_WORKFLOW: Workflow = [
-  {
-    id: 'detect',
-    label: 'Detecting prerequisites',
-    gate: (s) =>
-      s.frameworkContext.skillPath != null ||
-      s.frameworkContext.detectError != null,
-  },
-  // ...
-];
+export const errorTrackingConfig = createSkillWorkflow({
+  skillId: 'error-tracking-setup',
+  command: 'errors',
+  flowKey: 'error-tracking',
+  description: 'Set up PostHog error tracking',
+  integrationLabel: 'error-tracking',
+  successMessage: 'Error tracking configured!',
+  reportFile: 'posthog-error-tracking-report.md',
+  docsUrl: 'https://posthog.com/docs/error-tracking',
+  spinnerMessage: 'Setting up error tracking...',
+  estimatedDurationMinutes: 5,
+  requires: ['posthog-integration'],  // optional: prior workflows that must run first
+});
 ```
 
-### Error handling — never console.error from inside the TUI
+Then register it in two places:
 
-When the Ink TUI is rendering, calling `console.error` and `process.exit(1)` mangles the screen. Instead, your custom intro screen reads `frameworkContext.detectError` and renders an error view with an Exit option. bin.ts just awaits the intro gate — the screen handles both success and error states.
+1. `src/lib/workflows/workflow-registry.ts` — add to `WORKFLOW_REGISTRY` array
+2. `src/ui/tui/flows.ts` — add a `Flow` enum entry whose value matches `flowKey`
 
-### StoreInitContext
+That's the entire workflow. **bin.ts, the store, the agent runner, and the router all derive their wiring from the registry automatically.** Don't add a yargs command. Don't add a runner function. Don't touch bin.ts.
 
-Available in `onInit` callbacks (use only for session-independent work):
-- `ctx.session` — read current session state
-- `ctx.setReadinessResult(result)` — store health check results
-- `ctx.setFrameworkContext(key, value)` — store detection results
-- `ctx.emitChange()` — trigger gate re-evaluation
+The `audit` workflow (`src/lib/workflows/audit/`) is the cleanest example of this pattern.
 
-## Steps to Add a Workflow
+## Customizing the agent run
 
-### 1. Define workflow steps
+`createSkillWorkflow` accepts these optional fields on `SkillWorkflowOptions`, all of which flow through to the `WorkflowRun`:
 
-Create `src/lib/workflows/<your-workflow>.ts` with a detect step + (optional) intro step + auth + run + outro.
+| Option | Purpose |
+|---|---|
+| `customPrompt` | Extra prompt instructions appended after the default project prompt |
+| `buildOutroData` | Override the default outro. Receives session, credentials, cloud region. Returns `OutroData`. |
+| `abortCases` | Array of `{ match: RegExp, message, body, docsUrl? }` that match `[ABORT] <reason>` signals from the skill |
+| `requires` | Other workflow `flowKey`s that must be satisfied first |
 
-Export `detect*Prerequisites()` as a standalone async function — do NOT put detection in `onInit`.
+For more complex post-agent work (env var upload, dashboard creation, anything that needs to run after the agent completes but before the outro), drop the factory and build the `WorkflowConfig` directly so you can set `WorkflowRun.postRun`. See `posthog-integration` for that pattern.
 
-### 2. Register the flow
+## Dynamic run configuration
 
-In `src/ui/tui/flows.ts`:
-- Add to `Flow` enum
-- Add to `WORKFLOW_STEPS` map
-- Add to `FLOWS` record via `workflowToFlowEntries()`
+If your workflow needs to inspect the session before building the run config (read framework context, seed state on disk, set per-session prompt fragments), pass an async function as the workflow's `run`:
 
-### 3. Create the runner
+```ts
+const baseConfig = createSkillWorkflow({ /* ... */ });
 
-The runner is trivial — it reads the skill path from session and delegates to `runSkillBootstrap()`:
+const dynamicRun = async (session: WizardSession): Promise<WorkflowRun> => {
+  // do per-session work here (e.g. seed a ledger, populate frameworkContext)
+  if (!baseConfig.run) throw new Error('missing run');
+  return typeof baseConfig.run === 'function'
+    ? baseConfig.run(session)
+    : baseConfig.run;
+};
 
-```typescript
-import { runSkillBootstrap } from './skill-runner';
-
-export async function runYourWizard(session: WizardSession): Promise<void> {
-  const skillPath = session.frameworkContext.skillPath as string;
-
-  await runSkillBootstrap(session, {
-    skillPath,
-    integrationLabel: 'your-workflow',
-    promptContext: 'Set up X for this project.',
-    successMessage: 'X configured!',
-    reportFile: 'posthog-x-report.md',
-    docsUrl: 'https://posthog.com/docs/x',
-    spinnerMessage: 'Setting up X...',
-    estimatedDurationMinutes: 5,
-  });
-}
+export const yourConfig: WorkflowConfig = {
+  ...baseConfig,
+  run: dynamicRun,
+};
 ```
 
-Use the actual skill ID from context-mill's skill menu — don't guess.
+The `audit` workflow uses this pattern to seed a checks ledger on disk before the agent run.
 
-### 4. (Optional) Custom intro screen
+## Custom screens
 
-If you want a workflow-specific welcome screen, create one. The screen should also handle the `detectError` state since that's where errors are rendered.
+Skill-based workflows default to the generic step list in `agent-skill/steps.ts` (intro → auth → run → outro → keep-skills). To use workflow-specific screens (a custom intro that displays detection results, a custom outro with workflow-specific bullets), override the relevant step's `screen` field:
 
-**a.** Add a screen ID to the `Screen` enum in `src/ui/tui/flows.ts`.
+```ts
+const SCREEN_BY_STEP: Record<string, string> = {
+  intro: 'your-intro',
+  outro: 'your-outro',
+};
 
-**b.** Create `src/ui/tui/screens/YourIntroScreen.tsx`. Subscribe to the store, read `detectError` and detection results from `session.frameworkContext`, render either an error view (with Exit) or the welcome view (with Continue/Cancel). On confirm, call `store.completeSetup()`.
+const yourSteps: Workflow = AGENT_SKILL_STEPS.map((step) => {
+  const override = SCREEN_BY_STEP[step.id];
+  return override ? { ...step, screen: override } : step;
+});
 
-**c.** Register it in `src/ui/tui/screen-registry.tsx`.
+export const yourConfig: WorkflowConfig = {
+  ...baseConfig,
+  steps: yourSteps,
+};
+```
 
-**d.** Add an intro step to your workflow (after `detect`, before `auth`):
-```typescript
+Then:
+
+1. Add the screen IDs to the `Screen` enum in `flows.ts`
+2. Create the React component(s) under `src/ui/tui/screens/`
+3. Register them in `src/ui/tui/screen-registry.tsx`
+
+The screen reads from the store (via `useWizardStore`), renders error states from `frameworkContext.detectError` if present, and calls `store.completeSetup()` (or equivalent) when the user advances. The router resolves the active screen from session state — see `wizard-development/references/ARCHITECTURE.md` for the full screen resolution flow. **Never call `console.error` or imperatively navigate from inside the TUI.**
+
+## Detection / prerequisite checking
+
+If your workflow needs to verify prerequisites before showing the intro screen (e.g. PostHog must already be installed, certain SDKs must be present), add a headless detect step at the top of the workflow with an `onReady` hook:
+
+```ts
 {
-  id: 'intro',
-  label: 'Welcome',
-  screen: 'your-intro',
-  gate: (s) => s.setupConfirmed,
-  isComplete: (s) => s.setupConfirmed,
+  id: 'detect',
+  label: 'Detecting prerequisites',
+  // No screen — this step is headless
+  onReady: async (ctx) => {
+    // ctx.session.installDir is the user's project dir
+    // On success: ctx.setFrameworkContext('skillPath', '...')
+    // On failure: ctx.setFrameworkContext('detectError', { kind: '...', ... })
+  },
 },
 ```
 
-In bin.ts, await the intro gate after detect. Don't pre-set `setupConfirmed = true` if you have a custom intro — the user confirms via the screen.
+Use `onReady`, not `onInit` — `onInit` fires during store construction before `session` is assigned, so it can't read `installDir`. The custom intro screen reads `frameworkContext.detectError` and renders an error view (with an Exit option) when present, or the welcome view otherwise.
 
-### 5. Add the CLI command
+The `revenue-analytics` workflow is the canonical example of this pattern (detect step + custom intro + abort cases).
 
-In `bin.ts`, add a yargs command. The pattern:
-1. Start the TUI with your `Flow`
-2. Build session, assign to store
-3. Call `detect*Prerequisites()` explicitly
-4. Await `getGate('detect')`
-5. Await `getGate('intro')` — the screen handles both error and success states
-6. Call your runner
-7. Wait for `outroDismissed` via store subscribe, then `process.exit(0)` — without this, the process exits before the user can read the outro
-
-**Do not** `console.error` or `process.exit` for `detectError` from bin.ts — that mangles the Ink output. Let the intro screen render the error.
-
-### 6. Verify
+## Verification
 
 ```bash
-pnpm build    # Must compile
-pnpm test     # All tests pass
+pnpm build
+pnpm test
+pnpm fix
 ```
 
-Then run your command end-to-end against a real test app, including failure cases (missing prerequisites, bad directories) to confirm graceful handling.
+Then run end-to-end against a real test app:
 
-## Reference
+```bash
+pnpm try --install-dir=<path> <your-command>
+```
 
-See `references/WORKFLOW-GUIDE.md` for the full step-by-step guide with complete code examples.
+Test failure cases too — missing prerequisites, bad install directories, network errors during skill download. The wizard should render structured error outros, not stack traces.
 
-## Canonical Example
+## Canonical examples in the codebase
 
-`src/lib/workflows/revenue-analytics.ts` — read this for a full working implementation of every piece described above.
+- `src/lib/workflows/audit/` — clean `createSkillWorkflow` call with abort cases, custom screens, and a dynamic `run` function for per-session seeding
+- `src/lib/workflows/revenue-analytics/` — factory + custom intro screen + detect step with prerequisite checking
+- `src/lib/workflows/agent-skill/` — the factory itself (`createSkillWorkflow`) and the generic step list (`AGENT_SKILL_STEPS`)
+
+When in doubt, read the directory of the workflow that most resembles what you're building.

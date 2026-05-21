@@ -161,6 +161,10 @@ export interface WizardSession {
   outageDismissed: boolean;
   settingsOverrideKeys: string[] | null;
   settingsConflicts: SettingsConflict[] | null;
+  authErrorDetail: {
+    hasSettingsConflict: boolean;
+    logFilePath: string;
+  } | null;
   portConflictProcess: {
     command: string;
     pid: string;
@@ -239,6 +243,7 @@ export function buildSession(args: {
     outageDismissed: false,
     settingsOverrideKeys: null,
     settingsConflicts: null,
+    authErrorDetail: null,
     portConflictProcess: null,
     outroData: null,
     dashboardUrl: null,

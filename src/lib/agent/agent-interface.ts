@@ -294,6 +294,8 @@ export type AgentConfig = {
   /** Feature flag key -> variant (evaluated at start of run). */
   wizardFlags?: Record<string, string>;
   wizardMetadata?: Record<string, string>;
+  /** Workflow identifier — selects the model for that workflow. */
+  integrationLabel?: string;
 };
 
 /**
@@ -643,6 +645,21 @@ export async function initializeAgent(
     process.env.CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS = 'true';
 
     logToFile('Configured LLM gateway:', gatewayUrl);
+    logToFile(
+      'API key prefix:',
+      config.posthogApiKey
+        ? `${config.posthogApiKey.slice(0, 4)}***`
+        : '(missing)',
+    );
+    const initConflicts = checkAllSettingsConflicts(options.installDir);
+    logToFile(
+      'Settings conflicts at agent init:',
+      initConflicts.length > 0
+        ? initConflicts
+            .map((c) => `${c.source}(${c.keys.join(',')})`)
+            .join('; ')
+        : 'none',
+    );
 
     // Configure MCP server with PostHog authentication
     const mcpServers: McpServersConfig = {
@@ -669,10 +686,19 @@ export async function initializeAgent(
     });
     mcpServers['wizard-tools'] = wizardToolsServer;
 
+    // audit-3000 needs Opus 4.7's depth for the multi-phase audit chain;
+    // every other workflow runs on Sonnet 4.6.
+    // Bare model IDs (no `anthropic/` prefix) so the LLM gateway's Bedrock
+    // fallback can match map_to_bedrock_model()'s strict lookup.
+    const model =
+      config.integrationLabel === 'audit-3000'
+        ? 'claude-opus-4-6'
+        : 'claude-sonnet-4-6';
+
     const agentRunConfig: AgentRunConfig = {
       workingDirectory: config.workingDirectory,
       mcpServers,
-      model: 'anthropic/claude-sonnet-4-6',
+      model,
       wizardFlags: config.wizardFlags,
       wizardMetadata: config.wizardMetadata,
     };
@@ -1040,8 +1066,20 @@ export async function runAgent(
       ) {
         signalDone!();
         spinner.stop('Authentication failed');
-        logToFile('Agent error: 401, showing auth error screen');
-        getUI().showAuthError();
+        // Re-check at error time: a settings conflict can be the *real* cause
+        // of a 401, distinct from bad PAT / wrong region / expired key.
+        // Only the conflict case warrants telling the user to log out of
+        // Claude Code.
+        const conflicts = checkAllSettingsConflicts(options.installDir);
+        const hasSettingsConflict = conflicts.length > 0;
+        logToFile('Agent error: 401, showing auth error screen', {
+          hasSettingsConflict,
+          conflicts,
+        });
+        getUI().showAuthError({
+          hasSettingsConflict,
+          logFilePath: getLogFilePath(),
+        });
         await wizardAbort({
           message: 'Authentication failed (401)',
           error: new WizardError('Authentication failed'),
