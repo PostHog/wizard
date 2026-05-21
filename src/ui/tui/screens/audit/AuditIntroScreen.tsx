@@ -4,8 +4,6 @@ import type { WizardStore } from '../../store.js';
 import { IntroScreenLayout } from '../IntroScreenLayout.js';
 import { SkillSourceInfo, useSkillEntry } from '../SkillSourceInfo.js';
 
-const AUDIT_SKILL_ID = 'audit';
-
 interface AuditIntroScreenProps {
   store: WizardStore;
 }
@@ -18,10 +16,10 @@ export const AuditIntroScreen = ({ store }: AuditIntroScreenProps) => {
 
   const [showingMoreInfo, setShowingMoreInfo] = useState(false);
   const { session } = store;
-  const { skillEntry, fetchFailed } = useSkillEntry(
-    AUDIT_SKILL_ID,
-    session.localMcp,
-  );
+  // bin.ts seeds session.skillId from WorkflowConfig.skillId before render,
+  // so audit and events-audit pick up their respective skill metadata here.
+  const skillId = session.skillId ?? 'audit';
+  const { skillEntry, fetchFailed } = useSkillEntry(skillId, session.localMcp);
 
   const body = showingMoreInfo ? (
     <Box flexDirection="column" width={56}>
@@ -35,7 +33,7 @@ export const AuditIntroScreen = ({ store }: AuditIntroScreenProps) => {
       <Text>
         The{' '}
         <Text color="cyan" italic>
-          {AUDIT_SKILL_ID}
+          {skillId}
         </Text>{' '}
         workflow reviews your project's PostHog integration against best
         practices to help you capture high-quality events and writes a report
@@ -43,7 +41,7 @@ export const AuditIntroScreen = ({ store }: AuditIntroScreenProps) => {
       </Text>
       <Box marginTop={1}>
         <SkillSourceInfo
-          skillId={AUDIT_SKILL_ID}
+          skillId={skillId}
           skillEntry={skillEntry}
           fetchFailed={fetchFailed}
         />

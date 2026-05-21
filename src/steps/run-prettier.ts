@@ -1,5 +1,5 @@
 import type { Integration } from '../lib/constants';
-import { traceStep } from '../telemetry';
+import { withProgress } from '../telemetry';
 import { analytics } from '../utils/analytics';
 import { getUI } from '../ui';
 import {
@@ -17,7 +17,7 @@ export async function runPrettierStep({
 }: Pick<WizardOptions, 'installDir'> & {
   integration: Integration;
 }): Promise<void> {
-  return traceStep('run-prettier', async () => {
+  return withProgress('run-prettier', async () => {
     if (!isInGitRepo()) {
       // We only run formatting on changed files. If we're not in a git repo, we can't find
       // changed files. So let's early-return without showing any formatting-related messages.

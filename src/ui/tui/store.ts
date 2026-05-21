@@ -501,6 +501,11 @@ export class WizardStore {
     this.emitChange();
   }
 
+  setDashboardUrl(url: string): void {
+    this.$session.setKey('dashboardUrl', url);
+    this.emitChange();
+  }
+
   setFrameworkContext(key: string, value: unknown): void {
     const ctx = { ...this.$session.get().frameworkContext, [key]: value };
     this.$session.setKey('frameworkContext', ctx);
