@@ -296,6 +296,15 @@ export type AgentConfig = {
   wizardMetadata?: Record<string, string>;
   /** Workflow identifier — selects the model for that workflow. */
   integrationLabel?: string;
+  /** Bridge that drives the `wizard_ask` overlay. Omit in non-interactive hosts. */
+  askBridge?: import('../wizard-ask-bridge').WizardAskBridge;
+  /** Per-run cap on `wizard_ask` invocations. Defaults to 10. */
+  askMaxQuestions?: number;
+  /**
+   * Read accessor for the active pending question. Used by canUseTool to
+   * block Write/Edit while the overlay is open (defense in depth).
+   */
+  getPendingQuestion?: () => import('../wizard-session').PendingQuestion | null;
 };
 
 /**
@@ -372,6 +381,11 @@ type AgentRunConfig = {
   model: string;
   wizardFlags?: Record<string, string>;
   wizardMetadata?: Record<string, string>;
+  /**
+   * Read accessor for the active pending question. canUseTool reads this
+   * to block Write/Edit while the overlay is open.
+   */
+  getPendingQuestion?: () => import('../wizard-session').PendingQuestion | null;
 };
 
 /**
@@ -497,13 +511,31 @@ function matchesAllowedPrefix(command: string): boolean {
  * - Build/typecheck/lint commands for verification
  * - Piping to tail/head for output limiting is allowed
  * - Stderr redirection (2>&1) is allowed
+ *
+ * `wizardAskPending` is true while a wizard_ask overlay is open — when set,
+ * Write/Edit calls are denied as a defense-in-depth measure against a
+ * misbehaving agent that races to mutate files before the question is
+ * answered. The SDK's tool-result protocol already pauses the agent here;
+ * this guard is a belt-and-suspenders second line.
  */
 export function wizardCanUseTool(
   toolName: string,
   input: Record<string, unknown>,
+  context: { wizardAskPending?: boolean } = {},
 ):
   | { behavior: 'allow'; updatedInput: Record<string, unknown> }
   | { behavior: 'deny'; message: string } {
+  if (
+    context.wizardAskPending &&
+    (toolName === 'Write' || toolName === 'Edit')
+  ) {
+    logToFile(`Denying ${toolName} while wizard_ask overlay is open`);
+    return {
+      behavior: 'deny',
+      message: `${toolName} is paused while a wizard_ask question is open. Wait for the user's answer to come back as a tool result before writing files.`,
+    };
+  }
+
   // Block direct reads/writes of .env files — use wizard-tools MCP instead
   if (toolName === 'Read' || toolName === 'Write' || toolName === 'Edit') {
     const filePath = typeof input.file_path === 'string' ? input.file_path : '';
@@ -683,6 +715,8 @@ export async function initializeAgent(
       workingDirectory: config.workingDirectory,
       detectPackageManager: config.detectPackageManager,
       skillsBaseUrl: config.skillsBaseUrl,
+      askBridge: config.askBridge,
+      askMaxQuestions: config.askMaxQuestions,
     });
     mcpServers['wizard-tools'] = wizardToolsServer;
 
@@ -701,6 +735,7 @@ export async function initializeAgent(
       model,
       wizardFlags: config.wizardFlags,
       wizardMetadata: config.wizardMetadata,
+      getPendingQuestion: config.getPendingQuestion,
     };
 
     logToFile('Agent config:', {
@@ -954,6 +989,7 @@ export async function runAgent(
           const result = wizardCanUseTool(
             toolName,
             input as Record<string, unknown>,
+            { wizardAskPending: agentConfig.getPendingQuestion?.() != null },
           );
           logToFile('canUseTool result:', result);
           return Promise.resolve(result);

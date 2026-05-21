@@ -10,7 +10,11 @@
 
 import type { SettingsConflict } from '../lib/agent/agent-interface';
 import type { WizardReadinessResult } from '../lib/health-checks/readiness.js';
-import type { OutroData } from '../lib/wizard-session';
+import type {
+  AskAnswers,
+  OutroData,
+  PendingQuestion,
+} from '../lib/wizard-session';
 
 export enum TaskStatus {
   Pending = 'pending',
@@ -109,6 +113,13 @@ export interface WizardUI {
 
   /** Show auth error overlay when Anthropic API returns 401. */
   showAuthError(detail?: AuthErrorDetail): void;
+
+  /**
+   * Open the wizard_ask overlay and resolve with the user's answers.
+   * Implementations that can't ask (CI/logging) reject so the bridge can
+   * surface a clear "not available" error to the agent.
+   */
+  requestQuestion(question: PendingQuestion): Promise<AskAnswers>;
 
   // ── Display state ──────────────────────────────────────────────────
   /** Set the detected framework label (e.g., "Django with Wagtail CMS") */

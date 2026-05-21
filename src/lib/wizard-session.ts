@@ -94,6 +94,30 @@ export interface OutroData {
   dashboardUrl?: string;
 }
 
+/** A single question rendered by the WizardAsk overlay. */
+export interface AskQuestion {
+  /** Key for the response map */
+  id: string;
+  prompt: string;
+  /** text = single-line free input; single/multi = picker */
+  kind: 'single' | 'multi' | 'text';
+  /** Required for `single` and `multi`. Ignored for `text`. */
+  options?: { label: string; value: string }[];
+  /** Defaults to true */
+  required?: boolean;
+}
+
+/** Map of question id → answer (string for single/text, string[] for multi). */
+export type AskAnswers = Record<string, string | string[]>;
+
+/** A pending wizard_ask request held by the store. */
+export interface PendingQuestion {
+  id: string;
+  questions: AskQuestion[];
+  /** Skill id of the caller. Set by the wizard from session.skillId. */
+  source: string;
+}
+
 /**
  * PostHog dashboard URL emitted by the agent during a workflow run.
  * Populated via the `[DASHBOARD_URL]` text marker in agent assistant messages
@@ -183,6 +207,9 @@ export interface WizardSession {
 
   // Resolved framework config (set after integration is known)
   frameworkConfig: FrameworkConfig | null;
+
+  /** Active wizard_ask request, set by the bridge when the agent calls the tool. */
+  pendingQuestion: PendingQuestion | null;
 }
 
 /**
@@ -251,5 +278,6 @@ export function buildSession(args: {
     workflowLabel: null,
     skillId: null,
     frameworkConfig: null,
+    pendingQuestion: null,
   };
 }

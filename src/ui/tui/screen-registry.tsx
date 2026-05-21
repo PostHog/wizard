@@ -35,6 +35,7 @@ import { KeepSkillsScreen } from './screens/KeepSkillsScreen.js';
 import { OutroScreen } from './screens/OutroScreen.js';
 import { ExitScreen } from './screens/ExitScreen.js';
 import { AuthErrorScreen } from './screens/AuthErrorScreen.js';
+import { WizardAskScreen } from './screens/WizardAskScreen.js';
 import { createMcpInstaller } from './services/mcp-installer.js';
 import type { McpInstaller } from './services/mcp-installer.js';
 
@@ -58,6 +59,7 @@ export function createScreens(
     [Overlay.ManagedSettings]: <ManagedSettingsScreen store={store} />,
     [Overlay.PortConflict]: <PortConflictScreen store={store} />,
     [Overlay.AuthError]: <AuthErrorScreen store={store} />,
+    [Overlay.WizardAsk]: <WizardAskScreen store={store} />,
 
     // Wizard flow
     [Screen.Intro]: <PostHogIntegrationIntroScreen store={store} />,

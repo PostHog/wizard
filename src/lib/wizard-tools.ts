@@ -14,6 +14,7 @@ import fs from 'fs';
 import { execFileSync } from 'child_process';
 import { z } from 'zod';
 import { logToFile } from '../utils/debug';
+import { analytics } from '../utils/analytics';
 import { skillTmpPath } from '../utils/paths';
 import type { PackageManagerDetector } from './detection/package-manager';
 import {
@@ -22,6 +23,7 @@ import {
   type AuditCheck,
   type AuditStatus,
 } from './workflows/audit/types';
+import type { WizardAskBridge } from './wizard-ask-bridge';
 
 // ---------------------------------------------------------------------------
 // SDK dynamic import (ESM module loaded once, cached)
@@ -175,6 +177,61 @@ export interface WizardToolsOptions {
 
   /** Base URL for the skills server (e.g. http://localhost:8765 or GitHub releases URL) */
   skillsBaseUrl: string;
+
+  /**
+   * Bridge that drives the `wizard_ask` overlay. When omitted, the
+   * `wizard_ask` tool is still registered but returns an error explaining
+   * the host is non-interactive — keeps the tool surface stable across
+   * CI/dev environments.
+   */
+  askBridge?: WizardAskBridge;
+
+  /**
+   * Per-run cap on `wizard_ask` invocations. Defaults to {@link DEFAULT_ASK_MAX_QUESTIONS}.
+   * The 4th call always returns a "batch your questions" error regardless
+   * of this cap — see {@link ASK_BATCH_THRESHOLD}.
+   */
+  askMaxQuestions?: number;
+}
+
+/** Default per-run cap on wizard_ask calls when no override is provided. */
+export const DEFAULT_ASK_MAX_QUESTIONS = 10;
+/** Calls past this number always return a batch-it error. */
+export const ASK_BATCH_THRESHOLD = 3;
+
+export type AskCapDecision =
+  | { kind: 'ok' }
+  | {
+      kind: 'capped';
+      reason: 'max_questions' | 'adjacency';
+      message: string;
+    };
+
+/**
+ * Pure decision function for the wizard_ask caps. Returns whether the
+ * upcoming call should proceed and, if not, the error message to surface
+ * to the agent. Extracted so the policy can be unit-tested without
+ * spinning up an MCP server.
+ */
+export function evaluateAskCap(
+  callCount: number,
+  maxQuestions: number,
+): AskCapDecision {
+  if (callCount >= maxQuestions) {
+    return {
+      kind: 'capped',
+      reason: 'max_questions',
+      message: `Error: wizard_ask cap reached (${maxQuestions} calls in this run). Proceed with sensible defaults using the answers you already have, or emit [ABORT] requirements-incomplete.`,
+    };
+  }
+  if (callCount >= ASK_BATCH_THRESHOLD) {
+    return {
+      kind: 'capped',
+      reason: 'adjacency',
+      message: `Error: too many wizard_ask calls in a row (${callCount} so far). Batch the remaining questions into a single call — the schema accepts up to 8 questions per invocation.`,
+    };
+  }
+  return { kind: 'ok' };
 }
 
 // ---------------------------------------------------------------------------
@@ -431,9 +488,18 @@ const SERVER_NAME = 'wizard-tools';
  * Must be called asynchronously because the SDK is an ESM module loaded via dynamic import.
  */
 export async function createWizardToolsServer(options: WizardToolsOptions) {
-  const { workingDirectory, detectPackageManager, skillsBaseUrl } = options;
+  const {
+    workingDirectory,
+    detectPackageManager,
+    skillsBaseUrl,
+    askBridge,
+    askMaxQuestions = DEFAULT_ASK_MAX_QUESTIONS,
+  } = options;
   const sdk = await getSDKModule();
   const { tool, createSdkMcpServer } = sdk;
+
+  // Per-server counter for wizard_ask call accounting (adjacency + total cap).
+  let askCallCount = 0;
 
   // Pre-fetch skill menu so category names are available in the tool schema
   let cachedSkillMenu: Record<string, SkillEntry[]> = {};
@@ -811,6 +877,135 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
     },
   );
 
+  // -- wizard_ask -----------------------------------------------------------
+
+  const askQuestionSchema = z.object({
+    id: z
+      .string()
+      .min(1)
+      .describe('Stable key for the answer in the response map'),
+    prompt: z.string().min(1).describe('Question text shown to the user'),
+    kind: z
+      .enum(['single', 'multi', 'text'])
+      .describe(
+        "'single' = pick one option, 'multi' = pick any, 'text' = free-form single-line answer",
+      ),
+    options: z
+      .array(z.object({ label: z.string(), value: z.string() }))
+      .optional()
+      .describe('Required for kind=single|multi; ignored for kind=text'),
+    required: z.boolean().optional().describe('Defaults to true'),
+  });
+
+  const wizardAsk = tool(
+    'wizard_ask',
+    'Ask the user one or more structured questions and wait for their answers. ' +
+      'Use this whenever you would otherwise inline a question in your text output. ' +
+      'Batch related questions into a single call — do not call this multiple times in a row.',
+    {
+      questions: z.array(askQuestionSchema).min(1).max(8),
+    },
+    async (args: {
+      questions: Array<{
+        id: string;
+        prompt: string;
+        kind: 'single' | 'multi' | 'text';
+        options?: { label: string; value: string }[];
+        required?: boolean;
+      }>;
+    }) => {
+      if (!askBridge) {
+        return {
+          content: [
+            {
+              type: 'text' as const,
+              text: 'Error: wizard_ask is not available in this environment (CI / non-interactive). Proceed with sensible defaults or emit [ABORT] requirements-incomplete.',
+            },
+          ],
+          isError: true,
+        };
+      }
+
+      const capDecision = evaluateAskCap(askCallCount, askMaxQuestions);
+      if (capDecision.kind === 'capped') {
+        analytics.wizardCapture('wizard_ask capped', {
+          reason: capDecision.reason,
+          call_count: askCallCount,
+          max_questions: askMaxQuestions,
+        });
+        return {
+          content: [{ type: 'text' as const, text: capDecision.message }],
+          isError: true,
+        };
+      }
+
+      // Validate that single/multi questions include options. The schema
+      // alone can't enforce a per-kind requirement.
+      for (const q of args.questions) {
+        if (
+          (q.kind === 'single' || q.kind === 'multi') &&
+          (!q.options || q.options.length === 0)
+        ) {
+          return {
+            content: [
+              {
+                type: 'text' as const,
+                text: `Error: question "${q.id}" has kind="${q.kind}" but no options. Provide at least one { label, value } option, or change kind to "text".`,
+              },
+            ],
+            isError: true,
+          };
+        }
+      }
+
+      const ids = new Set<string>();
+      for (const q of args.questions) {
+        if (ids.has(q.id)) {
+          return {
+            content: [
+              {
+                type: 'text' as const,
+                text: `Error: duplicate question id "${q.id}". Each question must have a unique id.`,
+              },
+            ],
+            isError: true,
+          };
+        }
+        ids.add(q.id);
+      }
+
+      askCallCount += 1;
+
+      try {
+        const answers = await askBridge.request({ questions: args.questions });
+        logToFile(
+          `wizard_ask: resolved ${Object.keys(answers).length} answer(s) for ${
+            args.questions.length
+          } question(s)`,
+        );
+        return {
+          content: [
+            {
+              type: 'text' as const,
+              text: JSON.stringify({ answers }, null, 2),
+            },
+          ],
+        };
+      } catch (err: any) {
+        logToFile(`wizard_ask: error: ${err?.message ?? err}`);
+        return {
+          content: [
+            {
+              type: 'text' as const,
+              text: `Error: wizard_ask failed: ${err?.message ?? String(err)}`,
+            },
+          ],
+          isError: true,
+        };
+      }
+    },
+  );
+
   // -- Assemble server ------------------------------------------------------
 
   return createSdkMcpServer({
@@ -825,6 +1020,7 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
       auditSeedChecks,
       auditAddChecks,
       auditResolveChecks,
+      wizardAsk,
     ],
   });
 }
@@ -839,6 +1035,7 @@ export const WIZARD_TOOL_NAMES = [
   `${SERVER_NAME}:audit_seed_checks`,
   `${SERVER_NAME}:audit_add_checks`,
   `${SERVER_NAME}:audit_resolve_checks`,
+  `${SERVER_NAME}:wizard_ask`,
 ];
 
 // ---------------------------------------------------------------------------
