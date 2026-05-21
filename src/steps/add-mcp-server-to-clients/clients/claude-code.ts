@@ -4,10 +4,45 @@ import { PluginCapable, PluginInstallResult } from '../plugin-client';
 import { z } from 'zod';
 import { execSync } from 'child_process';
 import { analytics } from '../../../utils/analytics';
-import { debug } from '../../../utils/debug';
+import { debug, logToFile } from '../../../utils/debug';
+import { getUI } from '../../../ui';
 import * as os from 'os';
 import * as path from 'path';
 import * as fs from 'fs';
+
+// Stderr signatures that indicate the user's local Claude Code environment is
+// the problem, not the wizard. These shouldn't pollute error tracking — we
+// surface them to the user and move on.
+const USER_ENV_PLUGIN_INSTALL_ERRORS: Array<{
+  pattern: RegExp;
+  userMessage: string;
+}> = [
+  {
+    pattern: /Invalid JSON syntax in settings file/i,
+    userMessage:
+      'Your Claude Code settings.json has invalid JSON. Fix the syntax there and re-run the wizard to install the plugin.',
+  },
+  {
+    pattern: /not found in any configured marketplace/i,
+    userMessage:
+      'The PostHog marketplace is not configured in your Claude Code install, so the plugin could not be installed.',
+  },
+  {
+    pattern:
+      /unknown command|unrecognized command|not a claude command|invalid (sub)?command/i,
+    userMessage:
+      'Your Claude Code CLI is too old to support `plugin install`. Upgrade Claude Code and re-run the wizard to install the plugin.',
+  },
+];
+
+function classifyPluginInstallError(
+  msg: string,
+): { userMessage: string } | null {
+  for (const { pattern, userMessage } of USER_ENV_PLUGIN_INSTALL_ERRORS) {
+    if (pattern.test(msg)) return { userMessage };
+  }
+  return null;
+}
 
 export const ClaudeCodeMCPConfig = DefaultMCPClientConfig;
 
@@ -150,6 +185,12 @@ export class ClaudeCodeMCPClient
       const msg = error instanceof Error ? error.message : String(error);
       if (msg.includes('already installed') || msg.includes('already exists')) {
         return Promise.resolve({ success: true, alreadyInstalled: true });
+      }
+      const classified = classifyPluginInstallError(msg);
+      if (classified) {
+        getUI().log.warn(classified.userMessage);
+        logToFile(`[ClaudeCodeMCPClient] plugin install soft-failed: ${msg}`);
+        return Promise.resolve({ success: false });
       }
       analytics.captureException(
         new Error(`Claude Code plugin install failed: ${msg}`),

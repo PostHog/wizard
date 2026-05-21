@@ -14,6 +14,20 @@ jest.mock('../../../../utils/analytics', () => ({
 
 jest.mock('../../../../utils/debug', () => ({
   debug: jest.fn(),
+  logToFile: jest.fn(),
+}));
+
+const warnMock = jest.fn();
+jest.mock('../../../../ui', () => ({
+  getUI: () => ({
+    log: {
+      info: jest.fn(),
+      warn: warnMock,
+      error: jest.fn(),
+      success: jest.fn(),
+      step: jest.fn(),
+    },
+  }),
 }));
 
 describe('ClaudeCodeMCPClient — plugin methods', () => {
@@ -126,6 +140,55 @@ describe('ClaudeCodeMCPClient — plugin methods', () => {
         expect.objectContaining({
           message: expect.stringContaining('network timeout'),
         }),
+      );
+    });
+
+    it('returns failure without captureException when settings.json is malformed', async () => {
+      execSyncMock.mockImplementation((cmd: string) => {
+        if (String(cmd).includes('plugin install')) {
+          throw new Error(
+            '✘ Failed to install plugin "posthog": Failed to update settings: Invalid JSON syntax in settings file at /home/u/.claude/settings.json',
+          );
+        }
+        return Buffer.from('');
+      });
+      const client = new ClaudeCodeMCPClient();
+      await expect(client.installPlugin()).resolves.toEqual({ success: false });
+      expect(analytics.captureException).not.toHaveBeenCalled();
+      expect(warnMock).toHaveBeenCalledWith(
+        expect.stringContaining('settings.json'),
+      );
+    });
+
+    it('returns failure without captureException when marketplace is missing', async () => {
+      execSyncMock.mockImplementation((cmd: string) => {
+        if (String(cmd).includes('plugin install')) {
+          throw new Error(
+            'Plugin posthog not found in any configured marketplace',
+          );
+        }
+        return Buffer.from('');
+      });
+      const client = new ClaudeCodeMCPClient();
+      await expect(client.installPlugin()).resolves.toEqual({ success: false });
+      expect(analytics.captureException).not.toHaveBeenCalled();
+      expect(warnMock).toHaveBeenCalledWith(
+        expect.stringContaining('marketplace'),
+      );
+    });
+
+    it('returns failure without captureException when Claude Code is too old', async () => {
+      execSyncMock.mockImplementation((cmd: string) => {
+        if (String(cmd).includes('plugin install')) {
+          throw new Error("unknown command 'plugin'");
+        }
+        return Buffer.from('');
+      });
+      const client = new ClaudeCodeMCPClient();
+      await expect(client.installPlugin()).resolves.toEqual({ success: false });
+      expect(analytics.captureException).not.toHaveBeenCalled();
+      expect(warnMock).toHaveBeenCalledWith(
+        expect.stringContaining('Upgrade Claude Code'),
       );
     });
 
