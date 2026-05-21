@@ -117,6 +117,13 @@ export interface WorkflowConfig {
   description: string;
   /** Unique flow key — matches the Flow enum value */
   flowKey: string;
+  /**
+   * Context-mill skill ID this workflow installs and runs. When present,
+   * bin.ts seeds `session.skillId` with this value before the TUI renders
+   * so intro screens can resolve skill metadata without waiting for the
+   * agent run.
+   */
+  skillId?: string;
   /** The ordered step list */
   steps: Workflow;
   /** Agent run config. Static object or async function for dynamic config. */

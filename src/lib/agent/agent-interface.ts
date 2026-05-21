@@ -83,6 +83,12 @@ export const AgentSignals = {
   WIZARD_REMARK: '[WIZARD-REMARK]',
   /** Signal prefix for benchmark logging */
   BENCHMARK: '[BENCHMARK]',
+  /**
+   * Signal emitted when the agent has created a PostHog dashboard for the
+   * user. Format: `[DASHBOARD_URL] <full https url>`. The URL is captured
+   * onto `session.dashboardUrl` and surfaced by workflows in their outro.
+   */
+  DASHBOARD_URL: '[DASHBOARD_URL]',
 } as const;
 
 export type AgentSignal = (typeof AgentSignals)[keyof typeof AgentSignals];
@@ -1249,6 +1255,19 @@ function handleSDKMessage(
               const statusText = statusMatch[1].trim();
               getUI().pushStatus(statusText);
               spinner.message(statusText);
+            }
+
+            // Check for [DASHBOARD_URL] markers
+            const dashboardRegex = new RegExp(
+              `${AgentSignals.DASHBOARD_URL.replace(
+                /[.*+?^${}()|[\]\\]/g,
+                '\\$&',
+              )}\\s*(\\S+)`,
+              'm',
+            );
+            const dashboardMatch = block.text.match(dashboardRegex);
+            if (dashboardMatch) {
+              getUI().setDashboardUrl(dashboardMatch[1].trim());
             }
           }
 

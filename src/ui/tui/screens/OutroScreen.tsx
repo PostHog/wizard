@@ -83,6 +83,15 @@ export const OutroScreen = ({ store }: OutroScreenProps) => {
             </Box>
           )}
 
+          {outroData.dashboardUrl && (
+            <Box marginTop={1}>
+              <Text>
+                We've also made you a dashboard:{' '}
+                <Text color="cyan">{outroData.dashboardUrl}</Text>
+              </Text>
+            </Box>
+          )}
+
           {outroData.docsUrl && (
             <Box marginTop={1}>
               <Text>
