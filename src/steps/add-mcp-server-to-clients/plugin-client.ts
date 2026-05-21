@@ -1,6 +1,7 @@
 export interface PluginInstallResult {
   success: boolean;
   alreadyInstalled?: boolean;
+  outdatedClient?: boolean;
 }
 
 export interface PluginCapable {

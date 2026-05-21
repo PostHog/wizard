@@ -13,15 +13,63 @@ export const ClaudeCodeMCPConfig = DefaultMCPClientConfig;
 
 export type ClaudeCodeMCPConfig = z.infer<typeof DefaultMCPClientConfig>;
 
+// Minimum Claude Code CLI version that supports `plugin install`.
+export const MIN_PLUGIN_VERSION = '1.0.88';
+
+// Parse a semver-ish string ("1.0.88", "1.0.88 (Claude Code)") into [major, minor, patch].
+// Returns null if no version-like token is found.
+const parseVersion = (raw: string): [number, number, number] | null => {
+  const match = raw.match(/(\d+)\.(\d+)\.(\d+)/);
+  if (!match) return null;
+  return [Number(match[1]), Number(match[2]), Number(match[3])];
+};
+
+const compareVersions = (
+  a: [number, number, number],
+  b: [number, number, number],
+): number => {
+  for (let i = 0; i < 3; i++) {
+    if (a[i] !== b[i]) return a[i] - b[i];
+  }
+  return 0;
+};
+
 export class ClaudeCodeMCPClient
   extends DefaultMCPClient
   implements PluginCapable
 {
   name = 'Claude Code';
   private claudeBinaryPath: string | null = null;
+  private cliVersion: string | null = null;
 
   constructor() {
     super();
+  }
+
+  // Returns the installed CLI version (cached), or null if it can't be read.
+  private getCliVersion(): string | null {
+    if (this.cliVersion) return this.cliVersion;
+    const binary = this.findClaudeBinary();
+    if (!binary) return null;
+    try {
+      const output = execSync(`${binary} --version`, { stdio: 'pipe' });
+      this.cliVersion = output.toString().trim();
+      return this.cliVersion;
+    } catch {
+      return null;
+    }
+  }
+
+  // True iff the detected CLI version is below MIN_PLUGIN_VERSION.
+  // If the version can't be parsed, assume it's recent enough — the actual
+  // install will still surface any error.
+  private isCliOutdatedForPlugins(): boolean {
+    const version = this.getCliVersion();
+    if (!version) return false;
+    const parsed = parseVersion(version);
+    const min = parseVersion(MIN_PLUGIN_VERSION);
+    if (!parsed || !min) return false;
+    return compareVersions(parsed, min) < 0;
   }
 
   private findClaudeBinary(): string | null {
@@ -73,6 +121,7 @@ export class ClaudeCodeMCPClient
 
       const output = execSync(`${claudeBinary} --version`, { stdio: 'pipe' });
       const version = output.toString().trim();
+      this.cliVersion = version;
       debug(`  Claude Code detected: ${version}`);
       return Promise.resolve(true);
     } catch (error) {
@@ -143,6 +192,14 @@ export class ClaudeCodeMCPClient
   installPlugin(): Promise<PluginInstallResult> {
     const binary = this.findClaudeBinary();
     if (!binary) return Promise.resolve({ success: false });
+    if (this.isCliOutdatedForPlugins()) {
+      debug(
+        `  Claude Code CLI ${
+          this.cliVersion ?? '(unknown)'
+        } is below required ${MIN_PLUGIN_VERSION} for plugin install`,
+      );
+      return Promise.resolve({ success: false, outdatedClient: true });
+    }
     try {
       execSync(`${binary} plugin install posthog`, { stdio: 'pipe' });
       return Promise.resolve({ success: true });
@@ -150,6 +207,16 @@ export class ClaudeCodeMCPClient
       const msg = error instanceof Error ? error.message : String(error);
       if (msg.includes('already installed') || msg.includes('already exists')) {
         return Promise.resolve({ success: true, alreadyInstalled: true });
+      }
+      // Fallback: if the CLI itself reports it needs an update, treat as outdated
+      // rather than a generic failure. Covers cases where the version pre-check
+      // didn't trigger (e.g. unparseable version string).
+      if (
+        msg.includes('newer version') ||
+        msg.includes('needs an update') ||
+        msg.includes('is required to continue')
+      ) {
+        return Promise.resolve({ success: false, outdatedClient: true });
       }
       analytics.captureException(
         new Error(`Claude Code plugin install failed: ${msg}`),

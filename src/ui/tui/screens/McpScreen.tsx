@@ -74,6 +74,9 @@ export const McpScreen = ({
   const [selectedClientNames, setSelectedClientNames] = useState<string[]>([]);
   const [resultClients, setResultClients] = useState<string[]>([]);
   const [pluginClients, setPluginClients] = useState<string[]>([]);
+  const [outdatedPluginClients, setOutdatedPluginClients] = useState<string[]>(
+    [],
+  );
 
   useEffect(() => {
     void (async () => {
@@ -120,7 +123,8 @@ export const McpScreen = ({
   const doInstall = async (names: string[], features?: string[]) => {
     setPhase(Phase.Working);
     let mcpResult: string[] = [];
-    let pluginResult: string[] = [];
+    let pluginInstalled: string[] = [];
+    let pluginOutdated: string[] = [];
     try {
       mcpResult = await installer.install(
         names,
@@ -131,16 +135,21 @@ export const McpScreen = ({
       // mcpResult stays []
     }
     try {
-      pluginResult = await installer.installPlugins(names);
+      const outcome = await installer.installPlugins(names);
+      pluginInstalled = outcome.installed;
+      pluginOutdated = outcome.outdated;
     } catch {
       // best-effort — plugin failure does not affect MCP outcome
     }
     setResultClients(mcpResult);
-    setPluginClients(pluginResult);
+    setPluginClients(pluginInstalled);
+    setOutdatedPluginClients(pluginOutdated);
     setPhase(Phase.Done);
     const outcome =
       mcpResult.length > 0 ? McpOutcome.Installed : McpOutcome.Failed;
-    setTimeout(() => markDone(store, outcome, mcpResult), 2000);
+    // Give the user a beat longer to read the update hint when present.
+    const settleMs = pluginOutdated.length > 0 ? 4000 : 2000;
+    setTimeout(() => markDone(store, outcome, mcpResult), settleMs);
   };
 
   const doRemove = async () => {
@@ -235,7 +244,9 @@ export const McpScreen = ({
               <>
                 <Text color="green" bold>
                   {'\u2714'} MCP server
-                  {!isRemove && pluginClients.length > 0 ? ' and plugin' : ''}{' '}
+                  {!isRemove && pluginClients.length > 0
+                    ? ' and plugin'
+                    : ''}{' '}
                   {isRemove ? 'removed from' : 'installed for'}:
                 </Text>
                 {resultClients.map((name, i) => (
@@ -249,6 +260,18 @@ export const McpScreen = ({
               <Text dimColor>
                 {isRemove ? 'Removal' : 'Installation'} skipped.
               </Text>
+            )}
+            {!isRemove && outdatedPluginClients.length > 0 && (
+              <Box marginTop={1} flexDirection="column">
+                <Text color="yellow">
+                  Plugin install skipped for {outdatedPluginClients.join(', ')}{' '}
+                  — CLI is out of date.
+                </Text>
+                <Text dimColor>
+                  Run <Text bold>claude update</Text> and re-run the wizard to
+                  install the PostHog plugin.
+                </Text>
+              </Box>
             )}
           </Box>
         )}
