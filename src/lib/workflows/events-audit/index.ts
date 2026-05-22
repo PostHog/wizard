@@ -6,7 +6,8 @@ import { SPINNER_MESSAGE } from '../../framework-config.js';
 import { isUsingTypeScript } from '../../../utils/setup-utils.js';
 import { getCloudUrlFromRegion } from '../../../utils/urls.js';
 import { EVENTS_AUDIT_WORKFLOW } from './steps.js';
-import { getContentBlocks } from './content/content-blocks.js';
+import { AUDIT_CHECKS_KEY } from '../audit/types.js';
+import { AUDIT_SEED_CHECKS, seedAuditLedger } from '../audit/seed.js';
 
 export const SETUP_REPORT_FILE = 'posthog-events-audit-report.md';
 
@@ -18,13 +19,20 @@ export const eventsAuditConfig: WorkflowConfig = {
   flowKey: 'events-audit',
   skillId: 'events-audit',
   steps: EVENTS_AUDIT_WORKFLOW,
-  getContentBlocks,
+  // Top-level reportFile so AuditRunScreen can resolve the report path
+  // synchronously without unwrapping the deferred `run` function.
+  reportFile: SETUP_REPORT_FILE,
 
   run: (session: WizardSession): Promise<WorkflowRun> => {
     const typeScriptDetected = isUsingTypeScript({
       installDir: session.installDir,
     });
     session.typescript = typeScriptDetected;
+
+    // Seed the audit ledger so AuditRunScreen has something to render
+    // before the agent emits its first check update.
+    seedAuditLedger(session.installDir);
+    session.frameworkContext[AUDIT_CHECKS_KEY] = AUDIT_SEED_CHECKS;
 
     return Promise.resolve({
       skillId: 'events-audit',
