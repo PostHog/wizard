@@ -130,7 +130,10 @@ export interface WizardUI {
 
   setLoginUrl(url: string | null): void;
 
-  // ── Todo tracking from SDK TodoWrite events ───────────────────────
+  // ── Task tracking from SDK TaskCreate/TaskUpdate events ───────────
+  // Receives the full materialised task list each call. The caller (agent
+  // loop) maintains a Map<taskId, …> from incremental Task* events and
+  // re-emits the snapshot here, preserving the existing store semantics.
   syncTodos(
     todos: Array<{ content: string; status: string; activeForm?: string }>,
   ): void;
