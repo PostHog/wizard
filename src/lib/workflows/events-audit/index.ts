@@ -6,6 +6,7 @@ import { SPINNER_MESSAGE } from '../../framework-config.js';
 import { isUsingTypeScript } from '../../../utils/setup-utils.js';
 import { getCloudUrlFromRegion } from '../../../utils/urls.js';
 import { EVENTS_AUDIT_WORKFLOW } from './steps.js';
+import { getContentBlocks } from './content/content-blocks.js';
 
 export const SETUP_REPORT_FILE = 'posthog-events-audit-report.md';
 
@@ -17,6 +18,7 @@ export const eventsAuditConfig: WorkflowConfig = {
   flowKey: 'events-audit',
   skillId: 'events-audit',
   steps: EVENTS_AUDIT_WORKFLOW,
+  getContentBlocks,
 
   run: (session: WizardSession): Promise<WorkflowRun> => {
     const typeScriptDetected = isUsingTypeScript({

@@ -1,12 +1,14 @@
 import type { WorkflowConfig } from '../workflow-step.js';
 import { REVENUE_ANALYTICS_WORKFLOW } from './steps.js';
 import { REVENUE_ABORT_CASES } from './detect.js';
+import { getContentBlocks } from './content/content-blocks.js';
 
 export const revenueAnalyticsConfig: WorkflowConfig = {
   command: 'revenue',
   description: 'Set up PostHog revenue analytics (e.g. Stripe integration)',
   flowKey: 'revenue-analytics-setup',
   steps: REVENUE_ANALYTICS_WORKFLOW,
+  getContentBlocks,
   run: {
     skillId: 'revenue-analytics-setup',
     integrationLabel: 'revenue-analytics-setup',

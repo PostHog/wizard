@@ -3,6 +3,8 @@ import type { WizardReadinessResult } from '../health-checks/readiness.js';
 import type { WorkflowRun } from '../agent/agent-runner.js';
 import type { Integration } from '../constants.js';
 import type { FrameworkConfig } from '../framework-config.js';
+import type { ContentBlock } from '../../ui/tui/primitives/index.js';
+import type { WizardStore } from '../../ui/tui/store.js';
 
 /**
  * A workflow step is the primary unit of the wizard's execution model.
@@ -136,6 +138,13 @@ export interface WorkflowConfig {
    * read it synchronously without resolving a deferred `run` function.
    */
   reportFile?: string;
+  /**
+   * LearnCard deck rendered in the shared `RunScreen` while the agent
+   * runs. Lives at `<workflow>/content/content-blocks.tsx` by convention.
+   * Workflows that ship a custom RunScreen variant (audit, audit-3000)
+   * or skip the run step (posthog-doctor) leave this unset.
+   */
+  getContentBlocks?: (store?: WizardStore) => ContentBlock[];
 }
 
 /**
