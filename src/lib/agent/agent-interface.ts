@@ -911,7 +911,7 @@ export async function runAgent(
     // - Search: Glob, Grep
     // - Commands: Bash (with restrictions via canUseTool)
     // - MCP discovery: ListMcpResourcesTool (to find available skills)
-    // - Skills: Skill (to load installed PostHog skills)
+    // Skills themselves are enabled via the `skills` option below, not allowedTools.
     // MCP tools (PostHog) come from mcpServers, not allowedTools
     const allowedTools = [
       'Read',
@@ -922,7 +922,6 @@ export async function runAgent(
       'Bash',
       'Task',
       'ListMcpResourcesTool',
-      'Skill',
       ...WIZARD_TOOL_NAMES,
     ];
 
@@ -937,7 +936,12 @@ export async function runAgent(
         mcpServers: agentConfig.mcpServers,
         // Load skills from project's .claude/skills/ directory
         settingSources: ['project'],
-        // Explicitly enable required tools including Skill
+        // Enable all discovered skills. Omitting this is NOT "skills off" —
+        // it just means no SDK auto-config — so we set 'all' explicitly to
+        // preserve the prior behavior where 'Skill' in allowedTools exposed
+        // everything under .claude/skills/. (SDK ≥0.2.133 deprecates passing
+        // 'Skill' in allowedTools in favor of this option.)
+        skills: 'all',
         allowedTools,
         sandbox: {
           enabled: true,
