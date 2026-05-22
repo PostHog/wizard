@@ -1423,14 +1423,21 @@ function handleSDKMessage(
   receivedSuccessResult = false,
   tasks?: Map<string, TaskEntry>,
 ): void {
-  // Show pending entries (still keyed by tool_use_id) ahead of confirmed ones
-  // so the order roughly matches creation order even before the rekey lands.
+  // Map preserves insertion order (the order the agent created the tasks).
+  // Within that, group by status: completed first, then in_progress, then
+  // everything else (pending). Array.prototype.sort is stable, so creation
+  // order is preserved inside each group.
+  const STATUS_RANK: Record<string, number> = {
+    completed: 0,
+    in_progress: 1,
+  };
+  const rank = (status: string): number => STATUS_RANK[status] ?? 2;
   const syncTasks = (): void => {
     if (!tasks) return;
-    const entries = Array.from(tasks.values());
-    const pending = entries.filter((t) => t.status === 'pending');
-    const rest = entries.filter((t) => t.status !== 'pending');
-    getUI().syncTodos([...pending, ...rest]);
+    const sorted = Array.from(tasks.values()).sort(
+      (a, b) => rank(a.status) - rank(b.status),
+    );
+    getUI().syncTodos(sorted);
   };
   logToFile(`SDK Message: ${message.type}`, JSON.stringify(message, null, 2));
 
