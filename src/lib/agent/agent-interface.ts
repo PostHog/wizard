@@ -938,10 +938,7 @@ export async function runAgent(
       // Task list tools (replaced TodoWrite in 0.3.142). The wizard
       // commandments instruct the agent to call TaskCreate/TaskUpdate to
       // surface progress in the right-hand task panel.
-      'TaskCreate',
-      'TaskUpdate',
-      'TaskGet',
-      'TaskList',
+      ...Object.values(TaskTool),
       'ListMcpResourcesTool',
       ...WIZARD_TOOL_NAMES,
     ];
@@ -1299,6 +1296,92 @@ export async function runAgent(
  *                          result after success due to cleanup race conditions.
  */
 /**
+ * SDK >=0.3.142 replaced TodoWrite with four discrete Task* tools.
+ * Create / Update mutate the task list; Get / List are read-only.
+ */
+export enum TaskTool {
+  Create = 'TaskCreate',
+  Update = 'TaskUpdate',
+  Get = 'TaskGet',
+  List = 'TaskList',
+}
+
+type TaskEntry = { content: string; status: string; activeForm?: string };
+type PendingTaskEntry = { content: string; activeForm?: string };
+
+interface TaskMaps {
+  taskState: Map<string, TaskEntry>;
+  pendingTaskCreates: Map<string, PendingTaskEntry>;
+  sync: () => void;
+}
+
+interface ToolUseBlock {
+  type: 'tool_use';
+  id: string;
+  name: string;
+  input?: unknown;
+}
+
+function handleTaskCreate(block: ToolUseBlock, maps: TaskMaps): void {
+  const input = block.input as
+    | { subject?: string; activeForm?: string }
+    | undefined;
+  if (!input?.subject) return;
+  // taskId is assigned by the SDK and returned via tool_result; stash under
+  // tool_use_id and rekey when the result arrives.
+  maps.pendingTaskCreates.set(block.id, {
+    content: input.subject,
+    activeForm: input.activeForm,
+  });
+  maps.sync();
+}
+
+function handleTaskUpdate(block: ToolUseBlock, maps: TaskMaps): void {
+  const input = block.input as
+    | {
+        taskId?: string;
+        subject?: string;
+        status?: string;
+        activeForm?: string;
+      }
+    | undefined;
+  if (!input?.taskId) return;
+  const existing = maps.taskState.get(input.taskId);
+  if (!existing) return;
+  if (input.status === 'deleted') {
+    maps.taskState.delete(input.taskId);
+  } else {
+    maps.taskState.set(input.taskId, {
+      content: input.subject ?? existing.content,
+      status: input.status ?? existing.status,
+      activeForm: input.activeForm ?? existing.activeForm,
+    });
+  }
+  maps.sync();
+}
+
+function handleTaskGet(_block: ToolUseBlock, _maps: TaskMaps): void {
+  // Read-only — the agent is querying state, not mutating it.
+}
+
+function handleTaskList(_block: ToolUseBlock, _maps: TaskMaps): void {
+  // Read-only — the agent is querying state, not mutating it.
+}
+
+function dispatchTaskToolUse(block: ToolUseBlock, maps: TaskMaps): void {
+  switch (block.name as TaskTool) {
+    case TaskTool.Create:
+      return handleTaskCreate(block, maps);
+    case TaskTool.Update:
+      return handleTaskUpdate(block, maps);
+    case TaskTool.Get:
+      return handleTaskGet(block, maps);
+    case TaskTool.List:
+      return handleTaskList(block, maps);
+  }
+}
+
+/**
  * Pull the SDK-assigned task id off a SDKUserMessage.tool_use_result payload.
  * The SDK already deserialises TaskCreateOutput here, so the shape is the
  * structured `{ task: { id, subject } }` object — no JSON parsing needed.
@@ -1410,47 +1493,19 @@ function handleSDKMessage(
           }
 
           // Intercept Task* tool_use blocks for task progression.
-          // SDK >=0.3.142 replaced TodoWrite with TaskCreate/TaskUpdate; consumers must
-          // accumulate by task id rather than replacing a snapshot list.
-          if (block.type === 'tool_use' && taskState && pendingTaskCreates) {
-            if (block.name === 'TaskCreate') {
-              const input = block.input as
-                | { subject?: string; activeForm?: string }
-                | undefined;
-              if (input?.subject) {
-                // taskId is assigned by the SDK and returned via tool_result;
-                // stash under tool_use_id and rekey when the result arrives.
-                pendingTaskCreates.set(block.id, {
-                  content: input.subject,
-                  activeForm: input.activeForm,
-                });
-                syncFromTaskMaps();
-              }
-            } else if (block.name === 'TaskUpdate') {
-              const input = block.input as
-                | {
-                    taskId?: string;
-                    subject?: string;
-                    status?: string;
-                    activeForm?: string;
-                  }
-                | undefined;
-              if (input?.taskId) {
-                const existing = taskState.get(input.taskId);
-                if (existing) {
-                  if (input.status === 'deleted') {
-                    taskState.delete(input.taskId);
-                  } else {
-                    taskState.set(input.taskId, {
-                      content: input.subject ?? existing.content,
-                      status: input.status ?? existing.status,
-                      activeForm: input.activeForm ?? existing.activeForm,
-                    });
-                  }
-                  syncFromTaskMaps();
-                }
-              }
-            }
+          // SDK >=0.3.142 replaced TodoWrite with TaskCreate/TaskUpdate/TaskGet/TaskList;
+          // consumers must accumulate by task id rather than replacing a snapshot list.
+          if (
+            block.type === 'tool_use' &&
+            taskState &&
+            pendingTaskCreates &&
+            (Object.values(TaskTool) as string[]).includes(block.name)
+          ) {
+            dispatchTaskToolUse(block as ToolUseBlock, {
+              taskState,
+              pendingTaskCreates,
+              sync: syncFromTaskMaps,
+            });
           }
         }
       }
