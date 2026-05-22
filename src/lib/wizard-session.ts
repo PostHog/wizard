@@ -90,7 +90,41 @@ export interface OutroData {
   continueUrl?: string;
   /** Report file the agent wrote (e.g. "posthog-setup-report.md") */
   reportFile?: string;
+  /** PostHog dashboard URL the workflow created on the user's behalf. */
+  dashboardUrl?: string;
 }
+
+/** A single question rendered by the WizardAsk overlay. */
+export interface AskQuestion {
+  /** Key for the response map */
+  id: string;
+  prompt: string;
+  /** text = single-line free input; single/multi = picker */
+  kind: 'single' | 'multi' | 'text';
+  /** Required for `single` and `multi`. Ignored for `text`. */
+  options?: { label: string; value: string }[];
+  /** Defaults to true */
+  required?: boolean;
+}
+
+/** Map of question id → answer (string for single/text, string[] for multi). */
+export type AskAnswers = Record<string, string | string[]>;
+
+/** A pending wizard_ask request held by the store. */
+export interface PendingQuestion {
+  id: string;
+  questions: AskQuestion[];
+  /** Skill id of the caller. Set by the wizard from session.skillId. */
+  source: string;
+}
+
+/**
+ * PostHog dashboard URL emitted by the agent during a workflow run.
+ * Populated via the `[DASHBOARD_URL]` text marker in agent assistant messages
+ * — see `handleSDKMessage` in `agent/agent-interface.ts`. Read by workflows
+ * (e.g. events-audit) inside `buildOutroData` to surface a dashboard link
+ * the agent actually created.
+ */
 
 export interface WizardSession {
   // From CLI args
@@ -151,6 +185,10 @@ export interface WizardSession {
   outageDismissed: boolean;
   settingsOverrideKeys: string[] | null;
   settingsConflicts: SettingsConflict[] | null;
+  authErrorDetail: {
+    hasSettingsConflict: boolean;
+    logFilePath: string;
+  } | null;
   portConflictProcess: {
     command: string;
     pid: string;
@@ -158,6 +196,7 @@ export interface WizardSession {
     user: string;
   } | null;
   outroData: OutroData | null;
+  dashboardUrl: string | null;
 
   // Additional features queue (drained via stop hook after main integration)
   additionalFeatureQueue: AdditionalFeature[];
@@ -168,6 +207,9 @@ export interface WizardSession {
 
   // Resolved framework config (set after integration is known)
   frameworkConfig: FrameworkConfig | null;
+
+  /** Active wizard_ask request, set by the bridge when the agent calls the tool. */
+  pendingQuestion: PendingQuestion | null;
 }
 
 /**
@@ -228,11 +270,14 @@ export function buildSession(args: {
     outageDismissed: false,
     settingsOverrideKeys: null,
     settingsConflicts: null,
+    authErrorDetail: null,
     portConflictProcess: null,
     outroData: null,
+    dashboardUrl: null,
     additionalFeatureQueue: [],
     workflowLabel: null,
     skillId: null,
     frameworkConfig: null,
+    pendingQuestion: null,
   };
 }

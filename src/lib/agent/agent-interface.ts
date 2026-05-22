@@ -83,6 +83,12 @@ export const AgentSignals = {
   WIZARD_REMARK: '[WIZARD-REMARK]',
   /** Signal prefix for benchmark logging */
   BENCHMARK: '[BENCHMARK]',
+  /**
+   * Signal emitted when the agent has created a PostHog dashboard for the
+   * user. Format: `[DASHBOARD_URL] <full https url>`. The URL is captured
+   * onto `session.dashboardUrl` and surfaced by workflows in their outro.
+   */
+  DASHBOARD_URL: '[DASHBOARD_URL]',
 } as const;
 
 export type AgentSignal = (typeof AgentSignals)[keyof typeof AgentSignals];
@@ -288,6 +294,17 @@ export type AgentConfig = {
   /** Feature flag key -> variant (evaluated at start of run). */
   wizardFlags?: Record<string, string>;
   wizardMetadata?: Record<string, string>;
+  /** Workflow identifier — selects the model for that workflow. */
+  integrationLabel?: string;
+  /** Bridge that drives the `wizard_ask` overlay. Omit in non-interactive hosts. */
+  askBridge?: import('../wizard-ask-bridge').WizardAskBridge;
+  /** Per-run cap on `wizard_ask` invocations. Defaults to 10. */
+  askMaxQuestions?: number;
+  /**
+   * Read accessor for the active pending question. Used by canUseTool to
+   * block Write/Edit while the overlay is open (defense in depth).
+   */
+  getPendingQuestion?: () => import('../wizard-session').PendingQuestion | null;
 };
 
 /**
@@ -364,6 +381,11 @@ type AgentRunConfig = {
   model: string;
   wizardFlags?: Record<string, string>;
   wizardMetadata?: Record<string, string>;
+  /**
+   * Read accessor for the active pending question. canUseTool reads this
+   * to block Write/Edit while the overlay is open.
+   */
+  getPendingQuestion?: () => import('../wizard-session').PendingQuestion | null;
 };
 
 /**
@@ -489,13 +511,31 @@ function matchesAllowedPrefix(command: string): boolean {
  * - Build/typecheck/lint commands for verification
  * - Piping to tail/head for output limiting is allowed
  * - Stderr redirection (2>&1) is allowed
+ *
+ * `wizardAskPending` is true while a wizard_ask overlay is open — when set,
+ * Write/Edit calls are denied as a defense-in-depth measure against a
+ * misbehaving agent that races to mutate files before the question is
+ * answered. The SDK's tool-result protocol already pauses the agent here;
+ * this guard is a belt-and-suspenders second line.
  */
 export function wizardCanUseTool(
   toolName: string,
   input: Record<string, unknown>,
+  context: { wizardAskPending?: boolean } = {},
 ):
   | { behavior: 'allow'; updatedInput: Record<string, unknown> }
   | { behavior: 'deny'; message: string } {
+  if (
+    context.wizardAskPending &&
+    (toolName === 'Write' || toolName === 'Edit')
+  ) {
+    logToFile(`Denying ${toolName} while wizard_ask overlay is open`);
+    return {
+      behavior: 'deny',
+      message: `${toolName} is paused while a wizard_ask question is open. Wait for the user's answer to come back as a tool result before writing files.`,
+    };
+  }
+
   // Block direct reads/writes of .env files — use wizard-tools MCP instead
   if (toolName === 'Read' || toolName === 'Write' || toolName === 'Edit') {
     const filePath = typeof input.file_path === 'string' ? input.file_path : '';
@@ -637,6 +677,21 @@ export async function initializeAgent(
     process.env.CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS = 'true';
 
     logToFile('Configured LLM gateway:', gatewayUrl);
+    logToFile(
+      'API key prefix:',
+      config.posthogApiKey
+        ? `${config.posthogApiKey.slice(0, 4)}***`
+        : '(missing)',
+    );
+    const initConflicts = checkAllSettingsConflicts(options.installDir);
+    logToFile(
+      'Settings conflicts at agent init:',
+      initConflicts.length > 0
+        ? initConflicts
+            .map((c) => `${c.source}(${c.keys.join(',')})`)
+            .join('; ')
+        : 'none',
+    );
 
     // Configure MCP server with PostHog authentication
     const mcpServers: McpServersConfig = {
@@ -660,15 +715,27 @@ export async function initializeAgent(
       workingDirectory: config.workingDirectory,
       detectPackageManager: config.detectPackageManager,
       skillsBaseUrl: config.skillsBaseUrl,
+      askBridge: config.askBridge,
+      askMaxQuestions: config.askMaxQuestions,
     });
     mcpServers['wizard-tools'] = wizardToolsServer;
+
+    // audit-3000 needs Opus 4.7's depth for the multi-phase audit chain;
+    // every other workflow runs on Sonnet 4.6.
+    // Bare model IDs (no `anthropic/` prefix) so the LLM gateway's Bedrock
+    // fallback can match map_to_bedrock_model()'s strict lookup.
+    const model =
+      config.integrationLabel === 'audit-3000'
+        ? 'claude-opus-4-6'
+        : 'claude-sonnet-4-6';
 
     const agentRunConfig: AgentRunConfig = {
       workingDirectory: config.workingDirectory,
       mcpServers,
-      model: 'anthropic/claude-sonnet-4-6',
+      model,
       wizardFlags: config.wizardFlags,
       wizardMetadata: config.wizardMetadata,
+      getPendingQuestion: config.getPendingQuestion,
     };
 
     logToFile('Agent config:', {
@@ -926,6 +993,7 @@ export async function runAgent(
           const result = wizardCanUseTool(
             toolName,
             input as Record<string, unknown>,
+            { wizardAskPending: agentConfig.getPendingQuestion?.() != null },
           );
           logToFile('canUseTool result:', result);
           return Promise.resolve(result);
@@ -1038,8 +1106,20 @@ export async function runAgent(
       ) {
         signalDone!();
         spinner.stop('Authentication failed');
-        logToFile('Agent error: 401, showing auth error screen');
-        getUI().showAuthError();
+        // Re-check at error time: a settings conflict can be the *real* cause
+        // of a 401, distinct from bad PAT / wrong region / expired key.
+        // Only the conflict case warrants telling the user to log out of
+        // Claude Code.
+        const conflicts = checkAllSettingsConflicts(options.installDir);
+        const hasSettingsConflict = conflicts.length > 0;
+        logToFile('Agent error: 401, showing auth error screen', {
+          hasSettingsConflict,
+          conflicts,
+        });
+        getUI().showAuthError({
+          hasSettingsConflict,
+          logFilePath: getLogFilePath(),
+        });
         await wizardAbort({
           message: 'Authentication failed (401)',
           error: new WizardError('Authentication failed'),
@@ -1215,6 +1295,19 @@ function handleSDKMessage(
               const statusText = statusMatch[1].trim();
               getUI().pushStatus(statusText);
               spinner.message(statusText);
+            }
+
+            // Check for [DASHBOARD_URL] markers
+            const dashboardRegex = new RegExp(
+              `${AgentSignals.DASHBOARD_URL.replace(
+                /[.*+?^${}()|[\]\\]/g,
+                '\\$&',
+              )}\\s*(\\S+)`,
+              'm',
+            );
+            const dashboardMatch = block.text.match(dashboardRegex);
+            if (dashboardMatch) {
+              getUI().setDashboardUrl(dashboardMatch[1].trim());
             }
           }
 

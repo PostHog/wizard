@@ -54,6 +54,7 @@ import type { PackageManagerDetector } from '../detection/package-manager';
 import { getSkillsBaseUrl } from '../constants';
 import { runtimeEnv } from '@env';
 import { installSkillById, type InstallSkillResult } from '../wizard-tools';
+import { createWizardAskBridge } from '../wizard-ask-bridge';
 import type { WizardOptions } from '../../utils/types';
 
 import type { WorkflowConfig } from '../workflows/workflow-step';
@@ -111,9 +112,32 @@ export interface WorkflowRun {
     credentials: Credentials,
     cloudRegion: import('../../utils/types').CloudRegion | undefined,
   ) => WizardSession['outroData'];
+  /**
+   * Disable the `wizard_ask` tool for this workflow. The tool stays registered
+   * but every call returns an error telling the agent to proceed without
+   * input. Use for workflows that should never need user interaction.
+   */
+  disableAsk?: boolean;
+  /**
+   * Per-run cap on `wizard_ask` invocations. Defaults to 10. The 4th call
+   * always returns a "batch your questions" error regardless of the cap.
+   */
+  maxQuestions?: number;
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────
+
+/**
+ * Decide whether the `wizard_ask` overlay should be wired for this run.
+ * Disabled in non-interactive modes (CI, signup) and whenever the workflow
+ * explicitly opts out. Extracted so the policy can be unit-tested directly.
+ */
+export function shouldDisableAsk(
+  session: Pick<WizardSession, 'ci' | 'signup'>,
+  config: Pick<WorkflowRun, 'disableAsk'>,
+): boolean {
+  return session.ci || session.signup || config.disableAsk === true;
+}
 
 function sessionToOptions(session: WizardSession): WizardOptions {
   return {
@@ -300,6 +324,17 @@ export async function runWorkflow(
 
   getUI().startRun();
 
+  // wizard_ask is only available in interactive mode. CI/signup users have
+  // no way to answer; we omit the bridge so the tool returns an actionable
+  // error rather than hanging on a never-resolving prompt.
+  const askDisabled = shouldDisableAsk(session, config);
+  const askBridge = askDisabled
+    ? undefined
+    : createWizardAskBridge({
+        getSource: () => session.skillId ?? config.integrationLabel,
+        showQuestion: (q) => getUI().requestQuestion(q),
+      });
+
   const agent = await initializeAgent(
     {
       workingDirectory: session.installDir,
@@ -312,6 +347,10 @@ export async function runWorkflow(
       skillsBaseUrl,
       wizardFlags,
       wizardMetadata,
+      integrationLabel: config.integrationLabel,
+      askBridge,
+      askMaxQuestions: config.maxQuestions,
+      getPendingQuestion: () => session.pendingQuestion,
     },
     sessionToOptions(session),
   );

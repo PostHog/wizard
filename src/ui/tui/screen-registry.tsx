@@ -24,6 +24,9 @@ import { AgentSkillIntroScreen } from './screens/AgentSkillIntroScreen.js';
 import { AuditIntroScreen } from './screens/audit/AuditIntroScreen.js';
 import { AuditRunScreen } from './screens/audit/AuditRunScreen.js';
 import { AuditOutroScreen } from './screens/audit/AuditOutroScreen.js';
+import { Audit3000IntroScreen } from './screens/audit-3000/Audit3000IntroScreen.js';
+import { Audit3000RunScreen } from './screens/audit-3000/Audit3000RunScreen.js';
+import { Audit3000OutroScreen } from './screens/audit-3000/Audit3000OutroScreen.js';
 import { SetupScreen } from './screens/SetupScreen.js';
 import { AuthScreen } from './screens/AuthScreen.js';
 import { RunScreen } from './screens/RunScreen.js';
@@ -32,6 +35,7 @@ import { KeepSkillsScreen } from './screens/KeepSkillsScreen.js';
 import { OutroScreen } from './screens/OutroScreen.js';
 import { ExitScreen } from './screens/ExitScreen.js';
 import { AuthErrorScreen } from './screens/AuthErrorScreen.js';
+import { WizardAskScreen } from './screens/WizardAskScreen.js';
 import { createMcpInstaller } from './services/mcp-installer.js';
 import type { McpInstaller } from './services/mcp-installer.js';
 
@@ -54,7 +58,8 @@ export function createScreens(
     [Overlay.SettingsOverride]: <SettingsOverrideScreen store={store} />,
     [Overlay.ManagedSettings]: <ManagedSettingsScreen store={store} />,
     [Overlay.PortConflict]: <PortConflictScreen store={store} />,
-    [Overlay.AuthError]: <AuthErrorScreen />,
+    [Overlay.AuthError]: <AuthErrorScreen store={store} />,
+    [Overlay.WizardAsk]: <WizardAskScreen store={store} />,
 
     // Wizard flow
     [Screen.Intro]: <PostHogIntegrationIntroScreen store={store} />,
@@ -63,6 +68,9 @@ export function createScreens(
     [Screen.AuditIntro]: <AuditIntroScreen store={store} />,
     [Screen.AuditRun]: <AuditRunScreen store={store} />,
     [Screen.AuditOutro]: <AuditOutroScreen store={store} />,
+    [Screen.Audit3000Intro]: <Audit3000IntroScreen store={store} />,
+    [Screen.Audit3000Run]: <Audit3000RunScreen store={store} />,
+    [Screen.Audit3000Outro]: <Audit3000OutroScreen store={store} />,
     [Screen.HealthCheck]: <HealthCheckScreen store={store} />,
     [Screen.DoctorIntro]: <DoctorIntroScreen store={store} />,
     [Screen.DoctorReport]: <DoctorReportScreen store={store} />,

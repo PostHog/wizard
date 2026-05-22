@@ -4,14 +4,23 @@
  * No prompts, no TUI, no interactivity. Just console output.
  */
 
-import { TaskStatus, type WizardUI, type SpinnerHandle } from './wizard-ui';
+import {
+  TaskStatus,
+  type WizardUI,
+  type SpinnerHandle,
+  type AuthErrorDetail,
+} from './wizard-ui';
 import type { SettingsConflict } from '../lib/agent/agent-interface';
 import {
   type WizardReadinessResult,
   getBlockingServiceKeys,
   SERVICE_LABELS,
 } from '../lib/health-checks/readiness.js';
-import type { OutroData } from '../lib/wizard-session';
+import type {
+  AskAnswers,
+  OutroData,
+  PendingQuestion,
+} from '../lib/wizard-session';
 
 export class LoggingUI implements WizardUI {
   intro(message: string): void {
@@ -138,12 +147,40 @@ export class LoggingUI implements WizardUI {
     return Promise.resolve();
   }
 
-  showAuthError(): void {
-    console.log(`✖  Authentication failed (401)`);
-    console.log(
-      `│  Claude Code auth is conflicting with the wizard. Please try again after logging out:`,
+  requestQuestion(_question: PendingQuestion): Promise<AskAnswers> {
+    return Promise.reject(
+      new Error(
+        'wizard_ask is not available in CI / non-interactive mode. ' +
+          'Re-run the wizard without --ci to answer interactively.',
+      ),
     );
-    console.log(`│    claude auth logout`);
+  }
+
+  showAuthError(detail?: AuthErrorDetail): void {
+    console.log(`✖  Authentication failed (401)`);
+    if (detail?.hasSettingsConflict) {
+      console.log(
+        `│  Claude Code auth is conflicting with the wizard. Please try again after logging out:`,
+      );
+      console.log(`│    claude auth logout`);
+    } else {
+      console.log(
+        `│  The PostHog LLM Gateway rejected the API key. Common causes:`,
+      );
+      console.log(
+        `│    - Wrong key type: pass a personal API key (phx_xxx). pha_ is an OAuth access token, phc_ is a project key.`,
+      );
+      console.log(
+        `│    - Missing scope: the personal API key needs the "llm_gateway:read" scope.`,
+      );
+      console.log(`│    - Expired or revoked key.`);
+      console.log(
+        `│    - Region mismatch: --region must match the region the key was issued in (us vs eu).`,
+      );
+    }
+    if (detail?.logFilePath) {
+      console.log(`│  Verbose log: ${detail.logFilePath}`);
+    }
   }
 
   startRun(): void {
@@ -176,6 +213,10 @@ export class LoggingUI implements WizardUI {
   }
 
   setEventPlan(_events: Array<{ name: string; description: string }>): void {
+    // No-op in CI mode
+  }
+
+  setDashboardUrl(_url: string): void {
     // No-op in CI mode
   }
 

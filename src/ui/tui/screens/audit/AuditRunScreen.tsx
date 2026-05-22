@@ -20,6 +20,7 @@ import {
   coerceAuditChecks,
   getAuditChecks,
 } from '../../../../lib/workflows/audit/types.js';
+import { getWorkflowConfig } from '../../../../lib/workflows/workflow-registry.js';
 import { WIZARD_LOG_FILE } from '../../../../utils/paths.js';
 
 interface AuditRunScreenProps {
@@ -42,7 +43,9 @@ export const AuditRunScreen = ({ store }: AuditRunScreenProps) => {
 
   const [columns] = useStdoutDimensions();
   const checks = getAuditChecks(store.session);
-  const reportPath = `./${AUDIT_REPORT_FILE}`;
+  const reportFile =
+    getWorkflowConfig(store.router.activeFlow)?.reportFile ?? AUDIT_REPORT_FILE;
+  const reportPath = `./${reportFile}`;
   const pendingChecksList = <PendingChecksList checks={checks} />;
   const areaPane = <AuditAreaPane checks={checks} reportPath={reportPath} />;
 

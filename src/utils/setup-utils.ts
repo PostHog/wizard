@@ -2,8 +2,9 @@ import * as childProcess from 'node:child_process';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import { basename, isAbsolute, join, relative } from 'node:path';
+import { promisify } from 'node:util';
 
-import { traceStep } from '../telemetry';
+import { withProgress } from '../telemetry';
 import { debug } from './debug';
 import type { PackageDotJson } from './package-json';
 import {
@@ -67,15 +68,15 @@ export async function abort(message?: string, status?: number): Promise<never> {
   return wizardAbort({ message, exitCode: status });
 }
 
-export function isInGitRepo() {
+export function isInGitRepo(): boolean {
   try {
-    childProcess.execSync('git rev-parse --is-inside-work-tree', {
+    childProcess.execSync('git rev-parse --show-toplevel', {
       stdio: 'ignore',
     });
-    return true;
   } catch {
     return false;
   }
+  return true;
 }
 
 const FREEMAIL_DOMAINS = new Set([
@@ -138,24 +139,26 @@ export function detectOrgAndProject(email: string): {
 }
 
 export function getUncommittedOrUntrackedFiles(): string[] {
+  let gitStatus: string;
   try {
-    const gitStatus = childProcess
+    gitStatus = childProcess
       .execSync('git status --porcelain=v1', {
         // we only care about stdout
         stdio: ['ignore', 'pipe', 'ignore'],
       })
       .toString();
-
-    const files = gitStatus
-      .split(os.EOL)
-      .map((line) => line.trim())
-      .filter(Boolean)
-      .map((f) => `- ${f.split(/\s+/)[1]}`);
-
-    return files;
   } catch {
     return [];
   }
+
+  const result: string[] = [];
+  for (const rawLine of gitStatus.split(os.EOL)) {
+    const line = rawLine.trim();
+    if (!line) continue;
+    const match = /^\S+\s+(\S+)/.exec(line);
+    result.push(`- ${match?.[1]}`);
+  }
+  return result;
 }
 
 export async function isReact19Installed({
@@ -203,7 +206,7 @@ export async function installPackage({
   integration?: string;
   installDir: string;
 }): Promise<{ packageManager?: PackageManager }> {
-  return traceStep('install-package', async () => {
+  return withProgress('install-package', async () => {
     const sdkInstallSpinner = getUI().spinner();
 
     const pkgManager =
@@ -219,35 +222,28 @@ export async function installPackage({
       } with ${pkgManager.label}.`,
     );
 
-    try {
-      await new Promise<void>((resolve, reject) => {
-        childProcess.exec(
-          `${pkgManager.installCommand} ${packageName} ${pkgManager.flags} ${
-            forceInstall ? pkgManager.forceInstallFlag : ''
-          } ${legacyPeerDepsFlag}`.trim(),
-          { cwd: installDir },
-          (err, stdout, stderr) => {
-            if (err) {
-              fs.writeFileSync(
-                join(
-                  process.cwd(),
-                  `posthog-wizard-installation-error-${Date.now()}.log`,
-                ),
-                JSON.stringify({
-                  stdout,
-                  stderr,
-                }),
-                { encoding: 'utf8' },
-              );
+    const execAsync = promisify(childProcess.exec);
+    const installCommand = `${pkgManager.installCommand} ${packageName} ${
+      pkgManager.flags
+    } ${
+      forceInstall ? pkgManager.forceInstallFlag : ''
+    } ${legacyPeerDepsFlag}`.trim();
 
-              reject(err);
-            } else {
-              resolve();
-            }
-          },
-        );
-      });
+    try {
+      await execAsync(installCommand, { cwd: installDir });
     } catch (e) {
+      const { stdout = '', stderr = '' } = (e ?? {}) as {
+        stdout?: string;
+        stderr?: string;
+      };
+      fs.writeFileSync(
+        join(
+          process.cwd(),
+          `posthog-wizard-installation-error-${Date.now()}.log`,
+        ),
+        JSON.stringify({ stdout, stderr }),
+        { encoding: 'utf8' },
+      );
       sdkInstallSpinner.stop('Installation failed.');
       getUI().log.error(
         // eslint-disable-next-line @typescript-eslint/restrict-template-expressions
@@ -280,29 +276,29 @@ export async function installPackage({
 export async function getPackageDotJson({
   installDir,
 }: Pick<WizardOptions, 'installDir'>): Promise<PackageDotJson> {
-  const packageJsonFileContents = await fs.promises
-    .readFile(join(installDir, 'package.json'), 'utf8')
-    .catch(() => {
-      getUI().log.error(
-        'Could not find package.json. Make sure to run the wizard in the root of your app!',
-      );
-      return abort();
-    });
+  const pkgPath = join(installDir, 'package.json');
 
-  let packageJson: PackageDotJson | undefined = undefined;
+  let raw: string;
+  try {
+    raw = await fs.promises.readFile(pkgPath, 'utf8');
+  } catch {
+    getUI().log.error(
+      'Could not find package.json. Make sure to run the wizard in the root of your app!',
+    );
+    await abort();
+    return {};
+  }
 
   try {
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-    packageJson = JSON.parse(packageJsonFileContents);
+    const parsed = JSON.parse(raw) as PackageDotJson | null;
+    return parsed ?? {};
   } catch {
     getUI().log.error(
       `Unable to parse your package.json. Make sure it has a valid format!`,
     );
-
     await abort();
+    return {};
   }
-
-  return packageJson || {};
 }
 
 /**
@@ -327,18 +323,17 @@ export async function updatePackageDotJson(
   packageDotJson: PackageDotJson,
   { installDir }: Pick<WizardOptions, 'installDir'>,
 ): Promise<void> {
+  const pkgPath = join(installDir, 'package.json');
+  const serialized = JSON.stringify(packageDotJson, null, 2);
+
   try {
-    await fs.promises.writeFile(
-      join(installDir, 'package.json'),
-      JSON.stringify(packageDotJson, null, 2),
-      {
-        encoding: 'utf8',
-        flag: 'w',
-      },
-    );
+    await fs.promises.writeFile(pkgPath, serialized, {
+      encoding: 'utf8',
+      flag: 'w',
+    });
+    return;
   } catch {
     getUI().log.error(`Unable to update your package.json.`);
-
     await abort();
   }
 }
@@ -368,9 +363,10 @@ export async function getPackageManager(
 
 export function isUsingTypeScript({
   installDir,
-}: Pick<WizardOptions, 'installDir'>) {
+}: Pick<WizardOptions, 'installDir'>): boolean {
   try {
-    return fs.existsSync(join(installDir, 'tsconfig.json'));
+    fs.accessSync(join(installDir, 'tsconfig.json'));
+    return true;
   } catch {
     return false;
   }
@@ -418,7 +414,7 @@ export async function getOrAskForProjectData(
   }
 
   const { host, projectApiKey, accessToken, projectId, cloudRegion } =
-    await traceStep('login', () =>
+    await withProgress('login', () =>
       askForWizardLogin({
         signup: _options.signup,
         email: _options.email,

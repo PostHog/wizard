@@ -6,11 +6,15 @@
  * The router derives the active screen from session state.
  */
 
-import type { WizardUI, SpinnerHandle } from '../wizard-ui.js';
+import type { WizardUI, SpinnerHandle, AuthErrorDetail } from '../wizard-ui.js';
 import type { WizardStore } from './store.js';
 import type { SettingsConflict } from '../../lib/agent/agent-interface.js';
 import type { WizardReadinessResult } from '../../lib/health-checks/readiness.js';
-import type { OutroData } from '../../lib/wizard-session.js';
+import type {
+  AskAnswers,
+  OutroData,
+  PendingQuestion,
+} from '../../lib/wizard-session.js';
 import { RunPhase, OutroKind } from '../../lib/wizard-session.js';
 
 // Strip ANSI escape codes (chalk formatting) from strings
@@ -122,8 +126,12 @@ export class InkUI implements WizardUI {
     return this.store.showSettingsOverride(conflicts, backupAndFix);
   }
 
-  showAuthError(): void {
-    this.store.showAuthError();
+  showAuthError(detail?: AuthErrorDetail): void {
+    this.store.showAuthError(detail);
+  }
+
+  requestQuestion(question: PendingQuestion): Promise<AskAnswers> {
+    return this.store.requestQuestion(question);
   }
 
   startRun(): void {
@@ -182,6 +190,10 @@ export class InkUI implements WizardUI {
 
   setEventPlan(events: Array<{ name: string; description: string }>): void {
     this.store.setEventPlan(events);
+  }
+
+  setDashboardUrl(url: string): void {
+    this.store.setDashboardUrl(url);
   }
 
   setFrameworkContext(key: string, value: unknown): void {

@@ -14,11 +14,17 @@
  */
 
 import { atom, map } from 'nanostores';
-import { TaskStatus, isTaskStatus } from '../wizard-ui.js';
+import {
+  TaskStatus,
+  isTaskStatus,
+  type AuthErrorDetail,
+} from '../wizard-ui.js';
 import {
   type WizardSession,
   type OutroData,
   type DiscoveredFeature,
+  type PendingQuestion,
+  type AskAnswers,
   AdditionalFeature,
   McpOutcome,
   RunPhase,
@@ -95,6 +101,10 @@ export class WizardStore {
 
   /** Blocks OAuth flow until the port-conflict overlay is dismissed. */
   private _resolvePortConflict: (() => void) | null = null;
+
+  /** Resolves the in-flight wizard_ask request. */
+  private _resolvePendingQuestion: ((answers: AskAnswers) => void) | null =
+    null;
 
   constructor(flow: Flow = Flow.PostHogIntegration) {
     this.router = new WizardRouter(flow);
@@ -362,6 +372,57 @@ export class WizardStore {
   }
 
   /**
+   * Open the WizardAsk overlay with a set of questions and return a promise
+   * that resolves once the user submits answers (or the request is cancelled).
+   *
+   * Only one request is in flight at a time — calling this while a request
+   * is already pending throws.
+   */
+  requestQuestion(question: PendingQuestion): Promise<AskAnswers> {
+    if (this._resolvePendingQuestion) {
+      throw new Error(
+        'requestQuestion called while another wizard_ask request is pending',
+      );
+    }
+    this.$session.setKey('pendingQuestion', question);
+    this.pushOverlay(Overlay.WizardAsk);
+    analytics.wizardCapture('wizard_ask shown', {
+      source: question.source,
+      question_count: question.questions.length,
+      kinds: question.questions.map((q) => q.kind),
+    });
+    return new Promise<AskAnswers>((resolve) => {
+      this._resolvePendingQuestion = resolve;
+    });
+  }
+
+  /**
+   * Resolve the in-flight wizard_ask request with the user's answers and
+   * dismiss the overlay. Answers flow back to the agent as the tool result.
+   */
+  resolvePendingQuestion(answers: AskAnswers): void {
+    const resolve = this._resolvePendingQuestion;
+    this._resolvePendingQuestion = null;
+    this.$session.setKey('pendingQuestion', null);
+    this.popOverlay();
+    resolve?.(answers);
+  }
+
+  /**
+   * Cancel the in-flight wizard_ask request — the bridge sends a sentinel
+   * answer ("__cancelled__") so the skill can decide how to handle it.
+   */
+  cancelPendingQuestion(): void {
+    const pending = this.session.pendingQuestion;
+    if (!pending) return;
+    const cancelled: AskAnswers = {};
+    for (const q of pending.questions) {
+      cancelled[q.id] = '__cancelled__';
+    }
+    this.resolvePendingQuestion(cancelled);
+  }
+
+  /**
    * Back up .claude/settings.json. Dismisses the overlay on success.
    */
   backupAndFixSettingsOverride(): boolean {
@@ -378,7 +439,8 @@ export class WizardStore {
   }
 
   /** Push the auth-error overlay (no dismiss — user must exit). */
-  showAuthError(): void {
+  showAuthError(detail?: AuthErrorDetail): void {
+    this.$session.setKey('authErrorDetail', detail ?? null);
     this.pushOverlay(Overlay.AuthError);
   }
 
@@ -436,6 +498,11 @@ export class WizardStore {
 
   setOutroData(data: OutroData): void {
     this.$session.setKey('outroData', data);
+    this.emitChange();
+  }
+
+  setDashboardUrl(url: string): void {
+    this.$session.setKey('dashboardUrl', url);
     this.emitChange();
   }
 

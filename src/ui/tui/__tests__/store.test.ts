@@ -497,6 +497,86 @@ describe('WizardStore', () => {
     });
   });
 
+  // ── wizard_ask overlay ───────────────────────────────────────────
+
+  describe('requestQuestion / resolvePendingQuestion', () => {
+    const pending = {
+      id: 'req-1',
+      source: 'creating-product-tours',
+      questions: [
+        { id: 'goal', prompt: 'Goal?', kind: 'text' as const },
+        {
+          id: 'audience',
+          prompt: 'Who?',
+          kind: 'single' as const,
+          options: [
+            { label: 'All users', value: 'all' },
+            { label: 'New users', value: 'new' },
+          ],
+        },
+      ],
+    };
+
+    it('requestQuestion pushes WizardAsk overlay and stores pending payload', () => {
+      const store = createStore();
+      void store.requestQuestion(pending);
+      expect(store.currentScreen).toBe(Overlay.WizardAsk);
+      expect(store.session.pendingQuestion).toEqual(pending);
+    });
+
+    it('resolvePendingQuestion resolves the promise with the answers and pops overlay', async () => {
+      const store = createStore();
+      const promise = store.requestQuestion(pending);
+
+      store.resolvePendingQuestion({ goal: 'Find export', audience: 'new' });
+
+      await expect(promise).resolves.toEqual({
+        goal: 'Find export',
+        audience: 'new',
+      });
+      expect(store.session.pendingQuestion).toBeNull();
+      expect(store.currentScreen).not.toBe(Overlay.WizardAsk);
+    });
+
+    it('throws when requestQuestion is called while another is pending', () => {
+      const store = createStore();
+      void store.requestQuestion(pending);
+      expect(() => store.requestQuestion(pending)).toThrow(
+        /another wizard_ask request is pending/,
+      );
+    });
+
+    it('cancelPendingQuestion resolves all fields with the cancelled sentinel', async () => {
+      const store = createStore();
+      const promise = store.requestQuestion(pending);
+
+      store.cancelPendingQuestion();
+
+      await expect(promise).resolves.toEqual({
+        goal: '__cancelled__',
+        audience: '__cancelled__',
+      });
+      expect(store.session.pendingQuestion).toBeNull();
+    });
+
+    it('cancelPendingQuestion is a no-op when nothing is pending', () => {
+      const store = createStore();
+      expect(() => store.cancelPendingQuestion()).not.toThrow();
+      expect(store.session.pendingQuestion).toBeNull();
+    });
+
+    it('fires `wizard_ask shown` analytics with source, question_count, and kinds', () => {
+      const store = createStore();
+      void store.requestQuestion(pending);
+
+      expect(wizardCaptureMock).toHaveBeenCalledWith('wizard_ask shown', {
+        source: 'creating-product-tours',
+        question_count: 2,
+        kinds: ['text', 'single'],
+      });
+    });
+  });
+
   // ── Agent observation state ──────────────────────────────────────
 
   describe('statusMessages', () => {

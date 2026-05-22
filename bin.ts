@@ -1,6 +1,5 @@
 #!/usr/bin/env node
 import { satisfies } from 'semver';
-import { red } from './src/utils/logging';
 
 import yargs from 'yargs';
 import { hideBin } from 'yargs/helpers';
@@ -13,7 +12,8 @@ const NODE_VERSION_RANGE = '>=18.17.0';
 // Have to run this above the other imports because they are importing clack that
 // has the problematic imports.
 if (!satisfies(process.version, NODE_VERSION_RANGE)) {
-  red(
+  // eslint-disable-next-line no-console
+  console.log(
     `PostHog wizard requires Node.js ${NODE_VERSION_RANGE}. You are using Node.js ${process.version}. Please upgrade your Node.js version.`,
   );
   process.exit(1);
@@ -225,6 +225,27 @@ const cli = yargs(hideBin(process.argv))
           );
           process.exit(1);
           return;
+        }
+        // Warn (don't fail) on unexpected key prefix — `phx_` is the personal
+        // API key the LLM Gateway expects.
+        if (options.apiKey) {
+          const apiKeyValue = String(options.apiKey);
+          if (!apiKeyValue.startsWith('phx_')) {
+            setUI(new LoggingUI());
+            getUI().intro('PostHog Wizard');
+            const prefix = apiKeyValue.slice(0, 4);
+            let hint = '';
+            if (prefix === 'pha_') {
+              hint =
+                ' (pha_ is an OAuth access token — CI mode expects a personal API key)';
+            } else if (prefix === 'phc_') {
+              hint =
+                ' (phc_ is a project/client key — CI mode expects a personal API key)';
+            }
+            getUI().log.warn(
+              `--api-key does not start with "phx_"${hint}. Continuing anyway, but the LLM Gateway may reject it with a 401.`,
+            );
+          }
         }
         void (async () => {
           // If --signup but no existing key, provision a new account first and
@@ -641,6 +662,8 @@ function runWizard(
       session.workflowLabel = config.flowKey;
       if (options.skillId) {
         session.skillId = options.skillId as string;
+      } else if (config.skillId) {
+        session.skillId = config.skillId;
       }
 
       tui.store.session = session;
@@ -780,6 +803,9 @@ function runWizardCI(
       ...env,
     });
     session.workflowLabel = config.flowKey;
+    if (config.skillId) {
+      session.skillId = config.skillId;
+    }
     const runDef = typeof config.run === 'object' ? config.run : null;
 
     getUI().intro('Welcome to the PostHog setup wizard');

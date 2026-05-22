@@ -117,12 +117,25 @@ export interface WorkflowConfig {
   description: string;
   /** Unique flow key — matches the Flow enum value */
   flowKey: string;
+  /**
+   * Context-mill skill ID this workflow installs and runs. When present,
+   * bin.ts seeds `session.skillId` with this value before the TUI renders
+   * so intro screens can resolve skill metadata without waiting for the
+   * agent run.
+   */
+  skillId?: string;
   /** The ordered step list */
   steps: Workflow;
   /** Agent run config. Static object or async function for dynamic config. */
   run?: WorkflowRun | ((session: WizardSession) => Promise<WorkflowRun>);
   /** Prerequisites: other workflow flowKeys that must have run first */
   requires?: string[];
+  /**
+   * Path (relative to installDir) of the report file the workflow writes.
+   * Mirrors `run.reportFile` but lifted to the top level so UI screens can
+   * read it synchronously without resolving a deferred `run` function.
+   */
+  reportFile?: string;
 }
 
 /**

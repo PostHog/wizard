@@ -78,7 +78,7 @@ Read each primitive's source file for its current props interface.
 Shared style constants (`Colors`, `Icons`, `HAlign`, `VAlign`) live in
 `src/ui/tui/styles.ts`.
 
-**Playground**: Run `pnpm try --playground` to see all primitives in action.
+**Playground**: Run `pnpm try --playground` to see all primitives in action. **When you add a new primitive, also add a demo for it under `src/ui/tui/playground/demos/` and register it in `PlaygroundApp.tsx`.** The playground is the single place a contributor (or future agent) can see every primitive rendered with realistic props — a primitive that's not in the playground is invisible to anyone who didn't write it, and the next person solving the same UI problem will build a parallel component instead of reusing yours.
 
 ### Enums everywhere
 

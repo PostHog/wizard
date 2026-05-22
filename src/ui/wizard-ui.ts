@@ -10,7 +10,11 @@
 
 import type { SettingsConflict } from '../lib/agent/agent-interface';
 import type { WizardReadinessResult } from '../lib/health-checks/readiness.js';
-import type { OutroData } from '../lib/wizard-session';
+import type {
+  AskAnswers,
+  OutroData,
+  PendingQuestion,
+} from '../lib/wizard-session';
 
 export enum TaskStatus {
   Pending = 'pending',
@@ -26,6 +30,21 @@ export interface SpinnerHandle {
   start(message?: string): void;
   stop(message?: string): void;
   message(msg?: string): void;
+}
+
+/**
+ * Context passed to `showAuthError` so the screen can pick the right copy.
+ *
+ * `hasSettingsConflict` is true when a Claude Code settings.json /
+ * managed-settings file actually overrides the LLM Gateway auth — the
+ * Wizard's pre-flight check missed it or it appeared after startup.
+ * When false, the 401 has a different cause (bad PAT prefix, missing
+ * scope, expired key, region mismatch) and we should not advise the
+ * user to log out of Claude Code.
+ */
+export interface AuthErrorDetail {
+  hasSettingsConflict: boolean;
+  logFilePath: string;
 }
 
 export interface WizardUI {
@@ -93,7 +112,14 @@ export interface WizardUI {
   ): Promise<void>;
 
   /** Show auth error overlay when Anthropic API returns 401. */
-  showAuthError(): void;
+  showAuthError(detail?: AuthErrorDetail): void;
+
+  /**
+   * Open the wizard_ask overlay and resolve with the user's answers.
+   * Implementations that can't ask (CI/logging) reject so the bridge can
+   * surface a clear "not available" error to the agent.
+   */
+  requestQuestion(question: PendingQuestion): Promise<AskAnswers>;
 
   // ── Display state ──────────────────────────────────────────────────
   /** Set the detected framework label (e.g., "Django with Wagtail CMS") */
@@ -111,6 +137,9 @@ export interface WizardUI {
 
   // ── Event plan from .posthog-events.json ────────────────────
   setEventPlan(events: Array<{ name: string; description: string }>): void;
+
+  // ── Dashboard URL emitted by the agent via [DASHBOARD_URL] marker ──
+  setDashboardUrl(url: string): void;
 
   // ── Generic frameworkContext setter for workflow file watchers ─────
   setFrameworkContext(key: string, value: unknown): void;
