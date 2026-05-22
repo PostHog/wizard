@@ -834,17 +834,10 @@ export async function runAgent(
   let lastResultMessage: any = null;
 
   // SDK >=0.3.142 replaced TodoWrite (snapshot) with TaskCreate/TaskUpdate (accumulate by id).
-  // The agent's TaskCreate tool_use doesn't know the assigned taskId; the SDK returns it in
-  // the matching tool_result. Track in-flight creates by tool_use_id, then rekey by taskId
-  // once the result arrives. The displayed list is rebuilt from this map each time.
-  const taskState = new Map<
-    string,
-    { content: string; status: string; activeForm?: string }
-  >();
-  const pendingTaskCreates = new Map<
-    string,
-    { content: string; activeForm?: string }
-  >();
+  // The agent's TaskCreate tool_use doesn't know the assigned taskId — the SDK returns it
+  // in the matching tool_result. Keep one map keyed by whatever id we have right now:
+  // tool_use_id while pending, then rekeyed to taskId once the result arrives.
+  const tasks = new Map<string, TaskEntry>();
 
   // Workaround for SDK bug: stdin closes before canUseTool responses can be sent.
   // The fix is to use an async generator for the prompt that stays open until
@@ -1103,8 +1096,7 @@ export async function runAgent(
         spinner,
         collectedText,
         receivedSuccessResult,
-        taskState,
-        pendingTaskCreates,
+        tasks,
       );
 
       // [ABORT] detection: the skill emits "[ABORT] <reason>" when it
@@ -1307,11 +1299,9 @@ export enum TaskTool {
 }
 
 type TaskEntry = { content: string; status: string; activeForm?: string };
-type PendingTaskEntry = { content: string; activeForm?: string };
 
-interface TaskMaps {
-  taskState: Map<string, TaskEntry>;
-  pendingTaskCreates: Map<string, PendingTaskEntry>;
+interface TaskStore {
+  tasks: Map<string, TaskEntry>;
   sync: () => void;
 }
 
@@ -1322,21 +1312,22 @@ interface ToolUseBlock {
   input?: unknown;
 }
 
-function handleTaskCreate(block: ToolUseBlock, maps: TaskMaps): void {
+function handleTaskCreate(block: ToolUseBlock, store: TaskStore): void {
   const input = block.input as
     | { subject?: string; activeForm?: string }
     | undefined;
   if (!input?.subject) return;
-  // taskId is assigned by the SDK and returned via tool_result; stash under
-  // tool_use_id and rekey when the result arrives.
-  maps.pendingTaskCreates.set(block.id, {
+  // Key by tool_use_id for now — the rekey to the SDK-assigned taskId happens
+  // when the matching tool_result arrives.
+  store.tasks.set(block.id, {
     content: input.subject,
+    status: 'pending',
     activeForm: input.activeForm,
   });
-  maps.sync();
+  store.sync();
 }
 
-function handleTaskUpdate(block: ToolUseBlock, maps: TaskMaps): void {
+function handleTaskUpdate(block: ToolUseBlock, store: TaskStore): void {
   const input = block.input as
     | {
         taskId?: string;
@@ -1346,38 +1337,38 @@ function handleTaskUpdate(block: ToolUseBlock, maps: TaskMaps): void {
       }
     | undefined;
   if (!input?.taskId) return;
-  const existing = maps.taskState.get(input.taskId);
+  const existing = store.tasks.get(input.taskId);
   if (!existing) return;
   if (input.status === 'deleted') {
-    maps.taskState.delete(input.taskId);
+    store.tasks.delete(input.taskId);
   } else {
-    maps.taskState.set(input.taskId, {
+    store.tasks.set(input.taskId, {
       content: input.subject ?? existing.content,
       status: input.status ?? existing.status,
       activeForm: input.activeForm ?? existing.activeForm,
     });
   }
-  maps.sync();
+  store.sync();
 }
 
-function handleTaskGet(_block: ToolUseBlock, _maps: TaskMaps): void {
+function handleTaskGet(_block: ToolUseBlock, _store: TaskStore): void {
   // Read-only — the agent is querying state, not mutating it.
 }
 
-function handleTaskList(_block: ToolUseBlock, _maps: TaskMaps): void {
+function handleTaskList(_block: ToolUseBlock, _store: TaskStore): void {
   // Read-only — the agent is querying state, not mutating it.
 }
 
-function dispatchTaskToolUse(block: ToolUseBlock, maps: TaskMaps): void {
+function dispatchTaskToolUse(block: ToolUseBlock, store: TaskStore): void {
   switch (block.name as TaskTool) {
     case TaskTool.Create:
-      return handleTaskCreate(block, maps);
+      return handleTaskCreate(block, store);
     case TaskTool.Update:
-      return handleTaskUpdate(block, maps);
+      return handleTaskUpdate(block, store);
     case TaskTool.Get:
-      return handleTaskGet(block, maps);
+      return handleTaskGet(block, store);
     case TaskTool.List:
-      return handleTaskList(block, maps);
+      return handleTaskList(block, store);
   }
 }
 
@@ -1430,23 +1421,16 @@ function handleSDKMessage(
   spinner: SpinnerHandle,
   collectedText: string[],
   receivedSuccessResult = false,
-  taskState?: Map<
-    string,
-    { content: string; status: string; activeForm?: string }
-  >,
-  pendingTaskCreates?: Map<string, { content: string; activeForm?: string }>,
+  tasks?: Map<string, TaskEntry>,
 ): void {
-  const syncFromTaskMaps = (): void => {
-    if (!taskState || !pendingTaskCreates) return;
-    const todos = [
-      ...Array.from(pendingTaskCreates.values()).map((t) => ({
-        content: t.content,
-        status: 'pending',
-        activeForm: t.activeForm,
-      })),
-      ...Array.from(taskState.values()),
-    ];
-    getUI().syncTodos(todos);
+  // Show pending entries (still keyed by tool_use_id) ahead of confirmed ones
+  // so the order roughly matches creation order even before the rekey lands.
+  const syncTasks = (): void => {
+    if (!tasks) return;
+    const entries = Array.from(tasks.values());
+    const pending = entries.filter((t) => t.status === 'pending');
+    const rest = entries.filter((t) => t.status !== 'pending');
+    getUI().syncTodos([...pending, ...rest]);
   };
   logToFile(`SDK Message: ${message.type}`, JSON.stringify(message, null, 2));
 
@@ -1497,14 +1481,12 @@ function handleSDKMessage(
           // consumers must accumulate by task id rather than replacing a snapshot list.
           if (
             block.type === 'tool_use' &&
-            taskState &&
-            pendingTaskCreates &&
+            tasks &&
             (Object.values(TaskTool) as string[]).includes(block.name)
           ) {
             dispatchTaskToolUse(block as ToolUseBlock, {
-              taskState,
-              pendingTaskCreates,
-              sync: syncFromTaskMaps,
+              tasks,
+              sync: syncTasks,
             });
           }
         }
@@ -1513,41 +1495,33 @@ function handleSDKMessage(
     }
 
     case 'user': {
-      // Watch TaskCreate tool_results to learn the assigned task id and rekey
-      // pending entries into taskState. The structured `{task: {id, subject}}`
-      // payload is exposed at message.tool_use_result (top-level); the inner
-      // content[].tool_result blocks only carry the human-readable status text
-      // ("Task #1 created successfully: …"), which is not parseable JSON.
-      if (taskState && pendingTaskCreates && pendingTaskCreates.size > 0) {
+      // Rekey pending TaskCreate entries from tool_use_id to the SDK-assigned
+      // taskId. The structured `{task: {id, subject}}` payload is at
+      // message.tool_use_result (top-level); the inner content[].tool_result
+      // blocks only carry the human-readable status text, which is not JSON.
+      if (tasks && tasks.size > 0) {
         const content = message.message?.content;
         if (Array.isArray(content)) {
           for (const block of content) {
             if (
-              block.type === 'tool_result' &&
-              typeof block.tool_use_id === 'string' &&
-              pendingTaskCreates.has(block.tool_use_id)
+              block.type !== 'tool_result' ||
+              typeof block.tool_use_id !== 'string' ||
+              !tasks.has(block.tool_use_id)
             ) {
-              const pending = pendingTaskCreates.get(block.tool_use_id)!;
-              pendingTaskCreates.delete(block.tool_use_id);
-              const taskId =
-                extractTaskIdFromToolResult(
-                  (message as { tool_use_result?: unknown }).tool_use_result,
-                ) ?? extractTaskIdFromResult(block.content);
-              if (taskId) {
-                taskState.set(taskId, {
-                  content: pending.content,
-                  status: 'pending',
-                  activeForm: pending.activeForm,
-                });
-              } else {
-                // Couldn't recover the assigned id — keep the pending entry
-                // visible by re-adding it so the task doesn't vanish from the
-                // UI. Subsequent TaskUpdate calls without a matching id will
-                // be ignored, but at least the task list stays populated.
-                pendingTaskCreates.set(block.tool_use_id, pending);
-              }
-              syncFromTaskMaps();
+              continue;
             }
+            const taskId =
+              extractTaskIdFromToolResult(
+                (message as { tool_use_result?: unknown }).tool_use_result,
+              ) ?? extractTaskIdFromResult(block.content);
+            // No taskId means we leave the entry under tool_use_id so it stays
+            // visible; later TaskUpdate calls won't match it, but at least the
+            // task list doesn't vanish.
+            if (!taskId) continue;
+            const entry = tasks.get(block.tool_use_id)!;
+            tasks.delete(block.tool_use_id);
+            tasks.set(taskId, entry);
+            syncTasks();
           }
         }
       }
