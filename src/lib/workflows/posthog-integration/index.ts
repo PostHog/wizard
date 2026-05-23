@@ -19,7 +19,7 @@ import { getCloudUrlFromRegion } from '../../../utils/urls.js';
 import { requestDeepLink } from '../../../utils/provisioning.js';
 import type { CloudRegion } from '../../../utils/types.js';
 import { POSTHOG_INTEGRATION_WORKFLOW } from './steps.js';
-import { getContentBlocks } from './content/content-blocks.js';
+import { getContentBlocks } from './content/index.js';
 
 const DASHBOARD_DEEP_LINK_KEY = 'dashboardDeepLink';
 

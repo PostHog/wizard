@@ -1,7 +1,7 @@
 import type { WorkflowConfig } from '../workflow-step.js';
 import { REVENUE_ANALYTICS_WORKFLOW } from './steps.js';
 import { REVENUE_ABORT_CASES } from './detect.js';
-import { getContentBlocks } from './content/content-blocks.js';
+import { getContentBlocks } from './content/index.js';
 
 export const revenueAnalyticsConfig: WorkflowConfig = {
   command: 'revenue',

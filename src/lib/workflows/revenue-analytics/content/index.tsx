@@ -4,4 +4,4 @@
  * revenue narrative grows its own diagrams or talking points.
  */
 
-export { getContentBlocks } from '../../agent-skill/content/content-blocks.js';
+export { getContentBlocks } from '../../agent-skill/content/index.js';

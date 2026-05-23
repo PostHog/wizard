@@ -19,7 +19,7 @@ import type { ProgressItem } from '../../primitives/index.js';
 import { LearnCard } from '../../components/LearnCard.js';
 import { TipsCard } from '../../components/TipsCard.js';
 import { WIZARD_LOG_FILE } from '../../../../utils/paths.js';
-import { getContentBlocks as getIntegrationContentBlocks } from '../../../../lib/workflows/posthog-integration/content/content-blocks.js';
+import { getContentBlocks as getIntegrationContentBlocks } from '../../../../lib/workflows/posthog-integration/content/index.js';
 
 const MOCK_TASKS = [
   {

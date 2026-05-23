@@ -22,7 +22,7 @@
 import type { WorkflowConfig } from '../workflow-step.js';
 import type { WorkflowRun, AbortCase } from '../../agent/agent-runner.js';
 import { AGENT_SKILL_STEPS } from './steps.js';
-import { getContentBlocks } from './content/content-blocks.js';
+import { getContentBlocks } from './content/index.js';
 
 export interface SkillWorkflowOptions {
   /** Context-mill skill ID to install */

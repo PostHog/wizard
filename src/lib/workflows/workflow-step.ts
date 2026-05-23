@@ -140,7 +140,7 @@ export interface WorkflowConfig {
   reportFile?: string;
   /**
    * LearnCard deck rendered in the shared `RunScreen` while the agent
-   * runs. Lives at `<workflow>/content/content-blocks.tsx` by convention.
+   * runs. Lives at `<workflow>/content/index.tsx` by convention.
    * Workflows that ship a custom RunScreen variant (audit, audit-3000)
    * or skip the run step (posthog-doctor) leave this unset.
    */
