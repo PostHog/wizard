@@ -954,14 +954,29 @@ export async function runAgent(
               '//tmp/**',
               '//private/tmp',
               '//private/tmp/**',
-              // Package manager stores — allow writes so pnpm/npm can
-              // install packages without breaking the user's existing setup
-              '~/Library/pnpm/store/**', // pnpm global store (macOS)
-              '~/.local/share/pnpm/store/**', // pnpm global store (Linux)
+              // Package manager stores and toolchain installs — allow writes
+              // so pnpm/npm/yarn/bun and version managers (corepack, volta)
+              // can install packages and self-update without breaking the
+              // user's existing setup.
+              '~/Library/pnpm/**', // pnpm root (macOS) — store + .tools/ for packageManager pinning
+              '~/.local/share/pnpm/**', // pnpm root (Linux)
               '~/.pnpm-store/**', // pnpm alternate store
-              '~/.npm/**', // npm cache
-              '~/.yarn/**', // yarn classic cache
-              '~/.yarn/berry/**', // yarn berry cache
+              '~/.npm/**', // npm cache (covers _npx too)
+              '~/.yarn/**', // yarn classic + berry cache
+              '~/.bun/install/**', // bun cache + global installs
+              '~/.cache/node/corepack/**', // corepack version downloads (Linux/macOS)
+              '~/Library/Caches/node/corepack/**', // corepack on older macOS layouts
+              '~/.volta/**', // Volta toolchain (referenced by workbench package.json)
+              // Python — used by django/flask/fastapi wizards
+              '~/.cache/pip/**',
+              '~/Library/Caches/pip/**',
+              '~/.cache/uv/**',
+              '~/Library/Caches/uv/**',
+              '~/.cache/pypoetry/**',
+              '~/Library/Caches/pypoetry/**',
+              // Ruby — used by rails wizard
+              '~/.bundle/**',
+              '~/.gem/**',
             ],
           },
           network: {

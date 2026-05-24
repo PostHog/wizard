@@ -145,6 +145,20 @@ export interface WorkflowConfig {
    * or skip the run step (posthog-doctor) leave this unset.
    */
   getContentBlocks?: (store?: WizardStore) => ContentBlock[];
+  /**
+   * Subcommand-specific CLI options. Spread into yargs `.options(...)` when the
+   * workflow's subcommand is registered. Workflow-specific knowledge stays in
+   * the workflow config, not in bin.ts. Typed as `unknown` to avoid pulling a
+   * yargs dependency into this module.
+   */
+  cliOptions?: Record<string, unknown>;
+  /**
+   * Translate parsed CLI argv into extra options the runner consumes. Runs
+   * after yargs validation, before runWizard/runWizardCI. Use this when a flag
+   * needs to derive another field (e.g. `--product=statsig` → `skillId:
+   * 'migrate-statsig'`).
+   */
+  mapCliOptions?: (argv: Record<string, unknown>) => Record<string, unknown>;
 }
 
 /**

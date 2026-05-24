@@ -18,8 +18,8 @@ import {
 import type { ProgressItem } from '../../primitives/index.js';
 import { LearnCard } from '../../components/LearnCard.js';
 import { TipsCard } from '../../components/TipsCard.js';
+import { getContentBlocks as getMigrationContentBlocks } from '../../../../lib/workflows/migration/content/index.js';
 import { WIZARD_LOG_FILE } from '../../../../utils/paths.js';
-import { getContentBlocks as getIntegrationContentBlocks } from '../../../../lib/workflows/posthog-integration/content/index.js';
 
 const MOCK_TASKS = [
   {
@@ -162,6 +162,8 @@ export const RunScreenDemo = ({ store }: RunScreenDemoProps) => {
   const statuses =
     store.statusMessages.length > 0 ? store.statusMessages : undefined;
 
+  const learnBlocks = getMigrationContentBlocks(store);
+
   const tabs = [
     {
       id: 'status',
@@ -174,7 +176,7 @@ export const RunScreenDemo = ({ store }: RunScreenDemoProps) => {
             ) : (
               <LearnCard
                 store={store}
-                blocks={getIntegrationContentBlocks(store)}
+                blocks={learnBlocks}
                 onComplete={() => store.setLearnCardComplete()}
               />
             )

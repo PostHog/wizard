@@ -18,6 +18,7 @@ import { auditConfig } from './audit/index.js';
 import { eventsAuditConfig } from './events-audit/index.js';
 import { audit3000Config } from './audit-3000/index.js';
 import { posthogDoctorConfig } from './posthog-doctor/index.js';
+import { migrationConfig } from './migration/index.js';
 
 export const WORKFLOW_REGISTRY: WorkflowConfig[] = [
   posthogIntegrationConfig,
@@ -26,6 +27,7 @@ export const WORKFLOW_REGISTRY: WorkflowConfig[] = [
   eventsAuditConfig,
   audit3000Config,
   posthogDoctorConfig,
+  migrationConfig,
 ];
 
 /** Look up a workflow config by its flowKey. */
