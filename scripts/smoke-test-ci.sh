@@ -11,8 +11,8 @@
 #       - ../wizard-workbench relative to this repo
 #
 # Usage:
-#   ./scripts/smoke-test-ci.sh                          # default: next-js/15-app-router-todo
-#   ./scripts/smoke-test-ci.sh next-js/15-pages-router-saas
+#   ./scripts/smoke-test-ci.sh                          # default: basic-integration/next-js/15-app-router-todo
+#   ./scripts/smoke-test-ci.sh basic-integration/next-js/15-pages-router-saas
 #
 # Examples:
 #   # With API key inline:
@@ -22,7 +22,7 @@
 #   POSTHOG_PERSONAL_API_KEY=phx_your_key_here POSTHOG_PROJECT_ID=12345 ./scripts/smoke-test-ci.sh
 #
 #   # Specific app:
-#   POSTHOG_PERSONAL_API_KEY=phx_your_key_here ./scripts/smoke-test-ci.sh next-js/15-pages-router-saas
+#   POSTHOG_PERSONAL_API_KEY=phx_your_key_here ./scripts/smoke-test-ci.sh basic-integration/next-js/15-pages-router-saas
 #
 #   # If ../wizard-workbench/.env has POSTHOG_PERSONAL_API_KEY, just:
 #   ./scripts/smoke-test-ci.sh
@@ -49,7 +49,7 @@ else
   }
 fi
 
-APP="${1:-next-js/15-app-router-todo}"
+APP="${1:-basic-integration/next-js/15-app-router-todo}"
 APP_SRC="$WORKBENCH_ROOT/apps/$APP"
 
 if [ ! -d "$APP_SRC" ]; then
