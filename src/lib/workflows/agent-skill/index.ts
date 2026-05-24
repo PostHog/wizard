@@ -22,6 +22,7 @@
 import type { WorkflowConfig } from '../workflow-step.js';
 import type { WorkflowRun, AbortCase } from '../../agent/agent-runner.js';
 import { AGENT_SKILL_STEPS } from './steps.js';
+import { getContentBlocks } from './content/index.js';
 
 export interface SkillWorkflowOptions {
   /** Context-mill skill ID to install */
@@ -59,6 +60,7 @@ export function createSkillWorkflow(
     skillId: opts.skillId,
     steps: AGENT_SKILL_STEPS,
     reportFile: opts.reportFile,
+    getContentBlocks,
     run: {
       skillId: opts.skillId,
       integrationLabel: opts.integrationLabel,
