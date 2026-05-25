@@ -90,7 +90,7 @@ export const EVENTS_AUDIT_WORKFLOW: Workflow = [
   {
     id: 'run',
     label: 'Events audit',
-    screen: 'run',
+    screen: 'audit-run',
     isComplete: (session) =>
       session.runPhase === RunPhase.Completed ||
       session.runPhase === RunPhase.Error,
@@ -104,7 +104,7 @@ export const EVENTS_AUDIT_WORKFLOW: Workflow = [
   {
     id: 'outro',
     label: 'Done',
-    screen: 'outro',
+    screen: 'audit-outro',
     isComplete: (session) => session.outroDismissed,
   },
   {

@@ -152,6 +152,7 @@
     ],
     "moduleNameMapper": {
       "^@anthropic-ai/claude-agent-sdk$": "<rootDir>/__mocks__/@anthropic-ai/claude-agent-sdk.ts",
+      "^ink$": "<rootDir>/__mocks__/ink.ts",
       "^@env$": "<rootDir>/src/env.ts",
       "^@lib/(.*)$": "<rootDir>/src/lib/$1",
       "^@utils/(.*)$": "<rootDir>/src/utils/$1",

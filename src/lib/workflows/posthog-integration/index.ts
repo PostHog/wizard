@@ -19,6 +19,7 @@ import { getCloudUrlFromRegion } from '../../../utils/urls.js';
 import { requestDeepLink } from '../../../utils/provisioning.js';
 import type { CloudRegion } from '../../../utils/types.js';
 import { POSTHOG_INTEGRATION_WORKFLOW } from './steps.js';
+import { getContentBlocks } from './content/index.js';
 
 const DASHBOARD_DEEP_LINK_KEY = 'dashboardDeepLink';
 
@@ -42,6 +43,7 @@ export const posthogIntegrationConfig: WorkflowConfig = {
   description: 'Set up PostHog SDK integration',
   flowKey: 'posthog-integration',
   steps: POSTHOG_INTEGRATION_WORKFLOW,
+  getContentBlocks,
 
   run: async (session: WizardSession): Promise<WorkflowRun> => {
     const config = session.frameworkConfig!;

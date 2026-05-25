@@ -6,9 +6,9 @@ on:
   workflow_dispatch:
     inputs:
       app:
-        description: 'App to test (e.g. next-js/15-app-router-todo)'
+        description: 'App to test (e.g. basic-integration/next-js/15-app-router-todo)'
         required: false
-        default: 'next-js/15-app-router-todo'
+        default: 'basic-integration/next-js/15-app-router-todo'
         type: string
 
 permissions:
@@ -16,7 +16,7 @@ permissions:
 
 jobs:
   smoke-test:
-    name: Smoke Test (${{ inputs.app || 'next-js/15-app-router-todo' }})
+    name: Smoke Test (${{ inputs.app || 'basic-integration/next-js/15-app-router-todo' }})
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -44,11 +44,14 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Install sandbox dependencies
+        run: sudo apt-get update && sudo apt-get install -y bubblewrap socat
+
       - name: Run smoke test
         env:
           POSTHOG_PERSONAL_API_KEY: ${{ secrets.GH_APP_POSTHOG_WIZARD_CI_BOT_POSTHOG_PERSONAL_KEY }}
           WIZARD_WORKBENCH_ROOT: ${{ github.workspace }}/wizard-workbench
-          SMOKE_TEST_APP: ${{ inputs.app || 'next-js/15-app-router-todo' }}
+          SMOKE_TEST_APP: ${{ inputs.app || 'basic-integration/next-js/15-app-router-todo' }}
         run: ./scripts/smoke-test-ci.sh "$SMOKE_TEST_APP"
 
       - name: Upload artifacts

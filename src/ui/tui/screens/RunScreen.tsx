@@ -6,7 +6,7 @@
  * screen component (see audit/AuditRunScreen.tsx).
  */
 
-import { useSyncExternalStore } from 'react';
+import { useMemo, useSyncExternalStore } from 'react';
 import { join } from 'node:path';
 import { Box } from 'ink';
 import type { WizardStore } from '../store.js';
@@ -25,6 +25,8 @@ import { TipsCard } from '../components/TipsCard.js';
 import { useStdoutDimensions } from '../hooks/useStdoutDimensions.js';
 import { useFileWatcher } from '../hooks/file-watcher.js';
 import { EVENT_PLAN_FILE } from '../../../lib/workflows/posthog-integration/index.js';
+import { getWorkflowConfig } from '../../../lib/workflows/workflow-registry.js';
+import { getContentBlocks as getSkillContentBlocks } from '../../../lib/workflows/agent-skill/content/index.js';
 
 import { WIZARD_LOG_FILE } from '../../../utils/paths.js';
 
@@ -75,10 +77,25 @@ export const RunScreen = ({ store }: RunScreenProps) => {
   const statuses =
     store.statusMessages.length > 0 ? store.statusMessages : undefined;
 
+  // Each workflow owns its content deck (workflow/content/index.tsx)
+  // and wires it onto its WorkflowConfig.getContentBlocks. Fall back to the
+  // agent-skill deck for runtime-created configs (e.g. `--skill <id>`) that
+  // aren't in the static registry.
+  const activeFlow = store.router.activeFlow;
+  const learnBlocks = useMemo(() => {
+    const getBlocks =
+      getWorkflowConfig(activeFlow)?.getContentBlocks ?? getSkillContentBlocks;
+    return getBlocks(store);
+  }, [store, activeFlow]);
+
   const leftPane = store.learnCardComplete ? (
     <TipsCard store={store} />
   ) : (
-    <LearnCard store={store} onComplete={() => store.setLearnCardComplete()} />
+    <LearnCard
+      store={store}
+      blocks={learnBlocks}
+      onComplete={() => store.setLearnCardComplete()}
+    />
   );
   const progressList = <ProgressList items={progressItems} title="Tasks" />;
 
