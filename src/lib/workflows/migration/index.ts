@@ -17,13 +17,23 @@ const MIGRATION_ABORT_CASES: AbortCase[] = [
   },
 ];
 
-const MIGRATE_PRODUCTS = ['statsig'] as const;
+/**
+ * Map each `--product=<id>` choice to the context-mill skill ID that handles
+ * it. Adding a variant: drop a new row here. The CLI `choices` and the
+ * runtime lookup both read from this map, so the two stay in sync.
+ */
+const PRODUCT_TO_SKILL_ID = {
+  statsig: 'migrate-statsig',
+} as const;
+
+type MigrateProduct = keyof typeof PRODUCT_TO_SKILL_ID;
+const MIGRATE_PRODUCTS = Object.keys(PRODUCT_TO_SKILL_ID) as MigrateProduct[];
 
 export const migrationConfig: WorkflowConfig = {
   command: 'migrate',
   description: 'Migrate to PostHog from another analytics provider',
   flowKey: 'migration',
-  skillId: 'migrate-statsig',
+  skillId: PRODUCT_TO_SKILL_ID.statsig,
   steps: MIGRATION_WORKFLOW,
   reportFile: MIGRATION_REPORT_FILE,
   getContentBlocks,
@@ -35,9 +45,11 @@ export const migrationConfig: WorkflowConfig = {
       demandOption: true,
     },
   },
-  mapCliOptions: (argv) => ({ skillId: `migrate-${argv.product as string}` }),
+  mapCliOptions: (argv) => ({
+    skillId: PRODUCT_TO_SKILL_ID[argv.product as MigrateProduct],
+  }),
   run: {
-    skillId: 'migrate-statsig',
+    skillId: PRODUCT_TO_SKILL_ID.statsig,
     integrationLabel: 'migration',
     customPrompt: () =>
       'Migrate this project from its existing third-party analytics, ' +
