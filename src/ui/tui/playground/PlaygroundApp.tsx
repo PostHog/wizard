@@ -19,6 +19,7 @@ import { ModalDemo } from './demos/ModalDemo.js';
 import { McpDemo } from './demos/McpDemo.js';
 import { KeyboardHintsDemo } from './demos/KeyboardHintsDemo.js';
 import { AuditChecksDemo } from './demos/AuditChecksDemo.js';
+import { LearnDeckDemo } from './demos/LearnDeckDemo.js';
 
 interface PlaygroundAppProps {
   store: WizardStore;
@@ -64,6 +65,11 @@ export const PlaygroundApp = ({ store }: PlaygroundAppProps) => {
       id: 'audit-checks',
       label: 'Audit checks',
       component: <AuditChecksDemo />,
+    },
+    {
+      id: 'learn-deck',
+      label: 'Learn deck',
+      component: <LearnDeckDemo store={store} />,
     },
   ];
 

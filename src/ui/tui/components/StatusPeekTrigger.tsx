@@ -13,6 +13,7 @@ let peekedOnce = false;
 
 interface StatusPeekTriggerProps {
   store?: WizardStore;
+  /** How long the status bar stays expanded, in ms. */
   duration?: number;
 }
 

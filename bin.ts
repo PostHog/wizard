@@ -599,9 +599,15 @@ for (const wfConfig of getSubcommandWorkflows()) {
   cli.command(
     wfConfig.command!,
     wfConfig.description,
-    (y) => y.options(skillSubcommandOptions),
+    (y) =>
+      y.options({
+        ...skillSubcommandOptions,
+        ...(wfConfig.cliOptions ?? {}),
+      }),
     (argv) => {
-      const options = { ...argv };
+      const extras =
+        wfConfig.mapCliOptions?.(argv as Record<string, unknown>) ?? {};
+      const options = { ...argv, ...extras };
       if (options.ci) {
         runWizardCI(wfConfig, options);
       } else {
