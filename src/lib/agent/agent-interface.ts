@@ -833,6 +833,12 @@ export async function runAgent(
   let loggedInitialContext = false;
   let lastResultMessage: any = null;
 
+  // SDK >=0.3.142 replaced TodoWrite (snapshot) with TaskCreate/TaskUpdate (accumulate by id).
+  // The agent's TaskCreate tool_use doesn't know the assigned taskId — the SDK returns it
+  // in the matching tool_result. Keep one map keyed by whatever id we have right now:
+  // tool_use_id while pending, then rekeyed to taskId once the result arrives.
+  const tasks = new Map<string, TaskEntry>();
+
   // Workaround for SDK bug: stdin closes before canUseTool responses can be sent.
   // The fix is to use an async generator for the prompt that stays open until
   // the result is received, keeping the stdin stream alive for permission responses.
@@ -920,7 +926,12 @@ export async function runAgent(
       'Glob',
       'Grep',
       'Bash',
-      'Task',
+      // SDK 0.3.x renamed the subagent dispatch tool from 'Task' to 'Agent'.
+      'Agent',
+      // Task list tools (replaced TodoWrite in 0.3.142). The wizard
+      // commandments instruct the agent to call TaskCreate/TaskUpdate to
+      // surface progress in the right-hand task panel.
+      ...Object.values(TaskTool),
       'ListMcpResourcesTool',
       ...WIZARD_TOOL_NAMES,
     ];
@@ -945,6 +956,12 @@ export async function runAgent(
         allowedTools,
         sandbox: {
           enabled: true,
+          // SDK 0.2.91 made failIfUnavailable default to true when enabled is
+          // set, which would abort wizard runs on hosts that lack sandbox
+          // dependencies (e.g. Linux without bubblewrap). Wizard targets a
+          // broad set of user machines, so prefer graceful degradation —
+          // commands still respect allowUnsandboxedCommands below.
+          failIfUnavailable: false,
           allowUnsandboxedCommands: false,
           filesystem: {
             allowWrite: [
@@ -983,6 +1000,15 @@ export async function runAgent(
           // without deferral these consume ~113k tokens upfront, leaving
           // almost no room in Sonnet's 200k context window.
           ENABLE_TOOL_SEARCH: 'auto:0',
+          // SDK 0.3.142 made MCP servers connect in the background by default;
+          // the agent may start its first turn before posthog-wizard is ready
+          // (audit workflows call audit_seed_checks on turn 1, integration
+          // workflows call load_skill_menu / install_skill). Restore the prior
+          // blocking behavior so the SDK waits up to 5s for MCP connect before
+          // turn 1. `alwaysLoad: true` on the server would also work but it
+          // disables tool search deferral and re-inflates the system prompt by
+          // ~113k tokens (the reason ENABLE_TOOL_SEARCH=auto:0 is set above).
+          MCP_CONNECTION_NONBLOCKING: '0',
           ANTHROPIC_CUSTOM_HEADERS: buildAgentEnv(
             agentConfig.wizardMetadata ?? {},
             agentConfig.wizardFlags ?? {},
@@ -1070,6 +1096,7 @@ export async function runAgent(
         spinner,
         collectedText,
         receivedSuccessResult,
+        tasks,
       );
 
       // [ABORT] detection: the skill emits "[ABORT] <reason>" when it
@@ -1260,13 +1287,158 @@ export async function runAgent(
  *                          while still logging to file. The SDK may emit a second error
  *                          result after success due to cleanup race conditions.
  */
+/**
+ * SDK >=0.3.142 replaced TodoWrite with four discrete Task* tools.
+ * Create / Update mutate the task list; Get / List are read-only.
+ */
+export enum TaskTool {
+  Create = 'TaskCreate',
+  Update = 'TaskUpdate',
+  Get = 'TaskGet',
+  List = 'TaskList',
+}
+
+type TaskEntry = { content: string; status: string; activeForm?: string };
+
+interface TaskStore {
+  tasks: Map<string, TaskEntry>;
+  sync: () => void;
+}
+
+interface ToolUseBlock {
+  type: 'tool_use';
+  id: string;
+  name: string;
+  input?: unknown;
+}
+
+function handleTaskCreate(block: ToolUseBlock, store: TaskStore): void {
+  const input = block.input as
+    | { subject?: string; activeForm?: string }
+    | undefined;
+  if (!input?.subject) return;
+  // Key by tool_use_id for now — the rekey to the SDK-assigned taskId happens
+  // when the matching tool_result arrives.
+  store.tasks.set(block.id, {
+    content: input.subject,
+    status: 'pending',
+    activeForm: input.activeForm,
+  });
+  store.sync();
+}
+
+function handleTaskUpdate(block: ToolUseBlock, store: TaskStore): void {
+  const input = block.input as
+    | {
+        taskId?: string;
+        subject?: string;
+        status?: string;
+        activeForm?: string;
+      }
+    | undefined;
+  if (!input?.taskId) return;
+  const existing = store.tasks.get(input.taskId);
+  if (!existing) return;
+  if (input.status === 'deleted') {
+    store.tasks.delete(input.taskId);
+  } else {
+    store.tasks.set(input.taskId, {
+      content: input.subject ?? existing.content,
+      status: input.status ?? existing.status,
+      activeForm: input.activeForm ?? existing.activeForm,
+    });
+  }
+  store.sync();
+}
+
+function handleTaskGet(_block: ToolUseBlock, _store: TaskStore): void {
+  // Read-only — the agent is querying state, not mutating it.
+}
+
+function handleTaskList(_block: ToolUseBlock, _store: TaskStore): void {
+  // Read-only — the agent is querying state, not mutating it.
+}
+
+function dispatchTaskToolUse(block: ToolUseBlock, store: TaskStore): void {
+  switch (block.name as TaskTool) {
+    case TaskTool.Create:
+      return handleTaskCreate(block, store);
+    case TaskTool.Update:
+      return handleTaskUpdate(block, store);
+    case TaskTool.Get:
+      return handleTaskGet(block, store);
+    case TaskTool.List:
+      return handleTaskList(block, store);
+  }
+}
+
+/**
+ * Pull the SDK-assigned task id off a SDKUserMessage.tool_use_result payload.
+ * The SDK already deserialises TaskCreateOutput here, so the shape is the
+ * structured `{ task: { id, subject } }` object — no JSON parsing needed.
+ */
+function extractTaskIdFromToolResult(result: unknown): string | undefined {
+  if (!result || typeof result !== 'object') return undefined;
+  const obj = result as Record<string, unknown>;
+  const task = obj.task as Record<string, unknown> | undefined;
+  if (task && typeof task.id === 'string') return task.id;
+  if (typeof obj.taskId === 'string') return obj.taskId;
+  if (typeof obj.id === 'string') return obj.id;
+  return undefined;
+}
+
+/**
+ * Fallback id extractor for the inner tool_result block.content — used only
+ * when message.tool_use_result is absent. In current SDK versions the inner
+ * content is a human-readable string ("Task #1 created successfully: …") so
+ * this path almost always returns undefined.
+ */
+function extractTaskIdFromResult(content: unknown): string | undefined {
+  const tryParse = (s: string): string | undefined => {
+    try {
+      const parsed = JSON.parse(s);
+      const id = parsed?.task?.id ?? parsed?.taskId ?? parsed?.id;
+      return typeof id === 'string' ? id : undefined;
+    } catch {
+      return undefined;
+    }
+  };
+  if (typeof content === 'string') return tryParse(content);
+  if (Array.isArray(content)) {
+    for (const block of content) {
+      if (block?.type === 'text' && typeof block.text === 'string') {
+        const id = tryParse(block.text);
+        if (id) return id;
+      }
+    }
+  }
+  return undefined;
+}
+
 function handleSDKMessage(
   message: SDKMessage,
   options: WizardOptions,
   spinner: SpinnerHandle,
   collectedText: string[],
   receivedSuccessResult = false,
+  tasks?: Map<string, TaskEntry>,
 ): void {
+  // Map preserves insertion order (the order the agent created the tasks).
+  // Within that, group by status: completed first, then in_progress, then
+  // everything else (pending). Array.prototype.sort is stable, so creation
+  // order is preserved inside each group.
+  const STATUS_RANK: Record<string, number> = {
+    completed: 0,
+    in_progress: 1,
+  };
+  const rank = (status: string): number => STATUS_RANK[status] ?? 2;
+  const syncTasks = (): void => {
+    if (!tasks) return;
+    const sorted = Array.from(tasks.values()).sort(
+      (a, b) => rank(a.status) - rank(b.status),
+    );
+    getUI().syncTodos(sorted);
+  };
   logToFile(`SDK Message: ${message.type}`, JSON.stringify(message, null, 2));
 
   if (options.debug) {
@@ -1311,14 +1483,52 @@ function handleSDKMessage(
             }
           }
 
-          // Intercept TodoWrite tool_use blocks for task progression
+          // Intercept Task* tool_use blocks for task progression.
+          // SDK >=0.3.142 replaced TodoWrite with TaskCreate/TaskUpdate/TaskGet/TaskList;
+          // consumers must accumulate by task id rather than replacing a snapshot list.
           if (
             block.type === 'tool_use' &&
-            block.name === 'TodoWrite' &&
-            block.input?.todos &&
-            Array.isArray(block.input.todos)
+            tasks &&
+            (Object.values(TaskTool) as string[]).includes(block.name)
           ) {
-            getUI().syncTodos(block.input.todos);
+            dispatchTaskToolUse(block as ToolUseBlock, {
+              tasks,
+              sync: syncTasks,
+            });
+          }
+        }
+      }
+      break;
+    }
+
+    case 'user': {
+      // Rekey pending TaskCreate entries from tool_use_id to the SDK-assigned
+      // taskId. The structured `{task: {id, subject}}` payload is at
+      // message.tool_use_result (top-level); the inner content[].tool_result
+      // blocks only carry the human-readable status text, which is not JSON.
+      if (tasks && tasks.size > 0) {
+        const content = message.message?.content;
+        if (Array.isArray(content)) {
+          for (const block of content) {
+            if (
+              block.type !== 'tool_result' ||
+              typeof block.tool_use_id !== 'string' ||
+              !tasks.has(block.tool_use_id)
+            ) {
+              continue;
+            }
+            const taskId =
+              extractTaskIdFromToolResult(
+                (message as { tool_use_result?: unknown }).tool_use_result,
+              ) ?? extractTaskIdFromResult(block.content);
+            // No taskId means we leave the entry under tool_use_id so it stays
+            // visible; later TaskUpdate calls won't match it, but at least the
+            // task list doesn't vanish.
+            if (!taskId) continue;
+            const entry = tasks.get(block.tool_use_id)!;
+            tasks.delete(block.tool_use_id);
+            tasks.set(taskId, entry);
+            syncTasks();
           }
         }
       }

@@ -21,9 +21,11 @@ const WIZARD_COMMANDMENTS = [
 
   'Do not spawn subagents unless explicitly instructed to do so.',
 
-  'After reading the integration skill, use the TodoWrite tool to track your progress. Create a todo list at the describing the high-level areas of work, mark each as in_progress when you begin it, and completed when done. Describe high-level tasks from the workflow ("inserting event tracking code", etc), not specific files or lines. For each new stage of the integration, create additional todos if necessary. Create a final "wrapping up" step and mark it completed when the integration is complete.',
+  'Create tasks as soon as you understand the work you are going to carry out. Break the list into distinct stages of work that the user can follow through. Create all tasks in a single tool call, in the order you will be performing them. Drive the work with TaskUpdate: status in_progress when you begin a task, completed when done.',
 
-  'Do not assume "PostHog provider" or "PostHogProvider" in todo labels, status messages, or code. Only use a provider if the skill workflow explicitly requires one for the specific framework.',
+  'Keep task titles broad and stage-oriented — describe the purpose or area of work, not the specific files, paths, or symbols involved. Do not name individual files, modules, or directories inside task titles, and do not include illustrative examples within a task title.',
+
+  'Do not assume "PostHog provider" or "PostHogProvider" in task labels, status messages, or code. Only use a provider if the skill workflow explicitly requires one for the specific framework.',
 
   'If you see a [YARA WARNING] or [YARA VIOLATION] message, handle it silently. Fix the issue (revert the write, avoid the flagged pattern) without mentioning security warnings or YARA to the user. These are internal guardrails, not user-facing alerts. Never show scary security language to the user.',
 
