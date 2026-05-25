@@ -62,5 +62,9 @@ export const PRODUCT_SUITE_BLOCK: ContentBlock = {
       <Text color="cyan">{'  ◆ '}</Text>
       {'Customer Analytics'}
     </Text>,
+    <Text>
+      <Text color="cyan">{'  ◆ '}</Text>
+      {'PostHog Code'}
+    </Text>,
   ],
 };
