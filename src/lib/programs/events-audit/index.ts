@@ -22,6 +22,7 @@ export const eventsAuditConfig: ProgramConfig = {
   // Top-level reportFile so AuditRunScreen can resolve the report path
   // synchronously without unwrapping the deferred `run` function.
   reportFile: SETUP_REPORT_FILE,
+  allowedTools: ['Agent'],
 
   run: (session: WizardSession): Promise<ProgramRun> => {
     const typeScriptDetected = isUsingTypeScript({

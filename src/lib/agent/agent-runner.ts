@@ -175,7 +175,7 @@ export async function runAgent(
       ? await programConfig.run(session)
       : programConfig.run;
 
-  await runProgram(session, runDef);
+  await runProgram(session, runDef, programConfig);
 }
 
 /**
@@ -183,11 +183,13 @@ export async function runAgent(
  *
  * This is the single execution path for all programs — both skill-based
  * (revenue analytics) and framework-based (core integration). The
- * `ProgramRun` controls what varies between them.
+ * `ProgramRun` controls what varies between them; `programConfig` carries
+ * the program-level static metadata (tool allow/disallow lists, etc.).
  */
 export async function runProgram(
   session: WizardSession,
   config: ProgramRun,
+  programConfig: ProgramConfig,
 ): Promise<void> {
   // 1. Init logging + debug
   initLogFile();
@@ -348,6 +350,8 @@ export async function runProgram(
       integrationLabel: config.integrationLabel,
       askBridge,
       askMaxQuestions: config.maxQuestions,
+      allowedTools: programConfig.allowedTools,
+      disallowedTools: programConfig.disallowedTools,
       getPendingQuestion: () => session.pendingQuestion,
     },
     sessionToOptions(session),

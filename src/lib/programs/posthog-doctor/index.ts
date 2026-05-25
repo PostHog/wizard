@@ -7,6 +7,7 @@ export const posthogDoctorConfig: ProgramConfig = {
     'Diagnose your PostHog project for configuration issues and setup warnings',
   id: 'posthog-doctor',
   steps: POSTHOG_DOCTOR_PROGRAM,
+  allowedTools: ['Agent'],
 };
 
 export { POSTHOG_DOCTOR_PROGRAM } from './steps.js';

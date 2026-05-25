@@ -300,6 +300,10 @@ export type AgentConfig = {
   askBridge?: import('../wizard-ask-bridge').WizardAskBridge;
   /** Per-run cap on `wizard_ask` invocations. Defaults to 10. */
   askMaxQuestions?: number;
+  /** Extra tools added on top of BASE_ALLOWED_TOOLS for this run. */
+  allowedTools?: readonly string[];
+  /** Tools removed from BASE_ALLOWED_TOOLS for this run. */
+  disallowedTools?: readonly string[];
   /**
    * Read accessor for the active pending question. Used by canUseTool to
    * block Write/Edit while the overlay is open (defense in depth).
@@ -381,6 +385,10 @@ type AgentRunConfig = {
   model: string;
   wizardFlags?: Record<string, string>;
   wizardMetadata?: Record<string, string>;
+  /** Extra tools added on top of BASE_ALLOWED_TOOLS for this run. */
+  allowedTools?: readonly string[];
+  /** Tools removed from BASE_ALLOWED_TOOLS for this run. */
+  disallowedTools?: readonly string[];
   /**
    * Read accessor for the active pending question. canUseTool reads this
    * to block Write/Edit while the overlay is open.
@@ -735,6 +743,8 @@ export async function initializeAgent(
       model,
       wizardFlags: config.wizardFlags,
       wizardMetadata: config.wizardMetadata,
+      allowedTools: config.allowedTools,
+      disallowedTools: config.disallowedTools,
       getPendingQuestion: config.getPendingQuestion,
     };
 
@@ -912,29 +922,22 @@ export async function runAgent(
   let abortReason: string | null = null;
 
   try {
-    // Tools needed for the wizard:
-    // - File operations: Read, Write, Edit
-    // - Search: Glob, Grep
-    // - Commands: Bash (with restrictions via canUseTool)
-    // - MCP discovery: ListMcpResourcesTool (to find available skills)
-    // Skills themselves are enabled via the `skills` option below, not allowedTools.
-    // MCP tools (PostHog) come from mcpServers, not allowedTools
+    // Per-program allow/disallow lists tweak BASE_ALLOWED_TOOLS. Skills are
+    // enabled via the `skills` query option; PostHog MCP tools come through
+    // `mcpServers`. Neither belongs in this list.
+    const disallow = new Set(agentConfig.disallowedTools ?? []);
     const allowedTools = [
-      'Read',
-      'Write',
-      'Edit',
-      'Glob',
-      'Grep',
-      'Bash',
-      // SDK 0.3.x renamed the subagent dispatch tool from 'Task' to 'Agent'.
-      'Agent',
-      // Task list tools (replaced TodoWrite in 0.3.142). The wizard
-      // commandments instruct the agent to call TaskCreate/TaskUpdate to
-      // surface progress in the right-hand task panel.
-      ...Object.values(TaskTool),
-      'ListMcpResourcesTool',
-      ...WIZARD_TOOL_NAMES,
-    ];
+      ...BASE_ALLOWED_TOOLS,
+      ...(agentConfig.allowedTools ?? []),
+    ].filter((t) => !disallow.has(t));
+
+    // Subagents dispatched via the Agent tool don't inherit the parent's
+    // MCP servers by default — so general-purpose subagents can't see the
+    // PostHog MCP and fall back to curl with whatever key they can find
+    // (then 401, then start asking the user for keys). Override
+    // general-purpose to forward parent MCP servers by name; SDK resolves
+    // each string against the parent's mcpServers map.
+    const inheritedMcpServerNames = Object.keys(agentConfig.mcpServers);
 
     const response = query({
       prompt: createPromptStream(),
@@ -945,6 +948,15 @@ export async function runAgent(
         permissionMode: 'acceptEdits',
         betas: ['context-1m-2025-08-07'],
         mcpServers: agentConfig.mcpServers,
+        agents: {
+          'general-purpose': {
+            description:
+              "General-purpose subagent. Inherits the parent run's tools plus the PostHog and wizard-tools MCP servers, so it can call mcp__posthog-wizard__* directly instead of curling the REST API.",
+            prompt:
+              'You are a general-purpose subagent for the PostHog wizard. Prefer the authenticated mcp__posthog-wizard__* MCP tools over raw HTTP — they are already authenticated for this project. Only fall back to other transports if no MCP tool covers the operation.',
+            mcpServers: inheritedMcpServerNames,
+          },
+        },
         // Load skills from project's .claude/skills/ directory
         settingSources: ['project'],
         // Enable all discovered skills. Omitting this is NOT "skills off" —
@@ -1312,6 +1324,26 @@ export enum TaskTool {
   Get = 'TaskGet',
   List = 'TaskList',
 }
+
+/**
+ * Tools every program gets unless its ProgramConfig.disallowedTools says
+ * otherwise. Programs add more via ProgramConfig.allowedTools (e.g.
+ * `'Agent'` to opt into subagent dispatch). Skills and PostHog MCP tools
+ * are enabled separately (skills option / mcpServers).
+ */
+export const BASE_ALLOWED_TOOLS: readonly string[] = [
+  'Read',
+  'Write',
+  'Edit',
+  'Glob',
+  'Grep',
+  'Bash',
+  // Task list tools (replaced TodoWrite in 0.3.142). Commandments instruct
+  // the agent to call TaskCreate/TaskUpdate to surface progress in the TUI.
+  ...Object.values(TaskTool),
+  'ListMcpResourcesTool',
+  ...WIZARD_TOOL_NAMES,
+];
 
 type TaskEntry = { content: string; status: string; activeForm?: string };
 

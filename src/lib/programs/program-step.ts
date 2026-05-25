@@ -154,6 +154,17 @@ export interface ProgramConfig {
    * 'migrate-statsig'`).
    */
   mapCliOptions?: (argv: Record<string, unknown>) => Record<string, unknown>;
+  /**
+   * Extra tool names added on top of BASE_ALLOWED_TOOLS for this program's
+   * agent run. Use for tools that only this program needs.
+   */
+  allowedTools?: readonly string[];
+  /**
+   * Tool names removed from BASE_ALLOWED_TOOLS for this program's agent
+   * run. Use to forbid a base tool — e.g. `['Agent']` to block subagent
+   * dispatch in a program whose steps are explicitly single-agent.
+   */
+  disallowedTools?: readonly string[];
 }
 
 /**

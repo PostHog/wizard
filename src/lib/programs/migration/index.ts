@@ -37,6 +37,7 @@ export const migrationConfig: ProgramConfig = {
   steps: MIGRATION_PROGRAM,
   reportFile: MIGRATION_REPORT_FILE,
   getContentBlocks,
+  allowedTools: ['Agent'],
   cliOptions: {
     product: {
       describe: 'Source SDK to migrate from',

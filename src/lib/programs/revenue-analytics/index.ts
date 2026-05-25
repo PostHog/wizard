@@ -9,6 +9,7 @@ export const revenueAnalyticsConfig: ProgramConfig = {
   id: 'revenue-analytics-setup',
   steps: REVENUE_ANALYTICS_PROGRAM,
   getContentBlocks,
+  allowedTools: ['Agent'],
   run: {
     skillId: 'revenue-analytics-setup',
     integrationLabel: 'revenue-analytics-setup',

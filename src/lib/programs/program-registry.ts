@@ -30,6 +30,7 @@ const agentSkillConfig: ProgramConfig = {
   description: 'Run an arbitrary context-mill skill',
   steps: AGENT_SKILL_STEPS,
   getContentBlocks: agentSkillContentBlocks,
+  allowedTools: ['Agent'],
 };
 
 export const PROGRAM_REGISTRY = [

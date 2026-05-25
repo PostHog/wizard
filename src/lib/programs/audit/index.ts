@@ -61,4 +61,5 @@ export const auditConfig: ProgramConfig = {
   ...baseConfig,
   steps: auditSteps,
   run: auditRun,
+  allowedTools: ['Agent'],
 };

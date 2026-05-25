@@ -245,4 +245,5 @@ export const audit3000Config: ProgramConfig = {
   ...baseConfig,
   steps: audit3000Steps,
   run: audit3000Run,
+  allowedTools: ['Agent'],
 };
