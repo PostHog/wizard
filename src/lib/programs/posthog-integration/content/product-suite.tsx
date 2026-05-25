@@ -42,7 +42,7 @@ export const PRODUCT_SUITE_BLOCK: ContentBlock = {
     </Text>,
     <Text>
       <Text color="cyan">{'  ◆ '}</Text>
-      {'Programs             '}
+      {'Workflows             '}
       <Text color="cyan">{'◆ '}</Text>
       {'Logs'}
     </Text>,

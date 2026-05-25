@@ -2,6 +2,7 @@ import { AGENT_SKILL_STEPS, createSkillProgram } from '../agent-skill/index.js';
 import type { ProgramStep, ProgramConfig } from '../program-step.js';
 import type { ProgramRun } from '../../agent/agent-runner.js';
 import type { WizardSession } from '../../wizard-session.js';
+import { WIZARD_TOOL_NAMES } from '../../wizard-tools.js';
 import { AUDIT_ABORT_CASES } from './detect.js';
 import { AUDIT_CHECKS_KEY, AUDIT_REPORT_FILE } from './types.js';
 import { AUDIT_SEED_CHECKS, seedAuditLedger } from './seed.js';
@@ -62,4 +63,5 @@ export const auditConfig: ProgramConfig = {
   steps: auditSteps,
   run: auditRun,
   allowedTools: ['Agent'],
+  disallowedTools: [WIZARD_TOOL_NAMES.wizardAsk],
 };

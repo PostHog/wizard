@@ -4,6 +4,7 @@ import { AGENT_SKILL_STEPS, createSkillProgram } from '../agent-skill/index.js';
 import type { ProgramStep, ProgramConfig } from '../program-step.js';
 import type { ProgramRun } from '../../agent/agent-runner.js';
 import type { WizardSession } from '../../wizard-session.js';
+import { WIZARD_TOOL_NAMES } from '../../wizard-tools.js';
 import { AUDIT_ABORT_CASES } from '../audit/detect.js';
 import {
   AUDIT_CHECKS_FILE,
@@ -246,4 +247,5 @@ export const audit3000Config: ProgramConfig = {
   steps: audit3000Steps,
   run: audit3000Run,
   allowedTools: ['Agent'],
+  disallowedTools: [WIZARD_TOOL_NAMES.wizardAsk],
 };

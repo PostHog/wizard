@@ -5,6 +5,7 @@ import { OutroKind } from '../../wizard-session.js';
 import { SPINNER_MESSAGE } from '../../framework-config.js';
 import { isUsingTypeScript } from '../../../utils/setup-utils.js';
 import { getCloudUrlFromRegion } from '../../../utils/urls.js';
+import { WIZARD_TOOL_NAMES } from '../../wizard-tools.js';
 import { EVENTS_AUDIT_PROGRAM } from './steps.js';
 import { AUDIT_CHECKS_KEY } from '../audit/types.js';
 import { AUDIT_SEED_CHECKS, seedAuditLedger } from '../audit/seed.js';
@@ -23,6 +24,7 @@ export const eventsAuditConfig: ProgramConfig = {
   // synchronously without unwrapping the deferred `run` function.
   reportFile: SETUP_REPORT_FILE,
   allowedTools: ['Agent'],
+  disallowedTools: [WIZARD_TOOL_NAMES.wizardAsk],
 
   run: (session: WizardSession): Promise<ProgramRun> => {
     const typeScriptDetected = isUsingTypeScript({

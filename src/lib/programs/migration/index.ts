@@ -1,5 +1,6 @@
 import type { ProgramConfig } from '../program-step.js';
 import type { AbortCase } from '../../agent/agent-runner.js';
+import { WIZARD_TOOL_NAMES } from '../../wizard-tools.js';
 import { MIGRATION_PROGRAM } from './steps.js';
 import { getContentBlocks } from './content/index.js';
 
@@ -38,6 +39,7 @@ export const migrationConfig: ProgramConfig = {
   reportFile: MIGRATION_REPORT_FILE,
   getContentBlocks,
   allowedTools: ['Agent'],
+  disallowedTools: [WIZARD_TOOL_NAMES.wizardAsk],
   cliOptions: {
     product: {
       describe: 'Source SDK to migrate from',

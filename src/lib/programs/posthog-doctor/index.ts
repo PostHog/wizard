@@ -1,4 +1,5 @@
 import type { ProgramConfig } from '../program-step.js';
+import { WIZARD_TOOL_NAMES } from '../../wizard-tools.js';
 import { POSTHOG_DOCTOR_PROGRAM } from './steps.js';
 
 export const posthogDoctorConfig: ProgramConfig = {
@@ -8,6 +9,7 @@ export const posthogDoctorConfig: ProgramConfig = {
   id: 'posthog-doctor',
   steps: POSTHOG_DOCTOR_PROGRAM,
   allowedTools: ['Agent'],
+  disallowedTools: [WIZARD_TOOL_NAMES.wizardAsk],
 };
 
 export { POSTHOG_DOCTOR_PROGRAM } from './steps.js';
