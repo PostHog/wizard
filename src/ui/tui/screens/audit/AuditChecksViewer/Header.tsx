@@ -2,7 +2,7 @@ import { Box, Text } from 'ink';
 import type {
   AuditCheck,
   AuditStatus,
-} from '../../../../../lib/workflows/audit/types.js';
+} from '../../../../../lib/programs/audit/types.js';
 import type { ViewerLayout } from './layout.js';
 
 interface HeaderProps {

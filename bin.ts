@@ -22,8 +22,8 @@ if (!satisfies(process.version, NODE_VERSION_RANGE)) {
 import { isNonInteractiveEnvironment } from './src/utils/environment';
 import { getUI, setUI } from './src/ui';
 import { LoggingUI } from './src/ui/logging-ui';
-import { getSubcommandWorkflows } from './src/lib/workflows/workflow-registry';
-import type { WorkflowConfig } from './src/lib/workflows/workflow-step';
+import { getSubcommandPrograms } from './src/lib/programs/program-registry';
+import type { ProgramConfig } from './src/lib/programs/program-step';
 import type { WizardSession } from './src/lib/wizard-session';
 import { POSTHOG_DOCS_URL } from './src/lib/constants';
 import { runtimeEnv } from '@env';
@@ -44,7 +44,7 @@ if (process.env.NODE_ENV === 'test') {
   })();
 }
 
-/** Shared yargs options for skill-based workflow subcommands. */
+/** Shared yargs options for skill-based program subcommands. */
 const skillSubcommandOptions = {
   debug: {
     default: false,
@@ -295,7 +295,7 @@ const cli = yargs(hideBin(process.argv))
           }
 
           const { posthogIntegrationConfig } = await import(
-            './src/lib/workflows/posthog-integration/index.js'
+            './src/lib/programs/posthog-integration/index.js'
           );
           const { FRAMEWORK_REGISTRY } = await import('./src/lib/registry.js');
           const { detectFramework, gatherFrameworkContext } = await import(
@@ -366,14 +366,14 @@ const cli = yargs(hideBin(process.argv))
       } else if (options.skill) {
         // Run a specific skill by ID
         void (async () => {
-          const { createSkillWorkflow } = await import(
-            './src/lib/workflows/agent-skill/index.js'
+          const { createSkillProgram } = await import(
+            './src/lib/programs/agent-skill/index.js'
           );
           const skillId = options.skill as string;
-          const config = createSkillWorkflow({
+          const config = createSkillProgram({
             skillId,
             command: 'skill',
-            flowKey: 'agent-skill',
+            id: 'agent-skill',
             description: `Run skill: ${skillId}`,
             integrationLabel: skillId,
             successMessage: `${skillId} completed!`,
@@ -385,11 +385,11 @@ const cli = yargs(hideBin(process.argv))
           runWizard(config, { ...options, skillId });
         })();
       } else {
-        // Interactive TTY: run core-integration through the unified workflow path.
+        // Interactive TTY: run core-integration through the unified program path.
         // Same codepath as `npx @posthog/wizard integrate`.
         void (async () => {
           const { posthogIntegrationConfig } = await import(
-            './src/lib/workflows/posthog-integration/index.js'
+            './src/lib/programs/posthog-integration/index.js'
           );
           runWizard(posthogIntegrationConfig, options);
         })();
@@ -440,8 +440,8 @@ const cli = yargs(hideBin(process.argv))
                 './src/lib/wizard-session.js'
               );
 
-              const { Flow } = await import('./src/ui/tui/router.js');
-              const tui = startTUI(WIZARD_VERSION, Flow.McpAdd);
+              const { Program } = await import('./src/ui/tui/router.js');
+              const tui = startTUI(WIZARD_VERSION, Program.McpAdd);
               const session = buildSession({
                 debug: options.debug,
                 localMcp: options.local,
@@ -486,8 +486,8 @@ const cli = yargs(hideBin(process.argv))
                 './src/lib/wizard-session.js'
               );
 
-              const { Flow } = await import('./src/ui/tui/router.js');
-              const tui = startTUI(WIZARD_VERSION, Flow.McpRemove);
+              const { Program } = await import('./src/ui/tui/router.js');
+              const tui = startTUI(WIZARD_VERSION, Program.McpRemove);
               const session = buildSession({
                 debug: options.debug,
                 localMcp: options.local,
@@ -594,24 +594,24 @@ cli.command(
   },
 );
 
-// ── Skill-based workflow subcommands (derived from registry) ─────────
-for (const wfConfig of getSubcommandWorkflows()) {
+// ── Skill-based program subcommands (derived from registry) ─────────
+for (const programConfig of getSubcommandPrograms()) {
   cli.command(
-    wfConfig.command!,
-    wfConfig.description,
+    programConfig.command!,
+    programConfig.description,
     (y) =>
       y.options({
         ...skillSubcommandOptions,
-        ...(wfConfig.cliOptions ?? {}),
+        ...(programConfig.cliOptions ?? {}),
       }),
     (argv) => {
       const extras =
-        wfConfig.mapCliOptions?.(argv as Record<string, unknown>) ?? {};
+        programConfig.mapCliOptions?.(argv as Record<string, unknown>) ?? {};
       const options = { ...argv, ...extras };
       if (options.ci) {
-        runWizardCI(wfConfig, options);
+        runWizardCI(programConfig, options);
       } else {
-        runWizard(wfConfig, options);
+        runWizard(programConfig, options);
       }
     },
   );
@@ -625,12 +625,12 @@ cli
   .wrap(process.stdout.isTTY ? cli.terminalWidth() : 80).argv;
 
 /**
- * Run a full wizard workflow in the TUI. Handles the full lifecycle: start TUI,
+ * Run a full wizard program in the TUI. Handles the full lifecycle: start TUI,
  * build session, run detection, wait for intro gate, execute the
  * agent pipeline, wait for outro dismissal, then exit.
  */
 function runWizard(
-  config: WorkflowConfig,
+  config: ProgramConfig,
   options: Record<string, unknown>,
 ): void {
   void (async () => {
@@ -648,7 +648,7 @@ function runWizard(
       );
       const { analytics } = await import('./src/utils/analytics.js');
 
-      const tui = startTUI(WIZARD_VERSION, config.flowKey as any);
+      const tui = startTUI(WIZARD_VERSION, config.id as any);
 
       const session = buildSession({
         debug: options.debug as boolean | undefined,
@@ -665,7 +665,7 @@ function runWizard(
         benchmark: options.benchmark as boolean | undefined,
         yaraReport: options.yaraReport as boolean | undefined,
       });
-      session.workflowLabel = config.flowKey;
+      session.programLabel = config.id;
       if (options.skillId) {
         session.skillId = options.skillId as string;
       } else if (config.skillId) {
@@ -677,7 +677,7 @@ function runWizard(
       // Task stream — pushes state to external consumers on task changes
       const taskStream = new TaskStreamPush({
         store: tui.store,
-        workflowId: config.flowKey,
+        programId: config.id,
         destinations: [new FileDestination(), new PostHogDestination()],
       });
       tui.store.onTasksChanged = () => void taskStream.push();
@@ -747,12 +747,12 @@ function runWizard(
  * CI-mode pipeline shared by every non-interactive entry point.
  *
  * Validates flags, builds a `ci:true` session, runs `preRun` (or the
- * workflow's `onReady` hooks by default), executes `runAgent`, and
+ * program's `onReady` hooks by default), executes `runAgent`, and
  * routes any failure through `wizardAbort`. `wizardAbort` owns all
  * exits — never add a raw `process.exit` here.
  */
 function runWizardCI(
-  config: WorkflowConfig,
+  config: ProgramConfig,
   options: Record<string, unknown>,
   preRun?: (session: WizardSession) => Promise<void>,
 ): void {
@@ -808,14 +808,14 @@ function runWizardCI(
       yaraReport: options.yaraReport as boolean | undefined,
       ...env,
     });
-    session.workflowLabel = config.flowKey;
+    session.programLabel = config.id;
     if (config.skillId) {
       session.skillId = config.skillId;
     }
     const runDef = typeof config.run === 'object' ? config.run : null;
 
     getUI().intro('Welcome to the PostHog setup wizard');
-    getUI().log.info(`Running ${config.flowKey} in CI mode`);
+    getUI().log.info(`Running ${config.id} in CI mode`);
 
     try {
       if (preRun) {
@@ -839,7 +839,7 @@ function runWizardCI(
           }
         }
 
-        // Surface detectError written by the workflow's detect hook.
+        // Surface detectError written by the program's detect hook.
         const detectError = session.frameworkContext.detectError as
           | { kind: string; [k: string]: unknown }
           | undefined;
@@ -848,8 +848,8 @@ function runWizardCI(
             message: `Prerequisites not met: ${detectError.kind}\n\nSee ${
               runDef?.docsUrl ?? POSTHOG_DOCS_URL
             }`,
-            error: new WizardError(`${config.flowKey} prerequisites failed`, {
-              integration: config.flowKey,
+            error: new WizardError(`${config.id} prerequisites failed`, {
+              integration: config.id,
               detect_error_kind: detectError.kind,
             }),
           });

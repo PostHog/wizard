@@ -1,8 +1,8 @@
 /**
  * LearnCard — Generic render shell for an animated content deck.
  *
- * Workflow-owned. Callers pass the script via `blocks`. The script lives
- * under `src/lib/workflows/<name>/content/`. The shell handles
+ * Program-owned. Callers pass the script via `blocks`. The script lives
+ * under `src/lib/programs/<name>/content/`. The shell handles
  * dimension tracking, status-bar height math, and the `display="none"`
  * clamp on narrow terminals.
  */
@@ -22,7 +22,7 @@ const MIN_CONTENT_ROWS = 6;
 
 interface LearnCardProps {
   store?: WizardStore;
-  /** The script to play. Workflow-owned; see workflows/<name>/content/. */
+  /** The script to play. Program-owned; see programs/<name>/content/. */
   blocks: ContentBlock[];
   onComplete?: () => void;
 }

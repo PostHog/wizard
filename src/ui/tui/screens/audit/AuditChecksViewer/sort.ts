@@ -1,7 +1,7 @@
 import type {
   AuditCheck,
   AuditStatus,
-} from '../../../../../lib/workflows/audit/types.js';
+} from '../../../../../lib/programs/audit/types.js';
 
 const STATUS_ORDER: Record<AuditStatus, number> = {
   error: 0,

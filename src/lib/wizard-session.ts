@@ -90,7 +90,7 @@ export interface OutroData {
   continueUrl?: string;
   /** Report file the agent wrote (e.g. "posthog-setup-report.md") */
   reportFile?: string;
-  /** PostHog dashboard URL the workflow created on the user's behalf. */
+  /** PostHog dashboard URL the program created on the user's behalf. */
   dashboardUrl?: string;
 }
 
@@ -119,9 +119,9 @@ export interface PendingQuestion {
 }
 
 /**
- * PostHog dashboard URL emitted by the agent during a workflow run.
+ * PostHog dashboard URL emitted by the agent during a program run.
  * Populated via the `[DASHBOARD_URL]` text marker in agent assistant messages
- * — see `handleSDKMessage` in `agent/agent-interface.ts`. Read by workflows
+ * — see `handleSDKMessage` in `agent/agent-interface.ts`. Read by programs
  * (e.g. events-audit) inside `buildOutroData` to surface a dashboard link
  * the agent actually created.
  */
@@ -173,7 +173,7 @@ export interface WizardSession {
   discoveredFeatures: DiscoveredFeature[];
   llmOptIn: boolean;
 
-  // Screen completion
+  // ScreenId completion
   mcpComplete: boolean;
   mcpOutcome: McpOutcome | null;
   mcpInstalledClients: string[];
@@ -201,8 +201,8 @@ export interface WizardSession {
   // Additional features queue (drained via stop hook after main integration)
   additionalFeatureQueue: AdditionalFeature[];
 
-  // Workflow metadata (set by runWizard in bin.ts)
-  workflowLabel: string | null;
+  // Program metadata (set by runWizard in bin.ts)
+  programLabel: string | null;
   skillId: string | null;
 
   // Resolved framework config (set after integration is known)
@@ -275,7 +275,7 @@ export function buildSession(args: {
     outroData: null,
     dashboardUrl: null,
     additionalFeatureQueue: [],
-    workflowLabel: null,
+    programLabel: null,
     skillId: null,
     frameworkConfig: null,
     pendingQuestion: null,

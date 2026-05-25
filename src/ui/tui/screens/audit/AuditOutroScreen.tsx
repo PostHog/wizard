@@ -2,7 +2,7 @@
  * AuditOutroScreen — Audit-specific post-run summary. Renders the standard
  * success / error / cancel views with the audit checks summary inlined into
  * the success body. The report path shown in the success headline comes from
- * the workflow's `successMessage`, so this screen is workflow-agnostic.
+ * the program's `successMessage`, so this screen is program-agnostic.
  */
 
 import { join } from 'node:path';
@@ -11,7 +11,7 @@ import { useSyncExternalStore } from 'react';
 import type { WizardStore } from '../../store.js';
 import { OutroKind } from '../../../../lib/wizard-session.js';
 import { Colors } from '../../styles.js';
-import { getAuditChecks } from '../../../../lib/workflows/audit/types.js';
+import { getAuditChecks } from '../../../../lib/programs/audit/types.js';
 import { AuditChecksOutroSection } from './AuditChecksOutroSection.js';
 
 interface AuditOutroScreenProps {

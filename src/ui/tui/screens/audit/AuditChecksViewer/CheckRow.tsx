@@ -2,7 +2,7 @@ import { Box, Text } from 'ink';
 import {
   AUDIT_SEVERITY_STYLE,
   type AuditCheck,
-} from '../../../../../lib/workflows/audit/types.js';
+} from '../../../../../lib/programs/audit/types.js';
 import { truncate, type ViewerLayout } from './layout.js';
 
 interface CheckRowProps {

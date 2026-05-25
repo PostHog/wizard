@@ -4,7 +4,7 @@
  *
  * The schema is intentionally generic: onboarding is the first consumer,
  * but migrations, audits, and single-task installs can reuse the same
- * transport with a different workflow_id / skill_id pair.
+ * transport with a different program_id / skill_id pair.
  */
 
 import type { RunPhase } from '../wizard-session';
@@ -39,13 +39,13 @@ export interface TaskStreamError {
  * Wire payload the wizard pushes on every state change.
  *
  * Every run is a new session_id. The wizard never updates an old session —
- * re-running the same workflow + skill is a new row with a newer timestamp.
+ * re-running the same program + skill is a new row with a newer timestamp.
  * Consumers get the current view by picking the latest session for a given
- * (workflow_id, skill_id) pair.
+ * (program_id, skill_id) pair.
  */
 export interface TaskStreamUpdate {
   session_id: string;
-  workflow_id: string;
+  program_id: string;
   skill_id: string;
   started_at: string;
   run_phase: RunPhase;

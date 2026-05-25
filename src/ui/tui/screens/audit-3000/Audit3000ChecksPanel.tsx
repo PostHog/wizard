@@ -1,6 +1,6 @@
 /**
  * Audit-3000 left pane on the Run screen. Arcade-flavoured fork of the
- * audit workflow's `PendingChecksList`: a running score banner sits on
+ * audit program's `PendingChecksList`: a running score banner sits on
  * top, then the area-level "level" headers underneath.
  *
  * Per-check rows are deliberately omitted here — the Hi-score Table tab
@@ -13,7 +13,7 @@ import { Spinner } from '@inkjs/ui';
 import {
   type AuditCheck,
   type AuditStatus,
-} from '../../../../lib/workflows/audit/types.js';
+} from '../../../../lib/programs/audit/types.js';
 import { Colors, Icons } from '../../styles.js';
 import { LoadingBox } from '../../primitives/index.js';
 

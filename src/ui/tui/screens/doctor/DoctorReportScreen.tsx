@@ -6,7 +6,7 @@ import { Colors, Icons } from '../../styles.js';
 import {
   fetchHealthIssues,
   type HealthIssue,
-} from '../../../../lib/workflows/posthog-doctor/index.js';
+} from '../../../../lib/programs/posthog-doctor/index.js';
 import { getUiHostFromHost } from '../../../../utils/urls.js';
 import { OutroKind } from '../../../../lib/wizard-session.js';
 import { ApiError } from '../../../../lib/api.js';

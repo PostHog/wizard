@@ -2,7 +2,7 @@ import { Box, Text } from 'ink';
 import {
   AUDIT_SEVERITY_STYLE,
   type AuditCheck,
-} from '../../../../lib/workflows/audit/types.js';
+} from '../../../../lib/programs/audit/types.js';
 import { relativeToInstallDir } from '../../../../utils/paths.js';
 
 interface AuditChecksOutroSectionProps {

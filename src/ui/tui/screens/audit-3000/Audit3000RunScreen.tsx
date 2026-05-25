@@ -20,8 +20,8 @@ import {
   AUDIT_CHECKS_KEY,
   coerceAuditChecks,
   getAuditChecks,
-} from '../../../../lib/workflows/audit/types.js';
-import { getWorkflowConfig } from '../../../../lib/workflows/workflow-registry.js';
+} from '../../../../lib/programs/audit/types.js';
+import { getProgramConfig } from '../../../../lib/programs/program-registry.js';
 import { WIZARD_LOG_FILE } from '../../../../utils/paths.js';
 
 const AUDIT_3000_REPORT_FILE_FALLBACK = 'posthog-audit-3000-report.md';
@@ -53,7 +53,7 @@ export const Audit3000RunScreen = ({ store }: Audit3000RunScreenProps) => {
   const [gameState, setGameState] = useState(() => initialState());
   const checks = getAuditChecks(store.session);
   const reportFile =
-    getWorkflowConfig(store.router.activeFlow)?.reportFile ??
+    getProgramConfig(store.router.activeProgram)?.reportFile ??
     AUDIT_3000_REPORT_FILE_FALLBACK;
   const reportPath = `./${reportFile}`;
   const checksPanel = <Audit3000ChecksPanel checks={checks} />;

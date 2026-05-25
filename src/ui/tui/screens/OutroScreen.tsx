@@ -1,7 +1,7 @@
 /**
  * OutroScreen — Default post-run summary.
  *
- * Renders the success / error / cancel views from `outroData`. Workflows
+ * Renders the success / error / cancel views from `outroData`. Programs
  * that need a different success view (e.g. with extra summary content)
  * ship their own screen component (see audit/AuditOutroScreen.tsx).
  */

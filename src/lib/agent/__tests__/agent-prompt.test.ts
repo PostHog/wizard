@@ -1,7 +1,7 @@
 import { assemblePrompt, type PromptContext } from '../agent-prompt.js';
-import type { WorkflowRun } from '../agent-runner.js';
+import type { ProgramRun } from '../agent-runner.js';
 
-function makeRunDef(overrides: Partial<WorkflowRun> = {}): WorkflowRun {
+function makeRunDef(overrides: Partial<ProgramRun> = {}): ProgramRun {
   return {
     integrationLabel: 'test',
     spinnerMessage: 'Working...',

@@ -20,7 +20,7 @@ describe('shouldDisableAsk', () => {
     );
   });
 
-  it('honors an explicit disableAsk override on the workflow', () => {
+  it('honors an explicit disableAsk override on the program', () => {
     expect(shouldDisableAsk(baseSession, { disableAsk: true })).toBe(true);
   });
 

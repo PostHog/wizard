@@ -1,5 +1,5 @@
 /**
- * ExitScreen — Final step in every workflow.
+ * ExitScreen — Final step in every program.
  *
  * Renders nothing. Immediately exits the process.
  * The cleanup handler in start-tui.ts handles the exit summary line.

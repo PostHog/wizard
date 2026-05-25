@@ -1,4 +1,4 @@
-/** Phase transitions from [STATUS] in assistant text. Keep in sync with workflow "Status to report" bullets. */
+/** Phase transitions from [STATUS] in assistant text. Keep in sync with program "Status to report" bullets. */
 
 const PHASES_ORDER = [
   '1.0-begin',

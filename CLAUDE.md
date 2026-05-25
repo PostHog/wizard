@@ -14,7 +14,7 @@ Each domain has a dedicated boundary:
 - **Integration knowledge** → markdown skills in the
 [context-mill](https://github.com/PostHog/context-mill) repo
 - **Security policy** → YARA-X rules in the [warlock](https://github.com/PostHog/warlock) sibling repo. The wizard wires the scanner via PostToolUse/PreToolUse hooks (`src/lib/yara-hooks.ts`); the rule content itself lives in warlock.
-- **Workflows** → step arrays in `src/lib/workflows/`
+- **Programs** → step arrays in `src/lib/programs/`
 - **TUI** → screen components and primitives in `src/ui/tui/`
 
 Adding a new concern means finding the narrowest existing surface, not adding logic to the runner. The wizard is small (~20K lines) because boundaries prevent damage from propagating between concerns.
@@ -35,7 +35,7 @@ Four skills live under `.claude/skills/`. Read `wizard-development` first for an
 |---|---|
 | `wizard-development` | Before any structural change. Design principles + decision framework. |
 | `adding-framework-support` | Adding a new framework integration (e.g. Ruby on Rails, Go, Angular). |
-| `adding-skill-workflow` | Adding a new skill-based workflow (e.g. a new product feature setup). |
+| `adding-skill-program` | Adding a new skill-based program (e.g. a new product feature setup). |
 | `ink-tui` | Building or modifying TUI screens, layouts, and primitives. |
 
 ## Commands

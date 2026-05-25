@@ -18,7 +18,7 @@ import {
 import type { ProgressItem } from '../../primitives/index.js';
 import { LearnCard } from '../../components/LearnCard.js';
 import { TipsCard } from '../../components/TipsCard.js';
-import { getContentBlocks as getMigrationContentBlocks } from '../../../../lib/workflows/migration/content/index.js';
+import { getContentBlocks as getMigrationContentBlocks } from '../../../../lib/programs/migration/content/index.js';
 import { WIZARD_LOG_FILE } from '../../../../utils/paths.js';
 
 const MOCK_TASKS = [

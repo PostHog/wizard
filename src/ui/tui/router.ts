@@ -1,27 +1,33 @@
 /**
- * WizardRouter — declarative flow pipelines + overlay stack.
+ * WizardRouter — declarative program pipelines + overlay stack.
  *
  * Two layers:
- *   Flow cursor    — linear pipeline of screens, advanced with next()
+ *   Program cursor — linear sequence of screens, advanced with next()
  *   Overlay stack  — interrupts (outage, auth-expired, etc.) that push/pop
  *
- * The visible screen is: top of overlay stack if non-empty, otherwise the flow cursor.
+ * The visible screen is: top of overlay stack if non-empty, otherwise the program cursor.
  *
- * Adding a flow screen = append to a pipeline array.
+ * Adding a program screen = append to a sequence array.
  * Adding an overlay = call pushOverlay() from anywhere.
  * No switch statements, no hardcoded transitions in business logic.
  */
 
 import type { WizardSession } from '../../lib/wizard-session.js';
-import { FLOWS, Screen, Flow, type FlowEntry } from './flows.js';
+import {
+  PROGRAM_SEQUENCES,
+  ScreenId,
+  Program,
+  type Screen,
+  type Sequence,
+} from './programs.js';
 
 // Re-export so existing imports from './router.js' keep working
-export { Screen, Flow };
-export type { FlowEntry };
+export { ScreenId, Program };
+export type { Screen, Sequence };
 
-// ── Screen name taxonomy ──────────────────────────────────────────────
+// ── ScreenId name taxonomy ──────────────────────────────────────────────
 
-/** Screens that interrupt flows as overlays */
+/** Screens that interrupt programs as overlays */
 export enum Overlay {
   SettingsOverride = 'settings-override',
   ManagedSettings = 'managed-settings',
@@ -31,23 +37,23 @@ export enum Overlay {
 }
 
 /** Union of all screen names */
-export type ScreenName = Screen | Overlay;
+export type ScreenName = ScreenId | Overlay;
 
 // ── Router ────────────────────────────────────────────────────────────
 
 export class WizardRouter {
-  private flow: FlowEntry[];
-  private flowName: Flow;
+  private sequence: Sequence;
+  private programId: Program;
   private overlays: Overlay[] = [];
 
-  constructor(flowName: Flow = Flow.PostHogIntegration) {
-    this.flowName = flowName;
-    this.flow = FLOWS[flowName];
+  constructor(programId: Program = Program.PostHogIntegration) {
+    this.programId = programId;
+    this.sequence = PROGRAM_SEQUENCES[programId];
   }
 
   /**
    * Resolve which screen should be active based on session state.
-   * Walks the flow pipeline, skipping hidden entries and completed entries,
+   * Walks the program sequence, skipping hidden entries and completed entries,
    * returns the first incomplete screen.
    */
   resolve(session: WizardSession): ScreenName {
@@ -55,14 +61,14 @@ export class WizardRouter {
       return this.overlays[this.overlays.length - 1];
     }
 
-    for (const entry of this.flow) {
+    for (const entry of this.sequence) {
       if (entry.show && !entry.show(session)) continue;
       if (entry.isComplete && entry.isComplete(session)) continue;
-      return entry.screen;
+      return entry.id;
     }
 
     // All entries complete — show the last screen (outro)
-    return this.flow[this.flow.length - 1].screen;
+    return this.sequence[this.sequence.length - 1].id;
   }
 
   /** The screen that should be rendered right now. */
@@ -72,12 +78,12 @@ export class WizardRouter {
     if (this.overlays.length > 0) {
       return this.overlays[this.overlays.length - 1];
     }
-    return this.flow[0].screen;
+    return this.sequence[0].id;
   }
 
-  /** The name of the active flow. */
-  get activeFlow(): Flow {
-    return this.flowName;
+  /** The id of the active program. */
+  get activeProgram(): Program {
+    return this.programId;
   }
 
   /** Whether an overlay is currently active. */
@@ -86,15 +92,15 @@ export class WizardRouter {
   }
 
   /**
-   * Push an overlay that interrupts the current flow.
-   * The flow resumes when the overlay is dismissed via popOverlay().
+   * Push an overlay that interrupts the current program.
+   * The program resumes when the overlay is dismissed via popOverlay().
    */
   pushOverlay(overlay: Overlay): void {
     this.overlays.push(overlay);
   }
 
   /**
-   * Dismiss the topmost overlay. The flow screen underneath resumes.
+   * Dismiss the topmost overlay. The program screen underneath resumes.
    */
   popOverlay(): void {
     this.overlays.pop();

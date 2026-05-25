@@ -22,7 +22,7 @@ import {
   coerceAuditChecks,
   type AuditCheck,
   type AuditStatus,
-} from './workflows/audit/types';
+} from './programs/audit/types';
 import type { WizardAskBridge } from './wizard-ask-bridge';
 
 // ---------------------------------------------------------------------------
@@ -136,7 +136,7 @@ export type InstallSkillResult =
 
 /**
  * High-level "install a skill by ID" helper. Fetches the skill menu,
- * finds the skill, downloads and extracts it. Workflows should use this
+ * finds the skill, downloads and extracts it. Programs should use this
  * instead of composing fetchSkillMenu + downloadSkill themselves.
  */
 export async function installSkillById(

@@ -1,5 +1,5 @@
 /**
- * HealthCheckScreen — Flow screen between Intro and Auth.
+ * HealthCheckScreen — Program screen between Intro and Auth.
  *
  * Three states:
  *   1. Checking: spinner while health check runs
@@ -31,7 +31,7 @@ interface HealthCheckScreenProps {
 }
 
 const EXAMPLE_PROMPT =
-  'Integrate PostHog into this project using the skill files in .posthog/skills/. Read SKILL.md first, then follow the numbered workflow files in order.';
+  'Integrate PostHog into this project using the skill files in .posthog/skills/. Read SKILL.md first, then follow the numbered program files in order.';
 
 const SkillsDownloadedScreen = () => {
   useInput(() => {

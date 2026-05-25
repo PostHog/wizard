@@ -1,5 +1,5 @@
 /**
- * LearnDeckDemo — flip through every workflow's content deck one block at
+ * LearnDeckDemo — flip through every program's content deck one block at
  * a time so wording, pauses, and visual blocks can be reviewed without
  * waiting for the auto-advance timer.
  *
@@ -10,7 +10,7 @@
  * Arrow keys are reserved for the playground's tab switcher, so this demo
  * uses letter keys.
  *
- * Decks are pulled from `WORKFLOW_REGISTRY` so every workflow that ships a
+ * Decks are pulled from `PROGRAM_REGISTRY` so every program that ships a
  * deck is reviewable here. Migration also gets per-variant entries (one
  * per `--product=<id>` choice) so the variant composer in
  * `migration/content/index.tsx` can be exercised side-by-side with the
@@ -28,7 +28,7 @@ import {
 import type { ContentBlock, ProgressItem } from '../../primitives/index.js';
 import { Colors } from '../../styles.js';
 import type { WizardStore } from '../../store.js';
-import { WORKFLOW_REGISTRY } from '../../../../lib/workflows/workflow-registry.js';
+import { PROGRAM_REGISTRY } from '../../../../lib/programs/program-registry.js';
 import { AUDIT_AREA_SLIDES } from '../../screens/audit/slides/index.js';
 import { AUDIT_3000_AREA_SLIDES } from '../../screens/audit-3000/slides/index.js';
 import type { AreaSlide } from '../../screens/audit/slides/shared.js';
@@ -90,26 +90,26 @@ export const LearnDeckDemo = ({ store }: LearnDeckDemoProps) => {
   const decks: Deck[] = useMemo(() => {
     const all: Deck[] = [];
 
-    // Every workflow in the registry that ships a deck. Seed the store's
-    // skillId from the workflow config so decks that template the skill
+    // Every program in the registry that ships a deck. Seed the store's
+    // skillId from the program config so decks that template the skill
     // name (e.g. agent-skill's "Running the <skill> skill...") render the
     // real value instead of "unknown".
-    for (const wf of WORKFLOW_REGISTRY) {
-      if (!wf.getContentBlocks) continue;
-      const stub = wf.skillId
-        ? withSessionOverride(store, { skillId: wf.skillId })
+    for (const program of PROGRAM_REGISTRY) {
+      if (!program.getContentBlocks) continue;
+      const stub = program.skillId
+        ? withSessionOverride(store, { skillId: program.skillId })
         : store;
       all.push({
-        id: `workflow:${wf.flowKey}`,
-        label: `${wf.flowKey} (${wf.command ?? 'default'})${
-          wf.skillId ? ` · skill: ${wf.skillId}` : ''
+        id: `program:${program.id}`,
+        label: `${program.id} (${program.command ?? 'default'})${
+          program.skillId ? ` · skill: ${program.skillId}` : ''
         }`,
-        blocks: wf.getContentBlocks(stub),
+        blocks: program.getContentBlocks(stub),
       });
     }
 
     // Audit + audit-3000 ship their own per-area slide model (not the
-    // ContentBlock deck most workflows use). Adapt each AreaSlide into a
+    // ContentBlock deck most programs use). Adapt each AreaSlide into a
     // flat ContentBlock list so the flipper can review them the same way.
     all.push({
       id: 'audit:area-slides',

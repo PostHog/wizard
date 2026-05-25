@@ -74,9 +74,9 @@ export const AgentSignals = {
   /** Signal emitted when the agent cannot access the setup resource */
   ERROR_RESOURCE_MISSING: '[ERROR-RESOURCE-MISSING]',
   /**
-   * Signal emitted when the agent cannot complete the workflow and is
+   * Signal emitted when the agent cannot complete the program and is
    * aborting intentionally (distinct from errors). Format: "[ABORT] <reason>".
-   * Workflows can declare an onAbort handler to render a custom screen.
+   * Programs can declare an onAbort handler to render a custom screen.
    */
   ABORT: '[ABORT]',
   /** Signal emitted when the agent provides a remark about its run */
@@ -86,7 +86,7 @@ export const AgentSignals = {
   /**
    * Signal emitted when the agent has created a PostHog dashboard for the
    * user. Format: `[DASHBOARD_URL] <full https url>`. The URL is captured
-   * onto `session.dashboardUrl` and surfaced by workflows in their outro.
+   * onto `session.dashboardUrl` and surfaced by programs in their outro.
    */
   DASHBOARD_URL: '[DASHBOARD_URL]',
 } as const;
@@ -108,7 +108,7 @@ export enum AgentErrorType {
   API_ERROR = 'WIZARD_API_ERROR',
   /** YARA scanner detected a security violation */
   YARA_VIOLATION = 'WIZARD_YARA_VIOLATION',
-  /** Agent intentionally aborted the workflow (emitted [ABORT] <reason>) */
+  /** Agent intentionally aborted the program (emitted [ABORT] <reason>) */
   ABORT = 'WIZARD_ABORT',
 }
 
@@ -294,7 +294,7 @@ export type AgentConfig = {
   /** Feature flag key -> variant (evaluated at start of run). */
   wizardFlags?: Record<string, string>;
   wizardMetadata?: Record<string, string>;
-  /** Workflow identifier — selects the model for that workflow. */
+  /** Program identifier — selects the model for that program. */
   integrationLabel?: string;
   /** Bridge that drives the `wizard_ask` overlay. Omit in non-interactive hosts. */
   askBridge?: import('../wizard-ask-bridge').WizardAskBridge;
@@ -721,7 +721,7 @@ export async function initializeAgent(
     mcpServers['wizard-tools'] = wizardToolsServer;
 
     // audit-3000 needs Opus 4.7's depth for the multi-phase audit chain;
-    // every other workflow runs on Sonnet 4.6.
+    // every other program runs on Sonnet 4.6.
     // Bare model IDs (no `anthropic/` prefix) so the LLM gateway's Bedrock
     // fallback can match map_to_bedrock_model()'s strict lookup.
     const model =
@@ -1017,8 +1017,8 @@ export async function runAgent(
           ENABLE_TOOL_SEARCH: 'auto:0',
           // SDK 0.3.142 made MCP servers connect in the background by default;
           // the agent may start its first turn before posthog-wizard is ready
-          // (audit workflows call audit_seed_checks on turn 1, integration
-          // workflows call load_skill_menu / install_skill). Restore the prior
+          // (audit programs call audit_seed_checks on turn 1, integration
+          // programs call load_skill_menu / install_skill). Restore the prior
           // blocking behavior so the SDK waits up to 5s for MCP connect before
           // turn 1. `alwaysLoad: true` on the server would also work but it
           // disables tool search deferral and re-inflates the system prompt by
@@ -1115,7 +1115,7 @@ export async function runAgent(
       );
 
       // [ABORT] detection: the skill emits "[ABORT] <reason>" when it
-      // cannot complete the workflow. Kill the SDK query immediately —
+      // cannot complete the program. Kill the SDK query immediately —
       // the prompt doesn't need to cooperate with "and exit" because the
       // abort is enforced here. The reason is surfaced via the returned
       // AgentErrorType.ABORT so the runner can render a custom screen.
