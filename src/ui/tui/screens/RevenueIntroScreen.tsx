@@ -18,7 +18,7 @@ import {
   POSTHOG_SDKS,
   STRIPE_SDKS,
   type RevenueDetectError,
-} from '../../../lib/workflows/revenue-analytics/index.js';
+} from '../../../lib/programs/revenue-analytics/index.js';
 
 interface RevenueIntroScreenProps {
   store: WizardStore;
@@ -73,9 +73,9 @@ export const RevenueIntroScreen = ({ store }: RevenueIntroScreenProps) => {
         <Text>
           The{' '}
           <Text italic color="cyan">
-            {session.workflowLabel}
+            {session.programLabel}
           </Text>{' '}
-          workflow links Stripe customers and purchases to PostHog product data
+          program links Stripe customers and purchases to PostHog product data
           and persons. It unlocks insights like:
         </Text>
       </Box>
@@ -146,7 +146,7 @@ export const RevenueIntroScreen = ({ store }: RevenueIntroScreenProps) => {
       showDetection={!showingMoreInfo}
       detectionRows={detectionRows}
       errorView={errorView}
-      workflowLabel={session.workflowLabel}
+      programLabel={session.programLabel}
       skillId={session.skillId}
       menuOptions={menuOptions}
       onSelect={(value) => {

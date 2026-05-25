@@ -35,19 +35,20 @@ import type { WizardReadinessResult } from '../../lib/health-checks/readiness.js
 import {
   WizardRouter,
   type ScreenName,
-  Screen,
+  ScreenId,
   Overlay,
-  Flow,
+  Program,
+  type ProgramId,
 } from './router.js';
 import { analytics, sessionProperties } from '../../utils/analytics.js';
 import type {
   StoreInitContext,
-  WorkflowReadyContext,
-} from '../../lib/workflows/workflow-step.js';
-import { WORKFLOW_STEPS } from './flows.js';
+  ProgramReadyContext,
+} from '../../lib/programs/program-step.js';
+import { getProgramConfig } from '../../lib/programs/program-registry.js';
 
-export { TaskStatus, Screen, Overlay, Flow, RunPhase, McpOutcome };
-export type { ScreenName, OutroData, WizardSession };
+export { TaskStatus, ScreenId, Overlay, Program, RunPhase, McpOutcome };
+export type { ScreenName, OutroData, WizardSession, ProgramId };
 
 export interface TaskItem {
   label: string;
@@ -87,7 +88,7 @@ export class WizardStore {
   /** Hooks run when transitioning onto a screen. */
   private _enterScreenHooks = new Map<ScreenName, (() => void)[]>();
 
-  /** Gate promises derived from workflow step definitions. */
+  /** Gate promises derived from program step definitions. */
   private _gates = new Map<string, GateEntry>();
 
   version = '';
@@ -106,18 +107,17 @@ export class WizardStore {
   private _resolvePendingQuestion: ((answers: AskAnswers) => void) | null =
     null;
 
-  constructor(flow: Flow = Flow.PostHogIntegration) {
-    this.router = new WizardRouter(flow);
-    this._initFromWorkflow(flow);
+  constructor(program: ProgramId = Program.PostHogIntegration) {
+    this.router = new WizardRouter(program);
+    this._initFromProgram(program);
   }
 
   /**
-   * Scan workflow steps for gate predicates and onInit callbacks.
+   * Scan program steps for gate predicates and onInit callbacks.
    * Creates gate promises and fires init work.
    */
-  private _initFromWorkflow(flow: Flow): void {
-    const steps = WORKFLOW_STEPS[flow];
-    if (!steps) return;
+  private _initFromProgram(program: ProgramId): void {
+    const steps = getProgramConfig(program).steps;
 
     // Create gate promises from steps that define them
     for (const step of steps) {
@@ -136,7 +136,7 @@ export class WizardStore {
     }
 
     // Run onInit callbacks with a minimal context interface.
-    // Arrow functions capture `this` from _initFromWorkflow so we don't
+    // Arrow functions capture `this` from _initFromProgram so we don't
     // need to alias it.
     const getSession = (): WizardSession => this.session;
     const ctx: StoreInitContext = {
@@ -156,12 +156,11 @@ export class WizardStore {
    * Run all `onReady` hooks declared by the current flow's steps, in
    * order. Must be called after `store.session = session` so hooks see
    * the real installDir. bin.ts calls this generically — it doesn't
-   * need to know which workflow has which pre-flow work.
+   * need to know which program has which pre-flow work.
    */
   async runReadyHooks(): Promise<void> {
-    const steps = WORKFLOW_STEPS[this.router.activeFlow];
-    if (!steps) return;
-    const ctx: WorkflowReadyContext = {
+    const steps = getProgramConfig(this.router.activeProgram).steps;
+    const ctx: ProgramReadyContext = {
       session: this.session,
       setFrameworkContext: (k, v) => this.setFrameworkContext(k, v),
       setFrameworkConfig: (i, c) => this.setFrameworkConfig(i, c),
@@ -182,13 +181,13 @@ export class WizardStore {
   /**
    * Get a gate promise by step ID — the primary blocking checkpoint API
    * for bin.ts. `await store.getGate('...')` parks the caller until the
-   * corresponding workflow step's gate predicate flips to true (if the
+   * corresponding program step's gate predicate flips to true (if the
    * predicate stays false, the caller stays parked indefinitely — the
    * TUI keeps rendering so the user can resolve whatever is blocking).
    *
-   * If the workflow doesn't define a step with this ID, or the step
+   * If the program doesn't define a step with this ID, or the step
    * has no `gate` predicate, this returns an already-resolved promise
-   * so bin.ts flows straight through. This lets workflows opt in to
+   * so bin.ts flows straight through. This lets programs opt in to
    * gates on a per-step basis without bin.ts needing to know which
    * gates exist in which flow.
    */
@@ -561,7 +560,7 @@ export class WizardStore {
     this._detectTransition();
   }
 
-  // ── Screen transition analytics ─────────────────────────────────
+  // ── ScreenId transition analytics ─────────────────────────────────
 
   /**
    * Register a callback to run when transitioning onto the given screen.
@@ -587,7 +586,7 @@ export class WizardStore {
       }
       analytics.wizardCapture(`screen ${next}`, {
         from_screen: prev,
-        workflow: this.router.activeFlow,
+        program_id: this.router.activeProgram,
         ...sessionProperties(this.session),
       });
     }

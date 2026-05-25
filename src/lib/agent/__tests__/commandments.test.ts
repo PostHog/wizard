@@ -2,7 +2,7 @@ import { getWizardCommandments } from '../commandments';
 
 describe('getWizardCommandments', () => {
   // The commandment text is load-bearing — the agent reads these rules as
-  // part of its system prompt and they steer every workflow's behavior.
+  // part of its system prompt and they steer every program's behavior.
   // Snapshotting makes any edit visible in the PR diff so the change can
   // be reviewed alongside the behavior it affects.
   it('matches the published commandment list', () => {

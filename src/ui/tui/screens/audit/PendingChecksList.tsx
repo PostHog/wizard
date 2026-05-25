@@ -3,7 +3,7 @@ import { Spinner } from '@inkjs/ui';
 import {
   AUDIT_SEVERITY_STYLE,
   type AuditCheck,
-} from '../../../../lib/workflows/audit/types.js';
+} from '../../../../lib/programs/audit/types.js';
 import { Colors, Icons } from '../../styles.js';
 import { LoadingBox } from '../../primitives/index.js';
 import { useStdoutDimensions } from '../../hooks/useStdoutDimensions.js';

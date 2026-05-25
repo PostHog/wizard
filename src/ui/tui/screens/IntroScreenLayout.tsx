@@ -1,5 +1,5 @@
 /**
- * IntroScreenLayout ��� Shared visual shell for all workflow intro screens.
+ * IntroScreenLayout ��� Shared visual shell for all program intro screens.
  *
  * Purely presentational — no store subscription. Parent components own
  * the store subscription and pass derived data as props.
@@ -34,7 +34,7 @@ interface IntroScreenLayoutProps {
   /** Free-form content below the title (copy, spinners, pickers, notices) */
   body?: ReactNode;
 
-  /** Show the detection block (Directory, detection rows, Workflow, Skill). Default true. */
+  /** Show the detection block (Directory, detection rows, Program, Skill). Default true. */
   showDetection?: boolean;
 
   /** Extra detection row items rendered as "Label ✔ value suffix" */
@@ -49,8 +49,8 @@ interface IntroScreenLayoutProps {
   /** Called when the user picks a menu option */
   onSelect?: (value: string) => void;
 
-  /** Workflow label shown at the bottom */
-  workflowLabel?: string | null;
+  /** Program label shown at the bottom */
+  programLabel?: string | null;
 
   /** Skill ID shown at the bottom  */
   skillId?: string | null;
@@ -77,7 +77,7 @@ export const IntroScreenLayout = ({
   children,
   menuOptions,
   onSelect,
-  workflowLabel,
+  programLabel,
   skillId,
   errorView,
 }: IntroScreenLayoutProps) => {
@@ -161,14 +161,14 @@ export const IntroScreenLayout = ({
               </Text>
             ))}
 
-            {workflowLabel && (
+            {programLabel && (
               <Text>
-                Workflow{'  '}
-                <Text color="green">{'\u2714'}</Text> {workflowLabel}
+                Program{'  '}
+                <Text color="green">{'\u2714'}</Text> {programLabel}
               </Text>
             )}
 
-            {workflowLabel === 'agent-skill' && skillId && (
+            {programLabel === 'agent-skill' && skillId && (
               <Text>
                 Skill{'     '}
                 <Text color="green">{'\u2714'}</Text> {skillId}

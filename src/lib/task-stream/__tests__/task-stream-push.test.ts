@@ -78,7 +78,7 @@ function createPush(
   const d = dest ?? createMockDestination();
   const push = new TaskStreamPush({
     store,
-    workflowId: 'test-workflow',
+    programId: 'test-program',
     destinations: [d],
   });
   return { push, dest: d };
@@ -158,9 +158,9 @@ describe('TaskStreamPush', () => {
       await push.push();
 
       const payload = dest.calls[0][1];
-      expect(payload.workflow_id).toBe('test-workflow');
+      expect(payload.program_id).toBe('test-program');
       expect(payload.skill_id).toBe('test-skill');
-      expect(payload.session_id).toContain('test-workflow-test-skill-');
+      expect(payload.session_id).toContain('test-program-test-skill-');
     });
 
     it('includes eventPlan when non-empty', async () => {
@@ -195,7 +195,7 @@ describe('TaskStreamPush', () => {
       };
       const push = new TaskStreamPush({
         store,
-        workflowId: 'w',
+        programId: 'w',
         destinations: [bad, good],
       });
 
@@ -216,7 +216,7 @@ describe('TaskStreamPush', () => {
       };
       const push = new TaskStreamPush({
         store,
-        workflowId: 'w',
+        programId: 'w',
         destinations: [bad],
       });
 

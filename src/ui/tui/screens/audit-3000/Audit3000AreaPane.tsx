@@ -10,7 +10,7 @@ import { Fragment } from 'react';
 import { Box, Text, useInput } from 'ink';
 import { spawn } from 'node:child_process';
 import { Colors } from '../../styles.js';
-import { type AuditCheck } from '../../../../lib/workflows/audit/types.js';
+import { type AuditCheck } from '../../../../lib/programs/audit/types.js';
 import { AUDIT_3000_AREA_SLIDES, type AreaSlide } from './slides/index.js';
 
 const FINDING_STATUSES: AuditCheck['status'][] = [

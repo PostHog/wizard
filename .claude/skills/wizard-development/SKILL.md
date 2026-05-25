@@ -35,7 +35,7 @@ The knowledge — what PostHog needs from a Next.js project, how to detect Svelt
 | Frameworks | `FrameworkConfig` (~70-120 lines) | Detection, env vars, prompts |
 | Docs | Skill markdown in context-mill | Workflow steps, example code |
 | Security | YARA-X rules in the [warlock](https://github.com/PostHog/warlock) sibling repo | Rule content (patterns, severity, category). Wizard wires the engine via hooks. |
-| Context | Step array in `workflows/` | Gates, screens, predicates |
+| Context | Step array in `programs/` | Gates, screens, predicates |
 | UI | Screen component + primitives | Ink, store getters, layout |
 | Agent development | Runner, store, detection loop, tools | The machinery itself |
 
@@ -77,25 +77,24 @@ Three prevention layers:
 
 **What goes wrong when violated:** You build circuit breakers, checkpoints, retry-from-checkpoint, self-heal logic, graceful-exit handling. Each of these is code that exists because the boundary didn't prevent the problem. The codebase grows to compensate for the absence of prevention, and the recovery code itself becomes a source of complexity and bugs.
 
-### 4. New capability is a new workflow, not a new branch
+### 4. New capability is a new program, not a new branch
 
-When the product needs a new capability (revenue analytics, audit, LLM analytics), express it as a new workflow — a separate step array with its own config — not as conditional logic in the existing runner.
+When the product needs a new capability (revenue analytics, audit, LLM analytics), express it as a new program — a separate step array with its own config — not as conditional logic in the existing runner.
 
-`WorkflowConfig` is a uniform type. The workflow registry is an array. CLI subcommands, TUI flows, and the router all derive from the registry automatically. Adding a workflow means:
+`ProgramConfig` is a uniform type. The program registry is an array. CLI subcommands, screen sequences, the router, and the store all derive from the registry automatically. Adding a program means:
 
-1. Create `src/lib/workflows/<name>/` with `index.ts` exporting a `WorkflowConfig`
-2. Add it to `WORKFLOW_REGISTRY` in `workflow-registry.ts`
-3. Add a `Flow` enum entry in `flows.ts`
+1. Create `src/lib/programs/<name>/` with `index.ts` exporting a `ProgramConfig`
+2. Add it to `PROGRAM_REGISTRY` in `program-registry.ts`
 
-No changes to `bin.ts`, the store, or the runner.
+No changes to `bin.ts`, the store, the router, or the screen-sequences projection.
 
-**The test:** Can a new workflow ship without modifying the runner, the store, or `bin.ts`?
+**The test:** Can a new program ship without modifying the runner, the store, or `bin.ts`?
 
 **What goes wrong when violated:** The runner becomes a monolithic function with product-specific branches. Each new capability increases the blast radius of every other capability's changes. The function grows past the point where anyone can hold it in their head.
 
 ### 5. The UI is a pure function of state
 
-The screen the user sees is computed from `WizardSession` — the single source of truth. No component sets its own visibility. No code imperatively navigates. The router walks the workflow's step list and returns the first step whose `isComplete` predicate is still false.
+The screen the user sees is computed from `WizardSession` — the single source of truth. No component sets its own visibility. No code imperatively navigates. The router walks the program's step list and returns the first step whose `isComplete` predicate is still false.
 
 Every session mutation goes through an explicit store setter that calls `emitChange()`. The version counter bumps. Gate predicates are re-evaluated. Screen transitions are detected. React re-renders.
 
@@ -127,15 +126,15 @@ When you're adding something that doesn't have a precedent in the codebase, ask 
 
 **New security rule:** Contribute the rule to [warlock](https://github.com/PostHog/warlock), not to the wizard. Warlock is the YARA-X engine that backs the wizard's security scanning; it's an append-only sibling repo with its own contribution process. Add a `.yar` file under `src/scanner/rules/` with a meta block (description, severity, category, scan_context, action) and a test under `src/scanner/__tests__/rules/`. The wizard's hooks in `yara-hooks.ts` automatically pick up new rules when it bumps its warlock dependency — wizard-side changes are unnecessary unless the response to a new category needs different handling. Filter consumed matches by `category` and `severity` (the append-only API contract), not by individual rule names.
 
-**New detection signal:** If you need to detect something about the project beyond framework identity (e.g., Stripe presence, LLM SDK usage), add it to `detection/features.ts`. The `discoverFeatures()` function returns an array of `DiscoveredFeature` enums. The intro screen and workflow can read discovered features from the session. Detection functions are pure — no store mutations, no UI calls.
+**New detection signal:** If you need to detect something about the project beyond framework identity (e.g., Stripe presence, LLM SDK usage), add it to `detection/features.ts`. The `discoverFeatures()` function returns an array of `DiscoveredFeature` enums. The intro screen and program can read discovered features from the session. Detection functions are pure — no store mutations, no UI calls.
 
 **New middleware:** Implement the `Middleware` interface from `middleware/types.ts`: a `name` and optional lifecycle hooks (`onInit`, `onMessage`, `onPhaseTransition`, `onFinalize`). Add it to the pipeline construction in `agent-runner.ts`. The pipeline dispatches to middlewares in order. Each middleware publishes to a shared store that downstream middleware can read. The pipeline itself doesn't change shape.
 
 **New TUI primitive:** Create the component in `src/ui/tui/primitives/`. Export from `primitives/index.ts`. Primitives are pure rendering — they take props and return Ink JSX. They don't import the store, don't call `getUI()`, don't mutate state. Screens compose primitives; primitives don't know what screen they're in. **Add a demo under `src/ui/tui/playground/demos/` and register it in `PlaygroundApp.tsx`** — primitives that aren't in the playground are invisible to future contributors, who will build duplicates instead of reusing yours. See the `ink-tui` skill for the full component catalog and layout patterns.
 
-**New post-agent step:** If you need to do something after the agent completes (upload env vars, install MCP servers, etc.), use the `postRun` hook on `WorkflowRun`. The hook receives the session and credentials. It runs after the agent succeeds but before the outro. It doesn't modify the runner pipeline — it's a callback on the workflow configuration.
+**New post-agent step:** If you need to do something after the agent completes (upload env vars, install MCP servers, etc.), use the `postRun` hook on `ProgramRun`. The hook receives the session and credentials. It runs after the agent succeeds but before the outro. It doesn't modify the runner pipeline — it's a callback on the program configuration.
 
-**Custom workflow outro:** Set `buildOutroData` on the `WorkflowRun`. The function receives the session, credentials, and cloud region; returns an `OutroData` object that drives the outro screen. Use this for workflow-specific success messages, change lists, dashboard URLs, or seasonal copy. The runner uses sensible defaults from `successMessage`/`reportFile`/`docsUrl` when `buildOutroData` is omitted.
+**Custom program outro:** Set `buildOutroData` on the `ProgramRun`. The function receives the session, credentials, and cloud region; returns an `OutroData` object that drives the outro screen. Use this for program-specific success messages, change lists, dashboard URLs, or seasonal copy. The runner uses sensible defaults from `successMessage`/`reportFile`/`docsUrl` when `buildOutroData` is omitted.
 
 **New environment variable convention:** Each framework's `FrameworkConfig.environment.getEnvVars()` returns the env var names and values. The naming convention is framework-specific (e.g., `NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN` for Next.js, `PUBLIC_POSTHOG_PROJECT_TOKEN` for SvelteKit). If you need a new convention, add it to the framework config. The runner doesn't know or care what the env vars are called.
 
@@ -162,7 +161,7 @@ Verify your changes with `pnpm build && pnpm test && pnpm fix` before finishing.
 
 These are the early warning signs that a change is drifting from the discipline:
 
-- **The runner is getting longer.** If you're adding lines to `agent-runner.ts` or `agent-interface.ts`, ask whether the concern belongs in a `WorkflowRun` config, a middleware, a post-run hook, or a skill file.
+- **The runner is getting longer.** If you're adding lines to `agent-runner.ts` or `agent-interface.ts`, ask whether the concern belongs in a `ProgramRun` config, a middleware, a post-run hook, or a skill file.
 
 - **A framework contributor needs to read the runner.** The `FrameworkConfig` interface should be sufficient. If it's not, the interface is missing a field — extend the interface, don't add special-case logic to the runner.
 
@@ -172,7 +171,7 @@ These are the early warning signs that a change is drifting from the discipline:
 
 - **You're adding imperative UI transitions.** If you're writing `goTo`, `navigate`, or `if (screen === X) show Y`, the session state doesn't accurately represent what the user should see. Fix the state model and let the router derive the screen.
 
-- **A change in one workflow breaks another.** Workflows should be independent. If they share mutable state beyond the session, that state needs an explicit boundary (a store setter, a workflow config field) instead of implicit coupling through the runner.
+- **A change in one program breaks another.** Programs should be independent. If they share mutable state beyond the session, that state needs an explicit boundary (a store setter, a program config field) instead of implicit coupling through the runner.
 
 ## Compactness is an indicator, not a goal
 

@@ -2,7 +2,7 @@
  * RunScreen — Default observational view of the agent run.
  *
  * Tabs: Status (LearnCard + ProgressList), Event plan (when present),
- * Tail logs, HN. Workflows that need a different tab list ship their own
+ * Tail logs, HN. Programs that need a different tab list ship their own
  * screen component (see audit/AuditRunScreen.tsx).
  */
 
@@ -24,9 +24,9 @@ import { LearnCard } from '../components/LearnCard.js';
 import { TipsCard } from '../components/TipsCard.js';
 import { useStdoutDimensions } from '../hooks/useStdoutDimensions.js';
 import { useFileWatcher } from '../hooks/file-watcher.js';
-import { EVENT_PLAN_FILE } from '../../../lib/workflows/posthog-integration/index.js';
-import { getWorkflowConfig } from '../../../lib/workflows/workflow-registry.js';
-import { getContentBlocks as getSkillContentBlocks } from '../../../lib/workflows/agent-skill/content/index.js';
+import { EVENT_PLAN_FILE } from '../../../lib/programs/posthog-integration/index.js';
+import { getProgramConfig } from '../../../lib/programs/program-registry.js';
+import { getContentBlocks as getSkillContentBlocks } from '../../../lib/programs/agent-skill/content/index.js';
 
 import { WIZARD_LOG_FILE } from '../../../utils/paths.js';
 
@@ -77,16 +77,16 @@ export const RunScreen = ({ store }: RunScreenProps) => {
   const statuses =
     store.statusMessages.length > 0 ? store.statusMessages : undefined;
 
-  // Each workflow owns its content deck (workflow/content/index.tsx)
-  // and wires it onto its WorkflowConfig.getContentBlocks. Fall back to the
+  // Each program owns its content deck (program/content/index.tsx)
+  // and wires it onto its ProgramConfig.getContentBlocks. Fall back to the
   // agent-skill deck for runtime-created configs (e.g. `--skill <id>`) that
   // aren't in the static registry.
-  const activeFlow = store.router.activeFlow;
+  const activeProgram = store.router.activeProgram;
   const learnBlocks = useMemo(() => {
     const getBlocks =
-      getWorkflowConfig(activeFlow)?.getContentBlocks ?? getSkillContentBlocks;
+      getProgramConfig(activeProgram).getContentBlocks ?? getSkillContentBlocks;
     return getBlocks(store);
-  }, [store, activeFlow]);
+  }, [store, activeProgram]);
 
   const leftPane = store.learnCardComplete ? (
     <TipsCard store={store} />

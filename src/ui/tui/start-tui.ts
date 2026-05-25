@@ -8,7 +8,7 @@
 
 import { render } from 'ink';
 import { createElement } from 'react';
-import { WizardStore, Flow } from './store.js';
+import { WizardStore, Program, type ProgramId } from './store.js';
 import { InkUI } from './ink-ui.js';
 import { setUI } from '../index.js';
 import { App } from './App.js';
@@ -31,7 +31,7 @@ export function releaseTerminal(): void {
 
 function getExitLine(store: WizardStore): string {
   const outro = store.session.outroData;
-  const label = store.session.workflowLabel ?? 'Wizard';
+  const label = store.session.programLabel ?? 'Wizard';
 
   if (outro?.kind === OutroKind.Success) {
     const message = outro.message ?? `${label} completed successfully.`;
@@ -47,7 +47,7 @@ function getExitLine(store: WizardStore): string {
 
 export function startTUI(
   version: string,
-  flow: Flow = Flow.PostHogIntegration,
+  program: ProgramId = Program.PostHogIntegration,
 ): {
   unmount: () => void;
   store: WizardStore;
@@ -58,7 +58,7 @@ export function startTUI(
     ENTER_ALT_SCREEN + BG_BLACK + CLEAR_SCREEN + CURSOR_HOME,
   );
 
-  const store = new WizardStore(flow);
+  const store = new WizardStore(program);
   store.version = version;
 
   const inkUI = new InkUI(store);

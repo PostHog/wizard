@@ -18,7 +18,7 @@ import {
   getAuditChecks,
   type AuditCheck,
   type AuditStatus,
-} from '../../../../lib/workflows/audit/types.js';
+} from '../../../../lib/programs/audit/types.js';
 import { AuditChecksOutroSection } from '../audit/AuditChecksOutroSection.js';
 
 const NEON_PINK = '#F54E00';

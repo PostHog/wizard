@@ -1,7 +1,7 @@
 /**
- * AgentSkillIntroScreen — Default intro for generic agent-skill workflows.
+ * AgentSkillIntroScreen — Default intro for generic agent-skill programs.
  *
- * Workflows that need a different intro ship their own screen component
+ * Programs that need a different intro ship their own screen component
  * (see audit/AuditIntroScreen.tsx).
  */
 
@@ -86,7 +86,7 @@ export const AgentSkillIntroScreen = ({
       showSubtitle={!showingMoreInfo}
       body={body}
       showDetection={!showingMoreInfo}
-      workflowLabel={session.workflowLabel}
+      programLabel={session.programLabel}
       skillId={session.skillId}
       menuOptions={menuOptions}
       onSelect={handleSelect}

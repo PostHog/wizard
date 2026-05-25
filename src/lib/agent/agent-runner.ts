@@ -1,8 +1,8 @@
 /**
- * Unified workflow runner.
+ * Unified program runner.
  *
- * Single configurable pipeline for all workflows. Each workflow
- * provides a WorkflowRun (via the `run` field on WorkflowConfig)
+ * Single configurable pipeline for all programs. Each program
+ * provides a ProgramRun (via the `run` field on ProgramConfig)
  * that controls:
  *   - Whether a skill is pre-installed or discovered at runtime
  *   - How the agent prompt is built
@@ -57,7 +57,7 @@ import { installSkillById, type InstallSkillResult } from '../wizard-tools';
 import { createWizardAskBridge } from '../wizard-ask-bridge';
 import type { WizardOptions } from '../../utils/types';
 
-import type { WorkflowConfig } from '../workflows/workflow-step';
+import type { ProgramConfig } from '../programs/program-step';
 import { assemblePrompt, type PromptContext } from './agent-prompt';
 
 export type { PromptContext };
@@ -80,16 +80,16 @@ export interface AbortCase {
 /**
  * Unified agent run configuration.
  *
- * Every workflow provides one of these — either as a static object
+ * Every program provides one of these — either as a static object
  * or via a function that builds one from the session. The runner
  * assembles the final prompt from `prompt` + `skillId`.
  */
-export interface WorkflowRun {
+export interface ProgramRun {
   /** Analytics label (e.g. 'revenue-analytics-setup', 'nextjs') */
   integrationLabel: string;
   /** Skill ID to pre-install. Omit for agent-driven skill discovery. */
   skillId?: string;
-  /** Additional workflow-specific prompt instructions. Appended after the default project prompt. */
+  /** Additional program-specific prompt instructions. Appended after the default project prompt. */
   customPrompt?: (ctx: PromptContext) => string;
   /** Additional MCP servers (e.g. Svelte MCP) */
   additionalMcpServers?: Record<string, { url: string }>;
@@ -102,7 +102,7 @@ export interface WorkflowRun {
   docsUrl: string;
   errorMessage?: string;
   additionalFeatureQueue?: readonly AdditionalFeature[];
-  /** Known `[ABORT] <reason>` cases this workflow can render. */
+  /** Known `[ABORT] <reason>` cases this program can render. */
   abortCases?: AbortCase[];
   /** Runs after agent completes, before outro (e.g. env var upload). */
   postRun?: (session: WizardSession, credentials: Credentials) => Promise<void>;
@@ -112,12 +112,6 @@ export interface WorkflowRun {
     credentials: Credentials,
     cloudRegion: import('../../utils/types').CloudRegion | undefined,
   ) => WizardSession['outroData'];
-  /**
-   * Disable the `wizard_ask` tool for this workflow. The tool stays registered
-   * but every call returns an error telling the agent to proceed without
-   * input. Use for workflows that should never need user interaction.
-   */
-  disableAsk?: boolean;
   /**
    * Per-run cap on `wizard_ask` invocations. Defaults to 10. The 4th call
    * always returns a "batch your questions" error regardless of the cap.
@@ -129,14 +123,15 @@ export interface WorkflowRun {
 
 /**
  * Decide whether the `wizard_ask` overlay should be wired for this run.
- * Disabled in non-interactive modes (CI, signup) and whenever the workflow
- * explicitly opts out. Extracted so the policy can be unit-tested directly.
+ * Disabled in non-interactive modes (CI, signup) — there's no human to
+ * answer. Per-program disabling is done by adding WIZARD_ASK_TOOL_NAME to
+ * the program's `disallowedTools` so the SDK rejects calls outright.
+ * Extracted so the policy can be unit-tested directly.
  */
 export function shouldDisableAsk(
   session: Pick<WizardSession, 'ci' | 'signup'>,
-  config: Pick<WorkflowRun, 'disableAsk'>,
 ): boolean {
-  return session.ci || session.signup || config.disableAsk === true;
+  return session.ci || session.signup;
 }
 
 function sessionToOptions(session: WizardSession): WizardOptions {
@@ -159,37 +154,37 @@ function sessionToOptions(session: WizardSession): WizardOptions {
 // ── Runner ───────────────────────────────────────────────────────────
 
 /**
- * Resolve a WorkflowConfig's agent run definition and execute the pipeline.
+ * Resolve a ProgramConfig's agent run definition and execute the pipeline.
  * Entry point for bin.ts — handles buildRunConfig, bootstrap, and (future) run field.
  */
 export async function runAgent(
-  workflowConfig: WorkflowConfig,
+  programConfig: ProgramConfig,
   session: WizardSession,
 ): Promise<void> {
-  if (!workflowConfig.run) {
-    throw new Error(
-      `Workflow "${workflowConfig.flowKey}" has no run configuration.`,
-    );
+  if (!programConfig.run) {
+    throw new Error(`Program "${programConfig.id}" has no run configuration.`);
   }
 
   const runDef =
-    typeof workflowConfig.run === 'function'
-      ? await workflowConfig.run(session)
-      : workflowConfig.run;
+    typeof programConfig.run === 'function'
+      ? await programConfig.run(session)
+      : programConfig.run;
 
-  await runWorkflow(session, runDef);
+  await runProgram(session, runDef, programConfig);
 }
 
 /**
- * Run a workflow's agent pipeline.
+ * Run a program's agent pipeline.
  *
- * This is the single execution path for all workflows — both skill-based
+ * This is the single execution path for all programs — both skill-based
  * (revenue analytics) and framework-based (core integration). The
- * `WorkflowRun` controls what varies between them.
+ * `ProgramRun` controls what varies between them; `programConfig` carries
+ * the program-level static metadata (tool allow/disallow lists, etc.).
  */
-export async function runWorkflow(
+export async function runProgram(
   session: WizardSession,
-  config: WorkflowRun,
+  config: ProgramRun,
+  programConfig: ProgramConfig,
 ): Promise<void> {
   // 1. Init logging + debug
   initLogFile();
@@ -261,7 +256,7 @@ export async function runWorkflow(
 
   analytics.wizardCapture('agent started', {
     integration: config.integrationLabel,
-    workflow: config.integrationLabel,
+    program_id: config.integrationLabel,
     skill_id: config.skillId ?? null,
   });
 
@@ -327,7 +322,7 @@ export async function runWorkflow(
   // wizard_ask is only available in interactive mode. CI/signup users have
   // no way to answer; we omit the bridge so the tool returns an actionable
   // error rather than hanging on a never-resolving prompt.
-  const askDisabled = shouldDisableAsk(session, config);
+  const askDisabled = shouldDisableAsk(session);
   const askBridge = askDisabled
     ? undefined
     : createWizardAskBridge({
@@ -350,6 +345,8 @@ export async function runWorkflow(
       integrationLabel: config.integrationLabel,
       askBridge,
       askMaxQuestions: config.maxQuestions,
+      allowedTools: programConfig.allowedTools,
+      disallowedTools: programConfig.disallowedTools,
       getPendingQuestion: () => session.pendingQuestion,
     },
     sessionToOptions(session),
@@ -398,7 +395,7 @@ export async function runWorkflow(
       : {
           kind: OutroKind.Error,
           message: `${config.integrationLabel} aborted`,
-          body: reason || 'The agent aborted the workflow.',
+          body: reason || 'The agent aborted the program.',
           docsUrl: config.docsUrl,
         };
     analytics.wizardCapture('agent aborted', {

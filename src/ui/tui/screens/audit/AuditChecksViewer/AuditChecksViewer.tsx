@@ -23,7 +23,7 @@ import {
   useKeyBindings,
   type KeyBinding,
 } from '../../../hooks/useKeyBindings.js';
-import type { AuditCheck } from '../../../../../lib/workflows/audit/types.js';
+import type { AuditCheck } from '../../../../../lib/programs/audit/types.js';
 import { AreaHeaderRow } from './AreaHeaderRow.js';
 import { CheckRow } from './CheckRow.js';
 import { DetailRow } from './DetailRow.js';

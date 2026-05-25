@@ -164,9 +164,9 @@ export const PostHogIntegrationIntroScreen = ({
           <Text>
             The{' '}
             <Text italic color="cyan">
-              {session.workflowLabel}
+              {session.programLabel}
             </Text>{' '}
-            workflow installs the PostHog SDKs, instruments event tracking, and
+            program installs the PostHog SDKs, instruments event tracking, and
             integrates the following dev tools for your application:
           </Text>
         </Box>
@@ -308,7 +308,7 @@ export const PostHogIntegrationIntroScreen = ({
       detectionRows={detectionRows}
       menuOptions={unsupported ? null : menuOptions}
       onSelect={handleSelect}
-      workflowLabel={session.workflowLabel}
+      programLabel={session.programLabel}
       skillId={session.skillId}
     >
       {bodyChildren}

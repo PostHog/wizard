@@ -144,6 +144,6 @@ export interface WizardUI {
   // ── Dashboard URL emitted by the agent via [DASHBOARD_URL] marker ──
   setDashboardUrl(url: string): void;
 
-  // ── Generic frameworkContext setter for workflow file watchers ─────
+  // ── Generic frameworkContext setter for program file watchers ─────
   setFrameworkContext(key: string, value: unknown): void;
 }

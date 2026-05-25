@@ -25,7 +25,7 @@ export const MigrationIntroScreen = ({ store }: MigrationIntroScreenProps) => {
     <IntroScreenLayout
       installDir={session.installDir}
       body={body}
-      workflowLabel={session.workflowLabel}
+      programLabel={session.programLabel}
       skillId={session.skillId}
       menuOptions={[
         { label: 'Continue', value: 'continue' },

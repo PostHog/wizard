@@ -15,7 +15,7 @@ Each section describes a pattern that looks reasonable in isolation but degrades
 
 **The cost:** Every future change to any product concern risks breaking every other product concern. A contributor who wants to modify the event plan step must understand the dashboard step, the data ingestion step, the error classification, and the token refresh timing. The required knowledge for a local change has expanded to the full function.
 
-**What to do instead:** Use `WorkflowRun.postRun` for post-agent work. If the post-agent step is complex enough to need its own error handling, extract it to a module and call it from postRun. If multiple workflows need the same post-agent step, make it a shared function that postRun calls — not shared code in the runner. The runner stays generic; the product knowledge stays in workflow configuration.
+**What to do instead:** Use `ProgramRun.postRun` for post-agent work. If the post-agent step is complex enough to need its own error handling, extract it to a module and call it from postRun. If multiple programs need the same post-agent step, make it a shared function that postRun calls — not shared code in the runner. The runner stays generic; the product knowledge stays in program configuration.
 
 ---
 
@@ -51,7 +51,7 @@ Each section describes a pattern that looks reasonable in isolation but degrades
 
 **The cost:** The system has two navigation mechanisms that disagree. Every future screen change must account for both the predicate-based flow and the imperative jumps. Bugs in this regime are non-local — the cause is a state mutation in the runner, the symptom is a screen flicker in the TUI, and the "fix" that someone applies (another imperative jump) makes the problem worse.
 
-**What to do instead:** Add a field to `WizardSession` that represents the condition. Add a `show` or `isComplete` predicate on the workflow step that reads the field. The router derives the correct screen automatically. If the condition is an overlay (error modal, conflict resolution), use `store.pushOverlay()` — overlays stack above the flow and pop when dismissed, without disrupting the flow cursor.
+**What to do instead:** Add a field to `WizardSession` that represents the condition. Add a `show` or `isComplete` predicate on the program step that reads the field. The router derives the correct screen automatically. If the condition is an overlay (error modal, conflict resolution), use `store.pushOverlay()` — overlays stack above the flow and pop when dismissed, without disrupting the flow cursor.
 
 ---
 
@@ -69,13 +69,13 @@ Each section describes a pattern that looks reasonable in isolation but degrades
 
 ---
 
-## Shared mutable state between workflows
+## Shared mutable state between programs
 
-**The pattern:** Two workflows need the same information — the detected framework, the user's credentials, a feature discovery result. The fastest path is having both workflows read and write the same session fields, relying on execution order to ensure the first workflow populates what the second needs.
+**The pattern:** Two programs need the same information — the detected framework, the user's credentials, a feature discovery result. The fastest path is having both programs read and write the same session fields, relying on execution order to ensure the first program populates what the second needs.
 
-**What happens next:** The dependency is implicit. A refactor changes the execution order. The second workflow reads a field the first workflow hasn't populated yet. The field is null. The second workflow fails with a cryptic error. Or worse: it succeeds with default values that produce a subtly wrong integration. The bug is invisible in tests because the test setup populates the field explicitly.
+**What happens next:** The dependency is implicit. A refactor changes the execution order. The second program reads a field the first program hasn't populated yet. The field is null. The second program fails with a cryptic error. Or worse: it succeeds with default values that produce a subtly wrong integration. The bug is invisible in tests because the test setup populates the field explicitly.
 
-**The cost:** Implicit ordering dependencies between workflows make the system fragile to refactoring. The dependency graph exists in the developer's head, not in the code.
+**The cost:** Implicit ordering dependencies between programs make the system fragile to refactoring. The dependency graph exists in the developer's head, not in the code.
 
-**What to do instead:** Use the `requires` field on `WorkflowConfig` to make workflow dependencies explicit. For shared data, use `frameworkContext` with documented keys — the `setFrameworkContext` setter ensures `emitChange()` fires and downstream predicates re-evaluate. If two workflows need the same detection result, factor the detection into a shared module that both workflows' `onReady` hooks call, rather than relying on one workflow to populate what another reads.
+**What to do instead:** Use the `requires` field on `ProgramConfig` to make program dependencies explicit. For shared data, use `frameworkContext` with documented keys — the `setFrameworkContext` setter ensures `emitChange()` fires and downstream predicates re-evaluate. If two programs need the same detection result, factor the detection into a shared module that both programs' `onReady` hooks call, rather than relying on one program to populate what another reads.
 
