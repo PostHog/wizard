@@ -8,7 +8,7 @@
 
 import { render } from 'ink';
 import { createElement } from 'react';
-import { WizardStore, Program } from './store.js';
+import { WizardStore, Program, type ProgramId } from './store.js';
 import { InkUI } from './ink-ui.js';
 import { setUI } from '../index.js';
 import { App } from './App.js';
@@ -47,7 +47,7 @@ function getExitLine(store: WizardStore): string {
 
 export function startTUI(
   version: string,
-  program: Program = Program.PostHogIntegration,
+  program: ProgramId = Program.PostHogIntegration,
 ): {
   unmount: () => void;
   store: WizardStore;

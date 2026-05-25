@@ -22,7 +22,10 @@ if (!satisfies(process.version, NODE_VERSION_RANGE)) {
 import { isNonInteractiveEnvironment } from './src/utils/environment';
 import { getUI, setUI } from './src/ui';
 import { LoggingUI } from './src/ui/logging-ui';
-import { getSubcommandPrograms } from './src/lib/programs/program-registry';
+import {
+  getSubcommandPrograms,
+  Program,
+} from './src/lib/programs/program-registry';
 import type { ProgramConfig } from './src/lib/programs/program-step';
 import type { WizardSession } from './src/lib/wizard-session';
 import { POSTHOG_DOCS_URL } from './src/lib/constants';
@@ -440,7 +443,6 @@ const cli = yargs(hideBin(process.argv))
                 './src/lib/wizard-session.js'
               );
 
-              const { Program } = await import('./src/ui/tui/router.js');
               const tui = startTUI(WIZARD_VERSION, Program.McpAdd);
               const session = buildSession({
                 debug: options.debug,
@@ -486,7 +488,6 @@ const cli = yargs(hideBin(process.argv))
                 './src/lib/wizard-session.js'
               );
 
-              const { Program } = await import('./src/ui/tui/router.js');
               const tui = startTUI(WIZARD_VERSION, Program.McpRemove);
               const session = buildSession({
                 debug: options.debug,

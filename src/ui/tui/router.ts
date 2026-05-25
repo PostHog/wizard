@@ -14,16 +14,19 @@
 
 import type { WizardSession } from '../../lib/wizard-session.js';
 import {
+  Program,
+  type ProgramId,
+} from '../../lib/programs/program-registry.js';
+import {
   PROGRAM_SEQUENCES,
   ScreenId,
-  Program,
   type Screen,
   type Sequence,
-} from './programs.js';
+} from './screen-sequences.js';
 
 // Re-export so existing imports from './router.js' keep working
 export { ScreenId, Program };
-export type { Screen, Sequence };
+export type { Screen, Sequence, ProgramId };
 
 // ── ScreenId name taxonomy ──────────────────────────────────────────────
 
@@ -43,10 +46,10 @@ export type ScreenName = ScreenId | Overlay;
 
 export class WizardRouter {
   private sequence: Sequence;
-  private programId: Program;
+  private programId: ProgramId;
   private overlays: Overlay[] = [];
 
-  constructor(programId: Program = Program.PostHogIntegration) {
+  constructor(programId: ProgramId = Program.PostHogIntegration) {
     this.programId = programId;
     this.sequence = PROGRAM_SEQUENCES[programId];
   }
@@ -82,7 +85,7 @@ export class WizardRouter {
   }
 
   /** The id of the active program. */
-  get activeProgram(): Program {
+  get activeProgram(): ProgramId {
     return this.programId;
   }
 

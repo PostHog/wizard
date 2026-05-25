@@ -1,8 +1,12 @@
 import { buildSession, RunPhase } from '../../../lib/wizard-session.js';
 import { WizardReadiness } from '../../../lib/health-checks/readiness.js';
-import { PROGRAM_SEQUENCES, Program, ScreenId } from '../programs.js';
+import { PROGRAM_SEQUENCES, ScreenId } from '../screen-sequences.js';
+import {
+  Program,
+  type ProgramId,
+} from '../../../lib/programs/program-registry.js';
 
-function getEntry(program: Program, id: ScreenId) {
+function getEntry(program: ProgramId, id: ScreenId) {
   const entry = PROGRAM_SEQUENCES[program].find(
     (candidate) => candidate.id === id,
   );

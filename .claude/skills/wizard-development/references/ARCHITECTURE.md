@@ -7,36 +7,36 @@ description: How data moves through the wizard — from CLI args to the screen t
 
 ## The runner pipeline
 
-Every wizard run — framework integration, revenue analytics, audit, generic skill — executes the same pipeline in `agent-runner.ts`. The pipeline is fixed. What varies is the `WorkflowRun` configuration object.
+Every wizard run — framework integration, revenue analytics, audit, generic skill — executes the same pipeline in `agent-runner.ts`. The pipeline is fixed. What varies is the `ProgramRun` configuration object.
 
 ```
  1. Init logging + debug
  2. Health check (skip if TUI already ran it)
  3. Settings conflict detection + resolution
  4. OAuth / credential flow
- 5. Skill install (if WorkflowRun.skillId is set)
+ 5. Skill install (if ProgramRun.skillId is set)
  6. Agent initialization (MCP servers, tools, sandbox, env)
  7. Prompt assembly (project context + custom prompt + skill path)
  8. Agent execution (SDK query with hooks)
  9. Error classification + handling
-10. Post-run hooks (WorkflowRun.postRun — e.g. env var upload)
+10. Post-run hooks (ProgramRun.postRun — e.g. env var upload)
 11. Outro data construction
 12. Analytics shutdown
 ```
 
 ### Where configuration hooks fire
 
-- **WorkflowRun.customPrompt** — called at step 7, receives `PromptContext` (projectId, apiKey, host, skillPath). Returns additional prompt text.
-- **WorkflowRun.postRun** — called at step 10, receives session + credentials. Runs after the agent succeeds but before the outro.
-- **WorkflowRun.buildOutroData** — called at step 11 if present. Otherwise the runner builds default outro data from successMessage/reportFile/docsUrl.
-- **WorkflowRun.abortCases** — matched against `[ABORT] <reason>` signals during step 8. First regex match renders a custom error outro.
-- **WorkflowStep.onInit** — fires during store construction (step 0, before session is assigned). Use for session-independent work only (e.g. health check prefetch).
-- **WorkflowStep.onReady** — fires after `tui.store.session = session` in bin.ts. Awaited in sequence. Use for session-dependent pre-flow work (e.g. framework detection, prerequisite scanning).
-- **WorkflowStep.gate** — predicate checked on every `emitChange()`. bin.ts parks on `await store.getGate(stepId)` until the predicate flips true.
+- **ProgramRun.customPrompt** — called at step 7, receives `PromptContext` (projectId, apiKey, host, skillPath). Returns additional prompt text.
+- **ProgramRun.postRun** — called at step 10, receives session + credentials. Runs after the agent succeeds but before the outro.
+- **ProgramRun.buildOutroData** — called at step 11 if present. Otherwise the runner builds default outro data from successMessage/reportFile/docsUrl.
+- **ProgramRun.abortCases** — matched against `[ABORT] <reason>` signals during step 8. First regex match renders a custom error outro.
+- **ProgramStep.onInit** — fires during store construction (step 0, before session is assigned). Use for session-independent work only (e.g. health check prefetch).
+- **ProgramStep.onReady** — fires after `tui.store.session = session` in bin.ts. Awaited in sequence. Use for session-dependent pre-flow work (e.g. framework detection, prerequisite scanning).
+- **ProgramStep.gate** — predicate checked on every `emitChange()`. bin.ts parks on `await store.getGate(stepId)` until the predicate flips true.
 
 ### What the runner does NOT know
 
-The `agent-runner.ts` doesn't know what framework is being integrated. It doesn't know what skills exist. It doesn't know what env vars are called. It doesn't know what the outro should say. All of that comes from `WorkflowRun` and `FrameworkConfig` — configuration, not code.
+The `agent-runner.ts` doesn't know what framework is being integrated. It doesn't know what skills exist. It doesn't know what env vars are called. It doesn't know what the outro should say. All of that comes from `ProgramRun` and `FrameworkConfig` — configuration, not code.
 
 ## Session data flow
 
@@ -118,7 +118,7 @@ emitChange()
          ↓
 router.resolve(session)
     ├─ if overlay stack non-empty → return top overlay
-    └─ walk flow entries:
+    └─ walk program entries:
          for each entry:
            skip if entry.show(session) === false
            skip if entry.isComplete(session) === true

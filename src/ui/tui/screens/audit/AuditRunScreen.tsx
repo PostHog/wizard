@@ -44,7 +44,7 @@ export const AuditRunScreen = ({ store }: AuditRunScreenProps) => {
   const [columns] = useStdoutDimensions();
   const checks = getAuditChecks(store.session);
   const reportFile =
-    getProgramConfig(store.router.activeProgram)?.reportFile ??
+    getProgramConfig(store.router.activeProgram).reportFile ??
     AUDIT_REPORT_FILE;
   const reportPath = `./${reportFile}`;
   const pendingChecksList = <PendingChecksList checks={checks} />;

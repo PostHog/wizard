@@ -38,16 +38,17 @@ import {
   ScreenId,
   Overlay,
   Program,
+  type ProgramId,
 } from './router.js';
 import { analytics, sessionProperties } from '../../utils/analytics.js';
 import type {
   StoreInitContext,
   ProgramReadyContext,
 } from '../../lib/programs/program-step.js';
-import { PROGRAM_STEPS } from './programs.js';
+import { getProgramConfig } from '../../lib/programs/program-registry.js';
 
 export { TaskStatus, ScreenId, Overlay, Program, RunPhase, McpOutcome };
-export type { ScreenName, OutroData, WizardSession };
+export type { ScreenName, OutroData, WizardSession, ProgramId };
 
 export interface TaskItem {
   label: string;
@@ -106,7 +107,7 @@ export class WizardStore {
   private _resolvePendingQuestion: ((answers: AskAnswers) => void) | null =
     null;
 
-  constructor(program: Program = Program.PostHogIntegration) {
+  constructor(program: ProgramId = Program.PostHogIntegration) {
     this.router = new WizardRouter(program);
     this._initFromProgram(program);
   }
@@ -115,9 +116,8 @@ export class WizardStore {
    * Scan program steps for gate predicates and onInit callbacks.
    * Creates gate promises and fires init work.
    */
-  private _initFromProgram(program: Program): void {
-    const steps = PROGRAM_STEPS[program];
-    if (!steps) return;
+  private _initFromProgram(program: ProgramId): void {
+    const steps = getProgramConfig(program).steps;
 
     // Create gate promises from steps that define them
     for (const step of steps) {
@@ -159,8 +159,7 @@ export class WizardStore {
    * need to know which program has which pre-flow work.
    */
   async runReadyHooks(): Promise<void> {
-    const steps = PROGRAM_STEPS[this.router.activeProgram];
-    if (!steps) return;
+    const steps = getProgramConfig(this.router.activeProgram).steps;
     const ctx: ProgramReadyContext = {
       session: this.session,
       setFrameworkContext: (k, v) => this.setFrameworkContext(k, v),

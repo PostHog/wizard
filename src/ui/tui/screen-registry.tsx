@@ -3,7 +3,7 @@
  *
  * Adding a new screen:
  *   1. Create the component in screens/ (or screens/<program>/).
- *   2. Add a `ScreenId` enum entry in programs.ts.
+ *   2. Add a `ScreenId` enum entry in screen-sequences.ts.
  *   3. Add an entry here.
  *   4. Reference the screen by name in the program's `steps` array.
  */

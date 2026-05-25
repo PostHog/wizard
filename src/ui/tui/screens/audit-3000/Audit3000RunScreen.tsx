@@ -53,7 +53,7 @@ export const Audit3000RunScreen = ({ store }: Audit3000RunScreenProps) => {
   const [gameState, setGameState] = useState(() => initialState());
   const checks = getAuditChecks(store.session);
   const reportFile =
-    getProgramConfig(store.router.activeProgram)?.reportFile ??
+    getProgramConfig(store.router.activeProgram).reportFile ??
     AUDIT_3000_REPORT_FILE_FALLBACK;
   const reportPath = `./${reportFile}`;
   const checksPanel = <Audit3000ChecksPanel checks={checks} />;

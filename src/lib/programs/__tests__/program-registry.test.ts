@@ -17,14 +17,11 @@ describe('PROGRAM_REGISTRY', () => {
 });
 
 describe('getProgramConfig', () => {
-  it('finds known configs by id and returns undefined for unknown', () => {
-    expect(getProgramConfig('posthog-integration')?.id).toBe(
+  it('finds known configs by id', () => {
+    expect(getProgramConfig('posthog-integration').id).toBe(
       'posthog-integration',
     );
-    expect(getProgramConfig('revenue-analytics-setup')?.command).toBe(
-      'revenue',
-    );
-    expect(getProgramConfig('nonexistent')).toBeUndefined();
+    expect(getProgramConfig('revenue-analytics-setup').command).toBe('revenue');
   });
 });
 

@@ -5,29 +5,29 @@ description: How to keep the skills under .claude/skills/ accurate and useful ov
 
 # Maintaining the wizard's skills corpus
 
-The wizard ships four skills under `.claude/skills/`: `wizard-development`, `adding-framework-support`, `adding-skill-workflow`, `ink-tui`. They guide agents and human contributors through the design discipline (the meta-skill) and three procedural domains. Like any documentation, they go stale silently. This reference codifies what we've learned about keeping them load-bearing.
+The wizard ships four skills under `.claude/skills/`: `wizard-development`, `adding-framework-support`, `adding-skill-program`, `ink-tui`. They guide agents and human contributors through the design discipline (the meta-skill) and three procedural domains. Like any documentation, they go stale silently. This reference codifies what we've learned about keeping them load-bearing.
 
 ## Why skills go stale
 
 Skills go stale when the codebase changes faster than the skill's prose. The most common drift sources, in order of severity:
 
-1. **A new factory or abstraction lands.** When a clean factory call exists for the common case (like `createSkillWorkflow` for skill workflows, or `runAgentWizard` for framework integrations), the skill should lead with it. Skills written before the factory still teach the primitives — and following them produces more invasive changes than needed. This is the highest-impact drift: contributors do extra work the architecture doesn't ask for.
+1. **A new factory or abstraction lands.** When a clean factory call exists for the common case (like `createSkillProgram` for skill programs, or `runAgentWizard` for framework integrations), the skill should lead with it. Skills written before the factory still teach the primitives — and following them produces more invasive changes than needed. This is the highest-impact drift: contributors do extra work the architecture doesn't ask for.
 
-2. **A refactor changes the wiring.** When wiring becomes derived (e.g. bin.ts deriving subcommands from `WORKFLOW_REGISTRY` instead of hand-wiring each one), skills written before the refactor still teach the manual path. Contributors edit files that no longer need editing.
+2. **A refactor changes the wiring.** When wiring becomes derived (e.g. bin.ts deriving subcommands from `PROGRAM_REGISTRY` instead of hand-wiring each one), skills written before the refactor still teach the manual path. Contributors edit files that no longer need editing.
 
-3. **Path references rot.** Specific file paths (`src/lib/workflows/revenue-analytics.ts`) become directories or move. Directory paths (`src/lib/workflows/revenue-analytics/`) survive better. Pinning to a specific file inside a directory ages worst — the file gets renamed during refactors and the skill's pointer rots first.
+3. **Path references rot.** Specific file paths (`src/lib/programs/revenue-analytics.ts`) become directories or move. Directory paths (`src/lib/programs/revenue-analytics/`) survive better. Pinning to a specific file inside a directory ages worst — the file gets renamed during refactors and the skill's pointer rots first.
 
 4. **Code snippets duplicate canonical examples.** When the skill embeds code that mirrors a pattern in the codebase, the two copies drift apart. Six months later the canonical example has new fields the snippet lacks; the snippet has parameters the canonical example removed.
 
-5. **Prose contradicts a code comment.** The header comment in `workflow-registry.ts` says "flows.ts, store.ts, and bin.ts all derive their wiring from this array — no need to touch those files." If the skill still walks through editing those files, the skill is the wrong one.
+5. **Prose contradicts a code comment.** The header comment in `program-registry.ts` says "screen-sequences.ts, store.ts, and bin.ts all derive their wiring from this array — no need to touch those files." If the skill still walks through editing those files, the skill is the wrong one.
 
 ## What to check when reviewing a skill
 
 Run this checklist against the skill:
 
 - **Path validity.** Every file path in the skill — open it. If it's a directory now, fix the reference or drop the path entirely. If the file moved, find its replacement or remove the pointer.
-- **Factory check.** Search the codebase for any function whose name suggests it's the entry point for what the skill teaches (e.g. `create*Workflow`, `add*Framework`, `register*`). If one exists and the skill doesn't mention it, the skill is leading with the wrong abstraction level.
-- **Auto-derived wiring.** Search for `getSubcommandWorkflows`, `WORKFLOW_REGISTRY`, `FLOWS`, or similar registry-derived patterns. If the skill teaches manual edits to anything those derive, the skill is teaching dead work.
+- **Factory check.** Search the codebase for any function whose name suggests it's the entry point for what the skill teaches (e.g. `create*Program`, `add*Framework`, `register*`). If one exists and the skill doesn't mention it, the skill is leading with the wrong abstraction level.
+- **Auto-derived wiring.** Search for `getSubcommandPrograms`, `PROGRAM_REGISTRY`, `FLOWS`, or similar registry-derived patterns. If the skill teaches manual edits to anything those derive, the skill is teaching dead work.
 - **Code snippet drift.** Every code snippet — does an equivalent canonical example exist in the codebase? If yes, replace the snippet with a directory pointer. The codebase is the source of truth; skill snippets are a copy.
 - **Code comment vs skill prose.** The most authoritative documentation is the comment at the top of the file the skill describes. If the skill and the comment disagree, the comment wins (it's adjacent to the code that enforces it).
 - **API surface check.** For each interface or type the skill names — open the source file. Does the skill list every required field? Every optional field worth mentioning? Are any deprecated fields still in the skill? Are any new fields missing?
@@ -42,9 +42,9 @@ Run this checklist against the skill:
 
 ## Patterns that age well
 
-- **Pointing at directories, not files.** `src/lib/workflows/audit/` survives file renames within the directory. `src/lib/workflows/audit/index.ts` rots when the file gets restructured.
-- **Pointing at canonical examples and letting the reader read.** "The audit workflow is the cleanest example of this pattern" survives refactors of the audit workflow as long as audit remains canonical. A 40-line code snippet inside the skill does not.
-- **Stating invariants, not implementations.** "The runner is fixed; what varies is the WorkflowRun config" is an architectural claim that survives any refactor that doesn't violate it. A code snippet showing the runner's current shape rots on every refactor.
+- **Pointing at directories, not files.** `src/lib/programs/audit/` survives file renames within the directory. `src/lib/programs/audit/index.ts` rots when the file gets restructured.
+- **Pointing at canonical examples and letting the reader read.** "The audit program is the cleanest example of this pattern" survives refactors of the audit program as long as audit remains canonical. A 40-line code snippet inside the skill does not.
+- **Stating invariants, not implementations.** "The runner is fixed; what varies is the ProgramRun config" is an architectural claim that survives any refactor that doesn't violate it. A code snippet showing the runner's current shape rots on every refactor.
 - **Listing what NOT to do.** Anti-patterns are sticky because they describe failure modes that recur. The contents of `ANTI-PATTERNS.md` stay valid even when the positive patterns evolve, because they describe what breaks if the discipline lapses.
 - **Decision questions, not decision trees.** "Who changes this next?" is a question that produces fresh answers as the system evolves. A flowchart that bakes in current answers rots when the answers shift.
 

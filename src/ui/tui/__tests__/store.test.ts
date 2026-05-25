@@ -2,6 +2,7 @@ import {
   WizardStore,
   TaskStatus,
   Program,
+  type ProgramId,
   ScreenId,
   Overlay,
   RunPhase,
@@ -40,7 +41,7 @@ jest.mock('../../../lib/health-checks/readiness.js', () => ({
   SERVICE_LABELS: {},
 }));
 
-function createStore(program?: Program): WizardStore {
+function createStore(program?: ProgramId): WizardStore {
   return new WizardStore(program);
 }
 

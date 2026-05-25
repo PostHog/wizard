@@ -84,8 +84,7 @@ export const RunScreen = ({ store }: RunScreenProps) => {
   const activeProgram = store.router.activeProgram;
   const learnBlocks = useMemo(() => {
     const getBlocks =
-      getProgramConfig(activeProgram)?.getContentBlocks ??
-      getSkillContentBlocks;
+      getProgramConfig(activeProgram).getContentBlocks ?? getSkillContentBlocks;
     return getBlocks(store);
   }, [store, activeProgram]);
 
