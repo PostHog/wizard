@@ -19,8 +19,13 @@
 
 import { Box, Text, useInput } from 'ink';
 import { useMemo, useState } from 'react';
-import { ContentSequencer, TextRevealMode } from '../../primitives/index.js';
-import type { ContentBlock } from '../../primitives/index.js';
+import {
+  ContentSequencer,
+  ProgressList,
+  SplitView,
+  TextRevealMode,
+} from '../../primitives/index.js';
+import type { ContentBlock, ProgressItem } from '../../primitives/index.js';
 import { Colors } from '../../styles.js';
 import type { WizardStore } from '../../store.js';
 import { WORKFLOW_REGISTRY } from '../../../../lib/workflows/workflow-registry.js';
@@ -33,6 +38,49 @@ interface Deck {
   label: string;
   blocks: ContentBlock[];
 }
+
+/**
+ * Fake task list to fill the right-hand pane so the SplitView layout matches
+ * what operators actually see during a real run. Mix of statuses so the
+ * spinner glyph, the in-progress row, and completed rows all render.
+ */
+const MOCK_TASKS: ProgressItem[] = [
+  {
+    label: 'Confirm Statsig is in use',
+    activeForm: 'Confirming Statsig is in use',
+    status: 'completed',
+  },
+  {
+    label: 'Install PostHog',
+    activeForm: 'Installing PostHog',
+    status: 'completed',
+  },
+  {
+    label: 'Plan call site replacements',
+    activeForm: 'Planning call site replacements',
+    status: 'in_progress',
+  },
+  {
+    label: 'Rewrite call sites',
+    activeForm: 'Rewriting call sites',
+    status: 'pending',
+  },
+  {
+    label: 'Remove Statsig',
+    activeForm: 'Removing Statsig',
+    status: 'pending',
+  },
+  {
+    label: 'Verify the project still builds',
+    activeForm: 'Verifying the build',
+    status: 'pending',
+  },
+  {
+    label: 'Write migration report',
+    activeForm: 'Writing migration report',
+    status: 'pending',
+  },
+];
 
 interface LearnDeckDemoProps {
   store: WizardStore;
@@ -126,18 +174,18 @@ export const LearnDeckDemo = ({ store }: LearnDeckDemoProps) => {
       </Text>
       <Box height={1} />
 
-      <Box
-        flexDirection="column"
-        borderStyle="single"
-        borderColor={Colors.muted}
-        paddingX={1}
-        flexGrow={1}
-      >
-        <ContentSequencer
-          key={`${deck.id}-${blockIdx}-${replayKey}`}
-          blocks={[block]}
-          mode={TextRevealMode.SentenceBySentence}
-          startDelay={0}
+      <Box flexGrow={1}>
+        <SplitView
+          left={
+            <ContentSequencer
+              key={`${deck.id}-${blockIdx}-${replayKey}`}
+              blocks={deck.blocks.slice(0, blockIdx + 1)}
+              mode={TextRevealMode.SentenceBySentence}
+              startDelay={0}
+              initialBlockIdx={blockIdx}
+            />
+          }
+          right={<ProgressList items={MOCK_TASKS} title="Tasks" />}
         />
       </Box>
     </Box>

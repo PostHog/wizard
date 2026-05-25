@@ -15,15 +15,6 @@ const MIGRATION_ABORT_CASES: AbortCase[] = [
       "haven't installed PostHog yet, you don't need this command — run " +
       '`npx @posthog/wizard@latest` to add PostHog from scratch.',
   },
-  {
-    match: /^no project framework detected$/i,
-    message: 'No project framework detected',
-    body:
-      'The migration could not identify the framework this project sits on ' +
-      'top of from its dependency manifests. PostHog needs a framework match ' +
-      'to install the right SDK package. Make sure the project has a ' +
-      'recognizable manifest at the root and re-run.',
-  },
 ];
 
 const MIGRATE_PRODUCTS = ['statsig'] as const;

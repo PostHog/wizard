@@ -15,7 +15,7 @@
  *   - posthog.com/docs/experiments/best-practices
  */
 
-import { Box, Text } from 'ink';
+import { Text } from 'ink';
 import type { WizardStore } from '../../../../ui/tui/store.js';
 import { Colors } from '../../../../ui/tui/styles.js';
 import { TextRevealMode } from '../../../../ui/tui/primitives/TextBlock.js';
@@ -24,6 +24,9 @@ import { StatusPeekTrigger } from '../../../../ui/tui/components/StatusPeekTrigg
 import { PRODUCT_SUITE_BLOCK } from '../../posthog-integration/content/product-suite.js';
 import { LINE_CHART_BLOCK } from '../../posthog-integration/content/line-chart.js';
 import { FUNNEL_BLOCK } from '../../posthog-integration/content/funnel.js';
+import { VENDOR_STACK_BLOCK } from './vendor-stack.js';
+import { FREE_TIER_BLOCK } from './free-tier.js';
+import { PRICING_STRUCTURE_BLOCK } from './pricing-structure.js';
 
 export const getContentBlocks = (store?: WizardStore): ContentBlock[] => [
   // ── Welcome ────────────────────────────────────────────────────────────
@@ -57,6 +60,7 @@ export const getContentBlocks = (store?: WizardStore): ContentBlock[] => [
 
   {
     pause: 6000,
+    persist: true,
     content: (
       <Text>
         Press{' '}
@@ -112,6 +116,7 @@ export const getContentBlocks = (store?: WizardStore): ContentBlock[] => [
       </Text>
     ),
     pause: 6000,
+    persist: true,
   },
 
   {
@@ -122,15 +127,14 @@ export const getContentBlocks = (store?: WizardStore): ContentBlock[] => [
 
   {
     content: (
-      <Box flexDirection="column">
-        <Text>
-          In production, route requests through a reverse proxy to avoid ad
-          blockers breaking your flags.
-        </Text>
+      <Text>
+        In production, route requests through a reverse proxy to avoid ad
+        blockers breaking your flags.{'\n'}
         <Text dimColor>https://posthog.com/docs/advanced/proxy</Text>
-      </Box>
+      </Text>
     ),
     pause: 6500,
+    persist: true,
   },
 
   {
@@ -149,6 +153,7 @@ export const getContentBlocks = (store?: WizardStore): ContentBlock[] => [
       </Text>
     ),
     pause: 6500,
+    persist: true,
   },
 
   { type: 'clear', pause: 1500 },
@@ -161,6 +166,7 @@ export const getContentBlocks = (store?: WizardStore): ContentBlock[] => [
       </Text>
     ),
     pause: 2500,
+    persist: true,
   },
 
   {
@@ -208,6 +214,30 @@ export const getContentBlocks = (store?: WizardStore): ContentBlock[] => [
   },
 
   PRODUCT_SUITE_BLOCK,
+
+  { type: 'clear', pause: 1500 },
+
+  {
+    content: 'And consolidating onto one platform saves real money.',
+    pause: 4500,
+  },
+
+  { content: 'Here’s the math.', pause: 1500 },
+
+  VENDOR_STACK_BLOCK,
+
+  { type: 'clear', pause: 1500 },
+
+  {
+    content: 'Pricing is usage-based, with a generous free tier.',
+    pause: 4000,
+  },
+
+  FREE_TIER_BLOCK,
+
+  { type: 'clear', pause: 1500 },
+
+  PRICING_STRUCTURE_BLOCK,
 
   { type: 'clear', pause: 1500 },
 
