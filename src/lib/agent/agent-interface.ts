@@ -1342,7 +1342,7 @@ export const BASE_ALLOWED_TOOLS: readonly string[] = [
   // the agent to call TaskCreate/TaskUpdate to surface progress in the TUI.
   ...Object.values(TaskTool),
   'ListMcpResourcesTool',
-  ...WIZARD_TOOL_NAMES,
+  ...Object.values(WIZARD_TOOL_NAMES),
 ];
 
 type TaskEntry = { content: string; status: string; activeForm?: string };

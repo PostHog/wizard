@@ -1025,18 +1025,18 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
   });
 }
 
-/** Tool names exposed by the wizard-tools server, for use in allowedTools */
-export const WIZARD_TOOL_NAMES = [
-  `${SERVER_NAME}:check_env_keys`,
-  `${SERVER_NAME}:set_env_values`,
-  `${SERVER_NAME}:detect_package_manager`,
-  `${SERVER_NAME}:load_skill_menu`,
-  `${SERVER_NAME}:install_skill`,
-  `${SERVER_NAME}:audit_seed_checks`,
-  `${SERVER_NAME}:audit_add_checks`,
-  `${SERVER_NAME}:audit_resolve_checks`,
-  `${SERVER_NAME}:wizard_ask`,
-];
+/** Tool names exposed by the wizard-tools server, keyed for selective use. */
+export const WIZARD_TOOL_NAMES = {
+  checkEnvKeys: `${SERVER_NAME}:check_env_keys`,
+  setEnvValues: `${SERVER_NAME}:set_env_values`,
+  detectPackageManager: `${SERVER_NAME}:detect_package_manager`,
+  loadSkillMenu: `${SERVER_NAME}:load_skill_menu`,
+  installSkill: `${SERVER_NAME}:install_skill`,
+  auditSeedChecks: `${SERVER_NAME}:audit_seed_checks`,
+  auditAddChecks: `${SERVER_NAME}:audit_add_checks`,
+  auditResolveChecks: `${SERVER_NAME}:audit_resolve_checks`,
+  wizardAsk: `${SERVER_NAME}:wizard_ask`,
+} as const;
 
 // ---------------------------------------------------------------------------
 // Test-only exports

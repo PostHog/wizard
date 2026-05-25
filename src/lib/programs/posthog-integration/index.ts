@@ -1,6 +1,7 @@
 import opn from 'opn';
 import type { ProgramConfig } from '../program-step.js';
 import type { ProgramRun } from '../../agent/agent-runner.js';
+import { WIZARD_TOOL_NAMES } from '../../wizard-tools.js';
 import type { WizardSession } from '../../wizard-session.js';
 import { OutroKind } from '../../wizard-session.js';
 import { AgentSignals } from '../../agent/agent-interface.js';
@@ -44,6 +45,10 @@ export const posthogIntegrationConfig: ProgramConfig = {
   id: 'posthog-integration',
   steps: POSTHOG_INTEGRATION_PROGRAM,
   getContentBlocks,
+  // Basic integration runs without structured user input; drop wizard_ask
+  // so the model can't pop modal prompts mid-run. (Subagent dispatch is
+  // already gated by not opting into `Agent`.)
+  disallowedTools: [WIZARD_TOOL_NAMES.wizardAsk],
 
   run: async (session: WizardSession): Promise<ProgramRun> => {
     const config = session.frameworkConfig!;

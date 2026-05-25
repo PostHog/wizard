@@ -113,12 +113,6 @@ export interface ProgramRun {
     cloudRegion: import('../../utils/types').CloudRegion | undefined,
   ) => WizardSession['outroData'];
   /**
-   * Disable the `wizard_ask` tool for this program. The tool stays registered
-   * but every call returns an error telling the agent to proceed without
-   * input. Use for programs that should never need user interaction.
-   */
-  disableAsk?: boolean;
-  /**
    * Per-run cap on `wizard_ask` invocations. Defaults to 10. The 4th call
    * always returns a "batch your questions" error regardless of the cap.
    */
@@ -129,14 +123,15 @@ export interface ProgramRun {
 
 /**
  * Decide whether the `wizard_ask` overlay should be wired for this run.
- * Disabled in non-interactive modes (CI, signup) and whenever the program
- * explicitly opts out. Extracted so the policy can be unit-tested directly.
+ * Disabled in non-interactive modes (CI, signup) — there's no human to
+ * answer. Per-program disabling is done by adding WIZARD_ASK_TOOL_NAME to
+ * the program's `disallowedTools` so the SDK rejects calls outright.
+ * Extracted so the policy can be unit-tested directly.
  */
 export function shouldDisableAsk(
   session: Pick<WizardSession, 'ci' | 'signup'>,
-  config: Pick<ProgramRun, 'disableAsk'>,
 ): boolean {
-  return session.ci || session.signup || config.disableAsk === true;
+  return session.ci || session.signup;
 }
 
 function sessionToOptions(session: WizardSession): WizardOptions {
@@ -327,7 +322,7 @@ export async function runProgram(
   // wizard_ask is only available in interactive mode. CI/signup users have
   // no way to answer; we omit the bridge so the tool returns an actionable
   // error rather than hanging on a never-resolving prompt.
-  const askDisabled = shouldDisableAsk(session, config);
+  const askDisabled = shouldDisableAsk(session);
   const askBridge = askDisabled
     ? undefined
     : createWizardAskBridge({
