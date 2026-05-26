@@ -20,7 +20,10 @@ import {
   type Credentials,
   OutroKind,
 } from '../wizard-session';
-import { getOrAskForProjectData } from '../../utils/setup-utils';
+import {
+  getOrAskForProjectData,
+  handleProjectDataAuthError,
+} from '../../utils/setup-utils';
 import { analytics } from '../../utils/analytics';
 import { getUI } from '../../ui';
 import {
@@ -262,8 +265,9 @@ export async function runProgram(
 
   // 4. OAuth
   logToFile('[agent-runner] starting OAuth');
-  const { projectApiKey, host, accessToken, projectId, cloudRegion } =
-    await getOrAskForProjectData({
+  let projectData: Awaited<ReturnType<typeof getOrAskForProjectData>>;
+  try {
+    projectData = await getOrAskForProjectData({
       signup: session.signup,
       ci: session.ci,
       apiKey: session.apiKey,
@@ -271,6 +275,12 @@ export async function runProgram(
       email: session.email,
       region: session.region,
     });
+  } catch (error) {
+    await handleProjectDataAuthError(error);
+    throw error;
+  }
+  const { projectApiKey, host, accessToken, projectId, cloudRegion } =
+    projectData;
 
   session.credentials = { accessToken, projectApiKey, host, projectId };
   getUI().setCredentials(session.credentials);
