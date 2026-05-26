@@ -102,21 +102,31 @@ describe('CodexMCPClient', () => {
 
   describe('removeServer', () => {
     it('invokes the resolved binary with mcp remove and returns success', async () => {
-      spawnSyncMock.mockReturnValue({ status: 0 });
+      spawnSyncMock.mockReturnValue({ status: 0, stderr: '' });
       const client = new CodexMCPClient();
       await expect(client.removeServer()).resolves.toEqual({ success: true });
       expect(spawnSyncMock).toHaveBeenCalledWith(
         CODEX_PATH,
         ['mcp', 'remove', 'posthog'],
-        { stdio: 'ignore' },
+        { encoding: 'utf-8' },
       );
     });
 
     it('returns false and captures exception on failure', async () => {
-      spawnSyncMock.mockReturnValue({ status: 1 });
+      spawnSyncMock.mockReturnValue({ status: 1, stderr: 'network timeout' });
       const client = new CodexMCPClient();
       await expect(client.removeServer()).resolves.toEqual({ success: false });
       expect(analytics.captureException).toHaveBeenCalled();
+    });
+
+    it('returns failure without capturing exception when Codex config is malformed', async () => {
+      spawnSyncMock.mockReturnValue({
+        status: 1,
+        stderr: 'Invalid schema: plugins.2.source: Invalid input',
+      });
+      const client = new CodexMCPClient();
+      await expect(client.removeServer()).resolves.toEqual({ success: false });
+      expect(analytics.captureException).not.toHaveBeenCalled();
     });
   });
 
@@ -174,6 +184,16 @@ describe('CodexMCPClient', () => {
           message: expect.stringContaining('network timeout'),
         }),
       );
+    });
+
+    it('returns failure without capturing exception when Codex config is malformed', async () => {
+      spawnSyncMock.mockReturnValue({
+        status: 1,
+        stderr: 'Invalid schema: plugins.5.source: Invalid input',
+      });
+      const client = new CodexMCPClient();
+      await expect(client.installPlugin()).resolves.toEqual({ success: false });
+      expect(analytics.captureException).not.toHaveBeenCalled();
     });
   });
 });

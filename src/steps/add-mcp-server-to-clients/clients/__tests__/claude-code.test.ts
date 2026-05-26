@@ -129,12 +129,62 @@ describe('ClaudeCodeMCPClient — plugin methods', () => {
       );
     });
 
+    it('returns failure without capturing exception when ~/.claude config is malformed', async () => {
+      execSyncMock.mockImplementation((cmd: string) => {
+        if (String(cmd).includes('plugin install')) {
+          throw new Error(
+            'Command failed: claude plugin install posthog\n' +
+              'Invalid schema: plugins.5.source: Invalid input',
+          );
+        }
+        return Buffer.from('');
+      });
+      const client = new ClaudeCodeMCPClient();
+      await expect(client.installPlugin()).resolves.toEqual({ success: false });
+      expect(analytics.captureException).not.toHaveBeenCalled();
+    });
+
     it('returns failure when no binary is found', async () => {
       execSyncMock.mockImplementation(() => {
         throw new Error('not found');
       });
       const client = new ClaudeCodeMCPClient();
       await expect(client.installPlugin()).resolves.toEqual({ success: false });
+    });
+  });
+
+  describe('removeServer', () => {
+    it('returns success when claude mcp remove exits 0', async () => {
+      execSyncMock.mockImplementation(() => Buffer.from(''));
+      const client = new ClaudeCodeMCPClient();
+      await expect(client.removeServer()).resolves.toEqual({ success: true });
+    });
+
+    it('returns failure and captures exception on unexpected error', async () => {
+      execSyncMock.mockImplementation((cmd: string) => {
+        if (cmd === 'command -v claude') return Buffer.from('');
+        throw new Error('network timeout');
+      });
+      const client = new ClaudeCodeMCPClient();
+      await expect(client.removeServer()).resolves.toEqual({ success: false });
+      expect(analytics.captureException).toHaveBeenCalledWith(
+        expect.objectContaining({
+          message: expect.stringContaining('network timeout'),
+        }),
+      );
+    });
+
+    it('returns failure without capturing exception when ~/.claude config is malformed', async () => {
+      execSyncMock.mockImplementation((cmd: string) => {
+        if (cmd === 'command -v claude') return Buffer.from('');
+        throw new Error(
+          'Command failed: claude mcp remove --scope user posthog\n' +
+            'Invalid schema: plugins.0.source: Invalid input',
+        );
+      });
+      const client = new ClaudeCodeMCPClient();
+      await expect(client.removeServer()).resolves.toEqual({ success: false });
+      expect(analytics.captureException).not.toHaveBeenCalled();
     });
   });
 });
