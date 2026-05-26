@@ -1342,6 +1342,11 @@ export const BASE_ALLOWED_TOOLS: readonly string[] = [
   // the agent to call TaskCreate/TaskUpdate to surface progress in the TUI.
   ...Object.values(TaskTool),
   'ListMcpResourcesTool',
+  // PostHog MCP tool schemas are deferred (ENABLE_TOOL_SEARCH=auto:0 in
+  // the query env) to keep them out of the system prompt. ToolSearch is
+  // how the model loads them on demand — without it in allowedTools, the
+  // deferred tools are unreachable and the model falls back to curl.
+  'ToolSearch',
   ...Object.values(WIZARD_TOOL_NAMES),
 ];
 

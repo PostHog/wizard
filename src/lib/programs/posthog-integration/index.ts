@@ -51,7 +51,47 @@ export const posthogIntegrationConfig: ProgramConfig = {
   disallowedTools: [WIZARD_TOOL_NAMES.wizardAsk],
 
   run: async (session: WizardSession): Promise<ProgramRun> => {
-    const config = session.frameworkConfig!;
+    // Lazy framework detection — the default $0 CLI handler runs its own
+    // preRun that pre-populates this, but the `integrate` subcommand path
+    // doesn't, and CI/TUI flows that bypass onReady leave it unset too.
+    // Doing detection here means every entry point gets the same setup.
+    if (!session.frameworkConfig) {
+      const { FRAMEWORK_REGISTRY } = await import('../../registry.js');
+      const { detectFramework, gatherFrameworkContext } = await import(
+        '../../detection/index.js'
+      );
+      const { wizardAbort } = await import('../../../utils/wizard-abort.js');
+      const integration =
+        session.integration ?? (await detectFramework(session.installDir));
+      if (!integration) {
+        await wizardAbort({
+          message:
+            'Could not auto-detect your framework. Please specify --integration on the command line.',
+        });
+        throw new Error('framework detection failed'); // unreachable; wizardAbort exits
+      }
+      session.integration = integration;
+      analytics.setTag('integration', integration);
+      session.frameworkConfig = FRAMEWORK_REGISTRY[integration];
+      const context = await gatherFrameworkContext(session.frameworkConfig, {
+        installDir: session.installDir,
+        debug: session.debug,
+        forceInstall: session.forceInstall,
+        default: false,
+        signup: session.signup,
+        localMcp: session.localMcp,
+        ci: session.ci,
+        menu: session.menu,
+        benchmark: session.benchmark,
+        yaraReport: session.yaraReport,
+      });
+      for (const [key, value] of Object.entries(context)) {
+        if (!(key in session.frameworkContext)) {
+          session.frameworkContext[key] = value;
+        }
+      }
+    }
+    const config = session.frameworkConfig;
 
     const typeScriptDetected = isUsingTypeScript({
       installDir: session.installDir,

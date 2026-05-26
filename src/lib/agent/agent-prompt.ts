@@ -26,7 +26,9 @@ function defaultProjectPrompt(ctx: PromptContext): string {
 Project context:
 - PostHog Project ID: ${ctx.projectId}
 - PostHog public token: ${ctx.projectApiKey}
-- PostHog Host: ${ctx.host}`;
+- PostHog Host: ${ctx.host}
+
+The PostHog MCP exposes its full tool catalog (dashboards, insights, queries, feature flags, etc.) but tool schemas are deferred to keep the system prompt small. Use the \`ToolSearch\` tool to load any \`mcp__posthog-wizard__*\` tool you need before calling it — e.g. \`ToolSearch({ query: "+posthog dashboard insight" })\` for keyword search, or \`ToolSearch({ query: "select:dashboard-create,insight-create" })\` when you already know the names. Reach for ToolSearch before falling back to HTTP — the MCP server is already authenticated for this project.`;
 }
 
 function skillPrompt(skillPath: string, reportFile: string): string {
