@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.14.1](https://github.com/PostHog/wizard/compare/v2.14.0...v2.14.1) (2026-05-26)
+
+
+### Bug Fixes
+
+* remove shrinkwrap ([#481](https://github.com/PostHog/wizard/issues/481)) ([35f6aea](https://github.com/PostHog/wizard/commit/35f6aea78d605e419ca7715ac44fb25093cf4302))
+
 ## [2.14.0](https://github.com/PostHog/wizard/compare/v2.13.1...v2.14.0) (2026-05-26)
 
 
