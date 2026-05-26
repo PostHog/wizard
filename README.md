@@ -19,7 +19,7 @@ To use the wizard, you can run it directly using:
 npx @posthog/wizard
 ```
 
-Currently the wizard can be used for over 16 frameworks for frontend, backend, and mobile applications. If you have other integrations you would like the wizard to
+Currently the wizard can be used for over 16+ frameworks for frontend, backend, and mobile applications. If you have other integrations you would like the wizard to
 support, please open a [GitHub issue](https://github.com/posthog/wizard/issues)!
 
 Visit our [docs](https://posthog.com/docs/ai-engineering/ai-wizard) to learn more. 
