@@ -2,7 +2,7 @@ import { DefaultMCPClient } from '../MCPClient';
 import { DefaultMCPClientConfig } from '../defaults';
 import { PluginCapable, PluginInstallResult } from '../plugin-client';
 import { z } from 'zod';
-import { execSync } from 'child_process';
+import { execSync, spawnSync } from 'child_process';
 import { analytics } from '../../../utils/analytics';
 import { debug } from '../../../utils/debug';
 import * as os from 'os';
@@ -143,6 +143,59 @@ export class ClaudeCodeMCPClient
   installPlugin(): Promise<PluginInstallResult> {
     const binary = this.findClaudeBinary();
     if (!binary) return Promise.resolve({ success: false });
+
+    // `plugin install posthog` fails with `not found in any configured
+    // marketplace` unless the PostHog marketplace is registered first.
+    const runMarketplaceAdd = () =>
+      spawnSync(binary, ['plugin', 'marketplace', 'add', 'PostHog/ai-plugin'], {
+        encoding: 'utf-8',
+      });
+
+    let marketplaceResult = runMarketplaceAdd();
+
+    // Stale cache directory with no marketplace entry — clear it and retry
+    if (
+      marketplaceResult.status !== 0 &&
+      (marketplaceResult.stderr ?? '').includes(
+        'already added from a different source',
+      )
+    ) {
+      const staleDir = path.join(
+        os.homedir(),
+        '.claude',
+        'plugins',
+        'marketplaces',
+        'posthog',
+      );
+      try {
+        fs.rmSync(staleDir, { recursive: true, force: true });
+      } catch {
+        // ignore — retry anyway
+      }
+      marketplaceResult = runMarketplaceAdd();
+    }
+
+    if (marketplaceResult.status !== 0) {
+      const stderr = marketplaceResult.stderr ?? '';
+      const alreadyAdded =
+        stderr.includes('already added') || stderr.includes('already exists');
+
+      if (!alreadyAdded) {
+        if (stderr.includes('Marketplace configuration file is corrupted')) {
+          analytics.captureException(
+            new Error(
+              `Claude Code marketplace config is corrupted — user must repair ~/.claude/plugins/ config before retrying: ${stderr}`,
+            ),
+          );
+        } else {
+          analytics.captureException(
+            new Error(`Claude Code marketplace add failed: ${stderr}`),
+          );
+        }
+        return Promise.resolve({ success: false });
+      }
+    }
+
     try {
       execSync(`${binary} plugin install posthog`, { stdio: 'pipe' });
       return Promise.resolve({ success: true });
