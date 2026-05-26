@@ -1,5 +1,5 @@
 import { Text } from 'ink';
-import { VisualBox, type AreaSlide } from '../../audit/slides/shared.js';
+import { VisualBox, type AreaSlide } from '@ui/tui/screens/audit/slides/shared';
 
 const FeatureFlagsVisual = () => (
   <VisualBox>

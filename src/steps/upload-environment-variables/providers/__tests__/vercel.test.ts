@@ -1,4 +1,4 @@
-import { VercelEnvironmentProvider } from '../vercel';
+import { VercelEnvironmentProvider } from '@steps/upload-environment-variables/providers/vercel';
 import * as fs from 'fs';
 import * as child_process from 'child_process';
 

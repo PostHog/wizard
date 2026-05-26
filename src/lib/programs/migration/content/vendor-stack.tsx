@@ -5,7 +5,7 @@
  */
 
 import { Text } from 'ink';
-import type { ContentBlock } from '../../../../ui/tui/primitives/content-types.js';
+import type { ContentBlock } from '@ui/tui/primitives/content-types';
 
 export const VENDOR_STACK_BLOCK: ContentBlock = {
   type: 'lines',

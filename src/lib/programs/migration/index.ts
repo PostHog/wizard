@@ -1,6 +1,6 @@
-import type { ProgramConfig } from '../program-step.js';
-import type { AbortCase } from '../../agent/agent-runner.js';
-import { WIZARD_TOOL_NAMES } from '../../wizard-tools.js';
+import type { ProgramConfig } from '@lib/programs/program-step';
+import type { AbortCase } from '@lib/agent/agent-runner';
+import { WIZARD_TOOL_NAMES } from '@lib/wizard-tools';
 import { MIGRATION_PROGRAM } from './steps.js';
 import { getContentBlocks } from './content/index.js';
 

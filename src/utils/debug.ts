@@ -1,6 +1,6 @@
 import { appendFileSync } from 'fs';
 import path from 'path';
-import { getUI } from '../ui';
+import { getUI } from '@ui';
 import { runtimeEnv } from '@env';
 import { WIZARD_LOG_FILE } from './paths';
 

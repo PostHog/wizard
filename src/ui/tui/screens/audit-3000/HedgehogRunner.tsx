@@ -9,14 +9,14 @@
 
 import { Box, Text } from 'ink';
 import { Fragment, useEffect, type Dispatch, type SetStateAction } from 'react';
-import { Colors } from '../../styles.js';
+import { Colors } from '@ui/tui/styles';
 import { NEON_BLUE, NEON_GOLD, NEON_PINK } from './arcade-colors.js';
-import { useStdoutDimensions } from '../../hooks/useStdoutDimensions.js';
+import { useStdoutDimensions } from '@ui/tui/hooks/useStdoutDimensions';
 import {
   useKeyBindings,
   KeyMatch,
   type KeyBinding,
-} from '../../hooks/useKeyBindings.js';
+} from '@ui/tui/hooks/useKeyBindings';
 import {
   HEDGEHOG_COL,
   PLAYFIELD_WIDTH,

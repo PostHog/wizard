@@ -24,14 +24,14 @@ import {
   ProgressList,
   SplitView,
   TextRevealMode,
-} from '../../primitives/index.js';
-import type { ContentBlock, ProgressItem } from '../../primitives/index.js';
-import { Colors } from '../../styles.js';
-import type { WizardStore } from '../../store.js';
-import { PROGRAM_REGISTRY } from '../../../../lib/programs/program-registry.js';
-import { AUDIT_AREA_SLIDES } from '../../screens/audit/slides/index.js';
-import { AUDIT_3000_AREA_SLIDES } from '../../screens/audit-3000/slides/index.js';
-import type { AreaSlide } from '../../screens/audit/slides/shared.js';
+} from '@ui/tui/primitives/index';
+import type { ContentBlock, ProgressItem } from '@ui/tui/primitives/index';
+import { Colors } from '@ui/tui/styles';
+import type { WizardStore } from '@ui/tui/store';
+import { PROGRAM_REGISTRY } from '@lib/programs/program-registry';
+import { AUDIT_AREA_SLIDES } from '@ui/tui/screens/audit/slides/index';
+import { AUDIT_3000_AREA_SLIDES } from '@ui/tui/screens/audit-3000/slides/index';
+import type { AreaSlide } from '@ui/tui/screens/audit/slides/shared';
 
 interface Deck {
   id: string;

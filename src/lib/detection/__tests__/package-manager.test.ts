@@ -7,7 +7,7 @@ import {
   composerPackageManager,
   swiftPackageManager,
   gradlePackageManager,
-} from '../package-manager';
+} from '@lib/detection/package-manager';
 
 jest.mock('../../../utils/debug');
 jest.mock('../../../telemetry', () => ({

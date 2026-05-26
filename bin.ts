@@ -3,7 +3,7 @@ import { satisfies } from 'semver';
 
 import yargs from 'yargs';
 import { hideBin } from 'yargs/helpers';
-import { VERSION } from './src/lib/version.js';
+import { VERSION } from '@lib/version';
 
 const WIZARD_VERSION = VERSION;
 
@@ -19,16 +19,16 @@ if (!satisfies(process.version, NODE_VERSION_RANGE)) {
   process.exit(1);
 }
 
-import { isNonInteractiveEnvironment } from './src/utils/environment';
-import { getUI, setUI } from './src/ui';
-import { LoggingUI } from './src/ui/logging-ui';
+import { isNonInteractiveEnvironment } from '@utils/environment';
+import { getUI, setUI } from '@ui';
+import { LoggingUI } from '@ui/logging-ui';
 import {
   getSubcommandPrograms,
   Program,
-} from './src/lib/programs/program-registry';
-import type { ProgramConfig } from './src/lib/programs/program-step';
-import type { WizardSession } from './src/lib/wizard-session';
-import { POSTHOG_DOCS_URL } from './src/lib/constants';
+} from '@lib/programs/program-registry';
+import type { ProgramConfig } from '@lib/programs/program-step';
+import type { WizardSession } from '@lib/wizard-session';
+import { POSTHOG_DOCS_URL } from '@lib/constants';
 import { runtimeEnv } from '@env';
 
 // Test mock server — only loaded when NODE_ENV is 'test'.
@@ -258,7 +258,7 @@ const cli = yargs(hideBin(process.argv))
             getUI().intro('PostHog Wizard');
             try {
               const { provisionNewAccount } = await import(
-                './src/utils/provisioning.js'
+                '@utils/provisioning'
               );
               const signupRegion = (options.region as string).toUpperCase() as
                 | 'US'
@@ -298,14 +298,14 @@ const cli = yargs(hideBin(process.argv))
           }
 
           const { posthogIntegrationConfig } = await import(
-            './src/lib/programs/posthog-integration/index.js'
+            '@lib/programs/posthog-integration/index'
           );
-          const { FRAMEWORK_REGISTRY } = await import('./src/lib/registry.js');
+          const { FRAMEWORK_REGISTRY } = await import('@lib/registry');
           const { detectFramework, gatherFrameworkContext } = await import(
-            './src/lib/detection/index.js'
+            '@lib/detection/index'
           );
-          const { analytics } = await import('./src/utils/analytics.js');
-          const { wizardAbort } = await import('./src/utils/wizard-abort.js');
+          const { analytics } = await import('@utils/analytics');
+          const { wizardAbort } = await import('@utils/wizard-abort');
 
           // preRun: honor --integration, else auto-detect, then gather
           // framework context. Bypasses onReady hooks by design.
@@ -362,7 +362,7 @@ const cli = yargs(hideBin(process.argv))
         // Playground mode: launch the TUI primitives playground
         void (async () => {
           const { startPlayground } = await import(
-            './src/ui/tui/playground/start-playground.js'
+            '@ui/tui/playground/start-playground'
           );
           (startPlayground as (version: string) => void)(WIZARD_VERSION);
         })();
@@ -370,7 +370,7 @@ const cli = yargs(hideBin(process.argv))
         // Run a specific skill by ID
         void (async () => {
           const { createSkillProgram } = await import(
-            './src/lib/programs/agent-skill/index.js'
+            '@lib/programs/agent-skill/index'
           );
           const skillId = options.skill as string;
           const config = createSkillProgram({
@@ -392,7 +392,7 @@ const cli = yargs(hideBin(process.argv))
         // Same codepath as `npx @posthog/wizard integrate`.
         void (async () => {
           const { posthogIntegrationConfig } = await import(
-            './src/lib/programs/posthog-integration/index.js'
+            '@lib/programs/posthog-integration/index'
           );
           runWizard(posthogIntegrationConfig, options);
         })();
@@ -432,15 +432,15 @@ const cli = yargs(hideBin(process.argv))
             .filter(Boolean);
           void (async () => {
             const { readApiKeyFromEnv } = await import(
-              './src/utils/env-api-key.js'
+              '@utils/env-api-key'
             );
             const apiKey =
               (options.apiKey as string | undefined) || readApiKeyFromEnv();
 
             try {
-              const { startTUI } = await import('./src/ui/tui/start-tui.js');
+              const { startTUI } = await import('@ui/tui/start-tui');
               const { buildSession } = await import(
-                './src/lib/wizard-session.js'
+                '@lib/wizard-session'
               );
 
               const tui = startTUI(WIZARD_VERSION, Program.McpAdd);
@@ -455,7 +455,7 @@ const cli = yargs(hideBin(process.argv))
               // TUI unavailable — fallback to logging
               setUI(new LoggingUI());
               const { addMCPServerToClientsStep } = await import(
-                './src/steps/add-mcp-server-to-clients/index.js'
+                '@steps/add-mcp-server-to-clients/index'
               );
               await addMCPServerToClientsStep({
                 local: options.local,
@@ -483,9 +483,9 @@ const cli = yargs(hideBin(process.argv))
           const options = { ...argv };
           void (async () => {
             try {
-              const { startTUI } = await import('./src/ui/tui/start-tui.js');
+              const { startTUI } = await import('@ui/tui/start-tui');
               const { buildSession } = await import(
-                './src/lib/wizard-session.js'
+                '@lib/wizard-session'
               );
 
               const tui = startTUI(WIZARD_VERSION, Program.McpRemove);
@@ -498,7 +498,7 @@ const cli = yargs(hideBin(process.argv))
               // TUI unavailable — fallback to logging
               setUI(new LoggingUI());
               const { removeMCPServerFromClientsStep } = await import(
-                './src/steps/add-mcp-server-to-clients/index.js'
+                '@steps/add-mcp-server-to-clients/index'
               );
               await removeMCPServerFromClientsStep({
                 local: options.local,
@@ -558,7 +558,7 @@ cli.command(
     void (async () => {
       try {
         const { provisionNewAccount } = await import(
-          './src/utils/provisioning.js'
+          '@utils/provisioning'
         );
         if (!jsonMode) {
           getUI().log.info(`Provisioning account for ${email} in ${region}...`);
@@ -638,16 +638,16 @@ function runWizard(
     try {
       const installDir = (options.installDir as string) || process.cwd();
 
-      const { startTUI } = await import('./src/ui/tui/start-tui.js');
-      const { buildSession } = await import('./src/lib/wizard-session.js');
-      const { TaskStreamPush } = await import('./src/lib/task-stream/index.js');
+      const { startTUI } = await import('@ui/tui/start-tui');
+      const { buildSession } = await import('@lib/wizard-session');
+      const { TaskStreamPush } = await import('@lib/task-stream/index');
       const { FileDestination } = await import(
-        './src/lib/task-stream/destinations/file.js'
+        '@lib/task-stream/destinations/file'
       );
       const { PostHogDestination } = await import(
-        './src/lib/task-stream/destinations/posthog.js'
+        '@lib/task-stream/destinations/posthog'
       );
-      const { analytics } = await import('./src/utils/analytics.js');
+      const { analytics } = await import('@utils/analytics');
 
       const tui = startTUI(WIZARD_VERSION, config.id as any);
 
@@ -691,7 +691,7 @@ function runWizard(
 
       if (skipAgent) {
         const { getOrAskForProjectData } = await import(
-          './src/utils/setup-utils.js'
+          '@utils/setup-utils'
         );
         const { projectApiKey, host, accessToken, projectId } =
           await getOrAskForProjectData({
@@ -707,7 +707,7 @@ function runWizard(
           projectId,
         });
       } else {
-        const { runAgent } = await import('./src/lib/agent/agent-runner.js');
+        const { runAgent } = await import('@lib/agent/agent-runner');
         await runAgent(config, tui.store.session);
       }
 
@@ -774,14 +774,14 @@ function runWizardCI(
 
   void (async () => {
     const path = await import('path');
-    const { buildSession } = await import('./src/lib/wizard-session.js');
-    const { readEnvironment } = await import('./src/utils/environment.js');
-    const { readApiKeyFromEnv } = await import('./src/utils/env-api-key.js');
+    const { buildSession } = await import('@lib/wizard-session');
+    const { readEnvironment } = await import('@utils/environment');
+    const { readApiKeyFromEnv } = await import('@utils/env-api-key');
     const { configureLogFileFromEnvironment, logToFile } = await import(
-      './src/utils/debug.js'
+      '@utils/debug'
     );
     const { wizardAbort, WizardError } = await import(
-      './src/utils/wizard-abort.js'
+      '@utils/wizard-abort'
     );
 
     configureLogFileFromEnvironment();
@@ -857,7 +857,7 @@ function runWizardCI(
         }
       }
 
-      const { runAgent } = await import('./src/lib/agent/agent-runner.js');
+      const { runAgent } = await import('@lib/agent/agent-runner');
       await runAgent(config, session);
     } catch (error) {
       const errorMessage =

@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { IS_DEV, WIZARD_USER_AGENT } from '../lib/constants';
+import { IS_DEV, WIZARD_USER_AGENT } from '@lib/constants';
 import type { CloudRegion } from './types';
 
 export const getAssetHostFromHost = (host: string) => {

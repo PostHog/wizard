@@ -1,4 +1,4 @@
-import { analytics } from './utils/analytics';
+import { analytics } from '@utils/analytics';
 
 export function withProgress<T>(step: string, callback: () => T): T {
   updateProgress(step);

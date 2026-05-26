@@ -6,7 +6,11 @@
  * Context tokens in = previous phase's context tokens out.
  */
 
-import type { Middleware, MiddlewareContext, MiddlewareStore } from '../types';
+import type {
+  Middleware,
+  MiddlewareContext,
+  MiddlewareStore,
+} from '@lib/middleware/types';
 import type { TokenData } from './token-tracker';
 
 export interface ContextSizeData {

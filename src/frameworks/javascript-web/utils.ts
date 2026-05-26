@@ -1,7 +1,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { detectAllPackageManagers } from '../../utils/package-manager';
-import type { WizardOptions } from '../../utils/types';
+import { detectAllPackageManagers } from '@utils/package-manager';
+import type { WizardOptions } from '@utils/types';
 
 export type JavaScriptContext = {
   packageManagerName?: string;

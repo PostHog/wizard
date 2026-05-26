@@ -1,11 +1,11 @@
 import { Box, Text } from 'ink';
-import { useStdoutDimensions } from '../../hooks/useStdoutDimensions.js';
-import { Colors, Icons } from '../../styles.js';
+import { useStdoutDimensions } from '@ui/tui/hooks/useStdoutDimensions';
+import { Colors, Icons } from '@ui/tui/styles';
 import {
   getKindMeta,
   type HealthIssue,
   type HealthIssueSeverity,
-} from '../../../../lib/programs/posthog-doctor/index.js';
+} from '@lib/programs/posthog-doctor/index';
 
 export const SEVERITY_ORDER: HealthIssueSeverity[] = [
   'critical',

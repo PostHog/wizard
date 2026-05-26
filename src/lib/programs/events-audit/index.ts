@@ -1,14 +1,14 @@
-import type { ProgramConfig } from '../program-step.js';
-import type { ProgramRun } from '../../agent/agent-runner.js';
-import type { WizardSession } from '../../wizard-session.js';
-import { OutroKind } from '../../wizard-session.js';
-import { SPINNER_MESSAGE } from '../../framework-config.js';
-import { isUsingTypeScript } from '../../../utils/setup-utils.js';
-import { getCloudUrlFromRegion } from '../../../utils/urls.js';
-import { WIZARD_TOOL_NAMES } from '../../wizard-tools.js';
+import type { ProgramConfig } from '@lib/programs/program-step';
+import type { ProgramRun } from '@lib/agent/agent-runner';
+import type { WizardSession } from '@lib/wizard-session';
+import { OutroKind } from '@lib/wizard-session';
+import { SPINNER_MESSAGE } from '@lib/framework-config';
+import { isUsingTypeScript } from '@utils/setup-utils';
+import { getCloudUrlFromRegion } from '@utils/urls';
+import { WIZARD_TOOL_NAMES } from '@lib/wizard-tools';
 import { EVENTS_AUDIT_PROGRAM } from './steps.js';
-import { AUDIT_CHECKS_KEY } from '../audit/types.js';
-import { AUDIT_SEED_CHECKS, seedAuditLedger } from '../audit/seed.js';
+import { AUDIT_CHECKS_KEY } from '@lib/programs/audit/types';
+import { AUDIT_SEED_CHECKS, seedAuditLedger } from '@lib/programs/audit/seed';
 
 export const SETUP_REPORT_FILE = 'posthog-events-audit-report.md';
 

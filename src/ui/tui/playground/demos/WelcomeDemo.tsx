@@ -3,8 +3,8 @@
  */
 
 import { Box, Text, useInput } from 'ink';
-import type { WizardStore } from '../../store.js';
-import { Colors, Icons } from '../../styles.js';
+import type { WizardStore } from '@ui/tui/store';
+import { Colors, Icons } from '@ui/tui/styles';
 
 interface WelcomeDemoProps {
   store: WizardStore;

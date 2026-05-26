@@ -7,7 +7,7 @@
 
 import { Text } from 'ink';
 import { useEffect } from 'react';
-import type { WizardStore } from '../store.js';
+import type { WizardStore } from '@ui/tui/store';
 
 let peekedOnce = false;
 

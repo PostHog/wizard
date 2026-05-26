@@ -19,9 +19,9 @@ import {
   DUMMY_PROJECT_API_KEY,
   ISSUES_URL,
   WIZARD_OAUTH_SCOPES,
-} from '../lib/constants';
+} from '@lib/constants';
 import { analytics } from './analytics';
-import { getUI } from '../ui';
+import { getUI } from '@ui';
 import {
   getCloudUrlFromRegion,
   getHostFromRegion,
@@ -29,7 +29,7 @@ import {
 } from './urls';
 import { performOAuthFlow } from './oauth';
 import { provisionNewAccount } from './provisioning';
-import { fetchUserData, fetchProjectData } from '../lib/api';
+import { fetchUserData, fetchProjectData } from '@lib/api';
 import { fulfillsVersionRange } from './semver';
 import { wizardAbort } from './wizard-abort';
 

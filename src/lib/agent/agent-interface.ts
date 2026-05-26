@@ -5,41 +5,32 @@
 
 import path from 'path';
 import * as fs from 'fs';
-import { getUI, type SpinnerHandle } from '../../ui';
-import {
-  debug,
-  logToFile,
-  initLogFile,
-  getLogFilePath,
-} from '../../utils/debug';
-import type { WizardOptions } from '../../utils/types';
-import { analytics } from '../../utils/analytics';
+import { getUI, type SpinnerHandle } from '@ui';
+import { debug, logToFile, initLogFile, getLogFilePath } from '@utils/debug';
+import type { WizardOptions } from '@utils/types';
+import { analytics } from '@utils/analytics';
 import {
   WIZARD_REMARK_EVENT_NAME,
   POSTHOG_PROPERTY_HEADER_PREFIX,
   WIZARD_VARIANT_FLAG_KEY,
   WIZARD_VARIANTS,
   WIZARD_USER_AGENT,
-} from '../constants';
+} from '@lib/constants';
 import {
   type AdditionalFeature,
   ADDITIONAL_FEATURE_PROMPTS,
-} from '../wizard-session';
-import {
-  registerCleanup,
-  wizardAbort,
-  WizardError,
-} from '../../utils/wizard-abort';
-import { createCustomHeaders } from '../../utils/custom-headers';
-import { getLlmGatewayUrlFromHost } from '../../utils/urls';
-import { LINTING_TOOLS } from '../safe-tools';
-import { createWizardToolsServer, WIZARD_TOOL_NAMES } from '../wizard-tools';
+} from '@lib/wizard-session';
+import { registerCleanup, wizardAbort, WizardError } from '@utils/wizard-abort';
+import { createCustomHeaders } from '@utils/custom-headers';
+import { getLlmGatewayUrlFromHost } from '@utils/urls';
+import { LINTING_TOOLS } from '@lib/safe-tools';
+import { createWizardToolsServer, WIZARD_TOOL_NAMES } from '@lib/wizard-tools';
 import {
   createPreToolUseYaraHooks,
   createPostToolUseYaraHooks,
-} from '../yara-hooks';
+} from '@lib/yara-hooks';
 import { getWizardCommandments } from './commandments';
-import type { PackageManagerDetector } from '../detection/package-manager';
+import type { PackageManagerDetector } from '@lib/detection/package-manager';
 
 // Dynamic import cache for ESM module
 let _sdkModule: any = null;
@@ -297,7 +288,7 @@ export type AgentConfig = {
   /** Program identifier — selects the model for that program. */
   integrationLabel?: string;
   /** Bridge that drives the `wizard_ask` overlay. Omit in non-interactive hosts. */
-  askBridge?: import('../wizard-ask-bridge').WizardAskBridge;
+  askBridge?: import('@lib/wizard-ask-bridge').WizardAskBridge;
   /** Per-run cap on `wizard_ask` invocations. Defaults to 10. */
   askMaxQuestions?: number;
   /** Extra tools added on top of BASE_ALLOWED_TOOLS for this run. */
@@ -308,7 +299,9 @@ export type AgentConfig = {
    * Read accessor for the active pending question. Used by canUseTool to
    * block Write/Edit while the overlay is open (defense in depth).
    */
-  getPendingQuestion?: () => import('../wizard-session').PendingQuestion | null;
+  getPendingQuestion?: () =>
+    | import('@lib/wizard-session').PendingQuestion
+    | null;
 };
 
 /**
@@ -393,7 +386,9 @@ type AgentRunConfig = {
    * Read accessor for the active pending question. canUseTool reads this
    * to block Write/Edit while the overlay is open.
    */
-  getPendingQuestion?: () => import('../wizard-session').PendingQuestion | null;
+  getPendingQuestion?: () =>
+    | import('@lib/wizard-session').PendingQuestion
+    | null;
 };
 
 /**
@@ -485,7 +480,7 @@ const SAFE_SCRIPTS = [
 const DANGEROUS_OPERATORS = /[;`$()]/;
 
 // Re-export for backwards compatibility — canonical source is skill-install.ts
-export { isSkillInstallCommand } from '../skill-install';
+export { isSkillInstallCommand } from '@lib/skill-install';
 
 /**
  * Check if command is an allowed package manager command.

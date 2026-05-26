@@ -8,7 +8,7 @@
 import { Box, Text } from 'ink';
 import type { ReactNode } from 'react';
 import { useState, useSyncExternalStore } from 'react';
-import type { WizardStore } from '../store.js';
+import type { WizardStore } from '@ui/tui/store';
 import { IntroScreenLayout } from './IntroScreenLayout.js';
 import { SkillSourceInfo, useSkillEntry } from './SkillSourceInfo.js';
 

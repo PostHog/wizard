@@ -7,7 +7,7 @@ import {
   hasPackageInstalled,
   findInstalledPackageFromList,
   type PackageDotJson,
-} from '../utils/package-json';
+} from '@utils/package-json';
 
 describe('getPackageVersion', () => {
   it('returns version from dependencies', () => {

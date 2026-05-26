@@ -1,4 +1,4 @@
-import { shouldDisableAsk } from '../agent/agent-runner';
+import { shouldDisableAsk } from '@lib/agent/agent-runner';
 
 describe('shouldDisableAsk', () => {
   it('enables wizard_ask in interactive runs by default', () => {

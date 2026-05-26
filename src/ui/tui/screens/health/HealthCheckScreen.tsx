@@ -9,22 +9,22 @@
 
 import { Box, Text, useInput } from 'ink';
 import { useState, useSyncExternalStore } from 'react';
-import type { WizardStore } from '../../store.js';
+import type { WizardStore } from '@ui/tui/store';
 import {
   ConfirmationInput,
   LoadingBox,
   ModalOverlay,
-} from '../../primitives/index.js';
-import { Colors, Icons } from '../../styles.js';
-import { ServiceHealthList } from '../../components/ServiceHealthList.js';
+} from '@ui/tui/primitives/index';
+import { Colors, Icons } from '@ui/tui/styles';
+import { ServiceHealthList } from '@ui/tui/components/ServiceHealthList';
 import {
   getBlockingServiceKeys,
   SIGNUP_WIZARD_READINESS_CONFIG,
-} from '../../../../lib/health-checks/readiness.js';
-import { ServiceHealthStatus } from '../../../../lib/health-checks/types.js';
-import { wizardAbort } from '../../../../utils/wizard-abort.js';
-import { fetchSkillMenu, downloadSkill } from '../../../../lib/wizard-tools.js';
-import { REMOTE_SKILLS_BASE_URL } from '../../../../lib/constants.js';
+} from '@lib/health-checks/readiness';
+import { ServiceHealthStatus } from '@lib/health-checks/types';
+import { wizardAbort } from '@utils/wizard-abort';
+import { fetchSkillMenu, downloadSkill } from '@lib/wizard-tools';
+import { REMOTE_SKILLS_BASE_URL } from '@lib/constants';
 
 interface HealthCheckScreenProps {
   store: WizardStore;

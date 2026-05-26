@@ -9,14 +9,14 @@
  * extracted here so the `integrate` subcommand can reuse it.
  */
 
-import type { ProgramReadyContext } from '../program-step.js';
-import { FRAMEWORK_REGISTRY } from '../../registry.js';
+import type { ProgramReadyContext } from '@lib/programs/program-step';
+import { FRAMEWORK_REGISTRY } from '@lib/registry';
 import {
   detectFramework,
   discoverFeatures,
   gatherFrameworkContext,
   checkFrameworkVersion,
-} from '../../detection/index.js';
+} from '@lib/detection/index';
 
 export async function detectPostHogIntegration(
   ctx: ProgramReadyContext,

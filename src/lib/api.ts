@@ -1,6 +1,6 @@
 import axios, { AxiosError } from 'axios';
 import { z } from 'zod';
-import { analytics } from '../utils/analytics';
+import { analytics } from '@utils/analytics';
 import { WIZARD_USER_AGENT } from './constants';
 
 export const ApiUserSchema = z.object({

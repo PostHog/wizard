@@ -13,7 +13,7 @@
 import path from 'path';
 import { Box, Text } from 'ink';
 import type { ReactNode } from 'react';
-import { PickerMenu } from '../primitives/index.js';
+import { PickerMenu } from '@ui/tui/primitives/index';
 
 export interface DetectionRow {
   label: string;

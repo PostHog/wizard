@@ -1,15 +1,15 @@
 /* React Native wizard using posthog-agent with PostHog MCP */
-import type { WizardOptions } from '../../utils/types';
-import type { FrameworkConfig } from '../../lib/framework-config';
-import { detectNodePackageManagers } from '../../lib/detection/package-manager';
-import { Integration } from '../../lib/constants';
+import type { WizardOptions } from '@utils/types';
+import type { FrameworkConfig } from '@lib/framework-config';
+import { detectNodePackageManagers } from '@lib/detection/package-manager';
+import { Integration } from '@lib/constants';
 import {
   getPackageVersion,
   getInstalledPackageVersion,
   hasPackageInstalled,
   type PackageDotJson,
-} from '../../utils/package-json';
-import { tryGetPackageJson } from '../../utils/setup-utils';
+} from '@utils/package-json';
+import { tryGetPackageJson } from '@utils/setup-utils';
 import {
   detectReactNativeVariant,
   getReactNativeVariantName,

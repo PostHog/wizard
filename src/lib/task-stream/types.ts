@@ -7,7 +7,7 @@
  * transport with a different program_id / skill_id pair.
  */
 
-import type { RunPhase } from '../wizard-session';
+import type { RunPhase } from '@lib/wizard-session';
 
 export enum StreamTaskStatus {
   Pending = 'pending',

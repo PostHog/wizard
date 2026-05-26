@@ -14,10 +14,10 @@ import { readdir, rm, access } from 'node:fs/promises';
 import { join } from 'node:path';
 
 const WIZARD_MARKER = '.posthog-wizard';
-import type { WizardStore } from '../store.js';
-import { ConfirmationInput } from '../primitives/index.js';
-import { Colors } from '../styles.js';
-import { CONTEXT_MILL_URL } from '../../../lib/constants.js';
+import type { WizardStore } from '@ui/tui/store';
+import { ConfirmationInput } from '@ui/tui/primitives/index';
+import { Colors } from '@ui/tui/styles';
+import { CONTEXT_MILL_URL } from '@lib/constants';
 
 interface KeepSkillsScreenProps {
   store: WizardStore;

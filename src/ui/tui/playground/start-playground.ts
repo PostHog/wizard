@@ -4,9 +4,9 @@
 
 import { render } from 'ink';
 import { createElement } from 'react';
-import { WizardStore } from '../store.js';
+import { WizardStore } from '@ui/tui/store';
 import { PlaygroundApp } from './PlaygroundApp.js';
-import { WizardReadiness } from '../../../lib/health-checks/readiness.js';
+import { WizardReadiness } from '@lib/health-checks/readiness';
 
 export function startPlayground(version: string): void {
   const store = new WizardStore();

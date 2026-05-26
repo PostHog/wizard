@@ -5,9 +5,13 @@
  * including pre-compaction token counts per phase.
  */
 
-import type { Middleware, MiddlewareContext, MiddlewareStore } from '../types';
-import { logToFile } from '../../../utils/debug';
-import { AgentSignals } from '../../agent/agent-interface';
+import type {
+  Middleware,
+  MiddlewareContext,
+  MiddlewareStore,
+} from '@lib/middleware/types';
+import { logToFile } from '@utils/debug';
+import { AgentSignals } from '@lib/agent/agent-interface';
 
 export interface CompactionData {
   phaseCompactions: number;

@@ -8,13 +8,13 @@
 
 import { Box, Text } from 'ink';
 import { useState, useMemo, type ReactNode } from 'react';
-import { Colors, Icons } from '../styles.js';
+import { Colors, Icons } from '@ui/tui/styles';
 import {
   useKeyBindings,
   KeyMatch,
   type KeyBinding,
-} from '../hooks/useKeyBindings.js';
-import type { WizardStore } from '../store.js';
+} from '@ui/tui/hooks/useKeyBindings';
+import type { WizardStore } from '@ui/tui/store';
 
 export interface TabDefinition {
   id: string;

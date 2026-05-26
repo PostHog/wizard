@@ -21,7 +21,9 @@
       "@env": ["./src/env.ts"],
       "@lib/*": ["./src/lib/*"],
       "@utils/*": ["./src/utils/*"],
+      "@ui": ["./src/ui/index.ts"],
       "@ui/*": ["./src/ui/*"],
+      "@steps": ["./src/steps/index.ts"],
       "@steps/*": ["./src/steps/*"],
       "@frameworks/*": ["./src/frameworks/*"]
     }

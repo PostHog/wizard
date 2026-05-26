@@ -1,4 +1,7 @@
-import { createProgramSequence, type ProgramStep } from '../program-step.js';
+import {
+  createProgramSequence,
+  type ProgramStep,
+} from '@lib/programs/program-step';
 
 describe('createProgramSequence', () => {
   it('filters out headless steps and keeps only screen-bearing ones', () => {

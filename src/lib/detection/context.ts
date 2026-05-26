@@ -7,9 +7,9 @@
  */
 
 import * as semver from 'semver';
-import { DETECTION_TIMEOUT_MS } from '../constants.js';
-import type { FrameworkConfig } from '../framework-config.js';
-import type { WizardOptions } from '../../utils/types.js';
+import { DETECTION_TIMEOUT_MS } from '@lib/constants';
+import type { FrameworkConfig } from '@lib/framework-config';
+import type { WizardOptions } from '@utils/types';
 
 /**
  * Run a framework's `gatherContext()` to collect variant-specific

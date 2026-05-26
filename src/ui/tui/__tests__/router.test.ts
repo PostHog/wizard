@@ -1,6 +1,6 @@
-import { buildSession, RunPhase } from '../../../lib/wizard-session.js';
-import { WizardReadiness } from '../../../lib/health-checks/readiness.js';
-import { WizardRouter, ScreenId, Overlay, Program } from '../router.js';
+import { buildSession, RunPhase } from '@lib/wizard-session';
+import { WizardReadiness } from '@lib/health-checks/readiness';
+import { WizardRouter, ScreenId, Overlay, Program } from '@ui/tui/router';
 
 function baseWizardSession() {
   return buildSession({});

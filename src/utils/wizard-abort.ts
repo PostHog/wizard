@@ -7,8 +7,8 @@
  * The legacy abort() in setup-utils.ts delegates here.
  */
 import { analytics } from './analytics';
-import { getUI } from '../ui';
-import { OutroKind, type OutroData } from '../lib/wizard-session';
+import { getUI } from '@ui';
+import { OutroKind, type OutroData } from '@lib/wizard-session';
 
 export class WizardError extends Error {
   constructor(

@@ -1,4 +1,4 @@
-import type { WizardSession } from '../../wizard-session.js';
+import type { WizardSession } from '@lib/wizard-session';
 
 export type AuditStatus =
   | 'pending'

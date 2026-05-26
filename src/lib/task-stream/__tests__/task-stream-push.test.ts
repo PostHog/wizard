@@ -1,8 +1,11 @@
-import { TaskStreamPush } from '../task-stream-push';
-import { StreamEvent } from '../types';
-import type { TaskStreamDestination, TaskStreamUpdate } from '../types';
-import type { WizardStore, TaskItem } from '../../../ui/tui/store';
-import { RunPhase } from '../../wizard-session';
+import { TaskStreamPush } from '@lib/task-stream/task-stream-push';
+import { StreamEvent } from '@lib/task-stream/types';
+import type {
+  TaskStreamDestination,
+  TaskStreamUpdate,
+} from '@lib/task-stream/types';
+import type { WizardStore, TaskItem } from '@ui/tui/store';
+import { RunPhase } from '@lib/wizard-session';
 
 // Mocks and stuff
 

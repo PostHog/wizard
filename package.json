@@ -156,7 +156,9 @@
       "^@env$": "<rootDir>/src/env.ts",
       "^@lib/(.*)$": "<rootDir>/src/lib/$1",
       "^@utils/(.*)$": "<rootDir>/src/utils/$1",
+      "^@ui$": "<rootDir>/src/ui/index.ts",
       "^@ui/(.*)$": "<rootDir>/src/ui/$1",
+      "^@steps$": "<rootDir>/src/steps/index.ts",
       "^@steps/(.*)$": "<rootDir>/src/steps/$1",
       "^@frameworks/(.*)$": "<rootDir>/src/frameworks/$1",
       "^(\\.{1,2}/.*)\\.js$": "$1"

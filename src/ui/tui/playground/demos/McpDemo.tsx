@@ -5,9 +5,9 @@
  * a short install delay, and a successful result.
  */
 
-import { WizardStore } from '../../store.js';
-import { McpScreen } from '../../screens/McpScreen.js';
-import type { McpInstaller } from '../../services/mcp-installer.js';
+import { WizardStore } from '@ui/tui/store';
+import { McpScreen } from '@ui/tui/screens/McpScreen';
+import type { McpInstaller } from '@ui/tui/services/mcp-installer';
 
 const MOCK_CLIENTS = [
   { name: 'Claude Code', supportsPlugin: true },

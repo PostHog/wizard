@@ -3,9 +3,9 @@
  * and fans out async to all registered destinations.
  */
 
-import type { WizardStore, TaskItem } from '../../ui/tui/store';
-import { TaskStatus } from '../../ui/wizard-ui';
-import { RunPhase } from '../wizard-session';
+import type { WizardStore, TaskItem } from '@ui/tui/store';
+import { TaskStatus } from '@ui/wizard-ui';
+import { RunPhase } from '@lib/wizard-session';
 import {
   type TaskStreamDestination,
   type TaskStreamUpdate,

@@ -7,15 +7,15 @@ import {
   Overlay,
   RunPhase,
   McpOutcome,
-} from '../store.js';
-import { OutroKind, AdditionalFeature } from '../../../lib/wizard-session.js';
+} from '@ui/tui/store';
+import { OutroKind, AdditionalFeature } from '@lib/wizard-session';
 import {
   WizardReadiness,
   evaluateWizardReadiness,
-} from '../../../lib/health-checks/readiness.js';
-import { buildSession } from '../../../lib/wizard-session.js';
-import { Integration } from '../../../lib/constants.js';
-import { analytics } from '../../../utils/analytics.js';
+} from '@lib/health-checks/readiness';
+import { buildSession } from '@lib/wizard-session';
+import { Integration } from '@lib/constants';
+import { analytics } from '@utils/analytics';
 
 jest.mock('../../../utils/analytics.js', () => ({
   analytics: {

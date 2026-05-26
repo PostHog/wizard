@@ -1,4 +1,4 @@
-import { createVersionBucket } from '../../utils/semver';
+import { createVersionBucket } from '@utils/semver';
 
 /**
  * Get Angular version bucket for analytics

@@ -12,13 +12,13 @@
 
 import { Box } from 'ink';
 import { useSyncExternalStore, type ReactNode } from 'react';
-import { TitleBar } from '../components/TitleBar.js';
-import { useStdoutDimensions } from '../hooks/useStdoutDimensions.js';
-import { KeyboardHintsProvider } from '../hooks/useKeyboardHints.js';
+import { TitleBar } from '@ui/tui/components/TitleBar';
+import { useStdoutDimensions } from '@ui/tui/hooks/useStdoutDimensions';
+import { KeyboardHintsProvider } from '@ui/tui/hooks/useKeyboardHints';
 import { DissolveTransition } from './DissolveTransition.js';
 import { KeyboardHintsBar } from './KeyboardHintsBar.js';
 import { ScreenErrorBoundary } from './ScreenErrorBoundary.js';
-import type { WizardStore } from '../store.js';
+import type { WizardStore } from '@ui/tui/store';
 
 const MIN_WIDTH = 80;
 export const MAX_WIDTH = 120;

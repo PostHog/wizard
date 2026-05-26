@@ -10,8 +10,8 @@
 
 import { Box, Text, useInput } from 'ink';
 import { useSyncExternalStore } from 'react';
-import type { WizardStore } from '../store.js';
-import { Colors } from '../styles.js';
+import type { WizardStore } from '@ui/tui/store';
+import { Colors } from '@ui/tui/styles';
 
 interface AuthErrorScreenProps {
   store: WizardStore;

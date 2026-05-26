@@ -5,8 +5,11 @@
  * from a BenchmarkConfig.
  */
 
-import type { Middleware, MiddlewareFactoryOptions } from '../types';
-import type { BenchmarkConfig } from '../config';
+import type {
+  Middleware,
+  MiddlewareFactoryOptions,
+} from '@lib/middleware/types';
+import type { BenchmarkConfig } from '@lib/middleware/config';
 import { TurnCounterPlugin } from './turn-counter';
 import { TokenTrackerPlugin } from './token-tracker';
 import { CacheTrackerPlugin } from './cache-tracker';

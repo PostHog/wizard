@@ -1,7 +1,7 @@
 import { major, minVersion } from 'semver';
 import fg from 'fast-glob';
-import { getUI } from '../../ui';
-import type { WizardOptions } from '../../utils/types';
+import { getUI } from '@ui';
+import type { WizardOptions } from '@utils/types';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 

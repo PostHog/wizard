@@ -1,10 +1,10 @@
-import type { WizardSession, DiscoveredFeature } from '../wizard-session';
-import type { WizardReadinessResult } from '../health-checks/readiness.js';
-import type { ProgramRun } from '../agent/agent-runner.js';
-import type { Integration } from '../constants.js';
-import type { FrameworkConfig } from '../framework-config.js';
-import type { ContentBlock } from '../../ui/tui/primitives/index.js';
-import type { WizardStore } from '../../ui/tui/store.js';
+import type { WizardSession, DiscoveredFeature } from '@lib/wizard-session';
+import type { WizardReadinessResult } from '@lib/health-checks/readiness';
+import type { ProgramRun } from '@lib/agent/agent-runner';
+import type { Integration } from '@lib/constants';
+import type { FrameworkConfig } from '@lib/framework-config';
+import type { ContentBlock } from '@ui/tui/primitives/index';
+import type { WizardStore } from '@ui/tui/store';
 
 /**
  * A program step is the primary unit of the wizard's execution model.

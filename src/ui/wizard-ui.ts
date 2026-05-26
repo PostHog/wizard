@@ -8,13 +8,13 @@
  * Session-mutating methods trigger reactive screen resolution in the TUI.
  */
 
-import type { SettingsConflict } from '../lib/agent/agent-interface';
-import type { WizardReadinessResult } from '../lib/health-checks/readiness.js';
+import type { SettingsConflict } from '@lib/agent/agent-interface';
+import type { WizardReadinessResult } from '@lib/health-checks/readiness';
 import type {
   AskAnswers,
   OutroData,
   PendingQuestion,
-} from '../lib/wizard-session';
+} from '@lib/wizard-session';
 
 export enum TaskStatus {
   Pending = 'pending',

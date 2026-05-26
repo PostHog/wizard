@@ -5,8 +5,8 @@
  */
 
 import { Box, Text } from 'ink';
-import { ModalOverlay } from '../../primitives/index.js';
-import { Icons } from '../../styles.js';
+import { ModalOverlay } from '@ui/tui/primitives/index';
+import { Icons } from '@ui/tui/styles';
 
 export const ModalDemo = () => {
   return (

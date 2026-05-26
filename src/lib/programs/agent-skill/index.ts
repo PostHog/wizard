@@ -19,8 +19,8 @@
  *   })
  */
 
-import type { ProgramConfig } from '../program-step.js';
-import type { ProgramRun, AbortCase } from '../../agent/agent-runner.js';
+import type { ProgramConfig } from '@lib/programs/program-step';
+import type { ProgramRun, AbortCase } from '@lib/agent/agent-runner';
 import { AGENT_SKILL_STEPS } from './steps.js';
 import { getContentBlocks } from './content/index.js';
 

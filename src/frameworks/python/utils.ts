@@ -1,5 +1,5 @@
 import { execSync } from 'node:child_process';
-import type { WizardOptions } from '../../utils/types';
+import type { WizardOptions } from '@utils/types';
 
 export enum PythonPackageManager {
   UV = 'uv',

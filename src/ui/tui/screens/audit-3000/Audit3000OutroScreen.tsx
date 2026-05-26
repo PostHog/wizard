@@ -11,15 +11,15 @@
 import { join } from 'node:path';
 import { Box, Text, useInput } from 'ink';
 import { useSyncExternalStore } from 'react';
-import type { WizardStore } from '../../store.js';
-import { OutroKind } from '../../../../lib/wizard-session.js';
-import { Colors } from '../../styles.js';
+import type { WizardStore } from '@ui/tui/store';
+import { OutroKind } from '@lib/wizard-session';
+import { Colors } from '@ui/tui/styles';
 import {
   getAuditChecks,
   type AuditCheck,
   type AuditStatus,
-} from '../../../../lib/programs/audit/types.js';
-import { AuditChecksOutroSection } from '../audit/AuditChecksOutroSection.js';
+} from '@lib/programs/audit/types';
+import { AuditChecksOutroSection } from '@ui/tui/screens/audit/AuditChecksOutroSection';
 
 const NEON_PINK = '#F54E00';
 const NEON_GOLD = '#F9BD2B';

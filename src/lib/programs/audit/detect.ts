@@ -1,4 +1,4 @@
-import type { AbortCase } from '../../agent/agent-runner.js';
+import type { AbortCase } from '@lib/agent/agent-runner';
 
 /** `[ABORT] <reason>` cases the audit skill can emit. Reason strings are
  *  defined in the skill's `Abort statuses` section. */

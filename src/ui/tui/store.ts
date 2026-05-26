@@ -14,11 +14,7 @@
  */
 
 import { atom, map } from 'nanostores';
-import {
-  TaskStatus,
-  isTaskStatus,
-  type AuthErrorDetail,
-} from '../wizard-ui.js';
+import { TaskStatus, isTaskStatus, type AuthErrorDetail } from '@ui/wizard-ui';
 import {
   type WizardSession,
   type OutroData,
@@ -29,9 +25,9 @@ import {
   McpOutcome,
   RunPhase,
   buildSession,
-} from '../../lib/wizard-session.js';
-import type { SettingsConflict } from '../../lib/agent/agent-interface.js';
-import type { WizardReadinessResult } from '../../lib/health-checks/readiness.js';
+} from '@lib/wizard-session';
+import type { SettingsConflict } from '@lib/agent/agent-interface';
+import type { WizardReadinessResult } from '@lib/health-checks/readiness';
 import {
   WizardRouter,
   type ScreenName,
@@ -40,12 +36,12 @@ import {
   Program,
   type ProgramId,
 } from './router.js';
-import { analytics, sessionProperties } from '../../utils/analytics.js';
+import { analytics, sessionProperties } from '@utils/analytics';
 import type {
   StoreInitContext,
   ProgramReadyContext,
-} from '../../lib/programs/program-step.js';
-import { getProgramConfig } from '../../lib/programs/program-registry.js';
+} from '@lib/programs/program-step';
+import { getProgramConfig } from '@lib/programs/program-registry';
 
 export { TaskStatus, ScreenId, Overlay, Program, RunPhase, McpOutcome };
 export type { ScreenName, OutroData, WizardSession, ProgramId };

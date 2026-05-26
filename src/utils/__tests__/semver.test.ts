@@ -1,4 +1,4 @@
-import { createVersionBucket, fulfillsVersionRange } from '../semver';
+import { createVersionBucket, fulfillsVersionRange } from '@utils/semver';
 
 describe('createVersionBucket', () => {
   describe('without minimum threshold', () => {

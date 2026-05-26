@@ -11,8 +11,8 @@ import {
   mergeEnvValues,
   parseEnvKeys,
   resolveEnvPath,
-} from '../wizard-tools';
-import type { AuditCheck } from '../programs/audit/types';
+} from '@lib/wizard-tools';
+import type { AuditCheck } from '@lib/programs/audit/types';
 
 function makeTmpDir(): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'wizard-tools-'));

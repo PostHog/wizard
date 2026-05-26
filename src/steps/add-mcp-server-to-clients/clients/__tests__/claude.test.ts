@@ -2,8 +2,8 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import { ClaudeMCPClient } from '../claude';
-import { getDefaultServerConfig } from '../../defaults';
+import { ClaudeMCPClient } from '@steps/add-mcp-server-to-clients/clients/claude';
+import { getDefaultServerConfig } from '@steps/add-mcp-server-to-clients/defaults';
 
 jest.mock('fs', () => ({
   promises: {
@@ -51,7 +51,9 @@ describe('ClaudeMCPClient', () => {
     getDefaultServerConfigMock.mockReturnValue(mockServerConfig);
 
     // Mock the Zod schema parse method
-    const { DefaultMCPClientConfig } = require('../../defaults');
+    const {
+      DefaultMCPClientConfig,
+    } = require('@steps/add-mcp-server-to-clients/defaults');
     DefaultMCPClientConfig.parse.mockImplementation((data: any) => data);
   });
 
