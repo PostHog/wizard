@@ -48,7 +48,7 @@ const OAuthTokenResponseSchema = z.object({
   expires_in: z.number(),
   token_type: z.string(),
   scope: z.string(),
-  refresh_token: z.string(),
+  refresh_token: z.string().optional(),
   scoped_teams: z.array(z.number()).optional(),
   scoped_organizations: z.array(z.string()).optional(),
 });

@@ -46,8 +46,9 @@ export const posthogIntegrationConfig: ProgramConfig = {
   steps: POSTHOG_INTEGRATION_PROGRAM,
   getContentBlocks,
   // Basic integration runs without structured user input; drop wizard_ask
-  // so the model can't pop modal prompts mid-run. (Subagent dispatch is
-  // already gated by not opting into `Agent`.)
+  // so the model can't pop modal prompts mid-run. The runner forwards this
+  // list to the general-purpose subagent as well, so dispatched subagents
+  // can't reach around the parent and ask either.
   disallowedTools: [WIZARD_TOOL_NAMES.wizardAsk],
 
   run: async (session: WizardSession): Promise<ProgramRun> => {

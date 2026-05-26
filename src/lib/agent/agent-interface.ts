@@ -529,10 +529,27 @@ function matchesAllowedPrefix(command: string): boolean {
 export function wizardCanUseTool(
   toolName: string,
   input: Record<string, unknown>,
-  context: { wizardAskPending?: boolean } = {},
+  context: {
+    wizardAskPending?: boolean;
+    disallowedTools?: readonly string[];
+  } = {},
 ):
   | { behavior: 'allow'; updatedInput: Record<string, unknown> }
   | { behavior: 'deny'; message: string } {
+  // Hard gate on the program's disallow list. The SDK's own disallowedTools
+  // option blocks tools at the parent level, but does NOT reliably propagate
+  // to dispatched subagents (their AgentDefinition has its own field which the
+  // SDK appears to ignore for MCP tools). canUseTool is invoked for every
+  // tool call regardless of which agent layer emitted it, so denying here is
+  // the only certain block.
+  if (context.disallowedTools?.includes(toolName)) {
+    logToFile(`Denying disallowed tool: ${toolName}`);
+    return {
+      behavior: 'deny',
+      message: `Tool ${toolName} is disabled for this program.`,
+    };
+  }
+
   if (
     context.wizardAskPending &&
     (toolName === 'Write' || toolName === 'Edit')
@@ -955,6 +972,13 @@ export async function runAgent(
             prompt:
               'You are a general-purpose subagent for the PostHog wizard. Prefer the authenticated mcp__posthog-wizard__* MCP tools over raw HTTP — they are already authenticated for this project. Only fall back to other transports if no MCP tool covers the operation.',
             mcpServers: inheritedMcpServerNames,
+            // SDK does not propagate the parent's disallowedTools to subagents
+            // (sdk.d.ts: AgentDefinition has its own disallowedTools, and
+            // `tools: undefined` means "inherit all"). Without this, a program
+            // that disallows wizard_ask still leaks it to dispatched subagents.
+            disallowedTools: agentConfig.disallowedTools
+              ? [...agentConfig.disallowedTools]
+              : undefined,
           },
         },
         // Load skills from project's .claude/skills/ directory
@@ -1046,7 +1070,10 @@ export async function runAgent(
           const result = wizardCanUseTool(
             toolName,
             input as Record<string, unknown>,
-            { wizardAskPending: agentConfig.getPendingQuestion?.() != null },
+            {
+              wizardAskPending: agentConfig.getPendingQuestion?.() != null,
+              disallowedTools: agentConfig.disallowedTools,
+            },
           );
           logToFile('canUseTool result:', result);
           return Promise.resolve(result);
