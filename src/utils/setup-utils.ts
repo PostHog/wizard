@@ -29,9 +29,10 @@ import {
 } from './urls';
 import { performOAuthFlow } from './oauth';
 import { provisionNewAccount } from './provisioning';
-import { fetchUserData, fetchProjectData } from '../lib/api';
+import { ApiError, fetchUserData, fetchProjectData } from '../lib/api';
 import { fulfillsVersionRange } from './semver';
 import { wizardAbort } from './wizard-abort';
+import { getLogFilePath } from './debug';
 
 interface ProjectData {
   projectApiKey: string;
@@ -370,6 +371,31 @@ export function isUsingTypeScript({
   } catch {
     return false;
   }
+}
+
+/**
+ * Route a 401 from `getOrAskForProjectData` through the same AuthErrorScreen
+ * UX the agent-side 401 handler uses, then abort. Returns for non-401 errors
+ * so the caller can re-throw and let the generic error path render.
+ *
+ * Mirrors the flow in `agent-interface.ts` for SDK-side 401s, which only fires
+ * after the agent boots — PostHog API 401s thrown earlier need their own entry
+ * point or the run aborts opaquely.
+ */
+export async function handleProjectDataAuthError(
+  error: unknown,
+): Promise<void> {
+  if (!(error instanceof ApiError) || error.statusCode !== 401) {
+    return;
+  }
+  getUI().showAuthError({
+    hasSettingsConflict: false,
+    logFilePath: getLogFilePath(),
+  });
+  await wizardAbort({
+    message: 'Authentication failed (401)',
+    error,
+  });
 }
 
 /**

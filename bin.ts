@@ -690,16 +690,21 @@ function runWizard(
       const skipAgent = config.run == null;
 
       if (skipAgent) {
-        const { getOrAskForProjectData } = await import(
-          './src/utils/setup-utils.js'
-        );
-        const { projectApiKey, host, accessToken, projectId } =
-          await getOrAskForProjectData({
+        const { getOrAskForProjectData, handleProjectDataAuthError } =
+          await import('./src/utils/setup-utils.js');
+        let projectData: Awaited<ReturnType<typeof getOrAskForProjectData>>;
+        try {
+          projectData = await getOrAskForProjectData({
             signup: session.signup,
             ci: session.ci,
             apiKey: session.apiKey,
             projectId: session.projectId,
           });
+        } catch (error) {
+          await handleProjectDataAuthError(error);
+          throw error;
+        }
+        const { projectApiKey, host, accessToken, projectId } = projectData;
         tui.store.setCredentials({
           accessToken,
           projectApiKey,
@@ -737,9 +742,16 @@ function runWizard(
       tui.unmount();
       process.exit(0);
     } catch (err) {
+      // Surface unexpected errors instead of exiting cleanly — silent failures
+      // here mask things like PostHog-API 401s thrown before the agent starts.
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      // eslint-disable-next-line no-console
+      console.error(`Wizard failed: ${errorMessage}`);
       if (runtimeEnv('DEBUG') || runtimeEnv('POSTHOG_WIZARD_DEBUG')) {
-        console.error('TUI init failed:', err); // eslint-disable-line no-console
+        // eslint-disable-next-line no-console
+        console.error(err);
       }
+      process.exit(1);
     }
   })();
 }
