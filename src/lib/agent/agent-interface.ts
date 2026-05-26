@@ -955,6 +955,13 @@ export async function runAgent(
             prompt:
               'You are a general-purpose subagent for the PostHog wizard. Prefer the authenticated mcp__posthog-wizard__* MCP tools over raw HTTP — they are already authenticated for this project. Only fall back to other transports if no MCP tool covers the operation.',
             mcpServers: inheritedMcpServerNames,
+            // SDK does not propagate the parent's disallowedTools to subagents
+            // (sdk.d.ts: AgentDefinition has its own disallowedTools, and
+            // `tools: undefined` means "inherit all"). Without this, a program
+            // that disallows wizard_ask still leaks it to dispatched subagents.
+            disallowedTools: agentConfig.disallowedTools
+              ? [...agentConfig.disallowedTools]
+              : undefined,
           },
         },
         // Load skills from project's .claude/skills/ directory
