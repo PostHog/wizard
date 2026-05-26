@@ -1,5 +1,22 @@
 # Changelog
 
+## [2.14.0](https://github.com/PostHog/wizard/compare/v2.13.1...v2.14.0) (2026-05-26)
+
+
+### Features
+
+* Events audit ([#449](https://github.com/PostHog/wizard/issues/449)) ([6783b52](https://github.com/PostHog/wizard/commit/6783b52b08f38a3af2534cedba8db089b4531ec8))
+* migration agent ([#474](https://github.com/PostHog/wizard/issues/474)) ([7a7dba4](https://github.com/PostHog/wizard/commit/7a7dba4ab6def678003bee5dc74d163984c4b8d4))
+* User input overlay ([#459](https://github.com/PostHog/wizard/issues/459)) ([b050c5b](https://github.com/PostHog/wizard/commit/b050c5bbf626cad2aaa40173c56beabdaf9e6360))
+
+
+### Bug Fixes
+
+* improve CI mode 401 error UX ([#432](https://github.com/PostHog/wizard/issues/432)) ([5fb5790](https://github.com/PostHog/wizard/commit/5fb579077a7fa7bd7688dc90319773aa8a8cc101))
+* release ([#480](https://github.com/PostHog/wizard/issues/480)) ([771ffe0](https://github.com/PostHog/wizard/commit/771ffe083ff2c6da11120b847bb5fd06cf27124c))
+* smoke test directory ([#473](https://github.com/PostHog/wizard/issues/473)) ([984f1dc](https://github.com/PostHog/wizard/commit/984f1dc092ebb129823065684de3c8d9196fc3a9))
+* task queue ([#471](https://github.com/PostHog/wizard/issues/471)) ([5c4622c](https://github.com/PostHog/wizard/commit/5c4622cffdacb4c51e41fa6c7c0929f55d2c80d6))
+
 ## [2.13.1](https://github.com/PostHog/wizard/compare/v2.13.0...v2.13.1) (2026-05-14)
 
 
