@@ -256,7 +256,7 @@ export async function runProgram(
 
   analytics.wizardCapture('agent started', {
     integration: config.integrationLabel,
-    program_id: config.integrationLabel,
+    program_id: programConfig.id,
     skill_id: config.skillId ?? null,
   });
 
