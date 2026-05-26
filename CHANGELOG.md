@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.14.2](https://github.com/PostHog/wizard/compare/v2.14.1...v2.14.2) (2026-05-26)
+
+
+### Bug Fixes
+
+* make refresh token optional for impersonated users ([#483](https://github.com/PostHog/wizard/issues/483)) ([48a55c8](https://github.com/PostHog/wizard/commit/48a55c87adc04e7192670f57dd0142f32df12450))
+
 ## [2.14.1](https://github.com/PostHog/wizard/compare/v2.14.0...v2.14.1) (2026-05-26)
 
 
