@@ -1,11 +1,11 @@
 /* Generic JavaScript Web (client-side) wizard using posthog-agent with PostHog MCP */
-import type { WizardOptions } from '../../utils/types';
-import type { FrameworkConfig } from '../../lib/framework-config';
-import { Integration } from '../../lib/constants';
+import type { WizardOptions } from '@utils/types';
+import type { FrameworkConfig } from '@lib/framework-config';
+import { Integration } from '@lib/constants';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { hasPackageInstalled } from '../../utils/package-json';
-import { tryGetPackageJson } from '../../utils/setup-utils';
+import { hasPackageInstalled } from '@utils/package-json';
+import { tryGetPackageJson } from '@utils/setup-utils';
 import {
   FRAMEWORK_PACKAGES,
   detectJsPackageManager,
@@ -13,7 +13,7 @@ import {
   hasIndexHtml,
   type JavaScriptContext,
 } from './utils';
-import { detectNodePackageManagers } from '../../lib/detection/package-manager';
+import { detectNodePackageManagers } from '@lib/detection/package-manager';
 
 export const JAVASCRIPT_WEB_AGENT_CONFIG: FrameworkConfig<JavaScriptContext> = {
   metadata: {

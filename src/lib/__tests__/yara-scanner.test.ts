@@ -1,5 +1,5 @@
-import { scan, scanSkillDirectory, RULES } from '../yara-scanner';
-import type { ScanResult } from '../yara-scanner';
+import { scan, scanSkillDirectory, RULES } from '@lib/yara-scanner';
+import type { ScanResult } from '@lib/yara-scanner';
 
 type MatchedScanResult = Extract<ScanResult, { matched: true }>;
 

@@ -1,16 +1,16 @@
 import { Box, Text } from 'ink';
 import { useEffect, useState, useSyncExternalStore } from 'react';
-import type { WizardStore } from '../../store.js';
-import { LoadingBox, PickerMenu } from '../../primitives/index.js';
-import { Colors, Icons } from '../../styles.js';
+import type { WizardStore } from '@ui/tui/store';
+import { LoadingBox, PickerMenu } from '@ui/tui/primitives/index';
+import { Colors, Icons } from '@ui/tui/styles';
 import {
   fetchHealthIssues,
   type HealthIssue,
-} from '../../../../lib/programs/posthog-doctor/index.js';
-import { getUiHostFromHost } from '../../../../utils/urls.js';
-import { OutroKind } from '../../../../lib/wizard-session.js';
-import { ApiError } from '../../../../lib/api.js';
-import { POSTHOG_DOCS_URL } from '../../../../lib/constants.js';
+} from '@lib/programs/posthog-doctor/index';
+import { getUiHostFromHost } from '@utils/urls';
+import { OutroKind } from '@lib/wizard-session';
+import { ApiError } from '@lib/api';
+import { POSTHOG_DOCS_URL } from '@lib/constants';
 import { IssueTable, SEVERITY_LABEL, SEVERITY_ORDER } from './IssueTable.js';
 
 interface DoctorReportScreenProps {

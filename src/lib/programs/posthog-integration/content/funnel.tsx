@@ -3,7 +3,7 @@
  */
 
 import { Text } from 'ink';
-import type { ContentBlock } from '../../../../ui/tui/primitives/content-types.js';
+import type { ContentBlock } from '@ui/tui/primitives/content-types';
 
 export const FUNNEL_BLOCK: ContentBlock = {
   type: 'lines',

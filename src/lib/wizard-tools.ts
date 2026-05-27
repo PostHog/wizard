@@ -13,9 +13,9 @@ import path from 'path';
 import fs from 'fs';
 import { execFileSync } from 'child_process';
 import { z } from 'zod';
-import { logToFile } from '../utils/debug';
-import { analytics } from '../utils/analytics';
-import { skillTmpPath } from '../utils/paths';
+import { logToFile } from '@utils/debug';
+import { analytics } from '@utils/analytics';
+import { skillTmpPath } from '@utils/paths';
 import type { PackageManagerDetector } from './detection/package-manager';
 import {
   AUDIT_CHECKS_FILE,

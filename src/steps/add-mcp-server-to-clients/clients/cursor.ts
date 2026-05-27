@@ -1,7 +1,13 @@
-import { DefaultMCPClient, MCPServerConfig } from '../MCPClient';
+import {
+  DefaultMCPClient,
+  MCPServerConfig,
+} from '@steps/add-mcp-server-to-clients/MCPClient';
 import * as path from 'path';
 import * as os from 'os';
-import { DefaultMCPClientConfig, getNativeHTTPServerConfig } from '../defaults';
+import {
+  DefaultMCPClientConfig,
+  getNativeHTTPServerConfig,
+} from '@steps/add-mcp-server-to-clients/defaults';
 import { z } from 'zod';
 
 export const CursorMCPConfig = DefaultMCPClientConfig;

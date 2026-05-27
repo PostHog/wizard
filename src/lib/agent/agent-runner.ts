@@ -19,10 +19,10 @@ import {
   type AdditionalFeature,
   type Credentials,
   OutroKind,
-} from '../wizard-session';
-import { getOrAskForProjectData } from '../../utils/setup-utils';
-import { analytics } from '../../utils/analytics';
-import { getUI } from '../../ui';
+} from '@lib/wizard-session';
+import { getOrAskForProjectData } from '@utils/setup-utils';
+import { analytics } from '@utils/analytics';
+import { getUI } from '@ui';
 import {
   initializeAgent,
   runAgent as executeAgent,
@@ -33,31 +33,27 @@ import {
   backupAndFixClaudeSettings,
   restoreClaudeSettings,
 } from './agent-interface';
-import { getCloudUrlFromRegion } from '../../utils/urls';
+import { getCloudUrlFromRegion } from '@utils/urls';
 import {
   evaluateWizardReadiness,
   WizardReadiness,
   SIGNUP_WIZARD_READINESS_CONFIG,
   getBlockingServiceKeys,
   SERVICE_LABELS,
-} from '../health-checks/readiness';
-import { enableDebugLogs, initLogFile, logToFile } from '../../utils/debug';
-import { createBenchmarkPipeline } from '../middleware/benchmark';
-import {
-  wizardAbort,
-  WizardError,
-  registerCleanup,
-} from '../../utils/wizard-abort';
-import { formatScanReport, writeScanReport } from '../yara-hooks';
-import { detectNodePackageManagers } from '../detection/package-manager';
-import type { PackageManagerDetector } from '../detection/package-manager';
-import { getSkillsBaseUrl } from '../constants';
+} from '@lib/health-checks/readiness';
+import { enableDebugLogs, initLogFile, logToFile } from '@utils/debug';
+import { createBenchmarkPipeline } from '@lib/middleware/benchmark';
+import { wizardAbort, WizardError, registerCleanup } from '@utils/wizard-abort';
+import { formatScanReport, writeScanReport } from '@lib/yara-hooks';
+import { detectNodePackageManagers } from '@lib/detection/package-manager';
+import type { PackageManagerDetector } from '@lib/detection/package-manager';
+import { getSkillsBaseUrl } from '@lib/constants';
 import { runtimeEnv } from '@env';
-import { installSkillById, type InstallSkillResult } from '../wizard-tools';
-import { createWizardAskBridge } from '../wizard-ask-bridge';
-import type { WizardOptions } from '../../utils/types';
+import { installSkillById, type InstallSkillResult } from '@lib/wizard-tools';
+import { createWizardAskBridge } from '@lib/wizard-ask-bridge';
+import type { WizardOptions } from '@utils/types';
 
-import type { ProgramConfig } from '../programs/program-step';
+import type { ProgramConfig } from '@lib/programs/program-step';
 import { assemblePrompt, type PromptContext } from './agent-prompt';
 
 export type { PromptContext };
@@ -110,7 +106,7 @@ export interface ProgramRun {
   buildOutroData?: (
     session: WizardSession,
     credentials: Credentials,
-    cloudRegion: import('../../utils/types').CloudRegion | undefined,
+    cloudRegion: import('@utils/types').CloudRegion | undefined,
   ) => WizardSession['outroData'];
   /**
    * Per-run cap on `wizard_ask` invocations. Defaults to 10. The 4th call

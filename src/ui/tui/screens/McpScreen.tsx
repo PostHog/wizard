@@ -14,18 +14,18 @@
 import { Box, Text, useInput } from 'ink';
 import { useState, useEffect } from 'react';
 import { useSyncExternalStore } from 'react';
-import { type WizardStore, McpOutcome } from '../store.js';
+import { type WizardStore, McpOutcome } from '@ui/tui/store';
 import {
   ConfirmationInput,
   PickerMenu,
   GroupedPickerMenu,
-} from '../primitives/index.js';
-import { Colors } from '../styles.js';
-import type { McpInstaller, McpClientInfo } from '../services/mcp-installer.js';
+} from '@ui/tui/primitives/index';
+import { Colors } from '@ui/tui/styles';
+import type { McpInstaller, McpClientInfo } from '@ui/tui/services/mcp-installer';
 import {
   AVAILABLE_FEATURES,
   ALL_FEATURE_VALUES,
-} from '../../../steps/add-mcp-server-to-clients/defaults.js';
+} from '@steps/add-mcp-server-to-clients/defaults';
 
 export type McpMode = 'install' | 'remove';
 

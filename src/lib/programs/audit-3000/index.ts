@@ -1,18 +1,21 @@
 import fs from 'fs';
 import path from 'path';
-import { AGENT_SKILL_STEPS, createSkillProgram } from '../agent-skill/index.js';
-import type { ProgramStep, ProgramConfig } from '../program-step.js';
-import type { ProgramRun } from '../../agent/agent-runner.js';
-import type { WizardSession } from '../../wizard-session.js';
-import { WIZARD_TOOL_NAMES } from '../../wizard-tools.js';
-import { AUDIT_ABORT_CASES } from '../audit/detect.js';
+import {
+  AGENT_SKILL_STEPS,
+  createSkillProgram,
+} from '@lib/programs/agent-skill/index';
+import type { ProgramStep, ProgramConfig } from '@lib/programs/program-step';
+import type { ProgramRun } from '@lib/agent/agent-runner';
+import type { WizardSession } from '@lib/wizard-session';
+import { WIZARD_TOOL_NAMES } from '@lib/wizard-tools';
+import { AUDIT_ABORT_CASES } from '@lib/programs/audit/detect';
 import {
   AUDIT_CHECKS_FILE,
   AUDIT_CHECKS_KEY,
   type AuditCheck,
-} from '../audit/types.js';
-import { AUDIT_SEED_CHECKS } from '../audit/seed.js';
-import { logToFile } from '../../../utils/debug';
+} from '@lib/programs/audit/types';
+import { AUDIT_SEED_CHECKS } from '@lib/programs/audit/seed';
+import { logToFile } from '@utils/debug';
 
 const AUDIT3000_REPORT_FILE = 'posthog-audit-3000-report.md';
 

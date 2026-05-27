@@ -11,12 +11,12 @@
 
 import { useEffect, useState } from 'react';
 import { Box, Text } from 'ink';
-import { LoadingBox, ModalOverlay } from '../../primitives/index.js';
-import { Icons } from '../../styles.js';
-import { ServiceHealthList } from '../../components/ServiceHealthList.js';
-import { getBlockingServiceKeys } from '../../../../lib/health-checks/readiness.js';
-import { ServiceHealthStatus } from '../../../../lib/health-checks/types.js';
-import type { AllServicesHealth } from '../../../../lib/health-checks/types.js';
+import { LoadingBox, ModalOverlay } from '@ui/tui/primitives/index';
+import { Icons } from '@ui/tui/styles';
+import { ServiceHealthList } from '@ui/tui/components/ServiceHealthList';
+import { getBlockingServiceKeys } from '@lib/health-checks/readiness';
+import { ServiceHealthStatus } from '@lib/health-checks/types';
+import type { AllServicesHealth } from '@lib/health-checks/types';
 
 const HEALTHY = { status: ServiceHealthStatus.Healthy } as const;
 

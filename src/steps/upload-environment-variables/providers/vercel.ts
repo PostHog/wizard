@@ -1,9 +1,9 @@
 import { execSync, spawn, spawnSync } from 'child_process';
-import { EnvironmentProvider } from '../EnvironmentProvider';
+import { EnvironmentProvider } from '@steps/upload-environment-variables/EnvironmentProvider';
 import * as fs from 'fs';
 import * as path from 'path';
-import { getUI } from '../../../ui';
-import { analytics } from '../../../utils/analytics';
+import { getUI } from '@ui';
+import { analytics } from '@utils/analytics';
 
 export class VercelEnvironmentProvider extends EnvironmentProvider {
   name = 'Vercel';

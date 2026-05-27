@@ -16,14 +16,14 @@
  */
 
 import { Text } from 'ink';
-import type { WizardStore } from '../../../../ui/tui/store.js';
-import { Colors } from '../../../../ui/tui/styles.js';
-import { TextRevealMode } from '../../../../ui/tui/primitives/TextBlock.js';
-import type { ContentBlock } from '../../../../ui/tui/primitives/content-types.js';
-import { StatusPeekTrigger } from '../../../../ui/tui/components/StatusPeekTrigger.js';
-import { PRODUCT_SUITE_BLOCK } from '../../posthog-integration/content/product-suite.js';
-import { LINE_CHART_BLOCK } from '../../posthog-integration/content/line-chart.js';
-import { FUNNEL_BLOCK } from '../../posthog-integration/content/funnel.js';
+import type { WizardStore } from '@ui/tui/store';
+import { Colors } from '@ui/tui/styles';
+import { TextRevealMode } from '@ui/tui/primitives/TextBlock';
+import type { ContentBlock } from '@ui/tui/primitives/content-types';
+import { StatusPeekTrigger } from '@ui/tui/components/StatusPeekTrigger';
+import { PRODUCT_SUITE_BLOCK } from '@lib/programs/posthog-integration/content/product-suite';
+import { LINE_CHART_BLOCK } from '@lib/programs/posthog-integration/content/line-chart';
+import { FUNNEL_BLOCK } from '@lib/programs/posthog-integration/content/funnel';
 import { VENDOR_STACK_BLOCK } from './vendor-stack.js';
 import { FREE_TIER_BLOCK } from './free-tier.js';
 import { PRICING_STRUCTURE_BLOCK } from './pricing-structure.js';

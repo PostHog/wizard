@@ -4,10 +4,10 @@
  * arcade-flavoured slides for the three new areas the v3000 audit covers.
  */
 
-import type { AreaSlide } from '../../audit/slides/shared.js';
-import { InstallationSlide } from '../../audit/slides/installation.js';
-import { IdentificationSlide } from '../../audit/slides/identification.js';
-import { EventCaptureSlide } from '../../audit/slides/eventCapture.js';
+import type { AreaSlide } from '@ui/tui/screens/audit/slides/shared';
+import { InstallationSlide } from '@ui/tui/screens/audit/slides/installation';
+import { IdentificationSlide } from '@ui/tui/screens/audit/slides/identification';
+import { EventCaptureSlide } from '@ui/tui/screens/audit/slides/eventCapture';
 import { EventQualitySlide } from './eventQuality.js';
 import { FeatureFlagsSlide } from './featureFlags.js';
 import { ExpansionSlide } from './expansion.js';

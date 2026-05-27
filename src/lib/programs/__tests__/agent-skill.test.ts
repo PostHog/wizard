@@ -2,9 +2,9 @@ import {
   createSkillProgram,
   AGENT_SKILL_STEPS,
   type SkillProgramOptions,
-} from '../agent-skill/index.js';
-import type { ProgramRun } from '../../agent/agent-runner.js';
-import { buildSession, RunPhase } from '../../wizard-session.js';
+} from '@lib/programs/agent-skill/index';
+import type { ProgramRun } from '@lib/agent/agent-runner';
+import { buildSession, RunPhase } from '@lib/wizard-session';
 
 const baseOpts: SkillProgramOptions = {
   skillId: 'error-tracking-setup',

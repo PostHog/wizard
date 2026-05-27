@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { provisionNewAccount } from '../provisioning';
+import { provisionNewAccount } from '@utils/provisioning';
 
 jest.mock('axios');
 jest.mock('../debug', () => ({ logToFile: jest.fn() }));

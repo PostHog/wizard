@@ -8,9 +8,9 @@
 
 import { Box, Text, useInput } from 'ink';
 import { useSyncExternalStore } from 'react';
-import type { WizardStore } from '../store.js';
-import { OutroKind } from '../../../lib/wizard-session.js';
-import { Colors } from '../styles.js';
+import type { WizardStore } from '@ui/tui/store';
+import { OutroKind } from '@lib/wizard-session';
+import { Colors } from '@ui/tui/styles';
 
 interface OutroScreenProps {
   store: WizardStore;

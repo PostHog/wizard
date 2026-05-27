@@ -5,7 +5,7 @@ import {
   deduplicateAndSort,
   KeyMatch,
   type KeyboardHint,
-} from '../hooks/keyboard-hints-utils.js';
+} from '@ui/tui/hooks/keyboard-hints-utils';
 
 /** Helper to create a key flags object with all booleans false by default. */
 function makeKey(

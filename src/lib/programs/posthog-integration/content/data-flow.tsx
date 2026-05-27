@@ -3,8 +3,8 @@
  */
 
 import { Text } from 'ink';
-import { Colors } from '../../../../ui/tui/styles.js';
-import type { ContentBlock } from '../../../../ui/tui/primitives/content-types.js';
+import { Colors } from '@ui/tui/styles';
+import type { ContentBlock } from '@ui/tui/primitives/content-types';
 
 export const POSTHOG_DATA_FLOW: ContentBlock = {
   type: 'lines',

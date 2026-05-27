@@ -1,9 +1,9 @@
 import {
   CANCELLED_SENTINEL,
   createWizardAskBridge,
-} from '../wizard-ask-bridge';
-import { analytics } from '../../utils/analytics';
-import type { AskAnswers, PendingQuestion } from '../wizard-session';
+} from '@lib/wizard-ask-bridge';
+import { analytics } from '@utils/analytics';
+import type { AskAnswers, PendingQuestion } from '@lib/wizard-session';
 
 jest.mock('../../utils/analytics', () => ({
   analytics: {

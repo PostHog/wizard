@@ -6,10 +6,14 @@
  */
 
 import fs from 'fs';
-import { getUI } from '../../../ui';
-import { logToFile } from '../../../utils/debug';
-import { AgentSignals } from '../../agent/agent-interface';
-import type { Middleware, MiddlewareContext, MiddlewareStore } from '../types';
+import { getUI } from '@ui';
+import { logToFile } from '@utils/debug';
+import { AgentSignals } from '@lib/agent/agent-interface';
+import type {
+  Middleware,
+  MiddlewareContext,
+  MiddlewareStore,
+} from '@lib/middleware/types';
 import type { TokenData } from './token-tracker';
 import type { CacheData } from './cache-tracker';
 import type { TurnData } from './turn-counter';
@@ -17,7 +21,7 @@ import type { CostData } from './cost-tracker';
 import type { DurationData } from './duration-tracker';
 import type { CompactionData } from './compaction-tracker';
 import type { ContextSizeData } from './context-size-tracker';
-import type { BenchmarkData, StepUsage } from '../benchmark';
+import type { BenchmarkData, StepUsage } from '@lib/middleware/benchmark';
 
 /**
  * Sum token usage across all models from the SDK's modelUsage field.

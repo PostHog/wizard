@@ -8,15 +8,15 @@
  *     logic) instead of the integration intro.
  */
 
-import type { ProgramStep } from '../program-step.js';
-import type { WizardSession } from '../../wizard-session.js';
-import { RunPhase } from '../../wizard-session.js';
+import type { ProgramStep } from '@lib/programs/program-step';
+import type { WizardSession } from '@lib/wizard-session';
+import { RunPhase } from '@lib/wizard-session';
 import {
   evaluateWizardReadiness,
   WizardReadiness,
   SIGNUP_WIZARD_READINESS_CONFIG,
   getBlockingServiceKeys,
-} from '../../health-checks/readiness.js';
+} from '@lib/health-checks/readiness';
 
 function needsSetup(session: WizardSession): boolean {
   const config = session.frameworkConfig;

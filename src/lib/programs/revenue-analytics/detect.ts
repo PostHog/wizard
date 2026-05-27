@@ -8,9 +8,9 @@
 import type { Dirent } from 'fs';
 import { readFileSync, readdirSync, existsSync, statSync } from 'fs';
 import { join, relative } from 'path';
-import { IGNORED_DIRS } from '../../../utils/file-utils.js';
-import type { WizardSession } from '../../wizard-session.js';
-import type { AbortCase } from '../../agent/agent-runner.js';
+import { IGNORED_DIRS } from '@utils/file-utils';
+import type { WizardSession } from '@lib/wizard-session';
+import type { AbortCase } from '@lib/agent/agent-runner';
 
 export const POSTHOG_SDKS = [
   'posthog-js',

@@ -1,8 +1,8 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import { detectRevenuePrerequisites } from '../revenue-analytics/index.js';
-import { buildSession } from '../../wizard-session.js';
+import { detectRevenuePrerequisites } from '@lib/programs/revenue-analytics/index';
+import { buildSession } from '@lib/wizard-session';
 
 function makeTmpDir(): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'rev-detect-'));

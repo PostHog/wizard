@@ -1,4 +1,4 @@
-import type { ProgramStep } from '../program-step.js';
+import type { ProgramStep } from '@lib/programs/program-step';
 
 export const POSTHOG_DOCTOR_PROGRAM: ProgramStep[] = [
   {

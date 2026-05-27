@@ -12,16 +12,16 @@ import { Box, Text } from 'ink';
 import { spawnSync } from 'node:child_process';
 import type { ReactNode } from 'react';
 import { useEffect, useState, useSyncExternalStore } from 'react';
-import type { WizardStore } from '../store.js';
+import type { WizardStore } from '@ui/tui/store';
 import {
   Integration,
   WIZARD_TOOLS_MENU_FLAG_KEY,
-} from '../../../lib/constants.js';
-import { PickerMenu, LoadingBox } from '../primitives/index.js';
+} from '@lib/constants';
+import { PickerMenu, LoadingBox } from '@ui/tui/primitives/index';
 import { IntroScreenLayout, type DetectionRow } from './IntroScreenLayout.js';
 import { SkillSourceInfo, useSkillEntry } from './SkillSourceInfo.js';
-import { releaseTerminal } from '../start-tui.js';
-import { analytics } from '../../../utils/analytics.js';
+import { releaseTerminal } from '@ui/tui/start-tui';
+import { analytics } from '@utils/analytics';
 
 const TOOLS = [
   { label: 'Troubleshoot Integration', command: 'doctor' },
@@ -60,7 +60,7 @@ const FrameworkPicker = ({
       options={options}
       onSelect={(value) => {
         const integration = Array.isArray(value) ? value[0] : value;
-        void import('../../../lib/registry.js').then(
+        void import('@lib/registry').then(
           ({ FRAMEWORK_REGISTRY }) => {
             const config = FRAMEWORK_REGISTRY[integration];
             store.setFrameworkConfig(integration, config);

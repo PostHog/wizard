@@ -10,17 +10,17 @@ import {
   type SpinnerHandle,
   type AuthErrorDetail,
 } from './wizard-ui';
-import type { SettingsConflict } from '../lib/agent/agent-interface';
+import type { SettingsConflict } from '@lib/agent/agent-interface';
 import {
   type WizardReadinessResult,
   getBlockingServiceKeys,
   SERVICE_LABELS,
-} from '../lib/health-checks/readiness.js';
+} from '@lib/health-checks/readiness';
 import type {
   AskAnswers,
   OutroData,
   PendingQuestion,
-} from '../lib/wizard-session';
+} from '@lib/wizard-session';
 
 export class LoggingUI implements WizardUI {
   intro(message: string): void {

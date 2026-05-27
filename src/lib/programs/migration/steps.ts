@@ -1,5 +1,5 @@
-import type { ProgramStep } from '../program-step.js';
-import { RunPhase } from '../../wizard-session.js';
+import type { ProgramStep } from '@lib/programs/program-step';
+import { RunPhase } from '@lib/wizard-session';
 
 export const MIGRATION_PROGRAM: ProgramStep[] = [
   {

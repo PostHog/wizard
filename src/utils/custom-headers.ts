@@ -1,4 +1,4 @@
-import { POSTHOG_FLAG_HEADER_PREFIX } from '../lib/constants';
+import { POSTHOG_FLAG_HEADER_PREFIX } from '@lib/constants';
 
 /**
  * Builds a list of custom headers for ANTHROPIC_CUSTOM_HEADERS.

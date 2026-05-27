@@ -1,6 +1,6 @@
 import fg from 'fast-glob';
-import { logToFile } from '../utils/debug';
-import { tryGetPackageJson } from '../utils/setup-utils';
+import { logToFile } from '@utils/debug';
+import { tryGetPackageJson } from '@utils/setup-utils';
 
 const CLOUDFLARE_PACKAGES = [
   '@react-router/cloudflare',

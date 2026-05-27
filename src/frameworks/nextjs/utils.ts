@@ -1,6 +1,6 @@
 import fg from 'fast-glob';
-import type { WizardOptions } from '../../utils/types';
-import { createVersionBucket } from '../../utils/semver';
+import type { WizardOptions } from '@utils/types';
+import { createVersionBucket } from '@utils/semver';
 
 export const getNextJsVersionBucket = createVersionBucket();
 

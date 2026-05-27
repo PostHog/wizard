@@ -7,7 +7,7 @@
  * every other program (no special-cases in screen-sequences.ts).
  */
 
-import type { ProgramConfig } from '../program-step.js';
+import type { ProgramConfig } from '@lib/programs/program-step';
 
 export const mcpAddConfig: ProgramConfig = {
   id: 'mcp-add',

@@ -2,7 +2,7 @@ import {
   PROGRAM_REGISTRY,
   getProgramConfig,
   getSubcommandPrograms,
-} from '../program-registry.js';
+} from '@lib/programs/program-registry';
 
 describe('PROGRAM_REGISTRY', () => {
   it('every entry has unique id, description, and non-empty steps', () => {

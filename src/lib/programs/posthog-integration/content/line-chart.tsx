@@ -3,7 +3,7 @@
  */
 
 import { Text } from 'ink';
-import type { ContentBlock } from '../../../../ui/tui/primitives/content-types.js';
+import type { ContentBlock } from '@ui/tui/primitives/content-types';
 
 export const LINE_CHART_BLOCK: ContentBlock = {
   type: 'lines',

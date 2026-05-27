@@ -1,6 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import { logToFile } from '../../../utils/debug';
+import { logToFile } from '@utils/debug';
 import { AUDIT_CHECKS_FILE, type AuditCheck } from './types.js';
 
 /** The 10 data-integrity checks the audit runs. */

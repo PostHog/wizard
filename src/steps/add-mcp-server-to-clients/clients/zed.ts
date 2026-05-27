@@ -1,8 +1,11 @@
 import z from 'zod';
 import * as path from 'path';
 import * as os from 'os';
-import { DefaultMCPClient, MCPServerConfig } from '../MCPClient';
-import { getNativeHTTPServerConfig } from '../defaults';
+import {
+  DefaultMCPClient,
+  MCPServerConfig,
+} from '@steps/add-mcp-server-to-clients/MCPClient';
+import { getNativeHTTPServerConfig } from '@steps/add-mcp-server-to-clients/defaults';
 import { runtimeEnv } from '@env';
 
 export const ZedMCPConfig = z

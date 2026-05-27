@@ -1,4 +1,4 @@
-import { getWizardCommandments } from '../commandments';
+import { getWizardCommandments } from '@lib/agent/commandments';
 
 describe('getWizardCommandments', () => {
   // The commandment text is load-bearing — the agent reads these rules as

@@ -1,24 +1,21 @@
 import opn from 'opn';
-import type { ProgramConfig } from '../program-step.js';
-import type { ProgramRun } from '../../agent/agent-runner.js';
-import { WIZARD_TOOL_NAMES } from '../../wizard-tools.js';
-import type { WizardSession } from '../../wizard-session.js';
-import { OutroKind } from '../../wizard-session.js';
-import { AgentSignals } from '../../agent/agent-interface.js';
+import type { ProgramConfig } from '@lib/programs/program-step';
+import type { ProgramRun } from '@lib/agent/agent-runner';
+import { WIZARD_TOOL_NAMES } from '@lib/wizard-tools';
+import type { WizardSession } from '@lib/wizard-session';
+import { OutroKind } from '@lib/wizard-session';
+import { AgentSignals } from '@lib/agent/agent-interface';
 import {
   DEFAULT_PACKAGE_INSTALLATION,
   SPINNER_MESSAGE,
-} from '../../framework-config.js';
-import {
-  tryGetPackageJson,
-  isUsingTypeScript,
-} from '../../../utils/setup-utils.js';
-import { analytics } from '../../../utils/analytics.js';
-import { WIZARD_INTERACTION_EVENT_NAME } from '../../constants.js';
-import { getUI } from '../../../ui/index.js';
-import { getCloudUrlFromRegion } from '../../../utils/urls.js';
-import { requestDeepLink } from '../../../utils/provisioning.js';
-import type { CloudRegion } from '../../../utils/types.js';
+} from '@lib/framework-config';
+import { tryGetPackageJson, isUsingTypeScript } from '@utils/setup-utils';
+import { analytics } from '@utils/analytics';
+import { WIZARD_INTERACTION_EVENT_NAME } from '@lib/constants';
+import { getUI } from '@ui/index';
+import { getCloudUrlFromRegion } from '@utils/urls';
+import { requestDeepLink } from '@utils/provisioning';
+import type { CloudRegion } from '@utils/types';
 import { POSTHOG_INTEGRATION_PROGRAM } from './steps.js';
 import { getContentBlocks } from './content/index.js';
 
@@ -68,9 +65,7 @@ export const posthogIntegrationConfig: ProgramConfig = {
         installDir: session.installDir,
       });
       if (packageJson) {
-        const { hasPackageInstalled } = await import(
-          '../../../utils/package-json.js'
-        );
+        const { hasPackageInstalled } = await import('@utils/package-json');
         if (!hasPackageInstalled(config.detection.packageName, packageJson)) {
           getUI().log.warn(
             `${config.detection.packageDisplayName} does not seem to be installed. Continuing anyway — the agent will handle it.`,
@@ -172,7 +167,7 @@ Important: Use the detect_package_manager tool (from the wizard-tools MCP server
         );
         if (config.environment.uploadToHosting) {
           const { uploadEnvironmentVariablesStep } = await import(
-            '../../../steps/index.js'
+            '@steps/index'
           );
           const uploadedEnvVars = await uploadEnvironmentVariablesStep(
             envVars,

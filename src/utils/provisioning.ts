@@ -16,7 +16,7 @@ import {
   POSTHOG_US_CLIENT_ID,
   WIZARD_PROVISIONING_SCOPES,
   WIZARD_USER_AGENT,
-} from '../lib/constants';
+} from '@lib/constants';
 import { logToFile } from './debug';
 import { analytics } from './analytics';
 

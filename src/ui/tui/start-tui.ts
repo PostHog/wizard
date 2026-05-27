@@ -10,9 +10,9 @@ import { render } from 'ink';
 import { createElement } from 'react';
 import { WizardStore, Program, type ProgramId } from './store.js';
 import { InkUI } from './ink-ui.js';
-import { setUI } from '../index.js';
+import { setUI } from '@ui/index';
 import { App } from './App.js';
-import { OutroKind } from '../../lib/wizard-session.js';
+import { OutroKind } from '@lib/wizard-session';
 
 // ANSI escape sequences
 const RESET_ATTRS = '\x1b[0m';

@@ -1,8 +1,8 @@
 import {
   estimateBlockHeight,
   computeVisibleRange,
-} from '../primitives/layout-helpers.js';
-import type { ContentBlock } from '../primitives/content-types.js';
+} from '@ui/tui/primitives/layout-helpers';
+import type { ContentBlock } from '@ui/tui/primitives/content-types';
 
 describe('estimateBlockHeight', () => {
   it('counts wrapped lines for a short string that fits in one line', () => {

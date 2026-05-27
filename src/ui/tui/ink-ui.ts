@@ -6,16 +6,16 @@
  * The router derives the active screen from session state.
  */
 
-import type { WizardUI, SpinnerHandle, AuthErrorDetail } from '../wizard-ui.js';
+import type { WizardUI, SpinnerHandle, AuthErrorDetail } from '@ui/wizard-ui';
 import type { WizardStore } from './store.js';
-import type { SettingsConflict } from '../../lib/agent/agent-interface.js';
-import type { WizardReadinessResult } from '../../lib/health-checks/readiness.js';
+import type { SettingsConflict } from '@lib/agent/agent-interface';
+import type { WizardReadinessResult } from '@lib/health-checks/readiness';
 import type {
   AskAnswers,
   OutroData,
   PendingQuestion,
-} from '../../lib/wizard-session.js';
-import { RunPhase, OutroKind } from '../../lib/wizard-session.js';
+} from '@lib/wizard-session';
+import { RunPhase, OutroKind } from '@lib/wizard-session';
 
 // Strip ANSI escape codes (chalk formatting) from strings
 // eslint-disable-next-line no-control-regex

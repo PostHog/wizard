@@ -1,16 +1,16 @@
 import { useState, useSyncExternalStore } from 'react';
 import { join } from 'node:path';
 import { Box } from 'ink';
-import type { WizardStore } from '../../store.js';
+import type { WizardStore } from '@ui/tui/store';
 import {
   TabContainer,
   SplitView,
   LogViewer,
   HNViewer,
-} from '../../primitives/index.js';
-import { useStdoutDimensions } from '../../hooks/useStdoutDimensions.js';
-import { useFileWatcher } from '../../hooks/file-watcher.js';
-import { AuditChecksViewer } from '../audit/AuditChecksViewer/AuditChecksViewer.js';
+} from '@ui/tui/primitives/index';
+import { useStdoutDimensions } from '@ui/tui/hooks/useStdoutDimensions';
+import { useFileWatcher } from '@ui/tui/hooks/file-watcher';
+import { AuditChecksViewer } from '@ui/tui/screens/audit/AuditChecksViewer/AuditChecksViewer';
 import { Audit3000AreaPane } from './Audit3000AreaPane.js';
 import { Audit3000ChecksPanel } from './Audit3000ChecksPanel.js';
 import { HedgehogRunner } from './HedgehogRunner.js';
@@ -20,9 +20,9 @@ import {
   AUDIT_CHECKS_KEY,
   coerceAuditChecks,
   getAuditChecks,
-} from '../../../../lib/programs/audit/types.js';
-import { getProgramConfig } from '../../../../lib/programs/program-registry.js';
-import { WIZARD_LOG_FILE } from '../../../../utils/paths.js';
+} from '@lib/programs/audit/types';
+import { getProgramConfig } from '@lib/programs/program-registry';
+import { WIZARD_LOG_FILE } from '@utils/paths';
 
 const AUDIT_3000_REPORT_FILE_FALLBACK = 'posthog-audit-3000-report.md';
 

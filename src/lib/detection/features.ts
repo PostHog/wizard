@@ -8,7 +8,7 @@
 
 import { readFileSync } from 'fs';
 import { join } from 'path';
-import { DiscoveredFeature } from '../wizard-session.js';
+import { DiscoveredFeature } from '@lib/wizard-session';
 
 const STRIPE_PACKAGES = ['stripe', '@stripe/stripe-js'];
 

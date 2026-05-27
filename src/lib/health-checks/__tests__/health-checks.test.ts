@@ -33,7 +33,7 @@ import {
   evaluateWizardReadiness,
   ServiceHealthStatus,
   WizardReadiness,
-} from '../index';
+} from '@lib/health-checks/index';
 
 // ---------------------------------------------------------------------------
 // Real-world Statuspage.io v2 response factories

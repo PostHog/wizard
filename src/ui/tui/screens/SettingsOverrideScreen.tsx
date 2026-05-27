@@ -1,9 +1,9 @@
 import { Box, Text } from 'ink';
 import { useState, useSyncExternalStore } from 'react';
-import type { WizardStore } from '../store.js';
-import { ConfirmationInput, ModalOverlay } from '../primitives/index.js';
-import { Icons } from '../styles.js';
-import type { SettingsConflictSource } from '../../../lib/agent/agent-interface.js';
+import type { WizardStore } from '@ui/tui/store';
+import { ConfirmationInput, ModalOverlay } from '@ui/tui/primitives/index';
+import { Icons } from '@ui/tui/styles';
+import type { SettingsConflictSource } from '@lib/agent/agent-interface';
 
 function sourcePath(source: SettingsConflictSource): string {
   switch (source) {

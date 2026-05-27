@@ -1,8 +1,8 @@
-import type { Integration } from '../lib/constants';
+import type { Integration } from '@lib/constants';
 import { withProgress } from '../telemetry';
-import { analytics } from '../utils/analytics';
-import { getUI } from '../ui';
-import { getDotGitignore } from '../utils/file-utils';
+import { analytics } from '@utils/analytics';
+import { getUI } from '@ui';
+import { getDotGitignore } from '@utils/file-utils';
 import * as fs from 'fs';
 import path from 'path';
 

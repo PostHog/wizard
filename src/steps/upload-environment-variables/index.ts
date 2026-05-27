@@ -1,8 +1,8 @@
-import type { Integration } from '../../lib/constants';
+import type { Integration } from '@lib/constants';
 import { withProgress } from '../../telemetry';
-import { analytics } from '../../utils/analytics';
-import { getUI } from '../../ui';
-import type { WizardSession } from '../../lib/wizard-session';
+import { analytics } from '@utils/analytics';
+import { getUI } from '@ui';
+import type { WizardSession } from '@lib/wizard-session';
 import { EnvironmentProvider } from './EnvironmentProvider';
 import { VercelEnvironmentProvider } from './providers/vercel';
 

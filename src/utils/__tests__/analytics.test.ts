@@ -1,7 +1,7 @@
-import { Analytics } from '../analytics';
+import { Analytics } from '@utils/analytics';
 import { PostHog } from 'posthog-node';
 import { v4 as uuidv4 } from 'uuid';
-import { ANALYTICS_TEAM_TAG } from '../../lib/constants';
+import { ANALYTICS_TEAM_TAG } from '@lib/constants';
 
 jest.mock('posthog-node');
 jest.mock('uuid');

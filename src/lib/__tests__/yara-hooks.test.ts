@@ -1,7 +1,7 @@
 import {
   createPreToolUseYaraHooks,
   createPostToolUseYaraHooks,
-} from '../yara-hooks';
+} from '@lib/yara-hooks';
 
 // Mock dependencies
 jest.mock('../../utils/debug');

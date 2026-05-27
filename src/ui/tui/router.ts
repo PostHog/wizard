@@ -12,11 +12,8 @@
  * No switch statements, no hardcoded transitions in business logic.
  */
 
-import type { WizardSession } from '../../lib/wizard-session.js';
-import {
-  Program,
-  type ProgramId,
-} from '../../lib/programs/program-registry.js';
+import type { WizardSession } from '@lib/wizard-session';
+import { Program, type ProgramId } from '@lib/programs/program-registry';
 import {
   PROGRAM_SEQUENCES,
   ScreenId,

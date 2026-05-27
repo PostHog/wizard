@@ -1,5 +1,5 @@
-import { assemblePrompt, type PromptContext } from '../agent-prompt.js';
-import type { ProgramRun } from '../agent-runner.js';
+import { assemblePrompt, type PromptContext } from '@lib/agent/agent-prompt';
+import type { ProgramRun } from '@lib/agent/agent-runner';
 
 function makeRunDef(overrides: Partial<ProgramRun> = {}): ProgramRun {
   return {

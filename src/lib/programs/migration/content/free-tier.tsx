@@ -4,8 +4,8 @@
  */
 
 import { Text } from 'ink';
-import { Colors } from '../../../../ui/tui/styles.js';
-import type { ContentBlock } from '../../../../ui/tui/primitives/content-types.js';
+import { Colors } from '@ui/tui/styles';
+import type { ContentBlock } from '@ui/tui/primitives/content-types';
 
 export const FREE_TIER_BLOCK: ContentBlock = {
   type: 'lines',

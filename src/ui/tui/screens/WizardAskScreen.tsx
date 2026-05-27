@@ -9,10 +9,10 @@
 import { Box, Text } from 'ink';
 import { TextInput } from '@inkjs/ui';
 import { useState, useSyncExternalStore } from 'react';
-import type { WizardStore } from '../store.js';
-import { ModalOverlay, PickerMenu } from '../primitives/index.js';
-import { Colors, Icons } from '../styles.js';
-import type { AskAnswers, AskQuestion } from '../../../lib/wizard-session.js';
+import type { WizardStore } from '@ui/tui/store';
+import { ModalOverlay, PickerMenu } from '@ui/tui/primitives/index';
+import { Colors, Icons } from '@ui/tui/styles';
+import type { AskAnswers, AskQuestion } from '@lib/wizard-session';
 
 interface WizardAskScreenProps {
   store: WizardStore;

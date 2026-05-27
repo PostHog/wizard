@@ -7,7 +7,7 @@ const readEnv =
 import { tryGetPackageJson } from './setup-utils';
 import type { WizardOptions } from './types';
 import fg from 'fast-glob';
-import { IS_DEV } from '../lib/constants';
+import { IS_DEV } from '@lib/constants';
 
 export function isNonInteractiveEnvironment(): boolean {
   if (IS_DEV) {

@@ -13,9 +13,9 @@ import { Spinner } from '@inkjs/ui';
 import {
   type AuditCheck,
   type AuditStatus,
-} from '../../../../lib/programs/audit/types.js';
-import { Colors, Icons } from '../../styles.js';
-import { LoadingBox } from '../../primitives/index.js';
+} from '@lib/programs/audit/types';
+import { Colors, Icons } from '@ui/tui/styles';
+import { LoadingBox } from '@ui/tui/primitives/index';
 
 const NEON_PINK = '#F54E00';
 const NEON_GOLD = '#F9BD2B';

@@ -9,13 +9,13 @@
 
 import { Box, Text } from 'ink';
 import { useState } from 'react';
-import { Icons, Colors } from '../styles.js';
+import { Icons, Colors } from '@ui/tui/styles';
 import { PromptLabel } from './PromptLabel.js';
 import {
   useKeyBindings,
   KeyMatch,
   type KeyBinding,
-} from '../hooks/useKeyBindings.js';
+} from '@ui/tui/hooks/useKeyBindings';
 
 interface PickerOption<T> {
   label: string;

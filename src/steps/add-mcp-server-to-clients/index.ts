@@ -1,8 +1,8 @@
-import type { Integration } from '../../lib/constants';
-import type { CloudRegion } from '../../utils/types';
+import type { Integration } from '@lib/constants';
+import type { CloudRegion } from '@utils/types';
 import { withProgress } from '../../telemetry';
-import { analytics } from '../../utils/analytics';
-import { getUI } from '../../ui';
+import { analytics } from '@utils/analytics';
+import { getUI } from '@ui';
 import { MCPClient } from './MCPClient';
 import { CursorMCPClient } from './clients/cursor';
 import { ClaudeCodeMCPClient } from './clients/claude-code';
@@ -10,7 +10,7 @@ import { VisualStudioCodeClient } from './clients/visual-studio-code';
 import { ZedClient } from './clients/zed';
 import { CodexMCPClient } from './clients/codex';
 import { ALL_FEATURE_VALUES } from './defaults';
-import { debug } from '../../utils/debug';
+import { debug } from '@utils/debug';
 import { isPluginCapable, PluginCapable } from './plugin-client';
 
 export const getSupportedClients = async (): Promise<MCPClient[]> => {

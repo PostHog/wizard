@@ -1,8 +1,8 @@
-import { createVersionBucket } from '../../utils/semver';
-import { tryGetPackageJson } from '../../utils/setup-utils';
-import { hasPackageInstalled } from '../../utils/package-json';
-import { getUI } from '../../ui';
-import type { WizardOptions } from '../../utils/types';
+import { createVersionBucket } from '@utils/semver';
+import { tryGetPackageJson } from '@utils/setup-utils';
+import { hasPackageInstalled } from '@utils/package-json';
+import { getUI } from '@ui';
+import type { WizardOptions } from '@utils/types';
 
 export const getReactNativeVersionBucket = createVersionBucket();
 

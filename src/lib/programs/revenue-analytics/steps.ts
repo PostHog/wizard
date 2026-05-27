@@ -5,8 +5,8 @@
  * and agent run live in the program runner (see agent-runner.ts).
  */
 
-import type { ProgramStep } from '../program-step.js';
-import { RunPhase } from '../../wizard-session.js';
+import type { ProgramStep } from '@lib/programs/program-step';
+import { RunPhase } from '@lib/wizard-session';
 import { detectRevenuePrerequisites } from './detect.js';
 
 export const REVENUE_ANALYTICS_PROGRAM: ProgramStep[] = [

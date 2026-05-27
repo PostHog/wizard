@@ -1,6 +1,9 @@
-import { gatherFrameworkContext, checkFrameworkVersion } from '../context.js';
-import type { FrameworkConfig } from '../../framework-config.js';
-import type { WizardOptions } from '../../../utils/types.js';
+import {
+  gatherFrameworkContext,
+  checkFrameworkVersion,
+} from '@lib/detection/context';
+import type { FrameworkConfig } from '@lib/framework-config';
+import type { WizardOptions } from '@utils/types';
 
 const baseOptions: WizardOptions = {
   installDir: '/test/dir',
