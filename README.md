@@ -368,3 +368,6 @@ The script will:
 - Install dependencies for the app
 - Install the packed wizard tarball into an isolated temp project
 - Run `wizard` in `--ci` mode against the copied app and perform basic post‑install checks
+
+
+Can I sign?
