@@ -282,6 +282,7 @@ export async function performOAuthFlow(
       authUrl.searchParams.set('code_challenge_method', 'S256');
       authUrl.searchParams.set('scope', config.scopes.join(' '));
       authUrl.searchParams.set('required_access_level', 'project');
+      authUrl.searchParams.set('approval_prompt', 'force');
 
       const signupUrl = new URL(
         `${POSTHOG_OAUTH_URL}/signup?next=${encodeURIComponent(
