@@ -57,6 +57,26 @@ jest.mock('../lib/agent/agent-runner', () => ({
   runAgent: jest.fn().mockResolvedValue(undefined),
 }));
 
+import { provisionCommand } from '../commands/provision';
+import { parseCommand } from './helpers/parse-command.no-jest';
+
+describe('provision parsing (end-to-end yargs)', () => {
+  test('parses --email and --region', async () => {
+    const argv = await parseCommand(
+      provisionCommand,
+      'provision --email a@b.com --region eu',
+    );
+    expect(argv.email).toBe('a@b.com');
+    expect(argv.region).toBe('eu');
+  });
+
+  test('rejects when --email is missing (demandOption)', async () => {
+    await expect(
+      parseCommand(provisionCommand, 'provision --region us'),
+    ).rejects.toThrow(/email/i);
+  });
+});
+
 describe('wizard provision subcommand', () => {
   const originalArgv = process.argv;
   // eslint-disable-next-line @typescript-eslint/unbound-method

@@ -11,6 +11,9 @@ import {
 } from '@lib/framework-config';
 import { tryGetPackageJson, isUsingTypeScript } from '@utils/setup-utils';
 import { analytics } from '@utils/analytics';
+import { detectFramework, gatherFrameworkContext } from '@lib/detection/index';
+import { FRAMEWORK_REGISTRY } from '@lib/registry';
+import { wizardAbort } from '@utils/wizard-abort';
 import { WIZARD_INTERACTION_EVENT_NAME } from '@lib/constants';
 import { getUI } from '@ui/index';
 import { getCloudUrlFromRegion } from '@utils/urls';
@@ -47,6 +50,45 @@ export const posthogIntegrationConfig: ProgramConfig = {
   // list to the general-purpose subagent as well, so dispatched subagents
   // can't reach around the parent and ask either.
   disallowedTools: [WIZARD_TOOL_NAMES.wizardAsk],
+
+  // CI-mode prerequisite work: the headless equivalent of the detect step's
+  // onReady hook. Honor --integration, else auto-detect, then gather context.
+  ciPreRun: async (session: WizardSession): Promise<void> => {
+    const integration =
+      session.integration ?? (await detectFramework(session.installDir));
+    if (!integration) {
+      await wizardAbort({
+        message:
+          'Could not auto-detect your framework. Please specify --integration on the command line.',
+      });
+      return;
+    }
+    session.integration = integration;
+    analytics.setTag('integration', integration);
+
+    const frameworkConfig = FRAMEWORK_REGISTRY[integration];
+    session.frameworkConfig = frameworkConfig;
+
+    const context = await gatherFrameworkContext(frameworkConfig, {
+      installDir: session.installDir,
+      debug: session.debug,
+      forceInstall: session.forceInstall,
+      // `default` is required by WizardOptions but unused by detection; the
+      // --default CLI flag was removed, so this is always false here.
+      default: false,
+      signup: session.signup,
+      localMcp: session.localMcp,
+      ci: true,
+      menu: session.menu,
+      benchmark: session.benchmark,
+      yaraReport: session.yaraReport,
+    });
+    for (const [key, value] of Object.entries(context)) {
+      if (!(key in session.frameworkContext)) {
+        session.frameworkContext[key] = value;
+      }
+    }
+  },
 
   run: async (session: WizardSession): Promise<ProgramRun> => {
     const config = session.frameworkConfig!;
