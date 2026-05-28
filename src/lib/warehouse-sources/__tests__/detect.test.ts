@@ -62,11 +62,24 @@ describe('detectWarehouseSources', () => {
     expect(stripe.matchedSignal).toContain('stripe');
   });
 
-  it('detects a deep-link source (Sentry) and tags its mode', () => {
-    writePackageJson(tmpDir, { '@sentry/node': '^7.0.0' });
-    const [sentry] = detectWarehouseSources(tmpDir);
-    expect(sentry.kind).toBe('Sentry');
-    expect(sentry.mode).toBe('deep-link');
+  it('detects a deep-link source (Salesforce) and tags its mode', () => {
+    writePackageJson(tmpDir, { jsforce: '^3.0.0' });
+    const [salesforce] = detectWarehouseSources(tmpDir);
+    expect(salesforce.kind).toBe('Salesforce');
+    expect(salesforce.mode).toBe('deep-link');
+  });
+
+  it('detects newly added SaaS sources by their SDK package', () => {
+    writePackageJson(tmpDir, {
+      convex: '^1.0.0',
+      '@clerk/nextjs': '^5.0.0',
+      resend: '^4.0.0',
+    });
+    const detected = detectWarehouseSources(tmpDir);
+    const byKind = Object.fromEntries(detected.map((s) => [s.kind, s.mode]));
+    expect(byKind.Convex).toBe('in-cli');
+    expect(byKind.Clerk).toBe('in-cli');
+    expect(byKind.Resend).toBe('in-cli');
   });
 
   it('detects Postgres from a Python requirement', () => {

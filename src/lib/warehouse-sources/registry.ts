@@ -111,6 +111,16 @@ export const SOURCE_DETECTORS: SourceDetector[] = [
     },
   },
   {
+    kind: 'Convex',
+    label: 'Convex',
+    mode: 'in-cli',
+    signals: {
+      npm: ['convex'],
+      python: ['convex'],
+      envKeys: [/^CONVEX_/, /^NEXT_PUBLIC_CONVEX_URL$/],
+    },
+  },
+  {
     kind: 'Stripe',
     label: 'Stripe',
     mode: 'in-cli',
@@ -122,9 +132,112 @@ export const SOURCE_DETECTORS: SourceDetector[] = [
     },
   },
   {
+    kind: 'Clerk',
+    label: 'Clerk',
+    mode: 'in-cli',
+    signals: {
+      npm: [
+        '@clerk/nextjs',
+        '@clerk/clerk-react',
+        '@clerk/backend',
+        '@clerk/express',
+        '@clerk/fastify',
+        '@clerk/remix',
+      ],
+      envKeys: [/^CLERK_SECRET_KEY$/, /^NEXT_PUBLIC_CLERK_/],
+    },
+  },
+  {
+    kind: 'Resend',
+    label: 'Resend',
+    mode: 'in-cli',
+    signals: {
+      npm: ['resend'],
+      python: ['resend'],
+      envKeys: [/^RESEND_API_KEY$/],
+    },
+  },
+  {
+    kind: 'Shopify',
+    label: 'Shopify',
+    mode: 'in-cli',
+    signals: {
+      npm: ['@shopify/shopify-api', 'shopify-api-node'],
+      python: ['shopifyapi'],
+      envKeys: [/^SHOPIFY_/],
+    },
+  },
+  {
+    kind: 'Klaviyo',
+    label: 'Klaviyo',
+    mode: 'in-cli',
+    signals: {
+      npm: ['klaviyo-api'],
+      python: ['klaviyo-api'],
+      envKeys: [/^KLAVIYO_/],
+    },
+  },
+  {
+    kind: 'Chargebee',
+    label: 'Chargebee',
+    mode: 'in-cli',
+    signals: {
+      npm: ['chargebee'],
+      python: ['chargebee'],
+      envKeys: [/^CHARGEBEE_/],
+    },
+  },
+  {
+    kind: 'Paddle',
+    label: 'Paddle',
+    mode: 'in-cli',
+    signals: {
+      npm: ['@paddle/paddle-node-sdk', '@paddle/paddle-js'],
+      envKeys: [/^PADDLE_/],
+    },
+  },
+  {
+    kind: 'Polar',
+    label: 'Polar',
+    mode: 'in-cli',
+    signals: {
+      npm: ['@polar-sh/sdk', '@polar-sh/nextjs'],
+      envKeys: [/^POLAR_/],
+    },
+  },
+  {
+    kind: 'Mailchimp',
+    label: 'Mailchimp',
+    mode: 'in-cli',
+    signals: {
+      npm: ['@mailchimp/mailchimp_marketing'],
+      python: ['mailchimp-marketing'],
+      envKeys: [/^MAILCHIMP_/],
+    },
+  },
+  {
+    kind: 'CustomerIO',
+    label: 'Customer.io',
+    mode: 'in-cli',
+    signals: {
+      npm: ['customerio-node'],
+      python: ['customerio'],
+      envKeys: [/^CUSTOMER_?IO_/],
+    },
+  },
+  {
+    kind: 'Typeform',
+    label: 'Typeform',
+    mode: 'in-cli',
+    signals: {
+      npm: ['@typeform/api-client'],
+      envKeys: [/^TYPEFORM_/],
+    },
+  },
+  {
     kind: 'Sentry',
     label: 'Sentry',
-    mode: 'deep-link',
+    mode: 'in-cli',
     signals: {
       npm: [
         '@sentry/node',
@@ -164,6 +277,25 @@ export const SOURCE_DETECTORS: SourceDetector[] = [
       npm: ['node-zendesk'],
       python: ['zenpy'],
       envKeys: [/^ZENDESK_/],
+    },
+  },
+  {
+    kind: 'Intercom',
+    label: 'Intercom',
+    mode: 'deep-link',
+    signals: {
+      npm: ['intercom-client', '@intercom/messenger-js-sdk'],
+      python: ['python-intercom'],
+      envKeys: [/^INTERCOM_/],
+    },
+  },
+  {
+    kind: 'Linear',
+    label: 'Linear',
+    mode: 'deep-link',
+    signals: {
+      npm: ['@linear/sdk'],
+      envKeys: [/^LINEAR_API_KEY$/],
     },
   },
 ];
