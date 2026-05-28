@@ -116,6 +116,19 @@ export const POSTHOG_INTEGRATION_PROGRAM: ProgramStep[] = [
     isComplete: (session) => session.outroDismissed,
   },
   {
+    id: 'warehouse-offer',
+    label: 'Data warehouse',
+    screenId: 'warehouse-offer',
+    // Only shown when the detect step found a data warehouse source.
+    show: (session) =>
+      (
+        (session.frameworkContext.detectedWarehouseSources as
+          | unknown[]
+          | undefined) ?? []
+      ).length > 0,
+    isComplete: (session) => session.warehouseOfferDismissed,
+  },
+  {
     id: 'keep-skills',
     label: 'Keep Skills',
     screenId: 'keep-skills',

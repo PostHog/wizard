@@ -17,6 +17,8 @@ import { createProgramSequence } from '@lib/programs/program-step';
 export enum ScreenId {
   Intro = 'intro',
   RevenueIntro = 'revenue-intro',
+  WarehouseIntro = 'warehouse-intro',
+  WarehouseOffer = 'warehouse-offer',
   MigrationIntro = 'migration-intro',
   AgentSkillIntro = 'agent-skill-intro',
   AuditIntro = 'audit-intro',

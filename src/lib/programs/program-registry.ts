@@ -13,6 +13,7 @@
 import type { ProgramConfig } from './program-step.js';
 import { posthogIntegrationConfig } from './posthog-integration/index.js';
 import { revenueAnalyticsConfig } from './revenue-analytics/index.js';
+import { warehouseSourceConfig } from './warehouse-source/index.js';
 import { auditConfig } from './audit/index.js';
 import { eventsAuditConfig } from './events-audit/index.js';
 import { audit3000Config } from './audit-3000/index.js';
@@ -36,6 +37,7 @@ const agentSkillConfig: ProgramConfig = {
 export const PROGRAM_REGISTRY = [
   posthogIntegrationConfig,
   revenueAnalyticsConfig,
+  warehouseSourceConfig,
   auditConfig,
   eventsAuditConfig,
   audit3000Config,
@@ -54,6 +56,7 @@ export const PROGRAM_REGISTRY = [
 export const Program = {
   PostHogIntegration: posthogIntegrationConfig.id,
   RevenueAnalyticsSetup: revenueAnalyticsConfig.id,
+  WarehouseSource: warehouseSourceConfig.id,
   Migration: migrationConfig.id,
   Audit: auditConfig.id,
   EventsAudit: eventsAuditConfig.id,

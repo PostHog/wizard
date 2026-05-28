@@ -124,6 +124,38 @@ describe('PROGRAM_SEQUENCES', () => {
     });
   });
 
+  describe('Warehouse offer predicate', () => {
+    it('hides the offer when no warehouse source was detected', () => {
+      const session = buildSession({});
+      const entry = getEntry(
+        Program.PostHogIntegration,
+        ScreenId.WarehouseOffer,
+      );
+
+      expect(entry.show?.(session)).toBe(false);
+    });
+
+    it('shows the offer when a warehouse source was detected', () => {
+      const session = buildSession({});
+      const entry = getEntry(
+        Program.PostHogIntegration,
+        ScreenId.WarehouseOffer,
+      );
+
+      session.frameworkContext = {
+        detectedWarehouseSources: [
+          { kind: 'Postgres', label: 'PostgreSQL', mode: 'in-cli' },
+        ],
+      };
+
+      expect(entry.show?.(session)).toBe(true);
+      expect(entry.isComplete?.(session)).toBe(false);
+
+      session.warehouseOfferDismissed = true;
+      expect(entry.isComplete?.(session)).toBe(true);
+    });
+  });
+
   describe('MCP flow predicates', () => {
     it('uses mcpComplete for McpAdd', () => {
       const session = buildSession({});

@@ -17,6 +17,7 @@ import {
   gatherFrameworkContext,
   checkFrameworkVersion,
 } from '@lib/detection/index';
+import { detectWarehouseSources } from '@lib/warehouse-sources/detect';
 
 export async function detectPostHogIntegration(
   ctx: ProgramReadyContext,
@@ -67,6 +68,12 @@ export async function detectPostHogIntegration(
   // Feature discovery
   for (const feature of discoverFeatures(installDir)) {
     ctx.addDiscoveredFeature(feature);
+  }
+
+  // Data warehouse source discovery — drives the post-run soft prompt.
+  const warehouseSources = detectWarehouseSources(installDir);
+  if (warehouseSources.length > 0) {
+    ctx.setFrameworkContext('detectedWarehouseSources', warehouseSources);
   }
 
   ctx.setDetectionComplete();
