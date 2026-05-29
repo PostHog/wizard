@@ -60,12 +60,10 @@ describe('runAgent', () => {
   const defaultOptions: WizardOptions = {
     debug: false,
     installDir: '/test/dir',
-    forceInstall: false,
     default: false,
     signup: false,
     localMcp: false,
     ci: false,
-    menu: false,
     benchmark: false,
     yaraReport: false,
   };

@@ -12,16 +12,6 @@ export type WizardOptions = {
   debug: boolean;
 
   /**
-   * Whether to force install the SDK package to continue with the installation in case
-   * any package manager checks are failing (e.g. peer dependency versions).
-   *
-   * Use with caution and only if you know what you're doing.
-   *
-   * Does not apply to all wizard flows (currently NPM only)
-   */
-  forceInstall: boolean;
-
-  /**
    * The directory to run the wizard in.
    */
   installDir: string;
@@ -61,11 +51,6 @@ export type WizardOptions = {
    * instead of the default from the API key or OAuth.
    */
   projectId?: number;
-
-  /**
-   * Whether to show the menu for manual integration selection instead of auto-detecting.
-   */
-  menu: boolean;
 
   /**
    * Whether to run in benchmark mode with per-phase token tracking.

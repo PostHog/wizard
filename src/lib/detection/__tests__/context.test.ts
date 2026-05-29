@@ -8,12 +8,10 @@ import type { WizardOptions } from '@utils/types';
 const baseOptions: WizardOptions = {
   installDir: '/test/dir',
   debug: false,
-  forceInstall: false,
   default: false,
   signup: false,
   localMcp: false,
   ci: false,
-  menu: false,
   benchmark: false,
   yaraReport: false,
 };

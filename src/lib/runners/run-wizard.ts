@@ -33,7 +33,6 @@ export function runWizard(
 
       const session = buildSession({
         debug: options.debug as boolean | undefined,
-        forceInstall: options.forceInstall as boolean | undefined,
         localMcp: options.localMcp as boolean | undefined,
         installDir,
         ci: false,
@@ -41,7 +40,6 @@ export function runWizard(
         apiKey: options.apiKey as string | undefined,
         projectId: options.projectId as string | undefined,
         email: options.email as string | undefined,
-        menu: options.menu as boolean | undefined,
         benchmark: options.benchmark as boolean | undefined,
         yaraReport: options.yaraReport as boolean | undefined,
       });

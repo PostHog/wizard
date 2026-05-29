@@ -14,7 +14,6 @@ export interface PackageManager {
   /* The command that the package manager uses to run a script from package.json */
   runScriptCommand: string;
   flags: string;
-  forceInstallFlag: string;
   detect: ({ installDir }: Pick<WizardOptions, 'installDir'>) => boolean;
   addOverride: (
     pkgName: string,
@@ -83,7 +82,6 @@ export const BUN: PackageManager = {
   buildCommand: 'bun run build',
   runScriptCommand: 'bun run',
   flags: '',
-  forceInstallFlag: '--force',
   detect: ({ installDir }) =>
     lockExists(installDir, 'bun.lockb') || lockExists(installDir, 'bun.lock'),
   addOverride: (pkgName, pkgVersion, opts) =>
@@ -97,7 +95,6 @@ export const YARN_V1: PackageManager = {
   buildCommand: 'yarn build',
   runScriptCommand: 'yarn',
   flags: '--ignore-workspace-root-check',
-  forceInstallFlag: '--force',
   detect: ({ installDir }) =>
     lockMatches(installDir, 'yarn.lock', 'yarn lockfile v1'),
   addOverride: (pkgName, pkgVersion, opts) =>
@@ -112,7 +109,6 @@ export const YARN_V2: PackageManager = {
   buildCommand: 'yarn build',
   runScriptCommand: 'yarn',
   flags: '',
-  forceInstallFlag: '--force',
   detect: ({ installDir }) =>
     lockMatches(installDir, 'yarn.lock', '__metadata'),
   addOverride: (pkgName, pkgVersion, opts) =>
@@ -126,7 +122,6 @@ export const PNPM: PackageManager = {
   buildCommand: 'pnpm build',
   runScriptCommand: 'pnpm',
   flags: '--ignore-workspace-root-check',
-  forceInstallFlag: '--force',
   detect: ({ installDir }) => lockExists(installDir, 'pnpm-lock.yaml'),
   addOverride: (pkgName, pkgVersion, opts) =>
     applyOverride('pnpm.overrides', pkgName, pkgVersion, opts),
@@ -139,7 +134,6 @@ export const NPM: PackageManager = {
   buildCommand: 'npm run build',
   runScriptCommand: 'npm run',
   flags: '',
-  forceInstallFlag: '--force',
   detect: ({ installDir }) => lockExists(installDir, 'package-lock.json'),
   addOverride: (pkgName, pkgVersion, opts) =>
     applyOverride('overrides', pkgName, pkgVersion, opts),
@@ -152,7 +146,6 @@ export const EXPO: PackageManager = {
   buildCommand: 'npx expo build',
   runScriptCommand: 'npx expo run',
   flags: '',
-  forceInstallFlag: '--force',
   detect: () => false,
   addOverride: (pkgName, pkgVersion, opts) =>
     applyOverride('overrides', pkgName, pkgVersion, opts),

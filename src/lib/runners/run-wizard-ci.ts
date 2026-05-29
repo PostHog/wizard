@@ -60,14 +60,12 @@ export function runWizardCI(
 
     const session = buildSession({
       debug: options.debug as boolean | undefined,
-      forceInstall: options.forceInstall as boolean | undefined,
       installDir,
       ci: true,
       signup: options.signup as boolean | undefined,
       localMcp: options.localMcp as boolean | undefined,
       apiKey,
       email: options.email as string | undefined,
-      menu: options.menu as boolean | undefined,
       projectId: options.projectId as string | undefined,
       benchmark: options.benchmark as boolean | undefined,
       yaraReport: options.yaraReport as boolean | undefined,

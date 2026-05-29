@@ -134,12 +134,10 @@ function sessionToOptions(session: WizardSession): WizardOptions {
   return {
     installDir: session.installDir,
     debug: session.debug,
-    forceInstall: session.forceInstall,
     default: false,
     signup: session.signup,
     localMcp: session.localMcp,
     ci: session.ci,
-    menu: session.menu,
     benchmark: session.benchmark,
     projectId: session.projectId,
     apiKey: session.apiKey,

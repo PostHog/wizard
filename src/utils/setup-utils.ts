@@ -194,7 +194,6 @@ export async function installPackage({
   alreadyInstalled,
   packageNameDisplayLabel,
   packageManager,
-  forceInstall = false,
   integration,
   installDir,
 }: {
@@ -202,7 +201,6 @@ export async function installPackage({
   alreadyInstalled: boolean;
   packageNameDisplayLabel?: string;
   packageManager?: PackageManager;
-  forceInstall?: boolean;
   integration?: string;
   installDir: string;
 }): Promise<{ packageManager?: PackageManager }> {
@@ -223,11 +221,8 @@ export async function installPackage({
     );
 
     const execAsync = promisify(childProcess.exec);
-    const installCommand = `${pkgManager.installCommand} ${packageName} ${
-      pkgManager.flags
-    } ${
-      forceInstall ? pkgManager.forceInstallFlag : ''
-    } ${legacyPeerDepsFlag}`.trim();
+    const installCommand =
+      `${pkgManager.installCommand} ${packageName} ${pkgManager.flags} ${legacyPeerDepsFlag}`.trim();
 
     try {
       await execAsync(installCommand, { cwd: installDir });

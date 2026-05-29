@@ -9,12 +9,6 @@ export const basicIntegrationCommand: Command = {
   // program — it rides under the base command rather than as a peer.
   children: [provisionCommand],
   options: {
-    'force-install': {
-      default: false,
-      describe:
-        'Force install packages even if peer dependency checks fail\nenv: POSTHOG_WIZARD_FORCE_INSTALL',
-      type: 'boolean',
-    },
     'install-dir': {
       describe:
         'Directory to install PostHog in\nenv: POSTHOG_WIZARD_INSTALL_DIR',
@@ -23,12 +17,6 @@ export const basicIntegrationCommand: Command = {
     playground: {
       default: false,
       describe: 'Launch the TUI primitives playground',
-      type: 'boolean',
-    },
-    menu: {
-      default: false,
-      describe:
-        'Show menu for manual integration selection instead of auto-detecting\nenv: POSTHOG_WIZARD_MENU',
       type: 'boolean',
     },
     benchmark: {

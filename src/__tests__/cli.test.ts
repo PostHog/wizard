@@ -151,20 +151,13 @@ describe('CLI argument parsing', () => {
 
   describe('backward compatibility', () => {
     test('all existing flags continue to work', async () => {
-      await runCLI([
-        '--debug',
-        '--signup',
-        '--force-install',
-        '--install-dir',
-        '/custom/path',
-      ]);
+      await runCLI(['--debug', '--signup', '--install-dir', '/custom/path']);
 
       const args = getLastBuildSessionArgs();
 
       // Existing flags forwarded through buildSession
       expect(args.debug).toBe(true);
       expect(args.signup).toBe(true);
-      expect(args.forceInstall).toBe(true);
       expect(args.installDir).toBe('/custom/path');
     });
   });

@@ -32,12 +32,10 @@ export async function detectPostHogIntegration(
     const sessionOptions = {
       installDir,
       debug: session.debug,
-      forceInstall: session.forceInstall,
       default: false,
       signup: session.signup,
       localMcp: session.localMcp,
       ci: session.ci,
-      menu: session.menu,
       benchmark: session.benchmark,
       yaraReport: session.yaraReport,
     };
