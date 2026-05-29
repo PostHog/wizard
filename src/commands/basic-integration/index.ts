@@ -43,15 +43,15 @@ export const basicIntegrationCommand: Command = {
       type: 'string',
     },
   },
-  // ci, playground, and skill select different run modes — at most one.
   check: (argv) => {
-    const modes = (['ci', 'playground', 'skill'] as const).filter(
-      (key) => argv[key],
-    );
-    if (modes.length > 1) {
-      throw new Error(
-        `--${modes.join(', --')} are mutually exclusive; pass only one.`,
-      );
+    // --playground is the standalone TUI demo; it can't combine with the other
+    // run modes. (--ci + --skill IS valid — run a skill headlessly.)
+    if (argv.playground && (argv.ci || argv.skill)) {
+      throw new Error('--playground cannot be combined with --ci or --skill.');
+    }
+    // --skill with no ID would otherwise fall through to the interactive flow.
+    if (typeof argv.skill === 'string' && argv.skill.trim() === '') {
+      throw new Error('--skill needs a skill ID, e.g. --skill="foo"');
     }
     return true;
   },
@@ -59,6 +59,12 @@ export const basicIntegrationCommand: Command = {
     // Each mode file is loaded only when its branch is taken, so a plain
     // `npx @posthog/wizard` never pulls in the CI, playground, or skill paths.
     void (async () => {
+      // --ci --skill runs the skill headlessly (skill takes precedence over the
+      // default CI integration); --ci alone runs the integration.
+      if (argv.ci && argv.skill) {
+        const { runSkillMode } = await import('./skill');
+        return runSkillMode(argv);
+      }
       if (argv.ci) {
         const { runCIInstall } = await import('./ci-install');
         return runCIInstall(argv);

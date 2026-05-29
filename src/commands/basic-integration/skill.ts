@@ -1,9 +1,9 @@
 import type { Arguments } from 'yargs';
 import { POSTHOG_DOCS_URL } from '@lib/constants';
-import { runWizard } from '@lib/runners';
+import { runWizard, runWizardCI } from '@lib/runners';
 import { createSkillProgram } from '@lib/programs/agent-skill/index';
 
-/** Run an arbitrary context-mill skill by id (`--skill <id>`). */
+/** Run an arbitrary context-mill skill by id (`--skill <id>`, headless with `--ci`). */
 export function runSkillMode(argv: Arguments): void {
   const skillId = argv.skill as string;
   const config = createSkillProgram({
@@ -18,5 +18,10 @@ export function runSkillMode(argv: Arguments): void {
     spinnerMessage: `Running ${skillId}...`,
     estimatedDurationMinutes: 5,
   });
-  runWizard(config, { ...argv, skillId });
+  const options = { ...argv, skillId };
+  if (argv.ci) {
+    runWizardCI(config, options);
+  } else {
+    runWizard(config, options);
+  }
 }

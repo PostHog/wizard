@@ -60,6 +60,14 @@ export class Wizard {
     this.cli = yargs(hideBin(process.argv))
       .env('POSTHOG_WIZARD')
       .options(GLOBAL_OPTIONS)
+      // Print the error first (bright red) and the usage below it, instead of
+      // yargs' default of burying the message under the full help output.
+      .fail((msg, err, parser) => {
+        const text = msg || (err && err.message) || 'Invalid arguments';
+        process.stderr.write(`\n\x1b[1;91m✖ ${text}\x1b[0m\n\n`);
+        parser.showHelp();
+        process.exit(1);
+      })
       .help()
       .alias('help', 'h')
       .version()
