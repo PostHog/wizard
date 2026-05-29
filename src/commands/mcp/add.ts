@@ -3,9 +3,9 @@ import { setUI } from '@ui';
 import { LoggingUI } from '@ui/logging-ui';
 import { Program } from '@lib/programs/program-registry';
 import { VERSION } from '@lib/version';
-import type { WizardCommand } from '../../wizard';
+import type { Command } from '../command';
 
-export const mcpAddCommand: WizardCommand = {
+export const mcpAddCommand: Command = {
   name: 'add',
   description: 'Install PostHog MCP server to supported clients',
   options: {

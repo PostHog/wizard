@@ -5,11 +5,10 @@ describe('basic-integration parsing (end-to-end yargs)', () => {
   test('parses flags into camelCased argv keys', async () => {
     const argv = await parseCommand(
       basicIntegrationCommand,
-      '--api-key phx_x --install-dir /tmp/app --integration nextjs',
+      '--api-key phx_x --install-dir /tmp/app',
     );
     expect(argv.apiKey).toBe('phx_x');
     expect(argv.installDir).toBe('/tmp/app');
-    expect(argv.integration).toBe('nextjs');
   });
 
   test('rejects --ci with --playground', async () => {

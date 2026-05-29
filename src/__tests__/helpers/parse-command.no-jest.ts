@@ -1,10 +1,7 @@
 import yargs from 'yargs';
 import type { Arguments } from 'yargs';
-import {
-  GLOBAL_OPTIONS,
-  toCommandModule,
-  type WizardCommand,
-} from '../../wizard';
+import { GLOBAL_OPTIONS } from '../../wizard';
+import { toCommandModule, type Command } from '../../commands/command';
 
 /**
  * Parse an argv string through a command's real yargs configuration (global
@@ -17,10 +14,7 @@ import {
  * a spec without updating its handler would slip past a direct-handler test
  * but fail here.
  */
-export function parseCommand(
-  cmd: WizardCommand,
-  argv: string,
-): Promise<Arguments> {
+export function parseCommand(cmd: Command, argv: string): Promise<Arguments> {
   return new Promise((resolve, reject) => {
     yargs(argv.split(/\s+/).filter(Boolean))
       .options(GLOBAL_OPTIONS)
@@ -33,9 +27,9 @@ export function parseCommand(
 
 /** Recursively replace every command's handler with the capture callback. */
 function withCapture(
-  cmd: WizardCommand,
+  cmd: Command,
   capture: (argv: Arguments) => void,
-): WizardCommand {
+): Command {
   return {
     ...cmd,
     handler: cmd.handler ? capture : undefined,

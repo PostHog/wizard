@@ -1,8 +1,8 @@
 import { isNonInteractiveEnvironment } from '@utils/environment';
 import { provisionCommand } from '../provision';
-import type { WizardCommand } from '../../wizard';
+import type { Command } from '../command';
 
-export const basicIntegrationCommand: WizardCommand = {
+export const basicIntegrationCommand: Command = {
   name: ['$0'],
   description: 'Run the PostHog setup wizard',
   // provision is a one-shot HTTP call tied to the base flow, not a wizard
@@ -24,19 +24,6 @@ export const basicIntegrationCommand: WizardCommand = {
       default: false,
       describe: 'Launch the TUI primitives playground',
       type: 'boolean',
-    },
-    integration: {
-      describe: 'Integration to set up',
-      choices: [
-        'nextjs',
-        'astro',
-        'react',
-        'svelte',
-        'react-native',
-        'tanstack-router',
-        'tanstack-start',
-      ],
-      type: 'string',
     },
     menu: {
       default: false,

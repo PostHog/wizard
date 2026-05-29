@@ -3,9 +3,9 @@ import { setUI } from '@ui';
 import { LoggingUI } from '@ui/logging-ui';
 import { Program } from '@lib/programs/program-registry';
 import { VERSION } from '@lib/version';
-import type { WizardCommand } from '../../wizard';
+import type { Command } from '../command';
 
-export const mcpRemoveCommand: WizardCommand = {
+export const mcpRemoveCommand: Command = {
   name: 'remove',
   description: 'Remove PostHog MCP server from supported clients',
   options: {

@@ -1,104 +1,61 @@
-const mockRunWizardPrograms = jest.fn();
-const mockRunWizardCIPrograms = jest.fn();
-const mockMapCliOptionsPrograms = jest.fn((argv: Record<string, unknown>) => ({
-  mapped: true,
-  source: argv.source,
-}));
+const mockRunWizard = jest.fn();
+const mockRunWizardCI = jest.fn();
 
 jest.mock('@lib/runners', () => ({
-  runWizard: mockRunWizardPrograms,
-  runWizardCI: mockRunWizardCIPrograms,
-}));
-jest.mock('@lib/programs/program-registry', () => ({
-  Program: {},
-  PROGRAM_REGISTRY: [],
-  getProgramConfig: () => ({}),
-  getSubcommandPrograms: () => [
-    {
-      id: 'integrate',
-      command: 'integrate',
-      description: 'Set up PostHog SDK integration',
-      steps: [],
-      run: null,
-    },
-    {
-      id: 'mapper',
-      command: 'mapper',
-      description: 'Program with mapCliOptions',
-      steps: [],
-      run: null,
-      cliOptions: {
-        source: { type: 'string', describe: 'Source override' },
-      },
-      mapCliOptions: mockMapCliOptionsPrograms,
-    },
-  ],
+  runWizard: mockRunWizard,
+  runWizardCI: mockRunWizardCI,
 }));
 
 import type { Arguments } from 'yargs';
-import { getProgramCommands } from '../commands/programs';
+import { integrateCommand } from '../commands/integrate';
+import { auditCommand } from '../commands/audit';
+import { migrateCommand } from '../commands/migrate';
 import { parseCommand } from './helpers/parse-command.no-jest';
 
 function makeArgv(extra: Record<string, unknown> = {}): Arguments {
   return { _: [], $0: 'wizard', ...extra } as Arguments;
 }
 
-describe('programCommands', () => {
-  const programCommands = getProgramCommands();
-
+describe('program commands', () => {
   beforeEach(() => {
     jest.clearAllMocks();
   });
 
-  test('builds one command per registry program with a subcommand', () => {
-    expect(programCommands.map((c) => c.name)).toEqual(['integrate', 'mapper']);
+  test('each command exposes its CLI name', () => {
+    expect(integrateCommand.name).toBe('integrate');
+    expect(auditCommand.name).toBe('audit');
+    expect(migrateCommand.name).toBe('migrate');
   });
 
   test('dispatches to runWizard by default', () => {
-    const integrate = programCommands.find((c) => c.name === 'integrate')!;
-    integrate.handler!(makeArgv({ debug: true }));
-    expect(mockRunWizardPrograms).toHaveBeenCalledTimes(1);
-    expect(mockRunWizardCIPrograms).not.toHaveBeenCalled();
-    expect(mockRunWizardPrograms.mock.calls[0][0]).toMatchObject({
-      id: 'integrate',
-    });
-    expect(mockRunWizardPrograms.mock.calls[0][1]).toMatchObject({
-      debug: true,
-    });
+    auditCommand.handler!(makeArgv({ debug: true }));
+    expect(mockRunWizard).toHaveBeenCalledTimes(1);
+    expect(mockRunWizardCI).not.toHaveBeenCalled();
+    expect(mockRunWizard.mock.calls[0][1]).toMatchObject({ debug: true });
   });
 
   test('dispatches to runWizardCI when --ci is set', () => {
-    const integrate = programCommands.find((c) => c.name === 'integrate')!;
-    integrate.handler!(makeArgv({ ci: true }));
-    expect(mockRunWizardCIPrograms).toHaveBeenCalledTimes(1);
-    expect(mockRunWizardPrograms).not.toHaveBeenCalled();
+    auditCommand.handler!(makeArgv({ ci: true }));
+    expect(mockRunWizardCI).toHaveBeenCalledTimes(1);
+    expect(mockRunWizard).not.toHaveBeenCalled();
   });
 
   test('forwards --install-dir to the runner', () => {
-    const integrate = programCommands.find((c) => c.name === 'integrate')!;
-    integrate.handler!(makeArgv({ installDir: '/tmp/some-app' }));
-    const opts = mockRunWizardPrograms.mock.calls[0][1] as Record<
-      string,
-      unknown
-    >;
+    integrateCommand.handler!(makeArgv({ installDir: '/tmp/some-app' }));
+    const opts = mockRunWizard.mock.calls[0][1] as Record<string, unknown>;
     expect(opts.installDir).toBe('/tmp/some-app');
   });
 
-  test('merges mapCliOptions output into runner args', () => {
-    const mapper = programCommands.find((c) => c.name === 'mapper')!;
-    mapper.handler!(makeArgv({ source: 'stripe' }));
-    expect(mockMapCliOptionsPrograms).toHaveBeenCalled();
-    const opts = mockRunWizardPrograms.mock.calls[0][1] as Record<
-      string,
-      unknown
-    >;
-    expect(opts.source).toBe('stripe');
-    expect(opts.mapped).toBe(true);
+  test('merges mapCliOptions output into runner args (migrate)', () => {
+    migrateCommand.handler!(makeArgv({ product: 'statsig' }));
+    const opts = mockRunWizard.mock.calls[0][1] as Record<string, unknown>;
+    expect(opts.product).toBe('statsig');
+    // migration maps --product into a skillId
+    expect(typeof opts.skillId).toBe('string');
   });
 
   test('exposes the shared skill options on each command', () => {
-    const integrate = programCommands.find((c) => c.name === 'integrate')!;
-    expect(integrate.options).toMatchObject({
+    expect(auditCommand.options).toMatchObject({
       debug: expect.any(Object),
       'install-dir': expect.any(Object),
       'local-mcp': expect.any(Object),
@@ -106,19 +63,17 @@ describe('programCommands', () => {
     });
   });
 
-  test('merges per-program cliOptions on top of the shared set', () => {
-    const mapper = programCommands.find((c) => c.name === 'mapper')!;
-    expect(mapper.options).toMatchObject({
+  test('merges per-program cliOptions on top of the shared set (migrate)', () => {
+    expect(migrateCommand.options).toMatchObject({
       debug: expect.any(Object),
-      source: expect.any(Object),
+      product: expect.any(Object),
     });
   });
 
   test('camelCases --install-dir end-to-end through yargs', async () => {
-    const integrate = programCommands.find((c) => c.name === 'integrate')!;
     const argv = await parseCommand(
-      integrate,
-      'integrate --install-dir /tmp/app',
+      auditCommand,
+      'audit --install-dir /tmp/app',
     );
     expect(argv.installDir).toBe('/tmp/app');
   });

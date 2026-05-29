@@ -1,9 +1,15 @@
-import { commandKeys, type WizardCommand } from '../wizard';
+import { commandKeys, type Command } from '../commands/command';
 import { basicIntegrationCommand } from '../commands/basic-integration';
 import { mcpCommand } from '../commands/mcp';
-import { getProgramCommands } from '../commands/programs';
+import { integrateCommand } from '../commands/integrate';
+import { auditCommand } from '../commands/audit';
+import { audit3000Command } from '../commands/audit-3000';
+import { doctorCommand } from '../commands/doctor';
+import { migrateCommand } from '../commands/migrate';
+import { eventsAuditCommand } from '../commands/events-audit';
+import { revenueCommand } from '../commands/revenue';
 
-const cmd = (name: string | readonly string[]): WizardCommand => ({
+const cmd = (name: string | readonly string[]): Command => ({
   name,
   description: 'test',
   // eslint-disable-next-line @typescript-eslint/no-empty-function
@@ -15,10 +21,10 @@ const cmd = (name: string | readonly string[]): WizardCommand => ({
  * The command tree is static, so this invariant is asserted here rather than
  * walked at runtime on every CLI invocation.
  */
-function findConflicts(cmds: readonly WizardCommand[]): string[] {
+function findConflicts(cmds: readonly Command[]): string[] {
   const seen = new Set<string>();
   const conflicts: string[] = [];
-  const walk = (cmd: WizardCommand, parentPath: readonly string[]): void => {
+  const walk = (cmd: Command, parentPath: readonly string[]): void => {
     const keys = commandKeys(cmd.name);
     for (const key of keys) {
       const path = [...parentPath, key].join(' ');
@@ -48,7 +54,7 @@ describe('findConflicts', () => {
   });
 
   test('flags a duplicate child under the same parent', () => {
-    const parent: WizardCommand = {
+    const parent: Command = {
       name: 'parent',
       description: 'p',
       children: [cmd('child'), cmd('child')],
@@ -74,7 +80,17 @@ describe('findConflicts', () => {
 
 describe('production command tree', () => {
   test('has no path conflicts', () => {
-    const tree = [basicIntegrationCommand, mcpCommand, ...getProgramCommands()];
+    const tree = [
+      basicIntegrationCommand,
+      mcpCommand,
+      integrateCommand,
+      auditCommand,
+      audit3000Command,
+      doctorCommand,
+      migrateCommand,
+      eventsAuditCommand,
+      revenueCommand,
+    ];
     // On failure, findConflicts returns the offending path(s) — i.e. which
     // command collides, not just that one did.
     expect(findConflicts(tree)).toEqual([]);

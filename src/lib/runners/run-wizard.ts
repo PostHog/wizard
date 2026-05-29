@@ -42,8 +42,6 @@ export function runWizard(
         projectId: options.projectId as string | undefined,
         email: options.email as string | undefined,
         menu: options.menu as boolean | undefined,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        integration: options.integration as any,
         benchmark: options.benchmark as boolean | undefined,
         yaraReport: options.yaraReport as boolean | undefined,
       });

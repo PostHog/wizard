@@ -157,8 +157,6 @@ describe('CLI argument parsing', () => {
         '--force-install',
         '--install-dir',
         '/custom/path',
-        '--integration',
-        'nextjs',
       ]);
 
       const args = getLastBuildSessionArgs();
@@ -168,7 +166,6 @@ describe('CLI argument parsing', () => {
       expect(args.signup).toBe(true);
       expect(args.forceInstall).toBe(true);
       expect(args.installDir).toBe('/custom/path');
-      expect(args.integration).toBe('nextjs');
     });
   });
 

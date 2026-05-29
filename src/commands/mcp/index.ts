@@ -1,8 +1,8 @@
 import { mcpAddCommand } from './add';
 import { mcpRemoveCommand } from './remove';
-import type { WizardCommand } from '../../wizard';
+import type { Command } from '../command';
 
-export const mcpCommand: WizardCommand = {
+export const mcpCommand: Command = {
   name: 'mcp',
   description: 'MCP server management commands',
   children: [mcpAddCommand, mcpRemoveCommand],

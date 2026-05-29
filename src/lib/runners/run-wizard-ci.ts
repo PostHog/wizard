@@ -68,8 +68,6 @@ export function runWizardCI(
       apiKey,
       email: options.email as string | undefined,
       menu: options.menu as boolean | undefined,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      integration: options.integration as any,
       projectId: options.projectId as string | undefined,
       benchmark: options.benchmark as boolean | undefined,
       yaraReport: options.yaraReport as boolean | undefined,

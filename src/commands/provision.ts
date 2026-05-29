@@ -2,9 +2,9 @@ import type { Arguments } from 'yargs';
 import { getUI, setUI } from '@ui';
 import { LoggingUI } from '@ui/logging-ui';
 import type { ProvisioningResult } from '@utils/provisioning';
-import type { WizardCommand } from '../wizard';
+import type { Command } from './command';
 
-export const provisionCommand: WizardCommand = {
+export const provisionCommand: Command = {
   name: 'provision',
   description: 'Create a new PostHog account (headless, no TUI)',
   options: {

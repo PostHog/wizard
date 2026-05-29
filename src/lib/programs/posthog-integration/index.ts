@@ -52,14 +52,12 @@ export const posthogIntegrationConfig: ProgramConfig = {
   disallowedTools: [WIZARD_TOOL_NAMES.wizardAsk],
 
   // CI-mode prerequisite work: the headless equivalent of the detect step's
-  // onReady hook. Honor --integration, else auto-detect, then gather context.
+  // onReady hook. Auto-detect the framework, then gather context.
   ciPreRun: async (session: WizardSession): Promise<void> => {
-    const integration =
-      session.integration ?? (await detectFramework(session.installDir));
+    const integration = await detectFramework(session.installDir);
     if (!integration) {
       await wizardAbort({
-        message:
-          'Could not auto-detect your framework. Please specify --integration on the command line.',
+        message: 'Could not auto-detect your framework for this project.',
       });
       return;
     }
