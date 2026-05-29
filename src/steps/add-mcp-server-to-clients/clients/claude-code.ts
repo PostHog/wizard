@@ -101,29 +101,44 @@ export class ClaudeCodeMCPClient
     return { success: result.success };
   }
 
-  removeServer(local?: boolean): Promise<{ success: boolean }> {
+  async removeServer(local?: boolean): Promise<{ success: boolean }> {
     const claudeBinary = this.findClaudeBinary();
     if (!claudeBinary) {
-      return Promise.resolve({ success: false });
+      return { success: false };
     }
 
     const serverName = local ? 'posthog-local' : 'posthog';
-    const command = `${claudeBinary} mcp remove --scope user ${serverName}`;
+    let success = true;
 
-    try {
-      execSync(command);
-    } catch (error) {
-      analytics.captureException(
-        new Error(
-          `Failed to remove server from Claude Code: ${
-            error instanceof Error ? error.message : String(error)
-          }`,
-        ),
-      );
-      return Promise.resolve({ success: false });
+    if (await this.isPluginInstalled()) {
+      try {
+        execSync(`${claudeBinary} plugin uninstall posthog`, { stdio: 'pipe' });
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : String(error);
+        if (!/not installed|not found/i.test(msg)) {
+          success = false;
+          analytics.captureException(
+            new Error(`Failed to uninstall Claude Code plugin: ${msg}`),
+          );
+        }
+      }
     }
 
-    return Promise.resolve({ success: true });
+    try {
+      execSync(`${claudeBinary} mcp remove --scope user ${serverName}`, {
+        stdio: 'pipe',
+      });
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      if (!/No user-scoped MCP server found/i.test(msg)) {
+        success = false;
+        analytics.captureException(
+          new Error(`Failed to remove server from Claude Code: ${msg}`),
+        );
+      }
+    }
+
+    return { success };
   }
 
   supportsPlugin(): boolean {
