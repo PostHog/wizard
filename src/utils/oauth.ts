@@ -228,6 +228,36 @@ function isPortInUseError(error: unknown): boolean {
   );
 }
 
+/**
+ * Pull the OAuth error out of a failed token-exchange response.
+ *
+ * The token endpoint returns RFC 6749 error bodies like
+ * `{ "error": "invalid_grant", "error_description": "..." }`. axios surfaces a
+ * 400 as an opaque "Request failed with status code 400", discarding the body,
+ * so without this we can't tell an expired/reused code from a redirect_uri
+ * mismatch. Returns `null` when the error isn't an axios error with a usable
+ * OAuth body.
+ */
+export function getOAuthErrorDetails(
+  error: unknown,
+): { error: string; description?: string } | null {
+  if (!axios.isAxiosError(error)) return null;
+
+  const data: unknown = error.response?.data;
+  if (typeof data !== 'object' || data === null) return null;
+
+  const body = data as { error?: unknown; error_description?: unknown };
+  if (typeof body.error !== 'string') return null;
+
+  return {
+    error: body.error,
+    description:
+      typeof body.error_description === 'string'
+        ? body.error_description
+        : undefined,
+  };
+}
+
 async function exchangeCodeForToken(
   code: string,
   codeVerifier: string,
@@ -348,12 +378,28 @@ export async function performOAuthFlow(
         server.close();
 
         const error = e instanceof Error ? e : new Error('Unknown error');
+        const oauthError = getOAuthErrorDetails(e);
 
         if (error.message.includes('timeout')) {
           getUI().log.error('Authorization timed out. Please try again.');
-        } else if (error.message.includes('access_denied')) {
+        } else if (
+          error.message.includes('access_denied') ||
+          oauthError?.error === 'access_denied'
+        ) {
           getUI().log.info(
             `Authorization was cancelled.\n\nYou denied access to PostHog. To use the wizard, you need to authorize access to your PostHog account.\n\nYou can try again by re-running the wizard.`,
+          );
+        } else if (oauthError?.error === 'invalid_grant') {
+          getUI().log.error(
+            `Authorization failed: ${
+              oauthError.description ?? 'the login could not be completed'
+            }.\n\nThis usually means the login took too long or was already used. Please re-run the wizard and complete the login promptly.`,
+          );
+        } else if (oauthError) {
+          getUI().log.error(
+            `Authorization failed: ${oauthError.error}${
+              oauthError.description ? ` (${oauthError.description})` : ''
+            }.\n\nIf you think this is a bug in the PostHog wizard, please create an issue:\n${ISSUES_URL}`,
           );
         } else {
           getUI().log.error(
@@ -363,6 +409,10 @@ export async function performOAuthFlow(
 
         analytics.captureException(error, {
           step: 'oauth_flow',
+          ...(oauthError && {
+            oauth_error: oauthError.error,
+            oauth_error_description: oauthError.description,
+          }),
         });
 
         await abort();
