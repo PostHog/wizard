@@ -253,7 +253,7 @@ export class TaskStreamPush {
       started_at: this.startedAt,
       run_phase: phase,
       tasks: buildTasks(tasks),
-      event_plan: eventPlan.length > 0 ? eventPlan : undefined,
+      event_plan: eventPlan.length > 0 ? { events: eventPlan } : undefined,
       error: buildError(phase, session.outroData),
       timestamp: new Date().toISOString(),
     };

@@ -48,6 +48,10 @@ export interface TaskStreamError {
  * Consumers get the current view by picking the latest session for a given
  * (workflow_id, skill_id) pair.
  */
+export interface StreamEventPlan {
+  events: Array<{ name: string; description?: string }>;
+}
+
 export interface TaskStreamUpdate {
   session_id: string;
   workflow_id: string;
@@ -55,7 +59,7 @@ export interface TaskStreamUpdate {
   started_at: string;
   run_phase: RunPhase;
   tasks: StreamTask[];
-  event_plan?: unknown;
+  event_plan?: StreamEventPlan;
   error?: TaskStreamError;
   /** UTC ISO 8601 timestamp of this payload. Latest update wins on conflict. */
   timestamp: string;

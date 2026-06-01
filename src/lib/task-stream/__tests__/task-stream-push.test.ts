@@ -183,14 +183,14 @@ describe('TaskStreamPush', () => {
       );
     });
 
-    it('includes eventPlan when non-empty', async () => {
+    it('wraps eventPlan in { events: [...] } so the backend accepts it as a dict', async () => {
       const plan = [{ name: 'signup', description: 'User signs up' }];
       const store = createMockStore({ eventPlan: plan });
       const { push, dest } = createPush(store);
 
       await push.push();
 
-      expect(dest.calls[0][1].event_plan).toEqual(plan);
+      expect(dest.calls[0][1].event_plan).toEqual({ events: plan });
     });
 
     it('omits eventPlan when empty', async () => {
