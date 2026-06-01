@@ -119,6 +119,10 @@ export class InkUI implements WizardUI {
     return this.store.showPortConflict(processInfo);
   }
 
+  waitForManualAuthCode(): Promise<string> {
+    return this.store.waitForManualAuthCode();
+  }
+
   showSettingsOverride(
     conflicts: SettingsConflict[],
     backupAndFix: () => boolean,

@@ -140,6 +140,14 @@ export class LoggingUI implements WizardUI {
     return Promise.resolve();
   }
 
+  waitForManualAuthCode(): Promise<string> {
+    // No interactive prompt in CI/logging mode — never resolves. CI bypasses
+    // OAuth entirely, so this is only here to satisfy the interface.
+    return new Promise<string>(() => {
+      /* intentionally never resolves */
+    });
+  }
+
   showSettingsOverride(
     _conflicts: SettingsConflict[],
     _backupAndFix: () => boolean,

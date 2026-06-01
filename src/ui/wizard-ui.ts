@@ -106,6 +106,14 @@ export interface WizardUI {
     user: string;
   }): Promise<void>;
 
+  /**
+   * Resolve with an OAuth authorization code the user enters by hand — the
+   * fallback for headless/remote shells where the browser can't reach the
+   * local callback server. The OAuth flow races this against the callback
+   * server. Implementations that can't prompt (CI/logging) never resolve.
+   */
+  waitForManualAuthCode(): Promise<string>;
+
   showSettingsOverride(
     conflicts: SettingsConflict[],
     backupAndFix: () => boolean,
