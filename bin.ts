@@ -22,14 +22,11 @@ if (!satisfies(process.version, NODE_VERSION_RANGE)) {
 import { isNonInteractiveEnvironment } from '@utils/environment';
 import { getUI, setUI } from '@ui';
 import { LoggingUI } from '@ui/logging-ui';
-import {
-  getSubcommandPrograms,
-  Program,
-} from '@lib/programs/program-registry';
+import { getSubcommandPrograms, Program } from '@lib/programs/program-registry';
 import type { ProgramConfig } from '@lib/programs/program-step';
 import type { WizardSession } from '@lib/wizard-session';
 import { POSTHOG_DOCS_URL } from '@lib/constants';
-import { runtimeEnv } from '@env';
+import { runtimeEnv, IS_PRODUCTION_BUILD } from '@env';
 
 // Test mock server — only loaded when NODE_ENV is 'test'.
 // In production builds, tsdown replaces process.env.NODE_ENV with 'production',
@@ -106,12 +103,6 @@ const cli = yargs(hideBin(process.argv))
       default: false,
       describe:
         'Use local MCP server at http://localhost:8787/mcp\nenv: POSTHOG_WIZARD_LOCAL_MCP',
-      type: 'boolean',
-    },
-    ci: {
-      default: false,
-      describe:
-        'Enable CI mode for non-interactive execution\nenv: POSTHOG_WIZARD_CI',
       type: 'boolean',
     },
     'api-key': {
@@ -431,17 +422,13 @@ const cli = yargs(hideBin(process.argv))
             .map((s) => s.trim())
             .filter(Boolean);
           void (async () => {
-            const { readApiKeyFromEnv } = await import(
-              '@utils/env-api-key'
-            );
+            const { readApiKeyFromEnv } = await import('@utils/env-api-key');
             const apiKey =
               (options.apiKey as string | undefined) || readApiKeyFromEnv();
 
             try {
               const { startTUI } = await import('@ui/tui/start-tui');
-              const { buildSession } = await import(
-                '@lib/wizard-session'
-              );
+              const { buildSession } = await import('@lib/wizard-session');
 
               const tui = startTUI(WIZARD_VERSION, Program.McpAdd);
               const session = buildSession({
@@ -484,9 +471,7 @@ const cli = yargs(hideBin(process.argv))
           void (async () => {
             try {
               const { startTUI } = await import('@ui/tui/start-tui');
-              const { buildSession } = await import(
-                '@lib/wizard-session'
-              );
+              const { buildSession } = await import('@lib/wizard-session');
 
               const tui = startTUI(WIZARD_VERSION, Program.McpRemove);
               const session = buildSession({
@@ -557,9 +542,7 @@ cli.command(
 
     void (async () => {
       try {
-        const { provisionNewAccount } = await import(
-          '@utils/provisioning'
-        );
+        const { provisionNewAccount } = await import('@utils/provisioning');
         if (!jsonMode) {
           getUI().log.info(`Provisioning account for ${email} in ${region}...`);
         }
@@ -618,12 +601,45 @@ for (const programConfig of getSubcommandPrograms()) {
   );
 }
 
+// CI mode (--ci) is only supported in dev/test. It is left undeclared in
+// published builds (NODE_ENV==='production'), so .strictOptions() below rejects
+// it as an unknown argument there — exactly like any other unrecognized flag.
+if (!IS_PRODUCTION_BUILD) {
+  cli.option('ci', {
+    default: false,
+    describe:
+      'Enable CI mode for non-interactive execution\nenv: POSTHOG_WIZARD_CI',
+    type: 'boolean',
+  });
+}
+
 cli
+  .strictOptions()
+  // A custom fail callback in yargs neither exits nor rethrows on its own (it
+  // just returns, after which yargs would run the command handler anyway), so
+  // throw to halt before dispatch. The catch around parse() renders the error
+  // in red at the top and exits non-zero — instead of yargs' default of
+  // dumping full help with the error buried at the bottom.
+  .fail((msg, err) => {
+    throw err || new Error(msg);
+  })
   .help()
   .alias('help', 'h')
   .version()
   .alias('version', 'v')
-  .wrap(process.stdout.isTTY ? cli.terminalWidth() : 80).argv;
+  .wrap(process.stdout.isTTY ? cli.terminalWidth() : 80);
+
+try {
+  cli.parse();
+} catch (err) {
+  const RED = '\x1b[31m';
+  const BOLD = '\x1b[1m';
+  const RESET = '\x1b[0m';
+  const message = err instanceof Error ? err.message : String(err);
+  process.stderr.write(`${RED}${BOLD}✖ ${message}${RESET}\n`);
+  process.stderr.write('Run with --help to see available options.\n');
+  process.exit(1);
+}
 
 /**
  * Run a full wizard program in the TUI. Handles the full lifecycle: start TUI,
@@ -690,9 +706,7 @@ function runWizard(
       const skipAgent = config.run == null;
 
       if (skipAgent) {
-        const { getOrAskForProjectData } = await import(
-          '@utils/setup-utils'
-        );
+        const { getOrAskForProjectData } = await import('@utils/setup-utils');
         const { projectApiKey, host, accessToken, projectId } =
           await getOrAskForProjectData({
             signup: session.signup,
@@ -780,9 +794,7 @@ function runWizardCI(
     const { configureLogFileFromEnvironment, logToFile } = await import(
       '@utils/debug'
     );
-    const { wizardAbort, WizardError } = await import(
-      '@utils/wizard-abort'
-    );
+    const { wizardAbort, WizardError } = await import('@utils/wizard-abort');
 
     configureLogFileFromEnvironment();
 
