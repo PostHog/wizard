@@ -154,14 +154,35 @@ STEP 5 — Seed the personal API key into the environment.
      You do not need to know the key value to write it — the wizard resolves
      the ref locally before writing the file.
 
-STEP 6 — Identify the build command.
-   Inspect the project to find the production build command — you'll need
-   it for the summary and (if the user opts in) for the test affordance
-   step. Look at:
+STEP 6 — Identify the build AND run commands.
+   Inspect the project to find two commands — you'll need both for the
+   summary and (if the user opts in) for the test affordance step:
+
+   a) The production BUILD command (uploads source maps). Look at:
      - package.json scripts ("build", "build:prod", etc.)
      - gradle wrapper / xcodebuild scheme / Makefile target as appropriate
-   Do NOT run the build yourself. The wizard does not run builds — the
-   user runs their own build after this workflow finishes.
+
+   b) The RUN command that launches the built app so the user can actually
+      click the test button / hit the test route. Resolve the EXACT command
+      for THIS project — never leave it as a generic "start the app". Look at:
+     - package.json scripts: prefer the one that serves the production
+       build (e.g. "start", "preview", "serve") over the dev script when a
+       build artifact is involved. For frameworks: Next.js → \`next start\`
+       (usually \`npm run start\` after \`next build\`); Vite → \`npm run
+       preview\`; plain Node → the "start" script or \`node <built entry>\`
+       (e.g. \`node dist/index.js\` — read package.json "main"/"bin" and the
+       build output dir to name the real file).
+     - Node services with the test route: give the full command to start
+       the server PLUS the exact URL/route to hit (e.g. \`node dist/server.js\`
+       then \`curl http://localhost:3000/__posthog-test-error\`).
+     - Mobile/native (Android/iOS/Flutter/React Native): give the run
+       command the platform uses to launch on a device/simulator (e.g.
+       \`npx react-native run-ios\`, \`flutter run\`, run from Android
+       Studio / Xcode) rather than a web "start".
+
+   Resolve concrete commands from the project's actual scripts/config —
+   substitute the right package manager (from detect_package_manager). Do
+   NOT run the build or the app yourself; the user runs them.
    If you cannot identify a build command, emit
    ${AgentSignals.ABORT} build command not found.
 
@@ -238,17 +259,20 @@ STEP 7 — Offer to test the local setup.
       will restore in step (d). Keep the change minimal — one button / one
       route, no extra helpers, no new imports beyond the strict minimum.
 
-   c) Pause for the user to test. Call wizard_ask with the build command
-      you identified in STEP 6 baked into the prompt — the user must run
-      the build themselves to upload source maps and surface the test
-      affordance.
+   c) Pause for the user to test. Call wizard_ask with BOTH the build
+      command and the run command you identified in STEP 6 baked into the
+      prompt as literal, copy-pasteable commands — the user must run the
+      build themselves to upload source maps and surface the test
+      affordance, then run the app to trigger it. Never write a generic
+      "start / open the app"; always substitute the exact run command (and
+      the exact button label or route) for THIS project.
 
       IMPORTANT: separate each numbered step with \\n\\n in the prompt
       string so the TUI renders them as distinct lines instead of a wall
       of text. Ink's <Text> respects \\n as a line break:
         {
           id: "test-done",
-          prompt: "1) Run \`<your detected build command>\` to upload source maps and build the app with the test button.\\n\\n2) Start / open the app, click the test button (or hit the test route).\\n\\n3) Open Error Tracking in PostHog (${ctx.host.replace(
+          prompt: "1) Run \`<your detected build command>\` to upload source maps and build the app with the test button.\\n\\n2) Start the app with \`<your detected run command>\`, then click the \\"<your test button label>\\" button (or hit \`<your test route>\`).\\n\\n3) Open Error Tracking in PostHog (${ctx.host.replace(
             /\/$/,
             '',
           )}/project/${

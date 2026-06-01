@@ -65,7 +65,13 @@ export const DEFAULT_WIZARD_READINESS_CONFIG: WizardReadinessConfig = {
     'mcp',
     'githubReleases',
   ],
-  degradedBlocksRun: ['anthropic'],
+  // TEMP — LOCAL ONLY, DO NOT COMMIT. status.claude.com is reporting a
+  // "minor" degradation, which (via degradedBlocksRun: ['anthropic']) would
+  // hard-block the wizard before OAuth and hang the auth screen at
+  // "Waiting for authentication...". Emptied so we can keep testing; a real
+  // major/critical Anthropic outage still blocks via downBlocksRun above.
+  // Revert to ['anthropic'] once Claude status is back to operational.
+  degradedBlocksRun: [],
 };
 
 /**
