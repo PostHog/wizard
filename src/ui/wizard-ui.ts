@@ -138,6 +138,9 @@ export interface WizardUI {
 
   setLoginUrl(url: string | null): void;
 
+  /** Direct PostHog authorize URL, shown in the manual-paste modal. */
+  setAuthorizeUrl(url: string | null): void;
+
   // ── Task tracking from SDK TaskCreate/TaskUpdate events ───────────
   // Receives the full materialised task list each call. The caller (agent
   // loop) maintains a Map<taskId, …> from incremental Task* events and

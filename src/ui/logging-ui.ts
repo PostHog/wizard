@@ -102,6 +102,10 @@ export class LoggingUI implements WizardUI {
     }
   }
 
+  setAuthorizeUrl(_url: string | null): void {
+    // Manual-paste modal is TUI-only; CI/non-interactive runs don't use it.
+  }
+
   showBlockingOutage(result: WizardReadinessResult): Promise<void> {
     console.log(`▲  Service health issues detected — blocking outage.`);
     const blockingKeys = getBlockingServiceKeys(result.health);

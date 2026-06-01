@@ -34,8 +34,8 @@ export const AuthScreen = ({ store }: AuthScreenProps) => {
     canPasteCode
       ? [
           {
-            match: 'p',
-            label: 'p',
+            match: ['p', 'P'],
+            label: 'P',
             action: 'paste auth code',
             handler: () => store.showManualAuthCode(),
           },
@@ -85,11 +85,10 @@ export const AuthScreen = ({ store }: AuthScreenProps) => {
             {'\n\n'}
             <Text color="cyan">{session.loginUrl}</Text>
           </Text>
-          <Text color="cyan">{session.loginUrl}</Text>
           <Box marginTop={1}>
             <Text dimColor>
               On a remote machine or devbox? Press{' '}
-              <Text color={Colors.accent}>p</Text> to paste the callback URL.
+              <Text color={Colors.accent}>[P]</Text> to paste the callback URL.
             </Text>
           </Box>
         </Box>

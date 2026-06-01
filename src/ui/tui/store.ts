@@ -308,6 +308,11 @@ export class WizardStore {
     this.emitChange();
   }
 
+  setAuthorizeUrl(url: string | null): void {
+    this.$session.setKey('authorizeUrl', url);
+    this.emitChange();
+  }
+
   setReadinessResult(result: WizardReadinessResult | null): void {
     this.$session.setKey('readinessResult', result);
     this.emitChange();

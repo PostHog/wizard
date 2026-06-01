@@ -99,6 +99,10 @@ export class InkUI implements WizardUI {
     this.store.setLoginUrl(url);
   }
 
+  setAuthorizeUrl(url: string | null): void {
+    this.store.setAuthorizeUrl(url);
+  }
+
   showBlockingOutage(result: WizardReadinessResult): Promise<void> {
     // In the TUI, the HealthCheckScreen handles outage display.
     // This is only called from agent-runner for the CI fallback path.

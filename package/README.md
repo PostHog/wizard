@@ -1,0 +1,370 @@
+<p align="center">
+  <img alt="posthoglogo" src="https://user-images.githubusercontent.com/65415371/205059737-c8a4f836-4889-4654-902e-f302b187b6a0.png">
+</p>
+
+
+> have any feedback, please drop an email to **[wizard@posthog.com](mailto:wizard@posthog.com)**.
+
+<h1>PostHog wizard ✨</h1>
+
+The PostHog wizard helps you quickly add PostHog to your project using AI.
+
+![Wizard clip](https://res.cloudinary.com/dmukukwp6/image/upload/q_auto,f_auto/pasted_image_2026_05_01_T19_53_26_002_Z_398f697f5c.png)
+
+# Usage
+
+To use the wizard, you can run it directly using:
+
+```bash
+npx @posthog/wizard
+```
+
+Currently the wizard can be used for over 16+ frameworks for frontend, backend, and mobile applications. If you have other integrations you would like the wizard to
+support, please open a [GitHub issue](https://github.com/posthog/wizard/issues)!
+
+Visit our [docs](https://posthog.com/docs/ai-engineering/ai-wizard) to learn more. 
+
+## MCP Commands
+
+The wizard also includes commands for managing PostHog MCP (Model Context
+Protocol) servers:
+
+```bash
+# Install PostHog MCP server to supported clients
+npx @posthog/wizard mcp add
+
+# Remove PostHog MCP server from supported clients
+npx @posthog/wizard mcp remove
+```
+
+## Revenue Analytics
+
+Wire up an existing PostHog + Stripe project for revenue analytics:
+
+```bash
+npx @posthog/wizard revenue
+```
+
+Requires PostHog and Stripe SDKs already installed. Supports `--ci` with the
+same flags as the main wizard.
+
+## Headless signup + install (agents / CI)
+
+For a fully non-interactive first-run (no existing PostHog account, no TTY,
+no browser), combine `--ci --signup --email`. The wizard provisions a new
+account, uses the returned personal API key to run the normal CI install,
+and wires PostHog into the project at `--install-dir`:
+
+```bash
+npx @posthog/wizard --ci --signup \
+  --email you@example.com \
+  --install-dir .
+```
+
+Optional flags: `--name "Your Name"`, `--region eu` (default `us`),
+`--integration nextjs` (else auto-detected).
+
+### Provision only
+
+If you just want credentials — for tests, pre-flight checks, or wiring up
+PostHog yourself — use the `provision` subcommand, which emits a structured
+`ProvisioningResult` and does nothing else:
+
+```bash
+# Human-readable (when stdout is a TTY)
+npx @posthog/wizard provision --email user@example.com --region us
+
+# Machine-readable — auto when stdout is piped, or force with --json
+npx @posthog/wizard provision --email user@example.com --region eu --json
+```
+
+Success prints the full `ProvisioningResult` (`projectApiKey`, `host`,
+`projectId`, `accountId`, `accessToken`, `refreshToken`, and
+`personalApiKey` if present). Failure exits 1; in `--json` mode the error
+is emitted to stderr as `{"error":"...","code":"..."}`, with `code` set to
+`email_exists` when the address is already registered.
+
+> ⚠️ **Output contains live credentials.** Pipe it into a secrets store —
+> do not let it be captured by shared CI logs. Mask the step output or
+> redirect stdout to a file your job reads and discards.
+
+# Options
+
+The following CLI arguments are available:
+
+| Option            | Description                                                      | Type    | Default | Choices                                              | Environment Variable           |
+| ----------------- | ---------------------------------------------------------------- | ------- | ------- | ---------------------------------------------------- | ------------------------------ |
+| `--help`          | Show help                                                        | boolean |         |                                                      |                                |
+| `--version`       | Show version number                                              | boolean |         |                                                      |                                |
+| `--debug`         | Enable verbose logging                                           | boolean | `false` |                                                      | `POSTHOG_WIZARD_DEBUG`         |
+| `--default`       | Use default options for all prompts                              | boolean | `true`  |                                                      | `POSTHOG_WIZARD_DEFAULT`       |
+| `--signup`        | Create a new PostHog account during setup                        | boolean | `false` |                                                      | `POSTHOG_WIZARD_SIGNUP`        |
+| `--integration`   | Integration to set up                                            | string  |         | "nextjs", "astro", "react", "svelte", "react-native", "tanstack-router", "tanstack-start" |                                |
+| `--menu`          | Show menu for manual integration selection instead of auto-detecting | boolean | `false` |                                                      | `POSTHOG_WIZARD_MENU`          |
+| `--force-install` | Force install packages even if peer dependency checks fail       | boolean | `false` |                                                      | `POSTHOG_WIZARD_FORCE_INSTALL` |
+| `--install-dir`   | Directory to install PostHog in                                  | string  |         |                                                      | `POSTHOG_WIZARD_INSTALL_DIR`   |
+| `--ci`            | Enable CI mode for non-interactive execution                     | boolean | `false` |                                                      | `POSTHOG_WIZARD_CI`            |
+| `--api-key`       | PostHog personal API key (phx_xxx) for authentication            | string  |         |                                                      | `POSTHOG_WIZARD_API_KEY`       |
+
+
+# CI Mode
+
+Run the wizard non-interactive executions with `--ci`:
+
+```bash
+npx @posthog/wizard --ci --api-key $POSTHOG_PERSONAL_API_KEY --install-dir .
+```
+
+When running in CI mode (`--ci`):
+
+- Bypasses OAuth login flow (uses personal API key directly)
+- Auto-selects defaults for all prompts
+- Skips MCP server installation
+- Auto-continues on git warnings (uncommitted/untracked files)
+- Auto-consents to AI usage
+
+The CLI args override environment variables in CI mode.
+
+### Required Flags for CI Mode
+
+- `--api-key`: Personal API key (`phx_xxx`) from your [PostHog settings](https://app.posthog.com/settings/user-api-keys)
+- `--install-dir`: Directory to install PostHog in (e.g., `.` for current directory)
+
+### Required API Key Scopes
+
+When creating your personal API key, ensure it has the following scopes enabled:
+
+- `user:read` - Required to fetch user information
+- `project:read` - Required to fetch project details and API token
+- `introspection` - Required for API introspection
+- `llm_gateway:read` - Required for LLM gateway access
+- `dashboard:write` - Required to create dashboards
+- `insight:write` - Required to create insights
+
+# Steal this code
+
+While the wizard works great on its own, we also find the approach used by this
+project is
+[a powerful way to improve AI agent coding sessions](https://posthog.com/blog/envoy-wizard-llm-agent).
+Agents can run CLI tools, which means that conventional code like this can
+participate in the AI revolution as well – with all the benefits and control
+that conventional code implies.
+
+If you want to use this code as a starting place for your own project, here's a
+quick explainer on its structure.
+
+## Entrypoint: `run.ts`
+
+The entrypoint for this tool is `run.ts`. Use this file to interpret arguments
+and set up the general flow of the application.
+
+## Analytics
+
+Did you know you can capture PostHog events even for smaller, supporting
+products like a command line tool? `src/utils/analytics.ts` is a great example
+of how to do it.
+
+This file wraps `posthog-node` with some convenience functions to set up an
+analytics session and log events. We can see the usage and outcomes of this
+wizard alongside all of our other PostHog product data, and this is very
+powerful. For example: we could show in-product surveys to people who have used
+the wizard to improve the experience.
+
+## Leave rules behind
+
+Supporting agent sessions after we leave is important. There are plenty of ways
+to break or misconfigure PostHog, so guarding against this is key.
+
+`src/utils/rules/add-editor-rules.ts` demonstrates how to dynamically construct
+rules files and store them in the project's `.cursor/rules` directory.
+
+## Prompts and LLM interactions
+
+LLM agent sessions are _anti-deterministic_: really, anything can happen.
+
+But using LLMs for code generation is really advantageous: they can interpret
+existing code at scale and then modify it reliably.
+
+_If_ they are well prompted.
+
+`src/lib/prompts.ts` demonstrates how to wrap a deterministic fence around a
+chaotic process. Every wizard session gets the same prompt, tailored to the
+specific files in the project.
+
+These prompts are channeled using `src/utils/query.ts` to an LLM interface we
+host. This gives us more control: we can be certain of the model version and
+provider which interpret the prompts and modify the files. This way, we can find
+the right tools for the job and again, apply them consistently.
+
+This also allows us to pick up the bill on behalf of our customers.
+
+When we make improvements to this process, these are available instantly to all
+users of the wizard, no training delays or other ambiguity.
+
+## Build system
+
+Built with [tsdown](https://tsdown.dev/) (Rolldown). `pnpm build` bundles `bin.ts` into ESM chunks in `dist/`, inlining all local source and keeping npm dependencies external.
+
+### Environment variables
+
+**Build-time (locked).** `NODE_ENV` is replaced with `"production"` at compile time. It cannot be overridden at runtime. All URLs, OAuth client IDs, and dev-mode code paths resolve to their production values unconditionally.
+
+To add a new build-time constant, add it to `env` in `tsdown.config.ts` and export it from `src/env.ts`.
+
+**Runtime (allowlisted).** Runtime env reads go through `runtimeEnv()` in `src/env.ts`, which only accepts keys in the `RuntimeEnvKey` union:
+
+| Variable | Purpose |
+|---|---|
+| `POSTHOG_WIZARD_BENCHMARK_CONFIG` | Path to benchmark config file |
+| `POSTHOG_WIZARD_BENCHMARK_FILE` | Output path for benchmark results |
+| `POSTHOG_WIZARD_LOG_DIR` | Log directory override |
+| `POSTHOG_WIZARD_DEBUG` / `DEBUG` | Enable debug output |
+| `MCP_URL` | Override MCP server URL |
+| `POSTHOG_API_KEY` | API key for MCP subprocess auth |
+| `TERM`, `TERM_PROGRAM`, `CI`, etc. | Terminal/platform detection |
+| `APPDATA`, `XDG_CONFIG_HOME` | Platform path resolution |
+
+To add a new runtime env var, add its key to `RuntimeEnvKey` in `src/env.ts`.
+
+**Direct `process.env` access** is only used for subprocess environment writes (e.g. `agent-interface.ts` setting `ANTHROPIC_BASE_URL`), vendored code, and tests.
+
+### Import aliases
+
+Path aliases defined in `tsconfig.build.json`, resolved by tsdown:
+
+| Alias | Maps to |
+|---|---|
+| `@env` | `src/env.ts` |
+| `@lib/*` | `src/lib/*` |
+| `@utils/*` | `src/utils/*` |
+| `@ui/*` | `src/ui/*` |
+| `@steps/*` | `src/steps/*` |
+| `@frameworks/*` | `src/frameworks/*` |
+
+## Running locally
+
+### Quick test without linking
+
+```bash
+pnpm try --install-dir=[a path]
+```
+
+### Development with auto-rebuild
+
+```bash
+pnpm run dev
+```
+
+This builds, links globally, and watches for changes. Leave it running - any `.ts` file changes will auto-rebuild. Then from any project:
+
+```bash
+wizard --integration=nextjs
+
+# Or use local MCP server:
+wizard --integration=nextjs --local-mcp
+```
+
+## Testing
+
+To run unit tests, run:
+
+```bash
+bin/test
+```
+
+To run E2E tests run:
+
+```bash
+bin/test-e2e
+```
+
+E2E tests are a bit more complicated to create and adjust due to to their mocked
+LLM calls. See the `e2e-tests/README.md` for more information.
+
+## Publishing your tool
+
+To make your version of a tool usable with a one-line `npx` command:
+
+1. Edit `package.json`, especially details like `name`, `version`
+2. Run [`npm publish`](https://docs.npmjs.com/cli/v7/commands/npm-publish) from
+   your project directory
+3. Now you can run it with `npx yourpackagename`
+
+# Health checks
+
+`src/lib/health-checks/` checks external status pages and PostHog-owned
+services before the wizard runs to decide whether it can proceed. The entry
+point is `evaluateWizardReadiness()`, which returns one of three values:
+
+| Decision            | Meaning                                                         |
+| ------------------- | --------------------------------------------------------------- |
+| `yes`               | All services healthy — proceed normally.                        |
+| `yes_with_warnings` | Some services degraded but no critical dependency is down.      |
+| `no`                | A critical dependency is down or degraded — do not run.         |
+
+### Module layout
+
+| File | Responsibility |
+| --- | --- |
+| `types.ts` | Enums, interfaces (`ServiceHealthStatus`, `AllServicesHealth`, etc.) |
+| `statuspage.ts` | Statuspage.io v2 API helpers + checks for Anthropic, PostHog, GitHub, npm, Cloudflare |
+| `endpoints.ts` | Direct endpoint checks for LLM Gateway (`/_liveness`) and MCP (`/`) |
+| `readiness.ts` | `checkAllExternalServices`, `evaluateWizardReadiness`, readiness config |
+| `index.ts` | Barrel re-export |
+| `testme.md` | Test running instructions and endpoint reference |
+
+## What blocks a run
+
+The `DEFAULT_WIZARD_READINESS_CONFIG` in `readiness.ts` controls this. It has
+two arrays:
+
+- **`downBlocksRun`** — if any of these report status **Down**, readiness is
+  **No**.
+- **`degradedBlocksRun`** — if any of these report **Degraded** (or worse),
+  readiness is **No**.
+
+### Current defaults
+
+```ts
+downBlocksRun: ['anthropic', 'posthogOverall', 'npmOverall', 'llmGateway', 'mcp'],
+degradedBlocksRun: ['anthropic'],
+```
+
+## Smoke test helper (`scripts/smoke-test-ci.sh`)
+
+This repo includes a helper script to run a full end‑to‑end smoke test of the wizard packaged in a tarball against a real app from [`posthog/wizard-workbench`](https://github.com/PostHog/wizard-workbench). This will catch certain packaging issues that might not be caught by other tests.
+
+**Prerequisites**
+
+- Point to a `wizard-workbench` checkout either by:
+  - Setting `WIZARD_WORKBENCH_ROOT=/absolute/path/to/wizard-workbench`, or
+  - Cloning `wizard-workbench` next to this repo (so it lives at `../wizard-workbench`).
+- Set `POSTHOG_PERSONAL_API_KEY` either in your shell or in `../wizard-workbench/.env`.
+- (Optional) Set `POSTHOG_PROJECT_ID` to target a specific PostHog project.
+
+**Usage**
+
+```bash
+# Default app: next-js/15-app-router-todo
+./scripts/smoke-test-ci.sh
+
+# Specify a different app from wizard-workbench/apps
+./scripts/smoke-test-ci.sh next-js/15-pages-router-saas
+
+# With API key (and optional project ID) inline
+POSTHOG_PERSONAL_API_KEY=phx_your_key_here \
+POSTHOG_PROJECT_ID=12345 \
+./scripts/smoke-test-ci.sh next-js/15-pages-router-saas
+
+# Pointing at a custom wizard-workbench checkout
+WIZARD_WORKBENCH_ROOT=/path/to/wizard-workbench \
+./scripts/smoke-test-ci.sh
+```
+
+The script will:
+
+- Build and pack the wizard
+- Copy the selected app into a temp directory
+- Install dependencies for the app
+- Install the packed wizard tarball into an isolated temp project
+- Run `wizard` in `--ci` mode against the copied app and perform basic post‑install checks

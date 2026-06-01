@@ -349,6 +349,13 @@ export async function performOAuthFlow(
       logToFile('[oauth] callback server ready, showing login URL');
 
       getUI().setLoginUrl(urlToOpen);
+      // The localhost proxy above only works on this machine. Surface the
+      // direct PostHog authorize URL too, for the manual-paste modal — on a
+      // remote/headless box the user opens it from another machine, where
+      // localhost:<port> is unreachable.
+      getUI().setAuthorizeUrl(
+        config.signup ? signupUrl.toString() : authUrl.toString(),
+      );
 
       if (NODE_ENV !== 'test') {
         opn(urlToOpen, { wait: false }).catch(() => {
@@ -383,6 +390,7 @@ export async function performOAuthFlow(
 
         server.close();
         getUI().setLoginUrl(null);
+        getUI().setAuthorizeUrl(null);
         loginSpinner.stop('Authorization complete!');
 
         return token;
