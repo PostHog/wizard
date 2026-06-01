@@ -4,11 +4,14 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 
-import { DefaultMCPClient } from '../MCPClient';
-import { DefaultMCPClientConfig } from '../defaults';
-import { PluginCapable, PluginInstallResult } from '../plugin-client';
+import { DefaultMCPClient } from '@steps/add-mcp-server-to-clients/MCPClient';
+import { DefaultMCPClientConfig } from '@steps/add-mcp-server-to-clients/defaults';
+import {
+  PluginCapable,
+  PluginInstallResult,
+} from '@steps/add-mcp-server-to-clients/plugin-client';
 
-import { analytics } from '../../../utils/analytics';
+import { analytics } from '@utils/analytics';
 
 export const CodexMCPConfig = DefaultMCPClientConfig;
 

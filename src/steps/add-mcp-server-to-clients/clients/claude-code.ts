@@ -1,10 +1,13 @@
-import { DefaultMCPClient } from '../MCPClient';
-import { DefaultMCPClientConfig } from '../defaults';
-import { PluginCapable, PluginInstallResult } from '../plugin-client';
+import { DefaultMCPClient } from '@steps/add-mcp-server-to-clients/MCPClient';
+import { DefaultMCPClientConfig } from '@steps/add-mcp-server-to-clients/defaults';
+import {
+  PluginCapable,
+  PluginInstallResult,
+} from '@steps/add-mcp-server-to-clients/plugin-client';
 import { z } from 'zod';
 import { execSync } from 'child_process';
-import { analytics } from '../../../utils/analytics';
-import { debug } from '../../../utils/debug';
+import { analytics } from '@utils/analytics';
+import { debug } from '@utils/debug';
 import * as os from 'os';
 import * as path from 'path';
 import * as fs from 'fs';

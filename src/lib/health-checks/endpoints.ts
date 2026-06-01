@@ -1,4 +1,4 @@
-import { REMOTE_SKILLS_BASE_URL } from '../constants';
+import { REMOTE_SKILLS_BASE_URL } from '@lib/constants';
 import { ServiceHealthStatus, type BaseHealthResult } from './types';
 
 // ---------------------------------------------------------------------------

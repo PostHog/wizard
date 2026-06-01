@@ -1,8 +1,8 @@
 import { Box, Text } from 'ink';
 import { useState, useSyncExternalStore } from 'react';
-import type { WizardStore } from '../../store.js';
-import { IntroScreenLayout } from '../IntroScreenLayout.js';
-import { SkillSourceInfo, useSkillEntry } from '../SkillSourceInfo.js';
+import type { WizardStore } from '@ui/tui/store';
+import { IntroScreenLayout } from '@ui/tui/screens/IntroScreenLayout';
+import { SkillSourceInfo, useSkillEntry } from '@ui/tui/screens/SkillSourceInfo';
 
 interface AuditIntroScreenProps {
   store: WizardStore;
@@ -16,7 +16,7 @@ export const AuditIntroScreen = ({ store }: AuditIntroScreenProps) => {
 
   const [showingMoreInfo, setShowingMoreInfo] = useState(false);
   const { session } = store;
-  // bin.ts seeds session.skillId from WorkflowConfig.skillId before render,
+  // bin.ts seeds session.skillId from ProgramConfig.skillId before render,
   // so audit and events-audit pick up their respective skill metadata here.
   const skillId = session.skillId ?? 'audit';
   const { skillEntry, fetchFailed } = useSkillEntry(skillId, session.localMcp);
@@ -35,7 +35,7 @@ export const AuditIntroScreen = ({ store }: AuditIntroScreenProps) => {
         <Text color="cyan" italic>
           {skillId}
         </Text>{' '}
-        workflow reviews your project's PostHog integration against best
+        program reviews your project's PostHog integration against best
         practices to help you capture high-quality events and writes a report
         for suggested actions. Nothing in your project will be modified.
       </Text>
@@ -73,7 +73,7 @@ export const AuditIntroScreen = ({ store }: AuditIntroScreenProps) => {
       installDir={session.installDir}
       body={body}
       showDetection={!showingMoreInfo}
-      workflowLabel={session.workflowLabel}
+      programLabel={session.programLabel}
       skillId={session.skillId}
       menuOptions={menuOptions}
       onSelect={handleSelect}

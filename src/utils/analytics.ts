@@ -3,8 +3,8 @@ import {
   ANALYTICS_HOST_URL,
   ANALYTICS_POSTHOG_PUBLIC_PROJECT_WRITE_KEY,
   ANALYTICS_TEAM_TAG,
-} from '../lib/constants';
-import type { WizardSession } from '../lib/wizard-session';
+} from '@lib/constants';
+import type { WizardSession } from '@lib/wizard-session';
 import { v4 as uuidv4 } from 'uuid';
 import { debug } from './debug';
 

@@ -1,4 +1,4 @@
-import { ClaudeCodeMCPClient } from '../claude-code';
+import { ClaudeCodeMCPClient } from '@steps/add-mcp-server-to-clients/clients/claude-code';
 
 jest.mock('child_process', () => ({
   execSync: jest.fn(),
@@ -18,7 +18,7 @@ jest.mock('../../../../utils/debug', () => ({
 
 describe('ClaudeCodeMCPClient — plugin methods', () => {
   const { execSync } = require('child_process');
-  const { analytics } = require('../../../../utils/analytics');
+  const { analytics } = require('@utils/analytics');
   const execSyncMock = execSync as jest.Mock;
 
   beforeEach(() => {

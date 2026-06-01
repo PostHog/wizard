@@ -1,8 +1,8 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import { discoverFeatures } from '../features.js';
-import { DiscoveredFeature } from '../../wizard-session.js';
+import { discoverFeatures } from '@lib/detection/features';
+import { DiscoveredFeature } from '@lib/wizard-session';
 
 function makeTmpDir(): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'features-detect-'));

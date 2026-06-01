@@ -1,16 +1,16 @@
 /**
- * Screen registry — maps screen names to React components.
+ * ScreenId registry — maps screen names to React components.
  *
  * Adding a new screen:
- *   1. Create the component in screens/ (or screens/<workflow>/).
- *   2. Add a `Screen` enum entry in flows.ts.
+ *   1. Create the component in screens/ (or screens/<program>/).
+ *   2. Add a `ScreenId` enum entry in screen-sequences.ts.
  *   3. Add an entry here.
- *   4. Reference the screen by name in the workflow's `steps` array.
+ *   4. Reference the screen by name in the program's `steps` array.
  */
 
 import type { ReactNode } from 'react';
 import type { WizardStore } from './store.js';
-import { Screen, Overlay, type ScreenName } from './router.js';
+import { ScreenId, Overlay, type ScreenName } from './router.js';
 
 import { HealthCheckScreen } from './screens/health/HealthCheckScreen.js';
 import { DoctorIntroScreen } from './screens/doctor/DoctorIntroScreen.js';
@@ -63,32 +63,34 @@ export function createScreens(
     [Overlay.WizardAsk]: <WizardAskScreen store={store} />,
 
     // Wizard flow
-    [Screen.Intro]: <PostHogIntegrationIntroScreen store={store} />,
-    [Screen.RevenueIntro]: <RevenueIntroScreen store={store} />,
-    [Screen.MigrationIntro]: <MigrationIntroScreen store={store} />,
-    [Screen.AgentSkillIntro]: <AgentSkillIntroScreen store={store} />,
-    [Screen.AuditIntro]: <AuditIntroScreen store={store} />,
-    [Screen.AuditRun]: <AuditRunScreen store={store} />,
-    [Screen.AuditOutro]: <AuditOutroScreen store={store} />,
-    [Screen.Audit3000Intro]: <Audit3000IntroScreen store={store} />,
-    [Screen.Audit3000Run]: <Audit3000RunScreen store={store} />,
-    [Screen.Audit3000Outro]: <Audit3000OutroScreen store={store} />,
-    [Screen.HealthCheck]: <HealthCheckScreen store={store} />,
-    [Screen.DoctorIntro]: <DoctorIntroScreen store={store} />,
-    [Screen.DoctorReport]: <DoctorReportScreen store={store} />,
-    [Screen.Setup]: <SetupScreen store={store} />,
-    [Screen.Auth]: <AuthScreen store={store} />,
-    [Screen.Run]: <RunScreen store={store} />,
-    [Screen.Mcp]: <McpScreen store={store} installer={services.mcpInstaller} />,
-    [Screen.KeepSkills]: <KeepSkillsScreen store={store} />,
-    [Screen.Outro]: <OutroScreen store={store} />,
-    [Screen.Exit]: <ExitScreen />,
-
-    // Standalone MCP flows
-    [Screen.McpAdd]: (
+    [ScreenId.Intro]: <PostHogIntegrationIntroScreen store={store} />,
+    [ScreenId.RevenueIntro]: <RevenueIntroScreen store={store} />,
+    [ScreenId.MigrationIntro]: <MigrationIntroScreen store={store} />,
+    [ScreenId.AgentSkillIntro]: <AgentSkillIntroScreen store={store} />,
+    [ScreenId.AuditIntro]: <AuditIntroScreen store={store} />,
+    [ScreenId.AuditRun]: <AuditRunScreen store={store} />,
+    [ScreenId.AuditOutro]: <AuditOutroScreen store={store} />,
+    [ScreenId.Audit3000Intro]: <Audit3000IntroScreen store={store} />,
+    [ScreenId.Audit3000Run]: <Audit3000RunScreen store={store} />,
+    [ScreenId.Audit3000Outro]: <Audit3000OutroScreen store={store} />,
+    [ScreenId.HealthCheck]: <HealthCheckScreen store={store} />,
+    [ScreenId.DoctorIntro]: <DoctorIntroScreen store={store} />,
+    [ScreenId.DoctorReport]: <DoctorReportScreen store={store} />,
+    [ScreenId.Setup]: <SetupScreen store={store} />,
+    [ScreenId.Auth]: <AuthScreen store={store} />,
+    [ScreenId.Run]: <RunScreen store={store} />,
+    [ScreenId.Mcp]: (
       <McpScreen store={store} installer={services.mcpInstaller} />
     ),
-    [Screen.McpRemove]: (
+    [ScreenId.KeepSkills]: <KeepSkillsScreen store={store} />,
+    [ScreenId.Outro]: <OutroScreen store={store} />,
+    [ScreenId.Exit]: <ExitScreen />,
+
+    // Standalone MCP flows
+    [ScreenId.McpAdd]: (
+      <McpScreen store={store} installer={services.mcpInstaller} />
+    ),
+    [ScreenId.McpRemove]: (
       <McpScreen
         store={store}
         installer={services.mcpInstaller}

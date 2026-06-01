@@ -3,9 +3,9 @@
  * and fans out async to all registered destinations.
  */
 
-import type { WizardStore, TaskItem } from '../../ui/tui/store';
-import { TaskStatus } from '../../ui/wizard-ui';
-import { RunPhase } from '../wizard-session';
+import type { WizardStore, TaskItem } from '@ui/tui/store';
+import { TaskStatus } from '@ui/wizard-ui';
+import { RunPhase } from '@lib/wizard-session';
 import {
   type TaskStreamDestination,
   type TaskStreamUpdate,
@@ -30,7 +30,7 @@ function buildTasks(items: TaskItem[]): StreamTask[] {
 
 export interface TaskStreamPushOptions {
   store: WizardStore;
-  workflowId: string;
+  programId: string;
   destinations: TaskStreamDestination[];
 }
 
@@ -38,14 +38,14 @@ export class TaskStreamPush {
   private readonly store: WizardStore;
   private readonly destinations: TaskStreamDestination[];
   private readonly startedAt: string;
-  private readonly workflowId: string;
+  private readonly programId: string;
 
   private sessionId: string | null = null;
   private created = false;
 
   constructor(opts: TaskStreamPushOptions) {
     this.store = opts.store;
-    this.workflowId = opts.workflowId;
+    this.programId = opts.programId;
     this.destinations = opts.destinations;
     this.startedAt = new Date().toISOString();
   }
@@ -57,16 +57,16 @@ export class TaskStreamPush {
 
   async push(): Promise<void> {
     const { session, tasks, eventPlan } = this.store;
-    const skillId = session.skillId ?? this.workflowId;
+    const skillId = session.skillId ?? this.programId;
 
     // Lock session ID on first push so it stays stable
     if (!this.sessionId) {
-      this.sessionId = `${this.workflowId}-${skillId}-${this.startedAt}`;
+      this.sessionId = `${this.programId}-${skillId}-${this.startedAt}`;
     }
 
     const payload: TaskStreamUpdate = {
       session_id: this.sessionId,
-      workflow_id: this.workflowId,
+      program_id: this.programId,
       skill_id: skillId,
       started_at: this.startedAt,
       run_phase: session.runPhase,

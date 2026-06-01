@@ -6,8 +6,8 @@
  * (or undefined). No store mutations, no UI calls.
  */
 
-import { Integration, DETECTION_TIMEOUT_MS } from '../constants.js';
-import { FRAMEWORK_REGISTRY } from '../registry.js';
+import { Integration, DETECTION_TIMEOUT_MS } from '@lib/constants';
+import { FRAMEWORK_REGISTRY } from '@lib/registry';
 
 /**
  * Loop through all registered frameworks and return the first one

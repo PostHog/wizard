@@ -17,13 +17,13 @@
 
 import { Box, Text } from 'ink';
 import { Fragment, useMemo, useState, type ReactNode } from 'react';
-import { useStdoutDimensions } from '../../../hooks/useStdoutDimensions.js';
+import { useStdoutDimensions } from '@ui/tui/hooks/useStdoutDimensions';
 import {
   KeyMatch,
   useKeyBindings,
   type KeyBinding,
-} from '../../../hooks/useKeyBindings.js';
-import type { AuditCheck } from '../../../../../lib/workflows/audit/types.js';
+} from '@ui/tui/hooks/useKeyBindings';
+import type { AuditCheck } from '@lib/programs/audit/types';
 import { AreaHeaderRow } from './AreaHeaderRow.js';
 import { CheckRow } from './CheckRow.js';
 import { DetailRow } from './DetailRow.js';

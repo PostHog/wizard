@@ -26,9 +26,9 @@ jest.mock('../ui/tui/start-tui', () => ({
     },
   }),
 }));
-jest.mock('../lib/workflows/posthog-integration/index', () => ({
+jest.mock('../lib/programs/posthog-integration/index', () => ({
   posthogIntegrationConfig: {
-    flowKey: 'posthog-integration',
+    id: 'posthog-integration',
     steps: [],
     run: null,
   },

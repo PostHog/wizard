@@ -6,7 +6,11 @@
  * counts + a duplicate flag for downstream plugins.
  */
 
-import type { Middleware, MiddlewareContext, MiddlewareStore } from '../types';
+import type {
+  Middleware,
+  MiddlewareContext,
+  MiddlewareStore,
+} from '@lib/middleware/types';
 
 export interface TurnData {
   /** Whether the current message is a duplicate of the last processed turn */

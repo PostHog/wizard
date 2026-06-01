@@ -16,8 +16,8 @@ import path from 'path';
 import fg from 'fast-glob';
 import { scan, scanSkillDirectory } from './yara-scanner';
 import type { YaraMatch, ScanResult } from './yara-scanner';
-import { logToFile } from '../utils/debug';
-import { analytics } from '../utils/analytics';
+import { logToFile } from '@utils/debug';
+import { analytics } from '@utils/analytics';
 import { isSkillInstallCommand } from './skill-install';
 
 // ─── Types ───────────────────────────────────────────────────────
@@ -105,7 +105,7 @@ export function formatScanReport(): string | null {
   return lines.join('\n');
 }
 
-import { WIZARD_YARA_REPORT_FILE } from '../utils/paths';
+import { WIZARD_YARA_REPORT_FILE } from '@utils/paths';
 
 /** Write the scan report to a JSON file. Returns the file path, or null if no scans occurred. */
 export function writeScanReport(): string | null {

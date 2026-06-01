@@ -22,7 +22,7 @@ import {
   checkMcpHealth,
   checkGithubReleasesHealth,
 } from './endpoints';
-import { logToFile } from '../../utils/debug';
+import { logToFile } from '@utils/debug';
 
 // ---------------------------------------------------------------------------
 // Service labels (used in human-readable reason strings)

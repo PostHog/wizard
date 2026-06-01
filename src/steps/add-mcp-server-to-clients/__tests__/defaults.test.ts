@@ -2,7 +2,7 @@ import {
   buildMCPUrl,
   getDefaultServerConfig,
   getNativeHTTPServerConfig,
-} from '../defaults';
+} from '@steps/add-mcp-server-to-clients/defaults';
 
 describe('defaults', () => {
   describe('buildMCPUrl', () => {

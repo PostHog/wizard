@@ -5,7 +5,7 @@ import axios from 'axios';
 import { logToFile } from './debug';
 import opn from 'opn';
 import { z } from 'zod';
-import { getUI } from '../ui';
+import { getUI } from '@ui';
 import {
   IS_DEV,
   ISSUES_URL,
@@ -15,7 +15,7 @@ import {
   POSTHOG_OAUTH_URL,
   POSTHOG_PROXY_CLIENT_ID,
   WIZARD_USER_AGENT,
-} from '../lib/constants';
+} from '@lib/constants';
 import { NODE_ENV } from '@env';
 import { abort } from './setup-utils';
 import { analytics } from './analytics';
@@ -48,7 +48,7 @@ const OAuthTokenResponseSchema = z.object({
   expires_in: z.number(),
   token_type: z.string(),
   scope: z.string(),
-  refresh_token: z.string(),
+  refresh_token: z.string().optional(),
   scoped_teams: z.array(z.number()).optional(),
   scoped_organizations: z.array(z.string()).optional(),
 });

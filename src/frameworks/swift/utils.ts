@@ -1,4 +1,4 @@
-import type { WizardOptions } from '../../utils/types';
+import type { WizardOptions } from '@utils/types';
 import fg from 'fast-glob';
 import * as fs from 'node:fs';
 import * as path from 'node:path';

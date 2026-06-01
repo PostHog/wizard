@@ -1,8 +1,8 @@
 import fg from 'fast-glob';
 import fs from 'fs/promises';
 import path from 'path';
-import type { WizardOptions } from '../../utils/types';
-import { createVersionBucket } from '../../utils/semver';
+import type { WizardOptions } from '@utils/types';
+import { createVersionBucket } from '@utils/semver';
 
 export const getAstroVersionBucket = createVersionBucket();
 

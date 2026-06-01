@@ -2,14 +2,14 @@
  * RunScreen — Default observational view of the agent run.
  *
  * Tabs: Status (LearnCard + ProgressList), Event plan (when present),
- * Tail logs, HN. Workflows that need a different tab list ship their own
+ * Tail logs, HN. Programs that need a different tab list ship their own
  * screen component (see audit/AuditRunScreen.tsx).
  */
 
 import { useMemo, useSyncExternalStore } from 'react';
 import { join } from 'node:path';
 import { Box } from 'ink';
-import type { WizardStore } from '../store.js';
+import type { WizardStore } from '@ui/tui/store';
 import {
   TabContainer,
   SplitView,
@@ -17,18 +17,18 @@ import {
   LogViewer,
   EventPlanViewer,
   HNViewer,
-} from '../primitives/index.js';
-import type { ProgressItem } from '../primitives/index.js';
-import { ADDITIONAL_FEATURE_LABELS } from '../../../lib/wizard-session.js';
-import { LearnCard } from '../components/LearnCard.js';
-import { TipsCard } from '../components/TipsCard.js';
-import { useStdoutDimensions } from '../hooks/useStdoutDimensions.js';
-import { useFileWatcher } from '../hooks/file-watcher.js';
-import { EVENT_PLAN_FILE } from '../../../lib/workflows/posthog-integration/index.js';
-import { getWorkflowConfig } from '../../../lib/workflows/workflow-registry.js';
-import { getContentBlocks as getSkillContentBlocks } from '../../../lib/workflows/agent-skill/content/index.js';
+} from '@ui/tui/primitives/index';
+import type { ProgressItem } from '@ui/tui/primitives/index';
+import { ADDITIONAL_FEATURE_LABELS } from '@lib/wizard-session';
+import { LearnCard } from '@ui/tui/components/LearnCard';
+import { TipsCard } from '@ui/tui/components/TipsCard';
+import { useStdoutDimensions } from '@ui/tui/hooks/useStdoutDimensions';
+import { useFileWatcher } from '@ui/tui/hooks/file-watcher';
+import { EVENT_PLAN_FILE } from '@lib/programs/posthog-integration/index';
+import { getProgramConfig } from '@lib/programs/program-registry';
+import { getContentBlocks as getSkillContentBlocks } from '@lib/programs/agent-skill/content/index';
 
-import { WIZARD_LOG_FILE } from '../../../utils/paths.js';
+import { WIZARD_LOG_FILE } from '@utils/paths';
 
 interface RunScreenProps {
   store: WizardStore;
@@ -77,16 +77,16 @@ export const RunScreen = ({ store }: RunScreenProps) => {
   const statuses =
     store.statusMessages.length > 0 ? store.statusMessages : undefined;
 
-  // Each workflow owns its content deck (workflow/content/index.tsx)
-  // and wires it onto its WorkflowConfig.getContentBlocks. Fall back to the
+  // Each program owns its content deck (program/content/index.tsx)
+  // and wires it onto its ProgramConfig.getContentBlocks. Fall back to the
   // agent-skill deck for runtime-created configs (e.g. `--skill <id>`) that
   // aren't in the static registry.
-  const activeFlow = store.router.activeFlow;
+  const activeProgram = store.router.activeProgram;
   const learnBlocks = useMemo(() => {
     const getBlocks =
-      getWorkflowConfig(activeFlow)?.getContentBlocks ?? getSkillContentBlocks;
+      getProgramConfig(activeProgram).getContentBlocks ?? getSkillContentBlocks;
     return getBlocks(store);
-  }, [store, activeFlow]);
+  }, [store, activeProgram]);
 
   const leftPane = store.learnCardComplete ? (
     <TipsCard store={store} />

@@ -1,19 +1,19 @@
 /**
  * LearnCard — Generic render shell for an animated content deck.
  *
- * Workflow-owned. Callers pass the script via `blocks`. The script lives
- * under `src/lib/workflows/<name>/content/`. The shell handles
+ * Program-owned. Callers pass the script via `blocks`. The script lives
+ * under `src/lib/programs/<name>/content/`. The shell handles
  * dimension tracking, status-bar height math, and the `display="none"`
  * clamp on narrow terminals.
  */
 
 import { Box, Text } from 'ink';
-import { Colors } from '../styles.js';
-import type { WizardStore } from '../store.js';
-import { ContentSequencer, TextRevealMode } from '../primitives/index.js';
-import type { ContentBlock } from '../primitives/index.js';
-import { useStdoutDimensions } from '../hooks/useStdoutDimensions.js';
-import { COLLAPSED_COUNT, EXPANDED_COUNT } from '../primitives/TabContainer.js';
+import { Colors } from '@ui/tui/styles';
+import type { WizardStore } from '@ui/tui/store';
+import { ContentSequencer, TextRevealMode } from '@ui/tui/primitives/index';
+import type { ContentBlock } from '@ui/tui/primitives/index';
+import { useStdoutDimensions } from '@ui/tui/hooks/useStdoutDimensions';
+import { COLLAPSED_COUNT, EXPANDED_COUNT } from '@ui/tui/primitives/TabContainer';
 
 /** Fixed chrome: ScreenContainer (3) + TabContainer tab bar (2) */
 const FIXED_CHROME = 5;
@@ -22,7 +22,7 @@ const MIN_CONTENT_ROWS = 6;
 
 interface LearnCardProps {
   store?: WizardStore;
-  /** The script to play. Workflow-owned; see workflows/<name>/content/. */
+  /** The script to play. Program-owned; see programs/<name>/content/. */
   blocks: ContentBlock[];
   onComplete?: () => void;
 }

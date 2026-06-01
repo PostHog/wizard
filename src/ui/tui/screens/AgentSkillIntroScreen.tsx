@@ -1,14 +1,14 @@
 /**
- * AgentSkillIntroScreen — Default intro for generic agent-skill workflows.
+ * AgentSkillIntroScreen — Default intro for generic agent-skill programs.
  *
- * Workflows that need a different intro ship their own screen component
+ * Programs that need a different intro ship their own screen component
  * (see audit/AuditIntroScreen.tsx).
  */
 
 import { Box, Text } from 'ink';
 import type { ReactNode } from 'react';
 import { useState, useSyncExternalStore } from 'react';
-import type { WizardStore } from '../store.js';
+import type { WizardStore } from '@ui/tui/store';
 import { IntroScreenLayout } from './IntroScreenLayout.js';
 import { SkillSourceInfo, useSkillEntry } from './SkillSourceInfo.js';
 
@@ -86,7 +86,7 @@ export const AgentSkillIntroScreen = ({
       showSubtitle={!showingMoreInfo}
       body={body}
       showDetection={!showingMoreInfo}
-      workflowLabel={session.workflowLabel}
+      programLabel={session.programLabel}
       skillId={session.skillId}
       menuOptions={menuOptions}
       onSelect={handleSelect}

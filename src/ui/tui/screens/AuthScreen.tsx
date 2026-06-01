@@ -8,9 +8,9 @@
 
 import { Box, Text } from 'ink';
 import { useSyncExternalStore } from 'react';
-import type { WizardStore } from '../store.js';
-import { LoadingBox } from '../primitives/index.js';
-import { Colors } from '../styles.js';
+import type { WizardStore } from '@ui/tui/store';
+import { LoadingBox } from '@ui/tui/primitives/index';
+import { Colors } from '@ui/tui/styles';
 
 interface AuthScreenProps {
   store: WizardStore;

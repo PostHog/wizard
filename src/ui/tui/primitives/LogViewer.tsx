@@ -6,7 +6,7 @@
 import { Box, Text } from 'ink';
 import { useState, useEffect } from 'react';
 import * as fs from 'fs';
-import { useStdoutDimensions } from '../hooks/useStdoutDimensions.js';
+import { useStdoutDimensions } from '@ui/tui/hooks/useStdoutDimensions';
 
 /** Rows consumed by TitleBar + spacer + ScreenContainer padding + status bar + tab bar */
 const CHROME_ROWS = 8;

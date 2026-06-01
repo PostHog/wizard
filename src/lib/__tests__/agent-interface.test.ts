@@ -1,10 +1,10 @@
-import { runAgent, createStopHook } from '../agent/agent-interface';
-import type { WizardOptions } from '../../utils/types';
-import type { SpinnerHandle } from '../../ui';
+import { runAgent, createStopHook } from '@lib/agent/agent-interface';
+import type { WizardOptions } from '@utils/types';
+import type { SpinnerHandle } from '@ui';
 import {
   AdditionalFeature,
   ADDITIONAL_FEATURE_PROMPTS,
-} from '../wizard-session';
+} from '@lib/wizard-session';
 
 // Mock dependencies
 jest.mock('../../utils/analytics');

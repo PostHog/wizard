@@ -1,8 +1,8 @@
 import { Box, Text } from 'ink';
 import { useEffect, useState, useSyncExternalStore } from 'react';
-import type { WizardStore } from '../../store.js';
-import { IntroScreenLayout } from '../IntroScreenLayout.js';
-import { SkillSourceInfo, useSkillEntry } from '../SkillSourceInfo.js';
+import type { WizardStore } from '@ui/tui/store';
+import { IntroScreenLayout } from '@ui/tui/screens/IntroScreenLayout';
+import { SkillSourceInfo, useSkillEntry } from '@ui/tui/screens/SkillSourceInfo';
 import { NEON_BLUE, NEON_GOLD, NEON_PINK } from './arcade-colors.js';
 
 const AUDIT3000_SKILL_ID = 'audit-3000';
@@ -90,12 +90,11 @@ export const Audit3000IntroScreen = ({ store }: Audit3000IntroScreenProps) => {
         <Text color="cyan" italic>
           {AUDIT3000_SKILL_ID}
         </Text>{' '}
-        workflow reviews your PostHog integration across 34 checks — SDK
-        install, identification, event capture, event quality, stale feature
-        flag hygiene, session replay (fix + optimize), and use-case expansion
-        across 8 PostHog products. When enrichment is available it also produces
-        a company profile and use-case match. Nothing in your project is
-        modified.
+        program reviews your PostHog integration across 34 checks — SDK install,
+        identification, event capture, event quality, stale feature flag
+        hygiene, session replay (fix + optimize), and use-case expansion across
+        8 PostHog products. When enrichment is available it also produces a
+        company profile and use-case match. Nothing in your project is modified.
       </Text>
       <Box marginTop={1}>
         <Text>
@@ -155,7 +154,7 @@ export const Audit3000IntroScreen = ({ store }: Audit3000IntroScreenProps) => {
       installDir={session.installDir}
       body={body}
       showDetection={!showingMoreInfo}
-      workflowLabel={session.workflowLabel}
+      programLabel={session.programLabel}
       skillId={session.skillId}
       menuOptions={menuOptions}
       onSelect={handleSelect}

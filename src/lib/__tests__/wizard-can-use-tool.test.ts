@@ -1,4 +1,4 @@
-import { wizardCanUseTool } from '../agent/agent-interface';
+import { wizardCanUseTool } from '@lib/agent/agent-interface';
 
 jest.mock('../../utils/analytics', () => ({
   analytics: {

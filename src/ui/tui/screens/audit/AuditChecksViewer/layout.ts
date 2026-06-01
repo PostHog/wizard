@@ -1,4 +1,4 @@
-import { MAX_WIDTH } from '../../../primitives/ScreenContainer.js';
+import { MAX_WIDTH } from '@ui/tui/primitives/ScreenContainer';
 
 /** Terminal rows used by chrome outside the viewer
  *  (TitleBar, spacer, screen padding, status bar, tab bar). */

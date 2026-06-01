@@ -12,7 +12,7 @@
  */
 import { randomUUID } from 'crypto';
 
-import { analytics } from '../utils/analytics';
+import { analytics } from '@utils/analytics';
 import type {
   AskAnswers,
   AskQuestion,

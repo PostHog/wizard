@@ -9,7 +9,7 @@ import {
   restart,
   tick,
   type GameState,
-} from '../hedgehog-runner-engine.js';
+} from '@ui/tui/screens/audit-3000/hedgehog-runner-engine';
 
 describe('hedgehog-runner-engine', () => {
   describe('initialState', () => {

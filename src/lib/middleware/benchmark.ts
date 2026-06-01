@@ -7,15 +7,15 @@
  *   pipeline.finalize(resultMessage, durationMs);
  */
 
-import { getUI, type SpinnerHandle } from '../../ui';
-import { logToFile, getLogFilePath, configureLogFile } from '../../utils/debug';
+import { getUI, type SpinnerHandle } from '@ui';
+import { logToFile, getLogFilePath, configureLogFile } from '@utils/debug';
 import { MiddlewarePipeline } from './pipeline';
 import { PhaseDetector } from './phase-detector';
 import { loadBenchmarkConfig } from './config';
 import { createPluginsFromConfig } from './benchmarks';
 import type { BenchmarkConfig } from './config';
-import type { WizardOptions } from '../../utils/types';
-import { AgentSignals } from '../agent/agent-interface';
+import type { WizardOptions } from '@utils/types';
+import { AgentSignals } from '@lib/agent/agent-interface';
 
 // ── Types ──────────────────────────────────────────────────────────────
 

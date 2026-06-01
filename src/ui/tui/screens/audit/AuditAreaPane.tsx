@@ -16,8 +16,8 @@
 import { Fragment } from 'react';
 import { Box, Text, useInput } from 'ink';
 import { spawn } from 'node:child_process';
-import { Colors } from '../../styles.js';
-import { type AuditCheck } from '../../../../lib/workflows/audit/types.js';
+import { Colors } from '@ui/tui/styles';
+import { type AuditCheck } from '@lib/programs/audit/types';
 import { AUDIT_AREA_SLIDES, type AreaSlide } from './slides/index.js';
 
 // ── Helpers ──────────────────────────────────────────────────────────

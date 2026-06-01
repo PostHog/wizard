@@ -2,7 +2,7 @@ import type {
   TaskStreamDestination,
   TaskStreamUpdate,
   StreamEvent,
-} from '../types';
+} from '@lib/task-stream/types';
 
 export class PostHogDestination implements TaskStreamDestination {
   readonly name = 'posthog';

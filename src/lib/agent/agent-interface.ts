@@ -5,41 +5,32 @@
 
 import path from 'path';
 import * as fs from 'fs';
-import { getUI, type SpinnerHandle } from '../../ui';
-import {
-  debug,
-  logToFile,
-  initLogFile,
-  getLogFilePath,
-} from '../../utils/debug';
-import type { WizardOptions } from '../../utils/types';
-import { analytics } from '../../utils/analytics';
+import { getUI, type SpinnerHandle } from '@ui';
+import { debug, logToFile, initLogFile, getLogFilePath } from '@utils/debug';
+import type { WizardOptions } from '@utils/types';
+import { analytics } from '@utils/analytics';
 import {
   WIZARD_REMARK_EVENT_NAME,
   POSTHOG_PROPERTY_HEADER_PREFIX,
   WIZARD_VARIANT_FLAG_KEY,
   WIZARD_VARIANTS,
   WIZARD_USER_AGENT,
-} from '../constants';
+} from '@lib/constants';
 import {
   type AdditionalFeature,
   ADDITIONAL_FEATURE_PROMPTS,
-} from '../wizard-session';
-import {
-  registerCleanup,
-  wizardAbort,
-  WizardError,
-} from '../../utils/wizard-abort';
-import { createCustomHeaders } from '../../utils/custom-headers';
-import { getLlmGatewayUrlFromHost } from '../../utils/urls';
-import { LINTING_TOOLS } from '../safe-tools';
-import { createWizardToolsServer, WIZARD_TOOL_NAMES } from '../wizard-tools';
+} from '@lib/wizard-session';
+import { registerCleanup, wizardAbort, WizardError } from '@utils/wizard-abort';
+import { createCustomHeaders } from '@utils/custom-headers';
+import { getLlmGatewayUrlFromHost } from '@utils/urls';
+import { LINTING_TOOLS } from '@lib/safe-tools';
+import { createWizardToolsServer, WIZARD_TOOL_NAMES } from '@lib/wizard-tools';
 import {
   createPreToolUseYaraHooks,
   createPostToolUseYaraHooks,
-} from '../yara-hooks';
+} from '@lib/yara-hooks';
 import { getWizardCommandments } from './commandments';
-import type { PackageManagerDetector } from '../detection/package-manager';
+import type { PackageManagerDetector } from '@lib/detection/package-manager';
 
 // Dynamic import cache for ESM module
 let _sdkModule: any = null;
@@ -74,9 +65,9 @@ export const AgentSignals = {
   /** Signal emitted when the agent cannot access the setup resource */
   ERROR_RESOURCE_MISSING: '[ERROR-RESOURCE-MISSING]',
   /**
-   * Signal emitted when the agent cannot complete the workflow and is
+   * Signal emitted when the agent cannot complete the program and is
    * aborting intentionally (distinct from errors). Format: "[ABORT] <reason>".
-   * Workflows can declare an onAbort handler to render a custom screen.
+   * Programs can declare an onAbort handler to render a custom screen.
    */
   ABORT: '[ABORT]',
   /** Signal emitted when the agent provides a remark about its run */
@@ -86,7 +77,7 @@ export const AgentSignals = {
   /**
    * Signal emitted when the agent has created a PostHog dashboard for the
    * user. Format: `[DASHBOARD_URL] <full https url>`. The URL is captured
-   * onto `session.dashboardUrl` and surfaced by workflows in their outro.
+   * onto `session.dashboardUrl` and surfaced by programs in their outro.
    */
   DASHBOARD_URL: '[DASHBOARD_URL]',
 } as const;
@@ -108,7 +99,7 @@ export enum AgentErrorType {
   API_ERROR = 'WIZARD_API_ERROR',
   /** YARA scanner detected a security violation */
   YARA_VIOLATION = 'WIZARD_YARA_VIOLATION',
-  /** Agent intentionally aborted the workflow (emitted [ABORT] <reason>) */
+  /** Agent intentionally aborted the program (emitted [ABORT] <reason>) */
   ABORT = 'WIZARD_ABORT',
 }
 
@@ -294,17 +285,23 @@ export type AgentConfig = {
   /** Feature flag key -> variant (evaluated at start of run). */
   wizardFlags?: Record<string, string>;
   wizardMetadata?: Record<string, string>;
-  /** Workflow identifier — selects the model for that workflow. */
+  /** Program identifier — selects the model for that program. */
   integrationLabel?: string;
   /** Bridge that drives the `wizard_ask` overlay. Omit in non-interactive hosts. */
-  askBridge?: import('../wizard-ask-bridge').WizardAskBridge;
+  askBridge?: import('@lib/wizard-ask-bridge').WizardAskBridge;
   /** Per-run cap on `wizard_ask` invocations. Defaults to 10. */
   askMaxQuestions?: number;
+  /** Extra tools added on top of BASE_ALLOWED_TOOLS for this run. */
+  allowedTools?: readonly string[];
+  /** Tools removed from BASE_ALLOWED_TOOLS for this run. */
+  disallowedTools?: readonly string[];
   /**
    * Read accessor for the active pending question. Used by canUseTool to
    * block Write/Edit while the overlay is open (defense in depth).
    */
-  getPendingQuestion?: () => import('../wizard-session').PendingQuestion | null;
+  getPendingQuestion?: () =>
+    | import('@lib/wizard-session').PendingQuestion
+    | null;
 };
 
 /**
@@ -381,11 +378,17 @@ type AgentRunConfig = {
   model: string;
   wizardFlags?: Record<string, string>;
   wizardMetadata?: Record<string, string>;
+  /** Extra tools added on top of BASE_ALLOWED_TOOLS for this run. */
+  allowedTools?: readonly string[];
+  /** Tools removed from BASE_ALLOWED_TOOLS for this run. */
+  disallowedTools?: readonly string[];
   /**
    * Read accessor for the active pending question. canUseTool reads this
    * to block Write/Edit while the overlay is open.
    */
-  getPendingQuestion?: () => import('../wizard-session').PendingQuestion | null;
+  getPendingQuestion?: () =>
+    | import('@lib/wizard-session').PendingQuestion
+    | null;
 };
 
 /**
@@ -477,7 +480,7 @@ const SAFE_SCRIPTS = [
 const DANGEROUS_OPERATORS = /[;`$()]/;
 
 // Re-export for backwards compatibility — canonical source is skill-install.ts
-export { isSkillInstallCommand } from '../skill-install';
+export { isSkillInstallCommand } from '@lib/skill-install';
 
 /**
  * Check if command is an allowed package manager command.
@@ -521,10 +524,27 @@ function matchesAllowedPrefix(command: string): boolean {
 export function wizardCanUseTool(
   toolName: string,
   input: Record<string, unknown>,
-  context: { wizardAskPending?: boolean } = {},
+  context: {
+    wizardAskPending?: boolean;
+    disallowedTools?: readonly string[];
+  } = {},
 ):
   | { behavior: 'allow'; updatedInput: Record<string, unknown> }
   | { behavior: 'deny'; message: string } {
+  // Hard gate on the program's disallow list. The SDK's own disallowedTools
+  // option blocks tools at the parent level, but does NOT reliably propagate
+  // to dispatched subagents (their AgentDefinition has its own field which the
+  // SDK appears to ignore for MCP tools). canUseTool is invoked for every
+  // tool call regardless of which agent layer emitted it, so denying here is
+  // the only certain block.
+  if (context.disallowedTools?.includes(toolName)) {
+    logToFile(`Denying disallowed tool: ${toolName}`);
+    return {
+      behavior: 'deny',
+      message: `Tool ${toolName} is disabled for this program.`,
+    };
+  }
+
   if (
     context.wizardAskPending &&
     (toolName === 'Write' || toolName === 'Edit')
@@ -721,7 +741,7 @@ export async function initializeAgent(
     mcpServers['wizard-tools'] = wizardToolsServer;
 
     // audit-3000 needs Opus 4.7's depth for the multi-phase audit chain;
-    // every other workflow runs on Sonnet 4.6.
+    // every other program runs on Sonnet 4.6.
     // Bare model IDs (no `anthropic/` prefix) so the LLM gateway's Bedrock
     // fallback can match map_to_bedrock_model()'s strict lookup.
     const model =
@@ -735,6 +755,8 @@ export async function initializeAgent(
       model,
       wizardFlags: config.wizardFlags,
       wizardMetadata: config.wizardMetadata,
+      allowedTools: config.allowedTools,
+      disallowedTools: config.disallowedTools,
       getPendingQuestion: config.getPendingQuestion,
     };
 
@@ -912,29 +934,22 @@ export async function runAgent(
   let abortReason: string | null = null;
 
   try {
-    // Tools needed for the wizard:
-    // - File operations: Read, Write, Edit
-    // - Search: Glob, Grep
-    // - Commands: Bash (with restrictions via canUseTool)
-    // - MCP discovery: ListMcpResourcesTool (to find available skills)
-    // Skills themselves are enabled via the `skills` option below, not allowedTools.
-    // MCP tools (PostHog) come from mcpServers, not allowedTools
+    // Per-program allow/disallow lists tweak BASE_ALLOWED_TOOLS. Skills are
+    // enabled via the `skills` query option; PostHog MCP tools come through
+    // `mcpServers`. Neither belongs in this list.
+    const disallow = new Set(agentConfig.disallowedTools ?? []);
     const allowedTools = [
-      'Read',
-      'Write',
-      'Edit',
-      'Glob',
-      'Grep',
-      'Bash',
-      // SDK 0.3.x renamed the subagent dispatch tool from 'Task' to 'Agent'.
-      'Agent',
-      // Task list tools (replaced TodoWrite in 0.3.142). The wizard
-      // commandments instruct the agent to call TaskCreate/TaskUpdate to
-      // surface progress in the right-hand task panel.
-      ...Object.values(TaskTool),
-      'ListMcpResourcesTool',
-      ...WIZARD_TOOL_NAMES,
-    ];
+      ...BASE_ALLOWED_TOOLS,
+      ...(agentConfig.allowedTools ?? []),
+    ].filter((t) => !disallow.has(t));
+
+    // Subagents dispatched via the Agent tool don't inherit the parent's
+    // MCP servers by default — so general-purpose subagents can't see the
+    // PostHog MCP and fall back to curl with whatever key they can find
+    // (then 401, then start asking the user for keys). Override
+    // general-purpose to forward parent MCP servers by name; SDK resolves
+    // each string against the parent's mcpServers map.
+    const inheritedMcpServerNames = Object.keys(agentConfig.mcpServers);
 
     const response = query({
       prompt: createPromptStream(),
@@ -945,6 +960,22 @@ export async function runAgent(
         permissionMode: 'acceptEdits',
         betas: ['context-1m-2025-08-07'],
         mcpServers: agentConfig.mcpServers,
+        agents: {
+          'general-purpose': {
+            description:
+              "General-purpose subagent. Inherits the parent run's tools plus the PostHog and wizard-tools MCP servers, so it can call mcp__posthog-wizard__* directly instead of curling the REST API.",
+            prompt:
+              'You are a general-purpose subagent for the PostHog wizard. Prefer the authenticated mcp__posthog-wizard__* MCP tools over raw HTTP — they are already authenticated for this project. Only fall back to other transports if no MCP tool covers the operation.',
+            mcpServers: inheritedMcpServerNames,
+            // SDK does not propagate the parent's disallowedTools to subagents
+            // (sdk.d.ts: AgentDefinition has its own disallowedTools, and
+            // `tools: undefined` means "inherit all"). Without this, a program
+            // that disallows wizard_ask still leaks it to dispatched subagents.
+            disallowedTools: agentConfig.disallowedTools
+              ? [...agentConfig.disallowedTools]
+              : undefined,
+          },
+        },
         // Load skills from project's .claude/skills/ directory
         settingSources: ['project'],
         // Enable all discovered skills. Omitting this is NOT "skills off" —
@@ -1017,8 +1048,8 @@ export async function runAgent(
           ENABLE_TOOL_SEARCH: 'auto:0',
           // SDK 0.3.142 made MCP servers connect in the background by default;
           // the agent may start its first turn before posthog-wizard is ready
-          // (audit workflows call audit_seed_checks on turn 1, integration
-          // workflows call load_skill_menu / install_skill). Restore the prior
+          // (audit programs call audit_seed_checks on turn 1, integration
+          // programs call load_skill_menu / install_skill). Restore the prior
           // blocking behavior so the SDK waits up to 5s for MCP connect before
           // turn 1. `alwaysLoad: true` on the server would also work but it
           // disables tool search deferral and re-inflates the system prompt by
@@ -1034,7 +1065,10 @@ export async function runAgent(
           const result = wizardCanUseTool(
             toolName,
             input as Record<string, unknown>,
-            { wizardAskPending: agentConfig.getPendingQuestion?.() != null },
+            {
+              wizardAskPending: agentConfig.getPendingQuestion?.() != null,
+              disallowedTools: agentConfig.disallowedTools,
+            },
           );
           logToFile('canUseTool result:', result);
           return Promise.resolve(result);
@@ -1115,7 +1149,7 @@ export async function runAgent(
       );
 
       // [ABORT] detection: the skill emits "[ABORT] <reason>" when it
-      // cannot complete the workflow. Kill the SDK query immediately —
+      // cannot complete the program. Kill the SDK query immediately —
       // the prompt doesn't need to cooperate with "and exit" because the
       // abort is enforced here. The reason is surfaced via the returned
       // AgentErrorType.ABORT so the runner can render a custom screen.
@@ -1312,6 +1346,26 @@ export enum TaskTool {
   Get = 'TaskGet',
   List = 'TaskList',
 }
+
+/**
+ * Tools every program gets unless its ProgramConfig.disallowedTools says
+ * otherwise. Programs add more via ProgramConfig.allowedTools (e.g.
+ * `'Agent'` to opt into subagent dispatch). Skills and PostHog MCP tools
+ * are enabled separately (skills option / mcpServers).
+ */
+export const BASE_ALLOWED_TOOLS: readonly string[] = [
+  'Read',
+  'Write',
+  'Edit',
+  'Glob',
+  'Grep',
+  'Bash',
+  // Task list tools (replaced TodoWrite in 0.3.142). Commandments instruct
+  // the agent to call TaskCreate/TaskUpdate to surface progress in the TUI.
+  ...Object.values(TaskTool),
+  'ListMcpResourcesTool',
+  ...Object.values(WIZARD_TOOL_NAMES),
+];
 
 type TaskEntry = { content: string; status: string; activeForm?: string };
 

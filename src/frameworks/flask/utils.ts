@@ -1,7 +1,7 @@
 import fg from 'fast-glob';
-import { getUI } from '../../ui';
-import type { WizardOptions } from '../../utils/types';
-import { createVersionBucket } from '../../utils/semver';
+import { getUI } from '@ui';
+import type { WizardOptions } from '@utils/types';
+import { createVersionBucket } from '@utils/semver';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 

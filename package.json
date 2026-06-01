@@ -1,6 +1,6 @@
 {
   "name": "@posthog/wizard",
-  "version": "2.13.1",
+  "version": "2.14.3",
   "homepage": "https://github.com/PostHog/wizard",
   "repository": "https://github.com/PostHog/wizard",
   "description": "The PostHog wizard helps you to configure your project",
@@ -156,7 +156,9 @@
       "^@env$": "<rootDir>/src/env.ts",
       "^@lib/(.*)$": "<rootDir>/src/lib/$1",
       "^@utils/(.*)$": "<rootDir>/src/utils/$1",
+      "^@ui$": "<rootDir>/src/ui/index.ts",
       "^@ui/(.*)$": "<rootDir>/src/ui/$1",
+      "^@steps$": "<rootDir>/src/steps/index.ts",
       "^@steps/(.*)$": "<rootDir>/src/steps/$1",
       "^@frameworks/(.*)$": "<rootDir>/src/frameworks/$1",
       "^(\\.{1,2}/.*)\\.js$": "$1"

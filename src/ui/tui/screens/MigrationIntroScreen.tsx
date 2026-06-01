@@ -1,6 +1,6 @@
 import { Box, Text } from 'ink';
 import { useSyncExternalStore } from 'react';
-import type { WizardStore } from '../store.js';
+import type { WizardStore } from '@ui/tui/store';
 import { IntroScreenLayout } from './IntroScreenLayout.js';
 
 interface MigrationIntroScreenProps {
@@ -25,7 +25,7 @@ export const MigrationIntroScreen = ({ store }: MigrationIntroScreenProps) => {
     <IntroScreenLayout
       installDir={session.installDir}
       body={body}
-      workflowLabel={session.workflowLabel}
+      programLabel={session.programLabel}
       skillId={session.skillId}
       menuOptions={[
         { label: 'Continue', value: 'continue' },

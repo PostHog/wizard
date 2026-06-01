@@ -13,16 +13,16 @@ import path from 'path';
 import fs from 'fs';
 import { execFileSync } from 'child_process';
 import { z } from 'zod';
-import { logToFile } from '../utils/debug';
-import { analytics } from '../utils/analytics';
-import { skillTmpPath } from '../utils/paths';
+import { logToFile } from '@utils/debug';
+import { analytics } from '@utils/analytics';
+import { skillTmpPath } from '@utils/paths';
 import type { PackageManagerDetector } from './detection/package-manager';
 import {
   AUDIT_CHECKS_FILE,
   coerceAuditChecks,
   type AuditCheck,
   type AuditStatus,
-} from './workflows/audit/types';
+} from './programs/audit/types';
 import type { WizardAskBridge } from './wizard-ask-bridge';
 
 // ---------------------------------------------------------------------------
@@ -136,7 +136,7 @@ export type InstallSkillResult =
 
 /**
  * High-level "install a skill by ID" helper. Fetches the skill menu,
- * finds the skill, downloads and extracts it. Workflows should use this
+ * finds the skill, downloads and extracts it. Programs should use this
  * instead of composing fetchSkillMenu + downloadSkill themselves.
  */
 export async function installSkillById(
@@ -1025,18 +1025,22 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
   });
 }
 
-/** Tool names exposed by the wizard-tools server, for use in allowedTools */
-export const WIZARD_TOOL_NAMES = [
-  `${SERVER_NAME}:check_env_keys`,
-  `${SERVER_NAME}:set_env_values`,
-  `${SERVER_NAME}:detect_package_manager`,
-  `${SERVER_NAME}:load_skill_menu`,
-  `${SERVER_NAME}:install_skill`,
-  `${SERVER_NAME}:audit_seed_checks`,
-  `${SERVER_NAME}:audit_add_checks`,
-  `${SERVER_NAME}:audit_resolve_checks`,
-  `${SERVER_NAME}:wizard_ask`,
-];
+/** Tool names exposed by the wizard-tools server, keyed for selective use. */
+// SDK expects MCP tool names in allowedTools/disallowedTools to be the
+// fully-qualified `mcp__<server>__<tool>` form (sdk.d.ts: "Fully-qualified
+// MCP tool name, e.g. mcp__server__tool_name."). The colon form silently
+// fails to match, which made every program's `disallowedTools` entry a no-op.
+export const WIZARD_TOOL_NAMES = {
+  checkEnvKeys: `mcp__${SERVER_NAME}__check_env_keys`,
+  setEnvValues: `mcp__${SERVER_NAME}__set_env_values`,
+  detectPackageManager: `mcp__${SERVER_NAME}__detect_package_manager`,
+  loadSkillMenu: `mcp__${SERVER_NAME}__load_skill_menu`,
+  installSkill: `mcp__${SERVER_NAME}__install_skill`,
+  auditSeedChecks: `mcp__${SERVER_NAME}__audit_seed_checks`,
+  auditAddChecks: `mcp__${SERVER_NAME}__audit_add_checks`,
+  auditResolveChecks: `mcp__${SERVER_NAME}__audit_resolve_checks`,
+  wizardAsk: `mcp__${SERVER_NAME}__wizard_ask`,
+} as const;
 
 // ---------------------------------------------------------------------------
 // Test-only exports

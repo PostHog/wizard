@@ -11,8 +11,8 @@ import {
   mergeEnvValues,
   parseEnvKeys,
   resolveEnvPath,
-} from '../wizard-tools';
-import type { AuditCheck } from '../workflows/audit/types';
+} from '@lib/wizard-tools';
+import type { AuditCheck } from '@lib/programs/audit/types';
 
 function makeTmpDir(): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'wizard-tools-'));
@@ -298,12 +298,14 @@ describe('makeMutex', () => {
 });
 
 describe('WIZARD_TOOL_NAMES', () => {
-  it('exposes audit_add_checks so future workflows can append checks through the MCP server', () => {
-    expect(WIZARD_TOOL_NAMES).toContain('wizard-tools:audit_add_checks');
+  it('exposes audit_add_checks so future programs can append checks through the MCP server', () => {
+    expect(WIZARD_TOOL_NAMES.auditAddChecks).toBe(
+      'mcp__wizard-tools__audit_add_checks',
+    );
   });
 
   it('exposes wizard_ask so skills can collect structured input from the user', () => {
-    expect(WIZARD_TOOL_NAMES).toContain('wizard-tools:wizard_ask');
+    expect(WIZARD_TOOL_NAMES.wizardAsk).toBe('mcp__wizard-tools__wizard_ask');
   });
 });
 

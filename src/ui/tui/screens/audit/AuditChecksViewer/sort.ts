@@ -1,7 +1,4 @@
-import type {
-  AuditCheck,
-  AuditStatus,
-} from '../../../../../lib/workflows/audit/types.js';
+import type { AuditCheck, AuditStatus } from '@lib/programs/audit/types';
 
 const STATUS_ORDER: Record<AuditStatus, number> = {
   error: 0,

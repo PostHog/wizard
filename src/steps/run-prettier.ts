@@ -1,14 +1,14 @@
-import type { Integration } from '../lib/constants';
+import type { Integration } from '@lib/constants';
 import { withProgress } from '../telemetry';
-import { analytics } from '../utils/analytics';
-import { getUI } from '../ui';
+import { analytics } from '@utils/analytics';
+import { getUI } from '@ui';
 import {
   tryGetPackageJson,
   getUncommittedOrUntrackedFiles,
   isInGitRepo,
-} from '../utils/setup-utils';
-import { hasPackageInstalled } from '../utils/package-json';
-import type { WizardOptions } from '../utils/types';
+} from '@utils/setup-utils';
+import { hasPackageInstalled } from '@utils/package-json';
+import type { WizardOptions } from '@utils/types';
 import * as childProcess from 'node:child_process';
 
 export async function runPrettierStep({
