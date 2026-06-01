@@ -19,6 +19,7 @@ import {
 import { NODE_ENV } from '@env';
 import { abort } from './setup-utils';
 import { analytics } from './analytics';
+import { getProxyRequestConfig, isProtocolMismatchError } from './proxy';
 
 const OAUTH_CALLBACK_STYLES = `
   <style>
@@ -235,8 +236,10 @@ async function exchangeCodeForToken(
 ): Promise<OAuthTokenResponse> {
   const clientId = IS_DEV ? POSTHOG_DEV_CLIENT_ID : POSTHOG_PROXY_CLIENT_ID;
 
+  const tokenUrl = `${POSTHOG_OAUTH_URL}/oauth/token`;
+
   const response = await axios.post(
-    `${POSTHOG_OAUTH_URL}/oauth/token`,
+    tokenUrl,
     {
       grant_type: 'authorization_code',
       code,
@@ -249,6 +252,7 @@ async function exchangeCodeForToken(
         'Content-Type': 'application/json',
         'User-Agent': WIZARD_USER_AGENT,
       },
+      ...getProxyRequestConfig(tokenUrl),
     },
   );
 
@@ -349,7 +353,11 @@ export async function performOAuthFlow(
 
         const error = e instanceof Error ? e : new Error('Unknown error');
 
-        if (error.message.includes('timeout')) {
+        if (isProtocolMismatchError(error)) {
+          getUI().log.error(
+            `Authorization failed: could not reach PostHog through your network proxy.\n\nThis usually happens behind a corporate HTTP/HTTPS proxy. Make sure the HTTPS_PROXY (and/or HTTP_PROXY) environment variable points at your proxy, for example:\n\n  export HTTPS_PROXY=http://proxy.example.com:8080\n\nThen re-run the wizard. If the problem persists, please create an issue:\n${ISSUES_URL}`,
+          );
+        } else if (error.message.includes('timeout')) {
           getUI().log.error('Authorization timed out. Please try again.');
         } else if (error.message.includes('access_denied')) {
           getUI().log.info(
