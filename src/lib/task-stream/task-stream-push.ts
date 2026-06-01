@@ -52,6 +52,17 @@ function secondPrecisionIso(d: Date): string {
   return d.toISOString().replace(/\.\d{3}Z$/, 'Z');
 }
 
+/**
+ * `workflow_id` and `skill_id` end up unescaped in Redis pub/sub
+ * channel names, so the backend rejects anything outside
+ * `^[A-Za-z0-9_.-]{1,255}$` with a 400. All current values already
+ * comply; this is defence in depth in case a future caller passes
+ * something with `:`, spaces, or other separators.
+ */
+function sanitizeChannelId(value: string): string {
+  return value.replace(/[^A-Za-z0-9_.-]/g, '-').slice(0, 255);
+}
+
 function buildError(
   phase: RunPhase,
   outroData: OutroData | null,
@@ -91,14 +102,16 @@ export class TaskStreamPush {
 
   constructor(opts: TaskStreamPushOptions) {
     this.store = opts.store;
-    this.programId = opts.programId;
+    this.programId = sanitizeChannelId(opts.programId);
     this.destinations = opts.destinations;
     this.enabled = opts.enabled ?? true;
     this.startedAt = secondPrecisionIso(new Date());
     // skillId may not be set yet — fall back to programId so the
     // session_id is stable for the whole run regardless of when the
     // program metadata is populated.
-    const skillId = this.store.session.skillId ?? this.programId;
+    const skillId = sanitizeChannelId(
+      this.store.session.skillId ?? this.programId,
+    );
     this.sessionId = `${this.programId}-${skillId}-${this.startedAt}`;
   }
 
@@ -230,7 +243,7 @@ export class TaskStreamPush {
 
   private async sendOnce(): Promise<void> {
     const { session, tasks, eventPlan } = this.store;
-    const skillId = session.skillId ?? this.programId;
+    const skillId = sanitizeChannelId(session.skillId ?? this.programId);
     const phase = session.runPhase;
 
     const payload: TaskStreamUpdate = {

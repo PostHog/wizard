@@ -202,6 +202,27 @@ describe('TaskStreamPush', () => {
       expect(dest.calls[0][1].event_plan).toBeUndefined();
     });
 
+    it('sanitizes workflow_id and skill_id to channel-safe chars', async () => {
+      // Backend rejects anything outside ^[A-Za-z0-9_.-]{1,255}$ on
+      // workflow_id / skill_id because they appear unescaped in Redis
+      // channel names. Sanitize disallowed chars to "-" before sending.
+      const store = createMockStore({ skillId: 'has:colons and spaces' });
+      const dest = createMockDestination();
+      const push = new TaskStreamPush({
+        store,
+        programId: 'wf:with*globs',
+        destinations: [dest],
+      });
+
+      await push.push();
+
+      const payload = dest.calls[0][1];
+      expect(payload.workflow_id).toBe('wf-with-globs');
+      expect(payload.skill_id).toBe('has-colons-and-spaces');
+      expect(payload.workflow_id).toMatch(/^[A-Za-z0-9_.-]+$/);
+      expect(payload.skill_id).toMatch(/^[A-Za-z0-9_.-]+$/);
+    });
+
     it('populates error when phase is Error', async () => {
       const store = createMockStore({ runPhase: RunPhase.Error });
       const { push, dest } = createPush(store);

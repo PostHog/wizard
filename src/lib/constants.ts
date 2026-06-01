@@ -122,12 +122,14 @@ export const WIZARD_PROVISIONING_SCOPES = [
  * path and are not in the provisioning allowlist:
  * - introspection         lets the wizard introspect its own token
  * - health_issue:read     used by `wizard doctor`
- * - wizard_session:write  stream run state to /api/projects/{id}/wizard_sessions/
+ * - wizard_session:read   list / retrieve / stream sessions
+ * - wizard_session:write  stream run state to /api/projects/{id}/wizard/sessions/
  */
 export const WIZARD_OAUTH_SCOPES = [
   ...WIZARD_PROVISIONING_SCOPES,
   'introspection',
   'health_issue:read',
+  'wizard_session:read',
   'wizard_session:write',
 ] as const;
 
