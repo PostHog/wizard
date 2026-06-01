@@ -49,9 +49,10 @@ describe('createSkillProgram', () => {
 });
 
 describe('AGENT_SKILL_STEPS', () => {
-  it('is intro → auth → run → outro → skills, all with screens and working predicates', () => {
+  it('is intro → health-check → auth → run → outro → skills, all with screens and working predicates', () => {
     expect(AGENT_SKILL_STEPS.map((s) => s.id)).toEqual([
       'intro',
+      'health-check',
       'auth',
       'run',
       'outro',
@@ -59,7 +60,7 @@ describe('AGENT_SKILL_STEPS', () => {
     ]);
 
     const session = buildSession({});
-    const [intro, auth, run, outro] = AGENT_SKILL_STEPS;
+    const [intro, , auth, run, outro] = AGENT_SKILL_STEPS;
 
     // Intro gate starts closed
     expect(intro.gate!(session)).toBe(false);

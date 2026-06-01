@@ -1,5 +1,6 @@
 import type { ProgramStep } from '@lib/programs/program-step';
 import { RunPhase } from '@lib/wizard-session';
+import { HEALTH_CHECK_STEP } from '@lib/programs/shared/health-check-step';
 
 export const MIGRATION_PROGRAM: ProgramStep[] = [
   {
@@ -8,6 +9,7 @@ export const MIGRATION_PROGRAM: ProgramStep[] = [
     screenId: 'migration-intro',
     gate: (session) => session.setupConfirmed,
   },
+  HEALTH_CHECK_STEP,
   {
     id: 'auth',
     label: 'Authentication',
