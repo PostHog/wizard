@@ -1054,9 +1054,17 @@ describe('WizardStore', () => {
 
       // Step 1: Confirm intro
       store.completeSetup();
+      expect(store.currentScreen).toBe(ScreenId.HealthCheck);
+
+      // Step 2: Clear the health-check screen with a healthy readiness result
+      store.setReadinessResult({
+        decision: WizardReadiness.Yes,
+        health: {} as never,
+        reasons: [],
+      });
       expect(store.currentScreen).toBe(ScreenId.Auth);
 
-      // Step 2: Authenticate
+      // Step 3: Authenticate
       store.setCredentials({
         accessToken: 'tok',
         projectApiKey: 'pk',
@@ -1065,14 +1073,14 @@ describe('WizardStore', () => {
       });
       expect(store.currentScreen).toBe(ScreenId.Run);
 
-      // Step 3: Start and complete run
+      // Step 4: Start and complete run
       store.setRunPhase(RunPhase.Running);
       expect(store.currentScreen).toBe(ScreenId.Run);
 
       store.setRunPhase(RunPhase.Completed);
       expect(store.currentScreen).toBe(ScreenId.Outro);
 
-      // Step 4: Dismiss outro
+      // Step 5: Dismiss outro
       store.setOutroDismissed();
       expect(store.currentScreen).toBe('keep-skills');
     });
