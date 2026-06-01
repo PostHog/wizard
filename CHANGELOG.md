@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.14.3](https://github.com/PostHog/wizard/compare/v2.14.2...v2.14.3) (2026-06-01)
+
+
+### Bug Fixes
+
+* sharing health check step with agent-skill program ([#494](https://github.com/PostHog/wizard/issues/494)) ([2b866ad](https://github.com/PostHog/wizard/commit/2b866adb49ef3157ff0d713f5f825ef7c4d03e7e))
+
 ## [2.14.2](https://github.com/PostHog/wizard/compare/v2.14.1...v2.14.2) (2026-05-26)
 
 
