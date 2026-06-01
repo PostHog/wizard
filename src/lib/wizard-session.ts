@@ -165,6 +165,13 @@ export interface WizardSession {
   // From OAuth
   credentials: Credentials | null;
 
+  /**
+   * `role_at_organization` from `/api/users/@me/`. Null when the upstream
+   * value is missing (older accounts, fresh signups before onboarding).
+   * Drives role-tailored MCP prompt suggestions on the SuggestedPromptsScreen.
+   */
+  roleAtOrganization: string | null;
+
   // Lifecycle
   runPhase: RunPhase;
   loginUrl: string | null;
@@ -177,6 +184,7 @@ export interface WizardSession {
   mcpComplete: boolean;
   mcpOutcome: McpOutcome | null;
   mcpInstalledClients: string[];
+  suggestedPromptsDismissed: boolean;
   skillsComplete: boolean;
   outroDismissed: boolean;
 
@@ -262,10 +270,12 @@ export function buildSession(args: {
     mcpComplete: false,
     mcpOutcome: null,
     mcpInstalledClients: [],
+    suggestedPromptsDismissed: false,
     skillsComplete: false,
     outroDismissed: false,
     loginUrl: null,
     credentials: null,
+    roleAtOrganization: null,
     readinessResult: null,
     outageDismissed: false,
     settingsOverrideKeys: null,

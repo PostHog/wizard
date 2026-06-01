@@ -196,6 +196,10 @@ export class LoggingUI implements WizardUI {
     // No-op in CI mode — credentials are handled directly
   }
 
+  setRoleAtOrganization(_role: string | null): void {
+    // No-op in CI mode — there's no TUI to render role-tailored prompts
+  }
+
   syncTodos(
     todos: Array<{ content: string; status: string; activeForm?: string }>,
   ): void {

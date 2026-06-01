@@ -271,6 +271,11 @@ export class WizardStore {
     this.emitChange();
   }
 
+  setRoleAtOrganization(role: string | null): void {
+    this.$session.setKey('roleAtOrganization', role);
+    this.emitChange();
+  }
+
   setFrameworkConfig(
     integration: WizardSession['integration'],
     config: WizardSession['frameworkConfig'],
@@ -483,6 +488,11 @@ export class WizardStore {
       skills_kept: kept,
       ...sessionProperties(this.session),
     });
+    this.emitChange();
+  }
+
+  setSuggestedPromptsDismissed(): void {
+    this.$session.setKey('suggestedPromptsDismissed', true);
     this.emitChange();
   }
 

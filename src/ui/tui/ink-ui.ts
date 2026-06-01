@@ -84,6 +84,10 @@ export class InkUI implements WizardUI {
     this.store.setCredentials(credentials);
   }
 
+  setRoleAtOrganization(role: string | null): void {
+    this.store.setRoleAtOrganization(role);
+  }
+
   setDetectedFramework(label: string): void {
     this.store.setDetectedFramework(label);
   }

@@ -39,6 +39,12 @@ interface ProjectData {
   host: string;
   distinctId: string;
   projectId: number;
+  /**
+   * Optional `role_at_organization` from `/api/users/@me/`. Drives the
+   * role-tailored prompt suggestions on the SuggestedPromptsScreen. Null
+   * for signup flows (no role picked yet) and older accounts.
+   */
+  roleAtOrganization?: string | null;
 }
 
 export interface CliSetupConfig {
@@ -386,6 +392,7 @@ export async function getOrAskForProjectData(
   accessToken: string;
   projectId: number;
   cloudRegion: CloudRegion;
+  roleAtOrganization: string | null;
 }> {
   // CI mode: bypass OAuth, use personal API key for LLM gateway
   if (_options.ci && _options.apiKey) {
@@ -404,23 +411,40 @@ export async function getOrAskForProjectData(
           )
         : await fetchProjectDataWithApiKey(_options.apiKey, cloudUrl);
 
+    // Best-effort role fetch — CI flows may run with project-scoped keys
+    // that 403 on /api/users/@me/, so swallow errors and continue.
+    let roleAtOrganization: string | null = null;
+    try {
+      const userData = await fetchUserData(_options.apiKey, cloudUrl);
+      roleAtOrganization = userData.role_at_organization ?? null;
+    } catch {
+      // best-effort
+    }
+
     return {
       host,
       projectApiKey: projectData.api_token,
       accessToken: _options.apiKey,
       projectId: projectData.id,
       cloudRegion,
+      roleAtOrganization,
     };
   }
 
-  const { host, projectApiKey, accessToken, projectId, cloudRegion } =
-    await withProgress('login', () =>
-      askForWizardLogin({
-        signup: _options.signup,
-        email: _options.email,
-        region: _options.region,
-      }),
-    );
+  const {
+    host,
+    projectApiKey,
+    accessToken,
+    projectId,
+    cloudRegion,
+    roleAtOrganization,
+  } = await withProgress('login', () =>
+    askForWizardLogin({
+      signup: _options.signup,
+      email: _options.email,
+      region: _options.region,
+    }),
+  );
 
   if (!projectApiKey) {
     const cloudUrl = getCloudUrlFromRegion(cloudRegion);
@@ -441,6 +465,7 @@ ${cloudUrl}/settings/project#variables`);
     projectApiKey: projectApiKey || DUMMY_PROJECT_API_KEY,
     projectId,
     cloudRegion,
+    roleAtOrganization: roleAtOrganization ?? null,
   };
 }
 
@@ -522,6 +547,7 @@ async function askForWizardLogin(options: {
     distinctId: userData.distinct_id,
     projectId: projectId!,
     cloudRegion,
+    roleAtOrganization: userData.role_at_organization ?? null,
   };
 
   getUI().log.success('Login complete.');

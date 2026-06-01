@@ -92,6 +92,13 @@ export interface WizardUI {
     projectId: number;
   }): void;
 
+  /**
+   * Persist the user's `role_at_organization` once it's been fetched from
+   * `/api/users/@me/`. Drives role-tailored prompt suggestions on the
+   * SuggestedPromptsScreen. Pass `null` to clear / when unknown.
+   */
+  setRoleAtOrganization(role: string | null): void;
+
   /** Show blocking service outage (pushes outage overlay in TUI). Blocks until dismissed. */
   showBlockingOutage(result: WizardReadinessResult): Promise<void>;
 

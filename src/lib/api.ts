@@ -5,6 +5,9 @@ import { WIZARD_USER_AGENT } from './constants';
 
 export const ApiUserSchema = z.object({
   distinct_id: z.string(),
+  // Optional / nullable on the backend — pre-onboarding signup paths return
+  // null and older accounts may not have it set. Treat as a hint, never a guarantee.
+  role_at_organization: z.string().nullish(),
   organizations: z.array(
     z.object({
       id: z.string().uuid(),
@@ -18,6 +21,24 @@ export const ApiUserSchema = z.object({
     id: z.string().uuid(),
   }),
 });
+
+/**
+ * Single activity log entry the wizard cares about. The PostHog endpoint
+ * returns much more — schema kept minimal so changes upstream don't break us.
+ */
+export const ActivityLogEntrySchema = z
+  .object({
+    scope: z.string().nullish(),
+    activity: z.string().nullish(),
+    created_at: z.string().nullish(),
+  })
+  .passthrough();
+
+export const ActivityLogResponseSchema = z.object({
+  results: z.array(ActivityLogEntrySchema),
+});
+
+export type ActivityLogEntry = z.infer<typeof ActivityLogEntrySchema>;
 
 export const ApiProjectSchema = z.object({
   id: z.number(),
@@ -61,6 +82,48 @@ export async function fetchUserData(
       baseUrl,
     });
     throw apiError;
+  }
+}
+
+/**
+ * Best-effort fetch of recent activity log entries. Returns [] on any error
+ * — the caller (SuggestedPromptsScreen's verify phase) treats absence of
+ * results as "haven't detected anything yet" rather than a hard failure.
+ *
+ * Polling this endpoint lets the wizard celebrate when the user's first MCP
+ * prompt triggers any project-scoped activity. Read-only `List my feature flags`
+ * doesn't write to the activity log, but other test prompts (creating a flag,
+ * dashboard, etc.) do — so this is a soft signal, not a guarantee.
+ */
+export async function fetchRecentActivity(
+  accessToken: string,
+  projectId: number,
+  baseUrl: string,
+  since: Date,
+): Promise<ActivityLogEntry[]> {
+  try {
+    const response = await axios.get(
+      `${baseUrl}/api/projects/${projectId}/activity_log/`,
+      {
+        params: { limit: 10 },
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'User-Agent': WIZARD_USER_AGENT,
+        },
+        // Short timeout — this is a polled probe, not a critical path.
+        timeout: 4000,
+      },
+    );
+    const parsed = ActivityLogResponseSchema.safeParse(response.data);
+    if (!parsed.success) return [];
+    const sinceMs = since.getTime();
+    return parsed.data.results.filter((entry) => {
+      if (!entry.created_at) return false;
+      const t = Date.parse(entry.created_at);
+      return Number.isFinite(t) && t >= sinceMs;
+    });
+  } catch {
+    return [];
   }
 }
 
