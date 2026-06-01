@@ -21,6 +21,7 @@ import { PortConflictScreen } from './screens/PortConflictScreen.js';
 import { PostHogIntegrationIntroScreen } from './screens/PostHogIntegrationIntroScreen.js';
 import { RevenueIntroScreen } from './screens/RevenueIntroScreen.js';
 import { MigrationIntroScreen } from './screens/MigrationIntroScreen.js';
+import { SourceMapsIntroScreen } from './screens/SourceMapsIntroScreen.js';
 import { AgentSkillIntroScreen } from './screens/AgentSkillIntroScreen.js';
 import { AuditIntroScreen } from './screens/audit/AuditIntroScreen.js';
 import { AuditRunScreen } from './screens/audit/AuditRunScreen.js';
@@ -65,6 +66,7 @@ export function createScreens(
     // Wizard flow
     [ScreenId.Intro]: <PostHogIntegrationIntroScreen store={store} />,
     [ScreenId.RevenueIntro]: <RevenueIntroScreen store={store} />,
+    [ScreenId.SourceMapsIntro]: <SourceMapsIntroScreen store={store} />,
     [ScreenId.MigrationIntro]: <MigrationIntroScreen store={store} />,
     [ScreenId.AgentSkillIntro]: <AgentSkillIntroScreen store={store} />,
     [ScreenId.AuditIntro]: <AuditIntroScreen store={store} />,
