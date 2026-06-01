@@ -102,6 +102,7 @@
     "prebuild": "pnpm clean && node scripts/generate-version.cjs",
     "build:watch": "tsdown --watch",
     "build": "tsdown",
+    "build:ci": "WIZARD_BUILD_NODE_ENV=ci pnpm build",
     "typecheck": "tsc --noEmit",
     "postbuild": "chmod +x ./dist/bin.js && cp -r scripts/** dist && pnpm test:smoke",
     "test:smoke": "node --input-type=module -e \"import './dist/bin.js'\" 2>&1 | head -5 | grep -q 'PostHog Wizard' || (echo 'Smoke test failed: compiled binary crashed on load' && exit 1)",
