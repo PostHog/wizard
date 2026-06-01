@@ -22,10 +22,7 @@ if (!satisfies(process.version, NODE_VERSION_RANGE)) {
 import { isNonInteractiveEnvironment } from '@utils/environment';
 import { getUI, setUI } from '@ui';
 import { LoggingUI } from '@ui/logging-ui';
-import {
-  getSubcommandPrograms,
-  Program,
-} from '@lib/programs/program-registry';
+import { getSubcommandPrograms, Program } from '@lib/programs/program-registry';
 import type { ProgramConfig } from '@lib/programs/program-step';
 import type { WizardSession } from '@lib/wizard-session';
 import { POSTHOG_DOCS_URL } from '@lib/constants';
@@ -437,17 +434,13 @@ const cli = yargs(hideBin(process.argv))
             .map((s) => s.trim())
             .filter(Boolean);
           void (async () => {
-            const { readApiKeyFromEnv } = await import(
-              '@utils/env-api-key'
-            );
+            const { readApiKeyFromEnv } = await import('@utils/env-api-key');
             const apiKey =
               (options.apiKey as string | undefined) || readApiKeyFromEnv();
 
             try {
               const { startTUI } = await import('@ui/tui/start-tui');
-              const { buildSession } = await import(
-                '@lib/wizard-session'
-              );
+              const { buildSession } = await import('@lib/wizard-session');
 
               const tui = startTUI(WIZARD_VERSION, Program.McpAdd);
               const session = buildSession({
@@ -490,9 +483,7 @@ const cli = yargs(hideBin(process.argv))
           void (async () => {
             try {
               const { startTUI } = await import('@ui/tui/start-tui');
-              const { buildSession } = await import(
-                '@lib/wizard-session'
-              );
+              const { buildSession } = await import('@lib/wizard-session');
 
               const tui = startTUI(WIZARD_VERSION, Program.McpRemove);
               const session = buildSession({
@@ -563,9 +554,7 @@ cli.command(
 
     void (async () => {
       try {
-        const { provisionNewAccount } = await import(
-          '@utils/provisioning'
-        );
+        const { provisionNewAccount } = await import('@utils/provisioning');
         if (!jsonMode) {
           getUI().log.info(`Provisioning account for ${email} in ${region}...`);
         }
@@ -647,16 +636,11 @@ function runWizard(
       const { startTUI } = await import('@ui/tui/start-tui');
       const { buildSession, RunPhase } = await import('@lib/wizard-session');
       const { TaskStreamPush } = await import('@lib/task-stream/index');
-      const { FileDestination } = await import(
-        '@lib/task-stream/destinations/file'
-      );
       const { PostHogDestination } = await import(
         '@lib/task-stream/destinations/posthog'
       );
       const { analytics } = await import('@utils/analytics');
       const { logToFile } = await import('@utils/debug');
-      type AnyDestination =
-        import('@lib/task-stream/types').TaskStreamDestination;
 
       const tui = startTUI(WIZARD_VERSION, config.id as any);
 
@@ -686,31 +670,18 @@ function runWizard(
       tui.store.session = session;
 
       // Task stream — subscribes to store changes and pushes run state
-      // to external consumers (file log + PostHog backend). The PostHog
-      // destination is omitted when --no-telemetry is set so no HTTP
-      // request is ever issued.
+      // to the PostHog backend. Disabled entirely when --no-telemetry is
+      // set so no HTTP request is ever issued.
       const taskStreamEnabled = !session.noTelemetry;
-      const destinations: AnyDestination[] = [new FileDestination()];
-      if (taskStreamEnabled) {
-        destinations.push(
-          new PostHogDestination({
-            getCredentials: () => {
-              const creds = tui.store.session.credentials;
-              if (!creds) return null;
-              return {
-                host: creds.host,
-                projectId: creds.projectId,
-                auth: { kind: 'oauth_session', token: creds.accessToken },
-              };
-            },
-            onError: (err) => logToFile('[task-stream-push]', err.message),
-          }),
-        );
-      }
       const taskStream = new TaskStreamPush({
         store: tui.store,
         programId: config.id,
-        destinations,
+        destinations: [
+          new PostHogDestination({
+            getCredentials: () => tui.store.session.credentials,
+            onError: (err) => logToFile('[task-stream-push]', err.message),
+          }),
+        ],
         enabled: taskStreamEnabled,
       });
       taskStream.attach();
@@ -740,9 +711,7 @@ function runWizard(
       const skipAgent = config.run == null;
 
       if (skipAgent) {
-        const { getOrAskForProjectData } = await import(
-          '@utils/setup-utils'
-        );
+        const { getOrAskForProjectData } = await import('@utils/setup-utils');
         const { projectApiKey, host, accessToken, projectId } =
           await getOrAskForProjectData({
             signup: session.signup,
@@ -832,9 +801,7 @@ function runWizardCI(
     const { configureLogFileFromEnvironment, logToFile } = await import(
       '@utils/debug'
     );
-    const { wizardAbort, WizardError } = await import(
-      '@utils/wizard-abort'
-    );
+    const { wizardAbort, WizardError } = await import('@utils/wizard-abort');
 
     configureLogFileFromEnvironment();
 

@@ -1,14 +1,12 @@
-import {
-  PostHogDestination,
-  type PostHogCredentials,
-} from '../destinations/posthog';
+import { PostHogDestination } from '../destinations/posthog';
 import { StreamEvent, type TaskStreamUpdate } from '../types';
-import { RunPhase } from '../../wizard-session';
+import { RunPhase, type Credentials } from '../../wizard-session';
 
-const SAMPLE_CREDS: PostHogCredentials = {
+const SAMPLE_CREDS: Credentials = {
   host: 'https://us.posthog.com',
   projectId: 42,
-  auth: { kind: 'oauth_session', token: 'pha_abc' },
+  accessToken: 'pha_abc',
+  projectApiKey: 'phc_test',
 };
 
 const SAMPLE_PAYLOAD: TaskStreamUpdate = {
@@ -42,7 +40,7 @@ function makeFetch(responses: Array<Response | Error>): jest.Mock {
 }
 
 describe('PostHogDestination', () => {
-  it('POSTs to /api/projects/{id}/wizard_sessions/ with Bearer auth', async () => {
+  it('POSTs to /api/projects/{id}/wizard/sessions/ with Bearer auth', async () => {
     const fetchImpl = makeFetch([makeResponse(201)]);
     const dest = new PostHogDestination({
       getCredentials: () => SAMPLE_CREDS,
@@ -53,7 +51,7 @@ describe('PostHogDestination', () => {
 
     expect(fetchImpl).toHaveBeenCalledTimes(1);
     const [url, init] = fetchImpl.mock.calls[0];
-    expect(url).toBe('https://us.posthog.com/api/projects/42/wizard_sessions/');
+    expect(url).toBe('https://us.posthog.com/api/projects/42/wizard/sessions/');
     expect(init.method).toBe('POST');
     expect((init.headers as Record<string, string>).Authorization).toBe(
       'Bearer pha_abc',
@@ -286,24 +284,22 @@ describe('PostHogDestination', () => {
 
     await dest.send(StreamEvent.Update, SAMPLE_PAYLOAD);
     expect(fetchImpl.mock.calls[0][0]).toBe(
-      'https://us.posthog.com/api/projects/42/wizard_sessions/',
+      'https://us.posthog.com/api/projects/42/wizard/sessions/',
     );
   });
 
-  it('personal_api_key auth sends Bearer header', async () => {
-    const fetchImpl = makeFetch([makeResponse(201)]);
+  it('treats 200 (upsert update) as success, same as 201 (created)', async () => {
+    const fetchImpl = makeFetch([makeResponse(200)]);
+    const onError = jest.fn();
     const dest = new PostHogDestination({
-      getCredentials: () => ({
-        ...SAMPLE_CREDS,
-        auth: { kind: 'personal_api_key', key: 'phx_xyz' },
-      }),
+      getCredentials: () => SAMPLE_CREDS,
       fetchImpl,
+      onError,
     });
 
     await dest.send(StreamEvent.Update, SAMPLE_PAYLOAD);
-    const init = fetchImpl.mock.calls[0][1];
-    expect((init.headers as Record<string, string>).Authorization).toBe(
-      'Bearer phx_xyz',
-    );
+
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    expect(onError).not.toHaveBeenCalled();
   });
 });

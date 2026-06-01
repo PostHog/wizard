@@ -1,6 +1,9 @@
 /**
  * PostHog destination — pushes wizard run state to the PostHog backend
- * via `POST /api/projects/{project_id}/wizard_sessions/`.
+ * via `POST /api/projects/{project_id}/wizard/sessions/`.
+ *
+ * The endpoint is an upsert keyed by `(team, session_id)`: 201 means
+ * the row was created, 200 means it was updated. Both are success.
  *
  * Failure handling is fail-silent: never throws to the caller, never
  * writes to stdout/stderr, never blocks the agent. Errors flow through
@@ -19,16 +22,7 @@ import type {
   TaskStreamUpdate,
   StreamEvent,
 } from '@lib/task-stream/types';
-
-export type PostHogAuth =
-  | { kind: 'oauth_session'; token: string }
-  | { kind: 'personal_api_key'; key: string };
-
-export interface PostHogCredentials {
-  host: string;
-  projectId: number;
-  auth: PostHogAuth;
-}
+import type { Credentials } from '@lib/wizard-session';
 
 export interface PostHogDestinationOptions {
   /**
@@ -36,7 +30,7 @@ export interface PostHogDestinationOptions {
    * before authentication has completed; in that case the send is a
    * no-op (no HTTP request).
    */
-  getCredentials: () => PostHogCredentials | null;
+  getCredentials: () => Credentials | null;
   /** Receives every error for the wizard's internal logfile. */
   onError?: (err: Error) => void;
   /** Override for tests. Defaults to global fetch. */
@@ -68,12 +62,6 @@ function parseRetryAfter(value: string | null): number {
   return DEFAULT_RETRY_AFTER_MS;
 }
 
-function authHeader(auth: PostHogAuth): string {
-  return auth.kind === 'personal_api_key'
-    ? `Bearer ${auth.key}`
-    : `Bearer ${auth.token}`;
-}
-
 /**
  * Strip the internal-only `timestamp` field before sending. The
  * backend schema in the RFC does not define it.
@@ -89,7 +77,7 @@ function toWirePayload(
 export class PostHogDestination implements TaskStreamDestination {
   readonly name = 'posthog';
 
-  private readonly getCredentials: () => PostHogCredentials | null;
+  private readonly getCredentials: () => Credentials | null;
   private readonly onError: (err: Error) => void;
   private readonly fetchImpl: typeof fetch;
   private readonly sleep: (ms: number) => Promise<void>;
@@ -112,29 +100,26 @@ export class PostHogDestination implements TaskStreamDestination {
   }
 
   private buildRequest(
-    creds: PostHogCredentials,
+    creds: Credentials,
     body: object,
   ): { url: string; init: Parameters<typeof fetch>[1] } {
     const url = `${creds.host.replace(/\/$/, '')}/api/projects/${
       creds.projectId
-    }/wizard_sessions/`;
+    }/wizard/sessions/`;
     return {
       url,
       init: {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: authHeader(creds.auth),
+          Authorization: `Bearer ${creds.accessToken}`,
         },
         body: JSON.stringify(body),
       },
     };
   }
 
-  private async postWithRetry(
-    creds: PostHogCredentials,
-    body: object,
-  ): Promise<void> {
+  private async postWithRetry(creds: Credentials, body: object): Promise<void> {
     const { url, init } = this.buildRequest(creds, body);
     let attempt = 0;
     let backoff = BASE_BACKOFF_MS;
@@ -161,13 +146,13 @@ export class PostHogDestination implements TaskStreamDestination {
 
       if (status === 401 || status === 403) {
         this.disabled = true;
-        this.onError(new Error(`wizard_sessions auth failed: ${status}`));
+        this.onError(new Error(`wizard/sessions auth failed: ${status}`));
         return;
       }
 
       if (status === 429) {
         if (retriedAfter429) {
-          this.onError(new Error('wizard_sessions rate limited'));
+          this.onError(new Error('wizard/sessions rate limited'));
           return;
         }
         retriedAfter429 = true;
@@ -180,7 +165,7 @@ export class PostHogDestination implements TaskStreamDestination {
 
       if (status >= 500) {
         if (attempt >= MAX_ATTEMPTS) {
-          this.onError(new Error(`wizard_sessions server error: ${status}`));
+          this.onError(new Error(`wizard/sessions server error: ${status}`));
           return;
         }
         await this.sleep(backoff);
@@ -195,11 +180,11 @@ export class PostHogDestination implements TaskStreamDestination {
         } catch {
           // ignore
         }
-        this.onError(new Error(`wizard_sessions bad request (400): ${detail}`));
+        this.onError(new Error(`wizard/sessions bad request (400): ${detail}`));
         return;
       }
 
-      this.onError(new Error(`wizard_sessions unexpected status: ${status}`));
+      this.onError(new Error(`wizard/sessions unexpected status: ${status}`));
       return;
     }
   }
