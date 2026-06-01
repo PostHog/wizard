@@ -288,6 +288,27 @@ describe('PostHogDestination', () => {
     );
   });
 
+  it('caps Retry-After at 60s so an absurd HTTP-date does not exceed setTimeout limits', async () => {
+    const fetchImpl = makeFetch([
+      makeResponse(429, { headers: { 'Retry-After': '999999' } }),
+      makeResponse(201),
+    ]);
+    const sleep: jest.Mock<Promise<void>, [number]> = jest.fn((_ms: number) =>
+      Promise.resolve(),
+    );
+    const dest = new PostHogDestination({
+      getCredentials: () => SAMPLE_CREDS,
+      fetchImpl,
+      sleep,
+    });
+
+    await dest.send(StreamEvent.Update, SAMPLE_PAYLOAD);
+
+    expect(sleep).toHaveBeenCalledTimes(1);
+    expect(sleep.mock.calls[0][0]).toBeLessThanOrEqual(60_000);
+    expect(sleep.mock.calls[0][0]).toBeGreaterThan(0);
+  });
+
   it('treats 200 (upsert update) as success, same as 201 (created)', async () => {
     const fetchImpl = makeFetch([makeResponse(200)]);
     const onError = jest.fn();

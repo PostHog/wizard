@@ -25,6 +25,8 @@ import { LoggingUI } from '@ui/logging-ui';
 import { getSubcommandPrograms, Program } from '@lib/programs/program-registry';
 import type { ProgramConfig } from '@lib/programs/program-step';
 import type { WizardSession } from '@lib/wizard-session';
+import type { startTUI as StartTUIFn } from '@ui/tui/start-tui';
+import type { TaskStreamPush as TaskStreamPushClass } from '@lib/task-stream/task-stream-push';
 import { POSTHOG_DOCS_URL } from '@lib/constants';
 import { runtimeEnv } from '@env';
 
@@ -126,10 +128,10 @@ const cli = yargs(hideBin(process.argv))
         'Email address for signup (used with --signup)\nenv: POSTHOG_WIZARD_EMAIL',
       type: 'string',
     },
-    'no-telemetry': {
-      default: false,
+    telemetry: {
+      default: true,
       describe:
-        'Disable pushing wizard run state to PostHog\nenv: POSTHOG_WIZARD_NO_TELEMETRY',
+        'Send wizard run state to PostHog (pass --no-telemetry to disable)\nenv: POSTHOG_WIZARD_TELEMETRY',
       type: 'boolean',
     },
   })
@@ -620,6 +622,17 @@ cli
   .alias('version', 'v')
   .wrap(process.stdout.isTTY ? cli.terminalWidth() : 80).argv;
 
+// `--no-telemetry` flips `telemetry: false` via yargs negation;
+// `POSTHOG_WIZARD_NO_TELEMETRY` is honoured separately so the env-var
+// form documented in the README keeps working.
+function resolveNoTelemetry(options: Record<string, unknown>): boolean {
+  if (options.telemetry === false) return true;
+  const env = process.env.POSTHOG_WIZARD_NO_TELEMETRY;
+  if (env == null || env === '') return false;
+  const norm = env.toLowerCase();
+  return norm !== '0' && norm !== 'false';
+}
+
 /**
  * Run a full wizard program in the TUI. Handles the full lifecycle: start TUI,
  * build session, run detection, wait for intro gate, execute the
@@ -629,6 +642,11 @@ function runWizard(
   config: ProgramConfig,
   options: Record<string, unknown>,
 ): void {
+  let tui: ReturnType<typeof StartTUIFn> | null = null;
+  let taskStream: TaskStreamPushClass | null = null;
+  let onSignal: (() => void) | null = null;
+  let exitInProgress = false;
+
   void (async () => {
     try {
       const installDir = (options.installDir as string) || process.cwd();
@@ -639,10 +657,10 @@ function runWizard(
       const { PostHogDestination } = await import(
         '@lib/task-stream/destinations/posthog'
       );
-      const { analytics } = await import('@utils/analytics');
       const { logToFile } = await import('@utils/debug');
 
-      const tui = startTUI(WIZARD_VERSION, config.id as any);
+      tui = startTUI(WIZARD_VERSION, config.id as any);
+      const activeTui = tui;
 
       const session = buildSession({
         debug: options.debug as boolean | undefined,
@@ -658,7 +676,7 @@ function runWizard(
         integration: options.integration as any,
         benchmark: options.benchmark as boolean | undefined,
         yaraReport: options.yaraReport as boolean | undefined,
-        noTelemetry: options.noTelemetry as boolean | undefined,
+        noTelemetry: resolveNoTelemetry(options),
       });
       session.programLabel = config.id;
       if (options.skillId) {
@@ -667,46 +685,48 @@ function runWizard(
         session.skillId = config.skillId;
       }
 
-      tui.store.session = session;
+      activeTui.store.session = session;
 
-      // Task stream — subscribes to store changes and pushes run state
-      // to the PostHog backend. Disabled entirely when --no-telemetry is
-      // set so no HTTP request is ever issued.
       const taskStreamEnabled = !session.noTelemetry;
-      const taskStream = new TaskStreamPush({
-        store: tui.store,
+      taskStream = new TaskStreamPush({
+        store: activeTui.store,
         programId: config.id,
         destinations: [
           new PostHogDestination({
-            getCredentials: () => tui.store.session.credentials,
+            getCredentials: () => activeTui.store.session.credentials,
             onError: (err) => logToFile('[task-stream-push]', err.message),
           }),
         ],
         enabled: taskStreamEnabled,
       });
-      taskStream.attach();
+      const activeStream = taskStream;
+      activeStream.attach();
 
       // Flush a terminal-phase push on Ctrl-C so the web app sees the
       // run ended in error rather than hanging on the last "running"
-      // snapshot. A second signal during shutdown still exits normally
-      // because process.exit is the last line.
+      // snapshot.
       let signalled = false;
-      const onSignal = (): void => {
-        if (signalled) return;
+      onSignal = (): void => {
+        if (signalled || exitInProgress) return;
         signalled = true;
-        if (tui.store.session.runPhase === RunPhase.Running) {
-          tui.store.setRunPhase(RunPhase.Error);
+        if (activeTui.store.session.runPhase === RunPhase.Running) {
+          activeTui.store.setRunPhase(RunPhase.Error);
         }
-        void taskStream.shutdown(2000).finally(() => {
+        void activeStream.shutdown(2000).finally(() => {
+          try {
+            activeTui.unmount();
+          } catch {
+            // terminal may already be torn down
+          }
           process.exit(130);
         });
       };
       process.on('SIGINT', onSignal);
       process.on('SIGTERM', onSignal);
 
-      await tui.store.runReadyHooks();
-      await tui.store.getGate('intro');
-      await tui.store.getGate('health-check');
+      await activeTui.store.runReadyHooks();
+      await activeTui.store.getGate('intro');
+      await activeTui.store.getGate('health-check');
 
       const skipAgent = config.run == null;
 
@@ -719,7 +739,7 @@ function runWizard(
             apiKey: session.apiKey,
             projectId: session.projectId,
           });
-        tui.store.setCredentials({
+        activeTui.store.setCredentials({
           accessToken,
           projectApiKey,
           host,
@@ -727,16 +747,16 @@ function runWizard(
         });
       } else {
         const { runAgent } = await import('@lib/agent/agent-runner');
-        await runAgent(config, tui.store.session);
+        await runAgent(config, activeTui.store.session);
       }
 
       const isDone = (): boolean =>
         skipAgent
-          ? tui.store.session.outroDismissed
-          : tui.store.session.skillsComplete;
+          ? activeTui.store.session.outroDismissed
+          : activeTui.store.session.skillsComplete;
 
       await new Promise<void>((resolve) => {
-        const unsub = tui.store.subscribe(() => {
+        const unsub = activeTui.store.subscribe(() => {
           if (isDone()) {
             unsub();
             resolve();
@@ -748,19 +768,38 @@ function runWizard(
         }
       });
 
-      try {
-        await taskStream.shutdown(2000);
-      } catch (error) {
-        analytics.captureException(error as Error);
-      }
+      exitInProgress = true;
+      await activeStream.shutdown(2000);
       process.off('SIGINT', onSignal);
       process.off('SIGTERM', onSignal);
-      tui.unmount();
+      activeTui.unmount();
       process.exit(0);
     } catch (err) {
       if (runtimeEnv('DEBUG') || runtimeEnv('POSTHOG_WIZARD_DEBUG')) {
         console.error('TUI init failed:', err); // eslint-disable-line no-console
       }
+      // The task-stream debounce timer keeps the event loop alive, so
+      // we have to drain it before exiting on the error path.
+      exitInProgress = true;
+      if (onSignal) {
+        process.off('SIGINT', onSignal);
+        process.off('SIGTERM', onSignal);
+      }
+      if (taskStream) {
+        try {
+          await taskStream.shutdown(2000);
+        } catch {
+          // ignore
+        }
+      }
+      if (tui) {
+        try {
+          tui.unmount();
+        } catch {
+          // ignore
+        }
+      }
+      process.exit(1);
     }
   })();
 }
@@ -826,7 +865,7 @@ function runWizardCI(
       projectId: options.projectId as string | undefined,
       benchmark: options.benchmark as boolean | undefined,
       yaraReport: options.yaraReport as boolean | undefined,
-      noTelemetry: options.noTelemetry as boolean | undefined,
+      noTelemetry: resolveNoTelemetry(options),
       ...env,
     });
     session.programLabel = config.id;

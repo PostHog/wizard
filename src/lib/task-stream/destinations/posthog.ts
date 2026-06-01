@@ -43,6 +43,9 @@ const MAX_ATTEMPTS = 3;
 const BASE_BACKOFF_MS = 500;
 const MAX_BACKOFF_MS = 8000;
 const DEFAULT_RETRY_AFTER_MS = 1000;
+// setTimeout silently clamps anything above 2^31-1 ms to fire
+// immediately, so any Retry-After-derived sleep must be capped.
+const MAX_RETRY_AFTER_MS = 60_000;
 
 function defaultSleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -52,12 +55,12 @@ function parseRetryAfter(value: string | null): number {
   if (!value) return DEFAULT_RETRY_AFTER_MS;
   const seconds = Number(value);
   if (Number.isFinite(seconds) && seconds >= 0) {
-    return Math.ceil(seconds * 1000);
+    return Math.min(Math.ceil(seconds * 1000), MAX_RETRY_AFTER_MS);
   }
   // HTTP-date form — best-effort.
   const date = Date.parse(value);
   if (Number.isFinite(date)) {
-    return Math.max(0, date - Date.now());
+    return Math.min(Math.max(0, date - Date.now()), MAX_RETRY_AFTER_MS);
   }
   return DEFAULT_RETRY_AFTER_MS;
 }
