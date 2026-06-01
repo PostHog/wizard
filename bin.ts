@@ -29,26 +29,7 @@ import {
 import type { ProgramConfig } from '@lib/programs/program-step';
 import type { WizardSession } from '@lib/wizard-session';
 import { POSTHOG_DOCS_URL } from '@lib/constants';
-import { runtimeEnv, IS_PRODUCTION_BUILD } from '@env';
-
-/**
- * CI mode (`--ci`) is not supported in published builds. PostHog's LLM gateway
- * doesn't grant the scopes the wizard needs to personal API keys for most
- * users yet, so non-interactive CI runs fail at the gateway. Guard the
- * entrypoints that honor `--ci` and point users at interactive mode instead.
- * No-op outside production builds (dev/test), where CI mode stays available.
- */
-function assertCiModeSupported(): void {
-  if (!IS_PRODUCTION_BUILD) return;
-  setUI(new LoggingUI());
-  getUI().intro('PostHog Wizard');
-  getUI().log.error(
-    'CI mode (--ci) is not currently supported.\n' +
-      'Run the wizard in an interactive terminal instead:\n' +
-      '  npx @posthog/wizard',
-  );
-  process.exit(1);
-}
+import { runtimeEnv } from '@env';
 
 // Test mock server — only loaded when NODE_ENV is 'test'.
 // In production builds, tsdown replaces process.env.NODE_ENV with 'production',
@@ -219,7 +200,6 @@ const cli = yargs(hideBin(process.argv))
 
       // CI mode validation and TTY check
       if (options.ci) {
-        assertCiModeSupported();
         if (!options.region) options.region = 'us';
         if (!options.installDir) {
           setUI(new LoggingUI());
@@ -630,7 +610,6 @@ for (const programConfig of getSubcommandPrograms()) {
         programConfig.mapCliOptions?.(argv as Record<string, unknown>) ?? {};
       const options = { ...argv, ...extras };
       if (options.ci) {
-        assertCiModeSupported();
         runWizardCI(programConfig, options);
       } else {
         runWizard(programConfig, options);

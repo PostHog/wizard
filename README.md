@@ -50,9 +50,6 @@ same flags as the main wizard.
 
 ## Headless signup + install (agents / CI)
 
-> ⚠️ `--ci` is **not currently supported in published builds** (see [CI Mode](#ci-mode)).
-> This flow works in development builds only.
-
 For a fully non-interactive first-run (no existing PostHog account, no TTY,
 no browser), combine `--ci --signup --email`. The wizard provisions a new
 account, uses the returned personal API key to run the normal CI install,
@@ -111,13 +108,6 @@ The following CLI arguments are available:
 
 
 # CI Mode
-
-> ⚠️ **CI mode is not currently supported in published builds.** PostHog's LLM
-> gateway doesn't yet grant the scopes the wizard needs to personal API keys
-> for most users, so non-interactive `--ci` runs fail at the gateway. The flag
-> is disabled in the published package and exits with an error — run the wizard
-> in an interactive terminal instead (`npx @posthog/wizard`). The notes below
-> describe CI mode as it works in development builds.
 
 Run the wizard non-interactive executions with `--ci`:
 
