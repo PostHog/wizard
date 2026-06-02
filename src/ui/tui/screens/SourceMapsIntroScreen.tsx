@@ -8,8 +8,8 @@
 
 import { Box, Text } from 'ink';
 import { useSyncExternalStore } from 'react';
-import type { WizardStore } from '../store.js';
-import { PickerMenu } from '../primitives/index.js';
+import type { WizardStore } from '@ui/tui/store';
+import { PickerMenu } from '@ui/tui/primitives/index';
 import { IntroScreenLayout, type DetectionRow } from './IntroScreenLayout.js';
 import {
   SOURCE_MAPS_CONTEXT_KEYS,
@@ -59,7 +59,7 @@ export const SourceMapsIntroScreen = ({
   const body = (
     <>
       <Box flexDirection="column" alignItems="center">
-        <Text>Upload source maps so error stack traces de-minify.</Text>
+        <Text>Upload source maps for accurate error stack traces.</Text>
         <Box flexDirection="column" marginTop={1}>
           <Text>The agent will wire it into your build.</Text>
         </Box>

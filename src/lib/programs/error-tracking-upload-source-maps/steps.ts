@@ -43,7 +43,7 @@ export const ERROR_TRACKING_UPLOAD_SOURCE_MAPS_PROGRAM: ProgramStep[] = [
   {
     id: 'outro',
     label: 'Done',
-    screenId: 'outro',
+    screenId: 'source-maps-outro',
     isComplete: (session) => session.outroDismissed,
   },
   {

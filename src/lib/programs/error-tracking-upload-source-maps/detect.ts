@@ -284,6 +284,16 @@ export function detectSourceMapsPrerequisites(
   const signals = collectSignals(installDir);
   const variant = selectVariant(signals);
 
+  // This program currently targets JS-like stacks only. Avoid selecting native
+  // platforms until dedicated skill variants are available.
+  if (
+    variant &&
+    ['react-native', 'flutter', 'ios', 'android'].includes(variant)
+  ) {
+    fail({ kind: 'unsupported-platform', detected: variant });
+    return;
+  }
+
   if (!variant) {
     if (signals.scannedFileCount === 0) {
       fail({ kind: 'no-project-files' });

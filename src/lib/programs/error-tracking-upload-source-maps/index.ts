@@ -204,22 +204,13 @@ STEP 8 — Summarise and hand off. (skill: "Verify and hand off")
         return Promise.resolve();
       },
 
-      buildOutroData: (sess) => {
-        const completed = sess.frameworkContext[
-          'sourceMapsCompletedVariant'
-        ] as SkillVariant | undefined;
-        const changes = [
-          completed
-            ? `Configured source map upload for ${displayName ?? completed}`
-            : '',
-          'Added PostHog credentials to .env',
-        ].filter(Boolean);
-
+      buildOutroData: () => {
+        // SourceMapsOutroScreen renders static "what we did + how it works"
+        // guidance, so no per-run `changes` list is needed here.
         return {
           kind: OutroKind.Success as const,
           message: 'Source maps wired up!',
           reportFile: REPORT_FILE,
-          changes,
           docsUrl: DOCS_URL,
         };
       },
