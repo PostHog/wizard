@@ -217,6 +217,32 @@ This also allows us to pick up the bill on behalf of our customers.
 When we make improvements to this process, these are available instantly to all
 users of the wizard, no training delays or other ambiguity.
 
+## Keep secrets out of the LLM
+
+The wizard somtimes needs to move a secret. The agent
+orchestrates that journey, but the raw value should _never_ enter the LLM
+conversation, where it would be sent to the model provider, written to
+transcripts, and captured in logs.
+
+`src/lib/secret-vault.ts` is a small, reusable pattern for exactly this. It's a
+session-scoped, in-memory vault: a tool that handles a secret calls `put()` to
+store the raw value and hands the agent an opaque `secret:<uuid>` reference
+instead. The agent passes that ref between tools as if it were the value; the
+host resolves it back to the real secret only at the last moment, inside the
+process, when it writes the file.
+
+Two tools in `src/lib/wizard-tools.ts` form the ends of that pipe:
+
+- `wizard_ask` with `sensitive: true` vaults the user's typed answer and returns
+  `{ secretRef: "secret:..." }` to the agent rather than the string.
+- `set_env_values` accepts `{ secretRef }` in place of a literal value and
+  resolves it against the vault before writing — the value lands in the `.env`
+  file but is never returned to the model.
+
+The vault has no persistence and is dropped at the end of the run; refs minted
+in one session can't be resolved in another. The net effect: the model gets to
+drive the work end to end, but the only thing it ever sees is an opaque handle.
+
 ## Build system
 
 Built with [tsdown](https://tsdown.dev/) (Rolldown). `pnpm build` bundles `bin.ts` into ESM chunks in `dist/`, inlining all local source and keeping npm dependencies external.
