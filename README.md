@@ -146,7 +146,6 @@ When creating your personal API key, ensure it has the following scopes enabled:
 
 - `user:read` - Required to fetch user information
 - `project:read` - Required to fetch project details and API token
-- `introspection` - Required for API introspection
 - `llm_gateway:read` - Required for LLM gateway access
 - `dashboard:write` - Required to create dashboards
 - `insight:write` - Required to create insights
@@ -179,6 +178,13 @@ analytics session and log events. We can see the usage and outcomes of this
 wizard alongside all of our other PostHog product data, and this is very
 powerful. For example: we could show in-product surveys to people who have used
 the wizard to improve the experience.
+
+When the user authenticates, the wizard also streams live run state — current
+phase, task list, planned events — to `POST /api/projects/{id}/wizard/sessions/`
+so the PostHog web app can render real-time progress. Updates are debounced
+(250ms) with phase changes flushed immediately; failures fall back silently to
+the wizard's debug log without disturbing the TUI. Pass `--no-telemetry` (or
+set `POSTHOG_WIZARD_NO_TELEMETRY=1`) to disable.
 
 ## Leave rules behind
 

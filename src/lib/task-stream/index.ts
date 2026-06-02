@@ -5,7 +5,6 @@
 export { TaskStreamPush } from './task-stream-push';
 export type { TaskStreamPushOptions } from './task-stream-push';
 
-export { FileDestination } from './destinations/file';
 export { PostHogDestination } from './destinations/posthog';
 
 export { StreamTaskStatus, StreamEvent } from './types';

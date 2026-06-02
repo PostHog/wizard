@@ -1,4 +1,5 @@
 import type { ProgramStep } from '@lib/programs/program-step';
+import { HEALTH_CHECK_STEP } from '@lib/programs/shared/health-check-step';
 
 export const POSTHOG_DOCTOR_PROGRAM: ProgramStep[] = [
   {
@@ -7,6 +8,7 @@ export const POSTHOG_DOCTOR_PROGRAM: ProgramStep[] = [
     screenId: 'doctor-intro',
     gate: (session) => session.setupConfirmed,
   },
+  HEALTH_CHECK_STEP,
   {
     id: 'auth',
     label: 'Authentication',
