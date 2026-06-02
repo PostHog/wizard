@@ -7,8 +7,36 @@
  */
 
 import type { ProgramStep } from '@lib/programs/program-step';
+import type { WizardSession } from '@lib/wizard-session';
 import { RunPhase } from '@lib/wizard-session';
+import {
+  evaluateWizardReadiness,
+  WizardReadiness,
+  SIGNUP_WIZARD_READINESS_CONFIG,
+  getBlockingServiceKeys,
+} from '@lib/health-checks/readiness';
 import { detectSourceMapsPrerequisites } from './detect.js';
+
+function healthCheckReady(session: WizardSession): boolean {
+  if (!session.readinessResult) return false;
+
+  if (session.signup) {
+    const hardBlocking = getBlockingServiceKeys(
+      session.readinessResult.health,
+      SIGNUP_WIZARD_READINESS_CONFIG,
+    );
+    const defaultBlocking = getBlockingServiceKeys(
+      session.readinessResult.health,
+    );
+    if (hardBlocking.length === 0 && defaultBlocking.length === 0) return true;
+    return session.outageDismissed;
+  }
+
+  if (session.readinessResult.decision === WizardReadiness.No) {
+    return session.outageDismissed;
+  }
+  return true;
+}
 
 export const ERROR_TRACKING_UPLOAD_SOURCE_MAPS_PROGRAM: ProgramStep[] = [
   {
@@ -25,6 +53,25 @@ export const ERROR_TRACKING_UPLOAD_SOURCE_MAPS_PROGRAM: ProgramStep[] = [
     label: 'Welcome',
     screenId: 'source-maps-intro',
     gate: (session) => session.setupConfirmed,
+  },
+  {
+    id: 'health-check',
+    label: 'Health check',
+    screenId: 'health-check',
+    gate: healthCheckReady,
+    onInit: (ctx) => {
+      evaluateWizardReadiness()
+        .then((readiness) => {
+          ctx.setReadinessResult(readiness);
+        })
+        .catch(() => {
+          ctx.setReadinessResult({
+            decision: WizardReadiness.Yes,
+            health: {} as never,
+            reasons: [],
+          });
+        });
+    },
   },
   {
     id: 'auth',
