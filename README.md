@@ -136,7 +136,6 @@ When creating your personal API key, ensure it has the following scopes enabled:
 
 - `user:read` - Required to fetch user information
 - `project:read` - Required to fetch project details and API token
-- `introspection` - Required for API introspection
 - `llm_gateway:read` - Required for LLM gateway access
 - `dashboard:write` - Required to create dashboards
 - `insight:write` - Required to create insights
