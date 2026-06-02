@@ -2,11 +2,11 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { withProgress } from '../telemetry';
 import { getPackageDotJson, updatePackageDotJson } from './setup-utils';
-import type { PackageDotJson } from './package-json';
+import type { PackageJson } from './package-json';
 import { analytics } from './analytics';
-import type { WizardOptions } from './types';
+import type { WizardRunOptions } from './types';
 
-type InstallDirOpt = Pick<WizardOptions, 'installDir'>;
+type InstallDirOpt = Pick<WizardRunOptions, 'installDir'>;
 
 export interface PackageManager {
   name: string;
@@ -53,7 +53,7 @@ async function writeOverride(
   { installDir }: InstallDirOpt,
 ): Promise<void> {
   const pkg = await getPackageDotJson({ installDir });
-  let next: PackageDotJson;
+  let next: PackageJson;
   if (slot === 'yarn') {
     next = {
       ...pkg,

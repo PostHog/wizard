@@ -1,7 +1,7 @@
 import { readFileSync } from 'fs';
 import path from 'path';
 
-export type PackageDotJson = {
+export type PackageJson = {
   dependencies?: Record<string, string>;
   devDependencies?: Record<string, string>;
   scripts?: Record<string, string | undefined>;
@@ -24,9 +24,9 @@ type InstalledPackage = {
  * `dependencies` wins over `devDependencies`. An empty-string value in
  * either slot falls through, matching the previous behaviour.
  */
-export function getPackageVersion(
+export function getDeclaredVersion(
   packageName: string,
-  packageJson: PackageDotJson,
+  packageJson: PackageJson,
 ): string | undefined {
   const fromDeps = packageJson?.dependencies?.[packageName];
   if (fromDeps) return fromDeps;
@@ -35,19 +35,19 @@ export function getPackageVersion(
   return undefined;
 }
 
-export function hasPackageInstalled(
+export function hasDeclaredDependency(
   packageName: string,
-  packageJson: PackageDotJson,
+  packageJson: PackageJson,
 ): boolean {
-  return getPackageVersion(packageName, packageJson) !== undefined;
+  return getDeclaredVersion(packageName, packageJson) !== undefined;
 }
 
-export function findInstalledPackageFromList(
+export function findDeclaredPackage(
   packageNamesList: string[],
-  packageJson: PackageDotJson,
+  packageJson: PackageJson,
 ): InstalledPackage | undefined {
   for (const name of packageNamesList) {
-    const version = getPackageVersion(name, packageJson);
+    const version = getDeclaredVersion(name, packageJson);
     if (version) {
       return { name, version };
     }

@@ -6,14 +6,14 @@ import { promisify } from 'node:util';
 
 import { withProgress } from '../telemetry';
 import { debug } from './debug';
-import type { PackageDotJson } from './package-json';
+import type { PackageJson } from './package-json';
 import {
   type PackageManager,
   detectAllPackageManagers,
   NPM as npm,
 } from './package-manager';
-import type { CloudRegion, WizardOptions } from './types';
-import { getPackageVersion } from './package-json';
+import type { CloudRegion, WizardRunOptions } from './types';
+import { getDeclaredVersion } from './package-json';
 import {
   DEFAULT_HOST_URL,
   DUMMY_PROJECT_API_KEY,
@@ -30,7 +30,7 @@ import {
 import { performOAuthFlow } from './oauth';
 import { provisionNewAccount } from './provisioning';
 import { fetchUserData, fetchProjectData } from '@lib/api';
-import { fulfillsVersionRange } from './semver';
+import { versionSatisfiesRange } from './semver';
 import { wizardAbort } from './wizard-abort';
 
 interface ProjectData {
@@ -163,17 +163,17 @@ export function getUncommittedOrUntrackedFiles(): string[] {
 
 export async function isReact19Installed({
   installDir,
-}: Pick<WizardOptions, 'installDir'>): Promise<boolean> {
+}: Pick<WizardRunOptions, 'installDir'>): Promise<boolean> {
   try {
     const packageJson = await tryGetPackageJson({ installDir });
     if (!packageJson) return false;
-    const reactVersion = getPackageVersion('react', packageJson);
+    const reactVersion = getDeclaredVersion('react', packageJson);
 
     if (!reactVersion) {
       return false;
     }
 
-    return fulfillsVersionRange({
+    return versionSatisfiesRange({
       version: reactVersion,
       acceptableVersions: '>=19.0.0',
       canBeLatest: true,
@@ -275,7 +275,7 @@ export async function installPackage({
  */
 export async function getPackageDotJson({
   installDir,
-}: Pick<WizardOptions, 'installDir'>): Promise<PackageDotJson> {
+}: Pick<WizardRunOptions, 'installDir'>): Promise<PackageJson> {
   const pkgPath = join(installDir, 'package.json');
 
   let raw: string;
@@ -290,7 +290,7 @@ export async function getPackageDotJson({
   }
 
   try {
-    const parsed = JSON.parse(raw) as PackageDotJson | null;
+    const parsed = JSON.parse(raw) as PackageJson | null;
     return parsed ?? {};
   } catch {
     getUI().log.error(
@@ -307,21 +307,21 @@ export async function getPackageDotJson({
  */
 export async function tryGetPackageJson({
   installDir,
-}: Pick<WizardOptions, 'installDir'>): Promise<PackageDotJson | null> {
+}: Pick<WizardRunOptions, 'installDir'>): Promise<PackageJson | null> {
   try {
     const packageJsonFileContents = await fs.promises.readFile(
       join(installDir, 'package.json'),
       'utf8',
     );
-    return JSON.parse(packageJsonFileContents) as PackageDotJson;
+    return JSON.parse(packageJsonFileContents) as PackageJson;
   } catch {
     return null;
   }
 }
 
 export async function updatePackageDotJson(
-  packageDotJson: PackageDotJson,
-  { installDir }: Pick<WizardOptions, 'installDir'>,
+  packageDotJson: PackageJson,
+  { installDir }: Pick<WizardRunOptions, 'installDir'>,
 ): Promise<void> {
   const pkgPath = join(installDir, 'package.json');
   const serialized = JSON.stringify(packageDotJson, null, 2);
@@ -344,7 +344,7 @@ export async function updatePackageDotJson(
  */
 // eslint-disable-next-line @typescript-eslint/require-await
 export async function getPackageManager(
-  options: Pick<WizardOptions, 'installDir'> & { ci?: boolean },
+  options: Pick<WizardRunOptions, 'installDir'> & { ci?: boolean },
 ): Promise<PackageManager> {
   const detectedPackageManagers = detectAllPackageManagers({
     installDir: options.installDir,
@@ -363,7 +363,7 @@ export async function getPackageManager(
 
 export function isUsingTypeScript({
   installDir,
-}: Pick<WizardOptions, 'installDir'>): boolean {
+}: Pick<WizardRunOptions, 'installDir'>): boolean {
   try {
     fs.accessSync(join(installDir, 'tsconfig.json'));
     return true;
@@ -376,7 +376,7 @@ export function isUsingTypeScript({
  * Get project data for the wizard via OAuth or CI API key.
  */
 export async function getOrAskForProjectData(
-  _options: Pick<WizardOptions, 'signup' | 'ci' | 'apiKey' | 'projectId'> & {
+  _options: Pick<WizardRunOptions, 'signup' | 'ci' | 'apiKey' | 'projectId'> & {
     email?: string;
     region?: CloudRegion;
   },
@@ -597,7 +597,7 @@ async function askForProvisioningSignup(
 export async function createNewConfigFile(
   filepath: string,
   codeSnippet: string,
-  { installDir }: Pick<WizardOptions, 'installDir'>,
+  { installDir }: Pick<WizardRunOptions, 'installDir'>,
   moreInformation?: string,
 ): Promise<boolean> {
   if (!isAbsolute(filepath)) {

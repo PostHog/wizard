@@ -12,7 +12,7 @@ export type FileChange = {
   newContent: string;
 };
 
-export type WizardOptions = {
+export type WizardRunOptions = {
   installDir: string;
   ci: boolean;
   cloudRegion?: CloudRegion;

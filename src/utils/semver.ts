@@ -28,7 +28,7 @@ function isNonSemverVersion(version: string): boolean {
   );
 }
 
-export function fulfillsVersionRange({
+export function versionSatisfiesRange({
   version,
   acceptableVersions,
   canBeLatest,

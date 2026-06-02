@@ -1,5 +1,5 @@
 /* FastAPI wizard using posthog-agent with PostHog MCP */
-import type { WizardOptions } from '@utils/types';
+import type { WizardRunOptions } from '@utils/types';
 import type { FrameworkConfig } from '@lib/framework-config';
 import { PYTHON_PACKAGE_INSTALLATION } from '@lib/framework-config';
 import { detectPythonPackageManagers } from '@lib/detection/package-manager';
@@ -26,7 +26,7 @@ export const FASTAPI_AGENT_CONFIG: FrameworkConfig = {
     integration: Integration.fastapi,
     docsUrl: 'https://posthog.com/docs/libraries/python',
     unsupportedVersionDocsUrl: 'https://posthog.com/docs/libraries/python',
-    gatherContext: async (options: WizardOptions) => {
+    gatherContext: async (options: WizardRunOptions) => {
       const projectType = await getFastAPIProjectType(options);
       const appFile = await findFastAPIAppFile(options);
       return { projectType, appFile };

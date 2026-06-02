@@ -1,6 +1,6 @@
 import fg from 'fast-glob';
 import { getUI } from '@ui';
-import type { WizardOptions } from '@utils/types';
+import type { WizardRunOptions } from '@utils/types';
 import { createVersionBucket } from '@utils/semver';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -35,7 +35,7 @@ export const getFlaskVersionBucket = createVersionBucket();
  * Extract Flask version from requirements files or pyproject.toml
  */
 export async function getFlaskVersion(
-  options: Pick<WizardOptions, 'installDir'>,
+  options: Pick<WizardRunOptions, 'installDir'>,
 ): Promise<string | undefined> {
   const { installDir } = options;
 
@@ -81,7 +81,7 @@ export async function getFlaskVersion(
  */
 async function hasFlaskRESTful({
   installDir,
-}: Pick<WizardOptions, 'installDir'>): Promise<boolean> {
+}: Pick<WizardRunOptions, 'installDir'>): Promise<boolean> {
   const requirementsFiles = await fg(
     ['**/requirements*.txt', '**/pyproject.toml', '**/Pipfile'],
     {
@@ -132,7 +132,7 @@ async function hasFlaskRESTful({
  */
 async function hasFlaskRESTX({
   installDir,
-}: Pick<WizardOptions, 'installDir'>): Promise<boolean> {
+}: Pick<WizardRunOptions, 'installDir'>): Promise<boolean> {
   const requirementsFiles = await fg(
     ['**/requirements*.txt', '**/pyproject.toml', '**/Pipfile'],
     {
@@ -180,7 +180,7 @@ async function hasFlaskRESTX({
  */
 async function hasFlaskSmorest({
   installDir,
-}: Pick<WizardOptions, 'installDir'>): Promise<boolean> {
+}: Pick<WizardRunOptions, 'installDir'>): Promise<boolean> {
   const requirementsFiles = await fg(
     ['**/requirements*.txt', '**/pyproject.toml', '**/Pipfile'],
     {
@@ -228,7 +228,7 @@ async function hasFlaskSmorest({
  */
 async function hasBlueprints({
   installDir,
-}: Pick<WizardOptions, 'installDir'>): Promise<boolean> {
+}: Pick<WizardRunOptions, 'installDir'>): Promise<boolean> {
   const pyFiles = await fg(['**/*.py'], {
     cwd: installDir,
     ignore: IGNORE_PATTERNS,
@@ -256,7 +256,7 @@ async function hasBlueprints({
  * Detect Flask project type
  */
 export async function getFlaskProjectType(
-  options: WizardOptions,
+  options: WizardRunOptions,
 ): Promise<FlaskProjectType> {
   const { installDir } = options;
 
@@ -311,7 +311,7 @@ export function getFlaskProjectTypeName(projectType: FlaskProjectType): string {
  * Find the main Flask app file
  */
 export async function findFlaskAppFile(
-  options: Pick<WizardOptions, 'installDir'>,
+  options: Pick<WizardRunOptions, 'installDir'>,
 ): Promise<string | undefined> {
   const { installDir } = options;
 

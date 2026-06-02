@@ -65,8 +65,8 @@ export const posthogIntegrationConfig: ProgramConfig = {
         installDir: session.installDir,
       });
       if (packageJson) {
-        const { hasPackageInstalled } = await import('@utils/package-json');
-        if (!hasPackageInstalled(config.detection.packageName, packageJson)) {
+        const { hasDeclaredDependency } = await import('@utils/package-json');
+        if (!hasDeclaredDependency(config.detection.packageName, packageJson)) {
           getUI().log.warn(
             `${config.detection.packageDisplayName} does not seem to be installed. Continuing anyway — the agent will handle it.`,
           );

@@ -1,13 +1,13 @@
 /* React Native wizard using posthog-agent with PostHog MCP */
-import type { WizardOptions } from '@utils/types';
+import type { WizardRunOptions } from '@utils/types';
 import type { FrameworkConfig } from '@lib/framework-config';
 import { detectNodePackageManagers } from '@lib/detection/package-manager';
 import { Integration } from '@lib/constants';
 import {
-  getPackageVersion,
+  getDeclaredVersion,
   getInstalledPackageVersion,
-  hasPackageInstalled,
-  type PackageDotJson,
+  hasDeclaredDependency,
+  type PackageJson,
 } from '@utils/package-json';
 import { tryGetPackageJson } from '@utils/setup-utils';
 import {
@@ -26,7 +26,7 @@ export const REACT_NATIVE_AGENT_CONFIG: FrameworkConfig<ReactNativeContext> = {
     name: 'React Native',
     integration: Integration.reactNative,
     docsUrl: 'https://posthog.com/docs/libraries/react-native',
-    gatherContext: async (options: WizardOptions) => {
+    gatherContext: async (options: WizardRunOptions) => {
       const variant = await detectReactNativeVariant(options);
       return { variant };
     },
@@ -36,17 +36,17 @@ export const REACT_NATIVE_AGENT_CONFIG: FrameworkConfig<ReactNativeContext> = {
     packageName: 'react-native',
     packageDisplayName: 'React Native',
     getVersion: (packageJson: unknown) =>
-      getPackageVersion('react-native', packageJson as PackageDotJson),
+      getDeclaredVersion('react-native', packageJson as PackageJson),
     getVersionBucket: getReactNativeVersionBucket,
     minimumVersion: '0.73.0',
-    getInstalledVersion: (options: WizardOptions) =>
+    getInstalledVersion: (options: WizardRunOptions) =>
       Promise.resolve(
         getInstalledPackageVersion('react-native', options.installDir),
       ),
     detect: async (options) => {
       const packageJson = await tryGetPackageJson(options);
       return packageJson
-        ? hasPackageInstalled('react-native', packageJson)
+        ? hasDeclaredDependency('react-native', packageJson)
         : false;
     },
     detectPackageManager: detectNodePackageManagers,

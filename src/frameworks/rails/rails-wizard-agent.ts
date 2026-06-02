@@ -1,5 +1,5 @@
 /* Ruby on Rails wizard using posthog-agent with PostHog MCP */
-import type { WizardOptions } from '@utils/types';
+import type { WizardRunOptions } from '@utils/types';
 import type { FrameworkConfig } from '@lib/framework-config';
 import { bundlerPackageManager } from '@lib/detection/package-manager';
 import { Integration } from '@lib/constants';
@@ -25,7 +25,7 @@ export const RAILS_AGENT_CONFIG: FrameworkConfig<RailsContext> = {
     beta: true,
     docsUrl: 'https://posthog.com/docs/libraries/ruby-on-rails',
     unsupportedVersionDocsUrl: 'https://posthog.com/docs/libraries/ruby',
-    gatherContext: (options: WizardOptions) => {
+    gatherContext: (options: WizardRunOptions) => {
       const projectType = getRailsProjectType(options);
       const initializersDir = findInitializersDir(options);
       return Promise.resolve({ projectType, initializersDir });
@@ -39,7 +39,7 @@ export const RAILS_AGENT_CONFIG: FrameworkConfig<RailsContext> = {
     getVersion: () => undefined,
     getVersionBucket: getRailsVersionBucket,
     minimumVersion: '6.0.0',
-    getInstalledVersion: (options: WizardOptions) =>
+    getInstalledVersion: (options: WizardRunOptions) =>
       Promise.resolve(getRailsVersion(options)),
     detect: async (options) => isRailsProject(options),
     detectPackageManager: bundlerPackageManager,
