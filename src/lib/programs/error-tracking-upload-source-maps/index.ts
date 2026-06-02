@@ -10,6 +10,7 @@ import {
   type SkillVariant,
 } from './detect.js';
 import { getContentBlocks } from './content/index.js';
+import { getUiHostFromHost } from '@utils/urls';
 
 const REPORT_FILE = 'posthog-source-maps-report.md';
 const DOCS_URL = 'https://posthog.com/docs/error-tracking/upload-source-maps';
@@ -56,9 +57,8 @@ Emit: ${AgentSignals.ABORT} unsupported-platform
 Then halt.`;
         }
 
-        const settingsUrl = `${ctx.host.replace(/\/$/, '')}/project/${
-          ctx.projectId
-        }/settings/user-api-keys`;
+        const uiHost = getUiHostFromHost(ctx.host).replace(/\/$/, '');
+        const settingsUrl = `${uiHost}/project/${ctx.projectId}/settings/user-api-keys`;
 
         return `You are wiring up PostHog Error Tracking source map upload for this ${
           displayName ?? variant
@@ -175,10 +175,7 @@ STEP 7 — Offer to test the local setup. (skill: "Test the local setup")
    renders them as distinct lines:
         {
           id: "test-done",
-          prompt: "1) Run \`<your detected build command>\` to upload source maps and build the app with the test affordance.\\n\\n2) Start the app with \`<your detected run command>\`, then click the \\"<your test button label>\\" button (or hit \`<your test route>\`).\\n\\n3) Open Error Tracking in PostHog (${ctx.host.replace(
-            /\/$/,
-            '',
-          )}/project/${
+          prompt: "1) Run \`<your detected build command>\` to upload source maps and build the app with the test affordance.\\n\\n2) Start the app with \`<your detected run command>\`, then click the \\"<your test button label>\\" button (or hit \`<your test route>\`).\\n\\n3) Open Error Tracking in PostHog (${uiHost}/project/${
           ctx.projectId
         }/error_tracking) and confirm the test error appears with a source-resolved stack trace pointing at real source files (not minified bundle paths).\\n\\nWhen you're done, select Continue and I'll revert the test code.",
           kind: "single",
@@ -190,9 +187,7 @@ STEP 7 — Offer to test the local setup. (skill: "Test the local setup")
 STEP 8 — Summarise and hand off. (skill: "Verify and hand off")
    Follow the skill's "Verify and hand off" step. The Symbol sets page for
    this project — where the user confirms the upload landed — is:
-   ${ctx.host.replace(/\/$/, '')}/project/${
-          ctx.projectId
-        }/error_tracking/configuration
+   ${uiHost}/project/${ctx.projectId}/error_tracking/configuration
 `;
       },
 
