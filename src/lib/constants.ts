@@ -118,15 +118,19 @@ export const WIZARD_PROVISIONING_SCOPES = [
 
 /**
  * Scopes the wizard requests during the OAuth login flow. Superset of
- * `WIZARD_PROVISIONING_SCOPES` with two scopes that only apply to the login
+ * `WIZARD_PROVISIONING_SCOPES` with scopes that only apply to the login
  * path and are not in the provisioning allowlist:
- * - introspection      lets the wizard introspect its own token
- * - health_issue:read  used by `wizard doctor`
+ * - introspection         lets the wizard introspect its own token
+ * - health_issue:read     used by `wizard doctor`
+ * - wizard_session:read   list / retrieve / stream sessions
+ * - wizard_session:write  stream run state to /api/projects/{id}/wizard/sessions/
  */
 export const WIZARD_OAUTH_SCOPES = [
   ...WIZARD_PROVISIONING_SCOPES,
   'introspection',
   'health_issue:read',
+  'wizard_session:read',
+  'wizard_session:write',
 ] as const;
 
 // ── Wizard run / variants ───────────────────────────────────────────

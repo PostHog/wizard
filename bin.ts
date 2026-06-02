@@ -22,12 +22,11 @@ if (!satisfies(process.version, NODE_VERSION_RANGE)) {
 import { isNonInteractiveEnvironment } from '@utils/environment';
 import { getUI, setUI } from '@ui';
 import { LoggingUI } from '@ui/logging-ui';
-import {
-  getSubcommandPrograms,
-  Program,
-} from '@lib/programs/program-registry';
+import { getSubcommandPrograms, Program } from '@lib/programs/program-registry';
 import type { ProgramConfig } from '@lib/programs/program-step';
 import type { WizardSession } from '@lib/wizard-session';
+import type { startTUI as StartTUIFn } from '@ui/tui/start-tui';
+import type { TaskStreamPush as TaskStreamPushClass } from '@lib/task-stream/task-stream-push';
 import { POSTHOG_DOCS_URL } from '@lib/constants';
 import { runtimeEnv } from '@env';
 
@@ -128,6 +127,12 @@ const cli = yargs(hideBin(process.argv))
       describe:
         'Email address for signup (used with --signup)\nenv: POSTHOG_WIZARD_EMAIL',
       type: 'string',
+    },
+    telemetry: {
+      default: true,
+      describe:
+        'Send wizard run state to PostHog (pass --no-telemetry to disable)\nenv: POSTHOG_WIZARD_TELEMETRY',
+      type: 'boolean',
     },
   })
   .command(
@@ -431,17 +436,13 @@ const cli = yargs(hideBin(process.argv))
             .map((s) => s.trim())
             .filter(Boolean);
           void (async () => {
-            const { readApiKeyFromEnv } = await import(
-              '@utils/env-api-key'
-            );
+            const { readApiKeyFromEnv } = await import('@utils/env-api-key');
             const apiKey =
               (options.apiKey as string | undefined) || readApiKeyFromEnv();
 
             try {
               const { startTUI } = await import('@ui/tui/start-tui');
-              const { buildSession } = await import(
-                '@lib/wizard-session'
-              );
+              const { buildSession } = await import('@lib/wizard-session');
 
               const tui = startTUI(WIZARD_VERSION, Program.McpAdd);
               const session = buildSession({
@@ -484,9 +485,7 @@ const cli = yargs(hideBin(process.argv))
           void (async () => {
             try {
               const { startTUI } = await import('@ui/tui/start-tui');
-              const { buildSession } = await import(
-                '@lib/wizard-session'
-              );
+              const { buildSession } = await import('@lib/wizard-session');
 
               const tui = startTUI(WIZARD_VERSION, Program.McpRemove);
               const session = buildSession({
@@ -557,9 +556,7 @@ cli.command(
 
     void (async () => {
       try {
-        const { provisionNewAccount } = await import(
-          '@utils/provisioning'
-        );
+        const { provisionNewAccount } = await import('@utils/provisioning');
         if (!jsonMode) {
           getUI().log.info(`Provisioning account for ${email} in ${region}...`);
         }
@@ -625,6 +622,17 @@ cli
   .alias('version', 'v')
   .wrap(process.stdout.isTTY ? cli.terminalWidth() : 80).argv;
 
+// `--no-telemetry` flips `telemetry: false` via yargs negation;
+// `POSTHOG_WIZARD_NO_TELEMETRY` is honoured separately so the env-var
+// form documented in the README keeps working.
+function resolveNoTelemetry(options: Record<string, unknown>): boolean {
+  if (options.telemetry === false) return true;
+  const env = process.env.POSTHOG_WIZARD_NO_TELEMETRY;
+  if (env == null || env === '') return false;
+  const norm = env.toLowerCase();
+  return norm !== '0' && norm !== 'false';
+}
+
 /**
  * Run a full wizard program in the TUI. Handles the full lifecycle: start TUI,
  * build session, run detection, wait for intro gate, execute the
@@ -634,22 +642,25 @@ function runWizard(
   config: ProgramConfig,
   options: Record<string, unknown>,
 ): void {
+  let tui: ReturnType<typeof StartTUIFn> | null = null;
+  let taskStream: TaskStreamPushClass | null = null;
+  let onSignal: (() => void) | null = null;
+  let exitInProgress = false;
+
   void (async () => {
     try {
       const installDir = (options.installDir as string) || process.cwd();
 
       const { startTUI } = await import('@ui/tui/start-tui');
-      const { buildSession } = await import('@lib/wizard-session');
+      const { buildSession, RunPhase } = await import('@lib/wizard-session');
       const { TaskStreamPush } = await import('@lib/task-stream/index');
-      const { FileDestination } = await import(
-        '@lib/task-stream/destinations/file'
-      );
       const { PostHogDestination } = await import(
         '@lib/task-stream/destinations/posthog'
       );
-      const { analytics } = await import('@utils/analytics');
+      const { logToFile } = await import('@utils/debug');
 
-      const tui = startTUI(WIZARD_VERSION, config.id as any);
+      tui = startTUI(WIZARD_VERSION, config.id as any);
+      const activeTui = tui;
 
       const session = buildSession({
         debug: options.debug as boolean | undefined,
@@ -665,6 +676,7 @@ function runWizard(
         integration: options.integration as any,
         benchmark: options.benchmark as boolean | undefined,
         yaraReport: options.yaraReport as boolean | undefined,
+        noTelemetry: resolveNoTelemetry(options),
       });
       session.programLabel = config.id;
       if (options.skillId) {
@@ -673,26 +685,53 @@ function runWizard(
         session.skillId = config.skillId;
       }
 
-      tui.store.session = session;
+      activeTui.store.session = session;
 
-      // Task stream — pushes state to external consumers on task changes
-      const taskStream = new TaskStreamPush({
-        store: tui.store,
+      const taskStreamEnabled = !session.noTelemetry;
+      taskStream = new TaskStreamPush({
+        store: activeTui.store,
         programId: config.id,
-        destinations: [new FileDestination(), new PostHogDestination()],
+        destinations: [
+          new PostHogDestination({
+            getCredentials: () => activeTui.store.session.credentials,
+            onError: (err) => logToFile('[task-stream-push]', err.message),
+          }),
+        ],
+        enabled: taskStreamEnabled,
       });
-      tui.store.onTasksChanged = () => void taskStream.push();
+      const activeStream = taskStream;
+      activeStream.attach();
 
-      await tui.store.runReadyHooks();
-      await tui.store.getGate('intro');
-      await tui.store.getGate('health-check');
+      // Flush a terminal-phase push on Ctrl-C so the web app sees the
+      // run ended in error rather than hanging on the last "running"
+      // snapshot.
+      let signalled = false;
+      onSignal = (): void => {
+        if (signalled || exitInProgress) return;
+        signalled = true;
+        if (activeTui.store.session.runPhase === RunPhase.Running) {
+          activeTui.store.setRunPhase(RunPhase.Error);
+        }
+        void activeStream.shutdown(2000).finally(() => {
+          try {
+            activeTui.unmount();
+          } catch {
+            // terminal may already be torn down
+          }
+          process.exit(130);
+        });
+      };
+      process.on('SIGINT', onSignal);
+      process.on('SIGTERM', onSignal);
+
+      await activeTui.store.runReadyHooks();
+      await activeTui.store.getGate('intro');
+      await activeTui.store.getGate('health-check');
 
       const skipAgent = config.run == null;
 
       if (skipAgent) {
-        const { getOrAskForProjectData } = await import(
-          '@utils/setup-utils'
-        );
+        const { getOrAskForProjectData } = await import('@utils/setup-utils');
         const { projectApiKey, host, accessToken, projectId } =
           await getOrAskForProjectData({
             signup: session.signup,
@@ -700,7 +739,7 @@ function runWizard(
             apiKey: session.apiKey,
             projectId: session.projectId,
           });
-        tui.store.setCredentials({
+        activeTui.store.setCredentials({
           accessToken,
           projectApiKey,
           host,
@@ -708,16 +747,16 @@ function runWizard(
         });
       } else {
         const { runAgent } = await import('@lib/agent/agent-runner');
-        await runAgent(config, tui.store.session);
+        await runAgent(config, activeTui.store.session);
       }
 
       const isDone = (): boolean =>
         skipAgent
-          ? tui.store.session.outroDismissed
-          : tui.store.session.skillsComplete;
+          ? activeTui.store.session.outroDismissed
+          : activeTui.store.session.skillsComplete;
 
       await new Promise<void>((resolve) => {
-        const unsub = tui.store.subscribe(() => {
+        const unsub = activeTui.store.subscribe(() => {
           if (isDone()) {
             unsub();
             resolve();
@@ -729,17 +768,38 @@ function runWizard(
         }
       });
 
-      try {
-        await taskStream.dispose();
-      } catch (error) {
-        analytics.captureException(error as Error);
-      }
-      tui.unmount();
+      exitInProgress = true;
+      await activeStream.shutdown(2000);
+      process.off('SIGINT', onSignal);
+      process.off('SIGTERM', onSignal);
+      activeTui.unmount();
       process.exit(0);
     } catch (err) {
       if (runtimeEnv('DEBUG') || runtimeEnv('POSTHOG_WIZARD_DEBUG')) {
         console.error('TUI init failed:', err); // eslint-disable-line no-console
       }
+      // The task-stream debounce timer keeps the event loop alive, so
+      // we have to drain it before exiting on the error path.
+      exitInProgress = true;
+      if (onSignal) {
+        process.off('SIGINT', onSignal);
+        process.off('SIGTERM', onSignal);
+      }
+      if (taskStream) {
+        try {
+          await taskStream.shutdown(2000);
+        } catch {
+          // ignore
+        }
+      }
+      if (tui) {
+        try {
+          tui.unmount();
+        } catch {
+          // ignore
+        }
+      }
+      process.exit(1);
     }
   })();
 }
@@ -780,9 +840,7 @@ function runWizardCI(
     const { configureLogFileFromEnvironment, logToFile } = await import(
       '@utils/debug'
     );
-    const { wizardAbort, WizardError } = await import(
-      '@utils/wizard-abort'
-    );
+    const { wizardAbort, WizardError } = await import('@utils/wizard-abort');
 
     configureLogFileFromEnvironment();
 
@@ -807,6 +865,7 @@ function runWizardCI(
       projectId: options.projectId as string | undefined,
       benchmark: options.benchmark as boolean | undefined,
       yaraReport: options.yaraReport as boolean | undefined,
+      noTelemetry: resolveNoTelemetry(options),
       ...env,
     });
     session.programLabel = config.id;

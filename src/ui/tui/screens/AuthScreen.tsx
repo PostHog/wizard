@@ -56,11 +56,16 @@ export const AuthScreen = ({ store }: AuthScreenProps) => {
       <LoadingBox message="Waiting for authentication..." />
 
       {session.loginUrl && (
-        <Box marginTop={1} flexDirection="column">
-          <Text dimColor>
-            If the browser didn't open, copy and paste this URL:
+        <Box marginTop={1} marginBottom={1} flexDirection="column">
+          {/* Literal \n — sibling <Box> spacers squeeze to 0 under flex
+              height pressure, letting cmd-click slurp /authorize + 'y'. */}
+          <Text>
+            <Text dimColor>
+              If the browser didn't open, copy and paste this URL:
+            </Text>
+            {'\n\n'}
+            <Text color="cyan">{session.loginUrl}</Text>
           </Text>
-          <Text color="cyan">{session.loginUrl}</Text>
         </Box>
       )}
     </Box>
