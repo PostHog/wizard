@@ -105,7 +105,7 @@
     "build:ci": "WIZARD_BUILD_NODE_ENV=ci pnpm build",
     "typecheck": "tsc --noEmit",
     "postbuild": "chmod +x ./dist/bin.js && cp -r scripts/** dist && pnpm test:smoke",
-    "test:smoke": "node --input-type=module -e \"import './dist/bin.js'\" 2>&1 | head -5 | grep -q 'PostHog Wizard' || (echo 'Smoke test failed: compiled binary crashed on load' && exit 1)",
+    "test:smoke": "bash ./scripts/smoke-test.sh",
     "lint": "pnpm lint:prettier && pnpm lint:eslint",
     "lint:prettier": "prettier --check \"{lib,src,test}/**/*.ts\"",
     "lint:eslint": "eslint . --cache --format stylish",

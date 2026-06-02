@@ -341,13 +341,21 @@ const cli = yargs(hideBin(process.argv))
       } else if (isNonInteractiveEnvironment()) {
         // Non-interactive non-CI: error out
         getUI().intro(`PostHog Wizard`);
-        getUI().log.error(
-          'This installer requires an interactive terminal (TTY) to run.\n' +
-            'It appears you are running in a non-interactive environment.\n' +
-            'Please run the wizard in an interactive terminal.\n\n' +
-            'For CI/CD environments, use --ci mode:\n' +
-            '  npx @posthog/wizard --ci --region us --api-key phx_xxx',
-        );
+        if (IS_PRODUCTION_BUILD) {
+          getUI().log.error(
+            'This installer requires an interactive terminal (TTY) to run.\n' +
+              'It appears you are running in a non-interactive environment.\n\n' +
+              'Non-interactive (CI) mode is not supported in published builds.\n',
+          );
+        } else {
+          getUI().log.error(
+            'This installer requires an interactive terminal (TTY) to run.\n' +
+              'It appears you are running in a non-interactive environment.\n' +
+              'Please run the wizard in an interactive terminal.\n\n' +
+              'For CI/CD environments, use --ci mode:\n' +
+              '  npx @posthog/wizard --ci --region us --api-key phx_xxx',
+          );
+        }
         process.exit(1);
       } else if (options.playground) {
         // Playground mode: launch the TUI primitives playground
@@ -629,6 +637,25 @@ cli
   .alias('version', 'v')
   .wrap(process.stdout.isTTY ? cli.terminalWidth() : 80);
 
+// In published builds, `--ci` is undeclared, so yargs would reject it as
+// "Unknown arguments: ci" — accurate but unhelpful, since --help doesn't list
+// --ci either and the user has no path forward. POSTHOG_WIZARD_CI silently
+// no-ops for the same reason (yargs only resolves env vars for declared
+// options). Detect both up front and exit with a message that explains why
+// and what to do instead.
+if (IS_PRODUCTION_BUILD) {
+  const args = process.argv.slice(2);
+  const argvHasCI = args.some(
+    (a) => a === '--ci' || a === '--no-ci' || a.startsWith('--ci='),
+  );
+  const envHasCI =
+    process.env.POSTHOG_WIZARD_CI != null &&
+    process.env.POSTHOG_WIZARD_CI !== '';
+  if (argvHasCI || envHasCI) {
+    exitWithProductionCIError();
+  }
+}
+
 try {
   cli.parse();
 } catch (err) {
@@ -638,6 +665,16 @@ try {
   const message = err instanceof Error ? err.message : String(err);
   process.stderr.write(`${RED}${BOLD}✖ ${message}${RESET}\n`);
   process.stderr.write('Run with --help to see available options.\n');
+  process.exit(1);
+}
+
+function exitWithProductionCIError(): never {
+  const RED = '\x1b[31m';
+  const BOLD = '\x1b[1m';
+  const RESET = '\x1b[0m';
+  process.stderr.write(
+    `${RED}${BOLD}✖ CI mode is not currently supported in published builds.${RESET}\n`,
+  );
   process.exit(1);
 }
 
