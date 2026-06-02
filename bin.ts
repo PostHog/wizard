@@ -1,31 +1,28 @@
 #!/usr/bin/env node
 import { satisfies } from 'semver';
 
+// Run the Node-version check before pulling in the rest of the imports so
+// users on too-old Node see a friendly message instead of a `SyntaxError`
+// from one of our dependencies' modern features.
+const MIN_NODE_VERSION = '>=18.17.0';
+if (!satisfies(process.version, MIN_NODE_VERSION)) {
+  // eslint-disable-next-line no-console
+  console.log(
+    `PostHog wizard needs Node.js ${MIN_NODE_VERSION}. Detected ${process.version} — please upgrade Node and re-run.`,
+  );
+  process.exit(1);
+}
+
 import yargs from 'yargs';
 import { hideBin } from 'yargs/helpers';
 import { VERSION } from '@lib/version';
 
 const WIZARD_VERSION = VERSION;
 
-const NODE_VERSION_RANGE = '>=18.17.0';
-
-// Have to run this above the other imports because they are importing clack that
-// has the problematic imports.
-if (!satisfies(process.version, NODE_VERSION_RANGE)) {
-  // eslint-disable-next-line no-console
-  console.log(
-    `PostHog wizard requires Node.js ${NODE_VERSION_RANGE}. You are using Node.js ${process.version}. Please upgrade your Node.js version.`,
-  );
-  process.exit(1);
-}
-
 import { isNonInteractiveEnvironment } from '@utils/environment';
 import { getUI, setUI } from '@ui';
 import { LoggingUI } from '@ui/logging-ui';
-import {
-  getSubcommandPrograms,
-  Program,
-} from '@lib/programs/program-registry';
+import { getSubcommandPrograms, Program } from '@lib/programs/program-registry';
 import type { ProgramConfig } from '@lib/programs/program-step';
 import type { WizardSession } from '@lib/wizard-session';
 import { POSTHOG_DOCS_URL } from '@lib/constants';
@@ -431,17 +428,13 @@ const cli = yargs(hideBin(process.argv))
             .map((s) => s.trim())
             .filter(Boolean);
           void (async () => {
-            const { readApiKeyFromEnv } = await import(
-              '@utils/env-api-key'
-            );
+            const { readApiKeyFromEnv } = await import('@utils/env-api-key');
             const apiKey =
               (options.apiKey as string | undefined) || readApiKeyFromEnv();
 
             try {
               const { startTUI } = await import('@ui/tui/start-tui');
-              const { buildSession } = await import(
-                '@lib/wizard-session'
-              );
+              const { buildSession } = await import('@lib/wizard-session');
 
               const tui = startTUI(WIZARD_VERSION, Program.McpAdd);
               const session = buildSession({
@@ -484,9 +477,7 @@ const cli = yargs(hideBin(process.argv))
           void (async () => {
             try {
               const { startTUI } = await import('@ui/tui/start-tui');
-              const { buildSession } = await import(
-                '@lib/wizard-session'
-              );
+              const { buildSession } = await import('@lib/wizard-session');
 
               const tui = startTUI(WIZARD_VERSION, Program.McpRemove);
               const session = buildSession({
@@ -557,9 +548,7 @@ cli.command(
 
     void (async () => {
       try {
-        const { provisionNewAccount } = await import(
-          '@utils/provisioning'
-        );
+        const { provisionNewAccount } = await import('@utils/provisioning');
         if (!jsonMode) {
           getUI().log.info(`Provisioning account for ${email} in ${region}...`);
         }
@@ -690,9 +679,7 @@ function runWizard(
       const skipAgent = config.run == null;
 
       if (skipAgent) {
-        const { getOrAskForProjectData } = await import(
-          '@utils/setup-utils'
-        );
+        const { getOrAskForProjectData } = await import('@utils/setup-utils');
         const { projectApiKey, host, accessToken, projectId } =
           await getOrAskForProjectData({
             signup: session.signup,
@@ -780,9 +767,7 @@ function runWizardCI(
     const { configureLogFileFromEnvironment, logToFile } = await import(
       '@utils/debug'
     );
-    const { wizardAbort, WizardError } = await import(
-      '@utils/wizard-abort'
-    );
+    const { wizardAbort, WizardError } = await import('@utils/wizard-abort');
 
     configureLogFileFromEnvironment();
 
