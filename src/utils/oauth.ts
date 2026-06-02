@@ -1,7 +1,7 @@
 import * as crypto from 'node:crypto';
 import * as http from 'node:http';
 import { execSync } from 'node:child_process';
-import axios from 'axios';
+import axios, { AxiosError } from 'axios';
 import { logToFile } from './debug';
 import opn from 'opn';
 import { z } from 'zod';
@@ -42,6 +42,32 @@ const OAUTH_CALLBACK_STYLES = `
     }
   </style>
 `;
+
+/**
+ * Token exchange failed with a structured OAuth error (RFC 6749 §5.2).
+ *
+ * `code` is the OAuth `error` field (e.g. `invalid_grant`, `invalid_request`).
+ * `description` is the optional `error_description` text from the server.
+ * `status` is the HTTP status (typically 400 or 401).
+ */
+export class OAuthTokenExchangeError extends Error {
+  readonly code: string | null;
+  readonly description: string | null;
+  readonly status: number | null;
+
+  constructor(params: {
+    code: string | null;
+    description: string | null;
+    status: number | null;
+    message: string;
+  }) {
+    super(params.message);
+    this.name = 'OAuthTokenExchangeError';
+    this.code = params.code;
+    this.description = params.description;
+    this.status = params.status;
+  }
+}
 
 const OAuthTokenResponseSchema = z.object({
   access_token: z.string(),
@@ -235,24 +261,85 @@ async function exchangeCodeForToken(
 ): Promise<OAuthTokenResponse> {
   const clientId = IS_DEV ? POSTHOG_DEV_CLIENT_ID : POSTHOG_PROXY_CLIENT_ID;
 
-  const response = await axios.post(
-    `${POSTHOG_OAUTH_URL}/oauth/token`,
-    {
-      grant_type: 'authorization_code',
-      code,
-      redirect_uri: callbackUrl,
-      client_id: clientId,
-      code_verifier: codeVerifier,
-    },
-    {
-      headers: {
-        'Content-Type': 'application/json',
-        'User-Agent': WIZARD_USER_AGENT,
+  let response;
+  try {
+    response = await axios.post(
+      `${POSTHOG_OAUTH_URL}/oauth/token`,
+      {
+        grant_type: 'authorization_code',
+        code,
+        redirect_uri: callbackUrl,
+        client_id: clientId,
+        code_verifier: codeVerifier,
       },
-    },
-  );
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          'User-Agent': WIZARD_USER_AGENT,
+        },
+      },
+    );
+  } catch (err) {
+    if (axios.isAxiosError(err)) {
+      const axiosError = err as AxiosError<{
+        error?: string;
+        error_description?: string;
+      }>;
+      const status = axiosError.response?.status ?? null;
+      const payload = axiosError.response?.data;
+      const oauthCode =
+        typeof payload?.error === 'string' ? payload.error : null;
+      const description =
+        typeof payload?.error_description === 'string'
+          ? payload.error_description
+          : null;
+      const baseMessage = oauthCode
+        ? `OAuth token exchange failed: ${oauthCode}`
+        : `OAuth token exchange failed${
+            status !== null ? ` with status ${status}` : ''
+          }`;
+      const message = description
+        ? `${baseMessage} — ${description}`
+        : baseMessage;
+      throw new OAuthTokenExchangeError({
+        code: oauthCode,
+        description,
+        status,
+        message,
+      });
+    }
+    throw err;
+  }
 
   return OAuthTokenResponseSchema.parse(response.data);
+}
+
+function describeOAuthTokenExchangeError(
+  error: OAuthTokenExchangeError,
+): string {
+  const detailLine = error.description
+    ? `\n\nDetails: ${error.description}`
+    : '';
+  const bugReport = `If you think this is a bug in the PostHog wizard, please create an issue:\n${ISSUES_URL}`;
+
+  switch (error.code) {
+    case 'invalid_grant':
+      return `Authorization failed: the authorization code was rejected.\n\nThis usually means the code expired or was already used. Please re-run the wizard to start a fresh login.${detailLine}`;
+    case 'invalid_request':
+      return `Authorization failed: the token exchange request was rejected (invalid_request).${detailLine}\n\n${bugReport}`;
+    case 'invalid_client':
+      return `Authorization failed: PostHog did not recognize the wizard's client credentials (invalid_client).${detailLine}\n\n${bugReport}`;
+    case 'unauthorized_client':
+      return `Authorization failed: the wizard is not authorized to use this grant type (unauthorized_client).${detailLine}\n\n${bugReport}`;
+    case 'unsupported_grant_type':
+      return `Authorization failed: PostHog rejected the grant type (unsupported_grant_type).${detailLine}\n\n${bugReport}`;
+    case 'invalid_scope':
+      return `Authorization failed: the requested scopes were rejected (invalid_scope).${detailLine}\n\n${bugReport}`;
+    default: {
+      const codeLabel = error.code ? ` (${error.code})` : '';
+      return `Authorization failed${codeLabel}.${detailLine}\n\n${bugReport}`;
+    }
+  }
 }
 
 export async function performOAuthFlow(
@@ -349,7 +436,9 @@ export async function performOAuthFlow(
 
         const error = e instanceof Error ? e : new Error('Unknown error');
 
-        if (error.message.includes('timeout')) {
+        if (error instanceof OAuthTokenExchangeError) {
+          getUI().log.error(describeOAuthTokenExchangeError(error));
+        } else if (error.message.includes('timeout')) {
           getUI().log.error('Authorization timed out. Please try again.');
         } else if (error.message.includes('access_denied')) {
           getUI().log.info(
@@ -363,6 +452,12 @@ export async function performOAuthFlow(
 
         analytics.captureException(error, {
           step: 'oauth_flow',
+          ...(error instanceof OAuthTokenExchangeError
+            ? {
+                oauth_error: error.code,
+                oauth_status: error.status,
+              }
+            : {}),
         });
 
         await abort();
