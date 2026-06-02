@@ -361,8 +361,20 @@ export async function performOAuthFlow(
           );
         }
 
+        const oauthErrorCode = error.message.startsWith('OAuth error: ')
+          ? error.message.slice('OAuth error: '.length)
+          : error.message.includes('timeout')
+          ? 'timeout'
+          : 'unknown';
+
         analytics.captureException(error, {
           step: 'oauth_flow',
+          oauth_error_code: oauthErrorCode,
+          client_id: clientId,
+          requested_scopes: config.scopes.join(' '),
+          // Collapse OAuth callback failures of the same kind into one issue
+          // instead of fragmenting by each user's install path in the stack trace.
+          $exception_fingerprint: `wizard_oauth_${oauthErrorCode}`,
         });
 
         await abort();
