@@ -1,5 +1,29 @@
 # Changelog
 
+## [2.15.0](https://github.com/PostHog/wizard/compare/v2.14.3...v2.15.0) (2026-06-03)
+
+
+### Features
+
+* add wizard state push ([#463](https://github.com/PostHog/wizard/issues/463)) ([323a84f](https://github.com/PostHog/wizard/commit/323a84feb9f3bbcd4be9a990b26722ff001d1f42))
+* disable --ci in published builds ([#499](https://github.com/PostHog/wizard/issues/499)) ([c34b712](https://github.com/PostHog/wizard/commit/c34b712c3f687f3dfe74d280e3725f0a490dea97))
+* enrich oauth login failure telemetry for diagnosis ([#501](https://github.com/PostHog/wizard/issues/501)) ([e70f51b](https://github.com/PostHog/wizard/commit/e70f51b549dee4e5f9fbc487f5667e8a3500d178))
+* error tracking source maps ([#475](https://github.com/PostHog/wizard/issues/475)) ([c25b7b8](https://github.com/PostHog/wizard/commit/c25b7b84276c524e2dc5c39ff7b6e211e795fcb9))
+* manual OAuth code paste ([#496](https://github.com/PostHog/wizard/issues/496)) ([0e43025](https://github.com/PostHog/wizard/commit/0e43025b0a8f893669ae63ba9a4aab99d53c2eba))
+
+
+### Bug Fixes
+
+* drop ungrantable `introspection` scope from OAuth authorize URL ([#443](https://github.com/PostHog/wizard/issues/443)) ([69ed45b](https://github.com/PostHog/wizard/commit/69ed45b8fa4bcfb62528fee2900357bcd02b1e95))
+* responsive bug that hijacked the authorize url ([#497](https://github.com/PostHog/wizard/issues/497)) ([cdf17a4](https://github.com/PostHog/wizard/commit/cdf17a41a270fbf165a8c1b4d7f1b7d7568ee4ec))
+
+## [2.14.3](https://github.com/PostHog/wizard/compare/v2.14.2...v2.14.3) (2026-06-01)
+
+
+### Bug Fixes
+
+* sharing health check step with agent-skill program ([#494](https://github.com/PostHog/wizard/issues/494)) ([2b866ad](https://github.com/PostHog/wizard/commit/2b866adb49ef3157ff0d713f5f825ef7c4d03e7e))
+
 ## [2.14.2](https://github.com/PostHog/wizard/compare/v2.14.1...v2.14.2) (2026-05-26)
 
 

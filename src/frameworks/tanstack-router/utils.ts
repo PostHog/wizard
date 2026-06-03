@@ -1,6 +1,6 @@
 import fg from 'fast-glob';
-import type { WizardOptions } from '@utils/types';
-import { hasPackageInstalled } from '@utils/package-json';
+import type { WizardRunOptions } from '@utils/types';
+import { hasDeclaredDependency } from '@utils/package-json';
 import { createVersionBucket } from '@utils/semver';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -23,7 +23,7 @@ export const getTanStackRouterVersionBucket = createVersionBucket();
 
 async function hasFileBasedRouting({
   installDir,
-}: Pick<WizardOptions, 'installDir'>): Promise<boolean> {
+}: Pick<WizardRunOptions, 'installDir'>): Promise<boolean> {
   const generatedFiles = await fg('**/routeTree.gen.@(ts|tsx|js|jsx)', {
     dot: true,
     cwd: installDir,
@@ -40,8 +40,8 @@ async function hasFileBasedRouting({
     const packageJson = JSON.parse(content) as Record<string, unknown>;
 
     if (
-      hasPackageInstalled('@tanstack/router-plugin', packageJson) ||
-      hasPackageInstalled('@tanstack/router-vite-plugin', packageJson)
+      hasDeclaredDependency('@tanstack/router-plugin', packageJson) ||
+      hasDeclaredDependency('@tanstack/router-vite-plugin', packageJson)
     ) {
       return true;
     }
@@ -72,7 +72,7 @@ async function hasFileBasedRouting({
 
 async function hasCodeBasedRouting({
   installDir,
-}: Pick<WizardOptions, 'installDir'>): Promise<boolean> {
+}: Pick<WizardRunOptions, 'installDir'>): Promise<boolean> {
   const sourceFiles = await fg('**/*.@(ts|tsx|js|jsx)', {
     dot: true,
     cwd: installDir,
@@ -105,7 +105,7 @@ async function hasCodeBasedRouting({
  * Detect TanStack Router mode. Pure — returns null if ambiguous.
  */
 export async function getTanStackRouterMode(
-  options: WizardOptions,
+  options: WizardRunOptions,
 ): Promise<TanStackRouterMode | null> {
   const { installDir } = options;
 

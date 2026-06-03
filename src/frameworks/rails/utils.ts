@@ -1,6 +1,6 @@
 import fg from 'fast-glob';
 import { getUI } from '@ui';
-import type { WizardOptions } from '@utils/types';
+import type { WizardRunOptions } from '@utils/types';
 import { createVersionBucket } from '@utils/semver';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -28,7 +28,7 @@ export const getRailsVersionBucket = createVersionBucket();
  * Read and parse Gemfile contents
  */
 function readGemfile(
-  options: Pick<WizardOptions, 'installDir'>,
+  options: Pick<WizardRunOptions, 'installDir'>,
 ): string | undefined {
   const { installDir } = options;
 
@@ -45,7 +45,7 @@ function readGemfile(
  */
 export function hasGem(
   gemName: string,
-  options: Pick<WizardOptions, 'installDir'>,
+  options: Pick<WizardRunOptions, 'installDir'>,
 ): boolean {
   const content = readGemfile(options);
   if (!content) return false;
@@ -60,7 +60,7 @@ export function hasGem(
  */
 export function getGemVersion(
   gemName: string,
-  options: Pick<WizardOptions, 'installDir'>,
+  options: Pick<WizardRunOptions, 'installDir'>,
 ): string | undefined {
   const content = readGemfile(options);
   if (!content) return undefined;
@@ -77,7 +77,7 @@ export function getGemVersion(
  * Get Rails version from Gemfile
  */
 export function getRailsVersion(
-  options: Pick<WizardOptions, 'installDir'>,
+  options: Pick<WizardRunOptions, 'installDir'>,
 ): string | undefined {
   return getGemVersion('rails', options);
 }
@@ -85,7 +85,9 @@ export function getRailsVersion(
 /**
  * Detect Rails project type
  */
-export function getRailsProjectType(options: WizardOptions): RailsProjectType {
+export function getRailsProjectType(
+  options: WizardRunOptions,
+): RailsProjectType {
   const { installDir } = options;
 
   // Check for API-only mode in config/application.rb
@@ -122,7 +124,7 @@ export function getRailsProjectTypeName(projectType: RailsProjectType): string {
  * Find the Rails initializers directory
  */
 export function findInitializersDir(
-  options: Pick<WizardOptions, 'installDir'>,
+  options: Pick<WizardRunOptions, 'installDir'>,
 ): string | undefined {
   const { installDir } = options;
 
@@ -138,7 +140,7 @@ export function findInitializersDir(
  * Detect if the project is a Rails project by looking for typical Rails files
  */
 export async function isRailsProject(
-  options: Pick<WizardOptions, 'installDir'>,
+  options: Pick<WizardRunOptions, 'installDir'>,
 ): Promise<boolean> {
   const { installDir } = options;
 

@@ -1,13 +1,13 @@
 /* Astro wizard using posthog-agent with PostHog MCP */
-import type { WizardOptions } from '@utils/types';
+import type { WizardRunOptions } from '@utils/types';
 import type { FrameworkConfig } from '@lib/framework-config';
 import { detectNodePackageManagers } from '@lib/detection/package-manager';
 import { Integration } from '@lib/constants';
 import {
-  getPackageVersion,
+  getDeclaredVersion,
   getInstalledPackageVersion,
-  hasPackageInstalled,
-  type PackageDotJson,
+  hasDeclaredDependency,
+  type PackageJson,
 } from '@utils/package-json';
 import { tryGetPackageJson } from '@utils/setup-utils';
 import { getUI } from '@ui';
@@ -27,7 +27,7 @@ export const ASTRO_AGENT_CONFIG: FrameworkConfig<AstroContext> = {
     name: 'Astro',
     integration: Integration.astro,
     docsUrl: 'https://posthog.com/docs/libraries/astro',
-    gatherContext: async (options: WizardOptions) => {
+    gatherContext: async (options: WizardRunOptions) => {
       const renderingMode = await getAstroRenderingMode(options);
       getUI().setDetectedFramework(
         `Astro ${getAstroRenderingModeName(renderingMode)}`,
@@ -40,14 +40,14 @@ export const ASTRO_AGENT_CONFIG: FrameworkConfig<AstroContext> = {
     packageName: 'astro',
     packageDisplayName: 'Astro',
     getVersion: (packageJson: unknown) =>
-      getPackageVersion('astro', packageJson as PackageDotJson),
+      getDeclaredVersion('astro', packageJson as PackageJson),
     getVersionBucket: getAstroVersionBucket,
     minimumVersion: '4.0.0',
-    getInstalledVersion: (options: WizardOptions) =>
+    getInstalledVersion: (options: WizardRunOptions) =>
       Promise.resolve(getInstalledPackageVersion('astro', options.installDir)),
     detect: async (options) => {
       const packageJson = await tryGetPackageJson(options);
-      return packageJson ? hasPackageInstalled('astro', packageJson) : false;
+      return packageJson ? hasDeclaredDependency('astro', packageJson) : false;
     },
     detectPackageManager: detectNodePackageManagers,
   },

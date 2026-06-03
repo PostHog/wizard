@@ -51,7 +51,7 @@ import { getSkillsBaseUrl } from '@lib/constants';
 import { runtimeEnv } from '@env';
 import { installSkillById, type InstallSkillResult } from '@lib/wizard-tools';
 import { createWizardAskBridge } from '@lib/wizard-ask-bridge';
-import type { WizardOptions } from '@utils/types';
+import type { WizardRunOptions } from '@utils/types';
 
 import type { ProgramConfig } from '@lib/programs/program-step';
 import { assemblePrompt, type PromptContext } from './agent-prompt';
@@ -130,7 +130,7 @@ export function shouldDisableAsk(
   return session.ci || session.signup;
 }
 
-function sessionToOptions(session: WizardSession): WizardOptions {
+function sessionToOptions(session: WizardSession): WizardRunOptions {
   return {
     installDir: session.installDir,
     debug: session.debug,

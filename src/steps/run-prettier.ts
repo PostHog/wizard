@@ -7,14 +7,14 @@ import {
   getUncommittedOrUntrackedFiles,
   isInGitRepo,
 } from '@utils/setup-utils';
-import { hasPackageInstalled } from '@utils/package-json';
-import type { WizardOptions } from '@utils/types';
+import { hasDeclaredDependency } from '@utils/package-json';
+import type { WizardRunOptions } from '@utils/types';
 import * as childProcess from 'node:child_process';
 
 export async function runPrettierStep({
   installDir,
   integration,
-}: Pick<WizardOptions, 'installDir'> & {
+}: Pick<WizardRunOptions, 'installDir'> & {
   integration: Integration;
 }): Promise<void> {
   return withProgress('run-prettier', async () => {
@@ -37,7 +37,7 @@ export async function runPrettierStep({
 
     const packageJson = await tryGetPackageJson({ installDir });
     if (!packageJson) return;
-    const prettierInstalled = hasPackageInstalled('prettier', packageJson);
+    const prettierInstalled = hasDeclaredDependency('prettier', packageJson);
 
     analytics.setTag('prettier-installed', prettierInstalled);
 

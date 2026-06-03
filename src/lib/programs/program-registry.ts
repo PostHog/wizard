@@ -19,6 +19,7 @@ import { eventsAuditConfig } from './events-audit/index.js';
 import { audit3000Config } from './audit-3000/index.js';
 import { posthogDoctorConfig } from './posthog-doctor/index.js';
 import { migrationConfig } from './migration/index.js';
+import { errorTrackingUploadSourceMapsConfig } from './error-tracking-upload-source-maps/index.js';
 import { AGENT_SKILL_STEPS } from './agent-skill/index.js';
 import { getContentBlocks as agentSkillContentBlocks } from './agent-skill/content/index.js';
 import { mcpAddConfig, mcpRemoveConfig } from './mcp/index.js';
@@ -38,6 +39,7 @@ export const PROGRAM_REGISTRY = [
   posthogIntegrationConfig,
   revenueAnalyticsConfig,
   warehouseSourceConfig,
+  errorTrackingUploadSourceMapsConfig,
   auditConfig,
   eventsAuditConfig,
   audit3000Config,
@@ -57,6 +59,7 @@ export const Program = {
   PostHogIntegration: posthogIntegrationConfig.id,
   RevenueAnalyticsSetup: revenueAnalyticsConfig.id,
   WarehouseSource: warehouseSourceConfig.id,
+  ErrorTrackingUploadSourceMaps: errorTrackingUploadSourceMapsConfig.id,
   Migration: migrationConfig.id,
   Audit: auditConfig.id,
   EventsAudit: eventsAuditConfig.id,

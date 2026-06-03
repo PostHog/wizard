@@ -1,5 +1,5 @@
 /* Flask wizard using posthog-agent with PostHog MCP */
-import type { WizardOptions } from '@utils/types';
+import type { WizardRunOptions } from '@utils/types';
 import type { FrameworkConfig } from '@lib/framework-config';
 import { PYTHON_PACKAGE_INSTALLATION } from '@lib/framework-config';
 import { detectPythonPackageManagers } from '@lib/detection/package-manager';
@@ -28,7 +28,7 @@ export const FLASK_AGENT_CONFIG: FrameworkConfig<FlaskContext> = {
     beta: true,
     docsUrl: 'https://posthog.com/docs/libraries/python',
     unsupportedVersionDocsUrl: 'https://posthog.com/docs/libraries/python',
-    gatherContext: async (options: WizardOptions) => {
+    gatherContext: async (options: WizardRunOptions) => {
       const projectType = await getFlaskProjectType(options);
       const appFile = await findFlaskAppFile(options);
       return { projectType, appFile };
@@ -42,7 +42,8 @@ export const FLASK_AGENT_CONFIG: FrameworkConfig<FlaskContext> = {
     getVersion: () => undefined,
     getVersionBucket: getFlaskVersionBucket,
     minimumVersion: '2.0.0',
-    getInstalledVersion: (options: WizardOptions) => getFlaskVersion(options),
+    getInstalledVersion: (options: WizardRunOptions) =>
+      getFlaskVersion(options),
     detect: async (options) => {
       const { installDir } = options;
 

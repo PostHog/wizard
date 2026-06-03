@@ -23,6 +23,15 @@ export const NODE_ENV = process.env.NODE_ENV as string;
 export const IS_DEV =
   process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test';
 
+/**
+ * True only in published/production builds. tsdown inlines
+ * `process.env.NODE_ENV` as the literal `"production"` at build time, so this
+ * collapses to `true` in `dist/` and stays `false` for `tsx`/dev/test runs
+ * (where NODE_ENV is unset, `development`, or `test`). Used to gate features
+ * that aren't supported in the shipped package — e.g. `--ci` mode.
+ */
+export const IS_PRODUCTION_BUILD = process.env.NODE_ENV === 'production';
+
 // ── Runtime environment ──────────────────────────────────────────────
 
 /**

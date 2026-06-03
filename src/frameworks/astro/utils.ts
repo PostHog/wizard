@@ -1,7 +1,7 @@
 import fg from 'fast-glob';
 import fs from 'fs/promises';
 import path from 'path';
-import type { WizardOptions } from '@utils/types';
+import type { WizardRunOptions } from '@utils/types';
 import { createVersionBucket } from '@utils/semver';
 
 export const getAstroVersionBucket = createVersionBucket();
@@ -24,7 +24,7 @@ export const IGNORE_PATTERNS = [
  */
 export async function getAstroRenderingMode({
   installDir,
-}: Pick<WizardOptions, 'installDir'>): Promise<AstroRenderingMode> {
+}: Pick<WizardRunOptions, 'installDir'>): Promise<AstroRenderingMode> {
   const configMatches = await fg('astro.config.@(mjs|ts|js)', {
     dot: true,
     cwd: installDir,

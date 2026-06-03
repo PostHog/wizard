@@ -1,4 +1,4 @@
-minimumReleaseAge: 1440
+minimumReleaseAge: 10080
 minimumReleaseAgeExclude:
   - "@next/eslint-plugin-next@15.5.7"
   - "@next/env@15.5.7"

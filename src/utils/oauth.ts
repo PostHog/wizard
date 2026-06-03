@@ -76,6 +76,44 @@ function getLocalSignupUrl(port: number): string {
   return `${getLocalLoginUrl(port)}?signup=true`;
 }
 
+/**
+ * Extract an OAuth authorization code from raw user input. Accepts either the
+ * bare code, the full callback URL the browser was redirected to
+ * (`http://localhost:8239/callback?code=abc123&...`), or just the query
+ * string. Returns null when no code can be found.
+ *
+ * This backs the manual-entry fallback: in headless/remote environments the
+ * browser can't reach the wizard's local callback server, so the user copies
+ * the failed callback URL (or the code from it) back into the terminal.
+ */
+export function extractOAuthCode(input: string): string | null {
+  const trimmed = input.trim();
+  if (!trimmed) return null;
+
+  // Full URL — pull the `code` query param.
+  let looksLikeUrl = false;
+  try {
+    const url = new URL(trimmed);
+    looksLikeUrl = true;
+    const code = url.searchParams.get('code');
+    if (code) return code;
+  } catch {
+    // Not a parseable URL — fall through to the looser checks below.
+  }
+
+  // A pasted query string or `code=...` fragment.
+  const match = trimmed.match(/[?&]?code=([^&\s]+)/);
+  if (match) return decodeURIComponent(match[1]);
+
+  // A URL with no code is invalid — don't mistake the whole URL for a code.
+  if (looksLikeUrl) return null;
+
+  // Otherwise treat the whole input as the bare code (no embedded whitespace).
+  if (!/\s/.test(trimmed)) return trimmed;
+
+  return null;
+}
+
 function generateCodeVerifier(): string {
   return crypto.randomBytes(32).toString('base64url');
 }
@@ -311,6 +349,13 @@ export async function performOAuthFlow(
       logToFile('[oauth] callback server ready, showing login URL');
 
       getUI().setLoginUrl(urlToOpen);
+      // The localhost proxy above only works on this machine. Surface the
+      // direct PostHog authorize URL too, for the manual-paste modal — on a
+      // remote/headless box the user opens it from another machine, where
+      // localhost:<port> is unreachable.
+      getUI().setAuthorizeUrl(
+        config.signup ? signupUrl.toString() : authUrl.toString(),
+      );
 
       if (NODE_ENV !== 'test') {
         opn(urlToOpen, { wait: false }).catch(() => {
@@ -322,8 +367,13 @@ export async function performOAuthFlow(
       loginSpinner.start('Waiting for authorization...');
 
       try {
+        // Race the local callback server against a manually-pasted code. The
+        // manual path is the fallback for headless/remote shells where the
+        // browser can't reach localhost — the user opens the auth screen's
+        // paste modal and submits the callback URL or code by hand.
         const code = await Promise.race([
           waitForCallback(),
+          getUI().waitForManualAuthCode(),
           new Promise<never>((_, reject) =>
             setTimeout(
               () => reject(new Error('Authorization timed out')),
@@ -340,6 +390,7 @@ export async function performOAuthFlow(
 
         server.close();
         getUI().setLoginUrl(null);
+        getUI().setAuthorizeUrl(null);
         loginSpinner.stop('Authorization complete!');
 
         return token;
@@ -361,8 +412,20 @@ export async function performOAuthFlow(
           );
         }
 
+        const oauthErrorCode = error.message.startsWith('OAuth error: ')
+          ? error.message.slice('OAuth error: '.length)
+          : error.message.includes('timeout')
+          ? 'timeout'
+          : 'unknown';
+
         analytics.captureException(error, {
           step: 'oauth_flow',
+          oauth_error_code: oauthErrorCode,
+          client_id: clientId,
+          requested_scopes: config.scopes.join(' '),
+          // Collapse OAuth callback failures of the same kind into one issue
+          // instead of fragmenting by each user's install path in the stack trace.
+          $exception_fingerprint: `wizard_oauth_${oauthErrorCode}`,
         });
 
         await abort();
