@@ -70,6 +70,12 @@ enum ChoiceValue {
   Exit = 'exit',
 }
 
+// Cap how many prompts a single tutorial session can run. Once reached,
+// the user can read the final result but can't return to the picker —
+// the only way out is [esc]. Keeps the wizard from becoming a free-tier
+// MCP front-end and gives the tutorial a natural "done" point.
+const MAX_PROMPT_RUNS = 3;
+
 export const McpSuggestedPromptsScreen = ({
   store,
   services,
@@ -91,6 +97,11 @@ export const McpSuggestedPromptsScreen = ({
   const [runningPrompt, setRunningPrompt] = useState<string | null>(null);
   const [runChunks, setRunChunks] = useState<AgentChunk[]>([]);
   const [runStartedAt, setRunStartedAt] = useState<number | null>(null);
+  // Count every prompt the user has selected this session (including ones
+  // they aborted mid-stream). Counted at pick-time, not completion-time,
+  // so a user can't tap-cancel-tap-cancel to bypass the cap.
+  const [runCount, setRunCount] = useState(0);
+  const canPickAnother = runCount < MAX_PROMPT_RUNS;
 
   // AbortController for the in-flight runPromptStreaming call. Lifted
   // to a ref so [esc] / unmount can call abort() without the closure
@@ -212,6 +223,7 @@ export const McpSuggestedPromptsScreen = ({
   const handlePromptPick = (value: string | string[]): void => {
     const picked = Array.isArray(value) ? value[0] : value;
     setRunningPrompt(picked);
+    setRunCount((c) => c + 1);
     setPhase(Phase.Running);
   };
 
@@ -235,11 +247,14 @@ export const McpSuggestedPromptsScreen = ({
       // `[p]` is the primary "pick new prompt" hotkey during Running —
       // works whether the stream is in flight or already finished. Always
       // returns to the PromptPicker (aborting the stream if necessary).
+      // No-op once the per-session cap is reached; [esc] becomes the
+      // only escape.
       match: 'p',
       label: 'p',
-      action: 'pick new prompt',
+      action: canPickAnother ? 'pick new prompt' : 'cap reached',
       handler: () => {
         if (phase !== Phase.Running) return;
+        if (!canPickAnother) return;
         runAbortRef.current?.abort();
         setPhase(Phase.PromptPicker);
       },
@@ -277,6 +292,9 @@ export const McpSuggestedPromptsScreen = ({
             prompt={runningPrompt}
             chunks={runChunks}
             startedAt={runStartedAt}
+            canPickAnother={canPickAnother}
+            runCount={runCount}
+            maxRuns={MAX_PROMPT_RUNS}
           />
         )}
       </Box>
@@ -316,6 +334,9 @@ const ChoosePhase = ({ error, onSelect }: ChoosePhaseProps) => (
       </Text>
       <Text>
         <Text color="cyan">{Icons.diamond}</Text> Debug exceptions and errors
+      </Text>
+      <Text>
+        <Text color="cyan">{Icons.diamond}</Text> And lots more...
       </Text>
     </Box>
 
@@ -434,9 +455,22 @@ interface RunningPhaseProps {
   prompt: string;
   chunks: AgentChunk[];
   startedAt: number | null;
+  /** Whether [p] is still functional this session. */
+  canPickAnother: boolean;
+  /** How many prompts the user has selected so far (1-indexed at run-time). */
+  runCount: number;
+  /** Hard cap on prompt selections per session. */
+  maxRuns: number;
 }
 
-const RunningPhase = ({ prompt, chunks, startedAt }: RunningPhaseProps) => {
+const RunningPhase = ({
+  prompt,
+  chunks,
+  startedAt,
+  canPickAnother,
+  runCount,
+  maxRuns,
+}: RunningPhaseProps) => {
   const isDone = chunks.some((c) => c.kind === 'done');
   const errorChunk = chunks.find((c) => c.kind === 'error');
   const finished = isDone || !!errorChunk;
@@ -475,6 +509,9 @@ const RunningPhase = ({ prompt, chunks, startedAt }: RunningPhaseProps) => {
               : `Done in ${elapsed}s.`
             : 'Streaming from PostHog MCP'}
         </Text>
+        <Text dimColor>
+          ({runCount}/{maxRuns} prompts)
+        </Text>
       </Box>
 
       <Box marginTop={1} flexDirection="column">
@@ -482,6 +519,20 @@ const RunningPhase = ({ prompt, chunks, startedAt }: RunningPhaseProps) => {
           <ChunkLine key={idx} chunk={chunk} />
         ))}
       </Box>
+
+      {finished && !canPickAnother && (
+        <Box marginTop={1}>
+          <Text>
+            <Text dimColor>
+              You&apos;ve hit the {maxRuns}-prompt tutorial cap. Press{' '}
+            </Text>
+            <Text bold dimColor>
+              [esc]
+            </Text>
+            <Text dimColor> to exit.</Text>
+          </Text>
+        </Box>
+      )}
     </Box>
   );
 };
