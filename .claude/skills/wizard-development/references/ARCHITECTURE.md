@@ -104,6 +104,28 @@ The sandbox (filesystem + network scoping) is configured once in the SDK `query(
 
 Commandments (L0) are in the system prompt and operate at the model's judgment layer — no code enforcement. They're the first line, not the last.
 
+## Secret vault: keeping values out of the model
+
+The layers above stop the agent from _misusing_ tools. A separate boundary stops secret _values_ from ever reaching the model in the first place: the session-scoped secret vault in `src/lib/secret-vault.ts`.
+
+```
+wizard_ask (sensitive: true)
+    ↓  user types secret in the TUI
+vault.put(value) → "secret:<uuid>"     ← raw value stays host-side
+    ↓
+agent receives { secretRef } — never the string
+    ↓  agent passes the ref to the next tool
+set_env_values({ KEY: { secretRef } })
+    ↓
+vault.get(ref) → value, written to .env  ← resolved at the last moment
+    ↓
+result returned to agent (no value)
+```
+
+The vault is a plain in-memory `Map` created once per `createWizardToolsServer()` call — one per wizard run, no persistence, no cross-session sharing. A ref minted in one run can't be resolved in another. `list()` exposes metadata (label, source, timestamp) but never values. The two ends of the pipe both live in `wizard-tools.ts`: `wizard_ask` mints refs for answers flagged `sensitive: true` (text questions only), and `set_env_values` accepts `{ secretRef }` in place of a literal and resolves it before writing.
+
+The point of the boundary: the model orchestrates a secret's journey from the user's keyboard to a `.env` file without the value entering the LLM conversation, the transcript, or the logs. When you add a tool that touches a user secret, route it through the vault — return refs, resolve them host-side — rather than passing the value back to the agent.
+
 ## Screen resolution flow
 
 ```
@@ -148,7 +170,7 @@ The agent has access to two MCP servers:
 
 - **posthog-wizard** — remote, HTTP-based. The PostHog MCP server at `mcp.posthog.com/mcp` (or `mcp-eu.posthog.com/mcp`). Provides query tools for PostHog data, dashboard creation, etc. Authenticated via Bearer token. Tool schemas are deferred (`ENABLE_TOOL_SEARCH: 'auto:0'`) to avoid bloating the system prompt. It's almost never the right move to add tools here, unless a server-side component is the only path forward.
 
-- **wizard-tools** — local, in-process. Created by `createWizardToolsServer()` in `wizard-tools.ts`. Provides `check_env_keys`, `set_env_values`, `detect_package_manager`, `load_skill_menu`, `install_skill`. Runs in the wizard process — secret values never leave the machine.
+- **wizard-tools** — local, in-process. Created by `createWizardToolsServer()` in `wizard-tools.ts`. Provides `check_env_keys`, `set_env_values`, `detect_package_manager`, `load_skill_menu`, `install_skill`, `wizard_ask`. Runs in the wizard process — secret values never leave the machine, and the secret vault (see [Secret vault](#secret-vault-keeping-values-out-of-the-model)) keeps them out of the model context entirely.
 
 Frameworks can add additional MCP servers via `FrameworkConfig.metadata.additionalMcpServers` (e.g. SvelteKit adds the official Svelte MCP at `https://mcp.svelte.dev/mcp`).
 

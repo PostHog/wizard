@@ -69,7 +69,7 @@ Three prevention layers:
 
 - **L0 — Commandments** (`commandments.ts`): Terse rules in the system prompt. Keep these short. If a rule needs a paragraph of explanation, it belongs in a skill reference file, not in the per-turn system prompt.
 
-- **L1 — canUseTool allowlist** (`agent-interface.ts`): Blocks dangerous bash commands before execution. The `wizard-tools` MCP fences `.env` files so the agent never sees secret values.
+- **L1 — canUseTool allowlist** (`agent-interface.ts`): Blocks dangerous bash commands before execution. The `wizard-tools` MCP fences `.env` files so the agent can't read them directly. Secrets the user supplies are handled separately by the **session secret vault** (`secret-vault.ts`): `wizard_ask` and `set_env_values` exchange the raw value for an opaque `secret:<uuid>` ref, so a user's API key reaches the `.env` file without ever entering the LLM conversation. See [ARCHITECTURE.md](references/ARCHITECTURE.md#secret-vault-keeping-values-out-of-the-model).
 
 - **L2 — warlock scanner** (rules live in [warlock](https://github.com/PostHog/warlock); wizard wires hooks in `yara-hooks.ts`): Real YARA-X rules running as pre/post tool-use hooks. Catches PII in capture calls, hardcoded keys, prompt injection, secret exfiltration, supply chain attacks, destructive operations. The scanner is engine-only — it returns matches with category/severity/action metadata; the wizard decides how to respond. Critical violations terminate the session. **Fails closed** — scanner error means block, not pass. (Note: the wizard still ships a legacy hand-rolled regex scanner at `src/lib/yara-scanner.ts` during the warlock migration. New rules go in warlock; the in-repo scanner is being retired.)
 
@@ -122,7 +122,7 @@ When you're adding something that doesn't have a precedent in the codebase, ask 
 
 ### Patterns for common extension types
 
-**New agent tool (in-process MCP):** Add it to `wizard-tools.ts` alongside `check_env_keys`, `set_env_values`, etc. The tool runs locally — secret values never leave the machine. Register the tool name in `WIZARD_TOOL_NAMES` so the SDK allowlist includes it. Follow the existing tool pattern: zod schema, path-traversal protection, logging.
+**New agent tool (in-process MCP):** Add it to `wizard-tools.ts` alongside `check_env_keys`, `set_env_values`, etc. The tool runs locally — secret values never leave the machine. Register the tool name in `WIZARD_TOOL_NAMES` so the SDK allowlist includes it. Follow the existing tool pattern: zod schema, path-traversal protection, logging. If the tool handles a user secret, route it through the secret vault (`secret-vault.ts`) — return a `secret:<uuid>` ref, not the value, and resolve it host-side at the point of use — so the secret stays out of the LLM conversation.
 
 **New security rule:** Contribute the rule to [warlock](https://github.com/PostHog/warlock), not to the wizard. Warlock is the YARA-X engine that backs the wizard's security scanning; it's an append-only sibling repo with its own contribution process. Add a `.yar` file under `src/scanner/rules/` with a meta block (description, severity, category, scan_context, action) and a test under `src/scanner/__tests__/rules/`. The wizard's hooks in `yara-hooks.ts` automatically pick up new rules when it bumps its warlock dependency — wizard-side changes are unnecessary unless the response to a new category needs different handling. Filter consumed matches by `category` and `severity` (the append-only API contract), not by individual rule names.
 
