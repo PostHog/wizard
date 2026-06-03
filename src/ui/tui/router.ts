@@ -32,6 +32,7 @@ export enum Overlay {
   SettingsOverride = 'settings-override',
   ManagedSettings = 'managed-settings',
   PortConflict = 'port-conflict',
+  ManualAuthCode = 'manual-auth-code',
   AuthError = 'auth-error',
   WizardAsk = 'wizard-ask',
 }

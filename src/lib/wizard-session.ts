@@ -177,6 +177,9 @@ export interface WizardSession {
   // Lifecycle
   runPhase: RunPhase;
   loginUrl: string | null;
+  // Direct PostHog authorize URL, shown in the manual-paste modal for
+  // headless/remote shells (the localhost loginUrl is unreachable there).
+  authorizeUrl: string | null;
 
   // Feature discovery
   discoveredFeatures: DiscoveredFeature[];
@@ -276,6 +279,7 @@ export function buildSession(args: {
     skillsComplete: false,
     outroDismissed: false,
     loginUrl: null,
+    authorizeUrl: null,
     credentials: null,
     readinessResult: null,
     outageDismissed: false,

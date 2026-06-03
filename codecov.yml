@@ -1,15 +1,15 @@
-# Reference: https://docs.codecov.com/docs/codecovyml-reference
+# Codecov configuration for the PostHog wizard.
+# Schema reference: https://docs.codecov.com/docs/codecovyml-reference
 
 codecov:
-  # Codecov should wait for all other statuses to pass before sending its status.
   require_ci_to_pass: true
   notify:
-    # Codecov will wait for all CI statuses to complete before sending its status.
-    # Note: Codecov considers all non-codecov statuses to be CI statuses.
+    # Hold the Codecov status until every other check has reported; this
+    # keeps the PR ladder coherent when a slow job is still running.
     wait_for_ci: true
 
 coverage:
-  # The coverage percentage that should be reached before the build is considered successful.
-  # Note: This is set to a low value, as the test coverage is not high yet.
-  #       When adding more test coverage, consider increasing this value.
-  range: 40...100 
+  # Visual range for the coverage badge. The lower bound is intentionally
+  # generous while the wizard's test suite is still growing; bump it as
+  # coverage improves so the colour scale stays meaningful.
+  range: "40...100"

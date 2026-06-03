@@ -1,5 +1,5 @@
 /* Swift wizard using posthog-agent with PostHog MCP */
-import type { WizardOptions } from '@utils/types';
+import type { WizardRunOptions } from '@utils/types';
 import type { FrameworkConfig } from '@lib/framework-config';
 import { swiftPackageManager } from '@lib/detection/package-manager';
 import { Integration } from '@lib/constants';
@@ -24,7 +24,7 @@ export const SWIFT_AGENT_CONFIG: FrameworkConfig<SwiftContext> = {
     docsUrl: 'https://posthog.com/docs/libraries/ios',
     preRunNotice:
       'Please close the Xcode project before proceeding. Xcode may overwrite changes the wizard makes to project files.',
-    gatherContext: async (options: WizardOptions) => {
+    gatherContext: async (options: WizardRunOptions) => {
       const projectType = await detectSwiftProjectType(options);
       return { projectType };
     },

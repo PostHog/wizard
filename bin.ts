@@ -1,23 +1,23 @@
 #!/usr/bin/env node
 import { satisfies } from 'semver';
 
+// Run the Node-version check before pulling in the rest of the imports so
+// users on too-old Node see a friendly message instead of a `SyntaxError`
+// from one of our dependencies' modern features.
+const MIN_NODE_VERSION = '>=18.17.0';
+if (!satisfies(process.version, MIN_NODE_VERSION)) {
+  // eslint-disable-next-line no-console
+  console.log(
+    `PostHog wizard needs Node.js ${MIN_NODE_VERSION}. Detected ${process.version} — please upgrade Node and re-run.`,
+  );
+  process.exit(1);
+}
+
 import yargs from 'yargs';
 import { hideBin } from 'yargs/helpers';
 import { VERSION } from '@lib/version';
 
 const WIZARD_VERSION = VERSION;
-
-const NODE_VERSION_RANGE = '>=18.17.0';
-
-// Have to run this above the other imports because they are importing clack that
-// has the problematic imports.
-if (!satisfies(process.version, NODE_VERSION_RANGE)) {
-  // eslint-disable-next-line no-console
-  console.log(
-    `PostHog wizard requires Node.js ${NODE_VERSION_RANGE}. You are using Node.js ${process.version}. Please upgrade your Node.js version.`,
-  );
-  process.exit(1);
-}
 
 import { isNonInteractiveEnvironment } from '@utils/environment';
 import { getUI, setUI } from '@ui';

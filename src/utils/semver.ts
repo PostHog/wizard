@@ -28,21 +28,7 @@ function isNonSemverVersion(version: string): boolean {
   );
 }
 
-type ClassifiedVersion =
-  | { kind: 'exact'; value: string }
-  | { kind: 'range'; value: string };
-
-function classifyVersion(version: string): ClassifiedVersion | null {
-  const exact = valid(version);
-  if (exact) return { kind: 'exact', value: exact };
-
-  const range = validRange(version);
-  if (range) return { kind: 'range', value: range };
-
-  return null;
-}
-
-export function fulfillsVersionRange({
+export function versionSatisfiesRange({
   version,
   acceptableVersions,
   canBeLatest,
@@ -54,12 +40,14 @@ export function fulfillsVersionRange({
   if (version === 'latest') return canBeLatest;
   if (isNonSemverVersion(version)) return false;
 
-  const classified = classifyVersion(version);
-  if (!classified) return false;
+  const concrete = valid(version);
+  if (concrete !== null) {
+    return satisfies(concrete, acceptableVersions);
+  }
 
-  return classified.kind === 'range'
-    ? subset(classified.value, acceptableVersions)
-    : satisfies(classified.value, acceptableVersions);
+  const userRange = validRange(version);
+  if (userRange === null) return false;
+  return subset(userRange, acceptableVersions);
 }
 
 /**
