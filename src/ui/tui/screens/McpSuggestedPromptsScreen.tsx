@@ -32,7 +32,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useSyncExternalStore } from 'react';
 
 import type { WizardStore } from '@ui/tui/store';
-import { Colors } from '@ui/tui/styles';
+import { Colors, Icons } from '@ui/tui/styles';
 import { useKeyBindings, KeyMatch } from '@ui/tui/hooks/useKeyBindings';
 import {
   ContentSequencer,
@@ -80,7 +80,6 @@ export const McpSuggestedPromptsScreen = ({
   );
 
   const session = store.session;
-  const installedClient = session.mcpInstalledClients[0] ?? 'your agent';
   // The role + framework matrix in mcp-role-prompts.ts is intentionally
   // kept for future use (and the OAuth plumbing still populates
   // session.roleAtOrganization). For now the picker shows the same
@@ -251,11 +250,7 @@ export const McpSuggestedPromptsScreen = ({
     <Box flexDirection="column" flexGrow={1}>
       <Box marginTop={1} flexDirection="column">
         {phase === Phase.Choose && (
-          <ChoosePhase
-            client={installedClient}
-            error={loginError}
-            onSelect={handleChoice}
-          />
+          <ChoosePhase error={loginError} onSelect={handleChoice} />
         )}
 
         {phase === Phase.Authenticating && (
@@ -292,21 +287,35 @@ export const McpSuggestedPromptsScreen = ({
 // ── Choose phase ───────────────────────────────────────────────────────
 
 interface ChoosePhaseProps {
-  client: string;
   error: string | null;
   onSelect: (value: ChoiceValue | ChoiceValue[]) => void;
 }
 
-const ChoosePhase = ({ client, error, onSelect }: ChoosePhaseProps) => (
+const ChoosePhase = ({ error, onSelect }: ChoosePhaseProps) => (
   <Box flexDirection="column">
-    <Text>
-      MCP is installed for <Text bold>{client}</Text>.
+    <Text bold color={Colors.accent}>
+      PostHog MCP
     </Text>
 
     <Box marginTop={1}>
       <Text>
-        Now your agent can access the PostHog platform when you prompt it to.
-        Build dashboards, run SQL queries, deploy feature flags, and more.
+        With MCP your agent works directly with the PostHog platform. You can
+        prompt it to:
+      </Text>
+    </Box>
+
+    <Box marginTop={1} flexDirection="column">
+      <Text>
+        <Text color="cyan">{Icons.diamond}</Text> Build dashboards
+      </Text>
+      <Text>
+        <Text color="cyan">{Icons.diamond}</Text> Run SQL queries
+      </Text>
+      <Text>
+        <Text color="cyan">{Icons.diamond}</Text> Deploy feature flags
+      </Text>
+      <Text>
+        <Text color="cyan">{Icons.diamond}</Text> Debug exceptions and errors
       </Text>
     </Box>
 
@@ -506,9 +515,9 @@ function capTextChunks(chunks: AgentChunk[]): AgentChunk[] {
   return [
     {
       kind: 'text',
-      text: `[${hidden} earlier line${
+      text: `[${hidden} line${
         hidden === 1 ? '' : 's'
-      } hidden — agent overran terminal]\n\n${tail}`,
+      } above — expand terminal to see more]\n\n${tail}`,
     },
     ...errors,
   ];

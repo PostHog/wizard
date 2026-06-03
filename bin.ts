@@ -506,7 +506,49 @@ const cli = yargs(hideBin(process.argv))
           })();
         },
       )
-      .demandCommand(1, 'You must specify a subcommand (add or remove)')
+      .command(
+        'tutorial',
+        'Try the PostHog MCP with your agent (no install needed)',
+        (yargs) => {
+          return yargs.options({
+            local: {
+              default: false,
+              describe:
+                'Point the tutorial at the local MCP server (http://localhost:8787)',
+              type: 'boolean',
+            },
+          });
+        },
+        (argv) => {
+          const options = { ...argv };
+          void (async () => {
+            try {
+              const { startTUI } = await import('@ui/tui/start-tui');
+              const { buildSession } = await import('@lib/wizard-session');
+
+              const tui = startTUI(WIZARD_VERSION, Program.McpTutorial);
+              const session = buildSession({
+                debug: options.debug,
+                localMcp: options.local,
+              });
+              tui.store.session = session;
+            } catch (err) {
+              // TUI unavailable — tutorial has no headless fallback.
+              setUI(new LoggingUI());
+              getUI().log.error(
+                `The MCP tutorial requires an interactive terminal. ${
+                  err instanceof Error ? err.message : String(err)
+                }`,
+              );
+              process.exit(1);
+            }
+          })();
+        },
+      )
+      .demandCommand(
+        1,
+        'You must specify a subcommand (add, remove, or tutorial)',
+      )
       .help();
   });
 
