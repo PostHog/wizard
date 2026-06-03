@@ -251,6 +251,13 @@ describe('WizardStore', () => {
       expect(store.session.mcpInstalledClients).toEqual(['Cursor']);
     });
 
+    it('setMcpSuggestedPromptsDismissed flips the session flag', () => {
+      const store = createStore();
+      expect(store.session.mcpSuggestedPromptsDismissed).toBe(false);
+      store.setMcpSuggestedPromptsDismissed();
+      expect(store.session.mcpSuggestedPromptsDismissed).toBe(true);
+    });
+
     it('setOutroData sets outro information', () => {
       const store = createStore();
       const data = { kind: OutroKind.Success, message: 'Done!' };
@@ -280,13 +287,14 @@ describe('WizardStore', () => {
       store.setLoginUrl('url');
       store.setReadinessResult(null);
       store.setMcpComplete();
+      store.setMcpSuggestedPromptsDismissed();
       store.setOutroDismissed();
       store.setSkillsComplete(true);
       store.setOutroData({ kind: OutroKind.Success });
       store.setFrameworkContext('k', 'v');
       store.setFrameworkConfig(null, null);
 
-      expect(cb).toHaveBeenCalledTimes(13);
+      expect(cb).toHaveBeenCalledTimes(14);
     });
   });
 
