@@ -142,6 +142,7 @@ export interface WizardSession {
   benchmark: boolean;
   yaraReport: boolean;
   projectId?: number;
+  noTelemetry: boolean;
 
   // From detection + screens
   setupConfirmed: boolean;
@@ -234,6 +235,7 @@ export function buildSession(args: {
   benchmark?: boolean;
   yaraReport?: boolean;
   projectId?: string;
+  noTelemetry?: boolean;
 }): WizardSession {
   return {
     debug: args.debug ?? false,
@@ -250,6 +252,7 @@ export function buildSession(args: {
     benchmark: args.benchmark ?? false,
     yaraReport: args.yaraReport ?? false,
     projectId: parseProjectIdArg(args.projectId),
+    noTelemetry: args.noTelemetry ?? false,
 
     setupConfirmed: false,
     integration: args.integration ?? null,

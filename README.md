@@ -50,6 +50,9 @@ same flags as the main wizard.
 
 ## Headless signup + install (agents / CI)
 
+> ⚠️ `--ci` is **not currently supported in published builds** (see [CI Mode](#ci-mode)).
+> This flow works in development builds only.
+
 For a fully non-interactive first-run (no existing PostHog account, no TTY,
 no browser), combine `--ci --signup --email`. The wizard provisions a new
 account, uses the returned personal API key to run the normal CI install,
@@ -109,6 +112,13 @@ The following CLI arguments are available:
 
 # CI Mode
 
+> ⚠️ **CI mode is not currently supported in published builds.** PostHog's LLM
+> gateway doesn't yet grant the scopes the wizard needs to personal API keys
+> for most users, so non-interactive `--ci` runs fail at the gateway. The flag
+> is disabled in the published package and exits with an error — run the wizard
+> in an interactive terminal instead (`npx @posthog/wizard`). The notes below
+> describe CI mode as it works in development builds.
+
 Run the wizard non-interactive executions with `--ci`:
 
 ```bash
@@ -136,7 +146,6 @@ When creating your personal API key, ensure it has the following scopes enabled:
 
 - `user:read` - Required to fetch user information
 - `project:read` - Required to fetch project details and API token
-- `introspection` - Required for API introspection
 - `llm_gateway:read` - Required for LLM gateway access
 - `dashboard:write` - Required to create dashboards
 - `insight:write` - Required to create insights
@@ -169,6 +178,13 @@ analytics session and log events. We can see the usage and outcomes of this
 wizard alongside all of our other PostHog product data, and this is very
 powerful. For example: we could show in-product surveys to people who have used
 the wizard to improve the experience.
+
+When the user authenticates, the wizard also streams live run state — current
+phase, task list, planned events — to `POST /api/projects/{id}/wizard/sessions/`
+so the PostHog web app can render real-time progress. Updates are debounced
+(250ms) with phase changes flushed immediately; failures fall back silently to
+the wizard's debug log without disturbing the TUI. Pass `--no-telemetry` (or
+set `POSTHOG_WIZARD_NO_TELEMETRY=1`) to disable.
 
 ## Leave rules behind
 
