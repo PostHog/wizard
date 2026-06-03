@@ -1,12 +1,13 @@
 /**
  * Generic agent skill step list.
  *
- * Minimal flow: auth → run → outro → skills.
+ * Minimal flow: intro → health-check → auth → run → outro → skills.
  * No detection, no setup, no MCP.
  */
 
 import type { ProgramStep } from '@lib/programs/program-step';
 import { RunPhase } from '@lib/wizard-session';
+import { HEALTH_CHECK_STEP } from '@lib/programs/shared/health-check-step';
 
 export const AGENT_SKILL_STEPS: ProgramStep[] = [
   {
@@ -15,6 +16,7 @@ export const AGENT_SKILL_STEPS: ProgramStep[] = [
     screenId: 'agent-skill-intro',
     gate: (session) => session.setupConfirmed,
   },
+  HEALTH_CHECK_STEP,
   {
     id: 'auth',
     label: 'Authentication',

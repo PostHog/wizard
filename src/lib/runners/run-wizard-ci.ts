@@ -2,6 +2,7 @@ import { POSTHOG_DOCS_URL } from '@lib/constants';
 import { getUI, setUI } from '@ui';
 import { LoggingUI } from '@ui/logging-ui';
 import type { ProgramConfig } from '@lib/programs/program-step';
+import { resolveNoTelemetry } from './resolve-no-telemetry';
 
 /**
  * The single CI validation layer: defaults region and requires api-key and
@@ -69,6 +70,7 @@ export function runWizardCI(
       projectId: options.projectId as string | undefined,
       benchmark: options.benchmark as boolean | undefined,
       yaraReport: options.yaraReport as boolean | undefined,
+      noTelemetry: resolveNoTelemetry(options),
       ...env,
     });
     session.programLabel = config.id;

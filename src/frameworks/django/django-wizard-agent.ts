@@ -1,5 +1,5 @@
 /* Django wizard using posthog-agent with PostHog MCP */
-import type { WizardOptions } from '@utils/types';
+import type { WizardRunOptions } from '@utils/types';
 import type { FrameworkConfig } from '@lib/framework-config';
 import { PYTHON_PACKAGE_INSTALLATION } from '@lib/framework-config';
 import { detectPythonPackageManagers } from '@lib/detection/package-manager';
@@ -28,7 +28,7 @@ export const DJANGO_AGENT_CONFIG: FrameworkConfig<DjangoContext> = {
     beta: true,
     docsUrl: 'https://posthog.com/docs/libraries/django',
     unsupportedVersionDocsUrl: 'https://posthog.com/docs/libraries/python',
-    gatherContext: async (options: WizardOptions) => {
+    gatherContext: async (options: WizardRunOptions) => {
       const projectType = await getDjangoProjectType(options);
       const settingsFile = await findDjangoSettingsFile(options);
       return { projectType, settingsFile };
@@ -42,7 +42,8 @@ export const DJANGO_AGENT_CONFIG: FrameworkConfig<DjangoContext> = {
     getVersion: () => undefined,
     getVersionBucket: getDjangoVersionBucket,
     minimumVersion: '3.0.0',
-    getInstalledVersion: (options: WizardOptions) => getDjangoVersion(options),
+    getInstalledVersion: (options: WizardRunOptions) =>
+      getDjangoVersion(options),
     detect: async (options) => {
       const { installDir } = options;
 

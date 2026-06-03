@@ -2,40 +2,40 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { withProgress } from '../telemetry';
 import { getPackageDotJson, updatePackageDotJson } from './setup-utils';
-import type { PackageDotJson } from './package-json';
+import type { PackageJson } from './package-json';
 import { analytics } from './analytics';
-import type { WizardOptions } from './types';
+import type { WizardRunOptions } from './types';
+
+type InstallDirOpt = Pick<WizardRunOptions, 'installDir'>;
 
 export interface PackageManager {
   name: string;
   label: string;
   installCommand: string;
   buildCommand: string;
-  /* The command that the package manager uses to run a script from package.json */
+  /** Command the manager uses to execute a `package.json` script. */
   runScriptCommand: string;
   flags: string;
-  detect: ({ installDir }: Pick<WizardOptions, 'installDir'>) => boolean;
+  detect: (opts: InstallDirOpt) => boolean;
   addOverride: (
     pkgName: string,
     pkgVersion: string,
-    { installDir }: Pick<WizardOptions, 'installDir'>,
+    opts: InstallDirOpt,
   ) => Promise<void>;
 }
 
-type InstallDir = Pick<WizardOptions, 'installDir'>;
-
-function lockExists(installDir: string, fileName: string): boolean {
-  return fs.existsSync(path.join(installDir, fileName));
+function hasLockfile(installDir: string, file: string): boolean {
+  return fs.existsSync(path.join(installDir, file));
 }
 
-function lockMatches(
+function lockfileHeaderContains(
   installDir: string,
-  fileName: string,
+  file: string,
   needle: string,
 ): boolean {
   try {
     const head = fs
-      .readFileSync(path.join(installDir, fileName), 'utf-8')
+      .readFileSync(path.join(installDir, file), 'utf-8')
       .slice(0, 500);
     return head.includes(needle);
   } catch {
@@ -43,35 +43,35 @@ function lockMatches(
   }
 }
 
-type OverrideTarget = 'overrides' | 'resolutions' | 'pnpm.overrides';
+type OverrideSlot = 'npm' | 'yarn' | 'pnpm';
 
-async function applyOverride(
-  target: OverrideTarget,
+async function writeOverride(
+  slot: OverrideSlot,
   pkgName: string,
   pkgVersion: string,
-  { installDir }: InstallDir,
+  { installDir }: InstallDirOpt,
 ): Promise<void> {
   const pkg = await getPackageDotJson({ installDir });
-  const next: PackageDotJson = { ...pkg };
-
-  switch (target) {
-    case 'overrides': {
-      next.overrides = { ...(pkg.overrides ?? {}), [pkgName]: pkgVersion };
-      break;
-    }
-    case 'resolutions': {
-      next.resolutions = { ...(pkg.resolutions ?? {}), [pkgName]: pkgVersion };
-      break;
-    }
-    case 'pnpm.overrides': {
-      next.pnpm = {
+  let next: PackageJson;
+  if (slot === 'yarn') {
+    next = {
+      ...pkg,
+      resolutions: { ...(pkg.resolutions ?? {}), [pkgName]: pkgVersion },
+    };
+  } else if (slot === 'pnpm') {
+    next = {
+      ...pkg,
+      pnpm: {
         ...(pkg.pnpm ?? {}),
         overrides: { ...(pkg.pnpm?.overrides ?? {}), [pkgName]: pkgVersion },
-      };
-      break;
-    }
+      },
+    };
+  } else {
+    next = {
+      ...pkg,
+      overrides: { ...(pkg.overrides ?? {}), [pkgName]: pkgVersion },
+    };
   }
-
   await updatePackageDotJson(next, { installDir });
 }
 
@@ -83,9 +83,9 @@ export const BUN: PackageManager = {
   runScriptCommand: 'bun run',
   flags: '',
   detect: ({ installDir }) =>
-    lockExists(installDir, 'bun.lockb') || lockExists(installDir, 'bun.lock'),
+    hasLockfile(installDir, 'bun.lockb') || hasLockfile(installDir, 'bun.lock'),
   addOverride: (pkgName, pkgVersion, opts) =>
-    applyOverride('overrides', pkgName, pkgVersion, opts),
+    writeOverride('npm', pkgName, pkgVersion, opts),
 };
 
 export const YARN_V1: PackageManager = {
@@ -96,9 +96,9 @@ export const YARN_V1: PackageManager = {
   runScriptCommand: 'yarn',
   flags: '--ignore-workspace-root-check',
   detect: ({ installDir }) =>
-    lockMatches(installDir, 'yarn.lock', 'yarn lockfile v1'),
+    lockfileHeaderContains(installDir, 'yarn.lock', 'yarn lockfile v1'),
   addOverride: (pkgName, pkgVersion, opts) =>
-    applyOverride('resolutions', pkgName, pkgVersion, opts),
+    writeOverride('yarn', pkgName, pkgVersion, opts),
 };
 
 /** YARN V2/3/4 */
@@ -110,9 +110,9 @@ export const YARN_V2: PackageManager = {
   runScriptCommand: 'yarn',
   flags: '',
   detect: ({ installDir }) =>
-    lockMatches(installDir, 'yarn.lock', '__metadata'),
+    lockfileHeaderContains(installDir, 'yarn.lock', '__metadata'),
   addOverride: (pkgName, pkgVersion, opts) =>
-    applyOverride('resolutions', pkgName, pkgVersion, opts),
+    writeOverride('yarn', pkgName, pkgVersion, opts),
 };
 
 export const PNPM: PackageManager = {
@@ -122,9 +122,9 @@ export const PNPM: PackageManager = {
   buildCommand: 'pnpm build',
   runScriptCommand: 'pnpm',
   flags: '--ignore-workspace-root-check',
-  detect: ({ installDir }) => lockExists(installDir, 'pnpm-lock.yaml'),
+  detect: ({ installDir }) => hasLockfile(installDir, 'pnpm-lock.yaml'),
   addOverride: (pkgName, pkgVersion, opts) =>
-    applyOverride('pnpm.overrides', pkgName, pkgVersion, opts),
+    writeOverride('pnpm', pkgName, pkgVersion, opts),
 };
 
 export const NPM: PackageManager = {
@@ -134,11 +134,13 @@ export const NPM: PackageManager = {
   buildCommand: 'npm run build',
   runScriptCommand: 'npm run',
   flags: '',
-  detect: ({ installDir }) => lockExists(installDir, 'package-lock.json'),
+  detect: ({ installDir }) => hasLockfile(installDir, 'package-lock.json'),
   addOverride: (pkgName, pkgVersion, opts) =>
-    applyOverride('overrides', pkgName, pkgVersion, opts),
+    writeOverride('npm', pkgName, pkgVersion, opts),
 };
 
+// Expo is selected by upstream config (app.json / app.config.*) rather than
+// a lockfile, so its detect always returns false here.
 export const EXPO: PackageManager = {
   name: 'expo',
   label: 'Expo',
@@ -148,7 +150,7 @@ export const EXPO: PackageManager = {
   flags: '',
   detect: () => false,
   addOverride: (pkgName, pkgVersion, opts) =>
-    applyOverride('overrides', pkgName, pkgVersion, opts),
+    writeOverride('npm', pkgName, pkgVersion, opts),
 };
 
 export const packageManagers: PackageManager[] = [
@@ -162,14 +164,12 @@ export const packageManagers: PackageManager[] = [
 
 export function detectAllPackageManagers({
   installDir,
-}: InstallDir): PackageManager[] {
+}: InstallDirOpt): PackageManager[] {
   return withProgress('detect-package-manager', () => {
-    const detected = packageManagers.filter((pm) => pm.detect({ installDir }));
-
-    if (detected.length === 0) {
+    const matches = packageManagers.filter((pm) => pm.detect({ installDir }));
+    if (matches.length === 0) {
       analytics.setTag('package-manager', 'not-detected');
     }
-
-    return detected;
+    return matches;
   });
 }

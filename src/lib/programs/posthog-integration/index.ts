@@ -70,7 +70,7 @@ export const posthogIntegrationConfig: ProgramConfig = {
     const context = await gatherFrameworkContext(frameworkConfig, {
       installDir: session.installDir,
       debug: session.debug,
-      // `default` is required by WizardOptions but unused by detection; the
+      // `default` is required by WizardRunOptions but unused by detection; the
       // --default CLI flag was removed, so this is always false here.
       default: false,
       signup: session.signup,
@@ -103,8 +103,8 @@ export const posthogIntegrationConfig: ProgramConfig = {
         installDir: session.installDir,
       });
       if (packageJson) {
-        const { hasPackageInstalled } = await import('@utils/package-json');
-        if (!hasPackageInstalled(config.detection.packageName, packageJson)) {
+        const { hasDeclaredDependency } = await import('@utils/package-json');
+        if (!hasDeclaredDependency(config.detection.packageName, packageJson)) {
           getUI().log.warn(
             `${config.detection.packageDisplayName} does not seem to be installed. Continuing anyway — the agent will handle it.`,
           );

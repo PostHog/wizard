@@ -1,4 +1,4 @@
-import type { WizardOptions } from '@utils/types';
+import type { WizardRunOptions } from '@utils/types';
 import fg from 'fast-glob';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -21,7 +21,7 @@ export function getSwiftProjectTypeName(projectType: SwiftProjectType): string {
 }
 
 export async function detectSwiftProjectType(
-  options: WizardOptions,
+  options: WizardRunOptions,
 ): Promise<SwiftProjectType | undefined> {
   const { installDir } = options;
 

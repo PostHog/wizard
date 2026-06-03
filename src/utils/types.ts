@@ -1,82 +1,3 @@
-export type PostHogProjectData = Record<string, unknown>;
-
-export type PreselectedProject = {
-  project: PostHogProjectData;
-  authToken: string;
-};
-
-export type WizardOptions = {
-  /**
-   * Whether to enable debug mode.
-   */
-  debug: boolean;
-
-  /**
-   * The directory to run the wizard in.
-   */
-  installDir: string;
-
-  /**
-   * Whether to select the default option for all questions automatically.
-   */
-  default: boolean;
-
-  /**
-   * Whether to create a new PostHog account during setup.
-   */
-  signup: boolean;
-
-  /**
-   * Whether to use the local MCP server at http://localhost:8787/mcp
-   */
-  localMcp: boolean;
-
-  /**
-   * CI mode - non-interactive execution
-   */
-  ci: boolean;
-
-  /**
-   * Personal API key (phx_xxx) - used for LLM gateway auth, skips OAuth
-   */
-  apiKey?: string;
-
-  /**
-   * Email address for account creation (used with --signup)
-   */
-  email?: string;
-
-  /**
-   * PostHog project ID. When set (e.g. in CI with --project-id), the wizard uses this project
-   * instead of the default from the API key or OAuth.
-   */
-  projectId?: number;
-
-  /**
-   * Whether to run in benchmark mode with per-phase token tracking.
-   * When enabled, the wizard runs each program phase as a separate agent call
-   * and writes detailed usage data to posthog-wizard-benchmark.json in the OS temp dir.
-   */
-  benchmark: boolean;
-
-  /**
-   * Cloud region for the PostHog instance (US or EU).
-   * When not provided, the user will be prompted to select one.
-   */
-  cloudRegion?: CloudRegion;
-
-  /**
-   * Whether to print a YARA scanner summary after the agent run.
-   */
-  yaraReport: boolean;
-};
-
-export type FileChange = {
-  filePath: string;
-  oldContent?: string;
-  newContent: string;
-};
-
 export type CloudRegion = 'us' | 'eu';
 
 export type AIModel =
@@ -84,3 +5,27 @@ export type AIModel =
   | 'o4-mini'
   | 'gemini-2.5-flash'
   | 'gemini-2.5-pro';
+
+export type FileChange = {
+  filePath: string;
+  oldContent?: string;
+  newContent: string;
+};
+
+export type WizardRunOptions = {
+  installDir: string;
+  ci: boolean;
+  cloudRegion?: CloudRegion;
+
+  debug: boolean;
+  default: boolean;
+  benchmark: boolean;
+  yaraReport: boolean;
+
+  signup: boolean;
+  email?: string;
+  apiKey?: string;
+  projectId?: number;
+
+  localMcp: boolean;
+};

@@ -1,10 +1,10 @@
 /* Generic JavaScript Web (client-side) wizard using posthog-agent with PostHog MCP */
-import type { WizardOptions } from '@utils/types';
+import type { WizardRunOptions } from '@utils/types';
 import type { FrameworkConfig } from '@lib/framework-config';
 import { Integration } from '@lib/constants';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { hasPackageInstalled } from '@utils/package-json';
+import { hasDeclaredDependency } from '@utils/package-json';
 import { tryGetPackageJson } from '@utils/setup-utils';
 import {
   FRAMEWORK_PACKAGES,
@@ -21,7 +21,7 @@ export const JAVASCRIPT_WEB_AGENT_CONFIG: FrameworkConfig<JavaScriptContext> = {
     integration: Integration.javascript_web,
     beta: true,
     docsUrl: 'https://posthog.com/docs/libraries/js',
-    gatherContext: (options: WizardOptions) => {
+    gatherContext: (options: WizardRunOptions) => {
       const packageManagerName = detectJsPackageManager(options);
       const hasTypeScript = fs.existsSync(
         path.join(options.installDir, 'tsconfig.json'),
@@ -45,7 +45,7 @@ export const JAVASCRIPT_WEB_AGENT_CONFIG: FrameworkConfig<JavaScriptContext> = {
 
       // Exclude projects with known framework packages
       for (const frameworkPkg of FRAMEWORK_PACKAGES) {
-        if (hasPackageInstalled(frameworkPkg, packageJson)) {
+        if (hasDeclaredDependency(frameworkPkg, packageJson)) {
           return false;
         }
       }

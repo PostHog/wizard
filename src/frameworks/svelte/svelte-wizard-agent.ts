@@ -3,9 +3,9 @@ import type { FrameworkConfig } from '@lib/framework-config';
 import { detectNodePackageManagers } from '@lib/detection/package-manager';
 import { Integration } from '@lib/constants';
 import {
-  getPackageVersion,
-  hasPackageInstalled,
-  type PackageDotJson,
+  getDeclaredVersion,
+  hasDeclaredDependency,
+  type PackageJson,
 } from '@utils/package-json';
 import { tryGetPackageJson } from '@utils/setup-utils';
 
@@ -26,11 +26,11 @@ export const SVELTEKIT_AGENT_CONFIG: FrameworkConfig<SvelteKitContext> = {
     packageName: '@sveltejs/kit',
     packageDisplayName: 'SvelteKit',
     getVersion: (packageJson: unknown) =>
-      getPackageVersion('@sveltejs/kit', packageJson as PackageDotJson),
+      getDeclaredVersion('@sveltejs/kit', packageJson as PackageJson),
     detect: async (options) => {
       const packageJson = await tryGetPackageJson(options);
       return packageJson
-        ? hasPackageInstalled('@sveltejs/kit', packageJson)
+        ? hasDeclaredDependency('@sveltejs/kit', packageJson)
         : false;
     },
     minimumVersion: '2.0.0',

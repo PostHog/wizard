@@ -1,5 +1,5 @@
 import { execSync } from 'node:child_process';
-import type { WizardOptions } from '@utils/types';
+import type { WizardRunOptions } from '@utils/types';
 
 export enum PythonPackageManager {
   UV = 'uv',
@@ -16,7 +16,9 @@ export enum PythonPackageManager {
 /**
  * Get the installed Python version
  */
-export function getPythonVersion(options: WizardOptions): string | undefined {
+export function getPythonVersion(
+  options: WizardRunOptions,
+): string | undefined {
   try {
     const version = execSync('python --version || python3 --version', {
       cwd: options.installDir,
@@ -42,7 +44,7 @@ export function getPythonVersionBucket(version: string): string {
  * Detect which package manager the project uses
  */
 export async function detectPackageManager(
-  options: WizardOptions,
+  options: WizardRunOptions,
 ): Promise<PythonPackageManager> {
   const { installDir } = options;
   const fs = await import('node:fs');

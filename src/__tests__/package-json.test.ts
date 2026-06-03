@@ -2,40 +2,40 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'fs';
 import path from 'path';
 import { tmpdir } from 'os';
 import {
-  getPackageVersion,
+  getDeclaredVersion,
   getInstalledPackageVersion,
-  hasPackageInstalled,
-  findInstalledPackageFromList,
-  type PackageDotJson,
+  hasDeclaredDependency,
+  findDeclaredPackage,
+  type PackageJson,
 } from '@utils/package-json';
 
-describe('getPackageVersion', () => {
+describe('getDeclaredVersion', () => {
   it('returns version from dependencies', () => {
-    const pkg: PackageDotJson = { dependencies: { next: '^15.1.0' } };
-    expect(getPackageVersion('next', pkg)).toBe('^15.1.0');
+    const pkg: PackageJson = { dependencies: { next: '^15.1.0' } };
+    expect(getDeclaredVersion('next', pkg)).toBe('^15.1.0');
   });
 
   it('returns version from devDependencies', () => {
-    const pkg: PackageDotJson = { devDependencies: { jest: '~29.5.0' } };
-    expect(getPackageVersion('jest', pkg)).toBe('~29.5.0');
+    const pkg: PackageJson = { devDependencies: { jest: '~29.5.0' } };
+    expect(getDeclaredVersion('jest', pkg)).toBe('~29.5.0');
   });
 
   it('prefers dependencies over devDependencies', () => {
-    const pkg: PackageDotJson = {
+    const pkg: PackageJson = {
       dependencies: { next: '15.5.9' },
       devDependencies: { next: '^15.0.0' },
     };
-    expect(getPackageVersion('next', pkg)).toBe('15.5.9');
+    expect(getDeclaredVersion('next', pkg)).toBe('15.5.9');
   });
 
   it('returns undefined for missing package', () => {
-    const pkg: PackageDotJson = { dependencies: { react: '19.0.0' } };
-    expect(getPackageVersion('next', pkg)).toBeUndefined();
+    const pkg: PackageJson = { dependencies: { react: '19.0.0' } };
+    expect(getDeclaredVersion('next', pkg)).toBeUndefined();
   });
 
   it('returns undefined for empty package.json', () => {
-    const pkg: PackageDotJson = {};
-    expect(getPackageVersion('next', pkg)).toBeUndefined();
+    const pkg: PackageJson = {};
+    expect(getDeclaredVersion('next', pkg)).toBeUndefined();
   });
 });
 
@@ -99,7 +99,7 @@ describe('getInstalledPackageVersion', () => {
   });
 });
 
-describe('getInstalledPackageVersion vs getPackageVersion', () => {
+describe('getInstalledPackageVersion vs getDeclaredVersion', () => {
   let tmpDir: string;
 
   beforeEach(() => {
@@ -175,13 +175,13 @@ describe('getInstalledPackageVersion vs getPackageVersion', () => {
   ];
 
   it.each(rangeSpecifiers)(
-    'getPackageVersion returns the range for $label, getInstalledPackageVersion returns the real version',
+    'getDeclaredVersion returns the range for $label, getInstalledPackageVersion returns the real version',
     ({ range, installed }) => {
-      const pkg: PackageDotJson = { dependencies: { next: range } };
+      const pkg: PackageJson = { dependencies: { next: range } };
       installFakePackage('next', installed);
 
-      // getPackageVersion returns the raw range from package.json
-      expect(getPackageVersion('next', pkg)).toBe(range);
+      // getDeclaredVersion returns the raw range from package.json
+      expect(getDeclaredVersion('next', pkg)).toBe(range);
 
       // getInstalledPackageVersion returns the actual resolved version
       expect(getInstalledPackageVersion('next', tmpDir)).toBe(installed);
@@ -189,30 +189,30 @@ describe('getInstalledPackageVersion vs getPackageVersion', () => {
   );
 });
 
-describe('hasPackageInstalled', () => {
+describe('hasDeclaredDependency', () => {
   it('returns true when package exists in dependencies', () => {
-    const pkg: PackageDotJson = { dependencies: { next: '^15.1.0' } };
-    expect(hasPackageInstalled('next', pkg)).toBe(true);
+    const pkg: PackageJson = { dependencies: { next: '^15.1.0' } };
+    expect(hasDeclaredDependency('next', pkg)).toBe(true);
   });
 
   it('returns false when package is missing', () => {
-    const pkg: PackageDotJson = { dependencies: { react: '19.0.0' } };
-    expect(hasPackageInstalled('next', pkg)).toBe(false);
+    const pkg: PackageJson = { dependencies: { react: '19.0.0' } };
+    expect(hasDeclaredDependency('next', pkg)).toBe(false);
   });
 });
 
-describe('findInstalledPackageFromList', () => {
+describe('findDeclaredPackage', () => {
   it('returns first matching package with its version', () => {
-    const pkg: PackageDotJson = {
+    const pkg: PackageJson = {
       dependencies: { react: '19.0.0', next: '^15.1.0' },
     };
-    const result = findInstalledPackageFromList(['vue', 'next', 'react'], pkg);
+    const result = findDeclaredPackage(['vue', 'next', 'react'], pkg);
     expect(result).toEqual({ name: 'next', version: '^15.1.0' });
   });
 
   it('returns undefined when none match', () => {
-    const pkg: PackageDotJson = { dependencies: { react: '19.0.0' } };
-    const result = findInstalledPackageFromList(['vue', 'next'], pkg);
+    const pkg: PackageJson = { dependencies: { react: '19.0.0' } };
+    const result = findDeclaredPackage(['vue', 'next'], pkg);
     expect(result).toBeUndefined();
   });
 });

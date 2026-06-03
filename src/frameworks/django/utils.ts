@@ -1,6 +1,6 @@
 import fg from 'fast-glob';
 import { getUI } from '@ui';
-import type { WizardOptions } from '@utils/types';
+import type { WizardRunOptions } from '@utils/types';
 import { createVersionBucket } from '@utils/semver';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -33,7 +33,7 @@ export const getDjangoVersionBucket = createVersionBucket();
  * Extract Django version from requirements files or pyproject.toml
  */
 export async function getDjangoVersion(
-  options: Pick<WizardOptions, 'installDir'>,
+  options: Pick<WizardRunOptions, 'installDir'>,
 ): Promise<string | undefined> {
   const { installDir } = options;
 
@@ -79,7 +79,7 @@ export async function getDjangoVersion(
  */
 async function hasDRF({
   installDir,
-}: Pick<WizardOptions, 'installDir'>): Promise<boolean> {
+}: Pick<WizardRunOptions, 'installDir'>): Promise<boolean> {
   const requirementsFiles = await fg(
     ['**/requirements*.txt', '**/pyproject.toml', '**/Pipfile'],
     {
@@ -127,7 +127,7 @@ async function hasDRF({
  */
 async function hasWagtail({
   installDir,
-}: Pick<WizardOptions, 'installDir'>): Promise<boolean> {
+}: Pick<WizardRunOptions, 'installDir'>): Promise<boolean> {
   const requirementsFiles = await fg(
     ['**/requirements*.txt', '**/pyproject.toml', '**/Pipfile'],
     {
@@ -155,7 +155,7 @@ async function hasWagtail({
  */
 async function hasChannels({
   installDir,
-}: Pick<WizardOptions, 'installDir'>): Promise<boolean> {
+}: Pick<WizardRunOptions, 'installDir'>): Promise<boolean> {
   const requirementsFiles = await fg(
     ['**/requirements*.txt', '**/pyproject.toml', '**/Pipfile'],
     {
@@ -182,7 +182,7 @@ async function hasChannels({
  * Detect Django project type
  */
 export async function getDjangoProjectType(
-  options: WizardOptions,
+  options: WizardRunOptions,
 ): Promise<DjangoProjectType> {
   const { installDir } = options;
 
@@ -231,7 +231,7 @@ export function getDjangoProjectTypeName(
  * Find the main Django settings file
  */
 export async function findDjangoSettingsFile(
-  options: Pick<WizardOptions, 'installDir'>,
+  options: Pick<WizardRunOptions, 'installDir'>,
 ): Promise<string | undefined> {
   const { installDir } = options;
 
@@ -283,7 +283,7 @@ export async function findDjangoSettingsFile(
  * Find the main Django urls.py file
  */
 export async function findDjangoUrlsFile(
-  options: Pick<WizardOptions, 'installDir'>,
+  options: Pick<WizardRunOptions, 'installDir'>,
 ): Promise<string | undefined> {
   const { installDir } = options;
 

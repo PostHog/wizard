@@ -1,6 +1,9 @@
 import { VERSION } from '@lib/version';
 import { runtimeEnv } from '@env';
 import type { ProgramConfig } from '@lib/programs/program-step';
+import type { startTUI as StartTUIFn } from '@ui/tui/start-tui';
+import type { TaskStreamPush as TaskStreamPushClass } from '@lib/task-stream/task-stream-push';
+import { resolveNoTelemetry } from './resolve-no-telemetry';
 
 const WIZARD_VERSION = VERSION;
 
@@ -13,23 +16,26 @@ export function runWizard(
   config: ProgramConfig,
   options: Record<string, unknown>,
 ): void {
+  let tui: ReturnType<typeof StartTUIFn> | null = null;
+  let taskStream: TaskStreamPushClass | null = null;
+  let onSignal: (() => void) | null = null;
+  let exitInProgress = false;
+
   void (async () => {
     try {
       const installDir = (options.installDir as string) || process.cwd();
 
       const { startTUI } = await import('@ui/tui/start-tui');
-      const { buildSession } = await import('@lib/wizard-session');
+      const { buildSession, RunPhase } = await import('@lib/wizard-session');
       const { TaskStreamPush } = await import('@lib/task-stream/index');
-      const { FileDestination } = await import(
-        '@lib/task-stream/destinations/file'
-      );
       const { PostHogDestination } = await import(
         '@lib/task-stream/destinations/posthog'
       );
-      const { analytics } = await import('@utils/analytics');
+      const { logToFile } = await import('@utils/debug');
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const tui = startTUI(WIZARD_VERSION, config.id as any);
+      tui = startTUI(WIZARD_VERSION, config.id as any);
+      const activeTui = tui;
 
       const session = buildSession({
         debug: options.debug as boolean | undefined,
@@ -42,6 +48,7 @@ export function runWizard(
         email: options.email as string | undefined,
         benchmark: options.benchmark as boolean | undefined,
         yaraReport: options.yaraReport as boolean | undefined,
+        noTelemetry: resolveNoTelemetry(options),
       });
       session.programLabel = config.id;
       if (options.skillId) {
@@ -50,18 +57,48 @@ export function runWizard(
         session.skillId = config.skillId;
       }
 
-      tui.store.session = session;
+      activeTui.store.session = session;
 
-      const taskStream = new TaskStreamPush({
-        store: tui.store,
+      const taskStreamEnabled = !session.noTelemetry;
+      taskStream = new TaskStreamPush({
+        store: activeTui.store,
         programId: config.id,
-        destinations: [new FileDestination(), new PostHogDestination()],
+        destinations: [
+          new PostHogDestination({
+            getCredentials: () => activeTui.store.session.credentials,
+            onError: (err) => logToFile('[task-stream-push]', err.message),
+          }),
+        ],
+        enabled: taskStreamEnabled,
       });
-      tui.store.onTasksChanged = () => void taskStream.push();
+      const activeStream = taskStream;
+      activeStream.attach();
 
-      await tui.store.runReadyHooks();
-      await tui.store.getGate('intro');
-      await tui.store.getGate('health-check');
+      // Flush a terminal-phase push on Ctrl-C so the web app sees the
+      // run ended in error rather than hanging on the last "running"
+      // snapshot.
+      let signalled = false;
+      onSignal = (): void => {
+        if (signalled || exitInProgress) return;
+        signalled = true;
+        if (activeTui.store.session.runPhase === RunPhase.Running) {
+          activeTui.store.setRunPhase(RunPhase.Error);
+        }
+        void activeStream.shutdown(2000).finally(() => {
+          try {
+            activeTui.unmount();
+          } catch {
+            // terminal may already be torn down
+          }
+          process.exit(130);
+        });
+      };
+      process.on('SIGINT', onSignal);
+      process.on('SIGTERM', onSignal);
+
+      await activeTui.store.runReadyHooks();
+      await activeTui.store.getGate('intro');
+      await activeTui.store.getGate('health-check');
 
       const skipAgent = config.run == null;
 
@@ -74,7 +111,7 @@ export function runWizard(
             apiKey: session.apiKey,
             projectId: session.projectId,
           });
-        tui.store.setCredentials({
+        activeTui.store.setCredentials({
           accessToken,
           projectApiKey,
           host,
@@ -82,16 +119,16 @@ export function runWizard(
         });
       } else {
         const { runAgent } = await import('@lib/agent/agent-runner');
-        await runAgent(config, tui.store.session);
+        await runAgent(config, activeTui.store.session);
       }
 
       const isDone = (): boolean =>
         skipAgent
-          ? tui.store.session.outroDismissed
-          : tui.store.session.skillsComplete;
+          ? activeTui.store.session.outroDismissed
+          : activeTui.store.session.skillsComplete;
 
       await new Promise<void>((resolve) => {
-        const unsub = tui.store.subscribe(() => {
+        const unsub = activeTui.store.subscribe(() => {
           if (isDone()) {
             unsub();
             resolve();
@@ -103,18 +140,39 @@ export function runWizard(
         }
       });
 
-      try {
-        await taskStream.dispose();
-      } catch (error) {
-        analytics.captureException(error as Error);
-      }
-      tui.unmount();
+      exitInProgress = true;
+      await activeStream.shutdown(2000);
+      process.off('SIGINT', onSignal);
+      process.off('SIGTERM', onSignal);
+      activeTui.unmount();
       process.exit(0);
     } catch (err) {
       if (runtimeEnv('DEBUG') || runtimeEnv('POSTHOG_WIZARD_DEBUG')) {
         // eslint-disable-next-line no-console
         console.error('TUI init failed:', err);
       }
+      // The task-stream debounce timer keeps the event loop alive, so
+      // we have to drain it before exiting on the error path.
+      exitInProgress = true;
+      if (onSignal) {
+        process.off('SIGINT', onSignal);
+        process.off('SIGTERM', onSignal);
+      }
+      if (taskStream) {
+        try {
+          await taskStream.shutdown(2000);
+        } catch {
+          // ignore
+        }
+      }
+      if (tui) {
+        try {
+          tui.unmount();
+        } catch {
+          // ignore
+        }
+      }
+      process.exit(1);
     }
   })();
 }
