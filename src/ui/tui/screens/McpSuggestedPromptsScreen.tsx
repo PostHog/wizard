@@ -35,8 +35,7 @@ import { Colors, Icons } from '@ui/tui/styles';
 import { useKeyBindings, KeyMatch } from '@ui/tui/hooks/useKeyBindings';
 import { LoadingBox, PickerMenu } from '@ui/tui/primitives/index';
 import {
-  getRolePrompts,
-  getRoleLabel,
+  STOCK_MCP_SUGGESTED_PROMPTS,
   type SuggestedPrompt,
 } from '@lib/mcp-role-prompts';
 import { analytics } from '@utils/analytics';
@@ -78,10 +77,12 @@ export const McpSuggestedPromptsScreen = ({
   );
 
   const session = store.session;
-  const role = session.roleAtOrganization;
-  const roleLabel = getRoleLabel(role);
-  const kit = getRolePrompts(role, session.integration);
   const installedClient = session.mcpInstalledClients[0] ?? 'your agent';
+  // The role + framework matrix in mcp-role-prompts.ts is intentionally
+  // kept for future use (and the OAuth plumbing still populates
+  // session.roleAtOrganization). For now the picker shows the same
+  // generic kit to every user.
+  const kit = STOCK_MCP_SUGGESTED_PROMPTS;
 
   const [phase, setPhase] = useState<Phase>(Phase.Choose);
   const [loginError, setLoginError] = useState<string | null>(null);
@@ -245,10 +246,6 @@ export const McpSuggestedPromptsScreen = ({
 
   return (
     <Box flexDirection="column" flexGrow={1}>
-      <Text bold color={Colors.accent}>
-        Suggested prompts
-      </Text>
-
       <Box marginTop={1} flexDirection="column">
         {phase === Phase.Choose && (
           <ChoosePhase
@@ -263,11 +260,17 @@ export const McpSuggestedPromptsScreen = ({
         )}
 
         {phase === Phase.PromptPicker && (
-          <PromptPickerPhase
-            promptKit={kit}
-            roleLabel={roleLabel}
-            onSelect={handlePromptPick}
-          />
+          <>
+            <Box marginBottom={1}>
+              <Text bold color={Colors.accent}>
+                MCP tutorial
+              </Text>
+            </Box>
+            <Box marginBottom={1}>
+              <Text>Hello, {session.apiUser?.first_name || 'there'}!</Text>
+            </Box>
+            <PromptPickerPhase promptKit={kit} onSelect={handlePromptPick} />
+          </>
         )}
 
         {phase === Phase.Running && runningPrompt && (
@@ -305,15 +308,9 @@ const CHOOSE_EXAMPLES: ReadonlyArray<{
   {
     category: 'Product Analytics',
     prompt:
-      'Build a weekly signups insight broken down by acquisition channel and save it for the team.',
+      'Build a weekly signups insight broken down by acquisition channel.',
     description:
       'Picks the right query type, configures the breakdown, and saves the insight back to your project.',
-  },
-  {
-    category: 'Feature Flags & Experiments',
-    prompt:
-      'Create an A/B test for our pricing page that measures conversion to checkout.',
-    description: 'Configures control and test variants with a funnel metric.',
   },
 ];
 
@@ -334,8 +331,9 @@ const ChoosePhase = ({ client, error, onSelect }: ChoosePhaseProps) => (
       {CHOOSE_EXAMPLES.map((ex) => (
         <Box key={ex.prompt} flexDirection="column" marginBottom={1}>
           <Text>
-            <Text color="cyan">{Icons.diamond}</Text> &quot;
-            <Text color="cyan">{ex.prompt}</Text>&quot;{' '}
+            <Text color="cyan">
+              {Icons.diamond} {ex.prompt}
+            </Text>{' '}
             <Text dimColor>({ex.category})</Text>
           </Text>
         </Box>
@@ -345,11 +343,8 @@ const ChoosePhase = ({ client, error, onSelect }: ChoosePhaseProps) => (
     <Box marginTop={1}>
       <Text>Want a live demo using real data from your project?</Text>
     </Box>
-    <Box marginTop={1}>
-      <Text>Log in to begin your interactive MCP tutorial.</Text>
-    </Box>
 
-    <Box marginTop={1}>
+    <Box>
       <PickerMenu
         options={[
           { label: 'Start MCP tutorial', value: ChoiceValue.Login },
@@ -391,33 +386,29 @@ const AuthenticatingPhase = ({ loginUrl }: AuthenticatingPhaseProps) => (
 
 interface PromptPickerPhaseProps {
   promptKit: SuggestedPrompt[];
-  roleLabel: string | null;
   onSelect: (value: string | string[]) => void;
 }
 
-const PromptPickerPhase = ({
-  promptKit,
-  roleLabel,
-  onSelect,
-}: PromptPickerPhaseProps) => {
+const PromptPickerPhase = ({ promptKit, onSelect }: PromptPickerPhaseProps) => {
   const options = [
     ...promptKit.map((p) => ({
       label: p.prompt,
       value: p.prompt,
-      hint: p.description,
     })),
     { label: 'Exit', value: PICKER_EXIT_VALUE },
   ];
 
   return (
     <Box flexDirection="column">
-      <Text>
-        {roleLabel
-          ? `Picked for ${roleLabel} — pick one to try with your project's data:`
-          : 'Pick one to try with your project’s data:'}
-      </Text>
       <Box marginTop={1}>
-        <PickerMenu options={options} onSelect={onSelect} />
+        <Text>Pick a prompt to see the PostHog MCP in action:</Text>
+      </Box>
+      <Box marginTop={1}>
+        <PickerMenu
+          options={options}
+          optionMarginBottom={1}
+          onSelect={onSelect}
+        />
       </Box>
     </Box>
   );

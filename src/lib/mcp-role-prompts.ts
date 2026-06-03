@@ -105,6 +105,35 @@ export const VERIFY_PROMPT: SuggestedPrompt = {
     'Creates a dated note on your project — visible on every chart. Delete anytime from PostHog.',
 };
 
+// ── Suggested prompts (generic, role-agnostic) ─────────────────────────
+// What McpSuggestedPromptsScreen actually shows today. Picked so each
+// prompt is more or less guaranteed to return data on any active
+// PostHog project (no assumption that specific events like "signup" or
+// "$pageview" exist, no assumption about org plan or feature access).
+//
+// The role-tailored kits below this constant are intentionally kept for
+// future use — when we re-introduce role-aware prompts, the screen
+// imports `getRolePrompts` instead of this list. For now the screen
+// reads this directly.
+export const STOCK_MCP_SUGGESTED_PROMPTS: PromptKit = [
+  {
+    prompt: 'What events am I currently tracking and when did each last fire?',
+    description:
+      'Inventories your project’s event stream so you can see what’s being captured at a glance.',
+  },
+  {
+    prompt: 'Show me daily event volume for the last 30 days.',
+    description:
+      'Charts your event count day by day — a quick read on volume and trend.',
+  },
+  {
+    prompt:
+      'Create a dashboard with my top 10 events broken down by day for the last 7 days.',
+    description:
+      'Builds a saved dashboard you can pin and share — written back to your project.',
+  },
+];
+
 // ── Default kit (no role, no framework) ────────────────────────────────
 const DEFAULT_KIT: PromptKit = [
   VERIFY_PROMPT,

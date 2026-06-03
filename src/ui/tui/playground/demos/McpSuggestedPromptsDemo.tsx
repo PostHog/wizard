@@ -159,9 +159,9 @@ function createMockServices(
           distinct_id: 'demo-distinct-id',
           uuid: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
           id: 1,
-          email: 'demo@example.com',
-          first_name: 'Demo',
-          last_name: 'User',
+          email: 'joe@demo.example.com',
+          first_name: 'Joe',
+          last_name: 'Demo',
           role_at_organization: cfg.role,
           team: {
             id: 1,
