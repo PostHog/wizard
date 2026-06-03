@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.16.0](https://github.com/PostHog/wizard/compare/v2.15.0...v2.16.0) (2026-06-03)
+
+
+### Features
+
+* Rebuild the MCP install + create role-tailored prompts screen ([#500](https://github.com/PostHog/wizard/issues/500)) ([06ba620](https://github.com/PostHog/wizard/commit/06ba6204b89a3315f9d46a217f8abac2b0c2b00c))
+
 ## [2.15.0](https://github.com/PostHog/wizard/compare/v2.14.3...v2.15.0) (2026-06-03)
 
 
