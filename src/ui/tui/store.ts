@@ -530,11 +530,6 @@ export class WizardStore {
     this.emitChange();
   }
 
-  setWarehouseOfferDismissed(): void {
-    this.$session.setKey('warehouseOfferDismissed', true);
-    this.emitChange();
-  }
-
   setOutroData(data: OutroData): void {
     this.$session.setKey('outroData', data);
     this.emitChange();

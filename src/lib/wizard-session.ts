@@ -191,8 +191,6 @@ export interface WizardSession {
   mcpInstalledClients: string[];
   skillsComplete: boolean;
   outroDismissed: boolean;
-  /** Set when the user dismisses the post-run data warehouse source offer. */
-  warehouseOfferDismissed: boolean;
 
   // Runtime
   readinessResult: WizardReadinessResult | null;
@@ -280,7 +278,6 @@ export function buildSession(args: {
     mcpInstalledClients: [],
     skillsComplete: false,
     outroDismissed: false,
-    warehouseOfferDismissed: false,
     loginUrl: null,
     authorizeUrl: null,
     credentials: null,
