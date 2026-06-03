@@ -26,7 +26,7 @@ export const STRIPE_SDKS = [
   '@stripe/react-stripe-js',
 ];
 
-interface PackageMatch {
+export interface PackageMatch {
   /** Path to the package.json relative to installDir */
   path: string;
   posthogSdks: string[];
@@ -76,7 +76,10 @@ export const REVENUE_ABORT_CASES: AbortCase[] = [
  * Recursively find all package.json files under installDir (max depth 3),
  * skipping common ignored directories. Returns matches with detected SDKs.
  */
-function findPackageJsons(installDir: string, maxDepth = 3): PackageMatch[] {
+export function findPackageJsons(
+  installDir: string,
+  maxDepth = 3,
+): PackageMatch[] {
   const matches: PackageMatch[] = [];
 
   function scan(dir: string, depth: number): void {

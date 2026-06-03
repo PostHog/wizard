@@ -5,6 +5,7 @@
 
 import path from 'path';
 import * as fs from 'fs';
+import { createRequire } from 'module';
 import { getUI, type SpinnerHandle } from '@ui';
 import { debug, logToFile, initLogFile, getLogFilePath } from '@utils/debug';
 import type { WizardOptions } from '@utils/types';
@@ -47,7 +48,8 @@ async function getSDKModule(): Promise<any> {
  */
 function getClaudeCodeExecutablePath(): string {
   // require.resolve finds the package's main entry, then we get cli.js from same dir
-  const sdkPackagePath = require.resolve('@anthropic-ai/claude-agent-sdk');
+  const nodeRequire = createRequire(import.meta.url);
+  const sdkPackagePath = nodeRequire.resolve('@anthropic-ai/claude-agent-sdk');
   return path.join(path.dirname(sdkPackagePath), 'cli.js');
 }
 
