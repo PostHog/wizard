@@ -491,8 +491,8 @@ export class WizardStore {
     this.emitChange();
   }
 
-  setSuggestedPromptsDismissed(): void {
-    this.$session.setKey('suggestedPromptsDismissed', true);
+  setMcpSuggestedPromptsDismissed(): void {
+    this.$session.setKey('mcpSuggestedPromptsDismissed', true);
     this.emitChange();
   }
 

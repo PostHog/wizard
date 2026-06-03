@@ -95,7 +95,7 @@ export interface WizardUI {
   /**
    * Persist the user's `role_at_organization` once it's been fetched from
    * `/api/users/@me/`. Drives role-tailored prompt suggestions on the
-   * SuggestedPromptsScreen. Pass `null` to clear / when unknown.
+   * McpSuggestedPromptsScreen. Pass `null` to clear / when unknown.
    */
   setRoleAtOrganization(role: string | null): void;
 

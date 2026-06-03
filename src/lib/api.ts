@@ -87,7 +87,7 @@ export async function fetchUserData(
 
 /**
  * Best-effort fetch of recent activity log entries. Returns [] on any error
- * — the caller (SuggestedPromptsScreen's verify phase) treats absence of
+ * — the caller (McpSuggestedPromptsScreen's verify phase) treats absence of
  * results as "haven't detected anything yet" rather than a hard failure.
  *
  * Polling this endpoint lets the wizard celebrate when the user's first MCP

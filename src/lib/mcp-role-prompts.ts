@@ -1,7 +1,7 @@
 /**
  * Role + framework-tailored MCP prompt suggestions.
  *
- * The wizard surfaces these on the SuggestedPromptsScreen after MCP install.
+ * The wizard surfaces these on the McpSuggestedPromptsScreen after MCP install.
  * Picking strategy:
  *   1. If we know the user's role AND framework family, return the bespoke kit.
  *   2. If we only know the role, return the role's default kit.

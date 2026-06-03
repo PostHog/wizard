@@ -32,7 +32,7 @@ import { SetupScreen } from './screens/SetupScreen.js';
 import { AuthScreen } from './screens/AuthScreen.js';
 import { RunScreen } from './screens/RunScreen.js';
 import { McpScreen } from './screens/McpScreen.js';
-import { SuggestedPromptsScreen } from './screens/SuggestedPromptsScreen.js';
+import { McpSuggestedPromptsScreen } from './screens/McpSuggestedPromptsScreen.js';
 import { KeepSkillsScreen } from './screens/KeepSkillsScreen.js';
 import { OutroScreen } from './screens/OutroScreen.js';
 import { ExitScreen } from './screens/ExitScreen.js';
@@ -83,7 +83,7 @@ export function createScreens(
     [ScreenId.Mcp]: (
       <McpScreen store={store} installer={services.mcpInstaller} />
     ),
-    [ScreenId.SuggestedPrompts]: <SuggestedPromptsScreen store={store} />,
+    [ScreenId.McpSuggestedPrompts]: <McpSuggestedPromptsScreen store={store} />,
     [ScreenId.KeepSkills]: <KeepSkillsScreen store={store} />,
     [ScreenId.Outro]: <OutroScreen store={store} />,
     [ScreenId.Exit]: <ExitScreen />,

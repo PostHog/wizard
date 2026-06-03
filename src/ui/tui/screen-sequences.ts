@@ -32,7 +32,7 @@ export enum ScreenId {
   Auth = 'auth',
   Run = 'run',
   Mcp = 'mcp',
-  SuggestedPrompts = 'suggested-prompts',
+  McpSuggestedPrompts = 'mcp-suggested-prompts',
   KeepSkills = 'keep-skills',
   Outro = 'outro',
   Exit = 'exit',

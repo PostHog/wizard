@@ -169,7 +169,7 @@ export interface WizardSession {
   /**
    * `role_at_organization` from `/api/users/@me/`. Null when the upstream
    * value is missing (older accounts, fresh signups before onboarding).
-   * Drives role-tailored MCP prompt suggestions on the SuggestedPromptsScreen.
+   * Drives role-tailored MCP prompt suggestions on the McpSuggestedPromptsScreen.
    */
   roleAtOrganization: string | null;
 
@@ -185,7 +185,7 @@ export interface WizardSession {
   mcpComplete: boolean;
   mcpOutcome: McpOutcome | null;
   mcpInstalledClients: string[];
-  suggestedPromptsDismissed: boolean;
+  mcpSuggestedPromptsDismissed: boolean;
   skillsComplete: boolean;
   outroDismissed: boolean;
 
@@ -273,7 +273,7 @@ export function buildSession(args: {
     mcpComplete: false,
     mcpOutcome: null,
     mcpInstalledClients: [],
-    suggestedPromptsDismissed: false,
+    mcpSuggestedPromptsDismissed: false,
     skillsComplete: false,
     outroDismissed: false,
     loginUrl: null,

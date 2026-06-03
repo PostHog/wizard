@@ -41,7 +41,7 @@ interface ProjectData {
   projectId: number;
   /**
    * Optional `role_at_organization` from `/api/users/@me/`. Drives the
-   * role-tailored prompt suggestions on the SuggestedPromptsScreen. Null
+   * role-tailored prompt suggestions on the McpSuggestedPromptsScreen. Null
    * for signup flows (no role picked yet) and older accounts.
    */
   roleAtOrganization?: string | null;

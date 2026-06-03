@@ -66,14 +66,14 @@ export const POSTHOG_INTEGRATION_PROGRAM: ProgramStep[] = [
     isComplete: (session) => session.mcpComplete,
   },
   {
-    id: 'suggested-prompts',
-    label: 'Try it out',
-    screenId: 'suggested-prompts',
+    id: 'mcp-suggested-prompts',
+    label: 'Suggested prompts',
+    screenId: 'mcp-suggested-prompts',
     // Only render when MCP was actually installed — skip on user opt-out,
     // no clients detected, or install failure. The screen has no value
     // without a working MCP for the user to try the prompts against.
     show: (session) => session.mcpOutcome === McpOutcome.Installed,
-    isComplete: (session) => session.suggestedPromptsDismissed,
+    isComplete: (session) => session.mcpSuggestedPromptsDismissed,
   },
   {
     id: 'outro',

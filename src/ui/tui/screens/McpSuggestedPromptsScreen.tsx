@@ -1,5 +1,5 @@
 /**
- * SuggestedPromptsScreen — shown after MCP install succeeds.
+ * McpSuggestedPromptsScreen — shown after MCP install succeeds.
  *
  * Two phases:
  *   1. Verify — show one safe test prompt and poll the activity_log endpoint
@@ -26,11 +26,11 @@ import {
   getRoleLabel,
   VERIFY_PROMPT,
   type SuggestedPrompt,
-} from '@lib/role-prompts';
+} from '@lib/mcp-role-prompts';
 import { analytics } from '@utils/analytics';
 import { logToFile } from '@utils/debug';
 
-interface SuggestedPromptsScreenProps {
+interface McpSuggestedPromptsScreenProps {
   store: WizardStore;
 }
 
@@ -44,9 +44,9 @@ enum Phase {
 const VERIFY_TIMEOUT_MS = 30_000;
 const VERIFY_POLL_MS = 3_000;
 
-export const SuggestedPromptsScreen = ({
+export const McpSuggestedPromptsScreen = ({
   store,
-}: SuggestedPromptsScreenProps) => {
+}: McpSuggestedPromptsScreenProps) => {
   useSyncExternalStore(
     (cb) => store.subscribe(cb),
     () => store.getSnapshot(),
@@ -91,7 +91,7 @@ export const SuggestedPromptsScreen = ({
         const activity = top.activity ?? 'change';
         setDetectedActivity(`${scope} · ${activity}`);
         setPhase(Phase.Celebrated);
-        analytics.wizardCapture('mcp verify success', {
+        analytics.wizardCapture('mcp suggested prompts verified', {
           scope,
           activity,
           via: 'activity_log_poll',
@@ -104,8 +104,8 @@ export const SuggestedPromptsScreen = ({
     const timeout = setTimeout(() => {
       if (cancelled) return;
       setPhase(Phase.TimedOut);
-      logToFile('[SuggestedPromptsScreen] verify timed out');
-      analytics.wizardCapture('mcp verify timeout', {});
+      logToFile('[McpSuggestedPromptsScreen] verify timed out');
+      analytics.wizardCapture('mcp suggested prompts timed out', {});
     }, VERIFY_TIMEOUT_MS);
 
     return () => {
@@ -120,18 +120,20 @@ export const SuggestedPromptsScreen = ({
     // Defer one tick so any concurrent setState has flushed before the router
     // re-resolves on the new screen completion predicate.
     setTimeout(() => {
-      store.setSuggestedPromptsDismissed();
+      store.setMcpSuggestedPromptsDismissed();
     }, 0);
   };
 
   const markVerifiedManually = (): void => {
     if (phase === Phase.Verifying) {
-      analytics.wizardCapture('mcp verify success', { via: 'manual' });
+      analytics.wizardCapture('mcp suggested prompts verified', {
+        via: 'manual',
+      });
       setPhase(Phase.Celebrated);
     }
   };
 
-  useKeyBindings('suggested-prompts', [
+  useKeyBindings('mcp-suggested-prompts', [
     {
       match: KeyMatch.Return,
       label: 'enter',
@@ -155,7 +157,7 @@ export const SuggestedPromptsScreen = ({
   return (
     <Box flexDirection="column" flexGrow={1}>
       <Text bold color={Colors.accent}>
-        Try it out
+        Suggested prompts
       </Text>
 
       <Box marginTop={1} flexDirection="column">
