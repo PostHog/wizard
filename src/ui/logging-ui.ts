@@ -11,6 +11,7 @@ import {
   type AuthErrorDetail,
 } from './wizard-ui';
 import type { SettingsConflict } from '@lib/agent/agent-interface';
+import type { ApiUser } from '@lib/api';
 import {
   type WizardReadinessResult,
   getBlockingServiceKeys,
@@ -198,6 +199,11 @@ export class LoggingUI implements WizardUI {
 
   setRoleAtOrganization(_role: string | null): void {
     // No-op in CI mode — there's no TUI to render role-tailored prompts
+  }
+
+  setApiUser(_user: ApiUser | null): void {
+    // No-op in CI mode — there's no TUI to read account context from
+    // the session.
   }
 
   syncTodos(

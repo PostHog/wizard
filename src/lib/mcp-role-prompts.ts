@@ -87,18 +87,22 @@ export function getFrameworkFamily(
   return INTEGRATION_FAMILY[integration] ?? 'unknown';
 }
 
-// ── Verify prompt (test prompt) ────────────────────────────────────────
-// Write-shaped prompt — the wizard uses this as the trigger for the
-// verify-and-celebrate phase. Creating an annotation produces an
-// activity_log entry (scope: Annotation, activity: created), which the
-// verify-phase poll can actually catch. Reads (e.g. "list my flags")
-// don't write to activity_log and would never trigger celebration.
-// The annotation is dated, visible on every chart, and reversible from
-// the PostHog UI in seconds.
+// ── Default first-pick prompt ──────────────────────────────────────────
+// Every role kit starts with this prompt. Pre-Phase-6 it was load-bearing
+// as the "verify" trigger (its write to activity_log was what the screen
+// polled for). Post-Phase-6 it's just a good first-pick: a write-shaped
+// prompt creates a visible, dated artifact in the user's project that
+// makes the MCP integration feel real on the first run. The annotation
+// is dated, visible on every chart, and reversible from the PostHog UI
+// in seconds — so a low-risk demo.
+//
+// The constant name (VERIFY_PROMPT) is kept for compatibility with any
+// future code that might still want a "default first prompt" handle,
+// but the screen no longer special-cases it.
 export const VERIFY_PROMPT: SuggestedPrompt = {
   prompt: "Annotate today with 'PostHog wizard install'",
   description:
-    'Creates a dated note on your project — exercises auth and shows up on every chart. Delete anytime from PostHog.',
+    'Creates a dated note on your project — visible on every chart. Delete anytime from PostHog.',
 };
 
 // ── Default kit (no role, no framework) ────────────────────────────────

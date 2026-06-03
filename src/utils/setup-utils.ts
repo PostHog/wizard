@@ -29,7 +29,7 @@ import {
 } from './urls';
 import { performOAuthFlow } from './oauth';
 import { provisionNewAccount } from './provisioning';
-import { fetchUserData, fetchProjectData } from '@lib/api';
+import { fetchUserData, fetchProjectData, type ApiUser } from '@lib/api';
 import { fulfillsVersionRange } from './semver';
 import { wizardAbort } from './wizard-abort';
 
@@ -45,6 +45,13 @@ interface ProjectData {
    * for signup flows (no role picked yet) and older accounts.
    */
   roleAtOrganization?: string | null;
+  /**
+   * Full user payload from `/api/users/@me/`. Carried through so
+   * `getOrAskForProjectData` can forward it to the session as
+   * `session.apiUser`. Null when the request failed or the CI key
+   * lacked permissions.
+   */
+  user?: ApiUser | null;
 }
 
 export interface CliSetupConfig {
@@ -393,6 +400,7 @@ export async function getOrAskForProjectData(
   projectId: number;
   cloudRegion: CloudRegion;
   roleAtOrganization: string | null;
+  user: ApiUser | null;
 }> {
   // CI mode: bypass OAuth, use personal API key for LLM gateway
   if (_options.ci && _options.apiKey) {
@@ -411,12 +419,14 @@ export async function getOrAskForProjectData(
           )
         : await fetchProjectDataWithApiKey(_options.apiKey, cloudUrl);
 
-    // Best-effort role fetch — CI flows may run with project-scoped keys
-    // that 403 on /api/users/@me/, so swallow errors and continue.
+    // Best-effort user fetch — CI flows may run with project-scoped keys
+    // that 403 on /api/users/@me/, so swallow errors and continue with
+    // a null user (and null role).
+    let user: ApiUser | null = null;
     let roleAtOrganization: string | null = null;
     try {
-      const userData = await fetchUserData(_options.apiKey, cloudUrl);
-      roleAtOrganization = userData.role_at_organization ?? null;
+      user = await fetchUserData(_options.apiKey, cloudUrl);
+      roleAtOrganization = user.role_at_organization ?? null;
     } catch {
       // best-effort
     }
@@ -428,6 +438,7 @@ export async function getOrAskForProjectData(
       projectId: projectData.id,
       cloudRegion,
       roleAtOrganization,
+      user,
     };
   }
 
@@ -438,6 +449,7 @@ export async function getOrAskForProjectData(
     projectId,
     cloudRegion,
     roleAtOrganization,
+    user,
   } = await withProgress('login', () =>
     askForWizardLogin({
       signup: _options.signup,
@@ -466,6 +478,7 @@ ${cloudUrl}/settings/project#variables`);
     projectId,
     cloudRegion,
     roleAtOrganization: roleAtOrganization ?? null,
+    user: user ?? null,
   };
 }
 
@@ -548,6 +561,7 @@ async function askForWizardLogin(options: {
     projectId: projectId!,
     cloudRegion,
     roleAtOrganization: userData.role_at_organization ?? null,
+    user: userData,
   };
 
   getUI().log.success('Login complete.');

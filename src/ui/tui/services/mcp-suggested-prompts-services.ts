@@ -13,6 +13,7 @@
 import type { Credentials } from '@lib/wizard-session';
 import { getOrAskForProjectData } from '@utils/setup-utils';
 import type { WizardStore } from '@ui/tui/store';
+import type { ApiUser } from '@lib/api';
 
 /**
  * Discriminated union covering every kind of streamed event the screen
@@ -40,6 +41,7 @@ export interface McpSuggestedPromptsServices {
   performLogin(): Promise<{
     credentials: Credentials;
     roleAtOrganization: string | null;
+    user: ApiUser | null;
   }>;
 
   /**
@@ -85,6 +87,7 @@ export function createMcpSuggestedPromptsServices(
           projectId: result.projectId,
         },
         roleAtOrganization: result.roleAtOrganization,
+        user: result.user,
       };
     },
 

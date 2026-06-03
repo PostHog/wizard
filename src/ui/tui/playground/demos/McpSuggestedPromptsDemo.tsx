@@ -155,6 +155,37 @@ function createMockServices(
           projectId: 1,
         },
         roleAtOrganization: cfg.role,
+        user: {
+          distinct_id: 'demo-distinct-id',
+          uuid: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+          id: 1,
+          email: 'demo@example.com',
+          first_name: 'Demo',
+          last_name: 'User',
+          role_at_organization: cfg.role,
+          team: {
+            id: 1,
+            uuid: 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb',
+            organization: 'cccccccc-cccc-cccc-cccc-cccccccccccc',
+            api_token: 'phc_mock',
+            project_id: 1,
+            name: 'Demo team',
+            timezone: 'UTC',
+          },
+          organization: {
+            id: 'cccccccc-cccc-cccc-cccc-cccccccccccc',
+            name: 'Demo org',
+            slug: 'demo-org',
+            membership_level: 1,
+          },
+          organizations: [
+            {
+              id: 'cccccccc-cccc-cccc-cccc-cccccccccccc',
+              name: 'Demo org',
+              membership_level: 1,
+            },
+          ],
+        },
       };
     },
 

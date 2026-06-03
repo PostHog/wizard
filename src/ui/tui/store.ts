@@ -276,6 +276,11 @@ export class WizardStore {
     this.emitChange();
   }
 
+  setApiUser(user: WizardSession['apiUser']): void {
+    this.$session.setKey('apiUser', user);
+    this.emitChange();
+  }
+
   setFrameworkConfig(
     integration: WizardSession['integration'],
     config: WizardSession['frameworkConfig'],

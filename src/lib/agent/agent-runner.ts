@@ -265,6 +265,7 @@ export async function runProgram(
     projectId,
     cloudRegion,
     roleAtOrganization,
+    user,
   } = await getOrAskForProjectData({
     signup: session.signup,
     ci: session.ci,
@@ -276,8 +277,10 @@ export async function runProgram(
 
   session.credentials = { accessToken, projectApiKey, host, projectId };
   session.roleAtOrganization = roleAtOrganization;
+  session.apiUser = user;
   getUI().setCredentials(session.credentials);
   getUI().setRoleAtOrganization(roleAtOrganization);
+  getUI().setApiUser(user);
 
   // 5. Skill install (if skillId provided)
   let skillPath: string | undefined;

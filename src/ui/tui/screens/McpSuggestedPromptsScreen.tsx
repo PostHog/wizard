@@ -101,11 +101,12 @@ export const McpSuggestedPromptsScreen = ({
 
     void (async () => {
       try {
-        const { credentials, roleAtOrganization } =
+        const { credentials, roleAtOrganization, user } =
           await services.performLogin();
         if (cancelled) return;
         store.setCredentials(credentials);
         store.setRoleAtOrganization(roleAtOrganization);
+        store.setApiUser(user);
         store.setLoginUrl(null);
         setPhase(Phase.PromptPicker);
       } catch (err) {
@@ -295,21 +296,21 @@ const CHOOSE_EXAMPLES: ReadonlyArray<{
   description: string;
 }> = [
   {
-    category: 'Error tracking',
+    category: 'Error Tracking',
     prompt:
       'Show me the full stack trace for the most recent crash, then propose a fix.',
     description:
       'Pulls the stack trace, error message, and metadata so the agent can suggest code changes.',
   },
   {
-    category: 'Product analytics',
+    category: 'Product Analytics',
     prompt:
       'Build a weekly signups insight broken down by acquisition channel and save it for the team.',
     description:
       'Picks the right query type, configures the breakdown, and saves the insight back to your project.',
   },
   {
-    category: 'Feature flags & experiments',
+    category: 'Feature Flags & Experiments',
     prompt:
       'Create an A/B test for our pricing page that measures conversion to checkout.',
     description: 'Configures control and test variants with a funnel metric.',
@@ -324,43 +325,34 @@ const ChoosePhase = ({ client, error, onSelect }: ChoosePhaseProps) => (
 
     <Box marginTop={1}>
       <Text>
-        The whole PostHog platform is now in your editor — product analytics,
-        error tracking, feature flags, SQL, and more. Read it, write it, build
-        new things on top. A taste:
+        Now your agent can access the PostHog platform when you prompt it to.
+        Build dashboards, run SQL queries, deploy feature flags, and more.
       </Text>
     </Box>
 
     <Box marginTop={1} flexDirection="column">
       {CHOOSE_EXAMPLES.map((ex) => (
         <Box key={ex.prompt} flexDirection="column" marginBottom={1}>
-          <Text color={Colors.accent}>
-            {Icons.diamond} &quot;{ex.prompt}&quot;
-          </Text>
-          <Text dimColor>
-            {' '}
-            {ex.category}: {ex.description}
+          <Text>
+            <Text color="cyan">{Icons.diamond}</Text> &quot;
+            <Text color="cyan">{ex.prompt}</Text>&quot;{' '}
+            <Text dimColor>({ex.category})</Text>
           </Text>
         </Box>
       ))}
     </Box>
 
-    <Box marginBottom={1}>
-      <Text dimColor>
-        There&apos;s a lot more — dashboards and insights you can build from
-        scratch, raw HogQL queries, CDP destinations, cohort management, support
-        ticket triage, and multi-step recipes that chain it all together.
-      </Text>
+    <Box marginTop={1}>
+      <Text>Want a live demo using real data from your project?</Text>
     </Box>
-
-    <Text>
-      We can show you right now. Want to see the MCP query your data in real
-      time?
-    </Text>
+    <Box marginTop={1}>
+      <Text>Log in to begin your interactive MCP tutorial.</Text>
+    </Box>
 
     <Box marginTop={1}>
       <PickerMenu
         options={[
-          { label: 'Log in', value: ChoiceValue.Login },
+          { label: 'Start MCP tutorial', value: ChoiceValue.Login },
           { label: 'Exit', value: ChoiceValue.Exit },
         ]}
         onSelect={onSelect}

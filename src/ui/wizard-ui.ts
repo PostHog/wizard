@@ -10,6 +10,7 @@
 
 import type { SettingsConflict } from '@lib/agent/agent-interface';
 import type { WizardReadinessResult } from '@lib/health-checks/readiness';
+import type { ApiUser } from '@lib/api';
 import type {
   AskAnswers,
   OutroData,
@@ -98,6 +99,14 @@ export interface WizardUI {
    * McpSuggestedPromptsScreen. Pass `null` to clear / when unknown.
    */
   setRoleAtOrganization(role: string | null): void;
+
+  /**
+   * Persist the full user payload from `/api/users/@me/` so downstream
+   * screens can read account context (current org, team, plan, email,
+   * preferences, etc.) without re-fetching. Pass `null` to clear or
+   * when the request failed.
+   */
+  setApiUser(user: ApiUser | null): void;
 
   /** Show blocking service outage (pushes outage overlay in TUI). Blocks until dismissed. */
   showBlockingOutage(result: WizardReadinessResult): Promise<void>;

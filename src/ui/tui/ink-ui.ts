@@ -10,6 +10,7 @@ import type { WizardUI, SpinnerHandle, AuthErrorDetail } from '@ui/wizard-ui';
 import type { WizardStore } from './store.js';
 import type { SettingsConflict } from '@lib/agent/agent-interface';
 import type { WizardReadinessResult } from '@lib/health-checks/readiness';
+import type { ApiUser } from '@lib/api';
 import type {
   AskAnswers,
   OutroData,
@@ -86,6 +87,10 @@ export class InkUI implements WizardUI {
 
   setRoleAtOrganization(role: string | null): void {
     this.store.setRoleAtOrganization(role);
+  }
+
+  setApiUser(user: ApiUser | null): void {
+    this.store.setApiUser(user);
   }
 
   setDetectedFramework(label: string): void {
