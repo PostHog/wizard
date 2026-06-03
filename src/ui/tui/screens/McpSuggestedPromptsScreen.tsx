@@ -32,7 +32,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useSyncExternalStore } from 'react';
 
 import type { WizardStore } from '@ui/tui/store';
-import { Colors, Icons } from '@ui/tui/styles';
+import { Colors } from '@ui/tui/styles';
 import { useKeyBindings, KeyMatch } from '@ui/tui/hooks/useKeyBindings';
 import {
   ContentSequencer,
@@ -297,27 +297,6 @@ interface ChoosePhaseProps {
   onSelect: (value: ChoiceValue | ChoiceValue[]) => void;
 }
 
-const CHOOSE_EXAMPLES: ReadonlyArray<{
-  category: string;
-  prompt: string;
-  description: string;
-}> = [
-  {
-    category: 'Error Tracking',
-    prompt:
-      'Show me the full stack trace for the most recent crash, then propose a fix.',
-    description:
-      'Pulls the stack trace, error message, and metadata so the agent can suggest code changes.',
-  },
-  {
-    category: 'Product Analytics',
-    prompt:
-      'Build a weekly signups insight broken down by acquisition channel.',
-    description:
-      'Picks the right query type, configures the breakdown, and saves the insight back to your project.',
-  },
-];
-
 const ChoosePhase = ({ client, error, onSelect }: ChoosePhaseProps) => (
   <Box flexDirection="column">
     <Text>
@@ -329,19 +308,6 @@ const ChoosePhase = ({ client, error, onSelect }: ChoosePhaseProps) => (
         Now your agent can access the PostHog platform when you prompt it to.
         Build dashboards, run SQL queries, deploy feature flags, and more.
       </Text>
-    </Box>
-
-    <Box marginTop={1} flexDirection="column">
-      {CHOOSE_EXAMPLES.map((ex) => (
-        <Box key={ex.prompt} flexDirection="column" marginBottom={1}>
-          <Text>
-            <Text color="cyan">
-              {Icons.diamond} {ex.prompt}
-            </Text>{' '}
-            <Text dimColor>({ex.category})</Text>
-          </Text>
-        </Box>
-      ))}
     </Box>
 
     <Box marginTop={1}>
@@ -475,6 +441,12 @@ const RunningPhase = ({ prompt, chunks, startedAt }: RunningPhaseProps) => {
     ? chunks.filter((c) => c.kind === 'text' || c.kind === 'error')
     : chunks;
 
+  // Hard cap: if Claude ignored the terminal-fit system prompt and
+  // produced an overlong response, slice to the last N lines so the
+  // result still fits without scroll. The system prompt should keep this
+  // off most of the time — this is the belt-and-suspenders fallback.
+  const cappedChunks = finished ? capTextChunks(visibleChunks) : visibleChunks;
+
   return (
     <Box flexDirection="column">
       <Text>
@@ -497,13 +469,50 @@ const RunningPhase = ({ prompt, chunks, startedAt }: RunningPhaseProps) => {
       </Box>
 
       <Box marginTop={1} flexDirection="column">
-        {visibleChunks.map((chunk, idx) => (
+        {cappedChunks.map((chunk, idx) => (
           <ChunkLine key={idx} chunk={chunk} />
         ))}
       </Box>
     </Box>
   );
 };
+
+/**
+ * Belt-and-suspenders fallback for runs where Claude ignored the
+ * terminal-fit system prompt and produced an overlong response. Joins
+ * all text chunks, slices to the last N lines that fit in the current
+ * terminal, and prepends an indicator showing how many lines got cut.
+ * Errors are preserved separately so failures don't disappear into the
+ * truncation.
+ */
+function capTextChunks(chunks: AgentChunk[]): AgentChunk[] {
+  const rows = process.stdout.rows ?? 24;
+  // Reserve rows for: title bar, prompt header (hidden when finished but
+  // counted defensively), "Done in Xs." line, margins. The leftover is
+  // what the message area can use.
+  const maxMessageRows = Math.max(6, rows - 8);
+
+  const textChunks = chunks.filter((c) => c.kind === 'text');
+  const errors = chunks.filter((c) => c.kind === 'error');
+  if (textChunks.length === 0) return chunks;
+
+  const joined = textChunks.map((c) => c.text).join('');
+  const lines = joined.split('\n');
+  if (lines.length <= maxMessageRows) return chunks;
+
+  const hidden = lines.length - maxMessageRows;
+  const tail = lines.slice(-maxMessageRows).join('\n');
+
+  return [
+    {
+      kind: 'text',
+      text: `[${hidden} earlier line${
+        hidden === 1 ? '' : 's'
+      } hidden — agent overran terminal]\n\n${tail}`,
+    },
+    ...errors,
+  ];
+}
 
 interface ChunkLineProps {
   chunk: AgentChunk;

@@ -38,7 +38,7 @@ const MODEL = 'claude-sonnet-4-6';
 // chains (multi-tool reads → reason → write → verify → summarize) while
 // still capping runaway loops. Worth tuning down once we see real
 // telemetry on average turn counts per prompt.
-const MAX_TURNS = 20;
+const MAX_TURNS = 30;
 
 function resolveMcpUrl(host: string): string {
   const override = runtimeEnv('MCP_URL');
@@ -123,6 +123,41 @@ function messageToChunks(message: any): AgentChunk[] {
   return chunks;
 }
 
+/**
+ * Build a system-prompt append that nudges the agent to fit its response
+ * inside the current terminal window. We can't actually constrain Claude
+ * — this is a soft cap that the model usually honors. The screen also
+ * applies a hard truncation cap as a fallback for non-compliant runs.
+ *
+ * Core principle nudged at the model: TALL CONTENT IS BAD, WIDE CONTENT
+ * IS GOOD. Default terminal is 120 columns × 24 rows — that's a lot of
+ * horizontal space, not much vertical. Spread data across columns, never
+ * stack it down rows when a horizontal layout would work.
+ */
+function buildTerminalFitPrompt(): string {
+  const cols = process.stdout.columns ?? 120;
+  const rows = process.stdout.rows ?? 24;
+  // Reserve rows for wizard chrome (title, status, hint, margins).
+  const messageBudget = Math.max(8, rows - 10);
+  const tableRowBudget = Math.min(8, Math.max(3, rows - 14));
+
+  return [
+    `You are responding inside a CLI window that is exactly ${cols} columns wide and ${rows} rows tall. The user CAN'T SCROLL — your entire reply must fit on screen.`,
+    ``,
+    `LAYOUT PRINCIPLE: tall content is the enemy, wide content is your friend. You have ${cols} columns of horizontal space; use them. Spread data across columns instead of stacking it down rows.`,
+    ``,
+    `Hard limits:`,
+    `- Aim for 3-6 lines of prose. Maximum ${messageBudget} lines total.`,
+    `- Tables: max ${tableRowBudget} rows. Prefer MULTI-COLUMN tables (5-8 columns) over narrow tables with many rows. A two-column table with a long list of rows is exactly what to AVOID — that's the tall layout. If you have many key/value pairs, transpose them: keys as column headers across the top, values as a single wide row underneath.`,
+    `- Lists: if there are 6+ short items, format them inline (comma-separated) or in 2-3 columns, not as a vertical bullet list.`,
+    `- For tool results, summarize the 1-3 numbers that matter. Do NOT echo raw JSON or the full payload.`,
+    `- Code blocks: no language tag, no leading blank lines.`,
+    `- No closing pleasantries ("let me know if…", "feel free to…"). Stop when the answer is delivered.`,
+    `- No section headers unless the response actually has multiple sections.`,
+    `- The last paragraph should always be one line that says "Now go use our MCP to build something!"`,
+  ].join('\n');
+}
+
 export async function* runMcpPromptViaSdk(args: {
   prompt: string;
   credentials: Credentials;
@@ -178,6 +213,11 @@ export async function* runMcpPromptViaSdk(args: {
         cwd: process.cwd(),
         permissionMode: 'acceptEdits',
         maxTurns: MAX_TURNS,
+        systemPrompt: {
+          type: 'preset',
+          preset: 'claude_code',
+          append: buildTerminalFitPrompt(),
+        },
         mcpServers: {
           'posthog-wizard': {
             type: 'http',
