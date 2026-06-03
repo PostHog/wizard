@@ -106,6 +106,14 @@ export interface AskQuestion {
   options?: { label: string; value: string }[];
   /** Defaults to true */
   required?: boolean;
+  /**
+   * Only meaningful for kind='text'. When true, the wizard-tools `wizard_ask`
+   * tool stores the user's answer in the session secret vault and returns
+   * `{ secretRef }` to the agent instead of the plain string — so the value
+   * never enters the LLM conversation. The TUI may also mask input
+   * accordingly. See `secret-vault.ts`.
+   */
+  sensitive?: boolean;
 }
 
 /** Map of question id → answer (string for single/text, string[] for multi). */
@@ -191,6 +199,9 @@ export interface WizardSession {
   // Lifecycle
   runPhase: RunPhase;
   loginUrl: string | null;
+  // Direct PostHog authorize URL, shown in the manual-paste modal for
+  // headless/remote shells (the localhost loginUrl is unreachable there).
+  authorizeUrl: string | null;
 
   // Feature discovery
   discoveredFeatures: DiscoveredFeature[];
@@ -292,6 +303,7 @@ export function buildSession(args: {
     skillsComplete: false,
     outroDismissed: false,
     loginUrl: null,
+    authorizeUrl: null,
     credentials: null,
     roleAtOrganization: null,
     apiUser: null,

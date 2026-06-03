@@ -50,6 +50,9 @@ same flags as the main wizard.
 
 ## Headless signup + install (agents / CI)
 
+> ⚠️ `--ci` is **not currently supported in published builds** (see [CI Mode](#ci-mode)).
+> This flow works in development builds only.
+
 For a fully non-interactive first-run (no existing PostHog account, no TTY,
 no browser), combine `--ci --signup --email`. The wizard provisions a new
 account, uses the returned personal API key to run the normal CI install,
@@ -109,6 +112,13 @@ The following CLI arguments are available:
 
 # CI Mode
 
+> ⚠️ **CI mode is not currently supported in published builds.** PostHog's LLM
+> gateway doesn't yet grant the scopes the wizard needs to personal API keys
+> for most users, so non-interactive `--ci` runs fail at the gateway. The flag
+> is disabled in the published package and exits with an error — run the wizard
+> in an interactive terminal instead (`npx @posthog/wizard`). The notes below
+> describe CI mode as it works in development builds.
+
 Run the wizard non-interactive executions with `--ci`:
 
 ```bash
@@ -136,7 +146,6 @@ When creating your personal API key, ensure it has the following scopes enabled:
 
 - `user:read` - Required to fetch user information
 - `project:read` - Required to fetch project details and API token
-- `introspection` - Required for API introspection
 - `llm_gateway:read` - Required for LLM gateway access
 - `dashboard:write` - Required to create dashboards
 - `insight:write` - Required to create insights
@@ -207,6 +216,32 @@ This also allows us to pick up the bill on behalf of our customers.
 
 When we make improvements to this process, these are available instantly to all
 users of the wizard, no training delays or other ambiguity.
+
+## Keep secrets out of the LLM
+
+The wizard somtimes needs to move a secret. The agent
+orchestrates that journey, but the raw value should _never_ enter the LLM
+conversation, where it would be sent to the model provider, written to
+transcripts, and captured in logs.
+
+`src/lib/secret-vault.ts` is a small, reusable pattern for exactly this. It's a
+session-scoped, in-memory vault: a tool that handles a secret calls `put()` to
+store the raw value and hands the agent an opaque `secret:<uuid>` reference
+instead. The agent passes that ref between tools as if it were the value; the
+host resolves it back to the real secret only at the last moment, inside the
+process, when it writes the file.
+
+Two tools in `src/lib/wizard-tools.ts` form the ends of that pipe:
+
+- `wizard_ask` with `sensitive: true` vaults the user's typed answer and returns
+  `{ secretRef: "secret:..." }` to the agent rather than the string.
+- `set_env_values` accepts `{ secretRef }` in place of a literal value and
+  resolves it against the vault before writing — the value lands in the `.env`
+  file but is never returned to the model.
+
+The vault has no persistence and is dropped at the end of the run; refs minted
+in one session can't be resolved in another. The net effect: the model gets to
+drive the work end to end, but the only thing it ever sees is an opaque handle.
 
 ## Build system
 

@@ -1,13 +1,13 @@
 /* Angular wizard using posthog-agent with PostHog MCP */
-import type { WizardOptions } from '@utils/types';
+import type { WizardRunOptions } from '@utils/types';
 import type { FrameworkConfig } from '@lib/framework-config';
 import { detectNodePackageManagers } from '@lib/detection/package-manager';
 import { Integration } from '@lib/constants';
 import {
-  getPackageVersion,
+  getDeclaredVersion,
   getInstalledPackageVersion,
-  hasPackageInstalled,
-  type PackageDotJson,
+  hasDeclaredDependency,
+  type PackageJson,
 } from '@utils/package-json';
 import { tryGetPackageJson } from '@utils/setup-utils';
 import { getAngularVersionBucket } from './utils';
@@ -25,17 +25,17 @@ export const ANGULAR_AGENT_CONFIG: FrameworkConfig<AngularContext> = {
     packageName: '@angular/core',
     packageDisplayName: 'Angular',
     getVersion: (packageJson: unknown) =>
-      getPackageVersion('@angular/core', packageJson as PackageDotJson),
+      getDeclaredVersion('@angular/core', packageJson as PackageJson),
     getVersionBucket: getAngularVersionBucket,
     minimumVersion: '19.0.0',
-    getInstalledVersion: (options: WizardOptions) =>
+    getInstalledVersion: (options: WizardRunOptions) =>
       Promise.resolve(
         getInstalledPackageVersion('@angular/core', options.installDir),
       ),
     detect: async (options) => {
       const packageJson = await tryGetPackageJson(options);
       return packageJson
-        ? hasPackageInstalled('@angular/core', packageJson)
+        ? hasDeclaredDependency('@angular/core', packageJson)
         : false;
     },
     detectPackageManager: detectNodePackageManagers,

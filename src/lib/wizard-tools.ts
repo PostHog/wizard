@@ -24,6 +24,7 @@ import {
   type AuditStatus,
 } from './programs/audit/types';
 import type { WizardAskBridge } from './wizard-ask-bridge';
+import { createSecretVault, type SecretVault } from './secret-vault';
 
 // ---------------------------------------------------------------------------
 // SDK dynamic import (ESM module loaded once, cached)
@@ -192,6 +193,15 @@ export interface WizardToolsOptions {
    * of this cap — see {@link ASK_BATCH_THRESHOLD}.
    */
   askMaxQuestions?: number;
+
+  /**
+   * Optional secret vault. When provided, tools that handle sensitive
+   * values (wizard_ask with `sensitive: true`, set_env_values) route
+   * those values through the vault and return opaque refs to the agent
+   * instead of raw strings — so the LLM never sees them. When omitted
+   * (e.g. in unit tests), a fresh vault is created internally.
+   */
+  secretVault?: SecretVault;
 }
 
 /** Default per-run cap on wizard_ask calls when no override is provided. */
@@ -494,6 +504,7 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
     skillsBaseUrl,
     askBridge,
     askMaxQuestions = DEFAULT_ASK_MAX_QUESTIONS,
+    secretVault = createSecretVault(),
   } = options;
   const sdk = await getSDKModule();
   const { tool, createSdkMcpServer } = sdk;
@@ -553,16 +564,24 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
 
   const setEnvValues = tool(
     'set_env_values',
-    'Create or update environment variable keys in a .env file. Creates the file if it does not exist. Ensures .gitignore coverage.',
+    'Create or update environment variable keys in a .env file. Creates the file if it does not exist. Ensures .gitignore coverage. Each value can be either a literal string or a secret reference of the form `{ "secretRef": "secret:..." }` returned by another tool (e.g. wizard_ask). Secret references are resolved locally — the actual value is written to the file but never returned to the agent.',
     {
       filePath: z
         .string()
         .describe('Path to the .env file, relative to the project root'),
       values: z
-        .record(z.string(), z.string())
-        .describe('Key-value pairs to set'),
+        .record(
+          z.string(),
+          z.union([z.string(), z.object({ secretRef: z.string() })]),
+        )
+        .describe(
+          'Key → (literal string OR { secretRef } pointing to a vaulted secret)',
+        ),
     },
-    (args: { filePath: string; values: Record<string, string> }) => {
+    (args: {
+      filePath: string;
+      values: Record<string, string | { secretRef: string }>;
+    }) => {
       // Block the wrong key name — the correct key is NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN or similar
       const forbidden = Object.keys(args.values).find(
         (k) => k.toUpperCase() === 'POSTHOG_KEY',
@@ -579,17 +598,45 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
         };
       }
 
+      // Resolve any secret refs from the vault before writing.
+      const resolvedValues: Record<string, string> = {};
+      const resolvedRefKeys: string[] = [];
+      for (const [key, val] of Object.entries(args.values)) {
+        if (typeof val === 'string') {
+          resolvedValues[key] = val;
+        } else {
+          const secret = secretVault.get(val.secretRef);
+          if (secret === undefined) {
+            return {
+              content: [
+                {
+                  type: 'text' as const,
+                  text: `Error: secret reference "${val.secretRef}" for key "${key}" is not known to the vault. The ref may have expired, been minted in a different run, or been mistyped.`,
+                },
+              ],
+              isError: true,
+            };
+          }
+          resolvedValues[key] = secret;
+          resolvedRefKeys.push(key);
+        }
+      }
+
       const resolved = resolveEnvPath(workingDirectory, args.filePath);
       logToFile(
-        `set_env_values: ${resolved}, keys: ${Object.keys(args.values).join(
+        `set_env_values: ${resolved}, keys: ${Object.keys(resolvedValues).join(
           ', ',
-        )}`,
+        )}${
+          resolvedRefKeys.length > 0
+            ? ` (secret refs: ${resolvedRefKeys.join(', ')})`
+            : ''
+        }`,
       );
 
       const existing = fs.existsSync(resolved)
         ? fs.readFileSync(resolved, 'utf8')
         : '';
-      const content = mergeEnvValues(existing, args.values);
+      const content = mergeEnvValues(existing, resolvedValues);
 
       // Ensure parent directory exists
       const dir = path.dirname(resolved);
@@ -895,6 +942,12 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
       .optional()
       .describe('Required for kind=single|multi; ignored for kind=text'),
     required: z.boolean().optional().describe('Defaults to true'),
+    sensitive: z
+      .boolean()
+      .optional()
+      .describe(
+        "Only valid for kind='text'. When true, the user's answer is stored in the wizard's secret vault and returned to you as { secretRef: 'secret:...' } instead of the raw string. Use for API keys, tokens, and any other secret the user types in.",
+      ),
   });
 
   const wizardAsk = tool(
@@ -912,6 +965,7 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
         kind: 'single' | 'multi' | 'text';
         options?: { label: string; value: string }[];
         required?: boolean;
+        sensitive?: boolean;
       }>;
     }) => {
       if (!askBridge) {
@@ -956,6 +1010,17 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
             isError: true,
           };
         }
+        if (q.sensitive && q.kind !== 'text') {
+          return {
+            content: [
+              {
+                type: 'text' as const,
+                text: `Error: question "${q.id}" sets sensitive=true but kind="${q.kind}". Only kind="text" answers can be vaulted as secrets.`,
+              },
+            ],
+            isError: true,
+          };
+        }
       }
 
       const ids = new Set<string>();
@@ -978,6 +1043,37 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
 
       try {
         const answers = await askBridge.request({ questions: args.questions });
+
+        // For any question marked sensitive, move the raw answer into the
+        // vault and replace it with an opaque ref before returning to the
+        // agent — so the secret never enters the LLM conversation.
+        const sensitiveById = new Map(
+          args.questions
+            .filter((q) => q.sensitive)
+            .map((q) => [q.id, q.prompt]),
+        );
+        const sanitised: Record<
+          string,
+          string | string[] | { secretRef: string }
+        > = {};
+        for (const [id, answer] of Object.entries(answers)) {
+          const label = sensitiveById.get(id);
+          if (
+            label !== undefined &&
+            typeof answer === 'string' &&
+            answer !== '__cancelled__'
+          ) {
+            const ref = secretVault.put(answer, {
+              label,
+              source: 'wizard_ask',
+            });
+            sanitised[id] = { secretRef: ref };
+            logToFile(`wizard_ask: vaulted answer for "${id}" as ${ref}`);
+          } else {
+            sanitised[id] = answer;
+          }
+        }
+
         logToFile(
           `wizard_ask: resolved ${Object.keys(answers).length} answer(s) for ${
             args.questions.length
@@ -987,7 +1083,7 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
           content: [
             {
               type: 'text' as const,
-              text: JSON.stringify({ answers }, null, 2),
+              text: JSON.stringify({ answers: sanitised }, null, 2),
             },
           ],
         };

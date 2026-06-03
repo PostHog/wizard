@@ -1,10 +1,10 @@
 import path from 'path';
 import fs from 'fs';
-import type { WizardOptions } from './types';
+import type { WizardRunOptions } from './types';
 
 export function getDotGitignore({
   installDir,
-}: Pick<WizardOptions, 'installDir'>) {
+}: Pick<WizardRunOptions, 'installDir'>) {
   const gitignorePath = path.join(installDir, '.gitignore');
   const gitignoreExists = fs.existsSync(gitignorePath);
 

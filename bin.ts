@@ -1,23 +1,23 @@
 #!/usr/bin/env node
 import { satisfies } from 'semver';
 
+// Run the Node-version check before pulling in the rest of the imports so
+// users on too-old Node see a friendly message instead of a `SyntaxError`
+// from one of our dependencies' modern features.
+const MIN_NODE_VERSION = '>=18.17.0';
+if (!satisfies(process.version, MIN_NODE_VERSION)) {
+  // eslint-disable-next-line no-console
+  console.log(
+    `PostHog wizard needs Node.js ${MIN_NODE_VERSION}. Detected ${process.version} — please upgrade Node and re-run.`,
+  );
+  process.exit(1);
+}
+
 import yargs from 'yargs';
 import { hideBin } from 'yargs/helpers';
 import { VERSION } from '@lib/version';
 
 const WIZARD_VERSION = VERSION;
-
-const NODE_VERSION_RANGE = '>=18.17.0';
-
-// Have to run this above the other imports because they are importing clack that
-// has the problematic imports.
-if (!satisfies(process.version, NODE_VERSION_RANGE)) {
-  // eslint-disable-next-line no-console
-  console.log(
-    `PostHog wizard requires Node.js ${NODE_VERSION_RANGE}. You are using Node.js ${process.version}. Please upgrade your Node.js version.`,
-  );
-  process.exit(1);
-}
 
 import { isNonInteractiveEnvironment } from '@utils/environment';
 import { getUI, setUI } from '@ui';
@@ -28,7 +28,7 @@ import type { WizardSession } from '@lib/wizard-session';
 import type { startTUI as StartTUIFn } from '@ui/tui/start-tui';
 import type { TaskStreamPush as TaskStreamPushClass } from '@lib/task-stream/task-stream-push';
 import { POSTHOG_DOCS_URL } from '@lib/constants';
-import { runtimeEnv } from '@env';
+import { runtimeEnv, IS_PRODUCTION_BUILD } from '@env';
 
 // Test mock server — only loaded when NODE_ENV is 'test'.
 // In production builds, tsdown replaces process.env.NODE_ENV with 'production',
@@ -105,12 +105,6 @@ const cli = yargs(hideBin(process.argv))
       default: false,
       describe:
         'Use local MCP server at http://localhost:8787/mcp\nenv: POSTHOG_WIZARD_LOCAL_MCP',
-      type: 'boolean',
-    },
-    ci: {
-      default: false,
-      describe:
-        'Enable CI mode for non-interactive execution\nenv: POSTHOG_WIZARD_CI',
       type: 'boolean',
     },
     'api-key': {
@@ -355,13 +349,21 @@ const cli = yargs(hideBin(process.argv))
       } else if (isNonInteractiveEnvironment()) {
         // Non-interactive non-CI: error out
         getUI().intro(`PostHog Wizard`);
-        getUI().log.error(
-          'This installer requires an interactive terminal (TTY) to run.\n' +
-            'It appears you are running in a non-interactive environment.\n' +
-            'Please run the wizard in an interactive terminal.\n\n' +
-            'For CI/CD environments, use --ci mode:\n' +
-            '  npx @posthog/wizard --ci --region us --api-key phx_xxx',
-        );
+        if (IS_PRODUCTION_BUILD) {
+          getUI().log.error(
+            'This installer requires an interactive terminal (TTY) to run.\n' +
+              'It appears you are running in a non-interactive environment.\n\n' +
+              'Non-interactive (CI) mode is not supported in published builds.\n',
+          );
+        } else {
+          getUI().log.error(
+            'This installer requires an interactive terminal (TTY) to run.\n' +
+              'It appears you are running in a non-interactive environment.\n' +
+              'Please run the wizard in an interactive terminal.\n\n' +
+              'For CI/CD environments, use --ci mode:\n' +
+              '  npx @posthog/wizard --ci --region us --api-key phx_xxx',
+          );
+        }
         process.exit(1);
       } else if (options.playground) {
         // Playground mode: launch the TUI primitives playground
@@ -657,12 +659,74 @@ for (const programConfig of getSubcommandPrograms()) {
   );
 }
 
+// CI mode (--ci) is only supported in dev/test. It is left undeclared in
+// published builds (NODE_ENV==='production'), so .strictOptions() below rejects
+// it as an unknown argument there — exactly like any other unrecognized flag.
+if (!IS_PRODUCTION_BUILD) {
+  cli.option('ci', {
+    default: false,
+    describe:
+      'Enable CI mode for non-interactive execution\nenv: POSTHOG_WIZARD_CI',
+    type: 'boolean',
+  });
+}
+
 cli
+  .strictOptions()
+  // A custom fail callback in yargs neither exits nor rethrows on its own (it
+  // just returns, after which yargs would run the command handler anyway), so
+  // throw to halt before dispatch. The catch around parse() renders the error
+  // in red at the top and exits non-zero — instead of yargs' default of
+  // dumping full help with the error buried at the bottom.
+  .fail((msg, err) => {
+    throw err || new Error(msg);
+  })
   .help()
   .alias('help', 'h')
   .version()
   .alias('version', 'v')
-  .wrap(process.stdout.isTTY ? cli.terminalWidth() : 80).argv;
+  .wrap(process.stdout.isTTY ? cli.terminalWidth() : 80);
+
+// In published builds, `--ci` is undeclared, so yargs would reject it as
+// "Unknown arguments: ci" — accurate but unhelpful, since --help doesn't list
+// --ci either and the user has no path forward. POSTHOG_WIZARD_CI silently
+// no-ops for the same reason (yargs only resolves env vars for declared
+// options). Detect both up front and exit with a message that explains why
+// and what to do instead.
+if (IS_PRODUCTION_BUILD) {
+  const args = process.argv.slice(2);
+  const argvHasCI = args.some(
+    (a) => a === '--ci' || a === '--no-ci' || a.startsWith('--ci='),
+  );
+  const envHasCI =
+    process.env.POSTHOG_WIZARD_CI != null &&
+    process.env.POSTHOG_WIZARD_CI !== '';
+  if (argvHasCI || envHasCI) {
+    exitWithProductionCIError();
+  }
+}
+
+try {
+  cli.parse();
+} catch (err) {
+  const RED = '\x1b[31m';
+  const BOLD = '\x1b[1m';
+  const RESET = '\x1b[0m';
+  const message = err instanceof Error ? err.message : String(err);
+  process.stderr.write(`${RED}${BOLD}✖ ${message}${RESET}\n`);
+  process.stderr.write('Run with --help to see available options.\n');
+  process.exit(1);
+}
+
+function exitWithProductionCIError(): never {
+  const RED = '\x1b[31m';
+  const BOLD = '\x1b[1m';
+  const RESET = '\x1b[0m';
+  process.stderr.write(
+    `${RED}${BOLD}✖ CI mode is not currently supported in published builds.${RESET}\n`,
+  );
+  process.exit(1);
+}
 
 // `--no-telemetry` flips `telemetry: false` via yargs negation;
 // `POSTHOG_WIZARD_NO_TELEMETRY` is honoured separately so the env-var

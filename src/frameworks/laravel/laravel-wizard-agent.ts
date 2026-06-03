@@ -1,5 +1,5 @@
 /* Laravel wizard using posthog-agent with PostHog MCP */
-import type { WizardOptions } from '@utils/types';
+import type { WizardRunOptions } from '@utils/types';
 import type { FrameworkConfig } from '@lib/framework-config';
 import { composerPackageManager } from '@lib/detection/package-manager';
 import { Integration } from '@lib/constants';
@@ -31,7 +31,7 @@ export const LARAVEL_AGENT_CONFIG: FrameworkConfig<LaravelContext> = {
     beta: true,
     docsUrl: 'https://posthog.com/docs/libraries/php',
     unsupportedVersionDocsUrl: 'https://posthog.com/docs/libraries/php',
-    gatherContext: async (options: WizardOptions) => {
+    gatherContext: async (options: WizardRunOptions) => {
       const projectType = await getLaravelProjectType(options);
       const serviceProvider = await findLaravelServiceProvider(options);
       const bootstrapFile = findLaravelBootstrapFile(options);
@@ -53,7 +53,7 @@ export const LARAVEL_AGENT_CONFIG: FrameworkConfig<LaravelContext> = {
     getVersion: () => undefined,
     getVersionBucket: getLaravelVersionBucket,
     minimumVersion: '9.0.0',
-    getInstalledVersion: (options: WizardOptions) =>
+    getInstalledVersion: (options: WizardRunOptions) =>
       Promise.resolve(getLaravelVersion(options)),
     detect: async (options) => {
       const { installDir } = options;
