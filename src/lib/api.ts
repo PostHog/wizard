@@ -1,7 +1,16 @@
 import axios, { AxiosError } from 'axios';
 import { z } from 'zod';
 import { analytics } from '@utils/analytics';
+import { sleep } from './helper-functions';
 import { WIZARD_USER_AGENT } from './constants';
+
+// Retry policy for transient backend/network failures. A momentary 5xx,
+// network drop, or timeout on a read shouldn't abort the whole run before
+// PostHog setup can begin, so we retry with exponential backoff. Definite
+// failures (401/403/404, invalid payloads) are left to fail fast.
+const MAX_ATTEMPTS = 3;
+const BASE_BACKOFF_MS = 500;
+const MAX_BACKOFF_MS = 4000;
 
 export const ApiUserSchema = z.object({
   distinct_id: z.string(),
@@ -41,17 +50,57 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * A failure is transient if retrying might succeed: a network drop/timeout
+ * (no HTTP response) or a 5xx server error. Definite failures — auth
+ * (401/403), missing resources (404), and other 4xx — are not retried, nor
+ * are malformed responses (ZodError), which won't change on retry.
+ */
+function isTransientError(error: unknown): boolean {
+  if (!axios.isAxiosError(error)) {
+    return false;
+  }
+  const status = error.response?.status;
+  if (status === undefined) {
+    // No response: network error, timeout, or connection reset.
+    return true;
+  }
+  return status >= 500;
+}
+
+/**
+ * Run an async operation, retrying transient failures with exponential
+ * backoff. Definite failures throw immediately on the first attempt.
+ */
+async function withRetry<T>(operation: () => Promise<T>): Promise<T> {
+  let backoff = BASE_BACKOFF_MS;
+
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await operation();
+    } catch (error) {
+      if (attempt >= MAX_ATTEMPTS || !isTransientError(error)) {
+        throw error;
+      }
+      await sleep(backoff);
+      backoff = Math.min(backoff * 2, MAX_BACKOFF_MS);
+    }
+  }
+}
+
 export async function fetchUserData(
   accessToken: string,
   baseUrl: string,
 ): Promise<ApiUser> {
   try {
-    const response = await axios.get(`${baseUrl}/api/users/@me/`, {
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        'User-Agent': WIZARD_USER_AGENT,
-      },
-    });
+    const response = await withRetry(() =>
+      axios.get(`${baseUrl}/api/users/@me/`, {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'User-Agent': WIZARD_USER_AGENT,
+        },
+      }),
+    );
 
     return ApiUserSchema.parse(response.data);
   } catch (error) {
@@ -70,12 +119,14 @@ export async function fetchProjectData(
   baseUrl: string,
 ): Promise<ApiProject> {
   try {
-    const response = await axios.get(`${baseUrl}/api/projects/${projectId}/`, {
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        'User-Agent': WIZARD_USER_AGENT,
-      },
-    });
+    const response = await withRetry(() =>
+      axios.get(`${baseUrl}/api/projects/${projectId}/`, {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'User-Agent': WIZARD_USER_AGENT,
+        },
+      }),
+    );
 
     return ApiProjectSchema.parse(response.data);
   } catch (error) {

@@ -508,12 +508,26 @@ async function askForWizardLogin(options: {
   const cloudUrl = getCloudUrlFromRegion(cloudRegion);
   const host = getHostFromRegion(cloudRegion);
 
-  const projectData = await fetchProjectData(
-    tokenResponse.access_token,
-    projectId!,
-    cloudUrl,
-  );
-  const userData = await fetchUserData(tokenResponse.access_token, cloudUrl);
+  let projectData: Awaited<ReturnType<typeof fetchProjectData>>;
+  let userData: Awaited<ReturnType<typeof fetchUserData>>;
+  try {
+    projectData = await fetchProjectData(
+      tokenResponse.access_token,
+      projectId!,
+      cloudUrl,
+    );
+    userData = await fetchUserData(tokenResponse.access_token, cloudUrl);
+  } catch (error) {
+    // fetchProjectData/fetchUserData already retry transient failures and
+    // report to analytics, so reaching here means the backend stayed
+    // unreachable. Surface a clear, retryable message rather than crashing
+    // with a raw ApiError mid-login.
+    getUI().log.error(
+      "Couldn't load your PostHog project — the backend may be temporarily unavailable. Please check your connection and run the wizard again.",
+    );
+    await abort(error instanceof Error ? error.message : undefined);
+    throw new Error('unreachable');
+  }
 
   const data = {
     accessToken: tokenResponse.access_token,
