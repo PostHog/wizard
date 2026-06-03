@@ -39,6 +39,7 @@ import { doctorCommand } from './src/commands/doctor';
 import { migrateCommand } from './src/commands/migrate';
 import { eventsAuditCommand } from './src/commands/events-audit';
 import { revenueCommand } from './src/commands/revenue';
+import { uploadSourcemapsCommand } from './src/commands/upload-sourcemaps';
 
 Wizard.use(basicIntegrationCommand)
   .use(mcpCommand)
@@ -49,4 +50,5 @@ Wizard.use(basicIntegrationCommand)
   .use(migrateCommand)
   .use(eventsAuditCommand)
   .use(revenueCommand)
+  .use(uploadSourcemapsCommand)
   .init();
