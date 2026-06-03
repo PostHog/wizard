@@ -3,9 +3,9 @@
  * suggested-prompts screen.
  *
  * Mounts the real McpSuggestedPromptsScreen with mock services so every
- * phase (Choose → Authenticating → Verifying → Celebrated/TimedOut) can
- * be previewed without touching the network. No special-case branches
- * in the screen itself — the mock just satisfies the same interface
+ * phase (Choose → Authenticating → PromptPicker → Running) can be
+ * previewed without touching the network. No special-case branches in
+ * the screen itself — the mock just satisfies the same interface
  * production wires.
  *
  *   R   cycle role         (null → founder → product → ... → data → null)
@@ -14,8 +14,8 @@
  *
  *   O   OAuth outcome:     success | error
  *   L   login delay:       0ms (skip UI) | 2000ms | 6000ms
- *   A   activity outcome:  hit | none | error
- *   D   activity delay:    100ms | 1500ms | 6000ms
+ *   S   stream script:     short-text | with-tools | mid-stream-error
+ *   C   chunk delay:       50ms | 200ms | 800ms
  */
 
 import { Box, Text, useInput } from 'ink';
@@ -26,8 +26,10 @@ import { Colors } from '@ui/tui/styles';
 import { Integration } from '@lib/constants';
 import { McpOutcome } from '@lib/wizard-session';
 import { TAILORED_ROLES } from '@lib/mcp-role-prompts';
-import type { McpSuggestedPromptsServices } from '@ui/tui/services/mcp-suggested-prompts-services';
-import type { ActivityLogEntry } from '@lib/api';
+import type {
+  AgentChunk,
+  McpSuggestedPromptsServices,
+} from '@ui/tui/services/mcp-suggested-prompts-services';
 
 // One Integration per framework family so cycling exercises every
 // override bucket in mcp-role-prompts.ts.
@@ -42,18 +44,80 @@ const FAMILY_INTEGRATIONS: Array<Integration | null> = [
 const ROLE_CYCLE: Array<string | null> = [null, ...TAILORED_ROLES];
 
 const LOGIN_DELAYS_MS = [0, 2000, 6000] as const;
-const ACTIVITY_DELAYS_MS = [100, 1500, 6000] as const;
+const CHUNK_DELAYS_MS = [50, 200, 800] as const;
 type LoginOutcome = 'success' | 'error';
-type ActivityOutcome = 'hit' | 'none' | 'error';
+type StreamScript = 'short-text' | 'with-tools' | 'mid-stream-error';
 const LOGIN_OUTCOMES: LoginOutcome[] = ['success', 'error'];
-const ACTIVITY_OUTCOMES: ActivityOutcome[] = ['hit', 'none', 'error'];
+const STREAM_SCRIPTS: StreamScript[] = [
+  'short-text',
+  'with-tools',
+  'mid-stream-error',
+];
+
+const SCRIPTS: Record<StreamScript, AgentChunk[]> = {
+  'short-text': [
+    { kind: 'text', text: 'Looking at your project…' },
+    { kind: 'text', text: ' here is a quick read of the last 24 hours.' },
+    {
+      kind: 'text',
+      text: ' You had 12,308 events from 2,144 distinct users.',
+    },
+    { kind: 'text', text: '\n\nNothing unusual stood out.' },
+    { kind: 'done' },
+  ],
+  'with-tools': [
+    { kind: 'text', text: 'Looking up your project…' },
+    {
+      kind: 'tool-call',
+      toolName: 'mcp__posthog-wizard__query-trends',
+      detail: '{ event: "signup", interval: "day", window: "7d" }',
+    },
+    {
+      kind: 'tool-result',
+      toolName: 'mcp__posthog-wizard__query-trends',
+      detail: '{ rows: 7, total: 482, change: +8.4% }',
+    },
+    {
+      kind: 'text',
+      text: '\nSignups are up 8.4% week-over-week — 482 over the last 7 days.',
+    },
+    {
+      kind: 'tool-call',
+      toolName: 'mcp__posthog-wizard__create-insight',
+      detail: '{ name: "Weekly signups", query: <trends>, save: true }',
+    },
+    {
+      kind: 'tool-result',
+      toolName: 'mcp__posthog-wizard__create-insight',
+      detail:
+        '{ id: "ins_abc123", url: "https://app.posthog.com/i/ins_abc123" }',
+    },
+    {
+      kind: 'text',
+      text: '\nInsight saved as "Weekly signups" — pinned to your team dashboard.',
+    },
+    { kind: 'done' },
+  ],
+  'mid-stream-error': [
+    { kind: 'text', text: 'Looking at the most recent errors…' },
+    {
+      kind: 'tool-call',
+      toolName: 'mcp__posthog-wizard__list-errors',
+      detail: '{ window: "7d", limit: 5 }',
+    },
+    {
+      kind: 'error',
+      text: 'MCP server returned 503 — try again in a moment.',
+    },
+  ],
+};
 
 interface MockConfig {
   role: string | null;
   loginOutcome: LoginOutcome;
   loginDelayMs: number;
-  activityOutcome: ActivityOutcome;
-  activityDelayMs: number;
+  script: StreamScript;
+  chunkDelayMs: number;
 }
 
 interface McpSuggestedPromptsDemoProps {
@@ -65,8 +129,8 @@ const delay = (ms: number): Promise<void> =>
 
 /**
  * Returns a McpSuggestedPromptsServices instance whose behavior is read
- * fresh from `configRef` on every call. This lets hotkey changes take
- * effect for the *next* invocation without remounting the screen.
+ * fresh from `configRef` on every call. Hotkey changes take effect on
+ * the *next* invocation without remounting the screen.
  */
 function createMockServices(
   store: WizardStore,
@@ -75,9 +139,6 @@ function createMockServices(
   return {
     performLogin: async () => {
       const cfg = configRef.current;
-      // Set a mock login URL so the spinner + URL layout renders when
-      // there's enough delay to actually see it. Cleared when login
-      // resolves (the screen also clears it on success).
       store.setLoginUrl('https://app.posthog.com/oauth/playground-mock');
       await delay(cfg.loginDelayMs);
       store.setLoginUrl(null);
@@ -97,26 +158,22 @@ function createMockServices(
       };
     },
 
-    fetchActivitySince: async ({ since }) => {
-      const cfg = configRef.current;
-      await delay(cfg.activityDelayMs);
-
-      if (cfg.activityOutcome === 'error') {
-        // Production swallows errors and returns [] — mirror that here.
-        return [];
-      }
-      if (cfg.activityOutcome === 'hit') {
-        const entry: ActivityLogEntry = {
-          scope: 'Annotation',
-          activity: 'created',
-          created_at: new Date(since.getTime() + 1).toISOString(),
-        };
-        return [entry];
-      }
-      // 'none' — flows to TimedOut after the screen's 30s window.
-      return [];
-    },
+    runPromptStreaming: ({ signal }) => mockStream(configRef, signal),
   };
+}
+
+async function* mockStream(
+  configRef: { current: MockConfig },
+  signal: AbortSignal,
+): AsyncIterable<AgentChunk> {
+  const cfg = configRef.current;
+  const chunks = SCRIPTS[cfg.script];
+  for (const chunk of chunks) {
+    if (signal.aborted) return;
+    await delay(cfg.chunkDelayMs);
+    if (signal.aborted) return;
+    yield chunk;
+  }
 }
 
 export const McpSuggestedPromptsDemo = ({
@@ -127,41 +184,38 @@ export const McpSuggestedPromptsDemo = ({
   const [resetKey, setResetKey] = useState(0);
   const [loginOutcomeIdx, setLoginOutcomeIdx] = useState(0);
   const [loginDelayIdx, setLoginDelayIdx] = useState(1); // 2000ms default
-  const [activityOutcomeIdx, setActivityOutcomeIdx] = useState(0); // 'hit'
-  const [activityDelayIdx, setActivityDelayIdx] = useState(0); // 100ms
+  const [scriptIdx, setScriptIdx] = useState(1); // 'with-tools' default
+  const [chunkDelayIdx, setChunkDelayIdx] = useState(1); // 200ms default
 
   const role = ROLE_CYCLE[roleIdx];
   const integration = FAMILY_INTEGRATIONS[familyIdx];
   const loginOutcome = LOGIN_OUTCOMES[loginOutcomeIdx];
   const loginDelayMs = LOGIN_DELAYS_MS[loginDelayIdx];
-  const activityOutcome = ACTIVITY_OUTCOMES[activityOutcomeIdx];
-  const activityDelayMs = ACTIVITY_DELAYS_MS[activityDelayIdx];
+  const script = STREAM_SCRIPTS[scriptIdx];
+  const chunkDelayMs = CHUNK_DELAYS_MS[chunkDelayIdx];
 
   // Ref-based config so hotkeys can update behavior without remounting.
   const configRef = useRef<MockConfig>({
     role,
     loginOutcome,
     loginDelayMs,
-    activityOutcome,
-    activityDelayMs,
+    script,
+    chunkDelayMs,
   });
   configRef.current = {
     role,
     loginOutcome,
     loginDelayMs,
-    activityOutcome,
-    activityDelayMs,
+    script,
+    chunkDelayMs,
   };
 
   // Stable services instance — reads from configRef each call.
   const services = useMemo(() => createMockServices(store, configRef), [store]);
 
-  // Seed framework + a fake "installed" MCP state so the screen's verify
-  // copy can name a client. We deliberately do NOT pre-set credentials —
-  // credentials must come from the mock performLogin() so the Choose
-  // phase is reachable. setMcpComplete here is harmless: in production
-  // the McpScreen step would have already set it before this screen
-  // mounts.
+  // Seed framework + a fake "installed" MCP state. setMcpComplete here
+  // is harmless — production would have set it from the McpScreen step
+  // before this screen mounts.
   useEffect(() => {
     store.setMcpComplete(McpOutcome.Installed, ['Claude Code']);
     store.setFrameworkConfig(integration ?? null, null);
@@ -175,8 +229,6 @@ export const McpSuggestedPromptsDemo = ({
       setFamilyIdx((i) => (i + 1) % FAMILY_INTEGRATIONS.length);
       setResetKey((k) => k + 1);
     } else if (input === 'X' || input === 'x') {
-      // Clear any lingering store state from a previous run, then
-      // remount the screen so it lands back on Choose.
       store.setCredentials(null);
       store.setRoleAtOrganization(null);
       setResetKey((k) => k + 1);
@@ -184,10 +236,10 @@ export const McpSuggestedPromptsDemo = ({
       setLoginOutcomeIdx((i) => (i + 1) % LOGIN_OUTCOMES.length);
     } else if (input === 'L' || input === 'l') {
       setLoginDelayIdx((i) => (i + 1) % LOGIN_DELAYS_MS.length);
-    } else if (input === 'A' || input === 'a') {
-      setActivityOutcomeIdx((i) => (i + 1) % ACTIVITY_OUTCOMES.length);
-    } else if (input === 'D' || input === 'd') {
-      setActivityDelayIdx((i) => (i + 1) % ACTIVITY_DELAYS_MS.length);
+    } else if (input === 'S' || input === 's') {
+      setScriptIdx((i) => (i + 1) % STREAM_SCRIPTS.length);
+    } else if (input === 'C' || input === 'c') {
+      setChunkDelayIdx((i) => (i + 1) % CHUNK_DELAYS_MS.length);
     }
   });
 
@@ -196,13 +248,12 @@ export const McpSuggestedPromptsDemo = ({
   return (
     <Box flexDirection="column" flexGrow={1} paddingX={1}>
       <Text dimColor>
-        R role · F framework · X reset · O oauth · L login-delay · A activity ·
-        D activity-delay
+        R role · F framework · X reset · O oauth · L login-delay · S script · C
+        chunk-delay
       </Text>
       <Text dimColor>
-        role={String(role)} · integration={familyLabel} · login=
-        {loginOutcome}/{loginDelayMs}ms · activity={activityOutcome}/
-        {activityDelayMs}ms
+        role={String(role)} · integration={familyLabel} · login={loginOutcome}/
+        {loginDelayMs}ms · script={script}/{chunkDelayMs}ms
       </Text>
       <Box marginTop={1} flexDirection="column" flexGrow={1}>
         <McpSuggestedPromptsScreen
@@ -213,8 +264,8 @@ export const McpSuggestedPromptsDemo = ({
       </Box>
       <Box marginTop={1}>
         <Text color={Colors.muted} dimColor>
-          (mock services — no real OAuth, no real activity_log. Press R/F to
-          preview different prompt kits; O/L/A/D to flip mock outcomes.)
+          (mock services — no real OAuth, no real LLM. Press R/F to preview
+          different prompt kits; O/L/S/C to flip mock outcomes.)
         </Text>
       </Box>
     </Box>

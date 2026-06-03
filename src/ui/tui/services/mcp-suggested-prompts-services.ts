@@ -1,18 +1,30 @@
 /**
  * McpSuggestedPromptsServices — service layer between
  * McpSuggestedPromptsScreen and the network. Decouples the screen from
- * OAuth and the activity-log probe so the playground can inject mocks
- * (skip login, canned activity responses) without a special-case branch
- * in the screen itself.
+ * OAuth and the streaming-agent run so the playground can inject mocks
+ * (skip login, canned streaming responses) without a special-case
+ * branch in the screen itself.
  *
  * Mirrors the McpInstaller pattern: thin interface, production factory
- * that wires the real implementation, no dynamic imports in the React tree.
+ * that wires the real implementation, no dynamic imports in the React
+ * tree.
  */
 
-import { fetchRecentActivity, type ActivityLogEntry } from '@lib/api';
 import type { Credentials } from '@lib/wizard-session';
 import { getOrAskForProjectData } from '@utils/setup-utils';
 import type { WizardStore } from '@ui/tui/store';
+
+/**
+ * Discriminated union covering every kind of streamed event the screen
+ * needs to render. Production yields these from Claude SDK messages;
+ * the playground yields them from canned scripts.
+ */
+export type AgentChunk =
+  | { kind: 'text'; text: string }
+  | { kind: 'tool-call'; toolName: string; detail: string }
+  | { kind: 'tool-result'; toolName: string; detail: string }
+  | { kind: 'error'; text: string }
+  | { kind: 'done' };
 
 export interface McpSuggestedPromptsServices {
   /**
@@ -31,23 +43,26 @@ export interface McpSuggestedPromptsServices {
   }>;
 
   /**
-   * Best-effort activity-log probe. Production wires this to
-   * `fetchRecentActivity`; the playground returns canned entries.
-   * Returns `[]` on any error — the caller treats absence of results
-   * as "haven't detected anything yet" rather than a hard failure.
+   * Run a prompt against Claude with the PostHog MCP server available
+   * for tool use. Yields chunks as the agent streams. Caller is
+   * responsible for honoring the abort signal — implementations should
+   * also short-circuit when `signal.aborted` becomes true.
+   *
+   * In production this calls the Claude Agent SDK's `query()` with the
+   * user's OAuth token as the MCP Bearer. In the playground, the demo
+   * provides canned scripts.
    */
-  fetchActivitySince(args: {
-    accessToken: string;
-    projectId: number;
-    host: string;
-    since: Date;
-  }): Promise<ActivityLogEntry[]>;
+  runPromptStreaming(args: {
+    prompt: string;
+    credentials: Credentials;
+    signal: AbortSignal;
+  }): AsyncIterable<AgentChunk>;
 }
 
 /**
- * Production services. Set the login URL is handled by
- * `getOrAskForProjectData` → `askForWizardLogin` internally; this
- * factory just unwraps the result into the screen's expected shape.
+ * Production services. The `runPromptStreaming` implementation lives
+ * in a separate module so the heavy SDK import is only paid when
+ * actually invoked.
  */
 export function createMcpSuggestedPromptsServices(
   _store: WizardStore,
@@ -73,7 +88,20 @@ export function createMcpSuggestedPromptsServices(
       };
     },
 
-    fetchActivitySince: ({ accessToken, projectId, host, since }) =>
-      fetchRecentActivity(accessToken, projectId, host, since),
+    runPromptStreaming: (args) => runProductionPromptStreaming(args),
   };
+}
+
+async function* runProductionPromptStreaming(args: {
+  prompt: string;
+  credentials: Credentials;
+  signal: AbortSignal;
+}): AsyncIterable<AgentChunk> {
+  // Defer the SDK import to call time — the playground never hits
+  // this path (it overrides the whole service object), so demo
+  // sessions don't pay the SDK load cost.
+  const { runMcpPromptViaSdk } = await import(
+    '@lib/agent/mcp-prompt-streaming'
+  );
+  yield* runMcpPromptViaSdk(args);
 }
