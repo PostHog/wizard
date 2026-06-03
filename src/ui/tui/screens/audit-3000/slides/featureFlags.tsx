@@ -24,9 +24,9 @@ const FeatureFlagsVisual = () => (
 export const FeatureFlagsSlide: AreaSlide = {
   area: 'Feature Flags',
   intro: [
-    'LEVEL 6: STALE FLAGS. Old flags add evaluation overhead and confuse the next engineer who wonders if a flag is still live.',
-    "Cross-referencing PostHog's stale-flag classification against your source tree. Each flag scored: safe-to-disable, needs-review, or unknown.",
-    'The final report ships with a copy-paste cleanup prompt. We never touch a flag.',
+    "Old flags that are no longer in use still get evaluated on every flag call and clutter the dashboard — they're the silent compounding noise of a long-running PostHog project.",
+    "Cross-referencing PostHog's stale-flag list against your source tree. Each flag is scored as safe-to-disable, needs-review, or unknown.",
+    'The notebook ships with a copy-paste cleanup prompt so you can disable the safe ones from any PostHog MCP-enabled chat — we never touch a flag automatically.',
   ],
   visual: <FeatureFlagsVisual />,
   docsUrl: 'https://posthog.com/docs/feature-flags',

@@ -2,7 +2,10 @@ import { Box, Text } from 'ink';
 import { useEffect, useState, useSyncExternalStore } from 'react';
 import type { WizardStore } from '@ui/tui/store';
 import { IntroScreenLayout } from '@ui/tui/screens/IntroScreenLayout';
-import { SkillSourceInfo, useSkillEntry } from '@ui/tui/screens/SkillSourceInfo';
+import {
+  SkillSourceInfo,
+  useSkillEntry,
+} from '@ui/tui/screens/SkillSourceInfo';
 import { NEON_BLUE, NEON_GOLD, NEON_PINK } from './arcade-colors.js';
 
 const AUDIT3000_SKILL_ID = 'audit-3000';
@@ -98,14 +101,25 @@ export const Audit3000IntroScreen = ({ store }: Audit3000IntroScreenProps) => {
       </Text>
       <Box marginTop={1}>
         <Text>
-          Results stream live to the{' '}
+          The run takes roughly <Text bold>5\u20137 minutes</Text>. Results
+          stream live to the{' '}
           <Text color="cyan" bold>
             Hi-score Table
           </Text>{' '}
-          tab during the run — that&apos;s your live report. When the audit
-          finishes, the same report is also exported to{' '}
-          <Text color="cyan">./posthog-audit-3000-report.md</Text> in your
-          project folder.
+          tab during the run. When the audit finishes, the full report is
+          written as a notebook inside your PostHog project and the wizard
+          prints the direct link.
+        </Text>
+      </Box>
+      <Box marginTop={1}>
+        <Text>
+          Use{' '}
+          <Text color="cyan" bold>
+            {'\u2190 \u2192'}
+          </Text>{' '}
+          arrow keys to switch tabs (Arcade · Hi-score Table · Play a game ·
+          Tail logs · Hacker News) — or just leave the wizard running in the
+          background and come back when it's done.
         </Text>
       </Box>
       <Box marginTop={1}>
@@ -120,14 +134,18 @@ export const Audit3000IntroScreen = ({ store }: Audit3000IntroScreenProps) => {
     <Box flexDirection="column" alignItems="center">
       <ArcadeBanner />
       <Box marginTop={1} flexDirection="column" alignItems="center">
-        <Text bold>34 checks. 9 levels. 1 final report.</Text>
+        <Text bold>34 checks · 9 levels · ~5\u20137 min</Text>
         <Text dimColor>
           High-score your PostHog integration before the boss fight.
         </Text>
-        <Box marginTop={1}>
+        <Box marginTop={1} flexDirection="column" alignItems="center">
           <Text dimColor>
             Live report: <Text color={NEON_GOLD}>Hi-score Table</Text> tab ·
-            Export: ./posthog-audit-3000-report.md
+            Output: notebook in your PostHog project
+          </Text>
+          <Text dimColor>
+            Use {'\u2190 \u2192'} to switch tabs (Play / HN tabs available while
+            you wait)
           </Text>
         </Box>
       </Box>

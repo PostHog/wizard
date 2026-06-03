@@ -19,8 +19,8 @@ const AREA_ORDER: string[] = [
   'Feature Flags',
   'Session Replay',
   'Session Replay — Optimize',
-  'Use Case: Expansion',
-  'Additional Sections',
+  'Stack consolidation',
+  'Wrap-up & notebook',
 ];
 
 function areaRank(area: string): number {

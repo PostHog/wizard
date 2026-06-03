@@ -25,9 +25,9 @@ const EventQualityVisual = () => (
 export const EventQualitySlide: AreaSlide = {
   area: 'Event Quality',
   intro: [
-    'LEVEL 5: EVENT QUALITY. The capture call-sites are clean. The events themselves are the real boss fight.',
-    'Scanning for: naming inconsistencies, semantic duplicates, kitchen-sink event payloads, and (if your PostHog project is linked) which captured events actually drive insights and dashboards.',
-    '4 subagents fan out in parallel. The ticker shows them clearing checks live.',
+    'Even when the capture call-sites are clean, the events themselves can drift — inconsistent names, accidental duplicates, properties stuffed onto a single event — which quietly distorts every downstream funnel, retention, and dashboard.',
+    "We're checking naming consistency, looking for semantic duplicates (the same user action captured under two names), spotting kitchen-sink payloads, and — if your PostHog project is reachable — whether the events being captured actually drive any insight or dashboard.",
+    '4 subagents fan out in parallel; the score ticker on the right shows them clearing checks live.',
   ],
   visual: <EventQualityVisual />,
   docsUrl: 'https://posthog.com/docs/product-analytics/best-practices',

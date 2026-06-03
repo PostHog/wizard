@@ -35,11 +35,13 @@ function getExitLine(store: WizardStore): string {
 
   if (outro?.kind === OutroKind.Success) {
     const message = outro.message ?? `${label} completed successfully.`;
-    const reportSuffix =
-      outro.reportFile && !message.includes(outro.reportFile)
-        ? ` Check ./${outro.reportFile} for details.`
-        : '';
-    return `${GREEN}${BOLD}\u2714${RESET_ATTRS} ${message}${reportSuffix}`;
+    let suffix = '';
+    if (outro.notebookUrl) {
+      suffix = ` Notebook: ${outro.notebookUrl}`;
+    } else if (outro.reportFile && !message.includes(outro.reportFile)) {
+      suffix = ` Check ./${outro.reportFile} for details.`;
+    }
+    return `${GREEN}${BOLD}\u2714${RESET_ATTRS} ${message}${suffix}`;
   }
 
   return `${DIM}${label} exited.${RESET_ATTRS}`;

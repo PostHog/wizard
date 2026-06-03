@@ -92,6 +92,8 @@ export interface OutroData {
   reportFile?: string;
   /** PostHog dashboard URL the program created on the user's behalf. */
   dashboardUrl?: string;
+  /** PostHog notebook URL the program created on the user's behalf (audit-3000). */
+  notebookUrl?: string;
 }
 
 /** A single question rendered by the WizardAsk overlay. */

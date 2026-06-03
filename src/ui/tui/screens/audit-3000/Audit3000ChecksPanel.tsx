@@ -8,12 +8,9 @@
  * stage overview.
  */
 
+import { memo } from 'react';
 import { Box, Text } from 'ink';
-import { Spinner } from '@inkjs/ui';
-import {
-  type AuditCheck,
-  type AuditStatus,
-} from '@lib/programs/audit/types';
+import { type AuditCheck, type AuditStatus } from '@lib/programs/audit/types';
 import { Colors, Icons } from '@ui/tui/styles';
 import { LoadingBox } from '@ui/tui/primitives/index';
 
@@ -109,9 +106,11 @@ const GroupHeader = ({
   return (
     <Box>
       {isActive ? (
-        <Box marginRight={1}>
-          <Spinner />
-        </Box>
+        <Text>
+          <Text bold color={NEON_PINK}>
+            {'\u25B6'}
+          </Text>{' '}
+        </Text>
       ) : showIcon ? (
         <Text>
           <Text color={color}>{icon}</Text>{' '}
@@ -128,13 +127,32 @@ const GroupHeader = ({
   );
 };
 
-export const Audit3000ChecksPanel = ({ checks }: Audit3000ChecksPanelProps) => {
+const Audit3000ChecksPanelImpl = ({ checks }: Audit3000ChecksPanelProps) => {
   if (checks.length === 0) {
     return (
       <Box flexDirection="column">
-        <Text bold>AUDIT-3000</Text>
+        <Text bold color={NEON_PINK}>
+          AUDIT-3000
+        </Text>
         <Text> </Text>
         <LoadingBox message="Booting up arcade cabinet..." />
+        <Box marginTop={1} flexDirection="column">
+          <Text dimColor>
+            Reviewing your PostHog integration across 34 checks. ~5\u20137 min.
+          </Text>
+          <Text dimColor> </Text>
+          <Text dimColor>
+            Use <Text color={NEON_GOLD}>{'\u2190 \u2192'}</Text> to switch tabs:
+          </Text>
+          <Text dimColor>
+            {'  '}Arcade · Hi-score Table · Play · Tail logs · HN
+          </Text>
+          <Text dimColor> </Text>
+          <Text dimColor>
+            Output: a notebook in your PostHog project (link printed at the
+            end).
+          </Text>
+        </Box>
       </Box>
     );
   }
@@ -169,3 +187,16 @@ export const Audit3000ChecksPanel = ({ checks }: Audit3000ChecksPanelProps) => {
     </Box>
   );
 };
+
+/**
+ * Memo'd to skip re-renders when the `checks` array reference is stable.
+ * The parent `Audit3000RunScreen` subscribes to the whole wizard store
+ * (status messages, file watcher events) and re-renders on every change;
+ * without this memo, the right pane redraws on every spinner tick / status
+ * line, which compounds Ink's frame-redraw flicker. Other workflows are
+ * unaffected — this is audit-3000 only.
+ */
+export const Audit3000ChecksPanel = memo(
+  Audit3000ChecksPanelImpl,
+  (prev, next) => prev.checks === next.checks,
+);

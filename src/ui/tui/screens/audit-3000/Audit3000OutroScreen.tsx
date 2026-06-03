@@ -156,7 +156,18 @@ export const Audit3000OutroScreen = ({ store }: Audit3000OutroScreenProps) => {
             </Text>
           </Box>
 
-          {outroData.reportFile && (
+          {outroData.notebookUrl ? (
+            <Box flexDirection="column" marginTop={1}>
+              <Text bold color="cyan">
+                High-score reel saved to your PostHog notebook:
+              </Text>
+              <Text color={NEON_GOLD}>{outroData.notebookUrl}</Text>
+              <Text dimColor>
+                Open in your browser to view the full audit (live charts coming
+                in a future release).
+              </Text>
+            </Box>
+          ) : outroData.reportFile ? (
             <Box flexDirection="column" marginTop={1}>
               <Text bold color="cyan">
                 High-score reel saved to:
@@ -169,7 +180,7 @@ export const Audit3000OutroScreen = ({ store }: Audit3000OutroScreenProps) => {
                 to read the full audit.
               </Text>
             </Box>
-          )}
+          ) : null}
 
           <AuditChecksOutroSection
             checks={checks}

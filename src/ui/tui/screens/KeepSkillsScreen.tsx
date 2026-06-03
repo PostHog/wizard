@@ -109,8 +109,22 @@ export const KeepSkillsScreen = ({ store }: KeepSkillsScreenProps) => {
     }, 600);
   };
 
+  // Surface the audit-3000 notebook URL here too — by this screen the
+  // outro has already scrolled away. Conditional on outroData.notebookUrl
+  // so other workflows render unchanged.
+  const notebookUrl = store.session.outroData?.notebookUrl;
+
   return (
     <Box flexDirection="column" flexGrow={1}>
+      {notebookUrl && (
+        <Box flexDirection="column" marginBottom={1}>
+          <Text color="green" bold>
+            {'\u2714'} Your audit notebook is ready:
+          </Text>
+          <Text color="cyan">{notebookUrl}</Text>
+          <Text dimColor>Open in your browser to read the full audit.</Text>
+        </Box>
+      )}
       <Text bold color={Colors.accent}>
         Keep the skills?
       </Text>

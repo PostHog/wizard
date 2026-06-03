@@ -7,6 +7,7 @@ import {
 import type { ProgramStep, ProgramConfig } from '@lib/programs/program-step';
 import type { ProgramRun } from '@lib/agent/agent-runner';
 import type { WizardSession } from '@lib/wizard-session';
+import { OutroKind } from '@lib/wizard-session';
 import { WIZARD_TOOL_NAMES } from '@lib/wizard-tools';
 import { AUDIT_ABORT_CASES } from '@lib/programs/audit/detect';
 import {
@@ -18,6 +19,29 @@ import { AUDIT_SEED_CHECKS } from '@lib/programs/audit/seed';
 import { logToFile } from '@utils/debug';
 
 const AUDIT3000_REPORT_FILE = 'posthog-audit-3000-report.md';
+const AUDIT3000_NOTEBOOK_URL_FILE = '/tmp/posthog-notebook-url.txt';
+
+/**
+ * Read the notebook URL that step 10 of the audit-3000 skill writes to
+ * `/tmp/posthog-notebook-url.txt`, then delete the file so it never lingers
+ * across runs. Returns `null` if the file is missing or unreadable.
+ */
+const readAndConsumeNotebookUrl = (): string | null => {
+  try {
+    if (!fs.existsSync(AUDIT3000_NOTEBOOK_URL_FILE)) {
+      return null;
+    }
+    const raw = fs.readFileSync(AUDIT3000_NOTEBOOK_URL_FILE, 'utf8').trim();
+    fs.unlinkSync(AUDIT3000_NOTEBOOK_URL_FILE);
+    if (!raw || !/^https?:\/\//.test(raw)) {
+      return null;
+    }
+    return raw;
+  } catch (err) {
+    logToFile(`readAndConsumeNotebookUrl: ${(err as Error).message}`);
+    return null;
+  }
+};
 
 // Extra checks the v3000 audit adds on top of the base 10. IDs must match
 // those referenced in the audit-3000 skill's step files (Event Quality,
@@ -106,74 +130,74 @@ const AUDIT3000_EXTRA_CHECKS: AuditCheck[] = [
     label: 'Mobile sampling configured',
     status: 'pending',
   },
-  // ── Use Case: Expansion (Step 9) ──
+  // ── Stack consolidation (Step 9) ──
   {
     id: 'expansion-product-analytics',
-    area: 'Use Case: Expansion',
+    area: 'Stack consolidation',
     label: 'Product analytics coverage',
     status: 'pending',
   },
   {
     id: 'expansion-error-tracking',
-    area: 'Use Case: Expansion',
+    area: 'Stack consolidation',
     label: 'Error tracking coverage',
     status: 'pending',
   },
   {
     id: 'expansion-llm-observability',
-    area: 'Use Case: Expansion',
+    area: 'Stack consolidation',
     label: 'LLM observability coverage',
     status: 'pending',
   },
   {
     id: 'expansion-session-replay',
-    area: 'Use Case: Expansion',
+    area: 'Stack consolidation',
     label: 'Session replay coverage',
     status: 'pending',
   },
   {
     id: 'expansion-feature-flags',
-    area: 'Use Case: Expansion',
+    area: 'Stack consolidation',
     label: 'Feature flags coverage',
     status: 'pending',
   },
   {
     id: 'expansion-surveys',
-    area: 'Use Case: Expansion',
+    area: 'Stack consolidation',
     label: 'Surveys coverage',
     status: 'pending',
   },
   {
     id: 'expansion-logs',
-    area: 'Use Case: Expansion',
+    area: 'Stack consolidation',
     label: 'Logs coverage',
     status: 'pending',
   },
   {
     id: 'expansion-web-analytics',
-    area: 'Use Case: Expansion',
+    area: 'Stack consolidation',
     label: 'Web analytics coverage',
     status: 'pending',
   },
-  // ── Additional Sections (Steps 7, 8, 10 phase markers) ──
+  // ── Wrap-up & notebook (Steps 7, 8, 10 phase markers) ──
   // Tracked in the ledger so the UI can surface "did it run / was it
   // skipped" alongside the regular checks. use-case-expansion is omitted
   // because the eight `expansion-*` checks above cover that phase.
   {
     id: 'customer-enrichment',
-    area: 'Additional Sections',
+    area: 'Wrap-up & notebook',
     label: 'Customer enrichment (Harmonic + PDL)',
     status: 'pending',
   },
   {
     id: 'use-case-match',
-    area: 'Additional Sections',
+    area: 'Wrap-up & notebook',
     label: 'Use-case match',
     status: 'pending',
   },
   {
     id: 'final-report',
-    area: 'Additional Sections',
+    area: 'Wrap-up & notebook',
     label: 'Final audit report written',
     status: 'pending',
   },
@@ -223,14 +247,25 @@ const baseConfig = createSkillProgram({
     'Audit an existing PostHog integration (v3000 — adds event quality, stale-flag hygiene, customer enrichment, use-case match)',
   integrationLabel: 'audit-3000',
   customPrompt:
-    'Run the audit-3000 skill end-to-end. Follow the step chain starting at references/1-version.md. Do not modify any project files — only create the final audit report and (when enrichment is enabled) the enrichment report.',
-  successMessage: `Audit complete! View the report at ./${AUDIT3000_REPORT_FILE}`,
+    'Run the audit-3000 skill end-to-end. Follow the step chain starting at references/1-version.md. Do not modify any project files. The ONLY deliverable is the audit notebook created inside the customer PostHog project (via mcp__posthog-wizard__notebooks-create in step 10). IMPORTANT: ignore any later instruction that asks you to write a markdown report file at the project root — the audit notebook IS the report. Do not write posthog-audit-3000-report.md, posthog-audit-report.md, or any similar markdown summary file. Step 7 may stage enrichment content in /tmp; that is fine and is cleaned up in step 10.',
+  successMessage: 'Audit complete!',
   reportFile: AUDIT3000_REPORT_FILE,
   docsUrl: 'https://posthog.com/docs/product-analytics/best-practices',
   spinnerMessage: 'Running PostHog Audit 3000...',
   estimatedDurationMinutes: 6,
   requires: ['posthog-integration'],
   abortCases: AUDIT_ABORT_CASES,
+  buildOutroData: (_sess, _credentials, _cloudRegion) => {
+    const notebookUrl = readAndConsumeNotebookUrl();
+    return {
+      kind: OutroKind.Success,
+      message: notebookUrl
+        ? 'Audit complete!'
+        : 'Audit complete — notebook URL not captured.',
+      notebookUrl: notebookUrl ?? undefined,
+      docsUrl: 'https://posthog.com/docs/product-analytics/best-practices',
+    };
+  },
 });
 
 const audit3000Run = async (session: WizardSession): Promise<ProgramRun> => {

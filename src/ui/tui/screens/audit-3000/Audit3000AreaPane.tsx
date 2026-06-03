@@ -6,7 +6,7 @@
  * "LEVEL N: <area>" framing instead of "Verifying ...".
  */
 
-import { Fragment } from 'react';
+import { Fragment, memo } from 'react';
 import { Box, Text, useInput } from 'ink';
 import { spawn } from 'node:child_process';
 import { Colors } from '@ui/tui/styles';
@@ -43,7 +43,7 @@ interface Audit3000AreaPaneProps {
   reportPath: string;
 }
 
-export const Audit3000AreaPane = ({
+const Audit3000AreaPaneImpl = ({
   checks,
   reportPath,
 }: Audit3000AreaPaneProps) => {
@@ -67,8 +67,17 @@ export const Audit3000AreaPane = ({
 
   if (slide) {
     const hasFindings = checks.some(isFinding);
+    // "First level, no check resolved yet" = we're at the very start of the run.
+    // Show the orientation preamble above the slide content until something happens.
+    const showPreamble =
+      level === 1 && checks.every((c) => c.status === 'pending');
     return (
-      <ActiveSlide slide={slide} level={level} hasFindings={hasFindings} />
+      <ActiveSlide
+        slide={slide}
+        level={level}
+        hasFindings={hasFindings}
+        showPreamble={showPreamble}
+      />
     );
   }
 
@@ -79,16 +88,51 @@ export const Audit3000AreaPane = ({
   return <WritingReport reportPath={reportPath} />;
 };
 
+const OrientationPreamble = () => (
+  <Box
+    flexDirection="column"
+    borderStyle="single"
+    borderColor={Colors.accent}
+    paddingX={1}
+    marginBottom={1}
+  >
+    <Text bold color={Colors.accent}>
+      {'\u25B6'} What's happening
+    </Text>
+    <Box height={1} />
+    <Text>
+      We're running <Text bold>34 checks across 9 levels</Text> on your PostHog
+      integration. Each level explains what it's looking at here on the left as
+      it starts. The whole audit takes about <Text bold>5-7 minutes</Text>.
+    </Text>
+    <Box height={1} />
+    <Text>
+      The final output is a <Text bold>notebook inside your PostHog</Text>{' '}
+      project (we'll print the direct link at the end) — nothing in your
+      codebase is modified.
+    </Text>
+    <Box height={1} />
+    <Text dimColor>
+      Use <Text color={Colors.accent}>{'\u2190 \u2192'}</Text> to switch tabs:
+      Hi-score Table (live report), Play (a game), HN, or Tail logs. Or just
+      leave it running and come back.
+    </Text>
+  </Box>
+);
+
 const ActiveSlide = ({
   slide,
   level,
   hasFindings,
+  showPreamble,
 }: {
   slide: AreaSlide;
   level: number | null;
   hasFindings: boolean;
+  showPreamble: boolean;
 }) => (
   <Box flexDirection="column" paddingX={1}>
+    {showPreamble && <OrientationPreamble />}
     <Text bold color={Colors.accent}>
       {level ? `LEVEL ${level}: ` : ''}
       {slide.area.toUpperCase()}
@@ -121,22 +165,33 @@ const ActiveSlide = ({
   </Box>
 );
 
-const WritingReport = ({ reportPath }: { reportPath: string }) => (
+const WritingReport = ({ reportPath: _reportPath }: { reportPath: string }) => (
   <Box flexDirection="column" paddingX={1}>
     <Text bold color={Colors.accent}>
       STAGE CLEAR.
     </Text>
     <Box height={1} />
     <Text>
-      All checks resolved. Compiling your high-score reel at{' '}
-      <Text color="cyan">{reportPath}</Text>.
+      All checks resolved. Writing your audit notebook into your PostHog project
+      now.
     </Text>
     <Box height={1} />
     <Text>
-      The report covers everything we checked, what we found, and what to do
-      next.
+      The notebook covers everything we checked, what we found, and what to do
+      next. We'll print the link when it's done.
     </Text>
     <Box height={1} />
     <Text dimColor>{'Stand by\u2026'}</Text>
   </Box>
+);
+
+/**
+ * Memo'd to skip re-renders when neither `checks` nor `reportPath` changed.
+ * Pairs with the same memo on `Audit3000ChecksPanel` to cut flicker from
+ * unrelated store updates (status messages, polling ticks). Audit-3000 only.
+ */
+export const Audit3000AreaPane = memo(
+  Audit3000AreaPaneImpl,
+  (prev, next) =>
+    prev.checks === next.checks && prev.reportPath === next.reportPath,
 );
