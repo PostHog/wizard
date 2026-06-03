@@ -117,7 +117,7 @@ export const VERIFY_PROMPT: SuggestedPrompt = {
 // reads this directly.
 export const STOCK_MCP_SUGGESTED_PROMPTS: PromptKit = [
   {
-    prompt: 'What events am I currently tracking and when did each last fire?',
+    prompt: 'What are my busiest 10 events and when did each last fire?',
     description:
       'Inventories your project’s event stream so you can see what’s being captured at a glance.',
   },

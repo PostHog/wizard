@@ -27,13 +27,20 @@
  */
 
 import { Box, Text } from 'ink';
+import { Spinner } from '@inkjs/ui';
 import { useEffect, useRef, useState } from 'react';
 import { useSyncExternalStore } from 'react';
 
 import type { WizardStore } from '@ui/tui/store';
 import { Colors, Icons } from '@ui/tui/styles';
 import { useKeyBindings, KeyMatch } from '@ui/tui/hooks/useKeyBindings';
-import { LoadingBox, PickerMenu } from '@ui/tui/primitives/index';
+import {
+  ContentSequencer,
+  LoadingBox,
+  PickerMenu,
+  TextRevealMode,
+  type ContentBlock,
+} from '@ui/tui/primitives/index';
 import {
   STOCK_MCP_SUGGESTED_PROMPTS,
   type SuggestedPrompt,
@@ -62,10 +69,6 @@ enum ChoiceValue {
   Login = 'login',
   Exit = 'exit',
 }
-
-// Sentinel value used by the PromptPicker so "Exit" sits as a regular
-// option alongside the role-tailored prompts.
-const PICKER_EXIT_VALUE = '__exit__';
 
 export const McpSuggestedPromptsScreen = ({
   store,
@@ -209,10 +212,6 @@ export const McpSuggestedPromptsScreen = ({
 
   const handlePromptPick = (value: string | string[]): void => {
     const picked = Array.isArray(value) ? value[0] : value;
-    if (picked === PICKER_EXIT_VALUE) {
-      dismiss();
-      return;
-    }
     setRunningPrompt(picked);
     setPhase(Phase.Running);
   };
@@ -221,25 +220,29 @@ export const McpSuggestedPromptsScreen = ({
     {
       match: KeyMatch.Escape,
       label: 'esc',
-      action: phase === Phase.Running ? 'cancel run' : 'back',
+      action: phase === Phase.PromptPicker ? 'exit' : 'exit',
       handler: () => {
         if (phase === Phase.Running) {
+          // Abort any in-flight stream so the SDK call shuts down cleanly
+          // before we tear the screen down.
           runAbortRef.current?.abort();
-          setPhase(Phase.PromptPicker);
+          dismiss();
+        } else if (phase === Phase.PromptPicker) {
+          dismiss();
         }
       },
     },
     {
-      match: KeyMatch.Return,
-      label: 'enter',
-      action: phase === Phase.Running ? 'back to prompts' : 'continue',
+      // `[p]` is the primary "pick new prompt" hotkey during Running —
+      // works whether the stream is in flight or already finished. Always
+      // returns to the PromptPicker (aborting the stream if necessary).
+      match: 'p',
+      label: 'p',
+      action: 'pick new prompt',
       handler: () => {
-        if (phase === Phase.Running) {
-          const finished = runChunks.some(
-            (c) => c.kind === 'done' || c.kind === 'error',
-          );
-          if (finished) setPhase(Phase.PromptPicker);
-        }
+        if (phase !== Phase.Running) return;
+        runAbortRef.current?.abort();
+        setPhase(Phase.PromptPicker);
       },
     },
   ]);
@@ -266,10 +269,11 @@ export const McpSuggestedPromptsScreen = ({
                 MCP tutorial
               </Text>
             </Box>
-            <Box marginBottom={1}>
-              <Text>Hello, {session.apiUser?.first_name || 'there'}!</Text>
-            </Box>
-            <PromptPickerPhase promptKit={kit} onSelect={handlePromptPick} />
+            <PromptPickerPhase
+              promptKit={kit}
+              userDisplayName={session.apiUser?.first_name || null}
+              onSelect={handlePromptPick}
+            />
           </>
         )}
 
@@ -386,30 +390,65 @@ const AuthenticatingPhase = ({ loginUrl }: AuthenticatingPhaseProps) => (
 
 interface PromptPickerPhaseProps {
   promptKit: SuggestedPrompt[];
+  userDisplayName: string | null;
   onSelect: (value: string | string[]) => void;
 }
 
-const PromptPickerPhase = ({ promptKit, onSelect }: PromptPickerPhaseProps) => {
-  const options = [
-    ...promptKit.map((p) => ({
-      label: p.prompt,
-      value: p.prompt,
-    })),
-    { label: 'Exit', value: PICKER_EXIT_VALUE },
+const PromptPickerPhase = ({
+  promptKit,
+  userDisplayName,
+  onSelect,
+}: PromptPickerPhaseProps) => {
+  const options = promptKit.map((p) => ({
+    label: p.prompt,
+    value: p.prompt,
+  }));
+
+  // Sequence: typewriter greeting → typewriter prompt → live PickerMenu.
+  // The PickerMenu mounts only when the sequencer reaches it, so keyboard
+  // input doesn't capture until the picker is actually on screen.
+  const blocks: ContentBlock[] = [
+    {
+      content: `Hello there, ${userDisplayName || 'there'}!`,
+      mode: TextRevealMode.Typewriter,
+      animationInterval: 100,
+      pause: 1200,
+      dimWhenComplete: false,
+    },
+    {
+      content: 'Pick a prompt to see the PostHog MCP in action.',
+      mode: TextRevealMode.Typewriter,
+      animationInterval: 50,
+      pause: 1000,
+      dimWhenComplete: false,
+    },
+    {
+      content: (
+        <>
+          <PickerMenu
+            options={options}
+            optionMarginBottom={1}
+            onSelect={onSelect}
+          />
+          <Box marginTop={2}>
+            <Text>
+              <Text bold>[esc]</Text>
+              <Text> to exit</Text>
+            </Text>
+          </Box>
+        </>
+      ),
+      persist: true,
+    },
   ];
 
   return (
     <Box flexDirection="column">
-      <Box marginTop={1}>
-        <Text>Pick a prompt to see the PostHog MCP in action:</Text>
-      </Box>
-      <Box marginTop={1}>
-        <PickerMenu
-          options={options}
-          optionMarginBottom={1}
-          onSelect={onSelect}
-        />
-      </Box>
+      <ContentSequencer
+        blocks={blocks}
+        mode={TextRevealMode.Typewriter}
+        blockInterval={350}
+      />
     </Box>
   );
 };
@@ -428,23 +467,37 @@ const RunningPhase = ({ prompt, chunks, startedAt }: RunningPhaseProps) => {
   const finished = isDone || !!errorChunk;
   const elapsed = startedAt ? Math.round((Date.now() - startedAt) / 1000) : 0;
 
+  // When finished, the user has already seen the streaming progress —
+  // collapse to just the agent's final message. Drop tool-call /
+  // tool-result chatter and the "Prompt: <prompt>" header so the
+  // message fills the viewport.
+  const visibleChunks = finished
+    ? chunks.filter((c) => c.kind === 'text' || c.kind === 'error')
+    : chunks;
+
   return (
     <Box flexDirection="column">
       <Text>
-        <Text bold>Running:</Text> <Text color={Colors.accent}>{prompt}</Text>
+        <Text bold>Prompt:</Text> <Text color={Colors.accent}>{prompt}</Text>
       </Text>
-      <Box marginTop={1}>
-        <Text dimColor>
+
+      <Box marginTop={1} gap={1}>
+        {/* Spinner spins for the full duration of the stream — from
+            kickoff until the agent emits its final `done` chunk (or an
+            error). Visual confirmation that work is still in flight even
+            during pauses between chunks. */}
+        {!finished && <Spinner />}
+        <Text bold={finished}>
           {finished
             ? errorChunk
-              ? `Failed after ${elapsed}s — press [enter] to pick another, or [esc] to exit.`
-              : `Done in ${elapsed}s — press [enter] for another, or [esc] to exit.`
-            : 'Streaming from PostHog · [esc] to cancel'}
+              ? `Failed after ${elapsed}s.`
+              : `Done in ${elapsed}s.`
+            : 'Streaming from PostHog MCP'}
         </Text>
       </Box>
 
       <Box marginTop={1} flexDirection="column">
-        {chunks.map((chunk, idx) => (
+        {visibleChunks.map((chunk, idx) => (
           <ChunkLine key={idx} chunk={chunk} />
         ))}
       </Box>
@@ -462,7 +515,7 @@ const ChunkLine = ({ chunk }: ChunkLineProps) => {
   }
   if (chunk.kind === 'tool-call') {
     return (
-      <Text dimColor>
+      <Text>
         {'  '}
         <Text color="cyan">↳ {chunk.toolName}</Text>
         {chunk.detail ? ` ${chunk.detail}` : ''}
@@ -471,7 +524,7 @@ const ChunkLine = ({ chunk }: ChunkLineProps) => {
   }
   if (chunk.kind === 'tool-result') {
     return (
-      <Text dimColor>
+      <Text>
         {'    '}
         <Text color="green">✓</Text> {chunk.detail}
       </Text>

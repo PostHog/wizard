@@ -62,6 +62,12 @@ interface TextBlockProps {
   maxHeight?: number;
   /** Available text width in columns (for truncation wrapping). */
   availableWidth?: number;
+  /**
+   * When `completed === true`, render the text dim. Defaults to `true` —
+   * the standard "completed step" treatment. Pass `false` to keep the
+   * text at full opacity even after the sequencer has moved on.
+   */
+  dimWhenComplete?: boolean;
 }
 
 export const TextBlock = ({
@@ -75,6 +81,7 @@ export const TextBlock = ({
   sentenceInterval = 1600,
   maxHeight,
   availableWidth,
+  dimWhenComplete = true,
 }: TextBlockProps) => {
   const speed = animationInterval ?? TEXT_REVEAL_MODE_DEFAULTS[mode];
 
@@ -164,10 +171,10 @@ export const TextBlock = ({
     return wrapAndTruncate(visibleText, availableWidth, maxHeight);
   };
 
-  // Completed: dimmed text
+  // Completed: dimmed by default, but can be overridden per-block.
   if (completed) {
     return (
-      <Text dimColor>
+      <Text dimColor={dimWhenComplete}>
         {bullet}
         {wrap(text)}
       </Text>
