@@ -8,7 +8,7 @@
 
 import type { ProgramStep } from '@lib/programs/program-step';
 import type { WizardSession } from '@lib/wizard-session';
-import { McpOutcome, RunPhase } from '@lib/wizard-session';
+import { RunPhase } from '@lib/wizard-session';
 import { HEALTH_CHECK_STEP } from '@lib/programs/shared/health-check-step';
 import { detectPostHogIntegration } from './detect.js';
 
@@ -64,16 +64,6 @@ export const POSTHOG_INTEGRATION_PROGRAM: ProgramStep[] = [
     label: 'MCP servers',
     screenId: 'mcp',
     isComplete: (session) => session.mcpComplete,
-  },
-  {
-    id: 'mcp-suggested-prompts',
-    label: 'Suggested prompts',
-    screenId: 'mcp-suggested-prompts',
-    // Only render when MCP was actually installed — skip on user opt-out,
-    // no clients detected, or install failure. The screen has no value
-    // without a working MCP for the user to try the prompts against.
-    show: (session) => session.mcpOutcome === McpOutcome.Installed,
-    isComplete: (session) => session.mcpSuggestedPromptsDismissed,
   },
   {
     id: 'outro',

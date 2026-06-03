@@ -88,12 +88,17 @@ export function getFrameworkFamily(
 }
 
 // ── Verify prompt (test prompt) ────────────────────────────────────────
-// Always-safe read-only prompt — the wizard uses this as the trigger for
-// the verify-and-celebrate phase. Listing feature flags exercises the MCP
-// auth path without mutating any data.
+// Write-shaped prompt — the wizard uses this as the trigger for the
+// verify-and-celebrate phase. Creating an annotation produces an
+// activity_log entry (scope: Annotation, activity: created), which the
+// verify-phase poll can actually catch. Reads (e.g. "list my flags")
+// don't write to activity_log and would never trigger celebration.
+// The annotation is dated, visible on every chart, and reversible from
+// the PostHog UI in seconds.
 export const VERIFY_PROMPT: SuggestedPrompt = {
-  prompt: 'List my feature flags',
-  description: 'Quick read-only test — exercises auth and the data path.',
+  prompt: "Annotate today with 'PostHog wizard install'",
+  description:
+    'Creates a dated note on your project — exercises auth and shows up on every chart. Delete anytime from PostHog.',
 };
 
 // ── Default kit (no role, no framework) ────────────────────────────────

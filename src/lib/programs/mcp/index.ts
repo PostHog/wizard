@@ -8,6 +8,7 @@
  */
 
 import type { ProgramConfig } from '@lib/programs/program-step';
+import { McpOutcome } from '@lib/wizard-session';
 
 export const mcpAddConfig: ProgramConfig = {
   id: 'mcp-add',
@@ -18,6 +19,16 @@ export const mcpAddConfig: ProgramConfig = {
       label: 'Add MCP server',
       screenId: 'mcp-add',
       isComplete: (s) => s.mcpComplete,
+    },
+    {
+      id: 'mcp-suggested-prompts',
+      label: 'Suggested prompts',
+      screenId: 'mcp-suggested-prompts',
+      // Only render after a successful install — no-clients, skipped,
+      // and failed outcomes go straight to program end. The screen has
+      // no value without a working MCP for the user to log in against.
+      show: (s) => s.mcpOutcome === McpOutcome.Installed,
+      isComplete: (s) => s.mcpSuggestedPromptsDismissed,
     },
   ],
 };
