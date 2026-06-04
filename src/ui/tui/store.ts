@@ -555,6 +555,11 @@ export class WizardStore {
     this.emitChange();
   }
 
+  setNotebookUrl(url: string): void {
+    this.$session.setKey('notebookUrl', url);
+    this.emitChange();
+  }
+
   setFrameworkContext(key: string, value: unknown): void {
     const ctx = { ...this.$session.get().frameworkContext, [key]: value };
     this.$session.setKey('frameworkContext', ctx);

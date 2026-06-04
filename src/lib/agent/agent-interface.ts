@@ -80,6 +80,12 @@ export const AgentSignals = {
    * onto `session.dashboardUrl` and surfaced by programs in their outro.
    */
   DASHBOARD_URL: '[DASHBOARD_URL]',
+  /**
+   * Signal emitted when the agent has uploaded a report to a PostHog
+   * notebook. Format: `[NOTEBOOK_URL] <full https url>`. The URL is captured
+   * onto `session.notebookUrl` and surfaced by programs in their outro.
+   */
+  NOTEBOOK_URL: '[NOTEBOOK_URL]',
 } as const;
 
 export type AgentSignal = (typeof AgentSignals)[keyof typeof AgentSignals];
@@ -1549,6 +1555,19 @@ function handleSDKMessage(
             const dashboardMatch = block.text.match(dashboardRegex);
             if (dashboardMatch) {
               getUI().setDashboardUrl(dashboardMatch[1].trim());
+            }
+
+            // Check for [NOTEBOOK_URL] markers
+            const notebookRegex = new RegExp(
+              `${AgentSignals.NOTEBOOK_URL.replace(
+                /[.*+?^${}()|[\]\\]/g,
+                '\\$&',
+              )}\\s*(\\S+)`,
+              'm',
+            );
+            const notebookMatch = block.text.match(notebookRegex);
+            if (notebookMatch) {
+              getUI().setNotebookUrl(notebookMatch[1].trim());
             }
           }
 

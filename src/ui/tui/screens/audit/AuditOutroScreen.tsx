@@ -66,6 +66,22 @@ export const AuditOutroScreen = ({ store }: AuditOutroScreenProps) => {
             installDir={store.session.installDir}
           />
 
+          {outroData.dashboardUrl && (
+            <Box marginTop={1}>
+              <Text>
+                Dashboard: <Text color="cyan">{outroData.dashboardUrl}</Text>
+              </Text>
+            </Box>
+          )}
+
+          {outroData.notebookUrl && (
+            <Box marginTop={1}>
+              <Text>
+                Notebook: <Text color="cyan">{outroData.notebookUrl}</Text>
+              </Text>
+            </Box>
+          )}
+
           {outroData.docsUrl && (
             <Box marginTop={1}>
               <Text>

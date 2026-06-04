@@ -171,6 +171,9 @@ export interface WizardUI {
   // ── Dashboard URL emitted by the agent via [DASHBOARD_URL] marker ──
   setDashboardUrl(url: string): void;
 
+  // ── Notebook URL emitted by the agent via [NOTEBOOK_URL] marker ──
+  setNotebookUrl(url: string): void;
+
   // ── Generic frameworkContext setter for program file watchers ─────
   setFrameworkContext(key: string, value: unknown): void;
 }

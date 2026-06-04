@@ -92,6 +92,15 @@ export const OutroScreen = ({ store }: OutroScreenProps) => {
             </Box>
           )}
 
+          {outroData.notebookUrl && (
+            <Box marginTop={1}>
+              <Text>
+                And mirrored the report to a notebook:{' '}
+                <Text color="cyan">{outroData.notebookUrl}</Text>
+              </Text>
+            </Box>
+          )}
+
           {outroData.docsUrl && (
             <Box marginTop={1}>
               <Text>

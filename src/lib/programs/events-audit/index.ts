@@ -75,6 +75,11 @@ Project context:
         const dashboardUrl =
           sess.dashboardUrl ?? (cloudUrl ? `${cloudUrl}/dashboard` : undefined);
 
+        // The agent emits `[NOTEBOOK_URL] <url>` once it uploads the report
+        // to a PostHog notebook. No fallback: if the notebook upload was
+        // skipped (e.g. MCP unavailable) we just don't show a link.
+        const notebookUrl = sess.notebookUrl ?? undefined;
+
         return {
           kind: OutroKind.Success as const,
           message: 'Your events audit was successful',
@@ -83,6 +88,7 @@ Project context:
           docsUrl: DOCS_URL,
           continueUrl,
           dashboardUrl,
+          notebookUrl,
         };
       },
     });
