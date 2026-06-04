@@ -15,6 +15,7 @@
 import type { AgentChunk } from '@ui/tui/services/mcp-suggested-prompts-services';
 import type { Credentials } from '@lib/wizard-session';
 import { WIZARD_USER_AGENT } from '@lib/constants';
+import { getLlmGatewayUrlFromHost } from '@utils/urls';
 import { runtimeEnv } from '@env';
 import { logToFile } from '@utils/debug';
 
@@ -203,6 +204,24 @@ export async function* runMcpPromptViaSdk(args: {
 
   const mcpUrl = resolveMcpUrl(credentials.host);
   logToFile(`[runMcpPromptViaSdk] mcpUrl=${mcpUrl} model=${MODEL}`);
+
+  // Route the SDK's LLM calls through the PostHog LLM gateway, authed
+  // with the user's OAuth access token. Without these env vars the SDK
+  // tries to authenticate directly against Anthropic and 401s with
+  // "Invalid authentication credentials". Mirrors what `initializeAgent`
+  // does in agent-interface.ts for the main runAgent flow.
+  const gatewayUrl = getLlmGatewayUrlFromHost(credentials.host);
+  process.env.ANTHROPIC_BASE_URL = gatewayUrl;
+  process.env.ANTHROPIC_AUTH_TOKEN = credentials.accessToken;
+  process.env.CLAUDE_CODE_OAUTH_TOKEN = credentials.accessToken;
+  process.env.CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS = 'true';
+  logToFile(
+    `[runMcpPromptViaSdk] gatewayUrl=${gatewayUrl} tokenPrefix=${
+      credentials.accessToken
+        ? credentials.accessToken.slice(0, 4) + '***'
+        : '(missing)'
+    }`,
+  );
 
   // The SDK expects an async generator for the prompt that stays open
   // until the result is received. For a single-turn prompt we yield one
