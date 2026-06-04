@@ -58,7 +58,9 @@ export const AuditChecksOutroSection = ({
             );
           })}
           {hidden > 0 && (
-            <Text dimColor>… and {hidden} more — see the report.</Text>
+            <Text dimColor>
+              … and {hidden} more. See the report for details.
+            </Text>
           )}
         </>
       )}
