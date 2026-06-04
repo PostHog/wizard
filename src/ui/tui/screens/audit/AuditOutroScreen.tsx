@@ -55,8 +55,8 @@ export const AuditOutroScreen = ({ store }: AuditOutroScreenProps) => {
                 {join(store.session.installDir, outroData.reportFile)}
               </Text>
               <Text dimColor>
-                A markdown file in your project folder — open it in any editor
-                to read the full audit.
+                A markdown file in your project folder. Open it in any editor to
+                read the full audit.
               </Text>
             </Box>
           )}

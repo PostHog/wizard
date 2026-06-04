@@ -67,13 +67,19 @@ export const AUDIT_SEED_CHECKS: AuditCheck[] = [
   },
 ];
 
-/** Atomically write the seeded ledger to the project's audit checks file. */
-export function seedAuditLedger(installDir: string): void {
+/**
+ * Atomically write a seeded ledger to the project's audit checks file.
+ *
+ * Each audit-flavored program (doctor, events-audit) owns its own seed
+ * shape — pass the seed in so this writer stays program-agnostic.
+ */
+export function seedAuditLedger(
+  installDir: string,
+  checks: AuditCheck[] = AUDIT_SEED_CHECKS,
+): void {
   const target = path.join(installDir, AUDIT_CHECKS_FILE);
   const tmp = `${target}.tmp`;
-  fs.writeFileSync(tmp, JSON.stringify(AUDIT_SEED_CHECKS, null, 2), 'utf8');
+  fs.writeFileSync(tmp, JSON.stringify(checks, null, 2), 'utf8');
   fs.renameSync(tmp, target);
-  logToFile(
-    `seedAuditLedger: wrote ${AUDIT_SEED_CHECKS.length} entries to ${target}`,
-  );
+  logToFile(`seedAuditLedger: wrote ${checks.length} entries to ${target}`);
 }

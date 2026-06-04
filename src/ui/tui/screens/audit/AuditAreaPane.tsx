@@ -52,14 +52,20 @@ const openLink = (url: string) => {
 interface AuditAreaPaneProps {
   checks: AuditCheck[];
   reportPath: string;
+  /** Slide registry to look the active area up in. Defaults to the doctor
+   * (`audit` program) slides; events-audit passes its own 6-phase set. */
+  slides?: AreaSlide[];
 }
 
-export const AuditAreaPane = ({ checks, reportPath }: AuditAreaPaneProps) => {
+export const AuditAreaPane = ({
+  checks,
+  reportPath,
+  slides = AUDIT_AREA_SLIDES,
+}: AuditAreaPaneProps) => {
   const pendingChecks = checks.filter((c) => c.status === 'pending');
   const activeArea = pendingChecks[0]?.area;
   const slide = activeArea
-    ? AUDIT_AREA_SLIDES.find((s) => s.area === activeArea) ??
-      fallbackSlide(activeArea)
+    ? slides.find((s) => s.area === activeArea) ?? fallbackSlide(activeArea)
     : null;
 
   useInput((input) => {
