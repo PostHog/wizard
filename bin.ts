@@ -38,6 +38,7 @@ import { audit3000Command } from './src/commands/audit-3000';
 import { doctorCommand } from './src/commands/doctor';
 import { migrateCommand } from './src/commands/migrate';
 import { eventsAuditCommand } from './src/commands/events-audit';
+import { piiBouncerCommand } from './src/commands/pii-bouncer';
 import { revenueCommand } from './src/commands/revenue';
 import { uploadSourcemapsCommand } from './src/commands/upload-sourcemaps';
 
@@ -49,6 +50,7 @@ Wizard.use(basicIntegrationCommand)
   .use(doctorCommand)
   .use(migrateCommand)
   .use(eventsAuditCommand)
+  .use(piiBouncerCommand)
   .use(revenueCommand)
   .use(uploadSourcemapsCommand)
   .init();
