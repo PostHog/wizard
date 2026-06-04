@@ -1,7 +1,7 @@
 /**
  * PickerMenu — Single and multi select.
  * Single mode: custom renderer with small triangle indicator; enter selects.
- * Multi mode: checkbox glyphs toggled with space OR enter, plus a focusable
+ * Multi mode: checkbox glyphs toggled with enter, plus a focusable
  *   Confirm button below the options. The cursor moves onto the button and
  *   enter submits — see MultiPickerMenu for the rationale.
  *
@@ -205,9 +205,10 @@ const SinglePickerMenu = <T,>({
  * Interaction model (shared with GroupedPickerMenu):
  *   - \u2191\u2193 move the cursor through the options AND onto the Confirm button,
  *     which lives just past the last option.
- *   - space OR enter toggles the focused option (no more "space toggles but
- *     enter advances" split that tripped people up).
- *   - moving onto the Confirm button and pressing space/enter submits the
+ *   - enter toggles the focused option (no more "space toggles but enter
+ *     advances" split that tripped people up). Space is kept as an
+ *     undocumented alias, but the hints bar advertises only enter.
+ *   - moving onto the Confirm button and pressing enter submits the
  *     current selection.
  */
 const MultiPickerMenu = <T,>({
@@ -281,7 +282,7 @@ const MultiPickerMenu = <T,>({
     },
     {
       match: [KeyMatch.Space, KeyMatch.Return],
-      label: 'space/enter',
+      label: 'enter',
       action: 'select',
       handler: () => {
         if (onButton) {

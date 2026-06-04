@@ -3,7 +3,7 @@
  *
  * Pure render. Multi-select menus (PickerMenu mode="multi", GroupedPickerMenu)
  * append this below their options as the final focusable row: the user toggles
- * options with space/enter, then arrows down onto this button and presses enter
+ * options with enter, then arrows down onto this button and presses enter
  * to submit. This replaces the older "enter anywhere submits" pattern, which
  * confused people who expected enter to toggle the focused item.
  *

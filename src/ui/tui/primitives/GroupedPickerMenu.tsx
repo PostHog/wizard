@@ -3,9 +3,10 @@
  *
  * Renders groups of options with bold category labels.
  * Arrow keys navigate selectable items (headers are skipped) and the Confirm
- * button below them; space OR enter toggles the focused option, "a" toggles
- * all, and moving onto the Confirm button and pressing space/enter submits.
- * Shares the interaction model with PickerMenu mode="multi".
+ * button below them; enter toggles the focused option, "a" toggles all, and
+ * moving onto the Confirm button and pressing enter submits. Space is kept as
+ * an undocumented alias for enter. Shares the interaction model with
+ * PickerMenu mode="multi".
  *
  * When content exceeds available terminal height, the list scrolls
  * to keep the focused item visible with up/down indicators.
@@ -212,7 +213,7 @@ export const GroupedPickerMenu = ({
     },
     {
       match: [KeyMatch.Space, KeyMatch.Return],
-      label: 'space/enter',
+      label: 'enter',
       action: 'select',
       handler: () => {
         if (onButton) {
