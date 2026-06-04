@@ -111,6 +111,19 @@ describe('detectWarehouseSources', () => {
     expect(kinds(tmpDir)).toEqual(['MySQL']);
   });
 
+  it('follows a symlinked directory to find sources', () => {
+    // Manifest lives in an external dir reachable only via a symlink inside
+    // the project — exercises symlink resolution in the walker.
+    const external = makeTmpDir();
+    try {
+      writePackageJson(external, { mysql2: '^3.0.0' });
+      fs.symlinkSync(external, path.join(tmpDir, 'linked-pkg'), 'dir');
+      expect(kinds(tmpDir)).toEqual(['MySQL']);
+    } finally {
+      cleanup(external);
+    }
+  });
+
   it('ignores node_modules', () => {
     const nm = path.join(tmpDir, 'node_modules', 'pg');
     fs.mkdirSync(nm, { recursive: true });

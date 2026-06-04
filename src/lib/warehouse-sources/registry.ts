@@ -22,6 +22,10 @@ export const SOURCE_DETECTORS: SourceDetector[] = [
       python: ['psycopg', 'psycopg2', 'psycopg2-binary', 'asyncpg'],
       ruby: ['pg'],
       envKeys: [
+        // NOTE: DATABASE_URL is ambiguous — MySQL/SQLite projects (Prisma,
+        // Rails) use it too. We only read key NAMES, not the scheme, so this
+        // is a deliberate precision/recall tradeoff biased toward the most
+        // common convention (DATABASE_URL → Postgres).
         /^DATABASE_URL$/,
         /^POSTGRES_/,
         /^PG(HOST|DATABASE|USER|PORT)$/,
@@ -47,7 +51,9 @@ export const SOURCE_DETECTORS: SourceDetector[] = [
       npm: ['mongodb', 'mongoose'],
       python: ['pymongo', 'motor'],
       ruby: ['mongo', 'mongoid'],
-      envKeys: [/^MONGO(DB)?_(URI|URL)$/, /^MONGODB_/],
+      // Matches both MONGO_* and MONGODB_* prefixes (e.g. MONGO_HOST,
+      // MONGODB_URI) in one pattern.
+      envKeys: [/^MONGO(DB)?_/],
     },
   },
   {

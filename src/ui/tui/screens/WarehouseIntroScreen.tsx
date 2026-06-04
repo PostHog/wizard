@@ -15,7 +15,10 @@ import { useState, useSyncExternalStore } from 'react';
 import type { WizardStore } from '@ui/tui/store';
 import { PickerMenu } from '@ui/tui/primitives/index';
 import { IntroScreenLayout } from './IntroScreenLayout.js';
-import type { WarehouseDetectError } from '@lib/programs/warehouse-source/index';
+import {
+  getDetectedWarehouseSources,
+  type WarehouseDetectError,
+} from '@lib/programs/warehouse-source/index';
 import type { DetectedSource } from '@lib/warehouse-sources/types';
 
 interface WarehouseIntroScreenProps {
@@ -34,10 +37,7 @@ export const WarehouseIntroScreen = ({ store }: WarehouseIntroScreenProps) => {
   const detectError = session.frameworkContext.detectError as
     | WarehouseDetectError
     | undefined;
-  const detected =
-    (session.frameworkContext.detectedWarehouseSources as
-      | DetectedSource[]
-      | undefined) ?? [];
+  const detected = getDetectedWarehouseSources(session);
 
   const inCli = detected.filter((s) => s.mode === 'in-cli');
   const deepLink = detected.filter((s) => s.mode === 'deep-link');
@@ -70,24 +70,14 @@ export const WarehouseIntroScreen = ({ store }: WarehouseIntroScreenProps) => {
       {detected.length > 0 && (
         <Box flexDirection="column" marginTop={1}>
           {inCli.length > 0 && (
-            <Box flexDirection="column">
-              <Text dimColor>Will connect from here:</Text>
-              {inCli.map((s) => (
-                <Text key={s.kind} dimColor>
-                  {'  •'} {s.label} <Text dimColor>({s.matchedSignal})</Text>
-                </Text>
-              ))}
-            </Box>
+            <SourceGroup title="Will connect from here:" sources={inCli} />
           )}
           {deepLink.length > 0 && (
-            <Box flexDirection="column" marginTop={inCli.length > 0 ? 1 : 0}>
-              <Text dimColor>Will open in your browser to finish:</Text>
-              {deepLink.map((s) => (
-                <Text key={s.kind} dimColor>
-                  {'  •'} {s.label} <Text dimColor>({s.matchedSignal})</Text>
-                </Text>
-              ))}
-            </Box>
+            <SourceGroup
+              title="Will open in your browser to finish:"
+              sources={deepLink}
+              marginTop={inCli.length > 0 ? 1 : 0}
+            />
           )}
         </Box>
       )}
@@ -100,7 +90,10 @@ export const WarehouseIntroScreen = ({ store }: WarehouseIntroScreenProps) => {
     <>
       <Box flexDirection="column" marginBottom={1}>
         <Text color="red" bold>
-          {'✘'} No data warehouse source detected
+          {'✘'}{' '}
+          {detectError.kind === 'bad-directory'
+            ? 'Invalid project directory'
+            : 'No data warehouse source detected'}
         </Text>
         <Box marginTop={1} flexDirection="column">
           <DetectErrorBody error={detectError} />
@@ -149,6 +142,25 @@ export const WarehouseIntroScreen = ({ store }: WarehouseIntroScreenProps) => {
     />
   );
 };
+
+const SourceGroup = ({
+  title,
+  sources,
+  marginTop = 0,
+}: {
+  title: string;
+  sources: DetectedSource[];
+  marginTop?: number;
+}) => (
+  <Box flexDirection="column" marginTop={marginTop}>
+    <Text dimColor>{title}</Text>
+    {sources.map((s) => (
+      <Text key={s.kind} dimColor>
+        {'  •'} {s.label} <Text dimColor>({s.matchedSignal})</Text>
+      </Text>
+    ))}
+  </Box>
+);
 
 const DetectErrorBody = ({ error }: { error: WarehouseDetectError }) => {
   switch (error.kind) {

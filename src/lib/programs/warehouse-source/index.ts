@@ -1,18 +1,12 @@
 import type { ProgramConfig } from '@lib/programs/program-step';
 import type { ProgramRun } from '@lib/agent/agent-runner';
 import type { WizardSession } from '@lib/wizard-session';
-import type { DetectedSource } from '@lib/warehouse-sources/types';
 import { WAREHOUSE_SOURCE_PROGRAM } from './steps.js';
-import { WAREHOUSE_ABORT_CASES } from './detect.js';
+import {
+  WAREHOUSE_ABORT_CASES,
+  getDetectedWarehouseSources,
+} from './detect.js';
 import { getContentBlocks } from './content/index.js';
-
-function getDetectedSources(session: WizardSession): DetectedSource[] {
-  return (
-    (session.frameworkContext.detectedWarehouseSources as
-      | DetectedSource[]
-      | undefined) ?? []
-  );
-}
 
 /**
  * Inject the detected sources (and their creation mode) into the prompt so the
@@ -20,7 +14,7 @@ function getDetectedSources(session: WizardSession): DetectedSource[] {
  * collection, validation — lives in the skill, not here.
  */
 function buildPrompt(session: WizardSession): string {
-  const sources = getDetectedSources(session);
+  const sources = getDetectedWarehouseSources(session);
   if (sources.length === 0) {
     return 'Set up a data warehouse source for this project.';
   }
@@ -68,6 +62,8 @@ export const warehouseSourceConfig: ProgramConfig = {
 export { WAREHOUSE_SOURCE_PROGRAM } from './steps.js';
 export {
   detectWarehousePrerequisites,
+  getDetectedWarehouseSources,
+  DETECTED_WAREHOUSE_SOURCES_KEY,
   WAREHOUSE_ABORT_CASES,
   type WarehouseDetectError,
 } from './detect.js';

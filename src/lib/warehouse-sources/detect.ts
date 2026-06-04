@@ -9,10 +9,8 @@
  * Note we only read `.env` KEY NAMES, never values.
  */
 
-import type { Dirent } from 'fs';
-import { readFileSync, readdirSync, existsSync, statSync } from 'fs';
-import { join } from 'path';
-import { IGNORED_DIRS } from '@utils/file-utils';
+import { walkProjectFiles, safeReadFile } from '@utils/file-utils';
+import type { PackageJson } from '@utils/package-json';
 import {
   parseRequirementsTxt,
   parsePyprojectToml,
@@ -36,13 +34,9 @@ const MAX_DEPTH = 3;
  * so the result is naturally deduped).
  */
 export function detectWarehouseSources(installDir: string): DetectedSource[] {
-  if (!existsSync(installDir)) return [];
-  try {
-    if (!statSync(installDir).isDirectory()) return [];
-  } catch {
-    return [];
-  }
-
+  // No directory guard here: walkProjectFiles is best-effort and yields no
+  // signals for a missing/unreadable dir (→ []). The program-level detect
+  // step is responsible for surfacing a structured `bad-directory` error.
   const signals = collectSignals(installDir);
 
   const detected: DetectedSource[] = [];
@@ -95,64 +89,56 @@ function collectSignals(installDir: string): ProjectSignals {
     envKeys: new Set(),
   };
 
-  function scan(dir: string, depth: number): void {
-    if (depth > MAX_DEPTH) return;
+  walkProjectFiles(
+    installDir,
+    (name, fullPath) => ingestFile(name, fullPath, signals),
+    MAX_DEPTH,
+  );
 
-    let entries: Dirent[];
-    try {
-      entries = readdirSync(dir, { withFileTypes: true });
-    } catch {
-      return;
-    }
-
-    for (const entry of entries) {
-      if (entry.name.startsWith('.') && !entry.name.startsWith('.env'))
-        continue;
-      if (IGNORED_DIRS.has(entry.name)) continue;
-
-      const fullPath = join(dir, entry.name);
-
-      if (entry.isFile()) {
-        ingestFile(entry.name, fullPath, signals);
-      } else if (entry.isDirectory()) {
-        scan(fullPath, depth + 1);
-      }
-    }
-  }
-
-  scan(installDir, 0);
   return signals;
 }
 
+/**
+ * Route a file to the right parser BY NAME, reading its contents only when the
+ * name matches one of the ~6 manifests we care about. Checking the name first
+ * avoids slurping every file in the tree (lockfiles, binaries, assets) into
+ * memory just to discard it.
+ */
 function ingestFile(
   name: string,
   fullPath: string,
   signals: ProjectSignals,
 ): void {
-  const content = safeRead(fullPath);
+  const ingest = ingestorFor(name);
+  if (!ingest) return;
+
+  const content = safeReadFile(fullPath);
   if (content === null) return;
 
-  if (name === 'package.json') {
-    addNpmDeps(content, signals);
-  } else if (name === 'requirements.txt') {
-    parseRequirementsTxt(content).forEach((d) => signals.python.add(d));
-  } else if (name === 'pyproject.toml') {
-    parsePyprojectToml(content).forEach((d) => signals.python.add(d));
-  } else if (name === 'Pipfile') {
-    parsePipfile(content).forEach((d) => signals.python.add(d));
-  } else if (name === 'Gemfile') {
-    parseGemfile(content).forEach((g) => signals.ruby.add(g));
-  } else if (name === '.env' || name.startsWith('.env')) {
-    parseEnvKeys(content).forEach((k) => signals.envKeys.add(k));
-  }
+  ingest(content, signals);
+}
+
+type Ingestor = (content: string, signals: ProjectSignals) => void;
+
+/** Pick the parser for a manifest filename, or null if it's not one we read. */
+function ingestorFor(name: string): Ingestor | null {
+  if (name === 'package.json') return addNpmDeps;
+  if (name === 'requirements.txt')
+    return (c, s) => parseRequirementsTxt(c).forEach((d) => s.python.add(d));
+  if (name === 'pyproject.toml')
+    return (c, s) => parsePyprojectToml(c).forEach((d) => s.python.add(d));
+  if (name === 'Pipfile')
+    return (c, s) => parsePipfile(c).forEach((d) => s.python.add(d));
+  if (name === 'Gemfile')
+    return (c, s) => parseGemfile(c).forEach((g) => s.ruby.add(g));
+  if (name.startsWith('.env'))
+    return (c, s) => parseEnvKeys(c).forEach((k) => s.envKeys.add(k));
+  return null;
 }
 
 function addNpmDeps(content: string, signals: ProjectSignals): void {
   try {
-    const pkg = JSON.parse(content) as {
-      dependencies?: Record<string, string>;
-      devDependencies?: Record<string, string>;
-    };
+    const pkg = JSON.parse(content) as PackageJson;
     for (const dep of Object.keys({
       ...pkg.dependencies,
       ...pkg.devDependencies,
@@ -183,12 +169,4 @@ export function parseEnvKeys(content: string): string[] {
     if (match) keys.push(match[1]);
   }
   return keys;
-}
-
-function safeRead(fullPath: string): string | null {
-  try {
-    return readFileSync(fullPath, 'utf-8');
-  } catch {
-    return null;
-  }
 }

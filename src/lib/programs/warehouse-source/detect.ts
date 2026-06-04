@@ -10,6 +10,7 @@ import { existsSync, statSync } from 'fs';
 import type { WizardSession } from '@lib/wizard-session';
 import type { AbortCase } from '@lib/agent/agent-runner';
 import { detectWarehouseSources } from '@lib/warehouse-sources/detect';
+import type { DetectedSource } from '@lib/warehouse-sources/types';
 
 /** Structured detection errors rendered by the intro screen. */
 export type WarehouseDetectError =
@@ -20,11 +21,29 @@ export type WarehouseDetectError =
     }
   | { kind: 'no-sources' };
 
+/** frameworkContext key holding the detected sources (set on success). */
+export const DETECTED_WAREHOUSE_SOURCES_KEY = 'detectedWarehouseSources';
+
+/**
+ * Read the detected sources out of frameworkContext. Single accessor shared by
+ * the intro screen and the prompt builder so the key + cast live in one place.
+ */
+export function getDetectedWarehouseSources(
+  session: WizardSession,
+): DetectedSource[] {
+  return (
+    (session.frameworkContext[DETECTED_WAREHOUSE_SOURCES_KEY] as
+      | DetectedSource[]
+      | undefined) ?? []
+  );
+}
+
 /** `[ABORT] <reason>` cases the skill can emit. */
 export const WAREHOUSE_ABORT_CASES: AbortCase[] = [
   {
     // Skill emits: [ABORT] No data source detected
-    match: /^no data source detected$/i,
+    // Tolerant of plural ("sources") and a trailing period.
+    match: /^no data sources? detected\.?$/i,
     message: 'No data source detected',
     body:
       'The agent could not confirm a data warehouse source to connect. ' +
@@ -34,7 +53,7 @@ export const WAREHOUSE_ABORT_CASES: AbortCase[] = [
   },
   {
     // Skill emits: [ABORT] Source creation failed
-    match: /^source creation failed$/i,
+    match: /^source creation failed\.?$/i,
     message: 'Source creation failed',
     body:
       'PostHog could not create the data warehouse source with the ' +
@@ -78,5 +97,5 @@ export function detectWarehousePrerequisites(
     return;
   }
 
-  setFrameworkContext('detectedWarehouseSources', sources);
+  setFrameworkContext(DETECTED_WAREHOUSE_SOURCES_KEY, sources);
 }
