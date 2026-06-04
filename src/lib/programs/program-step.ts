@@ -125,6 +125,13 @@ export interface ProgramConfig {
   steps: ProgramStep[];
   /** Agent run config. Static object or async function for dynamic config. */
   run?: ProgramRun | ((session: WizardSession) => Promise<ProgramRun>);
+  /**
+   * CI-mode pre-run strategy. When set, runWizardCI awaits this after building
+   * the ci:true session and before the agent runs, instead of walking step
+   * onReady hooks. Use for headless prerequisite work (e.g. framework
+   * detection) that the TUI performs via step onReady callbacks.
+   */
+  ciPreRun?: (session: WizardSession) => Promise<void>;
   /** Prerequisites: other program ids that must have run first */
   requires?: string[];
   /**

@@ -1,4 +1,4 @@
-import { buildSession, RunPhase } from '@lib/wizard-session';
+import { buildSession, McpOutcome, RunPhase } from '@lib/wizard-session';
 import { WizardReadiness } from '@lib/health-checks/readiness';
 import { PROGRAM_SEQUENCES, ScreenId } from '@ui/tui/screen-sequences';
 import { Program, type ProgramId } from '@lib/programs/program-registry';
@@ -145,6 +145,52 @@ describe('PROGRAM_SEQUENCES', () => {
       session.mcpComplete = true;
 
       expect(entry.isComplete?.(session)).toBe(true);
+    });
+
+    describe('McpAdd → mcp-suggested-prompts step', () => {
+      it('hides the step when MCP install was skipped', () => {
+        const session = buildSession({});
+        session.mcpOutcome = McpOutcome.Skipped;
+        const entry = getEntry(Program.McpAdd, ScreenId.McpSuggestedPrompts);
+
+        expect(entry.show?.(session)).toBe(false);
+      });
+
+      it('hides the step when no MCP clients were detected', () => {
+        const session = buildSession({});
+        session.mcpOutcome = McpOutcome.NoClients;
+        const entry = getEntry(Program.McpAdd, ScreenId.McpSuggestedPrompts);
+
+        expect(entry.show?.(session)).toBe(false);
+      });
+
+      it('hides the step when MCP install failed', () => {
+        const session = buildSession({});
+        session.mcpOutcome = McpOutcome.Failed;
+        const entry = getEntry(Program.McpAdd, ScreenId.McpSuggestedPrompts);
+
+        expect(entry.show?.(session)).toBe(false);
+      });
+
+      it('shows the step when MCP was installed', () => {
+        const session = buildSession({});
+        session.mcpOutcome = McpOutcome.Installed;
+        const entry = getEntry(Program.McpAdd, ScreenId.McpSuggestedPrompts);
+
+        expect(entry.show?.(session)).toBe(true);
+      });
+
+      it('is incomplete until the user dismisses', () => {
+        const session = buildSession({});
+        session.mcpOutcome = McpOutcome.Installed;
+        const entry = getEntry(Program.McpAdd, ScreenId.McpSuggestedPrompts);
+
+        expect(entry.isComplete?.(session)).toBe(false);
+
+        session.mcpSuggestedPromptsDismissed = true;
+
+        expect(entry.isComplete?.(session)).toBe(true);
+      });
     });
   });
 });

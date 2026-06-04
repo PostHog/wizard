@@ -16,6 +16,18 @@ export interface ContentObjectBlock {
   sentenceInterval?: number;
   pause?: number;
   persist?: boolean;
+  /**
+   * When the sequencer advances past this block, should it render dim?
+   * Defaults to `true` — the standard "completed step" treatment. Set to
+   * `false` to keep the block at full opacity even after it's complete
+   * (useful for headings or greetings that should stay readable while
+   * later blocks animate in).
+   *
+   * Only meaningful for blocks whose `content` is a string (TextBlock
+   * renders the dim treatment). NodeBlocks render whatever JSX you pass
+   * verbatim regardless of completion state.
+   */
+  dimWhenComplete?: boolean;
 }
 
 /** Lines block — reveals ReactNode lines one at a time. */
