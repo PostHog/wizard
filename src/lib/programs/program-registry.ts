@@ -85,7 +85,12 @@ export function getProgramConfig(id: ProgramId): ProgramConfig {
   return PROGRAM_REGISTRY.find((c) => c.id === id)!;
 }
 
+/** A program config that is exposed as a CLI subcommand. */
+export type SubcommandProgram = ProgramConfig & { command: string };
+
 /** All program configs that are exposed as CLI subcommands. */
-export function getSubcommandPrograms(): ProgramConfig[] {
-  return PROGRAM_REGISTRY.filter((c) => c.command != null);
+export function getSubcommandPrograms(): SubcommandProgram[] {
+  return PROGRAM_REGISTRY.filter(
+    (c): c is SubcommandProgram => c.command != null,
+  );
 }

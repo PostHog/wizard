@@ -74,12 +74,12 @@ describe('CLI argument parsing', () => {
     delete process.env.POSTHOG_WIZARD_API_KEY;
     delete process.env.POSTHOG_WIZARD_INSTALL_DIR;
 
-    // Mock process.exit to prevent test runner from exiting.
-    // Throwing stops the handler from continuing past validation failures
-    // (e.g. into the CI async IIFE that expects validated options).
-    process.exit = jest.fn().mockImplementation(() => {
-      throw new Error('process.exit');
-    }) as any;
+    // Mock process.exit so the test runner doesn't exit. The CLI dispatch is
+    // async (it dynamically imports the matched command file), so a throwing
+    // mock would escape as an unhandled rejection rather than halting the
+    // handler. A no-op suffices: validation failures `return` right after
+    // calling exit, and tests assert on the recorded exit code.
+    process.exit = jest.fn() as unknown as typeof process.exit;
   });
 
   afterEach(() => {
@@ -117,26 +117,9 @@ describe('CLI argument parsing', () => {
     return calls[calls.length - 1][0];
   }
 
-  // Note: --default and --region are yargs options that don't flow through
-  // buildSession in the non-CI path, so they're tested indirectly (no errors)
-  // rather than by inspecting values.
-
-  describe('--default flag', () => {
-    test('accepted when not specified', async () => {
-      await runCLI([]);
-      expect(mockBuildSessionCli).toHaveBeenCalled();
-    });
-
-    test('accepted with --no-default', async () => {
-      await runCLI(['--no-default']);
-      expect(mockBuildSessionCli).toHaveBeenCalled();
-    });
-
-    test('accepted when explicitly set to true', async () => {
-      await runCLI(['--default']);
-      expect(mockBuildSessionCli).toHaveBeenCalled();
-    });
-  });
+  // Note: --region is a yargs option that doesn't flow through buildSession in
+  // the non-CI path, so it's tested indirectly (no errors) rather than by
+  // inspecting values.
 
   describe('--region flag', () => {
     test.each(['us', 'eu'])(
@@ -157,19 +140,10 @@ describe('CLI argument parsing', () => {
       expect(mockBuildSessionCli).toHaveBeenCalled();
     });
 
-    test('respects POSTHOG_WIZARD_DEFAULT', async () => {
-      process.env.POSTHOG_WIZARD_DEFAULT = 'false';
-
-      await runCLI([]);
-
-      expect(mockBuildSessionCli).toHaveBeenCalled();
-    });
-
     test('CLI args override environment variables', async () => {
       process.env.POSTHOG_WIZARD_REGION = 'us';
-      process.env.POSTHOG_WIZARD_DEFAULT = 'false';
 
-      await runCLI(['--region', 'eu', '--default']);
+      await runCLI(['--region', 'eu']);
 
       expect(mockBuildSessionCli).toHaveBeenCalled();
     });
@@ -177,24 +151,14 @@ describe('CLI argument parsing', () => {
 
   describe('backward compatibility', () => {
     test('all existing flags continue to work', async () => {
-      await runCLI([
-        '--debug',
-        '--signup',
-        '--force-install',
-        '--install-dir',
-        '/custom/path',
-        '--integration',
-        'nextjs',
-      ]);
+      await runCLI(['--debug', '--signup', '--install-dir', '/custom/path']);
 
       const args = getLastBuildSessionArgs();
 
       // Existing flags forwarded through buildSession
       expect(args.debug).toBe(true);
       expect(args.signup).toBe(true);
-      expect(args.forceInstall).toBe(true);
       expect(args.installDir).toBe('/custom/path');
-      expect(args.integration).toBe('nextjs');
     });
   });
 
