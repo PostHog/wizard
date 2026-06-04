@@ -1,34 +1,45 @@
 /**
  * McpSuggestedPromptsScreen — shown after MCP install succeeds in the
- * standalone `wizard mcp add` program.
+ * standalone `wizard mcp add` program, and as the entry point for
+ * `wizard mcp tutorial`.
  *
  * Phases:
- *   1. Choose         — opens with a Log in / Exit picker, framed by a
- *                       hardcoded teaser of three example prompts.
- *   2. Authenticating — runs `services.performLogin()` (OAuth in
- *                       production, canned values in the playground).
- *                       Renders a spinner + login URL inline while the
- *                       promise is pending. Errors return to Choose
- *                       with an inline error line.
- *   3. PromptPicker   — lists the role-tailored kit; user picks one to
- *                       run. The picker has its own "Exit" entry so
- *                       dismissal is discoverable without a hidden
- *                       hotkey.
- *   4. Running        — streams the agent's response inline via
- *                       `services.runPromptStreaming`. `[esc]` aborts
- *                       and returns to the picker; `[enter]` after
- *                       completion goes back to the picker so the user
- *                       can run another or exit.
+ *   1. Choose          — opens with a Log in / Exit picker, framed by a
+ *                        teaser of what MCP can do.
+ *   2. Authenticating  — runs `services.performLogin()` (OAuth in
+ *                        production, canned values in the playground).
+ *                        Renders a spinner + login URL inline while the
+ *                        promise is pending. Errors return to Choose
+ *                        with an inline error line.
+ *   3. Greeting        — role-tuned welcome via `getRoleGreeting`. A
+ *                        ContentSequencer animates the headline,
+ *                        bullets, and outro, then hands off to
+ *                        PromptPicker. Only fires once per session
+ *                        (returning via `[p]` skips it).
+ *   4. PromptPicker    — lists the role-tailored kit from
+ *                        `getRolePrompts`; user picks one to run.
+ *   5. Running         — streams the agent's response inline via
+ *                        `services.runPromptStreaming`. Text chunks
+ *                        typewrite in; tool calls and results render
+ *                        as styled badges. `[esc]` aborts; `[p]`
+ *                        returns to the picker. On `done`/`error`,
+ *                        auto-advances to FollowUp.
+ *   6. FollowUp        — surfaces 3 context-aware next prompts inferred
+ *                        from the last tool the agent used (via
+ *                        `getFollowUps`), plus an explicit exit.
+ *                        Picking a follow-up re-enters Running; the
+ *                        conversation tree grows as deep as
+ *                        MAX_PROMPT_RUNS allows.
  *
- * Credentials are guaranteed non-null once PromptPicker / Running are
- * reached (the Choose → Authenticating gate forces a successful login
- * before getting there). A defensive throw protects the Running
- * useEffect against a state-machine bug.
+ * Credentials are guaranteed non-null once Greeting / PromptPicker /
+ * Running / FollowUp are reached (the Choose → Authenticating gate
+ * forces a successful login first). A defensive throw protects the
+ * Running useEffect against a state-machine bug.
  */
 
 import { Box, Text } from 'ink';
 import { Spinner } from '@inkjs/ui';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSyncExternalStore } from 'react';
 
 import type { WizardStore } from '@ui/tui/store';
@@ -42,9 +53,14 @@ import {
   type ContentBlock,
 } from '@ui/tui/primitives/index';
 import {
-  STOCK_MCP_SUGGESTED_PROMPTS,
+  getRolePrompts,
+  getRoleGreeting,
+  getFollowUps,
+  FOLLOW_UP_EXIT_SENTINEL,
   type SuggestedPrompt,
+  type RoleGreeting,
 } from '@lib/mcp-role-prompts';
+import type { Integration } from '@lib/constants';
 import { analytics } from '@utils/analytics';
 import { logToFile } from '@utils/debug';
 import type {
@@ -60,8 +76,13 @@ interface McpSuggestedPromptsScreenProps {
 enum Phase {
   Choose = 'choose',
   Authenticating = 'authenticating',
+  Greeting = 'greeting',
   PromptPicker = 'prompt-picker',
   Running = 'running',
+  FollowUp = 'follow-up',
+  /** Final beat on every dismissal — reminds the user how to keep
+   *  talking to PostHog after the tutorial ends. */
+  Goodbye = 'goodbye',
   Done = 'done',
 }
 
@@ -70,11 +91,11 @@ enum ChoiceValue {
   Exit = 'exit',
 }
 
-// Cap how many prompts a single tutorial session can run. Once reached,
-// the user can read the final result but can't return to the picker —
-// the only way out is [esc]. Keeps the wizard from becoming a free-tier
-// MCP front-end and gives the tutorial a natural "done" point.
-const MAX_PROMPT_RUNS = 3;
+// Cap how many prompts a single tutorial session can run, including
+// follow-ups. Once reached, FollowUp shows a cap-reached state and the
+// only escape is [esc]. Keeps the wizard from becoming a free-tier MCP
+// front-end and gives the tutorial a natural "done" point.
+const MAX_PROMPT_RUNS = 5;
 
 export const McpSuggestedPromptsScreen = ({
   store,
@@ -86,22 +107,37 @@ export const McpSuggestedPromptsScreen = ({
   );
 
   const session = store.session;
-  // The role + framework matrix in mcp-role-prompts.ts is intentionally
-  // kept for future use (and the OAuth plumbing still populates
-  // session.roleAtOrganization). For now the picker shows the same
-  // generic kit to every user.
-  const kit = STOCK_MCP_SUGGESTED_PROMPTS;
+  // Role + framework family drive the kit and the greeting. Both helpers
+  // fall back to neutral defaults when either input is missing, so these
+  // are always populated.
+  const kit = getRolePrompts(session.roleAtOrganization, session.integration);
+  const greeting = useMemo(
+    () => getRoleGreeting(session.roleAtOrganization),
+    [session.roleAtOrganization],
+  );
 
   const [phase, setPhase] = useState<Phase>(Phase.Choose);
   const [loginError, setLoginError] = useState<string | null>(null);
   const [runningPrompt, setRunningPrompt] = useState<string | null>(null);
   const [runChunks, setRunChunks] = useState<AgentChunk[]>([]);
   const [runStartedAt, setRunStartedAt] = useState<number | null>(null);
+  // Frozen elapsed-seconds value, set the moment the stream emits
+  // 'done' / 'error'. Without this, the "Done in Xs." line ticks up
+  // every render once the result is parked under the FollowUp picker.
+  const [runDurationSecs, setRunDurationSecs] = useState<number | null>(null);
   // Count every prompt the user has selected this session (including ones
   // they aborted mid-stream). Counted at pick-time, not completion-time,
   // so a user can't tap-cancel-tap-cancel to bypass the cap.
   const [runCount, setRunCount] = useState(0);
   const canPickAnother = runCount < MAX_PROMPT_RUNS;
+
+  // The last tool the agent invoked during the current run. Drives the
+  // context-aware follow-up suggestions in FollowUp. Cleared at the
+  // start of each new run.
+  const [lastToolName, setLastToolName] = useState<string | null>(null);
+  // Every prompt the user has picked this session — initial + follow-ups.
+  // Used to filter out already-seen suggestions in getFollowUps().
+  const [branchHistory, setBranchHistory] = useState<string[]>([]);
 
   // AbortController for the in-flight runPromptStreaming call. Lifted
   // to a ref so [esc] / unmount can call abort() without the closure
@@ -122,7 +158,7 @@ export const McpSuggestedPromptsScreen = ({
         store.setRoleAtOrganization(roleAtOrganization);
         store.setApiUser(user);
         store.setLoginUrl(null);
-        setPhase(Phase.PromptPicker);
+        setPhase(Phase.Greeting);
       } catch (err) {
         if (cancelled) return;
         const message = err instanceof Error ? err.message : String(err);
@@ -138,7 +174,9 @@ export const McpSuggestedPromptsScreen = ({
     };
   }, [phase, services, store]);
 
-  // Stream the chosen prompt against the agent.
+  // Stream the chosen prompt against the agent. On terminal chunks
+  // ('done' or 'error') we schedule a short delay before swapping into
+  // FollowUp so the user gets a beat to read the final text.
   useEffect(() => {
     if (phase !== Phase.Running) return;
     if (!runningPrompt) return;
@@ -153,6 +191,32 @@ export const McpSuggestedPromptsScreen = ({
     const startedAt = Date.now();
     setRunStartedAt(startedAt);
     setRunChunks([]);
+    setLastToolName(null);
+    setRunDurationSecs(null);
+
+    const finishStream = (
+      kind: 'done' | 'error',
+      durationMs: number,
+      errorText?: string,
+    ) => {
+      if (controller.signal.aborted) return;
+      setRunDurationSecs(Math.round(durationMs / 1000));
+      if (kind === 'done') {
+        analytics.wizardCapture('mcp suggested prompts run', {
+          prompt: runningPrompt,
+          durationMs,
+        });
+      } else {
+        analytics.wizardCapture('mcp suggested prompts run failed', {
+          prompt: runningPrompt,
+          error: errorText,
+        });
+      }
+      // Transition immediately — the result chunks stay visible above
+      // the FollowUp picker, so the user reads at their own pace
+      // instead of waiting for an auto-advance timer.
+      setPhase(Phase.FollowUp);
+    };
 
     void (async () => {
       const credentials = session.credentials;
@@ -165,18 +229,15 @@ export const McpSuggestedPromptsScreen = ({
         })) {
           if (controller.signal.aborted) return;
           setRunChunks((prev) => [...prev, chunk]);
+          if (chunk.kind === 'tool-call') {
+            setLastToolName(chunk.toolName);
+          }
           if (chunk.kind === 'done') {
-            analytics.wizardCapture('mcp suggested prompts run', {
-              prompt: runningPrompt,
-              durationMs: Date.now() - startedAt,
-            });
+            finishStream('done', Date.now() - startedAt);
             return;
           }
           if (chunk.kind === 'error') {
-            analytics.wizardCapture('mcp suggested prompts run failed', {
-              prompt: runningPrompt,
-              error: chunk.text,
-            });
+            finishStream('error', Date.now() - startedAt, chunk.text);
             return;
           }
         }
@@ -184,10 +245,7 @@ export const McpSuggestedPromptsScreen = ({
         if (controller.signal.aborted) return;
         const text = err instanceof Error ? err.message : String(err);
         setRunChunks((prev) => [...prev, { kind: 'error', text }]);
-        analytics.wizardCapture('mcp suggested prompts run failed', {
-          prompt: runningPrompt,
-          error: text,
-        });
+        finishStream('error', Date.now() - startedAt, text);
       }
     })();
 
@@ -197,7 +255,17 @@ export const McpSuggestedPromptsScreen = ({
     };
   }, [phase, runningPrompt, services, session.credentials]);
 
-  const dismiss = (): void => {
+  // Two-stage exit so the user always sees the Goodbye reminder
+  // (installed clients + sample prompts) before the screen actually
+  // tears down. `enterGoodbye` routes any dismissal into the reminder;
+  // `closeWizard` does the actual store mutation that lets the router
+  // move on.
+  const enterGoodbye = (): void => {
+    runAbortRef.current?.abort();
+    setPhase(Phase.Goodbye);
+  };
+
+  const closeWizard = (): void => {
     setPhase(Phase.Done);
     setTimeout(() => {
       store.setMcpSuggestedPromptsDismissed();
@@ -216,49 +284,97 @@ export const McpSuggestedPromptsScreen = ({
       analytics.wizardCapture('mcp suggested prompts choose', {
         choice: 'exit',
       });
-      dismiss();
+      enterGoodbye();
     }
+  };
+
+  // Single entry-point for kicking off a stream. Used by both the
+  // initial picker and the follow-up picker.
+  const startRun = (prompt: string): void => {
+    setRunningPrompt(prompt);
+    setRunCount((c) => c + 1);
+    setBranchHistory((h) => [...h, prompt]);
+    setPhase(Phase.Running);
   };
 
   const handlePromptPick = (value: string | string[]): void => {
     const picked = Array.isArray(value) ? value[0] : value;
-    setRunningPrompt(picked);
-    setRunCount((c) => c + 1);
-    setPhase(Phase.Running);
+    startRun(picked);
   };
+
+  const handleFollowUpPick = (value: string | string[]): void => {
+    const picked = Array.isArray(value) ? value[0] : value;
+    if (picked === FOLLOW_UP_EXIT_SENTINEL) {
+      analytics.wizardCapture('mcp suggested prompts follow-up', {
+        choice: 'exit',
+        depth: branchHistory.length,
+      });
+      enterGoodbye();
+      return;
+    }
+    analytics.wizardCapture('mcp suggested prompts follow-up', {
+      choice: 'continue',
+      depth: branchHistory.length,
+      lastToolName,
+    });
+    startRun(picked);
+  };
+
+  // `[enter]` skips the auto-paced Greeting to the picker. Only
+  // registered while Greeting is on screen — PickerMenu owns enter
+  // during the picker phases, and Running auto-transitions on done
+  // (no auto-advance timer left to short-circuit).
+  const canSkipForward = phase === Phase.Greeting;
 
   useKeyBindings('mcp-suggested-prompts', [
     {
       match: KeyMatch.Escape,
       label: 'esc',
-      action: phase === Phase.PromptPicker ? 'exit' : 'exit',
+      action: phase === Phase.Goodbye ? 'close' : 'exit',
       handler: () => {
-        if (phase === Phase.Running) {
-          // Abort any in-flight stream so the SDK call shuts down cleanly
-          // before we tear the screen down.
-          runAbortRef.current?.abort();
-          dismiss();
-        } else if (phase === Phase.PromptPicker) {
-          dismiss();
+        if (phase === Phase.Goodbye) {
+          closeWizard();
+        } else if (
+          phase === Phase.Running ||
+          phase === Phase.PromptPicker ||
+          phase === Phase.FollowUp ||
+          phase === Phase.Greeting
+        ) {
+          enterGoodbye();
         }
       },
     },
     {
-      // `[p]` is the primary "pick new prompt" hotkey during Running —
-      // works whether the stream is in flight or already finished. Always
-      // returns to the PromptPicker (aborting the stream if necessary).
-      // No-op once the per-session cap is reached; [esc] becomes the
-      // only escape.
+      // `[p]` is the primary "pick a different prompt" hotkey during
+      // Running and FollowUp — always returns to the PromptPicker
+      // (aborting the stream if necessary). No-op once the per-session
+      // cap is reached.
       match: 'p',
       label: 'p',
       action: canPickAnother ? 'pick new prompt' : 'cap reached',
       handler: () => {
-        if (phase !== Phase.Running) return;
+        if (phase !== Phase.Running && phase !== Phase.FollowUp) return;
         if (!canPickAnother) return;
         runAbortRef.current?.abort();
         setPhase(Phase.PromptPicker);
       },
     },
+    // Conditional enter binding — only active during the Greeting
+    // (where it short-circuits the typewriter pacing). PickerMenu
+    // owns enter in the picker phases; Running flips straight to
+    // FollowUp the moment the stream completes.
+    ...(canSkipForward
+      ? [
+          {
+            match: KeyMatch.Return,
+            label: 'enter',
+            action: 'continue',
+            handler: () => {
+              setPhase(Phase.PromptPicker);
+            },
+          },
+        ]
+      : []),
   ]);
 
   return (
@@ -272,19 +388,16 @@ export const McpSuggestedPromptsScreen = ({
           <AuthenticatingPhase loginUrl={session.loginUrl} />
         )}
 
+        {phase === Phase.Greeting && (
+          <GreetingPhase
+            greeting={greeting}
+            userDisplayName={session.apiUser?.first_name || null}
+            onComplete={() => setPhase(Phase.PromptPicker)}
+          />
+        )}
+
         {phase === Phase.PromptPicker && (
-          <>
-            <Box marginBottom={1}>
-              <Text bold color={Colors.accent}>
-                MCP tutorial
-              </Text>
-            </Box>
-            <PromptPickerPhase
-              promptKit={kit}
-              userDisplayName={session.apiUser?.first_name || null}
-              onSelect={handlePromptPick}
-            />
-          </>
+          <PromptPickerPhase promptKit={kit} onSelect={handlePromptPick} />
         )}
 
         {phase === Phase.Running && runningPrompt && (
@@ -292,9 +405,47 @@ export const McpSuggestedPromptsScreen = ({
             prompt={runningPrompt}
             chunks={runChunks}
             startedAt={runStartedAt}
-            canPickAnother={canPickAnother}
+            frozenDurationSecs={runDurationSecs}
             runCount={runCount}
             maxRuns={MAX_PROMPT_RUNS}
+          />
+        )}
+
+        {phase === Phase.FollowUp && (
+          <Box flexDirection="column">
+            {runningPrompt && (
+              <RunningPhase
+                prompt={runningPrompt}
+                chunks={runChunks}
+                startedAt={runStartedAt}
+                frozenDurationSecs={runDurationSecs}
+                runCount={runCount}
+                maxRuns={MAX_PROMPT_RUNS}
+              />
+            )}
+            <Box marginTop={1}>
+              <FollowUpPhase
+                lastToolName={lastToolName}
+                lastPrompt={runningPrompt}
+                chunks={runChunks}
+                role={session.roleAtOrganization}
+                branchHistory={branchHistory}
+                canPickAnother={canPickAnother}
+                runCount={runCount}
+                maxRuns={MAX_PROMPT_RUNS}
+                onSelect={handleFollowUpPick}
+              />
+            </Box>
+          </Box>
+        )}
+
+        {phase === Phase.Goodbye && (
+          <GoodbyePhase
+            installedClients={session.mcpInstalledClients}
+            role={session.roleAtOrganization}
+            integration={session.integration}
+            engaged={branchHistory.length > 0}
+            onClose={closeWizard}
           />
         )}
       </Box>
@@ -382,69 +533,115 @@ const AuthenticatingPhase = ({ loginUrl }: AuthenticatingPhaseProps) => (
   </Box>
 );
 
+// ── Greeting phase ─────────────────────────────────────────────────────
+
+interface GreetingPhaseProps {
+  greeting: RoleGreeting;
+  userDisplayName: string | null;
+  onComplete: () => void;
+}
+
+const GreetingPhase = ({
+  greeting,
+  userDisplayName,
+  onComplete,
+}: GreetingPhaseProps) => {
+  // Sequence: optional first-name greeting → role-tuned headline →
+  // bullets reveal line-by-line → outro fades in → handoff to picker.
+  //
+  // Pacing notes: `pause` is the time the sequencer waits AFTER a
+  // block finishes before advancing — that's the user's reading
+  // window. Each typed block is "ready to read" only after the
+  // typewriter finishes, so the pauses are sized for the absorbed
+  // length, not the typing time.
+  const blocks: ContentBlock[] = [];
+
+  if (userDisplayName) {
+    blocks.push({
+      content: `Hi ${userDisplayName}!`,
+      mode: TextRevealMode.Typewriter,
+      animationInterval: 70,
+      pause: 1200,
+    });
+  }
+
+  blocks.push({
+    content: greeting.headline,
+    mode: TextRevealMode.Typewriter,
+    animationInterval: 45,
+    pause: 2000,
+  });
+
+  blocks.push({
+    type: 'lines',
+    lines: greeting.bullets.map((bullet, i) => (
+      <Text key={i}>
+        <Text color={Colors.primary}>{Icons.diamond}</Text>{' '}
+        <Text dimColor>{bullet}</Text>
+      </Text>
+    )),
+    interval: 700,
+    pause: 2200,
+  });
+
+  blocks.push({
+    content: greeting.outro,
+    mode: TextRevealMode.Typewriter,
+    animationInterval: 38,
+    pause: 1800,
+  });
+
+  return (
+    <Box flexDirection="column">
+      <Box marginBottom={1}>
+        <Text bold color={Colors.accent}>
+          MCP tutorial
+        </Text>
+      </Box>
+      <ContentSequencer
+        blocks={blocks}
+        mode={TextRevealMode.Typewriter}
+        blockInterval={500}
+        onSequenceComplete={onComplete}
+      />
+    </Box>
+  );
+};
+
 // ── Prompt picker phase ────────────────────────────────────────────────
 
 interface PromptPickerPhaseProps {
   promptKit: SuggestedPrompt[];
-  userDisplayName: string | null;
   onSelect: (value: string | string[]) => void;
 }
 
-const PromptPickerPhase = ({
-  promptKit,
-  userDisplayName,
-  onSelect,
-}: PromptPickerPhaseProps) => {
+const PromptPickerPhase = ({ promptKit, onSelect }: PromptPickerPhaseProps) => {
   const options = promptKit.map((p) => ({
     label: p.prompt,
     value: p.prompt,
   }));
 
-  // Sequence: typewriter greeting → typewriter prompt → live PickerMenu.
-  // The PickerMenu mounts only when the sequencer reaches it, so keyboard
-  // input doesn't capture until the picker is actually on screen.
-  const blocks: ContentBlock[] = [
-    {
-      content: `Hello there, ${userDisplayName || 'there'}!`,
-      mode: TextRevealMode.Typewriter,
-      animationInterval: 100,
-      pause: 1200,
-      dimWhenComplete: false,
-    },
-    {
-      content: 'Pick a prompt to see the PostHog MCP in action.',
-      mode: TextRevealMode.Typewriter,
-      animationInterval: 50,
-      pause: 1000,
-      dimWhenComplete: false,
-    },
-    {
-      content: (
-        <>
-          <PickerMenu
-            options={options}
-            optionMarginBottom={1}
-            onSelect={onSelect}
-          />
-          <Box marginTop={2}>
-            <Text>
-              <Text bold>[esc]</Text>
-              <Text> to exit</Text>
-            </Text>
-          </Box>
-        </>
-      ),
-      persist: true,
-    },
-  ];
-
   return (
     <Box flexDirection="column">
-      <ContentSequencer
-        blocks={blocks}
-        mode={TextRevealMode.Typewriter}
-        blockInterval={350}
+      <Box marginBottom={1}>
+        <Text bold color={Colors.accent}>
+          MCP tutorial
+        </Text>
+      </Box>
+      <Box marginBottom={1}>
+        <Text>Pick a prompt to see the PostHog MCP in action.</Text>
+      </Box>
+      <PickerMenu
+        options={options}
+        optionMarginBottom={1}
+        onSelect={onSelect}
       />
+      <Box marginTop={2}>
+        <Text>
+          <Text bold>[esc]</Text>
+          <Text> to exit</Text>
+        </Text>
+      </Box>
     </Box>
   );
 };
@@ -455,11 +652,10 @@ interface RunningPhaseProps {
   prompt: string;
   chunks: AgentChunk[];
   startedAt: number | null;
-  /** Whether [p] is still functional this session. */
-  canPickAnother: boolean;
-  /** How many prompts the user has selected so far (1-indexed at run-time). */
+  /** Set the instant the stream finishes; freezes the displayed elapsed
+   *  time so re-renders under FollowUp don't keep ticking it forward. */
+  frozenDurationSecs: number | null;
   runCount: number;
-  /** Hard cap on prompt selections per session. */
   maxRuns: number;
 }
 
@@ -467,28 +663,21 @@ const RunningPhase = ({
   prompt,
   chunks,
   startedAt,
-  canPickAnother,
+  frozenDurationSecs,
   runCount,
   maxRuns,
 }: RunningPhaseProps) => {
   const isDone = chunks.some((c) => c.kind === 'done');
   const errorChunk = chunks.find((c) => c.kind === 'error');
   const finished = isDone || !!errorChunk;
-  const elapsed = startedAt ? Math.round((Date.now() - startedAt) / 1000) : 0;
-
-  // When finished, the user has already seen the streaming progress —
-  // collapse to just the agent's final message. Drop tool-call /
-  // tool-result chatter and the "Prompt: <prompt>" header so the
-  // message fills the viewport.
-  const visibleChunks = finished
-    ? chunks.filter((c) => c.kind === 'text' || c.kind === 'error')
-    : chunks;
+  const elapsed =
+    frozenDurationSecs ??
+    (startedAt ? Math.round((Date.now() - startedAt) / 1000) : 0);
 
   // Hard cap: if Claude ignored the terminal-fit system prompt and
-  // produced an overlong response, slice to the last N lines so the
-  // result still fits without scroll. The system prompt should keep this
-  // off most of the time — this is the belt-and-suspenders fallback.
-  const cappedChunks = finished ? capTextChunks(visibleChunks) : visibleChunks;
+  // produced an overlong response, slice text to the last N lines so the
+  // result still fits without scroll. Tool calls / results are preserved.
+  const visibleChunks = finished ? capTextChunks(chunks) : chunks;
 
   return (
     <Box flexDirection="column">
@@ -497,10 +686,9 @@ const RunningPhase = ({
       </Text>
 
       <Box marginTop={1} gap={1}>
-        {/* Spinner spins for the full duration of the stream — from
-            kickoff until the agent emits its final `done` chunk (or an
-            error). Visual confirmation that work is still in flight even
-            during pauses between chunks. */}
+        {/* Spinner spins for the full duration of the stream — visual
+            confirmation that work is still in flight even during pauses
+            between chunks. */}
         {!finished && <Spinner />}
         <Text bold={finished}>
           {finished
@@ -515,24 +703,10 @@ const RunningPhase = ({
       </Box>
 
       <Box marginTop={1} flexDirection="column">
-        {cappedChunks.map((chunk, idx) => (
+        {visibleChunks.map((chunk, idx) => (
           <ChunkLine key={idx} chunk={chunk} />
         ))}
       </Box>
-
-      {finished && !canPickAnother && (
-        <Box marginTop={1}>
-          <Text>
-            <Text dimColor>
-              You&apos;ve hit the {maxRuns}-prompt tutorial cap. Press{' '}
-            </Text>
-            <Text bold dimColor>
-              [esc]
-            </Text>
-            <Text dimColor> to exit.</Text>
-          </Text>
-        </Box>
-      )}
     </Box>
   );
 };
@@ -541,19 +715,24 @@ const RunningPhase = ({
  * Belt-and-suspenders fallback for runs where Claude ignored the
  * terminal-fit system prompt and produced an overlong response. Joins
  * all text chunks, slices to the last N lines that fit in the current
- * terminal, and prepends an indicator showing how many lines got cut.
- * Errors are preserved separately so failures don't disappear into the
- * truncation.
+ * terminal, prepends an indicator showing how many lines got cut.
+ * Tool calls, results, and errors are preserved separately so they
+ * don't disappear into the truncation.
  */
 function capTextChunks(chunks: AgentChunk[]): AgentChunk[] {
   const rows = process.stdout.rows ?? 24;
-  // Reserve rows for: title bar, prompt header (hidden when finished but
-  // counted defensively), "Done in Xs." line, margins. The leftover is
-  // what the message area can use.
-  const maxMessageRows = Math.max(6, rows - 8);
+  // Reserve rows for: title bar, prompt header, status line, the
+  // FollowUp recap + picker + footer that now sits directly under
+  // the result, plus margins. Stay generous so picker options aren't
+  // pushed off-screen on shorter terminals.
+  const maxMessageRows = Math.max(4, rows - 18);
 
-  const textChunks = chunks.filter((c) => c.kind === 'text');
-  const errors = chunks.filter((c) => c.kind === 'error');
+  const textChunks = chunks.filter(
+    (c): c is Extract<AgentChunk, { kind: 'text' }> => c.kind === 'text',
+  );
+  const nonTextChunks = chunks.filter(
+    (c) => c.kind !== 'text' && c.kind !== 'done',
+  );
   if (textChunks.length === 0) return chunks;
 
   const joined = textChunks.map((c) => c.text).join('');
@@ -570,7 +749,7 @@ function capTextChunks(chunks: AgentChunk[]): AgentChunk[] {
         hidden === 1 ? '' : 's'
       } above — expand terminal to see more]\n\n${tail}`,
     },
-    ...errors,
+    ...nonTextChunks,
   ];
 }
 
@@ -580,28 +759,216 @@ interface ChunkLineProps {
 
 const ChunkLine = ({ chunk }: ChunkLineProps) => {
   if (chunk.kind === 'text') {
+    // Text chunks render as plain text — the chunk-by-chunk arrival
+    // from the stream IS the reveal animation. Adding a per-chunk
+    // typewriter on top stacks animations in parallel and creates
+    // visual noise when chunks arrive faster than they can type.
     return <Text>{chunk.text}</Text>;
   }
   if (chunk.kind === 'tool-call') {
     return (
-      <Text>
-        {'  '}
-        <Text color="cyan">↳ {chunk.toolName}</Text>
-        {chunk.detail ? ` ${chunk.detail}` : ''}
-      </Text>
+      <Box
+        marginTop={1}
+        paddingX={1}
+        borderStyle="round"
+        borderColor={Colors.primary}
+      >
+        <Text color={Colors.primary} bold>
+          {Icons.diamond}
+        </Text>
+        <Text> {chunk.toolName}</Text>
+        {chunk.detail ? <Text dimColor> · {chunk.detail}</Text> : null}
+      </Box>
     );
   }
   if (chunk.kind === 'tool-result') {
     return (
-      <Text>
-        {'    '}
-        <Text color="green">✓</Text> {chunk.detail}
-      </Text>
+      <Box marginLeft={2}>
+        <Text color={Colors.success}>{Icons.check}</Text>
+        <Text dimColor> {chunk.detail || 'ok'}</Text>
+      </Box>
     );
   }
   if (chunk.kind === 'error') {
-    return <Text color="red">Error: {chunk.text}</Text>;
+    return (
+      <Box
+        marginTop={1}
+        paddingX={1}
+        borderStyle="round"
+        borderColor={Colors.error}
+      >
+        <Text color={Colors.error}>
+          {Icons.warning} {chunk.text}
+        </Text>
+      </Box>
+    );
   }
-  // 'done' — no visual chunk; the dim status line above handles it.
+  // 'done' — no visual chunk; the status line above already reflects it.
   return null;
+};
+
+// ── Follow-up phase ────────────────────────────────────────────────────
+
+interface FollowUpPhaseProps {
+  lastToolName: string | null;
+  lastPrompt: string | null;
+  chunks: AgentChunk[];
+  role: string | null;
+  branchHistory: string[];
+  canPickAnother: boolean;
+  runCount: number;
+  maxRuns: number;
+  onSelect: (value: string | string[]) => void;
+}
+
+const FollowUpPhase = ({
+  lastToolName,
+  lastPrompt,
+  chunks,
+  role,
+  branchHistory,
+  canPickAnother,
+  runCount,
+  maxRuns,
+  onSelect,
+}: FollowUpPhaseProps) => {
+  const followUps = useMemo(
+    () =>
+      getFollowUps({
+        lastToolName,
+        lastPrompt: lastPrompt || '',
+        role,
+        branchHistory,
+      }),
+    [lastToolName, lastPrompt, role, branchHistory],
+  );
+
+  // When the cap is reached, only the exit entry is available.
+  const options = canPickAnother
+    ? followUps.map((f) => ({ label: f.label, value: f.prompt }))
+    : [{ label: 'Exit', value: FOLLOW_UP_EXIT_SENTINEL }];
+
+  const errorChunk = chunks.find((c) => c.kind === 'error');
+  const recap = errorChunk
+    ? 'That one errored out — try a different angle?'
+    : lastToolName
+    ? `That used \`${lastToolName}\`. Want to keep digging?`
+    : 'Want to keep exploring?';
+
+  return (
+    <Box flexDirection="column">
+      <Box marginBottom={1}>
+        <Text bold color={Colors.accent}>
+          What next?
+        </Text>
+      </Box>
+      <Box marginBottom={1}>
+        <Text>{recap}</Text>
+      </Box>
+      <PickerMenu
+        options={options}
+        optionMarginBottom={1}
+        onSelect={onSelect}
+      />
+      <Box marginTop={2} flexDirection="column">
+        <Text dimColor>
+          ({runCount}/{maxRuns} prompts used)
+        </Text>
+        {!canPickAnother && (
+          <Text dimColor>
+            You&apos;ve hit the {maxRuns}-prompt tutorial cap.
+          </Text>
+        )}
+        {canPickAnother && (
+          <Text>
+            <Text bold>[p]</Text>
+            <Text> to pick a different prompt</Text>
+            <Text>{'  '}</Text>
+            <Text bold>[esc]</Text>
+            <Text> to exit</Text>
+          </Text>
+        )}
+      </Box>
+    </Box>
+  );
+};
+
+// ── Goodbye phase ──────────────────────────────────────────────────────
+// Always shown before final dismissal. Reminds the user where MCP is
+// available and what to ask once they're back in their IDE.
+
+interface GoodbyePhaseProps {
+  installedClients: string[];
+  role: string | null;
+  integration: Integration | null;
+  /** True if the user actually ran at least one prompt this session. */
+  engaged: boolean;
+  onClose: () => void;
+}
+
+const GoodbyePhase = ({
+  installedClients,
+  role,
+  integration,
+  engaged,
+  onClose,
+}: GoodbyePhaseProps) => {
+  // Take 3 starter prompts from the role-tailored kit. These act as
+  // "next time you open your IDE, try this" reminders.
+  const kit = getRolePrompts(role, integration);
+  const samples = kit.slice(0, 3);
+
+  const headline = engaged
+    ? 'Nice work. You can keep talking to PostHog anytime.'
+    : "You're all set — PostHog MCP is here when you're ready.";
+
+  const introLine =
+    installedClients.length > 0 ? (
+      <Text>
+        MCP is set up in{' '}
+        <Text bold color={Colors.primary}>
+          {installedClients.join(', ')}
+        </Text>
+        . Open one and try a prompt like:
+      </Text>
+    ) : (
+      <Text>
+        Wherever you have MCP set up (Claude Code, Cursor, VS Code, Windsurf,
+        Zed, etc.), open the agent and try a prompt like:
+      </Text>
+    );
+
+  return (
+    <Box flexDirection="column">
+      <Box marginBottom={1}>
+        <Text bold color={Colors.accent}>
+          {headline}
+        </Text>
+      </Box>
+
+      <Box marginBottom={1}>{introLine}</Box>
+
+      <Box marginBottom={1} flexDirection="column">
+        {samples.map((p, i) => (
+          <Box key={i}>
+            <Text color={Colors.primary}>{Icons.triangleSmallRight}</Text>
+            <Text> </Text>
+            <Text dimColor>{p.prompt}</Text>
+          </Box>
+        ))}
+      </Box>
+
+      <Box marginBottom={1}>
+        <Text dimColor>
+          Re-run this tutorial anytime with{' '}
+          <Text bold>npx @posthog/wizard mcp tutorial</Text>.
+        </Text>
+      </Box>
+
+      <PickerMenu
+        options={[{ label: 'Close', value: 'close' }]}
+        onSelect={onClose}
+      />
+    </Box>
+  );
 };

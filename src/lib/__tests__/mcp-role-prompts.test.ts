@@ -2,6 +2,9 @@ import {
   getRolePrompts,
   getFrameworkFamily,
   getRoleLabel,
+  getRoleGreeting,
+  getFollowUps,
+  FOLLOW_UP_EXIT_SENTINEL,
   VERIFY_PROMPT,
   TAILORED_ROLES,
 } from '@lib/mcp-role-prompts';
@@ -93,5 +96,153 @@ describe('getRoleLabel', () => {
     for (const role of TAILORED_ROLES) {
       expect(getRoleLabel(role)).toMatch(/^\w/);
     }
+  });
+});
+
+describe('getRoleGreeting', () => {
+  it('returns a neutral greeting for null role', () => {
+    const g = getRoleGreeting(null);
+    expect(g.headline).toBeTruthy();
+    expect(g.bullets.length).toBeGreaterThan(0);
+    expect(g.outro).toBeTruthy();
+  });
+
+  it('returns the neutral greeting for unknown roles', () => {
+    const g = getRoleGreeting('not-a-real-role');
+    // The neutral greeting always mentions MCP somewhere — sanity check.
+    expect(g.headline).toMatch(/MCP/i);
+  });
+
+  it('returns a populated greeting for every TAILORED_ROLE', () => {
+    for (const role of TAILORED_ROLES) {
+      const g = getRoleGreeting(role);
+      expect(g.headline).toBeTruthy();
+      expect(g.bullets.length).toBeGreaterThanOrEqual(2);
+      expect(g.outro).toBeTruthy();
+    }
+  });
+
+  it('uses distinct headlines per role', () => {
+    const headlines = new Set(
+      TAILORED_ROLES.map((r) => getRoleGreeting(r).headline),
+    );
+    expect(headlines.size).toBe(TAILORED_ROLES.length);
+  });
+});
+
+describe('getFollowUps', () => {
+  const baseArgs = {
+    lastPrompt: '',
+    role: null,
+    branchHistory: [] as string[],
+  };
+
+  it('returns generic follow-ups + exit when no tool was used', () => {
+    const fs = getFollowUps({ ...baseArgs, lastToolName: null });
+    expect(fs.length).toBeGreaterThan(1);
+    // Exit is always the final entry.
+    expect(fs[fs.length - 1].prompt).toBe(FOLLOW_UP_EXIT_SENTINEL);
+  });
+
+  it('returns tool-specific follow-ups when the tool is known', () => {
+    const fs = getFollowUps({
+      ...baseArgs,
+      lastToolName: 'query-error-tracking-issue',
+    });
+    // 3 tool-specific + exit
+    expect(fs).toHaveLength(4);
+    expect(fs[0].label).toMatch(/Dig into/i);
+    expect(fs[fs.length - 1].prompt).toBe(FOLLOW_UP_EXIT_SENTINEL);
+  });
+
+  it('normalizes MCP-prefixed tool names', () => {
+    const direct = getFollowUps({
+      ...baseArgs,
+      lastToolName: 'query-trends',
+    });
+    const prefixed = getFollowUps({
+      ...baseArgs,
+      lastToolName: 'mcp__posthog-wizard__query-trends',
+    });
+    expect(prefixed[0].label).toBe(direct[0].label);
+  });
+
+  it('falls back to generic follow-ups for unknown tool names', () => {
+    const fs = getFollowUps({
+      ...baseArgs,
+      lastToolName: 'something-the-server-might-add-later',
+    });
+    // Unknown tool → candidate pool is just the generic set. Use a loose
+    // match against any current generic label to stay resilient to copy
+    // tweaks; the strong assertion is that we got generics, not a stale
+    // tool-specific lookup.
+    expect(fs[0].label).toMatch(
+      /deeper|angle|surprise|slice|compare|actionable/i,
+    );
+    expect(fs[fs.length - 1].prompt).toBe(FOLLOW_UP_EXIT_SENTINEL);
+  });
+
+  it('rotates suggestions by branch depth so visits differ', () => {
+    // Same tool, no history — but different depths should surface
+    // different first picks because of the rotation offset.
+    const shallow = getFollowUps({
+      ...baseArgs,
+      lastToolName: 'query-trends',
+      branchHistory: [],
+    });
+    const deeper = getFollowUps({
+      ...baseArgs,
+      lastToolName: 'query-trends',
+      // Synthetic prompts the rotation doesn't filter against.
+      branchHistory: ['__unrelated_a__', '__unrelated_b__'],
+    });
+    expect(shallow[0].prompt).not.toBe(deeper[0].prompt);
+  });
+
+  it('mixes in role-specific candidates for known roles', () => {
+    // Pool size larger than FOLLOW_UP_COUNT, so when role is set we
+    // should sometimes see role-flavored phrasing surface. Pick a depth
+    // that rotates past the tool-specific block into role territory.
+    const founderResult = getFollowUps({
+      lastPrompt: '',
+      branchHistory: ['a', 'b', 'c', 'd', 'e', 'f'],
+      role: 'founder',
+      lastToolName: 'query-trends',
+    });
+    const engineerResult = getFollowUps({
+      lastPrompt: '',
+      branchHistory: ['a', 'b', 'c', 'd', 'e', 'f'],
+      role: 'engineering',
+      lastToolName: 'query-trends',
+    });
+    // Same tool + same depth but different roles → different slices.
+    const founderLabels = founderResult.map((f) => f.label).join('|');
+    const engineerLabels = engineerResult.map((f) => f.label).join('|');
+    expect(founderLabels).not.toBe(engineerLabels);
+  });
+
+  it('always appends the exit follow-up regardless of input', () => {
+    for (const toolName of [null, 'query-trends', 'unknown']) {
+      const fs = getFollowUps({ ...baseArgs, lastToolName: toolName });
+      expect(fs[fs.length - 1].prompt).toBe(FOLLOW_UP_EXIT_SENTINEL);
+      expect(fs[fs.length - 1].label).toMatch(/exit|done/i);
+    }
+  });
+
+  it('filters out prompts already in branchHistory', () => {
+    const all = getFollowUps({
+      ...baseArgs,
+      lastToolName: 'query-trends',
+    });
+    // Drop the exit entry; pick a real follow-up to repeat.
+    const repeated = all[0].prompt;
+    const filtered = getFollowUps({
+      ...baseArgs,
+      lastToolName: 'query-trends',
+      branchHistory: [repeated],
+    });
+    expect(filtered.find((f) => f.prompt === repeated)).toBeUndefined();
+    // Exit still present.
+    expect(filtered[filtered.length - 1].prompt).toBe(FOLLOW_UP_EXIT_SENTINEL);
   });
 });

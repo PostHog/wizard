@@ -3,10 +3,10 @@
  * suggested-prompts screen.
  *
  * Mounts the real McpSuggestedPromptsScreen with mock services so every
- * phase (Choose → Authenticating → PromptPicker → Running) can be
- * previewed without touching the network. No special-case branches in
- * the screen itself — the mock just satisfies the same interface
- * production wires.
+ * phase (Choose → Authenticating → Greeting → PromptPicker → Running →
+ * FollowUp) can be previewed without touching the network. The Greeting
+ * phase auto-advances; FollowUp re-enters Running when a follow-up is
+ * picked, building a conversation tree up to MAX_PROMPT_RUNS deep.
  *
  *   R   cycle role         (null → founder → product → ... → data → null)
  *   F   cycle framework    (null → nextjs → vue → swift → django → null)
@@ -16,6 +16,11 @@
  *   L   login delay:       0ms (skip UI) | 2000ms | 6000ms
  *   S   stream script:     short-text | with-tools | mid-stream-error
  *   C   chunk delay:       50ms | 200ms | 800ms
+ *
+ * Tip: switch S to "with-tools" and the FollowUp picker after the run
+ * will show context-aware suggestions based on the last tool (mock
+ * tool names are MCP-prefixed and pass through the normalization in
+ * getFollowUps).
  */
 
 import { Box, Text, useInput } from 'ink';
