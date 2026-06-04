@@ -14,6 +14,7 @@ import type { Integration } from './constants';
 import type { FrameworkConfig } from './framework-config';
 import type { WizardReadinessResult } from './health-checks/readiness';
 import type { SettingsConflict } from './agent/agent-interface';
+import type { ApiUser } from './api';
 
 export interface Credentials {
   accessToken: string;
@@ -172,6 +173,27 @@ export interface WizardSession {
   // From OAuth
   credentials: Credentials | null;
 
+  /**
+   * `role_at_organization` from `/api/users/@me/`. Null when the upstream
+   * value is missing (older accounts, fresh signups before onboarding).
+   * Drives role-tailored MCP prompt suggestions on the McpSuggestedPromptsScreen.
+   *
+   * Mirrors `apiUser?.role_at_organization` — kept as a top-level convenience
+   * because it has dedicated UI semantics (role-tailored kits) and pre-dates
+   * the broader `apiUser` plumbing.
+   */
+  roleAtOrganization: string | null;
+
+  /**
+   * Full user payload from `/api/users/@me/` — identifiers, profile,
+   * current team + organization, preferences, etc. Null until OAuth /
+   * CI-key auth populates it. Schema lives in `src/lib/api.ts` and
+   * passes through unknown upstream fields so downstream features can
+   * read account context (plan, org name, email, etc.) without
+   * re-fetching.
+   */
+  apiUser: ApiUser | null;
+
   // Lifecycle
   runPhase: RunPhase;
   loginUrl: string | null;
@@ -187,6 +209,7 @@ export interface WizardSession {
   mcpComplete: boolean;
   mcpOutcome: McpOutcome | null;
   mcpInstalledClients: string[];
+  mcpSuggestedPromptsDismissed: boolean;
   skillsComplete: boolean;
   outroDismissed: boolean;
 
@@ -270,11 +293,14 @@ export function buildSession(args: {
     mcpComplete: false,
     mcpOutcome: null,
     mcpInstalledClients: [],
+    mcpSuggestedPromptsDismissed: false,
     skillsComplete: false,
     outroDismissed: false,
     loginUrl: null,
     authorizeUrl: null,
     credentials: null,
+    roleAtOrganization: null,
+    apiUser: null,
     readinessResult: null,
     outageDismissed: false,
     settingsOverrideKeys: null,

@@ -16,7 +16,11 @@ jest.mock('@utils/env-api-key', () => ({
   readApiKeyFromEnv: mockReadApiKeyFromEnvMcp,
 }));
 jest.mock('@lib/programs/program-registry', () => ({
-  Program: { McpAdd: 'mcp-add', McpRemove: 'mcp-remove' },
+  Program: {
+    McpAdd: 'mcp-add',
+    McpRemove: 'mcp-remove',
+    McpTutorial: 'mcp-tutorial',
+  },
   PROGRAM_REGISTRY: [],
   getSubcommandPrograms: () => [],
   getProgramConfig: () => ({}),
@@ -25,6 +29,7 @@ jest.mock('@lib/programs/program-registry', () => ({
 import type { Arguments } from 'yargs';
 import { mcpAddCommand } from '../commands/mcp/add';
 import { mcpRemoveCommand } from '../commands/mcp/remove';
+import { mcpTutorialCommand } from '../commands/mcp/tutorial';
 import { mcpCommand } from '../commands/mcp';
 import { parseCommand } from './helpers/parse-command.no-jest';
 
@@ -39,9 +44,13 @@ async function flush() {
 }
 
 describe('mcpCommand (parent)', () => {
-  test('exposes add and remove as children, no handler of its own', () => {
+  test('exposes add, remove, and tutorial as children, no handler of its own', () => {
     expect(mcpCommand.handler).toBeUndefined();
-    expect(mcpCommand.children).toEqual([mcpAddCommand, mcpRemoveCommand]);
+    expect(mcpCommand.children).toEqual([
+      mcpAddCommand,
+      mcpRemoveCommand,
+      mcpTutorialCommand,
+    ]);
   });
 });
 
