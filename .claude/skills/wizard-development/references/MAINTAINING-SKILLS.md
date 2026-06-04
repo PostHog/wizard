@@ -76,6 +76,23 @@ Skills carry a `version` field in their frontmatter. Bump it as follows:
 
 When you bump a version, also bump the `version` in any reference file that shipped as part of the change. Version churn is itself a maintenance signal — a skill that's bumped majors three times in a year is probably teaching an abstraction that hasn't stabilized.
 
+## Keep the README's OAuth scopes in sync with `constants.ts`
+
+The wizard's required OAuth scopes are defined once, in `WIZARD_OAUTH_SCOPES`
+(and its `WIZARD_PROVISIONING_SCOPES` subset) in `src/lib/constants.ts`. That
+constant is the source of truth — it's what the wizard actually requests at
+login. The README's "OAuth Scopes" section documents the same list for
+operators who grant scopes on the PostHog OAuth application (US / EU regions).
+
+These two drift apart easily: someone adds a scope to the constant for a new
+capability (e.g. `notebook:write` for the notebooks MCP tools) and the README
+keeps listing the old set, or vice versa. **Whenever you add or remove a scope
+in `constants.ts`, update the README's "OAuth Scopes" table and copy-pasteable
+list in the same change** — and confirm the new scope is granted on the OAuth
+application in every region, or the corresponding tool calls fail at runtime.
+The header comment on `WIZARD_OAUTH_SCOPES` carries the reverse pointer back to
+the README.
+
 ## The maintainer's question
 
 When you finish updating a skill, ask: "If a contributor with no prior context follows this exactly, will they produce work the architecture currently asks for?" Not "will they produce something that works" — works is necessary but not sufficient. The skill should produce idiomatic output, not just functional output. If following the skill produces a bin.ts edit that the registry would have done automatically, the skill is asking for work that should be automatic.

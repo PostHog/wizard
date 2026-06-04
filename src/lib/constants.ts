@@ -123,12 +123,18 @@ export const WIZARD_PROVISIONING_SCOPES = [
  * - health_issue:read     used by `wizard doctor`
  * - wizard_session:read   list / retrieve / stream sessions
  * - wizard_session:write  stream run state to /api/projects/{id}/wizard/sessions/
+ * - notebook:write        create / edit notebooks via the notebooks MCP tools
+ *
+ * Each scope here must also be granted on the PostHog OAuth application in
+ * every region (US / EU). When this list changes, update the "OAuth Scopes"
+ * section of README.md to match — it documents this constant for operators.
  */
 export const WIZARD_OAUTH_SCOPES = [
   ...WIZARD_PROVISIONING_SCOPES,
   'health_issue:read',
   'wizard_session:read',
   'wizard_session:write',
+  'notebook:write',
 ] as const;
 
 // ── Wizard run / variants ───────────────────────────────────────────
