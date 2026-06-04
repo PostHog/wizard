@@ -3,7 +3,12 @@ import path from 'path';
 import { logToFile } from '@utils/debug';
 import { AUDIT_CHECKS_FILE, type AuditCheck } from './types.js';
 
-/** The 10 data-integrity checks the audit runs. */
+/**
+ * The 10 data-integrity checks the audit runs, plus one workflow row for the
+ * notebook upload at the end (so the skill's `audit_resolve_checks` call for
+ * `upload-notebook` succeeds — the skill writes the report to a PostHog
+ * notebook as its final step).
+ */
 export const AUDIT_SEED_CHECKS: AuditCheck[] = [
   {
     id: 'sdk-installed',
@@ -63,6 +68,12 @@ export const AUDIT_SEED_CHECKS: AuditCheck[] = [
     id: 'capture-growth-events',
     area: 'Event Capture',
     label: 'Key activation events captured',
+    status: 'pending',
+  },
+  {
+    id: 'upload-notebook',
+    area: 'Upload notebook',
+    label: 'Write the report into a PostHog notebook',
     status: 'pending',
   },
 ];

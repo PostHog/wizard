@@ -1,12 +1,14 @@
 import type { AuditCheck } from '@lib/programs/audit/types';
 
 /**
- * The 6 phases the events-audit skill marches through. One check per area
+ * The 7 phases the events-audit skill marches through. One check per area
  * so PendingChecksList renders a clean linear pipeline (area = bold header,
  * single row = the active spinner).
  *
  * Phase ids match what the skill's step files resolve via
- * `mcp__wizard-tools__audit_resolve_checks` as each phase completes.
+ * `mcp__wizard-tools__audit_resolve_checks` as each phase completes. The
+ * skill's step 1 also seeds these same ids — keep both in sync so the
+ * wizard pre-seed and the skill's MCP seed agree.
  */
 export const EVENTS_AUDIT_SEED_CHECKS: AuditCheck[] = [
   {
@@ -43,6 +45,12 @@ export const EVENTS_AUDIT_SEED_CHECKS: AuditCheck[] = [
     id: 'create-dashboard',
     area: 'Create dashboard',
     label: 'Optional: dashboard for resolved events',
+    status: 'pending',
+  },
+  {
+    id: 'upload-notebook',
+    area: 'Upload notebook',
+    label: 'Write the report into a PostHog notebook',
     status: 'pending',
   },
 ];
