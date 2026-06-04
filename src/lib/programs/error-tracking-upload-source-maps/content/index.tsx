@@ -39,13 +39,18 @@ const withPace = (block: ContentBlock): ContentBlock => {
 /** Apply the dwell multiplier to every block in a deck. */
 const pace = (blocks: ContentBlock[]): ContentBlock[] => blocks.map(withPace);
 
-/** A minified production stack trace — the problem source maps solve. */
+/**
+ * A minified production stack trace — the problem source maps solve. Framed as
+ * a labelled, muted example (no error-red ✘) so a glance reads it as
+ * illustrative content, not as the wizard itself having errored mid-run.
+ */
 const MINIFIED_TRACE: ContentBlock = {
   type: 'lines',
   interval: 400,
   pause: 7000,
   lines: [
-    <Text color={Colors.error}>{'✘ TypeError: cart is undefined'}</Text>,
+    <Text dimColor>{'example — minified production trace'}</Text>,
+    <Text color={Colors.muted}>{'  TypeError: cart is undefined'}</Text>,
     <Text dimColor>{'    at t.min.js:1:48213'}</Text>,
     <Text dimColor>{'    at t.min.js:1:9402'}</Text>,
     <Text dimColor>{'    at t.min.js:1:71150'}</Text>,
@@ -58,7 +63,8 @@ const RESOLVED_TRACE: ContentBlock = {
   interval: 400,
   pause: 8000,
   lines: [
-    <Text color={Colors.success}>{'✔ TypeError: cart is undefined'}</Text>,
+    <Text dimColor>{'example — resolved with source maps'}</Text>,
+    <Text color={Colors.success}>{'  ✔ TypeError: cart is undefined'}</Text>,
     <Text>
       <Text dimColor>{'    at '}</Text>
       <Text color="cyan">Cart.tsx:42</Text>

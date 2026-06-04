@@ -19,8 +19,6 @@ export type WizardRunOptions = {
 
   debug: boolean;
   default: boolean;
-  menu: boolean;
-  forceInstall: boolean;
   benchmark: boolean;
   yaraReport: boolean;
 
