@@ -4,6 +4,8 @@ import {
   getRoleLabel,
   getRoleGreeting,
   getFollowUps,
+  getToolHint,
+  getCrossSellPrompts,
   FOLLOW_UP_EXIT_SENTINEL,
   VERIFY_PROMPT,
   TAILORED_ROLES,
@@ -244,5 +246,70 @@ describe('getFollowUps', () => {
     expect(filtered.find((f) => f.prompt === repeated)).toBeUndefined();
     // Exit still present.
     expect(filtered[filtered.length - 1].prompt).toBe(FOLLOW_UP_EXIT_SENTINEL);
+  });
+});
+
+describe('getToolHint', () => {
+  it('returns a hint for known tools', () => {
+    const hint = getToolHint('query-error-tracking-issue');
+    expect(hint).not.toBeNull();
+    expect(hint?.product).toMatch(/error/i);
+    expect(hint?.text.length).toBeGreaterThan(10);
+  });
+
+  it('normalizes MCP-prefixed tool names', () => {
+    const direct = getToolHint('query-trends');
+    const prefixed = getToolHint('mcp__posthog-wizard__query-trends');
+    expect(prefixed).not.toBeNull();
+    expect(prefixed?.product).toBe(direct?.product);
+  });
+
+  it('returns null for unrecognized tools', () => {
+    expect(getToolHint(null)).toBeNull();
+    expect(getToolHint('')).toBeNull();
+    expect(getToolHint('something-the-server-might-add-later')).toBeNull();
+  });
+});
+
+describe('getCrossSellPrompts', () => {
+  it('returns neutral cross-sells when role is null', () => {
+    const prompts = getCrossSellPrompts(null);
+    expect(prompts.length).toBeGreaterThan(0);
+    for (const p of prompts) {
+      expect(p.product).toBeTruthy();
+      expect(p.prompt).toBeTruthy();
+      expect(p.description).toBeTruthy();
+    }
+  });
+
+  it('returns neutral cross-sells for unknown roles', () => {
+    const prompts = getCrossSellPrompts('not-a-real-role');
+    expect(prompts.length).toBeGreaterThan(0);
+  });
+
+  it('returns role-specific cross-sells for every TAILORED_ROLE', () => {
+    for (const role of TAILORED_ROLES) {
+      const prompts = getCrossSellPrompts(role);
+      expect(prompts.length).toBeGreaterThan(0);
+      for (const p of prompts) {
+        expect(p.product).toBeTruthy();
+        expect(p.prompt).toBeTruthy();
+      }
+    }
+  });
+
+  it('produces distinct cross-sell sets across roles', () => {
+    // Guards against accidental copy-paste that would collapse multiple
+    // roles to the same cross-sell list. Threshold is loose enough to
+    // tolerate intentional overlap (engineer + data both pitching SQL
+    // would be fine).
+    const fingerprints = new Set(
+      TAILORED_ROLES.map((r) =>
+        getCrossSellPrompts(r)
+          .map((p) => p.product + ':' + p.prompt)
+          .join('|'),
+      ),
+    );
+    expect(fingerprints.size).toBeGreaterThanOrEqual(3);
   });
 });

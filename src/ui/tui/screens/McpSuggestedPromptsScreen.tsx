@@ -56,9 +56,12 @@ import {
   getRolePrompts,
   getRoleGreeting,
   getFollowUps,
+  getToolHint,
+  getCrossSellPrompts,
   FOLLOW_UP_EXIT_SENTINEL,
   type SuggestedPrompt,
   type RoleGreeting,
+  type CrossSellPrompt,
 } from '@lib/mcp-role-prompts';
 import type { Integration } from '@lib/constants';
 import { analytics } from '@utils/analytics';
@@ -107,10 +110,14 @@ export const McpSuggestedPromptsScreen = ({
   );
 
   const session = store.session;
-  // Role + framework family drive the kit and the greeting. Both helpers
-  // fall back to neutral defaults when either input is missing, so these
-  // are always populated.
+  // Role + framework family drive the kit, greeting, and cross-sell
+  // prompts. All helpers fall back to neutral defaults when either
+  // input is missing, so these are always populated.
   const kit = getRolePrompts(session.roleAtOrganization, session.integration);
+  const crossSell = useMemo(
+    () => getCrossSellPrompts(session.roleAtOrganization),
+    [session.roleAtOrganization],
+  );
   const greeting = useMemo(
     () => getRoleGreeting(session.roleAtOrganization),
     [session.roleAtOrganization],
@@ -397,7 +404,11 @@ export const McpSuggestedPromptsScreen = ({
         )}
 
         {phase === Phase.PromptPicker && (
-          <PromptPickerPhase promptKit={kit} onSelect={handlePromptPick} />
+          <PromptPickerPhase
+            promptKit={kit}
+            crossSell={crossSell}
+            onSelect={handlePromptPick}
+          />
         )}
 
         {phase === Phase.Running && runningPrompt && (
@@ -612,14 +623,27 @@ const GreetingPhase = ({
 
 interface PromptPickerPhaseProps {
   promptKit: SuggestedPrompt[];
+  crossSell: CrossSellPrompt[];
   onSelect: (value: string | string[]) => void;
 }
 
-const PromptPickerPhase = ({ promptKit, onSelect }: PromptPickerPhaseProps) => {
-  const options = promptKit.map((p) => ({
+const PromptPickerPhase = ({
+  promptKit,
+  crossSell,
+  onSelect,
+}: PromptPickerPhaseProps) => {
+  // Cross-sell prompts get prefixed with "Try {Product}" so they stand
+  // out in the flat picker. They share the same picker so arrow keys
+  // flow naturally across both sections.
+  const crossSellOptions = crossSell.map((c) => ({
+    label: `Try ${c.product}  —  ${c.prompt}`,
+    value: c.prompt,
+  }));
+  const kitOptions = promptKit.map((p) => ({
     label: p.prompt,
     value: p.prompt,
   }));
+  const options = [...crossSellOptions, ...kitOptions];
 
   return (
     <Box flexDirection="column">
@@ -782,10 +806,24 @@ const ChunkLine = ({ chunk }: ChunkLineProps) => {
     );
   }
   if (chunk.kind === 'tool-result') {
+    // Every tool that completes earns a cross-product hint — turns each
+    // agent action into a quiet product-tour beat without breaking flow.
+    const hint = getToolHint(chunk.toolName);
     return (
-      <Box marginLeft={2}>
-        <Text color={Colors.success}>{Icons.check}</Text>
-        <Text dimColor> {chunk.detail || 'ok'}</Text>
+      <Box flexDirection="column">
+        <Box marginLeft={2}>
+          <Text color={Colors.success}>{Icons.check}</Text>
+          <Text dimColor> {chunk.detail || 'ok'}</Text>
+        </Box>
+        {hint && (
+          <Box marginLeft={4}>
+            <Text color={Colors.primary}>{Icons.triangleSmallRight}</Text>
+            <Text dimColor>
+              {' '}
+              <Text bold>{hint.product}:</Text> {hint.text}
+            </Text>
+          </Box>
+        )}
       </Box>
     );
   }

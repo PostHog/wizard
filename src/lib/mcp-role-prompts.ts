@@ -1010,3 +1010,225 @@ export function getFollowUps(args: {
 
   return [...selected, EXIT_FOLLOW_UP];
 }
+
+// ── Cross-product hints (rendered under tool-result chunks) ────────────
+// Each tool the agent uses lights up a different PostHog product. After
+// the result lands the screen surfaces a one-liner pointing the user
+// toward that product, so the tutorial doubles as a quiet product tour
+// — every action the agent takes earns a small "did you know" moment.
+
+export interface ToolHint {
+  /** Which PostHog product this hint promotes. */
+  product: string;
+  /** One-line callout shown under the tool-result chunk. */
+  text: string;
+}
+
+const TOOL_HINTS: Record<string, ToolHint> = {
+  'query-error-tracking-issue': {
+    product: 'Error Tracking',
+    text: 'Error tracking is built into PostHog — no Sentry subscription needed.',
+  },
+  'query-trends': {
+    product: 'Product Analytics',
+    text: 'Pin this trend to a dashboard so the team sees it without re-running.',
+  },
+  'query-funnel': {
+    product: 'Product Analytics',
+    text: 'Funnels work across web, mobile, and backend — one SDK, all events.',
+  },
+  'query-retention': {
+    product: 'Product Analytics',
+    text: 'Retention curves update live — pin one to the team dashboard.',
+  },
+  'query-lifecycle': {
+    product: 'Product Analytics',
+    text: 'Lifecycle splits users into new / returning / dormant — pair with cohorts.',
+  },
+  'query-paths': {
+    product: 'Product Analytics',
+    text: 'Path analysis pairs well with Session Replay to see what users actually did.',
+  },
+  'create-feature-flag': {
+    product: 'Feature Flags',
+    text: 'Feature flags are free up to 1M evaluations per month.',
+  },
+  'update-feature-flag': {
+    product: 'Feature Flags',
+    text: 'Flag changes are versioned — roll back from the PostHog UI if needed.',
+  },
+  'create-dashboard': {
+    product: 'Dashboards',
+    text: 'Subscribe to a weekly email digest in Settings — no Slack-poking required.',
+  },
+  'insight-create': {
+    product: 'Product Analytics',
+    text: 'Insights pin to dashboards and embed in Notion — no separate BI tool.',
+  },
+  'execute-sql': {
+    product: 'Data Warehouse',
+    text: 'Sync Stripe, Salesforce, or S3 into PostHog to query revenue alongside events.',
+  },
+  'cohorts-create': {
+    product: 'Cohorts',
+    text: 'One cohort definition targets flags, surveys, experiments, and replays.',
+  },
+  'survey-create': {
+    product: 'Surveys',
+    text: 'Surveys are included free — no Typeform needed for product feedback.',
+  },
+  'experiment-create': {
+    product: 'Experiments',
+    text: 'Experiments piggyback on flags — same SDK, no extra setup.',
+  },
+  'session-recording-get': {
+    product: 'Session Replay',
+    text: 'Session replays redact PII automatically — turn on in Project Settings.',
+  },
+  'query-session-recordings-list': {
+    product: 'Session Replay',
+    text: 'Filter replays by cohort, event, or property — narrow to what matters.',
+  },
+  'query-llm-trace': {
+    product: 'LLM Observability',
+    text: 'LLM traces capture latency, cost, and tokens alongside product events.',
+  },
+  'web-analytics-weekly-digest': {
+    product: 'Web Analytics',
+    text: 'Web Analytics is GA-style, first-party, and ships with no cookie banner.',
+  },
+};
+
+export function getToolHint(
+  toolName: string | null | undefined,
+): ToolHint | null {
+  if (!toolName) return null;
+  const normalized = normalizeToolName(toolName);
+  if (!normalized) return null;
+  return TOOL_HINTS[normalized] ?? null;
+}
+
+// ── Cross-sell prompts (rendered above the role kit in PromptPicker) ───
+// Each entry explicitly demos a PostHog product the user may not have
+// tried yet. The picker shows them at the top with a "Try X" tag so the
+// tutorial doubles as a product-discovery menu — pick one and the agent
+// shows what that product would do against the user's actual data.
+
+export interface CrossSellPrompt {
+  /** PostHog product surfaced by this prompt. */
+  product: string;
+  /** Prompt sent to the agent on pick. */
+  prompt: string;
+  /** One-line "why care" rationale shown next to the picker. */
+  description: string;
+}
+
+const CROSS_SELL_BY_ROLE: Record<TailoredRole, CrossSellPrompt[]> = {
+  founder: [
+    {
+      product: 'Session Replay',
+      prompt:
+        'Find 3 recent sessions where a user looked at pricing but did not sign up.',
+      description:
+        'Watch what users see — replay turns funnel drop-offs into video.',
+    },
+    {
+      product: 'Surveys',
+      prompt: 'Launch an NPS survey targeting all paying customers.',
+      description: 'Quantitative pulse check, no Typeform setup.',
+    },
+  ],
+  product: [
+    {
+      product: 'Experiments',
+      prompt:
+        'Set up an A/B test for the new onboarding flow with a 50/50 split and signup as the primary metric.',
+      description: 'Experiments piggyback on flags — same SDK, no extra setup.',
+    },
+    {
+      product: 'Session Replay',
+      prompt:
+        'Find sessions where users got stuck on the empty state in onboarding.',
+      description: "See what funnels can't show you.",
+    },
+  ],
+  leadership: [
+    {
+      product: 'Surveys',
+      prompt: 'Run a quarterly NPS across all paid users.',
+      description: 'Replace Typeform with first-party survey data.',
+    },
+    {
+      product: 'Data Warehouse',
+      prompt:
+        'Compare MRR by signup source using Stripe data joined with event data.',
+      description:
+        'Sync Stripe / Salesforce / S3 to query revenue alongside events.',
+    },
+  ],
+  marketing: [
+    {
+      product: 'Session Replay',
+      prompt:
+        'Watch 5 sessions from users who came via our last campaign and converted.',
+      description: 'See campaign visitors behave — beyond aggregate numbers.',
+    },
+    {
+      product: 'Web Analytics',
+      prompt: 'Show me top traffic sources to the pricing page this week.',
+      description: 'GA-style first-party web analytics, no cookie banner.',
+    },
+  ],
+  engineering: [
+    {
+      product: 'Error Tracking',
+      prompt: 'Show me the top 5 errors this week and who is affected.',
+      description: 'Built-in error tracking — no Sentry subscription.',
+    },
+    {
+      product: 'Session Replay',
+      prompt: 'Replay the last 3 sessions that hit a 5xx error.',
+      description: 'Stack trace meets replay — see what the user did.',
+    },
+  ],
+  data: [
+    {
+      product: 'Data Warehouse',
+      prompt:
+        'Join my event stream with Stripe subscriptions to surface churn signals.',
+      description:
+        'Connect Stripe / Salesforce / S3, query everything with SQL.',
+    },
+    {
+      product: 'LLM Observability',
+      prompt: 'Show me the top 10 LLM prompts by cost over the last 7 days.',
+      description: 'Track LLM calls, latency, and cost next to product events.',
+    },
+  ],
+};
+
+const NEUTRAL_CROSS_SELL: CrossSellPrompt[] = [
+  {
+    product: 'Session Replay',
+    prompt:
+      'Show me 5 recent sessions where users dropped off before completing signup.',
+    description: 'Replay what users actually do — included on every plan.',
+  },
+  {
+    product: 'Error Tracking',
+    prompt: 'List the top errors my users hit this week.',
+    description: 'Built-in error tracking — no separate tool.',
+  },
+];
+
+/**
+ * Cross-sell prompts to surface above the role kit in PromptPicker.
+ * Filtered by role so the recommendations stay coherent (founders see
+ * the "exec-friendly" cross-sells, engineers see "debug-friendly", etc).
+ */
+export function getCrossSellPrompts(
+  role: string | null | undefined,
+): CrossSellPrompt[] {
+  if (!isTailoredRole(role)) return NEUTRAL_CROSS_SELL;
+  return CROSS_SELL_BY_ROLE[role];
+}
