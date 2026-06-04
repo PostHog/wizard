@@ -29,6 +29,7 @@ export const webAnalyticsDoctorConfig: ProgramConfig = {
     abortCases: WEB_ANALYTICS_ABORT_CASES,
   }),
   steps: WEB_ANALYTICS_DOCTOR_PROGRAM,
+  parentCommand: 'audit',
 };
 
 export { WEB_ANALYTICS_DOCTOR_PROGRAM } from './steps.js';

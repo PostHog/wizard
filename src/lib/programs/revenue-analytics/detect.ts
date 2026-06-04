@@ -5,33 +5,17 @@
  * into frameworkContext for the intro screen to render.
  */
 
-import type { Dirent } from 'fs';
-import { readFileSync, readdirSync, existsSync, statSync } from 'fs';
-import { join, relative } from 'path';
-import { IGNORED_DIRS } from '@utils/file-utils';
+import { existsSync, statSync } from 'fs';
 import type { WizardSession } from '@lib/wizard-session';
 import type { AbortCase } from '@lib/agent/agent-runner';
+import { findPackageJsons } from '@lib/programs/shared/package-scanning';
 
-export const POSTHOG_SDKS = [
-  'posthog-js',
-  'posthog-node',
-  'posthog-react-native',
-  'posthog-android',
-  'posthog-ios',
-];
-
-export const STRIPE_SDKS = [
-  'stripe',
-  '@stripe/stripe-js',
-  '@stripe/react-stripe-js',
-];
-
-export interface PackageMatch {
-  /** Path to the package.json relative to installDir */
-  path: string;
-  posthogSdks: string[];
-  stripeSdks: string[];
-}
+export {
+  findPackageJsons,
+  POSTHOG_SDKS,
+  STRIPE_SDKS,
+  type PackageMatch,
+} from '@lib/programs/shared/package-scanning';
 
 /**
  * Structured detection errors. The screen renders each kind into JSX
@@ -71,62 +55,6 @@ export const REVENUE_ABORT_CASES: AbortCase[] = [
     docsUrl: 'https://posthog.com/docs/revenue-analytics',
   },
 ];
-
-/**
- * Recursively find all package.json files under installDir (max depth 3),
- * skipping common ignored directories. Returns matches with detected SDKs.
- */
-export function findPackageJsons(
-  installDir: string,
-  maxDepth = 3,
-): PackageMatch[] {
-  const matches: PackageMatch[] = [];
-
-  function scan(dir: string, depth: number): void {
-    if (depth > maxDepth) return;
-
-    let entries: Dirent[];
-    try {
-      entries = readdirSync(dir, { withFileTypes: true });
-    } catch {
-      return;
-    }
-
-    for (const entry of entries) {
-      if (entry.name.startsWith('.') && entry.name !== '.') continue;
-      if (IGNORED_DIRS.has(entry.name)) continue;
-
-      const fullPath = join(dir, entry.name);
-
-      if (entry.isFile() && entry.name === 'package.json') {
-        try {
-          const pkg = JSON.parse(readFileSync(fullPath, 'utf-8')) as {
-            dependencies?: Record<string, string>;
-            devDependencies?: Record<string, string>;
-          };
-          const depNames = [
-            ...Object.keys(pkg.dependencies ?? {}),
-            ...Object.keys(pkg.devDependencies ?? {}),
-          ];
-          const posthogSdks = depNames.filter((d) => POSTHOG_SDKS.includes(d));
-          const stripeSdks = depNames.filter((d) => STRIPE_SDKS.includes(d));
-          matches.push({
-            path: relative(installDir, fullPath) || 'package.json',
-            posthogSdks,
-            stripeSdks,
-          });
-        } catch {
-          // Skip malformed package.json
-        }
-      } else if (entry.isDirectory()) {
-        scan(fullPath, depth + 1);
-      }
-    }
-  }
-
-  scan(installDir, 0);
-  return matches;
-}
 
 /**
  * Scan `session.installDir` for PostHog + Stripe SDKs. Writes detection

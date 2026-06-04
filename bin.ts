@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { satisfies } from 'semver';
 
-import yargs from 'yargs';
+import yargs, { type Argv } from 'yargs';
 import { hideBin } from 'yargs/helpers';
 import { VERSION } from '@lib/version';
 
@@ -593,25 +593,60 @@ cli.command(
 );
 
 // ── Skill-based program subcommands (derived from registry) ─────────
-for (const programConfig of getSubcommandPrograms()) {
+
+/** Resolve CLI argv to runner options and dispatch the program. */
+function dispatchProgram(
+  config: ProgramConfig,
+  argv: Record<string, unknown>,
+): void {
+  const extras = config.mapCliOptions?.(argv) ?? {};
+  const options = { ...argv, ...extras };
+  if (options.ci) {
+    runWizardCI(config, options);
+  } else {
+    runWizard(config, options);
+  }
+}
+
+const buildOptions = (config: ProgramConfig) => (y: Argv) =>
+  y.options({ ...skillSubcommandOptions, ...(config.cliOptions ?? {}) });
+
+const buildHandler =
+  (config: ProgramConfig) =>
+  (argv: unknown): void =>
+    dispatchProgram(config, argv as Record<string, unknown>);
+
+const subcommandPrograms = getSubcommandPrograms();
+
+const childrenByParent = new Map<string, ProgramConfig[]>();
+for (const config of subcommandPrograms) {
+  if (config.parentCommand) {
+    const siblings = childrenByParent.get(config.parentCommand) ?? [];
+    siblings.push(config);
+    childrenByParent.set(config.parentCommand, siblings);
+  }
+}
+
+for (const programConfig of subcommandPrograms) {
+  if (programConfig.parentCommand) continue;
+
+  const children = childrenByParent.get(programConfig.command!) ?? [];
+
   cli.command(
     programConfig.command!,
     programConfig.description,
-    (y) =>
-      y.options({
-        ...skillSubcommandOptions,
-        ...(programConfig.cliOptions ?? {}),
-      }),
-    (argv) => {
-      const extras =
-        programConfig.mapCliOptions?.(argv as Record<string, unknown>) ?? {};
-      const options = { ...argv, ...extras };
-      if (options.ci) {
-        runWizardCI(programConfig, options);
-      } else {
-        runWizard(programConfig, options);
+    (y) => {
+      for (const child of children) {
+        y.command(
+          child.command!,
+          child.description,
+          buildOptions(child),
+          buildHandler(child),
+        );
       }
+      return buildOptions(programConfig)(y);
     },
+    buildHandler(programConfig),
   );
 }
 
