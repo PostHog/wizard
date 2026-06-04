@@ -17,6 +17,7 @@ import { HealthCheckDemo } from './demos/HealthCheckDemo.js';
 import { DoctorReportDemo } from './demos/DoctorReportDemo.js';
 import { ModalDemo } from './demos/ModalDemo.js';
 import { McpDemo } from './demos/McpDemo.js';
+import { McpSuggestedPromptsDemo } from './demos/McpSuggestedPromptsDemo.js';
 import { KeyboardHintsDemo } from './demos/KeyboardHintsDemo.js';
 import { AuditChecksDemo } from './demos/AuditChecksDemo.js';
 import { LearnDeckDemo } from './demos/LearnDeckDemo.js';
@@ -55,6 +56,11 @@ export const PlaygroundApp = ({ store }: PlaygroundAppProps) => {
       id: 'mcp',
       label: 'MCP',
       component: <McpDemo store={store} />,
+    },
+    {
+      id: 'mcp-tutorial',
+      label: 'MCP tutorial',
+      component: <McpSuggestedPromptsDemo store={store} />,
     },
     {
       id: 'hints',

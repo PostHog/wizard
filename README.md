@@ -113,11 +113,7 @@ The following CLI arguments are available:
 | `--help`          | Show help                                                        | boolean |         |                                                      |                                |
 | `--version`       | Show version number                                              | boolean |         |                                                      |                                |
 | `--debug`         | Enable verbose logging                                           | boolean | `false` |                                                      | `POSTHOG_WIZARD_DEBUG`         |
-| `--default`       | Use default options for all prompts                              | boolean | `true`  |                                                      | `POSTHOG_WIZARD_DEFAULT`       |
 | `--signup`        | Create a new PostHog account during setup                        | boolean | `false` |                                                      | `POSTHOG_WIZARD_SIGNUP`        |
-| `--integration`   | Integration to set up                                            | string  |         | "nextjs", "astro", "react", "svelte", "react-native", "tanstack-router", "tanstack-start" |                                |
-| `--menu`          | Show menu for manual integration selection instead of auto-detecting | boolean | `false` |                                                      | `POSTHOG_WIZARD_MENU`          |
-| `--force-install` | Force install packages even if peer dependency checks fail       | boolean | `false` |                                                      | `POSTHOG_WIZARD_FORCE_INSTALL` |
 | `--install-dir`   | Directory to install PostHog in                                  | string  |         |                                                      | `POSTHOG_WIZARD_INSTALL_DIR`   |
 | `--ci`            | Enable CI mode for non-interactive execution                     | boolean | `false` |                                                      | `POSTHOG_WIZARD_CI`            |
 | `--api-key`       | PostHog personal API key (phx_xxx) for authentication            | string  |         |                                                      | `POSTHOG_WIZARD_API_KEY`       |

@@ -36,6 +36,7 @@ import { SetupScreen } from './screens/SetupScreen.js';
 import { AuthScreen } from './screens/AuthScreen.js';
 import { RunScreen } from './screens/RunScreen.js';
 import { McpScreen } from './screens/McpScreen.js';
+import { McpSuggestedPromptsScreen } from './screens/McpSuggestedPromptsScreen.js';
 import { KeepSkillsScreen } from './screens/KeepSkillsScreen.js';
 import { OutroScreen } from './screens/OutroScreen.js';
 import { ExitScreen } from './screens/ExitScreen.js';
@@ -43,14 +44,18 @@ import { AuthErrorScreen } from './screens/AuthErrorScreen.js';
 import { WizardAskScreen } from './screens/WizardAskScreen.js';
 import { createMcpInstaller } from './services/mcp-installer.js';
 import type { McpInstaller } from './services/mcp-installer.js';
+import { createMcpSuggestedPromptsServices } from './services/mcp-suggested-prompts-services.js';
+import type { McpSuggestedPromptsServices } from './services/mcp-suggested-prompts-services.js';
 
 export interface ScreenServices {
   mcpInstaller: McpInstaller;
+  mcpSuggestedPromptsServices: McpSuggestedPromptsServices;
 }
 
-export function createServices(): ScreenServices {
+export function createServices(store: WizardStore): ScreenServices {
   return {
     mcpInstaller: createMcpInstaller(),
+    mcpSuggestedPromptsServices: createMcpSuggestedPromptsServices(store),
   };
 }
 
@@ -89,6 +94,12 @@ export function createScreens(
     [ScreenId.Run]: <RunScreen store={store} />,
     [ScreenId.Mcp]: (
       <McpScreen store={store} installer={services.mcpInstaller} />
+    ),
+    [ScreenId.McpSuggestedPrompts]: (
+      <McpSuggestedPromptsScreen
+        store={store}
+        services={services.mcpSuggestedPromptsServices}
+      />
     ),
     [ScreenId.KeepSkills]: <KeepSkillsScreen store={store} />,
     [ScreenId.Outro]: <OutroScreen store={store} />,
