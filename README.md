@@ -59,9 +59,7 @@ npx @posthog/wizard warehouse
 
 The wizard scans your dependencies and `.env` key names (never the values) to
 identify sources. Database and API-key sources are created from the terminal;
-OAuth sources open the PostHog app's new-source flow in your browser. The main
-wizard also offers this as a follow-up when it detects a source during a normal
-run.
+OAuth sources open the PostHog app's new-source flow in your browser.
 
 ## Headless signup + install (agents / CI)
 
