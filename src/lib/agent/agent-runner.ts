@@ -51,7 +51,7 @@ import { getSkillsBaseUrl } from '@lib/constants';
 import { runtimeEnv } from '@env';
 import { installSkillById, type InstallSkillResult } from '@lib/wizard-tools';
 import { createWizardAskBridge } from '@lib/wizard-ask-bridge';
-import type { WizardOptions } from '@utils/types';
+import type { WizardRunOptions } from '@utils/types';
 
 import type { ProgramConfig } from '@lib/programs/program-step';
 import { assemblePrompt, type PromptContext } from './agent-prompt';
@@ -130,16 +130,14 @@ export function shouldDisableAsk(
   return session.ci || session.signup;
 }
 
-function sessionToOptions(session: WizardSession): WizardOptions {
+function sessionToOptions(session: WizardSession): WizardRunOptions {
   return {
     installDir: session.installDir,
     debug: session.debug,
-    forceInstall: session.forceInstall,
     default: false,
     signup: session.signup,
     localMcp: session.localMcp,
     ci: session.ci,
-    menu: session.menu,
     benchmark: session.benchmark,
     projectId: session.projectId,
     apiKey: session.apiKey,
@@ -258,18 +256,29 @@ export async function runProgram(
 
   // 4. OAuth
   logToFile('[agent-runner] starting OAuth');
-  const { projectApiKey, host, accessToken, projectId, cloudRegion } =
-    await getOrAskForProjectData({
-      signup: session.signup,
-      ci: session.ci,
-      apiKey: session.apiKey,
-      projectId: session.projectId,
-      email: session.email,
-      region: session.region,
-    });
+  const {
+    projectApiKey,
+    host,
+    accessToken,
+    projectId,
+    cloudRegion,
+    roleAtOrganization,
+    user,
+  } = await getOrAskForProjectData({
+    signup: session.signup,
+    ci: session.ci,
+    apiKey: session.apiKey,
+    projectId: session.projectId,
+    email: session.email,
+    region: session.region,
+  });
 
   session.credentials = { accessToken, projectApiKey, host, projectId };
+  session.roleAtOrganization = roleAtOrganization;
+  session.apiUser = user;
   getUI().setCredentials(session.credentials);
+  getUI().setRoleAtOrganization(roleAtOrganization);
+  getUI().setApiUser(user);
 
   // 5. Skill install (if skillId provided)
   let skillPath: string | undefined;

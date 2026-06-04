@@ -1,6 +1,6 @@
 import fg from 'fast-glob';
 import { getUI } from '@ui';
-import type { WizardOptions } from '@utils/types';
+import type { WizardRunOptions } from '@utils/types';
 import { createVersionBucket } from '@utils/semver';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -33,7 +33,7 @@ export const getLaravelVersionBucket = createVersionBucket();
  * Read and parse composer.json
  */
 export function getComposerJson(
-  options: Pick<WizardOptions, 'installDir'>,
+  options: Pick<WizardRunOptions, 'installDir'>,
 ): Record<string, any> | undefined {
   const { installDir } = options;
 
@@ -51,7 +51,7 @@ export function getComposerJson(
  */
 function hasComposerPackage(
   packageName: string,
-  options: Pick<WizardOptions, 'installDir'>,
+  options: Pick<WizardRunOptions, 'installDir'>,
 ): boolean {
   const composer = getComposerJson(options);
   if (!composer) return false;
@@ -66,7 +66,7 @@ function hasComposerPackage(
  */
 function getComposerPackageVersion(
   packageName: string,
-  options: Pick<WizardOptions, 'installDir'>,
+  options: Pick<WizardRunOptions, 'installDir'>,
 ): string | undefined {
   const composer = getComposerJson(options);
   if (!composer) return undefined;
@@ -86,7 +86,7 @@ function getComposerPackageVersion(
  */
 async function hasLaravelCodePattern(
   pattern: RegExp | string,
-  options: Pick<WizardOptions, 'installDir'>,
+  options: Pick<WizardRunOptions, 'installDir'>,
   filePatterns: string[] = ['**/*.php'],
 ): Promise<boolean> {
   const { installDir } = options;
@@ -115,7 +115,7 @@ async function hasLaravelCodePattern(
  * Get Laravel version from composer.json
  */
 export function getLaravelVersion(
-  options: Pick<WizardOptions, 'installDir'>,
+  options: Pick<WizardRunOptions, 'installDir'>,
 ): string | undefined {
   return getComposerPackageVersion('laravel/framework', options);
 }
@@ -142,7 +142,7 @@ export function getLaravelProjectTypeName(
  * Check for Inertia.js
  */
 async function hasInertia(
-  options: Pick<WizardOptions, 'installDir'>,
+  options: Pick<WizardRunOptions, 'installDir'>,
 ): Promise<boolean> {
   return (
     hasComposerPackage('inertiajs/inertia-laravel', options) ||
@@ -154,7 +154,7 @@ async function hasInertia(
  * Check for Livewire
  */
 async function hasLivewire(
-  options: Pick<WizardOptions, 'installDir'>,
+  options: Pick<WizardRunOptions, 'installDir'>,
 ): Promise<boolean> {
   return (
     hasComposerPackage('livewire/livewire', options) ||
@@ -166,7 +166,7 @@ async function hasLivewire(
  * Detect Laravel project type
  */
 export async function getLaravelProjectType(
-  options: WizardOptions,
+  options: WizardRunOptions,
 ): Promise<LaravelProjectType> {
   // Check for SPA/Reactive frameworks (important to detect - affects SDK needs)
   if (await hasInertia(options)) {
@@ -187,7 +187,7 @@ export async function getLaravelProjectType(
  * Find the main service provider file
  */
 export async function findLaravelServiceProvider(
-  options: Pick<WizardOptions, 'installDir'>,
+  options: Pick<WizardRunOptions, 'installDir'>,
 ): Promise<string | undefined> {
   const { installDir } = options;
 
@@ -214,7 +214,7 @@ export async function findLaravelServiceProvider(
  * Find the bootstrap file (differs between Laravel versions)
  */
 export function findLaravelBootstrapFile(
-  options: Pick<WizardOptions, 'installDir'>,
+  options: Pick<WizardRunOptions, 'installDir'>,
 ): string | undefined {
   const { installDir } = options;
 
@@ -237,7 +237,7 @@ export function findLaravelBootstrapFile(
  * Detect Laravel version structure for configuration guidance
  */
 export function detectLaravelStructure(
-  options: Pick<WizardOptions, 'installDir'>,
+  options: Pick<WizardRunOptions, 'installDir'>,
 ): 'legacy' | 'modern' | 'latest' {
   const version = getLaravelVersion(options);
   if (!version) return 'modern';

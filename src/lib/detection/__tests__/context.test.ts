@@ -3,17 +3,15 @@ import {
   checkFrameworkVersion,
 } from '@lib/detection/context';
 import type { FrameworkConfig } from '@lib/framework-config';
-import type { WizardOptions } from '@utils/types';
+import type { WizardRunOptions } from '@utils/types';
 
-const baseOptions: WizardOptions = {
+const baseOptions: WizardRunOptions = {
   installDir: '/test/dir',
   debug: false,
-  forceInstall: false,
   default: false,
   signup: false,
   localMcp: false,
   ci: false,
-  menu: false,
   benchmark: false,
   yaraReport: false,
 };

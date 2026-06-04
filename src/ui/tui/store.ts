@@ -99,6 +99,9 @@ export class WizardStore {
   /** Blocks OAuth flow until the port-conflict overlay is dismissed. */
   private _resolvePortConflict: (() => void) | null = null;
 
+  /** Resolves the OAuth flow with a manually-entered authorization code. */
+  private _resolveManualAuthCode: ((code: string) => void) | null = null;
+
   /** Resolves the in-flight wizard_ask request. */
   private _resolvePendingQuestion: ((answers: AskAnswers) => void) | null =
     null;
@@ -271,6 +274,16 @@ export class WizardStore {
     this.emitChange();
   }
 
+  setRoleAtOrganization(role: string | null): void {
+    this.$session.setKey('roleAtOrganization', role);
+    this.emitChange();
+  }
+
+  setApiUser(user: WizardSession['apiUser']): void {
+    this.$session.setKey('apiUser', user);
+    this.emitChange();
+  }
+
   setFrameworkConfig(
     integration: WizardSession['integration'],
     config: WizardSession['frameworkConfig'],
@@ -302,6 +315,11 @@ export class WizardStore {
 
   setLoginUrl(url: string | null): void {
     this.$session.setKey('loginUrl', url);
+    this.emitChange();
+  }
+
+  setAuthorizeUrl(url: string | null): void {
+    this.$session.setKey('authorizeUrl', url);
     this.emitChange();
   }
 
@@ -364,6 +382,37 @@ export class WizardStore {
     this.popOverlay();
     this._resolvePortConflict?.();
     this._resolvePortConflict = null;
+  }
+
+  /**
+   * Return a promise that resolves when the user submits a manually-entered
+   * OAuth code via the paste modal. The OAuth flow races this against the
+   * local callback server — see `performOAuthFlow`.
+   */
+  waitForManualAuthCode(): Promise<string> {
+    return new Promise<string>((resolve) => {
+      this._resolveManualAuthCode = resolve;
+    });
+  }
+
+  /** Open the manual OAuth code-entry overlay over the auth screen. */
+  showManualAuthCode(): void {
+    this.pushOverlay(Overlay.ManualAuthCode);
+  }
+
+  /** Dismiss the manual OAuth code overlay without submitting. */
+  dismissManualAuthCode(): void {
+    this.popOverlay();
+  }
+
+  /**
+   * Submit a manually-entered authorization code: dismiss the overlay and
+   * resolve the in-flight OAuth flow so it can exchange the code for a token.
+   */
+  submitManualAuthCode(code: string): void {
+    this.popOverlay();
+    this._resolveManualAuthCode?.(code);
+    this._resolveManualAuthCode = null;
   }
 
   /**
@@ -483,6 +532,11 @@ export class WizardStore {
       skills_kept: kept,
       ...sessionProperties(this.session),
     });
+    this.emitChange();
+  }
+
+  setMcpSuggestedPromptsDismissed(): void {
+    this.$session.setKey('mcpSuggestedPromptsDismissed', true);
     this.emitChange();
   }
 

@@ -1,5 +1,5 @@
 import { runAgent, createStopHook } from '@lib/agent/agent-interface';
-import type { WizardOptions } from '@utils/types';
+import type { WizardRunOptions } from '@utils/types';
 import type { SpinnerHandle } from '@ui';
 import {
   AdditionalFeature,
@@ -57,15 +57,13 @@ describe('runAgent', () => {
     message: jest.Mock;
   };
 
-  const defaultOptions: WizardOptions = {
+  const defaultOptions: WizardRunOptions = {
     debug: false,
     installDir: '/test/dir',
-    forceInstall: false,
     default: false,
     signup: false,
     localMcp: false,
     ci: false,
-    menu: false,
     benchmark: false,
     yaraReport: false,
   };

@@ -5,10 +5,9 @@
 
 import path from 'path';
 import * as fs from 'fs';
-import { createRequire } from 'module';
 import { getUI, type SpinnerHandle } from '@ui';
 import { debug, logToFile, initLogFile, getLogFilePath } from '@utils/debug';
-import type { WizardOptions } from '@utils/types';
+import type { WizardRunOptions } from '@utils/types';
 import { analytics } from '@utils/analytics';
 import {
   WIZARD_REMARK_EVENT_NAME,
@@ -48,8 +47,7 @@ async function getSDKModule(): Promise<any> {
  */
 function getClaudeCodeExecutablePath(): string {
   // require.resolve finds the package's main entry, then we get cli.js from same dir
-  const nodeRequire = createRequire(import.meta.url);
-  const sdkPackagePath = nodeRequire.resolve('@anthropic-ai/claude-agent-sdk');
+  const sdkPackagePath = require.resolve('@anthropic-ai/claude-agent-sdk');
   return path.join(path.dirname(sdkPackagePath), 'cli.js');
 }
 
@@ -679,7 +677,7 @@ export function wizardCanUseTool(
  */
 export async function initializeAgent(
   config: AgentConfig,
-  options: WizardOptions,
+  options: WizardRunOptions,
 ): Promise<AgentRunConfig> {
   // Initialize log file for this run
   initLogFile();
@@ -819,7 +817,7 @@ function checkYaraViolation(
 export async function runAgent(
   agentConfig: AgentRunConfig,
   prompt: string,
-  options: WizardOptions,
+  options: WizardRunOptions,
   spinner: SpinnerHandle,
   config?: {
     estimatedDurationMinutes?: number;
@@ -1488,7 +1486,7 @@ function extractTaskIdFromResult(content: unknown): string | undefined {
 
 function handleSDKMessage(
   message: SDKMessage,
-  options: WizardOptions,
+  options: WizardRunOptions,
   spinner: SpinnerHandle,
   collectedText: string[],
   receivedSuccessResult = false,

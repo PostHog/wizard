@@ -29,6 +29,12 @@ interface PickerMenuProps<T> {
   mode?: 'single' | 'multi';
   centered?: boolean;
   columns?: 1 | 2 | 3 | 4;
+  /**
+   * Vertical space between options, in TUI rows. Defaults to 0 — i.e.
+   * options stack tightly. Set to 1+ when the option labels are long
+   * (wrap across multiple lines) or for visual breathing room.
+   */
+  optionMarginBottom?: number;
   onSelect: (value: T | T[]) => void;
 }
 
@@ -38,6 +44,7 @@ export const PickerMenu = <T,>({
   mode = 'single',
   centered = false,
   columns = 1,
+  optionMarginBottom = 0,
   onSelect,
 }: PickerMenuProps<T>) => {
   if (mode === 'multi') {
@@ -47,6 +54,7 @@ export const PickerMenu = <T,>({
         options={options}
         centered={centered}
         columns={columns}
+        optionMarginBottom={optionMarginBottom}
         onSelect={onSelect}
       />
     );
@@ -58,6 +66,7 @@ export const PickerMenu = <T,>({
       options={options}
       centered={centered}
       columns={columns}
+      optionMarginBottom={optionMarginBottom}
       onSelect={onSelect}
     />
   );
@@ -69,12 +78,14 @@ const SinglePickerMenu = <T,>({
   options,
   centered = false,
   columns = 1,
+  optionMarginBottom = 0,
   onSelect,
 }: {
   message?: string;
   options: PickerOption<T>[];
   centered?: boolean;
   columns?: number;
+  optionMarginBottom?: number;
   onSelect: (value: T | T[]) => void;
 }) => {
   const [focused, setFocused] = useState(0);
@@ -161,7 +172,7 @@ const SinglePickerMenu = <T,>({
               const isFocused = flatIdx === focused;
               const label = opt.hint ? `${opt.label} (${opt.hint})` : opt.label;
               return (
-                <Box key={flatIdx} gap={1}>
+                <Box key={flatIdx} gap={1} marginBottom={optionMarginBottom}>
                   <Text
                     color={isFocused ? Colors.accent : undefined}
                     dimColor={!isFocused}
@@ -191,12 +202,14 @@ const MultiPickerMenu = <T,>({
   options,
   centered = false,
   columns = 1,
+  optionMarginBottom = 0,
   onSelect,
 }: {
   message?: string;
   options: PickerOption<T>[];
   centered?: boolean;
   columns?: number;
+  optionMarginBottom?: number;
   onSelect: (value: T | T[]) => void;
 }) => {
   const [focused, setFocused] = useState(0);
@@ -311,7 +324,7 @@ const MultiPickerMenu = <T,>({
                 ? Icons.squareFilled
                 : Icons.squareOpen;
               return (
-                <Box key={flatIdx} gap={1}>
+                <Box key={flatIdx} gap={1} marginBottom={optionMarginBottom}>
                   <Text
                     color={isSelected ? 'white' : Colors.muted}
                     dimColor={!isFocused && !isSelected}

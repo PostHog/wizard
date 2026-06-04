@@ -14,7 +14,7 @@ import { PhaseDetector } from './phase-detector';
 import { loadBenchmarkConfig } from './config';
 import { createPluginsFromConfig } from './benchmarks';
 import type { BenchmarkConfig } from './config';
-import type { WizardOptions } from '@utils/types';
+import type { WizardRunOptions } from '@utils/types';
 import { AgentSignals } from '@lib/agent/agent-interface';
 
 // ── Types ──────────────────────────────────────────────────────────────
@@ -66,7 +66,7 @@ export interface BenchmarkData {
  */
 export function createBenchmarkPipeline(
   spinner: SpinnerHandle,
-  options: WizardOptions,
+  options: WizardRunOptions,
   configOverride?: BenchmarkConfig,
 ): MiddlewarePipeline {
   const config = configOverride ?? loadBenchmarkConfig(options.installDir);

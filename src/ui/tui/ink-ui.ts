@@ -10,6 +10,7 @@ import type { WizardUI, SpinnerHandle, AuthErrorDetail } from '@ui/wizard-ui';
 import type { WizardStore } from './store.js';
 import type { SettingsConflict } from '@lib/agent/agent-interface';
 import type { WizardReadinessResult } from '@lib/health-checks/readiness';
+import type { ApiUser } from '@lib/api';
 import type {
   AskAnswers,
   OutroData,
@@ -84,6 +85,14 @@ export class InkUI implements WizardUI {
     this.store.setCredentials(credentials);
   }
 
+  setRoleAtOrganization(role: string | null): void {
+    this.store.setRoleAtOrganization(role);
+  }
+
+  setApiUser(user: ApiUser | null): void {
+    this.store.setApiUser(user);
+  }
+
   setDetectedFramework(label: string): void {
     this.store.setDetectedFramework(label);
   }
@@ -97,6 +106,10 @@ export class InkUI implements WizardUI {
 
   setLoginUrl(url: string | null): void {
     this.store.setLoginUrl(url);
+  }
+
+  setAuthorizeUrl(url: string | null): void {
+    this.store.setAuthorizeUrl(url);
   }
 
   showBlockingOutage(result: WizardReadinessResult): Promise<void> {
@@ -117,6 +130,10 @@ export class InkUI implements WizardUI {
     user: string;
   }): Promise<void> {
     return this.store.showPortConflict(processInfo);
+  }
+
+  waitForManualAuthCode(): Promise<string> {
+    return this.store.waitForManualAuthCode();
   }
 
   showSettingsOverride(

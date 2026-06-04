@@ -76,9 +76,12 @@ fi
 PROJECT_ID="${POSTHOG_PROJECT_ID:-}"
 
 # ── Build & Pack ────────────────────────────────────────────────────────────
-echo "==> Building wizard..."
+# Build the CI variant (NODE_ENV=ci): identical to the published build except
+# IS_PRODUCTION_BUILD is false, so --ci is enabled. The published build disables
+# --ci, which this non-interactive smoke test depends on.
+echo "==> Building wizard (CI variant)..."
 cd "$WIZARD_ROOT"
-pnpm build
+pnpm build:ci
 
 echo "==> Packing wizard..."
 PACK_FILE=$(pnpm pack --pack-destination /tmp 2>/dev/null | tail -1)

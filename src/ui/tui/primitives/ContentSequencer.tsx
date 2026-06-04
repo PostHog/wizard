@@ -239,6 +239,8 @@ const BlockRenderer = ({
         sentenceInterval={sentenceInterval}
         maxHeight={maxHeight}
         availableWidth={availableWidth}
+        // Bare string sugar always uses the default — to override, use
+        // the object form: { content: '...', dimWhenComplete: false }.
       />
     );
   }
@@ -271,6 +273,7 @@ const BlockRenderer = ({
         sentenceInterval={block.sentenceInterval ?? sentenceInterval}
         maxHeight={maxHeight}
         availableWidth={availableWidth}
+        dimWhenComplete={block.dimWhenComplete ?? true}
       />
     );
   }
