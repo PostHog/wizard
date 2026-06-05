@@ -31,6 +31,14 @@ import {
 } from '@lib/yara-hooks';
 import { getWizardCommandments } from './commandments';
 import type { PackageManagerDetector } from '@lib/detection/package-manager';
+import { AgentSignals, AgentErrorType } from './signals';
+import { AgentOutputSignals } from './output-signals';
+
+// Signal vocabulary and the output parser live in dedicated modules; re-export
+// so existing importers of these from agent-interface keep working.
+export { AgentSignals, AgentErrorType } from './signals';
+export type { AgentSignal } from './signals';
+export { AgentOutputSignals } from './output-signals';
 
 // Dynamic import cache for ESM module
 let _sdkModule: any = null;
@@ -56,58 +64,6 @@ function getClaudeCodeExecutablePath(): string {
 type SDKMessage = any;
 type McpServersConfig = any;
 type AbortCaseMatcher = { match: RegExp };
-
-export const AgentSignals = {
-  /** Signal emitted when the agent reports progress to the user */
-  STATUS: '[STATUS]',
-  /** Signal emitted when the agent cannot access the PostHog MCP server */
-  ERROR_MCP_MISSING: '[ERROR-MCP-MISSING]',
-  /** Signal emitted when the agent cannot access the setup resource */
-  ERROR_RESOURCE_MISSING: '[ERROR-RESOURCE-MISSING]',
-  /**
-   * Signal emitted when the agent cannot complete the program and is
-   * aborting intentionally (distinct from errors). Format: "[ABORT] <reason>".
-   * Programs can declare an onAbort handler to render a custom screen.
-   */
-  ABORT: '[ABORT]',
-  /** Signal emitted when the agent provides a remark about its run */
-  WIZARD_REMARK: '[WIZARD-REMARK]',
-  /** Signal prefix for benchmark logging */
-  BENCHMARK: '[BENCHMARK]',
-  /**
-   * Signal emitted when the agent has created a PostHog dashboard for the
-   * user. Format: `[DASHBOARD_URL] <full https url>`. The URL is captured
-   * onto `session.dashboardUrl` and surfaced by programs in their outro.
-   */
-  DASHBOARD_URL: '[DASHBOARD_URL]',
-  /**
-   * Signal emitted when the agent has uploaded a report to a PostHog
-   * notebook. Format: `[NOTEBOOK_URL] <full https url>`. The URL is captured
-   * onto `session.notebookUrl` and surfaced by programs in their outro.
-   */
-  NOTEBOOK_URL: '[NOTEBOOK_URL]',
-} as const;
-
-export type AgentSignal = (typeof AgentSignals)[keyof typeof AgentSignals];
-
-/**
- * Error types that can be returned from agent execution.
- * These correspond to the error signals that the agent emits.
- */
-export enum AgentErrorType {
-  /** Agent could not access the PostHog MCP server */
-  MCP_MISSING = 'WIZARD_MCP_MISSING',
-  /** Agent could not access the setup resource */
-  RESOURCE_MISSING = 'WIZARD_RESOURCE_MISSING',
-  /** API rate limit exceeded */
-  RATE_LIMIT = 'WIZARD_RATE_LIMIT',
-  /** Generic API error */
-  API_ERROR = 'WIZARD_API_ERROR',
-  /** YARA scanner detected a security violation */
-  YARA_VIOLATION = 'WIZARD_YARA_VIOLATION',
-  /** Agent intentionally aborted the program (emitted [ABORT] <reason>) */
-  ABORT = 'WIZARD_ABORT',
-}
 
 const BLOCKING_ENV_KEYS = [
   'ANTHROPIC_API_KEY',
@@ -343,7 +299,7 @@ export function createStopHook(
 
     // On API errors, allow stop immediately — blocking with remark/feature
     // prompts would just fail again. The auth error screen is shown separately.
-    if (signals?.has('API_ERROR')) {
+    if (signals?.hasApiError()) {
       logToFile('Stop hook: API error detected, allowing immediate stop');
       return {};
     }
@@ -796,77 +752,6 @@ export async function initializeAgent(
  * Check agent output for YARA scanner violations.
  * Used in both the success and catch paths of runAgent.
  */
-/**
- * Single source of truth for the substrings runAgent scans agent output for.
- * `AgentOutputSignals.push()` retains a line iff it contains one of these
- * values; every query reads the same table by a typed key. Retention and
- * consumers therefore cannot drift — adding a signal is one entry here, and it
- * is both retained and queryable; nothing outside the table is ever kept.
- * (`API Error: 401/429` are their own entries so no query composes needles.)
- */
-const OUTPUT_SIGNALS = {
-  API_ERROR: 'API Error:',
-  API_ERROR_401: 'API Error: 401',
-  API_ERROR_429: 'API Error: 429',
-  YARA_CRITICAL: '[YARA CRITICAL]',
-  YARA_SCANNER_ERROR: '[YARA] Scanner error',
-  MCP_MISSING: AgentSignals.ERROR_MCP_MISSING,
-  RESOURCE_MISSING: AgentSignals.ERROR_RESOURCE_MISSING,
-  WIZARD_REMARK: AgentSignals.WIZARD_REMARK,
-} as const;
-
-type OutputSignal = keyof typeof OUTPUT_SIGNALS;
-const SIGNAL_NEEDLES = Object.values(OUTPUT_SIGNALS);
-
-/**
- * Accumulates only the signal-bearing lines of agent output. The agent and SDK
- * communicate non-content events (auth/API errors, YARA violations, missing
- * MCP/resource, the end-of-run remark) by emitting marker strings inside their
- * prose; this parses those out and discards everything else, so the buffer
- * stays bounded regardless of run length.
- */
-export class AgentOutputSignals {
-  private readonly lines: string[] = [];
-
-  /** Parse step: keep the line only if it carries a known signal; drop prose. */
-  push(text: string): void {
-    if (SIGNAL_NEEDLES.some((n) => text.includes(n))) this.lines.push(text);
-  }
-
-  private get text(): string {
-    return this.lines.join('\n');
-  }
-
-  /** True if any retained line contains the given signal's marker. */
-  has(signal: OutputSignal): boolean {
-    return this.text.includes(OUTPUT_SIGNALS[signal]);
-  }
-
-  hasYaraViolation(): boolean {
-    return this.has('YARA_CRITICAL') || this.has('YARA_SCANNER_ERROR');
-  }
-
-  /** Joined `API Error: …` lines for the user-facing message, or undefined. */
-  apiErrorMessage(): string | undefined {
-    const m = this.text.match(
-      new RegExp(`${OUTPUT_SIGNALS.API_ERROR} [^\\n]+`, 'g'),
-    );
-    return m ? m.join('\n') : undefined;
-  }
-
-  /** Text after the single `[WIZARD-REMARK]` marker, trimmed, or undefined. */
-  remark(): string | undefined {
-    const re = new RegExp(
-      `${OUTPUT_SIGNALS.WIZARD_REMARK.replace(
-        /[.*+?^${}()|[\]\\]/g,
-        '\\$&',
-      )}\\s*(.+?)(?:\\n|$)`,
-      's',
-    );
-    return this.text.match(re)?.[1]?.trim() || undefined;
-  }
-}
-
 function checkYaraViolation(
   signals: AgentOutputSignals,
   spinner: SpinnerHandle,
@@ -1233,7 +1118,7 @@ export async function runAgent(
       }
 
       // 401: show auth error screen and exit immediately
-      if (message.type === 'assistant' && signals.has('API_ERROR_401')) {
+      if (message.type === 'assistant' && signals.hasApiErrorStatus(401)) {
         signalDone!();
         spinner.stop('Authentication failed');
         // Re-check at error time: a settings conflict can be the *real* cause
@@ -1302,13 +1187,13 @@ export async function runAgent(
     // Surface just the API error line(s), not the entire output
     const apiErrorMessage = signals.apiErrorMessage() ?? 'Unknown API error';
 
-    if (signals.has('API_ERROR_429')) {
+    if (signals.hasApiErrorStatus(429)) {
       logToFile('Agent error: RATE_LIMIT');
       spinner.stop('Rate limit exceeded');
       return { error: AgentErrorType.RATE_LIMIT, message: apiErrorMessage };
     }
 
-    if (signals.has('API_ERROR')) {
+    if (signals.hasApiError()) {
       logToFile('Agent error: API_ERROR');
       spinner.stop('API error occurred');
       return { error: AgentErrorType.API_ERROR, message: apiErrorMessage };
@@ -1343,13 +1228,13 @@ export async function runAgent(
     // Surface just the API error line(s), not the entire output
     const apiErrorMessage = signals.apiErrorMessage() ?? 'Unknown API error';
 
-    if (signals.has('API_ERROR_429')) {
+    if (signals.hasApiErrorStatus(429)) {
       logToFile('Agent error (caught): RATE_LIMIT');
       spinner.stop('Rate limit exceeded');
       return { error: AgentErrorType.RATE_LIMIT, message: apiErrorMessage };
     }
 
-    if (signals.has('API_ERROR')) {
+    if (signals.hasApiError()) {
       logToFile('Agent error (caught): API_ERROR');
       spinner.stop('API error occurred');
       return { error: AgentErrorType.API_ERROR, message: apiErrorMessage };

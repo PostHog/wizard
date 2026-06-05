@@ -43,6 +43,7 @@ import type {
   ProgramReadyContext,
 } from '@lib/programs/program-step';
 import { getProgramConfig } from '@lib/programs/program-registry';
+import { EXPANDED_COUNT } from '@ui/tui/constants';
 
 export { TaskStatus, ScreenId, Overlay, Program, RunPhase, McpOutcome };
 export type { ScreenName, OutroData, WizardSession, ProgramId };
@@ -68,11 +69,11 @@ interface GateEntry {
 }
 
 /**
- * FIFO cap on retained status lines. The status bar renders at most
- * EXPANDED_COUNT (10) and no consumer reads the full history, so this leaves
- * ample scrollback headroom while bounding both memory and per-push copy cost.
+ * FIFO cap on retained status lines. The status bar is the only consumer and
+ * renders at most EXPANDED_COUNT lines, so there is no reason to retain more —
+ * the cap is tied to the window it feeds.
  */
-const MAX_STATUS_MESSAGES = 100;
+const MAX_STATUS_MESSAGES = EXPANDED_COUNT;
 
 export class WizardStore {
   // ── Internal nanostore atoms ─────────────────────────────────────
