@@ -1,93 +1,58 @@
-import type { ProgramConfig } from '@lib/programs/program-step';
-import type { ProgramRun } from '@lib/agent/agent-runner';
-import type { WizardSession } from '@lib/wizard-session';
+/**
+ * PII Bouncer program.
+ *
+ * Scans a frontend project for sensitive form inputs, adds the
+ * `ph-no-capture` privacy class, and configures session-recording masking
+ * so PII never reaches replays. All of that "what to do" knowledge lives
+ * in the `pii-bouncer` context-mill skill — this file is just the wizard
+ * wiring (command, skill id, outro, abort routing). Engine, not cartridge.
+ */
+
 import { OutroKind } from '@lib/wizard-session';
-import { SPINNER_MESSAGE } from '@lib/framework-config';
 import { getCloudUrlFromRegion } from '@utils/urls';
-import { AGENT_SKILL_STEPS } from '@lib/programs/agent-skill/index';
-import { getContentBlocks } from '@lib/programs/agent-skill/content/index';
-import {
-  PII_BOUNCER_ABORT_CASES,
-  detectPiiBouncerPrerequisites,
-} from './detect.js';
+import { createSkillProgram } from '@lib/programs/agent-skill/index';
+import { PII_BOUNCER_ABORT_CASES } from './abort-cases.js';
 
 const REPORT_FILE = 'posthog-pii-bouncer-report.md';
 const DOCS_URL = 'https://posthog.com/docs/session-replay/privacy';
 
-export const piiBouncerConfig: ProgramConfig = {
+export const piiBouncerConfig = createSkillProgram({
+  skillId: 'pii-bouncer',
   command: 'pii-bouncer',
+  id: 'pii-bouncer',
   description:
     'Scan frontend forms for sensitive inputs and add session recording mask config',
-  id: 'pii-bouncer',
-  skillId: 'pii-bouncer',
-  steps: AGENT_SKILL_STEPS,
+  integrationLabel: 'pii-bouncer',
+  // Instructions live in the skill (loaded via skillId). The wizard only
+  // states the task; the skill's SKILL.md drives the actual run.
+  customPrompt:
+    'Run the PII Bouncer on this project, following the installed skill.',
+  successMessage:
+    'PII Bouncer complete! Review the changes and the report at ./' +
+    REPORT_FILE,
   reportFile: REPORT_FILE,
-  getContentBlocks,
+  docsUrl: DOCS_URL,
+  spinnerMessage: 'Running the PII Bouncer...',
+  estimatedDurationMinutes: 5,
   requires: ['posthog-integration'],
+  abortCases: PII_BOUNCER_ABORT_CASES,
 
-  run: (session: WizardSession): Promise<ProgramRun> => {
-    const detection = detectPiiBouncerPrerequisites(session.installDir);
+  buildOutroData: (sess, _credentials, cloudRegion) => {
+    const cloudUrl = cloudRegion
+      ? getCloudUrlFromRegion(cloudRegion)
+      : undefined;
+    const continueUrl =
+      sess.signup && cloudUrl ? `${cloudUrl}/replay?source=wizard` : undefined;
 
-    return Promise.resolve({
-      skillId: 'pii-bouncer',
-      integrationLabel: 'pii-bouncer',
-      spinnerMessage: SPINNER_MESSAGE,
-      successMessage:
-        'PII Bouncer complete! Review the changes and the report at ./' +
-        REPORT_FILE,
-      estimatedDurationMinutes: 5,
+    return {
+      kind: OutroKind.Success as const,
+      message: 'PII Bouncer finished',
       reportFile: REPORT_FILE,
+      changes: [],
       docsUrl: DOCS_URL,
-      errorMessage: 'PII Bouncer failed',
-      additionalFeatureQueue: session.additionalFeatureQueue,
-      abortCases: PII_BOUNCER_ABORT_CASES,
-
-      customPrompt: (ctx) =>
-        `Run the PII Bouncer on this project. Scan frontend templates for sensitive form inputs, add data-ph-no-capture markers, and update the posthog.init call with session recording mask config.
-
-Detection result from the wizard:
-- Frontend posthog-js installed: ${detection.hasFrontendPosthog ? 'Yes' : 'No'}
-- Package.json paths with posthog-js: ${
-          detection.matchingPackagePaths.length > 0
-            ? detection.matchingPackagePaths.join(', ')
-            : '(none)'
-        }
-
-Failure handling — emit these signals verbatim when the corresponding condition holds, then stop:
-- If posthog-js is not installed anywhere: [ABORT] no-posthog-js
-- If you cannot find any posthog.init(...) call: [ABORT] no-init-call
-- If you cannot find any frontend templates (.jsx / .tsx / .vue / .svelte / .astro / .html): [ABORT] no-frontend-templates
-
-Project context:
-- PostHog Project ID: ${ctx.projectId}
-- PostHog public token: ${ctx.projectApiKey}
-- PostHog Host: ${ctx.host}
-
-Write a markdown report to ./${REPORT_FILE} listing every file you edited, every input you masked (with the rule that matched), every init change, and every input you reviewed but intentionally skipped (with rationale).`,
-
-      buildOutroData: (sess, _credentials, cloudRegion) => {
-        const cloudUrl = cloudRegion
-          ? getCloudUrlFromRegion(cloudRegion)
-          : undefined;
-        const continueUrl =
-          sess.signup && cloudUrl
-            ? `${cloudUrl}/replay?source=wizard`
-            : undefined;
-
-        return {
-          kind: OutroKind.Success as const,
-          message: 'PII Bouncer finished',
-          reportFile: REPORT_FILE,
-          changes: [],
-          docsUrl: DOCS_URL,
-          continueUrl,
-        };
-      },
-    });
+      continueUrl,
+    };
   },
-};
+});
 
-export {
-  PII_BOUNCER_ABORT_CASES,
-  detectPiiBouncerPrerequisites,
-} from './detect.js';
+export { PII_BOUNCER_ABORT_CASES } from './abort-cases.js';
