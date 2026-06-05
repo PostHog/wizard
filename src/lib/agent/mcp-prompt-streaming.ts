@@ -18,6 +18,7 @@ import { WIZARD_USER_AGENT } from '@lib/constants';
 import { getLlmGatewayUrlFromHost } from '@utils/urls';
 import { runtimeEnv } from '@env';
 import { logToFile } from '@utils/debug';
+import { buildAgentEnv } from '@lib/agent/agent-interface';
 
 // Cached SDK module — first call pays the dynamic-import cost; later
 // calls reuse the same module.
@@ -207,6 +208,27 @@ export async function* runMcpPromptViaSdk(args: {
   resumeSessionId?: string;
 }): AsyncIterable<AgentChunk> {
   const { prompt, credentials, signal, resumeSessionId } = args;
+
+  // Route the SDK's LLM calls through the PostHog LLM gateway, authed
+  // with the user's OAuth access token. Set BEFORE loading the SDK in
+  // case any in-process code reads env at module init (cached base
+  // URLs, OAuth setup, etc.) — same reason `initializeAgent` does this
+  // before its query() call. Without these the SDK tries to
+  // authenticate directly against Anthropic and 401s with "Invalid
+  // authentication credentials".
+  const gatewayUrl = getLlmGatewayUrlFromHost(credentials.host);
+  process.env.ANTHROPIC_BASE_URL = gatewayUrl;
+  process.env.ANTHROPIC_AUTH_TOKEN = credentials.accessToken;
+  process.env.CLAUDE_CODE_OAUTH_TOKEN = credentials.accessToken;
+  process.env.CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS = 'true';
+  logToFile(
+    `[runMcpPromptViaSdk] gatewayUrl=${gatewayUrl} tokenPrefix=${
+      credentials.accessToken
+        ? credentials.accessToken.slice(0, 4) + '***'
+        : '(missing)'
+    }`,
+  );
+
   // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
   const { query } = await loadSdk();
 
@@ -222,24 +244,6 @@ export async function* runMcpPromptViaSdk(args: {
   logToFile(
     `[runMcpPromptViaSdk] mcpUrl=${mcpUrl} model=${MODEL} resume=${
       resumeSessionId ?? '(none)'
-    }`,
-  );
-
-  // Route the SDK's LLM calls through the PostHog LLM gateway, authed
-  // with the user's OAuth access token. Without these env vars the SDK
-  // tries to authenticate directly against Anthropic and 401s with
-  // "Invalid authentication credentials". Mirrors what `initializeAgent`
-  // does in agent-interface.ts for the main runAgent flow.
-  const gatewayUrl = getLlmGatewayUrlFromHost(credentials.host);
-  process.env.ANTHROPIC_BASE_URL = gatewayUrl;
-  process.env.ANTHROPIC_AUTH_TOKEN = credentials.accessToken;
-  process.env.CLAUDE_CODE_OAUTH_TOKEN = credentials.accessToken;
-  process.env.CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS = 'true';
-  logToFile(
-    `[runMcpPromptViaSdk] gatewayUrl=${gatewayUrl} tokenPrefix=${
-      credentials.accessToken
-        ? credentials.accessToken.slice(0, 4) + '***'
-        : '(missing)'
     }`,
   );
 
@@ -278,6 +282,14 @@ export async function* runMcpPromptViaSdk(args: {
         cwd: process.cwd(),
         permissionMode: 'acceptEdits',
         maxTurns: MAX_TURNS,
+        // Match agent-interface.ts — the 1M context beta is what keeps
+        // resumed follow-up sessions from truncating after a few turns.
+        betas: ['context-1m-2025-08-07'],
+        // Only load project-level skills/settings. Without this the SDK
+        // defaults to ['user', 'project'] and a user's
+        // `~/.claude/settings.json` (apiKeyHelper / env block) can
+        // override the OAuth routing we set above.
+        settingSources: ['project'],
         // When set, the SDK replays the named session's turns into the
         // new query so the follow-up prompt has full conversation
         // context. Omit on the first prompt for a fresh session.
@@ -323,6 +335,28 @@ export async function* runMcpPromptViaSdk(args: {
         // no Read/Edit/Write. This is a chat-with-MCP run, not a
         // wizard skill execution.
         allowedTools: ['mcp__posthog-wizard__*'],
+        env: {
+          ...process.env,
+          // Without this the SDK picks up a user's personal
+          // ANTHROPIC_API_KEY from their shell and silently bypasses
+          // the PostHog LLM gateway — defeats quota tracking and the
+          // OAuth flow even though our other env vars are correct.
+          ANTHROPIC_API_KEY: undefined,
+          // Defer MCP tool schemas to avoid bloating the system prompt.
+          // posthog-wizard exposes many query tools with large schemas;
+          // without deferral these consume ~113k tokens upfront, which
+          // matters especially when follow-ups resume sessions.
+          ENABLE_TOOL_SEARCH: 'auto:0',
+          // SDK 0.3.142+ connects MCP servers in the background by
+          // default; without this the agent may try to call tools
+          // before posthog-wizard is connected on turn 1.
+          MCP_CONNECTION_NONBLOCKING: '0',
+          // Same Bedrock-fallback + telemetry-friendly headers as the
+          // main runner. No wizard metadata or flags for the tutorial
+          // — runs are distinguished downstream via posthog.capture
+          // calls (program_id + event names), not SDK headers.
+          ANTHROPIC_CUSTOM_HEADERS: buildAgentEnv({}, {}),
+        },
       },
     });
 
