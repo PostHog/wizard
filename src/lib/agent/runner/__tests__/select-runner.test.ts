@@ -5,6 +5,7 @@ import {
 } from '../index';
 import { AnthropicRunner } from '../anthropic-runner';
 import { VercelRunner } from '../vercel/vercel-runner';
+import { PiRunner } from '../pi/pi-runner';
 import { WIZARD_RUNNER_FLAG_KEY } from '../../../constants';
 
 // `runAgent` pulls in the full SDK-backed agent stack; runner selection is a
@@ -35,9 +36,14 @@ describe('selectRunner', () => {
     );
   });
 
-  // `pi` isn't implemented yet, so it (and any unknown value) falls back to
-  // AnthropicRunner, the safe default.
-  it.each(['anthropic', 'pi', 'bogus'])(
+  it('returns PiRunner for the pi variant', () => {
+    expect(selectRunner({ [WIZARD_RUNNER_FLAG_KEY]: 'pi' })).toBeInstanceOf(
+      PiRunner,
+    );
+  });
+
+  // Any unknown value falls back to AnthropicRunner, the safe default.
+  it.each(['anthropic', 'bogus'])(
     'returns AnthropicRunner for %p',
     (variant) => {
       expect(
