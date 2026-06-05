@@ -14,12 +14,18 @@ import {
 } from '@steps/add-mcp-server-to-clients/index';
 import { ALL_FEATURE_VALUES } from '@steps/add-mcp-server-to-clients/defaults';
 import { isPluginCapable } from '@steps/add-mcp-server-to-clients/plugin-client';
+import { isBrowserFinishable } from '@steps/add-mcp-server-to-clients/browser-client';
 import { logToFile } from '@utils/debug';
 import { analytics } from '@utils/analytics';
 
 export interface McpClientInfo {
   name: string;
   supportsPlugin: boolean;
+  /**
+   * Set for clients connected by opening a hosted page in the browser. The
+   * Done screen renders this so the user knows to finish setup in the browser.
+   */
+  finish?: { url: string; instruction: string };
 }
 
 export interface McpInstaller {
@@ -54,6 +60,9 @@ export function createMcpInstaller(): McpInstaller {
       return supported.map((c) => ({
         name: c.name,
         supportsPlugin: isPluginCapable(c) && c.supportsPlugin(),
+        finish: isBrowserFinishable(c)
+          ? { url: c.connectorUrl, instruction: c.finishInstruction }
+          : undefined,
       }));
     },
 
