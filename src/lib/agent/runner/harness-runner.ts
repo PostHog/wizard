@@ -16,6 +16,8 @@ import {
   type MessagesToolUseBlock,
   type MessagesTurn,
 } from './messages-client';
+import { createToolDispatcher, toAnthropicTools } from './tools/registry';
+import type { ToolContext } from './tools/types';
 import type { Runner, RunnerResult, RunnerRunArgs } from './index';
 
 /**
@@ -43,16 +45,6 @@ export interface HarnessToolDispatcher {
   dispatch(block: MessagesToolUseBlock): Promise<HarnessToolResult>;
 }
 
-/** PR 02 stub: no tools are implemented yet (PR 03 supplies the real one). */
-const STUB_DISPATCHER: HarnessToolDispatcher = {
-  dispatch(block) {
-    return Promise.resolve({
-      content: `Tool "${block.name}" is not yet implemented in the harness runner.`,
-      isError: true,
-    });
-  },
-};
-
 export interface HarnessRunnerDeps {
   /** Injectable streaming transport (defaults to the real Messages client). */
   streamFn?: typeof streamMessages;
@@ -69,12 +61,12 @@ const ABORT_PATTERN = /\[ABORT\]\s*(.+?)(?:\n|$)/;
 
 export class HarnessRunner implements Runner {
   private readonly streamFn: typeof streamMessages;
-  private readonly dispatcher: HarnessToolDispatcher;
+  private readonly dispatcherOverride?: HarnessToolDispatcher;
   private readonly maxTurns: number;
 
   constructor(deps: HarnessRunnerDeps = {}) {
     this.streamFn = deps.streamFn ?? streamMessages;
-    this.dispatcher = deps.dispatcher ?? STUB_DISPATCHER;
+    this.dispatcherOverride = deps.dispatcher;
     this.maxTurns = deps.maxTurns ?? DEFAULT_MAX_TURNS;
   }
 
@@ -107,6 +99,12 @@ export class HarnessRunner implements Runner {
     const collectedText: string[] = [];
     const tasks = new Map<string, TaskEntry>();
     const abortController = new AbortController();
+    const ctx: ToolContext = {
+      workingDirectory: agentConfig.workingDirectory,
+      tasks,
+    };
+    const dispatcher = this.dispatcherOverride ?? createToolDispatcher(ctx);
+    const tools = toAnthropicTools();
 
     // TODO(harness): system is only the wizard commandments here. The SDK path
     // uses the bundled claude_code system-prompt preset and appends these; the
@@ -121,6 +119,7 @@ export class HarnessRunner implements Runner {
             model: agentConfig.model,
             system,
             messages,
+            tools,
             maxTokens: DEFAULT_MAX_TOKENS,
           },
           { baseUrl, authToken, headers, signal: abortController.signal },
@@ -156,7 +155,7 @@ export class HarnessRunner implements Runner {
         messages.push({ role: 'assistant', content: response.content });
         const results = await Promise.all(
           toolUses.map(async (block) => {
-            const result = await this.dispatcher.dispatch(block);
+            const result = await dispatcher.dispatch(block);
             return {
               type: 'tool_result' as const,
               tool_use_id: block.id,
@@ -224,9 +223,12 @@ export function buildHarnessHeaders(
 function toAssistantMessage(
   response: MessagesResponse,
 ): Parameters<typeof handleSDKMessage>[0] {
+  // Only text blocks: tool_use (incl. Task*) is executed by the harness
+  // dispatcher, so we must not let handleSDKMessage re-process Task blocks.
+  const textBlocks = response.content.filter((b) => b.type === 'text');
   return {
     type: 'assistant',
-    message: { role: 'assistant', content: response.content },
+    message: { role: 'assistant', content: textBlocks },
   } as unknown as Parameters<typeof handleSDKMessage>[0];
 }
 
