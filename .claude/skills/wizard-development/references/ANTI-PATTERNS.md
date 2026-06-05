@@ -79,3 +79,17 @@ Each section describes a pattern that looks reasonable in isolation but degrades
 
 **What to do instead:** Use the `requires` field on `ProgramConfig` to make program dependencies explicit. For shared data, use `frameworkContext` with documented keys — the `setFrameworkContext` setter ensures `emitChange()` fires and downstream predicates re-evaluate. If two programs need the same detection result, factor the detection into a shared module that both programs' `onReady` hooks call, rather than relying on one program to populate what another reads.
 
+---
+
+## Single-turn generation of long structured documents
+
+**The pattern:** A skill asks the agent to compose a multi-thousand-token artifact — a markdown audit report, a ProseMirror notebook tree, a large JSON inventory — in one turn, then `Write` (or call an MCP tool) once with the assembled result. The instruction reads naturally: "compose the report, then write it." It also looks token-efficient — one Write call, one assistant turn, no intermediate state.
+
+**What happens next:** The LLM streaming connection from the wizard to PostHog's LLM gateway (`gateway.us.posthog.com/wizard` → `api.anthropic.com`) is held open for the entire generation. Composing 10–15K output tokens at the standard service tier takes minutes; SSE connections at any hop in that chain (gateway, Anthropic edge, Cloudflare) have streaming timeouts in the 5–10 minute range. Past that, the socket dies mid-stream. The SDK surfaces it as `"API Error: The socket connection was closed unexpectedly"`, the runner aborts with `AgentErrorType.API_ERROR`, and everything the agent had composed for that turn is lost. The user re-runs and the same generation hits the same wall.
+
+**The cost:** Resilience is gated by raw token throughput. Skills that grow more capable (more sections, richer formatting, larger inventories) become more failure-prone over time, not less. Wizard-side mitigations — retries, longer timeouts — live at the wrong layer; they hide the root cause and burn money on the failed attempts.
+
+**What to do instead:** Chunk the generation across turns by writing a skeleton with placeholder markers and filling each placeholder with one `Edit`. The first turn writes structure (small generation). Each subsequent turn fills one section (bounded generation). The SSE timer resets at every tool call. The on-disk file is the source of truth, so a dropped turn loses at most one section, not the whole document. For ProseMirror or other structured JSON, use a transient scratch file (e.g. `.posthog-notebook-payload.json`), Write the skeleton with placeholder nodes, Edit each section in place, then Read + invoke the MCP tool with the assembled tree. Same pattern, same payoff. The wizard's `Write` and `Edit` are always available; this approach doesn't depend on feature-flagged MCP tools.
+
+**When a single Write is fine:** When the artifact is bounded — a few hundred tokens of output, a small JSON config, a one-paragraph summary — a single turn is cheaper and clearer. The chunking pattern adds value once you cross the SSE-timeout cliff, not before.
+
