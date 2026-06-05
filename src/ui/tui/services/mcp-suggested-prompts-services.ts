@@ -12,6 +12,7 @@
 
 import type { Credentials } from '@lib/wizard-session';
 import { getOrAskForProjectData } from '@utils/setup-utils';
+import { Program } from '@lib/programs/program-registry';
 import type { WizardStore } from '@ui/tui/store';
 import type { ApiUser } from '@lib/api';
 
@@ -85,6 +86,13 @@ export function createMcpSuggestedPromptsServices(
         projectId: undefined,
         email: undefined,
         region: undefined,
+        // Widens the OAuth scope grant: base `WIZARD_OAUTH_SCOPES` plus
+        // read on every product surface (flags, experiments, surveys,
+        // replays, errors, web/LLM analytics, cohorts, persons) plus
+        // annotation read/write. Persistence writes (dashboard, insight,
+        // notebook) come for free from the base set. See
+        // `src/lib/oauth/program-scopes.ts`.
+        programId: Program.McpTutorial,
       });
       return {
         credentials: {
