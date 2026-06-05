@@ -14,6 +14,7 @@
  */
 
 import { atom, map } from 'nanostores';
+import { logToFile } from '@utils/debug';
 import { TaskStatus, isTaskStatus, type AuthErrorDetail } from '@ui/wizard-ui';
 import {
   type WizardSession,
@@ -551,7 +552,14 @@ export class WizardStore {
   }
 
   setDashboardUrl(url: string): void {
+    logToFile(`store.setDashboardUrl: ${url}`);
     this.$session.setKey('dashboardUrl', url);
+    this.emitChange();
+  }
+
+  setNotebookUrl(url: string): void {
+    logToFile(`store.setNotebookUrl: ${url}`);
+    this.$session.setKey('notebookUrl', url);
     this.emitChange();
   }
 
