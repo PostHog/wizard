@@ -32,6 +32,7 @@ import { SetupScreen } from './screens/SetupScreen.js';
 import { AuthScreen } from './screens/AuthScreen.js';
 import { RunScreen } from './screens/RunScreen.js';
 import { McpScreen } from './screens/McpScreen.js';
+import { AutonomyOnboardingScreen } from './screens/AutonomyOnboardingScreen.js';
 import { KeepSkillsScreen } from './screens/KeepSkillsScreen.js';
 import { OutroScreen } from './screens/OutroScreen.js';
 import { ExitScreen } from './screens/ExitScreen.js';
@@ -82,6 +83,7 @@ export function createScreens(
     [ScreenId.Mcp]: (
       <McpScreen store={store} installer={services.mcpInstaller} />
     ),
+    [ScreenId.AutonomyOnboarding]: <AutonomyOnboardingScreen store={store} />,
     [ScreenId.KeepSkills]: <KeepSkillsScreen store={store} />,
     [ScreenId.Outro]: <OutroScreen store={store} />,
     [ScreenId.Exit]: <ExitScreen />,

@@ -20,6 +20,7 @@ import { McpDemo } from './demos/McpDemo.js';
 import { KeyboardHintsDemo } from './demos/KeyboardHintsDemo.js';
 import { AuditChecksDemo } from './demos/AuditChecksDemo.js';
 import { LearnDeckDemo } from './demos/LearnDeckDemo.js';
+import { AutonomyDemo } from './demos/AutonomyDemo.js';
 
 interface PlaygroundAppProps {
   store: WizardStore;
@@ -70,6 +71,11 @@ export const PlaygroundApp = ({ store }: PlaygroundAppProps) => {
       id: 'learn-deck',
       label: 'Learn deck',
       component: <LearnDeckDemo store={store} />,
+    },
+    {
+      id: 'autonomy',
+      label: 'Autonomy',
+      component: <AutonomyDemo store={store} />,
     },
   ];
 

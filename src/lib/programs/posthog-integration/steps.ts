@@ -66,6 +66,13 @@ export const POSTHOG_INTEGRATION_PROGRAM: ProgramStep[] = [
     isComplete: (session) => session.mcpComplete,
   },
   {
+    id: 'autonomy-onboarding',
+    label: 'Autonomy',
+    screenId: 'autonomy-onboarding',
+    show: (session) => session.autonomy,
+    isComplete: (session) => session.autonomyOnboardingDismissed,
+  },
+  {
     id: 'outro',
     label: 'Done',
     screenId: 'outro',

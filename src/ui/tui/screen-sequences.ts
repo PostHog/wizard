@@ -32,6 +32,7 @@ export enum ScreenId {
   Auth = 'auth',
   Run = 'run',
   Mcp = 'mcp',
+  AutonomyOnboarding = 'autonomy-onboarding',
   KeepSkills = 'keep-skills',
   Outro = 'outro',
   Exit = 'exit',

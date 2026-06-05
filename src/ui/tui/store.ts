@@ -263,6 +263,16 @@ export class WizardStore {
     this.emitChange();
   }
 
+  setAutonomyPlan(plan: WizardSession['autonomyPlan']): void {
+    this.$session.setKey('autonomyPlan', plan);
+    this.emitChange();
+  }
+
+  setAutonomyOnboardingDismissed(): void {
+    this.$session.setKey('autonomyOnboardingDismissed', true);
+    this.emitChange();
+  }
+
   setCredentials(credentials: WizardSession['credentials']): void {
     this.$session.setKey('credentials', credentials);
     analytics.wizardCapture('auth complete', {

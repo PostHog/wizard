@@ -198,6 +198,13 @@ const cli = yargs(hideBin(process.argv))
             'Name for account creation with --ci --signup\nenv: POSTHOG_WIZARD_NAME',
           type: 'string',
         },
+        autonomy: {
+          default: false,
+          describe:
+            'Plan PostHog Autonomy (scouts + responders) after integration\nenv: POSTHOG_WIZARD_AUTONOMY',
+          type: 'boolean',
+          hidden: true,
+        },
       });
     },
     (argv) => {
@@ -652,7 +659,9 @@ function runWizard(
       const installDir = (options.installDir as string) || process.cwd();
 
       const { startTUI } = await import('@ui/tui/start-tui');
-      const { buildSession, RunPhase } = await import('@lib/wizard-session');
+      const { buildSession, RunPhase, AdditionalFeature } = await import(
+        '@lib/wizard-session'
+      );
       const { TaskStreamPush } = await import('@lib/task-stream/index');
       const { PostHogDestination } = await import(
         '@lib/task-stream/destinations/posthog'
@@ -677,6 +686,7 @@ function runWizard(
         benchmark: options.benchmark as boolean | undefined,
         yaraReport: options.yaraReport as boolean | undefined,
         noTelemetry: resolveNoTelemetry(options),
+        autonomy: options.autonomy as boolean | undefined,
       });
       session.programLabel = config.id;
       if (options.skillId) {
@@ -686,6 +696,13 @@ function runWizard(
       }
 
       activeTui.store.session = session;
+
+      // Stop hook drains the feature queue after the main integration run;
+      // queueing here means the autonomy prompt fires in the same agent
+      // session, with all integration context still loaded.
+      if (session.autonomy) {
+        activeTui.store.enableFeature(AdditionalFeature.Autonomy);
+      }
 
       const taskStreamEnabled = !session.noTelemetry;
       taskStream = new TaskStreamPush({

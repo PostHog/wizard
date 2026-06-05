@@ -421,4 +421,25 @@ describe('createStopHook', () => {
     expect(first).toHaveProperty('decision', 'block');
     expect((first as { reason: string }).reason).toContain('WIZARD-REMARK');
   });
+
+  it('Autonomy feature injects its planning prompt then remark then allows stop', () => {
+    const hook = createStopHook([AdditionalFeature.Autonomy]);
+
+    const first = hook(hookInput);
+    expect(first).toHaveProperty('decision', 'block');
+    expect((first as { reason: string }).reason).toBe(
+      ADDITIONAL_FEATURE_PROMPTS[AdditionalFeature.Autonomy],
+    );
+    expect((first as { reason: string }).reason).toContain('PostHog Autonomy');
+    expect((first as { reason: string }).reason).toContain(
+      '.posthog/autonomy/autonomy.json',
+    );
+
+    const second = hook(hookInput);
+    expect(second).toHaveProperty('decision', 'block');
+    expect((second as { reason: string }).reason).toContain('WIZARD-REMARK');
+
+    const third = hook(hookInput);
+    expect(third).toEqual({});
+  });
 });
