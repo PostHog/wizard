@@ -93,6 +93,8 @@ export interface OutroData {
   reportFile?: string;
   /** PostHog dashboard URL the program created on the user's behalf. */
   dashboardUrl?: string;
+  /** PostHog notebook URL the program uploaded the report to. */
+  notebookUrl?: string;
 }
 
 /** A single question rendered by the WizardAsk overlay. */
@@ -138,7 +140,6 @@ export interface PendingQuestion {
 export interface WizardSession {
   // From CLI args
   debug: boolean;
-  forceInstall: boolean;
   installDir: string;
   ci: boolean;
   signup: boolean;
@@ -147,7 +148,6 @@ export interface WizardSession {
   apiKey?: string;
   email?: string;
   region?: CloudRegion;
-  menu: boolean;
   benchmark: boolean;
   yaraReport: boolean;
   projectId?: number;
@@ -232,6 +232,7 @@ export interface WizardSession {
   } | null;
   outroData: OutroData | null;
   dashboardUrl: string | null;
+  notebookUrl: string | null;
 
   // Additional features queue (drained via stop hook after main integration)
   additionalFeatureQueue: AdditionalFeature[];
@@ -252,7 +253,6 @@ export interface WizardSession {
  */
 export function buildSession(args: {
   debug?: boolean;
-  forceInstall?: boolean;
   installDir?: string;
   ci?: boolean;
   signup?: boolean;
@@ -261,7 +261,6 @@ export function buildSession(args: {
   apiKey?: string;
   email?: string;
   region?: CloudRegion;
-  menu?: boolean;
   integration?: Integration;
   benchmark?: boolean;
   yaraReport?: boolean;
@@ -270,7 +269,6 @@ export function buildSession(args: {
 }): WizardSession {
   return {
     debug: args.debug ?? false,
-    forceInstall: args.forceInstall ?? false,
     installDir: args.installDir ?? process.cwd(),
     ci: args.ci ?? false,
     signup: args.signup ?? false,
@@ -279,7 +277,6 @@ export function buildSession(args: {
     apiKey: args.apiKey,
     email: args.email,
     region: args.region,
-    menu: args.menu ?? false,
     benchmark: args.benchmark ?? false,
     yaraReport: args.yaraReport ?? false,
     projectId: parseProjectIdArg(args.projectId),
@@ -315,6 +312,7 @@ export function buildSession(args: {
     portConflictProcess: null,
     outroData: null,
     dashboardUrl: null,
+    notebookUrl: null,
     additionalFeatureQueue: [],
     programLabel: null,
     skillId: null,

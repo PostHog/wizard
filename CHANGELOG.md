@@ -1,5 +1,14 @@
 # Changelog
 
+## [2.16.1](https://github.com/PostHog/wizard/compare/v2.16.0...v2.16.1) (2026-06-05)
+
+
+### Bug Fixes
+
+* make seeded audit ledger customizable ([#512](https://github.com/PostHog/wizard/issues/512)) ([2419aa1](https://github.com/PostHog/wizard/commit/2419aa114dcd78f9f6cfc3c8599c318606e83d6f))
+* Make the source map deck look less like a real error ([#504](https://github.com/PostHog/wizard/issues/504)) ([5b92daa](https://github.com/PostHog/wizard/commit/5b92daa9368a5c0ff29378976b54258c9743a31a))
+* **tui:** keep keyboard hints bar always visible ([#511](https://github.com/PostHog/wizard/issues/511)) ([8711f02](https://github.com/PostHog/wizard/commit/8711f022e00a0cc71a8e7df1f8531449b6b6860e))
+
 ## [2.16.0](https://github.com/PostHog/wizard/compare/v2.15.0...v2.16.0) (2026-06-03)
 
 

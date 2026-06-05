@@ -16,7 +16,6 @@ export interface PackageManager {
   /** Command the manager uses to execute a `package.json` script. */
   runScriptCommand: string;
   flags: string;
-  forceInstallFlag: string;
   detect: (opts: InstallDirOpt) => boolean;
   addOverride: (
     pkgName: string,
@@ -83,7 +82,6 @@ export const BUN: PackageManager = {
   buildCommand: 'bun run build',
   runScriptCommand: 'bun run',
   flags: '',
-  forceInstallFlag: '--force',
   detect: ({ installDir }) =>
     hasLockfile(installDir, 'bun.lockb') || hasLockfile(installDir, 'bun.lock'),
   addOverride: (pkgName, pkgVersion, opts) =>
@@ -97,7 +95,6 @@ export const YARN_V1: PackageManager = {
   buildCommand: 'yarn build',
   runScriptCommand: 'yarn',
   flags: '--ignore-workspace-root-check',
-  forceInstallFlag: '--force',
   detect: ({ installDir }) =>
     lockfileHeaderContains(installDir, 'yarn.lock', 'yarn lockfile v1'),
   addOverride: (pkgName, pkgVersion, opts) =>
@@ -112,7 +109,6 @@ export const YARN_V2: PackageManager = {
   buildCommand: 'yarn build',
   runScriptCommand: 'yarn',
   flags: '',
-  forceInstallFlag: '--force',
   detect: ({ installDir }) =>
     lockfileHeaderContains(installDir, 'yarn.lock', '__metadata'),
   addOverride: (pkgName, pkgVersion, opts) =>
@@ -126,7 +122,6 @@ export const PNPM: PackageManager = {
   buildCommand: 'pnpm build',
   runScriptCommand: 'pnpm',
   flags: '--ignore-workspace-root-check',
-  forceInstallFlag: '--force',
   detect: ({ installDir }) => hasLockfile(installDir, 'pnpm-lock.yaml'),
   addOverride: (pkgName, pkgVersion, opts) =>
     writeOverride('pnpm', pkgName, pkgVersion, opts),
@@ -139,7 +134,6 @@ export const NPM: PackageManager = {
   buildCommand: 'npm run build',
   runScriptCommand: 'npm run',
   flags: '',
-  forceInstallFlag: '--force',
   detect: ({ installDir }) => hasLockfile(installDir, 'package-lock.json'),
   addOverride: (pkgName, pkgVersion, opts) =>
     writeOverride('npm', pkgName, pkgVersion, opts),
@@ -154,7 +148,6 @@ export const EXPO: PackageManager = {
   buildCommand: 'npx expo build',
   runScriptCommand: 'npx expo run',
   flags: '',
-  forceInstallFlag: '--force',
   detect: () => false,
   addOverride: (pkgName, pkgVersion, opts) =>
     writeOverride('npm', pkgName, pkgVersion, opts),
