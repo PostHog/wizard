@@ -92,6 +92,15 @@ export const OutroScreen = ({ store }: OutroScreenProps) => {
             </Box>
           )}
 
+          {outroData.notebookUrl && (
+            <Box marginTop={1}>
+              <Text>
+                And uploaded the report to a PostHog notebook:{' '}
+                <Text color="cyan">{outroData.notebookUrl}</Text>
+              </Text>
+            </Box>
+          )}
+
           {outroData.docsUrl && (
             <Box marginTop={1}>
               <Text>

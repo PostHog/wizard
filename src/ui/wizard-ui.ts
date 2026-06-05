@@ -171,6 +171,14 @@ export interface WizardUI {
   // ── Dashboard URL emitted by the agent via [DASHBOARD_URL] marker ──
   setDashboardUrl(url: string): void;
 
+  // ── Notebook URL emitted by the agent via [NOTEBOOK_URL] marker ──
+  setNotebookUrl(url: string): void;
+
+  // ── Outro payload built by agent-runner ──
+  // Replaces the direct `session.outroData = X` mutation that breaks once
+  // setKey-based store mutations have forked the session reference.
+  setOutroData(data: OutroData): void;
+
   // ── Generic frameworkContext setter for program file watchers ─────
   setFrameworkContext(key: string, value: unknown): void;
 }

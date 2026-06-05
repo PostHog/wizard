@@ -15,15 +15,16 @@ import {
   type KeyBinding,
 } from '@ui/tui/hooks/useKeyBindings';
 import type { WizardStore } from '@ui/tui/store';
+import { COLLAPSED_COUNT, EXPANDED_COUNT } from '@ui/tui/constants';
+
+// Re-exported so existing importers (e.g. LearnCard) keep their path.
+export { COLLAPSED_COUNT, EXPANDED_COUNT };
 
 export interface TabDefinition {
   id: string;
   label: string;
   component: ReactNode;
 }
-
-export const COLLAPSED_COUNT = 2;
-export const EXPANDED_COUNT = 10;
 
 interface TabContainerProps {
   tabs: TabDefinition[];
