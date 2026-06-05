@@ -108,38 +108,24 @@ The following CLI arguments are available:
 
 # OAuth Scopes
 
-The default interactive flow (`npx @posthog/wizard`) authenticates via OAuth.
-During login the wizard's main basic integration program requests the following
-scopes:
+`npx @posthog/wizard` authenticates via OAuth, requesting:
 
-| Scope                  | Why the wizard needs it                                                     |
-| ---------------------- | --------------------------------------------------------------------------- |
-| `user:read`            | Identify the user for analytics + agent context                             |
-| `project:read`         | Look up the freshly-provisioned project and its API token                   |
-| `llm_gateway:read`     | Authenticate the agent's LLM calls to `gateway.{us,eu}.posthog.com/wizard`  |
-| `dashboard:write`      | Create the onboarding dashboard during setup                                |
-| `insight:write`        | Create the onboarding insights during setup                                 |
-| `query:read`           | Run HogQL queries when the agent needs data                                 |
-| `health_issue:read`    | Power `wizard doctor` health checks                                         |
-| `wizard_session:read`  | List / retrieve / stream wizard sessions                                    |
-| `wizard_session:write` | Stream run state to `/api/projects/{id}/wizard/sessions/`                    |
-| `notebook:write`       | Create and edit notebooks via the notebooks MCP tools                       |
+| Scope                       | Why                                                          |
+| --------------------------- | ----------------------------------------------------------- |
+| `user:read`                 | Identify the user for analytics + agent context             |
+| `project:read`              | Look up the provisioned project and its API token           |
+| `llm_gateway:read`          | Authenticate the agent's LLM calls to the gateway           |
+| `dashboard:write`           | Create the onboarding dashboard                             |
+| `insight:write`             | Create the onboarding insights                             |
+| `query:read`                | Run HogQL queries when the agent needs data                 |
+| `event_definition:read`     | Read event schema (`read-data-schema` MCP tool)             |
+| `property_definition:read`  | Read property schema (`read-data-schema` MCP tool)          |
+| `health_issue:read`         | Power `wizard doctor` health checks                         |
+| `wizard_session:read`       | List / retrieve / stream wizard sessions                    |
+| `wizard_session:write`      | Stream run state to `/api/projects/{id}/wizard/sessions/`   |
+| `notebook:write`            | Create / edit notebooks via the notebooks MCP tools         |
 
-As a copy-pasteable list for granting scopes on the OAuth application:
-
-```
-user:read,project:read,llm_gateway:read,dashboard:write,insight:write,query:read,health_issue:read,wizard_session:read,wizard_session:write,notebook:write
-```
-
-Every scope above must be granted on the PostHog OAuth application in **each
-region (US / EU)** or the corresponding tool calls fail at runtime. The
-provisioning signup flow (`--signup`) requests a narrower subset and must stay
-within the backend's `ALLOWED_PROVISIONING_SCOPES` allowlist.
-
-> **Source of truth:** these scopes are defined by `WIZARD_OAUTH_SCOPES` (and
-> the `WIZARD_PROVISIONING_SCOPES` subset) in `src/lib/constants.ts`. This table
-> and the list above must be kept in sync with that constant whenever scopes
-> are added or removed.
+Grant every scope on the PostHog OAuth app in both regions (US / EU) or the matching tool calls fail. Source of truth: `WIZARD_OAUTH_SCOPES` in `src/lib/constants.ts` — keep this list in sync.
 
 
 # CI Mode

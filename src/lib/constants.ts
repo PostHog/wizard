@@ -120,10 +120,12 @@ export const WIZARD_PROVISIONING_SCOPES = [
  * Scopes the wizard requests during the OAuth login flow. Superset of
  * `WIZARD_PROVISIONING_SCOPES` with scopes that only apply to the login
  * path and are not in the provisioning allowlist:
- * - health_issue:read     used by `wizard doctor`
- * - wizard_session:read   list / retrieve / stream sessions
- * - wizard_session:write  stream run state to /api/projects/{id}/wizard/sessions/
- * - notebook:write        create / edit notebooks via the notebooks MCP tools
+ * - health_issue:read        used by `wizard doctor`
+ * - wizard_session:read      list / retrieve / stream sessions
+ * - wizard_session:write     stream run state to /api/projects/{id}/wizard/sessions/
+ * - notebook:write           create / edit notebooks via the notebooks MCP tools
+ * - event_definition:read    read event schema via the read-data-schema MCP tool
+ * - property_definition:read read property schema via the read-data-schema MCP tool
  *
  * Each scope here must also be granted on the PostHog OAuth application in
  * every region (US / EU). When this list changes, update the "OAuth Scopes"
@@ -135,6 +137,8 @@ export const WIZARD_OAUTH_SCOPES = [
   'wizard_session:read',
   'wizard_session:write',
   'notebook:write',
+  'event_definition:read',
+  'property_definition:read',
 ] as const;
 
 // ── Wizard run / variants ───────────────────────────────────────────
