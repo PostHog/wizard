@@ -1,6 +1,11 @@
 {
   "$schema-note": "All copy for the MCP tutorial picker, greeting, follow-ups, and cross-sells. Edit this file to update prompts without touching TypeScript. Every prompt is either (a) a read query on any PostHog product, or (b) a write on dashboards, insights, notebooks, or annotations — the four 'persistence' surfaces. No prompt should ask the agent to ship a flag, run an experiment, send a survey, or create an alert. See prompt-tree.md §5 for the scope reality.",
 
+  "pinnedFirstPrompt": {
+    "prompt": "Show me my top 5 events from the last 7 days",
+    "description": "A safe first pick — works on any project regardless of role or setup."
+  },
+
   "defaultKit": [
     {
       "key": "verify",

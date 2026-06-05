@@ -58,6 +58,7 @@ import {
   getFollowUps,
   getCrossSellPrompts,
   FOLLOW_UP_EXIT_SENTINEL,
+  PINNED_FIRST_PROMPT,
   type PromptOption,
   type RoleGreeting,
 } from '@lib/mcp-role-prompts';
@@ -665,16 +666,26 @@ const PromptPickerPhase = ({
   crossSell,
   onSelect,
 }: PromptPickerPhaseProps) => {
-  // Cross-sells come first and get a "Try {product}" label prefix so
-  // they stand out in the shared picker. Kit prompts use their prompt
-  // text as the label (no explicit `label` set on those entries).
-  // Cap at 4 options total so the picker fits without scrolling.
-  const options = [...crossSell, ...promptKit].slice(0, 4).map((o) => ({
-    label: o.product
-      ? `Try ${o.product}  —  ${o.label ?? o.prompt}`
-      : o.label ?? o.prompt,
-    value: o.prompt,
-  }));
+  // PINNED_FIRST_PROMPT is the always-first option — a safe generic
+  // read ("Show me my top 5 events from the last 7 days") that works
+  // on any project regardless of role or setup. Cross-sells follow,
+  // then the role kit. Dedupe by prompt text so the pinned entry
+  // doesn't appear twice when the role kit also contains it. Cap at
+  // 4 options total so the picker fits without scrolling.
+  const seenPrompts = new Set<string>();
+  const options = [PINNED_FIRST_PROMPT, ...crossSell, ...promptKit]
+    .filter((o) => {
+      if (seenPrompts.has(o.prompt)) return false;
+      seenPrompts.add(o.prompt);
+      return true;
+    })
+    .slice(0, 4)
+    .map((o) => ({
+      label: o.product
+        ? `Try ${o.product}  —  ${o.label ?? o.prompt}`
+        : o.label ?? o.prompt,
+      value: o.prompt,
+    }));
 
   return (
     <Box flexDirection="column">

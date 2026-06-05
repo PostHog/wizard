@@ -85,6 +85,14 @@ export const FOLLOW_UP_COUNT = 3;
 // constraints (e.g. Record<TailoredRole, ...>), so we re-attach them
 // here. TypeScript can still catch shape mismatches at the call site.
 
+/**
+ * Always shown as the picker's first option regardless of role —
+ * a safe generic read that works on any project setup. The screen
+ * prepends it and dedupes against the role kit so it never appears
+ * twice when DEFAULT_KIT happens to include it.
+ */
+export const PINNED_FIRST_PROMPT = copyData.pinnedFirstPrompt as PromptOption;
+
 const DEFAULT_KIT = copyData.defaultKit as PromptKit;
 const ROLE_KITS = copyData.roleKits as Record<TailoredRole, PromptKit>;
 // Overrides are keyed by a base-kit entry's `key` (e.g. "onboarding",
