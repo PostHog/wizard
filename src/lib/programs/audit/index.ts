@@ -77,6 +77,12 @@ const auditRun = async (session: WizardSession): Promise<ProgramRun> => {
           ? `${cloudUrl}/products?source=wizard`
           : undefined;
 
+      // Note: `sess` here is the agent-runner's snapshot of session at
+      // runAgent() invocation time. Any URL emissions during the run land
+      // on the live store, NOT on this snapshot. The UI layer
+      // (InkUI.setOutroData) merges live URLs in on top of this return
+      // value, so it's safe to leave dashboardUrl/notebookUrl as undefined
+      // here when the snapshot doesn't have them.
       return {
         kind: OutroKind.Success as const,
         message: baseRun.successMessage,

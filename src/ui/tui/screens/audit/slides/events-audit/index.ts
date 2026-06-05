@@ -13,6 +13,7 @@ import { EnrichSitesSlide } from './enrichSites.js';
 import { QueryVolumeSlide } from './queryVolume.js';
 import { WriteReportSlide } from './writeReport.js';
 import { CreateDashboardSlide } from './createDashboard.js';
+import { UploadNotebookSlide } from './uploadNotebook.js';
 
 export const EVENTS_AUDIT_AREA_SLIDES: AreaSlide[] = [
   DetectSdkSlide,
@@ -21,4 +22,5 @@ export const EVENTS_AUDIT_AREA_SLIDES: AreaSlide[] = [
   QueryVolumeSlide,
   WriteReportSlide,
   CreateDashboardSlide,
+  UploadNotebookSlide,
 ];

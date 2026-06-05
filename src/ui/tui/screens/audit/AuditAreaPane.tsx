@@ -55,12 +55,20 @@ interface AuditAreaPaneProps {
   /** Slide registry to look the active area up in. Defaults to the doctor
    * (`audit` program) slides; events-audit passes its own 6-phase set. */
   slides?: AreaSlide[];
+  /** Dashboard URL once the agent emits `[DASHBOARD_URL]`. Shown as a sticky
+   * footer so the user can grab the link while later phases still run. */
+  dashboardUrl?: string | null;
+  /** Notebook URL once the agent emits `[NOTEBOOK_URL]`. Same sticky-footer
+   * treatment as the dashboard URL. */
+  notebookUrl?: string | null;
 }
 
 export const AuditAreaPane = ({
   checks,
   reportPath,
   slides = AUDIT_AREA_SLIDES,
+  dashboardUrl,
+  notebookUrl,
 }: AuditAreaPaneProps) => {
   const pendingChecks = checks.filter((c) => c.status === 'pending');
   const activeArea = pendingChecks[0]?.area;
@@ -74,10 +82,20 @@ export const AuditAreaPane = ({
     }
   });
 
+  const urlsFooter =
+    dashboardUrl || notebookUrl ? (
+      <UrlsFooter dashboardUrl={dashboardUrl} notebookUrl={notebookUrl} />
+    ) : null;
+
   // Active area — agent is still resolving checks for this slide's area.
   if (slide) {
     const hasFindings = checks.some(isFinding);
-    return <ActiveSlide slide={slide} hasFindings={hasFindings} />;
+    return (
+      <Box flexDirection="column">
+        <ActiveSlide slide={slide} hasFindings={hasFindings} />
+        {urlsFooter}
+      </Box>
+    );
   }
 
   // Ledger empty — the seed hook fires synchronously at intro `onReady`,
@@ -88,7 +106,12 @@ export const AuditAreaPane = ({
   }
 
   // Every check is resolved and the agent is composing the report.
-  return <WritingReport reportPath={reportPath} />;
+  return (
+    <Box flexDirection="column">
+      <WritingReport reportPath={reportPath} />
+      {urlsFooter}
+    </Box>
+  );
 };
 
 // ── States ───────────────────────────────────────────────────────────
@@ -129,6 +152,28 @@ const ActiveSlide = ({
         )}
       </Text>
     </Box>
+  </Box>
+);
+
+const UrlsFooter = ({
+  dashboardUrl,
+  notebookUrl,
+}: {
+  dashboardUrl?: string | null;
+  notebookUrl?: string | null;
+}) => (
+  <Box flexDirection="column" paddingX={1} marginTop={1}>
+    <Text dimColor>{'─'.repeat(40)}</Text>
+    {dashboardUrl && (
+      <Text>
+        Dashboard: <Text color="cyan">{dashboardUrl}</Text>
+      </Text>
+    )}
+    {notebookUrl && (
+      <Text>
+        Notebook: <Text color="cyan">{notebookUrl}</Text>
+      </Text>
+    )}
   </Box>
 );
 

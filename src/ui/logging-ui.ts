@@ -246,6 +246,10 @@ export class LoggingUI implements WizardUI {
     // No-op in CI mode
   }
 
+  setOutroData(_data: import('@lib/wizard-session').OutroData): void {
+    // No-op in CI mode
+  }
+
   setFrameworkContext(_key: string, _value: unknown): void {
     // No-op in CI mode
   }

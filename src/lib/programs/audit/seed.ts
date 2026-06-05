@@ -71,6 +71,12 @@ export const AUDIT_SEED_CHECKS: AuditCheck[] = [
     status: 'pending',
   },
   {
+    id: 'write-report',
+    area: 'Write report',
+    label: 'Create posthog-audit-report.md',
+    status: 'pending',
+  },
+  {
     id: 'upload-notebook',
     area: 'Upload notebook',
     label: 'Write the report into a PostHog notebook',

@@ -490,24 +490,30 @@ export async function runProgram(
   }
 
   // 11. Outro
-  if (config.buildOutroData) {
-    session.outroData = config.buildOutroData(
-      session,
-      { accessToken, projectApiKey, host, projectId },
-      cloudRegion,
-    );
-  } else {
-    const continueUrl = session.signup
-      ? `${getCloudUrlFromRegion(cloudRegion)}/products?source=wizard`
-      : undefined;
-
-    session.outroData = {
-      kind: OutroKind.Success,
-      message: config.successMessage,
-      reportFile: config.reportFile,
-      docsUrl: config.docsUrl,
-      continueUrl,
-    };
+  // Push outro data through the UI (not via direct `session.outroData = ...`
+  // mutation) so the live store gets the value. agent-runner's `session`
+  // parameter is captured at runAgent() invocation time, and any `setKey`
+  // call between then and here (e.g. setDashboardUrl, setNotebookUrl) forks
+  // the session reference — direct mutation then lands on a stale snapshot
+  // that the screen never reads. UI.setOutroData() goes through the store
+  // and also merges in any post-snapshot URLs from the live session.
+  const outroData = config.buildOutroData
+    ? config.buildOutroData(
+        session,
+        { accessToken, projectApiKey, host, projectId },
+        cloudRegion,
+      )
+    : {
+        kind: OutroKind.Success,
+        message: config.successMessage,
+        reportFile: config.reportFile,
+        docsUrl: config.docsUrl,
+        continueUrl: session.signup
+          ? `${getCloudUrlFromRegion(cloudRegion)}/products?source=wizard`
+          : undefined,
+      };
+  if (outroData) {
+    getUI().setOutroData(outroData);
   }
 
   getUI().outro(config.successMessage);

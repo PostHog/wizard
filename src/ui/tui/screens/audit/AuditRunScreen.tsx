@@ -55,7 +55,13 @@ export const AuditRunScreen = ({ store }: AuditRunScreenProps) => {
       ? EVENTS_AUDIT_AREA_SLIDES
       : AUDIT_AREA_SLIDES;
   const areaPane = (
-    <AuditAreaPane checks={checks} reportPath={reportPath} slides={slides} />
+    <AuditAreaPane
+      checks={checks}
+      reportPath={reportPath}
+      slides={slides}
+      dashboardUrl={store.session.dashboardUrl}
+      notebookUrl={store.session.notebookUrl}
+    />
   );
 
   // Narrow terminals: drop the area pane.

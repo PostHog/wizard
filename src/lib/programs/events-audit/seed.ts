@@ -38,7 +38,7 @@ export const EVENTS_AUDIT_SEED_CHECKS: AuditCheck[] = [
   {
     id: 'write-report',
     area: 'Write report',
-    label: 'Render posthog-events-audit-report.md',
+    label: 'Create posthog-events-audit-report.md',
     status: 'pending',
   },
   {
