@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { provisionNewAccount } from '../provisioning';
+import { provisionNewAccount } from '@utils/provisioning';
 
 jest.mock('axios');
 jest.mock('../debug', () => ({ logToFile: jest.fn() }));
@@ -89,6 +89,15 @@ describe('provisionNewAccount', () => {
       (accountCall[1] as Record<string, unknown>).code_challenge,
     ).toBeTruthy();
     expect((accountCall[1] as Record<string, unknown>).client_id).toBeTruthy();
+    expect((accountCall[1] as Record<string, unknown>).scopes).toEqual([
+      'user:read',
+      'project:read',
+      'llm_gateway:read',
+      'dashboard:write',
+      'insight:write',
+      'query:read',
+      'notebook:write',
+    ]);
 
     // Verify token exchange includes code_verifier
     const tokenCall = mockedAxios.post.mock.calls[1];

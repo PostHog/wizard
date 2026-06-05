@@ -1,9 +1,9 @@
 /* Generic Python language wizard using posthog-agent with PostHog MCP */
-import type { WizardOptions } from '../../utils/types';
-import type { FrameworkConfig } from '../../lib/framework-config';
-import { PYTHON_PACKAGE_INSTALLATION } from '../../lib/framework-config';
-import { detectPythonPackageManagers } from '../../lib/detection/package-manager';
-import { Integration } from '../../lib/constants';
+import type { WizardRunOptions } from '@utils/types';
+import type { FrameworkConfig } from '@lib/framework-config';
+import { PYTHON_PACKAGE_INSTALLATION } from '@lib/framework-config';
+import { detectPythonPackageManagers } from '@lib/detection/package-manager';
+import { Integration } from '@lib/constants';
 import fg from 'fast-glob';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -25,7 +25,7 @@ export const PYTHON_AGENT_CONFIG: FrameworkConfig<PythonContext> = {
     integration: Integration.python,
     beta: true,
     docsUrl: 'https://posthog.com/docs/libraries/python',
-    gatherContext: async (options: WizardOptions) => {
+    gatherContext: async (options: WizardRunOptions) => {
       const packageManager = await detectPackageManager(options);
       return { packageManager };
     },
@@ -38,7 +38,7 @@ export const PYTHON_AGENT_CONFIG: FrameworkConfig<PythonContext> = {
     getVersion: () => undefined,
     getVersionBucket: getPythonVersionBucket,
     minimumVersion: '3.8.0',
-    getInstalledVersion: (options: WizardOptions) =>
+    getInstalledVersion: (options: WizardRunOptions) =>
       Promise.resolve(getPythonVersion(options)),
     detect: async (options) => {
       const { installDir } = options;

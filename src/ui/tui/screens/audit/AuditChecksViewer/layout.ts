@@ -1,13 +1,13 @@
-import { MAX_WIDTH } from '../../../primitives/ScreenContainer.js';
+import { MAX_WIDTH } from '@ui/tui/primitives/ScreenContainer';
 
 /** Terminal rows used by chrome outside the viewer
  *  (TitleBar, spacer, screen padding, status bar, tab bar). */
 export const CHROME_ROWS = 10;
 
 /** Rows used by the viewer's own header / footer
- *  (title, description, spacer, column headers, divider, scroll-up marker,
- *  scroll-down marker, legend, count summary). */
-export const VIEWER_CHROME_BASE = 9;
+ *  (title, subtitle, top summary, spacer, column headers, divider,
+ *  scroll-up marker, scroll-down marker, legend, footer summary). */
+export const VIEWER_CHROME_BASE = 10;
 
 export const COL_AREA_WIDTH = 18;
 export const COL_LABEL_MIN = 28;

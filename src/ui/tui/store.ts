@@ -14,34 +14,38 @@
  */
 
 import { atom, map } from 'nanostores';
-import { TaskStatus, isTaskStatus } from '../wizard-ui.js';
+import { logToFile } from '@utils/debug';
+import { TaskStatus, isTaskStatus, type AuthErrorDetail } from '@ui/wizard-ui';
 import {
   type WizardSession,
   type OutroData,
   type DiscoveredFeature,
+  type PendingQuestion,
+  type AskAnswers,
   AdditionalFeature,
   McpOutcome,
   RunPhase,
   buildSession,
-} from '../../lib/wizard-session.js';
-import type { SettingsConflict } from '../../lib/agent/agent-interface.js';
-import type { WizardReadinessResult } from '../../lib/health-checks/readiness.js';
+} from '@lib/wizard-session';
+import type { SettingsConflict } from '@lib/agent/agent-interface';
+import type { WizardReadinessResult } from '@lib/health-checks/readiness';
 import {
   WizardRouter,
   type ScreenName,
-  Screen,
+  ScreenId,
   Overlay,
-  Flow,
+  Program,
+  type ProgramId,
 } from './router.js';
-import { analytics, sessionProperties } from '../../utils/analytics.js';
+import { analytics, sessionProperties } from '@utils/analytics';
 import type {
   StoreInitContext,
-  WorkflowReadyContext,
-} from '../../lib/workflows/workflow-step.js';
-import { WORKFLOW_STEPS } from './flows.js';
+  ProgramReadyContext,
+} from '@lib/programs/program-step';
+import { getProgramConfig } from '@lib/programs/program-registry';
 
-export { TaskStatus, Screen, Overlay, Flow, RunPhase, McpOutcome };
-export type { ScreenName, OutroData, WizardSession };
+export { TaskStatus, ScreenId, Overlay, Program, RunPhase, McpOutcome };
+export type { ScreenName, OutroData, WizardSession, ProgramId };
 
 export interface TaskItem {
   label: string;
@@ -81,7 +85,7 @@ export class WizardStore {
   /** Hooks run when transitioning onto a screen. */
   private _enterScreenHooks = new Map<ScreenName, (() => void)[]>();
 
-  /** Gate promises derived from workflow step definitions. */
+  /** Gate promises derived from program step definitions. */
   private _gates = new Map<string, GateEntry>();
 
   version = '';
@@ -96,18 +100,24 @@ export class WizardStore {
   /** Blocks OAuth flow until the port-conflict overlay is dismissed. */
   private _resolvePortConflict: (() => void) | null = null;
 
-  constructor(flow: Flow = Flow.PostHogIntegration) {
-    this.router = new WizardRouter(flow);
-    this._initFromWorkflow(flow);
+  /** Resolves the OAuth flow with a manually-entered authorization code. */
+  private _resolveManualAuthCode: ((code: string) => void) | null = null;
+
+  /** Resolves the in-flight wizard_ask request. */
+  private _resolvePendingQuestion: ((answers: AskAnswers) => void) | null =
+    null;
+
+  constructor(program: ProgramId = Program.PostHogIntegration) {
+    this.router = new WizardRouter(program);
+    this._initFromProgram(program);
   }
 
   /**
-   * Scan workflow steps for gate predicates and onInit callbacks.
+   * Scan program steps for gate predicates and onInit callbacks.
    * Creates gate promises and fires init work.
    */
-  private _initFromWorkflow(flow: Flow): void {
-    const steps = WORKFLOW_STEPS[flow];
-    if (!steps) return;
+  private _initFromProgram(program: ProgramId): void {
+    const steps = getProgramConfig(program).steps;
 
     // Create gate promises from steps that define them
     for (const step of steps) {
@@ -126,7 +136,7 @@ export class WizardStore {
     }
 
     // Run onInit callbacks with a minimal context interface.
-    // Arrow functions capture `this` from _initFromWorkflow so we don't
+    // Arrow functions capture `this` from _initFromProgram so we don't
     // need to alias it.
     const getSession = (): WizardSession => this.session;
     const ctx: StoreInitContext = {
@@ -146,12 +156,11 @@ export class WizardStore {
    * Run all `onReady` hooks declared by the current flow's steps, in
    * order. Must be called after `store.session = session` so hooks see
    * the real installDir. bin.ts calls this generically — it doesn't
-   * need to know which workflow has which pre-flow work.
+   * need to know which program has which pre-flow work.
    */
   async runReadyHooks(): Promise<void> {
-    const steps = WORKFLOW_STEPS[this.router.activeFlow];
-    if (!steps) return;
-    const ctx: WorkflowReadyContext = {
+    const steps = getProgramConfig(this.router.activeProgram).steps;
+    const ctx: ProgramReadyContext = {
       session: this.session,
       setFrameworkContext: (k, v) => this.setFrameworkContext(k, v),
       setFrameworkConfig: (i, c) => this.setFrameworkConfig(i, c),
@@ -172,13 +181,13 @@ export class WizardStore {
   /**
    * Get a gate promise by step ID — the primary blocking checkpoint API
    * for bin.ts. `await store.getGate('...')` parks the caller until the
-   * corresponding workflow step's gate predicate flips to true (if the
+   * corresponding program step's gate predicate flips to true (if the
    * predicate stays false, the caller stays parked indefinitely — the
    * TUI keeps rendering so the user can resolve whatever is blocking).
    *
-   * If the workflow doesn't define a step with this ID, or the step
+   * If the program doesn't define a step with this ID, or the step
    * has no `gate` predicate, this returns an already-resolved promise
-   * so bin.ts flows straight through. This lets workflows opt in to
+   * so bin.ts flows straight through. This lets programs opt in to
    * gates on a per-step basis without bin.ts needing to know which
    * gates exist in which flow.
    */
@@ -266,6 +275,16 @@ export class WizardStore {
     this.emitChange();
   }
 
+  setRoleAtOrganization(role: string | null): void {
+    this.$session.setKey('roleAtOrganization', role);
+    this.emitChange();
+  }
+
+  setApiUser(user: WizardSession['apiUser']): void {
+    this.$session.setKey('apiUser', user);
+    this.emitChange();
+  }
+
   setFrameworkConfig(
     integration: WizardSession['integration'],
     config: WizardSession['frameworkConfig'],
@@ -297,6 +316,11 @@ export class WizardStore {
 
   setLoginUrl(url: string | null): void {
     this.$session.setKey('loginUrl', url);
+    this.emitChange();
+  }
+
+  setAuthorizeUrl(url: string | null): void {
+    this.$session.setKey('authorizeUrl', url);
     this.emitChange();
   }
 
@@ -362,6 +386,88 @@ export class WizardStore {
   }
 
   /**
+   * Return a promise that resolves when the user submits a manually-entered
+   * OAuth code via the paste modal. The OAuth flow races this against the
+   * local callback server — see `performOAuthFlow`.
+   */
+  waitForManualAuthCode(): Promise<string> {
+    return new Promise<string>((resolve) => {
+      this._resolveManualAuthCode = resolve;
+    });
+  }
+
+  /** Open the manual OAuth code-entry overlay over the auth screen. */
+  showManualAuthCode(): void {
+    this.pushOverlay(Overlay.ManualAuthCode);
+  }
+
+  /** Dismiss the manual OAuth code overlay without submitting. */
+  dismissManualAuthCode(): void {
+    this.popOverlay();
+  }
+
+  /**
+   * Submit a manually-entered authorization code: dismiss the overlay and
+   * resolve the in-flight OAuth flow so it can exchange the code for a token.
+   */
+  submitManualAuthCode(code: string): void {
+    this.popOverlay();
+    this._resolveManualAuthCode?.(code);
+    this._resolveManualAuthCode = null;
+  }
+
+  /**
+   * Open the WizardAsk overlay with a set of questions and return a promise
+   * that resolves once the user submits answers (or the request is cancelled).
+   *
+   * Only one request is in flight at a time — calling this while a request
+   * is already pending throws.
+   */
+  requestQuestion(question: PendingQuestion): Promise<AskAnswers> {
+    if (this._resolvePendingQuestion) {
+      throw new Error(
+        'requestQuestion called while another wizard_ask request is pending',
+      );
+    }
+    this.$session.setKey('pendingQuestion', question);
+    this.pushOverlay(Overlay.WizardAsk);
+    analytics.wizardCapture('wizard_ask shown', {
+      source: question.source,
+      question_count: question.questions.length,
+      kinds: question.questions.map((q) => q.kind),
+    });
+    return new Promise<AskAnswers>((resolve) => {
+      this._resolvePendingQuestion = resolve;
+    });
+  }
+
+  /**
+   * Resolve the in-flight wizard_ask request with the user's answers and
+   * dismiss the overlay. Answers flow back to the agent as the tool result.
+   */
+  resolvePendingQuestion(answers: AskAnswers): void {
+    const resolve = this._resolvePendingQuestion;
+    this._resolvePendingQuestion = null;
+    this.$session.setKey('pendingQuestion', null);
+    this.popOverlay();
+    resolve?.(answers);
+  }
+
+  /**
+   * Cancel the in-flight wizard_ask request — the bridge sends a sentinel
+   * answer ("__cancelled__") so the skill can decide how to handle it.
+   */
+  cancelPendingQuestion(): void {
+    const pending = this.session.pendingQuestion;
+    if (!pending) return;
+    const cancelled: AskAnswers = {};
+    for (const q of pending.questions) {
+      cancelled[q.id] = '__cancelled__';
+    }
+    this.resolvePendingQuestion(cancelled);
+  }
+
+  /**
    * Back up .claude/settings.json. Dismisses the overlay on success.
    */
   backupAndFixSettingsOverride(): boolean {
@@ -378,7 +484,8 @@ export class WizardStore {
   }
 
   /** Push the auth-error overlay (no dismiss — user must exit). */
-  showAuthError(): void {
+  showAuthError(detail?: AuthErrorDetail): void {
+    this.$session.setKey('authErrorDetail', detail ?? null);
     this.pushOverlay(Overlay.AuthError);
   }
 
@@ -435,6 +542,11 @@ export class WizardStore {
     this.emitChange();
   }
 
+  setMcpSuggestedPromptsDismissed(): void {
+    this.$session.setKey('mcpSuggestedPromptsDismissed', true);
+    this.emitChange();
+  }
+
   setOutroDismissed(): void {
     this.$session.setKey('outroDismissed', true);
     this.emitChange();
@@ -442,6 +554,18 @@ export class WizardStore {
 
   setOutroData(data: OutroData): void {
     this.$session.setKey('outroData', data);
+    this.emitChange();
+  }
+
+  setDashboardUrl(url: string): void {
+    logToFile(`store.setDashboardUrl: ${url}`);
+    this.$session.setKey('dashboardUrl', url);
+    this.emitChange();
+  }
+
+  setNotebookUrl(url: string): void {
+    logToFile(`store.setNotebookUrl: ${url}`);
+    this.$session.setKey('notebookUrl', url);
     this.emitChange();
   }
 
@@ -500,7 +624,7 @@ export class WizardStore {
     this._detectTransition();
   }
 
-  // ── Screen transition analytics ─────────────────────────────────
+  // ── ScreenId transition analytics ─────────────────────────────────
 
   /**
    * Register a callback to run when transitioning onto the given screen.
@@ -526,7 +650,7 @@ export class WizardStore {
       }
       analytics.wizardCapture(`screen ${next}`, {
         from_screen: prev,
-        workflow: this.router.activeFlow,
+        program_id: this.router.activeProgram,
         ...sessionProperties(this.session),
       });
     }

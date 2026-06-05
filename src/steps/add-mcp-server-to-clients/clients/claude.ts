@@ -1,7 +1,7 @@
-import { DefaultMCPClient } from '../MCPClient';
+import { DefaultMCPClient } from '@steps/add-mcp-server-to-clients/MCPClient';
 import * as path from 'path';
 import * as os from 'os';
-import { DefaultMCPClientConfig } from '../defaults';
+import { DefaultMCPClientConfig } from '@steps/add-mcp-server-to-clients/defaults';
 import { runtimeEnv } from '@env';
 import { z } from 'zod';
 

@@ -1,17 +1,19 @@
 import { useSyncExternalStore } from 'react';
 import { join } from 'node:path';
 import { Box } from 'ink';
-import type { WizardStore } from '../../store.js';
+import type { WizardStore } from '@ui/tui/store';
 import {
   TabContainer,
   SplitView,
   LogViewer,
   HNViewer,
-} from '../../primitives/index.js';
-import { useStdoutDimensions } from '../../hooks/useStdoutDimensions.js';
-import { useFileWatcher } from '../../hooks/file-watcher.js';
+} from '@ui/tui/primitives/index';
+import { useStdoutDimensions } from '@ui/tui/hooks/useStdoutDimensions';
+import { useFileWatcher } from '@ui/tui/hooks/file-watcher';
 import { AuditChecksViewer } from './AuditChecksViewer/AuditChecksViewer.js';
 import { AuditAreaPane } from './AuditAreaPane.js';
+import { AUDIT_AREA_SLIDES } from './slides/index.js';
+import { EVENTS_AUDIT_AREA_SLIDES } from './slides/events-audit/index.js';
 import { PendingChecksList } from './PendingChecksList.js';
 import {
   AUDIT_CHECKS_FILE,
@@ -19,8 +21,9 @@ import {
   AUDIT_REPORT_FILE,
   coerceAuditChecks,
   getAuditChecks,
-} from '../../../../lib/workflows/audit/types.js';
-import { WIZARD_LOG_FILE } from '../../../../utils/paths.js';
+} from '@lib/programs/audit/types';
+import { getProgramConfig } from '@lib/programs/program-registry';
+import { WIZARD_LOG_FILE } from '@utils/paths';
 
 interface AuditRunScreenProps {
   store: WizardStore;
@@ -42,9 +45,24 @@ export const AuditRunScreen = ({ store }: AuditRunScreenProps) => {
 
   const [columns] = useStdoutDimensions();
   const checks = getAuditChecks(store.session);
-  const reportPath = `./${AUDIT_REPORT_FILE}`;
+  const reportFile =
+    getProgramConfig(store.router.activeProgram).reportFile ??
+    AUDIT_REPORT_FILE;
+  const reportPath = `./${reportFile}`;
   const pendingChecksList = <PendingChecksList checks={checks} />;
-  const areaPane = <AuditAreaPane checks={checks} reportPath={reportPath} />;
+  const slides =
+    store.session.skillId === 'events-audit'
+      ? EVENTS_AUDIT_AREA_SLIDES
+      : AUDIT_AREA_SLIDES;
+  const areaPane = (
+    <AuditAreaPane
+      checks={checks}
+      reportPath={reportPath}
+      slides={slides}
+      dashboardUrl={store.session.dashboardUrl}
+      notebookUrl={store.session.notebookUrl}
+    />
+  );
 
   // Narrow terminals: drop the area pane.
   const statusComponent =

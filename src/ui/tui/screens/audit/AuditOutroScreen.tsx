@@ -1,15 +1,17 @@
 /**
  * AuditOutroScreen — Audit-specific post-run summary. Renders the standard
  * success / error / cancel views with the audit checks summary inlined into
- * the success body. The report path is hardcoded to AUDIT_REPORT_FILE.
+ * the success body. The report path shown in the success headline comes from
+ * the program's `successMessage`, so this screen is program-agnostic.
  */
 
+import { join } from 'node:path';
 import { Box, Text, useInput } from 'ink';
 import { useSyncExternalStore } from 'react';
-import type { WizardStore } from '../../store.js';
-import { OutroKind } from '../../../../lib/wizard-session.js';
-import { Colors } from '../../styles.js';
-import { getAuditChecks } from '../../../../lib/workflows/audit/types.js';
+import type { WizardStore } from '@ui/tui/store';
+import { OutroKind } from '@lib/wizard-session';
+import { Colors } from '@ui/tui/styles';
+import { getAuditChecks } from '@lib/programs/audit/types';
 import { AuditChecksOutroSection } from './AuditChecksOutroSection.js';
 
 interface AuditOutroScreenProps {
@@ -43,6 +45,37 @@ export const AuditOutroScreen = ({ store }: AuditOutroScreenProps) => {
           <Text color="green" bold>
             ✔ {outroData.message || 'Audit complete!'}
           </Text>
+
+          {outroData.dashboardUrl && (
+            <Box marginTop={1}>
+              <Text>
+                Dashboard: <Text color="cyan">{outroData.dashboardUrl}</Text>
+              </Text>
+            </Box>
+          )}
+
+          {outroData.notebookUrl && (
+            <Box marginTop={1}>
+              <Text>
+                Notebook: <Text color="cyan">{outroData.notebookUrl}</Text>
+              </Text>
+            </Box>
+          )}
+
+          {outroData.reportFile && (
+            <Box flexDirection="column" marginTop={1}>
+              <Text color="cyan" bold>
+                Report saved to:
+              </Text>
+              <Text>
+                {join(store.session.installDir, outroData.reportFile)}
+              </Text>
+              <Text dimColor>
+                A markdown file in your project folder. Open it in any editor to
+                read the full audit.
+              </Text>
+            </Box>
+          )}
 
           <AuditChecksOutroSection
             checks={getAuditChecks(store.session)}

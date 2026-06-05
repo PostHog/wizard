@@ -5,8 +5,8 @@
  */
 
 import { useEffect, useRef, useSyncExternalStore } from 'react';
-import { WizardStore, TaskStatus } from '../../store.js';
-import { DiscoveredFeature } from '../../../../lib/wizard-session.js';
+import { WizardStore, TaskStatus } from '@ui/tui/store';
+import { DiscoveredFeature } from '@lib/wizard-session';
 import {
   TabContainer,
   SplitView,
@@ -14,11 +14,12 @@ import {
   LogViewer,
   EventPlanViewer,
   HNViewer,
-} from '../../primitives/index.js';
-import type { ProgressItem } from '../../primitives/index.js';
-import { LearnCard } from '../../components/LearnCard.js';
-import { TipsCard } from '../../components/TipsCard.js';
-import { WIZARD_LOG_FILE } from '../../../../utils/paths.js';
+} from '@ui/tui/primitives/index';
+import type { ProgressItem } from '@ui/tui/primitives/index';
+import { LearnCard } from '@ui/tui/components/LearnCard';
+import { TipsCard } from '@ui/tui/components/TipsCard';
+import { getContentBlocks as getMigrationContentBlocks } from '@lib/programs/migration/content/index';
+import { WIZARD_LOG_FILE } from '@utils/paths';
 
 const MOCK_TASKS = [
   {
@@ -161,6 +162,8 @@ export const RunScreenDemo = ({ store }: RunScreenDemoProps) => {
   const statuses =
     store.statusMessages.length > 0 ? store.statusMessages : undefined;
 
+  const learnBlocks = getMigrationContentBlocks(store);
+
   const tabs = [
     {
       id: 'status',
@@ -173,6 +176,7 @@ export const RunScreenDemo = ({ store }: RunScreenDemoProps) => {
             ) : (
               <LearnCard
                 store={store}
+                blocks={learnBlocks}
                 onComplete={() => store.setLearnCardComplete()}
               />
             )

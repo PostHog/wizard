@@ -6,12 +6,17 @@
  * The router derives the active screen from session state.
  */
 
-import type { WizardUI, SpinnerHandle } from '../wizard-ui.js';
+import type { WizardUI, SpinnerHandle, AuthErrorDetail } from '@ui/wizard-ui';
 import type { WizardStore } from './store.js';
-import type { SettingsConflict } from '../../lib/agent/agent-interface.js';
-import type { WizardReadinessResult } from '../../lib/health-checks/readiness.js';
-import type { OutroData } from '../../lib/wizard-session.js';
-import { RunPhase, OutroKind } from '../../lib/wizard-session.js';
+import type { SettingsConflict } from '@lib/agent/agent-interface';
+import type { WizardReadinessResult } from '@lib/health-checks/readiness';
+import type { ApiUser } from '@lib/api';
+import type {
+  AskAnswers,
+  OutroData,
+  PendingQuestion,
+} from '@lib/wizard-session';
+import { RunPhase, OutroKind } from '@lib/wizard-session';
 
 // Strip ANSI escape codes (chalk formatting) from strings
 // eslint-disable-next-line no-control-regex
@@ -30,17 +35,17 @@ export class InkUI implements WizardUI {
   outro(message: string): void {
     this.store.pushStatus(stripAnsi(message));
 
-    // agent-runner mutates session.outroData directly before calling outro().
-    // Direct mutation doesn't notify nanostore subscribers, so re-set the
-    // value through setOutroData() to push it to React. If there's no
-    // pre-built outroData, fall back to a minimal success record.
+    // Outro data is pushed by agent-runner via setOutroData() above. If it
+    // wasn't (e.g. CI path where outro is called directly with just a
+    // message), fall back to a minimal success record so the screen still
+    // renders something useful.
     const existing = this.store.session.outroData;
-    this.store.setOutroData(
-      existing ?? {
+    if (!existing) {
+      this.store.setOutroData({
         kind: OutroKind.Success,
         message: stripAnsi(message),
-      },
-    );
+      });
+    }
 
     // Signal that the main work is done — router resolves to mcp or outro
     if (this.store.session.runPhase === RunPhase.Running) {
@@ -80,6 +85,14 @@ export class InkUI implements WizardUI {
     this.store.setCredentials(credentials);
   }
 
+  setRoleAtOrganization(role: string | null): void {
+    this.store.setRoleAtOrganization(role);
+  }
+
+  setApiUser(user: ApiUser | null): void {
+    this.store.setApiUser(user);
+  }
+
   setDetectedFramework(label: string): void {
     this.store.setDetectedFramework(label);
   }
@@ -93,6 +106,10 @@ export class InkUI implements WizardUI {
 
   setLoginUrl(url: string | null): void {
     this.store.setLoginUrl(url);
+  }
+
+  setAuthorizeUrl(url: string | null): void {
+    this.store.setAuthorizeUrl(url);
   }
 
   showBlockingOutage(result: WizardReadinessResult): Promise<void> {
@@ -115,6 +132,10 @@ export class InkUI implements WizardUI {
     return this.store.showPortConflict(processInfo);
   }
 
+  waitForManualAuthCode(): Promise<string> {
+    return this.store.waitForManualAuthCode();
+  }
+
   showSettingsOverride(
     conflicts: SettingsConflict[],
     backupAndFix: () => boolean,
@@ -122,8 +143,12 @@ export class InkUI implements WizardUI {
     return this.store.showSettingsOverride(conflicts, backupAndFix);
   }
 
-  showAuthError(): void {
-    this.store.showAuthError();
+  showAuthError(detail?: AuthErrorDetail): void {
+    this.store.showAuthError(detail);
+  }
+
+  requestQuestion(question: PendingQuestion): Promise<AskAnswers> {
+    return this.store.requestQuestion(question);
   }
 
   startRun(): void {
@@ -182,6 +207,29 @@ export class InkUI implements WizardUI {
 
   setEventPlan(events: Array<{ name: string; description: string }>): void {
     this.store.setEventPlan(events);
+  }
+
+  setDashboardUrl(url: string): void {
+    this.store.setDashboardUrl(url);
+  }
+
+  setNotebookUrl(url: string): void {
+    this.store.setNotebookUrl(url);
+  }
+
+  setOutroData(data: OutroData): void {
+    // Merge in URLs the agent emitted via `[DASHBOARD_URL]` / `[NOTEBOOK_URL]`
+    // markers. These land on the live store during the run; agent-runner's
+    // `session` snapshot misses them (setKey forks the reference). The live
+    // store wins over the `data` payload so a real emission always beats any
+    // fallback the program's buildOutroData may have computed from the stale
+    // snapshot (e.g. events-audit defaults dashboardUrl to `${cloudUrl}/dashboard`).
+    const live = this.store.session;
+    this.store.setOutroData({
+      ...data,
+      dashboardUrl: live.dashboardUrl ?? data.dashboardUrl ?? undefined,
+      notebookUrl: live.notebookUrl ?? data.notebookUrl ?? undefined,
+    });
   }
 
   setFrameworkContext(key: string, value: unknown): void {

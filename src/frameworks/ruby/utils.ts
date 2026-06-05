@@ -1,6 +1,6 @@
 import fg from 'fast-glob';
-import type { WizardOptions } from '../../utils/types';
-import { createVersionBucket } from '../../utils/semver';
+import type { WizardRunOptions } from '@utils/types';
+import { createVersionBucket } from '@utils/semver';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 
@@ -26,7 +26,7 @@ export const getRubyVersionBucket = createVersionBucket();
  * Detect Ruby package manager
  */
 export function detectPackageManager(
-  options: Pick<WizardOptions, 'installDir'>,
+  options: Pick<WizardRunOptions, 'installDir'>,
 ): RubyPackageManager {
   const { installDir } = options;
 
@@ -56,7 +56,7 @@ export function getPackageManagerName(
  * Get Ruby version from .ruby-version file or Gemfile
  */
 export function getRubyVersion(
-  options: Pick<WizardOptions, 'installDir'>,
+  options: Pick<WizardRunOptions, 'installDir'>,
 ): string | undefined {
   const { installDir } = options;
 
@@ -92,7 +92,7 @@ export function getRubyVersion(
  * Check if the project is a Ruby project (but not Rails)
  */
 export async function isRubyProject(
-  options: Pick<WizardOptions, 'installDir'>,
+  options: Pick<WizardRunOptions, 'installDir'>,
 ): Promise<boolean> {
   const { installDir } = options;
 

@@ -1,15 +1,15 @@
 /* TanStack Start wizard using posthog-agent with PostHog MCP */
-import type { WizardOptions } from '../../utils/types';
-import type { FrameworkConfig } from '../../lib/framework-config';
-import { detectNodePackageManagers } from '../../lib/detection/package-manager';
-import { Integration } from '../../lib/constants';
+import type { WizardRunOptions } from '@utils/types';
+import type { FrameworkConfig } from '@lib/framework-config';
+import { detectNodePackageManagers } from '@lib/detection/package-manager';
+import { Integration } from '@lib/constants';
 import {
-  getPackageVersion,
+  getDeclaredVersion,
   getInstalledPackageVersion,
-  hasPackageInstalled,
-  type PackageDotJson,
-} from '../../utils/package-json';
-import { tryGetPackageJson } from '../../utils/setup-utils';
+  hasDeclaredDependency,
+  type PackageJson,
+} from '@utils/package-json';
+import { tryGetPackageJson } from '@utils/setup-utils';
 import { getTanStackStartVersionBucket } from './utils';
 
 type TanStackStartContext = Record<string, unknown>;
@@ -26,13 +26,10 @@ export const TANSTACK_START_AGENT_CONFIG: FrameworkConfig<TanStackStartContext> 
       packageName: '@tanstack/react-start',
       packageDisplayName: 'TanStack Start',
       getVersion: (packageJson: unknown) =>
-        getPackageVersion(
-          '@tanstack/react-start',
-          packageJson as PackageDotJson,
-        ),
+        getDeclaredVersion('@tanstack/react-start', packageJson as PackageJson),
       getVersionBucket: getTanStackStartVersionBucket,
       minimumVersion: '1.0.0',
-      getInstalledVersion: (options: WizardOptions) =>
+      getInstalledVersion: (options: WizardRunOptions) =>
         Promise.resolve(
           getInstalledPackageVersion(
             '@tanstack/react-start',
@@ -42,7 +39,7 @@ export const TANSTACK_START_AGENT_CONFIG: FrameworkConfig<TanStackStartContext> 
       detect: async (options) => {
         const packageJson = await tryGetPackageJson(options);
         return packageJson
-          ? hasPackageInstalled('@tanstack/react-start', packageJson)
+          ? hasDeclaredDependency('@tanstack/react-start', packageJson)
           : false;
       },
       detectPackageManager: detectNodePackageManagers,

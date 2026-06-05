@@ -1,8 +1,8 @@
-import type { Integration } from '../../lib/constants';
-import type { CloudRegion } from '../../utils/types';
-import { traceStep } from '../../telemetry';
-import { analytics } from '../../utils/analytics';
-import { getUI } from '../../ui';
+import type { Integration } from '@lib/constants';
+import type { CloudRegion } from '@utils/types';
+import { withProgress } from '../../telemetry';
+import { analytics } from '@utils/analytics';
+import { getUI } from '@ui';
 import { MCPClient } from './MCPClient';
 import { CursorMCPClient } from './clients/cursor';
 import { ClaudeCodeMCPClient } from './clients/claude-code';
@@ -10,7 +10,7 @@ import { VisualStudioCodeClient } from './clients/visual-studio-code';
 import { ZedClient } from './clients/zed';
 import { CodexMCPClient } from './clients/codex';
 import { ALL_FEATURE_VALUES } from './defaults';
-import { debug } from '../../utils/debug';
+import { debug } from '@utils/debug';
 import { isPluginCapable, PluginCapable } from './plugin-client';
 
 export const getSupportedClients = async (): Promise<MCPClient[]> => {
@@ -77,7 +77,7 @@ export const addMCPServerToClientsStep = async ({
   }
 
   // Auto-install to all supported clients
-  await traceStep('adding mcp servers', async () => {
+  await withProgress('adding mcp servers', async () => {
     await addMCPServer(
       supportedClients,
       apiKey,
@@ -115,7 +115,7 @@ export const removeMCPServerFromClientsStep = async ({
   }
 
   // Auto-remove from all installed clients
-  const results = await traceStep('removing mcp servers', async () => {
+  const results = await withProgress('removing mcp servers', async () => {
     await removeMCPServer(installedClients, local);
     return installedClients.map((c) => c.name);
   });

@@ -1,8 +1,8 @@
 /**
- * Unified workflow runner.
+ * Unified program runner.
  *
- * Single configurable pipeline for all workflows. Each workflow
- * provides a WorkflowRun (via the `run` field on WorkflowConfig)
+ * Single configurable pipeline for all programs. Each program
+ * provides a ProgramRun (via the `run` field on ProgramConfig)
  * that controls:
  *   - Whether a skill is pre-installed or discovered at runtime
  *   - How the agent prompt is built
@@ -19,10 +19,10 @@ import {
   type AdditionalFeature,
   type Credentials,
   OutroKind,
-} from '../wizard-session';
-import { getOrAskForProjectData } from '../../utils/setup-utils';
-import { analytics } from '../../utils/analytics';
-import { getUI } from '../../ui';
+} from '@lib/wizard-session';
+import { getOrAskForProjectData } from '@utils/setup-utils';
+import { analytics } from '@utils/analytics';
+import { getUI } from '@ui';
 import {
   initializeAgent,
   runAgent as executeAgent,
@@ -33,30 +33,27 @@ import {
   backupAndFixClaudeSettings,
   restoreClaudeSettings,
 } from './agent-interface';
-import { getCloudUrlFromRegion } from '../../utils/urls';
+import { getCloudUrlFromRegion } from '@utils/urls';
 import {
   evaluateWizardReadiness,
   WizardReadiness,
   SIGNUP_WIZARD_READINESS_CONFIG,
   getBlockingServiceKeys,
   SERVICE_LABELS,
-} from '../health-checks/readiness';
-import { enableDebugLogs, initLogFile, logToFile } from '../../utils/debug';
-import { createBenchmarkPipeline } from '../middleware/benchmark';
-import {
-  wizardAbort,
-  WizardError,
-  registerCleanup,
-} from '../../utils/wizard-abort';
-import { formatScanReport, writeScanReport } from '../yara-hooks';
-import { detectNodePackageManagers } from '../detection/package-manager';
-import type { PackageManagerDetector } from '../detection/package-manager';
-import { getSkillsBaseUrl } from '../constants';
+} from '@lib/health-checks/readiness';
+import { enableDebugLogs, initLogFile, logToFile } from '@utils/debug';
+import { createBenchmarkPipeline } from '@lib/middleware/benchmark';
+import { wizardAbort, WizardError, registerCleanup } from '@utils/wizard-abort';
+import { formatScanReport, writeScanReport } from '@lib/yara-hooks';
+import { detectNodePackageManagers } from '@lib/detection/package-manager';
+import type { PackageManagerDetector } from '@lib/detection/package-manager';
+import { getSkillsBaseUrl } from '@lib/constants';
 import { runtimeEnv } from '@env';
-import { installSkillById, type InstallSkillResult } from '../wizard-tools';
-import type { WizardOptions } from '../../utils/types';
+import { installSkillById, type InstallSkillResult } from '@lib/wizard-tools';
+import { createWizardAskBridge } from '@lib/wizard-ask-bridge';
+import type { WizardRunOptions } from '@utils/types';
 
-import type { WorkflowConfig } from '../workflows/workflow-step';
+import type { ProgramConfig } from '@lib/programs/program-step';
 import { assemblePrompt, type PromptContext } from './agent-prompt';
 
 export type { PromptContext };
@@ -79,16 +76,16 @@ export interface AbortCase {
 /**
  * Unified agent run configuration.
  *
- * Every workflow provides one of these — either as a static object
+ * Every program provides one of these — either as a static object
  * or via a function that builds one from the session. The runner
  * assembles the final prompt from `prompt` + `skillId`.
  */
-export interface WorkflowRun {
+export interface ProgramRun {
   /** Analytics label (e.g. 'revenue-analytics-setup', 'nextjs') */
   integrationLabel: string;
   /** Skill ID to pre-install. Omit for agent-driven skill discovery. */
   skillId?: string;
-  /** Additional workflow-specific prompt instructions. Appended after the default project prompt. */
+  /** Additional program-specific prompt instructions. Appended after the default project prompt. */
   customPrompt?: (ctx: PromptContext) => string;
   /** Additional MCP servers (e.g. Svelte MCP) */
   additionalMcpServers?: Record<string, { url: string }>;
@@ -101,7 +98,7 @@ export interface WorkflowRun {
   docsUrl: string;
   errorMessage?: string;
   additionalFeatureQueue?: readonly AdditionalFeature[];
-  /** Known `[ABORT] <reason>` cases this workflow can render. */
+  /** Known `[ABORT] <reason>` cases this program can render. */
   abortCases?: AbortCase[];
   /** Runs after agent completes, before outro (e.g. env var upload). */
   postRun?: (session: WizardSession, credentials: Credentials) => Promise<void>;
@@ -109,22 +106,38 @@ export interface WorkflowRun {
   buildOutroData?: (
     session: WizardSession,
     credentials: Credentials,
-    cloudRegion: import('../../utils/types').CloudRegion | undefined,
+    cloudRegion: import('@utils/types').CloudRegion | undefined,
   ) => WizardSession['outroData'];
+  /**
+   * Per-run cap on `wizard_ask` invocations. Defaults to 10. The 4th call
+   * always returns a "batch your questions" error regardless of the cap.
+   */
+  maxQuestions?: number;
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────
 
-function sessionToOptions(session: WizardSession): WizardOptions {
+/**
+ * Decide whether the `wizard_ask` overlay should be wired for this run.
+ * Disabled in non-interactive modes (CI, signup) — there's no human to
+ * answer. Per-program disabling is done by adding WIZARD_ASK_TOOL_NAME to
+ * the program's `disallowedTools` so the SDK rejects calls outright.
+ * Extracted so the policy can be unit-tested directly.
+ */
+export function shouldDisableAsk(
+  session: Pick<WizardSession, 'ci' | 'signup'>,
+): boolean {
+  return session.ci || session.signup;
+}
+
+function sessionToOptions(session: WizardSession): WizardRunOptions {
   return {
     installDir: session.installDir,
     debug: session.debug,
-    forceInstall: session.forceInstall,
     default: false,
     signup: session.signup,
     localMcp: session.localMcp,
     ci: session.ci,
-    menu: session.menu,
     benchmark: session.benchmark,
     projectId: session.projectId,
     apiKey: session.apiKey,
@@ -135,37 +148,37 @@ function sessionToOptions(session: WizardSession): WizardOptions {
 // ── Runner ───────────────────────────────────────────────────────────
 
 /**
- * Resolve a WorkflowConfig's agent run definition and execute the pipeline.
+ * Resolve a ProgramConfig's agent run definition and execute the pipeline.
  * Entry point for bin.ts — handles buildRunConfig, bootstrap, and (future) run field.
  */
 export async function runAgent(
-  workflowConfig: WorkflowConfig,
+  programConfig: ProgramConfig,
   session: WizardSession,
 ): Promise<void> {
-  if (!workflowConfig.run) {
-    throw new Error(
-      `Workflow "${workflowConfig.flowKey}" has no run configuration.`,
-    );
+  if (!programConfig.run) {
+    throw new Error(`Program "${programConfig.id}" has no run configuration.`);
   }
 
   const runDef =
-    typeof workflowConfig.run === 'function'
-      ? await workflowConfig.run(session)
-      : workflowConfig.run;
+    typeof programConfig.run === 'function'
+      ? await programConfig.run(session)
+      : programConfig.run;
 
-  await runWorkflow(session, runDef);
+  await runProgram(session, runDef, programConfig);
 }
 
 /**
- * Run a workflow's agent pipeline.
+ * Run a program's agent pipeline.
  *
- * This is the single execution path for all workflows — both skill-based
+ * This is the single execution path for all programs — both skill-based
  * (revenue analytics) and framework-based (core integration). The
- * `WorkflowRun` controls what varies between them.
+ * `ProgramRun` controls what varies between them; `programConfig` carries
+ * the program-level static metadata (tool allow/disallow lists, etc.).
  */
-export async function runWorkflow(
+export async function runProgram(
   session: WizardSession,
-  config: WorkflowRun,
+  config: ProgramRun,
+  programConfig: ProgramConfig,
 ): Promise<void> {
   // 1. Init logging + debug
   initLogFile();
@@ -237,24 +250,35 @@ export async function runWorkflow(
 
   analytics.wizardCapture('agent started', {
     integration: config.integrationLabel,
-    workflow: config.integrationLabel,
+    program_id: programConfig.id,
     skill_id: config.skillId ?? null,
   });
 
   // 4. OAuth
   logToFile('[agent-runner] starting OAuth');
-  const { projectApiKey, host, accessToken, projectId, cloudRegion } =
-    await getOrAskForProjectData({
-      signup: session.signup,
-      ci: session.ci,
-      apiKey: session.apiKey,
-      projectId: session.projectId,
-      email: session.email,
-      region: session.region,
-    });
+  const {
+    projectApiKey,
+    host,
+    accessToken,
+    projectId,
+    cloudRegion,
+    roleAtOrganization,
+    user,
+  } = await getOrAskForProjectData({
+    signup: session.signup,
+    ci: session.ci,
+    apiKey: session.apiKey,
+    projectId: session.projectId,
+    email: session.email,
+    region: session.region,
+  });
 
   session.credentials = { accessToken, projectApiKey, host, projectId };
+  session.roleAtOrganization = roleAtOrganization;
+  session.apiUser = user;
   getUI().setCredentials(session.credentials);
+  getUI().setRoleAtOrganization(roleAtOrganization);
+  getUI().setApiUser(user);
 
   // 5. Skill install (if skillId provided)
   let skillPath: string | undefined;
@@ -300,6 +324,17 @@ export async function runWorkflow(
 
   getUI().startRun();
 
+  // wizard_ask is only available in interactive mode. CI/signup users have
+  // no way to answer; we omit the bridge so the tool returns an actionable
+  // error rather than hanging on a never-resolving prompt.
+  const askDisabled = shouldDisableAsk(session);
+  const askBridge = askDisabled
+    ? undefined
+    : createWizardAskBridge({
+        getSource: () => session.skillId ?? config.integrationLabel,
+        showQuestion: (q) => getUI().requestQuestion(q),
+      });
+
   const agent = await initializeAgent(
     {
       workingDirectory: session.installDir,
@@ -312,6 +347,12 @@ export async function runWorkflow(
       skillsBaseUrl,
       wizardFlags,
       wizardMetadata,
+      integrationLabel: config.integrationLabel,
+      askBridge,
+      askMaxQuestions: config.maxQuestions,
+      allowedTools: programConfig.allowedTools,
+      disallowedTools: programConfig.disallowedTools,
+      getPendingQuestion: () => session.pendingQuestion,
     },
     sessionToOptions(session),
   );
@@ -359,7 +400,7 @@ export async function runWorkflow(
       : {
           kind: OutroKind.Error,
           message: `${config.integrationLabel} aborted`,
-          body: reason || 'The agent aborted the workflow.',
+          body: reason || 'The agent aborted the program.',
           docsUrl: config.docsUrl,
         };
     analytics.wizardCapture('agent aborted', {
@@ -449,24 +490,30 @@ export async function runWorkflow(
   }
 
   // 11. Outro
-  if (config.buildOutroData) {
-    session.outroData = config.buildOutroData(
-      session,
-      { accessToken, projectApiKey, host, projectId },
-      cloudRegion,
-    );
-  } else {
-    const continueUrl = session.signup
-      ? `${getCloudUrlFromRegion(cloudRegion)}/products?source=wizard`
-      : undefined;
-
-    session.outroData = {
-      kind: OutroKind.Success,
-      message: config.successMessage,
-      reportFile: config.reportFile,
-      docsUrl: config.docsUrl,
-      continueUrl,
-    };
+  // Push outro data through the UI (not via direct `session.outroData = ...`
+  // mutation) so the live store gets the value. agent-runner's `session`
+  // parameter is captured at runAgent() invocation time, and any `setKey`
+  // call between then and here (e.g. setDashboardUrl, setNotebookUrl) forks
+  // the session reference — direct mutation then lands on a stale snapshot
+  // that the screen never reads. UI.setOutroData() goes through the store
+  // and also merges in any post-snapshot URLs from the live session.
+  const outroData = config.buildOutroData
+    ? config.buildOutroData(
+        session,
+        { accessToken, projectApiKey, host, projectId },
+        cloudRegion,
+      )
+    : {
+        kind: OutroKind.Success,
+        message: config.successMessage,
+        reportFile: config.reportFile,
+        docsUrl: config.docsUrl,
+        continueUrl: session.signup
+          ? `${getCloudUrlFromRegion(cloudRegion)}/products?source=wizard`
+          : undefined,
+      };
+  if (outroData) {
+    getUI().setOutroData(outroData);
   }
 
   getUI().outro(config.successMessage);

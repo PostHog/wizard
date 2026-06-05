@@ -1,9 +1,9 @@
 import { major } from 'semver';
 import fg from 'fast-glob';
-import { tryGetPackageJson } from '../../utils/setup-utils';
-import type { WizardOptions } from '../../utils/types';
-import { getPackageVersion } from '../../utils/package-json';
-import { createVersionBucket } from '../../utils/semver';
+import { tryGetPackageJson } from '@utils/setup-utils';
+import type { WizardRunOptions } from '@utils/types';
+import { getDeclaredVersion } from '@utils/package-json';
+import { createVersionBucket } from '@utils/semver';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as semver from 'semver';
@@ -27,7 +27,7 @@ export const getReactRouterVersionBucket = createVersionBucket();
 
 async function hasReactRouterConfig({
   installDir,
-}: Pick<WizardOptions, 'installDir'>): Promise<boolean> {
+}: Pick<WizardRunOptions, 'installDir'>): Promise<boolean> {
   const configMatches = await fg('**/react-router.config.@(ts|js|tsx|jsx)', {
     dot: true,
     cwd: installDir,
@@ -38,7 +38,7 @@ async function hasReactRouterConfig({
 
 async function hasCreateBrowserRouter({
   installDir,
-}: Pick<WizardOptions, 'installDir'>): Promise<boolean> {
+}: Pick<WizardRunOptions, 'installDir'>): Promise<boolean> {
   const sourceFiles = await fg('**/*.@(ts|tsx|js|jsx)', {
     dot: true,
     cwd: installDir,
@@ -62,7 +62,7 @@ async function hasCreateBrowserRouter({
 
 async function hasDeclarativeRouter({
   installDir,
-}: Pick<WizardOptions, 'installDir'>): Promise<boolean> {
+}: Pick<WizardRunOptions, 'installDir'>): Promise<boolean> {
   const sourceFiles = await fg('**/*.@(ts|tsx|js|jsx)', {
     dot: true,
     cwd: installDir,
@@ -93,7 +93,7 @@ async function hasDeclarativeRouter({
  * Detect React Router mode. Pure — returns null if ambiguous.
  */
 export async function getReactRouterMode(
-  options: WizardOptions,
+  options: WizardRunOptions,
 ): Promise<ReactRouterMode | null> {
   const { installDir } = options;
 
@@ -101,8 +101,8 @@ export async function getReactRouterMode(
   if (!packageJson) return null;
 
   const reactRouterVersion =
-    getPackageVersion('react-router-dom', packageJson) ||
-    getPackageVersion('react-router', packageJson);
+    getDeclaredVersion('react-router-dom', packageJson) ||
+    getDeclaredVersion('react-router', packageJson);
 
   if (!reactRouterVersion) {
     return null;

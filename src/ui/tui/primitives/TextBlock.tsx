@@ -14,7 +14,7 @@
 
 import { Text } from 'ink';
 import { useState, useEffect, useRef, useMemo, type ReactNode } from 'react';
-import { Colors } from '../styles.js';
+import { Colors } from '@ui/tui/styles';
 import {
   splitSentences,
   sentenceEndChars,
@@ -62,6 +62,12 @@ interface TextBlockProps {
   maxHeight?: number;
   /** Available text width in columns (for truncation wrapping). */
   availableWidth?: number;
+  /**
+   * When `completed === true`, render the text dim. Defaults to `true` —
+   * the standard "completed step" treatment. Pass `false` to keep the
+   * text at full opacity even after the sequencer has moved on.
+   */
+  dimWhenComplete?: boolean;
 }
 
 export const TextBlock = ({
@@ -75,6 +81,7 @@ export const TextBlock = ({
   sentenceInterval = 1600,
   maxHeight,
   availableWidth,
+  dimWhenComplete = true,
 }: TextBlockProps) => {
   const speed = animationInterval ?? TEXT_REVEAL_MODE_DEFAULTS[mode];
 
@@ -164,10 +171,10 @@ export const TextBlock = ({
     return wrapAndTruncate(visibleText, availableWidth, maxHeight);
   };
 
-  // Completed: dimmed text
+  // Completed: dimmed by default, but can be overridden per-block.
   if (completed) {
     return (
-      <Text dimColor>
+      <Text dimColor={dimWhenComplete}>
         {bullet}
         {wrap(text)}
       </Text>

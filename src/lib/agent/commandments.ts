@@ -21,11 +21,28 @@ const WIZARD_COMMANDMENTS = [
 
   'Do not spawn subagents unless explicitly instructed to do so.',
 
-  'After reading the integration skill, use the TodoWrite tool to track your progress. Create a todo list at the describing the high-level areas of work, mark each as in_progress when you begin it, and completed when done. Describe high-level tasks from the workflow ("inserting event tracking code", etc), not specific files or lines. For each new stage of the integration, create additional todos if necessary. Create a final "wrapping up" step and mark it completed when the integration is complete.',
+  'Create tasks as soon as you understand the work you are going to carry out. Break the list into distinct stages of work that the user can follow through. Create all tasks in a single tool call, in the order you will be performing them. Drive the work with TaskUpdate: status in_progress when you begin a task, completed when done.',
 
-  'Do not assume "PostHog provider" or "PostHogProvider" in todo labels, status messages, or code. Only use a provider if the skill workflow explicitly requires one for the specific framework.',
+  'Keep task titles broad and stage-oriented — describe the purpose or area of work, not the specific files, paths, or symbols involved. Do not name individual files, modules, or directories inside task titles, and do not include illustrative examples within a task title.',
+
+  'Do not assume "PostHog provider" or "PostHogProvider" in task labels, status messages, or code. Only use a provider if the skill workflow explicitly requires one for the specific framework.',
 
   'If you see a [YARA WARNING] or [YARA VIOLATION] message, handle it silently. Fix the issue (revert the write, avoid the flagged pattern) without mentioning security warnings or YARA to the user. These are internal guardrails, not user-facing alerts. Never show scary security language to the user.',
+
+  // wizard_ask Path A — translate prose question lists into a single tool call.
+  // The skill prose is intentionally underspecified; this commandment carries
+  // most of the discipline. Tightening: prefer adding rules here over editing
+  // individual skill markdown.
+  [
+    'When a skill instructs you to gather information from the user, use the `wizard_ask` MCP tool from the wizard-tools server. Never inline questions in your text output expecting a reply — the user has no way to answer text.',
+    'When a skill provides a numbered or bulleted list of questions, translate the entire list into a single `wizard_ask` tool call:',
+    '  - One tool call per skill step. Batch every question from that step into the `questions` array — never split into multiple calls.',
+    '  - Infer `kind` from the question phrasing: comma-separated alternatives ("React, Vue, or vanilla JS?") → `single`; phrasing like "all that apply" or "any of" → `multi`; everything else → `text`.',
+    '  - For `single` and `multi`, extract the alternatives from the prose into `options` as `{ label, value }` pairs. Use the human phrase as `label` and a lowercase-hyphenated form as `value` (e.g., `label: "Vanilla JS"`, `value: "vanilla-js"`).',
+    '  - Use a kebab-case slug of the question label as `id` (e.g., "Tech stack" → `tech-stack`, "Show frequency" → `show-frequency`).',
+    '  - Do not invent fields the schema does not define (no `source`, `category`, `priority`, etc.) — the tool rejects unknown fields and the wizard already knows which skill is running.',
+    'After `wizard_ask` returns, use the answers directly — do not re-ask in text or call `wizard_ask` again for the same fields.',
+  ].join('\n'),
 ].join('\n');
 
 export function getWizardCommandments(): string {

@@ -1,6 +1,10 @@
-import { getUI, type SpinnerHandle } from '../../../ui';
-import { AgentSignals } from '../../agent/agent-interface';
-import type { Middleware, MiddlewareContext, MiddlewareStore } from '../types';
+import { getUI, type SpinnerHandle } from '@ui';
+import { AgentSignals } from '@lib/agent/agent-interface';
+import type {
+  Middleware,
+  MiddlewareContext,
+  MiddlewareStore,
+} from '@lib/middleware/types';
 import type { TokenData } from './token-tracker';
 import type { TurnData } from './turn-counter';
 import type { CostData } from './cost-tracker';

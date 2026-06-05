@@ -1,7 +1,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { detectAllPackageManagers } from '../../utils/package-manager';
-import type { WizardOptions } from '../../utils/types';
+import { detectAllPackageManagers } from '@utils/package-manager';
+import type { WizardRunOptions } from '@utils/types';
 
 export type JavaScriptContext = {
   packageManagerName?: string;
@@ -45,7 +45,7 @@ export const FRAMEWORK_PACKAGES = [
  * Reuses the existing package manager detection infrastructure.
  */
 export function detectJsPackageManager(
-  options: Pick<WizardOptions, 'installDir'>,
+  options: Pick<WizardRunOptions, 'installDir'>,
 ): string {
   const detected = detectAllPackageManagers(options);
   if (detected.length > 0) {
@@ -58,7 +58,7 @@ export function detectJsPackageManager(
  * Detect the bundler used in the project by checking package.json dependencies.
  */
 export function detectBundler(
-  options: Pick<WizardOptions, 'installDir'>,
+  options: Pick<WizardRunOptions, 'installDir'>,
 ): string | undefined {
   try {
     const content = fs.readFileSync(
@@ -87,7 +87,7 @@ export function detectBundler(
  * ignoring common build and dependency directories.
  */
 export function hasIndexHtml(
-  options: Pick<WizardOptions, 'installDir'>,
+  options: Pick<WizardRunOptions, 'installDir'>,
 ): boolean {
   const root = options.installDir;
 

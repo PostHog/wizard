@@ -1,0 +1,102 @@
+import fs from 'fs';
+import path from 'path';
+import { logToFile } from '@utils/debug';
+import { AUDIT_CHECKS_FILE, type AuditCheck } from './types.js';
+
+/**
+ * The 10 data-integrity checks the audit runs, plus one workflow row for the
+ * notebook upload at the end (so the skill's `audit_resolve_checks` call for
+ * `upload-notebook` succeeds — the skill writes the report to a PostHog
+ * notebook as its final step).
+ */
+export const AUDIT_SEED_CHECKS: AuditCheck[] = [
+  {
+    id: 'sdk-installed',
+    area: 'Installation',
+    label: 'PostHog SDK installed',
+    status: 'pending',
+  },
+  {
+    id: 'sdk-up-to-date',
+    area: 'Installation',
+    label: 'SDK version up to date',
+    status: 'pending',
+  },
+  {
+    id: 'init-correct',
+    area: 'Installation',
+    label: 'Initialization is correct',
+    status: 'pending',
+  },
+  {
+    id: 'identify-stable-distinct-id',
+    area: 'Identification',
+    label: 'Stable distinct_id (not session UUID)',
+    status: 'pending',
+  },
+  {
+    id: 'identify-not-late',
+    area: 'Identification',
+    label: 'identify() called before captures / flag evals',
+    status: 'pending',
+  },
+  {
+    id: 'cross-runtime-distinct-id',
+    area: 'Identification',
+    label: 'Same distinct_id across client and server',
+    status: 'pending',
+  },
+  {
+    id: 'identify-reset-on-logout',
+    area: 'Identification',
+    label: 'reset() called on logout / account switch',
+    status: 'pending',
+  },
+  {
+    id: 'capture-event-names-static',
+    area: 'Event Capture',
+    label: 'Event names are static and consistent',
+    status: 'pending',
+  },
+  {
+    id: 'capture-uses-proxy',
+    area: 'Event Capture',
+    label: 'Captures route through a reverse proxy',
+    status: 'pending',
+  },
+  {
+    id: 'capture-growth-events',
+    area: 'Event Capture',
+    label: 'Key activation events captured',
+    status: 'pending',
+  },
+  {
+    id: 'write-report',
+    area: 'Write report',
+    label: 'Create posthog-audit-report.md',
+    status: 'pending',
+  },
+  {
+    id: 'upload-notebook',
+    area: 'Upload notebook',
+    label: 'Write the report into a PostHog notebook',
+    status: 'pending',
+  },
+];
+
+/**
+ * Atomically write a seeded ledger to the project's audit checks file.
+ *
+ * Each audit-flavored program (doctor, events-audit) owns its own seed
+ * shape — pass the seed in so this writer stays program-agnostic.
+ */
+export function seedAuditLedger(
+  installDir: string,
+  checks: AuditCheck[] = AUDIT_SEED_CHECKS,
+): void {
+  const target = path.join(installDir, AUDIT_CHECKS_FILE);
+  const tmp = `${target}.tmp`;
+  fs.writeFileSync(tmp, JSON.stringify(checks, null, 2), 'utf8');
+  fs.renameSync(tmp, target);
+  logToFile(`seedAuditLedger: wrote ${checks.length} entries to ${target}`);
+}

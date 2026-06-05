@@ -1,4 +1,4 @@
-import { createMcpInstaller } from '../services/mcp-installer';
+import { createMcpInstaller } from '@ui/tui/services/mcp-installer';
 
 jest.mock('../../../steps/add-mcp-server-to-clients/index.js', () => ({
   getSupportedClients: jest.fn(),
@@ -22,9 +22,9 @@ jest.mock('../../../utils/analytics.js', () => ({
 
 describe('createMcpInstaller — installPlugins', () => {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const mcpModule = require('../../../steps/add-mcp-server-to-clients/index.js');
+  const mcpModule = require('@steps/add-mcp-server-to-clients/index');
   // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const { analytics } = require('../../../utils/analytics.js');
+  const { analytics } = require('@utils/analytics');
 
   const mockClaudeClient = { name: 'Claude Code' };
   const mockCursorClient = { name: 'Cursor' };

@@ -1,6 +1,6 @@
-import { buildSession, RunPhase } from '../../../lib/wizard-session.js';
-import { WizardReadiness } from '../../../lib/health-checks/readiness.js';
-import { WizardRouter, Flow, Screen, Overlay } from '../router.js';
+import { buildSession, McpOutcome, RunPhase } from '@lib/wizard-session';
+import { WizardReadiness } from '@lib/health-checks/readiness';
+import { WizardRouter, ScreenId, Overlay, Program } from '@ui/tui/router';
 
 function baseWizardSession() {
   return buildSession({});
@@ -9,10 +9,10 @@ function baseWizardSession() {
 describe('WizardRouter', () => {
   describe('resolve', () => {
     it('returns the first incomplete visible screen for the wizard flow', () => {
-      const router = new WizardRouter(Flow.PostHogIntegration);
+      const router = new WizardRouter(Program.PostHogIntegration);
       const session = baseWizardSession();
 
-      expect(router.resolve(session)).toBe(Screen.Intro);
+      expect(router.resolve(session)).toBe(ScreenId.Intro);
 
       session.setupConfirmed = true;
       session.readinessResult = {
@@ -27,11 +27,11 @@ describe('WizardRouter', () => {
         projectId: 1,
       };
 
-      expect(router.resolve(session)).toBe(Screen.Run);
+      expect(router.resolve(session)).toBe(ScreenId.Run);
     });
 
     it('skips the setup screen when there are no unanswered framework questions', () => {
-      const router = new WizardRouter(Flow.PostHogIntegration);
+      const router = new WizardRouter(Program.PostHogIntegration);
       const session = baseWizardSession();
 
       session.setupConfirmed = true;
@@ -49,11 +49,11 @@ describe('WizardRouter', () => {
       } as never;
       session.frameworkContext = { packageManager: 'pnpm' };
 
-      expect(router.resolve(session)).toBe(Screen.Auth);
+      expect(router.resolve(session)).toBe(ScreenId.Auth);
     });
 
     it('returns the last flow screen when every entry is complete', () => {
-      const router = new WizardRouter(Flow.PostHogIntegration);
+      const router = new WizardRouter(Program.PostHogIntegration);
       const session = baseWizardSession();
 
       session.setupConfirmed = true;
@@ -71,11 +71,11 @@ describe('WizardRouter', () => {
       session.runPhase = RunPhase.Completed;
       session.mcpComplete = true;
 
-      expect(router.resolve(session)).toBe(Screen.Outro);
+      expect(router.resolve(session)).toBe(ScreenId.Outro);
     });
 
     it('gives the topmost overlay precedence over the flow screen', () => {
-      const router = new WizardRouter(Flow.PostHogIntegration);
+      const router = new WizardRouter(Program.PostHogIntegration);
       const session = baseWizardSession();
 
       router.pushOverlay(Overlay.SettingsOverride);
@@ -90,17 +90,54 @@ describe('WizardRouter', () => {
 
   describe('activeScreen', () => {
     it('defaults to the first screen in the active flow', () => {
-      const router = new WizardRouter(Flow.McpRemove);
+      const router = new WizardRouter(Program.McpRemove);
 
-      expect(router.activeScreen).toBe(Screen.McpRemove);
+      expect(router.activeScreen).toBe(ScreenId.McpRemove);
     });
 
     it('returns the top overlay when overlays are active', () => {
-      const router = new WizardRouter(Flow.PostHogIntegration);
+      const router = new WizardRouter(Program.PostHogIntegration);
 
       router.pushOverlay(Overlay.ManagedSettings);
 
       expect(router.activeScreen).toBe(Overlay.ManagedSettings);
+    });
+  });
+
+  describe('McpAdd flow', () => {
+    it('starts at McpAdd', () => {
+      const router = new WizardRouter(Program.McpAdd);
+      expect(router.activeScreen).toBe(ScreenId.McpAdd);
+    });
+
+    it('exits after install when MCP install was skipped', () => {
+      const router = new WizardRouter(Program.McpAdd);
+      const session = baseWizardSession();
+      session.mcpComplete = true;
+      session.mcpOutcome = McpOutcome.Skipped;
+
+      // Skipped → suggested-prompts step is hidden, so the only visible
+      // step (mcp-add) is complete and the program resolves to Exit.
+      expect(router.resolve(session)).toBe(ScreenId.Exit);
+    });
+
+    it('advances to McpSuggestedPrompts after a successful install', () => {
+      const router = new WizardRouter(Program.McpAdd);
+      const session = baseWizardSession();
+      session.mcpComplete = true;
+      session.mcpOutcome = McpOutcome.Installed;
+
+      expect(router.resolve(session)).toBe(ScreenId.McpSuggestedPrompts);
+    });
+
+    it('exits once suggested prompts are dismissed', () => {
+      const router = new WizardRouter(Program.McpAdd);
+      const session = baseWizardSession();
+      session.mcpComplete = true;
+      session.mcpOutcome = McpOutcome.Installed;
+      session.mcpSuggestedPromptsDismissed = true;
+
+      expect(router.resolve(session)).toBe(ScreenId.Exit);
     });
   });
 });

@@ -28,7 +28,7 @@ function isNonSemverVersion(version: string): boolean {
   );
 }
 
-export function fulfillsVersionRange({
+export function versionSatisfiesRange({
   version,
   acceptableVersions,
   canBeLatest,
@@ -37,31 +37,17 @@ export function fulfillsVersionRange({
   acceptableVersions: string;
   canBeLatest: boolean;
 }): boolean {
-  if (version === 'latest') {
-    return canBeLatest;
+  if (version === 'latest') return canBeLatest;
+  if (isNonSemverVersion(version)) return false;
+
+  const concrete = valid(version);
+  if (concrete !== null) {
+    return satisfies(concrete, acceptableVersions);
   }
 
-  if (isNonSemverVersion(version)) {
-    return false;
-  }
-
-  let cleanedUserVersion, isRange;
-
-  if (valid(version)) {
-    cleanedUserVersion = valid(version);
-    isRange = false;
-  } else if (validRange(version)) {
-    cleanedUserVersion = validRange(version);
-    isRange = true;
-  }
-
-  return (
-    // If the given version is a bogus format, this will still be undefined and we'll automatically reject it
-    !!cleanedUserVersion &&
-    (isRange
-      ? subset(cleanedUserVersion, acceptableVersions)
-      : satisfies(cleanedUserVersion, acceptableVersions))
-  );
+  const userRange = validRange(version);
+  if (userRange === null) return false;
+  return subset(userRange, acceptableVersions);
 }
 
 /**

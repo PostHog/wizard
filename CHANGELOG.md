@@ -1,5 +1,106 @@
 # Changelog
 
+## [2.16.1](https://github.com/PostHog/wizard/compare/v2.16.0...v2.16.1) (2026-06-05)
+
+
+### Bug Fixes
+
+* make seeded audit ledger customizable ([#512](https://github.com/PostHog/wizard/issues/512)) ([2419aa1](https://github.com/PostHog/wizard/commit/2419aa114dcd78f9f6cfc3c8599c318606e83d6f))
+* Make the source map deck look less like a real error ([#504](https://github.com/PostHog/wizard/issues/504)) ([5b92daa](https://github.com/PostHog/wizard/commit/5b92daa9368a5c0ff29378976b54258c9743a31a))
+* **tui:** keep keyboard hints bar always visible ([#511](https://github.com/PostHog/wizard/issues/511)) ([8711f02](https://github.com/PostHog/wizard/commit/8711f022e00a0cc71a8e7df1f8531449b6b6860e))
+
+## [2.16.0](https://github.com/PostHog/wizard/compare/v2.15.0...v2.16.0) (2026-06-03)
+
+
+### Features
+
+* Rebuild the MCP install + create role-tailored prompts screen ([#500](https://github.com/PostHog/wizard/issues/500)) ([06ba620](https://github.com/PostHog/wizard/commit/06ba6204b89a3315f9d46a217f8abac2b0c2b00c))
+
+## [2.15.0](https://github.com/PostHog/wizard/compare/v2.14.3...v2.15.0) (2026-06-03)
+
+
+### Features
+
+* add wizard state push ([#463](https://github.com/PostHog/wizard/issues/463)) ([323a84f](https://github.com/PostHog/wizard/commit/323a84feb9f3bbcd4be9a990b26722ff001d1f42))
+* disable --ci in published builds ([#499](https://github.com/PostHog/wizard/issues/499)) ([c34b712](https://github.com/PostHog/wizard/commit/c34b712c3f687f3dfe74d280e3725f0a490dea97))
+* enrich oauth login failure telemetry for diagnosis ([#501](https://github.com/PostHog/wizard/issues/501)) ([e70f51b](https://github.com/PostHog/wizard/commit/e70f51b549dee4e5f9fbc487f5667e8a3500d178))
+* error tracking source maps ([#475](https://github.com/PostHog/wizard/issues/475)) ([c25b7b8](https://github.com/PostHog/wizard/commit/c25b7b84276c524e2dc5c39ff7b6e211e795fcb9))
+* manual OAuth code paste ([#496](https://github.com/PostHog/wizard/issues/496)) ([0e43025](https://github.com/PostHog/wizard/commit/0e43025b0a8f893669ae63ba9a4aab99d53c2eba))
+
+
+### Bug Fixes
+
+* drop ungrantable `introspection` scope from OAuth authorize URL ([#443](https://github.com/PostHog/wizard/issues/443)) ([69ed45b](https://github.com/PostHog/wizard/commit/69ed45b8fa4bcfb62528fee2900357bcd02b1e95))
+* responsive bug that hijacked the authorize url ([#497](https://github.com/PostHog/wizard/issues/497)) ([cdf17a4](https://github.com/PostHog/wizard/commit/cdf17a41a270fbf165a8c1b4d7f1b7d7568ee4ec))
+
+## [2.14.3](https://github.com/PostHog/wizard/compare/v2.14.2...v2.14.3) (2026-06-01)
+
+
+### Bug Fixes
+
+* sharing health check step with agent-skill program ([#494](https://github.com/PostHog/wizard/issues/494)) ([2b866ad](https://github.com/PostHog/wizard/commit/2b866adb49ef3157ff0d713f5f825ef7c4d03e7e))
+
+## [2.14.2](https://github.com/PostHog/wizard/compare/v2.14.1...v2.14.2) (2026-05-26)
+
+
+### Bug Fixes
+
+* make refresh token optional for impersonated users ([#483](https://github.com/PostHog/wizard/issues/483)) ([48a55c8](https://github.com/PostHog/wizard/commit/48a55c87adc04e7192670f57dd0142f32df12450))
+
+## [2.14.1](https://github.com/PostHog/wizard/compare/v2.14.0...v2.14.1) (2026-05-26)
+
+
+### Bug Fixes
+
+* remove shrinkwrap ([#481](https://github.com/PostHog/wizard/issues/481)) ([35f6aea](https://github.com/PostHog/wizard/commit/35f6aea78d605e419ca7715ac44fb25093cf4302))
+
+## [2.14.0](https://github.com/PostHog/wizard/compare/v2.13.1...v2.14.0) (2026-05-26)
+
+
+### Features
+
+* Events audit ([#449](https://github.com/PostHog/wizard/issues/449)) ([6783b52](https://github.com/PostHog/wizard/commit/6783b52b08f38a3af2534cedba8db089b4531ec8))
+* migration agent ([#474](https://github.com/PostHog/wizard/issues/474)) ([7a7dba4](https://github.com/PostHog/wizard/commit/7a7dba4ab6def678003bee5dc74d163984c4b8d4))
+* User input overlay ([#459](https://github.com/PostHog/wizard/issues/459)) ([b050c5b](https://github.com/PostHog/wizard/commit/b050c5bbf626cad2aaa40173c56beabdaf9e6360))
+
+
+### Bug Fixes
+
+* improve CI mode 401 error UX ([#432](https://github.com/PostHog/wizard/issues/432)) ([5fb5790](https://github.com/PostHog/wizard/commit/5fb579077a7fa7bd7688dc90319773aa8a8cc101))
+* release ([#480](https://github.com/PostHog/wizard/issues/480)) ([771ffe0](https://github.com/PostHog/wizard/commit/771ffe083ff2c6da11120b847bb5fd06cf27124c))
+* smoke test directory ([#473](https://github.com/PostHog/wizard/issues/473)) ([984f1dc](https://github.com/PostHog/wizard/commit/984f1dc092ebb129823065684de3c8d9196fc3a9))
+* task queue ([#471](https://github.com/PostHog/wizard/issues/471)) ([5c4622c](https://github.com/PostHog/wizard/commit/5c4622cffdacb4c51e41fa6c7c0929f55d2c80d6))
+
+## [2.13.1](https://github.com/PostHog/wizard/compare/v2.13.0...v2.13.1) (2026-05-14)
+
+
+### Bug Fixes
+
+* bedrock fallback ([#454](https://github.com/PostHog/wizard/issues/454)) ([66ba2df](https://github.com/PostHog/wizard/commit/66ba2df3b972f0fb416f4092b5b3fa1ae589849b))
+
+## [2.13.0](https://github.com/PostHog/wizard/compare/v2.12.0...v2.13.0) (2026-05-14)
+
+
+### Features
+
+* add audit-3000 wizard command ([#452](https://github.com/PostHog/wizard/issues/452)) ([8e434f4](https://github.com/PostHog/wizard/commit/8e434f40111ad8347e753b335b379c065501d60b))
+
+## [2.12.0](https://github.com/PostHog/wizard/compare/v2.11.0...v2.12.0) (2026-05-07)
+
+
+### Features
+
+* Audit ([#425](https://github.com/PostHog/wizard/issues/425)) ([bbd07f9](https://github.com/PostHog/wizard/commit/bbd07f9864e5ea701af4d08f63fce42164185ba6))
+* enable AWS Bedrock fallback for wizard agent requests ([#439](https://github.com/PostHog/wizard/issues/439)) ([cbf6b04](https://github.com/PostHog/wizard/commit/cbf6b049666b49784e131ee2ceb595c58cfc4cee))
+* headless provision subcommand + --ci --signup for agents ([#415](https://github.com/PostHog/wizard/issues/415)) ([7afca9f](https://github.com/PostHog/wizard/commit/7afca9f40a62b9dc2e3f6d2aac08d3c2963f7a9b))
+* open PostHog dashboard after signup ([#398](https://github.com/PostHog/wizard/issues/398)) ([b9a1888](https://github.com/PostHog/wizard/commit/b9a188860ffb310162b183b6dbc3aef2f6429281))
+
+
+### Bug Fixes
+
+* request llm_gateway:read scope during signup provisioning ([#435](https://github.com/PostHog/wizard/issues/435)) ([4a2d511](https://github.com/PostHog/wizard/commit/4a2d5115e343df79f5c067d16abea0db892f8864))
+* skip non-essential health checks for signup and show clear errors on outages ([#413](https://github.com/PostHog/wizard/issues/413)) ([44bac37](https://github.com/PostHog/wizard/commit/44bac37bde1ea0e80e79bbc0a7833d62fd8d73ca))
+
 ## [2.11.0](https://github.com/PostHog/wizard/compare/v2.10.4...v2.11.0) (2026-04-30)
 
 

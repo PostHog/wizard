@@ -1,4 +1,4 @@
-import { CodexMCPClient } from '../codex';
+import { CodexMCPClient } from '@steps/add-mcp-server-to-clients/clients/codex';
 
 jest.mock('node:child_process', () => ({
   execSync: jest.fn(),
@@ -18,7 +18,7 @@ jest.mock('../../../../utils/analytics', () => ({
 describe('CodexMCPClient', () => {
   const { execSync, spawnSync } = require('node:child_process');
   const fs = require('node:fs');
-  const analytics = require('../../../../utils/analytics').analytics;
+  const analytics = require('@utils/analytics').analytics;
 
   const spawnSyncMock = spawnSync as jest.Mock;
   const execSyncMock = execSync as jest.Mock;

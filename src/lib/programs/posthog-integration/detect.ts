@@ -1,0 +1,71 @@
+/**
+ * Core integration detection step.
+ *
+ * Runs framework detection, context gathering, version checking,
+ * and feature discovery. Writes results to the store via the
+ * ProgramReadyContext so the IntroScreen can display them.
+ *
+ * This is the same work that bin.ts $0 handler does inline —
+ * extracted here so the `integrate` subcommand can reuse it.
+ */
+
+import type { ProgramReadyContext } from '@lib/programs/program-step';
+import { FRAMEWORK_REGISTRY } from '@lib/registry';
+import {
+  detectFramework,
+  discoverFeatures,
+  gatherFrameworkContext,
+  checkFrameworkVersion,
+} from '@lib/detection/index';
+
+export async function detectPostHogIntegration(
+  ctx: ProgramReadyContext,
+): Promise<void> {
+  const session = ctx.session;
+  const installDir = session.installDir;
+
+  const detectedIntegration = await detectFramework(installDir);
+
+  if (detectedIntegration) {
+    const config = FRAMEWORK_REGISTRY[detectedIntegration];
+
+    const sessionOptions = {
+      installDir,
+      debug: session.debug,
+      default: false,
+      signup: session.signup,
+      localMcp: session.localMcp,
+      ci: session.ci,
+      benchmark: session.benchmark,
+      yaraReport: session.yaraReport,
+    };
+
+    // Gather framework-specific context (e.g., router type)
+    const context = await gatherFrameworkContext(config, sessionOptions);
+    for (const [key, value] of Object.entries(context)) {
+      if (!(key in session.frameworkContext)) {
+        ctx.setFrameworkContext(key, value);
+      }
+    }
+
+    ctx.setFrameworkConfig(detectedIntegration, config);
+    session.skillId = detectedIntegration;
+
+    if (!session.detectedFrameworkLabel) {
+      ctx.setDetectedFramework(config.metadata.name);
+    }
+
+    // Version check
+    const versionResult = await checkFrameworkVersion(config, sessionOptions);
+    if (versionResult.supported !== true) {
+      ctx.setUnsupportedVersion(versionResult.supported);
+    }
+  }
+
+  // Feature discovery
+  for (const feature of discoverFeatures(installDir)) {
+    ctx.addDiscoveredFeature(feature);
+  }
+
+  ctx.setDetectionComplete();
+}

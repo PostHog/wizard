@@ -14,19 +14,22 @@
 import { Box, Text, useInput } from 'ink';
 import { useState, useEffect } from 'react';
 import { useSyncExternalStore } from 'react';
-import { type WizardStore, McpOutcome } from '../store.js';
+import { type WizardStore, McpOutcome } from '@ui/tui/store';
 import {
   ConfirmationInput,
   PickerMenu,
   GroupedPickerMenu,
-} from '../primitives/index.js';
-import { Colors } from '../styles.js';
-import type { McpInstaller, McpClientInfo } from '../services/mcp-installer.js';
+} from '@ui/tui/primitives/index';
+import { Colors } from '@ui/tui/styles';
+import type {
+  McpInstaller,
+  McpClientInfo,
+} from '@ui/tui/services/mcp-installer';
 import {
   AVAILABLE_FEATURES,
   ALL_FEATURE_VALUES,
   isAllFeaturesSelected,
-} from '../../../steps/add-mcp-server-to-clients/defaults.js';
+} from '@steps/add-mcp-server-to-clients/defaults';
 
 export type McpMode = 'install' | 'remove';
 
@@ -215,10 +218,20 @@ export const McpScreen = ({
     setTimeout(() => markDone(store, outcome, result), 2000);
   };
 
+  // The "what you get" preview shown above the install confirmation —
+  // installed users have no idea what "MCP" means; lead with the value.
+  const installValueBullets = [
+    'Ask your agent: "List my feature flags" — and it does.',
+    'Run SQL, build dashboards, ship flags, all from your IDE.',
+    'No copy-pasting tokens or context. Your agent has the keys.',
+  ];
+
   return (
     <Box flexDirection="column" flexGrow={1}>
       <Text bold color={Colors.accent}>
-        MCP Server {isRemove ? 'Removal' : 'Setup'}
+        {isRemove
+          ? 'Remove the PostHog MCP'
+          : 'Install the MCP so you can chat to your data'}
       </Text>
 
       <Box marginTop={1} flexDirection="column">
@@ -235,6 +248,15 @@ export const McpScreen = ({
 
         {phase === Phase.Ask && (
           <>
+            {!isRemove && (
+              <Box flexDirection="column" marginBottom={1}>
+                {installValueBullets.map((bullet) => (
+                  <Text key={bullet} dimColor>
+                    {'•'} {bullet}
+                  </Text>
+                ))}
+              </Box>
+            )}
             <Text dimColor>
               Detected: {clients.map((c) => c.name).join(', ')}
             </Text>

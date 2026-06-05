@@ -2,14 +2,17 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import {
+  ASK_BATCH_THRESHOLD,
+  DEFAULT_ASK_MAX_QUESTIONS,
   WIZARD_TOOL_NAMES,
   __test,
   ensureGitignoreCoverage,
+  evaluateAskCap,
   mergeEnvValues,
   parseEnvKeys,
   resolveEnvPath,
-} from '../wizard-tools';
-import type { AuditCheck } from '../workflows/audit/types';
+} from '@lib/wizard-tools';
+import type { AuditCheck } from '@lib/programs/audit/types';
 
 function makeTmpDir(): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'wizard-tools-'));
@@ -295,7 +298,48 @@ describe('makeMutex', () => {
 });
 
 describe('WIZARD_TOOL_NAMES', () => {
-  it('exposes audit_add_checks so future workflows can append checks through the MCP server', () => {
-    expect(WIZARD_TOOL_NAMES).toContain('wizard-tools:audit_add_checks');
+  it('exposes audit_add_checks so future programs can append checks through the MCP server', () => {
+    expect(WIZARD_TOOL_NAMES.auditAddChecks).toBe(
+      'mcp__wizard-tools__audit_add_checks',
+    );
+  });
+
+  it('exposes wizard_ask so skills can collect structured input from the user', () => {
+    expect(WIZARD_TOOL_NAMES.wizardAsk).toBe('mcp__wizard-tools__wizard_ask');
+  });
+});
+
+describe('evaluateAskCap', () => {
+  const MAX = DEFAULT_ASK_MAX_QUESTIONS;
+
+  it('allows calls under both the adjacency threshold and the max cap', () => {
+    for (let i = 0; i < ASK_BATCH_THRESHOLD; i++) {
+      expect(evaluateAskCap(i, MAX)).toEqual({ kind: 'ok' });
+    }
+  });
+
+  it('returns the adjacency error once the threshold is hit', () => {
+    expect(evaluateAskCap(ASK_BATCH_THRESHOLD, MAX)).toEqual({
+      kind: 'capped',
+      reason: 'adjacency',
+      message: expect.stringMatching(/batch/i),
+    });
+  });
+
+  it('escalates to the max_questions reason once the cap is reached', () => {
+    expect(evaluateAskCap(MAX, MAX)).toEqual({
+      kind: 'capped',
+      reason: 'max_questions',
+      message: expect.stringMatching(/cap reached/i),
+    });
+  });
+
+  it('honors a custom maxQuestions override smaller than the adjacency threshold', () => {
+    // With maxQuestions=2 (below ASK_BATCH_THRESHOLD), the per-run cap wins.
+    expect(evaluateAskCap(2, 2)).toEqual({
+      kind: 'capped',
+      reason: 'max_questions',
+      message: expect.any(String),
+    });
   });
 });

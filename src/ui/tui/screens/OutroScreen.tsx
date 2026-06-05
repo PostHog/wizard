@@ -1,16 +1,16 @@
 /**
  * OutroScreen — Default post-run summary.
  *
- * Renders the success / error / cancel views from `outroData`. Workflows
+ * Renders the success / error / cancel views from `outroData`. Programs
  * that need a different success view (e.g. with extra summary content)
  * ship their own screen component (see audit/AuditOutroScreen.tsx).
  */
 
 import { Box, Text, useInput } from 'ink';
 import { useSyncExternalStore } from 'react';
-import type { WizardStore } from '../store.js';
-import { OutroKind } from '../../../lib/wizard-session.js';
-import { Colors } from '../styles.js';
+import type { WizardStore } from '@ui/tui/store';
+import { OutroKind } from '@lib/wizard-session';
+import { Colors } from '@ui/tui/styles';
 
 interface OutroScreenProps {
   store: WizardStore;
@@ -80,6 +80,24 @@ export const OutroScreen = ({ store }: OutroScreenProps) => {
                   <Text dimColor> {event.description}</Text>
                 </Text>
               ))}
+            </Box>
+          )}
+
+          {outroData.dashboardUrl && (
+            <Box marginTop={1}>
+              <Text>
+                We've also made you a dashboard:{' '}
+                <Text color="cyan">{outroData.dashboardUrl}</Text>
+              </Text>
+            </Box>
+          )}
+
+          {outroData.notebookUrl && (
+            <Box marginTop={1}>
+              <Text>
+                And uploaded the report to a PostHog notebook:{' '}
+                <Text color="cyan">{outroData.notebookUrl}</Text>
+              </Text>
             </Box>
           )}
 

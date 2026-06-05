@@ -1,8 +1,5 @@
 import { Box, Text } from 'ink';
-import type {
-  AuditCheck,
-  AuditStatus,
-} from '../../../../../lib/workflows/audit/types.js';
+import type { AuditCheck, AuditStatus } from '@lib/programs/audit/types';
 import type { ViewerLayout } from './layout.js';
 
 interface HeaderProps {

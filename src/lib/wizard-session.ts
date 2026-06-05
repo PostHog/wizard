@@ -14,6 +14,7 @@ import type { Integration } from './constants';
 import type { FrameworkConfig } from './framework-config';
 import type { WizardReadinessResult } from './health-checks/readiness';
 import type { SettingsConflict } from './agent/agent-interface';
+import type { ApiUser } from './api';
 
 export interface Credentials {
   accessToken: string;
@@ -90,12 +91,55 @@ export interface OutroData {
   continueUrl?: string;
   /** Report file the agent wrote (e.g. "posthog-setup-report.md") */
   reportFile?: string;
+  /** PostHog dashboard URL the program created on the user's behalf. */
+  dashboardUrl?: string;
+  /** PostHog notebook URL the program uploaded the report to. */
+  notebookUrl?: string;
 }
+
+/** A single question rendered by the WizardAsk overlay. */
+export interface AskQuestion {
+  /** Key for the response map */
+  id: string;
+  prompt: string;
+  /** text = single-line free input; single/multi = picker */
+  kind: 'single' | 'multi' | 'text';
+  /** Required for `single` and `multi`. Ignored for `text`. */
+  options?: { label: string; value: string }[];
+  /** Defaults to true */
+  required?: boolean;
+  /**
+   * Only meaningful for kind='text'. When true, the wizard-tools `wizard_ask`
+   * tool stores the user's answer in the session secret vault and returns
+   * `{ secretRef }` to the agent instead of the plain string — so the value
+   * never enters the LLM conversation. The TUI may also mask input
+   * accordingly. See `secret-vault.ts`.
+   */
+  sensitive?: boolean;
+}
+
+/** Map of question id → answer (string for single/text, string[] for multi). */
+export type AskAnswers = Record<string, string | string[]>;
+
+/** A pending wizard_ask request held by the store. */
+export interface PendingQuestion {
+  id: string;
+  questions: AskQuestion[];
+  /** Skill id of the caller. Set by the wizard from session.skillId. */
+  source: string;
+}
+
+/**
+ * PostHog dashboard URL emitted by the agent during a program run.
+ * Populated via the `[DASHBOARD_URL]` text marker in agent assistant messages
+ * — see `handleSDKMessage` in `agent/agent-interface.ts`. Read by programs
+ * (e.g. events-audit) inside `buildOutroData` to surface a dashboard link
+ * the agent actually created.
+ */
 
 export interface WizardSession {
   // From CLI args
   debug: boolean;
-  forceInstall: boolean;
   installDir: string;
   ci: boolean;
   signup: boolean;
@@ -104,10 +148,10 @@ export interface WizardSession {
   apiKey?: string;
   email?: string;
   region?: CloudRegion;
-  menu: boolean;
   benchmark: boolean;
   yaraReport: boolean;
   projectId?: number;
+  noTelemetry: boolean;
 
   // From detection + screens
   setupConfirmed: boolean;
@@ -131,18 +175,43 @@ export interface WizardSession {
   // From OAuth
   credentials: Credentials | null;
 
+  /**
+   * `role_at_organization` from `/api/users/@me/`. Null when the upstream
+   * value is missing (older accounts, fresh signups before onboarding).
+   * Drives role-tailored MCP prompt suggestions on the McpSuggestedPromptsScreen.
+   *
+   * Mirrors `apiUser?.role_at_organization` — kept as a top-level convenience
+   * because it has dedicated UI semantics (role-tailored kits) and pre-dates
+   * the broader `apiUser` plumbing.
+   */
+  roleAtOrganization: string | null;
+
+  /**
+   * Full user payload from `/api/users/@me/` — identifiers, profile,
+   * current team + organization, preferences, etc. Null until OAuth /
+   * CI-key auth populates it. Schema lives in `src/lib/api.ts` and
+   * passes through unknown upstream fields so downstream features can
+   * read account context (plan, org name, email, etc.) without
+   * re-fetching.
+   */
+  apiUser: ApiUser | null;
+
   // Lifecycle
   runPhase: RunPhase;
   loginUrl: string | null;
+  // Direct PostHog authorize URL, shown in the manual-paste modal for
+  // headless/remote shells (the localhost loginUrl is unreachable there).
+  authorizeUrl: string | null;
 
   // Feature discovery
   discoveredFeatures: DiscoveredFeature[];
   llmOptIn: boolean;
 
-  // Screen completion
+  // ScreenId completion
   mcpComplete: boolean;
   mcpOutcome: McpOutcome | null;
   mcpInstalledClients: string[];
+  mcpSuggestedPromptsDismissed: boolean;
   skillsComplete: boolean;
   outroDismissed: boolean;
 
@@ -151,6 +220,10 @@ export interface WizardSession {
   outageDismissed: boolean;
   settingsOverrideKeys: string[] | null;
   settingsConflicts: SettingsConflict[] | null;
+  authErrorDetail: {
+    hasSettingsConflict: boolean;
+    logFilePath: string;
+  } | null;
   portConflictProcess: {
     command: string;
     pid: string;
@@ -158,16 +231,21 @@ export interface WizardSession {
     user: string;
   } | null;
   outroData: OutroData | null;
+  dashboardUrl: string | null;
+  notebookUrl: string | null;
 
   // Additional features queue (drained via stop hook after main integration)
   additionalFeatureQueue: AdditionalFeature[];
 
-  // Workflow metadata (set by runWizard in bin.ts)
-  workflowLabel: string | null;
+  // Program metadata (set by runWizard in bin.ts)
+  programLabel: string | null;
   skillId: string | null;
 
   // Resolved framework config (set after integration is known)
   frameworkConfig: FrameworkConfig | null;
+
+  /** Active wizard_ask request, set by the bridge when the agent calls the tool. */
+  pendingQuestion: PendingQuestion | null;
 }
 
 /**
@@ -175,7 +253,6 @@ export interface WizardSession {
  */
 export function buildSession(args: {
   debug?: boolean;
-  forceInstall?: boolean;
   installDir?: string;
   ci?: boolean;
   signup?: boolean;
@@ -184,15 +261,14 @@ export function buildSession(args: {
   apiKey?: string;
   email?: string;
   region?: CloudRegion;
-  menu?: boolean;
   integration?: Integration;
   benchmark?: boolean;
   yaraReport?: boolean;
   projectId?: string;
+  noTelemetry?: boolean;
 }): WizardSession {
   return {
     debug: args.debug ?? false,
-    forceInstall: args.forceInstall ?? false,
     installDir: args.installDir ?? process.cwd(),
     ci: args.ci ?? false,
     signup: args.signup ?? false,
@@ -201,10 +277,10 @@ export function buildSession(args: {
     apiKey: args.apiKey,
     email: args.email,
     region: args.region,
-    menu: args.menu ?? false,
     benchmark: args.benchmark ?? false,
     yaraReport: args.yaraReport ?? false,
     projectId: parseProjectIdArg(args.projectId),
+    noTelemetry: args.noTelemetry ?? false,
 
     setupConfirmed: false,
     integration: args.integration ?? null,
@@ -220,19 +296,27 @@ export function buildSession(args: {
     mcpComplete: false,
     mcpOutcome: null,
     mcpInstalledClients: [],
+    mcpSuggestedPromptsDismissed: false,
     skillsComplete: false,
     outroDismissed: false,
     loginUrl: null,
+    authorizeUrl: null,
     credentials: null,
+    roleAtOrganization: null,
+    apiUser: null,
     readinessResult: null,
     outageDismissed: false,
     settingsOverrideKeys: null,
     settingsConflicts: null,
+    authErrorDetail: null,
     portConflictProcess: null,
     outroData: null,
+    dashboardUrl: null,
+    notebookUrl: null,
     additionalFeatureQueue: [],
-    workflowLabel: null,
+    programLabel: null,
     skillId: null,
     frameworkConfig: null,
+    pendingQuestion: null,
   };
 }

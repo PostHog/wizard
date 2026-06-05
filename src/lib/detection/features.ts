@@ -1,6 +1,6 @@
 /**
  * Feature discovery — scan project dependencies for known SDK patterns
- * that indicate additional PostHog workflows are relevant.
+ * that indicate additional PostHog programs are relevant.
  *
  * Pure function: takes an install dir, returns a set of discovered features.
  * No store mutations, no UI calls.
@@ -8,7 +8,7 @@
 
 import { readFileSync } from 'fs';
 import { join } from 'path';
-import { DiscoveredFeature } from '../wizard-session.js';
+import { DiscoveredFeature } from '@lib/wizard-session';
 
 const STRIPE_PACKAGES = ['stripe', '@stripe/stripe-js'];
 

@@ -1,6 +1,6 @@
 import { Legend } from './Legend.js';
 import { Summary } from './Header.js';
-import type { AuditStatus } from '../../../../../lib/workflows/audit/types.js';
+import type { AuditStatus } from '@lib/programs/audit/types';
 
 interface FooterProps {
   total: number;

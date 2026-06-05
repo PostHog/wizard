@@ -1,8 +1,8 @@
-import { createVersionBucket } from '../../utils/semver';
-import { tryGetPackageJson } from '../../utils/setup-utils';
-import { hasPackageInstalled } from '../../utils/package-json';
-import { getUI } from '../../ui';
-import type { WizardOptions } from '../../utils/types';
+import { createVersionBucket } from '@utils/semver';
+import { tryGetPackageJson } from '@utils/setup-utils';
+import { hasDeclaredDependency } from '@utils/package-json';
+import { getUI } from '@ui';
+import type { WizardRunOptions } from '@utils/types';
 
 export const getReactNativeVersionBucket = createVersionBucket();
 
@@ -16,11 +16,11 @@ export function getReactNativeVariantName(variant: ReactNativeVariant): string {
 }
 
 export async function detectReactNativeVariant(
-  options: Pick<WizardOptions, 'installDir'>,
+  options: Pick<WizardRunOptions, 'installDir'>,
 ): Promise<ReactNativeVariant> {
   const packageJson = await tryGetPackageJson(options);
 
-  if (packageJson && hasPackageInstalled('expo', packageJson)) {
+  if (packageJson && hasDeclaredDependency('expo', packageJson)) {
     getUI().setDetectedFramework(
       `${getReactNativeVariantName(ReactNativeVariant.EXPO)} 📱`,
     );

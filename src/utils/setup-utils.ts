@@ -2,24 +2,26 @@ import * as childProcess from 'node:child_process';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import { basename, isAbsolute, join, relative } from 'node:path';
+import { promisify } from 'node:util';
 
-import { traceStep } from '../telemetry';
+import { withProgress } from '../telemetry';
 import { debug } from './debug';
-import type { PackageDotJson } from './package-json';
+import type { PackageJson } from './package-json';
 import {
   type PackageManager,
   detectAllPackageManagers,
   NPM as npm,
 } from './package-manager';
-import type { CloudRegion, WizardOptions } from './types';
-import { getPackageVersion } from './package-json';
+import type { CloudRegion, WizardRunOptions } from './types';
+import { getDeclaredVersion } from './package-json';
 import {
   DEFAULT_HOST_URL,
   DUMMY_PROJECT_API_KEY,
   ISSUES_URL,
-} from '../lib/constants';
+  WIZARD_OAUTH_SCOPES,
+} from '@lib/constants';
 import { analytics } from './analytics';
-import { getUI } from '../ui';
+import { getUI } from '@ui';
 import {
   getCloudUrlFromRegion,
   getHostFromRegion,
@@ -27,8 +29,8 @@ import {
 } from './urls';
 import { performOAuthFlow } from './oauth';
 import { provisionNewAccount } from './provisioning';
-import { fetchUserData, fetchProjectData } from '../lib/api';
-import { fulfillsVersionRange } from './semver';
+import { fetchUserData, fetchProjectData, type ApiUser } from '@lib/api';
+import { versionSatisfiesRange } from './semver';
 import { wizardAbort } from './wizard-abort';
 
 interface ProjectData {
@@ -37,6 +39,19 @@ interface ProjectData {
   host: string;
   distinctId: string;
   projectId: number;
+  /**
+   * Optional `role_at_organization` from `/api/users/@me/`. Drives the
+   * role-tailored prompt suggestions on the McpSuggestedPromptsScreen. Null
+   * for signup flows (no role picked yet) and older accounts.
+   */
+  roleAtOrganization?: string | null;
+  /**
+   * Full user payload from `/api/users/@me/`. Carried through so
+   * `getOrAskForProjectData` can forward it to the session as
+   * `session.apiUser`. Null when the request failed or the CI key
+   * lacked permissions.
+   */
+  user?: ApiUser | null;
 }
 
 export interface CliSetupConfig {
@@ -66,15 +81,15 @@ export async function abort(message?: string, status?: number): Promise<never> {
   return wizardAbort({ message, exitCode: status });
 }
 
-export function isInGitRepo() {
+export function isInGitRepo(): boolean {
   try {
-    childProcess.execSync('git rev-parse --is-inside-work-tree', {
+    childProcess.execSync('git rev-parse --show-toplevel', {
       stdio: 'ignore',
     });
-    return true;
   } catch {
     return false;
   }
+  return true;
 }
 
 const FREEMAIL_DOMAINS = new Set([
@@ -137,39 +152,41 @@ export function detectOrgAndProject(email: string): {
 }
 
 export function getUncommittedOrUntrackedFiles(): string[] {
+  let gitStatus: string;
   try {
-    const gitStatus = childProcess
+    gitStatus = childProcess
       .execSync('git status --porcelain=v1', {
         // we only care about stdout
         stdio: ['ignore', 'pipe', 'ignore'],
       })
       .toString();
-
-    const files = gitStatus
-      .split(os.EOL)
-      .map((line) => line.trim())
-      .filter(Boolean)
-      .map((f) => `- ${f.split(/\s+/)[1]}`);
-
-    return files;
   } catch {
     return [];
   }
+
+  const result: string[] = [];
+  for (const rawLine of gitStatus.split(os.EOL)) {
+    const line = rawLine.trim();
+    if (!line) continue;
+    const match = /^\S+\s+(\S+)/.exec(line);
+    result.push(`- ${match?.[1]}`);
+  }
+  return result;
 }
 
 export async function isReact19Installed({
   installDir,
-}: Pick<WizardOptions, 'installDir'>): Promise<boolean> {
+}: Pick<WizardRunOptions, 'installDir'>): Promise<boolean> {
   try {
     const packageJson = await tryGetPackageJson({ installDir });
     if (!packageJson) return false;
-    const reactVersion = getPackageVersion('react', packageJson);
+    const reactVersion = getDeclaredVersion('react', packageJson);
 
     if (!reactVersion) {
       return false;
     }
 
-    return fulfillsVersionRange({
+    return versionSatisfiesRange({
       version: reactVersion,
       acceptableVersions: '>=19.0.0',
       canBeLatest: true,
@@ -190,7 +207,6 @@ export async function installPackage({
   alreadyInstalled,
   packageNameDisplayLabel,
   packageManager,
-  forceInstall = false,
   integration,
   installDir,
 }: {
@@ -198,11 +214,10 @@ export async function installPackage({
   alreadyInstalled: boolean;
   packageNameDisplayLabel?: string;
   packageManager?: PackageManager;
-  forceInstall?: boolean;
   integration?: string;
   installDir: string;
 }): Promise<{ packageManager?: PackageManager }> {
-  return traceStep('install-package', async () => {
+  return withProgress('install-package', async () => {
     const sdkInstallSpinner = getUI().spinner();
 
     const pkgManager =
@@ -218,35 +233,25 @@ export async function installPackage({
       } with ${pkgManager.label}.`,
     );
 
-    try {
-      await new Promise<void>((resolve, reject) => {
-        childProcess.exec(
-          `${pkgManager.installCommand} ${packageName} ${pkgManager.flags} ${
-            forceInstall ? pkgManager.forceInstallFlag : ''
-          } ${legacyPeerDepsFlag}`.trim(),
-          { cwd: installDir },
-          (err, stdout, stderr) => {
-            if (err) {
-              fs.writeFileSync(
-                join(
-                  process.cwd(),
-                  `posthog-wizard-installation-error-${Date.now()}.log`,
-                ),
-                JSON.stringify({
-                  stdout,
-                  stderr,
-                }),
-                { encoding: 'utf8' },
-              );
+    const execAsync = promisify(childProcess.exec);
+    const installCommand =
+      `${pkgManager.installCommand} ${packageName} ${pkgManager.flags} ${legacyPeerDepsFlag}`.trim();
 
-              reject(err);
-            } else {
-              resolve();
-            }
-          },
-        );
-      });
+    try {
+      await execAsync(installCommand, { cwd: installDir });
     } catch (e) {
+      const { stdout = '', stderr = '' } = (e ?? {}) as {
+        stdout?: string;
+        stderr?: string;
+      };
+      fs.writeFileSync(
+        join(
+          process.cwd(),
+          `posthog-wizard-installation-error-${Date.now()}.log`,
+        ),
+        JSON.stringify({ stdout, stderr }),
+        { encoding: 'utf8' },
+      );
       sdkInstallSpinner.stop('Installation failed.');
       getUI().log.error(
         // eslint-disable-next-line @typescript-eslint/restrict-template-expressions
@@ -278,30 +283,30 @@ export async function installPackage({
  */
 export async function getPackageDotJson({
   installDir,
-}: Pick<WizardOptions, 'installDir'>): Promise<PackageDotJson> {
-  const packageJsonFileContents = await fs.promises
-    .readFile(join(installDir, 'package.json'), 'utf8')
-    .catch(() => {
-      getUI().log.error(
-        'Could not find package.json. Make sure to run the wizard in the root of your app!',
-      );
-      return abort();
-    });
+}: Pick<WizardRunOptions, 'installDir'>): Promise<PackageJson> {
+  const pkgPath = join(installDir, 'package.json');
 
-  let packageJson: PackageDotJson | undefined = undefined;
+  let raw: string;
+  try {
+    raw = await fs.promises.readFile(pkgPath, 'utf8');
+  } catch {
+    getUI().log.error(
+      'Could not find package.json. Make sure to run the wizard in the root of your app!',
+    );
+    await abort();
+    return {};
+  }
 
   try {
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-    packageJson = JSON.parse(packageJsonFileContents);
+    const parsed = JSON.parse(raw) as PackageJson | null;
+    return parsed ?? {};
   } catch {
     getUI().log.error(
       `Unable to parse your package.json. Make sure it has a valid format!`,
     );
-
     await abort();
+    return {};
   }
-
-  return packageJson || {};
 }
 
 /**
@@ -310,34 +315,33 @@ export async function getPackageDotJson({
  */
 export async function tryGetPackageJson({
   installDir,
-}: Pick<WizardOptions, 'installDir'>): Promise<PackageDotJson | null> {
+}: Pick<WizardRunOptions, 'installDir'>): Promise<PackageJson | null> {
   try {
     const packageJsonFileContents = await fs.promises.readFile(
       join(installDir, 'package.json'),
       'utf8',
     );
-    return JSON.parse(packageJsonFileContents) as PackageDotJson;
+    return JSON.parse(packageJsonFileContents) as PackageJson;
   } catch {
     return null;
   }
 }
 
 export async function updatePackageDotJson(
-  packageDotJson: PackageDotJson,
-  { installDir }: Pick<WizardOptions, 'installDir'>,
+  packageDotJson: PackageJson,
+  { installDir }: Pick<WizardRunOptions, 'installDir'>,
 ): Promise<void> {
+  const pkgPath = join(installDir, 'package.json');
+  const serialized = JSON.stringify(packageDotJson, null, 2);
+
   try {
-    await fs.promises.writeFile(
-      join(installDir, 'package.json'),
-      JSON.stringify(packageDotJson, null, 2),
-      {
-        encoding: 'utf8',
-        flag: 'w',
-      },
-    );
+    await fs.promises.writeFile(pkgPath, serialized, {
+      encoding: 'utf8',
+      flag: 'w',
+    });
+    return;
   } catch {
     getUI().log.error(`Unable to update your package.json.`);
-
     await abort();
   }
 }
@@ -348,7 +352,7 @@ export async function updatePackageDotJson(
  */
 // eslint-disable-next-line @typescript-eslint/require-await
 export async function getPackageManager(
-  options: Pick<WizardOptions, 'installDir'> & { ci?: boolean },
+  options: Pick<WizardRunOptions, 'installDir'> & { ci?: boolean },
 ): Promise<PackageManager> {
   const detectedPackageManagers = detectAllPackageManagers({
     installDir: options.installDir,
@@ -367,9 +371,10 @@ export async function getPackageManager(
 
 export function isUsingTypeScript({
   installDir,
-}: Pick<WizardOptions, 'installDir'>) {
+}: Pick<WizardRunOptions, 'installDir'>): boolean {
   try {
-    return fs.existsSync(join(installDir, 'tsconfig.json'));
+    fs.accessSync(join(installDir, 'tsconfig.json'));
+    return true;
   } catch {
     return false;
   }
@@ -379,7 +384,7 @@ export function isUsingTypeScript({
  * Get project data for the wizard via OAuth or CI API key.
  */
 export async function getOrAskForProjectData(
-  _options: Pick<WizardOptions, 'signup' | 'ci' | 'apiKey' | 'projectId'> & {
+  _options: Pick<WizardRunOptions, 'signup' | 'ci' | 'apiKey' | 'projectId'> & {
     email?: string;
     region?: CloudRegion;
   },
@@ -389,6 +394,8 @@ export async function getOrAskForProjectData(
   accessToken: string;
   projectId: number;
   cloudRegion: CloudRegion;
+  roleAtOrganization: string | null;
+  user: ApiUser | null;
 }> {
   // CI mode: bypass OAuth, use personal API key for LLM gateway
   if (_options.ci && _options.apiKey) {
@@ -407,23 +414,44 @@ export async function getOrAskForProjectData(
           )
         : await fetchProjectDataWithApiKey(_options.apiKey, cloudUrl);
 
+    // Best-effort user fetch — CI flows may run with project-scoped keys
+    // that 403 on /api/users/@me/, so swallow errors and continue with
+    // a null user (and null role).
+    let user: ApiUser | null = null;
+    let roleAtOrganization: string | null = null;
+    try {
+      user = await fetchUserData(_options.apiKey, cloudUrl);
+      roleAtOrganization = user.role_at_organization ?? null;
+    } catch {
+      // best-effort
+    }
+
     return {
       host,
       projectApiKey: projectData.api_token,
       accessToken: _options.apiKey,
       projectId: projectData.id,
       cloudRegion,
+      roleAtOrganization,
+      user,
     };
   }
 
-  const { host, projectApiKey, accessToken, projectId, cloudRegion } =
-    await traceStep('login', () =>
-      askForWizardLogin({
-        signup: _options.signup,
-        email: _options.email,
-        region: _options.region,
-      }),
-    );
+  const {
+    host,
+    projectApiKey,
+    accessToken,
+    projectId,
+    cloudRegion,
+    roleAtOrganization,
+    user,
+  } = await withProgress('login', () =>
+    askForWizardLogin({
+      signup: _options.signup,
+      email: _options.email,
+      region: _options.region,
+    }),
+  );
 
   if (!projectApiKey) {
     const cloudUrl = getCloudUrlFromRegion(cloudRegion);
@@ -444,6 +472,8 @@ ${cloudUrl}/settings/project#variables`);
     projectApiKey: projectApiKey || DUMMY_PROJECT_API_KEY,
     projectId,
     cloudRegion,
+    roleAtOrganization: roleAtOrganization ?? null,
+    user: user ?? null,
   };
 }
 
@@ -489,16 +519,7 @@ async function askForWizardLogin(options: {
   }
 
   const tokenResponse = await performOAuthFlow({
-    scopes: [
-      'user:read',
-      'project:read',
-      'introspection',
-      'llm_gateway:read',
-      'dashboard:write',
-      'insight:write',
-      'query:read',
-      'health_issue:read',
-    ],
+    scopes: [...WIZARD_OAUTH_SCOPES],
     signup: false,
   });
 
@@ -534,6 +555,8 @@ async function askForWizardLogin(options: {
     distinctId: userData.distinct_id,
     projectId: projectId!,
     cloudRegion,
+    roleAtOrganization: userData.role_at_organization ?? null,
+    user: userData,
   };
 
   getUI().log.success('Login complete.');
@@ -609,7 +632,7 @@ async function askForProvisioningSignup(
 export async function createNewConfigFile(
   filepath: string,
   codeSnippet: string,
-  { installDir }: Pick<WizardOptions, 'installDir'>,
+  { installDir }: Pick<WizardRunOptions, 'installDir'>,
   moreInformation?: string,
 ): Promise<boolean> {
   if (!isAbsolute(filepath)) {

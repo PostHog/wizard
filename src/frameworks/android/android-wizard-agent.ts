@@ -1,7 +1,7 @@
 /* Android (Kotlin) wizard using posthog-agent with PostHog MCP */
-import type { WizardOptions } from '../../utils/types';
-import type { FrameworkConfig } from '../../lib/framework-config';
-import { Integration } from '../../lib/constants';
+import type { WizardRunOptions } from '@utils/types';
+import type { FrameworkConfig } from '@lib/framework-config';
+import { Integration } from '@lib/constants';
 import fg from 'fast-glob';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -10,7 +10,7 @@ import {
   getKotlinVersionBucket,
   getMinSdkVersion,
 } from './utils';
-import { gradlePackageManager } from '../../lib/detection/package-manager';
+import { gradlePackageManager } from '@lib/detection/package-manager';
 
 type AndroidContext = {
   kotlinVersion?: string;
@@ -22,7 +22,7 @@ export const ANDROID_AGENT_CONFIG: FrameworkConfig<AndroidContext> = {
     integration: Integration.android,
     beta: true,
     docsUrl: 'https://posthog.com/docs/libraries/android',
-    gatherContext: (options: WizardOptions) => {
+    gatherContext: (options: WizardRunOptions) => {
       const kotlinVersion = getKotlinVersion(options);
       return Promise.resolve({ kotlinVersion });
     },
@@ -36,7 +36,8 @@ export const ANDROID_AGENT_CONFIG: FrameworkConfig<AndroidContext> = {
     getVersionBucket: (version: string) => getKotlinVersionBucket(version),
     // This is actually pretty high for a minimum, but android apis aren't super stable.
     minimumVersion: '21.0.0',
-    getInstalledVersion: (options: WizardOptions) => getMinSdkVersion(options),
+    getInstalledVersion: (options: WizardRunOptions) =>
+      getMinSdkVersion(options),
     detectPackageManager: gradlePackageManager,
     detect: async (options) => {
       const { installDir } = options;

@@ -13,15 +13,18 @@ import path from 'path';
 import fs from 'fs';
 import { execFileSync } from 'child_process';
 import { z } from 'zod';
-import { logToFile } from '../utils/debug';
-import { skillTmpPath } from '../utils/paths';
+import { logToFile } from '@utils/debug';
+import { analytics } from '@utils/analytics';
+import { skillTmpPath } from '@utils/paths';
 import type { PackageManagerDetector } from './detection/package-manager';
 import {
   AUDIT_CHECKS_FILE,
   coerceAuditChecks,
   type AuditCheck,
   type AuditStatus,
-} from './workflows/audit/types';
+} from './programs/audit/types';
+import type { WizardAskBridge } from './wizard-ask-bridge';
+import { createSecretVault, type SecretVault } from './secret-vault';
 
 // ---------------------------------------------------------------------------
 // SDK dynamic import (ESM module loaded once, cached)
@@ -134,7 +137,7 @@ export type InstallSkillResult =
 
 /**
  * High-level "install a skill by ID" helper. Fetches the skill menu,
- * finds the skill, downloads and extracts it. Workflows should use this
+ * finds the skill, downloads and extracts it. Programs should use this
  * instead of composing fetchSkillMenu + downloadSkill themselves.
  */
 export async function installSkillById(
@@ -175,6 +178,70 @@ export interface WizardToolsOptions {
 
   /** Base URL for the skills server (e.g. http://localhost:8765 or GitHub releases URL) */
   skillsBaseUrl: string;
+
+  /**
+   * Bridge that drives the `wizard_ask` overlay. When omitted, the
+   * `wizard_ask` tool is still registered but returns an error explaining
+   * the host is non-interactive — keeps the tool surface stable across
+   * CI/dev environments.
+   */
+  askBridge?: WizardAskBridge;
+
+  /**
+   * Per-run cap on `wizard_ask` invocations. Defaults to {@link DEFAULT_ASK_MAX_QUESTIONS}.
+   * The 4th call always returns a "batch your questions" error regardless
+   * of this cap — see {@link ASK_BATCH_THRESHOLD}.
+   */
+  askMaxQuestions?: number;
+
+  /**
+   * Optional secret vault. When provided, tools that handle sensitive
+   * values (wizard_ask with `sensitive: true`, set_env_values) route
+   * those values through the vault and return opaque refs to the agent
+   * instead of raw strings — so the LLM never sees them. When omitted
+   * (e.g. in unit tests), a fresh vault is created internally.
+   */
+  secretVault?: SecretVault;
+}
+
+/** Default per-run cap on wizard_ask calls when no override is provided. */
+export const DEFAULT_ASK_MAX_QUESTIONS = 10;
+/** Calls past this number always return a batch-it error. */
+export const ASK_BATCH_THRESHOLD = 3;
+
+export type AskCapDecision =
+  | { kind: 'ok' }
+  | {
+      kind: 'capped';
+      reason: 'max_questions' | 'adjacency';
+      message: string;
+    };
+
+/**
+ * Pure decision function for the wizard_ask caps. Returns whether the
+ * upcoming call should proceed and, if not, the error message to surface
+ * to the agent. Extracted so the policy can be unit-tested without
+ * spinning up an MCP server.
+ */
+export function evaluateAskCap(
+  callCount: number,
+  maxQuestions: number,
+): AskCapDecision {
+  if (callCount >= maxQuestions) {
+    return {
+      kind: 'capped',
+      reason: 'max_questions',
+      message: `Error: wizard_ask cap reached (${maxQuestions} calls in this run). Proceed with sensible defaults using the answers you already have, or emit [ABORT] requirements-incomplete.`,
+    };
+  }
+  if (callCount >= ASK_BATCH_THRESHOLD) {
+    return {
+      kind: 'capped',
+      reason: 'adjacency',
+      message: `Error: too many wizard_ask calls in a row (${callCount} so far). Batch the remaining questions into a single call — the schema accepts up to 8 questions per invocation.`,
+    };
+  }
+  return { kind: 'ok' };
 }
 
 // ---------------------------------------------------------------------------
@@ -431,9 +498,19 @@ const SERVER_NAME = 'wizard-tools';
  * Must be called asynchronously because the SDK is an ESM module loaded via dynamic import.
  */
 export async function createWizardToolsServer(options: WizardToolsOptions) {
-  const { workingDirectory, detectPackageManager, skillsBaseUrl } = options;
+  const {
+    workingDirectory,
+    detectPackageManager,
+    skillsBaseUrl,
+    askBridge,
+    askMaxQuestions = DEFAULT_ASK_MAX_QUESTIONS,
+    secretVault = createSecretVault(),
+  } = options;
   const sdk = await getSDKModule();
   const { tool, createSdkMcpServer } = sdk;
+
+  // Per-server counter for wizard_ask call accounting (adjacency + total cap).
+  let askCallCount = 0;
 
   // Pre-fetch skill menu so category names are available in the tool schema
   let cachedSkillMenu: Record<string, SkillEntry[]> = {};
@@ -487,16 +564,24 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
 
   const setEnvValues = tool(
     'set_env_values',
-    'Create or update environment variable keys in a .env file. Creates the file if it does not exist. Ensures .gitignore coverage.',
+    'Create or update environment variable keys in a .env file. Creates the file if it does not exist. Ensures .gitignore coverage. Each value can be either a literal string or a secret reference of the form `{ "secretRef": "secret:..." }` returned by another tool (e.g. wizard_ask). Secret references are resolved locally — the actual value is written to the file but never returned to the agent.',
     {
       filePath: z
         .string()
         .describe('Path to the .env file, relative to the project root'),
       values: z
-        .record(z.string(), z.string())
-        .describe('Key-value pairs to set'),
+        .record(
+          z.string(),
+          z.union([z.string(), z.object({ secretRef: z.string() })]),
+        )
+        .describe(
+          'Key → (literal string OR { secretRef } pointing to a vaulted secret)',
+        ),
     },
-    (args: { filePath: string; values: Record<string, string> }) => {
+    (args: {
+      filePath: string;
+      values: Record<string, string | { secretRef: string }>;
+    }) => {
       // Block the wrong key name — the correct key is NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN or similar
       const forbidden = Object.keys(args.values).find(
         (k) => k.toUpperCase() === 'POSTHOG_KEY',
@@ -513,17 +598,45 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
         };
       }
 
+      // Resolve any secret refs from the vault before writing.
+      const resolvedValues: Record<string, string> = {};
+      const resolvedRefKeys: string[] = [];
+      for (const [key, val] of Object.entries(args.values)) {
+        if (typeof val === 'string') {
+          resolvedValues[key] = val;
+        } else {
+          const secret = secretVault.get(val.secretRef);
+          if (secret === undefined) {
+            return {
+              content: [
+                {
+                  type: 'text' as const,
+                  text: `Error: secret reference "${val.secretRef}" for key "${key}" is not known to the vault. The ref may have expired, been minted in a different run, or been mistyped.`,
+                },
+              ],
+              isError: true,
+            };
+          }
+          resolvedValues[key] = secret;
+          resolvedRefKeys.push(key);
+        }
+      }
+
       const resolved = resolveEnvPath(workingDirectory, args.filePath);
       logToFile(
-        `set_env_values: ${resolved}, keys: ${Object.keys(args.values).join(
+        `set_env_values: ${resolved}, keys: ${Object.keys(resolvedValues).join(
           ', ',
-        )}`,
+        )}${
+          resolvedRefKeys.length > 0
+            ? ` (secret refs: ${resolvedRefKeys.join(', ')})`
+            : ''
+        }`,
       );
 
       const existing = fs.existsSync(resolved)
         ? fs.readFileSync(resolved, 'utf8')
         : '';
-      const content = mergeEnvValues(existing, args.values);
+      const content = mergeEnvValues(existing, resolvedValues);
 
       // Ensure parent directory exists
       const dir = path.dirname(resolved);
@@ -811,6 +924,184 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
     },
   );
 
+  // -- wizard_ask -----------------------------------------------------------
+
+  const askQuestionSchema = z.object({
+    id: z
+      .string()
+      .min(1)
+      .describe('Stable key for the answer in the response map'),
+    prompt: z.string().min(1).describe('Question text shown to the user'),
+    kind: z
+      .enum(['single', 'multi', 'text'])
+      .describe(
+        "'single' = pick one option, 'multi' = pick any, 'text' = free-form single-line answer",
+      ),
+    options: z
+      .array(z.object({ label: z.string(), value: z.string() }))
+      .optional()
+      .describe('Required for kind=single|multi; ignored for kind=text'),
+    required: z.boolean().optional().describe('Defaults to true'),
+    sensitive: z
+      .boolean()
+      .optional()
+      .describe(
+        "Only valid for kind='text'. When true, the user's answer is stored in the wizard's secret vault and returned to you as { secretRef: 'secret:...' } instead of the raw string. Use for API keys, tokens, and any other secret the user types in.",
+      ),
+  });
+
+  const wizardAsk = tool(
+    'wizard_ask',
+    'Ask the user one or more structured questions and wait for their answers. ' +
+      'Use this whenever you would otherwise inline a question in your text output. ' +
+      'Batch related questions into a single call — do not call this multiple times in a row.',
+    {
+      questions: z.array(askQuestionSchema).min(1).max(8),
+    },
+    async (args: {
+      questions: Array<{
+        id: string;
+        prompt: string;
+        kind: 'single' | 'multi' | 'text';
+        options?: { label: string; value: string }[];
+        required?: boolean;
+        sensitive?: boolean;
+      }>;
+    }) => {
+      if (!askBridge) {
+        return {
+          content: [
+            {
+              type: 'text' as const,
+              text: 'Error: wizard_ask is not available in this environment (CI / non-interactive). Proceed with sensible defaults or emit [ABORT] requirements-incomplete.',
+            },
+          ],
+          isError: true,
+        };
+      }
+
+      const capDecision = evaluateAskCap(askCallCount, askMaxQuestions);
+      if (capDecision.kind === 'capped') {
+        analytics.wizardCapture('wizard_ask capped', {
+          reason: capDecision.reason,
+          call_count: askCallCount,
+          max_questions: askMaxQuestions,
+        });
+        return {
+          content: [{ type: 'text' as const, text: capDecision.message }],
+          isError: true,
+        };
+      }
+
+      // Validate that single/multi questions include options. The schema
+      // alone can't enforce a per-kind requirement.
+      for (const q of args.questions) {
+        if (
+          (q.kind === 'single' || q.kind === 'multi') &&
+          (!q.options || q.options.length === 0)
+        ) {
+          return {
+            content: [
+              {
+                type: 'text' as const,
+                text: `Error: question "${q.id}" has kind="${q.kind}" but no options. Provide at least one { label, value } option, or change kind to "text".`,
+              },
+            ],
+            isError: true,
+          };
+        }
+        if (q.sensitive && q.kind !== 'text') {
+          return {
+            content: [
+              {
+                type: 'text' as const,
+                text: `Error: question "${q.id}" sets sensitive=true but kind="${q.kind}". Only kind="text" answers can be vaulted as secrets.`,
+              },
+            ],
+            isError: true,
+          };
+        }
+      }
+
+      const ids = new Set<string>();
+      for (const q of args.questions) {
+        if (ids.has(q.id)) {
+          return {
+            content: [
+              {
+                type: 'text' as const,
+                text: `Error: duplicate question id "${q.id}". Each question must have a unique id.`,
+              },
+            ],
+            isError: true,
+          };
+        }
+        ids.add(q.id);
+      }
+
+      askCallCount += 1;
+
+      try {
+        const answers = await askBridge.request({ questions: args.questions });
+
+        // For any question marked sensitive, move the raw answer into the
+        // vault and replace it with an opaque ref before returning to the
+        // agent — so the secret never enters the LLM conversation.
+        const sensitiveById = new Map(
+          args.questions
+            .filter((q) => q.sensitive)
+            .map((q) => [q.id, q.prompt]),
+        );
+        const sanitised: Record<
+          string,
+          string | string[] | { secretRef: string }
+        > = {};
+        for (const [id, answer] of Object.entries(answers)) {
+          const label = sensitiveById.get(id);
+          if (
+            label !== undefined &&
+            typeof answer === 'string' &&
+            answer !== '__cancelled__'
+          ) {
+            const ref = secretVault.put(answer, {
+              label,
+              source: 'wizard_ask',
+            });
+            sanitised[id] = { secretRef: ref };
+            logToFile(`wizard_ask: vaulted answer for "${id}" as ${ref}`);
+          } else {
+            sanitised[id] = answer;
+          }
+        }
+
+        logToFile(
+          `wizard_ask: resolved ${Object.keys(answers).length} answer(s) for ${
+            args.questions.length
+          } question(s)`,
+        );
+        return {
+          content: [
+            {
+              type: 'text' as const,
+              text: JSON.stringify({ answers: sanitised }, null, 2),
+            },
+          ],
+        };
+      } catch (err: any) {
+        logToFile(`wizard_ask: error: ${err?.message ?? err}`);
+        return {
+          content: [
+            {
+              type: 'text' as const,
+              text: `Error: wizard_ask failed: ${err?.message ?? String(err)}`,
+            },
+          ],
+          isError: true,
+        };
+      }
+    },
+  );
+
   // -- Assemble server ------------------------------------------------------
 
   return createSdkMcpServer({
@@ -825,21 +1116,27 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
       auditSeedChecks,
       auditAddChecks,
       auditResolveChecks,
+      wizardAsk,
     ],
   });
 }
 
-/** Tool names exposed by the wizard-tools server, for use in allowedTools */
-export const WIZARD_TOOL_NAMES = [
-  `${SERVER_NAME}:check_env_keys`,
-  `${SERVER_NAME}:set_env_values`,
-  `${SERVER_NAME}:detect_package_manager`,
-  `${SERVER_NAME}:load_skill_menu`,
-  `${SERVER_NAME}:install_skill`,
-  `${SERVER_NAME}:audit_seed_checks`,
-  `${SERVER_NAME}:audit_add_checks`,
-  `${SERVER_NAME}:audit_resolve_checks`,
-];
+/** Tool names exposed by the wizard-tools server, keyed for selective use. */
+// SDK expects MCP tool names in allowedTools/disallowedTools to be the
+// fully-qualified `mcp__<server>__<tool>` form (sdk.d.ts: "Fully-qualified
+// MCP tool name, e.g. mcp__server__tool_name."). The colon form silently
+// fails to match, which made every program's `disallowedTools` entry a no-op.
+export const WIZARD_TOOL_NAMES = {
+  checkEnvKeys: `mcp__${SERVER_NAME}__check_env_keys`,
+  setEnvValues: `mcp__${SERVER_NAME}__set_env_values`,
+  detectPackageManager: `mcp__${SERVER_NAME}__detect_package_manager`,
+  loadSkillMenu: `mcp__${SERVER_NAME}__load_skill_menu`,
+  installSkill: `mcp__${SERVER_NAME}__install_skill`,
+  auditSeedChecks: `mcp__${SERVER_NAME}__audit_seed_checks`,
+  auditAddChecks: `mcp__${SERVER_NAME}__audit_add_checks`,
+  auditResolveChecks: `mcp__${SERVER_NAME}__audit_resolve_checks`,
+  wizardAsk: `mcp__${SERVER_NAME}__wizard_ask`,
+} as const;
 
 // ---------------------------------------------------------------------------
 // Test-only exports

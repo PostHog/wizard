@@ -14,8 +14,9 @@ import {
   IS_DEV,
   POSTHOG_DEV_CLIENT_ID,
   POSTHOG_US_CLIENT_ID,
+  WIZARD_PROVISIONING_SCOPES,
   WIZARD_USER_AGENT,
-} from '../lib/constants';
+} from '@lib/constants';
 import { logToFile } from './debug';
 import { analytics } from './analytics';
 
@@ -117,6 +118,7 @@ export async function provisionNewAccount(
       client_id: WIZARD_CLIENT_ID,
       code_challenge: codeChallenge,
       code_challenge_method: 'S256',
+      scopes: WIZARD_PROVISIONING_SCOPES,
       configuration: {
         region,
         ...(opts?.orgName ? { organization_name: opts.orgName } : {}),
@@ -215,4 +217,43 @@ export async function provisionNewAccount(
     projectId: resourceData.id,
     accountId: tokenData.account?.id ?? '',
   };
+}
+
+/**
+ * Request a one-time deep link URL that logs the user into PostHog
+ * and redirects to their project dashboard.
+ */
+export async function requestDeepLink(
+  accessToken: string,
+  host: string,
+): Promise<string | null> {
+  try {
+    const baseUrl = host
+      .replace('us.i.posthog.com', 'us.posthog.com')
+      .replace('eu.i.posthog.com', 'eu.posthog.com');
+
+    const res = await axios.post(
+      `${baseUrl}/api/agentic/provisioning/deep_links`,
+      { purpose: 'dashboard' },
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${accessToken}`,
+          'API-Version': API_VERSION,
+          'User-Agent': WIZARD_USER_AGENT,
+        },
+        timeout: 10_000,
+      },
+    );
+
+    const url = res.data?.url;
+    if (typeof url === 'string') {
+      logToFile(`[provisioning] deep link created: ${url}`);
+      return url;
+    }
+    return null;
+  } catch {
+    logToFile('[provisioning] deep link request failed, skipping');
+    return null;
+  }
 }

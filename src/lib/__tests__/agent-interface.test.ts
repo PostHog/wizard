@@ -1,10 +1,10 @@
-import { runAgent, createStopHook } from '../agent/agent-interface';
-import type { WizardOptions } from '../../utils/types';
-import type { SpinnerHandle } from '../../ui';
+import { runAgent, createStopHook } from '@lib/agent/agent-interface';
+import type { WizardRunOptions } from '@utils/types';
+import type { SpinnerHandle } from '@ui';
 import {
   AdditionalFeature,
   ADDITIONAL_FEATURE_PROMPTS,
-} from '../wizard-session';
+} from '@lib/wizard-session';
 
 // Mock dependencies
 jest.mock('../../utils/analytics');
@@ -57,15 +57,13 @@ describe('runAgent', () => {
     message: jest.Mock;
   };
 
-  const defaultOptions: WizardOptions = {
+  const defaultOptions: WizardRunOptions = {
     debug: false,
     installDir: '/test/dir',
-    forceInstall: false,
     default: false,
     signup: false,
     localMcp: false,
     ci: false,
-    menu: false,
     benchmark: false,
     yaraReport: false,
   };

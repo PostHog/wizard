@@ -13,8 +13,8 @@
 
 import { Box, Text } from 'ink';
 import { useEffect, useState } from 'react';
-import { fetchSkillMenu, type SkillEntry } from '../../../lib/wizard-tools.js';
-import { getSkillsBaseUrl } from '../../../lib/constants.js';
+import { fetchSkillMenu, type SkillEntry } from '@lib/wizard-tools';
+import { getSkillsBaseUrl } from '@lib/constants';
 
 export function useSkillEntry(
   skillId: string | null,

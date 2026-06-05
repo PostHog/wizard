@@ -8,9 +8,14 @@
  * Session-mutating methods trigger reactive screen resolution in the TUI.
  */
 
-import type { SettingsConflict } from '../lib/agent/agent-interface';
-import type { WizardReadinessResult } from '../lib/health-checks/readiness.js';
-import type { OutroData } from '../lib/wizard-session';
+import type { SettingsConflict } from '@lib/agent/agent-interface';
+import type { WizardReadinessResult } from '@lib/health-checks/readiness';
+import type { ApiUser } from '@lib/api';
+import type {
+  AskAnswers,
+  OutroData,
+  PendingQuestion,
+} from '@lib/wizard-session';
 
 export enum TaskStatus {
   Pending = 'pending',
@@ -26,6 +31,21 @@ export interface SpinnerHandle {
   start(message?: string): void;
   stop(message?: string): void;
   message(msg?: string): void;
+}
+
+/**
+ * Context passed to `showAuthError` so the screen can pick the right copy.
+ *
+ * `hasSettingsConflict` is true when a Claude Code settings.json /
+ * managed-settings file actually overrides the LLM Gateway auth — the
+ * Wizard's pre-flight check missed it or it appeared after startup.
+ * When false, the 401 has a different cause (bad PAT prefix, missing
+ * scope, expired key, region mismatch) and we should not advise the
+ * user to log out of Claude Code.
+ */
+export interface AuthErrorDetail {
+  hasSettingsConflict: boolean;
+  logFilePath: string;
 }
 
 export interface WizardUI {
@@ -73,6 +93,21 @@ export interface WizardUI {
     projectId: number;
   }): void;
 
+  /**
+   * Persist the user's `role_at_organization` once it's been fetched from
+   * `/api/users/@me/`. Drives role-tailored prompt suggestions on the
+   * McpSuggestedPromptsScreen. Pass `null` to clear / when unknown.
+   */
+  setRoleAtOrganization(role: string | null): void;
+
+  /**
+   * Persist the full user payload from `/api/users/@me/` so downstream
+   * screens can read account context (current org, team, plan, email,
+   * preferences, etc.) without re-fetching. Pass `null` to clear or
+   * when the request failed.
+   */
+  setApiUser(user: ApiUser | null): void;
+
   /** Show blocking service outage (pushes outage overlay in TUI). Blocks until dismissed. */
   showBlockingOutage(result: WizardReadinessResult): Promise<void>;
 
@@ -87,13 +122,28 @@ export interface WizardUI {
     user: string;
   }): Promise<void>;
 
+  /**
+   * Resolve with an OAuth authorization code the user enters by hand — the
+   * fallback for headless/remote shells where the browser can't reach the
+   * local callback server. The OAuth flow races this against the callback
+   * server. Implementations that can't prompt (CI/logging) never resolve.
+   */
+  waitForManualAuthCode(): Promise<string>;
+
   showSettingsOverride(
     conflicts: SettingsConflict[],
     backupAndFix: () => boolean,
   ): Promise<void>;
 
   /** Show auth error overlay when Anthropic API returns 401. */
-  showAuthError(): void;
+  showAuthError(detail?: AuthErrorDetail): void;
+
+  /**
+   * Open the wizard_ask overlay and resolve with the user's answers.
+   * Implementations that can't ask (CI/logging) reject so the bridge can
+   * surface a clear "not available" error to the agent.
+   */
+  requestQuestion(question: PendingQuestion): Promise<AskAnswers>;
 
   // ── Display state ──────────────────────────────────────────────────
   /** Set the detected framework label (e.g., "Django with Wagtail CMS") */
@@ -104,7 +154,13 @@ export interface WizardUI {
 
   setLoginUrl(url: string | null): void;
 
-  // ── Todo tracking from SDK TodoWrite events ───────────────────────
+  /** Direct PostHog authorize URL, shown in the manual-paste modal. */
+  setAuthorizeUrl(url: string | null): void;
+
+  // ── Task tracking from SDK TaskCreate/TaskUpdate events ───────────
+  // Receives the full materialised task list each call. The caller (agent
+  // loop) maintains a Map<taskId, …> from incremental Task* events and
+  // re-emits the snapshot here, preserving the existing store semantics.
   syncTodos(
     todos: Array<{ content: string; status: string; activeForm?: string }>,
   ): void;
@@ -112,6 +168,17 @@ export interface WizardUI {
   // ── Event plan from .posthog-events.json ────────────────────
   setEventPlan(events: Array<{ name: string; description: string }>): void;
 
-  // ── Generic frameworkContext setter for workflow file watchers ─────
+  // ── Dashboard URL emitted by the agent via [DASHBOARD_URL] marker ──
+  setDashboardUrl(url: string): void;
+
+  // ── Notebook URL emitted by the agent via [NOTEBOOK_URL] marker ──
+  setNotebookUrl(url: string): void;
+
+  // ── Outro payload built by agent-runner ──
+  // Replaces the direct `session.outroData = X` mutation that breaks once
+  // setKey-based store mutations have forked the session reference.
+  setOutroData(data: OutroData): void;
+
+  // ── Generic frameworkContext setter for program file watchers ─────
   setFrameworkContext(key: string, value: unknown): void;
 }

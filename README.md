@@ -19,7 +19,7 @@ To use the wizard, you can run it directly using:
 npx @posthog/wizard
 ```
 
-Currently the wizard can be used for over 16 frameworks for frontend, backend, and mobile applications. If you have other integrations you would like the wizard to
+Currently the wizard can be used for over 16+ frameworks for frontend, backend, and mobile applications. If you have other integrations you would like the wizard to
 support, please open a [GitHub issue](https://github.com/posthog/wizard/issues)!
 
 Visit our [docs](https://posthog.com/docs/ai-engineering/ai-wizard) to learn more. 
@@ -48,6 +48,49 @@ npx @posthog/wizard revenue
 Requires PostHog and Stripe SDKs already installed. Supports `--ci` with the
 same flags as the main wizard.
 
+## Headless signup + install (agents / CI)
+
+> ⚠️ `--ci` is **not currently supported in published builds** (see [CI Mode](#ci-mode)).
+> This flow works in development builds only.
+
+For a fully non-interactive first-run (no existing PostHog account, no TTY,
+no browser), combine `--ci --signup --email`. The wizard provisions a new
+account, uses the returned personal API key to run the normal CI install,
+and wires PostHog into the project at `--install-dir`:
+
+```bash
+npx @posthog/wizard --ci --signup \
+  --email you@example.com \
+  --install-dir .
+```
+
+Optional flags: `--name "Your Name"`, `--region eu` (default `us`),
+`--integration nextjs` (else auto-detected).
+
+### Provision only
+
+If you just want credentials — for tests, pre-flight checks, or wiring up
+PostHog yourself — use the `provision` subcommand, which emits a structured
+`ProvisioningResult` and does nothing else:
+
+```bash
+# Human-readable (when stdout is a TTY)
+npx @posthog/wizard provision --email user@example.com --region us
+
+# Machine-readable — auto when stdout is piped, or force with --json
+npx @posthog/wizard provision --email user@example.com --region eu --json
+```
+
+Success prints the full `ProvisioningResult` (`projectApiKey`, `host`,
+`projectId`, `accountId`, `accessToken`, `refreshToken`, and
+`personalApiKey` if present). Failure exits 1; in `--json` mode the error
+is emitted to stderr as `{"error":"...","code":"..."}`, with `code` set to
+`email_exists` when the address is already registered.
+
+> ⚠️ **Output contains live credentials.** Pipe it into a secrets store —
+> do not let it be captured by shared CI logs. Mask the step output or
+> redirect stdout to a file your job reads and discards.
+
 # Options
 
 The following CLI arguments are available:
@@ -57,17 +100,20 @@ The following CLI arguments are available:
 | `--help`          | Show help                                                        | boolean |         |                                                      |                                |
 | `--version`       | Show version number                                              | boolean |         |                                                      |                                |
 | `--debug`         | Enable verbose logging                                           | boolean | `false` |                                                      | `POSTHOG_WIZARD_DEBUG`         |
-| `--default`       | Use default options for all prompts                              | boolean | `true`  |                                                      | `POSTHOG_WIZARD_DEFAULT`       |
 | `--signup`        | Create a new PostHog account during setup                        | boolean | `false` |                                                      | `POSTHOG_WIZARD_SIGNUP`        |
-| `--integration`   | Integration to set up                                            | string  |         | "nextjs", "astro", "react", "svelte", "react-native", "tanstack-router", "tanstack-start" |                                |
-| `--menu`          | Show menu for manual integration selection instead of auto-detecting | boolean | `false` |                                                      | `POSTHOG_WIZARD_MENU`          |
-| `--force-install` | Force install packages even if peer dependency checks fail       | boolean | `false` |                                                      | `POSTHOG_WIZARD_FORCE_INSTALL` |
 | `--install-dir`   | Directory to install PostHog in                                  | string  |         |                                                      | `POSTHOG_WIZARD_INSTALL_DIR`   |
 | `--ci`            | Enable CI mode for non-interactive execution                     | boolean | `false` |                                                      | `POSTHOG_WIZARD_CI`            |
 | `--api-key`       | PostHog personal API key (phx_xxx) for authentication            | string  |         |                                                      | `POSTHOG_WIZARD_API_KEY`       |
 
 
 # CI Mode
+
+> ⚠️ **CI mode is not currently supported in published builds.** PostHog's LLM
+> gateway doesn't yet grant the scopes the wizard needs to personal API keys
+> for most users, so non-interactive `--ci` runs fail at the gateway. The flag
+> is disabled in the published package and exits with an error — run the wizard
+> in an interactive terminal instead (`npx @posthog/wizard`). The notes below
+> describe CI mode as it works in development builds.
 
 Run the wizard non-interactive executions with `--ci`:
 
@@ -96,7 +142,6 @@ When creating your personal API key, ensure it has the following scopes enabled:
 
 - `user:read` - Required to fetch user information
 - `project:read` - Required to fetch project details and API token
-- `introspection` - Required for API introspection
 - `llm_gateway:read` - Required for LLM gateway access
 - `dashboard:write` - Required to create dashboards
 - `insight:write` - Required to create insights
@@ -130,6 +175,13 @@ wizard alongside all of our other PostHog product data, and this is very
 powerful. For example: we could show in-product surveys to people who have used
 the wizard to improve the experience.
 
+When the user authenticates, the wizard also streams live run state — current
+phase, task list, planned events — to `POST /api/projects/{id}/wizard/sessions/`
+so the PostHog web app can render real-time progress. Updates are debounced
+(250ms) with phase changes flushed immediately; failures fall back silently to
+the wizard's debug log without disturbing the TUI. Pass `--no-telemetry` (or
+set `POSTHOG_WIZARD_NO_TELEMETRY=1`) to disable.
+
 ## Leave rules behind
 
 Supporting agent sessions after we leave is important. There are plenty of ways
@@ -160,6 +212,32 @@ This also allows us to pick up the bill on behalf of our customers.
 
 When we make improvements to this process, these are available instantly to all
 users of the wizard, no training delays or other ambiguity.
+
+## Keep secrets out of the LLM
+
+The wizard somtimes needs to move a secret. The agent
+orchestrates that journey, but the raw value should _never_ enter the LLM
+conversation, where it would be sent to the model provider, written to
+transcripts, and captured in logs.
+
+`src/lib/secret-vault.ts` is a small, reusable pattern for exactly this. It's a
+session-scoped, in-memory vault: a tool that handles a secret calls `put()` to
+store the raw value and hands the agent an opaque `secret:<uuid>` reference
+instead. The agent passes that ref between tools as if it were the value; the
+host resolves it back to the real secret only at the last moment, inside the
+process, when it writes the file.
+
+Two tools in `src/lib/wizard-tools.ts` form the ends of that pipe:
+
+- `wizard_ask` with `sensitive: true` vaults the user's typed answer and returns
+  `{ secretRef: "secret:..." }` to the agent rather than the string.
+- `set_env_values` accepts `{ secretRef }` in place of a literal value and
+  resolves it against the vault before writing — the value lands in the `.env`
+  file but is never returned to the model.
+
+The vault has no persistence and is dropped at the end of the run; refs minted
+in one session can't be resolved in another. The net effect: the model gets to
+drive the work end to end, but the only thing it ever sees is an opaque handle.
 
 ## Build system
 

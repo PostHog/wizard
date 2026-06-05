@@ -5,8 +5,8 @@
  */
 
 import { Box } from 'ink';
-import type { AuditCheck } from '../../../../lib/workflows/audit/types.js';
-import { AuditChecksViewer } from '../../screens/audit/AuditChecksViewer/AuditChecksViewer.js';
+import type { AuditCheck } from '@lib/programs/audit/types';
+import { AuditChecksViewer } from '@ui/tui/screens/audit/AuditChecksViewer/AuditChecksViewer';
 
 const MOCK_CHECKS: AuditCheck[] = [
   {

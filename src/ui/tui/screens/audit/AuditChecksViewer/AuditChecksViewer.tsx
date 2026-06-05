@@ -1,9 +1,10 @@
 /**
  * AuditChecksViewer — "Audit plan" tab.
  *
- * Renders the full audit ledger as a scrollable table grouped by status:
- * resolved checks (issues + passes, sorted by severity) on top, pending
- * checks at the bottom, separated by a blank row.
+ * Renders the full audit ledger as a scrollable, area-grouped list that
+ * mirrors the structure of the final report. Each area gets a sub-header
+ * with a resolved/total count; checks within an area are sorted by
+ * severity (error → warning → suggestion → pass → pending).
  *
  * Two interactions, both registered via `useKeyBindings`:
  *   - `e`        — toggle detail rows (file:line + agent's `details` text)
@@ -16,19 +17,20 @@
 
 import { Box, Text } from 'ink';
 import { Fragment, useMemo, useState, type ReactNode } from 'react';
-import { useStdoutDimensions } from '../../../hooks/useStdoutDimensions.js';
+import { useStdoutDimensions } from '@ui/tui/hooks/useStdoutDimensions';
 import {
   KeyMatch,
   useKeyBindings,
   type KeyBinding,
-} from '../../../hooks/useKeyBindings.js';
-import type { AuditCheck } from '../../../../../lib/workflows/audit/types.js';
+} from '@ui/tui/hooks/useKeyBindings';
+import type { AuditCheck } from '@lib/programs/audit/types';
+import { AreaHeaderRow } from './AreaHeaderRow.js';
 import { CheckRow } from './CheckRow.js';
 import { DetailRow } from './DetailRow.js';
 import { Footer } from './Footer.js';
-import { Header, statusCounts } from './Header.js';
+import { Header, Summary, statusCounts } from './Header.js';
 import { computeLayout } from './layout.js';
-import { sortChecks } from './sort.js';
+import { groupChecksByArea } from './sort.js';
 
 interface AuditChecksViewerProps {
   checks: AuditCheck[];
@@ -36,61 +38,51 @@ interface AuditChecksViewerProps {
 
 export const AuditChecksViewer = ({ checks }: AuditChecksViewerProps) => {
   // ── Layout ─────────────────────────────────────────────────────────
-  // Recompute on every render against current terminal size so the viewer
-  // reflows on resize. `viewerChrome` is the row count consumed by header,
-  // dividers, scroll markers, legend, and counts; `visibleHeight` is what
-  // remains for the scrollable body.
   const [rawCols, termRows] = useStdoutDimensions();
   const layout = computeLayout(rawCols, termRows);
   const totalHeight = layout.visibleHeight + layout.viewerChrome;
 
-  // ── Sort + section split ───────────────────────────────────────────
-  // Issues + passes on top, pending at the bottom. The JSX renders the
-  // two sections in that order with a blank-line separator between them.
-  const sorted = useMemo(() => sortChecks(checks), [checks]);
-  const resolved = sorted.filter((c) => c.status !== 'pending');
-  const pending = sorted.filter((c) => c.status === 'pending');
+  // ── Group by area ──────────────────────────────────────────────────
+  const groups = useMemo(() => groupChecksByArea(checks), [checks]);
+  const counts = useMemo(() => statusCounts(checks), [checks]);
 
   // ── Expand state ───────────────────────────────────────────────────
-  const hasExpandable = sorted.some((c) => Boolean(c.details || c.file));
-  const hasIssues = sorted.some(
+  const hasExpandable = checks.some((c) => Boolean(c.details || c.file));
+  const hasIssues = checks.some(
     (c) =>
       c.status === 'error' ||
       c.status === 'warning' ||
       c.status === 'suggestion',
   );
-  // Auto-expand when there are issues — the AuditAreaPane's `[→] View
-  // issues` hint sends users here specifically to read details.
   const [expanded, setExpanded] = useState(hasIssues && hasExpandable);
 
   // ── Flat row list ──────────────────────────────────────────────────
-  // Build one ReactNode per visible terminal row so scroll math is a
-  // single number. CheckRow = 1 row; an expanded DetailRow ≈ 1 (long
-  // details that wrap will overflow — we don't track exact heights, the
-  // approximation is fine for a status pane).
+  // One ReactNode per visible terminal row so scroll math stays simple.
+  // Sub-header + check rows + (optional) detail rows interleave here.
   const allRows = useMemo<ReactNode[]>(() => {
     const rows: ReactNode[] = [];
-    const buildRow = (item: AuditCheck) => {
-      rows.push(<CheckRow key={item.id} item={item} layout={layout} />);
-      if (expanded && (item.details || item.file)) {
-        rows.push(
-          <DetailRow key={`${item.id}-detail`} item={item} layout={layout} />,
-        );
+    for (const group of groups) {
+      rows.push(
+        <AreaHeaderRow
+          key={`header-${group.area}`}
+          area={group.area}
+          resolved={group.counts.resolved}
+          total={group.counts.total}
+        />,
+      );
+      for (const item of group.checks) {
+        rows.push(<CheckRow key={item.id} item={item} layout={layout} />);
+        if (expanded && (item.details || item.file)) {
+          rows.push(
+            <DetailRow key={`${item.id}-detail`} item={item} layout={layout} />,
+          );
+        }
       }
-    };
-    resolved.forEach(buildRow);
-    if (resolved.length > 0 && pending.length > 0) {
-      rows.push(<Box key="separator" height={1} />);
     }
-    pending.forEach(buildRow);
     return rows;
-  }, [resolved, pending, expanded, layout]);
+  }, [groups, expanded, layout]);
 
   // ── Scroll viewport ────────────────────────────────────────────────
-  // `offset` is the index of the first visible row. Clamped on every
-  // render so resizing or collapsing details can't leave us scrolled
-  // past the new end. `hiddenAbove` / `hiddenBelow` drive the
-  // "↑ N more" / "↓ N more" markers above and below the body.
   const [offset, setOffset] = useState(0);
   const maxOffset = Math.max(0, allRows.length - layout.visibleHeight);
   const clampedOffset = Math.min(offset, maxOffset);
@@ -101,10 +93,6 @@ export const AuditChecksViewer = ({ checks }: AuditChecksViewerProps) => {
   );
 
   // ── Key bindings ───────────────────────────────────────────────────
-  // `e` toggles detail rows (only registered when there's something to
-  // expand). `↑`/`↓` always register so the hints bar consistently
-  // advertises scroll, even when content fits and the handler is a
-  // no-op via the clamp.
   const bindings: KeyBinding[] = [];
   if (hasExpandable) {
     bindings.push({
@@ -131,21 +119,29 @@ export const AuditChecksViewer = ({ checks }: AuditChecksViewerProps) => {
     clampedOffset + layout.visibleHeight,
   );
 
+  // Dynamic subtitle — lists the actual areas in the ledger.
+  const subtitle =
+    groups.length === 0
+      ? 'No checks yet.'
+      : `Review across ${groups.length} ${
+          groups.length === 1 ? 'area' : 'areas'
+        } — mirrors the final report.`;
+
   return (
     <Box flexDirection="column" paddingX={1} height={totalHeight}>
-      {/* Title */}
+      {/* Title + dynamic subtitle */}
       <Text bold>Audit plan</Text>
-      <Text dimColor>
-        Read-only review of installation, identification, and event capture
-      </Text>
+      <Text dimColor>{subtitle}</Text>
+
+      {/* Top summary — same as Footer summary, promoted here for at-a-glance */}
+      <Summary total={checks.length} counts={counts} />
       <Box height={1} />
 
       {/* Column headers + divider */}
       <Header layout={layout} />
       <Text dimColor>{'─'.repeat(layout.dividerWidth)}</Text>
 
-      {/* Scroll-up marker (renders a blank row when nothing is hidden
-          above so the body's vertical position stays stable) */}
+      {/* Scroll-up marker */}
       <Text dimColor>{hiddenAbove > 0 ? `↑ ${hiddenAbove} more` : ' '}</Text>
 
       {/* Scrollable body */}
@@ -159,11 +155,11 @@ export const AuditChecksViewer = ({ checks }: AuditChecksViewerProps) => {
         ))}
       </Box>
 
-      {/* Scroll-down marker (mirror of the above) */}
+      {/* Scroll-down marker */}
       <Text dimColor>{hiddenBelow > 0 ? `↓ ${hiddenBelow} more` : ' '}</Text>
 
-      {/* Legend + count summary */}
-      <Footer total={checks.length} counts={statusCounts(checks)} />
+      {/* Legend (counts already shown at the top) */}
+      <Footer total={checks.length} counts={counts} />
     </Box>
   );
 };

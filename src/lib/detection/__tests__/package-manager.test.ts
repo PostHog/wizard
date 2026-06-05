@@ -7,11 +7,11 @@ import {
   composerPackageManager,
   swiftPackageManager,
   gradlePackageManager,
-} from '../package-manager';
+} from '@lib/detection/package-manager';
 
 jest.mock('../../../utils/debug');
 jest.mock('../../../telemetry', () => ({
-  traceStep: (_name: string, fn: () => unknown) => fn(),
+  withProgress: (_name: string, fn: () => unknown) => fn(),
 }));
 jest.mock('../../../utils/analytics', () => ({
   analytics: { setTag: jest.fn() },

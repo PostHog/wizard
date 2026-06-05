@@ -1,7 +1,7 @@
 import { major, minVersion } from 'semver';
 import fg from 'fast-glob';
-import { getUI } from '../../ui';
-import type { WizardOptions } from '../../utils/types';
+import { getUI } from '@ui';
+import type { WizardRunOptions } from '@utils/types';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 
@@ -51,7 +51,7 @@ export function getFastAPIVersionBucket(version: string | undefined): string {
  * Extract FastAPI version from requirements files or pyproject.toml
  */
 export async function getFastAPIVersion(
-  options: Pick<WizardOptions, 'installDir'>,
+  options: Pick<WizardRunOptions, 'installDir'>,
 ): Promise<string | undefined> {
   const { installDir } = options;
 
@@ -97,7 +97,7 @@ export async function getFastAPIVersion(
  */
 async function hasAPIRouter({
   installDir,
-}: Pick<WizardOptions, 'installDir'>): Promise<boolean> {
+}: Pick<WizardRunOptions, 'installDir'>): Promise<boolean> {
   const pyFiles = await fg(['**/*.py'], {
     cwd: installDir,
     ignore: IGNORE_PATTERNS,
@@ -126,7 +126,7 @@ async function hasAPIRouter({
  */
 async function hasTemplates({
   installDir,
-}: Pick<WizardOptions, 'installDir'>): Promise<boolean> {
+}: Pick<WizardRunOptions, 'installDir'>): Promise<boolean> {
   // Check for Jinja2Templates usage in Python files
   const pyFiles = await fg(['**/*.py'], {
     cwd: installDir,
@@ -161,7 +161,7 @@ async function hasTemplates({
  * Detect FastAPI project type
  */
 export async function getFastAPIProjectType(
-  options: WizardOptions,
+  options: WizardRunOptions,
 ): Promise<FastAPIProjectType> {
   const { installDir } = options;
 
@@ -202,7 +202,7 @@ export function getFastAPIProjectTypeName(
  * Find the main FastAPI app file
  */
 export async function findFastAPIAppFile(
-  options: Pick<WizardOptions, 'installDir'>,
+  options: Pick<WizardRunOptions, 'installDir'>,
 ): Promise<string | undefined> {
   const { installDir } = options;
 

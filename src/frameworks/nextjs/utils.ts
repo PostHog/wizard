@@ -1,6 +1,6 @@
 import fg from 'fast-glob';
-import type { WizardOptions } from '../../utils/types';
-import { createVersionBucket } from '../../utils/semver';
+import type { WizardRunOptions } from '@utils/types';
+import { createVersionBucket } from '@utils/semver';
 
 export const getNextJsVersionBucket = createVersionBucket();
 
@@ -22,7 +22,7 @@ export const IGNORE_PATTERNS = [
  */
 export async function getNextJsRouter({
   installDir,
-}: Pick<WizardOptions, 'installDir'>): Promise<NextJsRouter | null> {
+}: Pick<WizardRunOptions, 'installDir'>): Promise<NextJsRouter | null> {
   const pagesMatches = await fg('**/pages/_app.@(ts|tsx|js|jsx)', {
     dot: true,
     cwd: installDir,

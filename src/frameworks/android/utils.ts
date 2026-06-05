@@ -1,5 +1,5 @@
-import type { WizardOptions } from '../../utils/types';
-import { createVersionBucket } from '../../utils/semver';
+import type { WizardRunOptions } from '@utils/types';
+import { createVersionBucket } from '@utils/semver';
 import fg from 'fast-glob';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -11,7 +11,7 @@ const IGNORE_PATTERNS = ['**/build/**', '**/.gradle/**', '**/node_modules/**'];
  * Returns the value as a semver-like string (e.g. "24" from minSdk = 24).
  */
 export async function getMinSdkVersion(
-  options: WizardOptions,
+  options: WizardRunOptions,
 ): Promise<string | undefined> {
   const { installDir } = options;
 
@@ -39,7 +39,9 @@ export const getKotlinVersionBucket = createVersionBucket();
 /**
  * Read the root or app-level build.gradle(.kts) and extract the Kotlin version.
  */
-export function getKotlinVersion(options: WizardOptions): string | undefined {
+export function getKotlinVersion(
+  options: WizardRunOptions,
+): string | undefined {
   const { installDir } = options;
 
   for (const name of [

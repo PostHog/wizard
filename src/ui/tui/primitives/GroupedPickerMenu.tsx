@@ -14,10 +14,10 @@
 
 import { Box, Text } from 'ink';
 import { useState, useMemo } from 'react';
-import { Icons, Colors } from '../styles.js';
+import { Icons, Colors } from '@ui/tui/styles';
 import { PromptLabel } from './PromptLabel.js';
-import { useStdoutDimensions } from '../hooks/useStdoutDimensions.js';
-import { useKeyBindings, KeyMatch } from '../hooks/useKeyBindings.js';
+import { useStdoutDimensions } from '@ui/tui/hooks/useStdoutDimensions';
+import { useKeyBindings, KeyMatch } from '@ui/tui/hooks/useKeyBindings';
 
 interface GroupOption {
   value: string;

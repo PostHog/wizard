@@ -5,8 +5,8 @@
 
 import { Box, Text, useInput } from 'ink';
 import { useState } from 'react';
-import { CardLayout, SplitView } from '../../primitives/index.js';
-import { HAlign, VAlign, Colors } from '../../styles.js';
+import { CardLayout, SplitView } from '@ui/tui/primitives/index';
+import { HAlign, VAlign, Colors } from '@ui/tui/styles';
 
 const hAligns = [HAlign.Left, HAlign.Center, HAlign.Right];
 const vAligns = [VAlign.Top, VAlign.Center, VAlign.Bottom];

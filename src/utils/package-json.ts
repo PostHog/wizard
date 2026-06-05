@@ -1,76 +1,81 @@
 import { readFileSync } from 'fs';
 import path from 'path';
 
-export type PackageDotJson = {
-  version?: string;
-  scripts?: Record<string, string | undefined>;
+export type PackageJson = {
   dependencies?: Record<string, string>;
   devDependencies?: Record<string, string>;
-  resolutions?: Record<string, string>;
+  scripts?: Record<string, string | undefined>;
+  version?: string;
   overrides?: Record<string, string>;
+  resolutions?: Record<string, string>;
   pnpm?: {
     overrides?: Record<string, string>;
   };
 };
 
-type NpmPackage = {
+type InstalledPackage = {
   name: string;
   version: string;
 };
 
 /**
- * Checks if @param packageJson has any of the @param packageNamesList package names
- * listed as a dependency or devDependency.
- * If so, it returns the first package name that is found, including the
- * version (range) specified in the package.json.
+ * Returns the raw version spec for `packageName` as written in
+ * `package.json` (range, pinned version, workspace ref, URL, etc.).
+ * `dependencies` wins over `devDependencies`. An empty-string value in
+ * either slot falls through, matching the previous behaviour.
  */
-export function findInstalledPackageFromList(
-  packageNamesList: string[],
-  packageJson: PackageDotJson,
-): NpmPackage | undefined {
-  return packageNamesList
-    .map((packageName) => ({
-      name: packageName,
-      version: getPackageVersion(packageName, packageJson),
-    }))
-    .find((sdkPackage): sdkPackage is NpmPackage => !!sdkPackage.version);
+export function getDeclaredVersion(
+  packageName: string,
+  packageJson: PackageJson,
+): string | undefined {
+  const fromDeps = packageJson?.dependencies?.[packageName];
+  if (fromDeps) return fromDeps;
+  const fromDevDeps = packageJson?.devDependencies?.[packageName];
+  if (fromDevDeps) return fromDevDeps;
+  return undefined;
 }
 
-export function hasPackageInstalled(
+export function hasDeclaredDependency(
   packageName: string,
-  packageJson: PackageDotJson,
+  packageJson: PackageJson,
 ): boolean {
-  return getPackageVersion(packageName, packageJson) !== undefined;
+  return getDeclaredVersion(packageName, packageJson) !== undefined;
+}
+
+export function findDeclaredPackage(
+  packageNamesList: string[],
+  packageJson: PackageJson,
+): InstalledPackage | undefined {
+  for (const name of packageNamesList) {
+    const version = getDeclaredVersion(name, packageJson);
+    if (version) {
+      return { name, version };
+    }
+  }
+  return undefined;
 }
 
 /**
- * Read the actual installed version from node_modules/[packageName]/package.json.
- * Returns the real semver (e.g. "15.5.9"), not the range from the project's package.json.
+ * Returns the resolved version from `node_modules/<pkg>/package.json`,
+ * not the range declared in the project's `package.json`. Use this when
+ * you need to know what npm actually installed.
  */
 export function getInstalledPackageVersion(
   packageName: string,
   installDir: string,
 ): string | undefined {
   try {
-    const pkgPath = path.join(
+    const manifestPath = path.join(
       installDir,
       'node_modules',
       packageName,
       'package.json',
     );
-    const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8'));
-    return pkg.version;
+    const manifest = JSON.parse(readFileSync(manifestPath, 'utf-8')) as {
+      version?: string;
+    };
+    return manifest.version;
   } catch {
     return undefined;
   }
-}
-
-export function getPackageVersion(
-  packageName: string,
-  packageJson: PackageDotJson,
-): string | undefined {
-  return (
-    packageJson?.dependencies?.[packageName] ||
-    packageJson?.devDependencies?.[packageName]
-  );
 }

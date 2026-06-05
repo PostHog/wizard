@@ -1,4 +1,4 @@
-import { createVersionBucket, fulfillsVersionRange } from '../semver';
+import { createVersionBucket, versionSatisfiesRange } from '@utils/semver';
 
 describe('createVersionBucket', () => {
   describe('without minimum threshold', () => {
@@ -160,13 +160,13 @@ describe('createVersionBucket', () => {
   });
 });
 
-describe('fulfillsVersionRange', () => {
+describe('versionSatisfiesRange', () => {
   const check = (
     version: string,
     acceptable = '>=15.0.0',
     canBeLatest = false,
   ) =>
-    fulfillsVersionRange({
+    versionSatisfiesRange({
       version,
       acceptableVersions: acceptable,
       canBeLatest,

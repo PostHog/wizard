@@ -1,18 +1,37 @@
 /**
  * Task-stream push — subscribes to WizardStore, builds payloads,
  * and fans out async to all registered destinations.
+ *
+ * Behaviour:
+ *   - `attach(store)`            subscribe to store changes
+ *   - task updates               debounced 250ms (trailing edge)
+ *   - phase transitions          flush immediately, bypass debounce
+ *   - RunPhase.Idle              skipped (no push)
+ *   - enabled === false          attach is a no-op
+ *   - shutdown(timeoutMs)        cancel pending, flush terminal phase
+ *                                with timeout, never throw
+ *
+ * Concurrency: only one fan-out at a time. Emits during an in-flight
+ * push are coalesced — at most one follow-up push fires with the
+ * latest state once the current one settles.
  */
 
-import type { WizardStore, TaskItem } from '../../ui/tui/store';
-import { TaskStatus } from '../../ui/wizard-ui';
-import { RunPhase } from '../wizard-session';
+import type { WizardStore, TaskItem } from '@ui/tui/store';
+import { TaskStatus } from '@ui/wizard-ui';
+import { RunPhase, OutroKind, type OutroData } from '@lib/wizard-session';
 import {
   type TaskStreamDestination,
   type TaskStreamUpdate,
   type StreamTask,
+  type TaskStreamError,
   StreamTaskStatus,
   StreamEvent,
 } from './types';
+
+/** Trailing-edge debounce window for non-phase-change emits. */
+const DEBOUNCE_MS = 250;
+/** Default shutdown timeout for the final terminal flush. */
+const DEFAULT_SHUTDOWN_TIMEOUT_MS = 2000;
 
 const STATUS_MAP: Record<TaskStatus, StreamTaskStatus> = {
   [TaskStatus.Pending]: StreamTaskStatus.Pending,
@@ -28,50 +47,214 @@ function buildTasks(items: TaskItem[]): StreamTask[] {
   }));
 }
 
+/** Drop ".SSSZ" → "Z" so session_id segments stay routing-safe. */
+function secondPrecisionIso(d: Date): string {
+  return d.toISOString().replace(/\.\d{3}Z$/, 'Z');
+}
+
+/**
+ * `workflow_id` and `skill_id` end up unescaped in Redis pub/sub
+ * channel names, so the backend rejects anything outside
+ * `^[A-Za-z0-9_.-]{1,255}$` with a 400. All current values already
+ * comply; this is defence in depth in case a future caller passes
+ * something with `:`, spaces, or other separators.
+ */
+function sanitizeChannelId(value: string): string {
+  return value.replace(/[^A-Za-z0-9_.-]/g, '-').slice(0, 255);
+}
+
+function buildError(
+  phase: RunPhase,
+  outroData: OutroData | null,
+): TaskStreamError | undefined {
+  if (phase !== RunPhase.Error) return undefined;
+  if (outroData?.kind === OutroKind.Error) {
+    const message = outroData.message ?? outroData.body ?? 'Wizard run failed';
+    return { type: 'wizard_error', message };
+  }
+  return { type: 'wizard_error', message: 'Wizard run failed' };
+}
+
 export interface TaskStreamPushOptions {
   store: WizardStore;
-  workflowId: string;
+  programId: string;
   destinations: TaskStreamDestination[];
+  /** When false, `attach` is a no-op and no destination ever fires. */
+  enabled?: boolean;
 }
 
 export class TaskStreamPush {
   private readonly store: WizardStore;
   private readonly destinations: TaskStreamDestination[];
   private readonly startedAt: string;
-  private readonly workflowId: string;
+  private readonly programId: string;
+  private readonly sessionId: string;
 
-  private sessionId: string | null = null;
+  private enabled: boolean;
   private created = false;
+  private lastPushedPhase: RunPhase | null = null;
+
+  private unsubscribe: (() => void) | null = null;
+  private debounceTimer: ReturnType<typeof setTimeout> | null = null;
+  private inFlight: Promise<void> | null = null;
+  private needsAnotherPush = false;
+  private shuttingDown = false;
 
   constructor(opts: TaskStreamPushOptions) {
     this.store = opts.store;
-    this.workflowId = opts.workflowId;
+    this.programId = sanitizeChannelId(opts.programId);
     this.destinations = opts.destinations;
-    this.startedAt = new Date().toISOString();
+    this.enabled = opts.enabled ?? true;
+    this.startedAt = secondPrecisionIso(new Date());
+    // skillId may not be set yet — fall back to programId so the
+    // session_id is stable for the whole run regardless of when the
+    // program metadata is populated.
+    const skillId = sanitizeChannelId(
+      this.store.session.skillId ?? this.programId,
+    );
+    this.sessionId = `${this.programId}-${skillId}-${this.startedAt}`;
   }
 
-  /** Send a final push. */
-  async dispose(): Promise<void> {
-    await this.push();
+  /**
+   * Subscribe to store changes. No-op when `enabled === false`.
+   * Idempotent — repeat calls are ignored.
+   */
+  attach(store?: WizardStore): void {
+    if (!this.enabled) return;
+    if (this.unsubscribe) return;
+    const target = store ?? this.store;
+    this.unsubscribe = target.subscribe(() => this.onStoreChange());
   }
 
-  async push(): Promise<void> {
-    const { session, tasks, eventPlan } = this.store;
-    const skillId = session.skillId ?? this.workflowId;
-
-    // Lock session ID on first push so it stays stable
-    if (!this.sessionId) {
-      this.sessionId = `${this.workflowId}-${skillId}-${this.startedAt}`;
+  /** Stop subscribing. Does not flush. */
+  detach(): void {
+    if (this.unsubscribe) {
+      this.unsubscribe();
+      this.unsubscribe = null;
     }
+    if (this.debounceTimer) {
+      clearTimeout(this.debounceTimer);
+      this.debounceTimer = null;
+    }
+  }
+
+  /**
+   * Cancel pending debounce, flush one final push if the current
+   * phase is terminal, and resolve. Never throws. Bounded by
+   * `timeoutMs` — if a destination hangs, this returns anyway.
+   */
+  async shutdown(
+    timeoutMs: number = DEFAULT_SHUTDOWN_TIMEOUT_MS,
+  ): Promise<void> {
+    this.shuttingDown = true;
+    if (this.debounceTimer) {
+      clearTimeout(this.debounceTimer);
+      this.debounceTimer = null;
+    }
+    this.detach();
+    if (!this.enabled) return;
+
+    const phase = this.store.session.runPhase;
+    const isTerminal = phase === RunPhase.Completed || phase === RunPhase.Error;
+    if (!isTerminal) return;
+
+    const flush = this.flush();
+    if (timeoutMs <= 0) return;
+    await Promise.race([
+      flush,
+      new Promise<void>((resolve) => setTimeout(resolve, timeoutMs)),
+    ]);
+  }
+
+  /**
+   * Imperative push — fires immediately regardless of phase. Kept as
+   * the building block for both subscription-driven and direct calls.
+   */
+  async push(): Promise<void> {
+    await this.flush();
+  }
+
+  // ── Internal ────────────────────────────────────────────────────
+
+  private onStoreChange(): void {
+    if (!this.enabled || this.shuttingDown) return;
+    const phase = this.store.session.runPhase;
+    if (phase === RunPhase.Idle) return;
+
+    // A push is already in flight — coalesce. The in-flight push's
+    // settle handler will trigger one follow-up with the latest state.
+    if (this.inFlight) {
+      if (this.debounceTimer) {
+        clearTimeout(this.debounceTimer);
+        this.debounceTimer = null;
+      }
+      this.needsAnotherPush = true;
+      return;
+    }
+
+    const phaseChanged = phase !== this.lastPushedPhase;
+    if (phaseChanged) {
+      // Phase transitions bypass the debounce: the web app needs to
+      // see Running → Completed as soon as it lands.
+      if (this.debounceTimer) {
+        clearTimeout(this.debounceTimer);
+        this.debounceTimer = null;
+      }
+      void this.flush();
+      return;
+    }
+
+    // Task updates can arrive faster than we want to push. Debounce
+    // them — the last update in a burst wins.
+    if (this.debounceTimer) return;
+    this.debounceTimer = setTimeout(() => {
+      this.debounceTimer = null;
+      void this.flush();
+    }, DEBOUNCE_MS);
+  }
+
+  /**
+   * Fan out the current state to every destination. Serialized — if
+   * a flush is already running, mark "needs another" and let the
+   * in-flight one schedule the follow-up when it settles.
+   */
+  private flush(): Promise<void> {
+    if (this.inFlight) {
+      this.needsAnotherPush = true;
+      return this.inFlight;
+    }
+
+    const run = async (): Promise<void> => {
+      try {
+        await this.sendOnce();
+      } finally {
+        this.inFlight = null;
+        if (this.needsAnotherPush) {
+          this.needsAnotherPush = false;
+          // Re-enter to push the latest snapshot.
+          await this.flush();
+        }
+      }
+    };
+
+    this.inFlight = run();
+    return this.inFlight;
+  }
+
+  private async sendOnce(): Promise<void> {
+    const { session, tasks, eventPlan } = this.store;
+    const skillId = sanitizeChannelId(session.skillId ?? this.programId);
+    const phase = session.runPhase;
 
     const payload: TaskStreamUpdate = {
       session_id: this.sessionId,
-      workflow_id: this.workflowId,
+      workflow_id: this.programId,
       skill_id: skillId,
       started_at: this.startedAt,
-      run_phase: session.runPhase,
+      run_phase: phase,
       tasks: buildTasks(tasks),
-      event_plan: eventPlan.length > 0 ? eventPlan : undefined,
+      event_plan: eventPlan.length > 0 ? { events: eventPlan } : undefined,
+      error: buildError(phase, session.outroData),
       timestamp: new Date().toISOString(),
     };
 
@@ -79,17 +262,21 @@ export class TaskStreamPush {
     if (!this.created) {
       this.created = true;
       event = StreamEvent.Create;
-    } else if (payload.run_phase === RunPhase.Completed) {
+    } else if (phase === RunPhase.Completed) {
       event = StreamEvent.Complete;
-    } else if (payload.run_phase === RunPhase.Error) {
+    } else if (phase === RunPhase.Error) {
       event = StreamEvent.Error;
     } else {
       event = StreamEvent.Update;
     }
 
+    this.lastPushedPhase = phase;
+
     await Promise.all(
-      // eslint-disable-next-line @typescript-eslint/no-empty-function
-      this.destinations.map((d) => d.send(event, payload).catch(() => {})),
+      this.destinations.map((d) =>
+        // eslint-disable-next-line @typescript-eslint/no-empty-function
+        d.send(event, payload).catch(() => {}),
+      ),
     );
   }
 }

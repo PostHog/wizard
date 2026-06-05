@@ -11,11 +11,11 @@ import {
   getInstalledClients,
   getSupportedPluginClients,
   installPlugins as runPluginInstall,
-} from '../../../steps/add-mcp-server-to-clients/index.js';
-import { ALL_FEATURE_VALUES } from '../../../steps/add-mcp-server-to-clients/defaults.js';
-import { isPluginCapable } from '../../../steps/add-mcp-server-to-clients/plugin-client.js';
-import { logToFile } from '../../../utils/debug.js';
-import { analytics } from '../../../utils/analytics.js';
+} from '@steps/add-mcp-server-to-clients/index';
+import { ALL_FEATURE_VALUES } from '@steps/add-mcp-server-to-clients/defaults';
+import { isPluginCapable } from '@steps/add-mcp-server-to-clients/plugin-client';
+import { logToFile } from '@utils/debug';
+import { analytics } from '@utils/analytics';
 
 export interface McpClientInfo {
   name: string;

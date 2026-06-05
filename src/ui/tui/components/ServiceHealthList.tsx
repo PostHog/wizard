@@ -11,9 +11,9 @@ import {
   type ComponentHealthResult,
   type ComponentStatus,
   type HealthCheckKey,
-} from '../../../lib/health-checks/types.js';
-import { SERVICE_LABELS } from '../../../lib/health-checks/readiness.js';
-import { Icons } from '../styles.js';
+} from '@lib/health-checks/types';
+import { SERVICE_LABELS } from '@lib/health-checks/readiness';
+import { Icons } from '@ui/tui/styles';
 
 /** Keys that are component-level detail — shown inline under their parent. */
 const COMPONENT_KEYS: HealthCheckKey[] = [

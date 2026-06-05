@@ -1,7 +1,7 @@
-import { Analytics } from '../analytics';
+import { Analytics } from '@utils/analytics';
 import { PostHog } from 'posthog-node';
 import { v4 as uuidv4 } from 'uuid';
-import { ANALYTICS_TEAM_TAG } from '../../lib/constants';
+import { ANALYTICS_TEAM_TAG } from '@lib/constants';
 
 jest.mock('posthog-node');
 jest.mock('uuid');
@@ -159,7 +159,7 @@ describe('Analytics', () => {
       const error = new Error('Test error');
 
       analytics.setTag('integration', 'nextjs');
-      analytics.setTag('forceInstall', true);
+      analytics.setTag('localMcp', true);
       analytics.setTag('debug', false);
 
       analytics.captureException(error, {
@@ -174,7 +174,7 @@ describe('Analytics', () => {
           team: ANALYTICS_TEAM_TAG,
           $app_name: 'wizard',
           integration: 'nextjs',
-          forceInstall: true,
+          localMcp: true,
           debug: false,
           arguments: JSON.stringify({ installDir: '/test' }),
           step: 'wizard-execution',

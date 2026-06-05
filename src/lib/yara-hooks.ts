@@ -16,8 +16,8 @@ import path from 'path';
 import fg from 'fast-glob';
 import { scan, scanSkillDirectory } from './yara-scanner';
 import type { YaraMatch, ScanResult } from './yara-scanner';
-import { logToFile } from '../utils/debug';
-import { analytics } from '../utils/analytics';
+import { logToFile } from '@utils/debug';
+import { analytics } from '@utils/analytics';
 import { isSkillInstallCommand } from './skill-install';
 
 // ─── Types ───────────────────────────────────────────────────────
@@ -105,7 +105,7 @@ export function formatScanReport(): string | null {
   return lines.join('\n');
 }
 
-import { WIZARD_YARA_REPORT_FILE } from '../utils/paths';
+import { WIZARD_YARA_REPORT_FILE } from '@utils/paths';
 
 /** Write the scan report to a JSON file. Returns the file path, or null if no scans occurred. */
 export function writeScanReport(): string | null {
@@ -160,6 +160,42 @@ function logYaraMatch(
     phase,
     tool,
   });
+}
+
+// ─── Wizard-documentation allowlist ───────────────────────────────
+//
+// Files the wizard's own programs write to describe events the user's
+// codebase already captures, or events the integration program is
+// proposing to add. When the agent copies a literal
+// `posthog.capture('event', { email: ... })` snippet (or a property
+// list including PII-shaped keys) into one of these files, the
+// `pii_in_capture_call` rule (category: posthog_pii) fires even though
+// the wizard is documenting / planning, not introducing, the pattern.
+// Suppress posthog_pii matches on these paths only; every other rule
+// (secrets, prompt injection, supply chain, destructive ops) still
+// fires normally so the file cannot be used as a smuggling vector for
+// actual violations.
+
+const WIZARD_DOC_BASENAMES = new Set([
+  // events-audit
+  '.posthog-events-inventory.json',
+  'posthog-events-audit-report.md',
+  // doctor (audit)
+  'posthog-audit-report.md',
+  // posthog-integration event plan
+  '.posthog-events.json',
+]);
+
+const WIZARD_DOC_PATTERNS: RegExp[] = [
+  // events-audit subagent part-files (e.g. `.posthog-events-inventory.part-3.json`)
+  /^\.posthog-events-inventory\.part-\d+\.json$/,
+];
+
+function isWizardDocumentationPath(filePath: string | undefined): boolean {
+  if (!filePath) return false;
+  const basename = path.basename(filePath);
+  if (WIZARD_DOC_BASENAMES.has(basename)) return true;
+  return WIZARD_DOC_PATTERNS.some((re) => re.test(basename));
 }
 
 // ─── Severity helpers ────────────────────────────────────────────
@@ -271,6 +307,30 @@ export function createPostToolUseYaraHooks(): HookCallbackMatcher[] {
             const tool = toolName;
             const result = scan(content, 'PostToolUse', tool);
             if (!result.matched) return Promise.resolve({});
+
+            // Wizard-documentation paths: suppress posthog_pii matches that
+            // come from the agent verbatim-copying the user's existing
+            // capture calls into an inventory / report, or planning new
+            // events with PII-shaped property keys. Every other category
+            // still triggers the revert.
+            const filePath = toolInput?.file_path as string | undefined;
+            if (isWizardDocumentationPath(filePath)) {
+              const nonPiiMatches = result.matches.filter(
+                (m) => m.rule.category !== 'posthog_pii',
+              );
+              if (nonPiiMatches.length === 0) {
+                logToFile(
+                  `[YARA] posthog_pii match suppressed on wizard doc ${path.basename(
+                    filePath ?? '',
+                  )} (rule: ${result.matches[0]?.rule.name})`,
+                );
+                return Promise.resolve({});
+              }
+              // Some non-PII rule also fired — fall through and revert on
+              // that one. Replace the matches set so the user sees the
+              // actually-actionable rule, not the suppressed PII one.
+              result.matches = nonPiiMatches;
+            }
 
             const match = highestSeverityMatch(result.matches);
             logYaraMatch('PostToolUse', tool, match, 'reverted');

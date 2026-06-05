@@ -4,8 +4,8 @@ import {
   WizardError,
   registerCleanup,
   clearCleanup,
-} from '../utils/wizard-abort';
-import { analytics } from '../utils/analytics';
+} from '@utils/wizard-abort';
+import { analytics } from '@utils/analytics';
 
 jest.mock('../utils/analytics');
 jest.mock('../ui', () => ({
@@ -184,7 +184,7 @@ describe('abort() delegates to wizardAbort()', () => {
   });
 
   it('abort() calls wizardAbort with message and exitCode', async () => {
-    const { abort } = await import('../utils/setup-utils.js');
+    const { abort } = await import('@utils/setup-utils');
 
     await expect(abort('Test abort', 3)).rejects.toThrow('process.exit called');
 
@@ -195,7 +195,7 @@ describe('abort() delegates to wizardAbort()', () => {
   });
 
   it('abort() uses defaults when called with no args', async () => {
-    const { abort } = await import('../utils/setup-utils.js');
+    const { abort } = await import('@utils/setup-utils');
 
     await expect(abort()).rejects.toThrow('process.exit called');
 

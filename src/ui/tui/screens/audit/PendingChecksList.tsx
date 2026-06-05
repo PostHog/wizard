@@ -3,10 +3,10 @@ import { Spinner } from '@inkjs/ui';
 import {
   AUDIT_SEVERITY_STYLE,
   type AuditCheck,
-} from '../../../../lib/workflows/audit/types.js';
-import { Colors, Icons } from '../../styles.js';
-import { LoadingBox } from '../../primitives/index.js';
-import { useStdoutDimensions } from '../../hooks/useStdoutDimensions.js';
+} from '@lib/programs/audit/types';
+import { Colors, Icons } from '@ui/tui/styles';
+import { LoadingBox } from '@ui/tui/primitives/index';
+import { useStdoutDimensions } from '@ui/tui/hooks/useStdoutDimensions';
 
 interface PendingChecksListProps {
   checks: AuditCheck[];

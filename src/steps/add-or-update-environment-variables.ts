@@ -1,8 +1,8 @@
-import type { Integration } from '../lib/constants';
-import { traceStep } from '../telemetry';
-import { analytics } from '../utils/analytics';
-import { getUI } from '../ui';
-import { getDotGitignore } from '../utils/file-utils';
+import type { Integration } from '@lib/constants';
+import { withProgress } from '../telemetry';
+import { analytics } from '@utils/analytics';
+import { getUI } from '@ui';
+import { getDotGitignore } from '@utils/file-utils';
 import * as fs from 'fs';
 import path from 'path';
 
@@ -19,7 +19,7 @@ export async function addOrUpdateEnvironmentVariablesStep({
   addedEnvVariables: boolean;
   addedGitignore: boolean;
 }> {
-  return traceStep('add-or-update-environment-variables', async () => {
+  return withProgress('add-or-update-environment-variables', async () => {
     const envVarContent = Object.entries(variables)
       .map(([key, value]) => `${key}=${value}`)
       .join('\n');

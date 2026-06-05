@@ -5,9 +5,14 @@
  * The schema is intentionally generic: onboarding is the first consumer,
  * but migrations, audits, and single-task installs can reuse the same
  * transport with a different workflow_id / skill_id pair.
+ *
+ * Naming note: the backend's public DTO field is `workflow_id` (URL
+ * query, regex validation, SSE channel name). The wizard CLI uses
+ * "program" terminology internally, so the field is named programId
+ * on TaskStreamPush but serialised to `workflow_id` here.
  */
 
-import type { RunPhase } from '../wizard-session';
+import type { RunPhase } from '@lib/wizard-session';
 
 export enum StreamTaskStatus {
   Pending = 'pending',
@@ -39,10 +44,14 @@ export interface TaskStreamError {
  * Wire payload the wizard pushes on every state change.
  *
  * Every run is a new session_id. The wizard never updates an old session —
- * re-running the same workflow + skill is a new row with a newer timestamp.
+ * re-running the same program + skill is a new row with a newer timestamp.
  * Consumers get the current view by picking the latest session for a given
  * (workflow_id, skill_id) pair.
  */
+export interface StreamEventPlan {
+  events: Array<{ name: string; description?: string }>;
+}
+
 export interface TaskStreamUpdate {
   session_id: string;
   workflow_id: string;
@@ -50,7 +59,7 @@ export interface TaskStreamUpdate {
   started_at: string;
   run_phase: RunPhase;
   tasks: StreamTask[];
-  event_plan?: unknown;
+  event_plan?: StreamEventPlan;
   error?: TaskStreamError;
   /** UTC ISO 8601 timestamp of this payload. Latest update wins on conflict. */
   timestamp: string;

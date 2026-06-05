@@ -1,10 +1,16 @@
 // Mock functions must be defined before imports (jest hoists jest.mock calls;
 // variables starting with "mock" are allowed in the factory scope).
-const mockBuildSession = jest.fn((args: Record<string, unknown>) => args);
+// NOTE: variable names must be unique across test files because .test.ts
+// files without top-level imports/exports share a single TS project scope.
+const mockBuildSessionCli = jest.fn((args: Record<string, unknown>) => args);
+const mockProvisionNewAccountCli = jest.fn();
 
 jest.mock('semver', () => ({ satisfies: () => true }));
 jest.mock('../lib/wizard-session', () => ({
-  buildSession: mockBuildSession,
+  buildSession: mockBuildSessionCli,
+}));
+jest.mock('../utils/provisioning', () => ({
+  provisionNewAccount: mockProvisionNewAccountCli,
 }));
 jest.mock('../ui/tui/start-tui', () => ({
   startTUI: () => ({
@@ -19,9 +25,9 @@ jest.mock('../ui/tui/start-tui', () => ({
     },
   }),
 }));
-jest.mock('../lib/workflows/posthog-integration/index', () => ({
+jest.mock('../lib/programs/posthog-integration/index', () => ({
   posthogIntegrationConfig: {
-    flowKey: 'posthog-integration',
+    id: 'posthog-integration',
     steps: [],
     run: null,
   },
@@ -68,12 +74,12 @@ describe('CLI argument parsing', () => {
     delete process.env.POSTHOG_WIZARD_API_KEY;
     delete process.env.POSTHOG_WIZARD_INSTALL_DIR;
 
-    // Mock process.exit to prevent test runner from exiting.
-    // Throwing stops the handler from continuing past validation failures
-    // (e.g. into the CI async IIFE that expects validated options).
-    process.exit = jest.fn().mockImplementation(() => {
-      throw new Error('process.exit');
-    }) as any;
+    // Mock process.exit so the test runner doesn't exit. The CLI dispatch is
+    // async (it dynamically imports the matched command file), so a throwing
+    // mock would escape as an unhandled rejection rather than halting the
+    // handler. A no-op suffices: validation failures `return` right after
+    // calling exit, and tests assert on the recorded exit code.
+    process.exit = jest.fn() as unknown as typeof process.exit;
   });
 
   afterEach(() => {
@@ -106,38 +112,21 @@ describe('CLI argument parsing', () => {
    * buildSession is the common interception point for both CI and non-CI paths.
    */
   function getLastBuildSessionArgs() {
-    expect(mockBuildSession).toHaveBeenCalled();
-    const calls = mockBuildSession.mock.calls;
+    expect(mockBuildSessionCli).toHaveBeenCalled();
+    const calls = mockBuildSessionCli.mock.calls;
     return calls[calls.length - 1][0];
   }
 
-  // Note: --default and --region are yargs options that don't flow through
-  // buildSession in the non-CI path, so they're tested indirectly (no errors)
-  // rather than by inspecting values.
-
-  describe('--default flag', () => {
-    test('accepted when not specified', async () => {
-      await runCLI([]);
-      expect(mockBuildSession).toHaveBeenCalled();
-    });
-
-    test('accepted with --no-default', async () => {
-      await runCLI(['--no-default']);
-      expect(mockBuildSession).toHaveBeenCalled();
-    });
-
-    test('accepted when explicitly set to true', async () => {
-      await runCLI(['--default']);
-      expect(mockBuildSession).toHaveBeenCalled();
-    });
-  });
+  // Note: --region is a yargs option that doesn't flow through buildSession in
+  // the non-CI path, so it's tested indirectly (no errors) rather than by
+  // inspecting values.
 
   describe('--region flag', () => {
     test.each(['us', 'eu'])(
       'accepts "%s" as a valid region',
       async (region) => {
         await runCLI(['--region', region]);
-        expect(mockBuildSession).toHaveBeenCalled();
+        expect(mockBuildSessionCli).toHaveBeenCalled();
       },
     );
   });
@@ -148,47 +137,28 @@ describe('CLI argument parsing', () => {
 
       await runCLI([]);
 
-      expect(mockBuildSession).toHaveBeenCalled();
-    });
-
-    test('respects POSTHOG_WIZARD_DEFAULT', async () => {
-      process.env.POSTHOG_WIZARD_DEFAULT = 'false';
-
-      await runCLI([]);
-
-      expect(mockBuildSession).toHaveBeenCalled();
+      expect(mockBuildSessionCli).toHaveBeenCalled();
     });
 
     test('CLI args override environment variables', async () => {
       process.env.POSTHOG_WIZARD_REGION = 'us';
-      process.env.POSTHOG_WIZARD_DEFAULT = 'false';
 
-      await runCLI(['--region', 'eu', '--default']);
+      await runCLI(['--region', 'eu']);
 
-      expect(mockBuildSession).toHaveBeenCalled();
+      expect(mockBuildSessionCli).toHaveBeenCalled();
     });
   });
 
   describe('backward compatibility', () => {
     test('all existing flags continue to work', async () => {
-      await runCLI([
-        '--debug',
-        '--signup',
-        '--force-install',
-        '--install-dir',
-        '/custom/path',
-        '--integration',
-        'nextjs',
-      ]);
+      await runCLI(['--debug', '--signup', '--install-dir', '/custom/path']);
 
       const args = getLastBuildSessionArgs();
 
       // Existing flags forwarded through buildSession
       expect(args.debug).toBe(true);
       expect(args.signup).toBe(true);
-      expect(args.forceInstall).toBe(true);
       expect(args.installDir).toBe('/custom/path');
-      expect(args.integration).toBe('nextjs');
     });
   });
 
@@ -299,6 +269,123 @@ describe('CLI argument parsing', () => {
 
       const args = getLastBuildSessionArgs();
       expect(args.apiKey).toBe('phx_cli_key');
+    });
+  });
+
+  describe('--ci --signup flow', () => {
+    // Exits inside the async provisioning IIFE become unhandled rejections if
+    // process.exit throws. Override to a silent no-op for this block — the
+    // handler's exit calls are always terminal, so "continuing" past them is
+    // harmless and lets us assert on both the exit code and mock state.
+    beforeEach(() => {
+      process.exit = jest.fn() as unknown as typeof process.exit;
+    });
+
+    const successResult = {
+      projectApiKey: 'phc_new',
+      host: 'https://us.posthog.com',
+      projectId: 'proj_42',
+      accountId: 'acc_1',
+      accessToken: 'at',
+      refreshToken: 'rt',
+      personalApiKey: 'phx_from_signup',
+    };
+
+    async function runCISignup(extra: string[] = []) {
+      await runCLI([
+        '--ci',
+        '--signup',
+        '--email',
+        'new@example.com',
+        '--install-dir',
+        '/tmp/test',
+        ...extra,
+      ]);
+      // Let the async provisioning IIFE + runWizardCI's own IIFE settle
+      for (let i = 0; i < 5; i++) {
+        await new Promise((resolve) => setImmediate(resolve));
+      }
+    }
+
+    test('requires --email when --ci --signup is set', async () => {
+      await runCLI(['--ci', '--signup', '--install-dir', '/tmp/test']);
+      expect(process.exit).toHaveBeenCalledWith(1);
+      expect(mockProvisionNewAccountCli).not.toHaveBeenCalled();
+    });
+
+    test('rejects --ci without --api-key and without --signup', async () => {
+      await runCLI(['--ci', '--install-dir', '/tmp/test']);
+      expect(process.exit).toHaveBeenCalledWith(1);
+      expect(mockProvisionNewAccountCli).not.toHaveBeenCalled();
+    });
+
+    test('provisions a new account and feeds personalApiKey into the CI flow', async () => {
+      mockProvisionNewAccountCli.mockResolvedValue(successResult);
+      await runCISignup();
+      expect(mockProvisionNewAccountCli).toHaveBeenCalledWith(
+        'new@example.com',
+        '',
+        'US',
+      );
+      const args = getLastBuildSessionArgs();
+      expect(args.apiKey).toBe('phx_from_signup');
+    });
+
+    test('forwards --name to provisionNewAccount', async () => {
+      mockProvisionNewAccountCli.mockResolvedValue(successResult);
+      await runCISignup(['--name', 'Test User']);
+      expect(mockProvisionNewAccountCli).toHaveBeenCalledWith(
+        'new@example.com',
+        'Test User',
+        'US',
+      );
+    });
+
+    test('uppercases --region before provisioning', async () => {
+      mockProvisionNewAccountCli.mockResolvedValue(successResult);
+      await runCISignup(['--region', 'eu']);
+      expect(mockProvisionNewAccountCli).toHaveBeenCalledWith(
+        'new@example.com',
+        '',
+        'EU',
+      );
+    });
+
+    test('exits non-zero when provisioning rejects', async () => {
+      mockProvisionNewAccountCli.mockRejectedValue(new Error('network fail'));
+      await runCISignup();
+      expect(mockProvisionNewAccountCli).toHaveBeenCalled();
+      expect(process.exit).toHaveBeenCalledWith(1);
+      expect(mockBuildSessionCli).not.toHaveBeenCalled();
+    });
+
+    test('exits non-zero when provisioning returns no personal API key', async () => {
+      mockProvisionNewAccountCli.mockResolvedValue({
+        ...successResult,
+        personalApiKey: undefined,
+      });
+      await runCISignup();
+      expect(process.exit).toHaveBeenCalledWith(1);
+      expect(mockBuildSessionCli).not.toHaveBeenCalled();
+    });
+
+    test('existing --api-key takes precedence over --signup', async () => {
+      await runCLI([
+        '--ci',
+        '--signup',
+        '--email',
+        'new@example.com',
+        '--api-key',
+        'phx_existing',
+        '--install-dir',
+        '/tmp/test',
+      ]);
+      for (let i = 0; i < 3; i++) {
+        await new Promise((resolve) => setImmediate(resolve));
+      }
+      expect(mockProvisionNewAccountCli).not.toHaveBeenCalled();
+      const args = getLastBuildSessionArgs();
+      expect(args.apiKey).toBe('phx_existing');
     });
   });
 });
