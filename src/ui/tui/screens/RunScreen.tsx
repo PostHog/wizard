@@ -24,7 +24,7 @@ import { LearnCard } from '@ui/tui/components/LearnCard';
 import { TipsCard } from '@ui/tui/components/TipsCard';
 import { useStdoutDimensions } from '@ui/tui/hooks/useStdoutDimensions';
 import { useFileWatcher } from '@ui/tui/hooks/file-watcher';
-import { PhaseVisual } from '@ui/tui/components/PhaseVisuals';
+import { VisualizerTab } from '@ui/tui/components/PhaseVisuals';
 import { EVENT_PLAN_FILE } from '@lib/programs/posthog-integration/index';
 import { getProgramConfig } from '@lib/programs/program-registry';
 import { getContentBlocks as getSkillContentBlocks } from '@lib/programs/agent-skill/content/index';
@@ -53,7 +53,7 @@ export const RunScreen = ({ store }: RunScreenProps) => {
     );
   });
 
-  const [columns, rows] = useStdoutDimensions();
+  const [columns] = useStdoutDimensions();
 
   const progressItems: ProgressItem[] = store.tasks.map((t) => ({
     label: t.label,
@@ -100,35 +100,13 @@ export const RunScreen = ({ store }: RunScreenProps) => {
   );
   const progressList = <ProgressList items={progressItems} title="Tasks" />;
 
-  // Phase visual lives at the bottom of the Tasks column, but only when the
-  // terminal has the vertical room — otherwise the tasks list would get
-  // squeezed. The Tasks step labels themselves convey what the agent is doing,
-  // so the visual has no header.
-  const VISUAL_H = 9;
-  const SHOW_VISUAL_MIN_ROWS = 28;
-  const visualWidth = Math.max(16, Math.floor((columns - 4) / 2) - 4);
-  const showVisual = rows >= SHOW_VISUAL_MIN_ROWS;
-
-  const rightPane = showVisual ? (
-    <Box flexDirection="column" flexGrow={1}>
-      <Box flexGrow={1} flexShrink={1} overflow="hidden">
-        {progressList}
-      </Box>
-      <Box flexShrink={0} marginTop={1}>
-        <PhaseVisual store={store} width={visualWidth} height={VISUAL_H} />
-      </Box>
-    </Box>
-  ) : (
-    progressList
-  );
-
   const statusComponent =
     columns < 80 ? (
       <Box flexDirection="column" flexGrow={1}>
         {progressList}
       </Box>
     ) : (
-      <SplitView left={leftPane} right={rightPane} />
+      <SplitView left={leftPane} right={progressList} />
     );
 
   const tabs = [
@@ -146,6 +124,11 @@ export const RunScreen = ({ store }: RunScreenProps) => {
       id: 'logs',
       label: 'Tail logs',
       component: <LogViewer filePath={WIZARD_LOG_FILE} />,
+    },
+    {
+      id: 'visualizer',
+      label: 'Visualizer',
+      component: <VisualizerTab store={store} />,
     },
     { id: 'hn', label: 'HN', component: <HNViewer /> },
   ];

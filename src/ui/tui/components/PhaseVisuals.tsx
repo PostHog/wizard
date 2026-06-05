@@ -18,6 +18,7 @@ import {
   type ReactNode,
 } from 'react';
 import type { WizardStore } from '@ui/tui/store';
+import { useStdoutDimensions } from '@ui/tui/hooks/useStdoutDimensions';
 import { MatrixRain, MATRIX_FADE } from './MatrixRain';
 
 export enum AgentPhase {
@@ -29,6 +30,16 @@ export enum AgentPhase {
   Dashboards = 'dashboards',
   EventVerify = 'event-verify',
 }
+
+const PHASE_LABELS: Record<AgentPhase, string> = {
+  [AgentPhase.CodebaseScan]: 'READING THE CODEBASE',
+  [AgentPhase.SkillInstall]: 'PICKING THE RIGHT SKILL',
+  [AgentPhase.DepInstall]: 'INSTALLING PACKAGES',
+  [AgentPhase.CodeEdits]: 'EDITING SOURCE',
+  [AgentPhase.EnvSetup]: 'WIRING UP SECRETS',
+  [AgentPhase.Dashboards]: 'BUILDING DASHBOARDS',
+  [AgentPhase.EventVerify]: 'WATCHING EVENTS ARRIVE',
+};
 
 // Order matters — first match wins. Specific patterns first, broad explorer
 // catch-all last. EventVerify deliberately narrow so "find files for event
@@ -101,6 +112,72 @@ export const PhaseVisual = ({ store, width, height }: PhaseVisualProps) => {
   const phase = useAgentPhase(store);
   return <PhaseBody phase={phase} width={width} height={height} />;
 };
+
+/**
+ * VisualizerTab — Winamp-style fullscreen take on the phase visual.
+ * "NOW PLAYING" header, centered visual, transport bar with elapsed time.
+ */
+export const VisualizerTab = ({ store }: { store: WizardStore }) => {
+  const phase = useAgentPhase(store);
+  const [columns, rows] = useStdoutDimensions();
+  const startRef = useRef(Date.now());
+  // Re-render every 180 ms so the EQ bars wobble; the elapsed clock derives
+  // its seconds from Date.now() each render so it still advances 1 Hz.
+  const tick = useTick(180);
+
+  const visualW = Math.max(20, Math.min(64, columns - 12));
+  const visualH = Math.max(7, Math.min(18, rows - 12));
+  const elapsedSec = Math.floor((Date.now() - startRef.current) / 1000);
+  const timeStr = formatElapsed(elapsedSec);
+  const equalizer = renderMiniEqualizer(tick);
+
+  return (
+    <Box
+      flexDirection="column"
+      flexGrow={1}
+      alignItems="center"
+      justifyContent="center"
+    >
+      <Box flexDirection="row" marginBottom={1}>
+        <Text color={MATRIX_FADE}>┌─</Text>
+        <Text bold color="#7CFF7C">
+          {' ► NOW PLAYING '}
+        </Text>
+        <Text color={MATRIX_FADE}>─┐</Text>
+      </Box>
+      <Box marginBottom={1}>
+        <Text bold color="#E6FFE6">
+          AGENT.run :: {PHASE_LABELS[phase]}
+        </Text>
+      </Box>
+      <PhaseBody phase={phase} width={visualW} height={visualH} />
+      <Box flexDirection="row" marginTop={1} gap={2}>
+        <Text color="#22D622">[{timeStr}]</Text>
+        <Text color={MATRIX_FADE}>{equalizer}</Text>
+        <Text color="#22D622">WIZARD-FM 88.0</Text>
+      </Box>
+    </Box>
+  );
+};
+
+function formatElapsed(totalSec: number): string {
+  const m = Math.floor(totalSec / 60);
+  const s = totalSec % 60;
+  return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+}
+
+function renderMiniEqualizer(t: number): string {
+  // Pseudo-EQ bars driven by the elapsed-second clock — no extra interval
+  // needed, just a bit of motion as the seconds tick.
+  const bars = '▁▂▃▄▅▆▇█';
+  let out = '';
+  for (let i = 0; i < 12; i++) {
+    const h = (Math.sin(i * 0.7 + t * 0.5) + Math.cos(i * 1.3 + t * 0.3)) / 2;
+    const idx = Math.floor(((h + 1) / 2) * (bars.length - 1));
+    out += bars[idx];
+  }
+  return out;
+}
 
 const PhaseBody = ({
   phase,
