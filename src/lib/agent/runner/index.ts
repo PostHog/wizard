@@ -17,6 +17,7 @@ import { WIZARD_RUNNER_FLAG_KEY } from '../../constants';
 import { logToFile } from '../../../utils/debug';
 import type { runAgent } from '../agent-interface';
 import { AnthropicRunner } from './anthropic-runner';
+import { VercelRunner } from './vercel/vercel-runner';
 
 /** The agent backends the `wizard-runner` flag can select. */
 export type WizardRunnerVariant = 'anthropic' | 'pi' | 'vercel';
@@ -50,15 +51,24 @@ export function resolveRunnerVariant(
 /**
  * Select the runner for this run and log which backend executed.
  *
- * The `pi` and `vercel` runners don't exist yet (#523/#524), so they fall back
- * to `AnthropicRunner` — the flag is wired and observable, but selection is
- * behavior-preserving until those runners land.
+ * The `pi` runner lands in #524; until then it falls back to `AnthropicRunner`
+ * so the flag stays wired and observable without changing behavior. An unknown
+ * value already resolved to `anthropic` in {@link resolveRunnerVariant}.
  */
 export function selectRunner(flags: Record<string, string>): Runner {
   const variant = resolveRunnerVariant(flags);
-  // TODO(runners): return PiRunner / VercelRunner once #524 / #523 land.
-  const fallback =
-    variant !== 'anthropic' ? ' (fallback — not yet implemented)' : '';
-  logToFile(`[runner] wizard-runner=${variant} → AnthropicRunner${fallback}`);
-  return new AnthropicRunner();
+  switch (variant) {
+    case 'vercel':
+      logToFile('[runner] wizard-runner=vercel → VercelRunner');
+      return new VercelRunner();
+    case 'pi':
+      logToFile(
+        '[runner] wizard-runner=pi → AnthropicRunner (fallback — not yet implemented)',
+      );
+      return new AnthropicRunner();
+    case 'anthropic':
+    default:
+      logToFile('[runner] wizard-runner=anthropic → AnthropicRunner');
+      return new AnthropicRunner();
+  }
 }
