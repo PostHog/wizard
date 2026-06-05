@@ -53,7 +53,7 @@ export const RunScreen = ({ store }: RunScreenProps) => {
     );
   });
 
-  const [columns] = useStdoutDimensions();
+  const [columns, rows] = useStdoutDimensions();
 
   const progressItems: ProgressItem[] = store.tasks.map((t) => ({
     label: t.label,
@@ -100,46 +100,36 @@ export const RunScreen = ({ store }: RunScreenProps) => {
   );
   const progressList = <ProgressList items={progressItems} title="Tasks" />;
 
-  // Terminal-width thresholds:
-  //   <80   → progress only
-  //   80–109 → learn + progress
-  //   ≥110  → learn + progress + phase visual
-  const VISUAL_W = 22;
+  // Phase visual lives at the bottom of the Tasks column, but only when the
+  // terminal has the vertical room — otherwise the tasks list would get
+  // squeezed. The Tasks step labels themselves convey what the agent is doing,
+  // so the visual has no header.
   const VISUAL_H = 9;
-  let statusComponent;
-  if (columns < 80) {
-    statusComponent = (
+  const SHOW_VISUAL_MIN_ROWS = 28;
+  const visualWidth = Math.max(16, Math.floor((columns - 4) / 2) - 4);
+  const showVisual = rows >= SHOW_VISUAL_MIN_ROWS;
+
+  const rightPane = showVisual ? (
+    <Box flexDirection="column" flexGrow={1}>
+      <Box flexGrow={1} flexShrink={1} overflow="hidden">
+        {progressList}
+      </Box>
+      <Box flexShrink={0} marginTop={1}>
+        <PhaseVisual store={store} width={visualWidth} height={VISUAL_H} />
+      </Box>
+    </Box>
+  ) : (
+    progressList
+  );
+
+  const statusComponent =
+    columns < 80 ? (
       <Box flexDirection="column" flexGrow={1}>
         {progressList}
       </Box>
+    ) : (
+      <SplitView left={leftPane} right={rightPane} />
     );
-  } else if (columns < 110) {
-    statusComponent = <SplitView left={leftPane} right={progressList} />;
-  } else {
-    statusComponent = (
-      <Box flexDirection="row" flexGrow={1} gap={2}>
-        <Box
-          flexGrow={1}
-          flexBasis={0}
-          flexDirection="column"
-          overflow="hidden"
-        >
-          {leftPane}
-        </Box>
-        <Box
-          flexGrow={1}
-          flexBasis={0}
-          flexDirection="column"
-          overflow="hidden"
-        >
-          {progressList}
-        </Box>
-        <Box flexShrink={0} flexDirection="column" width={VISUAL_W + 4}>
-          <PhaseVisual store={store} width={VISUAL_W} height={VISUAL_H} />
-        </Box>
-      </Box>
-    );
-  }
 
   const tabs = [
     { id: 'status', label: 'Status', component: statusComponent },

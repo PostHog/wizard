@@ -18,7 +18,6 @@ import {
   type ReactNode,
 } from 'react';
 import type { WizardStore } from '@ui/tui/store';
-import { Colors } from '@ui/tui/styles';
 import { MatrixRain, MATRIX_FADE } from './MatrixRain';
 
 export enum AgentPhase {
@@ -30,16 +29,6 @@ export enum AgentPhase {
   Dashboards = 'dashboards',
   EventVerify = 'event-verify',
 }
-
-const PHASE_LABELS: Record<AgentPhase, string> = {
-  [AgentPhase.CodebaseScan]: 'Reading the codebase',
-  [AgentPhase.SkillInstall]: 'Picking the right skill',
-  [AgentPhase.DepInstall]: 'Installing packages',
-  [AgentPhase.CodeEdits]: 'Editing source',
-  [AgentPhase.EnvSetup]: 'Wiring up secrets',
-  [AgentPhase.Dashboards]: 'Building dashboards',
-  [AgentPhase.EventVerify]: 'Watching events arrive',
-};
 
 // Order matters — first match wins. Specific patterns first, broad explorer
 // catch-all last. EventVerify deliberately narrow so "find files for event
@@ -110,19 +99,8 @@ interface PhaseVisualProps {
 
 export const PhaseVisual = ({ store, width, height }: PhaseVisualProps) => {
   const phase = useAgentPhase(store);
-  return (
-    <Box flexDirection="column">
-      <PhaseLabel phase={phase} />
-      <PhaseBody phase={phase} width={width} height={height} />
-    </Box>
-  );
+  return <PhaseBody phase={phase} width={width} height={height} />;
 };
-
-const PhaseLabel = ({ phase }: { phase: AgentPhase }) => (
-  <Text bold color={Colors.accent}>
-    {PHASE_LABELS[phase]}…
-  </Text>
-);
 
 const PhaseBody = ({
   phase,
