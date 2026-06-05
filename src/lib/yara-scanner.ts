@@ -107,6 +107,46 @@ const pii_in_capture_call: YaraRule = {
   ],
 };
 
+// Mirror of warlock's `posthog_pii_in_person_properties`. The wizard ships an
+// inline copy of warlock's PII rules until it consumes warlock directly; keep
+// these patterns in sync with the .yar source of truth.
+const pii_in_person_properties: YaraRule = {
+  name: 'pii_in_person_properties',
+  description:
+    'Detects sensitive PII passed to PostHog person-property calls (register / setPersonProperties)',
+  severity: 'high',
+  category: 'posthog_pii',
+  appliesTo: POST_WRITE_EDIT,
+  patterns: [
+    // register()/setPersonProperties() allow email/phone/name (standard person
+    // properties); only highly sensitive PII is flagged here.
+    /\.(register|register_once|setPersonProperties|setPersonPropertiesForFlags)\s*\([^)]{0,200}(ssn|social[_\s]?security)/i,
+    /\.(register|register_once|setPersonProperties|setPersonPropertiesForFlags)\s*\([^)]{0,200}(card[_\s]?number|cvv|cvc|credit[_\s]?card)/i,
+    /\.(register|register_once|setPersonProperties|setPersonPropertiesForFlags)\s*\([^)]{0,200}(date[_\s]?of[_\s]?birth|dob|birthday)/i,
+    /\.(register|register_once|setPersonProperties|setPersonPropertiesForFlags)\s*\([^)]{0,200}(street|mailing|home|billing)[_\s]?address/i,
+    /\.(register|register_once|setPersonProperties|setPersonPropertiesForFlags)\s*\([^)]{0,200}(passport|drivers?[_\s]?license|bank[_\s]?account|iban|routing[_\s]?number)/i,
+  ],
+};
+
+// Mirror of warlock's `posthog_pii_value_in_tracking_call`. Catches PII-shaped
+// literal values under any key (the rule above matches by key name).
+const pii_value_in_tracking_call: YaraRule = {
+  name: 'pii_value_in_tracking_call',
+  description:
+    'Detects PII-shaped literal values (email, US SSN, formatted card number) passed to a PostHog tracking call',
+  severity: 'high',
+  category: 'posthog_pii',
+  appliesTo: POST_WRITE_EDIT,
+  patterns: [
+    // Email literal — capture() only (email is a valid identify/person property).
+    /\.capture\s*\([^)]{0,200}['"][a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}['"]/i,
+    // Dashed US SSN literal in any tracking call.
+    /\.(capture|identify|register|register_once|setPersonProperties|setPersonPropertiesForFlags)\s*\([^)]{0,200}\b\d{3}-\d{2}-\d{4}\b/,
+    // Separator-grouped 16-digit card number in any tracking call.
+    /\.(capture|identify|register|register_once|setPersonProperties|setPersonPropertiesForFlags)\s*\([^)]{0,200}\b\d{4}[ -]\d{4}[ -]\d{4}[ -]\d{4}\b/,
+  ],
+};
+
 const hardcoded_posthog_key: YaraRule = {
   name: 'hardcoded_posthog_key',
   description:
@@ -335,6 +375,8 @@ const npm_install_global: YaraRule = {
 export const RULES: YaraRule[] = [
   // §1 PostHog API violations
   pii_in_capture_call,
+  pii_in_person_properties,
+  pii_value_in_tracking_call,
   hardcoded_posthog_key,
   autocapture_disabled,
   hardcoded_posthog_host,
