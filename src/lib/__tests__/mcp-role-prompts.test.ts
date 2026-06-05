@@ -17,12 +17,12 @@ describe('getRolePrompts', () => {
     const kit = getRolePrompts(null, Integration.nextjs);
     expect(kit[0]).toEqual(VERIFY_PROMPT);
     // DEFAULT_KIT advertises a generic top-events prompt at index 1.
-    expect(kit[1].prompt).toMatch(/top 10 events/i);
+    expect(kit[1].prompt).toMatch(/top 5 events/i);
   });
 
   it('falls back to DEFAULT_KIT when role is unrecognized', () => {
     const kit = getRolePrompts('not-a-real-role', Integration.nextjs);
-    expect(kit[1].prompt).toMatch(/top 10 events/i);
+    expect(kit[1].prompt).toMatch(/top 5 events/i);
   });
 
   it('returns the role kit when role is known and family has no overrides', () => {

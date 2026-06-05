@@ -166,22 +166,26 @@ function buildTerminalFitPrompt(): string {
   const rows = process.stdout.rows ?? 24;
   // Reserve rows for wizard chrome (title, status, hint, margins).
   const messageBudget = Math.max(8, rows - 10);
-  const tableRowBudget = Math.min(8, Math.max(3, rows - 14));
 
   return [
     `You are responding inside a CLI window that is exactly ${cols} columns wide and ${rows} rows tall. The user CAN'T SCROLL — your entire reply must fit on screen.`,
     ``,
     `LAYOUT PRINCIPLE: tall content is the enemy, wide content is your friend. You have ${cols} columns of horizontal space; use them. Spread data across columns instead of stacking it down rows.`,
     ``,
-    `Hard limits:`,
-    `- Aim for 3-6 lines of prose. Maximum ${messageBudget} lines total.`,
-    `- Tables: max ${tableRowBudget} rows. Prefer MULTI-COLUMN tables (5-8 columns) over narrow tables with many rows. A two-column table with a long list of rows is exactly what to AVOID — that's the tall layout. If you have many key/value pairs, transpose them: keys as column headers across the top, values as a single wide row underneath.`,
-    `- Lists: if there are 6+ short items, format them inline (comma-separated) or in 2-3 columns, not as a vertical bullet list.`,
+    `Tables:`,
+    `- Max 5 body rows. The prompts the user picks already constrain results to 5 or fewer — honor that and do not pad with extra rows.`,
+    `- If a tool result returns more than 5 items, show the top 5 and mention the rest count inline (e.g. "...and 12 more").`,
+    `- Prefer transposing wide-but-short data (items across columns, metrics down rows) when labels are short.`,
+    `- A two-column table with many rows is the tall layout to AVOID.`,
+    ``,
+    `Other limits:`,
+    `- Aim for 3-5 lines of prose. Maximum ${messageBudget} lines total.`,
+    `- DO NOT announce what you are about to do. Skip preamble like "I'll query…", "Let me check…", "Now I'll…", "I'm going to…". Go straight to running tools and then the answer.`,
+    `- Lists: if there are 6+ short items, format them inline (comma-separated), not as a vertical bullet list.`,
     `- For tool results, summarize the 1-3 numbers that matter. Do NOT echo raw JSON or the full payload.`,
     `- Code blocks: no language tag, no leading blank lines.`,
     `- No closing pleasantries ("let me know if…", "feel free to…"). Stop when the answer is delivered.`,
     `- No section headers unless the response actually has multiple sections.`,
-    `- The last paragraph should always be one line that says "Now go use our MCP to build something!"`,
   ].join('\n');
 }
 

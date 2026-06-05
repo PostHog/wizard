@@ -56,7 +56,6 @@ import {
   getRolePrompts,
   getRoleGreeting,
   getFollowUps,
-  getToolHint,
   getCrossSellPrompts,
   FOLLOW_UP_EXIT_SENTINEL,
   type SuggestedPrompt,
@@ -99,6 +98,11 @@ enum ChoiceValue {
 // only escape is [esc]. Keeps the wizard from becoming a free-tier MCP
 // front-end and gives the tutorial a natural "done" point.
 const MAX_PROMPT_RUNS = 5;
+
+// How long to hold the final streamed result on screen before swapping
+// into FollowUp. Gives the user a beat to read the result before the
+// picker mounts underneath. [esc] / [p] still work during the delay.
+const FOLLOW_UP_DELAY_MS = 3000;
 
 export const McpSuggestedPromptsScreen = ({
   store,
@@ -219,10 +223,14 @@ export const McpSuggestedPromptsScreen = ({
           error: errorText,
         });
       }
-      // Transition immediately — the result chunks stay visible above
-      // the FollowUp picker, so the user reads at their own pace
-      // instead of waiting for an auto-advance timer.
-      setPhase(Phase.FollowUp);
+      // Hold the final result on screen for a beat before swapping into
+      // FollowUp, so the user has a moment to read without the picker
+      // jumping in underneath. Guard via the abort controller so an
+      // [esc] / [p] press inside the delay window cancels the swap.
+      setTimeout(() => {
+        if (controller.signal.aborted) return;
+        setPhase(Phase.FollowUp);
+      }, FOLLOW_UP_DELAY_MS);
     };
 
     void (async () => {
@@ -423,18 +431,27 @@ export const McpSuggestedPromptsScreen = ({
         )}
 
         {phase === Phase.FollowUp && (
-          <Box flexDirection="column">
+          <Box flexDirection="column" flexGrow={1}>
+            {/* Result area absorbs flex and shrinks first when the
+                terminal is short. `capTextChunks` does the actual
+                row-aware truncation; flexShrink here is belt-and-
+                suspenders so Ink's layout never squeezes the picker. */}
             {runningPrompt && (
-              <RunningPhase
-                prompt={runningPrompt}
-                chunks={runChunks}
-                startedAt={runStartedAt}
-                frozenDurationSecs={runDurationSecs}
-                runCount={runCount}
-                maxRuns={MAX_PROMPT_RUNS}
-              />
+              <Box flexDirection="column" flexShrink={1}>
+                <RunningPhase
+                  prompt={runningPrompt}
+                  chunks={runChunks}
+                  startedAt={runStartedAt}
+                  frozenDurationSecs={runDurationSecs}
+                  runCount={runCount}
+                  maxRuns={MAX_PROMPT_RUNS}
+                />
+              </Box>
             )}
-            <Box marginTop={1}>
+            {/* Picker is pinned: flexShrink={0} means it never gives
+                up rows to siblings. flexBasis="auto" keeps its
+                natural height. */}
+            <Box marginTop={1} flexShrink={0} flexDirection="column">
               <FollowUpPhase
                 lastToolName={lastToolName}
                 lastPrompt={runningPrompt}
@@ -442,7 +459,6 @@ export const McpSuggestedPromptsScreen = ({
                 role={session.roleAtOrganization}
                 branchHistory={branchHistory}
                 canPickAnother={canPickAnother}
-                runCount={runCount}
                 maxRuns={MAX_PROMPT_RUNS}
                 onSelect={handleFollowUpPick}
               />
@@ -643,7 +659,10 @@ const PromptPickerPhase = ({
     label: p.prompt,
     value: p.prompt,
   }));
-  const options = [...crossSellOptions, ...kitOptions];
+  // Cap the initial picker at 4 options so the picker fits without
+  // scrolling on a default-sized terminal. Cross-sells come first, then
+  // the role kit fills the remaining slots.
+  const options = [...crossSellOptions, ...kitOptions].slice(0, 4);
 
   return (
     <Box flexDirection="column">
@@ -698,10 +717,15 @@ const RunningPhase = ({
     frozenDurationSecs ??
     (startedAt ? Math.round((Date.now() - startedAt) / 1000) : 0);
 
-  // Hard cap: if Claude ignored the terminal-fit system prompt and
-  // produced an overlong response, slice text to the last N lines so the
-  // result still fits without scroll. Tool calls / results are preserved.
-  const visibleChunks = finished ? capTextChunks(chunks) : chunks;
+  // When finished, collapse to just the agent's final answer + any
+  // error. The tool-call / tool-result chatter has already served its
+  // purpose as a "work in progress" indicator. We also drop every text
+  // block EXCEPT the last one — Sonnet often emits a "I'll query X…"
+  // preamble alongside its first tool_use, and showing both the
+  // preamble and the final answer doubles the noise above the picker.
+  const visibleChunks = finished
+    ? capTextChunks(collapseToFinalAnswer(chunks))
+    : chunks;
 
   return (
     <Box flexDirection="column">
@@ -736,35 +760,78 @@ const RunningPhase = ({
 };
 
 /**
+ * Strip everything except the agent's final answer + any error chunks.
+ * Drops tool-call / tool-result chatter (their work is done once the
+ * stream completes) and any text blocks emitted BEFORE the last text
+ * block — those are typically Sonnet's "I'll query X…" preamble that
+ * arrives alongside the first tool_use and adds noise above the picker.
+ *
+ * If the run produced no text at all (pure tool calls, or only errors),
+ * fall through to whatever chunks survived so the user isn't left with
+ * a blank result.
+ */
+function collapseToFinalAnswer(chunks: AgentChunk[]): AgentChunk[] {
+  const textChunks = chunks.filter((c) => c.kind === 'text');
+  const errors = chunks.filter((c) => c.kind === 'error');
+  if (textChunks.length === 0) return errors;
+  // Keep only the last text block — that's the model's final answer.
+  // Anything earlier was preamble emitted alongside tool_use.
+  return [textChunks[textChunks.length - 1], ...errors];
+}
+
+/**
  * Belt-and-suspenders fallback for runs where Claude ignored the
  * terminal-fit system prompt and produced an overlong response. Joins
- * all text chunks, slices to the last N lines that fit in the current
- * terminal, prepends an indicator showing how many lines got cut.
- * Tool calls, results, and errors are preserved separately so they
- * don't disappear into the truncation.
+ * all text chunks, then walks them from the bottom keeping only as many
+ * lines as fit in the visual row budget — wide lines that wrap to
+ * multiple rows on a narrow terminal cost their wrapped row count, not
+ * 1. Prepends an indicator showing how many source lines got cut. Tool
+ * calls, results, and errors are preserved separately so they don't
+ * disappear into the truncation.
+ *
+ * Visual-row-aware truncation is what makes the FollowUp picker feel
+ * pinned: a 5-row table that wraps to 12 visual rows on a 60-col
+ * terminal correctly counts as 12, so the cap leaves exactly the room
+ * the picker needs.
  */
 function capTextChunks(chunks: AgentChunk[]): AgentChunk[] {
   const rows = process.stdout.rows ?? 24;
-  // Reserve rows for: title bar, prompt header, status line, the
-  // FollowUp recap + picker + footer that now sits directly under
-  // the result, plus margins. Stay generous so picker options aren't
-  // pushed off-screen on shorter terminals.
-  const maxMessageRows = Math.max(4, rows - 18);
+  const cols = process.stdout.columns ?? 120;
+  // Reserve rows for the FollowUp picker that sits as a fixed section
+  // below the result: divider line, "What next?" header, recap line, 4
+  // picker options (no inter-option margins), plus the prompt + status
+  // chrome above the result and the global keyboard hints bar. Cap the
+  // result aggressively so the picker is always intact — long results
+  // are expected to truncate.
+  const maxVisualRows = Math.max(3, rows - 16);
 
-  const textChunks = chunks.filter(
-    (c): c is Extract<AgentChunk, { kind: 'text' }> => c.kind === 'text',
-  );
-  const nonTextChunks = chunks.filter(
-    (c) => c.kind !== 'text' && c.kind !== 'done',
-  );
+  const textChunks = chunks.filter((c) => c.kind === 'text');
+  const errors = chunks.filter((c) => c.kind === 'error');
   if (textChunks.length === 0) return chunks;
 
   const joined = textChunks.map((c) => c.text).join('');
   const lines = joined.split('\n');
-  if (lines.length <= maxMessageRows) return chunks;
 
-  const hidden = lines.length - maxMessageRows;
-  const tail = lines.slice(-maxMessageRows).join('\n');
+  // How many visual rows does this source line consume after wrap?
+  // Empty lines still take 1; everything else is ceil(width / cols).
+  const visualRows = (line: string): number =>
+    Math.max(1, Math.ceil(line.length / cols));
+
+  // Walk from the bottom, accumulating visual rows until budget runs
+  // out, so we keep the tail of the message (which has the punchline).
+  let used = 0;
+  let keepFrom = lines.length;
+  for (let i = lines.length - 1; i >= 0; i--) {
+    const cost = visualRows(lines[i]);
+    if (used + cost > maxVisualRows) break;
+    used += cost;
+    keepFrom = i;
+  }
+
+  if (keepFrom === 0) return chunks;
+
+  const hidden = keepFrom;
+  const tail = lines.slice(keepFrom).join('\n');
 
   return [
     {
@@ -773,7 +840,7 @@ function capTextChunks(chunks: AgentChunk[]): AgentChunk[] {
         hidden === 1 ? '' : 's'
       } above — expand terminal to see more]\n\n${tail}`,
     },
-    ...nonTextChunks,
+    ...errors,
   ];
 }
 
@@ -783,65 +850,29 @@ interface ChunkLineProps {
 
 const ChunkLine = ({ chunk }: ChunkLineProps) => {
   if (chunk.kind === 'text') {
-    // Text chunks render as plain text — the chunk-by-chunk arrival
-    // from the stream IS the reveal animation. Adding a per-chunk
-    // typewriter on top stacks animations in parallel and creates
-    // visual noise when chunks arrive faster than they can type.
     return <Text>{chunk.text}</Text>;
   }
   if (chunk.kind === 'tool-call') {
     return (
-      <Box
-        marginTop={1}
-        paddingX={1}
-        borderStyle="round"
-        borderColor={Colors.primary}
-      >
-        <Text color={Colors.primary} bold>
-          {Icons.diamond}
-        </Text>
-        <Text> {chunk.toolName}</Text>
-        {chunk.detail ? <Text dimColor> · {chunk.detail}</Text> : null}
-      </Box>
+      <Text>
+        {'  '}
+        <Text color="cyan">↳ {chunk.toolName}</Text>
+        {chunk.detail ? ` ${chunk.detail}` : ''}
+      </Text>
     );
   }
   if (chunk.kind === 'tool-result') {
-    // Every tool that completes earns a cross-product hint — turns each
-    // agent action into a quiet product-tour beat without breaking flow.
-    const hint = getToolHint(chunk.toolName);
     return (
-      <Box flexDirection="column">
-        <Box marginLeft={2}>
-          <Text color={Colors.success}>{Icons.check}</Text>
-          <Text dimColor> {chunk.detail || 'ok'}</Text>
-        </Box>
-        {hint && (
-          <Box marginLeft={4}>
-            <Text color={Colors.primary}>{Icons.triangleSmallRight}</Text>
-            <Text dimColor>
-              {' '}
-              <Text bold>{hint.product}:</Text> {hint.text}
-            </Text>
-          </Box>
-        )}
-      </Box>
+      <Text>
+        {'    '}
+        <Text color="green">✓</Text> {chunk.detail}
+      </Text>
     );
   }
   if (chunk.kind === 'error') {
-    return (
-      <Box
-        marginTop={1}
-        paddingX={1}
-        borderStyle="round"
-        borderColor={Colors.error}
-      >
-        <Text color={Colors.error}>
-          {Icons.warning} {chunk.text}
-        </Text>
-      </Box>
-    );
+    return <Text color="red">Error: {chunk.text}</Text>;
   }
-  // 'done' — no visual chunk; the status line above already reflects it.
+  // 'done' — no visual chunk; the dim status line above handles it.
   return null;
 };
 
@@ -854,7 +885,6 @@ interface FollowUpPhaseProps {
   role: string | null;
   branchHistory: string[];
   canPickAnother: boolean;
-  runCount: number;
   maxRuns: number;
   onSelect: (value: string | string[]) => void;
 }
@@ -866,7 +896,6 @@ const FollowUpPhase = ({
   role,
   branchHistory,
   canPickAnother,
-  runCount,
   maxRuns,
   onSelect,
 }: FollowUpPhaseProps) => {
@@ -889,44 +918,15 @@ const FollowUpPhase = ({
   const errorChunk = chunks.find((c) => c.kind === 'error');
   const recap = errorChunk
     ? 'That one errored out — try a different angle?'
-    : lastToolName
-    ? `That used \`${lastToolName}\`. Want to keep digging?`
-    : 'Want to keep exploring?';
+    : `Want to keep exploring? Select a follow-up prompt.`;
 
   return (
     <Box flexDirection="column">
-      <Box marginBottom={1}>
-        <Text bold color={Colors.accent}>
-          What next?
-        </Text>
-      </Box>
-      <Box marginBottom={1}>
-        <Text>{recap}</Text>
-      </Box>
-      <PickerMenu
-        options={options}
-        optionMarginBottom={1}
-        onSelect={onSelect}
-      />
-      <Box marginTop={2} flexDirection="column">
-        <Text dimColor>
-          ({runCount}/{maxRuns} prompts used)
-        </Text>
-        {!canPickAnother && (
-          <Text dimColor>
-            You&apos;ve hit the {maxRuns}-prompt tutorial cap.
-          </Text>
-        )}
-        {canPickAnother && (
-          <Text>
-            <Text bold>[p]</Text>
-            <Text> to pick a different prompt</Text>
-            <Text>{'  '}</Text>
-            <Text bold>[esc]</Text>
-            <Text> to exit</Text>
-          </Text>
-        )}
-      </Box>
+      <Text>{recap}</Text>
+      <PickerMenu options={options} onSelect={onSelect} />
+      {!canPickAnother && (
+        <Text dimColor>You&apos;ve hit the {maxRuns}-prompt tutorial cap.</Text>
+      )}
     </Box>
   );
 };

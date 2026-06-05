@@ -112,7 +112,7 @@ export const VERIFY_PROMPT: SuggestedPrompt = {
 // known role + framework get a tailored kit.
 export const STOCK_MCP_SUGGESTED_PROMPTS: PromptKit = [
   {
-    prompt: 'What are my busiest 10 events and when did each last fire?',
+    prompt: 'What are my busiest 5 events and when did each last fire?',
     description:
       'Inventories your project’s event stream so you can see what’s being captured at a glance.',
   },
@@ -123,7 +123,7 @@ export const STOCK_MCP_SUGGESTED_PROMPTS: PromptKit = [
   },
   {
     prompt:
-      'Create a dashboard with my top 10 events broken down by day for the last 7 days.',
+      'Create a dashboard with my top 5 events broken down by day for the last 7 days.',
     description:
       'Builds a saved dashboard you can pin and share — written back to your project.',
   },
@@ -133,7 +133,7 @@ export const STOCK_MCP_SUGGESTED_PROMPTS: PromptKit = [
 const DEFAULT_KIT: PromptKit = [
   VERIFY_PROMPT,
   {
-    prompt: 'Show me my top 10 events from the last 7 days',
+    prompt: 'Show me my top 5 events from the last 7 days',
     description: 'Get a feel for what your project is tracking.',
   },
   {
@@ -237,7 +237,7 @@ const ROLE_KITS: Record<TailoredRole, PromptKit> = {
       description: 'Dead-code hunt for your feature flag config.',
     },
     {
-      prompt: 'Show me the top 10 unresolved errors this week',
+      prompt: 'Show me the top 5 unresolved errors this week',
       description: 'Triage queue without opening another tab.',
     },
     {
@@ -252,7 +252,7 @@ const ROLE_KITS: Record<TailoredRole, PromptKit> = {
   data: [
     VERIFY_PROMPT,
     {
-      prompt: 'Top 20 events by volume in the last 24 hours',
+      prompt: 'Top 5 events by volume in the last 24 hours',
       description: 'Smoke test for ingestion + a sanity check on volumes.',
     },
     {
@@ -317,7 +317,7 @@ const ROLE_FAMILY_OVERRIDES: Partial<Record<TailoredRole, FamilyOverrides>> = {
     'frontend-web': {
       2: {
         prompt:
-          'Top 10 JS errors by occurrence count this week, with affected URLs',
+          'Top 5 JS errors by occurrence count this week, with affected URLs',
         description: 'Frontend-specific error triage — sorted by blast radius.',
       },
     },
@@ -336,7 +336,7 @@ const ROLE_FAMILY_OVERRIDES: Partial<Record<TailoredRole, FamilyOverrides>> = {
     },
     backend: {
       2: {
-        prompt: 'Top 10 server-side errors this week, grouped by endpoint',
+        prompt: 'Top 5 server-side errors this week, grouped by endpoint',
         description: 'Backend error triage by route, sorted by frequency.',
       },
       3: {
@@ -425,7 +425,7 @@ const ROLE_GREETINGS: Record<TailoredRole, RoleGreeting> = {
       'Pin annotations on every chart so you remember what shipped.',
     ],
     outro:
-      "Pick a prompt below — your agent will run it on your project's real data.",
+      "Pick a prompt — your agent will run it on your project's real data.",
   },
   product: {
     headline: 'PMs use MCP to ship faster and learn quicker.',
@@ -434,7 +434,7 @@ const ROLE_GREETINGS: Record<TailoredRole, RoleGreeting> = {
       'Feature flags and experiments without a deploy.',
       'Retention sliced by acquisition channel in seconds.',
     ],
-    outro: 'Pick a prompt below — your agent will do the legwork.',
+    outro: 'Pick a prompt — your agent will do the legwork.',
   },
   leadership: {
     headline: 'Run the business from your terminal.',
@@ -443,7 +443,7 @@ const ROLE_GREETINGS: Record<TailoredRole, RoleGreeting> = {
       'Slack alerts when MAU, churn, or revenue drifts.',
       'The numbers for the next leadership slide, on tap.',
     ],
-    outro: 'Pick a prompt below to see PostHog work for you.',
+    outro: 'Pick a prompt to see PostHog work for you.',
   },
   marketing: {
     headline: 'Marketing campaigns, fully instrumented.',
@@ -452,7 +452,7 @@ const ROLE_GREETINGS: Record<TailoredRole, RoleGreeting> = {
       'A/B test landing copy without an engineering ticket.',
       'Tie every campaign to revenue with annotated launches.',
     ],
-    outro: 'Pick a prompt below to try it on your data.',
+    outro: 'Pick a prompt to try it on your data.',
   },
   engineering: {
     headline: 'MCP is your shortest path from bug to fix.',
@@ -461,7 +461,7 @@ const ROLE_GREETINGS: Record<TailoredRole, RoleGreeting> = {
       'Latency SLOs and crash-free SLAs with one prompt.',
       'Kill-switch flags ready before the next release.',
     ],
-    outro: 'Pick a prompt below — your agent has full read/write access.',
+    outro: 'Pick a prompt — your agent has full read/write access.',
   },
   data: {
     headline: 'Data work without leaving the terminal.',
@@ -470,7 +470,7 @@ const ROLE_GREETINGS: Record<TailoredRole, RoleGreeting> = {
       'Retention curves by signup month, sliced any way you want.',
       'Run SQL against your event stream — no copy-paste, no exports.',
     ],
-    outro: 'Pick a prompt below — every result is real data from your project.',
+    outro: 'Pick a prompt — every result is real data from your project.',
   },
 };
 
@@ -481,7 +481,7 @@ const NEUTRAL_GREETING: RoleGreeting = {
     'Every result is real data from your project.',
     'No copy-pasting tokens, no context switching.',
   ],
-  outro: 'Pick a prompt below to see what MCP can do.',
+  outro: 'Pick a prompt to see what MCP can do.',
 };
 
 export function getRoleGreeting(role: string | null | undefined): RoleGreeting {
@@ -654,7 +654,7 @@ const TOOL_FOLLOW_UPS: Record<string, FollowUp[]> = {
     },
     {
       label: 'Add a leaderboard tile',
-      prompt: 'Add a top-10 users tile to that dashboard.',
+      prompt: 'Add a top-5 users tile to that dashboard.',
     },
     {
       label: 'Annotate today',
@@ -1201,7 +1201,7 @@ const CROSS_SELL_BY_ROLE: Record<TailoredRole, CrossSellPrompt[]> = {
     },
     {
       product: 'LLM Observability',
-      prompt: 'Show me the top 10 LLM prompts by cost over the last 7 days.',
+      prompt: 'Show me the top 5 LLM prompts by cost over the last 7 days.',
       description: 'Track LLM calls, latency, and cost next to product events.',
     },
   ],
