@@ -23,7 +23,13 @@
  * `programId` is threaded into `getOrAskForProjectData`.
  */
 
-import { Program, type ProgramId } from '@lib/programs/program-registry';
+// IMPORTANT: type-only import. A value import would create a circular
+// dependency (setup-utils → program-scopes → program-registry →
+// posthog-integration → ... → setup-utils), and `Program` would be
+// read as `undefined` at module init. Keep this type-only and reference
+// program IDs by their string-literal value below — TypeScript still
+// catches renames via the `Partial<Record<ProgramId, ...>>` keying.
+import type { ProgramId } from '@lib/programs/program-registry';
 import { WIZARD_OAUTH_SCOPES } from '@lib/constants';
 
 /**
@@ -106,7 +112,11 @@ export const MCP_TUTORIAL_SCOPE_ADDITIONS = [
  * program is renamed or removed.
  */
 const PROGRAM_SCOPE_ADDITIONS: Partial<Record<ProgramId, readonly string[]>> = {
-  [Program.McpTutorial]: MCP_TUTORIAL_SCOPE_ADDITIONS,
+  // String literal (not `Program.McpTutorial`) to avoid a runtime cycle
+  // with `program-registry.ts`. The `Partial<Record<ProgramId, ...>>`
+  // key constraint catches renames at compile time — if `mcpTutorialConfig.id`
+  // ever changes, this line will fail to type-check.
+  'mcp-tutorial': MCP_TUTORIAL_SCOPE_ADDITIONS,
 };
 
 /**
