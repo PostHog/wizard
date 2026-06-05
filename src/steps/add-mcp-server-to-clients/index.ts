@@ -160,19 +160,29 @@ export const getSupportedPluginClients = (
   return clients.filter(isPluginCapable).filter((c) => c.supportsPlugin());
 };
 
+export interface PluginInstallSummary {
+  installed: string[];
+  outdated: string[];
+}
+
 export const installPlugins = async (
   clients: Array<MCPClient & PluginCapable>,
-): Promise<string[]> => {
+): Promise<PluginInstallSummary> => {
   const installed: string[] = [];
+  const outdated: string[] = [];
   for (const client of clients) {
     try {
       const result = await client.installPlugin();
-      if (result.success) installed.push(client.name);
+      if (result.success) {
+        installed.push(client.name);
+      } else if (result.outdatedClient) {
+        outdated.push(client.name);
+      }
     } catch (err) {
       debug(`[installPlugins] installPlugin threw for ${client.name}: ${err}`);
     }
   }
-  return installed;
+  return { installed, outdated };
 };
 
 export const removeMCPServer = async (

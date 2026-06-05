@@ -22,6 +22,11 @@ export interface McpClientInfo {
   supportsPlugin: boolean;
 }
 
+export interface PluginInstallOutcome {
+  installed: string[];
+  outdated: string[];
+}
+
 export interface McpInstaller {
   /** Detect which MCP-capable editors are available on this machine. */
   detectClients(): Promise<McpClientInfo[]>;
@@ -37,7 +42,7 @@ export interface McpInstaller {
   remove(): Promise<string[]>;
 
   /** Install the PostHog AI plugin to supported clients. Best-effort: failures do not affect MCP outcome. */
-  installPlugins(clientNames: string[]): Promise<string[]>;
+  installPlugins(clientNames: string[]): Promise<PluginInstallOutcome>;
 }
 
 /**
@@ -110,21 +115,22 @@ export function createMcpInstaller(): McpInstaller {
       return installed.map((c) => c.name);
     },
 
-    async installPlugins(clientNames: string[]): Promise<string[]> {
+    async installPlugins(clientNames: string[]): Promise<PluginInstallOutcome> {
       const rawClients = cachedClients
         .filter((c) => clientNames.includes(c.name))
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         .map((c) => c.raw as any);
 
       const pluginClients = getSupportedPluginClients(rawClients);
-      const installed = await runPluginInstall(pluginClients);
+      const { installed, outdated } = await runPluginInstall(pluginClients);
 
       analytics.wizardCapture('mcp plugins installed', {
         clients: installed,
         attempted: pluginClients.map((c) => c.name),
+        outdated,
       });
 
-      return installed;
+      return { installed, outdated };
     },
   };
 }

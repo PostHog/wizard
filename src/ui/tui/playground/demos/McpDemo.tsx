@@ -27,9 +27,10 @@ function createMockInstaller(): McpInstaller {
     },
     async installPlugins(clientNames) {
       await new Promise((r) => setTimeout(r, 800));
-      return clientNames.filter(
+      const installed = clientNames.filter(
         (name) => MOCK_CLIENTS.find((c) => c.name === name)?.supportsPlugin,
       );
+      return { installed, outdated: [] };
     },
     async remove() {
       await new Promise((r) => setTimeout(r, 1000));
