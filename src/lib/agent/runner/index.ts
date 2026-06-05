@@ -15,6 +15,7 @@ import { WIZARD_OPEN_CODE_RUNNER_FLAG_KEY } from '../../constants';
 import { logToFile } from '../../../utils/debug';
 import type { runAgent } from '../agent-interface';
 import { SdkRunner } from './sdk-runner';
+import { HarnessRunner } from './harness-runner';
 
 /** Arguments accepted by a runner — mirrors `runAgent` exactly. */
 export type RunnerRunArgs = Parameters<typeof runAgent>;
@@ -46,17 +47,17 @@ export function isOpenCodeRunnerEnabled(
 /**
  * Select the runner for this run from the wizard feature flags.
  *
- * The open-code runner (`HarnessRunner`) does not exist at this layer yet, so
- * `selectRunner` always returns `SdkRunner` here — the flag is wired but inert
- * until the runner lands (PR 02+). That keeps this seam a behavior-preserving
- * refactor regardless of the flag's value.
+ * Returns the open-code runner (`HarnessRunner`) when `wizard-open-code-runner`
+ * is enabled, otherwise the SDK runner. The choice is logged so it is always
+ * clear from the run logs which backend executed.
  */
 export function selectRunner(flags: Record<string, string>): Runner {
-  const useOpenCodeRunner = isOpenCodeRunnerEnabled(flags);
-  // TODO(open-code): return new HarnessRunner() when useOpenCodeRunner once the
-  // in-house loop exists (PR 02+). Until then every run uses the SDK.
-  logToFile(
-    `[runner] wizard-open-code-runner=${useOpenCodeRunner} — running SDK runner (open-code runner not yet available)`,
-  );
+  if (isOpenCodeRunnerEnabled(flags)) {
+    logToFile(
+      '[runner] wizard-open-code-runner=true — running OPEN-CODE runner',
+    );
+    return new HarnessRunner();
+  }
+  logToFile('[runner] wizard-open-code-runner=false — running SDK runner');
   return new SdkRunner();
 }

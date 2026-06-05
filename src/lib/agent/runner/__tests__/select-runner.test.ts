@@ -1,11 +1,14 @@
 import { selectRunner, isOpenCodeRunnerEnabled } from '../index';
 import { SdkRunner } from '../sdk-runner';
+import { HarnessRunner } from '../harness-runner';
 import { WIZARD_OPEN_CODE_RUNNER_FLAG_KEY } from '../../../constants';
 
 // `runAgent` pulls in the full SDK-backed agent stack; runner selection is a
 // pure choice over flags, so stub the module to keep this a focused unit test.
 jest.mock('../../agent-interface', () => ({
   runAgent: jest.fn(),
+  handleSDKMessage: jest.fn(),
+  AgentErrorType: {},
 }));
 
 describe('isOpenCodeRunnerEnabled', () => {
@@ -21,10 +24,10 @@ describe('isOpenCodeRunnerEnabled', () => {
 });
 
 describe('selectRunner', () => {
-  it('returns the SDK runner when the open-code flag is enabled (runner not yet implemented)', () => {
+  it('returns the open-code (harness) runner when the flag is enabled', () => {
     expect(
       selectRunner({ [WIZARD_OPEN_CODE_RUNNER_FLAG_KEY]: 'true' }),
-    ).toBeInstanceOf(SdkRunner);
+    ).toBeInstanceOf(HarnessRunner);
   });
 
   it('returns the SDK runner when the flag is disabled', () => {

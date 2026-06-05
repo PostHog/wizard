@@ -1373,7 +1373,11 @@ export const BASE_ALLOWED_TOOLS: readonly string[] = [
   ...Object.values(WIZARD_TOOL_NAMES),
 ];
 
-type TaskEntry = { content: string; status: string; activeForm?: string };
+export type TaskEntry = {
+  content: string;
+  status: string;
+  activeForm?: string;
+};
 
 interface TaskStore {
   tasks: Map<string, TaskEntry>;
@@ -1490,7 +1494,7 @@ function extractTaskIdFromResult(content: unknown): string | undefined {
   return undefined;
 }
 
-function handleSDKMessage(
+export function handleSDKMessage(
   message: SDKMessage,
   options: WizardRunOptions,
   spinner: SpinnerHandle,
