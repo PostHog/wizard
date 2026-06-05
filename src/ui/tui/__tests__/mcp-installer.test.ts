@@ -115,3 +115,38 @@ describe('createMcpInstaller — installPlugins', () => {
     expect(result).toEqual(['Claude Code']);
   });
 });
+
+describe('createMcpInstaller — detectClients', () => {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const mcpModule = require('@steps/add-mcp-server-to-clients/index');
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('surfaces the finish note for browser-finishable clients only', async () => {
+    mcpModule.getSupportedClients.mockResolvedValue([
+      { name: 'Cursor' },
+      {
+        name: 'Claude Desktop/Web',
+        connectorUrl: 'https://claude.ai/directory/connectors/posthog',
+        finishInstruction: 'Sign in and click "Connect" to finish.',
+      },
+    ]);
+
+    const installer = createMcpInstaller();
+    const detected = await installer.detectClients();
+
+    expect(detected).toEqual([
+      { name: 'Cursor', supportsPlugin: false, finish: undefined },
+      {
+        name: 'Claude Desktop/Web',
+        supportsPlugin: false,
+        finish: {
+          url: 'https://claude.ai/directory/connectors/posthog',
+          instruction: 'Sign in and click "Connect" to finish.',
+        },
+      },
+    ]);
+  });
+});
