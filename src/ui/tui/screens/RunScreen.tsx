@@ -24,7 +24,7 @@ import { LearnCard } from '@ui/tui/components/LearnCard';
 import { TipsCard } from '@ui/tui/components/TipsCard';
 import { useStdoutDimensions } from '@ui/tui/hooks/useStdoutDimensions';
 import { useFileWatcher } from '@ui/tui/hooks/file-watcher';
-import { VisualizerTab } from '@ui/tui/components/PhaseVisuals';
+import { VisualizerTab, useAgentPhase } from '@ui/tui/components/PhaseVisuals';
 import { EVENT_PLAN_FILE } from '@lib/programs/posthog-integration/index';
 import { getProgramConfig } from '@lib/programs/program-registry';
 import { getContentBlocks as getSkillContentBlocks } from '@lib/programs/agent-skill/content/index';
@@ -54,6 +54,11 @@ export const RunScreen = ({ store }: RunScreenProps) => {
   });
 
   const [columns] = useStdoutDimensions();
+
+  // Track the active agent phase into the store, even when the user is on
+  // a tab that doesn't render PhaseVisual — so the Visualizer's elapsed
+  // clock reflects real stage time when they switch over.
+  useAgentPhase(store);
 
   const progressItems: ProgressItem[] = store.tasks.map((t) => ({
     label: t.label,

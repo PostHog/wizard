@@ -99,7 +99,14 @@ export function useAgentPhase(store: WizardStore): AgentPhase {
     return null;
   }, [tasks]);
   if (detected) lastDetectedRef.current = detected;
-  return lastDetectedRef.current;
+  const phase = lastDetectedRef.current;
+  // Mirror the active phase into the store so the Visualizer's elapsed clock
+  // can survive tab switches and reflect real stage time, not "time since
+  // this component mounted".
+  useEffect(() => {
+    store.setCurrentStage(phase);
+  }, [phase, store]);
+  return phase;
 }
 
 interface PhaseVisualProps {
@@ -120,14 +127,19 @@ export const PhaseVisual = ({ store, width, height }: PhaseVisualProps) => {
 export const VisualizerTab = ({ store }: { store: WizardStore }) => {
   const phase = useAgentPhase(store);
   const [columns, rows] = useStdoutDimensions();
-  const startRef = useRef(Date.now());
   // Re-render every 180 ms so the EQ bars wobble; the elapsed clock derives
   // its seconds from Date.now() each render so it still advances 1 Hz.
   const tick = useTick(180);
 
   const visualW = Math.max(20, Math.min(64, columns - 12));
   const visualH = Math.max(7, Math.min(18, rows - 12));
-  const elapsedSec = Math.floor((Date.now() - startRef.current) / 1000);
+  // Read the stage's startedAt from the store so the elapsed clock survives
+  // tab switches and resets only on real phase transitions.
+  const stageStartedAt = store.currentStage?.startedAt ?? Date.now();
+  const elapsedSec = Math.max(
+    0,
+    Math.floor((Date.now() - stageStartedAt) / 1000),
+  );
   const timeStr = formatElapsed(elapsedSec);
   const equalizer = renderMiniEqualizer(tick);
 
@@ -147,14 +159,14 @@ export const VisualizerTab = ({ store }: { store: WizardStore }) => {
       </Box>
       <Box marginBottom={1}>
         <Text bold color="#E6FFE6">
-          AGENT.run :: {PHASE_LABELS[phase]}
+          {PHASE_LABELS[phase]}
         </Text>
       </Box>
       <PhaseBody phase={phase} width={visualW} height={visualH} />
       <Box flexDirection="row" marginTop={1} gap={2}>
         <Text color="#22D622">[{timeStr}]</Text>
         <Text color={MATRIX_FADE}>{equalizer}</Text>
-        <Text color="#22D622">WIZARD-FM 88.0</Text>
+        <Text color="#22D622">WizardAmp</Text>
       </Box>
     </Box>
   );

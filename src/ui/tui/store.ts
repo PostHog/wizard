@@ -76,6 +76,14 @@ export class WizardStore {
   private $learnCardBlockIdx = atom(0);
   private $learnCardComplete = atom(false);
   private $version = atom(0);
+  // Global "what's playing right now" track for the Visualizer tab. Set by
+  // whichever component derives the current agent phase; survives tab
+  // switches so the elapsed clock measures real stage time, not "time since
+  // the Visualizer was last mounted". Generic `stage: string` so the store
+  // stays free of product knowledge.
+  private $currentStage = atom<{ stage: string; startedAt: number } | null>(
+    null,
+  );
 
   private _onTasksChanged: (() => void) | null = null;
   /** Last screen seen — used to detect screen transitions for analytics. */
@@ -229,6 +237,22 @@ export class WizardStore {
 
   get eventPlan(): PlannedEvent[] {
     return this.$eventPlan.get();
+  }
+
+  get currentStage(): { stage: string; startedAt: number } | null {
+    return this.$currentStage.get();
+  }
+
+  /**
+   * Record the current stage of work. If the stage hasn't changed, the
+   * stored `startedAt` is preserved so elapsed-time readouts keep counting
+   * up across re-renders and tab switches.
+   */
+  setCurrentStage(stage: string): void {
+    const cur = this.$currentStage.get();
+    if (cur?.stage === stage) return;
+    this.$currentStage.set({ stage, startedAt: Date.now() });
+    this.emitChange();
   }
 
   get statusExpanded(): boolean {
