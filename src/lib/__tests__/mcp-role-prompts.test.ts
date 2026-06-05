@@ -33,12 +33,12 @@ describe('getRolePrompts', () => {
     const kit = getRolePrompts('product', Integration.nextjs);
     expect(kit[0].prompt).toBe(ANNOTATION_PROMPT);
     expect(kit[1].prompt).toMatch(/onboarding flow/i);
-    expect(kit[3].prompt).toBe('A/B test the redesigned upgrade CTA');
+    expect(kit[3].prompt).toMatch(/upgrade CTA/i);
   });
 
   it('falls back to the role kit when integration is null', () => {
     const kit = getRolePrompts('product', null);
-    expect(kit[3].prompt).toBe('A/B test the redesigned upgrade CTA');
+    expect(kit[3].prompt).toMatch(/upgrade CTA/i);
   });
 
   it('applies role × family overrides at the right indices', () => {
@@ -47,7 +47,7 @@ describe('getRolePrompts', () => {
     expect(kit[1].prompt).toMatch(/app_open → onboarding_complete/);
     expect(kit[3].prompt).toMatch(/app version/);
     // [2] is not overridden, so it stays as the role kit's prompt.
-    expect(kit[2].prompt).toMatch(/new pricing page/);
+    expect(kit[2].prompt).toMatch(/pricing page/i);
   });
 
   it('applies overrides individually (one index does not affect others)', () => {
@@ -142,7 +142,7 @@ describe('getFollowUps', () => {
     });
     // 3 tool-specific + exit
     expect(fs).toHaveLength(4);
-    expect(fs[0].label).toMatch(/Dig into/i);
+    expect(fs[0].label).toMatch(/stack trace/i);
     expect(fs[fs.length - 1].prompt).toBe(FOLLOW_UP_EXIT_SENTINEL);
   });
 

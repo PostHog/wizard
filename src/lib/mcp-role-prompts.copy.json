@@ -1,5 +1,5 @@
 {
-  "$schema-note": "All copy for the MCP tutorial picker, greeting, follow-ups, and cross-sells. Edit this file to update prompts without touching TypeScript. Each entry in defaultKit/roleKits carries a stable `key` so framework overrides can target it by name (reorder-safe — see roleFamilyOverrides).",
+  "$schema-note": "All copy for the MCP tutorial picker, greeting, follow-ups, and cross-sells. Edit this file to update prompts without touching TypeScript. Every prompt is either (a) a read query on any PostHog product, or (b) a write on dashboards, insights, notebooks, or annotations — the four 'persistence' surfaces. No prompt should ask the agent to ship a flag, run an experiment, send a survey, or create an alert. See prompt-tree.md §5 for the scope reality.",
 
   "defaultKit": [
     {
@@ -14,18 +14,18 @@
     },
     {
       "key": "main-funnel",
-      "prompt": "Build me a funnel for my main user journey",
+      "prompt": "Build me a funnel for my main user journey and show where the drop-off is",
       "description": "Insight discovery — your agent picks the events."
     },
     {
-      "key": "new-flag",
-      "prompt": "Create a feature flag called new-feature rolled out to 10%",
-      "description": "Flag CRUD — instant kill switch for your next release."
+      "key": "flags-inventory",
+      "prompt": "Show me my feature flags and what each is currently rolled out to",
+      "description": "Inventory the rollout state of every flag in your project."
     },
     {
-      "key": "error-alert",
-      "prompt": "Alert me if my error rate spikes above baseline",
-      "description": "Set up a sensible default alert without leaving your IDE."
+      "key": "error-trend",
+      "prompt": "Show me daily error count for the last 30 days and flag anything that looks like a spike",
+      "description": "Pulse-check on stability — no dashboard setup required."
     }
   ],
 
@@ -38,7 +38,7 @@
       },
       {
         "key": "exec-dashboard",
-        "prompt": "Build me an exec dashboard: MRR, MAU, churn, top events",
+        "prompt": "Build me an exec dashboard with MRR, MAU, churn, and top events, then save it",
         "description": "A one-glance view of the business you can pin and share."
       },
       {
@@ -47,13 +47,13 @@
         "description": "The trendline you actually care about."
       },
       {
-        "key": "mau-alert",
-        "prompt": "Alert me if MAU drops more than 10% week-over-week",
-        "description": "Wake-up call if growth stalls — set and forget."
+        "key": "mau-trend",
+        "prompt": "Show me weekly MAU for the last 12 weeks and where the inflection points are",
+        "description": "See where growth bent — up or down — without setting up alerts."
       },
       {
-        "key": "nps-paid",
-        "prompt": "Run an NPS survey on all paid customers",
+        "key": "nps-summary",
+        "prompt": "Show me NPS responses from my paid users and summarize the themes",
         "description": "Pulse-check on the people paying you."
       }
     ],
@@ -65,18 +65,18 @@
       },
       {
         "key": "onboarding",
-        "prompt": "Build a funnel for my onboarding flow",
+        "prompt": "Build a funnel for my onboarding flow and show me the biggest drop-off step",
         "description": "See where new users drop off in their first session."
       },
       {
-        "key": "pricing-flag",
-        "prompt": "Create a feature flag for the new pricing page rolled out to 25%",
-        "description": "Ship safely — flag CRUD straight from your agent."
+        "key": "pricing-flag-state",
+        "prompt": "Show me feature flags scoped to the pricing page and who's currently in each",
+        "description": "Inspect rollout state of pricing experiments without changing anything."
       },
       {
-        "key": "cta",
-        "prompt": "A/B test the redesigned upgrade CTA",
-        "description": "Spin up an experiment without leaving your IDE."
+        "key": "cta-compare",
+        "prompt": "Show me how my upgrade CTA variants are converting across my recent experiments",
+        "description": "Read the verdict on CTA tests without spinning up a new one."
       },
       {
         "key": "retention",
@@ -92,7 +92,7 @@
       },
       {
         "key": "board-dashboard",
-        "prompt": "Build a board dashboard: revenue, MAU, churn, support backlog",
+        "prompt": "Build a board dashboard with revenue, MAU, churn, and support backlog, then save it",
         "description": "Pre-board prep in one prompt."
       },
       {
@@ -101,9 +101,9 @@
         "description": "The chart for the next leadership slide."
       },
       {
-        "key": "churn-alert",
-        "prompt": "Alert the leadership channel when churn doubles week-over-week",
-        "description": "Slack ping when something needs your attention."
+        "key": "churn-trend",
+        "prompt": "Show me churn over the last 8 weeks and where it moved most",
+        "description": "See the trend without configuring a notification."
       },
       {
         "key": "upgrade-drivers",
@@ -118,19 +118,19 @@
         "description": "Creates a dated note on your project — visible on every chart. Delete anytime from PostHog."
       },
       {
-        "key": "pricing-cohort",
-        "prompt": "Cohort of users who saw pricing but didn't sign up",
-        "description": "Retargetable list of high-intent visitors."
+        "key": "pricing-leavers",
+        "prompt": "Show me users who saw pricing but didn't sign up — what did they do next?",
+        "description": "Identify high-intent visitors and what they bounced to."
       },
       {
-        "key": "hero-test",
-        "prompt": "A/B test the landing page hero copy",
-        "description": "Run the experiment, get the verdict, no engineering ask."
+        "key": "hero-compare",
+        "prompt": "Show me how my landing page hero variants performed — which group converted best?",
+        "description": "Read the verdict on hero copy tests."
       },
       {
-        "key": "newsletter-nps",
-        "prompt": "Send an NPS survey to users who clicked our last newsletter",
-        "description": "Closed-loop feedback on the campaign that just ran."
+        "key": "newsletter-clicks",
+        "prompt": "Find users who clicked our last newsletter and show me what they did next",
+        "description": "See the downstream behavior of your last campaign."
       },
       {
         "key": "landing-annotation",
@@ -155,14 +155,14 @@
         "description": "Triage queue without opening another tab."
       },
       {
-        "key": "reliability-alert",
-        "prompt": "Page me if 5xx error rate exceeds 1% over 5 minutes",
-        "description": "Alerting that catches real incidents."
+        "key": "reliability-trend",
+        "prompt": "Show me 5xx error rate over the last 24 hours by endpoint",
+        "description": "See where reliability is drifting, no alert setup."
       },
       {
-        "key": "kill-switch",
-        "prompt": "Add a kill-switch flag for the next release rolled out to 0%",
-        "description": "Ship safer — one prompt sets up the rollback."
+        "key": "zero-rollout-flags",
+        "prompt": "Show me feature flags currently rolled out at 0% — anything ready to retire?",
+        "description": "Find dead kill-switch flags you can clean up later."
       }
     ],
     "data": [
@@ -187,9 +187,9 @@
         "description": "Drop-off across the full journey, ready to slice."
       },
       {
-        "key": "power-users",
-        "prompt": "Cohort of power users — 5+ sessions per week over the last month",
-        "description": "High-value segment, materialized in seconds."
+        "key": "power-users-query",
+        "prompt": "Show me users with 5+ sessions per week over the last month and what they have in common",
+        "description": "Profile your power-user segment without materializing a cohort."
       }
     ]
   },
@@ -197,19 +197,19 @@
   "roleFamilyOverrides": {
     "product": {
       "frontend-web": {
-        "cta": {
-          "prompt": "A/B test the redesigned upgrade CTA — variants control / red / green",
-          "description": "Frontend experiment with three arms, wired to your flag."
+        "cta-compare": {
+          "prompt": "Compare conversion across the variants of my last upgrade CTA experiment (control, red, green)",
+          "description": "Read the verdict on a three-arm frontend experiment."
         }
       },
       "mobile": {
         "onboarding": {
-          "prompt": "Funnel: app_open → onboarding_complete → first_session_complete",
+          "prompt": "Build a funnel app_open → onboarding_complete → first_session_complete and show me the drop-off",
           "description": "Mobile-flavored onboarding funnel with sensible defaults."
         },
-        "cta": {
-          "prompt": "Create a feature flag gated on app version >= the current release",
-          "description": "Version-gated rollouts — only new clients see the change."
+        "cta-compare": {
+          "prompt": "Show me feature flags gated on app version — who's in each release tier?",
+          "description": "See which clients see what, without changing anything."
         }
       },
       "backend": {
@@ -231,9 +231,9 @@
           "prompt": "Top crashes this week by app version, sorted by affected users",
           "description": "Mobile crash triage straight from the same data PostHog has."
         },
-        "reliability-alert": {
-          "prompt": "Page me when crash-free sessions drop below 99%",
-          "description": "Crash-free SLA alert — the one mobile metric that matters."
+        "reliability-trend": {
+          "prompt": "Show me crash-free sessions over the last 7 days by app version",
+          "description": "Crash-free trend per release — the one mobile metric that matters."
         }
       },
       "backend": {
@@ -241,9 +241,9 @@
           "prompt": "Top 5 server-side errors this week, grouped by endpoint",
           "description": "Backend error triage by route, sorted by frequency."
         },
-        "reliability-alert": {
-          "prompt": "Alert when p95 response time exceeds 500ms over a 5-minute window",
-          "description": "Latency SLO alert against the data you already collect."
+        "reliability-trend": {
+          "prompt": "Show me p95 response time over the last 24 hours by endpoint",
+          "description": "Latency trend from the data you already collect."
         }
       }
     },
@@ -262,51 +262,51 @@
       "headline": "Founders use MCP to keep a hand on growth.",
       "bullets": [
         "Weekly active users, retention, and revenue without leaving your IDE.",
-        "Alerts when something stalls — set once, forget about it.",
+        "Spot stalls in your trends without setting up dashboards by hand.",
         "Pin annotations on every chart so you remember what shipped."
       ],
       "outro": "Pick a prompt — your agent will run it on your project's real data."
     },
     "product": {
-      "headline": "PMs use MCP to ship faster and learn quicker.",
+      "headline": "PMs use MCP to learn faster and decide quicker.",
       "bullets": [
-        "Funnels for every onboarding flow you want to test.",
-        "Feature flags and experiments without a deploy.",
+        "Funnels for every onboarding flow you want to inspect.",
+        "Inspect feature flags and experiment outcomes without leaving your IDE.",
         "Retention sliced by acquisition channel in seconds."
       ],
       "outro": "Pick a prompt — your agent will do the legwork."
     },
     "leadership": {
-      "headline": "Run the business from your terminal.",
+      "headline": "Read the business from your terminal.",
       "bullets": [
         "Board-ready dashboards in one prompt.",
-        "Slack alerts when MAU, churn, or revenue drifts.",
+        "Trend lines for MAU, churn, and revenue, one query away.",
         "The numbers for the next leadership slide, on tap."
       ],
       "outro": "Pick a prompt to see PostHog work for you."
     },
     "marketing": {
-      "headline": "Marketing campaigns, fully instrumented.",
+      "headline": "Inspect campaigns, end to end.",
       "bullets": [
-        "Cohorts of high-intent visitors, ready to retarget.",
-        "A/B test landing copy without an engineering ticket.",
+        "Find high-intent visitors and what they did next.",
+        "Compare landing-copy experiments and see which arm is winning.",
         "Tie every campaign to revenue with annotated launches."
       ],
       "outro": "Pick a prompt to try it on your data."
     },
     "engineering": {
-      "headline": "MCP is your shortest path from bug to fix.",
+      "headline": "MCP is your shortest path from bug to root cause.",
       "bullets": [
         "Top errors this week, sorted by blast radius.",
-        "Latency SLOs and crash-free SLAs with one prompt.",
-        "Kill-switch flags ready before the next release."
+        "Latency and crash-free trends checked against real data.",
+        "Audit which flags are stale or fully rolled out."
       ],
-      "outro": "Pick a prompt — your agent has full read/write access."
+      "outro": "Pick a prompt — your agent has read access across your project."
     },
     "data": {
       "headline": "Data work without leaving the terminal.",
       "bullets": [
-        "Cohorts in seconds, materialized in your project.",
+        "Profile any segment in seconds.",
         "Retention curves by signup month, sliced any way you want.",
         "Run SQL against your event stream — no copy-paste, no exports."
       ],
@@ -317,7 +317,7 @@
   "neutralGreeting": {
     "headline": "PostHog MCP turns your agent into a product analyst.",
     "bullets": [
-      "Run queries, build dashboards, ship flags — straight from your IDE.",
+      "Run queries, build insights, save dashboards — straight from your IDE.",
       "Every result is real data from your project.",
       "No copy-pasting tokens, no context switching."
     ],
@@ -326,113 +326,130 @@
 
   "toolFollowUps": {
     "query-error-tracking-issue": [
-      { "label": "Dig into the top issue", "prompt": "Show me the stack trace and recent occurrences for the top error." },
-      { "label": "Set up an alert", "prompt": "Page me if that error rate doubles week-over-week." },
-      { "label": "Find related events", "prompt": "What events do users trigger right before hitting that error?" },
+      { "label": "Stack trace for the top error", "prompt": "Show me the stack trace and recent occurrences for the top error." },
       { "label": "Who is most affected?", "prompt": "Which users have hit that error most often in the last 7 days?" },
       { "label": "When did it start?", "prompt": "Show me when that error first appeared and any deploy that landed nearby." },
-      { "label": "Suppress the noise", "prompt": "Suppress the noisiest error for now so I can focus." }
+      { "label": "Find related sessions", "prompt": "Find session recordings that hit that error so I can see what users were doing." },
+      { "label": "Save the top-errors view", "prompt": "Save this top-errors view as an insight I can come back to." },
+      { "label": "Pin to engineering dashboard", "prompt": "Pin this errors view to my engineering dashboard." }
     ],
     "query-trends": [
-      { "label": "Save as dashboard", "prompt": "Save that as a dashboard called \"Trends\" and pin it." },
-      { "label": "Break down by property", "prompt": "Break that down by the most common user property." },
-      { "label": "Compare to last week", "prompt": "Compare that against the same period last month." },
-      { "label": "Build a funnel from it", "prompt": "Build a funnel using the top events from that trend." },
+      { "label": "Break down by property", "prompt": "Break that trend down by the most common user property." },
       { "label": "Find the outlier day", "prompt": "Which day stood out the most and what else was going on?" },
-      { "label": "Alert me on a drop", "prompt": "Alert me if that metric drops more than 20% week-over-week." }
+      { "label": "Compare to last month", "prompt": "Compare that against the same period last month." },
+      { "label": "Build a funnel from it", "prompt": "Build a funnel using the top events from that trend." },
+      { "label": "Save as an insight", "prompt": "Save that trend as an insight named 'Trends'." },
+      { "label": "Pin to main dashboard", "prompt": "Pin that trend to my main dashboard." }
     ],
     "query-funnel": [
-      { "label": "Find the biggest drop-off", "prompt": "Which step has the biggest drop-off, and who falls out there?" },
-      { "label": "Cohort the bouncers", "prompt": "Create a cohort of people who dropped out at the biggest step." },
+      { "label": "Biggest drop-off", "prompt": "Which step has the biggest drop-off, and who falls out there?" },
+      { "label": "Completion time", "prompt": "How long does it take users who complete that funnel?" },
       { "label": "Slice by platform", "prompt": "Show that funnel split by mobile vs desktop." },
-      { "label": "Look at completion time", "prompt": "How long does it take users who complete that funnel?" },
-      { "label": "Compare two cohorts", "prompt": "Compare that funnel between new signups and users older than 30 days." },
-      { "label": "A/B test a fix", "prompt": "Set up an experiment to test a change at the biggest drop-off step." }
+      { "label": "Find drop-off sessions", "prompt": "Find session recordings of users who dropped out at the biggest step." },
+      { "label": "Save the funnel", "prompt": "Save that funnel as an insight." },
+      { "label": "Pin to dashboard", "prompt": "Pin that funnel to my main dashboard." }
     ],
-    "create-feature-flag": [
-      { "label": "Roll it out to 25%", "prompt": "Roll that flag out to 25% of users." },
-      { "label": "Add a kill-switch", "prompt": "Create a kill-switch flag at 100% so I can disable the feature instantly." },
-      { "label": "See who is in", "prompt": "Show me which users are currently in that flag." },
-      { "label": "Wrap it in an experiment", "prompt": "Convert that flag into an A/B test with control + variant arms." },
-      { "label": "Schedule a ramp", "prompt": "Ramp that flag 10% → 25% → 50% → 100% over the next two weeks." },
-      { "label": "Filter to a cohort", "prompt": "Limit that flag rollout to beta users only." }
+    "query-retention": [
+      { "label": "Best-retaining cohort", "prompt": "Which cohort retains the longest in that curve?" },
+      { "label": "Worst-retaining cohort", "prompt": "Which cohort drops off fastest in that curve?" },
+      { "label": "Slice by acquisition channel", "prompt": "Re-run that retention split by acquisition channel." },
+      { "label": "Find churned users", "prompt": "Find session recordings of users who churned during week 1." },
+      { "label": "Save the retention chart", "prompt": "Save that retention chart as an insight." },
+      { "label": "Pin to growth dashboard", "prompt": "Pin that retention chart to my growth dashboard." }
+    ],
+    "query-feature-flag": [
+      { "label": "Who's in this flag?", "prompt": "Show me which users are currently in the rollout for that flag." },
+      { "label": "What changed recently?", "prompt": "Show me the rollout history for that flag — when did it last change?" },
+      { "label": "Compare against another flag", "prompt": "Show me the audience overlap between that flag and one related flag." },
+      { "label": "Find sessions for that flag", "prompt": "Find recent session recordings from users currently in that flag." },
+      { "label": "Save flag inventory", "prompt": "Save this flag inventory as an insight." },
+      { "label": "Pin to release dashboard", "prompt": "Pin this flag view to my release dashboard." }
+    ],
+    "query-survey-responses": [
+      { "label": "Summarize the themes", "prompt": "Summarize the themes from those survey responses." },
+      { "label": "Score distribution", "prompt": "Show me the score distribution across those responses." },
+      { "label": "Who are the detractors?", "prompt": "Show me users who left a low score and what they did next." },
+      { "label": "Find their sessions", "prompt": "Find session recordings from users who left a low score." },
+      { "label": "Save the response summary", "prompt": "Save this response summary as an insight." },
+      { "label": "Add to research notebook", "prompt": "Add this survey summary to my user research notebook." }
+    ],
+    "query-experiment": [
+      { "label": "Which variant is winning?", "prompt": "Show me the conversion rate of each variant in that experiment." },
+      { "label": "Slice by segment", "prompt": "Show me how each variant performed by user segment." },
+      { "label": "Statistical significance", "prompt": "Has that experiment reached statistical significance yet?" },
+      { "label": "Find variant sessions", "prompt": "Find session recordings from users in the winning variant." },
+      { "label": "Save the readout", "prompt": "Save that experiment readout as an insight." },
+      { "label": "Add to experiment notebook", "prompt": "Add this experiment readout to my experiments notebook." }
+    ],
+    "query-session-recordings-list": [
+      { "label": "Summarize what users did", "prompt": "Summarize what users did in those sessions." },
+      { "label": "Find common drop-offs", "prompt": "What's the most common step where users got stuck in those sessions?" },
+      { "label": "Errors in those sessions", "prompt": "Which errors fired most often across those sessions?" },
+      { "label": "Properties of those users", "prompt": "Show me the most common user properties across those sessions." },
+      { "label": "Save the session summary", "prompt": "Save the summary of those sessions as an insight." },
+      { "label": "Add to UX notebook", "prompt": "Add these session findings to my UX research notebook." }
+    ],
+    "execute-sql": [
+      { "label": "Add p50/p90/p99", "prompt": "Re-run that query with p50/p90/p99 added." },
+      { "label": "Slice differently", "prompt": "Re-run that query grouped by the most common user property." },
+      { "label": "Find the outliers", "prompt": "Re-run that query and surface the top 5 outliers." },
+      { "label": "Compare to last week", "prompt": "Compare that query result to the same window last week." },
+      { "label": "Save as an insight", "prompt": "Turn that query result into a saved insight." },
+      { "label": "Pin to data dashboard", "prompt": "Pin that query result to my data dashboard." }
     ],
     "create-dashboard": [
       { "label": "Add another tile", "prompt": "Add a tile showing daily active users to that dashboard." },
-      { "label": "Subscribe to weekly digest", "prompt": "Email me a weekly summary of that dashboard." },
-      { "label": "Share with the team", "prompt": "Make that dashboard shareable with the team." },
       { "label": "Add a leaderboard tile", "prompt": "Add a top-5 users tile to that dashboard." },
       { "label": "Annotate today", "prompt": "Annotate today on that dashboard as the launch baseline." },
-      { "label": "Compare to last quarter", "prompt": "Add a tile comparing this quarter to the last on the same dashboard." }
+      { "label": "Compare to last quarter", "prompt": "Add a tile comparing this quarter to the last on the same dashboard." },
+      { "label": "Add an errors tile", "prompt": "Add a tile showing the top 3 errors this week to that dashboard." },
+      { "label": "Add to dashboards notebook", "prompt": "Add a link to that dashboard in my dashboards notebook." }
     ],
     "create-insight": [
-      { "label": "Pin it to a dashboard", "prompt": "Pin that insight to my main dashboard." },
-      { "label": "Schedule a subscription", "prompt": "Email me that insight every Monday morning." },
-      { "label": "Split by user property", "prompt": "Split that insight by the most common user property." },
-      { "label": "Alert on a threshold", "prompt": "Alert me when that insight crosses an unusual value." },
-      { "label": "Compare to a control", "prompt": "Compare that insight between paid and free users side-by-side." },
-      { "label": "Save the underlying query", "prompt": "Save the SQL behind that insight so I can edit it later." }
-    ],
-    "execute-sql": [
-      { "label": "Materialize the result", "prompt": "Save that query as a materialized view I can reuse." },
-      { "label": "Chart it", "prompt": "Turn that into an insight with a line chart." },
-      { "label": "Slice differently", "prompt": "Re-run that query grouped by the most common user property." },
-      { "label": "Find the outliers", "prompt": "Re-run that query and surface the top 5 outliers." },
-      { "label": "Schedule it", "prompt": "Run that query every morning and post the result to Slack." },
-      { "label": "Add a percentile", "prompt": "Add p50/p90/p99 to that query's result." }
-    ],
-    "cohorts-create": [
-      { "label": "Build a funnel for them", "prompt": "Build a funnel showing how that cohort moves through onboarding." },
-      { "label": "Compare to everyone else", "prompt": "How does retention for that cohort compare to all other users?" },
-      { "label": "Run an experiment", "prompt": "Run an A/B test limited to that cohort." },
-      { "label": "Survey them", "prompt": "Send an NPS survey to that cohort." },
-      { "label": "Target a flag", "prompt": "Limit a feature flag rollout to just that cohort." },
-      { "label": "Find a lookalike", "prompt": "Find a cohort that behaves like that one but is larger." }
-    ],
-    "survey-create": [
-      { "label": "Launch the survey", "prompt": "Launch that survey now." },
-      { "label": "Target a cohort", "prompt": "Only show that survey to active users from the last 7 days." },
-      { "label": "Add a follow-up question", "prompt": "Add an open-ended follow-up question to that survey." },
-      { "label": "Summarize early responses", "prompt": "Summarize the responses to that survey so far." },
-      { "label": "A/B test the wording", "prompt": "Run two variants of that survey question and compare response rate." }
+      { "label": "Pin to main dashboard", "prompt": "Pin that insight to my main dashboard." },
+      { "label": "Split by user property", "prompt": "Re-run that insight split by the most common user property." },
+      { "label": "Compare to a control", "prompt": "Re-run that insight comparing paid vs free users side-by-side." },
+      { "label": "Save the underlying query", "prompt": "Save the underlying query for that insight so I can edit it later." },
+      { "label": "Add to notebook", "prompt": "Add that insight to my analytics notebook." },
+      { "label": "Annotate the moment", "prompt": "Annotate today on the chart for that insight." }
     ]
   },
 
   "roleFollowUps": {
     "founder": [
-      { "label": "Pin it to the exec dashboard", "prompt": "Add that result to my exec dashboard." },
-      { "label": "Alert me if it tanks", "prompt": "Page me if that metric drops 10% week-over-week." },
+      { "label": "Pin to exec dashboard", "prompt": "Add that result to my exec dashboard." },
       { "label": "Tie it to revenue", "prompt": "How does that correlate with paid conversions?" },
-      { "label": "Share with investors", "prompt": "Make a shareable view of that for our next board update." }
+      { "label": "Compare to last quarter", "prompt": "How does that compare against the same period last quarter?" },
+      { "label": "Save for board update", "prompt": "Save that as an insight I can attach to the next board update." }
     ],
     "product": [
       { "label": "Build a funnel around it", "prompt": "Build a funnel that includes that step." },
-      { "label": "Wrap in an experiment", "prompt": "Run an A/B test on that change." },
-      { "label": "Cohort the high-intent users", "prompt": "Create a cohort of users showing the strongest signal in that result." },
-      { "label": "Send a survey", "prompt": "Trigger a short survey to anyone in that cohort." }
+      { "label": "Find high-intent users", "prompt": "Show me which users in that group also completed activation." },
+      { "label": "Check related experiments", "prompt": "Show me how this metric trended across my recent experiments." },
+      { "label": "Save to product notebook", "prompt": "Add this finding to my product analytics notebook." }
     ],
     "leadership": [
-      { "label": "Add to weekly digest", "prompt": "Subscribe me to a weekly email containing that view." },
       { "label": "Compare to last quarter", "prompt": "How does that compare against the same period last quarter?" },
-      { "label": "Slack the leadership channel", "prompt": "Send a Slack alert to leadership if that drifts significantly." }
+      { "label": "Pin to leadership dashboard", "prompt": "Pin this view to my leadership dashboard." },
+      { "label": "Save for next meeting", "prompt": "Save this as an insight I can pull up in the next leadership meeting." }
     ],
     "marketing": [
       { "label": "Annotate the launch", "prompt": "Annotate today as the campaign launch on that chart." },
-      { "label": "Retarget the cohort", "prompt": "Build a retargetable cohort of users showing that behavior." },
+      { "label": "What did they do next?", "prompt": "Show me what users in that group did next." },
       { "label": "Tie back to channel", "prompt": "Split that result by acquisition channel." },
-      { "label": "A/B test the landing", "prompt": "Run an A/B test on the landing page driving that traffic." }
+      { "label": "Compare to landing tests", "prompt": "Compare this result across my recent landing-page experiments." }
     ],
     "engineering": [
-      { "label": "Surface the regression", "prompt": "Did that change land alongside a deploy in the last 24 hours?" },
-      { "label": "Page on the SLO", "prompt": "Set up an SLO alert for that metric." },
-      { "label": "Kill-switch the cause", "prompt": "Create a kill-switch flag for the feature most likely to be related." },
-      { "label": "Group by release", "prompt": "Re-run that broken down by app version or release." }
+      { "label": "Did a deploy land?", "prompt": "Did that change land alongside a deploy in the last 24 hours?" },
+      { "label": "Flag changes that fit", "prompt": "Show me which feature flag changes correlate with that change in metric." },
+      { "label": "Group by release", "prompt": "Re-run that broken down by app version or release." },
+      { "label": "Save to incident notebook", "prompt": "Save this analysis to my incident notebook." }
     ],
     "data": [
-      { "label": "Save as SQL view", "prompt": "Save that query as a reusable SQL view." },
-      { "label": "Materialize it", "prompt": "Materialize the underlying table so future queries are faster." },
       { "label": "Add percentiles", "prompt": "Add p50/p90/p99 distributions to that result." },
-      { "label": "Export to warehouse", "prompt": "Sync that result to my data warehouse." }
+      { "label": "Compare to last month", "prompt": "Show me how that result trended over the last month." },
+      { "label": "Save as an insight", "prompt": "Save that query result as an insight." },
+      { "label": "Pin to data dashboard", "prompt": "Pin this result to my data team dashboard." }
     ]
   },
 
@@ -441,28 +458,31 @@
     { "label": "Take a different angle", "prompt": "Look at the same question from a completely different angle." },
     { "label": "Find the surprise", "prompt": "What's the most surprising thing in that result?" },
     { "label": "Slice by user", "prompt": "Re-run that split by the highest-value user segment." },
-    { "label": "Compare with last month", "prompt": "How does that look compared to the same window a month ago." },
-    { "label": "Make it actionable", "prompt": "Turn that into an alert, dashboard, or saved insight." }
+    { "label": "Compare with last month", "prompt": "How does that look compared to the same window a month ago?" },
+    { "label": "Save as an insight", "prompt": "Save that result as an insight I can come back to." },
+    { "label": "Pin to a dashboard", "prompt": "Pin this view to my main dashboard." },
+    { "label": "Add to a notebook", "prompt": "Add this finding to my notebook." }
   ],
 
   "deepDiveFollowUps": [
     { "label": "Save this exploration", "prompt": "Save the most useful chart from this session as a dashboard I can come back to." },
-    { "label": "Set up an alert", "prompt": "Pick the most interesting metric from this session and alert me when it shifts." },
-    { "label": "Summarize what we found", "prompt": "Summarize the key findings from everything we just looked at in 3 bullets." }
+    { "label": "Summarize what we found", "prompt": "Summarize the key findings from everything we just looked at in 3 bullets." },
+    { "label": "Pin a session summary", "prompt": "Pin a summary of this session to my main dashboard." },
+    { "label": "Write to a notebook", "prompt": "Write everything we just covered into a notebook entry I can revisit." }
   ],
 
   "crossSellByRole": {
     "founder": [
       { "product": "Session Replay", "prompt": "Find 3 recent sessions where a user looked at pricing but did not sign up.", "description": "Watch what users see — replay turns funnel drop-offs into video." },
-      { "product": "Surveys", "prompt": "Launch an NPS survey targeting all paying customers.", "description": "Quantitative pulse check, no Typeform setup." }
+      { "product": "Surveys", "prompt": "Show me how my NPS results have trended over the last quarter.", "description": "Quantitative pulse check on the survey side of PostHog." }
     ],
     "product": [
-      { "product": "Experiments", "prompt": "Set up an A/B test for the new onboarding flow with a 50/50 split and signup as the primary metric.", "description": "Experiments piggyback on flags — same SDK, no extra setup." },
+      { "product": "Experiments", "prompt": "Show me results from my latest onboarding experiment — which variant is winning?", "description": "Experiments piggyback on flags — same SDK, all readable here." },
       { "product": "Session Replay", "prompt": "Find sessions where users got stuck on the empty state in onboarding.", "description": "See what funnels can't show you." }
     ],
     "leadership": [
-      { "product": "Surveys", "prompt": "Run a quarterly NPS across all paid users.", "description": "Replace Typeform with first-party survey data." },
-      { "product": "Data Warehouse", "prompt": "Compare MRR by signup source using Stripe data joined with event data.", "description": "Sync Stripe / Salesforce / S3 to query revenue alongside events." }
+      { "product": "Surveys", "prompt": "Show me NPS scores from the last quarter — who are the detractors?", "description": "Read the survey data PostHog already collects for you." },
+      { "product": "Data Warehouse", "prompt": "Compare MRR by signup source using Stripe data joined with event data.", "description": "Query revenue alongside events when warehouse is connected." }
     ],
     "marketing": [
       { "product": "Session Replay", "prompt": "Watch 5 sessions from users who came via our last campaign and converted.", "description": "See campaign visitors behave — beyond aggregate numbers." },
