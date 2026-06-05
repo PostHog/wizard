@@ -27,7 +27,6 @@ export const CreateDashboardSlide: AreaSlide = {
   area: 'Create dashboard',
   intro: [
     'Finally we build a live PostHog dashboard for the events your code captures. Use it to watch volume over time, spot new phantoms, and see how traffic shifts as you ship changes.',
-    "Skipped if PostHog wasn't reachable in the previous step. The report still ships without it.",
     'Open the dashboard from the wrap-up screen when the audit completes.',
   ],
   visual: <DashboardVisual />,

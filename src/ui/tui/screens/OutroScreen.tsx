@@ -95,7 +95,7 @@ export const OutroScreen = ({ store }: OutroScreenProps) => {
           {outroData.notebookUrl && (
             <Box marginTop={1}>
               <Text>
-                And mirrored the report to a notebook:{' '}
+                And uploaded the report to a PostHog notebook:{' '}
                 <Text color="cyan">{outroData.notebookUrl}</Text>
               </Text>
             </Box>
