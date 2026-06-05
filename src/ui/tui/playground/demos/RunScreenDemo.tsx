@@ -4,27 +4,21 @@
  * are pre-populated so conditional tips appear.
  */
 
-import { useEffect, useRef, useSyncExternalStore } from 'react';
+import { useEffect, useRef } from 'react';
 import { WizardStore, TaskStatus } from '@ui/tui/store';
 import { DiscoveredFeature } from '@lib/wizard-session';
-import {
-  TabContainer,
-  SplitView,
-  ProgressList,
-  LogViewer,
-  EventPlanViewer,
-  HNViewer,
-} from '@ui/tui/primitives/index';
-import type { ProgressItem } from '@ui/tui/primitives/index';
-import { LearnCard } from '@ui/tui/components/LearnCard';
-import { TipsCard } from '@ui/tui/components/TipsCard';
-import { getContentBlocks as getMigrationContentBlocks } from '@lib/programs/migration/content/index';
-import { WIZARD_LOG_FILE } from '@utils/paths';
+import { RunScreen } from '@ui/tui/screens/RunScreen';
 
 const MOCK_TASKS = [
   {
     label: 'Checking project structure and finding files for event tracking',
     activeForm: 'Checking project structure',
+    status: TaskStatus.Pending,
+    done: false,
+  },
+  {
+    label: 'Load skill menu and install integration-nextjs-app-router skill',
+    activeForm: 'Picking the right skill',
     status: TaskStatus.Pending,
     done: false,
   },
@@ -73,6 +67,18 @@ const MOCK_TASKS = [
   {
     label: 'Add PostHog capture events to project files',
     activeForm: 'Adding capture events',
+    status: TaskStatus.Pending,
+    done: false,
+  },
+  {
+    label: 'Create onboarding dashboard and insight',
+    activeForm: 'Building dashboard',
+    status: TaskStatus.Pending,
+    done: false,
+  },
+  {
+    label: 'Verify $pageview and $autocapture are arriving',
+    activeForm: 'Watching events arrive',
     status: TaskStatus.Pending,
     done: false,
   },
@@ -148,70 +154,5 @@ export const RunScreenDemo = ({ store }: RunScreenDemoProps) => {
     return () => clearInterval(timer);
   }, []);
 
-  useSyncExternalStore(
-    (cb) => store.subscribe(cb),
-    () => store.getSnapshot(),
-  );
-
-  const progressItems: ProgressItem[] = store.tasks.map((t) => ({
-    label: t.label,
-    activeForm: t.activeForm,
-    status: t.status,
-  }));
-
-  const statuses =
-    store.statusMessages.length > 0 ? store.statusMessages : undefined;
-
-  const learnBlocks = getMigrationContentBlocks(store);
-
-  const tabs = [
-    {
-      id: 'status',
-      label: 'Status',
-      component: (
-        <SplitView
-          left={
-            store.learnCardComplete ? (
-              <TipsCard store={store} />
-            ) : (
-              <LearnCard
-                store={store}
-                blocks={learnBlocks}
-                onComplete={() => store.setLearnCardComplete()}
-              />
-            )
-          }
-          right={<ProgressList items={progressItems} title="Tasks" />}
-        />
-      ),
-    },
-    ...(store.eventPlan.length > 0
-      ? [
-          {
-            id: 'events',
-            label: 'Event plan',
-            component: <EventPlanViewer events={store.eventPlan} />,
-          },
-        ]
-      : []),
-    {
-      id: 'logs',
-      label: 'Tail logs',
-      component: <LogViewer filePath={WIZARD_LOG_FILE} />,
-    },
-    {
-      id: 'hn',
-      label: 'HN',
-      component: <HNViewer />,
-    },
-  ];
-
-  return (
-    <TabContainer
-      tabs={tabs}
-      statusMessage={statuses}
-      expandableStatus
-      store={store}
-    />
-  );
+  return <RunScreen store={store} />;
 };

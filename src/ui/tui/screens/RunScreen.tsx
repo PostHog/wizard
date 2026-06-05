@@ -24,6 +24,7 @@ import { LearnCard } from '@ui/tui/components/LearnCard';
 import { TipsCard } from '@ui/tui/components/TipsCard';
 import { useStdoutDimensions } from '@ui/tui/hooks/useStdoutDimensions';
 import { useFileWatcher } from '@ui/tui/hooks/file-watcher';
+import { PhaseVisual } from '@ui/tui/components/PhaseVisuals';
 import { EVENT_PLAN_FILE } from '@lib/programs/posthog-integration/index';
 import { getProgramConfig } from '@lib/programs/program-registry';
 import { getContentBlocks as getSkillContentBlocks } from '@lib/programs/agent-skill/content/index';
@@ -99,15 +100,46 @@ export const RunScreen = ({ store }: RunScreenProps) => {
   );
   const progressList = <ProgressList items={progressItems} title="Tasks" />;
 
-  // On narrow terminals, drop the learn pane and show only progress
-  const statusComponent =
-    columns < 80 ? (
+  // Terminal-width thresholds:
+  //   <80   → progress only
+  //   80–109 → learn + progress
+  //   ≥110  → learn + progress + phase visual
+  const VISUAL_W = 22;
+  const VISUAL_H = 9;
+  let statusComponent;
+  if (columns < 80) {
+    statusComponent = (
       <Box flexDirection="column" flexGrow={1}>
         {progressList}
       </Box>
-    ) : (
-      <SplitView left={leftPane} right={progressList} />
     );
+  } else if (columns < 110) {
+    statusComponent = <SplitView left={leftPane} right={progressList} />;
+  } else {
+    statusComponent = (
+      <Box flexDirection="row" flexGrow={1} gap={2}>
+        <Box
+          flexGrow={1}
+          flexBasis={0}
+          flexDirection="column"
+          overflow="hidden"
+        >
+          {leftPane}
+        </Box>
+        <Box
+          flexGrow={1}
+          flexBasis={0}
+          flexDirection="column"
+          overflow="hidden"
+        >
+          {progressList}
+        </Box>
+        <Box flexShrink={0} flexDirection="column" width={VISUAL_W + 4}>
+          <PhaseVisual store={store} width={VISUAL_W} height={VISUAL_H} />
+        </Box>
+      </Box>
+    );
+  }
 
   const tabs = [
     { id: 'status', label: 'Status', component: statusComponent },
