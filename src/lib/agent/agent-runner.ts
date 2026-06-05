@@ -25,7 +25,6 @@ import { analytics, groupsFromUser } from '@utils/analytics';
 import { getUI } from '@ui';
 import {
   initializeAgent,
-  runAgent as executeAgent,
   AgentErrorType,
   AgentSignals,
   buildWizardMetadata,
@@ -33,6 +32,7 @@ import {
   backupAndFixClaudeSettings,
   restoreClaudeSettings,
 } from './agent-interface';
+import { selectRunner } from './runner';
 import { getCloudUrlFromRegion } from '@utils/urls';
 import {
   evaluateWizardReadiness,
@@ -304,6 +304,10 @@ export async function runProgram(
   const wizardFlags = await analytics.getAllFlagsForWizard();
   const wizardMetadata = buildWizardMetadata(wizardFlags);
 
+  // Select the agent runner backend (anthropic | pi | vercel) from the flags
+  // evaluated above. Resolves to AnthropicRunner today; see runner/index.ts.
+  const runner = selectRunner(wizardFlags);
+
   const mcpUrl = session.localMcp
     ? 'http://localhost:8787/mcp'
     : runtimeEnv('MCP_URL') ||
@@ -372,7 +376,7 @@ export async function runProgram(
   });
 
   // 8. Run agent
-  const agentResult = await executeAgent(
+  const agentResult = await runner.run(
     agent,
     prompt,
     sessionToOptions(session),

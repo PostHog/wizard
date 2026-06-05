@@ -143,6 +143,8 @@ export const WIZARD_REMARK_EVENT_NAME = 'wizard remark';
 export const WIZARD_VARIANT_FLAG_KEY = 'wizard-variant';
 /** Feature flag key that gates the intro-screen "Tools" menu. */
 export const WIZARD_TOOLS_MENU_FLAG_KEY = 'wizard-tools-menu';
+/** Multivariate flag selecting the agent runner backend (`anthropic` | `pi` | `vercel`). */
+export const WIZARD_RUNNER_FLAG_KEY = 'wizard-runner';
 /** Variant key -> metadata for wizard run (VARIANT flag selects which entry to use). */
 export const WIZARD_VARIANTS: Record<string, Record<string, string>> = {
   base: { VARIANT: 'base' },
