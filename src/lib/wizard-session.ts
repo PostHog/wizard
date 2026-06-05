@@ -93,6 +93,8 @@ export interface OutroData {
   reportFile?: string;
   /** PostHog dashboard URL the program created on the user's behalf. */
   dashboardUrl?: string;
+  /** PostHog notebook URL the program uploaded the report to. */
+  notebookUrl?: string;
 }
 
 /** A single question rendered by the WizardAsk overlay. */
@@ -230,6 +232,7 @@ export interface WizardSession {
   } | null;
   outroData: OutroData | null;
   dashboardUrl: string | null;
+  notebookUrl: string | null;
 
   // Additional features queue (drained via stop hook after main integration)
   additionalFeatureQueue: AdditionalFeature[];
@@ -309,6 +312,7 @@ export function buildSession(args: {
     portConflictProcess: null,
     outroData: null,
     dashboardUrl: null,
+    notebookUrl: null,
     additionalFeatureQueue: [],
     programLabel: null,
     skillId: null,
