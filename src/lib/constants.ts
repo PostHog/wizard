@@ -143,6 +143,8 @@ export const WIZARD_REMARK_EVENT_NAME = 'wizard remark';
 export const WIZARD_VARIANT_FLAG_KEY = 'wizard-variant';
 /** Feature flag key that gates the intro-screen "Tools" menu. */
 export const WIZARD_TOOLS_MENU_FLAG_KEY = 'wizard-tools-menu';
+/** Boolean feature flag: when enabled, runs the agent on the new open-code runner instead of the SDK. */
+export const WIZARD_OPEN_CODE_RUNNER_FLAG_KEY = 'wizard-open-code-runner';
 /** Variant key -> metadata for wizard run (VARIANT flag selects which entry to use). */
 export const WIZARD_VARIANTS: Record<string, Record<string, string>> = {
   base: { VARIANT: 'base' },
