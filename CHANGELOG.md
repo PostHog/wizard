@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.17.0](https://github.com/PostHog/wizard/compare/v2.16.1...v2.17.0) (2026-06-05)
+
+
+### Features
+
+* **mcp:** add Claude Desktop/Web to mcp add ([#517](https://github.com/PostHog/wizard/issues/517)) ([501e55a](https://github.com/PostHog/wizard/commit/501e55a0150fee7a926e91044378cd952a359fd4))
+* role-aware MCP tutorial with dialogue follow-ups and goodbye ([#508](https://github.com/PostHog/wizard/issues/508)) ([0c84e2f](https://github.com/PostHog/wizard/commit/0c84e2f4d21e8372697cce54b454998a0bd2f554))
+
 ## [2.16.1](https://github.com/PostHog/wizard/compare/v2.16.0...v2.16.1) (2026-06-05)
 
 

@@ -368,7 +368,7 @@ export function buildWizardMetadata(
  * includes `x-posthog-use-bedrock-fallback: true` so the LLM gateway falls back to Bedrock on
  * Anthropic 5xx, plus any wizard metadata/flags.
  */
-function buildAgentEnv(
+export function buildAgentEnv(
   wizardMetadata: Record<string, string>,
   wizardFlags: Record<string, string>,
 ): string {
