@@ -607,6 +607,20 @@ describe('WizardStore', () => {
       store.pushStatus('msg');
       expect(cb).toHaveBeenCalledTimes(1);
     });
+
+    it('pushStatus caps history as a FIFO, dropping oldest', () => {
+      const store = createStore();
+      for (let i = 0; i < 250; i++) {
+        store.pushStatus(`msg ${i}`);
+      }
+
+      const msgs = store.statusMessages;
+      expect(msgs).toHaveLength(100);
+      // Newest retained, oldest dropped.
+      expect(msgs[msgs.length - 1]).toBe('msg 249');
+      expect(msgs[0]).toBe('msg 150');
+      expect(msgs).not.toContain('msg 0');
+    });
   });
 
   describe('tasks', () => {

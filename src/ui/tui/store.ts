@@ -67,6 +67,13 @@ interface GateEntry {
   resolved: boolean;
 }
 
+/**
+ * FIFO cap on retained status lines. The status bar renders at most
+ * EXPANDED_COUNT (10) and no consumer reads the full history, so this leaves
+ * ample scrollback headroom while bounding both memory and per-push copy cost.
+ */
+const MAX_STATUS_MESSAGES = 100;
+
 export class WizardStore {
   // ── Internal nanostore atoms ─────────────────────────────────────
   private $session = map<WizardSession>(buildSession({}));
@@ -655,9 +662,16 @@ export class WizardStore {
 
   pushStatus(message: string): void {
     const msgs = this.$statusMessages.get();
-    // Skip consecutive duplicate messages
+    // Skip consecutive duplicate messages (no allocation on the hot path)
     if (msgs.length > 0 && msgs[msgs.length - 1] === message) return;
-    this.$statusMessages.set([...msgs, message]);
+    // Nanostore detects change by reference equality, so a new array is
+    // required. At the cap, allocate exactly once at the final size (dropping
+    // the oldest entry) rather than push-then-truncate.
+    const next =
+      msgs.length >= MAX_STATUS_MESSAGES
+        ? [...msgs.slice(msgs.length - MAX_STATUS_MESSAGES + 1), message]
+        : [...msgs, message];
+    this.$statusMessages.set(next);
     this.emitChange();
   }
 
