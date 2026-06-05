@@ -155,6 +155,13 @@ export const McpSuggestedPromptsScreen = ({
   // needing to re-bind on every state change.
   const runAbortRef = useRef<AbortController | null>(null);
 
+  // The Claude Agent SDK session ID of the most recent completed run.
+  // Carried forward into follow-up runs via `resumeSessionId` so the
+  // agent sees prior turns as context. Held in a ref so updating it
+  // doesn't re-trigger the Running useEffect. Cleared whenever the
+  // user returns to PromptPicker — that's a fresh conversation.
+  const currentSessionIdRef = useRef<string | null>(null);
+
   // Run OAuth when entering Authenticating phase.
   useEffect(() => {
     if (phase !== Phase.Authenticating) return;
@@ -241,6 +248,9 @@ export const McpSuggestedPromptsScreen = ({
           prompt: runningPrompt,
           credentials,
           signal: controller.signal,
+          // Read at call-time so a session id captured by the previous
+          // run carries into the follow-up. Null on a fresh start.
+          resumeSessionId: currentSessionIdRef.current ?? undefined,
         })) {
           if (controller.signal.aborted) return;
           setRunChunks((prev) => [...prev, chunk]);
@@ -248,6 +258,12 @@ export const McpSuggestedPromptsScreen = ({
             setLastToolName(chunk.toolName);
           }
           if (chunk.kind === 'done') {
+            // Remember the SDK session id so the next follow-up can
+            // resume it. The SDK may issue a new id on resume — always
+            // overwrite with the latest.
+            if (chunk.sessionId) {
+              currentSessionIdRef.current = chunk.sessionId;
+            }
             finishStream('done', Date.now() - startedAt);
             return;
           }
@@ -363,7 +379,8 @@ export const McpSuggestedPromptsScreen = ({
       // `[p]` is the primary "pick a different prompt" hotkey during
       // Running and FollowUp — always returns to the PromptPicker
       // (aborting the stream if necessary). No-op once the per-session
-      // cap is reached.
+      // cap is reached. Clearing the session id here is what makes
+      // the next pick a fresh conversation rather than a follow-up.
       match: 'p',
       label: 'p',
       action: canPickAnother ? 'pick new prompt' : 'cap reached',
@@ -371,6 +388,7 @@ export const McpSuggestedPromptsScreen = ({
         if (phase !== Phase.Running && phase !== Phase.FollowUp) return;
         if (!canPickAnother) return;
         runAbortRef.current?.abort();
+        currentSessionIdRef.current = null;
         setPhase(Phase.PromptPicker);
       },
     },
@@ -797,13 +815,14 @@ function collapseToFinalAnswer(chunks: AgentChunk[]): AgentChunk[] {
 function capTextChunks(chunks: AgentChunk[]): AgentChunk[] {
   const rows = process.stdout.rows ?? 24;
   const cols = process.stdout.columns ?? 120;
-  // Reserve rows for the FollowUp picker that sits as a fixed section
-  // below the result: divider line, "What next?" header, recap line, 4
-  // picker options (no inter-option margins), plus the prompt + status
-  // chrome above the result and the global keyboard hints bar. Cap the
-  // result aggressively so the picker is always intact — long results
-  // are expected to truncate.
-  const maxVisualRows = Math.max(3, rows - 16);
+  // Reserve rows for the FollowUp picker that sits below the result:
+  // recap line, 4 picker options, marginTop, plus the prompt + status
+  // chrome above the result and the global keyboard hints bar. Be
+  // pessimistic — `process.stdout.rows` doesn't always match the actual
+  // visible area (terminal padding, host UI chrome, etc.), and an
+  // off-by-a-few rows shows up as the result overlapping the picker.
+  // Better to leave the picker breathing room than risk overprint.
+  const maxVisualRows = Math.max(3, rows - 19);
 
   const textChunks = chunks.filter((c) => c.kind === 'text');
   const errors = chunks.filter((c) => c.kind === 'error');
@@ -918,15 +937,14 @@ const FollowUpPhase = ({
   const errorChunk = chunks.find((c) => c.kind === 'error');
   const recap = errorChunk
     ? 'That one errored out — try a different angle?'
+    : !canPickAnother
+    ? `You've hit the ${maxRuns}-prompt tutorial cap.`
     : `Want to keep exploring? Select a follow-up prompt.`;
 
   return (
     <Box flexDirection="column">
       <Text>{recap}</Text>
       <PickerMenu options={options} onSelect={onSelect} />
-      {!canPickAnother && (
-        <Text dimColor>You&apos;ve hit the {maxRuns}-prompt tutorial cap.</Text>
-      )}
     </Box>
   );
 };

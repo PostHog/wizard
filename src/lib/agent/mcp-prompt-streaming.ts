@@ -144,7 +144,9 @@ function messageToChunks(message: any): AgentChunk[] {
   }
 
   if (message?.type === 'result') {
-    chunks.push({ kind: 'done' });
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+    const sessionId = (message as { session_id?: string }).session_id;
+    chunks.push({ kind: 'done', sessionId });
   }
 
   return chunks;
@@ -186,6 +188,12 @@ function buildTerminalFitPrompt(): string {
     `- Code blocks: no language tag, no leading blank lines.`,
     `- No closing pleasantries ("let me know if…", "feel free to…"). Stop when the answer is delivered.`,
     `- No section headers unless the response actually has multiple sections.`,
+    ``,
+    `Tone & framing:`,
+    `- This is a tutorial demoing PostHog (the product the user just installed). You are showing it off, not auditing it. Stay constructive and neutral about PostHog throughout.`,
+    `- Don't editorialize about PostHog's reliability, performance, or cost. Describe what the data shows; treat anomalies as the user's data, not a platform issue.`,
+    `- If a tool call fails or returns nothing, say "the query didn't return data — try a different angle" or similar. Do NOT speculate about outages, gateway issues, MCP problems, or service health.`,
+    `- Avoid value-laden phrases like "worth investigating", "concerning", "red flag", "problematic", "suspicious", "alarming" when describing the user's metrics. Stick to what the numbers show; the user draws conclusions.`,
   ].join('\n');
 }
 
@@ -193,8 +201,12 @@ export async function* runMcpPromptViaSdk(args: {
   prompt: string;
   credentials: Credentials;
   signal: AbortSignal;
+  /** When set, the SDK loads the named session's prior turns as
+   *  context so the follow-up prompt can reference what the agent
+   *  already showed. */
+  resumeSessionId?: string;
 }): AsyncIterable<AgentChunk> {
-  const { prompt, credentials, signal } = args;
+  const { prompt, credentials, signal, resumeSessionId } = args;
   // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
   const { query } = await loadSdk();
 
@@ -207,7 +219,11 @@ export async function* runMcpPromptViaSdk(args: {
     });
 
   const mcpUrl = resolveMcpUrl(credentials.host);
-  logToFile(`[runMcpPromptViaSdk] mcpUrl=${mcpUrl} model=${MODEL}`);
+  logToFile(
+    `[runMcpPromptViaSdk] mcpUrl=${mcpUrl} model=${MODEL} resume=${
+      resumeSessionId ?? '(none)'
+    }`,
+  );
 
   // Route the SDK's LLM calls through the PostHog LLM gateway, authed
   // with the user's OAuth access token. Without these env vars the SDK
@@ -262,6 +278,32 @@ export async function* runMcpPromptViaSdk(args: {
         cwd: process.cwd(),
         permissionMode: 'acceptEdits',
         maxTurns: MAX_TURNS,
+        // When set, the SDK replays the named session's turns into the
+        // new query so the follow-up prompt has full conversation
+        // context. Omit on the first prompt for a fresh session.
+        ...(resumeSessionId ? { resume: resumeSessionId } : {}),
+        // Without `canUseTool` the SDK falls back to "ask the user" on
+        // every MCP tool call — `permissionMode: 'acceptEdits'` only
+        // relaxes Edit/Write, not MCP. Our Ink TUI has no surface to
+        // answer that prompt, so the agent would stall mid-stream
+        // saying things like "needs your approval to create dashboard".
+        // The tutorial's whole point is demoing the MCP tools against
+        // the user's project, so we auto-allow everything that matches
+        // the prefix and deny anything else (defense in depth — the
+        // `allowedTools` filter above already enforces this).
+        canUseTool: (toolName: string, input: unknown) => {
+          if (toolName.startsWith('mcp__posthog-wizard__')) {
+            return Promise.resolve({
+              behavior: 'allow' as const,
+              updatedInput: (input ?? {}) as Record<string, unknown>,
+            });
+          }
+          logToFile(`[runMcpPromptViaSdk] denying non-MCP tool: ${toolName}`);
+          return Promise.resolve({
+            behavior: 'deny' as const,
+            message: `${toolName} is not available in the MCP tutorial — only PostHog MCP tools are permitted.`,
+          });
+        },
         systemPrompt: {
           type: 'preset',
           preset: 'claude_code',

@@ -68,7 +68,7 @@ const SCRIPTS: Record<StreamScript, AgentChunk[]> = {
       text: ' You had 12,308 events from 2,144 distinct users.',
     },
     { kind: 'text', text: '\n\nNothing unusual stood out.' },
-    { kind: 'done' },
+    { kind: 'done', sessionId: 'mock-session-aaa' },
   ],
   'with-tools': [
     { kind: 'text', text: 'Looking up your project…' },
@@ -101,7 +101,7 @@ const SCRIPTS: Record<StreamScript, AgentChunk[]> = {
       kind: 'text',
       text: '\nInsight saved as "Weekly signups" — pinned to your team dashboard.',
     },
-    { kind: 'done' },
+    { kind: 'done', sessionId: 'mock-session-aaa' },
   ],
   'mid-stream-error': [
     { kind: 'text', text: 'Looking at the most recent errors…' },

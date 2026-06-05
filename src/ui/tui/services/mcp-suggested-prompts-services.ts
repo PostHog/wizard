@@ -25,7 +25,10 @@ export type AgentChunk =
   | { kind: 'tool-call'; toolName: string; detail: string }
   | { kind: 'tool-result'; toolName: string; detail: string }
   | { kind: 'error'; text: string }
-  | { kind: 'done' };
+  /** Stream completed. `sessionId` is the SDK session ID of the just-
+   *  completed turn; pass it back as `resumeSessionId` on a follow-up
+   *  call to continue the conversation with full history. */
+  | { kind: 'done'; sessionId?: string };
 
 export interface McpSuggestedPromptsServices {
   /**
@@ -58,6 +61,10 @@ export interface McpSuggestedPromptsServices {
     prompt: string;
     credentials: Credentials;
     signal: AbortSignal;
+    /** When set, resume the named SDK session so the agent sees the
+     *  earlier turns as context. Used by follow-up picks; omitted on
+     *  the first prompt and after `[p]` restarts the conversation. */
+    resumeSessionId?: string;
   }): AsyncIterable<AgentChunk>;
 }
 
@@ -99,6 +106,7 @@ async function* runProductionPromptStreaming(args: {
   prompt: string;
   credentials: Credentials;
   signal: AbortSignal;
+  resumeSessionId?: string;
 }): AsyncIterable<AgentChunk> {
   // Defer the SDK import to call time — the playground never hits
   // this path (it overrides the whole service object), so demo
