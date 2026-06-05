@@ -58,9 +58,8 @@ import {
   getFollowUps,
   getCrossSellPrompts,
   FOLLOW_UP_EXIT_SENTINEL,
-  type SuggestedPrompt,
+  type PromptOption,
   type RoleGreeting,
-  type CrossSellPrompt,
 } from '@lib/mcp-role-prompts';
 import type { Integration } from '@lib/constants';
 import { analytics } from '@utils/analytics';
@@ -656,8 +655,8 @@ const GreetingPhase = ({
 // ── Prompt picker phase ────────────────────────────────────────────────
 
 interface PromptPickerPhaseProps {
-  promptKit: SuggestedPrompt[];
-  crossSell: CrossSellPrompt[];
+  promptKit: PromptOption[];
+  crossSell: PromptOption[];
   onSelect: (value: string | string[]) => void;
 }
 
@@ -666,21 +665,16 @@ const PromptPickerPhase = ({
   crossSell,
   onSelect,
 }: PromptPickerPhaseProps) => {
-  // Cross-sell prompts get prefixed with "Try {Product}" so they stand
-  // out in the flat picker. They share the same picker so arrow keys
-  // flow naturally across both sections.
-  const crossSellOptions = crossSell.map((c) => ({
-    label: `Try ${c.product}  —  ${c.prompt}`,
-    value: c.prompt,
+  // Cross-sells come first and get a "Try {product}" label prefix so
+  // they stand out in the shared picker. Kit prompts use their prompt
+  // text as the label (no explicit `label` set on those entries).
+  // Cap at 4 options total so the picker fits without scrolling.
+  const options = [...crossSell, ...promptKit].slice(0, 4).map((o) => ({
+    label: o.product
+      ? `Try ${o.product}  —  ${o.label ?? o.prompt}`
+      : o.label ?? o.prompt,
+    value: o.prompt,
   }));
-  const kitOptions = promptKit.map((p) => ({
-    label: p.prompt,
-    value: p.prompt,
-  }));
-  // Cap the initial picker at 4 options so the picker fits without
-  // scrolling on a default-sized terminal. Cross-sells come first, then
-  // the role kit fills the remaining slots.
-  const options = [...crossSellOptions, ...kitOptions].slice(0, 4);
 
   return (
     <Box flexDirection="column">
@@ -929,9 +923,11 @@ const FollowUpPhase = ({
     [lastToolName, lastPrompt, role, branchHistory],
   );
 
-  // When the cap is reached, only the exit entry is available.
+  // When the cap is reached, only the exit entry is available. Follow-up
+  // entries always set `label`; fall back to `prompt` defensively in case
+  // a future contributor omits it.
   const options = canPickAnother
-    ? followUps.map((f) => ({ label: f.label, value: f.prompt }))
+    ? followUps.map((f) => ({ label: f.label ?? f.prompt, value: f.prompt }))
     : [{ label: 'Exit', value: FOLLOW_UP_EXIT_SENTINEL }];
 
   const errorChunk = chunks.find((c) => c.kind === 'error');

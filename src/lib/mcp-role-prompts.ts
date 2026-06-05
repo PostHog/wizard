@@ -1,22 +1,24 @@
 /**
  * Role + framework-tailored MCP prompt suggestions.
  *
- * The wizard surfaces these on the McpSuggestedPromptsScreen after MCP install.
- * Picking strategy:
- *   1. If we know the user's role AND framework family, return the bespoke kit.
- *   2. If we only know the role, return the role's default kit.
- *   3. If we only know the framework, return the framework's role-agnostic kit.
- *   4. Otherwise return DEFAULT_KIT.
+ * All copy lives in `mcp-role-prompts.copy.json` so prompts can be
+ * edited without touching TypeScript. This file holds the types,
+ * the lookup functions, and the framework-family mapping.
  *
- * Kit shape: an ordered list of { prompt, description } — first prompt is the
- * "test prompt" we ask the user to copy as the verify-and-celebrate trigger.
+ * The wizard surfaces these on the McpSuggestedPromptsScreen after
+ * MCP install. Picking strategy for the kit:
+ *   1. Known role + known framework → role kit with family overrides.
+ *   2. Known role + unknown framework → role kit, no overrides.
+ *   3. Unknown role → DEFAULT_KIT.
  */
 
 import type { Integration } from './constants';
+import copyData from './mcp-role-prompts.copy.json';
 
 /**
  * Roles that ship from `role_at_organization` on the PostHog user object.
- * `security` isn't in the enum upstream — the engineering kit covers that audience.
+ * `security` isn't in the enum upstream — the engineering kit covers
+ * that audience.
  */
 export const TAILORED_ROLES = [
   'founder',
@@ -29,21 +31,30 @@ export const TAILORED_ROLES = [
 
 export type TailoredRole = (typeof TAILORED_ROLES)[number];
 
-export interface SuggestedPrompt {
-  /** The prompt the user copies and pastes into their agent. */
+/**
+ * Unified shape for every clickable picker entry the screen renders —
+ * initial-picker kit prompts, cross-sell prompts, and follow-up prompts.
+ * The three flavors are distinguished by which optional fields they
+ * populate, not by separate types:
+ *
+ *   kit prompt         → { prompt, description }
+ *   cross-sell prompt  → { prompt, description, product }
+ *   follow-up prompt   → { prompt, label }
+ */
+export interface PromptOption {
+  /** Sent to the agent when picked. Also serves as the picker label when `label` is omitted. */
   prompt: string;
-  /** One-line description shown beside the prompt — what it accomplishes. */
-  description: string;
+  /** Optional picker label override. Follow-ups use this to show a short verb-phrase ("Save as dashboard") instead of the full prompt. */
+  label?: string;
+  /** Optional one-line description shown by the Goodbye sample list. */
+  description?: string;
+  /** Optional product tag — when present, picker prepends "Try {product} —" to the label. */
+  product?: string;
+  /** Stable identifier used by `roleFamilyOverrides` to target a kit entry by name (reorder-safe). Populated on kit entries; left out on cross-sells and follow-ups. */
+  key?: string;
 }
 
-export type PromptKit = SuggestedPrompt[];
-
-function isTailoredRole(role: string | null | undefined): role is TailoredRole {
-  return (
-    typeof role === 'string' &&
-    (TAILORED_ROLES as readonly string[]).includes(role)
-  );
-}
+export type PromptKit = PromptOption[];
 
 /**
  * Buckets `Integration` values into broader framework families so we can
@@ -55,6 +66,61 @@ export type FrameworkFamily =
   | 'backend'
   | 'fullstack'
   | 'unknown';
+
+export interface RoleGreeting {
+  /** 1-line hook — typewrites in. */
+  headline: string;
+  /** 2-3 lines of value framing — revealed line-by-line. */
+  bullets: string[];
+  /** Sets up the picker, e.g. "Pick one to try." — fades in. */
+  outro: string;
+}
+
+export const FOLLOW_UP_EXIT_SENTINEL = '__follow_up_exit__';
+/** How many follow-up suggestions to surface above the exit entry. */
+export const FOLLOW_UP_COUNT = 3;
+
+// ── Data loaded from JSON ──────────────────────────────────────────────
+// One cast per top-level key. JSON imports lose the precise key
+// constraints (e.g. Record<TailoredRole, ...>), so we re-attach them
+// here. TypeScript can still catch shape mismatches at the call site.
+
+const DEFAULT_KIT = copyData.defaultKit as PromptKit;
+const ROLE_KITS = copyData.roleKits as Record<TailoredRole, PromptKit>;
+// Overrides are keyed by a base-kit entry's `key` (e.g. "onboarding",
+// "top-errors") so a kit reorder doesn't silently shift overrides to
+// the wrong slot. Each override is a partial PromptOption that gets
+// merged onto the base entry.
+const ROLE_FAMILY_OVERRIDES = copyData.roleFamilyOverrides as Partial<
+  Record<
+    TailoredRole,
+    Partial<Record<FrameworkFamily, Record<string, PromptOption>>>
+  >
+>;
+const ROLE_GREETINGS = copyData.roleGreetings as Record<
+  TailoredRole,
+  RoleGreeting
+>;
+const NEUTRAL_GREETING = copyData.neutralGreeting as RoleGreeting;
+const TOOL_FOLLOW_UPS = copyData.toolFollowUps as Record<
+  string,
+  PromptOption[]
+>;
+const ROLE_FOLLOW_UPS = copyData.roleFollowUps as Record<
+  TailoredRole,
+  PromptOption[]
+>;
+const GENERIC_FOLLOW_UPS = copyData.genericFollowUps as PromptOption[];
+const DEEP_DIVE_FOLLOW_UPS = copyData.deepDiveFollowUps as PromptOption[];
+const CROSS_SELL_BY_ROLE = copyData.crossSellByRole as Record<
+  TailoredRole,
+  PromptOption[]
+>;
+const NEUTRAL_CROSS_SELL = copyData.neutralCrossSell as PromptOption[];
+
+// ── Framework family map ───────────────────────────────────────────────
+// Stays in code (not JSON) because it's structural data tied to the
+// `Integration` enum, not user-facing copy.
 
 const INTEGRATION_FAMILY: Record<string, FrameworkFamily> = {
   nextjs: 'fullstack',
@@ -80,855 +146,19 @@ const INTEGRATION_FAMILY: Record<string, FrameworkFamily> = {
   javascript_node: 'backend',
 };
 
-export function getFrameworkFamily(
-  integration: Integration | null | undefined,
-): FrameworkFamily {
-  if (!integration) return 'unknown';
-  return INTEGRATION_FAMILY[integration] ?? 'unknown';
-}
-
-// ── Default first-pick prompt ──────────────────────────────────────────
-// Every role kit starts with this prompt. Pre-Phase-6 it was load-bearing
-// as the "verify" trigger (its write to activity_log was what the screen
-// polled for). Post-Phase-6 it's just a good first-pick: a write-shaped
-// prompt creates a visible, dated artifact in the user's project that
-// makes the MCP integration feel real on the first run. The annotation
-// is dated, visible on every chart, and reversible from the PostHog UI
-// in seconds — so a low-risk demo.
-//
-// The constant name (VERIFY_PROMPT) is kept for compatibility with any
-// future code that might still want a "default first prompt" handle,
-// but the screen no longer special-cases it.
-export const VERIFY_PROMPT: SuggestedPrompt = {
-  prompt: "Annotate today with 'PostHog wizard install'",
-  description:
-    'Creates a dated note on your project — visible on every chart. Delete anytime from PostHog.',
-};
-
-// ── Suggested prompts (generic, role-agnostic) ─────────────────────────
-// Conservative kit kept around for fallback uses (the playground demo
-// compares against it, downstream features may want a "neutral" set).
-// The production screen calls `getRolePrompts` instead so users with a
-// known role + framework get a tailored kit.
-export const STOCK_MCP_SUGGESTED_PROMPTS: PromptKit = [
-  {
-    prompt: 'What are my busiest 5 events and when did each last fire?',
-    description:
-      'Inventories your project’s event stream so you can see what’s being captured at a glance.',
-  },
-  {
-    prompt: 'Show me daily event volume for the last 30 days.',
-    description:
-      'Charts your event count day by day — a quick read on volume and trend.',
-  },
-  {
-    prompt:
-      'Create a dashboard with my top 5 events broken down by day for the last 7 days.',
-    description:
-      'Builds a saved dashboard you can pin and share — written back to your project.',
-  },
-];
-
-// ── Default kit (no role, no framework) ────────────────────────────────
-const DEFAULT_KIT: PromptKit = [
-  VERIFY_PROMPT,
-  {
-    prompt: 'Show me my top 5 events from the last 7 days',
-    description: 'Get a feel for what your project is tracking.',
-  },
-  {
-    prompt: 'Build me a funnel for my main user journey',
-    description: 'Insight discovery — your agent picks the events.',
-  },
-  {
-    prompt: 'Create a feature flag called new-feature rolled out to 10%',
-    description: 'Flag CRUD — instant kill switch for your next release.',
-  },
-  {
-    prompt: 'Alert me if my error rate spikes above baseline',
-    description: 'Set up a sensible default alert without leaving your IDE.',
-  },
-];
-
-// ── Role-only kits (used when framework family is unknown) ─────────────
-
-const ROLE_KITS: Record<TailoredRole, PromptKit> = {
-  founder: [
-    VERIFY_PROMPT,
-    {
-      prompt: 'Build me an exec dashboard: MRR, MAU, churn, top events',
-      description: 'A one-glance view of the business you can pin and share.',
-    },
-    {
-      prompt: 'Show me weekly active users for the last 90 days',
-      description: 'The trendline you actually care about.',
-    },
-    {
-      prompt: 'Alert me if MAU drops more than 10% week-over-week',
-      description: 'Wake-up call if growth stalls — set and forget.',
-    },
-    {
-      prompt: 'Run an NPS survey on all paid customers',
-      description: 'Pulse-check on the people paying you.',
-    },
-  ],
-  product: [
-    VERIFY_PROMPT,
-    {
-      prompt: 'Build a funnel for my onboarding flow',
-      description: 'See where new users drop off in their first session.',
-    },
-    {
-      prompt:
-        'Create a feature flag for the new pricing page rolled out to 25%',
-      description: 'Ship safely — flag CRUD straight from your agent.',
-    },
-    {
-      prompt: 'A/B test the redesigned upgrade CTA',
-      description: 'Spin up an experiment without leaving your IDE.',
-    },
-    {
-      prompt: 'Compute week-1 retention split by acquisition channel',
-      description: 'Find the channel that actually retains users.',
-    },
-  ],
-  leadership: [
-    VERIFY_PROMPT,
-    {
-      prompt: 'Build a board dashboard: revenue, MAU, churn, support backlog',
-      description: 'Pre-board prep in one prompt.',
-    },
-    {
-      prompt: 'Show MAU growth over the last 4 quarters',
-      description: 'The chart for the next leadership slide.',
-    },
-    {
-      prompt: 'Alert the leadership channel when churn doubles week-over-week',
-      description: 'Slack ping when something needs your attention.',
-    },
-    {
-      prompt: 'Which features drive the most upgrades?',
-      description: 'Ranked breakdown of what actually moves the needle.',
-    },
-  ],
-  marketing: [
-    VERIFY_PROMPT,
-    {
-      prompt: "Cohort of users who saw pricing but didn't sign up",
-      description: 'Retargetable list of high-intent visitors.',
-    },
-    {
-      prompt: 'A/B test the landing page hero copy',
-      description: 'Run the experiment, get the verdict, no engineering ask.',
-    },
-    {
-      prompt: 'Send an NPS survey to users who clicked our last newsletter',
-      description: 'Closed-loop feedback on the campaign that just ran.',
-    },
-    {
-      prompt: 'Annotate today as the launch of the new landing page',
-      description: 'Pin the deploy on every chart so future you can find it.',
-    },
-  ],
-  engineering: [
-    VERIFY_PROMPT,
-    {
-      prompt: "List flags rolled out to 100% — they're probably safe to delete",
-      description: 'Dead-code hunt for your feature flag config.',
-    },
-    {
-      prompt: 'Show me the top 5 unresolved errors this week',
-      description: 'Triage queue without opening another tab.',
-    },
-    {
-      prompt: 'Page me if 5xx error rate exceeds 1% over 5 minutes',
-      description: 'Alerting that catches real incidents.',
-    },
-    {
-      prompt: 'Add a kill-switch flag for the next release rolled out to 0%',
-      description: 'Ship safer — one prompt sets up the rollback.',
-    },
-  ],
-  data: [
-    VERIFY_PROMPT,
-    {
-      prompt: 'Top 5 events by volume in the last 24 hours',
-      description: 'Smoke test for ingestion + a sanity check on volumes.',
-    },
-    {
-      prompt: 'Retention curve for paid users by signup month',
-      description: "The cohort chart you'd build first anyway.",
-    },
-    {
-      prompt: 'Funnel: signup → activated → first power feature → paid',
-      description: 'Drop-off across the full journey, ready to slice.',
-    },
-    {
-      prompt:
-        'Cohort of power users — 5+ sessions per week over the last month',
-      description: 'High-value segment, materialized in seconds.',
-    },
-  ],
-};
-
-// ── Role × framework family overrides (specific replacements) ──────────
-// Only override individual prompts where the framework changes the answer.
-// Anything not listed inherits from the role kit above.
-
-interface PromptOverrides {
-  /** Override the prompt at this index (0-based) within the role's kit. */
-  [index: number]: SuggestedPrompt;
-}
-
-type FamilyOverrides = Partial<Record<FrameworkFamily, PromptOverrides>>;
-
-const ROLE_FAMILY_OVERRIDES: Partial<Record<TailoredRole, FamilyOverrides>> = {
-  product: {
-    'frontend-web': {
-      3: {
-        prompt:
-          'A/B test the redesigned upgrade CTA — variants control / red / green',
-        description: 'Frontend experiment with three arms, wired to your flag.',
-      },
-    },
-    mobile: {
-      1: {
-        prompt:
-          'Funnel: app_open → onboarding_complete → first_session_complete',
-        description:
-          'Mobile-flavored onboarding funnel with sensible defaults.',
-      },
-      3: {
-        prompt:
-          'Create a feature flag gated on app version >= the current release',
-        description:
-          'Version-gated rollouts — only new clients see the change.',
-      },
-    },
-    backend: {
-      1: {
-        prompt: 'Funnel of signup → first API call → paid for last 30 days',
-        description:
-          'Backend funnel that reflects what your service actually sees.',
-      },
-    },
-  },
-  engineering: {
-    'frontend-web': {
-      2: {
-        prompt:
-          'Top 5 JS errors by occurrence count this week, with affected URLs',
-        description: 'Frontend-specific error triage — sorted by blast radius.',
-      },
-    },
-    mobile: {
-      2: {
-        prompt:
-          'Top crashes this week by app version, sorted by affected users',
-        description:
-          'Mobile crash triage straight from the same data PostHog has.',
-      },
-      3: {
-        prompt: 'Page me when crash-free sessions drop below 99%',
-        description:
-          'Crash-free SLA alert — the one mobile metric that matters.',
-      },
-    },
-    backend: {
-      2: {
-        prompt: 'Top 5 server-side errors this week, grouped by endpoint',
-        description: 'Backend error triage by route, sorted by frequency.',
-      },
-      3: {
-        prompt:
-          'Alert when p95 response time exceeds 500ms over a 5-minute window',
-        description: 'Latency SLO alert against the data you already collect.',
-      },
-    },
-  },
-  data: {
-    backend: {
-      3: {
-        prompt:
-          'Funnel: api_signup → first_api_call → first_paid_event over last 30 days',
-        description:
-          'Backend conversion funnel — captures the value your service delivers.',
-      },
-    },
-  },
-};
-
-/**
- * Resolve the right kit given everything we know about the user + project.
- * Always returns at least DEFAULT_KIT; never throws.
- */
-export function getRolePrompts(
-  role: string | null | undefined,
-  integration: Integration | null | undefined,
-): PromptKit {
-  const family = getFrameworkFamily(integration);
-
-  if (!isTailoredRole(role)) {
-    // Unknown role — DEFAULT_KIT is already framework-agnostic and broad.
-    return DEFAULT_KIT;
-  }
-
-  const baseKit = ROLE_KITS[role];
-  const overridesForRole = ROLE_FAMILY_OVERRIDES[role];
-  const overridesForFamily = overridesForRole?.[family];
-
-  if (!overridesForFamily) {
-    return baseKit;
-  }
-
-  return baseKit.map((prompt, idx) => overridesForFamily[idx] ?? prompt);
-}
-
-/**
- * Public-facing label for a role — used to acknowledge the user when the
- * kit is rendered (e.g. "Picked for a product manager:").
- */
-const ROLE_LABEL: Record<TailoredRole, string> = {
-  founder: 'a founder',
-  product: 'a product manager',
-  leadership: 'leadership',
-  marketing: 'marketing',
-  engineering: 'engineering',
-  data: 'a data analyst',
-};
-
-export function getRoleLabel(role: string | null | undefined): string | null {
-  if (!isTailoredRole(role)) return null;
-  return ROLE_LABEL[role];
-}
-
-// ── Role-tuned greeting copy ───────────────────────────────────────────
-// Shown in the Greeting phase between Authenticating and PromptPicker.
-// The screen feeds these into a ContentSequencer: headline typewrites,
-// bullets reveal line-by-line, outro fades in, then the picker mounts.
-
-export interface RoleGreeting {
-  /** 1-line hook — typewrites in. */
-  headline: string;
-  /** 2-3 lines of value framing — revealed line-by-line. */
-  bullets: string[];
-  /** Sets up the picker, e.g. "Pick one to try." — fades in. */
-  outro: string;
-}
-
-const ROLE_GREETINGS: Record<TailoredRole, RoleGreeting> = {
-  founder: {
-    headline: 'Founders use MCP to keep a hand on growth.',
-    bullets: [
-      'Weekly active users, retention, and revenue without leaving your IDE.',
-      'Alerts when something stalls — set once, forget about it.',
-      'Pin annotations on every chart so you remember what shipped.',
-    ],
-    outro:
-      "Pick a prompt — your agent will run it on your project's real data.",
-  },
-  product: {
-    headline: 'PMs use MCP to ship faster and learn quicker.',
-    bullets: [
-      'Funnels for every onboarding flow you want to test.',
-      'Feature flags and experiments without a deploy.',
-      'Retention sliced by acquisition channel in seconds.',
-    ],
-    outro: 'Pick a prompt — your agent will do the legwork.',
-  },
-  leadership: {
-    headline: 'Run the business from your terminal.',
-    bullets: [
-      'Board-ready dashboards in one prompt.',
-      'Slack alerts when MAU, churn, or revenue drifts.',
-      'The numbers for the next leadership slide, on tap.',
-    ],
-    outro: 'Pick a prompt to see PostHog work for you.',
-  },
-  marketing: {
-    headline: 'Marketing campaigns, fully instrumented.',
-    bullets: [
-      'Cohorts of high-intent visitors, ready to retarget.',
-      'A/B test landing copy without an engineering ticket.',
-      'Tie every campaign to revenue with annotated launches.',
-    ],
-    outro: 'Pick a prompt to try it on your data.',
-  },
-  engineering: {
-    headline: 'MCP is your shortest path from bug to fix.',
-    bullets: [
-      'Top errors this week, sorted by blast radius.',
-      'Latency SLOs and crash-free SLAs with one prompt.',
-      'Kill-switch flags ready before the next release.',
-    ],
-    outro: 'Pick a prompt — your agent has full read/write access.',
-  },
-  data: {
-    headline: 'Data work without leaving the terminal.',
-    bullets: [
-      'Cohorts in seconds, materialized in your project.',
-      'Retention curves by signup month, sliced any way you want.',
-      'Run SQL against your event stream — no copy-paste, no exports.',
-    ],
-    outro: 'Pick a prompt — every result is real data from your project.',
-  },
-};
-
-const NEUTRAL_GREETING: RoleGreeting = {
-  headline: 'PostHog MCP turns your agent into a product analyst.',
-  bullets: [
-    'Run queries, build dashboards, ship flags — straight from your IDE.',
-    'Every result is real data from your project.',
-    'No copy-pasting tokens, no context switching.',
-  ],
-  outro: 'Pick a prompt to see what MCP can do.',
-};
-
-export function getRoleGreeting(role: string | null | undefined): RoleGreeting {
-  if (!isTailoredRole(role)) return NEUTRAL_GREETING;
-  return ROLE_GREETINGS[role];
-}
-
-// ── Follow-up dialogue tree ────────────────────────────────────────────
-// After a prompt finishes streaming we surface 3 context-aware next
-// steps + an exit entry. To avoid feeling stuck on the same three
-// suggestions, the candidate pool blends three sources:
-//
-//   1. Tool-specific pool — keyed by the agent's most recent tool call,
-//      tailored to "you just ran X, what's natural after?"
-//   2. Role-specific pool — keyed by the user's role, tailored to "your
-//      day-to-day with PostHog probably looks like this".
-//   3. Generic pool — broad creative prompts that always make sense.
-//
-// We dedupe against `branchHistory` so the user never sees a suggestion
-// for a prompt they already ran, then pick 3 with a rotation offset
-// driven by `branchHistory.length`. The rotation means a user who keeps
-// hitting the same tool sees a different slice each visit, and a user
-// going deep down the tree sees the pool evolve.
-//
-// The exit follow-up is always appended last so dismissal is
-// discoverable without [esc].
-
-export interface FollowUp {
-  /** Label shown in the FollowUp PickerMenu. */
-  label: string;
-  /** Prompt to run on pick. Equal to FOLLOW_UP_EXIT_SENTINEL for the exit entry. */
-  prompt: string;
-}
-
-export const FOLLOW_UP_EXIT_SENTINEL = '__follow_up_exit__';
-/** How many follow-up suggestions to surface above the exit entry. */
-export const FOLLOW_UP_COUNT = 3;
-
-const EXIT_FOLLOW_UP: FollowUp = {
+const EXIT_FOLLOW_UP: PromptOption = {
   label: "I'm done — exit",
   prompt: FOLLOW_UP_EXIT_SENTINEL,
 };
 
-// Tool-name → candidate follow-ups. Pools are intentionally larger than
-// FOLLOW_UP_COUNT so successive visits rotate through different
-// suggestions. Tool names mirror what the PostHog MCP server emits;
-// `normalizeToolName` strips the `mcp__<server>__` prefix at lookup.
-const TOOL_FOLLOW_UPS: Record<string, FollowUp[]> = {
-  'query-error-tracking-issue': [
-    {
-      label: 'Dig into the top issue',
-      prompt:
-        'Show me the stack trace and recent occurrences for the top error.',
-    },
-    {
-      label: 'Set up an alert',
-      prompt: 'Page me if that error rate doubles week-over-week.',
-    },
-    {
-      label: 'Find related events',
-      prompt: 'What events do users trigger right before hitting that error?',
-    },
-    {
-      label: 'Who is most affected?',
-      prompt: 'Which users have hit that error most often in the last 7 days?',
-    },
-    {
-      label: 'When did it start?',
-      prompt:
-        'Show me when that error first appeared and any deploy that landed nearby.',
-    },
-    {
-      label: 'Suppress the noise',
-      prompt: 'Suppress the noisiest error for now so I can focus.',
-    },
-  ],
-  'query-trends': [
-    {
-      label: 'Save as dashboard',
-      prompt: 'Save that as a dashboard called "Trends" and pin it.',
-    },
-    {
-      label: 'Break down by property',
-      prompt: 'Break that down by the most common user property.',
-    },
-    {
-      label: 'Compare to last week',
-      prompt: 'Compare that against the same period last month.',
-    },
-    {
-      label: 'Build a funnel from it',
-      prompt: 'Build a funnel using the top events from that trend.',
-    },
-    {
-      label: 'Find the outlier day',
-      prompt: 'Which day stood out the most and what else was going on?',
-    },
-    {
-      label: 'Alert me on a drop',
-      prompt: 'Alert me if that metric drops more than 20% week-over-week.',
-    },
-  ],
-  'query-funnel': [
-    {
-      label: 'Find the biggest drop-off',
-      prompt: 'Which step has the biggest drop-off, and who falls out there?',
-    },
-    {
-      label: 'Cohort the bouncers',
-      prompt: 'Create a cohort of people who dropped out at the biggest step.',
-    },
-    {
-      label: 'Slice by platform',
-      prompt: 'Show that funnel split by mobile vs desktop.',
-    },
-    {
-      label: 'Look at completion time',
-      prompt: 'How long does it take users who complete that funnel?',
-    },
-    {
-      label: 'Compare two cohorts',
-      prompt:
-        'Compare that funnel between new signups and users older than 30 days.',
-    },
-    {
-      label: 'A/B test a fix',
-      prompt:
-        'Set up an experiment to test a change at the biggest drop-off step.',
-    },
-  ],
-  'create-feature-flag': [
-    {
-      label: 'Roll it out to 25%',
-      prompt: 'Roll that flag out to 25% of users.',
-    },
-    {
-      label: 'Add a kill-switch',
-      prompt:
-        'Create a kill-switch flag at 100% so I can disable the feature instantly.',
-    },
-    {
-      label: 'See who is in',
-      prompt: 'Show me which users are currently in that flag.',
-    },
-    {
-      label: 'Wrap it in an experiment',
-      prompt: 'Convert that flag into an A/B test with control + variant arms.',
-    },
-    {
-      label: 'Schedule a ramp',
-      prompt: 'Ramp that flag 10% → 25% → 50% → 100% over the next two weeks.',
-    },
-    {
-      label: 'Filter to a cohort',
-      prompt: 'Limit that flag rollout to beta users only.',
-    },
-  ],
-  'create-dashboard': [
-    {
-      label: 'Add another tile',
-      prompt: 'Add a tile showing daily active users to that dashboard.',
-    },
-    {
-      label: 'Subscribe to weekly digest',
-      prompt: 'Email me a weekly summary of that dashboard.',
-    },
-    {
-      label: 'Share with the team',
-      prompt: 'Make that dashboard shareable with the team.',
-    },
-    {
-      label: 'Add a leaderboard tile',
-      prompt: 'Add a top-5 users tile to that dashboard.',
-    },
-    {
-      label: 'Annotate today',
-      prompt: 'Annotate today on that dashboard as the launch baseline.',
-    },
-    {
-      label: 'Compare to last quarter',
-      prompt:
-        'Add a tile comparing this quarter to the last on the same dashboard.',
-    },
-  ],
-  'create-insight': [
-    {
-      label: 'Pin it to a dashboard',
-      prompt: 'Pin that insight to my main dashboard.',
-    },
-    {
-      label: 'Schedule a subscription',
-      prompt: 'Email me that insight every Monday morning.',
-    },
-    {
-      label: 'Split by user property',
-      prompt: 'Split that insight by the most common user property.',
-    },
-    {
-      label: 'Alert on a threshold',
-      prompt: 'Alert me when that insight crosses an unusual value.',
-    },
-    {
-      label: 'Compare to a control',
-      prompt: 'Compare that insight between paid and free users side-by-side.',
-    },
-    {
-      label: 'Save the underlying query',
-      prompt: 'Save the SQL behind that insight so I can edit it later.',
-    },
-  ],
-  'execute-sql': [
-    {
-      label: 'Materialize the result',
-      prompt: 'Save that query as a materialized view I can reuse.',
-    },
-    {
-      label: 'Chart it',
-      prompt: 'Turn that into an insight with a line chart.',
-    },
-    {
-      label: 'Slice differently',
-      prompt: 'Re-run that query grouped by the most common user property.',
-    },
-    {
-      label: 'Find the outliers',
-      prompt: 'Re-run that query and surface the top 5 outliers.',
-    },
-    {
-      label: 'Schedule it',
-      prompt: 'Run that query every morning and post the result to Slack.',
-    },
-    {
-      label: 'Add a percentile',
-      prompt: "Add p50/p90/p99 to that query's result.",
-    },
-  ],
-  'cohorts-create': [
-    {
-      label: 'Build a funnel for them',
-      prompt:
-        'Build a funnel showing how that cohort moves through onboarding.',
-    },
-    {
-      label: 'Compare to everyone else',
-      prompt: 'How does retention for that cohort compare to all other users?',
-    },
-    {
-      label: 'Run an experiment',
-      prompt: 'Run an A/B test limited to that cohort.',
-    },
-    {
-      label: 'Survey them',
-      prompt: 'Send an NPS survey to that cohort.',
-    },
-    {
-      label: 'Target a flag',
-      prompt: 'Limit a feature flag rollout to just that cohort.',
-    },
-    {
-      label: 'Find a lookalike',
-      prompt: 'Find a cohort that behaves like that one but is larger.',
-    },
-  ],
-  'survey-create': [
-    {
-      label: 'Launch the survey',
-      prompt: 'Launch that survey now.',
-    },
-    {
-      label: 'Target a cohort',
-      prompt: 'Only show that survey to active users from the last 7 days.',
-    },
-    {
-      label: 'Add a follow-up question',
-      prompt: 'Add an open-ended follow-up question to that survey.',
-    },
-    {
-      label: 'Summarize early responses',
-      prompt: 'Summarize the responses to that survey so far.',
-    },
-    {
-      label: 'A/B test the wording',
-      prompt:
-        'Run two variants of that survey question and compare response rate.',
-    },
-  ],
-};
+// ── Helpers ────────────────────────────────────────────────────────────
 
-// Role-specific candidates that supplement tool-specific suggestions.
-// Used when the role is known; mixed into the candidate pool alongside
-// the tool's own pool so a founder and an engineer running the same
-// tool see different combined suggestions.
-const ROLE_FOLLOW_UPS: Record<TailoredRole, FollowUp[]> = {
-  founder: [
-    {
-      label: 'Pin it to the exec dashboard',
-      prompt: 'Add that result to my exec dashboard.',
-    },
-    {
-      label: 'Alert me if it tanks',
-      prompt: 'Page me if that metric drops 10% week-over-week.',
-    },
-    {
-      label: 'Tie it to revenue',
-      prompt: 'How does that correlate with paid conversions?',
-    },
-    {
-      label: 'Share with investors',
-      prompt: 'Make a shareable view of that for our next board update.',
-    },
-  ],
-  product: [
-    {
-      label: 'Build a funnel around it',
-      prompt: 'Build a funnel that includes that step.',
-    },
-    {
-      label: 'Wrap in an experiment',
-      prompt: 'Run an A/B test on that change.',
-    },
-    {
-      label: 'Cohort the high-intent users',
-      prompt:
-        'Create a cohort of users showing the strongest signal in that result.',
-    },
-    {
-      label: 'Send a survey',
-      prompt: 'Trigger a short survey to anyone in that cohort.',
-    },
-  ],
-  leadership: [
-    {
-      label: 'Add to weekly digest',
-      prompt: 'Subscribe me to a weekly email containing that view.',
-    },
-    {
-      label: 'Compare to last quarter',
-      prompt: 'How does that compare against the same period last quarter?',
-    },
-    {
-      label: 'Slack the leadership channel',
-      prompt: 'Send a Slack alert to leadership if that drifts significantly.',
-    },
-  ],
-  marketing: [
-    {
-      label: 'Annotate the launch',
-      prompt: 'Annotate today as the campaign launch on that chart.',
-    },
-    {
-      label: 'Retarget the cohort',
-      prompt: 'Build a retargetable cohort of users showing that behavior.',
-    },
-    {
-      label: 'Tie back to channel',
-      prompt: 'Split that result by acquisition channel.',
-    },
-    {
-      label: 'A/B test the landing',
-      prompt: 'Run an A/B test on the landing page driving that traffic.',
-    },
-  ],
-  engineering: [
-    {
-      label: 'Surface the regression',
-      prompt: 'Did that change land alongside a deploy in the last 24 hours?',
-    },
-    {
-      label: 'Page on the SLO',
-      prompt: 'Set up an SLO alert for that metric.',
-    },
-    {
-      label: 'Kill-switch the cause',
-      prompt:
-        'Create a kill-switch flag for the feature most likely to be related.',
-    },
-    {
-      label: 'Group by release',
-      prompt: 'Re-run that broken down by app version or release.',
-    },
-  ],
-  data: [
-    {
-      label: 'Save as SQL view',
-      prompt: 'Save that query as a reusable SQL view.',
-    },
-    {
-      label: 'Materialize it',
-      prompt: 'Materialize the underlying table so future queries are faster.',
-    },
-    {
-      label: 'Add percentiles',
-      prompt: 'Add p50/p90/p99 distributions to that result.',
-    },
-    {
-      label: 'Export to warehouse',
-      prompt: 'Sync that result to my data warehouse.',
-    },
-  ],
-};
-
-const GENERIC_FOLLOW_UPS: FollowUp[] = [
-  {
-    label: 'Go one level deeper',
-    prompt: 'Run that same question one level deeper.',
-  },
-  {
-    label: 'Take a different angle',
-    prompt: 'Look at the same question from a completely different angle.',
-  },
-  {
-    label: 'Find the surprise',
-    prompt: "What's the most surprising thing in that result?",
-  },
-  {
-    label: 'Slice by user',
-    prompt: 'Re-run that split by the highest-value user segment.',
-  },
-  {
-    label: 'Compare with last month',
-    prompt: 'How does that look compared to the same window a month ago.',
-  },
-  {
-    label: 'Make it actionable',
-    prompt: 'Turn that into an alert, dashboard, or saved insight.',
-  },
-];
-
-// Late-tree candidates: shown when the user has gone several steps deep.
-// Steer toward "wrap up / make it persistent" rather than "go deeper again".
-const DEEP_DIVE_FOLLOW_UPS: FollowUp[] = [
-  {
-    label: 'Save this exploration',
-    prompt:
-      'Save the most useful chart from this session as a dashboard I can come back to.',
-  },
-  {
-    label: 'Set up an alert',
-    prompt:
-      'Pick the most interesting metric from this session and alert me when it shifts.',
-  },
-  {
-    label: 'Summarize what we found',
-    prompt:
-      'Summarize the key findings from everything we just looked at in 3 bullets.',
-  },
-];
+function isTailoredRole(role: string | null | undefined): role is TailoredRole {
+  return (
+    typeof role === 'string' &&
+    (TAILORED_ROLES as readonly string[]).includes(role)
+  );
+}
 
 /**
  * Strip MCP tool-name prefixes so lookup keys can stay short. Real MCP
@@ -955,10 +185,10 @@ function pickRotated<T>(pool: T[], n: number, rotation: number): T[] {
   return result;
 }
 
-/** Drop duplicates while preserving order (by FollowUp.prompt). */
-function dedupeFollowUps(list: FollowUp[]): FollowUp[] {
+/** Drop duplicates while preserving order (by prompt text). */
+function dedupeFollowUps(list: PromptOption[]): PromptOption[] {
   const seen = new Set<string>();
-  const out: FollowUp[] = [];
+  const out: PromptOption[] = [];
   for (const f of list) {
     if (seen.has(f.prompt)) continue;
     seen.add(f.prompt);
@@ -967,19 +197,66 @@ function dedupeFollowUps(list: FollowUp[]): FollowUp[] {
   return out;
 }
 
+// ── Public API ─────────────────────────────────────────────────────────
+
+export function getFrameworkFamily(
+  integration: Integration | null | undefined,
+): FrameworkFamily {
+  if (!integration) return 'unknown';
+  return INTEGRATION_FAMILY[integration] ?? 'unknown';
+}
+
+/**
+ * Resolve the right kit given everything we know about the user + project.
+ * Always returns at least DEFAULT_KIT; never throws.
+ */
+export function getRolePrompts(
+  role: string | null | undefined,
+  integration: Integration | null | undefined,
+): PromptKit {
+  const family = getFrameworkFamily(integration);
+
+  if (!isTailoredRole(role)) {
+    // Unknown role — DEFAULT_KIT is already framework-agnostic and broad.
+    return DEFAULT_KIT;
+  }
+
+  const baseKit = ROLE_KITS[role];
+  const overridesForRole = ROLE_FAMILY_OVERRIDES[role];
+  const overridesForFamily = overridesForRole?.[family];
+
+  if (!overridesForFamily) {
+    return baseKit;
+  }
+
+  // Look up overrides by each entry's stable `key` so a kit reorder
+  // doesn't shift overrides to the wrong slot. An entry without a key,
+  // or a key not present in the override map, passes through unchanged.
+  return baseKit.map((entry) => {
+    const override = entry.key ? overridesForFamily[entry.key] : undefined;
+    return override ?? entry;
+  });
+}
+
+export function getRoleGreeting(role: string | null | undefined): RoleGreeting {
+  if (!isTailoredRole(role)) return NEUTRAL_GREETING;
+  return ROLE_GREETINGS[role];
+}
+
 /**
  * Resolve `FOLLOW_UP_COUNT` context-aware follow-ups + an always-present
- * exit entry. Pulls from three pools — tool-specific, role-specific,
- * generic — and rotates by `branchHistory.length` so successive visits
- * show different slices. Prompts already in `branchHistory` are
- * filtered so the user never sees a repeat suggestion.
+ * exit entry. Pulls from up to four pools — tool-specific, role-specific,
+ * deep-dive (only after the user has explored a few steps), and generic —
+ * dedupes, filters out anything already in `branchHistory`, then picks
+ * `FOLLOW_UP_COUNT` with a rotation offset driven by `branchHistory.length`
+ * so successive visits surface different slices.
  */
 export function getFollowUps(args: {
   lastToolName: string | null;
   lastPrompt: string;
   role: string | null | undefined;
   branchHistory: string[];
-}): FollowUp[] {
+}): PromptOption[] {
   const { lastToolName, role, branchHistory } = args;
   const normalized = normalizeToolName(lastToolName);
   const depth = branchHistory.length;
@@ -987,7 +264,7 @@ export function getFollowUps(args: {
   // Build the candidate pool — order matters because dedup keeps the
   // first occurrence. Tool-specific first (most relevant), then role,
   // then deep-dive (only after the user's been exploring), then generic.
-  const candidates: FollowUp[] = [];
+  const candidates: PromptOption[] = [];
   if (normalized && TOOL_FOLLOW_UPS[normalized]) {
     candidates.push(...TOOL_FOLLOW_UPS[normalized]);
   }
@@ -1011,216 +288,6 @@ export function getFollowUps(args: {
   return [...selected, EXIT_FOLLOW_UP];
 }
 
-// ── Cross-product hints (rendered under tool-result chunks) ────────────
-// Each tool the agent uses lights up a different PostHog product. After
-// the result lands the screen surfaces a one-liner pointing the user
-// toward that product, so the tutorial doubles as a quiet product tour
-// — every action the agent takes earns a small "did you know" moment.
-
-export interface ToolHint {
-  /** Which PostHog product this hint promotes. */
-  product: string;
-  /** One-line callout shown under the tool-result chunk. */
-  text: string;
-}
-
-const TOOL_HINTS: Record<string, ToolHint> = {
-  'query-error-tracking-issue': {
-    product: 'Error Tracking',
-    text: 'Error tracking is built into PostHog — no Sentry subscription needed.',
-  },
-  'query-trends': {
-    product: 'Product Analytics',
-    text: 'Pin this trend to a dashboard so the team sees it without re-running.',
-  },
-  'query-funnel': {
-    product: 'Product Analytics',
-    text: 'Funnels work across web, mobile, and backend — one SDK, all events.',
-  },
-  'query-retention': {
-    product: 'Product Analytics',
-    text: 'Retention curves update live — pin one to the team dashboard.',
-  },
-  'query-lifecycle': {
-    product: 'Product Analytics',
-    text: 'Lifecycle splits users into new / returning / dormant — pair with cohorts.',
-  },
-  'query-paths': {
-    product: 'Product Analytics',
-    text: 'Path analysis pairs well with Session Replay to see what users actually did.',
-  },
-  'create-feature-flag': {
-    product: 'Feature Flags',
-    text: 'Feature flags are free up to 1M evaluations per month.',
-  },
-  'update-feature-flag': {
-    product: 'Feature Flags',
-    text: 'Flag changes are versioned — roll back from the PostHog UI if needed.',
-  },
-  'create-dashboard': {
-    product: 'Dashboards',
-    text: 'Subscribe to a weekly email digest in Settings — no Slack-poking required.',
-  },
-  'insight-create': {
-    product: 'Product Analytics',
-    text: 'Insights pin to dashboards and embed in Notion — no separate BI tool.',
-  },
-  'execute-sql': {
-    product: 'Data Warehouse',
-    text: 'Sync Stripe, Salesforce, or S3 into PostHog to query revenue alongside events.',
-  },
-  'cohorts-create': {
-    product: 'Cohorts',
-    text: 'One cohort definition targets flags, surveys, experiments, and replays.',
-  },
-  'survey-create': {
-    product: 'Surveys',
-    text: 'Surveys are included free — no Typeform needed for product feedback.',
-  },
-  'experiment-create': {
-    product: 'Experiments',
-    text: 'Experiments piggyback on flags — same SDK, no extra setup.',
-  },
-  'session-recording-get': {
-    product: 'Session Replay',
-    text: 'Session replays redact PII automatically — turn on in Project Settings.',
-  },
-  'query-session-recordings-list': {
-    product: 'Session Replay',
-    text: 'Filter replays by cohort, event, or property — narrow to what matters.',
-  },
-  'query-llm-trace': {
-    product: 'LLM Observability',
-    text: 'LLM traces capture latency, cost, and tokens alongside product events.',
-  },
-  'web-analytics-weekly-digest': {
-    product: 'Web Analytics',
-    text: 'Web Analytics is GA-style, first-party, and ships with no cookie banner.',
-  },
-};
-
-export function getToolHint(
-  toolName: string | null | undefined,
-): ToolHint | null {
-  if (!toolName) return null;
-  const normalized = normalizeToolName(toolName);
-  if (!normalized) return null;
-  return TOOL_HINTS[normalized] ?? null;
-}
-
-// ── Cross-sell prompts (rendered above the role kit in PromptPicker) ───
-// Each entry explicitly demos a PostHog product the user may not have
-// tried yet. The picker shows them at the top with a "Try X" tag so the
-// tutorial doubles as a product-discovery menu — pick one and the agent
-// shows what that product would do against the user's actual data.
-
-export interface CrossSellPrompt {
-  /** PostHog product surfaced by this prompt. */
-  product: string;
-  /** Prompt sent to the agent on pick. */
-  prompt: string;
-  /** One-line "why care" rationale shown next to the picker. */
-  description: string;
-}
-
-const CROSS_SELL_BY_ROLE: Record<TailoredRole, CrossSellPrompt[]> = {
-  founder: [
-    {
-      product: 'Session Replay',
-      prompt:
-        'Find 3 recent sessions where a user looked at pricing but did not sign up.',
-      description:
-        'Watch what users see — replay turns funnel drop-offs into video.',
-    },
-    {
-      product: 'Surveys',
-      prompt: 'Launch an NPS survey targeting all paying customers.',
-      description: 'Quantitative pulse check, no Typeform setup.',
-    },
-  ],
-  product: [
-    {
-      product: 'Experiments',
-      prompt:
-        'Set up an A/B test for the new onboarding flow with a 50/50 split and signup as the primary metric.',
-      description: 'Experiments piggyback on flags — same SDK, no extra setup.',
-    },
-    {
-      product: 'Session Replay',
-      prompt:
-        'Find sessions where users got stuck on the empty state in onboarding.',
-      description: "See what funnels can't show you.",
-    },
-  ],
-  leadership: [
-    {
-      product: 'Surveys',
-      prompt: 'Run a quarterly NPS across all paid users.',
-      description: 'Replace Typeform with first-party survey data.',
-    },
-    {
-      product: 'Data Warehouse',
-      prompt:
-        'Compare MRR by signup source using Stripe data joined with event data.',
-      description:
-        'Sync Stripe / Salesforce / S3 to query revenue alongside events.',
-    },
-  ],
-  marketing: [
-    {
-      product: 'Session Replay',
-      prompt:
-        'Watch 5 sessions from users who came via our last campaign and converted.',
-      description: 'See campaign visitors behave — beyond aggregate numbers.',
-    },
-    {
-      product: 'Web Analytics',
-      prompt: 'Show me top traffic sources to the pricing page this week.',
-      description: 'GA-style first-party web analytics, no cookie banner.',
-    },
-  ],
-  engineering: [
-    {
-      product: 'Error Tracking',
-      prompt: 'Show me the top 5 errors this week and who is affected.',
-      description: 'Built-in error tracking — no Sentry subscription.',
-    },
-    {
-      product: 'Session Replay',
-      prompt: 'Replay the last 3 sessions that hit a 5xx error.',
-      description: 'Stack trace meets replay — see what the user did.',
-    },
-  ],
-  data: [
-    {
-      product: 'Data Warehouse',
-      prompt:
-        'Join my event stream with Stripe subscriptions to surface churn signals.',
-      description:
-        'Connect Stripe / Salesforce / S3, query everything with SQL.',
-    },
-    {
-      product: 'LLM Observability',
-      prompt: 'Show me the top 5 LLM prompts by cost over the last 7 days.',
-      description: 'Track LLM calls, latency, and cost next to product events.',
-    },
-  ],
-};
-
-const NEUTRAL_CROSS_SELL: CrossSellPrompt[] = [
-  {
-    product: 'Session Replay',
-    prompt:
-      'Show me 5 recent sessions where users dropped off before completing signup.',
-    description: 'Replay what users actually do — included on every plan.',
-  },
-  {
-    product: 'Error Tracking',
-    prompt: 'List the top errors my users hit this week.',
-    description: 'Built-in error tracking — no separate tool.',
-  },
-];
-
 /**
  * Cross-sell prompts to surface above the role kit in PromptPicker.
  * Filtered by role so the recommendations stay coherent (founders see
@@ -1228,7 +295,7 @@ const NEUTRAL_CROSS_SELL: CrossSellPrompt[] = [
  */
 export function getCrossSellPrompts(
   role: string | null | undefined,
-): CrossSellPrompt[] {
+): PromptOption[] {
   if (!isTailoredRole(role)) return NEUTRAL_CROSS_SELL;
   return CROSS_SELL_BY_ROLE[role];
 }

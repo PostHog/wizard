@@ -1,21 +1,23 @@
 import {
   getRolePrompts,
   getFrameworkFamily,
-  getRoleLabel,
   getRoleGreeting,
   getFollowUps,
-  getToolHint,
   getCrossSellPrompts,
   FOLLOW_UP_EXIT_SENTINEL,
-  VERIFY_PROMPT,
   TAILORED_ROLES,
 } from '@lib/mcp-role-prompts';
 import { Integration } from '@lib/constants';
 
+// The first entry of every role kit (and DEFAULT_KIT) is the dated
+// annotation prompt. Tests assert against its prompt text rather than
+// a shared constant — VERIFY_PROMPT was removed in the Phase 1 cull.
+const ANNOTATION_PROMPT = "Annotate today with 'PostHog wizard install'";
+
 describe('getRolePrompts', () => {
   it('falls back to DEFAULT_KIT when role is null', () => {
     const kit = getRolePrompts(null, Integration.nextjs);
-    expect(kit[0]).toEqual(VERIFY_PROMPT);
+    expect(kit[0].prompt).toBe(ANNOTATION_PROMPT);
     // DEFAULT_KIT advertises a generic top-events prompt at index 1.
     expect(kit[1].prompt).toMatch(/top 5 events/i);
   });
@@ -29,7 +31,7 @@ describe('getRolePrompts', () => {
     // nextjs → fullstack; no role has fullstack overrides today, so this
     // should be the unmodified product kit.
     const kit = getRolePrompts('product', Integration.nextjs);
-    expect(kit[0]).toEqual(VERIFY_PROMPT);
+    expect(kit[0].prompt).toBe(ANNOTATION_PROMPT);
     expect(kit[1].prompt).toMatch(/onboarding flow/i);
     expect(kit[3].prompt).toBe('A/B test the redesigned upgrade CTA');
   });
@@ -85,19 +87,6 @@ describe('getFrameworkFamily', () => {
   it('maps frontend-web frameworks correctly', () => {
     expect(getFrameworkFamily(Integration.vue)).toBe('frontend-web');
     expect(getFrameworkFamily(Integration.angular)).toBe('frontend-web');
-  });
-});
-
-describe('getRoleLabel', () => {
-  it('returns null for unknown roles', () => {
-    expect(getRoleLabel(null)).toBeNull();
-    expect(getRoleLabel('not-a-role')).toBeNull();
-  });
-
-  it('returns labels for every TAILORED_ROLES entry', () => {
-    for (const role of TAILORED_ROLES) {
-      expect(getRoleLabel(role)).toMatch(/^\w/);
-    }
   });
 });
 
@@ -249,28 +238,6 @@ describe('getFollowUps', () => {
   });
 });
 
-describe('getToolHint', () => {
-  it('returns a hint for known tools', () => {
-    const hint = getToolHint('query-error-tracking-issue');
-    expect(hint).not.toBeNull();
-    expect(hint?.product).toMatch(/error/i);
-    expect(hint?.text.length).toBeGreaterThan(10);
-  });
-
-  it('normalizes MCP-prefixed tool names', () => {
-    const direct = getToolHint('query-trends');
-    const prefixed = getToolHint('mcp__posthog-wizard__query-trends');
-    expect(prefixed).not.toBeNull();
-    expect(prefixed?.product).toBe(direct?.product);
-  });
-
-  it('returns null for unrecognized tools', () => {
-    expect(getToolHint(null)).toBeNull();
-    expect(getToolHint('')).toBeNull();
-    expect(getToolHint('something-the-server-might-add-later')).toBeNull();
-  });
-});
-
 describe('getCrossSellPrompts', () => {
   it('returns neutral cross-sells when role is null', () => {
     const prompts = getCrossSellPrompts(null);
@@ -306,7 +273,7 @@ describe('getCrossSellPrompts', () => {
     const fingerprints = new Set(
       TAILORED_ROLES.map((r) =>
         getCrossSellPrompts(r)
-          .map((p) => p.product + ':' + p.prompt)
+          .map((p) => `${p.product ?? ''}:${p.prompt}`)
           .join('|'),
       ),
     );
