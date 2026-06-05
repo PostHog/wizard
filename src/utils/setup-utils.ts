@@ -18,8 +18,9 @@ import {
   DEFAULT_HOST_URL,
   DUMMY_PROJECT_API_KEY,
   ISSUES_URL,
-  WIZARD_OAUTH_SCOPES,
 } from '@lib/constants';
+import { getOAuthScopesForProgram } from '@lib/oauth/program-scopes';
+import type { ProgramId } from '@lib/programs/program-registry';
 import { analytics } from './analytics';
 import { getUI } from '@ui';
 import {
@@ -387,6 +388,10 @@ export async function getOrAskForProjectData(
   _options: Pick<WizardRunOptions, 'signup' | 'ci' | 'apiKey' | 'projectId'> & {
     email?: string;
     region?: CloudRegion;
+    /** Optional — picks the OAuth scope set via
+     *  `getOAuthScopesForProgram`. Omitted → default
+     *  `WIZARD_OAUTH_SCOPES`. Threaded into `askForWizardLogin`. */
+    programId?: ProgramId | null;
   },
 ): Promise<{
   host: string;
@@ -450,6 +455,7 @@ export async function getOrAskForProjectData(
       signup: _options.signup,
       email: _options.email,
       region: _options.region,
+      programId: _options.programId,
     }),
   );
 
@@ -513,13 +519,16 @@ async function askForWizardLogin(options: {
   signup: boolean;
   email?: string;
   region?: CloudRegion;
+  /** Used to pick the right scope set via `getOAuthScopesForProgram`.
+   *  Omitted → default `WIZARD_OAUTH_SCOPES`. */
+  programId?: ProgramId | null;
 }): Promise<ProjectData & { cloudRegion: CloudRegion }> {
   if (options.signup) {
     return askForProvisioningSignup(options.email, options.region);
   }
 
   const tokenResponse = await performOAuthFlow({
-    scopes: [...WIZARD_OAUTH_SCOPES],
+    scopes: [...getOAuthScopesForProgram(options.programId)],
     signup: false,
   });
 
