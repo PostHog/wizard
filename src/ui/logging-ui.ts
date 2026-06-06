@@ -220,6 +220,10 @@ export class LoggingUI implements WizardUI {
     // No-op in CI mode
   }
 
+  setStage(_stage: string): void {
+    // No-op in CI mode
+  }
+
   setFrameworkContext(_key: string, _value: unknown): void {
     // No-op in CI mode
   }

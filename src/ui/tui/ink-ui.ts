@@ -196,6 +196,10 @@ export class InkUI implements WizardUI {
     this.store.setDashboardUrl(url);
   }
 
+  setStage(stage: string): void {
+    this.store.setCurrentStage(stage);
+  }
+
   setFrameworkContext(key: string, value: unknown): void {
     this.store.setFrameworkContext(key, value);
   }

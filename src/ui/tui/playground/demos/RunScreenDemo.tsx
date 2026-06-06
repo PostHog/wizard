@@ -7,7 +7,17 @@
 import { useEffect, useRef } from 'react';
 import { WizardStore, TaskStatus } from '@ui/tui/store';
 import { DiscoveredFeature } from '@lib/wizard-session';
+import { AgentPhase } from '@lib/agent/agent-phase';
 import { RunScreen } from '@ui/tui/screens/RunScreen';
+
+const STAGE_CYCLE: AgentPhase[] = [
+  AgentPhase.CodebaseScan,
+  AgentPhase.SkillInstall,
+  AgentPhase.DepInstall,
+  AgentPhase.CodeEdits,
+  AgentPhase.EnvSetup,
+  AgentPhase.Dashboards,
+];
 
 const MOCK_TASKS = [
   {
@@ -153,6 +163,18 @@ export const RunScreenDemo = ({ store }: RunScreenDemoProps) => {
 
     return () => clearInterval(timer);
   }, []);
+
+  // Cycle through every Visualizer stage on a faster timer so the playground
+  // exercises each ASCII visual without needing the real agent loop.
+  useEffect(() => {
+    let i = 0;
+    store.setCurrentStage(STAGE_CYCLE[0]);
+    const timer = setInterval(() => {
+      i = (i + 1) % STAGE_CYCLE.length;
+      store.setCurrentStage(STAGE_CYCLE[i]);
+    }, 4000);
+    return () => clearInterval(timer);
+  }, [store]);
 
   return <RunScreen store={store} />;
 };

@@ -9,27 +9,14 @@
  */
 
 import { Box, Text } from 'ink';
-import {
-  useEffect,
-  useMemo,
-  useRef,
-  useSyncExternalStore,
-  type ReactNode,
-} from 'react';
+import { useRef, useSyncExternalStore, type ReactNode } from 'react';
 import type { WizardStore } from '@ui/tui/store';
 import { useStdoutDimensions } from '@ui/tui/hooks/useStdoutDimensions';
 import { useTick } from '@ui/tui/hooks/useTick';
+import { AgentPhase } from '@lib/agent/agent-phase';
 import { MatrixRain, MATRIX_FADE } from './MatrixRain';
 
-export enum AgentPhase {
-  CodebaseScan = 'codebase-scan',
-  SkillInstall = 'skill-install',
-  DepInstall = 'dep-install',
-  CodeEdits = 'code-edits',
-  EnvSetup = 'env-setup',
-  Dashboards = 'dashboards',
-  EventVerify = 'event-verify',
-}
+export { AgentPhase };
 
 // Track titles (PostHog being the "artist" — see VisualizerTab render).
 const PHASE_LABELS: Record<AgentPhase, string> = {
@@ -39,78 +26,10 @@ const PHASE_LABELS: Record<AgentPhase, string> = {
   [AgentPhase.CodeEdits]: 'Editing Source',
   [AgentPhase.EnvSetup]: 'Wiring Up Secrets',
   [AgentPhase.Dashboards]: 'Building Dashboards',
-  [AgentPhase.EventVerify]: 'Watching Events Arrive',
 };
 
-// Order matters — first match wins. Specific patterns first, broad explorer
-// catch-all last. EventVerify deliberately narrow so "find files for event
-// tracking" lands on CodebaseScan, not EventVerify.
-const PATTERNS: { phase: AgentPhase; re: RegExp }[] = [
-  {
-    phase: AgentPhase.SkillInstall,
-    re: /install[_-]?skill|load.*skill|skill[_-]menu|SKILL\.md/i,
-  },
-  {
-    phase: AgentPhase.DepInstall,
-    re: /install.*(package|posthog-(js|node|python|react|svelte)|sdk|dependenc)|verify.*dependenc|pnpm install|npm install|yarn add/i,
-  },
-  {
-    phase: AgentPhase.EnvSetup,
-    re: /\benv\b|\.env|secret|api[_-]?key\b|token|set_env_values|check_env_keys|environment variable/i,
-  },
-  {
-    phase: AgentPhase.Dashboards,
-    re: /dashboard|insight\b|chart\b|onboarding insight/i,
-  },
-  {
-    phase: AgentPhase.EventVerify,
-    re: /\$pageview|\$autocapture|posthog\.capture|telemetry health|received.*event|emit.*event/i,
-  },
-  {
-    phase: AgentPhase.CodeEdits,
-    re: /\b(create|write|edit|update|add|modify|generate|instrument|provider)\b/i,
-  },
-  {
-    phase: AgentPhase.CodebaseScan,
-    re: /check|find|locate|search|read|scan|inspect|explore|analy[sz]e|grep|glob/i,
-  },
-];
-
-function classifyLabel(label: string): AgentPhase | null {
-  for (const { phase, re } of PATTERNS) {
-    if (re.test(label)) return phase;
-  }
-  return null;
-}
-
-/**
- * Side-effect hook: derives the current agent phase from the in-progress
- * task list and pushes it into the store. Call once from a component that
- * stays mounted on the run screen (e.g. RunScreen). Stickiness lives in the
- * store — `setCurrentStage` is a no-op when the stage hasn't changed.
- */
-export function useTrackAgentPhase(store: WizardStore): void {
-  useSyncExternalStore(
-    (cb) => store.subscribe(cb),
-    () => store.getSnapshot(),
-  );
-  const tasks = store.tasks;
-  const detected = useMemo(() => {
-    for (let i = tasks.length - 1; i >= 0; i--) {
-      const t = tasks[i];
-      if (t.status !== 'in_progress') continue;
-      const phase = classifyLabel(t.label) || classifyLabel(t.activeForm ?? '');
-      if (phase) return phase;
-    }
-    return null;
-  }, [tasks]);
-  useEffect(() => {
-    if (detected) store.setCurrentStage(detected);
-  }, [detected, store]);
-}
-
-/** Read-only: returns the active phase from the store. Defaults to
- *  `CodebaseScan` until the tracker has detected something. */
+/** Reads the active phase from the store. The agent loop pushes it in via
+ *  `getUI().setStage(...)` whenever a new tool fires. */
 export function useAgentPhase(store: WizardStore): AgentPhase {
   useSyncExternalStore(
     (cb) => store.subscribe(cb),
@@ -278,8 +197,6 @@ const PhaseBody = ({
       return <Tumblers width={width} height={height} />;
     case AgentPhase.Dashboards:
       return <TrendLine width={width} height={height} />;
-    case AgentPhase.EventVerify:
-      return <StreamTicker width={width} height={height} />;
   }
 };
 
@@ -789,98 +706,3 @@ const TrendLine = ({ width, height }: VisualProps) => {
     </Panel>
   );
 };
-
-// ── 6. StreamTicker ──────────────────────────────────────────────
-//
-// Newest event at the bottom; older events scroll up & dim. Occasional
-// playful event name slips in.
-
-const EVENT_NAMES = [
-  '$pageview',
-  '$autocapture',
-  '$pageleave',
-  '$identify',
-  '$set',
-  'signup_started',
-  'signup_completed',
-  'button_clicked',
-  'form_submitted',
-  'feature_used',
-];
-const EVENT_WHIMSY = ['$mood_check', '$bug_squashed', '$coffee_break'];
-const EVENT_CONTEXTS = [
-  '/',
-  '/pricing',
-  '/login',
-  '/dashboard',
-  'button.cta',
-  'a.signup',
-  'form.contact',
-  '/changelog',
-];
-
-interface TickerLine {
-  time: string;
-  name: string;
-  context: string;
-}
-
-const StreamTicker = ({ width, height }: VisualProps) => {
-  const tick = useTick(550);
-  const linesRef = useRef<TickerLine[]>([]);
-  const nowRef = useRef(Date.now() - height * 3000);
-
-  if (linesRef.current.length < height) {
-    while (linesRef.current.length < height) {
-      nowRef.current += 1000 + Math.floor(Math.random() * 2500);
-      linesRef.current.push(makeTickerLine(nowRef.current, tick));
-    }
-  } else {
-    linesRef.current.shift();
-    nowRef.current += 1000 + Math.floor(Math.random() * 2500);
-    linesRef.current.push(makeTickerLine(nowRef.current, tick));
-  }
-
-  const lines = linesRef.current;
-  return (
-    <Panel>
-      {Array.from({ length: height }).map((_, y) => {
-        const line = lines[y];
-        const dist = height - 1 - y;
-        const color =
-          dist === 0
-            ? '#E6FFE6'
-            : dist < 2
-            ? '#7CFF7C'
-            : dist < 4
-            ? '#22D622'
-            : MATRIX_FADE;
-        const bold = dist === 0;
-        const text = `> ${line.time} ${line.name.padEnd(16, ' ')} ${
-          line.context
-        }`.slice(0, width - 2);
-        return (
-          <Box key={y}>
-            <Text bold={bold} color={color} dimColor={dist >= 4}>
-              {text.padEnd(width - 2, ' ')}
-            </Text>
-          </Box>
-        );
-      })}
-    </Panel>
-  );
-};
-
-function makeTickerLine(now: number, tick: number): TickerLine {
-  const d = new Date(now);
-  const time = `${String(d.getHours()).padStart(2, '0')}:${String(
-    d.getMinutes(),
-  ).padStart(2, '0')}:${String(d.getSeconds()).padStart(2, '0')}`;
-  const whimsy = tick % 17 === 0;
-  const pool = whimsy ? EVENT_WHIMSY : EVENT_NAMES;
-  return {
-    time,
-    name: pool[Math.floor(Math.random() * pool.length)],
-    context: EVENT_CONTEXTS[Math.floor(Math.random() * EVENT_CONTEXTS.length)],
-  };
-}
