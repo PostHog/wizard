@@ -31,14 +31,15 @@ export enum AgentPhase {
   EventVerify = 'event-verify',
 }
 
+// Track titles (PostHog being the "artist" — see VisualizerTab render).
 const PHASE_LABELS: Record<AgentPhase, string> = {
-  [AgentPhase.CodebaseScan]: 'READING THE CODEBASE',
-  [AgentPhase.SkillInstall]: 'PICKING THE RIGHT SKILL',
-  [AgentPhase.DepInstall]: 'INSTALLING PACKAGES',
-  [AgentPhase.CodeEdits]: 'EDITING SOURCE',
-  [AgentPhase.EnvSetup]: 'WIRING UP SECRETS',
-  [AgentPhase.Dashboards]: 'BUILDING DASHBOARDS',
-  [AgentPhase.EventVerify]: 'WATCHING EVENTS ARRIVE',
+  [AgentPhase.CodebaseScan]: 'Reading the Code',
+  [AgentPhase.SkillInstall]: 'Picking the Right Skill',
+  [AgentPhase.DepInstall]: 'Installing Packages',
+  [AgentPhase.CodeEdits]: 'Editing Source',
+  [AgentPhase.EnvSetup]: 'Wiring Up Secrets',
+  [AgentPhase.Dashboards]: 'Building Dashboards',
+  [AgentPhase.EventVerify]: 'Watching Events Arrive',
 };
 
 // Order matters — first match wins. Specific patterns first, broad explorer
@@ -164,6 +165,10 @@ export const VisualizerTab = ({ store }: { store: WizardStore }) => {
       <Box marginBottom={1}>
         <Text bold color="#E6FFE6">
           {PHASE_LABELS[phase]}
+        </Text>
+        <Text color={MATRIX_FADE}> - </Text>
+        <Text bold color="#7CFF7C">
+          PostHog
         </Text>
       </Box>
       <PhaseBody phase={phase} width={visualW} height={visualH} />
