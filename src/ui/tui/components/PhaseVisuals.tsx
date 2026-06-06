@@ -127,21 +127,20 @@ export const PhaseVisual = ({ store, width, height }: PhaseVisualProps) => {
 export const VisualizerTab = ({ store }: { store: WizardStore }) => {
   const phase = useAgentPhase(store);
   const [columns, rows] = useStdoutDimensions();
-  // Re-render every 180 ms so the EQ bars wobble; the elapsed clock derives
-  // its seconds from Date.now() each render so it still advances 1 Hz.
-  const tick = useTick(180);
+  // ~30 fps so the EQ bars pump rhythmically. The elapsed clock derives its
+  // seconds from Date.now() each render so it still advances 1 Hz.
+  useTick(33);
 
   const visualW = Math.max(20, Math.min(64, columns - 12));
   const visualH = Math.max(7, Math.min(18, rows - 12));
   // Read the stage's startedAt from the store so the elapsed clock survives
-  // tab switches and resets only on real phase transitions.
+  // tab switches and resets only on real phase transitions. Same anchor is
+  // used to phase-lock the EQ beat grid — fresh stage drops the needle.
   const stageStartedAt = store.currentStage?.startedAt ?? Date.now();
-  const elapsedSec = Math.max(
-    0,
-    Math.floor((Date.now() - stageStartedAt) / 1000),
-  );
+  const beatTimeMs = Date.now() - stageStartedAt;
+  const elapsedSec = Math.max(0, Math.floor(beatTimeMs / 1000));
   const timeStr = formatElapsed(elapsedSec);
-  const equalizer = renderMiniEqualizer(tick);
+  const equalizer = renderMiniEqualizer(beatTimeMs);
 
   return (
     <Box
@@ -178,15 +177,65 @@ function formatElapsed(totalSec: number): string {
   return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
 }
 
-function renderMiniEqualizer(t: number): string {
-  // Pseudo-EQ bars driven by the elapsed-second clock — no extra interval
-  // needed, just a bit of motion as the seconds tick.
+// 120 BPM techno in 4/4: a beat is 500 ms, a bar (measure) is 4 beats = 2 s.
+const BPM = 120;
+const BEAT_MS = (60 / BPM) * 1000;
+
+// One "drum hit": a value that snaps to 1.0 on the beat and fades out before
+// the next one. Higher `decay` = snappier (quicker fade). `phaseMs` shifts
+// when the hit fires (e.g. snare lands on beat 2, not beat 1).
+function pulse(
+  t: number,
+  periodMs: number,
+  decay: number,
+  phaseMs = 0,
+): number {
+  // `+ periodMs * 100` is a cheap way to keep the modulo positive even when
+  // phaseMs > t at the very start of a stage.
+  const since = (t - phaseMs + periodMs * 100) % periodMs;
+  return Math.exp((-decay * since) / periodMs);
+}
+
+function renderMiniEqualizer(beatTimeMs: number): string {
   const bars = '▁▂▃▄▅▆▇█';
+
+  // Voices — what you'd hear in a techno track:
+  //   kick   = the BOOM on every beat (the four-on-the-floor thing)
+  //   bass   = a longer-ringing sub note that overlaps the kick (the rumble)
+  //   clap   = the CLAP on beats 2 & 4 (the backbeat)
+  //   hat8   = the TSSSS on eighth notes (twice per beat)
+  //   hat16  = the faster ticka-ticka on sixteenth notes
+  //   pad    = a slow background hum so the track never feels totally silent
+  const kick = pulse(beatTimeMs, BEAT_MS, 4);
+  const bass = pulse(beatTimeMs, BEAT_MS, 1.5);
+  const clap = pulse(beatTimeMs, BEAT_MS * 2, 5, BEAT_MS);
+  const hat8 = pulse(beatTimeMs, BEAT_MS / 2, 8);
+  const hat16 = pulse(beatTimeMs, BEAT_MS / 4, 12);
+  // Slow ~4 s wobble between 0.05 and 0.35 — ambient floor.
+  const pad = 0.2 + 0.15 * Math.sin((2 * Math.PI * beatTimeMs) / 4000);
+
+  // Each of the 12 bars is a mix of voices, going low → high like a real
+  // spectrum analyzer. Low bars feel the kick + bass, mid bars feel the clap,
+  // high bars feel the hats. Pad layered in everywhere so nothing dies.
+  const mix = [
+    bass * 0.7 + kick * 0.5 + pad,
+    bass * 0.6 + kick * 0.6 + pad * 0.9,
+    bass * 0.4 + kick * 0.7 + pad * 0.8,
+    kick * 0.6 + clap * 0.3 + pad * 0.7,
+    kick * 0.4 + clap * 0.5 + pad * 0.7,
+    clap * 0.7 + hat8 * 0.3 + pad * 0.6,
+    clap * 0.6 + hat8 * 0.5 + pad * 0.5,
+    hat8 * 0.7 + clap * 0.3 + pad * 0.5,
+    hat8 * 0.5 + hat16 * 0.4 + pad * 0.4,
+    hat8 * 0.4 + hat16 * 0.5 + pad * 0.4,
+    hat16 * 0.6 + hat8 * 0.3 + pad * 0.3,
+    hat16 * 0.7 + pad * 0.3,
+  ];
+
   let out = '';
-  for (let i = 0; i < 12; i++) {
-    const h = (Math.sin(i * 0.7 + t * 0.5) + Math.cos(i * 1.3 + t * 0.3)) / 2;
-    const idx = Math.floor(((h + 1) / 2) * (bars.length - 1));
-    out += bars[idx];
+  for (const level of mix) {
+    const clamped = Math.min(1, level);
+    out += bars[Math.floor(clamped * (bars.length - 1))];
   }
   return out;
 }
