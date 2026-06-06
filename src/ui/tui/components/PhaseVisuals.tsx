@@ -13,12 +13,12 @@ import {
   useEffect,
   useMemo,
   useRef,
-  useState,
   useSyncExternalStore,
   type ReactNode,
 } from 'react';
 import type { WizardStore } from '@ui/tui/store';
 import { useStdoutDimensions } from '@ui/tui/hooks/useStdoutDimensions';
+import { useTick } from '@ui/tui/hooks/useTick';
 import { MatrixRain, MATRIX_FADE } from './MatrixRain';
 
 export enum AgentPhase {
@@ -83,12 +83,17 @@ function classifyLabel(label: string): AgentPhase | null {
   return null;
 }
 
-export function useAgentPhase(store: WizardStore): AgentPhase {
+/**
+ * Side-effect hook: derives the current agent phase from the in-progress
+ * task list and pushes it into the store. Call once from a component that
+ * stays mounted on the run screen (e.g. RunScreen). Stickiness lives in the
+ * store — `setCurrentStage` is a no-op when the stage hasn't changed.
+ */
+export function useTrackAgentPhase(store: WizardStore): void {
   useSyncExternalStore(
     (cb) => store.subscribe(cb),
     () => store.getSnapshot(),
   );
-  const lastDetectedRef = useRef<AgentPhase>(AgentPhase.CodebaseScan);
   const tasks = store.tasks;
   const detected = useMemo(() => {
     for (let i = tasks.length - 1; i >= 0; i--) {
@@ -99,15 +104,19 @@ export function useAgentPhase(store: WizardStore): AgentPhase {
     }
     return null;
   }, [tasks]);
-  if (detected) lastDetectedRef.current = detected;
-  const phase = lastDetectedRef.current;
-  // Mirror the active phase into the store so the Visualizer's elapsed clock
-  // can survive tab switches and reflect real stage time, not "time since
-  // this component mounted".
   useEffect(() => {
-    store.setCurrentStage(phase);
-  }, [phase, store]);
-  return phase;
+    if (detected) store.setCurrentStage(detected);
+  }, [detected, store]);
+}
+
+/** Read-only: returns the active phase from the store. Defaults to
+ *  `CodebaseScan` until the tracker has detected something. */
+export function useAgentPhase(store: WizardStore): AgentPhase {
+  useSyncExternalStore(
+    (cb) => store.subscribe(cb),
+    () => store.getSnapshot(),
+  );
+  return (store.currentStage?.stage as AgentPhase) ?? AgentPhase.CodebaseScan;
 }
 
 interface PhaseVisualProps {
@@ -128,23 +137,16 @@ export const PhaseVisual = ({ store, width, height }: PhaseVisualProps) => {
 export const VisualizerTab = ({ store }: { store: WizardStore }) => {
   const phase = useAgentPhase(store);
   const [columns, rows] = useStdoutDimensions();
-  // Re-render at EQ_TICK_MS (~15 fps) so the EQ bars pump rhythmically. The
-  // elapsed clock derives its seconds from Date.now() each render so it
-  // still advances 1 Hz.
   useTick(EQ_TICK_MS);
 
   const visualW = Math.max(20, Math.min(64, columns - 12));
   const visualH = Math.max(7, Math.min(18, rows - 12));
-  // Read the stage's startedAt from the store so the elapsed clock survives
-  // tab switches and resets only on real phase transitions. Same anchor is
-  // used to phase-lock the EQ beat grid — fresh stage drops the needle.
-  const stageStartedAt = store.currentStage?.startedAt ?? Date.now();
-  const beatTimeMs = Date.now() - stageStartedAt;
+  // Anchor both the elapsed clock and the EQ beat grid to the stage's
+  // startedAt — a fresh stage drops the needle on beat 1.
+  const now = Date.now();
+  const beatTimeMs = now - (store.currentStage?.startedAt ?? now);
   const elapsedSec = Math.max(0, Math.floor(beatTimeMs / 1000));
   const timeStr = formatElapsed(elapsedSec);
-  // Persistent bar heights so each bar can fall smoothly from its peak
-  // (Winamp-style), rather than snapping to the current audio level each
-  // frame. Carries across renders via ref.
   const eqLevelsRef = useRef<number[]>(new Array(EQ_BARS).fill(0));
   const equalizer = renderMiniEqualizer(beatTimeMs, eqLevelsRef.current);
 
@@ -187,12 +189,10 @@ function formatElapsed(totalSec: number): string {
 const BPM = 120;
 const BEAT_MS = (60 / BPM) * 1000;
 const EQ_BARS = 12;
-// How fast each bar falls back to zero. 0.08 per frame at ~15 fps ≈ 0.8 s
-// from full peak to silence — slow enough to read as a satisfying decay,
-// fast enough to track the next kick. If you change EQ_TICK_MS, scale this
-// proportionally so the decay *time* stays the same.
-const EQ_FALL_PER_FRAME = 0.08;
 const EQ_TICK_MS = 67; // ~15 fps
+// 0.08 / frame at ~15 fps ≈ 0.8 s peak-to-silence. Scale with EQ_TICK_MS if
+// you change the frame rate so the decay *time* stays the same.
+const EQ_FALL_PER_FRAME = 0.08;
 
 // One "drum hit": a value that snaps to 1.0 on the beat and fades out before
 // the next one. Higher `decay` = snappier (quicker fade). `phaseMs` shifts
@@ -203,15 +203,14 @@ function pulse(
   decay: number,
   phaseMs = 0,
 ): number {
-  // `+ periodMs * 100` is a cheap way to keep the modulo positive even when
-  // phaseMs > t at the very start of a stage.
+  // `+ periodMs * 100` keeps the modulo positive when phaseMs > t (start of stage).
   const since = (t - phaseMs + periodMs * 100) % periodMs;
   return Math.exp((-decay * since) / periodMs);
 }
 
-function renderMiniEqualizer(beatTimeMs: number, levels: number[]): string {
-  const bars = '▁▂▃▄▅▆▇█';
+const EQ_GLYPHS = '▁▂▃▄▅▆▇█';
 
+function renderMiniEqualizer(beatTimeMs: number, levels: number[]): string {
   // Voices — what you'd hear in a techno track:
   //   kick   = the BOOM on every beat (the four-on-the-floor thing)
   //   bass   = a longer-ringing sub note that overlaps the kick (the rumble)
@@ -252,7 +251,7 @@ function renderMiniEqualizer(beatTimeMs: number, levels: number[]): string {
   for (let i = 0; i < EQ_BARS; i++) {
     const target = Math.min(1, mix[i]);
     levels[i] = Math.max(target, levels[i] - EQ_FALL_PER_FRAME);
-    out += bars[Math.floor(levels[i] * (bars.length - 1))];
+    out += EQ_GLYPHS[Math.floor(levels[i] * (EQ_GLYPHS.length - 1))];
   }
   return out;
 }
@@ -296,15 +295,6 @@ const Panel = ({ children }: { children: ReactNode }) => (
     {children}
   </Box>
 );
-
-function useTick(intervalMs: number): number {
-  const [tick, setTick] = useState(0);
-  useEffect(() => {
-    const id = setInterval(() => setTick((t) => t + 1), intervalMs);
-    return () => clearInterval(id);
-  }, [intervalMs]);
-  return tick;
-}
 
 // ── 1. LibraryShelf ──────────────────────────────────────────────
 //

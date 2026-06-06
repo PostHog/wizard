@@ -52,7 +52,6 @@ async function getSDKModule(): Promise<any> {
 let _cliPath: string | null = null;
 function getClaudeCodeExecutablePath(): string {
   if (_cliPath) return _cliPath;
-  // `require` is a CJS global; in ESM (tsx) it's undefined.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const req: any = typeof require !== 'undefined' ? require : undefined;
   if (req && typeof req.resolve === 'function') {
