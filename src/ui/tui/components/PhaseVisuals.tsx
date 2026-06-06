@@ -127,9 +127,10 @@ export const PhaseVisual = ({ store, width, height }: PhaseVisualProps) => {
 export const VisualizerTab = ({ store }: { store: WizardStore }) => {
   const phase = useAgentPhase(store);
   const [columns, rows] = useStdoutDimensions();
-  // ~30 fps so the EQ bars pump rhythmically. The elapsed clock derives its
-  // seconds from Date.now() each render so it still advances 1 Hz.
-  useTick(33);
+  // Re-render at EQ_TICK_MS (~15 fps) so the EQ bars pump rhythmically. The
+  // elapsed clock derives its seconds from Date.now() each render so it
+  // still advances 1 Hz.
+  useTick(EQ_TICK_MS);
 
   const visualW = Math.max(20, Math.min(64, columns - 12));
   const visualH = Math.max(7, Math.min(18, rows - 12));
@@ -140,7 +141,11 @@ export const VisualizerTab = ({ store }: { store: WizardStore }) => {
   const beatTimeMs = Date.now() - stageStartedAt;
   const elapsedSec = Math.max(0, Math.floor(beatTimeMs / 1000));
   const timeStr = formatElapsed(elapsedSec);
-  const equalizer = renderMiniEqualizer(beatTimeMs);
+  // Persistent bar heights so each bar can fall smoothly from its peak
+  // (Winamp-style), rather than snapping to the current audio level each
+  // frame. Carries across renders via ref.
+  const eqLevelsRef = useRef<number[]>(new Array(EQ_BARS).fill(0));
+  const equalizer = renderMiniEqualizer(beatTimeMs, eqLevelsRef.current);
 
   return (
     <Box
@@ -180,6 +185,13 @@ function formatElapsed(totalSec: number): string {
 // 120 BPM techno in 4/4: a beat is 500 ms, a bar (measure) is 4 beats = 2 s.
 const BPM = 120;
 const BEAT_MS = (60 / BPM) * 1000;
+const EQ_BARS = 12;
+// How fast each bar falls back to zero. 0.08 per frame at ~15 fps ≈ 0.8 s
+// from full peak to silence — slow enough to read as a satisfying decay,
+// fast enough to track the next kick. If you change EQ_TICK_MS, scale this
+// proportionally so the decay *time* stays the same.
+const EQ_FALL_PER_FRAME = 0.08;
+const EQ_TICK_MS = 67; // ~15 fps
 
 // One "drum hit": a value that snaps to 1.0 on the beat and fades out before
 // the next one. Higher `decay` = snappier (quicker fade). `phaseMs` shifts
@@ -196,7 +208,7 @@ function pulse(
   return Math.exp((-decay * since) / periodMs);
 }
 
-function renderMiniEqualizer(beatTimeMs: number): string {
+function renderMiniEqualizer(beatTimeMs: number, levels: number[]): string {
   const bars = '▁▂▃▄▅▆▇█';
 
   // Voices — what you'd hear in a techno track:
@@ -232,10 +244,14 @@ function renderMiniEqualizer(beatTimeMs: number): string {
     hat16 * 0.7 + pad * 0.3,
   ];
 
+  // Winamp-style smoothing: each bar jumps up instantly to the current audio
+  // level (so kicks read as snap), then drifts down by EQ_FALL_PER_FRAME each
+  // frame until the next hit catches it.
   let out = '';
-  for (const level of mix) {
-    const clamped = Math.min(1, level);
-    out += bars[Math.floor(clamped * (bars.length - 1))];
+  for (let i = 0; i < EQ_BARS; i++) {
+    const target = Math.min(1, mix[i]);
+    levels[i] = Math.max(target, levels[i] - EQ_FALL_PER_FRAME);
+    out += bars[Math.floor(levels[i] * (bars.length - 1))];
   }
   return out;
 }
