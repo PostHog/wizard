@@ -164,11 +164,7 @@ export const VisualizerTab = ({ store }: { store: WizardStore }) => {
       </Box>
       <Box marginBottom={1}>
         <Text bold color="#E6FFE6">
-          {PHASE_LABELS[phase]}
-        </Text>
-        <Text color={MATRIX_FADE}> - </Text>
-        <Text bold color="#7CFF7C">
-          PostHog
+          {PHASE_LABELS[phase]} - PostHog
         </Text>
       </Box>
       <PhaseBody phase={phase} width={visualW} height={visualH} />
