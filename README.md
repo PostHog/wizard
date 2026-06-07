@@ -118,12 +118,12 @@ The following CLI arguments are available:
 | `dashboard:write`           | Create the onboarding dashboard                             |
 | `insight:write`             | Create the onboarding insights                             |
 | `query:read`                | Run HogQL queries when the agent needs data                 |
-| `event_definition:read`     | Read event schema (`read-data-schema` MCP tool)             |
-| `property_definition:read`  | Read property schema (`read-data-schema` MCP tool)          |
+| `notebook:write`            | Create / edit notebooks via the notebooks MCP tools         |
 | `health_issue:read`         | Power `wizard doctor` health checks                         |
 | `wizard_session:read`       | List / retrieve / stream wizard sessions                    |
 | `wizard_session:write`      | Stream run state to `/api/projects/{id}/wizard/sessions/`   |
-| `notebook:write`            | Create / edit notebooks via the notebooks MCP tools         |
+| `event_definition:read`     | Read event schema (`read-data-schema` MCP tool)             |
+| `property_definition:read`  | Read property schema (`read-data-schema` MCP tool)          |
 
 Grant every scope on the PostHog OAuth app in both regions (US / EU) or the matching tool calls fail. Source of truth: `WIZARD_OAUTH_SCOPES` in `src/lib/constants.ts` — keep this list in sync.
 

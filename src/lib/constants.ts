@@ -127,7 +127,6 @@ export const WIZARD_PROVISIONING_SCOPES = [
  * - health_issue:read        used by `wizard doctor`
  * - wizard_session:read      list / retrieve / stream sessions
  * - wizard_session:write     stream run state to /api/projects/{id}/wizard/sessions/
- * - notebook:write           create / edit notebooks via the notebooks MCP tools
  * - event_definition:read    read event schema via the read-data-schema MCP tool
  * - property_definition:read read property schema via the read-data-schema MCP tool
  *
@@ -140,7 +139,6 @@ export const WIZARD_OAUTH_SCOPES = [
   'health_issue:read',
   'wizard_session:read',
   'wizard_session:write',
-  'notebook:write',
   'event_definition:read',
   'property_definition:read',
 ] as const;
