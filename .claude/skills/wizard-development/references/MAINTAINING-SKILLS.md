@@ -76,9 +76,13 @@ Skills carry a `version` field in their frontmatter. Bump it as follows:
 
 When you bump a version, also bump the `version` in any reference file that shipped as part of the change. Version churn is itself a maintenance signal — a skill that's bumped majors three times in a year is probably teaching an abstraction that hasn't stabilized.
 
-## Keep the README's OAuth scopes in sync with `constants.ts`
+## Keep the README's OAuth scopes in sync with the scope constants
 
-`WIZARD_OAUTH_SCOPES` in `src/lib/constants.ts` is the source of truth. When you add or remove a scope there, update the README's "OAuth Scopes" list in the same change, and confirm the scope is granted on the OAuth application in every region (US / EU) or the matching tool calls fail at runtime.
+Three surfaces define what the wizard requests: `WIZARD_PROVISIONING_SCOPES` and `WIZARD_OAUTH_SCOPES` in `src/lib/constants.ts` (the base set, where `WIZARD_OAUTH_SCOPES` spreads the provisioning set), and `PROGRAM_SCOPE_ADDITIONS` in `src/lib/oauth/program-scopes.ts` (per-program extras). When you add or remove a scope in any of them:
+
+- update the README's "OAuth Scopes" section in the same change;
+- if it's a **provisioning** scope, add it to `ALLOWED_PROVISIONING_SCOPES` in the monorepo's `ee/api/agentic_provisioning/views.py` first, or the signup/provisioning call will reject the unknown scope;
+- confirm the scope is granted on the PostHog OAuth application in **every region (US / EU)**, or the matching tool calls fail at runtime even though the wizard requested it.
 
 ## The maintainer's question
 

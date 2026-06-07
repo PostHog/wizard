@@ -106,9 +106,17 @@ export const DUMMY_PROJECT_API_KEY = '_YOUR_POSTHOG_PROJECT_TOKEN_';
  * - notebook:write    upload the events-audit report as a PostHog notebook
  *                     in step 6 of the events-audit skill (notebooks-create
  *                     MCP tool requires this scope)
+ * - event_definition:read     read the project's event schema via the
+ *                     read-data-schema MCP tool, so the agent instruments
+ *                     real event names instead of guessing from capture()
+ *                     calls in code
+ * - property_definition:read  read the project's property schema via the
+ *                     same read-data-schema MCP tool
  *
  * Must be a subset of `ALLOWED_PROVISIONING_SCOPES` in
- * `ee/api/agentic_provisioning/views.py` on the backend.
+ * `ee/api/agentic_provisioning/views.py` on the backend — `event_definition:read`
+ * and `property_definition:read` must be added there before this list ships,
+ * or the provisioning signup call will reject the unknown scopes.
  */
 export const WIZARD_PROVISIONING_SCOPES = [
   'user:read',
@@ -118,29 +126,32 @@ export const WIZARD_PROVISIONING_SCOPES = [
   'insight:write',
   'query:read',
   'notebook:write',
+  'event_definition:read',
+  'property_definition:read',
 ] as const;
 
 /**
  * Scopes the wizard requests during the OAuth login flow. Superset of
  * `WIZARD_PROVISIONING_SCOPES` with scopes that only apply to the login
  * path and are not in the provisioning allowlist:
- * - health_issue:read        used by `wizard doctor`
- * - wizard_session:read      list / retrieve / stream sessions
- * - wizard_session:write     stream run state to /api/projects/{id}/wizard/sessions/
- * - event_definition:read    read event schema via the read-data-schema MCP tool
- * - property_definition:read read property schema via the read-data-schema MCP tool
+ * - health_issue:read     used by `wizard doctor`
+ * - wizard_session:read   list / retrieve / stream sessions
+ * - wizard_session:write  stream run state to /api/projects/{id}/wizard/sessions/
  *
- * Each scope here must also be granted on the PostHog OAuth application in
- * every region (US / EU). When this list changes, update the "OAuth Scopes"
- * section of README.md to match — it documents this constant for operators.
+ * This is the BASE set every program requests. A program can layer extra
+ * read scopes on top via `PROGRAM_SCOPE_ADDITIONS` in
+ * `src/lib/oauth/program-scopes.ts` (e.g. the MCP tutorial) — the actual
+ * requested set is resolved per-program by `getOAuthScopesForProgram`.
+ *
+ * Every scope the wizard can request (base + program additions) must also be
+ * granted on the PostHog OAuth application in every region (US / EU). When
+ * this list changes, update the "OAuth Scopes" section of README.md to match.
  */
 export const WIZARD_OAUTH_SCOPES = [
   ...WIZARD_PROVISIONING_SCOPES,
   'health_issue:read',
   'wizard_session:read',
   'wizard_session:write',
-  'event_definition:read',
-  'property_definition:read',
 ] as const;
 
 // ── Wizard run / variants ───────────────────────────────────────────
