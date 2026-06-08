@@ -1,12 +1,19 @@
+/**
+ * MatrixRain — code-rain visual used for the codebase-scan phase.
+ *
+ * Independent of the phase orchestrator so it can be reused elsewhere
+ * (e.g. standalone in a demo). `bordered` toggles the rounded green frame.
+ */
+
 import { Box, Text } from 'ink';
 import { useEffect, useRef, useState } from 'react';
+import { MATRIX_FADE } from './panel';
 
 // Matrix code-rain palette: pale-green head fades through bright green and
-// Matrix green to deep, dimmed green at the tail's end.
+// Matrix green to the deep, dimmed green at the tail's end.
 const MATRIX_HEAD = '#E6FFE6';
 const MATRIX_BRIGHT = '#7CFF7C';
 const MATRIX_MID = '#22D622';
-export const MATRIX_FADE = '#0E7A0E';
 
 const DEFAULT_TICK_MS = 110;
 const DEFAULT_MAX_TAIL = 7;
