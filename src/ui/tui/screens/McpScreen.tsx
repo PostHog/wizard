@@ -20,7 +20,7 @@ import {
   PickerMenu,
   GroupedPickerMenu,
 } from '@ui/tui/primitives/index';
-import { Colors } from '@ui/tui/styles';
+import { Colors, Icons } from '@ui/tui/styles';
 import type {
   McpInstaller,
   McpClientInfo,
@@ -44,6 +44,7 @@ enum Phase {
   Ask = 'ask',
   Pick = 'pick',
   FeatureSelect = 'feature-select',
+  Connector = 'connector',
   Working = 'working',
   Done = 'done',
   None = 'none',
@@ -60,6 +61,23 @@ const markDone = (
 
 const reportFeatures = (features: string[]): 'all' | string[] =>
   isAllFeaturesSelected(features) ? 'all' : features;
+
+/**
+ * Connector step prompt — Enter continues (opens the connector page). There's
+ * no skip: picking the connector commits to opening it.
+ */
+const ConnectorContinue = ({ onContinue }: { onContinue: () => void }) => {
+  useInput((_input, key) => {
+    if (key.return) {
+      onContinue();
+    }
+  });
+  return (
+    <Text color={Colors.primary}>
+      Press enter to continue {Icons.triangleRight}
+    </Text>
+  );
+};
 
 export const McpScreen = ({
   store,
@@ -107,21 +125,28 @@ export const McpScreen = ({
     chosenMode: 'all' | 'custom',
   ) => {
     setSelectedClientNames(clientNames);
+
+    // Recommended flow: install everything straight away. Browser connectors
+    // (e.g. Claude Desktop/Web) just open their connector page here, same as
+    // before — no extra screen.
     if (chosenMode === 'all') {
       void doInstall(clientNames, [...ALL_FEATURE_VALUES]);
-    } else if (store.session.mcpFeatures) {
+      return;
+    }
+    if (store.session.mcpFeatures) {
       void doInstall(clientNames, store.session.mcpFeatures);
       return;
     }
-    // Skip the feature picker when no selected client consumes features —
-    // browser connectors (e.g. Claude Desktop/Web) configure features online,
-    // not through CLI-written config.
-    const anyNeedsFeatures = clientNames.some((name) => {
-      const info = clients.find((c) => c.name === name);
-      return !info?.finish;
-    });
-    if (!anyNeedsFeatures) {
-      void doInstall(clientNames, []);
+
+    // Customize flow: a browser connector configures its tools and features in
+    // Claude's UI, not through the wizard's feature picker. The picker keeps it
+    // mutually exclusive from local editors, so a connector selection is
+    // connector-only — show its own screen instead of the feature picker.
+    const isConnector = clientNames.some(
+      (name) => clients.find((c) => c.name === name)?.finish,
+    );
+    if (isConnector) {
+      setPhase(Phase.Connector);
       return;
     }
     setPhase(Phase.FeatureSelect);
@@ -298,7 +323,6 @@ export const McpScreen = ({
                     {
                       label: 'Customize features',
                       value: 'custom',
-                      hint: 'MCP only',
                     },
                     { label: 'No thanks', value: 'skip' },
                   ]}
@@ -334,9 +358,16 @@ export const McpScreen = ({
             options={clients.map((c) => ({
               label: c.name,
               value: c.name,
+              // Browser connectors can't be installed alongside local editors
+              // and are configured on their own screen, not the feature picker.
+              exclusive: Boolean(c.finish),
+              // Hints only show in the recommended flow; the customize flow
+              // keeps the list clean.
               hint:
                 installMode === 'all'
-                  ? c.supportsPlugin
+                  ? c.finish
+                    ? 'connector'
+                    : c.supportsPlugin
                     ? 'plugin'
                     : 'MCP'
                   : undefined,
@@ -358,6 +389,20 @@ export const McpScreen = ({
               void doInstall(selectedClientNames, features);
             }}
           />
+        )}
+
+        {phase === Phase.Connector && (
+          <Box flexDirection="column">
+            <Box marginBottom={1}>
+              <Text dimColor>
+                You&apos;ll choose which features and tools to enable in
+                Claude&apos;s UI after connecting.
+              </Text>
+            </Box>
+            <ConnectorContinue
+              onContinue={() => void doInstall(selectedClientNames, [])}
+            />
+          </Box>
         )}
 
         {phase === Phase.Working && (
@@ -405,7 +450,8 @@ export const McpScreen = ({
                 {finishNotes.map((note) => (
                   <Box key={note.name} flexDirection="column" marginTop={1}>
                     <Text color="green" bold>
-                      {note.name} \u2014 finish in your browser:
+                      {'\u2714'} {note.name} {'\u2014'} installs a PostHog
+                      connector:
                     </Text>
                     <Text>
                       {'  '}Opened <Text color="cyan">{note.url}</Text>
