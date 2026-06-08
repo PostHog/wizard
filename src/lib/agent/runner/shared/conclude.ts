@@ -2,7 +2,7 @@ import { getUI } from '../../../../ui';
 import { logToFile } from '../../../../utils/debug';
 import { analytics } from '../../../../utils/analytics';
 import { WIZARD_REMARK_EVENT_NAME } from '../../../constants';
-import { AgentSignals, AgentErrorType } from '../../signals';
+import { AgentErrorType } from '../../signals';
 import type { RunBridge, BridgeResult } from './run-bridge';
 import { mapRunnerError } from './errors';
 
@@ -11,19 +11,15 @@ import { mapRunnerError } from './errors';
  *
  * Both runners stream their SDK's events into a {@link RunBridge}, then need the
  * same conclusion `runAgent` performs: turn the accumulated signals into a
- * result, stop the spinner with a matching message, capture the remark and
- * duration analytics, and run the benchmark middleware's finalize. Keeping it
- * here means the result taxonomy and metrics stay identical across runners.
+ * result, stop the spinner with a matching message, and capture the remark and
+ * duration analytics. Keeping it here means the result taxonomy and metrics stay
+ * identical across runners. Per-variant benchmark instrumentation (the SDK-shaped
+ * middleware the Anthropic path feeds) lands with observability in #527.
  */
 
 /** Spinner surface the conclusion stops. */
 interface StoppableSpinner {
   stop(message?: string): void;
-}
-
-/** Benchmark middleware hook (best-effort; only active in benchmark mode). */
-interface FinalizeMiddleware {
-  finalize(resultMessage: unknown, totalDurationMs: number): unknown;
 }
 
 export interface ConcludeOptions {
@@ -34,9 +30,6 @@ export interface ConcludeOptions {
   errorMessage: string;
   /** Runner label for log lines (`vercel` | `pi`). */
   label: string;
-  middleware?: FinalizeMiddleware;
-  /** Result message handed to `middleware.finalize` (shape is per-runner). */
-  finalizeMessage?: unknown;
 }
 
 /** Spinner stop text per error type, mirroring `runAgent`'s messages. */
@@ -71,8 +64,7 @@ function captureAborted(startTime: number): void {
 /**
  * Conclude a run that finished its loop without throwing. Inspects the bridge's
  * signals: on any error result, stops the spinner with the matching message and
- * returns it; otherwise captures the remark/duration, runs middleware finalize,
- * and returns success (`{}`).
+ * returns it; otherwise captures the remark/duration and returns success (`{}`).
  */
 export function concludeRun(opts: ConcludeOptions): BridgeResult {
   const { bridge, spinner, startTime, successMessage, errorMessage } = opts;
@@ -90,11 +82,6 @@ export function concludeRun(opts: ConcludeOptions): BridgeResult {
     duration_ms: durationMs,
     duration_seconds: Math.round(durationMs / 1000),
   });
-  try {
-    opts.middleware?.finalize(opts.finalizeMessage, durationMs);
-  } catch (e) {
-    logToFile(`${AgentSignals.BENCHMARK} Middleware finalize error:`, e);
-  }
   spinner.stop(successMessage);
   return {};
 }
