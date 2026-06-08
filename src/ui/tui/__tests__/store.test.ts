@@ -9,6 +9,7 @@ import {
   McpOutcome,
 } from '@ui/tui/store';
 import { OutroKind, AdditionalFeature } from '@lib/wizard-session';
+import { EXPANDED_COUNT } from '@ui/tui/constants';
 import {
   WizardReadiness,
   evaluateWizardReadiness,
@@ -251,6 +252,13 @@ describe('WizardStore', () => {
       expect(store.session.mcpInstalledClients).toEqual(['Cursor']);
     });
 
+    it('setMcpSuggestedPromptsDismissed flips the session flag', () => {
+      const store = createStore();
+      expect(store.session.mcpSuggestedPromptsDismissed).toBe(false);
+      store.setMcpSuggestedPromptsDismissed();
+      expect(store.session.mcpSuggestedPromptsDismissed).toBe(true);
+    });
+
     it('setOutroData sets outro information', () => {
       const store = createStore();
       const data = { kind: OutroKind.Success, message: 'Done!' };
@@ -280,13 +288,14 @@ describe('WizardStore', () => {
       store.setLoginUrl('url');
       store.setReadinessResult(null);
       store.setMcpComplete();
+      store.setMcpSuggestedPromptsDismissed();
       store.setOutroDismissed();
       store.setSkillsComplete(true);
       store.setOutroData({ kind: OutroKind.Success });
       store.setFrameworkContext('k', 'v');
       store.setFrameworkConfig(null, null);
 
-      expect(cb).toHaveBeenCalledTimes(13);
+      expect(cb).toHaveBeenCalledTimes(14);
     });
   });
 
@@ -598,6 +607,21 @@ describe('WizardStore', () => {
 
       store.pushStatus('msg');
       expect(cb).toHaveBeenCalledTimes(1);
+    });
+
+    it('pushStatus caps history as a FIFO, dropping oldest', () => {
+      const store = createStore();
+      for (let i = 0; i < 250; i++) {
+        store.pushStatus(`msg ${i}`);
+      }
+
+      // Cap is tied to EXPANDED_COUNT (the status bar's largest window).
+      const msgs = store.statusMessages;
+      expect(msgs).toHaveLength(EXPANDED_COUNT);
+      // Newest retained, oldest dropped.
+      expect(msgs[msgs.length - 1]).toBe('msg 249');
+      expect(msgs[0]).toBe(`msg ${250 - EXPANDED_COUNT}`);
+      expect(msgs).not.toContain('msg 0');
     });
   });
 

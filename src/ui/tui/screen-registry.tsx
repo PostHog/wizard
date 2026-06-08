@@ -18,9 +18,12 @@ import { DoctorReportScreen } from './screens/doctor/DoctorReportScreen.js';
 import { SettingsOverrideScreen } from './screens/SettingsOverrideScreen.js';
 import { ManagedSettingsScreen } from './screens/ManagedSettingsScreen.js';
 import { PortConflictScreen } from './screens/PortConflictScreen.js';
+import { ManualAuthCodeScreen } from './screens/ManualAuthCodeScreen.js';
 import { PostHogIntegrationIntroScreen } from './screens/PostHogIntegrationIntroScreen.js';
 import { RevenueIntroScreen } from './screens/RevenueIntroScreen.js';
 import { MigrationIntroScreen } from './screens/MigrationIntroScreen.js';
+import { SourceMapsIntroScreen } from './screens/SourceMapsIntroScreen.js';
+import { SourceMapsOutroScreen } from './screens/SourceMapsOutroScreen.js';
 import { AgentSkillIntroScreen } from './screens/AgentSkillIntroScreen.js';
 import { AuditIntroScreen } from './screens/audit/AuditIntroScreen.js';
 import { AuditRunScreen } from './screens/audit/AuditRunScreen.js';
@@ -32,6 +35,7 @@ import { SetupScreen } from './screens/SetupScreen.js';
 import { AuthScreen } from './screens/AuthScreen.js';
 import { RunScreen } from './screens/RunScreen.js';
 import { McpScreen } from './screens/McpScreen.js';
+import { McpSuggestedPromptsScreen } from './screens/McpSuggestedPromptsScreen.js';
 import { KeepSkillsScreen } from './screens/KeepSkillsScreen.js';
 import { OutroScreen } from './screens/OutroScreen.js';
 import { ExitScreen } from './screens/ExitScreen.js';
@@ -39,14 +43,18 @@ import { AuthErrorScreen } from './screens/AuthErrorScreen.js';
 import { WizardAskScreen } from './screens/WizardAskScreen.js';
 import { createMcpInstaller } from './services/mcp-installer.js';
 import type { McpInstaller } from './services/mcp-installer.js';
+import { createMcpSuggestedPromptsServices } from './services/mcp-suggested-prompts-services.js';
+import type { McpSuggestedPromptsServices } from './services/mcp-suggested-prompts-services.js';
 
 export interface ScreenServices {
   mcpInstaller: McpInstaller;
+  mcpSuggestedPromptsServices: McpSuggestedPromptsServices;
 }
 
-export function createServices(): ScreenServices {
+export function createServices(store: WizardStore): ScreenServices {
   return {
     mcpInstaller: createMcpInstaller(),
+    mcpSuggestedPromptsServices: createMcpSuggestedPromptsServices(store),
   };
 }
 
@@ -59,12 +67,15 @@ export function createScreens(
     [Overlay.SettingsOverride]: <SettingsOverrideScreen store={store} />,
     [Overlay.ManagedSettings]: <ManagedSettingsScreen store={store} />,
     [Overlay.PortConflict]: <PortConflictScreen store={store} />,
+    [Overlay.ManualAuthCode]: <ManualAuthCodeScreen store={store} />,
     [Overlay.AuthError]: <AuthErrorScreen store={store} />,
     [Overlay.WizardAsk]: <WizardAskScreen store={store} />,
 
     // Wizard flow
     [ScreenId.Intro]: <PostHogIntegrationIntroScreen store={store} />,
     [ScreenId.RevenueIntro]: <RevenueIntroScreen store={store} />,
+    [ScreenId.SourceMapsIntro]: <SourceMapsIntroScreen store={store} />,
+    [ScreenId.SourceMapsOutro]: <SourceMapsOutroScreen store={store} />,
     [ScreenId.MigrationIntro]: <MigrationIntroScreen store={store} />,
     [ScreenId.AgentSkillIntro]: <AgentSkillIntroScreen store={store} />,
     [ScreenId.AuditIntro]: <AuditIntroScreen store={store} />,
@@ -81,6 +92,12 @@ export function createScreens(
     [ScreenId.Run]: <RunScreen store={store} />,
     [ScreenId.Mcp]: (
       <McpScreen store={store} installer={services.mcpInstaller} />
+    ),
+    [ScreenId.McpSuggestedPrompts]: (
+      <McpSuggestedPromptsScreen
+        store={store}
+        services={services.mcpSuggestedPromptsServices}
+      />
     ),
     [ScreenId.KeepSkills]: <KeepSkillsScreen store={store} />,
     [ScreenId.Outro]: <OutroScreen store={store} />,

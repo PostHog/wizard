@@ -1,13 +1,13 @@
 /* Nuxt wizard using posthog-agent with PostHog MCP */
-import type { WizardOptions } from '@utils/types';
+import type { WizardRunOptions } from '@utils/types';
 import type { FrameworkConfig } from '@lib/framework-config';
 import { detectNodePackageManagers } from '@lib/detection/package-manager';
 import { Integration } from '@lib/constants';
 import {
-  getPackageVersion,
+  getDeclaredVersion,
   getInstalledPackageVersion,
-  hasPackageInstalled,
-  type PackageDotJson,
+  hasDeclaredDependency,
+  type PackageJson,
 } from '@utils/package-json';
 import { tryGetPackageJson } from '@utils/setup-utils';
 import { createVersionBucket } from '@utils/semver';
@@ -24,10 +24,10 @@ export const NUXT_AGENT_CONFIG: FrameworkConfig<NuxtContext> = {
     integration: Integration.nuxt,
     docsUrl: 'https://posthog.com/docs/libraries/nuxt',
     beta: true,
-    gatherContext: async (options: WizardOptions) => {
+    gatherContext: async (options: WizardRunOptions) => {
       const packageJson = await tryGetPackageJson(options);
       if (!packageJson) return {};
-      const version = getPackageVersion('nuxt', packageJson);
+      const version = getDeclaredVersion('nuxt', packageJson);
       const versionBucket = getNuxtVersionBucket(version);
       return { versionBucket };
     },
@@ -37,13 +37,13 @@ export const NUXT_AGENT_CONFIG: FrameworkConfig<NuxtContext> = {
     packageName: 'nuxt',
     packageDisplayName: 'Nuxt',
     getVersion: (packageJson: unknown) =>
-      getPackageVersion('nuxt', packageJson as PackageDotJson),
+      getDeclaredVersion('nuxt', packageJson as PackageJson),
     getVersionBucket: getNuxtVersionBucket,
-    getInstalledVersion: (options: WizardOptions) =>
+    getInstalledVersion: (options: WizardRunOptions) =>
       Promise.resolve(getInstalledPackageVersion('nuxt', options.installDir)),
     detect: async (options) => {
       const packageJson = await tryGetPackageJson(options);
-      return packageJson ? hasPackageInstalled('nuxt', packageJson) : false;
+      return packageJson ? hasDeclaredDependency('nuxt', packageJson) : false;
     },
     detectPackageManager: detectNodePackageManagers,
   },

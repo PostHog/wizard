@@ -21,7 +21,10 @@ import {
   GroupedPickerMenu,
 } from '@ui/tui/primitives/index';
 import { Colors } from '@ui/tui/styles';
-import type { McpInstaller, McpClientInfo } from '@ui/tui/services/mcp-installer';
+import type {
+  McpInstaller,
+  McpClientInfo,
+} from '@ui/tui/services/mcp-installer';
 import {
   AVAILABLE_FEATURES,
   ALL_FEATURE_VALUES,
@@ -98,9 +101,20 @@ export const McpScreen = ({
     // Skip feature picker if CLI already specified features
     if (store.session.mcpFeatures) {
       void doInstall(clientNames, store.session.mcpFeatures);
-    } else {
-      setPhase(Phase.FeatureSelect);
+      return;
     }
+    // Skip the feature picker when no selected client consumes features —
+    // browser connectors (e.g. Claude Desktop/Web) configure features online,
+    // not through CLI-written config.
+    const anyNeedsFeatures = clientNames.some((name) => {
+      const info = clients.find((c) => c.name === name);
+      return !info?.finish;
+    });
+    if (!anyNeedsFeatures) {
+      void doInstall(clientNames, []);
+      return;
+    }
+    setPhase(Phase.FeatureSelect);
   };
 
   const handleConfirm = () => {
@@ -158,10 +172,32 @@ export const McpScreen = ({
     setTimeout(() => markDone(store, outcome, result), 2000);
   };
 
+  // The "what you get" preview shown above the install confirmation —
+  // installed users have no idea what "MCP" means; lead with the value.
+  const installValueBullets = [
+    'Ask your agent: "List my feature flags" — and it does.',
+    'Run SQL, build dashboards, ship flags, all from your IDE.',
+    'No copy-pasting tokens or context. Your agent has the keys.',
+  ];
+
+  // Clients connected via a browser page (e.g. Claude Desktop/Web) aren't truly
+  // "installed" — the user finishes in the browser. Split them out of the
+  // "installed for" list and render the finish instructions separately.
+  const finishNotes = clients.flatMap((c) =>
+    c.finish && resultClients.includes(c.name)
+      ? [{ name: c.name, url: c.finish.url, instruction: c.finish.instruction }]
+      : [],
+  );
+  const installedNow = resultClients.filter(
+    (name) => !finishNotes.some((n) => n.name === name),
+  );
+
   return (
     <Box flexDirection="column" flexGrow={1}>
       <Text bold color={Colors.accent}>
-        MCP Server {isRemove ? 'Removal' : 'Setup'}
+        {isRemove
+          ? 'Remove the PostHog MCP'
+          : 'Install the MCP so you can chat to your data'}
       </Text>
 
       <Box marginTop={1} flexDirection="column">
@@ -178,6 +214,15 @@ export const McpScreen = ({
 
         {phase === Phase.Ask && (
           <>
+            {!isRemove && (
+              <Box flexDirection="column" marginBottom={1}>
+                {installValueBullets.map((bullet) => (
+                  <Text key={bullet} dimColor>
+                    {'•'} {bullet}
+                  </Text>
+                ))}
+              </Box>
+            )}
             <Text dimColor>
               Detected: {clients.map((c) => c.name).join(', ')}
             </Text>
@@ -231,24 +276,47 @@ export const McpScreen = ({
 
         {phase === Phase.Done && (
           <Box flexDirection="column">
-            {resultClients.length > 0 ? (
-              <>
-                <Text color="green" bold>
-                  {'\u2714'} MCP server
-                  {!isRemove && pluginClients.length > 0 ? ' and plugin' : ''}{' '}
-                  {isRemove ? 'removed from' : 'installed for'}:
-                </Text>
-                {resultClients.map((name, i) => (
-                  <Text key={i}>
-                    {' '}
-                    {'\u2022'} {name}
-                  </Text>
-                ))}
-              </>
-            ) : (
+            {installedNow.length === 0 && finishNotes.length === 0 ? (
               <Text dimColor>
                 {isRemove ? 'Removal' : 'Installation'} skipped.
               </Text>
+            ) : (
+              <>
+                {installedNow.length > 0 && (
+                  <>
+                    <Text color="green" bold>
+                      {'\u2714'} MCP server
+                      {!isRemove && pluginClients.length > 0
+                        ? ' and plugin'
+                        : ''}{' '}
+                      {isRemove ? 'removed from' : 'installed for'}:
+                    </Text>
+                    {installedNow.map((name, i) => (
+                      <Text key={i}>
+                        {' '}
+                        {'\u2022'} {name}
+                      </Text>
+                    ))}
+                  </>
+                )}
+                {finishNotes.map((note) => (
+                  <Box key={note.name} flexDirection="column" marginTop={1}>
+                    <Text color="green" bold>
+                      {note.name} \u2014 finish in your browser:
+                    </Text>
+                    <Text>
+                      {'  '}Opened <Text color="cyan">{note.url}</Text>
+                    </Text>
+                    <Text dimColor>
+                      {'  '}
+                      {note.instruction}
+                    </Text>
+                    <Text dimColor>
+                      {'  '}(If it didn&apos;t open, paste the URL above.)
+                    </Text>
+                  </Box>
+                ))}
+              </>
             )}
           </Box>
         )}

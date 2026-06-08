@@ -10,6 +10,7 @@ import { Box, Text } from 'ink';
 import { useSyncExternalStore } from 'react';
 import type { WizardStore } from '@ui/tui/store';
 import { LoadingBox } from '@ui/tui/primitives/index';
+import { useKeyBindings } from '@ui/tui/hooks/useKeyBindings';
 import { Colors } from '@ui/tui/styles';
 
 interface AuthScreenProps {
@@ -23,6 +24,24 @@ export const AuthScreen = ({ store }: AuthScreenProps) => {
   );
 
   const { session } = store;
+
+  // While the OAuth flow is waiting (loginUrl set), let the user paste the
+  // callback URL/code by hand — the fallback for headless/remote shells where
+  // the browser can't reach the local callback server.
+  const canPasteCode = Boolean(session.loginUrl);
+  useKeyBindings(
+    'auth',
+    canPasteCode
+      ? [
+          {
+            match: ['p', 'P'],
+            label: 'P',
+            action: 'paste auth code',
+            handler: () => store.showManualAuthCode(),
+          },
+        ]
+      : [],
+  );
   const config = session.frameworkConfig;
   const frameworkLabel =
     session.detectedFrameworkLabel ?? config?.metadata.name;
@@ -66,6 +85,12 @@ export const AuthScreen = ({ store }: AuthScreenProps) => {
             {'\n\n'}
             <Text color="cyan">{session.loginUrl}</Text>
           </Text>
+          <Box marginTop={1}>
+            <Text dimColor>
+              On a remote machine or devbox? Press{' '}
+              <Text color={Colors.accent}>[P]</Text> to paste the callback URL.
+            </Text>
+          </Box>
         </Box>
       )}
     </Box>

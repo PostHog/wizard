@@ -21,7 +21,7 @@ import {
   OutroKind,
 } from '@lib/wizard-session';
 import { getOrAskForProjectData } from '@utils/setup-utils';
-import { analytics } from '@utils/analytics';
+import { analytics, groupsFromUser } from '@utils/analytics';
 import { getUI } from '@ui';
 import {
   initializeAgent,
@@ -51,7 +51,7 @@ import { getSkillsBaseUrl } from '@lib/constants';
 import { runtimeEnv } from '@env';
 import { installSkillById, type InstallSkillResult } from '@lib/wizard-tools';
 import { createWizardAskBridge } from '@lib/wizard-ask-bridge';
-import type { WizardOptions } from '@utils/types';
+import type { WizardRunOptions } from '@utils/types';
 
 import type { ProgramConfig } from '@lib/programs/program-step';
 import { assemblePrompt, type PromptContext } from './agent-prompt';
@@ -130,16 +130,14 @@ export function shouldDisableAsk(
   return session.ci || session.signup;
 }
 
-function sessionToOptions(session: WizardSession): WizardOptions {
+function sessionToOptions(session: WizardSession): WizardRunOptions {
   return {
     installDir: session.installDir,
     debug: session.debug,
-    forceInstall: session.forceInstall,
     default: false,
     signup: session.signup,
     localMcp: session.localMcp,
     ci: session.ci,
-    menu: session.menu,
     benchmark: session.benchmark,
     projectId: session.projectId,
     apiKey: session.apiKey,
@@ -258,18 +256,31 @@ export async function runProgram(
 
   // 4. OAuth
   logToFile('[agent-runner] starting OAuth');
-  const { projectApiKey, host, accessToken, projectId, cloudRegion } =
-    await getOrAskForProjectData({
-      signup: session.signup,
-      ci: session.ci,
-      apiKey: session.apiKey,
-      projectId: session.projectId,
-      email: session.email,
-      region: session.region,
-    });
+  const {
+    projectApiKey,
+    host,
+    accessToken,
+    projectId,
+    cloudRegion,
+    roleAtOrganization,
+    user,
+  } = await getOrAskForProjectData({
+    signup: session.signup,
+    ci: session.ci,
+    apiKey: session.apiKey,
+    projectId: session.projectId,
+    email: session.email,
+    region: session.region,
+  });
 
   session.credentials = { accessToken, projectApiKey, host, projectId };
+  session.roleAtOrganization = roleAtOrganization;
+  session.apiUser = user;
   getUI().setCredentials(session.credentials);
+  getUI().setRoleAtOrganization(roleAtOrganization);
+  getUI().setApiUser(user);
+
+  analytics.setGroups(groupsFromUser(user, host));
 
   // 5. Skill install (if skillId provided)
   let skillPath: string | undefined;
@@ -481,24 +492,30 @@ export async function runProgram(
   }
 
   // 11. Outro
-  if (config.buildOutroData) {
-    session.outroData = config.buildOutroData(
-      session,
-      { accessToken, projectApiKey, host, projectId },
-      cloudRegion,
-    );
-  } else {
-    const continueUrl = session.signup
-      ? `${getCloudUrlFromRegion(cloudRegion)}/products?source=wizard`
-      : undefined;
-
-    session.outroData = {
-      kind: OutroKind.Success,
-      message: config.successMessage,
-      reportFile: config.reportFile,
-      docsUrl: config.docsUrl,
-      continueUrl,
-    };
+  // Push outro data through the UI (not via direct `session.outroData = ...`
+  // mutation) so the live store gets the value. agent-runner's `session`
+  // parameter is captured at runAgent() invocation time, and any `setKey`
+  // call between then and here (e.g. setDashboardUrl, setNotebookUrl) forks
+  // the session reference — direct mutation then lands on a stale snapshot
+  // that the screen never reads. UI.setOutroData() goes through the store
+  // and also merges in any post-snapshot URLs from the live session.
+  const outroData = config.buildOutroData
+    ? config.buildOutroData(
+        session,
+        { accessToken, projectApiKey, host, projectId },
+        cloudRegion,
+      )
+    : {
+        kind: OutroKind.Success,
+        message: config.successMessage,
+        reportFile: config.reportFile,
+        docsUrl: config.docsUrl,
+        continueUrl: session.signup
+          ? `${getCloudUrlFromRegion(cloudRegion)}/products?source=wizard`
+          : undefined,
+      };
+  if (outroData) {
+    getUI().setOutroData(outroData);
   }
 
   getUI().outro(config.successMessage);

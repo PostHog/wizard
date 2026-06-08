@@ -1,5 +1,5 @@
 import type { Integration } from './constants';
-import type { WizardOptions } from '@utils/types';
+import type { WizardRunOptions } from '@utils/types';
 import type { PackageManagerDetector } from './detection/package-manager';
 
 /**
@@ -15,7 +15,7 @@ export interface SetupQuestion {
   options: Array<{ label: string; value: string; hint?: string }>;
   /** Auto-detect; null = ask the user */
   detect: (
-    options: Pick<WizardOptions, 'installDir'>,
+    options: Pick<WizardRunOptions, 'installDir'>,
   ) => Promise<string | null>;
 }
 
@@ -70,7 +70,7 @@ export interface FrameworkMetadata<
    * For Next.js: detects router type
    * For React Native: detects Expo vs bare
    */
-  gatherContext?: (options: WizardOptions) => Promise<TContext>;
+  gatherContext?: (options: WizardRunOptions) => Promise<TContext>;
 
   /** Optional additional MCP servers for this framework (e.g., Svelte MCP). */
   additionalMcpServers?: Record<string, { url: string }>;
@@ -112,10 +112,12 @@ export interface FrameworkDetection {
   minimumVersion?: string;
 
   /** Get the currently installed version. Called by runner for version check. */
-  getInstalledVersion?: (options: WizardOptions) => Promise<string | undefined>;
+  getInstalledVersion?: (
+    options: WizardRunOptions,
+  ) => Promise<string | undefined>;
 
   /** Detect whether this framework is present in the project. */
-  detect: (options: Pick<WizardOptions, 'installDir'>) => Promise<boolean>;
+  detect: (options: Pick<WizardRunOptions, 'installDir'>) => Promise<boolean>;
 
   /** Detect the project's package manager(s). Used by the in-process MCP tool. */
   detectPackageManager: PackageManagerDetector;

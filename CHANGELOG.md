@@ -1,5 +1,46 @@
 # Changelog
 
+## [2.17.0](https://github.com/PostHog/wizard/compare/v2.16.1...v2.17.0) (2026-06-05)
+
+
+### Features
+
+* **mcp:** add Claude Desktop/Web to mcp add ([#517](https://github.com/PostHog/wizard/issues/517)) ([501e55a](https://github.com/PostHog/wizard/commit/501e55a0150fee7a926e91044378cd952a359fd4))
+* role-aware MCP tutorial with dialogue follow-ups and goodbye ([#508](https://github.com/PostHog/wizard/issues/508)) ([0c84e2f](https://github.com/PostHog/wizard/commit/0c84e2f4d21e8372697cce54b454998a0bd2f554))
+
+## [2.16.1](https://github.com/PostHog/wizard/compare/v2.16.0...v2.16.1) (2026-06-05)
+
+
+### Bug Fixes
+
+* make seeded audit ledger customizable ([#512](https://github.com/PostHog/wizard/issues/512)) ([2419aa1](https://github.com/PostHog/wizard/commit/2419aa114dcd78f9f6cfc3c8599c318606e83d6f))
+* Make the source map deck look less like a real error ([#504](https://github.com/PostHog/wizard/issues/504)) ([5b92daa](https://github.com/PostHog/wizard/commit/5b92daa9368a5c0ff29378976b54258c9743a31a))
+* **tui:** keep keyboard hints bar always visible ([#511](https://github.com/PostHog/wizard/issues/511)) ([8711f02](https://github.com/PostHog/wizard/commit/8711f022e00a0cc71a8e7df1f8531449b6b6860e))
+
+## [2.16.0](https://github.com/PostHog/wizard/compare/v2.15.0...v2.16.0) (2026-06-03)
+
+
+### Features
+
+* Rebuild the MCP install + create role-tailored prompts screen ([#500](https://github.com/PostHog/wizard/issues/500)) ([06ba620](https://github.com/PostHog/wizard/commit/06ba6204b89a3315f9d46a217f8abac2b0c2b00c))
+
+## [2.15.0](https://github.com/PostHog/wizard/compare/v2.14.3...v2.15.0) (2026-06-03)
+
+
+### Features
+
+* add wizard state push ([#463](https://github.com/PostHog/wizard/issues/463)) ([323a84f](https://github.com/PostHog/wizard/commit/323a84feb9f3bbcd4be9a990b26722ff001d1f42))
+* disable --ci in published builds ([#499](https://github.com/PostHog/wizard/issues/499)) ([c34b712](https://github.com/PostHog/wizard/commit/c34b712c3f687f3dfe74d280e3725f0a490dea97))
+* enrich oauth login failure telemetry for diagnosis ([#501](https://github.com/PostHog/wizard/issues/501)) ([e70f51b](https://github.com/PostHog/wizard/commit/e70f51b549dee4e5f9fbc487f5667e8a3500d178))
+* error tracking source maps ([#475](https://github.com/PostHog/wizard/issues/475)) ([c25b7b8](https://github.com/PostHog/wizard/commit/c25b7b84276c524e2dc5c39ff7b6e211e795fcb9))
+* manual OAuth code paste ([#496](https://github.com/PostHog/wizard/issues/496)) ([0e43025](https://github.com/PostHog/wizard/commit/0e43025b0a8f893669ae63ba9a4aab99d53c2eba))
+
+
+### Bug Fixes
+
+* drop ungrantable `introspection` scope from OAuth authorize URL ([#443](https://github.com/PostHog/wizard/issues/443)) ([69ed45b](https://github.com/PostHog/wizard/commit/69ed45b8fa4bcfb62528fee2900357bcd02b1e95))
+* responsive bug that hijacked the authorize url ([#497](https://github.com/PostHog/wizard/issues/497)) ([cdf17a4](https://github.com/PostHog/wizard/commit/cdf17a41a270fbf165a8c1b4d7f1b7d7568ee4ec))
+
 ## [2.14.3](https://github.com/PostHog/wizard/compare/v2.14.2...v2.14.3) (2026-06-01)
 
 

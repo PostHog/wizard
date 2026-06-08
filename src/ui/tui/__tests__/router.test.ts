@@ -1,4 +1,4 @@
-import { buildSession, RunPhase } from '@lib/wizard-session';
+import { buildSession, McpOutcome, RunPhase } from '@lib/wizard-session';
 import { WizardReadiness } from '@lib/health-checks/readiness';
 import { WizardRouter, ScreenId, Overlay, Program } from '@ui/tui/router';
 
@@ -101,6 +101,43 @@ describe('WizardRouter', () => {
       router.pushOverlay(Overlay.ManagedSettings);
 
       expect(router.activeScreen).toBe(Overlay.ManagedSettings);
+    });
+  });
+
+  describe('McpAdd flow', () => {
+    it('starts at McpAdd', () => {
+      const router = new WizardRouter(Program.McpAdd);
+      expect(router.activeScreen).toBe(ScreenId.McpAdd);
+    });
+
+    it('exits after install when MCP install was skipped', () => {
+      const router = new WizardRouter(Program.McpAdd);
+      const session = baseWizardSession();
+      session.mcpComplete = true;
+      session.mcpOutcome = McpOutcome.Skipped;
+
+      // Skipped → suggested-prompts step is hidden, so the only visible
+      // step (mcp-add) is complete and the program resolves to Exit.
+      expect(router.resolve(session)).toBe(ScreenId.Exit);
+    });
+
+    it('advances to McpSuggestedPrompts after a successful install', () => {
+      const router = new WizardRouter(Program.McpAdd);
+      const session = baseWizardSession();
+      session.mcpComplete = true;
+      session.mcpOutcome = McpOutcome.Installed;
+
+      expect(router.resolve(session)).toBe(ScreenId.McpSuggestedPrompts);
+    });
+
+    it('exits once suggested prompts are dismissed', () => {
+      const router = new WizardRouter(Program.McpAdd);
+      const session = baseWizardSession();
+      session.mcpComplete = true;
+      session.mcpOutcome = McpOutcome.Installed;
+      session.mcpSuggestedPromptsDismissed = true;
+
+      expect(router.resolve(session)).toBe(ScreenId.Exit);
     });
   });
 });

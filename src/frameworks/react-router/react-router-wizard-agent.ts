@@ -1,13 +1,13 @@
 /* React Router wizard using posthog-agent with PostHog MCP */
-import type { WizardOptions } from '@utils/types';
+import type { WizardRunOptions } from '@utils/types';
 import type { FrameworkConfig } from '@lib/framework-config';
 import { detectNodePackageManagers } from '@lib/detection/package-manager';
 import { Integration } from '@lib/constants';
 import {
-  getPackageVersion,
+  getDeclaredVersion,
   getInstalledPackageVersion,
-  hasPackageInstalled,
-  type PackageDotJson,
+  hasDeclaredDependency,
+  type PackageJson,
 } from '@utils/package-json';
 import { tryGetPackageJson } from '@utils/setup-utils';
 import { getUI } from '@ui';
@@ -28,7 +28,7 @@ export const REACT_ROUTER_AGENT_CONFIG: FrameworkConfig<ReactRouterContext> = {
     integration: Integration.reactRouter,
     docsUrl: 'https://posthog.com/docs/libraries/react',
     unsupportedVersionDocsUrl: 'https://posthog.com/docs/libraries/react',
-    gatherContext: async (options: WizardOptions) => {
+    gatherContext: async (options: WizardRunOptions) => {
       const routerMode = await getReactRouterMode(options);
       if (routerMode) {
         getUI().setDetectedFramework(
@@ -44,17 +44,17 @@ export const REACT_ROUTER_AGENT_CONFIG: FrameworkConfig<ReactRouterContext> = {
     packageName: 'react-router',
     packageDisplayName: 'React Router',
     getVersion: (packageJson: unknown) =>
-      getPackageVersion('react-router', packageJson as PackageDotJson),
+      getDeclaredVersion('react-router', packageJson as PackageJson),
     getVersionBucket: getReactRouterVersionBucket,
     minimumVersion: '6.0.0',
-    getInstalledVersion: (options: WizardOptions) =>
+    getInstalledVersion: (options: WizardRunOptions) =>
       Promise.resolve(
         getInstalledPackageVersion('react-router', options.installDir),
       ),
     detect: async (options) => {
       const packageJson = await tryGetPackageJson(options);
       return packageJson
-        ? hasPackageInstalled('react-router', packageJson)
+        ? hasDeclaredDependency('react-router', packageJson)
         : false;
     },
     detectPackageManager: detectNodePackageManagers,

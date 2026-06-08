@@ -17,10 +17,16 @@ import { auditConfig } from './audit/index.js';
 import { eventsAuditConfig } from './events-audit/index.js';
 import { audit3000Config } from './audit-3000/index.js';
 import { posthogDoctorConfig } from './posthog-doctor/index.js';
+import { webAnalyticsDoctorConfig } from './web-analytics-doctor/index.js';
 import { migrationConfig } from './migration/index.js';
+import { errorTrackingUploadSourceMapsConfig } from './error-tracking-upload-source-maps/index.js';
 import { AGENT_SKILL_STEPS } from './agent-skill/index.js';
 import { getContentBlocks as agentSkillContentBlocks } from './agent-skill/content/index.js';
-import { mcpAddConfig, mcpRemoveConfig } from './mcp/index.js';
+import {
+  mcpAddConfig,
+  mcpRemoveConfig,
+  mcpTutorialConfig,
+} from './mcp/index.js';
 
 // Generic skill program — invoked when the wizard runs an arbitrary
 // context-mill skill chosen at runtime (session.skillId) rather than a
@@ -36,14 +42,17 @@ const agentSkillConfig: ProgramConfig = {
 export const PROGRAM_REGISTRY = [
   posthogIntegrationConfig,
   revenueAnalyticsConfig,
+  errorTrackingUploadSourceMapsConfig,
   auditConfig,
   eventsAuditConfig,
   audit3000Config,
   posthogDoctorConfig,
+  webAnalyticsDoctorConfig,
   migrationConfig,
   agentSkillConfig,
   mcpAddConfig,
   mcpRemoveConfig,
+  mcpTutorialConfig,
 ] as const satisfies readonly ProgramConfig[];
 
 /**
@@ -54,14 +63,17 @@ export const PROGRAM_REGISTRY = [
 export const Program = {
   PostHogIntegration: posthogIntegrationConfig.id,
   RevenueAnalyticsSetup: revenueAnalyticsConfig.id,
+  ErrorTrackingUploadSourceMaps: errorTrackingUploadSourceMapsConfig.id,
   Migration: migrationConfig.id,
   Audit: auditConfig.id,
   EventsAudit: eventsAuditConfig.id,
   Audit3000: audit3000Config.id,
   PosthogDoctor: posthogDoctorConfig.id,
+  WebAnalyticsDoctor: webAnalyticsDoctorConfig.id,
   AgentSkill: agentSkillConfig.id,
   McpAdd: mcpAddConfig.id,
   McpRemove: mcpRemoveConfig.id,
+  McpTutorial: mcpTutorialConfig.id,
 } as const;
 
 /** Compile-time union of every registered program id. */
@@ -76,7 +88,12 @@ export function getProgramConfig(id: ProgramId): ProgramConfig {
   return PROGRAM_REGISTRY.find((c) => c.id === id)!;
 }
 
+/** A program config that is exposed as a CLI subcommand. */
+export type SubcommandProgram = ProgramConfig & { command: string };
+
 /** All program configs that are exposed as CLI subcommands. */
-export function getSubcommandPrograms(): ProgramConfig[] {
-  return PROGRAM_REGISTRY.filter((c) => c.command != null);
+export function getSubcommandPrograms(): SubcommandProgram[] {
+  return PROGRAM_REGISTRY.filter(
+    (c): c is SubcommandProgram => c.command != null,
+  );
 }

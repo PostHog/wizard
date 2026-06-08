@@ -1,5 +1,6 @@
 import { runAgent, createStopHook } from '@lib/agent/agent-interface';
-import type { WizardOptions } from '@utils/types';
+import { AgentOutputSignals } from '@lib/agent/output-signals';
+import type { WizardRunOptions } from '@utils/types';
 import type { SpinnerHandle } from '@ui';
 import {
   AdditionalFeature,
@@ -57,15 +58,13 @@ describe('runAgent', () => {
     message: jest.Mock;
   };
 
-  const defaultOptions: WizardOptions = {
+  const defaultOptions: WizardRunOptions = {
     debug: false,
     installDir: '/test/dir',
-    forceInstall: false,
     default: false,
     signup: false,
     localMcp: false,
     ci: false,
-    menu: false,
     benchmark: false,
     yaraReport: false,
   };
@@ -395,26 +394,29 @@ describe('createStopHook', () => {
   });
 
   it('allows stop immediately on API error (401)', () => {
-    const collectedText = [
+    const signals = new AgentOutputSignals();
+    signals.push(
       'Failed to authenticate. API Error: 401 {"detail":"Authentication required"}',
-    ];
-    const hook = createStopHook([AdditionalFeature.LLM], collectedText);
+    );
+    const hook = createStopHook([AdditionalFeature.LLM], signals);
 
     const result = hook(hookInput);
     expect(result).toEqual({});
   });
 
   it('allows stop immediately on generic API error', () => {
-    const collectedText = ['API Error: 500 Internal Server Error'];
-    const hook = createStopHook([AdditionalFeature.LLM], collectedText);
+    const signals = new AgentOutputSignals();
+    signals.push('API Error: 500 Internal Server Error');
+    const hook = createStopHook([AdditionalFeature.LLM], signals);
 
     const result = hook(hookInput);
     expect(result).toEqual({});
   });
 
-  it('proceeds normally when collectedText has no API error', () => {
-    const collectedText = ['Some normal agent output'];
-    const hook = createStopHook([], collectedText);
+  it('proceeds normally when output has no API error', () => {
+    const signals = new AgentOutputSignals();
+    signals.push('Some normal agent output'); // dropped: carries no signal
+    const hook = createStopHook([], signals);
 
     // First call → remark prompt (normal behavior)
     const first = hook(hookInput);

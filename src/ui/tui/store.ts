@@ -14,6 +14,7 @@
  */
 
 import { atom, map } from 'nanostores';
+import { logToFile } from '@utils/debug';
 import { TaskStatus, isTaskStatus, type AuthErrorDetail } from '@ui/wizard-ui';
 import {
   type WizardSession,
@@ -42,6 +43,7 @@ import type {
   ProgramReadyContext,
 } from '@lib/programs/program-step';
 import { getProgramConfig } from '@lib/programs/program-registry';
+import { EXPANDED_COUNT } from '@ui/tui/constants';
 
 export { TaskStatus, ScreenId, Overlay, Program, RunPhase, McpOutcome };
 export type { ScreenName, OutroData, WizardSession, ProgramId };
@@ -65,6 +67,13 @@ interface GateEntry {
   resolve: () => void;
   resolved: boolean;
 }
+
+/**
+ * FIFO cap on retained status lines. The status bar is the only consumer and
+ * renders at most EXPANDED_COUNT lines, so there is no reason to retain more —
+ * the cap is tied to the window it feeds.
+ */
+const MAX_STATUS_MESSAGES = EXPANDED_COUNT;
 
 export class WizardStore {
   // ── Internal nanostore atoms ─────────────────────────────────────
@@ -101,6 +110,9 @@ export class WizardStore {
 
   /** Blocks OAuth flow until the port-conflict overlay is dismissed. */
   private _resolvePortConflict: (() => void) | null = null;
+
+  /** Resolves the OAuth flow with a manually-entered authorization code. */
+  private _resolveManualAuthCode: ((code: string) => void) | null = null;
 
   /** Resolves the in-flight wizard_ask request. */
   private _resolvePendingQuestion: ((answers: AskAnswers) => void) | null =
@@ -287,6 +299,16 @@ export class WizardStore {
     this.emitChange();
   }
 
+  setRoleAtOrganization(role: string | null): void {
+    this.$session.setKey('roleAtOrganization', role);
+    this.emitChange();
+  }
+
+  setApiUser(user: WizardSession['apiUser']): void {
+    this.$session.setKey('apiUser', user);
+    this.emitChange();
+  }
+
   setFrameworkConfig(
     integration: WizardSession['integration'],
     config: WizardSession['frameworkConfig'],
@@ -318,6 +340,11 @@ export class WizardStore {
 
   setLoginUrl(url: string | null): void {
     this.$session.setKey('loginUrl', url);
+    this.emitChange();
+  }
+
+  setAuthorizeUrl(url: string | null): void {
+    this.$session.setKey('authorizeUrl', url);
     this.emitChange();
   }
 
@@ -380,6 +407,37 @@ export class WizardStore {
     this.popOverlay();
     this._resolvePortConflict?.();
     this._resolvePortConflict = null;
+  }
+
+  /**
+   * Return a promise that resolves when the user submits a manually-entered
+   * OAuth code via the paste modal. The OAuth flow races this against the
+   * local callback server — see `performOAuthFlow`.
+   */
+  waitForManualAuthCode(): Promise<string> {
+    return new Promise<string>((resolve) => {
+      this._resolveManualAuthCode = resolve;
+    });
+  }
+
+  /** Open the manual OAuth code-entry overlay over the auth screen. */
+  showManualAuthCode(): void {
+    this.pushOverlay(Overlay.ManualAuthCode);
+  }
+
+  /** Dismiss the manual OAuth code overlay without submitting. */
+  dismissManualAuthCode(): void {
+    this.popOverlay();
+  }
+
+  /**
+   * Submit a manually-entered authorization code: dismiss the overlay and
+   * resolve the in-flight OAuth flow so it can exchange the code for a token.
+   */
+  submitManualAuthCode(code: string): void {
+    this.popOverlay();
+    this._resolveManualAuthCode?.(code);
+    this._resolveManualAuthCode = null;
   }
 
   /**
@@ -502,6 +560,11 @@ export class WizardStore {
     this.emitChange();
   }
 
+  setMcpSuggestedPromptsDismissed(): void {
+    this.$session.setKey('mcpSuggestedPromptsDismissed', true);
+    this.emitChange();
+  }
+
   setOutroDismissed(): void {
     this.$session.setKey('outroDismissed', true);
     this.emitChange();
@@ -513,7 +576,14 @@ export class WizardStore {
   }
 
   setDashboardUrl(url: string): void {
+    logToFile(`store.setDashboardUrl: ${url}`);
     this.$session.setKey('dashboardUrl', url);
+    this.emitChange();
+  }
+
+  setNotebookUrl(url: string): void {
+    logToFile(`store.setNotebookUrl: ${url}`);
+    this.$session.setKey('notebookUrl', url);
     this.emitChange();
   }
 
@@ -609,9 +679,16 @@ export class WizardStore {
 
   pushStatus(message: string): void {
     const msgs = this.$statusMessages.get();
-    // Skip consecutive duplicate messages
+    // Skip consecutive duplicate messages (no allocation on the hot path)
     if (msgs.length > 0 && msgs[msgs.length - 1] === message) return;
-    this.$statusMessages.set([...msgs, message]);
+    // Nanostore detects change by reference equality, so a new array is
+    // required. At the cap, allocate exactly once at the final size (dropping
+    // the oldest entry) rather than push-then-truncate.
+    const next =
+      msgs.length >= MAX_STATUS_MESSAGES
+        ? [...msgs.slice(msgs.length - MAX_STATUS_MESSAGES + 1), message]
+        : [...msgs, message];
+    this.$statusMessages.set(next);
     this.emitChange();
   }
 

@@ -11,6 +11,7 @@ import {
   type AuthErrorDetail,
 } from './wizard-ui';
 import type { SettingsConflict } from '@lib/agent/agent-interface';
+import type { ApiUser } from '@lib/api';
 import {
   type WizardReadinessResult,
   getBlockingServiceKeys,
@@ -102,6 +103,10 @@ export class LoggingUI implements WizardUI {
     }
   }
 
+  setAuthorizeUrl(_url: string | null): void {
+    // Manual-paste modal is TUI-only; CI/non-interactive runs don't use it.
+  }
+
   showBlockingOutage(result: WizardReadinessResult): Promise<void> {
     console.log(`▲  Service health issues detected — blocking outage.`);
     const blockingKeys = getBlockingServiceKeys(result.health);
@@ -138,6 +143,14 @@ export class LoggingUI implements WizardUI {
     user: string;
   }): Promise<void> {
     return Promise.resolve();
+  }
+
+  waitForManualAuthCode(): Promise<string> {
+    // No interactive prompt in CI/logging mode — never resolves. CI bypasses
+    // OAuth entirely, so this is only here to satisfy the interface.
+    return new Promise<string>(() => {
+      /* intentionally never resolves */
+    });
   }
 
   showSettingsOverride(
@@ -196,6 +209,15 @@ export class LoggingUI implements WizardUI {
     // No-op in CI mode — credentials are handled directly
   }
 
+  setRoleAtOrganization(_role: string | null): void {
+    // No-op in CI mode — there's no TUI to render role-tailored prompts
+  }
+
+  setApiUser(_user: ApiUser | null): void {
+    // No-op in CI mode — there's no TUI to read account context from
+    // the session.
+  }
+
   syncTodos(
     todos: Array<{ content: string; status: string; activeForm?: string }>,
   ): void {
@@ -221,6 +243,14 @@ export class LoggingUI implements WizardUI {
   }
 
   setStage(_stage: string): void {
+    // No-op in CI mode
+  }
+
+  setNotebookUrl(_url: string): void {
+    // No-op in CI mode
+  }
+
+  setOutroData(_data: import('@lib/wizard-session').OutroData): void {
     // No-op in CI mode
   }
 

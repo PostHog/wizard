@@ -1,13 +1,13 @@
 /* Simplified Next.js wizard using posthog-agent with PostHog MCP */
-import type { WizardOptions } from '@utils/types';
+import type { WizardRunOptions } from '@utils/types';
 import type { FrameworkConfig } from '@lib/framework-config';
 import { detectNodePackageManagers } from '@lib/detection/package-manager';
 import { Integration } from '@lib/constants';
 import {
-  getPackageVersion,
+  getDeclaredVersion,
   getInstalledPackageVersion,
-  hasPackageInstalled,
-  type PackageDotJson,
+  hasDeclaredDependency,
+  type PackageJson,
 } from '@utils/package-json';
 import { tryGetPackageJson } from '@utils/setup-utils';
 import { getUI } from '@ui';
@@ -28,7 +28,7 @@ export const NEXTJS_AGENT_CONFIG: FrameworkConfig<NextjsContext> = {
     integration: Integration.nextjs,
     docsUrl: 'https://posthog.com/docs/libraries/next-js',
     unsupportedVersionDocsUrl: 'https://posthog.com/docs/libraries/next-js',
-    gatherContext: async (options: WizardOptions) => {
+    gatherContext: async (options: WizardRunOptions) => {
       const router = await getNextJsRouter(options);
       if (router) {
         const emoji =
@@ -62,14 +62,14 @@ export const NEXTJS_AGENT_CONFIG: FrameworkConfig<NextjsContext> = {
     packageName: 'next',
     packageDisplayName: 'Next.js',
     getVersion: (packageJson: unknown) =>
-      getPackageVersion('next', packageJson as PackageDotJson),
+      getDeclaredVersion('next', packageJson as PackageJson),
     getVersionBucket: getNextJsVersionBucket,
     minimumVersion: '15.3.0',
-    getInstalledVersion: (options: WizardOptions) =>
+    getInstalledVersion: (options: WizardRunOptions) =>
       Promise.resolve(getInstalledPackageVersion('next', options.installDir)),
     detect: async (options) => {
       const packageJson = await tryGetPackageJson(options);
-      return packageJson ? hasPackageInstalled('next', packageJson) : false;
+      return packageJson ? hasDeclaredDependency('next', packageJson) : false;
     },
     detectPackageManager: detectNodePackageManagers,
   },

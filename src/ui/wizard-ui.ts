@@ -10,6 +10,7 @@
 
 import type { SettingsConflict } from '@lib/agent/agent-interface';
 import type { WizardReadinessResult } from '@lib/health-checks/readiness';
+import type { ApiUser } from '@lib/api';
 import type {
   AskAnswers,
   OutroData,
@@ -92,6 +93,21 @@ export interface WizardUI {
     projectId: number;
   }): void;
 
+  /**
+   * Persist the user's `role_at_organization` once it's been fetched from
+   * `/api/users/@me/`. Drives role-tailored prompt suggestions on the
+   * McpSuggestedPromptsScreen. Pass `null` to clear / when unknown.
+   */
+  setRoleAtOrganization(role: string | null): void;
+
+  /**
+   * Persist the full user payload from `/api/users/@me/` so downstream
+   * screens can read account context (current org, team, plan, email,
+   * preferences, etc.) without re-fetching. Pass `null` to clear or
+   * when the request failed.
+   */
+  setApiUser(user: ApiUser | null): void;
+
   /** Show blocking service outage (pushes outage overlay in TUI). Blocks until dismissed. */
   showBlockingOutage(result: WizardReadinessResult): Promise<void>;
 
@@ -105,6 +121,14 @@ export interface WizardUI {
     port: number;
     user: string;
   }): Promise<void>;
+
+  /**
+   * Resolve with an OAuth authorization code the user enters by hand — the
+   * fallback for headless/remote shells where the browser can't reach the
+   * local callback server. The OAuth flow races this against the callback
+   * server. Implementations that can't prompt (CI/logging) never resolve.
+   */
+  waitForManualAuthCode(): Promise<string>;
 
   showSettingsOverride(
     conflicts: SettingsConflict[],
@@ -130,6 +154,9 @@ export interface WizardUI {
 
   setLoginUrl(url: string | null): void;
 
+  /** Direct PostHog authorize URL, shown in the manual-paste modal. */
+  setAuthorizeUrl(url: string | null): void;
+
   // ── Task tracking from SDK TaskCreate/TaskUpdate events ───────────
   // Receives the full materialised task list each call. The caller (agent
   // loop) maintains a Map<taskId, …> from incremental Task* events and
@@ -147,6 +174,14 @@ export interface WizardUI {
   /** Current "stage of work" — derived from the active tool call. Drives the
    *  Visualizer tab's NOW PLAYING display. Pass an AgentPhase value. */
   setStage(stage: string): void;
+
+  // ── Notebook URL emitted by the agent via [NOTEBOOK_URL] marker ──
+  setNotebookUrl(url: string): void;
+
+  // ── Outro payload built by agent-runner ──
+  // Replaces the direct `session.outroData = X` mutation that breaks once
+  // setKey-based store mutations have forked the session reference.
+  setOutroData(data: OutroData): void;
 
   // ── Generic frameworkContext setter for program file watchers ─────
   setFrameworkContext(key: string, value: unknown): void;
