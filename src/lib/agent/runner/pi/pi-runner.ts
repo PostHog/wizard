@@ -1,12 +1,7 @@
-import { getUI } from '../../../../ui';
-import { logToFile } from '../../../../utils/debug';
-import { AgentSignals } from '../../signals';
 import { getWizardCommandments } from '../../commandments';
 import type { Runner, RunnerRunArgs, RunnerResult } from '../index';
-import { RunBridge } from '../shared/run-bridge';
 import { concludeRun, concludeError } from '../shared/conclude';
-import { extractHttpMcpDescriptors } from '../shared/mcp';
-import type { TaskEntry, ToolContext } from '../shared/tools/types';
+import { setupRun, driveStream, type RunEvent } from '../shared/run-loop';
 import { createPiModel } from './model';
 import { createPiTools } from './tools';
 import { createPiMcpServers, closePiMcpServers } from './mcp';
@@ -19,111 +14,65 @@ import { createPiMcpServers, closePiMcpServers } from './mcp';
  * so the PostHog MCP servers are live here via `mcpServers`.
  *
  * It mirrors `runAgent`'s contract: same arguments, same `{ error?, message? }`
- * result, same spinner/TUI side effects. The shared {@link RunBridge} turns the
- * streamed assistant messages and task mutations into the same TUI updates and
- * signal-derived results the Anthropic SDK path produces; {@link concludeRun} /
- * {@link concludeError} handle the post-loop tail.
+ * result, same spinner/TUI side effects. {@link setupRun} builds the shared
+ * scaffolding and {@link driveStream} / `conclude*` drive the bridge and result
+ * identically to the `vercel` runner — so the only pi-specific code here is the
+ * SDK agent construction (with live MCP servers) and translating its run stream
+ * into neutral events.
  *
  * Out of scope here (per the runner epic): canUseTool + YARA security parity
- * (#525). The flag stays off until that lands.
+ * (#525) and per-variant benchmark instrumentation (#527). The flag stays off
+ * until those land.
  */
 export class PiRunner implements Runner {
   async run(...args: RunnerRunArgs): Promise<RunnerResult> {
-    const [agentConfig, prompt, , spinner, config, middleware] = args;
-    const {
-      spinnerMessage = 'Customizing your PostHog setup...',
-      successMessage = 'PostHog integration complete',
-      errorMessage = 'Integration failed',
-    } = config ?? {};
-
-    spinner.start(spinnerMessage);
-    const startTime = Date.now();
-    logToFile('[pi] starting run', { model: agentConfig.model });
-
-    const tasks = new Map<string, TaskEntry>();
-    const bridge = new RunBridge(getUI(), spinner);
-    const ctx: ToolContext = {
-      workingDirectory: agentConfig.workingDirectory,
-      tasks,
-      onTasksChange: (t) => bridge.syncTasks(t),
-    };
-    const conclude = {
-      bridge,
-      spinner,
-      startTime,
-      successMessage,
-      errorMessage,
-      label: 'pi',
-      middleware,
-    };
-
-    // agentConfig.mcpServers is the SDK's untyped (`any`) config map; narrow it
-    // to the record shape the neutral descriptor extractor expects.
-    const mcpDescriptors = extractHttpMcpDescriptors(
-      agentConfig.mcpServers as Record<string, unknown> | undefined,
-    );
-    logToFile(
-      `[pi] MCP descriptors: ${
-        mcpDescriptors.map((d) => d.name).join(', ') || '(none)'
-      }`,
-    );
+    const rc = setupRun(args, 'pi');
 
     // The SDK is ESM-only; load it lazily so constructing the runner (and
     // unit-testing selection) doesn't pull in the SDK — mirrors getSDKModule.
     const { Agent, run } = await import('@openai/agents');
 
-    const abortController = new AbortController();
     let mcpServers: Awaited<ReturnType<typeof createPiMcpServers>> = [];
     try {
-      mcpServers = await createPiMcpServers(mcpDescriptors);
-      const model = await createPiModel(
-        agentConfig.model,
-        agentConfig.wizardMetadata ?? {},
-        agentConfig.wizardFlags ?? {},
-      );
-      const tools = await createPiTools(ctx);
-
+      mcpServers = await createPiMcpServers(rc.mcpDescriptors);
       const agent = new Agent({
         name: 'PostHog Wizard',
         instructions: getWizardCommandments(),
-        model,
-        tools,
+        model: await createPiModel(rc.agentConfig.model, rc.metadata, rc.flags),
+        tools: await createPiTools(rc.toolCtx),
         mcpServers,
       });
 
-      const result = await run(agent, prompt, {
+      const result = await run(agent, rc.prompt, {
         stream: true,
-        signal: abortController.signal,
+        signal: rc.abortController.signal,
       });
 
-      for await (const event of result) {
-        try {
-          middleware?.onMessage(event);
-        } catch (e) {
-          logToFile(`${AgentSignals.BENCHMARK} Middleware onMessage error:`, e);
+      // Translate the SDK run stream into neutral events: each completed
+      // assistant message arrives as a `message_output_item` run-item event, so
+      // flush its whole text and markers split across it parse intact. Errors the
+      // SDK defers to completion surface by awaiting `result.completed`, which
+      // throws into the catch below.
+      const piEvents = async function* (): AsyncGenerator<RunEvent> {
+        for await (const event of result) {
+          if (
+            event.type === 'run_item_stream_event' &&
+            event.item.type === 'message_output_item'
+          ) {
+            yield { kind: 'assistantText', text: event.item.content };
+          }
         }
+        await result.completed;
+      };
 
-        // Each completed assistant message arrives as a run-item event; flush
-        // the whole message text to the bridge so markers parse intact.
-        if (
-          event.type === 'run_item_stream_event' &&
-          event.item.type === 'message_output_item'
-        ) {
-          const { abort } = bridge.handleAssistantText(event.item.content);
-          if (abort) abortController.abort();
-        }
-      }
-      // Surface any error the stream deferred to completion.
-      await result.completed;
+      await driveStream(piEvents(), rc.bridge, rc.abort);
     } catch (error) {
-      return concludeError(error, conclude);
+      return concludeError(error, rc.conclude);
     } finally {
+      // Close the live MCP servers before concluding, regardless of outcome.
       await closePiMcpServers(mcpServers);
     }
 
-    return concludeRun({
-      ...conclude,
-      finalizeMessage: { type: 'result', subtype: 'success' },
-    });
+    return concludeRun(rc.conclude);
   }
 }
