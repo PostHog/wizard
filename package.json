@@ -35,6 +35,7 @@
     "@anthropic-ai/claude-agent-sdk": "0.3.146",
     "@inkjs/ui": "^2.0.0",
     "@langchain/core": "^0.3.40",
+    "@posthog/warlock": "git+https://github.com/PostHog/warlock.git#243aa0f231f4ed872efacf0ec04a32d8b964d9fd",
     "axios": "1.7.4",
     "fast-glob": "^3.3.3",
     "glob": "9.3.5",
@@ -138,7 +139,8 @@
       "json"
     ],
     "modulePathIgnorePatterns": [
-      "<rootDir>/dist/"
+      "<rootDir>/dist/",
+      "<rootDir>/.claude/worktrees/"
     ],
     "testPathIgnorePatterns": [
       "/dist/",
@@ -153,6 +155,7 @@
     ],
     "moduleNameMapper": {
       "^@anthropic-ai/claude-agent-sdk$": "<rootDir>/__mocks__/@anthropic-ai/claude-agent-sdk.ts",
+      "^@posthog/warlock$": "<rootDir>/__mocks__/@posthog/warlock.ts",
       "^ink$": "<rootDir>/__mocks__/ink.ts",
       "^@env$": "<rootDir>/src/env.ts",
       "^@lib/(.*)$": "<rootDir>/src/lib/$1",
