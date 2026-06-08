@@ -102,6 +102,34 @@ export interface ProgramStep {
 }
 
 /**
+ * Declares a program's place in the wizard CLI surface.
+ *
+ * Mirrors the `cli:` block in context-mill skill configs so wizard-native
+ * programs and skill-backed programs share one vocabulary:
+ *
+ *   - `surface: 'public'`   — registered as `wizard <group> <leaf>` (or
+ *                             `wizard <leaf>` if no group)
+ *   - `surface: 'catalog'`  — reachable only via `wizard skill <id>`
+ *   - `surface: 'internal'` — hidden everywhere, only reachable via the
+ *                             `--skill=<id>` dev escape hatch
+ *
+ * Phase 0 of the CLI overhaul: this is declarative only. Nothing reads it
+ * yet. Phase 2+ wires the generated context-mill manifest and this field
+ * into command registration.
+ */
+export interface ProgramCliSurface {
+  /** Where the program appears in the wizard CLI surface. */
+  surface: 'public' | 'catalog' | 'internal';
+  /** Parent family name (e.g. 'audit'). Omit for flat or standalone commands. */
+  group?: string;
+  /**
+   * The user-typed word for the command (e.g. 'events' in
+   * `wizard audit events`). Required when `surface` is `'public'`.
+   */
+  leaf?: string;
+}
+
+/**
  * Uniform configuration for a wizard program.
  *
  * Each program directory exports one of these. The system uses it
@@ -179,6 +207,12 @@ export interface ProgramConfig {
    * dispatch in a program whose steps are explicitly single-agent.
    */
   disallowedTools?: readonly string[];
+  /**
+   * Declares this program's place in the wizard CLI surface. See
+   * `ProgramCliSurface` for semantics. Phase 0 of the CLI overhaul:
+   * declarative only, no behavior reads this yet.
+   */
+  cli?: ProgramCliSurface;
 }
 
 /**
