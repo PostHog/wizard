@@ -147,7 +147,7 @@ export function runWizard(
       activeTui.unmount();
       process.exit(0);
     } catch (err) {
-      if (runtimeEnv('DEBUG') || runtimeEnv('POSTHOG_WIZARD_DEBUG')) {
+      if (runtimeEnv('DEBUG') || runtimeEnv('WIZARD_DEBUG')) {
         // eslint-disable-next-line no-console
         console.error('TUI init failed:', err);
       }

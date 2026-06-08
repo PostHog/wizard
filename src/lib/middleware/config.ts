@@ -52,7 +52,7 @@ const DEFAULT_CONFIG: BenchmarkConfig = {
 
 export function loadBenchmarkConfig(installDir: string): BenchmarkConfig {
   const configPath =
-    runtimeEnv('POSTHOG_WIZARD_BENCHMARK_CONFIG') ??
+    runtimeEnv('WIZARD_BENCHMARK_CONFIG') ??
     path.join(installDir, '.benchmark-config.json');
   try {
     const raw = fs.readFileSync(configPath, 'utf-8');
@@ -63,11 +63,11 @@ export function loadBenchmarkConfig(installDir: string): BenchmarkConfig {
     };
 
     // Env var overrides for parallel runs
-    const benchFile = runtimeEnv('POSTHOG_WIZARD_BENCHMARK_FILE');
+    const benchFile = runtimeEnv('WIZARD_BENCHMARK_FILE');
     if (benchFile) {
       config.output.benchmarkPath = benchFile;
     }
-    const logDir = runtimeEnv('POSTHOG_WIZARD_LOG_DIR');
+    const logDir = runtimeEnv('WIZARD_LOG_DIR');
     if (logDir) {
       config.output.logPath = path.join(logDir, 'posthog-wizard.log');
     }
@@ -84,11 +84,11 @@ export function loadBenchmarkConfig(installDir: string): BenchmarkConfig {
     const config = structuredClone(DEFAULT_CONFIG);
 
     // Env var overrides
-    const benchFile2 = runtimeEnv('POSTHOG_WIZARD_BENCHMARK_FILE');
+    const benchFile2 = runtimeEnv('WIZARD_BENCHMARK_FILE');
     if (benchFile2) {
       config.output.benchmarkPath = benchFile2;
     }
-    const logDir2 = runtimeEnv('POSTHOG_WIZARD_LOG_DIR');
+    const logDir2 = runtimeEnv('WIZARD_LOG_DIR');
     if (logDir2) {
       config.output.logPath = path.join(logDir2, 'posthog-wizard.log');
     }

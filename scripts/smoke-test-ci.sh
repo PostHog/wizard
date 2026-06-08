@@ -4,7 +4,7 @@
 # wizard-workbench, and run in CI mode.
 #
 # Prerequisites:
-#   - POSTHOG_PERSONAL_API_KEY env var (or in .env)
+#   - WIZARD_API_KEY env var (or in .env)
 #   - A wizard-workbench repo checked out (for the test app), pointed to by:
 #       - WIZARD_WORKBENCH_ROOT=/path/to/wizard-workbench
 #         or
@@ -16,15 +16,15 @@
 #
 # Examples:
 #   # With API key inline:
-#   POSTHOG_PERSONAL_API_KEY=phx_your_key_here ./scripts/smoke-test-ci.sh
+#   WIZARD_API_KEY=phx_your_key_here ./scripts/smoke-test-ci.sh
 #
 #   # With project ID override:
-#   POSTHOG_PERSONAL_API_KEY=phx_your_key_here POSTHOG_PROJECT_ID=12345 ./scripts/smoke-test-ci.sh
+#   WIZARD_API_KEY=phx_your_key_here WIZARD_PROJECT_ID=12345 ./scripts/smoke-test-ci.sh
 #
 #   # Specific app:
-#   POSTHOG_PERSONAL_API_KEY=phx_your_key_here ./scripts/smoke-test-ci.sh basic-integration/next-js/15-pages-router-saas
+#   WIZARD_API_KEY=phx_your_key_here ./scripts/smoke-test-ci.sh basic-integration/next-js/15-pages-router-saas
 #
-#   # If ../wizard-workbench/.env has POSTHOG_PERSONAL_API_KEY, just:
+#   # If ../wizard-workbench/.env has WIZARD_API_KEY, just:
 #   ./scripts/smoke-test-ci.sh
 #
 set -euo pipefail
@@ -59,21 +59,21 @@ if [ ! -d "$APP_SRC" ]; then
   exit 1
 fi
 
-# Load .env from workbench if it exists (for POSTHOG_PERSONAL_API_KEY)
+# Load .env from workbench if it exists (for WIZARD_API_KEY)
 if [ -f "$WORKBENCH_ROOT/.env" ]; then
   set -a
   source "$WORKBENCH_ROOT/.env"
   set +a
 fi
 
-API_KEY="${POSTHOG_PERSONAL_API_KEY:-}"
+API_KEY="${WIZARD_API_KEY:-}"
 if [ -z "$API_KEY" ]; then
-  echo "ERROR: POSTHOG_PERSONAL_API_KEY not set"
+  echo "ERROR: WIZARD_API_KEY not set"
   echo "Set it in your environment or in $WORKBENCH_ROOT/.env"
   exit 1
 fi
 
-PROJECT_ID="${POSTHOG_PROJECT_ID:-}"
+PROJECT_ID="${WIZARD_PROJECT_ID:-}"
 
 # ── Build & Pack ────────────────────────────────────────────────────────────
 # Build the CI variant (NODE_ENV=ci): identical to the published build except
