@@ -5,6 +5,7 @@ import {
   ANALYTICS_TEAM_TAG,
 } from '@lib/constants';
 import type { WizardSession } from '@lib/wizard-session';
+import type { ApiUser } from '@lib/api';
 import { v4 as uuidv4 } from 'uuid';
 import { debug } from './debug';
 
@@ -25,6 +26,26 @@ export function sessionProperties(
     run_phase: session.runPhase,
   };
 }
+
+export function groupsFromUser(
+  user: ApiUser | null,
+  host: string,
+): Record<string, string> {
+  const groups: Record<string, string> = { instance: host };
+  if (!user) return groups;
+
+  const organizationId = user.organization?.id;
+  if (organizationId) groups.organization = organizationId;
+
+  const customerId = user.organization?.customer_id;
+  if (customerId) groups.customer = customerId;
+
+  const projectUuid = user.team?.uuid;
+  if (projectUuid) groups.project = projectUuid;
+
+  return groups;
+}
+
 export class Analytics {
   private client: PostHog;
   private tags: Record<string, string | boolean | number | null | undefined> =
@@ -33,6 +54,7 @@ export class Analytics {
   private anonymousId: string;
   private appName = 'wizard';
   private activeFlags: Record<string, string> | null = null;
+  private groups: Record<string, string> = {};
 
   constructor() {
     this.client = new PostHog(ANALYTICS_POSTHOG_PUBLIC_PROJECT_WRITE_KEY, {
@@ -40,6 +62,12 @@ export class Analytics {
       flushAt: 1,
       flushInterval: 0,
       enableExceptionAutocapture: true,
+      before_send: (event) => {
+        if (event && Object.keys(this.groups).length > 0) {
+          event.groups = { ...this.groups, ...event.groups };
+        }
+        return event;
+      },
     });
 
     this.tags = { $app_name: this.appName };
@@ -59,6 +87,10 @@ export class Analytics {
 
   setTag(key: string, value: string | boolean | number | null | undefined) {
     this.tags[key] = value;
+  }
+
+  setGroups(groups: Record<string, string>) {
+    this.groups = groups;
   }
 
   captureException(error: Error, properties: Record<string, unknown> = {}) {

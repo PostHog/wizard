@@ -14,6 +14,7 @@
  */
 
 import { atom, map } from 'nanostores';
+import { logToFile } from '@utils/debug';
 import { TaskStatus, isTaskStatus, type AuthErrorDetail } from '@ui/wizard-ui';
 import {
   type WizardSession,
@@ -42,6 +43,7 @@ import type {
   ProgramReadyContext,
 } from '@lib/programs/program-step';
 import { getProgramConfig } from '@lib/programs/program-registry';
+import { EXPANDED_COUNT } from '@ui/tui/constants';
 
 export { TaskStatus, ScreenId, Overlay, Program, RunPhase, McpOutcome };
 export type { ScreenName, OutroData, WizardSession, ProgramId };
@@ -65,6 +67,13 @@ interface GateEntry {
   resolve: () => void;
   resolved: boolean;
 }
+
+/**
+ * FIFO cap on retained status lines. The status bar is the only consumer and
+ * renders at most EXPANDED_COUNT lines, so there is no reason to retain more —
+ * the cap is tied to the window it feeds.
+ */
+const MAX_STATUS_MESSAGES = EXPANDED_COUNT;
 
 export class WizardStore {
   // ── Internal nanostore atoms ─────────────────────────────────────
@@ -551,7 +560,14 @@ export class WizardStore {
   }
 
   setDashboardUrl(url: string): void {
+    logToFile(`store.setDashboardUrl: ${url}`);
     this.$session.setKey('dashboardUrl', url);
+    this.emitChange();
+  }
+
+  setNotebookUrl(url: string): void {
+    logToFile(`store.setNotebookUrl: ${url}`);
+    this.$session.setKey('notebookUrl', url);
     this.emitChange();
   }
 
@@ -647,9 +663,16 @@ export class WizardStore {
 
   pushStatus(message: string): void {
     const msgs = this.$statusMessages.get();
-    // Skip consecutive duplicate messages
+    // Skip consecutive duplicate messages (no allocation on the hot path)
     if (msgs.length > 0 && msgs[msgs.length - 1] === message) return;
-    this.$statusMessages.set([...msgs, message]);
+    // Nanostore detects change by reference equality, so a new array is
+    // required. At the cap, allocate exactly once at the final size (dropping
+    // the oldest entry) rather than push-then-truncate.
+    const next =
+      msgs.length >= MAX_STATUS_MESSAGES
+        ? [...msgs.slice(msgs.length - MAX_STATUS_MESSAGES + 1), message]
+        : [...msgs, message];
+    this.$statusMessages.set(next);
     this.emitChange();
   }
 
