@@ -9,8 +9,8 @@ function getMatches(result: ScanResult) {
 
 describe('yara-scanner', () => {
   describe('rule registry', () => {
-    it('has 17 rules', () => {
-      expect(RULES).toHaveLength(17);
+    it('has 15 rules', () => {
+      expect(RULES).toHaveLength(15);
     });
 
     it('all rules have required fields', () => {
@@ -162,103 +162,6 @@ posthog.capture('signup', { email: user.email })`;
     it('does not trigger on Read phase (wrong phase)', () => {
       const content = `posthog.capture('signup', { email: user.email })`;
       const result = scan(content, 'PostToolUse', 'Read');
-      expect(result.matched).toBe(false);
-    });
-  });
-
-  // ── §1 PII in person-property calls ──────────────────────────
-
-  describe('pii_in_person_properties', () => {
-    it('detects SSN in setPersonProperties()', () => {
-      const content = `posthog.setPersonProperties({ ssn: user.ssn })`;
-      const result = scan(content, 'PostToolUse', 'Write');
-      expect(result.matched).toBe(true);
-      expect(
-        getMatches(result).some(
-          (m) => m.rule.name === 'pii_in_person_properties',
-        ),
-      ).toBe(true);
-    });
-
-    it('detects credit card in register()', () => {
-      const content = `posthog.register({ credit_card: card })`;
-      const result = scan(content, 'PostToolUse', 'Write');
-      expect(
-        getMatches(result).some(
-          (m) => m.rule.name === 'pii_in_person_properties',
-        ),
-      ).toBe(true);
-    });
-
-    it('detects bank account in register_once()', () => {
-      const content = `posthog.register_once({ bank_account: acct })`;
-      const result = scan(content, 'PostToolUse', 'Edit');
-      expect(
-        getMatches(result).some(
-          (m) => m.rule.name === 'pii_in_person_properties',
-        ),
-      ).toBe(true);
-    });
-
-    it('does not flag email/name in setPersonProperties() (standard person props)', () => {
-      const content = `posthog.setPersonProperties({ email: user.email, first_name: user.firstName })`;
-      const result = scan(content, 'PostToolUse', 'Write');
-      expect(result.matched).toBe(false);
-    });
-
-    it('does not fire on sensitive PII in capture() (sibling rule owns that)', () => {
-      const content = `posthog.capture('checkout', { ssn: user.ssn })`;
-      const result = scan(content, 'PostToolUse', 'Write');
-      expect(
-        getMatches(result).some(
-          (m) => m.rule.name === 'pii_in_person_properties',
-        ),
-      ).toBe(false);
-    });
-  });
-
-  // ── §1 PII-shaped literal values ─────────────────────────────
-
-  describe('pii_value_in_tracking_call', () => {
-    it('detects an email literal under an innocuous key in capture()', () => {
-      const content = `posthog.capture('signup', { referrer: 'jane@example.com' })`;
-      const result = scan(content, 'PostToolUse', 'Write');
-      expect(
-        getMatches(result).some(
-          (m) => m.rule.name === 'pii_value_in_tracking_call',
-        ),
-      ).toBe(true);
-    });
-
-    it('detects a dashed SSN literal in identify()', () => {
-      const content = `posthog.identify('user-1', { note: '123-45-6789' })`;
-      const result = scan(content, 'PostToolUse', 'Write');
-      expect(
-        getMatches(result).some(
-          (m) => m.rule.name === 'pii_value_in_tracking_call',
-        ),
-      ).toBe(true);
-    });
-
-    it('detects a separator-grouped card number in capture()', () => {
-      const content = `posthog.capture('payment', { num: '4111 1111 1111 1111' })`;
-      const result = scan(content, 'PostToolUse', 'Write');
-      expect(
-        getMatches(result).some(
-          (m) => m.rule.name === 'pii_value_in_tracking_call',
-        ),
-      ).toBe(true);
-    });
-
-    it('does not flag an email value in identify() (the standard pattern)', () => {
-      const content = `posthog.identify('user-1', { email: 'jane@example.com' })`;
-      const result = scan(content, 'PostToolUse', 'Write');
-      expect(result.matched).toBe(false);
-    });
-
-    it('does not flag an unseparated 16-digit run', () => {
-      const content = `posthog.capture('order', { orderId: '4111111111111111' })`;
-      const result = scan(content, 'PostToolUse', 'Write');
       expect(result.matched).toBe(false);
     });
   });
