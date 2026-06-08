@@ -9,6 +9,7 @@ import {
   McpOutcome,
 } from '@ui/tui/store';
 import { OutroKind, AdditionalFeature } from '@lib/wizard-session';
+import { EXPANDED_COUNT } from '@ui/tui/constants';
 import {
   WizardReadiness,
   evaluateWizardReadiness,
@@ -637,6 +638,21 @@ describe('WizardStore', () => {
 
       store.pushStatus('msg');
       expect(cb).toHaveBeenCalledTimes(1);
+    });
+
+    it('pushStatus caps history as a FIFO, dropping oldest', () => {
+      const store = createStore();
+      for (let i = 0; i < 250; i++) {
+        store.pushStatus(`msg ${i}`);
+      }
+
+      // Cap is tied to EXPANDED_COUNT (the status bar's largest window).
+      const msgs = store.statusMessages;
+      expect(msgs).toHaveLength(EXPANDED_COUNT);
+      // Newest retained, oldest dropped.
+      expect(msgs[msgs.length - 1]).toBe('msg 249');
+      expect(msgs[0]).toBe(`msg ${250 - EXPANDED_COUNT}`);
+      expect(msgs).not.toContain('msg 0');
     });
   });
 

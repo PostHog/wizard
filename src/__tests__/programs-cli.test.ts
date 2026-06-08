@@ -27,6 +27,14 @@ describe('program commands', () => {
     expect(migrateCommand.name).toBe('migrate');
   });
 
+  test('nests web analytics doctor under audit', () => {
+    expect(auditCommand.children).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: 'web-analytics' }),
+      ]),
+    );
+  });
+
   test('dispatches to runWizard by default', () => {
     auditCommand.handler!(makeArgv({ debug: true }));
     expect(mockRunWizard).toHaveBeenCalledTimes(1);
@@ -74,6 +82,14 @@ describe('program commands', () => {
     const argv = await parseCommand(
       auditCommand,
       'audit --install-dir /tmp/app',
+    );
+    expect(argv.installDir).toBe('/tmp/app');
+  });
+
+  test('parses audit web-analytics through yargs', async () => {
+    const argv = await parseCommand(
+      auditCommand,
+      'audit web-analytics --install-dir /tmp/app',
     );
     expect(argv.installDir).toBe('/tmp/app');
   });
