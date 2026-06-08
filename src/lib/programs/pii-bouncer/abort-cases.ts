@@ -28,11 +28,12 @@ export const PII_BOUNCER_ABORT_CASES: AbortCase[] = [
   },
   {
     match: /^no-init-call$/i,
-    message: 'Could not find a posthog.init call',
+    message: 'Could not find where PostHog is initialised',
     body:
-      'The PII Bouncer needs to find your `posthog.init(...)` call to add ' +
-      'session recording mask config. Make sure PostHog is initialised in ' +
-      'your project and try again.',
+      'The PII Bouncer needs to find where PostHog is initialised — a ' +
+      '`posthog.init(...)` call or a `<PostHogProvider>` — to add session ' +
+      'recording mask config. Make sure PostHog is initialised in your ' +
+      'project and try again.',
     docsUrl: 'https://posthog.com/docs/libraries/js#initialization',
   },
   {
