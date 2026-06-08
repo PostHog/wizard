@@ -44,7 +44,11 @@ import {
 import { enableDebugLogs, initLogFile, logToFile } from '@utils/debug';
 import { createBenchmarkPipeline } from '@lib/middleware/benchmark';
 import { wizardAbort, WizardError, registerCleanup } from '@utils/wizard-abort';
-import { formatScanReport, writeScanReport } from '@lib/yara-hooks';
+import {
+  writeScanReport,
+  captureScanReport,
+  formatScanReport,
+} from '@lib/yara-hooks';
 import { detectNodePackageManagers } from '@lib/detection/package-manager';
 import type { PackageManagerDetector } from '@lib/detection/package-manager';
 import { getSkillsBaseUrl } from '@lib/constants';
@@ -312,15 +316,17 @@ export async function runProgram(
   const restoreSettings = () => restoreClaudeSettings(session.installDir);
   getUI().onEnterScreen('outro', restoreSettings);
 
-  if (session.yaraReport) {
-    registerCleanup(() => {
+  // Send YARA scan summary to PostHog telemetry; write local debug report if --yara-report.
+  registerCleanup(() => {
+    captureScanReport();
+    if (session.yaraReport) {
       const reportPath = writeScanReport();
       if (reportPath) {
         const summary = formatScanReport();
         getUI().log.info(`YARA scan report: ${reportPath}${summary ?? ''}`);
       }
-    });
-  }
+    }
+  });
 
   getUI().startRun();
 
@@ -517,6 +523,21 @@ export async function runProgram(
   }
 
   getUI().outro(config.successMessage);
+
+  // Send YARA scan summary on success too — registerCleanup only fires from
+  // wizardAbort (error/cancel paths), so without this, successful runs would
+  // never report their scan activity. The write-local-report check matches
+  // the cleanup path for behavioral parity.
+  captureScanReport();
+  if (session.yaraReport) {
+    const reportPath = writeScanReport();
+    if (reportPath) {
+      // Show the path + one-line-per-violation summary in the user's
+      // terminal — they passed --yara-report explicitly, they want to see it.
+      const summary = formatScanReport();
+      getUI().log.info(`YARA scan report: ${reportPath}${summary ?? ''}`);
+    }
+  }
 
   // 12. Analytics shutdown
   await analytics.shutdown('success');

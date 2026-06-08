@@ -28,7 +28,9 @@ import { createWizardToolsServer, WIZARD_TOOL_NAMES } from '@lib/wizard-tools';
 import {
   createPreToolUseYaraHooks,
   createPostToolUseYaraHooks,
+  prewarmYaraScanner,
 } from '@lib/yara-hooks';
+import { createTriageLLMProvider } from './triage-provider';
 import { getWizardCommandments } from './commandments';
 import type { PackageManagerDetector } from '@lib/detection/package-manager';
 
@@ -783,6 +785,15 @@ export async function initializeAgent(
     }
 
     getUI().log.step(`Verbose logs: ${getLogFilePath()}`);
+
+    // Pre-warm the warlock scanner (WASM init + rule compile) off the hook path
+    // so the first tool-call scan doesn't pay cold-start under a hook timeout.
+    // Fire-and-forget: the warlock module promise is cached, so the first real
+    // scan awaits the same in-flight promise. Awaiting here would just move
+    // the cold-start cost to user-visible startup.
+    // Best-effort — a failure is non-fatal (hooks still fail closed per scan).
+    void prewarmYaraScanner();
+
     getUI().log.success("Agent initialized. Let's get cooking!");
     return agentRunConfig;
   } catch (error) {
@@ -938,6 +949,10 @@ export async function runAgent(
   // runner can surface it via outroData after we unwind.
   const abortController = new AbortController();
   let abortReason: string | null = null;
+  // Set when a YARA hook detects a terminal violation. Returning `stopReason`
+  // from a PostToolUse hook does NOT stop the SDK, so we abort the query and
+  // surface a YARA_VIOLATION below — mirroring the [ABORT] mechanism.
+  let yaraViolationReason: string | null = null;
 
   try {
     // Per-program allow/disallow lists tweak BASE_ALLOWED_TOOLS. Skills are
@@ -956,6 +971,22 @@ export async function runAgent(
     // general-purpose to forward parent MCP servers by name; SDK resolves
     // each string against the parent's mcpServers map.
     const inheritedMcpServerNames = Object.keys(agentConfig.mcpServers);
+
+    // LLM provider for warlock triage (reuses the gateway auth set on
+    // process.env by initializeAgent). Undefined if auth is missing — hooks
+    // then skip triage and fail closed.
+    const triageProvider = createTriageLLMProvider();
+
+    // Actually stop the run when a YARA hook hits a terminal violation. The SDK
+    // ignores `stopReason` from PostToolUse hooks, so we abort the query (like
+    // [ABORT]) and return YARA_VIOLATION from the loop-end / catch below.
+    const onYaraTerminate = (reason: string) => {
+      if (yaraViolationReason) return; // first violation wins
+      yaraViolationReason = reason;
+      logToFile(`[YARA] terminating run: ${reason}`);
+      abortController.abort();
+      signalDone!();
+    };
 
     const response = query({
       prompt: createPromptStream(),
@@ -1096,8 +1127,11 @@ export async function runAgent(
         },
         // Stop hook: drain additional feature queue, then collect remark, then allow stop
         hooks: {
-          PreToolUse: createPreToolUseYaraHooks(),
-          PostToolUse: createPostToolUseYaraHooks(),
+          PreToolUse: createPreToolUseYaraHooks(triageProvider),
+          PostToolUse: createPostToolUseYaraHooks(
+            triageProvider,
+            onYaraTerminate,
+          ),
           Stop: [
             {
               hooks: [
@@ -1226,6 +1260,13 @@ export async function runAgent(
       }
     }
 
+    // A YARA hook detected a terminal violation and aborted the run.
+    if (yaraViolationReason) {
+      logToFile('Agent error: YARA_VIOLATION');
+      spinner.stop('Security violation detected');
+      return { error: AgentErrorType.YARA_VIOLATION };
+    }
+
     // If the middleware caught an [ABORT] and aborted the SDK query, surface
     // it as a structured error before checking other signals.
     if (abortReason) {
@@ -1275,6 +1316,15 @@ export async function runAgent(
   } catch (error) {
     // Signal done to unblock the async generator
     signalDone!();
+
+    // A YARA hook aborted the run (the SDK throws AbortError once the hook
+    // calls abortController.abort()). Surface it before anything else so it is
+    // never mistaken for a success-cleanup race or a generic abort.
+    if (yaraViolationReason) {
+      logToFile('Agent error: YARA_VIOLATION');
+      spinner.stop('Security violation detected');
+      return { error: AgentErrorType.YARA_VIOLATION };
+    }
 
     // If the middleware caught an [ABORT] and triggered abortController.abort(),
     // the SDK will throw an AbortError — surface it as a clean abort result.
