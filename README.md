@@ -99,11 +99,14 @@ The following CLI arguments are available:
 | ----------------- | ---------------------------------------------------------------- | ------- | ------- | ---------------------------------------------------- | ------------------------------ |
 | `--help`          | Show help                                                        | boolean |         |                                                      |                                |
 | `--version`       | Show version number                                              | boolean |         |                                                      |                                |
-| `--debug`         | Enable verbose logging                                           | boolean | `false` |                                                      | `POSTHOG_WIZARD_DEBUG`         |
-| `--signup`        | Create a new PostHog account during setup                        | boolean | `false` |                                                      | `POSTHOG_WIZARD_SIGNUP`        |
-| `--install-dir`   | Directory to install PostHog in                                  | string  |         |                                                      | `POSTHOG_WIZARD_INSTALL_DIR`   |
-| `--ci`            | Enable CI mode for non-interactive execution                     | boolean | `false` |                                                      | `POSTHOG_WIZARD_CI`            |
-| `--api-key`       | PostHog personal API key (phx_xxx) for authentication            | string  |         |                                                      | `POSTHOG_WIZARD_API_KEY`       |
+| `--debug`         | Enable verbose logging                                           | boolean | `false` |                                                      | `WIZARD_DEBUG`                 |
+| `--signup`        | Create a new PostHog account during setup                        | boolean | `false` |                                                      | `WIZARD_SIGNUP`                |
+| `--install-dir`   | Directory to install PostHog in                                  | string  |         |                                                      | `WIZARD_INSTALL_DIR`           |
+| `--ci`            | Enable CI mode for non-interactive execution                     | boolean | `false` |                                                      | `WIZARD_CI`                    |
+| `--api-key`       | PostHog personal API key (phx_xxx) for authentication            | string  |         |                                                      | `WIZARD_API_KEY`               |
+
+> The `WIZARD_*` environment variables are a dev/CI-only convenience and are
+> ignored in the published package — drive the shipped CLI through the flags.
 
 
 # CI Mode
@@ -118,7 +121,7 @@ The following CLI arguments are available:
 Run the wizard non-interactive executions with `--ci`:
 
 ```bash
-npx @posthog/wizard --ci --api-key $POSTHOG_PERSONAL_API_KEY --install-dir .
+npx @posthog/wizard --ci --api-key $WIZARD_API_KEY --install-dir .
 ```
 
 When running in CI mode (`--ci`):
@@ -179,8 +182,8 @@ When the user authenticates, the wizard also streams live run state — current
 phase, task list, planned events — to `POST /api/projects/{id}/wizard/sessions/`
 so the PostHog web app can render real-time progress. Updates are debounced
 (250ms) with phase changes flushed immediately; failures fall back silently to
-the wizard's debug log without disturbing the TUI. Pass `--no-telemetry` (or
-set `POSTHOG_WIZARD_NO_TELEMETRY=1`) to disable.
+the wizard's debug log without disturbing the TUI. Pass `--no-telemetry` to
+disable (in dev/CI, `WIZARD_NO_TELEMETRY=1` works too).
 
 ## Leave rules behind
 
@@ -249,16 +252,15 @@ Built with [tsdown](https://tsdown.dev/) (Rolldown). `pnpm build` bundles `bin.t
 
 To add a new build-time constant, add it to `env` in `tsdown.config.ts` and export it from `src/env.ts`.
 
-**Runtime (allowlisted).** Runtime env reads go through `runtimeEnv()` in `src/env.ts`, which only accepts keys in the `RuntimeEnvKey` union:
+**Runtime (allowlisted).** Runtime env reads go through `runtimeEnv()` in `src/env.ts`, which only accepts keys in the `RuntimeEnvKey` union. The `WIZARD_*` keys are dev/CI-only — `runtimeEnv()` ignores them in published builds:
 
 | Variable | Purpose |
 |---|---|
-| `POSTHOG_WIZARD_BENCHMARK_CONFIG` | Path to benchmark config file |
-| `POSTHOG_WIZARD_BENCHMARK_FILE` | Output path for benchmark results |
-| `POSTHOG_WIZARD_LOG_DIR` | Log directory override |
-| `POSTHOG_WIZARD_DEBUG` / `DEBUG` | Enable debug output |
+| `WIZARD_BENCHMARK_CONFIG` | Path to benchmark config file |
+| `WIZARD_BENCHMARK_FILE` | Output path for benchmark results |
+| `WIZARD_LOG_DIR` | Log directory override |
+| `WIZARD_DEBUG` / `DEBUG` | Enable debug output |
 | `MCP_URL` | Override MCP server URL |
-| `POSTHOG_API_KEY` | API key for MCP subprocess auth |
 | `TERM`, `TERM_PROGRAM`, `CI`, etc. | Terminal/platform detection |
 | `APPDATA`, `XDG_CONFIG_HOME` | Platform path resolution |
 
@@ -377,8 +379,8 @@ This repo includes a helper script to run a full end‑to‑end smoke test of th
 - Point to a `wizard-workbench` checkout either by:
   - Setting `WIZARD_WORKBENCH_ROOT=/absolute/path/to/wizard-workbench`, or
   - Cloning `wizard-workbench` next to this repo (so it lives at `../wizard-workbench`).
-- Set `POSTHOG_PERSONAL_API_KEY` either in your shell or in `../wizard-workbench/.env`.
-- (Optional) Set `POSTHOG_PROJECT_ID` to target a specific PostHog project.
+- Set `WIZARD_API_KEY` either in your shell or in `../wizard-workbench/.env`.
+- (Optional) Set `WIZARD_PROJECT_ID` to target a specific PostHog project.
 
 **Usage**
 
@@ -390,8 +392,8 @@ This repo includes a helper script to run a full end‑to‑end smoke test of th
 ./scripts/smoke-test-ci.sh next-js/15-pages-router-saas
 
 # With API key (and optional project ID) inline
-POSTHOG_PERSONAL_API_KEY=phx_your_key_here \
-POSTHOG_PROJECT_ID=12345 \
+WIZARD_API_KEY=phx_your_key_here \
+WIZARD_PROJECT_ID=12345 \
 ./scripts/smoke-test-ci.sh next-js/15-pages-router-saas
 
 # Pointing at a custom wizard-workbench checkout
