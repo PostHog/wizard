@@ -8,9 +8,11 @@
  * wiring (command, skill id, outro, abort routing). Engine, not cartridge.
  */
 
+import path from 'node:path';
 import { OutroKind } from '@lib/wizard-session';
 import { getCloudUrlFromRegion } from '@utils/urls';
 import { createSkillProgram } from '@lib/programs/agent-skill/index';
+import { getEditedFiles } from '@lib/edit-tracker';
 import { PII_BOUNCER_ABORT_CASES } from './abort-cases.js';
 
 const REPORT_FILE = 'posthog-pii-bouncer-report.md';
@@ -44,11 +46,25 @@ export const piiBouncerConfig = createSkillProgram({
     const continueUrl =
       sess.signup && cloudUrl ? `${cloudUrl}/replay?source=wizard` : undefined;
 
+    // Be transparent about exactly which project files we touched. The
+    // edit tracker records the agent's actual Write/Edit calls, so this
+    // reflects what hit disk — important posture for a privacy tool. We
+    // relativise to the project, drop anything outside it, and exclude the
+    // report we just wrote. Full per-edit detail lives in the report.
+    const edited = getEditedFiles()
+      .map((f) => (path.isAbsolute(f) ? path.relative(sess.installDir, f) : f))
+      .filter((f) => f && !f.startsWith('..') && !f.endsWith(REPORT_FILE))
+      .sort();
+    const changes =
+      edited.length > 0
+        ? edited.map((f) => `Edited ${f}`)
+        : ['Reviewed frontend templates — no changes were needed'];
+
     return {
       kind: OutroKind.Success as const,
       message: 'PII Bouncer finished',
       reportFile: REPORT_FILE,
-      changes: [],
+      changes,
       docsUrl: DOCS_URL,
       continueUrl,
     };

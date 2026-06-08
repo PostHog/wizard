@@ -7,8 +7,11 @@
  * these cases map each reason to a structured terminal outro.
  *
  * The `match` regexes are the contract with the skill: the signals
- * documented in the skill's SKILL.md (`no-posthog-js`, `no-init-call`,
- * `no-frontend-templates`) must stay in sync with the patterns here.
+ * (`no-posthog-js`, `no-init-call`, `no-frontend-templates`) must stay in
+ * sync with the emitting side.
+ *
+ * See (emitting side): context-mill/transformation-config/skills/pii-bouncer/
+ * description.md — the "Abort statuses" section.
  */
 
 import type { AbortCase } from '@lib/agent/agent-runner';

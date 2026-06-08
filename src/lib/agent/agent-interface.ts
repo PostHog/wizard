@@ -29,6 +29,7 @@ import {
   createPreToolUseYaraHooks,
   createPostToolUseYaraHooks,
 } from '@lib/yara-hooks';
+import { createPostToolUseEditTrackerHooks } from '@lib/edit-tracker';
 import { getWizardCommandments } from './commandments';
 import type { PackageManagerDetector } from '@lib/detection/package-manager';
 import { AgentSignals, AgentErrorType } from './signals';
@@ -1036,7 +1037,10 @@ export async function runAgent(
         // Stop hook: drain additional feature queue, then collect remark, then allow stop
         hooks: {
           PreToolUse: createPreToolUseYaraHooks(),
-          PostToolUse: createPostToolUseYaraHooks(),
+          PostToolUse: [
+            ...createPostToolUseYaraHooks(),
+            ...createPostToolUseEditTrackerHooks(),
+          ],
           Stop: [
             {
               hooks: [
