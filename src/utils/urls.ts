@@ -75,6 +75,24 @@ export async function detectRegionFromToken(
   );
 }
 
+/**
+ * Map an app host (e.g. https://us.posthog.com) to its event-ingestion
+ * host (e.g. https://us.i.posthog.com) — where the SDK / posthog-node
+ * sends captured events. Used by the MCP tutorial's demo-event seeder.
+ * Falls back to the US ingestion host for anything unrecognized.
+ */
+export const getIngestionHostFromHost = (host: string) => {
+  if (host.includes('localhost')) {
+    return 'http://localhost:8010';
+  }
+
+  if (host.includes('eu.posthog.com') || host.includes('eu.i.posthog.com')) {
+    return 'https://eu.i.posthog.com';
+  }
+
+  return 'https://us.i.posthog.com';
+};
+
 export const getLlmGatewayUrlFromHost = (host: string) => {
   if (host.includes('localhost')) {
     return 'http://localhost:3308/wizard';
