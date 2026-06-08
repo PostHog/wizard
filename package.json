@@ -32,9 +32,11 @@
     "definition": "dist/index.d.ts"
   },
   "dependencies": {
+    "@ai-sdk/anthropic": "^3.0.81",
     "@anthropic-ai/claude-agent-sdk": "0.3.146",
     "@inkjs/ui": "^2.0.0",
     "@langchain/core": "^0.3.40",
+    "ai": "^6.0.193",
     "axios": "1.7.4",
     "fast-glob": "^3.3.3",
     "glob": "9.3.5",

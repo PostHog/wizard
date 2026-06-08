@@ -4,6 +4,7 @@ import {
   type WizardRunnerVariant,
 } from '../index';
 import { AnthropicRunner } from '../anthropic-runner';
+import { VercelRunner } from '../vercel/vercel-runner';
 import { WIZARD_RUNNER_FLAG_KEY } from '../../../constants';
 
 // `runAgent` pulls in the full SDK-backed agent stack; runner selection is a
@@ -28,8 +29,15 @@ describe('resolveRunnerVariant', () => {
 });
 
 describe('selectRunner', () => {
-  // pi/vercel aren't implemented yet, so every variant resolves to AnthropicRunner.
-  it.each(['anthropic', 'pi', 'vercel', 'bogus'])(
+  it('returns VercelRunner for the vercel variant', () => {
+    expect(selectRunner({ [WIZARD_RUNNER_FLAG_KEY]: 'vercel' })).toBeInstanceOf(
+      VercelRunner,
+    );
+  });
+
+  // `pi` isn't implemented yet, so it (and any unknown value) falls back to
+  // AnthropicRunner, the safe default.
+  it.each(['anthropic', 'pi', 'bogus'])(
     'returns AnthropicRunner for %p',
     (variant) => {
       expect(
