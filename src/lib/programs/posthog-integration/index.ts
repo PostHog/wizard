@@ -21,6 +21,7 @@ import { openTrackedLink, withUtm } from '@utils/links';
 import type { CloudRegion } from '@utils/types';
 import { POSTHOG_INTEGRATION_PROGRAM } from './steps.js';
 import { getContentBlocks } from './content/index.js';
+import { buildCodingAgentPrompt } from './handoff.js';
 
 const DASHBOARD_DEEP_LINK_KEY = 'dashboardDeepLink';
 
@@ -264,6 +265,7 @@ Important: Use the detect_package_manager tool (from the wizard-tools MCP server
           changes,
           docsUrl: config.metadata.docsUrl,
           continueUrl,
+          handoffPrompt: buildCodingAgentPrompt(SETUP_REPORT_FILE),
         };
       },
     };
