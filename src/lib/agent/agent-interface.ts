@@ -188,17 +188,25 @@ export function checkAllSettingsConflicts(
 }
 
 /**
- * Copy .claude/settings.json to .wizard-backup (overwriting if it exists),
- * then remove the original so the SDK doesn't load the blocking overrides.
+ * Copy .claude/settings.json to .wizard-backup, then remove the original so
+ * the SDK doesn't load the blocking overrides. Restored at outro and on
+ * cleanup.
  */
 export function backupAndFixClaudeSettings(workingDirectory: string): boolean {
   for (const name of ['settings.json', 'settings']) {
     const filePath = path.join(workingDirectory, '.claude', name);
+    if (!fs.existsSync(filePath)) continue;
     const backupPath = `${filePath}.wizard-backup`;
-    analytics.wizardCapture('backedup-claude-settings');
     try {
-      fs.copyFileSync(filePath, backupPath);
+      // Don't clobber a backup an earlier run already wrote — it holds the
+      // pristine original. recoverOrphanedSettingsBackups resolves cross-run
+      // orphans before we reach here, so a backup still present at this point
+      // is from the current process and the current file is the modified one.
+      if (!fs.existsSync(backupPath)) {
+        fs.copyFileSync(filePath, backupPath);
+      }
       fs.unlinkSync(filePath);
+      analytics.wizardCapture('backedup-claude-settings');
       registerCleanup(() => {
         try {
           restoreClaudeSettings(workingDirectory);
@@ -207,28 +215,57 @@ export function backupAndFixClaudeSettings(workingDirectory: string): boolean {
         }
       });
       return true;
-    } catch {
-      // File doesn't exist — try next candidate
+    } catch (error) {
+      analytics.captureException(error);
     }
   }
   return false;
 }
 
 /**
- * Restore .claude/settings.json from .wizard-backup.
- * Copies (not moves) so the backup is preserved.
+ * Restore .claude/settings.json from .wizard-backup and remove the backup.
+ *
+ * Runs on every outro and cleanup, including runs that never had a settings
+ * conflict (and so never wrote a backup). A missing backup is the normal,
+ * expected state for those runs, so skip it silently — only report a genuine
+ * copy failure. Removing the backup after a successful restore keeps repeat
+ * calls (outro then cleanup) idempotent and avoids leaving an orphan behind.
  */
 export function restoreClaudeSettings(workingDirectory: string): void {
   for (const name of ['settings.json', 'settings']) {
-    const backup = path.join(
-      workingDirectory,
-      '.claude',
-      `${name}.wizard-backup`,
-    );
+    const original = path.join(workingDirectory, '.claude', name);
+    const backup = `${original}.wizard-backup`;
+    if (!fs.existsSync(backup)) continue;
     try {
-      fs.copyFileSync(backup, path.join(workingDirectory, '.claude', name));
+      fs.copyFileSync(backup, original);
+      fs.rmSync(backup, { force: true });
       analytics.wizardCapture('restored-claude-settings');
       return;
+    } catch (error) {
+      analytics.captureException(error);
+    }
+  }
+}
+
+/**
+ * Restore an orphaned settings backup left by a previous interrupted run.
+ *
+ * If a run is killed after backupAndFixClaudeSettings moved the original
+ * aside but before restore ran, the user is left with no settings.json and a
+ * stray .wizard-backup. The next run's conflict check then sees no file and
+ * skips restore, so the user's settings stay silently gone. Detect that exact
+ * state (backup present, original absent) at startup and put the original
+ * back, so each run begins from a clean slate.
+ */
+export function recoverOrphanedSettingsBackups(workingDirectory: string): void {
+  for (const name of ['settings.json', 'settings']) {
+    const original = path.join(workingDirectory, '.claude', name);
+    const backup = `${original}.wizard-backup`;
+    if (!fs.existsSync(backup) || fs.existsSync(original)) continue;
+    try {
+      fs.copyFileSync(backup, original);
+      fs.rmSync(backup, { force: true });
+      analytics.wizardCapture('recovered-orphaned-settings');
     } catch (error) {
       analytics.captureException(error);
     }
@@ -642,6 +679,10 @@ export async function initializeAgent(
   initLogFile();
   logToFile('Agent initialization starting');
   logToFile('Install directory:', options.installDir);
+
+  // Heal any settings backup an earlier run left orphaned (interrupted before
+  // it could restore) before we touch .claude/settings.json this run.
+  recoverOrphanedSettingsBackups(options.installDir);
 
   getUI().log.step('Initializing Claude agent...');
 
