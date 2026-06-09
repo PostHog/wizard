@@ -4,6 +4,7 @@ import { agentSkillConfig } from '@lib/programs/program-registry';
 import { webAnalyticsDoctorConfig } from '@lib/programs/web-analytics-doctor/index';
 
 import type { Command } from './command';
+import { createFamilyPickerDefault } from './factories/family-picker';
 import { nativeCommandFactory } from './factories/native-command-factory';
 import { skillCommandFactory } from './factories/skill-command-factory';
 
@@ -20,8 +21,8 @@ import { skillCommandFactory } from './factories/skill-command-factory';
  *      live in the wizard (not in context-mill) because they do more than
  *      run a single skill.
  *
- * The parent `wizard audit` itself has no handler. Yargs auto-demands a
- * subcommand — Phase 5 replaces that with an interactive picker.
+ * `wizard audit` with no leaf opens an interactive TUI picker over the
+ * children via `interactiveDefault`. `wizard audit --help` still works.
  */
 
 // The comprehensive `wizard audit all` uses the specialized auditConfig
@@ -40,11 +41,14 @@ const auditSkillChildren = CLI_MANIFEST.entries
     skillCommandFactory(entry, resolveAuditConfig(entry.skillId)),
   );
 
+const auditChildren: Command[] = [
+  ...auditSkillChildren,
+  nativeCommandFactory(webAnalyticsDoctorConfig),
+];
+
 export const auditCommand: Command = {
   name: 'audit',
   description: auditConfig.description,
-  children: [
-    ...auditSkillChildren,
-    nativeCommandFactory(webAnalyticsDoctorConfig),
-  ],
+  children: auditChildren,
+  interactiveDefault: createFamilyPickerDefault('wizard audit', auditChildren),
 };

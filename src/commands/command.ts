@@ -13,7 +13,8 @@ export interface Command {
   /**
    * Called synchronously by yargs when the command matches. Wrap async work in
    * `void (async () => { ... })()`. Optional only when `children` is set — in
-   * that case yargs requires the user to pick a subcommand.
+   * that case yargs requires the user to pick a subcommand (or to set
+   * `interactiveDefault` for an in-process picker).
    */
   handler?: (argv: Arguments) => void;
   /**
@@ -25,6 +26,15 @@ export interface Command {
    * sees what you test for (e.g. truthiness).
    */
   check?: (argv: Arguments) => boolean;
+  /**
+   * Optional handler invoked when this command has `children` but the user
+   * supplied no subcommand. Use it to mount an interactive picker over the
+   * children so `wizard audit` (no leaf) opens a TUI menu instead of yargs
+   * help. When set, suppresses the implicit `demandCommand(1)`.
+   *
+   * May return a Promise — yargs awaits the result before exiting.
+   */
+  interactiveDefault?: (argv: Arguments) => void | Promise<void>;
 }
 
 /** Extract the bare command word(s) from a yargs name spec, dropping positionals and aliases' arg syntax. */
@@ -50,11 +60,11 @@ export function toCommandModule(
       for (const child of cmd.children ?? []) {
         next = next.command(toCommandModule(child, ownPath));
       }
-      if (cmd.children?.length && !cmd.handler) {
+      if (cmd.children?.length && !cmd.handler && !cmd.interactiveDefault) {
         next = next.demandCommand(1);
       }
       return next;
     },
-    handler: cmd.handler ?? (() => undefined),
+    handler: cmd.handler ?? cmd.interactiveDefault ?? (() => undefined),
   };
 }
