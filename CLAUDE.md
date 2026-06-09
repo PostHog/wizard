@@ -27,6 +27,8 @@ Read `.claude/skills/wizard-development/SKILL.md` first. It covers the design di
 boundaries, screen resolution
 - `references/ANTI-PATTERNS.md` — concrete failure modes with alternatives
 
+For CLI surface changes (adding/renaming/retiring a command, adding flags), read [`CONTRIBUTING.md`](CONTRIBUTING.md) — the convention, the three flag categories, and the contributor decision tree. [`docs/cli.md`](docs/cli.md) is the auto-generated reference for what currently exists.
+
 ## Skills available
 
 Four skills live under `.claude/skills/`. Read `wizard-development` first for any structural change; then load the relevant procedural skill:
@@ -76,6 +78,16 @@ the store directly from business logic.
 Never mutate `session` directly — nanostore holds a shallow copy.
 - The router resolves the active screen from session state. No imperative
 navigation (`goTo`, `navigate`, `push`) anywhere.
+- Public CLI surface is **derived**, not declared. Skill-backed commands come
+from context-mill's `cli-manifest.json` (snapshotted at build time into
+`src/lib/programs/cli-manifest.generated.ts`); wizard-native commands are
+hand-listed in `bin.ts` and constructed via `nativeCommandFactory(config)`.
+Adding a new skill-backed public command is a context-mill PR, not a wizard
+PR — see [CONTRIBUTING.md](CONTRIBUTING.md) for the decision tree.
+- Internal flags (`--playground`, `--benchmark`, `--ci`, `--skill`, etc.) are
+`hidden: true` and consolidated in `src/wizard.ts::GLOBAL_OPTIONS` or the
+default command. Don't add new top-level visible flags without checking the
+"when to add a flag" rules in [CONTRIBUTING.md](CONTRIBUTING.md).
 - Never write secrets to source code or hardcode API keys. Use the
 `wizard-tools` MCP server (`check_env_keys` / `set_env_values`) for `.env` file operations.
 - Feedback / issues: wizard@posthog.com or
