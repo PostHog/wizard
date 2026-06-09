@@ -184,14 +184,20 @@ Use `onReady`, not `onInit` — `onInit` fires during store construction before 
 
 The `revenue-analytics` program is the canonical example of this pattern (detect step + custom intro + abort cases).
 
-## Family parents (`wizard audit`, `wizard migrate`)
+## Flat vs. family — pick the right shape
 
-If the new command belongs in an existing family (like adding `wizard audit something-new`), all you need is the context-mill PR with `parentCommand: audit` in the `cli:` block. The wizard's `audit.ts` iterates the manifest and adds the new child automatically.
+The wizard's convention: a public command is **flat** when there's only one option today, **a family** when the user must pick among multiple distinct things. Don't pre-create a family form for a single-option command. `wizard migrate` runs Statsig today (flat, one vendor); `wizard audit` is a family (six distinct audits).
 
-If you're creating a **new family parent**, that's a wizard PR:
+- **Flat skill command:** `cli: { surface: public, command: <name> }` in context-mill. No `parentCommand`. On the wizard side, `src/commands/<name>.ts` finds the entry and wraps it with `skillCommandFactory`. See `src/commands/revenue.ts` for the one-liner pattern.
+- **Adding a leaf to an existing family** (like `wizard audit something-new`): all you need is the context-mill PR with `parentCommand: audit` in the `cli:` block. The wizard's `audit.ts` iterates the manifest and adds the new child automatically.
+- **Creating a new family parent:** wizard PR required.
+  1. Add a wizard-native parent command file (see `src/commands/audit.ts` — iterate manifest entries with `parentCommand: <yourname>`, wrap with `skillCommandFactory`, expose as a `Command` with `children` and an `interactiveDefault` set via `createFamilyPickerDefault(label, children)`).
+  2. Optionally mark a manifest entry as `default: true` to pre-highlight it in the picker.
+  3. Add the new command to `bin.ts`'s `Wizard.use(...)` chain.
 
-1. Add a wizard-native parent command file (see `src/commands/audit.ts` for the pattern — iterate manifest entries with `parentCommand: <yourname>`, wrap with `skillCommandFactory`, expose as a `Command` with `children` and an `interactiveDefault` for the family picker).
-2. Add it to `bin.ts`'s `Wizard.use(...)` chain.
+**Family picker behavior:** when the user invokes a family parent with no subcommand, the wizard always opens an interactive picker over the children. The `default: true` leaf is pre-highlighted, so a single Enter keystroke runs it — but every option is visible before the user commits. Discovery + consent in one extra keystroke.
+
+**Flat-to-family transition:** when a flat command grows a second real option (e.g. a second migration vendor), restructure to a family at that moment — don't pre-create the family form earlier "just in case." Document the breaking UX change in release notes for users who typed the flat form.
 
 ## Verification
 
@@ -219,9 +225,9 @@ Test failure cases too — missing prerequisites, bad install directories, netwo
 
 ## Canonical examples in the codebase
 
-- **`src/lib/programs/audit/`** — specialized config that's dispatched by `audit.ts` based on `skillId === 'audit'` (the comprehensive audit). Other audit children (`events`, `flags`, etc.) dispatch through the generic `agentSkillConfig` with the manifest entry's `skillId`.
-- **`src/lib/programs/migration/`** — single config (`migrationConfig`) that backs every `wizard migrate <vendor>` child via `skillCommandFactory`'s `skillId` override.
-- **`src/lib/programs/revenue-analytics/`** — flat skill command (`wizard revenue`) with a specialized config; the per-family file `src/commands/revenue.ts` finds the manifest entry by skillId and wraps with `skillCommandFactory`.
+- **`src/lib/programs/audit/` + `src/commands/audit.ts`** — family parent. The specialized `auditConfig` handles `wizard audit all` (comprehensive); the narrower children (`events`, `flags`, etc.) dispatch through the generic `agentSkillConfig` with the manifest entry's `skillId`. `wizard audit` (no leaf) opens the picker via `interactiveDefault`, with `audit all` pre-highlighted.
+- **`src/lib/programs/migration/` + `src/commands/migrate.ts`** — flat skill command today. `migrationConfig` plus `skillCommandFactory(migrateEntry, migrationConfig)`. When a second vendor lands, restructure to a family at that moment.
+- **`src/lib/programs/revenue-analytics/` + `src/commands/revenue.ts`** — same pattern as migrate; flat skill command for the only provider today.
 - **`src/lib/programs/agent-skill/`** — the generic dispatcher (`createSkillProgram`, `agentSkillConfig`, `AGENT_SKILL_STEPS`) used by every skill-backed command that doesn't need custom hooks.
 
 When in doubt, read the directory of the program that most resembles what you're building, plus the `src/commands/<family>.ts` file that wires it into the CLI.

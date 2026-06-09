@@ -26,19 +26,21 @@ Visit our [docs](https://posthog.com/docs/ai-engineering/ai-wizard) to learn mor
 
 ## Command surface
 
-The wizard follows one rule: **if it can pick the variant for you, the command is flat. If you have to pick, it's a family.**
+The wizard follows two rules:
+
+1. **A command is flat when it represents one thing today, a family when you have to pick among many.** No single-option families — `wizard revenue` runs Stripe directly because Stripe is the only provider.
+2. **`wizard <family>` opens an interactive picker** over the family's children, with a sensible default pre-highlighted. One Enter runs the default; arrows let you pick a different leaf.
 
 ```bash
-# Flat — the wizard auto-detects what to do
-npx @posthog/wizard                # default integration
+# Flat — one option today, runs it directly
+npx @posthog/wizard                # default integration (framework auto-detected)
 npx @posthog/wizard revenue        # Stripe revenue analytics
-npx @posthog/wizard source-maps    # upload source maps for error tracking
+npx @posthog/wizard migrate        # Statsig migration
+npx @posthog/wizard source-maps    # upload source maps (framework auto-detected)
 
-# Families — you pick the variant
-npx @posthog/wizard audit events           # audit a specific area
-npx @posthog/wizard migrate statsig        # migrate from a vendor
-
-# Bare `wizard audit` opens an interactive picker over the audit family
+# Family — multiple distinct options to pick from
+npx @posthog/wizard audit                  # opens picker with `audit all` pre-selected
+npx @posthog/wizard audit events           # explicit subcommand, skips picker
 
 # Catalog access
 npx @posthog/wizard skill list             # see every skill in the catalog

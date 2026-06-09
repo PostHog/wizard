@@ -91,7 +91,7 @@ For wizard-native programs (doctor, mcp, source-maps, the default integration), 
 2. Add it to `PROGRAM_REGISTRY` in `program-registry.ts`
 3. Register it in `bin.ts` with `nativeCommandFactory(yourConfig)`
 
-For families with no-leaf interactive pickers (`wizard audit`), the parent command sets `interactiveDefault: createFamilyPickerDefault(label, children)`. See `src/commands/audit.ts`.
+For multi-option family parents (`wizard audit`), the parent command sets `interactiveDefault: createFamilyPickerDefault(label, children)` — `wizard audit` (no leaf) opens a picker over the children, with the manifest entry marked `default: true` pre-highlighted. See `src/commands/audit.ts`. Single-option commands stay flat (no family wrapper); when a second option lands, restructure to a family at that moment and document the breaking UX change.
 
 **The test:** Can a new program ship without modifying the agent runner pipeline (`agent-runner.ts`), the store, or the screen-sequences projection?
 

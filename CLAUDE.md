@@ -86,6 +86,12 @@ from context-mill's `cli-manifest.json` (snapshotted at build time into
 hand-listed in `bin.ts` and constructed via `nativeCommandFactory(config)`.
 Adding a new skill-backed public command is a context-mill PR, not a wizard
 PR — see [CONTRIBUTING.md](CONTRIBUTING.md) for the decision tree.
+- **Flat vs. family rule.** A command is flat when it represents one thing
+today (`wizard revenue` runs Stripe, `wizard migrate` runs Statsig), a
+family when the user has to pick among multiple. Don't pre-create a family
+form for a single-option command — that's forced abstraction. Family
+parents always open an interactive picker; the leaf marked `default: true`
+in the manifest gets pre-highlighted so one Enter runs the obvious choice.
 - Internal flags (`--playground`, `--benchmark`, `--ci`, `--skill`, etc.) are
 `hidden: true` and consolidated in `src/wizard.ts::GLOBAL_OPTIONS` or the
 default command. Don't add new top-level visible flags without checking the
