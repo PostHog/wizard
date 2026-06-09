@@ -15,9 +15,14 @@ export interface SkillCommandFactoryOpts {
  * wizard-side `ProgramConfig` that supplies the runner mechanics.
  *
  * The manifest entry owns the user-visible bits — command name, description,
- * surface — while `ProgramConfig` supplies the run mechanics (steps, hooks,
- * content blocks, options). Each side stays responsible for what it knows
- * best: context-mill curates the CLI surface, wizard owns execution.
+ * surface, skill id — while `ProgramConfig` supplies the run mechanics
+ * (steps, hooks, content blocks, options). Each side stays responsible for
+ * what it knows best: context-mill curates the CLI surface, wizard owns
+ * execution.
+ *
+ * The entry's `skillId` shadows the base config's `skillId` at dispatch
+ * time, so one shared config (e.g. the generic `agent-skill` program) can
+ * back many manifest entries by skill id.
  *
  * Only `surface: 'public'` entries become commands. `catalog` and `internal`
  * entries are reachable through different paths (`wizard skill <id>`,
@@ -38,11 +43,15 @@ export function skillCommandFactory(
       `skillCommandFactory: entry "${entry.skillId}" is missing \`command\` — context-mill must declare a name for every public entry`,
     );
   }
+  const dispatchConfig: ProgramConfig = {
+    ...config,
+    skillId: entry.skillId,
+  };
   return {
     name: entry.command,
     description: entry.description,
-    options: mergeCommandOptions(config),
+    options: mergeCommandOptions(dispatchConfig),
     children: opts.children,
-    handler: (argv) => dispatchProgram(config, argv),
+    handler: (argv) => dispatchProgram(dispatchConfig, argv),
   };
 }

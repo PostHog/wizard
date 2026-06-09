@@ -1,0 +1,70 @@
+{
+  "version": "1.0",
+  "buildVersion": "bootstrap",
+  "buildTimestamp": "2026-06-09T00:00:00.000Z",
+  "entries": [
+    {
+      "skillId": "revenue-analytics-setup",
+      "surface": "public",
+      "command": "revenue",
+      "displayName": "Stripe Revenue Analytics",
+      "description": "Set up Stripe revenue analytics with PostHog"
+    },
+    {
+      "skillId": "audit",
+      "surface": "public",
+      "parentCommand": "audit",
+      "command": "all",
+      "displayName": "PostHog audit",
+      "description": "Audit an existing PostHog integration for correctness and best practices"
+    },
+    {
+      "skillId": "audit-autocapture",
+      "surface": "public",
+      "parentCommand": "audit",
+      "command": "autocapture",
+      "displayName": "PostHog audit — autocapture",
+      "description": "Audit a PostHog autocapture setup for correctness and cost-optimization opportunities"
+    },
+    {
+      "skillId": "audit-events",
+      "surface": "public",
+      "parentCommand": "audit",
+      "command": "events",
+      "displayName": "PostHog audit — events",
+      "description": "Audit a PostHog integration's event capture quality and cost-optimization opportunities"
+    },
+    {
+      "skillId": "audit-feature-flags",
+      "surface": "public",
+      "parentCommand": "audit",
+      "command": "flags",
+      "displayName": "PostHog audit — feature flags",
+      "description": "Audit a PostHog integration's feature flag usage for correctness and cost-optimization opportunities"
+    },
+    {
+      "skillId": "audit-identify",
+      "surface": "public",
+      "parentCommand": "audit",
+      "command": "identify",
+      "displayName": "PostHog audit — identify",
+      "description": "Audit a PostHog integration's $identify implementation for correctness and cost-optimization opportunities"
+    },
+    {
+      "skillId": "audit-session-replay",
+      "surface": "public",
+      "parentCommand": "audit",
+      "command": "session-replay",
+      "displayName": "PostHog audit — session replay",
+      "description": "Audit a PostHog session replay setup for correctness and cost-optimization opportunities"
+    },
+    {
+      "skillId": "migrate-statsig",
+      "surface": "public",
+      "parentCommand": "migrate",
+      "command": "statsig",
+      "displayName": "Statsig → PostHog",
+      "description": "Migrate from Statsig to PostHog"
+    }
+  ]
+}

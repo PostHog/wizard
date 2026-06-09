@@ -9,7 +9,10 @@
  * Fallback chain:
  *   1. Remote (GitHub release URL)
  *   2. Local cache at .cache/cli-manifest.json
- *   3. Empty manifest (no entries)
+ *   3. Bootstrap snapshot at cli-manifest.bootstrap.json (committed to the
+ *      repo — keeps the wizard buildable before context-mill cuts a release
+ *      with the new file)
+ *   4. Empty manifest (no entries)
  */
 
 const fs = require('fs');
@@ -19,6 +22,7 @@ const https = require('https');
 const REPO_ROOT = path.resolve(__dirname, '..');
 const CACHE_DIR = path.join(REPO_ROOT, '.cache');
 const CACHE_PATH = path.join(CACHE_DIR, 'cli-manifest.json');
+const BOOTSTRAP_PATH = path.join(REPO_ROOT, 'cli-manifest.bootstrap.json');
 const OUT_PATH = path.join(
   REPO_ROOT,
   'src',
@@ -173,6 +177,19 @@ async function loadManifest() {
       };
     } catch (cacheErr) {
       logWarning(`cache is invalid: ${cacheErr.message}`);
+    }
+  }
+
+  if (fs.existsSync(BOOTSTRAP_PATH)) {
+    try {
+      const bootstrap = JSON.parse(fs.readFileSync(BOOTSTRAP_PATH, 'utf8'));
+      const validated = validateManifest(bootstrap, 'bootstrap');
+      return {
+        manifest: validated,
+        source: `bootstrap snapshot (${BOOTSTRAP_PATH})`,
+      };
+    } catch (bootstrapErr) {
+      logWarning(`bootstrap is invalid: ${bootstrapErr.message}`);
     }
   }
 

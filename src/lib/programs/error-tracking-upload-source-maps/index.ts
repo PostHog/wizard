@@ -19,7 +19,7 @@ const REPORT_FILE = 'posthog-source-maps-report.md';
 const DOCS_URL = 'https://posthog.com/docs/error-tracking/upload-source-maps';
 
 export const errorTrackingUploadSourceMapsConfig: ProgramConfig = {
-  command: 'upload-source-maps',
+  command: 'source-maps',
   description: 'Upload source maps to PostHog Error Tracking',
   id: 'error-tracking-upload-source-maps',
   steps: ERROR_TRACKING_UPLOAD_SOURCE_MAPS_PROGRAM,

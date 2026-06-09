@@ -96,16 +96,23 @@ describe('skillCommandFactory', () => {
     expect(cmd.options).toHaveProperty('flavor');
   });
 
-  it('handler dispatches to runWizard with the program config', () => {
+  it('handler dispatches to runWizard with skillId overridden from the entry', () => {
     const config = buildTestConfig({
+      skillId: 'will-be-overridden',
       mapCliOptions: (argv) => ({ derived: argv.foo }),
     });
-    const cmd = skillCommandFactory(buildTestEntry(), config);
+    const cmd = skillCommandFactory(
+      buildTestEntry({ skillId: 'from-manifest-entry' }),
+      config,
+    );
     cmd.handler!(makeArgv({ foo: 'bar' }));
 
     expect(mockRunWizard).toHaveBeenCalledTimes(1);
     const [calledConfig, calledOptions] = mockRunWizard.mock.calls[0];
-    expect(calledConfig).toBe(config);
+    expect(calledConfig).toMatchObject({
+      id: config.id,
+      skillId: 'from-manifest-entry',
+    });
     expect(calledOptions).toMatchObject({ foo: 'bar', derived: 'bar' });
   });
 
