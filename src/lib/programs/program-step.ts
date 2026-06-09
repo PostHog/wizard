@@ -105,24 +105,44 @@ export interface ProgramStep {
  * Declares a program's place in the wizard CLI surface.
  *
  * Mirrors the `cli:` block in context-mill skill configs so wizard-native
- * programs and skill-backed programs share one vocabulary:
+ * programs and skill-backed programs share one vocabulary. Field names
+ * match `ProgramConfig.command` / `parentCommand` above, so contributors
+ * only learn one set of words.
  *
- *   - `surface: 'public'`   — registered as `wizard <group> <leaf>` (or
- *                             `wizard <leaf>` if no group)
- *   - `surface: 'catalog'`  — reachable only via `wizard skill <id>`
+ *   - `surface: 'public'`   — appears as a normal wizard command.
+ *   - `surface: 'catalog'`  — reachable only via `wizard skill <id>`.
  *   - `surface: 'internal'` — hidden everywhere, only reachable via the
- *                             `--skill=<id>` dev escape hatch
+ *                             `--skill=<id>` dev escape hatch.
+ *
+ * Mapping table — declaration on the left, registered command on the right:
+ *
+ *   { surface: 'public',                          →  wizard revenue
+ *     command: 'revenue' }
+ *
+ *   { surface: 'public',                          →  wizard audit events
+ *     parentCommand: 'audit',
+ *     command: 'events' }
+ *
+ *   { surface: 'catalog' }                        →  wizard skill <id>
+ *
+ * `cli` only configures the command shape — the verbs the user types.
+ * Flags and positional args (e.g. `--since=30d`) are configured on
+ * `cliOptions`, not here.
  */
 export interface ProgramCliSurface {
   /** Where the program appears in the wizard CLI surface. */
   surface: 'public' | 'catalog' | 'internal';
-  /** Parent family name (e.g. 'audit'). Omit for flat or standalone commands. */
-  group?: string;
   /**
-   * The user-typed word for the command (e.g. 'events' in
-   * `wizard audit events`). Required when `surface` is `'public'`.
+   * The user-typed word that registers this program (e.g. `'events'` in
+   * `wizard audit events`, or `'revenue'` in `wizard revenue`).
+   * Required when `surface` is `'public'`.
    */
-  leaf?: string;
+  command?: string;
+  /**
+   * The command this program nests under (e.g. `'audit'` for
+   * `wizard audit events`). Omit for flat / standalone commands.
+   */
+  parentCommand?: string;
 }
 
 /**
