@@ -16,6 +16,7 @@ import { z } from 'zod';
 import { logToFile } from '@utils/debug';
 import { analytics } from '@utils/analytics';
 import { skillTmpPath } from '@utils/paths';
+import { writeJsonAtomic, makeMutex } from '@utils/atomic-ledger';
 import type { PackageManagerDetector } from './detection/package-manager';
 import {
   AUDIT_CHECKS_FILE,
@@ -368,14 +369,9 @@ const auditUpdateSchema = z.object({
   details: z.string().optional(),
 });
 
-/**
- * Atomically write JSON: write to .tmp then rename. The rename is what bumps
- * the file's mtime, which is what the UI's file watcher polls on.
- */
+/** Atomically write the audit ledger. Thin typed wrapper over writeJsonAtomic. */
 function writeLedgerAtomic(targetPath: string, checks: AuditCheck[]): void {
-  const tmpPath = `${targetPath}.tmp`;
-  fs.writeFileSync(tmpPath, JSON.stringify(checks, null, 2), 'utf8');
-  fs.renameSync(tmpPath, targetPath);
+  writeJsonAtomic(targetPath, checks);
 }
 
 /**
@@ -472,19 +468,6 @@ function appendAuditChecksToLedger(
 
   writeLedgerAtomic(targetPath, next);
   return { ok: true, added: additions.length };
-}
-
-/**
- * Single async mutex shared by audit tools — guarantees a read-modify-write
- * cycle on the ledger is atomic across concurrent tool calls (e.g. future subagents).
- */
-function makeMutex() {
-  let chain: Promise<unknown> = Promise.resolve();
-  return async function run<T>(fn: () => Promise<T> | T): Promise<T> {
-    const next = chain.then(() => fn());
-    chain = next.catch(() => undefined);
-    return next;
-  };
 }
 
 // ---------------------------------------------------------------------------
