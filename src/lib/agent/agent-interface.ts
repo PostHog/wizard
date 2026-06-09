@@ -265,6 +265,11 @@ export type AgentConfig = {
   getPendingQuestion?: () =>
     | import('@lib/wizard-session').PendingQuestion
     | null;
+  /**
+   * Orchestrator queue context. Present only on the experimental `orchestrator`
+   * variant; threaded into wizard-tools so the orchestrator tools register.
+   */
+  orchestrator?: import('@lib/programs/orchestrator/queue-tools').OrchestratorToolsContext;
 };
 
 /**
@@ -708,6 +713,7 @@ export async function initializeAgent(
       skillsBaseUrl: config.skillsBaseUrl,
       askBridge: config.askBridge,
       askMaxQuestions: config.askMaxQuestions,
+      orchestrator: config.orchestrator,
     });
     mcpServers['wizard-tools'] = wizardToolsServer;
 
@@ -747,8 +753,6 @@ export async function initializeAgent(
       });
     }
 
-    getUI().log.step(`Verbose logs: ${getLogFilePath()}`);
-    getUI().log.success("Agent initialized. Let's get cooking!");
     return agentRunConfig;
   } catch (error) {
     getUI().log.error(

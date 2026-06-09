@@ -45,7 +45,12 @@ import {
   getBlockingServiceKeys,
   SERVICE_LABELS,
 } from '@lib/health-checks/readiness';
-import { enableDebugLogs, initLogFile, logToFile } from '@utils/debug';
+import {
+  enableDebugLogs,
+  getLogFilePath,
+  initLogFile,
+  logToFile,
+} from '@utils/debug';
 import { createBenchmarkPipeline } from '@lib/middleware/benchmark';
 import { wizardAbort, WizardError, registerCleanup } from '@utils/wizard-abort';
 import { formatScanReport, writeScanReport } from '@lib/yara-hooks';
@@ -439,6 +444,8 @@ async function runLinearProgram(
     },
     sessionToOptions(session),
   );
+  getUI().log.step(`Verbose logs: ${getLogFilePath()}`);
+  getUI().log.success("Agent initialized. Let's get cooking!");
 
   const middleware = session.benchmark
     ? createBenchmarkPipeline(spinner, sessionToOptions(session))
