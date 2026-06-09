@@ -51,41 +51,13 @@ async function getSDKModule(): Promise<any> {
 }
 
 /**
- * Resolves the bundled Claude Code CLI from the SDK package.
- *
- * Under CJS (Jest, compiled wizard) `require.resolve` works. Under ESM
- * (`tsx`) there is no `require`, so we walk upward from the entry script
- * until we find the SDK in a sibling `node_modules`. The wizard pins this
- * dep, so the closest match is always correct.
+ * Get the path to the bundled Claude Code CLI from the SDK package.
+ * This ensures we use the SDK's bundled version rather than the user's installed Claude Code.
  */
-let _cliPath: string | null = null;
 function getClaudeCodeExecutablePath(): string {
-  if (_cliPath) return _cliPath;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const req: any = typeof require !== 'undefined' ? require : undefined;
-  if (req && typeof req.resolve === 'function') {
-    const sdkPackagePath = req.resolve('@anthropic-ai/claude-agent-sdk');
-    _cliPath = path.join(path.dirname(sdkPackagePath), 'cli.js');
-    return _cliPath;
-  }
-  const anchor = process.argv[1] || process.cwd();
-  let dir = path.dirname(anchor);
-  while (dir && dir !== path.dirname(dir)) {
-    const candidate = path.join(
-      dir,
-      'node_modules',
-      '@anthropic-ai',
-      'claude-agent-sdk',
-    );
-    if (fs.existsSync(candidate)) {
-      _cliPath = path.join(candidate, 'cli.js');
-      return _cliPath;
-    }
-    dir = path.dirname(dir);
-  }
-  throw new Error(
-    `Could not locate @anthropic-ai/claude-agent-sdk from ${anchor}`,
-  );
+  // require.resolve finds the package's main entry, then we get cli.js from same dir
+  const sdkPackagePath = require.resolve('@anthropic-ai/claude-agent-sdk');
+  return path.join(path.dirname(sdkPackagePath), 'cli.js');
 }
 
 // Using `any` because typed imports from ESM modules require import attributes
