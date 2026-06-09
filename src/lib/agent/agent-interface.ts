@@ -5,6 +5,7 @@
 
 import path from 'path';
 import * as fs from 'fs';
+import * as os from 'os';
 import { getUI, type SpinnerHandle } from '@ui';
 import { debug, logToFile, initLogFile, getLogFilePath } from '@utils/debug';
 import type { WizardRunOptions } from '@utils/types';
@@ -73,15 +74,26 @@ const BLOCKING_ENV_KEYS = [
 const BLOCKING_SETTINGS_KEYS = ['apiKeyHelper'];
 
 /** Where a settings conflict was found. */
-export type SettingsConflictSource = 'project' | 'managed';
+export type SettingsConflictSource =
+  | 'project'
+  | 'project-local'
+  | 'user'
+  | 'managed';
 
 /** A single settings conflict detected during startup. */
 export interface SettingsConflict {
   /** Where the conflict was found. */
   source: SettingsConflictSource;
+  /** Absolute path of the file holding the override. */
+  path: string;
   /** The blocking keys found (e.g. 'ANTHROPIC_BASE_URL', 'apiKeyHelper'). */
   keys: string[];
-  /** Whether the wizard can back up / remove this file. Managed settings are read-only. */
+  /**
+   * Whether the wizard can back up / remove this file. Only the project
+   * `settings.json` is writable: managed settings are root-owned, and the
+   * user's global config and gitignored `*.local.json` are left untouched so
+   * we never mutate config outside the project we were pointed at.
+   */
   writable: boolean;
 }
 
@@ -146,13 +158,18 @@ const MANAGED_SETTINGS_PATH =
   '/Library/Application Support/ClaudeCode/managed-settings.json';
 
 /**
- * Check project and org-managed settings for blocking keys that conflict
- * with the wizard's proxy auth.
+ * Check every settings file Claude Code reads for blocking keys that conflict
+ * with the wizard's gateway auth: org-managed, the user's global config, the
+ * project config, and the gitignored project-local override. Each is a place
+ * an `apiKeyHelper` or `ANTHROPIC_*` override commonly lives, and any of them
+ * can outrank the env the wizard sets and make every agent call 401.
  */
 export function checkAllSettingsConflicts(
   workingDirectory: string,
+  homeDir: string = os.homedir(),
 ): SettingsConflict[] {
   const conflicts: SettingsConflict[] = [];
+  const home = homeDir;
 
   const sources: {
     source: SettingsConflictSource;
@@ -165,6 +182,14 @@ export function checkAllSettingsConflicts(
       writable: false,
     },
     {
+      source: 'user',
+      paths: [
+        path.join(home, '.claude', 'settings.json'),
+        path.join(home, '.claude', 'settings.local.json'),
+      ],
+      writable: false,
+    },
+    {
       source: 'project',
       paths: [
         path.join(workingDirectory, '.claude', 'settings.json'),
@@ -172,19 +197,65 @@ export function checkAllSettingsConflicts(
       ],
       writable: true,
     },
+    {
+      source: 'project-local',
+      paths: [path.join(workingDirectory, '.claude', 'settings.local.json')],
+      writable: false,
+    },
   ];
 
   for (const { source, paths, writable } of sources) {
     for (const filePath of paths) {
       const keys = checkSettingsFile(filePath);
       if (keys.length > 0) {
-        conflicts.push({ source, keys, writable });
+        conflicts.push({ source, path: filePath, keys, writable });
         break; // Only one conflict per source (settings.json vs settings fallback)
       }
     }
   }
 
   return conflicts;
+}
+
+/** Region implied by the resolved gateway URL, for telemetry and display. */
+function regionFromGatewayUrl(gatewayUrl: string): 'eu' | 'us' | 'local' {
+  if (gatewayUrl.includes('localhost')) return 'local';
+  return gatewayUrl.includes('gateway.eu.') ? 'eu' : 'us';
+}
+
+/**
+ * Diagnostic context for a gateway 401, used by the auth-error screen and the
+ * captured exception.
+ *
+ * A bare "Authentication failed" can't be triaged: the 401 could be a settings
+ * file overriding the credential, a region mismatch, or a rejected key. This
+ * records which, so the screen can name an actionable next step and telemetry
+ * can tell the causes apart. Absolute conflict paths stay out of the telemetry
+ * payload (they contain the user's home dir) — only sources/keys are reported.
+ */
+export interface AuthErrorContext {
+  hasSettingsConflict: boolean;
+  conflicts: SettingsConflict[];
+  conflictSources: SettingsConflictSource[];
+  conflictKeys: string[];
+  gatewayUrl: string;
+  region: 'eu' | 'us' | 'local';
+}
+
+export function buildAuthErrorContext(
+  workingDirectory: string,
+  gatewayUrl: string,
+  homeDir: string = os.homedir(),
+): AuthErrorContext {
+  const conflicts = checkAllSettingsConflicts(workingDirectory, homeDir);
+  return {
+    hasSettingsConflict: conflicts.length > 0,
+    conflicts,
+    conflictSources: conflicts.map((c) => c.source),
+    conflictKeys: [...new Set(conflicts.flatMap((c) => c.keys))],
+    gatewayUrl,
+    region: regionFromGatewayUrl(gatewayUrl),
+  };
 }
 
 /**
@@ -1125,19 +1196,25 @@ export async function runAgent(
         // of a 401, distinct from bad PAT / wrong region / expired key.
         // Only the conflict case warrants telling the user to log out of
         // Claude Code.
-        const conflicts = checkAllSettingsConflicts(options.installDir);
-        const hasSettingsConflict = conflicts.length > 0;
-        logToFile('Agent error: 401, showing auth error screen', {
-          hasSettingsConflict,
-          conflicts,
-        });
+        const authError = buildAuthErrorContext(
+          options.installDir,
+          process.env.ANTHROPIC_BASE_URL ?? '',
+        );
+        logToFile('Agent error: 401, showing auth error screen', authError);
         getUI().showAuthError({
-          hasSettingsConflict,
+          hasSettingsConflict: authError.hasSettingsConflict,
+          conflicts: authError.conflicts,
           logFilePath: getLogFilePath(),
         });
         await wizardAbort({
           message: 'Authentication failed (401)',
-          error: new WizardError('Authentication failed'),
+          error: new WizardError('Authentication failed', {
+            hasSettingsConflict: authError.hasSettingsConflict,
+            conflictSources: authError.conflictSources,
+            conflictKeys: authError.conflictKeys,
+            gatewayUrl: authError.gatewayUrl,
+            region: authError.region,
+          }),
         });
       }
 

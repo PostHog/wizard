@@ -222,6 +222,7 @@ export interface WizardSession {
   settingsConflicts: SettingsConflict[] | null;
   authErrorDetail: {
     hasSettingsConflict: boolean;
+    conflicts?: SettingsConflict[];
     logFilePath: string;
   } | null;
   portConflictProcess: {
