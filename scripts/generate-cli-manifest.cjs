@@ -6,6 +6,11 @@
  * manifest so the build never breaks. The generated file is gitignored —
  * regenerated on every prebuild.
  *
+ * Each load is validated against a JSON Schema before being accepted.
+ * Schema drift between context-mill and wizard (extra fields, wrong types,
+ * naming-convention violations) gets caught here at build time instead of
+ * surfacing at runtime.
+ *
  * Fallback chain:
  *   1. Remote (GitHub release URL)
  *   2. Local cache at .cache/cli-manifest.json
@@ -18,11 +23,17 @@
 const fs = require('fs');
 const path = require('path');
 const https = require('https');
+const Ajv = require('ajv');
 
 const REPO_ROOT = path.resolve(__dirname, '..');
 const CACHE_DIR = path.join(REPO_ROOT, '.cache');
 const CACHE_PATH = path.join(CACHE_DIR, 'cli-manifest.json');
 const BOOTSTRAP_PATH = path.join(REPO_ROOT, 'cli-manifest.bootstrap.json');
+const SCHEMA_BOOTSTRAP_PATH = path.join(
+  REPO_ROOT,
+  'cli-manifest.schema.bootstrap.json',
+);
+const SCHEMA_CACHE_PATH = path.join(CACHE_DIR, 'cli-manifest.schema.json');
 const OUT_PATH = path.join(
   REPO_ROOT,
   'src',
@@ -33,10 +44,10 @@ const OUT_PATH = path.join(
 
 // Mirrors REMOTE_SKILLS_BASE_URL in src/lib/constants.ts. Kept as a literal
 // here so the prebuild doesn't need to import the TS source.
-const REMOTE_URL =
-  'https://github.com/PostHog/context-mill/releases/latest/download/cli-manifest.json';
-
-const SURFACES = new Set(['public', 'catalog', 'internal']);
+const REMOTE_BASE_URL =
+  'https://github.com/PostHog/context-mill/releases/latest/download';
+const REMOTE_MANIFEST_URL = `${REMOTE_BASE_URL}/cli-manifest.json`;
+const REMOTE_SCHEMA_URL = `${REMOTE_BASE_URL}/cli-manifest.schema.json`;
 
 function logWarning(message) {
   process.stderr.write(`[generate-cli-manifest] ${message}\n`);
@@ -94,25 +105,53 @@ function writeCache(manifest) {
   fs.writeFileSync(CACHE_PATH, JSON.stringify(manifest, null, 2));
 }
 
-function validateManifest(raw, source) {
-  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
-    throw new Error(`${source}: manifest must be a JSON object`);
+/**
+ * Load the JSON Schema with the same fallback chain as the manifest itself.
+ * Remote → cache → bootstrap. Empty fallback is never used here — without a
+ * schema we have no contract, so we'd rather fail loudly than validate
+ * nothing.
+ */
+async function loadSchema() {
+  try {
+    const remote = await fetchJson(REMOTE_SCHEMA_URL);
+    fs.mkdirSync(CACHE_DIR, { recursive: true });
+    fs.writeFileSync(SCHEMA_CACHE_PATH, JSON.stringify(remote, null, 2));
+    return { schema: remote, source: `remote (${REMOTE_SCHEMA_URL})` };
+  } catch (err) {
+    logWarning(`remote schema fetch failed: ${err.message}`);
   }
-  if (!Array.isArray(raw.entries)) {
-    throw new Error(`${source}: manifest.entries must be an array`);
+  if (fs.existsSync(SCHEMA_CACHE_PATH)) {
+    try {
+      return {
+        schema: JSON.parse(fs.readFileSync(SCHEMA_CACHE_PATH, 'utf8')),
+        source: `cache (${SCHEMA_CACHE_PATH})`,
+      };
+    } catch (err) {
+      logWarning(`cached schema is unreadable: ${err.message}`);
+    }
   }
-  for (const entry of raw.entries) {
-    if (!entry || typeof entry !== 'object') {
-      throw new Error(`${source}: entries must be objects`);
-    }
-    if (typeof entry.skillId !== 'string' || !entry.skillId) {
-      throw new Error(`${source}: entry.skillId must be a non-empty string`);
-    }
-    if (!SURFACES.has(entry.surface)) {
-      throw new Error(
-        `${source}: entry "${entry.skillId}" has invalid surface "${entry.surface}"`,
-      );
-    }
+  if (fs.existsSync(SCHEMA_BOOTSTRAP_PATH)) {
+    return {
+      schema: JSON.parse(fs.readFileSync(SCHEMA_BOOTSTRAP_PATH, 'utf8')),
+      source: `bootstrap (${SCHEMA_BOOTSTRAP_PATH})`,
+    };
+  }
+  throw new Error(
+    'no JSON Schema available — refusing to write the generated TS without a contract to validate against.',
+  );
+}
+
+function buildValidator(schema) {
+  const ajv = new Ajv({ allErrors: true, strict: false });
+  return ajv.compile(schema);
+}
+
+function validateManifest(raw, source, validator) {
+  if (!validator(raw)) {
+    const formatted = (validator.errors ?? [])
+      .map((e) => `${e.instancePath || '/'} ${e.message}`)
+      .join('; ');
+    throw new Error(`${source}: schema validation failed — ${formatted}`);
   }
   return raw;
 }
@@ -157,12 +196,12 @@ export const CLI_MANIFEST: CliManifest = ${json};
 `;
 }
 
-async function loadManifest() {
+async function loadManifest(validator) {
   try {
-    const remote = await fetchJson(REMOTE_URL);
-    const validated = validateManifest(remote, 'remote');
+    const remote = await fetchJson(REMOTE_MANIFEST_URL);
+    const validated = validateManifest(remote, 'remote', validator);
     writeCache(validated);
-    return { manifest: validated, source: `remote (${REMOTE_URL})` };
+    return { manifest: validated, source: `remote (${REMOTE_MANIFEST_URL})` };
   } catch (remoteErr) {
     logWarning(`remote fetch failed: ${remoteErr.message}`);
   }
@@ -170,7 +209,7 @@ async function loadManifest() {
   const cached = readCache();
   if (cached) {
     try {
-      const validated = validateManifest(cached, 'cache');
+      const validated = validateManifest(cached, 'cache', validator);
       return {
         manifest: validated,
         source: `local cache (${CACHE_PATH})`,
@@ -183,7 +222,7 @@ async function loadManifest() {
   if (fs.existsSync(BOOTSTRAP_PATH)) {
     try {
       const bootstrap = JSON.parse(fs.readFileSync(BOOTSTRAP_PATH, 'utf8'));
-      const validated = validateManifest(bootstrap, 'bootstrap');
+      const validated = validateManifest(bootstrap, 'bootstrap', validator);
       return {
         manifest: validated,
         source: `bootstrap snapshot (${BOOTSTRAP_PATH})`,
@@ -196,11 +235,18 @@ async function loadManifest() {
   logWarning(
     'no manifest available — writing empty fallback. Run with network access to populate.',
   );
+  // The empty fallback isn't schema-validated by design — it's the
+  // last-resort "build never breaks" path. Real manifests must validate.
   return { manifest: emptyManifest(), source: 'empty fallback' };
 }
 
 async function main() {
-  const { manifest, source } = await loadManifest();
+  const { schema, source: schemaSource } = await loadSchema();
+  process.stdout.write(
+    `[generate-cli-manifest] loaded schema from ${schemaSource}\n`,
+  );
+  const validator = buildValidator(schema);
+  const { manifest, source } = await loadManifest(validator);
   fs.mkdirSync(path.dirname(OUT_PATH), { recursive: true });
   fs.writeFileSync(OUT_PATH, renderTypeScript(manifest, source));
   process.stdout.write(
