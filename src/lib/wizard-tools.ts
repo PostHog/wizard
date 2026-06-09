@@ -26,6 +26,10 @@ import {
 } from './programs/audit/types';
 import type { WizardAskBridge } from './wizard-ask-bridge';
 import { createSecretVault, type SecretVault } from './secret-vault';
+import {
+  buildOrchestratorTools,
+  type OrchestratorToolsContext,
+} from './programs/orchestrator/queue-tools';
 
 // ---------------------------------------------------------------------------
 // SDK dynamic import (ESM module loaded once, cached)
@@ -203,6 +207,13 @@ export interface WizardToolsOptions {
    * (e.g. in unit tests), a fresh vault is created internally.
    */
   secretVault?: SecretVault;
+
+  /**
+   * Orchestrator queue context. Present only on the experimental `orchestrator`
+   * variant; when set, the orchestrator tools (enqueue_task, complete_task,
+   * read_handoffs) are registered. Absent on the linear path.
+   */
+  orchestrator?: OrchestratorToolsContext;
 }
 
 /** Default per-run cap on wizard_ask calls when no override is provided. */
@@ -488,6 +499,7 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
     askBridge,
     askMaxQuestions = DEFAULT_ASK_MAX_QUESTIONS,
     secretVault = createSecretVault(),
+    orchestrator,
   } = options;
   const sdk = await getSDKModule();
   const { tool, createSdkMcpServer } = sdk;
@@ -1087,6 +1099,10 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
 
   // -- Assemble server ------------------------------------------------------
 
+  const orchestratorTools = orchestrator
+    ? buildOrchestratorTools(tool, orchestrator)
+    : [];
+
   return createSdkMcpServer({
     name: SERVER_NAME,
     version: '1.0.0',
@@ -1100,6 +1116,7 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
       auditAddChecks,
       auditResolveChecks,
       wizardAsk,
+      ...orchestratorTools,
     ],
   });
 }
@@ -1119,6 +1136,9 @@ export const WIZARD_TOOL_NAMES = {
   auditAddChecks: `mcp__${SERVER_NAME}__audit_add_checks`,
   auditResolveChecks: `mcp__${SERVER_NAME}__audit_resolve_checks`,
   wizardAsk: `mcp__${SERVER_NAME}__wizard_ask`,
+  enqueueTask: `mcp__${SERVER_NAME}__enqueue_task`,
+  completeTask: `mcp__${SERVER_NAME}__complete_task`,
+  readHandoffs: `mcp__${SERVER_NAME}__read_handoffs`,
 } as const;
 
 // ---------------------------------------------------------------------------
