@@ -102,13 +102,61 @@ export interface ProgramStep {
 }
 
 /**
+ * Declares a program's place in the wizard CLI surface.
+ *
+ * Mirrors the `cli:` block in context-mill skill configs so wizard-native
+ * programs and skill-backed programs share one vocabulary. Field names
+ * match `ProgramConfig.command` / `parentCommand` above, so contributors
+ * only learn one set of words.
+ *
+ *   - `role: 'command'`  — appears as a normal wizard command.
+ *   - `role: 'skill'`    — reachable only via `wizard skill <id>`.
+ *   - `role: 'internal'` — hidden everywhere, only reachable via the
+ *                          `--skill=<id>` dev escape hatch.
+ *
+ * Mapping table — declaration on the left, registered command on the right:
+ *
+ *   { role: 'command',                            →  wizard revenue-analytics
+ *     command: 'revenue-analytics' }
+ *
+ *   { role: 'command',                            →  wizard audit feature-flags
+ *     parentCommand: 'audit',
+ *     command: 'feature-flags' }
+ *
+ *   { role: 'skill' }                             →  wizard skill <id>
+ *
+ * `cli` only configures the command shape — the verbs the user types.
+ * Flags and positional args (e.g. `--since=30d`) are configured on
+ * `cliOptions`, not here.
+ *
+ * Naming rule: commands use the full PostHog product name with hyphens
+ * (`revenue-analytics`, `feature-flags`, `session-replay`), not
+ * abbreviations like `revenue` or `flags`.
+ */
+export interface ProgramCliSurface {
+  /** Where the program appears in the wizard CLI surface. */
+  role: 'command' | 'skill' | 'internal';
+  /**
+   * The user-typed word that registers this program (e.g. `'feature-flags'`
+   * in `wizard audit feature-flags`, or `'revenue-analytics'` in
+   * `wizard revenue-analytics`). Required when `role` is `'command'`.
+   */
+  command?: string;
+  /**
+   * The command this program nests under (e.g. `'audit'` for
+   * `wizard audit feature-flags`). Omit for flat / standalone commands.
+   */
+  parentCommand?: string;
+}
+
+/**
  * Uniform configuration for a wizard program.
  *
  * Each program directory exports one of these. The system uses it
  * for CLI registration, sequence/step wiring, and skill bootstrap.
  */
 export interface ProgramConfig {
-  /** CLI command name (e.g. 'revenue'). Omit for the default program. */
+  /** CLI command name (e.g. 'revenue-analytics'). Omit for the default program. */
   command?: string;
   /**
    * Parent CLI command to nest this program under. When set, the program is
@@ -179,6 +227,11 @@ export interface ProgramConfig {
    * dispatch in a program whose steps are explicitly single-agent.
    */
   disallowedTools?: readonly string[];
+  /**
+   * Declares this program's place in the wizard CLI surface. See
+   * `ProgramCliSurface` for semantics.
+   */
+  cli?: ProgramCliSurface;
 }
 
 /**

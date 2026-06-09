@@ -1,13 +1,12 @@
 import { commandKeys, type Command } from '../commands/command';
 import { basicIntegrationCommand } from '../commands/basic-integration';
 import { mcpCommand } from '../commands/mcp';
-import { integrateCommand } from '../commands/integrate';
 import { auditCommand } from '../commands/audit';
-import { audit3000Command } from '../commands/audit-3000';
 import { doctorCommand } from '../commands/doctor';
 import { migrateCommand } from '../commands/migrate';
-import { eventsAuditCommand } from '../commands/events-audit';
 import { revenueCommand } from '../commands/revenue';
+import { sourceMapsCommand } from '../commands/source-maps';
+import { skillCommand } from '../commands/skill';
 
 const cmd = (name: string | readonly string[]): Command => ({
   name,
@@ -83,13 +82,12 @@ describe('production command tree', () => {
     const tree = [
       basicIntegrationCommand,
       mcpCommand,
-      integrateCommand,
       auditCommand,
-      audit3000Command,
       doctorCommand,
       migrateCommand,
-      eventsAuditCommand,
       revenueCommand,
+      sourceMapsCommand,
+      skillCommand,
     ];
     // On failure, findConflicts returns the offending path(s) — i.e. which
     // command collides, not just that one did.

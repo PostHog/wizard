@@ -1,24 +1,32 @@
-import { runWizard, runWizardCI } from '@lib/runners';
+import { CLI_MANIFEST } from '@lib/programs/cli-manifest.generated';
 import { revenueAnalyticsConfig } from '@lib/programs/revenue-analytics/index';
-import { skillProgramOptions } from './skill-program-options';
-import type { Command } from './command';
 
-export const revenueCommand: Command = {
-  name: 'revenue',
-  description: revenueAnalyticsConfig.description,
-  options: {
-    ...skillProgramOptions,
-    ...(revenueAnalyticsConfig.cliOptions ?? {}),
-  },
-  handler: (argv) => {
-    const extras =
-      revenueAnalyticsConfig.mapCliOptions?.(argv as Record<string, unknown>) ??
-      {};
-    const options = { ...argv, ...extras };
-    if (options.ci) {
-      runWizardCI(revenueAnalyticsConfig, options);
-    } else {
-      runWizard(revenueAnalyticsConfig, options);
-    }
-  },
-};
+import type { Command } from './command';
+import { skillCommandFactory } from './factories/skill-command-factory';
+
+/**
+ * `wizard revenue-analytics` — flat skill command, Stripe today. Stays
+ * flat while there's only one provider. When a second provider lands,
+ * this file restructures into a family (parentCommand:
+ * revenue-analytics, command per vendor) and the picker opens — a
+ * deliberate breaking change at that point, not silent magic
+ * introduced now.
+ */
+const revenueEntry = CLI_MANIFEST.entries.find(
+  (entry) =>
+    entry.role === 'command' &&
+    !entry.parentCommand &&
+    entry.skillId === 'revenue-analytics-setup',
+);
+
+if (!revenueEntry) {
+  throw new Error(
+    'commands/revenue: no public `revenue-analytics-setup` entry in CLI_MANIFEST. ' +
+      'Check cli-manifest.bootstrap.json or the latest context-mill release.',
+  );
+}
+
+export const revenueCommand: Command = skillCommandFactory(
+  revenueEntry,
+  revenueAnalyticsConfig,
+);

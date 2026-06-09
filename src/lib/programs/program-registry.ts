@@ -31,7 +31,7 @@ import {
 // Generic skill program — invoked when the wizard runs an arbitrary
 // context-mill skill chosen at runtime (session.skillId) rather than a
 // registered named program. No CLI command, no run config.
-const agentSkillConfig: ProgramConfig = {
+export const agentSkillConfig: ProgramConfig = {
   id: 'agent-skill',
   description: 'Run an arbitrary context-mill skill',
   steps: AGENT_SKILL_STEPS,
