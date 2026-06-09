@@ -201,6 +201,14 @@ pnpm test
 pnpm fix
 ```
 
+If your change touches the CLI surface (added a wizard-native command, updated `cli-manifest.bootstrap.json`, restructured a family), regenerate the public reference:
+
+```bash
+pnpm docs:cli   # writes docs/cli.md from the bootstrap manifest + native commands
+```
+
+`docs/cli.md` is committed but auto-generated. Skipping the regen ships a stale public-facing reference; the next contributor will hit a confusing diff.
+
 Then run end-to-end against a real test app:
 
 ```bash

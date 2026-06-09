@@ -29,6 +29,8 @@ boundaries, screen resolution
 
 For CLI surface changes (adding/renaming/retiring a command, adding flags), read [`CONTRIBUTING.md`](CONTRIBUTING.md) — the convention, the three flag categories, and the contributor decision tree. [`docs/cli.md`](docs/cli.md) is the auto-generated reference for what currently exists.
 
+**After any CLI surface change, run `pnpm docs:cli` to regenerate `docs/cli.md`.** The file is committed but generated — `scripts/generate-cli-docs.cjs` reads the bootstrap manifest plus the wizard-native command list and writes the markdown. CLI changes include: updating `cli-manifest.bootstrap.json`, adding/renaming a wizard-native command, or syncing a new context-mill release whose manifest entries you want reflected. Skipping this step ships a stale public-facing reference.
+
 ## Skills available
 
 Four skills live under `.claude/skills/`. Read `wizard-development` first for any structural change; then load the relevant procedural skill:
