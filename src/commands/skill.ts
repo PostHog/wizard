@@ -1,6 +1,12 @@
+import type { Arguments } from 'yargs';
 import { runSkillMode } from './basic-integration/skill';
 import { skillProgramOptions } from './skill-program-options';
 import type { Command } from './command';
+
+/** Read the `<skill-name>` positional (yargs camelCases the hyphenated key). */
+function readSkillName(argv: Arguments): string {
+  return String(argv.skillName ?? argv['skill-name'] ?? '').trim();
+}
 
 /**
  * `wizard skill <skill-name>` — run a single context-mill skill by id.
@@ -15,9 +21,19 @@ export const skillCommand: Command = {
   options: {
     ...skillProgramOptions,
   },
+  // yargs already requires the positional, but an explicitly-empty value
+  // (`wizard skill ""`) would otherwise slip through to a broken run with no
+  // skill id. Reject it with the same friendly message the old flag gave.
+  check: (argv) => {
+    if (!readSkillName(argv)) {
+      throw new Error(
+        'skill needs a skill name, e.g. `wizard skill audit-events`',
+      );
+    }
+    return true;
+  },
   handler: (argv) => {
-    const skillName = String(argv.skillName ?? argv['skill-name'] ?? '').trim();
     // runSkillMode reads `argv.skill`; bridge the positional onto it.
-    runSkillMode({ ...argv, skill: skillName });
+    runSkillMode({ ...argv, skill: readSkillName(argv) });
   },
 };
