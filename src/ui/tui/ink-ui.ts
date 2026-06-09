@@ -223,7 +223,7 @@ export class InkUI implements WizardUI {
     // `session` snapshot misses them (setKey forks the reference). The live
     // store wins over the `data` payload so a real emission always beats any
     // fallback the program's buildOutroData may have computed from the stale
-    // snapshot (e.g. events-audit defaults dashboardUrl to `${cloudUrl}/dashboard`).
+    // snapshot (e.g. a cloud-region dashboard URL fallback).
     const live = this.store.session;
     this.store.setOutroData({
       ...data,

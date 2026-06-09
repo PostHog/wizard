@@ -52,8 +52,8 @@ const openLink = (url: string) => {
 interface AuditAreaPaneProps {
   checks: AuditCheck[];
   reportPath: string;
-  /** Slide registry to look the active area up in. Defaults to the doctor
-   * (`audit` program) slides; events-audit passes its own 6-phase set. */
+  /** Slide registry to look the active area up in. Defaults to the
+   * `audit` program's area slides. */
   slides?: AreaSlide[];
   /** Dashboard URL once the agent emits `[DASHBOARD_URL]`. Shown as a sticky
    * footer so the user can grab the link while later phases still run. */

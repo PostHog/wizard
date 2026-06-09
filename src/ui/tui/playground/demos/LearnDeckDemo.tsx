@@ -30,7 +30,6 @@ import { Colors } from '@ui/tui/styles';
 import type { WizardStore } from '@ui/tui/store';
 import { PROGRAM_REGISTRY } from '@lib/programs/program-registry';
 import { AUDIT_AREA_SLIDES } from '@ui/tui/screens/audit/slides/index';
-import { AUDIT_3000_AREA_SLIDES } from '@ui/tui/screens/audit-3000/slides/index';
 import type { AreaSlide } from '@ui/tui/screens/audit/slides/shared';
 
 interface Deck {
@@ -108,18 +107,13 @@ export const LearnDeckDemo = ({ store }: LearnDeckDemoProps) => {
       });
     }
 
-    // Audit + audit-3000 ship their own per-area slide model (not the
+    // The audit program ships its own per-area slide model (not the
     // ContentBlock deck most programs use). Adapt each AreaSlide into a
     // flat ContentBlock list so the flipper can review them the same way.
     all.push({
       id: 'audit:area-slides',
       label: 'audit · area slides',
       blocks: areaSlidesToBlocks(AUDIT_AREA_SLIDES),
-    });
-    all.push({
-      id: 'audit-3000:area-slides',
-      label: 'audit-3000 · area slides',
-      blocks: areaSlidesToBlocks(AUDIT_3000_AREA_SLIDES),
     });
 
     return all;

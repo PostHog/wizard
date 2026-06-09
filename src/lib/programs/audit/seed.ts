@@ -87,7 +87,7 @@ export const AUDIT_SEED_CHECKS: AuditCheck[] = [
 /**
  * Atomically write a seeded ledger to the project's audit checks file.
  *
- * Each audit-flavored program (doctor, events-audit) owns its own seed
+ * Each audit-flavored program (doctor, audit) owns its own seed
  * shape — pass the seed in so this writer stays program-agnostic.
  */
 export function seedAuditLedger(
