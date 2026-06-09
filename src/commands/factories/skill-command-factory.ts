@@ -1,0 +1,48 @@
+import type { ProgramConfig } from '@lib/programs/program-step';
+import type { CliManifestEntry } from '@lib/programs/cli-manifest.generated';
+
+import type { Command } from '../command';
+
+import { dispatchProgram, mergeCommandOptions } from './shared';
+
+export interface SkillCommandFactoryOpts {
+  /** Subcommands nested under this command. */
+  children?: readonly Command[];
+}
+
+/**
+ * Build a yargs `Command` from a context-mill manifest entry plus the
+ * wizard-side `ProgramConfig` that supplies the runner mechanics.
+ *
+ * The manifest entry owns the user-visible bits — command name, description,
+ * surface — while `ProgramConfig` supplies the run mechanics (steps, hooks,
+ * content blocks, options). Each side stays responsible for what it knows
+ * best: context-mill curates the CLI surface, wizard owns execution.
+ *
+ * Only `surface: 'public'` entries become commands. `catalog` and `internal`
+ * entries are reachable through different paths (`wizard skill <id>`,
+ * `--skill=<id>`) and throw if passed here.
+ */
+export function skillCommandFactory(
+  entry: CliManifestEntry,
+  config: ProgramConfig,
+  opts: SkillCommandFactoryOpts = {},
+): Command {
+  if (entry.surface !== 'public') {
+    throw new Error(
+      `skillCommandFactory: entry "${entry.skillId}" has surface "${entry.surface}" — only "public" entries become commands`,
+    );
+  }
+  if (!entry.command) {
+    throw new Error(
+      `skillCommandFactory: entry "${entry.skillId}" is missing \`command\` — context-mill must declare a name for every public entry`,
+    );
+  }
+  return {
+    name: entry.command,
+    description: entry.description,
+    options: mergeCommandOptions(config),
+    children: opts.children,
+    handler: (argv) => dispatchProgram(config, argv),
+  };
+}
