@@ -15,6 +15,7 @@ import {
   POSTHOG_PROPERTY_HEADER_PREFIX,
   WIZARD_VARIANT_FLAG_KEY,
   WIZARD_VARIANTS,
+  WIZARD_ORCHESTRATOR_FLAG_KEY,
   WIZARD_USER_AGENT,
 } from '@lib/constants';
 import {
@@ -243,6 +244,17 @@ export function buildWizardMetadata(
   const variant =
     (variantKey && WIZARD_VARIANTS[variantKey]) ?? WIZARD_VARIANTS['base'];
   return { ...variant };
+}
+
+/**
+ * Whether this run uses the experimental task-queue orchestrator. Gated by the
+ * boolean `wizard-orchestrator` feature flag, targeted to the user in the wizard's
+ * analytics project.
+ */
+export function isOrchestratorEnabled(
+  flags: Record<string, string> = {},
+): boolean {
+  return flags[WIZARD_ORCHESTRATOR_FLAG_KEY] === 'true';
 }
 
 /**
