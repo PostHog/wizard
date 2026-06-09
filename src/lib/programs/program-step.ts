@@ -116,31 +116,35 @@ export interface ProgramStep {
  *
  * Mapping table — declaration on the left, registered command on the right:
  *
- *   { surface: 'public',                          →  wizard revenue
- *     command: 'revenue' }
+ *   { surface: 'public',                          →  wizard revenue-analytics
+ *     command: 'revenue-analytics' }
  *
- *   { surface: 'public',                          →  wizard audit events
+ *   { surface: 'public',                          →  wizard audit feature-flags
  *     parentCommand: 'audit',
- *     command: 'events' }
+ *     command: 'feature-flags' }
  *
  *   { surface: 'catalog' }                        →  wizard skill <id>
  *
  * `cli` only configures the command shape — the verbs the user types.
  * Flags and positional args (e.g. `--since=30d`) are configured on
  * `cliOptions`, not here.
+ *
+ * Naming rule: commands use the full PostHog product name with hyphens
+ * (`revenue-analytics`, `feature-flags`, `session-replay`), not
+ * abbreviations like `revenue` or `flags`.
  */
 export interface ProgramCliSurface {
   /** Where the program appears in the wizard CLI surface. */
   surface: 'public' | 'catalog' | 'internal';
   /**
-   * The user-typed word that registers this program (e.g. `'events'` in
-   * `wizard audit events`, or `'revenue'` in `wizard revenue`).
-   * Required when `surface` is `'public'`.
+   * The user-typed word that registers this program (e.g. `'feature-flags'`
+   * in `wizard audit feature-flags`, or `'revenue-analytics'` in
+   * `wizard revenue-analytics`). Required when `surface` is `'public'`.
    */
   command?: string;
   /**
    * The command this program nests under (e.g. `'audit'` for
-   * `wizard audit events`). Omit for flat / standalone commands.
+   * `wizard audit feature-flags`). Omit for flat / standalone commands.
    */
   parentCommand?: string;
 }
@@ -152,7 +156,7 @@ export interface ProgramCliSurface {
  * for CLI registration, sequence/step wiring, and skill bootstrap.
  */
 export interface ProgramConfig {
-  /** CLI command name (e.g. 'revenue'). Omit for the default program. */
+  /** CLI command name (e.g. 'revenue-analytics'). Omit for the default program. */
   command?: string;
   /**
    * Parent CLI command to nest this program under. When set, the program is

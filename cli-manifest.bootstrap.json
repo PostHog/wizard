@@ -13,7 +13,7 @@
     {
       "skillId": "revenue-analytics-setup",
       "surface": "public",
-      "command": "revenue",
+      "command": "revenue-analytics",
       "displayName": "Stripe Revenue Analytics",
       "description": "Set up Stripe revenue analytics with PostHog"
     },
@@ -46,7 +46,7 @@
       "skillId": "audit-feature-flags",
       "surface": "public",
       "parentCommand": "audit",
-      "command": "flags",
+      "command": "feature-flags",
       "displayName": "PostHog audit — feature flags",
       "description": "Audit a PostHog integration's feature flag usage for correctness and cost-optimization opportunities"
     },

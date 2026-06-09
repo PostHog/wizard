@@ -32,7 +32,7 @@ describe('program commands', () => {
   test('each top-level command exposes its CLI name', () => {
     expect(auditCommand.name).toBe('audit');
     expect(migrateCommand.name).toBe('migrate');
-    expect(revenueCommand.name).toBe('revenue');
+    expect(revenueCommand.name).toBe('revenue-analytics');
   });
 
   test('audit nests web-analytics-doctor as a wizard-native child', () => {
@@ -52,7 +52,7 @@ describe('program commands', () => {
         'all',
         'autocapture',
         'events',
-        'flags',
+        'feature-flags',
         'identify',
         'session-replay',
       ]),
@@ -103,8 +103,8 @@ describe('program commands', () => {
     expect(opts.installDir).toBe('/tmp/some-app');
   });
 
-  test('revenue is a flat skill command', () => {
-    expect(revenueCommand.name).toBe('revenue');
+  test('revenue-analytics is a flat skill command', () => {
+    expect(revenueCommand.name).toBe('revenue-analytics');
     expect(revenueCommand.children).toBeUndefined();
     revenueCommand.handler!(makeArgv({ debug: true }));
     const [config] = mockRunWizard.mock.calls[0] as [{ skillId?: string }];

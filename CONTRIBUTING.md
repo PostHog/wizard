@@ -17,15 +17,15 @@ The wizard's public command surface follows two rules.
 **Rule 1: family form only when there are multiple options to pick from.**
 
 > If a command represents *one* thing today, it stays flat.
-> `wizard revenue` runs Stripe. `wizard migrate` runs Statsig.
-> Don't pre-create the `wizard revenue stripe` form for forward
-> compatibility — that's forced abstraction.
+> `wizard revenue-analytics` runs Stripe. `wizard migrate` runs Statsig.
+> Don't pre-create the `wizard revenue-analytics stripe` form for
+> forward compatibility — that's forced abstraction.
 >
 > When a second provider lands, restructure to a family at that
-> moment: `wizard revenue` becomes a family with `stripe` and the new
-> provider as children. The picker opens. Existing users who typed
-> `wizard revenue` see a one-time UX change — document it in the
-> release notes.
+> moment: `wizard revenue-analytics` becomes a family with `stripe`
+> and the new provider as children. The picker opens. Existing users
+> who typed `wizard revenue-analytics` see a one-time UX change —
+> document it in the release notes.
 
 **Rule 2: auto-detected = flat; user-picked = family.**
 
@@ -39,9 +39,15 @@ Examples:
 | Flat (no choice today) | Family (user picks) |
 |---|---|
 | `wizard` (default integration — framework auto-detected) | `wizard audit events` |
-| `wizard revenue` (Stripe only) | `wizard audit flags` |
-| `wizard migrate` (Statsig only) | `wizard audit identify` |
+| `wizard revenue-analytics` (Stripe only) | `wizard audit feature-flags` |
+| `wizard migrate` (Statsig only) | `wizard audit session-replay` |
 | `wizard source-maps` (framework auto-detected) | … |
+
+**Naming rule:** commands use the **full PostHog product name** with
+hyphens, not abbreviations. So `wizard audit feature-flags`, not
+`wizard audit flags`. `wizard revenue-analytics`, not `wizard revenue`.
+The kebab-case + 2–20 char checks in `parseCliBlock` enforce the
+mechanics; this rule is the *naming taste* layer on top of it.
 
 ### Family picker behavior
 

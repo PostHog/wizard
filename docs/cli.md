@@ -16,7 +16,7 @@ Migrate an existing analytics or feature-flag vendor to PostHog. Replaces SDK ca
 
 *Backed by context-mill skill: `migrate-statsig`*
 
-### `wizard revenue`
+### `wizard revenue-analytics`
 
 Set up Stripe revenue analytics with PostHog
 
@@ -44,7 +44,7 @@ Audit a PostHog integration's event capture quality and cost-optimization opport
 
 *Backed by context-mill skill: `audit-events`*
 
-### `wizard audit flags`
+### `wizard audit feature-flags`
 
 Audit a PostHog integration's feature flag usage for correctness and cost-optimization opportunities
 
