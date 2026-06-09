@@ -112,10 +112,6 @@ export interface ProgramStep {
  *   - `surface: 'catalog'`  — reachable only via `wizard skill <id>`
  *   - `surface: 'internal'` — hidden everywhere, only reachable via the
  *                             `--skill=<id>` dev escape hatch
- *
- * Phase 0 of the CLI overhaul: this is declarative only. Nothing reads it
- * yet. Phase 2+ wires the generated context-mill manifest and this field
- * into command registration.
  */
 export interface ProgramCliSurface {
   /** Where the program appears in the wizard CLI surface. */
@@ -209,8 +205,7 @@ export interface ProgramConfig {
   disallowedTools?: readonly string[];
   /**
    * Declares this program's place in the wizard CLI surface. See
-   * `ProgramCliSurface` for semantics. Phase 0 of the CLI overhaul:
-   * declarative only, no behavior reads this yet.
+   * `ProgramCliSurface` for semantics.
    */
   cli?: ProgramCliSurface;
 }
