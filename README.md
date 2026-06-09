@@ -24,6 +24,33 @@ support, please open a [GitHub issue](https://github.com/posthog/wizard/issues)!
 
 Visit our [docs](https://posthog.com/docs/ai-engineering/ai-wizard) to learn more. 
 
+## Command surface
+
+The wizard follows two rules:
+
+1. **A command is flat when it represents one thing today, a family when you have to pick among many.** No single-option families — `wizard revenue-analytics` runs Stripe directly because Stripe is the only provider.
+2. **`wizard <family>` opens an interactive picker** over the family's children, with a sensible default pre-highlighted. One Enter runs the default; arrows let you pick a different leaf.
+3. **No shorthand for product names.** Commands use the full PostHog product name with hyphens — `wizard revenue-analytics`, `wizard audit feature-flags`, `wizard audit session-replay` — not abbreviations like `revenue` or `flags`.
+
+```bash
+# Flat — one option today, runs it directly
+npx @posthog/wizard                       # default integration (framework auto-detected)
+npx @posthog/wizard revenue-analytics     # Stripe revenue analytics
+npx @posthog/wizard migrate               # Statsig migration
+npx @posthog/wizard source-maps           # upload source maps (framework auto-detected)
+
+# Family — multiple distinct options to pick from
+npx @posthog/wizard audit                       # opens picker with `audit all` pre-selected
+npx @posthog/wizard audit feature-flags         # explicit subcommand, skips picker
+npx @posthog/wizard audit session-replay        # explicit subcommand, skips picker
+
+# Catalog access
+npx @posthog/wizard skill list                  # see every skill in the catalog
+npx @posthog/wizard skill <id>                  # run any skill directly
+```
+
+The full public surface is documented in [`docs/cli.md`](docs/cli.md). Contributors adding commands should read [`CONTRIBUTING.md`](CONTRIBUTING.md).
+
 ## MCP Commands
 
 The wizard also includes commands for managing PostHog MCP (Model Context
@@ -42,7 +69,7 @@ npx @posthog/wizard mcp remove
 Wire up an existing PostHog + Stripe project for revenue analytics:
 
 ```bash
-npx @posthog/wizard revenue
+npx @posthog/wizard revenue-analytics
 ```
 
 Requires PostHog and Stripe SDKs already installed. Supports `--ci` with the

@@ -81,14 +81,19 @@ Three prevention layers:
 
 When the product needs a new capability (revenue analytics, audit, LLM analytics), express it as a new program — a separate step array with its own config — not as conditional logic in the existing runner.
 
-`ProgramConfig` is a uniform type. The program registry is an array. CLI subcommands, screen sequences, the router, and the store all derive from the registry automatically. Adding a program means:
+`ProgramConfig` is a uniform type. CLI registration goes through one of two factories: `nativeCommandFactory(config)` for wizard-native commands, or `skillCommandFactory(entry, config)` for skill-backed commands (which derives the public surface from context-mill's `cli-manifest.json` — snapshotted at build time into `src/lib/programs/cli-manifest.generated.ts`). Screen sequences, the router, and the store all derive from the registry automatically.
+
+**Adding a new public skill-backed command is usually a context-mill PR, not a wizard PR.** Set `cli: { surface: public, command: <name> }` on the skill's `config.yaml`; the wizard's next release picks it up via the manifest. A wizard PR is only needed when the program also wants custom hooks (outro, abort cases, content blocks) — in which case you add a `ProgramConfig` and the per-family command file dispatches through it.
+
+For wizard-native programs (doctor, mcp, source-maps, the default integration), the path is:
 
 1. Create `src/lib/programs/<name>/` with `index.ts` exporting a `ProgramConfig`
 2. Add it to `PROGRAM_REGISTRY` in `program-registry.ts`
+3. Register it in `bin.ts` with `nativeCommandFactory(yourConfig)`
 
-No changes to `bin.ts`, the store, the router, or the screen-sequences projection.
+For multi-option family parents (`wizard audit`), the parent command sets `interactiveDefault: createFamilyPickerDefault(label, children)` — `wizard audit` (no leaf) opens a picker over the children, with the manifest entry marked `default: true` pre-highlighted. See `src/commands/audit.ts`. Single-option commands stay flat (no family wrapper); when a second option lands, restructure to a family at that moment and document the breaking UX change.
 
-**The test:** Can a new program ship without modifying the runner, the store, or `bin.ts`?
+**The test:** Can a new program ship without modifying the agent runner pipeline (`agent-runner.ts`), the store, or the screen-sequences projection?
 
 **What goes wrong when violated:** The runner becomes a monolithic function with product-specific branches. Each new capability increases the blast radius of every other capability's changes. The function grows past the point where anyone can hold it in their head.
 

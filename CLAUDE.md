@@ -27,6 +27,10 @@ Read `.claude/skills/wizard-development/SKILL.md` first. It covers the design di
 boundaries, screen resolution
 - `references/ANTI-PATTERNS.md` — concrete failure modes with alternatives
 
+For CLI surface changes (adding/renaming/retiring a command, adding flags), read [`CONTRIBUTING.md`](CONTRIBUTING.md) — the convention, the three flag categories, and the contributor decision tree. [`docs/cli.md`](docs/cli.md) is the auto-generated reference for what currently exists.
+
+**After any CLI surface change, run `pnpm docs:cli` to regenerate `docs/cli.md`.** The file is committed but generated — `scripts/generate-cli-docs.cjs` reads the bootstrap manifest plus the wizard-native command list and writes the markdown. CLI changes include: updating `cli-manifest.bootstrap.json`, adding/renaming a wizard-native command, or syncing a new context-mill release whose manifest entries you want reflected. Skipping this step ships a stale public-facing reference.
+
 ## Skills available
 
 Four skills live under `.claude/skills/`. Read `wizard-development` first for any structural change; then load the relevant procedural skill:
@@ -76,6 +80,28 @@ the store directly from business logic.
 Never mutate `session` directly — nanostore holds a shallow copy.
 - The router resolves the active screen from session state. No imperative
 navigation (`goTo`, `navigate`, `push`) anywhere.
+- Public CLI surface is **derived**, not declared. Skill-backed commands come
+from context-mill's `cli-manifest.json` (snapshotted at build time into
+`src/lib/programs/cli-manifest.generated.ts`); wizard-native commands are
+hand-listed in `bin.ts` and constructed via `nativeCommandFactory(config)`.
+Adding a new skill-backed public command is a context-mill PR, not a wizard
+PR — see [CONTRIBUTING.md](CONTRIBUTING.md) for the decision tree.
+- **Flat vs. family rule.** A command is flat when it represents one thing
+today (`wizard revenue-analytics` runs Stripe, `wizard migrate` runs
+Statsig), a family when the user has to pick among multiple. Don't
+pre-create a family form for a single-option command — that's forced
+abstraction. Family parents always open an interactive picker; the leaf
+marked `default: true` in the manifest gets pre-highlighted so one Enter
+runs the obvious choice.
+- **Naming rule:** commands use the **full PostHog product name** with
+hyphens — `revenue-analytics`, `audit feature-flags`, `audit session-replay`
+— not shorthand like `revenue` or `flags`. The kebab-case / length /
+reserved-word checks in `parseCliBlock` (context-mill) enforce mechanics;
+this rule is the naming taste contributors should follow.
+- Internal flags (`--playground`, `--benchmark`, `--ci`, `--skill`, etc.) are
+`hidden: true` and consolidated in `src/wizard.ts::GLOBAL_OPTIONS` or the
+default command. Don't add new top-level visible flags without checking the
+"when to add a flag" rules in [CONTRIBUTING.md](CONTRIBUTING.md).
 - Never write secrets to source code or hardcode API keys. Use the
 `wizard-tools` MCP server (`check_env_keys` / `set_env_values`) for `.env` file operations.
 - Feedback / issues: wizard@posthog.com or

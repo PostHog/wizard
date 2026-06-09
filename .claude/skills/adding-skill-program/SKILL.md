@@ -1,34 +1,83 @@
 ---
 name: adding-skill-program
-description: Create a new skill-based program for the PostHog wizard. Use when adding a program type (like revenue analytics, audit, error tracking) that installs a context-mill skill and runs an agent against it. Covers the createSkillProgram factory for the common case, customization via ProgramRun, and advanced patterns for custom screens or detection.
+description: Create a new skill-based program for the PostHog wizard. Use when adding a program type (like revenue analytics, audit, error tracking) that installs a context-mill skill and runs an agent against it. Covers the two-repo flow (context-mill for CLI surface, wizard for run mechanics), the createSkillProgram factory for custom hooks, and advanced patterns for custom screens or detection.
 compatibility: Designed for Claude Code working on the PostHog wizard codebase.
 metadata:
   author: posthog
-  version: "2.0"
+  version: "3.0"
 ---
 
 # Adding a Skill-Based Program
 
-A skill-based program installs a context-mill skill and runs the agent against it. Examples in the codebase: the `audit` program (clean factory call), the `revenue-analytics` program (factory + custom intro screen + detect step).
+A skill-based program installs a context-mill skill and runs the agent against it. The CLI surface (command name, description, where it nests) lives in context-mill; the run mechanics (hooks, content blocks, abort cases) live in the wizard. **Adding a new skill-backed command is usually a context-mill PR, not a wizard PR.**
 
-Before reading this, read `wizard-development/SKILL.md` for the architectural context — particularly principle 4 ("New capability is a new program, not a new branch").
+Before reading this, read `wizard-development/SKILL.md` for the architectural context — particularly principle 4 ("New capability is a new program, not a new branch") — and the [wizard CONTRIBUTING.md](../../../../CONTRIBUTING.md) for the CLI convention and the contributor decision tree.
 
-## Architecture
+## The two-repo split
 
-The wizard's runner pipeline is fixed. What varies between programs is a `ProgramRun` configuration object that controls the skill ID, prompt, success message, abort cases, and post-run hooks. A `ProgramConfig` ties together: the CLI command, the step list, and the `ProgramRun`. The program registry derives all downstream wiring — CLI subcommands, TUI programs, the router — from a single array. **Adding a program is configuration, not code.**
+| Concern | Lives in |
+|---|---|
+| CLI surface — command name, description, where it nests (`parentCommand`) | **context-mill** — `transformation-config/skills/<name>/config.yaml` `cli:` block |
+| Skill content — markdown that drives the agent (steps, examples, docs) | **context-mill** — `transformation-config/skills/<name>/` directory |
+| Run mechanics — custom prompts, content blocks, abort cases, post-run hooks | **wizard** — `src/lib/programs/<name>/` (only if you need overrides) |
+| Default skill-runner behavior (intro, auth, run, outro, keep-skills) | **wizard** — `src/lib/programs/agent-skill/` (the generic dispatcher) |
 
-## The common case: `createSkillProgram`
+The wizard's `skillCommandFactory` overrides any base config's `skillId` with the manifest entry's `skillId` at dispatch time. So a single shared config — the generic `agentSkillConfig` — can back many manifest entries. Most new skill-backed commands don't need a wizard-side ProgramConfig at all.
 
-For programs that just install a skill and let the agent run it (most programs), use the factory in `agent-skill/index.ts`:
+## Decision: do I need a wizard PR?
+
+```
+Adding a new public skill-backed command?
+│
+├── Generic skill run (default intro/outro, no custom hooks)
+│   → context-mill PR only. Wizard picks it up automatically on next release.
+│   → Examples: future audit-* subcommands beyond what's already shipping.
+│
+└── Custom hooks needed (custom outro, abort cases, content blocks, detect step)
+    → context-mill PR for the skill + cli: block
+    → wizard PR for a ProgramConfig with the overrides
+    → Examples: audit (custom content blocks), revenue-analytics (custom detect),
+      migration (custom abort cases)
+```
+
+## Step 1 — context-mill: declare the skill and its surface
+
+In context-mill, create `transformation-config/skills/<your-skill>/`:
+
+```yaml
+# transformation-config/skills/your-skill/config.yaml
+type: docs-only
+template: description.md
+description: Set up PostHog error tracking
+tags: [error-tracking]
+cli:
+  surface: public
+  command: errors          # the user-typed word: `wizard errors`
+  # parentCommand: <foo>   # uncomment to nest under another command
+variants:
+  - id: all
+    display_name: PostHog error tracking
+```
+
+Then add `description.md`, any `references/*.md` files, and run `npm test && npm run build` in context-mill. Confirm the entry appears in `dist/skills/cli-manifest.json` with the values you expect.
+
+See [context-mill CONTRIBUTING.md](https://github.com/PostHog/context-mill/blob/main/CONTRIBUTING.md) for the full `cli:` block schema, the YAML→command mapping table, and the promotion criterion for `surface: public`. Naming convention rules (kebab-case, length 2–20, no reserved words, no internal-flag collisions) are enforced by `parseCliBlock` at build time.
+
+**At this point, if your skill needs no custom hooks, you're done.** The wizard's next release will pick up the manifest entry and register `wizard <command>` automatically via `skillCommandFactory(entry, agentSkillConfig)`. No wizard PR needed.
+
+## Step 2 (optional) — wizard: add a ProgramConfig for custom hooks
+
+If the skill needs custom run mechanics — a non-default outro, abort cases, a detect step, content blocks for the run screen — add a `ProgramConfig` in the wizard.
+
+For most cases, use the `createSkillProgram` factory in `agent-skill/index.ts`:
 
 ```ts
 // src/lib/programs/error-tracking/index.ts
 import { createSkillProgram } from '../agent-skill/index.js';
 
 export const errorTrackingConfig = createSkillProgram({
-  skillId: 'error-tracking-setup',
-  command: 'errors',
-  flowKey: 'error-tracking',
+  skillId: 'error-tracking-setup',  // matches the context-mill skill id
+  id: 'error-tracking',
   description: 'Set up PostHog error tracking',
   integrationLabel: 'error-tracking',
   successMessage: 'Error tracking configured!',
@@ -40,13 +89,14 @@ export const errorTrackingConfig = createSkillProgram({
 });
 ```
 
-Then register it in one place:
+**Note:** `createSkillProgram` accepts a `command` field for backwards compatibility with wizard-native programs, but for skill-backed commands the CLI surface comes from the manifest entry (not from `command`). The skill factory overrides any `skillId` on the dispatched config with the manifest entry's `skillId`, so a single config can back multiple commands.
 
-1. `src/lib/programs/program-registry.ts` — add to `PROGRAM_REGISTRY` array
+Then:
 
-That's the entire program. **bin.ts, the store, the agent runner, the router, and the screen sequences (`src/ui/tui/screen-sequences.ts`) all derive their wiring from the registry automatically.** Don't add a yargs command. Don't add a runner function. Don't touch bin.ts. The `ProgramId` union type updates itself from the registry contents.
+1. Add `errorTrackingConfig` to `PROGRAM_REGISTRY` in `src/lib/programs/program-registry.ts` — this lets the runner look up the config by `skillId` (so dispatch can attach the right hooks).
+2. If your command needs to dispatch through this config (not the generic `agentSkillConfig`), wire it explicitly in a per-family command file (see `src/commands/audit.ts` for the `resolveAuditConfig` pattern that picks specialized configs by `skillId`).
 
-The `audit` program (`src/lib/programs/audit/`) is the cleanest example of this pattern.
+bin.ts, the store, the agent runner, the router, and the screen sequences (`src/ui/tui/screen-sequences.ts`) all derive their wiring from the registry automatically. You shouldn't need to add a yargs command — the `skillCommandFactory` plus manifest iteration handles registration.
 
 ## Customizing the agent run
 
@@ -134,6 +184,21 @@ Use `onReady`, not `onInit` — `onInit` fires during store construction before 
 
 The `revenue-analytics` program is the canonical example of this pattern (detect step + custom intro + abort cases).
 
+## Flat vs. family — pick the right shape
+
+The wizard's convention: a public command is **flat** when there's only one option today, **a family** when the user must pick among multiple distinct things. Don't pre-create a family form for a single-option command. `wizard migrate` runs Statsig today (flat, one vendor); `wizard audit` is a family (six distinct audits).
+
+- **Flat skill command:** `cli: { surface: public, command: <name> }` in context-mill. No `parentCommand`. On the wizard side, `src/commands/<name>.ts` finds the entry and wraps it with `skillCommandFactory`. See `src/commands/revenue.ts` for the one-liner pattern.
+- **Adding a leaf to an existing family** (like `wizard audit something-new`): all you need is the context-mill PR with `parentCommand: audit` in the `cli:` block. The wizard's `audit.ts` iterates the manifest and adds the new child automatically.
+- **Creating a new family parent:** wizard PR required.
+  1. Add a wizard-native parent command file (see `src/commands/audit.ts` — iterate manifest entries with `parentCommand: <yourname>`, wrap with `skillCommandFactory`, expose as a `Command` with `children` and an `interactiveDefault` set via `createFamilyPickerDefault(label, children)`).
+  2. Optionally mark a manifest entry as `default: true` to pre-highlight it in the picker.
+  3. Add the new command to `bin.ts`'s `Wizard.use(...)` chain.
+
+**Family picker behavior:** when the user invokes a family parent with no subcommand, the wizard always opens an interactive picker over the children. The `default: true` leaf is pre-highlighted, so a single Enter keystroke runs it — but every option is visible before the user commits. Discovery + consent in one extra keystroke.
+
+**Flat-to-family transition:** when a flat command grows a second real option (e.g. a second migration vendor), restructure to a family at that moment — don't pre-create the family form earlier "just in case." Document the breaking UX change in release notes for users who typed the flat form.
+
 ## Verification
 
 ```bash
@@ -141,6 +206,14 @@ pnpm build
 pnpm test
 pnpm fix
 ```
+
+If your change touches the CLI surface (added a wizard-native command, updated `cli-manifest.bootstrap.json`, restructured a family), regenerate the public reference:
+
+```bash
+pnpm docs:cli   # writes docs/cli.md from the bootstrap manifest + native commands
+```
+
+`docs/cli.md` is committed but auto-generated. Skipping the regen ships a stale public-facing reference; the next contributor will hit a confusing diff.
 
 Then run end-to-end against a real test app:
 
@@ -152,8 +225,9 @@ Test failure cases too — missing prerequisites, bad install directories, netwo
 
 ## Canonical examples in the codebase
 
-- `src/lib/programs/audit/` — clean `createSkillProgram` call with abort cases, custom screens, and a dynamic `run` function for per-session seeding
-- `src/lib/programs/revenue-analytics/` — factory + custom intro screen + detect step with prerequisite checking
-- `src/lib/programs/agent-skill/` — the factory itself (`createSkillProgram`) and the generic step list (`AGENT_SKILL_STEPS`)
+- **`src/lib/programs/audit/` + `src/commands/audit.ts`** — family parent. The specialized `auditConfig` handles `wizard audit all` (comprehensive); the narrower children (`events`, `flags`, etc.) dispatch through the generic `agentSkillConfig` with the manifest entry's `skillId`. `wizard audit` (no leaf) opens the picker via `interactiveDefault`, with `audit all` pre-highlighted.
+- **`src/lib/programs/migration/` + `src/commands/migrate.ts`** — flat skill command today. `migrationConfig` plus `skillCommandFactory(migrateEntry, migrationConfig)`. When a second vendor lands, restructure to a family at that moment.
+- **`src/lib/programs/revenue-analytics/` + `src/commands/revenue.ts`** — same pattern as migrate; flat skill command for the only provider today.
+- **`src/lib/programs/agent-skill/`** — the generic dispatcher (`createSkillProgram`, `agentSkillConfig`, `AGENT_SKILL_STEPS`) used by every skill-backed command that doesn't need custom hooks.
 
-When in doubt, read the directory of the program that most resembles what you're building.
+When in doubt, read the directory of the program that most resembles what you're building, plus the `src/commands/<family>.ts` file that wires it into the CLI.
