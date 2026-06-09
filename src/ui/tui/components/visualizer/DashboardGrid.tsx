@@ -9,6 +9,7 @@
 import { Box, Text } from 'ink';
 import { useTick } from '@ui/tui/hooks/useTick';
 import { MATRIX_FADE, Panel, type VisualProps } from './panel';
+import { VISUALIZER_PALETTE } from './palette';
 
 type TileKind = 'bars' | 'line' | 'gauge' | 'pulse';
 
@@ -99,14 +100,18 @@ export const DashboardGrid = ({ width, height }: VisualProps) => {
             }
             if (SPARK_GLYPHS.includes(ch) || ch === '█') {
               return (
-                <Text key={x} color={'#22D622'}>
+                <Text key={x} color={VISUALIZER_PALETTE.mid}>
                   {ch}
                 </Text>
               );
             }
             if (ch === '●' || ch === '∙' || ch === '·') {
               const color =
-                ch === '●' ? '#E6FFE6' : ch === '∙' ? '#7CFF7C' : '#22D622';
+                ch === '●'
+                  ? VISUALIZER_PALETTE.head
+                  : ch === '∙'
+                  ? VISUALIZER_PALETTE.bright
+                  : VISUALIZER_PALETTE.mid;
               return (
                 <Text key={x} bold={ch === '●'} color={color}>
                   {ch}
@@ -115,13 +120,21 @@ export const DashboardGrid = ({ width, height }: VisualProps) => {
             }
             if (ch === '▲' || ch === '▼') {
               return (
-                <Text key={x} bold color={ch === '▲' ? '#7CFF7C' : '#D63B22'}>
+                <Text
+                  key={x}
+                  bold
+                  color={
+                    ch === '▲'
+                      ? VISUALIZER_PALETTE.upGreen
+                      : VISUALIZER_PALETTE.deleteRed
+                  }
+                >
                   {ch}
                 </Text>
               );
             }
             return (
-              <Text key={x} color={'#7CFF7C'}>
+              <Text key={x} color={VISUALIZER_PALETTE.bright}>
                 {ch}
               </Text>
             );

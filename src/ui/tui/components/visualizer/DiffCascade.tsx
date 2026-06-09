@@ -9,6 +9,7 @@ import { Box, Text } from 'ink';
 import { useRef } from 'react';
 import { useTick } from '@ui/tui/hooks/useTick';
 import { MATRIX_FADE, Panel, type VisualProps } from './panel';
+import { VISUALIZER_PALETTE } from './palette';
 
 const CODE_SNIPPETS = [
   "import posthog from 'posthog-js'",
@@ -67,9 +68,9 @@ export const DiffCascade = ({ width, height }: VisualProps) => {
         const text = `${line.sign} ${line.text}`.slice(0, cap);
         const color =
           line.sign === '+'
-            ? '#22D622'
+            ? VISUALIZER_PALETTE.mid
             : line.sign === '-'
-            ? '#D63B22'
+            ? VISUALIZER_PALETTE.deleteRed
             : MATRIX_FADE;
         return (
           <Box key={y}>

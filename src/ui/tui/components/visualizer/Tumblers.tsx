@@ -9,6 +9,7 @@ import { Box, Text } from 'ink';
 import { useRef } from 'react';
 import { useTick } from '@ui/tui/hooks/useTick';
 import { MATRIX_FADE, Panel, type VisualProps } from './panel';
+import { VISUALIZER_PALETTE } from './palette';
 
 interface TumblerState {
   heights: number[]; // settled height per pin, 0 = unset
@@ -92,7 +93,7 @@ export const Tumblers = ({ width, height }: VisualProps) => {
             if (ch === '│' || ch === '─' || ch === '▼') {
               const c = pulsing
                 ? pulseBright
-                  ? '#7CFF7C'
+                  ? VISUALIZER_PALETTE.bright
                   : MATRIX_FADE
                 : MATRIX_FADE;
               return (
@@ -108,11 +109,11 @@ export const Tumblers = ({ width, height }: VisualProps) => {
               x === 1 + state.current * 2 + 1;
             const color = pulsing
               ? pulseBright
-                ? '#E6FFE6'
-                : '#7CFF7C'
+                ? VISUALIZER_PALETTE.head
+                : VISUALIZER_PALETTE.bright
               : isFalling
-              ? '#E6FFE6'
-              : '#22D622';
+              ? VISUALIZER_PALETTE.head
+              : VISUALIZER_PALETTE.mid;
             return (
               <Text key={x} bold={pulsing || isFalling} color={color}>
                 {ch}

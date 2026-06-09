@@ -8,12 +8,13 @@
 import { Box, Text } from 'ink';
 import { useEffect, useRef, useState } from 'react';
 import { MATRIX_FADE } from './panel';
+import { VISUALIZER_PALETTE } from './palette';
 
-// Matrix code-rain palette: pale-green head fades through bright green and
-// Matrix green to the deep, dimmed green at the tail's end.
-const MATRIX_HEAD = '#E6FFE6';
-const MATRIX_BRIGHT = '#7CFF7C';
-const MATRIX_MID = '#22D622';
+const {
+  head: MATRIX_HEAD,
+  bright: MATRIX_BRIGHT,
+  mid: MATRIX_MID,
+} = VISUALIZER_PALETTE;
 
 const DEFAULT_TICK_MS = 110;
 const DEFAULT_MAX_TAIL = 7;

@@ -8,10 +8,11 @@
 
 import { Box } from 'ink';
 import type { ReactNode } from 'react';
+import { VISUALIZER_PALETTE } from './palette';
 
 // The deep, dimmed end of the Matrix code-rain palette. Used as the framing
 // color for every visual (panel border, axis lines, scaffolding glyphs).
-export const MATRIX_FADE = '#0E7A0E';
+export const MATRIX_FADE = VISUALIZER_PALETTE.fade;
 
 export interface VisualProps {
   width: number;

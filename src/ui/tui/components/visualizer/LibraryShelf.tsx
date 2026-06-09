@@ -8,6 +8,7 @@
 import { Box, Text } from 'ink';
 import { useTick } from '@ui/tui/hooks/useTick';
 import { MATRIX_FADE, Panel, type VisualProps } from './panel';
+import { VISUALIZER_PALETTE } from './palette';
 
 const BOOK_LABELS = [
   'nx',
@@ -23,7 +24,7 @@ const BOOK_LABELS = [
   'ts',
   'py',
 ];
-const BOOK_COLORS = ['#22D622', '#7CFF7C', '#5BE05B', '#A0F0A0', '#36B536'];
+const BOOK_COLORS = VISUALIZER_PALETTE.book;
 
 export const LibraryShelf = ({ width, height }: VisualProps) => {
   const tick = useTick(380);
@@ -85,7 +86,7 @@ export const LibraryShelf = ({ width, height }: VisualProps) => {
             }
             if (ch === '▶') {
               return (
-                <Text key={x} bold color={'#E6FFE6'}>
+                <Text key={x} bold color={VISUALIZER_PALETTE.head}>
                   ▶
                 </Text>
               );
@@ -97,7 +98,11 @@ export const LibraryShelf = ({ width, height }: VisualProps) => {
             const selectedX = 1 + selectedIdx * 2 + offset;
             const isSel = x === selectedX;
             return (
-              <Text key={x} bold={isSel} color={isSel ? '#E6FFE6' : booksColor}>
+              <Text
+                key={x}
+                bold={isSel}
+                color={isSel ? VISUALIZER_PALETTE.head : booksColor}
+              >
                 {ch}
               </Text>
             );

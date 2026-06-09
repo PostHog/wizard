@@ -9,6 +9,7 @@ import { Box, Text } from 'ink';
 import { useRef } from 'react';
 import { useTick } from '@ui/tui/hooks/useTick';
 import { Panel, type VisualProps } from './panel';
+import { VISUALIZER_PALETTE } from './palette';
 
 const PACKAGE_NAMES = [
   'posthog-js',
@@ -111,7 +112,9 @@ export const CrateStack = ({ width, height }: VisualProps) => {
               <Text
                 key={x}
                 bold={isFalling}
-                color={isFalling ? '#E6FFE6' : '#22D622'}
+                color={
+                  isFalling ? VISUALIZER_PALETTE.head : VISUALIZER_PALETTE.mid
+                }
               >
                 {ch}
               </Text>

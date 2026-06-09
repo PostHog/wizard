@@ -14,6 +14,7 @@ import type { WizardStore } from '@ui/tui/store';
 import { useTick } from '@ui/tui/hooks/useTick';
 import { AgentPhase } from '@lib/agent/agent-phase';
 import { MATRIX_FADE } from './visualizer/panel';
+import { VISUALIZER_PALETTE } from './visualizer/palette';
 import { MatrixRain } from './visualizer/MatrixRain';
 import { LibraryShelf } from './visualizer/LibraryShelf';
 import { CrateStack } from './visualizer/CrateStack';
@@ -135,7 +136,7 @@ export const VisualizerTab = ({ store }: { store: WizardStore }) => {
       {showHeader && (
         <Box flexDirection="row" marginBottom={1}>
           <Text color={MATRIX_FADE}>┌─</Text>
-          <Text bold color="#7CFF7C">
+          <Text bold color={VISUALIZER_PALETTE.bright}>
             {' ► NOW PLAYING '}
           </Text>
           <Text color={MATRIX_FADE}>─┐</Text>
@@ -143,7 +144,7 @@ export const VisualizerTab = ({ store }: { store: WizardStore }) => {
       )}
       {showTitle && (
         <Box marginBottom={1}>
-          <Text bold color="#E6FFE6">
+          <Text bold color={VISUALIZER_PALETTE.head}>
             {PHASE_LABELS[phase]} - PostHog
           </Text>
         </Box>
@@ -151,9 +152,9 @@ export const VisualizerTab = ({ store }: { store: WizardStore }) => {
       <PhaseBody phase={phase} width={visualW} height={visualH} />
       {showTransport && (
         <Box flexDirection="row" marginTop={1} gap={2}>
-          <Text color="#22D622">[{timeStr}]</Text>
+          <Text color={VISUALIZER_PALETTE.mid}>[{timeStr}]</Text>
           <Text color={MATRIX_FADE}>{equalizer}</Text>
-          <Text color="#22D622">WizardAmp</Text>
+          <Text color={VISUALIZER_PALETTE.mid}>WizardAmp</Text>
         </Box>
       )}
     </Box>
