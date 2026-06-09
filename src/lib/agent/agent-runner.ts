@@ -9,9 +9,11 @@
  *   - What MCP servers and package manager detector to use
  *   - What happens after the agent completes
  *
- * The pipeline itself is fixed:
- *   init → health check → settings → OAuth → [skill install] →
- *   agent init → prompt → run → errors → [postRun] → outro
+ * The pipeline runs a shared bootstrap (logging, health check, settings, OAuth,
+ * flags, MCP url), then forks. The `orchestrator` variant routes to the
+ * experimental task-queue runner. Every other variant runs the fixed linear
+ * pipeline:
+ *   [skill install] → agent init → prompt → run → errors → [postRun] → outro
  */
 
 import {
@@ -51,7 +53,7 @@ import { getSkillsBaseUrl } from '@lib/constants';
 import { runtimeEnv } from '@env';
 import { installSkillById, type InstallSkillResult } from '@lib/wizard-tools';
 import { createWizardAskBridge } from '@lib/wizard-ask-bridge';
-import type { WizardRunOptions } from '@utils/types';
+import type { WizardRunOptions, CloudRegion } from '@utils/types';
 
 import type { ProgramConfig } from '@lib/programs/program-step';
 import { assemblePrompt, type PromptContext } from './agent-prompt';
@@ -106,13 +108,30 @@ export interface ProgramRun {
   buildOutroData?: (
     session: WizardSession,
     credentials: Credentials,
-    cloudRegion: import('@utils/types').CloudRegion | undefined,
+    cloudRegion: CloudRegion | undefined,
   ) => WizardSession['outroData'];
   /**
    * Per-run cap on `wizard_ask` invocations. Defaults to 10. The 4th call
    * always returns a "batch your questions" error regardless of the cap.
    */
   maxQuestions?: number;
+}
+
+/**
+ * Result of the shared bootstrap, consumed by both the linear and the
+ * orchestrator arm. Credentials, role, and user are already applied to the
+ * session by `bootstrapProgram`; this carries the values both arms still need.
+ */
+export interface BootstrapResult {
+  skillsBaseUrl: string;
+  projectApiKey: Credentials['projectApiKey'];
+  host: Credentials['host'];
+  accessToken: Credentials['accessToken'];
+  projectId: Credentials['projectId'];
+  cloudRegion: CloudRegion;
+  mcpUrl: string;
+  wizardFlags: Record<string, string>;
+  wizardMetadata: Record<string, string>;
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────
@@ -170,16 +189,31 @@ export async function runAgent(
 /**
  * Run a program's agent pipeline.
  *
- * This is the single execution path for all programs — both skill-based
- * (revenue analytics) and framework-based (core integration). The
- * `ProgramRun` controls what varies between them; `programConfig` carries
- * the program-level static metadata (tool allow/disallow lists, etc.).
+ * Runs the shared bootstrap, then forks on the `wizard-variant` flag. The
+ * `orchestrator` variant routes to the experimental task-queue runner; every
+ * other variant runs the linear pipeline.
  */
 export async function runProgram(
   session: WizardSession,
   config: ProgramRun,
   programConfig: ProgramConfig,
 ): Promise<void> {
+  const boot = await bootstrapProgram(session, config, programConfig);
+
+  return runLinearProgram(session, config, programConfig, boot);
+}
+
+/**
+ * Shared setup for both arms: logging, health check, settings conflicts, OAuth
+ * and credentials, then the feature flags, variant metadata, and MCP url. Sets
+ * `session.credentials`, role, and user as a side effect. Returns the values the
+ * arms still need.
+ */
+async function bootstrapProgram(
+  session: WizardSession,
+  config: ProgramRun,
+  programConfig: ProgramConfig,
+): Promise<BootstrapResult> {
   // 1. Init logging + debug
   initLogFile();
   session.skillId = config.skillId ?? config.integrationLabel;
@@ -283,6 +317,55 @@ export async function runProgram(
 
   analytics.setGroups(groupsFromUser(user, host));
 
+  // Feature flags, variant metadata, and MCP url. Both arms need these, and the
+  // fork decision reads the flags.
+  const wizardFlags = await analytics.getAllFlagsForWizard();
+  const wizardMetadata = buildWizardMetadata(wizardFlags);
+
+  const mcpUrl = session.localMcp
+    ? 'http://localhost:8787/mcp'
+    : runtimeEnv('MCP_URL') ||
+      (cloudRegion === 'eu'
+        ? 'https://mcp-eu.posthog.com/mcp'
+        : 'https://mcp.posthog.com/mcp');
+
+  return {
+    skillsBaseUrl,
+    projectApiKey,
+    host,
+    accessToken,
+    projectId,
+    cloudRegion,
+    mcpUrl,
+    wizardFlags,
+    wizardMetadata,
+  };
+}
+
+/**
+ * The linear pipeline. Single execution path for all non-orchestrator programs,
+ * both skill-based (revenue analytics) and framework-based (core integration).
+ * The `ProgramRun` controls what varies between them; `programConfig` carries the
+ * program-level static metadata (tool allow/disallow lists, etc.).
+ */
+async function runLinearProgram(
+  session: WizardSession,
+  config: ProgramRun,
+  programConfig: ProgramConfig,
+  boot: BootstrapResult,
+): Promise<void> {
+  const {
+    skillsBaseUrl,
+    projectApiKey,
+    host,
+    accessToken,
+    projectId,
+    cloudRegion,
+    mcpUrl,
+    wizardFlags,
+    wizardMetadata,
+  } = boot;
+
   // 5. Skill install (if skillId provided)
   let skillPath: string | undefined;
   if (config.skillId) {
@@ -302,15 +385,6 @@ export async function runProgram(
 
   // 6. Initialize agent
   const spinner = getUI().spinner();
-  const wizardFlags = await analytics.getAllFlagsForWizard();
-  const wizardMetadata = buildWizardMetadata(wizardFlags);
-
-  const mcpUrl = session.localMcp
-    ? 'http://localhost:8787/mcp'
-    : runtimeEnv('MCP_URL') ||
-      (cloudRegion === 'eu'
-        ? 'https://mcp-eu.posthog.com/mcp'
-        : 'https://mcp.posthog.com/mcp');
 
   const restoreSettings = () => restoreClaudeSettings(session.installDir);
   getUI().onEnterScreen('outro', restoreSettings);
