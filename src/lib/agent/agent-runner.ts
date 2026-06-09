@@ -271,6 +271,7 @@ export async function runProgram(
     projectId: session.projectId,
     email: session.email,
     region: session.region,
+    programId: programConfig.id,
   });
 
   session.credentials = { accessToken, projectApiKey, host, projectId };

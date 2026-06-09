@@ -110,6 +110,7 @@ export function runWizard(
             ci: session.ci,
             apiKey: session.apiKey,
             projectId: session.projectId,
+            programId: config.id,
           });
         activeTui.store.setCredentials({
           accessToken,
