@@ -349,6 +349,9 @@ async function bootstrapProgram(
   getUI().setRoleAtOrganization(roleAtOrganization);
   getUI().setApiUser(user);
 
+  // Identify the user (email, name) before evaluating flags, so flags can target
+  // the individual user and not just $app_name.
+  if (user) analytics.identifyUser(user);
   analytics.setGroups(groupsFromUser(user, host));
 
   // 4.5. AI opt-in enforcement. Parks here while AiOptInRequiredScreen is
