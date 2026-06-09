@@ -92,7 +92,9 @@ describe('skillCommandFactory', () => {
         },
       }),
     );
-    expect(cmd.options).toHaveProperty('debug');
+    // --install-dir is the only per-command shared option; global flags
+    // (--debug, --local-mcp, --benchmark, etc.) live in GLOBAL_OPTIONS.
+    expect(cmd.options).toHaveProperty('install-dir');
     expect(cmd.options).toHaveProperty('flavor');
   });
 

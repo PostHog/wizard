@@ -56,10 +56,10 @@ describe('nativeCommandFactory', () => {
         },
       }),
     );
-    // Standard skill-program options are present
-    expect(cmd.options).toHaveProperty('debug');
+    // Per-command skill-program option (--install-dir) is present.
+    // Global flags (--debug, --local-mcp, --benchmark, --yara-report, --ci)
+    // live in wizard.ts GLOBAL_OPTIONS, not on the per-command options.
     expect(cmd.options).toHaveProperty('install-dir');
-    expect(cmd.options).toHaveProperty('local-mcp');
     // Program-specific options are present
     expect(cmd.options).toHaveProperty('flavor');
   });

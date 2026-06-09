@@ -117,11 +117,12 @@ describe('program commands', () => {
 
   test('exposes the shared skill options on each command', () => {
     const child = findChild(auditCommand, 'events');
+    // Global flags (--debug, --local-mcp, --benchmark, --yara-report, --ci)
+    // live in wizard.ts GLOBAL_OPTIONS now, so they're applied at the
+    // parser level rather than mirrored onto every command's options.
+    // Only per-command flags are asserted here.
     expect(child!.options).toMatchObject({
-      debug: expect.any(Object),
       'install-dir': expect.any(Object),
-      'local-mcp': expect.any(Object),
-      benchmark: expect.any(Object),
     });
   });
 
