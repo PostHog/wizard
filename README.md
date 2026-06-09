@@ -24,6 +24,29 @@ support, please open a [GitHub issue](https://github.com/posthog/wizard/issues)!
 
 Visit our [docs](https://posthog.com/docs/ai-engineering/ai-wizard) to learn more. 
 
+## Command surface
+
+The wizard follows one rule: **if it can pick the variant for you, the command is flat. If you have to pick, it's a family.**
+
+```bash
+# Flat — the wizard auto-detects what to do
+npx @posthog/wizard                # default integration
+npx @posthog/wizard revenue        # Stripe revenue analytics
+npx @posthog/wizard source-maps    # upload source maps for error tracking
+
+# Families — you pick the variant
+npx @posthog/wizard audit events           # audit a specific area
+npx @posthog/wizard migrate statsig        # migrate from a vendor
+
+# Bare `wizard audit` opens an interactive picker over the audit family
+
+# Catalog access
+npx @posthog/wizard skill list             # see every skill in the catalog
+npx @posthog/wizard skill <id>             # run any skill directly
+```
+
+The full public surface is documented in [`docs/cli.md`](docs/cli.md). Contributors adding commands should read [`CONTRIBUTING.md`](CONTRIBUTING.md).
+
 ## MCP Commands
 
 The wizard also includes commands for managing PostHog MCP (Model Context
