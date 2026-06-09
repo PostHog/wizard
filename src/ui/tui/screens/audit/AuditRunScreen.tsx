@@ -13,7 +13,6 @@ import { useFileWatcher } from '@ui/tui/hooks/file-watcher';
 import { AuditChecksViewer } from './AuditChecksViewer/AuditChecksViewer.js';
 import { AuditAreaPane } from './AuditAreaPane.js';
 import { AUDIT_AREA_SLIDES } from './slides/index.js';
-import { EVENTS_AUDIT_AREA_SLIDES } from './slides/events-audit/index.js';
 import { PendingChecksList } from './PendingChecksList.js';
 import {
   AUDIT_CHECKS_FILE,
@@ -50,10 +49,7 @@ export const AuditRunScreen = ({ store }: AuditRunScreenProps) => {
     AUDIT_REPORT_FILE;
   const reportPath = `./${reportFile}`;
   const pendingChecksList = <PendingChecksList checks={checks} />;
-  const slides =
-    store.session.skillId === 'events-audit'
-      ? EVENTS_AUDIT_AREA_SLIDES
-      : AUDIT_AREA_SLIDES;
+  const slides = AUDIT_AREA_SLIDES;
   const areaPane = (
     <AuditAreaPane
       checks={checks}

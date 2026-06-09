@@ -133,7 +133,7 @@ export interface PendingQuestion {
  * PostHog dashboard URL emitted by the agent during a program run.
  * Populated via the `[DASHBOARD_URL]` text marker in agent assistant messages
  * — see `handleSDKMessage` in `agent/agent-interface.ts`. Read by programs
- * (e.g. events-audit) inside `buildOutroData` to surface a dashboard link
+ * (e.g. audit) inside `buildOutroData` to surface a dashboard link
  * the agent actually created.
  */
 
