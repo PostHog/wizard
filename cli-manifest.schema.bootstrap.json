@@ -55,6 +55,10 @@
           "maxLength": 20,
           "description": "Optional parent command this skill nests under."
         },
+        "default": {
+          "type": "boolean",
+          "description": "When true, this leaf runs when the user invokes the family parent with no subcommand (e.g. `wizard audit` runs the leaf marked default). At most one leaf per family may be marked default. Without a default, a multi-child family opens the interactive picker; a single-child family auto-runs its only child."
+        },
         "displayName": {
           "type": "string",
           "minLength": 1

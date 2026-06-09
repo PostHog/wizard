@@ -4,17 +4,11 @@
   "buildTimestamp": "2026-06-09T00:00:00.000Z",
   "entries": [
     {
-      "skillId": "revenue-analytics-setup",
-      "surface": "public",
-      "command": "revenue",
-      "displayName": "Stripe Revenue Analytics",
-      "description": "Set up Stripe revenue analytics with PostHog"
-    },
-    {
       "skillId": "audit",
       "surface": "public",
       "parentCommand": "audit",
       "command": "all",
+      "default": true,
       "displayName": "PostHog audit",
       "description": "Audit an existing PostHog integration for correctness and best practices"
     },
@@ -64,7 +58,16 @@
       "parentCommand": "migrate",
       "command": "statsig",
       "displayName": "Statsig → PostHog",
-      "description": "Migrate from Statsig to PostHog"
+      "description": "Migrate an existing analytics or feature-flag vendor to PostHog. Replaces SDK call sites in-place, removes the source package, and writes a migration report. Replacement-only, doesn't adds new instrumentation."
+    },
+    {
+      "skillId": "revenue-analytics-setup",
+      "surface": "public",
+      "parentCommand": "revenue",
+      "command": "stripe",
+      "default": true,
+      "displayName": "Stripe Revenue Analytics",
+      "description": "Set up Stripe revenue analytics with PostHog"
     }
   ]
 }

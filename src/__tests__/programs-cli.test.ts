@@ -107,10 +107,13 @@ describe('program commands', () => {
     expect(opts.installDir).toBe('/tmp/some-app');
   });
 
-  test('revenue is a flat skill command', () => {
+  test('revenue is a family with stripe marked default', () => {
     expect(revenueCommand.name).toBe('revenue');
-    expect(revenueCommand.children).toBeUndefined();
-    revenueCommand.handler!(makeArgv({ debug: true }));
+    expect(revenueCommand.children?.length).toBe(1);
+    const stripe = findChild(revenueCommand, 'stripe');
+    expect(stripe).toBeDefined();
+    expect(stripe!.default).toBe(true);
+    stripe!.handler!(makeArgv({ debug: true }));
     const [config] = mockRunWizard.mock.calls[0] as [{ skillId?: string }];
     expect(config.skillId).toBe('revenue-analytics-setup');
   });

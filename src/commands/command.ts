@@ -35,6 +35,13 @@ export interface Command {
    * May return a Promise — yargs awaits the result before exiting.
    */
   interactiveDefault?: (argv: Arguments) => void | Promise<void>;
+  /**
+   * When true, the family parent runs this child by default when invoked
+   * with no subcommand. At most one child per parent should be marked
+   * default. Propagated from the context-mill manifest's `default: true`
+   * field through `skillCommandFactory`.
+   */
+  default?: boolean;
 }
 
 /** Extract the bare command word(s) from a yargs name spec, dropping positionals and aliases' arg syntax. */

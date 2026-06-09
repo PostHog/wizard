@@ -53,5 +53,6 @@ export function skillCommandFactory(
     options: mergeCommandOptions(dispatchConfig),
     children: opts.children,
     handler: (argv) => dispatchProgram(dispatchConfig, argv),
+    default: entry.default,
   };
 }

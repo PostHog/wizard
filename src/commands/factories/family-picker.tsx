@@ -90,9 +90,35 @@ export function chooseFamilyChild(
 }
 
 /**
- * Returns an `interactiveDefault` handler that opens the family picker over
- * a command's children and dispatches the user's selection with the
- * caller's argv.
+ * Pick the "no-leaf default" for a family parent. Decision order:
+ *
+ *  1. Single child with a handler → that child (no picker, no prompt).
+ *  2. A child marked `default: true` → that child.
+ *  3. Otherwise → null (caller should open the picker).
+ *
+ * Exported for unit tests and for any caller that wants the resolution
+ * logic without the picker fallback (e.g. `--ci` mode where picker
+ * doesn't make sense).
+ */
+export function pickFamilyDefault(
+  children: readonly Command[],
+): Command | null {
+  const handlerChildren = children.filter((c) => c.handler);
+  if (handlerChildren.length === 1) return handlerChildren[0];
+  const marked = handlerChildren.filter((c) => c.default);
+  if (marked.length === 1) return marked[0];
+  return null;
+}
+
+/**
+ * Returns an `interactiveDefault` handler for a family parent's no-leaf
+ * invocation. Runs the default child if one resolves; otherwise opens
+ * the picker.
+ *
+ * Resolution order matches `pickFamilyDefault`: single child → marked
+ * default → picker. Adding a non-default child to a family later won't
+ * change what `wizard <family>` does, so existing users keep getting
+ * the same behavior.
  *
  * Wire onto a family parent:
  *   export const auditCommand: Command = {
@@ -111,6 +137,11 @@ export function createFamilyPickerDefault(
   ) => Promise<Command | null> = chooseFamilyChild,
 ): (argv: Arguments) => Promise<void> {
   return async (argv) => {
+    const resolved = pickFamilyDefault(children);
+    if (resolved) {
+      await Promise.resolve(resolved.handler?.(argv));
+      return;
+    }
     const chosen = await chooser(parentLabel, children);
     if (!chosen) return;
     await Promise.resolve(chosen.handler?.(argv));

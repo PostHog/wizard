@@ -181,6 +181,12 @@ export interface CliManifestEntry {
   surface: ProgramCliSurface['surface'];
   command?: string;
   parentCommand?: string;
+  /**
+   * When true, this leaf runs when the family parent is invoked with
+   * no subcommand (e.g. \`wizard audit\` runs the entry marked default).
+   * At most one entry per family parent should be marked.
+   */
+  default?: boolean;
   displayName: string;
   description: string;
 }

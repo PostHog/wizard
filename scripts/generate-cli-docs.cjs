@@ -79,7 +79,8 @@ function formatCommand(entry) {
   const path = entry.parentCommand
     ? `wizard ${entry.parentCommand} ${entry.command}`
     : `wizard ${entry.command}`;
-  return `### \`${path}\`\n\n${entry.description}\n\n*Backed by context-mill skill: \`${entry.skillId}\`*`;
+  const defaultBadge = entry.default ? ' _(default for this family)_' : '';
+  return `### \`${path}\`${defaultBadge}\n\n${entry.description}\n\n*Backed by context-mill skill: \`${entry.skillId}\`*`;
 }
 
 function generateMarkdown(manifest) {
@@ -135,15 +136,18 @@ function generateMarkdown(manifest) {
   for (const [parent, entries] of [...families.entries()].sort(([a], [b]) =>
     a.localeCompare(b),
   )) {
+    const sorted = entries.sort((a, b) => a.command.localeCompare(b.command));
+    const defaultEntry = sorted.find((e) => e.default);
+    const noLeafBehavior = defaultEntry
+      ? `\`wizard ${parent}\` with no subcommand runs the default leaf (\`${defaultEntry.command}\`) directly — adding a non-default child to this family won't change what bare \`wizard ${parent}\` does.`
+      : sorted.length === 1
+        ? `\`wizard ${parent}\` with no subcommand runs the only child (\`${sorted[0].command}\`) directly.`
+        : `\`wizard ${parent}\` with no subcommand opens an interactive picker over the children below.`;
+
     lines.push(`### \`wizard ${parent}\` family`);
     lines.push('');
-    lines.push(
-      `\`wizard ${parent}\` with no subcommand opens an interactive picker over ` +
-        `the children below. \`wizard ${parent} --help\` shows the same list as ` +
-        'text.',
-    );
+    lines.push(`${noLeafBehavior} \`wizard ${parent} --help\` lists the children as text.`);
     lines.push('');
-    const sorted = entries.sort((a, b) => a.command.localeCompare(b.command));
     for (const entry of sorted) {
       lines.push(formatCommand(entry));
       lines.push('');
