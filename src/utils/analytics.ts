@@ -7,7 +7,7 @@ import {
 import type { WizardSession } from '@lib/wizard-session';
 import type { ApiUser } from '@lib/api';
 import { v4 as uuidv4 } from 'uuid';
-import { debug } from './debug';
+import { debug, logToFile } from './debug';
 
 /**
  * Extract a standard property bag from the current session.
@@ -55,6 +55,7 @@ export class Analytics {
   private appName = 'wizard';
   private activeFlags: Record<string, string> | null = null;
   private groups: Record<string, string> = {};
+  private personProperties: Record<string, string> = {};
 
   constructor() {
     this.client = new PostHog(ANALYTICS_POSTHOG_PUBLIC_PROJECT_WRITE_KEY, {
@@ -83,6 +84,34 @@ export class Analytics {
       distinctId,
       alias: this.anonymousId,
     });
+  }
+
+  /**
+   * Identify the authenticated user. Sets the distinct id and records their
+   * person properties (email, name) so events carry them and feature flags can
+   * target the individual user. Without the email here, the wizard only sends
+   * `$app_name`, so flags targeted by email never match.
+   */
+  identifyUser(user: ApiUser) {
+    this.setDistinctId(user.distinct_id);
+    const props: Record<string, string> = {};
+    if (user.email) props.email = user.email;
+    const name = [user.first_name, user.last_name]
+      .filter(Boolean)
+      .join(' ')
+      .trim();
+    if (name) props.name = name;
+    this.personProperties = props;
+    this.client.identify({ distinctId: user.distinct_id, properties: props });
+    // The flag snapshot is per identity. Anything evaluated before login (the
+    // intro screen reads the tools-menu flag) was anonymous — drop it so the
+    // next read re-evaluates as this user.
+    this.activeFlags = null;
+  }
+
+  /** Person properties sent with flag evaluation: app name plus the user's. */
+  private flagPersonProperties(): Record<string, string> {
+    return { $app_name: this.appName, ...this.personProperties };
   }
 
   setTag(key: string, value: string | boolean | number | null | undefined) {
@@ -125,9 +154,7 @@ export class Analytics {
       const distinctId = this.distinctId ?? this.anonymousId;
       return await this.client.getFeatureFlag(flagKey, distinctId, {
         sendFeatureFlagEvents: true,
-        personProperties: {
-          $app_name: this.appName,
-        },
+        personProperties: this.flagPersonProperties(),
       });
     } catch (error) {
       debug('Failed to get feature flag:', flagKey, error);
@@ -146,8 +173,13 @@ export class Analytics {
     }
     try {
       const distinctId = this.distinctId ?? this.anonymousId;
+      logToFile('[flags] evaluating as', {
+        distinctId,
+        identified: this.distinctId !== undefined,
+        personProperties: this.flagPersonProperties(),
+      });
       const result = await this.client.getAllFlagsAndPayloads(distinctId, {
-        personProperties: { $app_name: this.appName },
+        personProperties: this.flagPersonProperties(),
       });
       const flags = result.featureFlags ?? {};
       const out: Record<string, string> = {};
@@ -156,6 +188,7 @@ export class Analytics {
         out[key] = typeof value === 'boolean' ? String(value) : String(value);
       }
       this.activeFlags = out;
+      logToFile('[flags] evaluated', out);
       return out;
     } catch (error) {
       debug('Failed to get all feature flags:', error);

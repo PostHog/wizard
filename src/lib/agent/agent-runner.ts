@@ -327,6 +327,9 @@ async function bootstrapProgram(
   getUI().setRoleAtOrganization(roleAtOrganization);
   getUI().setApiUser(user);
 
+  // Identify the user (email, name) before evaluating flags, so flags can target
+  // the individual user and not just $app_name.
+  if (user) analytics.identifyUser(user);
   analytics.setGroups(groupsFromUser(user, host));
 
   // Feature flags, variant metadata, and MCP url. Both arms need these, and the
