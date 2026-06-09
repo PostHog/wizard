@@ -8,6 +8,20 @@ The wizard's public command surface follows one rule: if the wizard can pick the
 
 These come from context-mill. Adding a new one is a context-mill PR with a `cli:` block on the skill's `config.yaml` — no wizard release required.
 
+### Flat commands
+
+### `wizard migrate`
+
+Migrate an existing analytics or feature-flag vendor to PostHog. Replaces SDK call sites in-place, removes the source package, and writes a migration report. Replacement-only, doesn't adds new instrumentation.
+
+*Backed by context-mill skill: `migrate-statsig`*
+
+### `wizard revenue`
+
+Set up Stripe revenue analytics with PostHog
+
+*Backed by context-mill skill: `revenue-analytics-setup`*
+
 ### `wizard audit` family
 
 `wizard audit` with no subcommand runs the default leaf (`all`) directly — adding a non-default child to this family won't change what bare `wizard audit` does. `wizard audit --help` lists the children as text.
@@ -47,26 +61,6 @@ Audit a PostHog integration's $identify implementation for correctness and cost-
 Audit a PostHog session replay setup for correctness and cost-optimization opportunities
 
 *Backed by context-mill skill: `audit-session-replay`*
-
-### `wizard migrate` family
-
-`wizard migrate` with no subcommand runs the only child (`statsig`) directly. `wizard migrate --help` lists the children as text.
-
-### `wizard migrate statsig`
-
-Migrate an existing analytics or feature-flag vendor to PostHog. Replaces SDK call sites in-place, removes the source package, and writes a migration report. Replacement-only, doesn't adds new instrumentation.
-
-*Backed by context-mill skill: `migrate-statsig`*
-
-### `wizard revenue` family
-
-`wizard revenue` with no subcommand runs the default leaf (`stripe`) directly — adding a non-default child to this family won't change what bare `wizard revenue` does. `wizard revenue --help` lists the children as text.
-
-### `wizard revenue stripe` _(default for this family)_
-
-Set up Stripe revenue analytics with PostHog
-
-*Backed by context-mill skill: `revenue-analytics-setup`*
 
 ## Wizard-native commands
 

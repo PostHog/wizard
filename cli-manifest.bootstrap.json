@@ -4,6 +4,20 @@
   "buildTimestamp": "2026-06-09T00:00:00.000Z",
   "entries": [
     {
+      "skillId": "migrate-statsig",
+      "surface": "public",
+      "command": "migrate",
+      "displayName": "Statsig → PostHog",
+      "description": "Migrate an existing analytics or feature-flag vendor to PostHog. Replaces SDK call sites in-place, removes the source package, and writes a migration report. Replacement-only, doesn't adds new instrumentation."
+    },
+    {
+      "skillId": "revenue-analytics-setup",
+      "surface": "public",
+      "command": "revenue",
+      "displayName": "Stripe Revenue Analytics",
+      "description": "Set up Stripe revenue analytics with PostHog"
+    },
+    {
       "skillId": "audit",
       "surface": "public",
       "parentCommand": "audit",
@@ -51,23 +65,6 @@
       "command": "session-replay",
       "displayName": "PostHog audit — session replay",
       "description": "Audit a PostHog session replay setup for correctness and cost-optimization opportunities"
-    },
-    {
-      "skillId": "migrate-statsig",
-      "surface": "public",
-      "parentCommand": "migrate",
-      "command": "statsig",
-      "displayName": "Statsig → PostHog",
-      "description": "Migrate an existing analytics or feature-flag vendor to PostHog. Replaces SDK call sites in-place, removes the source package, and writes a migration report. Replacement-only, doesn't adds new instrumentation."
-    },
-    {
-      "skillId": "revenue-analytics-setup",
-      "surface": "public",
-      "parentCommand": "revenue",
-      "command": "stripe",
-      "default": true,
-      "displayName": "Stripe Revenue Analytics",
-      "description": "Set up Stripe revenue analytics with PostHog"
     }
   ]
 }

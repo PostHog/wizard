@@ -59,11 +59,9 @@ describe('program commands', () => {
     );
   });
 
-  test('migrate exposes one child per migrate-* manifest entry', () => {
-    const names = (migrateCommand.children ?? []).map((c) =>
-      Array.isArray(c.name) ? c.name[0] : c.name,
-    );
-    expect(names).toEqual(expect.arrayContaining(['statsig']));
+  test('migrate is a flat command while only one vendor exists', () => {
+    expect(migrateCommand.name).toBe('migrate');
+    expect(migrateCommand.children).toBeUndefined();
   });
 
   test('audit family has no top-level handler (subcommand required)', () => {
@@ -95,10 +93,8 @@ describe('program commands', () => {
     expect(dispatchedConfig.skillId).toBe('audit-events');
   });
 
-  test('migrate statsig dispatches with migrate-statsig skillId', () => {
-    const statsig = findChild(migrateCommand, 'statsig');
-    expect(statsig).toBeDefined();
-    statsig!.handler!(makeArgv({ installDir: '/tmp/some-app' }));
+  test('migrate dispatches with migrate-statsig skillId', () => {
+    migrateCommand.handler!(makeArgv({ installDir: '/tmp/some-app' }));
     const [config, opts] = mockRunWizard.mock.calls[0] as [
       { skillId?: string },
       Record<string, unknown>,
@@ -107,13 +103,10 @@ describe('program commands', () => {
     expect(opts.installDir).toBe('/tmp/some-app');
   });
 
-  test('revenue is a family with stripe marked default', () => {
+  test('revenue is a flat skill command', () => {
     expect(revenueCommand.name).toBe('revenue');
-    expect(revenueCommand.children?.length).toBe(1);
-    const stripe = findChild(revenueCommand, 'stripe');
-    expect(stripe).toBeDefined();
-    expect(stripe!.default).toBe(true);
-    stripe!.handler!(makeArgv({ debug: true }));
+    expect(revenueCommand.children).toBeUndefined();
+    revenueCommand.handler!(makeArgv({ debug: true }));
     const [config] = mockRunWizard.mock.calls[0] as [{ skillId?: string }];
     expect(config.skillId).toBe('revenue-analytics-setup');
   });

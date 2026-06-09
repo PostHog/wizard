@@ -6,9 +6,14 @@
  * `wizard audit` — when the user invokes the parent without a leaf, this
  * shows a TUI menu instead of yargs's `demandCommand(1)` help dump.
  *
- * The picker mounts a lightweight Ink app, awaits selection, unmounts
- * cleanly, then invokes the chosen child's handler with the original
- * argv. The child runs in the same process; no re-exec.
+ * The picker always opens for families; the `default` flag on a child
+ * just controls which option is pre-highlighted (so `wizard audit` →
+ * Enter still runs `audit all`, but the user sees every other audit
+ * before committing). Discovery and consent in one extra keystroke.
+ *
+ * Single-option commands aren't families — they should be flat
+ * commands wired with `skillCommandFactory` / `nativeCommandFactory`
+ * directly, not run through this module.
  */
 
 import type { Arguments } from 'yargs';
@@ -56,6 +61,22 @@ function describe(child: Command): string {
 }
 
 /**
+ * Reorder children so the `default`-marked entry is first, while
+ * preserving the relative order of the rest. The picker's initial
+ * focus is index 0, so this is what makes "press Enter on
+ * `wizard audit`" run the comprehensive audit by default.
+ *
+ * Exported for testability — the ordering logic stays pure and
+ * inspectable without mounting Ink.
+ */
+export function orderFamilyChildren(children: readonly Command[]): Command[] {
+  const selectable = children.filter((c) => c.handler || c.children?.length);
+  const defaults = selectable.filter((c) => c.default);
+  const rest = selectable.filter((c) => !c.default);
+  return [...defaults, ...rest];
+}
+
+/**
  * Render the picker. Resolves once the user has selected a child;
  * dispatching the child's handler is the caller's responsibility (so this
  * function stays pure-UI and easy to test by stubbing `render`).
@@ -64,10 +85,10 @@ export function chooseFamilyChild(
   parentLabel: string,
   children: readonly Command[],
 ): Promise<Command | null> {
-  const selectable = children.filter((c) => c.handler || c.children?.length);
-  if (selectable.length === 0) return Promise.resolve(null);
+  const ordered = orderFamilyChildren(children);
+  if (ordered.length === 0) return Promise.resolve(null);
 
-  const options = selectable.map((child) => ({
+  const options = ordered.map((child) => ({
     label: describe(child),
     value: child,
     hint: child.description,
@@ -90,35 +111,11 @@ export function chooseFamilyChild(
 }
 
 /**
- * Pick the "no-leaf default" for a family parent. Decision order:
- *
- *  1. Single child with a handler → that child (no picker, no prompt).
- *  2. A child marked `default: true` → that child.
- *  3. Otherwise → null (caller should open the picker).
- *
- * Exported for unit tests and for any caller that wants the resolution
- * logic without the picker fallback (e.g. `--ci` mode where picker
- * doesn't make sense).
- */
-export function pickFamilyDefault(
-  children: readonly Command[],
-): Command | null {
-  const handlerChildren = children.filter((c) => c.handler);
-  if (handlerChildren.length === 1) return handlerChildren[0];
-  const marked = handlerChildren.filter((c) => c.default);
-  if (marked.length === 1) return marked[0];
-  return null;
-}
-
-/**
  * Returns an `interactiveDefault` handler for a family parent's no-leaf
- * invocation. Runs the default child if one resolves; otherwise opens
- * the picker.
+ * invocation. Always opens the picker; the `default`-marked child is
+ * shown first (pre-highlighted), so a single Enter keystroke runs it.
  *
- * Resolution order matches `pickFamilyDefault`: single child → marked
- * default → picker. Adding a non-default child to a family later won't
- * change what `wizard <family>` does, so existing users keep getting
- * the same behavior.
+ * Discovery + consent in one extra keystroke vs. auto-running silently.
  *
  * Wire onto a family parent:
  *   export const auditCommand: Command = {
@@ -137,11 +134,6 @@ export function createFamilyPickerDefault(
   ) => Promise<Command | null> = chooseFamilyChild,
 ): (argv: Arguments) => Promise<void> {
   return async (argv) => {
-    const resolved = pickFamilyDefault(children);
-    if (resolved) {
-      await Promise.resolve(resolved.handler?.(argv));
-      return;
-    }
     const chosen = await chooser(parentLabel, children);
     if (!chosen) return;
     await Promise.resolve(chosen.handler?.(argv));
