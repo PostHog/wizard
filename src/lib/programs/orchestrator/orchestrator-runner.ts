@@ -11,7 +11,7 @@
  * stays product-ignorant: it is the queue, the executor, and the loader.
  */
 import { randomUUID } from 'crypto';
-import { existsSync } from 'fs';
+import { existsSync, rmSync } from 'fs';
 import * as path from 'path';
 import {
   initializeAgent,
@@ -210,18 +210,27 @@ export async function runOrchestrator(
   // parallel, the seed's graph being the only schedule. Each task resolves to
   // its agent prompt (the WHAT) and the mini-skills it needs (the HOW), then
   // runs on its own model and tools.
+  const taskSkillsRoot = path.join(QUEUE_DIR_NAME, 'skills');
   const runTask: RunTask = async (task) => {
     renderQueue();
     try {
       const resolved = resolveTask(registry, task, store);
       const agent = await initializeAgent(agentConfigFor(task.id), options);
+      // Task instructions are one-run scaffolding, not durable skills, so they
+      // install under the run dir rather than .claude/skills — the SDK must not
+      // auto-load them and they must never land in the project (or a CI PR).
+      // The prompt points the agent at them instead.
+      const skillPaths: string[] = [];
       for (const skillId of resolved.skills) {
         const result = await installSkillById(
           skillId,
           session.installDir,
           boot.skillsBaseUrl,
+          taskSkillsRoot,
         );
-        if (result.kind !== 'ok') {
+        if (result.kind === 'ok') {
+          skillPaths.push(path.join(result.path, 'SKILL.md'));
+        } else {
           logToFile(
             `[orchestrator] skill install failed type=${task.type} skill=${skillId} ${result.kind}`,
           );
@@ -234,7 +243,7 @@ export async function runOrchestrator(
           allowedTools: resolved.allowedTools,
           disallowedTools: resolved.disallowedTools,
         },
-        assembleTaskPrompt(promptContext, resolved.prompt),
+        assembleTaskPrompt(promptContext, resolved.prompt, skillPaths),
         options,
         spinner,
         // Empty messages suppress the per-task spinner lines (the spinner renders
@@ -252,7 +261,15 @@ export async function runOrchestrator(
       renderQueue();
     }
   };
-  await drainQueue(store, runTask);
+  try {
+    await drainQueue(store, runTask);
+  } finally {
+    // Success or failure, the installed task instructions never outlive the run.
+    rmSync(path.join(session.installDir, taskSkillsRoot), {
+      recursive: true,
+      force: true,
+    });
+  }
 
   renderQueue();
 
