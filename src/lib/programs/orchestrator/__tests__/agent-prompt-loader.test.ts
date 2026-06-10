@@ -131,6 +131,18 @@ describe('buildRegistry', () => {
     // A flowless prompt (e.g. the documentation example) joins no registry.
     expect(registry.get('example')).toBeUndefined();
   });
+
+  it('drops harness-excluded types; unrestricted runs keep them', () => {
+    const prompts = [
+      prompt({ type: 'plan', flow: 'f', seed: true }),
+      prompt({ type: 'build', flow: 'f' }),
+      prompt({ type: 'dashboard', flow: 'f' }),
+    ];
+    expect(
+      buildRegistry(prompts, 'f', { exclude: ['dashboard'] }).types,
+    ).toEqual(['build']);
+    expect(buildRegistry(prompts, 'f').types).toEqual(['build', 'dashboard']);
+  });
 });
 
 describe('resolveTask', () => {
