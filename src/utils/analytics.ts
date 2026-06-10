@@ -93,6 +93,25 @@ export class Analytics {
     this.groups = groups;
   }
 
+  /**
+   * Establish the authenticated user's identity on the analytics client.
+   * Sets distinct_id, attaches email + organization tags so they ride on
+   * every subsequent event, and configures groups for org/customer/project.
+   */
+  setUser(user: ApiUser | null, host: string) {
+    if (user) {
+      this.setDistinctId(user.distinct_id);
+      if (user.email) this.setTag('email', user.email);
+      if (user.organization?.id) {
+        this.setTag('organization_id', user.organization.id);
+      }
+      if (user.organization?.name) {
+        this.setTag('organization_name', user.organization.name);
+      }
+    }
+    this.setGroups(groupsFromUser(user, host));
+  }
+
   captureException(error: Error, properties: Record<string, unknown> = {}) {
     this.client.captureException(error, this.distinctId ?? this.anonymousId, {
       team: ANALYTICS_TEAM_TAG,
