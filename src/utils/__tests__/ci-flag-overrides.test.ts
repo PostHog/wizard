@@ -1,4 +1,7 @@
-import { applyCiFlagOverrides } from '@utils/ci-flag-overrides';
+import {
+  applyCiFlagOverrides,
+  ciExcludedTaskTypes,
+} from '@utils/ci-flag-overrides';
 
 jest.mock('@utils/debug', () => ({
   logToFile: jest.fn(),
@@ -59,5 +62,36 @@ describe('applyCiFlagOverrides', () => {
       process.env.NODE_ENV = prevNodeEnv;
       expect(result).toEqual({ 'wizard-orchestrator': 'false' });
     });
+  });
+});
+
+describe('ciExcludedTaskTypes', () => {
+  afterEach(() => {
+    delete process.env.WIZARD_CI_EXCLUDE_TASKS;
+  });
+
+  it('is empty when nothing is excluded', () => {
+    expect(ciExcludedTaskTypes()).toEqual([]);
+  });
+
+  it('parses the comma-separated list, ignoring stray whitespace', () => {
+    process.env.WIZARD_CI_EXCLUDE_TASKS = 'dashboard, report ,';
+    expect(ciExcludedTaskTypes()).toEqual(['dashboard', 'report']);
+  });
+
+  it('is inert in production builds', () => {
+    const prevNodeEnv = process.env.NODE_ENV;
+    process.env.NODE_ENV = 'production';
+    process.env.WIZARD_CI_EXCLUDE_TASKS = 'dashboard';
+    let result: readonly string[] | undefined;
+    jest.isolateModules(() => {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const prod = require('@utils/ci-flag-overrides') as {
+        ciExcludedTaskTypes: typeof ciExcludedTaskTypes;
+      };
+      result = prod.ciExcludedTaskTypes();
+    });
+    process.env.NODE_ENV = prevNodeEnv;
+    expect(result).toEqual([]);
   });
 });

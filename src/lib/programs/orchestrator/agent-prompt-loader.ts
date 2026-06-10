@@ -137,8 +137,15 @@ export interface AgentRegistry {
 export function buildRegistry(
   prompts: readonly AgentPrompt[],
   flow: string,
+  opts?: { exclude?: readonly string[] },
 ): AgentRegistry {
-  const inFlow = prompts.filter((p) => p.flow === flow);
+  // The harness can exclude task types (CI excludes dashboards). An excluded
+  // type does not exist for the run: the seed cannot enqueue it and no agent
+  // is ever spun up for it.
+  const excluded = new Set(opts?.exclude ?? []);
+  const inFlow = prompts.filter(
+    (p) => p.flow === flow && !excluded.has(p.type),
+  );
   const byType = new Map(inFlow.map((p) => [p.type, p]));
   return {
     types: inFlow.filter((p) => !p.seed).map((p) => p.type),
@@ -238,6 +245,7 @@ async function fetchText(url: string): Promise<string> {
 export async function loadAgentRegistry(
   skillsBaseUrl: string,
   flow: string,
+  opts?: { exclude?: readonly string[] },
 ): Promise<AgentRegistry> {
   const menuRaw = await fetchText(`${skillsBaseUrl}/agent-menu.json`);
   const menu = JSON.parse(menuRaw) as AgentMenu;
@@ -249,7 +257,7 @@ export async function loadAgentRegistry(
     }),
   );
 
-  return buildRegistry(prompts, flow);
+  return buildRegistry(prompts, flow, opts);
 }
 
 /**

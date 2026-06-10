@@ -23,6 +23,7 @@ import { detectNodePackageManagers } from '../../detection/package-manager';
 import { installSkillById } from '../../wizard-tools';
 import { getUI } from '../../../ui';
 import { analytics } from '../../../utils/analytics';
+import { ciExcludedTaskTypes } from '../../../utils/ci-flag-overrides';
 import { logToFile } from '../../../utils/debug';
 import type { ProgramConfig } from '../program-step';
 import type { BootstrapResult } from '../../agent/agent-runner';
@@ -88,6 +89,7 @@ export async function runOrchestrator(
   const registry = await loadAgentRegistry(
     boot.skillsBaseUrl,
     programConfig.id,
+    { exclude: ciExcludedTaskTypes() },
   );
   const seedPrompt = registry.seed;
   if (!seedPrompt) {
