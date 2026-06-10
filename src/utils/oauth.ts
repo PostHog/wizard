@@ -1,7 +1,7 @@
 import * as crypto from 'node:crypto';
 import * as http from 'node:http';
 import { execSync } from 'node:child_process';
-import axios from 'axios';
+import axios, { AxiosError } from 'axios';
 import { logToFile } from './debug';
 import opn from 'opn';
 import { z } from 'zod';
@@ -266,6 +266,11 @@ function isPortInUseError(error: unknown): boolean {
   );
 }
 
+const OAuthErrorResponseSchema = z.object({
+  error: z.string().optional(),
+  error_description: z.string().optional(),
+});
+
 async function exchangeCodeForToken(
   code: string,
   codeVerifier: string,
@@ -273,24 +278,56 @@ async function exchangeCodeForToken(
 ): Promise<OAuthTokenResponse> {
   const clientId = IS_DEV ? POSTHOG_DEV_CLIENT_ID : POSTHOG_PROXY_CLIENT_ID;
 
-  const response = await axios.post(
-    `${POSTHOG_OAUTH_URL}/oauth/token`,
-    {
-      grant_type: 'authorization_code',
-      code,
-      redirect_uri: callbackUrl,
-      client_id: clientId,
-      code_verifier: codeVerifier,
-    },
-    {
-      headers: {
-        'Content-Type': 'application/json',
-        'User-Agent': WIZARD_USER_AGENT,
+  try {
+    const response = await axios.post(
+      `${POSTHOG_OAUTH_URL}/oauth/token`,
+      {
+        grant_type: 'authorization_code',
+        code,
+        redirect_uri: callbackUrl,
+        client_id: clientId,
+        code_verifier: codeVerifier,
       },
-    },
-  );
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          'User-Agent': WIZARD_USER_AGENT,
+        },
+      },
+    );
 
-  return OAuthTokenResponseSchema.parse(response.data);
+    return OAuthTokenResponseSchema.parse(response.data);
+  } catch (e) {
+    if (axios.isAxiosError(e)) {
+      const axiosError = e as AxiosError<unknown>;
+      const status = axiosError.response?.status;
+      const parsed = OAuthErrorResponseSchema.safeParse(
+        axiosError.response?.data,
+      );
+      const oauthError = parsed.success ? parsed.data.error : undefined;
+      const oauthDescription = parsed.success
+        ? parsed.data.error_description
+        : undefined;
+
+      logToFile(
+        `[oauth] token exchange failed: status=${String(status)} error=${String(
+          oauthError,
+        )} description=${String(oauthDescription)} redirect_uri=${callbackUrl}`,
+      );
+
+      if (status && status >= 400 && status < 500) {
+        const detail =
+          oauthDescription ||
+          oauthError ||
+          'The PostHog OAuth server rejected the authorization code.';
+        const label = oauthError ? `${oauthError}: ${detail}` : detail;
+        throw new Error(
+          `${label}\n\nThis usually means the authorization code expired, was already used, or the redirect URI didn't match. Please re-run the wizard to start a fresh login.`,
+        );
+      }
+    }
+    throw e;
+  }
 }
 
 export async function performOAuthFlow(
@@ -330,7 +367,9 @@ export async function performOAuthFlow(
       const localLoginUrl = getLocalLoginUrl(port);
       const urlToOpen = config.signup ? localSignupUrl : localLoginUrl;
 
-      logToFile(`[oauth] attempting callback server on port ${port}`);
+      logToFile(
+        `[oauth] attempting callback server on port ${port} redirect_uri=${callbackUrl}`,
+      );
 
       let server: http.Server;
       let waitForCallback: () => Promise<string>;
