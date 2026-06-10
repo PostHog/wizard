@@ -24,6 +24,7 @@ export interface OrchestratorToolsContext {
 
 export interface EnqueueArgs {
   type: string;
+  label?: string;
   inputs?: Record<string, unknown>;
   dependsOn?: string[];
   model?: string;
@@ -109,6 +110,7 @@ export function applyEnqueue(
 
   const task = ctx.store.enqueue({
     type: args.type,
+    label: args.label,
     inputs: args.inputs ?? {},
     dependsOn: args.dependsOn ?? [],
     model: args.model,
@@ -169,6 +171,12 @@ const HANDOFF_SHAPE = {
   did: z.string().describe('What you actually did.'),
   forNextAgent: z.string().describe('What the next agent should know.'),
   filesTouched: z.array(z.string()).optional(),
+  conflict: z
+    .string()
+    .optional()
+    .describe(
+      'A one-line summary of any conflict you could not cleanly resolve (e.g. a dependency or build conflict). Put full detail in your work; this line is surfaced to the user.',
+    ),
 };
 
 type SdkTool = (
@@ -198,6 +206,12 @@ export function buildOrchestratorTools(
       type: z
         .string()
         .describe(`The task type. One of: ${ctx.validTypes.join(', ')}.`),
+      label: z
+        .string()
+        .optional()
+        .describe(
+          'A short label for the UI — the action in a few words (e.g. "Add the PostHog SDK", "Initialize PostHog"). Leave out file names, class names, and other specifics.',
+        ),
       inputs: z.record(z.unknown()).optional(),
       dependsOn: z
         .array(z.string())
