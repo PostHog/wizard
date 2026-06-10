@@ -49,6 +49,16 @@ function exampleReference(ctx: OrchestratorPromptContext): string | null {
   return `A reference PostHog integration for this framework is at \`${ctx.examplePath}\`. It shows the target implementation pattern. Reference its patterns and conventions, adapting them to this codebase.`;
 }
 
+/** The framework's rules ship with the reference skill; every task follows them. */
+function commandmentsReference(ctx: OrchestratorPromptContext): string | null {
+  if (!ctx.commandmentsPath) return null;
+  return `Framework rules for this integration are at \`${ctx.commandmentsPath}\`. Read them before you edit and follow them.`;
+}
+
+const TASK_BASICS = `You are one isolated task in a larger PostHog workflow, run as a fresh agent with no memory of the other tasks beyond the context you are given. Do only your task, then report exactly once by calling complete_task with a structured handoff: what your goal was, what you did, and what the next agent should know. When you are given context from previous steps, trust it — those agents already did their work, so do not re-verify or re-read what their handoffs tell you. Build on it and move fast. Read a file before you edit it, so your own changes do not duplicate what is already there. Work only within this project's own directory; nothing outside it is part of your task. If your task does not apply to this project — there is genuinely nothing for it to do — report it with status \`skipped\` and say why, rather than marking it done.`;
+
+const SEED_BASICS = `You are the orchestrator. Plan the work and seed the queue with enqueue_task — each call returns an id you can pass as a dependency to a later task. Give each task a short label for the UI — the action in a few words, not file names, class names, or other specifics. You are not a task yourself: do not call complete_task and do not edit the project.`;
+
 /**
  * Points the agent at its installed task instructions (the HOW). They live under
  * the wizard's run dir, not `.claude/skills/`, so the SDK does not auto-load
@@ -59,16 +69,6 @@ function skillReference(paths: readonly string[]): string | null {
   const list = paths.map((p) => `\`${p}\``).join(', ');
   return `Your task instructions are at ${list}. Read them before you start and follow them. They are wizard scaffolding, not part of the project.`;
 }
-
-/** The framework's rules ship with the reference skill; every task follows them. */
-function commandmentsReference(ctx: OrchestratorPromptContext): string | null {
-  if (!ctx.commandmentsPath) return null;
-  return `Framework rules for this integration are at \`${ctx.commandmentsPath}\`. Read them before you edit and follow them.`;
-}
-
-const TASK_BASICS = `You are one isolated task in a larger PostHog workflow, run as a fresh agent with no memory of the other tasks beyond the context you are given. Do only your task, then report exactly once by calling complete_task with a structured handoff: what your goal was, what you did, and what the next agent should know. When you are given context from previous steps, trust it — those agents already did their work, so do not re-verify or re-read what their handoffs tell you. Build on it and move fast. Read a file before you edit it, so your own changes do not duplicate what is already there. Work only within this project's own directory; nothing outside it is part of your task. If your task does not apply to this project — there is genuinely nothing for it to do — report it with status \`skipped\` and say why, rather than marking it done.`;
-
-const SEED_BASICS = `You are the orchestrator. Plan the work and seed the queue with enqueue_task — each call returns an id you can pass as a dependency to a later task. Give each task a short label for the UI — the action in a few words, not file names, class names, or other specifics. You are not a task yourself: do not call complete_task and do not edit the project.`;
 
 /** A task agent's full prompt: injected basics, then the authored intent. */
 export function assembleTaskPrompt(
@@ -315,9 +315,14 @@ export function resolveTask(
     .join('\n\n');
 
   return {
-    model: task.model ?? prompt.model ?? DEFAULT_TASK_MODEL,
+    model: taskModel(registry, task),
     ...agentRunTools(prompt),
     prompt: body,
     skills: prompt.skills,
   };
+}
+
+/** The model a task runs on: enqueue override, then prompt frontmatter, then default. */
+export function taskModel(registry: AgentRegistry, task: QueuedTask): string {
+  return task.model ?? registry.get(task.type)?.model ?? DEFAULT_TASK_MODEL;
 }
