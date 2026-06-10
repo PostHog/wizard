@@ -21,7 +21,7 @@ import {
   OutroKind,
 } from '@lib/wizard-session';
 import { getOrAskForProjectData } from '@utils/setup-utils';
-import { analytics } from '@utils/analytics';
+import { analytics, groupsFromUser } from '@utils/analytics';
 import { getUI } from '@ui';
 import {
   initializeAgent,
@@ -275,6 +275,7 @@ export async function runProgram(
     projectId: session.projectId,
     email: session.email,
     region: session.region,
+    programId: programConfig.id,
   });
 
   session.credentials = { accessToken, projectApiKey, host, projectId };
@@ -283,6 +284,8 @@ export async function runProgram(
   getUI().setCredentials(session.credentials);
   getUI().setRoleAtOrganization(roleAtOrganization);
   getUI().setApiUser(user);
+
+  analytics.setGroups(groupsFromUser(user, host));
 
   // 5. Skill install (if skillId provided)
   let skillPath: string | undefined;

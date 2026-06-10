@@ -33,6 +33,14 @@ import {
 import { createTriageLLMProvider } from './triage-provider';
 import { getWizardCommandments } from './commandments';
 import type { PackageManagerDetector } from '@lib/detection/package-manager';
+import { AgentSignals, AgentErrorType } from './signals';
+import { AgentOutputSignals } from './output-signals';
+
+// Signal vocabulary and the output parser live in dedicated modules; re-export
+// so existing importers of these from agent-interface keep working.
+export { AgentSignals, AgentErrorType } from './signals';
+export type { AgentSignal } from './signals';
+export { AgentOutputSignals } from './output-signals';
 
 // Dynamic import cache for ESM module
 let _sdkModule: any = null;
@@ -58,58 +66,6 @@ function getClaudeCodeExecutablePath(): string {
 type SDKMessage = any;
 type McpServersConfig = any;
 type AbortCaseMatcher = { match: RegExp };
-
-export const AgentSignals = {
-  /** Signal emitted when the agent reports progress to the user */
-  STATUS: '[STATUS]',
-  /** Signal emitted when the agent cannot access the PostHog MCP server */
-  ERROR_MCP_MISSING: '[ERROR-MCP-MISSING]',
-  /** Signal emitted when the agent cannot access the setup resource */
-  ERROR_RESOURCE_MISSING: '[ERROR-RESOURCE-MISSING]',
-  /**
-   * Signal emitted when the agent cannot complete the program and is
-   * aborting intentionally (distinct from errors). Format: "[ABORT] <reason>".
-   * Programs can declare an onAbort handler to render a custom screen.
-   */
-  ABORT: '[ABORT]',
-  /** Signal emitted when the agent provides a remark about its run */
-  WIZARD_REMARK: '[WIZARD-REMARK]',
-  /** Signal prefix for benchmark logging */
-  BENCHMARK: '[BENCHMARK]',
-  /**
-   * Signal emitted when the agent has created a PostHog dashboard for the
-   * user. Format: `[DASHBOARD_URL] <full https url>`. The URL is captured
-   * onto `session.dashboardUrl` and surfaced by programs in their outro.
-   */
-  DASHBOARD_URL: '[DASHBOARD_URL]',
-  /**
-   * Signal emitted when the agent has uploaded a report to a PostHog
-   * notebook. Format: `[NOTEBOOK_URL] <full https url>`. The URL is captured
-   * onto `session.notebookUrl` and surfaced by programs in their outro.
-   */
-  NOTEBOOK_URL: '[NOTEBOOK_URL]',
-} as const;
-
-export type AgentSignal = (typeof AgentSignals)[keyof typeof AgentSignals];
-
-/**
- * Error types that can be returned from agent execution.
- * These correspond to the error signals that the agent emits.
- */
-export enum AgentErrorType {
-  /** Agent could not access the PostHog MCP server */
-  MCP_MISSING = 'WIZARD_MCP_MISSING',
-  /** Agent could not access the setup resource */
-  RESOURCE_MISSING = 'WIZARD_RESOURCE_MISSING',
-  /** API rate limit exceeded */
-  RATE_LIMIT = 'WIZARD_RATE_LIMIT',
-  /** Generic API error */
-  API_ERROR = 'WIZARD_API_ERROR',
-  /** YARA scanner detected a security violation */
-  YARA_VIOLATION = 'WIZARD_YARA_VIOLATION',
-  /** Agent intentionally aborted the program (emitted [ABORT] <reason>) */
-  ABORT = 'WIZARD_ABORT',
-}
 
 const BLOCKING_ENV_KEYS = [
   'ANTHROPIC_API_KEY',
@@ -330,7 +286,7 @@ export type StopHookResult =
  */
 export function createStopHook(
   featureQueue: readonly AdditionalFeature[],
-  collectedText?: string[],
+  signals?: AgentOutputSignals,
 ): (input: { stop_hook_active: boolean }) => StopHookResult {
   let featureIndex = 0;
   let remarkRequested = false;
@@ -345,12 +301,9 @@ export function createStopHook(
 
     // On API errors, allow stop immediately — blocking with remark/feature
     // prompts would just fail again. The auth error screen is shown separately.
-    if (collectedText) {
-      const text = collectedText.join('\n');
-      if (text.includes('API Error:')) {
-        logToFile('Stop hook: API error detected, allowing immediate stop');
-        return {};
-      }
+    if (signals?.hasApiError()) {
+      logToFile('Stop hook: API error detected, allowing immediate stop');
+      return {};
     }
 
     // Phase 1: drain feature queue
@@ -417,7 +370,7 @@ export function buildWizardMetadata(
  * includes `x-posthog-use-bedrock-fallback: true` so the LLM gateway falls back to Bedrock on
  * Anthropic 5xx, plus any wizard metadata/flags.
  */
-function buildAgentEnv(
+export function buildAgentEnv(
   wizardMetadata: Record<string, string>,
   wizardFlags: Record<string, string>,
 ): string {
@@ -811,13 +764,10 @@ export async function initializeAgent(
  * Used in both the success and catch paths of runAgent.
  */
 function checkYaraViolation(
-  outputText: string,
+  signals: AgentOutputSignals,
   spinner: SpinnerHandle,
 ): { error: AgentErrorType } | null {
-  if (
-    outputText.includes('[YARA CRITICAL]') ||
-    outputText.includes('[YARA] Scanner error')
-  ) {
+  if (signals.hasYaraViolation()) {
     logToFile('Agent error: YARA_VIOLATION');
     spinner.stop('Security violation detected');
     return { error: AgentErrorType.YARA_VIOLATION };
@@ -866,7 +816,7 @@ export async function runAgent(
   logToFile('Prompt:', prompt);
 
   const startTime = Date.now();
-  const collectedText: string[] = [];
+  const signals = new AgentOutputSignals();
   // Track if we received a successful result (before any cleanup errors)
   let receivedSuccessResult = false;
   let loggedInitialContext = false;
@@ -915,20 +865,9 @@ export async function runAgent(
     }
 
     // Extract and capture the agent's reflection on the run
-    const outputText = collectedText.join('\n');
-    const remarkRegex = new RegExp(
-      `${AgentSignals.WIZARD_REMARK.replace(
-        /[.*+?^${}()|[\]\\]/g,
-        '\\$&',
-      )}\\s*(.+?)(?:\\n|$)`,
-      's',
-    );
-    const remarkMatch = outputText.match(remarkRegex);
-    if (remarkMatch && remarkMatch[1]) {
-      const remark = remarkMatch[1].trim();
-      if (remark) {
-        analytics.capture(WIZARD_REMARK_EVENT_NAME, { remark });
-      }
+    const remark = signals.remark();
+    if (remark) {
+      analytics.capture(WIZARD_REMARK_EVENT_NAME, { remark });
     }
 
     analytics.wizardCapture('agent completed', {
@@ -1135,10 +1074,7 @@ export async function runAgent(
           Stop: [
             {
               hooks: [
-                createStopHook(
-                  config?.additionalFeatureQueue ?? [],
-                  collectedText,
-                ),
+                createStopHook(config?.additionalFeatureQueue ?? [], signals),
               ],
               timeout: 30,
             },
@@ -1183,7 +1119,7 @@ export async function runAgent(
         message,
         options,
         spinner,
-        collectedText,
+        signals,
         receivedSuccessResult,
         tasks,
       );
@@ -1216,10 +1152,7 @@ export async function runAgent(
       }
 
       // 401: show auth error screen and exit immediately
-      if (
-        message.type === 'assistant' &&
-        collectedText.join('\n').includes('API Error: 401')
-      ) {
+      if (message.type === 'assistant' && signals.hasApiErrorStatus(401)) {
         signalDone!();
         spinner.stop('Authentication failed');
         // Re-check at error time: a settings conflict can be the *real* cause
@@ -1274,39 +1207,34 @@ export async function runAgent(
       return { error: AgentErrorType.ABORT, message: abortReason };
     }
 
-    const outputText = collectedText.join('\n');
-
     // Check for YARA scanner violations
-    const yaraResult = checkYaraViolation(outputText, spinner);
+    const yaraResult = checkYaraViolation(signals, spinner);
     if (yaraResult) return yaraResult;
 
     // Check for error markers in the agent's output
-    if (outputText.includes(AgentSignals.ERROR_MCP_MISSING)) {
+    if (signals.has('MCP_MISSING')) {
       logToFile('Agent error: MCP_MISSING');
       spinner.stop('Agent could not access PostHog MCP');
       return { error: AgentErrorType.MCP_MISSING };
     }
 
-    if (outputText.includes(AgentSignals.ERROR_RESOURCE_MISSING)) {
+    if (signals.has('RESOURCE_MISSING')) {
       logToFile('Agent error: RESOURCE_MISSING');
       spinner.stop('Agent could not access setup resource');
       return { error: AgentErrorType.RESOURCE_MISSING };
     }
 
     // Check for API errors (rate limits, etc.)
-    // Extract just the API error line(s), not the entire output
-    const apiErrorMatch = outputText.match(/API Error: [^\n]+/g);
-    const apiErrorMessage = apiErrorMatch
-      ? apiErrorMatch.join('\n')
-      : 'Unknown API error';
+    // Surface just the API error line(s), not the entire output
+    const apiErrorMessage = signals.apiErrorMessage() ?? 'Unknown API error';
 
-    if (outputText.includes('API Error: 429')) {
+    if (signals.hasApiErrorStatus(429)) {
       logToFile('Agent error: RATE_LIMIT');
       spinner.stop('Rate limit exceeded');
       return { error: AgentErrorType.RATE_LIMIT, message: apiErrorMessage };
     }
 
-    if (outputText.includes('API Error:')) {
+    if (signals.hasApiError()) {
       logToFile('Agent error: API_ERROR');
       spinner.stop('API error occurred');
       return { error: AgentErrorType.API_ERROR, message: apiErrorMessage };
@@ -1342,25 +1270,21 @@ export async function runAgent(
     }
 
     // Check if we collected an error before the exception was thrown
-    const outputText = collectedText.join('\n');
 
     // Check for YARA scanner violations
-    const yaraResult = checkYaraViolation(outputText, spinner);
+    const yaraResult = checkYaraViolation(signals, spinner);
     if (yaraResult) return yaraResult;
 
-    // Extract just the API error line(s), not the entire output
-    const apiErrorMatch = outputText.match(/API Error: [^\n]+/g);
-    const apiErrorMessage = apiErrorMatch
-      ? apiErrorMatch.join('\n')
-      : 'Unknown API error';
+    // Surface just the API error line(s), not the entire output
+    const apiErrorMessage = signals.apiErrorMessage() ?? 'Unknown API error';
 
-    if (outputText.includes('API Error: 429')) {
+    if (signals.hasApiErrorStatus(429)) {
       logToFile('Agent error (caught): RATE_LIMIT');
       spinner.stop('Rate limit exceeded');
       return { error: AgentErrorType.RATE_LIMIT, message: apiErrorMessage };
     }
 
-    if (outputText.includes('API Error:')) {
+    if (signals.hasApiError()) {
       logToFile('Agent error (caught): API_ERROR');
       spinner.stop('API error occurred');
       return { error: AgentErrorType.API_ERROR, message: apiErrorMessage };
@@ -1544,7 +1468,7 @@ function handleSDKMessage(
   message: SDKMessage,
   options: WizardRunOptions,
   spinner: SpinnerHandle,
-  collectedText: string[],
+  signals: AgentOutputSignals,
   receivedSuccessResult = false,
   tasks?: Map<string, TaskEntry>,
 ): void {
@@ -1577,7 +1501,7 @@ function handleSDKMessage(
       if (Array.isArray(content)) {
         for (const block of content) {
           if (block.type === 'text' && typeof block.text === 'string') {
-            collectedText.push(block.text);
+            signals.push(block.text);
 
             // Check for [STATUS] markers
             const statusRegex = new RegExp(
@@ -1678,7 +1602,7 @@ function handleSDKMessage(
       if (message.is_error) {
         logToFile('Agent result with error:', message.result);
         if (typeof message.result === 'string') {
-          collectedText.push(message.result);
+          signals.push(message.result);
         }
         // Only show errors to user if we haven't already succeeded.
         // Post-success errors are SDK cleanup noise (telemetry failures, streaming
@@ -1692,7 +1616,7 @@ function handleSDKMessage(
       } else if (message.subtype === 'success') {
         logToFile('Agent completed successfully');
         if (typeof message.result === 'string') {
-          collectedText.push(message.result);
+          signals.push(message.result);
         }
       } else {
         logToFile('Agent result with error:', message.result);

@@ -110,6 +110,13 @@ export interface ProgramStep {
 export interface ProgramConfig {
   /** CLI command name (e.g. 'revenue'). Omit for the default program. */
   command?: string;
+  /**
+   * Parent CLI command to nest this program under. When set, the program is
+   * registered as `<parentCommand> <command>` instead of as a top-level
+   * command. The parent must itself be a registered subcommand program. Omit
+   * for top-level programs.
+   */
+  parentCommand?: string;
   /** CLI description shown in --help */
   description: string;
   /** Unique program id — matches the Program enum value */
