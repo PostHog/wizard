@@ -49,6 +49,17 @@ function exampleReference(ctx: OrchestratorPromptContext): string | null {
   return `A reference PostHog integration for this framework is at \`${ctx.examplePath}\`. It shows the target implementation pattern. Reference its patterns and conventions, adapting them to this codebase.`;
 }
 
+/**
+ * Points the agent at its installed task instructions (the HOW). They live under
+ * the wizard's run dir, not `.claude/skills/`, so the SDK does not auto-load
+ * them — the prompt has to name them.
+ */
+function skillReference(paths: readonly string[]): string | null {
+  if (paths.length === 0) return null;
+  const list = paths.map((p) => `\`${p}\``).join(', ');
+  return `Your task instructions are at ${list}. Read them before you start and follow them. They are wizard scaffolding, not part of the project.`;
+}
+
 /** The framework's rules ship with the reference skill; every task follows them. */
 function commandmentsReference(ctx: OrchestratorPromptContext): string | null {
   if (!ctx.commandmentsPath) return null;
@@ -63,11 +74,13 @@ const SEED_BASICS = `You are the orchestrator. Plan the work and seed the queue 
 export function assembleTaskPrompt(
   ctx: OrchestratorPromptContext,
   body: string,
+  skillPaths: readonly string[] = [],
 ): string {
   return [
     projectContext(ctx),
     exampleReference(ctx),
     commandmentsReference(ctx),
+    skillReference(skillPaths),
     TASK_BASICS,
     body,
   ]
