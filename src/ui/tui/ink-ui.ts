@@ -213,6 +213,10 @@ export class InkUI implements WizardUI {
     this.store.setDashboardUrl(url);
   }
 
+  setStage(stage: string): void {
+    this.store.setCurrentStage(stage);
+  }
+
   setNotebookUrl(url: string): void {
     this.store.setNotebookUrl(url);
   }

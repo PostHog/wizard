@@ -85,6 +85,9 @@ export class WizardStore {
   private $learnCardBlockIdx = atom(0);
   private $learnCardComplete = atom(false);
   private $version = atom(0);
+  private $currentStage = atom<{ stage: string; startedAt: number } | null>(
+    null,
+  );
 
   private _onTasksChanged: (() => void) | null = null;
   /** Last screen seen — used to detect screen transitions for analytics. */
@@ -241,6 +244,19 @@ export class WizardStore {
 
   get eventPlan(): PlannedEvent[] {
     return this.$eventPlan.get();
+  }
+
+  get currentStage(): { stage: string; startedAt: number } | null {
+    return this.$currentStage.get();
+  }
+
+  /** No-op when the stage hasn't changed, so `startedAt` survives across
+   *  re-renders and tab switches and measures real stage time. */
+  setCurrentStage(stage: string): void {
+    const cur = this.$currentStage.get();
+    if (cur?.stage === stage) return;
+    this.$currentStage.set({ stage, startedAt: Date.now() });
+    this.emitChange();
   }
 
   get statusExpanded(): boolean {

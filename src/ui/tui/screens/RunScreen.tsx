@@ -24,6 +24,7 @@ import { LearnCard } from '@ui/tui/components/LearnCard';
 import { TipsCard } from '@ui/tui/components/TipsCard';
 import { useStdoutDimensions } from '@ui/tui/hooks/useStdoutDimensions';
 import { useFileWatcher } from '@ui/tui/hooks/file-watcher';
+import { VisualizerTab } from '@ui/tui/components/PhaseVisuals';
 import { EVENT_PLAN_FILE } from '@lib/programs/posthog-integration/index';
 import { getProgramConfig } from '@lib/programs/program-registry';
 import { getContentBlocks as getSkillContentBlocks } from '@lib/programs/agent-skill/content/index';
@@ -99,7 +100,6 @@ export const RunScreen = ({ store }: RunScreenProps) => {
   );
   const progressList = <ProgressList items={progressItems} title="Tasks" />;
 
-  // On narrow terminals, drop the learn pane and show only progress
   const statusComponent =
     columns < 80 ? (
       <Box flexDirection="column" flexGrow={1}>
@@ -124,6 +124,11 @@ export const RunScreen = ({ store }: RunScreenProps) => {
       id: 'logs',
       label: 'Tail logs',
       component: <LogViewer filePath={WIZARD_LOG_FILE} />,
+    },
+    {
+      id: 'visualizer',
+      label: 'Visualizer',
+      component: <VisualizerTab store={store} />,
     },
     { id: 'hn', label: 'HN', component: <HNViewer /> },
   ];

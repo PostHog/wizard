@@ -30,6 +30,7 @@ import {
   createPostToolUseYaraHooks,
 } from '@lib/yara-hooks';
 import { getWizardCommandments } from './commandments';
+import { classifyToolToStage } from './agent-phase';
 import type { PackageManagerDetector } from '@lib/detection/package-manager';
 import { AgentSignals, AgentErrorType } from './signals';
 import { AgentOutputSignals } from './output-signals';
@@ -1507,6 +1508,12 @@ function handleSDKMessage(
               tasks,
               sync: syncTasks,
             });
+          }
+
+          // Mirror the active tool into the Visualizer's "stage" indicator.
+          if (block.type === 'tool_use') {
+            const stage = classifyToolToStage((block as ToolUseBlock).name);
+            if (stage) getUI().setStage(stage);
           }
         }
       }
