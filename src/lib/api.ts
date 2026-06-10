@@ -1,6 +1,7 @@
 import axios, { AxiosError } from 'axios';
 import { z } from 'zod';
 import { analytics } from '@utils/analytics';
+import { getProxyRequestConfig } from '@utils/proxy';
 import { WIZARD_USER_AGENT } from './constants';
 
 /**
@@ -130,11 +131,13 @@ export async function fetchUserData(
   baseUrl: string,
 ): Promise<ApiUser> {
   try {
-    const response = await axios.get(`${baseUrl}/api/users/@me/`, {
+    const url = `${baseUrl}/api/users/@me/`;
+    const response = await axios.get(url, {
       headers: {
         Authorization: `Bearer ${accessToken}`,
         'User-Agent': WIZARD_USER_AGENT,
       },
+      ...getProxyRequestConfig(url),
     });
 
     return ApiUserSchema.parse(response.data);
@@ -197,11 +200,13 @@ export async function fetchProjectData(
   baseUrl: string,
 ): Promise<ApiProject> {
   try {
-    const response = await axios.get(`${baseUrl}/api/projects/${projectId}/`, {
+    const url = `${baseUrl}/api/projects/${projectId}/`;
+    const response = await axios.get(url, {
       headers: {
         Authorization: `Bearer ${accessToken}`,
         'User-Agent': WIZARD_USER_AGENT,
       },
+      ...getProxyRequestConfig(url),
     });
 
     return ApiProjectSchema.parse(response.data);

@@ -1,6 +1,7 @@
 import axios from 'axios';
 import { IS_DEV, WIZARD_USER_AGENT } from '@lib/constants';
 import type { CloudRegion } from './types';
+import { getProxyRequestConfig } from './proxy';
 
 export const getAssetHostFromHost = (host: string) => {
   if (host.includes('us.i.posthog.com')) {
@@ -62,9 +63,12 @@ export async function detectRegionFromToken(
     'User-Agent': WIZARD_USER_AGENT,
   };
 
+  const usUrl = 'https://us.posthog.com/api/users/@me/';
+  const euUrl = 'https://eu.posthog.com/api/users/@me/';
+
   const [usResult, euResult] = await Promise.allSettled([
-    axios.get('https://us.posthog.com/api/users/@me/', { headers }),
-    axios.get('https://eu.posthog.com/api/users/@me/', { headers }),
+    axios.get(usUrl, { headers, ...getProxyRequestConfig(usUrl) }),
+    axios.get(euUrl, { headers, ...getProxyRequestConfig(euUrl) }),
   ]);
 
   if (usResult.status === 'fulfilled') return 'us';
