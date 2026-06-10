@@ -218,20 +218,22 @@ export class LoggingUI implements WizardUI {
     // the session.
   }
 
+  private lastTodoLine = '';
+
   syncTodos(
     todos: Array<{ content: string; status: string; activeForm?: string }>,
   ): void {
     const completed = todos.filter(
       (t) => t.status === TaskStatus.Completed,
     ).length;
-    const inProgress = todos.find((t) => t.status === TaskStatus.InProgress);
-    if (inProgress) {
-      console.log(
-        `◌  [${completed}/${todos.length}] ${
-          inProgress.activeForm || inProgress.content
-        }`,
-      );
-    }
+    const active = todos.filter((t) => t.status === TaskStatus.InProgress);
+    if (active.length === 0) return;
+    const labels = active.map((t) => t.activeForm || t.content).join(' · ');
+    const line = `◌  [${completed}/${todos.length}] ${labels}`;
+    // The queue re-renders on every transition; print only what changed.
+    if (line === this.lastTodoLine) return;
+    this.lastTodoLine = line;
+    console.log(line);
   }
 
   setEventPlan(_events: Array<{ name: string; description: string }>): void {

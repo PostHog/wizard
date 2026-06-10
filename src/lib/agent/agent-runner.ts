@@ -31,10 +31,12 @@ import {
   AgentErrorType,
   AgentSignals,
   buildWizardMetadata,
+  isOrchestratorEnabled,
   checkAllSettingsConflicts,
   backupAndFixClaudeSettings,
   restoreClaudeSettings,
 } from './agent-interface';
+import { runOrchestrator } from '../programs/orchestrator/orchestrator-runner';
 import { getCloudUrlFromRegion } from '@utils/urls';
 import {
   evaluateWizardReadiness,
@@ -43,7 +45,12 @@ import {
   getBlockingServiceKeys,
   SERVICE_LABELS,
 } from '@lib/health-checks/readiness';
-import { enableDebugLogs, initLogFile, logToFile } from '@utils/debug';
+import {
+  enableDebugLogs,
+  getLogFilePath,
+  initLogFile,
+  logToFile,
+} from '@utils/debug';
 import { createBenchmarkPipeline } from '@lib/middleware/benchmark';
 import { wizardAbort, WizardError, registerCleanup } from '@utils/wizard-abort';
 import { formatScanReport, writeScanReport } from '@lib/yara-hooks';
@@ -199,6 +206,11 @@ export async function runProgram(
   programConfig: ProgramConfig,
 ): Promise<void> {
   const boot = await bootstrapProgram(session, config, programConfig);
+
+  if (isOrchestratorEnabled(boot.wizardFlags)) {
+    getUI().log.info('Task-queue orchestrator enabled.');
+    return runOrchestrator(session, programConfig, boot);
+  }
 
   return runLinearProgram(session, config, programConfig, boot);
 }
@@ -412,6 +424,7 @@ async function runLinearProgram(
         showQuestion: (q) => getUI().requestQuestion(q),
       });
 
+  getUI().log.step('Initializing Claude agent...');
   const agent = await initializeAgent(
     {
       workingDirectory: session.installDir,
@@ -433,6 +446,8 @@ async function runLinearProgram(
     },
     sessionToOptions(session),
   );
+  getUI().log.step(`Verbose logs: ${getLogFilePath()}`);
+  getUI().log.success("Agent initialized. Let's get cooking!");
 
   const middleware = session.benchmark
     ? createBenchmarkPipeline(spinner, sessionToOptions(session))
