@@ -7,6 +7,7 @@ import {
   buildRegistry,
   parseAgentPrompt,
   resolveTask,
+  taskModel,
   type AgentPrompt,
   type AgentRegistry,
   type OrchestratorPromptContext,
@@ -203,6 +204,23 @@ describe('resolveTask', () => {
     expect(resolveTask(registry, task, store).prompt).not.toContain(
       'Context from previous steps',
     );
+  });
+});
+
+describe('taskModel', () => {
+  const prompt = parseAgentPrompt(
+    '---\nmodel: prompt-model\n---\nx',
+    'capture',
+  );
+
+  it('prefers the enqueue override, then the prompt, then the default', () => {
+    const registry = registryOf([prompt]);
+    const task = { type: 'capture' };
+    expect(taskModel(registry, { ...task, model: 'override' } as never)).toBe(
+      'override',
+    );
+    expect(taskModel(registry, task as never)).toBe('prompt-model');
+    expect(taskModel(registryOf([]), task as never)).toBe('claude-sonnet-4-6');
   });
 });
 

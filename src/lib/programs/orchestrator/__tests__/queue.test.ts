@@ -7,6 +7,10 @@ import {
   type TaskHandoff,
 } from '@lib/programs/orchestrator/queue';
 
+jest.mock('@utils/analytics', () => ({
+  analytics: { captureException: jest.fn(), wizardCapture: jest.fn() },
+}));
+
 function tmpDir(): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'queue-test-'));
 }
@@ -131,5 +135,41 @@ describe('QueueStore', () => {
     expect(file.tasks).toHaveLength(1);
     expect(file.tasks[0].status).toBe('done');
     expect(file.tasks[0].handoff?.did).toBe('d');
+  });
+
+  it('notifies the transition listener with post-transition task state', () => {
+    const seen: Array<{ event: string; status: string; attempts: number }> = [];
+    const listened = new QueueStore(dir, 'run-2', {
+      onTransition: (event, task) =>
+        seen.push({ event, status: task.status, attempts: task.attempts }),
+    });
+
+    const t = listened.enqueue({ type: 'install' });
+    listened.start(t.id);
+    listened.fail(t.id, { type: 'API_ERROR', message: 'boom' });
+    listened.requeue(t.id);
+    listened.start(t.id);
+    listened.complete(t.id);
+
+    expect(seen).toEqual([
+      { event: 'enqueue', status: 'pending', attempts: 0 },
+      { event: 'start', status: 'in_progress', attempts: 1 },
+      { event: 'fail', status: 'failed', attempts: 1 },
+      { event: 'requeue', status: 'pending', attempts: 1 },
+      { event: 'start', status: 'in_progress', attempts: 2 },
+      { event: 'complete', status: 'done', attempts: 2 },
+    ]);
+  });
+
+  it('a throwing listener does not break transitions', () => {
+    const listened = new QueueStore(dir, 'run-3', {
+      onTransition: () => {
+        throw new Error('listener boom');
+      },
+    });
+    const t = listened.enqueue({ type: 'install' });
+    listened.start(t.id);
+    listened.complete(t.id);
+    expect(listened.get(t.id)?.status).toBe('done');
   });
 });
