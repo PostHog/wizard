@@ -9,6 +9,7 @@ import type { ApiUser } from '@lib/api';
 import { v4 as uuidv4 } from 'uuid';
 import { IS_PRODUCTION_BUILD } from '@env';
 import { debug, logToFile } from './debug';
+import { applyCiFlagOverrides } from './ci-flag-overrides';
 
 /**
  * Extract a standard property bag from the current session.
@@ -211,6 +212,7 @@ export class Analytics {
     if (this.activeFlags !== null) {
       return this.activeFlags;
     }
+    const out: Record<string, string> = {};
     try {
       const distinctId = this.distinctId ?? this.anonymousId;
       logToFile('[flags] evaluating as', {
@@ -222,18 +224,23 @@ export class Analytics {
         personProperties: this.flagPersonProperties(),
       });
       const flags = result.featureFlags ?? {};
-      const out: Record<string, string> = {};
       for (const [key, value] of Object.entries(flags)) {
         if (value === undefined) continue;
         out[key] = typeof value === 'boolean' ? String(value) : String(value);
       }
-      this.activeFlags = out;
-      logToFile('[flags] evaluated', out);
-      return out;
     } catch (error) {
       debug('Failed to get all feature flags:', error);
-      return {};
+      this.captureException(
+        error instanceof Error ? error : new Error(String(error)),
+        { step: 'get_all_flags' },
+      );
     }
+    // Outside the fetch guard on purpose: a malformed CI override must fail
+    // the run loudly, and a valid one applies even when the fetch failed —
+    // CI routing stays deterministic either way.
+    this.activeFlags = applyCiFlagOverrides(out);
+    logToFile('[flags] evaluated', this.activeFlags);
+    return this.activeFlags;
   }
 
   async shutdown(status: 'success' | 'error' | 'cancelled') {
