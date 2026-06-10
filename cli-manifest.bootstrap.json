@@ -22,7 +22,6 @@
       "role": "command",
       "parentCommand": "audit",
       "command": "all",
-      "recommended": true,
       "displayName": "PostHog audit",
       "description": "Audit an existing PostHog integration for correctness and best practices"
     },
@@ -39,6 +38,7 @@
       "role": "command",
       "parentCommand": "audit",
       "command": "events",
+      "recommended": true,
       "displayName": "PostHog audit — events",
       "description": "Audit a PostHog integration's event capture quality and cost-optimization opportunities"
     },
