@@ -1,8 +1,7 @@
-import { CLI_MANIFEST } from '@lib/programs/cli-manifest.generated';
 import { migrationConfig } from '@lib/programs/migration/index';
 
 import type { Command } from './command';
-import { skillCommandFactory } from './factories/skill-command-factory';
+import { flatSkillCommand } from './factories/flat-skill-command';
 
 /**
  * `wizard migrate` — flat skill command, Statsig today. Stays flat
@@ -10,22 +9,11 @@ import { skillCommandFactory } from './factories/skill-command-factory';
  * restructures into a family (parentCommand: migrate, command per
  * vendor) and the picker opens — a deliberate breaking change at that
  * point, not silent magic introduced now.
+ *
+ * Resolved from the manifest by skillId; falls back to the built-in
+ * config if the snapshot is missing the entry (see flatSkillCommand).
  */
-const migrateEntry = CLI_MANIFEST.entries.find(
-  (entry) =>
-    entry.role === 'command' &&
-    !entry.parentCommand &&
-    entry.command === 'migrate',
-);
-
-if (!migrateEntry) {
-  throw new Error(
-    'commands/migrate: no public `migrate` entry in CLI_MANIFEST. ' +
-      'Check cli-manifest.bootstrap.json or the latest context-mill release.',
-  );
-}
-
-export const migrateCommand: Command = skillCommandFactory(
-  migrateEntry,
+export const migrateCommand: Command = flatSkillCommand(
+  'migrate-statsig',
   migrationConfig,
 );

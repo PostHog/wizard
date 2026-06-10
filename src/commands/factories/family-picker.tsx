@@ -136,6 +136,11 @@ export function createFamilyPickerDefault(
   return async (argv) => {
     const chosen = await chooser(parentLabel, children);
     if (!chosen) return;
+    // We forward the PARENT's parsed argv straight to the chosen child. The
+    // child's own option defaults and `check` validator do NOT run on this
+    // path — they only run when the leaf is invoked directly
+    // (`wizard audit events`). Harmless while leaves declare neither, but if a
+    // leaf ever grows a `check` or a defaulted option, this path will skip it.
     await Promise.resolve(chosen.handler?.(argv));
   };
 }

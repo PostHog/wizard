@@ -1,4 +1,10 @@
-import type { Arguments, Argv, CommandModule, Options } from 'yargs';
+import type {
+  Arguments,
+  Argv,
+  CommandModule,
+  Options,
+  PositionalOptions,
+} from 'yargs';
 
 export interface Command {
   /** Yargs command name. Use `['$0']` for the default command. */
@@ -6,6 +12,14 @@ export interface Command {
   description: string;
   /** Flags exposed by this command. Same shape as yargs `.options()`. */
   options?: Record<string, Options>;
+  /**
+   * Positional arguments declared in `name` (e.g. the `id` in `skill [id]`).
+   * Under `.strictOptions()`, yargs only treats a positional as a known
+   * argument once it's registered via `.positional()` — a command-string
+   * positional alone is rejected as `Unknown argument`. Declare each one here
+   * so an optional positional like `skill [id]` actually accepts its value.
+   */
+  positionals?: Record<string, PositionalOptions>;
   /** Nested subcommands. */
   children?: readonly Command[];
   /** `--help` examples shown for this command. */
@@ -36,10 +50,11 @@ export interface Command {
    */
   interactiveDefault?: (argv: Arguments) => void | Promise<void>;
   /**
-   * When true, the family parent runs this child by default when invoked
-   * with no subcommand. At most one child per parent should be marked
-   * default. Propagated from the context-mill manifest's `default: true`
-   * field through `skillCommandFactory`.
+   * When true, this child is the "recommended" leaf in its family: the
+   * family picker pre-highlights it so a single Enter runs it. The picker
+   * still always opens — this never auto-runs the child. At most one child
+   * per parent should be marked. Propagated from the context-mill manifest
+   * entry's `recommended` flag through `skillCommandFactory`.
    */
   default?: boolean;
 }
@@ -59,6 +74,9 @@ export function toCommandModule(
     describe: cmd.description,
     builder: (y: Argv) => {
       let next = cmd.options ? y.options(cmd.options) : y;
+      for (const [key, opts] of Object.entries(cmd.positionals ?? {})) {
+        next = next.positional(key, opts);
+      }
       if (cmd.check) next = next.check(cmd.check);
       for (const [usage, description] of cmd.examples ?? []) {
         next = next.example(usage, description);
