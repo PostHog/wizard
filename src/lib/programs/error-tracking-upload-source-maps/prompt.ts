@@ -58,11 +58,13 @@ tasks, in this order — do not collapse, rename, or omit any of them:
   5. Write keys to .env
   6. Identify build & run commands
   7. Test the local setup
-  8. Summarise & hand off
+  8. Set up CI for auto-upload
+  9. Summarise & hand off
 Drive the list with TaskUpdate — mark a task in_progress when you start it
-and completed when done. ALWAYS keep task 7 ("Test the local setup") in the
-list even if the user declines testing in STEP 7: mark it completed rather
-than deleting it, so the user can see testing was offered.
+and completed when done. ALWAYS keep task 7 ("Test the local setup") and task
+8 ("Set up CI for auto-upload") in the list even if the user declines either
+in STEP 7 / STEP 8: mark them completed rather than deleting them, so the user
+can see each was offered.
 
 STEP 1 — Get a personal API key from the user. (skill: "Get a personal API key")
    The wizard cannot mint keys — never call the PostHog API or any tool to
@@ -83,7 +85,7 @@ STEP 1 — Get a personal API key from the user. (skill: "Get a personal API key
 STEP 2 — Install the skill.
    Call install_skill (wizard-tools MCP server) with skillId "${skillId}".
    Do NOT run shell commands to install skills. Then read the installed
-   SKILL.md and its reference files — they drive STEPS 3-8.
+   SKILL.md and its reference files — they drive STEPS 3-9.
    If install fails, emit ${AgentSignals.ERROR_RESOURCE_MISSING} skill ${skillId} could not be installed.
 
 STEP 3 — Apply build-config changes. (skill: "Apply build-config changes")
@@ -145,9 +147,45 @@ STEP 7 — Offer to test the local setup. (skill: "Test the local setup")
           options: [{ label: "Continue (revert test code)", value: "continue" }]
         }
    After the user continues, revert the test code per the skill's rules and
-   surface any failure in STEP 8.
+   surface any failure in STEP 9.
 
-STEP 8 — Summarise and hand off. (skill: "Verify and hand off")
+STEP 8 — Offer to set up CI for automatic uploads. (skill: "Set up CI for automatic uploads")
+   Source maps only upload when the production build runs, so the build's CI/CD
+   must carry the same upload credentials you wrote in STEP 5. Ask the user with
+   wizard_ask whether to wire this up now:
+     {
+       id: "ci-affordance",
+       prompt: "Want me to set up CI so source maps upload automatically on every deploy?\\n\\nI'll wire your upload credentials into your build pipeline (Dockerfile / GitHub Actions) wherever I recognise it.",
+       kind: "single",
+       options: [
+         { label: "Yes, set up CI", value: "yes" },
+         { label: "No, I'll handle CI myself", value: "no" }
+       ]
+     }
+   Keep the \\n line breaks exactly as written.
+
+   If "no", skip to STEP 9.
+
+   If "yes", follow the skill's "Set up CI for automatic uploads" step. It
+   tells you how to trace where the production build actually runs and how to
+   wire the credentials through every layer for each setup it covers
+   (Dockerfile, GitHub Actions, composite actions, builds over SSH). The
+   skill is the source of truth for that wiring; wizard-specific rules on top:
+   - Trace the deploy path by reading the project's files — do NOT ask the
+     user, and do NOT invent config that isn't there.
+   - Reuse the EXACT credential variable names you wrote in STEP 5.
+   - If you can't trace the build to a setup the skill covers, make NO CI
+     file changes — instead tell the user which env vars their build
+     environment must provide, or maps won't upload on deploy.
+   - NEVER write a secret VALUE into a Dockerfile, workflow, or any other
+     committed file — only variable names / \`secrets.*\` references.
+   - You CANNOT create CI secrets. Tell the user each secret to add under
+     their repo's Settings → Secrets and variables → Actions before the
+     next deploy.
+   - Carry every manual follow-up (secrets to add, the unrecognised-setup
+     note) into STEP 9.
+
+STEP 9 — Summarise and hand off. (skill: "Verify and hand off")
    Follow the skill's "Verify and hand off" step. The Symbol sets page for
    this project — where the user confirms the upload landed — is:
    ${uiHost}/project/${projectId}/error_tracking/configuration
