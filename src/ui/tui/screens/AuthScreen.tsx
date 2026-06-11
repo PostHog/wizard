@@ -1,15 +1,23 @@
 /**
  * AuthScreen — Shown while waiting for OAuth authentication.
  *
- * Displays framework detection results, beta/disclosure notices,
- * a waiting spinner, and the login URL when available.
+ * Displays framework detection, a compressed privacy summary, a waiting
+ * spinner, and the login URL when available. [I] opens the full
+ * PrivacyPanel as an overlay. [P] (when loginUrl is set) lets the user
+ * paste the callback URL by hand.
+ *
  * The router resolves past this screen once session.credentials is set.
  */
 
 import { Box, Text } from 'ink';
-import { useSyncExternalStore } from 'react';
+import { useState, useSyncExternalStore } from 'react';
 import type { WizardStore } from '@ui/tui/store';
-import { LoadingBox } from '@ui/tui/primitives/index';
+import {
+  ConfirmationInput,
+  LoadingBox,
+  ModalOverlay,
+} from '@ui/tui/primitives/index';
+import { PrivacyPanel } from '@ui/tui/components/PrivacyPanel';
 import { useKeyBindings } from '@ui/tui/hooks/useKeyBindings';
 import { Colors } from '@ui/tui/styles';
 
@@ -23,25 +31,63 @@ export const AuthScreen = ({ store }: AuthScreenProps) => {
     () => store.getSnapshot(),
   );
 
+  const [showPrivacy, setShowPrivacy] = useState(false);
   const { session } = store;
 
   // While the OAuth flow is waiting (loginUrl set), let the user paste the
   // callback URL/code by hand — the fallback for headless/remote shells where
   // the browser can't reach the local callback server.
   const canPasteCode = Boolean(session.loginUrl);
+
   useKeyBindings(
     'auth',
-    canPasteCode
-      ? [
+    showPrivacy
+      ? []
+      : [
+          ...(canPasteCode
+            ? [
+                {
+                  match: ['p', 'P'],
+                  label: 'P',
+                  action: 'paste auth code',
+                  handler: () => store.showManualAuthCode(),
+                },
+              ]
+            : []),
           {
-            match: ['p', 'P'],
-            label: 'P',
-            action: 'paste auth code',
-            handler: () => store.showManualAuthCode(),
+            match: ['i', 'I'],
+            label: 'I',
+            action: 'privacy info',
+            handler: () => setShowPrivacy(true),
           },
-        ]
-      : [],
+        ],
   );
+
+  if (showPrivacy) {
+    return (
+      <ModalOverlay
+        borderColor="cyan"
+        title="Privacy & data usage"
+        width={72}
+        footer={
+          <ConfirmationInput
+            message=""
+            confirmLabel=""
+            cancelLabel="Back [Esc]"
+            onConfirm={() => setShowPrivacy(false)}
+            onCancel={() => setShowPrivacy(false)}
+          />
+        }
+      >
+        <PrivacyPanel
+          noTelemetry={session.noTelemetry}
+          skillId={session.skillId}
+          localMcp={session.localMcp}
+        />
+      </ModalOverlay>
+    );
+  }
+
   const config = session.frameworkConfig;
   const frameworkLabel =
     session.detectedFrameworkLabel ?? config?.metadata.name;
@@ -55,7 +101,7 @@ export const AuthScreen = ({ store }: AuthScreenProps) => {
 
         {frameworkLabel && (
           <Text>
-            <Text color="green">{'\u2714'} </Text>
+            <Text color="green">{'✔'} </Text>
             <Text>Framework: {frameworkLabel}</Text>
           </Text>
         )}
@@ -70,6 +116,29 @@ export const AuthScreen = ({ store }: AuthScreenProps) => {
         {config?.metadata.preRunNotice && (
           <Text color="yellow">{config.metadata.preRunNotice}</Text>
         )}
+      </Box>
+
+      <Box flexDirection="column" marginBottom={1}>
+        <Text bold>Privacy at a glance</Text>
+        <Text dimColor>
+          {'•'} Source files {'→'} Anthropic Claude (AI context)
+        </Text>
+        <Text dimColor>{'•'} .env* files and secrets stay on your machine</Text>
+        <Text dimColor>
+          {'•'} Telemetry:{' '}
+          {session.noTelemetry ? (
+            <Text color="green">DISABLED</Text>
+          ) : (
+            <>
+              <Text color="yellow">ENABLED</Text> (
+              <Text color="cyan">--no-telemetry</Text> to disable)
+            </>
+          )}
+        </Text>
+        <Text dimColor>
+          Press <Text color={Colors.accent}>[I]</Text> for full privacy & data
+          usage info
+        </Text>
       </Box>
 
       <LoadingBox message="Waiting for authentication..." />
