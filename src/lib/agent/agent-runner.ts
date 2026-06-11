@@ -192,6 +192,14 @@ export async function runProgram(
   const skillsBaseUrl = getSkillsBaseUrl(session.localMcp);
 
   // 2. Health check (guarded — skip if TUI already ran it)
+  if (session.readinessResult) {
+    logToFile(
+      `[agent-runner] readiness pre-computed by TUI: decision=${session.readinessResult.decision}` +
+        `${
+          session.outageDismissed ? ' (outage dismissed by user)' : ''
+        } — skipping re-check`,
+    );
+  }
   if (!session.readinessResult) {
     logToFile('[agent-runner] evaluating wizard readiness');
     const readinessConfig = session.signup
@@ -271,6 +279,7 @@ export async function runProgram(
     projectId: session.projectId,
     email: session.email,
     region: session.region,
+    programId: programConfig.id,
   });
 
   session.credentials = { accessToken, projectApiKey, host, projectId };
@@ -359,6 +368,8 @@ export async function runProgram(
     sessionToOptions(session),
   );
 
+  logToFile('[agent-runner] agent initialized');
+
   const middleware = session.benchmark
     ? createBenchmarkPipeline(spinner, sessionToOptions(session))
     : undefined;
@@ -370,6 +381,7 @@ export async function runProgram(
     host,
     skillPath,
   });
+  logToFile(`[agent-runner] prompt assembled (${prompt.length} chars)`);
 
   // 8. Run agent
   const agentResult = await executeAgent(
