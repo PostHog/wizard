@@ -271,6 +271,7 @@ export const PostHogIntegrationIntroScreen = ({
       showDetection={showContinue}
       detectionRows={detectionRows}
       menuOptions={unsupported ? null : menuOptions}
+      menuAlign={view === 'more-info' ? 'left' : 'center'}
       onSelect={handleSelect}
       programLabel={session.programLabel}
       skillId={session.skillId}
