@@ -22,6 +22,7 @@ import { Colors } from '@ui/tui/styles';
 import { useSkillEntry } from '@ui/tui/screens/SkillSourceInfo';
 import { fetchUserData } from '@lib/api';
 import { getCloudUrlFromRegion } from '@utils/urls';
+import { POSTHOG_APP_URL } from '@lib/constants';
 import { analytics } from '@utils/analytics';
 import { LoadingBox } from '@ui/tui/primitives/index';
 
@@ -48,17 +49,15 @@ export const AiOptInRequiredScreen = ({
 
   const region = session.region ?? 'us';
   const projectId = session.credentials?.projectId;
-  const cloudUrl = getCloudUrlFromRegion(region);
-  // Org settings sit under a project context in PostHog's URL structure.
-  // Fall back to the project-less URL if we somehow don't have a projectId
-  // (shouldn't happen post-auth, but harmless if it does — PostHog will
-  // route the user to their default project).
+  // Use the region-agnostic app.posthog.com URL so the redirect routes
+  // the user to their actual region (us / eu) based on their profile.
+  // This avoids relying on a possibly-stale local session.region.
   // `projectId != null` (not just `projectId`) so that 0 — possible in
   // synthetic playground sessions — still picks the project-scoped URL.
   const settingsUrl =
     projectId != null
-      ? `${cloudUrl}/project/${projectId}/${SETTINGS_PATH}${SETTINGS_ANCHOR}`
-      : `${cloudUrl}/${SETTINGS_PATH}${SETTINGS_ANCHOR}`;
+      ? `${POSTHOG_APP_URL}/project/${projectId}/${SETTINGS_PATH}${SETTINGS_ANCHOR}`
+      : `${POSTHOG_APP_URL}/${SETTINGS_PATH}${SETTINGS_ANCHOR}`;
 
   const [showSkill, setShowSkill] = useState(false);
   const [retrying, setRetrying] = useState(false);
