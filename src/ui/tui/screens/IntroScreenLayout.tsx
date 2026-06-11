@@ -120,11 +120,13 @@ export const IntroScreenLayout = ({
           {showSubtitle && (
             <Box flexDirection="column" alignItems="center" marginTop={1}>
               <Text dimColor>
-                We'll use AI to analyze your project and complete work.
+                We'll use Anthropic Claude to analyze your project and complete
+                work.
               </Text>
               <Text dimColor>
-                .env* file contents will not leave your machine.
+                .env* files and secrets stay on your machine.
               </Text>
+              <Text dimColor>Details under "Privacy & data usage" below.</Text>
             </Box>
           )}
 

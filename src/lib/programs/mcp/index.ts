@@ -13,6 +13,7 @@ import { McpOutcome } from '@lib/wizard-session';
 
 export const mcpAddConfig: ProgramConfig = {
   id: 'mcp-add',
+  requiresAi: false,
   description: 'Add PostHog MCP server to supported clients',
   steps: [
     {
@@ -50,6 +51,7 @@ export const mcpAddConfig: ProgramConfig = {
  */
 export const mcpRemoveConfig: ProgramConfig = {
   id: 'mcp-remove',
+  requiresAi: false,
   description: 'Remove PostHog MCP server from supported clients',
   steps: [
     {
@@ -73,6 +75,7 @@ export const mcpRemoveConfig: ProgramConfig = {
  */
 export const mcpTutorialConfig: ProgramConfig = {
   id: 'mcp-tutorial',
+  requiresAi: false,
   description: 'Try the PostHog MCP with your agent — no install needed',
   steps: [
     {

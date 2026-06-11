@@ -16,7 +16,7 @@ import type { WizardStore } from '@ui/tui/store';
 import { Integration, WIZARD_TOOLS_MENU_FLAG_KEY } from '@lib/constants';
 import { PickerMenu, LoadingBox } from '@ui/tui/primitives/index';
 import { IntroScreenLayout, type DetectionRow } from './IntroScreenLayout.js';
-import { SkillSourceInfo, useSkillEntry } from './SkillSourceInfo.js';
+import { PrivacyPanel } from '@ui/tui/components/PrivacyPanel';
 import { releaseTerminal } from '@ui/tui/start-tui';
 import { analytics } from '@utils/analytics';
 
@@ -100,10 +100,6 @@ export const PostHogIntegrationIntroScreen = ({
   const config = session.frameworkConfig;
   const frameworkLabel =
     session.detectedFrameworkLabel ?? config?.metadata.name;
-  const { skillEntry, fetchFailed } = useSkillEntry(
-    session.skillId,
-    session.localMcp,
-  );
   const detecting = !session.detectionComplete;
   const needsFrameworkPick =
     session.detectionComplete && !session.frameworkConfig;
@@ -150,38 +146,11 @@ export const PostHogIntegrationIntroScreen = ({
     );
   } else if (view === 'more-info') {
     body = (
-      <Box flexDirection="column" width={56} flexShrink={0}>
-        <Text>
-          The wizard is an agent that executes PostHog tasks. Its code is open
-          source: <Text color="cyan">https://github.com/PostHog/wizard</Text>
-        </Text>
-        <Box flexDirection="column" marginTop={1}>
-          <Text>
-            The{' '}
-            <Text italic color="cyan">
-              {session.programLabel}
-            </Text>{' '}
-            program installs the PostHog SDKs, instruments event tracking, and
-            integrates the following dev tools for your application:
-          </Text>
-        </Box>
-        <Box flexDirection="column" marginTop={1} paddingLeft={4}>
-          <Text>{`\u2022`} Product Analytics</Text>
-          <Text>{`\u2022`} Web Analytics</Text>
-          <Text>{`\u2022`} Session Replay</Text>
-          <Text>{`\u2022`} Error Tracking</Text>
-        </Box>
-        <Box flexDirection="column" marginTop={1}>
-          <Text>If you prefer your own AI setup, download the skill:</Text>
-          <Box marginTop={1}>
-            <SkillSourceInfo
-              skillId={session.skillId}
-              skillEntry={skillEntry}
-              fetchFailed={fetchFailed}
-            />
-          </Box>
-        </Box>
-      </Box>
+      <PrivacyPanel
+        noTelemetry={session.noTelemetry}
+        skillId={session.skillId}
+        localMcp={session.localMcp}
+      />
     );
   } else if (showContinue) {
     body = (
@@ -264,7 +233,7 @@ export const PostHogIntegrationIntroScreen = ({
       { label: 'Continue', value: 'continue' },
       { label: 'Change framework', value: 'framework' },
       ...(toolsEnabled ? [{ label: 'Tools', value: 'tools' }] : []),
-      { label: 'More info', value: 'more-info' },
+      { label: 'Privacy & data usage', value: 'more-info' },
       { label: 'Cancel', value: 'cancel' },
     ];
   }
