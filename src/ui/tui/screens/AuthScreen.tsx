@@ -12,12 +12,9 @@
 import { Box, Text } from 'ink';
 import { useState, useSyncExternalStore } from 'react';
 import type { WizardStore } from '@ui/tui/store';
-import {
-  ConfirmationInput,
-  LoadingBox,
-  ModalOverlay,
-} from '@ui/tui/primitives/index';
+import { LoadingBox } from '@ui/tui/primitives/index';
 import { PrivacyPanel } from '@ui/tui/components/PrivacyPanel';
+import { IntroScreenLayout } from '@ui/tui/screens/IntroScreenLayout';
 import { useKeyBindings } from '@ui/tui/hooks/useKeyBindings';
 import { Colors } from '@ui/tui/styles';
 
@@ -65,26 +62,22 @@ export const AuthScreen = ({ store }: AuthScreenProps) => {
 
   if (showPrivacy) {
     return (
-      <ModalOverlay
-        borderColor="cyan"
-        title="Privacy & data usage"
-        width={72}
-        footer={
-          <ConfirmationInput
-            message=""
-            confirmLabel=""
-            cancelLabel="Back [Esc]"
-            onConfirm={() => setShowPrivacy(false)}
-            onCancel={() => setShowPrivacy(false)}
+      <IntroScreenLayout
+        installDir={session.installDir}
+        title="Wizard privacy & usage"
+        showSubtitle={false}
+        showDetection={false}
+        body={
+          <PrivacyPanel
+            noTelemetry={session.noTelemetry}
+            skillId={session.skillId}
+            localMcp={session.localMcp}
           />
         }
-      >
-        <PrivacyPanel
-          noTelemetry={session.noTelemetry}
-          skillId={session.skillId}
-          localMcp={session.localMcp}
-        />
-      </ModalOverlay>
+        menuOptions={[{ label: 'Back', value: 'back' }]}
+        menuAlign="left"
+        onSelect={() => setShowPrivacy(false)}
+      />
     );
   }
 
@@ -119,25 +112,25 @@ export const AuthScreen = ({ store }: AuthScreenProps) => {
       </Box>
 
       <Box flexDirection="column" marginBottom={1}>
-        <Text bold>Privacy at a glance</Text>
+        <Text bold>How does the wizard use your data?</Text>
         <Text dimColor>
-          {'•'} Source files {'→'} Anthropic Claude (AI context)
+          {'•'} Source files are read by Claude for AI context
         </Text>
-        <Text dimColor>{'•'} .env* files and secrets stay on your machine</Text>
+        <Text dimColor>{'•'} .env* and secrets stay on your machine</Text>
         <Text dimColor>
-          {'•'} Telemetry:{' '}
+          {'•'} Usage data{' '}
           {session.noTelemetry ? (
-            <Text color="green">DISABLED</Text>
+            <Text color="green">disabled</Text>
           ) : (
             <>
-              <Text color="yellow">ENABLED</Text> (
-              <Text color="cyan">--no-telemetry</Text> to disable)
+              <Text color="yellow">enabled by default</Text>, pass{' '}
+              <Text color="cyan">--no-telemetry</Text> to disable
             </>
           )}
         </Text>
         <Text dimColor>
-          Press <Text color={Colors.accent}>[I]</Text> for full privacy & data
-          usage info
+          Press <Text color={Colors.accent}>[I]</Text> for full privacy & usage
+          info
         </Text>
       </Box>
 

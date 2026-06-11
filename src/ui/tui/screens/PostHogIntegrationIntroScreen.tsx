@@ -113,7 +113,12 @@ export const PostHogIntegrationIntroScreen = ({
 
   // ── Title ──────────────────────────────────────────────────────────
 
-  const title = detecting ? 'PostHog Wizard starting up' : 'PostHog Wizard 🦔';
+  const title =
+    view === 'more-info'
+      ? 'Wizard privacy & usage'
+      : detecting
+      ? 'PostHog Wizard starting up'
+      : 'PostHog Wizard 🦔';
 
   // ── Description ────────────────────────────────────────────────────
 
