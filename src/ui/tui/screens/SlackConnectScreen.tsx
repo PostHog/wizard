@@ -42,7 +42,7 @@ export const SlackConnectScreen = ({ store }: SlackConnectScreenProps) => {
   );
 
   const role = store.session.roleAtOrganization;
-  const slack = getSlackAppCard(role);
+  const slack = getSlackAppCard();
   const connected = store.session.slackConnected === true;
 
   const dismiss = (choice: ChoiceValue): void => {
@@ -92,22 +92,16 @@ export const SlackConnectScreen = ({ store }: SlackConnectScreenProps) => {
         <Box marginTop={1}>
           <Text>
             {connected
-              ? 'Slack is connected. Tag @PostHog in any channel to analyze data and ship product changes — try:'
+              ? "Slack is connected — here's what you can do:"
               : slack.pitch}
           </Text>
         </Box>
 
-        {!connected && (
-          <Box marginTop={1}>
-            <Text dimColor>{slack.detail}</Text>
-          </Box>
-        )}
-
         <Box marginTop={1} flexDirection="column">
-          {slack.useCases.map((useCase, i) => (
+          {slack.capabilities.map((capability, i) => (
             <Box key={i}>
               <Text color="cyan">{Icons.diamond}</Text>
-              <Text> {useCase}</Text>
+              <Text> {capability}</Text>
             </Box>
           ))}
         </Box>

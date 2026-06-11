@@ -508,42 +508,15 @@
     { "product": "Error Tracking", "prompt": "List the top errors my users hit this week.", "description": "Built-in error tracking — no separate tool." }
   ],
 
-  "slackApp-note": "Presentation copy for the 'Take PostHog to Slack' surfaces (Goodbye card + dedicated step). These use-case strings are shown to the user, NOT sent to the agent — so the read/persistence prompt-scope rule above does not apply to them. Connecting Slack is a manual OAuth step in the PostHog app, so we link out to setupUrl rather than having the agent wire it up.",
+  "slackApp-note": "Presentation copy for the 'Take PostHog to Slack' surfaces (Goodbye card + dedicated step). These strings are shown to the user, NOT sent to the agent — so the read/persistence prompt-scope rule above does not apply. The two capabilities describe the Slack agent itself, not role-specific examples. Connecting Slack is a manual OAuth step in the PostHog app, so we link out to setupUrl rather than wiring it up.",
   "slackApp": {
     "learnMoreUrl": "https://posthog.com/slack-app",
     "setupUrl": "https://app.posthog.com/settings/project-integrations#integration-slack",
     "headline": "Take PostHog to Slack",
-    "pitch": "Analyze data and ship product changes straight from Slack — just tag @PostHog.",
-    "detail": "Ask a product question, run a query, deploy a feature flag, or open a PR — all without leaving Slack.",
-    "neutralUseCases": [
-      "Ask @PostHog product questions right in Slack",
-      "Get insights and dashboards delivered to your channels on a schedule"
-    ],
-    "useCasesByRole": {
-      "founder": [
-        "Post a weekly MAU / revenue digest to your channel",
-        "Ask @PostHog \"how did signups do this week?\" without opening PostHog"
-      ],
-      "product": [
-        "Deliver your onboarding funnel to #product on a schedule",
-        "Ask @PostHog about an experiment's results in Slack"
-      ],
-      "leadership": [
-        "Auto-deliver the board dashboard to your leadership channel",
-        "Ask @PostHog for the latest churn number before a meeting"
-      ],
-      "marketing": [
-        "Post campaign performance to #marketing on a schedule",
-        "Ask @PostHog what users did after your last campaign"
-      ],
-      "engineering": [
-        "Get error-spike alerts in #eng",
-        "Ask @PostHog to triage the top error — or open a PR from Slack"
-      ],
-      "data": [
-        "Schedule a SQL insight to land in #data",
-        "Ask @PostHog a data question without leaving Slack"
-      ]
-    }
+    "pitch": "You can also analyze product data and ship changes.",
+    "capabilities": [
+      "Tag @PostHog with a bug, edit, or a feature idea. It will spin up a sandboxed environment, plan, edit files, run tests, and open a draft PR.",
+      "Tag @PostHog with any data question. It's the same SQL-writing, statistically-minded assistant as PostHog AI, but it responds where you send work memes."
+    ]
   }
 }

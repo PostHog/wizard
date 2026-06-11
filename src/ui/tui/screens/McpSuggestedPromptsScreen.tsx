@@ -342,10 +342,10 @@ export const McpSuggestedPromptsScreen = ({
       // so the user can still start the tutorial. opn throws in headless
       // environments — swallow it; the URL is also printed on screen.
       if (process.env.NODE_ENV !== 'test') {
-        opn(getSlackAppCard(session.roleAtOrganization).setupUrl, {
+        opn(getSlackAppCard().setupUrl, {
           wait: false,
         }).catch(() => {
-          // No browser available — the printed URL is the fallback.
+          // No browser available.
         });
       }
     } else {
@@ -1031,7 +1031,26 @@ const GoodbyePhase = ({
   // "next time you open your IDE, try this" reminders.
   const kit = getRolePrompts(role, integration);
   const samples = kit.slice(0, 3);
-  const slack = getSlackAppCard(role);
+  const slack = getSlackAppCard();
+
+  // "Close" always dismisses; "Connect PostHog Slack agent" also opens the
+  // integration settings first. Only offered when Slack isn't already
+  // connected — connected users just get "Close".
+  const handleGoodbye = (value: string | string[]): void => {
+    const choice = Array.isArray(value) ? value[0] : value;
+    if (choice === 'connect-slack') {
+      analytics.wizardCapture('slack connect opened', {
+        role,
+        surface: 'goodbye',
+      });
+      if (process.env.NODE_ENV !== 'test') {
+        opn(slack.setupUrl, { wait: false }).catch(() => {
+          // No browser available.
+        });
+      }
+    }
+    onClose();
+  };
 
   const headline = engaged
     ? 'Nice work. You can keep talking to PostHog anytime.'
@@ -1073,10 +1092,11 @@ const GoodbyePhase = ({
         ))}
       </Box>
 
-      {/* "Take PostHog to Slack" — present the Slack app + role-tailored
-          use-cases. When Slack is already connected we confirm it and skip
-          the connect link; otherwise we nudge + link out to setup (a manual
-          OAuth step in the PostHog app — we never wire it up ourselves). */}
+      {/* "Take PostHog to Slack" — describe the Slack agent's two
+          capabilities. When already connected we confirm it and drop the
+          connect option; otherwise the "Connect PostHog Slack agent" menu
+          entry opens the integration settings (a manual OAuth step — we
+          never wire it up ourselves). */}
       <Box marginBottom={1} flexDirection="column">
         {slackConnected ? (
           <Text bold color={Colors.success}>
@@ -1090,28 +1110,18 @@ const GoodbyePhase = ({
         <Box marginTop={1}>
           <Text dimColor>
             {slackConnected
-              ? 'Tag @PostHog in your workspace to analyze data and ship product changes — try:'
+              ? "Slack is connected — here's what you can do:"
               : slack.pitch}
           </Text>
         </Box>
         <Box marginTop={1} flexDirection="column">
-          {slack.useCases.map((useCase, i) => (
+          {slack.capabilities.map((capability, i) => (
             <Box key={i}>
               <Text color={Colors.primary}>{Icons.triangleSmallRight}</Text>
               <Text> </Text>
-              <Text dimColor>{useCase}</Text>
+              <Text dimColor>{capability}</Text>
             </Box>
           ))}
-        </Box>
-        <Box marginTop={1} flexDirection="column">
-          {!slackConnected && (
-            <Text dimColor>
-              Connect it: <Text color="cyan">{slack.setupUrl}</Text>
-            </Text>
-          )}
-          <Text dimColor>
-            Learn more: <Text color="cyan">{slack.learnMoreUrl}</Text>
-          </Text>
         </Box>
       </Box>
 
@@ -1123,8 +1133,18 @@ const GoodbyePhase = ({
       </Box>
 
       <PickerMenu
-        options={[{ label: 'Close', value: 'close' }]}
-        onSelect={onClose}
+        options={
+          slackConnected
+            ? [{ label: 'Close', value: 'close' }]
+            : [
+                {
+                  label: 'Connect PostHog Slack agent',
+                  value: 'connect-slack',
+                },
+                { label: 'Close', value: 'close' },
+              ]
+        }
+        onSelect={handleGoodbye}
       />
     </Box>
   );

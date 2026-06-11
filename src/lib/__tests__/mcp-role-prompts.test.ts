@@ -283,48 +283,27 @@ describe('getCrossSellPrompts', () => {
 });
 
 describe('getSlackAppCard', () => {
-  it('returns the neutral card with populated fields for null role', () => {
-    const card = getSlackAppCard(null);
+  it('returns a populated, role-independent card', () => {
+    const card = getSlackAppCard();
     expect(card.headline).toBeTruthy();
     expect(card.pitch).toBeTruthy();
-    expect(card.detail).toBeTruthy();
-    expect(card.useCases.length).toBeGreaterThan(0);
-    for (const useCase of card.useCases) {
-      expect(useCase).toBeTruthy();
+    expect(card.capabilities).toHaveLength(2);
+    for (const capability of card.capabilities) {
+      expect(capability).toBeTruthy();
     }
   });
 
-  it('returns the neutral card for unknown roles', () => {
-    const known = getSlackAppCard('founder');
-    const unknown = getSlackAppCard('not-a-real-role');
-    const neutral = getSlackAppCard(null);
-    // Unknown roles fall back to the neutral use-cases, not a role kit.
-    expect(unknown.useCases).toEqual(neutral.useCases);
-    expect(unknown.useCases).not.toEqual(known.useCases);
-  });
-
   it('exposes the documented learn-more and setup URLs', () => {
-    const card = getSlackAppCard(null);
+    const card = getSlackAppCard();
     expect(card.learnMoreUrl).toBe('https://posthog.com/slack-app');
     expect(card.setupUrl).toBe(
       'https://app.posthog.com/settings/project-integrations#integration-slack',
     );
   });
 
-  it('returns role-specific use-cases for every TAILORED_ROLE', () => {
-    for (const role of TAILORED_ROLES) {
-      const card = getSlackAppCard(role);
-      expect(card.useCases.length).toBeGreaterThan(0);
-      for (const useCase of card.useCases) {
-        expect(useCase).toBeTruthy();
-      }
-    }
-  });
-
-  it('produces distinct use-case sets across roles', () => {
-    const fingerprints = new Set(
-      TAILORED_ROLES.map((r) => getSlackAppCard(r).useCases.join('|')),
-    );
-    expect(fingerprints.size).toBeGreaterThanOrEqual(3);
+  it('describes both Slack agent capabilities — code/PR and data', () => {
+    const [code, data] = getSlackAppCard().capabilities;
+    expect(code).toMatch(/PR/i);
+    expect(data).toMatch(/data question|SQL/i);
   });
 });

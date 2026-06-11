@@ -87,13 +87,12 @@ export interface SlackAppCard {
   headline: string;
   /** One-line hook covering both analysis and shipping. */
   pitch: string;
-  /** Longer elaboration shown where there's room (e.g. the dedicated step). */
-  detail: string;
   /** posthog.com/slack-app — "learn more". */
   learnMoreUrl: string;
   /** settings/project-integrations#integration-slack — where the user connects Slack. */
   setupUrl: string;
-  useCases: string[];
+  /** The Slack agent's two capabilities (code/PR + data) — fixed, not role-tailored. */
+  capabilities: string[];
 }
 
 export const FOLLOW_UP_EXIT_SENTINEL = '__follow_up_exit__';
@@ -150,9 +149,7 @@ const SLACK_APP = copyData.slackApp as {
   setupUrl: string;
   headline: string;
   pitch: string;
-  detail: string;
-  neutralUseCases: string[];
-  useCasesByRole: Record<TailoredRole, string[]>;
+  capabilities: string[];
 };
 
 // ── Framework family map ───────────────────────────────────────────────
@@ -338,20 +335,16 @@ export function getCrossSellPrompts(
 }
 
 /**
- * Resolve the "Take PostHog to Slack" card for the current role. Known
- * roles get tailored use-cases; unknown roles fall back to the neutral
- * pair. The static fields (headline, pitch, URLs) are role-independent.
+ * Resolve the "Take PostHog to Slack" card. Role-independent — the Slack
+ * agent's two capabilities (code/PR + data) describe the product itself,
+ * not role-specific examples.
  */
-export function getSlackAppCard(role: string | null | undefined): SlackAppCard {
-  const useCases = isTailoredRole(role)
-    ? SLACK_APP.useCasesByRole[role]
-    : SLACK_APP.neutralUseCases;
+export function getSlackAppCard(): SlackAppCard {
   return {
     headline: SLACK_APP.headline,
     pitch: SLACK_APP.pitch,
-    detail: SLACK_APP.detail,
     learnMoreUrl: SLACK_APP.learnMoreUrl,
     setupUrl: SLACK_APP.setupUrl,
-    useCases,
+    capabilities: SLACK_APP.capabilities,
   };
 }
