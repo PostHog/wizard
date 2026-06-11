@@ -47,8 +47,9 @@ export const PrivacyPanel = ({
 
       <Box marginTop={1}>
         <Text>
-          Telemetry is enabled by default. You can disable it by passing
-          <Text color="green">--no-telemetry</Text>.
+          We collect anonymous usage metrics (run count, errors, cost) — never
+          your source code or prompts, and nothing is used for AI training. Pass{' '}
+          <Text color="green">--no-telemetry</Text> to opt out.
         </Text>
       </Box>
 
