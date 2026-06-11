@@ -1116,10 +1116,14 @@ const GoodbyePhase = ({
         </Box>
         <Box marginTop={1} flexDirection="column">
           {slack.capabilities.map((capability, i) => (
-            <Box key={i}>
-              <Text color={Colors.primary}>{Icons.triangleSmallRight}</Text>
-              <Text> </Text>
-              <Text dimColor>{capability}</Text>
+            // Marker + copy in one <Text> so the (long) line wraps as a
+            // single flow. Separate row-Box siblings drop the marker on
+            // wrapped bullets — see TipsCard for the same pattern.
+            <Box key={i} marginTop={i === 0 ? 0 : 1}>
+              <Text dimColor>
+                <Text color={Colors.primary}>{Icons.triangleSmallRight} </Text>
+                {capability}
+              </Text>
             </Box>
           ))}
         </Box>

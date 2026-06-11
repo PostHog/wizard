@@ -99,9 +99,14 @@ export const SlackConnectScreen = ({ store }: SlackConnectScreenProps) => {
 
         <Box marginTop={1} flexDirection="column">
           {slack.capabilities.map((capability, i) => (
-            <Box key={i}>
-              <Text color="cyan">{Icons.diamond}</Text>
-              <Text> {capability}</Text>
+            // Marker + copy in one <Text> so the (long) line wraps as a
+            // single flow — separate row-Box siblings drop the marker on
+            // wrapped bullets.
+            <Box key={i} marginTop={i === 0 ? 0 : 1}>
+              <Text>
+                <Text color="cyan">{Icons.diamond} </Text>
+                {capability}
+              </Text>
             </Box>
           ))}
         </Box>
