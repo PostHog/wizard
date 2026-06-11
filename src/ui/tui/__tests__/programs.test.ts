@@ -100,6 +100,69 @@ describe('PROGRAM_SEQUENCES', () => {
     });
   });
 
+  describe('AI opt-in gate predicate', () => {
+    const orgWith = (
+      is_ai_data_processing_approved: boolean | null | undefined,
+    ) =>
+      ({
+        organization: { is_ai_data_processing_approved },
+      } as never);
+
+    it('hides the gate while apiUser is null (transient between emits)', () => {
+      const session = buildSession({});
+      const entry = getEntry(Program.PostHogIntegration, ScreenId.AiOptIn);
+
+      expect(session.apiUser).toBeNull();
+      expect(entry.show?.(session)).toBe(false);
+      expect(entry.isComplete?.(session)).toBe(false);
+    });
+
+    it('hides the gate when the org has opted in (true)', () => {
+      const session = buildSession({});
+      session.apiUser = orgWith(true);
+      const entry = getEntry(Program.PostHogIntegration, ScreenId.AiOptIn);
+
+      expect(entry.show?.(session)).toBe(false);
+      expect(entry.isComplete?.(session)).toBe(true);
+    });
+
+    it('shows the gate when the org has explicitly opted out (false)', () => {
+      const session = buildSession({});
+      session.apiUser = orgWith(false);
+      const entry = getEntry(Program.PostHogIntegration, ScreenId.AiOptIn);
+
+      expect(entry.show?.(session)).toBe(true);
+      expect(entry.isComplete?.(session)).toBe(false);
+    });
+
+    it('shows the gate when the field is null (legacy org, matches Max)', () => {
+      const session = buildSession({});
+      session.apiUser = orgWith(null);
+      const entry = getEntry(Program.PostHogIntegration, ScreenId.AiOptIn);
+
+      expect(entry.show?.(session)).toBe(true);
+      expect(entry.isComplete?.(session)).toBe(false);
+    });
+
+    it('shows the gate when the field is undefined (matches Max)', () => {
+      const session = buildSession({});
+      session.apiUser = orgWith(undefined);
+      const entry = getEntry(Program.PostHogIntegration, ScreenId.AiOptIn);
+
+      expect(entry.show?.(session)).toBe(true);
+      expect(entry.isComplete?.(session)).toBe(false);
+    });
+
+    it('is omitted entirely from programs with requiresAi: false', () => {
+      // posthog-doctor sets requiresAi: false — withAiOptInGate should skip
+      // injection so the gate never appears in the sequence.
+      const entry = PROGRAM_SEQUENCES[Program.PosthogDoctor].find(
+        (e) => e.id === ScreenId.AiOptIn,
+      );
+      expect(entry).toBeUndefined();
+    });
+  });
+
   describe('Wizard run predicate', () => {
     it('stays incomplete while run is idle or running', () => {
       const session = buildSession({});

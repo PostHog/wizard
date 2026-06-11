@@ -11,7 +11,11 @@ import {
   PROGRAM_REGISTRY,
   type ProgramId,
 } from '@lib/programs/program-registry';
-import { createProgramSequence } from '@lib/programs/program-step';
+import {
+  createProgramSequence,
+  type ProgramConfig,
+  type ProgramStep,
+} from '@lib/programs/program-step';
 
 /** Screens that participate in linear programs. */
 export enum ScreenId {
@@ -41,6 +45,7 @@ export enum ScreenId {
   Exit = 'exit',
   McpAdd = 'mcp-add',
   McpRemove = 'mcp-remove',
+  AiOptIn = 'ai-opt-in',
 }
 
 export interface Screen {
@@ -55,11 +60,49 @@ export interface Screen {
 /** An ordered list of screens — a program's screen journey. */
 export type Sequence = Screen[];
 
+/**
+ * Inject the AI opt-in gate step after `auth` for any program whose
+ * agent run touches Anthropic Claude. `requiresAi: false` opts out; the
+ * default is to gate. Programs without an `auth` step skip injection —
+ * `apiUser` would never be populated for evaluation anyway.
+ *
+ * The gate predicate matches Max's strict reading: only literal `true`
+ * proceeds; `null` / `undefined` / `false` all block.
+ */
+function withAiOptInGate(config: ProgramConfig): ProgramStep[] {
+  if (config.requiresAi === false) return config.steps;
+
+  const authIdx = config.steps.findIndex((s) => s.id === 'auth');
+  if (authIdx === -1) return config.steps;
+
+  const gateStep: ProgramStep = {
+    id: 'ai-opt-in',
+    label: 'AI opt-in check',
+    screenId: ScreenId.AiOptIn,
+    // Only fire once apiUser has actually been populated — between
+    // setCredentials and setApiUser there's a brief emitChange window
+    // where apiUser is null, and we don't want to flash the gate then.
+    // Once apiUser is set, mirror Max's strict reading (only literal
+    // `true` proceeds).
+    show: (session) =>
+      session.apiUser != null &&
+      !session.apiUser.organization?.is_ai_data_processing_approved,
+    isComplete: (session) =>
+      !!session.apiUser?.organization?.is_ai_data_processing_approved,
+  };
+
+  return [
+    ...config.steps.slice(0, authIdx + 1),
+    gateStep,
+    ...config.steps.slice(authIdx + 1),
+  ];
+}
+
 /** All program screen sequences keyed by program id. */
 export const PROGRAM_SEQUENCES: Record<ProgramId, Sequence> =
   Object.fromEntries(
     PROGRAM_REGISTRY.map((c) => [
       c.id,
-      createProgramSequence(c.steps) as Sequence,
+      createProgramSequence(withAiOptInGate(c)) as Sequence,
     ]),
   ) as Record<ProgramId, Sequence>;
