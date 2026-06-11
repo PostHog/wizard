@@ -28,6 +28,11 @@ export const cliAddCommand: Command = {
         'Write to an explicit instructions file instead of a detected agent',
       type: 'string',
     },
+    all: {
+      default: false,
+      describe: 'Install for every detected agent without prompting',
+      type: 'boolean',
+    },
   },
   examples: [
     ['wizard cli add', 'Detect your coding agents and pick one'],
@@ -35,11 +40,18 @@ export const cliAddCommand: Command = {
       'wizard cli add --agent claude-code',
       'Install for Claude Code (~/.claude/CLAUDE.md)',
     ],
+    ['wizard cli add --all', 'Install for every detected agent'],
     [
       'wizard cli add --path ./AGENTS.md',
       'Install into a specific instructions file',
     ],
   ],
+  check: (argv) => {
+    if (argv.all && (argv.agent || argv.path)) {
+      throw new Error('--all cannot be combined with --agent or --path');
+    }
+    return true;
+  },
   handler: (argv) => {
     void runCliAdd(argv);
   },
@@ -104,6 +116,15 @@ async function resolveTargetFiles(argv: Arguments): Promise<string[]> {
       `Supported agents: ${CLI_STEERING_TARGETS.map((t) => t.id).join(', ')}`,
     );
     return [];
+  }
+
+  if (argv.all === true) {
+    ui.log.info(
+      `Installing for all detected agents: ${detected
+        .map((t) => t.name)
+        .join(', ')}`,
+    );
+    return detected.map((target) => target.instructionsPath());
   }
 
   if (detected.length === 1) {
