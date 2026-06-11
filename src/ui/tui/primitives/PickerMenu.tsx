@@ -1,7 +1,9 @@
 /**
  * PickerMenu — Single and multi select.
- * Single mode: custom renderer with small triangle indicator.
- * Multi mode: checkbox glyphs with space to toggle.
+ * Single mode: custom renderer with small triangle indicator; enter selects.
+ * Multi mode: checkbox glyphs toggled with enter, plus a focusable
+ *   Confirm button below the options. The cursor moves onto the button and
+ *   enter submits — see MultiPickerMenu for the rationale.
  *
  * Key bindings are declared via useKeyBindings, which auto-registers
  * hints in the KeyboardHintsBar.
@@ -11,6 +13,7 @@ import { Box, Text } from 'ink';
 import { useState } from 'react';
 import { Icons, Colors } from '@ui/tui/styles';
 import { PromptLabel } from './PromptLabel.js';
+import { ConfirmButton } from './ConfirmButton.js';
 import {
   useKeyBindings,
   KeyMatch,
@@ -196,7 +199,18 @@ const SinglePickerMenu = <T,>({
   );
 };
 
-/** Custom multi-select with checkbox glyphs and accent highlight. */
+/**
+ * Custom multi-select with checkbox glyphs and accent highlight.
+ *
+ * Interaction model (shared with GroupedPickerMenu):
+ *   - \u2191\u2193 move the cursor through the options AND onto the Confirm button,
+ *     which lives just past the last option.
+ *   - enter toggles the focused option (no more "space toggles but enter
+ *     advances" split that tripped people up). Space is kept as an
+ *     undocumented alias, but the hints bar advertises only enter.
+ *   - moving onto the Confirm button and pressing enter submits the
+ *     current selection.
+ */
 const MultiPickerMenu = <T,>({
   message,
   options,
@@ -213,8 +227,17 @@ const MultiPickerMenu = <T,>({
   onSelect: (value: T | T[]) => void;
 }) => {
   const [focused, setFocused] = useState(0);
+  // When true, the cursor is on the Confirm button rather than an option.
+  const [onButton, setOnButton] = useState(false);
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const rows = Math.ceil(options.length / columns);
+
+  const confirm = () => {
+    const values = [...selected]
+      .sort((a, b) => a - b)
+      .map((i) => options[i].value);
+    onSelect(values);
+  };
 
   const bindings: KeyBinding[] = [
     {
@@ -222,31 +245,50 @@ const MultiPickerMenu = <T,>({
       label: '\u2191\u2193',
       action: 'navigate',
       handler: (_input, key) => {
-        const col = Math.floor(focused / rows);
-        const row = focused % rows;
-
         if (key.upArrow) {
+          if (onButton) {
+            // Button \u2192 bottom of the grid.
+            setOnButton(false);
+            setFocused(options.length - 1);
+            return;
+          }
+          const col = Math.floor(focused / rows);
+          const row = focused % rows;
           if (row > 0) {
             setFocused(col * rows + row - 1);
           } else {
-            setFocused(Math.min(col * rows + rows - 1, options.length - 1));
+            // Top row \u2192 wrap up onto the button.
+            setOnButton(true);
           }
         }
         if (key.downArrow) {
+          if (onButton) {
+            // Button \u2192 top of the grid.
+            setOnButton(false);
+            setFocused(0);
+            return;
+          }
+          const col = Math.floor(focused / rows);
+          const row = focused % rows;
           const next = col * rows + row + 1;
           if (next < options.length && row + 1 < rows) {
             setFocused(next);
           } else {
-            setFocused(col * rows);
+            // Bottom row \u2192 down onto the button.
+            setOnButton(true);
           }
         }
       },
     },
     {
-      match: KeyMatch.Space,
-      label: 'space',
-      action: 'toggle',
+      match: [KeyMatch.Space, KeyMatch.Return],
+      label: 'enter',
+      action: 'select',
       handler: () => {
+        if (onButton) {
+          confirm();
+          return;
+        }
         setSelected((prev) => {
           const next = new Set(prev);
           if (next.has(focused)) {
@@ -258,22 +300,6 @@ const MultiPickerMenu = <T,>({
         });
       },
     },
-    {
-      match: KeyMatch.Return,
-      label: 'enter',
-      action: 'confirm',
-      handler: () => {
-        if (selected.size === 0) {
-          const hovered = options[focused];
-          if (hovered) {
-            onSelect(hovered.value);
-          }
-        } else {
-          const values = [...selected].sort().map((i) => options[i].value);
-          onSelect(values);
-        }
-      },
-    },
   ];
 
   if (columns > 1) {
@@ -282,6 +308,7 @@ const MultiPickerMenu = <T,>({
       label: '\u2190\u2192',
       action: 'navigate',
       handler: (_input, key) => {
+        if (onButton) return;
         const col = Math.floor(focused / rows);
         const row = focused % rows;
 
@@ -317,7 +344,7 @@ const MultiPickerMenu = <T,>({
           <Box key={colIdx} flexDirection="column">
             {colOpts.map((opt, rowIdx) => {
               const flatIdx = colIdx * rows + rowIdx;
-              const isFocused = flatIdx === focused;
+              const isFocused = !onButton && flatIdx === focused;
               const isSelected = selected.has(flatIdx);
               const label = opt.hint ? `${opt.label} (${opt.hint})` : opt.label;
               const checkbox = isSelected
@@ -343,6 +370,9 @@ const MultiPickerMenu = <T,>({
             })}
           </Box>
         ))}
+      </Box>
+      <Box marginTop={1} marginLeft={centered ? 0 : 2}>
+        <ConfirmButton focused={onButton} count={selected.size} />
       </Box>
     </Box>
   );
