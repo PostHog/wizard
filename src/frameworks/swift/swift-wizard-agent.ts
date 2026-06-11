@@ -20,7 +20,6 @@ export const SWIFT_AGENT_CONFIG: FrameworkConfig<SwiftContext> = {
   metadata: {
     name: 'Swift (iOS/macOS)',
     integration: Integration.swift,
-    beta: true,
     docsUrl: 'https://posthog.com/docs/libraries/ios',
     preRunNotice:
       'Please close the Xcode project before proceeding. Xcode may overwrite changes the wizard makes to project files.',
