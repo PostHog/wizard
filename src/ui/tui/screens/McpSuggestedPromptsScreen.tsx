@@ -180,6 +180,19 @@ export const McpSuggestedPromptsScreen = ({
         store.setApiUser(user);
         store.setLoginUrl(null);
         setPhase(Phase.Greeting);
+
+        // Fire-and-forget: detect whether Slack is already connected so the
+        // Goodbye card and the dedicated Connect-Slack step can adapt their
+        // copy (confirm it's on vs. nudge to connect). Best-effort — on
+        // failure `slackConnected` stays null and renders as "not connected".
+        void services
+          .checkSlackConnected(credentials)
+          .then((connected) => {
+            if (!cancelled) store.setSlackConnected(connected);
+          })
+          .catch(() => {
+            /* best-effort; leave slackConnected unknown */
+          });
       } catch (err) {
         if (cancelled) return;
         const message = err instanceof Error ? err.message : String(err);
@@ -514,6 +527,7 @@ export const McpSuggestedPromptsScreen = ({
             role={session.roleAtOrganization}
             integration={session.integration}
             engaged={branchHistory.length > 0}
+            slackConnected={session.slackConnected}
             onClose={closeWizard}
           />
         )}
@@ -530,8 +544,6 @@ interface ChoosePhaseProps {
 }
 
 const ChoosePhase = ({ error, onSelect }: ChoosePhaseProps) => {
-  // setupUrl is role-independent — resolve it once for the fallback link.
-  const slackSetupUrl = getSlackAppCard(null).setupUrl;
   return (
     <Box flexDirection="column">
       <Text bold color={Colors.accent}>
@@ -568,11 +580,6 @@ const ChoosePhase = ({ error, onSelect }: ChoosePhaseProps) => {
           You can also connect PostHog to Slack, so you can analyze data and
           ship product changes there by tagging <Text bold>@PostHog</Text>.
         </Text>
-        <Box marginTop={1}>
-          <Text dimColor>
-            Connect it: <Text color="cyan">{slackSetupUrl}</Text>
-          </Text>
-        </Box>
       </Box>
 
       <Box marginTop={1}>
@@ -1007,6 +1014,8 @@ interface GoodbyePhaseProps {
   integration: Integration | null;
   /** True if the user actually ran at least one prompt this session. */
   engaged: boolean;
+  /** Whether Slack is already connected (null = unknown → treat as not). */
+  slackConnected: boolean | null;
   onClose: () => void;
 }
 
@@ -1015,6 +1024,7 @@ const GoodbyePhase = ({
   role,
   integration,
   engaged,
+  slackConnected,
   onClose,
 }: GoodbyePhaseProps) => {
   // Take 3 starter prompts from the role-tailored kit. These act as
@@ -1064,14 +1074,25 @@ const GoodbyePhase = ({
       </Box>
 
       {/* "Take PostHog to Slack" — present the Slack app + role-tailored
-          use-cases and link out to setup. We link rather than wire it up:
-          connecting Slack is a manual OAuth step in the PostHog app. */}
+          use-cases. When Slack is already connected we confirm it and skip
+          the connect link; otherwise we nudge + link out to setup (a manual
+          OAuth step in the PostHog app — we never wire it up ourselves). */}
       <Box marginBottom={1} flexDirection="column">
-        <Text bold color={Colors.accent}>
-          {slack.headline}
-        </Text>
+        {slackConnected ? (
+          <Text bold color={Colors.success}>
+            {Icons.check} Slack connected
+          </Text>
+        ) : (
+          <Text bold color={Colors.accent}>
+            {slack.headline}
+          </Text>
+        )}
         <Box marginTop={1}>
-          <Text dimColor>{slack.pitch}</Text>
+          <Text dimColor>
+            {slackConnected
+              ? 'Tag @PostHog in your workspace to analyze data and ship product changes — try:'
+              : slack.pitch}
+          </Text>
         </Box>
         <Box marginTop={1} flexDirection="column">
           {slack.useCases.map((useCase, i) => (
@@ -1083,9 +1104,11 @@ const GoodbyePhase = ({
           ))}
         </Box>
         <Box marginTop={1} flexDirection="column">
-          <Text dimColor>
-            Connect it: <Text color="cyan">{slack.setupUrl}</Text>
-          </Text>
+          {!slackConnected && (
+            <Text dimColor>
+              Connect it: <Text color="cyan">{slack.setupUrl}</Text>
+            </Text>
+          )}
           <Text dimColor>
             Learn more: <Text color="cyan">{slack.learnMoreUrl}</Text>
           </Text>

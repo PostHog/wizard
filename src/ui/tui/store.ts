@@ -554,6 +554,11 @@ export class WizardStore {
     this.emitChange();
   }
 
+  setSlackConnected(connected: boolean): void {
+    this.$session.setKey('slackConnected', connected);
+    this.emitChange();
+  }
+
   setOutroDismissed(): void {
     this.$session.setKey('outroDismissed', true);
     this.emitChange();

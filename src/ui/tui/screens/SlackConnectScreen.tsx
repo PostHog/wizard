@@ -3,12 +3,16 @@
  * MCP tutorial (`wizard mcp tutorial`) and after a successful install
  * (`wizard mcp add`).
  *
- * Presents the PostHog Slack app plus role-tailored use-cases and links
- * out to the integration settings page. We link rather than wire it up:
- * connecting Slack is a manual OAuth step in the PostHog app, so the
- * wizard never performs the connection itself. Picking "Open Slack setup"
- * launches the browser at the setup URL; either choice dismisses the step
- * (setting `slackStepDismissed`) and lets the router advance to exit.
+ * Presents the PostHog Slack app plus role-tailored use-cases. The copy
+ * adapts to whether Slack is already connected (`session.slackConnected`,
+ * detected post-login):
+ *   • not connected (or unknown) — nudge + "Open Slack setup", which
+ *     launches the browser at the integration settings page. We link
+ *     rather than wire it up: connecting Slack is a manual OAuth step.
+ *   • already connected — confirm it and skip the connect CTA, so users
+ *     who already have it aren't nagged.
+ * Either path dismisses the step (`slackStepDismissed`) and lets the
+ * router advance to exit.
  */
 
 import { Box, Text } from 'ink';
@@ -39,6 +43,7 @@ export const SlackConnectScreen = ({ store }: SlackConnectScreenProps) => {
 
   const role = store.session.roleAtOrganization;
   const slack = getSlackAppCard(role);
+  const connected = store.session.slackConnected === true;
 
   const dismiss = (choice: ChoiceValue): void => {
     if (choice === ChoiceValue.Open) {
@@ -52,7 +57,7 @@ export const SlackConnectScreen = ({ store }: SlackConnectScreenProps) => {
         });
       }
     } else {
-      analytics.wizardCapture('slack connect skipped', { role });
+      analytics.wizardCapture('slack connect skipped', { role, connected });
     }
     store.setSlackStepDismissed();
   };
@@ -66,7 +71,7 @@ export const SlackConnectScreen = ({ store }: SlackConnectScreenProps) => {
     {
       match: KeyMatch.Escape,
       label: 'esc',
-      action: 'skip',
+      action: connected ? 'done' : 'skip',
       handler: () => dismiss(ChoiceValue.Skip),
     },
   ]);
@@ -74,17 +79,29 @@ export const SlackConnectScreen = ({ store }: SlackConnectScreenProps) => {
   return (
     <Box flexDirection="column" flexGrow={1}>
       <Box marginTop={1} flexDirection="column">
-        <Text bold color={Colors.accent}>
-          {slack.headline}
-        </Text>
+        {connected ? (
+          <Text bold color={Colors.success}>
+            {Icons.check} Slack connected
+          </Text>
+        ) : (
+          <Text bold color={Colors.accent}>
+            {slack.headline}
+          </Text>
+        )}
 
         <Box marginTop={1}>
-          <Text>{slack.pitch}</Text>
+          <Text>
+            {connected
+              ? 'Slack is connected. Tag @PostHog in any channel to analyze data and ship product changes — try:'
+              : slack.pitch}
+          </Text>
         </Box>
 
-        <Box marginTop={1}>
-          <Text dimColor>{slack.detail}</Text>
-        </Box>
+        {!connected && (
+          <Box marginTop={1}>
+            <Text dimColor>{slack.detail}</Text>
+          </Box>
+        )}
 
         <Box marginTop={1} flexDirection="column">
           {slack.useCases.map((useCase, i) => (
@@ -96,9 +113,11 @@ export const SlackConnectScreen = ({ store }: SlackConnectScreenProps) => {
         </Box>
 
         <Box marginTop={1} flexDirection="column">
-          <Text dimColor>
-            Connect it: <Text color="cyan">{slack.setupUrl}</Text>
-          </Text>
+          {!connected && (
+            <Text dimColor>
+              Connect it: <Text color="cyan">{slack.setupUrl}</Text>
+            </Text>
+          )}
           <Text dimColor>
             Learn more: <Text color="cyan">{slack.learnMoreUrl}</Text>
           </Text>
@@ -106,10 +125,14 @@ export const SlackConnectScreen = ({ store }: SlackConnectScreenProps) => {
 
         <Box marginTop={1}>
           <PickerMenu
-            options={[
-              { label: 'Open Slack setup', value: ChoiceValue.Open },
-              { label: 'Skip', value: ChoiceValue.Skip },
-            ]}
+            options={
+              connected
+                ? [{ label: 'Done', value: ChoiceValue.Skip }]
+                : [
+                    { label: 'Open Slack setup', value: ChoiceValue.Open },
+                    { label: 'Skip', value: ChoiceValue.Skip },
+                  ]
+            }
             onSelect={handleSelect}
           />
         </Box>
