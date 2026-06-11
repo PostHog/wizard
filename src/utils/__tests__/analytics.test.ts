@@ -269,6 +269,72 @@ describe('Analytics', () => {
     });
   });
 
+  describe('setUser', () => {
+    const fullUser = {
+      distinct_id: 'user-789',
+      email: 'jane@example.com',
+      organization: {
+        id: 'org-uuid',
+        name: 'Acme Inc',
+        customer_id: 'cus_abc',
+      },
+      team: { id: 1, uuid: 'team-uuid', organization: 'org-uuid' },
+      organizations: [],
+    } as unknown as ApiUser;
+
+    it('sets distinct_id, email, organization tags, and groups', () => {
+      analytics.setUser(fullUser, 'https://us.posthog.com');
+      analytics.capture('test event');
+
+      expect(mockPostHogInstance.alias).toHaveBeenCalledWith({
+        distinctId: 'user-789',
+        alias: 'test-uuid',
+      });
+      expect(mockPostHogInstance.capture).toHaveBeenCalledWith({
+        distinctId: 'user-789',
+        event: 'test event',
+        properties: {
+          $app_name: 'wizard',
+          email: 'jane@example.com',
+          organization_id: 'org-uuid',
+          organization_name: 'Acme Inc',
+        },
+      });
+    });
+
+    it('only sets groups when user is null', () => {
+      analytics.setUser(null, 'https://us.posthog.com');
+      analytics.capture('test event');
+
+      expect(mockPostHogInstance.alias).not.toHaveBeenCalled();
+      expect(mockPostHogInstance.capture).toHaveBeenCalledWith({
+        distinctId: 'test-uuid',
+        event: 'test event',
+        properties: { $app_name: 'wizard' },
+      });
+    });
+
+    it('skips email tag when email is missing', () => {
+      const userWithoutEmail = {
+        ...fullUser,
+        email: null,
+      } as unknown as ApiUser;
+
+      analytics.setUser(userWithoutEmail, 'https://us.posthog.com');
+      analytics.capture('test event');
+
+      expect(mockPostHogInstance.capture).toHaveBeenCalledWith({
+        distinctId: 'user-789',
+        event: 'test event',
+        properties: {
+          $app_name: 'wizard',
+          organization_id: 'org-uuid',
+          organization_name: 'Acme Inc',
+        },
+      });
+    });
+  });
+
   describe('integration with other methods', () => {
     it('should work correctly with setTag and captureException', () => {
       const error = new Error('Test error');

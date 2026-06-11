@@ -431,6 +431,8 @@ export async function getOrAskForProjectData(
       // best-effort
     }
 
+    analytics.setUser(user, host);
+
     return {
       host,
       projectApiKey: projectData.api_token,
@@ -570,7 +572,7 @@ async function askForWizardLogin(options: {
 
   getUI().log.success('Login complete.');
   analytics.setTag('opened-wizard-link', true);
-  analytics.setDistinctId(data.distinctId);
+  analytics.setUser(userData, host);
 
   return data;
 }
@@ -605,6 +607,9 @@ async function askForProvisioningSignup(
     const cloudRegion: CloudRegion = host.includes('eu.') ? 'eu' : 'us';
 
     analytics.setTag('provisioning-signup', true);
+    analytics.setDistinctId(email);
+    analytics.setTag('email', email);
+    analytics.setGroups({ instance: host });
 
     return {
       accessToken: result.accessToken,
