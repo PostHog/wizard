@@ -23,7 +23,9 @@ describe('getProgramConfig', () => {
     expect(getProgramConfig('posthog-integration').id).toBe(
       'posthog-integration',
     );
-    expect(getProgramConfig('revenue-analytics-setup').command).toBe('revenue');
+    expect(getProgramConfig('revenue-analytics-setup').command).toBe(
+      'revenue-analytics',
+    );
   });
 });
 
@@ -33,7 +35,7 @@ describe('getSubcommandPrograms', () => {
     const commands = subcommands.map((c) => c.command);
 
     expect(commands).toContain('integrate');
-    expect(commands).toContain('revenue');
+    expect(commands).toContain('revenue-analytics');
     for (const config of subcommands) {
       expect(config.command).toBeTruthy();
     }

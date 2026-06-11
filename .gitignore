@@ -41,8 +41,3 @@ e2e-tests/fixtures/.tracking/*
 
 # Generated at build time by scripts/generate-version.js
 src/lib/version.ts
-
-# Generated at build time by scripts/generate-cli-manifest.cjs
-src/lib/programs/cli-manifest.generated.ts
-.cache/cli-manifest.json
-.cache/cli-manifest.schema.json

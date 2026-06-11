@@ -198,8 +198,8 @@ export interface ProgramConfig {
   /**
    * LearnCard deck rendered in the shared `RunScreen` while the agent
    * runs. Lives at `<program>/content/index.tsx` by convention.
-   * Programs that ship a custom RunScreen variant (audit, audit-3000)
-   * or skip the run step (posthog-doctor) leave this unset.
+   * Programs that ship a custom RunScreen variant (audit) or skip the
+   * run step (posthog-doctor) leave this unset.
    */
   getContentBlocks?: (store?: WizardStore) => ContentBlock[];
   /**

@@ -1,8 +1,8 @@
+import type { Arguments } from 'yargs';
+
 import { agentSkillConfig } from '@lib/programs/program-registry';
-import {
-  CLI_MANIFEST,
-  type CliManifestEntry,
-} from '@lib/programs/cli-manifest.generated';
+import { getSkillsBaseUrl } from '@lib/constants';
+import { fetchSkillMenu, type CliEntry } from '@lib/wizard-tools';
 
 import { dispatchProgram, mergeCommandOptions } from './factories/shared';
 import type { Command } from './command';
@@ -11,25 +11,34 @@ import type { Command } from './command';
  * `wizard skill`        — list the runnable skills in the catalog.
  * `wizard skill <name>` — run that one skill.
  *
- * Two forms, nothing else: bare lists, named runs. The listing is the menu;
- * the name picks from it. Anything you see listed, you can run by name.
- *
- * Running dispatches the generic `agent-skill` program with the chosen skill
- * id, so any catalogued skill is runnable without being promoted to a
- * top-level command of its own.
- *
- * Catalog source is the build-time `CLI_MANIFEST` snapshot. `internal` skills
- * are kept out of both the listing and the runnable set (reachable only via
- * the hidden `--skill=<id>` dev escape hatch), mirroring how internal flags
- * stay out of `--help`.
+ * The catalog is fetched live from `skill-menu.json` each invocation —
+ * no baked snapshot. `internal` skills are excluded from both the listing
+ * and the runnable set; they're reachable only via the hidden
+ * `--skill=<id>` dev escape hatch.
  */
-const BROWSABLE_ROLES = new Set(['command', 'skill']);
+const BROWSABLE_ROLES: ReadonlySet<CliEntry['role']> = new Set([
+  'command',
+  'skill',
+]);
 
-function browsableEntries(): CliManifestEntry[] {
-  return CLI_MANIFEST.entries.filter((e) => BROWSABLE_ROLES.has(e.role));
+async function fetchBrowsableEntries(
+  argv: Arguments,
+): Promise<CliEntry[] | null> {
+  const skillsBaseUrl = getSkillsBaseUrl(Boolean(argv['local-mcp']));
+  const menu = await fetchSkillMenu(skillsBaseUrl);
+  if (!menu) return null;
+  return (menu.cliEntries ?? []).filter((e) => BROWSABLE_ROLES.has(e.role));
 }
 
-function formatEntry(entry: CliManifestEntry): string {
+function failFetch(): never {
+  process.stderr.write(
+    `\n\x1b[1;91m✖ Couldn't reach the skill registry.\x1b[0m\n` +
+      `  Check your network connection and try again.\n\n`,
+  );
+  process.exit(1);
+}
+
+function formatEntry(entry: CliEntry): string {
   const path = entry.parentCommand
     ? `wizard ${entry.parentCommand} ${entry.command}`
     : entry.command
@@ -40,11 +49,9 @@ function formatEntry(entry: CliManifestEntry): string {
   }`;
 }
 
-function printEntries(entries: readonly CliManifestEntry[]): void {
+function printEntries(entries: readonly CliEntry[]): void {
   if (entries.length === 0) {
-    process.stdout.write(
-      'No skills found. The CLI manifest may not have been fetched yet — run a build with network access.\n',
-    );
+    process.stdout.write('No skills found.\n');
     return;
   }
   process.stdout.write(
@@ -68,20 +75,24 @@ const searchCommand: Command = {
     },
   },
   handler: (argv) => {
-    const query = String(argv.query ?? '').toLowerCase();
-    if (!query) {
-      process.stdout.write('No query provided.\n');
-      return;
-    }
-    const matches = browsableEntries().filter(
-      (entry) =>
-        entry.skillId.toLowerCase().includes(query) ||
-        entry.displayName.toLowerCase().includes(query) ||
-        entry.description.toLowerCase().includes(query) ||
-        (entry.command?.toLowerCase().includes(query) ?? false) ||
-        (entry.parentCommand?.toLowerCase().includes(query) ?? false),
-    );
-    printEntries(matches);
+    void (async () => {
+      const query = String(argv.query ?? '').toLowerCase();
+      if (!query) {
+        process.stdout.write('No query provided.\n');
+        return;
+      }
+      const entries = await fetchBrowsableEntries(argv);
+      if (!entries) failFetch();
+      const matches = entries.filter(
+        (entry) =>
+          entry.skillId.toLowerCase().includes(query) ||
+          entry.displayName.toLowerCase().includes(query) ||
+          entry.description.toLowerCase().includes(query) ||
+          (entry.command?.toLowerCase().includes(query) ?? false) ||
+          (entry.parentCommand?.toLowerCase().includes(query) ?? false),
+      );
+      printEntries(matches);
+    })();
   },
 };
 
@@ -97,30 +108,25 @@ export const skillCommand: Command = {
     },
   },
   handler: (argv) => {
-    // The name the user types is the skill's name straight from the listing
-    // (its context-mill skill id, e.g. `audit-events`). There's no separate
-    // "id" — name and id are the same readable string here.
-    const name = (argv.name as string | undefined)?.trim();
+    void (async () => {
+      const name = (argv.name as string | undefined)?.trim();
+      const entries = await fetchBrowsableEntries(argv);
+      if (!entries) failFetch();
 
-    // Bare `wizard skill` — list the runnable catalog so the user sees what
-    // they can run, then exit. No TUI, no agent run.
-    if (!name) {
-      printEntries(browsableEntries());
-      return;
-    }
+      if (!name) {
+        printEntries(entries);
+        return;
+      }
 
-    // `wizard skill <name>` — run that skill, but only if the catalog knows
-    // it. `skill` is a user-facing surface, so we refuse unknown (or internal)
-    // names rather than handing an arbitrary string to the agent runner. You
-    // can run anything the bare listing shows; nothing else.
-    const runnable = browsableEntries().some((entry) => entry.skillId === name);
-    if (!runnable) {
-      process.stderr.write(
-        `\x1b[1;91m✖ Unknown skill "${name}".\x1b[0m Run \`wizard skill\` to see what you can run.\n`,
-      );
-      process.exit(1);
-    }
+      const runnable = entries.some((entry) => entry.skillId === name);
+      if (!runnable) {
+        process.stderr.write(
+          `\x1b[1;91m✖ Unknown skill "${name}".\x1b[0m Run \`wizard skill\` to see what you can run.\n`,
+        );
+        process.exit(1);
+      }
 
-    dispatchProgram({ ...agentSkillConfig, skillId: name }, argv);
+      dispatchProgram({ ...agentSkillConfig, skillId: name }, argv);
+    })();
   },
 };

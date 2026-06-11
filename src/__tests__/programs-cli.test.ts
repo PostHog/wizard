@@ -6,57 +6,57 @@ jest.mock('@lib/runners', () => ({
   runWizardCI: mockRunWizardCI,
 }));
 
+jest.mock('@lib/wizard-tools', () => {
+  const actual = jest.requireActual('@lib/wizard-tools');
+  return {
+    ...actual,
+    fetchSkillMenu: jest.fn(),
+  };
+});
+
 import type { Arguments } from 'yargs';
-import type { Command } from '../commands/command';
 import { auditCommand } from '../commands/audit';
 import { migrateCommand } from '../commands/migrate';
 import { revenueCommand } from '../commands/revenue';
+import { dispatchFamily } from '@lib/programs/dispatch-family';
+import { fetchSkillMenu, type CliEntry } from '@lib/wizard-tools';
+import { auditConfig } from '@lib/programs/audit/index';
+import { webAnalyticsDoctorConfig } from '@lib/programs/web-analytics-doctor/index';
 import { parseCommand } from './helpers/parse-command.no-jest';
+
+const mockFetchSkillMenu = fetchSkillMenu as jest.MockedFunction<
+  typeof fetchSkillMenu
+>;
 
 function makeArgv(extra: Record<string, unknown> = {}): Arguments {
   return { _: [], $0: 'wizard', ...extra } as Arguments;
 }
 
-function findChild(parent: Command, name: string): Command | undefined {
-  return parent.children?.find((c) => {
-    const first = Array.isArray(c.name) ? c.name[0] : c.name;
-    return first.split(/\s+/)[0] === name;
-  });
+function entry(partial: Partial<CliEntry> & { skillId: string }): CliEntry {
+  return {
+    role: 'command',
+    displayName: partial.skillId,
+    description: `desc for ${partial.skillId}`,
+    ...partial,
+  };
 }
 
-describe('program commands', () => {
+function mockMenu(cliEntries: CliEntry[]): void {
+  mockFetchSkillMenu.mockResolvedValue({ categories: {}, cliEntries });
+}
+
+describe('top-level command shapes', () => {
   beforeEach(() => {
     jest.clearAllMocks();
   });
 
-  test('each top-level command exposes its CLI name', () => {
-    expect(auditCommand.name).toBe('audit');
-    expect(migrateCommand.name).toBe('migrate');
-    expect(revenueCommand.name).toBe('revenue-analytics');
-  });
-
-  test('audit nests web-analytics-doctor as a wizard-native child', () => {
-    expect(auditCommand.children).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ name: 'web-analytics' }),
-      ]),
-    );
-  });
-
-  test('audit exposes a subcommand for each public manifest entry', () => {
-    const names = (auditCommand.children ?? []).map((c) =>
-      Array.isArray(c.name) ? c.name[0] : c.name,
-    );
-    expect(names).toEqual(
-      expect.arrayContaining([
-        'all',
-        'autocapture',
-        'events',
-        'feature-flags',
-        'identify',
-        'session-replay',
-      ]),
-    );
+  test('audit registers as a family with a [skill] positional', () => {
+    expect(auditCommand.name).toBe('audit [skill]');
+    // The family parent dispatches via dispatchFamily; subcommands are
+    // resolved at runtime, not declared as static yargs children.
+    expect(auditCommand.children).toBeUndefined();
+    expect(auditCommand.handler).toBeDefined();
+    expect(auditCommand.interactiveDefault).toBeDefined();
   });
 
   test('migrate is a flat command while only one vendor exists', () => {
@@ -64,33 +64,81 @@ describe('program commands', () => {
     expect(migrateCommand.children).toBeUndefined();
   });
 
-  test('audit family has no top-level handler (subcommand required)', () => {
-    expect(auditCommand.handler).toBeUndefined();
+  test('revenue-analytics is a flat skill command', () => {
+    expect(revenueCommand.name).toBe('revenue-analytics');
+    expect(revenueCommand.children).toBeUndefined();
   });
 
-  test('audit events dispatches to runWizard by default', () => {
-    const child = findChild(auditCommand, 'events');
-    expect(child).toBeDefined();
-    child!.handler!(makeArgv({ debug: true }));
+  test('audit exposes the shared skill options on the parent', () => {
+    expect(auditCommand.options).toMatchObject({
+      'install-dir': expect.any(Object),
+    });
+  });
+});
+
+describe('dispatchFamily', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  test('routes a skill-backed subcommand to runWizard with the resolved skillId', async () => {
+    mockMenu([
+      entry({
+        skillId: 'audit-events',
+        command: 'events',
+        parentCommand: 'audit',
+      }),
+    ]);
+    await dispatchFamily('audit', makeArgv({ skill: 'events', debug: true }));
     expect(mockRunWizard).toHaveBeenCalledTimes(1);
     expect(mockRunWizardCI).not.toHaveBeenCalled();
-    expect(mockRunWizard.mock.calls[0][1]).toMatchObject({ debug: true });
+    const [config, opts] = mockRunWizard.mock.calls[0] as [
+      { skillId?: string },
+      Record<string, unknown>,
+    ];
+    expect(config.skillId).toBe('audit-events');
+    expect(opts).toMatchObject({ debug: true });
   });
 
-  test('audit events dispatches to runWizardCI when --ci is set', () => {
-    const child = findChild(auditCommand, 'events');
-    child!.handler!(makeArgv({ ci: true }));
+  test('routes through runWizardCI when --ci is set', async () => {
+    mockMenu([
+      entry({
+        skillId: 'audit-events',
+        command: 'events',
+        parentCommand: 'audit',
+      }),
+    ]);
+    await dispatchFamily('audit', makeArgv({ skill: 'events', ci: true }));
     expect(mockRunWizardCI).toHaveBeenCalledTimes(1);
     expect(mockRunWizard).not.toHaveBeenCalled();
   });
 
-  test('skillCommandFactory injects the manifest entry skillId into the dispatched config', () => {
-    const events = findChild(auditCommand, 'events');
-    events!.handler!(makeArgv());
-    const dispatchedConfig = mockRunWizard.mock.calls[0][0] as {
-      skillId?: string;
-    };
-    expect(dispatchedConfig.skillId).toBe('audit-events');
+  test('runs the wizard-native handler for `audit web-analytics` without touching the registry', async () => {
+    // fetchSkillMenu must not be reached for natives — verifies the native
+    // override short-circuits before any network work.
+    await dispatchFamily('audit', makeArgv({ skill: 'web-analytics' }));
+    expect(mockFetchSkillMenu).not.toHaveBeenCalled();
+    expect(mockRunWizard).toHaveBeenCalledTimes(1);
+    const [config] = mockRunWizard.mock.calls[0] as [{ id?: string }];
+    expect(config.id).toBe(webAnalyticsDoctorConfig.id);
+  });
+
+  test('the comprehensive `audit all` runs the specialized auditConfig, not agent-skill', async () => {
+    // skillId 'audit' (what context-mill emits for `audit all`) signals
+    // the wizard to use auditConfig (custom hooks, content blocks).
+    mockMenu([
+      entry({ skillId: 'audit', command: 'all', parentCommand: 'audit' }),
+    ]);
+    await dispatchFamily('audit', makeArgv({ skill: 'all' }));
+    expect(mockRunWizard).toHaveBeenCalledTimes(1);
+    const [config] = mockRunWizard.mock.calls[0] as [{ id?: string }];
+    expect(config.id).toBe(auditConfig.id);
+  });
+});
+
+describe('flat skill commands', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
   });
 
   test('migrate dispatches with migrate-statsig skillId', () => {
@@ -103,31 +151,21 @@ describe('program commands', () => {
     expect(opts.installDir).toBe('/tmp/some-app');
   });
 
-  test('revenue-analytics is a flat skill command', () => {
-    expect(revenueCommand.name).toBe('revenue-analytics');
-    expect(revenueCommand.children).toBeUndefined();
+  test('revenue-analytics dispatches with revenue-analytics-setup skillId', () => {
     revenueCommand.handler!(makeArgv({ debug: true }));
     const [config] = mockRunWizard.mock.calls[0] as [{ skillId?: string }];
     expect(config.skillId).toBe('revenue-analytics-setup');
   });
+});
 
-  test('exposes the shared skill options on each command', () => {
-    const child = findChild(auditCommand, 'events');
-    // Global flags (--debug, --local-mcp, --benchmark, --yara-report, --ci)
-    // live in wizard.ts GLOBAL_OPTIONS now, so they're applied at the
-    // parser level rather than mirrored onto every command's options.
-    // Only per-command flags are asserted here.
-    expect(child!.options).toMatchObject({
-      'install-dir': expect.any(Object),
-    });
-  });
-
-  test('camelCases --install-dir end-to-end through yargs', async () => {
+describe('yargs parsing for the audit family', () => {
+  test('camelCases --install-dir end-to-end', async () => {
     const argv = await parseCommand(
       auditCommand,
       'audit events --install-dir /tmp/app',
     );
     expect(argv.installDir).toBe('/tmp/app');
+    expect(argv.skill).toBe('events');
   });
 
   test('parses audit web-analytics through yargs', async () => {
@@ -136,5 +174,6 @@ describe('program commands', () => {
       'audit web-analytics --install-dir /tmp/app',
     );
     expect(argv.installDir).toBe('/tmp/app');
+    expect(argv.skill).toBe('web-analytics');
   });
 });

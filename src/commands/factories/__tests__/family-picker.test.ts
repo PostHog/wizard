@@ -172,7 +172,12 @@ describe('auditCommand', () => {
     expect(typeof auditCommand.interactiveDefault).toBe('function');
   });
 
-  it('still exposes children so yargs can route `wizard audit <leaf>`', () => {
-    expect(auditCommand.children?.length).toBeGreaterThan(0);
+  it('routes leaves through a runtime handler (no static yargs children)', () => {
+    // Skill-backed audit leaves resolve via `dispatchFamily` at runtime
+    // against `cliEntries` in `skill-menu.json`, not via baked yargs
+    // children. So `auditCommand.children` is intentionally empty; the
+    // `[skill]` positional + handler is the routing surface.
+    expect(auditCommand.children).toBeUndefined();
+    expect(typeof auditCommand.handler).toBe('function');
   });
 });
