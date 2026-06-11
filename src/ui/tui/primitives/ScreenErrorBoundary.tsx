@@ -30,8 +30,7 @@ export class ScreenErrorBoundary extends Component<Props, State> {
   componentDidCatch(error: Error): void {
     const { store } = this.props;
 
-    // console output lands in the alt screen and is wiped on unmount —
-    // the file log is the durable record.
+    // The console.error below is wiped with the alt screen; this survives.
     logToFile('[screen-error-boundary]', error);
     // eslint-disable-next-line no-console
     console.error('[ScreenErrorBoundary]', error.message, error.stack);

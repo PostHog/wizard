@@ -73,9 +73,7 @@ export function startTUI(
   const cleanup = () => {
     if (cleaned) return;
     cleaned = true;
-    // Anything printed into the alt screen (including stack traces from
-    // Ink's patched console) is destroyed here — timestamp the teardown
-    // so the log shows when terminal output stopped being visible.
+    // Timestamp the teardown — everything printed into the alt screen dies here.
     logToFile(
       `[start-tui] unmounting TUI, leaving alt screen (exitCode=${
         process.exitCode ?? 'unset'

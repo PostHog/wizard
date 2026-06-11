@@ -13,9 +13,8 @@ function stringify(value: unknown): string {
   if (typeof value === 'string') return value;
   if (value instanceof Error) return value.stack ?? String(value);
   try {
-    // JSON.stringify returns undefined for functions/symbols/undefined and
-    // throws on circular values — fall back to util.inspect so a crash log
-    // line is never silently dropped.
+    // JSON.stringify throws on cycles and skips some values — fall back to
+    // inspect so a crash log line is never dropped.
     return JSON.stringify(value, null, 2) ?? inspect(value, { depth: 3 });
   } catch {
     return inspect(value, { depth: 3 });
