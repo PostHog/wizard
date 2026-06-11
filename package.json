@@ -117,6 +117,7 @@
     "test:e2e": "pnpm build && ./e2e-tests/run.sh",
     "test:e2e-record": "export RECORD_FIXTURES=true && pnpm build && ./e2e-tests/run.sh",
     "try": "tsx bin.ts",
+    "preview:ai-opt-in": "tsx scripts/preview-ai-opt-in.tsx",
     "dev": "pnpm build && pnpm link --global && pnpm build:watch",
     "test:watch": "jest --watch",
     "prepare": "husky",
