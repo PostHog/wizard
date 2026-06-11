@@ -68,11 +68,7 @@ export const AuthScreen = ({ store }: AuthScreenProps) => {
         showSubtitle={false}
         showDetection={false}
         body={
-          <PrivacyPanel
-            noTelemetry={session.noTelemetry}
-            skillId={session.skillId}
-            localMcp={session.localMcp}
-          />
+          <PrivacyPanel skillId={session.skillId} localMcp={session.localMcp} />
         }
         menuOptions={[{ label: 'Back', value: 'back' }]}
         menuAlign="left"
@@ -99,6 +95,10 @@ export const AuthScreen = ({ store }: AuthScreenProps) => {
           </Text>
         )}
 
+        {/* Dead path today — every framework went GA, so no config has
+            metadata.beta = true. Kept intentionally for the next time we
+            ship a framework integration in beta. Set `beta: true` on the
+            framework's config and this rendering re-activates. */}
         {config?.metadata.beta && (
           <Text color="yellow">
             [BETA] The {config.metadata.name} wizard is in beta. Questions or
