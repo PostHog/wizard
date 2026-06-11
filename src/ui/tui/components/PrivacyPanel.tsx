@@ -5,13 +5,9 @@
  * identically from the intro screen ("Privacy & data usage" menu option)
  * and as an overlay from the auth screen ([I] keystroke).
  *
- * Sections:
- *   - Open source         (trust signal)
- *   - Leaves your machine (source files → Claude, run metadata → telemetry)
- *   - Stays on your machine (.env*, secrets, anything matched by YARA)
- *   - Telemetry status    (reflects session.noTelemetry)
- *   - BYOAI escape        (SkillSourceInfo — the strongest privacy out)
- *   - Terms / Privacy / Contact
+ * Compact layout — must fit in a default-sized macOS Terminal (~24
+ * rows) without scrolling. Sections are visually grouped with bold
+ * headers and a single blank line between them; no nested margin boxes.
  */
 
 import type { ReactNode } from 'react';
@@ -26,6 +22,7 @@ import {
   SkillSourceInfo,
   useSkillEntry,
 } from '@ui/tui/screens/SkillSourceInfo';
+import { Divider } from '@ui/tui/primitives/index';
 
 interface PrivacyPanelProps {
   /** Reflects session.noTelemetry — controls the telemetry status line. */
@@ -45,12 +42,10 @@ export const PrivacyPanel = ({
 
   return (
     <Box flexDirection="column" width={64} flexShrink={0}>
-      <Section title="Open source">
-        <Text>
-          The wizard's code is open:{' '}
-          <Text color="cyan">{POSTHOG_WIZARD_REPO_URL}</Text>
-        </Text>
-      </Section>
+      <Text>
+        Wizard is open source —{' '}
+        <Text color="cyan">{POSTHOG_WIZARD_REPO_URL}</Text>
+      </Text>
 
       <Section title="Leaves your machine">
         <Bullet>Source files → Anthropic Claude (AI context)</Bullet>
@@ -62,41 +57,43 @@ export const PrivacyPanel = ({
         <Bullet>Anything matched by the security scanner</Bullet>
       </Section>
 
-      <Section title="Telemetry">
-        {noTelemetry ? (
-          <Text>
-            <Text color="green">DISABLED</Text> (via --no-telemetry)
-          </Text>
-        ) : (
-          <Text>
-            <Text color="yellow">ENABLED</Text> — run with{' '}
-            <Text color="cyan">--no-telemetry</Text> to disable
-          </Text>
-        )}
-      </Section>
+      <Box marginTop={1}>
+        <Text>
+          <Text bold>Telemetry:</Text>{' '}
+          {noTelemetry ? (
+            <>
+              <Text color="green">DISABLED</Text> (via --no-telemetry)
+            </>
+          ) : (
+            <>
+              <Text color="yellow">ENABLED</Text> — run with{' '}
+              <Text color="cyan">--no-telemetry</Text> to disable
+            </>
+          )}
+        </Text>
+      </Box>
 
       <Section title="Prefer your own AI?">
-        <Text>Download the skill and run it in your own agent:</Text>
-        <Box marginTop={1}>
-          <SkillSourceInfo
-            skillId={skillId}
-            skillEntry={skillEntry}
-            fetchFailed={fetchFailed}
-          />
-        </Box>
+        <SkillSourceInfo
+          skillId={skillId}
+          skillEntry={skillEntry}
+          fetchFailed={fetchFailed}
+        />
       </Section>
 
-      <Section title="More info">
-        <Text>
-          Terms: <Text color="cyan">{POSTHOG_TERMS_URL}</Text>
+      <Box marginTop={1}>
+        <Text dimColor>
+          Terms: <Text color="cyan">{POSTHOG_TERMS_URL}</Text> · Privacy:{' '}
+          <Text color="cyan">{POSTHOG_PRIVACY_URL}</Text>
         </Text>
-        <Text>
-          Privacy: <Text color="cyan">{POSTHOG_PRIVACY_URL}</Text>
-        </Text>
-        <Text>
-          Contact: <Text color="cyan">{WIZARD_CONTACT_EMAIL}</Text>
-        </Text>
-      </Section>
+      </Box>
+      <Text dimColor>
+        Contact: <Text color="cyan">{WIZARD_CONTACT_EMAIL}</Text>
+      </Text>
+
+      <Box marginTop={1}>
+        <Divider />
+      </Box>
     </Box>
   );
 };
@@ -110,9 +107,7 @@ const Section = ({
 }) => (
   <Box flexDirection="column" marginTop={1}>
     <Text bold>{title}</Text>
-    <Box flexDirection="column" marginTop={0}>
-      {children}
-    </Box>
+    {children}
   </Box>
 );
 
