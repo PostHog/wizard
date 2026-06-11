@@ -5,12 +5,12 @@
  * identically from the intro screen ("Privacy & data usage" menu option)
  * and as an overlay from the auth screen ([I] keystroke).
  *
- * Compact layout — must fit in a default-sized macOS Terminal (~24
- * rows) without scrolling. Sections are visually grouped with bold
- * headers and a single blank line between them; no nested margin boxes.
+ * Must fit in a default-sized macOS Terminal (~24 rows) with no
+ * scrolling. Compact paragraph form is preferred over multi-section
+ * bullet layouts — users who want the full legal text follow the Terms
+ * / Privacy links to their browser.
  */
 
-import type { ReactNode } from 'react';
 import { Box, Text } from 'ink';
 import {
   POSTHOG_PRIVACY_URL,
@@ -22,7 +22,6 @@ import {
   SkillSourceInfo,
   useSkillEntry,
 } from '@ui/tui/screens/SkillSourceInfo';
-import { Divider } from '@ui/tui/primitives/index';
 
 interface PrivacyPanelProps {
   /** Reflects session.noTelemetry — controls the telemetry status line. */
@@ -47,15 +46,13 @@ export const PrivacyPanel = ({
         <Text color="cyan">{POSTHOG_WIZARD_REPO_URL}</Text>
       </Text>
 
-      <Section title="Leaves your machine">
-        <Bullet>Source files → Anthropic Claude (AI context)</Bullet>
-        <Bullet>Run metadata → PostHog telemetry</Bullet>
-      </Section>
-
-      <Section title="Stays on your machine">
-        <Bullet>.env* files and secrets</Bullet>
-        <Bullet>Anything matched by the security scanner</Bullet>
-      </Section>
+      <Box marginTop={1}>
+        <Text>
+          We use <Text bold>Anthropic Claude</Text> to read your source files as
+          AI context. <Text bold>.env*</Text> files, secrets, and anything
+          matched by the security scanner stay on your machine.
+        </Text>
+      </Box>
 
       <Box marginTop={1}>
         <Text>
@@ -73,46 +70,22 @@ export const PrivacyPanel = ({
         </Text>
       </Box>
 
-      <Section title="Prefer your own AI?">
+      <Box marginTop={1} flexDirection="column">
+        <Text bold>Prefer your own AI? Download the skill:</Text>
         <SkillSourceInfo
           skillId={skillId}
           skillEntry={skillEntry}
           fetchFailed={fetchFailed}
         />
-      </Section>
+      </Box>
 
       <Box marginTop={1}>
         <Text dimColor>
-          Terms: <Text color="cyan">{POSTHOG_TERMS_URL}</Text> · Privacy:{' '}
-          <Text color="cyan">{POSTHOG_PRIVACY_URL}</Text>
+          <Text color="cyan">{POSTHOG_TERMS_URL}</Text> ·{' '}
+          <Text color="cyan">{POSTHOG_PRIVACY_URL}</Text> ·{' '}
+          <Text color="cyan">{WIZARD_CONTACT_EMAIL}</Text>
         </Text>
-      </Box>
-      <Text dimColor>
-        Contact: <Text color="cyan">{WIZARD_CONTACT_EMAIL}</Text>
-      </Text>
-
-      <Box marginTop={1}>
-        <Divider />
       </Box>
     </Box>
   );
 };
-
-const Section = ({
-  title,
-  children,
-}: {
-  title: string;
-  children: ReactNode;
-}) => (
-  <Box flexDirection="column" marginTop={1}>
-    <Text bold>{title}</Text>
-    {children}
-  </Box>
-);
-
-const Bullet = ({ children }: { children: ReactNode }) => (
-  <Text>
-    {'•'} {children}
-  </Text>
-);
