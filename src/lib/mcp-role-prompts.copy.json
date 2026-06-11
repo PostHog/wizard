@@ -506,5 +506,92 @@
   "neutralCrossSell": [
     { "product": "Session Replay", "prompt": "Show me 5 recent sessions where users dropped off before completing signup.", "description": "Replay what users actually do — included on every plan." },
     { "product": "Error Tracking", "prompt": "List the top errors my users hit this week.", "description": "Built-in error tracking — no separate tool." }
-  ]
+  ],
+
+  "$generated-note": "Templates filled at runtime from the project's REAL event names (getGeneratedQuests). {events} → a comma list of top custom events; {event} → the single busiest custom event. The agent orders funnel steps sensibly, so volume-sorted input is fine.",
+  "generatedQuests": {
+    "funnel": {
+      "label": "Funnel your real events",
+      "prompt": "Build a funnel from these events in the most sensible order — {events} — over the last 30 days, and show me the biggest drop-off."
+    },
+    "trend": {
+      "label": "Trend {event}",
+      "prompt": "Show me a daily trend of {event} over the last 30 days and call out the biggest spike or dip."
+    },
+    "breakdown": {
+      "label": "Break down {event}",
+      "prompt": "Break down {event} over the last 30 days by the most common user property and show me the top segments."
+    }
+  },
+
+  "$write-only-note": "Quests for empty / data-less projects: every entry is a write on the dashboard/insight/notebook/annotation surfaces, so it produces a real artifact regardless of event history. No reads that would come back empty.",
+  "writeOnlyQuests": [
+    {
+      "key": "verify",
+      "prompt": "Annotate today with 'PostHog wizard install'",
+      "description": "Creates a dated note on your project — visible on every chart. Delete anytime from PostHog."
+    },
+    {
+      "key": "starter-dashboard",
+      "prompt": "Create a starter dashboard called 'My first dashboard (wizard MCP tutorial)' with a daily-active-users tile and a top-events tile.",
+      "description": "A real dashboard you can build on — no event history required."
+    }
+  ],
+
+  "$activation-note": "Surfaced (getActivationCrossSell) for products the scout found NO data for — turns a data-less dead end into a product-discovery beat. Prompts route through docs-search, which always returns something, so they never dead-end. Picker prefixes 'Try {product} —'.",
+  "activationCrossSell": {
+    "errorTracking": {
+      "product": "Error Tracking",
+      "label": "see what it'd catch",
+      "prompt": "I don't have error tracking data yet. Show me how to turn on PostHog Error Tracking in my stack and what it would capture.",
+      "description": "Built-in exception tracking — no separate Sentry bill."
+    },
+    "sessionReplay": {
+      "product": "Session Replay",
+      "label": "watch real sessions",
+      "prompt": "I don't have session recordings yet. Show me how to enable PostHog Session Replay and what I'd be able to see.",
+      "description": "Watch what users actually do — included on every plan."
+    },
+    "surveys": {
+      "product": "Surveys",
+      "label": "ask your users",
+      "prompt": "I'm not running surveys yet. Show me how to launch a PostHog survey and the kinds of questions teams ask.",
+      "description": "In-app surveys and NPS, collected next to your events."
+    },
+    "webAnalytics": {
+      "product": "Web Analytics",
+      "label": "GA-style dashboards",
+      "prompt": "I don't have pageview data yet. Show me how to enable PostHog Web Analytics and what the dashboard shows.",
+      "description": "First-party web analytics — no cookie banner."
+    },
+    "experiments": {
+      "product": "Experiments",
+      "label": "A/B test safely",
+      "prompt": "I haven't run experiments yet. Show me how PostHog Experiments work and what I'd need to start one.",
+      "description": "A/B tests that piggyback on your feature flags."
+    },
+    "featureFlags": {
+      "product": "Feature Flags",
+      "label": "ship behind a flag",
+      "prompt": "I don't have feature flags yet. Show me how to add a PostHog feature flag in my framework and how rollout works.",
+      "description": "Gradual rollouts and kill switches, evaluated locally."
+    },
+    "dataWarehouse": {
+      "product": "Data Warehouse",
+      "label": "join external data",
+      "prompt": "Show me how to connect a data warehouse source like Stripe to PostHog and what I could query once it's joined.",
+      "description": "Query Stripe / Salesforce / S3 alongside your events."
+    }
+  },
+
+  "$seed-offer-note": "Shown in the SeedOffer phase for empty projects (idea 15).",
+  "seedOfferGreeting": {
+    "headline": "Fresh project — let's put something on the map.",
+    "bullets": [
+      "Your project hasn't logged events yet, so there's nothing to chart — yet.",
+      "I can send a small demo dataset so you can see funnels, trends, and dashboards in action.",
+      "Everything I send is tagged so you can wipe it in one click later."
+    ],
+    "outro": "Want me to seed some demo data to explore?"
+  }
 }
