@@ -33,7 +33,7 @@ interface PrivacyPanelProps {
 }
 
 export const PrivacyPanel = ({
-  noTelemetry,
+  noTelemetry: _noTelemetry,
   skillId,
   localMcp,
 }: PrivacyPanelProps) => {
@@ -42,19 +42,24 @@ export const PrivacyPanel = ({
   return (
     <Box flexDirection="column" width={64} flexShrink={0}>
       <Text>
-        We use <Text bold>Anthropic Claude</Text> to read your source files as
-        AI context. <Text bold>.env*</Text> files, secrets, and anything matched
-        by the security scanner stay on your machine. Telemetry is{' '}
-        {noTelemetry ? (
-          <Text color="green">DISABLED</Text>
-        ) : (
-          <Text color="yellow">ENABLED</Text>
-        )}{' '}
-        — pass <Text color="cyan">--no-telemetry</Text>
-        {noTelemetry ? '' : ' to disable'}. The wizard is open source (
-        <Text color="cyan">{POSTHOG_WIZARD_REPO_URL}</Text>); prefer your own
-        AI? Download the skill below and run it in your own agent.
+        We use Anthropic's Claude via the PostHog LLM gateway to read your
+        source files as AI context. .env* files, secrets, and anything matched
+        by the security scanner stay on your machine. The wizard is open source
+        (<Text color="cyan">{POSTHOG_WIZARD_REPO_URL}</Text>).
       </Text>
+
+      <Box marginTop={1}>
+        <Text>
+          Telemetry is enabled by default. You can disable it by passing
+          `--no-telemetry`.
+        </Text>
+      </Box>
+
+      <Box marginTop={1}>
+        <Text>
+          Prefer your own AI? Download the skill and run it in your own agent.
+        </Text>
+      </Box>
 
       <Box marginTop={1}>
         <SkillSourceInfo
