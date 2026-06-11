@@ -29,7 +29,8 @@ import { analytics } from '@utils/analytics';
 import { LoadingBox } from '@ui/tui/primitives/index';
 
 const ORG_ADMIN_LEVEL = 8;
-const SETTINGS_ANCHOR = 'organization-ai-consent';
+const SETTINGS_PATH = 'settings/organization-details';
+const SETTINGS_ANCHOR = '#organization-ai-consent';
 
 interface AiOptInRequiredScreenProps {
   store: WizardStore;
@@ -49,9 +50,15 @@ export const AiOptInRequiredScreen = ({
   const variant: 'admin' | 'non-admin' = isAdmin ? 'admin' : 'non-admin';
 
   const region = session.region ?? 'us';
-  const settingsUrl = `${getCloudUrlFromRegion(
-    region,
-  )}/settings/${SETTINGS_ANCHOR}`;
+  const projectId = session.credentials?.projectId;
+  const cloudUrl = getCloudUrlFromRegion(region);
+  // Org settings sit under a project context in PostHog's URL structure.
+  // Fall back to the project-less URL if we somehow don't have a projectId
+  // (shouldn't happen post-auth, but harmless if it does — PostHog will
+  // route the user to their default project).
+  const settingsUrl = projectId
+    ? `${cloudUrl}/project/${projectId}/${SETTINGS_PATH}${SETTINGS_ANCHOR}`
+    : `${cloudUrl}/${SETTINGS_PATH}${SETTINGS_ANCHOR}`;
 
   const [showSkill, setShowSkill] = useState(false);
   const [retrying, setRetrying] = useState(false);
