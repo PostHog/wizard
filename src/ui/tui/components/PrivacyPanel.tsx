@@ -48,19 +48,13 @@ export const PrivacyPanel = ({
       <Box marginTop={1}>
         <Text>
           Telemetry is enabled by default. You can disable it by passing
-          `--no-telemetry`.
+          <Text color="green">--no-telemetry</Text>.
         </Text>
       </Box>
 
       <Box marginTop={1}>
         <Text>
-          Prefer your own AI? Download the skill and run it in your own agent.
-        </Text>
-      </Box>
-
-      <Box marginTop={1}>
-        <Text>
-          Skill:{' '}
+          Prefer your own AI? Download the skill and run it in your own agent:{' '}
           <Text color="cyan">
             {skillEntry?.downloadUrl ??
               (fetchFailed ? 'unavailable' : 'Loading...')}
