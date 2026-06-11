@@ -41,9 +41,11 @@ import { eventsAuditCommand } from './src/commands/events-audit';
 import { revenueCommand } from './src/commands/revenue';
 import { uploadSourcemapsCommand } from './src/commands/upload-sourcemaps';
 import { skillCommand } from './src/commands/skill';
+import { cliCommand } from './src/commands/cli';
 
 Wizard.use(basicIntegrationCommand)
   .use(mcpCommand)
+  .use(cliCommand)
   .use(integrateCommand)
   .use(auditCommand)
   .use(audit3000Command)
