@@ -151,11 +151,7 @@ export const PostHogIntegrationIntroScreen = ({
     );
   } else if (view === 'more-info') {
     body = (
-      <PrivacyPanel
-        noTelemetry={session.noTelemetry}
-        skillId={session.skillId}
-        localMcp={session.localMcp}
-      />
+      <PrivacyPanel skillId={session.skillId} localMcp={session.localMcp} />
     );
   } else if (showContinue) {
     body = (
@@ -173,6 +169,8 @@ export const PostHogIntegrationIntroScreen = ({
   if (frameworkLabel) {
     const suffixParts: string[] = [];
     if (!manuallySelected) suffixParts.push('(detected)');
+    // Dead path today — every framework went GA. Kept for re-activation
+    // when the next beta framework lands (set `beta: true` on its config).
     if (config?.metadata.beta) suffixParts.push('[BETA]');
 
     detectionRows.push({

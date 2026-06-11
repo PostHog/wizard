@@ -21,19 +21,13 @@ import {
 import { useSkillEntry } from '@ui/tui/screens/SkillSourceInfo';
 
 interface PrivacyPanelProps {
-  /** Reflects session.noTelemetry — controls the telemetry status line. */
-  noTelemetry: boolean;
   /** Program's skill id, for the BYOAI escape-hatch section. */
   skillId: string | null;
   /** Session's localMcp flag — picks remote vs local skill base URL. */
   localMcp: boolean;
 }
 
-export const PrivacyPanel = ({
-  noTelemetry: _noTelemetry,
-  skillId,
-  localMcp,
-}: PrivacyPanelProps) => {
+export const PrivacyPanel = ({ skillId, localMcp }: PrivacyPanelProps) => {
   const { skillEntry, fetchFailed } = useSkillEntry(skillId, localMcp);
 
   return (
