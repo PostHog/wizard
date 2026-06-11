@@ -5,10 +5,10 @@
  * identically from the intro screen ("Privacy & data usage" menu option)
  * and as an overlay from the auth screen ([I] keystroke).
  *
- * Must fit in a default-sized macOS Terminal (~24 rows) with no
- * scrolling. Compact paragraph form is preferred over multi-section
- * bullet layouts — users who want the full legal text follow the Terms
- * / Privacy links to their browser.
+ * Must fit in a default-sized macOS Terminal (~24 rows). One condensed
+ * paragraph carries the top-level disclosure; the dynamic skill block
+ * and link footer follow. Users who want the full legal text follow
+ * the Terms / Privacy URLs to their browser.
  */
 
 import { Box, Text } from 'ink';
@@ -42,36 +42,21 @@ export const PrivacyPanel = ({
   return (
     <Box flexDirection="column" width={64} flexShrink={0}>
       <Text>
-        Wizard is open source —{' '}
-        <Text color="cyan">{POSTHOG_WIZARD_REPO_URL}</Text>
+        We use <Text bold>Anthropic Claude</Text> to read your source files as
+        AI context. <Text bold>.env*</Text> files, secrets, and anything matched
+        by the security scanner stay on your machine. Telemetry is{' '}
+        {noTelemetry ? (
+          <Text color="green">DISABLED</Text>
+        ) : (
+          <Text color="yellow">ENABLED</Text>
+        )}{' '}
+        — pass <Text color="cyan">--no-telemetry</Text>
+        {noTelemetry ? '' : ' to disable'}. The wizard is open source (
+        <Text color="cyan">{POSTHOG_WIZARD_REPO_URL}</Text>); prefer your own
+        AI? Download the skill below and run it in your own agent.
       </Text>
 
       <Box marginTop={1}>
-        <Text>
-          We use <Text bold>Anthropic Claude</Text> to read your source files as
-          AI context. <Text bold>.env*</Text> files, secrets, and anything
-          matched by the security scanner stay on your machine.
-        </Text>
-      </Box>
-
-      <Box marginTop={1}>
-        <Text>
-          <Text bold>Telemetry:</Text>{' '}
-          {noTelemetry ? (
-            <>
-              <Text color="green">DISABLED</Text> (via --no-telemetry)
-            </>
-          ) : (
-            <>
-              <Text color="yellow">ENABLED</Text> — run with{' '}
-              <Text color="cyan">--no-telemetry</Text> to disable
-            </>
-          )}
-        </Text>
-      </Box>
-
-      <Box marginTop={1} flexDirection="column">
-        <Text bold>Prefer your own AI? Download the skill:</Text>
         <SkillSourceInfo
           skillId={skillId}
           skillEntry={skillEntry}
@@ -79,11 +64,15 @@ export const PrivacyPanel = ({
         />
       </Box>
 
-      <Box marginTop={1}>
+      <Box marginTop={1} flexDirection="column">
         <Text dimColor>
-          <Text color="cyan">{POSTHOG_TERMS_URL}</Text> ·{' '}
-          <Text color="cyan">{POSTHOG_PRIVACY_URL}</Text> ·{' '}
-          <Text color="cyan">{WIZARD_CONTACT_EMAIL}</Text>
+          Terms: <Text color="cyan">{POSTHOG_TERMS_URL}</Text>
+        </Text>
+        <Text dimColor>
+          Privacy: <Text color="cyan">{POSTHOG_PRIVACY_URL}</Text>
+        </Text>
+        <Text dimColor>
+          Contact: <Text color="cyan">{WIZARD_CONTACT_EMAIL}</Text>
         </Text>
       </Box>
     </Box>
