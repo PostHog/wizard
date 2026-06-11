@@ -18,10 +18,7 @@ import {
   POSTHOG_WIZARD_REPO_URL,
   WIZARD_CONTACT_EMAIL,
 } from '@lib/constants';
-import {
-  SkillSourceInfo,
-  useSkillEntry,
-} from '@ui/tui/screens/SkillSourceInfo';
+import { useSkillEntry } from '@ui/tui/screens/SkillSourceInfo';
 
 interface PrivacyPanelProps {
   /** Reflects session.noTelemetry — controls the telemetry status line. */
@@ -44,8 +41,8 @@ export const PrivacyPanel = ({
       <Text>
         We use Anthropic's Claude via the PostHog LLM gateway to read your
         source files as AI context. .env* files, secrets, and anything matched
-        by the security scanner stay on your machine. The wizard is open source
-        (<Text color="cyan">{POSTHOG_WIZARD_REPO_URL}</Text>).
+        by the security scanner stay on your machine. The wizard is open source:{' '}
+        <Text color="cyan">{POSTHOG_WIZARD_REPO_URL}</Text>.
       </Text>
 
       <Box marginTop={1}>
@@ -62,11 +59,13 @@ export const PrivacyPanel = ({
       </Box>
 
       <Box marginTop={1}>
-        <SkillSourceInfo
-          skillId={skillId}
-          skillEntry={skillEntry}
-          fetchFailed={fetchFailed}
-        />
+        <Text>
+          Skill:{' '}
+          <Text color="cyan">
+            {skillEntry?.downloadUrl ??
+              (fetchFailed ? 'unavailable' : 'Loading...')}
+          </Text>
+        </Text>
       </Box>
 
       <Box marginTop={1} flexDirection="column">
