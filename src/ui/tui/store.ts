@@ -339,6 +339,7 @@ export class WizardStore {
 
   /** User dismissed the blocking outage screen. Gate resolves via _checkGates(). */
   dismissOutage(): void {
+    logToFile('[health-checks] user dismissed outage screen, continuing');
     this.$session.setKey('outageDismissed', true);
     this.emitChange();
   }

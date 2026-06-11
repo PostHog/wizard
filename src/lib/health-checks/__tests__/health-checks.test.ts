@@ -22,6 +22,7 @@ import {
   checkCloudflareComponentHealth,
   checkCloudflareOverallHealth,
   checkGithubHealth,
+  checkGithubReleasesHealth,
   checkLlmGatewayHealth,
   checkMcpHealth,
   checkNpmComponentHealth,
@@ -696,6 +697,18 @@ describe('health-checks', () => {
       );
     });
 
+    it('returns down on 302 — the gateway probe stays strict, redirects are not OK here', async () => {
+      (global.fetch as jest.Mock).mockImplementation(
+        overrideFetch({
+          [URLS.llmGatewayLiveness]: () =>
+            Promise.resolve(new Response(null, { status: 302 })),
+        }),
+      );
+      const result = await checkLlmGatewayHealth();
+      expect(result.status).toBe(ServiceHealthStatus.Down);
+      expect(result.error).toBe('HTTP 302');
+    });
+
     it('returns down when gateway responds 503 (e.g. deploying)', async () => {
       (global.fetch as jest.Mock).mockImplementation(
         overrideFetch({
@@ -746,7 +759,7 @@ describe('health-checks', () => {
       );
       const result = await checkLlmGatewayHealth();
       expect(result.status).toBe(ServiceHealthStatus.Down);
-      expect(result.error).toBe('Request timed out');
+      expect(result.error).toBe('Request timed out after 5000ms');
     });
   });
 
@@ -763,6 +776,34 @@ describe('health-checks', () => {
         URLS.mcpLanding,
         expect.objectContaining({ signal: expect.any(AbortSignal) }),
       );
+    });
+
+    it('returns healthy when worker responds 302 (redirect to docs, not followed)', async () => {
+      (global.fetch as jest.Mock).mockImplementation(
+        overrideFetch({
+          [URLS.mcpLanding]: () =>
+            Promise.resolve(new Response(null, { status: 302 })),
+        }),
+      );
+      const result = await checkMcpHealth();
+      expect(result.status).toBe(ServiceHealthStatus.Healthy);
+      expect(result.rawIndicator).toBe('HTTP 302');
+      expect(global.fetch).toHaveBeenCalledWith(
+        URLS.mcpLanding,
+        expect.objectContaining({ redirect: 'manual' }),
+      );
+    });
+
+    it('returns down on 400 — only 2xx-3xx counts as up', async () => {
+      (global.fetch as jest.Mock).mockImplementation(
+        overrideFetch({
+          [URLS.mcpLanding]: () =>
+            Promise.resolve(new Response('Bad Request', { status: 400 })),
+        }),
+      );
+      const result = await checkMcpHealth();
+      expect(result.status).toBe(ServiceHealthStatus.Down);
+      expect(result.error).toBe('HTTP 400');
     });
 
     it('returns down when worker responds 500', async () => {
@@ -800,6 +841,34 @@ describe('health-checks', () => {
       const result = await checkMcpHealth();
       expect(result.status).toBe(ServiceHealthStatus.Down);
       expect(result.error).toBe('fetch failed');
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // GitHub Releases (fetchEndpointHealth – skill-menu.json)
+  // -----------------------------------------------------------------------
+
+  describe('checkGithubReleasesHealth', () => {
+    it('returns healthy on a final 200 and follows redirects (GitHub 302s asset URLs even for missing assets)', async () => {
+      const result = await checkGithubReleasesHealth();
+      expect(result.status).toBe(ServiceHealthStatus.Healthy);
+      expect(result.rawIndicator).toBe('HTTP 200');
+      expect(global.fetch).toHaveBeenCalledWith(
+        URLS.githubReleasesSkillMenu,
+        expect.objectContaining({ redirect: 'follow' }),
+      );
+    });
+
+    it('returns down on 404 (release published without the asset)', async () => {
+      (global.fetch as jest.Mock).mockImplementation(
+        overrideFetch({
+          [URLS.githubReleasesSkillMenu]: () =>
+            Promise.resolve(new Response('Not Found', { status: 404 })),
+        }),
+      );
+      const result = await checkGithubReleasesHealth();
+      expect(result.status).toBe(ServiceHealthStatus.Down);
+      expect(result.error).toBe('HTTP 404');
     });
   });
 
