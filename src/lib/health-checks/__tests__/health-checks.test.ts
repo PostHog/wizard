@@ -697,6 +697,18 @@ describe('health-checks', () => {
       );
     });
 
+    it('returns down on 302 — the gateway probe stays strict, redirects are not OK here', async () => {
+      (global.fetch as jest.Mock).mockImplementation(
+        overrideFetch({
+          [URLS.llmGatewayLiveness]: () =>
+            Promise.resolve(new Response(null, { status: 302 })),
+        }),
+      );
+      const result = await checkLlmGatewayHealth();
+      expect(result.status).toBe(ServiceHealthStatus.Down);
+      expect(result.error).toBe('HTTP 302');
+    });
+
     it('returns down when gateway responds 503 (e.g. deploying)', async () => {
       (global.fetch as jest.Mock).mockImplementation(
         overrideFetch({
@@ -782,6 +794,18 @@ describe('health-checks', () => {
       );
     });
 
+    it('returns down on 400 — only 2xx-3xx counts as up', async () => {
+      (global.fetch as jest.Mock).mockImplementation(
+        overrideFetch({
+          [URLS.mcpLanding]: () =>
+            Promise.resolve(new Response('Bad Request', { status: 400 })),
+        }),
+      );
+      const result = await checkMcpHealth();
+      expect(result.status).toBe(ServiceHealthStatus.Down);
+      expect(result.error).toBe('HTTP 400');
+    });
+
     it('returns down when worker responds 500', async () => {
       (global.fetch as jest.Mock).mockImplementation(
         overrideFetch({
@@ -825,8 +849,10 @@ describe('health-checks', () => {
   // -----------------------------------------------------------------------
 
   describe('checkGithubReleasesHealth', () => {
-    it('follows redirects (GitHub 302s asset URLs even for missing assets)', async () => {
-      await checkGithubReleasesHealth();
+    it('returns healthy on a final 200 and follows redirects (GitHub 302s asset URLs even for missing assets)', async () => {
+      const result = await checkGithubReleasesHealth();
+      expect(result.status).toBe(ServiceHealthStatus.Healthy);
+      expect(result.rawIndicator).toBe('HTTP 200');
       expect(global.fetch).toHaveBeenCalledWith(
         URLS.githubReleasesSkillMenu,
         expect.objectContaining({ redirect: 'follow' }),
