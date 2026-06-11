@@ -22,6 +22,7 @@ import {
   checkCloudflareComponentHealth,
   checkCloudflareOverallHealth,
   checkGithubHealth,
+  checkGithubReleasesHealth,
   checkLlmGatewayHealth,
   checkMcpHealth,
   checkNpmComponentHealth,
@@ -746,7 +747,7 @@ describe('health-checks', () => {
       );
       const result = await checkLlmGatewayHealth();
       expect(result.status).toBe(ServiceHealthStatus.Down);
-      expect(result.error).toBe('Request timed out');
+      expect(result.error).toBe('Request timed out after 5000ms');
     });
   });
 
@@ -762,6 +763,22 @@ describe('health-checks', () => {
       expect(global.fetch).toHaveBeenCalledWith(
         URLS.mcpLanding,
         expect.objectContaining({ signal: expect.any(AbortSignal) }),
+      );
+    });
+
+    it('returns healthy when worker responds 302 (redirect to docs, not followed)', async () => {
+      (global.fetch as jest.Mock).mockImplementation(
+        overrideFetch({
+          [URLS.mcpLanding]: () =>
+            Promise.resolve(new Response(null, { status: 302 })),
+        }),
+      );
+      const result = await checkMcpHealth();
+      expect(result.status).toBe(ServiceHealthStatus.Healthy);
+      expect(result.rawIndicator).toBe('HTTP 302');
+      expect(global.fetch).toHaveBeenCalledWith(
+        URLS.mcpLanding,
+        expect.objectContaining({ redirect: 'manual' }),
       );
     });
 
@@ -800,6 +817,32 @@ describe('health-checks', () => {
       const result = await checkMcpHealth();
       expect(result.status).toBe(ServiceHealthStatus.Down);
       expect(result.error).toBe('fetch failed');
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // GitHub Releases (fetchEndpointHealth – skill-menu.json)
+  // -----------------------------------------------------------------------
+
+  describe('checkGithubReleasesHealth', () => {
+    it('follows redirects (GitHub 302s asset URLs even for missing assets)', async () => {
+      await checkGithubReleasesHealth();
+      expect(global.fetch).toHaveBeenCalledWith(
+        URLS.githubReleasesSkillMenu,
+        expect.objectContaining({ redirect: 'follow' }),
+      );
+    });
+
+    it('returns down on 404 (release published without the asset)', async () => {
+      (global.fetch as jest.Mock).mockImplementation(
+        overrideFetch({
+          [URLS.githubReleasesSkillMenu]: () =>
+            Promise.resolve(new Response('Not Found', { status: 404 })),
+        }),
+      );
+      const result = await checkGithubReleasesHealth();
+      expect(result.status).toBe(ServiceHealthStatus.Down);
+      expect(result.error).toBe('HTTP 404');
     });
   });
 
