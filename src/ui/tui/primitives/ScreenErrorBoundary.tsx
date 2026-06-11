@@ -9,6 +9,7 @@ import { Box, Text } from 'ink';
 import { Component, type ReactNode } from 'react';
 import type { WizardStore } from '@ui/tui/store';
 import { OutroKind, RunPhase } from '@lib/wizard-session';
+import { logToFile } from '@utils/debug';
 
 interface Props {
   store: WizardStore;
@@ -29,6 +30,9 @@ export class ScreenErrorBoundary extends Component<Props, State> {
   componentDidCatch(error: Error): void {
     const { store } = this.props;
 
+    // console output lands in the alt screen and is wiped on unmount —
+    // the file log is the durable record.
+    logToFile('[screen-error-boundary]', error);
     // eslint-disable-next-line no-console
     console.error('[ScreenErrorBoundary]', error.message, error.stack);
 
