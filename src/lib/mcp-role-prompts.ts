@@ -76,6 +76,23 @@ export interface RoleGreeting {
   outro: string;
 }
 
+/**
+ * The "Take PostHog to Slack" card surfaced at the end of the MCP flow
+ * (Goodbye phase + dedicated Connect-Slack step). `useCases` is resolved
+ * per role; the rest is static. Every string here is presentation copy
+ * shown to the user — none of it is sent to the agent, so the picker's
+ * read/persistence prompt-scope rule does not apply.
+ */
+export interface SlackAppCard {
+  headline: string;
+  pitch: string;
+  /** posthog.com/slack-app — "learn more". */
+  learnMoreUrl: string;
+  /** project-integrations#integration-slack — where the user connects Slack. */
+  setupUrl: string;
+  useCases: string[];
+}
+
 export const FOLLOW_UP_EXIT_SENTINEL = '__follow_up_exit__';
 /** How many follow-up suggestions to surface above the exit entry. */
 export const FOLLOW_UP_COUNT = 3;
@@ -125,6 +142,14 @@ const CROSS_SELL_BY_ROLE = copyData.crossSellByRole as Record<
   PromptOption[]
 >;
 const NEUTRAL_CROSS_SELL = copyData.neutralCrossSell as PromptOption[];
+const SLACK_APP = copyData.slackApp as {
+  learnMoreUrl: string;
+  setupUrl: string;
+  headline: string;
+  pitch: string;
+  neutralUseCases: string[];
+  useCasesByRole: Record<TailoredRole, string[]>;
+};
 
 // ── Framework family map ───────────────────────────────────────────────
 // Stays in code (not JSON) because it's structural data tied to the
@@ -306,4 +331,22 @@ export function getCrossSellPrompts(
 ): PromptOption[] {
   if (!isTailoredRole(role)) return NEUTRAL_CROSS_SELL;
   return CROSS_SELL_BY_ROLE[role];
+}
+
+/**
+ * Resolve the "Take PostHog to Slack" card for the current role. Known
+ * roles get tailored use-cases; unknown roles fall back to the neutral
+ * pair. The static fields (headline, pitch, URLs) are role-independent.
+ */
+export function getSlackAppCard(role: string | null | undefined): SlackAppCard {
+  const useCases = isTailoredRole(role)
+    ? SLACK_APP.useCasesByRole[role]
+    : SLACK_APP.neutralUseCases;
+  return {
+    headline: SLACK_APP.headline,
+    pitch: SLACK_APP.pitch,
+    learnMoreUrl: SLACK_APP.learnMoreUrl,
+    setupUrl: SLACK_APP.setupUrl,
+    useCases,
+  };
 }

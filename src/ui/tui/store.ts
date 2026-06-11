@@ -549,6 +549,11 @@ export class WizardStore {
     this.emitChange();
   }
 
+  setSlackStepDismissed(): void {
+    this.$session.setKey('slackStepDismissed', true);
+    this.emitChange();
+  }
+
   setOutroDismissed(): void {
     this.$session.setKey('outroDismissed', true);
     this.emitChange();

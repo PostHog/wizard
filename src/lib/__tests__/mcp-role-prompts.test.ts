@@ -4,6 +4,7 @@ import {
   getRoleGreeting,
   getFollowUps,
   getCrossSellPrompts,
+  getSlackAppCard,
   FOLLOW_UP_EXIT_SENTINEL,
   TAILORED_ROLES,
 } from '@lib/mcp-role-prompts';
@@ -276,6 +277,52 @@ describe('getCrossSellPrompts', () => {
           .map((p) => `${p.product ?? ''}:${p.prompt}`)
           .join('|'),
       ),
+    );
+    expect(fingerprints.size).toBeGreaterThanOrEqual(3);
+  });
+});
+
+describe('getSlackAppCard', () => {
+  it('returns the neutral card with populated fields for null role', () => {
+    const card = getSlackAppCard(null);
+    expect(card.headline).toBeTruthy();
+    expect(card.pitch).toBeTruthy();
+    expect(card.useCases.length).toBeGreaterThan(0);
+    for (const useCase of card.useCases) {
+      expect(useCase).toBeTruthy();
+    }
+  });
+
+  it('returns the neutral card for unknown roles', () => {
+    const known = getSlackAppCard('founder');
+    const unknown = getSlackAppCard('not-a-real-role');
+    const neutral = getSlackAppCard(null);
+    // Unknown roles fall back to the neutral use-cases, not a role kit.
+    expect(unknown.useCases).toEqual(neutral.useCases);
+    expect(unknown.useCases).not.toEqual(known.useCases);
+  });
+
+  it('exposes the documented learn-more and setup URLs', () => {
+    const card = getSlackAppCard(null);
+    expect(card.learnMoreUrl).toBe('https://posthog.com/slack-app');
+    expect(card.setupUrl).toBe(
+      'https://app.posthog.com/project-integrations#integration-slack',
+    );
+  });
+
+  it('returns role-specific use-cases for every TAILORED_ROLE', () => {
+    for (const role of TAILORED_ROLES) {
+      const card = getSlackAppCard(role);
+      expect(card.useCases.length).toBeGreaterThan(0);
+      for (const useCase of card.useCases) {
+        expect(useCase).toBeTruthy();
+      }
+    }
+  });
+
+  it('produces distinct use-case sets across roles', () => {
+    const fingerprints = new Set(
+      TAILORED_ROLES.map((r) => getSlackAppCard(r).useCases.join('|')),
     );
     expect(fingerprints.size).toBeGreaterThanOrEqual(3);
   });

@@ -57,6 +57,7 @@ import {
   getRoleGreeting,
   getFollowUps,
   getCrossSellPrompts,
+  getSlackAppCard,
   FOLLOW_UP_EXIT_SENTINEL,
   PINNED_FIRST_PROMPT,
   type PromptOption,
@@ -293,6 +294,13 @@ export const McpSuggestedPromptsScreen = ({
   // move on.
   const enterGoodbye = (): void => {
     runAbortRef.current?.abort();
+    // The Goodbye phase also surfaces the "Take PostHog to Slack" card —
+    // capture the impression here (the single entry-point into Goodbye)
+    // rather than in render, which would re-fire on every re-render.
+    analytics.wizardCapture('mcp suggested prompts slack shown', {
+      role: session.roleAtOrganization,
+      engaged: branchHistory.length > 0,
+    });
     setPhase(Phase.Goodbye);
   };
 
@@ -530,6 +538,10 @@ const ChoosePhase = ({ error, onSelect }: ChoosePhaseProps) => (
       </Text>
       <Text>
         <Text color="cyan">{Icons.diamond}</Text> Debug exceptions and errors
+      </Text>
+      <Text>
+        <Text color="cyan">{Icons.diamond}</Text> Ask questions and share
+        insights in Slack
       </Text>
       <Text>
         <Text color="cyan">{Icons.diamond}</Text> And lots more...
@@ -980,6 +992,7 @@ const GoodbyePhase = ({
   // "next time you open your IDE, try this" reminders.
   const kit = getRolePrompts(role, integration);
   const samples = kit.slice(0, 3);
+  const slack = getSlackAppCard(role);
 
   const headline = engaged
     ? 'Nice work. You can keep talking to PostHog anytime.'
@@ -1019,6 +1032,35 @@ const GoodbyePhase = ({
             <Text dimColor>{p.prompt}</Text>
           </Box>
         ))}
+      </Box>
+
+      {/* "Take PostHog to Slack" — present the Slack app + role-tailored
+          use-cases and link out to setup. We link rather than wire it up:
+          connecting Slack is a manual OAuth step in the PostHog app. */}
+      <Box marginBottom={1} flexDirection="column">
+        <Text bold color={Colors.accent}>
+          {slack.headline}
+        </Text>
+        <Box marginTop={1}>
+          <Text dimColor>{slack.pitch}</Text>
+        </Box>
+        <Box marginTop={1} flexDirection="column">
+          {slack.useCases.map((useCase, i) => (
+            <Box key={i}>
+              <Text color={Colors.primary}>{Icons.triangleSmallRight}</Text>
+              <Text> </Text>
+              <Text dimColor>{useCase}</Text>
+            </Box>
+          ))}
+        </Box>
+        <Box marginTop={1} flexDirection="column">
+          <Text dimColor>
+            Connect it: <Text color="cyan">{slack.setupUrl}</Text>
+          </Text>
+          <Text dimColor>
+            Learn more: <Text color="cyan">{slack.learnMoreUrl}</Text>
+          </Text>
+        </Box>
       </Box>
 
       <Box marginBottom={1}>
