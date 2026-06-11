@@ -41,6 +41,7 @@ import { Box, Text } from 'ink';
 import { Spinner } from '@inkjs/ui';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSyncExternalStore } from 'react';
+import opn from 'opn';
 
 import type { WizardStore } from '@ui/tui/store';
 import { Colors, Icons } from '@ui/tui/styles';
@@ -91,6 +92,7 @@ enum Phase {
 
 enum ChoiceValue {
   Login = 'login',
+  ConnectSlack = 'connect-slack',
   Exit = 'exit',
 }
 
@@ -319,6 +321,20 @@ export const McpSuggestedPromptsScreen = ({
         choice: 'login',
       });
       setPhase(Phase.Authenticating);
+    } else if (choice === ChoiceValue.ConnectSlack) {
+      analytics.wizardCapture('mcp suggested prompts choose', {
+        choice: 'connect-slack',
+      });
+      // Open the Slack integration settings and stay on the Choose screen
+      // so the user can still start the tutorial. opn throws in headless
+      // environments — swallow it; the URL is also printed on screen.
+      if (process.env.NODE_ENV !== 'test') {
+        opn(getSlackAppCard(session.roleAtOrganization).setupUrl, {
+          wait: false,
+        }).catch(() => {
+          // No browser available — the printed URL is the fallback.
+        });
+      }
     } else {
       analytics.wizardCapture('mcp suggested prompts choose', {
         choice: 'exit',
@@ -513,61 +529,74 @@ interface ChoosePhaseProps {
   onSelect: (value: ChoiceValue | ChoiceValue[]) => void;
 }
 
-const ChoosePhase = ({ error, onSelect }: ChoosePhaseProps) => (
-  <Box flexDirection="column">
-    <Text bold color={Colors.accent}>
-      PostHog MCP
-    </Text>
+const ChoosePhase = ({ error, onSelect }: ChoosePhaseProps) => {
+  // setupUrl is role-independent — resolve it once for the fallback link.
+  const slackSetupUrl = getSlackAppCard(null).setupUrl;
+  return (
+    <Box flexDirection="column">
+      <Text bold color={Colors.accent}>
+        PostHog MCP
+      </Text>
 
-    <Box marginTop={1}>
-      <Text>
-        With MCP your agent works directly with the PostHog platform. You can
-        prompt it to:
-      </Text>
-    </Box>
-
-    <Box marginTop={1} flexDirection="column">
-      <Text>
-        <Text color="cyan">{Icons.diamond}</Text> Build dashboards
-      </Text>
-      <Text>
-        <Text color="cyan">{Icons.diamond}</Text> Run SQL queries
-      </Text>
-      <Text>
-        <Text color="cyan">{Icons.diamond}</Text> Deploy feature flags
-      </Text>
-      <Text>
-        <Text color="cyan">{Icons.diamond}</Text> Debug exceptions and errors
-      </Text>
-      <Text>
-        <Text color="cyan">{Icons.diamond}</Text> Ask questions and share
-        insights in Slack
-      </Text>
-      <Text>
-        <Text color="cyan">{Icons.diamond}</Text> And lots more...
-      </Text>
-    </Box>
-
-    <Box marginTop={1}>
-      <Text>Want a live demo using real data from your project?</Text>
-    </Box>
-
-    <Box>
-      <PickerMenu
-        options={[
-          { label: 'Start MCP tutorial', value: ChoiceValue.Login },
-          { label: 'Exit', value: ChoiceValue.Exit },
-        ]}
-        onSelect={onSelect}
-      />
-    </Box>
-    {error && (
       <Box marginTop={1}>
-        <Text color="red">Login failed: {error}. Try again or exit.</Text>
+        <Text>
+          With MCP your agent works directly with the PostHog platform. You can
+          prompt it to:
+        </Text>
       </Box>
-    )}
-  </Box>
-);
+
+      <Box marginTop={1} flexDirection="column">
+        <Text>
+          <Text color="cyan">{Icons.diamond}</Text> Build dashboards
+        </Text>
+        <Text>
+          <Text color="cyan">{Icons.diamond}</Text> Run SQL queries
+        </Text>
+        <Text>
+          <Text color="cyan">{Icons.diamond}</Text> Deploy feature flags
+        </Text>
+        <Text>
+          <Text color="cyan">{Icons.diamond}</Text> Debug exceptions and errors
+        </Text>
+        <Text>
+          <Text color="cyan">{Icons.diamond}</Text> And lots more...
+        </Text>
+      </Box>
+
+      <Box marginTop={1} flexDirection="column">
+        <Text>
+          You can also connect PostHog to Slack, so you can analyze data and
+          ship product changes there by tagging <Text bold>@PostHog</Text>.
+        </Text>
+        <Box marginTop={1}>
+          <Text dimColor>
+            Connect it: <Text color="cyan">{slackSetupUrl}</Text>
+          </Text>
+        </Box>
+      </Box>
+
+      <Box marginTop={1}>
+        <Text>Want a live demo using real data from your project?</Text>
+      </Box>
+
+      <Box>
+        <PickerMenu
+          options={[
+            { label: 'Start MCP tutorial', value: ChoiceValue.Login },
+            { label: 'Connect Slack now', value: ChoiceValue.ConnectSlack },
+            { label: 'Exit', value: ChoiceValue.Exit },
+          ]}
+          onSelect={onSelect}
+        />
+      </Box>
+      {error && (
+        <Box marginTop={1}>
+          <Text color="red">Login failed: {error}. Try again or exit.</Text>
+        </Box>
+      )}
+    </Box>
+  );
+};
 
 // ── Authenticating phase ───────────────────────────────────────────────
 

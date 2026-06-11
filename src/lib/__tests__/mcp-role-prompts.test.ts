@@ -287,6 +287,7 @@ describe('getSlackAppCard', () => {
     const card = getSlackAppCard(null);
     expect(card.headline).toBeTruthy();
     expect(card.pitch).toBeTruthy();
+    expect(card.detail).toBeTruthy();
     expect(card.useCases.length).toBeGreaterThan(0);
     for (const useCase of card.useCases) {
       expect(useCase).toBeTruthy();
@@ -306,7 +307,7 @@ describe('getSlackAppCard', () => {
     const card = getSlackAppCard(null);
     expect(card.learnMoreUrl).toBe('https://posthog.com/slack-app');
     expect(card.setupUrl).toBe(
-      'https://app.posthog.com/project-integrations#integration-slack',
+      'https://app.posthog.com/settings/project-integrations#integration-slack',
     );
   });
 

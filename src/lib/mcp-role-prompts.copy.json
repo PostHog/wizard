@@ -511,9 +511,10 @@
   "slackApp-note": "Presentation copy for the 'Take PostHog to Slack' surfaces (Goodbye card + dedicated step). These use-case strings are shown to the user, NOT sent to the agent — so the read/persistence prompt-scope rule above does not apply to them. Connecting Slack is a manual OAuth step in the PostHog app, so we link out to setupUrl rather than having the agent wire it up.",
   "slackApp": {
     "learnMoreUrl": "https://posthog.com/slack-app",
-    "setupUrl": "https://app.posthog.com/project-integrations#integration-slack",
+    "setupUrl": "https://app.posthog.com/settings/project-integrations#integration-slack",
     "headline": "Take PostHog to Slack",
-    "pitch": "Connect the PostHog Slack app to ask @PostHog questions and get insights delivered to your channels.",
+    "pitch": "Analyze data and ship product changes straight from Slack — just tag @PostHog.",
+    "detail": "Ask a product question, run a query, deploy a feature flag, or open a PR — all without leaving Slack.",
     "neutralUseCases": [
       "Ask @PostHog product questions right in Slack",
       "Get insights and dashboards delivered to your channels on a schedule"

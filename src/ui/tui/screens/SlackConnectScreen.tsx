@@ -82,6 +82,10 @@ export const SlackConnectScreen = ({ store }: SlackConnectScreenProps) => {
           <Text>{slack.pitch}</Text>
         </Box>
 
+        <Box marginTop={1}>
+          <Text dimColor>{slack.detail}</Text>
+        </Box>
+
         <Box marginTop={1} flexDirection="column">
           {slack.useCases.map((useCase, i) => (
             <Box key={i}>

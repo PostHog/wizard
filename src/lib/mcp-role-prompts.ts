@@ -85,10 +85,13 @@ export interface RoleGreeting {
  */
 export interface SlackAppCard {
   headline: string;
+  /** One-line hook covering both analysis and shipping. */
   pitch: string;
+  /** Longer elaboration shown where there's room (e.g. the dedicated step). */
+  detail: string;
   /** posthog.com/slack-app — "learn more". */
   learnMoreUrl: string;
-  /** project-integrations#integration-slack — where the user connects Slack. */
+  /** settings/project-integrations#integration-slack — where the user connects Slack. */
   setupUrl: string;
   useCases: string[];
 }
@@ -147,6 +150,7 @@ const SLACK_APP = copyData.slackApp as {
   setupUrl: string;
   headline: string;
   pitch: string;
+  detail: string;
   neutralUseCases: string[];
   useCasesByRole: Record<TailoredRole, string[]>;
 };
@@ -345,6 +349,7 @@ export function getSlackAppCard(role: string | null | undefined): SlackAppCard {
   return {
     headline: SLACK_APP.headline,
     pitch: SLACK_APP.pitch,
+    detail: SLACK_APP.detail,
     learnMoreUrl: SLACK_APP.learnMoreUrl,
     setupUrl: SLACK_APP.setupUrl,
     useCases,
