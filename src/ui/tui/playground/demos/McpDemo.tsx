@@ -7,12 +7,23 @@
 
 import { WizardStore } from '@ui/tui/store';
 import { McpScreen } from '@ui/tui/screens/McpScreen';
-import type { McpInstaller } from '@ui/tui/services/mcp-installer';
+import type {
+  McpInstaller,
+  McpClientInfo,
+} from '@ui/tui/services/mcp-installer';
 
-const MOCK_CLIENTS = [
+const MOCK_CLIENTS: McpClientInfo[] = [
   { name: 'Claude Code', supportsPlugin: true },
   { name: 'Cursor', supportsPlugin: true },
   { name: 'VS Code', supportsPlugin: false },
+  {
+    name: 'Claude Desktop/Web',
+    supportsPlugin: false,
+    finish: {
+      url: 'https://claude.ai/directory/connectors/posthog',
+      instruction: 'Sign in and click "Connect" to finish.',
+    },
+  },
 ];
 
 function createMockInstaller(): McpInstaller {

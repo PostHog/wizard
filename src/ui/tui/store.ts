@@ -339,6 +339,7 @@ export class WizardStore {
 
   /** User dismissed the blocking outage screen. Gate resolves via _checkGates(). */
   dismissOutage(): void {
+    logToFile('[health-checks] user dismissed outage screen, continuing');
     this.$session.setKey('outageDismissed', true);
     this.emitChange();
   }
@@ -523,13 +524,19 @@ export class WizardStore {
   setMcpComplete(
     outcome: McpOutcome = McpOutcome.Skipped,
     installedClients: string[] = [],
+    featuresSelected?: 'all' | string[],
   ): void {
     this.$session.setKey('mcpComplete', true);
     this.$session.setKey('mcpOutcome', outcome);
     this.$session.setKey('mcpInstalledClients', installedClients);
+    const featuresPayload =
+      outcome === McpOutcome.Installed && featuresSelected !== undefined
+        ? { mcp_features_selected: featuresSelected }
+        : {};
     analytics.wizardCapture('mcp complete', {
       mcp_outcome: outcome,
       mcp_installed_clients: installedClients,
+      ...featuresPayload,
       ...sessionProperties(this.session),
     });
     this.emitChange();

@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.19.0](https://github.com/PostHog/wizard/compare/v2.18.0...v2.19.0) (2026-06-11)
+
+
+### Features
+
+* **mcp:** granular feature selection with plugin/MCP decoupling ([#442](https://github.com/PostHog/wizard/issues/442)) ([6acf3ee](https://github.com/PostHog/wizard/commit/6acf3ee449f5b7de180b3100cc94fcb14823db7a))
+
+
+### Bug Fixes
+
+* **wizard:** Fix wizard workbench runs against local MCP/repo ([#641](https://github.com/PostHog/wizard/issues/641)) ([96e4621](https://github.com/PostHog/wizard/commit/96e4621f4d3e63331316824d30b75fce91f7ad35))
+
 ## [2.18.0](https://github.com/PostHog/wizard/compare/v2.17.0...v2.18.0) (2026-06-10)
 
 

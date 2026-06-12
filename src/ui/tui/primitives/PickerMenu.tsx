@@ -21,6 +21,13 @@ interface PickerOption<T> {
   label: string;
   value: T;
   hint?: string;
+  /**
+   * Multi-select only: marks this option mutually exclusive with every other
+   * option. Selecting it clears all other picks; selecting any non-exclusive
+   * option clears it. Used e.g. for a browser connector that can't be
+   * installed alongside local editors.
+   */
+  exclusive?: boolean;
 }
 
 interface PickerMenuProps<T> {
@@ -251,9 +258,19 @@ const MultiPickerMenu = <T,>({
           const next = new Set(prev);
           if (next.has(focused)) {
             next.delete(focused);
-          } else {
-            next.add(focused);
+            return next;
           }
+          // Enforce mutual exclusivity: an exclusive option clears every other
+          // pick; any other option clears previously-picked exclusive ones.
+          if (options[focused]?.exclusive) {
+            return new Set([focused]);
+          }
+          for (const i of next) {
+            if (options[i]?.exclusive) {
+              next.delete(i);
+            }
+          }
+          next.add(focused);
           return next;
         });
       },
