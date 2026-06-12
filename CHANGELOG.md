@@ -1,5 +1,19 @@
 # Changelog
 
+## [2.20.0](https://github.com/PostHog/wizard/compare/v2.19.0...v2.20.0) (2026-06-12)
+
+
+### Features
+
+* **agent:** detect all gateway-auth overrides and make the 401 actionable ([#615](https://github.com/PostHog/wizard/issues/615)) ([51e54b8](https://github.com/PostHog/wizard/commit/51e54b8a1c999389f02ae612818c8cb52056d9c2))
+* Slack connect follow-ups from [#640](https://github.com/PostHog/wizard/issues/640) review ([#648](https://github.com/PostHog/wizard/issues/648)) ([f5a6f72](https://github.com/PostHog/wizard/commit/f5a6f72d128e772cbbca148a2e5e652b047920f0))
+* surface the PostHog Slack app in the MCP tutorial ([#640](https://github.com/PostHog/wizard/issues/640)) ([e9257b8](https://github.com/PostHog/wizard/commit/e9257b88108d4bead72ff2371828a73c99986e6f))
+
+
+### Bug Fixes
+
+* **agent:** make .claude/settings backup/restore resilient ([#614](https://github.com/PostHog/wizard/issues/614)) ([9c8d27a](https://github.com/PostHog/wizard/commit/9c8d27a09bc8edfb2df76c9ce34b4f1d12dccf84))
+
 ## [2.19.0](https://github.com/PostHog/wizard/compare/v2.18.0...v2.19.0) (2026-06-11)
 
 
