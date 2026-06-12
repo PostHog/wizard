@@ -7,6 +7,7 @@ import {
 import type { WizardSession } from '@lib/wizard-session';
 import type { ApiUser } from '@lib/api';
 import { v4 as uuidv4 } from 'uuid';
+import { IS_PRODUCTION_BUILD } from '@env';
 import { debug } from './debug';
 
 /**
@@ -63,22 +64,63 @@ export class Analytics {
       flushInterval: 0,
       enableExceptionAutocapture: true,
       before_send: (event) => {
-        if (event && Object.keys(this.groups).length > 0) {
+        if (!event) return event;
+        if (Object.keys(this.groups).length > 0) {
           event.groups = { ...this.groups, ...event.groups };
+        }
+        // Autocaptured exceptions arrive with a random uuid and
+        // `$process_person_profile: false` — reattach the run's identity
+        // and tags so they land on the same person as everything else.
+        if (event.event === '$exception') {
+          event.distinctId = this.distinctId ?? this.anonymousId;
+          const { $process_person_profile, ...properties } =
+            event.properties ?? {};
+          void $process_person_profile;
+          event.properties = { ...this.tags, ...properties };
         }
         return event;
       },
     });
 
     this.tags = { $app_name: this.appName };
+    // Non-production builds tag every event so they segment out of prod
+    // data. CI runs upgrade the tag to 'ci' (see runWizardCI).
+    if (!IS_PRODUCTION_BUILD) {
+      this.tags.build = 'dev';
+    }
 
     this.anonymousId = uuidv4();
 
     this.distinctId = undefined;
   }
 
-  setDistinctId(distinctId: string) {
+  /**
+   * Associate the run with the logged-in user, once per id: identify them
+   * (email, name), then alias the run's anonymous id onto the identified
+   * person so pre-login events merge in. Alias only ever fires after
+   * identification.
+   */
+  identifyUser(user: ApiUser) {
+    const distinctId = user.distinct_id;
+    if (this.distinctId === distinctId || distinctId === this.anonymousId) {
+      return;
+    }
     this.distinctId = distinctId;
+    this.client.identify({
+      distinctId,
+      properties: {
+        $set: {
+          ...(user.email ? { email: user.email } : {}),
+          ...(user.first_name || user.last_name
+            ? {
+                name: [user.first_name, user.last_name]
+                  .filter(Boolean)
+                  .join(' '),
+              }
+            : {}),
+        },
+      },
+    });
     this.client.alias({
       distinctId,
       alias: this.anonymousId,

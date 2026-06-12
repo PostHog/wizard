@@ -13,6 +13,7 @@ import { InkUI } from './ink-ui.js';
 import { setUI } from '@ui/index';
 import { App } from './App.js';
 import { OutroKind } from '@lib/wizard-session';
+import { analytics } from '@utils/analytics';
 import { logToFile } from '@utils/debug';
 
 // ANSI escape sequences
@@ -68,6 +69,10 @@ export function startTUI(
   const { unmount: inkUnmount, waitUntilExit } = render(
     createElement(App, { store }),
   );
+
+  // The launch marker — the first event of every TUI run, captured under
+  // the run's anonymous id and merged into the user once they log in.
+  analytics.wizardCapture('started', { program_id: program });
 
   // Fire the program steps' init work (e.g. the health-check pre-flight)
   // now that the screens are rendering — store construction alone must

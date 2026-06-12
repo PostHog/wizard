@@ -667,6 +667,11 @@ export class WizardStore {
   private _detectTransition(): void {
     const next = this.router.resolve(this.session);
     const prev = this._lastScreen;
+    if (next !== prev) {
+      // Every event carries the active TUI screen, filling the
+      // "URL / Screen" column in PostHog.
+      analytics.setTag('$screen_name', next);
+    }
     if (prev !== null && next !== prev) {
       const hooks = this._enterScreenHooks.get(next);
       if (hooks) {
