@@ -14,8 +14,8 @@
  * surface (feature flags, experiments, surveys, replays, errors, web
  * analytics, LLM analytics, cohorts, persons) plus read/write on
  * annotations; `AgentSkill` adds feature-flag read/write; the default
- * `PostHogIntegration` run adds `integration:read` for the
- * Connect-Slack step. Persistence writes (dashboard:write,
+ * `PostHogIntegration` run and the standalone `slack` flow add
+ * `integration:read` for the Connect-Slack step. Persistence writes (dashboard:write,
  * insight:write, notebook:write, query:read) come for free from the
  * base set, so the tutorial's "save as insight / pin to dashboard /
  * add to notebook" follow-ups keep working.
@@ -120,18 +120,17 @@ export const AGENT_SKILL_SCOPE_ADDITIONS = [
 ] as const;
 
 /**
- * Extra scope the default wizard run needs on top of `WIZARD_OAUTH_SCOPES`.
+ * Extra scope the Connect-Slack step needs on top of `WIZARD_OAUTH_SCOPES`.
  *
- * The Connect-Slack step at the end of the run polls
- * `/api/projects/:id/integrations/` (`fetchSlackConnected`) to render the
- * already-connected variant and to flip live once the user completes the
- * Slack OAuth step in the browser. Without `integration:read` the first
- * poll 403s, the screen stops polling, and an already-connected project
- * is nagged with the connect nudge.
+ * The step polls `/api/projects/:id/integrations/` (`fetchSlackConnected`)
+ * to render the already-connected variant and to flip live once the user
+ * completes the Slack OAuth step in the browser. Without `integration:read`
+ * the first poll 403s, the screen stops polling, and an already-connected
+ * project is nagged with the connect nudge. Used by the default integration
+ * run (the step ends the run) and by the standalone `wizard slack` flow
+ * (the step is the whole program).
  */
-export const POSTHOG_INTEGRATION_SCOPE_ADDITIONS = [
-  'integration:read',
-] as const;
+export const CONNECT_SLACK_SCOPE_ADDITIONS = ['integration:read'] as const;
 
 /**
  * Per-program scope additions, layered on top of `WIZARD_OAUTH_SCOPES`.
@@ -151,7 +150,8 @@ const PROGRAM_SCOPE_ADDITIONS: Partial<Record<ProgramId, readonly string[]>> = {
   // ever changes, this line will fail to type-check.
   'mcp-tutorial': MCP_TUTORIAL_SCOPE_ADDITIONS,
   'agent-skill': AGENT_SKILL_SCOPE_ADDITIONS,
-  'posthog-integration': POSTHOG_INTEGRATION_SCOPE_ADDITIONS,
+  'posthog-integration': CONNECT_SLACK_SCOPE_ADDITIONS,
+  slack: CONNECT_SLACK_SCOPE_ADDITIONS,
 };
 
 /**

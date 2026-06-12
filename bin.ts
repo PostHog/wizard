@@ -39,6 +39,7 @@ import { doctorCommand } from './src/commands/doctor';
 import { migrateCommand } from './src/commands/migrate';
 import { eventsAuditCommand } from './src/commands/events-audit';
 import { revenueCommand } from './src/commands/revenue';
+import { slackCommand } from './src/commands/slack';
 import { uploadSourcemapsCommand } from './src/commands/upload-sourcemaps';
 import { skillCommand } from './src/commands/skill';
 import { recoverOrphanedSettingsBackups } from './src/lib/agent/claude-settings';
@@ -67,6 +68,7 @@ Wizard.use(basicIntegrationCommand)
   .use(migrateCommand)
   .use(eventsAuditCommand)
   .use(revenueCommand)
+  .use(slackCommand)
   .use(uploadSourcemapsCommand)
   .use(skillCommand)
   .init();
