@@ -156,7 +156,7 @@ export const PostHogIntegrationIntroScreen = ({
     );
   } else if (view === 'more-info') {
     body = (
-      <Box flexDirection="column" width={56} flexShrink={0}>
+      <Box flexDirection="column" width={64} flexShrink={0}>
         <Text>
           The wizard is an agent that executes PostHog tasks. Its code is open
           source: <Text color="cyan">https://github.com/PostHog/wizard</Text>
