@@ -57,10 +57,14 @@ export const DEFAULT_HOST_URL = IS_DEV
   : 'https://us.i.posthog.com';
 export const ISSUES_URL = 'https://github.com/posthog/wizard/issues';
 export const CONTEXT_MILL_URL = 'https://github.com/PostHog/context-mill';
+export const CONTEXT_MILL_RELEASE_URL =
+  'https://github.com/PostHog/context-mill/releases';
 export const POSTHOG_DOCS_URL = 'https://posthog.com/docs';
 export const POSTHOG_WIZARD_REPO_URL = 'https://github.com/PostHog/wizard';
 export const POSTHOG_TERMS_URL = 'https://posthog.com/terms';
 export const POSTHOG_PRIVACY_URL = 'https://posthog.com/privacy';
+export const POSTHOG_ORG_AI_SETTINGS_URL =
+  'https://app.posthog.com/settings/organization-details#setting=organization-ai-consent';
 export const WIZARD_CONTACT_EMAIL = 'wizard@posthog.com';
 
 /** Remote base URL for fetching the skill menu + downloading skills. */

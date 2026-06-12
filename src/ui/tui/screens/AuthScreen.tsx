@@ -67,9 +67,7 @@ export const AuthScreen = ({ store }: AuthScreenProps) => {
         title="Wizard privacy & usage"
         showSubtitle={false}
         showDetection={false}
-        body={
-          <PrivacyPanel skillId={session.skillId} localMcp={session.localMcp} />
-        }
+        body={<PrivacyPanel />}
         menuOptions={[{ label: 'Back', value: 'back' }]}
         menuAlign="left"
         onSelect={() => setShowPrivacy(false)}
@@ -112,25 +110,16 @@ export const AuthScreen = ({ store }: AuthScreenProps) => {
       </Box>
 
       <Box flexDirection="column" marginBottom={1}>
-        <Text bold>How does the wizard use your data?</Text>
+        <Text bold dimColor>
+          How does the wizard use your data?
+        </Text>
         <Text dimColor>
           {'•'} Source files are read by Claude for AI context
         </Text>
         <Text dimColor>{'•'} .env* and secrets stay on your machine</Text>
         <Text dimColor>
-          {'•'} Usage data{' '}
-          {session.noTelemetry ? (
-            <Text color="green">disabled</Text>
-          ) : (
-            <>
-              <Text color="yellow">enabled by default</Text>, pass{' '}
-              <Text color="cyan">--no-telemetry</Text> to disable
-            </>
-          )}
-        </Text>
-        <Text dimColor>
-          Press <Text color={Colors.accent}>[I]</Text> for full privacy & usage
-          info
+          {'•'} Press <Text color={Colors.accent}>[I]</Text> for full privacy &
+          usage info
         </Text>
       </Box>
 
