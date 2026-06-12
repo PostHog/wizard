@@ -7,6 +7,10 @@ import { toCommandModule, type Command } from './commands/command';
 /**
  * Global yargs options applied to every command. These are read from the
  * `POSTHOG_WIZARD` env prefix as well as flags.
+ *
+ * Options with `hidden: true` are "internal modes" — they don't show up in
+ * `--help` but are still accepted on every command. The catalog of internal
+ * flags and what each one does lives in CONTRIBUTING.md.
  */
 export const GLOBAL_OPTIONS = {
   debug: {
@@ -23,12 +27,6 @@ export const GLOBAL_OPTIONS = {
     default: false,
     describe:
       'Create a new PostHog account during setup\nenv: POSTHOG_WIZARD_SIGNUP',
-    type: 'boolean' as const,
-  },
-  'local-mcp': {
-    default: false,
-    describe:
-      'Use local MCP server at http://localhost:8787/mcp\nenv: POSTHOG_WIZARD_LOCAL_MCP',
     type: 'boolean' as const,
   },
   telemetry: {
@@ -52,6 +50,29 @@ export const GLOBAL_OPTIONS = {
       'Email address for signup (used with --signup)\nenv: POSTHOG_WIZARD_EMAIL',
     type: 'string' as const,
   },
+  // ── Internal modes ─────────────────────────────────────────────────
+  // Hidden from `--help`. See CONTRIBUTING.md for what each one does.
+  'local-mcp': {
+    default: false,
+    describe:
+      'Use local MCP server at http://localhost:8787/mcp\nenv: POSTHOG_WIZARD_LOCAL_MCP',
+    type: 'boolean' as const,
+    hidden: true,
+  },
+  benchmark: {
+    default: false,
+    describe:
+      'Run in benchmark mode with per-phase token tracking\nenv: POSTHOG_WIZARD_BENCHMARK',
+    type: 'boolean' as const,
+    hidden: true,
+  },
+  'yara-report': {
+    default: false,
+    describe:
+      'Print YARA scanner summary after the agent run\nenv: POSTHOG_WIZARD_YARA_REPORT',
+    type: 'boolean' as const,
+    hidden: true,
+  },
 };
 
 export class Wizard {
@@ -72,6 +93,7 @@ export class Wizard {
         describe:
           'Enable CI mode for non-interactive execution\nenv: POSTHOG_WIZARD_CI',
         type: 'boolean',
+        hidden: true,
       });
     }
 
