@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.21.0](https://github.com/PostHog/wizard/compare/v2.20.0...v2.21.0) (2026-06-12)
+
+
+### Features
+
+* detect existing Slack connection at the end of a wizard run ([#649](https://github.com/PostHog/wizard/issues/649)) ([06bbf79](https://github.com/PostHog/wizard/commit/06bbf794f1cffe1ccea77988a04344b56d65641c))
+
 ## [2.20.0](https://github.com/PostHog/wizard/compare/v2.19.0...v2.20.0) (2026-06-12)
 
 
