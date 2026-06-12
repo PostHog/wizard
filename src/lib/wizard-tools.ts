@@ -11,11 +11,11 @@
 
 import path from 'path';
 import fs from 'fs';
-import { execFileSync } from 'child_process';
+import axios from 'axios';
+import { unzipSync } from 'fflate';
 import { z } from 'zod';
 import { logToFile } from '@utils/debug';
 import { analytics } from '@utils/analytics';
-import { skillTmpPath } from '@utils/paths';
 import type { PackageManagerDetector } from './detection/package-manager';
 import {
   AUDIT_CHECKS_FILE,
@@ -84,31 +84,30 @@ export async function fetchSkillMenu(
  * Download and extract a skill.
  * By default installs to `<installDir>/.claude/skills/<id>/`.
  * Pass `skillsRoot` to override the base directory (e.g. `.posthog/skills`).
+ *
+ * Downloads the zip into memory and extracts it in-process. This stays
+ * cross-platform: the earlier `curl`/`unzip` shell-out broke on Windows,
+ * which ships neither an `unzip` binary nor a `/tmp` directory.
  */
-export function downloadSkill(
+export async function downloadSkill(
   skillEntry: SkillEntry,
   installDir: string,
   skillsRoot?: string,
-): { success: boolean; error?: string } {
+): Promise<{ success: boolean; error?: string }> {
   const skillDir = skillsRoot
     ? path.join(installDir, skillsRoot, skillEntry.id)
     : path.join(installDir, '.claude', 'skills', skillEntry.id);
-  const tmpFile = skillTmpPath(skillEntry.id);
 
   try {
     fs.mkdirSync(skillDir, { recursive: true });
-    execFileSync('curl', ['-sL', skillEntry.downloadUrl, '-o', tmpFile], {
+
+    const resp = await axios.get<ArrayBuffer>(skillEntry.downloadUrl, {
+      responseType: 'arraybuffer',
       timeout: 30000,
     });
-    execFileSync('unzip', ['-o', tmpFile, '-d', skillDir], {
-      timeout: 30000,
-    });
+    extractZipTo(new Uint8Array(resp.data), skillDir);
+
     fs.writeFileSync(path.join(skillDir, '.posthog-wizard'), '');
-    try {
-      fs.unlinkSync(tmpFile);
-    } catch {
-      /* ignore cleanup errors */
-    }
 
     logToFile(
       `downloadSkill: installed ${skillEntry.id} from ${skillEntry.downloadUrl}`,
@@ -117,6 +116,24 @@ export function downloadSkill(
   } catch (err: any) {
     logToFile(`downloadSkill: error: ${err.message}`);
     return { success: false, error: err.message };
+  }
+}
+
+/**
+ * Extract a zip archive's bytes into `destDir`. Rejects entries whose path
+ * escapes `destDir` (zip-slip) before writing anything to disk.
+ */
+function extractZipTo(zip: Uint8Array, destDir: string): void {
+  const entries = unzipSync(zip);
+  for (const [name, data] of Object.entries(entries)) {
+    if (name.endsWith('/')) continue; // directory entry; parents made on demand
+    const dest = path.join(destDir, name);
+    const rel = path.relative(destDir, dest);
+    if (rel.startsWith('..') || path.isAbsolute(rel)) {
+      throw new Error(`unsafe path in skill archive: ${name}`);
+    }
+    fs.mkdirSync(path.dirname(dest), { recursive: true });
+    fs.writeFileSync(dest, data);
   }
 }
 
@@ -154,7 +171,7 @@ export async function installSkillById(
     .find((s) => s.id === skillId);
   if (!skill) return { kind: 'skill-not-found', skillId };
 
-  const result = downloadSkill(skill, installDir, skillsRoot);
+  const result = await downloadSkill(skill, installDir, skillsRoot);
   if (!result.success) {
     return { kind: 'download-failed', message: result.error ?? 'unknown' };
   }
@@ -735,7 +752,7 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
           'Skill ID from the skill menu (e.g., "integration-nextjs-app-router")',
         ),
     },
-    (args: { skillId: string }) => {
+    async (args: { skillId: string }) => {
       if (!/^[a-z0-9][a-z0-9_-]*$/.test(args.skillId)) {
         return {
           content: [
@@ -763,7 +780,7 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
         };
       }
 
-      const result = downloadSkill(skill, workingDirectory);
+      const result = await downloadSkill(skill, workingDirectory);
       if (result.success) {
         return {
           content: [
@@ -1150,4 +1167,5 @@ export const __test = {
   applyAuditUpdates,
   makeMutex,
   AUDIT_CHECKS_FILE,
+  extractZipTo,
 };
