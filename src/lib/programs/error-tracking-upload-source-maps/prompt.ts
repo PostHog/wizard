@@ -48,25 +48,34 @@ not invent steps the skill doesn't describe.
 
 Follow these steps IN ORDER. Do not skip or reorder.
 
-Before doing any work, create your FULL task list in a single TaskCreate
-call so the user can follow your progress in the TUI. Use exactly these
-tasks, in this order — do not collapse, rename, or omit any of them:
-  1. Get personal API key
-  2. Install source maps skill
-  3. Apply build-config changes (per skill)
-  4. Make credentials readable at build time
-  5. Write keys to .env
-  6. Identify build & run commands
+Your FIRST message must contain ONLY parallel tool calls, in this order:
+  - the STEP 1 wizard_ask call FIRST — tool calls execute as they stream,
+    so this puts the API-key prompt in front of the user within seconds —
+    then
+  - one TaskCreate call PER task below, all in this same message (the tool
+    takes a single task per call). The TUI shows only the subject, so keep
+    every description to a few words — never a sentence.
+Do not read files, explore the project, or write any text first, and keep
+any thinking before the calls to a single short sentence.
+
+Use exactly these tasks, in this order — do not collapse, rename, or omit
+any of them. Getting the API key is NOT a task — its prompt is already on
+screen by the time the list renders:
+  1. Install source maps skill
+  2. Apply build-config changes (per skill)
+  3. Make credentials readable at build time
+  4. Write keys to .env
+  5. Identify build & run commands
+  6. Set up CI for auto-upload
   7. Test the local setup
-  8. Set up CI for auto-upload
-  9. Summarise & hand off
+  8. Summarise & hand off
 Drive the list with TaskUpdate — mark a task in_progress when you start it
-and completed when done. ALWAYS keep task 7 ("Test the local setup") and task
-8 ("Set up CI for auto-upload") in the list even if the user declines either
-in STEP 7 / STEP 8: mark them completed rather than deleting them, so the user
-can see each was offered.
+and completed when done. ALWAYS keep task 7 ("Test the local setup") in the
+list even if the user declines it in STEP 8: mark it completed rather than
+deleting it, so the user can see it was offered.
 
 STEP 1 — Get a personal API key from the user. (skill: "Get a personal API key")
+   This wizard_ask call ships in your FIRST message, per the rule above.
    The wizard cannot mint keys — never call the PostHog API or any tool to
    create one. Ask the user with the wizard_ask MCP tool; you receive the
    answer as a vaulted secretRef (never the raw value), which you reuse in
@@ -119,7 +128,20 @@ STEP 6 — Identify the build AND run commands. (skill: "Identify the build and 
    NOT run either yourself — the user runs them. If you cannot identify a
    build command, emit ${AgentSignals.ABORT} build command not found.
 
-STEP 7 — Offer to test the local setup. (skill: "Test the local setup")
+STEP 7 — Set up CI for automatic uploads. (skill: "Set up CI for automatic uploads")
+   Source maps only upload when the production build runs, so the build's
+   CI/CD must carry the same upload credentials you wrote in STEP 5. Do this
+   step without asking — there is no opt-in question for it. Follow the
+   skill's "Set up CI for automatic uploads" step — it is the source of
+   truth for tracing where the production build runs and wiring the
+   credentials through every layer, whatever the CI provider.
+   Wizard-specific rules on top:
+   - Trace the deploy path by reading the project's files — do NOT ask the
+     user, and do NOT invent config that isn't there.
+   - Carry every manual follow-up the skill has you hand off (secrets the
+     user must create, an untraceable build path) into STEP 9.
+
+STEP 8 — Offer to test the local setup. (skill: "Test the local setup")
    Call wizard_ask:
      {
        id: "test-affordance",
@@ -131,7 +153,7 @@ STEP 7 — Offer to test the local setup. (skill: "Test the local setup")
        ]
      }
 
-   If "no", skip to STEP 8.
+   If "no", skip to STEP 9.
 
    If "yes", follow the skill's "Test the local setup" step for the
    platform-appropriate affordance, the captureException shape, the
@@ -148,42 +170,6 @@ STEP 7 — Offer to test the local setup. (skill: "Test the local setup")
         }
    After the user continues, revert the test code per the skill's rules and
    surface any failure in STEP 9.
-
-STEP 8 — Offer to set up CI for automatic uploads. (skill: "Set up CI for automatic uploads")
-   Source maps only upload when the production build runs, so the build's CI/CD
-   must carry the same upload credentials you wrote in STEP 5. Ask the user with
-   wizard_ask whether to wire this up now:
-     {
-       id: "ci-affordance",
-       prompt: "Want me to set up CI so source maps upload automatically on every deploy?\\n\\nI'll wire your upload credentials into your build pipeline (Dockerfile / GitHub Actions) wherever I recognise it.",
-       kind: "single",
-       options: [
-         { label: "Yes, set up CI", value: "yes" },
-         { label: "No, I'll handle CI myself", value: "no" }
-       ]
-     }
-   Keep the \\n line breaks exactly as written.
-
-   If "no", skip to STEP 9.
-
-   If "yes", follow the skill's "Set up CI for automatic uploads" step. It
-   tells you how to trace where the production build actually runs and how to
-   wire the credentials through every layer for each setup it covers
-   (Dockerfile, GitHub Actions, composite actions, builds over SSH). The
-   skill is the source of truth for that wiring; wizard-specific rules on top:
-   - Trace the deploy path by reading the project's files — do NOT ask the
-     user, and do NOT invent config that isn't there.
-   - Reuse the EXACT credential variable names you wrote in STEP 5.
-   - If you can't trace the build to a setup the skill covers, make NO CI
-     file changes — instead tell the user which env vars their build
-     environment must provide, or maps won't upload on deploy.
-   - NEVER write a secret VALUE into a Dockerfile, workflow, or any other
-     committed file — only variable names / \`secrets.*\` references.
-   - You CANNOT create CI secrets. Tell the user each secret to add under
-     their repo's Settings → Secrets and variables → Actions before the
-     next deploy.
-   - Carry every manual follow-up (secrets to add, the unrecognised-setup
-     note) into STEP 9.
 
 STEP 9 — Summarise and hand off. (skill: "Verify and hand off")
    Follow the skill's "Verify and hand off" step. The Symbol sets page for

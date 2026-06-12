@@ -78,7 +78,7 @@ export const SourceMapsIntroScreen = ({
         <Text>{'•'} Ask for a personal API key to authorize uploads</Text>
         <Text>{'•'} Wire map generation + upload into your build</Text>
         <Text>{'•'} Write the upload credentials to your .env</Text>
-        <Text>{'•'} Offer a local test run and CI wiring for deploys</Text>
+        <Text>{'•'} Wire CI for deploys and offer a local test run</Text>
       </Box>
       <Box marginTop={1}>
         <Text dimColor>

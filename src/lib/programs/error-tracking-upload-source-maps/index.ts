@@ -51,7 +51,7 @@ export const errorTrackingUploadSourceMapsConfig: ProgramConfig = {
       abortCases: SOURCE_MAPS_ABORT_CASES,
       // The flow parks on wizard_ask while the user does slow work — create
       // a personal API key in the browser (STEP 1), or run a production
-      // build, trigger the test error, and check Error Tracking (STEP 7).
+      // build, trigger the test error, and check Error Tracking (STEP 8).
       // The 5-minute default cancels the question mid-task and the agent
       // wraps up to the outro, so give these answers half an hour.
       askTimeoutMs: 30 * 60 * 1000,
