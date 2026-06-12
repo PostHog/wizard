@@ -22,7 +22,7 @@ import { Colors } from '@ui/tui/styles';
 import { useSkillEntry } from '@ui/tui/screens/SkillSourceInfo';
 import { fetchUserData } from '@lib/api';
 import { getCloudUrlFromRegion } from '@utils/urls';
-import { POSTHOG_APP_URL } from '@lib/constants';
+import { CONTEXT_MILL_RELEASES_URL, POSTHOG_APP_URL } from '@lib/constants';
 import { analytics } from '@utils/analytics';
 import { LoadingBox } from '@ui/tui/primitives/index';
 
@@ -63,10 +63,7 @@ export const AiOptInRequiredScreen = ({
   const [retrying, setRetrying] = useState(false);
   const [retryError, setRetryError] = useState<string | null>(null);
 
-  const { skillEntry, fetchFailed } = useSkillEntry(
-    session.skillId,
-    session.localMcp,
-  );
+  const { skillEntry } = useSkillEntry(session.skillId, session.localMcp);
 
   // Fire the "shown" event once per variant transition.
   useEffect(() => {
@@ -199,15 +196,23 @@ export const AiOptInRequiredScreen = ({
         <Text color="cyan">{settingsUrl}</Text>
       </Box>
 
+      {/* Release PAGE, not the direct asset URL — asset URLs hard-wrap in
+          the terminal and corrupt copy/paste (same rationale as
+          PrivacyPanel). The resolved entry names the asset to grab. */}
       {showSkill && (
-        <Box marginBottom={1}>
+        <Box marginBottom={1} flexDirection="column">
           <Text>
-            Prefer your own AI? Download the skill:{' '}
-            <Text color="cyan">
-              {skillEntry?.downloadUrl ??
-                (fetchFailed ? 'unavailable' : 'Loading...')}
-            </Text>
+            Prefer your own AI? Download{' '}
+            {skillEntry ? (
+              <>
+                the <Text bold>{skillEntry.id}</Text> skill
+              </>
+            ) : (
+              'the skill for your framework'
+            )}{' '}
+            and run it in your own agent:
           </Text>
+          <Text color="cyan">{CONTEXT_MILL_RELEASES_URL}</Text>
         </Box>
       )}
 
