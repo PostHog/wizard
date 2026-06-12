@@ -70,8 +70,9 @@ export const SourceMapsIntroScreen = ({
           <Text italic color="cyan">
             {session.programLabel}
           </Text>{' '}
-          program teaches PostHog Error Tracking to resolve minified production
-          stack traces back to your original source. It will:
+          program sets up your project to upload source maps to PostHog, so
+          Error Tracking shows production stack traces in your original source
+          instead of minified bundles. It will:
         </Text>
       </Box>
       <Box flexDirection="column" marginTop={1} paddingLeft={4}>
