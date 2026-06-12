@@ -15,7 +15,7 @@ import type { WizardStore } from '@ui/tui/store';
 import { LoadingBox } from '@ui/tui/primitives/index';
 import { PrivacyPanel } from '@ui/tui/components/PrivacyPanel';
 import { IntroScreenLayout } from '@ui/tui/screens/IntroScreenLayout';
-import { useKeyBindings } from '@ui/tui/hooks/useKeyBindings';
+import { useKeyBindings, type KeyBinding } from '@ui/tui/hooks/useKeyBindings';
 import { Colors } from '@ui/tui/styles';
 
 interface AuthScreenProps {
@@ -36,29 +36,26 @@ export const AuthScreen = ({ store }: AuthScreenProps) => {
   // the browser can't reach the local callback server.
   const canPasteCode = Boolean(session.loginUrl);
 
-  useKeyBindings(
-    'auth',
-    showPrivacy
-      ? []
-      : [
-          ...(canPasteCode
-            ? [
-                {
-                  match: ['p', 'P'],
-                  label: 'P',
-                  action: 'paste auth code',
-                  handler: () => store.showManualAuthCode(),
-                },
-              ]
-            : []),
-          {
-            match: ['i', 'I'],
-            label: 'I',
-            action: 'privacy info',
-            handler: () => setShowPrivacy(true),
-          },
-        ],
-  );
+  // Build bindings imperatively: while the privacy view is open, the
+  // screen registers NO bindings (IntroScreenLayout's menu owns input).
+  const bindings: KeyBinding[] = [];
+  if (!showPrivacy) {
+    if (canPasteCode) {
+      bindings.push({
+        match: ['p', 'P'],
+        label: 'P',
+        action: 'paste auth code',
+        handler: () => store.showManualAuthCode(),
+      });
+    }
+    bindings.push({
+      match: ['i', 'I'],
+      label: 'I',
+      action: 'privacy info',
+      handler: () => setShowPrivacy(true),
+    });
+  }
+  useKeyBindings('auth', bindings);
 
   if (showPrivacy) {
     return (
