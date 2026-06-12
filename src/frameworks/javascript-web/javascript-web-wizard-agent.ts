@@ -19,7 +19,6 @@ export const JAVASCRIPT_WEB_AGENT_CONFIG: FrameworkConfig<JavaScriptContext> = {
   metadata: {
     name: 'JavaScript (Web)',
     integration: Integration.javascript_web,
-    beta: true,
     docsUrl: 'https://posthog.com/docs/libraries/js',
     gatherContext: (options: WizardRunOptions) => {
       const packageManagerName = detectJsPackageManager(options);
