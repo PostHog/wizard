@@ -5,7 +5,7 @@ import { auditCommand } from '../commands/audit';
 import { doctorCommand } from '../commands/doctor';
 import { migrateCommand } from '../commands/migrate';
 import { revenueCommand } from '../commands/revenue';
-import { sourceMapsCommand } from '../commands/source-maps';
+import { uploadSourcemapsCommand } from '../commands/upload-sourcemaps';
 import { skillCommand } from '../commands/skill';
 
 const cmd = (name: string | readonly string[]): Command => ({
@@ -86,7 +86,7 @@ describe('production command tree', () => {
       doctorCommand,
       migrateCommand,
       revenueCommand,
-      sourceMapsCommand,
+      uploadSourcemapsCommand,
       skillCommand,
     ];
     // On failure, findConflicts returns the offending path(s) — i.e. which

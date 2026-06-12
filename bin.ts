@@ -36,7 +36,7 @@ import { auditCommand } from './src/commands/audit';
 import { doctorCommand } from './src/commands/doctor';
 import { migrateCommand } from './src/commands/migrate';
 import { revenueCommand } from './src/commands/revenue';
-import { sourceMapsCommand } from './src/commands/source-maps';
+import { uploadSourcemapsCommand } from './src/commands/upload-sourcemaps';
 import { skillCommand } from './src/commands/skill';
 
 Wizard.use(basicIntegrationCommand)
@@ -45,6 +45,6 @@ Wizard.use(basicIntegrationCommand)
   .use(doctorCommand)
   .use(migrateCommand)
   .use(revenueCommand)
-  .use(sourceMapsCommand)
+  .use(uploadSourcemapsCommand)
   .use(skillCommand)
   .init();

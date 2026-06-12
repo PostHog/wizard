@@ -13,10 +13,7 @@ import { spawnSync } from 'node:child_process';
 import type { ReactNode } from 'react';
 import { useEffect, useState, useSyncExternalStore } from 'react';
 import type { WizardStore } from '@ui/tui/store';
-import {
-  Integration,
-  WIZARD_TOOLS_MENU_FLAG_KEY,
-} from '@lib/constants';
+import { Integration, WIZARD_TOOLS_MENU_FLAG_KEY } from '@lib/constants';
 import { PickerMenu, LoadingBox } from '@ui/tui/primitives/index';
 import { IntroScreenLayout, type DetectionRow } from './IntroScreenLayout.js';
 import { SkillSourceInfo, useSkillEntry } from './SkillSourceInfo.js';
@@ -60,14 +57,12 @@ const FrameworkPicker = ({
       options={options}
       onSelect={(value) => {
         const integration = Array.isArray(value) ? value[0] : value;
-        void import('@lib/registry').then(
-          ({ FRAMEWORK_REGISTRY }) => {
-            const config = FRAMEWORK_REGISTRY[integration];
-            store.setFrameworkConfig(integration, config);
-            store.setDetectedFramework(config.metadata.name);
-            onComplete?.();
-          },
-        );
+        void import('@lib/registry').then(({ FRAMEWORK_REGISTRY }) => {
+          const config = FRAMEWORK_REGISTRY[integration];
+          store.setFrameworkConfig(integration, config);
+          store.setDetectedFramework(config.metadata.name);
+          onComplete?.();
+        });
       }}
     />
   );

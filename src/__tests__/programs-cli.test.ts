@@ -18,6 +18,7 @@ import type { Arguments } from 'yargs';
 import { auditCommand } from '../commands/audit';
 import { migrateCommand } from '../commands/migrate';
 import { revenueCommand } from '../commands/revenue';
+import { uploadSourcemapsCommand } from '../commands/upload-sourcemaps';
 import { dispatchFamily } from '@lib/programs/dispatch-family';
 import { fetchSkillMenu, type CliEntry } from '@lib/wizard-tools';
 import { auditConfig } from '@lib/programs/audit/index';
@@ -175,5 +176,18 @@ describe('yargs parsing for the audit family', () => {
     );
     expect(argv.installDir).toBe('/tmp/app');
     expect(argv.skill).toBe('web-analytics');
+  });
+
+  test('accepts upload-source-maps and legacy upload-sourcemaps alias', async () => {
+    const canonical = await parseCommand(
+      uploadSourcemapsCommand,
+      'upload-source-maps --region eu',
+    );
+    const legacy = await parseCommand(
+      uploadSourcemapsCommand,
+      'upload-sourcemaps --region eu',
+    );
+    expect(canonical.region).toBe('eu');
+    expect(legacy.region).toBe('eu');
   });
 });

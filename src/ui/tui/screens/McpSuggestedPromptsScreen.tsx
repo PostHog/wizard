@@ -41,6 +41,7 @@ import { Box, Text } from 'ink';
 import { Spinner } from '@inkjs/ui';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSyncExternalStore } from 'react';
+import opn from 'opn';
 
 import type { WizardStore } from '@ui/tui/store';
 import { Colors, Icons } from '@ui/tui/styles';
@@ -57,6 +58,7 @@ import {
   getRoleGreeting,
   getFollowUps,
   getCrossSellPrompts,
+  getSlackAppCard,
   FOLLOW_UP_EXIT_SENTINEL,
   PINNED_FIRST_PROMPT,
   type PromptOption,
@@ -90,6 +92,7 @@ enum Phase {
 
 enum ChoiceValue {
   Login = 'login',
+  ConnectSlack = 'connect-slack',
   Exit = 'exit',
 }
 
@@ -177,6 +180,19 @@ export const McpSuggestedPromptsScreen = ({
         store.setApiUser(user);
         store.setLoginUrl(null);
         setPhase(Phase.Greeting);
+
+        // Fire-and-forget: detect whether Slack is already connected so the
+        // Goodbye card and the dedicated Connect-Slack step can adapt their
+        // copy (confirm it's on vs. nudge to connect). Best-effort — on
+        // failure `slackConnected` stays null and renders as "not connected".
+        void services
+          .checkSlackConnected(credentials)
+          .then((connected) => {
+            if (!cancelled) store.setSlackConnected(connected);
+          })
+          .catch(() => {
+            /* best-effort; leave slackConnected unknown */
+          });
       } catch (err) {
         if (cancelled) return;
         const message = err instanceof Error ? err.message : String(err);
@@ -293,6 +309,13 @@ export const McpSuggestedPromptsScreen = ({
   // move on.
   const enterGoodbye = (): void => {
     runAbortRef.current?.abort();
+    // The Goodbye phase also surfaces the "Take PostHog to Slack" card —
+    // capture the impression here (the single entry-point into Goodbye)
+    // rather than in render, which would re-fire on every re-render.
+    analytics.wizardCapture('mcp suggested prompts slack shown', {
+      role: session.roleAtOrganization,
+      engaged: branchHistory.length > 0,
+    });
     setPhase(Phase.Goodbye);
   };
 
@@ -311,6 +334,20 @@ export const McpSuggestedPromptsScreen = ({
         choice: 'login',
       });
       setPhase(Phase.Authenticating);
+    } else if (choice === ChoiceValue.ConnectSlack) {
+      analytics.wizardCapture('mcp suggested prompts choose', {
+        choice: 'connect-slack',
+      });
+      // Open the Slack integration settings and stay on the Choose screen
+      // so the user can still start the tutorial. opn throws in headless
+      // environments — swallow it; the URL is also printed on screen.
+      if (process.env.NODE_ENV !== 'test') {
+        opn(getSlackAppCard().setupUrl, {
+          wait: false,
+        }).catch(() => {
+          // No browser available.
+        });
+      }
     } else {
       analytics.wizardCapture('mcp suggested prompts choose', {
         choice: 'exit',
@@ -490,6 +527,7 @@ export const McpSuggestedPromptsScreen = ({
             role={session.roleAtOrganization}
             integration={session.integration}
             engaged={branchHistory.length > 0}
+            slackConnected={session.slackConnected}
             onClose={closeWizard}
           />
         )}
@@ -505,57 +543,67 @@ interface ChoosePhaseProps {
   onSelect: (value: ChoiceValue | ChoiceValue[]) => void;
 }
 
-const ChoosePhase = ({ error, onSelect }: ChoosePhaseProps) => (
-  <Box flexDirection="column">
-    <Text bold color={Colors.accent}>
-      PostHog MCP
-    </Text>
+const ChoosePhase = ({ error, onSelect }: ChoosePhaseProps) => {
+  return (
+    <Box flexDirection="column">
+      <Text bold color={Colors.accent}>
+        PostHog MCP
+      </Text>
 
-    <Box marginTop={1}>
-      <Text>
-        With MCP your agent works directly with the PostHog platform. You can
-        prompt it to:
-      </Text>
-    </Box>
-
-    <Box marginTop={1} flexDirection="column">
-      <Text>
-        <Text color="cyan">{Icons.diamond}</Text> Build dashboards
-      </Text>
-      <Text>
-        <Text color="cyan">{Icons.diamond}</Text> Run SQL queries
-      </Text>
-      <Text>
-        <Text color="cyan">{Icons.diamond}</Text> Deploy feature flags
-      </Text>
-      <Text>
-        <Text color="cyan">{Icons.diamond}</Text> Debug exceptions and errors
-      </Text>
-      <Text>
-        <Text color="cyan">{Icons.diamond}</Text> And lots more...
-      </Text>
-    </Box>
-
-    <Box marginTop={1}>
-      <Text>Want a live demo using real data from your project?</Text>
-    </Box>
-
-    <Box>
-      <PickerMenu
-        options={[
-          { label: 'Start MCP tutorial', value: ChoiceValue.Login },
-          { label: 'Exit', value: ChoiceValue.Exit },
-        ]}
-        onSelect={onSelect}
-      />
-    </Box>
-    {error && (
       <Box marginTop={1}>
-        <Text color="red">Login failed: {error}. Try again or exit.</Text>
+        <Text>
+          With MCP your agent works directly with the PostHog platform. You can
+          prompt it to:
+        </Text>
       </Box>
-    )}
-  </Box>
-);
+
+      <Box marginTop={1} flexDirection="column">
+        <Text>
+          <Text color="cyan">{Icons.diamond}</Text> Build dashboards
+        </Text>
+        <Text>
+          <Text color="cyan">{Icons.diamond}</Text> Run SQL queries
+        </Text>
+        <Text>
+          <Text color="cyan">{Icons.diamond}</Text> Deploy feature flags
+        </Text>
+        <Text>
+          <Text color="cyan">{Icons.diamond}</Text> Debug exceptions and errors
+        </Text>
+        <Text>
+          <Text color="cyan">{Icons.diamond}</Text> And lots more...
+        </Text>
+      </Box>
+
+      <Box marginTop={1} flexDirection="column">
+        <Text>
+          You can also connect PostHog to Slack, so you can analyze data and
+          ship product changes there by tagging <Text bold>@PostHog</Text>.
+        </Text>
+      </Box>
+
+      <Box marginTop={1}>
+        <Text>Want a live demo using real data from your project?</Text>
+      </Box>
+
+      <Box>
+        <PickerMenu
+          options={[
+            { label: 'Start MCP tutorial', value: ChoiceValue.Login },
+            { label: 'Connect Slack now', value: ChoiceValue.ConnectSlack },
+            { label: 'Exit', value: ChoiceValue.Exit },
+          ]}
+          onSelect={onSelect}
+        />
+      </Box>
+      {error && (
+        <Box marginTop={1}>
+          <Text color="red">Login failed: {error}. Try again or exit.</Text>
+        </Box>
+      )}
+    </Box>
+  );
+};
 
 // ── Authenticating phase ───────────────────────────────────────────────
 
@@ -966,6 +1014,8 @@ interface GoodbyePhaseProps {
   integration: Integration | null;
   /** True if the user actually ran at least one prompt this session. */
   engaged: boolean;
+  /** Whether Slack is already connected (null = unknown → treat as not). */
+  slackConnected: boolean | null;
   onClose: () => void;
 }
 
@@ -974,12 +1024,33 @@ const GoodbyePhase = ({
   role,
   integration,
   engaged,
+  slackConnected,
   onClose,
 }: GoodbyePhaseProps) => {
   // Take 3 starter prompts from the role-tailored kit. These act as
   // "next time you open your IDE, try this" reminders.
   const kit = getRolePrompts(role, integration);
   const samples = kit.slice(0, 3);
+  const slack = getSlackAppCard();
+
+  // "Close" always dismisses; "Connect PostHog Slack agent" also opens the
+  // integration settings first. Only offered when Slack isn't already
+  // connected — connected users just get "Close".
+  const handleGoodbye = (value: string | string[]): void => {
+    const choice = Array.isArray(value) ? value[0] : value;
+    if (choice === 'connect-slack') {
+      analytics.wizardCapture('slack connect opened', {
+        role,
+        surface: 'goodbye',
+      });
+      if (process.env.NODE_ENV !== 'test') {
+        opn(slack.setupUrl, { wait: false }).catch(() => {
+          // No browser available.
+        });
+      }
+    }
+    onClose();
+  };
 
   const headline = engaged
     ? 'Nice work. You can keep talking to PostHog anytime.'
@@ -1021,6 +1092,43 @@ const GoodbyePhase = ({
         ))}
       </Box>
 
+      {/* "Take PostHog to Slack" — describe the Slack agent's two
+          capabilities. When already connected we confirm it and drop the
+          connect option; otherwise the "Connect PostHog Slack agent" menu
+          entry opens the integration settings (a manual OAuth step — we
+          never wire it up ourselves). */}
+      <Box marginBottom={1} flexDirection="column">
+        {slackConnected ? (
+          <Text bold color={Colors.success}>
+            {Icons.check} Slack connected
+          </Text>
+        ) : (
+          <Text bold color={Colors.accent}>
+            {slack.headline}
+          </Text>
+        )}
+        <Box marginTop={1}>
+          <Text dimColor>
+            {slackConnected
+              ? "Slack is connected — here's what you can do:"
+              : slack.pitch}
+          </Text>
+        </Box>
+        <Box marginTop={1} flexDirection="column">
+          {slack.capabilities.map((capability, i) => (
+            // Marker + copy in one <Text> so the (long) line wraps as a
+            // single flow. Separate row-Box siblings drop the marker on
+            // wrapped bullets — see TipsCard for the same pattern.
+            <Box key={i} marginTop={i === 0 ? 0 : 1}>
+              <Text dimColor>
+                <Text color={Colors.primary}>{Icons.triangleSmallRight} </Text>
+                {capability}
+              </Text>
+            </Box>
+          ))}
+        </Box>
+      </Box>
+
       <Box marginBottom={1}>
         <Text dimColor>
           Re-run this tutorial anytime with{' '}
@@ -1029,8 +1137,18 @@ const GoodbyePhase = ({
       </Box>
 
       <PickerMenu
-        options={[{ label: 'Close', value: 'close' }]}
-        onSelect={onClose}
+        options={
+          slackConnected
+            ? [{ label: 'Close', value: 'close' }]
+            : [
+                {
+                  label: 'Connect PostHog Slack agent',
+                  value: 'connect-slack',
+                },
+                { label: 'Close', value: 'close' },
+              ]
+        }
+        onSelect={handleGoodbye}
       />
     </Box>
   );

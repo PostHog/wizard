@@ -5,6 +5,7 @@
 
 import path from 'path';
 import * as fs from 'fs';
+import { createRequire } from 'node:module';
 import { getUI, type SpinnerHandle } from '@ui';
 import { debug, logToFile, initLogFile, getLogFilePath } from '@utils/debug';
 import type { WizardRunOptions } from '@utils/types';
@@ -54,8 +55,13 @@ async function getSDKModule(): Promise<any> {
  * This ensures we use the SDK's bundled version rather than the user's installed Claude Code.
  */
 function getClaudeCodeExecutablePath(): string {
-  // require.resolve finds the package's main entry, then we get cli.js from same dir
-  const sdkPackagePath = require.resolve('@anthropic-ai/claude-agent-sdk');
+  // Bare `require` is undefined in ESM (tsx dev runs) — fall back to createRequire.
+  const resolver =
+    typeof require !== 'undefined'
+      ? require
+      : createRequire(process.argv[1] ?? `${process.cwd()}/`);
+  // resolve finds the package's main entry, then we get cli.js from same dir
+  const sdkPackagePath = resolver.resolve('@anthropic-ai/claude-agent-sdk');
   return path.join(path.dirname(sdkPackagePath), 'cli.js');
 }
 
@@ -790,6 +796,7 @@ export async function runAgent(
     abortCases = [],
   } = config ?? {};
 
+  logToFile('Starting agent run');
   const { query } = await getSDKModule();
 
   spinner.start(spinnerMessage);
