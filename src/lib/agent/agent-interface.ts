@@ -757,10 +757,6 @@ export async function initializeAgent(
   logToFile('Agent initialization starting');
   logToFile('Install directory:', options.installDir);
 
-  // Heal any settings backup an earlier run left orphaned (interrupted before
-  // it could restore) before we touch .claude/settings.json this run.
-  recoverOrphanedSettingsBackups(options.installDir);
-
   getUI().log.step('Initializing Claude agent...');
 
   try {

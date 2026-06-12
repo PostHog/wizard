@@ -32,6 +32,7 @@ import {
   checkAllSettingsConflicts,
   backupAndFixClaudeSettings,
   restoreClaudeSettings,
+  recoverOrphanedSettingsBackups,
 } from './agent-interface';
 import { getCloudUrlFromRegion } from '@utils/urls';
 import {
@@ -188,6 +189,12 @@ export async function runProgram(
   if (session.debug) {
     enableDebugLogs();
   }
+
+  // Heal any settings backup an earlier interrupted run left orphaned. Must
+  // run before the conflict check below: an orphan means the conflicting
+  // settings.json is sitting in .wizard-backup, so detection against the live
+  // file would miss it and the restore would resurface the overrides mid-run.
+  recoverOrphanedSettingsBackups(session.installDir);
 
   const skillsBaseUrl = getSkillsBaseUrl(session.localMcp);
 
