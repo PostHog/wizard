@@ -48,6 +48,19 @@ npx @posthog/wizard revenue
 Requires PostHog and Stripe SDKs already installed. Supports `--ci` with the
 same flags as the main wizard.
 
+## Data Warehouse
+
+Detect data sources your project already uses (Postgres, MySQL, MongoDB,
+Snowflake, BigQuery, Stripe, …) and connect them to PostHog's data warehouse:
+
+```bash
+npx @posthog/wizard warehouse
+```
+
+The wizard scans your dependencies and `.env` key names (never the values) to
+identify sources. Database and API-key sources are created from the terminal;
+OAuth sources open the PostHog app's new-source flow in your browser.
+
 ## Headless signup + install (agents / CI)
 
 > ⚠️ `--ci` is **not currently supported in published builds** (see [CI Mode](#ci-mode)).
