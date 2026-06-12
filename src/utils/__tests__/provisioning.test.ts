@@ -1,17 +1,17 @@
 import axios from 'axios';
 import { provisionNewAccount } from '@utils/provisioning';
 
-jest.mock('axios');
-jest.mock('../debug', () => ({ logToFile: jest.fn() }));
-jest.mock('../analytics', () => ({
-  analytics: { captureException: jest.fn() },
+vi.mock('axios');
+vi.mock('../debug', () => ({ logToFile: vi.fn() }));
+vi.mock('../analytics', () => ({
+  analytics: { captureException: vi.fn() },
 }));
 
-const mockedAxios = axios as jest.Mocked<typeof axios>;
+const mockedAxios = axios as Mocked<typeof axios>;
 
 describe('provisionNewAccount', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   it('completes the full PKCE flow and returns credentials', async () => {

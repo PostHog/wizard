@@ -23,7 +23,7 @@ describe('startFileWatcher', () => {
   });
 
   it('fires onUpdate when the watched file becomes valid JSON', async () => {
-    const onUpdate = jest.fn();
+    const onUpdate = vi.fn();
     const target = path.join(workdir, 'data.json');
 
     handle = startFileWatcher(target, onUpdate, {
@@ -38,7 +38,7 @@ describe('startFileWatcher', () => {
   });
 
   it('skips re-parsing when mtime is unchanged across polls', async () => {
-    const onUpdate = jest.fn();
+    const onUpdate = vi.fn();
     const target = path.join(workdir, 'data.json');
     writeFileSync(target, JSON.stringify({ a: 1 }));
 
@@ -53,7 +53,7 @@ describe('startFileWatcher', () => {
   });
 
   it('handles atomic-rename writes (write to .tmp + rename)', async () => {
-    const onUpdate = jest.fn();
+    const onUpdate = vi.fn();
     const target = path.join(workdir, 'data.json');
     writeFileSync(target, JSON.stringify({ v: 1 }));
 
@@ -71,7 +71,7 @@ describe('startFileWatcher', () => {
   });
 
   it('polls and attaches once the file appears later', async () => {
-    const onUpdate = jest.fn();
+    const onUpdate = vi.fn();
     const target = path.join(workdir, 'late.json');
 
     handle = startFileWatcher(target, onUpdate, {
@@ -89,7 +89,7 @@ describe('startFileWatcher', () => {
   });
 
   it('swallows invalid JSON without throwing', async () => {
-    const onUpdate = jest.fn();
+    const onUpdate = vi.fn();
     const target = path.join(workdir, 'data.json');
     writeFileSync(target, '{not valid');
 
@@ -100,7 +100,7 @@ describe('startFileWatcher', () => {
   });
 
   it('stop() halts polling and watchers', async () => {
-    const onUpdate = jest.fn();
+    const onUpdate = vi.fn();
     const target = path.join(workdir, 'data.json');
     writeFileSync(target, JSON.stringify({ a: 1 }));
 
@@ -116,7 +116,7 @@ describe('startFileWatcher', () => {
   });
 
   it('survives the file being deleted and recreated', async () => {
-    const onUpdate = jest.fn();
+    const onUpdate = vi.fn();
     const target = path.join(workdir, 'data.json');
     writeFileSync(target, JSON.stringify({ v: 1 }));
 

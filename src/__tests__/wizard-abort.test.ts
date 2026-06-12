@@ -6,33 +6,44 @@ import {
   clearCleanup,
 } from '@utils/wizard-abort';
 import { analytics } from '@utils/analytics';
+import { getUI } from '../ui';
 
-jest.mock('../utils/analytics');
-jest.mock('../ui', () => ({
-  getUI: jest.fn().mockReturnValue({
-    outroError: jest.fn(),
-    waitForOutroDismissed: jest.fn().mockResolvedValue(undefined),
+vi.mock('../utils/analytics');
+vi.mock('../ui', () => ({
+  getUI: vi.fn().mockReturnValue({
+    outroError: vi.fn(),
+    waitForOutroDismissed: vi.fn().mockResolvedValue(undefined),
   }),
 }));
 
-const mockAnalytics = analytics as jest.Mocked<typeof analytics>;
-const { getUI } = jest.requireMock('../ui');
+const mockAnalytics = analytics as Mocked<typeof analytics>;
+
+// vitest's restoreAllMocks() (afterEach) wipes the getUI() factory mock's
+// return value (unlike jest, which only restores spyOn mocks), so re-seed it
+// before each test.
+const seedGetUI = () => {
+  (getUI as Mock).mockReturnValue({
+    outroError: vi.fn(),
+    waitForOutroDismissed: vi.fn().mockResolvedValue(undefined),
+  });
+};
 
 describe('wizardAbort', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     clearCleanup();
+    seedGetUI();
 
-    mockAnalytics.captureException = jest.fn();
-    mockAnalytics.shutdown = jest.fn().mockResolvedValue(undefined);
+    mockAnalytics.captureException = vi.fn();
+    mockAnalytics.shutdown = vi.fn().mockResolvedValue(undefined);
 
-    jest.spyOn(process, 'exit').mockImplementation(() => {
+    vi.spyOn(process, 'exit').mockImplementation(() => {
       throw new Error('process.exit called');
     });
   });
 
   afterEach(() => {
-    jest.restoreAllMocks();
+    vi.restoreAllMocks();
   });
 
   it('calls analytics.shutdown, getUI().outroError, and process.exit in order', async () => {
@@ -40,7 +51,7 @@ describe('wizardAbort', () => {
     mockAnalytics.shutdown.mockImplementation(async () => {
       callOrder.push('shutdown');
     });
-    getUI().outroError.mockImplementation(() => {
+    (getUI().outroError as unknown as Mock).mockImplementation(() => {
       callOrder.push('outroError');
     });
 
@@ -128,7 +139,7 @@ describe('wizardAbort', () => {
     mockAnalytics.shutdown.mockImplementation(async () => {
       callOrder.push('shutdown');
     });
-    getUI().outroError.mockImplementation(() => {
+    (getUI().outroError as unknown as Mock).mockImplementation(() => {
       callOrder.push('outroError');
     });
 
@@ -168,19 +179,20 @@ describe('wizardAbort', () => {
 
 describe('abort() delegates to wizardAbort()', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     clearCleanup();
+    seedGetUI();
 
-    mockAnalytics.captureException = jest.fn();
-    mockAnalytics.shutdown = jest.fn().mockResolvedValue(undefined);
+    mockAnalytics.captureException = vi.fn();
+    mockAnalytics.shutdown = vi.fn().mockResolvedValue(undefined);
 
-    jest.spyOn(process, 'exit').mockImplementation(() => {
+    vi.spyOn(process, 'exit').mockImplementation(() => {
       throw new Error('process.exit called');
     });
   });
 
   afterEach(() => {
-    jest.restoreAllMocks();
+    vi.restoreAllMocks();
   });
 
   it('abort() calls wizardAbort with message and exitCode', async () => {

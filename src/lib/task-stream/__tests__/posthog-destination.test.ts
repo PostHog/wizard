@@ -29,9 +29,9 @@ function makeResponse(
   });
 }
 
-function makeFetch(responses: Array<Response | Error>): jest.Mock {
+function makeFetch(responses: Array<Response | Error>): Mock {
   let i = 0;
-  return jest.fn(() => {
+  return vi.fn(() => {
     const next = responses[i++];
     if (next instanceof Error) return Promise.reject(next);
     if (!next) return Promise.resolve(makeResponse(500));
@@ -84,7 +84,7 @@ describe('PostHogDestination', () => {
       makeResponse(201),
       makeResponse(201),
     ]);
-    const onError = jest.fn();
+    const onError = vi.fn();
     const dest = new PostHogDestination({
       getCredentials: () => SAMPLE_CREDS,
       fetchImpl,
@@ -123,10 +123,10 @@ describe('PostHogDestination', () => {
       makeResponse(500),
       makeResponse(500),
     ]);
-    const sleep: jest.Mock<Promise<void>, [number]> = jest.fn((_ms: number) =>
+    const sleep: Mock<(ms: number) => Promise<void>> = vi.fn((_ms: number) =>
       Promise.resolve(),
     );
-    const onError = jest.fn();
+    const onError = vi.fn();
     const dest = new PostHogDestination({
       getCredentials: () => SAMPLE_CREDS,
       fetchImpl,
@@ -151,10 +151,10 @@ describe('PostHogDestination', () => {
       new Error('ECONNREFUSED'),
       new Error('ECONNREFUSED'),
     ]);
-    const sleep: jest.Mock<Promise<void>, [number]> = jest.fn((_ms: number) =>
+    const sleep: Mock<(ms: number) => Promise<void>> = vi.fn((_ms: number) =>
       Promise.resolve(),
     );
-    const onError = jest.fn();
+    const onError = vi.fn();
     const dest = new PostHogDestination({
       getCredentials: () => SAMPLE_CREDS,
       fetchImpl,
@@ -170,7 +170,7 @@ describe('PostHogDestination', () => {
 
   it('5xx succeeds on retry', async () => {
     const fetchImpl = makeFetch([makeResponse(503), makeResponse(201)]);
-    const sleep: jest.Mock<Promise<void>, [number]> = jest.fn((_ms: number) =>
+    const sleep: Mock<(ms: number) => Promise<void>> = vi.fn((_ms: number) =>
       Promise.resolve(),
     );
     const dest = new PostHogDestination({
@@ -190,10 +190,10 @@ describe('PostHogDestination', () => {
       makeResponse(429, { headers: { 'Retry-After': '1' } }),
       makeResponse(429, { headers: { 'Retry-After': '1' } }),
     ]);
-    const sleep: jest.Mock<Promise<void>, [number]> = jest.fn((_ms: number) =>
+    const sleep: Mock<(ms: number) => Promise<void>> = vi.fn((_ms: number) =>
       Promise.resolve(),
     );
-    const onError = jest.fn();
+    const onError = vi.fn();
     const dest = new PostHogDestination({
       getCredentials: () => SAMPLE_CREDS,
       fetchImpl,
@@ -215,7 +215,7 @@ describe('PostHogDestination', () => {
       makeResponse(429, { headers: { 'Retry-After': '1' } }),
       makeResponse(201),
     ]);
-    const sleep: jest.Mock<Promise<void>, [number]> = jest.fn((_ms: number) =>
+    const sleep: Mock<(ms: number) => Promise<void>> = vi.fn((_ms: number) =>
       Promise.resolve(),
     );
     const dest = new PostHogDestination({
@@ -235,7 +235,7 @@ describe('PostHogDestination', () => {
       makeResponse(400, { body: 'invalid run_phase' }),
       makeResponse(201),
     ]);
-    const onError = jest.fn();
+    const onError = vi.fn();
     const dest = new PostHogDestination({
       getCredentials: () => SAMPLE_CREDS,
       fetchImpl,
@@ -258,7 +258,7 @@ describe('PostHogDestination', () => {
       new Error('boom'),
       new Error('boom'),
     ]);
-    const onError = jest.fn();
+    const onError = vi.fn();
     const dest = new PostHogDestination({
       getCredentials: () => SAMPLE_CREDS,
       fetchImpl,
@@ -293,7 +293,7 @@ describe('PostHogDestination', () => {
       makeResponse(429, { headers: { 'Retry-After': '999999' } }),
       makeResponse(201),
     ]);
-    const sleep: jest.Mock<Promise<void>, [number]> = jest.fn((_ms: number) =>
+    const sleep: Mock<(ms: number) => Promise<void>> = vi.fn((_ms: number) =>
       Promise.resolve(),
     );
     const dest = new PostHogDestination({
@@ -311,7 +311,7 @@ describe('PostHogDestination', () => {
 
   it('treats 200 (upsert update) as success, same as 201 (created)', async () => {
     const fetchImpl = makeFetch([makeResponse(200)]);
-    const onError = jest.fn();
+    const onError = vi.fn();
     const dest = new PostHogDestination({
       getCredentials: () => SAMPLE_CREDS,
       fetchImpl,
