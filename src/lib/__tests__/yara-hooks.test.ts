@@ -7,29 +7,32 @@ import {
   resetScanReport,
 } from '@lib/yara-hooks';
 import { scan, triageMatches } from '@posthog/warlock';
+import fs from 'fs';
+import fg from 'fast-glob';
+import * as analyticsModule from '../../utils/analytics';
 
 // Mock dependencies
-jest.mock('../../utils/debug');
-jest.mock('../../utils/analytics');
-jest.mock('fs');
-jest.mock('fast-glob');
+vi.mock('../../utils/debug');
+vi.mock('../../utils/analytics');
+vi.mock('fs');
+vi.mock('fast-glob');
 
 // Mock isSkillInstallCommand from skill-install (extracted to break circular dep)
-jest.mock('../skill-install', () => ({
+vi.mock('../skill-install', () => ({
   isSkillInstallCommand: (command: string) =>
     command.startsWith('mkdir -p .claude/skills/') &&
     command.includes('curl -sL') &&
     command.includes('github.com/PostHog/context-mill/releases/'),
 }));
 
-const mockFs = jest.requireMock('fs');
-const mockFg = jest.requireMock('fast-glob');
-const mockAnalytics = jest.requireMock('../../utils/analytics');
+const mockFs = vi.mocked(fs);
+const mockFg = vi.mocked(fg);
+const mockAnalytics = vi.mocked(analyticsModule, true);
 
 // @posthog/warlock is mapped to __mocks__/@posthog/warlock.ts (ESM + WASM can't
-// load under jest). These are the jest.fn()s the hooks call via dynamic import.
-const mockScan = scan as jest.Mock;
-const mockTriage = triageMatches as jest.Mock;
+// load under vitest). These are the vi.fn()s the hooks call via dynamic import.
+const mockScan = scan as Mock;
+const mockTriage = triageMatches as Mock;
 
 const dummySignal = new AbortController().signal;
 
@@ -38,7 +41,7 @@ const dummyProvider = () => Promise.resolve('[]');
 
 // onTerminate is required by createPostToolUseYaraHooks. Tests that don't
 // exercise terminate paths can pass this no-op so the signature is satisfied;
-// tests that DO exercise terminate paths pass their own jest.fn() spy.
+// tests that DO exercise terminate paths pass their own vi.fn() spy.
 // eslint-disable-next-line @typescript-eslint/no-empty-function
 const noopTerminate = (_reason: string): void => {};
 
@@ -83,7 +86,7 @@ function input(fields: Record<string, unknown>) {
 
 describe('yara-hooks', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     resetScanReport();
     // Default: nothing matches; triage passes everything through as real.
     mockScan.mockReset().mockResolvedValue(noMatch);
@@ -310,7 +313,7 @@ describe('yara-hooks', () => {
 
       it('fails closed (terminate) when the scanner throws', async () => {
         mockScan.mockRejectedValueOnce(new Error('boom'));
-        const terminateSpy = jest.fn();
+        const terminateSpy = vi.fn();
         const hook = createPostToolUseYaraHooks(undefined, terminateSpy)[0]
           .hooks[0];
         const result = await hook(
@@ -826,7 +829,7 @@ describe('yara-hooks', () => {
           }),
         ),
       );
-      const onTerminate = jest.fn();
+      const onTerminate = vi.fn();
       const hook = createPostToolUseYaraHooks(undefined, onTerminate)[1]
         .hooks[0];
       const result = await hook(
@@ -844,7 +847,7 @@ describe('yara-hooks', () => {
 
     it('fires fail-closed when the read scan throws', async () => {
       mockScan.mockRejectedValueOnce(new Error('boom'));
-      const onTerminate = jest.fn();
+      const onTerminate = vi.fn();
       const hook = createPostToolUseYaraHooks(undefined, onTerminate)[1]
         .hooks[0];
       await hook(input({ tool_name: 'Read', tool_response: 'x' }), 'x', {
@@ -866,7 +869,7 @@ describe('yara-hooks', () => {
           }),
         ),
       );
-      const onTerminate = jest.fn();
+      const onTerminate = vi.fn();
       const hook = createPostToolUseYaraHooks(undefined, onTerminate)[2]
         .hooks[0];
       await hook(
@@ -889,7 +892,7 @@ describe('yara-hooks', () => {
           }),
         ),
       );
-      const onTerminate = jest.fn();
+      const onTerminate = vi.fn();
       const hook = createPostToolUseYaraHooks(undefined, onTerminate)[1]
         .hooks[0];
       await hook(input({ tool_name: 'Grep', tool_response: 'x' }), 'x', {
@@ -907,7 +910,7 @@ describe('yara-hooks', () => {
           }),
         ),
       );
-      const onTerminate = jest.fn();
+      const onTerminate = vi.fn();
       const hook = createPostToolUseYaraHooks(undefined, onTerminate)[0]
         .hooks[0];
       await hook(

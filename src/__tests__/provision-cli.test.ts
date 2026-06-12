@@ -1,60 +1,62 @@
-// Mock functions must be defined before imports (jest hoists jest.mock calls;
-// variables starting with "mock" are allowed in the factory scope).
+// Mock functions are created via vi.hoisted so they exist before the hoisted
+// vi.mock factories that reference them run.
 // Name-scoped to this file because .test.ts files share TS project scope when
 // they have no top-level imports/exports.
-const mockProvisionNewAccountSubcmd = jest.fn();
+const { mockProvisionNewAccountSubcmd } = vi.hoisted(() => ({
+  mockProvisionNewAccountSubcmd: vi.fn(),
+}));
 
-jest.mock('semver', () => ({ satisfies: () => true }));
-jest.mock('../utils/provisioning', () => ({
+vi.mock('semver', () => ({ satisfies: () => true }));
+vi.mock('../utils/provisioning', () => ({
   provisionNewAccount: mockProvisionNewAccountSubcmd,
 }));
 // Same supporting mocks as src/__tests__/cli.test.ts — bin.ts imports these
 // at module load regardless of which subcommand yargs dispatches.
-jest.mock('../lib/wizard-session', () => ({
-  buildSession: jest.fn((args: Record<string, unknown>) => args),
+vi.mock('../lib/wizard-session', () => ({
+  buildSession: vi.fn((args: Record<string, unknown>) => args),
 }));
-jest.mock('../ui/tui/start-tui', () => ({
+vi.mock('../ui/tui/start-tui', () => ({
   startTUI: () => ({
-    unmount: jest.fn(),
+    unmount: vi.fn(),
     store: {
       session: {},
-      runReadyHooks: jest.fn().mockResolvedValue(undefined),
+      runReadyHooks: vi.fn().mockResolvedValue(undefined),
       // eslint-disable-next-line @typescript-eslint/no-empty-function
-      getGate: jest.fn().mockReturnValue(new Promise(() => {})),
-      subscribe: jest.fn(),
-      onEnterScreen: jest.fn(),
+      getGate: vi.fn().mockReturnValue(new Promise(() => {})),
+      subscribe: vi.fn(),
+      onEnterScreen: vi.fn(),
     },
   }),
 }));
-jest.mock('../lib/programs/posthog-integration/index', () => ({
+vi.mock('../lib/programs/posthog-integration/index', () => ({
   posthogIntegrationConfig: {
     id: 'posthog-integration',
     steps: [],
     run: null,
   },
 }));
-jest.mock('../utils/environment', () => ({
+vi.mock('../utils/environment', () => ({
   isNonInteractiveEnvironment: () => false,
   readEnvironment: () => ({}),
 }));
-jest.mock('../utils/env-api-key', () => ({
+vi.mock('../utils/env-api-key', () => ({
   readApiKeyFromEnv: () => undefined,
 }));
-jest.mock('../utils/debug', () => ({
-  configureLogFileFromEnvironment: jest.fn(),
-  logToFile: jest.fn(),
+vi.mock('../utils/debug', () => ({
+  configureLogFileFromEnvironment: vi.fn(),
+  logToFile: vi.fn(),
 }));
-jest.mock('../lib/registry', () => ({ FRAMEWORK_REGISTRY: {} }));
-jest.mock('../lib/detection/index', () => ({
-  detectFramework: jest.fn().mockResolvedValue(null),
-  gatherFrameworkContext: jest.fn().mockResolvedValue({}),
+vi.mock('../lib/registry', () => ({ FRAMEWORK_REGISTRY: {} }));
+vi.mock('../lib/detection/index', () => ({
+  detectFramework: vi.fn().mockResolvedValue(null),
+  gatherFrameworkContext: vi.fn().mockResolvedValue({}),
 }));
-jest.mock('../utils/analytics', () => ({
-  analytics: { setTag: jest.fn() },
+vi.mock('../utils/analytics', () => ({
+  analytics: { setTag: vi.fn() },
 }));
-jest.mock('../utils/wizard-abort', () => ({ wizardAbort: jest.fn() }));
-jest.mock('../lib/agent/agent-runner', () => ({
-  runAgent: jest.fn().mockResolvedValue(undefined),
+vi.mock('../utils/wizard-abort', () => ({ wizardAbort: vi.fn() }));
+vi.mock('../lib/agent/agent-runner', () => ({
+  runAgent: vi.fn().mockResolvedValue(undefined),
 }));
 
 import { provisionCommand } from '../commands/provision';
@@ -87,7 +89,7 @@ describe('wizard provision subcommand', () => {
 
   let stdoutChunks: string[];
   let stderrChunks: string[];
-  let consoleLogSpy: jest.SpyInstance;
+  let consoleLogSpy: MockInstance;
 
   const successResult = {
     projectApiKey: 'phc_test',
@@ -100,7 +102,7 @@ describe('wizard provision subcommand', () => {
   };
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     stdoutChunks = [];
     stderrChunks = [];
 
@@ -113,14 +115,14 @@ describe('wizard provision subcommand', () => {
       return true;
     }) as typeof process.stderr.write;
 
-    consoleLogSpy = jest.spyOn(console, 'log').mockImplementation(() => {
+    consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {
       // suppress LoggingUI output during tests
     });
 
     // process.exit is always the final call in each branch of the provision
     // handler, so a silent no-op is enough. Throwing here would escape the
     // void async IIFE and become an unhandled rejection.
-    process.exit = jest.fn() as unknown as typeof process.exit;
+    process.exit = vi.fn() as unknown as typeof process.exit;
   });
 
   afterEach(() => {
@@ -133,7 +135,7 @@ describe('wizard provision subcommand', () => {
       configurable: true,
     });
     consoleLogSpy.mockRestore();
-    jest.resetModules();
+    vi.resetModules();
   });
 
   function setTTY(isTTY: boolean) {
@@ -146,9 +148,9 @@ describe('wizard provision subcommand', () => {
   async function runCLI(args: string[]) {
     process.argv = ['node', 'bin.ts', 'provision', ...args];
     try {
-      jest.isolateModules(() => {
-        require('../../bin.ts');
-      });
+      // vi.resetModules() (afterEach) clears the registry, so this re-evaluates
+      // bin.ts fresh on every call — the vitest equivalent of isolateModules.
+      await import('../../bin');
     } catch {
       // process.exit mock throws to halt handler execution
     }

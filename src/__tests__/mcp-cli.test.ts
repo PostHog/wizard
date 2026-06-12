@@ -1,21 +1,21 @@
 // Mock variable names must be unique across .test.ts files (shared TS scope).
-const mockBuildSessionMcp = jest.fn((args: Record<string, unknown>) => args);
-const mockStartTUIMcp = jest.fn(() => ({
-  unmount: jest.fn(),
+const mockBuildSessionMcp = vi.fn((args: Record<string, unknown>) => args);
+const mockStartTUIMcp = vi.fn(() => ({
+  unmount: vi.fn(),
   store: { session: {} },
 }));
-const mockReadApiKeyFromEnvMcp = jest.fn(() => undefined as string | undefined);
+const mockReadApiKeyFromEnvMcp = vi.fn(() => undefined as string | undefined);
 
-jest.mock('@lib/wizard-session', () => ({
+vi.mock('@lib/wizard-session', () => ({
   buildSession: mockBuildSessionMcp,
 }));
-jest.mock('@ui/tui/start-tui', () => ({
+vi.mock('@ui/tui/start-tui', () => ({
   startTUI: mockStartTUIMcp,
 }));
-jest.mock('@utils/env-api-key', () => ({
+vi.mock('@utils/env-api-key', () => ({
   readApiKeyFromEnv: mockReadApiKeyFromEnvMcp,
 }));
-jest.mock('@lib/programs/program-registry', () => ({
+vi.mock('@lib/programs/program-registry', () => ({
   Program: {
     McpAdd: 'mcp-add',
     McpRemove: 'mcp-remove',
@@ -56,7 +56,7 @@ describe('mcpCommand (parent)', () => {
 
 describe('mcp add handler', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   test('starts the TUI with the McpAdd program id', async () => {
@@ -118,7 +118,7 @@ describe('mcp parsing (end-to-end yargs)', () => {
 
 describe('mcp remove handler', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   test('starts the TUI with the McpRemove program id', async () => {

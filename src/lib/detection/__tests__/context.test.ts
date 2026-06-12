@@ -20,7 +20,7 @@ describe('gatherFrameworkContext', () => {
   it('calls gatherContext and returns the result', async () => {
     const config = {
       metadata: {
-        gatherContext: jest
+        gatherContext: vi
           .fn()
           .mockResolvedValue({ routerType: 'app', srcDir: 'src' }),
       },
@@ -38,7 +38,7 @@ describe('gatherFrameworkContext', () => {
 
     const throws = {
       metadata: {
-        gatherContext: jest.fn().mockRejectedValue(new Error('fail')),
+        gatherContext: vi.fn().mockRejectedValue(new Error('fail')),
       },
     } as unknown as FrameworkConfig;
     expect(await gatherFrameworkContext(throws, baseOptions)).toEqual({});
@@ -56,7 +56,7 @@ describe('checkFrameworkVersion', () => {
     const config = {
       detection: {
         minimumVersion: '14.0.0',
-        getInstalledVersion: jest.fn().mockResolvedValue('15.2.3'),
+        getInstalledVersion: vi.fn().mockResolvedValue('15.2.3'),
       },
       metadata: { docsUrl: 'https://example.com/docs' },
     } as unknown as FrameworkConfig;
@@ -70,7 +70,7 @@ describe('checkFrameworkVersion', () => {
     const config = {
       detection: {
         minimumVersion: '14.0.0',
-        getInstalledVersion: jest.fn().mockResolvedValue('13.5.0'),
+        getInstalledVersion: vi.fn().mockResolvedValue('13.5.0'),
       },
       metadata: { docsUrl: 'https://example.com/docs' },
     } as unknown as FrameworkConfig;

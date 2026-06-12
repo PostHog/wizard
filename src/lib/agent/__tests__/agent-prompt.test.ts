@@ -29,7 +29,7 @@ describe('assemblePrompt', () => {
   });
 
   it('composes three sections in order: default → custom → skill', () => {
-    const customFn = jest.fn(() => 'CUSTOM_INSTRUCTIONS');
+    const customFn = vi.fn(() => 'CUSTOM_INSTRUCTIONS');
     const runDef = makeRunDef({ customPrompt: customFn });
     const ctx: PromptContext = { ...baseCtx, skillPath: '/skills/test' };
 
