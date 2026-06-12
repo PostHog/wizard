@@ -3,7 +3,6 @@ import * as http from 'node:http';
 import { execSync } from 'node:child_process';
 import axios from 'axios';
 import { logToFile } from './debug';
-import opn from 'opn';
 import { z } from 'zod';
 import { getUI } from '@ui';
 import {
@@ -16,8 +15,8 @@ import {
   POSTHOG_PROXY_CLIENT_ID,
   WIZARD_USER_AGENT,
 } from '@lib/constants';
-import { NODE_ENV } from '@env';
 import { abort } from './setup-utils';
+import { openTrackedLink, withUtm } from './links';
 import { analytics } from './analytics';
 
 const OAUTH_CALLBACK_STYLES = `
@@ -358,10 +357,16 @@ export async function performOAuthFlow(
       authUrl.searchParams.set('scope', config.scopes.join(' '));
       authUrl.searchParams.set('required_access_level', 'project');
 
+      // UTM-tag both kickoff URLs so the journey into the app is
+      // attributable to the wizard command that started it.
+      const taggedAuthUrl = withUtm(authUrl.toString(), 'oauth-authorize');
       const signupUrl = new URL(
-        `${POSTHOG_OAUTH_URL}/signup?next=${encodeURIComponent(
-          authUrl.toString(),
-        )}`,
+        withUtm(
+          `${POSTHOG_OAUTH_URL}/signup?next=${encodeURIComponent(
+            taggedAuthUrl,
+          )}`,
+          'oauth-signup',
+        ),
       );
       const localSignupUrl = getLocalSignupUrl(port);
       const localLoginUrl = getLocalLoginUrl(port);
@@ -373,7 +378,7 @@ export async function performOAuthFlow(
       let waitForCallback: () => Promise<string>;
       try {
         ({ server, waitForCallback } = await startCallbackServer(
-          authUrl.toString(),
+          taggedAuthUrl,
           signupUrl.toString(),
           port,
         ));
@@ -391,14 +396,12 @@ export async function performOAuthFlow(
       // remote/headless box the user opens it from another machine, where
       // localhost:<port> is unreachable.
       getUI().setAuthorizeUrl(
-        config.signup ? signupUrl.toString() : authUrl.toString(),
+        config.signup ? signupUrl.toString() : taggedAuthUrl,
       );
 
-      if (NODE_ENV !== 'test') {
-        opn(urlToOpen, { wait: false }).catch(() => {
-          // opn throws in environments without a browser
-        });
-      }
+      // The localhost proxy URL stays untagged — the PostHog destination
+      // it redirects to carries the UTMs.
+      openTrackedLink(urlToOpen, 'oauth', { auto: true, utm: false });
 
       const loginSpinner = getUI().spinner();
       loginSpinner.start('Waiting for authorization...');

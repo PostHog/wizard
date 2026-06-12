@@ -41,7 +41,6 @@ import { Box, Text } from 'ink';
 import { Spinner } from '@inkjs/ui';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSyncExternalStore } from 'react';
-import opn from 'opn';
 
 import type { WizardStore } from '@ui/tui/store';
 import { Colors, Icons } from '@ui/tui/styles';
@@ -67,6 +66,7 @@ import {
 import type { Integration } from '@lib/constants';
 import { analytics } from '@utils/analytics';
 import { logToFile } from '@utils/debug';
+import { openTrackedLink } from '@utils/links';
 import type {
   AgentChunk,
   McpSuggestedPromptsServices,
@@ -362,15 +362,8 @@ export const McpSuggestedPromptsScreen = ({
         choice: 'connect-slack',
       });
       // Open the Slack integration settings and stay on the Choose screen
-      // so the user can still start the tutorial. opn throws in headless
-      // environments — swallow it; the URL is also printed on screen.
-      if (process.env.NODE_ENV !== 'test') {
-        opn(getSlackAppCard().setupUrl, {
-          wait: false,
-        }).catch(() => {
-          // No browser available.
-        });
-      }
+      // so the user can still start the tutorial.
+      openTrackedLink(getSlackAppCard().setupUrl, 'mcp-prompts-slack-setup');
     } else {
       analytics.wizardCapture('mcp suggested prompts choose', {
         choice: 'exit',

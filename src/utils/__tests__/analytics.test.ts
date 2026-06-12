@@ -155,6 +155,81 @@ describe('Analytics', () => {
     });
   });
 
+  describe('setDistinctId', () => {
+    it('merges the anonymous person into the identified one, once', () => {
+      analytics.setDistinctId('user-123');
+
+      expect(mockPostHogInstance.alias).toHaveBeenCalledWith({
+        distinctId: 'user-123',
+        alias: 'test-uuid',
+      });
+
+      // Re-login with the same id must not re-merge.
+      analytics.setDistinctId('user-123');
+      expect(mockPostHogInstance.alias).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not alias when the id is the anonymous id itself', () => {
+      analytics.setDistinctId('test-uuid');
+      expect(mockPostHogInstance.alias).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('exception repair (before_send)', () => {
+    type TestEvent = Record<string, unknown> & {
+      distinctId?: string;
+      properties?: Record<string, unknown>;
+    };
+    type BeforeSendFn = (event: TestEvent | null) => TestEvent | null;
+
+    const getBeforeSend = (): BeforeSendFn =>
+      (MockedPostHog.mock.calls[0][1] as { before_send: BeforeSendFn })
+        .before_send;
+
+    it('reattaches identity and tags to autocaptured exceptions', () => {
+      analytics.setTag('command', 'slack');
+      const beforeSend = getBeforeSend();
+
+      const result = beforeSend({
+        event: '$exception',
+        distinctId: 'random-uuidv7',
+        properties: {
+          $exception_list: [{ type: 'Error' }],
+          $process_person_profile: false,
+        },
+      });
+
+      expect(result?.distinctId).toBe('test-uuid');
+      expect(result?.properties).toEqual({
+        $app_name: 'wizard',
+        command: 'slack',
+        $exception_list: [{ type: 'Error' }],
+      });
+    });
+
+    it('uses the real distinct id once set', () => {
+      analytics.setDistinctId('user-123');
+      const beforeSend = getBeforeSend();
+
+      const result = beforeSend({
+        event: '$exception',
+        distinctId: 'random-uuidv7',
+        properties: {},
+      });
+
+      expect(result?.distinctId).toBe('user-123');
+    });
+
+    it('leaves non-exception events untouched', () => {
+      const beforeSend = getBeforeSend();
+      const event = { event: 'x', distinctId: 'd', properties: { a: 1 } };
+
+      expect(beforeSend(event)).toBe(event);
+      expect(event.distinctId).toBe('d');
+      expect(event.properties).toEqual({ a: 1 });
+    });
+  });
+
   describe('groups (before_send injection)', () => {
     type TestEvent = Record<string, unknown> & {
       groups?: Record<string, string>;

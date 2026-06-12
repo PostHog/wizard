@@ -63,8 +63,19 @@ export class Analytics {
       flushInterval: 0,
       enableExceptionAutocapture: true,
       before_send: (event) => {
-        if (event && Object.keys(this.groups).length > 0) {
+        if (!event) return event;
+        if (Object.keys(this.groups).length > 0) {
           event.groups = { ...this.groups, ...event.groups };
+        }
+        // Autocaptured exceptions arrive with a random uuid and
+        // `$process_person_profile: false` — reattach the run's identity
+        // and tags so they land on the same person as everything else.
+        if (event.event === '$exception') {
+          event.distinctId = this.distinctId ?? this.anonymousId;
+          const { $process_person_profile, ...properties } =
+            event.properties ?? {};
+          void $process_person_profile;
+          event.properties = { ...this.tags, ...properties };
         }
         return event;
       },
@@ -77,7 +88,15 @@ export class Analytics {
     this.distinctId = undefined;
   }
 
+  /**
+   * Switch to the user's real distinct id and merge the run's anonymous
+   * person (pre-login events) into it. Runs once per id; the anonymous
+   * side of the alias must never be an identified person.
+   */
   setDistinctId(distinctId: string) {
+    if (this.distinctId === distinctId || distinctId === this.anonymousId) {
+      return;
+    }
     this.distinctId = distinctId;
     this.client.alias({
       distinctId,

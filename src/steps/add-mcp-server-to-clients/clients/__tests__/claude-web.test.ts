@@ -1,10 +1,12 @@
-import opn from 'opn';
 import { ClaudeWebMCPClient } from '@steps/add-mcp-server-to-clients/clients/claude-web';
 import { isBrowserFinishable } from '@steps/add-mcp-server-to-clients/browser-client';
+import { openTrackedLink } from '@utils/links';
 
-jest.mock('opn', () => jest.fn(() => Promise.resolve()));
+jest.mock('@utils/links', () => ({
+  openTrackedLink: jest.fn(),
+}));
 
-const opnMock = opn as unknown as jest.Mock;
+const openTrackedLinkMock = openTrackedLink as jest.Mock;
 
 const CONNECTOR_URL = 'https://claude.ai/directory/connectors/posthog';
 
@@ -36,18 +38,17 @@ describe('ClaudeWebMCPClient', () => {
     await expect(client.isServerInstalled()).resolves.toBe(false);
   });
 
-  it('opens the connector page on addServer and reports success', async () => {
+  it('opens the connector page as a tracked link on addServer', async () => {
     await expect(client.addServer()).resolves.toEqual({ success: true });
-    expect(opnMock).toHaveBeenCalledWith(CONNECTOR_URL, { wait: false });
-  });
-
-  it('still reports success when opening the browser fails', async () => {
-    opnMock.mockReturnValueOnce(Promise.reject(new Error('no browser')));
-    await expect(client.addServer()).resolves.toEqual({ success: true });
+    expect(openTrackedLinkMock).toHaveBeenCalledWith(
+      CONNECTOR_URL,
+      'claude-web-connector',
+      { auto: true, utm: false },
+    );
   });
 
   it('removeServer is a no-op that reports nothing removed', async () => {
     await expect(client.removeServer()).resolves.toEqual({ success: false });
-    expect(opnMock).not.toHaveBeenCalled();
+    expect(openTrackedLinkMock).not.toHaveBeenCalled();
   });
 });

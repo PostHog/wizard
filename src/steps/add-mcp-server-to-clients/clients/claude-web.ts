@@ -1,6 +1,6 @@
-import opn from 'opn';
 import { MCPClient } from '@steps/add-mcp-server-to-clients/MCPClient';
 import { BrowserFinishable } from '@steps/add-mcp-server-to-clients/browser-client';
+import { openTrackedLink } from '@utils/links';
 
 /**
  * Claude Desktop / Claude.ai (web). PostHog ships here as a hosted connector,
@@ -24,9 +24,10 @@ export class ClaudeWebMCPClient extends MCPClient implements BrowserFinishable {
   }
 
   addServer(): Promise<{ success: boolean }> {
-    void opn(this.connectorUrl, { wait: false }).catch(() => {
-      // opn throws in environments without a browser (e.g. CI) — swallow it;
-      // the URL is still surfaced to the user on the Done screen.
+    // Not a PostHog property, so no UTMs — just the tracked open.
+    openTrackedLink(this.connectorUrl, 'claude-web-connector', {
+      auto: true,
+      utm: false,
     });
     return Promise.resolve({ success: true });
   }
