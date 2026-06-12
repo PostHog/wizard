@@ -137,6 +137,12 @@ export const AGENT_SKILL_SCOPE_ADDITIONS = [
  *     only from the local setup report. All three are read-only and
  *     already in the wizard OAuth app's production scope ceiling (the
  *     mcp-tutorial program requests them).
+ *   • external_data_source:read / external_data_source:write — the
+ *     connected-tools step creates the GitHub Issues / Linear warehouse
+ *     sources directly (`external-data-sources-create`) and verifies
+ *     what's actually connected (`external-data-sources-list`) instead
+ *     of taking the user's word for it. NOT yet in the production
+ *     OAuth app ceiling — must be added there before launch.
  */
 export const PRODUCT_AUTONOMY_SCOPE_ADDITIONS = [
   'task:read',
@@ -147,6 +153,8 @@ export const PRODUCT_AUTONOMY_SCOPE_ADDITIONS = [
   'session_recording:read',
   'survey:read',
   'error_tracking:read',
+  'external_data_source:read',
+  'external_data_source:write',
 ] as const;
 
 /**
