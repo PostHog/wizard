@@ -452,6 +452,7 @@ describe('WizardStore', () => {
       });
       store.setRunPhase(RunPhase.Completed);
       store.setMcpComplete();
+      store.setSlackStepDismissed();
       expect(store.currentScreen).toBe(ScreenId.Outro);
     });
 
@@ -471,6 +472,7 @@ describe('WizardStore', () => {
       });
       store.setRunPhase(RunPhase.Completed);
       store.setMcpComplete();
+      store.setSlackStepDismissed();
       store.setOutroDismissed();
       expect(store.currentScreen).toBe(ScreenId.KeepSkills);
     });
@@ -1092,14 +1094,18 @@ describe('WizardStore', () => {
 
       // Step 5: Complete MCP
       store.setMcpComplete();
+      expect(store.currentScreen).toBe(ScreenId.SlackConnect);
+
+      // Step 6: Dismiss the Connect-Slack step
+      store.setSlackStepDismissed();
       expect(store.currentScreen).toBe(ScreenId.Outro);
 
-      // Step 6: Dismiss outro
+      // Step 7: Dismiss outro
       store.setOutroDismissed();
       expect(store.currentScreen).toBe(ScreenId.KeepSkills);
 
       // Verify version was bumped for each setter call
-      expect(store.getVersion()).toBe(7);
+      expect(store.getVersion()).toBe(8);
     });
 
     it('walks through the revenue analytics flow correctly', () => {
@@ -1196,6 +1202,7 @@ describe('WizardStore', () => {
       });
 
       const store = createStore();
+      store.runInitHooks();
       let resolved = false;
 
       void store.getGate('health-check').then(() => {
@@ -1220,6 +1227,7 @@ describe('WizardStore', () => {
       });
 
       const store = createStore();
+      store.runInitHooks();
       let resolved = false;
 
       void store.getGate('health-check').then(() => {
