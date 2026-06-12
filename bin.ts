@@ -41,6 +41,22 @@ import { eventsAuditCommand } from './src/commands/events-audit';
 import { revenueCommand } from './src/commands/revenue';
 import { uploadSourcemapsCommand } from './src/commands/upload-sourcemaps';
 import { skillCommand } from './src/commands/skill';
+import { recoverOrphanedSettingsBackups } from './src/lib/agent/claude-settings';
+
+// Heal any .claude/settings backup a previous interrupted run left orphaned,
+// before anything else reads Claude settings — conflict detection, OAuth, and
+// the agent all need to see the user's real settings file. The install dir is
+// read directly from argv/env because yargs hasn't parsed yet.
+recoverOrphanedSettingsBackups(resolveInstallDir());
+
+function resolveInstallDir(): string {
+  const args = process.argv.slice(2);
+  const flagIndex = args.indexOf('--install-dir');
+  if (flagIndex !== -1 && args[flagIndex + 1]) return args[flagIndex + 1];
+  const inline = args.find((a) => a.startsWith('--install-dir='));
+  if (inline) return inline.slice('--install-dir='.length);
+  return process.env.POSTHOG_WIZARD_INSTALL_DIR ?? process.cwd();
+}
 
 Wizard.use(basicIntegrationCommand)
   .use(mcpCommand)

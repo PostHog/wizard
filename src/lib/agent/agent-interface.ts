@@ -4,7 +4,6 @@
  */
 
 import path from 'path';
-import * as fs from 'fs';
 import * as os from 'os';
 import { createRequire } from 'node:module';
 import { getUI, type SpinnerHandle } from '@ui';
@@ -22,7 +21,7 @@ import {
   type AdditionalFeature,
   ADDITIONAL_FEATURE_PROMPTS,
 } from '@lib/wizard-session';
-import { registerCleanup, wizardAbort, WizardError } from '@utils/wizard-abort';
+import { wizardAbort, WizardError } from '@utils/wizard-abort';
 import { createCustomHeaders } from '@utils/custom-headers';
 import { getLlmGatewayUrlFromHost } from '@utils/urls';
 import { LINTING_TOOLS } from '@lib/safe-tools';
@@ -41,6 +40,11 @@ import { AgentOutputSignals } from './output-signals';
 export { AgentSignals, AgentErrorType } from './signals';
 export type { AgentSignal } from './signals';
 export { AgentOutputSignals } from './output-signals';
+import {
+  checkAllSettingsConflicts,
+  type SettingsConflict,
+  type SettingsConflictSource,
+} from './claude-settings';
 
 // Dynamic import cache for ESM module
 let _sdkModule: any = null;
@@ -71,157 +75,6 @@ function getClaudeCodeExecutablePath(): string {
 type SDKMessage = any;
 type McpServersConfig = any;
 type AbortCaseMatcher = { match: RegExp };
-
-const BLOCKING_ENV_KEYS = [
-  'ANTHROPIC_API_KEY',
-  'ANTHROPIC_BASE_URL',
-  'ANTHROPIC_AUTH_TOKEN',
-];
-const BLOCKING_SETTINGS_KEYS = ['apiKeyHelper'];
-
-/** Where a settings conflict was found. */
-export type SettingsConflictSource =
-  | 'project'
-  | 'project-local'
-  | 'user'
-  | 'managed';
-
-/** A single settings conflict detected during startup. */
-export interface SettingsConflict {
-  /** Where the conflict was found. */
-  source: SettingsConflictSource;
-  /** Absolute path of the file holding the override. */
-  path: string;
-  /** The blocking keys found (e.g. 'ANTHROPIC_BASE_URL', 'apiKeyHelper'). */
-  keys: string[];
-  /**
-   * Whether the wizard can back up / remove this file. Only the project
-   * `settings.json` is writable: managed settings are root-owned, and the
-   * user's global config and gitignored `*.local.json` are left untouched so
-   * we never mutate config outside the project we were pointed at.
-   */
-  writable: boolean;
-}
-
-/**
- * Check a single settings file for blocking env keys and top-level settings keys.
- * Returns matched key names, or an empty array if none found.
- */
-function checkSettingsFile(filePath: string): string[] {
-  try {
-    const raw = fs.readFileSync(filePath, 'utf-8');
-    const parsed = JSON.parse(raw);
-    const matched: string[] = [];
-
-    // Check env block for blocking env keys
-    const envBlock = parsed?.env;
-    if (envBlock && typeof envBlock === 'object') {
-      matched.push(...BLOCKING_ENV_KEYS.filter((key) => key in envBlock));
-    }
-
-    // Check top-level settings keys
-    matched.push(
-      ...BLOCKING_SETTINGS_KEYS.filter(
-        (key) => key in parsed && parsed[key] !== '' && parsed[key] != null,
-      ),
-    );
-
-    return matched;
-  } catch {
-    // File doesn't exist or isn't valid JSON — skip
-    return [];
-  }
-}
-
-/**
- * Check if .claude/settings.json in the project directory contains env
- * overrides or apiKeyHelper that block the Wizard from accessing the PostHog LLM Gateway.
- * Returns the list of matched key names, or an empty array if none found.
- *
- * @deprecated Use {@link checkAllSettingsConflicts} for comprehensive detection.
- */
-export function checkClaudeSettingsOverrides(
-  workingDirectory: string,
-): string[] {
-  const candidates = [
-    path.join(workingDirectory, '.claude', 'settings.json'),
-    path.join(workingDirectory, '.claude', 'settings'),
-  ];
-
-  for (const filePath of candidates) {
-    const matched = checkSettingsFile(filePath);
-    if (matched.length > 0) return matched;
-  }
-
-  return [];
-}
-
-/**
- * Managed settings path on macOS.
- * IT/MDM-deployed settings — readable by all users, writable only by root.
- */
-const MANAGED_SETTINGS_PATH =
-  '/Library/Application Support/ClaudeCode/managed-settings.json';
-
-/**
- * Check every settings file Claude Code reads for blocking keys that conflict
- * with the wizard's gateway auth: org-managed, the user's global config, the
- * project config, and the gitignored project-local override. Each is a place
- * an `apiKeyHelper` or `ANTHROPIC_*` override commonly lives, and any of them
- * can outrank the env the wizard sets and make every agent call 401.
- */
-export function checkAllSettingsConflicts(
-  workingDirectory: string,
-  homeDir: string = os.homedir(),
-): SettingsConflict[] {
-  const conflicts: SettingsConflict[] = [];
-  const home = homeDir;
-
-  const sources: {
-    source: SettingsConflictSource;
-    paths: string[];
-    writable: boolean;
-  }[] = [
-    {
-      source: 'managed',
-      paths: [MANAGED_SETTINGS_PATH],
-      writable: false,
-    },
-    {
-      source: 'user',
-      paths: [
-        path.join(home, '.claude', 'settings.json'),
-        path.join(home, '.claude', 'settings.local.json'),
-      ],
-      writable: false,
-    },
-    {
-      source: 'project',
-      paths: [
-        path.join(workingDirectory, '.claude', 'settings.json'),
-        path.join(workingDirectory, '.claude', 'settings'),
-      ],
-      writable: true,
-    },
-    {
-      source: 'project-local',
-      paths: [path.join(workingDirectory, '.claude', 'settings.local.json')],
-      writable: false,
-    },
-  ];
-
-  for (const { source, paths, writable } of sources) {
-    for (const filePath of paths) {
-      const keys = checkSettingsFile(filePath);
-      if (keys.length > 0) {
-        conflicts.push({ source, path: filePath, keys, writable });
-        break; // Only one conflict per source (settings.json vs settings fallback)
-      }
-    }
-  }
-
-  return conflicts;
-}
 
 /** Region implied by the resolved gateway URL, for telemetry and display. */
 function regionFromGatewayUrl(gatewayUrl: string): 'eu' | 'us' | 'local' {
@@ -262,54 +115,6 @@ export function buildAuthErrorContext(
     gatewayUrl,
     region: regionFromGatewayUrl(gatewayUrl),
   };
-}
-
-/**
- * Copy .claude/settings.json to .wizard-backup (overwriting if it exists),
- * then remove the original so the SDK doesn't load the blocking overrides.
- */
-export function backupAndFixClaudeSettings(workingDirectory: string): boolean {
-  for (const name of ['settings.json', 'settings']) {
-    const filePath = path.join(workingDirectory, '.claude', name);
-    const backupPath = `${filePath}.wizard-backup`;
-    analytics.wizardCapture('backedup-claude-settings');
-    try {
-      fs.copyFileSync(filePath, backupPath);
-      fs.unlinkSync(filePath);
-      registerCleanup(() => {
-        try {
-          restoreClaudeSettings(workingDirectory);
-        } catch (error) {
-          analytics.captureException(error);
-        }
-      });
-      return true;
-    } catch {
-      // File doesn't exist — try next candidate
-    }
-  }
-  return false;
-}
-
-/**
- * Restore .claude/settings.json from .wizard-backup.
- * Copies (not moves) so the backup is preserved.
- */
-export function restoreClaudeSettings(workingDirectory: string): void {
-  for (const name of ['settings.json', 'settings']) {
-    const backup = path.join(
-      workingDirectory,
-      '.claude',
-      `${name}.wizard-backup`,
-    );
-    try {
-      fs.copyFileSync(backup, path.join(workingDirectory, '.claude', name));
-      analytics.wizardCapture('restored-claude-settings');
-      return;
-    } catch (error) {
-      analytics.captureException(error);
-    }
-  }
 }
 
 export type AgentConfig = {

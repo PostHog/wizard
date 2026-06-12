@@ -6,10 +6,8 @@ jest.mock('@utils/analytics', () => ({
   analytics: { captureException: jest.fn(), wizardCapture: jest.fn() },
 }));
 
-import {
-  checkAllSettingsConflicts,
-  buildAuthErrorContext,
-} from '@lib/agent/agent-interface';
+import { checkAllSettingsConflicts } from '@lib/agent/claude-settings';
+import { buildAuthErrorContext } from '@lib/agent/agent-interface';
 
 const OVERRIDE = JSON.stringify({ apiKeyHelper: 'echo sk-x' });
 const ENV_OVERRIDE = JSON.stringify({

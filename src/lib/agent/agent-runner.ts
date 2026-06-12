@@ -29,10 +29,12 @@ import {
   AgentErrorType,
   AgentSignals,
   buildWizardMetadata,
+} from './agent-interface';
+import {
   checkAllSettingsConflicts,
   backupAndFixClaudeSettings,
   restoreClaudeSettings,
-} from './agent-interface';
+} from './claude-settings';
 import { getCloudUrlFromRegion } from '@utils/urls';
 import {
   evaluateWizardReadiness,

@@ -27,7 +27,7 @@ import {
   RunPhase,
   buildSession,
 } from '@lib/wizard-session';
-import type { SettingsConflict } from '@lib/agent/agent-interface';
+import type { SettingsConflict } from '@lib/agent/claude-settings';
 import type { WizardReadinessResult } from '@lib/health-checks/readiness';
 import {
   WizardRouter,
