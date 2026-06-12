@@ -16,6 +16,34 @@ import { useEffect, useState } from 'react';
 import { fetchSkillMenu, type SkillEntry } from '@lib/wizard-tools';
 import { getSkillsBaseUrl } from '@lib/constants';
 
+/**
+ * Resolve a session skillId against the skill-menu entries.
+ *
+ * `session.skillId` is seeded with the raw integration id during
+ * detection (e.g. 'python'), but the menu publishes integration skills
+ * under prefixed ids ('integration-python'); frameworks with variants
+ * publish several ('integration-nextjs-app-router', '-pages-router').
+ * Match chain: exact id → `integration-<id>` → unique
+ * `integration-<id>-*` prefix. Ambiguous variants (≥2 prefix matches)
+ * return null — the caller should point at the skills repo instead of
+ * guessing the wrong variant.
+ */
+export function resolveSkillEntry(
+  entries: SkillEntry[],
+  skillId: string,
+): SkillEntry | null {
+  const exact = entries.find((s) => s.id === skillId);
+  if (exact) return exact;
+
+  const prefixed = entries.find((s) => s.id === `integration-${skillId}`);
+  if (prefixed) return prefixed;
+
+  const variants = entries.filter((s) =>
+    s.id.startsWith(`integration-${skillId}-`),
+  );
+  return variants.length === 1 ? variants[0] : null;
+}
+
 export function useSkillEntry(
   skillId: string | null,
   local: boolean,
@@ -37,9 +65,10 @@ export function useSkillEntry(
         setFetchFailed(true);
         return;
       }
-      const match = Object.values(menu.categories)
-        .flat()
-        .find((s) => s.id === skillId);
+      const match = resolveSkillEntry(
+        Object.values(menu.categories).flat(),
+        skillId,
+      );
       if (match) setSkillEntry(match);
       else setFetchFailed(true);
     });

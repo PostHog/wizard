@@ -13,6 +13,7 @@
 
 import { Box, Text } from 'ink';
 import {
+  CONTEXT_MILL_URL,
   POSTHOG_PRIVACY_URL,
   POSTHOG_TERMS_URL,
   POSTHOG_WIZARD_REPO_URL,
@@ -47,12 +48,15 @@ export const PrivacyPanel = ({ skillId, localMcp }: PrivacyPanelProps) => {
         </Text>
       </Box>
 
+      {/* Fallback to the skills repo when the menu lookup can't resolve a
+          single skill (ambiguous framework variants, menu fetch failure) —
+          a browseable link beats rendering "unavailable". */}
       <Box marginTop={1}>
         <Text>
           Prefer your own AI? Download the skill and run it in your own agent:{' '}
           <Text color="cyan">
             {skillEntry?.downloadUrl ??
-              (fetchFailed ? 'unavailable' : 'Loading...')}
+              (fetchFailed ? CONTEXT_MILL_URL : 'Loading...')}
           </Text>
         </Text>
       </Box>
