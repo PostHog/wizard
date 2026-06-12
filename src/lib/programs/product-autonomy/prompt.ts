@@ -16,6 +16,15 @@ export function buildProductAutonomyPrompt(ctx: PromptContext): string {
   const orgAiSettingsUrl = `${uiHost}/settings/organization#organization-ai-consent`;
   const newWarehouseSourceUrl = `${projectBase}/pipeline/new/source`;
   const inboxUrl = `${projectBase}/inbox`;
+  const aiApprovalLabel =
+    ctx.orgAiDataProcessingApproved === true
+      ? 'APPROVED'
+      : ctx.orgAiDataProcessingApproved === false
+      ? 'NOT APPROVED'
+      : 'UNKNOWN';
+  const optIn = (value: boolean | null | undefined): string =>
+    value === true ? 'ON' : value === false ? 'OFF' : 'unknown';
+  const optIns = ctx.teamProductOptIns;
 
   return `You are setting up PostHog Product Autonomy (Signals) for this project: you will enable the right signal sources, make sure GitHub is connected, tune the scout fleet, and hand the user a configured inbox.
 
@@ -24,6 +33,14 @@ Project URLs:
 - Organization AI settings: ${orgAiSettingsUrl}
 - New data warehouse source (Linear / Zendesk / GitHub issues / pganalyze): ${newWarehouseSourceUrl}
 - Signals inbox: ${inboxUrl}
+
+Project state read at auth time (PostHog project settings — authoritative
+for whether a product is enabled, regardless of what this repo
+instruments; products are often instrumented from other repos or the
+snippet, so repo evidence may rule a product IN but never OUT):
+- Session replay recording: ${optIn(optIns?.sessionReplay)}
+- Exception autocapture (error tracking): ${optIn(optIns?.exceptionAutocapture)}
+- Surveys: ${optIn(optIns?.surveys)}
 
 The installed skill is the source of truth for the HOW of every step:
 which MCP tools to call, which sources and scouts apply to this product,
@@ -67,16 +84,19 @@ STEP 1 — Check Product Autonomy access. (skill: "Check access")
    and halt.
 
 STEP 2 — Read project and current Signals state. (skill: "Read context")
-   Read ./posthog-setup-report.md as ground truth for what is already
-   instrumented. Do a light scan ONLY for what the report won't cover.
-   List the currently enabled signal sources so every later write is
-   idempotent.
+   Read ./posthog-setup-report.md as ground truth for what THIS repo
+   instruments. Combine it with the project-state block above and the
+   skill's server-side usage probes — repo evidence rules products in,
+   never out. Do a light scan ONLY for what neither covers. List the
+   currently enabled signal sources so every later write is idempotent.
 
 STEP 3 — Confirm AI data processing approval. (skill: "AI approval")
    Signals drops every finding unless the organization has approved AI
-   data processing. Follow the skill's step; if approval is needed,
-   point the user at ${orgAiSettingsUrl} via wizard_ask. If the user
-   declines, emit
+   data processing. Auth-time check for this organization:
+   AI data processing approval is ${aiApprovalLabel}.
+   Follow the skill's step with that status as your starting point; if
+   approval is needed, point the user at ${orgAiSettingsUrl} via
+   wizard_ask. If the user declines, emit
    ${AgentSignals.ABORT} ai data processing approval declined
    and halt.
 
