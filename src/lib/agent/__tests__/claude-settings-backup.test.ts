@@ -74,6 +74,54 @@ describe('claude settings backup/restore', () => {
       expect(read(BACKUP)).toBe('{"pristine":true}');
       expect(exists(SETTINGS)).toBe(false);
     });
+
+    it('mirrors the source file mode on the backup so 0600 stays 0600', () => {
+      const settingsPath = path.join(claudeDir, SETTINGS);
+      fs.writeFileSync(settingsPath, '{"apiKeyHelper":"secret"}');
+      fs.chmodSync(settingsPath, 0o600);
+
+      backupAndFixClaudeSettings(dir);
+
+      const backupMode = fs.statSync(path.join(claudeDir, BACKUP)).mode & 0o777;
+      expect(backupMode).toBe(0o600);
+    });
+
+    it("adds *.wizard-backup to .claude/.gitignore so orphans can't be committed", () => {
+      fs.writeFileSync(path.join(claudeDir, SETTINGS), '{"apiKeyHelper":"x"}');
+
+      backupAndFixClaudeSettings(dir);
+
+      const gitignore = fs.readFileSync(
+        path.join(claudeDir, '.gitignore'),
+        'utf-8',
+      );
+      expect(gitignore).toContain('*.wizard-backup');
+    });
+
+    it('does not duplicate the gitignore entry on repeat backups', () => {
+      const gitignorePath = path.join(claudeDir, '.gitignore');
+      fs.writeFileSync(gitignorePath, '*.wizard-backup\n');
+      fs.writeFileSync(path.join(claudeDir, SETTINGS), '{"apiKeyHelper":"x"}');
+
+      backupAndFixClaudeSettings(dir);
+
+      const lines = fs
+        .readFileSync(gitignorePath, 'utf-8')
+        .split('\n')
+        .filter((l) => l.trim() === '*.wizard-backup');
+      expect(lines).toHaveLength(1);
+    });
+
+    it('appends to an existing .gitignore without a trailing newline', () => {
+      const gitignorePath = path.join(claudeDir, '.gitignore');
+      fs.writeFileSync(gitignorePath, 'foo');
+      fs.writeFileSync(path.join(claudeDir, SETTINGS), '{"apiKeyHelper":"x"}');
+
+      backupAndFixClaudeSettings(dir);
+
+      const gitignore = fs.readFileSync(gitignorePath, 'utf-8');
+      expect(gitignore).toBe('foo\n*.wizard-backup\n');
+    });
   });
 
   describe('restoreClaudeSettings', () => {

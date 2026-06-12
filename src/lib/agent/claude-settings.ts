@@ -165,6 +165,28 @@ export function checkAllSettingsConflicts(
 }
 
 /**
+ * Ensure `.claude/.gitignore` excludes `*.wizard-backup` so a backup left
+ * orphaned by an interrupted run can't get committed to git — settings files
+ * commonly hold `apiKeyHelper` or `ANTHROPIC_API_KEY`, which we don't want
+ * leaking into a repo.
+ */
+function ensureBackupGitignored(claudeDir: string): void {
+  const gitignorePath = path.join(claudeDir, '.gitignore');
+  const entry = '*.wizard-backup';
+  try {
+    const existing = fs.existsSync(gitignorePath)
+      ? fs.readFileSync(gitignorePath, 'utf-8')
+      : '';
+    const lines = existing.split('\n').map((l) => l.trim());
+    if (lines.includes(entry)) return;
+    const sep = existing && !existing.endsWith('\n') ? '\n' : '';
+    fs.writeFileSync(gitignorePath, `${existing}${sep}${entry}\n`);
+  } catch (error) {
+    analytics.captureException(error);
+  }
+}
+
+/**
  * Copy .claude/settings.json to .wizard-backup, then remove the original so
  * the SDK doesn't load the blocking overrides. Restored at outro and on
  * cleanup.
@@ -181,7 +203,13 @@ export function backupAndFixClaudeSettings(workingDirectory: string): boolean {
       // is from the current process and the current file is the modified one.
       if (!fs.existsSync(backupPath)) {
         fs.copyFileSync(filePath, backupPath);
+        // Mirror the source's mode so a 0600 settings.json (apiKeyHelper,
+        // API keys) doesn't become a 0644 backup readable by other local
+        // users. copyFileSync would otherwise apply default umask.
+        const mode = fs.statSync(filePath).mode & 0o777;
+        fs.chmodSync(backupPath, mode);
       }
+      ensureBackupGitignored(path.join(workingDirectory, '.claude'));
       fs.unlinkSync(filePath);
       analytics.wizardCapture('backedup-claude-settings');
       registerCleanup(() => {
