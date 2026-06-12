@@ -1,6 +1,8 @@
 export interface PluginInstallResult {
   success: boolean;
   alreadyInstalled?: boolean;
+  /** Client binary is too old or otherwise can't accept the plugin. Not an error worth reporting. */
+  unsupported?: boolean;
 }
 
 export interface PluginCapable {
