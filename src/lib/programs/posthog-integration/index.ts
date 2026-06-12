@@ -37,7 +37,7 @@ function resolveContinueUrl(
 }
 
 export const SETUP_REPORT_FILE = 'posthog-setup-report.md';
-export const EVENT_PLAN_FILE = '.posthog-events.json';
+export { EVENT_PLAN_FILE } from './constants.js';
 
 export const posthogIntegrationConfig: ProgramConfig = {
   command: 'integrate',

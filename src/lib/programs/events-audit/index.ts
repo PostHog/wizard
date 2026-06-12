@@ -11,7 +11,12 @@ import { AUDIT_CHECKS_KEY } from '@lib/programs/audit/types';
 import { seedAuditLedger } from '@lib/programs/audit/seed';
 import { EVENTS_AUDIT_SEED_CHECKS } from './seed.js';
 
-export const SETUP_REPORT_FILE = 'posthog-events-audit-report.md';
+// SETUP_REPORT_FILE is also re-exported for backward compat with existing
+// imports from `@lib/programs/events-audit`. EVENT_INVENTORY_FILE and
+// EVENT_INVENTORY_PART_PATTERN are only used by yara-hooks, which imports
+// them directly from `./constants` — no re-export needed.
+export { SETUP_REPORT_FILE } from './constants.js';
+import { SETUP_REPORT_FILE } from './constants.js';
 
 const DOCS_URL = 'https://posthog.com/docs/product-analytics/best-practices';
 

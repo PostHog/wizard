@@ -17,6 +17,10 @@ const WIZARD_COMMANDMENTS = [
 
   'Treat feature flags, custom properties, and event names as part of an analytics contract. Prefer reusing existing names and patterns in the project. When you must introduce new ones, make them clear, descriptive, and consistent with existing conventions, and avoid scattering the same flag or property across many unrelated callsites.',
 
+  // TODO(context-mill#175): migrate to a shared skill doc; product-specific
+  // guidance like this belongs in context-mill, not wizard infra.
+  'Keep PostHog data capture at its defaults unless the user explicitly asks otherwise. Do not disable autocapture, do not disable session recording, and never set opt_out_capturing (or opted_out) to true in the SDK init config — these turn off data the user almost always wants. Note: posthog.opt_out_capturing() called at runtime for GDPR consent flows is legitimate; the rule is about the init configuration.',
+
   'Prefer minimal, targeted edits that achieve the requested behavior while preserving existing structure and style. Avoid large refactors, broad reformatting, or unrelated changes unless explicitly requested.',
 
   'Do not spawn subagents unless explicitly instructed to do so.',
