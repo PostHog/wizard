@@ -1,5 +1,4 @@
 {
-  "$schema-note": "All copy for the MCP tutorial picker, greeting, follow-ups, and cross-sells. Edit this file to update prompts without touching TypeScript. Every prompt is either (a) a read query on any PostHog product, or (b) a write on dashboards, insights, notebooks, or annotations — the four 'persistence' surfaces. No prompt should ask the agent to ship a flag, run an experiment, send a survey, or create an alert. See prompt-tree.md §5 for the scope reality.",
 
   "pinnedFirstPrompt": {
     "prompt": "Show me my top 5 events from the last 7 days",
@@ -508,7 +507,6 @@
     { "product": "Error Tracking", "prompt": "List the top errors my users hit this week.", "description": "Built-in error tracking — no separate tool." }
   ],
 
-  "slackApp-note": "Presentation copy for the 'Take PostHog to Slack' surfaces (Goodbye card + dedicated step). These strings are shown to the user, NOT sent to the agent — so the read/persistence prompt-scope rule above does not apply. The two capabilities describe the Slack agent itself, not role-specific examples. Connecting Slack is a manual OAuth step in the PostHog app, so we link out to setupUrl rather than wiring it up.",
   "slackApp": {
     "learnMoreUrl": "https://posthog.com/slack-app",
     "setupUrl": "https://app.posthog.com/settings/project-integrations#integration-slack",

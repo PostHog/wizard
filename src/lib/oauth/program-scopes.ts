@@ -35,11 +35,11 @@ import { WIZARD_OAUTH_SCOPES } from '@lib/constants';
 /**
  * Extra scopes the MCP tutorial needs on top of `WIZARD_OAUTH_SCOPES`.
  *
- * Mirrors the wizard partner's full OAuth ceiling on the PostHog side
- * (see the comma-delimited list in the wizard OAuth app's
- * `OAuthApplication.scopes`). The tutorial's prompts and follow-ups
- * touch most of the read surface, plus annotation write for the
- * "PostHog wizard install" verify-prompt.
+ * Every scope requested here must stay within the wizard OAuth app's
+ * ceiling on the PostHog side (`OAuthApplication.scopes`) — the full
+ * list lives in the README under "OAuth app scope ceiling". The
+ * tutorial's prompts and follow-ups touch most of the read surface,
+ * plus annotation write for the "PostHog wizard install" verify-prompt.
  *
  * Already in the base `WIZARD_OAUTH_SCOPES` (and therefore not
  * repeated here):
@@ -98,10 +98,6 @@ export const MCP_TUTORIAL_SCOPE_ADDITIONS = [
   // alert on this metric?").
   'alert:read',
   'subscription:read',
-
-  // Integration read — lets the tutorial detect whether Slack is already
-  // connected so the Connect-Slack surfaces can adapt their copy (confirm
-  // it's on vs. nudge to connect). Read-only; we never write integrations.
   'integration:read',
 ] as const;
 
