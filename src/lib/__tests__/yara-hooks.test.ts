@@ -644,6 +644,169 @@ describe('yara-hooks', () => {
         expect(mockTriage).not.toHaveBeenCalled();
         expect(result.decision).toBe('block');
       });
+
+      it('reports an overruled match to telemetry, without the free-text reason', async () => {
+        const m = match('posthog_pii_in_capture_call', {
+          category: 'posthog_pii',
+          severity: 'high',
+          scan_context: 'output',
+        });
+        mockScan.mockResolvedValueOnce(matched(m));
+        mockTriage.mockResolvedValueOnce([
+          {
+            ...m,
+            triage: {
+              verdict: 'false_positive',
+              reason: 'quotes user secret xyz',
+            },
+          },
+        ]);
+        const hook = createPostToolUseYaraHooks(dummyProvider, noopTerminate)[0]
+          .hooks[0];
+        await hook(
+          input({ tool_name: 'Write', tool_input: { content: 'x' } }),
+          't6',
+          { signal: dummySignal },
+        );
+        const call = mockAnalytics.analytics.wizardCapture.mock.calls.find(
+          (c: unknown[]) => c[0] === 'yara triage overruled',
+        );
+        expect(call).toBeDefined();
+        expect(call?.[1]).toEqual(
+          expect.objectContaining({
+            rule: 'posthog_pii_in_capture_call',
+            severity: 'high',
+            category: 'posthog_pii',
+            scan_context: 'output',
+          }),
+        );
+        // The triage reason may quote scanned content — must never be sent.
+        expect(JSON.stringify(call?.[1])).not.toContain('quotes user secret');
+      });
+
+      it('suppresses doc-path posthog_pii matches BEFORE triage (no LLM call)', async () => {
+        mockScan.mockResolvedValueOnce(
+          matched(
+            match('posthog_pii_in_capture_call', {
+              category: 'posthog_pii',
+              scan_context: 'output',
+            }),
+          ),
+        );
+        const hook = createPostToolUseYaraHooks(dummyProvider, noopTerminate)[0]
+          .hooks[0];
+        const result = await hook(
+          input({
+            tool_name: 'Write',
+            tool_input: {
+              // EVENT_PLAN_FILE — a wizard-documentation path where verbatim
+              // PII-shaped capture snippets are expected.
+              file_path: '/tmp/project/.posthog-events.json',
+              content: `posthog.capture('signup', { email })`,
+            },
+          }),
+          't7',
+          { signal: dummySignal },
+        );
+        expect(result).toEqual({});
+        expect(mockTriage).not.toHaveBeenCalled();
+      });
+
+      it('still triages non-pii matches on doc paths', async () => {
+        mockScan.mockResolvedValueOnce(
+          matched(
+            match('hardcoded_secret', {
+              category: 'hardcoded_secret',
+              scan_context: 'output',
+            }),
+          ),
+        );
+        const hook = createPostToolUseYaraHooks(dummyProvider, noopTerminate)[0]
+          .hooks[0];
+        const result = await hook(
+          input({
+            tool_name: 'Write',
+            tool_input: {
+              file_path: '/tmp/project/.posthog-events.json',
+              content: `const k = 'phc_xxx'`,
+            },
+          }),
+          't8',
+          { signal: dummySignal },
+        );
+        expect(mockTriage).toHaveBeenCalledTimes(1);
+        const output = result.hookSpecificOutput as any;
+        expect(output.additionalContext).toContain('YARA VIOLATION');
+      });
+    });
+  });
+
+  // ── Chunked scanning ───────────────────────────────────────
+
+  describe('chunked scanning', () => {
+    // SCAN_CHUNK_SIZE = 100_000, SCAN_CHUNK_OVERLAP = 4_096 → step 95_904,
+    // so 250KB of content spans 3 chunks.
+    it('scans oversized content in overlapping chunks and reports it', async () => {
+      const big = 'a'.repeat(250_000);
+      const hook = createPostToolUseYaraHooks(undefined, noopTerminate)[0]
+        .hooks[0];
+      const result = await hook(
+        input({ tool_name: 'Write', tool_input: { content: big } }),
+        'chunk1',
+        { signal: dummySignal },
+      );
+      expect(result).toEqual({});
+      expect(mockScan).toHaveBeenCalledTimes(3);
+      for (const call of mockScan.mock.calls) {
+        expect((call[0] as string).length).toBeLessThanOrEqual(100_000);
+      }
+      expect(mockAnalytics.analytics.wizardCapture).toHaveBeenCalledWith(
+        'yara scan chunked',
+        expect.objectContaining({
+          content_length: 250_000,
+          chunk_count: 3,
+          scan_context: 'output',
+        }),
+      );
+    });
+
+    it('scans small content in a single pass with no chunked event', async () => {
+      const hook = createPostToolUseYaraHooks(undefined, noopTerminate)[0]
+        .hooks[0];
+      await hook(
+        input({ tool_name: 'Write', tool_input: { content: 'small' } }),
+        'chunk2',
+        { signal: dummySignal },
+      );
+      expect(mockScan).toHaveBeenCalledTimes(1);
+      const chunkedCall = mockAnalytics.analytics.wizardCapture.mock.calls.find(
+        (c: unknown[]) => c[0] === 'yara scan chunked',
+      );
+      expect(chunkedCall).toBeUndefined();
+    });
+
+    it('triages a flagged chunk against that chunk, not the full buffer', async () => {
+      // Marker lands at ~150K — inside the second chunk only.
+      const big = 'a'.repeat(150_000) + 'EVIL_MARKER' + 'b'.repeat(100_000);
+      const m = match('posthog_pii_in_capture_call', {
+        category: 'posthog_pii',
+        scan_context: 'output',
+      });
+      mockScan
+        .mockResolvedValueOnce(noMatch)
+        .mockResolvedValueOnce(matched(m))
+        .mockResolvedValueOnce(noMatch);
+      const hook = createPostToolUseYaraHooks(dummyProvider, noopTerminate)[0]
+        .hooks[0];
+      await hook(
+        input({ tool_name: 'Write', tool_input: { content: big } }),
+        'chunk3',
+        { signal: dummySignal },
+      );
+      expect(mockTriage).toHaveBeenCalledTimes(1);
+      const triagedContent = mockTriage.mock.calls[0][0] as string;
+      expect(triagedContent.length).toBeLessThanOrEqual(100_000);
+      expect(triagedContent).toContain('EVIL_MARKER');
     });
   });
 

@@ -6,6 +6,8 @@
 // fail-closed behavior) against these jest.fn()s — never the real engine. Rule
 // matching itself is tested in the warlock repo.
 
+import type * as RealWarlock from '@posthog/warlock';
+
 export type Category =
   | 'prompt_injection'
   | 'exfiltration'
@@ -29,6 +31,8 @@ export interface RuleMetadata {
 export interface ScanMatch {
   rule: string;
   metadata: RuleMetadata;
+  /** Evidence spans lifted from the scanned content (added in warlock 0.2.x). */
+  matchedStrings: string[];
 }
 
 export type ScanResult =
@@ -39,6 +43,10 @@ export type TriageVerdict = 'true_positive' | 'false_positive';
 
 export interface TriageMatch extends ScanMatch {
   triage: { verdict: TriageVerdict; reason: string };
+}
+
+export interface TriageOptions {
+  maxPromptChars?: number;
 }
 
 export type LLMProvider = (prompt: string) => Promise<string>;
@@ -65,6 +73,7 @@ export const triageMatches = jest.fn(
     _content: string,
     matches: ScanMatch[],
     _provider: LLMProvider,
+    _options?: TriageOptions,
   ): Promise<TriageMatch[]> =>
     Promise.resolve(
       matches.map((m) => ({
@@ -73,3 +82,17 @@ export const triageMatches = jest.fn(
       })),
     ),
 );
+
+// ─── Compile-time drift guard ────────────────────────────────────
+// If the real package's exports change shape, this assignment stops
+// type-checking and `pnpm test` fails — so the mock can't silently diverge
+// from the engine the wizard actually ships with. It works because jest's
+// moduleNameMapper is runtime-only: the `import type` above resolves to the
+// REAL package under TypeScript and is fully erased at runtime.
+// (This guard caught warlock 0.2.2 adding the required `matchedStrings`
+// field to ScanMatch.)
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const _conformance: Pick<
+  typeof RealWarlock,
+  'scan' | 'triageMatches' | 'CATEGORIES'
+> = { scan, triageMatches, CATEGORIES };

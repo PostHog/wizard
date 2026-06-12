@@ -35,7 +35,7 @@
     "@anthropic-ai/claude-agent-sdk": "0.3.146",
     "@inkjs/ui": "^2.0.0",
     "@langchain/core": "^0.3.40",
-    "@posthog/warlock": "git+https://github.com/PostHog/warlock.git#243aa0f231f4ed872efacf0ec04a32d8b964d9fd",
+    "@posthog/warlock": "0.2.2",
     "axios": "1.7.4",
     "fast-glob": "^3.3.3",
     "glob": "9.3.5",

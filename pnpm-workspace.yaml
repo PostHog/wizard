@@ -1,11 +1,11 @@
 onlyBuiltDependencies:
   - esbuild
   - msw
-  # TODO(warlock-npm): remove this entry once @posthog/warlock is published to
-  # npm. It's only needed because the git dependency runs a `prepare` build on
-  # install; the published package ships prebuilt dist/ and needs no build.
-  - '@posthog/warlock'
 minimumReleaseAge: 10080
+minimumReleaseAgeExclude:
+  # First-party PostHog package, published 2026-06-09 — newer than the 7-day
+  # policy allows. Safe to remove this exclusion after 2026-06-16.
+  - '@posthog/warlock'
 blockExoticSubdeps: true
 trustPolicy: no-downgrade
 

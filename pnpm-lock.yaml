@@ -18,8 +18,8 @@ importers:
         specifier: ^0.3.40
         version: 0.3.40(openai@6.7.0(ws@8.18.1)(zod@3.24.2))
       '@posthog/warlock':
-        specifier: git+https://github.com/PostHog/warlock.git#243aa0f231f4ed872efacf0ec04a32d8b964d9fd
-        version: git+https://github.com/PostHog/warlock.git#243aa0f231f4ed872efacf0ec04a32d8b964d9fd
+        specifier: 0.2.2
+        version: 0.2.2
       axios:
         specifier: 1.7.4
         version: 1.7.4
@@ -1308,9 +1308,8 @@ packages:
   '@posthog/core@1.23.1':
     resolution: {integrity: sha512-GViD5mOv/mcbZcyzz3z9CS0R79JzxVaqEz4sP5Dsea178M/j3ZWe6gaHDZB9yuyGfcmIMQ/8K14yv+7QrK4sQQ==}
 
-  '@posthog/warlock@git+https://github.com/PostHog/warlock.git#243aa0f231f4ed872efacf0ec04a32d8b964d9fd':
-    resolution: {commit: 243aa0f231f4ed872efacf0ec04a32d8b964d9fd, repo: https://github.com/PostHog/warlock.git, type: git}
-    version: 0.0.0
+  '@posthog/warlock@0.2.2':
+    resolution: {integrity: sha512-fpN9eZJ7JvOFej6gfsW1DETJTyo7S2xuu5NQsnBYl8C/cYCmGc8Q0IPiVfBGkIifF1Cic0fzkytFusImxzv4ww==}
     engines: {node: ^20.20.0 || >=22.22.0}
 
   '@quansync/fs@1.0.0':
@@ -5436,7 +5435,7 @@ snapshots:
     dependencies:
       cross-spawn: 7.0.6
 
-  '@posthog/warlock@git+https://github.com/PostHog/warlock.git#243aa0f231f4ed872efacf0ec04a32d8b964d9fd':
+  '@posthog/warlock@0.2.2':
     dependencies:
       '@virustotal/yara-x': 1.15.0
 

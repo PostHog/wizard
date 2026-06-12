@@ -52,18 +52,6 @@ import { EVENT_PLAN_FILE } from '@lib/programs/posthog-integration/constants';
 // first scan() call. We import it once and cache the module promise so the
 // warmed engine (a warlock-internal singleton) is shared across every hook.
 // Mirrors the lazy `await import(...)` pattern used for the agent SDK.
-//
-// TODO(warlock-npm): @posthog/warlock is currently a GIT dependency on a PRIVATE
-// repo, pinned in package.json to a commit SHA. A private git dep breaks
-// `npx @posthog/wizard` for end users, so before any public wizard release —
-// once warlock is published to npm — do all of:
-//   1. package.json: swap "git+https://github.com/PostHog/warlock.git#<sha>"
-//      for a published version range (e.g. "^1.0.0").
-//   2. pnpm-workspace.yaml: remove "@posthog/warlock" from onlyBuiltDependencies
-//      (no install-time build once it ships prebuilt dist/).
-//   3. If the published version is <7 days old, add "@posthog/warlock" to a
-//      minimumReleaseAgeExclude allowlist or the wizard's min-release-age policy
-//      will block the install.
 
 type WarlockModule = typeof import('@posthog/warlock');
 
@@ -253,8 +241,19 @@ const HOOK_TIMEOUT_MS = 30_000;
 /** Timeout for the skill install hook (filesystem I/O + multiple scans) */
 const SKILL_SCAN_HOOK_TIMEOUT_MS = 30_000;
 
-/** Maximum content length to scan (100 KB). Inputs beyond this are truncated. */
-const MAX_SCAN_LENGTH = 100_000;
+/**
+ * Chunk size for scanning (100 KB). Oversized content is scanned in
+ * overlapping chunks so coverage is complete — nothing is silently truncated.
+ * The size also bounds what a single triage call pastes into the LLM prompt
+ * (~25K tokens), so triage always sees the chunk its matches came from.
+ */
+const SCAN_CHUNK_SIZE = 100_000;
+/**
+ * Overlap between adjacent chunks so a pattern straddling a chunk boundary
+ * still lands whole inside at least one chunk. YARA rule strings are at most
+ * a few hundred bytes; 4 KB is generous.
+ */
+const SCAN_CHUNK_OVERLAP = 4_096;
 
 // ─── Logging ─────────────────────────────────────────────────────
 
@@ -389,10 +388,16 @@ function matchesForContext(
  * Drop false positives via warlock's LLM triage. Fail-closed: if no provider is
  * available, or the triage call throws, every match is treated as real — we
  * never silently suppress a flagged match.
+ *
+ * Every overruled match is reported to PostHog (rule metadata only, never the
+ * free-text reason) so maintainers can alert on triage-overrule patterns — the
+ * signal that someone is either tripping a noisy rule or trying to talk the
+ * triage model out of a real finding.
  */
 async function triageFilter(
   content: string,
   matches: ScanMatch[],
+  ctx: ScanContext,
   llmProvider: LLMProvider | undefined,
 ): Promise<ScanMatch[]> {
   if (matches.length === 0) return [];
@@ -406,6 +411,22 @@ async function triageFilter(
     const warlock = await getWarlock();
     const triaged = await warlock.triageMatches(content, matches, llmProvider);
     const kept = triaged.filter((m) => m.triage.verdict === 'true_positive');
+    for (const m of triaged) {
+      if (m.triage.verdict === 'true_positive') continue;
+      logToFile(
+        `[YARA] triage overruled rule "${m.rule}" (${
+          m.metadata.severity ?? 'unknown'
+        }) — not acting on it`,
+      );
+      analytics.wizardCapture('yara triage overruled', {
+        rule: m.rule,
+        severity: m.metadata.severity,
+        category: m.metadata.category,
+        scan_context: ctx,
+        // The free-text triage reason is deliberately omitted — it can quote
+        // scanned content, which must never leave the user's machine.
+      });
+    }
     logToFile(
       `[YARA] triage: ${matches.length} flagged → ${kept.length} kept as real`,
     );
@@ -416,21 +437,99 @@ async function triageFilter(
   }
 }
 
+/** A chunk of scanned content together with the matches found inside it. */
+interface FlaggedChunk {
+  chunk: string;
+  matches: ScanMatch[];
+}
+
+/**
+ * Split oversized content into overlapping chunks so the scanner covers all
+ * of it. Content that fits in one chunk is returned as-is.
+ */
+function chunkContent(content: string): string[] {
+  if (content.length <= SCAN_CHUNK_SIZE) return [content];
+  const chunks: string[] = [];
+  const step = SCAN_CHUNK_SIZE - SCAN_CHUNK_OVERLAP;
+  for (let start = 0; start < content.length; start += step) {
+    chunks.push(content.slice(start, start + SCAN_CHUNK_SIZE));
+    if (start + SCAN_CHUNK_SIZE >= content.length) break;
+  }
+  return chunks;
+}
+
+/**
+ * Scan content against warlock rules — chunked when oversized, so nothing is
+ * skipped — and keep only matches for this content surface. Chunks scan
+ * sequentially (the WASM engine is single-threaded; parallelism buys nothing).
+ * Returns each flagged chunk with its matches so triage can later judge every
+ * match against the exact content it came from.
+ */
+async function scanForContext(
+  content: string,
+  ctx: ScanContext,
+): Promise<FlaggedChunk[]> {
+  const warlock = await getWarlock();
+  const chunks = chunkContent(content);
+  if (chunks.length > 1) {
+    logToFile(
+      `[YARA] content is ${content.length} chars — scanning ${chunks.length} overlapping chunks`,
+    );
+    // Alertable signal: oversized content should be rare; a spike could mean
+    // someone is padding content to probe the scanner.
+    analytics.wizardCapture('yara scan chunked', {
+      content_length: content.length,
+      chunk_count: chunks.length,
+      scan_context: ctx,
+    });
+  }
+  const flagged: FlaggedChunk[] = [];
+  for (const chunk of chunks) {
+    const result = await warlock.scan(chunk);
+    if (!result.matched) continue;
+    const matches = matchesForContext(result.matches, ctx);
+    if (matches.length === 0) continue;
+    flagged.push({ chunk, matches });
+  }
+  return flagged;
+}
+
+/** The overlap between chunks can surface the same rule twice; count it once. */
+function dedupeByRule(matches: ScanMatch[]): ScanMatch[] {
+  const seen = new Set<string>();
+  return matches.filter((m) => {
+    if (seen.has(m.rule)) return false;
+    seen.add(m.rule);
+    return true;
+  });
+}
+
+/**
+ * Triage each flagged chunk against its own content — the evidence is always
+ * inside the window the LLM sees. Triage calls run in parallel (each is just
+ * an HTTP round trip) so N flagged chunks cost ~1× triage latency, not N×.
+ */
+async function triageFlagged(
+  flagged: FlaggedChunk[],
+  ctx: ScanContext,
+  llmProvider: LLMProvider | undefined,
+): Promise<ScanMatch[]> {
+  const triaged = await Promise.all(
+    flagged.map(({ chunk, matches }) =>
+      triageFilter(chunk, matches, ctx, llmProvider),
+    ),
+  );
+  return dedupeByRule(triaged.flat());
+}
+
 /** Scan content, filter to the relevant context, triage. Returns real matches. */
 async function scanAndTriage(
   content: string,
   ctx: ScanContext,
   llmProvider: LLMProvider | undefined,
 ): Promise<ScanMatch[]> {
-  const warlock = await getWarlock();
-  const scanContent =
-    content.length > MAX_SCAN_LENGTH
-      ? content.slice(0, MAX_SCAN_LENGTH)
-      : content;
-  const result = await warlock.scan(scanContent);
-  if (!result.matched) return [];
-  const filtered = matchesForContext(result.matches, ctx);
-  return triageFilter(scanContent, filtered, llmProvider);
+  const flagged = await scanForContext(content, ctx);
+  return triageFlagged(flagged, ctx, llmProvider);
 }
 
 // ─── PreToolUse Hooks ────────────────────────────────────────────
@@ -536,33 +635,49 @@ export function createPostToolUseYaraHooks(
             if (!content) return {};
 
             recordScan();
-            const matches = await scanAndTriage(content, 'output', llmProvider);
-            if (matches.length === 0) return {};
+            const flagged = await scanForContext(content, 'output');
+            if (flagged.length === 0) return {};
 
             // Wizard-documentation paths: suppress posthog_pii matches that
             // come from the agent verbatim-copying the user's existing
             // capture calls into an inventory / report, or planning new
             // events with PII-shaped property keys. Every other category
-            // still triggers the revert.
-            // TODO(warlock-npm): once Joe's warlock PR #33 lands with its
+            // still triggers the revert. Suppression runs BEFORE triage so
+            // we never pay an LLM round trip for a match we're about to
+            // discard anyway.
+            // TODO(warlock#33): once warlock PR #33 lands with its
             // more-precise PII rules, the wizard-side suppression below
             // should become unnecessary — remove `WIZARD_DOC_BASENAMES`,
             // `WIZARD_DOC_PATTERNS`, and `isWizardDocumentationPath` and
             // verify the noisy-PII issue stays fixed.
             const filePath = toolInput?.file_path as string | undefined;
-            const activeMatches = isWizardDocumentationPath(filePath)
-              ? matches.filter((m) => m.metadata.category !== 'posthog_pii')
-              : matches;
-            if (activeMatches.length === 0) {
+            const activeFlagged = isWizardDocumentationPath(filePath)
+              ? flagged
+                  .map(({ chunk, matches }) => ({
+                    chunk,
+                    matches: matches.filter(
+                      (m) => m.metadata.category !== 'posthog_pii',
+                    ),
+                  }))
+                  .filter(({ matches }) => matches.length > 0)
+              : flagged;
+            if (activeFlagged.length === 0) {
               logToFile(
                 `[YARA] posthog_pii match suppressed on wizard doc ${path.basename(
                   filePath ?? '',
-                )} (rule: ${matches[0]?.rule})`,
+                )} (rule: ${flagged[0]?.matches[0]?.rule})`,
               );
               return {};
             }
 
-            const match = highestSeverityMatch(activeMatches);
+            const matches = await triageFlagged(
+              activeFlagged,
+              'output',
+              llmProvider,
+            );
+            if (matches.length === 0) return {};
+
+            const match = highestSeverityMatch(matches);
             recordMatch('PostToolUse', toolName, match, 'reverted');
 
             return {
@@ -763,37 +878,19 @@ async function scanSkillFiles(
     `[YARA] Scanning ${fileContents.length} files in skill directory: ${skillDir}`,
   );
 
-  const warlock = await getWarlock();
-  // Pass 1 (sequential): scan + filter per file. WASM scanning is
-  // single-threaded so this loop has to be serial — collect (scanContent,
-  // matches) tuples for every file that flagged something.
-  // Triage per-file so each match is judged against the content it came from.
-  // The previous "scan per file, triage one combined buffer" approach passed
-  // triage a `combined.slice(0, MAX_SCAN_LENGTH)` window that often didn't
-  // contain the matched evidence (matches in later files past the 100KB cut),
-  // biasing the LLM toward `false_positive` on real attacks.
-  const flagged: { scanContent: string; matches: ScanMatch[] }[] = [];
+  // Pass 1 (sequential): scan each file through the chunk-aware path —
+  // full coverage even for oversized files, and every flagged chunk keeps a
+  // reference to the exact content its matches came from.
+  const flagged: FlaggedChunk[] = [];
   for (const content of fileContents) {
-    const scanContent =
-      content.length > MAX_SCAN_LENGTH
-        ? content.slice(0, MAX_SCAN_LENGTH)
-        : content;
-    const result = await warlock.scan(scanContent);
-    if (!result.matched) continue;
-    const matches = matchesForContext(result.matches, 'input');
-    if (matches.length === 0) continue;
-    flagged.push({ scanContent, matches });
+    flagged.push(...(await scanForContext(content, 'input')));
   }
 
-  // Pass 2 (parallel): triage each flagged file's matches against its own
-  // content concurrently. Triage is just an axios call — running them in
-  // parallel cuts total wall-clock from N × triage-timeout to ~1 ×.
-  // Important because the hook's HOOK_TIMEOUT_MS is 30s; serial triage on
-  // 2+ matched files could blow the hook timeout under a slow Haiku.
-  const triagedPerFile = await Promise.all(
-    flagged.map(({ scanContent, matches }) =>
-      triageFilter(scanContent, matches, llmProvider),
-    ),
-  );
-  return triagedPerFile.flat();
+  // Pass 2 (parallel, inside triageFlagged): triage each flagged chunk
+  // against its own content concurrently. Triage is just an axios call —
+  // running them in parallel cuts total wall-clock from N × triage-timeout
+  // to ~1×. Important because the hook's HOOK_TIMEOUT_MS is 30s; serial
+  // triage on 2+ matched files could blow the hook timeout under a slow
+  // Haiku.
+  return triageFlagged(flagged, 'input', llmProvider);
 }

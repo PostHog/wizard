@@ -807,25 +807,6 @@ export async function initializeAgent(
 }
 
 /**
- * Check agent output for YARA scanner violations.
- * Used in both the success and catch paths of runAgent.
- */
-function checkYaraViolation(
-  outputText: string,
-  spinner: SpinnerHandle,
-): { error: AgentErrorType } | null {
-  if (
-    outputText.includes('[YARA CRITICAL]') ||
-    outputText.includes('[YARA] Scanner error')
-  ) {
-    logToFile('Agent error: YARA_VIOLATION');
-    spinner.stop('Security violation detected');
-    return { error: AgentErrorType.YARA_VIOLATION };
-  }
-  return null;
-}
-
-/**
  * Execute an agent with the provided prompt and options
  * Handles the full lifecycle: spinner, execution, error handling
  *
@@ -1276,10 +1257,6 @@ export async function runAgent(
 
     const outputText = collectedText.join('\n');
 
-    // Check for YARA scanner violations
-    const yaraResult = checkYaraViolation(outputText, spinner);
-    if (yaraResult) return yaraResult;
-
     // Check for error markers in the agent's output
     if (outputText.includes(AgentSignals.ERROR_MCP_MISSING)) {
       logToFile('Agent error: MCP_MISSING');
@@ -1343,10 +1320,6 @@ export async function runAgent(
 
     // Check if we collected an error before the exception was thrown
     const outputText = collectedText.join('\n');
-
-    // Check for YARA scanner violations
-    const yaraResult = checkYaraViolation(outputText, spinner);
-    if (yaraResult) return yaraResult;
 
     // Extract just the API error line(s), not the entire output
     const apiErrorMatch = outputText.match(/API Error: [^\n]+/g);
