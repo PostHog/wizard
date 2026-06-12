@@ -13,7 +13,7 @@
 import type { Integration } from './constants';
 import type { FrameworkConfig } from './framework-config';
 import type { WizardReadinessResult } from './health-checks/readiness';
-import type { SettingsConflict } from './agent/agent-interface';
+import type { SettingsConflict } from './agent/claude-settings';
 import type { ApiUser } from './api';
 
 export interface Credentials {

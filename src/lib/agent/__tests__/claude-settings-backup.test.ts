@@ -16,7 +16,7 @@ import {
   backupAndFixClaudeSettings,
   restoreClaudeSettings,
   recoverOrphanedSettingsBackups,
-} from '@lib/agent/agent-interface';
+} from '@lib/agent/claude-settings';
 
 const SETTINGS = 'settings.json';
 const BACKUP = 'settings.json.wizard-backup';
