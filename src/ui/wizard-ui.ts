@@ -109,6 +109,18 @@ export interface WizardUI {
    */
   setApiUser(user: ApiUser | null): void;
 
+  /**
+   * Park until the org's AI opt-in gate clears
+   * (`organization.is_ai_data_processing_approved === true`, or the
+   * program never registered the gate — requiresAi: false / no auth
+   * step / CI session). The agent runner awaits this after setApiUser
+   * and BEFORE skill install or agent start: this is the enforcement
+   * point that keeps source on the machine while the TUI shows
+   * AiOptInRequiredScreen. Resolves immediately in non-TUI
+   * environments (CI auto-consents to AI usage).
+   */
+  waitForAiOptIn(): Promise<void>;
+
   /** Show blocking service outage (pushes outage overlay in TUI). Blocks until dismissed. */
   showBlockingOutage(result: WizardReadinessResult): Promise<void>;
 

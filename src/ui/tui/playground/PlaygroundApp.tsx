@@ -21,11 +21,8 @@ import { McpSuggestedPromptsDemo } from './demos/McpSuggestedPromptsDemo.js';
 import { KeyboardHintsDemo } from './demos/KeyboardHintsDemo.js';
 import { AuditChecksDemo } from './demos/AuditChecksDemo.js';
 import { LearnDeckDemo } from './demos/LearnDeckDemo.js';
-<<<<<<< HEAD
 import { EndScreensDemo } from './demos/EndScreensDemo.js';
-=======
 import { AiOptInDemo } from './demos/AiOptInDemo.js';
->>>>>>> dd3532c (feat(playground): add AiOptInRequiredScreen demo (admin + non-admin))
 
 interface PlaygroundAppProps {
   store: WizardStore;
@@ -83,11 +80,11 @@ export const PlaygroundApp = ({ store }: PlaygroundAppProps) => {
       component: <LearnDeckDemo store={store} />,
     },
     {
-<<<<<<< HEAD
       id: 'end-screens',
       label: 'End screens',
       component: <EndScreensDemo store={store} />,
-=======
+    },
+    {
       id: 'ai-opt-in-admin',
       label: 'AI opt-in (admin)',
       component: <AiOptInDemo variant="admin" />,
@@ -96,7 +93,6 @@ export const PlaygroundApp = ({ store }: PlaygroundAppProps) => {
       id: 'ai-opt-in-nonadmin',
       label: 'AI opt-in (non-admin)',
       component: <AiOptInDemo variant="non-admin" />,
->>>>>>> dd3532c (feat(playground): add AiOptInRequiredScreen demo (admin + non-admin))
     },
   ];
 

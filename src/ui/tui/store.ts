@@ -43,6 +43,7 @@ import type {
   ProgramReadyContext,
 } from '@lib/programs/program-step';
 import { getProgramConfig } from '@lib/programs/program-registry';
+import { withAiOptInGate } from '@lib/programs/ai-opt-in-gate';
 import { EXPANDED_COUNT } from '@ui/tui/constants';
 
 export { TaskStatus, ScreenId, Overlay, Program, RunPhase, McpOutcome };
@@ -121,10 +122,21 @@ export class WizardStore {
   }
 
   /**
+<<<<<<< HEAD
    * Scan program steps for gate predicates and create gate promises.
+=======
+   * Scan program steps for gate predicates and onInit callbacks.
+   * Creates gate promises and fires init work.
+   *
+   * Steps are wrapped with withAiOptInGate so the injected ai-opt-in
+   * step's gate registers here — the agent runner awaits it (via
+   * WizardUI.waitForAiOptIn) before any source leaves the machine.
+   * Same wrapper screen-sequences.ts uses, so the gate and its screen
+   * can't drift apart.
+>>>>>>> 7858f40 (fix(ai-opt-in): enforce the gate in the agent runner + request organization:read)
    */
   private _initFromProgram(program: ProgramId): void {
-    const steps = getProgramConfig(program).steps;
+    const steps = withAiOptInGate(getProgramConfig(program));
 
     // Create gate promises from steps that define them
     for (const step of steps) {
