@@ -12,9 +12,9 @@ import { WizardStore, Program, type ProgramId } from './store.js';
 import { InkUI } from './ink-ui.js';
 import { setUI } from '@ui/index';
 import { App } from './App.js';
-import { OutroKind } from '@lib/wizard-session';
 import { analytics } from '@utils/analytics';
 import { logToFile } from '@utils/debug';
+import { getExitLine } from './exit-line.js';
 
 // ANSI escape sequences
 const RESET_ATTRS = '\x1b[0m';
@@ -23,28 +23,9 @@ const CURSOR_HOME = '\x1b[H';
 const BG_BLACK = '\x1b[48;2;0;0;0m';
 const ENTER_ALT_SCREEN = '\x1b[?1049h';
 const LEAVE_ALT_SCREEN = '\x1b[?1049l';
-const GREEN = '\x1b[32m';
-const BOLD = '\x1b[1m';
-const DIM = '\x1b[2m';
 
 export function releaseTerminal(): void {
   process.stdout.write(RESET_ATTRS + LEAVE_ALT_SCREEN);
-}
-
-function getExitLine(store: WizardStore): string {
-  const outro = store.session.outroData;
-  const label = store.session.programLabel ?? 'Wizard';
-
-  if (outro?.kind === OutroKind.Success) {
-    const message = outro.message ?? `${label} completed successfully.`;
-    const reportSuffix =
-      outro.reportFile && !message.includes(outro.reportFile)
-        ? ` Check ./${outro.reportFile} for details.`
-        : '';
-    return `${GREEN}${BOLD}\u2714${RESET_ATTRS} ${message}${reportSuffix}`;
-  }
-
-  return `${DIM}${label} exited.${RESET_ATTRS}`;
 }
 
 export function startTUI(
