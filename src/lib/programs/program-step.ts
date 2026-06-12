@@ -43,6 +43,7 @@ export interface ProgramReadyContext {
     config: FrameworkConfig,
   ) => void;
   readonly setDetectedFramework: (label: string) => void;
+  readonly setSkillId: (skillId: string | null) => void;
   readonly setUnsupportedVersion: (info: {
     current: string;
     minimum: string;
