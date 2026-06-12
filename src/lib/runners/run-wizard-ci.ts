@@ -97,6 +97,11 @@ export function runWizardCI(
           },
           setFrameworkConfig: () => undefined,
           setDetectedFramework: () => undefined,
+          // CI session is a plain object (no nanostore copy-on-write),
+          // so direct assignment is safe here.
+          setSkillId: (skillId: string | null) => {
+            session.skillId = skillId;
+          },
           setUnsupportedVersion: () => undefined,
           addDiscoveredFeature: () => undefined,
           setDetectionComplete: () => undefined,
