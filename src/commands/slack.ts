@@ -9,6 +9,15 @@ export const slackCommand: Command = {
   name: 'slack',
   description: 'Connect PostHog to your Slack',
   handler: runSlackConnect,
+  // Mirrors the mcp command family shape: `wizard slack` and
+  // `wizard slack add` run the same connect flow.
+  children: [
+    {
+      name: 'add',
+      description: 'Connect PostHog to your Slack',
+      handler: runSlackConnect,
+    },
+  ],
 };
 
 function runSlackConnect(argv: Arguments): void {
