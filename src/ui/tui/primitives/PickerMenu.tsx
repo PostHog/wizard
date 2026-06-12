@@ -8,7 +8,7 @@
  */
 
 import { Box, Text } from 'ink';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Icons, Colors } from '@ui/tui/styles';
 import { PromptLabel } from './PromptLabel.js';
 import {
@@ -21,6 +21,11 @@ interface PickerOption<T> {
   label: string;
   value: T;
   hint?: string;
+  /** Glyph rendered before the label, in its own color — unaffected by
+   *  focus and disabled styling. */
+  icon?: { glyph: string; color?: string };
+  /** Dimmed and unselectable; navigation skips over it. */
+  disabled?: boolean;
   /**
    * Multi-select only: marks this option mutually exclusive with every other
    * option. Selecting it clears all other picks; selecting any non-exclusive
@@ -28,6 +33,35 @@ interface PickerOption<T> {
    * installed alongside local editors.
    */
   exclusive?: boolean;
+}
+
+/**
+ * Step through a column's options in `dir`, wrapping, until an enabled
+ * option is found. Returns `from` unchanged if the column is entirely
+ * disabled.
+ */
+function stepEnabled<T>(
+  options: PickerOption<T>[],
+  rows: number,
+  from: number,
+  dir: 1 | -1,
+): number {
+  const col = Math.floor(from / rows);
+  const colStart = col * rows;
+  const colLen = Math.min(rows, options.length - colStart);
+  let row = from % rows;
+  for (let i = 0; i < colLen; i++) {
+    row = (row + dir + colLen) % colLen;
+    const idx = colStart + row;
+    if (!options[idx]?.disabled) return idx;
+  }
+  return from;
+}
+
+/** Index of the first enabled option, for the initial focus. */
+function firstEnabled<T>(options: PickerOption<T>[]): number {
+  const idx = options.findIndex((o) => !o.disabled);
+  return idx === -1 ? 0 : idx;
 }
 
 interface PickerMenuProps<T> {
@@ -95,8 +129,17 @@ const SinglePickerMenu = <T,>({
   optionMarginBottom?: number;
   onSelect: (value: T | T[]) => void;
 }) => {
-  const [focused, setFocused] = useState(0);
+  const [focused, setFocused] = useState(() => firstEnabled(options));
   const rows = Math.ceil(options.length / columns);
+
+  // Re-validate focus when the options change while mounted \u2014 a list
+  // that shrinks or disables entries can leave `focused` pointing at a
+  // missing or disabled option, which would make enter a no-op.
+  useEffect(() => {
+    if (focused >= options.length || options[focused]?.disabled) {
+      setFocused(firstEnabled(options));
+    }
+  }, [options, focused]);
 
   const bindings: KeyBinding[] = [
     {
@@ -104,23 +147,11 @@ const SinglePickerMenu = <T,>({
       label: '\u2191\u2193',
       action: 'navigate',
       handler: (_input, key) => {
-        const col = Math.floor(focused / rows);
-        const row = focused % rows;
-
         if (key.upArrow) {
-          if (row > 0) {
-            setFocused(col * rows + row - 1);
-          } else {
-            setFocused(Math.min(col * rows + rows - 1, options.length - 1));
-          }
+          setFocused(stepEnabled(options, rows, focused, -1));
         }
         if (key.downArrow) {
-          const next = col * rows + row + 1;
-          if (next < options.length && row + 1 < rows) {
-            setFocused(next);
-          } else {
-            setFocused(col * rows);
-          }
+          setFocused(stepEnabled(options, rows, focused, 1));
         }
       },
     },
@@ -130,7 +161,7 @@ const SinglePickerMenu = <T,>({
       action: 'select',
       handler: () => {
         const selected = options[focused];
-        if (selected) {
+        if (selected && !selected.disabled) {
           onSelect(selected.value);
         }
       },
@@ -146,14 +177,21 @@ const SinglePickerMenu = <T,>({
         const col = Math.floor(focused / rows);
         const row = focused % rows;
 
+        let next = focused;
         if (key.leftArrow) {
           const prevCol = col > 0 ? col - 1 : columns - 1;
-          setFocused(Math.min(prevCol * rows + row, options.length - 1));
+          next = Math.min(prevCol * rows + row, options.length - 1);
         }
         if (key.rightArrow) {
           const nextCol = col < columns - 1 ? col + 1 : 0;
-          setFocused(Math.min(nextCol * rows + row, options.length - 1));
+          next = Math.min(nextCol * rows + row, options.length - 1);
         }
+        // Landing on a disabled option slides to the column's nearest
+        // enabled one.
+        if (options[next]?.disabled) {
+          next = stepEnabled(options, rows, next, 1);
+        }
+        setFocused(next);
       },
     });
   }
@@ -186,10 +224,19 @@ const SinglePickerMenu = <T,>({
                   >
                     {isFocused ? Icons.triangleSmallRight : ' '}
                   </Text>
+                  {opt.icon && (
+                    <Text color={opt.icon.color}>{opt.icon.glyph}</Text>
+                  )}
                   <Text
-                    color={isFocused ? Colors.accent : undefined}
-                    bold={isFocused}
-                    dimColor={!isFocused}
+                    color={
+                      opt.disabled
+                        ? Colors.muted
+                        : isFocused
+                        ? Colors.accent
+                        : undefined
+                    }
+                    bold={isFocused && !opt.disabled}
+                    dimColor={!isFocused || opt.disabled}
                   >
                     {label}
                   </Text>
@@ -219,9 +266,18 @@ const MultiPickerMenu = <T,>({
   optionMarginBottom?: number;
   onSelect: (value: T | T[]) => void;
 }) => {
-  const [focused, setFocused] = useState(0);
+  const [focused, setFocused] = useState(() => firstEnabled(options));
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const rows = Math.ceil(options.length / columns);
+
+  // Re-validate focus when the options change while mounted — a list
+  // that shrinks or disables entries can leave `focused` pointing at a
+  // missing or disabled option, which would make enter a no-op.
+  useEffect(() => {
+    if (focused >= options.length || options[focused]?.disabled) {
+      setFocused(firstEnabled(options));
+    }
+  }, [options, focused]);
 
   const bindings: KeyBinding[] = [
     {
@@ -229,23 +285,11 @@ const MultiPickerMenu = <T,>({
       label: '\u2191\u2193',
       action: 'navigate',
       handler: (_input, key) => {
-        const col = Math.floor(focused / rows);
-        const row = focused % rows;
-
         if (key.upArrow) {
-          if (row > 0) {
-            setFocused(col * rows + row - 1);
-          } else {
-            setFocused(Math.min(col * rows + rows - 1, options.length - 1));
-          }
+          setFocused(stepEnabled(options, rows, focused, -1));
         }
         if (key.downArrow) {
-          const next = col * rows + row + 1;
-          if (next < options.length && row + 1 < rows) {
-            setFocused(next);
-          } else {
-            setFocused(col * rows);
-          }
+          setFocused(stepEnabled(options, rows, focused, 1));
         }
       },
     },
@@ -254,6 +298,7 @@ const MultiPickerMenu = <T,>({
       label: 'space',
       action: 'toggle',
       handler: () => {
+        if (options[focused]?.disabled) return;
         setSelected((prev) => {
           const next = new Set(prev);
           if (next.has(focused)) {
@@ -282,7 +327,7 @@ const MultiPickerMenu = <T,>({
       handler: () => {
         if (selected.size === 0) {
           const hovered = options[focused];
-          if (hovered) {
+          if (hovered && !hovered.disabled) {
             onSelect(hovered.value);
           }
         } else {
@@ -302,14 +347,21 @@ const MultiPickerMenu = <T,>({
         const col = Math.floor(focused / rows);
         const row = focused % rows;
 
+        let next = focused;
         if (key.leftArrow) {
           const prevCol = col > 0 ? col - 1 : columns - 1;
-          setFocused(Math.min(prevCol * rows + row, options.length - 1));
+          next = Math.min(prevCol * rows + row, options.length - 1);
         }
         if (key.rightArrow) {
           const nextCol = col < columns - 1 ? col + 1 : 0;
-          setFocused(Math.min(nextCol * rows + row, options.length - 1));
+          next = Math.min(nextCol * rows + row, options.length - 1);
         }
+        // Landing on a disabled option slides to the column's nearest
+        // enabled one.
+        if (options[next]?.disabled) {
+          next = stepEnabled(options, rows, next, 1);
+        }
+        setFocused(next);
       },
     });
   }
@@ -348,10 +400,19 @@ const MultiPickerMenu = <T,>({
                   >
                     {checkbox}
                   </Text>
+                  {opt.icon && (
+                    <Text color={opt.icon.color}>{opt.icon.glyph}</Text>
+                  )}
                   <Text
-                    color={isFocused ? Colors.accent : undefined}
-                    bold={isFocused}
-                    dimColor={!isFocused}
+                    color={
+                      opt.disabled
+                        ? Colors.muted
+                        : isFocused
+                        ? Colors.accent
+                        : undefined
+                    }
+                    bold={isFocused && !opt.disabled}
+                    dimColor={!isFocused || opt.disabled}
                   >
                     {label}
                   </Text>

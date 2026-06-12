@@ -13,7 +13,7 @@
 import type { Integration } from './constants';
 import type { FrameworkConfig } from './framework-config';
 import type { WizardReadinessResult } from './health-checks/readiness';
-import type { SettingsConflict } from './agent/agent-interface';
+import type { SettingsConflict } from './agent/claude-settings';
 import type { ApiUser } from './api';
 
 export interface Credentials {
@@ -215,9 +215,10 @@ export interface WizardSession {
   /** True once the user has acted on (opened or skipped) the Connect-Slack step. */
   slackStepDismissed: boolean;
   /**
-   * Whether the project already has a Slack integration connected. `null`
-   * until detected (post-login, best-effort) — treated as "not connected"
-   * by the UI, which shows the connect nudge rather than the confirmation.
+   * Whether the project already has a Slack integration connected.
+   * `null` until detected. Prefetched by the tutorial screen as soon as
+   * credentials exist so the Connect-Slack step renders the right
+   * variant immediately instead of flashing the nudge first.
    */
   slackConnected: boolean | null;
   skillsComplete: boolean;
@@ -230,6 +231,7 @@ export interface WizardSession {
   settingsConflicts: SettingsConflict[] | null;
   authErrorDetail: {
     hasSettingsConflict: boolean;
+    conflicts?: SettingsConflict[];
     logFilePath: string;
   } | null;
   portConflictProcess: {

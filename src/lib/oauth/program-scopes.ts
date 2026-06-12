@@ -10,13 +10,15 @@
  * not listed in `PROGRAM_SCOPE_ADDITIONS` request the unchanged
  * base set, exactly like before.
  *
- * Today only `McpTutorial` adds anything: read-only on every product
+ * Current additions: `McpTutorial` layers read-only on every product
  * surface (feature flags, experiments, surveys, replays, errors, web
  * analytics, LLM analytics, cohorts, persons) plus read/write on
- * annotations. Persistence writes (dashboard:write, insight:write,
- * notebook:write, query:read) come for free from the base set, so the
- * tutorial's "save as insight / pin to dashboard / add to notebook"
- * follow-ups keep working.
+ * annotations; `AgentSkill` adds feature-flag read/write; the default
+ * `PostHogIntegration` run adds `integration:read` for the
+ * Connect-Slack step. Persistence writes (dashboard:write,
+ * insight:write, notebook:write, query:read) come for free from the
+ * base set, so the tutorial's "save as insight / pin to dashboard /
+ * add to notebook" follow-ups keep working.
  *
  * Add a new program override by extending `PROGRAM_SCOPE_ADDITIONS`
  * below — no other call-site changes required as long as the program's
@@ -35,11 +37,11 @@ import { WIZARD_OAUTH_SCOPES } from '@lib/constants';
 /**
  * Extra scopes the MCP tutorial needs on top of `WIZARD_OAUTH_SCOPES`.
  *
- * Mirrors the wizard partner's full OAuth ceiling on the PostHog side
- * (see the comma-delimited list in the wizard OAuth app's
- * `OAuthApplication.scopes`). The tutorial's prompts and follow-ups
- * touch most of the read surface, plus annotation write for the
- * "PostHog wizard install" verify-prompt.
+ * Every scope requested here must stay within the wizard OAuth app's
+ * ceiling on the PostHog side (`OAuthApplication.scopes`) — the full
+ * list lives in the README under "OAuth app scope ceiling". The
+ * tutorial's prompts and follow-ups touch most of the read surface,
+ * plus annotation write for the "PostHog wizard install" verify-prompt.
  *
  * Already in the base `WIZARD_OAUTH_SCOPES` (and therefore not
  * repeated here):
@@ -98,10 +100,6 @@ export const MCP_TUTORIAL_SCOPE_ADDITIONS = [
   // alert on this metric?").
   'alert:read',
   'subscription:read',
-
-  // Integration read — lets the tutorial detect whether Slack is already
-  // connected so the Connect-Slack surfaces can adapt their copy (confirm
-  // it's on vs. nudge to connect). Read-only; we never write integrations.
   'integration:read',
 ] as const;
 
@@ -122,6 +120,20 @@ export const AGENT_SKILL_SCOPE_ADDITIONS = [
 ] as const;
 
 /**
+ * Extra scope the default wizard run needs on top of `WIZARD_OAUTH_SCOPES`.
+ *
+ * The Connect-Slack step at the end of the run polls
+ * `/api/projects/:id/integrations/` (`fetchSlackConnected`) to render the
+ * already-connected variant and to flip live once the user completes the
+ * Slack OAuth step in the browser. Without `integration:read` the first
+ * poll 403s, the screen stops polling, and an already-connected project
+ * is nagged with the connect nudge.
+ */
+export const POSTHOG_INTEGRATION_SCOPE_ADDITIONS = [
+  'integration:read',
+] as const;
+
+/**
  * Per-program scope additions, layered on top of `WIZARD_OAUTH_SCOPES`.
  *
  * Programs not listed here request the unchanged base set. Use this
@@ -139,6 +151,7 @@ const PROGRAM_SCOPE_ADDITIONS: Partial<Record<ProgramId, readonly string[]>> = {
   // ever changes, this line will fail to type-check.
   'mcp-tutorial': MCP_TUTORIAL_SCOPE_ADDITIONS,
   'agent-skill': AGENT_SKILL_SCOPE_ADDITIONS,
+  'posthog-integration': POSTHOG_INTEGRATION_SCOPE_ADDITIONS,
 };
 
 /**

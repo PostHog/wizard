@@ -18,8 +18,8 @@ import type { WizardStore } from '@ui/tui/store';
  * Other programs (e.g. revenue analytics) register a different step list.
  */
 /**
- * Context passed to onInit callbacks — fires during store construction,
- * before bin.ts has assigned the real session.
+ * Context passed to onInit callbacks — fires when the TUI starts
+ * rendering, before bin.ts has assigned the real session.
  */
 export interface StoreInitContext {
   readonly session: WizardSession;
@@ -85,10 +85,11 @@ export interface ProgramStep {
   gate?: (session: WizardSession) => boolean;
 
   /**
-   * Called once during store construction, with the default session.
-   * Use for session-independent fire-and-forget work that should start
-   * as early as possible (e.g. health check kicked off while the user
-   * is still reading the intro screen).
+   * Called once when the TUI starts rendering, with the default
+   * session. Use for session-independent fire-and-forget work that
+   * should start as early as possible (e.g. health check kicked off
+   * while the user is still reading the intro screen). Never fires for
+   * a store that isn't rendering screens (tests, playground).
    */
   onInit?: (ctx: StoreInitContext) => void;
 
