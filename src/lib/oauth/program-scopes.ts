@@ -98,6 +98,11 @@ export const MCP_TUTORIAL_SCOPE_ADDITIONS = [
   // alert on this metric?").
   'alert:read',
   'subscription:read',
+
+  // Integration read — lets the tutorial detect whether Slack is already
+  // connected so the Connect-Slack surfaces can adapt their copy (confirm
+  // it's on vs. nudge to connect). Read-only; we never write integrations.
+  'integration:read',
 ] as const;
 
 /**
