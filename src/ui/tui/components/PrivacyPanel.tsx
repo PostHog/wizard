@@ -13,7 +13,7 @@
 
 import { Box, Text } from 'ink';
 import {
-  CONTEXT_MILL_URL,
+  CONTEXT_MILL_RELEASES_URL,
   POSTHOG_PRIVACY_URL,
   POSTHOG_TERMS_URL,
   POSTHOG_WIZARD_REPO_URL,
@@ -29,7 +29,7 @@ interface PrivacyPanelProps {
 }
 
 export const PrivacyPanel = ({ skillId, localMcp }: PrivacyPanelProps) => {
-  const { skillEntry, fetchFailed } = useSkillEntry(skillId, localMcp);
+  const { skillEntry } = useSkillEntry(skillId, localMcp);
 
   return (
     <Box flexDirection="column" width={64} flexShrink={0}>
@@ -48,17 +48,25 @@ export const PrivacyPanel = ({ skillId, localMcp }: PrivacyPanelProps) => {
         </Text>
       </Box>
 
-      {/* Fallback to the skills repo when the menu lookup can't resolve a
-          single skill (ambiguous framework variants, menu fetch failure) —
-          a browseable link beats rendering "unavailable". */}
-      <Box marginTop={1}>
+      {/* Always link the release PAGE, never the direct asset URL — asset
+          URLs are ~89 chars and hard-wrap inside this 64-col panel, which
+          corrupts copy/paste with a mid-URL line break. The resolved skill
+          entry names the exact asset to grab; when the lookup can't pin one
+          (ambiguous framework variants, menu fetch failure) the sentence
+          stays generic. */}
+      <Box marginTop={1} flexDirection="column">
         <Text>
-          Prefer your own AI? Download the skill and run it in your own agent:{' '}
-          <Text color="cyan">
-            {skillEntry?.downloadUrl ??
-              (fetchFailed ? CONTEXT_MILL_URL : 'Loading...')}
-          </Text>
+          Prefer your own AI? Download{' '}
+          {skillEntry ? (
+            <>
+              the <Text bold>{skillEntry.id}</Text> skill
+            </>
+          ) : (
+            'the skill for your framework'
+          )}{' '}
+          and run it in your own agent:
         </Text>
+        <Text color="cyan">{CONTEXT_MILL_RELEASES_URL}</Text>
       </Box>
 
       <Box marginTop={1} flexDirection="column">
