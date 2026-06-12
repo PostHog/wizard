@@ -70,6 +70,7 @@ describe('WizardRouter', () => {
       };
       session.runPhase = RunPhase.Completed;
       session.mcpComplete = true;
+      session.slackStepDismissed = true;
 
       expect(router.resolve(session)).toBe(ScreenId.Outro);
     });

@@ -121,8 +121,7 @@ export class WizardStore {
   }
 
   /**
-   * Scan program steps for gate predicates and onInit callbacks.
-   * Creates gate promises and fires init work.
+   * Scan program steps for gate predicates and create gate promises.
    */
   private _initFromProgram(program: ProgramId): void {
     const steps = getProgramConfig(program).steps;
@@ -142,10 +141,16 @@ export class WizardStore {
         });
       }
     }
+  }
 
-    // Run onInit callbacks with a minimal context interface.
-    // Arrow functions capture `this` from _initFromProgram so we don't
-    // need to alias it.
+  /**
+   * Run the program steps' onInit callbacks. startTUI calls this once
+   * the screens are actually rendering — constructing a store alone
+   * (tests, playground) must not fire init work like the health-check
+   * pre-flight, whose probes belong only to flows that show its screen.
+   */
+  runInitHooks(): void {
+    const steps = getProgramConfig(this.router.activeProgram).steps;
     const getSession = (): WizardSession => this.session;
     const ctx: StoreInitContext = {
       get session() {

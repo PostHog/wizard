@@ -191,7 +191,12 @@ export async function runProgram(
 
   const skillsBaseUrl = getSkillsBaseUrl(session.localMcp);
 
-  // 2. Health check (guarded — skip if TUI already ran it)
+  // 2. Health check (guarded — skip if TUI already ran it). Only
+  // programs that declare a health-check screen get pre-flight checks;
+  // for everything else the checks never fire and never block.
+  const hasHealthCheckScreen = programConfig.steps.some(
+    (s) => s.screenId === 'health-check',
+  );
   if (session.readinessResult) {
     logToFile(
       `[agent-runner] readiness pre-computed by TUI: decision=${session.readinessResult.decision}` +
@@ -200,7 +205,7 @@ export async function runProgram(
         } — skipping re-check`,
     );
   }
-  if (!session.readinessResult) {
+  if (hasHealthCheckScreen && !session.readinessResult) {
     logToFile('[agent-runner] evaluating wizard readiness');
     const readinessConfig = session.signup
       ? SIGNUP_WIZARD_READINESS_CONFIG

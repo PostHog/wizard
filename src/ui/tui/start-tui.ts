@@ -65,7 +65,21 @@ export function startTUI(
   const inkUI = new InkUI(store);
   setUI(inkUI);
 
-  const { unmount: inkUnmount } = render(createElement(App, { store }));
+  const { unmount: inkUnmount, waitUntilExit } = render(
+    createElement(App, { store }),
+  );
+
+  // Fire the program steps' init work (e.g. the health-check pre-flight)
+  // now that the screens are rendering — store construction alone must
+  // not trigger it.
+  store.runInitHooks();
+
+  // Tearing down raw mode with a TTY read still pending surfaces a
+  // benign 'read EIO' on stdin (macOS); without a handler Node treats
+  // it as an uncaught exception and prints a stack over the exit line.
+  process.stdin.on('error', (err: NodeJS.ErrnoException) => {
+    if (err.code !== 'EIO') throw err;
+  });
 
   // On exit: unmount Ink, leave alt screen (restores previous content),
   // then print exit summary line into the main buffer.
@@ -84,6 +98,15 @@ export function startTUI(
     process.stdout.write(getExitLine(store) + '\n');
   };
   process.on('exit', cleanup);
+
+  // Ink unmounts itself on ctrl+c (exitOnCtrlC) but that alone doesn't
+  // end the process — background handles (e.g. the OAuth callback
+  // server) keep the event loop alive, leaving a zombie wizard with no
+  // UI. Follow the app teardown with a real exit.
+  void waitUntilExit().then(() => {
+    cleanup();
+    process.exit(process.exitCode ?? 0);
+  });
 
   return {
     unmount: cleanup,
