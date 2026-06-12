@@ -106,6 +106,42 @@ The following CLI arguments are available:
 | `--api-key`       | PostHog personal API key (phx_xxx) for authentication            | string  |         |                                                      | `POSTHOG_WIZARD_API_KEY`       |
 
 
+# OAuth Scopes
+
+`npx @posthog/wizard` authenticates via OAuth. Every program requests this **base** set:
+
+| Scope                       | Why                                                          |
+| --------------------------- | ----------------------------------------------------------- |
+| `user:read`                 | Identify the user for analytics + agent context             |
+| `project:read`              | Look up the provisioned project and its API token           |
+| `llm_gateway:read`          | Authenticate the agent's LLM calls to the gateway           |
+| `dashboard:write`           | Create the onboarding dashboard                             |
+| `insight:write`             | Create the onboarding insights                             |
+| `query:read`                | Run HogQL queries when the agent needs data                 |
+| `notebook:write`            | Create / edit notebooks via the notebooks MCP tools         |
+| `event_definition:read`     | Read the project's event schema (`read-data-schema` MCP tool)    |
+| `property_definition:read`  | Read the project's property schema (`read-data-schema` MCP tool) |
+| `health_issue:read`         | Power `wizard doctor` health checks                         |
+| `wizard_session:read`       | List / retrieve / stream wizard sessions                    |
+| `wizard_session:write`      | Stream run state to `/api/projects/{id}/wizard/sessions/`   |
+
+The first nine scopes (through `property_definition:read`) are the **provisioning** scopes,
+requested on both the signup/provisioning path and the OAuth login path; the three
+`health_issue` / `wizard_session` scopes are login-only. Some programs request **additional**
+read-only scopes on top of the base set — for example the MCP tutorial layers in reads across
+feature flags, experiments, surveys, replays, error tracking, warehouse, and more. The actual
+set is resolved per-program by `getOAuthScopesForProgram`.
+
+Sources of truth: `WIZARD_PROVISIONING_SCOPES` / `WIZARD_OAUTH_SCOPES` in `src/lib/constants.ts`
+(base) and `PROGRAM_SCOPE_ADDITIONS` in `src/lib/oauth/program-scopes.ts` (per-program). Every
+scope the wizard can request must also be:
+
+- added to `ALLOWED_PROVISIONING_SCOPES` in the monorepo's `ee/api/agentic_provisioning/views.py`
+  if it's a provisioning scope (otherwise the signup call rejects it), and
+- granted on the PostHog OAuth application in **both regions (US / EU)** — otherwise the matching
+  tool calls fail at runtime even though the wizard requested the scope.
+
+
 # CI Mode
 
 > ⚠️ **CI mode is not currently supported in published builds.** PostHog's LLM

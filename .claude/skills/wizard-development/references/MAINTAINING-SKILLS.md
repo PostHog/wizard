@@ -76,6 +76,14 @@ Skills carry a `version` field in their frontmatter. Bump it as follows:
 
 When you bump a version, also bump the `version` in any reference file that shipped as part of the change. Version churn is itself a maintenance signal — a skill that's bumped majors three times in a year is probably teaching an abstraction that hasn't stabilized.
 
+## Keep the README's OAuth scopes in sync with the scope constants
+
+Three surfaces define what the wizard requests: `WIZARD_PROVISIONING_SCOPES` and `WIZARD_OAUTH_SCOPES` in `src/lib/constants.ts` (the base set, where `WIZARD_OAUTH_SCOPES` spreads the provisioning set), and `PROGRAM_SCOPE_ADDITIONS` in `src/lib/oauth/program-scopes.ts` (per-program extras). When you add or remove a scope in any of them:
+
+- update the README's "OAuth Scopes" section in the same change;
+- if it's a **provisioning** scope, add it to `ALLOWED_PROVISIONING_SCOPES` in the monorepo's `ee/api/agentic_provisioning/views.py` first, or the signup/provisioning call will reject the unknown scope;
+- confirm the scope is granted on the PostHog OAuth application in **every region (US / EU)**, or the matching tool calls fail at runtime even though the wizard requested it.
+
 ## The maintainer's question
 
 When you finish updating a skill, ask: "If a contributor with no prior context follows this exactly, will they produce work the architecture currently asks for?" Not "will they produce something that works" — works is necessary but not sufficient. The skill should produce idiomatic output, not just functional output. If following the skill produces a bin.ts edit that the registry would have done automatically, the skill is asking for work that should be automatic.
