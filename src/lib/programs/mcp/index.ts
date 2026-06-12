@@ -32,6 +32,16 @@ export const mcpAddConfig: ProgramConfig = {
       show: (s) => s.mcpOutcome === McpOutcome.Installed,
       isComplete: (s) => s.mcpSuggestedPromptsDismissed,
     },
+    {
+      id: 'slack-connect',
+      label: 'Connect Slack',
+      screenId: 'slack-connect',
+      // Gate on the same successful-install signal as the tutorial step,
+      // so the "what's next" Slack prompt only appears once the user has
+      // a working MCP. No-clients / skipped / failed installs end here.
+      show: (s) => s.mcpOutcome === McpOutcome.Installed,
+      isComplete: (s) => s.slackStepDismissed,
+    },
   ],
 };
 
@@ -83,6 +93,12 @@ export const mcpTutorialConfig: ProgramConfig = {
       label: 'MCP tutorial',
       screenId: 'mcp-suggested-prompts',
       isComplete: (s) => s.mcpSuggestedPromptsDismissed,
+    },
+    {
+      id: 'slack-connect',
+      label: 'Connect Slack',
+      screenId: 'slack-connect',
+      isComplete: (s) => s.slackStepDismissed,
     },
   ],
 };

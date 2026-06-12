@@ -8,7 +8,7 @@
  * Session-mutating methods trigger reactive screen resolution in the TUI.
  */
 
-import type { SettingsConflict } from '@lib/agent/agent-interface';
+import type { SettingsConflict } from '@lib/agent/claude-settings';
 import type { WizardReadinessResult } from '@lib/health-checks/readiness';
 import type { ApiUser } from '@lib/api';
 import type {
@@ -36,15 +36,16 @@ export interface SpinnerHandle {
 /**
  * Context passed to `showAuthError` so the screen can pick the right copy.
  *
- * `hasSettingsConflict` is true when a Claude Code settings.json /
- * managed-settings file actually overrides the LLM Gateway auth — the
- * Wizard's pre-flight check missed it or it appeared after startup.
- * When false, the 401 has a different cause (bad PAT prefix, missing
- * scope, expired key, region mismatch) and we should not advise the
- * user to log out of Claude Code.
+ * `hasSettingsConflict` is true when a Claude Code settings file (project,
+ * project-local, the user's global config, or managed) actually overrides the
+ * LLM Gateway auth. `conflicts` carries the exact files and keys so the screen
+ * can name them. When there is no conflict, the 401 has a different cause (bad
+ * PAT prefix, missing scope, expired key, region mismatch) and we should not
+ * advise the user to log out of Claude Code.
  */
 export interface AuthErrorDetail {
   hasSettingsConflict: boolean;
+  conflicts?: SettingsConflict[];
   logFilePath: string;
 }
 

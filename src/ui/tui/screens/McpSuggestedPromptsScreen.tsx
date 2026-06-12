@@ -57,6 +57,7 @@ import {
   getRoleGreeting,
   getFollowUps,
   getCrossSellPrompts,
+  getSlackAppCard,
   FOLLOW_UP_EXIT_SENTINEL,
   PINNED_FIRST_PROMPT,
   type PromptOption,
@@ -65,6 +66,7 @@ import {
 import type { Integration } from '@lib/constants';
 import { analytics } from '@utils/analytics';
 import { logToFile } from '@utils/debug';
+import { openTrackedLink } from '@utils/links';
 import type {
   AgentChunk,
   McpSuggestedPromptsServices,
@@ -90,6 +92,7 @@ enum Phase {
 
 enum ChoiceValue {
   Login = 'login',
+  ConnectSlack = 'connect-slack',
   Exit = 'exit',
 }
 
@@ -127,8 +130,19 @@ export const McpSuggestedPromptsScreen = ({
     [session.roleAtOrganization],
   );
 
-  const [phase, setPhase] = useState<Phase>(Phase.Choose);
+  // Auth runs up front: the whole flow (Choose-phase Slack option, the
+  // Connect-Slack step after) needs credentials to know whether Slack
+  // is already connected, so without them we go straight into the
+  // OAuth dance and land on Choose informed. Esc cancels back to
+  // Choose for users who don't want to log in.
+  const [phase, setPhase] = useState<Phase>(() =>
+    store.session.credentials ? Phase.Choose : Phase.Authenticating,
+  );
   const [loginError, setLoginError] = useState<string | null>(null);
+  // Whether the user picked "Start MCP tutorial" — decides where a
+  // successful login lands: Greeting for a started tutorial, Choose
+  // for the up-front auth.
+  const startedTutorialRef = useRef(false);
   const [runningPrompt, setRunningPrompt] = useState<string | null>(null);
   const [runChunks, setRunChunks] = useState<AgentChunk[]>([]);
   const [runStartedAt, setRunStartedAt] = useState<number | null>(null);
@@ -176,7 +190,7 @@ export const McpSuggestedPromptsScreen = ({
         store.setRoleAtOrganization(roleAtOrganization);
         store.setApiUser(user);
         store.setLoginUrl(null);
-        setPhase(Phase.Greeting);
+        setPhase(startedTutorialRef.current ? Phase.Greeting : Phase.Choose);
       } catch (err) {
         if (cancelled) return;
         const message = err instanceof Error ? err.message : String(err);
@@ -191,6 +205,36 @@ export const McpSuggestedPromptsScreen = ({
       cancelled = true;
     };
   }, [phase, services, store]);
+
+  // Detect whether Slack is already connected, as soon as credentials
+  // are available — pre-seeded by the install flow, or set by the login
+  // above. Stored in the session so the Connect-Slack step that follows
+  // renders the right variant immediately. Drives the Choose-phase
+  // "Connect Slack now" option here. On failure `slackConnected` stays
+  // null and renders as "not connected".
+  const credentials = session.credentials;
+  const slackConnected = session.slackConnected;
+  useEffect(() => {
+    if (!credentials || slackConnected !== null) return;
+    let cancelled = false;
+    const controller = new AbortController();
+    void services
+      .checkSlackConnected(credentials, controller.signal)
+      .then((connected) => {
+        if (!cancelled) store.setSlackConnected(connected);
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        analytics.captureException(
+          err instanceof Error ? err : new Error(String(err)),
+          { step: 'slack_connected_check' },
+        );
+      });
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
+  }, [credentials, slackConnected, services, store]);
 
   // Stream the chosen prompt against the agent. On terminal chunks
   // ('done' or 'error') we schedule a short delay before swapping into
@@ -310,7 +354,16 @@ export const McpSuggestedPromptsScreen = ({
       analytics.wizardCapture('mcp suggested prompts choose', {
         choice: 'login',
       });
-      setPhase(Phase.Authenticating);
+      startedTutorialRef.current = true;
+      // Already authenticated by the up-front login — skip straight in.
+      setPhase(session.credentials ? Phase.Greeting : Phase.Authenticating);
+    } else if (choice === ChoiceValue.ConnectSlack) {
+      analytics.wizardCapture('mcp suggested prompts choose', {
+        choice: 'connect-slack',
+      });
+      // Open the Slack integration settings and stay on the Choose screen
+      // so the user can still start the tutorial.
+      openTrackedLink(getSlackAppCard().setupUrl, 'mcp-prompts-slack-setup');
     } else {
       analytics.wizardCapture('mcp suggested prompts choose', {
         choice: 'exit',
@@ -361,10 +414,19 @@ export const McpSuggestedPromptsScreen = ({
     {
       match: KeyMatch.Escape,
       label: 'esc',
-      action: phase === Phase.Goodbye ? 'close' : 'exit',
+      action:
+        phase === Phase.Goodbye
+          ? 'close'
+          : phase === Phase.Authenticating
+          ? 'cancel'
+          : 'exit',
       handler: () => {
         if (phase === Phase.Goodbye) {
           closeWizard();
+        } else if (phase === Phase.Authenticating) {
+          // Cancel the OAuth dance — the login effect's cleanup discards
+          // the in-flight result. Choose still works without credentials.
+          setPhase(Phase.Choose);
         } else if (
           phase === Phase.Running ||
           phase === Phase.PromptPicker ||
@@ -414,7 +476,11 @@ export const McpSuggestedPromptsScreen = ({
     <Box flexDirection="column" flexGrow={1}>
       <Box marginTop={1} flexDirection="column">
         {phase === Phase.Choose && (
-          <ChoosePhase error={loginError} onSelect={handleChoice} />
+          <ChoosePhase
+            error={loginError}
+            slackConnected={slackConnected}
+            onSelect={handleChoice}
+          />
         )}
 
         {phase === Phase.Authenticating && (
@@ -502,60 +568,86 @@ export const McpSuggestedPromptsScreen = ({
 
 interface ChoosePhaseProps {
   error: string | null;
+  slackConnected: boolean | null;
   onSelect: (value: ChoiceValue | ChoiceValue[]) => void;
 }
 
-const ChoosePhase = ({ error, onSelect }: ChoosePhaseProps) => (
-  <Box flexDirection="column">
-    <Text bold color={Colors.accent}>
-      PostHog MCP
-    </Text>
+const ChoosePhase = ({ error, slackConnected, onSelect }: ChoosePhaseProps) => {
+  return (
+    <Box flexDirection="column">
+      <Text bold color={Colors.accent}>
+        PostHog MCP
+      </Text>
 
-    <Box marginTop={1}>
-      <Text>
-        With MCP your agent works directly with the PostHog platform. You can
-        prompt it to:
-      </Text>
-    </Box>
-
-    <Box marginTop={1} flexDirection="column">
-      <Text>
-        <Text color="cyan">{Icons.diamond}</Text> Build dashboards
-      </Text>
-      <Text>
-        <Text color="cyan">{Icons.diamond}</Text> Run SQL queries
-      </Text>
-      <Text>
-        <Text color="cyan">{Icons.diamond}</Text> Deploy feature flags
-      </Text>
-      <Text>
-        <Text color="cyan">{Icons.diamond}</Text> Debug exceptions and errors
-      </Text>
-      <Text>
-        <Text color="cyan">{Icons.diamond}</Text> And lots more...
-      </Text>
-    </Box>
-
-    <Box marginTop={1}>
-      <Text>Want a live demo using real data from your project?</Text>
-    </Box>
-
-    <Box>
-      <PickerMenu
-        options={[
-          { label: 'Start MCP tutorial', value: ChoiceValue.Login },
-          { label: 'Exit', value: ChoiceValue.Exit },
-        ]}
-        onSelect={onSelect}
-      />
-    </Box>
-    {error && (
       <Box marginTop={1}>
-        <Text color="red">Login failed: {error}. Try again or exit.</Text>
+        <Text>
+          With MCP your agent works directly with the PostHog platform. You can
+          prompt it to:
+        </Text>
       </Box>
-    )}
-  </Box>
-);
+
+      <Box marginTop={1} flexDirection="column">
+        <Text>
+          <Text color="cyan">{Icons.diamond}</Text> Build dashboards
+        </Text>
+        <Text>
+          <Text color="cyan">{Icons.diamond}</Text> Run SQL queries
+        </Text>
+        <Text>
+          <Text color="cyan">{Icons.diamond}</Text> Deploy feature flags
+        </Text>
+        <Text>
+          <Text color="cyan">{Icons.diamond}</Text> Debug exceptions and errors
+        </Text>
+        <Text>
+          <Text color="cyan">{Icons.diamond}</Text> And lots more...
+        </Text>
+      </Box>
+
+      <Box marginTop={1} flexDirection="column">
+        {slackConnected ? (
+          <Text>
+            <Text color={Colors.success}>{Icons.check}</Text> Slack is connected
+            — analyze data and ship product changes there by tagging{' '}
+            <Text bold>@PostHog</Text>.
+          </Text>
+        ) : (
+          <Text>
+            You can also connect PostHog to Slack, so you can analyze data and
+            ship product changes there by tagging <Text bold>@PostHog</Text>.
+          </Text>
+        )}
+      </Box>
+
+      <Box marginTop={1}>
+        <Text>Want a live demo using real data from your project?</Text>
+      </Box>
+
+      <Box>
+        <PickerMenu
+          options={[
+            { label: 'Start MCP tutorial', value: ChoiceValue.Login },
+            slackConnected
+              ? {
+                  label: 'Already connected to Slack',
+                  value: ChoiceValue.ConnectSlack,
+                  icon: { glyph: Icons.check, color: Colors.success },
+                  disabled: true,
+                }
+              : { label: 'Connect Slack now', value: ChoiceValue.ConnectSlack },
+            { label: 'Exit', value: ChoiceValue.Exit },
+          ]}
+          onSelect={onSelect}
+        />
+      </Box>
+      {error && (
+        <Box marginTop={1}>
+          <Text color="red">Login failed: {error}. Try again or exit.</Text>
+        </Box>
+      )}
+    </Box>
+  );
+};
 
 // ── Authenticating phase ───────────────────────────────────────────────
 
@@ -1030,7 +1122,7 @@ const GoodbyePhase = ({
 
       <PickerMenu
         options={[{ label: 'Close', value: 'close' }]}
-        onSelect={onClose}
+        onSelect={() => onClose()}
       />
     </Box>
   );

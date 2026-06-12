@@ -1,5 +1,4 @@
 {
-  "$schema-note": "All copy for the MCP tutorial picker, greeting, follow-ups, and cross-sells. Edit this file to update prompts without touching TypeScript. Every prompt is either (a) a read query on any PostHog product, or (b) a write on dashboards, insights, notebooks, or annotations — the four 'persistence' surfaces. No prompt should ask the agent to ship a flag, run an experiment, send a survey, or create an alert. See prompt-tree.md §5 for the scope reality.",
 
   "pinnedFirstPrompt": {
     "prompt": "Show me my top 5 events from the last 7 days",
@@ -506,5 +505,16 @@
   "neutralCrossSell": [
     { "product": "Session Replay", "prompt": "Show me 5 recent sessions where users dropped off before completing signup.", "description": "Replay what users actually do — included on every plan." },
     { "product": "Error Tracking", "prompt": "List the top errors my users hit this week.", "description": "Built-in error tracking — no separate tool." }
-  ]
+  ],
+
+  "slackApp": {
+    "learnMoreUrl": "https://posthog.com/slack-app",
+    "setupUrl": "https://app.posthog.com/settings/project-integrations#integration-slack",
+    "headline": "Take PostHog to Slack",
+    "pitch": "You can also analyze product data and ship changes.",
+    "capabilities": [
+      "Tag @PostHog with a bug, edit, or a feature idea. It will spin up a sandboxed environment, plan, edit files, run tests, and open a draft PR.",
+      "Tag @PostHog with any data question. It's the same SQL-writing, statistically-minded assistant as PostHog AI, but it responds where you send work memes."
+    ]
+  }
 }

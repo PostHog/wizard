@@ -14,7 +14,7 @@
 import { Box, Text } from 'ink';
 import { useEffect, useState } from 'react';
 import { fetchSkillMenu, type SkillEntry } from '@lib/wizard-tools';
-import { CONTEXT_MILL_RELEASE_URL, getSkillsBaseUrl } from '@lib/constants';
+import { CONTEXT_MILL_RELEASES_URL, getSkillsBaseUrl } from '@lib/constants';
 
 /**
  * Resolve a session skillId against the skill-menu entries.
@@ -102,7 +102,7 @@ export const SkillSourceInfo = ({
       URL:{' '}
       <Text color="cyan">
         {skillEntry?.downloadUrl ??
-          (fetchFailed ? CONTEXT_MILL_RELEASE_URL : 'Loading...')}
+          (fetchFailed ? CONTEXT_MILL_RELEASES_URL : 'Loading...')}
       </Text>
     </Text>
   </Box>
