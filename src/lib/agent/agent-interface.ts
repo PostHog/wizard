@@ -646,26 +646,16 @@ export async function initializeAgent(
   getUI().log.step('Initializing Claude agent...');
 
   try {
-    // LOCAL DEV PATCH — DO NOT COMMIT. When ANTHROPIC_API_KEY is set in the
-    // environment, skip the PostHog LLM gateway and let the SDK talk to the
-    // Anthropic API directly with that key.
-    let gatewayUrl = '(direct Anthropic API — local dev patch)';
-    if (process.env.ANTHROPIC_API_KEY) {
-      logToFile(
-        'LOCAL DEV: using direct Anthropic API (ANTHROPIC_API_KEY set)',
-      );
-    } else {
-      // Configure LLM gateway environment variables (inherited by SDK subprocess)
-      gatewayUrl = getLlmGatewayUrlFromHost(config.posthogApiHost);
-      process.env.ANTHROPIC_BASE_URL = gatewayUrl;
-      process.env.ANTHROPIC_AUTH_TOKEN = config.posthogApiKey;
-      // Use CLAUDE_CODE_OAUTH_TOKEN to override any stored /login credentials
-      process.env.CLAUDE_CODE_OAUTH_TOKEN = config.posthogApiKey;
-      // Disable experimental betas (like input_examples) that the LLM gateway doesn't support
-      process.env.CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS = 'true';
+    // Configure LLM gateway environment variables (inherited by SDK subprocess)
+    const gatewayUrl = getLlmGatewayUrlFromHost(config.posthogApiHost);
+    process.env.ANTHROPIC_BASE_URL = gatewayUrl;
+    process.env.ANTHROPIC_AUTH_TOKEN = config.posthogApiKey;
+    // Use CLAUDE_CODE_OAUTH_TOKEN to override any stored /login credentials
+    process.env.CLAUDE_CODE_OAUTH_TOKEN = config.posthogApiKey;
+    // Disable experimental betas (like input_examples) that the LLM gateway doesn't support
+    process.env.CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS = 'true';
 
-      logToFile('Configured LLM gateway:', gatewayUrl);
-    }
+    logToFile('Configured LLM gateway:', gatewayUrl);
     logToFile(
       'API key prefix:',
       config.posthogApiKey
@@ -994,10 +984,8 @@ export async function runAgent(
         },
         env: {
           ...process.env,
-          // LOCAL DEV PATCH — DO NOT COMMIT. The shipped wizard scrubs
-          // ANTHROPIC_API_KEY here so a shell key can't bypass the gateway;
-          // this patch passes it through (initializeAgent skips the gateway
-          // env entirely when the key is set, so the modes can't mix).
+          // Prevent user's Anthropic API key from overriding the wizard's OAuth token
+          ANTHROPIC_API_KEY: undefined,
           // Defer MCP tool schemas to avoid bloating the system prompt.
           // The posthog-wizard MCP exposes many query tools with large schemas;
           // without deferral these consume ~113k tokens upfront, leaving

@@ -214,34 +214,25 @@ export async function* runMcpPromptViaSdk(args: {
 }): AsyncIterable<AgentChunk> {
   const { prompt, credentials, signal, resumeSessionId } = args;
 
-  // LOCAL DEV PATCH — DO NOT COMMIT. When ANTHROPIC_API_KEY is set in the
-  // environment, skip the PostHog LLM gateway and let the SDK talk to the
-  // Anthropic API directly with that key.
-  if (process.env.ANTHROPIC_API_KEY) {
-    logToFile(
-      '[runMcpPromptViaSdk] LOCAL DEV: using direct Anthropic API (ANTHROPIC_API_KEY set)',
-    );
-  } else {
-    // Route the SDK's LLM calls through the PostHog LLM gateway, authed
-    // with the user's OAuth access token. Set BEFORE loading the SDK in
-    // case any in-process code reads env at module init (cached base
-    // URLs, OAuth setup, etc.) — same reason `initializeAgent` does this
-    // before its query() call. Without these the SDK tries to
-    // authenticate directly against Anthropic and 401s with "Invalid
-    // authentication credentials".
-    const gatewayUrl = getLlmGatewayUrlFromHost(credentials.host);
-    process.env.ANTHROPIC_BASE_URL = gatewayUrl;
-    process.env.ANTHROPIC_AUTH_TOKEN = credentials.accessToken;
-    process.env.CLAUDE_CODE_OAUTH_TOKEN = credentials.accessToken;
-    process.env.CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS = 'true';
-    logToFile(
-      `[runMcpPromptViaSdk] gatewayUrl=${gatewayUrl} tokenPrefix=${
-        credentials.accessToken
-          ? credentials.accessToken.slice(0, 4) + '***'
-          : '(missing)'
-      }`,
-    );
-  }
+  // Route the SDK's LLM calls through the PostHog LLM gateway, authed
+  // with the user's OAuth access token. Set BEFORE loading the SDK in
+  // case any in-process code reads env at module init (cached base
+  // URLs, OAuth setup, etc.) — same reason `initializeAgent` does this
+  // before its query() call. Without these the SDK tries to
+  // authenticate directly against Anthropic and 401s with "Invalid
+  // authentication credentials".
+  const gatewayUrl = getLlmGatewayUrlFromHost(credentials.host);
+  process.env.ANTHROPIC_BASE_URL = gatewayUrl;
+  process.env.ANTHROPIC_AUTH_TOKEN = credentials.accessToken;
+  process.env.CLAUDE_CODE_OAUTH_TOKEN = credentials.accessToken;
+  process.env.CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS = 'true';
+  logToFile(
+    `[runMcpPromptViaSdk] gatewayUrl=${gatewayUrl} tokenPrefix=${
+      credentials.accessToken
+        ? credentials.accessToken.slice(0, 4) + '***'
+        : '(missing)'
+    }`,
+  );
 
   // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
   const { query } = await loadSdk();
@@ -351,10 +342,11 @@ export async function* runMcpPromptViaSdk(args: {
         allowedTools: ['mcp__posthog-wizard__*'],
         env: {
           ...process.env,
-          // LOCAL DEV PATCH — DO NOT COMMIT. The shipped wizard scrubs
-          // ANTHROPIC_API_KEY here so a shell key can't bypass the gateway;
-          // this patch passes it through (the gateway env above is skipped
-          // entirely when the key is set, so the modes can't mix).
+          // Without this the SDK picks up a user's personal
+          // ANTHROPIC_API_KEY from their shell and silently bypasses
+          // the PostHog LLM gateway — defeats quota tracking and the
+          // OAuth flow even though our other env vars are correct.
+          ANTHROPIC_API_KEY: undefined,
           // Defer MCP tool schemas to avoid bloating the system prompt.
           // posthog-wizard exposes many query tools with large schemas;
           // without deferral these consume ~113k tokens upfront, which
