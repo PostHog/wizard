@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.22.0](https://github.com/PostHog/wizard/compare/v2.21.0...v2.22.0) (2026-06-12)
+
+
+### Features
+
+* utm-tag and track outbound links, fix event attribution ([#653](https://github.com/PostHog/wizard/issues/653)) ([d927119](https://github.com/PostHog/wizard/commit/d92711914445d67f3be1e2cb332c36c5119011c7))
+* wizard slack command ([#654](https://github.com/PostHog/wizard/issues/654)) ([0790389](https://github.com/PostHog/wizard/commit/0790389fbeb9791eaa1b74564dbdde4fadaae94e))
+
 ## [2.21.0](https://github.com/PostHog/wizard/compare/v2.20.0...v2.21.0) (2026-06-12)
 
 
