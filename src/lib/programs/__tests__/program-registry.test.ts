@@ -37,3 +37,31 @@ describe('getSubcommandPrograms', () => {
     }
   });
 });
+
+describe('parentCommand nesting', () => {
+  it('nests web-analytics-doctor under the audit command', () => {
+    const webAnalytics = getProgramConfig('web-analytics-doctor');
+    expect(webAnalytics.command).toBe('web-analytics');
+    expect(webAnalytics.parentCommand).toBe('audit');
+  });
+
+  it('keeps audit as a top-level command', () => {
+    const audit = getProgramConfig('audit');
+    expect(audit.command).toBe('audit');
+    expect(audit.parentCommand).toBeUndefined();
+  });
+
+  it('every parentCommand refers to a registered top-level command', () => {
+    const topLevelCommands = new Set(
+      getSubcommandPrograms()
+        .filter((c) => c.parentCommand == null)
+        .map((c) => c.command),
+    );
+    const parentCommands = getSubcommandPrograms()
+      .map((c) => c.parentCommand)
+      .filter((p): p is string => p != null);
+    for (const parent of parentCommands) {
+      expect(topLevelCommands).toContain(parent);
+    }
+  });
+});

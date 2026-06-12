@@ -10,6 +10,7 @@ import type { Arguments } from 'yargs';
 import { integrateCommand } from '../commands/integrate';
 import { auditCommand } from '../commands/audit';
 import { migrateCommand } from '../commands/migrate';
+import { uploadSourcemapsCommand } from '../commands/upload-sourcemaps';
 import { parseCommand } from './helpers/parse-command.no-jest';
 
 function makeArgv(extra: Record<string, unknown> = {}): Arguments {
@@ -25,6 +26,14 @@ describe('program commands', () => {
     expect(integrateCommand.name).toBe('integrate');
     expect(auditCommand.name).toBe('audit');
     expect(migrateCommand.name).toBe('migrate');
+  });
+
+  test('nests web analytics doctor under audit', () => {
+    expect(auditCommand.children).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: 'web-analytics' }),
+      ]),
+    );
   });
 
   test('dispatches to runWizard by default', () => {
@@ -76,5 +85,26 @@ describe('program commands', () => {
       'audit --install-dir /tmp/app',
     );
     expect(argv.installDir).toBe('/tmp/app');
+  });
+
+  test('parses audit web-analytics through yargs', async () => {
+    const argv = await parseCommand(
+      auditCommand,
+      'audit web-analytics --install-dir /tmp/app',
+    );
+    expect(argv.installDir).toBe('/tmp/app');
+  });
+
+  test('accepts upload-source-maps and legacy upload-sourcemaps alias', async () => {
+    const canonical = await parseCommand(
+      uploadSourcemapsCommand,
+      'upload-source-maps --region eu',
+    );
+    const legacy = await parseCommand(
+      uploadSourcemapsCommand,
+      'upload-sourcemaps --region eu',
+    );
+    expect(canonical.region).toBe('eu');
+    expect(legacy.region).toBe('eu');
   });
 });
