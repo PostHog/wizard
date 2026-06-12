@@ -206,7 +206,7 @@ export interface WizardToolsOptions {
 
 /** Default per-run cap on wizard_ask calls when no override is provided. */
 export const DEFAULT_ASK_MAX_QUESTIONS = 10;
-/** Calls past this number always return a batch-it error. */
+/** The call after this many returns a one-time batch-your-questions nudge. */
 export const ASK_BATCH_THRESHOLD = 3;
 
 export type AskCapDecision =
@@ -222,10 +222,18 @@ export type AskCapDecision =
  * upcoming call should proceed and, if not, the error message to surface
  * to the agent. Extracted so the policy can be unit-tested without
  * spinning up an MCP server.
+ *
+ * The adjacency nudge fires exactly once per run (the caller records it
+ * via `adjacencyNudged`) — flows that legitimately need several
+ * sequential, answer-dependent asks then proceed up to `maxQuestions`.
+ * Without the flag the rejected call would never advance the counter and
+ * every later call would be rejected, making caps above the threshold
+ * unreachable.
  */
 export function evaluateAskCap(
   callCount: number,
   maxQuestions: number,
+  adjacencyNudged = false,
 ): AskCapDecision {
   if (callCount >= maxQuestions) {
     return {
@@ -234,11 +242,11 @@ export function evaluateAskCap(
       message: `Error: wizard_ask cap reached (${maxQuestions} calls in this run). Proceed with sensible defaults using the answers you already have, or emit [ABORT] requirements-incomplete.`,
     };
   }
-  if (callCount >= ASK_BATCH_THRESHOLD) {
+  if (!adjacencyNudged && callCount >= ASK_BATCH_THRESHOLD) {
     return {
       kind: 'capped',
       reason: 'adjacency',
-      message: `Error: too many wizard_ask calls in a row (${callCount} so far). Batch the remaining questions into a single call — the schema accepts up to 8 questions per invocation.`,
+      message: `Error: too many wizard_ask calls in a row (${callCount} so far). Batch the remaining questions into a single call — the schema accepts up to 8 questions per invocation. If the remaining questions truly depend on earlier answers, ask again and they will go through.`,
     };
   }
   return { kind: 'ok' };
@@ -511,6 +519,8 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
 
   // Per-server counter for wizard_ask call accounting (adjacency + total cap).
   let askCallCount = 0;
+  // The adjacency nudge fires once per run; after that only the total cap applies.
+  let askAdjacencyNudged = false;
 
   // Pre-fetch skill menu so category names are available in the tool schema
   let cachedSkillMenu: Record<string, SkillEntry[]> = {};
@@ -980,8 +990,15 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
         };
       }
 
-      const capDecision = evaluateAskCap(askCallCount, askMaxQuestions);
+      const capDecision = evaluateAskCap(
+        askCallCount,
+        askMaxQuestions,
+        askAdjacencyNudged,
+      );
       if (capDecision.kind === 'capped') {
+        if (capDecision.reason === 'adjacency') {
+          askAdjacencyNudged = true;
+        }
         analytics.wizardCapture('wizard_ask capped', {
           reason: capDecision.reason,
           call_count: askCallCount,

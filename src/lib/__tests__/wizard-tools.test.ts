@@ -326,6 +326,19 @@ describe('evaluateAskCap', () => {
     });
   });
 
+  it('fires the adjacency nudge only once — later calls proceed up to the cap', () => {
+    // After the nudge is recorded, calls between the threshold and the cap
+    // go through; otherwise caps above the threshold would be unreachable.
+    for (let i = ASK_BATCH_THRESHOLD; i < MAX; i++) {
+      expect(evaluateAskCap(i, MAX, true)).toEqual({ kind: 'ok' });
+    }
+    expect(evaluateAskCap(MAX, MAX, true)).toEqual({
+      kind: 'capped',
+      reason: 'max_questions',
+      message: expect.stringMatching(/cap reached/i),
+    });
+  });
+
   it('escalates to the max_questions reason once the cap is reached', () => {
     expect(evaluateAskCap(MAX, MAX)).toEqual({
       kind: 'capped',

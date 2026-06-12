@@ -117,6 +117,39 @@ export const AGENT_SKILL_SCOPE_ADDITIONS = [
 ] as const;
 
 /**
+ * Extra scopes the product-autonomy program needs on top of
+ * `WIZARD_OAUTH_SCOPES`. All consumed by the PostHog MCP tools the
+ * agent drives during the run:
+ *   • task:read / task:write — the signal source config API
+ *     (`inbox-source-configs-*`) is permissioned under the generic
+ *     `task` scope object, NOT a signals-specific one. Unrelated to
+ *     the Tasks product.
+ *   • integration:read — `integrations-list`, to check whether the
+ *     team already has a GitHub integration and to verify the connect
+ *     flow completed.
+ *   • signal_scout:read / signal_scout:write — list, sync, and tune
+ *     the Signals scout fleet (`signals-scout-config-*`).
+ *   • session_recording:read / survey:read / error_tracking:read —
+ *     server-side product-usage probes (`query-session-recordings-list`,
+ *     `survey-list`, `error-issue-list`). Product usage is a
+ *     project-level fact (often instrumented in another repo or via
+ *     the snippet), so the agent asks the server instead of inferring
+ *     only from the local setup report. All three are read-only and
+ *     already in the wizard OAuth app's production scope ceiling (the
+ *     mcp-tutorial program requests them).
+ */
+export const PRODUCT_AUTONOMY_SCOPE_ADDITIONS = [
+  'task:read',
+  'task:write',
+  'integration:read',
+  'signal_scout:read',
+  'signal_scout:write',
+  'session_recording:read',
+  'survey:read',
+  'error_tracking:read',
+] as const;
+
+/**
  * Per-program scope additions, layered on top of `WIZARD_OAUTH_SCOPES`.
  *
  * Programs not listed here request the unchanged base set. Use this
@@ -134,6 +167,7 @@ const PROGRAM_SCOPE_ADDITIONS: Partial<Record<ProgramId, readonly string[]>> = {
   // ever changes, this line will fail to type-check.
   'mcp-tutorial': MCP_TUTORIAL_SCOPE_ADDITIONS,
   'agent-skill': AGENT_SKILL_SCOPE_ADDITIONS,
+  'product-autonomy': PRODUCT_AUTONOMY_SCOPE_ADDITIONS,
 };
 
 /**

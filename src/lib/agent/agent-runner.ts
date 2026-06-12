@@ -272,6 +272,7 @@ export async function runProgram(
     cloudRegion,
     roleAtOrganization,
     user,
+    project,
   } = await getOrAskForProjectData({
     signup: session.signup,
     ci: session.ci,
@@ -380,6 +381,15 @@ export async function runProgram(
     projectApiKey,
     host,
     skillPath,
+    orgAiDataProcessingApproved:
+      user?.organization?.is_ai_data_processing_approved ?? null,
+    teamProductOptIns: project
+      ? {
+          sessionReplay: project.session_recording_opt_in ?? null,
+          exceptionAutocapture: project.autocapture_exceptions_opt_in ?? null,
+          surveys: project.surveys_opt_in ?? null,
+        }
+      : null,
   });
   logToFile(`[agent-runner] prompt assembled (${prompt.length} chars)`);
 

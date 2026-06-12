@@ -221,11 +221,13 @@ export async function provisionNewAccount(
 
 /**
  * Request a one-time deep link URL that logs the user into PostHog
- * and redirects to their project dashboard.
+ * and redirects to their project dashboard — or, when `opts.path` is
+ * given, to any safe in-app relative path (e.g. the Signals inbox).
  */
 export async function requestDeepLink(
   accessToken: string,
   host: string,
+  opts?: { purpose?: string; path?: string },
 ): Promise<string | null> {
   try {
     const baseUrl = host
@@ -234,7 +236,10 @@ export async function requestDeepLink(
 
     const res = await axios.post(
       `${baseUrl}/api/agentic/provisioning/deep_links`,
-      { purpose: 'dashboard' },
+      {
+        purpose: opts?.purpose ?? 'dashboard',
+        ...(opts?.path ? { path: opts.path } : {}),
+      },
       {
         headers: {
           'Content-Type': 'application/json',

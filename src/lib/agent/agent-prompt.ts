@@ -18,6 +18,24 @@ export interface PromptContext {
   host: string;
   /** Set when skillId was provided and the skill was installed successfully. */
   skillPath?: string;
+  /**
+   * Org-level AI consent (`is_ai_data_processing_approved`) read from the
+   * `/api/users/@me/` payload at auth time. `null` = unknown (older orgs,
+   * or the user fetch failed). Lets prompts pre-resolve consent state so
+   * agents only ask the user when it is actually off or unknown.
+   */
+  orgAiDataProcessingApproved?: boolean | null;
+  /**
+   * Team product opt-ins from the `/api/projects/:id/` payload at auth
+   * time. Project-level truth for "is this product enabled" — products
+   * can be instrumented from other repos or the snippet, so repo-local
+   * evidence must never rule them out. `null` field = unknown.
+   */
+  teamProductOptIns?: {
+    sessionReplay?: boolean | null;
+    exceptionAutocapture?: boolean | null;
+    surveys?: boolean | null;
+  } | null;
 }
 
 function defaultProjectPrompt(ctx: PromptContext): string {
