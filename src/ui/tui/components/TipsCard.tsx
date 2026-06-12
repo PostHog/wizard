@@ -50,6 +50,13 @@ const TIPS: Tip[] = [
       'Events and person records can have any properties you want. Track things like how they found your website, what subscription tier they choose, and much more.',
   },
   {
+    id: 'slack',
+    title: 'Use PostHog in Slack',
+    description:
+      'Connect the PostHog Slack app to analyze data and ship product changes — deploy flags, open PRs, run queries — just by tagging @PostHog:',
+    url: 'https://posthog.com/slack-app',
+  },
+  {
     id: 'stripe',
     title: 'You can track Stripe revenue with PostHog',
     description: 'Add Stripe as a data source while you wait:',
