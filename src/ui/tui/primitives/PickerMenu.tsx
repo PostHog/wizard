@@ -139,7 +139,7 @@ const SinglePickerMenu = <T,>({
     if (focused >= options.length || options[focused]?.disabled) {
       setFocused(firstEnabled(options));
     }
-  });
+  }, [options, focused]);
 
   const bindings: KeyBinding[] = [
     {
@@ -277,7 +277,7 @@ const MultiPickerMenu = <T,>({
     if (focused >= options.length || options[focused]?.disabled) {
       setFocused(firstEnabled(options));
     }
-  });
+  }, [options, focused]);
 
   const bindings: KeyBinding[] = [
     {
