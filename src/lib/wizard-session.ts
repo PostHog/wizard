@@ -212,6 +212,14 @@ export interface WizardSession {
   mcpOutcome: McpOutcome | null;
   mcpInstalledClients: string[];
   mcpSuggestedPromptsDismissed: boolean;
+  /** True once the user has acted on (opened or skipped) the Connect-Slack step. */
+  slackStepDismissed: boolean;
+  /**
+   * Whether the project already has a Slack integration connected. `null`
+   * until detected (post-login, best-effort) — treated as "not connected"
+   * by the UI, which shows the connect nudge rather than the confirmation.
+   */
+  slackConnected: boolean | null;
   skillsComplete: boolean;
   outroDismissed: boolean;
 
@@ -298,6 +306,8 @@ export function buildSession(args: {
     mcpOutcome: null,
     mcpInstalledClients: [],
     mcpSuggestedPromptsDismissed: false,
+    slackStepDismissed: false,
+    slackConnected: null,
     skillsComplete: false,
     outroDismissed: false,
     loginUrl: null,

@@ -19,6 +19,7 @@ import {
   SIGNUP_WIZARD_READINESS_CONFIG,
   getBlockingServiceKeys,
 } from '@lib/health-checks/readiness';
+import { logToFile } from '@utils/debug';
 
 export function healthCheckReady(session: WizardSession): boolean {
   if (!session.readinessResult) return false;
@@ -49,9 +50,13 @@ export const HEALTH_CHECK_STEP: ProgramStep = {
   onInit: (ctx) => {
     evaluateWizardReadiness()
       .then((readiness) => {
+        logToFile(
+          `[health-checks] TUI pre-flight complete: decision=${readiness.decision}`,
+        );
         ctx.setReadinessResult(readiness);
       })
-      .catch(() => {
+      .catch((err) => {
+        logToFile('[health-checks] TUI pre-flight failed:', err);
         ctx.setReadinessResult({
           decision: WizardReadiness.Yes,
           health: {} as never,

@@ -7,6 +7,7 @@
  * The legacy abort() in setup-utils.ts delegates here.
  */
 import { analytics } from './analytics';
+import { logToFile } from './debug';
 import { getUI } from '@ui';
 import { OutroKind, type OutroData } from '@lib/wizard-session';
 
@@ -47,6 +48,11 @@ export async function wizardAbort(
     error,
     exitCode = 1,
   } = options ?? {};
+
+  logToFile(`[wizard-abort] exitCode=${exitCode}, message: ${message}`);
+  if (error) {
+    logToFile('[wizard-abort] error:', error);
+  }
 
   // 1. Run registered cleanup functions
   for (const fn of cleanupFns) {

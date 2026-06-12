@@ -1,5 +1,33 @@
 # Changelog
 
+## [2.19.0](https://github.com/PostHog/wizard/compare/v2.18.0...v2.19.0) (2026-06-11)
+
+
+### Features
+
+* **mcp:** granular feature selection with plugin/MCP decoupling ([#442](https://github.com/PostHog/wizard/issues/442)) ([6acf3ee](https://github.com/PostHog/wizard/commit/6acf3ee449f5b7de180b3100cc94fcb14823db7a))
+
+
+### Bug Fixes
+
+* **wizard:** Fix wizard workbench runs against local MCP/repo ([#641](https://github.com/PostHog/wizard/issues/641)) ([96e4621](https://github.com/PostHog/wizard/commit/96e4621f4d3e63331316824d30b75fce91f7ad35))
+
+## [2.18.0](https://github.com/PostHog/wizard/compare/v2.17.0...v2.18.0) (2026-06-10)
+
+
+### Features
+
+* Add Web analytics doctor ([#506](https://github.com/PostHog/wizard/issues/506)) ([025ab55](https://github.com/PostHog/wizard/commit/025ab5503b1c7b562fa066a650fbef189506c9d3))
+* attach PostHog groups to wizard analytics events ([#591](https://github.com/PostHog/wizard/issues/591)) ([752c747](https://github.com/PostHog/wizard/commit/752c747bfd7558376a30c77fc5af169361b475b8))
+* **cli:** replace --skill flag with skill command ([#618](https://github.com/PostHog/wizard/issues/618)) ([424bd51](https://github.com/PostHog/wizard/commit/424bd519bb43a4c7a524df18bdf5ad539c2c8d2d))
+
+
+### Bug Fixes
+
+* Bound the two uncapped in-memory buffers in the agent run ([#516](https://github.com/PostHog/wizard/issues/516)) ([4f59877](https://github.com/PostHog/wizard/commit/4f59877ac0a3de8d79020e872dda4f7633cb0b47))
+* ff scopes for agent skill program ([#604](https://github.com/PostHog/wizard/issues/604)) ([7f0ee00](https://github.com/PostHog/wizard/commit/7f0ee00562835ca63a8f41105d17b057e7c22fb0))
+* upload source maps command ([#630](https://github.com/PostHog/wizard/issues/630)) ([23714b3](https://github.com/PostHog/wizard/commit/23714b309d272477e505b0ca6dcb09b2b6f4dd0d))
+
 ## [2.17.0](https://github.com/PostHog/wizard/compare/v2.16.1...v2.17.0) (2026-06-05)
 
 

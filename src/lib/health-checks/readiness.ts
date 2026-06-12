@@ -194,7 +194,11 @@ export async function evaluateWizardReadiness(
 
     const blockingKeys = getBlockingServiceKeys(health, config);
     if (blockingKeys.length > 0) {
-      logToFile(`[health-checks] blocked by: ${blockingKeys.join(', ')}`);
+      const blockingDetails = blockingKeys.map((key) => {
+        const h = health[key];
+        return `${key} (${h.status}${h.error ? ` — ${h.error}` : ''})`;
+      });
+      logToFile(`[health-checks] blocked by: ${blockingDetails.join(', ')}`);
       return { decision: WizardReadiness.No, health, reasons };
     }
 

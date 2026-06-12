@@ -13,6 +13,7 @@ import { InkUI } from './ink-ui.js';
 import { setUI } from '@ui/index';
 import { App } from './App.js';
 import { OutroKind } from '@lib/wizard-session';
+import { logToFile } from '@utils/debug';
 
 // ANSI escape sequences
 const RESET_ATTRS = '\x1b[0m';
@@ -72,6 +73,12 @@ export function startTUI(
   const cleanup = () => {
     if (cleaned) return;
     cleaned = true;
+    // Timestamp the teardown — everything printed into the alt screen dies here.
+    logToFile(
+      `[start-tui] unmounting TUI, leaving alt screen (exitCode=${
+        process.exitCode ?? 'unset'
+      })`,
+    );
     inkUnmount();
     releaseTerminal();
     process.stdout.write(getExitLine(store) + '\n');

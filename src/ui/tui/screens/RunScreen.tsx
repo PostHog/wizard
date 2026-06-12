@@ -79,8 +79,8 @@ export const RunScreen = ({ store }: RunScreenProps) => {
 
   // Each program owns its content deck (program/content/index.tsx)
   // and wires it onto its ProgramConfig.getContentBlocks. Fall back to the
-  // agent-skill deck for runtime-created configs (e.g. `--skill <id>`) that
-  // aren't in the static registry.
+  // agent-skill deck for runtime-created configs (e.g. `wizard skill <id>`)
+  // that aren't in the static registry.
   const activeProgram = store.router.activeProgram;
   const learnBlocks = useMemo(() => {
     const getBlocks =
