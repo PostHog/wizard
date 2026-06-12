@@ -36,8 +36,8 @@ export const PrivacyPanel = ({ skillId, localMcp }: PrivacyPanelProps) => {
       <Text>
         We use Anthropic's Claude via the PostHog LLM gateway to read your
         source files as AI context. .env* files, secrets, and anything matched
-        by the security scanner stay on your machine. The wizard is open source:{' '}
-        <Text color="cyan">{POSTHOG_WIZARD_REPO_URL}</Text>.
+        by the local security scanner stay on your machine. The wizard is open
+        source: <Text color="cyan">{POSTHOG_WIZARD_REPO_URL}</Text>.
       </Text>
 
       <Box marginTop={1}>
