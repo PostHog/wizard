@@ -508,10 +508,10 @@
   ],
 
   "slackApp": {
-    "learnMoreUrl": "https://posthog.com/slack-app",
+    "learnMoreUrl": "https://posthog.com/slack",
     "setupUrl": "https://app.posthog.com/settings/project-integrations#integration-slack",
-    "headline": "Take PostHog to Slack",
-    "pitch": "You can also analyze product data and ship changes.",
+    "headline": "@PostHog in Slack",
+    "pitch": "Analyze product data and ship changes.",
     "capabilities": [
       "Tag @PostHog with a bug, edit, or a feature idea. It will spin up a sandboxed environment, plan, edit files, run tests, and open a draft PR.",
       "Tag @PostHog with any data question. It's the same SQL-writing, statistically-minded assistant as PostHog AI, but it responds where you send work memes."

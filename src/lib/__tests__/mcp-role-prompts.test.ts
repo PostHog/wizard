@@ -295,7 +295,7 @@ describe('getSlackAppCard', () => {
 
   it('exposes the documented learn-more and setup URLs', () => {
     const card = getSlackAppCard();
-    expect(card.learnMoreUrl).toBe('https://posthog.com/slack-app');
+    expect(card.learnMoreUrl).toBe('https://posthog.com/slack');
     expect(card.setupUrl).toBe(
       'https://app.posthog.com/settings/project-integrations#integration-slack',
     );
