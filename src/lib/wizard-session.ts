@@ -242,6 +242,9 @@ export interface WizardSession {
     conflicts?: SettingsConflict[];
     logFilePath: string;
   } | null;
+  /** Minutes after which the login window expired. Set when the OAuth flow
+   *  times out, drives the session-timeout overlay copy. */
+  sessionTimeoutMinutes: number | null;
   portConflictProcess: {
     command: string;
     pid: string;
@@ -329,6 +332,7 @@ export function buildSession(args: {
     settingsOverrideKeys: null,
     settingsConflicts: null,
     authErrorDetail: null,
+    sessionTimeoutMinutes: null,
     portConflictProcess: null,
     outroData: null,
     dashboardUrl: null,

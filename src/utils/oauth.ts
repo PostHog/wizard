@@ -455,10 +455,11 @@ export async function performOAuthFlow(
         logToFile('[oauth] flow failed:', error);
 
         if (timedOut) {
+          // Overlay bypasses the auth-step gating (which never completes
+          // without credentials), so the user sees the failure instead of a
+          // spinner that never stops; any key exits.
           const timeoutMinutes = Math.round(OAUTH_TIMEOUT_MS / 60_000);
-          getUI().log.error(
-            `Session timed out. The login window expired after ${timeoutMinutes} minutes for security reasons.\n\nRe-run the wizard to start a new session.`,
-          );
+          getUI().showSessionTimeout(timeoutMinutes);
         } else if (error.message.includes('access_denied')) {
           getUI().log.info(
             `Authorization was cancelled.\n\nYou denied access to PostHog. To use the wizard, you need to authorize access to your PostHog account.\n\nYou can try again by re-running the wizard.`,

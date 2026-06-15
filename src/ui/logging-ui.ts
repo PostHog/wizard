@@ -196,6 +196,13 @@ export class LoggingUI implements WizardUI {
     }
   }
 
+  showSessionTimeout(minutes: number): void {
+    console.log(
+      `✖  Login timed out. The OAuth link timed out after ${minutes} minutes.`,
+    );
+    console.log(`│  Re-run the wizard to get a fresh link and try again.`);
+  }
+
   startRun(): void {
     // No-op in CI mode
   }
