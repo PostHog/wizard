@@ -1,7 +1,9 @@
-const mockRunWizard = jest.fn();
-const mockRunWizardCI = jest.fn();
+const { mockRunWizard, mockRunWizardCI } = vi.hoisted(() => ({
+  mockRunWizard: vi.fn(),
+  mockRunWizardCI: vi.fn(),
+}));
 
-jest.mock('@lib/runners', () => ({
+vi.mock('@lib/runners', () => ({
   runWizard: mockRunWizard,
   runWizardCI: mockRunWizardCI,
 }));
@@ -19,7 +21,7 @@ function makeArgv(extra: Record<string, unknown> = {}): Arguments {
 
 describe('program commands', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   test('each command exposes its CLI name', () => {

@@ -1,9 +1,9 @@
 // Mock for @posthog/warlock
 //
 // The real package is ESM-only and loads a YARA-X WASM binary at runtime, which
-// jest cannot transform/execute. Unit tests exercise the wizard's own decision
+// the unit test runner can't execute. Unit tests exercise the wizard's own decision
 // logic (scan_context filtering, severity/action mapping, triage handling,
-// fail-closed behavior) against these jest.fn()s — never the real engine. Rule
+// fail-closed behavior) against these vi.fn()s — never the real engine. Rule
 // matching itself is tested in the warlock repo.
 
 import type * as RealWarlock from '@posthog/warlock';
@@ -62,13 +62,13 @@ export const CATEGORIES = [
 ] as const;
 
 // Default: nothing matches. Tests override per-case with mockResolvedValueOnce.
-export const scan = jest.fn(
+export const scan = vi.fn(
   (_content: string): Promise<ScanResult> =>
     Promise.resolve({ matched: false }),
 );
 
 // Default: pass matches through as true positives (mirrors warlock's fail-safe).
-export const triageMatches = jest.fn(
+export const triageMatches = vi.fn(
   (
     _content: string,
     matches: ScanMatch[],
@@ -86,8 +86,8 @@ export const triageMatches = jest.fn(
 // ─── Compile-time drift guard ────────────────────────────────────
 // If the real package's exports change shape, this assignment stops
 // type-checking and `pnpm test` fails — so the mock can't silently diverge
-// from the engine the wizard actually ships with. It works because jest's
-// moduleNameMapper is runtime-only: the `import type` above resolves to the
+// from the engine the wizard actually ships with. It works because vitest's
+// resolve.alias is runtime-only: the `import type` above resolves to the
 // REAL package under TypeScript and is fully erased at runtime.
 // (This guard caught warlock 0.2.2 adding the required `matchedStrings`
 // field to ScanMatch.)

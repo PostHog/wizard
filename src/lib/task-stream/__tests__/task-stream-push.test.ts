@@ -72,7 +72,7 @@ function createMockDestination(name = 'test'): TaskStreamDestination & {
   return {
     name,
     calls,
-    send: jest.fn((event: StreamEvent, payload: TaskStreamUpdate) => {
+    send: vi.fn((event: StreamEvent, payload: TaskStreamUpdate) => {
       calls.push([event, payload]);
       return Promise.resolve();
     }),
@@ -98,7 +98,7 @@ function createPush(
 
 describe('TaskStreamPush', () => {
   afterEach(() => {
-    jest.useRealTimers();
+    vi.useRealTimers();
   });
 
   // ── Existing event-sequencing behaviour ────────────────────────
@@ -242,7 +242,7 @@ describe('TaskStreamPush', () => {
       const good = createMockDestination('good');
       const bad: TaskStreamDestination = {
         name: 'bad',
-        send: jest.fn(() => Promise.reject(new Error('network down'))),
+        send: vi.fn(() => Promise.reject(new Error('network down'))),
       };
       const push = new TaskStreamPush({
         store,
@@ -260,7 +260,7 @@ describe('TaskStreamPush', () => {
       const store = createMockStore();
       const bad: TaskStreamDestination = {
         name: 'bad',
-        send: jest.fn(() => Promise.reject(new Error('fail'))),
+        send: vi.fn(() => Promise.reject(new Error('fail'))),
       };
       const push = new TaskStreamPush({
         store,
@@ -277,17 +277,17 @@ describe('TaskStreamPush', () => {
   describe('spec: deterministic session_id', () => {
     it('session_id is locked at construction with second-precision ISO', async () => {
       const fixedNow = new Date('2026-05-20T17:00:00.123Z');
-      jest.useFakeTimers();
-      jest.setSystemTime(fixedNow);
+      vi.useFakeTimers();
+      vi.setSystemTime(fixedNow);
 
       const store = createMockStore();
       const { push, dest } = createPush(store);
 
       // Even if real time advances before the first push, session_id
       // is fixed.
-      jest.setSystemTime(new Date('2026-05-20T17:05:00.999Z'));
+      vi.setSystemTime(new Date('2026-05-20T17:05:00.999Z'));
       await push.push();
-      jest.setSystemTime(new Date('2026-05-20T17:10:00.000Z'));
+      vi.setSystemTime(new Date('2026-05-20T17:10:00.000Z'));
       await push.push();
 
       expect(dest.calls[0][1].session_id).toBe(
@@ -296,7 +296,7 @@ describe('TaskStreamPush', () => {
       expect(dest.calls[1][1].session_id).toBe(dest.calls[0][1].session_id);
       expect(dest.calls[0][1].started_at).toBe('2026-05-20T17:00:00Z');
 
-      jest.useRealTimers();
+      vi.useRealTimers();
     });
   });
 
@@ -340,7 +340,7 @@ describe('TaskStreamPush', () => {
 
   describe('spec: debounces task updates', () => {
     it('five rapid emits in the running phase produce one HTTP call with the latest task list', async () => {
-      jest.useFakeTimers();
+      vi.useFakeTimers();
       const store = createMockStore({ runPhase: RunPhase.Running });
       const { push, dest } = createPush(store);
       push.attach();
@@ -354,12 +354,12 @@ describe('TaskStreamPush', () => {
       // Five rapid task emits within 100ms — none fire synchronously.
       for (let i = 1; i <= 5; i++) {
         store._setAndEmit({ tasks: tasksUpTo(i) });
-        await jest.advanceTimersByTimeAsync(20);
+        await vi.advanceTimersByTimeAsync(20);
       }
       expect(dest.calls).toHaveLength(1);
 
       // Advance past the 250ms debounce window — one push with the latest list.
-      await jest.advanceTimersByTimeAsync(250);
+      await vi.advanceTimersByTimeAsync(250);
       await flushMicrotasks();
 
       expect(dest.calls).toHaveLength(2);
@@ -369,7 +369,7 @@ describe('TaskStreamPush', () => {
 
   describe('spec: phase change bypasses debounce', () => {
     it('Running → Completed produces an immediate push', async () => {
-      jest.useFakeTimers();
+      vi.useFakeTimers();
       const store = createMockStore({ runPhase: RunPhase.Running });
       const { push, dest } = createPush(store);
       push.attach();
@@ -401,7 +401,7 @@ describe('TaskStreamPush', () => {
       } = {
         name: 'slow',
         calls: [],
-        send: jest.fn((event: StreamEvent, payload: TaskStreamUpdate) => {
+        send: vi.fn((event: StreamEvent, payload: TaskStreamUpdate) => {
           dest.calls.push([event, payload]);
           if (dest.calls.length === 1) {
             return new Promise<void>((resolve) => {
@@ -464,11 +464,11 @@ describe('TaskStreamPush', () => {
 
   describe('spec: shutdown honours timeout', () => {
     it('shutdown returns even when destination hangs forever', async () => {
-      jest.useFakeTimers();
+      vi.useFakeTimers();
       const store = createMockStore({ runPhase: RunPhase.Completed });
       const hanging: TaskStreamDestination = {
         name: 'hangs',
-        send: jest.fn(() => new Promise<void>(() => undefined)),
+        send: vi.fn(() => new Promise<void>(() => undefined)),
       };
       const push = new TaskStreamPush({
         store,
@@ -477,9 +477,9 @@ describe('TaskStreamPush', () => {
       });
 
       const shutdown = push.shutdown(500);
-      jest.advanceTimersByTime(500);
+      vi.advanceTimersByTime(500);
       await expect(shutdown).resolves.toBeUndefined();
-      jest.useRealTimers();
+      vi.useRealTimers();
     });
   });
 });

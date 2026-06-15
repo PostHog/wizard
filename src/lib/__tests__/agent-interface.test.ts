@@ -8,54 +8,54 @@ import {
 } from '@lib/wizard-session';
 
 // Mock dependencies
-jest.mock('../../utils/analytics');
-jest.mock('../../utils/debug');
+vi.mock('../../utils/analytics');
+vi.mock('../../utils/debug');
 
 // Mock the SDK module
-const mockQuery = jest.fn();
-jest.mock('@anthropic-ai/claude-agent-sdk', () => ({
+const mockQuery = vi.fn();
+vi.mock('@anthropic-ai/claude-agent-sdk', () => ({
   query: (...args: unknown[]) => mockQuery(...args),
 }));
 
 // Mock the UI layer
 const mockUIInstance = {
   log: {
-    step: jest.fn(),
-    success: jest.fn(),
-    error: jest.fn(),
-    warn: jest.fn(),
-    info: jest.fn(),
+    step: vi.fn(),
+    success: vi.fn(),
+    error: vi.fn(),
+    warn: vi.fn(),
+    info: vi.fn(),
   },
-  spinner: jest.fn(),
-  select: jest.fn(),
-  confirm: jest.fn(),
-  text: jest.fn(),
-  intro: jest.fn(),
-  outro: jest.fn(),
-  cancel: jest.fn(),
-  note: jest.fn(),
-  isCancel: jest.fn(),
-  setDetectedFramework: jest.fn(),
-  setCredentials: jest.fn(),
-  pushStatus: jest.fn(),
-  setLoginUrl: jest.fn(),
-  showBlockingOutage: jest.fn(),
-  setReadinessWarnings: jest.fn(),
-  showSettingsOverride: jest.fn(),
-  startRun: jest.fn(),
-  syncTodos: jest.fn(),
-  groupMultiselect: jest.fn(),
-  multiselect: jest.fn(),
+  spinner: vi.fn(),
+  select: vi.fn(),
+  confirm: vi.fn(),
+  text: vi.fn(),
+  intro: vi.fn(),
+  outro: vi.fn(),
+  cancel: vi.fn(),
+  note: vi.fn(),
+  isCancel: vi.fn(),
+  setDetectedFramework: vi.fn(),
+  setCredentials: vi.fn(),
+  pushStatus: vi.fn(),
+  setLoginUrl: vi.fn(),
+  showBlockingOutage: vi.fn(),
+  setReadinessWarnings: vi.fn(),
+  showSettingsOverride: vi.fn(),
+  startRun: vi.fn(),
+  syncTodos: vi.fn(),
+  groupMultiselect: vi.fn(),
+  multiselect: vi.fn(),
 };
-jest.mock('../../ui', () => ({
+vi.mock('../../ui', () => ({
   getUI: () => mockUIInstance,
 }));
 
 describe('runAgent', () => {
   let mockSpinner: {
-    start: jest.Mock;
-    stop: jest.Mock;
-    message: jest.Mock;
+    start: Mock;
+    stop: Mock;
+    message: Mock;
   };
 
   const defaultOptions: WizardRunOptions = {
@@ -76,12 +76,12 @@ describe('runAgent', () => {
   };
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
 
     mockSpinner = {
-      start: jest.fn(),
-      stop: jest.fn(),
-      message: jest.fn(),
+      start: vi.fn(),
+      stop: vi.fn(),
+      message: vi.fn(),
     };
 
     mockUIInstance.spinner.mockReturnValue(mockSpinner);

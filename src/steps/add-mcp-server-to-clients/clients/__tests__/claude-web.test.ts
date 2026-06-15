@@ -2,9 +2,9 @@ import opn from 'opn';
 import { ClaudeWebMCPClient } from '@steps/add-mcp-server-to-clients/clients/claude-web';
 import { isBrowserFinishable } from '@steps/add-mcp-server-to-clients/browser-client';
 
-jest.mock('opn', () => jest.fn(() => Promise.resolve()));
+vi.mock('opn', () => ({ default: vi.fn(() => Promise.resolve()) }));
 
-const opnMock = opn as unknown as jest.Mock;
+const opnMock = opn as unknown as Mock;
 
 const CONNECTOR_URL = 'https://claude.ai/directory/connectors/posthog';
 
@@ -13,7 +13,7 @@ describe('ClaudeWebMCPClient', () => {
 
   beforeEach(() => {
     client = new ClaudeWebMCPClient();
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   it('has the expected name and connector metadata', () => {

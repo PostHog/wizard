@@ -1,28 +1,28 @@
 import { ClaudeCodeMCPClient } from '@steps/add-mcp-server-to-clients/clients/claude-code';
+import { execSync } from 'child_process';
+import { analytics } from '@utils/analytics';
 
-jest.mock('child_process', () => ({
-  execSync: jest.fn(),
+vi.mock('child_process', () => ({
+  execSync: vi.fn(),
 }));
 
-jest.mock('fs', () => ({
-  existsSync: jest.fn().mockReturnValue(false),
+vi.mock('fs', () => ({
+  existsSync: vi.fn().mockReturnValue(false),
 }));
 
-jest.mock('../../../../utils/analytics', () => ({
-  analytics: { captureException: jest.fn() },
+vi.mock('../../../../utils/analytics', () => ({
+  analytics: { captureException: vi.fn() },
 }));
 
-jest.mock('../../../../utils/debug', () => ({
-  debug: jest.fn(),
+vi.mock('../../../../utils/debug', () => ({
+  debug: vi.fn(),
 }));
 
 describe('ClaudeCodeMCPClient — plugin methods', () => {
-  const { execSync } = require('child_process');
-  const { analytics } = require('@utils/analytics');
-  const execSyncMock = execSync as jest.Mock;
+  const execSyncMock = execSync as Mock;
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     // Make binary discoverable via PATH by default
     execSyncMock.mockImplementation((cmd: string) => {
       if (cmd === 'command -v claude') return Buffer.from('');

@@ -76,6 +76,7 @@
     "@types/yargs": "^16.0.9",
     "@typescript-eslint/eslint-plugin": "^5.13.0",
     "@typescript-eslint/parser": "^5.13.0",
+    "@vitest/coverage-v8": "^3.2.4",
     "babel-jest": "^29.7.0",
     "dotenv": "^16.4.7",
     "eslint": "^8.18.0",
@@ -91,7 +92,8 @@
     "ts-node": "^10.9.1",
     "tsdown": "^0.21.9",
     "tsx": "^4.20.3",
-    "typescript": "^5.0.4"
+    "typescript": "^5.0.4",
+    "vitest": "^3.2.4"
   },
   "engines": {
     "node": "^20.20.0 || >=22.22.0",
@@ -113,60 +115,14 @@
     "fix": "pnpm fix:eslint && pnpm fix:prettier",
     "fix:prettier": "prettier --write \"{lib,src,test}/**/*.ts\"",
     "fix:eslint": "eslint . --cache --format stylish --fix",
-    "test": "pnpm build && jest",
+    "test": "pnpm build && vitest run",
+    "test:coverage": "pnpm build && vitest run --coverage",
     "test:e2e": "pnpm build && ./e2e-tests/run.sh",
     "test:e2e-record": "export RECORD_FIXTURES=true && pnpm build && ./e2e-tests/run.sh",
     "try": "tsx bin.ts",
     "dev": "pnpm build && pnpm link --global && pnpm build:watch",
-    "test:watch": "jest --watch",
+    "test:watch": "vitest",
     "prepare": "husky"
-  },
-  "jest": {
-    "collectCoverage": true,
-    "coveragePathIgnorePatterns": [
-      "dist"
-    ],
-    "transform": {
-      "^.+\\.tsx?$": "ts-jest",
-      "node_modules/.+\\.js$": "babel-jest"
-    },
-    "testRegex": "(/__tests__/.*|(\\.|/)(test|spec))\\.(jsx?|tsx?)$",
-    "moduleFileExtensions": [
-      "ts",
-      "tsx",
-      "js",
-      "jsx",
-      "json"
-    ],
-    "modulePathIgnorePatterns": [
-      "<rootDir>/dist/",
-      "<rootDir>/.claude/worktrees/"
-    ],
-    "testPathIgnorePatterns": [
-      "/dist/",
-      "/node_modules/",
-      "\\.d\\.(jsx?|tsx?)$",
-      "\\.no-jest\\.(jsx?|tsx?)$",
-      "/e2e-tests/"
-    ],
-    "testEnvironment": "node",
-    "transformIgnorePatterns": [
-      "node_modules/(?!(.pnpm/nanostores|nanostores))"
-    ],
-    "moduleNameMapper": {
-      "^@anthropic-ai/claude-agent-sdk$": "<rootDir>/__mocks__/@anthropic-ai/claude-agent-sdk.ts",
-      "^@posthog/warlock$": "<rootDir>/__mocks__/@posthog/warlock.ts",
-      "^ink$": "<rootDir>/__mocks__/ink.ts",
-      "^@env$": "<rootDir>/src/env.ts",
-      "^@lib/(.*)$": "<rootDir>/src/lib/$1",
-      "^@utils/(.*)$": "<rootDir>/src/utils/$1",
-      "^@ui$": "<rootDir>/src/ui/index.ts",
-      "^@ui/(.*)$": "<rootDir>/src/ui/$1",
-      "^@steps$": "<rootDir>/src/steps/index.ts",
-      "^@steps/(.*)$": "<rootDir>/src/steps/$1",
-      "^@frameworks/(.*)$": "<rootDir>/src/frameworks/$1",
-      "^(\\.{1,2}/.*)\\.js$": "$1"
-    }
   },
   "lint-staged": {
     ".claude/settings.json": "sh -c 'printf \"\\n\\033[31mDo not commit .claude/settings.json — use .claude/settings.local.json (gitignored).\\nUnstage with: git restore --staged .claude/settings.json\\033[0m\\n\\n\" >&2 && exit 1'",

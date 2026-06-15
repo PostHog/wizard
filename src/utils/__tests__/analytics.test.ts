@@ -4,25 +4,25 @@ import { v4 as uuidv4 } from 'uuid';
 import { ANALYTICS_TEAM_TAG } from '@lib/constants';
 import type { ApiUser } from '@lib/api';
 
-jest.mock('posthog-node');
-jest.mock('uuid');
+vi.mock('posthog-node');
+vi.mock('uuid');
 
-const mockUuidv4 = uuidv4 as jest.MockedFunction<typeof uuidv4>;
-const MockedPostHog = PostHog as jest.MockedClass<typeof PostHog>;
+const mockUuidv4 = uuidv4 as unknown as MockedFunction<typeof uuidv4>;
+const MockedPostHog = PostHog as MockedClass<typeof PostHog>;
 
 describe('Analytics', () => {
   let analytics: Analytics;
-  let mockPostHogInstance: jest.Mocked<PostHog>;
+  let mockPostHogInstance: Mocked<PostHog>;
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     mockUuidv4.mockReturnValue('test-uuid' as any);
 
     mockPostHogInstance = {
-      capture: jest.fn(),
-      captureException: jest.fn(),
-      alias: jest.fn(),
-      shutdown: jest.fn().mockResolvedValue(undefined),
+      capture: vi.fn(),
+      captureException: vi.fn(),
+      alias: vi.fn(),
+      shutdown: vi.fn().mockResolvedValue(undefined),
     } as any;
 
     MockedPostHog.mockImplementation(() => mockPostHogInstance);
