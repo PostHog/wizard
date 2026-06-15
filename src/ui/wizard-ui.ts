@@ -139,6 +139,9 @@ export interface WizardUI {
   /** Show auth error overlay when Anthropic API returns 401. */
   showAuthError(detail?: AuthErrorDetail): void;
 
+  /** Show the session-timeout overlay when the OAuth login window expires. */
+  showSessionTimeout(): void;
+
   /**
    * Open the wizard_ask overlay and resolve with the user's answers.
    * Implementations that can't ask (CI/logging) reject so the bridge can

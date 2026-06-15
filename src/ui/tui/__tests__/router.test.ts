@@ -87,6 +87,25 @@ describe('WizardRouter', () => {
       router.popOverlay();
       expect(router.resolve(session)).toBe(Overlay.SettingsOverride);
     });
+
+    it('shows the session-timeout overlay over the auth screen that never completes', () => {
+      // On OAuth timeout the user has no credentials, so the auth step's
+      // isComplete gate never passes and resolve() is pinned on Auth. The
+      // overlay must take precedence, otherwise the spinner shows forever.
+      const router = new WizardRouter(Program.PostHogIntegration);
+      const session = baseWizardSession();
+
+      session.setupConfirmed = true;
+      session.readinessResult = {
+        decision: WizardReadiness.Yes,
+        health: {} as never,
+        reasons: [],
+      };
+      expect(router.resolve(session)).toBe(ScreenId.Auth);
+
+      router.pushOverlay(Overlay.SessionTimeout);
+      expect(router.resolve(session)).toBe(Overlay.SessionTimeout);
+    });
   });
 
   describe('activeScreen', () => {
