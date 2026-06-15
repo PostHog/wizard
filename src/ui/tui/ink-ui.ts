@@ -93,6 +93,13 @@ export class InkUI implements WizardUI {
     this.store.setApiUser(user);
   }
 
+  waitForAiOptIn(): Promise<void> {
+    // Resolved immediately when no gate is registered (requiresAi: false,
+    // no auth step, or CI). Otherwise parks until _checkGates sees the
+    // org's approval flip to true — e.g. via [R]etry on the kill screen.
+    return this.store.getGate('ai-opt-in');
+  }
+
   setDetectedFramework(label: string): void {
     this.store.setDetectedFramework(label);
   }

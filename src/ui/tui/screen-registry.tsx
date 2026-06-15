@@ -33,6 +33,7 @@ import { Audit3000RunScreen } from './screens/audit-3000/Audit3000RunScreen.js';
 import { Audit3000OutroScreen } from './screens/audit-3000/Audit3000OutroScreen.js';
 import { SetupScreen } from './screens/SetupScreen.js';
 import { AuthScreen } from './screens/AuthScreen.js';
+import { AiOptInRequiredScreen } from './screens/AiOptInRequiredScreen.js';
 import { RunScreen } from './screens/RunScreen.js';
 import { McpScreen } from './screens/McpScreen.js';
 import { McpSuggestedPromptsScreen } from './screens/McpSuggestedPromptsScreen.js';
@@ -92,6 +93,7 @@ export function createScreens(
     [ScreenId.DoctorReport]: <DoctorReportScreen store={store} />,
     [ScreenId.Setup]: <SetupScreen store={store} />,
     [ScreenId.Auth]: <AuthScreen store={store} />,
+    [ScreenId.AiOptIn]: <AiOptInRequiredScreen store={store} />,
     [ScreenId.Run]: <RunScreen store={store} />,
     [ScreenId.Mcp]: (
       <McpScreen store={store} installer={services.mcpInstaller} />

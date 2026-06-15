@@ -43,6 +43,11 @@ export class LoggingUI implements WizardUI {
     return Promise.resolve();
   }
 
+  waitForAiOptIn(): Promise<void> {
+    // Non-TUI runs are CI runs, which auto-consent to AI usage.
+    return Promise.resolve();
+  }
+
   cancel(message: string): void {
     console.log(`■  ${message}`);
   }
