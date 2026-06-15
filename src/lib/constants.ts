@@ -163,5 +163,13 @@ export const POSTHOG_FLAG_HEADER_PREFIX = 'X-POSTHOG-FLAG-';
 /** Timeout for framework / project detection probes (ms). */
 export const DETECTION_TIMEOUT_MS = 10_000;
 
-/** Timeout for the OAuth authorization flow (ms). */
-export const OAUTH_TIMEOUT_MS = 360_000;
+/**
+ * Timeout for the OAuth authorization flow (ms).
+ *
+ * Mirrors the server-side authorization-code expiry
+ * (`AUTHORIZATION_CODE_EXPIRE_SECONDS`, 5 minutes). Once the code expires the
+ * callback is dead and the token exchange can no longer succeed, so we stop
+ * waiting at the same moment and prompt the user to re-run rather than letting
+ * them complete a login that would fail.
+ */
+export const OAUTH_TIMEOUT_MS = 300_000;

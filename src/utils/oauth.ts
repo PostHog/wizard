@@ -54,6 +54,15 @@ const OAuthTokenResponseSchema = z.object({
 
 export type OAuthTokenResponse = z.infer<typeof OAuthTokenResponseSchema>;
 
+// Stable marker for the authorization-flow timeout. Detection keys off the exact
+// message rather than a loose substring — `.includes('timeout')` never matched
+// `'timed out'`, which silently routed timeouts to the generic failure message.
+const AUTHORIZATION_TIMEOUT_MESSAGE = 'Authorization timed out';
+
+export function isAuthorizationTimeout(error: Error): boolean {
+  return error.message === AUTHORIZATION_TIMEOUT_MESSAGE;
+}
+
 interface OAuthConfig {
   scopes: string[];
   signup?: boolean;
@@ -416,7 +425,7 @@ export async function performOAuthFlow(
           getUI().waitForManualAuthCode(),
           new Promise<never>((_, reject) =>
             setTimeout(
-              () => reject(new Error('Authorization timed out')),
+              () => reject(new Error(AUTHORIZATION_TIMEOUT_MESSAGE)),
               OAUTH_TIMEOUT_MS,
             ),
           ),
@@ -435,14 +444,21 @@ export async function performOAuthFlow(
 
         return token;
       } catch (e) {
-        loginSpinner.stop('Authorization failed.');
+        const error = e instanceof Error ? e : new Error('Unknown error');
+        const timedOut = isAuthorizationTimeout(error);
+
+        loginSpinner.stop(
+          timedOut ? 'Session timed out.' : 'Authorization failed.',
+        );
         server.close();
 
-        const error = e instanceof Error ? e : new Error('Unknown error');
         logToFile('[oauth] flow failed:', error);
 
-        if (error.message.includes('timeout')) {
-          getUI().log.error('Authorization timed out. Please try again.');
+        if (timedOut) {
+          const timeoutMinutes = Math.round(OAUTH_TIMEOUT_MS / 60_000);
+          getUI().log.error(
+            `Session timed out. The login window expired after ${timeoutMinutes} minutes for security reasons.\n\nRe-run the wizard to start a new session.`,
+          );
         } else if (error.message.includes('access_denied')) {
           getUI().log.info(
             `Authorization was cancelled.\n\nYou denied access to PostHog. To use the wizard, you need to authorize access to your PostHog account.\n\nYou can try again by re-running the wizard.`,
@@ -455,7 +471,7 @@ export async function performOAuthFlow(
 
         const oauthErrorCode = error.message.startsWith('OAuth error: ')
           ? error.message.slice('OAuth error: '.length)
-          : error.message.includes('timeout')
+          : timedOut
           ? 'timeout'
           : 'unknown';
 
