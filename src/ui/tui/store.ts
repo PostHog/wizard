@@ -28,7 +28,10 @@ import {
   buildSession,
 } from '@lib/wizard-session';
 import type { SettingsConflict } from '@lib/agent/claude-settings';
-import type { WizardReadinessResult } from '@lib/health-checks/readiness';
+import {
+  describeDisruption,
+  type WizardReadinessResult,
+} from '@lib/health-checks/readiness';
 import {
   WizardRouter,
   type ScreenName,
@@ -352,6 +355,12 @@ export class WizardStore {
 
   setReadinessResult(result: WizardReadinessResult | null): void {
     this.$session.setKey('readinessResult', result);
+    // Fires once per run (setReadinessResult is called once from the
+    // health-check step), the moment the disruption screen will appear.
+    const disruption = result && describeDisruption(result);
+    if (disruption) {
+      analytics.wizardCapture('service disruption shown', { ...disruption });
+    }
     this.emitChange();
   }
 

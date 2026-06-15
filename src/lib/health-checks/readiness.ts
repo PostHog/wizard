@@ -285,6 +285,53 @@ export function getBlockingServiceKeys(
   });
 }
 
+/** Analytics payload describing a service disruption shown to the user. */
+export interface DisruptionEvent {
+  severity: 'blocking' | 'warning';
+  services: Array<{ key: HealthCheckKey; label: string; status: string }>;
+  decision: WizardReadiness;
+}
+
+/**
+ * Summarize a readiness result as a disruption the user would see, or null when
+ * everything is healthy. `blocking` when the run is gated; `warning` for the
+ * soft (proceed-anyway) case. Single source of truth for the disruption
+ * analytics payload, shared by the TUI and CI paths.
+ */
+export function describeDisruption(
+  result: WizardReadinessResult,
+  config: WizardReadinessConfig = DEFAULT_WIZARD_READINESS_CONFIG,
+): DisruptionEvent | null {
+  const toServices = (keys: HealthCheckKey[]) =>
+    keys.map((key) => ({
+      key,
+      label: SERVICE_LABELS[key],
+      status: result.health[key].status,
+    }));
+
+  const blockingKeys = getBlockingServiceKeys(result.health, config);
+  if (blockingKeys.length > 0) {
+    return {
+      severity: 'blocking',
+      services: toServices(blockingKeys),
+      decision: result.decision,
+    };
+  }
+
+  if (result.decision === WizardReadiness.YesWithWarnings) {
+    const warnKeys = (Object.keys(result.health) as HealthCheckKey[]).filter(
+      (key) => result.health[key].status !== ServiceHealthStatus.Healthy,
+    );
+    return {
+      severity: 'warning',
+      services: toServices(warnKeys),
+      decision: result.decision,
+    };
+  }
+
+  return null;
+}
+
 /** Build an AllServicesHealth where every service is Degraded with the given error. */
 function allUnknown(error: string): AllServicesHealth {
   const base: BaseHealthResult = {

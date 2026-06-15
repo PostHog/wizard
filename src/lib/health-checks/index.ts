@@ -35,4 +35,6 @@ export {
   WizardReadiness,
   type WizardReadinessResult,
   evaluateWizardReadiness,
+  describeDisruption,
+  type DisruptionEvent,
 } from './readiness';

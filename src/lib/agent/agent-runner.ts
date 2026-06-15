@@ -42,6 +42,7 @@ import {
   SIGNUP_WIZARD_READINESS_CONFIG,
   getBlockingServiceKeys,
   SERVICE_LABELS,
+  describeDisruption,
 } from '@lib/health-checks/readiness';
 import { enableDebugLogs, initLogFile, logToFile } from '@utils/debug';
 import { createBenchmarkPipeline } from '@lib/middleware/benchmark';
@@ -224,6 +225,10 @@ export async function runProgram(
       session.region,
     );
     logToFile(`[agent-runner] readiness=${readiness.decision}`);
+    const disruption = describeDisruption(readiness, readinessConfig);
+    if (disruption) {
+      analytics.wizardCapture('service disruption shown', { ...disruption });
+    }
     if (readiness.decision === WizardReadiness.No) {
       const blockingKeys = getBlockingServiceKeys(
         readiness.health,

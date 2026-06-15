@@ -40,6 +40,7 @@ jest.mock('../../../lib/health-checks/readiness.js', () => ({
     YesWithWarnings: 'yes-with-warnings',
   },
   SERVICE_LABELS: {},
+  describeDisruption: jest.fn().mockReturnValue(null),
 }));
 
 function createStore(program?: ProgramId): WizardStore {

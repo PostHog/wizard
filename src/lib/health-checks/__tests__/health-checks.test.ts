@@ -32,6 +32,7 @@ import {
   resetPosthogHealthCache,
   DEFAULT_WIZARD_READINESS_CONFIG,
   evaluateWizardReadiness,
+  describeDisruption,
   ServiceHealthStatus,
   WizardReadiness,
 } from '@lib/health-checks/index';
@@ -1092,6 +1093,36 @@ describe('health-checks', () => {
       expect(result.reasons.some((r) => r.includes('Cloudflare'))).toBe(true);
       expect(result.reasons.some((r) => r.includes('LLM Gateway'))).toBe(true);
       expect(result.reasons.some((r) => r.includes('MCP'))).toBe(true);
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // describeDisruption (analytics payload)
+  // -----------------------------------------------------------------------
+
+  describe('describeDisruption', () => {
+    it('returns null when everything is healthy', async () => {
+      const result = await evaluateWizardReadiness(
+        DEFAULT_WIZARD_READINESS_CONFIG,
+      );
+      expect(describeDisruption(result)).toBeNull();
+    });
+
+    it('reports a blocking disruption naming the down service', async () => {
+      (global.fetch as jest.Mock).mockImplementation(
+        overrideFetch({
+          [URLS.llmGatewayLiveness]: () =>
+            Promise.resolve(new Response('down', { status: 503 })),
+        }),
+      );
+      const result = await evaluateWizardReadiness(
+        DEFAULT_WIZARD_READINESS_CONFIG,
+      );
+      const disruption = describeDisruption(result);
+
+      expect(disruption?.severity).toBe('blocking');
+      expect(disruption?.services.map((s) => s.key)).toContain('llmGateway');
+      expect(disruption?.decision).toBe(WizardReadiness.No);
     });
   });
 });
