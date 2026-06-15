@@ -18,6 +18,11 @@ export default defineConfig({
   // IS_DEV and the `NODE_ENV === 'test'` mock paths stay exactly as in prod.
   env: {
     NODE_ENV: process.env.WIZARD_BUILD_NODE_ENV || 'production',
+    // Analytics build channel, decoupled from NODE_ENV so a build can tag its
+    // events 'dev'/'ci' without flipping IS_DEV (URLs, --ci gating). Empty here
+    // → resolves to 'prod' in src/env.ts. The `dev`/`try`/`build:ci` scripts set
+    // WIZARD_BUILD_CHANNEL so those builds tag themselves non-prod.
+    WIZARD_BUILD_CHANNEL: process.env.WIZARD_BUILD_CHANNEL || '',
   },
 
   // Keep npm dependencies external — they're installed at runtime.

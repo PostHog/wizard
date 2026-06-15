@@ -7,7 +7,7 @@ import {
 import type { WizardSession } from '@lib/wizard-session';
 import type { ApiUser } from '@lib/api';
 import { v4 as uuidv4 } from 'uuid';
-import { IS_PRODUCTION_BUILD } from '@env';
+import { BUILD_CHANNEL } from '@env';
 import { debug } from './debug';
 
 /**
@@ -82,12 +82,10 @@ export class Analytics {
       },
     });
 
-    this.tags = { $app_name: this.appName };
-    // Non-production builds tag every event so they segment out of prod
-    // data. CI runs upgrade the tag to 'ci' (see runWizardCI).
-    if (!IS_PRODUCTION_BUILD) {
-      this.tags.build = 'dev';
-    }
+    // Tag every event with the build channel (prod/dev/ci) so the three run
+    // types — which all report to one project — are filterable. CI runs
+    // override this to 'ci' at runtime (see runWizardCI).
+    this.tags = { $app_name: this.appName, build: BUILD_CHANNEL };
 
     this.anonymousId = uuidv4();
 

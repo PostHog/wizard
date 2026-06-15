@@ -32,6 +32,17 @@ export const IS_DEV =
  */
 export const IS_PRODUCTION_BUILD = process.env.NODE_ENV === 'production';
 
+/**
+ * Analytics build channel — 'prod' | 'dev' | 'ci'. Tags every event so dev, CI,
+ * and prod runs (all report to one project) are filterable. Decoupled from
+ * NODE_ENV: a build sets WIZARD_BUILD_CHANNEL to tag itself without changing
+ * behavior (the `pnpm dev` global link builds NODE_ENV=production for real
+ * behavior but tags 'dev'). Falls back to 'dev' for tsx/test and 'prod' for the
+ * published build. `--ci` runs override this to 'ci' at runtime.
+ */
+export const BUILD_CHANNEL = (process.env.WIZARD_BUILD_CHANNEL ||
+  (IS_DEV ? 'dev' : 'prod')) as 'prod' | 'dev' | 'ci';
+
 // ── Runtime environment ──────────────────────────────────────────────
 
 /**
