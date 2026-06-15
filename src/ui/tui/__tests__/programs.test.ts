@@ -161,6 +161,18 @@ describe('PROGRAM_SEQUENCES', () => {
       );
       expect(entry).toBeUndefined();
     });
+
+    it('skips the gate in CI mode regardless of opt-in state', () => {
+      // CI users have already auto-consented to AI usage per the README,
+      // and the interactive kill screen would be unworkable headless.
+      const session = buildSession({});
+      session.ci = true;
+      session.apiUser = orgWith(false);
+      const entry = getEntry(Program.PostHogIntegration, ScreenId.AiOptIn);
+
+      expect(entry.show?.(session)).toBe(false);
+      expect(entry.isComplete?.(session)).toBe(true);
+    });
   });
 
   describe('Wizard run predicate', () => {
