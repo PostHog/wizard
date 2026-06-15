@@ -138,14 +138,15 @@ export const McpScreen = ({
       return;
     }
 
-    // Customize flow: a browser connector configures its tools and features in
-    // Claude's UI, not through the wizard's feature picker. The picker keeps it
-    // mutually exclusive from local editors, so a connector selection is
-    // connector-only — show its own screen instead of the feature picker.
-    const isConnector = clientNames.some(
-      (name) => clients.find((c) => c.name === name)?.finish,
+    // Customize flow: local editors get the feature picker. A browser connector
+    // configures its tools in Claude's UI, so it ignores the feature list — but
+    // a mixed selection still routes through the feature picker (doInstall opens
+    // the connector page alongside writing local configs). Only a connector-only
+    // selection skips straight to the connector screen.
+    const hasLocalClient = clientNames.some(
+      (name) => !clients.find((c) => c.name === name)?.finish,
     );
-    if (isConnector) {
+    if (!hasLocalClient) {
       setPhase(Phase.Connector);
       return;
     }
@@ -358,9 +359,6 @@ export const McpScreen = ({
             options={clients.map((c) => ({
               label: c.name,
               value: c.name,
-              // Browser connectors can't be installed alongside local editors
-              // and are configured on their own screen, not the feature picker.
-              exclusive: Boolean(c.finish),
               // Hints only show in the recommended flow; the customize flow
               // keeps the list clean.
               hint:
