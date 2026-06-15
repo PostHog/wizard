@@ -54,7 +54,7 @@ const TIPS: Tip[] = [
     title: 'Use PostHog in Slack',
     description:
       'Connect the PostHog Slack app to analyze data and ship product changes — deploy flags, open PRs, run queries — just by tagging @PostHog:',
-    url: 'https://posthog.com/slack-app',
+    url: 'https://posthog.com/slack',
   },
   {
     id: 'stripe',
