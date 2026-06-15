@@ -1,4 +1,7 @@
 import type { ProgramConfig } from '@lib/programs/program-step';
+// Import from the leaf module (not @lib/wizard-session): this value is read at
+// module-init, and the leaf is dependency-free so it can't be mid-cycle.
+import { DiscoveredFeature } from '@lib/discovered-features';
 import { WIZARD_TOOL_NAMES } from '@lib/wizard-tools';
 import { REVENUE_ANALYTICS_PROGRAM } from './steps.js';
 import { REVENUE_ABORT_CASES } from './detect.js';
@@ -24,6 +27,11 @@ export const revenueAnalyticsConfig: ProgramConfig = {
     abortCases: REVENUE_ABORT_CASES,
   },
   requires: ['posthog-integration'],
+  promotable: {
+    feature: DiscoveredFeature.Stripe,
+    label: 'Revenue analytics',
+    description: 'connect Stripe to track revenue in PostHog',
+  },
 };
 
 export { REVENUE_ANALYTICS_PROGRAM } from './steps.js';

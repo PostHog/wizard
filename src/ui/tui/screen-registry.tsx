@@ -38,6 +38,7 @@ import { RunScreen } from './screens/RunScreen.js';
 import { McpScreen } from './screens/McpScreen.js';
 import { McpSuggestedPromptsScreen } from './screens/McpSuggestedPromptsScreen.js';
 import { SlackConnectScreen } from './screens/SlackConnectScreen.js';
+import { RecommendedNextScreen } from './screens/RecommendedNextScreen.js';
 import { KeepSkillsScreen } from './screens/KeepSkillsScreen.js';
 import { OutroScreen } from './screens/OutroScreen.js';
 import { ExitScreen } from './screens/ExitScreen.js';
@@ -105,6 +106,7 @@ export function createScreens(
       />
     ),
     [ScreenId.SlackConnect]: <SlackConnectScreen store={store} />,
+    [ScreenId.RecommendedNext]: <RecommendedNextScreen store={store} />,
     [ScreenId.KeepSkills]: <KeepSkillsScreen store={store} />,
     [ScreenId.Outro]: <OutroScreen store={store} />,
     [ScreenId.Exit]: <ExitScreen />,
