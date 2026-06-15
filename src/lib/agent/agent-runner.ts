@@ -115,6 +115,13 @@ export interface ProgramRun {
    * always returns a "batch your questions" error regardless of the cap.
    */
   maxQuestions?: number;
+  /**
+   * Per-question `wizard_ask` timeout in milliseconds. Defaults to
+   * DEFAULT_ASK_TIMEOUT_MS (5 minutes). Raise it for programs whose
+   * questions send the user off to do slow work (run a build, create a
+   * key in the browser) before they can answer.
+   */
+  askTimeoutMs?: number;
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────
@@ -351,6 +358,7 @@ export async function runProgram(
     : createWizardAskBridge({
         getSource: () => session.skillId ?? config.integrationLabel,
         showQuestion: (q) => getUI().requestQuestion(q),
+        timeoutMs: config.askTimeoutMs,
       });
 
   const agent = await initializeAgent(

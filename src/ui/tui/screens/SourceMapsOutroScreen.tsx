@@ -4,7 +4,7 @@
  * Unlike the generic OutroScreen, this spells out the operational facts a user
  * needs to actually get de-minified stack traces: that packages were installed
  * and upload credentials written to .env, plus the three gotchas (builds
- * upload, run the build, mirror the env vars in CI). All static guidance —
+ * upload, run the build, give CI the same credentials). All static guidance —
  * driven only by the program's `buildOutroData` (kind / message / report /
  * docs), no per-run data.
  */
@@ -70,8 +70,10 @@ export const SourceMapsOutroScreen = ({
               uploaded.
             </Text>
             <Text>
-              • In <Text bold>CI</Text>, make sure the build job exposes the
-              same env vars the wizard added to your <Text bold>.env</Text>.
+              • In <Text bold>CI</Text>, the build job needs the same upload
+              credentials. If the wizard wired your pipeline, add the referenced
+              secrets to your CI provider (e.g. GitHub repo secrets) before your
+              next deploy.
             </Text>
           </Section>
 
