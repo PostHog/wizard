@@ -19,10 +19,7 @@ import { useEffect, useState, useSyncExternalStore } from 'react';
 import type { WizardStore } from '@ui/tui/store';
 import { useKeyBindings } from '@ui/tui/hooks/useKeyBindings';
 import { Colors } from '@ui/tui/styles';
-import {
-  SkillSourceInfo,
-  useSkillEntry,
-} from '@ui/tui/screens/SkillSourceInfo';
+import { useSkillEntry } from '@ui/tui/screens/SkillSourceInfo';
 import { fetchUserData } from '@lib/api';
 import { getCloudUrlFromRegion } from '@utils/urls';
 import { analytics } from '@utils/analytics';
@@ -56,9 +53,12 @@ export const AiOptInRequiredScreen = ({
   // Fall back to the project-less URL if we somehow don't have a projectId
   // (shouldn't happen post-auth, but harmless if it does — PostHog will
   // route the user to their default project).
-  const settingsUrl = projectId
-    ? `${cloudUrl}/project/${projectId}/${SETTINGS_PATH}${SETTINGS_ANCHOR}`
-    : `${cloudUrl}/${SETTINGS_PATH}${SETTINGS_ANCHOR}`;
+  // `projectId != null` (not just `projectId`) so that 0 — possible in
+  // synthetic playground sessions — still picks the project-scoped URL.
+  const settingsUrl =
+    projectId != null
+      ? `${cloudUrl}/project/${projectId}/${SETTINGS_PATH}${SETTINGS_ANCHOR}`
+      : `${cloudUrl}/${SETTINGS_PATH}${SETTINGS_ANCHOR}`;
 
   const [showSkill, setShowSkill] = useState(false);
   const [retrying, setRetrying] = useState(false);
@@ -201,15 +201,14 @@ export const AiOptInRequiredScreen = ({
       </Box>
 
       {showSkill && (
-        <Box flexDirection="column" marginBottom={1}>
-          <Text>Prefer your own AI? Download the skill:</Text>
-          <Box marginTop={1}>
-            <SkillSourceInfo
-              skillId={session.skillId}
-              skillEntry={skillEntry}
-              fetchFailed={fetchFailed}
-            />
-          </Box>
+        <Box marginBottom={1}>
+          <Text>
+            Prefer your own AI? Download the skill:{' '}
+            <Text color="cyan">
+              {skillEntry?.downloadUrl ??
+                (fetchFailed ? 'unavailable' : 'Loading...')}
+            </Text>
+          </Text>
         </Box>
       )}
 
