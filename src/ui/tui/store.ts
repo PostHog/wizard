@@ -178,6 +178,7 @@ export class WizardStore {
       setFrameworkContext: (k, v) => this.setFrameworkContext(k, v),
       setFrameworkConfig: (i, c) => this.setFrameworkConfig(i, c),
       setDetectedFramework: (l) => this.setDetectedFramework(l),
+      setSkillId: (id) => this.setSkillId(id),
       setUnsupportedVersion: (info) => this.setUnsupportedVersion(info),
       addDiscoveredFeature: (f) => this.addDiscoveredFeature(f),
       setDetectionComplete: () => this.setDetectionComplete(),
@@ -315,6 +316,11 @@ export class WizardStore {
 
   setDetectedFramework(label: string): void {
     this.$session.setKey('detectedFrameworkLabel', label);
+    this.emitChange();
+  }
+
+  setSkillId(skillId: string | null): void {
+    this.$session.setKey('skillId', skillId);
     this.emitChange();
   }
 
