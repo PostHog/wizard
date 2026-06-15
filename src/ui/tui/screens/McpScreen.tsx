@@ -45,6 +45,8 @@ enum Phase {
   Pick = 'pick',
   FeatureSelect = 'feature-select',
   Connector = 'connector',
+  /** Connector page opened; waiting for the user to finish in the browser. */
+  ConnectorFinish = 'connector-finish',
   Working = 'working',
   Done = 'done',
   None = 'none',
@@ -66,7 +68,13 @@ const reportFeatures = (features: string[]): 'all' | string[] =>
  * Connector step prompt — Enter continues (opens the connector page). There's
  * no skip: picking the connector commits to opening it.
  */
-const ConnectorContinue = ({ onContinue }: { onContinue: () => void }) => {
+const ConnectorContinue = ({
+  onContinue,
+  label = 'continue',
+}: {
+  onContinue: () => void;
+  label?: string;
+}) => {
   useInput((_input, key) => {
     if (key.return) {
       onContinue();
@@ -74,7 +82,7 @@ const ConnectorContinue = ({ onContinue }: { onContinue: () => void }) => {
   });
   return (
     <Text color={Colors.primary}>
-      Press enter to continue {Icons.triangleRight}
+      Press enter to {label} {Icons.triangleRight}
     </Text>
   );
 };
@@ -131,11 +139,14 @@ export const McpScreen = ({
   ) => {
     const connectors = connectorNames(names);
     const locals = localNames(names);
-    if (connectors.length > 0 && locals.length > 0) {
-      void doInstall(locals, features, { thenConnector: connectors });
-    } else {
-      void doInstall(names, features);
+    if (locals.length === 0) {
+      // Connector-only — its own screen opens the page and waits for the user.
+      setPhase(Phase.Connector);
+      return;
     }
+    void doInstall(locals, features, {
+      thenConnector: connectors.length > 0 ? connectors : undefined,
+    });
   };
 
   useEffect(() => {
@@ -287,6 +298,48 @@ export const McpScreen = ({
       featuresRef.current ?? features ?? [...ALL_FEATURE_VALUES],
     );
     setTimeout(() => markDone(store, outcome, installed, featuresReport), 2000);
+  };
+
+  /**
+   * Open the browser connector, then wait. The connector finishes in the
+   * browser (sign in, click Connect), so we hand off and pause on
+   * ConnectorFinish rather than auto-advancing — the user presses enter when
+   * they're done.
+   */
+  const openConnector = async () => {
+    const connectors = connectorNames(selectedClientNames);
+    setInstallingNames(connectors);
+    setPhase(Phase.Working);
+    let result: string[] = [];
+    try {
+      result = await installer.install(connectors, [], store.session.apiKey);
+    } catch {
+      // result stays []
+    }
+    installedRef.current = {
+      ...installedRef.current,
+      mcp: [...installedRef.current.mcp, ...result],
+    };
+    setResultClients(installedRef.current.mcp);
+    setPhase(Phase.ConnectorFinish);
+  };
+
+  /**
+   * After the user confirms they finished connecting in the browser, show the
+   * Done summary (what landed) before the flow advances on to the tutorial.
+   */
+  const finishRun = () => {
+    setPhase(Phase.Done);
+    const installed = [
+      ...installedRef.current.mcp,
+      ...installedRef.current.plugin,
+    ];
+    const outcome =
+      installed.length > 0 ? McpOutcome.Installed : McpOutcome.Failed;
+    const featuresReport = reportFeatures(
+      featuresRef.current ?? [...ALL_FEATURE_VALUES],
+    );
+    setTimeout(() => markDone(store, outcome, installed, featuresReport), 2500);
   };
 
   const doRemove = async () => {
@@ -460,10 +513,48 @@ export const McpScreen = ({
               </Text>
             </Box>
             <ConnectorContinue
-              onContinue={() =>
-                void doInstall(connectorNames(selectedClientNames), [])
-              }
+              onContinue={() => void openConnector()}
+              label="open it in your browser"
             />
+          </Box>
+        )}
+
+        {phase === Phase.ConnectorFinish && (
+          <Box flexDirection="column">
+            {installedNow.length > 0 && (
+              <Box marginBottom={1}>
+                <Text color={Colors.success}>
+                  {Icons.check} MCP installed for {installedNow.join(', ')}
+                </Text>
+              </Box>
+            )}
+            {finishNotes.map((note) => (
+              <Box key={note.name} flexDirection="column">
+                <Text color={Colors.success}>
+                  {Icons.check} Opened {note.name} in your browser
+                </Text>
+                <Box
+                  flexDirection="column"
+                  marginTop={1}
+                  marginBottom={1}
+                  paddingLeft={2}
+                >
+                  <Text color="cyan">{note.url}</Text>
+                  <Box marginTop={1}>
+                    <Text dimColor>{note.instruction}</Text>
+                  </Box>
+                  <Text dimColor>
+                    (If it didn&apos;t open, paste the URL above.)
+                  </Text>
+                </Box>
+              </Box>
+            ))}
+            <Box marginTop={1}>
+              <ConnectorContinue
+                onContinue={finishRun}
+                label="continue once you've connected"
+              />
+            </Box>
           </Box>
         )}
 

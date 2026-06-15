@@ -37,7 +37,7 @@
  * Running useEffect against a state-machine bug.
  */
 
-import { Box, Text } from 'ink';
+import { Box, Text, useInput } from 'ink';
 import { Spinner } from '@inkjs/ui';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSyncExternalStore } from 'react';
@@ -80,6 +80,8 @@ interface McpSuggestedPromptsScreenProps {
 enum Phase {
   Choose = 'choose',
   Authenticating = 'authenticating',
+  /** Brief "signed in" confirmation between auth and the tutorial. */
+  SignedIn = 'signed-in',
   Greeting = 'greeting',
   PromptPicker = 'prompt-picker',
   Running = 'running',
@@ -176,6 +178,10 @@ export const McpSuggestedPromptsScreen = ({
   // user returns to PromptPicker — that's a fresh conversation.
   const currentSessionIdRef = useRef<string | null>(null);
 
+  // Where to go after the "signed in" confirmation (Greeting if the user
+  // started the tutorial, else back to Choose).
+  const postAuthPhaseRef = useRef<Phase>(Phase.Choose);
+
   // Run OAuth when entering Authenticating phase.
   useEffect(() => {
     if (phase !== Phase.Authenticating) return;
@@ -190,7 +196,10 @@ export const McpSuggestedPromptsScreen = ({
         store.setRoleAtOrganization(roleAtOrganization);
         store.setApiUser(user);
         store.setLoginUrl(null);
-        setPhase(startedTutorialRef.current ? Phase.Greeting : Phase.Choose);
+        postAuthPhaseRef.current = startedTutorialRef.current
+          ? Phase.Greeting
+          : Phase.Choose;
+        setPhase(Phase.SignedIn);
       } catch (err) {
         if (cancelled) return;
         const message = err instanceof Error ? err.message : String(err);
@@ -487,6 +496,15 @@ export const McpSuggestedPromptsScreen = ({
           <AuthenticatingPhase loginUrl={session.loginUrl} />
         )}
 
+        {phase === Phase.SignedIn && (
+          <SignedInPhase
+            userDisplayName={
+              session.apiUser?.first_name || session.apiUser?.email || null
+            }
+            onContinue={() => setPhase(postAuthPhaseRef.current)}
+          />
+        )}
+
         {phase === Phase.Greeting && (
           <GreetingPhase
             greeting={greeting}
@@ -657,6 +675,13 @@ interface AuthenticatingPhaseProps {
 
 const AuthenticatingPhase = ({ loginUrl }: AuthenticatingPhaseProps) => (
   <Box flexDirection="column">
+    <Box marginBottom={1} flexDirection="column">
+      <Text>We&apos;ve opened your browser to sign in to PostHog.</Text>
+      <Text dimColor>
+        Authorize the wizard there — this screen continues automatically once
+        you do.
+      </Text>
+    </Box>
     <LoadingBox message="Waiting for authentication..." />
     {loginUrl && (
       <Box marginTop={1} marginBottom={1} flexDirection="column">
@@ -667,8 +692,37 @@ const AuthenticatingPhase = ({ loginUrl }: AuthenticatingPhaseProps) => (
         </Text>
       </Box>
     )}
+    <Box marginTop={1}>
+      <Text dimColor>
+        Press <Text color={Colors.accent}>[esc]</Text> to cancel.
+      </Text>
+    </Box>
   </Box>
 );
+
+interface SignedInPhaseProps {
+  userDisplayName: string | null;
+  onContinue: () => void;
+}
+
+const SignedInPhase = ({ userDisplayName, onContinue }: SignedInPhaseProps) => {
+  useInput((_input, key) => {
+    if (key.return) onContinue();
+  });
+  return (
+    <Box flexDirection="column">
+      <Text color={Colors.success} bold>
+        {Icons.check} Signed in to PostHog
+        {userDisplayName ? ` as ${userDisplayName}` : ''}
+      </Text>
+      <Box marginTop={1}>
+        <Text color={Colors.primary}>
+          Press enter to continue {Icons.triangleRight}
+        </Text>
+      </Box>
+    </Box>
+  );
+};
 
 // ── Greeting phase ─────────────────────────────────────────────────────
 
