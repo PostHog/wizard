@@ -21,6 +21,7 @@ import { McpSuggestedPromptsDemo } from './demos/McpSuggestedPromptsDemo.js';
 import { KeyboardHintsDemo } from './demos/KeyboardHintsDemo.js';
 import { AuditChecksDemo } from './demos/AuditChecksDemo.js';
 import { LearnDeckDemo } from './demos/LearnDeckDemo.js';
+import { EndScreensDemo } from './demos/EndScreensDemo.js';
 
 interface PlaygroundAppProps {
   store: WizardStore;
@@ -76,6 +77,11 @@ export const PlaygroundApp = ({ store }: PlaygroundAppProps) => {
       id: 'learn-deck',
       label: 'Learn deck',
       component: <LearnDeckDemo store={store} />,
+    },
+    {
+      id: 'end-screens',
+      label: 'End screens',
+      component: <EndScreensDemo store={store} />,
     },
   ];
 

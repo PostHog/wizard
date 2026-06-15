@@ -1,9 +1,12 @@
 /**
- * ManagedSettingsScreen — Modal when IT/org-managed settings contain overrides
- * that block the Wizard from reaching the PostHog LLM Gateway.
+ * ManagedSettingsScreen — Modal for read-only settings conflicts that block
+ * the Wizard from reaching the PostHog LLM Gateway: org-managed settings, the
+ * user's global `~/.claude` config, and gitignored project-local overrides.
  *
- * Unlike SettingsOverrideScreen, the wizard cannot back up or modify these files.
- * The user must contact their IT administrator to resolve the conflict.
+ * Unlike SettingsOverrideScreen, the wizard cannot safely back up or remove
+ * these files for the user, so it names the exact file and key and asks the
+ * user to fix it and re-run. Managed (root-owned) files need an IT admin; the
+ * rest the user can edit themselves.
  */
 
 import { Box, Text } from 'ink';
@@ -11,14 +14,16 @@ import { useSyncExternalStore } from 'react';
 import type { WizardStore } from '@ui/tui/store';
 import { ConfirmationInput, ModalOverlay } from '@ui/tui/primitives/index';
 import { Icons } from '@ui/tui/styles';
-import type { SettingsConflict } from '@lib/agent/agent-interface';
+import type { SettingsConflict } from '@lib/agent/claude-settings';
 
 function sourceLabel(source: SettingsConflict['source']): string {
   switch (source) {
     case 'managed':
-      return 'Managed settings (IT/org-managed)';
-    case 'project':
-      return '.claude/settings.json';
+      return 'Organization-managed settings';
+    case 'user':
+      return 'Your global Claude Code settings';
+    case 'project-local':
+      return 'Project-local settings';
     default:
       return source;
   }
@@ -43,14 +48,16 @@ export const ManagedSettingsScreen = ({
     return null;
   }
 
+  const hasManaged = readOnlyConflicts.some((c) => c.source === 'managed');
+
   return (
     <ModalOverlay
       borderColor="red"
-      title={`${Icons.warning} Organization settings conflict`}
-      width={68}
+      title={`${Icons.warning} Settings conflict`}
+      width={72}
       footer={
         <ConfirmationInput
-          message="Contact your IT administrator to resolve this."
+          message="Fix the file(s) above, then re-run the Wizard."
           confirmLabel=""
           cancelLabel="Exit [Esc]"
           onConfirm={() => process.exit(1)}
@@ -59,12 +66,13 @@ export const ManagedSettingsScreen = ({
       }
     >
       <Text dimColor>
-        Your organization&apos;s managed settings contain overrides that prevent
-        the Wizard from reaching the PostHog LLM Gateway.
+        These Claude Code settings override credentials and prevent the Wizard
+        from reaching the PostHog LLM Gateway.
       </Text>
       {readOnlyConflicts.map((conflict) => (
-        <Box key={conflict.source} flexDirection="column" marginTop={1}>
+        <Box key={conflict.path} flexDirection="column" marginTop={1}>
           <Text bold>{sourceLabel(conflict.source)}</Text>
+          <Text dimColor>{conflict.path}</Text>
           <Box flexDirection="column" paddingLeft={2}>
             {conflict.keys.map((key) => (
               <Text key={key}>
@@ -79,8 +87,9 @@ export const ManagedSettingsScreen = ({
       ))}
       <Box marginTop={1}>
         <Text dimColor>
-          Try running "claude auth logout" or contact your IT administrator to
-          resolve this.
+          {hasManaged
+            ? 'Remove these keys (or run "claude auth logout"). Managed files are root-owned — ask your IT administrator.'
+            : 'Remove these keys, or run "claude auth logout", then re-run the Wizard.'}
         </Text>
       </Box>
     </ModalOverlay>

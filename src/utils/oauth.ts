@@ -3,7 +3,6 @@ import * as http from 'node:http';
 import { execSync } from 'node:child_process';
 import axios from 'axios';
 import { logToFile } from './debug';
-import opn from 'opn';
 import { z } from 'zod';
 import { getUI } from '@ui';
 import {
@@ -16,8 +15,8 @@ import {
   POSTHOG_PROXY_CLIENT_ID,
   WIZARD_USER_AGENT,
 } from '@lib/constants';
-import { NODE_ENV } from '@env';
 import { abort } from './setup-utils';
+import { openTrackedLink, withUtm } from './links';
 import { analytics } from './analytics';
 
 const OAUTH_CALLBACK_STYLES = `
@@ -162,6 +161,8 @@ async function startCallbackServer(
 
       if (error) {
         const isAccessDenied = error === 'access_denied';
+        const safeError = error.replace(/[^\x20-\x7e]/g, '').slice(0, 200);
+        logToFile(`[oauth] callback received with error: ${safeError}`);
         res.writeHead(isAccessDenied ? 200 : 400, {
           'Content-Type': 'text/html; charset=utf-8',
         });
@@ -190,6 +191,7 @@ async function startCallbackServer(
       }
 
       if (code) {
+        logToFile('[oauth] callback received with authorization code');
         res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
         res.end(`
           <html>
@@ -273,24 +275,51 @@ async function exchangeCodeForToken(
 ): Promise<OAuthTokenResponse> {
   const clientId = IS_DEV ? POSTHOG_DEV_CLIENT_ID : POSTHOG_PROXY_CLIENT_ID;
 
-  const response = await axios.post(
-    `${POSTHOG_OAUTH_URL}/oauth/token`,
-    {
-      grant_type: 'authorization_code',
-      code,
-      redirect_uri: callbackUrl,
-      client_id: clientId,
-      code_verifier: codeVerifier,
-    },
-    {
-      headers: {
-        'Content-Type': 'application/json',
-        'User-Agent': WIZARD_USER_AGENT,
-      },
-    },
+  logToFile(
+    `[oauth] exchanging code for token at ${POSTHOG_OAUTH_URL}/oauth/token`,
   );
+  let response;
+  try {
+    response = await axios.post(
+      `${POSTHOG_OAUTH_URL}/oauth/token`,
+      {
+        grant_type: 'authorization_code',
+        code,
+        redirect_uri: callbackUrl,
+        client_id: clientId,
+        code_verifier: codeVerifier,
+      },
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          'User-Agent': WIZARD_USER_AGENT,
+        },
+      },
+    );
+  } catch (e) {
+    const status = axios.isAxiosError(e) ? e.response?.status : undefined;
+    logToFile(
+      `[oauth] token exchange failed${status ? ` (HTTP ${status})` : ''}:`,
+      e instanceof Error ? e.message : e,
+    );
+    throw e;
+  }
 
-  return OAuthTokenResponseSchema.parse(response.data);
+  const token = OAuthTokenResponseSchema.parse(response.data);
+  logToFile(
+    `[oauth] token exchange succeeded, granted scopes: ${token.scope}` +
+      `${
+        token.scoped_teams
+          ? `, scoped_teams: [${token.scoped_teams.join(', ')}]`
+          : ''
+      }` +
+      `${
+        token.scoped_organizations
+          ? `, scoped_organizations: ${token.scoped_organizations.length}`
+          : ''
+      }`,
+  );
+  return token;
 }
 
 export async function performOAuthFlow(
@@ -300,6 +329,13 @@ export async function performOAuthFlow(
   const codeVerifier = generateCodeVerifier();
   const codeChallenge = generateCodeChallenge(codeVerifier);
   let shouldRetry = false;
+
+  logToFile(
+    `[oauth] starting flow against ${POSTHOG_OAUTH_URL} ` +
+      `(${
+        IS_DEV ? 'dev' : 'prod'
+      } client), requested scopes: ${config.scopes.join(' ')}`,
+  );
 
   do {
     shouldRetry = false;
@@ -321,10 +357,16 @@ export async function performOAuthFlow(
       authUrl.searchParams.set('scope', config.scopes.join(' '));
       authUrl.searchParams.set('required_access_level', 'project');
 
+      // UTM-tag both kickoff URLs so the journey into the app is
+      // attributable to the wizard command that started it.
+      const taggedAuthUrl = withUtm(authUrl.toString(), 'oauth-authorize');
       const signupUrl = new URL(
-        `${POSTHOG_OAUTH_URL}/signup?next=${encodeURIComponent(
-          authUrl.toString(),
-        )}`,
+        withUtm(
+          `${POSTHOG_OAUTH_URL}/signup?next=${encodeURIComponent(
+            taggedAuthUrl,
+          )}`,
+          'oauth-signup',
+        ),
       );
       const localSignupUrl = getLocalSignupUrl(port);
       const localLoginUrl = getLocalLoginUrl(port);
@@ -336,7 +378,7 @@ export async function performOAuthFlow(
       let waitForCallback: () => Promise<string>;
       try {
         ({ server, waitForCallback } = await startCallbackServer(
-          authUrl.toString(),
+          taggedAuthUrl,
           signupUrl.toString(),
           port,
         ));
@@ -354,14 +396,12 @@ export async function performOAuthFlow(
       // remote/headless box the user opens it from another machine, where
       // localhost:<port> is unreachable.
       getUI().setAuthorizeUrl(
-        config.signup ? signupUrl.toString() : authUrl.toString(),
+        config.signup ? signupUrl.toString() : taggedAuthUrl,
       );
 
-      if (NODE_ENV !== 'test') {
-        opn(urlToOpen, { wait: false }).catch(() => {
-          // opn throws in environments without a browser
-        });
-      }
+      // The localhost proxy URL stays untagged — the PostHog destination
+      // it redirects to carries the UTMs.
+      openTrackedLink(urlToOpen, 'oauth', { auto: true, skipUtm: true });
 
       const loginSpinner = getUI().spinner();
       loginSpinner.start('Waiting for authorization...');
@@ -399,6 +439,7 @@ export async function performOAuthFlow(
         server.close();
 
         const error = e instanceof Error ? e : new Error('Unknown error');
+        logToFile('[oauth] flow failed:', error);
 
         if (error.message.includes('timeout')) {
           getUI().log.error('Authorization timed out. Please try again.');

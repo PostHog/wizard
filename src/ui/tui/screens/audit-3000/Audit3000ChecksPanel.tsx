@@ -10,10 +10,7 @@
 
 import { Box, Text } from 'ink';
 import { Spinner } from '@inkjs/ui';
-import {
-  type AuditCheck,
-  type AuditStatus,
-} from '@lib/programs/audit/types';
+import { type AuditCheck, type AuditStatus } from '@lib/programs/audit/types';
 import { Colors, Icons } from '@ui/tui/styles';
 import { LoadingBox } from '@ui/tui/primitives/index';
 

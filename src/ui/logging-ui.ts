@@ -10,7 +10,7 @@ import {
   type SpinnerHandle,
   type AuthErrorDetail,
 } from './wizard-ui';
-import type { SettingsConflict } from '@lib/agent/agent-interface';
+import type { SettingsConflict } from '@lib/agent/claude-settings';
 import type { ApiUser } from '@lib/api';
 import {
   type WizardReadinessResult,

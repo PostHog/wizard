@@ -430,6 +430,7 @@ export async function getOrAskForProjectData(
     } catch {
       // best-effort
     }
+    if (user) analytics.identifyUser(user);
 
     return {
       host,
@@ -570,7 +571,7 @@ async function askForWizardLogin(options: {
 
   getUI().log.success('Login complete.');
   analytics.setTag('opened-wizard-link', true);
-  analytics.setDistinctId(data.distinctId);
+  analytics.identifyUser(userData);
 
   return data;
 }
