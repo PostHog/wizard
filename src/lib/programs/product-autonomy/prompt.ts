@@ -26,7 +26,7 @@ export function buildProductAutonomyPrompt(ctx: PromptContext): string {
     value === true ? 'ON' : value === false ? 'OFF' : 'unknown';
   const optIns = ctx.teamProductOptIns;
 
-  return `You are setting up PostHog Product Autonomy (Signals) for this project: you will enable the right signal sources, make sure GitHub is connected, tune the scout fleet, and hand the user a configured inbox.
+  return `You are setting up PostHog Product Autonomy (Signals) for this project: you will enable the right signal sources, make sure GitHub is connected, tune the scout fleet, design custom scouts for what this product uniquely needs, and hand the user a configured inbox.
 
 Project URLs:
 - Integrations settings (GitHub App install): ${integrationsSettingsUrl}
@@ -58,7 +58,8 @@ tasks, in this order:
   5. Enable signal sources
   6. Offer issue-tracker integrations
   7. Configure the scout fleet
-  8. Write report and hand off
+  8. Design custom scouts
+  9. Write report and hand off
 Drive the list with TaskUpdate — mark a task in_progress when you start
 it and completed when done. If a step turns out to be a no-op (e.g.
 GitHub is already connected), still mark its task completed.
@@ -122,7 +123,17 @@ STEP 7 — Configure the scout fleet. (skill: "Scouts")
    Materialize the fleet and disable the scouts whose product surface
    this project lacks, per the skill.
 
-STEP 8 — Write the report and hand off. (skill: "Report")
+STEP 8 — Design custom scouts for this product. (skill: "Custom scouts")
+   You are the only actor that has read this repo — turn that into
+   coverage per the skill: a real gap analysis of the project's
+   watchable surfaces against what the canonical fleet already covers,
+   then custom scouts for the uncovered ones. Never edit canonical
+   scout bodies. Propose all candidates in ONE batched wizard_ask
+   before creating anything; the user declining everything (or finding
+   no gap at all) is a valid outcome, not an abort. Mark the task
+   completed either way.
+
+STEP 9 — Write the report and hand off. (skill: "Report")
    Write the report per the skill, including follow-ups for anything
    deferred. Tell the user findings will start appearing in their inbox
    at ${inboxUrl} within about 30 minutes.`;

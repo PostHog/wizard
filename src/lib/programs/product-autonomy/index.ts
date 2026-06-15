@@ -54,9 +54,10 @@ const run: ProgramRun = {
   estimatedDurationMinutes: 10,
   abortCases: PRODUCT_AUTONOMY_ABORT_CASES,
   // The flow legitimately needs several interactions (AI approval,
-  // GitHub connect + verify, issue-tracker picks), so raise the
-  // wizard_ask budget a little above the default 10.
-  maxQuestions: 12,
+  // GitHub connect + verify, issue-tracker picks, the scout-tailoring
+  // proposal), so raise the wizard_ask budget a little above the
+  // default 10.
+  maxQuestions: 13,
 
   postRun: async (session, credentials) => {
     const inboxPath = `/project/${credentials.projectId}/inbox`;

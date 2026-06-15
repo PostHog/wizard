@@ -143,6 +143,13 @@ export const AGENT_SKILL_SCOPE_ADDITIONS = [
  *     what's actually connected (`external-data-sources-list`) instead
  *     of taking the user's word for it. NOT yet in the production
  *     OAuth app ceiling — must be added there before launch.
+ *   • llm_skill:read / llm_skill:write — the custom-scouts step
+ *     (skill step 7b): read the seeded `authoring-signals-scouts`
+ *     guide and canonical scout bodies (`llma-skill-get` /
+ *     `llma-skill-file-get`) and author the user-approved custom
+ *     `signals-scout-*` skills (`llma-skill-create`). Canonical scout
+ *     bodies are never edited. NOT yet in the production OAuth app
+ *     ceiling — must be added there before launch.
  */
 export const PRODUCT_AUTONOMY_SCOPE_ADDITIONS = [
   'task:read',
@@ -155,6 +162,8 @@ export const PRODUCT_AUTONOMY_SCOPE_ADDITIONS = [
   'error_tracking:read',
   'external_data_source:read',
   'external_data_source:write',
+  'llm_skill:read',
+  'llm_skill:write',
 ] as const;
 
 /**
