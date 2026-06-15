@@ -11,14 +11,22 @@
  * their browser.
  */
 
+import { useEffect } from 'react';
 import { Box, Text } from 'ink';
 import {
   POSTHOG_ORG_AI_SETTINGS_URL,
   POSTHOG_PRIVACY_URL,
   POSTHOG_TERMS_URL,
 } from '@lib/constants';
+import { analytics } from '@utils/analytics';
 
 export const PrivacyPanel = () => {
+  // Rendered from the intro menu and the auth-screen [I] overlay; either way,
+  // count the impression once per mount.
+  useEffect(() => {
+    analytics.wizardCapture('privacy panel shown');
+  }, []);
+
   return (
     <Box flexDirection="column" width={64} flexShrink={0}>
       <Text>

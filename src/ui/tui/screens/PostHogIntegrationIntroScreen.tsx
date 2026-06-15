@@ -285,6 +285,7 @@ export const PostHogIntegrationIntroScreen = ({
   }
 
   const handleSelect = (value: string) => {
+    analytics.wizardCapture('intro menu selected', { value, view });
     if (view === 'tools') {
       if (value === 'back') setView('default');
       else launchTool(value, session.installDir);
