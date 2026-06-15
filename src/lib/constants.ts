@@ -151,17 +151,18 @@ export const WIZARD_PROVISIONING_SCOPES = [
  * - health_issue:read     used by `wizard doctor`
  * - wizard_session:read   list / retrieve / stream sessions
  * - wizard_session:write  stream run state to /api/projects/{id}/wizard/sessions/
- * - organization:read     read `organization.is_ai_data_processing_approved`
- *                         from /api/users/@me/ for the AI opt-in gate —
- *                         without it the field is absent from OAuth-scoped
- *                         responses and the gate would block opted-in orgs
+ *
+ * NOTE: every scope here must be within the wizard OAuth application's
+ * server-side scope ceiling (`OAuthApplication.scopes` in posthog) —
+ * requesting anything outside it fails the WHOLE authorize request with
+ * `error=invalid_scope` before the consent screen renders. Coordinate
+ * ceiling changes with the posthog side before adding scopes.
  */
 export const WIZARD_OAUTH_SCOPES = [
   ...WIZARD_PROVISIONING_SCOPES,
   'health_issue:read',
   'wizard_session:read',
   'wizard_session:write',
-  'organization:read',
 ] as const;
 
 // ── Wizard run / variants ───────────────────────────────────────────
