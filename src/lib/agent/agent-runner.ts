@@ -113,6 +113,13 @@ export interface ProgramRun {
    * always returns a "batch your questions" error regardless of the cap.
    */
   maxQuestions?: number;
+  /**
+   * Opt this program's `wizard_ask` overlays into rich link rendering:
+   * standalone URLs in prompt text become OSC 8 hyperlinks and a lone URL is
+   * copied to the clipboard, so a long URL can't be broken by the overlay's
+   * line wrapping. Defaults to false — leave off for flows we don't own.
+   */
+  richLinks?: boolean;
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────
@@ -345,6 +352,7 @@ export async function runProgram(
     : createWizardAskBridge({
         getSource: () => session.skillId ?? config.integrationLabel,
         showQuestion: (q) => getUI().requestQuestion(q),
+        richLinks: config.richLinks ?? false,
       });
 
   const agent = await initializeAgent(

@@ -58,6 +58,11 @@ const run: ProgramRun = {
   // proposal), so raise the wizard_ask budget a little above the
   // default 10.
   maxQuestions: 13,
+  // This flow hands the user long OAuth/authorize URLs (Linear, GitHub
+  // fallback, Zendesk) in wizard_ask prompts. Render them as OSC 8
+  // hyperlinks + clipboard copy so the overlay's line wrapping can't break
+  // the click target. Scoped to this program only.
+  richLinks: true,
 
   postRun: async (session, credentials) => {
     const inboxPath = `/project/${credentials.projectId}/inbox`;
