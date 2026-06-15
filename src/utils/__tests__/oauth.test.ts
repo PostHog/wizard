@@ -1,4 +1,4 @@
-import { extractOAuthCode } from '@utils/oauth';
+import { extractOAuthCode, isAuthorizationTimeout } from '@utils/oauth';
 
 describe('extractOAuthCode', () => {
   it('extracts the code from a full callback URL', () => {
@@ -44,5 +44,29 @@ describe('extractOAuthCode', () => {
 
   it('returns null for free-form text with whitespace and no code', () => {
     expect(extractOAuthCode('please paste here')).toBeNull();
+  });
+});
+
+describe('isAuthorizationTimeout', () => {
+  it('matches the authorization timeout error', () => {
+    expect(isAuthorizationTimeout(new Error('Authorization timed out'))).toBe(
+      true,
+    );
+  });
+
+  it('does not match unrelated errors', () => {
+    expect(
+      isAuthorizationTimeout(new Error('OAuth error: access_denied')),
+    ).toBe(false);
+    expect(isAuthorizationTimeout(new Error('Unknown error'))).toBe(false);
+  });
+
+  // Guards the regression where `.includes('timeout')` was used to detect the
+  // `'Authorization timed out'` error — it never matched, so timeouts fell
+  // through to the generic "create an issue" message.
+  it('matches a message that the old substring check would have missed', () => {
+    const error = new Error('Authorization timed out');
+    expect(error.message).not.toContain('timeout');
+    expect(isAuthorizationTimeout(error)).toBe(true);
   });
 });

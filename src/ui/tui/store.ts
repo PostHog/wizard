@@ -516,6 +516,11 @@ export class WizardStore {
     this.pushOverlay(Overlay.AuthError);
   }
 
+  /** Push the session-timeout overlay (no dismiss — user must exit). */
+  showSessionTimeout(): void {
+    this.pushOverlay(Overlay.SessionTimeout);
+  }
+
   addDiscoveredFeature(feature: DiscoveredFeature): void {
     if (!this.session.discoveredFeatures.includes(feature)) {
       this.session.discoveredFeatures.push(feature);
