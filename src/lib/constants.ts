@@ -52,6 +52,15 @@ export const DEBUG = false;
 export const DEFAULT_URL = IS_DEV
   ? 'http://localhost:8010'
   : 'https://us.posthog.com';
+/**
+ * Region-agnostic PostHog app URL. Resolves to us.posthog.com or
+ * eu.posthog.com server-side based on the signed-in user's profile.
+ * Use this for share-with-user links (e.g. settings pages) so they
+ * land on the right region without us needing to know it client-side.
+ */
+export const POSTHOG_APP_URL = IS_DEV
+  ? 'http://localhost:8010'
+  : 'https://app.posthog.com';
 export const DEFAULT_HOST_URL = IS_DEV
   ? 'http://localhost:8010'
   : 'https://us.i.posthog.com';
