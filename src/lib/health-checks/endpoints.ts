@@ -1,5 +1,7 @@
 import { REMOTE_SKILLS_BASE_URL } from '@lib/constants';
 import { logToFile } from '@utils/debug';
+import { getLlmGatewayBaseFromRegion } from '@utils/urls';
+import type { CloudRegion } from '@utils/types';
 import { ServiceHealthStatus, type BaseHealthResult } from './types';
 
 // ---------------------------------------------------------------------------
@@ -59,8 +61,10 @@ async function fetchEndpointHealth(
   return result;
 }
 
-export const checkLlmGatewayHealth = (): Promise<BaseHealthResult> =>
-  fetchEndpointHealth('https://gateway.us.posthog.com/_liveness');
+export const checkLlmGatewayHealth = (
+  region?: CloudRegion,
+): Promise<BaseHealthResult> =>
+  fetchEndpointHealth(`${getLlmGatewayBaseFromRegion(region)}/_liveness`);
 
 export const checkMcpHealth = (): Promise<BaseHealthResult> =>
   fetchEndpointHealth(

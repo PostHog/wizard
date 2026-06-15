@@ -48,7 +48,7 @@ export const HEALTH_CHECK_STEP: ProgramStep = {
   screenId: 'health-check',
   gate: healthCheckReady,
   onInit: (ctx) => {
-    evaluateWizardReadiness()
+    evaluateWizardReadiness(undefined, ctx.session.region)
       .then((readiness) => {
         logToFile(
           `[health-checks] TUI pre-flight complete: decision=${readiness.decision}`,

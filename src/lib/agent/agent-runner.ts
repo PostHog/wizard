@@ -219,7 +219,10 @@ export async function runProgram(
     const readinessConfig = session.signup
       ? SIGNUP_WIZARD_READINESS_CONFIG
       : undefined;
-    const readiness = await evaluateWizardReadiness(readinessConfig);
+    const readiness = await evaluateWizardReadiness(
+      readinessConfig,
+      session.region,
+    );
     logToFile(`[agent-runner] readiness=${readiness.decision}`);
     if (readiness.decision === WizardReadiness.No) {
       const blockingKeys = getBlockingServiceKeys(

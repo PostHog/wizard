@@ -23,6 +23,27 @@ import {
   checkGithubReleasesHealth,
 } from './endpoints';
 import { logToFile } from '@utils/debug';
+import type { CloudRegion } from '@utils/types';
+
+// Health checks ping flaky external services; a single transient network blip
+// shouldn't read as "down". Retry a Down result up to MAX_HEALTH_ATTEMPTS times
+// before accepting it. Degraded results (real Statuspage signals) aren't retried.
+const MAX_HEALTH_ATTEMPTS = 3;
+
+async function withRetry<T extends BaseHealthResult>(
+  check: () => Promise<T>,
+): Promise<T> {
+  let result = await check();
+  for (
+    let attempt = 2;
+    attempt <= MAX_HEALTH_ATTEMPTS &&
+    result.status === ServiceHealthStatus.Down;
+    attempt++
+  ) {
+    result = await check();
+  }
+  return result;
+}
 
 // ---------------------------------------------------------------------------
 // Service labels (used in human-readable reason strings)
@@ -82,7 +103,9 @@ export const SIGNUP_WIZARD_READINESS_CONFIG: WizardReadinessConfig = {
 // Aggregate check
 // ---------------------------------------------------------------------------
 
-export async function checkAllExternalServices(): Promise<AllServicesHealth> {
+export async function checkAllExternalServices(
+  region?: CloudRegion,
+): Promise<AllServicesHealth> {
   const [
     anthropic,
     posthogOverall,
@@ -96,17 +119,17 @@ export async function checkAllExternalServices(): Promise<AllServicesHealth> {
     mcp,
     githubReleases,
   ] = await Promise.all([
-    checkAnthropicHealth(),
-    checkPosthogOverallHealth(),
-    checkPosthogComponentHealth(),
-    checkGithubHealth(),
-    checkNpmOverallHealth(),
-    checkNpmComponentHealth(),
-    checkCloudflareOverallHealth(),
-    checkCloudflareComponentHealth(),
-    checkLlmGatewayHealth(),
-    checkMcpHealth(),
-    checkGithubReleasesHealth(),
+    withRetry(checkAnthropicHealth),
+    withRetry(checkPosthogOverallHealth),
+    withRetry(checkPosthogComponentHealth),
+    withRetry(checkGithubHealth),
+    withRetry(checkNpmOverallHealth),
+    withRetry(checkNpmComponentHealth),
+    withRetry(checkCloudflareOverallHealth),
+    withRetry(checkCloudflareComponentHealth),
+    withRetry(() => checkLlmGatewayHealth(region)),
+    withRetry(checkMcpHealth),
+    withRetry(checkGithubReleasesHealth),
   ]);
 
   return {
@@ -167,10 +190,11 @@ const READINESS_TIMEOUT_MS = 10_000;
 
 export async function evaluateWizardReadiness(
   config: WizardReadinessConfig = DEFAULT_WIZARD_READINESS_CONFIG,
+  region?: CloudRegion,
 ): Promise<WizardReadinessResult> {
   try {
     const health = await Promise.race([
-      checkAllExternalServices(),
+      checkAllExternalServices(region),
       new Promise<AllServicesHealth>((resolve) =>
         setTimeout(
           () => resolve(allUnknown('Health check timed out')),

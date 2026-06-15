@@ -60,7 +60,7 @@ export const ERROR_TRACKING_UPLOAD_SOURCE_MAPS_PROGRAM: ProgramStep[] = [
     screenId: 'health-check',
     gate: healthCheckReady,
     onInit: (ctx) => {
-      evaluateWizardReadiness()
+      evaluateWizardReadiness(undefined, ctx.session.region)
         .then((readiness) => {
           ctx.setReadinessResult(readiness);
         })

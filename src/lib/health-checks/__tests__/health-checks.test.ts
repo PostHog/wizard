@@ -761,6 +761,20 @@ describe('health-checks', () => {
       expect(result.status).toBe(ServiceHealthStatus.Down);
       expect(result.error).toBe('Request timed out after 5000ms');
     });
+
+    it('probes the US gateway by default and the EU gateway for region "eu"', async () => {
+      await checkLlmGatewayHealth();
+      expect(global.fetch).toHaveBeenCalledWith(
+        'https://gateway.us.posthog.com/_liveness',
+        expect.anything(),
+      );
+
+      await checkLlmGatewayHealth('eu');
+      expect(global.fetch).toHaveBeenCalledWith(
+        'https://gateway.eu.posthog.com/_liveness',
+        expect.anything(),
+      );
+    });
   });
 
   // -----------------------------------------------------------------------
@@ -913,6 +927,46 @@ describe('health-checks', () => {
       expect(calledUrls).toContain(URLS.llmGatewayLiveness);
       expect(calledUrls).toContain(URLS.mcpLanding);
       expect(calledUrls).toContain(URLS.githubReleasesSkillMenu);
+    });
+
+    it('retries a transient Down result before accepting it', async () => {
+      // First gateway probe fails (network blip), second succeeds. The retry
+      // should yield healthy, not down.
+      let gatewayCalls = 0;
+      (global.fetch as jest.Mock).mockImplementation(
+        overrideFetch({
+          [URLS.llmGatewayLiveness]: () => {
+            gatewayCalls += 1;
+            return gatewayCalls === 1
+              ? Promise.reject(new Error('socket hang up'))
+              : Promise.resolve(
+                  new Response(JSON.stringify({ status: 'alive' }), {
+                    status: 200,
+                  }),
+                );
+          },
+        }),
+      );
+
+      const health = await checkAllExternalServices();
+      expect(gatewayCalls).toBe(2);
+      expect(health.llmGateway.status).toBe(ServiceHealthStatus.Healthy);
+    });
+
+    it('gives up after 3 attempts when a service stays down', async () => {
+      let gatewayCalls = 0;
+      (global.fetch as jest.Mock).mockImplementation(
+        overrideFetch({
+          [URLS.llmGatewayLiveness]: () => {
+            gatewayCalls += 1;
+            return Promise.reject(new Error('socket hang up'));
+          },
+        }),
+      );
+
+      const health = await checkAllExternalServices();
+      expect(gatewayCalls).toBe(3);
+      expect(health.llmGateway.status).toBe(ServiceHealthStatus.Down);
     });
   });
 

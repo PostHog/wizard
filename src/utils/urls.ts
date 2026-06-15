@@ -86,3 +86,12 @@ export const getLlmGatewayUrlFromHost = (host: string) => {
 
   return 'https://gateway.us.posthog.com/wizard';
 };
+
+/** LLM Gateway origin for a region, used by the liveness health check. Always
+ *  the real prod gateway (the check reports actual service status, even in
+ *  dev). US is the default when region is unknown — the readiness pre-flight
+ *  runs before login, so `--region` is the only signal available then. */
+export const getLlmGatewayBaseFromRegion = (region: CloudRegion | undefined) =>
+  region === 'eu'
+    ? 'https://gateway.eu.posthog.com'
+    : 'https://gateway.us.posthog.com';
