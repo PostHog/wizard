@@ -95,6 +95,14 @@ export interface OutroData {
   dashboardUrl?: string;
   /** PostHog notebook URL the program uploaded the report to. */
   notebookUrl?: string;
+  /**
+   * Copy-paste prompt the operator hands to their coding agent to finish the
+   * job (work the report's checklist). Printed to the terminal's main buffer on
+   * exit (see getExitLine in start-tui.ts) — the TUI's alternate screen is wiped
+   * on exit, so the scrollback line is where it survives and can be
+   * triple-click-selected. Set per-program in buildOutroData.
+   */
+  handoffPrompt?: string;
 }
 
 /** A single question rendered by the WizardAsk overlay. */
