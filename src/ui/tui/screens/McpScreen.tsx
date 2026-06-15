@@ -12,7 +12,7 @@
  */
 
 import { Box, Text, useInput } from 'ink';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useSyncExternalStore } from 'react';
 import { type WizardStore, McpOutcome } from '@ui/tui/store';
 import {
@@ -101,6 +101,42 @@ export const McpScreen = ({
   const [resultClients, setResultClients] = useState<string[]>([]);
   const [pluginClients, setPluginClients] = useState<string[]>([]);
   const [installMode, setInstallMode] = useState<'all' | 'custom'>('custom');
+  // Clients targeted by the in-flight install step (named on the Working screen).
+  const [installingNames, setInstallingNames] = useState<string[]>([]);
+
+  // A run can install in two steps — local editors first, then the browser
+  // connector on a deliberate "continue" — so results accumulate across calls.
+  const installedRef = useRef<{ mcp: string[]; plugin: string[] }>({
+    mcp: [],
+    plugin: [],
+  });
+  // Features chosen for the local editors; reported on the final Done screen
+  // even though the trailing connector step installs with no feature list.
+  const featuresRef = useRef<string[] | undefined>(undefined);
+
+  const isConnectorName = (name: string): boolean =>
+    Boolean(clients.find((c) => c.name === name)?.finish);
+  const connectorNames = (names: string[]): string[] =>
+    names.filter(isConnectorName);
+  const localNames = (names: string[]): string[] =>
+    names.filter((n) => !isConnectorName(n));
+
+  /**
+   * Install `names`, deferring any browser connector to its own screen so its
+   * page opens after the local editors are configured — not at the same time.
+   */
+  const installLocalsThenConnector = (
+    names: string[],
+    features: string[] | undefined,
+  ) => {
+    const connectors = connectorNames(names);
+    const locals = localNames(names);
+    if (connectors.length > 0 && locals.length > 0) {
+      void doInstall(locals, features, { thenConnector: connectors });
+    } else {
+      void doInstall(names, features);
+    }
+  };
 
   useEffect(() => {
     void (async () => {
@@ -125,28 +161,25 @@ export const McpScreen = ({
     chosenMode: 'all' | 'custom',
   ) => {
     setSelectedClientNames(clientNames);
+    installedRef.current = { mcp: [], plugin: [] };
+    featuresRef.current = undefined;
 
-    // Recommended flow: install everything straight away. Browser connectors
-    // (e.g. Claude Desktop/Web) just open their connector page here, same as
-    // before — no extra screen.
+    // Recommended flow: install everything straight away. A mixed pick still
+    // installs the local editors first and opens the connector after.
     if (chosenMode === 'all') {
-      void doInstall(clientNames, [...ALL_FEATURE_VALUES]);
+      installLocalsThenConnector(clientNames, [...ALL_FEATURE_VALUES]);
       return;
     }
     if (store.session.mcpFeatures) {
-      void doInstall(clientNames, store.session.mcpFeatures);
+      installLocalsThenConnector(clientNames, store.session.mcpFeatures);
       return;
     }
 
-    // Customize flow: local editors get the feature picker. A browser connector
-    // configures its tools in Claude's UI, so it ignores the feature list — but
-    // a mixed selection still routes through the feature picker (doInstall opens
-    // the connector page alongside writing local configs). Only a connector-only
-    // selection skips straight to the connector screen.
-    const hasLocalClient = clientNames.some(
-      (name) => !clients.find((c) => c.name === name)?.finish,
-    );
-    if (!hasLocalClient) {
+    // Customize flow: local editors go through the feature picker; a browser
+    // connector configures its tools in Claude's UI, so it opens on its own
+    // screen. A connector-only pick goes straight there; a mixed pick installs
+    // the local editors first (feature picker), then hands off to the connector.
+    if (localNames(clientNames).length === 0) {
       setPhase(Phase.Connector);
       return;
     }
@@ -180,7 +213,12 @@ export const McpScreen = ({
     markDone(store, McpOutcome.Skipped);
   };
 
-  const doInstall = async (names: string[], features?: string[]) => {
+  const doInstall = async (
+    names: string[],
+    features?: string[],
+    opts?: { thenConnector?: string[] },
+  ) => {
+    setInstallingNames(names);
     setPhase(Phase.Working);
     let mcpResult: string[] = [];
     let pluginResult: string[] = [];
@@ -222,22 +260,33 @@ export const McpScreen = ({
       }
     }
 
-    setResultClients(mcpResult);
-    setPluginClients(pluginResult);
+    // Accumulate across the local-then-connector steps.
+    installedRef.current = {
+      mcp: [...installedRef.current.mcp, ...mcpResult],
+      plugin: [...installedRef.current.plugin, ...pluginResult],
+    };
+    setResultClients(installedRef.current.mcp);
+    setPluginClients(installedRef.current.plugin);
+
+    // Mixed pick: locals are done — hand off to the connector screen so its
+    // page opens on a deliberate "continue", not at the same time as this.
+    if (opts?.thenConnector && opts.thenConnector.length > 0) {
+      featuresRef.current = features;
+      setPhase(Phase.Connector);
+      return;
+    }
+
     setPhase(Phase.Done);
-    const succeeded = mcpResult.length + pluginResult.length > 0;
-    const outcome = succeeded ? McpOutcome.Installed : McpOutcome.Failed;
-    const featuresReport = reportFeatures(features ?? [...ALL_FEATURE_VALUES]);
-    setTimeout(
-      () =>
-        markDone(
-          store,
-          outcome,
-          [...mcpResult, ...pluginResult],
-          featuresReport,
-        ),
-      2000,
+    const installed = [
+      ...installedRef.current.mcp,
+      ...installedRef.current.plugin,
+    ];
+    const outcome =
+      installed.length > 0 ? McpOutcome.Installed : McpOutcome.Failed;
+    const featuresReport = reportFeatures(
+      featuresRef.current ?? features ?? [...ALL_FEATURE_VALUES],
     );
+    setTimeout(() => markDone(store, outcome, installed, featuresReport), 2000);
   };
 
   const doRemove = async () => {
@@ -384,28 +433,49 @@ export const McpScreen = ({
             groups={AVAILABLE_FEATURES}
             initialSelected={[]}
             onSelect={(features) => {
-              void doInstall(selectedClientNames, features);
+              installLocalsThenConnector(selectedClientNames, features);
             }}
           />
         )}
 
         {phase === Phase.Connector && (
           <Box flexDirection="column">
-            <Box marginBottom={1}>
+            {/* In a mixed pick the local editors are already done — confirm that
+                before handing off, so the browser step reads as "what's next". */}
+            {installedNow.length > 0 && (
+              <Box marginBottom={1}>
+                <Text color={Colors.success}>
+                  {Icons.check} MCP installed for {installedNow.join(', ')}
+                </Text>
+              </Box>
+            )}
+            <Text bold color={Colors.accent}>
+              {installedNow.length > 0 ? 'Next: connect ' : 'Connect '}
+              {connectorNames(selectedClientNames).join(' & ')}
+            </Text>
+            <Box marginTop={1} marginBottom={1}>
               <Text dimColor>
-                You&apos;ll choose which features and tools to enable in
-                Claude&apos;s UI after connecting.
+                This opens in your browser. You&apos;ll choose which features
+                and tools to enable in Claude&apos;s UI after connecting.
               </Text>
             </Box>
             <ConnectorContinue
-              onContinue={() => void doInstall(selectedClientNames, [])}
+              onContinue={() =>
+                void doInstall(connectorNames(selectedClientNames), [])
+              }
             />
           </Box>
         )}
 
         {phase === Phase.Working && (
           <Text dimColor>
-            {isRemove ? 'Removing' : 'Installing'} MCP server...
+            {isRemove
+              ? 'Removing MCP server...'
+              : installingNames.length > 0 &&
+                connectorNames(installingNames).length ===
+                  installingNames.length
+              ? `Opening ${installingNames.join(', ')}...`
+              : `Installing MCP for ${installingNames.join(', ')}...`}
           </Text>
         )}
 
