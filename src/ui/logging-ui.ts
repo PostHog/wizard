@@ -12,6 +12,7 @@ import {
 } from './wizard-ui';
 import type { SettingsConflict } from '@lib/agent/claude-settings';
 import type { ApiUser } from '@lib/api';
+import { OAUTH_TIMEOUT_MS } from '@lib/constants';
 import {
   type WizardReadinessResult,
   getBlockingServiceKeys,
@@ -196,7 +197,8 @@ export class LoggingUI implements WizardUI {
     }
   }
 
-  showSessionTimeout(minutes: number): void {
+  showSessionTimeout(): void {
+    const minutes = Math.round(OAUTH_TIMEOUT_MS / 60_000);
     console.log(
       `✖  Login timed out. The OAuth link timed out after ${minutes} minutes.`,
     );

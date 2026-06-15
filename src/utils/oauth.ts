@@ -458,8 +458,7 @@ export async function performOAuthFlow(
           // Overlay bypasses the auth-step gating (which never completes
           // without credentials), so the user sees the failure instead of a
           // spinner that never stops; any key exits.
-          const timeoutMinutes = Math.round(OAUTH_TIMEOUT_MS / 60_000);
-          getUI().showSessionTimeout(timeoutMinutes);
+          getUI().showSessionTimeout();
         } else if (error.message.includes('access_denied')) {
           getUI().log.info(
             `Authorization was cancelled.\n\nYou denied access to PostHog. To use the wizard, you need to authorize access to your PostHog account.\n\nYou can try again by re-running the wizard.`,

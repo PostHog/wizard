@@ -147,8 +147,8 @@ export class InkUI implements WizardUI {
     this.store.showAuthError(detail);
   }
 
-  showSessionTimeout(minutes: number): void {
-    this.store.showSessionTimeout(minutes);
+  showSessionTimeout(): void {
+    this.store.showSessionTimeout();
   }
 
   requestQuestion(question: PendingQuestion): Promise<AskAnswers> {

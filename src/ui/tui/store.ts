@@ -510,8 +510,7 @@ export class WizardStore {
   }
 
   /** Push the session-timeout overlay (no dismiss — user must exit). */
-  showSessionTimeout(minutes: number): void {
-    this.$session.setKey('sessionTimeoutMinutes', minutes);
+  showSessionTimeout(): void {
     this.pushOverlay(Overlay.SessionTimeout);
   }
 

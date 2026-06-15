@@ -140,7 +140,7 @@ export interface WizardUI {
   showAuthError(detail?: AuthErrorDetail): void;
 
   /** Show the session-timeout overlay when the OAuth login window expires. */
-  showSessionTimeout(minutes: number): void;
+  showSessionTimeout(): void;
 
   /**
    * Open the wizard_ask overlay and resolve with the user's answers.

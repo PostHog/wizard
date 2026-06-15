@@ -11,10 +11,13 @@ import { Box, Text, useInput } from 'ink';
 import { useSyncExternalStore } from 'react';
 import type { WizardStore } from '@ui/tui/store';
 import { Colors } from '@ui/tui/styles';
+import { OAUTH_TIMEOUT_MS } from '@lib/constants';
 
 interface SessionTimeoutScreenProps {
   store: WizardStore;
 }
+
+const TIMEOUT_MINUTES = Math.round(OAUTH_TIMEOUT_MS / 60_000);
 
 export const SessionTimeoutScreen = ({ store }: SessionTimeoutScreenProps) => {
   useSyncExternalStore(
@@ -26,8 +29,6 @@ export const SessionTimeoutScreen = ({ store }: SessionTimeoutScreenProps) => {
     process.exit(1);
   });
 
-  const minutes = store.session.sessionTimeoutMinutes ?? 5;
-
   return (
     <Box flexDirection="column" flexGrow={1}>
       <Text color="red" bold>
@@ -35,7 +36,7 @@ export const SessionTimeoutScreen = ({ store }: SessionTimeoutScreenProps) => {
       </Text>
 
       <Box marginTop={1}>
-        <Text>The OAuth link timed out after {minutes} minutes.</Text>
+        <Text>The OAuth link timed out after {TIMEOUT_MINUTES} minutes.</Text>
       </Box>
 
       <Box marginTop={1}>
