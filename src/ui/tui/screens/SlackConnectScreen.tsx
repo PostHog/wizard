@@ -257,7 +257,7 @@ export const SlackConnectScreen = ({ store }: SlackConnectScreenProps) => {
                 ? [{ label: 'Done', value: ChoiceValue.Skip }]
                 : [
                     { label: 'Open Slack setup', value: ChoiceValue.Open },
-                    { label: 'Skip', value: ChoiceValue.Skip },
+                    { label: 'Skip / Continue', value: ChoiceValue.Skip },
                   ]
             }
             onSelect={handleSelect}
