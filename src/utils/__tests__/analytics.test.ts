@@ -7,6 +7,21 @@ import type { ApiUser } from '@lib/api';
 jest.mock('posthog-node');
 jest.mock('uuid');
 
+// IS_PRODUCTION_BUILD is read live (property access) in the Analytics
+// constructor, so a getter backed by this mutable flag lets a test flip the
+// build type without re-importing the module. Defaults falsy → 'dev',
+// matching every other test. `var` (not `let`) so the hoisted jest.mock
+// factory can read it at import time without hitting the temporal dead zone;
+// the `mock` prefix satisfies jest's hoisting rule.
+// eslint-disable-next-line no-var
+var mockIsProductionBuild = false;
+jest.mock('@env', () => ({
+  ...jest.requireActual('@env'),
+  get IS_PRODUCTION_BUILD() {
+    return mockIsProductionBuild;
+  },
+}));
+
 const mockUuidv4 = uuidv4 as jest.MockedFunction<typeof uuidv4>;
 const MockedPostHog = PostHog as jest.MockedClass<typeof PostHog>;
 
@@ -16,6 +31,7 @@ describe('Analytics', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    mockIsProductionBuild = false;
     // Each run mints several distinct uuids; mock them to different values
     // so the tests reflect reality (run_id !== $session_id) rather than
     // collapsing them. Call order: anonymousId, runId (both in the
@@ -178,6 +194,31 @@ describe('Analytics', () => {
           run_id: 'run-uuid',
         },
       );
+    });
+  });
+
+  describe('build tag', () => {
+    it("tags dev/test runs as 'dev'", () => {
+      analytics.captureException(new Error('e'));
+
+      expect(
+        (mockPostHogInstance.captureException as jest.Mock).mock.calls.at(
+          -1,
+        )?.[2],
+      ).toMatchObject({ build: 'dev' });
+    });
+
+    it("tags production builds as 'prod'", () => {
+      mockIsProductionBuild = true;
+      const prodAnalytics = new Analytics();
+
+      prodAnalytics.captureException(new Error('e'));
+
+      expect(
+        (mockPostHogInstance.captureException as jest.Mock).mock.calls.at(
+          -1,
+        )?.[2],
+      ).toMatchObject({ build: 'prod' });
     });
   });
 

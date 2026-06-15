@@ -85,11 +85,11 @@ export class Analytics {
     });
 
     this.tags = { $app_name: this.appName };
-    // Non-production builds tag every event so they segment out of prod
-    // data. CI runs upgrade the tag to 'ci' (see runWizardCI).
-    if (!IS_PRODUCTION_BUILD) {
-      this.tags.build = 'dev';
-    }
+    // Tag every run with its build type so prod / dev / ci segment cleanly
+    // in analytics. tsdown inlines IS_PRODUCTION_BUILD to `true` in published
+    // builds and `false` for dev/tsx/test runs. CI runs (always non-prod
+    // builds) upgrade this to 'ci' in runWizardCI.
+    this.tags.build = IS_PRODUCTION_BUILD ? 'prod' : 'dev';
 
     this.anonymousId = uuidv4();
 
