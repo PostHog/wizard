@@ -22,6 +22,7 @@ export const errorTrackingUploadSourceMapsConfig: ProgramConfig = {
   command: 'upload-source-maps',
   description: 'Upload source maps to PostHog Error Tracking',
   id: 'error-tracking-upload-source-maps',
+  requiresAi: true,
   steps: ERROR_TRACKING_UPLOAD_SOURCE_MAPS_PROGRAM,
   reportFile: REPORT_FILE,
   getContentBlocks,

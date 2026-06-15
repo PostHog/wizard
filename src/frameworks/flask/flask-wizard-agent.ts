@@ -25,7 +25,6 @@ export const FLASK_AGENT_CONFIG: FrameworkConfig<FlaskContext> = {
   metadata: {
     name: 'Flask',
     integration: Integration.flask,
-    beta: true,
     docsUrl: 'https://posthog.com/docs/libraries/python',
     unsupportedVersionDocsUrl: 'https://posthog.com/docs/libraries/python',
     gatherContext: async (options: WizardRunOptions) => {
