@@ -16,7 +16,17 @@ describe('Analytics', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    mockUuidv4.mockReturnValue('test-uuid' as any);
+    // Each run mints several distinct uuids; mock them to different values
+    // so the tests reflect reality (run_id !== $session_id) rather than
+    // collapsing them. Call order: anonymousId, runId (both in the
+    // constructor), then sessionId (lazily, on first identify).
+    let uuidCall = 0;
+    mockUuidv4.mockImplementation((() => {
+      uuidCall += 1;
+      if (uuidCall === 1) return 'test-uuid'; // anonymousId
+      if (uuidCall === 2) return 'run-uuid'; // runId
+      return 'session-uuid'; // sessionId (first identify)
+    }) as any);
 
     mockPostHogInstance = {
       capture: jest.fn(),
@@ -45,6 +55,7 @@ describe('Analytics', () => {
           team: ANALYTICS_TEAM_TAG,
           $app_name: 'wizard',
           build: 'dev',
+          run_id: 'run-uuid',
           ...properties,
         },
       );
@@ -64,6 +75,7 @@ describe('Analytics', () => {
           team: ANALYTICS_TEAM_TAG,
           $app_name: 'wizard',
           build: 'dev',
+          run_id: 'run-uuid',
           testTag: 'testValue',
           ...properties,
         },
@@ -84,6 +96,8 @@ describe('Analytics', () => {
           team: ANALYTICS_TEAM_TAG,
           $app_name: 'wizard',
           build: 'dev',
+          run_id: 'run-uuid',
+          $session_id: 'session-uuid',
         },
       );
     });
@@ -100,6 +114,7 @@ describe('Analytics', () => {
           team: ANALYTICS_TEAM_TAG,
           $app_name: 'wizard',
           build: 'dev',
+          run_id: 'run-uuid',
         },
       );
     });
@@ -119,6 +134,7 @@ describe('Analytics', () => {
           team: ANALYTICS_TEAM_TAG,
           $app_name: 'wizard',
           build: 'dev',
+          run_id: 'run-uuid',
           environment: 'test',
           version: '1.0.0',
           integration: 'nextjs',
@@ -141,6 +157,7 @@ describe('Analytics', () => {
           team: ANALYTICS_TEAM_TAG,
           $app_name: 'wizard',
           build: 'dev',
+          run_id: 'run-uuid',
           integration: 'react',
         },
       );
@@ -158,6 +175,7 @@ describe('Analytics', () => {
           team: ANALYTICS_TEAM_TAG,
           $app_name: 'wizard',
           build: 'dev',
+          run_id: 'run-uuid',
         },
       );
     });
@@ -209,6 +227,24 @@ describe('Analytics', () => {
       expect(mockPostHogInstance.alias).not.toHaveBeenCalled();
     });
 
+    it('opens the session ($session_id) only once the user is identified', () => {
+      const error = new Error('e');
+
+      // Pre-login: run_id is present, $session_id is not.
+      analytics.captureException(error);
+      const beforeLogin = (mockPostHogInstance.captureException as jest.Mock)
+        .mock.calls[0][2];
+      expect(beforeLogin).toMatchObject({ run_id: 'run-uuid' });
+      expect(beforeLogin).not.toHaveProperty('$session_id');
+
+      // Post-login: both ids ride along.
+      analytics.identifyUser({ distinct_id: 'user-123' } as unknown as ApiUser);
+      analytics.captureException(error);
+      expect(
+        (mockPostHogInstance.captureException as jest.Mock).mock.calls[1][2],
+      ).toMatchObject({ run_id: 'run-uuid', $session_id: 'session-uuid' });
+    });
+
     it('omits person properties the user does not have', () => {
       analytics.identifyUser({
         distinct_id: 'user-123',
@@ -249,6 +285,7 @@ describe('Analytics', () => {
       expect(result?.properties).toEqual({
         $app_name: 'wizard',
         build: 'dev',
+        run_id: 'run-uuid',
         command: 'slack',
         $exception_list: [{ type: 'Error' }],
       });
@@ -411,6 +448,7 @@ describe('Analytics', () => {
           team: ANALYTICS_TEAM_TAG,
           $app_name: 'wizard',
           build: 'dev',
+          run_id: 'run-uuid',
           integration: 'nextjs',
           localMcp: true,
           debug: false,
@@ -435,6 +473,8 @@ describe('Analytics', () => {
           team: ANALYTICS_TEAM_TAG,
           $app_name: 'wizard',
           build: 'dev',
+          run_id: 'run-uuid',
+          $session_id: 'session-uuid',
           integration: 'svelte',
         },
       );
