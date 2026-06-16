@@ -109,7 +109,7 @@ export async function checkAllExternalServices(): Promise<AllServicesHealth> {
     checkGithubReleasesHealth(),
   ]);
 
-  return {
+  const health: AllServicesHealth = {
     anthropic,
     posthogOverall,
     posthogComponents,
@@ -121,6 +121,50 @@ export async function checkAllExternalServices(): Promise<AllServicesHealth> {
     llmGateway,
     mcp,
     githubReleases,
+  };
+  return reconcilePosthogReachability(health);
+}
+
+/**
+ * When a PostHog-owned endpoint probe returns `NoConnection`, decide
+ * whether it's a real outage or a likely-local issue by checking the
+ * official status page (`posthogstatus.com`):
+ *
+ *   - Status page says PostHog is `Down` / `Degraded` → upgrade
+ *     llmGateway / mcp to `Down`. The status page corroborates.
+ *   - Status page is `Healthy` → keep `NoConnection`. The status page
+ *     contradicts; this is probably the user's network.
+ *   - Status page is also `NoConnection` → keep `NoConnection`. User
+ *     can't reach two independent PostHog properties; almost
+ *     certainly their network.
+ *
+ * Mutates a copy of `health` and returns it.
+ */
+export function reconcilePosthogReachability(
+  health: AllServicesHealth,
+): AllServicesHealth {
+  const posthogStatus = health.posthogOverall.status;
+  const corroboratesOutage =
+    posthogStatus === ServiceHealthStatus.Down ||
+    posthogStatus === ServiceHealthStatus.Degraded;
+
+  if (!corroboratesOutage) return health;
+
+  const upgrade = (r: BaseHealthResult): BaseHealthResult =>
+    r.status === ServiceHealthStatus.NoConnection
+      ? {
+          ...r,
+          status: ServiceHealthStatus.Down,
+          error: r.error
+            ? `${r.error} (corroborated by status page)`
+            : 'corroborated by status page',
+        }
+      : r;
+
+  return {
+    ...health,
+    llmGateway: upgrade(health.llmGateway),
+    mcp: upgrade(health.mcp),
   };
 }
 
@@ -163,7 +207,11 @@ function describeComponents(label: string, h: ComponentHealthResult): string {
   return `${label} components impacted: ${shown.join(', ')}${suffix}`;
 }
 
-const READINESS_TIMEOUT_MS = 10_000;
+// Each probe can take up to one base timeout + two retries with the
+// 500ms / 2000ms backoffs in endpoints.ts (worst case ~17.5s for a
+// network failure that exhausts retries). Probes run in parallel so
+// the aggregate ceiling is one probe, not the sum.
+const READINESS_TIMEOUT_MS = 20_000;
 
 export async function evaluateWizardReadiness(
   config: WizardReadinessConfig = DEFAULT_WIZARD_READINESS_CONFIG,
@@ -237,6 +285,11 @@ const COMPONENT_KEYS: HealthCheckKey[] = [
 
 /**
  * Get the keys of services that would block a wizard run per the given config.
+ *
+ * `NoConnection` blocks the same services as `Down` — the wizard genuinely
+ * can't continue if it can't reach the gateway. The screen shows softer
+ * framing in that case (HealthCheckScreen) so we don't falsely accuse
+ * PostHog of an outage when the user's network is the likely cause.
  */
 export function getBlockingServiceKeys(
   health: AllServicesHealth,
@@ -247,7 +300,8 @@ export function getBlockingServiceKeys(
     const result = health[key];
     if (
       config.downBlocksRun.includes(key) &&
-      result.status === ServiceHealthStatus.Down
+      (result.status === ServiceHealthStatus.Down ||
+        result.status === ServiceHealthStatus.NoConnection)
     ) {
       return true;
     }
