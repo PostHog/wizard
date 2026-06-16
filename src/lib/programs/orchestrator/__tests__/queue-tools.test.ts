@@ -57,6 +57,18 @@ describe('checkEnqueueGuards', () => {
     const r = checkEnqueueGuards(ctx, { type: 'init', reason: 'x' });
     expect(r).toEqual({ ok: true });
   });
+
+  it('refuses to grow the queue past the runaway cap', () => {
+    for (let i = 0; i < 30; i++) {
+      store.enqueue({ type: 'capture', inputs: { i } });
+    }
+    const r = checkEnqueueGuards(ctx, {
+      type: 'init',
+      inputs: { i: 30 },
+      reason: 'x',
+    });
+    expect(r).toMatchObject({ ok: false, guard: 'queue-full' });
+  });
 });
 
 describe('apply functions', () => {

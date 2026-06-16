@@ -43,7 +43,7 @@ import {
   resolveTask,
   taskModel,
   type OrchestratorPromptContext,
-} from './agent-prompt-loader';
+} from '../../agent/agent-prompt-loader';
 
 function toTodoStatus(status: TaskStatus): string {
   switch (status) {
