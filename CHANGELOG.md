@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.22.1](https://github.com/PostHog/wizard/compare/v2.22.0...v2.22.1) (2026-06-16)
+
+
+### Bug Fixes
+
+* **agent:** don't fail a successful run on a post-completion socket close ([#662](https://github.com/PostHog/wizard/issues/662)) ([ae606f1](https://github.com/PostHog/wizard/commit/ae606f1cb073f5e255637550a4bafcc16d68b959))
+* health-check-retry ([#671](https://github.com/PostHog/wizard/issues/671)) ([cbb64b1](https://github.com/PostHog/wizard/commit/cbb64b1004f6fba600a81008c666f87d70d2c752))
+
 ## [2.22.0](https://github.com/PostHog/wizard/compare/v2.21.0...v2.22.0) (2026-06-15)
 
 
