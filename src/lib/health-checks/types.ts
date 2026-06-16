@@ -2,6 +2,14 @@ export enum ServiceHealthStatus {
   Healthy = 'healthy',
   Degraded = 'degraded',
   Down = 'down',
+  /**
+   * Probe failed (network error, timeout, DNS failure) AND we have no
+   * corroborating status-page incident. The service may be fine — the
+   * user's network is the likely culprit. Distinct from `Down`, which
+   * is confirmed (HTTP 5xx or status-page incident). User-facing label:
+   * "No connection".
+   */
+  NoConnection = 'no-connection',
 }
 
 export interface BaseHealthResult {
