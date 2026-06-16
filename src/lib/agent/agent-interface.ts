@@ -1067,6 +1067,16 @@ export async function runAgent(
       return { error: AgentErrorType.RESOURCE_MISSING };
     }
 
+    // A clean success result already arrived. The Claude SDK can emit a second
+    // error result during teardown (e.g. "API Error: The socket connection was
+    // closed unexpectedly" when the streaming connection drops on cleanup),
+    // whose text lands in `signals` — so the API-error checks below would
+    // escalate that teardown noise to a fatal error. A finished run is
+    // finished; mirror the catch-path guard and complete successfully.
+    if (receivedSuccessResult) {
+      return completeWithSuccess();
+    }
+
     // Check for API errors (rate limits, etc.)
     // Surface just the API error line(s), not the entire output
     const apiErrorMessage = signals.apiErrorMessage() ?? 'Unknown API error';

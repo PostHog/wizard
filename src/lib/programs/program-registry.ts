@@ -27,6 +27,7 @@ import {
   mcpRemoveConfig,
   mcpTutorialConfig,
 } from './mcp/index.js';
+import { slackConnectConfig } from './slack/index.js';
 
 // Generic skill program — runs an arbitrary context-mill skill chosen at
 // dispatch time (session.skillId) rather than a registered named program.
@@ -71,6 +72,7 @@ export const PROGRAM_REGISTRY = [
   mcpAddConfig,
   mcpRemoveConfig,
   mcpTutorialConfig,
+  slackConnectConfig,
 ] as const satisfies readonly ProgramConfig[];
 
 /**
@@ -91,6 +93,7 @@ export const Program = {
   McpAdd: mcpAddConfig.id,
   McpRemove: mcpRemoveConfig.id,
   McpTutorial: mcpTutorialConfig.id,
+  SlackConnect: slackConnectConfig.id,
 } as const;
 
 /** Compile-time union of every registered program id. */

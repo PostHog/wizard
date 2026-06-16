@@ -115,6 +115,13 @@ export interface ProgramRun {
    * always returns a "batch your questions" error regardless of the cap.
    */
   maxQuestions?: number;
+  /**
+   * Per-question `wizard_ask` timeout in milliseconds. Defaults to
+   * DEFAULT_ASK_TIMEOUT_MS (5 minutes). Raise it for programs whose
+   * questions send the user off to do slow work (run a build, create a
+   * key in the browser) before they can answer.
+   */
+  askTimeoutMs?: number;
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────
@@ -298,6 +305,15 @@ export async function runProgram(
 
   analytics.setGroups(groupsFromUser(user, host));
 
+  // 4.5. AI opt-in enforcement. Parks here while AiOptInRequiredScreen is
+  // up if the org hasn't approved third-party AI — BEFORE the skill
+  // install and agent start, so no source leaves the machine. The screen
+  // alone is cosmetic; this await is the actual gate. Resolves
+  // immediately when the program declared requiresAi: false or in CI.
+  logToFile('[agent-runner] checking AI opt-in gate');
+  await getUI().waitForAiOptIn();
+  logToFile('[agent-runner] AI opt-in gate cleared');
+
   // 5. Skill install (if skillId provided)
   let skillPath: string | undefined;
   if (config.skillId) {
@@ -351,6 +367,7 @@ export async function runProgram(
     : createWizardAskBridge({
         getSource: () => session.skillId ?? config.integrationLabel,
         showQuestion: (q) => getUI().requestQuestion(q),
+        timeoutMs: config.askTimeoutMs,
       });
 
   const agent = await initializeAgent(

@@ -43,6 +43,7 @@ export interface ProgramReadyContext {
     config: FrameworkConfig,
   ) => void;
   readonly setDetectedFramework: (label: string) => void;
+  readonly setSkillId: (skillId: string | null) => void;
   readonly setUnsupportedVersion: (info: {
     current: string;
     minimum: string;
@@ -170,6 +171,19 @@ export interface ProgramConfig {
   description: string;
   /** Unique program id — matches the Program enum value */
   id: string;
+  /**
+   * Whether this program's agent run requires third-party AI services.
+   *
+   * When true (the default), the wizard checks
+   * `apiUser.organization.is_ai_data_processing_approved` after auth and
+   * renders `AiOptInRequiredScreen` if the org has not opted in. Matches
+   * Max's strict reading: only literal `true` proceeds.
+   *
+   * Opt out (set to `false`) for programs that don't run the agent —
+   * doctor, mcp install/remove/tutorial, source-map upload. The safe
+   * default is `true` so future programs gate by declaration.
+   */
+  requiresAi?: boolean;
   /**
    * Context-mill skill ID this program installs and runs. When present,
    * bin.ts seeds `session.skillId` with this value before the TUI renders

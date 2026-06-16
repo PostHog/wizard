@@ -7,6 +7,7 @@ import {
 import type { WizardSession } from '@lib/wizard-session';
 import type { ApiUser } from '@lib/api';
 import { v4 as uuidv4 } from 'uuid';
+import { IS_PRODUCTION_BUILD } from '@env';
 import { debug } from './debug';
 
 /**
@@ -52,6 +53,8 @@ export class Analytics {
     {};
   private distinctId?: string;
   private anonymousId: string;
+  private runId: string;
+  private sessionId: string | null = null;
   private appName = 'wizard';
   private activeFlags: Record<string, string> | null = null;
   private groups: Record<string, string> = {};
@@ -63,22 +66,82 @@ export class Analytics {
       flushInterval: 0,
       enableExceptionAutocapture: true,
       before_send: (event) => {
-        if (event && Object.keys(this.groups).length > 0) {
+        if (!event) return event;
+        if (Object.keys(this.groups).length > 0) {
           event.groups = { ...this.groups, ...event.groups };
+        }
+        // Autocaptured exceptions arrive with a random uuid and
+        // `$process_person_profile: false` — reattach the run's identity
+        // and tags so they land on the same person as everything else.
+        if (event.event === '$exception') {
+          event.distinctId = this.distinctId ?? this.anonymousId;
+          const { $process_person_profile, ...properties } =
+            event.properties ?? {};
+          void $process_person_profile;
+          event.properties = { ...this.tags, ...properties };
         }
         return event;
       },
     });
 
     this.tags = { $app_name: this.appName };
+    // Tag every run with its build type so prod / dev / ci segment cleanly
+    // in analytics. tsdown inlines IS_PRODUCTION_BUILD to `true` in published
+    // builds and `false` for dev/tsx/test runs. CI runs (always non-prod
+    // builds) upgrade this to 'ci' in runWizardCI.
+    this.tags.build = IS_PRODUCTION_BUILD ? 'prod' : 'dev';
 
     this.anonymousId = uuidv4();
+
+    // One id per process = one id per wizard run, registered in the tag bag
+    // so it rides on every capture, exception, and autocaptured exception
+    // (all of which merge `this.tags`). Lets you separate two runs by the
+    // same logged-in user, who otherwise share one distinct id. Distinct
+    // from `anonymousId`, the pre-login *person* id that gets aliased onto
+    // the real user at login. `$session_id` is intentionally not set here —
+    // it stays null until OAuth completes (see identifyUser).
+    this.runId = uuidv4();
+    this.tags.run_id = this.runId;
 
     this.distinctId = undefined;
   }
 
-  setDistinctId(distinctId: string) {
+  /**
+   * Associate the run with the logged-in user, once per id: identify them
+   * (email, name), then alias the run's anonymous id onto the identified
+   * person so pre-login events merge in. Alias only ever fires after
+   * identification.
+   */
+  identifyUser(user: ApiUser) {
+    const distinctId = user.distinct_id;
+    if (this.distinctId === distinctId || distinctId === this.anonymousId) {
+      return;
+    }
     this.distinctId = distinctId;
+    // Open the analytics session on first login. Null until here, so
+    // pre-OAuth events carry only `run_id`; from now on every event also
+    // carries `$session_id` and PostHog groups the authenticated run into a
+    // native Session. Stored in the tag bag so it rides on every subsequent
+    // capture and exception.
+    if (!this.sessionId) {
+      this.sessionId = uuidv4();
+      this.tags.$session_id = this.sessionId;
+    }
+    this.client.identify({
+      distinctId,
+      properties: {
+        $set: {
+          ...(user.email ? { email: user.email } : {}),
+          ...(user.first_name || user.last_name
+            ? {
+                name: [user.first_name, user.last_name]
+                  .filter(Boolean)
+                  .join(' '),
+              }
+            : {}),
+        },
+      },
+    });
     this.client.alias({
       distinctId,
       alias: this.anonymousId,
@@ -172,6 +235,10 @@ export class Analytics {
       distinctId: this.distinctId ?? this.anonymousId,
       event: 'setup wizard finished',
       properties: {
+        // Hoisted out of `tags` so the run's terminal event is filterable by
+        // run, and joins the session when one was opened (post-OAuth runs).
+        run_id: this.runId,
+        ...(this.sessionId ? { $session_id: this.sessionId } : {}),
         status,
         tags: this.tags,
       },

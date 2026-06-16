@@ -7,9 +7,10 @@
  */
 
 import { Box, Text } from 'ink';
-import { useSyncExternalStore } from 'react';
+import { useState, useSyncExternalStore } from 'react';
 import type { WizardStore } from '@ui/tui/store';
 import { PickerMenu } from '@ui/tui/primitives/index';
+import { PrivacyPanel } from '@ui/tui/components/PrivacyPanel';
 import { IntroScreenLayout, type DetectionRow } from './IntroScreenLayout.js';
 import {
   SOURCE_MAPS_CONTEXT_KEYS,
@@ -17,6 +18,8 @@ import {
   type SkillVariant,
   type SourceMapsDetectError,
 } from '@lib/programs/error-tracking-upload-source-maps/index';
+
+type View = 'default' | 'more-info' | 'privacy';
 
 interface SourceMapsIntroScreenProps {
   store: WizardStore;
@@ -29,6 +32,8 @@ export const SourceMapsIntroScreen = ({
     (cb) => store.subscribe(cb),
     () => store.getSnapshot(),
   );
+
+  const [view, setView] = useState<View>('default');
 
   const { session } = store;
   const detectError = session.frameworkContext[
@@ -56,28 +61,63 @@ export const SourceMapsIntroScreen = ({
     });
   }
 
-  const body = (
-    <>
-      <Box flexDirection="column" alignItems="center">
-        <Text>Upload source maps for accurate error stack traces.</Text>
+  const body =
+    view === 'more-info' ? (
+      <Box flexDirection="column" width={56} flexShrink={0}>
+        <Text>
+          The wizard is an agent that executes PostHog tasks. Its code is open
+          source: <Text color="cyan">https://github.com/PostHog/wizard</Text>.
+        </Text>
         <Box flexDirection="column" marginTop={1}>
-          <Text>The agent will wire it into your build.</Text>
+          <Text>
+            The{' '}
+            <Text italic color="cyan">
+              {session.programLabel}
+            </Text>{' '}
+            program sets up your project to upload source maps to PostHog, so
+            Error Tracking shows production stack traces in your original source
+            instead of minified bundles. It will:
+          </Text>
+        </Box>
+        <Box flexDirection="column" marginTop={1} paddingLeft={4}>
+          <Text>{'•'} Ask for a personal API key to authorize uploads</Text>
+          <Text>{'•'} Wire map generation + upload into your build</Text>
+          <Text>{'•'} Write the upload credentials to your .env</Text>
+          <Text>{'•'} Wire CI for deploys and offer a local test run</Text>
+        </Box>
+        <Box marginTop={1}>
+          <Text dimColor>
+            Maps upload to PostHog during the production build and never need to
+            be served publicly.
+          </Text>
         </Box>
       </Box>
-
-      {packagePaths.length > 1 && (
-        <Box flexDirection="column" marginTop={1}>
-          <Text dimColor>Found {packagePaths.length} package.json files:</Text>
-          {packagePaths.map((p) => (
-            <Text key={p} dimColor>
-              {'  '}
-              {'•'} {p}
-            </Text>
-          ))}
+    ) : view === 'privacy' ? (
+      <PrivacyPanel />
+    ) : (
+      <>
+        <Box flexDirection="column" alignItems="center">
+          <Text>Upload source maps for accurate error stack traces.</Text>
+          <Box flexDirection="column" marginTop={1}>
+            <Text>The agent will wire it into your build.</Text>
+          </Box>
         </Box>
-      )}
-    </>
-  );
+
+        {packagePaths.length > 1 && (
+          <Box flexDirection="column" marginTop={1}>
+            <Text dimColor>
+              Found {packagePaths.length} package.json files:
+            </Text>
+            {packagePaths.map((p) => (
+              <Text key={p} dimColor>
+                {'  '}
+                {'•'} {p}
+              </Text>
+            ))}
+          </Box>
+        )}
+      </>
+    );
 
   const errorView = detectError ? (
     <>
@@ -97,16 +137,30 @@ export const SourceMapsIntroScreen = ({
     </>
   ) : undefined;
 
-  const menuOptions = [
-    { label: 'Continue', value: 'continue' },
-    { label: 'Cancel', value: 'cancel' },
-  ];
+  const menuOptions =
+    view === 'more-info'
+      ? [
+          { label: 'Back', value: 'back' },
+          { label: 'Privacy & data usage', value: 'privacy' },
+        ]
+      : view === 'privacy'
+      ? [{ label: 'Back', value: 'back' }]
+      : [
+          { label: 'Continue', value: 'continue' },
+          { label: 'More info', value: 'more-info' },
+          { label: 'Cancel', value: 'cancel' },
+        ];
+
+  const title =
+    view === 'privacy' ? 'Wizard privacy & usage' : 'PostHog Wizard 🦔';
 
   return (
     <IntroScreenLayout
       installDir={session.installDir}
+      title={title}
+      showSubtitle={view === 'default'}
       body={body}
-      showDetection={true}
+      showDetection={view === 'default'}
       detectionRows={detectionRows}
       errorView={errorView}
       programLabel={session.programLabel}
@@ -115,6 +169,12 @@ export const SourceMapsIntroScreen = ({
       onSelect={(value) => {
         if (value === 'cancel') {
           process.exit(0);
+        } else if (value === 'more-info') {
+          setView('more-info');
+        } else if (value === 'privacy') {
+          setView('privacy');
+        } else if (value === 'back') {
+          setView(view === 'privacy' ? 'more-info' : 'default');
         } else {
           store.completeSetup();
         }

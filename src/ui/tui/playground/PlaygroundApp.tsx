@@ -22,6 +22,7 @@ import { KeyboardHintsDemo } from './demos/KeyboardHintsDemo.js';
 import { AuditChecksDemo } from './demos/AuditChecksDemo.js';
 import { LearnDeckDemo } from './demos/LearnDeckDemo.js';
 import { EndScreensDemo } from './demos/EndScreensDemo.js';
+import { AiOptInDemo } from './demos/AiOptInDemo.js';
 
 interface PlaygroundAppProps {
   store: WizardStore;
@@ -82,6 +83,16 @@ export const PlaygroundApp = ({ store }: PlaygroundAppProps) => {
       id: 'end-screens',
       label: 'End screens',
       component: <EndScreensDemo store={store} />,
+    },
+    {
+      id: 'ai-opt-in-admin',
+      label: 'AI opt-in (admin)',
+      component: <AiOptInDemo variant="admin" />,
+    },
+    {
+      id: 'ai-opt-in-nonadmin',
+      label: 'AI opt-in (non-admin)',
+      component: <AiOptInDemo variant="non-admin" />,
     },
   ];
 

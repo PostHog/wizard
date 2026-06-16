@@ -1,5 +1,46 @@
 # Changelog
 
+## [2.23.0](https://github.com/PostHog/wizard/compare/v2.22.1...v2.23.0) (2026-06-16)
+
+
+### Features
+
+* **analytics:** add run_id to every event and $session_id after login ([#661](https://github.com/PostHog/wizard/issues/661)) ([001925f](https://github.com/PostHog/wizard/commit/001925ff017e5acd431bcc8d2d05c9ac039f9aa3))
+* **analytics:** instrument privacy panel, intro menu, and settings-conflict screens ([#666](https://github.com/PostHog/wizard/issues/666)) ([f0decaf](https://github.com/PostHog/wizard/commit/f0decaf23d4a971efd5a78ee7cbeead96ae22872))
+
+
+### Bug Fixes
+
+* point Slack setup at new /integrations/slack landing page ([#676](https://github.com/PostHog/wizard/issues/676)) ([0b3738c](https://github.com/PostHog/wizard/commit/0b3738c9707e752380a45dc4ada566b7947b8c1e))
+
+## [2.22.1](https://github.com/PostHog/wizard/compare/v2.22.0...v2.22.1) (2026-06-16)
+
+
+### Bug Fixes
+
+* **agent:** don't fail a successful run on a post-completion socket close ([#662](https://github.com/PostHog/wizard/issues/662)) ([ae606f1](https://github.com/PostHog/wizard/commit/ae606f1cb073f5e255637550a4bafcc16d68b959))
+* health-check-retry ([#671](https://github.com/PostHog/wizard/issues/671)) ([cbb64b1](https://github.com/PostHog/wizard/commit/cbb64b1004f6fba600a81008c666f87d70d2c752))
+
+## [2.22.0](https://github.com/PostHog/wizard/compare/v2.21.0...v2.22.0) (2026-06-15)
+
+
+### Features
+
+* **privacy:** consolidate disclosure into Privacy & data usage panel ([#644](https://github.com/PostHog/wizard/issues/644)) ([d5273d4](https://github.com/PostHog/wizard/commit/d5273d4b464e5be19577574565de99f459fe236f))
+* **privacy:** gate runs on AI opt in org setting ([#645](https://github.com/PostHog/wizard/issues/645)) ([6cbf743](https://github.com/PostHog/wizard/commit/6cbf7430685a89def019ca965fbbd06178158e9e))
+* refresh Slack app copy and update /slack URL ([#659](https://github.com/PostHog/wizard/issues/659)) ([ddeb64a](https://github.com/PostHog/wizard/commit/ddeb64affce02cf285113b4472d8c3424b6bc24b))
+* **slack:** relabel Skip to Skip / Continue on the connect screen ([#660](https://github.com/PostHog/wizard/issues/660)) ([9979a32](https://github.com/PostHog/wizard/commit/9979a32ad89f0159aae64550092a88e29302d9ee))
+* surface a coding-agent handoff prompt on wizard exit ([#595](https://github.com/PostHog/wizard/issues/595)) ([9762ff3](https://github.com/PostHog/wizard/commit/9762ff3684040b9b361d110b9af9bb0210e52ca2))
+* upload source maps CI support ([#651](https://github.com/PostHog/wizard/issues/651)) ([84b7aad](https://github.com/PostHog/wizard/commit/84b7aad5082db4db32818427fa54e489cda9ad89))
+* utm-tag and track outbound links, fix event attribution ([#653](https://github.com/PostHog/wizard/issues/653)) ([d927119](https://github.com/PostHog/wizard/commit/d92711914445d67f3be1e2cb332c36c5119011c7))
+* wizard slack command ([#654](https://github.com/PostHog/wizard/issues/654)) ([0790389](https://github.com/PostHog/wizard/commit/0790389fbeb9791eaa1b74564dbdde4fadaae94e))
+
+
+### Bug Fixes
+
+* **oauth:** time out the login flow at 5 minutes and prompt re-run ([#658](https://github.com/PostHog/wizard/issues/658)) ([e0f35da](https://github.com/PostHog/wizard/commit/e0f35da41ef2744999a1ffcc7416a02dc6391128))
+* privacy panel for upload-source-maps ([#663](https://github.com/PostHog/wizard/issues/663)) ([a81910c](https://github.com/PostHog/wizard/commit/a81910c2ba3364a429caf4e8bab945dd943ab2d9))
+
 ## [2.21.0](https://github.com/PostHog/wizard/compare/v2.20.0...v2.21.0) (2026-06-12)
 
 

@@ -12,6 +12,7 @@ import {
 } from './wizard-ui';
 import type { SettingsConflict } from '@lib/agent/claude-settings';
 import type { ApiUser } from '@lib/api';
+import { OAUTH_TIMEOUT_MS } from '@lib/constants';
 import {
   type WizardReadinessResult,
   getBlockingServiceKeys,
@@ -39,6 +40,11 @@ export class LoggingUI implements WizardUI {
   }
 
   waitForOutroDismissed(): Promise<void> {
+    return Promise.resolve();
+  }
+
+  waitForAiOptIn(): Promise<void> {
+    // Non-TUI runs are CI runs, which auto-consent to AI usage.
     return Promise.resolve();
   }
 
@@ -194,6 +200,14 @@ export class LoggingUI implements WizardUI {
     if (detail?.logFilePath) {
       console.log(`│  Verbose log: ${detail.logFilePath}`);
     }
+  }
+
+  showSessionTimeout(): void {
+    const minutes = Math.round(OAUTH_TIMEOUT_MS / 60_000);
+    console.log(
+      `✖  Login timed out. The OAuth link timed out after ${minutes} minutes.`,
+    );
+    console.log(`│  Re-run the wizard to get a fresh link and try again.`);
   }
 
   startRun(): void {

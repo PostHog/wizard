@@ -1,4 +1,3 @@
-import opn from 'opn';
 import type { ProgramConfig } from '@lib/programs/program-step';
 import type { ProgramRun } from '@lib/agent/agent-runner';
 import { WIZARD_TOOL_NAMES } from '@lib/wizard-tools';
@@ -18,9 +17,11 @@ import { WIZARD_INTERACTION_EVENT_NAME } from '@lib/constants';
 import { getUI } from '@ui/index';
 import { getCloudUrlFromRegion } from '@utils/urls';
 import { requestDeepLink } from '@utils/provisioning';
+import { openTrackedLink, withUtm } from '@utils/links';
 import type { CloudRegion } from '@utils/types';
 import { POSTHOG_INTEGRATION_PROGRAM } from './steps.js';
 import { getContentBlocks } from './content/index.js';
+import { buildCodingAgentPrompt } from './handoff.js';
 
 const DASHBOARD_DEEP_LINK_KEY = 'dashboardDeepLink';
 
@@ -32,7 +33,10 @@ function resolveContinueUrl(
   if (!sess.signup) return undefined;
   if (typeof deepLink === 'string' && deepLink) return deepLink;
   if (cloudRegion)
-    return `${getCloudUrlFromRegion(cloudRegion)}/products?source=wizard`;
+    return withUtm(
+      `${getCloudUrlFromRegion(cloudRegion)}/products?source=wizard`,
+      'outro-continue',
+    );
   return undefined;
 }
 
@@ -230,12 +234,11 @@ Important: Use the detect_package_manager tool (from the wizard-tools MCP server
             credentials.host,
           );
           if (deepLink) {
-            sess.frameworkContext[DASHBOARD_DEEP_LINK_KEY] = deepLink;
-            if (process.env.NODE_ENV !== 'test') {
-              opn(deepLink, { wait: false }).catch(() => {
-                // opn throws in environments without a browser
-              });
-            }
+            const taggedDeepLink = withUtm(deepLink, 'dashboard-deeplink');
+            sess.frameworkContext[DASHBOARD_DEEP_LINK_KEY] = taggedDeepLink;
+            openTrackedLink(taggedDeepLink, 'dashboard-deeplink', {
+              auto: true,
+            });
           }
         }
       },
@@ -262,6 +265,7 @@ Important: Use the detect_package_manager tool (from the wizard-tools MCP server
           changes,
           docsUrl: config.metadata.docsUrl,
           continueUrl,
+          handoffPrompt: buildCodingAgentPrompt(SETUP_REPORT_FILE),
         };
       },
     };

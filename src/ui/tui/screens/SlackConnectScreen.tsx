@@ -1,7 +1,8 @@
 /**
  * SlackConnectScreen — the dedicated "Connect Slack" step shown after the
- * MCP tutorial (`wizard mcp tutorial`) and after a successful install
- * (`wizard mcp add`).
+ * MCP tutorial (`wizard mcp tutorial`), after a successful install
+ * (`wizard mcp add`), at the end of the integration flow, and as the whole
+ * program in the standalone `wizard slack` flow.
  *
  * Presents the PostHog Slack app plus role-tailored use-cases. The copy
  * adapts to whether Slack is already connected (polled while the screen
@@ -14,19 +15,24 @@
  *     who already have it aren't nagged.
  * "Skip" / "Done" / esc dismiss the step (`slackStepDismissed`) and let
  * the router advance to exit.
+ *
+ * The mcp and integration flows arrive here already authenticated. In the
+ * standalone `wizard slack` flow the program's `onInit` runs the OAuth
+ * while this screen renders the auth-wait state.
  */
 
 import { Box, Text } from 'ink';
-import { useEffect, useSyncExternalStore } from 'react';
-import opn from 'opn';
+import { useEffect, useRef, useSyncExternalStore } from 'react';
 
 import type { WizardStore } from '@ui/tui/store';
 import { Colors, Icons } from '@ui/tui/styles';
-import { PickerMenu } from '@ui/tui/primitives/index';
+import { LoadingBox, PickerMenu } from '@ui/tui/primitives/index';
 import { useKeyBindings, KeyMatch } from '@ui/tui/hooks/useKeyBindings';
 import { getSlackAppCard } from '@lib/mcp-role-prompts';
 import { fetchSlackConnected } from '@lib/api';
+import { Program } from '@lib/programs/program-registry';
 import { analytics } from '@utils/analytics';
+import { openTrackedLink, withUtm } from '@utils/links';
 
 interface SlackConnectScreenProps {
   store: WizardStore;
@@ -47,20 +53,41 @@ export const SlackConnectScreen = ({ store }: SlackConnectScreenProps) => {
 
   const role = store.session.roleAtOrganization;
   const slack = getSlackAppCard();
+  const setupUrl = withUtm(slack.setupUrl, 'slack-connect-setup');
+  const learnMoreUrl = withUtm(slack.learnMoreUrl, 'slack-connect-learn-more');
 
-  // Impression — once per mount, not per render.
-  useEffect(() => {
-    analytics.wizardCapture('slack connect shown', { role });
-  }, []);
-
-  // Seeded by the tutorial screen's prefetch (session.slackConnected),
-  // so the first render already shows the right variant. While not
-  // connected, poll: connecting Slack is a manual OAuth step in the
-  // browser, so the poll is what flips the screen to the connected
-  // state when the user comes back. Without credentials (user skipped
-  // login) it renders the connect nudge.
-  const connected = store.session.slackConnected === true;
   const credentials = store.session.credentials;
+
+  // Standalone, the program's onInit is mid-OAuth while credentials are
+  // missing. Other flows arrive authenticated, or deliberately
+  // unauthenticated (nudge without the poll).
+  const awaitingLogin =
+    store.router.activeProgram === Program.SlackConnect && !credentials;
+
+  // `slackConnected` is three-state: null until something has actually
+  // checked (the tutorial's prefetch, or this screen's first poll tick).
+  const connectedState = store.session.slackConnected;
+  const connected = connectedState === true;
+
+  // Impression — once, and only when the connected state is known, so
+  // `already_connected` is real: users who arrive connected segment apart
+  // from users who connect during the screen ('slack connect completed').
+  const known = connectedState !== null || (!credentials && !awaitingLogin);
+  const impressionFired = useRef(false);
+  useEffect(() => {
+    if (!known || impressionFired.current) return;
+    impressionFired.current = true;
+    analytics.wizardCapture('slack connect shown', {
+      role,
+      already_connected: connected,
+    });
+  }, [known, connected, role]);
+
+  // While not connected, poll: connecting Slack is a manual OAuth step in
+  // the browser, so the poll is what flips the screen to the connected
+  // state when the user comes back. The first tick also resolves the
+  // null/unknown state. Without credentials (user skipped login) it
+  // renders the connect nudge.
   useEffect(() => {
     if (!credentials || connected) return;
     let cancelled = false;
@@ -76,8 +103,17 @@ export const SlackConnectScreen = ({ store }: SlackConnectScreenProps) => {
         .then((isConnected) => {
           if (cancelled) return;
           if (isConnected) {
+            // Only a false→true flip means the user completed the Slack
+            // OAuth during this screen; true on the first-ever check just
+            // means they arrived connected.
+            if (store.session.slackConnected === false) {
+              analytics.wizardCapture('slack connect completed', { role });
+            }
             store.setSlackConnected(true);
           } else {
+            if (store.session.slackConnected === null) {
+              store.setSlackConnected(false);
+            }
             timer = setTimeout(check, POLL_INTERVAL_MS);
           }
         })
@@ -85,7 +121,11 @@ export const SlackConnectScreen = ({ store }: SlackConnectScreenProps) => {
           if (cancelled) return;
           // Capture once and stop polling — repeating a failing call
           // every tick would spam error tracking. The nudge copy is
-          // the fallback either way.
+          // the fallback either way; a failed check counts as not
+          // connected so the screen doesn't sit on the loading state.
+          if (store.session.slackConnected === null) {
+            store.setSlackConnected(false);
+          }
           analytics.captureException(
             err instanceof Error ? err : new Error(String(err)),
             { step: 'slack_connected_check' },
@@ -102,8 +142,13 @@ export const SlackConnectScreen = ({ store }: SlackConnectScreenProps) => {
     };
   }, [credentials, connected, store]);
 
+  // Leaving while connected is "done"; leaving while not connected is a
+  // skip. Two events so the funnel reads without prop gymnastics.
   const dismiss = (): void => {
-    analytics.wizardCapture('slack connect skipped', { role, connected });
+    analytics.wizardCapture(
+      connected ? 'slack connect done' : 'slack connect skipped',
+      { role, connected },
+    );
     store.setSlackStepDismissed();
   };
 
@@ -111,15 +156,9 @@ export const SlackConnectScreen = ({ store }: SlackConnectScreenProps) => {
     const choice = Array.isArray(value) ? value[0] : value;
     if (choice === ChoiceValue.Open) {
       analytics.wizardCapture('slack connect opened', { role });
-      // Fire-and-forget. opn throws in environments without a browser
-      // (headless/remote) — the setup URL is printed on screen as a
-      // fallback, so swallow the error. The screen stays up; the poll
-      // flips it to connected once the OAuth step completes.
-      if (process.env.NODE_ENV !== 'test') {
-        opn(slack.setupUrl, { wait: false }).catch(() => {
-          // No browser available — the printed URL is the fallback.
-        });
-      }
+      // The screen stays up; the poll flips it to connected once the
+      // OAuth step completes in the browser.
+      openTrackedLink(setupUrl, 'slack-connect-setup');
       return;
     }
     dismiss();
@@ -133,6 +172,37 @@ export const SlackConnectScreen = ({ store }: SlackConnectScreenProps) => {
       handler: () => dismiss(),
     },
   ]);
+
+  if (awaitingLogin) {
+    return (
+      <Box flexDirection="column" flexGrow={1} marginTop={1}>
+        <LoadingBox message="Waiting for authentication..." />
+        {store.session.loginUrl && (
+          <Box marginTop={1} flexDirection="column">
+            <Text>
+              <Text dimColor>
+                If the browser didn&apos;t open, copy and paste:
+              </Text>
+              {'\n\n'}
+              <Text color="cyan">{store.session.loginUrl}</Text>
+            </Text>
+          </Box>
+        )}
+      </Box>
+    );
+  }
+
+  // Credentials in hand but the first integration check hasn't resolved —
+  // hold the nudge so an already-connected user is never asked to connect.
+  // Flows that prefetch (mcp tutorial) arrive with the state seeded and
+  // never see this.
+  if (credentials && connectedState === null) {
+    return (
+      <Box flexDirection="column" flexGrow={1} marginTop={1}>
+        <LoadingBox message="Checking for an existing Slack connection..." />
+      </Box>
+    );
+  }
 
   return (
     <Box flexDirection="column" flexGrow={1}>
@@ -172,11 +242,11 @@ export const SlackConnectScreen = ({ store }: SlackConnectScreenProps) => {
         <Box marginTop={1} flexDirection="column">
           {!connected && (
             <Text dimColor>
-              Connect it: <Text color="cyan">{slack.setupUrl}</Text>
+              Connect it: <Text color="cyan">{setupUrl}</Text>
             </Text>
           )}
           <Text dimColor>
-            Learn more: <Text color="cyan">{slack.learnMoreUrl}</Text>
+            Learn more: <Text color="cyan">{learnMoreUrl}</Text>
           </Text>
         </Box>
 
@@ -187,7 +257,7 @@ export const SlackConnectScreen = ({ store }: SlackConnectScreenProps) => {
                 ? [{ label: 'Done', value: ChoiceValue.Skip }]
                 : [
                     { label: 'Open Slack setup', value: ChoiceValue.Open },
-                    { label: 'Skip', value: ChoiceValue.Skip },
+                    { label: 'Skip / Continue', value: ChoiceValue.Skip },
                   ]
             }
             onSelect={handleSelect}

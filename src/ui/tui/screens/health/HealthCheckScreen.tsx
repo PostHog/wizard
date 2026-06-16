@@ -114,13 +114,30 @@ export const HealthCheckScreen = ({ store }: HealthCheckScreenProps) => {
     result.health.githubReleases.status === ServiceHealthStatus.Healthy;
   const integration = store.session.integration;
 
-  const title = hasHardBlock
+  // If every blocking row is `NoConnection` (probe failed, no status-page
+  // corroboration), reframe the screen to point at the user's network
+  // instead of accusing PostHog of an outage. Mixed Down + NoConnection
+  // falls through to the confirmed-outage framing because there's still
+  // a real incident underneath.
+  const allBlockingHaveNoConnection =
+    hasHardBlock &&
+    displayKeys.every(
+      (k) => result.health[k].status === ServiceHealthStatus.NoConnection,
+    );
+
+  const title = isGithubReleasesDown
+    ? 'Ongoing service disruptions'
+    : allBlockingHaveNoConnection
+    ? "Couldn't reach PostHog"
+    : hasHardBlock
     ? 'Ongoing service disruptions'
     : 'Service disruption detected';
 
   const docsUrl = store.session.frameworkConfig?.metadata.docsUrl;
   const description = isGithubReleasesDown
     ? "The Wizard can't download necessary skills from GitHub Releases right now."
+    : allBlockingHaveNoConnection
+    ? "We couldn't reach these services from this machine. PostHog's status page shows no incidents, so this is most likely a network issue — VPN, firewall, captive portal, or flaky Wi-Fi."
     : hasHardBlock
     ? 'The Wizard cannot start while these services are down.'
     : 'Some services are degraded. You can continue, but parts of the wizard may not work reliably.';
@@ -155,7 +172,9 @@ export const HealthCheckScreen = ({ store }: HealthCheckScreenProps) => {
 
   return (
     <ModalOverlay
-      borderColor={hasHardBlock ? 'red' : 'yellow'}
+      borderColor={
+        hasHardBlock && !allBlockingHaveNoConnection ? 'red' : 'yellow'
+      }
       title={title}
       width={72}
       footer={
@@ -188,7 +207,9 @@ export const HealthCheckScreen = ({ store }: HealthCheckScreenProps) => {
             <Text color="red">{Icons.squareFilled}</Text>
             <Text dimColor> Down </Text>
             <Text color="#DC9300">{Icons.squareFilled}</Text>
-            <Text dimColor> Degraded</Text>
+            <Text dimColor> Degraded </Text>
+            <Text color="gray">{Icons.squareFilled}</Text>
+            <Text dimColor> No connection</Text>
           </Text>
         </Box>
 

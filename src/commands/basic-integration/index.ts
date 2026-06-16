@@ -1,4 +1,5 @@
 import { isNonInteractiveEnvironment } from '@utils/environment';
+import { setEntryCommand } from '@utils/links';
 import { provisionCommand } from '../provision';
 import type { Command } from '../command';
 
@@ -36,6 +37,8 @@ export const basicIntegrationCommand: Command = {
     return true;
   },
   handler: (argv) => {
+    // The bare run is the integrate flow.
+    setEntryCommand('integrate');
     // Each mode file is loaded only when its branch is taken, so a plain
     // `npx @posthog/wizard` never pulls in the CI or playground paths.
     void (async () => {
