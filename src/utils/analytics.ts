@@ -53,6 +53,8 @@ export class Analytics {
     {};
   private distinctId?: string;
   private anonymousId: string;
+  private runId: string;
+  private sessionId: string | null = null;
   private appName = 'wizard';
   private activeFlags: Record<string, string> | null = null;
   private groups: Record<string, string> = {};
@@ -83,13 +85,23 @@ export class Analytics {
     });
 
     this.tags = { $app_name: this.appName };
-    // Non-production builds tag every event so they segment out of prod
-    // data. CI runs upgrade the tag to 'ci' (see runWizardCI).
-    if (!IS_PRODUCTION_BUILD) {
-      this.tags.build = 'dev';
-    }
+    // Tag every run with its build type so prod / dev / ci segment cleanly
+    // in analytics. tsdown inlines IS_PRODUCTION_BUILD to `true` in published
+    // builds and `false` for dev/tsx/test runs. CI runs (always non-prod
+    // builds) upgrade this to 'ci' in runWizardCI.
+    this.tags.build = IS_PRODUCTION_BUILD ? 'prod' : 'dev';
 
     this.anonymousId = uuidv4();
+
+    // One id per process = one id per wizard run, registered in the tag bag
+    // so it rides on every capture, exception, and autocaptured exception
+    // (all of which merge `this.tags`). Lets you separate two runs by the
+    // same logged-in user, who otherwise share one distinct id. Distinct
+    // from `anonymousId`, the pre-login *person* id that gets aliased onto
+    // the real user at login. `$session_id` is intentionally not set here —
+    // it stays null until OAuth completes (see identifyUser).
+    this.runId = uuidv4();
+    this.tags.run_id = this.runId;
 
     this.distinctId = undefined;
   }
@@ -106,6 +118,15 @@ export class Analytics {
       return;
     }
     this.distinctId = distinctId;
+    // Open the analytics session on first login. Null until here, so
+    // pre-OAuth events carry only `run_id`; from now on every event also
+    // carries `$session_id` and PostHog groups the authenticated run into a
+    // native Session. Stored in the tag bag so it rides on every subsequent
+    // capture and exception.
+    if (!this.sessionId) {
+      this.sessionId = uuidv4();
+      this.tags.$session_id = this.sessionId;
+    }
     this.client.identify({
       distinctId,
       properties: {
@@ -214,6 +235,10 @@ export class Analytics {
       distinctId: this.distinctId ?? this.anonymousId,
       event: 'setup wizard finished',
       properties: {
+        // Hoisted out of `tags` so the run's terminal event is filterable by
+        // run, and joins the session when one was opened (post-OAuth runs).
+        run_id: this.runId,
+        ...(this.sessionId ? { $session_id: this.sessionId } : {}),
         status,
         tags: this.tags,
       },

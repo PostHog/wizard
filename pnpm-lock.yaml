@@ -9,8 +9,8 @@ importers:
   .:
     dependencies:
       '@anthropic-ai/claude-agent-sdk':
-        specifier: 0.3.146
-        version: 0.3.146(@anthropic-ai/sdk@0.81.0(zod@3.24.2))(@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@3.24.2))(zod@3.24.2)
+        specifier: 0.3.169
+        version: 0.3.169(@anthropic-ai/sdk@0.81.0(zod@3.24.2))(@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@3.24.2))(zod@3.24.2)
       '@inkjs/ui':
         specifier: ^2.0.0
         version: 2.0.0(ink@6.8.0(@types/react@19.2.14)(react@19.2.4))
@@ -203,52 +203,52 @@ packages:
     resolution: {integrity: sha512-30iZtAPgz+LTIYoeivqYo853f02jBYSd5uGnGpkFV0M3xOt9aN73erkgYAmZU43x4VfqcnLxW9Kpg3R5LC4YYw==}
     engines: {node: '>=6.0.0'}
 
-  '@anthropic-ai/claude-agent-sdk-darwin-arm64@0.3.146':
-    resolution: {integrity: sha512-0IIvlEaenq2CRSVx5Bo5BaCtHQXS87GancM35WKEYveGVLn6DI+5G7ikYuTE4AKRPkMnogFtY4BJt6LulWGj+A==}
+  '@anthropic-ai/claude-agent-sdk-darwin-arm64@0.3.169':
+    resolution: {integrity: sha512-5PJU3wqfvJUrgUF3H7iroxAGDyliKmq5q8kK+glERf8YZgmPeDMvQL4mGSB0Vf9RgBWS01dCen93TIsN0O8NPQ==}
     cpu: [arm64]
     os: [darwin]
 
-  '@anthropic-ai/claude-agent-sdk-darwin-x64@0.3.146':
-    resolution: {integrity: sha512-Dk5xJ03Ff1JXbMRP1t2wc/TyfY6xF/2Ysp31wMhFPjoNiKSPHMWaIg242+T3CHdxLWmJ8plWHL1HL5cyZ/LCkw==}
+  '@anthropic-ai/claude-agent-sdk-darwin-x64@0.3.169':
+    resolution: {integrity: sha512-1Hzt0QYG7N/ExfPbN/C92YRc3BoDnyQMJpuWLVyI/r0NmKV/se/cZbIygbvQXs2ywoXOB/EyNj/hkVHaC1G22g==}
     cpu: [x64]
     os: [darwin]
 
-  '@anthropic-ai/claude-agent-sdk-linux-arm64-musl@0.3.146':
-    resolution: {integrity: sha512-QlCid0ucdrmhUAOewfQjaofN2wlokWcfFTxSFePTSj1umk35JO7TDFP700F7jU49r1fPWIdvJpPwWGyB0DeFPA==}
+  '@anthropic-ai/claude-agent-sdk-linux-arm64-musl@0.3.169':
+    resolution: {integrity: sha512-xkmyNdU6f7HXXzgR6IZym7x41bjL3rjGrXf5PAmx9PjdThy476+TrpO1evKUza1zlVmUj4tj/jYKQsV4ER7QFw==}
     cpu: [arm64]
     os: [linux]
     libc: [musl]
 
-  '@anthropic-ai/claude-agent-sdk-linux-arm64@0.3.146':
-    resolution: {integrity: sha512-mzBXDDWWBAC/vDtAYpO1G/dq5QvJtYSPXsqcb+sNdcDhiuf4IYnYp7ytRncYlsUNDkLmX6Gk2jkWAHUUA2Lozg==}
+  '@anthropic-ai/claude-agent-sdk-linux-arm64@0.3.169':
+    resolution: {integrity: sha512-J0tyM4t5qxc2/xilsfHqcJv+fyEDhX66Nv+CMXq4mRbquZmMHhbZbh8ryb+BnKYXUeqKX3uoU/J+7K6/fjcY4g==}
     cpu: [arm64]
     os: [linux]
     libc: [glibc]
 
-  '@anthropic-ai/claude-agent-sdk-linux-x64-musl@0.3.146':
-    resolution: {integrity: sha512-E3coK1ThQT08KIX80RLcsq7DWXFllCKOzoOe32it/bdtY56TBgPY9xemwXhIJ+cVBHTI9/MpBSIlKBcFCt+yQA==}
+  '@anthropic-ai/claude-agent-sdk-linux-x64-musl@0.3.169':
+    resolution: {integrity: sha512-Me8VW91pCKgkct/y1isjKNVt+ZPMPhHk3C7O078UO1bakHD6kuPiMtugcCsg4jmmmuuywXQIQUESRbcf0GluUg==}
     cpu: [x64]
     os: [linux]
     libc: [musl]
 
-  '@anthropic-ai/claude-agent-sdk-linux-x64@0.3.146':
-    resolution: {integrity: sha512-B2baXU1tCBT5CVlD7jJMKjpC4xdO45NUIWpqImmwuOfKvlM/PITjyTXyTY662mGZf1dBmdqBBsqirwFH/jhi8Q==}
+  '@anthropic-ai/claude-agent-sdk-linux-x64@0.3.169':
+    resolution: {integrity: sha512-ktEPBwzXZagt0cntfRLlvNL0sAplt2HOCbR5iBvq2IV5dLvbEOiBjZQArIcSAN7CTQUFqkZs9HzQMdKe5QPwuQ==}
     cpu: [x64]
     os: [linux]
     libc: [glibc]
 
-  '@anthropic-ai/claude-agent-sdk-win32-arm64@0.3.146':
-    resolution: {integrity: sha512-CIwQxGX2r/yWpjCJ6ahB3smKXhghWgGTxL98+LGW52TUwqTiBnlNrH9DPqqgv1/+Hyquw6xfLrKU+StyfMgiLw==}
+  '@anthropic-ai/claude-agent-sdk-win32-arm64@0.3.169':
+    resolution: {integrity: sha512-HL9ecP82A/H8aC896Q7ETyl+nLFkMzBHfO0yvK7Lhxbi98CEpqXn3BADTAc5pEgzkO+r18+CDmZdgjTFMvGoTw==}
     cpu: [arm64]
     os: [win32]
 
-  '@anthropic-ai/claude-agent-sdk-win32-x64@0.3.146':
-    resolution: {integrity: sha512-qmxrsyaqA8s4HShqJls7ZCRjdoqN66Jo/hbjQNB3uHepD8tEO1iD19aPV4+osdLT7feMkhDBfLT07Q30R2NB5w==}
+  '@anthropic-ai/claude-agent-sdk-win32-x64@0.3.169':
+    resolution: {integrity: sha512-34pBbiKe7FNsY8LHuuTmKujmYko/cBOrKJpk9H+MOot+dSfB/FmIHq9USL17otNal5Droq9lqpezAWPBPv3lAQ==}
     cpu: [x64]
     os: [win32]
 
-  '@anthropic-ai/claude-agent-sdk@0.3.146':
-    resolution: {integrity: sha512-hK9/Ng+hOyexUemTxdIUsSWJ9o2LFi2YNWzHwz8/YMCohUYOnFMZkBiENvUAb0WIc5hieOyBZrOIlg5OewuJMg==}
+  '@anthropic-ai/claude-agent-sdk@0.3.169':
+    resolution: {integrity: sha512-pzsd0BBnlfHwAUfKouSNwDLcCxGDq+lbPZTsIdiNSLw+AQw7mjxPxqnFwd4YH7qw+E3XhlotuihCm01XzcybPQ==}
     engines: {node: '>=18.0.0'}
     peerDependencies:
       '@anthropic-ai/sdk': '>=0.93.0'
@@ -4726,44 +4726,44 @@ snapshots:
       '@jridgewell/gen-mapping': 0.3.13
       '@jridgewell/trace-mapping': 0.3.31
 
-  '@anthropic-ai/claude-agent-sdk-darwin-arm64@0.3.146':
+  '@anthropic-ai/claude-agent-sdk-darwin-arm64@0.3.169':
     optional: true
 
-  '@anthropic-ai/claude-agent-sdk-darwin-x64@0.3.146':
+  '@anthropic-ai/claude-agent-sdk-darwin-x64@0.3.169':
     optional: true
 
-  '@anthropic-ai/claude-agent-sdk-linux-arm64-musl@0.3.146':
+  '@anthropic-ai/claude-agent-sdk-linux-arm64-musl@0.3.169':
     optional: true
 
-  '@anthropic-ai/claude-agent-sdk-linux-arm64@0.3.146':
+  '@anthropic-ai/claude-agent-sdk-linux-arm64@0.3.169':
     optional: true
 
-  '@anthropic-ai/claude-agent-sdk-linux-x64-musl@0.3.146':
+  '@anthropic-ai/claude-agent-sdk-linux-x64-musl@0.3.169':
     optional: true
 
-  '@anthropic-ai/claude-agent-sdk-linux-x64@0.3.146':
+  '@anthropic-ai/claude-agent-sdk-linux-x64@0.3.169':
     optional: true
 
-  '@anthropic-ai/claude-agent-sdk-win32-arm64@0.3.146':
+  '@anthropic-ai/claude-agent-sdk-win32-arm64@0.3.169':
     optional: true
 
-  '@anthropic-ai/claude-agent-sdk-win32-x64@0.3.146':
+  '@anthropic-ai/claude-agent-sdk-win32-x64@0.3.169':
     optional: true
 
-  '@anthropic-ai/claude-agent-sdk@0.3.146(@anthropic-ai/sdk@0.81.0(zod@3.24.2))(@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@3.24.2))(zod@3.24.2)':
+  '@anthropic-ai/claude-agent-sdk@0.3.169(@anthropic-ai/sdk@0.81.0(zod@3.24.2))(@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@3.24.2))(zod@3.24.2)':
     dependencies:
       '@anthropic-ai/sdk': 0.81.0(zod@3.24.2)
       '@modelcontextprotocol/sdk': 1.29.0(@cfworker/json-schema@4.1.1)(zod@3.24.2)
       zod: 3.24.2
     optionalDependencies:
-      '@anthropic-ai/claude-agent-sdk-darwin-arm64': 0.3.146
-      '@anthropic-ai/claude-agent-sdk-darwin-x64': 0.3.146
-      '@anthropic-ai/claude-agent-sdk-linux-arm64': 0.3.146
-      '@anthropic-ai/claude-agent-sdk-linux-arm64-musl': 0.3.146
-      '@anthropic-ai/claude-agent-sdk-linux-x64': 0.3.146
-      '@anthropic-ai/claude-agent-sdk-linux-x64-musl': 0.3.146
-      '@anthropic-ai/claude-agent-sdk-win32-arm64': 0.3.146
-      '@anthropic-ai/claude-agent-sdk-win32-x64': 0.3.146
+      '@anthropic-ai/claude-agent-sdk-darwin-arm64': 0.3.169
+      '@anthropic-ai/claude-agent-sdk-darwin-x64': 0.3.169
+      '@anthropic-ai/claude-agent-sdk-linux-arm64': 0.3.169
+      '@anthropic-ai/claude-agent-sdk-linux-arm64-musl': 0.3.169
+      '@anthropic-ai/claude-agent-sdk-linux-x64': 0.3.169
+      '@anthropic-ai/claude-agent-sdk-linux-x64-musl': 0.3.169
+      '@anthropic-ai/claude-agent-sdk-win32-arm64': 0.3.169
+      '@anthropic-ai/claude-agent-sdk-win32-x64': 0.3.169
 
   '@anthropic-ai/sdk@0.81.0(zod@3.24.2)':
     dependencies:
@@ -4807,10 +4807,10 @@ snapshots:
 
   '@babel/generator@7.26.9':
     dependencies:
-      '@babel/parser': 7.29.0
-      '@babel/types': 7.29.0
-      '@jridgewell/gen-mapping': 0.3.13
-      '@jridgewell/trace-mapping': 0.3.31
+      '@babel/parser': 7.26.9
+      '@babel/types': 7.26.9
+      '@jridgewell/gen-mapping': 0.3.8
+      '@jridgewell/trace-mapping': 0.3.25
       jsesc: 3.1.0
 
   '@babel/generator@7.29.1':
@@ -4960,7 +4960,7 @@ snapshots:
 
   '@babel/parser@7.26.9':
     dependencies:
-      '@babel/types': 7.29.0
+      '@babel/types': 7.26.9
 
   '@babel/parser@7.29.0':
     dependencies:
@@ -5531,8 +5531,8 @@ snapshots:
   '@babel/template@7.26.9':
     dependencies:
       '@babel/code-frame': 7.26.2
-      '@babel/parser': 7.29.0
-      '@babel/types': 7.29.0
+      '@babel/parser': 7.26.9
+      '@babel/types': 7.26.9
 
   '@babel/template@7.28.6':
     dependencies:
@@ -5548,7 +5548,7 @@ snapshots:
       '@babel/parser': 7.29.0
       '@babel/template': 7.28.6
       '@babel/types': 7.29.0
-      debug: 4.4.3
+      debug: 4.4.0
     transitivePeerDependencies:
       - supports-color
 
@@ -5778,7 +5778,7 @@ snapshots:
   '@eslint/eslintrc@2.1.4':
     dependencies:
       ajv: 6.12.6
-      debug: 4.4.3
+      debug: 4.4.0
       espree: 9.6.1
       globals: 13.24.0
       ignore: 5.3.2
@@ -5798,7 +5798,7 @@ snapshots:
   '@humanwhocodes/config-array@0.13.0':
     dependencies:
       '@humanwhocodes/object-schema': 2.0.3
-      debug: 4.4.3
+      debug: 4.4.0
       minimatch: 3.1.2
     transitivePeerDependencies:
       - supports-color
@@ -5947,7 +5947,7 @@ snapshots:
       '@jest/test-result': 29.7.0
       '@jest/transform': 29.7.0
       '@jest/types': 29.6.3
-      '@jridgewell/trace-mapping': 0.3.31
+      '@jridgewell/trace-mapping': 0.3.25
       '@types/node': 18.19.76
       chalk: 4.1.2
       collect-v8-coverage: 1.0.2
@@ -5975,7 +5975,7 @@ snapshots:
 
   '@jest/source-map@29.6.3':
     dependencies:
-      '@jridgewell/trace-mapping': 0.3.31
+      '@jridgewell/trace-mapping': 0.3.25
       callsites: 3.1.0
       graceful-fs: 4.2.11
 
@@ -6031,7 +6031,7 @@ snapshots:
     dependencies:
       '@jridgewell/set-array': 1.2.1
       '@jridgewell/sourcemap-codec': 1.5.0
-      '@jridgewell/trace-mapping': 0.3.31
+      '@jridgewell/trace-mapping': 0.3.25
 
   '@jridgewell/remapping@2.3.5':
     dependencies:
@@ -6319,7 +6319,7 @@ snapshots:
 
   '@types/babel__template@7.4.4':
     dependencies:
-      '@babel/parser': 7.29.0
+      '@babel/parser': 7.26.9
       '@babel/types': 7.21.5
 
   '@types/babel__traverse@7.20.6':
@@ -6531,7 +6531,7 @@ snapshots:
     dependencies:
       '@typescript-eslint/typescript-estree': 5.62.0(typescript@5.7.3)
       '@typescript-eslint/utils': 5.62.0(eslint@8.57.1)(typescript@5.7.3)
-      debug: 4.4.3
+      debug: 4.4.0
       eslint: 8.57.1
       tsutils: 3.21.0(typescript@5.7.3)
     optionalDependencies:
@@ -6545,7 +6545,7 @@ snapshots:
     dependencies:
       '@typescript-eslint/types': 5.62.0
       '@typescript-eslint/visitor-keys': 5.62.0
-      debug: 4.4.3
+      debug: 4.4.0
       globby: 11.1.0
       is-glob: 4.0.3
       semver: 7.7.1
@@ -7834,7 +7834,7 @@ snapshots:
   istanbul-lib-instrument@5.2.1:
     dependencies:
       '@babel/core': 7.29.0
-      '@babel/parser': 7.29.0
+      '@babel/parser': 7.26.9
       '@istanbuljs/schema': 0.1.3
       istanbul-lib-coverage: 3.2.2
       semver: 6.3.1
@@ -7844,10 +7844,10 @@ snapshots:
   istanbul-lib-instrument@6.0.3:
     dependencies:
       '@babel/core': 7.29.0
-      '@babel/parser': 7.29.0
+      '@babel/parser': 7.26.9
       '@istanbuljs/schema': 0.1.3
       istanbul-lib-coverage: 3.2.2
-      semver: 7.7.4
+      semver: 7.7.1
     transitivePeerDependencies:
       - supports-color
 
@@ -9307,7 +9307,7 @@ snapshots:
 
   v8-to-istanbul@9.3.0:
     dependencies:
-      '@jridgewell/trace-mapping': 0.3.31
+      '@jridgewell/trace-mapping': 0.3.25
       '@types/istanbul-lib-coverage': 2.0.6
       convert-source-map: 2.0.0
 

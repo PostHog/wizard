@@ -1,8 +1,9 @@
 import { Box, Text } from 'ink';
-import { useState, useSyncExternalStore } from 'react';
+import { useEffect, useState, useSyncExternalStore } from 'react';
 import type { WizardStore } from '@ui/tui/store';
 import { ConfirmationInput, ModalOverlay } from '@ui/tui/primitives/index';
 import { Icons } from '@ui/tui/styles';
+import { analytics } from '@utils/analytics';
 
 interface SettingsOverrideScreenProps {
   store: WizardStore;
@@ -18,6 +19,13 @@ export const SettingsOverrideScreen = ({
 
   const [feedback, setFeedback] = useState<string | null>(null);
   const conflicts = store.session.settingsConflicts?.filter((c) => c.writable);
+
+  const hasConflicts = Boolean(conflicts && conflicts.length > 0);
+  useEffect(() => {
+    if (hasConflicts) {
+      analytics.wizardCapture('settings conflict shown', { kind: 'override' });
+    }
+  }, [hasConflicts]);
 
   if (!conflicts || conflicts.length === 0) {
     return null;
@@ -35,6 +43,9 @@ export const SettingsOverrideScreen = ({
           confirmLabel="Backup & continue [Enter]"
           cancelLabel="Exit [Esc]"
           onConfirm={() => {
+            analytics.wizardCapture('settings conflict accepted', {
+              kind: 'override',
+            });
             const ok = store.backupAndFixSettingsOverride();
             if (!ok) {
               setFeedback('Could not back up the settings file.');

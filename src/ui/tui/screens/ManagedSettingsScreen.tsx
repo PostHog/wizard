@@ -10,11 +10,12 @@
  */
 
 import { Box, Text } from 'ink';
-import { useSyncExternalStore } from 'react';
+import { useEffect, useSyncExternalStore } from 'react';
 import type { WizardStore } from '@ui/tui/store';
 import { ConfirmationInput, ModalOverlay } from '@ui/tui/primitives/index';
 import { Icons } from '@ui/tui/styles';
 import type { SettingsConflict } from '@lib/agent/claude-settings';
+import { analytics } from '@utils/analytics';
 
 function sourceLabel(source: SettingsConflict['source']): string {
   switch (source) {
@@ -44,11 +45,25 @@ export const ManagedSettingsScreen = ({
   const conflicts = store.session.settingsConflicts;
   const readOnlyConflicts = conflicts?.filter((c) => !c.writable);
 
+  const hasManaged = Boolean(
+    readOnlyConflicts?.some((c) => c.source === 'managed'),
+  );
+  const hasReadOnly = Boolean(
+    readOnlyConflicts && readOnlyConflicts.length > 0,
+  );
+  useEffect(() => {
+    // Read-only conflict — nothing to accept, so impression only.
+    if (hasReadOnly) {
+      analytics.wizardCapture('settings conflict shown', {
+        kind: 'managed',
+        has_managed: hasManaged,
+      });
+    }
+  }, [hasReadOnly, hasManaged]);
+
   if (!readOnlyConflicts || readOnlyConflicts.length === 0) {
     return null;
   }
-
-  const hasManaged = readOnlyConflicts.some((c) => c.source === 'managed');
 
   return (
     <ModalOverlay
