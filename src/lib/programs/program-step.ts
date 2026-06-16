@@ -1,4 +1,5 @@
-import type { WizardSession, DiscoveredFeature } from '@lib/wizard-session';
+import type { WizardSession } from '@lib/wizard-session';
+import type { DiscoveredFeature } from '@lib/discovered-features';
 import type { WizardReadinessResult } from '@lib/health-checks/readiness';
 import type { ProgramRun } from '@lib/agent/agent-runner';
 import type { Integration } from '@lib/constants';
@@ -156,6 +157,21 @@ export interface ProgramConfig {
   ciPreRun?: (session: WizardSession) => Promise<void>;
   /** Prerequisites: other program ids that must have run first */
   requires?: string[];
+  /**
+   * Discoverability metadata. When set, this program can be promoted on the
+   * post-install "Recommended next" screen — but only if its `feature` signal
+   * was found during the integration flow's `detect` step (i.e. it's in
+   * `session.discoveredFeatures`). Adding a promotable program is one registry
+   * entry: the screen iterates the registry and stays product-agnostic.
+   */
+  promotable?: {
+    /** Detection signal that makes this program a good fit for the project. */
+    feature: DiscoveredFeature;
+    /** Display name on the recommendation screen, e.g. "Revenue analytics". */
+    label: string;
+    /** One-line "why you're a fit" shown next to the label. */
+    description: string;
+  };
   /**
    * Path (relative to installDir) of the report file the program writes.
    * Mirrors `run.reportFile` but lifted to the top level so UI screens can

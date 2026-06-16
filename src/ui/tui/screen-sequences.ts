@@ -37,6 +37,7 @@ export enum ScreenId {
   Mcp = 'mcp',
   McpSuggestedPrompts = 'mcp-suggested-prompts',
   SlackConnect = 'slack-connect',
+  RecommendedNext = 'recommended-next',
   KeepSkills = 'keep-skills',
   Outro = 'outro',
   Exit = 'exit',

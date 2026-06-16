@@ -87,4 +87,30 @@ describe('getExitLine', () => {
     expect(line).toMatch(/exited\.$/);
     expect(line).not.toContain('coding agent');
   });
+
+  it('prints npx commands for recommended follow-up programs', () => {
+    const store = storeWithOutro({
+      kind: OutroKind.Success,
+      message: 'Successfully installed PostHog!',
+    });
+    store.setRecommendedFollowUps([Program.RevenueAnalyticsSetup]);
+
+    const line = stripAnsi(getExitLine(store));
+
+    expect(line).toContain('Recommended next');
+    expect(line).toContain('npx @posthog/wizard revenue');
+  });
+
+  it('omits the follow-up block when nothing was picked', () => {
+    const store = storeWithOutro({
+      kind: OutroKind.Success,
+      message: 'Successfully installed PostHog!',
+    });
+    store.setRecommendedFollowUps([]);
+
+    const line = stripAnsi(getExitLine(store));
+
+    expect(line).not.toContain('Recommended next');
+    expect(line).not.toContain('npx @posthog/wizard');
+  });
 });

@@ -15,6 +15,11 @@ import type { FrameworkConfig } from './framework-config';
 import type { WizardReadinessResult } from './health-checks/readiness';
 import type { SettingsConflict } from './agent/claude-settings';
 import type { ApiUser } from './api';
+// Type-only — erased at compile time, so no runtime cycle with program-registry.
+import type { ProgramId } from './programs/program-registry';
+// Local type-only binding for use within this file; the runtime value is
+// re-exported below.
+import type { DiscoveredFeature } from './discovered-features';
 
 export interface Credentials {
   accessToken: string;
@@ -44,10 +49,11 @@ export enum RunPhase {
 }
 
 /** Features discovered by the feature-discovery subagent */
-export enum DiscoveredFeature {
-  Stripe = 'stripe',
-  LLM = 'llm',
-}
+// `DiscoveredFeature` is defined in a dependency-free leaf module (see
+// discovered-features.ts) so program configs can reference its values at
+// module-init without risking a mid-cycle `undefined`. Re-exported here so
+// existing `@lib/wizard-session` consumers are unaffected.
+export { DiscoveredFeature } from './discovered-features';
 
 /** Additional features the agent can integrate after the main setup */
 export enum AdditionalFeature {
@@ -213,6 +219,14 @@ export interface WizardSession {
 
   // Feature discovery
   discoveredFeatures: DiscoveredFeature[];
+  /**
+   * Registered programs the project is a good fit for, derived from
+   * `discoveredFeatures` + each program's `promotable` metadata. Computed by
+   * the store as features are discovered (the store can import the program
+   * registry; the integration program's steps can't, without a load cycle).
+   * The "Recommended next" step's `show` predicate reads this.
+   */
+  promotableCandidates: ProgramId[];
   llmOptIn: boolean;
 
   // ScreenId completion
@@ -231,6 +245,9 @@ export interface WizardSession {
   slackConnected: boolean | null;
   skillsComplete: boolean;
   outroDismissed: boolean;
+  /** True once the user has acted on (confirmed or skipped) the
+   *  post-install "Recommended next" screen. */
+  recommendedNextDismissed: boolean;
 
   // Runtime
   readinessResult: WizardReadinessResult | null;
@@ -254,6 +271,14 @@ export interface WizardSession {
 
   // Additional features queue (drained via stop hook after main integration)
   additionalFeatureQueue: AdditionalFeature[];
+
+  /**
+   * Standalone programs the user picked on the "Recommended next" screen.
+   * The modular seam: today these are printed as `npx` commands on exit
+   * (exit-line.ts); a future orchestrator/queue will drain this array to run
+   * each program in-process. Empty when nothing was detected/picked.
+   */
+  recommendedFollowUps: ProgramId[];
 
   // Program metadata (set by runWizard in bin.ts)
   programLabel: string | null;
@@ -310,6 +335,7 @@ export function buildSession(args: {
 
     runPhase: RunPhase.Idle,
     discoveredFeatures: [],
+    promotableCandidates: [],
     llmOptIn: false,
     mcpComplete: false,
     mcpOutcome: null,
@@ -319,6 +345,7 @@ export function buildSession(args: {
     slackConnected: null,
     skillsComplete: false,
     outroDismissed: false,
+    recommendedNextDismissed: false,
     loginUrl: null,
     authorizeUrl: null,
     credentials: null,
@@ -334,6 +361,7 @@ export function buildSession(args: {
     dashboardUrl: null,
     notebookUrl: null,
     additionalFeatureQueue: [],
+    recommendedFollowUps: [],
     programLabel: null,
     skillId: null,
     frameworkConfig: null,

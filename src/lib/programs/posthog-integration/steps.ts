@@ -79,6 +79,17 @@ export const POSTHOG_INTEGRATION_PROGRAM: ProgramStep[] = [
     isComplete: (session) => session.outroDismissed,
   },
   {
+    id: 'recommended-next',
+    label: 'Recommended next',
+    screenId: 'recommended-next',
+    // Only shown when the project is a good fit for another program. When no
+    // candidates were detected the router skips this screen entirely.
+    // `promotableCandidates` is computed by the store (steps can't import the
+    // program registry without a module load cycle).
+    show: (session) => session.promotableCandidates.length > 0,
+    isComplete: (session) => session.recommendedNextDismissed,
+  },
+  {
     id: 'keep-skills',
     label: 'Keep Skills',
     screenId: 'keep-skills',

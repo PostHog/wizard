@@ -48,6 +48,7 @@ import type {
   ProgramReadyContext,
 } from '@lib/programs/program-step';
 import { getProgramConfig } from '@lib/programs/program-registry';
+import { getPromotableRecommendations } from '@lib/programs/promotable';
 import { withAiOptInGate } from '@lib/programs/ai-opt-in-gate';
 import { EXPANDED_COUNT } from '@ui/tui/constants';
 
@@ -586,6 +587,13 @@ export class WizardStore {
   addDiscoveredFeature(feature: DiscoveredFeature): void {
     if (!this.session.discoveredFeatures.includes(feature)) {
       this.session.discoveredFeatures.push(feature);
+      // Recompute which registered programs are now promotable. Done here
+      // (not in the integration steps) because the store can import the
+      // program registry without a module load cycle.
+      this.$session.setKey(
+        'promotableCandidates',
+        getPromotableRecommendations(this.session).map((config) => config.id),
+      );
       this.emitChange();
     }
   }
@@ -653,6 +661,21 @@ export class WizardStore {
 
   setOutroDismissed(): void {
     this.$session.setKey('outroDismissed', true);
+    this.emitChange();
+  }
+
+  /**
+   * Record the user's picks on the "Recommended next" screen and mark the
+   * screen done. `ids` may be empty (the user skipped). The picks are the
+   * modular seam consumed by exit-line.ts today and a future queue later.
+   */
+  setRecommendedFollowUps(ids: ProgramId[]): void {
+    this.$session.setKey('recommendedFollowUps', ids);
+    this.$session.setKey('recommendedNextDismissed', true);
+    analytics.wizardCapture('recommended next dismissed', {
+      recommended_follow_ups: ids,
+      ...sessionProperties(this.session),
+    });
     this.emitChange();
   }
 
