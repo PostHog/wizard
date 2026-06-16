@@ -136,7 +136,23 @@ export async function checkAllExternalServices(): Promise<AllServicesHealth> {
  *     contradicts; this is probably the user's network.
  *   - Status page is also `NoConnection` → keep `NoConnection`. User
  *     can't reach two independent PostHog properties; almost
- *     certainly their network.
+ *     certainly their network. (This case relies on incidentio.ts
+ *     correctly emitting `NoConnection` for fetch failures rather
+ *     than the previous `Degraded`, which used to silently flip the
+ *     reconciliation into a false positive.)
+ *
+ * Why `Degraded` corroborates: a `Degraded` reading here only fires
+ * when incident.io's API parsed successfully and reported a real
+ * `partial_outage` or `degraded_performance` for some component. That's
+ * PostHog acknowledging an issue, even if narrower than a full outage.
+ * If our gateway probe is also failing, those two signals together
+ * justify pointing at PostHog rather than the user.
+ *
+ * A narrower variant — only corroborate when the affected component is
+ * gateway-related (LLM, US/EU Cloud, app) — would be more precise. We
+ * have the data in `posthogComponents` but don't use it here. If the
+ * analytics show false positives concentrated in this case, it's a
+ * cheap follow-up.
  *
  * Mutates a copy of `health` and returns it.
  */

@@ -455,6 +455,40 @@ describe('health-checks', () => {
       expect(result.status).toBe(ServiceHealthStatus.Down);
     });
 
+    it('returns NoConnection when posthogstatus.com fetch fails with a network error', async () => {
+      (global.fetch as jest.Mock).mockImplementation(
+        overrideFetch({
+          [URLS.posthogIncidentIo]: () =>
+            Promise.reject(new Error('getaddrinfo ENOTFOUND')),
+        }),
+      );
+      const result = await checkPosthogOverallHealth();
+      expect(result.status).toBe(ServiceHealthStatus.NoConnection);
+    });
+
+    it('returns NoConnection when posthogstatus.com fetch times out', async () => {
+      const abortError = new Error('aborted');
+      abortError.name = 'AbortError';
+      (global.fetch as jest.Mock).mockImplementation(
+        overrideFetch({
+          [URLS.posthogIncidentIo]: () => Promise.reject(abortError),
+        }),
+      );
+      const result = await checkPosthogOverallHealth();
+      expect(result.status).toBe(ServiceHealthStatus.NoConnection);
+    });
+
+    it('returns Down when posthogstatus.com returns an HTTP error', async () => {
+      (global.fetch as jest.Mock).mockImplementation(
+        overrideFetch({
+          [URLS.posthogIncidentIo]: () =>
+            Promise.resolve(new Response('Bad Gateway', { status: 502 })),
+        }),
+      );
+      const result = await checkPosthogOverallHealth();
+      expect(result.status).toBe(ServiceHealthStatus.Down);
+    });
+
     it('returns degraded when an incident has partial_outage impact', async () => {
       const body = {
         ...POSTHOG_INCIDENTIO_HEALTHY,
@@ -1015,6 +1049,31 @@ describe('health-checks', () => {
       expect(health.llmGateway.status).toBe(ServiceHealthStatus.Down);
       expect(health.llmGateway.error).toContain('corroborated by status page');
       expect(health.mcp.status).toBe(ServiceHealthStatus.Down);
+    });
+
+    it('keeps llmGateway/mcp as NoConnection when posthogstatus.com itself is unreachable (the bug-fix scenario)', async () => {
+      // User on flaky wifi: every PostHog-owned URL fetch fails at the
+      // network layer, including posthogstatus.com. Previously
+      // incidentio.ts returned Degraded for fetch failures, which
+      // tricked reconciliation into upgrading the gateway probe to Down
+      // and showing the red "Ongoing service disruptions" screen — the
+      // exact false positive this PR fixes.
+      (global.fetch as jest.Mock).mockImplementation(
+        overrideFetch({
+          [URLS.posthogIncidentIo]: () =>
+            Promise.reject(new Error('ECONNRESET')),
+          [URLS.llmGatewayLiveness]: () =>
+            Promise.reject(new Error('ECONNRESET')),
+          [URLS.mcpLanding]: () => Promise.reject(new Error('ECONNRESET')),
+        }),
+      );
+
+      const health = await checkAllExternalServices();
+      expect(health.posthogOverall.status).toBe(
+        ServiceHealthStatus.NoConnection,
+      );
+      expect(health.llmGateway.status).toBe(ServiceHealthStatus.NoConnection);
+      expect(health.mcp.status).toBe(ServiceHealthStatus.NoConnection);
     });
 
     it('keeps llmGateway/mcp as NoConnection when status page reports no incident', async () => {
