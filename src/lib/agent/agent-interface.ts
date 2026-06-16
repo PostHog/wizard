@@ -869,6 +869,9 @@ export async function runAgent(
           ...process.env,
           // Prevent user's Anthropic API key from overriding the wizard's OAuth token
           ANTHROPIC_API_KEY: undefined,
+          // Likewise drop a stray POSTHOG_API_KEY so the agent/MCP authenticate
+          // with the wizard's OAuth credentials, not a key from the user's shell.
+          POSTHOG_API_KEY: undefined,
           // Defer MCP tool schemas to avoid bloating the system prompt.
           // The posthog-wizard MCP exposes many query tools with large schemas;
           // without deferral these consume ~113k tokens upfront, leaving

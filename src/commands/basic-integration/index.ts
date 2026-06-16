@@ -1,3 +1,4 @@
+import { wizardEnvBool, wizardEnvDefault } from '@env';
 import { isNonInteractiveEnvironment } from '@utils/environment';
 import { setEntryCommand } from '@utils/links';
 import { provisionCommand } from '../provision';
@@ -11,8 +12,8 @@ export const basicIntegrationCommand: Command = {
   children: [provisionCommand],
   options: {
     'install-dir': {
-      describe:
-        'Directory to install PostHog in\nenv: POSTHOG_WIZARD_INSTALL_DIR',
+      ...wizardEnvDefault('INSTALL_DIR'),
+      describe: 'Directory to install PostHog in\nenv: WIZARD_INSTALL_DIR',
       type: 'string',
     },
     playground: {
@@ -21,21 +22,22 @@ export const basicIntegrationCommand: Command = {
       type: 'boolean',
     },
     benchmark: {
-      default: false,
+      default: wizardEnvBool('BENCHMARK', false),
       describe:
-        'Run in benchmark mode with per-phase token tracking\nenv: POSTHOG_WIZARD_BENCHMARK',
+        'Run in benchmark mode with per-phase token tracking\nenv: WIZARD_BENCHMARK',
       type: 'boolean',
     },
     'yara-report': {
-      default: false,
+      default: wizardEnvBool('YARA_REPORT', false),
       describe:
-        'Print YARA scanner summary after the agent run\nenv: POSTHOG_WIZARD_YARA_REPORT',
+        'Print YARA scanner summary after the agent run\nenv: WIZARD_YARA_REPORT',
       type: 'boolean',
       hidden: true,
     },
     name: {
+      ...wizardEnvDefault('NAME'),
       describe:
-        'Name for account creation with --ci --signup\nenv: POSTHOG_WIZARD_NAME',
+        'Name for account creation with --ci --signup\nenv: WIZARD_NAME',
       type: 'string',
     },
   },

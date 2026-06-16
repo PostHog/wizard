@@ -347,6 +347,9 @@ export async function* runMcpPromptViaSdk(args: {
           // the PostHog LLM gateway — defeats quota tracking and the
           // OAuth flow even though our other env vars are correct.
           ANTHROPIC_API_KEY: undefined,
+          // Likewise drop a stray POSTHOG_API_KEY so the MCP authenticates
+          // with the wizard's OAuth credentials, not a key from the user's shell.
+          POSTHOG_API_KEY: undefined,
           // Defer MCP tool schemas to avoid bloating the system prompt.
           // posthog-wizard exposes many query tools with large schemas;
           // without deferral these consume ~113k tokens upfront, which
