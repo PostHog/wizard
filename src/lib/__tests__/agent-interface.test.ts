@@ -1,4 +1,9 @@
-import { runAgent, createStopHook } from '@lib/agent/agent-interface';
+import {
+  runAgent,
+  createStopHook,
+  isWarlockDisabled,
+} from '@lib/agent/agent-interface';
+import { WIZARD_WARLOCK_DISABLED_FLAG_KEY } from '@lib/constants';
 import { AgentOutputSignals } from '@lib/agent/output-signals';
 import type { WizardRunOptions } from '@utils/types';
 import type { SpinnerHandle } from '@ui';
@@ -477,5 +482,55 @@ describe('createStopHook', () => {
     const first = hook(hookInput);
     expect(first).toHaveProperty('decision', 'block');
     expect((first as { reason: string }).reason).toContain('WIZARD-REMARK');
+  });
+});
+
+describe('isWarlockDisabled (kill switch)', () => {
+  const ENV_KEY = 'POSTHOG_WIZARD_WARLOCK_DISABLED';
+  const originalEnv = process.env[ENV_KEY];
+
+  afterEach(() => {
+    if (originalEnv === undefined) {
+      delete process.env[ENV_KEY];
+    } else {
+      process.env[ENV_KEY] = originalEnv;
+    }
+  });
+
+  // Fail-safe: scanning stays ON unless something explicitly says 'true'.
+  it('is disabled (false) by default — no flags, no env', () => {
+    delete process.env[ENV_KEY];
+    expect(isWarlockDisabled()).toBe(false);
+    expect(isWarlockDisabled({})).toBe(false);
+  });
+
+  it('stays enabled when the flag is absent or not exactly "true"', () => {
+    delete process.env[ENV_KEY];
+    expect(isWarlockDisabled({ 'some-other-flag': 'true' })).toBe(false);
+    expect(
+      isWarlockDisabled({ [WIZARD_WARLOCK_DISABLED_FLAG_KEY]: 'false' }),
+    ).toBe(false);
+    // A boolean serialized to anything but the literal 'true' must not disable.
+    expect(
+      isWarlockDisabled({ [WIZARD_WARLOCK_DISABLED_FLAG_KEY]: 'True' }),
+    ).toBe(false);
+  });
+
+  it('disables scanning when the flag resolves to "true"', () => {
+    delete process.env[ENV_KEY];
+    expect(
+      isWarlockDisabled({ [WIZARD_WARLOCK_DISABLED_FLAG_KEY]: 'true' }),
+    ).toBe(true);
+  });
+
+  it('disables scanning via the local env override even with empty flags', () => {
+    process.env[ENV_KEY] = 'true';
+    expect(isWarlockDisabled({})).toBe(true);
+    expect(isWarlockDisabled()).toBe(true);
+  });
+
+  it('env override only triggers on exactly "true"', () => {
+    process.env[ENV_KEY] = '1';
+    expect(isWarlockDisabled({})).toBe(false);
   });
 });

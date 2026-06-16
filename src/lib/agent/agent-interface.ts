@@ -10,12 +10,14 @@ import { getUI, type SpinnerHandle } from '@ui';
 import { debug, logToFile, initLogFile, getLogFilePath } from '@utils/debug';
 import type { WizardRunOptions } from '@utils/types';
 import { analytics } from '@utils/analytics';
+import { runtimeEnv } from '@env';
 import {
   WIZARD_REMARK_EVENT_NAME,
   POSTHOG_PROPERTY_HEADER_PREFIX,
   WIZARD_VARIANT_FLAG_KEY,
   WIZARD_VARIANTS,
   WIZARD_USER_AGENT,
+  WIZARD_WARLOCK_DISABLED_FLAG_KEY,
 } from '@lib/constants';
 import {
   type AdditionalFeature,
@@ -245,6 +247,21 @@ export function buildWizardMetadata(
   const variant =
     (variantKey && WIZARD_VARIANTS[variantKey]) ?? WIZARD_VARIANTS['base'];
   return { ...variant };
+}
+
+/**
+ * Whether the Warlock/YARA kill switch is engaged for this run. Off by default:
+ * scanning is disabled only when the feature flag resolves to the explicit
+ * string 'true', or the local POSTHOG_WIZARD_WARLOCK_DISABLED env override is
+ * set. A missing flag, an empty flag map (the safe default returned when the
+ * flag fetch fails), or any other value all leave scanning ON — a network blip
+ * must never silently disable a security control.
+ */
+export function isWarlockDisabled(flags: Record<string, string> = {}): boolean {
+  return (
+    flags[WIZARD_WARLOCK_DISABLED_FLAG_KEY] === 'true' ||
+    runtimeEnv('POSTHOG_WIZARD_WARLOCK_DISABLED') === 'true'
+  );
 }
 
 /**
@@ -794,6 +811,16 @@ export async function runAgent(
       signalDone!();
     };
 
+    // Kill switch for Warlock/YARA scanning (off by default — see
+    // isWarlockDisabled for the fail-safe semantics).
+    const warlockDisabled = isWarlockDisabled(agentConfig.wizardFlags);
+    if (warlockDisabled) {
+      logToFile(
+        '[warlock] kill switch active — YARA scanning disabled for run',
+      );
+      analytics.wizardCapture('warlock disabled', { reason: 'kill-switch' });
+    }
+
     const response = query({
       prompt: createPromptStream(),
       options: {
@@ -933,11 +960,12 @@ export async function runAgent(
         },
         // Stop hook: drain additional feature queue, then collect remark, then allow stop
         hooks: {
-          PreToolUse: createPreToolUseYaraHooks(triageProvider),
-          PostToolUse: createPostToolUseYaraHooks(
-            triageProvider,
-            onYaraTerminate,
-          ),
+          PreToolUse: warlockDisabled
+            ? []
+            : createPreToolUseYaraHooks(triageProvider),
+          PostToolUse: warlockDisabled
+            ? []
+            : createPostToolUseYaraHooks(triageProvider, onYaraTerminate),
           Stop: [
             {
               hooks: [
