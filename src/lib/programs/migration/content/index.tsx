@@ -209,7 +209,7 @@ export const getContentBlocks = (store?: WizardStore): ContentBlock[] => [
 
   {
     content:
-      'PostHog also provides every other analytics and AI tool to build your product.',
+      'PostHog also provides every other dev and AI tool to build your product.',
     pause: 4500,
   },
 

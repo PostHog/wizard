@@ -25,6 +25,9 @@ const MIGRATION_ABORT_CASES: AbortCase[] = [
  */
 const PRODUCT_TO_SKILL_ID = {
   statsig: 'migrate-statsig',
+  mixpanel: 'migrate-mixpanel',
+  amplitude: 'migrate-amplitude',
+  sentry: 'migrate-sentry',
 } as const;
 
 type MigrateProduct = keyof typeof PRODUCT_TO_SKILL_ID;
@@ -51,23 +54,29 @@ export const migrationConfig: ProgramConfig = {
   mapCliOptions: (argv) => ({
     skillId: PRODUCT_TO_SKILL_ID[argv.product as MigrateProduct],
   }),
-  run: {
-    skillId: PRODUCT_TO_SKILL_ID.statsig,
-    integrationLabel: 'migration',
-    customPrompt: () =>
-      'Migrate this project from its existing third-party analytics, ' +
-      'feature-flag, and observability tools to PostHog. Run the `migrate` ' +
-      'skill end-to-end: follow the step chain starting at ' +
-      'references/1-presence.md. Only replace existing source-SDK call sites ' +
-      'with PostHog equivalents — make zero unrelated changes and no ' +
-      `net-new instrumentation. The final report is written to ./${MIGRATION_REPORT_FILE}.`,
-    successMessage: `Migration complete! View the report at ./${MIGRATION_REPORT_FILE}`,
-    reportFile: MIGRATION_REPORT_FILE,
-    docsUrl: '',
-    spinnerMessage: 'Migrating to PostHog...',
-    estimatedDurationMinutes: 8,
-    abortCases: MIGRATION_ABORT_CASES,
-  },
+  // `run` is a function so the per-invocation skillId set by
+  // `mapCliOptions` (`--product=<id>` → `migrate-<id>`) flows through.
+  // A static object here would freeze the skillId at module load and
+  // every `migrate` invocation would install whichever default we put
+  // in the object, regardless of the CLI flag.
+  run: (session) =>
+    Promise.resolve({
+      skillId: session.skillId ?? PRODUCT_TO_SKILL_ID.statsig,
+      integrationLabel: 'migration',
+      customPrompt: () =>
+        'Migrate this project from its existing third-party analytics, ' +
+        'feature-flag, and observability tools to PostHog. Run the `migrate` ' +
+        'skill end-to-end: follow the step chain starting at ' +
+        'references/1-presence.md. Only replace existing source-SDK call sites ' +
+        'with PostHog equivalents — make zero unrelated changes and no ' +
+        `net-new instrumentation. The final report is written to ./${MIGRATION_REPORT_FILE}.`,
+      successMessage: `Migration complete! View the report at ./${MIGRATION_REPORT_FILE}`,
+      reportFile: MIGRATION_REPORT_FILE,
+      docsUrl: '',
+      spinnerMessage: 'Migrating to PostHog...',
+      estimatedDurationMinutes: 8,
+      abortCases: MIGRATION_ABORT_CASES,
+    }),
   requires: ['posthog-integration'],
 };
 

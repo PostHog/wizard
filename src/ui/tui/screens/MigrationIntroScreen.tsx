@@ -27,6 +27,11 @@ export const MigrationIntroScreen = ({ store }: MigrationIntroScreenProps) => {
       body={body}
       programLabel={session.programLabel}
       skillId={session.skillId}
+      detectionRows={
+        session.skillId
+          ? [{ label: 'Skill', value: session.skillId }]
+          : undefined
+      }
       menuOptions={[
         { label: 'Continue', value: 'continue' },
         { label: 'Cancel', value: 'cancel' },
