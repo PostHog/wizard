@@ -35,6 +35,7 @@ import {
   type QueuedTask,
 } from './queue';
 import { drainQueue, type RunTask } from './executor';
+import { RunMetrics } from './run-metrics';
 import {
   agentRunTools,
   assembleSeedPrompt,
@@ -107,8 +108,7 @@ export async function runOrchestrator(
   // queue transitions, with the resolved model so cheap work is attributable
   // to cheap models.
   const runStartMs = Date.now();
-  let firstStartMs: number | undefined;
-  let lastStartMs: number | undefined;
+  const metrics = new RunMetrics(runStartMs);
   const durationMs = (t: QueuedTask) =>
     t.startedAt && t.finishedAt
       ? Date.parse(t.finishedAt) - Date.parse(t.startedAt)
@@ -129,31 +129,28 @@ export async function runOrchestrator(
             dynamic: task.enqueuedBy !== 'orchestrator',
           });
           break;
-        case 'start': {
-          const now = Date.now();
+        case 'start':
           analytics.wizardCapture('orchestrator task started', {
             ...base,
-            ms_since_run_start: now - runStartMs,
-            gap_since_prev_start_ms:
-              lastStartMs === undefined ? undefined : now - lastStartMs,
+            ...metrics.recordStart(Date.now()),
           });
-          firstStartMs ??= now;
-          lastStartMs = now;
           break;
-        }
         case 'complete':
+          metrics.recordComplete(Date.now());
           analytics.wizardCapture('orchestrator task completed', {
             ...base,
             duration_ms: durationMs(task),
           });
           break;
         case 'skip':
+          metrics.recordTerminal(Date.now());
           analytics.wizardCapture('orchestrator task skipped', {
             ...base,
             duration_ms: durationMs(task),
           });
           break;
         case 'fail':
+          metrics.recordTerminal(Date.now());
           analytics.wizardCapture('orchestrator task failed', {
             ...base,
             duration_ms: durationMs(task),
@@ -353,11 +350,20 @@ export async function runOrchestrator(
   try {
     await drainQueue(store, runTask);
   } finally {
-    // Success or failure, the installed task instructions never outlive the run.
-    rmSync(path.join(session.installDir, taskSkillsRoot), {
-      recursive: true,
-      force: true,
-    });
+    // Success or failure, no run artifact outlives the run — wipe the whole
+    // cache folder (queue, handoffs, reference example, installed task
+    // instructions). The .DELETE-ME.md inside is the fallback if we don't.
+    try {
+      rmSync(path.join(session.installDir, QUEUE_DIR_NAME), {
+        recursive: true,
+        force: true,
+      });
+    } catch (err) {
+      analytics.captureException(
+        err instanceof Error ? err : new Error(String(err)),
+        { step: 'orchestrator_cache_cleanup' },
+      );
+    }
   }
 
   renderQueue();
@@ -372,8 +378,11 @@ export async function runOrchestrator(
     tasks_failed: summary.failed,
     tasks_skipped: summary.skipped,
     total_duration_ms: Date.now() - runStartMs,
-    time_to_first_task_ms:
-      firstStartMs === undefined ? undefined : firstStartMs - runStartMs,
+    ...metrics.summary(),
+    dynamic_enqueue_count: store
+      .list()
+      .filter((t) => t.enqueuedBy !== 'orchestrator').length,
+    retried_task_count: store.list().filter((t) => t.attempts > 1).length,
   });
 
   // The build step flags any unresolved conflict in its handoff; surface the
