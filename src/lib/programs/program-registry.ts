@@ -19,6 +19,7 @@ import { audit3000Config } from './audit-3000/index.js';
 import { posthogDoctorConfig } from './posthog-doctor/index.js';
 import { webAnalyticsDoctorConfig } from './web-analytics-doctor/index.js';
 import { migrationConfig } from './migration/index.js';
+import { piiBouncerConfig } from './pii-bouncer/index.js';
 import { errorTrackingUploadSourceMapsConfig } from './error-tracking-upload-source-maps/index.js';
 import { AGENT_SKILL_STEPS } from './agent-skill/index.js';
 import { getContentBlocks as agentSkillContentBlocks } from './agent-skill/content/index.js';
@@ -50,6 +51,7 @@ export const PROGRAM_REGISTRY = [
   posthogDoctorConfig,
   webAnalyticsDoctorConfig,
   migrationConfig,
+  piiBouncerConfig,
   agentSkillConfig,
   mcpAddConfig,
   mcpRemoveConfig,
@@ -67,6 +69,7 @@ export const Program = {
   RevenueAnalyticsSetup: revenueAnalyticsConfig.id,
   ErrorTrackingUploadSourceMaps: errorTrackingUploadSourceMapsConfig.id,
   Migration: migrationConfig.id,
+  PiiBouncer: piiBouncerConfig.id,
   Audit: auditConfig.id,
   EventsAudit: eventsAuditConfig.id,
   Audit3000: audit3000Config.id,
