@@ -279,6 +279,61 @@ describe('runAgent', () => {
       expect(mockUIInstance.log.error).not.toHaveBeenCalled();
     });
 
+    it('should return success when a post-success result carries an API Error', async () => {
+      // The reported failure: after a clean success result, the SDK emits a
+      // second error result whose text is "API Error: socket closed" (the
+      // streaming connection dropping on teardown). That text lands in the
+      // output signals, so the post-loop hasApiError() check would escalate
+      // teardown noise to a fatal API_ERROR. A finished run is finished.
+      function* mockGeneratorWithApiErrorAfterSuccess() {
+        yield {
+          type: 'system',
+          subtype: 'init',
+          model: 'claude-opus-4-5-20251101',
+          tools: [],
+          mcp_servers: [],
+        };
+
+        yield {
+          type: 'result',
+          subtype: 'success',
+          is_error: false,
+          num_turns: 42,
+          result: '[WIZARD-REMARK] Integration completed successfully',
+          session_id: '2ce14bda-6d86-4220-b5bb-ab24f7004290',
+          total_cost_usd: 1.23,
+        };
+
+        yield {
+          type: 'result',
+          subtype: 'error_during_execution',
+          is_error: true,
+          num_turns: 0,
+          result:
+            'API Error: The socket connection was closed unexpectedly. For more information, pass `verbose: true` in the second argument to fetch()',
+          session_id: '2ce14bda-6d86-4220-b5bb-ab24f7004290',
+          total_cost_usd: 0,
+        };
+      }
+
+      mockQuery.mockReturnValue(mockGeneratorWithApiErrorAfterSuccess());
+
+      const result = await runAgent(
+        defaultAgentConfig,
+        'test prompt',
+        defaultOptions,
+        mockSpinner as unknown as SpinnerHandle,
+        {
+          successMessage: 'Test success',
+          errorMessage: 'Test error',
+        },
+      );
+
+      expect(result).toEqual({});
+      expect(mockSpinner.stop).toHaveBeenCalledWith('Test success');
+      expect(mockUIInstance.log.error).not.toHaveBeenCalled();
+    });
+
     it('should ignore abort requests when no abort cases are registered', async () => {
       function* mockGeneratorWithAbortText() {
         yield {
