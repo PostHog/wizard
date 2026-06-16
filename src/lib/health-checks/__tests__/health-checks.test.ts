@@ -706,7 +706,7 @@ describe('health-checks', () => {
       );
       const result = await checkLlmGatewayHealth();
       expect(result.status).toBe(ServiceHealthStatus.Down);
-      expect(result.error).toBe('HTTP 302');
+      expect(result.error).toContain('HTTP 302');
     });
 
     it('returns down when gateway responds 503 (e.g. deploying)', async () => {
@@ -720,7 +720,7 @@ describe('health-checks', () => {
       );
       const result = await checkLlmGatewayHealth();
       expect(result.status).toBe(ServiceHealthStatus.Down);
-      expect(result.error).toBe('HTTP 503');
+      expect(result.error).toContain('HTTP 503');
     });
 
     it('returns down when gateway responds 502 (bad gateway)', async () => {
@@ -732,7 +732,7 @@ describe('health-checks', () => {
       );
       const result = await checkLlmGatewayHealth();
       expect(result.status).toBe(ServiceHealthStatus.Down);
-      expect(result.error).toBe('HTTP 502');
+      expect(result.error).toContain('HTTP 502');
     });
 
     it('returns no-connection on DNS resolution failure (no status-page corroboration)', async () => {
@@ -783,7 +783,7 @@ describe('health-checks', () => {
       expect(calls).toBe(3);
     });
 
-    it('does not retry on explicit HTTP errors (single attempt)', async () => {
+    it('retries on persistent HTTP errors and stays Down after all attempts fail', async () => {
       let calls = 0;
       (global.fetch as jest.Mock).mockImplementation(
         overrideFetch({
@@ -797,7 +797,50 @@ describe('health-checks', () => {
       );
       const result = await checkLlmGatewayHealth();
       expect(result.status).toBe(ServiceHealthStatus.Down);
-      expect(calls).toBe(1);
+      expect(calls).toBe(3);
+      expect(result.error).toContain('HTTP 503');
+      expect(result.error).toContain('attempts=3');
+    });
+
+    it('retries on transient 5xx and recovers if a later attempt succeeds', async () => {
+      let calls = 0;
+      (global.fetch as jest.Mock).mockImplementation(
+        overrideFetch({
+          [URLS.llmGatewayLiveness]: () => {
+            calls++;
+            if (calls < 3) {
+              return Promise.resolve(
+                new Response('Bad Gateway', { status: 502 }),
+              );
+            }
+            return Promise.resolve(
+              new Response(LLM_GATEWAY_LIVENESS_BODY, { status: 200 }),
+            );
+          },
+        }),
+      );
+      const result = await checkLlmGatewayHealth();
+      expect(result.status).toBe(ServiceHealthStatus.Healthy);
+      expect(result.rawIndicator).toContain('attempts=3');
+      expect(calls).toBe(3);
+    });
+
+    it('returns Down (not NoConnection) when last attempt got an HTTP response after earlier network errors', async () => {
+      let calls = 0;
+      (global.fetch as jest.Mock).mockImplementation(
+        overrideFetch({
+          [URLS.llmGatewayLiveness]: () => {
+            calls++;
+            if (calls < 3) return Promise.reject(new Error('ECONNRESET'));
+            return Promise.resolve(
+              new Response('Bad Gateway', { status: 502 }),
+            );
+          },
+        }),
+      );
+      const result = await checkLlmGatewayHealth();
+      expect(result.status).toBe(ServiceHealthStatus.Down);
+      expect(result.error).toContain('HTTP 502');
     });
   });
 
@@ -841,7 +884,7 @@ describe('health-checks', () => {
       );
       const result = await checkMcpHealth();
       expect(result.status).toBe(ServiceHealthStatus.Down);
-      expect(result.error).toBe('HTTP 400');
+      expect(result.error).toContain('HTTP 400');
     });
 
     it('returns down when worker responds 500', async () => {
@@ -855,7 +898,7 @@ describe('health-checks', () => {
       );
       const result = await checkMcpHealth();
       expect(result.status).toBe(ServiceHealthStatus.Down);
-      expect(result.error).toBe('HTTP 500');
+      expect(result.error).toContain('HTTP 500');
     });
 
     it('returns down when Cloudflare returns 522 (connection timed out)', async () => {
@@ -867,7 +910,7 @@ describe('health-checks', () => {
       );
       const result = await checkMcpHealth();
       expect(result.status).toBe(ServiceHealthStatus.Down);
-      expect(result.error).toBe('HTTP 522');
+      expect(result.error).toContain('HTTP 522');
     });
 
     it('returns no-connection on network failure', async () => {
@@ -906,7 +949,7 @@ describe('health-checks', () => {
       );
       const result = await checkGithubReleasesHealth();
       expect(result.status).toBe(ServiceHealthStatus.Down);
-      expect(result.error).toBe('HTTP 404');
+      expect(result.error).toContain('HTTP 404');
     });
   });
 

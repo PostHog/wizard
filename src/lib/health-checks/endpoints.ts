@@ -68,9 +68,17 @@ async function fetchEndpointHealth(
   isExpectedStatus: (status: number) => boolean = (s) => s === 200,
   redirect: 'follow' | 'manual' | 'error' = 'follow',
 ): Promise<BaseHealthResult> {
-  // Total attempts = 1 initial + RETRY_BACKOFFS_MS.length retries. Only
-  // network/timeout errors trigger a retry — explicit HTTP responses are
-  // deterministic so retrying them is wasted time and a worse spinner.
+  // Total attempts = 1 initial + RETRY_BACKOFFS_MS.length retries. Both
+  // unexpected HTTP statuses (4xx/5xx) and network errors trigger a retry:
+  // transient 5xx and Cloudflare edge blips often recover on a retry, and
+  // even nominally deterministic 4xx can be transient (CDN propagation
+  // lag after a release, token rotation, rate-limit window resets). GETs
+  // are idempotent so retrying is safe.
+  //
+  // Final status if every attempt fails:
+  //   - At least one HTTP response observed → `Down` (server-side evidence)
+  //   - Only network errors observed         → `NoConnection`
+  let lastHttpStatus: number | null = null;
   let lastError = 'Unknown error';
   let attempts = 0;
 
@@ -78,7 +86,7 @@ async function fetchEndpointHealth(
     if (i > 0) {
       const wait = RETRY_BACKOFFS_MS[i - 1];
       logToFile(
-        `[health-checks] retry ${i}/${RETRY_BACKOFFS_MS.length} for ${url} in ${wait}ms`,
+        `[health-checks] retry ${i}/${RETRY_BACKOFFS_MS.length} for ${url} in ${wait}ms (last: ${lastError})`,
       );
       await new Promise((r) => setTimeout(r, wait));
     }
@@ -88,21 +96,23 @@ async function fetchEndpointHealth(
 
     if (outcome.kind === 'response') {
       const res = outcome.res;
-      const result: BaseHealthResult = isExpectedStatus(res.status)
-        ? {
-            status: ServiceHealthStatus.Healthy,
-            rawIndicator:
-              attempts > 1
-                ? `HTTP ${res.status} (attempts=${attempts})`
-                : `HTTP ${res.status}`,
-          }
-        : downResult(`HTTP ${res.status}`);
-      logToFile(
-        `[health-checks] GET ${url} -> ${result.status}` +
-          `${result.rawIndicator ? ` (${result.rawIndicator})` : ''}` +
-          `${result.error ? ` (${result.error})` : ''}`,
-      );
-      return result;
+      if (isExpectedStatus(res.status)) {
+        const result: BaseHealthResult = {
+          status: ServiceHealthStatus.Healthy,
+          rawIndicator:
+            attempts > 1
+              ? `HTTP ${res.status} (attempts=${attempts})`
+              : `HTTP ${res.status}`,
+        };
+        logToFile(
+          `[health-checks] GET ${url} -> ${result.status}` +
+            ` (${result.rawIndicator})`,
+        );
+        return result;
+      }
+      lastHttpStatus = res.status;
+      lastError = `HTTP ${res.status}`;
+      continue;
     }
 
     lastError = outcome.timedOut
@@ -110,7 +120,10 @@ async function fetchEndpointHealth(
       : outcome.error.message;
   }
 
-  const result = noConnectionResult(lastError, attempts);
+  const result =
+    lastHttpStatus !== null
+      ? downResult(`HTTP ${lastHttpStatus} (attempts=${attempts})`)
+      : noConnectionResult(lastError, attempts);
   logToFile(
     `[health-checks] GET ${url} -> ${result.status}` +
       ` (attempts=${attempts}, ${result.error})`,
