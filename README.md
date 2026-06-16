@@ -37,16 +37,35 @@ npx @posthog/wizard mcp add
 npx @posthog/wizard mcp remove
 ```
 
+## Audit
+
+Audit an existing PostHog integration for correctness and best practices. The
+`audit` command is a **family** — run it with no subcommand to open an
+interactive picker, or pass a subcommand directly:
+
+```bash
+# Interactive picker
+npx @posthog/wizard audit
+
+# Run a specific audit
+npx @posthog/wizard audit events          # event instrumentation
+npx @posthog/wizard audit web-analytics   # web analytics setup
+npx @posthog/wizard audit all             # comprehensive audit
+```
+
+Subcommands resolve at runtime from the published skill registry, so new audits
+appear without a wizard release.
+
 ## Revenue Analytics
 
 Wire up an existing PostHog + Stripe project for revenue analytics:
 
 ```bash
-npx @posthog/wizard revenue
+npx @posthog/wizard revenue-analytics
 ```
 
 Requires PostHog and Stripe SDKs already installed. Supports `--ci` with the
-same flags as the main wizard.
+same flags as the main wizard. (Renamed from `revenue` in the CLI overhaul.)
 
 ## Headless signup + install (agents / CI)
 
@@ -156,6 +175,25 @@ ceiling, for bookkeeping:
 ```
 user:read,project:read,llm_gateway:read,dashboard:read,dashboard:write,insight:read,insight:write,query:read,notebook:read,notebook:write,health_issue:read,wizard_session:read,wizard_session:write,feature_flag:read,experiment:read,experiment_saved_metric:read,survey:read,session_recording:read,error_tracking:read,web_analytics:read,llm_analytics:read,cohort:read,person:read,annotation:read,annotation:write,activity_log:read,property_definition:read,event_definition:read,action:read,warehouse_table:read,warehouse_view:read,alert:read,subscription:read,feature_flag:write,integration:read
 ```
+
+# Command changes (CLI overhaul)
+
+The CLI was overhauled to consolidate commands into a smaller, extensible
+surface. If you used an older command, here's where it went:
+
+| Old command | New command | What changed |
+|---|---|---|
+| `wizard integrate` | `wizard` (default flow) | Command removed; the default flow runs the integration |
+| `wizard events-audit` | `wizard audit events` | Now an `audit`-family subcommand |
+| `wizard audit` (single audit) | `wizard audit [skill]` | Now a family; `wizard audit all` runs the comprehensive audit |
+| `wizard audit-3000` | *removed* | Retired |
+| `wizard revenue` | `wizard revenue-analytics` | Renamed (old `revenue` removed) |
+| `wizard upload-sourcemaps` | `wizard upload-source-maps` | Renamed; `upload-sourcemaps` still works as an alias |
+
+> **Commands vs. programs:** `integrate` was the *command*; the program behind it
+> is `posthog-integration`, which still exists and now powers the default flow.
+> Other commands depend on it via `requires: ['posthog-integration']`. The
+> program id is internal — it was never a command you typed.
 
 # Steal this code
 
