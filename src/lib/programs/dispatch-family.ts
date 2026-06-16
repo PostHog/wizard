@@ -127,7 +127,7 @@ export function buildFamilyPickerChildren(
         skill: entry.command,
       } as Arguments);
     },
-    default: entry.recommended,
+    default: entry.default,
   }));
   return [...natives, ...live];
 }

@@ -55,7 +55,7 @@ export type CliEntry = {
   role: 'command' | 'skill' | 'internal';
   command?: string;
   parentCommand?: string;
-  recommended?: boolean;
+  default?: boolean;
   displayName: string;
   description: string;
 };

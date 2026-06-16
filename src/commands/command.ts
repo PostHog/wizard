@@ -51,11 +51,11 @@ export interface Command {
    */
   interactiveDefault?: (argv: Arguments) => void | Promise<void>;
   /**
-   * When true, this child is the "recommended" leaf in its family: the
+   * When true, this child is the "default" leaf in its family: the
    * family picker pre-highlights it so a single Enter runs it. The picker
    * still always opens — this never auto-runs the child. At most one child
    * per parent should be marked. Propagated from the context-mill manifest
-   * entry's `recommended` flag through `skillCommandFactory`.
+   * entry's `default` flag through `skillCommandFactory`.
    */
   default?: boolean;
 }

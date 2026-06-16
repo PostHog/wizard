@@ -33,7 +33,7 @@ export interface FamilyCommandFactoryOpts {
  *     `skill-menu.json`. Unknown subs error with the available list.
  *   - `wizard <family>` (no positional) — `interactiveDefault` fetches the
  *     registry, builds a children list combining native + live entries, and
- *     opens the family picker. The recommended leaf (if any) is
+ *     opens the family picker. The default leaf (if any) is
  *     pre-highlighted.
  *
  * No static yargs children. New skill-backed subcommands appear after a
