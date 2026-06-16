@@ -8,7 +8,7 @@
 
 import type { WizardUI, SpinnerHandle, AuthErrorDetail } from '@ui/wizard-ui';
 import type { WizardStore } from './store.js';
-import type { SettingsConflict } from '@lib/agent/agent-interface';
+import type { SettingsConflict } from '@lib/agent/claude-settings';
 import type { WizardReadinessResult } from '@lib/health-checks/readiness';
 import type { ApiUser } from '@lib/api';
 import type {
@@ -93,6 +93,13 @@ export class InkUI implements WizardUI {
     this.store.setApiUser(user);
   }
 
+  waitForAiOptIn(): Promise<void> {
+    // Resolved immediately when no gate is registered (requiresAi: false,
+    // no auth step, or CI). Otherwise parks until _checkGates sees the
+    // org's approval flip to true — e.g. via [R]etry on the kill screen.
+    return this.store.getGate('ai-opt-in');
+  }
+
   setDetectedFramework(label: string): void {
     this.store.setDetectedFramework(label);
   }
@@ -145,6 +152,10 @@ export class InkUI implements WizardUI {
 
   showAuthError(detail?: AuthErrorDetail): void {
     this.store.showAuthError(detail);
+  }
+
+  showSessionTimeout(): void {
+    this.store.showSessionTimeout();
   }
 
   requestQuestion(question: PendingQuestion): Promise<AskAnswers> {

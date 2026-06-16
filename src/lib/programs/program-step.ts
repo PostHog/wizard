@@ -18,8 +18,8 @@ import type { WizardStore } from '@ui/tui/store';
  * Other programs (e.g. revenue analytics) register a different step list.
  */
 /**
- * Context passed to onInit callbacks — fires during store construction,
- * before bin.ts has assigned the real session.
+ * Context passed to onInit callbacks — fires when the TUI starts
+ * rendering, before bin.ts has assigned the real session.
  */
 export interface StoreInitContext {
   readonly session: WizardSession;
@@ -43,6 +43,7 @@ export interface ProgramReadyContext {
     config: FrameworkConfig,
   ) => void;
   readonly setDetectedFramework: (label: string) => void;
+  readonly setSkillId: (skillId: string | null) => void;
   readonly setUnsupportedVersion: (info: {
     current: string;
     minimum: string;
@@ -85,10 +86,11 @@ export interface ProgramStep {
   gate?: (session: WizardSession) => boolean;
 
   /**
-   * Called once during store construction, with the default session.
-   * Use for session-independent fire-and-forget work that should start
-   * as early as possible (e.g. health check kicked off while the user
-   * is still reading the intro screen).
+   * Called once when the TUI starts rendering, with the default
+   * session. Use for session-independent fire-and-forget work that
+   * should start as early as possible (e.g. health check kicked off
+   * while the user is still reading the intro screen). Never fires for
+   * a store that isn't rendering screens (tests, playground).
    */
   onInit?: (ctx: StoreInitContext) => void;
 
@@ -121,6 +123,19 @@ export interface ProgramConfig {
   description: string;
   /** Unique program id — matches the Program enum value */
   id: string;
+  /**
+   * Whether this program's agent run requires third-party AI services.
+   *
+   * When true (the default), the wizard checks
+   * `apiUser.organization.is_ai_data_processing_approved` after auth and
+   * renders `AiOptInRequiredScreen` if the org has not opted in. Matches
+   * Max's strict reading: only literal `true` proceeds.
+   *
+   * Opt out (set to `false`) for programs that don't run the agent —
+   * doctor, mcp install/remove/tutorial, source-map upload. The safe
+   * default is `true` so future programs gate by declaration.
+   */
+  requiresAi?: boolean;
   /**
    * Context-mill skill ID this program installs and runs. When present,
    * bin.ts seeds `session.skillId` with this value before the TUI renders

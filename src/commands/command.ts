@@ -1,4 +1,5 @@
 import type { Arguments, Argv, CommandModule, Options } from 'yargs';
+import { setEntryCommand } from '@utils/links';
 
 export interface Command {
   /** Yargs command name. Use `['$0']` for the default command. */
@@ -37,6 +38,11 @@ export function toCommandModule(
   cmd: Command,
   parentPath: readonly string[],
 ): CommandModule {
+  // `wizard slack` → 'slack', `wizard mcp add` → 'mcp-add'. The default
+  // `$0` resolves to '' and is skipped — its handler reports itself.
+  const entryCommand = [...parentPath, commandKeys(cmd.name)[0]]
+    .filter((key) => key !== '$0')
+    .join('-');
   return {
     command: cmd.name,
     describe: cmd.description,
@@ -55,6 +61,9 @@ export function toCommandModule(
       }
       return next;
     },
-    handler: cmd.handler ?? (() => undefined),
+    handler: (argv: Arguments) => {
+      if (entryCommand) setEntryCommand(entryCommand);
+      cmd.handler?.(argv);
+    },
   };
 }

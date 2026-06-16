@@ -1,5 +1,6 @@
 import { appendFileSync } from 'fs';
 import path from 'path';
+import { inspect } from 'node:util';
 import { getUI } from '@ui';
 import { runtimeEnv } from '@env';
 import { WIZARD_LOG_FILE } from './paths';
@@ -10,8 +11,14 @@ let consoleLoggingEnabled = false;
 
 function stringify(value: unknown): string {
   if (typeof value === 'string') return value;
-  if (value instanceof Error) return value.stack ?? '';
-  return JSON.stringify(value, null, 2);
+  if (value instanceof Error) return value.stack ?? String(value);
+  try {
+    // JSON.stringify throws on cycles and skips some values — fall back to
+    // inspect so a crash log line is never dropped.
+    return JSON.stringify(value, null, 2) ?? inspect(value, { depth: 3 });
+  } catch {
+    return inspect(value, { depth: 3 });
+  }
 }
 
 function renderLine(args: readonly unknown[]): string {

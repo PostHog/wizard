@@ -66,6 +66,13 @@ export const POSTHOG_INTEGRATION_PROGRAM: ProgramStep[] = [
     isComplete: (session) => session.mcpComplete,
   },
   {
+    id: 'slack-connect',
+    label: 'Connect Slack',
+    screenId: 'slack-connect',
+    // Always shown — the user declines via Skip/esc, never bypassed.
+    isComplete: (session) => session.slackStepDismissed,
+  },
+  {
     id: 'outro',
     label: 'Done',
     screenId: 'outro',

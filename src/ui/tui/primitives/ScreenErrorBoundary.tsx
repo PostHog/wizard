@@ -9,6 +9,7 @@ import { Box, Text } from 'ink';
 import { Component, type ReactNode } from 'react';
 import type { WizardStore } from '@ui/tui/store';
 import { OutroKind, RunPhase } from '@lib/wizard-session';
+import { logToFile } from '@utils/debug';
 
 interface Props {
   store: WizardStore;
@@ -29,6 +30,8 @@ export class ScreenErrorBoundary extends Component<Props, State> {
   componentDidCatch(error: Error): void {
     const { store } = this.props;
 
+    // The console.error below is wiped with the alt screen; this survives.
+    logToFile('[screen-error-boundary]', error);
     // eslint-disable-next-line no-console
     console.error('[ScreenErrorBoundary]', error.message, error.stack);
 

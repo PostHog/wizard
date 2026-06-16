@@ -13,6 +13,7 @@ import { McpOutcome } from '@lib/wizard-session';
 
 export const mcpAddConfig: ProgramConfig = {
   id: 'mcp-add',
+  requiresAi: false,
   description: 'Add PostHog MCP server to supported clients',
   steps: [
     {
@@ -30,6 +31,16 @@ export const mcpAddConfig: ProgramConfig = {
       // no value without a working MCP for the user to log in against.
       show: (s) => s.mcpOutcome === McpOutcome.Installed,
       isComplete: (s) => s.mcpSuggestedPromptsDismissed,
+    },
+    {
+      id: 'slack-connect',
+      label: 'Connect Slack',
+      screenId: 'slack-connect',
+      // Gate on the same successful-install signal as the tutorial step,
+      // so the "what's next" Slack prompt only appears once the user has
+      // a working MCP. No-clients / skipped / failed installs end here.
+      show: (s) => s.mcpOutcome === McpOutcome.Installed,
+      isComplete: (s) => s.slackStepDismissed,
     },
   ],
 };
@@ -50,6 +61,7 @@ export const mcpAddConfig: ProgramConfig = {
  */
 export const mcpRemoveConfig: ProgramConfig = {
   id: 'mcp-remove',
+  requiresAi: false,
   description: 'Remove PostHog MCP server from supported clients',
   steps: [
     {
@@ -73,6 +85,7 @@ export const mcpRemoveConfig: ProgramConfig = {
  */
 export const mcpTutorialConfig: ProgramConfig = {
   id: 'mcp-tutorial',
+  requiresAi: false,
   description: 'Try the PostHog MCP with your agent — no install needed',
   steps: [
     {
@@ -80,6 +93,12 @@ export const mcpTutorialConfig: ProgramConfig = {
       label: 'MCP tutorial',
       screenId: 'mcp-suggested-prompts',
       isComplete: (s) => s.mcpSuggestedPromptsDismissed,
+    },
+    {
+      id: 'slack-connect',
+      label: 'Connect Slack',
+      screenId: 'slack-connect',
+      isComplete: (s) => s.slackStepDismissed,
     },
   ],
 };

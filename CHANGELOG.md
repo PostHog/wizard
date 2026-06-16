@@ -1,5 +1,74 @@
 # Changelog
 
+## [2.22.0](https://github.com/PostHog/wizard/compare/v2.21.0...v2.22.0) (2026-06-15)
+
+
+### Features
+
+* **privacy:** consolidate disclosure into Privacy & data usage panel ([#644](https://github.com/PostHog/wizard/issues/644)) ([d5273d4](https://github.com/PostHog/wizard/commit/d5273d4b464e5be19577574565de99f459fe236f))
+* **privacy:** gate runs on AI opt in org setting ([#645](https://github.com/PostHog/wizard/issues/645)) ([6cbf743](https://github.com/PostHog/wizard/commit/6cbf7430685a89def019ca965fbbd06178158e9e))
+* refresh Slack app copy and update /slack URL ([#659](https://github.com/PostHog/wizard/issues/659)) ([ddeb64a](https://github.com/PostHog/wizard/commit/ddeb64affce02cf285113b4472d8c3424b6bc24b))
+* **slack:** relabel Skip to Skip / Continue on the connect screen ([#660](https://github.com/PostHog/wizard/issues/660)) ([9979a32](https://github.com/PostHog/wizard/commit/9979a32ad89f0159aae64550092a88e29302d9ee))
+* surface a coding-agent handoff prompt on wizard exit ([#595](https://github.com/PostHog/wizard/issues/595)) ([9762ff3](https://github.com/PostHog/wizard/commit/9762ff3684040b9b361d110b9af9bb0210e52ca2))
+* upload source maps CI support ([#651](https://github.com/PostHog/wizard/issues/651)) ([84b7aad](https://github.com/PostHog/wizard/commit/84b7aad5082db4db32818427fa54e489cda9ad89))
+* utm-tag and track outbound links, fix event attribution ([#653](https://github.com/PostHog/wizard/issues/653)) ([d927119](https://github.com/PostHog/wizard/commit/d92711914445d67f3be1e2cb332c36c5119011c7))
+* wizard slack command ([#654](https://github.com/PostHog/wizard/issues/654)) ([0790389](https://github.com/PostHog/wizard/commit/0790389fbeb9791eaa1b74564dbdde4fadaae94e))
+
+
+### Bug Fixes
+
+* **oauth:** time out the login flow at 5 minutes and prompt re-run ([#658](https://github.com/PostHog/wizard/issues/658)) ([e0f35da](https://github.com/PostHog/wizard/commit/e0f35da41ef2744999a1ffcc7416a02dc6391128))
+* privacy panel for upload-source-maps ([#663](https://github.com/PostHog/wizard/issues/663)) ([a81910c](https://github.com/PostHog/wizard/commit/a81910c2ba3364a429caf4e8bab945dd943ab2d9))
+
+## [2.21.0](https://github.com/PostHog/wizard/compare/v2.20.0...v2.21.0) (2026-06-12)
+
+
+### Features
+
+* detect existing Slack connection at the end of a wizard run ([#649](https://github.com/PostHog/wizard/issues/649)) ([06bbf79](https://github.com/PostHog/wizard/commit/06bbf794f1cffe1ccea77988a04344b56d65641c))
+
+## [2.20.0](https://github.com/PostHog/wizard/compare/v2.19.0...v2.20.0) (2026-06-12)
+
+
+### Features
+
+* **agent:** detect all gateway-auth overrides and make the 401 actionable ([#615](https://github.com/PostHog/wizard/issues/615)) ([51e54b8](https://github.com/PostHog/wizard/commit/51e54b8a1c999389f02ae612818c8cb52056d9c2))
+* Slack connect follow-ups from [#640](https://github.com/PostHog/wizard/issues/640) review ([#648](https://github.com/PostHog/wizard/issues/648)) ([f5a6f72](https://github.com/PostHog/wizard/commit/f5a6f72d128e772cbbca148a2e5e652b047920f0))
+* surface the PostHog Slack app in the MCP tutorial ([#640](https://github.com/PostHog/wizard/issues/640)) ([e9257b8](https://github.com/PostHog/wizard/commit/e9257b88108d4bead72ff2371828a73c99986e6f))
+
+
+### Bug Fixes
+
+* **agent:** make .claude/settings backup/restore resilient ([#614](https://github.com/PostHog/wizard/issues/614)) ([9c8d27a](https://github.com/PostHog/wizard/commit/9c8d27a09bc8edfb2df76c9ce34b4f1d12dccf84))
+
+## [2.19.0](https://github.com/PostHog/wizard/compare/v2.18.0...v2.19.0) (2026-06-11)
+
+
+### Features
+
+* **mcp:** granular feature selection with plugin/MCP decoupling ([#442](https://github.com/PostHog/wizard/issues/442)) ([6acf3ee](https://github.com/PostHog/wizard/commit/6acf3ee449f5b7de180b3100cc94fcb14823db7a))
+
+
+### Bug Fixes
+
+* **wizard:** Fix wizard workbench runs against local MCP/repo ([#641](https://github.com/PostHog/wizard/issues/641)) ([96e4621](https://github.com/PostHog/wizard/commit/96e4621f4d3e63331316824d30b75fce91f7ad35))
+
+## [2.18.0](https://github.com/PostHog/wizard/compare/v2.17.0...v2.18.0) (2026-06-10)
+
+
+### Features
+
+* Add Web analytics doctor ([#506](https://github.com/PostHog/wizard/issues/506)) ([025ab55](https://github.com/PostHog/wizard/commit/025ab5503b1c7b562fa066a650fbef189506c9d3))
+* attach PostHog groups to wizard analytics events ([#591](https://github.com/PostHog/wizard/issues/591)) ([752c747](https://github.com/PostHog/wizard/commit/752c747bfd7558376a30c77fc5af169361b475b8))
+* **cli:** replace --skill flag with skill command ([#618](https://github.com/PostHog/wizard/issues/618)) ([424bd51](https://github.com/PostHog/wizard/commit/424bd519bb43a4c7a524df18bdf5ad539c2c8d2d))
+
+
+### Bug Fixes
+
+* Bound the two uncapped in-memory buffers in the agent run ([#516](https://github.com/PostHog/wizard/issues/516)) ([4f59877](https://github.com/PostHog/wizard/commit/4f59877ac0a3de8d79020e872dda4f7633cb0b47))
+* ff scopes for agent skill program ([#604](https://github.com/PostHog/wizard/issues/604)) ([7f0ee00](https://github.com/PostHog/wizard/commit/7f0ee00562835ca63a8f41105d17b057e7c22fb0))
+* upload source maps command ([#630](https://github.com/PostHog/wizard/issues/630)) ([23714b3](https://github.com/PostHog/wizard/commit/23714b309d272477e505b0ca6dcb09b2b6f4dd0d))
+
 ## [2.17.0](https://github.com/PostHog/wizard/compare/v2.16.1...v2.17.0) (2026-06-05)
 
 

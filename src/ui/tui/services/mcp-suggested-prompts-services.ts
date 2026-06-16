@@ -49,6 +49,18 @@ export interface McpSuggestedPromptsServices {
   }>;
 
   /**
+   * Check whether the project already has a Slack integration
+   * connected. Drives the Goodbye card copy (confirm vs. nudge).
+   * Rejects on failure — callers treat that as "not connected".
+   * Production hits the PostHog integrations API; the playground
+   * returns a canned value.
+   */
+  checkSlackConnected(
+    credentials: Credentials,
+    signal?: AbortSignal,
+  ): Promise<boolean>;
+
+  /**
    * Run a prompt against Claude with the PostHog MCP server available
    * for tool use. Yields chunks as the agent streams. Caller is
    * responsible for honoring the abort signal — implementations should
@@ -104,6 +116,16 @@ export function createMcpSuggestedPromptsServices(
         roleAtOrganization: result.roleAtOrganization,
         user: result.user,
       };
+    },
+
+    checkSlackConnected: async (credentials, signal) => {
+      const { fetchSlackConnected } = await import('@lib/api');
+      return fetchSlackConnected(
+        credentials.accessToken,
+        credentials.projectId,
+        credentials.host,
+        signal,
+      );
     },
 
     runPromptStreaming: (args) => runProductionPromptStreaming(args),
