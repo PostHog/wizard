@@ -24,6 +24,18 @@ support, please open a [GitHub issue](https://github.com/posthog/wizard/issues)!
 
 Visit our [docs](https://posthog.com/docs/ai-engineering/ai-wizard) to learn more. 
 
+## Privacy & data usage
+
+The wizard uses **Anthropic Claude** (via PostHog's LLM gateway) to read your project's source files and integrate PostHog. A few things worth knowing up front:
+
+- **Source files** are sent to Anthropic as part of the agent's context.
+- **`.env*` files and secrets** stay on your machine. The wizard's security scanner blocks anything it identifies as a secret from being read by the agent.
+- **Telemetry** (run metadata — phase, task list, planned events) is sent to PostHog by default. Pass `--no-telemetry` (or set `POSTHOG_WIZARD_NO_TELEMETRY=1`) to disable.
+- **AI opt-in**: the wizard honors your PostHog organization's `is_ai_data_processing_approved` setting (the same toggle that gates Max). If your org has not opted in, the wizard explains how to enable it and exits without sending source to Anthropic.
+- **Prefer your own AI?** The wizard's integration knowledge ships as a context-mill skill you can download and run inside your own agent.
+
+The wizard's "Privacy & data usage" menu (intro screen) and the `[I]` shortcut on the auth screen surface the same information in-terminal.
+
 ## MCP Commands
 
 The wizard also includes commands for managing PostHog MCP (Model Context
@@ -104,6 +116,7 @@ The following CLI arguments are available:
 | `--install-dir`   | Directory to install PostHog in                                  | string  |         |                                                      | `POSTHOG_WIZARD_INSTALL_DIR`   |
 | `--ci`            | Enable CI mode for non-interactive execution                     | boolean | `false` |                                                      | `POSTHOG_WIZARD_CI`            |
 | `--api-key`       | PostHog personal API key (phx_xxx) for authentication            | string  |         |                                                      | `POSTHOG_WIZARD_API_KEY`       |
+| `--no-telemetry`  | Disable wizard run-state telemetry                               | boolean | `false` |                                                      | `POSTHOG_WIZARD_NO_TELEMETRY`  |
 
 
 # CI Mode
@@ -145,6 +158,17 @@ When creating your personal API key, ensure it has the following scopes enabled:
 - `llm_gateway:read` - Required for LLM gateway access
 - `dashboard:write` - Required to create dashboards
 - `insight:write` - Required to create insights
+
+### OAuth app scope ceiling
+
+The wizard's OAuth app on the PostHog side caps the scopes its tokens may
+carry (`OAuthApplication.scopes`). Any scope requested in this repo (see
+`src/lib/oauth/program-scopes.ts`) must be present in that list. Current
+ceiling, for bookkeeping:
+
+```
+user:read,project:read,llm_gateway:read,dashboard:read,dashboard:write,insight:read,insight:write,query:read,notebook:read,notebook:write,health_issue:read,wizard_session:read,wizard_session:write,feature_flag:read,experiment:read,experiment_saved_metric:read,survey:read,session_recording:read,error_tracking:read,web_analytics:read,llm_analytics:read,cohort:read,person:read,annotation:read,annotation:write,activity_log:read,property_definition:read,event_definition:read,action:read,warehouse_table:read,warehouse_view:read,alert:read,subscription:read,feature_flag:write,integration:read,organization:read
+```
 
 # Steal this code
 

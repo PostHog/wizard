@@ -22,6 +22,7 @@ describe('Analytics', () => {
       capture: vi.fn(),
       captureException: vi.fn(),
       alias: vi.fn(),
+      identify: vi.fn(),
       shutdown: vi.fn().mockResolvedValue(undefined),
     } as any;
 
@@ -43,6 +44,7 @@ describe('Analytics', () => {
         {
           team: ANALYTICS_TEAM_TAG,
           $app_name: 'wizard',
+          build: 'dev',
           ...properties,
         },
       );
@@ -61,6 +63,7 @@ describe('Analytics', () => {
         {
           team: ANALYTICS_TEAM_TAG,
           $app_name: 'wizard',
+          build: 'dev',
           testTag: 'testValue',
           ...properties,
         },
@@ -71,7 +74,7 @@ describe('Analytics', () => {
       const error = new Error('Test error');
       const distinctId = 'user-123';
 
-      analytics.setDistinctId(distinctId);
+      analytics.identifyUser({ distinct_id: distinctId } as unknown as ApiUser);
       analytics.captureException(error);
 
       expect(mockPostHogInstance.captureException).toHaveBeenCalledWith(
@@ -80,6 +83,7 @@ describe('Analytics', () => {
         {
           team: ANALYTICS_TEAM_TAG,
           $app_name: 'wizard',
+          build: 'dev',
         },
       );
     });
@@ -95,6 +99,7 @@ describe('Analytics', () => {
         {
           team: ANALYTICS_TEAM_TAG,
           $app_name: 'wizard',
+          build: 'dev',
         },
       );
     });
@@ -113,6 +118,7 @@ describe('Analytics', () => {
         {
           team: ANALYTICS_TEAM_TAG,
           $app_name: 'wizard',
+          build: 'dev',
           environment: 'test',
           version: '1.0.0',
           integration: 'nextjs',
@@ -134,6 +140,7 @@ describe('Analytics', () => {
         {
           team: ANALYTICS_TEAM_TAG,
           $app_name: 'wizard',
+          build: 'dev',
           integration: 'react',
         },
       );
@@ -150,8 +157,123 @@ describe('Analytics', () => {
         {
           team: ANALYTICS_TEAM_TAG,
           $app_name: 'wizard',
+          build: 'dev',
         },
       );
+    });
+  });
+
+  describe('identifyUser', () => {
+    const user = {
+      distinct_id: 'user-123',
+      email: 'v@posthog.com',
+      first_name: 'Vincent',
+      last_name: null,
+    } as unknown as ApiUser;
+
+    it('identifies the user, then merges the anonymous person in', () => {
+      analytics.identifyUser(user);
+
+      expect(mockPostHogInstance.identify).toHaveBeenCalledWith({
+        distinctId: 'user-123',
+        properties: {
+          $set: { email: 'v@posthog.com', name: 'Vincent' },
+        },
+      });
+      expect(mockPostHogInstance.alias).toHaveBeenCalledWith({
+        distinctId: 'user-123',
+        alias: 'test-uuid',
+      });
+      // Alias only ever fires after identification.
+      expect(
+        (mockPostHogInstance.identify as Mock).mock.invocationCallOrder[0],
+      ).toBeLessThan(
+        (mockPostHogInstance.alias as Mock).mock.invocationCallOrder[0],
+      );
+    });
+
+    it('runs once per user — re-login does not re-identify or re-merge', () => {
+      analytics.identifyUser(user);
+      analytics.identifyUser(user);
+
+      expect(mockPostHogInstance.identify).toHaveBeenCalledTimes(1);
+      expect(mockPostHogInstance.alias).toHaveBeenCalledTimes(1);
+    });
+
+    it('does nothing when the id is the run anonymous id itself', () => {
+      analytics.identifyUser({
+        distinct_id: 'test-uuid',
+      } as unknown as ApiUser);
+
+      expect(mockPostHogInstance.identify).not.toHaveBeenCalled();
+      expect(mockPostHogInstance.alias).not.toHaveBeenCalled();
+    });
+
+    it('omits person properties the user does not have', () => {
+      analytics.identifyUser({
+        distinct_id: 'user-123',
+      } as unknown as ApiUser);
+
+      expect(mockPostHogInstance.identify).toHaveBeenCalledWith({
+        distinctId: 'user-123',
+        properties: { $set: {} },
+      });
+    });
+  });
+
+  describe('exception repair (before_send)', () => {
+    type TestEvent = Record<string, unknown> & {
+      distinctId?: string;
+      properties?: Record<string, unknown>;
+    };
+    type BeforeSendFn = (event: TestEvent | null) => TestEvent | null;
+
+    const getBeforeSend = (): BeforeSendFn =>
+      (MockedPostHog.mock.calls[0][1] as { before_send: BeforeSendFn })
+        .before_send;
+
+    it('reattaches identity and tags to autocaptured exceptions', () => {
+      analytics.setTag('command', 'slack');
+      const beforeSend = getBeforeSend();
+
+      const result = beforeSend({
+        event: '$exception',
+        distinctId: 'random-uuidv7',
+        properties: {
+          $exception_list: [{ type: 'Error' }],
+          $process_person_profile: false,
+        },
+      });
+
+      expect(result?.distinctId).toBe('test-uuid');
+      expect(result?.properties).toEqual({
+        $app_name: 'wizard',
+        build: 'dev',
+        command: 'slack',
+        $exception_list: [{ type: 'Error' }],
+      });
+    });
+
+    it('uses the real distinct id once set', () => {
+      analytics.identifyUser({ distinct_id: 'user-123' } as unknown as ApiUser);
+      const beforeSend = getBeforeSend();
+
+      const result = beforeSend({
+        event: '$exception',
+        distinctId: 'random-uuidv7',
+        properties: {},
+      });
+
+      expect(result?.distinctId).toBe('user-123');
+    });
+
+    it('leaves non-exception events untouched', () => {
+      const beforeSend = getBeforeSend();
+      const event = { event: 'x', distinctId: 'd', properties: { a: 1 } };
+
+      expect(beforeSend(event)).toBe(event);
+      expect(event.distinctId).toBe('d');
+      expect(event.properties).toEqual({ a: 1 });
     });
   });
 
@@ -288,6 +410,7 @@ describe('Analytics', () => {
         {
           team: ANALYTICS_TEAM_TAG,
           $app_name: 'wizard',
+          build: 'dev',
           integration: 'nextjs',
           localMcp: true,
           debug: false,
@@ -297,11 +420,11 @@ describe('Analytics', () => {
       );
     });
 
-    it('should work correctly with setDistinctId and captureException', () => {
+    it('attributes exceptions to the identified user', () => {
       const error = new Error('Test error');
       const distinctId = 'user-456';
 
-      analytics.setDistinctId(distinctId);
+      analytics.identifyUser({ distinct_id: distinctId } as unknown as ApiUser);
       analytics.setTag('integration', 'svelte');
       analytics.captureException(error);
 
@@ -311,6 +434,7 @@ describe('Analytics', () => {
         {
           team: ANALYTICS_TEAM_TAG,
           $app_name: 'wizard',
+          build: 'dev',
           integration: 'svelte',
         },
       );

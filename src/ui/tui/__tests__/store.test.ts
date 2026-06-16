@@ -40,6 +40,7 @@ vi.mock('../../../lib/health-checks/readiness.js', () => ({
     YesWithWarnings: 'yes-with-warnings',
   },
   SERVICE_LABELS: {},
+  getBlockingServiceKeys: vi.fn(() => []),
 }));
 
 function createStore(program?: ProgramId): WizardStore {
@@ -342,6 +343,37 @@ describe('WizardStore', () => {
         }),
       );
     });
+
+    it('setMcpComplete includes mcp_features_selected when installed', () => {
+      const store = createStore();
+      store.setMcpComplete(McpOutcome.Installed, ['Cursor'], 'all');
+      expect(wizardCaptureMock).toHaveBeenCalledWith(
+        'mcp complete',
+        expect.objectContaining({ mcp_features_selected: 'all' }),
+      );
+
+      wizardCaptureMock.mockClear();
+      store.setMcpComplete(
+        McpOutcome.Installed,
+        ['Cursor'],
+        ['dashboards', 'insights'],
+      );
+      expect(wizardCaptureMock).toHaveBeenCalledWith(
+        'mcp complete',
+        expect.objectContaining({
+          mcp_features_selected: ['dashboards', 'insights'],
+        }),
+      );
+    });
+
+    it('setMcpComplete omits mcp_features_selected when not installed', () => {
+      const store = createStore();
+      store.setMcpComplete(McpOutcome.Skipped, [], 'all');
+      const call = wizardCaptureMock.mock.calls.find(
+        ([event]) => event === 'mcp complete',
+      );
+      expect(call?.[1]).not.toHaveProperty('mcp_features_selected');
+    });
   });
 
   // ── ScreenId resolution (derived state) ────────────────────────────
@@ -420,6 +452,7 @@ describe('WizardStore', () => {
       });
       store.setRunPhase(RunPhase.Completed);
       store.setMcpComplete();
+      store.setSlackStepDismissed();
       expect(store.currentScreen).toBe(ScreenId.Outro);
     });
 
@@ -439,6 +472,7 @@ describe('WizardStore', () => {
       });
       store.setRunPhase(RunPhase.Completed);
       store.setMcpComplete();
+      store.setSlackStepDismissed();
       store.setOutroDismissed();
       expect(store.currentScreen).toBe(ScreenId.KeepSkills);
     });
@@ -1060,14 +1094,18 @@ describe('WizardStore', () => {
 
       // Step 5: Complete MCP
       store.setMcpComplete();
+      expect(store.currentScreen).toBe(ScreenId.SlackConnect);
+
+      // Step 6: Dismiss the Connect-Slack step
+      store.setSlackStepDismissed();
       expect(store.currentScreen).toBe(ScreenId.Outro);
 
-      // Step 6: Dismiss outro
+      // Step 7: Dismiss outro
       store.setOutroDismissed();
       expect(store.currentScreen).toBe(ScreenId.KeepSkills);
 
       // Verify version was bumped for each setter call
-      expect(store.getVersion()).toBe(7);
+      expect(store.getVersion()).toBe(8);
     });
 
     it('walks through the revenue analytics flow correctly', () => {
@@ -1164,6 +1202,7 @@ describe('WizardStore', () => {
       });
 
       const store = createStore();
+      store.runInitHooks();
       let resolved = false;
 
       void store.getGate('health-check').then(() => {
@@ -1188,6 +1227,7 @@ describe('WizardStore', () => {
       });
 
       const store = createStore();
+      store.runInitHooks();
       let resolved = false;
 
       void store.getGate('health-check').then(() => {

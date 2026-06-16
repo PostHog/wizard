@@ -1,6 +1,6 @@
 {
   "name": "@posthog/wizard",
-  "version": "2.18.0",
+  "version": "2.22.1",
   "homepage": "https://github.com/PostHog/wizard",
   "repository": "https://github.com/PostHog/wizard",
   "description": "The PostHog wizard helps you to configure your project",
@@ -83,6 +83,7 @@
     "eslint-config-prettier": "^8.3.0",
     "eslint-plugin-jest": "^25.3.0",
     "husky": "^9.1.7",
+    "ink-testing-library": "^4.0.0",
     "jest": "^29.5.0",
     "lint-staged": "^15.5.1",
     "msw": "^2.10.4",
@@ -122,7 +123,8 @@
     "try": "tsx bin.ts",
     "dev": "pnpm build && pnpm link --global && pnpm build:watch",
     "test:watch": "vitest",
-    "prepare": "husky"
+    "prepare": "husky",
+    "screens:check": "tsx scripts/check-screens.tsx"
   },
   "lint-staged": {
     ".claude/settings.json": "sh -c 'printf \"\\n\\033[31mDo not commit .claude/settings.json — use .claude/settings.local.json (gitignored).\\nUnstage with: git restore --staged .claude/settings.json\\033[0m\\n\\n\" >&2 && exit 1'",

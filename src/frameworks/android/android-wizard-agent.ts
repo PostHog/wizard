@@ -20,7 +20,6 @@ export const ANDROID_AGENT_CONFIG: FrameworkConfig<AndroidContext> = {
   metadata: {
     name: 'Android (Kotlin)',
     integration: Integration.android,
-    beta: true,
     docsUrl: 'https://posthog.com/docs/libraries/android',
     gatherContext: (options: WizardRunOptions) => {
       const kotlinVersion = getKotlinVersion(options);

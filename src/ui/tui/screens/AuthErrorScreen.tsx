@@ -29,6 +29,7 @@ export const AuthErrorScreen = ({ store }: AuthErrorScreenProps) => {
 
   const detail = store.session.authErrorDetail;
   const hasSettingsConflict = detail?.hasSettingsConflict ?? true;
+  const conflicts = detail?.conflicts ?? [];
   const logFilePath = detail?.logFilePath;
 
   return (
@@ -42,15 +43,25 @@ export const AuthErrorScreen = ({ store }: AuthErrorScreenProps) => {
           <Box flexDirection="column" marginTop={1}>
             <Text>
               The Wizard couldn't connect to the PostHog LLM Gateway. Claude
-              Code settings on this machine are overriding the Wizard's
-              credentials.
+              Code settings on this machine override the Wizard's credentials.
             </Text>
           </Box>
 
+          {conflicts.length > 0 && (
+            <Box flexDirection="column" marginTop={1} paddingLeft={2}>
+              {conflicts.map((conflict) => (
+                <Text key={conflict.path}>
+                  {'•'} <Text bold>{conflict.path}</Text> sets{' '}
+                  <Text color="yellow">{conflict.keys.join(', ')}</Text>
+                </Text>
+              ))}
+            </Box>
+          )}
+
           <Box marginTop={1}>
             <Text dimColor>
-              Try logging out of Claude Code temporarily and re-running the
-              Wizard:
+              Remove those keys from the file(s) above, or log out of Claude
+              Code, then re-run the Wizard:
             </Text>
           </Box>
 
