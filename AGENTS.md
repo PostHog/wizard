@@ -49,10 +49,36 @@ command names.** Old names mostly no longer exist — only some are kept as alia
 |---|---|---|
 | `wizard integrate` | `wizard` (default flow) | command removed |
 | `wizard events-audit` | `wizard audit events` | moved into `audit` family |
-| `wizard audit` (single) | `wizard audit [skill]` | now a family; `audit all` = comprehensive |
+| `wizard audit` (single) | `wizard audit <subcommand>` | now a family — see [Audit subcommands](#audit-subcommands) |
 | `wizard audit-3000` | *removed* | retired |
 | `wizard revenue` | `wizard revenue-analytics` | renamed (old `revenue` removed) |
 | `wizard upload-sourcemaps` | `wizard upload-source-maps` | renamed; `upload-sourcemaps` kept as alias |
+
+### Audit subcommands
+
+`audit` is the only family with skill-backed subcommands today:
+
+| Subcommand | What it audits |
+|---|---|
+| `wizard audit events` | event capture quality + cost (**default** leaf) |
+| `wizard audit all` | comprehensive audit across every area |
+| `wizard audit autocapture` | autocapture setup + cost |
+| `wizard audit feature-flags` | feature flag usage + cost |
+| `wizard audit identify` | `$identify` implementation |
+| `wizard audit session-replay` | session replay setup |
+| `wizard audit web-analytics` | web analytics setup (**wizard-native**, not a skill) |
+
+### Commands vs. skills (the `audit [skill]` gotcha)
+
+A skill and a command are the **same machinery** — a context-mill skill becomes a
+command when its `cli:` block sets `role: command`. So `wizard audit events`
+*is* the `audit-events` skill, just promoted. `wizard skill <skill-name>`
+([`skill.ts`](src/commands/skill.ts)) runs a skill that **wasn't** promoted.
+
+Two surfaces, one mechanism. So `wizard audit <subcommand>` is choosing an audit
+area — it is **not** asking for a skill name, despite `wizard audit --help`
+labelling the positional `[skill]` (a wizard-internal name we left as-is). Don't
+confuse it with the top-level `wizard skill` command.
 
 ### Where the surface is defined (source of truth)
 

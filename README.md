@@ -56,17 +56,38 @@ Audit an existing PostHog integration for correctness and best practices. The
 interactive picker, or pass a subcommand directly:
 
 ```bash
-# Interactive picker
+# Interactive picker (Enter runs `events`, the default)
 npx @posthog/wizard audit
 
-# Run a specific audit
-npx @posthog/wizard audit events          # event instrumentation
-npx @posthog/wizard audit web-analytics   # web analytics setup
-npx @posthog/wizard audit all             # comprehensive audit
+# Or run a specific audit directly
+npx @posthog/wizard audit events           # event capture quality + cost (default)
+npx @posthog/wizard audit all              # comprehensive audit across every area
+npx @posthog/wizard audit autocapture      # autocapture setup + cost
+npx @posthog/wizard audit feature-flags    # feature flag usage + cost
+npx @posthog/wizard audit identify         # your $identify implementation
+npx @posthog/wizard audit session-replay   # session replay setup
+npx @posthog/wizard audit web-analytics    # web analytics setup
 ```
 
-Subcommands resolve at runtime from the published skill registry, so new audits
-appear without a wizard release.
+Most audit subcommands resolve at runtime from the published skill registry, so
+new audits appear without a wizard release (`web-analytics` is wizard-native).
+
+> **`audit <subcommand>` chooses an audit area — it does not take a skill name.**
+> The audit subcommands above *are* context-mill skills promoted to commands (via
+> a `cli: role: command` block); [`wizard skill <skill-name>`](#run-a-single-skill)
+> runs a skill that hasn't been promoted. Same machinery, two surfaces.
+> (`wizard audit --help` still labels the positional `[skill]` — read it as "pick
+> a subcommand.")
+
+## Run a single skill
+
+Run any context-mill skill directly by name, even if it isn't exposed as its own
+command:
+
+```bash
+npx @posthog/wizard skill list              # list every available skill
+npx @posthog/wizard skill <skill-name>      # run one by name
+```
 
 ## Revenue Analytics
 
@@ -198,7 +219,7 @@ surface. If you used an older command, here's where it went:
 |---|---|---|
 | `wizard integrate` | `wizard` (default flow) | Command removed; the default flow runs the integration |
 | `wizard events-audit` | `wizard audit events` | Now an `audit`-family subcommand |
-| `wizard audit` (single audit) | `wizard audit [skill]` | Now a family; `wizard audit all` runs the comprehensive audit |
+| `wizard audit` (single audit) | `wizard audit <subcommand>` | Now a family; see [Audit](#audit) for the subcommands |
 | `wizard audit-3000` | *removed* | Retired |
 | `wizard revenue` | `wizard revenue-analytics` | Renamed (old `revenue` removed) |
 | `wizard upload-sourcemaps` | `wizard upload-source-maps` | Renamed; `upload-sourcemaps` still works as an alias |
