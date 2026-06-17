@@ -52,11 +52,11 @@ npx @posthog/wizard mcp remove
 ## Audit
 
 Audit an existing PostHog integration for correctness and best practices. The
-`audit` command is a **family** — run it with no subcommand to open an
-interactive picker, or pass a subcommand directly:
+`audit` command is a **family**. With no subcommand it runs the **events**
+audit (the default); pass a subcommand to run a specific one:
 
 ```bash
-# Interactive picker (Enter runs `events`, the default)
+# Runs the events audit (the default) — no subcommand needed
 npx @posthog/wizard audit
 
 # Or run a specific audit directly
