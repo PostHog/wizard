@@ -84,6 +84,9 @@ describe('wizard provision subcommand', () => {
   const originalStdoutWrite = process.stdout.write.bind(process.stdout);
   const originalStderrWrite = process.stderr.write.bind(process.stderr);
   const originalIsTTY = process.stdout.isTTY;
+  // When true, the process.exit mock throws to halt the synchronous parse path
+  // (a validation `.fail()`); runCLI flips it off before the async handler runs.
+  let exitThrowsDuringParse = false;
 
   let stdoutChunks: string[];
   let stderrChunks: string[];
@@ -117,10 +120,15 @@ describe('wizard provision subcommand', () => {
       // suppress LoggingUI output during tests
     });
 
-    // process.exit is always the final call in each branch of the provision
-    // handler, so a silent no-op is enough. Throwing here would escape the
-    // void async IIFE and become an unhandled rejection.
-    process.exit = jest.fn() as unknown as typeof process.exit;
+    // On a validation failure, yargs calls `.fail()` and would otherwise run
+    // the command handler anyway (the real process.exit halts it; a no-op
+    // mock wouldn't). So exit throws during the synchronous parse — runCLI
+    // catches it, the handler never runs — and no-ops afterwards, where it's
+    // the final call in each async handler branch (throwing there would be an
+    // unhandled rejection on the `void provision()` IIFE).
+    process.exit = jest.fn(() => {
+      if (exitThrowsDuringParse) throw new Error('process.exit() called');
+    }) as unknown as typeof process.exit;
   });
 
   afterEach(() => {
@@ -145,13 +153,16 @@ describe('wizard provision subcommand', () => {
 
   async function runCLI(args: string[]) {
     process.argv = ['node', 'bin.ts', 'provision', ...args];
+    exitThrowsDuringParse = true;
     try {
       jest.isolateModules(() => {
         require('../../bin.ts');
       });
     } catch {
-      // process.exit mock throws to halt handler execution
+      // A validation `.fail()` calls process.exit during the synchronous parse;
+      // the throwing mock halts it here so the command handler never runs.
     }
+    exitThrowsDuringParse = false;
     // Dynamic import + async handler need several microtask flushes
     for (let i = 0; i < 10; i++) {
       await new Promise((resolve) => setImmediate(resolve));
