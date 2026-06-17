@@ -99,12 +99,17 @@ export class Wizard {
 
     this.cli = cli
       .strictOptions()
-      // Print the error first (bright red) and the usage below it, instead of
-      // yargs' default of burying the message under the full help output.
-      .fail((msg, err, parser) => {
+      // Reject unrecognized commands (e.g. `wizard bogus`) instead of letting
+      // them fall through to the default `$0` integration flow.
+      .strictCommands()
+      // Print a concise error and point to `--help`, instead of yargs' default
+      // of dumping the entire usage screen under every failure.
+      .fail((msg, err) => {
         const text = msg || (err && err.message) || 'Invalid arguments';
-        process.stderr.write(`\n\x1b[1;91m✖ ${text}\x1b[0m\n\n`);
-        parser.showHelp();
+        process.stderr.write(
+          `\n\x1b[1;91m✖ ${text}\x1b[0m\n` +
+            `  Run \`wizard --help\` to see available commands and options.\n\n`,
+        );
         process.exit(1);
       })
       .help()
