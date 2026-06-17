@@ -11,7 +11,7 @@ import { fetchSkillMenu } from '@lib/wizard-tools';
 
 import type { Command } from '../command';
 import { createFamilyPickerDefault } from './family-picker';
-import { mergeCommandOptions } from './shared';
+import { mergeCommandOptions, runCommandHandler } from './shared';
 
 export interface FamilyCommandFactoryOpts {
   /** The family's CLI name (e.g. 'audit'). */
@@ -82,11 +82,13 @@ export function familyCommandFactory({
       // in an interactive terminal. In non-TTY/CI, fall through to
       // dispatchFamily, which prints "requires a subcommand" rather than
       // running something unprompted or hanging on a picker that can't render.
-      if (sub || !process.stdout.isTTY) {
-        void dispatchFamily(family, argv);
-      } else {
-        void openFamilyEntry(argv);
-      }
+      // runCommandHandler awaits the async work so a rejection surfaces as a
+      // clean error instead of an unhandled promise rejection.
+      runCommandHandler(() =>
+        sub || !process.stdout.isTTY
+          ? dispatchFamily(family, argv)
+          : openFamilyEntry(argv),
+      );
     },
     interactiveDefault: openFamilyEntry,
   };

@@ -5,6 +5,7 @@ import { fetchSkillMenu, type CliEntry } from '@lib/wizard-tools';
 
 import { runSkillMode } from './basic-integration/skill';
 import { skillProgramOptions } from './skill-program-options';
+import { runCommandHandler } from './factories/shared';
 import type { Command } from './command';
 
 /** Read the `<skill-name>` positional (yargs camelCases the hyphenated key). */
@@ -38,7 +39,7 @@ const listCommand: Command = {
   name: 'list',
   description: 'List every browsable skill in the catalog',
   handler: (argv) => {
-    void (async () => {
+    runCommandHandler(async () => {
       const skillsBaseUrl = getSkillsBaseUrl(Boolean(argv['local-mcp']));
       const menu = await fetchSkillMenu(skillsBaseUrl);
       if (!menu) {
@@ -64,7 +65,7 @@ const listCommand: Command = {
       for (const entry of entries) {
         process.stdout.write(`${formatEntry(entry)}\n`);
       }
-    })();
+    });
   },
 };
 

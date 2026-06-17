@@ -12,6 +12,25 @@ import { skillProgramOptions } from '../skill-program-options';
  *
  * Every command file used to inline this; the factories call it instead.
  */
+/**
+ * Run a command's async body as fire-and-forget while still surfacing failures.
+ * yargs handlers are synchronous, so async work kicks off a detached promise —
+ * without this, a rejection becomes an unhandled promise rejection (no message,
+ * wrong exit code). This awaits the work and turns any error into a clean
+ * message + non-zero exit.
+ */
+export function runCommandHandler(work: () => void | Promise<void>): void {
+  void (async () => {
+    try {
+      await work();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      process.stderr.write(`\n\x1b[1;91m✖ ${msg}\x1b[0m\n\n`);
+      process.exit(1);
+    }
+  })();
+}
+
 export function dispatchProgram(config: ProgramConfig, argv: Arguments): void {
   const argvRecord = argv as unknown as Record<string, unknown>;
   const extras = config.mapCliOptions?.(argvRecord) ?? {};
