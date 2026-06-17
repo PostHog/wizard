@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.24.1](https://github.com/PostHog/wizard/compare/v2.24.0...v2.24.1) (2026-06-17)
+
+
+### Bug Fixes
+
+* separate login and slackconnect screen ([#681](https://github.com/PostHog/wizard/issues/681)) ([5fd0de6](https://github.com/PostHog/wizard/commit/5fd0de69dc92a39285727537f7dc435d4753797a))
+
 ## [2.24.0](https://github.com/PostHog/wizard/compare/v2.23.0...v2.24.0) (2026-06-17)
 
 
