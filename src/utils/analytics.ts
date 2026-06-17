@@ -183,6 +183,16 @@ export class Analytics {
     this.capture(`wizard: ${eventName}`, properties);
   }
 
+  /**
+   * Flush pending events without firing the "setup wizard finished" terminal
+   * event. Use this from CLI error paths that exit before any wizard run
+   * starts — `shutdown()` would inflate the run count with a "finished" event
+   * for a parse error that never actually ran the wizard.
+   */
+  async flush(): Promise<void> {
+    await this.client.shutdown();
+  }
+
   async getFeatureFlag(flagKey: string): Promise<string | boolean | undefined> {
     try {
       const distinctId = this.distinctId ?? this.anonymousId;
