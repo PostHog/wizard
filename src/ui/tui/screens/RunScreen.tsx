@@ -41,14 +41,20 @@ export const RunScreen = ({ store }: RunScreenProps) => {
   );
 
   // Mirror the agent's `.posthog-events.json` plan into the store so the
-  // Event plan tab appears as soon as the agent emits the file.
+  // Event plan tab appears as soon as the agent emits the file. The skill
+  // tells the agent to use `event_name`/`event_description` (the canonical
+  // form); `name`/`event`/`description` are legacy fallbacks for skills or
+  // one-off runs that drift. Drop any entry that still ends up nameless so
+  // the outro never shows blank bullets.
   useFileWatcher(join(store.session.installDir, EVENT_PLAN_FILE), (parsed) => {
     if (!Array.isArray(parsed)) return;
     store.setEventPlan(
-      parsed.map((e: Record<string, unknown>) => ({
-        name: (e.name ?? e.event ?? '') as string,
-        description: (e.description ?? '') as string,
-      })),
+      parsed
+        .map((e: Record<string, unknown>) => ({
+          name: (e.event_name ?? e.name ?? e.event ?? '') as string,
+          description: (e.event_description ?? e.description ?? '') as string,
+        }))
+        .filter((e) => e.name),
     );
   });
 
