@@ -16,9 +16,9 @@
  * "Skip" / "Done" / esc dismiss the step (`slackStepDismissed`) and let
  * the router advance to exit.
  *
- * The mcp and integration flows arrive here already authenticated. In the
- * standalone `wizard slack` flow the program's `onInit` runs the OAuth
- * while this screen renders the auth-wait state.
+ * The mcp and integration flows arrive here already authenticated. The
+ * standalone `wizard slack` flow deliberately doesn't log in — connecting
+ * Slack itself happens in the browser, so we render the no-creds nudge.
  */
 
 import { Box, Text } from 'ink';
@@ -26,11 +26,10 @@ import { useEffect, useRef, useSyncExternalStore } from 'react';
 
 import type { WizardStore } from '@ui/tui/store';
 import { Colors, Icons } from '@ui/tui/styles';
-import { LoadingBox, PickerMenu } from '@ui/tui/primitives/index';
+import { PickerMenu, LoadingBox } from '@ui/tui/primitives/index';
 import { useKeyBindings, KeyMatch } from '@ui/tui/hooks/useKeyBindings';
 import { getSlackAppCard } from '@lib/mcp-role-prompts';
 import { fetchSlackConnected } from '@lib/api';
-import { Program } from '@lib/programs/program-registry';
 import { analytics } from '@utils/analytics';
 import { openTrackedLink, withUtm } from '@utils/links';
 
@@ -58,12 +57,6 @@ export const SlackConnectScreen = ({ store }: SlackConnectScreenProps) => {
 
   const credentials = store.session.credentials;
 
-  // Standalone, the program's onInit is mid-OAuth while credentials are
-  // missing. Other flows arrive authenticated, or deliberately
-  // unauthenticated (nudge without the poll).
-  const awaitingLogin =
-    store.router.activeProgram === Program.SlackConnect && !credentials;
-
   // `slackConnected` is three-state: null until something has actually
   // checked (the tutorial's prefetch, or this screen's first poll tick).
   const connectedState = store.session.slackConnected;
@@ -90,10 +83,10 @@ export const SlackConnectScreen = ({ store }: SlackConnectScreenProps) => {
   // readers see those impressions distinctly from authenticated views.
   const nudgeImpressionFired = useRef(false);
   useEffect(() => {
-    if (credentials || awaitingLogin || nudgeImpressionFired.current) return;
+    if (credentials || nudgeImpressionFired.current) return;
     nudgeImpressionFired.current = true;
     analytics.wizardCapture('slack connect nudge shown', { role });
-  }, [credentials, awaitingLogin, role]);
+  }, [credentials, role]);
 
   // While not connected, poll: connecting Slack is a manual OAuth step in
   // the browser, so the poll is what flips the screen to the connected
@@ -191,25 +184,6 @@ export const SlackConnectScreen = ({ store }: SlackConnectScreenProps) => {
       handler: () => dismiss(),
     },
   ]);
-
-  if (awaitingLogin) {
-    return (
-      <Box flexDirection="column" flexGrow={1} marginTop={1}>
-        <LoadingBox message="Waiting for authentication..." />
-        {store.session.loginUrl && (
-          <Box marginTop={1} flexDirection="column">
-            <Text>
-              <Text dimColor>
-                If the browser didn&apos;t open, copy and paste:
-              </Text>
-              {'\n\n'}
-              <Text color="cyan">{store.session.loginUrl}</Text>
-            </Text>
-          </Box>
-        )}
-      </Box>
-    );
-  }
 
   // Credentials in hand but the first integration check hasn't resolved —
   // hold the nudge so an already-connected user is never asked to connect.
