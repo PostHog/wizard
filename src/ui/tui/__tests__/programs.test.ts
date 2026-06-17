@@ -222,6 +222,25 @@ describe('PROGRAM_SEQUENCES', () => {
       expect(entry.isComplete?.(session)).toBe(true);
     });
 
+    describe('McpAdd step ordering', () => {
+      // Slack-connect must run before the tutorial: the no-creds Slack render
+      // is the only post-install step that can render in mcp-add (a loginless
+      // command), so it sits between install and the tutorial. Ordering it
+      // after the tutorial would also bury Slack discovery behind a tutorial
+      // dismissal screen.
+      it('runs install → slack-connect → mcp-suggested-prompts', () => {
+        const order = PROGRAM_SEQUENCES[Program.McpAdd]
+          .map((entry) => entry.id)
+          .filter((id) => id !== ScreenId.Exit);
+
+        expect(order).toEqual([
+          ScreenId.McpAdd,
+          ScreenId.SlackConnect,
+          ScreenId.McpSuggestedPrompts,
+        ]);
+      });
+    });
+
     describe('McpAdd → mcp-suggested-prompts step', () => {
       it('hides the step when MCP install was skipped', () => {
         const session = buildSession({});

@@ -72,7 +72,9 @@ export const SlackConnectScreen = ({ store }: SlackConnectScreenProps) => {
   // Impression — once, and only when the connected state is known, so
   // `already_connected` is real: users who arrive connected segment apart
   // from users who connect during the screen ('slack connect completed').
-  const known = connectedState !== null || (!credentials && !awaitingLogin);
+  // The no-creds path can't know the state, so it fires
+  // `slack connect nudge shown` instead — see below.
+  const known = connectedState !== null;
   const impressionFired = useRef(false);
   useEffect(() => {
     if (!known || impressionFired.current) return;
@@ -82,6 +84,16 @@ export const SlackConnectScreen = ({ store }: SlackConnectScreenProps) => {
       already_connected: connected,
     });
   }, [known, connected, role]);
+
+  // Separate impression for the no-creds path: we render the nudge but
+  // don't know whether the user is already connected. Lets funnel
+  // readers see those impressions distinctly from authenticated views.
+  const nudgeImpressionFired = useRef(false);
+  useEffect(() => {
+    if (credentials || awaitingLogin || nudgeImpressionFired.current) return;
+    nudgeImpressionFired.current = true;
+    analytics.wizardCapture('slack connect nudge shown', { role });
+  }, [credentials, awaitingLogin, role]);
 
   // While not connected, poll: connecting Slack is a manual OAuth step in
   // the browser, so the poll is what flips the screen to the connected
@@ -143,12 +155,19 @@ export const SlackConnectScreen = ({ store }: SlackConnectScreenProps) => {
   }, [credentials, connected, store]);
 
   // Leaving while connected is "done"; leaving while not connected is a
-  // skip. Two events so the funnel reads without prop gymnastics.
+  // skip. Two events so the funnel reads without prop gymnastics. The
+  // `connection_state` property on `skipped` distinguishes "we knew the
+  // user wasn't connected" (had creds, polled, false) from "we never
+  // knew" (no creds, never polled).
   const dismiss = (): void => {
-    analytics.wizardCapture(
-      connected ? 'slack connect done' : 'slack connect skipped',
-      { role, connected },
-    );
+    if (connected) {
+      analytics.wizardCapture('slack connect done', { role });
+    } else {
+      analytics.wizardCapture('slack connect skipped', {
+        role,
+        connection_state: credentials ? 'not_connected' : 'unknown',
+      });
+    }
     store.setSlackStepDismissed();
   };
 
