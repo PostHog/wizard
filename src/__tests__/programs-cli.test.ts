@@ -19,7 +19,11 @@ import { auditCommand } from '../commands/audit';
 import { migrateCommand } from '../commands/migrate';
 import { revenueCommand } from '../commands/revenue';
 import { uploadSourcemapsCommand } from '../commands/upload-sourcemaps';
-import { dispatchFamily } from '@lib/programs/dispatch-family';
+import {
+  dispatchFamily,
+  pickerChildrenToShow,
+} from '@lib/programs/dispatch-family';
+import type { Command } from '../commands/command';
 import { fetchSkillMenu, type CliEntry } from '@lib/wizard-tools';
 import { auditConfig } from '@lib/programs/audit/index';
 import { webAnalyticsDoctorConfig } from '@lib/programs/web-analytics-doctor/index';
@@ -189,5 +193,29 @@ describe('yargs parsing for the audit family', () => {
     );
     expect(canonical.region).toBe('eu');
     expect(legacy.region).toBe('eu');
+  });
+});
+
+describe('pickerChildrenToShow (today: picker shows only the default leaf)', () => {
+  const make = (name: string, isDefault?: boolean): Command => ({
+    name,
+    description: `${name} desc`,
+    handler: () => undefined,
+    ...(isDefault ? { default: true } : {}),
+  });
+
+  test('shows only the default-marked child when one exists', () => {
+    const shown = pickerChildrenToShow([
+      make('web-analytics'),
+      make('events', true),
+      make('all'),
+      make('feature-flags'),
+    ]);
+    expect(shown.map((c) => c.name)).toEqual(['events']);
+  });
+
+  test('falls back to all children when none is marked default', () => {
+    const shown = pickerChildrenToShow([make('events'), make('all')]);
+    expect(shown.map((c) => c.name)).toEqual(['events', 'all']);
   });
 });

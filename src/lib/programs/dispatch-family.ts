@@ -59,9 +59,11 @@ export async function dispatchFamily(
 ): Promise<void> {
   const sub = (argv.skill as string | undefined)?.trim();
   if (!sub) {
+    // Reached only in non-TTY/CI — an interactive terminal routes the no-sub
+    // case to the picker before this runs, so don't suggest opening it here.
     process.stderr.write(
       `\n\x1b[1;91m✖ \`wizard ${family}\` requires a subcommand.\x1b[0m\n` +
-        `  Run \`wizard ${family}\` with no argument to open the picker.\n\n`,
+        `  Pass one (e.g. \`wizard ${family} <subcommand>\`), or run it in an interactive terminal to pick from a menu.\n\n`,
     );
     process.exit(1);
   }
@@ -130,4 +132,18 @@ export function buildFamilyPickerChildren(
     default: entry.default,
   }));
   return [...natives, ...live];
+}
+
+/**
+ * The children the family picker shows **today**: only the leaf marked
+ * `default` (e.g. `audit events`). Every other subcommand stays runnable
+ * directly (`wizard audit <name>`) — they just aren't listed in the picker yet.
+ * Falls back to all children when nothing is marked `default`.
+ *
+ * Temporary: when we're ready to surface the full menu, return `children`
+ * unchanged (and delete this note).
+ */
+export function pickerChildrenToShow(children: readonly Command[]): Command[] {
+  const defaults = children.filter((c) => c.default);
+  return defaults.length > 0 ? [...defaults] : [...children];
 }

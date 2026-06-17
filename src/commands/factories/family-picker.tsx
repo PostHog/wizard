@@ -6,10 +6,12 @@
  * `wizard audit` — when the user invokes the parent without a leaf, this
  * shows a TUI menu instead of yargs's `demandCommand(1)` help dump.
  *
- * The picker always opens for families; the `default` flag on a child
- * just controls which option is pre-highlighted (so `wizard audit` →
- * Enter still runs `audit all`, but the user sees every other audit
- * before committing). Discovery and consent in one extra keystroke.
+ * The picker opens for families in an interactive terminal; the `default`
+ * flag on a child controls which option is pre-highlighted (so `wizard audit`
+ * → Enter runs the default leaf, today `audit events`). The caller decides
+ * which children to pass in — `familyCommandFactory` currently passes only the
+ * default leaf, so other subcommands stay runnable directly but aren't listed
+ * here yet.
  *
  * Single-option commands aren't families — they should be flat
  * commands wired with `skillCommandFactory` / `nativeCommandFactory`
@@ -64,7 +66,7 @@ function describe(child: Command): string {
  * Reorder children so the `default`-marked entry is first, while
  * preserving the relative order of the rest. The picker's initial
  * focus is index 0, so this is what makes "press Enter on
- * `wizard audit`" run the comprehensive audit by default.
+ * `wizard audit`" run the default leaf (today `audit events`).
  *
  * Exported for testability — the ordering logic stays pure and
  * inspectable without mounting Ink.

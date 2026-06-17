@@ -4,6 +4,7 @@ import type { ProgramConfig } from '@lib/programs/program-step';
 import {
   buildFamilyPickerChildren,
   dispatchFamily,
+  pickerChildrenToShow,
 } from '@lib/programs/dispatch-family';
 import { getSkillsBaseUrl } from '@lib/constants';
 import { fetchSkillMenu } from '@lib/wizard-tools';
@@ -31,10 +32,11 @@ export interface FamilyCommandFactoryOpts {
  *   - `wizard <family> <sub>` — `dispatchFamily` resolves `<sub>` against
  *     native handlers first, then the live `cliEntries` from
  *     `skill-menu.json`. Unknown subs error with the available list.
- *   - `wizard <family>` (no positional) — `interactiveDefault` fetches the
- *     registry, builds a children list combining native + live entries, and
- *     opens the family picker. The default leaf (if any) is
- *     pre-highlighted.
+ *   - `wizard <family>` (no positional) — in an interactive terminal, opens the
+ *     family picker (`openPicker`). For now the picker surfaces only the leaf
+ *     marked `default` (e.g. `audit events`); the others stay runnable directly.
+ *     In non-TTY/CI, falls through to `dispatchFamily`, which prints
+ *     "requires a subcommand" rather than hanging on a picker that can't render.
  *
  * No static yargs children. New skill-backed subcommands appear after a
  * context-mill release without a wizard release. New *native* subcommands
@@ -45,6 +47,20 @@ export function familyCommandFactory({
   description,
   optionsFrom,
 }: FamilyCommandFactoryOpts): Command {
+  const openPicker = async (argv: Arguments): Promise<void> => {
+    const skillsBaseUrl = getSkillsBaseUrl(Boolean(argv['local-mcp']));
+    const menu = await fetchSkillMenu(skillsBaseUrl);
+    const children = buildFamilyPickerChildren(family, menu?.cliEntries ?? []);
+    // Today the picker surfaces only the default leaf (e.g. `audit events`);
+    // other subcommands stay runnable directly. See `pickerChildrenToShow`.
+    const pickerChildren = pickerChildrenToShow(children);
+    const picker = createFamilyPickerDefault(
+      `wizard ${family}`,
+      pickerChildren,
+    );
+    await picker(argv);
+  };
+
   return {
     name: `${family} [skill]`,
     description,
@@ -56,17 +72,17 @@ export function familyCommandFactory({
       },
     },
     handler: (argv: Arguments) => {
-      void dispatchFamily(family, argv);
+      const sub = (argv.skill as string | undefined)?.trim();
+      // With a subcommand, resolve and run it. Without one, open the picker —
+      // but only in an interactive terminal. In non-TTY/CI, fall through to
+      // dispatchFamily, which prints "requires a subcommand" rather than hanging
+      // on an Ink picker that can't render.
+      if (sub || !process.stdout.isTTY) {
+        void dispatchFamily(family, argv);
+      } else {
+        void openPicker(argv);
+      }
     },
-    interactiveDefault: async (argv: Arguments) => {
-      const skillsBaseUrl = getSkillsBaseUrl(Boolean(argv['local-mcp']));
-      const menu = await fetchSkillMenu(skillsBaseUrl);
-      const children = buildFamilyPickerChildren(
-        family,
-        menu?.cliEntries ?? [],
-      );
-      const picker = createFamilyPickerDefault(`wizard ${family}`, children);
-      await picker(argv);
-    },
+    interactiveDefault: openPicker,
   };
 }
