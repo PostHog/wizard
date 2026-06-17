@@ -277,14 +277,37 @@ function formatInputValue(value: unknown): string {
 }
 
 /**
- * Render the handoffs of a task's completed dependencies into a context section,
- * so a fresh agent sees what the upstream steps did. Empty when there are none.
+ * The ids of every task `task` transitively depends on — the full upstream
+ * chain, not just direct dependencies — ordered roots-first, each once. A `seen`
+ * set dedupes diamonds and guards against cycles.
+ */
+function ancestorIds(task: QueuedTask, store: QueueStore): string[] {
+  const seen = new Set<string>();
+  const ordered: string[] = [];
+  const visit = (id: string): void => {
+    if (seen.has(id)) return;
+    seen.add(id);
+    const t = store.get(id);
+    if (!t) return;
+    for (const dep of t.dependsOn) visit(dep); // ancestors before dependents
+    ordered.push(id);
+  };
+  for (const dep of task.dependsOn) visit(dep);
+  return ordered;
+}
+
+/**
+ * Render the handoffs of every step `task` transitively depends on into a context
+ * section, so a fresh agent sees the whole upstream chain — not just its direct
+ * dependencies. Reliability over token economy: a step must never have to
+ * re-discover what any ancestor already established just because an intermediate
+ * handoff happened to omit it. Empty when there are no completed ancestors.
  */
 function renderHandoffContext(task: QueuedTask, store: QueueStore): string {
   const lines: string[] = [];
-  for (const depId of task.dependsOn) {
-    const dep = store.get(depId);
-    const handoff = store.readHandoff(depId);
+  for (const id of ancestorIds(task, store)) {
+    const dep = store.get(id);
+    const handoff = store.readHandoff(id);
     if (!dep || !handoff) continue;
     lines.push(`### ${dep.type}`);
     lines.push(`- did: ${handoff.did}`);
