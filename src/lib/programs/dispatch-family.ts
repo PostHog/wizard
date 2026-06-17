@@ -6,9 +6,31 @@ import { webAnalyticsDoctorConfig } from '@lib/programs/web-analytics-doctor/ind
 import type { ProgramConfig } from '@lib/programs/program-step';
 import { getSkillsBaseUrl } from '@lib/constants';
 import { fetchSkillMenu, type CliEntry } from '@lib/wizard-tools';
+import { analytics } from '@utils/analytics';
 
 import { dispatchProgram } from '../../commands/factories/shared';
 import type { Command } from '../../commands/command';
+
+/**
+ * Capture a CLI dispatch error, flush analytics, and exit. The wizard never
+ * starts a run from these paths — use flush() (not shutdown()) so we don't
+ * fire a "setup wizard finished" event for a parse error that didn't run.
+ */
+async function exitDispatchError(
+  reason: string,
+  properties: Record<string, unknown>,
+  message: string,
+  code = 1,
+): Promise<never> {
+  analytics.wizardCapture('cli dispatch error', { reason, ...properties });
+  try {
+    await analytics.flush();
+  } catch {
+    /* flush is best-effort; never block the exit */
+  }
+  process.stderr.write(message);
+  return process.exit(code);
+}
 
 /**
  * Family commands (`wizard audit`, `wizard migrate`, ...) resolve their
@@ -61,11 +83,12 @@ export async function dispatchFamily(
   if (!sub) {
     // Reached only in non-TTY/CI — an interactive terminal routes the no-sub
     // case to the picker before this runs, so don't suggest opening it here.
-    process.stderr.write(
+    return exitDispatchError(
+      'missing subcommand',
+      { family },
       `\n\x1b[1;91m✖ \`wizard ${family}\` requires a subcommand.\x1b[0m\n` +
         `  Pass one (e.g. \`wizard ${family} <subcommand>\`), or run it in an interactive terminal to pick from a menu.\n\n`,
     );
-    process.exit(1);
   }
 
   const native = NATIVE_HANDLERS[family]?.[sub];
@@ -77,11 +100,12 @@ export async function dispatchFamily(
   const skillsBaseUrl = getSkillsBaseUrl(Boolean(argv['local-mcp']));
   const menu = await fetchSkillMenu(skillsBaseUrl);
   if (!menu) {
-    process.stderr.write(
+    return exitDispatchError(
+      'registry unreachable',
+      { family, sub, skillsBaseUrl },
       `\n\x1b[1;91m✖ Couldn't reach the skill registry at ${skillsBaseUrl}.\x1b[0m\n` +
         `  Check your network connection and try again.\n\n`,
     );
-    process.exit(1);
   }
 
   const entries = menu.cliEntries ?? [];
@@ -95,13 +119,14 @@ export async function dispatchFamily(
     ...Object.keys(NATIVE_HANDLERS[family] ?? {}),
     ...familyEntries(family, entries).map((e) => e.command!),
   ].sort();
-  process.stderr.write(
+  return exitDispatchError(
+    'unknown subcommand',
+    { family, sub, available },
     `\n\x1b[1;91m✖ Unknown subcommand "${sub}" under \`${family}\`.\x1b[0m\n` +
       (available.length
         ? `  Available: ${available.join(', ')}\n\n`
         : `  No subcommands published for "${family}" yet.\n\n`),
   );
-  process.exit(1);
 }
 
 /**

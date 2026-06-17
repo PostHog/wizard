@@ -2,6 +2,7 @@ import type { Arguments } from 'yargs';
 
 import { getSkillsBaseUrl } from '@lib/constants';
 import { fetchSkillMenu, type CliEntry } from '@lib/wizard-tools';
+import { analytics } from '@utils/analytics';
 
 import { runSkillMode } from './basic-integration/skill';
 import { skillProgramOptions } from './skill-program-options';
@@ -42,6 +43,17 @@ const listCommand: Command = {
       const skillsBaseUrl = getSkillsBaseUrl(Boolean(argv['local-mcp']));
       const menu = await fetchSkillMenu(skillsBaseUrl);
       if (!menu) {
+        analytics.wizardCapture('cli dispatch error', {
+          reason: 'registry unreachable',
+          family: 'skill',
+          sub: 'list',
+          skillsBaseUrl,
+        });
+        try {
+          await analytics.flush();
+        } catch {
+          /* best-effort */
+        }
         process.stderr.write(
           `\n\x1b[1;91m✖ Couldn't reach the skill registry.\x1b[0m\n` +
             `  Check your network connection and try again.\n\n`,
