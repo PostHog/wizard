@@ -89,14 +89,30 @@ function capture(args) {
     );
     const child = spawn('script', scriptInvocation(outFile, args), {
       stdio: 'ignore',
+      // Own process group, so we can signal the inner wizard too — `script`
+      // doesn't forward signals to its child.
+      detached: true,
     });
-    const timer = setTimeout(() => child.kill('SIGTERM'), CAPTURE_MS);
+    // SIGINT (not SIGTERM) so Ink restores the terminal; signal the whole group
+    // so the inner `node` actually dies. A stray wizard left running holds
+    // resources (e.g. the OAuth-callback port) and empties the next capture.
+    const stop = (signal) => {
+      try {
+        if (child.pid) process.kill(-child.pid, signal);
+      } catch {
+        /* already exited */
+      }
+    };
+    const timer = setTimeout(() => stop('SIGINT'), CAPTURE_MS);
+    const hardTimer = setTimeout(() => stop('SIGKILL'), CAPTURE_MS + 2000);
     child.on('error', (err) => {
       clearTimeout(timer);
+      clearTimeout(hardTimer);
       reject(err);
     });
     child.on('close', () => {
       clearTimeout(timer);
+      clearTimeout(hardTimer);
       try {
         const buf = existsSync(outFile) ? readFileSync(outFile) : Buffer.alloc(0);
         rmSync(outFile, { force: true });
