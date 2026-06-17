@@ -2,54 +2,54 @@
 /**
  * ANSI "screenshot" tests for the wizard CLI command surface.
  *
- * For each command below, this launches the REAL built binary in a
- * pseudo-terminal (Ink won't render without a TTY) using the system `script`
- * command, captures the raw ANSI output, and compares it to a committed golden
- * dump under `scripts/__screenshots__/`. It catches regressions in the
- * command → intro-screen wiring: a command falling through to the default
- * flow, an intro screen not rendering, or the wrong screen showing.
+ * For each command below, this launches the REAL built binary in a real
+ * pseudo-terminal (via node-pty — Ink won't render without a TTY, and the pty
+ * needs a fixed size or screens paint blank), captures the **raw bytes** it
+ * writes to the terminal, and compares them **byte-for-byte** against a
+ * committed golden dump under scripts/__screenshots__/. It catches regressions
+ * in the command → intro-screen wiring: a command falling through to the
+ * default flow, the wrong screen, or nothing rendering.
  *
- * The goldens are the "jank screenshots" — raw ANSI bytes, so they capture
- * colour + layout, not just stripped text.
- *
- * A live TUI animates (spinners, cursor moves), so a byte-exact compare would
- * flake. `normalize()` strips the volatile escape sequences before comparing
- * (it keeps SGR colour codes so the screenshot still shows styling). Tune it if
- * a screen still flakes.
+ * The goldens are raw binary ANSI dumps — the actual "screenshot" (colour +
+ * layout), not stripped text. For byte-exact comparison to be stable:
+ *   - the pty size is fixed (COLS×ROWS),
+ *   - colour output is forced (FORCE_COLOR) so it's identical local ↔ CI,
+ *   - capture waits for the screen to SETTLE (output stops) before snapshotting.
+ * If a screen animates (e.g. a spinner) it won't settle to a stable frame —
+ * handle those case-by-case (pin the screen, or exclude it) rather than
+ * loosening the whole comparison.
  *
  * Usage:
  *   pnpm build && node scripts/cli-screenshots.mjs            # check vs goldens
  *   pnpm build && node scripts/cli-screenshots.mjs --update   # (re)capture goldens
  *
- * NOTE: a pseudo-terminal is required, so goldens must be seeded once with
- * `--update` in a real terminal or CI runner — they are not generated in
- * environments without a TTY.
+ * Requires node-pty (devDependency) built — `pnpm install` with node-pty in
+ * pnpm.onlyBuiltDependencies.
  */
 
-import { spawn } from 'node:child_process';
-import {
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from 'node:fs';
-import { tmpdir } from 'node:os';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import pty from 'node-pty';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.resolve(HERE, '..');
 const BIN = path.join(REPO, 'dist', 'bin.js');
 const GOLDEN_DIR = path.join(HERE, '__screenshots__');
 
-/** How long to let a screen render before killing it (intro screens wait for input). */
-const CAPTURE_MS = 4000;
+// Fixed terminal geometry — layout (and therefore the bytes) must be identical
+// when seeding and when checking, on macOS and in CI alike.
+const COLS = 100;
+const ROWS = 40;
+/** Snapshot once output has been quiet for this long (screen has painted). */
+const SETTLE_MS = 1200;
+/** Hard cap, in case a screen never goes quiet. */
+const MAX_CAPTURE_MS = 12000;
 
 /**
  * Commands to snapshot. `slug` is the golden filename; `args` is the wizard
- * argv. Keep this in sync with the command surface (`bin.ts` + the audit
- * family). `unknown-command` is a negative case — it must error, not run a flow.
+ * argv. Keep in sync with the command surface (`bin.ts` + the audit family).
+ * `unknown-command` is a negative case — it must error, not run a flow.
  */
 const COMMANDS = [
   { slug: 'default', args: [] },
@@ -68,76 +68,51 @@ const COMMANDS = [
 
 const UPDATE = process.argv.includes('--update');
 
-/** Build the platform-specific `script` invocation that runs the wizard in a pty. */
-function scriptInvocation(outFile, args) {
-  const inner = ['node', BIN, ...args, '--no-telemetry'];
-  if (process.platform === 'darwin') {
-    // BSD script: `script -q <file> <command...>`
-    return ['-q', outFile, ...inner];
-  }
-  // util-linux: `script -q -e -c "<command>" <file>`
-  const command = inner.map((a) => (/\s/.test(a) ? JSON.stringify(a) : a)).join(' ');
-  return ['-q', '-e', '-c', command, outFile];
-}
-
-/** Run one command in a pty, kill it after CAPTURE_MS, return the captured bytes. */
+/** Run one command in a sized pty, snapshot once it settles, return raw bytes. */
 function capture(args) {
   return new Promise((resolve, reject) => {
-    const outFile = path.join(
-      tmpdir(),
-      `wizard-shot-${process.pid}-${Math.random().toString(36).slice(2)}.ans`,
-    );
-    const child = spawn('script', scriptInvocation(outFile, args), {
-      stdio: 'ignore',
-      // Own process group, so we can signal the inner wizard too — `script`
-      // doesn't forward signals to its child.
-      detached: true,
-    });
-    // SIGINT (not SIGTERM) so Ink restores the terminal; signal the whole group
-    // so the inner `node` actually dies. A stray wizard left running holds
-    // resources (e.g. the OAuth-callback port) and empties the next capture.
-    const stop = (signal) => {
+    let proc;
+    try {
+      proc = pty.spawn('node', [BIN, ...args, '--no-telemetry'], {
+        name: 'xterm-256color',
+        cols: COLS,
+        rows: ROWS,
+        cwd: REPO,
+        // Force a stable colour level so the bytes match across environments.
+        env: { ...process.env, FORCE_COLOR: '3', TERM: 'xterm-256color' },
+        encoding: null, // hand back Buffers, not decoded strings
+      });
+    } catch (err) {
+      reject(err);
+      return;
+    }
+
+    const chunks = [];
+    let settleTimer;
+    let done = false;
+    const finish = () => {
+      if (done) return;
+      done = true;
+      clearTimeout(settleTimer);
+      clearTimeout(maxTimer);
       try {
-        if (child.pid) process.kill(-child.pid, signal);
+        proc.kill();
       } catch {
-        /* already exited */
+        /* already gone */
       }
     };
-    const timer = setTimeout(() => stop('SIGINT'), CAPTURE_MS);
-    const hardTimer = setTimeout(() => stop('SIGKILL'), CAPTURE_MS + 2000);
-    child.on('error', (err) => {
-      clearTimeout(timer);
-      clearTimeout(hardTimer);
-      reject(err);
+    proc.onData((data) => {
+      chunks.push(Buffer.isBuffer(data) ? data : Buffer.from(data, 'utf8'));
+      clearTimeout(settleTimer);
+      settleTimer = setTimeout(finish, SETTLE_MS);
     });
-    child.on('close', () => {
-      clearTimeout(timer);
-      clearTimeout(hardTimer);
-      try {
-        const buf = existsSync(outFile) ? readFileSync(outFile) : Buffer.alloc(0);
-        rmSync(outFile, { force: true });
-        resolve(buf);
-      } catch (err) {
-        reject(err);
-      }
+    const maxTimer = setTimeout(finish, MAX_CAPTURE_MS);
+    proc.onExit(() => {
+      clearTimeout(settleTimer);
+      clearTimeout(maxTimer);
+      resolve(Buffer.concat(chunks));
     });
   });
-}
-
-/** Strip volatile terminal noise so comparisons don't flake on animation/timing. */
-function normalize(buf) {
-  return (
-    buf
-      .toString('utf8')
-      // `script` wrapper lines
-      .replace(/^Script (started|done).*$/gm, '')
-      // cursor moves / clear-line / clear-screen — i.e. how spinners repaint.
-      // Keep SGR (`\x1b[...m`) so the screenshot still carries colour.
-      .replace(/\x1b\[[0-9;]*[ABCDEFGHJKnsu]/g, '')
-      .replace(/\r/g, '')
-      .replace(/\n{3,}/g, '\n\n')
-      .trim()
-  );
 }
 
 async function main() {
@@ -161,18 +136,14 @@ async function main() {
       continue;
     }
     if (captured.length === 0) {
-      // No output means no pty (e.g. `script` couldn't allocate one) — fail
-      // loudly rather than write/compare an empty golden.
-      console.error(
-        `✖ ${slug} (${label}): empty capture — needs a real terminal/CI (is \`script\` available?)`,
-      );
+      console.error(`✖ ${slug} (${label}): empty capture — the screen rendered nothing`);
       failures++;
       continue;
     }
 
     if (UPDATE) {
       writeFileSync(goldenFile, captured);
-      console.log(`updated  ${slug}`);
+      console.log(`updated  ${slug}  (${captured.length} bytes)`);
       continue;
     }
     if (!existsSync(goldenFile)) {
@@ -180,10 +151,10 @@ async function main() {
       failures++;
       continue;
     }
-    if (normalize(captured) === normalize(readFileSync(goldenFile))) {
+    if (captured.equals(readFileSync(goldenFile))) {
       console.log(`ok       ${slug}`);
     } else {
-      console.error(`✖ ${slug} (${label}): output changed vs golden`);
+      console.error(`✖ ${slug} (${label}): bytes differ from golden`);
       failures++;
     }
   }
