@@ -1,0 +1,56 @@
+name: CLI Screenshot Tests
+
+# Verifies every command renders its expected intro screen by capturing the
+# real binary's ANSI output in a pseudo-terminal and diffing against committed
+# goldens under scripts/__screenshots__/. See scripts/cli-screenshots.mjs.
+#
+# Trigger is workflow_dispatch (manual) until the goldens are seeded: run
+#   pnpm build && pnpm screens:cli --update
+# in a real terminal, commit scripts/__screenshots__/, then add the triggers
+# below so it gates PRs:
+#   pull_request:
+#   push:
+#     branches: [main]
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  cli-screenshots:
+    name: CLI screenshot tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@eae0cfeb286e66ffb5155f1a79b90583a127a68b # v2.4.1
+        with:
+          version: 10.23.0
+          run_install: false
+
+      - name: Set up Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version-file: 'package.json'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build wizard
+        run: pnpm build
+
+      - name: Check command screens
+        run: node scripts/cli-screenshots.mjs
+
+      - name: Upload captured screenshots
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: cli-screenshots
+          path: scripts/__screenshots__/**
+          if-no-files-found: ignore

@@ -120,7 +120,8 @@
     "dev": "pnpm build && pnpm link --global && pnpm build:watch",
     "test:watch": "jest --watch",
     "prepare": "husky",
-    "screens:check": "tsx scripts/check-screens.tsx"
+    "screens:check": "tsx scripts/check-screens.tsx",
+    "screens:cli": "node scripts/cli-screenshots.mjs"
   },
   "jest": {
     "collectCoverage": true,
