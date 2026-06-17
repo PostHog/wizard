@@ -47,7 +47,7 @@ export class InkUI implements WizardUI {
       });
     }
 
-    // Signal that the main work is done — router resolves to mcp or outro
+    // Signal that the main work is done — router resolves to outro
     if (this.store.session.runPhase === RunPhase.Running) {
       this.store.setRunPhase(RunPhase.Completed);
     }
