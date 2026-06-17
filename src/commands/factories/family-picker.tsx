@@ -6,12 +6,10 @@
  * `wizard audit` — when the user invokes the parent without a leaf, this
  * shows a TUI menu instead of yargs's `demandCommand(1)` help dump.
  *
- * The picker opens for families in an interactive terminal; the `default`
- * flag on a child controls which option is pre-highlighted (so `wizard audit`
- * → Enter runs the default leaf, today `audit events`). The caller decides
- * which children to pass in — `familyCommandFactory` currently passes only the
- * default leaf, so other subcommands stay runnable directly but aren't listed
- * here yet.
+ * The picker opens when a family surfaces more than one option; the `default`
+ * flag controls which one is pre-highlighted. When a family surfaces a single
+ * option (today `audit` → `events`), `familyCommandFactory` runs it directly
+ * instead, so the user lands on its intro screen rather than a one-item menu.
  *
  * Single-option commands aren't families — they should be flat
  * commands wired with `skillCommandFactory` / `nativeCommandFactory`
