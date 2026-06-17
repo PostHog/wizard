@@ -20,7 +20,7 @@ import {
 } from '../../agent/agent-interface';
 import { OutroKind, type WizardSession } from '../../wizard-session';
 import { detectNodePackageManagers } from '../../detection/package-manager';
-import { installSkillById } from '../../wizard-tools';
+import { installSkillById, fetchSkillMenu } from '../../wizard-tools';
 import { getUI } from '../../../ui';
 import { analytics } from '../../../utils/analytics';
 import { ciExcludedTaskTypes } from '../../../utils/ci-flag-overrides';
@@ -73,6 +73,27 @@ function sessionRunOptions(session: WizardSession): WizardRunOptions {
     apiKey: session.apiKey,
     yaraReport: session.yaraReport,
   };
+}
+
+/**
+ * The framework reference is the full `integration` skill. `session.skillId` is
+ * the bare framework (e.g. `django`), but the skill menu ids it as
+ * `integration-<variant>`. Resolve to the menu id: exact `integration-<framework>`
+ * (the 1:1 frameworks — django, python, flask, …), else the first granular variant
+ * under it (e.g. `integration-nextjs-app-router`). Undefined when none exists.
+ */
+async function resolveReferenceSkillId(
+  skillsBaseUrl: string,
+  framework: string,
+): Promise<string | undefined> {
+  const menu = await fetchSkillMenu(skillsBaseUrl);
+  if (!menu) return undefined;
+  const ids = Object.values(menu.categories)
+    .flat()
+    .map((s) => s.id);
+  const exact = `integration-${framework}`;
+  if (ids.includes(exact)) return exact;
+  return ids.find((id) => id.startsWith(`integration-${framework}-`));
 }
 
 export async function runOrchestrator(
@@ -169,9 +190,12 @@ export async function runOrchestrator(
   // skill — only the example file is read, when the agent's prompt points at it.
   let examplePath: string | undefined;
   let commandmentsPath: string | undefined;
-  if (session.skillId) {
+  const referenceSkillId = session.skillId
+    ? await resolveReferenceSkillId(boot.skillsBaseUrl, session.skillId)
+    : undefined;
+  if (referenceSkillId) {
     const ref = await installSkillById(
-      session.skillId,
+      referenceSkillId,
       session.installDir,
       boot.skillsBaseUrl,
       path.join(QUEUE_DIR_NAME, 'reference'),
@@ -186,8 +210,14 @@ export async function runOrchestrator(
         commandmentsPath = commandments;
       }
     } else {
-      logToFile(`[orchestrator] reference example unavailable: ${ref.kind}`);
+      logToFile(
+        `[orchestrator] reference unavailable: ${ref.kind} (${referenceSkillId})`,
+      );
     }
+  } else if (session.skillId) {
+    logToFile(
+      `[orchestrator] no integration skill for framework "${session.skillId}"`,
+    );
   }
 
   // The client injects the basics (project context + the I/O contract) around
