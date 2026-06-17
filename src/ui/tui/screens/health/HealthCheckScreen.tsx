@@ -152,7 +152,7 @@ export const HealthCheckScreen = ({ store }: HealthCheckScreenProps) => {
         s.id.startsWith(prefix),
       );
       for (const skill of skills) {
-        downloadSkill(skill, store.session.installDir, '.posthog/skills');
+        await downloadSkill(skill, store.session.installDir, '.posthog/skills');
       }
     }
     setDownloaded(true);

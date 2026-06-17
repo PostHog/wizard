@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
+import { zipSync, strToU8 } from 'fflate';
 import {
   ASK_BATCH_THRESHOLD,
   DEFAULT_ASK_MAX_QUESTIONS,
@@ -341,5 +342,40 @@ describe('evaluateAskCap', () => {
       reason: 'max_questions',
       message: expect.any(String),
     });
+  });
+});
+
+describe('extractZipTo', () => {
+  let dir: string;
+
+  beforeEach(() => {
+    dir = makeTmpDir();
+  });
+
+  afterEach(() => {
+    cleanup(dir);
+  });
+
+  it('writes nested files in-process without shelling out to unzip', () => {
+    const zip = zipSync({
+      'SKILL.md': strToU8('# skill'),
+      'references/guide.md': strToU8('details'),
+    });
+
+    __test.extractZipTo(zip, dir);
+
+    expect(fs.readFileSync(path.join(dir, 'SKILL.md'), 'utf8')).toBe('# skill');
+    expect(
+      fs.readFileSync(path.join(dir, 'references', 'guide.md'), 'utf8'),
+    ).toBe('details');
+  });
+
+  it('rejects zip-slip entries that escape the destination', () => {
+    const zip = zipSync({ '../escape.md': strToU8('pwned') });
+
+    expect(() => __test.extractZipTo(zip, dir)).toThrow(/unsafe path/i);
+    expect(fs.existsSync(path.join(path.dirname(dir), 'escape.md'))).toBe(
+      false,
+    );
   });
 });

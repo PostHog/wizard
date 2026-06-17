@@ -10,10 +10,6 @@ export const WIZARD_YARA_REPORT_FILE = join(
   TMP,
   'posthog-wizard-yara-report.json',
 );
-/** Temp path for a skill download zip. */
-export function skillTmpPath(skillId: string): string {
-  return join(TMP, `posthog-skill-${skillId}.zip`);
-}
 
 /**
  * Strip an absolute installDir prefix off a project file path so the UI
