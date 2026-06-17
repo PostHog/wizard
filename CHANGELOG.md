@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.24.0](https://github.com/PostHog/wizard/compare/v2.23.0...v2.24.0) (2026-06-17)
+
+
+### Features
+
+* **cli:** overhaul cli ([#617](https://github.com/PostHog/wizard/issues/617)) ([413f88e](https://github.com/PostHog/wizard/commit/413f88e33ae1d57c463aa6a11809c234b6b40697))
+
 ## [2.23.0](https://github.com/PostHog/wizard/compare/v2.22.1...v2.23.0) (2026-06-16)
 
 
