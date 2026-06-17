@@ -17,12 +17,14 @@
  * the router advance to exit.
  *
  * The mcp and integration flows arrive here already authenticated. The
- * standalone `wizard slack` flow deliberately doesn't log in — connecting
- * Slack itself happens in the browser, so we render the no-creds nudge.
+ * standalone `wizard slack` flow lands without credentials and only
+ * triggers OAuth when the user explicitly picks "Open Slack setup" —
+ * once authed, the connected-state poll lets the screen flip to the
+ * "Slack connected" copy without nagging users who already have it.
  */
 
 import { Box, Text } from 'ink';
-import { useEffect, useRef, useSyncExternalStore } from 'react';
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 
 import type { WizardStore } from '@ui/tui/store';
 import { Colors, Icons } from '@ui/tui/styles';
@@ -30,7 +32,10 @@ import { PickerMenu, LoadingBox } from '@ui/tui/primitives/index';
 import { useKeyBindings, KeyMatch } from '@ui/tui/hooks/useKeyBindings';
 import { getSlackAppCard } from '@lib/mcp-role-prompts';
 import { fetchSlackConnected } from '@lib/api';
+import { Program } from '@lib/programs/program-registry';
+import { getOrAskForProjectData } from '@utils/setup-utils';
 import { analytics } from '@utils/analytics';
+import { logToFile } from '@utils/debug';
 import { openTrackedLink, withUtm } from '@utils/links';
 
 interface SlackConnectScreenProps {
@@ -40,6 +45,13 @@ interface SlackConnectScreenProps {
 enum ChoiceValue {
   Open = 'open',
   Skip = 'skip',
+}
+
+enum Phase {
+  /** Default — the marketing card with the picker. */
+  Nudge = 'nudge',
+  /** User picked "Open Slack setup" without credentials; OAuth is in flight. */
+  Authenticating = 'authenticating',
 }
 
 const POLL_INTERVAL_MS = 3000;
@@ -61,6 +73,25 @@ export const SlackConnectScreen = ({ store }: SlackConnectScreenProps) => {
   // checked (the tutorial's prefetch, or this screen's first poll tick).
   const connectedState = store.session.slackConnected;
   const connected = connectedState === true;
+
+  // Phase.Nudge is the default; Phase.Authenticating fires only when the
+  // no-creds user picks "Open Slack setup" — explicit consent for the OAuth
+  // dance. Without credentials the connected-state poll can't run, so
+  // logging in is what unlocks the screen flipping to "Slack connected" on
+  // its own once the browser-side Slack OAuth completes.
+  const [phase, setPhase] = useState<Phase>(Phase.Nudge);
+  const [loginError, setLoginError] = useState<string | null>(null);
+
+  // Track whether we've already opened the Slack setup link this session.
+  // Once we have, the picker drops the "Open Slack setup" CTA (it would
+  // just re-fire the same browser action) and swaps in copy telling the
+  // user to finish the steps in their browser. The poll will flip the
+  // screen to "Slack connected" on its own when it succeeds.
+  const [setupOpened, setSetupOpened] = useState(false);
+  const openSlackSetup = (): void => {
+    openTrackedLink(setupUrl, 'slack-connect-setup');
+    setSetupOpened(true);
+  };
 
   // Impression — once, and only when the connected state is known, so
   // `already_connected` is real: users who arrive connected segment apart
@@ -168,22 +199,109 @@ export const SlackConnectScreen = ({ store }: SlackConnectScreenProps) => {
     const choice = Array.isArray(value) ? value[0] : value;
     if (choice === ChoiceValue.Open) {
       analytics.wizardCapture('slack connect opened', { role });
-      // The screen stays up; the poll flips it to connected once the
-      // OAuth step completes in the browser.
-      openTrackedLink(setupUrl, 'slack-connect-setup');
+      setLoginError(null);
+      // With credentials, the screen stays up and the existing poll flips
+      // it to connected once the user finishes the browser Slack OAuth.
+      // Without credentials, we kick off the wizard OAuth first so the
+      // poll can run after the user returns — opening Slack setup before
+      // login would mean we never get to confirm the connection.
+      if (credentials) {
+        openSlackSetup();
+        return;
+      }
+      setPhase(Phase.Authenticating);
       return;
     }
     dismiss();
   };
 
+  // OAuth runs when entering Authenticating. On success we land creds in
+  // the store, open the Slack setup link, and return to Nudge — the
+  // connected-state poll (keyed on credentials) then kicks in
+  // automatically. On failure we surface the error inline and stay put.
+  useEffect(() => {
+    if (phase !== Phase.Authenticating) return;
+    let cancelled = false;
+
+    void (async () => {
+      try {
+        const data = await getOrAskForProjectData({
+          signup: false,
+          ci: false,
+          apiKey: undefined,
+          projectId: undefined,
+          programId: Program.SlackConnect,
+        });
+        if (cancelled) return;
+        store.setCredentials({
+          accessToken: data.accessToken,
+          projectApiKey: data.projectApiKey,
+          host: data.host,
+          projectId: data.projectId,
+        });
+        store.setRoleAtOrganization(data.roleAtOrganization);
+        store.setApiUser(data.user);
+        store.setLoginUrl(null);
+        openSlackSetup();
+        setPhase(Phase.Nudge);
+      } catch (err) {
+        if (cancelled) return;
+        const message = err instanceof Error ? err.message : String(err);
+        logToFile(`[SlackConnectScreen] login failed: ${message}`);
+        analytics.captureException(
+          err instanceof Error ? err : new Error(String(err)),
+          { step: 'slack_connect_login' },
+        );
+        store.setLoginUrl(null);
+        setLoginError(message);
+        setPhase(Phase.Nudge);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [phase, role, setupUrl, store]);
+
   useKeyBindings('slack-connect', [
     {
       match: KeyMatch.Escape,
       label: 'esc',
-      action: connected ? 'done' : 'skip',
-      handler: () => dismiss(),
+      action:
+        phase === Phase.Authenticating ? 'cancel' : connected ? 'done' : 'skip',
+      handler: () => {
+        // Cancelling OAuth from the Authenticating phase returns to the
+        // nudge without dismissing — the user can retry, skip, or pick
+        // another action. The effect's cleanup discards the in-flight
+        // login result via the cancelled flag.
+        if (phase === Phase.Authenticating) {
+          store.setLoginUrl(null);
+          setPhase(Phase.Nudge);
+          return;
+        }
+        dismiss();
+      },
     },
   ]);
+
+  if (phase === Phase.Authenticating) {
+    return (
+      <Box flexDirection="column" flexGrow={1} marginTop={1}>
+        <LoadingBox message="Waiting for authentication..." />
+        {store.session.loginUrl && (
+          <Box marginTop={1} flexDirection="column">
+            <Text>
+              <Text dimColor>
+                If the browser didn&apos;t open, copy and paste:
+              </Text>
+              {'\n\n'}
+              <Text color="cyan">{store.session.loginUrl}</Text>
+            </Text>
+          </Box>
+        )}
+      </Box>
+    );
+  }
 
   // Credentials in hand but the first integration check hasn't resolved —
   // hold the nudge so an already-connected user is never asked to connect.
@@ -197,12 +315,22 @@ export const SlackConnectScreen = ({ store }: SlackConnectScreenProps) => {
     );
   }
 
+  // Waiting-for-browser state: after the user has picked "Open Slack
+  // setup" we've already triggered the browser action. Re-offering it as
+  // the headline CTA is confusing; surface "go finish it in your browser"
+  // copy and demote re-open to a recovery action.
+  const awaitingBrowser = setupOpened && !connected;
+
   return (
     <Box flexDirection="column" flexGrow={1}>
       <Box marginTop={1} flexDirection="column">
         {connected ? (
           <Text bold color={Colors.success}>
             {Icons.check} Slack connected
+          </Text>
+        ) : awaitingBrowser ? (
+          <Text bold color={Colors.accent}>
+            Finish connecting Slack
           </Text>
         ) : (
           <Text bold color={Colors.accent}>
@@ -214,6 +342,8 @@ export const SlackConnectScreen = ({ store }: SlackConnectScreenProps) => {
           <Text>
             {connected
               ? "Slack is connected — here's what you can do:"
+              : awaitingBrowser
+              ? "We've opened PostHog's Slack setup page in your browser. Authorize the Slack app there — we'll detect the connection automatically and continue."
               : slack.pitch}
           </Text>
         </Box>
@@ -235,7 +365,8 @@ export const SlackConnectScreen = ({ store }: SlackConnectScreenProps) => {
         <Box marginTop={1} flexDirection="column">
           {!connected && (
             <Text dimColor>
-              Connect it: <Text color="cyan">{setupUrl}</Text>
+              {awaitingBrowser ? 'Setup page: ' : 'Connect it: '}
+              <Text color="cyan">{setupUrl}</Text>
             </Text>
           )}
           <Text dimColor>
@@ -248,6 +379,14 @@ export const SlackConnectScreen = ({ store }: SlackConnectScreenProps) => {
             options={
               connected
                 ? [{ label: 'Done', value: ChoiceValue.Skip }]
+                : awaitingBrowser
+                ? [
+                    {
+                      label: 'Re-open Slack setup',
+                      value: ChoiceValue.Open,
+                    },
+                    { label: 'Skip / Continue', value: ChoiceValue.Skip },
+                  ]
                 : [
                     { label: 'Open Slack setup', value: ChoiceValue.Open },
                     { label: 'Skip / Continue', value: ChoiceValue.Skip },
@@ -256,6 +395,14 @@ export const SlackConnectScreen = ({ store }: SlackConnectScreenProps) => {
             onSelect={handleSelect}
           />
         </Box>
+
+        {loginError && (
+          <Box marginTop={1}>
+            <Text color="red">
+              Login failed: {loginError}. Try again or skip.
+            </Text>
+          </Box>
+        )}
       </Box>
     </Box>
   );
