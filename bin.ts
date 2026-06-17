@@ -32,12 +32,9 @@ if (process.env.NODE_ENV === 'test') {
 import { Wizard } from './src/wizard';
 import { basicIntegrationCommand } from './src/commands/basic-integration';
 import { mcpCommand } from './src/commands/mcp';
-import { integrateCommand } from './src/commands/integrate';
 import { auditCommand } from './src/commands/audit';
-import { audit3000Command } from './src/commands/audit-3000';
 import { doctorCommand } from './src/commands/doctor';
 import { migrateCommand } from './src/commands/migrate';
-import { eventsAuditCommand } from './src/commands/events-audit';
 import { revenueCommand } from './src/commands/revenue';
 import { slackCommand } from './src/commands/slack';
 import { uploadSourcemapsCommand } from './src/commands/upload-sourcemaps';
@@ -61,12 +58,9 @@ function resolveInstallDir(): string {
 
 Wizard.use(basicIntegrationCommand)
   .use(mcpCommand)
-  .use(integrateCommand)
   .use(auditCommand)
-  .use(audit3000Command)
   .use(doctorCommand)
   .use(migrateCommand)
-  .use(eventsAuditCommand)
   .use(revenueCommand)
   .use(slackCommand)
   .use(uploadSourcemapsCommand)
