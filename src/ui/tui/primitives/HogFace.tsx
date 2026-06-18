@@ -262,44 +262,71 @@ export const SnoringHog = ({ color = Colors.accent }: { color?: string }) => {
 // --- Talking animation (mouth flap) ----------------------------------------
 
 /** Milliseconds per talking tick. */
-const TALK_TICK_MS = 150;
-/** Min/max ticks the mouth holds each open/closed position. */
-const TALK_MIN_HOLD = 1;
-const TALK_MAX_HOLD = 2;
+const TALK_TICK_MS = 130;
+/** Min/max ticks the mouth holds each open or closed flap. */
+const TALK_FLAP_MIN = 1;
+const TALK_FLAP_MAX = 2;
+/** After the mouth closes, chance to hold a short pause (gap between words). */
+const TALK_PAUSE_CHANCE = 0.2;
+/** Length of that pause, in ticks (~0.4s–1s). */
+const TALK_PAUSE_MIN = 3;
+const TALK_PAUSE_MAX = 8;
+/** Per-tick chance of a blink while talking. */
+const TALK_BLINK_CHANCE = 0.05;
 
 interface TalkingHogProps {
-  arms?: HogArms;
   color?: string;
 }
 
 /**
- * Speaking mascot: the mouth opens and shuts at a slightly irregular pace to
- * mimic speech. Drive this while rendering dialogue text.
+ * Speaking mascot. The mouth flaps open (shocked, o) and shut (neutral, ﻌ) at
+ * an irregular pace, with the occasional short pause (a gap between words) and
+ * the odd blink, so it reads as talking rather than mechanically chattering.
+ * Drive this while rendering dialogue text.
  */
-export const TalkingHog = ({
-  arms = 'none',
-  color = Colors.accent,
-}: TalkingHogProps) => {
-  const [open, setOpen] = useState(false);
-  const holdRef = useRef(randInt(TALK_MIN_HOLD, TALK_MAX_HOLD));
+export const TalkingHog = ({ color = Colors.accent }: TalkingHogProps) => {
+  const [expression, setExpression] = useState<HogExpression>('neutral');
+  const openRef = useRef(false); // is the mouth currently open?
+  const flapRef = useRef(randInt(TALK_FLAP_MIN, TALK_FLAP_MAX)); // ticks left on this flap
+  const pauseRef = useRef(0); // ticks left in a between-words pause
+  const blinkRef = useRef(0); // ticks left in a blink
 
   useEffect(() => {
     const timer = setInterval(() => {
-      holdRef.current -= 1;
-      if (holdRef.current <= 0) {
-        holdRef.current = randInt(TALK_MIN_HOLD, TALK_MAX_HOLD);
-        setOpen((o) => !o);
+      // A blink overrides everything for its (brief) duration.
+      if (blinkRef.current > 0) {
+        blinkRef.current -= 1;
+        setExpression('blink');
+        return;
       }
+      if (Math.random() < TALK_BLINK_CHANCE) {
+        blinkRef.current = 1; // one frame, mouth closes momentarily
+        setExpression('blink');
+        return;
+      }
+
+      // Pause: mouth stays shut, mimicking a gap between words/sentences.
+      if (pauseRef.current > 0) {
+        pauseRef.current -= 1;
+        openRef.current = false;
+        setExpression('neutral');
+        return;
+      }
+
+      // Otherwise flap the mouth open/closed.
+      flapRef.current -= 1;
+      if (flapRef.current <= 0) {
+        openRef.current = !openRef.current;
+        flapRef.current = randInt(TALK_FLAP_MIN, TALK_FLAP_MAX);
+        // Just closed? Sometimes hold a beat before the next word.
+        if (!openRef.current && Math.random() < TALK_PAUSE_CHANCE) {
+          pauseRef.current = randInt(TALK_PAUSE_MIN, TALK_PAUSE_MAX);
+        }
+      }
+      setExpression(openRef.current ? 'shocked' : 'neutral');
     }, TALK_TICK_MS);
     return () => clearInterval(timer);
   }, []);
 
-  // 'shocked' = open mouth (o); 'neutral' = closed snout (ﻌ).
-  return (
-    <HogFace
-      expression={open ? 'shocked' : 'neutral'}
-      arms={arms}
-      color={color}
-    />
-  );
+  return <HogFace expression={expression} color={color} />;
 };
