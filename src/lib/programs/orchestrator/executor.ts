@@ -101,7 +101,7 @@ export async function drainQueue(
   for (;;) {
     for (const task of store.nextRunnable()) {
       if (++starts > opts.maxStarts) break;
-      // runOne marks the task in_progress synchronously, so the next
+      // runOne marks the task running synchronously, so the next
       // nextRunnable() call no longer offers it.
       const p = runOne(store, runTask, task).finally(() =>
         running.delete(task.id),

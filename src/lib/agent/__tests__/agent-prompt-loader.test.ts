@@ -12,7 +12,7 @@ import {
   type AgentRegistry,
   type OrchestratorPromptContext,
 } from '../agent-prompt-loader';
-import { QueueStore } from '../queue';
+import { QueueStore } from '../../programs/orchestrator/queue';
 
 function tmpDir(): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'agent-loader-test-'));
@@ -130,6 +130,18 @@ describe('buildRegistry', () => {
     expect(registry.get('install')).toBeUndefined();
     // A flowless prompt (e.g. the documentation example) joins no registry.
     expect(registry.get('example')).toBeUndefined();
+  });
+
+  it('drops harness-excluded types; unrestricted runs keep them', () => {
+    const prompts = [
+      prompt({ type: 'plan', flow: 'f', seed: true }),
+      prompt({ type: 'build', flow: 'f' }),
+      prompt({ type: 'dashboard', flow: 'f' }),
+    ];
+    expect(
+      buildRegistry(prompts, 'f', { exclude: ['dashboard'] }).types,
+    ).toEqual(['build']);
+    expect(buildRegistry(prompts, 'f').types).toEqual(['build', 'dashboard']);
   });
 });
 

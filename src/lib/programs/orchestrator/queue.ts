@@ -32,6 +32,12 @@ export interface QueuedTask {
   /** Human-readable label for the TUI, set by the enqueuing agent. */
   label?: string;
   status: TaskStatus;
+  /**
+   * Ids of tasks that must finish before this one runs. Ids are generated at
+   * enqueue and dependsOn is never mutated, so a task can only depend on tasks
+   * created before it — the graph is a DAG by construction, cycles cannot
+   * form. Unknown ids are rejected by the enqueue_task guard.
+   */
   dependsOn: string[];
   inputs: Record<string, unknown>;
   model?: string;
@@ -76,6 +82,10 @@ export interface EnqueueInput {
 export const QUEUE_DIR_NAME = '.posthog-wizard';
 const DEFAULT_MAX_ATTEMPTS = 2;
 
+function nowIso(): string {
+  return new Date().toISOString();
+}
+
 /** Every queue transition, in the order it is reflected. */
 export type TransitionEvent =
   | 'enqueue'
@@ -92,10 +102,6 @@ export interface QueueStoreOptions {
    * Listener errors are reported but cannot break a transition.
    */
   onTransition?: (event: TransitionEvent, task: QueuedTask) => void;
-}
-
-function nowIso(): string {
-  return new Date().toISOString();
 }
 
 export class QueueStore {
@@ -147,7 +153,7 @@ export class QueueStore {
   }
 
   /**
-   * True when no task is in progress and none can be started. Either everything
+   * True when no task is running and none can be started. Either everything
    * is terminal, or the only pending tasks are blocked by a failed dependency.
    */
   isDrained(): boolean {
@@ -229,7 +235,7 @@ export class QueueStore {
     return this.finish(id, TaskStatus.Failed, handoff);
   }
 
-  /** Put a failed/in-progress task back to pending for a retry within the run. */
+  /** Put a failed/running task back to pending for a retry within the run. */
   requeue(id: string): QueuedTask {
     const t = this.require(id);
     t.status = TaskStatus.Pending;
