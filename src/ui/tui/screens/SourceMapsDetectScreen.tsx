@@ -143,10 +143,11 @@ export const SourceMapsDetectScreen = ({
             {Icons.squareFilled} Nothing to instrument yet
           </Text>
           <Text dimColor>
-            None of the projects found can have source-map upload set up.
+            None of the {report.projects.length} projects found can have
+            source-map upload set up.
           </Text>
         </Box>
-        <ProjectList title="Projects found" projects={blocked} showReason />
+        <BlockedSummary blocked={blocked} />
         <Box marginTop={1}>
           <PickerMenu
             options={[{ label: 'Exit', value: EXIT }]}
@@ -172,19 +173,10 @@ export const SourceMapsDetectScreen = ({
           {Icons.check} Found{' '}
           {report.repoType === 'monorepo' ? 'a monorepo' : 'your project'}
         </Text>
-        <Text dimColor>Pick the project to wire up source-map upload for.</Text>
       </Box>
 
-      {blocked.length > 0 && (
-        <ProjectList
-          title="Can't instrument yet"
-          projects={blocked}
-          showReason
-        />
-      )}
-
       <PickerMenu
-        message="Which project?"
+        message="Which project would you like to set up source map uploads for?"
         options={options}
         onSelect={(value) => {
           const path = Array.isArray(value) ? value[0] : value;
@@ -208,27 +200,36 @@ export const SourceMapsDetectScreen = ({
           );
         }}
       />
+
+      <Box marginTop={1}>
+        <BlockedSummary blocked={blocked} />
+      </Box>
     </Box>
   );
 };
 
-const ProjectList = ({
-  title,
-  projects,
-  showReason,
-}: {
-  title: string;
-  projects: DetectedProject[];
-  showReason?: boolean;
-}) => (
-  <Box flexDirection="column" marginBottom={1}>
-    <Text dimColor>{title}:</Text>
-    {projects.map((p) => (
-      <Text key={p.path} dimColor>
-        {'  '}
-        {Icons.bullet} {projectLabel(p)}
-        {showReason && p.reason ? ` — ${p.reason}` : ''}
-      </Text>
-    ))}
-  </Box>
-);
+/**
+ * Collapses the non-instrumentable projects into a short count line (or two)
+ * instead of listing every one — a monorepo can have dozens.
+ */
+const BlockedSummary = ({ blocked }: { blocked: DetectedProject[] }) => {
+  const unsupported = blocked.filter((p) => p.variant == null).length;
+  const missingSdk = blocked.length - unsupported;
+  if (blocked.length === 0) return null;
+  return (
+    <Box flexDirection="column">
+      {unsupported > 0 && (
+        <Text dimColor>
+          (… {unsupported} other project{unsupported === 1 ? '' : 's'} not
+          supported)
+        </Text>
+      )}
+      {missingSdk > 0 && (
+        <Text dimColor>
+          (… {missingSdk} supported but missing the PostHog SDK — install it
+          there first)
+        </Text>
+      )}
+    </Box>
+  );
+};
