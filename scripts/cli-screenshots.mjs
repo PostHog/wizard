@@ -46,17 +46,24 @@ const SETTLE_MS = 1200;
 const MAX_CAPTURE_MS = 12000;
 
 /**
- * Each command and the marker its intro screen must contain. `marker` is in
- * normalized form (see normalize(): ANSI stripped, hyphens → spaces, collapsed,
- * lowercased). `src` ties the marker to wizard source, so it's a deliberate
- * "command → skill/program" assertion, not an eyeballed string.
+ * Each command and the marker(s) its screen must contain. `marker` is a string,
+ * or an array if the flow has several valid entry screens (the check passes if
+ * ANY appear) — in normalized form (see normalize(): ANSI stripped, hyphens →
+ * spaces, collapsed, lowercased). `src` ties markers to wizard source, so it's a
+ * deliberate "command → skill/program" assertion, not an eyeballed string.
  */
 const COMMANDS = [
-  // Strong: marker is the program/skill id the source wires into the intro row.
+  // The integration flow renders one of three screens depending on the dir and
+  // how fast detection finishes (cold CI may still be detecting at capture) —
+  // all framework-specific, none appear in other flows.
   {
     slug: 'default',
     args: [],
-    marker: 'program ✔ posthog integration',
+    marker: [
+      'program ✔ posthog integration', // intro (framework detected)
+      'detecting project framework', // still detecting
+      'select your framework', // picker (none detected)
+    ],
     src: "posthog-integration/index.ts id:'posthog-integration'",
   },
   {
@@ -110,13 +117,13 @@ const COMMANDS = [
     marker: 'posthog mcp',
     src: 'McpScreen.tsx',
   },
-  // Slack starts OAuth immediately, so the settled screen is the auth wait.
-  // Weak: proves slack didn't fall through to the default flow, not a skill id.
+  // Logged out (CI) shows the Slack connect intro; logged in jumps to the
+  // PostHog login wait. Either proves slack didn't fall through to another flow.
   {
     slug: 'slack-add',
     args: ['slack', 'add'],
-    marker: 'waiting for authentication',
-    src: 'SlackConnectScreen.tsx (OAuth wait; routing smoke check)',
+    marker: ['@posthog in slack', 'open slack setup', 'waiting for authentication'],
+    src: 'SlackConnectScreen.tsx (connect intro / login wait; routing check)',
   },
   {
     slug: 'skill-list',
@@ -254,11 +261,16 @@ async function main() {
     // Save the actual screenshot for inspection / CI artifacts (gitignored).
     writeFileSync(path.join(SHOTS_DIR, `${slug}.ans`), frame);
 
-    if (normalize(frame).includes(marker)) {
-      console.log(`ok       ${slug}  (found "${marker}")`);
+    const wanted = Array.isArray(marker) ? marker : [marker];
+    const normalized = normalize(frame);
+    const hit = wanted.find((m) => normalized.includes(m));
+    if (hit) {
+      console.log(`ok       ${slug}  (found "${hit}")`);
     } else {
       console.error(
-        `✖ ${slug} (${label}): expected "${marker}" [${src}] — not on screen.\n` +
+        `✖ ${slug} (${label}): expected ${wanted
+          .map((m) => `"${m}"`)
+          .join(' or ')} [${src}] — not on screen.\n` +
           `    See scripts/__screenshots__/${slug}.ans for what rendered.`,
       );
       failures++;
