@@ -7,6 +7,7 @@ import {
   CLI_STEERING_TARGETS,
   detectTargets,
   findTarget,
+  installOrUpdatePostHogCli,
   installSteeringSnippet,
 } from '@steps/install-cli-steering';
 
@@ -55,8 +56,45 @@ describe('install-cli-steering', () => {
     });
   });
 
+  describe('installOrUpdatePostHogCli', () => {
+    it('installs or updates the latest published CLI globally', () => {
+      spawnSyncMock.mockReturnValue({ status: 0, stdout: '', stderr: '' });
+
+      const result = installOrUpdatePostHogCli();
+
+      expect(result).toEqual({ success: true });
+      const [command, args, options] = spawnSyncMock.mock.calls[0];
+      expect(command).toBe('npm');
+      expect(args).toEqual(['install', '--global', '@posthog/cli@latest']);
+      expect(options.encoding).toBe('utf-8');
+    });
+
+    it('surfaces stderr when npm exits non-zero', () => {
+      spawnSyncMock.mockReturnValue({
+        status: 1,
+        stdout: '',
+        stderr: 'Error: install failed\n',
+      });
+
+      const result = installOrUpdatePostHogCli();
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('install failed');
+    });
+
+    it('explains when npm itself cannot be run', () => {
+      spawnSyncMock.mockReturnValue({
+        error: new Error('spawn npm ENOENT'),
+        status: null,
+      });
+
+      const result = installOrUpdatePostHogCli();
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('Is Node.js installed?');
+    });
+  });
+
   describe('installSteeringSnippet', () => {
-    it('delegates to the latest published CLI with the experimental env set', () => {
+    it('delegates to the installed CLI with the experimental env set', () => {
       spawnSyncMock.mockReturnValue({ status: 0, stdout: '', stderr: '' });
 
       const result = installSteeringSnippet('/home/user/.claude/CLAUDE.md');
@@ -66,10 +104,8 @@ describe('install-cli-steering', () => {
         filePath: '/home/user/.claude/CLAUDE.md',
       });
       const [command, args, options] = spawnSyncMock.mock.calls[0];
-      expect(command).toBe('npx');
+      expect(command).toBe('posthog-cli');
       expect(args).toEqual([
-        '-y',
-        '@posthog/cli@latest',
         'api',
         'agents-md',
         'install',
@@ -91,15 +127,16 @@ describe('install-cli-steering', () => {
       expect(result.error).toContain('something broke');
     });
 
-    it('explains when npx itself cannot be run', () => {
+    it('explains when posthog-cli itself cannot be run', () => {
       spawnSyncMock.mockReturnValue({
-        error: new Error('spawn npx ENOENT'),
+        error: new Error('spawn posthog-cli ENOENT'),
         status: null,
       });
 
       const result = installSteeringSnippet('/tmp/AGENTS.md');
       expect(result.success).toBe(false);
-      expect(result.error).toContain('Is Node.js installed?');
+      expect(result.error).toContain('posthog-cli');
+      expect(result.error).toContain('PATH');
     });
   });
 });

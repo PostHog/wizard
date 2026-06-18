@@ -63,39 +63,71 @@ export interface SteeringInstallResult {
   error?: string;
 }
 
+export interface CliInstallResult {
+  success: boolean;
+  error?: string;
+}
+
+const spawnOptions = {
+  encoding: 'utf-8' as const,
+  // npm/posthog-cli are npm.cmd/posthog-cli.cmd on Windows; spawnSync only
+  // resolves them through a shell.
+  shell: process.platform === 'win32',
+};
+
 /**
- * Delegate the actual write to `posthog-cli api agents-md install`, pinned to
- * `@posthog/cli@latest` via npx. The steering snippet lives in the CLI (its
- * single source of truth), so going through the latest release means a rerun
- * always refreshes the installed `<posthog>` block to the current content
- * instead of baking a copy into the wizard that would go stale.
+ * Install or update the PostHog CLI in the user's environment. `npm install
+ * --global @posthog/cli@latest` covers both first-time installs and upgrades
+ * for existing npm-installed CLIs.
+ */
+export function installOrUpdatePostHogCli(): CliInstallResult {
+  const args = ['install', '--global', '@posthog/cli@latest'];
+  debug(`Running npm ${args.join(' ')}`);
+
+  const result = spawnSync('npm', args, spawnOptions);
+
+  if (result.error) {
+    return {
+      success: false,
+      error: `Failed to run npm: ${result.error.message}. Is Node.js installed?`,
+    };
+  }
+  if (result.status !== 0) {
+    const detail = (result.stderr || result.stdout || '').trim();
+    return {
+      success: false,
+      error:
+        detail ||
+        `npm install --global @posthog/cli@latest exited with status ${
+          result.status ?? 'unknown'
+        }`,
+    };
+  }
+  return { success: true };
+}
+
+/**
+ * Delegate the actual write to the installed `posthog-cli api agents-md
+ * install`. The steering snippet lives in the CLI (its single source of truth),
+ * so the command should run only after `installOrUpdatePostHogCli` refreshes
+ * the CLI to the latest release.
  */
 export function installSteeringSnippet(
   filePath: string,
 ): SteeringInstallResult {
-  const args = [
-    '-y',
-    '@posthog/cli@latest',
-    'api',
-    'agents-md',
-    'install',
-    '--path',
-    filePath,
-  ];
-  debug(`Running npx ${args.join(' ')}`);
+  const args = ['api', 'agents-md', 'install', '--path', filePath];
+  debug(`Running posthog-cli ${args.join(' ')}`);
 
-  const result = spawnSync('npx', args, {
-    encoding: 'utf-8',
+  const result = spawnSync('posthog-cli', args, {
+    ...spawnOptions,
     env: { ...process.env, POSTHOG_CLI_EXPERIMENTAL_API: '1' },
-    // npx is npx.cmd on Windows; spawnSync only resolves it through a shell.
-    shell: process.platform === 'win32',
   });
 
   if (result.error) {
     return {
       success: false,
       filePath,
-      error: `Failed to run npx: ${result.error.message}. Is Node.js installed?`,
+      error: `Failed to run posthog-cli: ${result.error.message}. Make sure npm's global bin directory is on your PATH.`,
     };
   }
   if (result.status !== 0) {
@@ -103,7 +135,9 @@ export function installSteeringSnippet(
     return {
       success: false,
       filePath,
-      error: detail || `npx exited with status ${result.status ?? 'unknown'}`,
+      error:
+        detail ||
+        `posthog-cli exited with status ${result.status ?? 'unknown'}`,
     };
   }
   return { success: true, filePath };
