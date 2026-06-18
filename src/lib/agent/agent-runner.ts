@@ -9,9 +9,11 @@
  *   - What MCP servers and package manager detector to use
  *   - What happens after the agent completes
  *
- * The pipeline itself is fixed:
- *   init → health check → settings → OAuth → [skill install] →
- *   agent init → prompt → run → errors → [postRun] → outro
+ * The pipeline runs a shared bootstrap (logging, health check, settings, OAuth,
+ * flags, MCP url), then forks. The `orchestrator` variant routes to the
+ * experimental task-queue runner. Every other variant runs the fixed linear
+ * pipeline:
+ *   [skill install] → agent init → prompt → run → errors → [postRun] → outro
  */
 
 import {
@@ -29,12 +31,14 @@ import {
   AgentErrorType,
   AgentSignals,
   buildWizardMetadata,
+  isOrchestratorEnabled,
 } from './agent-interface';
 import {
   checkAllSettingsConflicts,
   backupAndFixClaudeSettings,
   restoreClaudeSettings,
 } from './claude-settings';
+import { runOrchestrator } from '../programs/orchestrator/orchestrator-runner';
 import { getCloudUrlFromRegion } from '@utils/urls';
 import {
   evaluateWizardReadiness,
@@ -43,9 +47,15 @@ import {
   getBlockingServiceKeys,
   SERVICE_LABELS,
 } from '@lib/health-checks/readiness';
-import { enableDebugLogs, initLogFile, logToFile } from '@utils/debug';
+import {
+  enableDebugLogs,
+  getLogFilePath,
+  initLogFile,
+  logToFile,
+} from '@utils/debug';
 import { createBenchmarkPipeline } from '@lib/middleware/benchmark';
 import { wizardAbort, WizardError, registerCleanup } from '@utils/wizard-abort';
+import { isNonInteractiveEnvironment } from '@utils/environment';
 import { formatScanReport, writeScanReport } from '@lib/yara-hooks';
 import { detectNodePackageManagers } from '@lib/detection/package-manager';
 import type { PackageManagerDetector } from '@lib/detection/package-manager';
@@ -53,7 +63,7 @@ import { getSkillsBaseUrl } from '@lib/constants';
 import { runtimeEnv } from '@env';
 import { installSkillById, type InstallSkillResult } from '@lib/wizard-tools';
 import { createWizardAskBridge } from '@lib/wizard-ask-bridge';
-import type { WizardRunOptions } from '@utils/types';
+import type { WizardRunOptions, CloudRegion } from '@utils/types';
 
 import type { ProgramConfig } from '@lib/programs/program-step';
 import { assemblePrompt, type PromptContext } from './agent-prompt';
@@ -108,7 +118,7 @@ export interface ProgramRun {
   buildOutroData?: (
     session: WizardSession,
     credentials: Credentials,
-    cloudRegion: import('@utils/types').CloudRegion | undefined,
+    cloudRegion: CloudRegion | undefined,
   ) => WizardSession['outroData'];
   /**
    * Per-run cap on `wizard_ask` invocations. Defaults to 10. The 4th call
@@ -122,6 +132,23 @@ export interface ProgramRun {
    * key in the browser) before they can answer.
    */
   askTimeoutMs?: number;
+}
+
+/**
+ * Result of the shared bootstrap, consumed by both the linear and the
+ * orchestrator arm. Credentials, role, and user are already applied to the
+ * session by `bootstrapProgram`; this carries the values both arms still need.
+ */
+export interface BootstrapResult {
+  skillsBaseUrl: string;
+  projectApiKey: Credentials['projectApiKey'];
+  host: Credentials['host'];
+  accessToken: Credentials['accessToken'];
+  projectId: Credentials['projectId'];
+  cloudRegion: CloudRegion;
+  mcpUrl: string;
+  wizardFlags: Record<string, string>;
+  wizardMetadata: Record<string, string>;
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────
@@ -179,16 +206,36 @@ export async function runAgent(
 /**
  * Run a program's agent pipeline.
  *
- * This is the single execution path for all programs — both skill-based
- * (revenue analytics) and framework-based (core integration). The
- * `ProgramRun` controls what varies between them; `programConfig` carries
- * the program-level static metadata (tool allow/disallow lists, etc.).
+ * Runs the shared bootstrap, then forks on the `wizard-variant` flag. The
+ * `orchestrator` variant routes to the experimental task-queue runner; every
+ * other variant runs the linear pipeline.
  */
 export async function runProgram(
   session: WizardSession,
   config: ProgramRun,
   programConfig: ProgramConfig,
 ): Promise<void> {
+  const boot = await bootstrapProgram(session, config, programConfig);
+
+  if (isOrchestratorEnabled(boot.wizardFlags)) {
+    getUI().log.info('Task-queue orchestrator enabled.');
+    return runOrchestrator(session, programConfig, boot);
+  }
+
+  return runLinearProgram(session, config, programConfig, boot);
+}
+
+/**
+ * Shared setup for both arms: logging, health check, settings conflicts, OAuth
+ * and credentials, then the feature flags, variant metadata, and MCP url. Sets
+ * `session.credentials`, role, and user as a side effect. Returns the values the
+ * arms still need.
+ */
+async function bootstrapProgram(
+  session: WizardSession,
+  config: ProgramRun,
+  programConfig: ProgramConfig,
+): Promise<BootstrapResult> {
   // 1. Init logging + debug
   initLogFile();
   session.skillId = config.skillId ?? config.integrationLabel;
@@ -233,12 +280,17 @@ export async function runProgram(
 
       await getUI().showBlockingOutage(readiness);
 
-      await wizardAbort({
-        message:
-          'Cannot start — external services are down:\n' +
-          blockingLabels.map((l) => `  - ${l}`).join('\n') +
-          '\n\nPlease try again later.',
-      });
+      // The TUI lets the user continue past an outage; non-interactive runs
+      // (CI) do the same automatically — the degraded services are reported
+      // above, but we proceed rather than aborting on a transient upstream blip.
+      if (!isNonInteractiveEnvironment()) {
+        await wizardAbort({
+          message:
+            'Cannot start — external services are down:\n' +
+            blockingLabels.map((l) => `  - ${l}`).join('\n') +
+            '\n\nPlease try again later.',
+        });
+      }
     } else if (readiness.decision === WizardReadiness.YesWithWarnings) {
       getUI().setReadinessWarnings(readiness);
     }
@@ -303,6 +355,9 @@ export async function runProgram(
   getUI().setRoleAtOrganization(roleAtOrganization);
   getUI().setApiUser(user);
 
+  // Identify the user (email, name) before evaluating flags, so flags can target
+  // the individual user and not just $app_name.
+  if (user) analytics.identifyUser(user);
   analytics.setGroups(groupsFromUser(user, host));
 
   // 4.5. AI opt-in enforcement. Parks here while AiOptInRequiredScreen is
@@ -310,9 +365,62 @@ export async function runProgram(
   // install and agent start, so no source leaves the machine. The screen
   // alone is cosmetic; this await is the actual gate. Resolves
   // immediately when the program declared requiresAi: false or in CI.
+  // In bootstrapProgram so both the linear and orchestrator arms gate.
   logToFile('[agent-runner] checking AI opt-in gate');
   await getUI().waitForAiOptIn();
   logToFile('[agent-runner] AI opt-in gate cleared');
+
+  // Feature flags, variant metadata, and MCP url. Both arms need these, and the
+  // fork decision reads the flags.
+  const wizardFlags = await analytics.getAllFlagsForWizard();
+  const wizardMetadata = buildWizardMetadata(wizardFlags);
+  // Tag every wizard event with the variant so runs segment in PostHog; the
+  // orchestrator arm overwrites this with its own variant when it forks.
+  analytics.setTag('variant', wizardMetadata.VARIANT);
+
+  // One MCP url for every region: the server resolves the user's region from
+  // the bearer token, so the EU subdomain (a Claude Code OAuth workaround) is
+  // not needed here.
+  const mcpUrl = session.localMcp
+    ? 'http://localhost:8787/mcp'
+    : runtimeEnv('MCP_URL') || 'https://mcp.posthog.com/mcp';
+
+  return {
+    skillsBaseUrl,
+    projectApiKey,
+    host,
+    accessToken,
+    projectId,
+    cloudRegion,
+    mcpUrl,
+    wizardFlags,
+    wizardMetadata,
+  };
+}
+
+/**
+ * The linear pipeline. Single execution path for all non-orchestrator programs,
+ * both skill-based (revenue analytics) and framework-based (core integration).
+ * The `ProgramRun` controls what varies between them; `programConfig` carries the
+ * program-level static metadata (tool allow/disallow lists, etc.).
+ */
+async function runLinearProgram(
+  session: WizardSession,
+  config: ProgramRun,
+  programConfig: ProgramConfig,
+  boot: BootstrapResult,
+): Promise<void> {
+  const {
+    skillsBaseUrl,
+    projectApiKey,
+    host,
+    accessToken,
+    projectId,
+    cloudRegion,
+    mcpUrl,
+    wizardFlags,
+    wizardMetadata,
+  } = boot;
 
   // 5. Skill install (if skillId provided)
   let skillPath: string | undefined;
@@ -333,15 +441,6 @@ export async function runProgram(
 
   // 6. Initialize agent
   const spinner = getUI().spinner();
-  const wizardFlags = await analytics.getAllFlagsForWizard();
-  const wizardMetadata = buildWizardMetadata(wizardFlags);
-
-  const mcpUrl = session.localMcp
-    ? 'http://localhost:8787/mcp'
-    : runtimeEnv('MCP_URL') ||
-      (cloudRegion === 'eu'
-        ? 'https://mcp-eu.posthog.com/mcp'
-        : 'https://mcp.posthog.com/mcp');
 
   const restoreSettings = () => restoreClaudeSettings(session.installDir);
   getUI().onEnterScreen('outro', restoreSettings);
@@ -370,6 +469,7 @@ export async function runProgram(
         timeoutMs: config.askTimeoutMs,
       });
 
+  getUI().log.step('Initializing Claude agent...');
   const agent = await initializeAgent(
     {
       workingDirectory: session.installDir,
@@ -391,6 +491,8 @@ export async function runProgram(
     },
     sessionToOptions(session),
   );
+  getUI().log.step(`Verbose logs: ${getLogFilePath()}`);
+  getUI().log.success("Agent initialized. Let's get cooking!");
 
   logToFile('[agent-runner] agent initialized');
 
