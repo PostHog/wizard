@@ -61,7 +61,7 @@ matching context-mill file carries the HOW.
 |---|---|---|---|
 | 1 | Check access | `1-check-access.md` | Probe `inbox-source-configs-list` (no readable beta flag — the API *is* the probe). Fail → `[ABORT] product autonomy is not available for this project`. |
 | 2 | Read project & Signals state | `2-read-context.md` | `./posthog-setup-report.md` + `signals-scout-project-profile-get` + cheap usage probes. Prompt opt-ins are authoritative ("repo evidence rules a product IN, never OUT"). |
-| 3 | Confirm AI data processing approval | `3-ai-approval.md` | Org consent; findings dropped without it. If needed, `wizard_ask` → `/settings/organization#organization-ai-consent`. Decline → `[ABORT] ai data processing approval declined`. |
+| 3 | Confirm AI data processing approval | `3-ai-approval.md` | Now a near no-op: org consent is enforced **upstream** by the base wizard's AI opt-in gate (§6), so it's guaranteed granted here — the agent just records "approved"; no `wizard_ask`, no abort. |
 | 4 | Connect GitHub (REQUIRED) | `4-github.md` | `integrations-list` for `kind:"github"`; else `wizard_ask` → `/settings/environment-integrations`, re-verify. Can't → `[ABORT] github connection declined`. |
 | 5 | Enable signal sources | `5-sources.md` | Create/enable `SignalSourceConfig` rows for products in use (`inbox-source-configs-*`). Always enables the scout gate `signals_scout`/`cross_source_issue`. Never enables an unconfirmed tool. |
 | 6 | Offer issue-tracker integrations | `6-connected-tools.md` (+ `6a`, `6b`) | One batched multi-select for GitHub Issues / Linear / Zendesk / pganalyze, then connect-then-enable. Each needs a warehouse source (`external-data-sources-create`) first. |
@@ -207,6 +207,11 @@ scoped to `created_via=MCP`.
 3. **AI data processing approval** — `Organization.is_ai_data_processing_approved`
    (`posthog/models/organization.py`, default `True`, nullable; admin toggle at
    `/settings/organization#organization-ai-consent`). Fail-closed; without it findings are silently dropped.
+   Enforced for this program by the **base wizard's AI opt-in gate** (`src/lib/programs/ai-opt-in-gate.ts`,
+   `withAiOptInGate`): it injects an `ai-opt-in` step after `auth` for every program that doesn't set
+   `requiresAi: false` (product-autonomy doesn't), and `store.getGate('ai-opt-in')` parks the agent until
+   approval lands — so the run can't reach the agent unapproved. That's why prompt STEP 3 / `3-ai-approval.md`
+   is now a no-op recording the already-guaranteed approval rather than asking or aborting.
 4. **GitHub integration** (kind `"github"`, team or user level) — required, or repo selection degrades to
    `no_repo`. UI: `/settings/environment-integrations#integration-github`.
 

@@ -16,12 +16,6 @@ export function buildProductAutonomyPrompt(ctx: PromptContext): string {
   const orgAiSettingsUrl = `${uiHost}/settings/organization#organization-ai-consent`;
   const newWarehouseSourceUrl = `${projectBase}/pipeline/new/source`;
   const inboxUrl = `${projectBase}/inbox`;
-  const aiApprovalLabel =
-    ctx.orgAiDataProcessingApproved === true
-      ? 'APPROVED'
-      : ctx.orgAiDataProcessingApproved === false
-      ? 'NOT APPROVED'
-      : 'UNKNOWN';
   const optIn = (value: boolean | null | undefined): string =>
     value === true ? 'ON' : value === false ? 'OFF' : 'unknown';
   const optIns = ctx.teamProductOptIns;
@@ -92,14 +86,10 @@ STEP 2 — Read project and current Signals state. (skill: "Read context")
    currently enabled signal sources so every later write is idempotent.
 
 STEP 3 — Confirm AI data processing approval. (skill: "AI approval")
-   Signals drops every finding unless the organization has approved AI
-   data processing. Auth-time check for this organization:
-   AI data processing approval is ${aiApprovalLabel}.
-   Follow the skill's step with that status as your starting point; if
-   approval is needed, point the user at ${orgAiSettingsUrl} via
-   wizard_ask. If the user declines, emit
-   ${AgentSignals.ABORT} ai data processing approval declined
-   and halt.
+   The wizard's base AI opt-in gate already enforces organization AI
+   data processing approval before this run starts, so it is guaranteed
+   granted by the time you reach this step. Do NOT ask the user about it
+   and do NOT abort — just record it as approved, per the skill.
 
 STEP 4 — Connect GitHub. REQUIRED. (skill: "Connect GitHub")
    Signals cannot research or fix issues without code access. Check for
