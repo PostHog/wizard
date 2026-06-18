@@ -57,6 +57,20 @@ The agent makes its 9-item task list up front (one `TaskCreate`), drives it with
 and asks the user only via `wizard_ask` (batched). Each prompt STEP names a skill reference whose
 matching context-mill file carries the HOW.
 
+**Step backbone (expected action, one line each):**
+
+1. **Check access** — probe the Signals API; if it's not available for the team, abort cleanly (`[ABORT] product autonomy is not available for this project`).
+2. **Read context** — build an evidence picture of which products are in use (setup report + `signals-scout-project-profile-get` + cheap usage probes + a light repo scan); read-only.
+3. **AI approval** — no-op: org consent is enforced upstream, so just record "approved".
+4. **Connect GitHub** — required; if no `github` integration, send the user through the GitHub App install (one-click authorize deep-link) and re-verify; abort if declined.
+5. **Enable sources** — always enable the scout gate; enable native sources (error tracking, replay, support) only where step-2 evidence shows the product is in use.
+6. **Offer issue trackers** — one multi-select (GitHub Issues / Linear / Zendesk / pganalyze); auto-create warehouse sources for GitHub Issues & Linear, redirect to the warehouse-source UI for Zendesk / pganalyze; verify each pick and enable a (possibly dormant) responder.
+7. **Configure scout fleet** — materialize the canonical fleet; keep the universal scouts, enable conditional ones only with evidence, disable the rest.
+8. **Design custom scouts** — gap-analyze the repo against the fleet, propose candidates in one ask, create the approved subset (the only place custom scouts are made).
+9. **Write report** — write `./posthog-product-autonomy-report.md` (everything changed + follow-ups); findings reach the inbox in ~30 min.
+
+The table below adds the skill reference and the tool/MCP surface for each.
+
 | # | Step | Skill ref / file | Tools · surface |
 |---|---|---|---|
 | 1 | Check access | `1-check-access.md` | Probe `inbox-source-configs-list` (no readable beta flag — the API *is* the probe). Fail → `[ABORT] product autonomy is not available for this project`. |
@@ -176,7 +190,7 @@ live `signals-scout-*` skill a config ("author a skill, get a scout"). The wizar
 both immediately instead of waiting for the Temporal coordinator's tick.
 
 **Custom scouts.** A scout is just an `LLMSkill` whose name starts `signals-scout-` (model:
-`posthog/products/ai_observability/backend/models/skills.py`). The agent authors them via
+`posthog/products/skills/backend/models/skills.py`). The agent authors them via
 `llma-skill-create`/`-get`/`-list` (scope `llm_skill:*`), guided by `authoring-signals-scouts`. A custom
 scout has **no `seeded_by` marker** — the single authoritative canonical-vs-custom discriminator (used by
 sync, prune, and the reset command in §8).
@@ -241,6 +255,23 @@ Plus the **Temporal coordinator schedule** (`signals-scout-coordinator-schedule`
 5. **Flag rollout:** `signals-scout` 100%-on with target teams in `guaranteed_team_ids`; `product-autonomy`
    on for target users.
 6. **Per-team runtime** (user's responsibility): org AI consent on, GitHub connected.
+
+> [!NOTE]
+> **Deferred changes (do when the dependency ships).** Tracked alongside the prod
+> checklist so they aren't forgotten:
+> 1. **Zendesk / pganalyze redirect → Inbox.** Today STEP 6 sends users to the
+>    new-warehouse-source URL (`/pipeline/new/source`) to add these credential-based
+>    sources (they can't be auto-created — the run never collects API keys). When the
+>    **new Inbox** ships, switch that redirect to the Inbox URL. Lands in context-mill
+>    `6-connected-tools.md` (the Zendesk/pganalyze branch) and the URL list in
+>    `prompt.ts` (`buildProductAutonomyPrompt`).
+> 2. **GitHub Issues / Linear sync cadence → 1h.** The MCP source-create builds the
+>    schema array server-side and defaults non-CDC sources to **6h**
+>    (`external_data_source.py`), so STEP 6 leaves issue syncs at 6h. To tighten the
+>    `issues` schema to `1hour` (a valid `sync_frequency`), the wizard MCP must expose an
+>    `external-data-schemas` update tool (or add `sync_frequency` passthrough to
+>    source-create); STEP 6a/6b would then PATCH the schema after create. Deferred — 6h is
+>    fine for issue trackers.
 
 ---
 
