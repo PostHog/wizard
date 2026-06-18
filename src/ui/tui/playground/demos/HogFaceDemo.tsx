@@ -106,24 +106,6 @@ export const HogFaceDemo = () => (
       </Labelled>
     </Section>
 
-    <Section title="Ears (pick the one closest to the eyes in your font)">
-      <Labelled label="⌒ current">
-        <HogFace ear="⌒" />
-      </Labelled>
-      <Labelled label="◠">
-        <HogFace ear="◠" />
-      </Labelled>
-      <Labelled label="∩">
-        <HogFace ear="∩" />
-      </Labelled>
-      <Labelled label="⌓">
-        <HogFace ear="⌓" />
-      </Labelled>
-      <Labelled label="^">
-        <HogFace ear="^" />
-      </Labelled>
-    </Section>
-
     <Box flexGrow={1} />
   </Box>
 );

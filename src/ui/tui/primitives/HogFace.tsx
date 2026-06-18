@@ -11,11 +11,6 @@
  * eyes on a wink. To stay deterministic we render every glyph in its own
  * cell inside a flex row, so visual order always matches logical order.
  *
- * Terminal note: rows are a fixed single line tall — there is no fractional
- * "line-height", so the ear row already sits as close to the eyes as the grid
- * allows. To tighten the look further, change EAR below to a lower-sitting
- * glyph, or reduce your terminal's line-spacing setting.
- *
  * `HogFace` is a pure primitive (props in, JSX out). The animated wrappers
  * (`AnimatedHogFace`, `SnoringHog`, `TalkingHog`) add self-contained timers.
  */
@@ -37,7 +32,7 @@ export type WinkEye = 'left' | 'right';
 /** Arm pose: tucked away, out to both sides, or swung left/right. */
 export type HogArms = 'none' | 'out' | 'left' | 'right';
 
-const EAR = '⌒'; // ear arc — swap for a lower glyph (e.g. ◠, ∩, ⌓) to tighten
+const EAR = '⌒'; // ear arc
 const SNOUT = 'ﻌ'; // closed snout (neutral mouth)
 const MOUTH_GRIN = 'ᴗ'; // cheeky
 const MOUTH_POUT = 'ε'; // pout
@@ -129,8 +124,6 @@ interface HogFaceProps {
   /** Which eye closes when expression is 'wink'. Defaults to the right eye. */
   winkEye?: WinkEye;
   arms?: HogArms;
-  /** Glyph used for the ears. Defaults to ⌒; try ◠ or ∩ for a lower sit. */
-  ear?: string;
   color?: string;
 }
 
@@ -138,13 +131,12 @@ export const HogFace = ({
   expression = 'neutral',
   winkEye = 'right',
   arms = 'none',
-  ear = EAR,
   color = Colors.accent,
 }: HogFaceProps) => {
   const { eyes, mouth } = faceSpec(expression, winkEye);
   const { cells, eyeCols } = buildFace(eyes, mouth, arms);
   // Ear row: same width as the face, ears sitting directly over the eyes.
-  const earCells = cells.map((_, i) => (eyeCols.includes(i) ? ear : ' '));
+  const earCells = cells.map((_, i) => (eyeCols.includes(i) ? EAR : ' '));
 
   return (
     <Box flexDirection="column" alignItems="center">
