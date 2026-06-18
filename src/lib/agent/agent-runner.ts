@@ -368,6 +368,9 @@ async function bootstrapProgram(
   // fork decision reads the flags.
   const wizardFlags = await analytics.getAllFlagsForWizard();
   const wizardMetadata = buildWizardMetadata(wizardFlags);
+  // Tag every wizard event with the variant so runs segment in PostHog; the
+  // orchestrator arm overwrites this with its own variant when it forks.
+  analytics.setTag('variant', wizardMetadata.VARIANT);
 
   const mcpUrl = session.localMcp
     ? 'http://localhost:8787/mcp'

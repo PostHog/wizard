@@ -14,6 +14,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { randomUUID } from 'crypto';
 import { writeJsonAtomic } from '../../../utils/atomic-ledger';
+import { analytics } from '../../../utils/analytics';
 
 export const TaskStatus = {
   Pending: 'pending',
@@ -75,17 +76,40 @@ export interface EnqueueInput {
 export const QUEUE_DIR_NAME = '.posthog-wizard';
 const DEFAULT_MAX_ATTEMPTS = 2;
 
+/** Every queue transition, in the order it is reflected. */
+export type TransitionEvent =
+  | 'enqueue'
+  | 'start'
+  | 'complete'
+  | 'skip'
+  | 'fail'
+  | 'requeue';
+
+export interface QueueStoreOptions {
+  /**
+   * Called on every transition with the task's post-transition state. The
+   * runner uses it for telemetry; the store itself stays analytics-free.
+   * Listener errors are reported but cannot break a transition.
+   */
+  onTransition?: (event: TransitionEvent, task: QueuedTask) => void;
+}
+
 function nowIso(): string {
   return new Date().toISOString();
 }
 
 export class QueueStore {
   private tasks: QueuedTask[] = [];
+  private readonly onTransition?: (
+    event: TransitionEvent,
+    task: QueuedTask,
+  ) => void;
 
   readonly runId: string;
   readonly queuePath: string;
 
-  constructor(installDir: string, runId: string) {
+  constructor(installDir: string, runId: string, opts?: QueueStoreOptions) {
+    this.onTransition = opts?.onTransition;
     this.runId = runId;
     const dir = path.join(installDir, QUEUE_DIR_NAME);
     this.queuePath = path.join(dir, 'queue.json');
@@ -172,6 +196,7 @@ export class QueueStore {
     };
     this.tasks.push(task);
     this.reflect();
+    this.notify('enqueue', task);
     return task;
   }
 
@@ -181,6 +206,7 @@ export class QueueStore {
     t.startedAt = nowIso();
     t.attempts += 1;
     this.reflect();
+    this.notify('start', t);
     return t;
   }
 
@@ -210,6 +236,7 @@ export class QueueStore {
     t.startedAt = undefined;
     t.finishedAt = undefined;
     this.reflect();
+    this.notify('requeue', t);
     return t;
   }
 
@@ -225,6 +252,14 @@ export class QueueStore {
     t.status = status;
     t.finishedAt = nowIso();
     this.reflect();
+    this.notify(
+      status === TaskStatus.Done
+        ? 'complete'
+        : status === TaskStatus.Skipped
+        ? 'skip'
+        : 'fail',
+      t,
+    );
     return t;
   }
 
@@ -235,6 +270,18 @@ export class QueueStore {
       tasks: this.tasks,
     };
     writeJsonAtomic(this.queuePath, file);
+  }
+
+  private notify(event: TransitionEvent, task: QueuedTask): void {
+    try {
+      this.onTransition?.(event, task);
+    } catch (error) {
+      // A listener must never break a transition, but its failure is a bug.
+      analytics.captureException(
+        error instanceof Error ? error : new Error(String(error)),
+        { step: 'orchestrator_queue_listener', event },
+      );
+    }
   }
 
   private require(id: string): QueuedTask {

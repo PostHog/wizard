@@ -678,6 +678,11 @@ export async function runAgent(
     abortCases?: readonly AbortCaseMatcher[];
     /** Request the end-of-run reflection remark. Defaults to true. */
     requestRemark?: boolean;
+    /**
+     * Extra properties attached to this run's `agent completed` / `agent
+     * aborted` events (e.g. the orchestrator's task type and id).
+     */
+    analyticsProperties?: Record<string, unknown>;
   },
   middleware?: {
     onMessage(message: any): void;
@@ -756,9 +761,27 @@ export async function runAgent(
       analytics.capture(WIZARD_REMARK_EVENT_NAME, { remark });
     }
 
+    // Token usage comes from the SDK result message and is per agent run —
+    // for the orchestrator that means per task, the secondary cost to watch.
+    const usage = lastResultMessage?.usage as
+      | {
+          input_tokens?: number;
+          output_tokens?: number;
+          cache_creation_input_tokens?: number;
+          cache_read_input_tokens?: number;
+        }
+      | undefined;
     analytics.wizardCapture('agent completed', {
       duration_ms: durationMs,
       duration_seconds: durationSeconds,
+      model: agentConfig.model,
+      num_turns: lastResultMessage?.num_turns,
+      total_cost_usd: lastResultMessage?.total_cost_usd,
+      input_tokens: usage?.input_tokens,
+      output_tokens: usage?.output_tokens,
+      cache_creation_input_tokens: usage?.cache_creation_input_tokens,
+      cache_read_input_tokens: usage?.cache_read_input_tokens,
+      ...config?.analyticsProperties,
     });
     try {
       middleware?.finalize(lastResultMessage, durationMs);
@@ -1172,6 +1195,8 @@ export async function runAgent(
       analytics.wizardCapture('agent aborted', {
         duration_ms: durationMs,
         duration_seconds: Math.round(durationMs / 1000),
+        model: agentConfig.model,
+        ...config?.analyticsProperties,
       });
     }
   }
