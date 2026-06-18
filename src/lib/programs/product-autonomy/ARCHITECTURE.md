@@ -79,7 +79,7 @@ The table below adds the skill reference and the tool/MCP surface for each.
 | 4 | Connect GitHub (REQUIRED) | `4-github.md` | `integrations-list` for `kind:"github"`; else `wizard_ask` → `/settings/environment-integrations`, re-verify. Can't → `[ABORT] github connection declined`. |
 | 5 | Enable signal sources | `5-sources.md` | Create/enable `SignalSourceConfig` rows for products in use (`inbox-source-configs-*`). Always enables the scout gate `signals_scout`/`cross_source_issue`. Never enables an unconfirmed tool. |
 | 6 | Offer issue-tracker integrations | `6-connected-tools.md` (+ `6a`, `6b`) | One batched multi-select for GitHub Issues / Linear / Zendesk / pganalyze, then connect-then-enable. Each needs a warehouse source (`external-data-sources-create`) first. |
-| 7 | Configure the scout fleet | `7-scouts.md` | `signals-scout-config-sync` materializes the fleet; keep the 5 universal scouts, enable a conditional one only with evidence, disable the rest (`signals-scout-config-update {enabled:false}`). Never touches `emit`/`run_interval`. |
+| 7 | Configure the scout fleet | `7-scouts.md` | `signals-scout-config-sync` materializes the fleet (~19 scouts, grows over time); classify each row the sync returns — keep the cross-product scouts, enable surface-specific ones only with evidence, disable the rest (`signals-scout-config-update {enabled:false}`). Never touches `emit`/`run_interval`. |
 | 8 | Design custom scouts | `7b-tailor-scouts.md` | The **only** place custom scouts are created. Gap-analyze repo surfaces vs the fleet; propose in ONE `wizard_ask`; create approved ones via `llma-skill-create` (`signals-scout-<scope>`). **Canonical bodies never edited.** Declining is valid, not an abort. |
 | 9 | Write report & hand off | `8-report.md` | Write `./posthog-product-autonomy-report.md`; findings appear in the inbox in ~30 min. |
 
@@ -181,11 +181,14 @@ the `task` scope); `-destroy` disabled. Enabling can trigger server-side side-ef
 schedules, data-import sync).
 
 **Scout fleet.** `SignalScoutConfig` (`models.py`): per `(team, skill_name)`, `enabled` (participation),
-`emit` (dry-run vs emit, default on), `run_interval_minutes` (default 60). Canonical fleet (10) in
-`posthog/products/signals/skills/`: universal — `signals-scout-{general, error-tracking,
-anomaly-detection, observability-gaps, health-checks}`; conditional — `signals-scout-{revenue-analytics,
-surveys, ai-observability, logs, csp-violations}`; plus the `authoring-signals-scouts` companion (not a
-scout). `lazy_seed.py` mirrors the on-disk canonical skills into per-team `LLMSkill` rows:
+`emit` (dry-run vs emit, default on), `run_interval_minutes` (default 60). Canonical fleet (~19 `signals-scout-*` skills, and growing) in
+`posthog/products/signals/skills/`. STEP 7 does **not** hardcode the list — it classifies whatever
+`signals-scout-config-sync` returns into **always-on** (cross-product: `general`,
+`anomaly-detection`, `observability-gaps`, `health-checks`, `inbox-validation`) vs **surface-specific**
+(enabled only with evidence: `error-tracking`, `session-replay`, `product-analytics`, `web-analytics`,
+`feature-flags`, `surveys`, `revenue-analytics`, `ai-observability`, `logs`, `csp-violations`,
+`experiments`, `customer-analytics`, `data-pipelines`, `replay-vision`), per `7-scouts.md`; plus the
+`authoring-signals-scouts` companion (not a scout). `lazy_seed.py` mirrors the on-disk canonical skills into per-team `LLMSkill` rows:
 `sync_canonical_skills` only ever touches rows stamped `metadata.seeded_by == "signals_scout_harness"`
 (content-hash gated; a team-edited copy stops receiving updates); `register_missing_configs` gives each
 live `signals-scout-*` skill a config ("author a skill, get a scout"). The wizard's STEP 7 calls MCP
@@ -315,6 +318,7 @@ Plus the **Temporal coordinator schedule** (`signals-scout-coordinator-schedule`
 >    their first DWH sync completes (item 2) regardless of the coordinator — so an immediate
 >    trigger speeds up scout findings, not source/warehouse findings. Lands in posthog (the
 >    trigger) + context-mill (call it) + the wizard outro copy.
+> 7. Write down a proper end message for wizard (go to inbox, do stuff) instead of directing to docs, as now @/Users/woutut/Documents/Screenshots/CleanShot 2026-06-18 at 17.44.02.png
 
 ---
 
