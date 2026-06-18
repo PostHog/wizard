@@ -30,10 +30,13 @@ export const errorTrackingUploadSourceMapsConfig: ProgramConfig = {
 
   run: (session: WizardSession): Promise<ProgramRun> => {
     const variant = session.frameworkContext[
-      SOURCE_MAPS_CONTEXT_KEYS.skillVariant
+      SOURCE_MAPS_CONTEXT_KEYS.selectedVariant
     ] as SkillVariant | undefined;
     const displayName = session.frameworkContext[
-      SOURCE_MAPS_CONTEXT_KEYS.displayName
+      SOURCE_MAPS_CONTEXT_KEYS.selectedDisplayName
+    ] as string | undefined;
+    const projectPath = session.frameworkContext[
+      SOURCE_MAPS_CONTEXT_KEYS.selectedPath
     ] as string | undefined;
 
     const skillId = variant
@@ -71,6 +74,7 @@ export const errorTrackingUploadSourceMapsConfig: ProgramConfig = {
           displayName,
           variant,
           skillId,
+          projectPath,
           projectId: ctx.projectId,
           host: ctx.host,
           settingsUrl: `${uiHost}/project/${ctx.projectId}/settings/user-api-keys`,

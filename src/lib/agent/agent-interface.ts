@@ -17,6 +17,7 @@ import {
   WIZARD_VARIANTS,
   WIZARD_ORCHESTRATOR_FLAG_KEY,
   WIZARD_USER_AGENT,
+  DEFAULT_AGENT_MODEL,
 } from '@lib/constants';
 import {
   type AdditionalFeature,
@@ -133,6 +134,11 @@ export type AgentConfig = {
   wizardMetadata?: Record<string, string>;
   /** Program identifier — selects the model for that program. */
   integrationLabel?: string;
+  /**
+   * Override the agent model for this run. Defaults to DEFAULT_AGENT_MODEL.
+   * Use for cheap mechanical runs (e.g. source-map detection on HAIKU_MODEL).
+   */
+  modelOverride?: string;
   /** Bridge that drives the `wizard_ask` overlay. Omit in non-interactive hosts. */
   askBridge?: import('@lib/wizard-ask-bridge').WizardAskBridge;
   /** Per-run cap on `wizard_ask` invocations. Defaults to 10. */
@@ -603,7 +609,7 @@ export async function initializeAgent(
 
     // Bare model IDs (no `anthropic/` prefix) so the LLM gateway's Bedrock
     // fallback can match map_to_bedrock_model()'s strict lookup.
-    const model = 'claude-sonnet-4-6';
+    const model = config.modelOverride ?? DEFAULT_AGENT_MODEL;
 
     const agentRunConfig: AgentRunConfig = {
       workingDirectory: config.workingDirectory,
