@@ -9,6 +9,7 @@ import {
   type CliSteeringTarget,
   detectTargets,
   findTarget,
+  installOrUpdatePostHogCli,
   installSteeringSnippet,
 } from '@steps/install-cli-steering';
 import type { Command } from '../command';
@@ -16,7 +17,7 @@ import type { Command } from '../command';
 export const cliAddCommand: Command = {
   name: 'add',
   description:
-    "Add PostHog CLI steering instructions to your coding agent's global instructions file",
+    "Install or update PostHog CLI and add steering instructions to your coding agent's global instructions file",
   options: {
     agent: {
       describe: 'Agent to install the instructions for',
@@ -60,12 +61,32 @@ export const cliAddCommand: Command = {
 async function runCliAdd(argv: Arguments): Promise<void> {
   setUI(new LoggingUI());
   const ui = getUI();
-  ui.intro('PostHog CLI steering instructions');
+  ui.intro('PostHog CLI setup');
 
   const files = await resolveTargetFiles(argv);
   if (files.length === 0) {
     process.exit(1);
+    return;
   }
+
+  ui.log.info('Installing or updating PostHog CLI...');
+  const cliInstallResult = installOrUpdatePostHogCli();
+  if (!cliInstallResult.success) {
+    ui.log.error(
+      `Failed to install or update PostHog CLI: ${
+        cliInstallResult.error ?? ''
+      }`,
+    );
+    analytics.wizardCapture('cli steering installed', {
+      files: files.length,
+      failures: files.length,
+      cli_install_failed: true,
+      agent: typeof argv.agent === 'string' ? argv.agent : undefined,
+    });
+    process.exit(1);
+    return;
+  }
+  ui.log.success('Installed or updated PostHog CLI.');
 
   let failures = 0;
   for (const file of files) {
@@ -86,9 +107,10 @@ async function runCliAdd(argv: Arguments): Promise<void> {
 
   if (failures > 0) {
     process.exit(1);
+    return;
   }
   ui.outro(
-    'Done. Your agent will now use `posthog-cli api` for PostHog tasks.',
+    'Done. PostHog CLI is installed and your agent will now use `posthog-cli api` for PostHog tasks.',
   );
   process.exit(0);
 }
@@ -103,7 +125,11 @@ async function resolveTargetFiles(argv: Arguments): Promise<string[]> {
 
   if (typeof argv.agent === 'string') {
     // yargs `choices` already rejected unknown ids.
-    const target = findTarget(argv.agent)!;
+    const target = findTarget(argv.agent);
+    if (!target) {
+      ui.log.error(`Unsupported agent: ${argv.agent}`);
+      return [];
+    }
     return [target.instructionsPath()];
   }
 
