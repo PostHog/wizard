@@ -39,6 +39,7 @@ import { revenueCommand } from './src/commands/revenue';
 import { slackCommand } from './src/commands/slack';
 import { uploadSourcemapsCommand } from './src/commands/upload-sourcemaps';
 import { skillCommand } from './src/commands/skill';
+import { cliCommand } from './src/commands/cli';
 import { recoverOrphanedSettingsBackups } from './src/lib/agent/claude-settings';
 
 // Heal any .claude/settings backup a previous interrupted run left orphaned,
@@ -58,6 +59,7 @@ function resolveInstallDir(): string {
 
 Wizard.use(basicIntegrationCommand)
   .use(mcpCommand)
+  .use(cliCommand)
   .use(auditCommand)
   .use(doctorCommand)
   .use(migrateCommand)
