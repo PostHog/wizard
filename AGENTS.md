@@ -121,6 +121,7 @@ pnpm build                         # Compile TypeScript
 pnpm test                          # Unit tests (builds first)
 pnpm test:watch                    # Unit tests in watch mode
 pnpm test:e2e                      # End-to-end tests
+pnpm screens:cli                   # Assert each command loads the right skill (renders + checks its intro screen)
 pnpm lint                          # Prettier + ESLint checks
 pnpm fix                           # Auto-fix lint issues
 pnpm dev                           # Build, link globally, watch for changes

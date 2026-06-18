@@ -1,18 +1,21 @@
 name: CLI Screenshot Tests
 
-# Verifies every command renders its expected intro screen by capturing the
-# real binary's ANSI output in a pseudo-terminal and diffing against committed
-# goldens under scripts/__screenshots__/. See scripts/cli-screenshots.mjs.
-#
-# Trigger is workflow_dispatch (manual) until the goldens are seeded: run
-#   pnpm build && pnpm screens:cli --update
-# in a real terminal, commit scripts/__screenshots__/, then add the triggers
-# below so it gates PRs:
-#   pull_request:
-#   push:
-#     branches: [main]
+# Asserts each command loads the right skill/program. See scripts/cli-screenshots.mjs.
 on:
   workflow_dispatch:
+  # Drift monitor: catches a context-mill change breaking a command, no PR needed.
+  # Runs from `main` only (GitHub limitation).
+  schedule:
+    - cron: '37 13 * * *' # daily ~06:37 PT
+  # Pre-merge gate, scoped to files that decide command → screen wiring.
+  pull_request:
+    paths:
+      - 'bin.ts'
+      - 'src/commands/**'
+      - 'src/ui/tui/**'
+      - 'src/lib/programs/**'
+      - 'scripts/cli-screenshots.mjs'
+      - '.github/workflows/cli-screenshots.yml'
 
 permissions:
   contents: read
@@ -54,3 +57,15 @@ jobs:
           name: cli-screenshots
           path: scripts/__screenshots__/**
           if-no-files-found: ignore
+
+      # Scheduled-only: a PR failure shows a red ❌ already; a scheduled one pings nobody.
+      - name: Notify Slack on scheduled failure
+        if: failure() && github.event_name == 'schedule'
+        uses: slackapi/slack-github-action@485a9d42d3a73031f12ec201c457e2162c45d02d # v2.0.0
+        with:
+          webhook: ${{ secrets.SLACK_WEBHOOK_WIZARD_CHANNEL }}
+          webhook-type: incoming-webhook
+          payload: |
+            {
+              "text": "🖼️ CLI screenshot check failed on the scheduled run — a command may be loading the wrong screen, or context-mill drifted. <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View run>"
+            }
