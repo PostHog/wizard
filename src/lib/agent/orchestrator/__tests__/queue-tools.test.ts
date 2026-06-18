@@ -1,14 +1,14 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { QueueStore } from '@lib/programs/orchestrator/queue';
+import { QueueStore } from '@lib/agent/orchestrator/queue';
 import {
   applyComplete,
   applyEnqueue,
   applyReadHandoffs,
   checkEnqueueGuards,
   type OrchestratorToolsContext,
-} from '@lib/programs/orchestrator/queue-tools';
+} from '@lib/agent/orchestrator/queue-tools';
 
 function tmpDir(): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'queue-tools-test-'));

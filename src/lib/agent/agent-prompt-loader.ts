@@ -15,8 +15,8 @@
  * network latency. The registry's type list also drives `enqueue_task`
  * validation.
  */
-import type { QueueStore, QueuedTask } from '../programs/orchestrator/queue';
-import type { ResolvedTask } from '../programs/orchestrator/executor';
+import type { QueueStore, QueuedTask } from './orchestrator/queue';
+import type { ResolvedTask } from './orchestrator/executor';
 
 /**
  * The basics the client injects around every agent-prompt body. The `/agents/`

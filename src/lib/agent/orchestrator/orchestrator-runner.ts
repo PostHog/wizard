@@ -17,7 +17,7 @@ import {
   initializeAgent,
   runAgent,
   type AgentConfig,
-} from '../../agent/agent-interface';
+} from '../agent-interface';
 import { OutroKind, type WizardSession } from '../../wizard-session';
 import { detectNodePackageManagers } from '../../detection/package-manager';
 import { installSkillById, fetchSkillMenu } from '../../wizard-tools';
@@ -25,8 +25,8 @@ import { getUI } from '../../../ui';
 import { analytics } from '../../../utils/analytics';
 import { ciExcludedTaskTypes } from '../../../utils/ci-flag-overrides';
 import { logToFile } from '../../../utils/debug';
-import type { ProgramConfig } from '../program-step';
-import type { BootstrapResult } from '../../agent/agent-runner';
+import type { ProgramConfig } from '../../programs/program-step';
+import type { BootstrapResult } from '../runner/types';
 import type { WizardRunOptions } from '../../../utils/types';
 import {
   QueueStore,
@@ -44,7 +44,7 @@ import {
   resolveTask,
   taskModel,
   type OrchestratorPromptContext,
-} from '../../agent/agent-prompt-loader';
+} from '../agent-prompt-loader';
 
 function toTodoStatus(status: TaskStatus): string {
   switch (status) {

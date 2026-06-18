@@ -1,4 +1,4 @@
-import { RunMetrics } from '@lib/programs/orchestrator/run-metrics';
+import { RunMetrics } from '@lib/agent/orchestrator/run-metrics';
 
 describe('RunMetrics', () => {
   it('reports time to first start and first completion from run start', () => {

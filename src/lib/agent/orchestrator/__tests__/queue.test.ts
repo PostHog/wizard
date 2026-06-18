@@ -6,7 +6,7 @@ import {
   QUEUE_DIR_NAME,
   type QueueFile,
   type TaskHandoff,
-} from '@lib/programs/orchestrator/queue';
+} from '@lib/agent/orchestrator/queue';
 
 jest.mock('@utils/analytics', () => ({
   analytics: { captureException: jest.fn(), wizardCapture: jest.fn() },
