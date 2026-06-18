@@ -509,7 +509,7 @@
 
   "slackApp": {
     "learnMoreUrl": "https://posthog.com/slack",
-    "setupUrl": "https://app.posthog.com/settings/project-integrations#integration-slack",
+    "setupUrl": "https://app.posthog.com/integrations/slack",
     "headline": "@PostHog in Slack",
     "pitch": "Ask about your product data, debug issues, and generate PRs without leaving the thread.",
     "capabilities": [

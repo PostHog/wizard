@@ -19,49 +19,45 @@ const MIGRATION_ABORT_CASES: AbortCase[] = [
 ];
 
 /**
- * Map each `--product=<id>` choice to the context-mill skill ID that handles
- * it. Adding a variant: drop a new row here. The CLI `choices` and the
- * runtime lookup both read from this map, so the two stay in sync.
+ * Vendors supported by `wizard migrate <vendor>`. Each entry maps to the
+ * context-mill skill that drives that vendor's migration. New vendors get
+ * added here and surfaced as family subcommands via the family dispatcher
+ * (see `dispatch-family.ts`).
  */
-const PRODUCT_TO_SKILL_ID = {
+export const MIGRATE_VENDOR_TO_SKILL_ID = {
   statsig: 'migrate-statsig',
   mixpanel: 'migrate-mixpanel',
   amplitude: 'migrate-amplitude',
   sentry: 'migrate-sentry',
 } as const;
 
-type MigrateProduct = keyof typeof PRODUCT_TO_SKILL_ID;
-const MIGRATE_PRODUCTS = Object.keys(PRODUCT_TO_SKILL_ID) as MigrateProduct[];
+export type MigrateVendor = keyof typeof MIGRATE_VENDOR_TO_SKILL_ID;
+
+// Default skill id when nothing else picks one. The `wizard migrate <vendor>`
+// subcommands override this via the family dispatcher (each CliEntry's
+// skillId lands on session.skillId before the run), so this default only
+// kicks in for legacy callers (e.g. programmatic uses of migrationConfig
+// directly with no skillId).
+const DEFAULT_MIGRATE_SKILL_ID = MIGRATE_VENDOR_TO_SKILL_ID.statsig;
 
 export const migrationConfig: ProgramConfig = {
   command: 'migrate',
   description: 'Migrate to PostHog from another analytics provider',
   id: 'migration',
-  skillId: PRODUCT_TO_SKILL_ID.statsig,
+  skillId: DEFAULT_MIGRATE_SKILL_ID,
   steps: MIGRATION_PROGRAM,
   reportFile: MIGRATION_REPORT_FILE,
   getContentBlocks,
   allowedTools: ['Agent'],
   disallowedTools: [WIZARD_TOOL_NAMES.wizardAsk],
-  cliOptions: {
-    product: {
-      describe: 'Source SDK to migrate from',
-      type: 'string',
-      choices: MIGRATE_PRODUCTS,
-      demandOption: true,
-    },
-  },
-  mapCliOptions: (argv) => ({
-    skillId: PRODUCT_TO_SKILL_ID[argv.product as MigrateProduct],
-  }),
-  // `run` is a function so the per-invocation skillId set by
-  // `mapCliOptions` (`--product=<id>` → `migrate-<id>`) flows through.
-  // A static object here would freeze the skillId at module load and
-  // every `migrate` invocation would install whichever default we put
-  // in the object, regardless of the CLI flag.
+  // `run` is a function so the per-invocation skillId (set by the family
+  // dispatcher when resolving `wizard migrate <vendor>`) flows through to
+  // the runner. A static object would freeze the skillId at module load
+  // and every vendor would install the default, regardless of the chosen
+  // subcommand.
   run: (session) =>
     Promise.resolve({
-      skillId: session.skillId ?? PRODUCT_TO_SKILL_ID.statsig,
+      skillId: session.skillId ?? DEFAULT_MIGRATE_SKILL_ID,
       integrationLabel: 'migration',
       customPrompt: () =>
         'Migrate this project from its existing third-party analytics, ' +

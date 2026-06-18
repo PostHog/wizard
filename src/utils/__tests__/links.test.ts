@@ -12,13 +12,13 @@ describe('withUtm', () => {
 
   it('preserves existing query params and fragments', () => {
     const url = withUtm(
-      'https://app.posthog.com/settings/project-integrations?a=1#integration-slack',
+      'https://app.posthog.com/integrations/slack?a=1#connect',
       'slack-connect-setup',
     );
     const parsed = new URL(url);
     expect(parsed.searchParams.get('a')).toBe('1');
     expect(parsed.searchParams.get('utm_source')).toBe('wizard');
-    expect(parsed.hash).toBe('#integration-slack');
+    expect(parsed.hash).toBe('#connect');
   });
 
   it('does not re-tag a URL that already carries a utm_source', () => {

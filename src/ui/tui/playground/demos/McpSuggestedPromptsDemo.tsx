@@ -123,7 +123,6 @@ interface MockConfig {
   loginDelayMs: number;
   script: StreamScript;
   chunkDelayMs: number;
-  slackConnected: boolean;
 }
 
 interface McpSuggestedPromptsDemoProps {
@@ -195,9 +194,6 @@ function createMockServices(
       };
     },
 
-    checkSlackConnected: () =>
-      Promise.resolve(configRef.current.slackConnected),
-
     runPromptStreaming: ({ signal }) => mockStream(configRef, signal),
   };
 }
@@ -226,7 +222,6 @@ export const McpSuggestedPromptsDemo = ({
   const [loginDelayIdx, setLoginDelayIdx] = useState(1); // 2000ms default
   const [scriptIdx, setScriptIdx] = useState(1); // 'with-tools' default
   const [chunkDelayIdx, setChunkDelayIdx] = useState(1); // 200ms default
-  const [slackConnected, setSlackConnected] = useState(false);
 
   const role = ROLE_CYCLE[roleIdx];
   const integration = FAMILY_INTEGRATIONS[familyIdx];
@@ -242,7 +237,6 @@ export const McpSuggestedPromptsDemo = ({
     loginDelayMs,
     script,
     chunkDelayMs,
-    slackConnected,
   });
   configRef.current = {
     role,
@@ -250,7 +244,6 @@ export const McpSuggestedPromptsDemo = ({
     loginDelayMs,
     script,
     chunkDelayMs,
-    slackConnected,
   };
 
   // Stable services instance — reads from configRef each call.
@@ -283,8 +276,6 @@ export const McpSuggestedPromptsDemo = ({
       setScriptIdx((i) => (i + 1) % STREAM_SCRIPTS.length);
     } else if (input === 'C' || input === 'c') {
       setChunkDelayIdx((i) => (i + 1) % CHUNK_DELAYS_MS.length);
-    } else if (input === 'K' || input === 'k') {
-      setSlackConnected((v) => !v);
     }
   });
 
@@ -294,12 +285,11 @@ export const McpSuggestedPromptsDemo = ({
     <Box flexDirection="column" flexGrow={1} paddingX={1}>
       <Text dimColor>
         R role · F framework · X reset · O oauth · L login-delay · S script · C
-        chunk-delay · K slack-connected
+        chunk-delay
       </Text>
       <Text dimColor>
         role={String(role)} · integration={familyLabel} · login={loginOutcome}/
-        {loginDelayMs}ms · script={script}/{chunkDelayMs}ms · slack=
-        {slackConnected ? 'connected' : 'not-connected'}
+        {loginDelayMs}ms · script={script}/{chunkDelayMs}ms
       </Text>
       <Box marginTop={1} flexDirection="column" flexGrow={1}>
         <McpSuggestedPromptsScreen

@@ -44,8 +44,29 @@ async function getSDKModule(): Promise<any> {
 
 export type SkillEntry = { id: string; name: string; downloadUrl: string };
 
+/**
+ * Entry in the wizard's runtime CLI registry. Mirrors the shape context-mill
+ * publishes under `cliEntries` inside `skill-menu.json`. The wizard uses these
+ * to register skill-backed subcommands at runtime instead of from a baked
+ * build-time snapshot.
+ */
+export type CliEntry = {
+  skillId: string;
+  role: 'command' | 'skill' | 'internal';
+  command?: string;
+  parentCommand?: string;
+  default?: boolean;
+  displayName: string;
+  description: string;
+};
+
 export interface SkillMenu {
   categories: Record<string, SkillEntry[]>;
+  /**
+   * Skills exposed as CLI commands. Optional because context-mill releases
+   * older than the runtime-resolver cutover don't emit this field.
+   */
+  cliEntries?: CliEntry[];
 }
 
 // ---------------------------------------------------------------------------

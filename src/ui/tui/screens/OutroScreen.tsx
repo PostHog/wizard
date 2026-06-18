@@ -45,6 +45,28 @@ export const OutroScreen = ({ store }: OutroScreenProps) => {
             ✔ {outroData.message || 'Done!'}
           </Text>
 
+          {outroData.dashboardUrl && (
+            <Box marginTop={1}>
+              <Text>
+                Dashboard:{' '}
+                <Text color="cyan">
+                  {withUtm(outroData.dashboardUrl, 'outro-dashboard')}
+                </Text>
+              </Text>
+            </Box>
+          )}
+
+          {outroData.notebookUrl && (
+            <Box marginTop={1}>
+              <Text>
+                Notebook:{' '}
+                <Text color="cyan">
+                  {withUtm(outroData.notebookUrl, 'outro-notebook')}
+                </Text>
+              </Text>
+            </Box>
+          )}
+
           {outroData.body && (
             <Box marginTop={1}>
               <Text dimColor>{outroData.body}</Text>
@@ -81,28 +103,6 @@ export const OutroScreen = ({ store }: OutroScreenProps) => {
                   <Text dimColor> {event.description}</Text>
                 </Text>
               ))}
-            </Box>
-          )}
-
-          {outroData.dashboardUrl && (
-            <Box marginTop={1}>
-              <Text>
-                We've also made you a dashboard:{' '}
-                <Text color="cyan">
-                  {withUtm(outroData.dashboardUrl, 'outro-dashboard')}
-                </Text>
-              </Text>
-            </Box>
-          )}
-
-          {outroData.notebookUrl && (
-            <Box marginTop={1}>
-              <Text>
-                And uploaded the report to a PostHog notebook:{' '}
-                <Text color="cyan">
-                  {withUtm(outroData.notebookUrl, 'outro-notebook')}
-                </Text>
-              </Text>
             </Box>
           )}
 

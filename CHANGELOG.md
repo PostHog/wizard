@@ -1,5 +1,32 @@
 # Changelog
 
+## [2.24.1](https://github.com/PostHog/wizard/compare/v2.24.0...v2.24.1) (2026-06-17)
+
+
+### Bug Fixes
+
+* separate login and slackconnect screen ([#681](https://github.com/PostHog/wizard/issues/681)) ([5fd0de6](https://github.com/PostHog/wizard/commit/5fd0de69dc92a39285727537f7dc435d4753797a))
+
+## [2.24.0](https://github.com/PostHog/wizard/compare/v2.23.0...v2.24.0) (2026-06-17)
+
+
+### Features
+
+* **cli:** overhaul cli ([#617](https://github.com/PostHog/wizard/issues/617)) ([413f88e](https://github.com/PostHog/wizard/commit/413f88e33ae1d57c463aa6a11809c234b6b40697))
+
+## [2.23.0](https://github.com/PostHog/wizard/compare/v2.22.1...v2.23.0) (2026-06-16)
+
+
+### Features
+
+* **analytics:** add run_id to every event and $session_id after login ([#661](https://github.com/PostHog/wizard/issues/661)) ([001925f](https://github.com/PostHog/wizard/commit/001925ff017e5acd431bcc8d2d05c9ac039f9aa3))
+* **analytics:** instrument privacy panel, intro menu, and settings-conflict screens ([#666](https://github.com/PostHog/wizard/issues/666)) ([f0decaf](https://github.com/PostHog/wizard/commit/f0decaf23d4a971efd5a78ee7cbeead96ae22872))
+
+
+### Bug Fixes
+
+* point Slack setup at new /integrations/slack landing page ([#676](https://github.com/PostHog/wizard/issues/676)) ([0b3738c](https://github.com/PostHog/wizard/commit/0b3738c9707e752380a45dc4ada566b7947b8c1e))
+
 ## [2.22.1](https://github.com/PostHog/wizard/compare/v2.22.0...v2.22.1) (2026-06-16)
 
 

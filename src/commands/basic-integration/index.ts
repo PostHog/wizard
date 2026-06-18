@@ -15,28 +15,18 @@ export const basicIntegrationCommand: Command = {
         'Directory to install PostHog in\nenv: POSTHOG_WIZARD_INSTALL_DIR',
       type: 'string',
     },
-    playground: {
-      default: false,
-      describe: 'Launch the TUI primitives playground',
-      type: 'boolean',
-    },
-    benchmark: {
-      default: false,
-      describe:
-        'Run in benchmark mode with per-phase token tracking\nenv: POSTHOG_WIZARD_BENCHMARK',
-      type: 'boolean',
-    },
-    'yara-report': {
-      default: false,
-      describe:
-        'Print YARA scanner summary after the agent run\nenv: POSTHOG_WIZARD_YARA_REPORT',
-      type: 'boolean',
-      hidden: true,
-    },
     name: {
       describe:
         'Name for account creation with --ci --signup\nenv: POSTHOG_WIZARD_NAME',
       type: 'string',
+    },
+    // ── Internal modes ───────────────────────────────────────────────
+    // Hidden from `--help`. See CONTRIBUTING.md for what each one does.
+    playground: {
+      default: false,
+      describe: 'Launch the TUI primitives playground',
+      type: 'boolean',
+      hidden: true,
     },
   },
   check: (argv) => {
