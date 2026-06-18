@@ -3,6 +3,7 @@ import * as os from 'os';
 import * as path from 'path';
 import {
   QueueStore,
+  QUEUE_DIR_NAME,
   type QueueFile,
   type TaskHandoff,
 } from '@lib/programs/orchestrator/queue';
@@ -26,6 +27,15 @@ describe('QueueStore', () => {
 
   afterEach(() => {
     fs.rmSync(dir, { recursive: true, force: true });
+  });
+
+  it('drops a self-explaining .DELETE-ME.md in the cache folder', () => {
+    const note = fs.readFileSync(
+      path.join(dir, QUEUE_DIR_NAME, '.DELETE-ME.md'),
+      'utf8',
+    );
+    expect(note).toContain('safely delete');
+    expect(note).toContain(`${QUEUE_DIR_NAME}/`);
   });
 
   it('enqueues a pending task with defaults', () => {

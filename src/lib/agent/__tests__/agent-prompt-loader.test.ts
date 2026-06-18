@@ -217,6 +217,46 @@ describe('resolveTask', () => {
       'Context from previous steps',
     );
   });
+
+  it('includes transitive ancestors, not just direct dependencies', () => {
+    const registry = registryOf([prompt]);
+    // install -> capture -> (this task). The task depends only on capture, but
+    // install's context must still reach it so nothing is silently lost.
+    const install = store.enqueue({ type: 'install' });
+    store.complete(install.id, {
+      goals: 'declare the SDK',
+      did: 'added posthog to the manifest',
+      forNextAgent: 'SDK is declared, not yet installed',
+    });
+    const capture = store.enqueue({ type: 'capture', dependsOn: [install.id] });
+    store.complete(capture.id, {
+      goals: 'instrument events',
+      did: 'added capture calls',
+      forNextAgent: 'events are in',
+    });
+    const task = store.enqueue({ type: 'capture', dependsOn: [capture.id] });
+    const { prompt: out } = resolveTask(registry, task, store);
+    expect(out).toContain('added posthog to the manifest'); // transitive
+    expect(out).toContain('added capture calls'); // direct
+  });
+
+  it('lists each ancestor once for diamond dependencies', () => {
+    const registry = registryOf([prompt]);
+    const install = store.enqueue({ type: 'install' });
+    store.complete(install.id, {
+      goals: 'g',
+      did: 'manifest entry added',
+      forNextAgent: 'n',
+    });
+    const a = store.enqueue({ type: 'identify', dependsOn: [install.id] });
+    store.complete(a.id, { goals: 'g', did: 'a-did', forNextAgent: 'n' });
+    const b = store.enqueue({ type: 'identify', dependsOn: [install.id] });
+    store.complete(b.id, { goals: 'g', did: 'b-did', forNextAgent: 'n' });
+    // Resolved task must be a registered type (capture); its ancestors need not be.
+    const task = store.enqueue({ type: 'capture', dependsOn: [a.id, b.id] });
+    const { prompt: out } = resolveTask(registry, task, store);
+    expect(out.match(/manifest entry added/g)).toHaveLength(1);
+  });
 });
 
 describe('taskModel', () => {
