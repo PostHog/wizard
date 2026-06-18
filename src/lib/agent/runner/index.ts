@@ -19,10 +19,10 @@
 import type { WizardSession } from '../../wizard-session';
 import { isOrchestratorEnabled } from '../agent-interface';
 import { getUI } from '../../../ui';
-import { runOrchestrator } from '../orchestrator/orchestrator-runner';
+import { runOrchestrator } from './orchestrator/orchestrator-runner';
 import type { ProgramConfig } from '../../programs/program-step';
-import type { ProgramRun } from './types';
-import { bootstrapProgram } from './bootstrap';
+import type { ProgramRun } from './shared/types';
+import { bootstrapProgram } from './shared/bootstrap';
 import { runLinearProgram } from './linear';
 
 export type {
@@ -31,8 +31,8 @@ export type {
   AbortCase,
   PromptContext,
   Credentials,
-} from './types';
-export { shouldDisableAsk } from './bootstrap';
+} from './shared/types';
+export { shouldDisableAsk } from './shared/bootstrap';
 
 /**
  * Resolve a ProgramConfig's agent run definition and execute the pipeline.

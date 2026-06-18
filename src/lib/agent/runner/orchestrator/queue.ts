@@ -14,8 +14,8 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { randomUUID } from 'crypto';
-import { writeJsonAtomic } from '../../../utils/atomic-ledger';
-import { analytics } from '../../../utils/analytics';
+import { writeJsonAtomic } from '@utils/atomic-ledger';
+import { analytics } from '@utils/analytics';
 
 export const TaskStatus = {
   Pending: 'pending',

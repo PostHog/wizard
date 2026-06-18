@@ -6,10 +6,10 @@ import type {
   Credentials,
   AdditionalFeature,
   WizardSession,
-} from '../../wizard-session';
-import type { PromptContext } from '../agent-prompt';
-import type { PackageManagerDetector } from '../../detection/package-manager';
-import type { CloudRegion } from '../../../utils/types';
+} from '@lib/wizard-session';
+import type { PromptContext } from '@lib/agent/agent-prompt';
+import type { PackageManagerDetector } from '@lib/detection/package-manager';
+import type { CloudRegion } from '@utils/types';
 
 export type { PromptContext, Credentials };
 

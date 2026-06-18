@@ -30,9 +30,9 @@ import { installSkillById } from '../../wizard-tools';
 import { createWizardAskBridge } from '../../wizard-ask-bridge';
 import type { ProgramConfig } from '../../programs/program-step';
 import { assemblePrompt } from '../agent-prompt';
-import type { ProgramRun, BootstrapResult } from './types';
-import { abortOnInstallFailure } from './errors';
-import { shouldDisableAsk, sessionToOptions } from './bootstrap';
+import type { ProgramRun, BootstrapResult } from './shared/types';
+import { abortOnInstallFailure } from './shared/errors';
+import { shouldDisableAsk, sessionToOptions } from './shared/bootstrap';
 
 export async function runLinearProgram(
   session: WizardSession,

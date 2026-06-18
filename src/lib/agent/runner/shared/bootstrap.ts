@@ -7,29 +7,29 @@
  * effects. Returns the values the arms still need.
  */
 
-import type { WizardSession } from '../../wizard-session';
-import { getOrAskForProjectData } from '../../../utils/setup-utils';
-import { analytics, groupsFromUser } from '../../../utils/analytics';
-import { getUI } from '../../../ui';
-import { buildWizardMetadata } from '../agent-interface';
+import type { WizardSession } from '@lib/wizard-session';
+import { getOrAskForProjectData } from '@utils/setup-utils';
+import { analytics, groupsFromUser } from '@utils/analytics';
+import { getUI } from '@ui';
+import { buildWizardMetadata } from '@lib/agent/agent-interface';
 import {
   checkAllSettingsConflicts,
   backupAndFixClaudeSettings,
-} from '../claude-settings';
+} from '@lib/agent/claude-settings';
 import {
   evaluateWizardReadiness,
   WizardReadiness,
   SIGNUP_WIZARD_READINESS_CONFIG,
   getBlockingServiceKeys,
   SERVICE_LABELS,
-} from '../../health-checks/readiness';
-import { enableDebugLogs, logToFile, initLogFile } from '../../../utils/debug';
-import { wizardAbort } from '../../../utils/wizard-abort';
-import { isNonInteractiveEnvironment } from '../../../utils/environment';
-import { getSkillsBaseUrl } from '../../constants';
-import { runtimeEnv } from '../../../env';
-import type { WizardRunOptions } from '../../../utils/types';
-import type { ProgramConfig } from '../../programs/program-step';
+} from '@lib/health-checks/readiness';
+import { enableDebugLogs, logToFile, initLogFile } from '@utils/debug';
+import { wizardAbort } from '@utils/wizard-abort';
+import { isNonInteractiveEnvironment } from '@utils/environment';
+import { getSkillsBaseUrl } from '@lib/constants';
+import { runtimeEnv } from '@env';
+import type { WizardRunOptions } from '@utils/types';
+import type { ProgramConfig } from '@lib/programs/program-step';
 import type { ProgramRun, BootstrapResult } from './types';
 
 // ── Helpers ──────────────────────────────────────────────────────────

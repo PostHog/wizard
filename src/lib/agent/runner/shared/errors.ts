@@ -2,8 +2,8 @@
  * Shared error helpers for the runner pipeline.
  */
 
-import type { InstallSkillResult } from '../../wizard-tools';
-import { wizardAbort, WizardError } from '../../../utils/wizard-abort';
+import type { InstallSkillResult } from '@lib/wizard-tools';
+import { wizardAbort, WizardError } from '@utils/wizard-abort';
 
 export async function abortOnInstallFailure(
   integrationLabel: string,
