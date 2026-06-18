@@ -147,6 +147,12 @@ export type AgentConfig = {
   getPendingQuestion?: () =>
     | import('@lib/wizard-session').PendingQuestion
     | null;
+  /**
+   * Orchestrator queue context. Present only when the `wizard-orchestrator`
+   * flag routes the run here; threaded into wizard-tools so the orchestrator
+   * tools register.
+   */
+  orchestrator?: import('@lib/programs/orchestrator/queue-tools').OrchestratorToolsContext;
 };
 
 /**
@@ -168,6 +174,7 @@ export type StopHookResult =
 export function createStopHook(
   featureQueue: readonly AdditionalFeature[],
   signals?: AgentOutputSignals,
+  requestRemark = true,
 ): (input: { stop_hook_active: boolean }) => StopHookResult {
   let featureIndex = 0;
   let remarkRequested = false;
@@ -195,8 +202,9 @@ export function createStopHook(
       return { decision: 'block', reason: prompt };
     }
 
-    // Phase 2: collect remark (once)
-    if (!remarkRequested) {
+    // Phase 2: collect remark (once). Skipped when the caller opts out — the
+    // orchestrator suppresses it per task so it does not fire on every agent.
+    if (requestRemark && !remarkRequested) {
       remarkRequested = true;
       logToFile('Stop hook: requesting reflection');
       return {
@@ -537,8 +545,6 @@ export async function initializeAgent(
   logToFile('Agent initialization starting');
   logToFile('Install directory:', options.installDir);
 
-  getUI().log.step('Initializing Claude agent...');
-
   try {
     // Configure LLM gateway environment variables (inherited by SDK subprocess)
     const gatewayUrl = getLlmGatewayUrlFromHost(config.posthogApiHost);
@@ -590,6 +596,7 @@ export async function initializeAgent(
       skillsBaseUrl: config.skillsBaseUrl,
       askBridge: config.askBridge,
       askMaxQuestions: config.askMaxQuestions,
+      orchestrator: config.orchestrator,
     });
     mcpServers['wizard-tools'] = wizardToolsServer;
 
@@ -624,8 +631,6 @@ export async function initializeAgent(
       });
     }
 
-    getUI().log.step(`Verbose logs: ${getLogFilePath()}`);
-    getUI().log.success("Agent initialized. Let's get cooking!");
     return agentRunConfig;
   } catch (error) {
     getUI().log.error(
@@ -671,6 +676,8 @@ export async function runAgent(
     errorMessage?: string;
     additionalFeatureQueue?: readonly AdditionalFeature[];
     abortCases?: readonly AbortCaseMatcher[];
+    /** Request the end-of-run reflection remark. Defaults to true. */
+    requestRemark?: boolean;
   },
   middleware?: {
     onMessage(message: any): void;
@@ -930,7 +937,11 @@ export async function runAgent(
           Stop: [
             {
               hooks: [
-                createStopHook(config?.additionalFeatureQueue ?? [], signals),
+                createStopHook(
+                  config?.additionalFeatureQueue ?? [],
+                  signals,
+                  config?.requestRemark ?? true,
+                ),
               ],
               timeout: 30,
             },
@@ -978,6 +989,7 @@ export async function runAgent(
         signals,
         receivedSuccessResult,
         tasks,
+        isOrchestratorEnabled(agentConfig.wizardFlags ?? {}),
       );
 
       // [ABORT] detection: the skill emits "[ABORT] <reason>" when it
@@ -1327,6 +1339,9 @@ function handleSDKMessage(
   signals: AgentOutputSignals,
   receivedSuccessResult = false,
   tasks?: Map<string, TaskEntry>,
+  // The orchestrator owns the TUI task panel (it renders its queue). Suppress the
+  // agent's own TaskCreate/TaskUpdate rendering so it does not clobber the queue.
+  suppressTaskRender = false,
 ): void {
   // Map preserves insertion order (the order the agent created the tasks).
   // Within that, group by status: completed first, then in_progress, then
@@ -1338,7 +1353,7 @@ function handleSDKMessage(
   };
   const rank = (status: string): number => STATUS_RANK[status] ?? 2;
   const syncTasks = (): void => {
-    if (!tasks) return;
+    if (!tasks || suppressTaskRender) return;
     const sorted = Array.from(tasks.values()).sort(
       (a, b) => rank(a.status) - rank(b.status),
     );

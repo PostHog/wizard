@@ -28,6 +28,8 @@ export type TaskStatus = (typeof TaskStatus)[keyof typeof TaskStatus];
 export interface QueuedTask {
   id: string;
   type: string;
+  /** Human-readable label for the TUI, set by the enqueuing agent. */
+  label?: string;
   status: TaskStatus;
   dependsOn: string[];
   inputs: Record<string, unknown>;
@@ -56,10 +58,13 @@ export interface TaskHandoff {
   did: string;
   forNextAgent: string;
   filesTouched?: string[];
+  /** A one-line summary of any unresolved conflict, surfaced in the outro. */
+  conflict?: string;
 }
 
 export interface EnqueueInput {
   type: string;
+  label?: string;
   inputs?: Record<string, unknown>;
   dependsOn?: string[];
   model?: string;
@@ -155,6 +160,7 @@ export class QueueStore {
     const task: QueuedTask = {
       id: randomUUID(),
       type: input.type,
+      label: input.label,
       status: TaskStatus.Pending,
       dependsOn: input.dependsOn ?? [],
       inputs: input.inputs ?? {},
