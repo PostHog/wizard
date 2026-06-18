@@ -27,7 +27,12 @@ import { logToFile } from '../../../utils/debug';
 import type { ProgramConfig } from '../program-step';
 import type { BootstrapResult } from '../../agent/agent-runner';
 import type { WizardRunOptions } from '../../../utils/types';
-import { QueueStore, QUEUE_DIR_NAME, TaskStatus } from './queue';
+import {
+  QueueStore,
+  QUEUE_DIR_NAME,
+  TaskStatus,
+  type QueuedTask,
+} from './queue';
 import { drainQueue, type RunTask } from './executor';
 import {
   agentRunTools,
@@ -35,6 +40,7 @@ import {
   assembleTaskPrompt,
   loadAgentRegistry,
   resolveTask,
+  taskModel,
   type OrchestratorPromptContext,
 } from './agent-prompt-loader';
 
@@ -73,7 +79,6 @@ export async function runOrchestrator(
   boot: BootstrapResult,
 ): Promise<void> {
   const runId = randomUUID();
-  const store = new QueueStore(session.installDir, runId);
 
   const options = sessionRunOptions(session);
 
@@ -90,6 +95,74 @@ export async function runOrchestrator(
       `No seed agent prompt (frontmatter \`seed: true\`) for flow "${programConfig.id}" is available from ${boot.skillsBaseUrl}.`,
     );
   }
+
+  // Every wizard event from here on carries the variant, so orchestrator runs
+  // segment cleanly from the linear baseline.
+  analytics.setTag('variant', 'orchestrator');
+
+  // Responsiveness is the headline metric of the dark launch: time to first
+  // visible progress, and no single step dominating wall-clock. Track it from
+  // queue transitions, with the resolved model so cheap work is attributable
+  // to cheap models.
+  const runStartMs = Date.now();
+  let firstStartMs: number | undefined;
+  let lastStartMs: number | undefined;
+  const durationMs = (t: QueuedTask) =>
+    t.startedAt && t.finishedAt
+      ? Date.parse(t.finishedAt) - Date.parse(t.startedAt)
+      : undefined;
+
+  const store = new QueueStore(session.installDir, runId, {
+    onTransition: (event, task) => {
+      const base = {
+        type: task.type,
+        model: taskModel(registry, task),
+        attempts: task.attempts,
+      };
+      switch (event) {
+        case 'enqueue':
+          analytics.wizardCapture('orchestrator task enqueued', {
+            type: task.type,
+            enqueued_by: task.enqueuedBy,
+            dynamic: task.enqueuedBy !== 'orchestrator',
+          });
+          break;
+        case 'start': {
+          const now = Date.now();
+          analytics.wizardCapture('orchestrator task started', {
+            ...base,
+            ms_since_run_start: now - runStartMs,
+            gap_since_prev_start_ms:
+              lastStartMs === undefined ? undefined : now - lastStartMs,
+          });
+          firstStartMs ??= now;
+          lastStartMs = now;
+          break;
+        }
+        case 'complete':
+          analytics.wizardCapture('orchestrator task completed', {
+            ...base,
+            duration_ms: durationMs(task),
+          });
+          break;
+        case 'skip':
+          analytics.wizardCapture('orchestrator task skipped', {
+            ...base,
+            duration_ms: durationMs(task),
+          });
+          break;
+        case 'fail':
+          analytics.wizardCapture('orchestrator task failed', {
+            ...base,
+            duration_ms: durationMs(task),
+            error: task.error?.type,
+          });
+          break;
+        case 'requeue':
+          break;
+      }
+    },
+  });
 
   // Give task agents the framework's finished reference integration to match,
   // the same EXAMPLE.md the linear flow uses. Install it under the run dir rather
@@ -191,6 +264,7 @@ export async function runOrchestrator(
       successMessage: 'Planned the integration',
       additionalFeatureQueue: [],
       requestRemark: false,
+      analyticsProperties: { task_type: 'seed' },
     },
   );
   if (seedResult.error) {
@@ -211,6 +285,7 @@ export async function runOrchestrator(
   // its agent prompt (the WHAT) and the mini-skills it needs (the HOW), then
   // runs on its own model and tools.
   const taskSkillsRoot = path.join(QUEUE_DIR_NAME, 'skills');
+  let remarkRequested = false;
   const runTask: RunTask = async (task) => {
     renderQueue();
     try {
@@ -236,6 +311,18 @@ export async function runOrchestrator(
           );
         }
       }
+      // The run-end reflection fires once, on the task that is last in the
+      // queue when it starts — nothing else pending or running alongside it.
+      const isLastTask = !store
+        .list()
+        .some(
+          (t) =>
+            t.id !== task.id &&
+            (t.status === TaskStatus.Pending ||
+              t.status === TaskStatus.Running),
+        );
+      const requestRemark = isLastTask && !remarkRequested;
+      if (requestRemark) remarkRequested = true;
       await runAgent(
         {
           ...agent,
@@ -249,12 +336,12 @@ export async function runOrchestrator(
         // Empty messages suppress the per-task spinner lines (the spinner renders
         // only when a message is set); the queue panel shows progress. Errors
         // still surface — runAgent stops the spinner with its own error text.
-        // No per-task remark — the reflection would fire on every task.
         {
           spinnerMessage: '',
           successMessage: '',
           additionalFeatureQueue: [],
-          requestRemark: false,
+          requestRemark,
+          analyticsProperties: { task_type: task.type, task_id: task.id },
         },
       );
     } finally {
@@ -281,6 +368,10 @@ export async function runOrchestrator(
     tasks_total: summary.total,
     tasks_done: summary.done,
     tasks_failed: summary.failed,
+    tasks_skipped: summary.skipped,
+    total_duration_ms: Date.now() - runStartMs,
+    time_to_first_task_ms:
+      firstStartMs === undefined ? undefined : firstStartMs - runStartMs,
   });
 
   // The build step flags any unresolved conflict in its handoff; surface the
