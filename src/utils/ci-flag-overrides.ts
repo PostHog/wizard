@@ -3,14 +3,15 @@
  *
  * CI must route deterministically: a run that tests the orchestrator arm says
  * so explicitly instead of depending on a live feature flag someone can edit
- * mid-week. `WIZARD_CI_FLAG_OVERRIDES` is a JSON object of flag key →
- * value, merged over whatever PostHog returned.
+ * mid-week. The override env var (see the allowlist in `env.ts`) is a JSON
+ * object of flag key → value, merged over whatever PostHog returned.
  *
  * The override path exists only in CI builds (`pnpm build:ci`). Published
- * builds inline NODE_ENV as the literal "production", the guard below
- * collapses, and tsdown strips the rest from the bundle — and the smoke test
- * asserts the env var's name is physically absent from production output, so
- * this can never quietly become a production surface.
+ * builds inline NODE_ENV as the literal "production", the guards collapse,
+ * and tsdown strips the rest from the bundle — and the smoke test asserts the
+ * env var names are physically absent from production output (which is also
+ * why no comment in this file may spell them out), so this can never quietly
+ * become a production surface.
  */
 import { runtimeEnv } from '@env';
 import { logToFile } from './debug';
@@ -33,7 +34,7 @@ export function applyCiFlagOverrides(
     // A malformed override is a CI misconfiguration. Fail the run loudly
     // rather than silently testing whatever the live flags happen to say.
     throw new Error(
-      'WIZARD_CI_FLAG_OVERRIDES is not valid JSON (expected {"flag-key": value, ...}).',
+      'The CI flag-override env var is not valid JSON (expected {"flag-key": value, ...}).',
     );
   }
 
@@ -43,4 +44,24 @@ export function applyCiFlagOverrides(
   }
   logToFile('[flags] CI overrides applied', overrides);
   return merged;
+}
+
+/**
+ * Task types excluded from this run. The exclusion env var (see the allowlist
+ * in `env.ts`) is a comma-separated list (e.g. `dashboard`), set by the CI
+ * harness that owns the policy — the wizard and the served content stay
+ * run-mode agnostic. CI-build only, same as the flag overrides: published
+ * builds strip this path.
+ */
+export function ciExcludedTaskTypes(): readonly string[] {
+  if (process.env.NODE_ENV === 'production') return [];
+
+  const raw = runtimeEnv('WIZARD_CI_EXCLUDE_TASKS');
+  if (!raw) return [];
+  const types = raw
+    .split(',')
+    .map((t) => t.trim())
+    .filter(Boolean);
+  if (types.length > 0) logToFile('[flags] CI task exclusions', types);
+  return types;
 }

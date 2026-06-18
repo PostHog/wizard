@@ -372,12 +372,12 @@ async function bootstrapProgram(
   // orchestrator arm overwrites this with its own variant when it forks.
   analytics.setTag('variant', wizardMetadata.VARIANT);
 
+  // One MCP url for every region: the server resolves the user's region from
+  // the bearer token, so the EU subdomain (a Claude Code OAuth workaround) is
+  // not needed here.
   const mcpUrl = session.localMcp
     ? 'http://localhost:8787/mcp'
-    : runtimeEnv('MCP_URL') ||
-      (cloudRegion === 'eu'
-        ? 'https://mcp-eu.posthog.com/mcp'
-        : 'https://mcp.posthog.com/mcp');
+    : runtimeEnv('MCP_URL') || 'https://mcp.posthog.com/mcp';
 
   return {
     skillsBaseUrl,

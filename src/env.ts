@@ -43,6 +43,7 @@ type RuntimeEnvKey =
   // Deliberately NOT POSTHOG_WIZARD_-prefixed: yargs .env('POSTHOG_WIZARD')
   // would claim it as an unknown CLI option and strict-reject the run.
   | 'WIZARD_CI_FLAG_OVERRIDES'
+  | 'WIZARD_CI_EXCLUDE_TASKS'
   // Wizard CLI configuration (yargs POSTHOG_WIZARD_ prefix)
   | 'POSTHOG_WIZARD_BENCHMARK_CONFIG'
   | 'POSTHOG_WIZARD_BENCHMARK_FILE'

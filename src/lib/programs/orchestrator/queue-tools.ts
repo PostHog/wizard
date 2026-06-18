@@ -56,15 +56,31 @@ function dedupKey(type: string, inputs: Record<string, unknown>): string {
 }
 
 /**
+ * A backstop on total queue size. Tasks can enqueue tasks, so a misbehaving
+ * type could grow the queue without bound. Keeping the graph small is the job
+ * of good agent and skill design, not this number — it only stops a runaway.
+ * The real flow is ~9 tasks, so this sits well clear of it.
+ */
+const MAX_QUEUE_TASKS = 30;
+
+/**
  * Validate an enqueue. Structural checks only — a real type, real dependencies,
- * and not a literal duplicate. How much runs, and in what shape, is the task
- * graph's business, not a knob's.
+ * not a literal duplicate, and not past the runaway backstop. How much runs,
+ * and in what shape, is the task graph's business, not a knob's.
  */
 export function checkEnqueueGuards(
   ctx: OrchestratorToolsContext,
   args: EnqueueArgs,
 ): GuardResult {
   const tasks = ctx.store.list();
+
+  if (tasks.length >= MAX_QUEUE_TASKS) {
+    return {
+      ok: false,
+      guard: 'queue-full',
+      message: `The queue already holds ${tasks.length} tasks (cap ${MAX_QUEUE_TASKS}). Refine the existing tasks rather than adding more.`,
+    };
+  }
 
   if (!ctx.validTypes.includes(args.type)) {
     return {
