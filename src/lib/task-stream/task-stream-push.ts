@@ -37,6 +37,8 @@ const STATUS_MAP: Record<TaskStatus, StreamTaskStatus> = {
   [TaskStatus.Pending]: StreamTaskStatus.Pending,
   [TaskStatus.InProgress]: StreamTaskStatus.InProgress,
   [TaskStatus.Completed]: StreamTaskStatus.Completed,
+  // The stream has no skipped state; skipped is terminal, so report it resolved.
+  [TaskStatus.Skipped]: StreamTaskStatus.Completed,
 };
 
 function buildTasks(items: TaskItem[]): StreamTask[] {

@@ -25,7 +25,6 @@ export const DJANGO_AGENT_CONFIG: FrameworkConfig<DjangoContext> = {
   metadata: {
     name: 'Django',
     integration: Integration.django,
-    beta: true,
     docsUrl: 'https://posthog.com/docs/libraries/django',
     unsupportedVersionDocsUrl: 'https://posthog.com/docs/libraries/python',
     gatherContext: async (options: WizardRunOptions) => {

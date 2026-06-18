@@ -40,6 +40,7 @@ jest.mock('../../../lib/health-checks/readiness.js', () => ({
     YesWithWarnings: 'yes-with-warnings',
   },
   SERVICE_LABELS: {},
+  getBlockingServiceKeys: jest.fn(() => []),
 }));
 
 function createStore(program?: ProgramId): WizardStore {
@@ -418,7 +419,7 @@ describe('WizardStore', () => {
       expect(store.currentScreen).toBe(ScreenId.Run);
     });
 
-    it('advances to mcp after run completes', () => {
+    it('advances to outro after run completes', () => {
       const store = createStore();
       store.completeSetup();
       store.setReadinessResult({
@@ -433,29 +434,10 @@ describe('WizardStore', () => {
         projectId: 1,
       });
       store.setRunPhase(RunPhase.Completed);
-      expect(store.currentScreen).toBe(ScreenId.Mcp);
-    });
-
-    it('advances to outro after mcp completes', () => {
-      const store = createStore();
-      store.completeSetup();
-      store.setReadinessResult({
-        decision: WizardReadiness.Yes,
-        health: {} as never,
-        reasons: [],
-      });
-      store.setCredentials({
-        accessToken: 'tok',
-        projectApiKey: 'pk',
-        host: 'h',
-        projectId: 1,
-      });
-      store.setRunPhase(RunPhase.Completed);
-      store.setMcpComplete();
       expect(store.currentScreen).toBe(ScreenId.Outro);
     });
 
-    it('advances to skills after outro dismissed', () => {
+    it('advances to mcp after outro dismissed', () => {
       const store = createStore();
       store.completeSetup();
       store.setReadinessResult({
@@ -470,8 +452,28 @@ describe('WizardStore', () => {
         projectId: 1,
       });
       store.setRunPhase(RunPhase.Completed);
-      store.setMcpComplete();
       store.setOutroDismissed();
+      expect(store.currentScreen).toBe(ScreenId.Mcp);
+    });
+
+    it('advances to skills after slack-connect dismissed', () => {
+      const store = createStore();
+      store.completeSetup();
+      store.setReadinessResult({
+        decision: WizardReadiness.Yes,
+        health: {} as never,
+        reasons: [],
+      });
+      store.setCredentials({
+        accessToken: 'tok',
+        projectApiKey: 'pk',
+        host: 'h',
+        projectId: 1,
+      });
+      store.setRunPhase(RunPhase.Completed);
+      store.setOutroDismissed();
+      store.setMcpComplete();
+      store.setSlackStepDismissed();
       expect(store.currentScreen).toBe(ScreenId.KeepSkills);
     });
 
@@ -1028,7 +1030,7 @@ describe('WizardStore', () => {
       });
       store.setRunPhase(RunPhase.Error);
       // Run is "complete" (either Completed or Error), so we advance past it
-      expect(store.currentScreen).toBe(ScreenId.Mcp);
+      expect(store.currentScreen).toBe(ScreenId.Outro);
     });
 
     it('completeSetup can only resolve the promise once', async () => {
@@ -1088,18 +1090,22 @@ describe('WizardStore', () => {
       expect(store.currentScreen).toBe(ScreenId.Run);
 
       store.setRunPhase(RunPhase.Completed);
-      expect(store.currentScreen).toBe(ScreenId.Mcp);
-
-      // Step 5: Complete MCP
-      store.setMcpComplete();
       expect(store.currentScreen).toBe(ScreenId.Outro);
 
-      // Step 6: Dismiss outro
+      // Step 5: Dismiss outro
       store.setOutroDismissed();
+      expect(store.currentScreen).toBe(ScreenId.Mcp);
+
+      // Step 6: Complete MCP
+      store.setMcpComplete();
+      expect(store.currentScreen).toBe(ScreenId.SlackConnect);
+
+      // Step 7: Dismiss the Connect-Slack step
+      store.setSlackStepDismissed();
       expect(store.currentScreen).toBe(ScreenId.KeepSkills);
 
       // Verify version was bumped for each setter call
-      expect(store.getVersion()).toBe(7);
+      expect(store.getVersion()).toBe(8);
     });
 
     it('walks through the revenue analytics flow correctly', () => {
@@ -1196,6 +1202,7 @@ describe('WizardStore', () => {
       });
 
       const store = createStore();
+      store.runInitHooks();
       let resolved = false;
 
       void store.getGate('health-check').then(() => {
@@ -1220,6 +1227,7 @@ describe('WizardStore', () => {
       });
 
       const store = createStore();
+      store.runInitHooks();
       let resolved = false;
 
       void store.getGate('health-check').then(() => {

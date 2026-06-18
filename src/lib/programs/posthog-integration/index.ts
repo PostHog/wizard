@@ -1,4 +1,3 @@
-import opn from 'opn';
 import type { ProgramConfig } from '@lib/programs/program-step';
 import type { ProgramRun } from '@lib/agent/agent-runner';
 import { WIZARD_TOOL_NAMES } from '@lib/wizard-tools';
@@ -18,9 +17,11 @@ import { WIZARD_INTERACTION_EVENT_NAME } from '@lib/constants';
 import { getUI } from '@ui/index';
 import { getCloudUrlFromRegion } from '@utils/urls';
 import { requestDeepLink } from '@utils/provisioning';
+import { openTrackedLink, withUtm } from '@utils/links';
 import type { CloudRegion } from '@utils/types';
 import { POSTHOG_INTEGRATION_PROGRAM } from './steps.js';
 import { getContentBlocks } from './content/index.js';
+import { buildCodingAgentPrompt } from './handoff.js';
 
 const DASHBOARD_DEEP_LINK_KEY = 'dashboardDeepLink';
 
@@ -32,7 +33,10 @@ function resolveContinueUrl(
   if (!sess.signup) return undefined;
   if (typeof deepLink === 'string' && deepLink) return deepLink;
   if (cloudRegion)
-    return `${getCloudUrlFromRegion(cloudRegion)}/products?source=wizard`;
+    return withUtm(
+      `${getCloudUrlFromRegion(cloudRegion)}/products?source=wizard`,
+      'outro-continue',
+    );
   return undefined;
 }
 
@@ -183,7 +187,7 @@ STEP 2: Call install_skill (from the wizard-tools MCP server) with the chosen sk
 
 STEP 3: Load the installed skill's SKILL.md file to understand what references are available.
 
-STEP 4: Follow the skill's program files in sequence. Look for numbered program files in the references (e.g., files with patterns like "1.0-", "1.1-", "1.2-"). Start with the first one and proceed through each step until completion. Each program file will tell you what to do and which file comes next. Never directly write PostHog tokens directly to code files; always use environment variables.
+STEP 4: Follow the skill's program files in sequence. Look for numbered program files in the references (e.g., files with patterns like "1-", "2-", "3-"). Start with the first one and proceed through each step until completion. Each program file will tell you what to do and which file comes next. Never directly write PostHog tokens directly to code files; always use environment variables.
 
 STEP 5: Set up environment variables for PostHog using the wizard-tools MCP server (this runs locally — secret values never leave the machine):
    - Use check_env_keys to see which keys already exist in the project's .env file (e.g. .env.local or .env).
@@ -230,12 +234,11 @@ Important: Use the detect_package_manager tool (from the wizard-tools MCP server
             credentials.host,
           );
           if (deepLink) {
-            sess.frameworkContext[DASHBOARD_DEEP_LINK_KEY] = deepLink;
-            if (process.env.NODE_ENV !== 'test') {
-              opn(deepLink, { wait: false }).catch(() => {
-                // opn throws in environments without a browser
-              });
-            }
+            const taggedDeepLink = withUtm(deepLink, 'dashboard-deeplink');
+            sess.frameworkContext[DASHBOARD_DEEP_LINK_KEY] = taggedDeepLink;
+            openTrackedLink(taggedDeepLink, 'dashboard-deeplink', {
+              auto: true,
+            });
           }
         }
       },
@@ -262,6 +265,7 @@ Important: Use the detect_package_manager tool (from the wizard-tools MCP server
           changes,
           docsUrl: config.metadata.docsUrl,
           continueUrl,
+          handoffPrompt: buildCodingAgentPrompt(SETUP_REPORT_FILE),
         };
       },
     };

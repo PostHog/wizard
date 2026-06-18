@@ -24,6 +24,18 @@ support, please open a [GitHub issue](https://github.com/posthog/wizard/issues)!
 
 Visit our [docs](https://posthog.com/docs/ai-engineering/ai-wizard) to learn more. 
 
+## Privacy & data usage
+
+The wizard uses **Anthropic Claude** (via PostHog's LLM gateway) to read your project's source files and integrate PostHog. A few things worth knowing up front:
+
+- **Source files** are sent to Anthropic as part of the agent's context.
+- **`.env*` files and secrets** stay on your machine. The wizard's security scanner blocks anything it identifies as a secret from being read by the agent.
+- **Telemetry** (run metadata — phase, task list, planned events) is sent to PostHog by default. Pass `--no-telemetry` (or set `POSTHOG_WIZARD_NO_TELEMETRY=1`) to disable.
+- **AI opt-in**: the wizard honors your PostHog organization's `is_ai_data_processing_approved` setting (the same toggle that gates Max). If your org has not opted in, the wizard explains how to enable it and exits without sending source to Anthropic.
+- **Prefer your own AI?** The wizard's integration knowledge ships as a context-mill skill you can download and run inside your own agent.
+
+The wizard's "Privacy & data usage" menu (intro screen) and the `[I]` shortcut on the auth screen surface the same information in-terminal.
+
 ## MCP Commands
 
 The wizard also includes commands for managing PostHog MCP (Model Context
@@ -37,16 +49,56 @@ npx @posthog/wizard mcp add
 npx @posthog/wizard mcp remove
 ```
 
+## Audit
+
+Audit an existing PostHog integration for correctness and best practices. The
+`audit` command is a **family**. With no subcommand it runs the **events**
+audit (the default); pass a subcommand to run a specific one:
+
+```bash
+# Runs the events audit (the default) — no subcommand needed
+npx @posthog/wizard audit
+
+# Or run a specific audit directly
+npx @posthog/wizard audit events           # event capture quality + cost (default)
+npx @posthog/wizard audit all              # comprehensive audit across every area
+npx @posthog/wizard audit autocapture      # autocapture setup + cost
+npx @posthog/wizard audit feature-flags    # feature flag usage + cost
+npx @posthog/wizard audit identify         # your $identify implementation
+npx @posthog/wizard audit session-replay   # session replay setup
+npx @posthog/wizard audit web-analytics    # web analytics setup
+```
+
+Most audit subcommands resolve at runtime from the published skill registry, so
+new audits appear without a wizard release (`web-analytics` is wizard-native).
+
+> **`audit <subcommand>` chooses an audit area — it does not take a skill name.**
+> The audit subcommands above *are* context-mill skills promoted to commands (via
+> a `cli: role: command` block); [`wizard skill <skill-name>`](#run-a-single-skill)
+> runs a skill that hasn't been promoted. Same machinery, two surfaces.
+> (`wizard audit --help` still labels the positional `[skill]` — read it as "pick
+> a subcommand.")
+
+## Run a single skill
+
+Run any context-mill skill directly by name, even if it isn't exposed as its own
+command:
+
+```bash
+npx @posthog/wizard skill list              # list every available skill
+npx @posthog/wizard skill <skill-name>      # run one by name
+```
+
 ## Revenue Analytics
 
 Wire up an existing PostHog + Stripe project for revenue analytics:
 
 ```bash
-npx @posthog/wizard revenue
+npx @posthog/wizard revenue-analytics
 ```
 
 Requires PostHog and Stripe SDKs already installed. Supports `--ci` with the
-same flags as the main wizard.
+same flags as the main wizard. (Renamed from `revenue` in the CLI overhaul.)
 
 ## Headless signup + install (agents / CI)
 
@@ -104,6 +156,7 @@ The following CLI arguments are available:
 | `--install-dir`   | Directory to install PostHog in                                  | string  |         |                                                      | `POSTHOG_WIZARD_INSTALL_DIR`   |
 | `--ci`            | Enable CI mode for non-interactive execution                     | boolean | `false` |                                                      | `POSTHOG_WIZARD_CI`            |
 | `--api-key`       | PostHog personal API key (phx_xxx) for authentication            | string  |         |                                                      | `POSTHOG_WIZARD_API_KEY`       |
+| `--no-telemetry`  | Disable wizard run-state telemetry                               | boolean | `false` |                                                      | `POSTHOG_WIZARD_NO_TELEMETRY`  |
 
 
 # CI Mode
@@ -145,6 +198,36 @@ When creating your personal API key, ensure it has the following scopes enabled:
 - `llm_gateway:read` - Required for LLM gateway access
 - `dashboard:write` - Required to create dashboards
 - `insight:write` - Required to create insights
+
+### OAuth app scope ceiling
+
+The wizard's OAuth app on the PostHog side caps the scopes its tokens may
+carry (`OAuthApplication.scopes`). Any scope requested in this repo (see
+`src/lib/oauth/program-scopes.ts`) must be present in that list. Current
+ceiling, for bookkeeping:
+
+```
+user:read,project:read,llm_gateway:read,dashboard:read,dashboard:write,insight:read,insight:write,query:read,notebook:read,notebook:write,health_issue:read,wizard_session:read,wizard_session:write,feature_flag:read,experiment:read,experiment_saved_metric:read,survey:read,session_recording:read,error_tracking:read,web_analytics:read,llm_analytics:read,cohort:read,person:read,annotation:read,annotation:write,activity_log:read,property_definition:read,event_definition:read,action:read,warehouse_table:read,warehouse_view:read,alert:read,subscription:read,feature_flag:write,integration:read,organization:read
+```
+
+# Command changes (CLI overhaul)
+
+The CLI was overhauled to consolidate commands into a smaller, extensible
+surface. If you used an older command, here's where it went:
+
+| Old command | New command | What changed |
+|---|---|---|
+| `wizard integrate` | `wizard` (default flow) | Command removed; the default flow runs the integration |
+| `wizard events-audit` | `wizard audit events` | Now an `audit`-family subcommand |
+| `wizard audit` (single audit) | `wizard audit <subcommand>` | Now a family; see [Audit](#audit) for the subcommands |
+| `wizard audit-3000` | *removed* | Retired |
+| `wizard revenue` | `wizard revenue-analytics` | Renamed (old `revenue` removed) |
+| `wizard upload-sourcemaps` | `wizard upload-source-maps` | Renamed; `upload-sourcemaps` still works as an alias |
+
+> **Commands vs. programs:** `integrate` was the *command*; the program behind it
+> is `posthog-integration`, which still exists and now powers the default flow.
+> Other commands depend on it via `requires: ['posthog-integration']`. The
+> program id is internal — it was never a command you typed.
 
 # Steal this code
 

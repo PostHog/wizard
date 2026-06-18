@@ -216,6 +216,38 @@ export async function fetchProjectData(
   }
 }
 
+/** Minimal shape of `/api/projects/:id/integrations/` — we only read `kind`. */
+const IntegrationsResponseSchema = z.object({
+  results: z.array(z.object({ kind: z.string().nullish() }).passthrough()),
+});
+
+/**
+ * Check whether the project already has a Slack integration connected.
+ * Requires the `integration:read` scope. Throws on failure — callers
+ * (including the SlackConnectScreen poll) decide how to degrade and
+ * are responsible for capturing the error exactly once.
+ */
+export async function fetchSlackConnected(
+  accessToken: string,
+  projectId: number,
+  baseUrl: string,
+  signal?: AbortSignal,
+): Promise<boolean> {
+  const response = await axios.get(
+    `${baseUrl}/api/projects/${projectId}/integrations/`,
+    {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'User-Agent': WIZARD_USER_AGENT,
+      },
+      signal,
+    },
+  );
+  const parsed = IntegrationsResponseSchema.safeParse(response.data);
+  if (!parsed.success) return false;
+  return parsed.data.results.some((i) => i.kind === 'slack');
+}
+
 export function handleApiError(error: unknown, operation: string): ApiError {
   if (axios.isAxiosError(error)) {
     const axiosError = error as AxiosError<{ detail?: string }>;

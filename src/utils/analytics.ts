@@ -7,7 +7,9 @@ import {
 import type { WizardSession } from '@lib/wizard-session';
 import type { ApiUser } from '@lib/api';
 import { v4 as uuidv4 } from 'uuid';
-import { debug } from './debug';
+import { IS_PRODUCTION_BUILD } from '@env';
+import { debug, logToFile } from './debug';
+import { applyCiFlagOverrides } from './ci-flag-overrides';
 
 /**
  * Extract a standard property bag from the current session.
@@ -52,9 +54,12 @@ export class Analytics {
     {};
   private distinctId?: string;
   private anonymousId: string;
+  private runId: string;
+  private sessionId: string | null = null;
   private appName = 'wizard';
   private activeFlags: Record<string, string> | null = null;
   private groups: Record<string, string> = {};
+  private personProperties: Record<string, string> = {};
 
   constructor() {
     this.client = new PostHog(ANALYTICS_POSTHOG_PUBLIC_PROJECT_WRITE_KEY, {
@@ -63,26 +68,91 @@ export class Analytics {
       flushInterval: 0,
       enableExceptionAutocapture: true,
       before_send: (event) => {
-        if (event && Object.keys(this.groups).length > 0) {
+        if (!event) return event;
+        if (Object.keys(this.groups).length > 0) {
           event.groups = { ...this.groups, ...event.groups };
+        }
+        // Autocaptured exceptions arrive with a random uuid and
+        // `$process_person_profile: false` — reattach the run's identity
+        // and tags so they land on the same person as everything else.
+        if (event.event === '$exception') {
+          event.distinctId = this.distinctId ?? this.anonymousId;
+          const { $process_person_profile, ...properties } =
+            event.properties ?? {};
+          void $process_person_profile;
+          event.properties = { ...this.tags, ...properties };
         }
         return event;
       },
     });
 
     this.tags = { $app_name: this.appName };
+    // Tag every run with its build type so prod / dev / ci segment cleanly
+    // in analytics. tsdown inlines IS_PRODUCTION_BUILD to `true` in published
+    // builds and `false` for dev/tsx/test runs. CI runs (always non-prod
+    // builds) upgrade this to 'ci' in runWizardCI.
+    this.tags.build = IS_PRODUCTION_BUILD ? 'prod' : 'dev';
 
     this.anonymousId = uuidv4();
+
+    // One id per process = one id per wizard run, registered in the tag bag
+    // so it rides on every capture, exception, and autocaptured exception
+    // (all of which merge `this.tags`). Lets you separate two runs by the
+    // same logged-in user, who otherwise share one distinct id. Distinct
+    // from `anonymousId`, the pre-login *person* id that gets aliased onto
+    // the real user at login. `$session_id` is intentionally not set here —
+    // it stays null until OAuth completes (see identifyUser).
+    this.runId = uuidv4();
+    this.tags.run_id = this.runId;
 
     this.distinctId = undefined;
   }
 
-  setDistinctId(distinctId: string) {
+  /**
+   * Associate the run with the logged-in user, once per id. Identifies them
+   * (email, name) and records those person properties so events carry them and
+   * feature flags can target the individual user — without the email here the
+   * wizard only sends `$app_name`, so email-targeted flags never match. Opens
+   * the analytics session on first login, then aliases the run's anonymous id
+   * onto the identified person so pre-login events merge in.
+   */
+  identifyUser(user: ApiUser) {
+    const distinctId = user.distinct_id;
+    if (this.distinctId === distinctId || distinctId === this.anonymousId) {
+      return;
+    }
     this.distinctId = distinctId;
+    // Open the analytics session on first login. Null until here, so
+    // pre-OAuth events carry only `run_id`; from now on every event also
+    // carries `$session_id` and PostHog groups the authenticated run into a
+    // native Session. Stored in the tag bag so it rides on every subsequent
+    // capture and exception.
+    if (!this.sessionId) {
+      this.sessionId = uuidv4();
+      this.tags.$session_id = this.sessionId;
+    }
+    const props: Record<string, string> = {};
+    if (user.email) props.email = user.email;
+    const name = [user.first_name, user.last_name]
+      .filter(Boolean)
+      .join(' ')
+      .trim();
+    if (name) props.name = name;
+    this.personProperties = props;
+    this.client.identify({ distinctId, properties: { $set: props } });
     this.client.alias({
       distinctId,
       alias: this.anonymousId,
     });
+    // The flag snapshot is per identity. Anything evaluated before login (the
+    // intro screen reads the tools-menu flag) was anonymous — drop it so the
+    // next read re-evaluates as this user.
+    this.activeFlags = null;
+  }
+
+  /** Person properties sent with flag evaluation: app name plus the user's. */
+  private flagPersonProperties(): Record<string, string> {
+    return { $app_name: this.appName, ...this.personProperties };
   }
 
   setTag(key: string, value: string | boolean | number | null | undefined) {
@@ -120,14 +190,22 @@ export class Analytics {
     this.capture(`wizard: ${eventName}`, properties);
   }
 
+  /**
+   * Flush pending events without firing the "setup wizard finished" terminal
+   * event. Use this from CLI error paths that exit before any wizard run
+   * starts — `shutdown()` would inflate the run count with a "finished" event
+   * for a parse error that never actually ran the wizard.
+   */
+  async flush(): Promise<void> {
+    await this.client.shutdown();
+  }
+
   async getFeatureFlag(flagKey: string): Promise<string | boolean | undefined> {
     try {
       const distinctId = this.distinctId ?? this.anonymousId;
       return await this.client.getFeatureFlag(flagKey, distinctId, {
         sendFeatureFlagEvents: true,
-        personProperties: {
-          $app_name: this.appName,
-        },
+        personProperties: this.flagPersonProperties(),
       });
     } catch (error) {
       debug('Failed to get feature flag:', flagKey, error);
@@ -144,23 +222,35 @@ export class Analytics {
     if (this.activeFlags !== null) {
       return this.activeFlags;
     }
+    const out: Record<string, string> = {};
     try {
       const distinctId = this.distinctId ?? this.anonymousId;
+      logToFile('[flags] evaluating as', {
+        distinctId,
+        identified: this.distinctId !== undefined,
+        personProperties: this.flagPersonProperties(),
+      });
       const result = await this.client.getAllFlagsAndPayloads(distinctId, {
-        personProperties: { $app_name: this.appName },
+        personProperties: this.flagPersonProperties(),
       });
       const flags = result.featureFlags ?? {};
-      const out: Record<string, string> = {};
       for (const [key, value] of Object.entries(flags)) {
         if (value === undefined) continue;
         out[key] = typeof value === 'boolean' ? String(value) : String(value);
       }
-      this.activeFlags = out;
-      return out;
     } catch (error) {
       debug('Failed to get all feature flags:', error);
-      return {};
+      this.captureException(
+        error instanceof Error ? error : new Error(String(error)),
+        { step: 'get_all_flags' },
+      );
     }
+    // Outside the fetch guard on purpose: a malformed CI override must fail
+    // the run loudly, and a valid one applies even when the fetch failed —
+    // CI routing stays deterministic either way.
+    this.activeFlags = applyCiFlagOverrides(out);
+    logToFile('[flags] evaluated', this.activeFlags);
+    return this.activeFlags;
   }
 
   async shutdown(status: 'success' | 'error' | 'cancelled') {
@@ -172,6 +262,10 @@ export class Analytics {
       distinctId: this.distinctId ?? this.anonymousId,
       event: 'setup wizard finished',
       properties: {
+        // Hoisted out of `tags` so the run's terminal event is filterable by
+        // run, and joins the session when one was opened (post-OAuth runs).
+        run_id: this.runId,
+        ...(this.sessionId ? { $session_id: this.sessionId } : {}),
         status,
         tags: this.tags,
       },

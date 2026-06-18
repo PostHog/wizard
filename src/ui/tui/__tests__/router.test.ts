@@ -70,6 +70,7 @@ describe('WizardRouter', () => {
       };
       session.runPhase = RunPhase.Completed;
       session.mcpComplete = true;
+      session.slackStepDismissed = true;
 
       expect(router.resolve(session)).toBe(ScreenId.Outro);
     });
@@ -85,6 +86,25 @@ describe('WizardRouter', () => {
 
       router.popOverlay();
       expect(router.resolve(session)).toBe(Overlay.SettingsOverride);
+    });
+
+    it('shows the session-timeout overlay over the auth screen that never completes', () => {
+      // On OAuth timeout the user has no credentials, so the auth step's
+      // isComplete gate never passes and resolve() is pinned on Auth. The
+      // overlay must take precedence, otherwise the spinner shows forever.
+      const router = new WizardRouter(Program.PostHogIntegration);
+      const session = baseWizardSession();
+
+      session.setupConfirmed = true;
+      session.readinessResult = {
+        decision: WizardReadiness.Yes,
+        health: {} as never,
+        reasons: [],
+      };
+      expect(router.resolve(session)).toBe(ScreenId.Auth);
+
+      router.pushOverlay(Overlay.SessionTimeout);
+      expect(router.resolve(session)).toBe(Overlay.SessionTimeout);
     });
   });
 
@@ -116,27 +136,51 @@ describe('WizardRouter', () => {
       session.mcpComplete = true;
       session.mcpOutcome = McpOutcome.Skipped;
 
-      // Skipped → suggested-prompts step is hidden, so the only visible
+      // Skipped → tutorial step is hidden, so the only visible
       // step (mcp-add) is complete and the program resolves to Exit.
       expect(router.resolve(session)).toBe(ScreenId.Exit);
     });
 
-    it('advances to McpSuggestedPrompts after a successful install', () => {
+    it('advances to SlackConnect after a successful install', () => {
       const router = new WizardRouter(Program.McpAdd);
       const session = baseWizardSession();
       session.mcpComplete = true;
       session.mcpOutcome = McpOutcome.Installed;
+
+      // Slack is the first post-install step (loginless render); the
+      // tutorial follows it.
+      expect(router.resolve(session)).toBe(ScreenId.SlackConnect);
+    });
+
+    it('advances to McpSuggestedPrompts once the Slack step is dismissed', () => {
+      const router = new WizardRouter(Program.McpAdd);
+      const session = baseWizardSession();
+      session.mcpComplete = true;
+      session.mcpOutcome = McpOutcome.Installed;
+      session.slackStepDismissed = true;
 
       expect(router.resolve(session)).toBe(ScreenId.McpSuggestedPrompts);
     });
 
-    it('exits once suggested prompts are dismissed', () => {
+    it('exits once the tutorial step is dismissed', () => {
       const router = new WizardRouter(Program.McpAdd);
       const session = baseWizardSession();
       session.mcpComplete = true;
       session.mcpOutcome = McpOutcome.Installed;
+      session.slackStepDismissed = true;
       session.mcpSuggestedPromptsDismissed = true;
 
+      expect(router.resolve(session)).toBe(ScreenId.Exit);
+    });
+
+    it('skips the Slack step when MCP install was skipped', () => {
+      const router = new WizardRouter(Program.McpAdd);
+      const session = baseWizardSession();
+      session.mcpComplete = true;
+      session.mcpOutcome = McpOutcome.Skipped;
+
+      // Both the tutorial and slack-connect steps are gated on a
+      // successful install, so a skipped install resolves straight to Exit.
       expect(router.resolve(session)).toBe(ScreenId.Exit);
     });
   });
