@@ -3,11 +3,13 @@ import * as os from 'os';
 import * as path from 'path';
 import {
   agentRunTools,
+  assembleTaskPrompt,
   buildRegistry,
   parseAgentPrompt,
   resolveTask,
   type AgentPrompt,
   type AgentRegistry,
+  type OrchestratorPromptContext,
 } from '../agent-prompt-loader';
 import { QueueStore } from '../queue';
 
@@ -200,6 +202,28 @@ describe('resolveTask', () => {
     const task = store.enqueue({ type: 'capture' });
     expect(resolveTask(registry, task, store).prompt).not.toContain(
       'Context from previous steps',
+    );
+  });
+});
+
+describe('assembleTaskPrompt', () => {
+  const ctx: OrchestratorPromptContext = {
+    projectId: 1,
+    projectApiKey: 'phc_x',
+    host: 'https://us.posthog.com',
+  };
+
+  it('points the agent at its installed task instructions', () => {
+    const assembled = assembleTaskPrompt(ctx, 'do the task', [
+      '.posthog-wizard/skills/capture/SKILL.md',
+    ]);
+    expect(assembled).toContain('.posthog-wizard/skills/capture/SKILL.md');
+    expect(assembled).toContain('do the task');
+  });
+
+  it('omits the instructions section when no skills are installed', () => {
+    expect(assembleTaskPrompt(ctx, 'do the task')).not.toContain(
+      'task instructions',
     );
   });
 });
