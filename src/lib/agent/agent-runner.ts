@@ -29,10 +29,12 @@ import {
   AgentErrorType,
   AgentSignals,
   buildWizardMetadata,
+} from './agent-interface';
+import {
   checkAllSettingsConflicts,
   backupAndFixClaudeSettings,
   restoreClaudeSettings,
-} from './agent-interface';
+} from './claude-settings';
 import { getCloudUrlFromRegion } from '@utils/urls';
 import {
   evaluateWizardReadiness,
@@ -120,6 +122,13 @@ export interface ProgramRun {
    * line wrapping. Defaults to false — leave off for flows we don't own.
    */
   richLinks?: boolean;
+  /**
+   * Per-question `wizard_ask` timeout in milliseconds. Defaults to
+   * DEFAULT_ASK_TIMEOUT_MS (5 minutes). Raise it for programs whose
+   * questions send the user off to do slow work (run a build, create a
+   * key in the browser) before they can answer.
+   */
+  askTimeoutMs?: number;
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────
@@ -198,7 +207,12 @@ export async function runProgram(
 
   const skillsBaseUrl = getSkillsBaseUrl(session.localMcp);
 
-  // 2. Health check (guarded — skip if TUI already ran it)
+  // 2. Health check (guarded — skip if TUI already ran it). Only
+  // programs that declare a health-check screen get pre-flight checks;
+  // for everything else the checks never fire and never block.
+  const hasHealthCheckScreen = programConfig.steps.some(
+    (s) => s.screenId === 'health-check',
+  );
   if (session.readinessResult) {
     logToFile(
       `[agent-runner] readiness pre-computed by TUI: decision=${session.readinessResult.decision}` +
@@ -207,7 +221,7 @@ export async function runProgram(
         } — skipping re-check`,
     );
   }
-  if (!session.readinessResult) {
+  if (hasHealthCheckScreen && !session.readinessResult) {
     logToFile('[agent-runner] evaluating wizard readiness');
     const readinessConfig = session.signup
       ? SIGNUP_WIZARD_READINESS_CONFIG
@@ -299,6 +313,15 @@ export async function runProgram(
 
   analytics.setGroups(groupsFromUser(user, host));
 
+  // 4.5. AI opt-in enforcement. Parks here while AiOptInRequiredScreen is
+  // up if the org hasn't approved third-party AI — BEFORE the skill
+  // install and agent start, so no source leaves the machine. The screen
+  // alone is cosmetic; this await is the actual gate. Resolves
+  // immediately when the program declared requiresAi: false or in CI.
+  logToFile('[agent-runner] checking AI opt-in gate');
+  await getUI().waitForAiOptIn();
+  logToFile('[agent-runner] AI opt-in gate cleared');
+
   // 5. Skill install (if skillId provided)
   let skillPath: string | undefined;
   if (config.skillId) {
@@ -353,6 +376,7 @@ export async function runProgram(
         getSource: () => session.skillId ?? config.integrationLabel,
         showQuestion: (q) => getUI().requestQuestion(q),
         richLinks: config.richLinks ?? false,
+        timeoutMs: config.askTimeoutMs,
       });
 
   const agent = await initializeAgent(

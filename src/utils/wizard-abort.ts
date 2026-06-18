@@ -39,6 +39,18 @@ export function clearCleanup(): void {
   cleanupFns.length = 0;
 }
 
+/** Runs all registered cleanup functions and drains the array. */
+export function runCleanups(): void {
+  const fns = cleanupFns.splice(0);
+  for (const fn of fns) {
+    try {
+      fn();
+    } catch {
+      /* cleanup should not prevent exit */
+    }
+  }
+}
+
 export async function wizardAbort(
   options?: WizardAbortOptions,
 ): Promise<never> {
@@ -55,13 +67,7 @@ export async function wizardAbort(
   }
 
   // 1. Run registered cleanup functions
-  for (const fn of cleanupFns) {
-    try {
-      fn();
-    } catch {
-      /* cleanup should not prevent exit */
-    }
-  }
+  runCleanups();
 
   // 2. Capture error in analytics (if provided)
   if (error) {

@@ -5,9 +5,10 @@ import { REVENUE_ABORT_CASES } from './detect.js';
 import { getContentBlocks } from './content/index.js';
 
 export const revenueAnalyticsConfig: ProgramConfig = {
-  command: 'revenue',
+  command: 'revenue-analytics',
   description: 'Set up PostHog revenue analytics (e.g. Stripe integration)',
   id: 'revenue-analytics-setup',
+  skillId: 'revenue-analytics-setup',
   steps: REVENUE_ANALYTICS_PROGRAM,
   getContentBlocks,
   allowedTools: ['Agent'],

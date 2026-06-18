@@ -4,6 +4,7 @@ import type { ProgramConfig } from '@lib/programs/program-step';
 import type { startTUI as StartTUIFn } from '@ui/tui/start-tui';
 import type { TaskStreamPush as TaskStreamPushClass } from '@lib/task-stream/task-stream-push';
 import { resolveNoTelemetry } from './resolve-no-telemetry';
+import { runCleanups } from '@utils/wizard-abort';
 
 const WIZARD_VERSION = VERSION;
 
@@ -81,6 +82,9 @@ export function runWizard(
         if (signalled || exitInProgress) return;
         signalled = true;
         logToFile('[run-wizard] signal received, flushing task stream');
+        // Run cleanups synchronously first — settings restore is sync fs work
+        // and must complete even if the stream shutdown below times out.
+        runCleanups();
         if (activeTui.store.session.runPhase === RunPhase.Running) {
           activeTui.store.setRunPhase(RunPhase.Error);
         }
@@ -155,6 +159,9 @@ export function runWizard(
     } catch (err) {
       // File-log first — the cleanup below can throw or exit.
       logToFile('[run-wizard] FATAL:', err);
+      // Run cleanups before anything async so settings are restored even if
+      // the stream shutdown hangs.
+      runCleanups();
       // The task-stream debounce timer keeps the event loop alive, so
       // we have to drain it before exiting on the error path.
       exitInProgress = true;

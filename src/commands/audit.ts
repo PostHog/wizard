@@ -1,43 +1,22 @@
-import { runWizard, runWizardCI } from '@lib/runners';
 import { auditConfig } from '@lib/programs/audit/index';
-import { webAnalyticsDoctorConfig } from '@lib/programs/web-analytics-doctor/index';
-import { skillProgramOptions } from './skill-program-options';
+
 import type { Command } from './command';
+import { familyCommandFactory } from './factories/family-command-factory';
 
-const dispatchProgram = (
-  config: typeof auditConfig | typeof webAnalyticsDoctorConfig,
-  argv: Record<string, unknown>,
-): void => {
-  const extras = config.mapCliOptions?.(argv) ?? {};
-  const options = { ...argv, ...extras };
-  if (options.ci) {
-    runWizardCI(config, options);
-  } else {
-    runWizard(config, options);
-  }
-};
-
-const webAnalyticsCommand: Command = {
-  name: webAnalyticsDoctorConfig.command!,
-  description: webAnalyticsDoctorConfig.description,
-  options: {
-    ...skillProgramOptions,
-    ...(webAnalyticsDoctorConfig.cliOptions ?? {}),
-  },
-  handler: (argv) => {
-    dispatchProgram(webAnalyticsDoctorConfig, argv as Record<string, unknown>);
-  },
-};
-
-export const auditCommand: Command = {
-  name: 'audit',
+/**
+ * The `wizard audit` family.
+ *
+ * Subcommands are resolved at runtime: the wizard fetches `cliEntries` from
+ * `skill-menu.json` and dispatches based on `parentCommand: 'audit'`. The
+ * wizard-native handler for `web-analytics` lives in `NATIVE_HANDLERS` over
+ * in `dispatch-family.ts`. `wizard audit` with no positional opens the
+ * family picker, which combines native + live entries.
+ *
+ * Adding a new skill-backed audit subcommand is a context-mill release —
+ * no wizard release needed.
+ */
+export const auditCommand: Command = familyCommandFactory({
+  family: 'audit',
   description: auditConfig.description,
-  children: [webAnalyticsCommand],
-  options: {
-    ...skillProgramOptions,
-    ...(auditConfig.cliOptions ?? {}),
-  },
-  handler: (argv) => {
-    dispatchProgram(auditConfig, argv as Record<string, unknown>);
-  },
-};
+  optionsFrom: auditConfig,
+});

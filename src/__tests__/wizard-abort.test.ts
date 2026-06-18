@@ -4,6 +4,7 @@ import {
   WizardError,
   registerCleanup,
   clearCleanup,
+  runCleanups,
 } from '@utils/wizard-abort';
 import { analytics } from '@utils/analytics';
 
@@ -163,6 +164,38 @@ describe('wizardAbort', () => {
     );
 
     expect(mockAnalytics.shutdown).toHaveBeenCalledWith('cancelled');
+  });
+});
+
+describe('runCleanups', () => {
+  beforeEach(() => {
+    clearCleanup();
+  });
+
+  it('runs all registered cleanup functions', () => {
+    const calls: string[] = [];
+    registerCleanup(() => calls.push('a'));
+    registerCleanup(() => calls.push('b'));
+    runCleanups();
+    expect(calls).toEqual(['a', 'b']);
+  });
+
+  it('drains the array so a second call is a no-op', () => {
+    const calls: string[] = [];
+    registerCleanup(() => calls.push('a'));
+    runCleanups();
+    runCleanups();
+    expect(calls).toEqual(['a']);
+  });
+
+  it('continues past a throwing cleanup and runs remaining fns', () => {
+    const calls: string[] = [];
+    registerCleanup(() => {
+      throw new Error('boom');
+    });
+    registerCleanup(() => calls.push('after'));
+    runCleanups();
+    expect(calls).toEqual(['after']);
   });
 });
 

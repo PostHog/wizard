@@ -12,6 +12,7 @@ import {
   type ProgramId,
 } from '@lib/programs/program-registry';
 import { createProgramSequence } from '@lib/programs/program-step';
+import { withAiOptInGate } from '@lib/programs/ai-opt-in-gate';
 
 /** Screens that participate in linear programs. */
 export enum ScreenId {
@@ -25,9 +26,6 @@ export enum ScreenId {
   AuditIntro = 'audit-intro',
   AuditRun = 'audit-run',
   AuditOutro = 'audit-outro',
-  Audit3000Intro = 'audit-3000-intro',
-  Audit3000Run = 'audit-3000-run',
-  Audit3000Outro = 'audit-3000-outro',
   HealthCheck = 'health-check',
   DoctorIntro = 'doctor-intro',
   DoctorReport = 'doctor-report',
@@ -36,11 +34,13 @@ export enum ScreenId {
   Run = 'run',
   Mcp = 'mcp',
   McpSuggestedPrompts = 'mcp-suggested-prompts',
+  SlackConnect = 'slack-connect',
   KeepSkills = 'keep-skills',
   Outro = 'outro',
   Exit = 'exit',
   McpAdd = 'mcp-add',
   McpRemove = 'mcp-remove',
+  AiOptIn = 'ai-opt-in',
 }
 
 export interface Screen {
@@ -60,6 +60,6 @@ export const PROGRAM_SEQUENCES: Record<ProgramId, Sequence> =
   Object.fromEntries(
     PROGRAM_REGISTRY.map((c) => [
       c.id,
-      createProgramSequence(c.steps) as Sequence,
+      createProgramSequence(withAiOptInGate(c)) as Sequence,
     ]),
   ) as Record<ProgramId, Sequence>;

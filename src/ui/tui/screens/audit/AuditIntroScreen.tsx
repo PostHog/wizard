@@ -2,7 +2,10 @@ import { Box, Text } from 'ink';
 import { useState, useSyncExternalStore } from 'react';
 import type { WizardStore } from '@ui/tui/store';
 import { IntroScreenLayout } from '@ui/tui/screens/IntroScreenLayout';
-import { SkillSourceInfo, useSkillEntry } from '@ui/tui/screens/SkillSourceInfo';
+import {
+  SkillSourceInfo,
+  useSkillEntry,
+} from '@ui/tui/screens/SkillSourceInfo';
 
 interface AuditIntroScreenProps {
   store: WizardStore;
