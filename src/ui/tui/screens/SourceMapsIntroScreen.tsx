@@ -64,10 +64,10 @@ export const SourceMapsIntroScreen = ({
     ) : view === 'privacy' ? (
       <PrivacyPanel />
     ) : (
-      <Box flexDirection="column" alignItems="center" width={60}>
+      <Box flexDirection="column" width={60}>
         <Text>
-          The Wizard will run an agent to detect your framework(s), download the
-          relevant docs, and implement source-map uploads for you.
+          The Wizard will run an agent to detect your project's framework(s),
+          download the relevant docs, and implement source-map uploads for you.
         </Text>
         <Box marginTop={1}>
           <Text>Ready?</Text>

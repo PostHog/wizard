@@ -32,7 +32,7 @@ type DetectState =
   | { kind: 'error'; message: string };
 
 const EXIT = '__exit';
-const MAX_ACTIVITY_LINES = 4;
+const MAX_ACTIVITY_LINES = 8;
 
 function projectLabel(p: DetectedProject): string {
   const name = p.variant ? VARIANT_DISPLAY_NAME[p.variant] : p.framework;
@@ -95,12 +95,20 @@ export const SourceMapsDetectScreen = ({
           <LoadingBox message="Scanning the repo for frameworks and PostHog SDKs..." />
         </Box>
         <Box flexDirection="column">
-          {activity.map((line, i) => (
-            <Text key={`${i}-${line}`} dimColor>
-              {'  '}
-              {line}
-            </Text>
-          ))}
+          {activity.length === 0 ? (
+            <Text dimColor>{'  '}Starting up the detection agent…</Text>
+          ) : (
+            activity.map((line, i) => (
+              <Text
+                key={`${i}-${line}`}
+                dimColor={i < activity.length - 1}
+                color={i === activity.length - 1 ? Colors.primary : undefined}
+              >
+                {'  '}
+                {Icons.triangleSmallRight} {line}
+              </Text>
+            ))
+          )}
         </Box>
       </Box>
     );

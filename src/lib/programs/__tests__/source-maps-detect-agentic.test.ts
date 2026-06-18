@@ -8,7 +8,7 @@ describe('coerceReport', () => {
         {
           path: '.',
           framework: 'Next.js',
-          variant: 'nextjs',
+          targetId: 'nextjs',
           hasPostHog: true,
         },
       ],
@@ -29,7 +29,7 @@ describe('coerceReport', () => {
         {
           path: '.',
           framework: 'Next.js',
-          variant: 'nextjs',
+          targetId: 'nextjs',
           hasPostHog: false,
         },
       ],
@@ -48,14 +48,14 @@ describe('coerceReport', () => {
         {
           path: 'apps/mobile',
           framework: 'React Native',
-          variant: 'react-native',
+          targetId: 'react-native',
           hasPostHog: true,
         },
         // garbage value
         {
           path: 'apps/api',
           framework: 'Rust',
-          variant: 'rocket',
+          targetId: 'rocket',
           hasPostHog: true,
         },
       ],
