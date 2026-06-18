@@ -3,11 +3,10 @@ name: CLI Screenshot Tests
 # Asserts each command loads the right skill/program. See scripts/cli-screenshots.mjs.
 on:
   workflow_dispatch:
-  # Drift monitor: catches a context-mill change breaking a command, no PR needed.
-  # Runs from `main` only (GitHub limitation).
+  # Drift monitor (context-mill can break a command with no PR). Runs from main only.
   schedule:
     - cron: '37 13 * * *' # daily ~06:37 PT
-  # Pre-merge gate, scoped to files that decide command → screen wiring.
+  # Pre-merge gate, scoped to files that affect command → screen wiring.
   pull_request:
     paths:
       - 'bin.ts'
@@ -58,7 +57,7 @@ jobs:
           path: scripts/__screenshots__/**
           if-no-files-found: ignore
 
-      # Scheduled-only: a PR failure shows a red ❌ already; a scheduled one pings nobody.
+      # Scheduled-only — a PR failure already shows a red ❌.
       - name: Notify Slack on scheduled failure
         if: failure() && github.event_name == 'schedule'
         uses: slackapi/slack-github-action@485a9d42d3a73031f12ec201c457e2162c45d02d # v2.0.0
