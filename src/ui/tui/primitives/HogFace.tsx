@@ -330,3 +330,40 @@ export const TalkingHog = ({ color = Colors.accent }: TalkingHogProps) => {
 
   return <HogFace expression={expression} color={color} />;
 };
+
+// --- Dance animation (arm flap + colour flash) -----------------------------
+
+/** Milliseconds per dance tick (the arm-flap rate). */
+const DANCE_TICK_MS = 180;
+/** Arm poses cycled while dancing — a side-to-side flap. */
+const DANCE_ARMS: HogArms[] = ['out', 'left', 'out', 'right'];
+/** Brand shades flashed while dancing. */
+const DANCE_COLORS = [
+  '#FF5C1C', // orange
+  '#FF474D', // red
+  '#FFA81C', // yellow
+  '#A737D2', // purple
+  '#43DAB3', // teal
+  '#2BB3DF', // blue
+];
+/**
+ * Ticks each colour holds before the next. >1 keeps the colour change under
+ * ~3 flashes/second (photosensitivity-friendly) while the arms flap faster.
+ */
+const DANCE_COLOR_TICKS = 2;
+
+/** Party mascot: arms flap through directions while the colour cycles. */
+export const DancingHog = () => {
+  const [tick, setTick] = useState(0);
+
+  useEffect(() => {
+    const timer = setInterval(() => setTick((t) => t + 1), DANCE_TICK_MS);
+    return () => clearInterval(timer);
+  }, []);
+
+  const arms = DANCE_ARMS[tick % DANCE_ARMS.length];
+  const color =
+    DANCE_COLORS[Math.floor(tick / DANCE_COLOR_TICKS) % DANCE_COLORS.length];
+
+  return <HogFace expression="cheeky" arms={arms} color={color} />;
+};

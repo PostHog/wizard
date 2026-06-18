@@ -9,6 +9,7 @@ import { Box, Text } from 'ink';
 import type { ReactNode } from 'react';
 import {
   AnimatedHogFace,
+  DancingHog,
   HogFace,
   SnoringHog,
   TalkingHog,
@@ -64,6 +65,9 @@ export const HogFaceDemo = () => (
       </Labelled>
       <Labelled label="talking">
         <TalkingHog />
+      </Labelled>
+      <Labelled label="dancing">
+        <DancingHog />
       </Labelled>
     </Box>
 
