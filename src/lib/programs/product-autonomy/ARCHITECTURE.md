@@ -91,10 +91,13 @@ are a cross-repo contract — change one, change both repos.
 
 ## 3. Wizard internals
 
-**Program definition** (`src/lib/programs/product-autonomy/`, four files):
+**Program definition** (`src/lib/programs/product-autonomy/`, five files):
 `index.ts` (config + lifecycle), `prompt.ts` (the 9 steps + mechanics + project URLs),
 `detect.ts` (prerequisite check + abort vocabulary), `steps.ts` (TUI screen sequence
-`detect → intro → health-check → auth → run → outro`). `productAutonomyConfig` is built from the
+`detect → intro → health-check → auth → run → outro`), and `content/tips.ts` (the
+program-owned `Tips`-sidebar copy that defines signal sources + scouts in plain
+language, wired via `getTips`; `RunScreen` falls back to `DEFAULT_TIPS` for every
+other program, so nothing else is affected). `productAutonomyConfig` is built from the
 `createSkillProgram` factory (`src/lib/programs/agent-skill/`) with overrides. Notables in
 `index.ts`: `PRODUCT_AUTONOMY_SKILL_ID = 'product-autonomy-setup'`, `REPORT_FILE =
 'posthog-product-autonomy-report.md'`, `maxQuestions: 13` (AI approval + GitHub + tracker picks +
@@ -257,8 +260,8 @@ Plus the **Temporal coordinator schedule** (`signals-scout-coordinator-schedule`
 6. **Per-team runtime** (user's responsibility): org AI consent on, GitHub connected.
 
 > [!NOTE]
-> **Deferred changes (do when the dependency ships).** Tracked alongside the prod
-> checklist so they aren't forgotten:
+> **Deferred / planned changes.** TODO-later items, tracked alongside the prod checklist
+> so they aren't forgotten (each notes its own trigger, where it has one):
 > 1. **Zendesk / pganalyze redirect → Inbox.** Today STEP 6 sends users to the
 >    new-warehouse-source URL (`/pipeline/new/source`) to add these credential-based
 >    sources (they can't be auto-created — the run never collects API keys). When the
@@ -272,6 +275,46 @@ Plus the **Temporal coordinator schedule** (`signals-scout-coordinator-schedule`
 >    `external-data-schemas` update tool (or add `sync_frequency` passthrough to
 >    source-create); STEP 6a/6b would then PATCH the schema after create. Deferred — 6h is
 >    fine for issue trackers.
+> 3. **Tailor the intro subtitle.** The intro screen still shows the generic
+>    `IntroScreenLayout` subtitle ("We'll use AI to analyze your project and complete work.
+>    .env* file contents will not leave your machine."). Reword it for this flow. Lands in
+>    `ProductAutonomyIntroScreen.tsx` / `IntroScreenLayout` (the subtitle the layout renders).
+> 4. **Rename `autonomy` → `self-driving`.** Product decision to drop "autonomy" / "Product
+>    Autonomy" in favour of "self-driving" across the command, the program, the intro text,
+>    and all skills. Cross-repo — do in lockstep:
+>    - **wizard:** the CLI command (`autonomy` → `self-driving`, `src/commands/autonomy.ts`),
+>      the program id (`product-autonomy`), every user-facing "Product Autonomy" string
+>      (intro copy, success/outro messages, `detect.ts` abort bodies), the report filename
+>      (`posthog-product-autonomy-report.md`), the screen id `product-autonomy-intro`, and
+>      the `PRODUCT_AUTONOMY_*` constants / `product-autonomy/` dir / `ProductAutonomy*`
+>      files (this doc included).
+>    - **context-mill:** the skill id (`product-autonomy-setup`), its dir + `config.yaml`,
+>      and every reference file.
+>    - The `[ABORT] <reason>` strings are a cross-repo contract (`detect.ts` ↔ skill) — keep
+>      both sides in step. posthog is unaffected (its `signals_*` / `SignalScout*` names
+>      don't carry the program name).
+> 5. **Auto-connect Zendesk / pganalyze via in-wizard API keys.** Today STEP 6 redirects
+>    these to the warehouse-source UI because the run never collects API credentials (which
+>    is also why item 1 exists). Instead, ask for the credentials in a `wizard_ask` (Zendesk
+>    subdomain + API token; pganalyze key) and create the source automatically via
+>    `external-data-sources-create` — the same connector pattern as GitHub Issues (6a) and
+>    Linear (6b), removing the UI trip and making item 1 moot for these two tools. Lands in
+>    context-mill `6-connected-tools.md` + new `6c`/`6d` connector files. **Reverses a
+>    deliberate constraint** (no credential collection today), so it needs a secure-credential
+>    path: masked entry, keep the keys out of the report and the agent transcript, mind the
+>    YARA secret-scan hooks, and confirm each tool's source-create payload actually supports
+>    credential-based creation.
+> 6. **Don't make the user wait ~30 min for the first scan (if avoidable).** The report/outro
+>    promises findings "within ~30 minutes" because fresh scout configs only run on the next
+>    Temporal coordinator tick (`signals-scout-coordinator-schedule`) — STEP 7's
+>    `signals-scout-config-sync` materializes the fleet immediately but doesn't dispatch a run.
+>    Explore triggering an immediate coordinator run for this team right after setup (e.g. an
+>    on-demand schedule trigger exposed as an MCP tool the wizard calls in STEP 7/9), then
+>    update the outro/report copy. **Partly unavoidable:** scouts still take a few minutes to
+>    actually run, and warehouse-fed sources (GitHub / Linear / Zendesk issues) can't emit until
+>    their first DWH sync completes (item 2) regardless of the coordinator — so an immediate
+>    trigger speeds up scout findings, not source/warehouse findings. Lands in posthog (the
+>    trigger) + context-mill (call it) + the wizard outro copy.
 
 ---
 
