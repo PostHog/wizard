@@ -23,6 +23,7 @@ import { AuditChecksDemo } from './demos/AuditChecksDemo.js';
 import { LearnDeckDemo } from './demos/LearnDeckDemo.js';
 import { EndScreensDemo } from './demos/EndScreensDemo.js';
 import { AiOptInDemo } from './demos/AiOptInDemo.js';
+import { HogFaceDemo } from './demos/HogFaceDemo.js';
 
 interface PlaygroundAppProps {
   store: WizardStore;
@@ -30,6 +31,7 @@ interface PlaygroundAppProps {
 
 export const PlaygroundApp = ({ store }: PlaygroundAppProps) => {
   const tabs = [
+    { id: 'hog-face', label: 'Hog face', component: <HogFaceDemo /> },
     { id: 'layout', label: 'Layout', component: <LayoutDemo /> },
     { id: 'input', label: 'Input', component: <InputDemo /> },
     { id: 'progress', label: 'Progress', component: <ProgressDemo /> },
