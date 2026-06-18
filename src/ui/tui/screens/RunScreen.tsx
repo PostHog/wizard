@@ -25,7 +25,6 @@ import { TipsCard } from '@ui/tui/components/TipsCard';
 import { useStdoutDimensions } from '@ui/tui/hooks/useStdoutDimensions';
 import { useFileWatcher } from '@ui/tui/hooks/file-watcher';
 import { EVENT_PLAN_FILE } from '@lib/programs/posthog-integration/index';
-import { QUEUE_DIR_NAME } from '@lib/programs/orchestrator/queue';
 import { getProgramConfig } from '@lib/programs/program-registry';
 import { getContentBlocks as getSkillContentBlocks } from '@lib/programs/agent-skill/content/index';
 
@@ -47,7 +46,7 @@ export const RunScreen = ({ store }: RunScreenProps) => {
   // form); `name`/`event`/`description` are legacy fallbacks for skills or
   // one-off runs that drift. Drop any entry that still ends up nameless so
   // the outro never shows blank bullets.
-  const onEventPlan = (parsed: unknown) => {
+  useFileWatcher(join(store.session.installDir, EVENT_PLAN_FILE), (parsed) => {
     if (!Array.isArray(parsed)) return;
     store.setEventPlan(
       parsed
@@ -57,15 +56,7 @@ export const RunScreen = ({ store }: RunScreenProps) => {
         }))
         .filter((e) => e.name),
     );
-  };
-  // The linear flow writes the plan at the project root; the orchestrator
-  // writes it inside its run cache (cleaned up with the rest, so it never
-  // lands in the project). The TUI can't tell the flows apart, so watch both.
-  useFileWatcher(join(store.session.installDir, EVENT_PLAN_FILE), onEventPlan);
-  useFileWatcher(
-    join(store.session.installDir, QUEUE_DIR_NAME, EVENT_PLAN_FILE),
-    onEventPlan,
-  );
+  });
 
   const [columns] = useStdoutDimensions();
 
