@@ -1,5 +1,18 @@
 # Changelog
 
+## [2.25.0](https://github.com/PostHog/wizard/compare/v2.24.1...v2.25.0) (2026-06-18)
+
+
+### Features
+
+* **cli:** add `wizard cli add` to install agent steering instructions ([#646](https://github.com/PostHog/wizard/issues/646)) ([9819d67](https://github.com/PostHog/wizard/commit/9819d6712c467546b96d5f0cde2f4ad57c692600))
+* **orchestrator:** experimental task-queue orchestrator (behind wizard-orchestrator flag) ([#606](https://github.com/PostHog/wizard/issues/606)) ([b4deb24](https://github.com/PostHog/wizard/commit/b4deb24fc64f88072d3685957adf640c9a14364d))
+
+
+### Bug Fixes
+
+* **cli:** install PostHog CLI before steering ([#687](https://github.com/PostHog/wizard/issues/687)) ([703341a](https://github.com/PostHog/wizard/commit/703341a6a96deaab3220ec8340840e0fb5d49371))
+
 ## [2.24.1](https://github.com/PostHog/wizard/compare/v2.24.0...v2.24.1) (2026-06-17)
 
 
