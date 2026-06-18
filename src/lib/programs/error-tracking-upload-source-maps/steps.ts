@@ -36,9 +36,12 @@ export const ERROR_TRACKING_UPLOAD_SOURCE_MAPS_PROGRAM: ProgramStep[] = [
     label: 'Detecting projects',
     // The Haiku agent scans the repo, surfaces an instrumentable / not-yet map,
     // and the user picks the project to wire up. Advances once a project is
-    // chosen (its variant is written to frameworkContext).
+    // chosen (its variant is written to frameworkContext). The gate lets the
+    // agent runner park after auth until the pick lands, so the run prompt sees
+    // the chosen variant.
     screenId: 'source-maps-detect',
     isComplete: projectSelected,
+    gate: projectSelected,
   },
   {
     id: 'run',

@@ -227,7 +227,7 @@ const BlockedSummary = ({ blocked }: { blocked: DetectedProject[] }) => {
       {missingSdk > 0 && (
         <Text dimColor>
           (… {missingSdk} supported but missing the PostHog SDK — install it
-          there first)
+          first with `npx @posthog/wizard`)
         </Text>
       )}
     </Box>

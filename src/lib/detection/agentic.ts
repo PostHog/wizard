@@ -47,6 +47,42 @@ export type AgenticDetectionReport = {
 /** Streaming progress callback — one short activity line per agent step. */
 export type DetectEvent = (line: string) => void;
 
+/**
+ * Every project-manifest / workspace-marker filename the wizard's frameworks
+ * are identified by. One brace-expansion Glob over all of these locates every
+ * project root in the repo in a single call, regardless of language.
+ */
+export const PROJECT_MANIFESTS: readonly string[] = [
+  // JS/TS + workspace markers
+  'package.json',
+  'pnpm-workspace.yaml',
+  'turbo.json',
+  'nx.json',
+  'lerna.json',
+  // Python
+  'requirements.txt',
+  'pyproject.toml',
+  'setup.py',
+  'Pipfile',
+  'manage.py',
+  // Ruby / PHP
+  'Gemfile',
+  'composer.json',
+  // Mobile / native
+  'Package.swift',
+  'Podfile',
+  'pubspec.yaml',
+  'build.gradle',
+  'build.gradle.kts',
+  'settings.gradle',
+  'settings.gradle.kts',
+];
+
+/** The single brace-expansion glob covering every supported manifest. */
+export function manifestGlob(): string {
+  return `**/{${PROJECT_MANIFESTS.join(',')}}`;
+}
+
 export type AgenticDetectOptions = {
   /** Categories to classify each project into. */
   targets: readonly DetectTarget[];
@@ -67,16 +103,16 @@ function buildPrompt(
     '',
     `Working directory: ${cwd}`,
     '',
-    'A "project" is the directory containing a package.json. Find projects by their manifests, NOT by walking directories — never report a directory that has no package.json.',
+    'A "project" is a directory containing one or more of the manifest files below. Find projects by their manifests, NOT by walking directories — never report a directory that has no manifest.',
     '',
     'Do exactly this:',
-    '1. Run Glob with pattern "**/package.json" — this lists every JS project in one call. Discard any result whose path contains node_modules/, dist/, build/, .next/, out/, coverage/, or vendor/.',
-    '2. Decide repoType: "monorepo" if the root package.json has a "workspaces" field OR pnpm-workspace.yaml / turbo.json / nx.json / lerna.json exists at the root (Glob them in one call), else "single".',
-    '3. For EACH remaining package.json, Read it ONCE. From its "dependencies" + "devDependencies" decide:',
-    '   - the human-readable framework name (e.g. "Next.js", "Express"),',
+    `1. Run Glob ONCE with this pattern to find every project manifest in the repo in a single call: "${manifestGlob()}". Discard any result whose path contains node_modules/, dist/, build/, .next/, out/, coverage/, vendor/, .venv/, or site-packages/. Group the remaining results by directory — each directory is one project.`,
+    '2. Decide repoType: "monorepo" if the root package.json has a "workspaces" field OR a pnpm-workspace.yaml / turbo.json / nx.json / lerna.json was found at the root, else "single".',
+    '3. For EACH project directory, Read its manifest(s) ONCE. From the dependency lists decide:',
+    '   - the human-readable framework name (e.g. "Next.js", "Django", "Rails"),',
     '   - the matching target id below, or null if none matches,',
-    '   - hasPostHog: true if any dependency name starts with "posthog" (posthog-js, posthog-node, @posthog/*, etc.), else false.',
-    '   Do NOT read any file other than package.json manifests.',
+    '   - hasPostHog: true if any dependency is a PostHog SDK (name contains "posthog", e.g. posthog-js, posthog-node, @posthog/*, posthog (pip/gem)), else false.',
+    '   Do NOT read any file other than these manifests.',
     '',
     'Target ids (id → name):',
     targetList,
@@ -84,10 +120,10 @@ function buildPrompt(
     'Output requirements:',
     '- Respond with ONLY a single JSON object. No prose, no markdown code fences.',
     '- Shape: {"repoType":"monorepo"|"single","projects":[{"path":string,"framework":string,"targetId":string|null,"hasPostHog":boolean}]}',
-    '- "path" is the package.json\'s directory relative to the working directory; use "." for the repo root.',
+    '- "path" is the project directory relative to the working directory; use "." for the repo root.',
     '- "targetId" MUST be exactly one of the target ids above when it matches; otherwise null.',
     '- Include projects whose stack matches no target too (targetId: null).',
-    `- If there are no package.json files at all, respond with exactly: ${AgentSignals.ABORT} detection failed`,
+    `- If there are no manifests at all, respond with exactly: ${AgentSignals.ABORT} detection failed`,
   ].join('\n');
 }
 

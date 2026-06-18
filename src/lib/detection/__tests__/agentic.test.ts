@@ -1,6 +1,25 @@
-import { coerceAgenticReport } from '@lib/detection/agentic';
+import { coerceAgenticReport, manifestGlob } from '@lib/detection/agentic';
 
 const TARGETS = ['nextjs', 'node', 'vite'];
+
+describe('manifestGlob', () => {
+  it('is one brace-expansion glob covering JS, Python, Ruby, PHP and native manifests', () => {
+    const glob = manifestGlob();
+    expect(glob.startsWith('**/{')).toBe(true);
+    expect(glob.endsWith('}')).toBe(true);
+    for (const name of [
+      'package.json',
+      'pnpm-workspace.yaml',
+      'requirements.txt',
+      'Gemfile',
+      'composer.json',
+      'build.gradle',
+      'pubspec.yaml',
+    ]) {
+      expect(glob).toContain(name);
+    }
+  });
+});
 
 describe('coerceAgenticReport', () => {
   it('keeps a targetId that is in the valid set', () => {

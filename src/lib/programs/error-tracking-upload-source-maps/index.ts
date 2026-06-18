@@ -14,6 +14,7 @@ import {
 } from './detect.js';
 import { getContentBlocks } from './content/index.js';
 import { getUiHostFromHost } from '@utils/urls';
+import { getUI } from '@ui';
 
 const REPORT_FILE = 'posthog-source-maps-report.md';
 const DOCS_URL = 'https://posthog.com/docs/error-tracking/upload-source-maps';
@@ -28,20 +29,26 @@ export const errorTrackingUploadSourceMapsConfig: ProgramConfig = {
   getContentBlocks,
   requires: ['posthog-integration'],
 
-  run: (session: WizardSession): Promise<ProgramRun> => {
-    const variant = session.frameworkContext[
-      SOURCE_MAPS_CONTEXT_KEYS.selectedVariant
-    ] as SkillVariant | undefined;
-    const displayName = session.frameworkContext[
-      SOURCE_MAPS_CONTEXT_KEYS.selectedDisplayName
-    ] as string | undefined;
-    const projectPath = session.frameworkContext[
-      SOURCE_MAPS_CONTEXT_KEYS.selectedPath
-    ] as string | undefined;
-
-    const skillId = variant
-      ? `error-tracking-upload-source-maps-${variant}`
-      : undefined;
+  run: (_session: WizardSession): Promise<ProgramRun> => {
+    // Read the picked project LIVE at prompt-build time, not here: the picker
+    // screen runs AFTER this run config is resolved (post-auth), and the store
+    // forks the session reference, so the `session` passed in never sees the
+    // choice. getUI().getFrameworkContext reads the live store session.
+    const readSelection = () => {
+      const variant = getUI().getFrameworkContext(
+        SOURCE_MAPS_CONTEXT_KEYS.selectedVariant,
+      ) as SkillVariant | undefined;
+      const displayName = getUI().getFrameworkContext(
+        SOURCE_MAPS_CONTEXT_KEYS.selectedDisplayName,
+      ) as string | undefined;
+      const projectPath = getUI().getFrameworkContext(
+        SOURCE_MAPS_CONTEXT_KEYS.selectedPath,
+      ) as string | undefined;
+      const skillId = variant
+        ? `error-tracking-upload-source-maps-${variant}`
+        : undefined;
+      return { variant, displayName, projectPath, skillId };
+    };
 
     return Promise.resolve({
       integrationLabel: 'error-tracking-upload-source-maps',
@@ -61,10 +68,10 @@ export const errorTrackingUploadSourceMapsConfig: ProgramConfig = {
       askTimeoutMs: 30 * 60 * 1000,
 
       customPrompt: (ctx) => {
+        const { variant, displayName, projectPath, skillId } = readSelection();
         if (!skillId || !variant) {
-          // Detection failed but the user got past the intro somehow.
-          // Tell the agent to abort with a structured signal so the runner
-          // renders a friendly outro.
+          // No project was selected — abort with a structured signal so the
+          // runner renders a friendly outro.
           return SOURCE_MAPS_DETECTION_FAILED_PROMPT;
         }
 
@@ -82,10 +89,11 @@ export const errorTrackingUploadSourceMapsConfig: ProgramConfig = {
         });
       },
 
-      postRun: (sess) => {
+      postRun: () => {
         // Stash a hint for the outro about what variant we shipped.
+        const { variant } = readSelection();
         if (variant) {
-          sess.frameworkContext['sourceMapsCompletedVariant'] = variant;
+          getUI().setFrameworkContext('sourceMapsCompletedVariant', variant);
         }
         return Promise.resolve();
       },

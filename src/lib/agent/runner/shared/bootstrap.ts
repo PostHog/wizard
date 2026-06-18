@@ -209,6 +209,22 @@ export async function bootstrapProgram(
   await getUI().waitForAiOptIn();
   logToFile('[agent-runner] AI opt-in gate cleared');
 
+  // Park for any interactive step the user must complete AFTER authenticating
+  // but BEFORE the agent runs — e.g. the source-maps project picker, which
+  // needs credentials to scan and writes its choice to frameworkContext that
+  // the run prompt reads. Generic: await every gated step between auth and run.
+  const authIndex = programConfig.steps.findIndex((s) => s.screenId === 'auth');
+  const runIndex = programConfig.steps.findIndex((s) => s.screenId === 'run');
+  if (authIndex !== -1 && runIndex > authIndex) {
+    for (const step of programConfig.steps.slice(authIndex + 1, runIndex)) {
+      if (step.gate) {
+        logToFile(`[agent-runner] awaiting post-auth gate: ${step.id}`);
+        await getUI().waitForGate(step.id);
+        logToFile(`[agent-runner] post-auth gate cleared: ${step.id}`);
+      }
+    }
+  }
+
   // Feature flags, variant metadata, and MCP url. Both arms need these, and the
   // fork decision reads the flags.
   const wizardFlags = await analytics.getAllFlagsForWizard();

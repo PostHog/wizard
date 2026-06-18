@@ -202,4 +202,14 @@ export interface WizardUI {
 
   // ── Generic frameworkContext setter for program file watchers ─────
   setFrameworkContext(key: string, value: unknown): void;
+
+  /** Read a frameworkContext value from the LIVE session (store may have
+   * forked the reference the runner holds). Used by run configs to read
+   * values written by post-auth screens (e.g. the source-maps picker). */
+  getFrameworkContext(key: string): unknown;
+
+  /** Park until the named program step's gate predicate flips true. Resolves
+   * immediately if the step has no gate. Mirrors waitForAiOptIn for any
+   * post-auth interactive step the agent run must wait on. */
+  waitForGate(stepId: string): Promise<void>;
 }

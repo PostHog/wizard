@@ -100,6 +100,14 @@ export class InkUI implements WizardUI {
     return this.store.getGate('ai-opt-in');
   }
 
+  waitForGate(stepId: string): Promise<void> {
+    return this.store.getGate(stepId);
+  }
+
+  getFrameworkContext(key: string): unknown {
+    return this.store.session.frameworkContext[key];
+  }
+
   setDetectedFramework(label: string): void {
     this.store.setDetectedFramework(label);
   }
