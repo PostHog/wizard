@@ -52,7 +52,7 @@ export const ProductAutonomyIntroScreen = ({
       </Box>
       <Box flexDirection="column" marginTop={1} paddingLeft={4}>
         <Text>{'•'} Watches errors, replays, and connected tools</Text>
-        <Text>{'•'} Runs scheduled scouts that scan for issues</Text>
+        <Text>{'•'} Runs scouts — scheduled checks that scan for issues</Text>
         <Text>{'•'} Researches findings in your code via GitHub</Text>
         <Text>{'•'} Surfaces everything in your Signals inbox</Text>
       </Box>
@@ -62,6 +62,14 @@ export const ProductAutonomyIntroScreen = ({
       <Text>Let's set up PostHog Product Autonomy.</Text>
       <Box flexDirection="column" marginTop={1}>
         <Text>PostHog finds — and can fix — issues in your product.</Text>
+      </Box>
+      <Box flexDirection="column" marginTop={1} alignItems="center">
+        <Text dimColor>
+          It turns on signal sources (errors, replays, connected tools)
+        </Text>
+        <Text dimColor>
+          and scouts — scheduled checks that flag issues to your inbox.
+        </Text>
       </Box>
     </Box>
   );

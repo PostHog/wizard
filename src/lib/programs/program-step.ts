@@ -5,6 +5,7 @@ import type { Integration } from '@lib/constants';
 import type { FrameworkConfig } from '@lib/framework-config';
 import type { ContentBlock } from '@ui/tui/primitives/index';
 import type { WizardStore } from '@ui/tui/store';
+import type { Tip } from '@ui/tui/components/TipsCard';
 
 /**
  * A program step is the primary unit of the wizard's execution model.
@@ -217,6 +218,15 @@ export interface ProgramConfig {
    * run step (posthog-doctor) leave this unset.
    */
   getContentBlocks?: (store?: WizardStore) => ContentBlock[];
+  /**
+   * Tips shown in the run screen's right pane (the `Tips` sidebar) once
+   * the LearnCard finishes. Lets a program supply its own explainer copy
+   * (e.g. product-autonomy explaining what signal sources and scouts are)
+   * instead of the generic onboarding deck. Unset → `RunScreen` falls back
+   * to `DEFAULT_TIPS`, so every other program is unaffected. Lives at
+   * `<program>/content/tips.ts` by convention.
+   */
+  getTips?: (store?: WizardStore) => Tip[];
   /**
    * Subcommand-specific CLI options. Spread into yargs `.options(...)` when the
    * program's subcommand is registered. Program-specific knowledge stays in

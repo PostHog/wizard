@@ -9,6 +9,7 @@ import { createSkillProgram } from '../agent-skill/index.js';
 import { PRODUCT_AUTONOMY_PROGRAM } from './steps.js';
 import { PRODUCT_AUTONOMY_ABORT_CASES } from './detect.js';
 import { buildProductAutonomyPrompt } from './prompt.js';
+import { getTips } from './content/tips.js';
 
 export const PRODUCT_AUTONOMY_SKILL_ID = 'product-autonomy-setup';
 const REPORT_FILE = 'posthog-product-autonomy-report.md';
@@ -111,6 +112,7 @@ export const productAutonomyConfig: ProgramConfig = {
   }),
   steps: PRODUCT_AUTONOMY_PROGRAM,
   run,
+  getTips,
 };
 
 export { PRODUCT_AUTONOMY_PROGRAM } from './steps.js';
