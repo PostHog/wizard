@@ -55,7 +55,7 @@ function commandmentsReference(ctx: OrchestratorPromptContext): string | null {
   return `Framework rules for this integration are at \`${ctx.commandmentsPath}\`. Read them before you edit and follow them.`;
 }
 
-const TASK_BASICS = `You are one isolated task in a larger PostHog workflow, run as a fresh agent with no memory of the other tasks beyond the context you are given. Do only your task, then report exactly once by calling complete_task with a structured handoff: what your goal was, what you did, and what the next agent should know. When you are given context from previous steps, trust it — those agents already did their work, so do not re-verify or re-read what their handoffs tell you. Build on it and move fast. Read a file before you edit it, so your own changes do not duplicate what is already there. Work only within this project's own directory; nothing outside it is part of your task. If your task does not apply to this project — there is genuinely nothing for it to do — report it with status \`skipped\` and say why, rather than marking it done.`;
+const TASK_BASICS = `You are one isolated task in a larger PostHog workflow, run as a fresh agent with no memory of the other tasks beyond the context you are given. Do only your task, then report exactly once by calling complete_task with a structured handoff: what your goal was, what you did, and what the next agent should know. When you are given context from previous steps, trust it — those agents already did their work, so do not re-verify or re-read what their handoffs tell you. Build on it and move fast. Read a file before you edit it, so your own changes do not duplicate what is already there. Work only inside this project's own directory: never read, list, or search (find, ls, grep, glob) outside it — not the OS, not other projects, not global package caches. If your task seems to need something outside this directory, it does not — skip that part and say so in your handoff rather than hunting across the filesystem. If your task does not apply to this project — there is genuinely nothing for it to do — report it with status \`skipped\` and say why, rather than marking it done.`;
 
 const SEED_BASICS = `You are the orchestrator. Plan the work and seed the queue with enqueue_task — each call returns an id you can pass as a dependency to a later task. Give each task a short label for the UI — the action in a few words, not file names, class names, or other specifics. You are not a task yourself: do not call complete_task and do not edit the project.`;
 
@@ -277,14 +277,37 @@ function formatInputValue(value: unknown): string {
 }
 
 /**
- * Render the handoffs of a task's completed dependencies into a context section,
- * so a fresh agent sees what the upstream steps did. Empty when there are none.
+ * The ids of every task `task` transitively depends on — the full upstream
+ * chain, not just direct dependencies — ordered roots-first, each once. A `seen`
+ * set dedupes diamonds and guards against cycles.
+ */
+function ancestorIds(task: QueuedTask, store: QueueStore): string[] {
+  const seen = new Set<string>();
+  const ordered: string[] = [];
+  const visit = (id: string): void => {
+    if (seen.has(id)) return;
+    seen.add(id);
+    const t = store.get(id);
+    if (!t) return;
+    for (const dep of t.dependsOn) visit(dep); // ancestors before dependents
+    ordered.push(id);
+  };
+  for (const dep of task.dependsOn) visit(dep);
+  return ordered;
+}
+
+/**
+ * Render the handoffs of every step `task` transitively depends on into a context
+ * section, so a fresh agent sees the whole upstream chain — not just its direct
+ * dependencies. Reliability over token economy: a step must never have to
+ * re-discover what any ancestor already established just because an intermediate
+ * handoff happened to omit it. Empty when there are no completed ancestors.
  */
 function renderHandoffContext(task: QueuedTask, store: QueueStore): string {
   const lines: string[] = [];
-  for (const depId of task.dependsOn) {
-    const dep = store.get(depId);
-    const handoff = store.readHandoff(depId);
+  for (const id of ancestorIds(task, store)) {
+    const dep = store.get(id);
+    const handoff = store.readHandoff(id);
     if (!dep || !handoff) continue;
     lines.push(`### ${dep.type}`);
     lines.push(`- did: ${handoff.did}`);

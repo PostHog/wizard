@@ -6,9 +6,10 @@
  * returns every pending task whose dependencies are satisfied, and how many of
  * those run at once is decided by the task graph, not the queue.
  *
- * Every transition rewrites `<installDir>/.posthog-wizard/queue.json`, a small
- * file holding the whole queue, handoffs included. Today it is the run's
- * log and the report's source; later it is the resume point.
+ * Every transition rewrites `<installDir>/.posthog-wizard-cache/queue.json`, a
+ * small file holding the whole queue, handoffs included. It is the run's log
+ * and the report's source. The whole cache folder is run-scoped and wiped when
+ * the run ends.
  */
 import * as fs from 'fs';
 import * as path from 'path';
@@ -79,12 +80,21 @@ export interface EnqueueInput {
   enqueuedBy?: string;
 }
 
-export const QUEUE_DIR_NAME = '.posthog-wizard';
+export const QUEUE_DIR_NAME = '.posthog-wizard-cache';
 const DEFAULT_MAX_ATTEMPTS = 2;
 
 function nowIso(): string {
   return new Date().toISOString();
 }
+
+/** Dropped in the cache folder so an orphaned copy explains itself. */
+const DELETE_ME_FILE = '.DELETE-ME.md';
+const DELETE_ME_BODY = `# Safe to delete
+
+This folder contains run artifacts from the PostHog Wizard. This should have
+been deleted if the Wizard has finished running. If this wasn't deleted for
+some reason, you can safely delete the entire \`${QUEUE_DIR_NAME}/\` folder.
+`;
 
 /** Every queue transition, in the order it is reflected. */
 export type TransitionEvent =
@@ -120,6 +130,7 @@ export class QueueStore {
     const dir = path.join(installDir, QUEUE_DIR_NAME);
     this.queuePath = path.join(dir, 'queue.json');
     fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, DELETE_ME_FILE), DELETE_ME_BODY);
   }
 
   // ── Reads ───────────────────────────────────────────────────────────
