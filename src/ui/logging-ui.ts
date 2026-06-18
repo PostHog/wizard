@@ -114,7 +114,7 @@ export class LoggingUI implements WizardUI {
   }
 
   showBlockingOutage(result: WizardReadinessResult): Promise<void> {
-    console.log(`▲  Service health issues detected — blocking outage.`);
+    console.log(`▲  Service health issues detected.`);
     const blockingKeys = getBlockingServiceKeys(result.health);
     if (blockingKeys.length > 0) {
       console.log(`│`);
@@ -131,7 +131,9 @@ export class LoggingUI implements WizardUI {
     for (const reason of result.reasons) {
       console.log(`│  ${reason}`);
     }
-    console.log(`│  The wizard cannot start while these services are down.`);
+    console.log(
+      `│  Continuing anyway — health checks are advisory in non-interactive runs.`,
+    );
     return Promise.resolve();
   }
 

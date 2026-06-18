@@ -55,6 +55,7 @@ import {
 } from '@utils/debug';
 import { createBenchmarkPipeline } from '@lib/middleware/benchmark';
 import { wizardAbort, WizardError, registerCleanup } from '@utils/wizard-abort';
+import { isNonInteractiveEnvironment } from '@utils/environment';
 import { formatScanReport, writeScanReport } from '@lib/yara-hooks';
 import { detectNodePackageManagers } from '@lib/detection/package-manager';
 import type { PackageManagerDetector } from '@lib/detection/package-manager';
@@ -279,12 +280,17 @@ async function bootstrapProgram(
 
       await getUI().showBlockingOutage(readiness);
 
-      await wizardAbort({
-        message:
-          'Cannot start — external services are down:\n' +
-          blockingLabels.map((l) => `  - ${l}`).join('\n') +
-          '\n\nPlease try again later.',
-      });
+      // The TUI lets the user continue past an outage; non-interactive runs
+      // (CI) do the same automatically — the degraded services are reported
+      // above, but we proceed rather than aborting on a transient upstream blip.
+      if (!isNonInteractiveEnvironment()) {
+        await wizardAbort({
+          message:
+            'Cannot start — external services are down:\n' +
+            blockingLabels.map((l) => `  - ${l}`).join('\n') +
+            '\n\nPlease try again later.',
+        });
+      }
     } else if (readiness.decision === WizardReadiness.YesWithWarnings) {
       getUI().setReadinessWarnings(readiness);
     }
