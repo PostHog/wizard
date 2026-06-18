@@ -96,6 +96,30 @@ async function resolveReferenceSkillId(
   return ids.find((id) => id.startsWith(`integration-${framework}-`));
 }
 
+/**
+ * A step-skill (the HOW for one task) may ship per-framework variants — install,
+ * init, capture, and error-tracking each package the framework's docs page, ided
+ * as `<baseId>-<framework>`. Resolve the agent's bare skill id to that variant:
+ * exact `<baseId>-<framework>`, else the first granular variant under it, else
+ * the bare id unchanged (the generic single-variant steps — identify, report,
+ * dashboard, build — and the no-framework case).
+ */
+async function resolveStepSkillId(
+  skillsBaseUrl: string,
+  baseId: string,
+  framework: string | null | undefined,
+): Promise<string> {
+  if (!framework) return baseId;
+  const menu = await fetchSkillMenu(skillsBaseUrl);
+  if (!menu) return baseId;
+  const ids = Object.values(menu.categories)
+    .flat()
+    .map((s) => s.id);
+  const exact = `${baseId}-${framework}`;
+  if (ids.includes(exact)) return exact;
+  return ids.find((id) => id.startsWith(`${baseId}-${framework}-`)) ?? baseId;
+}
+
 export async function runOrchestrator(
   session: WizardSession,
   programConfig: ProgramConfig,
@@ -347,7 +371,12 @@ export async function runOrchestrator(
       // auto-load them and they must never land in the project (or a CI PR).
       // The prompt points the agent at them instead.
       const skillPaths: string[] = [];
-      for (const skillId of resolved.skills) {
+      for (const baseSkillId of resolved.skills) {
+        const skillId = await resolveStepSkillId(
+          boot.skillsBaseUrl,
+          baseSkillId,
+          session.skillId,
+        );
         const result = await installSkillById(
           skillId,
           session.installDir,
