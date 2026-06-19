@@ -320,6 +320,7 @@ Plus the **Temporal coordinator schedule** (`signals-scout-coordinator-schedule`
 >    trigger) + context-mill (call it) + the wizard outro copy.
 > 7. Write down a proper end message for wizard (go to inbox, do stuff) instead of directing to docs, as now @/Users/woutut/Documents/Screenshots/CleanShot 2026-06-18 at 17.44.02.png
 > 8. Update Inbox UI to propose to run Wizard command for autonomy
+> 9. Disable scouts that replicate pipeline (error tracking/replay)
 
 ---
 
