@@ -12,8 +12,10 @@
  * follow-ups (#525, #524 skills) — v1 uses pi's built-in coding tools.
  */
 
+import fs from 'fs';
+import path from 'path';
 import { getUI } from '../../../../ui';
-import { logToFile } from '../../../../utils/debug';
+import { getLogFilePath, logToFile } from '../../../../utils/debug';
 import { getLlmGatewayUrlFromHost } from '../../../../utils/urls';
 import {
   POSTHOG_FLAG_HEADER_PREFIX,
@@ -38,9 +40,11 @@ const MODEL_ID = 'claude-sonnet-4-6';
 const PI_RUNTIME_NOTES = [
   '',
   '## This runtime',
-  '- To list or explore files, call the `read` tool with a DIRECTORY path — it returns the listing. `bash` is restricted to install/build/typecheck/lint/format commands; `ls`, `find`, `cat`, and pipes are blocked. Do not use `bash` to explore the project.',
+  "- To see a directory's files, call the `read` tool with the directory path (e.g. read '.' or read 'src/'); it returns the listing. Use `read` for files too. NEVER run `ls`, `find`, `cat`, or `grep` through `bash` — they are blocked and waste a turn.",
+  '- `bash` is ONLY for install/build/typecheck/lint/format. Run installs SYNCHRONOUSLY (e.g. `npm install <pkg>`); do not background with `&`, chain with `&&`, or pipe — all are blocked.',
   '- Call `load_skill_menu` once to choose the skill, then `install_skill`. Do not call `load_skill_menu` again this session.',
   "- Never write a PostHog URL or token as a literal in source (e.g. 'https://us.i.posthog.com') — it is blocked. Read them from environment variables (process.env.POSTHOG_HOST, os.environ['POSTHOG_HOST'], etc.).",
+  '- Update the task list FREQUENTLY as you work — mark items `completed` the moment you finish them and `in_progress` as you pick them up, so the displayed step always reflects where you actually are. Keep titles broad and action-oriented (the area of work), not specific files or sub-steps.',
 ].join('\n');
 
 /**
@@ -89,6 +93,11 @@ export const piBackend: AgentBackend = {
 
   async run(inputs: BackendRunInputs): Promise<AgentResult> {
     const { session, boot, prompt, spinner, config, programConfig } = inputs;
+
+    // Init banner (parity #5).
+    getUI().log.step('Initializing Wizard agent...');
+    getUI().log.step(`Verbose logs: ${getLogFilePath()}`);
+    getUI().log.success("Agent initialized. Let's get cooking!");
 
     spinner.start(config.spinnerMessage ?? 'Customizing your PostHog setup...');
 
@@ -259,6 +268,16 @@ export const piBackend: AgentBackend = {
           `[pi] terminated: YARA violation (blocked ${security.state.blockedCount} call(s))`,
         );
         return { error: AgentErrorType.YARA_VIOLATION };
+      }
+
+      // The skill plans events into .posthog-events.json then asks to remove it
+      // on completion; pi's `rm` is fence-blocked, so the agent can't — clean it
+      // up host-side rather than leave a stale (often empty) artifact (#15).
+      try {
+        const planFile = path.join(session.installDir, '.posthog-events.json');
+        if (fs.existsSync(planFile)) await fs.promises.rm(planFile);
+      } catch (err) {
+        logToFile(`[pi] .posthog-events.json cleanup skipped: ${String(err)}`);
       }
 
       spinner.stop(config.successMessage ?? 'PostHog integration complete');
