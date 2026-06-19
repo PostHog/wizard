@@ -115,8 +115,12 @@ STEP 7 — Design custom scouts for this product. (skill: "Custom scouts")
    You are the only actor that has read this repo — turn that into
    coverage per the skill: a real gap analysis of the project's
    watchable surfaces against what the canonical fleet already covers,
-   then custom scouts for the uncovered ones. Never edit canonical
-   scout bodies. Propose all candidates in ONE batched wizard_ask
+   then custom scouts for the uncovered ones. Keep scout bodies
+   high-level: describe the behavior and signal conditions to watch,
+   referencing repo evidence by file/function name — never paste raw
+   source, secrets, env values, or customer data into a scout body.
+   Never edit canonical scout bodies. Propose all candidates in ONE
+   batched wizard_ask
    before creating anything; the user declining everything (or finding
    no gap at all) is a valid outcome, not an abort. Mark the task
    completed either way.
