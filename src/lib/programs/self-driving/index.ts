@@ -5,6 +5,7 @@ import type { ProgramRun } from '@lib/agent/agent-runner';
 import { OutroKind } from '@lib/wizard-session';
 import { getUiHostFromHost } from '@utils/urls';
 import { createSkillProgram } from '../agent-skill/index.js';
+import { getContentBlocks as agentSkillContentBlocks } from '../agent-skill/content/index.js';
 import { SELF_DRIVING_PROGRAM } from './steps.js';
 import { SELF_DRIVING_ABORT_CASES } from './detect.js';
 import { buildSelfDrivingPrompt } from './prompt.js';
@@ -104,6 +105,18 @@ export const selfDrivingConfig: ProgramConfig = {
   steps: SELF_DRIVING_PROGRAM,
   run,
   getTips,
+  // The shared agent-skill Learn deck lingers ~60s on its last block before
+  // RunScreen flips to the Self-driving Tips pane; shorten that final pause
+  // so the scout/source/inbox tips appear promptly (the Tasks pane already
+  // shows progress). Same deck, just a quicker hand-off.
+  getContentBlocks: (store) => {
+    const blocks = agentSkillContentBlocks(store);
+    return blocks.map((b, i) =>
+      i === blocks.length - 1 && typeof b === 'object'
+        ? { ...b, pause: 5000 }
+        : b,
+    );
+  },
 };
 
 export { SELF_DRIVING_PROGRAM } from './steps.js';

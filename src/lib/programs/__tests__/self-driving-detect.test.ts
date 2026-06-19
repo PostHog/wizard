@@ -75,6 +75,13 @@ describe('selfDrivingConfig', () => {
     );
   });
 
+  it('shortens the Learn deck final pause so the Tips pane appears promptly', () => {
+    const blocks = selfDrivingConfig.getContentBlocks?.() ?? [];
+    expect(blocks.length).toBeGreaterThan(0);
+    const last = blocks[blocks.length - 1];
+    expect(typeof last === 'object' ? last.pause : undefined).toBe(5000);
+  });
+
   it('gives wizard_ask a 30-min timeout for the browser-handoff steps', () => {
     const { run } = selfDrivingConfig;
     const timeout = typeof run === 'object' ? run.askTimeoutMs : undefined;
