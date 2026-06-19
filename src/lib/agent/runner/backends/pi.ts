@@ -29,6 +29,21 @@ const GATEWAY_PROVIDER = 'posthog-gateway';
 const MODEL_ID = 'claude-sonnet-4-6';
 
 /**
+ * pi-specific runtime guidance appended to the shared commandments. Targets the
+ * top run-slowness causes (profiled): the agent reaching for blocked `bash
+ * ls/find` to explore (each retry is a model round-trip), re-fetching the skill
+ * menu, and writing literal PostHog URLs that the YARA scanner blocks at write
+ * time. Steering it once up front avoids the retry spirals.
+ */
+const PI_RUNTIME_NOTES = [
+  '',
+  '## This runtime',
+  '- To list or explore files, call the `read` tool with a DIRECTORY path — it returns the listing. `bash` is restricted to install/build/typecheck/lint/format commands; `ls`, `find`, `cat`, and pipes are blocked. Do not use `bash` to explore the project.',
+  '- Call `load_skill_menu` once to choose the skill, then `install_skill`. Do not call `load_skill_menu` again this session.',
+  "- Never write a PostHog URL or token as a literal in source (e.g. 'https://us.i.posthog.com') — it is blocked. Read them from environment variables (process.env.POSTHOG_HOST, os.environ['POSTHOG_HOST'], etc.).",
+].join('\n');
+
+/**
  * Gateway HTTP headers, mirroring `buildAgentEnv` on the anthropic path: always
  * the Bedrock-fallback header, plus wizard metadata (`X-POSTHOG-PROPERTY-*`) and
  * wizard feature flags (`X-POSTHOG-FLAG-*`).
@@ -139,7 +154,7 @@ export const piBackend: AgentBackend = {
       const resourceLoader = new DefaultResourceLoader({
         cwd: session.installDir,
         agentDir: getAgentDir(),
-        systemPrompt: getWizardCommandments(),
+        systemPrompt: getWizardCommandments() + '\n' + PI_RUNTIME_NOTES,
         noExtensions: true,
         noSkills: true,
         noContextFiles: true,
@@ -220,7 +235,7 @@ export const piBackend: AgentBackend = {
             break;
           }
           case 'agent_end': {
-            logToFile(`[pi] agent_end (willRetry=${event.willRetry})`);
+            logToFile(`[pi] agent_end (willRetry=${String(event.willRetry)})`);
             break;
           }
           default:

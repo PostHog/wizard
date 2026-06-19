@@ -25,7 +25,10 @@ import {
   resolveEnvPath,
 } from '../../../wizard-tools';
 
-function text(s: string): { content: [{ type: 'text'; text: string }]; details: unknown } {
+function text(s: string): {
+  content: [{ type: 'text'; text: string }];
+  details: unknown;
+} {
   return { content: [{ type: 'text', text: s }], details: {} };
 }
 
@@ -37,19 +40,25 @@ export interface PiToolsContext {
 export function createWizardPiTools(ctx: PiToolsContext): ToolDefinition[] {
   const { workingDirectory, skillsBaseUrl } = ctx;
 
+  // Fetch the skill menu at most once per run — the agent calls load_skill_menu
+  // 2-3× otherwise, each a fresh HTTP round-trip (profiled slowness).
+  let menuPromise: ReturnType<typeof fetchSkillMenu> | undefined;
+  const getSkillMenu = () => (menuPromise ??= fetchSkillMenu(skillsBaseUrl));
+
   const loadSkillMenu = defineTool({
     name: 'load_skill_menu',
     label: 'Load skill menu',
     description:
       'Load available PostHog skills for a category. Returns skill IDs and names. Call this first, then install_skill with the chosen ID.',
-    promptSnippet: 'load_skill_menu(category) — list installable PostHog skills',
+    promptSnippet:
+      'load_skill_menu(category) — list installable PostHog skills',
     parameters: Type.Object({
       category: Type.String({
         description: 'Skill category, e.g. "integration"',
       }),
     }),
     async execute(_id, args) {
-      const menu = await fetchSkillMenu(skillsBaseUrl);
+      const menu = await getSkillMenu();
       if (!menu) return text('Error: could not load the skill menu.');
       const skills = menu.categories[args.category] ?? [];
       if (skills.length === 0) {
@@ -65,7 +74,8 @@ export function createWizardPiTools(ctx: PiToolsContext): ToolDefinition[] {
     label: 'Install skill',
     description:
       'Download and install a PostHog skill by ID into .claude/skills/<skillId>/. Call load_skill_menu first. Then read the installed SKILL.md and follow it.',
-    promptSnippet: 'install_skill(skillId) — install a skill, then read its SKILL.md',
+    promptSnippet:
+      'install_skill(skillId) — install a skill, then read its SKILL.md',
     parameters: Type.Object({
       skillId: Type.String({ description: 'Skill ID from load_skill_menu' }),
     }),
@@ -105,7 +115,7 @@ export function createWizardPiTools(ctx: PiToolsContext): ToolDefinition[] {
     async execute(_id, args) {
       const resolved = resolveEnvPath(workingDirectory, args.filePath);
       const existing = fs.existsSync(resolved)
-        ? parseEnvKeys(fs.readFileSync(resolved, 'utf8'))
+        ? parseEnvKeys(await fs.promises.readFile(resolved, 'utf8'))
         : new Set<string>();
       const results: Record<string, 'present' | 'missing'> = {};
       for (const key of args.keys) {
@@ -120,7 +130,8 @@ export function createWizardPiTools(ctx: PiToolsContext): ToolDefinition[] {
     label: 'Set env values',
     description:
       'Create or update environment variable keys in a .env file (creates the file if missing). Pass literal string values.',
-    promptSnippet: 'set_env_values(filePath, values) — write .env keys (never hardcode secrets in source)',
+    promptSnippet:
+      'set_env_values(filePath, values) — write .env keys (never hardcode secrets in source)',
     parameters: Type.Object({
       filePath: Type.String({
         description: 'Path to the .env file, relative to the project root',
@@ -140,16 +151,21 @@ export function createWizardPiTools(ctx: PiToolsContext): ToolDefinition[] {
       }
       const resolved = resolveEnvPath(workingDirectory, args.filePath);
       const existing = fs.existsSync(resolved)
-        ? fs.readFileSync(resolved, 'utf8')
+        ? await fs.promises.readFile(resolved, 'utf8')
         : '';
       const merged = mergeEnvValues(existing, args.values);
       const dir = path.dirname(resolved);
-      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-      fs.writeFileSync(resolved, merged, 'utf8');
+      if (!fs.existsSync(dir))
+        await fs.promises.mkdir(dir, { recursive: true });
+      await fs.promises.writeFile(resolved, merged, 'utf8');
       logToFile(
-        `[pi] set_env_values: ${resolved} keys=${Object.keys(args.values).join(',')}`,
+        `[pi] set_env_values: ${resolved} keys=${Object.keys(args.values).join(
+          ',',
+        )}`,
       );
-      return text(`Wrote ${Object.keys(args.values).length} key(s) to ${args.filePath}.`);
+      return text(
+        `Wrote ${Object.keys(args.values).length} key(s) to ${args.filePath}.`,
+      );
     },
   });
 
