@@ -121,12 +121,25 @@ export const piBackend: AgentBackend = {
       });
       await resourceLoader.reload();
 
+      // Wizard capabilities as custom tools (pi has no MCP): skill
+      // discovery/install + fenced .env edits, same names as the MCP server so
+      // the shared prompt is unchanged. pi's built-in Read/Write/Edit/Bash do
+      // the code changes. Loaded lazily — it pulls in typebox (ESM), which must
+      // stay out of the static module graph so CommonJS unit tests can load the
+      // backend seam without parsing it.
+      const { createWizardPiTools } = await import('./pi-tools');
+      const customTools = createWizardPiTools({
+        workingDirectory: session.installDir,
+        skillsBaseUrl: boot.skillsBaseUrl,
+      });
+
       const { session: agentSession } = await createAgentSession({
         model,
         modelRegistry: registry,
         cwd: session.installDir,
         sessionManager: SessionManager.inMemory(session.installDir),
         resourceLoader,
+        customTools,
       });
 
       // Map pi events onto the run spinner + the log file. Markers + todos are
