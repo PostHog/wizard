@@ -370,6 +370,34 @@ Plus the **Temporal coordinator schedule** (`signals-scout-coordinator-schedule`
 >     the primitive. **Residual:** navigating onto a non-decline row and pressing `enter` without `space`
 >     still selects it (inherent to the untouched primitive; the cure is a one-line empty-`enter` → `[]`
 >     change if ever wanted). **Prod-sequencing** for the `description` field is in checklist item 2.
+> 12. **Run screen lingers on the generic "Learn" deck ~70s before the Self-driving "Tips" pane
+>     appears.** During the run the left pane plays the generic **Learn** deck ("Welcome." → "The Wizard
+>     is an agent." → "Running the `self-driving-setup` skill…") for ~70s before it flips to the program
+>     **Tips** pane (the scout / source / inbox explainers from `getTips`) — even though the Tasks pane
+>     and the bottom status line already show the agent working (e.g. "Reading project context", 1/9).
+>     The switch is a **content-deck timer, fully decoupled from agent progress**, and the wait is
+>     dominated by a hardcoded **`pause: 60000`** (60 s) on the deck's last block. **Where to look:**
+>     `RunScreen` chooses `leftPane` off `store.learnCardComplete` (`LearnCard` until true, then
+>     `TipsCard`) and resolves the deck via
+>     `getProgramConfig(activeProgram).getContentBlocks ?? getSkillContentBlocks`; `LearnCard` wires
+>     `onSequenceComplete → store.setLearnCardComplete()` (plus its own `startDelay` of 2 s);
+>     `ContentSequencer.handleComplete` fires `onSequenceComplete` **only after the last block's `pause`
+>     elapses**; the deck self-driving plays is the **shared factory default**
+>     `agent-skill/content/index.tsx` (`getContentBlocks`, last block `pause: 60000`) — self-driving does
+>     **not** override it today. **Scoping caveat (the whole reason this is a TODO, not a one-liner):**
+>     that deck is inherited by *every* skill program (audit, revenue-analytics, migration, bare
+>     `wizard skill <id>`), so editing `agent-skill/content/index.tsx` changes all of them. Fix
+>     self-driving alone the way `getTips` already is — add a **self-driving-owned `getContentBlocks`**
+>     override to `selfDrivingConfig` (`self-driving/index.ts`, right next to the `getTips` override);
+>     only self-driving runs pick it up, every other program keeps the shared deck. **Do NOT** branch on
+>     `activeProgram === 'self-driving'` inside `RunScreen` / `LearnCard` — product knowledge in shared
+>     TUI machinery is the repo's core anti-pattern. Three behaviours the override could carry: (a) same
+>     deck with a short final `pause` (~5 s) — smallest, zero shared-code edits; (b) **progress-driven**
+>     flip (Tips the moment the first task/`[STATUS]` lands) via a new *generic* `ProgramConfig` predicate
+>     hook the run screen consults — keeps the machinery generic, only self-driving supplies the
+>     predicate; (c) **no deck** (Tips from the start) — needs a generic "empty deck ⇒ complete
+>     immediately" guard in `LearnCard` / `RunScreen`, because an empty `getContentBlocks` never fires
+>     `onSequenceComplete` and would otherwise hang on a blank Learn pane. UI polish — deferred.
 
 ---
 
