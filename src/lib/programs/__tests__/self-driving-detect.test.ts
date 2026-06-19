@@ -66,7 +66,6 @@ describe('SELF_DRIVING_ABORT_CASES', () => {
   const reasons = [
     'self-driving is not available for this project',
     'github connection declined',
-    'ai data processing approval declined',
     'requires-interactive-mode',
     'requirements-incomplete',
   ];

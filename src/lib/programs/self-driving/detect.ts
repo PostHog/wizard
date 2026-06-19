@@ -56,22 +56,12 @@ export const SELF_DRIVING_ABORT_CASES: AbortCase[] = [
       'App, run the wizard again.',
   },
   {
-    // Skill emits: [ABORT] ai data processing approval declined
-    match: /^ai data processing approval declined$/i,
-    message: 'AI data processing approval required',
-    body:
-      'Self-driving analyzes your product data with AI, which needs an ' +
-      'organization-level approval. Without it, every signal is dropped ' +
-      'before it reaches your inbox. Approve AI processing under Settings ' +
-      '→ Organization → AI service providers, then run the wizard again.',
-  },
-  {
     // Skill emits: [ABORT] requires-interactive-mode
     match: /^requires-interactive-mode$/i,
     message: 'Interactive terminal required',
     body:
-      'Self-driving setup asks questions along the way (GitHub, issue ' +
-      'trackers, AI approval), so it needs an interactive terminal. Run ' +
+      'Self-driving setup asks questions along the way (GitHub and ' +
+      'issue trackers), so it needs an interactive terminal. Run ' +
       'the wizard outside CI / non-interactive mode.',
   },
   {

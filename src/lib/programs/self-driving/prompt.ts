@@ -47,13 +47,12 @@ call so the user can follow your progress in the TUI. Use exactly these
 tasks, in this order:
   1. Check Self-driving access
   2. Read project and current Self-driving state
-  3. Confirm AI data processing approval
-  4. Connect GitHub (required)
-  5. Enable signal sources
-  6. Offer issue-tracker integrations
-  7. Configure the scout fleet
-  8. Design custom scouts
-  9. Write report and hand off
+  3. Connect GitHub (required)
+  4. Enable signal sources
+  5. Offer issue-tracker integrations
+  6. Configure the scout fleet
+  7. Design custom scouts
+  8. Write report and hand off
 Drive the list with TaskUpdate — mark a task in_progress when you start
 it and completed when done. If a step turns out to be a no-op (e.g.
 GitHub is already connected), still mark its task completed.
@@ -85,13 +84,7 @@ STEP 2 — Read project and current Signals state. (skill: "Read context")
    never out. Do a light scan ONLY for what neither covers. List the
    currently enabled signal sources so every later write is idempotent.
 
-STEP 3 — Confirm AI data processing approval. (skill: "AI approval")
-   The wizard's base AI opt-in gate already enforces organization AI
-   data processing approval before this run starts, so it is guaranteed
-   granted by the time you reach this step. Do NOT ask the user about it
-   and do NOT abort — just record it as approved, per the skill.
-
-STEP 4 — Connect GitHub. REQUIRED. (skill: "Connect GitHub")
+STEP 3 — Connect GitHub. REQUIRED. (skill: "Connect GitHub")
    Signals cannot research or fix issues without code access. Check for
    an existing GitHub integration first; if absent, send the user to
    ${integrationsSettingsUrl} via wizard_ask and verify the connection
@@ -99,12 +92,12 @@ STEP 4 — Connect GitHub. REQUIRED. (skill: "Connect GitHub")
    ${AgentSignals.ABORT} github connection declined
    and halt — never finish setup without GitHub.
 
-STEP 5 — Enable signal sources. (skill: "Enable sources")
+STEP 4 — Enable signal sources. (skill: "Enable sources")
    Enable the sources that match what this product actually uses, per
    the skill. Never enable a source for a tool the user hasn't
    confirmed they use.
 
-STEP 6 — Offer issue-tracker integrations. (skill: "Connected tools")
+STEP 5 — Offer issue-tracker integrations. (skill: "Connected tools")
    One batched multi-select wizard_ask for the external tools the skill
    lists. The run auto-connects the ones it can (GitHub Issues, and
    Linear via a one-click OAuth link) and arms the rest as dormant
@@ -112,11 +105,11 @@ STEP 6 — Offer issue-tracker integrations. (skill: "Connected tools")
    credentials in the browser, and never polls to confirm a connection.
    Enable a source only for a tool the user picked.
 
-STEP 7 — Configure the scout fleet. (skill: "Scouts")
+STEP 6 — Configure the scout fleet. (skill: "Scouts")
    Materialize the fleet and disable the scouts whose product surface
    this project lacks, per the skill.
 
-STEP 8 — Design custom scouts for this product. (skill: "Custom scouts")
+STEP 7 — Design custom scouts for this product. (skill: "Custom scouts")
    You are the only actor that has read this repo — turn that into
    coverage per the skill: a real gap analysis of the project's
    watchable surfaces against what the canonical fleet already covers,
@@ -126,7 +119,7 @@ STEP 8 — Design custom scouts for this product. (skill: "Custom scouts")
    no gap at all) is a valid outcome, not an abort. Mark the task
    completed either way.
 
-STEP 9 — Write the report and hand off. (skill: "Report")
+STEP 8 — Write the report and hand off. (skill: "Report")
    Write the report per the skill, including follow-ups for anything
    deferred. Tell the user findings will start appearing in their inbox
    at ${inboxUrl} within about 30 minutes.`;

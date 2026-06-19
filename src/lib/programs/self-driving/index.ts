@@ -45,10 +45,9 @@ const run: ProgramRun = {
   spinnerMessage: 'Setting up PostHog Self-driving...',
   estimatedDurationMinutes: 10,
   abortCases: SELF_DRIVING_ABORT_CASES,
-  // The flow legitimately needs several interactions (AI approval,
-  // GitHub connect + verify, issue-tracker picks, the scout-tailoring
-  // proposal), so raise the wizard_ask budget a little above the
-  // default 10.
+  // The flow legitimately needs several interactions (GitHub connect +
+  // verify, issue-tracker picks, the scout-tailoring proposal), so raise
+  // the wizard_ask budget a little above the default 10.
   maxQuestions: 13,
   // This flow hands the user long OAuth/authorize URLs (Linear, GitHub
   // fallback, Zendesk) in wizard_ask prompts. Render them as OSC 8
