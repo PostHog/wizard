@@ -21,6 +21,7 @@ export enum TaskStatus {
   Pending = 'pending',
   InProgress = 'in_progress',
   Completed = 'completed',
+  Skipped = 'skipped',
 }
 
 export function isTaskStatus(value: string): value is TaskStatus {
@@ -186,6 +187,10 @@ export interface WizardUI {
 
   // ── Dashboard URL emitted by the agent via [DASHBOARD_URL] marker ──
   setDashboardUrl(url: string): void;
+
+  /** Current "stage of work" — derived from the active tool call. Drives the
+   *  Visualizer tab's NOW PLAYING display. Pass an AgentPhase value. */
+  setStage(stage: string): void;
 
   // ── Notebook URL emitted by the agent via [NOTEBOOK_URL] marker ──
   setNotebookUrl(url: string): void;

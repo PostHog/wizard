@@ -15,6 +15,7 @@ import {
   POSTHOG_PROPERTY_HEADER_PREFIX,
   WIZARD_VARIANT_FLAG_KEY,
   WIZARD_VARIANTS,
+  WIZARD_ORCHESTRATOR_FLAG_KEY,
   WIZARD_USER_AGENT,
 } from '@lib/constants';
 import {
@@ -31,6 +32,7 @@ import {
   createPostToolUseYaraHooks,
 } from '@lib/yara-hooks';
 import { getWizardCommandments } from './commandments';
+import { classifyToolToStage } from './agent-phase';
 import type { PackageManagerDetector } from '@lib/detection/package-manager';
 import { AgentSignals, AgentErrorType } from './signals';
 import { AgentOutputSignals } from './output-signals';
@@ -146,6 +148,12 @@ export type AgentConfig = {
   getPendingQuestion?: () =>
     | import('@lib/wizard-session').PendingQuestion
     | null;
+  /**
+   * Orchestrator queue context. Present only when the `wizard-orchestrator`
+   * flag routes the run here; threaded into wizard-tools so the orchestrator
+   * tools register.
+   */
+  orchestrator?: import('@lib/agent/runner/orchestrator/queue-tools').OrchestratorToolsContext;
 };
 
 /**
@@ -167,6 +175,7 @@ export type StopHookResult =
 export function createStopHook(
   featureQueue: readonly AdditionalFeature[],
   signals?: AgentOutputSignals,
+  requestRemark = true,
 ): (input: { stop_hook_active: boolean }) => StopHookResult {
   let featureIndex = 0;
   let remarkRequested = false;
@@ -194,8 +203,9 @@ export function createStopHook(
       return { decision: 'block', reason: prompt };
     }
 
-    // Phase 2: collect remark (once)
-    if (!remarkRequested) {
+    // Phase 2: collect remark (once). Skipped when the caller opts out — the
+    // orchestrator suppresses it per task so it does not fire on every agent.
+    if (requestRemark && !remarkRequested) {
       remarkRequested = true;
       logToFile('Stop hook: requesting reflection');
       return {
@@ -243,6 +253,17 @@ export function buildWizardMetadata(
   const variant =
     (variantKey && WIZARD_VARIANTS[variantKey]) ?? WIZARD_VARIANTS['base'];
   return { ...variant };
+}
+
+/**
+ * Whether this run uses the experimental task-queue orchestrator. Gated by the
+ * boolean `wizard-orchestrator` feature flag, targeted to the user in the wizard's
+ * analytics project.
+ */
+export function isOrchestratorEnabled(
+  flags: Record<string, string> = {},
+): boolean {
+  return flags[WIZARD_ORCHESTRATOR_FLAG_KEY] === 'true';
 }
 
 /**
@@ -525,8 +546,6 @@ export async function initializeAgent(
   logToFile('Agent initialization starting');
   logToFile('Install directory:', options.installDir);
 
-  getUI().log.step('Initializing Claude agent...');
-
   try {
     // Configure LLM gateway environment variables (inherited by SDK subprocess)
     const gatewayUrl = getLlmGatewayUrlFromHost(config.posthogApiHost);
@@ -578,6 +597,7 @@ export async function initializeAgent(
       skillsBaseUrl: config.skillsBaseUrl,
       askBridge: config.askBridge,
       askMaxQuestions: config.askMaxQuestions,
+      orchestrator: config.orchestrator,
     });
     mcpServers['wizard-tools'] = wizardToolsServer;
 
@@ -612,8 +632,6 @@ export async function initializeAgent(
       });
     }
 
-    getUI().log.step(`Verbose logs: ${getLogFilePath()}`);
-    getUI().log.success("Agent initialized. Let's get cooking!");
     return agentRunConfig;
   } catch (error) {
     getUI().log.error(
@@ -659,6 +677,13 @@ export async function runAgent(
     errorMessage?: string;
     additionalFeatureQueue?: readonly AdditionalFeature[];
     abortCases?: readonly AbortCaseMatcher[];
+    /** Request the end-of-run reflection remark. Defaults to true. */
+    requestRemark?: boolean;
+    /**
+     * Extra properties attached to this run's `agent completed` / `agent
+     * aborted` events (e.g. the orchestrator's task type and id).
+     */
+    analyticsProperties?: Record<string, unknown>;
   },
   middleware?: {
     onMessage(message: any): void;
@@ -737,9 +762,27 @@ export async function runAgent(
       analytics.capture(WIZARD_REMARK_EVENT_NAME, { remark });
     }
 
+    // Token usage comes from the SDK result message and is per agent run —
+    // for the orchestrator that means per task, the secondary cost to watch.
+    const usage = lastResultMessage?.usage as
+      | {
+          input_tokens?: number;
+          output_tokens?: number;
+          cache_creation_input_tokens?: number;
+          cache_read_input_tokens?: number;
+        }
+      | undefined;
     analytics.wizardCapture('agent completed', {
       duration_ms: durationMs,
       duration_seconds: durationSeconds,
+      model: agentConfig.model,
+      num_turns: lastResultMessage?.num_turns,
+      total_cost_usd: lastResultMessage?.total_cost_usd,
+      input_tokens: usage?.input_tokens,
+      output_tokens: usage?.output_tokens,
+      cache_creation_input_tokens: usage?.cache_creation_input_tokens,
+      cache_read_input_tokens: usage?.cache_read_input_tokens,
+      ...config?.analyticsProperties,
     });
     try {
       middleware?.finalize(lastResultMessage, durationMs);
@@ -918,7 +961,11 @@ export async function runAgent(
           Stop: [
             {
               hooks: [
-                createStopHook(config?.additionalFeatureQueue ?? [], signals),
+                createStopHook(
+                  config?.additionalFeatureQueue ?? [],
+                  signals,
+                  config?.requestRemark ?? true,
+                ),
               ],
               timeout: 30,
             },
@@ -966,6 +1013,7 @@ export async function runAgent(
         signals,
         receivedSuccessResult,
         tasks,
+        isOrchestratorEnabled(agentConfig.wizardFlags ?? {}),
       );
 
       // [ABORT] detection: the skill emits "[ABORT] <reason>" when it
@@ -1148,6 +1196,8 @@ export async function runAgent(
       analytics.wizardCapture('agent aborted', {
         duration_ms: durationMs,
         duration_seconds: Math.round(durationMs / 1000),
+        model: agentConfig.model,
+        ...config?.analyticsProperties,
       });
     }
   }
@@ -1315,6 +1365,9 @@ function handleSDKMessage(
   signals: AgentOutputSignals,
   receivedSuccessResult = false,
   tasks?: Map<string, TaskEntry>,
+  // The orchestrator owns the TUI task panel (it renders its queue). Suppress the
+  // agent's own TaskCreate/TaskUpdate rendering so it does not clobber the queue.
+  suppressTaskRender = false,
 ): void {
   // Map preserves insertion order (the order the agent created the tasks).
   // Within that, group by status: completed first, then in_progress, then
@@ -1326,7 +1379,7 @@ function handleSDKMessage(
   };
   const rank = (status: string): number => STATUS_RANK[status] ?? 2;
   const syncTasks = (): void => {
-    if (!tasks) return;
+    if (!tasks || suppressTaskRender) return;
     const sorted = Array.from(tasks.values()).sort(
       (a, b) => rank(a.status) - rank(b.status),
     );
@@ -1401,6 +1454,12 @@ function handleSDKMessage(
               tasks,
               sync: syncTasks,
             });
+          }
+
+          // Mirror the active tool into the Visualizer's "stage" indicator.
+          if (block.type === 'tool_use') {
+            const stage = classifyToolToStage((block as ToolUseBlock).name);
+            if (stage) getUI().setStage(stage);
           }
         }
       }

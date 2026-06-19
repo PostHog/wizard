@@ -114,7 +114,7 @@ export class LoggingUI implements WizardUI {
   }
 
   showBlockingOutage(result: WizardReadinessResult): Promise<void> {
-    console.log(`▲  Service health issues detected — blocking outage.`);
+    console.log(`▲  Service health issues detected.`);
     const blockingKeys = getBlockingServiceKeys(result.health);
     if (blockingKeys.length > 0) {
       console.log(`│`);
@@ -131,7 +131,9 @@ export class LoggingUI implements WizardUI {
     for (const reason of result.reasons) {
       console.log(`│  ${reason}`);
     }
-    console.log(`│  The wizard cannot start while these services are down.`);
+    console.log(
+      `│  Continuing anyway — health checks are advisory in non-interactive runs.`,
+    );
     return Promise.resolve();
   }
 
@@ -232,20 +234,22 @@ export class LoggingUI implements WizardUI {
     // the session.
   }
 
+  private lastTodoLine = '';
+
   syncTodos(
     todos: Array<{ content: string; status: string; activeForm?: string }>,
   ): void {
     const completed = todos.filter(
       (t) => t.status === TaskStatus.Completed,
     ).length;
-    const inProgress = todos.find((t) => t.status === TaskStatus.InProgress);
-    if (inProgress) {
-      console.log(
-        `◌  [${completed}/${todos.length}] ${
-          inProgress.activeForm || inProgress.content
-        }`,
-      );
-    }
+    const active = todos.filter((t) => t.status === TaskStatus.InProgress);
+    if (active.length === 0) return;
+    const labels = active.map((t) => t.activeForm || t.content).join(' · ');
+    const line = `◌  [${completed}/${todos.length}] ${labels}`;
+    // The queue re-renders on every transition; print only what changed.
+    if (line === this.lastTodoLine) return;
+    this.lastTodoLine = line;
+    console.log(line);
   }
 
   setEventPlan(_events: Array<{ name: string; description: string }>): void {
@@ -253,6 +257,10 @@ export class LoggingUI implements WizardUI {
   }
 
   setDashboardUrl(_url: string): void {
+    // No-op in CI mode
+  }
+
+  setStage(_stage: string): void {
     // No-op in CI mode
   }
 
