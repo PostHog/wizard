@@ -5,8 +5,11 @@ import {
   QueueStore,
   type QueuedTask,
   type TaskHandoff,
-} from '@lib/programs/orchestrator/queue';
-import { drainQueue, type RunTask } from '@lib/programs/orchestrator/executor';
+} from '@lib/agent/runner/orchestrator/queue';
+import {
+  drainQueue,
+  type RunTask,
+} from '@lib/agent/runner/orchestrator/executor';
 
 jest.mock('@utils/analytics', () => ({
   analytics: { captureException: jest.fn(), wizardCapture: jest.fn() },

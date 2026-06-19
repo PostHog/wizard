@@ -7,7 +7,7 @@
  * `buildOrchestratorTools` wraps them in the SDK `tool()` shape.
  */
 import { z } from 'zod';
-import { analytics } from '../../../utils/analytics';
+import { analytics } from '@utils/analytics';
 import {
   TaskStatus,
   type QueueStore,

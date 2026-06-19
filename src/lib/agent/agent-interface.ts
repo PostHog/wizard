@@ -153,7 +153,7 @@ export type AgentConfig = {
    * flag routes the run here; threaded into wizard-tools so the orchestrator
    * tools register.
    */
-  orchestrator?: import('@lib/programs/orchestrator/queue-tools').OrchestratorToolsContext;
+  orchestrator?: import('@lib/agent/runner/orchestrator/queue-tools').OrchestratorToolsContext;
 };
 
 /**

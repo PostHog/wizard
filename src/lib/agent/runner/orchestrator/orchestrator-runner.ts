@@ -17,17 +17,17 @@ import {
   initializeAgent,
   runAgent,
   type AgentConfig,
-} from '../../agent/agent-interface';
-import { OutroKind, type WizardSession } from '../../wizard-session';
-import { detectNodePackageManagers } from '../../detection/package-manager';
-import { installSkillById, fetchSkillMenu } from '../../wizard-tools';
-import { getUI } from '../../../ui';
-import { analytics } from '../../../utils/analytics';
-import { ciExcludedTaskTypes } from '../../../utils/ci-flag-overrides';
-import { logToFile } from '../../../utils/debug';
-import type { ProgramConfig } from '../program-step';
-import type { BootstrapResult } from '../../agent/agent-runner';
-import type { WizardRunOptions } from '../../../utils/types';
+} from '@lib/agent/agent-interface';
+import { OutroKind, type WizardSession } from '@lib/wizard-session';
+import { detectNodePackageManagers } from '@lib/detection/package-manager';
+import { installSkillById, fetchSkillMenu } from '@lib/wizard-tools';
+import { getUI } from '@ui';
+import { analytics } from '@utils/analytics';
+import { ciExcludedTaskTypes } from '@utils/ci-flag-overrides';
+import { logToFile } from '@utils/debug';
+import type { ProgramConfig } from '@lib/programs/program-step';
+import type { BootstrapResult } from '../shared/types';
+import type { WizardRunOptions } from '@utils/types';
 import {
   QueueStore,
   QUEUE_DIR_NAME,
@@ -44,7 +44,7 @@ import {
   resolveTask,
   taskModel,
   type OrchestratorPromptContext,
-} from '../../agent/agent-prompt-loader';
+} from '@lib/agent/agent-prompt-loader';
 
 function toTodoStatus(status: TaskStatus): string {
   switch (status) {

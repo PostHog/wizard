@@ -26,6 +26,7 @@ import { useStdoutDimensions } from '@ui/tui/hooks/useStdoutDimensions';
 import { useFileWatcher } from '@ui/tui/hooks/file-watcher';
 import { VisualizerTab } from '@ui/tui/components/PhaseVisuals';
 import { EVENT_PLAN_FILE } from '@lib/programs/posthog-integration/index';
+
 import { getProgramConfig } from '@lib/programs/program-registry';
 import { getContentBlocks as getSkillContentBlocks } from '@lib/programs/agent-skill/content/index';
 
