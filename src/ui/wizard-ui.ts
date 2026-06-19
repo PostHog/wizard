@@ -8,7 +8,7 @@
  * Session-mutating methods trigger reactive screen resolution in the TUI.
  */
 
-import type { SettingsConflict } from '@lib/agent/agent-interface';
+import type { SettingsConflict } from '@lib/agent/claude-settings';
 import type { WizardReadinessResult } from '@lib/health-checks/readiness';
 import type { ApiUser } from '@lib/api';
 import type {
@@ -21,6 +21,7 @@ export enum TaskStatus {
   Pending = 'pending',
   InProgress = 'in_progress',
   Completed = 'completed',
+  Skipped = 'skipped',
 }
 
 export function isTaskStatus(value: string): value is TaskStatus {
@@ -36,15 +37,16 @@ export interface SpinnerHandle {
 /**
  * Context passed to `showAuthError` so the screen can pick the right copy.
  *
- * `hasSettingsConflict` is true when a Claude Code settings.json /
- * managed-settings file actually overrides the LLM Gateway auth — the
- * Wizard's pre-flight check missed it or it appeared after startup.
- * When false, the 401 has a different cause (bad PAT prefix, missing
- * scope, expired key, region mismatch) and we should not advise the
- * user to log out of Claude Code.
+ * `hasSettingsConflict` is true when a Claude Code settings file (project,
+ * project-local, the user's global config, or managed) actually overrides the
+ * LLM Gateway auth. `conflicts` carries the exact files and keys so the screen
+ * can name them. When there is no conflict, the 401 has a different cause (bad
+ * PAT prefix, missing scope, expired key, region mismatch) and we should not
+ * advise the user to log out of Claude Code.
  */
 export interface AuthErrorDetail {
   hasSettingsConflict: boolean;
+  conflicts?: SettingsConflict[];
   logFilePath: string;
 }
 
@@ -108,6 +110,18 @@ export interface WizardUI {
    */
   setApiUser(user: ApiUser | null): void;
 
+  /**
+   * Park until the org's AI opt-in gate clears
+   * (`organization.is_ai_data_processing_approved === true`, or the
+   * program never registered the gate — requiresAi: false / no auth
+   * step / CI session). The agent runner awaits this after setApiUser
+   * and BEFORE skill install or agent start: this is the enforcement
+   * point that keeps source on the machine while the TUI shows
+   * AiOptInRequiredScreen. Resolves immediately in non-TUI
+   * environments (CI auto-consents to AI usage).
+   */
+  waitForAiOptIn(): Promise<void>;
+
   /** Show blocking service outage (pushes outage overlay in TUI). Blocks until dismissed. */
   showBlockingOutage(result: WizardReadinessResult): Promise<void>;
 
@@ -137,6 +151,9 @@ export interface WizardUI {
 
   /** Show auth error overlay when Anthropic API returns 401. */
   showAuthError(detail?: AuthErrorDetail): void;
+
+  /** Show the session-timeout overlay when the OAuth login window expires. */
+  showSessionTimeout(): void;
 
   /**
    * Open the wizard_ask overlay and resolve with the user's answers.
@@ -170,6 +187,18 @@ export interface WizardUI {
 
   // ── Dashboard URL emitted by the agent via [DASHBOARD_URL] marker ──
   setDashboardUrl(url: string): void;
+
+  /** Current "stage of work" — derived from the active tool call. Drives the
+   *  Visualizer tab's NOW PLAYING display. Pass an AgentPhase value. */
+  setStage(stage: string): void;
+
+  // ── Notebook URL emitted by the agent via [NOTEBOOK_URL] marker ──
+  setNotebookUrl(url: string): void;
+
+  // ── Outro payload built by agent-runner ──
+  // Replaces the direct `session.outroData = X` mutation that breaks once
+  // setKey-based store mutations have forked the session reference.
+  setOutroData(data: OutroData): void;
 
   // ── Generic frameworkContext setter for program file watchers ─────
   setFrameworkContext(key: string, value: unknown): void;

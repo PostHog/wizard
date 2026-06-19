@@ -8,7 +8,7 @@
 
 import type { WizardUI, SpinnerHandle, AuthErrorDetail } from '@ui/wizard-ui';
 import type { WizardStore } from './store.js';
-import type { SettingsConflict } from '@lib/agent/agent-interface';
+import type { SettingsConflict } from '@lib/agent/claude-settings';
 import type { WizardReadinessResult } from '@lib/health-checks/readiness';
 import type { ApiUser } from '@lib/api';
 import type {
@@ -35,19 +35,19 @@ export class InkUI implements WizardUI {
   outro(message: string): void {
     this.store.pushStatus(stripAnsi(message));
 
-    // agent-runner mutates session.outroData directly before calling outro().
-    // Direct mutation doesn't notify nanostore subscribers, so re-set the
-    // value through setOutroData() to push it to React. If there's no
-    // pre-built outroData, fall back to a minimal success record.
+    // Outro data is pushed by agent-runner via setOutroData() above. If it
+    // wasn't (e.g. CI path where outro is called directly with just a
+    // message), fall back to a minimal success record so the screen still
+    // renders something useful.
     const existing = this.store.session.outroData;
-    this.store.setOutroData(
-      existing ?? {
+    if (!existing) {
+      this.store.setOutroData({
         kind: OutroKind.Success,
         message: stripAnsi(message),
-      },
-    );
+      });
+    }
 
-    // Signal that the main work is done — router resolves to mcp or outro
+    // Signal that the main work is done — router resolves to outro
     if (this.store.session.runPhase === RunPhase.Running) {
       this.store.setRunPhase(RunPhase.Completed);
     }
@@ -91,6 +91,13 @@ export class InkUI implements WizardUI {
 
   setApiUser(user: ApiUser | null): void {
     this.store.setApiUser(user);
+  }
+
+  waitForAiOptIn(): Promise<void> {
+    // Resolved immediately when no gate is registered (requiresAi: false,
+    // no auth step, or CI). Otherwise parks until _checkGates sees the
+    // org's approval flip to true — e.g. via [R]etry on the kill screen.
+    return this.store.getGate('ai-opt-in');
   }
 
   setDetectedFramework(label: string): void {
@@ -145,6 +152,10 @@ export class InkUI implements WizardUI {
 
   showAuthError(detail?: AuthErrorDetail): void {
     this.store.showAuthError(detail);
+  }
+
+  showSessionTimeout(): void {
+    this.store.showSessionTimeout();
   }
 
   requestQuestion(question: PendingQuestion): Promise<AskAnswers> {
@@ -211,6 +222,29 @@ export class InkUI implements WizardUI {
 
   setDashboardUrl(url: string): void {
     this.store.setDashboardUrl(url);
+  }
+
+  setStage(stage: string): void {
+    this.store.setCurrentStage(stage);
+  }
+
+  setNotebookUrl(url: string): void {
+    this.store.setNotebookUrl(url);
+  }
+
+  setOutroData(data: OutroData): void {
+    // Merge in URLs the agent emitted via `[DASHBOARD_URL]` / `[NOTEBOOK_URL]`
+    // markers. These land on the live store during the run; agent-runner's
+    // `session` snapshot misses them (setKey forks the reference). The live
+    // store wins over the `data` payload so a real emission always beats any
+    // fallback the program's buildOutroData may have computed from the stale
+    // snapshot (e.g. events-audit defaults dashboardUrl to `${cloudUrl}/dashboard`).
+    const live = this.store.session;
+    this.store.setOutroData({
+      ...data,
+      dashboardUrl: live.dashboardUrl ?? data.dashboardUrl ?? undefined,
+      notebookUrl: live.notebookUrl ?? data.notebookUrl ?? undefined,
+    });
   }
 
   setFrameworkContext(key: string, value: unknown): void {

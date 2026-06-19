@@ -60,16 +60,23 @@ export const POSTHOG_INTEGRATION_PROGRAM: ProgramStep[] = [
       session.runPhase === RunPhase.Error,
   },
   {
+    id: 'outro',
+    label: 'Done',
+    screenId: 'outro',
+    isComplete: (session) => session.outroDismissed,
+  },
+  {
     id: 'mcp',
     label: 'MCP servers',
     screenId: 'mcp',
     isComplete: (session) => session.mcpComplete,
   },
   {
-    id: 'outro',
-    label: 'Done',
-    screenId: 'outro',
-    isComplete: (session) => session.outroDismissed,
+    id: 'slack-connect',
+    label: 'Connect Slack',
+    screenId: 'slack-connect',
+    // Always shown — the user declines via Skip/esc, never bypassed.
+    isComplete: (session) => session.slackStepDismissed,
   },
   {
     id: 'keep-skills',

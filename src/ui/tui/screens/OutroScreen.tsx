@@ -11,6 +11,7 @@ import { useSyncExternalStore } from 'react';
 import type { WizardStore } from '@ui/tui/store';
 import { OutroKind } from '@lib/wizard-session';
 import { Colors } from '@ui/tui/styles';
+import { withUtm } from '@utils/links';
 
 interface OutroScreenProps {
   store: WizardStore;
@@ -43,6 +44,28 @@ export const OutroScreen = ({ store }: OutroScreenProps) => {
           <Text color="green" bold>
             ✔ {outroData.message || 'Done!'}
           </Text>
+
+          {outroData.dashboardUrl && (
+            <Box marginTop={1}>
+              <Text>
+                Dashboard:{' '}
+                <Text color="cyan">
+                  {withUtm(outroData.dashboardUrl, 'outro-dashboard')}
+                </Text>
+              </Text>
+            </Box>
+          )}
+
+          {outroData.notebookUrl && (
+            <Box marginTop={1}>
+              <Text>
+                Notebook:{' '}
+                <Text color="cyan">
+                  {withUtm(outroData.notebookUrl, 'outro-notebook')}
+                </Text>
+              </Text>
+            </Box>
+          )}
 
           {outroData.body && (
             <Box marginTop={1}>
@@ -83,19 +106,13 @@ export const OutroScreen = ({ store }: OutroScreenProps) => {
             </Box>
           )}
 
-          {outroData.dashboardUrl && (
-            <Box marginTop={1}>
-              <Text>
-                We've also made you a dashboard:{' '}
-                <Text color="cyan">{outroData.dashboardUrl}</Text>
-              </Text>
-            </Box>
-          )}
-
           {outroData.docsUrl && (
             <Box marginTop={1}>
               <Text>
-                Learn more: <Text color="cyan">{outroData.docsUrl}</Text>
+                Learn more:{' '}
+                <Text color="cyan">
+                  {withUtm(outroData.docsUrl, 'outro-docs')}
+                </Text>
               </Text>
             </Box>
           )}
@@ -104,7 +121,9 @@ export const OutroScreen = ({ store }: OutroScreenProps) => {
             <Box>
               <Text>
                 Continue onboarding:{' '}
-                <Text color="cyan">{outroData.continueUrl}</Text>
+                <Text color="cyan">
+                  {withUtm(outroData.continueUrl, 'outro-continue')}
+                </Text>
               </Text>
             </Box>
           )}

@@ -1,17 +1,18 @@
 /**
- * ConfirmButton — the "physical" confirm button used to submit a selection.
+ * ConfirmButton — the confirm row used to submit a selection.
  *
  * Pure render. Multi-select menus (PickerMenu mode="multi", GroupedPickerMenu)
  * append this below their options as the final focusable row: the user toggles
- * options with enter, then arrows down onto this button and presses enter
- * to submit. This replaces the older "enter anywhere submits" pattern, which
+ * options with enter, then arrows down onto this row and presses enter to
+ * submit. This replaces the older "enter anywhere submits" pattern, which
  * confused people who expected enter to toggle the focused item.
  *
- * Focus styling mirrors the option rows (accent + triangle when focused, muted
- * otherwise) but the single border marks it as a distinct, pressable target.
+ * Renders flat, mirroring the option rows — a focus triangle and the label,
+ * accent and bold when focused, dimmed otherwise — so it lines up under the
+ * options instead of sitting in a separate boxed target.
  */
 
-import { Box, Text } from 'ink';
+import { Text } from 'ink';
 import { Icons, Colors } from '@ui/tui/styles';
 
 interface ConfirmButtonProps {
@@ -30,14 +31,12 @@ export const ConfirmButton = ({
 }: ConfirmButtonProps) => {
   const text = count && count > 0 ? `${label} (${count})` : label;
   return (
-    <Box
-      borderStyle="single"
-      borderColor={focused ? Colors.accent : Colors.muted}
-      paddingX={1}
+    <Text
+      color={focused ? Colors.accent : undefined}
+      bold={focused}
+      dimColor={!focused}
     >
-      <Text color={focused ? Colors.accent : Colors.muted} bold={focused}>
-        {focused ? Icons.triangleSmallRight : ' '} {text}
-      </Text>
-    </Box>
+      {focused ? Icons.triangleSmallRight : ' '} {text}
+    </Text>
   );
 };

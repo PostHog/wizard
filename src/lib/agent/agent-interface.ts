@@ -4,7 +4,8 @@
  */
 
 import path from 'path';
-import * as fs from 'fs';
+import * as os from 'os';
+import { createRequire } from 'node:module';
 import { getUI, type SpinnerHandle } from '@ui';
 import { debug, logToFile, initLogFile, getLogFilePath } from '@utils/debug';
 import type { WizardRunOptions } from '@utils/types';
@@ -14,13 +15,14 @@ import {
   POSTHOG_PROPERTY_HEADER_PREFIX,
   WIZARD_VARIANT_FLAG_KEY,
   WIZARD_VARIANTS,
+  WIZARD_ORCHESTRATOR_FLAG_KEY,
   WIZARD_USER_AGENT,
 } from '@lib/constants';
 import {
   type AdditionalFeature,
   ADDITIONAL_FEATURE_PROMPTS,
 } from '@lib/wizard-session';
-import { registerCleanup, wizardAbort, WizardError } from '@utils/wizard-abort';
+import { wizardAbort, WizardError } from '@utils/wizard-abort';
 import { createCustomHeaders } from '@utils/custom-headers';
 import { getLlmGatewayUrlFromHost } from '@utils/urls';
 import { LINTING_TOOLS } from '@lib/safe-tools';
@@ -30,7 +32,21 @@ import {
   createPostToolUseYaraHooks,
 } from '@lib/yara-hooks';
 import { getWizardCommandments } from './commandments';
+import { classifyToolToStage } from './agent-phase';
 import type { PackageManagerDetector } from '@lib/detection/package-manager';
+import { AgentSignals, AgentErrorType } from './signals';
+import { AgentOutputSignals } from './output-signals';
+
+// Signal vocabulary and the output parser live in dedicated modules; re-export
+// so existing importers of these from agent-interface keep working.
+export { AgentSignals, AgentErrorType } from './signals';
+export type { AgentSignal } from './signals';
+export { AgentOutputSignals } from './output-signals';
+import {
+  checkAllSettingsConflicts,
+  type SettingsConflict,
+  type SettingsConflictSource,
+} from './claude-settings';
 
 // Dynamic import cache for ESM module
 let _sdkModule: any = null;
@@ -46,8 +62,13 @@ async function getSDKModule(): Promise<any> {
  * This ensures we use the SDK's bundled version rather than the user's installed Claude Code.
  */
 function getClaudeCodeExecutablePath(): string {
-  // require.resolve finds the package's main entry, then we get cli.js from same dir
-  const sdkPackagePath = require.resolve('@anthropic-ai/claude-agent-sdk');
+  // Bare `require` is undefined in ESM (tsx dev runs) — fall back to createRequire.
+  const resolver =
+    typeof require !== 'undefined'
+      ? require
+      : createRequire(process.argv[1] ?? `${process.cwd()}/`);
+  // resolve finds the package's main entry, then we get cli.js from same dir
+  const sdkPackagePath = resolver.resolve('@anthropic-ai/claude-agent-sdk');
   return path.join(path.dirname(sdkPackagePath), 'cli.js');
 }
 
@@ -57,220 +78,45 @@ type SDKMessage = any;
 type McpServersConfig = any;
 type AbortCaseMatcher = { match: RegExp };
 
-export const AgentSignals = {
-  /** Signal emitted when the agent reports progress to the user */
-  STATUS: '[STATUS]',
-  /** Signal emitted when the agent cannot access the PostHog MCP server */
-  ERROR_MCP_MISSING: '[ERROR-MCP-MISSING]',
-  /** Signal emitted when the agent cannot access the setup resource */
-  ERROR_RESOURCE_MISSING: '[ERROR-RESOURCE-MISSING]',
-  /**
-   * Signal emitted when the agent cannot complete the program and is
-   * aborting intentionally (distinct from errors). Format: "[ABORT] <reason>".
-   * Programs can declare an onAbort handler to render a custom screen.
-   */
-  ABORT: '[ABORT]',
-  /** Signal emitted when the agent provides a remark about its run */
-  WIZARD_REMARK: '[WIZARD-REMARK]',
-  /** Signal prefix for benchmark logging */
-  BENCHMARK: '[BENCHMARK]',
-  /**
-   * Signal emitted when the agent has created a PostHog dashboard for the
-   * user. Format: `[DASHBOARD_URL] <full https url>`. The URL is captured
-   * onto `session.dashboardUrl` and surfaced by programs in their outro.
-   */
-  DASHBOARD_URL: '[DASHBOARD_URL]',
-} as const;
-
-export type AgentSignal = (typeof AgentSignals)[keyof typeof AgentSignals];
-
-/**
- * Error types that can be returned from agent execution.
- * These correspond to the error signals that the agent emits.
- */
-export enum AgentErrorType {
-  /** Agent could not access the PostHog MCP server */
-  MCP_MISSING = 'WIZARD_MCP_MISSING',
-  /** Agent could not access the setup resource */
-  RESOURCE_MISSING = 'WIZARD_RESOURCE_MISSING',
-  /** API rate limit exceeded */
-  RATE_LIMIT = 'WIZARD_RATE_LIMIT',
-  /** Generic API error */
-  API_ERROR = 'WIZARD_API_ERROR',
-  /** YARA scanner detected a security violation */
-  YARA_VIOLATION = 'WIZARD_YARA_VIOLATION',
-  /** Agent intentionally aborted the program (emitted [ABORT] <reason>) */
-  ABORT = 'WIZARD_ABORT',
-}
-
-const BLOCKING_ENV_KEYS = [
-  'ANTHROPIC_API_KEY',
-  'ANTHROPIC_BASE_URL',
-  'ANTHROPIC_AUTH_TOKEN',
-];
-const BLOCKING_SETTINGS_KEYS = ['apiKeyHelper'];
-
-/** Where a settings conflict was found. */
-export type SettingsConflictSource = 'project' | 'managed';
-
-/** A single settings conflict detected during startup. */
-export interface SettingsConflict {
-  /** Where the conflict was found. */
-  source: SettingsConflictSource;
-  /** The blocking keys found (e.g. 'ANTHROPIC_BASE_URL', 'apiKeyHelper'). */
-  keys: string[];
-  /** Whether the wizard can back up / remove this file. Managed settings are read-only. */
-  writable: boolean;
+/** Region implied by the resolved gateway URL, for telemetry and display. */
+function regionFromGatewayUrl(gatewayUrl: string): 'eu' | 'us' | 'local' {
+  if (gatewayUrl.includes('localhost')) return 'local';
+  return gatewayUrl.includes('gateway.eu.') ? 'eu' : 'us';
 }
 
 /**
- * Check a single settings file for blocking env keys and top-level settings keys.
- * Returns matched key names, or an empty array if none found.
- */
-function checkSettingsFile(filePath: string): string[] {
-  try {
-    const raw = fs.readFileSync(filePath, 'utf-8');
-    const parsed = JSON.parse(raw);
-    const matched: string[] = [];
-
-    // Check env block for blocking env keys
-    const envBlock = parsed?.env;
-    if (envBlock && typeof envBlock === 'object') {
-      matched.push(...BLOCKING_ENV_KEYS.filter((key) => key in envBlock));
-    }
-
-    // Check top-level settings keys
-    matched.push(
-      ...BLOCKING_SETTINGS_KEYS.filter(
-        (key) => key in parsed && parsed[key] !== '' && parsed[key] != null,
-      ),
-    );
-
-    return matched;
-  } catch {
-    // File doesn't exist or isn't valid JSON — skip
-    return [];
-  }
-}
-
-/**
- * Check if .claude/settings.json in the project directory contains env
- * overrides or apiKeyHelper that block the Wizard from accessing the PostHog LLM Gateway.
- * Returns the list of matched key names, or an empty array if none found.
+ * Diagnostic context for a gateway 401, used by the auth-error screen and the
+ * captured exception.
  *
- * @deprecated Use {@link checkAllSettingsConflicts} for comprehensive detection.
+ * A bare "Authentication failed" can't be triaged: the 401 could be a settings
+ * file overriding the credential, a region mismatch, or a rejected key. This
+ * records which, so the screen can name an actionable next step and telemetry
+ * can tell the causes apart. Absolute conflict paths stay out of the telemetry
+ * payload (they contain the user's home dir) — only sources/keys are reported.
  */
-export function checkClaudeSettingsOverrides(
+export interface AuthErrorContext {
+  hasSettingsConflict: boolean;
+  conflicts: SettingsConflict[];
+  conflictSources: SettingsConflictSource[];
+  conflictKeys: string[];
+  gatewayUrl: string;
+  region: 'eu' | 'us' | 'local';
+}
+
+export function buildAuthErrorContext(
   workingDirectory: string,
-): string[] {
-  const candidates = [
-    path.join(workingDirectory, '.claude', 'settings.json'),
-    path.join(workingDirectory, '.claude', 'settings'),
-  ];
-
-  for (const filePath of candidates) {
-    const matched = checkSettingsFile(filePath);
-    if (matched.length > 0) return matched;
-  }
-
-  return [];
-}
-
-/**
- * Managed settings path on macOS.
- * IT/MDM-deployed settings — readable by all users, writable only by root.
- */
-const MANAGED_SETTINGS_PATH =
-  '/Library/Application Support/ClaudeCode/managed-settings.json';
-
-/**
- * Check project and org-managed settings for blocking keys that conflict
- * with the wizard's proxy auth.
- */
-export function checkAllSettingsConflicts(
-  workingDirectory: string,
-): SettingsConflict[] {
-  const conflicts: SettingsConflict[] = [];
-
-  const sources: {
-    source: SettingsConflictSource;
-    paths: string[];
-    writable: boolean;
-  }[] = [
-    {
-      source: 'managed',
-      paths: [MANAGED_SETTINGS_PATH],
-      writable: false,
-    },
-    {
-      source: 'project',
-      paths: [
-        path.join(workingDirectory, '.claude', 'settings.json'),
-        path.join(workingDirectory, '.claude', 'settings'),
-      ],
-      writable: true,
-    },
-  ];
-
-  for (const { source, paths, writable } of sources) {
-    for (const filePath of paths) {
-      const keys = checkSettingsFile(filePath);
-      if (keys.length > 0) {
-        conflicts.push({ source, keys, writable });
-        break; // Only one conflict per source (settings.json vs settings fallback)
-      }
-    }
-  }
-
-  return conflicts;
-}
-
-/**
- * Copy .claude/settings.json to .wizard-backup (overwriting if it exists),
- * then remove the original so the SDK doesn't load the blocking overrides.
- */
-export function backupAndFixClaudeSettings(workingDirectory: string): boolean {
-  for (const name of ['settings.json', 'settings']) {
-    const filePath = path.join(workingDirectory, '.claude', name);
-    const backupPath = `${filePath}.wizard-backup`;
-    analytics.wizardCapture('backedup-claude-settings');
-    try {
-      fs.copyFileSync(filePath, backupPath);
-      fs.unlinkSync(filePath);
-      registerCleanup(() => {
-        try {
-          restoreClaudeSettings(workingDirectory);
-        } catch (error) {
-          analytics.captureException(error);
-        }
-      });
-      return true;
-    } catch {
-      // File doesn't exist — try next candidate
-    }
-  }
-  return false;
-}
-
-/**
- * Restore .claude/settings.json from .wizard-backup.
- * Copies (not moves) so the backup is preserved.
- */
-export function restoreClaudeSettings(workingDirectory: string): void {
-  for (const name of ['settings.json', 'settings']) {
-    const backup = path.join(
-      workingDirectory,
-      '.claude',
-      `${name}.wizard-backup`,
-    );
-    try {
-      fs.copyFileSync(backup, path.join(workingDirectory, '.claude', name));
-      analytics.wizardCapture('restored-claude-settings');
-      return;
-    } catch (error) {
-      analytics.captureException(error);
-    }
-  }
+  gatewayUrl: string,
+  homeDir: string = os.homedir(),
+): AuthErrorContext {
+  const conflicts = checkAllSettingsConflicts(workingDirectory, homeDir);
+  return {
+    hasSettingsConflict: conflicts.length > 0,
+    conflicts,
+    conflictSources: conflicts.map((c) => c.source),
+    conflictKeys: [...new Set(conflicts.flatMap((c) => c.keys))],
+    gatewayUrl,
+    region: regionFromGatewayUrl(gatewayUrl),
+  };
 }
 
 export type AgentConfig = {
@@ -302,6 +148,12 @@ export type AgentConfig = {
   getPendingQuestion?: () =>
     | import('@lib/wizard-session').PendingQuestion
     | null;
+  /**
+   * Orchestrator queue context. Present only when the `wizard-orchestrator`
+   * flag routes the run here; threaded into wizard-tools so the orchestrator
+   * tools register.
+   */
+  orchestrator?: import('@lib/agent/runner/orchestrator/queue-tools').OrchestratorToolsContext;
 };
 
 /**
@@ -322,7 +174,8 @@ export type StopHookResult =
  */
 export function createStopHook(
   featureQueue: readonly AdditionalFeature[],
-  collectedText?: string[],
+  signals?: AgentOutputSignals,
+  requestRemark = true,
 ): (input: { stop_hook_active: boolean }) => StopHookResult {
   let featureIndex = 0;
   let remarkRequested = false;
@@ -337,12 +190,9 @@ export function createStopHook(
 
     // On API errors, allow stop immediately — blocking with remark/feature
     // prompts would just fail again. The auth error screen is shown separately.
-    if (collectedText) {
-      const text = collectedText.join('\n');
-      if (text.includes('API Error:')) {
-        logToFile('Stop hook: API error detected, allowing immediate stop');
-        return {};
-      }
+    if (signals?.hasApiError()) {
+      logToFile('Stop hook: API error detected, allowing immediate stop');
+      return {};
     }
 
     // Phase 1: drain feature queue
@@ -353,8 +203,9 @@ export function createStopHook(
       return { decision: 'block', reason: prompt };
     }
 
-    // Phase 2: collect remark (once)
-    if (!remarkRequested) {
+    // Phase 2: collect remark (once). Skipped when the caller opts out — the
+    // orchestrator suppresses it per task so it does not fire on every agent.
+    if (requestRemark && !remarkRequested) {
       remarkRequested = true;
       logToFile('Stop hook: requesting reflection');
       return {
@@ -405,11 +256,22 @@ export function buildWizardMetadata(
 }
 
 /**
+ * Whether this run uses the experimental task-queue orchestrator. Gated by the
+ * boolean `wizard-orchestrator` feature flag, targeted to the user in the wizard's
+ * analytics project.
+ */
+export function isOrchestratorEnabled(
+  flags: Record<string, string> = {},
+): boolean {
+  return flags[WIZARD_ORCHESTRATOR_FLAG_KEY] === 'true';
+}
+
+/**
  * Build env for the SDK subprocess: process.env plus ANTHROPIC_CUSTOM_HEADERS, which always
  * includes `x-posthog-use-bedrock-fallback: true` so the LLM gateway falls back to Bedrock on
  * Anthropic 5xx, plus any wizard metadata/flags.
  */
-function buildAgentEnv(
+export function buildAgentEnv(
   wizardMetadata: Record<string, string>,
   wizardFlags: Record<string, string>,
 ): string {
@@ -684,8 +546,6 @@ export async function initializeAgent(
   logToFile('Agent initialization starting');
   logToFile('Install directory:', options.installDir);
 
-  getUI().log.step('Initializing Claude agent...');
-
   try {
     // Configure LLM gateway environment variables (inherited by SDK subprocess)
     const gatewayUrl = getLlmGatewayUrlFromHost(config.posthogApiHost);
@@ -737,17 +597,13 @@ export async function initializeAgent(
       skillsBaseUrl: config.skillsBaseUrl,
       askBridge: config.askBridge,
       askMaxQuestions: config.askMaxQuestions,
+      orchestrator: config.orchestrator,
     });
     mcpServers['wizard-tools'] = wizardToolsServer;
 
-    // audit-3000 needs Opus 4.7's depth for the multi-phase audit chain;
-    // every other program runs on Sonnet 4.6.
     // Bare model IDs (no `anthropic/` prefix) so the LLM gateway's Bedrock
     // fallback can match map_to_bedrock_model()'s strict lookup.
-    const model =
-      config.integrationLabel === 'audit-3000'
-        ? 'claude-opus-4-6'
-        : 'claude-sonnet-4-6';
+    const model = 'claude-sonnet-4-6';
 
     const agentRunConfig: AgentRunConfig = {
       workingDirectory: config.workingDirectory,
@@ -776,8 +632,6 @@ export async function initializeAgent(
       });
     }
 
-    getUI().log.step(`Verbose logs: ${getLogFilePath()}`);
-    getUI().log.success("Agent initialized. Let's get cooking!");
     return agentRunConfig;
   } catch (error) {
     getUI().log.error(
@@ -794,13 +648,10 @@ export async function initializeAgent(
  * Used in both the success and catch paths of runAgent.
  */
 function checkYaraViolation(
-  outputText: string,
+  signals: AgentOutputSignals,
   spinner: SpinnerHandle,
 ): { error: AgentErrorType } | null {
-  if (
-    outputText.includes('[YARA CRITICAL]') ||
-    outputText.includes('[YARA] Scanner error')
-  ) {
+  if (signals.hasYaraViolation()) {
     logToFile('Agent error: YARA_VIOLATION');
     spinner.stop('Security violation detected');
     return { error: AgentErrorType.YARA_VIOLATION };
@@ -826,6 +677,13 @@ export async function runAgent(
     errorMessage?: string;
     additionalFeatureQueue?: readonly AdditionalFeature[];
     abortCases?: readonly AbortCaseMatcher[];
+    /** Request the end-of-run reflection remark. Defaults to true. */
+    requestRemark?: boolean;
+    /**
+     * Extra properties attached to this run's `agent completed` / `agent
+     * aborted` events (e.g. the orchestrator's task type and id).
+     */
+    analyticsProperties?: Record<string, unknown>;
   },
   middleware?: {
     onMessage(message: any): void;
@@ -839,6 +697,7 @@ export async function runAgent(
     abortCases = [],
   } = config ?? {};
 
+  logToFile('Starting agent run');
   const { query } = await getSDKModule();
 
   spinner.start(spinnerMessage);
@@ -849,7 +708,7 @@ export async function runAgent(
   logToFile('Prompt:', prompt);
 
   const startTime = Date.now();
-  const collectedText: string[] = [];
+  const signals = new AgentOutputSignals();
   // Track if we received a successful result (before any cleanup errors)
   let receivedSuccessResult = false;
   let loggedInitialContext = false;
@@ -898,25 +757,32 @@ export async function runAgent(
     }
 
     // Extract and capture the agent's reflection on the run
-    const outputText = collectedText.join('\n');
-    const remarkRegex = new RegExp(
-      `${AgentSignals.WIZARD_REMARK.replace(
-        /[.*+?^${}()|[\]\\]/g,
-        '\\$&',
-      )}\\s*(.+?)(?:\\n|$)`,
-      's',
-    );
-    const remarkMatch = outputText.match(remarkRegex);
-    if (remarkMatch && remarkMatch[1]) {
-      const remark = remarkMatch[1].trim();
-      if (remark) {
-        analytics.capture(WIZARD_REMARK_EVENT_NAME, { remark });
-      }
+    const remark = signals.remark();
+    if (remark) {
+      analytics.capture(WIZARD_REMARK_EVENT_NAME, { remark });
     }
 
+    // Token usage comes from the SDK result message and is per agent run —
+    // for the orchestrator that means per task, the secondary cost to watch.
+    const usage = lastResultMessage?.usage as
+      | {
+          input_tokens?: number;
+          output_tokens?: number;
+          cache_creation_input_tokens?: number;
+          cache_read_input_tokens?: number;
+        }
+      | undefined;
     analytics.wizardCapture('agent completed', {
       duration_ms: durationMs,
       duration_seconds: durationSeconds,
+      model: agentConfig.model,
+      num_turns: lastResultMessage?.num_turns,
+      total_cost_usd: lastResultMessage?.total_cost_usd,
+      input_tokens: usage?.input_tokens,
+      output_tokens: usage?.output_tokens,
+      cache_creation_input_tokens: usage?.cache_creation_input_tokens,
+      cache_read_input_tokens: usage?.cache_read_input_tokens,
+      ...config?.analyticsProperties,
     });
     try {
       middleware?.finalize(lastResultMessage, durationMs);
@@ -1097,7 +963,8 @@ export async function runAgent(
               hooks: [
                 createStopHook(
                   config?.additionalFeatureQueue ?? [],
-                  collectedText,
+                  signals,
+                  config?.requestRemark ?? true,
                 ),
               ],
               timeout: 30,
@@ -1143,9 +1010,10 @@ export async function runAgent(
         message,
         options,
         spinner,
-        collectedText,
+        signals,
         receivedSuccessResult,
         tasks,
+        isOrchestratorEnabled(agentConfig.wizardFlags ?? {}),
       );
 
       // [ABORT] detection: the skill emits "[ABORT] <reason>" when it
@@ -1176,29 +1044,32 @@ export async function runAgent(
       }
 
       // 401: show auth error screen and exit immediately
-      if (
-        message.type === 'assistant' &&
-        collectedText.join('\n').includes('API Error: 401')
-      ) {
+      if (message.type === 'assistant' && signals.hasApiErrorStatus(401)) {
         signalDone!();
         spinner.stop('Authentication failed');
         // Re-check at error time: a settings conflict can be the *real* cause
         // of a 401, distinct from bad PAT / wrong region / expired key.
         // Only the conflict case warrants telling the user to log out of
         // Claude Code.
-        const conflicts = checkAllSettingsConflicts(options.installDir);
-        const hasSettingsConflict = conflicts.length > 0;
-        logToFile('Agent error: 401, showing auth error screen', {
-          hasSettingsConflict,
-          conflicts,
-        });
+        const authError = buildAuthErrorContext(
+          options.installDir,
+          process.env.ANTHROPIC_BASE_URL ?? '',
+        );
+        logToFile('Agent error: 401, showing auth error screen', authError);
         getUI().showAuthError({
-          hasSettingsConflict,
+          hasSettingsConflict: authError.hasSettingsConflict,
+          conflicts: authError.conflicts,
           logFilePath: getLogFilePath(),
         });
         await wizardAbort({
           message: 'Authentication failed (401)',
-          error: new WizardError('Authentication failed'),
+          error: new WizardError('Authentication failed', {
+            hasSettingsConflict: authError.hasSettingsConflict,
+            conflictSources: authError.conflictSources,
+            conflictKeys: authError.conflictKeys,
+            gatewayUrl: authError.gatewayUrl,
+            region: authError.region,
+          }),
         });
       }
 
@@ -1227,39 +1098,44 @@ export async function runAgent(
       return { error: AgentErrorType.ABORT, message: abortReason };
     }
 
-    const outputText = collectedText.join('\n');
-
     // Check for YARA scanner violations
-    const yaraResult = checkYaraViolation(outputText, spinner);
+    const yaraResult = checkYaraViolation(signals, spinner);
     if (yaraResult) return yaraResult;
 
     // Check for error markers in the agent's output
-    if (outputText.includes(AgentSignals.ERROR_MCP_MISSING)) {
+    if (signals.has('MCP_MISSING')) {
       logToFile('Agent error: MCP_MISSING');
       spinner.stop('Agent could not access PostHog MCP');
       return { error: AgentErrorType.MCP_MISSING };
     }
 
-    if (outputText.includes(AgentSignals.ERROR_RESOURCE_MISSING)) {
+    if (signals.has('RESOURCE_MISSING')) {
       logToFile('Agent error: RESOURCE_MISSING');
       spinner.stop('Agent could not access setup resource');
       return { error: AgentErrorType.RESOURCE_MISSING };
     }
 
-    // Check for API errors (rate limits, etc.)
-    // Extract just the API error line(s), not the entire output
-    const apiErrorMatch = outputText.match(/API Error: [^\n]+/g);
-    const apiErrorMessage = apiErrorMatch
-      ? apiErrorMatch.join('\n')
-      : 'Unknown API error';
+    // A clean success result already arrived. The Claude SDK can emit a second
+    // error result during teardown (e.g. "API Error: The socket connection was
+    // closed unexpectedly" when the streaming connection drops on cleanup),
+    // whose text lands in `signals` — so the API-error checks below would
+    // escalate that teardown noise to a fatal error. A finished run is
+    // finished; mirror the catch-path guard and complete successfully.
+    if (receivedSuccessResult) {
+      return completeWithSuccess();
+    }
 
-    if (outputText.includes('API Error: 429')) {
+    // Check for API errors (rate limits, etc.)
+    // Surface just the API error line(s), not the entire output
+    const apiErrorMessage = signals.apiErrorMessage() ?? 'Unknown API error';
+
+    if (signals.hasApiErrorStatus(429)) {
       logToFile('Agent error: RATE_LIMIT');
       spinner.stop('Rate limit exceeded');
       return { error: AgentErrorType.RATE_LIMIT, message: apiErrorMessage };
     }
 
-    if (outputText.includes('API Error:')) {
+    if (signals.hasApiError()) {
       logToFile('Agent error: API_ERROR');
       spinner.stop('API error occurred');
       return { error: AgentErrorType.API_ERROR, message: apiErrorMessage };
@@ -1286,25 +1162,21 @@ export async function runAgent(
     }
 
     // Check if we collected an error before the exception was thrown
-    const outputText = collectedText.join('\n');
 
     // Check for YARA scanner violations
-    const yaraResult = checkYaraViolation(outputText, spinner);
+    const yaraResult = checkYaraViolation(signals, spinner);
     if (yaraResult) return yaraResult;
 
-    // Extract just the API error line(s), not the entire output
-    const apiErrorMatch = outputText.match(/API Error: [^\n]+/g);
-    const apiErrorMessage = apiErrorMatch
-      ? apiErrorMatch.join('\n')
-      : 'Unknown API error';
+    // Surface just the API error line(s), not the entire output
+    const apiErrorMessage = signals.apiErrorMessage() ?? 'Unknown API error';
 
-    if (outputText.includes('API Error: 429')) {
+    if (signals.hasApiErrorStatus(429)) {
       logToFile('Agent error (caught): RATE_LIMIT');
       spinner.stop('Rate limit exceeded');
       return { error: AgentErrorType.RATE_LIMIT, message: apiErrorMessage };
     }
 
-    if (outputText.includes('API Error:')) {
+    if (signals.hasApiError()) {
       logToFile('Agent error (caught): API_ERROR');
       spinner.stop('API error occurred');
       return { error: AgentErrorType.API_ERROR, message: apiErrorMessage };
@@ -1324,6 +1196,8 @@ export async function runAgent(
       analytics.wizardCapture('agent aborted', {
         duration_ms: durationMs,
         duration_seconds: Math.round(durationMs / 1000),
+        model: agentConfig.model,
+        ...config?.analyticsProperties,
       });
     }
   }
@@ -1488,9 +1362,12 @@ function handleSDKMessage(
   message: SDKMessage,
   options: WizardRunOptions,
   spinner: SpinnerHandle,
-  collectedText: string[],
+  signals: AgentOutputSignals,
   receivedSuccessResult = false,
   tasks?: Map<string, TaskEntry>,
+  // The orchestrator owns the TUI task panel (it renders its queue). Suppress the
+  // agent's own TaskCreate/TaskUpdate rendering so it does not clobber the queue.
+  suppressTaskRender = false,
 ): void {
   // Map preserves insertion order (the order the agent created the tasks).
   // Within that, group by status: completed first, then in_progress, then
@@ -1502,7 +1379,7 @@ function handleSDKMessage(
   };
   const rank = (status: string): number => STATUS_RANK[status] ?? 2;
   const syncTasks = (): void => {
-    if (!tasks) return;
+    if (!tasks || suppressTaskRender) return;
     const sorted = Array.from(tasks.values()).sort(
       (a, b) => rank(a.status) - rank(b.status),
     );
@@ -1521,7 +1398,7 @@ function handleSDKMessage(
       if (Array.isArray(content)) {
         for (const block of content) {
           if (block.type === 'text' && typeof block.text === 'string') {
-            collectedText.push(block.text);
+            signals.push(block.text);
 
             // Check for [STATUS] markers
             const statusRegex = new RegExp(
@@ -1550,6 +1427,19 @@ function handleSDKMessage(
             if (dashboardMatch) {
               getUI().setDashboardUrl(dashboardMatch[1].trim());
             }
+
+            // Check for [NOTEBOOK_URL] markers
+            const notebookRegex = new RegExp(
+              `${AgentSignals.NOTEBOOK_URL.replace(
+                /[.*+?^${}()|[\]\\]/g,
+                '\\$&',
+              )}\\s*(\\S+)`,
+              'm',
+            );
+            const notebookMatch = block.text.match(notebookRegex);
+            if (notebookMatch) {
+              getUI().setNotebookUrl(notebookMatch[1].trim());
+            }
           }
 
           // Intercept Task* tool_use blocks for task progression.
@@ -1564,6 +1454,12 @@ function handleSDKMessage(
               tasks,
               sync: syncTasks,
             });
+          }
+
+          // Mirror the active tool into the Visualizer's "stage" indicator.
+          if (block.type === 'tool_use') {
+            const stage = classifyToolToStage((block as ToolUseBlock).name);
+            if (stage) getUI().setStage(stage);
           }
         }
       }
@@ -1609,7 +1505,7 @@ function handleSDKMessage(
       if (message.is_error) {
         logToFile('Agent result with error:', message.result);
         if (typeof message.result === 'string') {
-          collectedText.push(message.result);
+          signals.push(message.result);
         }
         // Only show errors to user if we haven't already succeeded.
         // Post-success errors are SDK cleanup noise (telemetry failures, streaming
@@ -1623,7 +1519,7 @@ function handleSDKMessage(
       } else if (message.subtype === 'success') {
         logToFile('Agent completed successfully');
         if (typeof message.result === 'string') {
-          collectedText.push(message.result);
+          signals.push(message.result);
         }
       } else {
         logToFile('Agent result with error:', message.result);

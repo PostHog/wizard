@@ -13,13 +13,11 @@ import { spawnSync } from 'node:child_process';
 import type { ReactNode } from 'react';
 import { useEffect, useState, useSyncExternalStore } from 'react';
 import type { WizardStore } from '@ui/tui/store';
-import {
-  Integration,
-  WIZARD_TOOLS_MENU_FLAG_KEY,
-} from '@lib/constants';
+import { Integration, WIZARD_TOOLS_MENU_FLAG_KEY } from '@lib/constants';
 import { PickerMenu, LoadingBox } from '@ui/tui/primitives/index';
 import { IntroScreenLayout, type DetectionRow } from './IntroScreenLayout.js';
 import { SkillSourceInfo, useSkillEntry } from './SkillSourceInfo.js';
+import { PrivacyPanel } from '@ui/tui/components/PrivacyPanel';
 import { releaseTerminal } from '@ui/tui/start-tui';
 import { analytics } from '@utils/analytics';
 
@@ -27,7 +25,7 @@ const TOOLS = [
   { label: 'Troubleshoot Integration', command: 'doctor' },
 ] as const;
 
-type View = 'default' | 'more-info' | 'tools';
+type View = 'default' | 'more-info' | 'privacy' | 'tools';
 
 function launchTool(command: string, installDir: string): never {
   releaseTerminal();
@@ -60,14 +58,12 @@ const FrameworkPicker = ({
       options={options}
       onSelect={(value) => {
         const integration = Array.isArray(value) ? value[0] : value;
-        void import('@lib/registry').then(
-          ({ FRAMEWORK_REGISTRY }) => {
-            const config = FRAMEWORK_REGISTRY[integration];
-            store.setFrameworkConfig(integration, config);
-            store.setDetectedFramework(config.metadata.name);
-            onComplete?.();
-          },
-        );
+        void import('@lib/registry').then(({ FRAMEWORK_REGISTRY }) => {
+          const config = FRAMEWORK_REGISTRY[integration];
+          store.setFrameworkConfig(integration, config);
+          store.setDetectedFramework(config.metadata.name);
+          onComplete?.();
+        });
       }}
     />
   );
@@ -122,7 +118,12 @@ export const PostHogIntegrationIntroScreen = ({
 
   // ── Title ──────────────────────────────────────────────────────────
 
-  const title = detecting ? 'PostHog Wizard starting up' : 'PostHog Wizard 🦔';
+  const title =
+    view === 'privacy'
+      ? 'Wizard privacy & usage'
+      : detecting
+      ? 'PostHog Wizard starting up'
+      : 'PostHog Wizard 🦔';
 
   // ── Description ────────────────────────────────────────────────────
 
@@ -155,7 +156,7 @@ export const PostHogIntegrationIntroScreen = ({
     );
   } else if (view === 'more-info') {
     body = (
-      <Box flexDirection="column" width={56} flexShrink={0}>
+      <Box flexDirection="column" width={64} flexShrink={0}>
         <Text>
           The wizard is an agent that executes PostHog tasks. Its code is open
           source: <Text color="cyan">https://github.com/PostHog/wizard</Text>
@@ -171,10 +172,10 @@ export const PostHogIntegrationIntroScreen = ({
           </Text>
         </Box>
         <Box flexDirection="column" marginTop={1} paddingLeft={4}>
-          <Text>{`\u2022`} Product Analytics</Text>
-          <Text>{`\u2022`} Web Analytics</Text>
-          <Text>{`\u2022`} Session Replay</Text>
-          <Text>{`\u2022`} Error Tracking</Text>
+          <Text>{`•`} Product Analytics</Text>
+          <Text>{`•`} Web Analytics</Text>
+          <Text>{`•`} Session Replay</Text>
+          <Text>{`•`} Error Tracking</Text>
         </Box>
         <Box flexDirection="column" marginTop={1}>
           <Text>If you prefer your own AI setup, download the skill:</Text>
@@ -188,6 +189,8 @@ export const PostHogIntegrationIntroScreen = ({
         </Box>
       </Box>
     );
+  } else if (view === 'privacy') {
+    body = <PrivacyPanel />;
   } else if (showContinue) {
     body = (
       <>
@@ -204,6 +207,8 @@ export const PostHogIntegrationIntroScreen = ({
   if (frameworkLabel) {
     const suffixParts: string[] = [];
     if (!manuallySelected) suffixParts.push('(detected)');
+    // Dead path today — every framework went GA. Kept for re-activation
+    // when the next beta framework lands (set `beta: true` on its config).
     if (config?.metadata.beta) suffixParts.push('[BETA]');
 
     detectionRows.push({
@@ -263,6 +268,11 @@ export const PostHogIntegrationIntroScreen = ({
       { label: 'Back', value: 'back' },
     ];
   } else if (view === 'more-info') {
+    menuOptions = [
+      { label: 'Back', value: 'back' },
+      { label: 'Privacy & data usage', value: 'privacy' },
+    ];
+  } else if (view === 'privacy') {
     menuOptions = [{ label: 'Back', value: 'back' }];
   } else if (showContinue) {
     menuOptions = [
@@ -275,6 +285,7 @@ export const PostHogIntegrationIntroScreen = ({
   }
 
   const handleSelect = (value: string) => {
+    analytics.wizardCapture('intro menu selected', { value, view });
     if (view === 'tools') {
       if (value === 'back') setView('default');
       else launchTool(value, session.installDir);
@@ -287,10 +298,12 @@ export const PostHogIntegrationIntroScreen = ({
       setManuallySelected(true);
     } else if (value === 'more-info') {
       setView('more-info');
+    } else if (value === 'privacy') {
+      setView('privacy');
     } else if (value === 'tools') {
       setView('tools');
     } else if (value === 'back') {
-      setView('default');
+      setView(view === 'privacy' ? 'more-info' : 'default');
     } else {
       store.completeSetup();
     }
@@ -307,6 +320,7 @@ export const PostHogIntegrationIntroScreen = ({
       showDetection={showContinue}
       detectionRows={detectionRows}
       menuOptions={unsupported ? null : menuOptions}
+      menuAlign="center"
       onSelect={handleSelect}
       programLabel={session.programLabel}
       skillId={session.skillId}

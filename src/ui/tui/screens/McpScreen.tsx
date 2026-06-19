@@ -20,7 +20,7 @@ import {
   PickerMenu,
   GroupedPickerMenu,
 } from '@ui/tui/primitives/index';
-import { Colors } from '@ui/tui/styles';
+import { Colors, Icons } from '@ui/tui/styles';
 import type {
   McpInstaller,
   McpClientInfo,
@@ -28,6 +28,7 @@ import type {
 import {
   AVAILABLE_FEATURES,
   ALL_FEATURE_VALUES,
+  isAllFeaturesSelected,
 } from '@steps/add-mcp-server-to-clients/defaults';
 
 export type McpMode = 'install' | 'remove';
@@ -43,6 +44,7 @@ enum Phase {
   Ask = 'ask',
   Pick = 'pick',
   FeatureSelect = 'feature-select',
+  Connector = 'connector',
   Working = 'working',
   Done = 'done',
   None = 'none',
@@ -52,8 +54,29 @@ const markDone = (
   store: WizardStore,
   outcome: McpOutcome,
   clients: string[] = [],
+  featuresSelected?: 'all' | string[],
 ) => {
-  store.setMcpComplete(outcome, clients);
+  store.setMcpComplete(outcome, clients, featuresSelected);
+};
+
+const reportFeatures = (features: string[]): 'all' | string[] =>
+  isAllFeaturesSelected(features) ? 'all' : features;
+
+/**
+ * Connector step prompt — Enter continues (opens the connector page). There's
+ * no skip: picking the connector commits to opening it.
+ */
+const ConnectorContinue = ({ onContinue }: { onContinue: () => void }) => {
+  useInput((_input, key) => {
+    if (key.return) {
+      onContinue();
+    }
+  });
+  return (
+    <Text color={Colors.primary}>
+      Press enter to continue {Icons.triangleRight}
+    </Text>
+  );
 };
 
 export const McpScreen = ({
@@ -77,6 +100,7 @@ export const McpScreen = ({
   const [selectedClientNames, setSelectedClientNames] = useState<string[]>([]);
   const [resultClients, setResultClients] = useState<string[]>([]);
   const [pluginClients, setPluginClients] = useState<string[]>([]);
+  const [installMode, setInstallMode] = useState<'all' | 'custom'>('custom');
 
   useEffect(() => {
     void (async () => {
@@ -96,21 +120,56 @@ export const McpScreen = ({
     })();
   }, [installer]); // eslint-disable-line
 
-  const proceedToFeatureSelectOrInstall = (clientNames: string[]) => {
+  const proceedAfterClientPick = (
+    clientNames: string[],
+    chosenMode: 'all' | 'custom',
+  ) => {
     setSelectedClientNames(clientNames);
-    // Skip feature picker if CLI already specified features
+
+    // Recommended flow: install everything straight away. Browser connectors
+    // (e.g. Claude Desktop/Web) just open their connector page here, same as
+    // before — no extra screen.
+    if (chosenMode === 'all') {
+      void doInstall(clientNames, [...ALL_FEATURE_VALUES]);
+      return;
+    }
     if (store.session.mcpFeatures) {
       void doInstall(clientNames, store.session.mcpFeatures);
-    } else {
-      setPhase(Phase.FeatureSelect);
+      return;
     }
+
+    // Customize flow: a browser connector configures its tools and features in
+    // Claude's UI, not through the wizard's feature picker. The picker keeps it
+    // mutually exclusive from local editors, so a connector selection is
+    // connector-only — show its own screen instead of the feature picker.
+    const isConnector = clientNames.some(
+      (name) => clients.find((c) => c.name === name)?.finish,
+    );
+    if (isConnector) {
+      setPhase(Phase.Connector);
+      return;
+    }
+    setPhase(Phase.FeatureSelect);
   };
 
   const handleConfirm = () => {
     if (isRemove) {
       void doRemove();
     } else if (clients.length === 1) {
-      proceedToFeatureSelectOrInstall(clients.map((c) => c.name));
+      proceedAfterClientPick([clients[0]!.name], 'custom');
+    } else {
+      setPhase(Phase.Pick);
+    }
+  };
+
+  const handleTriStateChoice = (choice: 'all' | 'custom' | 'skip') => {
+    if (choice === 'skip') {
+      handleSkip();
+      return;
+    }
+    setInstallMode(choice);
+    if (clients.length === 1) {
+      proceedAfterClientPick([clients[0]!.name], choice);
     } else {
       setPhase(Phase.Pick);
     }
@@ -124,26 +183,60 @@ export const McpScreen = ({
     setPhase(Phase.Working);
     let mcpResult: string[] = [];
     let pluginResult: string[] = [];
-    try {
-      mcpResult = await installer.install(
-        names,
-        features,
-        store.session.apiKey,
-      );
-    } catch {
-      // mcpResult stays []
+
+    const pluginCapableSet = new Set(
+      clients.filter((c) => c.supportsPlugin).map((c) => c.name),
+    );
+    const pluginCapableNames = names.filter((n) => pluginCapableSet.has(n));
+    const directNames = names.filter((n) => !pluginCapableSet.has(n));
+
+    if (installMode === 'all') {
+      // Plugin-capable clients get the plugin (which bundles MCP).
+      // Non-plugin-capable clients get a direct MCP config write.
+      try {
+        mcpResult = await installer.install(
+          directNames,
+          features,
+          store.session.apiKey,
+        );
+      } catch {
+        // mcpResult stays []
+      }
+      try {
+        pluginResult = await installer.installPlugins(pluginCapableNames);
+      } catch {
+        // best-effort
+      }
+    } else {
+      // 'custom' — MCP-only for every selected client. Plugin install is
+      // skipped so the user's feature selection is actually respected.
+      try {
+        mcpResult = await installer.install(
+          names,
+          features,
+          store.session.apiKey,
+        );
+      } catch {
+        // mcpResult stays []
+      }
     }
-    try {
-      pluginResult = await installer.installPlugins(names);
-    } catch {
-      // best-effort — plugin failure does not affect MCP outcome
-    }
+
     setResultClients(mcpResult);
     setPluginClients(pluginResult);
     setPhase(Phase.Done);
-    const outcome =
-      mcpResult.length > 0 ? McpOutcome.Installed : McpOutcome.Failed;
-    setTimeout(() => markDone(store, outcome, mcpResult), 2000);
+    const succeeded = mcpResult.length + pluginResult.length > 0;
+    const outcome = succeeded ? McpOutcome.Installed : McpOutcome.Failed;
+    const featuresReport = reportFeatures(features ?? [...ALL_FEATURE_VALUES]);
+    setTimeout(
+      () =>
+        markDone(
+          store,
+          outcome,
+          [...mcpResult, ...pluginResult],
+          featuresReport,
+        ),
+      2000,
+    );
   };
 
   const doRemove = async () => {
@@ -168,6 +261,18 @@ export const McpScreen = ({
     'Run SQL, build dashboards, ship flags, all from your IDE.',
     'No copy-pasting tokens or context. Your agent has the keys.',
   ];
+
+  // Clients connected via a browser page (e.g. Claude Desktop/Web) aren't truly
+  // "installed" — the user finishes in the browser. Split them out of the
+  // "installed for" list and render the finish instructions separately.
+  const finishNotes = clients.flatMap((c) =>
+    c.finish && resultClients.includes(c.name)
+      ? [{ name: c.name, url: c.finish.url, instruction: c.finish.instruction }]
+      : [],
+  );
+  const installedNow = resultClients.filter(
+    (name) => !finishNotes.some((n) => n.name === name),
+  );
 
   return (
     <Box flexDirection="column" flexGrow={1}>
@@ -204,32 +309,73 @@ export const McpScreen = ({
               Detected: {clients.map((c) => c.name).join(', ')}
             </Text>
             <Box marginTop={1}>
-              <ConfirmationInput
-                message={`${
-                  isRemove ? 'Remove' : 'Install'
-                } the PostHog MCP server${
-                  clients.some((c) => c.supportsPlugin) ? ' and plugin' : ''
-                }?`}
-                confirmLabel={isRemove ? 'Remove' : 'Install'}
-                cancelLabel="No thanks"
-                onConfirm={handleConfirm}
-                onCancel={handleSkip}
-              />
+              {!isRemove && !store.session.mcpFeatures ? (
+                <PickerMenu
+                  message={`Install the PostHog MCP server${
+                    clients.some((c) => c.supportsPlugin) ? ' and plugin' : ''
+                  }?`}
+                  options={[
+                    {
+                      label: 'Install with all features',
+                      value: 'all',
+                      hint: 'recommended',
+                    },
+                    {
+                      label: 'Customize features',
+                      value: 'custom',
+                    },
+                    { label: 'No thanks', value: 'skip' },
+                  ]}
+                  mode="single"
+                  onSelect={(choice) =>
+                    handleTriStateChoice(choice as 'all' | 'custom' | 'skip')
+                  }
+                />
+              ) : (
+                <ConfirmationInput
+                  message={`${
+                    isRemove ? 'Remove' : 'Install'
+                  } the PostHog MCP server${
+                    clients.some((c) => c.supportsPlugin) ? ' and plugin' : ''
+                  }?`}
+                  confirmLabel={isRemove ? 'Remove' : 'Install'}
+                  cancelLabel="No thanks"
+                  onConfirm={handleConfirm}
+                  onCancel={handleSkip}
+                />
+              )}
             </Box>
           </>
         )}
 
         {phase === Phase.Pick && (
           <PickerMenu
-            message="Select editor to install MCP server"
+            message={
+              installMode === 'all'
+                ? 'Select editor to install'
+                : 'Select editor to install MCP server'
+            }
             options={clients.map((c) => ({
               label: c.name,
               value: c.name,
+              // Browser connectors can't be installed alongside local editors
+              // and are configured on their own screen, not the feature picker.
+              exclusive: Boolean(c.finish),
+              // Hints only show in the recommended flow; the customize flow
+              // keeps the list clean.
+              hint:
+                installMode === 'all'
+                  ? c.finish
+                    ? 'connector'
+                    : c.supportsPlugin
+                    ? 'plugin'
+                    : 'MCP'
+                  : undefined,
             }))}
             mode="multi"
             onSelect={(selected) => {
               const names = Array.isArray(selected) ? selected : [selected];
-              proceedToFeatureSelectOrInstall(names);
+              proceedAfterClientPick(names, installMode);
             }}
           />
         )}
@@ -238,11 +384,25 @@ export const McpScreen = ({
           <GroupedPickerMenu
             message="Select features to enable"
             groups={AVAILABLE_FEATURES}
-            initialSelected={[...ALL_FEATURE_VALUES]}
+            initialSelected={[]}
             onSelect={(features) => {
               void doInstall(selectedClientNames, features);
             }}
           />
+        )}
+
+        {phase === Phase.Connector && (
+          <Box flexDirection="column">
+            <Box marginBottom={1}>
+              <Text dimColor>
+                You&apos;ll choose which features and tools to enable in
+                Claude&apos;s UI after connecting.
+              </Text>
+            </Box>
+            <ConnectorContinue
+              onContinue={() => void doInstall(selectedClientNames, [])}
+            />
+          </Box>
         )}
 
         {phase === Phase.Working && (
@@ -253,26 +413,59 @@ export const McpScreen = ({
 
         {phase === Phase.Done && (
           <Box flexDirection="column">
-            {resultClients.length > 0 ? (
-              <>
-                <Text color="green" bold>
-                  {'\u2714'} MCP server
-                  {!isRemove && pluginClients.length > 0
-                    ? ' and plugin'
-                    : ''}{' '}
-                  {isRemove ? 'removed from' : 'installed for'}:
-                </Text>
-                {resultClients.map((name, i) => (
-                  <Text key={i}>
-                    {' '}
-                    {'\u2022'} {name}
-                  </Text>
-                ))}
-              </>
-            ) : (
+            {installedNow.length + pluginClients.length + finishNotes.length ===
+            0 ? (
               <Text dimColor>
                 {isRemove ? 'Removal' : 'Installation'} skipped.
               </Text>
+            ) : (
+              <>
+                {pluginClients.length > 0 && (
+                  <>
+                    <Text color="green" bold>
+                      {'\u2714'} Plugin installed for:
+                    </Text>
+                    {pluginClients.map((name, i) => (
+                      <Text key={`p-${i}`}>
+                        {' '}
+                        {'\u2022'} {name}
+                      </Text>
+                    ))}
+                  </>
+                )}
+                {installedNow.length > 0 && (
+                  <>
+                    <Text color="green" bold>
+                      {'\u2714'} MCP server{' '}
+                      {isRemove ? 'removed from' : 'installed for'}:
+                    </Text>
+                    {installedNow.map((name, i) => (
+                      <Text key={`m-${i}`}>
+                        {' '}
+                        {'\u2022'} {name}
+                      </Text>
+                    ))}
+                  </>
+                )}
+                {finishNotes.map((note) => (
+                  <Box key={note.name} flexDirection="column" marginTop={1}>
+                    <Text color="green" bold>
+                      {'\u2714'} {note.name} {'\u2014'} installs a PostHog
+                      connector:
+                    </Text>
+                    <Text>
+                      {'  '}Opened <Text color="cyan">{note.url}</Text>
+                    </Text>
+                    <Text dimColor>
+                      {'  '}
+                      {note.instruction}
+                    </Text>
+                    <Text dimColor>
+                      {'  '}(If it didn&apos;t open, paste the URL above.)
+                    </Text>
+                  </Box>
+                ))}
+              </>
             )}
           </Box>
         )}

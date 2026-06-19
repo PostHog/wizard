@@ -46,6 +46,13 @@ interface IntroScreenLayoutProps {
   /** Menu options. Pass null to hide the menu entirely. */
   menuOptions?: { label: string; value: string }[] | null;
 
+  /**
+   * Menu alignment. 'center' (default) matches the wizard's standard
+   * intro menu. 'left' is for views like the privacy panel where the
+   * menu should align with the panel content rather than viewport center.
+   */
+  menuAlign?: 'center' | 'left';
+
   /** Called when the user picks a menu option */
   onSelect?: (value: string) => void;
 
@@ -76,6 +83,7 @@ export const IntroScreenLayout = ({
   detectionRows,
   children,
   menuOptions,
+  menuAlign = 'center',
   onSelect,
   programLabel,
   skillId,
@@ -177,9 +185,11 @@ export const IntroScreenLayout = ({
           </Box>
         )}
 
-        <Box width={24}>
+        <Box width={menuAlign === 'left' ? 64 : 24} marginTop={1}>
           {resolvedMenuOptions && onSelect && (
-            <Box justifyContent="center">
+            <Box
+              justifyContent={menuAlign === 'left' ? 'flex-start' : 'center'}
+            >
               <PickerMenu
                 key={resolvedMenuOptions.map((o) => o.value).join(',')}
                 options={resolvedMenuOptions}
