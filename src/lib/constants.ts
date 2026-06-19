@@ -178,6 +178,13 @@ export const WIZARD_REMARK_EVENT_NAME = 'wizard remark';
 export const WIZARD_VARIANT_FLAG_KEY = 'wizard-variant';
 /** Boolean feature flag that routes a run to the experimental orchestrator runner. */
 export const WIZARD_ORCHESTRATOR_FLAG_KEY = 'wizard-orchestrator';
+/**
+ * Multivariate feature flag that selects the agent backend inside the linear
+ * mode: `anthropic` (control, claude-agent-sdk) or `pi` (pi.dev coding agent).
+ * Multivariate over boolean so telemetry reads the backend name directly.
+ * Unknown/missing resolves to `anthropic`.
+ */
+export const WIZARD_RUNNER_FLAG_KEY = 'wizard-runner';
 /** Feature flag key that gates the intro-screen "Tools" menu. */
 export const WIZARD_TOOLS_MENU_FLAG_KEY = 'wizard-tools-menu';
 /** Variant key -> metadata for wizard run (VARIANT flag selects which entry to use). */

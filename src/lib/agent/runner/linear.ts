@@ -8,15 +8,10 @@
 import type { WizardSession } from '../../wizard-session';
 import { OutroKind } from '../../wizard-session';
 import { getUI } from '../../../ui';
-import {
-  initializeAgent,
-  runAgent as executeAgent,
-  AgentErrorType,
-  AgentSignals,
-} from '../agent-interface';
+import { AgentErrorType, AgentSignals } from '../agent-interface';
 import { restoreClaudeSettings } from '../claude-settings';
 import { getCloudUrlFromRegion } from '../../../utils/urls';
-import { logToFile, getLogFilePath } from '../../../utils/debug';
+import { logToFile } from '../../../utils/debug';
 import { createBenchmarkPipeline } from '../../middleware/benchmark';
 import {
   wizardAbort,
@@ -25,8 +20,8 @@ import {
 } from '../../../utils/wizard-abort';
 import { analytics } from '../../../utils/analytics';
 import { formatScanReport, writeScanReport } from '../../yara-hooks';
-import { detectNodePackageManagers } from '../../detection/package-manager';
 import { installSkillById } from '../../wizard-tools';
+import { selectBackend } from './backends';
 import { createWizardAskBridge } from '../../wizard-ask-bridge';
 import type { ProgramConfig } from '../../programs/program-step';
 import { assemblePrompt } from '../agent-prompt';
@@ -47,9 +42,7 @@ export async function runLinearProgram(
     accessToken,
     projectId,
     cloudRegion,
-    mcpUrl,
     wizardFlags,
-    wizardMetadata,
   } = boot;
 
   // 5. Skill install (if skillId provided)
@@ -99,33 +92,6 @@ export async function runLinearProgram(
         timeoutMs: config.askTimeoutMs,
       });
 
-  getUI().log.step('Initializing Claude agent...');
-  const agent = await initializeAgent(
-    {
-      workingDirectory: session.installDir,
-      posthogMcpUrl: mcpUrl,
-      posthogApiKey: accessToken,
-      posthogApiHost: host,
-      additionalMcpServers: config.additionalMcpServers,
-      detectPackageManager:
-        config.detectPackageManager ?? detectNodePackageManagers,
-      skillsBaseUrl,
-      wizardFlags,
-      wizardMetadata,
-      integrationLabel: config.integrationLabel,
-      askBridge,
-      askMaxQuestions: config.maxQuestions,
-      allowedTools: programConfig.allowedTools,
-      disallowedTools: programConfig.disallowedTools,
-      getPendingQuestion: () => session.pendingQuestion,
-    },
-    sessionToOptions(session),
-  );
-  getUI().log.step(`Verbose logs: ${getLogFilePath()}`);
-  getUI().log.success("Agent initialized. Let's get cooking!");
-
-  logToFile('[agent-runner] agent initialized');
-
   const middleware = session.benchmark
     ? createBenchmarkPipeline(spinner, sessionToOptions(session))
     : undefined;
@@ -139,22 +105,21 @@ export async function runLinearProgram(
   });
   logToFile(`[agent-runner] prompt assembled (${prompt.length} chars)`);
 
-  // 8. Run agent
-  const agentResult = await executeAgent(
-    agent,
+  // 8. Run the agent through the selected backend (wizard-runner: anthropic | pi).
+  // The backend owns the agent loop + model transport; prompt assembly, error
+  // routing, and the outro below stay here so every backend shares them.
+  const backend = selectBackend(wizardFlags);
+  const agentResult = await backend.run({
+    session,
+    config,
+    programConfig,
+    boot,
     prompt,
-    sessionToOptions(session),
+    skillPath,
     spinner,
-    {
-      estimatedDurationMinutes: config.estimatedDurationMinutes,
-      spinnerMessage: config.spinnerMessage,
-      successMessage: config.successMessage,
-      errorMessage: config.errorMessage ?? `${config.integrationLabel} failed`,
-      additionalFeatureQueue: config.additionalFeatureQueue ?? [],
-      abortCases: config.abortCases,
-    },
+    askBridge,
     middleware,
-  );
+  });
 
   // 9. Error handling (full set from both runners)
   if (agentResult.error === AgentErrorType.ABORT) {
