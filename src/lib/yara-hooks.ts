@@ -191,7 +191,9 @@ const WIZARD_DOC_PATTERNS: RegExp[] = [
   /^\.posthog-events-inventory\.part-\d+\.json$/,
 ];
 
-function isWizardDocumentationPath(filePath: string | undefined): boolean {
+export function isWizardDocumentationPath(
+  filePath: string | undefined,
+): boolean {
   if (!filePath) return false;
   const basename = path.basename(filePath);
   if (WIZARD_DOC_BASENAMES.has(basename)) return true;

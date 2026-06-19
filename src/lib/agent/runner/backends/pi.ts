@@ -57,7 +57,7 @@ export const piBackend: AgentBackend = {
   name: 'pi',
 
   async run(inputs: BackendRunInputs): Promise<AgentResult> {
-    const { session, boot, prompt, spinner, config } = inputs;
+    const { session, boot, prompt, spinner, config, programConfig } = inputs;
 
     spinner.start(config.spinnerMessage ?? 'Customizing your PostHog setup...');
 
@@ -109,6 +109,17 @@ export const piBackend: AgentBackend = {
       // System prompt = wizard commandments. Skip project context files /
       // user extensions / skills so the run is hermetic; skills discovery is a
       // follow-up (#524).
+      //
+      // Fail-closed security (#525): an extension intercepts EVERY tool call —
+      // built-in and custom — and reuses the anthropic policy (canUseTool
+      // allowlist + .env fencing + YARA). `noExtensions: true` only suppresses
+      // disk-discovered extensions; explicit `extensionFactories` still load,
+      // so the fence is on while the target project can't inject its own.
+      const { createSecurityExtension } = await import('./pi-security');
+      const security = createSecurityExtension({
+        disallowedTools: programConfig.disallowedTools,
+      });
+
       const resourceLoader = new DefaultResourceLoader({
         cwd: session.installDir,
         agentDir: getAgentDir(),
@@ -118,6 +129,7 @@ export const piBackend: AgentBackend = {
         noContextFiles: true,
         noPromptTemplates: true,
         noThemes: true,
+        extensionFactories: [security.factory],
       });
       await resourceLoader.reload();
 
@@ -176,6 +188,16 @@ export const piBackend: AgentBackend = {
         await agentSession.prompt(prompt);
       } finally {
         unsubscribe();
+      }
+
+      // A latched post-scan violation terminates the run as a YARA violation,
+      // matching the anthropic path's AgentErrorType.YARA_VIOLATION.
+      if (security.state.criticalViolation) {
+        spinner.stop('Security violation detected');
+        logToFile(
+          `[pi] terminated: YARA violation (blocked ${security.state.blockedCount} call(s))`,
+        );
+        return { error: AgentErrorType.YARA_VIOLATION };
       }
 
       spinner.stop(config.successMessage ?? 'PostHog integration complete');
