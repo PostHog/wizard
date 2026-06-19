@@ -41,7 +41,7 @@ const PI_RUNTIME_NOTES = [
   '',
   '## This runtime',
   '- Explore with the `ls`, `find`, and `grep` tools (list a directory, find files by name, search file contents). `read` is for FILES only — reading a directory errors. NEVER run ls/find/cat/grep through `bash`; they are blocked and waste a turn.',
-  '- This runtime has NO background or detached execution — DISREGARD any instruction (commandment or skill) to run installs in the background or "continue while it installs". Run installs SYNCHRONOUSLY and wait (e.g. `npm install <pkg>`). `bash` is ONLY for install/build/typecheck/lint/format; `&`, `&&`, and pipes are all blocked.',
+  '- `bash` is ONLY for install/build/typecheck/lint/format. Run installs synchronously and wait (e.g. `npm install <pkg>`); `&`, `&&`, and pipes are all blocked.',
   '- Call `load_skill_menu` once to choose the skill, then `install_skill`. Do not call `load_skill_menu` again this session.',
   "- Never write a PostHog URL or token as a literal in source (e.g. 'https://us.i.posthog.com') — it is blocked. Read them from environment variables (process.env.POSTHOG_HOST, os.environ['POSTHOG_HOST'], etc.).",
   '- Update the task list FREQUENTLY as you work — mark items `completed` the moment you finish them and `in_progress` as you pick them up, so the displayed step always reflects where you actually are. Keep titles broad and action-oriented (the area of work), not specific files or sub-steps.',
