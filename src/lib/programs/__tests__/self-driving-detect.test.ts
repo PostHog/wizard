@@ -10,7 +10,7 @@ import { WIZARD_TOOL_NAMES } from '@lib/wizard-tools';
 import { buildSession } from '@lib/wizard-session';
 
 function makeTmpDir(): string {
-  return fs.mkdtempSync(path.join(os.tmpdir(), 'pa-detect-'));
+  return fs.mkdtempSync(path.join(os.tmpdir(), 'self-driving-detect-'));
 }
 
 function cleanup(dir: string): void {

@@ -102,10 +102,11 @@ STEP 4 — Enable signal sources. (skill: "Enable sources")
 STEP 5 — Offer issue-tracker integrations. (skill: "Connected tools")
    One batched multi-select wizard_ask for the external tools the skill
    lists. The run auto-connects the ones it can (GitHub Issues, and
-   Linear via a one-click OAuth link) and arms the rest as dormant
-   responders to finish later — it never sends the user to paste
-   credentials in the browser, and never polls to confirm a connection.
-   Enable a source only for a tool the user picked.
+   Linear via a one-click OAuth link), verifying each with a single
+   silent check — never nudge. It arms the rest as dormant responders to
+   finish later: for tools it can't auto-connect (Zendesk, pganalyze) it
+   never sends the user to paste credentials and never re-prompts. Enable
+   a source only for a tool the user picked.
 
 STEP 6 — Configure the scout fleet. (skill: "Scouts")
    Materialize the fleet and disable the scouts whose product surface
