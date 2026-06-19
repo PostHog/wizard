@@ -87,6 +87,19 @@ export interface OutroData {
   body?: string;
   /** Success-only: bulleted list of "what the agent did" */
   changes?: string[];
+  /**
+   * Success-only: a prominent, labeled link to where the user should go
+   * next (e.g. an inbox the program just configured). Rendered right under
+   * the headline and shown verbatim — no UTM tagging — so the URL stays
+   * clean and copy-pasteable. Set per-program in buildOutroData.
+   */
+  primaryLink?: { label: string; url: string };
+  /**
+   * Success-only: a short "what to do next" checklist with its own heading,
+   * rendered as a bulleted list. Distinct from `changes`, which recaps what
+   * the agent already did.
+   */
+  nextSteps?: { heading: string; items: string[] };
   docsUrl?: string;
   continueUrl?: string;
   /** Report file the agent wrote (e.g. "posthog-setup-report.md") */

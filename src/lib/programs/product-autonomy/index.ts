@@ -3,7 +3,6 @@ import { access, rm } from 'node:fs/promises';
 import type { ProgramConfig } from '@lib/programs/program-step';
 import type { ProgramRun } from '@lib/agent/agent-runner';
 import { OutroKind } from '@lib/wizard-session';
-import { requestDeepLink } from '@utils/provisioning';
 import { getUiHostFromHost } from '@utils/urls';
 import { createSkillProgram } from '../agent-skill/index.js';
 import { PRODUCT_AUTONOMY_PROGRAM } from './steps.js';
@@ -18,9 +17,6 @@ const SUCCESS_MESSAGE =
   'Product Autonomy is on! PostHog will start scanning within ~30 minutes ' +
   'and surface findings in your inbox.';
 const WIZARD_MARKER = '.posthog-wizard';
-
-/** frameworkContext key holding the inbox link the outro renders. */
-const INBOX_URL_KEY = 'productAutonomyInboxUrl';
 
 /**
  * Remove the installed setup skill. It is transient orchestration
@@ -65,32 +61,28 @@ const run: ProgramRun = {
   // the click target. Scoped to this program only.
   richLinks: true,
 
-  postRun: async (session, credentials) => {
-    const inboxPath = `/project/${credentials.projectId}/inbox`;
-    const deepLink = await requestDeepLink(
-      credentials.accessToken,
-      credentials.host,
-      { purpose: 'product-autonomy', path: inboxPath },
-    );
-    const uiHost = getUiHostFromHost(credentials.host).replace(/\/$/, '');
-    session.frameworkContext[INBOX_URL_KEY] =
-      deepLink ?? `${uiHost}${inboxPath}`;
-
+  postRun: async (session) => {
     await removeInstalledSkill(session.installDir);
   },
 
-  buildOutroData: (session, credentials) => {
+  buildOutroData: (_session, credentials) => {
     const uiHost = getUiHostFromHost(credentials.host).replace(/\/$/, '');
-    const inboxUrl =
-      (session.frameworkContext[INBOX_URL_KEY] as string | undefined) ??
-      `${uiHost}/project/${credentials.projectId}/inbox`;
+    const inboxUrl = `${uiHost}/project/${credentials.projectId}/inbox`;
     return {
       kind: OutroKind.Success as const,
       message:
-        'Product Autonomy is on — PostHog will start scanning within ' +
-        `~30 minutes. Your Signals inbox: ${inboxUrl}`,
+        'Product Autonomy is on. PostHog is scanning your project — ' +
+        'first findings hit your inbox within ~30 minutes.',
+      primaryLink: { label: 'Your Self-driving inbox', url: inboxUrl },
+      nextSteps: {
+        heading: 'In your inbox you can:',
+        items: [
+          'Review the findings PostHog surfaces',
+          'Triage what matters and dismiss the noise',
+          'Kick off fixes and open issues',
+        ],
+      },
       reportFile: REPORT_FILE,
-      docsUrl: DOCS_URL,
     };
   },
 };

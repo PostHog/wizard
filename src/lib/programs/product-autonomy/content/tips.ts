@@ -15,7 +15,7 @@ export const PRODUCT_AUTONOMY_TIPS: Tip[] = [
     id: 'what-is-a-signal-source',
     title: "What's a signal source?",
     description:
-      'A signal source is a PostHog product or connected tool — errors, session replays, support, GitHub or Linear issues — that feeds findings into your Signals inbox.',
+      'A signal source is a PostHog product or connected tool — errors, session replays, support, GitHub or Linear issues — that feeds findings into your Self-driving inbox.',
   },
   {
     id: 'what-is-a-scout',
@@ -27,7 +27,7 @@ export const PRODUCT_AUTONOMY_TIPS: Tip[] = [
     id: 'findings-in-inbox',
     title: 'Findings land in your inbox',
     description:
-      'Once setup finishes, PostHog starts scanning within ~30 minutes and surfaces what it finds in your Signals inbox — grouped, researched, and ready to act on.',
+      'Once setup finishes, PostHog starts scanning within ~30 minutes and surfaces what it finds in your Self-driving inbox — grouped, researched, and ready to act on.',
   },
 ];
 

@@ -78,7 +78,7 @@ The table below adds the skill reference and the tool/MCP surface for each.
 | 3 | Confirm AI data processing approval | `3-ai-approval.md` | Now a near no-op: org consent is enforced **upstream** by the base wizard's AI opt-in gate (§6), so it's guaranteed granted here — the agent just records "approved"; no `wizard_ask`, no abort. |
 | 4 | Connect GitHub (REQUIRED) | `4-github.md` | `integrations-list` for `kind:"github"`; else `wizard_ask` → `/settings/environment-integrations`, re-verify. Can't → `[ABORT] github connection declined`. |
 | 5 | Enable signal sources | `5-sources.md` | Create/enable `SignalSourceConfig` rows for products in use (`inbox-source-configs-*`). Always enables the scout gate `signals_scout`/`cross_source_issue`. Never enables an unconfirmed tool. |
-| 6 | Offer issue-tracker integrations | `6-connected-tools.md` (+ `6a`, `6b`) | One batched multi-select for GitHub Issues / Linear / Zendesk / pganalyze, then connect-then-enable. Each needs a warehouse source (`external-data-sources-create`) first. |
+| 6 | Offer issue-tracker integrations | `6-connected-tools.md` (+ `6a`, `6b`) | One batched multi-select for GitHub Issues / Linear / Zendesk / pganalyze. GitHub Issues & Linear auto-connect via `external-data-sources-create` (Linear: OAuth link + one silent `integrations-list`, never nudge); Zendesk / pganalyze are armed dormant + report follow-up (no UI redirect, no verify). Enable a (possibly dormant) responder per pick. |
 | 7 | Configure the scout fleet | `7-scouts.md` | `signals-scout-config-sync` materializes the fleet (~19 scouts, grows over time); classify each row the sync returns — keep the cross-product scouts, enable surface-specific ones only with evidence, disable the rest (`signals-scout-config-update {enabled:false}`). Never touches `emit`/`run_interval`. |
 | 8 | Design custom scouts | `7b-tailor-scouts.md` | The **only** place custom scouts are created. Gap-analyze repo surfaces vs the fleet; propose in ONE `wizard_ask`; create approved ones via `llma-skill-create` (`signals-scout-<scope>`). **Canonical bodies never edited.** Declining is valid, not an abort. |
 | 9 | Write report & hand off | `8-report.md` | Write `./posthog-product-autonomy-report.md`; findings appear in the inbox in ~30 min. |
@@ -102,8 +102,10 @@ other program, so nothing else is affected). `productAutonomyConfig` is built fr
 `index.ts`: `PRODUCT_AUTONOMY_SKILL_ID = 'product-autonomy-setup'`, `REPORT_FILE =
 'posthog-product-autonomy-report.md'`, `maxQuestions: 13` (AI approval + GitHub + tracker picks +
 custom-scout proposal), `richLinks: true` (OSC-8 links so long OAuth URLs survive wrapping), and
-`postRun` (builds the inbox deep link, then `removeInstalledSkill` — the setup skill is transient,
-marker-guarded by `.posthog-wizard`, so there's no keep-skills step). CLI: `src/commands/autonomy.ts`;
+`postRun` (just `removeInstalledSkill` — the setup skill is transient,
+marker-guarded by `.posthog-wizard`, so there's no keep-skills step). The outro inbox URL is the
+clean `…/project/:id/inbox` built in `buildOutroData` (no auth deep-link — §7 item 7). CLI:
+`src/commands/autonomy.ts`;
 `--install-dir` becomes `session.installDir` (the agent's working dir and detection target).
 
 **Runner & agent loop (generic — not Signals-aware).** `runProgram` (`src/lib/agent/agent-runner.ts`)
@@ -142,8 +144,9 @@ scope objects must be in the prod ceiling**, not just the four the in-code comme
 **Security & TUI.** YARA hooks (`src/lib/yara-hooks.ts`) scan Bash/Write/Edit/Read content and
 installed skills via the `warlock` scanner (fail-closed; categories: prompt injection, exfiltration,
 destructive ops, supply-chain, secrets, PII); a critical match aborts the run. New rules go in
-`warlock`. The agent writes the report (`OutroScreen` surfaces it + the inbox deep link); progress
-comes from the agent's `TaskCreate`/`TaskUpdate` calls synced to the TUI.
+`warlock`. The agent writes the report (`OutroScreen` surfaces it + a clean Self-driving inbox link
+and a next-steps list — §7 item 7); progress comes from the agent's `TaskCreate`/`TaskUpdate` calls
+synced to the TUI.
 
 ---
 
@@ -265,12 +268,15 @@ Plus the **Temporal coordinator schedule** (`signals-scout-coordinator-schedule`
 > [!NOTE]
 > **Deferred / planned changes.** TODO-later items, tracked alongside the prod checklist
 > so they aren't forgotten (each notes its own trigger, where it has one):
-> 1. **Zendesk / pganalyze redirect → Inbox.** Today STEP 6 sends users to the
->    new-warehouse-source URL (`/pipeline/new/source`) to add these credential-based
->    sources (they can't be auto-created — the run never collects API keys). When the
->    **new Inbox** ships, switch that redirect to the Inbox URL. Lands in context-mill
->    `6-connected-tools.md` (the Zendesk/pganalyze branch) and the URL list in
->    `prompt.ts` (`buildProductAutonomyPrompt`).
+> 1. **Downstream reminder for dormant connected-tool sources.** STEP 6 no longer
+>    redirects users to the warehouse UI or verifies Zendesk / pganalyze (and an
+>    unfinished Linear) — it arms the dormant responder and records a report follow-up,
+>    deferring the actual connection to a **downstream reminder** (e.g. a Slack nudge) that
+>    tells the user to add the warehouse source. That reminder is **out of the wizard's
+>    scope** (the CLI exits after the run), so it lands in posthog / Signals: make sure such
+>    a reminder exists and picks up these armed-but-dormant sources. (Earlier this slot
+>    tracked a redirect→Inbox switch and in-wizard credential collection; both are moot now
+>    that STEP 6 collects no credentials and never redirects.)
 > 2. **GitHub Issues / Linear sync cadence → 1h.** The MCP source-create builds the
 >    schema array server-side and defaults non-CDC sources to **6h**
 >    (`external_data_source.py`), so STEP 6 leaves issue syncs at 6h. To tighten the
@@ -310,7 +316,15 @@ Plus the **Temporal coordinator schedule** (`signals-scout-coordinator-schedule`
 >    their first DWH sync completes (item 2) regardless of the coordinator — so an immediate
 >    trigger speeds up scout findings, not source/warehouse findings. Lands in posthog (the
 >    trigger) + context-mill (call it) + the wizard outro copy.
-> 7. Write down a proper end message for wizard (go to inbox, do stuff) instead of directing to docs, as now @/Users/woutut/Documents/Screenshots/CleanShot 2026-06-18 at 17.44.02.png
+> 7. ~~**Write down a proper end message for wizard** (go to inbox, do stuff) instead of directing
+>    to docs.~~ **DONE.** `buildOutroData` (`index.ts`) drops the generic `posthog.com/docs` link and
+>    renders a clean **Self-driving inbox** link (`…/project/:id/inbox`, shown verbatim — no UTM, no
+>    auth deep-link) plus an "In your inbox you can…" next-steps list. Both ride two new *generic*
+>    `OutroData` fields — `primaryLink` (labeled link under the headline) and `nextSteps`
+>    (heading + bullets) — rendered by the shared `OutroScreen`; the Signals-specific copy stays in
+>    the program's `buildOutroData`, so no product knowledge leaks into the screen. The user-facing
+>    inbox label is "Self-driving inbox" across the intro bullet, run-sidebar tips, and outro (ahead
+>    of the full item-4 rename).
 > 8. Update Inbox UI to propose to run Wizard command for autonomy
 > 9. Disable scouts that replicate pipeline (error tracking/replay)
 

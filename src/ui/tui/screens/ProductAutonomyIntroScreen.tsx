@@ -63,7 +63,7 @@ export const ProductAutonomyIntroScreen = ({
         <Text>{'•'} Watches errors, replays, and connected tools</Text>
         <Text>{'•'} Runs scouts — scheduled checks that scan for issues</Text>
         <Text>{'•'} Researches findings in your code via GitHub</Text>
-        <Text>{'•'} Surfaces everything in your Signals inbox</Text>
+        <Text>{'•'} Surfaces everything in your Self-driving inbox</Text>
       </Box>
     </Box>
   ) : (
