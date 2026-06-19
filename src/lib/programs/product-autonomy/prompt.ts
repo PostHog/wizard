@@ -26,7 +26,7 @@ Project URLs:
 - Integrations settings (GitHub App install): ${integrationsSettingsUrl}
 - Organization AI settings: ${orgAiSettingsUrl}
 - New data warehouse source (Linear / Zendesk / GitHub issues / pganalyze): ${newWarehouseSourceUrl}
-- Signals inbox: ${inboxUrl}
+- Self-driving inbox: ${inboxUrl}
 
 Project state read at auth time (PostHog project settings — authoritative
 for whether a product is enabled, regardless of what this repo
@@ -106,8 +106,11 @@ STEP 5 — Enable signal sources. (skill: "Enable sources")
 
 STEP 6 — Offer issue-tracker integrations. (skill: "Connected tools")
    One batched multi-select wizard_ask for the external tools the skill
-   lists, then a single batched connect-confirmation for the picked
-   tools; only connect-then-enable what the user confirms.
+   lists. The run auto-connects the ones it can (GitHub Issues, and
+   Linear via a one-click OAuth link) and arms the rest as dormant
+   responders to finish later — it never sends the user to paste
+   credentials in the browser, and never polls to confirm a connection.
+   Enable a source only for a tool the user picked.
 
 STEP 7 — Configure the scout fleet. (skill: "Scouts")
    Materialize the fleet and disable the scouts whose product surface
