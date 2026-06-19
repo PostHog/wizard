@@ -19,6 +19,7 @@ import { auditCommand } from '../commands/audit';
 import { migrateCommand } from '../commands/migrate';
 import { revenueCommand } from '../commands/revenue';
 import { uploadSourcemapsCommand } from '../commands/upload-sourcemaps';
+import { selfDrivingCommand } from '../commands/self-driving';
 import {
   dispatchFamily,
   pickerChildrenToShow,
@@ -217,5 +218,27 @@ describe('pickerChildrenToShow (today: picker shows only the default leaf)', () 
   test('falls back to all children when none is marked default', () => {
     const shown = pickerChildrenToShow([make('events'), make('all')]);
     expect(shown.map((c) => c.name)).toEqual(['events', 'all']);
+  });
+});
+
+describe('self-driving rejects unsupported modes', () => {
+  // The guard lives in selfDrivingCommand.check, so it runs at the yargs layer
+  // before the handler — parseCommand exercises that real path.
+  test('rejects --signup', async () => {
+    await expect(
+      parseCommand(selfDrivingCommand, 'self-driving --signup'),
+    ).rejects.toThrow(/--signup/i);
+  });
+
+  test('rejects --ci', async () => {
+    await expect(
+      parseCommand(selfDrivingCommand, 'self-driving --ci'),
+    ).rejects.toThrow(/CI mode/i);
+  });
+
+  test('accepts a plain run', async () => {
+    await expect(
+      parseCommand(selfDrivingCommand, 'self-driving --install-dir /tmp/app'),
+    ).resolves.toBeDefined();
   });
 });
