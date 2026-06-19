@@ -11,7 +11,7 @@
  * stays product-ignorant: it is the queue, the executor, and the loader.
  */
 import { randomUUID } from 'crypto';
-import { existsSync, rmSync } from 'fs';
+import { existsSync, readdirSync, rmSync } from 'fs';
 import * as path from 'path';
 import {
   initializeAgent,
@@ -94,6 +94,30 @@ async function resolveReferenceSkillId(
   const exact = `integration-${framework}`;
   if (ids.includes(exact)) return exact;
   return ids.find((id) => id.startsWith(`integration-${framework}-`));
+}
+
+/**
+ * A step-skill (the HOW for one task) may ship per-framework variants — install,
+ * init, capture, and error-tracking each package the framework's docs page, ided
+ * as `<baseId>-<framework>`. Resolve the agent's bare skill id to that variant:
+ * exact `<baseId>-<framework>`, else the first granular variant under it, else
+ * the bare id unchanged (the generic single-variant steps — identify, report,
+ * dashboard, build — and the no-framework case).
+ */
+async function resolveStepSkillId(
+  skillsBaseUrl: string,
+  baseId: string,
+  framework: string | null | undefined,
+): Promise<string> {
+  if (!framework) return baseId;
+  const menu = await fetchSkillMenu(skillsBaseUrl);
+  if (!menu) return baseId;
+  const ids = Object.values(menu.categories)
+    .flat()
+    .map((s) => s.id);
+  const exact = `${baseId}-${framework}`;
+  if (ids.includes(exact)) return exact;
+  return ids.find((id) => id.startsWith(`${baseId}-${framework}-`)) ?? baseId;
 }
 
 export async function runOrchestrator(
@@ -190,6 +214,7 @@ export async function runOrchestrator(
   // skill — only the example file is read, when the agent's prompt points at it.
   let examplePath: string | undefined;
   let commandmentsPath: string | undefined;
+  let docsPaths: string[] = [];
   const referenceSkillId = session.skillId
     ? await resolveReferenceSkillId(boot.skillsBaseUrl, session.skillId)
     : undefined;
@@ -201,13 +226,33 @@ export async function runOrchestrator(
       path.join(QUEUE_DIR_NAME, 'reference'),
     );
     if (ref.kind === 'ok') {
-      const example = path.join(ref.path, 'references', 'EXAMPLE.md');
+      const refDir = path.join(ref.path, 'references');
+      const example = path.join(refDir, 'EXAMPLE.md');
       if (existsSync(path.join(session.installDir, example))) {
         examplePath = example;
       }
-      const commandments = path.join(ref.path, 'references', 'COMMANDMENTS.md');
+      const commandments = path.join(refDir, 'COMMANDMENTS.md');
       if (existsSync(path.join(session.installDir, commandments))) {
         commandmentsPath = commandments;
+      }
+      // Surface the per-framework SDK docs (e.g. `go.md`, `next-js.md`) the
+      // skill packages — the HOW for this framework, and the only HOW signal
+      // for docs-only frameworks with no EXAMPLE.md. Skip the structural files:
+      // EXAMPLE.md and COMMANDMENTS.md are handled above, and the monolith's
+      // numbered workflow files (`1-begin.md` …) are its linear-flow narrative,
+      // not SDK reference — match those by their numeric prefix.
+      const refDirAbs = path.join(session.installDir, refDir);
+      if (existsSync(refDirAbs)) {
+        docsPaths = readdirSync(refDirAbs)
+          .filter(
+            (f) =>
+              f.endsWith('.md') &&
+              f !== 'EXAMPLE.md' &&
+              f !== 'COMMANDMENTS.md' &&
+              !/^\d+-/.test(f),
+          )
+          .sort()
+          .map((f) => path.join(refDir, f));
       }
     } else {
       logToFile(
@@ -228,6 +273,7 @@ export async function runOrchestrator(
     host: boot.host,
     examplePath,
     commandmentsPath,
+    docsPaths,
   };
 
   logToFile(
@@ -325,7 +371,12 @@ export async function runOrchestrator(
       // auto-load them and they must never land in the project (or a CI PR).
       // The prompt points the agent at them instead.
       const skillPaths: string[] = [];
-      for (const skillId of resolved.skills) {
+      for (const baseSkillId of resolved.skills) {
+        const skillId = await resolveStepSkillId(
+          boot.skillsBaseUrl,
+          baseSkillId,
+          session.skillId,
+        );
         const result = await installSkillById(
           skillId,
           session.installDir,

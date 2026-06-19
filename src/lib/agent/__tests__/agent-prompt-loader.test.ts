@@ -296,4 +296,24 @@ describe('assembleTaskPrompt', () => {
       'task instructions',
     );
   });
+
+  it('surfaces the per-framework SDK docs when present', () => {
+    const assembled = assembleTaskPrompt(
+      {
+        ...ctx,
+        docsPaths: ['.posthog-wizard-cache/reference/references/go.md'],
+      },
+      'do the task',
+    );
+    expect(assembled).toContain('SDK reference docs');
+    expect(assembled).toContain(
+      '.posthog-wizard-cache/reference/references/go.md',
+    );
+  });
+
+  it('omits the SDK docs section when there are none', () => {
+    expect(assembleTaskPrompt(ctx, 'do the task')).not.toContain(
+      'SDK reference docs',
+    );
+  });
 });

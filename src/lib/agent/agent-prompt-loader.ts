@@ -32,6 +32,9 @@ export interface OrchestratorPromptContext {
   examplePath?: string;
   /** Path to the framework's rules (COMMANDMENTS.md), if available. */
   commandmentsPath?: string;
+  /** Paths to the framework's SDK reference docs (the per-framework `.md` files
+   *  packaged in the reference skill), if any. */
+  docsPaths?: readonly string[];
 }
 
 function projectContext(ctx: OrchestratorPromptContext): string {
@@ -53,6 +56,14 @@ function exampleReference(ctx: OrchestratorPromptContext): string | null {
 function commandmentsReference(ctx: OrchestratorPromptContext): string | null {
   if (!ctx.commandmentsPath) return null;
   return `Framework rules for this integration are at \`${ctx.commandmentsPath}\`. Read them before you edit and follow them.`;
+}
+
+/** The per-framework SDK docs ship with the reference skill. For docs-only
+ *  frameworks (no EXAMPLE.md) they are the primary implementation signal. */
+function docsReference(ctx: OrchestratorPromptContext): string | null {
+  if (!ctx.docsPaths || ctx.docsPaths.length === 0) return null;
+  const list = ctx.docsPaths.map((p) => `\`${p}\``).join(', ');
+  return `The PostHog SDK reference docs for this framework are at ${list}. Read the ones relevant to your task before you edit.`;
 }
 
 const TASK_BASICS = `You are one isolated task in a larger PostHog workflow, run as a fresh agent with no memory of the other tasks beyond the context you are given. Do only your task, then report exactly once by calling complete_task with a structured handoff: what your goal was, what you did, and what the next agent should know. When you are given context from previous steps, trust it — those agents already did their work, so do not re-verify or re-read what their handoffs tell you. Build on it and move fast. Read a file before you edit it, so your own changes do not duplicate what is already there. Work only inside this project's own directory: never read, list, or search (find, ls, grep, glob) outside it — not the OS, not other projects, not global package caches. If your task seems to need something outside this directory, it does not — skip that part and say so in your handoff rather than hunting across the filesystem. If your task does not apply to this project — there is genuinely nothing for it to do — report it with status \`skipped\` and say why, rather than marking it done.`;
@@ -80,6 +91,7 @@ export function assembleTaskPrompt(
     projectContext(ctx),
     exampleReference(ctx),
     commandmentsReference(ctx),
+    docsReference(ctx),
     skillReference(skillPaths),
     TASK_BASICS,
     body,
