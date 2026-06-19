@@ -8,6 +8,7 @@
 import { WIZARD_RUNNER_FLAG_KEY } from '../../../constants';
 import { logToFile } from '../../../../utils/debug';
 import { anthropicBackend } from './anthropic';
+import { piBackend } from './pi';
 import type { AgentBackend } from './types';
 
 export type { AgentBackend, AgentResult, BackendRunInputs } from './types';
@@ -20,8 +21,7 @@ export function selectBackend(
   let backend: AgentBackend;
   switch (variant) {
     case 'pi':
-      // pi backend lands in a follow-up; resolve to the control until then.
-      backend = anthropicBackend;
+      backend = piBackend;
       break;
     case 'anthropic':
     default:
