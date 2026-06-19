@@ -19,7 +19,42 @@ node --input-type=module -e "import '$DIST_BIN'" 2>&1 | head -5 | grep -q 'PostH
   exit 1
 }
 
-# ── 2. --ci rejected in production builds ────────────────────────────────────
+# ── 2. CI flag overrides physically absent from production builds ───────────
+# The override path (src/utils/ci-flag-overrides.ts) is dead code in published
+# builds and tsdown strips it; its env var name appearing in dist/*.js means
+# dead-code elimination regressed and a prod surface leaked. Sourcemaps keep
+# the original source, so only .js output counts.
+OVERRIDE_MARKERS='WIZARD_CI_FLAG_OVERRIDES WIZARD_CI_EXCLUDE_TASKS'
+if [ "${WIZARD_BUILD_NODE_ENV:-production}" = "ci" ]; then
+  # CI builds must keep the paths — their absence means the overrides silently
+  # stopped working and CI is back to testing live behavior.
+  for marker in $OVERRIDE_MARKERS; do
+    if ! grep -q "$marker" ./dist/*.js; then
+      echo "Smoke test failed: CI build is missing the $marker path" >&2
+      exit 1
+    fi
+  done
+  # And a real invocation must accept the env var. yargs claims every
+  # POSTHOG_WIZARD_-prefixed env var as a CLI option and strict-rejects
+  # unknown ones during command parse (--version/--help short-circuit and
+  # prove nothing). The run exits fast on the missing api key — all this
+  # asserts is that yargs did not reject the environment.
+  ci_probe=$(WIZARD_CI_FLAG_OVERRIDES='{"wizard-orchestrator":true}' node "$DIST_BIN" --ci --install-dir /tmp/wizard-smoke-probe 2>&1) || true
+  if echo "$ci_probe" | grep -q 'Unknown argument'; then
+    echo 'Smoke test failed: CI binary rejects WIZARD_CI_FLAG_OVERRIDES in the environment' >&2
+    echo "$ci_probe" | head -3 >&2
+    exit 1
+  fi
+else
+  for marker in $OVERRIDE_MARKERS; do
+    if grep -q "$marker" ./dist/*.js; then
+      echo "Smoke test failed: $marker code leaked into a production build" >&2
+      exit 1
+    fi
+  done
+fi
+
+# ── 3. --ci rejected in production builds ────────────────────────────────────
 # build:ci sets WIZARD_BUILD_NODE_ENV=ci → --ci stays enabled → skip the check.
 if [ "${WIZARD_BUILD_NODE_ENV:-production}" = "ci" ]; then
   exit 0

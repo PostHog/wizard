@@ -20,7 +20,6 @@ export const VUE_AGENT_CONFIG: FrameworkConfig<VueContext> = {
     name: 'Vue',
     integration: Integration.vue,
     docsUrl: 'https://posthog.com/docs/libraries/vue',
-    beta: true,
   },
 
   detection: {

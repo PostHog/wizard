@@ -22,6 +22,7 @@ import {
   checkCloudflareComponentHealth,
   checkCloudflareOverallHealth,
   checkGithubHealth,
+  checkGithubReleasesHealth,
   checkLlmGatewayHealth,
   checkMcpHealth,
   checkNpmComponentHealth,
@@ -454,6 +455,40 @@ describe('health-checks', () => {
       expect(result.status).toBe(ServiceHealthStatus.Down);
     });
 
+    it('returns NoConnection when posthogstatus.com fetch fails with a network error', async () => {
+      (global.fetch as jest.Mock).mockImplementation(
+        overrideFetch({
+          [URLS.posthogIncidentIo]: () =>
+            Promise.reject(new Error('getaddrinfo ENOTFOUND')),
+        }),
+      );
+      const result = await checkPosthogOverallHealth();
+      expect(result.status).toBe(ServiceHealthStatus.NoConnection);
+    });
+
+    it('returns NoConnection when posthogstatus.com fetch times out', async () => {
+      const abortError = new Error('aborted');
+      abortError.name = 'AbortError';
+      (global.fetch as jest.Mock).mockImplementation(
+        overrideFetch({
+          [URLS.posthogIncidentIo]: () => Promise.reject(abortError),
+        }),
+      );
+      const result = await checkPosthogOverallHealth();
+      expect(result.status).toBe(ServiceHealthStatus.NoConnection);
+    });
+
+    it('returns Down when posthogstatus.com returns an HTTP error', async () => {
+      (global.fetch as jest.Mock).mockImplementation(
+        overrideFetch({
+          [URLS.posthogIncidentIo]: () =>
+            Promise.resolve(new Response('Bad Gateway', { status: 502 })),
+        }),
+      );
+      const result = await checkPosthogOverallHealth();
+      expect(result.status).toBe(ServiceHealthStatus.Down);
+    });
+
     it('returns degraded when an incident has partial_outage impact', async () => {
       const body = {
         ...POSTHOG_INCIDENTIO_HEALTHY,
@@ -696,6 +731,18 @@ describe('health-checks', () => {
       );
     });
 
+    it('returns down on 302 — the gateway probe stays strict, redirects are not OK here', async () => {
+      (global.fetch as jest.Mock).mockImplementation(
+        overrideFetch({
+          [URLS.llmGatewayLiveness]: () =>
+            Promise.resolve(new Response(null, { status: 302 })),
+        }),
+      );
+      const result = await checkLlmGatewayHealth();
+      expect(result.status).toBe(ServiceHealthStatus.Down);
+      expect(result.error).toContain('HTTP 302');
+    });
+
     it('returns down when gateway responds 503 (e.g. deploying)', async () => {
       (global.fetch as jest.Mock).mockImplementation(
         overrideFetch({
@@ -707,7 +754,7 @@ describe('health-checks', () => {
       );
       const result = await checkLlmGatewayHealth();
       expect(result.status).toBe(ServiceHealthStatus.Down);
-      expect(result.error).toBe('HTTP 503');
+      expect(result.error).toContain('HTTP 503');
     });
 
     it('returns down when gateway responds 502 (bad gateway)', async () => {
@@ -719,10 +766,10 @@ describe('health-checks', () => {
       );
       const result = await checkLlmGatewayHealth();
       expect(result.status).toBe(ServiceHealthStatus.Down);
-      expect(result.error).toBe('HTTP 502');
+      expect(result.error).toContain('HTTP 502');
     });
 
-    it('returns down on DNS resolution failure', async () => {
+    it('returns no-connection on DNS resolution failure (no status-page corroboration)', async () => {
       (global.fetch as jest.Mock).mockImplementation(
         overrideFetch({
           [URLS.llmGatewayLiveness]: () =>
@@ -732,11 +779,11 @@ describe('health-checks', () => {
         }),
       );
       const result = await checkLlmGatewayHealth();
-      expect(result.status).toBe(ServiceHealthStatus.Down);
+      expect(result.status).toBe(ServiceHealthStatus.NoConnection);
       expect(result.error).toBe('getaddrinfo ENOTFOUND gateway.us.posthog.com');
     });
 
-    it('returns down on timeout (AbortError)', async () => {
+    it('returns no-connection on timeout (AbortError)', async () => {
       const abortError = new Error('The operation was aborted.');
       abortError.name = 'AbortError';
       (global.fetch as jest.Mock).mockImplementation(
@@ -745,8 +792,89 @@ describe('health-checks', () => {
         }),
       );
       const result = await checkLlmGatewayHealth();
+      expect(result.status).toBe(ServiceHealthStatus.NoConnection);
+      expect(result.error).toBe('Request timed out after 5000ms');
+    });
+
+    it('retries on network errors and recovers if a later attempt succeeds', async () => {
+      let calls = 0;
+      (global.fetch as jest.Mock).mockImplementation(
+        overrideFetch({
+          [URLS.llmGatewayLiveness]: () => {
+            calls++;
+            if (calls < 3) {
+              return Promise.reject(new Error('ECONNRESET'));
+            }
+            return Promise.resolve(
+              new Response(LLM_GATEWAY_LIVENESS_BODY, { status: 200 }),
+            );
+          },
+        }),
+      );
+      const result = await checkLlmGatewayHealth();
+      expect(result.status).toBe(ServiceHealthStatus.Healthy);
+      expect(result.rawIndicator).toContain('attempts=3');
+      expect(calls).toBe(3);
+    });
+
+    it('retries on persistent HTTP errors and stays Down after all attempts fail', async () => {
+      let calls = 0;
+      (global.fetch as jest.Mock).mockImplementation(
+        overrideFetch({
+          [URLS.llmGatewayLiveness]: () => {
+            calls++;
+            return Promise.resolve(
+              new Response('Service Unavailable', { status: 503 }),
+            );
+          },
+        }),
+      );
+      const result = await checkLlmGatewayHealth();
       expect(result.status).toBe(ServiceHealthStatus.Down);
-      expect(result.error).toBe('Request timed out');
+      expect(calls).toBe(3);
+      expect(result.error).toContain('HTTP 503');
+      expect(result.error).toContain('attempts=3');
+    });
+
+    it('retries on transient 5xx and recovers if a later attempt succeeds', async () => {
+      let calls = 0;
+      (global.fetch as jest.Mock).mockImplementation(
+        overrideFetch({
+          [URLS.llmGatewayLiveness]: () => {
+            calls++;
+            if (calls < 3) {
+              return Promise.resolve(
+                new Response('Bad Gateway', { status: 502 }),
+              );
+            }
+            return Promise.resolve(
+              new Response(LLM_GATEWAY_LIVENESS_BODY, { status: 200 }),
+            );
+          },
+        }),
+      );
+      const result = await checkLlmGatewayHealth();
+      expect(result.status).toBe(ServiceHealthStatus.Healthy);
+      expect(result.rawIndicator).toContain('attempts=3');
+      expect(calls).toBe(3);
+    });
+
+    it('returns Down (not NoConnection) when last attempt got an HTTP response after earlier network errors', async () => {
+      let calls = 0;
+      (global.fetch as jest.Mock).mockImplementation(
+        overrideFetch({
+          [URLS.llmGatewayLiveness]: () => {
+            calls++;
+            if (calls < 3) return Promise.reject(new Error('ECONNRESET'));
+            return Promise.resolve(
+              new Response('Bad Gateway', { status: 502 }),
+            );
+          },
+        }),
+      );
+      const result = await checkLlmGatewayHealth();
+      expect(result.status).toBe(ServiceHealthStatus.Down);
+      expect(result.error).toContain('HTTP 502');
     });
   });
 
@@ -765,6 +893,34 @@ describe('health-checks', () => {
       );
     });
 
+    it('returns healthy when worker responds 302 (redirect to docs, not followed)', async () => {
+      (global.fetch as jest.Mock).mockImplementation(
+        overrideFetch({
+          [URLS.mcpLanding]: () =>
+            Promise.resolve(new Response(null, { status: 302 })),
+        }),
+      );
+      const result = await checkMcpHealth();
+      expect(result.status).toBe(ServiceHealthStatus.Healthy);
+      expect(result.rawIndicator).toBe('HTTP 302');
+      expect(global.fetch).toHaveBeenCalledWith(
+        URLS.mcpLanding,
+        expect.objectContaining({ redirect: 'manual' }),
+      );
+    });
+
+    it('returns down on 400 — only 2xx-3xx counts as up', async () => {
+      (global.fetch as jest.Mock).mockImplementation(
+        overrideFetch({
+          [URLS.mcpLanding]: () =>
+            Promise.resolve(new Response('Bad Request', { status: 400 })),
+        }),
+      );
+      const result = await checkMcpHealth();
+      expect(result.status).toBe(ServiceHealthStatus.Down);
+      expect(result.error).toContain('HTTP 400');
+    });
+
     it('returns down when worker responds 500', async () => {
       (global.fetch as jest.Mock).mockImplementation(
         overrideFetch({
@@ -776,7 +932,7 @@ describe('health-checks', () => {
       );
       const result = await checkMcpHealth();
       expect(result.status).toBe(ServiceHealthStatus.Down);
-      expect(result.error).toBe('HTTP 500');
+      expect(result.error).toContain('HTTP 500');
     });
 
     it('returns down when Cloudflare returns 522 (connection timed out)', async () => {
@@ -788,18 +944,46 @@ describe('health-checks', () => {
       );
       const result = await checkMcpHealth();
       expect(result.status).toBe(ServiceHealthStatus.Down);
-      expect(result.error).toBe('HTTP 522');
+      expect(result.error).toContain('HTTP 522');
     });
 
-    it('returns down on network failure', async () => {
+    it('returns no-connection on network failure', async () => {
       (global.fetch as jest.Mock).mockImplementation(
         overrideFetch({
           [URLS.mcpLanding]: () => Promise.reject(new Error('fetch failed')),
         }),
       );
       const result = await checkMcpHealth();
-      expect(result.status).toBe(ServiceHealthStatus.Down);
+      expect(result.status).toBe(ServiceHealthStatus.NoConnection);
       expect(result.error).toBe('fetch failed');
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // GitHub Releases (fetchEndpointHealth – skill-menu.json)
+  // -----------------------------------------------------------------------
+
+  describe('checkGithubReleasesHealth', () => {
+    it('returns healthy on a final 200 and follows redirects (GitHub 302s asset URLs even for missing assets)', async () => {
+      const result = await checkGithubReleasesHealth();
+      expect(result.status).toBe(ServiceHealthStatus.Healthy);
+      expect(result.rawIndicator).toBe('HTTP 200');
+      expect(global.fetch).toHaveBeenCalledWith(
+        URLS.githubReleasesSkillMenu,
+        expect.objectContaining({ redirect: 'follow' }),
+      );
+    });
+
+    it('returns down on 404 (release published without the asset)', async () => {
+      (global.fetch as jest.Mock).mockImplementation(
+        overrideFetch({
+          [URLS.githubReleasesSkillMenu]: () =>
+            Promise.resolve(new Response('Not Found', { status: 404 })),
+        }),
+      );
+      const result = await checkGithubReleasesHealth();
+      expect(result.status).toBe(ServiceHealthStatus.Down);
+      expect(result.error).toContain('HTTP 404');
     });
   });
 
@@ -830,6 +1014,81 @@ describe('health-checks', () => {
       for (const val of Object.values(health)) {
         expect(val.status).toBe(ServiceHealthStatus.Healthy);
       }
+    });
+
+    it('upgrades NoConnection llmGateway/mcp to Down when status page reports an outage', async () => {
+      const incidentBody = {
+        ...POSTHOG_INCIDENTIO_HEALTHY,
+        ongoing_incidents: [
+          {
+            id: 'inc1',
+            name: 'Major outage',
+            status: 'identified',
+            current_worst_impact: 'full_outage',
+            affected_components: [],
+            url: 'https://www.posthogstatus.com/incidents/test',
+            last_update_at: '2026-04-22T00:00:00Z',
+            last_update_message: 'Investigating',
+          },
+        ],
+      };
+      (global.fetch as jest.Mock).mockImplementation(
+        overrideFetch({
+          [URLS.posthogIncidentIo]: () =>
+            Promise.resolve(
+              new Response(JSON.stringify(incidentBody), { status: 200 }),
+            ),
+          [URLS.llmGatewayLiveness]: () =>
+            Promise.reject(new Error('ECONNRESET')),
+          [URLS.mcpLanding]: () => Promise.reject(new Error('ECONNRESET')),
+        }),
+      );
+
+      const health = await checkAllExternalServices();
+      expect(health.posthogOverall.status).toBe(ServiceHealthStatus.Down);
+      expect(health.llmGateway.status).toBe(ServiceHealthStatus.Down);
+      expect(health.llmGateway.error).toContain('corroborated by status page');
+      expect(health.mcp.status).toBe(ServiceHealthStatus.Down);
+    });
+
+    it('keeps llmGateway/mcp as NoConnection when posthogstatus.com itself is unreachable (the bug-fix scenario)', async () => {
+      // User on flaky wifi: every PostHog-owned URL fetch fails at the
+      // network layer, including posthogstatus.com. Previously
+      // incidentio.ts returned Degraded for fetch failures, which
+      // tricked reconciliation into upgrading the gateway probe to Down
+      // and showing the red "Ongoing service disruptions" screen — the
+      // exact false positive this PR fixes.
+      (global.fetch as jest.Mock).mockImplementation(
+        overrideFetch({
+          [URLS.posthogIncidentIo]: () =>
+            Promise.reject(new Error('ECONNRESET')),
+          [URLS.llmGatewayLiveness]: () =>
+            Promise.reject(new Error('ECONNRESET')),
+          [URLS.mcpLanding]: () => Promise.reject(new Error('ECONNRESET')),
+        }),
+      );
+
+      const health = await checkAllExternalServices();
+      expect(health.posthogOverall.status).toBe(
+        ServiceHealthStatus.NoConnection,
+      );
+      expect(health.llmGateway.status).toBe(ServiceHealthStatus.NoConnection);
+      expect(health.mcp.status).toBe(ServiceHealthStatus.NoConnection);
+    });
+
+    it('keeps llmGateway/mcp as NoConnection when status page reports no incident', async () => {
+      (global.fetch as jest.Mock).mockImplementation(
+        overrideFetch({
+          [URLS.llmGatewayLiveness]: () =>
+            Promise.reject(new Error('ETIMEDOUT')),
+          [URLS.mcpLanding]: () => Promise.reject(new Error('ETIMEDOUT')),
+        }),
+      );
+
+      const health = await checkAllExternalServices();
+      expect(health.posthogOverall.status).toBe(ServiceHealthStatus.Healthy);
+      expect(health.llmGateway.status).toBe(ServiceHealthStatus.NoConnection);
+      expect(health.mcp.status).toBe(ServiceHealthStatus.NoConnection);
     });
 
     it('fires all fetch calls in parallel', async () => {

@@ -16,6 +16,7 @@ import { z } from 'zod';
 import { logToFile } from '@utils/debug';
 import { analytics } from '@utils/analytics';
 import { skillTmpPath } from '@utils/paths';
+import { writeJsonAtomic, makeMutex } from '@utils/atomic-ledger';
 import type { PackageManagerDetector } from './detection/package-manager';
 import {
   AUDIT_CHECKS_FILE,
@@ -25,6 +26,10 @@ import {
 } from './programs/audit/types';
 import type { WizardAskBridge } from './wizard-ask-bridge';
 import { createSecretVault, type SecretVault } from './secret-vault';
+import {
+  buildOrchestratorTools,
+  type OrchestratorToolsContext,
+} from './programs/orchestrator/queue-tools';
 
 // ---------------------------------------------------------------------------
 // SDK dynamic import (ESM module loaded once, cached)
@@ -44,8 +49,29 @@ async function getSDKModule(): Promise<any> {
 
 export type SkillEntry = { id: string; name: string; downloadUrl: string };
 
+/**
+ * Entry in the wizard's runtime CLI registry. Mirrors the shape context-mill
+ * publishes under `cliEntries` inside `skill-menu.json`. The wizard uses these
+ * to register skill-backed subcommands at runtime instead of from a baked
+ * build-time snapshot.
+ */
+export type CliEntry = {
+  skillId: string;
+  role: 'command' | 'skill' | 'internal';
+  command?: string;
+  parentCommand?: string;
+  default?: boolean;
+  displayName: string;
+  description: string;
+};
+
 export interface SkillMenu {
   categories: Record<string, SkillEntry[]>;
+  /**
+   * Skills exposed as CLI commands. Optional because context-mill releases
+   * older than the runtime-resolver cutover don't emit this field.
+   */
+  cliEntries?: CliEntry[];
 }
 
 // ---------------------------------------------------------------------------
@@ -202,6 +228,14 @@ export interface WizardToolsOptions {
    * (e.g. in unit tests), a fresh vault is created internally.
    */
   secretVault?: SecretVault;
+
+  /**
+   * Orchestrator queue context. Present only when the `wizard-orchestrator`
+   * flag routes the run to the orchestrator; when set, the orchestrator tools
+   * (enqueue_task, complete_task, read_handoffs) are registered. Absent on the
+   * linear path.
+   */
+  orchestrator?: OrchestratorToolsContext;
 }
 
 /** Default per-run cap on wizard_ask calls when no override is provided. */
@@ -368,14 +402,9 @@ const auditUpdateSchema = z.object({
   details: z.string().optional(),
 });
 
-/**
- * Atomically write JSON: write to .tmp then rename. The rename is what bumps
- * the file's mtime, which is what the UI's file watcher polls on.
- */
+/** Atomically write the audit ledger. Thin typed wrapper over writeJsonAtomic. */
 function writeLedgerAtomic(targetPath: string, checks: AuditCheck[]): void {
-  const tmpPath = `${targetPath}.tmp`;
-  fs.writeFileSync(tmpPath, JSON.stringify(checks, null, 2), 'utf8');
-  fs.renameSync(tmpPath, targetPath);
+  writeJsonAtomic(targetPath, checks);
 }
 
 /**
@@ -474,19 +503,6 @@ function appendAuditChecksToLedger(
   return { ok: true, added: additions.length };
 }
 
-/**
- * Single async mutex shared by audit tools — guarantees a read-modify-write
- * cycle on the ledger is atomic across concurrent tool calls (e.g. future subagents).
- */
-function makeMutex() {
-  let chain: Promise<unknown> = Promise.resolve();
-  return async function run<T>(fn: () => Promise<T> | T): Promise<T> {
-    const next = chain.then(() => fn());
-    chain = next.catch(() => undefined);
-    return next;
-  };
-}
-
 // ---------------------------------------------------------------------------
 // Server factory
 // ---------------------------------------------------------------------------
@@ -505,6 +521,7 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
     askBridge,
     askMaxQuestions = DEFAULT_ASK_MAX_QUESTIONS,
     secretVault = createSecretVault(),
+    orchestrator,
   } = options;
   const sdk = await getSDKModule();
   const { tool, createSdkMcpServer } = sdk;
@@ -1104,6 +1121,10 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
 
   // -- Assemble server ------------------------------------------------------
 
+  const orchestratorTools = orchestrator
+    ? buildOrchestratorTools(tool, orchestrator)
+    : [];
+
   return createSdkMcpServer({
     name: SERVER_NAME,
     version: '1.0.0',
@@ -1117,6 +1138,7 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
       auditAddChecks,
       auditResolveChecks,
       wizardAsk,
+      ...orchestratorTools,
     ],
   });
 }
@@ -1136,6 +1158,9 @@ export const WIZARD_TOOL_NAMES = {
   auditAddChecks: `mcp__${SERVER_NAME}__audit_add_checks`,
   auditResolveChecks: `mcp__${SERVER_NAME}__audit_resolve_checks`,
   wizardAsk: `mcp__${SERVER_NAME}__wizard_ask`,
+  enqueueTask: `mcp__${SERVER_NAME}__enqueue_task`,
+  completeTask: `mcp__${SERVER_NAME}__complete_task`,
+  readHandoffs: `mcp__${SERVER_NAME}__read_handoffs`,
 } as const;
 
 // ---------------------------------------------------------------------------

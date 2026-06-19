@@ -22,6 +22,7 @@ export const errorTrackingUploadSourceMapsConfig: ProgramConfig = {
   command: 'upload-source-maps',
   description: 'Upload source maps to PostHog Error Tracking',
   id: 'error-tracking-upload-source-maps',
+  requiresAi: true,
   steps: ERROR_TRACKING_UPLOAD_SOURCE_MAPS_PROGRAM,
   reportFile: REPORT_FILE,
   getContentBlocks,
@@ -49,6 +50,12 @@ export const errorTrackingUploadSourceMapsConfig: ProgramConfig = {
       spinnerMessage: 'Wiring up source maps...',
       estimatedDurationMinutes: 3,
       abortCases: SOURCE_MAPS_ABORT_CASES,
+      // The flow parks on wizard_ask while the user does slow work — create
+      // a personal API key in the browser (STEP 1), or run a production
+      // build, trigger the test error, and check Error Tracking (STEP 8).
+      // The 5-minute default cancels the question mid-task and the agent
+      // wraps up to the outro, so give these answers half an hour.
+      askTimeoutMs: 30 * 60 * 1000,
 
       customPrompt: (ctx) => {
         if (!skillId || !variant) {

@@ -49,7 +49,11 @@ export async function detectPostHogIntegration(
     }
 
     ctx.setFrameworkConfig(detectedIntegration, config);
-    session.skillId = detectedIntegration;
+    // Must go through the store setter: setFrameworkConfig (above) calls
+    // nanostore setKey, which replaces the session with a shallow copy —
+    // a direct `session.skillId = ...` here would write to the stale
+    // pre-copy object and the live session would never see it.
+    ctx.setSkillId(detectedIntegration);
 
     if (!session.detectedFrameworkLabel) {
       ctx.setDetectedFramework(config.metadata.name);

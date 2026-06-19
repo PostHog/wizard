@@ -42,38 +42,11 @@ const MODEL = 'claude-sonnet-4-6';
 // telemetry on average turn counts per prompt.
 const MAX_TURNS = 30;
 
-function resolveMcpUrl(host: string): string {
-  const override = runtimeEnv('MCP_URL');
-  if (override) return override;
-  // Parse the actual hostname rather than substring-matching the raw
-  // input. `host.includes('eu.posthog.com')` would let arbitrary URLs
-  // like `https://evil.eu.posthog.com.attacker.com` or
-  // `https://useu.posthog.commerce` route to the EU MCP endpoint
-  // (CodeQL: incomplete-url-substring-sanitization). Parsing into a
-  // hostname and checking exact match / trusted subdomain blocks both.
-  const hostname = parseHostname(host);
-  const isEu =
-    hostname === 'eu.posthog.com' || hostname.endsWith('.eu.posthog.com');
-  return isEu
-    ? 'https://mcp-eu.posthog.com/mcp'
-    : 'https://mcp.posthog.com/mcp';
-}
-
-/**
- * Normalize a host string into a hostname suitable for trust checks.
- * Accepts either a full URL (`https://us.posthog.com`) or a bare host
- * (`us.posthog.com`). Returns the hostname lowercased, or the trimmed
- * input lowercased if parsing fails (defensive fallback so a malformed
- * value still resolves to the safer-default US endpoint).
- */
-function parseHostname(raw: string): string {
-  const trimmed = raw.trim().toLowerCase();
-  try {
-    const withScheme = trimmed.includes('://') ? trimmed : `https://${trimmed}`;
-    return new URL(withScheme).hostname.toLowerCase();
-  } catch {
-    return trimmed;
-  }
+// One MCP url for every region: the server resolves the user's region from
+// the bearer token, so the EU subdomain (a Claude Code OAuth workaround) is
+// not needed here.
+function resolveMcpUrl(): string {
+  return runtimeEnv('MCP_URL') || 'https://mcp.posthog.com/mcp';
 }
 
 /**
@@ -245,7 +218,7 @@ export async function* runMcpPromptViaSdk(args: {
       once: true,
     });
 
-  const mcpUrl = resolveMcpUrl(credentials.host);
+  const mcpUrl = resolveMcpUrl();
   logToFile(
     `[runMcpPromptViaSdk] mcpUrl=${mcpUrl} model=${MODEL} resume=${
       resumeSessionId ?? '(none)'

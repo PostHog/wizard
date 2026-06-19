@@ -2,6 +2,7 @@ import { POSTHOG_DOCS_URL } from '@lib/constants';
 import { getUI, setUI } from '@ui';
 import { LoggingUI } from '@ui/logging-ui';
 import type { ProgramConfig } from '@lib/programs/program-step';
+import { analytics } from '@utils/analytics';
 import { resolveNoTelemetry } from './resolve-no-telemetry';
 
 /**
@@ -39,6 +40,9 @@ export function runWizardCI(
 ): void {
   setUI(new LoggingUI());
   validateCiOptions(options);
+  // Every CI entry point routes through here — upgrade the non-prod
+  // build tag from 'dev' to 'ci'.
+  analytics.setTag('build', 'ci');
 
   void (async () => {
     const path = await import('path');
@@ -93,6 +97,11 @@ export function runWizardCI(
           },
           setFrameworkConfig: () => undefined,
           setDetectedFramework: () => undefined,
+          // CI session is a plain object (no nanostore copy-on-write),
+          // so direct assignment is safe here.
+          setSkillId: (skillId: string | null) => {
+            session.skillId = skillId;
+          },
           setUnsupportedVersion: () => undefined,
           addDiscoveredFeature: () => undefined,
           setDetectionComplete: () => undefined,

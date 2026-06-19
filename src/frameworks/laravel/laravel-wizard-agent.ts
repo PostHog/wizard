@@ -28,7 +28,6 @@ export const LARAVEL_AGENT_CONFIG: FrameworkConfig<LaravelContext> = {
   metadata: {
     name: 'Laravel',
     integration: Integration.laravel,
-    beta: true,
     docsUrl: 'https://posthog.com/docs/libraries/php',
     unsupportedVersionDocsUrl: 'https://posthog.com/docs/libraries/php',
     gatherContext: async (options: WizardRunOptions) => {
