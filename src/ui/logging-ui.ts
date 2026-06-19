@@ -260,6 +260,10 @@ export class LoggingUI implements WizardUI {
     // No-op in CI mode
   }
 
+  setStage(_stage: string): void {
+    // No-op in CI mode
+  }
+
   setNotebookUrl(_url: string): void {
     // No-op in CI mode
   }
