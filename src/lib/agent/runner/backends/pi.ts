@@ -53,6 +53,22 @@ function buildGatewayHeaders(
   return headers;
 }
 
+/** Pull plain text out of a pi AgentMessage (content is text/image blocks). */
+function extractText(message: unknown): string {
+  const content = (message as { content?: unknown })?.content;
+  if (typeof content === 'string') return content;
+  if (Array.isArray(content)) {
+    return content
+      .filter((c): c is { type: string; text: string } => {
+        const block = c as { type?: string; text?: unknown };
+        return block?.type === 'text' && typeof block.text === 'string';
+      })
+      .map((c) => c.text)
+      .join('');
+  }
+  return '';
+}
+
 export const piBackend: AgentBackend = {
   name: 'pi',
 
@@ -140,10 +156,28 @@ export const piBackend: AgentBackend = {
       // stay out of the static module graph so CommonJS unit tests can load the
       // backend seam without parsing it.
       const { createWizardPiTools } = await import('./pi-tools');
-      const customTools = createWizardPiTools({
-        workingDirectory: session.installDir,
-        skillsBaseUrl: boot.skillsBaseUrl,
-      });
+      const { createWizardPiTaskTools } = await import('./pi-tasks');
+      const { createDispatchAgentTool } = await import('./pi-subagent');
+      const customTools = [
+        ...createWizardPiTools({
+          workingDirectory: session.installDir,
+          skillsBaseUrl: boot.skillsBaseUrl,
+        }),
+        // Task/todo tools (#526): render the todo list live in the TUI, parity
+        // with the anthropic path.
+        ...createWizardPiTaskTools().tools,
+        // Controlled subagent dispatch (#526): a nested fenced session with a
+        // read-only toolset and no dispatch_agent of its own, so it can't
+        // escape the fence or recurse.
+        createDispatchAgentTool({
+          model,
+          modelRegistry: registry,
+          cwd: session.installDir,
+          agentDir: getAgentDir(),
+          securityFactory: security.factory as (pi: unknown) => void,
+          sdk: { createAgentSession, DefaultResourceLoader, SessionManager },
+        }),
+      ];
 
       const { session: agentSession } = await createAgentSession({
         model,
@@ -154,21 +188,33 @@ export const piBackend: AgentBackend = {
         customTools,
       });
 
-      // Map pi events onto the run spinner + the log file. Markers + todos are
-      // a follow-up (the shared stream→TUI bridge); v1 keeps the spinner alive
-      // and records tool I/O to the log.
+      // Map pi events onto the run spinner + the log file, mirroring the
+      // anthropic path's log shape (assistant turns + tool I/O) and driving the
+      // single run spinner with one stable status at a time (no overlap).
       const unsubscribe = agentSession.subscribe((event) => {
         switch (event.type) {
+          case 'message_end': {
+            const assistant = extractText(event.message).trim();
+            if (assistant) {
+              logToFile(`[pi] assistant: ${assistant.slice(0, 1000)}`);
+            }
+            break;
+          }
           case 'tool_execution_start': {
             const args = JSON.stringify(event.args ?? {}).slice(0, 200);
             logToFile(`[pi] → ${event.toolName} ${args}`);
-            spinner.message(`Running ${event.toolName}…`);
+            // Don't surface raw tool names in the spinner — the anthropic path
+            // doesn't, and it reads as noise. The Task panel (syncTodos) is the
+            // visible progress, matching the anthropic presentation.
             break;
           }
           case 'tool_execution_end': {
             if (event.isError) {
               logToFile(
-                `[pi] ✗ ${event.toolName}: ${String(event.result).slice(0, 300)}`,
+                `[pi] ✗ ${event.toolName}: ${String(event.result).slice(
+                  0,
+                  300,
+                )}`,
               );
             }
             break;
