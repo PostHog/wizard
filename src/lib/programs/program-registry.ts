@@ -20,7 +20,7 @@ import { posthogDoctorConfig } from './posthog-doctor/index.js';
 import { webAnalyticsDoctorConfig } from './web-analytics-doctor/index.js';
 import { migrationConfig } from './migration/index.js';
 import { errorTrackingUploadSourceMapsConfig } from './error-tracking-upload-source-maps/index.js';
-import { productAutonomyConfig } from './product-autonomy/index.js';
+import { selfDrivingConfig } from './self-driving/index.js';
 import { AGENT_SKILL_STEPS } from './agent-skill/index.js';
 import { getContentBlocks as agentSkillContentBlocks } from './agent-skill/content/index.js';
 import {
@@ -69,7 +69,7 @@ export const PROGRAM_REGISTRY = [
   posthogDoctorConfig,
   webAnalyticsDoctorConfig,
   migrationConfig,
-  productAutonomyConfig,
+  selfDrivingConfig,
   agentSkillConfig,
   mcpAddConfig,
   mcpRemoveConfig,
@@ -91,7 +91,7 @@ export const Program = {
   EventsAudit: eventsAuditConfig.id,
   PosthogDoctor: posthogDoctorConfig.id,
   WebAnalyticsDoctor: webAnalyticsDoctorConfig.id,
-  ProductAutonomy: productAutonomyConfig.id,
+  SelfDriving: selfDrivingConfig.id,
   AgentSkill: agentSkillConfig.id,
   McpAdd: mcpAddConfig.id,
   McpRemove: mcpRemoveConfig.id,

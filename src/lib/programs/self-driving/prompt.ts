@@ -3,13 +3,13 @@ import type { PromptContext } from '@lib/agent/agent-runner';
 import { getUiHostFromHost } from '@utils/urls';
 
 /**
- * Build the product-autonomy run prompt. The installed
- * `product-autonomy-setup` skill is the source of truth for the HOW of
+ * Build the self-driving run prompt. The installed
+ * `self-driving-setup` skill is the source of truth for the HOW of
  * every step (which MCP tools to call, which sources/scouts apply, how
  * to verify); this prompt carries the order, the wizard-specific
  * mechanics (wizard_ask, abort signals), and the project URLs.
  */
-export function buildProductAutonomyPrompt(ctx: PromptContext): string {
+export function buildSelfDrivingPrompt(ctx: PromptContext): string {
   const uiHost = getUiHostFromHost(ctx.host).replace(/\/$/, '');
   const projectBase = `${uiHost}/project/${ctx.projectId}`;
   const integrationsSettingsUrl = `${projectBase}/settings/environment-integrations`;
@@ -75,7 +75,7 @@ Follow these steps IN ORDER. Do not skip or reorder.
 STEP 1 — Check Self-driving access. (skill: "Check access")
    Probe the Signals API as the skill describes. If the API is not
    available for this project (permission or not-found errors), emit
-   ${AgentSignals.ABORT} product autonomy is not available for this project
+   ${AgentSignals.ABORT} self-driving is not available for this project
    and halt.
 
 STEP 2 — Read project and current Signals state. (skill: "Read context")

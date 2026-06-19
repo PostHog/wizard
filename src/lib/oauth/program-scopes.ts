@@ -120,7 +120,7 @@ export const AGENT_SKILL_SCOPE_ADDITIONS = [
 ] as const;
 
 /**
- * Extra scopes the product-autonomy program needs on top of
+ * Extra scopes the self-driving program needs on top of
  * `WIZARD_OAUTH_SCOPES`. All consumed by the PostHog MCP tools the
  * agent drives during the run:
  *   • task:read / task:write — the signal source config API
@@ -154,7 +154,7 @@ export const AGENT_SKILL_SCOPE_ADDITIONS = [
  *     bodies are never edited. NOT yet in the production OAuth app
  *     ceiling — must be added there before launch.
  */
-export const PRODUCT_AUTONOMY_SCOPE_ADDITIONS = [
+export const SELF_DRIVING_SCOPE_ADDITIONS = [
   'task:read',
   'task:write',
   'integration:read',
@@ -200,7 +200,7 @@ const PROGRAM_SCOPE_ADDITIONS: Partial<Record<ProgramId, readonly string[]>> = {
   // ever changes, this line will fail to type-check.
   'mcp-tutorial': MCP_TUTORIAL_SCOPE_ADDITIONS,
   'agent-skill': AGENT_SKILL_SCOPE_ADDITIONS,
-  'self-driving': PRODUCT_AUTONOMY_SCOPE_ADDITIONS,
+  'self-driving': SELF_DRIVING_SCOPE_ADDITIONS,
   'posthog-integration': CONNECT_SLACK_SCOPE_ADDITIONS,
   slack: CONNECT_SLACK_SCOPE_ADDITIONS,
 };

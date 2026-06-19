@@ -1,12 +1,12 @@
 /**
- * ProductAutonomyIntroScreen — Welcome screen for the product-autonomy flow.
+ * SelfDrivingIntroScreen — Welcome screen for the self-driving flow.
  *
  * Composes IntroScreenLayout with prerequisite-detection state:
  *   - Detection succeeded: explains what Self-driving turns on, continue/cancel
  *   - Detection failed: shows the error via errorView + exit prompt
  *
  * Reads `frameworkContext.detectError` set by
- * detectProductAutonomyPrerequisites().
+ * detectSelfDrivingPrerequisites().
  */
 
 import { Box, Text } from 'ink';
@@ -14,15 +14,15 @@ import { useState, useSyncExternalStore } from 'react';
 import type { WizardStore } from '@ui/tui/store';
 import { PickerMenu } from '@ui/tui/primitives/index';
 import { IntroScreenLayout } from './IntroScreenLayout.js';
-import type { ProductAutonomyDetectError } from '@lib/programs/product-autonomy/index';
+import type { SelfDrivingDetectError } from '@lib/programs/self-driving/index';
 
-interface ProductAutonomyIntroScreenProps {
+interface SelfDrivingIntroScreenProps {
   store: WizardStore;
 }
 
-export const ProductAutonomyIntroScreen = ({
+export const SelfDrivingIntroScreen = ({
   store,
-}: ProductAutonomyIntroScreenProps) => {
+}: SelfDrivingIntroScreenProps) => {
   useSyncExternalStore(
     (cb) => store.subscribe(cb),
     () => store.getSnapshot(),
@@ -32,7 +32,7 @@ export const ProductAutonomyIntroScreen = ({
 
   const { session } = store;
   const detectError = session.frameworkContext.detectError as
-    | ProductAutonomyDetectError
+    | SelfDrivingDetectError
     | undefined;
 
   const subtitle = (
@@ -135,7 +135,7 @@ export const ProductAutonomyIntroScreen = ({
   );
 };
 
-const DetectErrorBody = ({ error }: { error: ProductAutonomyDetectError }) => {
+const DetectErrorBody = ({ error }: { error: SelfDrivingDetectError }) => {
   switch (error.kind) {
     case 'bad-directory': {
       const reasonText = {

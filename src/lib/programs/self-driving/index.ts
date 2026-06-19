@@ -5,12 +5,12 @@ import type { ProgramRun } from '@lib/agent/agent-runner';
 import { OutroKind } from '@lib/wizard-session';
 import { getUiHostFromHost } from '@utils/urls';
 import { createSkillProgram } from '../agent-skill/index.js';
-import { PRODUCT_AUTONOMY_PROGRAM } from './steps.js';
-import { PRODUCT_AUTONOMY_ABORT_CASES } from './detect.js';
-import { buildProductAutonomyPrompt } from './prompt.js';
+import { SELF_DRIVING_PROGRAM } from './steps.js';
+import { SELF_DRIVING_ABORT_CASES } from './detect.js';
+import { buildSelfDrivingPrompt } from './prompt.js';
 import { getTips } from './content/tips.js';
 
-export const PRODUCT_AUTONOMY_SKILL_ID = 'product-autonomy-setup';
+export const SELF_DRIVING_SKILL_ID = 'self-driving-setup';
 const REPORT_FILE = 'posthog-self-driving-report.md';
 const DOCS_URL = 'https://posthog.com/docs';
 const SUCCESS_MESSAGE =
@@ -26,12 +26,7 @@ const WIZARD_MARKER = '.posthog-wizard';
  * guarded: only directories the wizard installed are touched.
  */
 async function removeInstalledSkill(installDir: string): Promise<void> {
-  const skillDir = join(
-    installDir,
-    '.claude',
-    'skills',
-    PRODUCT_AUTONOMY_SKILL_ID,
-  );
+  const skillDir = join(installDir, '.claude', 'skills', SELF_DRIVING_SKILL_ID);
   try {
     await access(join(skillDir, WIZARD_MARKER));
   } catch {
@@ -41,15 +36,15 @@ async function removeInstalledSkill(installDir: string): Promise<void> {
 }
 
 const run: ProgramRun = {
-  skillId: PRODUCT_AUTONOMY_SKILL_ID,
-  integrationLabel: PRODUCT_AUTONOMY_SKILL_ID,
-  customPrompt: buildProductAutonomyPrompt,
+  skillId: SELF_DRIVING_SKILL_ID,
+  integrationLabel: SELF_DRIVING_SKILL_ID,
+  customPrompt: buildSelfDrivingPrompt,
   successMessage: SUCCESS_MESSAGE,
   reportFile: REPORT_FILE,
   docsUrl: DOCS_URL,
   spinnerMessage: 'Setting up PostHog Self-driving...',
   estimatedDurationMinutes: 10,
-  abortCases: PRODUCT_AUTONOMY_ABORT_CASES,
+  abortCases: SELF_DRIVING_ABORT_CASES,
   // The flow legitimately needs several interactions (AI approval,
   // GitHub connect + verify, issue-tracker picks, the scout-tailoring
   // proposal), so raise the wizard_ask budget a little above the
@@ -87,29 +82,29 @@ const run: ProgramRun = {
   },
 };
 
-export const productAutonomyConfig: ProgramConfig = {
+export const selfDrivingConfig: ProgramConfig = {
   ...createSkillProgram({
-    skillId: PRODUCT_AUTONOMY_SKILL_ID,
+    skillId: SELF_DRIVING_SKILL_ID,
     command: 'self-driving',
     id: 'self-driving',
     description: 'Set up PostHog Self-driving for this project',
-    integrationLabel: PRODUCT_AUTONOMY_SKILL_ID,
+    integrationLabel: SELF_DRIVING_SKILL_ID,
     successMessage: SUCCESS_MESSAGE,
     reportFile: REPORT_FILE,
     docsUrl: DOCS_URL,
     spinnerMessage: 'Setting up PostHog Self-driving...',
     estimatedDurationMinutes: 10,
     requires: ['posthog-integration'],
-    abortCases: PRODUCT_AUTONOMY_ABORT_CASES,
+    abortCases: SELF_DRIVING_ABORT_CASES,
   }),
-  steps: PRODUCT_AUTONOMY_PROGRAM,
+  steps: SELF_DRIVING_PROGRAM,
   run,
   getTips,
 };
 
-export { PRODUCT_AUTONOMY_PROGRAM } from './steps.js';
+export { SELF_DRIVING_PROGRAM } from './steps.js';
 export {
-  detectProductAutonomyPrerequisites,
-  PRODUCT_AUTONOMY_ABORT_CASES,
-  type ProductAutonomyDetectError,
+  detectSelfDrivingPrerequisites,
+  SELF_DRIVING_ABORT_CASES,
+  type SelfDrivingDetectError,
 } from './detect.js';

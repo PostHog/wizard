@@ -1,10 +1,11 @@
 /**
- * Product autonomy prerequisite detection + abort vocabulary.
+ * Self-driving prerequisite detection + abort vocabulary.
  *
  * The only precondition that can be verified before auth is local: the
  * PostHog setup report must exist, proving the base posthog-integration
  * program ran. The beta gates (the `product-autonomy` access flag and
- * `signals-scout` enrollment) are PostHog-internal flags with no
+ * `signals-scout` enrollment — PostHog-side flag names, unchanged by the
+ * wizard-side "self-driving" rename) are PostHog-internal flags with no
  * customer-facing read API, so the agent probes the Signals API at the
  * start of the run instead and emits a structured `[ABORT]` when the
  * product is not available for the team.
@@ -20,7 +21,7 @@ import { SETUP_REPORT_FILE } from '@lib/programs/posthog-integration/index';
  * Structured detection errors. The intro screen renders each kind into
  * JSX — keeps error data separate from presentation.
  */
-export type ProductAutonomyDetectError =
+export type SelfDrivingDetectError =
   | {
       kind: 'bad-directory';
       path: string;
@@ -29,14 +30,14 @@ export type ProductAutonomyDetectError =
   | { kind: 'no-setup-report'; reportFile: string };
 
 /**
- * `[ABORT] <reason>` cases the product-autonomy skill can emit. The
+ * `[ABORT] <reason>` cases the self-driving skill can emit. The
  * reason strings are part of the skill contract — the context-mill
- * `product-autonomy-setup` skill emits these exact strings.
+ * `self-driving-setup` skill emits these exact strings.
  */
-export const PRODUCT_AUTONOMY_ABORT_CASES: AbortCase[] = [
+export const SELF_DRIVING_ABORT_CASES: AbortCase[] = [
   {
-    // Skill emits: [ABORT] product autonomy is not available for this project
-    match: /^product autonomy is not available for this project$/i,
+    // Skill emits: [ABORT] self-driving is not available for this project
+    match: /^self-driving is not available for this project$/i,
     message: 'PostHog Self-driving is not available for this project',
     body:
       'Self-driving is in beta and is enabled per ' +
@@ -89,14 +90,14 @@ export const PRODUCT_AUTONOMY_ABORT_CASES: AbortCase[] = [
 
 /**
  * Verify `session.installDir` is a readable directory containing the
- * PostHog setup report. Writes a `ProductAutonomyDetectError` to
+ * PostHog setup report. Writes a `SelfDrivingDetectError` to
  * frameworkContext on failure — the intro screen renders it and blocks.
  */
-export function detectProductAutonomyPrerequisites(
+export function detectSelfDrivingPrerequisites(
   session: WizardSession,
   setFrameworkContext: (key: string, value: unknown) => void,
 ): void {
-  const fail = (error: ProductAutonomyDetectError) =>
+  const fail = (error: SelfDrivingDetectError) =>
     setFrameworkContext('detectError', error);
 
   const installDir = session.installDir;

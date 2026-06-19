@@ -1,5 +1,5 @@
 /**
- * Product autonomy program step list.
+ * Self-driving program step list.
  *
  * detect → intro → health-check → auth → run → outro. No keep-skills
  * step: the setup skill is transient orchestration knowledge the user
@@ -9,9 +9,9 @@
 import type { ProgramStep } from '@lib/programs/program-step';
 import { RunPhase } from '@lib/wizard-session';
 import { HEALTH_CHECK_STEP } from '@lib/programs/shared/health-check-step';
-import { detectProductAutonomyPrerequisites } from './detect.js';
+import { detectSelfDrivingPrerequisites } from './detect.js';
 
-export const PRODUCT_AUTONOMY_PROGRAM: ProgramStep[] = [
+export const SELF_DRIVING_PROGRAM: ProgramStep[] = [
   {
     id: 'detect',
     label: 'Detecting prerequisites',
@@ -20,12 +20,12 @@ export const PRODUCT_AUTONOMY_PROGRAM: ProgramStep[] = [
     // and writes a detectError to frameworkContext for the intro
     // screen to render when it doesn't.
     onReady: (ctx) =>
-      detectProductAutonomyPrerequisites(ctx.session, ctx.setFrameworkContext),
+      detectSelfDrivingPrerequisites(ctx.session, ctx.setFrameworkContext),
   },
   {
     id: 'intro',
     label: 'Welcome',
-    screenId: 'product-autonomy-intro',
+    screenId: 'self-driving-intro',
     gate: (session) => session.setupConfirmed,
   },
   HEALTH_CHECK_STEP,

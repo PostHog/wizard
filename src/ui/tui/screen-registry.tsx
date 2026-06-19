@@ -25,7 +25,7 @@ import { MigrationIntroScreen } from './screens/MigrationIntroScreen.js';
 import { SourceMapsIntroScreen } from './screens/SourceMapsIntroScreen.js';
 import { SourceMapsOutroScreen } from './screens/SourceMapsOutroScreen.js';
 import { AgentSkillIntroScreen } from './screens/AgentSkillIntroScreen.js';
-import { ProductAutonomyIntroScreen } from './screens/ProductAutonomyIntroScreen.js';
+import { SelfDrivingIntroScreen } from './screens/SelfDrivingIntroScreen.js';
 import { AuditIntroScreen } from './screens/audit/AuditIntroScreen.js';
 import { AuditRunScreen } from './screens/audit/AuditRunScreen.js';
 import { AuditOutroScreen } from './screens/audit/AuditOutroScreen.js';
@@ -80,9 +80,7 @@ export function createScreens(
     [ScreenId.SourceMapsOutro]: <SourceMapsOutroScreen store={store} />,
     [ScreenId.MigrationIntro]: <MigrationIntroScreen store={store} />,
     [ScreenId.AgentSkillIntro]: <AgentSkillIntroScreen store={store} />,
-    [ScreenId.ProductAutonomyIntro]: (
-      <ProductAutonomyIntroScreen store={store} />
-    ),
+    [ScreenId.SelfDrivingIntro]: <SelfDrivingIntroScreen store={store} />,
     [ScreenId.AuditIntro]: <AuditIntroScreen store={store} />,
     [ScreenId.AuditRun]: <AuditRunScreen store={store} />,
     [ScreenId.AuditOutro]: <AuditOutroScreen store={store} />,

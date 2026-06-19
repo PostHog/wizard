@@ -1,6 +1,6 @@
-# Product Autonomy — Wizard Program Architecture
+# Self-driving — Wizard Program Architecture
 
-How the `product-autonomy` program works: the program that runs on `npx @posthog/wizard
+How the `self-driving` program works: the program that runs on `npx @posthog/wizard
 self-driving` and sets up **PostHog Signals** for a project. It spans **three repos**; the
 load-bearing idea is the **division of labor** (§1) — the wizard owns *order + mechanics +
 URLs*, context-mill owns *how each step is done*, posthog owns *the backend and the gating*.
@@ -20,9 +20,9 @@ prefix are in `wizard`; cross-repo paths are prefixed `posthog/…` / `context-m
 
 | Need | Go to |
 |---|---|
-| The ordered steps | `src/lib/programs/product-autonomy/prompt.ts` |
-| What each step *does* | `context-mill/context/skills/product-autonomy/references/*.md` |
-| Program registration / lifecycle | `src/lib/programs/product-autonomy/index.ts` |
+| The ordered steps | `src/lib/programs/self-driving/prompt.ts` |
+| What each step *does* | `context-mill/context/skills/self-driving/references/*.md` |
+| Program registration / lifecycle | `src/lib/programs/self-driving/index.ts` |
 | `wizard_ask` / `.env` tools | `src/lib/wizard-tools.ts`, `src/lib/wizard-ask-bridge.ts` |
 | OAuth scopes (+ prod ceiling) | `src/lib/oauth/program-scopes.ts` (§3, §7) |
 | Signals models / MCP / sync | `posthog/products/signals/backend/…` (§5) |
@@ -38,7 +38,7 @@ prefix are in `wizard`; cross-repo paths are prefixed `posthog/…` / `context-m
   YARA hooks know nothing about Signals. The only Signals-specific code here is the program's
   **prompt** (`prompt.ts` — the *order* + mechanics), its **config/lifecycle** (`index.ts`),
   its **abort vocabulary** (`detect.ts`), and its **OAuth scope additions** (`program-scopes.ts`).
-- **`context-mill` (the HOW).** The installed `product-autonomy-setup` skill is the source of
+- **`context-mill` (the HOW).** The installed `self-driving-setup` skill is the source of
   truth for *how* each step runs — tools, recipes, verification. The wizard ships only the skill
   **ID**; the body is fetched at runtime and can change independently of the wizard release.
 - **`posthog` (backend + gating).** The models the agent writes (`SignalSourceConfig`,
@@ -59,7 +59,7 @@ matching context-mill file carries the HOW.
 
 **Step backbone (expected action, one line each):**
 
-1. **Check access** — probe the Signals API; if it's not available for the team, abort cleanly (`[ABORT] product autonomy is not available for this project`).
+1. **Check access** — probe the Signals API; if it's not available for the team, abort cleanly (`[ABORT] self-driving is not available for this project`).
 2. **Read context** — build an evidence picture of which products are in use (setup report + `signals-scout-project-profile-get` + cheap usage probes + a light repo scan); read-only.
 3. **AI approval** — no-op: org consent is enforced upstream, so just record "approved".
 4. **Connect GitHub** — required; if no `github` integration, send the user through the GitHub App install (one-click authorize deep-link) and re-verify; abort if declined.
@@ -73,7 +73,7 @@ The table below adds the skill reference and the tool/MCP surface for each.
 
 | # | Step | Skill ref / file | Tools · surface |
 |---|---|---|---|
-| 1 | Check access | `1-check-access.md` | Probe `inbox-source-configs-list` (no readable beta flag — the API *is* the probe). Fail → `[ABORT] product autonomy is not available for this project`. |
+| 1 | Check access | `1-check-access.md` | Probe `inbox-source-configs-list` (no readable beta flag — the API *is* the probe). Fail → `[ABORT] self-driving is not available for this project`. |
 | 2 | Read project & Signals state | `2-read-context.md` | `./posthog-setup-report.md` + `signals-scout-project-profile-get` + cheap usage probes. Prompt opt-ins are authoritative ("repo evidence rules a product IN, never OUT"). |
 | 3 | Confirm AI data processing approval | `3-ai-approval.md` | Now a near no-op: org consent is enforced **upstream** by the base wizard's AI opt-in gate (§6), so it's guaranteed granted here — the agent just records "approved"; no `wizard_ask`, no abort. |
 | 4 | Connect GitHub (REQUIRED) | `4-github.md` | `integrations-list` for `kind:"github"`; else `wizard_ask` → `/settings/environment-integrations`, re-verify. Can't → `[ABORT] github connection declined`. |
@@ -84,28 +84,28 @@ The table below adds the skill reference and the tool/MCP surface for each.
 | 9 | Write report & hand off | `8-report.md` | Write `./posthog-self-driving-report.md`; findings appear in the inbox in ~30 min. |
 
 **Abort contract:** the skill emits exact `[ABORT] <reason>` strings; the wizard matches them
-against `PRODUCT_AUTONOMY_ABORT_CASES` (`detect.ts`) for tailored error outros. The reason strings
+against `SELF_DRIVING_ABORT_CASES` (`detect.ts`) for tailored error outros. The reason strings
 are a cross-repo contract — change one, change both repos.
 
 ---
 
 ## 3. Wizard internals
 
-**Program definition** (`src/lib/programs/product-autonomy/`, five files):
+**Program definition** (`src/lib/programs/self-driving/`, five files):
 `index.ts` (config + lifecycle), `prompt.ts` (the 9 steps + mechanics + project URLs),
 `detect.ts` (prerequisite check + abort vocabulary), `steps.ts` (TUI screen sequence
 `detect → intro → health-check → auth → run → outro`), and `content/tips.ts` (the
 program-owned `Tips`-sidebar copy that defines signal sources + scouts in plain
 language, wired via `getTips`; `RunScreen` falls back to `DEFAULT_TIPS` for every
-other program, so nothing else is affected). `productAutonomyConfig` is built from the
+other program, so nothing else is affected). `selfDrivingConfig` is built from the
 `createSkillProgram` factory (`src/lib/programs/agent-skill/`) with overrides. Notables in
-`index.ts`: `PRODUCT_AUTONOMY_SKILL_ID = 'product-autonomy-setup'`, `REPORT_FILE =
+`index.ts`: `SELF_DRIVING_SKILL_ID = 'self-driving-setup'`, `REPORT_FILE =
 'posthog-self-driving-report.md'`, `maxQuestions: 13` (AI approval + GitHub + tracker picks +
 custom-scout proposal), `richLinks: true` (OSC-8 links so long OAuth URLs survive wrapping), and
 `postRun` (just `removeInstalledSkill` — the setup skill is transient,
 marker-guarded by `.posthog-wizard`, so there's no keep-skills step). The outro inbox URL is the
 clean `…/project/:id/inbox` built in `buildOutroData` (no auth deep-link — §7 item 7). CLI:
-`src/commands/autonomy.ts`;
+`src/commands/self-driving.ts`;
 `--install-dir` becomes `session.installDir` (the agent's working dir and detection target).
 
 **Runner & agent loop (generic — not Signals-aware).** `runProgram` (`src/lib/agent/agent-runner.ts`)
@@ -114,7 +114,7 @@ postRun → outro`. It installs the skill by ID, resolves the MCP URL, runs the 
 `query()` (`src/lib/agent/agent-interface.ts`) in a sandbox with the `posthog-wizard` + `wizard-tools`
 MCP servers, and parses agent output: `[STATUS]` → UI, `[ABORT] <reason>` → terminal
 `AgentErrorType.ABORT` matched against `config.abortCases`. `PromptContext` (project/host + AI-consent
-+ product opt-ins, from `/api/users/@me/` and `/api/projects/:id/`) feeds `buildProductAutonomyPrompt`.
++ product opt-ins, from `/api/users/@me/` and `/api/projects/:id/`) feeds `buildSelfDrivingPrompt`.
 Anything deeper here is generic machinery — read those two files directly.
 
 **`wizard-tools` MCP + `wizard_ask`** (`src/lib/wizard-tools.ts`). `check_env_keys` / `set_env_values`
@@ -125,7 +125,7 @@ are the only sanctioned `.env` access (value-safe, `.gitignore`-guarded, secret-
 overlay; cancelled/timed-out fields resolve to `CANCELLED_SENTINEL = '__cancelled__'`.
 
 **OAuth scopes** (`src/lib/oauth/program-scopes.ts`). Base `WIZARD_OAUTH_SCOPES`
-(`src/lib/constants.ts`) ∪ `PRODUCT_AUTONOMY_SCOPE_ADDITIONS` — **12 strings**, requested via a PKCE
+(`src/lib/constants.ts`) ∪ `SELF_DRIVING_SCOPE_ADDITIONS` — **12 strings**, requested via a PKCE
 auth-code flow:
 
 | Scope | Why |
@@ -150,10 +150,10 @@ synced to the TUI.
 
 ---
 
-## 4. context-mill: the `product-autonomy-setup` skill
+## 4. context-mill: the `self-driving-setup` skill
 
-Source: `context-mill/context/skills/product-autonomy/`. `config.yaml` (`template: description.md`,
-`tags: [signals, product-autonomy]`, no fetched docs), `description.md` (becomes `SKILL.md`; declares
+Source: `context-mill/context/skills/self-driving/`. `config.yaml` (`template: description.md`,
+`tags: [signals, self-driving]`, no fetched docs), `description.md` (becomes `SKILL.md`; declares
 the 9-step chain + the cross-cutting rules: trust the setup report, list-before-create idempotency,
 only switch sources on, ask-then-connect, **canonical scout bodies never edited — new scouts only in
 step 7b**), and the `references/` chain `1-check-access → 2-read-context → 3-ai-approval → 4-github →
@@ -163,7 +163,7 @@ step 7b**), and the `references/` chain `1-check-access → 2-read-context → 3
 The canonical `signals-scout-*` skills do **not** live here — they're in posthog (§5). context-mill
 ships only the orchestration skill.
 
-**Build & consumption.** `pnpm build` renders per-skill ZIPs (`dist/skills/product-autonomy-setup.zip`)
+**Build & consumption.** `pnpm build` renders per-skill ZIPs (`dist/skills/self-driving-setup.zip`)
 + a bundle + `skill-menu.json`; the dev server (`pnpm dev`, port **8765**) hot-rebuilds individual
 skill zips but **not** the bundle. Release: a PR to `main` with the **`mcp-publish`** label builds and
 force-moves the `latest` GitHub release tag. The wizard resolves the skill ID at runtime against
@@ -206,7 +206,7 @@ sync, prune, and the reset command in §8).
 
 **External data sources (issue trackers).** STEP 6 creates a warehouse source via the data_warehouse MCP
 (`external-data-sources-create`, scope `external_data_source:write`), which **injects `created_via: mcp`**
-(`posthog/products/data_warehouse/mcp/tools.yaml`) — the marker distinguishing autonomy-created sources
+(`posthog/products/data_warehouse/mcp/tools.yaml`) — the marker distinguishing self-driving-created sources
 from a user's own. There's no FK between `SignalSourceConfig` and `ExternalDataSource` (the signals layer
 attaches by `(team, source_type, schema_name)`), which is why the reset (§8) tears them down separately,
 scoped to `created_via=MCP`.
@@ -232,7 +232,7 @@ scoped to `created_via=MCP`.
    `/settings/organization#organization-ai-consent`). Fail-closed; without it findings are silently dropped.
    Enforced for this program by the **base wizard's AI opt-in gate** (`src/lib/programs/ai-opt-in-gate.ts`,
    `withAiOptInGate`): it injects an `ai-opt-in` step after `auth` for every program that doesn't set
-   `requiresAi: false` (product-autonomy doesn't), and `store.getGate('ai-opt-in')` parks the agent until
+   `requiresAi: false` (self-driving doesn't), and `store.getGate('ai-opt-in')` parks the agent until
    approval lands — so the run can't reach the agent unapproved. That's why prompt STEP 3 / `3-ai-approval.md`
    is now a no-op recording the already-guaranteed approval rather than asking or aborting.
 4. **GitHub integration** (kind `"github"`, team or user level) — required, or repo selection degrades to
@@ -256,7 +256,7 @@ Plus the **Temporal coordinator schedule** (`signals-scout-coordinator-schedule`
    `external_data_source:*` and `llm_skill:*` as not-yet-present. Edit the US prod client
    `c4Rdw8DIxgtQfA80IiSnGKlNX8QN00cFWF00QQhM`, and the dev client
    `DC5uRLVbGI02YQ82grxgnK6Qn12SXWpCqdPb60oZ` on `localhost:8010`.
-2. **context-mill skill release.** Merge `product-autonomy-setup` to `main` with the `mcp-publish` label
+2. **context-mill skill release.** Merge `self-driving-setup` to `main` with the `mcp-publish` label
    so the `latest` release contains the skill ZIP — else the prod wizard can't fetch it.
 3. **posthog backend deploy** of the `feat/signals-scout-config-sync` work: the `sync` endpoint, companion
    seeding (`lazy_seed.py`), and the 10 canonical scout skills.
@@ -286,31 +286,32 @@ Plus the **Temporal coordinator schedule** (`signals-scout-coordinator-schedule`
 >    fine for issue trackers.
 > 3. ~~**Tailor the intro subtitle.**~~ **DONE.** `IntroScreenLayout` now takes an optional
 >    `subtitle` slot (defaults to the generic "We'll use AI… / .env*…" lines, so every other
->    intro is unchanged); `ProductAutonomyIntroScreen.tsx` passes a tailored first line —
+>    intro is unchanged); `SelfDrivingIntroScreen.tsx` passes a tailored first line —
 >    "We'll use AI to analyze your project and set up PostHog Self-driving." — keeping the
 >    verbatim ".env* file contents will not leave your machine." guarantee as line 2. The rest
 >    of the user-facing copy now also uses the **Self-driving** name (item 4 landed).
-> 4. ~~**Rename `autonomy` → `self-driving`.**~~ **User-facing + functional rename DONE.**
->    Product decision to drop "autonomy" / "Product Autonomy" in favour of "self-driving".
->    Internal identifiers were deliberately left as `product-autonomy` (out of scope — never
->    shown to a user):
->    - **wizard — DONE:** the CLI command (`autonomy` → `self-driving`), the program id (now
->      `self-driving`, so the `programLabel` shown in the intro/exit no longer leaks the slug
->      `product-autonomy`), the `program-scopes.ts` map key, every user-facing string (intro
->      copy, success/outro/spinner messages, `detect.ts` abort `message`/`body`, the prompt
->      header + task labels), and the report filename (`posthog-self-driving-report.md`). The
->      two user-facing "PostHog Signals" mentions (intro more-info, AI-approval abort body)
->      also became "Self-driving".
->    - **context-mill — DONE:** `config.yaml` `display_name` + `description`, the
->      `description.md` title, the `[STATUS] Checking …` line, prose name references, and the
->      report filename in `8-report.md` (kept in lockstep with the wizard's `REPORT_FILE`).
->    - **Still `product-autonomy` (internal, deferred):** the `product-autonomy/` dir +
->      `PRODUCT_AUTONOMY_*` constants + `ProductAutonomy*` files, the `src/commands/autonomy.ts`
->      filename + `autonomyCommand` var, the screen id `product-autonomy-intro`, and the
->      context-mill skill id `product-autonomy-setup` + its dir. The skill id is a
->      wizard↔context-mill contract — rename `PRODUCT_AUTONOMY_SKILL_ID` and the skill dir
->      together if you ever do it.
->    - **`[ABORT] <reason>` tokens kept verbatim** (e.g. `product autonomy is not available for
+> 4. ~~**Rename `autonomy` → `self-driving`.**~~ **DONE — full rename, both repos, internals
+>    included.** Product decision to drop "autonomy" / "Product Autonomy" in favour of
+>    "self-driving". Carried out end-to-end:
+>    - **wizard:** the CLI command (`self-driving`), the program id (`self-driving` — so the
+>      `programLabel` shown in the intro/exit reads `self-driving`), the `program-scopes.ts`
+>      map key, the `self-driving/` dir + `SELF_DRIVING_*` constants + `SelfDriving*` types /
+>      components, `src/commands/self-driving.ts` + `selfDrivingCommand`, the screen id
+>      `self-driving-intro`, every user-facing string (intro copy, success/outro/spinner
+>      messages, `detect.ts` abort `message`/`body`, prompt header + task labels), and the
+>      report filename (`posthog-self-driving-report.md`). The two user-facing "PostHog
+>      Signals" mentions (intro more-info, AI-approval abort body) also became "Self-driving".
+>    - **context-mill:** the skill dir `self-driving/` → skill id `self-driving-setup` (dir +
+>      `setup` variant), `config.yaml` (`display_name` / `description` / `tags`), the
+>      `description.md` title, `[STATUS]` lines, prose, and the report filename in `8-report.md`.
+>      The skill id is a wizard↔context-mill contract — `SELF_DRIVING_SKILL_ID` must equal
+>      `self-driving-setup`, and a prod wizard needs the renamed skill published to `latest`.
+>    - **The `[ABORT]` token was renamed in lockstep** to `self-driving is not available for this
+>      project` (`detect.ts` regex ↔ skill emit ↔ test).
+>    - **Deliberately NOT renamed (other-repo identifiers):** the posthog UI flag
+>      `product-autonomy` / `FEATURE_FLAGS.PRODUCT_AUTONOMY` (§6/§7) and the git branch names in
+>      the header — posthog is unchanged.
+>    - **`[ABORT] <reason>` tokens kept verbatim** (e.g. `self-driving is not available for
 >      this project`) — they're the `detect.ts` ↔ skill match contract and are never displayed,
 >      so the rename does NOT touch them. posthog is unaffected (its `signals_*` / `SignalScout*`
 >      names don't carry the program name).
@@ -334,29 +335,29 @@ Plus the **Temporal coordinator schedule** (`signals-scout-coordinator-schedule`
 >    the program's `buildOutroData`, so no product knowledge leaks into the screen. The user-facing
 >    inbox label is "Self-driving inbox" across the intro bullet, run-sidebar tips, and outro (ahead
 >    of the full item-4 rename).
-> 8. Update Inbox UI to propose to run Wizard command for autonomy
+> 8. Update Inbox UI to propose to run Wizard command for self-driving
 > 9. Disable scouts that replicate pipeline (error tracking/replay)
 
 ---
 
 ## 8. Local dev & reset
 
-Run: `POSTHOG_WIZARD_DEBUG=1 NODE_ENV=development pnpm try --install-dir=<test project> autonomy
+Run: `POSTHOG_WIZARD_DEBUG=1 NODE_ENV=development pnpm try --install-dir=<test project> self-driving
 --local-mcp`. `--local-mcp` points skills at the context-mill dev server (`localhost:8765`) and MCP at
 `localhost:8787`; OAuth at the local PostHog (`localhost:8010`). Local team 1 is enrolled via the DEBUG
 fallback (§6).
 
 Each run mutates state (sources, fleet, custom scouts, warehouse sources, report), so re-testing needs a
 teardown. Use the dev-only posthog command (full docs in `posthog/products/signals/ARCHITECTURE.md` →
-"Resetting autonomy state for local re-testing"):
+"Resetting self-driving state for local re-testing"):
 
 ```text
-python manage.py reset_signals_autonomy --team-id 1 --yes --install-dir <test project>
+python manage.py reset_signals_self_driving --team-id 1 --yes --install-dir <test project>
 ```
 
 It deletes the team's sources, scout fleet config, custom scouts (preserving canonical/companion via the
 `seeded_by` marker), run-state, emitted findings (via `cleanup_signals`), and **soft-deletes the
-autonomy-created warehouse pipelines** (scoped to `created_via=MCP`), then removes the report and cycles
+self-driving-created warehouse pipelines** (scoped to `created_via=MCP`), then removes the report and cycles
 the wizard log. `DEBUG`-only.
 
 ---
@@ -366,4 +367,4 @@ the wizard log. `DEBUG`-only.
 - Wizard design discipline: repo-root `CLAUDE.md`, `.claude/skills/wizard-development/`.
 - Signals backend internals + the reset command in full: `posthog/products/signals/ARCHITECTURE.md`.
 - Scout authoring: `posthog/products/signals/skills/authoring-signals-scouts/SKILL.md`.
-- The setup skill: `context-mill/context/skills/product-autonomy/`. Security rules: the `warlock` repo.
+- The setup skill: `context-mill/context/skills/self-driving/`. Security rules: the `warlock` repo.

@@ -39,7 +39,7 @@ export interface Tip {
 /**
  * The default deck — generic PostHog onboarding tips, shown for any
  * program that doesn't supply its own via `ProgramConfig.getTips`.
- * Program-specific copy (e.g. the product-autonomy scout/source
+ * Program-specific copy (e.g. the self-driving scout/source
  * explainers) lives in that program's content, not here — this stays the
  * neutral fallback.
  */

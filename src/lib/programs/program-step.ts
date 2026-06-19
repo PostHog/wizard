@@ -221,7 +221,7 @@ export interface ProgramConfig {
   /**
    * Tips shown in the run screen's right pane (the `Tips` sidebar) once
    * the LearnCard finishes. Lets a program supply its own explainer copy
-   * (e.g. product-autonomy explaining what signal sources and scouts are)
+   * (e.g. self-driving explaining what signal sources and scouts are)
    * instead of the generic onboarding deck. Unset → `RunScreen` falls back
    * to `DEFAULT_TIPS`, so every other program is unaffected. Lives at
    * `<program>/content/tips.ts` by convention.

@@ -1,5 +1,5 @@
 /**
- * Sidebar tips for the product-autonomy run. Unlike the generic
+ * Sidebar tips for the self-driving run. Unlike the generic
  * onboarding tips (`DEFAULT_TIPS`), these explain Signals' core nouns —
  * signal sources and scouts — in plain language, so the agent's
  * questions during the run land with a user who's never seen the terms.
@@ -10,7 +10,7 @@
 
 import type { Tip } from '@ui/tui/components/TipsCard';
 
-export const PRODUCT_AUTONOMY_TIPS: Tip[] = [
+export const SELF_DRIVING_TIPS: Tip[] = [
   {
     id: 'what-is-a-signal-source',
     title: "What's a signal source?",
@@ -31,4 +31,4 @@ export const PRODUCT_AUTONOMY_TIPS: Tip[] = [
   },
 ];
 
-export const getTips = (): Tip[] => PRODUCT_AUTONOMY_TIPS;
+export const getTips = (): Tip[] => SELF_DRIVING_TIPS;
