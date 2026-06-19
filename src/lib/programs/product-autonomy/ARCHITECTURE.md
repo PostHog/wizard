@@ -64,7 +64,7 @@ matching context-mill file carries the HOW.
 3. **AI approval** — no-op: org consent is enforced upstream, so just record "approved".
 4. **Connect GitHub** — required; if no `github` integration, send the user through the GitHub App install (one-click authorize deep-link) and re-verify; abort if declined.
 5. **Enable sources** — always enable the scout gate; enable native sources (error tracking, replay, support) only where step-2 evidence shows the product is in use.
-6. **Offer issue trackers** — one multi-select (GitHub Issues / Linear / Zendesk / pganalyze); auto-create warehouse sources for GitHub Issues & Linear, redirect to the warehouse-source UI for Zendesk / pganalyze; verify each pick and enable a (possibly dormant) responder.
+6. **Offer issue trackers** — one multi-select (GitHub Issues / Linear / Zendesk / pganalyze). Auto-connect what the run can: GitHub Issues (pick a repo) and Linear (one-click OAuth link → single silent `integrations-list` check → create, never nudge). Zendesk / pganalyze need credentials the run never collects, so they're armed as dormant responders + a report follow-up — no UI redirect, no verification (a downstream reminder prompts the user to finish). Enable a (possibly dormant) responder for every pick.
 7. **Configure scout fleet** — materialize the canonical fleet; keep the universal scouts, enable conditional ones only with evidence, disable the rest.
 8. **Design custom scouts** — gap-analyze the repo against the fleet, propose candidates in one ask, create the approved subset (the only place custom scouts are made).
 9. **Write report** — write `./posthog-product-autonomy-report.md` (everything changed + follow-ups); findings reach the inbox in ~30 min.
@@ -278,10 +278,13 @@ Plus the **Temporal coordinator schedule** (`signals-scout-coordinator-schedule`
 >    `external-data-schemas` update tool (or add `sync_frequency` passthrough to
 >    source-create); STEP 6a/6b would then PATCH the schema after create. Deferred — 6h is
 >    fine for issue trackers.
-> 3. **Tailor the intro subtitle.** The intro screen still shows the generic
->    `IntroScreenLayout` subtitle ("We'll use AI to analyze your project and complete work.
->    .env* file contents will not leave your machine."). Reword it for this flow. Lands in
->    `ProductAutonomyIntroScreen.tsx` / `IntroScreenLayout` (the subtitle the layout renders).
+> 3. ~~**Tailor the intro subtitle.**~~ **DONE.** `IntroScreenLayout` now takes an optional
+>    `subtitle` slot (defaults to the generic "We'll use AI… / .env*…" lines, so every other
+>    intro is unchanged); `ProductAutonomyIntroScreen.tsx` passes a tailored first line —
+>    "We'll use AI to analyze your project and set up PostHog Self-driving." — keeping the
+>    verbatim ".env* file contents will not leave your machine." guarantee as line 2. Note: it
+>    already uses the **Self-driving** name (item 4), ahead of the rest of this flow's copy
+>    which is still "Product Autonomy" until that rename lands.
 > 4. **Rename `autonomy` → `self-driving`.** Product decision to drop "autonomy" / "Product
 >    Autonomy" in favour of "self-driving" across the command, the program, the intro text,
 >    and all skills. Cross-repo — do in lockstep:
@@ -296,17 +299,6 @@ Plus the **Temporal coordinator schedule** (`signals-scout-coordinator-schedule`
 >    - The `[ABORT] <reason>` strings are a cross-repo contract (`detect.ts` ↔ skill) — keep
 >      both sides in step. posthog is unaffected (its `signals_*` / `SignalScout*` names
 >      don't carry the program name).
-> 5. **Auto-connect Zendesk / pganalyze via in-wizard API keys.** Today STEP 6 redirects
->    these to the warehouse-source UI because the run never collects API credentials (which
->    is also why item 1 exists). Instead, ask for the credentials in a `wizard_ask` (Zendesk
->    subdomain + API token; pganalyze key) and create the source automatically via
->    `external-data-sources-create` — the same connector pattern as GitHub Issues (6a) and
->    Linear (6b), removing the UI trip and making item 1 moot for these two tools. Lands in
->    context-mill `6-connected-tools.md` + new `6c`/`6d` connector files. **Reverses a
->    deliberate constraint** (no credential collection today), so it needs a secure-credential
->    path: masked entry, keep the keys out of the report and the agent transcript, mind the
->    YARA secret-scan hooks, and confirm each tool's source-create payload actually supports
->    credential-based creation.
 > 6. **Don't make the user wait ~30 min for the first scan (if avoidable).** The report/outro
 >    promises findings "within ~30 minutes" because fresh scout configs only run on the next
 >    Temporal coordinator tick (`signals-scout-coordinator-schedule`) — STEP 7's
