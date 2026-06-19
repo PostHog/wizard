@@ -5,7 +5,7 @@
 
 import { Box, Text, useInput } from 'ink';
 import { useState } from 'react';
-import { CardLayout, SplitView } from '@ui/tui/primitives/index';
+import { CardLayout, SplitView, ConfirmButton } from '@ui/tui/primitives/index';
 import { HAlign, VAlign, Colors } from '@ui/tui/styles';
 
 const hAligns = [HAlign.Left, HAlign.Center, HAlign.Right];
@@ -48,6 +48,15 @@ export const LayoutDemo = () => {
           </CardLayout>
         }
       />
+      <Box height={1} />
+      <Text dimColor>
+        ConfirmButton — the focusable submit target for multi-select menus
+        (focused / unfocused):
+      </Text>
+      <Box gap={2} marginTop={1}>
+        <ConfirmButton focused count={3} />
+        <ConfirmButton focused={false} />
+      </Box>
     </Box>
   );
 };
