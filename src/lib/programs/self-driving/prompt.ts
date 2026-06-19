@@ -78,11 +78,13 @@ STEP 1 — Check Self-driving access. (skill: "Check access")
    and halt.
 
 STEP 2 — Read project and current Signals state. (skill: "Read context")
-   Read ./posthog-setup-report.md as ground truth for what THIS repo
-   instruments. Combine it with the project-state block above and the
-   skill's server-side usage probes — repo evidence rules products in,
-   never out. Do a light scan ONLY for what neither covers. List the
-   currently enabled signal sources so every later write is idempotent.
+   If ./posthog-setup-report.md exists, read it as a strong hint for what
+   THIS repo instruments — but it is often absent (users frequently don't
+   commit it), so do NOT depend on it. Combine whatever you find with the
+   project-state block above and the skill's server-side usage probes —
+   repo evidence rules products in, never out. Do a light scan ONLY for
+   what neither covers. List the currently enabled signal sources so every
+   later write is idempotent.
 
 STEP 3 — Connect GitHub. REQUIRED. (skill: "Connect GitHub")
    Signals cannot research or fix issues without code access. Check for

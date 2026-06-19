@@ -6,7 +6,6 @@ import {
   selfDrivingConfig,
   SELF_DRIVING_ABORT_CASES,
 } from '@lib/programs/self-driving/index';
-import { SETUP_REPORT_FILE } from '@lib/programs/posthog-integration/index';
 import { WIZARD_TOOL_NAMES } from '@lib/wizard-tools';
 import { buildSession } from '@lib/wizard-session';
 
@@ -41,24 +40,13 @@ describe('detectSelfDrivingPrerequisites', () => {
     );
   });
 
-  it('errors when the PostHog setup report is missing', () => {
-    const session = buildSession({ installDir: tmpDir });
-    detectSelfDrivingPrerequisites(session, setCtx);
-
-    expect(ctx.detectError).toEqual({
-      kind: 'no-setup-report',
-      reportFile: SETUP_REPORT_FILE,
-    });
-  });
-
-  it('succeeds when the PostHog setup report exists', () => {
-    fs.writeFileSync(path.join(tmpDir, SETUP_REPORT_FILE), '# PostHog setup');
-
+  it('proceeds for a valid directory even when the setup report is absent', () => {
+    // The setup report is no longer a prerequisite — many users never commit
+    // it — so a valid, readable install dir alone clears detection.
     const session = buildSession({ installDir: tmpDir });
     detectSelfDrivingPrerequisites(session, setCtx);
 
     expect(ctx.detectError).toBeUndefined();
-    expect(ctx.setupReportFound).toBe(true);
   });
 });
 

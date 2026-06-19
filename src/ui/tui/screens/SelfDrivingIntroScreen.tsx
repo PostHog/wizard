@@ -154,22 +154,14 @@ const DetectErrorBody = ({ error }: { error: SelfDrivingDetectError }) => {
       );
     }
 
-    case 'no-setup-report':
+    default:
+      // Defensive fallback so a future SelfDrivingDetectError kind still
+      // renders something useful instead of a blank screen.
       return (
-        <>
-          <Text>
-            No <Text bold>{error.reportFile}</Text> found in this directory.
-          </Text>
-          <Text dimColor>
-            Self-driving builds on an existing PostHog setup.
-          </Text>
-          <Box marginTop={1}>
-            <Text dimColor>
-              Run <Text bold>npx @posthog/wizard</Text> first to set up PostHog,
-              then run this program again from the same directory.
-            </Text>
-          </Box>
-        </>
+        <Text>
+          Self-driving could not start in this directory. Try again, or reach
+          out to wizard@posthog.com.
+        </Text>
       );
   }
 };

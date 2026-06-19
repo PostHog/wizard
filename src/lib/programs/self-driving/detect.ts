@@ -1,33 +1,32 @@
 /**
  * Self-driving prerequisite detection + abort vocabulary.
  *
- * The only precondition that can be verified before auth is local: the
- * PostHog setup report must exist, proving the base posthog-integration
- * program ran. The beta gates (the `product-autonomy` access flag and
- * `signals-scout` enrollment — PostHog-side flag names, unchanged by the
- * wizard-side "self-driving" rename) are PostHog-internal flags with no
- * customer-facing read API, so the agent probes the Signals API at the
- * start of the run instead and emits a structured `[ABORT]` when the
- * product is not available for the team.
+ * The only thing worth verifying before auth is local and cheap: that
+ * `session.installDir` is a real, readable directory. We deliberately do
+ * NOT require the base posthog-integration report to be present — it is a
+ * report many users never commit, and `requires: ['posthog-integration']`
+ * is metadata, not a hard runtime gate. Real readiness (integration state
+ * + beta access) is established by the agent's STEP 1 Signals API probe at
+ * the start of the run. The beta gates (the `product-autonomy` access flag
+ * and `signals-scout` enrollment — PostHog-side flag names, unchanged by
+ * the wizard-side "self-driving" rename) are PostHog-internal flags with no
+ * customer-facing read API, which is why that probe lives in the run and
+ * emits a structured `[ABORT]` when the product is not available.
  */
 
 import { existsSync, statSync } from 'fs';
-import { join } from 'path';
 import type { WizardSession } from '@lib/wizard-session';
 import type { AbortCase } from '@lib/agent/agent-runner';
-import { SETUP_REPORT_FILE } from '@lib/programs/posthog-integration/index';
 
 /**
  * Structured detection errors. The intro screen renders each kind into
  * JSX — keeps error data separate from presentation.
  */
-export type SelfDrivingDetectError =
-  | {
-      kind: 'bad-directory';
-      path: string;
-      reason: 'missing' | 'not-dir' | 'unreadable';
-    }
-  | { kind: 'no-setup-report'; reportFile: string };
+export type SelfDrivingDetectError = {
+  kind: 'bad-directory';
+  path: string;
+  reason: 'missing' | 'not-dir' | 'unreadable';
+};
 
 /**
  * `[ABORT] <reason>` cases the self-driving skill can emit. The
@@ -79,9 +78,9 @@ export const SELF_DRIVING_ABORT_CASES: AbortCase[] = [
 ];
 
 /**
- * Verify `session.installDir` is a readable directory containing the
- * PostHog setup report. Writes a `SelfDrivingDetectError` to
- * frameworkContext on failure — the intro screen renders it and blocks.
+ * Verify `session.installDir` is a readable directory. Writes a
+ * `SelfDrivingDetectError` to frameworkContext on failure — the intro
+ * screen renders it and blocks.
  */
 export function detectSelfDrivingPrerequisites(
   session: WizardSession,
@@ -105,11 +104,4 @@ export function detectSelfDrivingPrerequisites(
     fail({ kind: 'bad-directory', path: installDir, reason: 'unreadable' });
     return;
   }
-
-  if (!existsSync(join(installDir, SETUP_REPORT_FILE))) {
-    fail({ kind: 'no-setup-report', reportFile: SETUP_REPORT_FILE });
-    return;
-  }
-
-  setFrameworkContext('setupReportFound', true);
 }
