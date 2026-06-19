@@ -1,7 +1,7 @@
 # Product Autonomy — Wizard Program Architecture
 
 How the `product-autonomy` program works: the program that runs on `npx @posthog/wizard
-autonomy` and sets up **PostHog Signals** for a project. It spans **three repos**; the
+self-driving` and sets up **PostHog Signals** for a project. It spans **three repos**; the
 load-bearing idea is the **division of labor** (§1) — the wizard owns *order + mechanics +
 URLs*, context-mill owns *how each step is done*, posthog owns *the backend and the gating*.
 
@@ -67,7 +67,7 @@ matching context-mill file carries the HOW.
 6. **Offer issue trackers** — one multi-select (GitHub Issues / Linear / Zendesk / pganalyze). Auto-connect what the run can: GitHub Issues (pick a repo) and Linear (one-click OAuth link → single silent `integrations-list` check → create, never nudge). Zendesk / pganalyze need credentials the run never collects, so they're armed as dormant responders + a report follow-up — no UI redirect, no verification (a downstream reminder prompts the user to finish). Enable a (possibly dormant) responder for every pick.
 7. **Configure scout fleet** — materialize the canonical fleet; keep the universal scouts, enable conditional ones only with evidence, disable the rest.
 8. **Design custom scouts** — gap-analyze the repo against the fleet, propose candidates in one ask, create the approved subset (the only place custom scouts are made).
-9. **Write report** — write `./posthog-product-autonomy-report.md` (everything changed + follow-ups); findings reach the inbox in ~30 min.
+9. **Write report** — write `./posthog-self-driving-report.md` (everything changed + follow-ups); findings reach the inbox in ~30 min.
 
 The table below adds the skill reference and the tool/MCP surface for each.
 
@@ -81,7 +81,7 @@ The table below adds the skill reference and the tool/MCP surface for each.
 | 6 | Offer issue-tracker integrations | `6-connected-tools.md` (+ `6a`, `6b`) | One batched multi-select for GitHub Issues / Linear / Zendesk / pganalyze. GitHub Issues & Linear auto-connect via `external-data-sources-create` (Linear: OAuth link + one silent `integrations-list`, never nudge); Zendesk / pganalyze are armed dormant + report follow-up (no UI redirect, no verify). Enable a (possibly dormant) responder per pick. |
 | 7 | Configure the scout fleet | `7-scouts.md` | `signals-scout-config-sync` materializes the fleet (~19 scouts, grows over time); classify each row the sync returns — keep the cross-product scouts, enable surface-specific ones only with evidence, disable the rest (`signals-scout-config-update {enabled:false}`). Never touches `emit`/`run_interval`. |
 | 8 | Design custom scouts | `7b-tailor-scouts.md` | The **only** place custom scouts are created. Gap-analyze repo surfaces vs the fleet; propose in ONE `wizard_ask`; create approved ones via `llma-skill-create` (`signals-scout-<scope>`). **Canonical bodies never edited.** Declining is valid, not an abort. |
-| 9 | Write report & hand off | `8-report.md` | Write `./posthog-product-autonomy-report.md`; findings appear in the inbox in ~30 min. |
+| 9 | Write report & hand off | `8-report.md` | Write `./posthog-self-driving-report.md`; findings appear in the inbox in ~30 min. |
 
 **Abort contract:** the skill emits exact `[ABORT] <reason>` strings; the wizard matches them
 against `PRODUCT_AUTONOMY_ABORT_CASES` (`detect.ts`) for tailored error outros. The reason strings
@@ -100,7 +100,7 @@ language, wired via `getTips`; `RunScreen` falls back to `DEFAULT_TIPS` for ever
 other program, so nothing else is affected). `productAutonomyConfig` is built from the
 `createSkillProgram` factory (`src/lib/programs/agent-skill/`) with overrides. Notables in
 `index.ts`: `PRODUCT_AUTONOMY_SKILL_ID = 'product-autonomy-setup'`, `REPORT_FILE =
-'posthog-product-autonomy-report.md'`, `maxQuestions: 13` (AI approval + GitHub + tracker picks +
+'posthog-self-driving-report.md'`, `maxQuestions: 13` (AI approval + GitHub + tracker picks +
 custom-scout proposal), `richLinks: true` (OSC-8 links so long OAuth URLs survive wrapping), and
 `postRun` (just `removeInstalledSkill` — the setup skill is transient,
 marker-guarded by `.posthog-wizard`, so there's no keep-skills step). The outro inbox URL is the
@@ -288,23 +288,32 @@ Plus the **Temporal coordinator schedule** (`signals-scout-coordinator-schedule`
 >    `subtitle` slot (defaults to the generic "We'll use AI… / .env*…" lines, so every other
 >    intro is unchanged); `ProductAutonomyIntroScreen.tsx` passes a tailored first line —
 >    "We'll use AI to analyze your project and set up PostHog Self-driving." — keeping the
->    verbatim ".env* file contents will not leave your machine." guarantee as line 2. Note: it
->    already uses the **Self-driving** name (item 4), ahead of the rest of this flow's copy
->    which is still "Product Autonomy" until that rename lands.
-> 4. **Rename `autonomy` → `self-driving`.** Product decision to drop "autonomy" / "Product
->    Autonomy" in favour of "self-driving" across the command, the program, the intro text,
->    and all skills. Cross-repo — do in lockstep:
->    - **wizard:** the CLI command (`autonomy` → `self-driving`, `src/commands/autonomy.ts`),
->      the program id (`product-autonomy`), every user-facing "Product Autonomy" string
->      (intro copy, success/outro messages, `detect.ts` abort bodies), the report filename
->      (`posthog-product-autonomy-report.md`), the screen id `product-autonomy-intro`, and
->      the `PRODUCT_AUTONOMY_*` constants / `product-autonomy/` dir / `ProductAutonomy*`
->      files (this doc included).
->    - **context-mill:** the skill id (`product-autonomy-setup`), its dir + `config.yaml`,
->      and every reference file.
->    - The `[ABORT] <reason>` strings are a cross-repo contract (`detect.ts` ↔ skill) — keep
->      both sides in step. posthog is unaffected (its `signals_*` / `SignalScout*` names
->      don't carry the program name).
+>    verbatim ".env* file contents will not leave your machine." guarantee as line 2. The rest
+>    of the user-facing copy now also uses the **Self-driving** name (item 4 landed).
+> 4. ~~**Rename `autonomy` → `self-driving`.**~~ **User-facing + functional rename DONE.**
+>    Product decision to drop "autonomy" / "Product Autonomy" in favour of "self-driving".
+>    Internal identifiers were deliberately left as `product-autonomy` (out of scope — never
+>    shown to a user):
+>    - **wizard — DONE:** the CLI command (`autonomy` → `self-driving`), the program id (now
+>      `self-driving`, so the `programLabel` shown in the intro/exit no longer leaks the slug
+>      `product-autonomy`), the `program-scopes.ts` map key, every user-facing string (intro
+>      copy, success/outro/spinner messages, `detect.ts` abort `message`/`body`, the prompt
+>      header + task labels), and the report filename (`posthog-self-driving-report.md`). The
+>      two user-facing "PostHog Signals" mentions (intro more-info, AI-approval abort body)
+>      also became "Self-driving".
+>    - **context-mill — DONE:** `config.yaml` `display_name` + `description`, the
+>      `description.md` title, the `[STATUS] Checking …` line, prose name references, and the
+>      report filename in `8-report.md` (kept in lockstep with the wizard's `REPORT_FILE`).
+>    - **Still `product-autonomy` (internal, deferred):** the `product-autonomy/` dir +
+>      `PRODUCT_AUTONOMY_*` constants + `ProductAutonomy*` files, the `src/commands/autonomy.ts`
+>      filename + `autonomyCommand` var, the screen id `product-autonomy-intro`, and the
+>      context-mill skill id `product-autonomy-setup` + its dir. The skill id is a
+>      wizard↔context-mill contract — rename `PRODUCT_AUTONOMY_SKILL_ID` and the skill dir
+>      together if you ever do it.
+>    - **`[ABORT] <reason>` tokens kept verbatim** (e.g. `product autonomy is not available for
+>      this project`) — they're the `detect.ts` ↔ skill match contract and are never displayed,
+>      so the rename does NOT touch them. posthog is unaffected (its `signals_*` / `SignalScout*`
+>      names don't carry the program name).
 > 6. **Don't make the user wait ~30 min for the first scan (if avoidable).** The report/outro
 >    promises findings "within ~30 minutes" because fresh scout configs only run on the next
 >    Temporal coordinator tick (`signals-scout-coordinator-schedule`) — STEP 7's

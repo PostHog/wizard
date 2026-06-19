@@ -2,7 +2,7 @@
  * ProductAutonomyIntroScreen — Welcome screen for the product-autonomy flow.
  *
  * Composes IntroScreenLayout with prerequisite-detection state:
- *   - Detection succeeded: explains what Product Autonomy turns on, continue/cancel
+ *   - Detection succeeded: explains what Self-driving turns on, continue/cancel
  *   - Detection failed: shows the error via errorView + exit prompt
  *
  * Reads `frameworkContext.detectError` set by
@@ -56,7 +56,7 @@ export const ProductAutonomyIntroScreen = ({
           <Text italic color="cyan">
             {session.programLabel}
           </Text>{' '}
-          program turns on PostHog Signals for this project:
+          program turns on PostHog Self-driving for this project:
         </Text>
       </Box>
       <Box flexDirection="column" marginTop={1} paddingLeft={4}>
@@ -68,7 +68,7 @@ export const ProductAutonomyIntroScreen = ({
     </Box>
   ) : (
     <Box flexDirection="column" alignItems="center">
-      <Text>Let's set up PostHog Product Autonomy.</Text>
+      <Text>Let's set up PostHog Self-driving.</Text>
       <Box flexDirection="column" marginTop={1}>
         <Text>PostHog finds — and can fix — issues in your product.</Text>
       </Box>
@@ -87,7 +87,7 @@ export const ProductAutonomyIntroScreen = ({
     <>
       <Box flexDirection="column" marginBottom={1}>
         <Text color="red" bold>
-          {'✘'} Cannot set up Product Autonomy
+          {'✘'} Cannot set up PostHog Self-driving
         </Text>
         <Box marginTop={1} flexDirection="column">
           <DetectErrorBody error={detectError} />
@@ -161,7 +161,7 @@ const DetectErrorBody = ({ error }: { error: ProductAutonomyDetectError }) => {
             No <Text bold>{error.reportFile}</Text> found in this directory.
           </Text>
           <Text dimColor>
-            Product Autonomy builds on an existing PostHog setup.
+            Self-driving builds on an existing PostHog setup.
           </Text>
           <Box marginTop={1}>
             <Text dimColor>

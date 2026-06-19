@@ -4,7 +4,7 @@ import { skillProgramOptions } from './skill-program-options';
 import type { Command } from './command';
 
 export const autonomyCommand: Command = {
-  name: 'autonomy',
+  name: 'self-driving',
   description: productAutonomyConfig.description,
   options: {
     ...skillProgramOptions,

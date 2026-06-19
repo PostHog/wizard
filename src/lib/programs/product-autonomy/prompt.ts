@@ -20,7 +20,7 @@ export function buildProductAutonomyPrompt(ctx: PromptContext): string {
     value === true ? 'ON' : value === false ? 'OFF' : 'unknown';
   const optIns = ctx.teamProductOptIns;
 
-  return `You are setting up PostHog Product Autonomy (Signals) for this project: you will enable the right signal sources, make sure GitHub is connected, tune the scout fleet, design custom scouts for what this product uniquely needs, and hand the user a configured inbox.
+  return `You are setting up PostHog Self-driving for this project: you will enable the right signal sources, make sure GitHub is connected, tune the scout fleet, design custom scouts for what this product uniquely needs, and hand the user a configured inbox.
 
 Project URLs:
 - Integrations settings (GitHub App install): ${integrationsSettingsUrl}
@@ -45,8 +45,8 @@ doing the work, and do not invent steps the skill doesn't describe.
 Before doing any work, create your FULL task list in a single TaskCreate
 call so the user can follow your progress in the TUI. Use exactly these
 tasks, in this order:
-  1. Check Product Autonomy access
-  2. Read project and current Signals state
+  1. Check Self-driving access
+  2. Read project and current Self-driving state
   3. Confirm AI data processing approval
   4. Connect GitHub (required)
   5. Enable signal sources
@@ -72,7 +72,7 @@ Wizard mechanics:
 
 Follow these steps IN ORDER. Do not skip or reorder.
 
-STEP 1 — Check Product Autonomy access. (skill: "Check access")
+STEP 1 — Check Self-driving access. (skill: "Check access")
    Probe the Signals API as the skill describes. If the API is not
    available for this project (permission or not-found errors), emit
    ${AgentSignals.ABORT} product autonomy is not available for this project

@@ -89,9 +89,9 @@ describe('productAutonomyConfig', () => {
   });
 
   it('wires the product-autonomy-setup skill and CLI command', () => {
-    expect(productAutonomyConfig.command).toBe('autonomy');
+    expect(productAutonomyConfig.command).toBe('self-driving');
     expect(productAutonomyConfig.skillId).toBe('product-autonomy-setup');
-    expect(productAutonomyConfig.id).toBe('product-autonomy');
+    expect(productAutonomyConfig.id).toBe('self-driving');
     expect(productAutonomyConfig.requires).toContain('posthog-integration');
   });
 

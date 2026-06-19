@@ -37,7 +37,7 @@ export const PRODUCT_AUTONOMY_PROGRAM: ProgramStep[] = [
   },
   {
     id: 'run',
-    label: 'Product autonomy',
+    label: 'Self-driving',
     screenId: 'run',
     isComplete: (session) =>
       session.runPhase === RunPhase.Completed ||

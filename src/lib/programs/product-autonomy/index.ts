@@ -11,10 +11,10 @@ import { buildProductAutonomyPrompt } from './prompt.js';
 import { getTips } from './content/tips.js';
 
 export const PRODUCT_AUTONOMY_SKILL_ID = 'product-autonomy-setup';
-const REPORT_FILE = 'posthog-product-autonomy-report.md';
+const REPORT_FILE = 'posthog-self-driving-report.md';
 const DOCS_URL = 'https://posthog.com/docs';
 const SUCCESS_MESSAGE =
-  'Product Autonomy is on! PostHog will start scanning within ~30 minutes ' +
+  'Self-driving is on! PostHog will start scanning within ~30 minutes ' +
   'and surface findings in your inbox.';
 const WIZARD_MARKER = '.posthog-wizard';
 
@@ -47,7 +47,7 @@ const run: ProgramRun = {
   successMessage: SUCCESS_MESSAGE,
   reportFile: REPORT_FILE,
   docsUrl: DOCS_URL,
-  spinnerMessage: 'Setting up Product Autonomy...',
+  spinnerMessage: 'Setting up PostHog Self-driving...',
   estimatedDurationMinutes: 10,
   abortCases: PRODUCT_AUTONOMY_ABORT_CASES,
   // The flow legitimately needs several interactions (AI approval,
@@ -71,7 +71,7 @@ const run: ProgramRun = {
     return {
       kind: OutroKind.Success as const,
       message:
-        'Product Autonomy is on. PostHog is scanning your project — ' +
+        'Self-driving is on. PostHog is scanning your project — ' +
         'first findings hit your inbox within ~30 minutes.',
       primaryLink: { label: 'Your Self-driving inbox', url: inboxUrl },
       nextSteps: {
@@ -90,14 +90,14 @@ const run: ProgramRun = {
 export const productAutonomyConfig: ProgramConfig = {
   ...createSkillProgram({
     skillId: PRODUCT_AUTONOMY_SKILL_ID,
-    command: 'autonomy',
-    id: 'product-autonomy',
-    description: 'Set up PostHog Product Autonomy (Signals) for this project',
+    command: 'self-driving',
+    id: 'self-driving',
+    description: 'Set up PostHog Self-driving for this project',
     integrationLabel: PRODUCT_AUTONOMY_SKILL_ID,
     successMessage: SUCCESS_MESSAGE,
     reportFile: REPORT_FILE,
     docsUrl: DOCS_URL,
-    spinnerMessage: 'Setting up Product Autonomy...',
+    spinnerMessage: 'Setting up PostHog Self-driving...',
     estimatedDurationMinutes: 10,
     requires: ['posthog-integration'],
     abortCases: PRODUCT_AUTONOMY_ABORT_CASES,

@@ -37,9 +37,9 @@ export const PRODUCT_AUTONOMY_ABORT_CASES: AbortCase[] = [
   {
     // Skill emits: [ABORT] product autonomy is not available for this project
     match: /^product autonomy is not available for this project$/i,
-    message: 'Product Autonomy is not available for this project',
+    message: 'PostHog Self-driving is not available for this project',
     body:
-      'Product Autonomy (PostHog Signals) is in beta and is enabled per ' +
+      'Self-driving is in beta and is enabled per ' +
       'team by PostHog. This project does not appear to have access yet. ' +
       'Reach out to your PostHog contact (or wizard@posthog.com) to join ' +
       'the beta, then run the wizard again.',
@@ -49,7 +49,7 @@ export const PRODUCT_AUTONOMY_ABORT_CASES: AbortCase[] = [
     match: /^github connection declined$/i,
     message: 'GitHub connection required',
     body:
-      'Signals needs GitHub access to research issues in your code and ' +
+      'Self-driving needs GitHub access to research issues in your code and ' +
       'open fixes, so setup cannot finish without it. Nothing was left ' +
       'half-configured. When you are ready to install the PostHog GitHub ' +
       'App, run the wizard again.',
@@ -59,7 +59,7 @@ export const PRODUCT_AUTONOMY_ABORT_CASES: AbortCase[] = [
     match: /^ai data processing approval declined$/i,
     message: 'AI data processing approval required',
     body:
-      'Signals analyzes your product data with AI, which needs an ' +
+      'Self-driving analyzes your product data with AI, which needs an ' +
       'organization-level approval. Without it, every signal is dropped ' +
       'before it reaches your inbox. Approve AI processing under Settings ' +
       '→ Organization → AI service providers, then run the wizard again.',
@@ -69,7 +69,7 @@ export const PRODUCT_AUTONOMY_ABORT_CASES: AbortCase[] = [
     match: /^requires-interactive-mode$/i,
     message: 'Interactive terminal required',
     body:
-      'Product Autonomy setup asks questions along the way (GitHub, issue ' +
+      'Self-driving setup asks questions along the way (GitHub, issue ' +
       'trackers, AI approval), so it needs an interactive terminal. Run ' +
       'the wizard outside CI / non-interactive mode.',
   },

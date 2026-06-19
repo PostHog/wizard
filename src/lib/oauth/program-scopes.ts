@@ -200,7 +200,7 @@ const PROGRAM_SCOPE_ADDITIONS: Partial<Record<ProgramId, readonly string[]>> = {
   // ever changes, this line will fail to type-check.
   'mcp-tutorial': MCP_TUTORIAL_SCOPE_ADDITIONS,
   'agent-skill': AGENT_SKILL_SCOPE_ADDITIONS,
-  'product-autonomy': PRODUCT_AUTONOMY_SCOPE_ADDITIONS,
+  'self-driving': PRODUCT_AUTONOMY_SCOPE_ADDITIONS,
   'posthog-integration': CONNECT_SLACK_SCOPE_ADDITIONS,
   slack: CONNECT_SLACK_SCOPE_ADDITIONS,
 };
