@@ -54,6 +54,11 @@ const run: ProgramRun = {
   // hyperlinks + clipboard copy so the overlay's line wrapping can't break
   // the click target. Scoped to this program only.
   richLinks: true,
+  // STEP 3 (GitHub App install) and STEP 5 (Linear OAuth) park on wizard_ask
+  // while the user does slow browser work; a first-time GitHub App install
+  // routinely exceeds the 5-min default, and a timeout is indistinguishable
+  // from a decline (both resolve to __cancelled__). Match upload-source-maps.
+  askTimeoutMs: 30 * 60 * 1000,
 
   postRun: async (session) => {
     await removeInstalledSkill(session.installDir);

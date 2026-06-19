@@ -75,6 +75,12 @@ describe('selfDrivingConfig', () => {
     );
   });
 
+  it('gives wizard_ask a 30-min timeout for the browser-handoff steps', () => {
+    const { run } = selfDrivingConfig;
+    const timeout = typeof run === 'object' ? run.askTimeoutMs : undefined;
+    expect(timeout).toBe(30 * 60 * 1000);
+  });
+
   it('wires the self-driving-setup skill and CLI command', () => {
     expect(selfDrivingConfig.command).toBe('self-driving');
     expect(selfDrivingConfig.skillId).toBe('self-driving-setup');
