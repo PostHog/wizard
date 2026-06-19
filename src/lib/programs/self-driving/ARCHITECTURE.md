@@ -137,13 +137,14 @@ auth-code flow:
 | `task:read`, `task:write` | The signal **source** config API (`inbox-source-configs-*`) is under the generic `task` scope (not a Signals-specific one). |
 | `integration:read` | `integrations-list` — verify GitHub (STEP 3). |
 | `signal_scout:read`, `signal_scout:write` | List/sync/tune the scout fleet (STEP 6). |
-| `session_recording:read`, `survey:read`, `error_tracking:read` | Read-only usage probes (STEP 2). **Already in the prod ceiling.** |
-| `external_data_source:read`, `external_data_source:write` | Create/verify warehouse sources (STEP 5). **NOT yet in the prod ceiling — see §7.** |
-| `llm_skill:read`, `llm_skill:write` | Read the authoring guide + canonical bodies, create approved custom scouts (STEP 7). **NOT yet in the prod ceiling — see §7.** |
+| `session_recording:read`, `survey:read`, `error_tracking:read` | Read-only usage probes (STEP 2). |
+| `external_data_source:read`, `external_data_source:write` | Create/verify warehouse sources (STEP 5). |
+| `llm_skill:read`, `llm_skill:write` | Read the authoring guide + canonical bodies, create approved custom scouts (STEP 7). |
 
 The prod `OAuthApplication.scopes` ceiling is an **exhaustive allow-list** (`posthog/scopes.py`,
-`scopes_within_ceiling`) — anything outside it is rejected at `/authorize`. So **all nine net-new
-scope objects must be in the prod ceiling**, not just the four the in-code comment flags (§7).
+`scopes_within_ceiling`) — anything outside it is rejected at `/authorize`. Several of these
+additions are **net-new** to that ceiling and must be added before any real-team launch; §7 item 1
+is the authoritative list.
 
 **Security & TUI.** YARA hooks (`src/lib/yara-hooks.ts`) scan Bash/Write/Edit/Read content and
 installed skills via the `warlock` scanner (fail-closed; categories: prompt injection, exfiltration,
@@ -255,10 +256,11 @@ Plus the **Temporal coordinator schedule** (`signals-scout-coordinator-schedule`
 > easiest to forget. Update this list whenever you add/rename a scope, flag, or backend surface.
 
 1. **OAuth scope ceiling (prod-admin DB action).** The prod `OAuthApplication.scopes` allow-list is
-   exhaustive (`posthog/scopes.py`), so confirm it contains **all nine net-new objects**: `task:read`,
-   `task:write`, `integration:read`, `signal_scout:read`, `signal_scout:write`, `external_data_source:read`,
-   `external_data_source:write`, `llm_skill:read`, `llm_skill:write`. The in-code comment explicitly flags
-   `external_data_source:*` and `llm_skill:*` as not-yet-present. Edit the US prod client
+   exhaustive (`posthog/scopes.py`), so add the **eight net-new objects** self-driving needs: `task:read`,
+   `task:write`, `signal_scout:read`, `signal_scout:write`, `external_data_source:read`,
+   `external_data_source:write`, `llm_skill:read`, `llm_skill:write`. (Its other four additions —
+   `integration:read`, `session_recording:read`, `survey:read`, `error_tracking:read` — are already in
+   the ceiling.) Edit the US prod client
    `c4Rdw8DIxgtQfA80IiSnGKlNX8QN00cFWF00QQhM`, and the dev client
    `DC5uRLVbGI02YQ82grxgnK6Qn12SXWpCqdPb60oZ` on `localhost:8010`.
 2. **context-mill skill release.** Merge `self-driving-setup` to `main` with the `mcp-publish` label
