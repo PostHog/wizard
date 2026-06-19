@@ -969,7 +969,20 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
         "'single' = pick one option, 'multi' = pick any, 'text' = free-form single-line answer",
       ),
     options: z
-      .array(z.object({ label: z.string(), value: z.string() }))
+      .array(
+        z.object({
+          label: z.string(),
+          value: z.string(),
+          description: z
+            .string()
+            .optional()
+            .describe(
+              'Optional secondary line shown dimmed and wrapped beneath the ' +
+                'label (multi-select only). Use when a choice needs more than a ' +
+                'title — e.g. what a custom scout watches and what makes it speak up.',
+            ),
+        }),
+      )
       .optional()
       .describe('Required for kind=single|multi; ignored for kind=text'),
     required: z.boolean().optional().describe('Defaults to true'),

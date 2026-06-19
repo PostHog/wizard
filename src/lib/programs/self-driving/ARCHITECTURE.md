@@ -66,7 +66,7 @@ matching context-mill file carries the HOW.
 5. **Enable sources** — always enable the scout gate; enable native sources (error tracking, replay, support) only where step-2 evidence shows the product is in use.
 6. **Offer issue trackers** — one multi-select (GitHub Issues / Linear / Zendesk / pganalyze). Auto-connect what the run can: GitHub Issues (pick a repo) and Linear (one-click OAuth link → single silent `integrations-list` check → create, never nudge). Zendesk / pganalyze need credentials the run never collects, so they're armed as dormant responders + a report follow-up — no UI redirect, no verification (a downstream reminder prompts the user to finish). Enable a (possibly dormant) responder for every pick.
 7. **Configure scout fleet** — materialize the canonical fleet; keep the universal scouts, enable conditional ones only with evidence, disable the rest.
-8. **Design custom scouts** — gap-analyze the repo against the fleet, propose candidates in one ask, create the approved subset (the only place custom scouts are made).
+8. **Design custom scouts** — gap-analyze the repo against the fleet, propose **at most 2** candidates in one ask (each a plain-language `label` + a dimmed `description`, behind a leading "None — keep the canonical fleet" default option), create the approved subset (the only place custom scouts are made).
 9. **Write report** — write `./posthog-self-driving-report.md` (everything changed + follow-ups); findings reach the inbox in ~30 min.
 
 The table below adds the skill reference and the tool/MCP surface for each.
@@ -80,7 +80,7 @@ The table below adds the skill reference and the tool/MCP surface for each.
 | 5 | Enable signal sources | `5-sources.md` | Create/enable `SignalSourceConfig` rows for products in use (`inbox-source-configs-*`). Always enables the scout gate `signals_scout`/`cross_source_issue`. Never enables an unconfirmed tool. |
 | 6 | Offer issue-tracker integrations | `6-connected-tools.md` (+ `6a`, `6b`) | One batched multi-select for GitHub Issues / Linear / Zendesk / pganalyze. GitHub Issues & Linear auto-connect via `external-data-sources-create` (Linear: OAuth link + one silent `integrations-list`, never nudge); Zendesk / pganalyze are armed dormant + report follow-up (no UI redirect, no verify). Enable a (possibly dormant) responder per pick. |
 | 7 | Configure the scout fleet | `7-scouts.md` | `signals-scout-config-sync` materializes the fleet (~19 scouts, grows over time); classify each row the sync returns — keep the cross-product scouts, enable surface-specific ones only with evidence, disable the rest (`signals-scout-config-update {enabled:false}`). Never touches `emit`/`run_interval`. |
-| 8 | Design custom scouts | `7b-tailor-scouts.md` | The **only** place custom scouts are created. Gap-analyze repo surfaces vs the fleet; propose in ONE `wizard_ask`; create approved ones via `llma-skill-create` (`signals-scout-<scope>`). **Canonical bodies never edited.** Declining is valid, not an abort. |
+| 8 | Design custom scouts | `7b-tailor-scouts.md` | The **only** place custom scouts are created. Gap-analyze repo surfaces vs the fleet; propose **at most 2** in ONE `wizard_ask`, each option carrying a `description` (an optional `wizard_ask` option field rendered dimmed/wrapped under the label) plus a leading "None" option that's the default highlight (so an empty submit declines); create approved ones via `llma-skill-create` (`signals-scout-<scope>`). **Canonical bodies never edited.** Declining is valid, not an abort. |
 | 9 | Write report & hand off | `8-report.md` | Write `./posthog-self-driving-report.md`; findings appear in the inbox in ~30 min. |
 
 **Abort contract:** the skill emits exact `[ABORT] <reason>` strings; the wizard matches them
@@ -120,7 +120,13 @@ Anything deeper here is generic machinery — read those two files directly.
 **`wizard-tools` MCP + `wizard_ask`** (`src/lib/wizard-tools.ts`). `check_env_keys` / `set_env_values`
 are the only sanctioned `.env` access (value-safe, `.gitignore`-guarded, secret-vault aware).
 `wizard_ask` is the **only** way to ask the user anything — 1–8 questions, capped at `maxQuestions`
-(13), batched. No bridge (CI/non-interactive) → returns an error telling the agent to default or emit
+(13), batched. Each `single`/`multi` option is `{ label, value, description? }`. `description` is
+**optional and additive** (added for STEP 8): rendered dimmed and wrapped beneath the label, and **only
+in the multi-select render path** (`PickerMenu` `MultiPickerMenu` + `WizardAskScreen`); when a question
+omits it, every other ask renders byte-for-byte as before, so no other program is touched. A
+multi-select's default focus is its first enabled option and an empty `enter` submits that focused
+option — which is why a **decline option, when present, is placed first** (it becomes the safe default).
+No bridge (CI/non-interactive) → returns an error telling the agent to default or emit
 `[ABORT] requires-interactive-mode`. The bridge (`src/lib/wizard-ask-bridge.ts`) brokers into the TUI
 overlay; cancelled/timed-out fields resolve to `CANCELLED_SENTINEL = '__cancelled__'`.
 
@@ -156,7 +162,8 @@ Source: `context-mill/context/skills/self-driving/`. `config.yaml` (`template: d
 `tags: [signals, self-driving]`, no fetched docs), `description.md` (becomes `SKILL.md`; declares
 the 9-step chain + the cross-cutting rules: trust the setup report, list-before-create idempotency,
 only switch sources on, ask-then-connect, **canonical scout bodies never edited — new scouts only in
-step 7b**), and the `references/` chain `1-check-access → 2-read-context → 3-ai-approval → 4-github →
+step 7b**, decline-option-first on every `wizard_ask` except the required step-4 GitHub gate), and the
+`references/` chain `1-check-access → 2-read-context → 3-ai-approval → 4-github →
 5-sources → 6-connected-tools` (+ `6a-github`, `6b-linear`) `→ 7-scouts → 7b-tailor-scouts → 8-report`
 (chained by `next_step` frontmatter; what each does is in the §2 table).
 
@@ -257,7 +264,13 @@ Plus the **Temporal coordinator schedule** (`signals-scout-coordinator-schedule`
    `c4Rdw8DIxgtQfA80IiSnGKlNX8QN00cFWF00QQhM`, and the dev client
    `DC5uRLVbGI02YQ82grxgnK6Qn12SXWpCqdPb60oZ` on `localhost:8010`.
 2. **context-mill skill release.** Merge `self-driving-setup` to `main` with the `mcp-publish` label
-   so the `latest` release contains the skill ZIP — else the prod wizard can't fetch it.
+   so the `latest` release contains the skill ZIP — else the prod wizard can't fetch it. **Sequencing
+   for the STEP 8 `description` field:** `7b` now emits `wizard_ask` options with a `description` (and a
+   leading "None" decline option). Ship the **wizard** `description`-field change (the npm release)
+   **before** this skill release. Reversed order degrades gracefully — Zod strips the unknown key (the
+   option schema isn't `.strict()`), so an older wizard just drops descriptions and shows label-only —
+   but wizard-first is the intended order. The decline-first reordering and the at-most-2 cap are pure
+   skill changes with no wizard dependency.
 3. **posthog backend deploy** of the `feat/signals-scout-config-sync` work: the `sync` endpoint, companion
    seeding (`lazy_seed.py`), and the 10 canonical scout skills.
 4. **Temporal coordinator schedule** running in prod.
@@ -337,6 +350,26 @@ Plus the **Temporal coordinator schedule** (`signals-scout-coordinator-schedule`
 >    of the full item-4 rename).
 > 8. Update Inbox UI to propose to run Wizard command for self-driving
 > 9. Disable scouts that replicate pipeline (error tracking/replay)
+> 10. Record the demo and discuss the textx with the team.
+> 11. ~~**Custom-scout proposal UX + decline-first asks.**~~ **DONE.** (a) **At most 2** custom scouts
+>     proposed — a hard rule in `7b` (mirrored in §2); nothing in wizard code clamps the count, on
+>     purpose (a count limit is product knowledge that belongs in the skill, not the ask infra). (b)
+>     **Per-option explanation** via a new **optional, additive** `wizard_ask` option `description`
+>     (wizard: `wizard-tools.ts` Zod schema, `wizard-session.ts` type, `PickerMenu.tsx`
+>     `PickerOption.description` + multi-select render with an explicit width so Ink wraps,
+>     `WizardAskScreen.tsx` forwarding + per-row spacing only when present) — **multi-path only, dormant
+>     when unset → no other program changes**; context-mill `7b` populates it per proposed scout. (c)
+>     **Decline option first on every self-driving `wizard_ask`** so it is the default highlight and an
+>     accidental `enter` declines: step 8 ("None — keep the canonical fleet"), step 6 ("None of these"),
+>     6a ("Skip GitHub Issues" + fallback "Skip for now"), 6b ("Skip Linear"). **Exception: step 4's
+>     GitHub gate** keeps the affirmative first and the decline ("I can't connect…", which aborts) last,
+>     since the run can't proceed without GitHub. Enforced as a cross-cutting rule in `description.md`
+>     (the agent builds every ask), so **no wizard code and no blast radius to other programs**. The
+>     shared `PickerMenu` empty-submit behavior (an empty `enter` selects the focused option, not `[]`)
+>     was **deliberately left unchanged**; decline-first neutralizes it for self-driving without touching
+>     the primitive. **Residual:** navigating onto a non-decline row and pressing `enter` without `space`
+>     still selects it (inherent to the untouched primitive; the cure is a one-line empty-`enter` → `[]`
+>     change if ever wanted). **Prod-sequencing** for the `description` field is in checklist item 2.
 
 ---
 

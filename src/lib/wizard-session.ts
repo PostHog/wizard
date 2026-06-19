@@ -126,7 +126,7 @@ export interface AskQuestion {
   /** text = single-line free input; single/multi = picker */
   kind: 'single' | 'multi' | 'text';
   /** Required for `single` and `multi`. Ignored for `text`. */
-  options?: { label: string; value: string }[];
+  options?: { label: string; value: string; description?: string }[];
   /** Defaults to true */
   required?: boolean;
   /**

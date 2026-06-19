@@ -148,20 +148,28 @@ const QuestionInput = ({ question, onSubmit }: QuestionInputProps) => {
         />
       );
 
-    case 'multi':
+    case 'multi': {
+      const multiOptions = (question.options ?? []).map((o) => ({
+        label: o.label,
+        value: o.value,
+        description: o.description,
+      }));
+      // Add vertical breathing room between options only when at least one
+      // carries a description — keeps every description-less multi-select
+      // (every other program) spaced exactly as before.
+      const hasDescriptions = multiOptions.some((o) => o.description);
       return (
         <PickerMenu<string>
           mode="multi"
-          options={(question.options ?? []).map((o) => ({
-            label: o.label,
-            value: o.value,
-          }))}
+          optionMarginBottom={hasDescriptions ? 1 : 0}
+          options={multiOptions}
           onSelect={(value) => {
             const v = Array.isArray(value) ? value : [value];
             onSubmit(v);
           }}
         />
       );
+    }
 
     case 'text':
       return (
