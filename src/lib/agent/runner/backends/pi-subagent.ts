@@ -18,8 +18,12 @@ import { defineTool } from '@earendil-works/pi-coding-agent';
 import type { ToolDefinition } from '@earendil-works/pi-coding-agent';
 import { logToFile } from '../../../../utils/debug';
 
-/** Read-only built-ins a subagent may use; bash is still allowlist-fenced. */
-const SUBAGENT_TOOLS = ['read', 'grep', 'find', 'ls', 'bash'];
+/**
+ * Read-only built-ins a subagent may use. bash is supplied separately as the
+ * parent's env-scrubbed tool (below), not the built-in, so a subagent's
+ * subprocesses are locked down too.
+ */
+const SUBAGENT_TOOLS = ['read', 'grep', 'find', 'ls'];
 
 const SUBAGENT_SYSTEM_PROMPT = [
   'You are a read-only research subagent for the PostHog wizard.',
@@ -28,7 +32,10 @@ const SUBAGENT_SYSTEM_PROMPT = [
   'Investigate the task you are given and report concise findings as your final message.',
 ].join('\n');
 
-function text(s: string): { content: [{ type: 'text'; text: string }]; details: unknown } {
+function text(s: string): {
+  content: [{ type: 'text'; text: string }];
+  details: unknown;
+} {
   return { content: [{ type: 'text', text: s }], details: {} };
 }
 
@@ -57,6 +64,8 @@ export interface SubagentContext {
   agentDir: string;
   /** The parent's security extension factory — reused so the fence is inherited. */
   securityFactory: (pi: unknown) => void;
+  /** The parent's env-scrubbed bash, so a subagent's subprocesses are locked down too. */
+  bashTool: ToolDefinition;
   /** pi SDK entrypoints, already imported by the backend. */
   sdk: {
     createAgentSession: typeof import('@earendil-works/pi-coding-agent')['createAgentSession'];
@@ -100,7 +109,8 @@ export function createDispatchAgentTool(ctx: SubagentContext): ToolDefinition {
         cwd: ctx.cwd,
         sessionManager: SessionManager.inMemory(ctx.cwd),
         resourceLoader: loader,
-        tools: SUBAGENT_TOOLS, // read-only; no custom tools, no dispatch_agent
+        tools: SUBAGENT_TOOLS, // read-only built-ins; no write/edit, no dispatch_agent
+        customTools: [ctx.bashTool], // env-scrubbed bash only (still allowlist-fenced)
       });
 
       let result = '';

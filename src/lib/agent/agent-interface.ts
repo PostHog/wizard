@@ -535,6 +535,33 @@ export function wizardCanUseTool(
 }
 
 /**
+ * When the wizard itself runs inside another agent (e.g. a Claude Code session
+ * or CI harness), the parent's `CLAUDE*` env vars advertise an active agent
+ * session with its own OAuth identity. Inherited by the SDK subprocess, they
+ * push it onto that OAuth path instead of bearer-authenticating to the gateway
+ * — a 401. Drop every inherited `CLAUDE*` var except the two the wizard sets
+ * itself, so the child authenticates fresh from the gateway token. A no-op in a
+ * plain terminal where none are set. Returns an undefined-valued map; the spawn
+ * treats undefined as "unset".
+ */
+export function neutralizeInheritedAgentSession(): Record<string, undefined> {
+  const wizardOwned = new Set([
+    'CLAUDE_CODE_OAUTH_TOKEN',
+    'CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS',
+  ]);
+  const out: Record<string, undefined> = {};
+  for (const key of Object.keys(process.env)) {
+    if (
+      (key.startsWith('CLAUDE') || key === 'CLAUDECODE') &&
+      !wizardOwned.has(key)
+    ) {
+      out[key] = undefined;
+    }
+  }
+  return out;
+}
+
+/**
  * Initialize agent configuration for the LLM gateway
  */
 export async function initializeAgent(
@@ -905,6 +932,9 @@ export async function runAgent(
         },
         env: {
           ...process.env,
+          // Drop an outer agent's inherited Claude Code session identity so the
+          // SDK bearer-authenticates to the gateway instead of its OAuth path.
+          ...neutralizeInheritedAgentSession(),
           // Prevent user's Anthropic API key from overriding the wizard's OAuth token
           ANTHROPIC_API_KEY: undefined,
           // Defer MCP tool schemas to avoid bloating the system prompt.

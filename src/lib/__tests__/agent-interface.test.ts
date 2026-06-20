@@ -1,4 +1,8 @@
-import { runAgent, createStopHook } from '@lib/agent/agent-interface';
+import {
+  runAgent,
+  createStopHook,
+  neutralizeInheritedAgentSession,
+} from '@lib/agent/agent-interface';
 import { AgentOutputSignals } from '@lib/agent/output-signals';
 import type { WizardRunOptions } from '@utils/types';
 import type { SpinnerHandle } from '@ui';
@@ -477,5 +481,42 @@ describe('createStopHook', () => {
     const first = hook(hookInput);
     expect(first).toHaveProperty('decision', 'block');
     expect((first as { reason: string }).reason).toContain('WIZARD-REMARK');
+  });
+});
+
+describe('neutralizeInheritedAgentSession', () => {
+  const saved = { ...process.env };
+  afterEach(() => {
+    for (const k of Object.keys(process.env)) delete process.env[k];
+    Object.assign(process.env, saved);
+  });
+
+  it('unsets an outer agent session’s inherited CLAUDE* identity vars', () => {
+    process.env.CLAUDECODE = '1';
+    process.env.CLAUDE_CODE_SESSION_ID = 'abc';
+    process.env.CLAUDE_CODE_OAUTH_SCOPES = 'read';
+
+    const result = neutralizeInheritedAgentSession();
+
+    expect(result).toHaveProperty('CLAUDECODE', undefined);
+    expect(result).toHaveProperty('CLAUDE_CODE_SESSION_ID', undefined);
+    expect(result).toHaveProperty('CLAUDE_CODE_OAUTH_SCOPES', undefined);
+  });
+
+  it('keeps the vars the wizard sets itself', () => {
+    process.env.CLAUDE_CODE_OAUTH_TOKEN = 'gateway-token';
+    process.env.CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS = 'true';
+
+    const result = neutralizeInheritedAgentSession();
+
+    expect('CLAUDE_CODE_OAUTH_TOKEN' in result).toBe(false);
+    expect('CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS' in result).toBe(false);
+  });
+
+  it('is a no-op when no agent-session vars are present', () => {
+    for (const k of Object.keys(process.env)) {
+      if (k.startsWith('CLAUDE')) delete process.env[k];
+    }
+    expect(neutralizeInheritedAgentSession()).toEqual({});
   });
 });
