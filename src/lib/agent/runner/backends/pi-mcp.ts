@@ -20,8 +20,14 @@ import { createJiti } from 'jiti';
 import { logToFile } from '../../../../utils/debug';
 
 const MCP_TOKEN_ENV = 'POSTHOG_MCP_TOKEN';
-/** Which PostHog MCP tools to surface as first-class tools (keeps context small). */
-const DIRECT_TOOL_PATTERN = /dashboard|insight|query/i;
+/**
+ * Which PostHog MCP tools to surface as first-class tools. Only the few the
+ * dashboard step needs — creating a dashboard and adding insights to it. The
+ * broad `/dashboard|insight|query/` matched ~30 tools, which bloated context
+ * (and tripped post-run compaction); the create/add verbs are enough.
+ */
+const DIRECT_TOOL_PATTERN =
+  /(dashboard|insight)[-_]?(create)|(create)[-_]?(dashboard|insight)|add[-_]?insight|dashboard[-_]?add/i;
 
 export interface PostHogMcpSetup {
   /** pi ExtensionFactory to add to the resource loader's `extensionFactories`. */
