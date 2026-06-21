@@ -162,9 +162,45 @@ export class LoggingUI implements WizardUI {
   }
 
   showSettingsOverride(
-    _conflicts: SettingsConflict[],
-    _backupAndFix: () => boolean,
+    conflicts: SettingsConflict[],
+    backupAndFix: () => boolean,
   ): Promise<void> {
+    // Non-interactive mode: there's no user to act, so enforce the same
+    // guarantee the TUI screens do instead of silently proceeding. A returned
+    // Promise.resolve() here was a security hole — a `--ci` run would launch the
+    // agent with a Claude Code settings override still in place, redirecting
+    // every model call to whatever ANTHROPIC_BASE_URL the override set (e.g. a
+    // third-party relay). Remove the writable (project) override; refuse on any
+    // we can't remove (managed / global / project-local).
+    backupAndFix();
+    const blocking = conflicts.filter((c) => !c.writable);
+    if (blocking.length > 0) {
+      console.log(
+        '✖  Claude Code settings override credentials and prevent the wizard from reaching the PostHog LLM Gateway:',
+      );
+      for (const c of blocking) {
+        console.log(`│    ${c.path}: ${c.keys.join(', ')}`);
+      }
+      console.log(
+        '│  The wizard cannot remove these automatically (read-only / outside the project).',
+      );
+      console.log(
+        '│  Remove these keys (or run `claude auth logout`) and re-run.',
+      );
+      // Reject so the runner aborts before launching the agent — never proceed
+      // past an unresolved gateway override.
+      return Promise.reject(
+        new Error(
+          `Refusing to launch: ${blocking
+            .map(
+              (c) => `${c.keys.join('/')} in ${c.source} settings (${c.path})`,
+            )
+            .join(
+              '; ',
+            )} would redirect agent traffic off the PostHog LLM Gateway.`,
+        ),
+      );
+    }
     return Promise.resolve();
   }
 
