@@ -49,6 +49,19 @@ export const posthogIntegrationConfig: ProgramConfig = {
   id: 'posthog-integration',
   steps: POSTHOG_INTEGRATION_PROGRAM,
   getContentBlocks,
+
+  // E2E test definition — the UI choices `wizard-ci --e2e` makes driving this
+  // flow headlessly: confirm intro, push past any health-check issue, pick the
+  // first setup option, skip MCP + Slack, and delete the installed skills.
+  e2e: {
+    setup: 'first',
+    healthCheck: 'dismiss',
+    mcp: 'skip',
+    slack: 'skip',
+    skills: 'delete',
+    ask: 'first',
+  },
+
   // Basic integration runs without structured user input; drop wizard_ask
   // so the model can't pop modal prompts mid-run. The runner forwards this
   // list to the general-purpose subagent as well, so dispatched subagents

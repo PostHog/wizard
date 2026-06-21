@@ -257,6 +257,13 @@ export interface ProgramConfig {
    * `ProgramCliSurface` for semantics.
    */
   cli?: ProgramCliSurface;
+  /**
+   * E2E test definition: the UI choices a headless control-plane run
+   * (`wizard-ci --e2e`) makes at each decision point of THIS program's flow.
+   * Product knowledge about the flow lives here, not in the test harness.
+   * Absent → the program isn't e2e-drivable yet. See `WizardE2eProfile`.
+   */
+  e2e?: import('@lib/ci-driver/e2e-profile').WizardE2eProfile;
 }
 
 /**
