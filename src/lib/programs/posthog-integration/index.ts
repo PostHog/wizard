@@ -20,6 +20,7 @@ import { requestDeepLink } from '@utils/provisioning';
 import { openTrackedLink, withUtm } from '@utils/links';
 import type { CloudRegion } from '@utils/types';
 import { POSTHOG_INTEGRATION_PROGRAM } from './steps.js';
+import { POSTHOG_INTEGRATION_E2E_PROFILE } from './e2e.js';
 import { getContentBlocks } from './content/index.js';
 import { buildCodingAgentPrompt } from './handoff.js';
 
@@ -51,16 +52,8 @@ export const posthogIntegrationConfig: ProgramConfig = {
   getContentBlocks,
 
   // E2E test definition — the UI choices `wizard-ci --e2e` makes driving this
-  // flow headlessly: confirm intro, push past any health-check issue, pick the
-  // first setup option, skip MCP + Slack, and delete the installed skills.
-  e2e: {
-    setup: 'first',
-    healthCheck: 'dismiss',
-    mcp: 'skip',
-    slack: 'skip',
-    skills: 'delete',
-    ask: 'first',
-  },
+  // flow headlessly. Lives in ./e2e.ts (product knowledge, not harness logic).
+  e2e: POSTHOG_INTEGRATION_E2E_PROFILE,
 
   // Basic integration runs without structured user input; drop wizard_ask
   // so the model can't pop modal prompts mid-run. The runner forwards this
