@@ -84,8 +84,9 @@ list_actions / perform_action), the screen→action registry, and the
 
 **To change what the run clicks**, edit the program's **e2e profile** — the UI
 choices live ON the program, not in the harness:
-`posthogIntegrationConfig.e2e` (`src/lib/programs/posthog-integration/index.ts`),
-typed by `WizardE2eProfile` (`src/lib/ci-driver/e2e-profile.ts`). The harness
+the profile in `src/lib/programs/posthog-integration/e2e.ts` (wired in via
+`ProgramConfig.e2e`), typed by `WizardE2eProfile`
+(`src/lib/ci-driver/e2e-profile.ts`). The harness
 asks `decideE2eAction(state, profile)` what to commit on each screen. To make a
 *different* program e2e-drivable, give it an `e2e` profile too.
 
