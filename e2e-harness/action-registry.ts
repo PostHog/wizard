@@ -10,10 +10,6 @@
  * Discipline mirrors screen-registry.tsx: one entry per screen, kept exhaustive
  * by a test over the ScreenId/Overlay enums. No product knowledge leaks in —
  * actions speak only in store setters and generic params.
- *
- * Never ships to prod: the `apply` closures call prod store setters, but this
- * registry lives in e2e-harness/ and is imported only by the driver/tests — no
- * production code references it, so it never reaches the tsdown bundle.
  */
 
 import type { WizardStore } from '@ui/tui/store';
@@ -81,12 +77,6 @@ export const NO_ACTION_SCREENS: ReadonlySet<ScreenName> = new Set<ScreenName>([
  * Intro-style screens whose only action is "confirm and continue", committing
  * the same `setupConfirmed` flag the IntroScreen sets. Several programs reuse
  * this shape, so they share one action via this helper.
- *
- * This is the store hop of the trace in {@link ./wizard-ci-tools} (perform_action):
- * `apply` calls `store.completeSetup()`, which does
- * `$session.setKey('setupConfirmed', true)` + `emitChange()`. `router.resolve`
- * then treats the intro as complete and renders the next screen — no imperative
- * navigation, just a flag flip the screen sequence reacts to.
  */
 const confirmSetupAction: DriverAction = {
   id: 'confirm_setup',
