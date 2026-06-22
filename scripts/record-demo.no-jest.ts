@@ -17,13 +17,10 @@ import { FRAMEWORK_REGISTRY } from '@lib/registry';
 import { WizardReadiness } from '@lib/health-checks/readiness';
 import { Program } from '@lib/programs/program-registry';
 import { ScreenId } from '@ui/tui/router';
-import { posthogIntegrationConfig } from '@lib/programs/posthog-integration';
-import { WizardCiDriver } from '@lib/ci-driver/wizard-ci-driver';
-import {
-  decideE2eAction,
-  DEFAULT_E2E_PROFILE,
-} from '@lib/ci-driver/e2e-profile';
-import { WizardRecorder } from '@lib/ci-driver/recorder';
+import { WizardCiDriver } from '@e2e-harness/wizard-ci-driver';
+import { decideE2eAction } from '@e2e-harness/e2e-profile';
+import { profileFor } from '@e2e-harness/profiles';
+import { WizardRecorder } from '@e2e-harness/recorder';
 
 const out = process.env.RECORDING_OUT ?? '/tmp/wizard-demo.recording.json';
 
@@ -43,7 +40,7 @@ const rec = new WizardRecorder(
 rec.start();
 
 const driver = new WizardCiDriver(store);
-const profile = posthogIntegrationConfig.e2e ?? DEFAULT_E2E_PROFILE;
+const profile = profileFor(Program.PostHogIntegration);
 
 for (let i = 0; i < 40; i++) {
   const state = driver.readState();

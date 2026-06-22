@@ -14,7 +14,7 @@
 import { mkdirSync, writeFileSync, rmSync } from 'fs';
 import { join } from 'path';
 import type { ProgramId } from '@ui/tui/router';
-import { loadRecording, renderFrame } from '@lib/ci-driver/replay';
+import { loadRecording, renderFrame } from '@e2e-harness/replay';
 
 const [recordingPath, outDir] = process.argv.slice(2);
 if (!recordingPath || !outDir) {

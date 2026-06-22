@@ -21,7 +21,7 @@ import { buildSession, RunPhase } from '@lib/wizard-session';
 import { Program } from '@lib/programs/program-registry';
 import { WizardReadiness } from '@lib/health-checks/readiness';
 import { ScreenId, Overlay, type ScreenName } from '@ui/tui/router';
-import { WizardCiDriver } from '@lib/ci-driver/wizard-ci-driver';
+import { WizardCiDriver } from '@e2e-harness/wizard-ci-driver';
 
 function makeOneFileProject(): string {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'wizard-ci-'));

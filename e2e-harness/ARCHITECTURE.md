@@ -8,12 +8,17 @@ agent-only).
 
 ## The pieces
 
+This whole harness lives in `e2e-harness/` at the repo root — deliberately OUT
+of `src/` so none of it is part of the wizard's production source (nothing in
+`src/` imports it; the tsdown bundle never includes it).
+
 ```
-src/lib/ci-driver/
+e2e-harness/
   wizard-ci-driver.ts   WizardCiDriver — read_state / list_actions / perform_action
   action-registry.ts    screen → the actions legal on it (+ NO_ACTION_SCREENS)
   wizard-ci-tools.ts     in-process MCP server exposing the driver to an external loop
   e2e-profile.ts        WizardE2eProfile + decideE2eAction — the scripted walk policy
+  profiles.ts           per-program profiles + profileFor(programId)
   recorder.ts           captures a run as key-moment frames
   replay.ts             reconstructs a frame's store and renders the real Ink screen
 ```
@@ -72,12 +77,12 @@ The harness emits a JSON result; assert on:
 
 ## Changing what the run does
 
-The UI choices live **on the program**, not in the harness — product knowledge
-stays out of infrastructure. Edit the program's e2e profile
-(`src/lib/programs/posthog-integration/e2e.ts`, wired via `ProgramConfig.e2e`,
-typed by `WizardE2eProfile`). The harness asks `decideE2eAction(state, profile)`
-what to commit on each screen. To make another program e2e-drivable, give it an
-`e2e` profile too.
+The per-program UI choices are product knowledge, but they live in the harness
+(`profiles.ts`, keyed by program id) — not on the program config — so this
+machinery stays out of the wizard's production source. Edit the program's entry
+in `profiles.ts` (typed by `WizardE2eProfile`). The harness asks
+`decideE2eAction(state, profile)` what to commit on each screen. To make another
+program e2e-drivable, add its profile to `profiles.ts`.
 
 The flow is **snapshot-tested** offline (no agent, deterministic):
 `__tests__/e2e-flow-snapshot.test.ts` golden-checks the (screen → decision)

@@ -18,11 +18,11 @@ import { setUI } from '@ui/index';
 import { buildSession } from '@lib/wizard-session';
 import { buildAgentEnv } from '@lib/agent/agent-interface';
 import { Program } from '@lib/programs/program-registry';
-import { WizardCiDriver } from '@lib/ci-driver/wizard-ci-driver';
+import { WizardCiDriver } from '@e2e-harness/wizard-ci-driver';
 import {
   createWizardCiToolsServer,
   CI_TOOL_NAMES,
-} from '@lib/ci-driver/wizard-ci-tools';
+} from '@e2e-harness/wizard-ci-tools';
 
 const GATEWAY_URL = 'https://gateway.us.posthog.com/wizard';
 const MODEL = 'claude-haiku-4-5-20251001';

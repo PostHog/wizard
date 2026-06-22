@@ -158,6 +158,7 @@
       "^ink$": "<rootDir>/__mocks__/ink.ts",
       "^@env$": "<rootDir>/src/env.ts",
       "^@lib/(.*)$": "<rootDir>/src/lib/$1",
+      "^@e2e-harness/(.*)$": "<rootDir>/e2e-harness/$1",
       "^@utils/(.*)$": "<rootDir>/src/utils/$1",
       "^@ui$": "<rootDir>/src/ui/index.ts",
       "^@ui/(.*)$": "<rootDir>/src/ui/$1",

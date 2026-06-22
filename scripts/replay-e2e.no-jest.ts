@@ -8,7 +8,7 @@
  */
 import { createInterface } from 'readline';
 import type { ProgramId } from '@ui/tui/router';
-import { loadRecording, renderFrame, frameHeader } from '@lib/ci-driver/replay';
+import { loadRecording, renderFrame, frameHeader } from '@e2e-harness/replay';
 
 const ENTER_ALT = '\x1b[?1049h';
 const LEAVE_ALT = '\x1b[?1049l';

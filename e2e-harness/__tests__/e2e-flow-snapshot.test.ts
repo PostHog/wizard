@@ -22,9 +22,9 @@ import { FRAMEWORK_REGISTRY } from '@lib/registry';
 import { WizardReadiness } from '@lib/health-checks/readiness';
 import { Program } from '@lib/programs/program-registry';
 import { ScreenId } from '@ui/tui/router';
-import { posthogIntegrationConfig } from '@lib/programs/posthog-integration';
 import { WizardCiDriver } from '../wizard-ci-driver';
-import { decideE2eAction, DEFAULT_E2E_PROFILE } from '../e2e-profile';
+import { decideE2eAction } from '../e2e-profile';
+import { profileFor } from '../profiles';
 
 /**
  * Walk the program flow offline using its e2e profile, injecting the external
@@ -42,7 +42,7 @@ function traceFlow(
   store.session = session;
 
   const driver = new WizardCiDriver(store);
-  const profile = posthogIntegrationConfig.e2e ?? DEFAULT_E2E_PROFILE;
+  const profile = profileFor(Program.PostHogIntegration);
 
   const trace: Array<{ screen: string; action: string }> = [];
   for (let guard = 0; guard < 40; guard++) {
@@ -82,7 +82,7 @@ describe('e2e flow snapshot — posthog-integration', () => {
   it('Next.js (with a setup question) walks a stable path', () => {
     expect({
       program: 'posthog-integration',
-      profile: posthogIntegrationConfig.e2e,
+      profile: profileFor(Program.PostHogIntegration),
       trace: traceFlow(Integration.nextjs),
     }).toMatchSnapshot();
   });

@@ -2,11 +2,12 @@
  * WizardE2eProfile — a program's declarative e2e "test definition": the
  * UI choices a headless e2e run should make at each decision point.
  *
- * This is the test format the design discipline wants: the *choices* are
- * product knowledge about a program's flow, so they live on the program's
- * `ProgramConfig.e2e`, not hardcoded in the harness. The harness is generic —
- * it reads the profile and asks {@link decideE2eAction} what to commit on the
- * current screen. Add a profile to a program to make it e2e-drivable.
+ * The *choices* are product knowledge about a program's flow, but they live in
+ * the harness ({@link ./profiles}, keyed by program id) rather than on the
+ * program config — so none of this e2e machinery reaches the wizard's
+ * production source. The harness is generic: it reads a profile and asks
+ * {@link decideE2eAction} what to commit on the current screen. Add a program's
+ * profile to {@link ./profiles} to make it e2e-drivable.
  */
 
 import { ScreenId, Overlay, type ScreenName } from '@ui/tui/router';

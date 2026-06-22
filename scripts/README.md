@@ -37,11 +37,11 @@ Real `--e2e` runs also drop a recording at
 
 ## Background
 
-The control plane lives in [`src/lib/ci-driver/`](../src/lib/ci-driver/) —
-`WizardCiDriver` (read/act over the store), the screen→action registry, the
-`wizard-ci-tools` MCP server, the e2e profile, and the recorder/replay. See
-[`ARCHITECTURE.md`](../src/lib/ci-driver/ARCHITECTURE.md) for how an agent
-drives these (env strip, scoped project id, gotchas).
+The control plane lives in [`e2e-harness/`](../e2e-harness/) — out of `src/`, so
+none of it ships in prod. `WizardCiDriver` (read/act over the store), the
+screen→action registry, the `wizard-ci-tools` MCP server, the e2e profiles, and
+the recorder/replay. See [`ARCHITECTURE.md`](../e2e-harness/ARCHITECTURE.md) for
+how an agent drives these (env strip, scoped project id, gotchas).
 
 > **Security-leak repro scripts** (`relay-prod.no-jest.ts`,
 > `precedence.no-jest.ts`) that reproduce the `ANTHROPIC_BASE_URL`

@@ -20,16 +20,16 @@ import { InkUI } from '@ui/tui/ink-ui';
 import { setUI } from '@ui/index';
 import { buildSession, RunPhase } from '@lib/wizard-session';
 import { Program } from '@lib/programs/program-registry';
-import { WizardCiDriver } from '@lib/ci-driver/wizard-ci-driver';
+import { WizardCiDriver } from '@e2e-harness/wizard-ci-driver';
 import { runAgent } from '@lib/agent/agent-runner';
 import { posthogIntegrationConfig } from '@lib/programs/posthog-integration';
 import type { ScreenName } from '@ui/tui/router';
 import {
   decideE2eAction,
-  DEFAULT_E2E_PROFILE,
   type WizardE2eProfile,
-} from '@lib/ci-driver/e2e-profile';
-import { WizardRecorder } from '@lib/ci-driver/recorder';
+} from '@e2e-harness/e2e-profile';
+import { profileFor } from '@e2e-harness/profiles';
+import { WizardRecorder } from '@e2e-harness/recorder';
 
 const log = (m: string) => process.stdout.write(`[e2e] ${m}\n`);
 
@@ -95,12 +95,11 @@ async function main() {
 
   const driver = new WizardCiDriver(store);
 
-  // The program OWNS its e2e UI choices (ProgramConfig.e2e). The harness is
-  // generic: it asks decideE2eAction what to commit on each screen. The
-  // --keep-skills flag (E2E_KEEP_SKILLS) overrides the profile's skills policy.
+  // The harness owns the per-program e2e UI choices (profileFor). It asks
+  // decideE2eAction what to commit on each screen. The --keep-skills flag
+  // (E2E_KEEP_SKILLS) overrides the profile's skills policy.
   const profile: WizardE2eProfile = {
-    ...DEFAULT_E2E_PROFILE,
-    ...(posthogIntegrationConfig.e2e ?? {}),
+    ...profileFor(Program.PostHogIntegration),
     ...(keepSkills ? { skills: 'keep' as const } : {}),
   };
   log(`e2e profile: ${JSON.stringify(profile)}`);
