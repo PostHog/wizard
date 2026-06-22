@@ -38,7 +38,7 @@ export const SelfDrivingIntroScreen = ({
   const subtitle = (
     <>
       <Text bold>
-        This wizard uses AI (Anthropic's Claude) to read and modify your code.
+        This wizard uses AI to read and modify your code.
       </Text>
       <Text dimColor>.env* file contents will not leave your machine.</Text>
     </>
