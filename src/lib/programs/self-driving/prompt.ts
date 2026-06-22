@@ -109,8 +109,9 @@ STEP 5 — Offer issue-tracker integrations. (skill: "Connected tools")
    a source only for a tool the user picked.
 
 STEP 6 — Configure the scout fleet. (skill: "Scouts")
-   Materialize the fleet and disable the scouts whose product surface
-   this project lacks, per the skill.
+   Materialize the fleet, then enable only a small set — the general
+   scout plus the one or two specialists for the products this project
+   uses most — and disable the rest, per the skill.
 
 STEP 7 — Design custom scouts for this product. (skill: "Custom scouts")
    You are the only actor that has read this repo — turn that into
