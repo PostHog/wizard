@@ -1,15 +1,16 @@
 /**
  * wizard-ci-mcp — a standalone stdio MCP server that holds ONE live WizardStore
- * and exposes it, so an external agent (Claude Code) drives a real wizard run
- * turn by turn: read_state → perform_action → … → run_agent → … → keep_skills,
- * rendering the screen whenever it wants. Unlike e2e-full-run (which drives
- * itself via the scripted profile), here the connected agent makes every choice.
+ * and exposes it, so an external agent (Claude Code, in a session where this is
+ * registered) drives a real wizard run turn by turn: read_state → perform_action
+ * → … → run_agent → … → keep_skills, rendering the screen whenever it wants.
  *
  *   APP_DIR=/tmp/app POSTHOG_KEY_FILE=/path/to/phx.txt PROJECT_ID=… \
  *     npx tsx scripts/wizard-ci-mcp.no-jest.ts          # speaks MCP on stdio
  *
- * Tools: read_state, perform_action, render_screen, run_agent.
- * stdout is the JSON-RPC channel — diagnostics go to stderr only.
+ * The transport connects immediately; the store (framework detection + the
+ * networked health probe) is built lazily on the first tool call, so the MCP
+ * handshake never blocks. Tools: read_state, perform_action, render_screen,
+ * run_agent. stdout is the JSON-RPC channel — diagnostics go to stderr only.
  */
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
@@ -35,9 +36,39 @@ const text = (data: unknown) => ({
   ],
 });
 
+/** Render a store's current screen to ANSI (access token redacted). */
+function renderNow(store: WizardStore): string {
+  const s = store.session;
+  const session: WizardSession = s.credentials
+    ? {
+        ...s,
+        credentials: { ...s.credentials, accessToken: 'phx_***redacted***' },
+      }
+    : s;
+  const frame: RecordedFrame = {
+    seq: 0,
+    ms: 0,
+    triggers: ['screen'],
+    screen: store.currentScreen,
+    hasOverlay: store.router.hasOverlay,
+    session,
+    tasks: store.tasks.map((t) => ({
+      label: t.label,
+      status: t.status,
+      activeForm: t.activeForm,
+      done: t.done,
+    })),
+    statusMessages: [...store.statusMessages],
+    eventPlan: store.eventPlan.map((e) => ({
+      name: e.name,
+      description: e.description,
+    })),
+  };
+  return renderFrame(frame, Program.PostHogIntegration);
+}
+
 async function main() {
-  // The key can come inline or from a file path (keeps the secret out of the
-  // MCP config the agent registers).
+  // Fast, offline validation — fail clearly before connecting if misconfigured.
   const apiKey = (
     process.env.POSTHOG_PERSONAL_API_KEY ??
     (process.env.POSTHOG_KEY_FILE
@@ -53,49 +84,25 @@ async function main() {
   if (!appDir || !fs.existsSync(appDir))
     throw new Error(`APP_DIR missing or not found: ${appDir}`);
 
-  const store = new WizardStore(Program.PostHogIntegration);
-  setUI(new InkUI(store)); // real UI, never rendered → no stdout
-  store.session = buildSession({
-    installDir: appDir,
-    ci: true, // OAuth-bypass + ai-opt-in auto-consent; phx key as gateway bearer
-    apiKey,
-    projectId,
-    region,
-  });
-  await store.runReadyHooks(); // framework detection
-  store.runInitHooks(); // health-check readiness probe
-  const driver = new WizardCiDriver(store);
-
-  /** Render the current screen to ANSI (access token redacted). */
-  const renderNow = (): string => {
-    const s = store.session;
-    const session: WizardSession = s.credentials
-      ? {
-          ...s,
-          credentials: { ...s.credentials, accessToken: 'phx_***redacted***' },
-        }
-      : s;
-    const frame: RecordedFrame = {
-      seq: 0,
-      ms: 0,
-      triggers: ['screen'],
-      screen: store.currentScreen,
-      hasOverlay: store.router.hasOverlay,
-      session,
-      tasks: store.tasks.map((t) => ({
-        label: t.label,
-        status: t.status,
-        activeForm: t.activeForm,
-        done: t.done,
-      })),
-      statusMessages: [...store.statusMessages],
-      eventPlan: store.eventPlan.map((e) => ({
-        name: e.name,
-        description: e.description,
-      })),
-    };
-    return renderFrame(frame, Program.PostHogIntegration);
-  };
+  // Build the live store lazily on first use: detection + the networked health
+  // probe are slow, and doing them before connect() would stall the handshake.
+  let ready: Promise<{ store: WizardStore; driver: WizardCiDriver }> | null =
+    null;
+  const live = () =>
+    (ready ??= (async () => {
+      const store = new WizardStore(Program.PostHogIntegration);
+      setUI(new InkUI(store)); // never rendered → no stdout
+      store.session = buildSession({
+        installDir: appDir,
+        ci: true, // OAuth-bypass + ai-opt-in auto-consent; phx key as gateway bearer
+        apiKey,
+        projectId,
+        region,
+      });
+      await store.runReadyHooks(); // framework detection
+      store.runInitHooks(); // health-check readiness probe
+      return { store, driver: new WizardCiDriver(store) };
+    })());
 
   const server = new McpServer({ name: 'wizard-ci', version: '1.0.0' });
 
@@ -103,7 +110,7 @@ async function main() {
     'read_state',
     "Read the wizard's committed state: current screen, run phase, a secret-free session view, agent tasks/status, any pending question, unresolved setup questions, and the actions legal right now. Call first and after every perform_action.",
     {},
-    async () => text(driver.readState()),
+    async () => text((await live()).driver.readState()),
   );
 
   server.tool(
@@ -118,7 +125,7 @@ async function main() {
     },
     async ({ action, params }) => {
       try {
-        return text(driver.performAction(action, params ?? {}));
+        return text((await live()).driver.performAction(action, params ?? {}));
       } catch (e) {
         return {
           content: [
@@ -137,7 +144,7 @@ async function main() {
     'render_screen',
     'Render the current TUI screen to ANSI so you can see exactly what the user would.',
     {},
-    async () => text(renderNow()),
+    async () => text(renderNow((await live()).store)),
   );
 
   server.tool(
@@ -145,6 +152,7 @@ async function main() {
     "Run the real wizard integration agent — the `run` screen's work. Blocks until it finishes (minutes), then returns the final runPhase and next screen. Call when read_state shows currentScreen=run.",
     {},
     async () => {
+      const { store } = await live();
       await store.getGate('intro');
       await store.getGate('health-check');
       await runAgent(posthogIntegrationConfig, store.session);
@@ -155,12 +163,8 @@ async function main() {
     },
   );
 
-  process.stderr.write(
-    `wizard-ci-mcp: serving on stdio (app=${appDir}, detected=${
-      store.session.integration ?? '?'
-    })\n`,
-  );
   await server.connect(new StdioServerTransport());
+  process.stderr.write(`wizard-ci-mcp: ready on stdio (app=${appDir})\n`);
 }
 
 main().catch((e) => {

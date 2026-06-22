@@ -1,18 +1,17 @@
 ---
 name: exploring-the-wizard
-description: Run, drive, and explore the PostHog wizard headlessly against an app — decide each screen yourself (read_state / perform_action / run_agent) and snapshot the TUI to view. Use when you want to test or explore the wizard end-to-end without a terminal.
+description: Run, drive, and explore the PostHog wizard headlessly against an app — decide each screen yourself over MCP (read_state / perform_action / run_agent) and snapshot the TUI to view. Use when you want to test or explore the wizard end-to-end without a terminal.
 compatibility: Designed for Claude Code working on the PostHog wizard codebase.
 metadata:
   author: posthog
-  version: "2.1"
+  version: "2.2"
 ---
 
 # Exploring the wizard as an agent
 
 Drive a real wizard run headlessly and decide each step yourself — read the
-current screen, commit a decision, fire the agent, snapshot the TUI. The control
-plane is `WizardCiDriver` (read/act over a live store); for _how_ it works, read
-[`e2e-harness/ARCHITECTURE.md`](../../../e2e-harness/ARCHITECTURE.md).
+current screen, commit a decision, fire the agent, snapshot the TUI. For _how_ it
+works, read [`e2e-harness/ARCHITECTURE.md`](../../../e2e-harness/ARCHITECTURE.md).
 
 ## 0. Ask for the key, set up
 
@@ -21,13 +20,51 @@ absolute path to your phx key file?" — plus the project id and region if you d
 have them. Clone/point at the app as a **throwaway `/tmp` copy** (never a real
 fixture). Note `WIZARD_PATH` (this repo). Never print or commit the key.
 
-## 1. Drive it from a script (works in THIS session)
+## 1. Drive it over MCP
 
-Write a script that drives the `WizardCiDriver` turn by turn — `readState()` →
-_your_ decision → `performAction()`, `renderFrame()` to see each screen. Put it
-**inside this repo** (so `@lib`/`@e2e-harness` resolve), name it
-`scripts/explore.no-jest.ts`, run `npx tsx scripts/explore.no-jest.ts`, then
-delete it. Run it, read the output, adjust the decisions, re-run.
+The `wizard-ci-mcp` server holds one live store and exposes it as tools. **MCP
+tools load at session start**, so this is two phases — register, then drive in a
+**fresh session**.
+
+**Phase 1 — register (in your current session):**
+
+```bash
+claude mcp add -s project wizard-ci \
+  -e APP_DIR=/tmp/<the app copy> \
+  -e POSTHOG_KEY_FILE=<key file path> \
+  -e PROJECT_ID=<project id> \
+  -e POSTHOG_REGION=us \
+  -- npx tsx "$WIZARD_PATH/scripts/wizard-ci-mcp.no-jest.ts"
+```
+
+Confirm it loads: `claude mcp list` shows `wizard-ci: … ✔ Connected`. Then tell the
+user to **start a fresh Claude Code session in this repo** (a new tab) — that's
+where the tools live. (`APP_DIR` is any dir, so an external repo works: clone it to
+`/tmp` and point `APP_DIR` at it.)
+
+**Phase 2 — drive (in the fresh session):** the `wizard-ci` tools are now bound.
+Walk the flow, deciding each screen:
+
+- **`read_state`** — current screen, run phase, secret-free session, tasks, the
+  actions legal now. Call first and after every move.
+- **`perform_action {action, params?}`** — `confirm_setup`, `dismiss_outage`,
+  `choose` (a setup question), `set_mcp_outcome`, `dismiss_slack`, `keep_skills`.
+- **`render_screen`** — render the current TUI to ANSI so you can _see_ it.
+- **`run_agent`** — on the `run` screen, the **real integration** (blocks minutes).
+
+```
+read_state → intro → perform_action confirm_setup
+read_state → health-check → perform_action dismiss_outage
+read_state → run → run_agent            (the real integration)
+read_state → outro → perform_action dismiss_outro → … → keep_skills
+```
+
+## 2. Drive it from a script (no fresh session needed)
+
+If you can't start a new session, drive the same `WizardCiDriver` from a script —
+`readState()` → your decision → `performAction()`, `renderFrame()` to view. Put it
+inside this repo (so `@lib`/`@e2e-harness` resolve) as `scripts/explore.no-jest.ts`,
+run `npx tsx scripts/explore.no-jest.ts`, then delete it.
 
 ```ts
 import fs from 'fs';
@@ -52,37 +89,31 @@ async function main() {
     projectId: process.env.PROJECT_ID!,
     region: 'us',
   });
-  await store.runReadyHooks(); // framework detection
-  store.runInitHooks(); // health-check probe
-
+  await store.runReadyHooks();
+  store.runInitHooks();
   const rec = new WizardRecorder(store, { program: 'posthog-integration' });
   rec.start();
   const driver = new WizardCiDriver(store);
   const at = () => {
     const s = driver.readState();
     console.log(s.currentScreen, s.actions.map((a) => a.id));
-    return s.currentScreen;
   };
 
-  // YOU decide each screen — read state, then commit a legal action:
   at(); // intro
   driver.performAction('confirm_setup');
   at(); // health-check
   driver.performAction('dismiss_outage');
   // setup question? -> driver.performAction('choose', { key, value })
 
-  // the `run` screen = the real integration agent (blocks minutes):
   await store.getGate('intro');
   await store.getGate('health-check');
-  await runAgent(posthogIntegrationConfig, store.session);
+  await runAgent(posthogIntegrationConfig, store.session); // the real integration
 
-  // post-run screens:
   driver.performAction('dismiss_outro');
   driver.performAction('set_mcp_outcome', { outcome: 'skipped' });
   driver.performAction('dismiss_slack');
   driver.performAction('keep_skills', { kept: false });
 
-  // SEE every key moment as the real TUI:
   rec.stop();
   for (const f of rec.getRecording().frames) {
     console.log(`\n=== ${f.screen} ===\n` + renderFrame(f, Program.PostHogIntegration));
@@ -91,33 +122,9 @@ async function main() {
 main();
 ```
 
-`APP_DIR` is any directory — so for an **external repo**, clone it to `/tmp` and
-point `APP_DIR` at it.
-
-## 2. Drive it as MCP tools (needs a fresh session)
-
-`scripts/wizard-ci-mcp.no-jest.ts` is a stdio MCP server over one live store,
-exposing `read_state` / `perform_action` / `render_screen` / `run_agent` as tools
-you call turn-by-turn — the most interactive way. **But MCP tools load at session
-start**, so you cannot add-and-use it in the same session. Register it first, then
-drive in a **new** session:
-
-```bash
-claude mcp add -s project wizard-ci \
-  -e APP_DIR=/tmp/<the app copy> \
-  -e POSTHOG_KEY_FILE=<key file path> \
-  -e PROJECT_ID=<project id> \
-  -- npx tsx "$WIZARD_PATH/scripts/wizard-ci-mcp.no-jest.ts"
-```
-
-Then start a fresh Claude Code session in this repo and call the tools
-(`read_state` → `perform_action` → … → `run_agent` → … → `keep_skills`,
-`render_screen` to view).
-
 ## 3. Or run it hands-off (scripted)
 
-To let the scripted profile make the decisions (for apps under
-`wizard-workbench/apps/`):
+To let the scripted profile decide (for apps under `wizard-workbench/apps/`):
 
 ```bash
 pnpm wizard-ci <app> --e2e          # real agent, headless; writes a recording
