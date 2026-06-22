@@ -26,7 +26,6 @@ import {
 import { wizardAbort, WizardError } from '@utils/wizard-abort';
 import { createCustomHeaders } from '@utils/custom-headers';
 import { getLlmGatewayUrlFromHost } from '@utils/urls';
-import { getDirectAnthropicKey } from '@env';
 import { LINTING_TOOLS } from '@lib/safe-tools';
 import { createWizardToolsServer, WIZARD_TOOL_NAMES } from '@lib/wizard-tools';
 import {
@@ -554,33 +553,17 @@ export async function initializeAgent(
   logToFile('Install directory:', options.installDir);
 
   try {
-    // Configure model routing (inherited by the SDK subprocess). The default
-    // routes through the PostHog LLM gateway, authed with the user's OAuth
-    // token. Local dev can opt into hitting the Anthropic API directly (see
-    // getDirectAnthropicKey) — handy when the gateway is unavailable or you
-    // want to spend your own Anthropic quota.
-    const directAnthropicKey = getDirectAnthropicKey();
+    // Configure model routing (inherited by the SDK subprocess). All model
+    // calls route through the PostHog LLM gateway, authed with the user's
+    // OAuth token.
     // Disable experimental betas (like input_examples) the gateway doesn't support.
     process.env.CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS = 'true';
-    let gatewayUrl: string | undefined;
-    if (directAnthropicKey) {
-      // Direct-to-Anthropic: set the API key and clear every gateway var so the
-      // SDK doesn't send a conflicting auth token or target the gateway host.
-      process.env.ANTHROPIC_API_KEY = directAnthropicKey;
-      delete process.env.ANTHROPIC_BASE_URL;
-      delete process.env.ANTHROPIC_AUTH_TOKEN;
-      delete process.env.CLAUDE_CODE_OAUTH_TOKEN;
-      logToFile(
-        'Model routing: direct Anthropic API (gateway bypassed for local dev)',
-      );
-    } else {
-      gatewayUrl = getLlmGatewayUrlFromHost(config.posthogApiHost);
-      process.env.ANTHROPIC_BASE_URL = gatewayUrl;
-      process.env.ANTHROPIC_AUTH_TOKEN = config.posthogApiKey;
-      // Use CLAUDE_CODE_OAUTH_TOKEN to override any stored /login credentials
-      process.env.CLAUDE_CODE_OAUTH_TOKEN = config.posthogApiKey;
-      logToFile('Configured LLM gateway:', gatewayUrl);
-    }
+    const gatewayUrl = getLlmGatewayUrlFromHost(config.posthogApiHost);
+    process.env.ANTHROPIC_BASE_URL = gatewayUrl;
+    process.env.ANTHROPIC_AUTH_TOKEN = config.posthogApiKey;
+    // Use CLAUDE_CODE_OAUTH_TOKEN to override any stored /login credentials
+    process.env.CLAUDE_CODE_OAUTH_TOKEN = config.posthogApiKey;
+    logToFile('Configured LLM gateway:', gatewayUrl);
     logToFile(
       'API key prefix:',
       config.posthogApiKey
@@ -841,10 +824,6 @@ export async function runAgent(
     // each string against the parent's mcpServers map.
     const inheritedMcpServerNames = Object.keys(agentConfig.mcpServers);
 
-    // Local dev may route the model calls straight to Anthropic; see
-    // getDirectAnthropicKey. Mirrors the env wiring in initializeAgent.
-    const directAnthropicKey = getDirectAnthropicKey();
-
     const response = query({
       prompt: createPromptStream(),
       options: {
@@ -933,18 +912,9 @@ export async function runAgent(
         },
         env: {
           ...process.env,
-          // Direct-to-Anthropic (local dev): pass the key through and clear the
-          // gateway vars so the SDK doesn't send a conflicting auth token.
-          // Otherwise drop any shell ANTHROPIC_API_KEY so it can't override the
-          // wizard's OAuth gateway token.
-          ...(directAnthropicKey
-            ? {
-                ANTHROPIC_API_KEY: directAnthropicKey,
-                ANTHROPIC_BASE_URL: undefined,
-                ANTHROPIC_AUTH_TOKEN: undefined,
-                CLAUDE_CODE_OAUTH_TOKEN: undefined,
-              }
-            : { ANTHROPIC_API_KEY: undefined }),
+          // Drop any shell ANTHROPIC_API_KEY so it can't override the wizard's
+          // OAuth gateway token.
+          ANTHROPIC_API_KEY: undefined,
           // Defer MCP tool schemas to avoid bloating the system prompt.
           // The posthog-wizard MCP exposes many query tools with large schemas;
           // without deferral these consume ~113k tokens upfront, leaving
@@ -959,14 +929,11 @@ export async function runAgent(
           // disables tool search deferral and re-inflates the system prompt by
           // ~113k tokens (the reason ENABLE_TOOL_SEARCH=auto:0 is set above).
           MCP_CONNECTION_NONBLOCKING: '0',
-          // PostHog gateway headers (Bedrock fallback, property/flag tags) only
-          // apply to the gateway — skip them when hitting Anthropic directly.
-          ANTHROPIC_CUSTOM_HEADERS: directAnthropicKey
-            ? undefined
-            : buildAgentEnv(
-                agentConfig.wizardMetadata ?? {},
-                agentConfig.wizardFlags ?? {},
-              ),
+          // PostHog gateway headers: Bedrock fallback + property/flag tags.
+          ANTHROPIC_CUSTOM_HEADERS: buildAgentEnv(
+            agentConfig.wizardMetadata ?? {},
+            agentConfig.wizardFlags ?? {},
+          ),
         },
         canUseTool: (toolName: string, input: unknown) => {
           logToFile('canUseTool called:', { toolName, input });

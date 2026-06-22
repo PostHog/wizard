@@ -16,7 +16,6 @@ import type { AgentChunk } from '@ui/tui/services/mcp-suggested-prompts-services
 import type { Credentials } from '@lib/wizard-session';
 import { WIZARD_USER_AGENT } from '@lib/constants';
 import { getLlmGatewayUrlFromHost } from '@utils/urls';
-import { getDirectAnthropicKey } from '@env';
 import { runtimeEnv } from '@env';
 import { logToFile } from '@utils/debug';
 import { buildAgentEnv } from '@lib/agent/agent-interface';
@@ -196,30 +195,18 @@ export async function* runMcpPromptViaSdk(args: {
   // authenticate directly against Anthropic and 401s with "Invalid
   // authentication credentials".
   process.env.CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS = 'true';
-  // Local dev may bypass the gateway and hit Anthropic directly; see
-  // getDirectAnthropicKey. Otherwise route through the PostHog LLM gateway.
-  const directAnthropicKey = getDirectAnthropicKey();
-  if (directAnthropicKey) {
-    process.env.ANTHROPIC_API_KEY = directAnthropicKey;
-    delete process.env.ANTHROPIC_BASE_URL;
-    delete process.env.ANTHROPIC_AUTH_TOKEN;
-    delete process.env.CLAUDE_CODE_OAUTH_TOKEN;
-    logToFile(
-      '[runMcpPromptViaSdk] model routing: direct Anthropic API (gateway bypassed for local dev)',
-    );
-  } else {
-    const gatewayUrl = getLlmGatewayUrlFromHost(credentials.host);
-    process.env.ANTHROPIC_BASE_URL = gatewayUrl;
-    process.env.ANTHROPIC_AUTH_TOKEN = credentials.accessToken;
-    process.env.CLAUDE_CODE_OAUTH_TOKEN = credentials.accessToken;
-    logToFile(
-      `[runMcpPromptViaSdk] gatewayUrl=${gatewayUrl} tokenPrefix=${
-        credentials.accessToken
-          ? credentials.accessToken.slice(0, 4) + '***'
-          : '(missing)'
-      }`,
-    );
-  }
+  // Route through the PostHog LLM gateway, authed with the user's OAuth token.
+  const gatewayUrl = getLlmGatewayUrlFromHost(credentials.host);
+  process.env.ANTHROPIC_BASE_URL = gatewayUrl;
+  process.env.ANTHROPIC_AUTH_TOKEN = credentials.accessToken;
+  process.env.CLAUDE_CODE_OAUTH_TOKEN = credentials.accessToken;
+  logToFile(
+    `[runMcpPromptViaSdk] gatewayUrl=${gatewayUrl} tokenPrefix=${
+      credentials.accessToken
+        ? credentials.accessToken.slice(0, 4) + '***'
+        : '(missing)'
+    }`,
+  );
 
   // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
   const { query } = await loadSdk();
@@ -329,18 +316,9 @@ export async function* runMcpPromptViaSdk(args: {
         allowedTools: ['mcp__posthog-wizard__*'],
         env: {
           ...process.env,
-          // Direct-to-Anthropic (local dev): pass the key through and clear the
-          // gateway vars. Otherwise drop any shell ANTHROPIC_API_KEY so it can't
-          // silently bypass the PostHog LLM gateway and defeat quota tracking
-          // and the OAuth flow.
-          ...(directAnthropicKey
-            ? {
-                ANTHROPIC_API_KEY: directAnthropicKey,
-                ANTHROPIC_BASE_URL: undefined,
-                ANTHROPIC_AUTH_TOKEN: undefined,
-                CLAUDE_CODE_OAUTH_TOKEN: undefined,
-              }
-            : { ANTHROPIC_API_KEY: undefined }),
+          // Drop any shell ANTHROPIC_API_KEY so it can't silently bypass the
+          // PostHog LLM gateway and defeat quota tracking and the OAuth flow.
+          ANTHROPIC_API_KEY: undefined,
           // Defer MCP tool schemas to avoid bloating the system prompt.
           // posthog-wizard exposes many query tools with large schemas;
           // without deferral these consume ~113k tokens upfront, which
@@ -354,10 +332,7 @@ export async function* runMcpPromptViaSdk(args: {
           // main runner. No wizard metadata or flags for the tutorial
           // — runs are distinguished downstream via posthog.capture
           // calls (program_id + event names), not SDK headers.
-          // PostHog gateway headers don't apply when hitting Anthropic directly.
-          ANTHROPIC_CUSTOM_HEADERS: directAnthropicKey
-            ? undefined
-            : buildAgentEnv({}, {}),
+          ANTHROPIC_CUSTOM_HEADERS: buildAgentEnv({}, {}),
         },
       },
     });
