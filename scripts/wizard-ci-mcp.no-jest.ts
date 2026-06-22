@@ -8,7 +8,7 @@
  *   APP_DIR=/tmp/app POSTHOG_KEY_FILE=/path/to/phx.txt PROJECT_ID=… \
  *     npx tsx scripts/wizard-ci-mcp.no-jest.ts          # speaks MCP on stdio
  *
- * Tools: read_state, list_actions, perform_action, render_screen, run_agent.
+ * Tools: read_state, perform_action, render_screen, run_agent.
  * stdout is the JSON-RPC channel — diagnostics go to stderr only.
  */
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
@@ -104,17 +104,6 @@ async function main() {
     "Read the wizard's committed state: current screen, run phase, a secret-free session view, agent tasks/status, any pending question, unresolved setup questions, and the actions legal right now. Call first and after every perform_action.",
     {},
     async () => text(driver.readState()),
-  );
-
-  server.tool(
-    'list_actions',
-    'List the commit actions legal on the current screen, with their params.',
-    {},
-    async () =>
-      text({
-        currentScreen: driver.readState().currentScreen,
-        actions: driver.listActions(),
-      }),
   );
 
   server.tool(
