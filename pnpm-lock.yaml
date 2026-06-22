@@ -10,13 +10,13 @@ importers:
     dependencies:
       '@anthropic-ai/claude-agent-sdk':
         specifier: 0.3.169
-        version: 0.3.169(@anthropic-ai/sdk@0.81.0(zod@3.24.2))(@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@3.24.2))(zod@3.24.2)
+        version: 0.3.169(@anthropic-ai/sdk@0.81.0(zod@3.25.76))(@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@3.25.76))(zod@3.25.76)
       '@inkjs/ui':
         specifier: ^2.0.0
         version: 2.0.0(ink@6.8.0(@types/react@19.2.14)(react@19.2.4))
       '@langchain/core':
         specifier: ^0.3.40
-        version: 0.3.40(openai@6.7.0(ws@8.18.1)(zod@3.24.2))
+        version: 0.3.40(openai@6.7.0(ws@8.18.1)(zod@3.25.76))
       axios:
         specifier: 1.7.4
         version: 1.7.4
@@ -75,11 +75,11 @@ importers:
         specifier: ^16.2.0
         version: 16.2.0
       zod:
-        specifier: ^3.24.2
-        version: 3.24.2
+        specifier: ^3.25.0
+        version: 3.25.76
       zod-to-json-schema:
         specifier: ^3.24.3
-        version: 3.24.3(zod@3.24.2)
+        version: 3.24.3(zod@3.25.76)
     devDependencies:
       '@babel/core':
         specifier: ^7.29.0
@@ -93,6 +93,9 @@ importers:
       '@babel/types':
         specifier: ~7.21.4
         version: 7.21.5
+      '@modelcontextprotocol/sdk':
+        specifier: ^1.29.0
+        version: 1.29.0(@cfworker/json-schema@4.1.1)(zod@3.25.76)
       '@types/chai':
         specifier: ^4.3.17
         version: 4.3.20
@@ -4099,8 +4102,8 @@ packages:
     peerDependencies:
       zod: ^3.25.28 || ^4
 
-  zod@3.24.2:
-    resolution: {integrity: sha512-lY7CDW43ECgW9u1TcT3IoXHflywfVqDYze4waEz812jR/bZ8FHDsl7pFQoSZTz5N+2NqRXs8GBwnAwo3ZNxqhQ==}
+  zod@3.25.76:
+    resolution: {integrity: sha512-gzUt/qt81nXsFGKIFcC3YnfEAx5NkunCfnDlvuBSSFS02bcXu4Lmea0AFIUwbLWxWPx3d9p8S5QoaujKcNQxcQ==}
 
 snapshots:
 
@@ -4133,11 +4136,11 @@ snapshots:
   '@anthropic-ai/claude-agent-sdk-win32-x64@0.3.169':
     optional: true
 
-  '@anthropic-ai/claude-agent-sdk@0.3.169(@anthropic-ai/sdk@0.81.0(zod@3.24.2))(@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@3.24.2))(zod@3.24.2)':
+  '@anthropic-ai/claude-agent-sdk@0.3.169(@anthropic-ai/sdk@0.81.0(zod@3.25.76))(@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@3.25.76))(zod@3.25.76)':
     dependencies:
-      '@anthropic-ai/sdk': 0.81.0(zod@3.24.2)
-      '@modelcontextprotocol/sdk': 1.29.0(@cfworker/json-schema@4.1.1)(zod@3.24.2)
-      zod: 3.24.2
+      '@anthropic-ai/sdk': 0.81.0(zod@3.25.76)
+      '@modelcontextprotocol/sdk': 1.29.0(@cfworker/json-schema@4.1.1)(zod@3.25.76)
+      zod: 3.25.76
     optionalDependencies:
       '@anthropic-ai/claude-agent-sdk-darwin-arm64': 0.3.169
       '@anthropic-ai/claude-agent-sdk-darwin-x64': 0.3.169
@@ -4148,11 +4151,11 @@ snapshots:
       '@anthropic-ai/claude-agent-sdk-win32-arm64': 0.3.169
       '@anthropic-ai/claude-agent-sdk-win32-x64': 0.3.169
 
-  '@anthropic-ai/sdk@0.81.0(zod@3.24.2)':
+  '@anthropic-ai/sdk@0.81.0(zod@3.25.76)':
     dependencies:
       json-schema-to-ts: 3.1.1
     optionalDependencies:
-      zod: 3.24.2
+      zod: 3.25.76
 
   '@babel/code-frame@7.26.2':
     dependencies:
@@ -5081,7 +5084,7 @@ snapshots:
   '@eslint/eslintrc@2.1.4':
     dependencies:
       ajv: 6.12.6
-      debug: 4.4.0
+      debug: 4.4.3
       espree: 9.6.1
       globals: 13.24.0
       ignore: 5.3.2
@@ -5101,7 +5104,7 @@ snapshots:
   '@humanwhocodes/config-array@0.13.0':
     dependencies:
       '@humanwhocodes/object-schema': 2.0.3
-      debug: 4.4.0
+      debug: 4.4.3
       minimatch: 3.1.2
     transitivePeerDependencies:
       - supports-color
@@ -5353,24 +5356,24 @@ snapshots:
       '@jridgewell/resolve-uri': 3.1.2
       '@jridgewell/sourcemap-codec': 1.5.0
 
-  '@langchain/core@0.3.40(openai@6.7.0(ws@8.18.1)(zod@3.24.2))':
+  '@langchain/core@0.3.40(openai@6.7.0(ws@8.18.1)(zod@3.25.76))':
     dependencies:
       '@cfworker/json-schema': 4.1.1
       ansi-styles: 5.2.0
       camelcase: 6.3.0
       decamelize: 1.2.0
       js-tiktoken: 1.0.19
-      langsmith: 0.3.11(openai@6.7.0(ws@8.18.1)(zod@3.24.2))
+      langsmith: 0.3.11(openai@6.7.0(ws@8.18.1)(zod@3.25.76))
       mustache: 4.2.0
       p-queue: 6.6.2
       p-retry: 4.6.2
       uuid: 10.0.0
-      zod: 3.24.2
-      zod-to-json-schema: 3.24.3(zod@3.24.2)
+      zod: 3.25.76
+      zod-to-json-schema: 3.24.3(zod@3.25.76)
     transitivePeerDependencies:
       - openai
 
-  '@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@3.24.2)':
+  '@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@3.25.76)':
     dependencies:
       '@hono/node-server': 1.19.14(hono@4.12.18)
       ajv: 8.20.0
@@ -5387,8 +5390,8 @@ snapshots:
       json-schema-typed: 8.0.2
       pkce-challenge: 5.0.1
       raw-body: 3.0.2
-      zod: 3.24.2
-      zod-to-json-schema: 3.25.2(zod@3.24.2)
+      zod: 3.25.76
+      zod-to-json-schema: 3.25.2(zod@3.25.76)
     optionalDependencies:
       '@cfworker/json-schema': 4.1.1
     transitivePeerDependencies:
@@ -5732,7 +5735,7 @@ snapshots:
     dependencies:
       '@typescript-eslint/typescript-estree': 5.62.0(typescript@5.7.3)
       '@typescript-eslint/utils': 5.62.0(eslint@8.57.1)(typescript@5.7.3)
-      debug: 4.4.0
+      debug: 4.4.3
       eslint: 8.57.1
       tsutils: 3.21.0(typescript@5.7.3)
     optionalDependencies:
@@ -5746,7 +5749,7 @@ snapshots:
     dependencies:
       '@typescript-eslint/types': 5.62.0
       '@typescript-eslint/visitor-keys': 5.62.0
-      debug: 4.4.0
+      debug: 4.4.3
       globby: 11.1.0
       is-glob: 4.0.3
       semver: 7.7.1
@@ -7286,7 +7289,7 @@ snapshots:
 
   kleur@3.0.3: {}
 
-  langsmith@0.3.11(openai@6.7.0(ws@8.18.1)(zod@3.24.2)):
+  langsmith@0.3.11(openai@6.7.0(ws@8.18.1)(zod@3.25.76)):
     dependencies:
       '@types/uuid': 10.0.0
       chalk: 4.1.2
@@ -7296,7 +7299,7 @@ snapshots:
       semver: 7.7.1
       uuid: 10.0.0
     optionalDependencies:
-      openai: 6.7.0(ws@8.18.1)(zod@3.24.2)
+      openai: 6.7.0(ws@8.18.1)(zod@3.25.76)
 
   leven@3.1.0: {}
 
@@ -7517,10 +7520,10 @@ snapshots:
     dependencies:
       mimic-function: 5.0.1
 
-  openai@6.7.0(ws@8.18.1)(zod@3.24.2):
+  openai@6.7.0(ws@8.18.1)(zod@3.25.76):
     optionalDependencies:
       ws: 8.18.1
-      zod: 3.24.2
+      zod: 3.25.76
     optional: true
 
   opn@5.5.0:
@@ -8342,12 +8345,12 @@ snapshots:
 
   yoga-layout@3.2.1: {}
 
-  zod-to-json-schema@3.24.3(zod@3.24.2):
+  zod-to-json-schema@3.24.3(zod@3.25.76):
     dependencies:
-      zod: 3.24.2
+      zod: 3.25.76
 
-  zod-to-json-schema@3.25.2(zod@3.24.2):
+  zod-to-json-schema@3.25.2(zod@3.25.76):
     dependencies:
-      zod: 3.24.2
+      zod: 3.25.76
 
-  zod@3.24.2: {}
+  zod@3.25.76: {}

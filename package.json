@@ -54,7 +54,7 @@
     "xcode": "3.0.1",
     "xml-js": "^1.6.11",
     "yargs": "^16.2.0",
-    "zod": "^3.24.2",
+    "zod": "^3.25.0",
     "zod-to-json-schema": "^3.24.3"
   },
   "devDependencies": {
@@ -91,7 +91,8 @@
     "ts-node": "^10.9.1",
     "tsdown": "^0.21.9",
     "tsx": "^4.20.3",
-    "typescript": "^5.0.4"
+    "typescript": "^5.0.4",
+    "@modelcontextprotocol/sdk": "^1.29.0"
   },
   "engines": {
     "node": "^20.20.0 || >=22.22.0",
