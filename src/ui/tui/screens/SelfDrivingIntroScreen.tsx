@@ -37,8 +37,8 @@ export const SelfDrivingIntroScreen = ({
 
   const subtitle = (
     <>
-      <Text dimColor>
-        We'll use AI to analyze your project and set up PostHog Self-driving.
+      <Text bold>
+        This wizard uses AI (Anthropic's Claude) to read and modify your code.
       </Text>
       <Text dimColor>.env* file contents will not leave your machine.</Text>
     </>

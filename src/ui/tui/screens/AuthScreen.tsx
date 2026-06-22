@@ -106,6 +106,12 @@ export const AuthScreen = ({ store }: AuthScreenProps) => {
         )}
       </Box>
 
+      <Box marginBottom={1}>
+        <Text bold>
+          This wizard uses AI (Anthropic's Claude) to read and modify your code.
+        </Text>
+      </Box>
+
       <Box flexDirection="column" marginBottom={1}>
         <Text bold dimColor>
           How does the wizard use your data?

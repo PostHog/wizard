@@ -85,8 +85,8 @@ const WizardTitle = ({ title }: { title: string }) => (
 /** Generic subtitle shown when a screen doesn't supply its own. */
 const DEFAULT_SUBTITLE = (
   <>
-    <Text dimColor>
-      We'll use AI to analyze your project and complete work.
+    <Text bold>
+      This wizard uses AI (Anthropic's Claude) to read and modify your code.
     </Text>
     <Text dimColor>.env* file contents will not leave your machine.</Text>
   </>
