@@ -33,6 +33,7 @@ import { assemblePrompt } from '../agent-prompt';
 import type { ProgramRun, BootstrapResult } from './shared/types';
 import { abortOnInstallFailure } from './shared/errors';
 import { shouldDisableAsk, sessionToOptions } from './shared/bootstrap';
+import { runWithProvisioningRetry } from './shared/provisioning-retry';
 
 export async function runLinearProgram(
   session: WizardSession,
@@ -150,21 +151,40 @@ export async function runLinearProgram(
   });
   logToFile(`[agent-runner] prompt assembled (${prompt.length} chars)`);
 
-  // 8. Run agent
-  const agentResult = await executeAgent(
-    agent,
-    prompt,
-    sessionToOptions(session),
-    spinner,
-    {
-      estimatedDurationMinutes: config.estimatedDurationMinutes,
-      spinnerMessage: config.spinnerMessage,
-      successMessage: config.successMessage,
-      errorMessage: config.errorMessage ?? `${config.integrationLabel} failed`,
-      additionalFeatureQueue: config.additionalFeatureQueue ?? [],
-      abortCases: config.abortCases,
+  // 8. Run agent. A transient provisioning/billing 403 from the gateway's
+  // Bedrock fallback (PostHog-side AWS Marketplace billing, self-resolving)
+  // is retried with backoff rather than aborting — see provisioning-retry.ts.
+  const agentResult = await runWithProvisioningRetry(
+    () =>
+      executeAgent(
+        agent,
+        prompt,
+        sessionToOptions(session),
+        spinner,
+        {
+          estimatedDurationMinutes: config.estimatedDurationMinutes,
+          spinnerMessage: config.spinnerMessage,
+          successMessage: config.successMessage,
+          errorMessage:
+            config.errorMessage ?? `${config.integrationLabel} failed`,
+          additionalFeatureQueue: config.additionalFeatureQueue ?? [],
+          abortCases: config.abortCases,
+        },
+        middleware,
+      ),
+    ({ attempt, total, delayMs }) => {
+      analytics.wizardCapture('agent provisioning retry', {
+        integration: config.integrationLabel,
+        attempt,
+        total,
+        delay_ms: delayMs,
+      });
+      getUI().log.warn(
+        `PostHog's model service is temporarily unavailable. ` +
+          `Retrying in ${Math.round(delayMs / 1000)}s ` +
+          `(attempt ${attempt} of ${total})...`,
+      );
     },
-    middleware,
   );
 
   // 9. Error handling (full set from both runners)
@@ -236,6 +256,32 @@ export async function runLinearProgram(
         integration: config.integrationLabel,
         error_type: AgentErrorType.YARA_VIOLATION,
       }),
+    });
+  }
+
+  if (agentResult.error === AgentErrorType.PROVISIONING_ERROR) {
+    // Retries (step 8) were exhausted and the gateway is still returning the
+    // transient billing 403. This is a PostHog-side condition that clears on
+    // its own, so surface a friendly "try again shortly" message rather than
+    // the terminal "report this to wizard@posthog.com" abort.
+    analytics.wizardCapture('agent provisioning error', {
+      integration: config.integrationLabel,
+      error_type: agentResult.error,
+      error_message: agentResult.message,
+    });
+
+    await wizardAbort({
+      message:
+        "PostHog's model service is temporarily unavailable\n\n" +
+        'This is a transient issue on our side, not a problem with your\n' +
+        'project. Please wait a few minutes and run the wizard again.',
+      error: new WizardError(
+        `Provisioning error: ${agentResult.message ?? 'unknown'}`,
+        {
+          integration: config.integrationLabel,
+          error_type: agentResult.error,
+        },
+      ),
     });
   }
 
