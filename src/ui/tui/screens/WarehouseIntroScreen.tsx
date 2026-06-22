@@ -19,7 +19,6 @@ import {
   getDetectedWarehouseSources,
   type WarehouseDetectError,
 } from '@lib/programs/warehouse-source/index';
-import type { DetectedSource } from '@lib/warehouse-sources/types';
 
 interface WarehouseIntroScreenProps {
   store: WizardStore;
@@ -38,9 +37,6 @@ export const WarehouseIntroScreen = ({ store }: WarehouseIntroScreenProps) => {
     | WarehouseDetectError
     | undefined;
   const detected = getDetectedWarehouseSources(session);
-
-  const inCli = detected.filter((s) => s.mode === 'in-cli');
-  const deepLink = detected.filter((s) => s.mode === 'deep-link');
 
   // ── Body ────────────────────────────────────────────────────────────
 
@@ -69,16 +65,12 @@ export const WarehouseIntroScreen = ({ store }: WarehouseIntroScreenProps) => {
 
       {detected.length > 0 && (
         <Box flexDirection="column" marginTop={1}>
-          {inCli.length > 0 && (
-            <SourceGroup title="Will connect from here:" sources={inCli} />
-          )}
-          {deepLink.length > 0 && (
-            <SourceGroup
-              title="Will open in your browser to finish:"
-              sources={deepLink}
-              marginTop={inCli.length > 0 ? 1 : 0}
-            />
-          )}
+          <Text dimColor>Detected warehouse sources:</Text>
+          {detected.map((s) => (
+            <Text key={s.kind} dimColor>
+              {'  •'} {s.label}
+            </Text>
+          ))}
         </Box>
       )}
     </>
@@ -142,25 +134,6 @@ export const WarehouseIntroScreen = ({ store }: WarehouseIntroScreenProps) => {
     />
   );
 };
-
-const SourceGroup = ({
-  title,
-  sources,
-  marginTop = 0,
-}: {
-  title: string;
-  sources: DetectedSource[];
-  marginTop?: number;
-}) => (
-  <Box flexDirection="column" marginTop={marginTop}>
-    <Text dimColor>{title}</Text>
-    {sources.map((s) => (
-      <Text key={s.kind} dimColor>
-        {'  •'} {s.label} <Text dimColor>({s.matchedSignal})</Text>
-      </Text>
-    ))}
-  </Box>
-);
 
 const DetectErrorBody = ({ error }: { error: WarehouseDetectError }) => {
   switch (error.kind) {
