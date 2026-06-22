@@ -6,6 +6,11 @@ it runs the WHOLE interactive flow headlessly via `wizard-ci-tools` and asserts
 on structured state — not the classic `--ci` mode (LoggingUI, stdout-grep,
 agent-only).
 
+> If you're an agent that just wants to **run and explore the wizard** (drive
+> it, view the screens, snapshot it), start with the runbook:
+> [`EXPLORING-AS-AN-AGENT.md`](EXPLORING-AS-AN-AGENT.md). This doc is the _how
+> it works_ underneath.
+
 ## The pieces
 
 This whole harness lives in `e2e-harness/` at the repo root — deliberately OUT
