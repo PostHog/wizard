@@ -417,18 +417,24 @@ LLM calls. See the `e2e-tests/README.md` for more information.
 
 #### Explore with an agent
 
-You can hand the wizard to an AI agent and have it run, drive, and explore the
-wizard itself — headlessly, snapshotting the TUI so it can see what happened. The
-how-to is the `exploring-the-wizard` skill
-(`.claude/skills/exploring-the-wizard/SKILL.md`), which an agent in this repo
-discovers automatically. Example prompt — explore against
+You can hand the wizard to an AI agent and have it drive the real flow itself —
+deciding each screen and snapshotting the TUI to see what happened. The agent
+drives through the `wizard-ci` MCP tools (`open_app` / `read_state` /
+`perform_action` / `render_screen` / `run_agent`), which are registered in this
+repo's `.mcp.json` and bound in every session here — approve `wizard-ci` the first
+time you're prompted. The how-to is the `exploring-the-wizard` skill
+(`.claude/skills/exploring-the-wizard/SKILL.md`), which an agent discovers
+automatically.
+
+Example prompt — explore against
 [open-saas](https://github.com/wasp-lang/open-saas):
 
-> Explore the PostHog wizard against a real app. Use the `exploring-the-wizard`
-> skill — your runbook for driving the wizard headlessly and snapshotting it. Ask
-> me for my phx key file path, then clone `https://github.com/wasp-lang/open-saas`
-> into a throwaway `/tmp` copy, run the wizard against it driving the flow and
-> snapshotting each key moment, and tell me what it did and anything that broke.
+> Explore the PostHog wizard against open-saas, following the
+> `exploring-the-wizard` skill. Ask me for my phx key file path, clone
+> `https://github.com/wasp-lang/open-saas` into a throwaway `/tmp` copy, then use
+> the `wizard-ci` MCP tools to open it and drive the whole flow — deciding each
+> screen yourself and snapshotting key moments — and tell me what it did and
+> anything that broke.
 
 ## Publishing your tool
 
