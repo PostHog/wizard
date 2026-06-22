@@ -168,6 +168,19 @@ export const SELF_DRIVING_SCOPE_ADDITIONS = [
 ] as const;
 
 /**
+ * Extra scopes the warehouse-source program needs on top of
+ * `WIZARD_OAUTH_SCOPES`. The agent creates data warehouse sources directly
+ * (`external-data-sources-create`) and lists what's connected
+ * (`external-data-sources-list`) to verify the result. Both are already within
+ * the wizard OAuth app's scope ceiling — the self-driving program requests the
+ * same pair.
+ */
+export const WAREHOUSE_SOURCE_SCOPE_ADDITIONS = [
+  'external_data_source:read',
+  'external_data_source:write',
+] as const;
+
+/**
  * Extra scope the Connect-Slack step needs on top of `WIZARD_OAUTH_SCOPES`.
  *
  * The step polls `/api/projects/:id/integrations/` (`fetchSlackConnected`)
@@ -199,6 +212,7 @@ const PROGRAM_SCOPE_ADDITIONS: Partial<Record<ProgramId, readonly string[]>> = {
   'mcp-tutorial': MCP_TUTORIAL_SCOPE_ADDITIONS,
   'agent-skill': AGENT_SKILL_SCOPE_ADDITIONS,
   'self-driving': SELF_DRIVING_SCOPE_ADDITIONS,
+  'warehouse-source': WAREHOUSE_SOURCE_SCOPE_ADDITIONS,
   'posthog-integration': CONNECT_SLACK_SCOPE_ADDITIONS,
   slack: CONNECT_SLACK_SCOPE_ADDITIONS,
 };
