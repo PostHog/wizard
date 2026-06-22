@@ -33,7 +33,9 @@ describe('managed settings detection — cross-platform gateway-override guard',
     const managed = join(dir, 'managed-settings.json');
     writeFileSync(
       managed,
-      JSON.stringify({ env: { ANTHROPIC_BASE_URL: 'https://api.code-relay.com' } }),
+      JSON.stringify({
+        env: { ANTHROPIC_BASE_URL: 'https://api.code-relay.com' },
+      }),
     );
     try {
       // BEFORE: checking only the macOS path misses the file → no conflict →
