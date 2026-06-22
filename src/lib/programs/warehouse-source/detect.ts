@@ -7,6 +7,7 @@
  */
 
 import { existsSync, statSync } from 'fs';
+import { analytics } from '@utils/analytics';
 import type { WizardSession } from '@lib/wizard-session';
 import type { AbortCase } from '@lib/agent/agent-runner';
 import { detectWarehouseSources } from '@lib/warehouse-sources/detect';
@@ -85,7 +86,11 @@ export function detectWarehousePrerequisites(
       fail({ kind: 'bad-directory', path: installDir, reason: 'not-dir' });
       return;
     }
-  } catch {
+  } catch (error) {
+    analytics.captureException(
+      error instanceof Error ? error : new Error(String(error)),
+      { op: 'detectWarehousePrerequisites.stat', target: installDir },
+    );
     fail({ kind: 'bad-directory', path: installDir, reason: 'unreadable' });
     return;
   }

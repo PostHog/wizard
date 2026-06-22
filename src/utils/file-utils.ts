@@ -1,7 +1,21 @@
 import path from 'path';
 import fs from 'fs';
 import type { Dirent } from 'fs';
+import { analytics } from './analytics';
 import type { WizardRunOptions } from './types';
+
+/**
+ * Report a swallowed filesystem error to error tracking. Traversal stays
+ * best-effort — the caller still skips the failing entry — but the failure is
+ * no longer silent. Preserves the original Error (and its `code`, e.g. EACCES
+ * / ENOENT) when available.
+ */
+function reportFsError(op: string, target: string, error: unknown): void {
+  analytics.captureException(
+    error instanceof Error ? error : new Error(String(error)),
+    { op, target },
+  );
+}
 
 export function getDotGitignore({
   installDir,
@@ -53,8 +67,9 @@ export const IGNORED_DIRS = new Set<string>([
  * regular file — including dotfiles like `.env` (the caller decides what it
  * cares about). Skips `IGNORED_DIRS` and hidden directories, follows symlinked
  * directories with realpath-based loop protection, and descends at most
- * `maxDepth` levels below `rootDir`. All filesystem errors are swallowed:
- * a missing/unreadable root simply yields no callbacks (best-effort).
+ * `maxDepth` levels below `rootDir`. Filesystem errors are reported to error
+ * tracking and then skipped: a missing/unreadable root simply yields no
+ * callbacks (best-effort).
  *
  * Shared by the detection layers (warehouse sources, etc.) so traversal policy
  * — ignored dirs, depth, symlink handling — lives in one place.
@@ -74,7 +89,8 @@ export function walkProjectFiles(
     let realDir: string;
     try {
       realDir = fs.realpathSync(dir);
-    } catch {
+    } catch (error) {
+      reportFsError('walkProjectFiles.realpath', dir, error);
       return;
     }
     if (visited.has(realDir)) return;
@@ -83,7 +99,8 @@ export function walkProjectFiles(
     let entries: Dirent[];
     try {
       entries = fs.readdirSync(dir, { withFileTypes: true });
-    } catch {
+    } catch (error) {
+      reportFsError('walkProjectFiles.readdir', dir, error);
       return;
     }
 
@@ -101,7 +118,8 @@ export function walkProjectFiles(
           const st = fs.statSync(fullPath);
           isDir = st.isDirectory();
           isFile = st.isFile();
-        } catch {
+        } catch (error) {
+          reportFsError('walkProjectFiles.stat', fullPath, error);
           continue;
         }
       }
@@ -118,11 +136,15 @@ export function walkProjectFiles(
   scan(rootDir, 0);
 }
 
-/** Read a file as UTF-8, returning `null` on any error. Best-effort. */
+/**
+ * Read a file as UTF-8, returning `null` on any error. Best-effort: errors are
+ * reported to error tracking, then swallowed.
+ */
 export function safeReadFile(fullPath: string): string | null {
   try {
     return fs.readFileSync(fullPath, 'utf-8');
-  } catch {
+  } catch (error) {
+    reportFsError('safeReadFile', fullPath, error);
     return null;
   }
 }

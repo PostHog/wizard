@@ -9,6 +9,7 @@
  * Note we only read `.env` KEY NAMES, never values.
  */
 
+import { analytics } from '@utils/analytics';
 import { walkProjectFiles, safeReadFile } from '@utils/file-utils';
 import type { PackageJson } from '@utils/package-json';
 import {
@@ -145,8 +146,12 @@ function addNpmDeps(content: string, signals: ProjectSignals): void {
     })) {
       signals.npm.add(dep);
     }
-  } catch {
-    // Skip malformed package.json
+  } catch (error) {
+    // Malformed package.json — skip it, but record that we hit it.
+    analytics.captureException(
+      error instanceof Error ? error : new Error(String(error)),
+      { op: 'detectWarehouseSources.parsePackageJson' },
+    );
   }
 }
 
