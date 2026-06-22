@@ -136,16 +136,23 @@ export class WizardCiDriver {
    * Apply a named action via its store setter, then return the next state.
    * Throws UnknownActionError if the action isn't legal on the current screen,
    * or MissingParamError if a required param is absent.
+   *
+   * The middle hop of the trace in {@link ./wizard-ci-tools} (perform_action):
+   * exactly one store setter fires per call (via `action.apply`), `emitChange()`
+   * bumps `$version`, `router.resolve` re-derives the screen, and the fresh
+   * `readState()` reflects it.
    */
   performAction(
     actionId: string,
     params: Record<string, unknown> = {},
   ): CiState {
     const screen = this.store.currentScreen;
+    // Resolve the action against the CURRENT screen's registry entry, so a
+    // caller can't commit something illegal for where the flow actually is.
     const action = actionsForScreen(screen).find((a) => a.id === actionId);
     if (!action) throw new UnknownActionError(actionId, screen);
-    action.apply(this.store, params); // may throw MissingParamError
-    return this.readState();
+    action.apply(this.store, params); // the single committed mutation
+    return this.readState(); // next state, screen already re-derived
   }
 
   /**

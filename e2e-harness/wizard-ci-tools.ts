@@ -68,6 +68,19 @@ export async function createWizardCiToolsServer(
       }),
   );
 
+  // End to end, one perform_action call lands as a single committed store
+  // mutation and re-derives the rendered screen:
+  //
+  //   agent → mcp__wizard-ci-tools__perform_action {action:"confirm_setup"}
+  //         → driver.performAction("confirm_setup", {})
+  //         → actionsForScreen("intro") finds confirm_setup
+  //         → apply → store.completeSetup()
+  //                 → $session.setKey("setupConfirmed", true); emitChange()
+  //                 → $version 0→1 → router.resolve(session) now skips intro
+  //                   (isComplete) → returns "health-check"
+  //         → driver.readState() → { currentScreen:"health-check",
+  //             actions:[dismiss_outage], … }
+  //   returned to the agent, which calls read_state and picks the next action.
   const performAction = tool(
     'perform_action',
     'Commit a decision by invoking a legal action for the current screen ' +

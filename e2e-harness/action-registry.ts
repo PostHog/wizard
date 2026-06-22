@@ -77,6 +77,12 @@ export const NO_ACTION_SCREENS: ReadonlySet<ScreenName> = new Set<ScreenName>([
  * Intro-style screens whose only action is "confirm and continue", committing
  * the same `setupConfirmed` flag the IntroScreen sets. Several programs reuse
  * this shape, so they share one action via this helper.
+ *
+ * This is the store hop of the trace in {@link ./wizard-ci-tools} (perform_action):
+ * `apply` calls `store.completeSetup()`, which does
+ * `$session.setKey('setupConfirmed', true)` + `emitChange()`. `router.resolve`
+ * then treats the intro as complete and renders the next screen — no imperative
+ * navigation, just a flag flip the screen sequence reacts to.
  */
 const confirmSetupAction: DriverAction = {
   id: 'confirm_setup',
