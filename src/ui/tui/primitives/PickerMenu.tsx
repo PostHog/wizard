@@ -24,6 +24,12 @@ interface PickerOption<T> {
   label: string;
   value: T;
   hint?: string;
+  /**
+   * Multi-select only: a secondary explanation rendered dimmed and wrapped on
+   * its own line(s) beneath the label, for choices that need more than a title.
+   * When unset, the row renders exactly as a label-only row.
+   */
+  description?: string;
   /** Glyph rendered before the label, in its own color — unaffected by
    *  focus and disabled styling. */
   icon?: { glyph: string; color?: string };
@@ -447,29 +453,46 @@ const MultiPickerMenu = <T,>({
                 ? Icons.squareFilled
                 : Icons.squareOpen;
               return (
-                <Box key={flatIdx} gap={1} marginBottom={optionMarginBottom}>
-                  <Text
-                    color={isSelected ? 'white' : Colors.muted}
-                    dimColor={!isFocused && !isSelected}
-                  >
-                    {checkbox}
-                  </Text>
-                  {opt.icon && (
-                    <Text color={opt.icon.color}>{opt.icon.glyph}</Text>
+                <Box
+                  key={flatIdx}
+                  flexDirection="column"
+                  marginBottom={optionMarginBottom}
+                >
+                  <Box gap={1}>
+                    <Text
+                      color={isSelected ? 'white' : Colors.muted}
+                      dimColor={!isFocused && !isSelected}
+                    >
+                      {checkbox}
+                    </Text>
+                    {opt.icon && (
+                      <Text color={opt.icon.color}>{opt.icon.glyph}</Text>
+                    )}
+                    <Text
+                      color={
+                        opt.disabled
+                          ? Colors.muted
+                          : isFocused
+                          ? Colors.accent
+                          : undefined
+                      }
+                      bold={isFocused && !opt.disabled}
+                      dimColor={!isFocused || opt.disabled}
+                    >
+                      {label}
+                    </Text>
+                  </Box>
+                  {/* Optional dimmed, wrapped explanation under the label. The
+                      explicit width forces Ink to wrap (an unconstrained Box
+                      shrinks to its content and never wraps). Renders only when
+                      set, so label-only rows are byte-for-byte unchanged. */}
+                  {opt.description && (
+                    <Box marginLeft={4} width={56}>
+                      <Text dimColor wrap="wrap">
+                        {opt.description}
+                      </Text>
+                    </Box>
                   )}
-                  <Text
-                    color={
-                      opt.disabled
-                        ? Colors.muted
-                        : isFocused
-                        ? Colors.accent
-                        : undefined
-                    }
-                    bold={isFocused && !opt.disabled}
-                    dimColor={!isFocused || opt.disabled}
-                  >
-                    {label}
-                  </Text>
                 </Box>
               );
             })}

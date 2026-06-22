@@ -22,6 +22,7 @@ export enum ScreenId {
   SourceMapsOutro = 'source-maps-outro',
   MigrationIntro = 'migration-intro',
   AgentSkillIntro = 'agent-skill-intro',
+  SelfDrivingIntro = 'self-driving-intro',
   AuditIntro = 'audit-intro',
   AuditRun = 'audit-run',
   AuditOutro = 'audit-outro',
