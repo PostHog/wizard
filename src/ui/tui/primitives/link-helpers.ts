@@ -1,16 +1,17 @@
 /**
  * Link-rendering helpers for terminal prompts.
  *
- * Terminals linkify text by scanning *visual* lines, so a URL that the TUI
- * wraps across two lines — or pads with box-border characters — is either
- * truncated (the click opens half a URL) or stitched back together with the
- * border glyphs and padding (the click opens a mangled URL). Either way the
- * click target is wrong.
+ * Terminals that auto-linkify text scan *visual* lines, so a URL the TUI wraps
+ * across lines — or pads with box-border characters — gets a wrong click
+ * target: the terminal opens half a URL, or one stitched back together with
+ * border glyphs and padding.
  *
- * These helpers let a caller render each standalone URL on its own
- * non-wrapping line as an OSC 8 hyperlink, so the click target is the exact
- * URL regardless of how the visible text is laid out. Terminals without
- * OSC 8 support simply ignore the escape and show the visible text.
+ * The fix is an explicit OSC 8 hyperlink: the escape carries the exact target
+ * out of band, independent of the visible layout, and Ink's wrap re-emits it on
+ * every wrapped line — so the click target stays correct even when the URL
+ * wraps to fit the overlay. Each standalone URL gets its own line so the escape
+ * brackets exactly one URL. Terminals without OSC 8 support ignore the escape
+ * and show the visible text.
  */
 
 // OSC 8 hyperlink escape: ESC ] 8 ; ; <url> BEL <label> ESC ] 8 ; ; BEL.
