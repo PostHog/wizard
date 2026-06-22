@@ -1,9 +1,10 @@
 import { VERSION } from '@lib/version';
-import { runtimeEnv } from '@env';
+import { logToFile, getLogFilePath } from '@utils/debug';
 import type { ProgramConfig } from '@lib/programs/program-step';
 import type { startTUI as StartTUIFn } from '@ui/tui/start-tui';
 import type { TaskStreamPush as TaskStreamPushClass } from '@lib/task-stream/task-stream-push';
 import { resolveNoTelemetry } from './resolve-no-telemetry';
+import { runCleanups } from '@utils/wizard-abort';
 
 const WIZARD_VERSION = VERSION;
 
@@ -31,7 +32,6 @@ export function runWizard(
       const { PostHogDestination } = await import(
         '@lib/task-stream/destinations/posthog'
       );
-      const { logToFile } = await import('@utils/debug');
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       tui = startTUI(WIZARD_VERSION, config.id as any);
@@ -81,17 +81,26 @@ export function runWizard(
       onSignal = (): void => {
         if (signalled || exitInProgress) return;
         signalled = true;
+        logToFile('[run-wizard] signal received, flushing task stream');
+        // Run cleanups synchronously first — settings restore is sync fs work
+        // and must complete even if the stream shutdown below times out.
+        runCleanups();
         if (activeTui.store.session.runPhase === RunPhase.Running) {
           activeTui.store.setRunPhase(RunPhase.Error);
         }
-        void activeStream.shutdown(2000).finally(() => {
-          try {
-            activeTui.unmount();
-          } catch {
-            // terminal may already be torn down
-          }
-          process.exit(130);
-        });
+        void activeStream
+          .shutdown(2000)
+          .catch((e) =>
+            logToFile('[run-wizard] task stream shutdown error on signal:', e),
+          )
+          .finally(() => {
+            try {
+              activeTui.unmount();
+            } catch {
+              // terminal may already be torn down
+            }
+            process.exit(130);
+          });
       };
       process.on('SIGINT', onSignal);
       process.on('SIGTERM', onSignal);
@@ -110,6 +119,7 @@ export function runWizard(
             ci: session.ci,
             apiKey: session.apiKey,
             projectId: session.projectId,
+            programId: config.id,
           });
         activeTui.store.setCredentials({
           accessToken,
@@ -147,10 +157,11 @@ export function runWizard(
       activeTui.unmount();
       process.exit(0);
     } catch (err) {
-      if (runtimeEnv('DEBUG') || runtimeEnv('POSTHOG_WIZARD_DEBUG')) {
-        // eslint-disable-next-line no-console
-        console.error('TUI init failed:', err);
-      }
+      // File-log first — the cleanup below can throw or exit.
+      logToFile('[run-wizard] FATAL:', err);
+      // Run cleanups before anything async so settings are restored even if
+      // the stream shutdown hangs.
+      runCleanups();
       // The task-stream debounce timer keeps the event loop alive, so
       // we have to drain it before exiting on the error path.
       exitInProgress = true;
@@ -172,6 +183,11 @@ export function runWizard(
           // ignore
         }
       }
+      // Print after unmount — anything printed into the alt screen is wiped.
+      // eslint-disable-next-line no-console
+      console.error('Wizard run failed:', err);
+      // eslint-disable-next-line no-console
+      console.error(`Full logs: ${getLogFilePath()}`);
       process.exit(1);
     }
   })();

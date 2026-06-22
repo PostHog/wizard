@@ -3,8 +3,8 @@
  *
  * Cycles through SinglePicker, MultiPicker, GroupedPicker, and Confirmation
  * so the user can see the hints bar update automatically for each component.
- * The bar appears at the bottom of the screen and dismisses 3s after the
- * first keypress, then reappears when the component changes.
+ * The bar appears at the bottom of the screen and stays visible, updating to
+ * match the active component.
  */
 
 import { Box, Text } from 'ink';
@@ -27,9 +27,9 @@ enum DemoStep {
 const STEP_LABELS: Record<DemoStep, string> = {
   [DemoStep.SingleSelect]: 'Single Select — hints: ↑↓ navigate, enter select',
   [DemoStep.MultiSelect]:
-    'Multi Select — hints: ↑↓ navigate, space toggle, enter confirm',
+    'Multi Select — hints: ↑↓ navigate, enter select, arrow to Confirm + enter to submit',
   [DemoStep.GroupedSelect]:
-    'Grouped Select — hints: ↑↓ navigate, space toggle, a toggle all, enter confirm',
+    'Grouped Select — hints: ↑↓ navigate, enter select, a toggle all, arrow to Confirm + enter to submit',
   [DemoStep.Confirmation]:
     'Confirmation — hints: ←→ switch, enter confirm, esc cancel',
   [DemoStep.Done]: 'Done',

@@ -16,6 +16,7 @@ import { z } from 'zod';
 import { logToFile } from '@utils/debug';
 import { analytics } from '@utils/analytics';
 import { skillTmpPath } from '@utils/paths';
+import { writeJsonAtomic, makeMutex } from '@utils/atomic-ledger';
 import type { PackageManagerDetector } from './detection/package-manager';
 import {
   AUDIT_CHECKS_FILE,
@@ -25,6 +26,10 @@ import {
 } from './programs/audit/types';
 import type { WizardAskBridge } from './wizard-ask-bridge';
 import { createSecretVault, type SecretVault } from './secret-vault';
+import {
+  buildOrchestratorTools,
+  type OrchestratorToolsContext,
+} from './agent/runner/orchestrator/queue-tools';
 
 // ---------------------------------------------------------------------------
 // SDK dynamic import (ESM module loaded once, cached)
@@ -44,8 +49,29 @@ async function getSDKModule(): Promise<any> {
 
 export type SkillEntry = { id: string; name: string; downloadUrl: string };
 
+/**
+ * Entry in the wizard's runtime CLI registry. Mirrors the shape context-mill
+ * publishes under `cliEntries` inside `skill-menu.json`. The wizard uses these
+ * to register skill-backed subcommands at runtime instead of from a baked
+ * build-time snapshot.
+ */
+export type CliEntry = {
+  skillId: string;
+  role: 'command' | 'skill' | 'internal';
+  command?: string;
+  parentCommand?: string;
+  default?: boolean;
+  displayName: string;
+  description: string;
+};
+
 export interface SkillMenu {
   categories: Record<string, SkillEntry[]>;
+  /**
+   * Skills exposed as CLI commands. Optional because context-mill releases
+   * older than the runtime-resolver cutover don't emit this field.
+   */
+  cliEntries?: CliEntry[];
 }
 
 // ---------------------------------------------------------------------------
@@ -202,11 +228,19 @@ export interface WizardToolsOptions {
    * (e.g. in unit tests), a fresh vault is created internally.
    */
   secretVault?: SecretVault;
+
+  /**
+   * Orchestrator queue context. Present only when the `wizard-orchestrator`
+   * flag routes the run to the orchestrator; when set, the orchestrator tools
+   * (enqueue_task, complete_task, read_handoffs) are registered. Absent on the
+   * linear path.
+   */
+  orchestrator?: OrchestratorToolsContext;
 }
 
 /** Default per-run cap on wizard_ask calls when no override is provided. */
 export const DEFAULT_ASK_MAX_QUESTIONS = 10;
-/** Calls past this number always return a batch-it error. */
+/** The call after this many returns a one-time batch-your-questions nudge. */
 export const ASK_BATCH_THRESHOLD = 3;
 
 export type AskCapDecision =
@@ -222,10 +256,18 @@ export type AskCapDecision =
  * upcoming call should proceed and, if not, the error message to surface
  * to the agent. Extracted so the policy can be unit-tested without
  * spinning up an MCP server.
+ *
+ * The adjacency nudge fires exactly once per run (the caller records it
+ * via `adjacencyNudged`) — flows that legitimately need several
+ * sequential, answer-dependent asks then proceed up to `maxQuestions`.
+ * Without the flag the rejected call would never advance the counter and
+ * every later call would be rejected, making caps above the threshold
+ * unreachable.
  */
 export function evaluateAskCap(
   callCount: number,
   maxQuestions: number,
+  adjacencyNudged = false,
 ): AskCapDecision {
   if (callCount >= maxQuestions) {
     return {
@@ -234,11 +276,11 @@ export function evaluateAskCap(
       message: `Error: wizard_ask cap reached (${maxQuestions} calls in this run). Proceed with sensible defaults using the answers you already have, or emit [ABORT] requirements-incomplete.`,
     };
   }
-  if (callCount >= ASK_BATCH_THRESHOLD) {
+  if (!adjacencyNudged && callCount >= ASK_BATCH_THRESHOLD) {
     return {
       kind: 'capped',
       reason: 'adjacency',
-      message: `Error: too many wizard_ask calls in a row (${callCount} so far). Batch the remaining questions into a single call — the schema accepts up to 8 questions per invocation.`,
+      message: `Error: too many wizard_ask calls in a row (${callCount} so far). Batch the remaining questions into a single call — the schema accepts up to 8 questions per invocation. If the remaining questions truly depend on earlier answers, ask again and they will go through.`,
     };
   }
   return { kind: 'ok' };
@@ -368,14 +410,9 @@ const auditUpdateSchema = z.object({
   details: z.string().optional(),
 });
 
-/**
- * Atomically write JSON: write to .tmp then rename. The rename is what bumps
- * the file's mtime, which is what the UI's file watcher polls on.
- */
+/** Atomically write the audit ledger. Thin typed wrapper over writeJsonAtomic. */
 function writeLedgerAtomic(targetPath: string, checks: AuditCheck[]): void {
-  const tmpPath = `${targetPath}.tmp`;
-  fs.writeFileSync(tmpPath, JSON.stringify(checks, null, 2), 'utf8');
-  fs.renameSync(tmpPath, targetPath);
+  writeJsonAtomic(targetPath, checks);
 }
 
 /**
@@ -474,19 +511,6 @@ function appendAuditChecksToLedger(
   return { ok: true, added: additions.length };
 }
 
-/**
- * Single async mutex shared by audit tools — guarantees a read-modify-write
- * cycle on the ledger is atomic across concurrent tool calls (e.g. future subagents).
- */
-function makeMutex() {
-  let chain: Promise<unknown> = Promise.resolve();
-  return async function run<T>(fn: () => Promise<T> | T): Promise<T> {
-    const next = chain.then(() => fn());
-    chain = next.catch(() => undefined);
-    return next;
-  };
-}
-
 // ---------------------------------------------------------------------------
 // Server factory
 // ---------------------------------------------------------------------------
@@ -505,12 +529,15 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
     askBridge,
     askMaxQuestions = DEFAULT_ASK_MAX_QUESTIONS,
     secretVault = createSecretVault(),
+    orchestrator,
   } = options;
   const sdk = await getSDKModule();
   const { tool, createSdkMcpServer } = sdk;
 
   // Per-server counter for wizard_ask call accounting (adjacency + total cap).
   let askCallCount = 0;
+  // The adjacency nudge fires once per run; after that only the total cap applies.
+  let askAdjacencyNudged = false;
 
   // Pre-fetch skill menu so category names are available in the tool schema
   let cachedSkillMenu: Record<string, SkillEntry[]> = {};
@@ -938,7 +965,20 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
         "'single' = pick one option, 'multi' = pick any, 'text' = free-form single-line answer",
       ),
     options: z
-      .array(z.object({ label: z.string(), value: z.string() }))
+      .array(
+        z.object({
+          label: z.string(),
+          value: z.string(),
+          description: z
+            .string()
+            .optional()
+            .describe(
+              'Optional secondary line shown dimmed and wrapped beneath the ' +
+                'label (multi-select only). Use when a choice needs more than a ' +
+                'title — e.g. what a custom scout watches and what makes it speak up.',
+            ),
+        }),
+      )
       .optional()
       .describe('Required for kind=single|multi; ignored for kind=text'),
     required: z.boolean().optional().describe('Defaults to true'),
@@ -980,8 +1020,15 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
         };
       }
 
-      const capDecision = evaluateAskCap(askCallCount, askMaxQuestions);
+      const capDecision = evaluateAskCap(
+        askCallCount,
+        askMaxQuestions,
+        askAdjacencyNudged,
+      );
       if (capDecision.kind === 'capped') {
+        if (capDecision.reason === 'adjacency') {
+          askAdjacencyNudged = true;
+        }
         analytics.wizardCapture('wizard_ask capped', {
           reason: capDecision.reason,
           call_count: askCallCount,
@@ -1104,6 +1151,10 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
 
   // -- Assemble server ------------------------------------------------------
 
+  const orchestratorTools = orchestrator
+    ? buildOrchestratorTools(tool, orchestrator)
+    : [];
+
   return createSdkMcpServer({
     name: SERVER_NAME,
     version: '1.0.0',
@@ -1117,6 +1168,7 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
       auditAddChecks,
       auditResolveChecks,
       wizardAsk,
+      ...orchestratorTools,
     ],
   });
 }
@@ -1136,6 +1188,9 @@ export const WIZARD_TOOL_NAMES = {
   auditAddChecks: `mcp__${SERVER_NAME}__audit_add_checks`,
   auditResolveChecks: `mcp__${SERVER_NAME}__audit_resolve_checks`,
   wizardAsk: `mcp__${SERVER_NAME}__wizard_ask`,
+  enqueueTask: `mcp__${SERVER_NAME}__enqueue_task`,
+  completeTask: `mcp__${SERVER_NAME}__complete_task`,
+  readHandoffs: `mcp__${SERVER_NAME}__read_handoffs`,
 } as const;
 
 // ---------------------------------------------------------------------------

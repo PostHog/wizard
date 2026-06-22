@@ -24,7 +24,9 @@ import { LearnCard } from '@ui/tui/components/LearnCard';
 import { TipsCard } from '@ui/tui/components/TipsCard';
 import { useStdoutDimensions } from '@ui/tui/hooks/useStdoutDimensions';
 import { useFileWatcher } from '@ui/tui/hooks/file-watcher';
+import { VisualizerTab } from '@ui/tui/components/PhaseVisuals';
 import { EVENT_PLAN_FILE } from '@lib/programs/posthog-integration/index';
+
 import { getProgramConfig } from '@lib/programs/program-registry';
 import { getContentBlocks as getSkillContentBlocks } from '@lib/programs/agent-skill/content/index';
 
@@ -41,14 +43,20 @@ export const RunScreen = ({ store }: RunScreenProps) => {
   );
 
   // Mirror the agent's `.posthog-events.json` plan into the store so the
-  // Event plan tab appears as soon as the agent emits the file.
+  // Event plan tab appears as soon as the agent emits the file. The skill
+  // tells the agent to use `event_name`/`event_description` (the canonical
+  // form); `name`/`event`/`description` are legacy fallbacks for skills or
+  // one-off runs that drift. Drop any entry that still ends up nameless so
+  // the outro never shows blank bullets.
   useFileWatcher(join(store.session.installDir, EVENT_PLAN_FILE), (parsed) => {
     if (!Array.isArray(parsed)) return;
     store.setEventPlan(
-      parsed.map((e: Record<string, unknown>) => ({
-        name: (e.name ?? e.event ?? '') as string,
-        description: (e.description ?? '') as string,
-      })),
+      parsed
+        .map((e: Record<string, unknown>) => ({
+          name: (e.event_name ?? e.name ?? e.event ?? '') as string,
+          description: (e.event_description ?? e.description ?? '') as string,
+        }))
+        .filter((e) => e.name),
     );
   });
 
@@ -79,8 +87,8 @@ export const RunScreen = ({ store }: RunScreenProps) => {
 
   // Each program owns its content deck (program/content/index.tsx)
   // and wires it onto its ProgramConfig.getContentBlocks. Fall back to the
-  // agent-skill deck for runtime-created configs (e.g. `--skill <id>`) that
-  // aren't in the static registry.
+  // agent-skill deck for runtime-created configs (e.g. `wizard skill <id>`)
+  // that aren't in the static registry.
   const activeProgram = store.router.activeProgram;
   const learnBlocks = useMemo(() => {
     const getBlocks =
@@ -88,8 +96,12 @@ export const RunScreen = ({ store }: RunScreenProps) => {
     return getBlocks(store);
   }, [store, activeProgram]);
 
+  // Program-supplied tips for the right pane; undefined falls back to
+  // DEFAULT_TIPS inside TipsCard, so non-self-driving programs are unaffected.
+  const programTips = getProgramConfig(activeProgram).getTips?.(store);
+
   const leftPane = store.learnCardComplete ? (
-    <TipsCard store={store} />
+    <TipsCard store={store} tips={programTips} />
   ) : (
     <LearnCard
       store={store}
@@ -99,7 +111,6 @@ export const RunScreen = ({ store }: RunScreenProps) => {
   );
   const progressList = <ProgressList items={progressItems} title="Tasks" />;
 
-  // On narrow terminals, drop the learn pane and show only progress
   const statusComponent =
     columns < 80 ? (
       <Box flexDirection="column" flexGrow={1}>
@@ -124,6 +135,11 @@ export const RunScreen = ({ store }: RunScreenProps) => {
       id: 'logs',
       label: 'Tail logs',
       component: <LogViewer filePath={WIZARD_LOG_FILE} />,
+    },
+    {
+      id: 'visualizer',
+      label: 'Visualizer',
+      component: <VisualizerTab store={store} />,
     },
     { id: 'hn', label: 'HN', component: <HNViewer /> },
   ];

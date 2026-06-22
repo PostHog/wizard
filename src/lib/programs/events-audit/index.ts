@@ -8,7 +8,8 @@ import { getCloudUrlFromRegion } from '@utils/urls';
 import { WIZARD_TOOL_NAMES } from '@lib/wizard-tools';
 import { EVENTS_AUDIT_PROGRAM } from './steps.js';
 import { AUDIT_CHECKS_KEY } from '@lib/programs/audit/types';
-import { AUDIT_SEED_CHECKS, seedAuditLedger } from '@lib/programs/audit/seed';
+import { seedAuditLedger } from '@lib/programs/audit/seed';
+import { EVENTS_AUDIT_SEED_CHECKS } from './seed.js';
 
 export const SETUP_REPORT_FILE = 'posthog-events-audit-report.md';
 
@@ -33,9 +34,10 @@ export const eventsAuditConfig: ProgramConfig = {
     session.typescript = typeScriptDetected;
 
     // Seed the audit ledger so AuditRunScreen has something to render
-    // before the agent emits its first check update.
-    seedAuditLedger(session.installDir);
-    session.frameworkContext[AUDIT_CHECKS_KEY] = AUDIT_SEED_CHECKS;
+    // before the agent emits its first check update. The events-audit
+    // ledger is the 6-phase pipeline, not the doctor's 10 integrity checks.
+    seedAuditLedger(session.installDir, EVENTS_AUDIT_SEED_CHECKS);
+    session.frameworkContext[AUDIT_CHECKS_KEY] = EVENTS_AUDIT_SEED_CHECKS;
 
     return Promise.resolve({
       skillId: 'events-audit',
@@ -73,6 +75,11 @@ Project context:
         const dashboardUrl =
           sess.dashboardUrl ?? (cloudUrl ? `${cloudUrl}/dashboard` : undefined);
 
+        // The agent emits `[NOTEBOOK_URL] <url>` once it uploads the report
+        // to a PostHog notebook. No fallback: if the notebook upload was
+        // skipped (e.g. MCP unavailable) we just don't show a link.
+        const notebookUrl = sess.notebookUrl ?? undefined;
+
         return {
           kind: OutroKind.Success as const,
           message: 'Your events audit was successful',
@@ -81,6 +88,7 @@ Project context:
           docsUrl: DOCS_URL,
           continueUrl,
           dashboardUrl,
+          notebookUrl,
         };
       },
     });

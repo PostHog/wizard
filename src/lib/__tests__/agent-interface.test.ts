@@ -1,4 +1,5 @@
 import { runAgent, createStopHook } from '@lib/agent/agent-interface';
+import { AgentOutputSignals } from '@lib/agent/output-signals';
 import type { WizardRunOptions } from '@utils/types';
 import type { SpinnerHandle } from '@ui';
 import {
@@ -278,6 +279,61 @@ describe('runAgent', () => {
       expect(mockUIInstance.log.error).not.toHaveBeenCalled();
     });
 
+    it('should return success when a post-success result carries an API Error', async () => {
+      // The reported failure: after a clean success result, the SDK emits a
+      // second error result whose text is "API Error: socket closed" (the
+      // streaming connection dropping on teardown). That text lands in the
+      // output signals, so the post-loop hasApiError() check would escalate
+      // teardown noise to a fatal API_ERROR. A finished run is finished.
+      function* mockGeneratorWithApiErrorAfterSuccess() {
+        yield {
+          type: 'system',
+          subtype: 'init',
+          model: 'claude-opus-4-5-20251101',
+          tools: [],
+          mcp_servers: [],
+        };
+
+        yield {
+          type: 'result',
+          subtype: 'success',
+          is_error: false,
+          num_turns: 42,
+          result: '[WIZARD-REMARK] Integration completed successfully',
+          session_id: '2ce14bda-6d86-4220-b5bb-ab24f7004290',
+          total_cost_usd: 1.23,
+        };
+
+        yield {
+          type: 'result',
+          subtype: 'error_during_execution',
+          is_error: true,
+          num_turns: 0,
+          result:
+            'API Error: The socket connection was closed unexpectedly. For more information, pass `verbose: true` in the second argument to fetch()',
+          session_id: '2ce14bda-6d86-4220-b5bb-ab24f7004290',
+          total_cost_usd: 0,
+        };
+      }
+
+      mockQuery.mockReturnValue(mockGeneratorWithApiErrorAfterSuccess());
+
+      const result = await runAgent(
+        defaultAgentConfig,
+        'test prompt',
+        defaultOptions,
+        mockSpinner as unknown as SpinnerHandle,
+        {
+          successMessage: 'Test success',
+          errorMessage: 'Test error',
+        },
+      );
+
+      expect(result).toEqual({});
+      expect(mockSpinner.stop).toHaveBeenCalledWith('Test success');
+      expect(mockUIInstance.log.error).not.toHaveBeenCalled();
+    });
+
     it('should ignore abort requests when no abort cases are registered', async () => {
       function* mockGeneratorWithAbortText() {
         yield {
@@ -393,26 +449,29 @@ describe('createStopHook', () => {
   });
 
   it('allows stop immediately on API error (401)', () => {
-    const collectedText = [
+    const signals = new AgentOutputSignals();
+    signals.push(
       'Failed to authenticate. API Error: 401 {"detail":"Authentication required"}',
-    ];
-    const hook = createStopHook([AdditionalFeature.LLM], collectedText);
+    );
+    const hook = createStopHook([AdditionalFeature.LLM], signals);
 
     const result = hook(hookInput);
     expect(result).toEqual({});
   });
 
   it('allows stop immediately on generic API error', () => {
-    const collectedText = ['API Error: 500 Internal Server Error'];
-    const hook = createStopHook([AdditionalFeature.LLM], collectedText);
+    const signals = new AgentOutputSignals();
+    signals.push('API Error: 500 Internal Server Error');
+    const hook = createStopHook([AdditionalFeature.LLM], signals);
 
     const result = hook(hookInput);
     expect(result).toEqual({});
   });
 
-  it('proceeds normally when collectedText has no API error', () => {
-    const collectedText = ['Some normal agent output'];
-    const hook = createStopHook([], collectedText);
+  it('proceeds normally when output has no API error', () => {
+    const signals = new AgentOutputSignals();
+    signals.push('Some normal agent output'); // dropped: carries no signal
+    const hook = createStopHook([], signals);
 
     // First call → remark prompt (normal behavior)
     const first = hook(hookInput);

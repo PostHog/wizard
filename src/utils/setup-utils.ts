@@ -18,8 +18,9 @@ import {
   DEFAULT_HOST_URL,
   DUMMY_PROJECT_API_KEY,
   ISSUES_URL,
-  WIZARD_OAUTH_SCOPES,
 } from '@lib/constants';
+import { getOAuthScopesForProgram } from '@lib/oauth/program-scopes';
+import type { ProgramId } from '@lib/programs/program-registry';
 import { analytics } from './analytics';
 import { getUI } from '@ui';
 import {
@@ -29,7 +30,12 @@ import {
 } from './urls';
 import { performOAuthFlow } from './oauth';
 import { provisionNewAccount } from './provisioning';
-import { fetchUserData, fetchProjectData, type ApiUser } from '@lib/api';
+import {
+  fetchUserData,
+  fetchProjectData,
+  type ApiUser,
+  type ApiProject,
+} from '@lib/api';
 import { versionSatisfiesRange } from './semver';
 import { wizardAbort } from './wizard-abort';
 
@@ -52,6 +58,13 @@ interface ProjectData {
    * lacked permissions.
    */
   user?: ApiUser | null;
+  /**
+   * Full project payload from `/api/projects/:id/`. Carries the team's
+   * product opt-ins (replay, exception autocapture, surveys) so prompts
+   * can state project-level product enablement instead of agents
+   * inferring it from repo evidence. Null on signup flows.
+   */
+  project?: ApiProject | null;
 }
 
 export interface CliSetupConfig {
@@ -387,6 +400,10 @@ export async function getOrAskForProjectData(
   _options: Pick<WizardRunOptions, 'signup' | 'ci' | 'apiKey' | 'projectId'> & {
     email?: string;
     region?: CloudRegion;
+    /** Optional — picks the OAuth scope set via
+     *  `getOAuthScopesForProgram`. Omitted → default
+     *  `WIZARD_OAUTH_SCOPES`. Threaded into `askForWizardLogin`. */
+    programId?: ProgramId | null;
   },
 ): Promise<{
   host: string;
@@ -396,6 +413,7 @@ export async function getOrAskForProjectData(
   cloudRegion: CloudRegion;
   roleAtOrganization: string | null;
   user: ApiUser | null;
+  project: ApiProject | null;
 }> {
   // CI mode: bypass OAuth, use personal API key for LLM gateway
   if (_options.ci && _options.apiKey) {
@@ -425,6 +443,7 @@ export async function getOrAskForProjectData(
     } catch {
       // best-effort
     }
+    if (user) analytics.identifyUser(user);
 
     return {
       host,
@@ -434,6 +453,7 @@ export async function getOrAskForProjectData(
       cloudRegion,
       roleAtOrganization,
       user,
+      project: projectData.project,
     };
   }
 
@@ -445,11 +465,13 @@ export async function getOrAskForProjectData(
     cloudRegion,
     roleAtOrganization,
     user,
+    project,
   } = await withProgress('login', () =>
     askForWizardLogin({
       signup: _options.signup,
       email: _options.email,
       region: _options.region,
+      programId: _options.programId,
     }),
   );
 
@@ -474,13 +496,14 @@ ${cloudUrl}/settings/project#variables`);
     cloudRegion,
     roleAtOrganization: roleAtOrganization ?? null,
     user: user ?? null,
+    project: project ?? null,
   };
 }
 
 async function fetchProjectDataWithApiKey(
   apiKey: string,
   cloudUrl: string,
-): Promise<{ api_token: string; id: number }> {
+): Promise<{ api_token: string; id: number; project: ApiProject }> {
   const userData = await fetchUserData(apiKey, cloudUrl);
   const projectId = userData.team?.id;
 
@@ -494,6 +517,7 @@ async function fetchProjectDataWithApiKey(
   return {
     api_token: projectData.api_token,
     id: projectId,
+    project: projectData,
   };
 }
 
@@ -501,11 +525,12 @@ async function fetchProjectDataById(
   apiKey: string,
   projectId: number,
   cloudUrl: string,
-): Promise<{ api_token: string; id: number }> {
+): Promise<{ api_token: string; id: number; project: ApiProject }> {
   const projectData = await fetchProjectData(apiKey, projectId, cloudUrl);
   return {
     api_token: projectData.api_token,
     id: projectId,
+    project: projectData,
   };
 }
 
@@ -513,13 +538,16 @@ async function askForWizardLogin(options: {
   signup: boolean;
   email?: string;
   region?: CloudRegion;
+  /** Used to pick the right scope set via `getOAuthScopesForProgram`.
+   *  Omitted → default `WIZARD_OAUTH_SCOPES`. */
+  programId?: ProgramId | null;
 }): Promise<ProjectData & { cloudRegion: CloudRegion }> {
   if (options.signup) {
     return askForProvisioningSignup(options.email, options.region);
   }
 
   const tokenResponse = await performOAuthFlow({
-    scopes: [...WIZARD_OAUTH_SCOPES],
+    scopes: [...getOAuthScopesForProgram(options.programId)],
     signup: false,
   });
 
@@ -557,11 +585,12 @@ async function askForWizardLogin(options: {
     cloudRegion,
     roleAtOrganization: userData.role_at_organization ?? null,
     user: userData,
+    project: projectData,
   };
 
   getUI().log.success('Login complete.');
   analytics.setTag('opened-wizard-link', true);
-  analytics.setDistinctId(data.distinctId);
+  analytics.identifyUser(userData);
 
   return data;
 }

@@ -13,7 +13,7 @@
 import type { Integration } from './constants';
 import type { FrameworkConfig } from './framework-config';
 import type { WizardReadinessResult } from './health-checks/readiness';
-import type { SettingsConflict } from './agent/agent-interface';
+import type { SettingsConflict } from './agent/claude-settings';
 import type { ApiUser } from './api';
 
 export interface Credentials {
@@ -87,12 +87,35 @@ export interface OutroData {
   body?: string;
   /** Success-only: bulleted list of "what the agent did" */
   changes?: string[];
+  /**
+   * Success-only: a prominent, labeled link to where the user should go
+   * next (e.g. an inbox the program just configured). Rendered right under
+   * the headline and shown verbatim — no UTM tagging — so the URL stays
+   * clean and copy-pasteable. Set per-program in buildOutroData.
+   */
+  primaryLink?: { label: string; url: string };
+  /**
+   * Success-only: a short "what to do next" checklist with its own heading,
+   * rendered as a bulleted list. Distinct from `changes`, which recaps what
+   * the agent already did.
+   */
+  nextSteps?: { heading: string; items: string[] };
   docsUrl?: string;
   continueUrl?: string;
   /** Report file the agent wrote (e.g. "posthog-setup-report.md") */
   reportFile?: string;
   /** PostHog dashboard URL the program created on the user's behalf. */
   dashboardUrl?: string;
+  /** PostHog notebook URL the program uploaded the report to. */
+  notebookUrl?: string;
+  /**
+   * Copy-paste prompt the operator hands to their coding agent to finish the
+   * job (work the report's checklist). Printed to the terminal's main buffer on
+   * exit (see getExitLine in start-tui.ts) — the TUI's alternate screen is wiped
+   * on exit, so the scrollback line is where it survives and can be
+   * triple-click-selected. Set per-program in buildOutroData.
+   */
+  handoffPrompt?: string;
 }
 
 /** A single question rendered by the WizardAsk overlay. */
@@ -103,7 +126,7 @@ export interface AskQuestion {
   /** text = single-line free input; single/multi = picker */
   kind: 'single' | 'multi' | 'text';
   /** Required for `single` and `multi`. Ignored for `text`. */
-  options?: { label: string; value: string }[];
+  options?: { label: string; value: string; description?: string }[];
   /** Defaults to true */
   required?: boolean;
   /**
@@ -125,6 +148,14 @@ export interface PendingQuestion {
   questions: AskQuestion[];
   /** Skill id of the caller. Set by the wizard from session.skillId. */
   source: string;
+  /**
+   * When true, the ask overlay renders standalone URLs in prompt text as
+   * OSC 8 hyperlinks and copies a lone URL to the clipboard. Opt-in per
+   * program (set from `ProgramRun.richLinks` via the ask bridge); defaults
+   * to false so existing flows render prompts exactly as before. See
+   * `LinkText` / `link-helpers`.
+   */
+  richLinks?: boolean;
 }
 
 /**
@@ -210,6 +241,15 @@ export interface WizardSession {
   mcpOutcome: McpOutcome | null;
   mcpInstalledClients: string[];
   mcpSuggestedPromptsDismissed: boolean;
+  /** True once the user has acted on (opened or skipped) the Connect-Slack step. */
+  slackStepDismissed: boolean;
+  /**
+   * Whether the project already has a Slack integration connected.
+   * `null` until detected. Prefetched by the tutorial screen as soon as
+   * credentials exist so the Connect-Slack step renders the right
+   * variant immediately instead of flashing the nudge first.
+   */
+  slackConnected: boolean | null;
   skillsComplete: boolean;
   outroDismissed: boolean;
 
@@ -220,6 +260,7 @@ export interface WizardSession {
   settingsConflicts: SettingsConflict[] | null;
   authErrorDetail: {
     hasSettingsConflict: boolean;
+    conflicts?: SettingsConflict[];
     logFilePath: string;
   } | null;
   portConflictProcess: {
@@ -230,6 +271,7 @@ export interface WizardSession {
   } | null;
   outroData: OutroData | null;
   dashboardUrl: string | null;
+  notebookUrl: string | null;
 
   // Additional features queue (drained via stop hook after main integration)
   additionalFeatureQueue: AdditionalFeature[];
@@ -294,6 +336,8 @@ export function buildSession(args: {
     mcpOutcome: null,
     mcpInstalledClients: [],
     mcpSuggestedPromptsDismissed: false,
+    slackStepDismissed: false,
+    slackConnected: null,
     skillsComplete: false,
     outroDismissed: false,
     loginUrl: null,
@@ -309,6 +353,7 @@ export function buildSession(args: {
     portConflictProcess: null,
     outroData: null,
     dashboardUrl: null,
+    notebookUrl: null,
     additionalFeatureQueue: [],
     programLabel: null,
     skillId: null,

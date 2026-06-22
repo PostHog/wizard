@@ -7,8 +7,11 @@ import { createElement } from 'react';
 import { WizardStore } from '@ui/tui/store';
 import { PlaygroundApp } from './PlaygroundApp.js';
 import { WizardReadiness } from '@lib/health-checks/readiness';
+import { enterDarkTerminal, releaseTerminal } from '../terminal.js';
 
 export function startPlayground(version: string): void {
+  enterDarkTerminal();
+
   const store = new WizardStore();
   store.version = version;
 
@@ -35,6 +38,7 @@ export function startPlayground(version: string): void {
 
   void waitUntilExit().then(() => {
     unmount();
+    releaseTerminal();
     process.exit(0);
   });
 }

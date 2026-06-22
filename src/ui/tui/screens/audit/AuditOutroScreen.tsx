@@ -46,6 +46,22 @@ export const AuditOutroScreen = ({ store }: AuditOutroScreenProps) => {
             ✔ {outroData.message || 'Audit complete!'}
           </Text>
 
+          {outroData.dashboardUrl && (
+            <Box marginTop={1}>
+              <Text>
+                Dashboard: <Text color="cyan">{outroData.dashboardUrl}</Text>
+              </Text>
+            </Box>
+          )}
+
+          {outroData.notebookUrl && (
+            <Box marginTop={1}>
+              <Text>
+                Notebook: <Text color="cyan">{outroData.notebookUrl}</Text>
+              </Text>
+            </Box>
+          )}
+
           {outroData.reportFile && (
             <Box flexDirection="column" marginTop={1}>
               <Text color="cyan" bold>
@@ -55,8 +71,8 @@ export const AuditOutroScreen = ({ store }: AuditOutroScreenProps) => {
                 {join(store.session.installDir, outroData.reportFile)}
               </Text>
               <Text dimColor>
-                A markdown file in your project folder — open it in any editor
-                to read the full audit.
+                A markdown file in your project folder. Open it in any editor to
+                read the full audit.
               </Text>
             </Box>
           )}
