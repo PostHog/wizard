@@ -62,6 +62,10 @@ export const ApiUserSchema = z
         slug: z.string().nullish(),
         membership_level: z.number().nullish(),
         customer_id: z.string().nullish(),
+        // Org-level AI consent gate. Signals drops all findings while
+        // this is not true. Null on older orgs (pre-2026-05 default
+        // flip) — treat null as "unknown", not "off".
+        is_ai_data_processing_approved: z.boolean().nullish(),
       })
       .passthrough(),
     organizations: z.array(
@@ -109,6 +113,15 @@ export const ApiProjectSchema = z.object({
   organization: z.string().uuid(),
   api_token: z.string(),
   name: z.string(),
+  // Product opt-ins (TeamSerializer-compat fields on /api/projects/:id).
+  // Project-level truth for "is this product enabled" — a product can be
+  // instrumented from another repo or the snippet, so these settings
+  // override repo-local evidence. Null/absent = unknown. Only the
+  // opt-ins a signals decision consumes: replay + exception autocapture
+  // feed signal-source choices; surveys feeds the surveys-scout tuning.
+  session_recording_opt_in: z.boolean().nullish(),
+  autocapture_exceptions_opt_in: z.boolean().nullish(),
+  surveys_opt_in: z.boolean().nullish(),
 });
 
 export type ApiUser = z.infer<typeof ApiUserSchema>;

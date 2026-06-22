@@ -10,6 +10,7 @@ import type {
 import type { PromptContext } from '@lib/agent/agent-prompt';
 import type { PackageManagerDetector } from '@lib/detection/package-manager';
 import type { CloudRegion } from '@utils/types';
+import type { ApiProject } from '@lib/api';
 
 export type { PromptContext, Credentials };
 
@@ -65,6 +66,13 @@ export interface ProgramRun {
    */
   maxQuestions?: number;
   /**
+   * Opt this program's `wizard_ask` overlays into rich link rendering:
+   * standalone URLs in prompt text become OSC 8 hyperlinks and a lone URL is
+   * copied to the clipboard, so a long URL can't be broken by the overlay's
+   * line wrapping. Defaults to false — leave off for flows we don't own.
+   */
+  richLinks?: boolean;
+  /**
    * Per-question `wizard_ask` timeout in milliseconds. Defaults to
    * DEFAULT_ASK_TIMEOUT_MS (5 minutes). Raise it for programs whose
    * questions send the user off to do slow work (run a build, create a
@@ -88,4 +96,6 @@ export interface BootstrapResult {
   mcpUrl: string;
   wizardFlags: Record<string, string>;
   wizardMetadata: Record<string, string>;
+  /** Full project payload, for project-level prompt context (opt-ins). */
+  project: ApiProject | null;
 }

@@ -87,6 +87,19 @@ export interface OutroData {
   body?: string;
   /** Success-only: bulleted list of "what the agent did" */
   changes?: string[];
+  /**
+   * Success-only: a prominent, labeled link to where the user should go
+   * next (e.g. an inbox the program just configured). Rendered right under
+   * the headline and shown verbatim — no UTM tagging — so the URL stays
+   * clean and copy-pasteable. Set per-program in buildOutroData.
+   */
+  primaryLink?: { label: string; url: string };
+  /**
+   * Success-only: a short "what to do next" checklist with its own heading,
+   * rendered as a bulleted list. Distinct from `changes`, which recaps what
+   * the agent already did.
+   */
+  nextSteps?: { heading: string; items: string[] };
   docsUrl?: string;
   continueUrl?: string;
   /** Report file the agent wrote (e.g. "posthog-setup-report.md") */
@@ -113,7 +126,7 @@ export interface AskQuestion {
   /** text = single-line free input; single/multi = picker */
   kind: 'single' | 'multi' | 'text';
   /** Required for `single` and `multi`. Ignored for `text`. */
-  options?: { label: string; value: string }[];
+  options?: { label: string; value: string; description?: string }[];
   /** Defaults to true */
   required?: boolean;
   /**
@@ -135,6 +148,14 @@ export interface PendingQuestion {
   questions: AskQuestion[];
   /** Skill id of the caller. Set by the wizard from session.skillId. */
   source: string;
+  /**
+   * When true, the ask overlay renders standalone URLs in prompt text as
+   * OSC 8 hyperlinks and copies a lone URL to the clipboard. Opt-in per
+   * program (set from `ProgramRun.richLinks` via the ask bridge); defaults
+   * to false so existing flows render prompts exactly as before. See
+   * `LinkText` / `link-helpers`.
+   */
+  richLinks?: boolean;
 }
 
 /**

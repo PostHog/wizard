@@ -45,6 +45,26 @@ export const OutroScreen = ({ store }: OutroScreenProps) => {
             ✔ {outroData.message || 'Done!'}
           </Text>
 
+          {outroData.primaryLink && (
+            <Box marginTop={1}>
+              <Text>
+                {outroData.primaryLink.label}:{' '}
+                <Text color="cyan">{outroData.primaryLink.url}</Text>
+              </Text>
+            </Box>
+          )}
+
+          {outroData.nextSteps && outroData.nextSteps.items.length > 0 && (
+            <Box flexDirection="column" marginTop={1}>
+              <Text color="cyan" bold>
+                {outroData.nextSteps.heading}
+              </Text>
+              {outroData.nextSteps.items.map((item, i) => (
+                <Text key={i}>• {item}</Text>
+              ))}
+            </Box>
+          )}
+
           {outroData.dashboardUrl && (
             <Box marginTop={1}>
               <Text>

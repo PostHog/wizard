@@ -1,5 +1,14 @@
 # Changelog
 
+## [2.26.0](https://github.com/PostHog/wizard/compare/v2.25.0...v2.26.0) (2026-06-22)
+
+
+### Features
+
+* **self-driving:** Add the `self-driving` program to set up PostHog Self-driving ([#642](https://github.com/PostHog/wizard/issues/642)) ([b834e5d](https://github.com/PostHog/wizard/commit/b834e5d7fe2b964cc8d372b9ce32dd3a1bdba9d2))
+* **tui:** multi-select confirm button + space/enter to toggle ([#507](https://github.com/PostHog/wizard/issues/507)) ([8395fb1](https://github.com/PostHog/wizard/commit/8395fb1cc3ff3fbfda7f5293d2a6350800735fbf))
+* WizardAmp ([#514](https://github.com/PostHog/wizard/issues/514)) ([5c51b33](https://github.com/PostHog/wizard/commit/5c51b333369d471838e7d1799c6af86e0c932a37))
+
 ## [2.25.0](https://github.com/PostHog/wizard/compare/v2.24.1...v2.25.0) (2026-06-18)
 
 

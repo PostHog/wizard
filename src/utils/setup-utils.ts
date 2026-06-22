@@ -30,7 +30,12 @@ import {
 } from './urls';
 import { performOAuthFlow } from './oauth';
 import { provisionNewAccount } from './provisioning';
-import { fetchUserData, fetchProjectData, type ApiUser } from '@lib/api';
+import {
+  fetchUserData,
+  fetchProjectData,
+  type ApiUser,
+  type ApiProject,
+} from '@lib/api';
 import { versionSatisfiesRange } from './semver';
 import { wizardAbort } from './wizard-abort';
 
@@ -53,6 +58,13 @@ interface ProjectData {
    * lacked permissions.
    */
   user?: ApiUser | null;
+  /**
+   * Full project payload from `/api/projects/:id/`. Carries the team's
+   * product opt-ins (replay, exception autocapture, surveys) so prompts
+   * can state project-level product enablement instead of agents
+   * inferring it from repo evidence. Null on signup flows.
+   */
+  project?: ApiProject | null;
 }
 
 export interface CliSetupConfig {
@@ -401,6 +413,7 @@ export async function getOrAskForProjectData(
   cloudRegion: CloudRegion;
   roleAtOrganization: string | null;
   user: ApiUser | null;
+  project: ApiProject | null;
 }> {
   // CI mode: bypass OAuth, use personal API key for LLM gateway
   if (_options.ci && _options.apiKey) {
@@ -440,6 +453,7 @@ export async function getOrAskForProjectData(
       cloudRegion,
       roleAtOrganization,
       user,
+      project: projectData.project,
     };
   }
 
@@ -451,6 +465,7 @@ export async function getOrAskForProjectData(
     cloudRegion,
     roleAtOrganization,
     user,
+    project,
   } = await withProgress('login', () =>
     askForWizardLogin({
       signup: _options.signup,
@@ -481,13 +496,14 @@ ${cloudUrl}/settings/project#variables`);
     cloudRegion,
     roleAtOrganization: roleAtOrganization ?? null,
     user: user ?? null,
+    project: project ?? null,
   };
 }
 
 async function fetchProjectDataWithApiKey(
   apiKey: string,
   cloudUrl: string,
-): Promise<{ api_token: string; id: number }> {
+): Promise<{ api_token: string; id: number; project: ApiProject }> {
   const userData = await fetchUserData(apiKey, cloudUrl);
   const projectId = userData.team?.id;
 
@@ -501,6 +517,7 @@ async function fetchProjectDataWithApiKey(
   return {
     api_token: projectData.api_token,
     id: projectId,
+    project: projectData,
   };
 }
 
@@ -508,11 +525,12 @@ async function fetchProjectDataById(
   apiKey: string,
   projectId: number,
   cloudUrl: string,
-): Promise<{ api_token: string; id: number }> {
+): Promise<{ api_token: string; id: number; project: ApiProject }> {
   const projectData = await fetchProjectData(apiKey, projectId, cloudUrl);
   return {
     api_token: projectData.api_token,
     id: projectId,
+    project: projectData,
   };
 }
 
@@ -567,6 +585,7 @@ async function askForWizardLogin(options: {
     cloudRegion,
     roleAtOrganization: userData.role_at_organization ?? null,
     user: userData,
+    project: projectData,
   };
 
   getUI().log.success('Login complete.');

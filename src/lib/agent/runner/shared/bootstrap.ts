@@ -177,6 +177,7 @@ export async function bootstrapProgram(
     cloudRegion,
     roleAtOrganization,
     user,
+    project,
   } = await getOrAskForProjectData({
     signup: session.signup,
     ci: session.ci,
@@ -234,5 +235,6 @@ export async function bootstrapProgram(
     mcpUrl,
     wizardFlags,
     wizardMetadata,
+    project,
   };
 }

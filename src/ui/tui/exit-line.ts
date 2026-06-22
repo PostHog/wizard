@@ -33,14 +33,32 @@ export function getExitLine(store: WizardStore): string {
         : '';
     const headline = `${GREEN}${BOLD}✔${RESET_ATTRS} ${message}${reportSuffix}`;
 
-    if (outro.handoffPrompt) {
-      return (
-        `${headline}\n\n` +
-        `${DIM}Hand this to your coding agent to finish up (triple-click to select):${RESET_ATTRS}\n` +
-        outro.handoffPrompt
+    const parts = [headline];
+
+    // The alt-screen outro is wiped on exit, so a program's primary
+    // next-action link (e.g. the Self-driving inbox) only survives in
+    // scrollback if echoed here. URL on its own line → clean triple-click.
+    if (outro.primaryLink) {
+      parts.push(
+        `${DIM}${outro.primaryLink.label}:${RESET_ATTRS}\n${outro.primaryLink.url}`,
       );
     }
-    return headline;
+
+    if (outro.nextSteps) {
+      const bullets = outro.nextSteps.items
+        .map((item) => `${DIM}  • ${item}${RESET_ATTRS}`)
+        .join('\n');
+      parts.push(`${DIM}${outro.nextSteps.heading}${RESET_ATTRS}\n${bullets}`);
+    }
+
+    if (outro.handoffPrompt) {
+      parts.push(
+        `${DIM}Hand this to your coding agent to finish up (triple-click to select):${RESET_ATTRS}\n` +
+          outro.handoffPrompt,
+      );
+    }
+
+    return parts.join('\n\n');
   }
 
   return `${DIM}${label} exited.${RESET_ATTRS}`;
