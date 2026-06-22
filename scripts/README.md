@@ -2,38 +2,22 @@
 
 Helper scripts. The build-related ones (`generate-version.cjs`,
 `smoke-test*.sh`, `check-screens.tsx`) are wired into `package.json`. The rest
-below are **manual, runnable tools** for the `wizard-ci-tools` control plane and
-e2e — each is a standalone `tsx` entry, named `*.no-jest.ts` so Jest ignores it.
+below are **manual, runnable tools** for headless e2e + snapshots — each is a
+standalone `tsx` entry, named `*.no-jest.ts` so Jest ignores it.
 
 Run from the repo root, e.g. `npx tsx scripts/<name>.no-jest.ts`.
 
-## Control-plane e2e (drive the wizard headlessly via wizard-ci-tools)
+| Script                            | What it does                                                                                                                                                                | Needs                                                                             |
+| --------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| **`e2e-full-run.no-jest.ts`**     | The full headless e2e: real `WizardStore` + `InkUI` (never rendered) + concurrent driver + **real `runAgent`** against prod cloud. Emits a structured result + a recording. | `POSTHOG_PERSONAL_API_KEY`, `APP_DIR`, `PROJECT_ID`; host `CLAUDE_*` env stripped |
+| **`render-snapshots.no-jest.ts`** | Renders a recording's key-moment frames to per-frame `.ans` snapshots (real Ink → ANSI). Feeds the workbench visual-regression flow.                                        | a `recording.json` + outDir                                                       |
+| **`replay-e2e.no-jest.ts`**       | Replays a recording in the terminal — reconstructs each frame's store and renders the **real Ink screen**. `--step` (Enter to advance) or `--delay <ms>` (auto-play).       | a `recording.json`                                                                |
 
-| Script                        | What it does                                                                                                                                                                                                             | Needs                                                                             |
-| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------- |
-| **`ci-driver-demo.ts`**       | Drives the real store/router/detection flow with `WizardCiDriver` — **offline, agent stubbed**. Proves the control loop on a 1-file project.                                                                             | nothing                                                                           |
-| **`e2e-full-run.no-jest.ts`** | The full headless e2e: real `WizardStore` + `InkUI` (never rendered) + concurrent driver + **real `runAgent`** against prod cloud. Emits a structured result (`E2E_RESULT_JSON`) and a recording (`E2E_RECORDING_JSON`). | `POSTHOG_PERSONAL_API_KEY`, `APP_DIR`, `PROJECT_ID`; host `CLAUDE_*` env stripped |
-| **`ci-driver-live-agent.ts`** | A **real gateway LLM** drives the `wizard-ci-tools` MCP server (read_state / perform_action) to advance the wizard — agent-vs-agent proof.                                                                               | `PHX_KEY_FILE`                                                                    |
-
-> Normally you don't call these directly — `pnpm wizard-ci <app> --e2e` (in
-> [wizard-workbench](https://github.com/PostHog/wizard-workbench)) orchestrates
-> `e2e-full-run` with the env hygiene + assertions.
-
-## Record & replay (view a run back in the terminal)
-
-| Script                       | What it does                                                                                                                                                                          | Needs                |
-| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------- |
-| **`record-demo.no-jest.ts`** | Produces a sample recording **offline** (no agent, no network) by driving the flow with a `WizardRecorder`. Writes `/tmp/wizard-demo.recording.json` (override with `RECORDING_OUT`). | nothing              |
-| **`replay-e2e.no-jest.ts`**  | Replays a recording in the terminal — reconstructs each frame's store and renders the **real Ink screen**. `--step` (Enter to advance, default) or `--delay <ms>` (auto-play).        | a `*.recording.json` |
-
-```bash
-# make a sample recording, then watch it
-npx tsx scripts/record-demo.no-jest.ts
-npx tsx scripts/replay-e2e.no-jest.ts /tmp/wizard-demo.recording.json --step
-```
-
-Real `--e2e` runs also drop a recording at
-`/tmp/wizard-e2e-<app>.recording.json`.
+> You usually don't call these directly — `pnpm wizard-ci <app> --e2e` and
+> `pnpm wizard-ci-snapshots` (in
+> [wizard-workbench](https://github.com/PostHog/wizard-workbench)) orchestrate
+> them with the env hygiene + assertions. A real `--e2e` run drops a recording
+> at `/tmp/wizard-e2e-<app>.recording.json`.
 
 ## Background
 

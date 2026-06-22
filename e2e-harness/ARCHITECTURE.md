@@ -97,8 +97,9 @@ store/router changes (a route, a task-list update, a status line, a runPhase
 change, an overlay). Replay reconstructs each frame's store and renders the real
 Ink screen back to the terminal, so a run can be watched back to verify it:
 
+A real `--e2e` run drops a recording at `/tmp/wizard-e2e-<app>.recording.json`.
+
 ```bash
-npx tsx scripts/record-demo.no-jest.ts                                  # sample, offline
 npx tsx scripts/replay-e2e.no-jest.ts <recording.json> --step           # Enter ▸ step
 npx tsx scripts/replay-e2e.no-jest.ts <recording.json> --delay 1200     # auto-play
 ```
