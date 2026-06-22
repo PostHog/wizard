@@ -1,28 +1,22 @@
 /**
  * Per-program e2e profiles — the UI choices a headless run makes driving each
- * program's flow. These are product knowledge about the flows, but they live in
- * the test harness (NOT on the program config) so none of this e2e machinery
- * reaches the wizard's production source. Look one up with {@link profileFor}.
+ * program's flow.
+ *
+ * Each program declares its test path as a readable JSON next to the program
+ * (`src/lib/programs/<program>/test/e2e.json`): a `profile` (the options the run
+ * auto-takes) plus a documented `path`. We load the `profile` here and map it by
+ * program id. Those JSONs are *data*, imported only by this harness — never by
+ * prod code — so they don't reach the wizard's production source or its bundle.
+ * Look one up with {@link profileFor}.
  */
 
 import { Program, type ProgramId } from '@lib/programs/program-registry';
 import { DEFAULT_E2E_PROFILE, type WizardE2eProfile } from './e2e-profile.js';
-
-/**
- * PostHog integration happy path: confirm the intro, push past any health-check
- * issue, pick the first setup option, skip MCP + Slack, delete installed skills.
- */
-const POSTHOG_INTEGRATION_PROFILE: WizardE2eProfile = {
-  setup: 'first',
-  healthCheck: 'dismiss',
-  mcp: 'skip',
-  slack: 'skip',
-  skills: 'delete',
-  ask: 'first',
-};
+import posthogIntegrationE2e from '@lib/programs/posthog-integration/test/e2e.json';
 
 const PROFILES: Partial<Record<ProgramId, WizardE2eProfile>> = {
-  [Program.PostHogIntegration]: POSTHOG_INTEGRATION_PROFILE,
+  [Program.PostHogIntegration]:
+    posthogIntegrationE2e.profile as WizardE2eProfile,
 };
 
 /** The e2e profile for a program, or the happy-path default if none is set. */
