@@ -44,11 +44,40 @@ export type DetectionReport = {
   projects: DetectedProject[];
 };
 
-/** Source-maps targets: the variants the wizard can automate, by id → name. */
-const SOURCE_MAPS_TARGETS: DetectTarget[] = AUTOMATABLE_VARIANTS.map((v) => ({
-  id: v,
-  name: VARIANT_DISPLAY_NAME[v],
-}));
+/**
+ * Variant precedence for the agentic picker (most specific first). The detector
+ * keeps the EARLIEST matching target, so this ordering is what makes a React app
+ * built with Vite resolve to `vite` (bundler-plugin upload) instead of the
+ * generic `react` posthog-cli path. Mirrors `pickJsVariant` in detect.ts:
+ * opinionated frameworks → bundlers → bare React → Node → generic web.
+ */
+const VARIANT_PRECEDENCE: readonly SkillVariant[] = [
+  'nextjs',
+  'nuxt',
+  'angular',
+  'vite',
+  'webpack',
+  'rollup',
+  'react',
+  'node',
+  'web',
+];
+
+const precedenceRank = (v: SkillVariant): number => {
+  const i = VARIANT_PRECEDENCE.indexOf(v);
+  return i === -1 ? Number.MAX_SAFE_INTEGER : i;
+};
+
+/**
+ * Source-maps targets: the variants the wizard can automate, by id → name,
+ * ordered by VARIANT_PRECEDENCE so the detector's "earliest match wins"
+ * tie-break selects the most specific variant. Derived from AUTOMATABLE_VARIANTS
+ * so a newly-automatable variant is never silently dropped (unranked ones sort
+ * last). Exported for testing.
+ */
+export const SOURCE_MAPS_TARGETS: DetectTarget[] = [...AUTOMATABLE_VARIANTS]
+  .sort((a, b) => precedenceRank(a) - precedenceRank(b))
+  .map((v) => ({ id: v, name: VARIANT_DISPLAY_NAME[v] }));
 
 function classify(
   variant: SkillVariant | null,

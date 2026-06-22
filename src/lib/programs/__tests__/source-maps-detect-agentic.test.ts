@@ -1,4 +1,38 @@
-import { coerceReport } from '@lib/programs/error-tracking-upload-source-maps/detect-agentic';
+import {
+  coerceReport,
+  SOURCE_MAPS_TARGETS,
+} from '@lib/programs/error-tracking-upload-source-maps/detect-agentic';
+import { AUTOMATABLE_VARIANTS } from '@lib/programs/error-tracking-upload-source-maps/detect';
+
+describe('SOURCE_MAPS_TARGETS precedence', () => {
+  const ids = SOURCE_MAPS_TARGETS.map((t) => t.id);
+  const rank = (id: string) => ids.indexOf(id);
+
+  it('covers every automatable variant exactly once', () => {
+    expect([...ids].sort()).toEqual([...AUTOMATABLE_VARIANTS].sort());
+  });
+
+  it('ranks bundlers ahead of the generic React variant', () => {
+    // A React app built with Vite must resolve to `vite` (bundler-plugin
+    // upload), not the generic `react` posthog-cli path — the regression that
+    // shipped a posthog-cli setup into a Vite project.
+    for (const bundler of ['vite', 'webpack', 'rollup']) {
+      expect(rank(bundler)).toBeLessThan(rank('react'));
+    }
+  });
+
+  it('ranks opinionated frameworks ahead of bundlers', () => {
+    for (const fw of ['nextjs', 'nuxt', 'angular']) {
+      expect(rank(fw)).toBeLessThan(rank('vite'));
+    }
+  });
+
+  it('ranks the generic web fallback last among JS targets', () => {
+    for (const other of ['react', 'node', 'vite']) {
+      expect(rank(other)).toBeLessThan(rank('web'));
+    }
+  });
+});
 
 describe('coerceReport', () => {
   it('marks a supported project with a PostHog SDK as instrumentable', () => {

@@ -53,6 +53,11 @@ type RuntimeEnvKey =
   // Agent / MCP
   | 'MCP_URL'
   | 'POSTHOG_API_KEY'
+  // Local-dev model routing escape hatch (see getDirectAnthropicKey).
+  // Deliberately NOT POSTHOG_WIZARD_-prefixed: yargs .env('POSTHOG_WIZARD')
+  // would claim it as an unknown CLI option and strict-reject the run.
+  | 'WIZARD_ANTHROPIC_API_KEY'
+  | 'ANTHROPIC_API_KEY'
   // Platform: terminal detection
   | 'TERM'
   | 'TERM_PROGRAM'
@@ -68,4 +73,26 @@ type RuntimeEnvKey =
 /** Read a runtime environment variable. Only allowlisted keys compile. */
 export function runtimeEnv(key: RuntimeEnvKey): string | undefined {
   return process.env[key];
+}
+
+/**
+ * Local-dev escape hatch: route the agent's model calls straight to the
+ * Anthropic API instead of the PostHog LLM gateway. Returns the key to use
+ * directly, or `undefined` to keep the gateway path (the production default).
+ *
+ * - `WIZARD_ANTHROPIC_API_KEY` opts in explicitly and works in any build.
+ * - A bare `ANTHROPIC_API_KEY` is honored ONLY in dev/test builds (`IS_DEV`),
+ *   so a stray shell key never silently bypasses the gateway for
+ *   `npx @posthog/wizard` users — that bypass would defeat the OAuth flow,
+ *   quota tracking, and the gateway's Bedrock fallback. `IS_DEV` is inlined to
+ *   `false` in published builds, so this path is unreachable there.
+ */
+export function getDirectAnthropicKey(): string | undefined {
+  const explicit = runtimeEnv('WIZARD_ANTHROPIC_API_KEY')?.trim();
+  if (explicit) return explicit;
+  if (IS_DEV) {
+    const shellKey = runtimeEnv('ANTHROPIC_API_KEY')?.trim();
+    if (shellKey) return shellKey;
+  }
+  return undefined;
 }

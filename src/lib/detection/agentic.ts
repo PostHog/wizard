@@ -68,6 +68,9 @@ export const PROJECT_MANIFESTS: readonly string[] = [
   // Ruby / PHP
   'Gemfile',
   'composer.json',
+  // Rust / Go
+  'Cargo.toml',
+  'go.mod',
   // Mobile / native
   'Package.swift',
   'Podfile',
@@ -84,7 +87,12 @@ export function manifestGlob(): string {
 }
 
 export type AgenticDetectOptions = {
-  /** Categories to classify each project into. */
+  /**
+   * Categories to classify each project into. Order matters: list targets by
+   * priority, most specific first. When a project could match more than one,
+   * the agent keeps the earliest — so the caller encodes precedence purely
+   * through ordering (e.g. a bundler target before a generic framework target).
+   */
   targets: readonly DetectTarget[];
   /** One short clause describing what the scan is for (frames the prompt). */
   purpose?: string;
@@ -106,22 +114,22 @@ function buildPrompt(
     'A "project" is a directory containing one or more of the manifest files below. Find projects by their manifests, NOT by walking directories — never report a directory that has no manifest.',
     '',
     'Do exactly this:',
-    `1. Run Glob ONCE with this pattern to find every project manifest in the repo in a single call: "${manifestGlob()}". Discard any result whose path contains node_modules/, dist/, build/, .next/, out/, coverage/, vendor/, .venv/, or site-packages/. Group the remaining results by directory — each directory is one project.`,
+    `1. Run Glob ONCE with this pattern to find every project manifest in the repo in a single call: "${manifestGlob()}". Discard any result whose path contains node_modules/, dist/, build/, .next/, out/, coverage/, vendor/, .venv/, site-packages/, or target/. Group the remaining results by directory — each directory is one project.`,
     '2. Decide repoType: "monorepo" if the root package.json has a "workspaces" field OR a pnpm-workspace.yaml / turbo.json / nx.json / lerna.json was found at the root, else "single".',
     '3. For EACH project directory, Read its manifest(s) ONCE. From the dependency lists decide:',
     '   - the human-readable framework name (e.g. "Next.js", "Django", "Rails"),',
-    '   - the matching target id below, or null if none matches,',
+    '   - the matching target id from the list below. That list is ordered by priority — most specific first — so when a project could match more than one target (e.g. it uses several of the listed technologies), pick the one listed EARLIEST. Use null only if none matches,',
     '   - hasPostHog: true if any dependency is a PostHog SDK (name contains "posthog", e.g. posthog-js, posthog-node, @posthog/*, posthog (pip/gem)), else false.',
     '   Do NOT read any file other than these manifests.',
     '',
-    'Target ids (id → name):',
+    'Target ids (id → name), in priority order — most specific first; if several match a project, keep the one listed earliest:',
     targetList,
     '',
     'Output requirements:',
     '- Respond with ONLY a single JSON object. No prose, no markdown code fences.',
     '- Shape: {"repoType":"monorepo"|"single","projects":[{"path":string,"framework":string,"targetId":string|null,"hasPostHog":boolean}]}',
     '- "path" is the project directory relative to the working directory; use "." for the repo root.',
-    '- "targetId" MUST be exactly one of the target ids above when it matches; otherwise null.',
+    '- "targetId" MUST be exactly one of the target ids above when it matches; if several match, use the one listed earliest; otherwise null.',
     '- Include projects whose stack matches no target too (targetId: null).',
     `- If there are no manifests at all, respond with exactly: ${AgentSignals.ABORT} detection failed`,
   ].join('\n');
@@ -285,8 +293,21 @@ export async function detectProjectsWithAgent(
     throw new Error(result.message || `Agent error: ${result.error}`);
   }
 
-  return coerceAgenticReport(
-    extractJson(resultText || collected.join('\n')),
-    targets.map((t) => t.id),
-  );
+  const output = resultText || collected.join('\n');
+  try {
+    return coerceAgenticReport(
+      extractJson(output),
+      targets.map((t) => t.id),
+    );
+  } catch (err) {
+    // The prompt tells the agent to emit `[ABORT] detection failed` when the
+    // repo has no recognizable project manifests. Surface that (and any other
+    // non-JSON terminal output that carries the abort signal) as an empty
+    // report so the screen renders a friendly "nothing to instrument" state
+    // instead of a cryptic "Agent did not return a JSON object" error.
+    if (output.includes(AgentSignals.ABORT)) {
+      return { repoType: 'single', projects: [] };
+    }
+    throw err;
+  }
 }

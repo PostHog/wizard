@@ -13,6 +13,8 @@ describe('manifestGlob', () => {
       'requirements.txt',
       'Gemfile',
       'composer.json',
+      'Cargo.toml',
+      'go.mod',
       'build.gradle',
       'pubspec.yaml',
     ]) {
