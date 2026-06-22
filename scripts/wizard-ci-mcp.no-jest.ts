@@ -132,7 +132,7 @@ async function main() {
 
   server.tool(
     'open_app',
-    'Boot a live wizard run on an app and make it active. Call once before the other tools. Point appDir at a throwaway copy of the app — the directory that has the package.json. Returns the first screen.',
+    'Boot a live wizard run on an app and make it active. Call once before the other tools. appDir is a throwaway copy of the app to integrate. Returns the first screen.',
     {
       appDir: z
         .string()

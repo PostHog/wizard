@@ -27,8 +27,7 @@ fixture). Never print or commit the key.
 ## Drive
 
 1. **`open_app({ appDir, keyFile, projectId, region })`** — boots a live wizard on
-   the app and returns the first screen. Point `appDir` at the throwaway copy — the
-   app directory that has the `package.json`.
+   the app and returns the first screen. `appDir` is the throwaway copy.
 2. **`read_state`** — current screen, run phase, secret-free session, tasks, and
    the actions legal right now. Call after every move.
 3. **`perform_action({ action, params? })`** — commit a decision: `confirm_setup`,
