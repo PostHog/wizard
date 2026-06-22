@@ -26,9 +26,3 @@ none of it ships in prod. `WizardCiDriver` (read/act over the store), the
 screen→action registry, the `wizard-ci-tools` MCP server, the e2e profiles, and
 the recorder/replay. See [`ARCHITECTURE.md`](../e2e-harness/ARCHITECTURE.md) for
 how an agent drives these (env strip, scoped project id, gotchas).
-
-> **Security-leak repro scripts** (`relay-prod.no-jest.ts`,
-> `precedence.no-jest.ts`) that reproduce the `ANTHROPIC_BASE_URL`
-> settings-override gateway leak live on the fix PR
-> ([PostHog/wizard#703](https://github.com/PostHog/wizard/pull/703)), documented
-> in its description + comments.

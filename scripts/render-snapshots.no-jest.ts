@@ -1,13 +1,7 @@
 /**
  * Render a recording to per-frame TUI snapshots — one `.ans` file per key
- * moment, the REAL Ink screen rendered to ANSI (via replay's renderFrame, which
- * needs real ink, hence tsx not jest).
- *
- * These are the snapshots the workbench's visual-comparison flow diffs against a
- * committed baseline. A recording comes from a real `--e2e` run, so the
- * snapshots are what the user actually saw; run-to-run differences (e.g. the
- * agent enqueuing a different task) show up in the side-by-side for a human to
- * review.
+ * moment, the real Ink screen rendered to ANSI via replay's renderFrame (needs
+ * real ink, hence tsx not jest). Feeds the workbench visual-comparison flow.
  *
  *   tsx scripts/render-snapshots.no-jest.ts <recording.json> <outDir>
  */

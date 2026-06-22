@@ -2,12 +2,10 @@
  * Per-program e2e profiles — the UI choices a headless run makes driving each
  * program's flow.
  *
- * Each program declares its test path as a readable JSON next to the program
+ * Each program declares its test path as JSON next to it
  * (`src/lib/programs/<program>/test/e2e.json`): a `profile` (the options the run
- * auto-takes) plus a documented `path`. We load the `profile` here and map it by
- * program id. Those JSONs are *data*, imported only by this harness — never by
- * prod code — so they don't reach the wizard's production source or its bundle.
- * Look one up with {@link profileFor}.
+ * auto-takes) plus a documented `path`. {@link profileFor} loads the `profile`
+ * and maps it by program id.
  */
 
 import { Program, type ProgramId } from '@lib/programs/program-registry';

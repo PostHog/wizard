@@ -91,9 +91,7 @@ program e2e-drivable, add its profile to `profiles.ts`.
 
 The flow is **snapshot-tested** offline (no agent, deterministic):
 `__tests__/e2e-flow-snapshot.test.ts` golden-checks the (screen → decision)
-trace. Update with `jest -u` after an intentional flow/profile change. This is
-the structured-state analog of the TUI ANSI screenshots in
-`scripts/__screenshots__/`.
+trace. Update with `jest -u` after an intentional flow/profile change.
 
 ## Record & replay
 
