@@ -93,6 +93,8 @@ export const ACTION_REGISTRY: Partial<Record<ScreenName, DriverAction[]>> = {
   [ScreenId.AgentSkillIntro]: [confirmSetupAction],
   [ScreenId.AuditIntro]: [confirmSetupAction],
   [ScreenId.DoctorIntro]: [confirmSetupAction],
+  [ScreenId.WarehouseIntro]: [confirmSetupAction],
+  [ScreenId.SelfDrivingIntro]: [confirmSetupAction],
 
   // ── Health check — dismiss a blocking outage ──────────────────────────
   [ScreenId.HealthCheck]: [

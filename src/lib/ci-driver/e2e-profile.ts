@@ -73,6 +73,8 @@ export function decideE2eAction(
     case ScreenId.AuditIntro:
     case ScreenId.SourceMapsIntro:
     case ScreenId.DoctorIntro:
+    case ScreenId.WarehouseIntro:
+    case ScreenId.SelfDrivingIntro:
       return { action: { id: 'confirm_setup' } };
 
     case ScreenId.HealthCheck:
