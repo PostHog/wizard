@@ -18,6 +18,7 @@ import type { Arguments } from 'yargs';
 import { auditCommand } from '../commands/audit';
 import { migrateCommand } from '../commands/migrate';
 import { revenueCommand } from '../commands/revenue';
+import { warehouseCommand } from '../commands/warehouse';
 import { uploadSourcemapsCommand } from '../commands/upload-sourcemaps';
 import { selfDrivingCommand } from '../commands/self-driving';
 import {
@@ -73,6 +74,11 @@ describe('top-level command shapes', () => {
   test('revenue-analytics is a flat skill command', () => {
     expect(revenueCommand.name).toBe('revenue-analytics');
     expect(revenueCommand.children).toBeUndefined();
+  });
+
+  test('warehouse is a flat skill command', () => {
+    expect(warehouseCommand.name).toBe('warehouse');
+    expect(warehouseCommand.children).toBeUndefined();
   });
 
   test('audit exposes the shared skill options on the parent', () => {
@@ -161,6 +167,16 @@ describe('flat skill commands', () => {
     revenueCommand.handler!(makeArgv({ debug: true }));
     const [config] = mockRunWizard.mock.calls[0] as [{ skillId?: string }];
     expect(config.skillId).toBe('revenue-analytics-setup');
+  });
+
+  test('warehouse dispatches with data-warehouse-source-setup skillId', () => {
+    warehouseCommand.handler!(makeArgv({ installDir: '/tmp/some-app' }));
+    const [config, opts] = mockRunWizard.mock.calls[0] as [
+      { skillId?: string },
+      Record<string, unknown>,
+    ];
+    expect(config.skillId).toBe('data-warehouse-source-setup');
+    expect(opts.installDir).toBe('/tmp/some-app');
   });
 });
 
