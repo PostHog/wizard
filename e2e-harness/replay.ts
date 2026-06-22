@@ -7,6 +7,10 @@
  * Rendering is offline against a disposable store, so screen effects (detection,
  * prefetch) fire harmlessly against the recorded state and never touch the real
  * run.
+ *
+ * Never ships to prod: it imports real screen components to render them, but it
+ * lives in e2e-harness/ and only scripts/tests import it — no production code
+ * does, so it is absent from the tsdown bundle (`bin.ts` is the only entry).
  */
 
 import { readFileSync } from 'fs';

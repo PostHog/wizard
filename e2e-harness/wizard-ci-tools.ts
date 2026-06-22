@@ -12,6 +12,10 @@
  * Mirrors wizard-tools.ts: pure adapter behind a seam (the driver), importing
  * no product knowledge. The driver does the work; this just speaks MCP. The
  * SDK is dynamically imported so this module loads even where the SDK is mocked.
+ *
+ * Never ships to prod: despite building an MCP server and importing the agent
+ * SDK, this lives in e2e-harness/ and is never imported by production code —
+ * `bin.ts` is the only tsdown entry, so it is absent from the published bundle.
  */
 
 import { z } from 'zod';

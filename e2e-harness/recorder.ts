@@ -13,6 +13,10 @@
  * Each frame stores the (secret-redacted) session plus tasks/status/event-plan,
  * which is enough for {@link ../replay} to reconstruct a throwaway store and
  * render the real Ink screen back to ANSI.
+ *
+ * Never ships to prod: it subscribes to a real store, but it lives in
+ * e2e-harness/ and no production code imports it — the live run never records
+ * itself, and it is absent from the tsdown bundle (`bin.ts` is the only entry).
  */
 
 import type { WizardStore } from '@ui/tui/store';

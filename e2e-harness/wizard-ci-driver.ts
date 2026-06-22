@@ -16,6 +16,10 @@
  * state (typed-but-unsubmitted text, highlighted option, the wizard_ask
  * per-question accumulator) is React-local and deliberately invisible here —
  * the driver issues the final commit directly instead.
+ *
+ * Never ships to prod: it reads/mutates the store via the same setters the UI
+ * uses, but it lives in e2e-harness/ and no production code imports it, so it is
+ * absent from the tsdown bundle (`bin.ts` is the only build entry).
  */
 
 import type { WizardStore } from '@ui/tui/store';

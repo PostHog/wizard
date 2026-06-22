@@ -10,6 +10,10 @@
  * Discipline mirrors screen-registry.tsx: one entry per screen, kept exhaustive
  * by a test over the ScreenId/Overlay enums. No product knowledge leaks in —
  * actions speak only in store setters and generic params.
+ *
+ * Never ships to prod: the `apply` closures call prod store setters, but this
+ * registry lives in e2e-harness/ and is imported only by the driver/tests — no
+ * production code references it, so it never reaches the tsdown bundle.
  */
 
 import type { WizardStore } from '@ui/tui/store';
