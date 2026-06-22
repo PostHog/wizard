@@ -18,6 +18,7 @@ import { withAiOptInGate } from '@lib/programs/ai-opt-in-gate';
 export enum ScreenId {
   Intro = 'intro',
   RevenueIntro = 'revenue-intro',
+  WarehouseIntro = 'warehouse-intro',
   SourceMapsIntro = 'source-maps-intro',
   SourceMapsOutro = 'source-maps-outro',
   MigrationIntro = 'migration-intro',
