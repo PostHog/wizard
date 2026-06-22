@@ -109,6 +109,19 @@ redacted `session`) or render specific frames to ANSI with `renderFrame()` from
 `replay.ts`. The access token is redacted, so recordings are safe to share.
 Code: `recorder.ts` (capture) + `replay.ts` (render).
 
+## Visual-regression snapshots (the workbench flow)
+
+[wizard-workbench](https://github.com/PostHog/wizard-workbench) drives this for
+real-run **visual regression**: `pnpm wizard-ci-snapshots` runs each CI-e2e test
+definition as a real `--e2e` run, renders every key-moment frame to a `.ans`
+snapshot (via `scripts/render-snapshots.no-jest.ts` → `replay.ts`), and diffs
+against a committed baseline, writing a side-by-side `report.html`. Run-to-run
+agent differences (e.g. a different task enqueued) are surfaced for a human to
+review, not asserted away. It needs `WIZARD_PATH` pointing at a checkout that
+has this `e2e-harness/`, plus the e2e env (`POSTHOG_PERSONAL_API_KEY`,
+`POSTHOG_WIZARD_PROJECT_ID`, `POSTHOG_REGION`). See
+`services/wizard-ci/snapshots.ts` there.
+
 ## Driving it as a true LLM loop (optional)
 
 `wizard-ci-tools.ts` exposes `read_state` / `list_actions` / `perform_action` as
