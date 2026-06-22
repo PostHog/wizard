@@ -108,7 +108,7 @@ export const AuthScreen = ({ store }: AuthScreenProps) => {
 
       <Box marginBottom={1}>
         <Text bold>
-          This wizard uses AI (Anthropic's Claude) to read and modify your code.
+          This wizard uses AI to read and modify your code.
         </Text>
       </Box>
 
