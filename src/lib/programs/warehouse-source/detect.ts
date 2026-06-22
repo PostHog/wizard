@@ -89,7 +89,7 @@ export function detectWarehousePrerequisites(
   } catch (error) {
     analytics.captureException(
       error instanceof Error ? error : new Error(String(error)),
-      { op: 'detectWarehousePrerequisites.stat', target: installDir },
+      { step: 'detectWarehousePrerequisites.stat', path: installDir },
     );
     fail({ kind: 'bad-directory', path: installDir, reason: 'unreadable' });
     return;

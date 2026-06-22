@@ -150,7 +150,7 @@ function addNpmDeps(content: string, signals: ProjectSignals): void {
     // Malformed package.json — skip it, but record that we hit it.
     analytics.captureException(
       error instanceof Error ? error : new Error(String(error)),
-      { op: 'detectWarehouseSources.parsePackageJson' },
+      { step: 'detectWarehouseSources.parsePackageJson' },
     );
   }
 }

@@ -10,10 +10,10 @@ import type { WizardRunOptions } from './types';
  * no longer silent. Preserves the original Error (and its `code`, e.g. EACCES
  * / ENOENT) when available.
  */
-function reportFsError(op: string, target: string, error: unknown): void {
+function reportFsError(step: string, path: string, error: unknown): void {
   analytics.captureException(
     error instanceof Error ? error : new Error(String(error)),
-    { op, target },
+    { step, path },
   );
 }
 
