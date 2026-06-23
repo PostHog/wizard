@@ -684,6 +684,11 @@ export async function runAgent(
     errorMessage?: string;
     additionalFeatureQueue?: readonly AdditionalFeature[];
     abortCases?: readonly AbortCaseMatcher[];
+    /**
+     * Emit a `wizard: step` event on each agent task transition. Threaded from
+     * `ProgramRun.trackStepProgress`; defaults off for every other caller.
+     */
+    emitStepEvents?: boolean;
     /** Request the end-of-run reflection remark. Defaults to true. */
     requestRemark?: boolean;
     /**
@@ -702,6 +707,7 @@ export async function runAgent(
     successMessage = 'PostHog integration complete',
     errorMessage = 'Integration failed',
     abortCases = [],
+    emitStepEvents = false,
   } = config ?? {};
 
   logToFile('Starting agent run');
@@ -1023,6 +1029,7 @@ export async function runAgent(
         receivedSuccessResult,
         tasks,
         isOrchestratorEnabled(agentConfig.wizardFlags ?? {}),
+        emitStepEvents,
       );
 
       // [ABORT] detection: the skill emits "[ABORT] <reason>" when it
@@ -1255,6 +1262,8 @@ type TaskEntry = { content: string; status: string; activeForm?: string };
 interface TaskStore {
   tasks: Map<string, TaskEntry>;
   sync: () => void;
+  /** When true, emit a `wizard: step` event on each status transition. */
+  emitStepEvents?: boolean;
 }
 
 interface ToolUseBlock {
@@ -1294,6 +1303,36 @@ function handleTaskUpdate(block: ToolUseBlock, store: TaskStore): void {
   if (input.status === 'deleted') {
     store.tasks.delete(input.taskId);
   } else {
+    // Per-step drop-off signal for programs that opt in via `trackStepProgress`
+    // (threaded here as `emitStepEvents`). Emit `wizard: step` on each real
+    // status transition so analytics can see how far a run got — even a silent
+    // step (no wizard_ask) that dies mid-run surfaces as its last `in_progress`
+    // with no matching `completed`. Generic: the step name is whatever the
+    // agent set; the `command` tag already identifies the program.
+    if (
+      store.emitStepEvents &&
+      input.status &&
+      input.status !== existing.status &&
+      (input.status === 'in_progress' || input.status === 'completed')
+    ) {
+      const keys = [...store.tasks.keys()];
+      analytics.wizardCapture('step', {
+        // The task's display label lives on `activeForm` (what the TUI renders,
+        // e.g. "Checking access"); `content`/`subject` are typically empty on a
+        // status-only TaskUpdate. Prefer the stored entry, then the update, so
+        // the name is never null. Named `step_name` (not `step`): a bare
+        // `properties.step` doesn't resolve in HogQL — `step_name` queries
+        // cleanly, like `step_index` / `step_count`.
+        step_name:
+          existing.activeForm ??
+          input.activeForm ??
+          existing.content ??
+          input.subject,
+        status: input.status,
+        step_index: keys.indexOf(input.taskId),
+        step_count: keys.length,
+      });
+    }
     store.tasks.set(input.taskId, {
       content: input.subject ?? existing.content,
       status: input.status ?? existing.status,
@@ -1377,6 +1416,9 @@ function handleSDKMessage(
   // The orchestrator owns the TUI task panel (it renders its queue). Suppress the
   // agent's own TaskCreate/TaskUpdate rendering so it does not clobber the queue.
   suppressTaskRender = false,
+  // Opt-in per-step analytics, threaded from runAgent's `emitStepEvents`
+  // (ProgramRun.trackStepProgress). Off for every program that doesn't opt in.
+  emitStepEvents = false,
 ): void {
   // Map preserves insertion order (the order the agent created the tasks).
   // Within that, group by status: completed first, then in_progress, then
@@ -1462,6 +1504,7 @@ function handleSDKMessage(
             dispatchTaskToolUse(block as ToolUseBlock, {
               tasks,
               sync: syncTasks,
+              emitStepEvents,
             });
           }
 

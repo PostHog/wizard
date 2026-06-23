@@ -163,6 +163,7 @@ export async function runLinearProgram(
       errorMessage: config.errorMessage ?? `${config.integrationLabel} failed`,
       additionalFeatureQueue: config.additionalFeatureQueue ?? [],
       abortCases: config.abortCases,
+      emitStepEvents: config.trackStepProgress ?? false,
     },
     middleware,
   );
