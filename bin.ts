@@ -36,6 +36,8 @@ import { auditCommand } from './src/commands/audit';
 import { doctorCommand } from './src/commands/doctor';
 import { migrateCommand } from './src/commands/migrate';
 import { revenueCommand } from './src/commands/revenue';
+import { warehouseCommand } from './src/commands/warehouse';
+import { selfDrivingCommand } from './src/commands/self-driving';
 import { slackCommand } from './src/commands/slack';
 import { uploadSourcemapsCommand } from './src/commands/upload-sourcemaps';
 import { skillCommand } from './src/commands/skill';
@@ -64,6 +66,8 @@ Wizard.use(basicIntegrationCommand)
   .use(doctorCommand)
   .use(migrateCommand)
   .use(revenueCommand)
+  .use(warehouseCommand)
+  .use(selfDrivingCommand)
   .use(slackCommand)
   .use(uploadSourcemapsCommand)
   .use(skillCommand)

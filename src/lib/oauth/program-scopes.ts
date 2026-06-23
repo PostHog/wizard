@@ -120,6 +120,67 @@ export const AGENT_SKILL_SCOPE_ADDITIONS = [
 ] as const;
 
 /**
+ * Extra scopes the self-driving program needs on top of
+ * `WIZARD_OAUTH_SCOPES`. All consumed by the PostHog MCP tools the
+ * agent drives during the run:
+ *   • task:read / task:write — the signal source config API
+ *     (`inbox-source-configs-*`) is permissioned under the generic
+ *     `task` scope object, NOT a signals-specific one. Unrelated to
+ *     the Tasks product.
+ *   • integration:read — `integrations-list`, to check whether the
+ *     team already has a GitHub integration and to verify the connect
+ *     flow completed.
+ *   • signal_scout:read / signal_scout:write — list, sync, and tune
+ *     the Signals scout troop (`signals-scout-config-*`).
+ *   • session_recording:read / survey:read / error_tracking:read —
+ *     server-side product-usage probes (`query-session-recordings-list`,
+ *     `survey-list`, `error-issue-list`). Product usage is a
+ *     project-level fact (often instrumented in another repo or via
+ *     the snippet), so the agent asks the server instead of inferring
+ *     only from the local setup report. All three are read-only and
+ *     already in the wizard OAuth app's production scope ceiling (the
+ *     mcp-tutorial program requests them).
+ *   • external_data_source:read / external_data_source:write — the
+ *     connected-tools step creates the GitHub Issues / Linear warehouse
+ *     sources directly (`external-data-sources-create`) and verifies
+ *     what's actually connected (`external-data-sources-list`) instead
+ *     of taking the user's word for it.
+ *   • llm_skill:read / llm_skill:write — the custom-scouts step
+ *     (skill step 7b): read the seeded `authoring-signals-scouts`
+ *     guide and canonical scout bodies (`llma-skill-get` /
+ *     `llma-skill-file-get`) and author the user-approved custom
+ *     `signals-scout-*` skills (`llma-skill-create`). Canonical scout
+ *     bodies are never edited.
+ */
+export const SELF_DRIVING_SCOPE_ADDITIONS = [
+  'task:read',
+  'task:write',
+  'integration:read',
+  'signal_scout:read',
+  'signal_scout:write',
+  'session_recording:read',
+  'survey:read',
+  'error_tracking:read',
+  'external_data_source:read',
+  'external_data_source:write',
+  'llm_skill:read',
+  'llm_skill:write',
+] as const;
+
+/**
+ * Extra scopes the warehouse-source program needs on top of
+ * `WIZARD_OAUTH_SCOPES`. The agent creates data warehouse sources directly
+ * (`external-data-sources-create`) and lists what's connected
+ * (`external-data-sources-list`) to verify the result. Both are already within
+ * the wizard OAuth app's scope ceiling — the self-driving program requests the
+ * same pair.
+ */
+export const WAREHOUSE_SOURCE_SCOPE_ADDITIONS = [
+  'external_data_source:read',
+  'external_data_source:write',
+] as const;
+
+/**
  * Extra scope the Connect-Slack step needs on top of `WIZARD_OAUTH_SCOPES`.
  *
  * The step polls `/api/projects/:id/integrations/` (`fetchSlackConnected`)
@@ -150,6 +211,8 @@ const PROGRAM_SCOPE_ADDITIONS: Partial<Record<ProgramId, readonly string[]>> = {
   // ever changes, this line will fail to type-check.
   'mcp-tutorial': MCP_TUTORIAL_SCOPE_ADDITIONS,
   'agent-skill': AGENT_SKILL_SCOPE_ADDITIONS,
+  'self-driving': SELF_DRIVING_SCOPE_ADDITIONS,
+  'warehouse-source': WAREHOUSE_SOURCE_SCOPE_ADDITIONS,
   'posthog-integration': CONNECT_SLACK_SCOPE_ADDITIONS,
   slack: CONNECT_SLACK_SCOPE_ADDITIONS,
 };

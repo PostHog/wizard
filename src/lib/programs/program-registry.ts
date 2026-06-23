@@ -14,12 +14,14 @@ import type { ProgramConfig } from './program-step.js';
 import { POSTHOG_DOCS_URL } from '../constants.js';
 import { posthogIntegrationConfig } from './posthog-integration/index.js';
 import { revenueAnalyticsConfig } from './revenue-analytics/index.js';
+import { warehouseSourceConfig } from './warehouse-source/index.js';
 import { auditConfig } from './audit/index.js';
 import { eventsAuditConfig } from './events-audit/index.js';
 import { posthogDoctorConfig } from './posthog-doctor/index.js';
 import { webAnalyticsDoctorConfig } from './web-analytics-doctor/index.js';
 import { migrationConfig } from './migration/index.js';
 import { errorTrackingUploadSourceMapsConfig } from './error-tracking-upload-source-maps/index.js';
+import { selfDrivingConfig } from './self-driving/index.js';
 import { AGENT_SKILL_STEPS } from './agent-skill/index.js';
 import { getContentBlocks as agentSkillContentBlocks } from './agent-skill/content/index.js';
 import {
@@ -62,12 +64,14 @@ export const agentSkillConfig: ProgramConfig = {
 export const PROGRAM_REGISTRY = [
   posthogIntegrationConfig,
   revenueAnalyticsConfig,
+  warehouseSourceConfig,
   errorTrackingUploadSourceMapsConfig,
   auditConfig,
   eventsAuditConfig,
   posthogDoctorConfig,
   webAnalyticsDoctorConfig,
   migrationConfig,
+  selfDrivingConfig,
   agentSkillConfig,
   mcpAddConfig,
   mcpRemoveConfig,
@@ -83,12 +87,14 @@ export const PROGRAM_REGISTRY = [
 export const Program = {
   PostHogIntegration: posthogIntegrationConfig.id,
   RevenueAnalyticsSetup: revenueAnalyticsConfig.id,
+  WarehouseSource: warehouseSourceConfig.id,
   ErrorTrackingUploadSourceMaps: errorTrackingUploadSourceMapsConfig.id,
   Migration: migrationConfig.id,
   Audit: auditConfig.id,
   EventsAudit: eventsAuditConfig.id,
   PosthogDoctor: posthogDoctorConfig.id,
   WebAnalyticsDoctor: webAnalyticsDoctorConfig.id,
+  SelfDriving: selfDrivingConfig.id,
   AgentSkill: agentSkillConfig.id,
   McpAdd: mcpAddConfig.id,
   McpRemove: mcpRemoveConfig.id,

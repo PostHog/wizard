@@ -50,6 +50,7 @@ export async function runLinearProgram(
     mcpUrl,
     wizardFlags,
     wizardMetadata,
+    project,
   } = boot;
 
   // 5. Skill install (if skillId provided)
@@ -96,6 +97,7 @@ export async function runLinearProgram(
     : createWizardAskBridge({
         getSource: () => session.skillId ?? config.integrationLabel,
         showQuestion: (q) => getUI().requestQuestion(q),
+        richLinks: config.richLinks ?? false,
         timeoutMs: config.askTimeoutMs,
       });
 
@@ -136,6 +138,15 @@ export async function runLinearProgram(
     projectApiKey,
     host,
     skillPath,
+    orgAiDataProcessingApproved:
+      session.apiUser?.organization?.is_ai_data_processing_approved ?? null,
+    teamProductOptIns: project
+      ? {
+          sessionReplay: project.session_recording_opt_in ?? null,
+          exceptionAutocapture: project.autocapture_exceptions_opt_in ?? null,
+          surveys: project.surveys_opt_in ?? null,
+        }
+      : null,
   });
   logToFile(`[agent-runner] prompt assembled (${prompt.length} chars)`);
 

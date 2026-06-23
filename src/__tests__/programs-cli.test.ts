@@ -18,7 +18,9 @@ import type { Arguments } from 'yargs';
 import { auditCommand } from '../commands/audit';
 import { migrateCommand } from '../commands/migrate';
 import { revenueCommand } from '../commands/revenue';
+import { warehouseCommand } from '../commands/warehouse';
 import { uploadSourcemapsCommand } from '../commands/upload-sourcemaps';
+import { selfDrivingCommand } from '../commands/self-driving';
 import {
   dispatchFamily,
   pickerChildrenToShow,
@@ -72,6 +74,11 @@ describe('top-level command shapes', () => {
   test('revenue-analytics is a flat skill command', () => {
     expect(revenueCommand.name).toBe('revenue-analytics');
     expect(revenueCommand.children).toBeUndefined();
+  });
+
+  test('warehouse is a flat skill command', () => {
+    expect(warehouseCommand.name).toBe('warehouse');
+    expect(warehouseCommand.children).toBeUndefined();
   });
 
   test('audit exposes the shared skill options on the parent', () => {
@@ -161,6 +168,16 @@ describe('flat skill commands', () => {
     const [config] = mockRunWizard.mock.calls[0] as [{ skillId?: string }];
     expect(config.skillId).toBe('revenue-analytics-setup');
   });
+
+  test('warehouse dispatches with data-warehouse-source-setup skillId', () => {
+    warehouseCommand.handler!(makeArgv({ installDir: '/tmp/some-app' }));
+    const [config, opts] = mockRunWizard.mock.calls[0] as [
+      { skillId?: string },
+      Record<string, unknown>,
+    ];
+    expect(config.skillId).toBe('data-warehouse-source-setup');
+    expect(opts.installDir).toBe('/tmp/some-app');
+  });
 });
 
 describe('yargs parsing for the audit family', () => {
@@ -217,5 +234,27 @@ describe('pickerChildrenToShow (today: picker shows only the default leaf)', () 
   test('falls back to all children when none is marked default', () => {
     const shown = pickerChildrenToShow([make('events'), make('all')]);
     expect(shown.map((c) => c.name)).toEqual(['events', 'all']);
+  });
+});
+
+describe('self-driving rejects unsupported modes', () => {
+  // The guard lives in selfDrivingCommand.check, so it runs at the yargs layer
+  // before the handler — parseCommand exercises that real path.
+  test('rejects --signup', async () => {
+    await expect(
+      parseCommand(selfDrivingCommand, 'self-driving --signup'),
+    ).rejects.toThrow(/--signup/i);
+  });
+
+  test('rejects --ci', async () => {
+    await expect(
+      parseCommand(selfDrivingCommand, 'self-driving --ci'),
+    ).rejects.toThrow(/CI mode/i);
+  });
+
+  test('accepts a plain run', async () => {
+    await expect(
+      parseCommand(selfDrivingCommand, 'self-driving --install-dir /tmp/app'),
+    ).resolves.toBeDefined();
   });
 });

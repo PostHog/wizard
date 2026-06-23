@@ -96,8 +96,12 @@ export const RunScreen = ({ store }: RunScreenProps) => {
     return getBlocks(store);
   }, [store, activeProgram]);
 
+  // Program-supplied tips for the right pane; undefined falls back to
+  // DEFAULT_TIPS inside TipsCard, so non-self-driving programs are unaffected.
+  const programTips = getProgramConfig(activeProgram).getTips?.(store);
+
   const leftPane = store.learnCardComplete ? (
-    <TipsCard store={store} />
+    <TipsCard store={store} tips={programTips} />
   ) : (
     <LearnCard
       store={store}
