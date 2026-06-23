@@ -1,5 +1,19 @@
 # Changelog
 
+## [2.29.0](https://github.com/PostHog/wizard/compare/v2.28.1...v2.29.0) (2026-06-23)
+
+
+### Features
+
+* agentic detection for source-map upload flow ([#689](https://github.com/PostHog/wizard/issues/689)) ([940bf67](https://github.com/PostHog/wizard/commit/940bf6791e80b54eb4964baa41b88f0e6742ca9e))
+* detect more data warehouse sources in onboarding ([#711](https://github.com/PostHog/wizard/issues/711)) ([b206169](https://github.com/PostHog/wizard/commit/b20616915158813f41ee7c9f0c0abc15386ea532))
+
+
+### Bug Fixes
+
+* **analytics:** tag every event with program_id ([#714](https://github.com/PostHog/wizard/issues/714)) ([4db5a0f](https://github.com/PostHog/wizard/commit/4db5a0f7aa84a4daa86e70789f592adc6c5563d3))
+* **self-driving:** Rename "canonical" scouts to "built-in" in self-driving prompt ([#717](https://github.com/PostHog/wizard/issues/717)) ([e99450e](https://github.com/PostHog/wizard/commit/e99450e82951f1a5237f7fd75e9ebe9d981152e8))
+
 ## [2.28.1](https://github.com/PostHog/wizard/compare/v2.28.0...v2.28.1) (2026-06-23)
 
 
