@@ -205,7 +205,8 @@ async function main() {
     await drive;
     await sleep(400);
 
-    // Structured result for the --e2e assertion path (same shape e2e-full-run had).
+    // Structured result the --e2e assertion path reads: run phase, posthog deps,
+    // env file, and the screens walked.
     if (process.env.E2E_RESULT_JSON) {
       const appDir = process.env.APP_DIR!;
       let deps: string[] = [];
