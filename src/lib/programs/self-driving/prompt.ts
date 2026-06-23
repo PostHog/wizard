@@ -109,7 +109,7 @@ STEP 5 — Offer issue-tracker integrations. (skill: "Connected tools")
    a source only for a tool the user picked.
 
 STEP 6 — Configure the scout fleet. (skill: "Scouts")
-   Materialize the fleet, then enable only a small set — the general
+   Materialize the fleet, then enable only a small set — the `general`
    scout plus the one or two specialists for the products this project
    uses most — and disable the rest, per the skill.
 
