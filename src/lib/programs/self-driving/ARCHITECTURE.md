@@ -65,7 +65,7 @@ matching context-mill file carries the HOW.
 4. **Enable sources** — always enable the scout gate; enable native sources (error tracking, replay, support) only where step-2 evidence shows the product is in use.
 5. **Offer issue trackers** — one multi-select (GitHub Issues / Linear / Zendesk / pganalyze). Auto-connect what the run can: GitHub Issues (pick a repo) and Linear (one-click OAuth link → single silent `integrations-list` check → create, never nudge). Zendesk / pganalyze need credentials the run never collects, so they're armed as dormant responders + a report follow-up — no UI redirect, no verification (a downstream reminder prompts the user to finish). Enable a (possibly dormant) responder for every pick.
 6. **Configure scout troop** — materialize the canonical troop, then enable a deliberately small set: `general` (always) + the **1–2 specialists** for the products this project uses most; never `error-tracking`/`session-replay` (consumed as native sources); disable the rest. The enabled troop lands at **2–5** (general + 1–2 specialists + 0–2 custom).
-7. **Design custom scouts** — gap-analyze the repo against the troop, propose **at most 2** candidates in one ask (each a plain-language `label` + a dimmed `description`, behind a leading "None — keep the canonical troop" default option), create the approved subset (the only place custom scouts are made).
+7. **Design custom scouts** — gap-analyze the repo against the troop, propose **at most 2** candidates in one ask (each a plain-language `label` + a dimmed `description`, behind a leading "None — keep the built-in troop" default option), create the approved subset (the only place custom scouts are made).
 8. **Write report** — write `./posthog-self-driving-report.md` (everything changed + follow-ups); findings reach the inbox in ~30 min.
 
 The table below adds the skill reference and the tool/MCP surface for each.
@@ -375,7 +375,7 @@ Plus the **Temporal coordinator schedule** (`signals-scout-coordinator-schedule`
 >     `WizardAskScreen.tsx` forwarding + per-row spacing only when present) — **multi-path only, dormant
 >     when unset → no other program changes**; context-mill `7b` populates it per proposed scout. (c)
 >     **Decline option first on every self-driving `wizard_ask`** so it is the default highlight and an
->     accidental `enter` declines: step 7 ("None — keep the canonical troop"), step 5 ("None of these"),
+>     accidental `enter` declines: step 7 ("None — keep the built-in troop"), step 5 ("None of these"),
 >     5a ("Skip GitHub Issues" + fallback "Skip for now"), 5b ("Skip Linear"). **Exception: step 3's
 >     GitHub gate** keeps the affirmative first and the decline ("I can't connect…", which aborts) last,
 >     since the run can't proceed without GitHub. Enforced as a cross-cutting rule in `description.md`
