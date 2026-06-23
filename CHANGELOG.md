@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.28.1](https://github.com/PostHog/wizard/compare/v2.28.0...v2.28.1) (2026-06-23)
+
+
+### Bug Fixes
+
+* **self-driving:** Differentiate the source vs scout tips, rename "fleet" to "troop" ([#712](https://github.com/PostHog/wizard/issues/712)) ([edacabc](https://github.com/PostHog/wizard/commit/edacabc57660f1f4944a0c1cecdfa52f5f88986a))
+
 ## [2.28.0](https://github.com/PostHog/wizard/compare/v2.27.0...v2.28.0) (2026-06-23)
 
 
