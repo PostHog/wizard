@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.28.0](https://github.com/PostHog/wizard/compare/v2.27.0...v2.28.0) (2026-06-23)
+
+
+### Features
+
+* **signals:** Add limits on scouts. ([#707](https://github.com/PostHog/wizard/issues/707)) ([06307d9](https://github.com/PostHog/wizard/commit/06307d9b03018a73f5716adf056eef592804eb60))
+
 ## [2.27.0](https://github.com/PostHog/wizard/compare/v2.26.0...v2.27.0) (2026-06-22)
 
 
