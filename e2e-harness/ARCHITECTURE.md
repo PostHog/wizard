@@ -46,9 +46,9 @@ OAuth token takes, so the auth screen advances with no browser and no keystrokes
 ## The two routes
 
 - **CI snapshots** — `tui-snapshots.no-jest.ts` spawns `tui-host` (`MODE=fixed`)
-  in a PTY. The host self-drives the fixed profile (`decideE2eAction`) and signals
-  each new screen; the parent writes the real rendered screen to
-  `SNAP_OUT/NN-<screen>.txt`. `RUN_AGENT=1` runs the real agent through to outro.
+  in a PTY. The host self-drives the fixed profile (`decideE2eAction`) through the
+  real agent run and signals each key moment; the parent writes the real rendered
+  screen to `SNAP_OUT/NN-<screen>.txt` (including the run screen's progression).
 - **Agent** — `wizard-ci-mcp.no-jest.ts` is a stdio MCP server that spawns
   `tui-host` (`MODE=serve`) and proxies: `read_state` / `perform_action` /
   `run_agent` forward over a unix socket; `render_screen` returns the real

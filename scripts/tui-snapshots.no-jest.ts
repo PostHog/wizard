@@ -2,11 +2,11 @@
  * Fixed-route snapshots of the REAL TUI (Node, single-stack).
  *
  * Spawns the real-TUI host (MODE=fixed) in a PTY, lets it self-drive the fixed
- * e2e profile, and writes the real rendered screen to SNAP_OUT/NN-<screen>.txt
- * each time the host signals a new screen via the control file.
+ * e2e profile through the real agent run, and writes the real rendered screen to
+ * SNAP_OUT/NN-<screen>.txt at each key moment the host signals.
  *
  *   SNAP_OUT=/tmp/snaps APP_DIR=/tmp/app POSTHOG_KEY_FILE=… PROJECT_ID=… \
- *   RUN_AGENT=0|1  npx tsx scripts/tui-snapshots.no-jest.ts
+ *     npx tsx scripts/tui-snapshots.no-jest.ts
  */
 import fs from 'fs';
 import path from 'path';

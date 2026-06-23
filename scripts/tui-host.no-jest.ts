@@ -148,7 +148,6 @@ async function main() {
   // ---- CI route: self-drive the fixed profile, snapshot each screen ----
   async function fixed() {
     const CTRL = process.env.SNAP_CTRL!;
-    const runFull = process.env.RUN_AGENT === '1';
     const profile: WizardE2eProfile = profileFor(Program.PostHogIntegration);
     const screenPath: string[] = [];
     // Snapshot on key moments — a screen change, a task-list update, or a
@@ -156,7 +155,7 @@ async function main() {
     // captured, not just screen transitions. The driver loop snaps each screen
     // before acting on it (so transitions are caught as presented); a store
     // subscription catches within-screen changes (the run). Deduped by
-    // signature, serialized, and throttled.
+    // signature and serialized.
     let lastSig = '';
     let chain: Promise<void> = Promise.resolve();
     const signature = () =>
@@ -211,18 +210,12 @@ async function main() {
     await store.getGate('intro');
     await store.getGate('health-check');
 
-    if (runFull) {
-      await runAgent(posthogIntegrationConfig, store.session);
-      const deadline = Date.now() + 120_000;
-      while (!store.session.skillsComplete && Date.now() < deadline)
-        await driver.waitForChange(5_000);
-    } else {
-      await authByState();
-      await sleep(2500);
-    }
-    // The driver loop has nothing left to do (full run reached skillsComplete; the
-    // cheap path stops after auth) but may be parked in waitForChange — don't
-    // block on it; the process exit below ends it.
+    await runAgent(posthogIntegrationConfig, store.session);
+    const deadline = Date.now() + 120_000;
+    while (!store.session.skillsComplete && Date.now() < deadline)
+      await driver.waitForChange(5_000);
+    // The run reached skillsComplete, so the driver loop is done — but it may be
+    // parked in waitForChange, so don't block on it; the process exit ends it.
     stop = true;
     void drive;
     unsub();
