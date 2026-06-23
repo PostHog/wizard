@@ -151,20 +151,44 @@ async function main() {
     const runFull = process.env.RUN_AGENT === '1';
     const profile: WizardE2eProfile = profileFor(Program.PostHogIntegration);
     const screenPath: string[] = [];
-    let lastSnap = '';
-    const snap = async () => {
-      const s = store.currentScreen;
-      if (s === lastSnap) return;
-      lastSnap = s;
-      screenPath.push(s);
-      await sleep(650);
-      fs.appendFileSync(CTRL, s + '\n');
-      await sleep(400);
+    // Snapshot on key moments — a screen change, a task-list update, or a
+    // runPhase change — so the run screen's progression (the agent working) is
+    // captured, not just screen transitions. The driver loop snaps each screen
+    // before acting on it (so transitions are caught as presented); a store
+    // subscription catches within-screen changes (the run). Deduped by
+    // signature, serialized, and throttled.
+    let lastSig = '';
+    let lastSnapAt = 0;
+    let chain: Promise<void> = Promise.resolve();
+    const signature = () =>
+      JSON.stringify({
+        screen: store.currentScreen,
+        overlay: store.router.hasOverlay,
+        tasks: store.tasks.map((t) => [t.label, t.status, t.done]),
+        phase: store.session.runPhase,
+      });
+    const snap = (): Promise<void> => {
+      const sig = signature();
+      if (sig === lastSig) return chain;
+      lastSig = sig;
+      const screen = store.currentScreen;
+      if (screenPath[screenPath.length - 1] !== screen) screenPath.push(screen);
+      chain = chain.then(async () => {
+        const gap = Date.now() - lastSnapAt;
+        if (gap < 600) await sleep(600 - gap); // throttle bursts
+        await sleep(650); // settle (and let detection fill in on the intro)
+        fs.appendFileSync(CTRL, store.currentScreen + '\n');
+        lastSnapAt = Date.now();
+        await sleep(400); // give the capturer time before the screen moves on
+      });
+      return chain;
     };
+    const unsub = store.subscribe(() => void snap());
+
     let stop = false;
     const driverLoop = async () => {
       while (!stop && !store.session.skillsComplete) {
-        await snap();
+        await snap(); // capture this screen as presented, before acting
         const state = driver.readState();
         const before = state.currentScreen;
         let acted = false;
@@ -199,11 +223,12 @@ async function main() {
     } else {
       await authByState();
       await sleep(2500);
-      await snap(); // the run screen
     }
     stop = true;
     await drive;
-    await sleep(400);
+    unsub();
+    await snap(); // the final screen
+    await chain; // flush any pending snapshots
 
     // Structured result the --e2e assertion path reads: run phase, posthog deps,
     // env file, and the screens walked.
