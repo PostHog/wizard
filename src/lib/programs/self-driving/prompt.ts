@@ -20,7 +20,7 @@ export function buildSelfDrivingPrompt(ctx: PromptContext): string {
     value === true ? 'ON' : value === false ? 'OFF' : 'unknown';
   const optIns = ctx.teamProductOptIns;
 
-  return `You are setting up PostHog Self-driving for this project: you will enable the right signal sources, make sure GitHub is connected, tune the scout fleet, design custom scouts for what this product uniquely needs, and hand the user a configured inbox.
+  return `You are setting up PostHog Self-driving for this project: you will enable the right signal sources, make sure GitHub is connected, tune the scout troop, design custom scouts for what this product uniquely needs, and hand the user a configured inbox.
 
 Project URLs:
 - Integrations settings (GitHub App install): ${integrationsSettingsUrl}
@@ -50,7 +50,7 @@ tasks, in this order:
   3. Connect GitHub (required)
   4. Enable signal sources
   5. Offer issue-tracker integrations
-  6. Configure the scout fleet
+  6. Configure the scout troop
   7. Design custom scouts
   8. Write report and hand off
 Drive the list with TaskUpdate — mark a task in_progress when you start
@@ -108,15 +108,15 @@ STEP 5 — Offer issue-tracker integrations. (skill: "Connected tools")
    never sends the user to paste credentials and never re-prompts. Enable
    a source only for a tool the user picked.
 
-STEP 6 — Configure the scout fleet. (skill: "Scouts")
-   Materialize the fleet, then enable only a small set — the "general"
+STEP 6 — Configure the scout troop. (skill: "Scouts")
+   Materialize the troop, then enable only a small set — the "general"
    scout plus the one or two specialists for the products this project
    uses most — and disable the rest, per the skill.
 
 STEP 7 — Design custom scouts for this product. (skill: "Custom scouts")
    You are the only actor that has read this repo — turn that into
    coverage per the skill: a real gap analysis of the project's
-   watchable surfaces against what the canonical fleet already covers,
+   watchable surfaces against what the canonical troop already covers,
    then custom scouts for the uncovered ones. Keep scout bodies
    high-level: describe the behavior and signal conditions to watch,
    referencing repo evidence by file/function name — never paste raw
