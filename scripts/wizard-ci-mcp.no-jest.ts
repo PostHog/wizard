@@ -220,7 +220,7 @@ async function main() {
 
   server.tool(
     'run_agent',
-    "Run the real wizard integration agent — the `run` screen's work. Blocks until it finishes (minutes), then returns the final runPhase and next screen. Call when read_state shows currentScreen=run.",
+    'Run the real wizard integration agent. It bootstraps credentials from the supplied key, then runs the integration, returning the final runPhase and next screen. This is what advances the auth and run screens — they expose no action and never advance on their own, so call this once setup is confirmed. Blocks minutes.',
     {},
     async () => {
       try {
