@@ -59,12 +59,17 @@ export function captureTui(opts: {
   const rows = opts.rows ?? (Number(process.env.PTY_ROWS) || 50);
   ensureSpawnHelper();
   const term = new Terminal({ cols, rows, allowProposedApi: true });
+  // Strip CI markers: ink renders non-interactively when it detects CI, which
+  // leaves the captured screen blank. We want the real interactive TUI.
+  const childEnv = { ...opts.env };
+  for (const k of ['CI', 'CONTINUOUS_INTEGRATION', 'GITHUB_ACTIONS'])
+    delete childEnv[k];
   const child = pty.spawn(opts.cmd, opts.args, {
     name: 'xterm-256color',
     cols,
     rows,
     cwd: opts.cwd,
-    env: opts.env as { [key: string]: string },
+    env: childEnv as { [key: string]: string },
   });
 
   const cbs: Array<() => void> = [];
