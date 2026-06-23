@@ -24,6 +24,7 @@ import { RevenueIntroScreen } from './screens/RevenueIntroScreen.js';
 import { WarehouseIntroScreen } from './screens/WarehouseIntroScreen.js';
 import { MigrationIntroScreen } from './screens/MigrationIntroScreen.js';
 import { SourceMapsIntroScreen } from './screens/SourceMapsIntroScreen.js';
+import { SourceMapsDetectScreen } from './screens/SourceMapsDetectScreen.js';
 import { SourceMapsOutroScreen } from './screens/SourceMapsOutroScreen.js';
 import { AgentSkillIntroScreen } from './screens/AgentSkillIntroScreen.js';
 import { SelfDrivingIntroScreen } from './screens/SelfDrivingIntroScreen.js';
@@ -79,6 +80,7 @@ export function createScreens(
     [ScreenId.RevenueIntro]: <RevenueIntroScreen store={store} />,
     [ScreenId.WarehouseIntro]: <WarehouseIntroScreen store={store} />,
     [ScreenId.SourceMapsIntro]: <SourceMapsIntroScreen store={store} />,
+    [ScreenId.SourceMapsDetect]: <SourceMapsDetectScreen store={store} />,
     [ScreenId.SourceMapsOutro]: <SourceMapsOutroScreen store={store} />,
     [ScreenId.MigrationIntro]: <MigrationIntroScreen store={store} />,
     [ScreenId.AgentSkillIntro]: <AgentSkillIntroScreen store={store} />,

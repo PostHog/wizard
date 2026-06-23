@@ -194,11 +194,12 @@ export async function* runMcpPromptViaSdk(args: {
   // before its query() call. Without these the SDK tries to
   // authenticate directly against Anthropic and 401s with "Invalid
   // authentication credentials".
+  process.env.CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS = 'true';
+  // Route through the PostHog LLM gateway, authed with the user's OAuth token.
   const gatewayUrl = getLlmGatewayUrlFromHost(credentials.host);
   process.env.ANTHROPIC_BASE_URL = gatewayUrl;
   process.env.ANTHROPIC_AUTH_TOKEN = credentials.accessToken;
   process.env.CLAUDE_CODE_OAUTH_TOKEN = credentials.accessToken;
-  process.env.CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS = 'true';
   logToFile(
     `[runMcpPromptViaSdk] gatewayUrl=${gatewayUrl} tokenPrefix=${
       credentials.accessToken
@@ -315,10 +316,8 @@ export async function* runMcpPromptViaSdk(args: {
         allowedTools: ['mcp__posthog-wizard__*'],
         env: {
           ...process.env,
-          // Without this the SDK picks up a user's personal
-          // ANTHROPIC_API_KEY from their shell and silently bypasses
-          // the PostHog LLM gateway — defeats quota tracking and the
-          // OAuth flow even though our other env vars are correct.
+          // Drop any shell ANTHROPIC_API_KEY so it can't silently bypass the
+          // PostHog LLM gateway and defeat quota tracking and the OAuth flow.
           ANTHROPIC_API_KEY: undefined,
           // Defer MCP tool schemas to avoid bloating the system prompt.
           // posthog-wizard exposes many query tools with large schemas;

@@ -4,6 +4,20 @@
 
 import { VERSION } from './version';
 
+// ── Models ──────────────────────────────────────────────────────────
+
+/**
+ * Default model for agent runs. Bare model IDs (no `anthropic/` prefix) so the
+ * LLM gateway's Bedrock fallback can match map_to_bedrock_model().
+ */
+export const DEFAULT_AGENT_MODEL = 'claude-sonnet-4-6';
+
+/**
+ * Cheaper, faster model for mechanical agent work (e.g. repo classification
+ * during source-map detection). Passed via AgentConfig.modelOverride.
+ */
+export const HAIKU_MODEL = 'claude-haiku-4-5-20251001';
+
 // ── Integration / CLI ───────────────────────────────────────────────
 
 /**

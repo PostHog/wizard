@@ -5,6 +5,8 @@ export type SourceMapsUploadPromptParams = {
   displayName: string | undefined;
   variant: SkillVariant;
   skillId: string;
+  /** Project to instrument, relative to the repo root ("." or undefined = root). */
+  projectPath?: string;
   projectId: number;
   host: string;
   settingsUrl: string;
@@ -22,12 +24,17 @@ export function buildSourceMapsUploadPrompt(
     displayName,
     variant,
     skillId,
+    projectPath,
     projectId,
     host,
     settingsUrl,
     uiHost,
   } = params;
   const platformLabel = displayName ?? variant;
+  const inSubproject = projectPath != null && projectPath !== '.';
+  const projectLine = inSubproject
+    ? `- Project directory (relative to repo root): ${projectPath}`
+    : '- Project directory: the repo root';
 
   return `You are wiring up PostHog Error Tracking source map upload for this ${platformLabel} project.
 
@@ -36,7 +43,14 @@ Project context:
 - PostHog Host: ${host}
 - Detected platform: ${platformLabel}
 - Skill to use: ${skillId}
+${projectLine}
 - Personal API keys settings page: ${settingsUrl}
+
+All file changes, build/run commands, and config edits target the project directory above${
+    inSubproject
+      ? ` — this is a monorepo, so scope your work to \`${projectPath}\` and do not touch other packages`
+      : ''
+  }.
 
 The skill you install in STEP 2 is the source of truth for the HOW of every
 step: its "## Steps" section has an overview, tips and per-technology
@@ -95,7 +109,9 @@ STEP 2 — Install the skill.
    Call install_skill (wizard-tools MCP server) with skillId "${skillId}".
    Do NOT run shell commands to install skills. Then read the installed
    SKILL.md and its reference files — they drive STEPS 3-9.
-   If install fails, emit ${AgentSignals.ERROR_RESOURCE_MISSING} skill ${skillId} could not be installed.
+   If install fails, emit ${
+     AgentSignals.ERROR_RESOURCE_MISSING
+   } skill ${skillId} could not be installed.
 
 STEP 3 — Apply build-config changes. (skill: "Apply build-config changes")
    Make the bundler / build-config changes the skill's step instructs. The

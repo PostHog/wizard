@@ -17,6 +17,7 @@ import {
   WIZARD_VARIANTS,
   WIZARD_ORCHESTRATOR_FLAG_KEY,
   WIZARD_USER_AGENT,
+  DEFAULT_AGENT_MODEL,
 } from '@lib/constants';
 import {
   type AdditionalFeature,
@@ -133,6 +134,11 @@ export type AgentConfig = {
   wizardMetadata?: Record<string, string>;
   /** Program identifier — selects the model for that program. */
   integrationLabel?: string;
+  /**
+   * Override the agent model for this run. Defaults to DEFAULT_AGENT_MODEL.
+   * Use for cheap mechanical runs (e.g. source-map detection on HAIKU_MODEL).
+   */
+  modelOverride?: string;
   /** Bridge that drives the `wizard_ask` overlay. Omit in non-interactive hosts. */
   askBridge?: import('@lib/wizard-ask-bridge').WizardAskBridge;
   /** Per-run cap on `wizard_ask` invocations. Defaults to 10. */
@@ -547,15 +553,16 @@ export async function initializeAgent(
   logToFile('Install directory:', options.installDir);
 
   try {
-    // Configure LLM gateway environment variables (inherited by SDK subprocess)
+    // Configure model routing (inherited by the SDK subprocess). All model
+    // calls route through the PostHog LLM gateway, authed with the user's
+    // OAuth token.
+    // Disable experimental betas (like input_examples) the gateway doesn't support.
+    process.env.CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS = 'true';
     const gatewayUrl = getLlmGatewayUrlFromHost(config.posthogApiHost);
     process.env.ANTHROPIC_BASE_URL = gatewayUrl;
     process.env.ANTHROPIC_AUTH_TOKEN = config.posthogApiKey;
     // Use CLAUDE_CODE_OAUTH_TOKEN to override any stored /login credentials
     process.env.CLAUDE_CODE_OAUTH_TOKEN = config.posthogApiKey;
-    // Disable experimental betas (like input_examples) that the LLM gateway doesn't support
-    process.env.CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS = 'true';
-
     logToFile('Configured LLM gateway:', gatewayUrl);
     logToFile(
       'API key prefix:',
@@ -603,7 +610,7 @@ export async function initializeAgent(
 
     // Bare model IDs (no `anthropic/` prefix) so the LLM gateway's Bedrock
     // fallback can match map_to_bedrock_model()'s strict lookup.
-    const model = 'claude-sonnet-4-6';
+    const model = config.modelOverride ?? DEFAULT_AGENT_MODEL;
 
     const agentRunConfig: AgentRunConfig = {
       workingDirectory: config.workingDirectory,
@@ -905,7 +912,8 @@ export async function runAgent(
         },
         env: {
           ...process.env,
-          // Prevent user's Anthropic API key from overriding the wizard's OAuth token
+          // Drop any shell ANTHROPIC_API_KEY so it can't override the wizard's
+          // OAuth gateway token.
           ANTHROPIC_API_KEY: undefined,
           // Defer MCP tool schemas to avoid bloating the system prompt.
           // The posthog-wizard MCP exposes many query tools with large schemas;
@@ -921,6 +929,7 @@ export async function runAgent(
           // disables tool search deferral and re-inflates the system prompt by
           // ~113k tokens (the reason ENABLE_TOOL_SEARCH=auto:0 is set above).
           MCP_CONNECTION_NONBLOCKING: '0',
+          // PostHog gateway headers: Bedrock fallback + property/flag tags.
           ANTHROPIC_CUSTOM_HEADERS: buildAgentEnv(
             agentConfig.wizardMetadata ?? {},
             agentConfig.wizardFlags ?? {},

@@ -100,6 +100,41 @@ describe('PROGRAM_SEQUENCES', () => {
     });
   });
 
+  describe('Source maps flow', () => {
+    const sourceMapsScreens = () =>
+      PROGRAM_SEQUENCES[Program.ErrorTrackingUploadSourceMaps].map((s) => s.id);
+
+    it('logs in, then detects: intro → auth → detect → run, no health-check', () => {
+      const screens = sourceMapsScreens();
+
+      // Auth comes before the agentic detect screen (detection needs creds).
+      expect(screens.indexOf(ScreenId.Auth)).toBeLessThan(
+        screens.indexOf(ScreenId.SourceMapsDetect),
+      );
+      expect(screens.indexOf(ScreenId.SourceMapsIntro)).toBeLessThan(
+        screens.indexOf(ScreenId.Auth),
+      );
+      expect(screens.indexOf(ScreenId.SourceMapsDetect)).toBeLessThan(
+        screens.indexOf(ScreenId.Run),
+      );
+      // The health-check ("connection") screen was removed from this flow.
+      expect(screens).not.toContain(ScreenId.HealthCheck);
+    });
+
+    it('detect screen stays incomplete until a project is selected', () => {
+      const entry = getEntry(
+        Program.ErrorTrackingUploadSourceMaps,
+        ScreenId.SourceMapsDetect,
+      );
+      const session = buildSession({});
+
+      expect(entry.isComplete?.(session)).toBe(false);
+
+      session.frameworkContext = { sourceMapsSelectedVariant: 'nextjs' };
+      expect(entry.isComplete?.(session)).toBe(true);
+    });
+  });
+
   describe('AI opt-in gate predicate', () => {
     const orgWith = (
       is_ai_data_processing_approved: boolean | null | undefined,
