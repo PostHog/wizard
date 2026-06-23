@@ -48,6 +48,13 @@ export enum AgentErrorType {
   RESOURCE_MISSING = 'WIZARD_RESOURCE_MISSING',
   /** API rate limit exceeded */
   RATE_LIMIT = 'WIZARD_RATE_LIMIT',
+  /**
+   * Transient provisioning/billing failure from the LLM gateway's Bedrock
+   * fallback (e.g. a 403 `INVALID_PAYMENT_INSTRUMENT` / AWS Marketplace
+   * subscription error). PostHog-side and self-resolving — retryable, not a
+   * "report this" terminal error.
+   */
+  PROVISIONING_ERROR = 'WIZARD_PROVISIONING_ERROR',
   /** Generic API error */
   API_ERROR = 'WIZARD_API_ERROR',
   /** YARA scanner detected a security violation */

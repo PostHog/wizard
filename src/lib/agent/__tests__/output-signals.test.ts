@@ -26,6 +26,31 @@ describe('AgentOutputSignals', () => {
     expect(signals.hasApiErrorStatus(500)).toBe(false);
   });
 
+  it('detects a transient provisioning 403 from the Bedrock fallback', () => {
+    const invalidPayment = new AgentOutputSignals();
+    invalidPayment.push(
+      'API Error: 403 Model access is denied due to INVALID_PAYMENT_INSTRUMENT',
+    );
+    expect(invalidPayment.hasProvisioningError()).toBe(true);
+
+    const marketplace = new AgentOutputSignals();
+    marketplace.push(
+      'API Error: 403 Your AWS Marketplace subscription for this model cannot be completed',
+    );
+    expect(marketplace.hasProvisioningError()).toBe(true);
+  });
+
+  it('does not treat other 403s or other statuses as provisioning errors', () => {
+    const forbidden = new AgentOutputSignals();
+    forbidden.push('API Error: 403 Forbidden: insufficient permissions');
+    expect(forbidden.hasProvisioningError()).toBe(false);
+
+    // The billing keywords on a non-403 status must not match either.
+    const wrongStatus = new AgentOutputSignals();
+    wrongStatus.push('API Error: 500 INVALID_PAYMENT_INSTRUMENT');
+    expect(wrongStatus.hasProvisioningError()).toBe(false);
+  });
+
   it('detects YARA violations from either marker', () => {
     const critical = new AgentOutputSignals();
     critical.push('[YARA CRITICAL] prompt injection detected');

@@ -54,6 +54,21 @@ export class AgentOutputSignals {
     return this.text.includes(`${OUTPUT_SIGNALS.API_ERROR} ${code}`);
   }
 
+  /**
+   * True for a transient provisioning/billing 403 from the gateway's Bedrock
+   * fallback: a PostHog-side AWS Marketplace condition (`INVALID_PAYMENT_INSTRUMENT`)
+   * that clears on its own, whose own message advises retrying after ~2 minutes.
+   * Distinct from a generic API error so the runner can retry instead of aborting
+   * with the terminal "report this" message.
+   */
+  hasProvisioningError(): boolean {
+    if (!this.hasApiErrorStatus(403)) return false;
+    return (
+      this.text.includes('INVALID_PAYMENT_INSTRUMENT') ||
+      this.text.includes('AWS Marketplace')
+    );
+  }
+
   hasYaraViolation(): boolean {
     return this.has('YARA_CRITICAL') || this.has('YARA_SCANNER_ERROR');
   }

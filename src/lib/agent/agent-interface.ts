@@ -1135,6 +1135,15 @@ export async function runAgent(
       return { error: AgentErrorType.RATE_LIMIT, message: apiErrorMessage };
     }
 
+    if (signals.hasProvisioningError()) {
+      logToFile('Agent error: PROVISIONING_ERROR');
+      spinner.stop('Model service temporarily unavailable');
+      return {
+        error: AgentErrorType.PROVISIONING_ERROR,
+        message: apiErrorMessage,
+      };
+    }
+
     if (signals.hasApiError()) {
       logToFile('Agent error: API_ERROR');
       spinner.stop('API error occurred');
@@ -1174,6 +1183,15 @@ export async function runAgent(
       logToFile('Agent error (caught): RATE_LIMIT');
       spinner.stop('Rate limit exceeded');
       return { error: AgentErrorType.RATE_LIMIT, message: apiErrorMessage };
+    }
+
+    if (signals.hasProvisioningError()) {
+      logToFile('Agent error (caught): PROVISIONING_ERROR');
+      spinner.stop('Model service temporarily unavailable');
+      return {
+        error: AgentErrorType.PROVISIONING_ERROR,
+        message: apiErrorMessage,
+      };
     }
 
     if (signals.hasApiError()) {

@@ -211,6 +211,49 @@ describe('runAgent', () => {
       expect(result.message).toContain('API Error');
     });
 
+    it('should classify a transient Bedrock-fallback billing 403 as PROVISIONING_ERROR', async () => {
+      // The gateway's Bedrock fallback can return a 403 with
+      // INVALID_PAYMENT_INSTRUMENT (a PostHog-side AWS Marketplace billing
+      // condition that clears on its own). This must be distinguished from a
+      // generic API error so the runner retries instead of aborting fatally.
+      function* mockGeneratorWithProvisioning403() {
+        yield {
+          type: 'system',
+          subtype: 'init',
+          model: 'claude-opus-4-5-20251101',
+          tools: [],
+          mcp_servers: [],
+        };
+
+        yield {
+          type: 'result',
+          subtype: 'success',
+          is_error: true,
+          result:
+            'API Error: 403 Model access is denied due to INVALID_PAYMENT_INSTRUMENT. ' +
+            'Your AWS Marketplace subscription for this model cannot be completed',
+        };
+
+        throw new Error('Process exited with code 1');
+      }
+
+      mockQuery.mockReturnValue(mockGeneratorWithProvisioning403());
+
+      const result = await runAgent(
+        defaultAgentConfig,
+        'test prompt',
+        defaultOptions,
+        mockSpinner as unknown as SpinnerHandle,
+        {
+          successMessage: 'Test success',
+          errorMessage: 'Test error',
+        },
+      );
+
+      expect(result.error).toBe('WIZARD_PROVISIONING_ERROR');
+      expect(result.message).toContain('INVALID_PAYMENT_INSTRUMENT');
+    });
+
     it('should suppress user-facing errors when SDK yields error result after success', async () => {
       // This test models actual SDK behavior where the SDK emits TWO result messages:
       // 1. SDK yields success result (num_turns: 105, is_error: false)
