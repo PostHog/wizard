@@ -64,7 +64,7 @@ matching context-mill file carries the HOW.
 3. **Connect GitHub** — required; if no `github` integration, send the user through the GitHub App install (one-click authorize deep-link) and re-verify; abort if declined.
 4. **Enable sources** — always enable the scout gate; enable native sources (error tracking, replay, support) only where step-2 evidence shows the product is in use.
 5. **Offer issue trackers** — one multi-select (GitHub Issues / Linear / Zendesk / pganalyze). Auto-connect what the run can: GitHub Issues (pick a repo) and Linear (one-click OAuth link → single silent `integrations-list` check → create, never nudge). Zendesk / pganalyze need credentials the run never collects, so they're armed as dormant responders + a report follow-up — no UI redirect, no verification (a downstream reminder prompts the user to finish). Enable a (possibly dormant) responder for every pick.
-6. **Configure scout fleet** — materialize the canonical fleet; keep the universal scouts, enable conditional ones only with evidence, disable the rest.
+6. **Configure scout fleet** — materialize the canonical fleet, then enable a deliberately small set: `general` (always) + the **1–2 specialists** for the products this project uses most; never `error-tracking`/`session-replay` (consumed as native sources); disable the rest. The enabled fleet lands at **2–5** (general + 1–2 specialists + 0–2 custom).
 7. **Design custom scouts** — gap-analyze the repo against the fleet, propose **at most 2** candidates in one ask (each a plain-language `label` + a dimmed `description`, behind a leading "None — keep the canonical fleet" default option), create the approved subset (the only place custom scouts are made).
 8. **Write report** — write `./posthog-self-driving-report.md` (everything changed + follow-ups); findings reach the inbox in ~30 min.
 
@@ -77,7 +77,7 @@ The table below adds the skill reference and the tool/MCP surface for each.
 | 3 | Connect GitHub (REQUIRED) | `3-github.md` | `integrations-list` for `kind:"github"`; else `wizard_ask` → `/settings/environment-integrations`, re-verify. Can't → `[ABORT] github connection declined`. |
 | 4 | Enable signal sources | `4-sources.md` | Create/enable `SignalSourceConfig` rows for products in use (`inbox-source-configs-*`). Always enables the scout gate `signals_scout`/`cross_source_issue`. Never enables an unconfirmed tool. |
 | 5 | Offer issue-tracker integrations | `5-connected-tools.md` (+ `5a`, `5b`) | One batched multi-select for GitHub Issues / Linear / Zendesk / pganalyze. GitHub Issues & Linear auto-connect via `external-data-sources-create` (Linear: OAuth link + one silent `integrations-list`, never nudge); Zendesk / pganalyze are armed dormant + report follow-up (no UI redirect, no verify). Enable a (possibly dormant) responder per pick. |
-| 6 | Configure the scout fleet | `6-scouts.md` | `signals-scout-config-sync` materializes the fleet (~19 scouts, grows over time); classify each row the sync returns — keep the cross-product scouts, enable surface-specific ones only with evidence, disable the rest (`signals-scout-config-update {enabled:false}`). Never touches `emit`/`run_interval`. |
+| 6 | Configure the scout fleet | `6-scouts.md` | `signals-scout-config-sync` materializes the fleet (~19 scouts, grows over time); enable `general` + the **1–2 specialists** for the most-used products (agent judgment over step-2 evidence), never `error-tracking`/`session-replay` (covered by native sources), fall back to one universal cross-product scout if no surface qualifies, disable all the rest (`signals-scout-config-update {enabled:false}`). Never touches `emit`/`run_interval`. |
 | 7 | Design custom scouts | `6b-tailor-scouts.md` | The **only** place custom scouts are created. Gap-analyze repo surfaces vs the fleet; propose **at most 2** in ONE `wizard_ask`, each option carrying a `description` (an optional `wizard_ask` option field rendered dimmed/wrapped under the label) plus a leading "None" option that's the default highlight (so an empty submit declines); create approved ones via `llma-skill-create` (`signals-scout-<scope>`). **Canonical bodies never edited.** Declining is valid, not an abort. |
 | 8 | Write report & hand off | `7-report.md` | Write `./posthog-self-driving-report.md`; findings appear in the inbox in ~30 min. |
 
@@ -191,13 +191,20 @@ schedules, data-import sync).
 
 **Scout fleet.** `SignalScoutConfig` (`models.py`): per `(team, skill_name)`, `enabled` (participation),
 `emit` (dry-run vs emit, default on), `run_interval_minutes` (default 60). Canonical fleet (~19 `signals-scout-*` skills, and growing) in
-`posthog/products/signals/skills/`. STEP 6 does **not** hardcode the list — it classifies whatever
-`signals-scout-config-sync` returns into **always-on** (cross-product: `general`,
-`anomaly-detection`, `observability-gaps`, `health-checks`, `inbox-validation`) vs **surface-specific**
-(enabled only with evidence: `error-tracking`, `session-replay`, `product-analytics`, `web-analytics`,
-`feature-flags`, `surveys`, `revenue-analytics`, `ai-observability`, `logs`, `csp-violations`,
-`experiments`, `customer-analytics`, `data-pipelines`, `replay-vision`), per `6-scouts.md`; plus the
-`authoring-signals-scouts` companion (not a scout). `lazy_seed.py` mirrors the on-disk canonical skills into per-team `LLMSkill` rows:
+`posthog/products/signals/skills/`. STEP 6 does **not** hardcode the list — it works from whatever
+`signals-scout-config-sync` returns and enables a **deliberately small set**: `general` is the only
+**always-on** scout; **1–2 specialists** are enabled for the products this project uses most (agent
+judgment over step-2 evidence — `top_events` volume, recent activity, active config counts). The
+specialist candidate pool is the rest of the fleet — the surface-specific scouts (`product-analytics`,
+`web-analytics`, `feature-flags`, `surveys`, `revenue-analytics`, `ai-observability`, `logs`,
+`csp-violations`, `experiments`, `customer-analytics`, `data-pipelines`, `replay-vision`) plus the
+cross-product `anomaly-detection`/`observability-gaps`/`health-checks`/`inbox-validation` —
+**excluding** `error-tracking`/`session-replay`, which are deliberately never enabled because step 4
+consumes them as native sources (a scout would duplicate that pipeline). If no surface clearly
+qualifies, one universal cross-product scout (`anomaly-detection` or `health-checks`) is the fallback
+so ≥1 specialist always runs. Everything else is disabled; the enabled fleet caps at **2–5** (general
++ 1–2 specialists + 0–2 custom from STEP 7). Per `6-scouts.md`; plus the `authoring-signals-scouts`
+companion (not a scout). `lazy_seed.py` mirrors the on-disk canonical skills into per-team `LLMSkill` rows:
 `sync_canonical_skills` only ever touches rows stamped `metadata.seeded_by == "signals_scout_harness"`
 (content-hash gated; a team-edited copy stops receiving updates); `register_missing_configs` gives each
 live `signals-scout-*` skill a config ("author a skill, get a scout"). The wizard's STEP 6 calls MCP
@@ -349,7 +356,15 @@ Plus the **Temporal coordinator schedule** (`signals-scout-coordinator-schedule`
 >    inbox label is "Self-driving inbox" across the intro bullet, run-sidebar tips, and outro (ahead
 >    of the full item-4 rename).
 > 8. Update Inbox UI to propose to run Wizard command for self-driving
-> 9. Disable scouts that replicate pipeline (error tracking/replay)
+> 9. ~~**Disable scouts that replicate pipeline (error tracking/replay).**~~ **DONE — folded into the
+>     STEP 6 fleet-narrowing.** The `error-tracking` and `session-replay` scouts are now disabled
+>     unconditionally (step 4 consumes both as native sources, so a scout duplicates that pipeline) —
+>     and step 6 was tightened beyond just this: it now enables only `general` + the 1–2 specialists
+>     for the most-used products, capping the enabled fleet at 2–5 (was ~12). Pure **context-mill**
+>     change (`6-scouts.md`, with `2-read-context.md` gathering a usage ranking and `6b` barring custom
+>     scouts from re-covering ET/replay); no wizard-code dependency (the prompt + this doc are lockstep
+>     wording only), so it ships with the next `mcp-publish` skill release like the decline-first
+>     reordering.
 > 10. Record the demo and discuss the textx with the team.
 > 11. ~~**Custom-scout proposal UX + decline-first asks.**~~ **DONE.** (a) **At most 2** custom scouts
 >     proposed — a hard rule in `7b` (mirrored in §2); nothing in wizard code clamps the count, on
