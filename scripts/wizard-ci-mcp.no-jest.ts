@@ -1,34 +1,22 @@
 /**
- * wizard-ci-mcp — a stdio MCP server that holds one live WizardStore and exposes
- * it as tools, so an agent drives a real wizard run turn by turn: open_app →
- * read_state → perform_action → … → run_agent → … → keep_skills, rendering the
- * screen whenever it wants.
+ * wizard-ci-mcp — MCP server that lets an agent drive the REAL wizard TUI.
  *
- * Registered in this repo's `.mcp.json`, so the tools are bound in every session
- * here — no per-run setup. It boots app-agnostic; `open_app` picks the app +
- * credentials at call time (so nothing secret lives in `.mcp.json`). It also
- * auto-opens from APP_DIR / POSTHOG_KEY_FILE env if those happen to be set.
+ * A thin proxy: it spawns the shared real-TUI host (scripts/tui-host.no-jest.ts,
+ * MODE=serve) in a PTY via the Node capturer, forwards read_state/perform_action/
+ * run_agent to it over a unix socket, and returns the REAL rendered screen for
+ * render_screen. No store or rendering lives here — same host the CI snapshot
+ * route uses. stdout is the JSON-RPC channel; nothing else writes to it.
  *
- * stdout is the JSON-RPC channel — diagnostics go to stderr only.
+ * Registered in this repo's `.mcp.json`, so the tools are bound in every session.
  */
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
 import fs from 'fs';
-import { WizardStore } from '@ui/tui/store';
-import { InkUI } from '@ui/tui/ink-ui';
-import { setUI } from '@ui/index';
-import {
-  buildSession,
-  RunPhase,
-  type WizardSession,
-} from '@lib/wizard-session';
-import { Program } from '@lib/programs/program-registry';
-import { posthogIntegrationConfig } from '@lib/programs/posthog-integration';
-import { runAgent } from '@lib/agent/agent-runner';
-import { WizardCiDriver } from '@e2e-harness/wizard-ci-driver';
-import { renderFrame } from '@e2e-harness/replay';
-import type { RecordedFrame } from '@e2e-harness/recorder';
+import os from 'os';
+import path from 'path';
+import net from 'net';
+import { captureTui, type TuiCapture } from '@e2e-harness/tui-capture';
 
 const text = (data: unknown) => ({
   content: [
@@ -38,7 +26,6 @@ const text = (data: unknown) => ({
     },
   ],
 });
-
 const errorOut = (e: unknown) => ({
   content: [
     {
@@ -49,91 +36,53 @@ const errorOut = (e: unknown) => ({
   isError: true,
 });
 
-/** Render a store's current screen to ANSI (access token redacted). */
-function renderNow(store: WizardStore): string {
-  const s = store.session;
-  const session: WizardSession = s.credentials
-    ? {
-        ...s,
-        credentials: { ...s.credentials, accessToken: 'phx_***redacted***' },
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+let cap: TuiCapture | null = null;
+let sockPath = '';
+
+/** One request/response over the host's control socket (newline-delimited JSON). */
+function rpc(
+  req: object,
+): Promise<{
+  ok: boolean;
+  state?: unknown;
+  error?: string;
+  runStatus?: string;
+}> {
+  return new Promise((resolve, reject) => {
+    if (!sockPath)
+      return reject(new Error('No app open. Call open_app first.'));
+    const sock = net.connect(sockPath);
+    let buf = '';
+    const timer = setTimeout(() => {
+      sock.destroy();
+      reject(new Error('control socket timeout'));
+    }, 600_000);
+    sock.on('connect', () => sock.write(JSON.stringify(req) + '\n'));
+    sock.on('data', (d) => {
+      buf += d;
+      const i = buf.indexOf('\n');
+      if (i >= 0) {
+        clearTimeout(timer);
+        sock.end();
+        resolve(JSON.parse(buf.slice(0, i)));
       }
-    : s;
-  const frame: RecordedFrame = {
-    seq: 0,
-    ms: 0,
-    triggers: ['screen'],
-    screen: store.currentScreen,
-    hasOverlay: store.router.hasOverlay,
-    session,
-    tasks: store.tasks.map((t) => ({
-      label: t.label,
-      status: t.status,
-      activeForm: t.activeForm,
-      done: t.done,
-    })),
-    statusMessages: [...store.statusMessages],
-    eventPlan: store.eventPlan.map((e) => ({
-      name: e.name,
-      description: e.description,
-    })),
-  };
-  return renderFrame(frame, Program.PostHogIntegration);
-}
-
-type Live = { store: WizardStore; driver: WizardCiDriver };
-let active: Live | null = null;
-
-// run_agent runs in the background so the tool returns immediately; a multi-minute
-// blocking MCP call makes the client reconnect and lose this process's store.
-let runStatus: 'idle' | 'running' | 'done' | 'failed' = 'idle';
-let runError: string | null = null;
-
-/** Boot a fresh live wizard on an app and make it the active run. */
-async function openApp(cfg: {
-  appDir: string;
-  apiKey: string;
-  projectId: string;
-  region: string;
-}): Promise<Live> {
-  if (!cfg.appDir || !fs.existsSync(cfg.appDir))
-    throw new Error(`appDir missing or not found: ${cfg.appDir}`);
-  if (!cfg.apiKey)
-    throw new Error('a PostHog key is required (keyFile or apiKey)');
-  const store = new WizardStore(Program.PostHogIntegration);
-  setUI(new InkUI(store)); // real UI, never rendered → no stdout
-  store.session = buildSession({
-    installDir: cfg.appDir,
-    ci: true, // OAuth-bypass + ai-opt-in auto-consent; phx key as gateway bearer
-    apiKey: cfg.apiKey,
-    projectId: cfg.projectId,
-    region: cfg.region,
-  });
-  await store.runReadyHooks(); // framework detection
-  store.runInitHooks(); // health-check readiness probe
-  active = { store, driver: new WizardCiDriver(store) };
-  return active;
-}
-
-/** The active run, auto-opening from env if it was provided at launch. */
-async function ensure(): Promise<Live> {
-  if (active) return active;
-  const envKey = (
-    process.env.POSTHOG_PERSONAL_API_KEY ??
-    (process.env.POSTHOG_KEY_FILE
-      ? fs.readFileSync(process.env.POSTHOG_KEY_FILE, 'utf8')
-      : '')
-  ).trim();
-  if (process.env.APP_DIR && envKey)
-    return openApp({
-      appDir: process.env.APP_DIR,
-      apiKey: envKey,
-      projectId:
-        process.env.PROJECT_ID ?? process.env.POSTHOG_WIZARD_PROJECT_ID ?? '',
-      region: process.env.POSTHOG_REGION ?? 'us',
     });
-  throw new Error(
-    'No app open. Call open_app({ appDir, keyFile, projectId, region }) first.',
-  );
+    sock.on('error', (e) => {
+      clearTimeout(timer);
+      reject(e);
+    });
+  });
+}
+
+async function waitFor(cond: () => boolean, ms: number): Promise<boolean> {
+  const end = Date.now() + ms;
+  while (Date.now() < end) {
+    if (cond()) return true;
+    await sleep(150);
+  }
+  return false;
 }
 
 async function main() {
@@ -141,7 +90,7 @@ async function main() {
 
   server.tool(
     'open_app',
-    'Boot a live wizard run on an app and make it active. Call once before the other tools. appDir is a throwaway copy of the app to integrate. Returns the first screen.',
+    'Boot the real wizard TUI on an app and make it active. Call once before the other tools. appDir is a throwaway copy of the app to integrate. Returns the first screen.',
     {
       appDir: z
         .string()
@@ -164,16 +113,39 @@ async function main() {
     },
     async ({ appDir, keyFile, apiKey, projectId, region }) => {
       try {
-        const key = (
-          apiKey ?? (keyFile ? fs.readFileSync(keyFile, 'utf8') : '')
-        ).trim();
-        const live = await openApp({
-          appDir,
-          apiKey: key,
-          projectId,
-          region: region ?? 'us',
+        if (cap) cap.kill();
+        const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'wizard-ci-'));
+        sockPath = path.join(dir, 'host.sock');
+        const key =
+          keyFile ??
+          (() => {
+            const p = path.join(dir, 'key');
+            fs.writeFileSync(p, (apiKey ?? '').trim(), { mode: 0o600 });
+            return p;
+          })();
+        const env: NodeJS.ProcessEnv = { ...process.env };
+        for (const k of Object.keys(env))
+          if (/^(CLAUDE|ANTHROPIC)/.test(k)) delete env[k];
+        Object.assign(env, {
+          MODE: 'serve',
+          CONTROL_SOCK: sockPath,
+          SNAP_CTRL: path.join(dir, 'ctrl'),
+          APP_DIR: appDir,
+          POSTHOG_KEY_FILE: key,
+          PROJECT_ID: projectId,
+          POSTHOG_REGION: region ?? 'us',
         });
-        return text(live.driver.readState());
+        cap = captureTui({
+          cmd: path.join(process.cwd(), 'node_modules/.bin/tsx'),
+          args: ['scripts/tui-host.no-jest.ts'],
+          cwd: process.cwd(),
+          env,
+        });
+        if (!(await waitFor(() => fs.existsSync(sockPath), 30_000)))
+          return errorOut(new Error('the TUI host did not start'));
+        await waitFor(() => cap!.frame().includes('PostHog'), 30_000);
+        const r = await rpc({ type: 'read_state' });
+        return text(r.state ?? r);
       } catch (e) {
         return errorOut(e);
       }
@@ -182,15 +154,12 @@ async function main() {
 
   server.tool(
     'read_state',
-    "Read the wizard's committed state: current screen, run phase, a secret-free session view, agent tasks/status, any pending question, unresolved setup questions, and the actions legal right now. Call after every perform_action.",
+    "Read the wizard's committed state: current screen, run phase, a secret-free session view, tasks, pending question, and the actions legal now. Call after every perform_action and to poll run_agent (integration: running → done).",
     {},
     async () => {
       try {
-        const state = (await ensure()).driver.readState();
-        const extra: Record<string, unknown> = {};
-        if (runStatus !== 'idle') extra.integration = runStatus;
-        if (runError) extra.runError = runError;
-        return text({ ...state, ...extra });
+        const r = await rpc({ type: 'read_state' });
+        return text(r.state ?? r);
       } catch (e) {
         return errorOut(e);
       }
@@ -199,7 +168,7 @@ async function main() {
 
   server.tool(
     'perform_action',
-    'Commit a decision: invoke a legal action for the current screen (e.g. confirm_setup, dismiss_outage, choose, set_mcp_outcome, dismiss_slack, keep_skills). Returns the next state. The action must appear in read_state.actions.',
+    'Commit a decision on the current screen (confirm_setup, dismiss_outage, choose, set_mcp_outcome, dismiss_slack, keep_skills). The action must appear in read_state.actions. Returns the next state.',
     {
       action: z.string().describe('Action id from read_state.actions'),
       params: z
@@ -209,9 +178,12 @@ async function main() {
     },
     async ({ action, params }) => {
       try {
-        return text(
-          (await ensure()).driver.performAction(action, params ?? {}),
-        );
+        const r = await rpc({
+          type: 'perform_action',
+          action,
+          params: params ?? {},
+        });
+        return text(r.state ?? r);
       } catch (e) {
         return errorOut(e);
       }
@@ -220,11 +192,13 @@ async function main() {
 
   server.tool(
     'render_screen',
-    'Render the current TUI screen to ANSI so you can see exactly what the user would.',
+    'Return the REAL rendered TUI screen (ANSI-stripped text) — exactly what the user would see.',
     {},
     async () => {
       try {
-        return text(renderNow((await ensure()).store));
+        if (!cap) throw new Error('No app open. Call open_app first.');
+        await sleep(150); // let the emulator apply the latest frame
+        return text(cap.frame());
       } catch (e) {
         return errorOut(e);
       }
@@ -233,46 +207,15 @@ async function main() {
 
   server.tool(
     'run_agent',
-    'Kick off the real wizard integration and return immediately — do NOT expect it to block. It bootstraps credentials from the key and runs the integration in the background; this is what advances the auth and run screens (they never advance on their own). Then POLL read_state every ~10s: runPhase goes running → completed and currentScreen advances to outro. Takes minutes, and creates real PostHog resources (a dashboard + insights) in the project. Call once setup is confirmed.',
+    'Kick off the real integration in the background and return immediately. It advances the auth and run screens (they never advance on their own). Then poll read_state — integration goes running → done and currentScreen advances to outro. Creates real PostHog resources (a dashboard + insights). Call once setup is confirmed.',
     {},
     async () => {
       try {
-        const { store } = await ensure();
-        if (runStatus === 'running')
-          return text({
-            status: 'already running — poll read_state',
-            runPhase: store.session.runPhase,
-            currentScreen: store.currentScreen,
-          });
-        if (
-          runStatus === 'done' ||
-          store.session.runPhase === RunPhase.Completed
-        )
-          return text({
-            status: 'already completed',
-            runPhase: store.session.runPhase,
-            currentScreen: store.currentScreen,
-          });
-        runStatus = 'running';
-        runError = null;
-        // Background: returning now keeps the server responsive so the client
-        // doesn't reconnect (which would drop this store). The agent polls.
-        void (async () => {
-          try {
-            await store.getGate('intro');
-            await store.getGate('health-check');
-            await runAgent(posthogIntegrationConfig, store.session);
-            runStatus = 'done';
-          } catch (e) {
-            runStatus = 'failed';
-            runError = e instanceof Error ? e.message : String(e);
-          }
-        })();
+        const r = await rpc({ type: 'run_agent' });
         return text({
           status:
-            'integration started in the background — poll read_state every ~10s; runPhase goes running → completed and currentScreen advances to outro',
-          runPhase: store.session.runPhase,
-          currentScreen: store.currentScreen,
+            'integration started in the background — poll read_state (integration: running → done; screen advances to outro)',
+          ...r,
         });
       } catch (e) {
         return errorOut(e);
@@ -281,7 +224,7 @@ async function main() {
   );
 
   await server.connect(new StdioServerTransport());
-  process.stderr.write('wizard-ci-mcp: ready on stdio\n');
+  process.stderr.write('wizard-ci-mcp: proxy ready on stdio\n');
 }
 
 main().catch((e) => {

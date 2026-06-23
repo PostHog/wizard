@@ -3,9 +3,9 @@
  *
  * Maps every screen/overlay to the set of *commit* actions a user could
  * perform on it — and, for each, the single WizardStore setter/resolver that
- * commit goes through. This is the actuation half of the wizard-ci-tools
- * surface: instead of injecting keystrokes, a harness names an action and the
- * driver invokes the same store method the Ink screen's keyboard handler would.
+ * commit goes through. This is the actuation half of the driver: instead of
+ * injecting keystrokes, a harness names an action and the driver invokes the
+ * same store method the Ink screen's keyboard handler would.
  *
  * Discipline mirrors screen-registry.tsx: one entry per screen, kept exhaustive
  * by a test over the ScreenId/Overlay enums. No product knowledge leaks in —

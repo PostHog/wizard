@@ -1,8 +1,8 @@
 /**
  * WizardCiDriver — the read/act control plane over a live WizardStore.
  *
- * This is the SDK-free core of wizard-ci-tools. A test harness or a driver LLM
- * uses three primitives to run a real wizard end-to-end without a terminal:
+ * This is the read/act core both e2e routes drive. A test harness or a driver
+ * LLM uses these primitives to run a real wizard end-to-end without keystrokes:
  *
  *   readState()      — a truthful projection of the committed store state
  *                      (the same state the Ink render is a pure function of),

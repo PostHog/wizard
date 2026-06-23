@@ -7,23 +7,27 @@ standalone `tsx` entry, named `*.no-jest.ts` so Jest ignores it.
 
 Run from the repo root, e.g. `npx tsx scripts/<name>.no-jest.ts`.
 
-| Script                            | What it does                                                                                                                                                                                 | Needs                                                                             |
-| --------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
-| **`e2e-full-run.no-jest.ts`**     | The full headless e2e: real `WizardStore` + `InkUI` (never rendered) + concurrent driver + **real `runAgent`** against prod cloud. Emits a structured result + a recording.                  | `POSTHOG_PERSONAL_API_KEY`, `APP_DIR`, `PROJECT_ID`; host `CLAUDE_*` env stripped |
-| **`render-snapshots.no-jest.ts`** | Renders a recording's key-moment frames to per-frame `.ans` snapshots (real Ink → ANSI). Feeds the workbench visual-regression flow.                                                         | a `recording.json` + outDir                                                       |
-| **`replay-e2e.no-jest.ts`**       | Replays a recording in the terminal — reconstructs each frame's store and renders the **real Ink screen**. `--step` (Enter to advance) or `--delay <ms>` (auto-play).                        | a `recording.json`                                                                |
-| **`wizard-ci-mcp.no-jest.ts`**    | A stdio **MCP server** over one live store: an agent drives a real run turn-by-turn (`read_state` / `perform_action` / `run_agent` / `render_screen`). See the `exploring-the-wizard` skill. | `APP_DIR`, `POSTHOG_KEY_FILE` (or key), `PROJECT_ID`                              |
+Both e2e routes share one primitive: the **real TUI host** runs `startTUI` (the
+real ink render) and is driven purely by store state manipulation; a PTY parent
+([`e2e-harness/tui-capture.ts`](../e2e-harness/tui-capture.ts), node-pty +
+`@xterm/headless`) captures the real rendered screen.
 
-> You usually don't call these directly — `pnpm wizard-ci <app> --e2e` and
-> `pnpm wizard-ci-snapshots` (in
-> [wizard-workbench](https://github.com/PostHog/wizard-workbench)) orchestrate
-> them with the env hygiene + assertions. A real `--e2e` run drops a recording
-> at `/tmp/wizard-e2e-<app>.recording.json`.
+| Script                          | What it does                                                                                                                                                                                          | Needs                                                              |
+| ------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| **`tui-host.no-jest.ts`**       | The real-TUI host. `MODE=fixed` self-drives the fixed e2e profile and signals each screen; `MODE=serve` accepts drive commands (`read_state`/`perform_action`/`run_agent`) over a unix socket.       | `APP_DIR`, `POSTHOG_KEY_FILE`, `PROJECT_ID`; run under a PTY       |
+| **`tui-snapshots.no-jest.ts`**  | CI snapshot route: spawns `tui-host` (`MODE=fixed`) in a PTY and writes the **real rendered** screen to `SNAP_OUT/NN-<screen>.txt` at each key moment. `RUN_AGENT=1` for the full run through outro. | `SNAP_OUT`, `APP_DIR`, `POSTHOG_KEY_FILE`, `PROJECT_ID`            |
+| **`wizard-ci-mcp.no-jest.ts`**  | Agent route: a stdio **MCP server** that proxies `tui-host` (`MODE=serve`) — `read_state`/`perform_action`/`run_agent` forward over the socket, `render_screen` returns the real captured frame.     | spawns the host itself; key passed via `open_app`                 |
+| **`wizard-ci-explore.no-jest.ts`** | Quick eyeball of the agent route: drives the MCP server (`open_app → confirm_setup → render_screen`) and prints the real TUI. `pnpm wizard-ci-explore`.                                            | `APP_DIR`, `POSTHOG_KEY_FILE`, `PROJECT_ID`                        |
+
+> You usually don't call these directly — `pnpm wizard-ci-snapshots` (in
+> [wizard-workbench](https://github.com/PostHog/wizard-workbench)) orchestrates
+> the snapshot route; the MCP server is registered in this repo's `.mcp.json` and
+> used via the `exploring-the-wizard` skill.
 
 ## Background
 
 The control plane lives in [`e2e-harness/`](../e2e-harness/) — out of `src/`, so
 none of it ships in prod. `WizardCiDriver` (read/act over the store), the
-screen→action registry, the `wizard-ci-tools` MCP server, the e2e profiles, and
-the recorder/replay. See [`ARCHITECTURE.md`](../e2e-harness/ARCHITECTURE.md) for
-how an agent drives these (env strip, scoped project id, gotchas).
+screen→action registry, the e2e profiles, and `tui-capture` (real-TUI PTY
+capture). See [`ARCHITECTURE.md`](../e2e-harness/ARCHITECTURE.md) for how the two
+routes drive these (env strip, scoped project id, gotchas).
