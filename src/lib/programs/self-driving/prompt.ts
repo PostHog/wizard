@@ -23,7 +23,7 @@ export function buildSelfDrivingPrompt(ctx: PromptContext): string {
   return `You are setting up PostHog Self-driving for this project: you will enable the right signal sources, make sure GitHub is connected, tune the scout troop, design custom scouts for what this product uniquely needs, and hand the user a configured inbox.
 
 Project URLs:
-- Integrations settings (GitHub App install): ${integrationsSettingsUrl}
+- Integrations settings: ${integrationsSettingsUrl}
 - Organization AI settings: ${orgAiSettingsUrl}
 - New data warehouse source (Linear / Zendesk / GitHub issues / pganalyze): ${newWarehouseSourceUrl}
 - Self-driving inbox: ${inboxUrl}
@@ -88,9 +88,10 @@ STEP 2 — Read project and current Signals state. (skill: "Read context")
 
 STEP 3 — Connect GitHub. REQUIRED. (skill: "Connect GitHub")
    Signals cannot research or fix issues without code access. Check for
-   an existing GitHub integration first; if absent, send the user to
-   ${integrationsSettingsUrl} via wizard_ask and verify the connection
-   after they confirm. If the user cannot connect now, emit
+   an existing GitHub integration first; if absent, send the user
+   through the GitHub App connection via wizard_ask exactly as the skill
+   describes (it builds the one-click authorize link), and verify the
+   connection after they confirm. If the user cannot connect now, emit
    ${AgentSignals.ABORT} github connection declined
    and halt — never finish setup without GitHub.
 
