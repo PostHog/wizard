@@ -39,6 +39,7 @@ export function startTUI(
     createElement(App, { store }),
   );
 
+  analytics.setTag('program_id', program);
   // The launch marker — the first event of every TUI run, captured under
   // the run's anonymous id and merged into the user once they log in.
   analytics.wizardCapture('started', { program_id: program });
