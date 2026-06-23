@@ -61,6 +61,12 @@ const run: ProgramRun = {
   // from a decline (both resolve to __cancelled__). Match upload-source-maps.
   askTimeoutMs: 30 * 60 * 1000,
 
+  // Emit a `wizard: step` analytics event on each agent task transition so we
+  // can build a step-level drop-off funnel (where a run stops — GitHub connect,
+  // scout enable, etc.), including silent steps with no wizard_ask. Opt-in, so
+  // only self-driving runs emit these; every other program is unchanged.
+  trackStepProgress: true,
+
   postRun: async (session) => {
     await removeInstalledSkill(session.installDir);
   },
