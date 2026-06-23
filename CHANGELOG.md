@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.30.0](https://github.com/PostHog/wizard/compare/v2.29.0...v2.30.0) (2026-06-23)
+
+
+### Features
+
+* Track steps progression for Wizard. ([#718](https://github.com/PostHog/wizard/issues/718)) ([896f190](https://github.com/PostHog/wizard/commit/896f190d6ddc73f2c7d5381f53f01bc001698116))
+
 ## [2.29.0](https://github.com/PostHog/wizard/compare/v2.28.1...v2.29.0) (2026-06-23)
 
 
