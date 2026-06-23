@@ -20,10 +20,10 @@ export function buildSelfDrivingPrompt(ctx: PromptContext): string {
     value === true ? 'ON' : value === false ? 'OFF' : 'unknown';
   const optIns = ctx.teamProductOptIns;
 
-  return `You are setting up PostHog Self-driving for this project: you will enable the right signal sources, make sure GitHub is connected, tune the scout fleet, design custom scouts for what this product uniquely needs, and hand the user a configured inbox.
+  return `You are setting up PostHog Self-driving for this project: you will enable the right signal sources, make sure GitHub is connected, tune the scout troop, design custom scouts for what this product uniquely needs, and hand the user a configured inbox.
 
 Project URLs:
-- Integrations settings (GitHub App install): ${integrationsSettingsUrl}
+- Integrations settings: ${integrationsSettingsUrl}
 - Organization AI settings: ${orgAiSettingsUrl}
 - New data warehouse source (Linear / Zendesk / GitHub issues / pganalyze): ${newWarehouseSourceUrl}
 - Self-driving inbox: ${inboxUrl}
@@ -50,7 +50,7 @@ tasks, in this order:
   3. Connect GitHub (required)
   4. Enable signal sources
   5. Offer issue-tracker integrations
-  6. Configure the scout fleet
+  6. Configure the scout troop
   7. Design custom scouts
   8. Write report and hand off
 Drive the list with TaskUpdate — mark a task in_progress when you start
@@ -88,9 +88,10 @@ STEP 2 — Read project and current Signals state. (skill: "Read context")
 
 STEP 3 — Connect GitHub. REQUIRED. (skill: "Connect GitHub")
    Signals cannot research or fix issues without code access. Check for
-   an existing GitHub integration first; if absent, send the user to
-   ${integrationsSettingsUrl} via wizard_ask and verify the connection
-   after they confirm. If the user cannot connect now, emit
+   an existing GitHub integration first; if absent, send the user
+   through the GitHub App connection via wizard_ask exactly as the skill
+   describes (it builds the one-click authorize link), and verify the
+   connection after they confirm. If the user cannot connect now, emit
    ${AgentSignals.ABORT} github connection declined
    and halt — never finish setup without GitHub.
 
@@ -108,14 +109,15 @@ STEP 5 — Offer issue-tracker integrations. (skill: "Connected tools")
    never sends the user to paste credentials and never re-prompts. Enable
    a source only for a tool the user picked.
 
-STEP 6 — Configure the scout fleet. (skill: "Scouts")
-   Materialize the fleet and disable the scouts whose product surface
-   this project lacks, per the skill.
+STEP 6 — Configure the scout troop. (skill: "Scouts")
+   Materialize the troop, then enable only a small set — the "general"
+   scout plus the one or two specialists for the products this project
+   uses most — and disable the rest, per the skill.
 
 STEP 7 — Design custom scouts for this product. (skill: "Custom scouts")
    You are the only actor that has read this repo — turn that into
    coverage per the skill: a real gap analysis of the project's
-   watchable surfaces against what the canonical fleet already covers,
+   watchable surfaces against what the canonical troop already covers,
    then custom scouts for the uncovered ones. Keep scout bodies
    high-level: describe the behavior and signal conditions to watch,
    referencing repo evidence by file/function name — never paste raw

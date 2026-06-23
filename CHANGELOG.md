@@ -1,5 +1,31 @@
 # Changelog
 
+## [2.28.1](https://github.com/PostHog/wizard/compare/v2.28.0...v2.28.1) (2026-06-23)
+
+
+### Bug Fixes
+
+* **self-driving:** Differentiate the source vs scout tips, rename "fleet" to "troop" ([#712](https://github.com/PostHog/wizard/issues/712)) ([edacabc](https://github.com/PostHog/wizard/commit/edacabc57660f1f4944a0c1cecdfa52f5f88986a))
+
+## [2.28.0](https://github.com/PostHog/wizard/compare/v2.27.0...v2.28.0) (2026-06-23)
+
+
+### Features
+
+* **signals:** Add limits on scouts. ([#707](https://github.com/PostHog/wizard/issues/707)) ([06307d9](https://github.com/PostHog/wizard/commit/06307d9b03018a73f5716adf056eef592804eb60))
+
+## [2.27.0](https://github.com/PostHog/wizard/compare/v2.26.0...v2.27.0) (2026-06-22)
+
+
+### Features
+
+* detect and connect data warehouse sources ([#488](https://github.com/PostHog/wizard/issues/488)) ([4528780](https://github.com/PostHog/wizard/commit/452878016f8dc5bdca7a7be3d55946a0dfa03006))
+
+
+### Bug Fixes
+
+* Update readme ([#705](https://github.com/PostHog/wizard/issues/705)) ([cc58dda](https://github.com/PostHog/wizard/commit/cc58ddaf63566adcbc8dad1212d1c925378e36d6))
+
 ## [2.26.0](https://github.com/PostHog/wizard/compare/v2.25.0...v2.26.0) (2026-06-22)
 
 
