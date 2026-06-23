@@ -131,7 +131,7 @@ export const AGENT_SKILL_SCOPE_ADDITIONS = [
  *     team already has a GitHub integration and to verify the connect
  *     flow completed.
  *   • signal_scout:read / signal_scout:write — list, sync, and tune
- *     the Signals scout fleet (`signals-scout-config-*`).
+ *     the Signals scout troop (`signals-scout-config-*`).
  *   • session_recording:read / survey:read / error_tracking:read —
  *     server-side product-usage probes (`query-session-recordings-list`,
  *     `survey-list`, `error-issue-list`). Product usage is a
