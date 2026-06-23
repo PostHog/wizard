@@ -34,16 +34,19 @@ fixture). Never print or commit the key.
    `dismiss_outage`, `choose` (a setup question, e.g. `{ key, value }`),
    `set_mcp_outcome`, `dismiss_slack`, `keep_skills`.
 4. **`render_screen`** — render the current TUI to ANSI so you can _see_ it.
-5. **`run_agent`** — bootstraps credentials from the key, then runs the **real
-   integration** (blocks minutes). This is what advances `auth` and `run`.
+5. **`run_agent`** — kicks off the **real integration** in the background and
+   returns immediately; it bootstraps credentials, so it's what advances `auth`
+   and `run`. Then **poll `read_state`** — `runPhase` goes `running → completed`
+   and the screen advances to `outro`.
 
 A typical walk:
 
 ```
 open_app → intro → perform_action confirm_setup
 read_state → health-check → perform_action dismiss_outage
-read_state → auth → run_agent           (bootstraps creds + runs the integration)
-read_state → outro → perform_action dismiss_outro → … → keep_skills
+read_state → auth → run_agent           (returns at once; integration runs in background)
+read_state (poll) → runPhase running → completed, screen → outro
+outro → perform_action dismiss_outro → … → keep_skills
 ```
 
 Snapshot with `render_screen` at each key moment so you (and the user) can see what
@@ -54,8 +57,11 @@ the wizard showed.
 - **State → screen.** You never navigate; you commit a decision (an action) and the
   router re-derives the active screen. Name actions, not keys.
 - **`auth` and `run` advance only via `run_agent`.** They expose no action and
-  don't self-advance — don't poll them. Everything else is an instant commit;
-  `run_agent` is the real, billable, blocking step.
+  don't self-advance. `run_agent` returns immediately and runs the integration in
+  the background — poll `read_state` for `runPhase` (`running → completed`).
+  Everything else is an instant commit.
+- **`run_agent` creates real PostHog resources** (a dashboard + insights) in the
+  project; each run duplicates them.
 - **A green run ≠ a valid integration.** `runPhase=completed` means the flow
   finished, not that the wizard understood the framework (e.g. it'll treat a Wasp
   app as react-router). Read what it actually changed.

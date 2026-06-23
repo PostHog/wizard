@@ -18,7 +18,11 @@ import fs from 'fs';
 import { WizardStore } from '@ui/tui/store';
 import { InkUI } from '@ui/tui/ink-ui';
 import { setUI } from '@ui/index';
-import { buildSession, type WizardSession } from '@lib/wizard-session';
+import {
+  buildSession,
+  RunPhase,
+  type WizardSession,
+} from '@lib/wizard-session';
 import { Program } from '@lib/programs/program-registry';
 import { posthogIntegrationConfig } from '@lib/programs/posthog-integration';
 import { runAgent } from '@lib/agent/agent-runner';
@@ -78,6 +82,11 @@ function renderNow(store: WizardStore): string {
 
 type Live = { store: WizardStore; driver: WizardCiDriver };
 let active: Live | null = null;
+
+// run_agent runs in the background so the tool returns immediately; a multi-minute
+// blocking MCP call makes the client reconnect and lose this process's store.
+let runStatus: 'idle' | 'running' | 'done' | 'failed' = 'idle';
+let runError: string | null = null;
 
 /** Boot a fresh live wizard on an app and make it the active run. */
 async function openApp(cfg: {
@@ -177,7 +186,11 @@ async function main() {
     {},
     async () => {
       try {
-        return text((await ensure()).driver.readState());
+        const state = (await ensure()).driver.readState();
+        const extra: Record<string, unknown> = {};
+        if (runStatus !== 'idle') extra.integration = runStatus;
+        if (runError) extra.runError = runError;
+        return text({ ...state, ...extra });
       } catch (e) {
         return errorOut(e);
       }
@@ -220,15 +233,44 @@ async function main() {
 
   server.tool(
     'run_agent',
-    'Run the real wizard integration agent. It bootstraps credentials from the supplied key, then runs the integration, returning the final runPhase and next screen. This is what advances the auth and run screens — they expose no action and never advance on their own, so call this once setup is confirmed. Blocks minutes.',
+    'Kick off the real wizard integration and return immediately — do NOT expect it to block. It bootstraps credentials from the key and runs the integration in the background; this is what advances the auth and run screens (they never advance on their own). Then POLL read_state every ~10s: runPhase goes running → completed and currentScreen advances to outro. Takes minutes, and creates real PostHog resources (a dashboard + insights) in the project. Call once setup is confirmed.',
     {},
     async () => {
       try {
         const { store } = await ensure();
-        await store.getGate('intro');
-        await store.getGate('health-check');
-        await runAgent(posthogIntegrationConfig, store.session);
+        if (runStatus === 'running')
+          return text({
+            status: 'already running — poll read_state',
+            runPhase: store.session.runPhase,
+            currentScreen: store.currentScreen,
+          });
+        if (
+          runStatus === 'done' ||
+          store.session.runPhase === RunPhase.Completed
+        )
+          return text({
+            status: 'already completed',
+            runPhase: store.session.runPhase,
+            currentScreen: store.currentScreen,
+          });
+        runStatus = 'running';
+        runError = null;
+        // Background: returning now keeps the server responsive so the client
+        // doesn't reconnect (which would drop this store). The agent polls.
+        void (async () => {
+          try {
+            await store.getGate('intro');
+            await store.getGate('health-check');
+            await runAgent(posthogIntegrationConfig, store.session);
+            runStatus = 'done';
+          } catch (e) {
+            runStatus = 'failed';
+            runError = e instanceof Error ? e.message : String(e);
+          }
+        })();
         return text({
+          status:
+            'integration started in the background — poll read_state every ~10s; runPhase goes running → completed and currentScreen advances to outro',
           runPhase: store.session.runPhase,
           currentScreen: store.currentScreen,
         });
