@@ -158,7 +158,6 @@ async function main() {
     // subscription catches within-screen changes (the run). Deduped by
     // signature, serialized, and throttled.
     let lastSig = '';
-    let lastSnapAt = 0;
     let chain: Promise<void> = Promise.resolve();
     const signature = () =>
       JSON.stringify({
@@ -174,12 +173,9 @@ async function main() {
       const screen = store.currentScreen;
       if (screenPath[screenPath.length - 1] !== screen) screenPath.push(screen);
       chain = chain.then(async () => {
-        const gap = Date.now() - lastSnapAt;
-        if (gap < 600) await sleep(600 - gap); // throttle bursts
-        await sleep(650); // settle (and let detection fill in on the intro)
+        await sleep(500); // settle: let the frame finish drawing
         fs.appendFileSync(CTRL, store.currentScreen + '\n');
-        lastSnapAt = Date.now();
-        await sleep(400); // give the capturer time before the screen moves on
+        await sleep(300); // let the capturer capture before the screen moves on
       });
       return chain;
     };
@@ -224,8 +220,11 @@ async function main() {
       await authByState();
       await sleep(2500);
     }
+    // The driver loop has nothing left to do (full run reached skillsComplete; the
+    // cheap path stops after auth) but may be parked in waitForChange — don't
+    // block on it; the process exit below ends it.
     stop = true;
-    await drive;
+    void drive;
     unsub();
     await snap(); // the final screen
     await chain; // flush any pending snapshots
