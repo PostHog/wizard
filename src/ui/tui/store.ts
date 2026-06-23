@@ -365,6 +365,9 @@ export class WizardStore {
 
   setCredentials(credentials: WizardSession['credentials']): void {
     this.$session.setKey('credentials', credentials);
+    if (credentials?.projectId) {
+      analytics.setTag('project_id', credentials.projectId);
+    }
     analytics.wizardCapture('auth complete', {
       project_id: credentials?.projectId,
     });
@@ -388,6 +391,7 @@ export class WizardStore {
     this.$session.setKey('integration', integration);
     this.$session.setKey('frameworkConfig', config);
     this.$session.setKey('unsupportedVersion', null);
+    if (integration) analytics.setTag('integration', integration);
     this.emitChange();
   }
 
@@ -398,6 +402,7 @@ export class WizardStore {
 
   setDetectedFramework(label: string): void {
     this.$session.setKey('detectedFrameworkLabel', label);
+    analytics.setTag('detected_framework', label);
     this.emitChange();
   }
 
