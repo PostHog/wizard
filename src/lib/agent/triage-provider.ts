@@ -18,7 +18,7 @@ import type { LLMProvider } from '@posthog/warlock';
 // capable for boolean classification). Do NOT swap to Sonnet without reason;
 // the cost/latency difference matters on every flagged scan. temperature 0
 // keeps verdicts deterministic across identical inputs.
-const TRIAGE_MODEL = 'claude-haiku-4-5-20251001';
+const TRIAGE_MODEL = 'claude-haiku-4-5';
 const TRIAGE_MAX_TOKENS = 16_384;
 // Shorter than the hook timeout so a hung triage fails *inside* the hook's
 // try/catch (→ fail-closed) rather than tripping the SDK hook timeout.

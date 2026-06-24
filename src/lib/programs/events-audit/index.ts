@@ -15,8 +15,8 @@ import { EVENTS_AUDIT_SEED_CHECKS } from './seed.js';
 // imports from `@lib/programs/events-audit`. EVENT_INVENTORY_FILE and
 // EVENT_INVENTORY_PART_PATTERN are only used by yara-hooks, which imports
 // them directly from `./constants` — no re-export needed.
-export { SETUP_REPORT_FILE } from './constants.js';
 import { SETUP_REPORT_FILE } from './constants.js';
+export { SETUP_REPORT_FILE };
 
 const DOCS_URL = 'https://posthog.com/docs/product-analytics/best-practices';
 
