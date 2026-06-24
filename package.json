@@ -108,7 +108,7 @@
     "build": "tsdown",
     "build:ci": "WIZARD_BUILD_NODE_ENV=ci pnpm build",
     "typecheck": "tsc --noEmit",
-    "postbuild": "chmod +x ./dist/bin.js && cp -r scripts/** dist && pnpm test:smoke",
+    "postbuild": "chmod +x ./dist/bin.js && cp -r scripts/** dist && rm -f dist/*.no-jest.* && pnpm test:smoke",
     "test:smoke": "bash ./scripts/smoke-test.sh",
     "lint": "pnpm lint:prettier && pnpm lint:eslint",
     "lint:prettier": "prettier --check \"{lib,src,test}/**/*.ts\"",
