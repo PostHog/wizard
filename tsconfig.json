@@ -19,11 +19,10 @@
     "src/**/*",
     "test/**/*",
     "e2e-tests/**/*",
+    "e2e-harness/**/*",
     "types/**/*"
   ],
-  "exclude": [
-    "e2e-tests/test-applications/**/*"
-  ],
+  "exclude": ["e2e-tests/test-applications/**/*"],
   "ts-node": {
     "files": true
   }
