@@ -11,6 +11,7 @@ import type { WizardSession } from '@lib/wizard-session';
 import { getOrAskForProjectData } from '@utils/setup-utils';
 import { analytics, groupsFromUser } from '@utils/analytics';
 import { getUI } from '@ui';
+import { buildRunTags } from '@lib/agent/agent-interface';
 import {
   checkAllSettingsConflicts,
   backupAndFixClaudeSettings,
@@ -230,7 +231,12 @@ export async function bootstrapProgram(
   const wizardFlags = await analytics.getAllFlagsForWizard();
   // Gateway trace tags for this run. The runner stamps its variant onto this
   // after the fork (see runProgram), so the value reflects which arm ran.
-  const wizardMetadata: Record<string, string> = {};
+  const wizardMetadata = buildRunTags({
+    programId: programConfig.id,
+    integration: config.integrationLabel,
+    runId: analytics.runId,
+    skillId: config.skillId,
+  });
 
   // One MCP url for every region: the server resolves the user's region from
   // the bearer token, so the EU subdomain (a Claude Code OAuth workaround) is
