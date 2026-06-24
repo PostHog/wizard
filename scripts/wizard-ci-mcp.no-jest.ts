@@ -114,13 +114,6 @@ async function main() {
         if (cap) cap.kill();
         const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'wizard-ci-'));
         sockPath = path.join(dir, 'host.sock');
-        const key =
-          keyFile ??
-          (() => {
-            const p = path.join(dir, 'key');
-            fs.writeFileSync(p, (apiKey ?? '').trim(), { mode: 0o600 });
-            return p;
-          })();
         // Strip the host's Claude Code / Anthropic auth so the wizard's agent
         // subprocess authenticates with the phx key instead of deferring to the
         // host session (which yields apiKeySource=none → 401).
@@ -132,9 +125,13 @@ async function main() {
           CONTROL_SOCK: sockPath,
           SNAP_CTRL: path.join(dir, 'ctrl'),
           APP_DIR: appDir,
-          POSTHOG_KEY_FILE: key,
           PROJECT_ID: projectId,
           POSTHOG_REGION: region ?? 'us',
+          // Pass the key the way the caller gave it; never write an inline key to
+          // disk. The host reads either form (POSTHOG_PERSONAL_API_KEY wins).
+          ...(keyFile
+            ? { POSTHOG_KEY_FILE: keyFile }
+            : { POSTHOG_PERSONAL_API_KEY: (apiKey ?? '').trim() }),
         });
         cap = captureTui({
           cmd: path.join(process.cwd(), 'node_modules/.bin/tsx'),
@@ -208,7 +205,7 @@ async function main() {
 
   server.tool(
     'run_agent',
-    'Kick off the real integration in the background and return immediately. It advances the auth and run screens (they never advance on their own). Then poll read_state — integration goes running → done and currentScreen advances to outro. Creates real PostHog resources (a dashboard + insights). Call once setup is confirmed.',
+    'Kick off the real integration in the background and return immediately. It advances the auth and run screens (they never advance on their own). Then poll read_state — integration goes running → done and currentScreen advances to outro, or → failed with the reason in integrationError. Creates real PostHog resources (a dashboard + insights). Call once setup is confirmed.',
     {},
     async () => {
       try {

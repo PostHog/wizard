@@ -84,6 +84,7 @@ async function main() {
   // ---- agent route: drive commands over a unix socket ----
   function serve() {
     let runStatus: 'idle' | 'running' | 'done' | 'failed' = 'idle';
+    let runError: string | null = null;
     const handle = async (req: {
       type: string;
       action?: string;
@@ -94,7 +95,11 @@ async function main() {
           case 'read_state':
             return {
               ok: true,
-              state: { ...driver.readState(), integration: runStatus },
+              state: {
+                ...driver.readState(),
+                integration: runStatus,
+                integrationError: runError,
+              },
             };
           case 'perform_action':
             return {
@@ -114,7 +119,8 @@ async function main() {
                 runStatus = 'done';
               } catch (e) {
                 runStatus = 'failed';
-                mark('run_agent error ' + (e as Error).message);
+                runError = (e as Error).message;
+                mark('run_agent error ' + runError);
               }
             })();
             return { ok: true, runStatus: 'running' };
