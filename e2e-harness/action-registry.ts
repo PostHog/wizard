@@ -53,11 +53,15 @@ function requireString(
 }
 
 /**
- * Screens with no committable user action (the runner or agent advances them):
- * auth (runner sets credentials), run (agent sets runPhase), ai-opt-in (gated on
- * org approval / ci auto-consent), exit, and the no-dismiss terminal overlays.
- * Listed explicitly so the exhaustiveness test can tell "intentionally empty"
- * from "forgotten".
+ * Screens the driver does not commit an action on, listed explicitly so the
+ * exhaustiveness test can tell "intentionally empty" from "forgotten". Two
+ * kinds:
+ *   - the runner or agent advances them: auth (runner sets credentials), run
+ *     (agent sets runPhase), ai-opt-in (org approval / ci auto-consent), exit,
+ *     and the no-dismiss terminal overlays.
+ *   - screens of programs the integration e2e profile never enters (audit,
+ *     doctor, source-maps). source-maps-detect is interactive, so wire it into
+ *     ACTION_REGISTRY when a source-maps profile starts driving that program.
  */
 export const NO_ACTION_SCREENS: ReadonlySet<ScreenName> = new Set<ScreenName>([
   ScreenId.Auth,
@@ -66,6 +70,7 @@ export const NO_ACTION_SCREENS: ReadonlySet<ScreenName> = new Set<ScreenName>([
   ScreenId.Exit,
   ScreenId.AuditRun,
   ScreenId.DoctorReport,
+  ScreenId.SourceMapsDetect,
   ScreenId.SourceMapsOutro,
   ScreenId.AuditOutro,
   Overlay.ManagedSettings,
