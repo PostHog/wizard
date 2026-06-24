@@ -11,15 +11,17 @@
  */
 
 import type { ProgramConfig } from './program-step.js';
+import { POSTHOG_DOCS_URL } from '../constants.js';
 import { posthogIntegrationConfig } from './posthog-integration/index.js';
 import { revenueAnalyticsConfig } from './revenue-analytics/index.js';
+import { warehouseSourceConfig } from './warehouse-source/index.js';
 import { auditConfig } from './audit/index.js';
 import { eventsAuditConfig } from './events-audit/index.js';
-import { audit3000Config } from './audit-3000/index.js';
 import { posthogDoctorConfig } from './posthog-doctor/index.js';
 import { webAnalyticsDoctorConfig } from './web-analytics-doctor/index.js';
 import { migrationConfig } from './migration/index.js';
 import { errorTrackingUploadSourceMapsConfig } from './error-tracking-upload-source-maps/index.js';
+import { selfDrivingConfig } from './self-driving/index.js';
 import { AGENT_SKILL_STEPS } from './agent-skill/index.js';
 import { getContentBlocks as agentSkillContentBlocks } from './agent-skill/content/index.js';
 import {
@@ -29,27 +31,47 @@ import {
 } from './mcp/index.js';
 import { slackConnectConfig } from './slack/index.js';
 
-// Generic skill program — invoked when the wizard runs an arbitrary
-// context-mill skill chosen at runtime (session.skillId) rather than a
-// registered named program. No CLI command, no run config.
-const agentSkillConfig: ProgramConfig = {
+// Generic skill program — runs an arbitrary context-mill skill chosen at
+// dispatch time (session.skillId) rather than a registered named program.
+// Backs `wizard skill <name>` and the narrow `audit` leaves (events,
+// feature-flags, identify, session-replay, autocapture); each injects its
+// skillId onto the config, which lands on session.skillId before the run.
+//
+// The `run` recipe is a function rather than a static block because the
+// skillId isn't known until dispatch. Without a `run` recipe the runner's
+// `skipAgent` guard (run-wizard.ts) fires and the skill never executes — so we
+// derive generic run metadata from the resolved skill id at run time.
+export const agentSkillConfig: ProgramConfig = {
   id: 'agent-skill',
   description: 'Run an arbitrary context-mill skill',
   steps: AGENT_SKILL_STEPS,
   getContentBlocks: agentSkillContentBlocks,
   allowedTools: ['Agent'],
+  run: (session) => {
+    const skillId = session.skillId ?? 'agent-skill';
+    return Promise.resolve({
+      skillId,
+      integrationLabel: skillId,
+      spinnerMessage: `Running ${skillId}...`,
+      successMessage: `${skillId} complete!`,
+      estimatedDurationMinutes: 5,
+      reportFile: `posthog-${skillId}-report.md`,
+      docsUrl: POSTHOG_DOCS_URL,
+    });
+  },
 };
 
 export const PROGRAM_REGISTRY = [
   posthogIntegrationConfig,
   revenueAnalyticsConfig,
+  warehouseSourceConfig,
   errorTrackingUploadSourceMapsConfig,
   auditConfig,
   eventsAuditConfig,
-  audit3000Config,
   posthogDoctorConfig,
   webAnalyticsDoctorConfig,
   migrationConfig,
+  selfDrivingConfig,
   agentSkillConfig,
   mcpAddConfig,
   mcpRemoveConfig,
@@ -65,13 +87,14 @@ export const PROGRAM_REGISTRY = [
 export const Program = {
   PostHogIntegration: posthogIntegrationConfig.id,
   RevenueAnalyticsSetup: revenueAnalyticsConfig.id,
+  WarehouseSource: warehouseSourceConfig.id,
   ErrorTrackingUploadSourceMaps: errorTrackingUploadSourceMapsConfig.id,
   Migration: migrationConfig.id,
   Audit: auditConfig.id,
   EventsAudit: eventsAuditConfig.id,
-  Audit3000: audit3000Config.id,
   PosthogDoctor: posthogDoctorConfig.id,
   WebAnalyticsDoctor: webAnalyticsDoctorConfig.id,
+  SelfDriving: selfDrivingConfig.id,
   AgentSkill: agentSkillConfig.id,
   McpAdd: mcpAddConfig.id,
   McpRemove: mcpRemoveConfig.id,

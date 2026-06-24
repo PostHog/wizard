@@ -1,5 +1,101 @@
 # Changelog
 
+## [2.30.0](https://github.com/PostHog/wizard/compare/v2.29.0...v2.30.0) (2026-06-23)
+
+
+### Features
+
+* Track steps progression for Wizard. ([#718](https://github.com/PostHog/wizard/issues/718)) ([896f190](https://github.com/PostHog/wizard/commit/896f190d6ddc73f2c7d5381f53f01bc001698116))
+
+## [2.29.0](https://github.com/PostHog/wizard/compare/v2.28.1...v2.29.0) (2026-06-23)
+
+
+### Features
+
+* agentic detection for source-map upload flow ([#689](https://github.com/PostHog/wizard/issues/689)) ([940bf67](https://github.com/PostHog/wizard/commit/940bf6791e80b54eb4964baa41b88f0e6742ca9e))
+* detect more data warehouse sources in onboarding ([#711](https://github.com/PostHog/wizard/issues/711)) ([b206169](https://github.com/PostHog/wizard/commit/b20616915158813f41ee7c9f0c0abc15386ea532))
+
+
+### Bug Fixes
+
+* **analytics:** tag every event with program_id ([#714](https://github.com/PostHog/wizard/issues/714)) ([4db5a0f](https://github.com/PostHog/wizard/commit/4db5a0f7aa84a4daa86e70789f592adc6c5563d3))
+* **self-driving:** Rename "canonical" scouts to "built-in" in self-driving prompt ([#717](https://github.com/PostHog/wizard/issues/717)) ([e99450e](https://github.com/PostHog/wizard/commit/e99450e82951f1a5237f7fd75e9ebe9d981152e8))
+
+## [2.28.1](https://github.com/PostHog/wizard/compare/v2.28.0...v2.28.1) (2026-06-23)
+
+
+### Bug Fixes
+
+* **self-driving:** Differentiate the source vs scout tips, rename "fleet" to "troop" ([#712](https://github.com/PostHog/wizard/issues/712)) ([edacabc](https://github.com/PostHog/wizard/commit/edacabc57660f1f4944a0c1cecdfa52f5f88986a))
+
+## [2.28.0](https://github.com/PostHog/wizard/compare/v2.27.0...v2.28.0) (2026-06-23)
+
+
+### Features
+
+* **signals:** Add limits on scouts. ([#707](https://github.com/PostHog/wizard/issues/707)) ([06307d9](https://github.com/PostHog/wizard/commit/06307d9b03018a73f5716adf056eef592804eb60))
+
+## [2.27.0](https://github.com/PostHog/wizard/compare/v2.26.0...v2.27.0) (2026-06-22)
+
+
+### Features
+
+* detect and connect data warehouse sources ([#488](https://github.com/PostHog/wizard/issues/488)) ([4528780](https://github.com/PostHog/wizard/commit/452878016f8dc5bdca7a7be3d55946a0dfa03006))
+
+
+### Bug Fixes
+
+* Update readme ([#705](https://github.com/PostHog/wizard/issues/705)) ([cc58dda](https://github.com/PostHog/wizard/commit/cc58ddaf63566adcbc8dad1212d1c925378e36d6))
+
+## [2.26.0](https://github.com/PostHog/wizard/compare/v2.25.0...v2.26.0) (2026-06-22)
+
+
+### Features
+
+* **self-driving:** Add the `self-driving` program to set up PostHog Self-driving ([#642](https://github.com/PostHog/wizard/issues/642)) ([b834e5d](https://github.com/PostHog/wizard/commit/b834e5d7fe2b964cc8d372b9ce32dd3a1bdba9d2))
+* **tui:** multi-select confirm button + space/enter to toggle ([#507](https://github.com/PostHog/wizard/issues/507)) ([8395fb1](https://github.com/PostHog/wizard/commit/8395fb1cc3ff3fbfda7f5293d2a6350800735fbf))
+* WizardAmp ([#514](https://github.com/PostHog/wizard/issues/514)) ([5c51b33](https://github.com/PostHog/wizard/commit/5c51b333369d471838e7d1799c6af86e0c932a37))
+
+## [2.25.0](https://github.com/PostHog/wizard/compare/v2.24.1...v2.25.0) (2026-06-18)
+
+
+### Features
+
+* **cli:** add `wizard cli add` to install agent steering instructions ([#646](https://github.com/PostHog/wizard/issues/646)) ([9819d67](https://github.com/PostHog/wizard/commit/9819d6712c467546b96d5f0cde2f4ad57c692600))
+* **orchestrator:** experimental task-queue orchestrator (behind wizard-orchestrator flag) ([#606](https://github.com/PostHog/wizard/issues/606)) ([b4deb24](https://github.com/PostHog/wizard/commit/b4deb24fc64f88072d3685957adf640c9a14364d))
+
+
+### Bug Fixes
+
+* **cli:** install PostHog CLI before steering ([#687](https://github.com/PostHog/wizard/issues/687)) ([703341a](https://github.com/PostHog/wizard/commit/703341a6a96deaab3220ec8340840e0fb5d49371))
+
+## [2.24.1](https://github.com/PostHog/wizard/compare/v2.24.0...v2.24.1) (2026-06-17)
+
+
+### Bug Fixes
+
+* separate login and slackconnect screen ([#681](https://github.com/PostHog/wizard/issues/681)) ([5fd0de6](https://github.com/PostHog/wizard/commit/5fd0de69dc92a39285727537f7dc435d4753797a))
+
+## [2.24.0](https://github.com/PostHog/wizard/compare/v2.23.0...v2.24.0) (2026-06-17)
+
+
+### Features
+
+* **cli:** overhaul cli ([#617](https://github.com/PostHog/wizard/issues/617)) ([413f88e](https://github.com/PostHog/wizard/commit/413f88e33ae1d57c463aa6a11809c234b6b40697))
+
+## [2.23.0](https://github.com/PostHog/wizard/compare/v2.22.1...v2.23.0) (2026-06-16)
+
+
+### Features
+
+* **analytics:** add run_id to every event and $session_id after login ([#661](https://github.com/PostHog/wizard/issues/661)) ([001925f](https://github.com/PostHog/wizard/commit/001925ff017e5acd431bcc8d2d05c9ac039f9aa3))
+* **analytics:** instrument privacy panel, intro menu, and settings-conflict screens ([#666](https://github.com/PostHog/wizard/issues/666)) ([f0decaf](https://github.com/PostHog/wizard/commit/f0decaf23d4a971efd5a78ee7cbeead96ae22872))
+
+
+### Bug Fixes
+
+* point Slack setup at new /integrations/slack landing page ([#676](https://github.com/PostHog/wizard/issues/676)) ([0b3738c](https://github.com/PostHog/wizard/commit/0b3738c9707e752380a45dc4ada566b7947b8c1e))
+
 ## [2.22.1](https://github.com/PostHog/wizard/compare/v2.22.0...v2.22.1) (2026-06-16)
 
 

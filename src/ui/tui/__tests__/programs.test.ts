@@ -100,6 +100,41 @@ describe('PROGRAM_SEQUENCES', () => {
     });
   });
 
+  describe('Source maps flow', () => {
+    const sourceMapsScreens = () =>
+      PROGRAM_SEQUENCES[Program.ErrorTrackingUploadSourceMaps].map((s) => s.id);
+
+    it('logs in, then detects: intro → auth → detect → run, no health-check', () => {
+      const screens = sourceMapsScreens();
+
+      // Auth comes before the agentic detect screen (detection needs creds).
+      expect(screens.indexOf(ScreenId.Auth)).toBeLessThan(
+        screens.indexOf(ScreenId.SourceMapsDetect),
+      );
+      expect(screens.indexOf(ScreenId.SourceMapsIntro)).toBeLessThan(
+        screens.indexOf(ScreenId.Auth),
+      );
+      expect(screens.indexOf(ScreenId.SourceMapsDetect)).toBeLessThan(
+        screens.indexOf(ScreenId.Run),
+      );
+      // The health-check ("connection") screen was removed from this flow.
+      expect(screens).not.toContain(ScreenId.HealthCheck);
+    });
+
+    it('detect screen stays incomplete until a project is selected', () => {
+      const entry = getEntry(
+        Program.ErrorTrackingUploadSourceMaps,
+        ScreenId.SourceMapsDetect,
+      );
+      const session = buildSession({});
+
+      expect(entry.isComplete?.(session)).toBe(false);
+
+      session.frameworkContext = { sourceMapsSelectedVariant: 'nextjs' };
+      expect(entry.isComplete?.(session)).toBe(true);
+    });
+  });
+
   describe('AI opt-in gate predicate', () => {
     const orgWith = (
       is_ai_data_processing_approved: boolean | null | undefined,
@@ -220,6 +255,25 @@ describe('PROGRAM_SEQUENCES', () => {
       session.mcpComplete = true;
 
       expect(entry.isComplete?.(session)).toBe(true);
+    });
+
+    describe('McpAdd step ordering', () => {
+      // Slack-connect must run before the tutorial: the no-creds Slack render
+      // is the only post-install step that can render in mcp-add (a loginless
+      // command), so it sits between install and the tutorial. Ordering it
+      // after the tutorial would also bury Slack discovery behind a tutorial
+      // dismissal screen.
+      it('runs install → slack-connect → mcp-suggested-prompts', () => {
+        const order = PROGRAM_SEQUENCES[Program.McpAdd]
+          .map((entry) => entry.id)
+          .filter((id) => id !== ScreenId.Exit);
+
+        expect(order).toEqual([
+          ScreenId.McpAdd,
+          ScreenId.SlackConnect,
+          ScreenId.McpSuggestedPrompts,
+        ]);
+      });
     });
 
     describe('McpAdd → mcp-suggested-prompts step', () => {

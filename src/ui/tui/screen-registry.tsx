@@ -21,16 +21,16 @@ import { PortConflictScreen } from './screens/PortConflictScreen.js';
 import { ManualAuthCodeScreen } from './screens/ManualAuthCodeScreen.js';
 import { PostHogIntegrationIntroScreen } from './screens/PostHogIntegrationIntroScreen.js';
 import { RevenueIntroScreen } from './screens/RevenueIntroScreen.js';
+import { WarehouseIntroScreen } from './screens/WarehouseIntroScreen.js';
 import { MigrationIntroScreen } from './screens/MigrationIntroScreen.js';
 import { SourceMapsIntroScreen } from './screens/SourceMapsIntroScreen.js';
+import { SourceMapsDetectScreen } from './screens/SourceMapsDetectScreen.js';
 import { SourceMapsOutroScreen } from './screens/SourceMapsOutroScreen.js';
 import { AgentSkillIntroScreen } from './screens/AgentSkillIntroScreen.js';
+import { SelfDrivingIntroScreen } from './screens/SelfDrivingIntroScreen.js';
 import { AuditIntroScreen } from './screens/audit/AuditIntroScreen.js';
 import { AuditRunScreen } from './screens/audit/AuditRunScreen.js';
 import { AuditOutroScreen } from './screens/audit/AuditOutroScreen.js';
-import { Audit3000IntroScreen } from './screens/audit-3000/Audit3000IntroScreen.js';
-import { Audit3000RunScreen } from './screens/audit-3000/Audit3000RunScreen.js';
-import { Audit3000OutroScreen } from './screens/audit-3000/Audit3000OutroScreen.js';
 import { SetupScreen } from './screens/SetupScreen.js';
 import { AuthScreen } from './screens/AuthScreen.js';
 import { AiOptInRequiredScreen } from './screens/AiOptInRequiredScreen.js';
@@ -78,16 +78,16 @@ export function createScreens(
     // Wizard flow
     [ScreenId.Intro]: <PostHogIntegrationIntroScreen store={store} />,
     [ScreenId.RevenueIntro]: <RevenueIntroScreen store={store} />,
+    [ScreenId.WarehouseIntro]: <WarehouseIntroScreen store={store} />,
     [ScreenId.SourceMapsIntro]: <SourceMapsIntroScreen store={store} />,
+    [ScreenId.SourceMapsDetect]: <SourceMapsDetectScreen store={store} />,
     [ScreenId.SourceMapsOutro]: <SourceMapsOutroScreen store={store} />,
     [ScreenId.MigrationIntro]: <MigrationIntroScreen store={store} />,
     [ScreenId.AgentSkillIntro]: <AgentSkillIntroScreen store={store} />,
+    [ScreenId.SelfDrivingIntro]: <SelfDrivingIntroScreen store={store} />,
     [ScreenId.AuditIntro]: <AuditIntroScreen store={store} />,
     [ScreenId.AuditRun]: <AuditRunScreen store={store} />,
     [ScreenId.AuditOutro]: <AuditOutroScreen store={store} />,
-    [ScreenId.Audit3000Intro]: <Audit3000IntroScreen store={store} />,
-    [ScreenId.Audit3000Run]: <Audit3000RunScreen store={store} />,
-    [ScreenId.Audit3000Outro]: <Audit3000OutroScreen store={store} />,
     [ScreenId.HealthCheck]: <HealthCheckScreen store={store} />,
     [ScreenId.DoctorIntro]: <DoctorIntroScreen store={store} />,
     [ScreenId.DoctorReport]: <DoctorReportScreen store={store} />,

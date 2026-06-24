@@ -96,7 +96,7 @@ export interface SlackAppCard {
   pitch: string;
   /** posthog.com/slack — "learn more". */
   learnMoreUrl: string;
-  /** settings/project-integrations#integration-slack — where the user connects Slack. */
+  /** integrations/slack — where the user connects Slack. */
   setupUrl: string;
   /** The Slack agent's two capabilities (code/PR + data) — fixed, not role-tailored. */
   capabilities: string[];

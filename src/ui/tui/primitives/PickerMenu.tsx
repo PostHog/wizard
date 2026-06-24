@@ -1,7 +1,9 @@
 /**
  * PickerMenu — Single and multi select.
- * Single mode: custom renderer with small triangle indicator.
- * Multi mode: checkbox glyphs with space to toggle.
+ * Single mode: custom renderer with small triangle indicator; enter selects.
+ * Multi mode: checkbox glyphs toggled with enter, plus a focusable
+ *   Confirm button below the options. The cursor moves onto the button and
+ *   enter submits — see MultiPickerMenu for the rationale.
  *
  * Key bindings are declared via useKeyBindings, which auto-registers
  * hints in the KeyboardHintsBar.
@@ -11,6 +13,7 @@ import { Box, Text } from 'ink';
 import { useEffect, useState } from 'react';
 import { Icons, Colors } from '@ui/tui/styles';
 import { PromptLabel } from './PromptLabel.js';
+import { ConfirmButton } from './ConfirmButton.js';
 import {
   useKeyBindings,
   KeyMatch,
@@ -21,6 +24,12 @@ interface PickerOption<T> {
   label: string;
   value: T;
   hint?: string;
+  /**
+   * Multi-select only: a secondary explanation rendered dimmed and wrapped on
+   * its own line(s) beneath the label, for choices that need more than a title.
+   * When unset, the row renders exactly as a label-only row.
+   */
+  description?: string;
   /** Glyph rendered before the label, in its own color — unaffected by
    *  focus and disabled styling. */
   icon?: { glyph: string; color?: string };
@@ -62,6 +71,15 @@ function stepEnabled<T>(
 function firstEnabled<T>(options: PickerOption<T>[]): number {
   const idx = options.findIndex((o) => !o.disabled);
   return idx === -1 ? 0 : idx;
+}
+
+/** Index of the last enabled option, for wrapping from the button onto
+ *  the bottom of the grid. */
+function lastEnabled<T>(options: PickerOption<T>[]): number {
+  for (let i = options.length - 1; i >= 0; i--) {
+    if (!options[i]?.disabled) return i;
+  }
+  return options.length - 1;
 }
 
 interface PickerMenuProps<T> {
@@ -250,7 +268,18 @@ const SinglePickerMenu = <T,>({
   );
 };
 
-/** Custom multi-select with checkbox glyphs and accent highlight. */
+/**
+ * Custom multi-select with checkbox glyphs and accent highlight.
+ *
+ * Interaction model (shared with GroupedPickerMenu):
+ *   - \u2191\u2193 move the cursor through the options AND onto the Confirm button,
+ *     which lives just past the last option.
+ *   - enter toggles the focused option (no more "space toggles but enter
+ *     advances" split that tripped people up). Space is kept as an
+ *     undocumented alias, but the hints bar advertises only enter.
+ *   - moving onto the Confirm button and pressing enter submits the
+ *     current selection.
+ */
 const MultiPickerMenu = <T,>({
   message,
   options,
@@ -267,6 +296,8 @@ const MultiPickerMenu = <T,>({
   onSelect: (value: T | T[]) => void;
 }) => {
   const [focused, setFocused] = useState(() => firstEnabled(options));
+  // When true, the cursor is on the Confirm button rather than an option.
+  const [onButton, setOnButton] = useState(false);
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const rows = Math.ceil(options.length / columns);
 
@@ -279,6 +310,13 @@ const MultiPickerMenu = <T,>({
     }
   }, [options, focused]);
 
+  const confirm = () => {
+    const values = [...selected]
+      .sort((a, b) => a - b)
+      .map((i) => options[i].value);
+    onSelect(values);
+  };
+
   const bindings: KeyBinding[] = [
     {
       match: [KeyMatch.UpArrow, KeyMatch.DownArrow],
@@ -286,18 +324,55 @@ const MultiPickerMenu = <T,>({
       action: 'navigate',
       handler: (_input, key) => {
         if (key.upArrow) {
-          setFocused(stepEnabled(options, rows, focused, -1));
+          if (onButton) {
+            // Button \u2192 bottom of the grid (last enabled option).
+            setOnButton(false);
+            setFocused(lastEnabled(options));
+            return;
+          }
+          const col = Math.floor(focused / rows);
+          const row = focused % rows;
+          // Nearest enabled option above in this column.
+          let r = row - 1;
+          while (r >= 0 && options[col * rows + r]?.disabled) r--;
+          if (r >= 0) {
+            setFocused(col * rows + r);
+          } else {
+            // Top of the column \u2192 wrap up onto the button.
+            setOnButton(true);
+          }
         }
         if (key.downArrow) {
-          setFocused(stepEnabled(options, rows, focused, 1));
+          if (onButton) {
+            // Button \u2192 top of the grid (first enabled option).
+            setOnButton(false);
+            setFocused(firstEnabled(options));
+            return;
+          }
+          const col = Math.floor(focused / rows);
+          const row = focused % rows;
+          const colLen = Math.min(rows, options.length - col * rows);
+          // Nearest enabled option below in this column.
+          let r = row + 1;
+          while (r < colLen && options[col * rows + r]?.disabled) r++;
+          if (r < colLen) {
+            setFocused(col * rows + r);
+          } else {
+            // Bottom of the column \u2192 down onto the button.
+            setOnButton(true);
+          }
         }
       },
     },
     {
-      match: KeyMatch.Space,
-      label: 'space',
-      action: 'toggle',
+      match: [KeyMatch.Space, KeyMatch.Return],
+      label: 'enter',
+      action: 'select',
       handler: () => {
+        if (onButton) {
+          confirm();
+          return;
+        }
         if (options[focused]?.disabled) return;
         setSelected((prev) => {
           const next = new Set(prev);
@@ -320,22 +395,6 @@ const MultiPickerMenu = <T,>({
         });
       },
     },
-    {
-      match: KeyMatch.Return,
-      label: 'enter',
-      action: 'confirm',
-      handler: () => {
-        if (selected.size === 0) {
-          const hovered = options[focused];
-          if (hovered && !hovered.disabled) {
-            onSelect(hovered.value);
-          }
-        } else {
-          const values = [...selected].sort().map((i) => options[i].value);
-          onSelect(values);
-        }
-      },
-    },
   ];
 
   if (columns > 1) {
@@ -344,6 +403,7 @@ const MultiPickerMenu = <T,>({
       label: '\u2190\u2192',
       action: 'navigate',
       handler: (_input, key) => {
+        if (onButton) return;
         const col = Math.floor(focused / rows);
         const row = focused % rows;
 
@@ -386,41 +446,61 @@ const MultiPickerMenu = <T,>({
           <Box key={colIdx} flexDirection="column">
             {colOpts.map((opt, rowIdx) => {
               const flatIdx = colIdx * rows + rowIdx;
-              const isFocused = flatIdx === focused;
+              const isFocused = !onButton && flatIdx === focused;
               const isSelected = selected.has(flatIdx);
               const label = opt.hint ? `${opt.label} (${opt.hint})` : opt.label;
               const checkbox = isSelected
                 ? Icons.squareFilled
                 : Icons.squareOpen;
               return (
-                <Box key={flatIdx} gap={1} marginBottom={optionMarginBottom}>
-                  <Text
-                    color={isSelected ? 'white' : Colors.muted}
-                    dimColor={!isFocused && !isSelected}
-                  >
-                    {checkbox}
-                  </Text>
-                  {opt.icon && (
-                    <Text color={opt.icon.color}>{opt.icon.glyph}</Text>
+                <Box
+                  key={flatIdx}
+                  flexDirection="column"
+                  marginBottom={optionMarginBottom}
+                >
+                  <Box gap={1}>
+                    <Text
+                      color={isSelected ? 'white' : Colors.muted}
+                      dimColor={!isFocused && !isSelected}
+                    >
+                      {checkbox}
+                    </Text>
+                    {opt.icon && (
+                      <Text color={opt.icon.color}>{opt.icon.glyph}</Text>
+                    )}
+                    <Text
+                      color={
+                        opt.disabled
+                          ? Colors.muted
+                          : isFocused
+                          ? Colors.accent
+                          : undefined
+                      }
+                      bold={isFocused && !opt.disabled}
+                      dimColor={!isFocused || opt.disabled}
+                    >
+                      {label}
+                    </Text>
+                  </Box>
+                  {/* Optional dimmed, wrapped explanation under the label. The
+                      explicit width forces Ink to wrap (an unconstrained Box
+                      shrinks to its content and never wraps). Renders only when
+                      set, so label-only rows are byte-for-byte unchanged. */}
+                  {opt.description && (
+                    <Box marginLeft={4} width={56}>
+                      <Text dimColor wrap="wrap">
+                        {opt.description}
+                      </Text>
+                    </Box>
                   )}
-                  <Text
-                    color={
-                      opt.disabled
-                        ? Colors.muted
-                        : isFocused
-                        ? Colors.accent
-                        : undefined
-                    }
-                    bold={isFocused && !opt.disabled}
-                    dimColor={!isFocused || opt.disabled}
-                  >
-                    {label}
-                  </Text>
                 </Box>
               );
             })}
           </Box>
         ))}
+      </Box>
+      <Box marginTop={1} marginLeft={centered ? 0 : 2}>
+        <ConfirmButton focused={onButton} count={selected.size} />
       </Box>
     </Box>
   );

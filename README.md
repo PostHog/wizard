@@ -49,16 +49,69 @@ npx @posthog/wizard mcp add
 npx @posthog/wizard mcp remove
 ```
 
+## Audit
+
+Audit an existing PostHog integration for correctness and best practices. The
+`audit` command is a **family**. With no subcommand it runs the **events**
+audit (the default); pass a subcommand to run a specific one:
+
+```bash
+# Runs the events audit (the default) — no subcommand needed
+npx @posthog/wizard audit
+
+# Or run a specific audit directly
+npx @posthog/wizard audit events           # event capture quality + cost (default)
+npx @posthog/wizard audit all              # comprehensive audit across every area
+npx @posthog/wizard audit autocapture      # autocapture setup + cost
+npx @posthog/wizard audit feature-flags    # feature flag usage + cost
+npx @posthog/wizard audit identify         # your $identify implementation
+npx @posthog/wizard audit session-replay   # session replay setup
+npx @posthog/wizard audit web-analytics    # web analytics setup
+```
+
+Most audit subcommands resolve at runtime from the published skill registry, so
+new audits appear without a wizard release (`web-analytics` is wizard-native).
+
+> **`audit <subcommand>` chooses an audit area — it does not take a skill name.**
+> The audit subcommands above *are* context-mill skills promoted to commands (via
+> a `cli: role: command` block); [`wizard skill <skill-name>`](#run-a-single-skill)
+> runs a skill that hasn't been promoted. Same machinery, two surfaces.
+> (`wizard audit --help` still labels the positional `[skill]` — read it as "pick
+> a subcommand.")
+
+## Run a single skill
+
+Run any context-mill skill directly by name, even if it isn't exposed as its own
+command:
+
+```bash
+npx @posthog/wizard skill list              # list every available skill
+npx @posthog/wizard skill <skill-name>      # run one by name
+```
+
 ## Revenue Analytics
 
 Wire up an existing PostHog + Stripe project for revenue analytics:
 
 ```bash
-npx @posthog/wizard revenue
+npx @posthog/wizard revenue-analytics
 ```
 
 Requires PostHog and Stripe SDKs already installed. Supports `--ci` with the
-same flags as the main wizard.
+same flags as the main wizard. (Renamed from `revenue` in the CLI overhaul.)
+
+## Data Warehouse
+
+Detect data sources your project already uses (Postgres, MySQL, MongoDB,
+Snowflake, BigQuery, Stripe, …) and connect them to PostHog's data warehouse:
+
+```bash
+npx @posthog/wizard warehouse
+```
+
+The wizard scans your dependencies and `.env` key names (never the values) to
+identify sources. Database and API-key sources are created from the terminal;
+OAuth sources open the PostHog app's new-source flow in your browser.
 
 ## Headless signup + install (agents / CI)
 
@@ -167,8 +220,27 @@ carry (`OAuthApplication.scopes`). Any scope requested in this repo (see
 ceiling, for bookkeeping:
 
 ```
-user:read,project:read,llm_gateway:read,dashboard:read,dashboard:write,insight:read,insight:write,query:read,notebook:read,notebook:write,health_issue:read,wizard_session:read,wizard_session:write,feature_flag:read,experiment:read,experiment_saved_metric:read,survey:read,session_recording:read,error_tracking:read,web_analytics:read,llm_analytics:read,cohort:read,person:read,annotation:read,annotation:write,activity_log:read,property_definition:read,event_definition:read,action:read,warehouse_table:read,warehouse_view:read,alert:read,subscription:read,feature_flag:write,integration:read,organization:read
+user:read,project:read,llm_gateway:read,dashboard:read,dashboard:write,insight:read,insight:write,query:read,notebook:read,notebook:write,health_issue:read,wizard_session:read,wizard_session:write,feature_flag:read,experiment:read,experiment_saved_metric:read,survey:read,session_recording:read,error_tracking:read,web_analytics:read,llm_analytics:read,cohort:read,person:read,annotation:read,annotation:write,activity_log:read,property_definition:read,event_definition:read,action:read,warehouse_table:read,warehouse_view:read,external_data_source:read,external_data_source:write,alert:read,subscription:read,feature_flag:write,integration:read,organization:read,task:read,task:write,signal_scout:read,signal_scout:write,external_data_source:read,external_data_source:write,llm_skill:read,llm_skill:write
 ```
+
+# Command changes (CLI overhaul)
+
+The CLI was overhauled to consolidate commands into a smaller, extensible
+surface. If you used an older command, here's where it went:
+
+| Old command | New command | What changed |
+|---|---|---|
+| `wizard integrate` | `wizard` (default flow) | Command removed; the default flow runs the integration |
+| `wizard events-audit` | `wizard audit events` | Now an `audit`-family subcommand |
+| `wizard audit` (single audit) | `wizard audit <subcommand>` | Now a family; see [Audit](#audit) for the subcommands |
+| `wizard audit-3000` | *removed* | Retired |
+| `wizard revenue` | `wizard revenue-analytics` | Renamed (old `revenue` removed) |
+| `wizard upload-sourcemaps` | `wizard upload-source-maps` | Renamed; `upload-sourcemaps` still works as an alias |
+
+> **Commands vs. programs:** `integrate` was the *command*; the program behind it
+> is `posthog-integration`, which still exists and now powers the default flow.
+> Other commands depend on it via `requires: ['posthog-integration']`. The
+> program id is internal — it was never a command you typed.
 
 # Steal this code
 

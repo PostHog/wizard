@@ -28,6 +28,8 @@ import fg from 'fast-glob';
 import type { ScanMatch, TriageMatch, LLMProvider } from '@posthog/warlock';
 import { logToFile } from '@utils/debug';
 import { analytics } from '@utils/analytics';
+import { getUI } from '@ui';
+import type { WizardSession } from '@lib/wizard-session';
 import { isSkillInstallCommand } from './skill-install';
 import { WIZARD_YARA_REPORT_FILE } from '@utils/paths';
 // TODO(wizard#594): invert this dependency.
@@ -315,6 +317,31 @@ export function captureScanReport(): void {
   // ship duplicate telemetry. Also protects future chained-program runs.
   scanCount = 0;
   scanViolations.length = 0;
+}
+
+/**
+ * End-of-run flush for the scan report. Wired once at the runner seam so every
+ * harness (linear, orchestrator, and any future shape) reports without having
+ * to know warlock exists — scanning is already harness-agnostic (it runs from
+ * SDK Pre/PostToolUse hooks), and this keeps reporting at a single shared seam.
+ *
+ * Order matters: write the local --yara-report file FIRST (it reads scanCount /
+ * scanViolations), THEN send telemetry. captureScanReport() zeroes scan state,
+ * which is what makes this whole function idempotent — a second call from
+ * another termination path (e.g. finally after an abort already flushed) finds
+ * scanCount === 0 and every step no-ops.
+ */
+export function flushScanReport(
+  session: Pick<WizardSession, 'yaraReport'>,
+): void {
+  if (session.yaraReport) {
+    const reportPath = writeScanReport();
+    if (reportPath) {
+      const summary = formatScanReport();
+      getUI().log.info(`YARA scan report: ${reportPath}${summary ?? ''}`);
+    }
+  }
+  captureScanReport();
 }
 
 // ─── Wizard-documentation allowlist ───────────────────────────────

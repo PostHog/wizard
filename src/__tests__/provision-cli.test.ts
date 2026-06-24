@@ -1,7 +1,5 @@
 // Mock functions are created via vi.hoisted so they exist before the hoisted
 // vi.mock factories that reference them run.
-// Name-scoped to this file because .test.ts files share TS project scope when
-// they have no top-level imports/exports.
 const { mockProvisionNewAccountSubcmd } = vi.hoisted(() => ({
   mockProvisionNewAccountSubcmd: vi.fn(),
 }));
@@ -12,7 +10,8 @@ vi.mock('../utils/provisioning', () => ({
 }));
 // Same supporting mocks as src/__tests__/cli.test.ts — bin.ts imports these
 // at module load regardless of which subcommand yargs dispatches.
-vi.mock('../lib/wizard-session', () => ({
+vi.mock('../lib/wizard-session', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../lib/wizard-session')>()),
   buildSession: vi.fn((args: Record<string, unknown>) => args),
 }));
 vi.mock('../ui/tui/start-tui', () => ({
@@ -54,7 +53,10 @@ vi.mock('../lib/detection/index', () => ({
 vi.mock('../utils/analytics', () => ({
   analytics: { setTag: vi.fn() },
 }));
-vi.mock('../utils/wizard-abort', () => ({ wizardAbort: vi.fn() }));
+vi.mock('../utils/wizard-abort', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../utils/wizard-abort')>()),
+  wizardAbort: vi.fn(),
+}));
 vi.mock('../lib/agent/agent-runner', () => ({
   runAgent: vi.fn().mockResolvedValue(undefined),
 }));
@@ -89,7 +91,7 @@ describe('wizard provision subcommand', () => {
 
   let stdoutChunks: string[];
   let stderrChunks: string[];
-  let consoleLogSpy: MockInstance;
+  let consoleLogSpy: ReturnType<typeof vi.spyOn>;
 
   const successResult = {
     projectApiKey: 'phc_test',
@@ -100,6 +102,24 @@ describe('wizard provision subcommand', () => {
     refreshToken: 'refresh_token',
     personalApiKey: 'phx_test',
   };
+
+  // The success path calls process.exit(0) at the end of bin.ts's detached
+  // `void (async () => …)()` dispatch. Our throwing exit mock turns that into an
+  // unhandled rejection with no catch site. Swallow exactly that sentinel (the
+  // asserted work already ran before exit); re-throw anything else so genuine
+  // errors still fail the run.
+  const swallowExitRejection = (reason: unknown) => {
+    if (reason instanceof Error && reason.message === 'process.exit() called') {
+      return;
+    }
+    throw reason;
+  };
+  beforeAll(() => {
+    process.on('unhandledRejection', swallowExitRejection);
+  });
+  afterAll(() => {
+    process.off('unhandledRejection', swallowExitRejection);
+  });
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -119,10 +139,17 @@ describe('wizard provision subcommand', () => {
       // suppress LoggingUI output during tests
     });
 
-    // process.exit is always the final call in each branch of the provision
-    // handler, so a silent no-op is enough. Throwing here would escape the
-    // void async IIFE and become an unhandled rejection.
-    process.exit = vi.fn() as unknown as typeof process.exit;
+    // The CLI quits via process.exit(); the mock throws so a validation failure
+    // (yargs `.fail()` during parse) halts BEFORE the command handler runs —
+    // otherwise the handler would call provisionNewAccount with invalid input.
+    // The call is still recorded before the throw, so `toHaveBeenCalledWith`
+    // assertions hold. On the success path exit(0) runs at the end of bin.ts's
+    // detached `void (async () => …)()` dispatch, so its throw escapes as an
+    // unhandled rejection — swallowed by the suite-level handler below (the
+    // asserted work has already run by then).
+    process.exit = vi.fn(() => {
+      throw new Error('process.exit() called');
+    }) as unknown as typeof process.exit;
   });
 
   afterEach(() => {
@@ -148,16 +175,31 @@ describe('wizard provision subcommand', () => {
   async function runCLI(args: string[]) {
     process.argv = ['node', 'bin.ts', 'provision', ...args];
     try {
-      // vi.resetModules() (afterEach) clears the registry, so this re-evaluates
-      // bin.ts fresh on every call — the vitest equivalent of isolateModules.
+      // vi.resetModules() re-evaluates bin.ts fresh on each call — the vitest
+      // equivalent of jest.isolateModules.
+      vi.resetModules();
       await import('../../bin');
     } catch {
-      // process.exit mock throws to halt handler execution
+      // bin.ts dispatch can reject on some parse paths; the run's effect is
+      // asserted via the mocks after settle().
     }
-    // Dynamic import + async handler need several microtask flushes
-    for (let i = 0; i < 10; i++) {
-      await new Promise((resolve) => setImmediate(resolve));
+    await settle();
+  }
+
+  // The CLI dispatch fires detached async work that awaits a chain of dynamic
+  // imports before reaching a mocked sink. Pump the event loop until this run
+  // reaches a sink — provisionNewAccount (success) or process.exit (validation
+  // failure) — then drain briefly so trailing work finishes inside this test
+  // rather than leaking into the next. (Mirrors cli.test.ts's settle.)
+  async function settle() {
+    const sank = () =>
+      mockProvisionNewAccountSubcmd.mock.calls.length > 0 ||
+      (process.exit as unknown as ReturnType<typeof vi.fn>).mock.calls.length >
+        0;
+    for (let i = 0; i < 300 && !sank(); i++) {
+      await new Promise((resolve) => setTimeout(resolve, 10));
     }
+    await new Promise((resolve) => setTimeout(resolve, 150));
   }
 
   test('exits non-zero without calling the API when --email is missing', async () => {

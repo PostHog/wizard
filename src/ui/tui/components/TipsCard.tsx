@@ -10,7 +10,7 @@ import { Colors, Icons } from '@ui/tui/styles';
 import { DiscoveredFeature, AdditionalFeature } from '@lib/wizard-session';
 
 /** A discrete tip shown in the TipsCard during the agent run. */
-interface Tip {
+export interface Tip {
   /** Unique identifier */
   id: string;
   /** Title line */
@@ -36,7 +36,14 @@ interface Tip {
   };
 }
 
-const TIPS: Tip[] = [
+/**
+ * The default deck — generic PostHog onboarding tips, shown for any
+ * program that doesn't supply its own via `ProgramConfig.getTips`.
+ * Program-specific copy (e.g. the self-driving scout/source
+ * explainers) lives in that program's content, not here — this stays the
+ * neutral fallback.
+ */
+export const DEFAULT_TIPS: Tip[] = [
   {
     id: 'persons',
     title: 'You can also track people and groups with PostHog',
@@ -80,9 +87,15 @@ const TIPS: Tip[] = [
   },
 ];
 
-export const TipsCard = ({ store }: { store: WizardStore }) => {
+export const TipsCard = ({
+  store,
+  tips = DEFAULT_TIPS,
+}: {
+  store: WizardStore;
+  tips?: Tip[];
+}) => {
   useInput((input) => {
-    for (const tip of TIPS) {
+    for (const tip of tips) {
       if (
         tip.toggle &&
         input.toLowerCase() === tip.toggle.key &&
@@ -101,40 +114,42 @@ export const TipsCard = ({ store }: { store: WizardStore }) => {
       </Text>
       <Box height={1} />
 
-      {TIPS.filter((tip) => !tip.visible || tip.visible(store)).map((tip) => (
-        <Box key={tip.id} flexDirection="column" marginBottom={1}>
-          <Text>
-            <Text color={Colors.accent}>{Icons.diamond} </Text>
-            <Text bold>{tip.title}</Text>
-          </Text>
+      {tips
+        .filter((tip) => !tip.visible || tip.visible(store))
+        .map((tip) => (
+          <Box key={tip.id} flexDirection="column" marginBottom={1}>
+            <Text>
+              <Text color={Colors.accent}>{Icons.diamond} </Text>
+              <Text bold>{tip.title}</Text>
+            </Text>
 
-          {tip.toggle ? (
-            tip.toggle.isEnabled(store) ? (
-              <Text color={Colors.success}>
-                {Icons.check} {tip.toggle.enabledLabel}
-              </Text>
+            {tip.toggle ? (
+              tip.toggle.isEnabled(store) ? (
+                <Text color={Colors.success}>
+                  {Icons.check} {tip.toggle.enabledLabel}
+                </Text>
+              ) : (
+                <Text dimColor>
+                  {tip.toggle.prompt} Press{' '}
+                  <Text bold color={Colors.accent}>
+                    {tip.toggle.key.toUpperCase()}
+                  </Text>{' '}
+                  to enable.
+                </Text>
+              )
             ) : (
               <Text dimColor>
-                {tip.toggle.prompt} Press{' '}
-                <Text bold color={Colors.accent}>
-                  {tip.toggle.key.toUpperCase()}
-                </Text>{' '}
-                to enable.
+                {tip.description}
+                {tip.url && (
+                  <>
+                    {' '}
+                    <Text color="cyan">{tip.url}</Text>
+                  </>
+                )}
               </Text>
-            )
-          ) : (
-            <Text dimColor>
-              {tip.description}
-              {tip.url && (
-                <>
-                  {' '}
-                  <Text color="cyan">{tip.url}</Text>
-                </>
-              )}
-            </Text>
-          )}
-        </Box>
-      ))}
+            )}
+          </Box>
+        ))}
     </Box>
   );
 };

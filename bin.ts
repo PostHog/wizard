@@ -32,16 +32,16 @@ if (process.env.NODE_ENV === 'test') {
 import { Wizard } from './src/wizard';
 import { basicIntegrationCommand } from './src/commands/basic-integration';
 import { mcpCommand } from './src/commands/mcp';
-import { integrateCommand } from './src/commands/integrate';
 import { auditCommand } from './src/commands/audit';
-import { audit3000Command } from './src/commands/audit-3000';
 import { doctorCommand } from './src/commands/doctor';
 import { migrateCommand } from './src/commands/migrate';
-import { eventsAuditCommand } from './src/commands/events-audit';
 import { revenueCommand } from './src/commands/revenue';
+import { warehouseCommand } from './src/commands/warehouse';
+import { selfDrivingCommand } from './src/commands/self-driving';
 import { slackCommand } from './src/commands/slack';
 import { uploadSourcemapsCommand } from './src/commands/upload-sourcemaps';
 import { skillCommand } from './src/commands/skill';
+import { cliCommand } from './src/commands/cli';
 import { recoverOrphanedSettingsBackups } from './src/lib/agent/claude-settings';
 
 // Heal any .claude/settings backup a previous interrupted run left orphaned,
@@ -61,13 +61,13 @@ function resolveInstallDir(): string {
 
 Wizard.use(basicIntegrationCommand)
   .use(mcpCommand)
-  .use(integrateCommand)
+  .use(cliCommand)
   .use(auditCommand)
-  .use(audit3000Command)
   .use(doctorCommand)
   .use(migrateCommand)
-  .use(eventsAuditCommand)
   .use(revenueCommand)
+  .use(warehouseCommand)
+  .use(selfDrivingCommand)
   .use(slackCommand)
   .use(uploadSourcemapsCommand)
   .use(skillCommand)

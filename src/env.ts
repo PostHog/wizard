@@ -39,6 +39,11 @@ export const IS_PRODUCTION_BUILD = process.env.NODE_ENV === 'production';
  * Add new keys here when a new runtime dependency is needed.
  */
 type RuntimeEnvKey =
+  // CI-build-only flag overrides (see utils/ci-flag-overrides.ts).
+  // Deliberately NOT POSTHOG_WIZARD_-prefixed: yargs .env('POSTHOG_WIZARD')
+  // would claim it as an unknown CLI option and strict-reject the run.
+  | 'WIZARD_CI_FLAG_OVERRIDES'
+  | 'WIZARD_CI_EXCLUDE_TASKS'
   // Wizard CLI configuration (yargs POSTHOG_WIZARD_ prefix)
   | 'POSTHOG_WIZARD_BENCHMARK_CONFIG'
   | 'POSTHOG_WIZARD_BENCHMARK_FILE'

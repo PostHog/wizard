@@ -12,21 +12,12 @@ import { WizardStore, Program, type ProgramId } from './store.js';
 import { InkUI } from './ink-ui.js';
 import { setUI } from '@ui/index';
 import { App } from './App.js';
+import { enterDarkTerminal, releaseTerminal } from './terminal.js';
 import { analytics } from '@utils/analytics';
 import { logToFile } from '@utils/debug';
 import { getExitLine } from './exit-line.js';
 
-// ANSI escape sequences
-const RESET_ATTRS = '\x1b[0m';
-const CLEAR_SCREEN = '\x1b[2J';
-const CURSOR_HOME = '\x1b[H';
-const BG_BLACK = '\x1b[48;2;0;0;0m';
-const ENTER_ALT_SCREEN = '\x1b[?1049h';
-const LEAVE_ALT_SCREEN = '\x1b[?1049l';
-
-export function releaseTerminal(): void {
-  process.stdout.write(RESET_ATTRS + LEAVE_ALT_SCREEN);
-}
+export { releaseTerminal };
 
 export function startTUI(
   version: string,
@@ -36,10 +27,7 @@ export function startTUI(
   store: WizardStore;
   waitForSetup: () => Promise<void>;
 } {
-  // Enter alternate screen buffer, then set up dark background
-  process.stdout.write(
-    ENTER_ALT_SCREEN + BG_BLACK + CLEAR_SCREEN + CURSOR_HOME,
-  );
+  enterDarkTerminal();
 
   const store = new WizardStore(program);
   store.version = version;
@@ -51,6 +39,7 @@ export function startTUI(
     createElement(App, { store }),
   );
 
+  analytics.setTag('program_id', program);
   // The launch marker — the first event of every TUI run, captured under
   // the run's anonymous id and merged into the user once they log in.
   analytics.wizardCapture('started', { program_id: program });

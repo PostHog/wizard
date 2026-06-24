@@ -8,10 +8,16 @@
 
 import { Box, Text } from 'ink';
 import { TextInput } from '@inkjs/ui';
-import { useState, useSyncExternalStore } from 'react';
+import { useEffect, useState, useSyncExternalStore } from 'react';
 import type { WizardStore } from '@ui/tui/store';
-import { ModalOverlay, PickerMenu } from '@ui/tui/primitives/index';
+import {
+  LinkText,
+  ModalOverlay,
+  PickerMenu,
+  extractUrls,
+} from '@ui/tui/primitives/index';
 import { Colors, Icons } from '@ui/tui/styles';
+import { copyToClipboard } from '@utils/clipboard';
 import type { AskAnswers, AskQuestion } from '@lib/wizard-session';
 
 interface WizardAskScreenProps {
@@ -31,6 +37,28 @@ export const WizardAskScreen = ({ store }: WizardAskScreenProps) => {
   const [index, setIndex] = useState(0);
   const [answers, setAnswers] = useState<AskAnswers>({});
   const [lastPendingId, setLastPendingId] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  // For rich-link prompts (opt-in programs only) copy a lone URL to the
+  // clipboard, so users on terminals without OSC 8 support can still paste it.
+  // Only fires when the current question has exactly one URL, to avoid
+  // clobbering the clipboard ambiguously. `soleUrl` is the sole effect dep.
+  const richLinks = pending?.richLinks ?? false;
+  const currentPrompt = pending?.questions[index]?.prompt ?? '';
+  const promptUrls = richLinks ? extractUrls(currentPrompt) : [];
+  const soleUrl = promptUrls.length === 1 ? promptUrls[0] : null;
+
+  useEffect(() => {
+    setCopied(false);
+    if (!soleUrl) return;
+    let active = true;
+    void copyToClipboard(soleUrl).then((ok) => {
+      if (active && ok) setCopied(true);
+    });
+    return () => {
+      active = false;
+    };
+  }, [soleUrl]);
 
   if (!pending) return null;
 
@@ -71,8 +99,20 @@ export const WizardAskScreen = ({ store }: WizardAskScreenProps) => {
         </Box>
       )}
       <Box flexDirection="column">
-        <Text>{question.prompt}</Text>
+        {pending.richLinks ? (
+          <LinkText text={question.prompt} />
+        ) : (
+          <Text>{question.prompt}</Text>
+        )}
       </Box>
+      {pending.richLinks && copied && (
+        <Box marginTop={1}>
+          <Text dimColor>
+            Link copied to clipboard — paste it in your browser if it isn&apos;t
+            clickable.
+          </Text>
+        </Box>
+      )}
       <Box marginTop={1}>
         {/* `key` forces React to remount the input when the question changes
             so per-question internal state (typed buffer, picker focus) doesn't
@@ -108,20 +148,28 @@ const QuestionInput = ({ question, onSubmit }: QuestionInputProps) => {
         />
       );
 
-    case 'multi':
+    case 'multi': {
+      const multiOptions = (question.options ?? []).map((o) => ({
+        label: o.label,
+        value: o.value,
+        description: o.description,
+      }));
+      // Add vertical breathing room between options only when at least one
+      // carries a description — keeps every description-less multi-select
+      // (every other program) spaced exactly as before.
+      const hasDescriptions = multiOptions.some((o) => o.description);
       return (
         <PickerMenu<string>
           mode="multi"
-          options={(question.options ?? []).map((o) => ({
-            label: o.label,
-            value: o.value,
-          }))}
+          optionMarginBottom={hasDescriptions ? 1 : 0}
+          options={multiOptions}
           onSelect={(value) => {
             const v = Array.isArray(value) ? value : [value];
             onSubmit(v);
           }}
         />
       );
+    }
 
     case 'text':
       return (

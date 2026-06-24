@@ -145,6 +145,9 @@ export class WizardStore {
   private $learnCardBlockIdx = atom(0);
   private $learnCardComplete = atom(false);
   private $version = atom(0);
+  private $currentStage = atom<{ stage: string; startedAt: number } | null>(
+    null,
+  );
 
   private _onTasksChanged: (() => void) | null = null;
   /** Last screen seen — used to detect screen transitions for analytics. */
@@ -315,6 +318,19 @@ export class WizardStore {
     return this.$eventPlan.get();
   }
 
+  get currentStage(): { stage: string; startedAt: number } | null {
+    return this.$currentStage.get();
+  }
+
+  /** No-op when the stage hasn't changed, so `startedAt` survives across
+   *  re-renders and tab switches and measures real stage time. */
+  setCurrentStage(stage: string): void {
+    const cur = this.$currentStage.get();
+    if (cur?.stage === stage) return;
+    this.$currentStage.set({ stage, startedAt: Date.now() });
+    this.emitChange();
+  }
+
   get statusExpanded(): boolean {
     return this.$statusExpanded.get();
   }
@@ -349,6 +365,9 @@ export class WizardStore {
 
   setCredentials(credentials: WizardSession['credentials']): void {
     this.$session.setKey('credentials', credentials);
+    if (credentials?.projectId) {
+      analytics.setTag('project_id', credentials.projectId);
+    }
     analytics.wizardCapture('auth complete', {
       project_id: credentials?.projectId,
     });
@@ -372,6 +391,7 @@ export class WizardStore {
     this.$session.setKey('integration', integration);
     this.$session.setKey('frameworkConfig', config);
     this.$session.setKey('unsupportedVersion', null);
+    if (integration) analytics.setTag('integration', integration);
     this.emitChange();
   }
 
@@ -382,6 +402,7 @@ export class WizardStore {
 
   setDetectedFramework(label: string): void {
     this.$session.setKey('detectedFrameworkLabel', label);
+    analytics.setTag('detected_framework', label);
     this.emitChange();
   }
 

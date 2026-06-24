@@ -43,6 +43,12 @@ export interface WizardAskBridgeOptions {
    * {@link CANCELLED_SENTINEL} value. Defaults to {@link DEFAULT_ASK_TIMEOUT_MS}.
    */
   timeoutMs?: number;
+  /**
+   * Opt the rendered overlay into rich link handling (OSC 8 hyperlinks +
+   * clipboard copy for prompt URLs). Set per program; defaults to false.
+   * Propagated onto every {@link PendingQuestion} this bridge creates.
+   */
+  richLinks?: boolean;
 }
 
 /** Sentinel returned for unanswered fields on cancellation or timeout. */
@@ -76,6 +82,7 @@ export function createWizardAskBridge(
         id: randomUUID(),
         questions,
         source: opts.getSource(),
+        richLinks: opts.richLinks ?? false,
       };
 
       const startedAt = Date.now();

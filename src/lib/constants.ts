@@ -4,6 +4,20 @@
 
 import { VERSION } from './version';
 
+// ── Models ──────────────────────────────────────────────────────────
+
+/**
+ * Default model for agent runs. Bare model IDs (no `anthropic/` prefix) so the
+ * LLM gateway's Bedrock fallback can match map_to_bedrock_model().
+ */
+export const DEFAULT_AGENT_MODEL = 'claude-sonnet-4-6';
+
+/**
+ * Cheaper, faster model for mechanical agent work (e.g. repo classification
+ * during source-map detection). Passed via AgentConfig.modelOverride.
+ */
+export const HAIKU_MODEL = 'claude-haiku-4-5-20251001';
+
 // ── Integration / CLI ───────────────────────────────────────────────
 
 /**
@@ -176,6 +190,8 @@ export const WIZARD_INTERACTION_EVENT_NAME = 'wizard interaction';
 export const WIZARD_REMARK_EVENT_NAME = 'wizard remark';
 /** Feature flag key whose value selects a variant from WIZARD_VARIANTS. */
 export const WIZARD_VARIANT_FLAG_KEY = 'wizard-variant';
+/** Boolean feature flag that routes a run to the experimental orchestrator runner. */
+export const WIZARD_ORCHESTRATOR_FLAG_KEY = 'wizard-orchestrator';
 /** Feature flag key that gates the intro-screen "Tools" menu. */
 export const WIZARD_TOOLS_MENU_FLAG_KEY = 'wizard-tools-menu';
 /**

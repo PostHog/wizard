@@ -60,6 +60,36 @@ describe('getExitLine', () => {
     expect(line).not.toContain('\n');
   });
 
+  it('echoes the primary link and next-steps so they survive in scrollback', () => {
+    const line = stripAnsi(
+      getExitLine(
+        storeWithOutro({
+          kind: OutroKind.Success,
+          message: 'Self-driving is on.',
+          primaryLink: {
+            label: 'Your Self-driving inbox',
+            url: 'https://us.posthog.com/project/123/inbox',
+          },
+          nextSteps: {
+            heading: 'In your inbox you can:',
+            items: ['Review findings', 'Triage what matters'],
+          },
+        }),
+      ),
+    );
+
+    expect(line).toContain('Self-driving is on.');
+    expect(line).toContain('Your Self-driving inbox:');
+    // URL sits on its own line (not glued to the label) for clean selection.
+    expect(
+      line
+        .split('\n')
+        .some((l) => l === 'https://us.posthog.com/project/123/inbox'),
+    ).toBe(true);
+    expect(line).toContain('In your inbox you can:');
+    expect(line).toContain('• Review findings');
+  });
+
   it('appends the report suffix when the message does not already mention it', () => {
     const line = stripAnsi(
       getExitLine(

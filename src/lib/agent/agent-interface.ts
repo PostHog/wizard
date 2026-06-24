@@ -16,8 +16,10 @@ import {
   POSTHOG_PROPERTY_HEADER_PREFIX,
   WIZARD_VARIANT_FLAG_KEY,
   WIZARD_VARIANTS,
+  WIZARD_ORCHESTRATOR_FLAG_KEY,
   WIZARD_USER_AGENT,
   WIZARD_WARLOCK_DISABLED_FLAG_KEY,
+  DEFAULT_AGENT_MODEL,
 } from '@lib/constants';
 import {
   type AdditionalFeature,
@@ -35,6 +37,7 @@ import {
 } from '@lib/yara-hooks';
 import { createTriageLLMProvider } from './triage-provider';
 import { getWizardCommandments } from './commandments';
+import { classifyToolToStage } from './agent-phase';
 import type { PackageManagerDetector } from '@lib/detection/package-manager';
 import { AgentSignals, AgentErrorType } from './signals';
 import { AgentOutputSignals } from './output-signals';
@@ -135,6 +138,11 @@ export type AgentConfig = {
   wizardMetadata?: Record<string, string>;
   /** Program identifier — selects the model for that program. */
   integrationLabel?: string;
+  /**
+   * Override the agent model for this run. Defaults to DEFAULT_AGENT_MODEL.
+   * Use for cheap mechanical runs (e.g. source-map detection on HAIKU_MODEL).
+   */
+  modelOverride?: string;
   /** Bridge that drives the `wizard_ask` overlay. Omit in non-interactive hosts. */
   askBridge?: import('@lib/wizard-ask-bridge').WizardAskBridge;
   /** Per-run cap on `wizard_ask` invocations. Defaults to 10. */
@@ -150,6 +158,12 @@ export type AgentConfig = {
   getPendingQuestion?: () =>
     | import('@lib/wizard-session').PendingQuestion
     | null;
+  /**
+   * Orchestrator queue context. Present only when the `wizard-orchestrator`
+   * flag routes the run here; threaded into wizard-tools so the orchestrator
+   * tools register.
+   */
+  orchestrator?: import('@lib/agent/runner/orchestrator/queue-tools').OrchestratorToolsContext;
 };
 
 /**
@@ -171,6 +185,7 @@ export type StopHookResult =
 export function createStopHook(
   featureQueue: readonly AdditionalFeature[],
   signals?: AgentOutputSignals,
+  requestRemark = true,
 ): (input: { stop_hook_active: boolean }) => StopHookResult {
   let featureIndex = 0;
   let remarkRequested = false;
@@ -198,8 +213,9 @@ export function createStopHook(
       return { decision: 'block', reason: prompt };
     }
 
-    // Phase 2: collect remark (once)
-    if (!remarkRequested) {
+    // Phase 2: collect remark (once). Skipped when the caller opts out — the
+    // orchestrator suppresses it per task so it does not fire on every agent.
+    if (requestRemark && !remarkRequested) {
       remarkRequested = true;
       logToFile('Stop hook: requesting reflection');
       return {
@@ -262,6 +278,17 @@ export function isWarlockDisabled(flags: Record<string, string> = {}): boolean {
     flags[WIZARD_WARLOCK_DISABLED_FLAG_KEY] === 'true' ||
     runtimeEnv('POSTHOG_WIZARD_WARLOCK_DISABLED') === 'true'
   );
+}
+
+/**
+ * Whether this run uses the experimental task-queue orchestrator. Gated by the
+ * boolean `wizard-orchestrator` feature flag, targeted to the user in the wizard's
+ * analytics project.
+ */
+export function isOrchestratorEnabled(
+  flags: Record<string, string> = {},
+): boolean {
+  return flags[WIZARD_ORCHESTRATOR_FLAG_KEY] === 'true';
 }
 
 /**
@@ -544,18 +571,17 @@ export async function initializeAgent(
   logToFile('Agent initialization starting');
   logToFile('Install directory:', options.installDir);
 
-  getUI().log.step('Initializing Claude agent...');
-
   try {
-    // Configure LLM gateway environment variables (inherited by SDK subprocess)
+    // Configure model routing (inherited by the SDK subprocess). All model
+    // calls route through the PostHog LLM gateway, authed with the user's
+    // OAuth token.
+    // Disable experimental betas (like input_examples) the gateway doesn't support.
+    process.env.CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS = 'true';
     const gatewayUrl = getLlmGatewayUrlFromHost(config.posthogApiHost);
     process.env.ANTHROPIC_BASE_URL = gatewayUrl;
     process.env.ANTHROPIC_AUTH_TOKEN = config.posthogApiKey;
     // Use CLAUDE_CODE_OAUTH_TOKEN to override any stored /login credentials
     process.env.CLAUDE_CODE_OAUTH_TOKEN = config.posthogApiKey;
-    // Disable experimental betas (like input_examples) that the LLM gateway doesn't support
-    process.env.CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS = 'true';
-
     logToFile('Configured LLM gateway:', gatewayUrl);
     logToFile(
       'API key prefix:',
@@ -597,17 +623,13 @@ export async function initializeAgent(
       skillsBaseUrl: config.skillsBaseUrl,
       askBridge: config.askBridge,
       askMaxQuestions: config.askMaxQuestions,
+      orchestrator: config.orchestrator,
     });
     mcpServers['wizard-tools'] = wizardToolsServer;
 
-    // audit-3000 needs Opus 4.7's depth for the multi-phase audit chain;
-    // every other program runs on Sonnet 4.6.
     // Bare model IDs (no `anthropic/` prefix) so the LLM gateway's Bedrock
     // fallback can match map_to_bedrock_model()'s strict lookup.
-    const model =
-      config.integrationLabel === 'audit-3000'
-        ? 'claude-opus-4-6'
-        : 'claude-sonnet-4-6';
+    const model = config.modelOverride ?? DEFAULT_AGENT_MODEL;
 
     const agentRunConfig: AgentRunConfig = {
       workingDirectory: config.workingDirectory,
@@ -636,8 +658,6 @@ export async function initializeAgent(
       });
     }
 
-    getUI().log.step(`Verbose logs: ${getLogFilePath()}`);
-
     // Pre-warm the warlock scanner (WASM init + rule compile) off the hook path
     // so the first tool-call scan doesn't pay cold-start under a hook timeout.
     // Fire-and-forget: the warlock module promise is cached, so the first real
@@ -646,7 +666,6 @@ export async function initializeAgent(
     // Best-effort — a failure is non-fatal (hooks still fail closed per scan).
     void prewarmYaraScanner();
 
-    getUI().log.success("Agent initialized. Let's get cooking!");
     return agentRunConfig;
   } catch (error) {
     getUI().log.error(
@@ -676,6 +695,18 @@ export async function runAgent(
     errorMessage?: string;
     additionalFeatureQueue?: readonly AdditionalFeature[];
     abortCases?: readonly AbortCaseMatcher[];
+    /**
+     * Emit a `wizard: step` event on each agent task transition. Threaded from
+     * `ProgramRun.trackStepProgress`; defaults off for every other caller.
+     */
+    emitStepEvents?: boolean;
+    /** Request the end-of-run reflection remark. Defaults to true. */
+    requestRemark?: boolean;
+    /**
+     * Extra properties attached to this run's `agent completed` / `agent
+     * aborted` events (e.g. the orchestrator's task type and id).
+     */
+    analyticsProperties?: Record<string, unknown>;
   },
   middleware?: {
     onMessage(message: any): void;
@@ -687,6 +718,7 @@ export async function runAgent(
     successMessage = 'PostHog integration complete',
     errorMessage = 'Integration failed',
     abortCases = [],
+    emitStepEvents = false,
   } = config ?? {};
 
   logToFile('Starting agent run');
@@ -754,9 +786,27 @@ export async function runAgent(
       analytics.capture(WIZARD_REMARK_EVENT_NAME, { remark });
     }
 
+    // Token usage comes from the SDK result message and is per agent run —
+    // for the orchestrator that means per task, the secondary cost to watch.
+    const usage = lastResultMessage?.usage as
+      | {
+          input_tokens?: number;
+          output_tokens?: number;
+          cache_creation_input_tokens?: number;
+          cache_read_input_tokens?: number;
+        }
+      | undefined;
     analytics.wizardCapture('agent completed', {
       duration_ms: durationMs,
       duration_seconds: durationSeconds,
+      model: agentConfig.model,
+      num_turns: lastResultMessage?.num_turns,
+      total_cost_usd: lastResultMessage?.total_cost_usd,
+      input_tokens: usage?.input_tokens,
+      output_tokens: usage?.output_tokens,
+      cache_creation_input_tokens: usage?.cache_creation_input_tokens,
+      cache_read_input_tokens: usage?.cache_read_input_tokens,
+      ...config?.analyticsProperties,
     });
     try {
       middleware?.finalize(lastResultMessage, durationMs);
@@ -909,7 +959,8 @@ export async function runAgent(
         },
         env: {
           ...process.env,
-          // Prevent user's Anthropic API key from overriding the wizard's OAuth token
+          // Drop any shell ANTHROPIC_API_KEY so it can't override the wizard's
+          // OAuth gateway token.
           ANTHROPIC_API_KEY: undefined,
           // Defer MCP tool schemas to avoid bloating the system prompt.
           // The posthog-wizard MCP exposes many query tools with large schemas;
@@ -925,6 +976,7 @@ export async function runAgent(
           // disables tool search deferral and re-inflates the system prompt by
           // ~113k tokens (the reason ENABLE_TOOL_SEARCH=auto:0 is set above).
           MCP_CONNECTION_NONBLOCKING: '0',
+          // PostHog gateway headers: Bedrock fallback + property/flag tags.
           ANTHROPIC_CUSTOM_HEADERS: buildAgentEnv(
             agentConfig.wizardMetadata ?? {},
             agentConfig.wizardFlags ?? {},
@@ -969,7 +1021,11 @@ export async function runAgent(
           Stop: [
             {
               hooks: [
-                createStopHook(config?.additionalFeatureQueue ?? [], signals),
+                createStopHook(
+                  config?.additionalFeatureQueue ?? [],
+                  signals,
+                  config?.requestRemark ?? true,
+                ),
               ],
               timeout: 30,
             },
@@ -1017,6 +1073,8 @@ export async function runAgent(
         signals,
         receivedSuccessResult,
         tasks,
+        isOrchestratorEnabled(agentConfig.wizardFlags ?? {}),
+        emitStepEvents,
       );
 
       // [ABORT] detection: the skill emits "[ABORT] <reason>" when it
@@ -1206,6 +1264,8 @@ export async function runAgent(
       analytics.wizardCapture('agent aborted', {
         duration_ms: durationMs,
         duration_seconds: Math.round(durationMs / 1000),
+        model: agentConfig.model,
+        ...config?.analyticsProperties,
       });
     }
   }
@@ -1254,6 +1314,8 @@ type TaskEntry = { content: string; status: string; activeForm?: string };
 interface TaskStore {
   tasks: Map<string, TaskEntry>;
   sync: () => void;
+  /** When true, emit a `wizard: step` event on each status transition. */
+  emitStepEvents?: boolean;
 }
 
 interface ToolUseBlock {
@@ -1293,6 +1355,36 @@ function handleTaskUpdate(block: ToolUseBlock, store: TaskStore): void {
   if (input.status === 'deleted') {
     store.tasks.delete(input.taskId);
   } else {
+    // Per-step drop-off signal for programs that opt in via `trackStepProgress`
+    // (threaded here as `emitStepEvents`). Emit `wizard: step` on each real
+    // status transition so analytics can see how far a run got — even a silent
+    // step (no wizard_ask) that dies mid-run surfaces as its last `in_progress`
+    // with no matching `completed`. Generic: the step name is whatever the
+    // agent set; the `command` tag already identifies the program.
+    if (
+      store.emitStepEvents &&
+      input.status &&
+      input.status !== existing.status &&
+      (input.status === 'in_progress' || input.status === 'completed')
+    ) {
+      const keys = [...store.tasks.keys()];
+      analytics.wizardCapture('step', {
+        // The task's display label lives on `activeForm` (what the TUI renders,
+        // e.g. "Checking access"); `content`/`subject` are typically empty on a
+        // status-only TaskUpdate. Prefer the stored entry, then the update, so
+        // the name is never null. Named `step_name` (not `step`): a bare
+        // `properties.step` doesn't resolve in HogQL — `step_name` queries
+        // cleanly, like `step_index` / `step_count`.
+        step_name:
+          existing.activeForm ??
+          input.activeForm ??
+          existing.content ??
+          input.subject,
+        status: input.status,
+        step_index: keys.indexOf(input.taskId),
+        step_count: keys.length,
+      });
+    }
     store.tasks.set(input.taskId, {
       content: input.subject ?? existing.content,
       status: input.status ?? existing.status,
@@ -1373,6 +1465,12 @@ function handleSDKMessage(
   signals: AgentOutputSignals,
   receivedSuccessResult = false,
   tasks?: Map<string, TaskEntry>,
+  // The orchestrator owns the TUI task panel (it renders its queue). Suppress the
+  // agent's own TaskCreate/TaskUpdate rendering so it does not clobber the queue.
+  suppressTaskRender = false,
+  // Opt-in per-step analytics, threaded from runAgent's `emitStepEvents`
+  // (ProgramRun.trackStepProgress). Off for every program that doesn't opt in.
+  emitStepEvents = false,
 ): void {
   // Map preserves insertion order (the order the agent created the tasks).
   // Within that, group by status: completed first, then in_progress, then
@@ -1384,7 +1482,7 @@ function handleSDKMessage(
   };
   const rank = (status: string): number => STATUS_RANK[status] ?? 2;
   const syncTasks = (): void => {
-    if (!tasks) return;
+    if (!tasks || suppressTaskRender) return;
     const sorted = Array.from(tasks.values()).sort(
       (a, b) => rank(a.status) - rank(b.status),
     );
@@ -1458,7 +1556,14 @@ function handleSDKMessage(
             dispatchTaskToolUse(block as ToolUseBlock, {
               tasks,
               sync: syncTasks,
+              emitStepEvents,
             });
+          }
+
+          // Mirror the active tool into the Visualizer's "stage" indicator.
+          if (block.type === 'tool_use') {
+            const stage = classifyToolToStage((block as ToolUseBlock).name);
+            if (stage) getUI().setStage(stage);
           }
         }
       }

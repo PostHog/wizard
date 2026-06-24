@@ -5,6 +5,7 @@ import type { Integration } from '@lib/constants';
 import type { FrameworkConfig } from '@lib/framework-config';
 import type { ContentBlock } from '@ui/tui/primitives/index';
 import type { WizardStore } from '@ui/tui/store';
+import type { Tip } from '@ui/tui/components/TipsCard';
 
 /**
  * A program step is the primary unit of the wizard's execution model.
@@ -104,13 +105,61 @@ export interface ProgramStep {
 }
 
 /**
+ * Declares a program's place in the wizard CLI surface.
+ *
+ * Mirrors the `cli:` block in context-mill skill configs so wizard-native
+ * programs and skill-backed programs share one vocabulary. Field names
+ * match `ProgramConfig.command` / `parentCommand` above, so contributors
+ * only learn one set of words.
+ *
+ *   - `role: 'command'`  — appears as a normal wizard command.
+ *   - `role: 'skill'`    — reachable only via `wizard skill <id>`.
+ *   - `role: 'internal'` — hidden everywhere, only reachable via the
+ *                          `--skill=<id>` dev escape hatch.
+ *
+ * Mapping table — declaration on the left, registered command on the right:
+ *
+ *   { role: 'command',                            →  wizard revenue-analytics
+ *     command: 'revenue-analytics' }
+ *
+ *   { role: 'command',                            →  wizard audit feature-flags
+ *     parentCommand: 'audit',
+ *     command: 'feature-flags' }
+ *
+ *   { role: 'skill' }                             →  wizard skill <id>
+ *
+ * `cli` only configures the command shape — the verbs the user types.
+ * Flags and positional args (e.g. `--since=30d`) are configured on
+ * `cliOptions`, not here.
+ *
+ * Naming rule: commands use the full PostHog product name with hyphens
+ * (`revenue-analytics`, `feature-flags`, `session-replay`), not
+ * abbreviations like `revenue` or `flags`.
+ */
+export interface ProgramCliSurface {
+  /** Where the program appears in the wizard CLI surface. */
+  role: 'command' | 'skill' | 'internal';
+  /**
+   * The user-typed word that registers this program (e.g. `'feature-flags'`
+   * in `wizard audit feature-flags`, or `'revenue-analytics'` in
+   * `wizard revenue-analytics`). Required when `role` is `'command'`.
+   */
+  command?: string;
+  /**
+   * The command this program nests under (e.g. `'audit'` for
+   * `wizard audit feature-flags`). Omit for flat / standalone commands.
+   */
+  parentCommand?: string;
+}
+
+/**
  * Uniform configuration for a wizard program.
  *
  * Each program directory exports one of these. The system uses it
  * for CLI registration, sequence/step wiring, and skill bootstrap.
  */
 export interface ProgramConfig {
-  /** CLI command name (e.g. 'revenue'). Omit for the default program. */
+  /** CLI command name (e.g. 'revenue-analytics'). Omit for the default program. */
   command?: string;
   /**
    * Parent CLI command to nest this program under. When set, the program is
@@ -165,10 +214,19 @@ export interface ProgramConfig {
   /**
    * LearnCard deck rendered in the shared `RunScreen` while the agent
    * runs. Lives at `<program>/content/index.tsx` by convention.
-   * Programs that ship a custom RunScreen variant (audit, audit-3000)
-   * or skip the run step (posthog-doctor) leave this unset.
+   * Programs that ship a custom RunScreen variant (audit) or skip the
+   * run step (posthog-doctor) leave this unset.
    */
   getContentBlocks?: (store?: WizardStore) => ContentBlock[];
+  /**
+   * Tips shown in the run screen's right pane (the `Tips` sidebar) once
+   * the LearnCard finishes. Lets a program supply its own explainer copy
+   * (e.g. self-driving explaining what signal sources and scouts are)
+   * instead of the generic onboarding deck. Unset → `RunScreen` falls back
+   * to `DEFAULT_TIPS`, so every other program is unaffected. Lives at
+   * `<program>/content/tips.ts` by convention.
+   */
+  getTips?: (store?: WizardStore) => Tip[];
   /**
    * Subcommand-specific CLI options. Spread into yargs `.options(...)` when the
    * program's subcommand is registered. Program-specific knowledge stays in
@@ -194,6 +252,11 @@ export interface ProgramConfig {
    * dispatch in a program whose steps are explicitly single-agent.
    */
   disallowedTools?: readonly string[];
+  /**
+   * Declares this program's place in the wizard CLI surface. See
+   * `ProgramCliSurface` for semantics.
+   */
+  cli?: ProgramCliSurface;
 }
 
 /**

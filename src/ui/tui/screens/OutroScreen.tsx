@@ -45,6 +45,48 @@ export const OutroScreen = ({ store }: OutroScreenProps) => {
             ✔ {outroData.message || 'Done!'}
           </Text>
 
+          {outroData.primaryLink && (
+            <Box marginTop={1}>
+              <Text>
+                {outroData.primaryLink.label}:{' '}
+                <Text color="cyan">{outroData.primaryLink.url}</Text>
+              </Text>
+            </Box>
+          )}
+
+          {outroData.nextSteps && outroData.nextSteps.items.length > 0 && (
+            <Box flexDirection="column" marginTop={1}>
+              <Text color="cyan" bold>
+                {outroData.nextSteps.heading}
+              </Text>
+              {outroData.nextSteps.items.map((item, i) => (
+                <Text key={i}>• {item}</Text>
+              ))}
+            </Box>
+          )}
+
+          {outroData.dashboardUrl && (
+            <Box marginTop={1}>
+              <Text>
+                Dashboard:{' '}
+                <Text color="cyan">
+                  {withUtm(outroData.dashboardUrl, 'outro-dashboard')}
+                </Text>
+              </Text>
+            </Box>
+          )}
+
+          {outroData.notebookUrl && (
+            <Box marginTop={1}>
+              <Text>
+                Notebook:{' '}
+                <Text color="cyan">
+                  {withUtm(outroData.notebookUrl, 'outro-notebook')}
+                </Text>
+              </Text>
+            </Box>
+          )}
+
           {outroData.body && (
             <Box marginTop={1}>
               <Text dimColor>{outroData.body}</Text>
@@ -81,28 +123,6 @@ export const OutroScreen = ({ store }: OutroScreenProps) => {
                   <Text dimColor> {event.description}</Text>
                 </Text>
               ))}
-            </Box>
-          )}
-
-          {outroData.dashboardUrl && (
-            <Box marginTop={1}>
-              <Text>
-                We've also made you a dashboard:{' '}
-                <Text color="cyan">
-                  {withUtm(outroData.dashboardUrl, 'outro-dashboard')}
-                </Text>
-              </Text>
-            </Box>
-          )}
-
-          {outroData.notebookUrl && (
-            <Box marginTop={1}>
-              <Text>
-                And uploaded the report to a PostHog notebook:{' '}
-                <Text color="cyan">
-                  {withUtm(outroData.notebookUrl, 'outro-notebook')}
-                </Text>
-              </Text>
             </Box>
           )}
 

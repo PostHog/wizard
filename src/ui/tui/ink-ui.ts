@@ -47,7 +47,7 @@ export class InkUI implements WizardUI {
       });
     }
 
-    // Signal that the main work is done — router resolves to mcp or outro
+    // Signal that the main work is done — router resolves to outro
     if (this.store.session.runPhase === RunPhase.Running) {
       this.store.setRunPhase(RunPhase.Completed);
     }
@@ -98,6 +98,14 @@ export class InkUI implements WizardUI {
     // no auth step, or CI). Otherwise parks until _checkGates sees the
     // org's approval flip to true — e.g. via [R]etry on the kill screen.
     return this.store.getGate('ai-opt-in');
+  }
+
+  waitForGate(stepId: string): Promise<void> {
+    return this.store.getGate(stepId);
+  }
+
+  getFrameworkContext(key: string): unknown {
+    return this.store.session.frameworkContext[key];
   }
 
   setDetectedFramework(label: string): void {
@@ -222,6 +230,10 @@ export class InkUI implements WizardUI {
 
   setDashboardUrl(url: string): void {
     this.store.setDashboardUrl(url);
+  }
+
+  setStage(stage: string): void {
+    this.store.setCurrentStage(stage);
   }
 
   setNotebookUrl(url: string): void {

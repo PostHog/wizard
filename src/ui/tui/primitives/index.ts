@@ -11,8 +11,16 @@ export { PromptLabel } from './PromptLabel.js';
 export { PickerMenu } from './PickerMenu.js';
 export { GroupedPickerMenu } from './GroupedPickerMenu.js';
 export { ConfirmationInput } from './ConfirmationInput.js';
+export { ConfirmButton } from './ConfirmButton.js';
 export { Divider } from './Divider.js';
 export { ModalOverlay } from './ModalOverlay.js';
+export { LinkText } from './LinkText.js';
+export {
+  osc8Hyperlink,
+  extractUrls,
+  splitPromptIntoSegments,
+} from './link-helpers.js';
+export type { PromptSegment } from './link-helpers.js';
 export { LogViewer } from './LogViewer.js';
 export { EventPlanViewer } from './EventPlanViewer.js';
 export { ScreenContainer } from './ScreenContainer.js';
