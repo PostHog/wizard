@@ -120,10 +120,6 @@ export async function runOrchestrator(
     );
   }
 
-  // Every wizard event from here on carries the variant, so orchestrator runs
-  // segment cleanly from the linear baseline.
-  analytics.setTag('variant', 'orchestrator');
-
   // Responsiveness is the headline metric of the dark launch: time to first
   // visible progress, and no single step dominating wall-clock. Track it from
   // queue transitions, with the resolved model so cheap work is attributable
@@ -263,8 +259,7 @@ export async function runOrchestrator(
     detectPackageManager: detectNodePackageManagers,
     skillsBaseUrl: boot.skillsBaseUrl,
     wizardFlags: boot.wizardFlags,
-    // Tag agent events as orchestrator so telemetry segments from the baseline.
-    wizardMetadata: { ...boot.wizardMetadata, VARIANT: 'orchestrator' },
+    wizardMetadata: boot.wizardMetadata,
     integrationLabel: programConfig.id,
     orchestrator: {
       store,

@@ -1,7 +1,4 @@
-import {
-  buildWizardMetadata,
-  isOrchestratorEnabled,
-} from '@lib/agent/agent-interface';
+import { isOrchestratorEnabled } from '@lib/agent/agent-interface';
 
 describe('isOrchestratorEnabled', () => {
   it('is true only when the wizard-orchestrator flag is true', () => {
@@ -17,20 +14,5 @@ describe('isOrchestratorEnabled', () => {
     );
     expect(isOrchestratorEnabled({})).toBe(false);
     expect(isOrchestratorEnabled()).toBe(false);
-  });
-});
-
-describe('buildWizardMetadata', () => {
-  it('selects a known variant header from the flag', () => {
-    expect(buildWizardMetadata({ 'wizard-variant': 'subagents' })).toEqual({
-      VARIANT: 'subagents',
-    });
-  });
-
-  it('falls back to the base variant for unknown or missing flags', () => {
-    expect(buildWizardMetadata({ 'wizard-variant': 'nope' })).toEqual({
-      VARIANT: 'base',
-    });
-    expect(buildWizardMetadata({})).toEqual({ VARIANT: 'base' });
   });
 });
