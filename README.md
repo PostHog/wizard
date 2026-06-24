@@ -430,11 +430,24 @@ Example prompt — explore against
 [open-saas](https://github.com/wasp-lang/open-saas):
 
 > Explore the PostHog wizard against open-saas, following the
-> `exploring-the-wizard` skill. Ask me for my phx key file path, clone
-> `https://github.com/wasp-lang/open-saas` into a throwaway `/tmp` copy, then use
-> the `wizard-ci` MCP tools to open it and drive the whole flow — deciding each
-> screen yourself and snapshotting key moments — and tell me what it did and
-> anything that broke.
+> `exploring-the-wizard` skill. Ask me for my phx key file path and project id,
+> then clone `https://github.com/wasp-lang/open-saas` into a throwaway `/tmp`
+> copy. Drive the whole flow yourself through the `wizard-ci` MCP tools, deciding
+> each screen:
+>
+> 1. `open_app` on the `/tmp` copy, then `read_state` to see the screen and the
+>    actions legal right now.
+> 2. At each key moment, `render_screen` and save the frame to
+>    `/tmp/wz-explore-snaps/NN-<screen>.txt` (numbered in order) so we get a
+>    readable record of the run.
+> 3. Act: `confirm_setup` at intro, `dismiss_outage` at health-check, `choose`
+>    for any setup question, then `run_agent` at auth.
+> 4. Poll `read_state` until `integration` is `done` (or `failed` — then report
+>    `integrationError`), snapshotting as the run screen progresses.
+> 5. Finish the tail: dismiss outro / mcp / slack, then `keep_skills`.
+>
+> Then show me the saved snapshots in order, the screen path, whether `posthog`
+> landed in the app, and anything that broke.
 
 ## Publishing your tool
 

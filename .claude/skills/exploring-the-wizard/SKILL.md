@@ -49,8 +49,11 @@ read_state (poll) → runPhase running → completed, screen → outro
 outro → perform_action dismiss_outro → … → keep_skills
 ```
 
-Snapshot with `render_screen` at each key moment so you (and the user) can see what
-the wizard showed.
+Snapshot with `render_screen` at each key moment and save each frame to a numbered
+file — `/tmp/wz-explore-snaps/NN-<screen>.txt`, incrementing `NN` in visit order —
+so the run leaves a readable, ordered record you and the user can review afterward
+(the same shape the CI route's `.txt` frames take). Capture the run screen as it
+progresses, not just on screen changes.
 
 ## Key facts
 
