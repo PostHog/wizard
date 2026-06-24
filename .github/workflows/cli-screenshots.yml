@@ -1,0 +1,70 @@
+name: CLI Screenshot Tests
+
+# Asserts each command loads the right skill/program. See scripts/cli-screenshots.mjs.
+on:
+  workflow_dispatch:
+  # Drift monitor (context-mill can break a command with no PR). Runs from main only.
+  schedule:
+    - cron: '37 13 * * *' # daily ~06:37 PT
+  # Pre-merge gate, scoped to files that affect command → screen wiring.
+  pull_request:
+    paths:
+      - 'bin.ts'
+      - 'src/commands/**'
+      - 'src/ui/tui/**'
+      - 'src/lib/programs/**'
+      - 'scripts/cli-screenshots.mjs'
+      - '.github/workflows/cli-screenshots.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  cli-screenshots:
+    name: CLI screenshot tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@eae0cfeb286e66ffb5155f1a79b90583a127a68b # v2.4.1
+        with:
+          version: 10.23.0
+          run_install: false
+
+      - name: Set up Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version-file: 'package.json'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build wizard
+        run: pnpm build
+
+      - name: Check command screens
+        run: node scripts/cli-screenshots.mjs
+
+      - name: Upload captured screenshots
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: cli-screenshots
+          path: scripts/__screenshots__/**
+          if-no-files-found: ignore
+
+      # Scheduled-only — a PR failure already shows a red ❌.
+      - name: Notify Slack on scheduled failure
+        if: failure() && github.event_name == 'schedule'
+        uses: slackapi/slack-github-action@485a9d42d3a73031f12ec201c457e2162c45d02d # v2.0.0
+        with:
+          webhook: ${{ secrets.SLACK_WEBHOOK_WIZARD_CHANNEL }}
+          webhook-type: incoming-webhook
+          payload: |
+            {
+              "text": "🖼️ CLI screenshot check failed on the scheduled run — a command may be loading the wrong screen, or context-mill drifted. <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View run>"
+            }
