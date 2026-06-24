@@ -49,7 +49,6 @@ export const posthogIntegrationConfig: ProgramConfig = {
   id: 'posthog-integration',
   steps: POSTHOG_INTEGRATION_PROGRAM,
   getContentBlocks,
-
   // Basic integration runs without structured user input; drop wizard_ask
   // so the model can't pop modal prompts mid-run. The runner forwards this
   // list to the general-purpose subagent as well, so dispatched subagents

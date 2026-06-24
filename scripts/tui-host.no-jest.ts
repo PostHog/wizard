@@ -59,7 +59,7 @@ async function main() {
       signup: false,
       ci: true,
       apiKey,
-      projectId,
+      projectId: Number(projectId),
       programId: Program.PostHogIntegration,
     });
     store.setCredentials({
@@ -68,6 +68,14 @@ async function main() {
       host: d.host,
       projectId: d.projectId,
     });
+  };
+
+  // Pass the intro and health-check gates and run the real integration agent.
+  // The auth and run screens never advance on their own; this is what moves them.
+  const runIntegration = async () => {
+    await store.getGate('intro');
+    await store.getGate('health-check');
+    await runAgent(posthogIntegrationConfig, store.session);
   };
 
   if (process.env.MODE === 'serve') return serve();
@@ -102,9 +110,7 @@ async function main() {
             runStatus = 'running';
             void (async () => {
               try {
-                await store.getGate('intro');
-                await store.getGate('health-check');
-                await runAgent(posthogIntegrationConfig, store.session);
+                await runIntegration();
                 runStatus = 'done';
               } catch (e) {
                 runStatus = 'failed';
@@ -207,10 +213,7 @@ async function main() {
     const drive = driverLoop();
 
     await store.runReadyHooks();
-    await store.getGate('intro');
-    await store.getGate('health-check');
-
-    await runAgent(posthogIntegrationConfig, store.session);
+    await runIntegration();
     const deadline = Date.now() + 120_000;
     while (!store.session.skillsComplete && Date.now() < deadline)
       await driver.waitForChange(5_000);

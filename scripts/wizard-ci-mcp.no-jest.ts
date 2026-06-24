@@ -42,9 +42,7 @@ let cap: TuiCapture | null = null;
 let sockPath = '';
 
 /** One request/response over the host's control socket (newline-delimited JSON). */
-function rpc(
-  req: object,
-): Promise<{
+function rpc(req: object): Promise<{
   ok: boolean;
   state?: unknown;
   error?: string;
@@ -123,9 +121,12 @@ async function main() {
             fs.writeFileSync(p, (apiKey ?? '').trim(), { mode: 0o600 });
             return p;
           })();
+        // Strip the host's Claude Code / Anthropic auth so the wizard's agent
+        // subprocess authenticates with the phx key instead of deferring to the
+        // host session (which yields apiKeySource=none → 401).
         const env: NodeJS.ProcessEnv = { ...process.env };
         for (const k of Object.keys(env))
-          if (/^(CLAUDE|ANTHROPIC)/.test(k)) delete env[k];
+          if (/^(CLAUDE|ANTHROPIC|AI_AGENT)/.test(k)) delete env[k];
         Object.assign(env, {
           MODE: 'serve',
           CONTROL_SOCK: sockPath,
