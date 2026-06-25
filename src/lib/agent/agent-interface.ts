@@ -249,19 +249,22 @@ type AgentRunConfig = {
 /**
  * Global identifiers attached to every LLM gateway trace for a run. They ride on
  * each `$ai_generation` the gateway emits (as `X-POSTHOG-PROPERTY-*` headers via
- * `buildAgentEnv`), so traces are filterable by program, framework, and run for
- * cost attribution and dashboards. `skill_id` is omitted when the run has none.
+ * `buildAgentEnv`), so traces are filterable by program, framework, run, and build
+ * type for cost attribution and dashboards. `skill_id` is omitted when the run has
+ * none.
  */
 export function buildRunTags(args: {
   programId: string;
   integration: string;
   runId: string;
+  build: string;
   skillId?: string;
 }): Record<string, string> {
   return {
     program_id: args.programId,
     integration: args.integration,
     run_id: args.runId,
+    build: args.build,
     ...(args.skillId ? { skill_id: args.skillId } : {}),
   };
 }

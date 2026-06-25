@@ -113,6 +113,11 @@ export class Analytics {
     return this._runId;
   }
 
+  /** Build type for this run ('prod' | 'dev' | 'ci') — the same value tagged on every analytics event. */
+  get build(): string {
+    return String(this.tags.build ?? 'dev');
+  }
+
   /**
    * Associate the run with the logged-in user, once per id. Identifies them
    * (email, name) and records those person properties so events carry them and
