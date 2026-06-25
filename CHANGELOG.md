@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.32.0](https://github.com/PostHog/wizard/compare/v2.31.0...v2.32.0) (2026-06-25)
+
+
+### Features
+
+* **commands:** add flat `mcp-analytics` command ([#731](https://github.com/PostHog/wizard/issues/731)) ([de3f487](https://github.com/PostHog/wizard/commit/de3f48729824f6dbf3cf2fc939862b3ce8c2fb77))
+
 ## [2.31.0](https://github.com/PostHog/wizard/compare/v2.30.0...v2.31.0) (2026-06-25)
 
 
