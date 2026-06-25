@@ -325,6 +325,23 @@ describe('CLI argument parsing', () => {
       expect(analytics.setTag).not.toHaveBeenCalledWith('build', 'ci');
     });
 
+    // The dispatch checks the headless flag before --ci, so headless wins when
+    // both are passed. Not a supported combination, but pin the precedence.
+    test('takes precedence over --ci when both are passed', async () => {
+      await runCLI([
+        '--ci',
+        headlessFlag,
+        '--api-key',
+        'pha_test',
+        '--install-dir',
+        '/tmp/test',
+      ]);
+
+      const { analytics } = await import('../utils/analytics');
+      expect(analytics.setTag).toHaveBeenCalledWith('build', 'headless');
+      expect(analytics.setTag).not.toHaveBeenCalledWith('build', 'ci');
+    });
+
     test('does not require --region when headless is set', async () => {
       await runCLI([
         headlessFlag,
