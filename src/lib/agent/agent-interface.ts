@@ -247,6 +247,26 @@ type AgentRunConfig = {
 };
 
 /**
+ * Global identifiers attached to every LLM gateway trace for a run. They ride on
+ * each `$ai_generation` the gateway emits (as `X-POSTHOG-PROPERTY-*` headers via
+ * `buildAgentEnv`), so traces are filterable by program, framework, and run for
+ * cost attribution and dashboards. `skill_id` is omitted when the run has none.
+ */
+export function buildRunTags(args: {
+  programId: string;
+  integration: string;
+  runId: string;
+  skillId?: string;
+}): Record<string, string> {
+  return {
+    program_id: args.programId,
+    integration: args.integration,
+    run_id: args.runId,
+    ...(args.skillId ? { skill_id: args.skillId } : {}),
+  };
+}
+
+/**
  * Whether this run uses the experimental task-queue orchestrator. Gated by the
  * boolean `wizard-orchestrator` feature flag, targeted to the user in the wizard's
  * analytics project.
