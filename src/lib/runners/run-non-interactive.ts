@@ -4,6 +4,9 @@ import { LoggingUI } from '@ui/logging-ui';
 import type { ProgramConfig } from '@lib/programs/program-step';
 import { analytics } from '@utils/analytics';
 import { resolveNoTelemetry } from './resolve-no-telemetry';
+import type { WizardStore } from '@ui/tui/store';
+import type { TaskStreamPush } from '@lib/task-stream/task-stream-push';
+import type { OutroData, RunPhase as RunPhaseT } from '@lib/wizard-session';
 
 /**
  * The two non-interactive run modes. Both drive the same pipeline today; the
@@ -79,7 +82,9 @@ export function runNonInteractive(
 
   void (async () => {
     const path = await import('path');
-    const { buildSession } = await import('@lib/wizard-session');
+    const { buildSession, RunPhase, OutroKind } = await import(
+      '@lib/wizard-session'
+    );
     const { readEnvironment } = await import('@utils/environment');
     const { readApiKeyFromEnv } = await import('@utils/env-api-key');
     const { configureLogFileFromEnvironment, logToFile } = await import(
@@ -119,6 +124,49 @@ export function runNonInteractive(
     getUI().intro('Welcome to the PostHog setup wizard');
     getUI().log.info(`Running ${config.id} in ${modeLabel(mode)} mode`);
 
+    // Headless streams run state to the PostHog backend so the web app can show
+    // live progress. Reuses the interactive TaskStreamPush + WizardStore (no Ink
+    // render): HeadlessUI keeps LoggingUI's output and feeds task updates into
+    // the store; this runner drives the phase transitions. CI does not stream.
+    let store: WizardStore | null = null;
+    let taskStream: TaskStreamPush | null = null;
+    if (mode === 'headless') {
+      const { WizardStore } = await import('@ui/tui/store');
+      const { HeadlessUI } = await import('@ui/headless-ui');
+      const { TaskStreamPush, PostHogDestination } = await import(
+        '@lib/task-stream/index'
+      );
+
+      store = new WizardStore(config.id);
+      store.session = session;
+      setUI(new HeadlessUI(store));
+      taskStream = new TaskStreamPush({
+        store,
+        programId: config.id,
+        destinations: [
+          new PostHogDestination({
+            getCredentials: () => session.credentials,
+            onError: (e) => logToFile('[headless task-stream]', e.message),
+          }),
+        ],
+        enabled: !session.noTelemetry,
+      });
+      taskStream.attach();
+      store.setRunPhase(RunPhase.Running);
+    }
+
+    // wizardAbort exits via process.exit, so flush the terminal phase before any
+    // exit. No-op for CI.
+    const settleStream = async (
+      phase: RunPhaseT,
+      outroData?: OutroData,
+    ): Promise<void> => {
+      if (!store || !taskStream) return;
+      if (outroData) store.setOutroData(outroData);
+      store.setRunPhase(phase);
+      await taskStream.shutdown(2000);
+    };
+
     try {
       if (config.ciPreRun) {
         await config.ciPreRun(session);
@@ -149,6 +197,10 @@ export function runNonInteractive(
           | { kind: string; [k: string]: unknown }
           | undefined;
         if (detectError) {
+          await settleStream(RunPhase.Error, {
+            kind: OutroKind.Error,
+            message: `Prerequisites not met: ${detectError.kind}`,
+          });
           await wizardAbort({
             message: `Prerequisites not met: ${detectError.kind}\n\nSee ${
               runDef?.docsUrl ?? POSTHOG_DOCS_URL
@@ -163,6 +215,7 @@ export function runNonInteractive(
 
       const { runAgent } = await import('@lib/agent/agent-runner');
       await runAgent(config, session);
+      await settleStream(RunPhase.Completed);
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : String(error);
@@ -177,6 +230,10 @@ export function runNonInteractive(
         session.frameworkConfig?.metadata.docsUrl ??
         runDef?.docsUrl ??
         POSTHOG_DOCS_URL;
+      await settleStream(RunPhase.Error, {
+        kind: OutroKind.Error,
+        message: errorMessage,
+      });
       await wizardAbort({
         message: `Something went wrong: ${errorMessage}\n\nYou can read the documentation at ${docsUrl} to set up manually.${debugInfo}`,
         error: error as Error,

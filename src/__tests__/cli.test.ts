@@ -7,6 +7,38 @@ const { mockBuildSessionCli, mockProvisionNewAccountCli } = vi.hoisted(() => ({
   mockProvisionNewAccountCli: vi.fn(),
 }));
 
+// Headless-only machinery, stubbed so the headless path doesn't construct a
+// real WizardStore (which would re-call the mocked buildSession) or open a real
+// network stream. The spies assert the stream is wired in headless and not CI.
+const { mockStreamAttach, mockStreamShutdown } = vi.hoisted(() => ({
+  mockStreamAttach: vi.fn(),
+  mockStreamShutdown: vi.fn(),
+}));
+vi.mock('../lib/task-stream/index', () => ({
+  // shutdown() hardcodes a resolved Promise (not a bare vi.fn) so the
+  // interactive runWizard's dangling SIGTERM handler — which calls
+  // shutdown().catch() and outlives these tests — never hits undefined.catch.
+  TaskStreamPush: class {
+    attach() {
+      mockStreamAttach();
+    }
+    shutdown() {
+      mockStreamShutdown();
+      return Promise.resolve();
+    }
+  },
+  PostHogDestination: class {},
+}));
+vi.mock('../ui/tui/store', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../ui/tui/store')>()),
+  WizardStore: class {
+    session: unknown;
+    setRunPhase = vi.fn();
+    setOutroData = vi.fn();
+    syncTodos = vi.fn();
+  },
+}));
+
 vi.mock('semver', () => ({ satisfies: () => true }));
 // importOriginal keeps real exports (e.g. RunPhase) while overriding
 // buildSession — vitest throws on access to exports a partial mock omits.
@@ -285,6 +317,18 @@ describe('CLI argument parsing', () => {
       const { analytics } = await import('../utils/analytics');
       expect(analytics.setTag).toHaveBeenCalledWith('build', 'ci');
     });
+
+    test('does not stream wizard-session state in CI', async () => {
+      await runCLI([
+        '--ci',
+        '--api-key',
+        'phx_test',
+        '--install-dir',
+        '/tmp/test',
+      ]);
+
+      expect(mockStreamAttach).not.toHaveBeenCalled();
+    });
   });
 
   // The experimental headless flag is the published-build sibling of --ci: it
@@ -340,6 +384,19 @@ describe('CLI argument parsing', () => {
       const { analytics } = await import('../utils/analytics');
       expect(analytics.setTag).toHaveBeenCalledWith('build', 'headless');
       expect(analytics.setTag).not.toHaveBeenCalledWith('build', 'ci');
+    });
+
+    test('attaches and flushes the wizard-session stream', async () => {
+      await runCLI([
+        headlessFlag,
+        '--api-key',
+        'pha_test',
+        '--install-dir',
+        '/tmp/test',
+      ]);
+
+      expect(mockStreamAttach).toHaveBeenCalled();
+      expect(mockStreamShutdown).toHaveBeenCalled();
     });
 
     test('does not require --region when headless is set', async () => {
