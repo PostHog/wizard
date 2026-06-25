@@ -13,8 +13,6 @@ import { analytics } from '@utils/analytics';
 import {
   WIZARD_REMARK_EVENT_NAME,
   POSTHOG_PROPERTY_HEADER_PREFIX,
-  WIZARD_VARIANT_FLAG_KEY,
-  WIZARD_VARIANTS,
   WIZARD_ORCHESTRATOR_FLAG_KEY,
   WIZARD_USER_AGENT,
   DEFAULT_AGENT_MODEL,
@@ -247,19 +245,6 @@ type AgentRunConfig = {
     | import('@lib/wizard-session').PendingQuestion
     | null;
 };
-
-/**
- * Select wizard metadata from WIZARD_VARIANTS using the variant feature flag.
- * If the flag is missing or the value is not in config, returns the "base" variant (VARIANT: "base").
- */
-export function buildWizardMetadata(
-  flags: Record<string, string> = {},
-): Record<string, string> {
-  const variantKey = flags[WIZARD_VARIANT_FLAG_KEY];
-  const variant =
-    (variantKey && WIZARD_VARIANTS[variantKey]) ?? WIZARD_VARIANTS['base'];
-  return { ...variant };
-}
 
 /**
  * Whether this run uses the experimental task-queue orchestrator. Gated by the

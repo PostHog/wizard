@@ -17,11 +17,13 @@
  */
 
 import type { WizardSession } from '../../wizard-session';
+import { analytics } from '@utils/analytics';
 import { isOrchestratorEnabled } from '../agent-interface';
 import { getUI } from '../../../ui';
 import { runOrchestrator } from './orchestrator/orchestrator-runner';
 import type { ProgramConfig } from '../../programs/program-step';
-import type { ProgramRun } from './shared/types';
+import { WizardVariant } from './shared/types';
+import type { ProgramRun, BootstrapResult } from './shared/types';
 import { bootstrapProgram } from './shared/bootstrap';
 import { runLinearProgram } from './linear';
 
@@ -57,9 +59,9 @@ export async function runAgent(
 /**
  * Run a program's agent pipeline.
  *
- * Runs the shared bootstrap, then forks on the `wizard-variant` flag. The
- * `orchestrator` variant routes to the experimental task-queue runner; every
- * other variant runs the linear pipeline.
+ * Runs the shared bootstrap, then forks on the `wizard-orchestrator` flag.
+ * When enabled the run routes to the experimental task-queue runner; otherwise
+ * it runs the linear pipeline.
  */
 export async function runProgram(
   session: WizardSession,
@@ -70,8 +72,19 @@ export async function runProgram(
 
   if (isOrchestratorEnabled(boot.wizardFlags)) {
     getUI().log.info('Task-queue orchestrator enabled.');
+    stampVariant(boot, WizardVariant.ORCHESTRATOR);
     return runOrchestrator(session, programConfig, boot);
   }
 
+  stampVariant(boot, WizardVariant.BASE);
   return runLinearProgram(session, config, programConfig, boot);
+}
+
+/**
+ * Record which runner arm ran. Tags every wizard event and every gateway trace
+ * with the variant, so runs segment by arm (base vs orchestrator, later pi).
+ */
+function stampVariant(boot: BootstrapResult, variant: WizardVariant): void {
+  analytics.setTag('variant', variant);
+  boot.wizardMetadata.VARIANT = variant;
 }
