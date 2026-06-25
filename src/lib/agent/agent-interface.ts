@@ -418,6 +418,19 @@ export function wizardCanUseTool(
     };
   }
 
+  // Hard stop: a task agent must never spawn a subagent. A dispatched subagent
+  // runs as a nested query that does NOT pass through this gate — no Bash
+  // allowlist, no .env block, no read fence — so a single spawn escapes every
+  // limit (it can read ~/.claude, other repos, and run arbitrary shell). Task
+  // agents do not need subagents for the integration flow; deny outright.
+  if (toolName === 'Agent' || toolName === 'Task') {
+    logToFile(`Denying subagent dispatch: ${toolName}`);
+    return {
+      behavior: 'deny',
+      message: `Spawning subagents is not allowed. Do the work yourself with the tools you have; if you cannot, say so in your handoff.`,
+    };
+  }
+
   if (
     context.wizardAskPending &&
     (toolName === 'Write' || toolName === 'Edit')
@@ -827,14 +840,6 @@ export async function runAgent(
       ...(agentConfig.allowedTools ?? []),
     ].filter((t) => !disallow.has(t));
 
-    // Subagents dispatched via the Agent tool don't inherit the parent's
-    // MCP servers by default — so general-purpose subagents can't see the
-    // PostHog MCP and fall back to curl with whatever key they can find
-    // (then 401, then start asking the user for keys). Override
-    // general-purpose to forward parent MCP servers by name; SDK resolves
-    // each string against the parent's mcpServers map.
-    const inheritedMcpServerNames = Object.keys(agentConfig.mcpServers);
-
     const response = query({
       prompt: createPromptStream(),
       options: {
@@ -844,22 +849,11 @@ export async function runAgent(
         permissionMode: 'acceptEdits',
         betas: ['context-1m-2025-08-07'],
         mcpServers: agentConfig.mcpServers,
-        agents: {
-          'general-purpose': {
-            description:
-              "General-purpose subagent. Inherits the parent run's tools plus the PostHog and wizard-tools MCP servers, so it can call mcp__posthog-wizard__* directly instead of curling the REST API.",
-            prompt:
-              'You are a general-purpose subagent for the PostHog wizard. Prefer the authenticated mcp__posthog-wizard__* MCP tools over raw HTTP — they are already authenticated for this project. Only fall back to other transports if no MCP tool covers the operation.',
-            mcpServers: inheritedMcpServerNames,
-            // SDK does not propagate the parent's disallowedTools to subagents
-            // (sdk.d.ts: AgentDefinition has its own disallowedTools, and
-            // `tools: undefined` means "inherit all"). Without this, a program
-            // that disallows wizard_ask still leaks it to dispatched subagents.
-            disallowedTools: agentConfig.disallowedTools
-              ? [...agentConfig.disallowedTools]
-              : undefined,
-          },
-        },
+        // No `agents:` definition — task agents must never dispatch subagents.
+        // A dispatched subagent runs as a nested query that bypasses
+        // wizardCanUseTool (the Bash allowlist, .env block, and read fence), so a
+        // single spawn escapes every limit. The `Agent` tool is also hard-denied
+        // in wizardCanUseTool as defense in depth.
         // Load skills from project's .claude/skills/ directory
         settingSources: ['project'],
         // Enable all discovered skills. Omitting this is NOT "skills off" —
