@@ -19,6 +19,36 @@ export const ClaudeCodeMCPConfig = DefaultMCPClientConfig;
 
 export type ClaudeCodeMCPConfig = z.infer<typeof DefaultMCPClientConfig>;
 
+// Plugin subcommand and the marketplace flow both require Claude Code >= 1.0.88.
+const MIN_PLUGIN_VERSION: readonly [number, number, number] = [1, 0, 88];
+const POSTHOG_MARKETPLACE = 'PostHog/ai-plugin';
+
+function parseSemver(s: string): [number, number, number] | null {
+  const m = s.match(/(\d+)\.(\d+)\.(\d+)/);
+  if (!m) return null;
+  return [Number(m[1]), Number(m[2]), Number(m[3])];
+}
+
+function isAtLeast(
+  v: [number, number, number],
+  min: readonly [number, number, number],
+): boolean {
+  if (v[0] !== min[0]) return v[0] > min[0];
+  if (v[1] !== min[1]) return v[1] > min[1];
+  return v[2] >= min[2];
+}
+
+// Errors that mean "this Claude Code can't install the plugin" — not a bug to report.
+function isUnsupportedPluginError(msg: string): boolean {
+  return (
+    msg.includes("unknown command 'install'") ||
+    msg.includes("unknown command 'plugin'") ||
+    msg.includes('unknown command') ||
+    msg.includes('needs an update') ||
+    msg.includes('not found in any configured marketplace')
+  );
+}
+
 export class ClaudeCodeMCPClient
   extends DefaultMCPClient
   implements PluginCapable
@@ -192,9 +222,52 @@ export class ClaudeCodeMCPClient
     }
   }
 
+  private getVersion(binary: string): [number, number, number] | null {
+    try {
+      const out = execSync(`${binary} --version`, { stdio: 'pipe' }).toString();
+      return parseSemver(out);
+    } catch {
+      return null;
+    }
+  }
+
+  private addMarketplace(binary: string): PluginInstallResult | null {
+    try {
+      execSync(`${binary} plugin marketplace add ${POSTHOG_MARKETPLACE}`, {
+        stdio: 'pipe',
+      });
+      return null;
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      // Re-running after a successful add — fine.
+      if (msg.toLowerCase().includes('already')) return null;
+      if (isUnsupportedPluginError(msg)) {
+        return { success: false, unsupported: true };
+      }
+      analytics.captureException(
+        new Error(`Claude Code plugin marketplace add failed: ${msg}`),
+      );
+      return { success: false };
+    }
+  }
+
   installPlugin(): Promise<PluginInstallResult> {
     const binary = this.findClaudeBinary();
     if (!binary) return Promise.resolve({ success: false });
+
+    const version = this.getVersion(binary);
+    if (!version || !isAtLeast(version, MIN_PLUGIN_VERSION)) {
+      debug(
+        `  Claude Code ${
+          version ? version.join('.') : 'version unknown'
+        } is below ${MIN_PLUGIN_VERSION.join('.')} — skipping plugin install`,
+      );
+      return Promise.resolve({ success: false, unsupported: true });
+    }
+
+    const marketplaceFailure = this.addMarketplace(binary);
+    if (marketplaceFailure) return Promise.resolve(marketplaceFailure);
+
     try {
       execSync(`${binary} plugin install posthog`, { stdio: 'pipe' });
       return Promise.resolve({ success: true });
@@ -202,6 +275,9 @@ export class ClaudeCodeMCPClient
       const msg = error instanceof Error ? error.message : String(error);
       if (msg.includes('already installed') || msg.includes('already exists')) {
         return Promise.resolve({ success: true, alreadyInstalled: true });
+      }
+      if (isUnsupportedPluginError(msg)) {
+        return Promise.resolve({ success: false, unsupported: true });
       }
       analytics.captureException(
         new Error(`Claude Code plugin install failed: ${msg}`),
