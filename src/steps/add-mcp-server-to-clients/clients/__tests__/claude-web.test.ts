@@ -2,11 +2,11 @@ import { ClaudeWebMCPClient } from '@steps/add-mcp-server-to-clients/clients/cla
 import { isBrowserFinishable } from '@steps/add-mcp-server-to-clients/browser-client';
 import { openTrackedLink } from '@utils/links';
 
-jest.mock('@utils/links', () => ({
-  openTrackedLink: jest.fn(),
+vi.mock('@utils/links', () => ({
+  openTrackedLink: vi.fn(),
 }));
 
-const openTrackedLinkMock = openTrackedLink as jest.Mock;
+const openTrackedLinkMock = openTrackedLink as Mock;
 
 const CONNECTOR_URL = 'https://claude.ai/directory/connectors/posthog';
 
@@ -15,7 +15,7 @@ describe('ClaudeWebMCPClient', () => {
 
   beforeEach(() => {
     client = new ClaudeWebMCPClient();
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   it('has the expected name and connector metadata', () => {

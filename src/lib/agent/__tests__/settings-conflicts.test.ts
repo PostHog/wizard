@@ -2,8 +2,8 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 
-jest.mock('@utils/analytics', () => ({
-  analytics: { captureException: jest.fn(), wizardCapture: jest.fn() },
+vi.mock('@utils/analytics', () => ({
+  analytics: { captureException: vi.fn(), wizardCapture: vi.fn() },
 }));
 
 import { checkAllSettingsConflicts } from '@lib/agent/claude-settings';

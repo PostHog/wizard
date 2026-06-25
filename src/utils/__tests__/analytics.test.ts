@@ -4,34 +4,33 @@ import { v4 as uuidv4 } from 'uuid';
 import { ANALYTICS_TEAM_TAG } from '@lib/constants';
 import type { ApiUser } from '@lib/api';
 
-jest.mock('posthog-node');
-jest.mock('uuid');
+vi.mock('posthog-node');
+vi.mock('uuid');
 
 // IS_PRODUCTION_BUILD is read live (property access) in the Analytics
 // constructor, so a getter backed by this mutable flag lets a test flip the
 // build type without re-importing the module. Defaults falsy → 'dev',
-// matching every other test. `var` (not `let`) so the hoisted jest.mock
-// factory can read it at import time without hitting the temporal dead zone;
-// the `mock` prefix satisfies jest's hoisting rule.
-// eslint-disable-next-line no-var
-var mockIsProductionBuild = false;
-jest.mock('@env', () => ({
-  ...jest.requireActual('@env'),
+// matching every other test. vi.hoisted() runs before the hoisted vi.mock
+// factory, so the getter can read the flag at import time without hitting the
+// temporal dead zone.
+const envState = vi.hoisted(() => ({ isProductionBuild: false }));
+vi.mock('@env', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@env')>()),
   get IS_PRODUCTION_BUILD() {
-    return mockIsProductionBuild;
+    return envState.isProductionBuild;
   },
 }));
 
-const mockUuidv4 = uuidv4 as jest.MockedFunction<typeof uuidv4>;
-const MockedPostHog = PostHog as jest.MockedClass<typeof PostHog>;
+const mockUuidv4 = uuidv4 as unknown as MockedFunction<typeof uuidv4>;
+const MockedPostHog = PostHog as MockedClass<typeof PostHog>;
 
 describe('Analytics', () => {
   let analytics: Analytics;
-  let mockPostHogInstance: jest.Mocked<PostHog>;
+  let mockPostHogInstance: Mocked<PostHog>;
 
   beforeEach(() => {
-    jest.clearAllMocks();
-    mockIsProductionBuild = false;
+    vi.clearAllMocks();
+    envState.isProductionBuild = false;
     // Each run mints several distinct uuids; mock them to different values
     // so the tests reflect reality (run_id !== $session_id) rather than
     // collapsing them. Call order: anonymousId, runId (both in the
@@ -45,11 +44,11 @@ describe('Analytics', () => {
     }) as any);
 
     mockPostHogInstance = {
-      capture: jest.fn(),
-      captureException: jest.fn(),
-      alias: jest.fn(),
-      identify: jest.fn(),
-      shutdown: jest.fn().mockResolvedValue(undefined),
+      capture: vi.fn(),
+      captureException: vi.fn(),
+      alias: vi.fn(),
+      identify: vi.fn(),
+      shutdown: vi.fn().mockResolvedValue(undefined),
     } as any;
 
     MockedPostHog.mockImplementation(() => mockPostHogInstance);
@@ -202,22 +201,18 @@ describe('Analytics', () => {
       analytics.captureException(new Error('e'));
 
       expect(
-        (mockPostHogInstance.captureException as jest.Mock).mock.calls.at(
-          -1,
-        )?.[2],
+        (mockPostHogInstance.captureException as Mock).mock.calls.at(-1)?.[2],
       ).toMatchObject({ build: 'dev' });
     });
 
     it("tags production builds as 'prod'", () => {
-      mockIsProductionBuild = true;
+      envState.isProductionBuild = true;
       const prodAnalytics = new Analytics();
 
       prodAnalytics.captureException(new Error('e'));
 
       expect(
-        (mockPostHogInstance.captureException as jest.Mock).mock.calls.at(
-          -1,
-        )?.[2],
+        (mockPostHogInstance.captureException as Mock).mock.calls.at(-1)?.[2],
       ).toMatchObject({ build: 'prod' });
     });
   });
@@ -245,9 +240,9 @@ describe('Analytics', () => {
       });
       // Alias only ever fires after identification.
       expect(
-        (mockPostHogInstance.identify as jest.Mock).mock.invocationCallOrder[0],
+        (mockPostHogInstance.identify as Mock).mock.invocationCallOrder[0],
       ).toBeLessThan(
-        (mockPostHogInstance.alias as jest.Mock).mock.invocationCallOrder[0],
+        (mockPostHogInstance.alias as Mock).mock.invocationCallOrder[0],
       );
     });
 
@@ -273,8 +268,8 @@ describe('Analytics', () => {
 
       // Pre-login: run_id is present, $session_id is not.
       analytics.captureException(error);
-      const beforeLogin = (mockPostHogInstance.captureException as jest.Mock)
-        .mock.calls[0][2];
+      const beforeLogin = (mockPostHogInstance.captureException as Mock).mock
+        .calls[0][2];
       expect(beforeLogin).toMatchObject({ run_id: 'run-uuid' });
       expect(beforeLogin).not.toHaveProperty('$session_id');
 
@@ -282,7 +277,7 @@ describe('Analytics', () => {
       analytics.identifyUser({ distinct_id: 'user-123' } as unknown as ApiUser);
       analytics.captureException(error);
       expect(
-        (mockPostHogInstance.captureException as jest.Mock).mock.calls[1][2],
+        (mockPostHogInstance.captureException as Mock).mock.calls[1][2],
       ).toMatchObject({ run_id: 'run-uuid', $session_id: 'session-uuid' });
     });
 
