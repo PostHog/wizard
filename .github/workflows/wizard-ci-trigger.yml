@@ -255,24 +255,25 @@ jobs:
               content: 'rocket'
             });
 
-            // Run the real-TUI snapshots in wizard-workbench. It runs on this
-            // repository_dispatch and checks out its own trusted ref — no untrusted
-            // PR code is ever checked out or executed here.
+            // Same wizard-ci-trigger dispatch as /wizard-ci, plus snapshots:true —
+            // wizard-ci.yml's one SNAPSHOTS branch runs the real-TUI review instead
+            // of the evaluator. It checks out its own trusted ref; no untrusted PR
+            // code is checked out here.
             await github.rest.repos.createDispatchEvent({
               owner: 'PostHog',
               repo: 'wizard-workbench',
-              event_type: 'wizard-snapshots-trigger',
+              event_type: 'wizard-ci-trigger',
               client_payload: {
                 app: app,
-                wizard_ref: wizardRef
+                source: 'wizard-pr',
+                source_repo: 'wizard',
+                source_pr_number: context.payload.issue.number,
+                source_pr_url: pr.data.html_url,
+                wizard_ref: wizardRef,
+                notify_slack: 'false',
+                notify_pr: 'true',
+                snapshots: true
               }
             });
 
-            await github.rest.issues.createComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.payload.issue.number,
-              body: `📸 Running real-TUI snapshots for \`${app}\` (wizard ref \`${wizardRef}\`). A review PR will open in [wizard-workbench](https://github.com/PostHog/wizard-workbench/pulls?q=is%3Apr+%22%5BCI%5D+%28snapshots%29%22).`
-            });
-
-            console.log(`Triggered wizard-snapshots for app: ${app} (ref ${wizardRef})`);
+            console.log(`Triggered snapshots for app: ${app} (ref ${wizardRef})`);
