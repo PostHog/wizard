@@ -54,7 +54,7 @@ export class Analytics {
     {};
   private distinctId?: string;
   private anonymousId: string;
-  private runId: string;
+  private _runId: string;
   private sessionId: string | null = null;
   private appName = 'wizard';
   private activeFlags: Record<string, string> | null = null;
@@ -102,10 +102,15 @@ export class Analytics {
     // from `anonymousId`, the pre-login *person* id that gets aliased onto
     // the real user at login. `$session_id` is intentionally not set here —
     // it stays null until OAuth completes (see identifyUser).
-    this.runId = uuidv4();
-    this.tags.run_id = this.runId;
+    this._runId = uuidv4();
+    this.tags.run_id = this._runId;
 
     this.distinctId = undefined;
+  }
+
+  /** Per-process run id, tagged on every event and gateway trace. */
+  get runId(): string {
+    return this._runId;
   }
 
   /**
@@ -264,7 +269,7 @@ export class Analytics {
       properties: {
         // Hoisted out of `tags` so the run's terminal event is filterable by
         // run, and joins the session when one was opened (post-OAuth runs).
-        run_id: this.runId,
+        run_id: this._runId,
         ...(this.sessionId ? { $session_id: this.sessionId } : {}),
         status,
         tags: this.tags,

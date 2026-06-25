@@ -11,7 +11,7 @@ import type { WizardSession } from '@lib/wizard-session';
 import { getOrAskForProjectData } from '@utils/setup-utils';
 import { analytics, groupsFromUser } from '@utils/analytics';
 import { getUI } from '@ui';
-import { buildWizardMetadata } from '@lib/agent/agent-interface';
+import { buildRunTags } from '@lib/agent/agent-interface';
 import {
   checkAllSettingsConflicts,
   backupAndFixClaudeSettings,
@@ -226,13 +226,17 @@ export async function bootstrapProgram(
     }
   }
 
-  // Feature flags, variant metadata, and MCP url. Both arms need these, and the
-  // fork decision reads the flags.
+  // Feature flags and MCP url. Both arms need these, and the fork decision reads
+  // the flags.
   const wizardFlags = await analytics.getAllFlagsForWizard();
-  const wizardMetadata = buildWizardMetadata(wizardFlags);
-  // Tag every wizard event with the variant so runs segment in PostHog; the
-  // orchestrator arm overwrites this with its own variant when it forks.
-  analytics.setTag('variant', wizardMetadata.VARIANT);
+  // Gateway trace tags for this run. The runner stamps its variant onto this
+  // after the fork (see runProgram), so the value reflects which arm ran.
+  const wizardMetadata = buildRunTags({
+    programId: programConfig.id,
+    integration: config.integrationLabel,
+    runId: analytics.runId,
+    skillId: config.skillId,
+  });
 
   // One MCP url for every region: the server resolves the user's region from
   // the bearer token, so the EU subdomain (a Claude Code OAuth workaround) is

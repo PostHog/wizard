@@ -1,0 +1,93 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`e2e flow snapshot — posthog-integration > Next.js (with a setup question) walks a stable path 1`] = `
+{
+  "profile": {
+    "ask": "first",
+    "healthCheck": "dismiss",
+    "mcp": "skip",
+    "setup": "first",
+    "skills": "delete",
+    "slack": "skip",
+  },
+  "program": "posthog-integration",
+  "trace": [
+    {
+      "action": "confirm_setup",
+      "screen": "intro",
+    },
+    {
+      "action": "dismiss_outage",
+      "screen": "health-check",
+    },
+    {
+      "action": "choose",
+      "screen": "setup",
+    },
+    {
+      "action": "(external)",
+      "screen": "auth",
+    },
+    {
+      "action": "(external)",
+      "screen": "run",
+    },
+    {
+      "action": "dismiss_outro",
+      "screen": "outro",
+    },
+    {
+      "action": "set_mcp_outcome",
+      "screen": "mcp",
+    },
+    {
+      "action": "dismiss_slack",
+      "screen": "slack-connect",
+    },
+    {
+      "action": "keep_skills",
+      "screen": "keep-skills",
+    },
+  ],
+}
+`;
+
+exports[`e2e flow snapshot — posthog-integration > Node (no setup question) walks a stable path 1`] = `
+{
+  "program": "posthog-integration",
+  "trace": [
+    {
+      "action": "confirm_setup",
+      "screen": "intro",
+    },
+    {
+      "action": "dismiss_outage",
+      "screen": "health-check",
+    },
+    {
+      "action": "(external)",
+      "screen": "auth",
+    },
+    {
+      "action": "(external)",
+      "screen": "run",
+    },
+    {
+      "action": "dismiss_outro",
+      "screen": "outro",
+    },
+    {
+      "action": "set_mcp_outcome",
+      "screen": "mcp",
+    },
+    {
+      "action": "dismiss_slack",
+      "screen": "slack-connect",
+    },
+    {
+      "action": "keep_skills",
+      "screen": "keep-skills",
+    },
+  ],
+}
+`;

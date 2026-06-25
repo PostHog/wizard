@@ -188,8 +188,6 @@ export const WIZARD_OAUTH_SCOPES = [
 
 export const WIZARD_INTERACTION_EVENT_NAME = 'wizard interaction';
 export const WIZARD_REMARK_EVENT_NAME = 'wizard remark';
-/** Feature flag key whose value selects a variant from WIZARD_VARIANTS. */
-export const WIZARD_VARIANT_FLAG_KEY = 'wizard-variant';
 /** Boolean feature flag that routes a run to the experimental orchestrator runner. */
 export const WIZARD_ORCHESTRATOR_FLAG_KEY = 'wizard-orchestrator';
 /** Feature flag key that gates the intro-screen "Tools" menu. */
@@ -200,11 +198,6 @@ export const WIZARD_TOOLS_MENU_FLAG_KEY = 'wizard-tools-menu';
  * flag fetch must never silently disable a security control.
  */
 export const WIZARD_WARLOCK_DISABLED_FLAG_KEY = 'wizard-warlock-disabled';
-/** Variant key -> metadata for wizard run (VARIANT flag selects which entry to use). */
-export const WIZARD_VARIANTS: Record<string, Record<string, string>> = {
-  base: { VARIANT: 'base' },
-  subagents: { VARIANT: 'subagents' },
-};
 /** User-Agent for wizard HTTP requests and MCP server identification. */
 export const WIZARD_USER_AGENT = `posthog/wizard; version: ${VERSION}`;
 

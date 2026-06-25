@@ -19,6 +19,7 @@
     "spec/**/*",
     "src/**/*",
     "test/**/*",
+    "e2e-harness/**/*",
     "types/**/*"
   ],
   "exclude": [

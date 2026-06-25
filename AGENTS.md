@@ -31,7 +31,7 @@ boundaries, screen resolution
 
 ## Skills available
 
-Four skills live under `.claude/skills/`. Read `wizard-development` first for any structural change; then load the relevant procedural skill:
+Five skills live under `.claude/skills/`. Read `wizard-development` first for any structural change; then load the relevant procedural skill:
 
 | Skill | When to use |
 |---|---|
@@ -39,6 +39,7 @@ Four skills live under `.claude/skills/`. Read `wizard-development` first for an
 | `adding-framework-support` | Adding a new framework integration (e.g. Ruby on Rails, Go, Angular). |
 | `adding-skill-program` | Adding a new skill-based program (e.g. a new product feature setup). |
 | `ink-tui` | Building or modifying TUI screens, layouts, and primitives. |
+| `exploring-the-wizard` | Running/driving/exploring the wizard headlessly (read_state/perform_action, TUI snapshots). |
 
 ## CLI command surface
 

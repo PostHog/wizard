@@ -398,7 +398,7 @@ wizard --integration=nextjs
 wizard --integration=nextjs --local-mcp
 ```
 
-## Testing
+### Testing
 
 To run unit tests, run:
 
@@ -414,6 +414,40 @@ bin/test-e2e
 
 E2E tests are a bit more complicated to create and adjust due to to their mocked
 LLM calls. See the `e2e-tests/README.md` for more information.
+
+#### Explore with an agent
+
+You can hand the wizard to an AI agent and have it drive the real flow itself —
+deciding each screen and snapshotting the TUI to see what happened. The agent
+drives through the `wizard-ci` MCP tools (`open_app` / `read_state` /
+`perform_action` / `render_screen` / `run_agent`), which are registered in this
+repo's `.mcp.json` and bound in every session here — approve `wizard-ci` the first
+time you're prompted. The how-to is the `exploring-the-wizard` skill
+(`.claude/skills/exploring-the-wizard/SKILL.md`), which an agent discovers
+automatically.
+
+Example prompt — explore against
+[open-saas](https://github.com/wasp-lang/open-saas):
+
+> Explore the PostHog wizard against open-saas, following the
+> `exploring-the-wizard` skill. Ask me for my phx key file path and project id,
+> then clone `https://github.com/wasp-lang/open-saas` into a throwaway `/tmp`
+> copy. Drive the whole flow yourself through the `wizard-ci` MCP tools, deciding
+> each screen:
+>
+> 1. `open_app` on the `/tmp` copy, then `read_state` to see the screen and the
+>    actions legal right now.
+> 2. At each key moment, `render_screen` and save the frame to
+>    `/tmp/wz-explore-snaps/NN-<screen>.txt` (numbered in order) so we get a
+>    readable record of the run.
+> 3. Act: `confirm_setup` at intro, `dismiss_outage` at health-check, `choose`
+>    for any setup question, then `run_agent` at auth.
+> 4. Poll `read_state` until `integration` is `done` (or `failed` — then report
+>    `integrationError`), snapshotting as the run screen progresses.
+> 5. Finish the tail: dismiss outro / mcp / slack, then `keep_skills`.
+>
+> Then show me the saved snapshots in order, the screen path, whether `posthog`
+> landed in the app, and anything that broke.
 
 ## Publishing your tool
 
