@@ -2,14 +2,14 @@ import { getExitLine } from '@ui/tui/exit-line';
 import { WizardStore, Program } from '@ui/tui/store';
 import { OutroKind } from '@lib/wizard-session';
 
-jest.mock('../../../utils/analytics.js', () => ({
+vi.mock('../../../utils/analytics.js', () => ({
   analytics: {
-    capture: jest.fn(),
-    wizardCapture: jest.fn(),
-    setTag: jest.fn(),
-    shutdown: jest.fn().mockResolvedValue(undefined),
+    capture: vi.fn(),
+    wizardCapture: vi.fn(),
+    setTag: vi.fn(),
+    shutdown: vi.fn().mockResolvedValue(undefined),
   },
-  sessionProperties: jest.fn(() => ({})),
+  sessionProperties: vi.fn(() => ({})),
 }));
 
 // Strip ANSI so assertions read against plain text.

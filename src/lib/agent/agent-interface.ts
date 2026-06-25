@@ -10,11 +10,13 @@ import { getUI, type SpinnerHandle } from '@ui';
 import { debug, logToFile, initLogFile, getLogFilePath } from '@utils/debug';
 import type { WizardRunOptions } from '@utils/types';
 import { analytics } from '@utils/analytics';
+import { runtimeEnv } from '@env';
 import {
   WIZARD_REMARK_EVENT_NAME,
   POSTHOG_PROPERTY_HEADER_PREFIX,
   WIZARD_ORCHESTRATOR_FLAG_KEY,
   WIZARD_USER_AGENT,
+  WIZARD_WARLOCK_DISABLED_FLAG_KEY,
   DEFAULT_AGENT_MODEL,
 } from '@lib/constants';
 import {
@@ -29,7 +31,9 @@ import { createWizardToolsServer, WIZARD_TOOL_NAMES } from '@lib/wizard-tools';
 import {
   createPreToolUseYaraHooks,
   createPostToolUseYaraHooks,
+  prewarmYaraScanner,
 } from '@lib/yara-hooks';
+import { createTriageLLMProvider } from './triage-provider';
 import { getWizardCommandments } from './commandments';
 import { classifyToolToStage } from './agent-phase';
 import type { PackageManagerDetector } from '@lib/detection/package-manager';
@@ -267,6 +271,21 @@ export function buildRunTags(args: {
     build: args.build,
     ...(args.skillId ? { skill_id: args.skillId } : {}),
   };
+}
+
+/**
+ * Whether the Warlock/YARA kill switch is engaged for this run. Off by default:
+ * scanning is disabled only when the feature flag resolves to the explicit
+ * string 'true', or the local POSTHOG_WIZARD_WARLOCK_DISABLED env override is
+ * set. A missing flag, an empty flag map (the safe default returned when the
+ * flag fetch fails), or any other value all leave scanning ON — a network blip
+ * must never silently disable a security control.
+ */
+export function isWarlockDisabled(flags: Record<string, string> = {}): boolean {
+  return (
+    flags[WIZARD_WARLOCK_DISABLED_FLAG_KEY] === 'true' ||
+    runtimeEnv('POSTHOG_WIZARD_WARLOCK_DISABLED') === 'true'
+  );
 }
 
 /**
@@ -647,6 +666,14 @@ export async function initializeAgent(
       });
     }
 
+    // Pre-warm the warlock scanner (WASM init + rule compile) off the hook path
+    // so the first tool-call scan doesn't pay cold-start under a hook timeout.
+    // Fire-and-forget: the warlock module promise is cached, so the first real
+    // scan awaits the same in-flight promise. Awaiting here would just move
+    // the cold-start cost to user-visible startup.
+    // Best-effort — a failure is non-fatal (hooks still fail closed per scan).
+    void prewarmYaraScanner();
+
     return agentRunConfig;
   } catch (error) {
     getUI().log.error(
@@ -656,22 +683,6 @@ export async function initializeAgent(
     debug('Agent initialization error:', error);
     throw error;
   }
-}
-
-/**
- * Check agent output for YARA scanner violations.
- * Used in both the success and catch paths of runAgent.
- */
-function checkYaraViolation(
-  signals: AgentOutputSignals,
-  spinner: SpinnerHandle,
-): { error: AgentErrorType } | null {
-  if (signals.hasYaraViolation()) {
-    logToFile('Agent error: YARA_VIOLATION');
-    spinner.stop('Security violation detected');
-    return { error: AgentErrorType.YARA_VIOLATION };
-  }
-  return null;
 }
 
 /**
@@ -819,6 +830,10 @@ export async function runAgent(
   // runner can surface it via outroData after we unwind.
   const abortController = new AbortController();
   let abortReason: string | null = null;
+  // Set when a YARA hook detects a terminal violation. Returning `stopReason`
+  // from a PostToolUse hook does NOT stop the SDK, so we abort the query and
+  // surface a YARA_VIOLATION below — mirroring the [ABORT] mechanism.
+  let yaraViolationReason: string | null = null;
 
   try {
     // Per-program allow/disallow lists tweak BASE_ALLOWED_TOOLS. Skills are
@@ -837,6 +852,32 @@ export async function runAgent(
     // general-purpose to forward parent MCP servers by name; SDK resolves
     // each string against the parent's mcpServers map.
     const inheritedMcpServerNames = Object.keys(agentConfig.mcpServers);
+
+    // LLM provider for warlock triage (reuses the gateway auth set on
+    // process.env by initializeAgent). Undefined if auth is missing — hooks
+    // then skip triage and fail closed.
+    const triageProvider = createTriageLLMProvider();
+
+    // Actually stop the run when a YARA hook hits a terminal violation. The SDK
+    // ignores `stopReason` from PostToolUse hooks, so we abort the query (like
+    // [ABORT]) and return YARA_VIOLATION from the loop-end / catch below.
+    const onYaraTerminate = (reason: string) => {
+      if (yaraViolationReason) return; // first violation wins
+      yaraViolationReason = reason;
+      logToFile(`[YARA] terminating run: ${reason}`);
+      abortController.abort();
+      signalDone!();
+    };
+
+    // Kill switch for Warlock/YARA scanning (off by default — see
+    // isWarlockDisabled for the fail-safe semantics).
+    const warlockDisabled = isWarlockDisabled(agentConfig.wizardFlags);
+    if (warlockDisabled) {
+      logToFile(
+        '[warlock] kill switch active — YARA scanning disabled for run',
+      );
+      analytics.wizardCapture('warlock disabled', { reason: 'kill-switch' });
+    }
 
     const response = query({
       prompt: createPromptStream(),
@@ -979,8 +1020,12 @@ export async function runAgent(
         },
         // Stop hook: drain additional feature queue, then collect remark, then allow stop
         hooks: {
-          PreToolUse: createPreToolUseYaraHooks(),
-          PostToolUse: createPostToolUseYaraHooks(),
+          PreToolUse: warlockDisabled
+            ? []
+            : createPreToolUseYaraHooks(triageProvider),
+          PostToolUse: warlockDisabled
+            ? []
+            : createPostToolUseYaraHooks(triageProvider, onYaraTerminate),
           Stop: [
             {
               hooks: [
@@ -1115,16 +1160,19 @@ export async function runAgent(
       }
     }
 
+    // A YARA hook detected a terminal violation and aborted the run.
+    if (yaraViolationReason) {
+      logToFile('Agent error: YARA_VIOLATION');
+      spinner.stop('Security violation detected');
+      return { error: AgentErrorType.YARA_VIOLATION };
+    }
+
     // If the middleware caught an [ABORT] and aborted the SDK query, surface
     // it as a structured error before checking other signals.
     if (abortReason) {
       spinner.stop('Wizard aborted');
       return { error: AgentErrorType.ABORT, message: abortReason };
     }
-
-    // Check for YARA scanner violations
-    const yaraResult = checkYaraViolation(signals, spinner);
-    if (yaraResult) return yaraResult;
 
     // Check for error markers in the agent's output
     if (signals.has('MCP_MISSING')) {
@@ -1170,6 +1218,15 @@ export async function runAgent(
     // Signal done to unblock the async generator
     signalDone!();
 
+    // A YARA hook aborted the run (the SDK throws AbortError once the hook
+    // calls abortController.abort()). Surface it before anything else so it is
+    // never mistaken for a success-cleanup race or a generic abort.
+    if (yaraViolationReason) {
+      logToFile('Agent error: YARA_VIOLATION');
+      spinner.stop('Security violation detected');
+      return { error: AgentErrorType.YARA_VIOLATION };
+    }
+
     // If the middleware caught an [ABORT] and triggered abortController.abort(),
     // the SDK will throw an AbortError — surface it as a clean abort result.
     if (abortReason) {
@@ -1185,13 +1242,8 @@ export async function runAgent(
       return completeWithSuccess(error as Error);
     }
 
-    // Check if we collected an error before the exception was thrown
-
-    // Check for YARA scanner violations
-    const yaraResult = checkYaraViolation(signals, spinner);
-    if (yaraResult) return yaraResult;
-
-    // Surface just the API error line(s), not the entire output
+    // Check if we collected an error signal before the exception was thrown.
+    // Surface just the API error line(s), not the entire output.
     const apiErrorMessage = signals.apiErrorMessage() ?? 'Unknown API error';
 
     if (signals.hasApiErrorStatus(429)) {

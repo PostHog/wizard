@@ -49,6 +49,8 @@ type RuntimeEnvKey =
   | 'POSTHOG_WIZARD_BENCHMARK_FILE'
   | 'POSTHOG_WIZARD_LOG_DIR'
   | 'POSTHOG_WIZARD_DEBUG'
+  // Local/CI escape hatch to disable Warlock scanning without the PostHog flag.
+  | 'POSTHOG_WIZARD_WARLOCK_DISABLED'
   | 'DEBUG'
   // Agent / MCP
   | 'MCP_URL'

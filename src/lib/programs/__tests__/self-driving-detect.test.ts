@@ -8,6 +8,7 @@ import {
 } from '@lib/programs/self-driving/index';
 import { WIZARD_TOOL_NAMES } from '@lib/wizard-tools';
 import { buildSession } from '@lib/wizard-session';
+import type { Mock } from 'vitest';
 
 function makeTmpDir(): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'self-driving-detect-'));
@@ -20,12 +21,12 @@ function cleanup(dir: string): void {
 describe('detectSelfDrivingPrerequisites', () => {
   let tmpDir: string;
   let ctx: Record<string, unknown>;
-  let setCtx: jest.Mock;
+  let setCtx: Mock;
 
   beforeEach(() => {
     tmpDir = makeTmpDir();
     ctx = {};
-    setCtx = jest.fn((key: string, value: unknown) => {
+    setCtx = vi.fn((key: string, value: unknown) => {
       ctx[key] = value;
     });
   });

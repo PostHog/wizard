@@ -1,11 +1,8 @@
-const jestPackageJson = require('jest/package.json');
-
 module.exports = {
   root: true,
   env: {
     es6: true,
     node: true,
-    jest: true,
   },
   parser: '@typescript-eslint/parser',
   plugins: ['@typescript-eslint'],
@@ -22,7 +19,9 @@ module.exports = {
     'assets/**',
     'scripts/**',
     'coverage/**',
-    'e2e-tests/test-applications/**',
+    // Standalone jest-based package, linted/typechecked in its own context and
+    // outside the root tsconfig the parser uses (parserOptions.project).
+    'e2e-tests/**',
   ],
   extends: [
     'eslint:recommended',
@@ -33,16 +32,31 @@ module.exports = {
   overrides: [
     {
       files: [
-        '**/e2e-tests/utils/**/*.ts',
         '*.test.js',
         '*.test.ts',
         '**/__tests__/**/*.ts',
         '**/__tests__/**/*.js',
+        '**/__mocks__/**/*.ts',
       ],
-      plugins: ['jest'],
-      extends: ['plugin:jest/recommended', 'plugin:jest/style'],
-      env: {
-        'jest/globals': true,
+      globals: {
+        // vitest test APIs (test.globals: true) ...
+        describe: 'readonly',
+        it: 'readonly',
+        test: 'readonly',
+        expect: 'readonly',
+        suite: 'readonly',
+        beforeEach: 'readonly',
+        afterEach: 'readonly',
+        beforeAll: 'readonly',
+        afterAll: 'readonly',
+        vi: 'readonly',
+        vitest: 'readonly',
+        // ... and the ambient mock helper types from types/vitest-global-types.d.ts
+        Mock: 'readonly',
+        Mocked: 'readonly',
+        MockInstance: 'readonly',
+        MockedFunction: 'readonly',
+        MockedClass: 'readonly',
       },
       rules: {
         '@typescript-eslint/unbound-method': 'off',
@@ -55,11 +69,6 @@ module.exports = {
       },
     },
   ],
-  settings: {
-    jest: {
-      version: jestPackageJson.version,
-    },
-  },
   globals: {
     NodeJS: true,
   },

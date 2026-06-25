@@ -1,6 +1,6 @@
-// Jest Snapshot v1, https://goo.gl/fbAQLP
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
-exports[`e2e flow snapshot — posthog-integration Next.js (with a setup question) walks a stable path 1`] = `
+exports[`e2e flow snapshot — posthog-integration > Next.js (with a setup question) walks a stable path 1`] = `
 {
   "profile": {
     "ask": "first",
@@ -52,7 +52,7 @@ exports[`e2e flow snapshot — posthog-integration Next.js (with a setup questio
 }
 `;
 
-exports[`e2e flow snapshot — posthog-integration Node (no setup question) walks a stable path 1`] = `
+exports[`e2e flow snapshot — posthog-integration > Node (no setup question) walks a stable path 1`] = `
 {
   "program": "posthog-integration",
   "trace": [

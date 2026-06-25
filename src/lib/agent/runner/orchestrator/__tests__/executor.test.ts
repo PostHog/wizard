@@ -11,8 +11,8 @@ import {
   type RunTask,
 } from '@lib/agent/runner/orchestrator/executor';
 
-jest.mock('@utils/analytics', () => ({
-  analytics: { captureException: jest.fn(), wizardCapture: jest.fn() },
+vi.mock('@utils/analytics', () => ({
+  analytics: { captureException: vi.fn(), wizardCapture: vi.fn() },
 }));
 import { analytics } from '@utils/analytics';
 

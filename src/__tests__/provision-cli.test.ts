@@ -1,60 +1,64 @@
-// Mock functions must be defined before imports (jest hoists jest.mock calls;
-// variables starting with "mock" are allowed in the factory scope).
-// Name-scoped to this file because .test.ts files share TS project scope when
-// they have no top-level imports/exports.
-const mockProvisionNewAccountSubcmd = jest.fn();
+// Mock functions are created via vi.hoisted so they exist before the hoisted
+// vi.mock factories that reference them run.
+const { mockProvisionNewAccountSubcmd } = vi.hoisted(() => ({
+  mockProvisionNewAccountSubcmd: vi.fn(),
+}));
 
-jest.mock('semver', () => ({ satisfies: () => true }));
-jest.mock('../utils/provisioning', () => ({
+vi.mock('semver', () => ({ satisfies: () => true }));
+vi.mock('../utils/provisioning', () => ({
   provisionNewAccount: mockProvisionNewAccountSubcmd,
 }));
 // Same supporting mocks as src/__tests__/cli.test.ts — bin.ts imports these
 // at module load regardless of which subcommand yargs dispatches.
-jest.mock('../lib/wizard-session', () => ({
-  buildSession: jest.fn((args: Record<string, unknown>) => args),
+vi.mock('../lib/wizard-session', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../lib/wizard-session')>()),
+  buildSession: vi.fn((args: Record<string, unknown>) => args),
 }));
-jest.mock('../ui/tui/start-tui', () => ({
+vi.mock('../ui/tui/start-tui', () => ({
   startTUI: () => ({
-    unmount: jest.fn(),
+    unmount: vi.fn(),
     store: {
       session: {},
-      runReadyHooks: jest.fn().mockResolvedValue(undefined),
+      runReadyHooks: vi.fn().mockResolvedValue(undefined),
       // eslint-disable-next-line @typescript-eslint/no-empty-function
-      getGate: jest.fn().mockReturnValue(new Promise(() => {})),
-      subscribe: jest.fn(),
-      onEnterScreen: jest.fn(),
+      getGate: vi.fn().mockReturnValue(new Promise(() => {})),
+      subscribe: vi.fn(),
+      onEnterScreen: vi.fn(),
     },
   }),
 }));
-jest.mock('../lib/programs/posthog-integration/index', () => ({
+vi.mock('../lib/programs/posthog-integration/index', () => ({
   posthogIntegrationConfig: {
     id: 'posthog-integration',
     steps: [],
     run: null,
   },
 }));
-jest.mock('../utils/environment', () => ({
+vi.mock('../utils/environment', () => ({
   isNonInteractiveEnvironment: () => false,
   readEnvironment: () => ({}),
 }));
-jest.mock('../utils/env-api-key', () => ({
+vi.mock('../utils/env-api-key', () => ({
   readApiKeyFromEnv: () => undefined,
 }));
-jest.mock('../utils/debug', () => ({
-  configureLogFileFromEnvironment: jest.fn(),
-  logToFile: jest.fn(),
+vi.mock('../utils/debug', () => ({
+  configureLogFileFromEnvironment: vi.fn(),
+  logToFile: vi.fn(),
 }));
-jest.mock('../lib/registry', () => ({ FRAMEWORK_REGISTRY: {} }));
-jest.mock('../lib/detection/index', () => ({
-  detectFramework: jest.fn().mockResolvedValue(null),
-  gatherFrameworkContext: jest.fn().mockResolvedValue({}),
+vi.mock('../lib/registry', () => ({ FRAMEWORK_REGISTRY: {} }));
+vi.mock('../lib/detection/index', () => ({
+  detectFramework: vi.fn().mockResolvedValue(null),
+  gatherFrameworkContext: vi.fn().mockResolvedValue({}),
 }));
-jest.mock('../utils/analytics', () => ({
-  analytics: { setTag: jest.fn() },
+vi.mock('../utils/analytics', () => ({
+  analytics: { setTag: vi.fn() },
 }));
-jest.mock('../utils/wizard-abort', () => ({ wizardAbort: jest.fn() }));
-jest.mock('../lib/agent/agent-runner', () => ({
-  runAgent: jest.fn().mockResolvedValue(undefined),
+vi.mock('../utils/wizard-abort', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../utils/wizard-abort')>()),
+  wizardAbort: vi.fn(),
+}));
+vi.mock('../lib/agent/agent-runner', () => ({
+  runAgent: vi.fn().mockResolvedValue(undefined),
 }));
 
 import { provisionCommand } from '../commands/provision';
@@ -84,13 +88,10 @@ describe('wizard provision subcommand', () => {
   const originalStdoutWrite = process.stdout.write.bind(process.stdout);
   const originalStderrWrite = process.stderr.write.bind(process.stderr);
   const originalIsTTY = process.stdout.isTTY;
-  // When true, the process.exit mock throws to halt the synchronous parse path
-  // (a validation `.fail()`); runCLI flips it off before the async handler runs.
-  let exitThrowsDuringParse = false;
 
   let stdoutChunks: string[];
   let stderrChunks: string[];
-  let consoleLogSpy: jest.SpyInstance;
+  let consoleLogSpy: ReturnType<typeof vi.spyOn>;
 
   const successResult = {
     projectApiKey: 'phc_test',
@@ -102,8 +103,26 @@ describe('wizard provision subcommand', () => {
     personalApiKey: 'phx_test',
   };
 
+  // The success path calls process.exit(0) at the end of bin.ts's detached
+  // `void (async () => …)()` dispatch. Our throwing exit mock turns that into an
+  // unhandled rejection with no catch site. Swallow exactly that sentinel (the
+  // asserted work already ran before exit); re-throw anything else so genuine
+  // errors still fail the run.
+  const swallowExitRejection = (reason: unknown) => {
+    if (reason instanceof Error && reason.message === 'process.exit() called') {
+      return;
+    }
+    throw reason;
+  };
+  beforeAll(() => {
+    process.on('unhandledRejection', swallowExitRejection);
+  });
+  afterAll(() => {
+    process.off('unhandledRejection', swallowExitRejection);
+  });
+
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     stdoutChunks = [];
     stderrChunks = [];
 
@@ -116,18 +135,20 @@ describe('wizard provision subcommand', () => {
       return true;
     }) as typeof process.stderr.write;
 
-    consoleLogSpy = jest.spyOn(console, 'log').mockImplementation(() => {
+    consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {
       // suppress LoggingUI output during tests
     });
 
-    // On a validation failure, yargs calls `.fail()` and would otherwise run
-    // the command handler anyway (the real process.exit halts it; a no-op
-    // mock wouldn't). So exit throws during the synchronous parse — runCLI
-    // catches it, the handler never runs — and no-ops afterwards, where it's
-    // the final call in each async handler branch (throwing there would be an
-    // unhandled rejection on the `void provision()` IIFE).
-    process.exit = jest.fn(() => {
-      if (exitThrowsDuringParse) throw new Error('process.exit() called');
+    // The CLI quits via process.exit(); the mock throws so a validation failure
+    // (yargs `.fail()` during parse) halts BEFORE the command handler runs —
+    // otherwise the handler would call provisionNewAccount with invalid input.
+    // The call is still recorded before the throw, so `toHaveBeenCalledWith`
+    // assertions hold. On the success path exit(0) runs at the end of bin.ts's
+    // detached `void (async () => …)()` dispatch, so its throw escapes as an
+    // unhandled rejection — swallowed by the suite-level handler below (the
+    // asserted work has already run by then).
+    process.exit = vi.fn(() => {
+      throw new Error('process.exit() called');
     }) as unknown as typeof process.exit;
   });
 
@@ -141,7 +162,7 @@ describe('wizard provision subcommand', () => {
       configurable: true,
     });
     consoleLogSpy.mockRestore();
-    jest.resetModules();
+    vi.resetModules();
   });
 
   function setTTY(isTTY: boolean) {
@@ -153,20 +174,32 @@ describe('wizard provision subcommand', () => {
 
   async function runCLI(args: string[]) {
     process.argv = ['node', 'bin.ts', 'provision', ...args];
-    exitThrowsDuringParse = true;
     try {
-      jest.isolateModules(() => {
-        require('../../bin.ts');
-      });
+      // vi.resetModules() re-evaluates bin.ts fresh on each call — the vitest
+      // equivalent of jest.isolateModules.
+      vi.resetModules();
+      await import('../../bin');
     } catch {
-      // A validation `.fail()` calls process.exit during the synchronous parse;
-      // the throwing mock halts it here so the command handler never runs.
+      // bin.ts dispatch can reject on some parse paths; the run's effect is
+      // asserted via the mocks after settle().
     }
-    exitThrowsDuringParse = false;
-    // Dynamic import + async handler need several microtask flushes
-    for (let i = 0; i < 10; i++) {
-      await new Promise((resolve) => setImmediate(resolve));
+    await settle();
+  }
+
+  // The CLI dispatch fires detached async work that awaits a chain of dynamic
+  // imports before reaching a mocked sink. Pump the event loop until this run
+  // reaches a sink — provisionNewAccount (success) or process.exit (validation
+  // failure) — then drain briefly so trailing work finishes inside this test
+  // rather than leaking into the next. (Mirrors cli.test.ts's settle.)
+  async function settle() {
+    const sank = () =>
+      mockProvisionNewAccountSubcmd.mock.calls.length > 0 ||
+      (process.exit as unknown as ReturnType<typeof vi.fn>).mock.calls.length >
+        0;
+    for (let i = 0; i < 300 && !sank(); i++) {
+      await new Promise((resolve) => setTimeout(resolve, 10));
     }
+    await new Promise((resolve) => setTimeout(resolve, 150));
   }
 
   test('exits non-zero without calling the API when --email is missing', async () => {

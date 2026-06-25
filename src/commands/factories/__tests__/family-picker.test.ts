@@ -1,10 +1,11 @@
 import type { Arguments } from 'yargs';
+import type { Mock } from 'vitest';
 
 // Stub only Ink's `render` so `chooseFamilyChild` can build its options
 // without mounting a real TUI; everything else in `ink` stays real.
-jest.mock('ink', () => {
-  const actual = jest.requireActual('ink');
-  return { ...actual, render: jest.fn() };
+vi.mock('ink', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('ink')>();
+  return { ...actual, render: vi.fn() };
 });
 
 import { render } from 'ink';
@@ -23,21 +24,21 @@ function makeArgv(extras: Record<string, unknown> = {}): Arguments {
 
 describe('orderFamilyChildren', () => {
   it('hoists the default-marked child to the front', () => {
-    const a: Command = { name: 'a', description: 'a', handler: jest.fn() };
+    const a: Command = { name: 'a', description: 'a', handler: vi.fn() };
     const b: Command = {
       name: 'b',
       description: 'b',
-      handler: jest.fn(),
+      handler: vi.fn(),
       default: true,
     };
-    const c: Command = { name: 'c', description: 'c', handler: jest.fn() };
+    const c: Command = { name: 'c', description: 'c', handler: vi.fn() };
     const ordered = orderFamilyChildren([a, b, c]);
     expect(ordered.map((cmd) => cmd.name)).toEqual(['b', 'a', 'c']);
   });
 
   it('preserves order when no child is marked default', () => {
-    const a: Command = { name: 'a', description: 'a', handler: jest.fn() };
-    const b: Command = { name: 'b', description: 'b', handler: jest.fn() };
+    const a: Command = { name: 'a', description: 'a', handler: vi.fn() };
+    const b: Command = { name: 'b', description: 'b', handler: vi.fn() };
     expect(orderFamilyChildren([a, b])).toEqual([a, b]);
   });
 
@@ -46,7 +47,7 @@ describe('orderFamilyChildren', () => {
     const real: Command = {
       name: 'real',
       description: 'd',
-      handler: jest.fn(),
+      handler: vi.fn(),
     };
     expect(orderFamilyChildren([dead, real])).toEqual([real]);
   });
@@ -54,24 +55,24 @@ describe('orderFamilyChildren', () => {
 
 describe('chooseFamilyChild', () => {
   it('renders the default leaf first so it is pre-highlighted (Enter runs it)', () => {
-    (render as jest.Mock).mockClear();
+    (render as Mock).mockClear();
     const all: Command = {
       name: 'all',
       description: 'comprehensive',
-      handler: jest.fn(),
+      handler: vi.fn(),
       default: true,
     };
     const events: Command = {
       name: 'events',
       description: 'events',
-      handler: jest.fn(),
+      handler: vi.fn(),
     };
 
     // Input order puts the default LAST — the picker must reorder it to index 0.
     void chooseFamilyChild('wizard audit', [events, all]);
 
-    expect(render as jest.Mock).toHaveBeenCalledTimes(1);
-    const element = (render as jest.Mock).mock.calls[0][0];
+    expect(render as Mock).toHaveBeenCalledTimes(1);
+    const element = (render as Mock).mock.calls[0][0];
     const options = element.props.options as {
       label: string;
       value: Command;
@@ -83,7 +84,7 @@ describe('chooseFamilyChild', () => {
 
 describe('createFamilyPickerDefault', () => {
   it('always opens the picker — even when one child is marked default', async () => {
-    const childHandler = jest.fn();
+    const childHandler = vi.fn();
     const child: Command = {
       name: 'all',
       description: 'comprehensive',
@@ -93,9 +94,9 @@ describe('createFamilyPickerDefault', () => {
     const sibling: Command = {
       name: 'events',
       description: 'events',
-      handler: jest.fn(),
+      handler: vi.fn(),
     };
-    const chooser = jest.fn().mockResolvedValue(child);
+    const chooser = vi.fn().mockResolvedValue(child);
 
     const handler = createFamilyPickerDefault(
       'wizard audit',
@@ -110,8 +111,8 @@ describe('createFamilyPickerDefault', () => {
   });
 
   it('dispatches whichever child the picker resolves', async () => {
-    const aHandler = jest.fn();
-    const bHandler = jest.fn();
+    const aHandler = vi.fn();
+    const bHandler = vi.fn();
     const a: Command = {
       name: 'a',
       description: 'a',
@@ -119,7 +120,7 @@ describe('createFamilyPickerDefault', () => {
       default: true,
     };
     const b: Command = { name: 'b', description: 'b', handler: bHandler };
-    const chooser = jest.fn().mockResolvedValue(b);
+    const chooser = vi.fn().mockResolvedValue(b);
 
     const handler = createFamilyPickerDefault('wizard family', [a, b], chooser);
     await handler(makeArgv());
@@ -132,10 +133,10 @@ describe('createFamilyPickerDefault', () => {
     const handler = createFamilyPickerDefault(
       'wizard family',
       [
-        { name: 'a', description: 'a', handler: jest.fn() },
-        { name: 'b', description: 'b', handler: jest.fn() },
+        { name: 'a', description: 'a', handler: vi.fn() },
+        { name: 'b', description: 'b', handler: vi.fn() },
       ],
-      jest.fn().mockResolvedValue(null),
+      vi.fn().mockResolvedValue(null),
     );
     await handler(makeArgv());
     // No expectations on handlers — they shouldn't run, but the test that
@@ -160,7 +161,7 @@ describe('createFamilyPickerDefault', () => {
     const handler = createFamilyPickerDefault(
       'wizard audit',
       [child],
-      jest.fn().mockResolvedValue(child),
+      vi.fn().mockResolvedValue(child),
     );
     await handler(makeArgv());
     expect(resolved).toBe(true);

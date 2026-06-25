@@ -1,92 +1,110 @@
-// Mock functions must be defined before imports (jest hoists jest.mock calls;
-// variables starting with "mock" are allowed in the factory scope).
+// Mock functions are created via vi.hoisted so they exist before the hoisted
+// vi.mock factories that reference them run.
 // NOTE: variable names must be unique across test files because .test.ts
 // files without top-level imports/exports share a single TS project scope.
-const mockBuildSessionCli = jest.fn((args: Record<string, unknown>) => args);
-const mockProvisionNewAccountCli = jest.fn();
+const { mockBuildSessionCli, mockProvisionNewAccountCli } = vi.hoisted(() => ({
+  mockBuildSessionCli: vi.fn((args: Record<string, unknown>) => args),
+  mockProvisionNewAccountCli: vi.fn(),
+}));
 
-jest.mock('semver', () => ({ satisfies: () => true }));
-jest.mock('../lib/wizard-session', () => ({
+vi.mock('semver', () => ({ satisfies: () => true }));
+// importOriginal keeps real exports (e.g. RunPhase) while overriding
+// buildSession — vitest throws on access to exports a partial mock omits.
+vi.mock('../lib/wizard-session', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../lib/wizard-session')>()),
   buildSession: mockBuildSessionCli,
 }));
-jest.mock('../utils/provisioning', () => ({
+vi.mock('../utils/provisioning', () => ({
   provisionNewAccount: mockProvisionNewAccountCli,
 }));
-jest.mock('../ui/tui/start-tui', () => ({
+vi.mock('../ui/tui/start-tui', () => ({
   startTUI: () => ({
-    unmount: jest.fn(),
+    unmount: vi.fn(),
     store: {
       session: {},
-      runReadyHooks: jest.fn().mockResolvedValue(undefined),
+      runReadyHooks: vi.fn().mockResolvedValue(undefined),
       // eslint-disable-next-line @typescript-eslint/no-empty-function
-      getGate: jest.fn().mockReturnValue(new Promise(() => {})),
-      subscribe: jest.fn(),
-      onEnterScreen: jest.fn(),
+      getGate: vi.fn().mockReturnValue(new Promise(() => {})),
+      subscribe: vi.fn(),
+      onEnterScreen: vi.fn(),
     },
   }),
 }));
-jest.mock('../lib/programs/posthog-integration/index', () => ({
+vi.mock('../lib/programs/posthog-integration/index', () => ({
   posthogIntegrationConfig: {
     id: 'posthog-integration',
     steps: [],
     run: null,
   },
 }));
-jest.mock('../utils/environment', () => ({
+vi.mock('../utils/environment', () => ({
   isNonInteractiveEnvironment: () => false,
   readEnvironment: () => ({}),
 }));
 // CI-path dynamic imports need mocks to prevent unhandled rejections
-jest.mock('../utils/env-api-key', () => ({
+vi.mock('../utils/env-api-key', () => ({
   readApiKeyFromEnv: () => undefined,
 }));
-jest.mock('../utils/debug', () => ({
-  configureLogFileFromEnvironment: jest.fn(),
-  logToFile: jest.fn(),
+vi.mock('../utils/debug', () => ({
+  configureLogFileFromEnvironment: vi.fn(),
+  logToFile: vi.fn(),
 }));
-jest.mock('../lib/registry', () => ({ FRAMEWORK_REGISTRY: {} }));
-jest.mock('../lib/detection/index', () => ({
-  detectFramework: jest.fn().mockResolvedValue(null),
-  gatherFrameworkContext: jest.fn().mockResolvedValue({}),
+vi.mock('../lib/registry', () => ({ FRAMEWORK_REGISTRY: {} }));
+vi.mock('../lib/detection/index', () => ({
+  detectFramework: vi.fn().mockResolvedValue(null),
+  gatherFrameworkContext: vi.fn().mockResolvedValue({}),
 }));
-jest.mock('../utils/analytics', () => ({
-  analytics: { setTag: jest.fn() },
+vi.mock('../utils/analytics', () => ({
+  analytics: { setTag: vi.fn() },
 }));
-jest.mock('../utils/wizard-abort', () => ({ wizardAbort: jest.fn() }));
-jest.mock('../lib/agent/agent-runner', () => ({
-  runAgent: jest.fn().mockResolvedValue(undefined),
+vi.mock('../utils/wizard-abort', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../utils/wizard-abort')>()),
+  wizardAbort: vi.fn(),
+}));
+vi.mock('../lib/agent/agent-runner', () => ({
+  runAgent: vi.fn().mockResolvedValue(undefined),
 }));
 
 describe('CLI argument parsing', () => {
   const originalArgv = process.argv;
   // eslint-disable-next-line @typescript-eslint/unbound-method
   const originalExit = process.exit;
-  const originalEnv = { ...process.env };
+
+  // The wizard's env vars that individual tests set. Cleared around each test
+  // by mutating the live process.env in place — reassigning `process.env` to a
+  // fresh object (as this used to) defeats yargs' `.env()` reader once the
+  // module graph has been reset and yargs re-imported, so env-only flags stop
+  // being picked up.
+  const WIZARD_ENV_KEYS = [
+    'POSTHOG_WIZARD_REGION',
+    'POSTHOG_WIZARD_DEFAULT',
+    'POSTHOG_WIZARD_CI',
+    'POSTHOG_WIZARD_API_KEY',
+    'POSTHOG_WIZARD_INSTALL_DIR',
+  ];
+  const clearWizardEnv = () => {
+    for (const key of WIZARD_ENV_KEYS) delete process.env[key];
+  };
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
 
     // Reset environment
-    process.env = { ...originalEnv };
-    delete process.env.POSTHOG_WIZARD_REGION;
-    delete process.env.POSTHOG_WIZARD_DEFAULT;
-    delete process.env.POSTHOG_WIZARD_CI;
-    delete process.env.POSTHOG_WIZARD_API_KEY;
-    delete process.env.POSTHOG_WIZARD_INSTALL_DIR;
+    clearWizardEnv();
 
     // Mock process.exit so the test runner doesn't exit. The CLI dispatch is
     // async (it dynamically imports the matched command file), so a throwing
     // mock would escape as an unhandled rejection rather than halting the
     // handler. A no-op suffices: validation failures `return` right after
     // calling exit, and tests assert on the recorded exit code.
-    process.exit = jest.fn() as unknown as typeof process.exit;
+    process.exit = vi.fn() as unknown as typeof process.exit;
   });
 
   afterEach(() => {
     process.argv = originalArgv;
     process.exit = originalExit;
-    process.env = originalEnv;
-    jest.resetModules();
+    clearWizardEnv();
+    vi.resetModules();
   });
 
   /**
@@ -96,15 +114,44 @@ describe('CLI argument parsing', () => {
     process.argv = ['node', 'bin.ts', ...args];
 
     try {
-      jest.isolateModules(() => {
-        require('../../bin.ts');
-      });
+      // vi.resetModules() (afterEach) clears the registry, so this re-evaluates
+      // bin.ts fresh on every call — the vitest equivalent of isolateModules.
+      await import('../../bin');
     } catch {
       // process.exit mock throws to halt handler execution
     }
 
-    // Allow yargs + async handlers to process
-    await new Promise((resolve) => setImmediate(resolve));
+    await settle();
+  }
+
+  async function settle() {
+    // The CLI dispatch fires detached async work (`void (async () => …)()`)
+    // that awaits a deep chain of dynamic imports before reaching a mocked
+    // sink. Under jest these imports were synchronous (babel-commonjs), so the
+    // chain completed within runCLI; under the real ESM runner it spans many
+    // async turns.
+    //
+    // First anchor: pump the event loop until this run reaches a sink —
+    // buildSession (success paths) or process.exit (validation-failure paths).
+    // This guarantees the run has acted before we return, so it can't leak a
+    // first sink call into the next test.
+    // Poll on a real timer (not a fixed event-loop-turn count): afterEach's
+    // vi.resetModules() forces a full graph reload from disk on every run, so
+    // the chain is I/O-bound and can be starved when vitest runs files in
+    // parallel. A wall-clock budget tolerates that load; it returns as soon as
+    // the sink fires, so the budget is only spent in the worst case.
+    const sank = () =>
+      mockBuildSessionCli.mock.calls.length > 0 ||
+      (process.exit as unknown as Mock).mock.calls.length > 0;
+    for (let i = 0; i < 300 && !sank(); i++) {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    // Then drain: process.exit is a no-op here, so a validation-failure chain
+    // keeps running past it and may still call buildSession. A short wait lets
+    // that trailing work finish inside this test rather than leaking into the
+    // next one. (Success chains past their sink only park on the never-resolving
+    // intro gate or hit mocked no-ops.)
+    await new Promise((resolve) => setTimeout(resolve, 150));
   }
 
   /**
@@ -278,7 +325,7 @@ describe('CLI argument parsing', () => {
     // handler's exit calls are always terminal, so "continuing" past them is
     // harmless and lets us assert on both the exit code and mock state.
     beforeEach(() => {
-      process.exit = jest.fn() as unknown as typeof process.exit;
+      process.exit = vi.fn() as unknown as typeof process.exit;
     });
 
     const successResult = {
