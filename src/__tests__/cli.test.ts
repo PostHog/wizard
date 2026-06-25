@@ -272,6 +272,76 @@ describe('CLI argument parsing', () => {
       const args = getLastBuildSessionArgs();
       expect(args.apiKey).toBe('phx_test_key');
     });
+
+    test("tags the build as 'ci'", async () => {
+      await runCLI([
+        '--ci',
+        '--api-key',
+        'phx_test',
+        '--install-dir',
+        '/tmp/test',
+      ]);
+
+      const { analytics } = await import('../utils/analytics');
+      expect(analytics.setTag).toHaveBeenCalledWith('build', 'ci');
+    });
+  });
+
+  // The experimental headless flag is the published-build sibling of --ci: it
+  // routes through the same non-interactive runner (session.ci === true), but
+  // is its own flag and tags the build distinctly so the two modes segment in
+  // analytics. Its CLI name is intentionally ugly/undocumented — sourced from
+  // @lib/headless-mode so this test never has to spell it out.
+  describe('headless flag', () => {
+    // Source of truth: HEADLESS_FLAG in src/lib/headless-mode.ts. Hardcoded
+    // here (not imported) to keep this file free of top-level imports — see the
+    // note at the top of the file.
+    const headlessFlag = '--headless-DONOTUSE-EXPERIMENTAL';
+
+    test('routes through the CI runner (builds a ci session)', async () => {
+      await runCLI([
+        headlessFlag,
+        '--api-key',
+        'pha_test',
+        '--install-dir',
+        '/tmp/test',
+      ]);
+
+      const args = getLastBuildSessionArgs();
+      expect(args.ci).toBe(true);
+    });
+
+    test("tags the build as 'headless' (not 'ci')", async () => {
+      await runCLI([
+        headlessFlag,
+        '--api-key',
+        'pha_test',
+        '--install-dir',
+        '/tmp/test',
+      ]);
+
+      const { analytics } = await import('../utils/analytics');
+      expect(analytics.setTag).toHaveBeenCalledWith('build', 'headless');
+      expect(analytics.setTag).not.toHaveBeenCalledWith('build', 'ci');
+    });
+
+    test('does not require --region when headless is set', async () => {
+      await runCLI([
+        headlessFlag,
+        '--api-key',
+        'pha_test',
+        '--install-dir',
+        '/tmp/test',
+      ]);
+
+      expect(process.exit).not.toHaveBeenCalledWith(1);
+    });
+
+    test('requires --api-key when headless is set', async () => {
+      await runCLI([headlessFlag, '--install-dir', '/tmp/test']);
+
+      expect(process.exit).toHaveBeenCalledWith(1);
+    });
   });
 
   describe('CI environment variables', () => {
