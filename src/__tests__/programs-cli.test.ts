@@ -20,6 +20,7 @@ import type { Arguments } from 'yargs';
 import type { MockedFunction } from 'vitest';
 import { auditCommand } from '../commands/audit';
 import { migrateCommand } from '../commands/migrate';
+import { mcpAnalyticsCommand } from '../commands/mcp-analytics';
 import { revenueCommand } from '../commands/revenue';
 import { warehouseCommand } from '../commands/warehouse';
 import { uploadSourcemapsCommand } from '../commands/upload-sourcemaps';
@@ -77,6 +78,11 @@ describe('top-level command shapes', () => {
   test('revenue-analytics is a flat skill command', () => {
     expect(revenueCommand.name).toBe('revenue-analytics');
     expect(revenueCommand.children).toBeUndefined();
+  });
+
+  test('mcp-analytics is a flat skill command', () => {
+    expect(mcpAnalyticsCommand.name).toBe('mcp-analytics');
+    expect(mcpAnalyticsCommand.children).toBeUndefined();
   });
 
   test('warehouse is a flat skill command', () => {
@@ -170,6 +176,12 @@ describe('flat skill commands', () => {
     revenueCommand.handler!(makeArgv({ debug: true }));
     const [config] = mockRunWizard.mock.calls[0] as [{ skillId?: string }];
     expect(config.skillId).toBe('revenue-analytics-setup');
+  });
+
+  test('mcp-analytics dispatches with mcp-analytics skillId', () => {
+    mcpAnalyticsCommand.handler!(makeArgv({ debug: true }));
+    const [config] = mockRunWizard.mock.calls[0] as [{ skillId?: string }];
+    expect(config.skillId).toBe('mcp-analytics');
   });
 
   test('warehouse dispatches with data-warehouse-source-setup skillId', () => {
