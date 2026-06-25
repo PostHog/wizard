@@ -1,5 +1,14 @@
 # Changelog
 
+## [2.31.0](https://github.com/PostHog/wizard/compare/v2.30.0...v2.31.0) (2026-06-25)
+
+
+### Features
+
+* **e2e-harness:** drive and snapshot the real wizard TUI ([#702](https://github.com/PostHog/wizard/issues/702)) ([bd875c3](https://github.com/PostHog/wizard/commit/bd875c36b1e1fe1823d0a3a94fa979948a87b34f))
+* tag LLM gateway traces with build type ([#727](https://github.com/PostHog/wizard/issues/727)) ([f97c53f](https://github.com/PostHog/wizard/commit/f97c53f9fc23a873df53678d2a7fb42d779c5c47))
+* tag LLM gateway traces with program_id and run identifiers ([#726](https://github.com/PostHog/wizard/issues/726)) ([fcdf70f](https://github.com/PostHog/wizard/commit/fcdf70faa9c390540664c895b28cf9654b65fd5d))
+
 ## [2.30.0](https://github.com/PostHog/wizard/compare/v2.29.0...v2.30.0) (2026-06-23)
 
 
