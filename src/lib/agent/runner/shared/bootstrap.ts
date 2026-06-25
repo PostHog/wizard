@@ -235,6 +235,7 @@ export async function bootstrapProgram(
     programId: programConfig.id,
     integration: config.integrationLabel,
     runId: analytics.runId,
+    build: analytics.build,
     skillId: config.skillId,
   });
 
