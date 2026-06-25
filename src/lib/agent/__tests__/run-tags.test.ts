@@ -19,6 +19,20 @@ describe('buildRunTags', () => {
     });
   });
 
+  it("carries a headless run's build type onto gateway traces", () => {
+    // A published headless run tags build='headless' in runNonInteractive;
+    // that value rides through analytics.build into the gateway trace tags, so
+    // the LLM gateway can tell a cloud/headless run apart from prod/dev/ci.
+    expect(
+      buildRunTags({
+        programId: 'posthog-integration',
+        integration: 'nextjs',
+        runId: 'run-123',
+        build: 'headless',
+      }),
+    ).toMatchObject({ build: 'headless' });
+  });
+
   it('omits skill_id when the run has none', () => {
     const tags = buildRunTags({
       programId: 'posthog-integration',

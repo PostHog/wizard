@@ -87,10 +87,11 @@ export class Analytics {
     });
 
     this.tags = { $app_name: this.appName };
-    // Tag every run with its build type so prod / dev / ci segment cleanly
-    // in analytics. tsdown inlines IS_PRODUCTION_BUILD to `true` in published
-    // builds and `false` for dev/tsx/test runs. CI runs (always non-prod
-    // builds) upgrade this to 'ci' in runWizardCI.
+    // Tag every run with its build type so prod / dev / ci / headless segment
+    // cleanly in analytics. tsdown inlines IS_PRODUCTION_BUILD to `true` in
+    // published builds and `false` for dev/tsx/test runs. Non-interactive runs
+    // upgrade this in runWizardCI: dev `--ci` runs to 'ci', published headless
+    // runs to 'headless'.
     this.tags.build = IS_PRODUCTION_BUILD ? 'prod' : 'dev';
 
     this.anonymousId = uuidv4();
@@ -113,7 +114,7 @@ export class Analytics {
     return this._runId;
   }
 
-  /** Build type for this run ('prod' | 'dev' | 'ci') — the same value tagged on every analytics event. */
+  /** Build type for this run ('prod' | 'dev' | 'ci' | 'headless') — the same value tagged on every analytics event. */
   get build(): string {
     return String(this.tags.build ?? 'dev');
   }

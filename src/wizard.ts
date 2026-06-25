@@ -2,6 +2,7 @@ import yargs from 'yargs';
 import { hideBin } from 'yargs/helpers';
 import type { Argv } from 'yargs';
 import { IS_PRODUCTION_BUILD } from '@env';
+import { HEADLESS_FLAG } from '@lib/headless-mode';
 import { toCommandModule, type Command } from './commands/command';
 
 /**
@@ -52,6 +53,17 @@ export const GLOBAL_OPTIONS = {
   },
   // ── Internal modes ─────────────────────────────────────────────────
   // Hidden from `--help`. See CONTRIBUTING.md for what each one does.
+  [HEADLESS_FLAG]: {
+    default: false,
+    // EXPERIMENTAL + UNSTABLE: the non-interactive published-build run path.
+    // Declared unconditionally (unlike --ci) so it works in the shipped
+    // package, but hidden and intentionally ugly-named — the contract may
+    // break without notice, so it must not be advertised. See @lib/headless-mode.
+    describe:
+      'EXPERIMENTAL — do not use. Unstable, subject to breaking changes.',
+    type: 'boolean' as const,
+    hidden: true,
+  },
   'local-mcp': {
     default: false,
     describe:
@@ -87,6 +99,10 @@ export class Wizard {
     // published builds (NODE_ENV==='production'), so .strictOptions() rejects
     // it there as an unknown argument — exactly like any other unrecognized
     // flag. init() additionally detects it up front to print a clearer message.
+    // The published-build, non-interactive path is the experimental headless
+    // flag (declared unconditionally in GLOBAL_OPTIONS, see @lib/headless-mode);
+    // --ci and headless are kept as separate flags so they can diverge — see
+    // basic-integration's dispatch. headless is deliberately not advertised.
     if (!IS_PRODUCTION_BUILD) {
       cli = cli.option('ci', {
         default: false,
