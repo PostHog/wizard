@@ -75,7 +75,7 @@ export interface McpSuggestedPromptsServices {
  * actually invoked.
  */
 export function createMcpSuggestedPromptsServices(
-  _store: WizardStore,
+  store: WizardStore,
 ): McpSuggestedPromptsServices {
   return {
     performLogin: async () => {
@@ -86,6 +86,7 @@ export function createMcpSuggestedPromptsServices(
         projectId: undefined,
         email: undefined,
         region: undefined,
+        baseUrl: store.session.baseUrl,
         // Widens the OAuth scope grant: base `WIZARD_OAUTH_SCOPES` plus
         // read on every product surface (flags, experiments, surveys,
         // replays, errors, web/LLM analytics, cohorts, persons) plus

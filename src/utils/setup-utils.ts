@@ -23,11 +23,7 @@ import { getOAuthScopesForProgram } from '@lib/oauth/program-scopes';
 import type { ProgramId } from '@lib/programs/program-registry';
 import { analytics } from './analytics';
 import { getUI } from '@ui';
-import {
-  getCloudUrlFromRegion,
-  getHostFromRegion,
-  detectRegionFromToken,
-} from './urls';
+import { getCloudUrl, getHost, detectRegion } from './urls';
 import { performOAuthFlow } from './oauth';
 import { resolveGrantedProject } from './project-resolution';
 import { provisionNewAccount } from './provisioning';
@@ -401,6 +397,9 @@ export async function getOrAskForProjectData(
   _options: Pick<WizardRunOptions, 'signup' | 'ci' | 'apiKey' | 'projectId'> & {
     email?: string;
     region?: CloudRegion;
+    /** Explicit base URL override (`--base-url`, from `session.baseUrl`). When
+     *  set, pins every PostHog origin and bypasses region resolution. */
+    baseUrl?: string;
     /** Optional — picks the OAuth scope set via
      *  `getOAuthScopesForProgram`. Omitted → default
      *  `WIZARD_OAUTH_SCOPES`. Threaded into `askForWizardLogin`. */
@@ -425,10 +424,10 @@ export async function getOrAskForProjectData(
     // under load the wrong region can win, and the subsequent project fetch
     // then targets the wrong cloud and hangs (~120s) before failing. CI always
     // passes --region, so only fall back to detection when it's truly absent.
-    const cloudRegion =
-      _options.region ?? (await detectRegionFromToken(_options.apiKey));
-    const host = getHostFromRegion(cloudRegion);
-    const cloudUrl = getCloudUrlFromRegion(cloudRegion);
+    const cloudRegion = _options.region ?? (await detectRegion(_options.apiKey, _options.baseUrl));
+    
+    const host = getHost(cloudRegion, _options.baseUrl);
+    const cloudUrl = getCloudUrl(cloudRegion, _options.baseUrl);
 
     const projectData =
       _options.projectId != null
@@ -478,13 +477,14 @@ export async function getOrAskForProjectData(
       signup: _options.signup,
       email: _options.email,
       region: _options.region,
+      baseUrl: _options.baseUrl,
       programId: _options.programId,
       projectId: _options.projectId,
     }),
   );
 
   if (!projectApiKey) {
-    const cloudUrl = getCloudUrlFromRegion(cloudRegion);
+    const cloudUrl = getCloudUrl(cloudRegion, _options.baseUrl);
     getUI().log.error(`Didn't receive a project token. This shouldn't happen :(
 
 Please let us know if you think this is a bug in the wizard:
@@ -546,6 +546,8 @@ async function askForWizardLogin(options: {
   signup: boolean;
   email?: string;
   region?: CloudRegion;
+  /** Explicit base URL override (`--base-url`); pins every PostHog origin. */
+  baseUrl?: string;
   /** Used to pick the right scope set via `getOAuthScopesForProgram`.
    *  Omitted → default `WIZARD_OAUTH_SCOPES`. */
   programId?: ProgramId | null;
@@ -554,13 +556,18 @@ async function askForWizardLogin(options: {
   projectId?: number;
 }): Promise<ProjectData & { cloudRegion: CloudRegion }> {
   if (options.signup) {
-    return askForProvisioningSignup(options.email, options.region);
+    return askForProvisioningSignup(
+      options.email,
+      options.region,
+      options.baseUrl,
+    );
   }
 
   const tokenResponse = await performOAuthFlow({
     scopes: [...getOAuthScopesForProgram(options.programId)],
     signup: false,
     projectId: options.projectId,
+    baseUrl: options.baseUrl,
   });
 
   // `--project-id`, when provided, is authoritative — but only if the user actually
@@ -598,9 +605,12 @@ async function askForWizardLogin(options: {
     await abort();
   }
 
-  const cloudRegion = await detectRegionFromToken(tokenResponse.access_token);
-  const cloudUrl = getCloudUrlFromRegion(cloudRegion);
-  const host = getHostFromRegion(cloudRegion);
+  const cloudRegion = await detectRegion(
+    tokenResponse.access_token,
+    options.baseUrl,
+  );
+  const cloudUrl = getCloudUrl(cloudRegion, options.baseUrl);
+  const host = getHost(cloudRegion, options.baseUrl);
 
   const projectData = await fetchProjectData(
     tokenResponse.access_token,
@@ -631,6 +641,7 @@ async function askForWizardLogin(options: {
 async function askForProvisioningSignup(
   email?: string,
   region?: CloudRegion,
+  baseUrl?: string,
 ): Promise<ProjectData & { cloudRegion: CloudRegion }> {
   if (!email || !email.includes('@')) {
     getUI().log.error(
@@ -649,6 +660,7 @@ async function askForProvisioningSignup(
     const result = await provisionNewAccount(email, '', provisionRegion, {
       orgName,
       projectName,
+      baseUrl,
     });
 
     spinner.stop('Account created!');
@@ -675,7 +687,8 @@ async function askForProvisioningSignup(
       getUI().log.info(
         'This email already has a PostHog account. Switching to login flow...',
       );
-      return askForWizardLogin({ signup: false });
+
+      return askForWizardLogin({ signup: false, baseUrl });
     }
 
     getUI().log.error(`Failed to create account: ${message}`);
