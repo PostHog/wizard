@@ -66,6 +66,8 @@ export function isAuthorizationTimeout(error: Error): boolean {
 interface OAuthConfig {
   scopes: string[];
   signup?: boolean;
+  /** Project to pre-select on the consent screen (the `--project-id` flag). */
+  projectId?: number;
 }
 
 function getLocalOAuthOrigin(port: number): string {
@@ -365,6 +367,10 @@ export async function performOAuthFlow(
       authUrl.searchParams.set('code_challenge_method', 'S256');
       authUrl.searchParams.set('scope', config.scopes.join(' '));
       authUrl.searchParams.set('required_access_level', 'project');
+      if (config.projectId !== undefined) {
+        // Pre-select this project on the consent screen so the user just clicks Authorize.
+        authUrl.searchParams.set('team_id', String(config.projectId));
+      }
 
       // UTM-tag both kickoff URLs so the journey into the app is
       // attributable to the wizard command that started it.
