@@ -1,5 +1,14 @@
 # Changelog
 
+## [2.33.0](https://github.com/PostHog/wizard/compare/v2.32.0...v2.33.0) (2026-06-26)
+
+
+### Features
+
+* add experimental headless mode for published, non-interactive runs ([#732](https://github.com/PostHog/wizard/issues/732)) ([6a4a48d](https://github.com/PostHog/wizard/commit/6a4a48dc737e5cd1c71a21d1d3f8ae50a9437e39))
+* **self-driving:** Simplify step 1 of self-driving Wizard, as we don't need to check FFs anymore ([#739](https://github.com/PostHog/wizard/issues/739)) ([48e4516](https://github.com/PostHog/wizard/commit/48e45168600d9ff4979a62fa21fbc7073a09db54))
+* stream wizard run state to PostHog in headless mode ([#734](https://github.com/PostHog/wizard/issues/734)) ([69caa2a](https://github.com/PostHog/wizard/commit/69caa2a02d5d644b84b5977b06dab0718720d8c2))
+
 ## [2.32.0](https://github.com/PostHog/wizard/compare/v2.31.0...v2.32.0) (2026-06-25)
 
 
