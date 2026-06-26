@@ -50,6 +50,10 @@ import {
   type SettingsConflict,
   type SettingsConflictSource,
 } from './claude-settings';
+import {
+  detectStoredClaudeLogin,
+  hasStoredClaudeLogin,
+} from './stored-login';
 
 // Dynamic import cache for ESM module
 let _sdkModule: any = null;
@@ -597,6 +601,24 @@ export async function initializeAgent(
         ? `${config.posthogApiKey.slice(0, 4)}***`
         : '(missing)',
     );
+
+    // A pre-existing Claude login (the SDK's "/login managed key") can outrank
+    // the gateway token we just set and get sent to the PostHog gateway, which
+    // 401s it. The settings-conflict scan can't see it, so detect + report it
+    // here — this is the leading suspect behind the gateway auth_failed reports.
+    const storedLogin = detectStoredClaudeLogin();
+    if (hasStoredClaudeLogin(storedLogin)) {
+      logToFile(
+        `Pre-existing Claude login detected (credentialsFile=${storedLogin.credentialsFile}, ` +
+          `keychain=${storedLogin.keychain}). It can outrank the wizard's gateway token ` +
+          `and cause a 401 — 'claude logout' clears it.`,
+      );
+      analytics.wizardCapture('claude stored login detected', {
+        credentials_file: storedLogin.credentialsFile,
+        keychain: storedLogin.keychain,
+      });
+    }
+
     const initConflicts = checkAllSettingsConflicts(options.installDir);
     logToFile(
       'Settings conflicts at agent init:',
