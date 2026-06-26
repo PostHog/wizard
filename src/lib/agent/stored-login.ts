@@ -15,6 +15,19 @@
  *
  * Existence-only: it never reads the credential value (no `-w`), so no secret is
  * ever exposed.
+ *
+ * The locations checked here mirror the SDK's own credential resolution. Source
+ * (the bundled SDK we run — npmjs.com/package/@anthropic-ai/claude-agent-sdk):
+ *   node_modules/@anthropic-ai/claude-agent-sdk@0.3.169 → sdk.mjs:
+ *     const dir = opts?.CLAUDE_CONFIG_DIR ?? process.env.CLAUDE_CONFIG_DIR;
+ *     const base = dir ?? join(home, ".claude");
+ *     readFile(join(base, ".credentials.json"));   // ← credentials file
+ *     if (!dir && !ANTHROPIC_API_KEY && !CLAUDE_CODE_OAUTH_TOKEN)
+ *       readKeychain();                             // ← macOS keychain (only when CLAUDE_CONFIG_DIR is unset)
+ * The `apiKeySource: "/login managed key"` label itself is emitted by the
+ * compiled CLI the SDK extracts at runtime, not by this JS — so the exact
+ * precedence (stored login vs CLAUDE_CODE_OAUTH_TOKEN) isn't visible in source
+ * and is confirmed empirically via scripts/gateway-auth-probe.no-jest.ts.
  */
 import * as fs from 'fs';
 import * as os from 'os';
