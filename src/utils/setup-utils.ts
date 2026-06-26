@@ -472,6 +472,7 @@ export async function getOrAskForProjectData(
       email: _options.email,
       region: _options.region,
       programId: _options.programId,
+      projectId: _options.projectId,
     }),
   );
 
@@ -541,6 +542,9 @@ async function askForWizardLogin(options: {
   /** Used to pick the right scope set via `getOAuthScopesForProgram`.
    *  Omitted → default `WIZARD_OAUTH_SCOPES`. */
   programId?: ProgramId | null;
+  /** `--project-id`, if passed. When the user granted access to it on the consent
+   *  screen we use it directly; otherwise we fall back to the first granted team. */
+  projectId?: number;
 }): Promise<ProjectData & { cloudRegion: CloudRegion }> {
   if (options.signup) {
     return askForProvisioningSignup(options.email, options.region);
@@ -549,9 +553,34 @@ async function askForWizardLogin(options: {
   const tokenResponse = await performOAuthFlow({
     scopes: [...getOAuthScopesForProgram(options.programId)],
     signup: false,
+    projectId: options.projectId,
   });
 
-  const projectId = tokenResponse.scoped_teams?.[0];
+  // `--project-id`, when provided, is authoritative — but only if the user actually
+  // granted access to it on the consent screen. If they authorized a different
+  // project, fail loudly instead of silently capturing into the wrong one.
+  const grantedTeams = tokenResponse.scoped_teams;
+  if (
+    options.projectId !== undefined &&
+    grantedTeams?.length &&
+    !grantedTeams.includes(options.projectId)
+  ) {
+    const error = new Error(
+      `You authorized project ${grantedTeams[0]}, but setup is targeting project ${options.projectId}. Re-run and grant access to project ${options.projectId} on the authorization screen.`,
+    );
+    analytics.captureException(error, {
+      step: 'wizard_login',
+      requested_project_id: options.projectId,
+      granted_project_id: grantedTeams[0],
+    });
+    getUI().log.error(error.message);
+    await abort();
+  }
+
+  const projectId =
+    options.projectId !== undefined && grantedTeams?.includes(options.projectId)
+      ? options.projectId
+      : grantedTeams?.[0];
 
   if (projectId === undefined) {
     const error = new Error(
