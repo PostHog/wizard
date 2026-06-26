@@ -1,19 +1,18 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import path from 'path';
-
-jest.mock('node:child_process', () => ({ spawnSync: jest.fn() }));
-
+import { spawnSync } from 'node:child_process';
 import { detectStoredClaudeLogin, hasStoredClaudeLogin } from '../stored-login';
 
-const { spawnSync } = require('node:child_process');
-const spawnSyncMock = spawnSync as jest.Mock;
+vi.mock('node:child_process', () => ({ spawnSync: vi.fn() }));
+
+const spawnSyncMock = spawnSync as unknown as Mock;
 
 describe('detectStoredClaudeLogin', () => {
   let home: string;
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     home = fs.mkdtempSync(path.join(os.tmpdir(), 'wz-stored-login-'));
     delete process.env.CLAUDE_CONFIG_DIR;
     // Default: keychain item absent (non-zero exit).
