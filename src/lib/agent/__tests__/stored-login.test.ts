@@ -2,9 +2,17 @@ import * as fs from 'fs';
 import * as os from 'os';
 import path from 'path';
 import { spawnSync } from 'node:child_process';
-import { detectStoredClaudeLogin, hasStoredClaudeLogin } from '../stored-login';
+import {
+  detectStoredClaudeLogin,
+  hasStoredClaudeLogin,
+  isolateClaudeConfigDir,
+} from '../stored-login';
 
 vi.mock('node:child_process', () => ({ spawnSync: vi.fn() }));
+vi.mock('@utils/analytics', () => ({
+  analytics: { wizardCapture: vi.fn(), captureException: vi.fn() },
+}));
+vi.mock('@utils/wizard-abort', () => ({ registerCleanup: vi.fn() }));
 
 const spawnSyncMock = spawnSync as unknown as Mock;
 
@@ -77,5 +85,37 @@ describe('detectStoredClaudeLogin', () => {
   it('treats a missing keychain item as no login', () => {
     spawnSyncMock.mockReturnValue({ status: 44 });
     expect(detectStoredClaudeLogin(home, 'darwin').keychain).toBe(false);
+  });
+
+  it('reads the explicit configDir, ignoring CLAUDE_CONFIG_DIR', () => {
+    // Real login lives under ~/.claude; CLAUDE_CONFIG_DIR points elsewhere
+    // (as it would after isolateClaudeConfigDir ran). Passing the real dir
+    // explicitly must still find it.
+    fs.mkdirSync(path.join(home, '.claude'));
+    fs.writeFileSync(path.join(home, '.claude', '.credentials.json'), '{}');
+    process.env.CLAUDE_CONFIG_DIR = path.join(home, 'isolated-empty');
+
+    expect(detectStoredClaudeLogin(home, 'linux').credentialsFile).toBe(false);
+    expect(
+      detectStoredClaudeLogin(home, 'linux', path.join(home, '.claude'))
+        .credentialsFile,
+    ).toBe(true);
+  });
+});
+
+describe('isolateClaudeConfigDir', () => {
+  it('creates a fresh empty throwaway dir under tmp (no stored login inside)', () => {
+    const a = isolateClaudeConfigDir();
+    const b = isolateClaudeConfigDir();
+
+    expect(a.startsWith(os.tmpdir())).toBe(true);
+    expect(fs.existsSync(a)).toBe(true);
+    expect(fs.readdirSync(a)).toEqual([]);
+    expect(fs.existsSync(path.join(a, '.credentials.json'))).toBe(false);
+    // A fresh dir each call so runs never share state.
+    expect(a).not.toBe(b);
+
+    fs.rmSync(a, { recursive: true, force: true });
+    fs.rmSync(b, { recursive: true, force: true });
   });
 });

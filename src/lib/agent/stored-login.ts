@@ -34,6 +34,8 @@ import * as os from 'os';
 import path from 'path';
 import { spawnSync } from 'node:child_process';
 import { logToFile } from '@utils/debug';
+import { registerCleanup } from '@utils/wizard-abort';
+import { analytics } from '@utils/analytics';
 
 /** macOS keychain service name Claude Code stores its login under. */
 const KEYCHAIN_SERVICE = 'Claude Code-credentials';
@@ -52,23 +54,29 @@ export const hasStoredClaudeLogin = (login: StoredClaudeLogin): boolean =>
 /**
  * Look for a stored Claude login. `homeDir` / `platform` are injectable for
  * tests; production uses the real home dir and platform.
+ *
+ * `configDir` defaults to the SDK's own resolution (CLAUDE_CONFIG_DIR, else
+ * `~/.claude`). Pass it explicitly to look at the *real* config dir even after
+ * the run has isolated CLAUDE_CONFIG_DIR (see {@link isolateClaudeConfigDir}).
  */
 export function detectStoredClaudeLogin(
   homeDir: string = os.homedir(),
   platform: NodeJS.Platform = process.platform,
+  configDir: string = process.env.CLAUDE_CONFIG_DIR ||
+    path.join(homeDir, '.claude'),
 ): StoredClaudeLogin {
-  // Honor CLAUDE_CONFIG_DIR the same way the SDK does when resolving creds.
-  const configDir =
-    process.env.CLAUDE_CONFIG_DIR || path.join(homeDir, '.claude');
-
   const credentialsPath = path.join(configDir, '.credentials.json');
   let credentialsFile = false;
   try {
     credentialsFile = fs.existsSync(credentialsPath);
-  } catch {
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
     logToFile(
-      `[stored-login] checked ${credentialsPath} — unreadable, treating as absent`,
+      `[stored-login] checked ${credentialsPath} — unreadable (${message}), treating as absent`,
     );
+    analytics.wizardCapture('stored login check failed', {
+      step: 'credentials-file',
+    });
   }
 
   let keychain = false;
@@ -82,12 +90,42 @@ export function detectStoredClaudeLogin(
         { stdio: 'ignore', timeout: 5000 },
       );
       keychain = res.status === 0;
-    } catch {
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
       logToFile(
-        `[stored-login] checked keychain '${KEYCHAIN_SERVICE}' — lookup cleared, treating as absent`,
+        `[stored-login] checked keychain '${KEYCHAIN_SERVICE}' — lookup cleared (${message}), treating as absent`,
       );
+      analytics.wizardCapture('stored login check failed', {
+        step: 'keychain',
+      });
     }
   }
 
   return { credentialsFile, keychain };
+}
+
+/**
+ * Neutralize the conflict: point the agent's Claude config dir at a fresh,
+ * empty throwaway directory so the SDK cannot resolve a stored `/login`
+ * credential (file or keychain — keychain reads are skipped once
+ * CLAUDE_CONFIG_DIR is set) and send it to the PostHog gateway. The wizard's
+ * injected `CLAUDE_CODE_OAUTH_TOKEN` is unaffected. The caller sets
+ * `process.env.CLAUDE_CONFIG_DIR` to the returned path. Registers best-effort
+ * cleanup of the directory at process exit.
+ */
+export function isolateClaudeConfigDir(): string {
+  const dir = fs.mkdtempSync(
+    path.join(os.tmpdir(), 'posthog-wizard-claude-config-'),
+  );
+  registerCleanup(() => {
+    try {
+      fs.rmSync(dir, { recursive: true, force: true });
+    } catch (error) {
+      logToFile(`[stored-login] failed to clean up isolated config dir ${dir}`);
+      analytics.captureException(
+        error instanceof Error ? error : new Error(String(error)),
+      );
+    }
+  });
+  return dir;
 }
