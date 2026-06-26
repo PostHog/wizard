@@ -29,6 +29,7 @@ import {
   detectRegionFromToken,
 } from './urls';
 import { performOAuthFlow } from './oauth';
+import { resolveGrantedProject } from './project-resolution';
 import { provisionNewAccount } from './provisioning';
 import {
   fetchUserData,
@@ -558,29 +559,26 @@ async function askForWizardLogin(options: {
 
   // `--project-id`, when provided, is authoritative — but only if the user actually
   // granted access to it on the consent screen. If they authorized a different
-  // project, fail loudly instead of silently capturing into the wrong one.
-  const grantedTeams = tokenResponse.scoped_teams;
-  if (
-    options.projectId !== undefined &&
-    grantedTeams?.length &&
-    !grantedTeams.includes(options.projectId)
-  ) {
+  // project, fail loudly instead of silently capturing into the wrong one. With no
+  // `--project-id` this falls back to the granted project, unchanged for every program.
+  const resolution = resolveGrantedProject(
+    options.projectId,
+    tokenResponse.scoped_teams,
+  );
+  if (!resolution.ok) {
     const error = new Error(
-      `You authorized project ${grantedTeams[0]}, but setup is targeting project ${options.projectId}. Re-run and grant access to project ${options.projectId} on the authorization screen.`,
+      `You authorized project ${resolution.granted}, but setup is targeting project ${resolution.requested}. Re-run and grant access to project ${resolution.requested} on the authorization screen.`,
     );
     analytics.captureException(error, {
       step: 'wizard_login',
-      requested_project_id: options.projectId,
-      granted_project_id: grantedTeams[0],
+      requested_project_id: resolution.requested,
+      granted_project_id: resolution.granted,
     });
     getUI().log.error(error.message);
     await abort();
   }
 
-  const projectId =
-    options.projectId !== undefined && grantedTeams?.includes(options.projectId)
-      ? options.projectId
-      : grantedTeams?.[0];
+  const projectId = resolution.ok ? resolution.projectId : undefined;
 
   if (projectId === undefined) {
     const error = new Error(
