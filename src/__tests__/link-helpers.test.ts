@@ -61,10 +61,36 @@ describe('splitPromptIntoSegments', () => {
     ]);
   });
 
-  it('keeps inline urls inside the text segment', () => {
+  it('breaks an inline url onto its own segment, keeping surrounding prose', () => {
     expect(splitPromptIntoSegments('visit https://x.test for details')).toEqual(
-      [{ type: 'text', value: 'visit https://x.test for details' }],
+      [
+        { type: 'text', value: 'visit' },
+        { type: 'url', value: 'https://x.test' },
+        { type: 'text', value: 'for details' },
+      ],
     );
+  });
+
+  it('keeps trailing punctuation with the prose, not the url', () => {
+    expect(splitPromptIntoSegments('open https://x.test. Then return.')).toEqual(
+      [
+        { type: 'text', value: 'open' },
+        { type: 'url', value: 'https://x.test' },
+        { type: 'text', value: '. Then return.' },
+      ],
+    );
+  });
+
+  it('breaks out multiple inline urls on one line', () => {
+    expect(
+      splitPromptIntoSegments('a https://one.test b https://two.test c'),
+    ).toEqual([
+      { type: 'text', value: 'a' },
+      { type: 'url', value: 'https://one.test' },
+      { type: 'text', value: 'b' },
+      { type: 'url', value: 'https://two.test' },
+      { type: 'text', value: 'c' },
+    ]);
   });
 
   it('handles a url-only prompt', () => {

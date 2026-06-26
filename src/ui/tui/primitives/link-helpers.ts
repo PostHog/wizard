@@ -23,9 +23,6 @@ const OSC_8 = `${ESC}]8;;`;
 /** Matches an http(s) URL run (no surrounding whitespace). */
 const URL_RUN = /https?:\/\/[^\s]+/g;
 
-/** A line whose entire (trimmed) content is a single URL. */
-const STANDALONE_URL_LINE = /^https?:\/\/\S+$/;
-
 /** Trailing characters that are punctuation around a URL, not part of it. */
 const TRAILING_PUNCTUATION = /[.,;:!?)\]}>'"]+$/;
 
@@ -53,12 +50,17 @@ export type PromptSegment =
   | { type: 'url'; value: string };
 
 /**
- * Split prompt text into renderable segments, breaking out any line that is
- * *solely* a URL into its own `url` segment. Consecutive non-URL lines stay
- * grouped in one `text` segment (newlines preserved) so paragraph spacing is
- * unchanged. URLs that appear inline within prose are left in the text
- * segment — only standalone-line URLs are special-cased, which is how the
- * wizard's prompts present links a user is meant to open.
+ * Split prompt text into renderable segments, breaking *every* URL out onto its
+ * own `url` segment — whether it sits alone on a line or inline within prose.
+ * Pulling it out matters: `LinkText` renders a `url` segment as a single OSC 8
+ * hyperlink, so the click target stays the exact full URL even when it wraps. A
+ * URL left inline in a `text` segment is plain text the terminal may auto-detect
+ * per *visual* line, which opens a broken half-URL when it wraps.
+ *
+ * Consecutive URL-free lines stay grouped in one `text` segment (newlines
+ * preserved) so paragraph spacing is unchanged. The prose surrounding an inline
+ * URL is kept as `text` segments before/after it (trailing URL punctuation stays
+ * with the prose), so it reads the same minus the link being on its own line.
  */
 export function splitPromptIntoSegments(text: string): PromptSegment[] {
   const segments: PromptSegment[] = [];
@@ -72,12 +74,32 @@ export function splitPromptIntoSegments(text: string): PromptSegment[] {
   };
 
   for (const line of text.split('\n')) {
-    const trimmed = line.trim();
-    if (STANDALONE_URL_LINE.test(trimmed)) {
-      flush();
-      segments.push({ type: 'url', value: trimTrailingPunctuation(trimmed) });
-    } else {
+    URL_RUN.lastIndex = 0;
+    if (!URL_RUN.test(line)) {
       buffer.push(line);
+      continue;
+    }
+    // The line has at least one URL: emit the buffered prose, then walk the
+    // line emitting text/url/text around each URL.
+    flush();
+    let cursor = 0;
+    URL_RUN.lastIndex = 0;
+    let match: RegExpExecArray | null;
+    while ((match = URL_RUN.exec(line)) !== null) {
+      const url = trimTrailingPunctuation(match[0]);
+      const before = line.slice(cursor, match.index).trim();
+      if (before) {
+        segments.push({ type: 'text', value: before });
+      }
+      segments.push({ type: 'url', value: url });
+      // Resume after the URL itself — any stripped trailing punctuation stays
+      // as prose for the next slice.
+      cursor = match.index + url.length;
+      URL_RUN.lastIndex = cursor;
+    }
+    const after = line.slice(cursor).trim();
+    if (after) {
+      segments.push({ type: 'text', value: after });
     }
   }
   flush();

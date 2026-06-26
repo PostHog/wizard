@@ -1,13 +1,14 @@
 /**
- * LinkText — renders prompt text with standalone URLs as OSC 8 hyperlinks.
+ * LinkText — renders prompt text with URLs as OSC 8 hyperlinks.
  *
- * Each URL gets its own line, wrapped (`wrap="wrap"`) so the full URL is shown
- * within the overlay instead of truncated — the user can read and select all of
- * it. Ink's wrap (wrap-ansi) re-emits the OSC 8 escape on every wrapped visual
- * line, so the click target stays the exact, full URL no matter where the
- * visible text breaks. A manual selection of a wrapped line still picks up the
- * line break, so for a clean copy `WizardAskScreen` auto-copies a sole URL to
- * the clipboard. Prose renders unchanged.
+ * Every URL (standalone or inline in prose) is pulled onto its own line and
+ * wrapped (`wrap="wrap"`) so the full URL is shown within the overlay instead of
+ * truncated — the user can read and select all of it. Ink's wrap (wrap-ansi)
+ * re-emits the OSC 8 escape on every wrapped visual line, so the click target
+ * stays the exact, full URL no matter where the visible text breaks. A manual
+ * selection of a wrapped line still picks up the line break, so for a clean copy
+ * `WizardAskScreen` copies a sole URL to the clipboard (auto + a `c` keybind).
+ * Prose renders unchanged.
  *
  * Used by the `wizard_ask` overlay only for programs that opt into rich link
  * rendering (see `PendingQuestion.richLinks`). Other flows are untouched.

@@ -18,6 +18,7 @@ import {
 } from '@ui/tui/primitives/index';
 import { Colors, Icons } from '@ui/tui/styles';
 import { copyToClipboard } from '@utils/clipboard';
+import { useKeyBindings } from '@ui/tui/hooks/useKeyBindings';
 import type { AskAnswers, AskQuestion } from '@lib/wizard-session';
 
 interface WizardAskScreenProps {
@@ -48,6 +49,11 @@ export const WizardAskScreen = ({ store }: WizardAskScreenProps) => {
   const promptUrls = richLinks ? extractUrls(currentPrompt) : [];
   const soleUrl = promptUrls.length === 1 ? promptUrls[0] : null;
 
+  // The `c` keybind would steal keystrokes from a free-text answer, so only
+  // offer copy on picker questions (where the user isn't typing).
+  const isTextQuestion = pending?.questions[index]?.kind === 'text';
+  const canCopy = !!soleUrl && !isTextQuestion;
+
   useEffect(() => {
     setCopied(false);
     if (!soleUrl) return;
@@ -59,6 +65,25 @@ export const WizardAskScreen = ({ store }: WizardAskScreenProps) => {
       active = false;
     };
   }, [soleUrl]);
+
+  // Explicit, discoverable copy: auto-copy above is silent and can fail, so a
+  // `c` keybind (shown in the hints bar) lets the user copy the link on demand.
+  useKeyBindings(
+    'wizard-ask-copy',
+    canCopy
+      ? [
+          {
+            match: 'c',
+            label: 'c',
+            action: 'copy link',
+            handler: () => {
+              if (!soleUrl) return;
+              void copyToClipboard(soleUrl).then((ok) => setCopied(ok));
+            },
+          },
+        ]
+      : [],
+  );
 
   if (!pending) return null;
 
@@ -105,12 +130,18 @@ export const WizardAskScreen = ({ store }: WizardAskScreenProps) => {
           <Text>{question.prompt}</Text>
         )}
       </Box>
-      {pending.richLinks && copied && (
+      {canCopy && (
         <Box marginTop={1}>
-          <Text dimColor>
-            Link copied to clipboard — paste it in your browser if it isn&apos;t
-            clickable.
-          </Text>
+          {copied ? (
+            <Text color={Colors.success}>
+              {Icons.check} Link copied to clipboard — paste it in your browser
+              if it isn&apos;t clickable.
+            </Text>
+          ) : (
+            <Text dimColor>
+              Press <Text color={Colors.accent}>c</Text> to copy the link.
+            </Text>
+          )}
         </Box>
       )}
       <Box marginTop={1}>
