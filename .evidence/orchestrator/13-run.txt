@@ -1,0 +1,49 @@
+                               PostHog Wizard v2.33.0                                                                    Feedback: wizard@posthog.com 
+
+                                Learn                                                      Tasks
+
+                                Like trends to measure growth.                             ◼ Install PostHog SDK
+                                                                                           ◼ Initialize PostHog
+                                  Trends · user signups (monthly)                          ▶ Identify users
+                                                                                           ▶ Capture product events
+                                  10k ┤                          ╭── 9,575                 ◼ Wire error tracking
+                                      │                         ╭╯                         ◻ Build and verify
+                                 7.5k ┤                        ╭╯                          ◻ Create PostHog dashboard
+                                      │                      ╭─╯                           ◻ Write setup report
+                                   5k ┤                    ╭─╯
+                                      │                 ╭──╯                               ⠸ Progress: 3/8 completed
+                                 2.5k ┤             ╭───╯
+                                      │      ╭──────╯
+                                    0 ┤──────╯
+                                      └┬─────┬─────┬─────┬─────┬──
+                                       May   Aug   Nov   Feb   May
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                               ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+                                ┊ Planning the integration...
+                                ◆ Planned the integration
+
+                                 Status   Tail logs   Visualizer   HN 
+
+                                ←→ switch tab  s toggle status

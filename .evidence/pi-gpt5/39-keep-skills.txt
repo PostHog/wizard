@@ -1,0 +1,49 @@
+                               PostHog Wizard v2.33.0                                                                    Feedback: wizard@posthog.com 
+
+                               Keep the skills?
+
+                               The wizard installed open-source skills that help AI coding agents integrate PostHog into your project:
+
+                                 .claude/
+                                  skills/
+                                  integration-nextjs-app-router/
+                                       SKILL.md
+                                       references
+
+                               Source: https://github.com/PostHog/context-mill
+
+                                Keep the installed skills?
+
+                                 ▸ Keep [Enter]    Remove [Esc]
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                                ←→ switch  esc cancel  enter confirm

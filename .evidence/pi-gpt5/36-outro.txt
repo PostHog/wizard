@@ -1,0 +1,38 @@
+                               PostHog Wizard v2.33.0                                                                    Feedback: wizard@posthog.com 
+
+                               ✔ Successfully installed PostHog!
+
+                               Dashboard:
+                               https://us.posthog.com/project/228144/dashboard/1765879?utm_source=wizard&utm_medium=cli&utm_content=outro-dashboard
+
+                               Check ./posthog-setup-report.md for details
+
+                               What the agent did:
+                               • Analyzed your Next.js project structure (app router)
+                               • Created and configured PostHog initializers
+                               • Integrated PostHog into your application
+                               • Added environment variables to .env file
+
+                               Events added:
+                               • todos_viewed User viewed the main todo list after data successfully loaded.
+                               • todo_create_submitted User submitted the form to create a new todo.
+                               • todo_create_succeeded A new todo was successfully created on the server and added to the UI.
+                               • todo_create_failed Creating a new todo failed due to a client or server error.
+                               • todo_completed User marked a todo as completed.
+                               • todo_reopened User marked a completed todo as active again.
+                               • todo_delete_clicked User clicked to delete a todo.
+                               • todo_delete_succeeded A todo was successfully deleted on the server and removed from the UI.
+                               • todo_delete_failed Deleting a todo failed due to a client or server error.
+                               • todos_fetch_failed Initial fetch of todos failed when loading the list.
+                               • server_todos_listed Server returned the full list of todos.
+                               • server_todo_created Server created a new todo item.
+                               • server_todo_updated Server updated fields for a specific todo (including completion status).
+                               • server_todo_deleted Server deleted a specific todo.
+                               • server_todo_get Server returned a specific todo by ID.
+
+                               Learn more: https://posthog.com/docs/libraries/next-js?utm_source=wizard&utm_medium=cli&utm_content=outro-docs
+
+                               Note: This wizard uses an LLM agent to analyze and modify your project. Please review the changes made.
+                               How did this work for you? Drop us a line: wizard@posthog.com
+
+                               Press any key to continue

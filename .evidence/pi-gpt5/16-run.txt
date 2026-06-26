@@ -1,0 +1,49 @@
+                               PostHog Wizard v2.33.0                                                                    Feedback: wizard@posthog.com 
+
+                                Learn                                                      Tasks
+
+                                Like trends to measure growth.                             ◼ Choosing and installing the appropriate PostHog
+                                                                                           integration skill for this Next.js project
+                                  Trends · user signups (monthly)                          ◼ Reading installed skill documentation and program
+                                                                                           references
+                                  10k ┤                          ╭── 9,575                 ◻ Configuring environment variables for PostHog
+                                      │                         ╭╯                         ◻ Detecting package manager and installing PostHog 
+                                 7.5k ┤                        ╭╯                          dependencies
+                                      │                      ╭─╯                           ◻ Implementing client and server integration per skill 
+                                   5k ┤                    ╭─╯                             program
+                                      │                 ╭──╯                               ◻ Verifying the integration builds and typechecks
+                                 2.5k ┤             ╭───╯                                  ▶ Reviewing project files to plan events
+                                      │      ╭──────╯
+                                    0 ┤──────╯                                             ⠏ Progress: 2/7 completed
+                                      └┬─────┬─────┬─────┬─────┬──
+                                       May   Aug   Nov   Feb   May
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                               ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+                                ┊ Agent initialized. Let's get cooking!
+                                ◆ Writing your PostHog setup with events, error capture and more...
+
+                                 Status   Tail logs   Visualizer   HN 
+
+                                ←→ switch tab  s toggle status

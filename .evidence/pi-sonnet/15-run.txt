@@ -1,0 +1,49 @@
+                               PostHog Wizard v2.33.0                                                                    Feedback: wizard@posthog.com 
+
+                                Learn                                                      Tasks
+
+                                                                                           ◼ Load skill and explore project structure
+                                                                                           ◼ Plan event tracking for the project
+                                                                                           ▶ Installing PostHog
+                                                                                           ◻ Set up PostHog providers and configuration files
+                                                                                           ◻ Capture events across key user flows
+                                                                                           ◻ Identify users on auth flows
+                                                                                           ◻ Create PostHog dashboard with key insights
+
+                                                                                           ⠦ Progress: 2/7 completed
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                               ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+                                ┊ Agent initialized. Let's get cooking!
+                                ◆ Writing your PostHog setup with events, error capture and more...
+
+                                 Status   Event plan   Tail logs   Visualizer   HN 
+
+                                ←→ switch tab  s toggle status

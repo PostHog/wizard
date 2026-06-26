@@ -1,0 +1,4 @@
+/tmp/posthog-wizard.log:[2026-06-26T17:43:32.676Z] [runner] resolved: program=posthog-integration runner=pi model=openai/gpt-5
+/tmp/posthog-wizard.log:[2026-06-26T17:43:33.147Z] [pi] gateway https://gateway.us.posthog.com/wizard/v1 model openai/gpt-5 (openai-completions)
+/tmp/posthog-wizard.log:_posthogUrl: "https://us.posthog.com/project/228144/dashboard/1765879"
+/tmp/posthog-wizard.log:[2026-06-26T17:56:55.889Z] store.setDashboardUrl: https://us.posthog.com/project/228144/dashboard/1765879

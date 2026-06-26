@@ -1,0 +1,49 @@
+                               PostHog Wizard v2.33.0                                                                    Feedback: wizard@posthog.com 
+
+                                Learn                                                      Tasks
+
+                                Use those signals to decide what to build next.            ◼ Load skill and explore project structure
+                                                                                           ◼ Plan event tracking for the project
+                                PostHog has all the dev tools you need.                    ◼ Install PostHog SDK
+                                                                                           ◼ Set up PostHog providers and configuration files
+                                  ◆ Product Analytics     ◆ Error Tracking                 ◼ Capture events across key user flows
+                                  ◆ Web Analytics         ◆ Session Replay                 ◻ Identify users on auth flows
+                                  ◆ Feature Flags         ◆ Data Pipelines                 ◻ Create PostHog dashboard with key insights
+                                  ◆ Experiments           ◆ Data Warehouse
+                                  ◆ LLM Analytics         ◆ Surveys                        ⠏ Progress: 5/7 completed
+                                  ◆ Workflows             ◆ Logs
+                                  ◆ Product Tours         ◆ Support
+                                  ◆ Revenue Analytics     ◆ Endpoints
+                                  ◆ Customer Analytics    ◆ PostHog Code
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                               ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+                                ┊ Agent initialized. Let's get cooking!
+                                ◆ Writing your PostHog setup with events, error capture and more...
+
+                                 Status   Event plan   Tail logs   Visualizer   HN 
+
+                                ←→ switch tab  s toggle status

@@ -1,0 +1,49 @@
+                               PostHog Wizard v2.33.0                                                                    Feedback: wizard@posthog.com 
+
+                                Learn                                                      Tasks
+
+                                                                                           ▶ Install PostHog SDK
+                                                                                           ▶ Initialize PostHog
+                                                                                           ◻ Identify users
+                                                                                           ◻ Capture product events
+                                                                                           ◻ Wire error tracking
+                                                                                           ◻ Build and verify
+                                                                                           ◻ Create PostHog dashboard
+                                                                                           ◻ Write setup report
+
+                                                                                           ⠏ Progress: 0/8 completed
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                               ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+                                ┊ Planning the integration...
+                                ◆ Planned the integration
+
+                                 Status   Tail logs   Visualizer   HN 
+
+                                ←→ switch tab  s toggle status

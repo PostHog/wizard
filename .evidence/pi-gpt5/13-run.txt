@@ -1,0 +1,49 @@
+                               PostHog Wizard v2.33.0                                                                    Feedback: wizard@posthog.com 
+
+                                Learn                                                      Tasks
+
+                                Events are the foundation of the PostHog platform.         ◼ Choosing and installing the appropriate PostHog
+                                                                                           integration skill for this Next.js project
+                                Every time an action is performed in your codebase —       ▶ Loading and reviewing SKILL.md and referenced program
+                                like button clicks, function calls, or thrown errors —     files
+                                we can capture an event.                                   ◻ Configuring environment variables for PostHog
+                                                                                           ◻ Detecting package manager and installing PostHog 
+                                Events are sent to PostHog and joined with other product   dependencies
+                                data.                                                      ◻ Implementing client and server integration per skill 
+                                                                                           program
+                                                                                           ◻ Verifying the integration builds and typechecks
+
+                                                                                           ⠸ Progress: 1/6 completed
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                               ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+                                ┊ Agent initialized. Let's get cooking!
+                                ◆ Writing your PostHog setup with events, error capture and more...
+
+                                 Status   Tail logs   Visualizer   HN 
+
+                                ←→ switch tab  s toggle status

@@ -1,0 +1,30 @@
+                               PostHog Wizard v2.33.0                                                                    Feedback: wizard@posthog.com 
+
+                               ✔ Successfully installed PostHog!
+
+                               Dashboard:
+                               https://us.posthog.com/project/228144/dashboard/1765799?utm_source=wizard&utm_medium=cli&utm_content=outro-dashboard
+
+                               Check ./posthog-setup-report.md for details
+
+                               What the agent did:
+                               • Analyzed your Next.js project structure (app router)
+                               • Created and configured PostHog initializers
+                               • Integrated PostHog into your application
+                               • Added environment variables to .env file
+
+                               Events added:
+                               • todo_created User submits the form to create a new todo item.
+                               • todo_completed User checks a todo item to mark it as completed.
+                               • todo_reopened User unchecks a completed todo item to mark it as active again.
+                               • todo_deleted User clicks the delete button to remove a todo item.
+                               • todo_created Server captures todo creation after successful persistence.
+                               • todo_updated Server captures a todo update (title, description, or completion status).
+                               • todo_deleted Server captures todo deletion after successful removal.
+
+                               Learn more: https://posthog.com/docs/libraries/next-js?utm_source=wizard&utm_medium=cli&utm_content=outro-docs
+
+                               Note: This wizard uses an LLM agent to analyze and modify your project. Please review the changes made.
+                               How did this work for you? Drop us a line: wizard@posthog.com
+
+                               Press any key to continue

@@ -1,0 +1,49 @@
+                               PostHog Wizard v2.33.0                                                                    Feedback: wizard@posthog.com 
+
+                                Learn                                                      Tasks
+
+                                Or funnels to reveal bottlenecks.                          ◼ Install PostHog SDK
+                                                                                           ◼ Initialize PostHog
+                                                                                           ◻ Identify users (skipped)
+                                                                                           ▶ Capture product events
+                                                                                           ◼ Wire error tracking
+                                                                                           ◻ Build and verify
+                                                                                           ◻ Create PostHog dashboard
+                                                                                           ◻ Write setup report
+
+                                                                                           ⠋ Progress: 4/8 completed
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                               ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+                                ┊ Planning the integration...
+                                ◆ Planned the integration
+
+                                 Status   Tail logs   Visualizer   HN 
+
+                                ←→ switch tab  s toggle status

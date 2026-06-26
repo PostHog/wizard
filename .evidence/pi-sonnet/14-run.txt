@@ -1,0 +1,49 @@
+                               PostHog Wizard v2.33.0                                                                    Feedback: wizard@posthog.com 
+
+                                Learn                                                      Tasks
+
+                                Here's the flow.                                           ◼ Load skill and explore project structure
+                                                                                           ◼ Plan event tracking for the project
+                                  ┌──────────────────────────────┐                         ▶ Installing PostHog
+                                  │ Your App                     │                         ◻ Set up PostHog providers and configuration files
+                                  │   │ posthog.capture()        │                         ◻ Capture events across key user flows
+                                  │   │  custom events           │                         ◻ Identify users on auth flows
+                                  │   │  custom properties       │                         ◻ Create PostHog dashboard with key insights
+                                  │   │  person profiles         │
+                                  │   ↓  groups                  │                         ⠧ Progress: 2/7 completed
+                                  │ PostHog SDK                  │
+                                  │   ↓ HTTP                     │
+                                  │ PostHog Cloud                │
+                                  │   ↓ query + visualize        │
+                                  │ Dashboards & Insights        │
+                                  └──────────────────────────────┘
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                               ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+                                ┊ Agent initialized. Let's get cooking!
+                                ◆ Writing your PostHog setup with events, error capture and more...
+
+                                 Status   Event plan   Tail logs   Visualizer   HN 
+
+                                ←→ switch tab  s toggle status

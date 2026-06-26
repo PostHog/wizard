@@ -1,0 +1,49 @@
+                               PostHog Wizard v2.33.0                                                                    Feedback: wizard@posthog.com 
+
+                                Learn                                                      Tasks
+
+                                Here's the flow.                                           ◼ Install PostHog SDK
+                                                                                           ◼ Initialize PostHog
+                                  ┌──────────────────────────────┐                         ▶ Identify users
+                                  │ Your App                     │                         ▶ Capture product events
+                                  │   │ posthog.capture()        │                         ▶ Wire error tracking
+                                  │   │  custom events           │                         ◻ Build and verify
+                                  │   │  custom properties       │                         ◻ Create PostHog dashboard
+                                  │   │  person profiles         │                         ◻ Write setup report
+                                  │   ↓  groups                  │
+                                  │ PostHog SDK                  │                         ⠋ Progress: 2/8 completed
+                                  │   ↓ HTTP                     │
+                                  │ PostHog Cloud                │
+                                  │   ↓ query + visualize        │
+                                  │ Dashboards & Insights        │
+                                  └──────────────────────────────┘
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                               ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+                                ┊ Planning the integration...
+                                ◆ Planned the integration
+
+                                 Status   Tail logs   Visualizer   HN 
+
+                                ←→ switch tab  s toggle status

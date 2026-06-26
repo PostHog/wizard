@@ -1,0 +1,49 @@
+                               PostHog Wizard v2.33.0                                                                    Feedback: wizard@posthog.com 
+
+                                Learn                                                      Tasks
+
+                                Use those signals to decide what to build next.            ◼ Install PostHog SDK
+                                                                                           ◼ Initialize PostHog
+                                PostHog has all the dev tools you need.                    ◻ Identify users (skipped)
+                                                                                           ◼ Capture product events
+                                  ◆ Product Analytics     ◆ Error Tracking                 ◼ Wire error tracking
+                                  ◆ Web Analytics         ◆ Session Replay                 ▶ Build and verify
+                                  ◆ Feature Flags         ◆ Data Pipelines                 ◻ Create PostHog dashboard
+                                  ◆ Experiments           ◆ Data Warehouse                 ◻ Write setup report
+                                  ◆ LLM Analytics         ◆ Surveys
+                                  ◆ Workflows             ◆ Logs                           ⠼ Progress: 5/8 completed
+                                  ◆ Product Tours         ◆ Support
+                                  ◆ Revenue Analytics     ◆ Endpoints
+                                  ◆ Customer Analytics    ◆ PostHog Code
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                               ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+                                ┊ Planning the integration...
+                                ◆ Planned the integration
+
+                                 Status   Tail logs   Visualizer   HN 
+
+                                ←→ switch tab  s toggle status

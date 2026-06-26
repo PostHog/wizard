@@ -1,0 +1,1 @@
+/tmp/posthog-wizard.log:[2026-06-26T17:34:53.035Z] [runner] resolved: program=posthog-integration runner=anthropic model=claude-sonnet-4-6

@@ -1,0 +1,49 @@
+                               PostHog Wizard v2.33.0                                                                    Feedback: wizard@posthog.com 
+
+                               Install the MCP so you can chat to your data
+
+                               • Ask your agent: "List my feature flags" — and it does.
+                               • Run SQL, build dashboards, ship flags, all from your IDE.
+                               • No copy-pasting tokens or context. Your agent has the keys.
+
+                               Detected: Claude Code, Claude Desktop/Web, Cursor, Visual Studio Code, Zed
+
+                                Install the PostHog MCP server and plugin?
+                               ▸ Install with all features (recommended)
+                                 Customize features
+                                 No thanks
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                                ↑↓ navigate  enter select

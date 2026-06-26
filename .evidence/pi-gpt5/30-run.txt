@@ -1,0 +1,49 @@
+                               PostHog Wizard v2.33.0                                                                    Feedback: wizard@posthog.com 
+
+                                Tips                                                       Tasks
+
+                                ◆ You can also track people and groups with PostHog        ◼ Choosing and installing the appropriate PostHog
+                                Events can be associated with the humans who generate      integration skill for this Next.js project
+                                them, letting you understand a specific user or            ◼ Reading installed skill documentation and program
+                                customer's situation.                                      references
+                                                                                           ◼ Configuring environment variables for PostHog
+                                ◆ Get way more detail using properties                     ◼ Detected pnpm and installed PostHog SDK packages
+                                Events and person records can have any properties you      ▶ Reviewing remaining files for minimal changes
+                                want. Track things like how they found your website,       ▶ Running build to verify integration
+                                what subscription tier they choose, and much more.         ◼ Planning event tracking and drafting event plan
+                                                                                           ◼ Created .posthog-events.json with proposed client and
+                                ◆ Use PostHog in Slack                                     server events
+                                Connect the PostHog Slack app to analyze data and ship     ◼ Installed PostHog SDKs with pnpm
+                                product changes — deploy flags, open PRs, run queries —    ▶ Editing UI components to fire capture events from
+                                just by tagging @PostHog: https://posthog.com/slack        handlers
+
+                                                                                           ⠴ Progress: 7/10 completed
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                               ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+                                ┊ Agent initialized. Let's get cooking!
+                                ◆ Writing your PostHog setup with events, error capture and more...
+
+                                 Status   Event plan   Tail logs   Visualizer   HN 
+
+                                ←→ switch tab  s toggle status
