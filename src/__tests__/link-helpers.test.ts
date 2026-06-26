@@ -72,13 +72,13 @@ describe('splitPromptIntoSegments', () => {
   });
 
   it('keeps trailing punctuation with the prose, not the url', () => {
-    expect(splitPromptIntoSegments('open https://x.test. Then return.')).toEqual(
-      [
-        { type: 'text', value: 'open' },
-        { type: 'url', value: 'https://x.test' },
-        { type: 'text', value: '. Then return.' },
-      ],
-    );
+    expect(
+      splitPromptIntoSegments('open https://x.test. Then return.'),
+    ).toEqual([
+      { type: 'text', value: 'open' },
+      { type: 'url', value: 'https://x.test' },
+      { type: 'text', value: '. Then return.' },
+    ]);
   });
 
   it('breaks out multiple inline urls on one line', () => {
