@@ -59,7 +59,7 @@ matching context-mill file carries the HOW.
 
 **Step backbone (expected action, one line each):**
 
-1. **Check access** — probe the Signals API; if it's not available for the team, abort cleanly (`[ABORT] self-driving is not available for this project`).
+1. **Check access** — **instant, no probe.** Self-driving is in **open beta** (available to every team), so there is no access gate to check; the step just marks itself in_progress→completed (no MCP call) so the step-tracking funnel still fires and the user gets an immediate first checkmark. `[ABORT] self-driving is not available for this project` is kept only as a safety net for a genuine Signals-API outage during the run.
 2. **Read context** — build an evidence picture of which products are in use (setup report + `signals-scout-project-profile-get` + cheap usage probes + a light repo scan); read-only.
 3. **Connect GitHub** — required; if no `github` integration, send the user through the GitHub App install (one-click authorize deep-link) and re-verify; abort if declined.
 4. **Enable sources** — always enable the scout gate; enable native sources (error tracking, replay, support) only where step-2 evidence shows the product is in use.
@@ -72,7 +72,7 @@ The table below adds the skill reference and the tool/MCP surface for each.
 
 | # | Step | Skill ref / file | Tools · surface |
 |---|---|---|---|
-| 1 | Check access | `1-check-access.md` | Probe `inbox-source-configs-list` (no readable beta flag — the API *is* the probe). Fail → `[ABORT] self-driving is not available for this project`. |
+| 1 | Check access | `1-check-access.md` | **No probe — instant** (open beta: available to every team). Marks the task in_progress→completed immediately, calls no MCP tool. The `[ABORT] self-driving is not available for this project` string remains a safety net for a genuine Signals-API outage during the run, not a beta gate. |
 | 2 | Read project & Signals state | `2-read-context.md` | `./posthog-setup-report.md` + `signals-scout-project-profile-get` + cheap usage probes. Prompt opt-ins are authoritative ("repo evidence rules a product IN, never OUT"). |
 | 3 | Connect GitHub (REQUIRED) | `3-github.md` | `integrations-list` for `kind:"github"`; else `wizard_ask` with the one-click `integrations/authorize?kind=github` deep-link (the single link covers fresh install / link-existing / re-auth — no separate settings "re-link" path), re-verify after a manual "done". Can't → `[ABORT] github connection declined`. |
 | 4 | Enable signal sources | `4-sources.md` | Create/enable `SignalSourceConfig` rows for products in use (`inbox-source-configs-*`). Always enables the scout gate `signals_scout`/`cross_source_issue`. Never enables an unconfirmed tool. |
@@ -232,6 +232,14 @@ scoped to `created_via=MCP`.
 
 ## 6. Gating & prerequisites — "will it actually work?"
 
+> [!NOTE]
+> **Open beta — the wizard no longer probes access.** Self-driving is in open
+> beta (available to every team), so STEP 1 dropped its `inbox-source-configs-list`
+> access probe and runs instantly; the wizard surfaces no beta gate of its own.
+> The PostHog-side gates below still apply **server-side** (a flag not yet at 100%
+> just means findings won't surface), and the `[ABORT] self-driving is not available
+> for this project` path is now only a safety net for a genuine Signals-API outage.
+
 1. **UI flag `product-autonomy`** (`posthog/frontend/src/lib/constants.tsx`,
    `FEATURE_FLAGS.PRODUCT_AUTONOMY`). Frontend-only — gates the Inbox scene, nav item, and source-config
    loading. Off → the user can't *see* the inbox; the pipeline is unaffected.
@@ -281,8 +289,10 @@ Plus the **Temporal coordinator schedule** (`signals-scout-coordinator-schedule`
 3. **posthog backend deploy** of the `feat/signals-scout-config-sync` work: the `sync` endpoint, companion
    seeding (`lazy_seed.py`), and the 10 canonical scout skills.
 4. **Temporal coordinator schedule** running in prod.
-5. **Flag rollout:** `signals-scout` 100%-on with target teams in `guaranteed_team_ids`; `product-autonomy`
-   on for target users.
+5. **Flag rollout (open beta = everyone):** `signals-scout` 100%-on for all teams (still the real
+   server gate for dispatch); `product-autonomy` on for all users. The wizard no longer probes access
+   in STEP 1, so an un-flagged team isn't turned away at setup — it just won't see findings until the
+   server-side flags are on.
 6. **Per-team runtime** (user's responsibility): org AI consent on, GitHub connected.
 
 > [!NOTE]

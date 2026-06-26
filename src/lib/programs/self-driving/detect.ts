@@ -5,13 +5,18 @@
  * `session.installDir` is a real, readable directory. We deliberately do
  * NOT require the base posthog-integration report to be present — it is a
  * report many users never commit, and `requires: ['posthog-integration']`
- * is metadata, not a hard runtime gate. Real readiness (integration state
- * + beta access) is established by the agent's STEP 1 Signals API probe at
- * the start of the run. The beta gates (the `product-autonomy` access flag
- * and `signals-scout` enrollment — PostHog-side flag names, unchanged by
- * the wizard-side "self-driving" rename) are PostHog-internal flags with no
- * customer-facing read API, which is why that probe lives in the run and
- * emits a structured `[ABORT]` when the product is not available.
+ * is metadata, not a hard runtime gate.
+ *
+ * Self-driving is now in OPEN beta — available to every team — so STEP 1
+ * no longer probes the Signals API as an access gate; it completes
+ * instantly so the run opens with a fast first checkmark. The
+ * `self-driving is not available for this project` abort below is kept
+ * only as a safety net: if the Signals API genuinely can't be reached
+ * during the run (a hard error that is unexpected in open beta), the skill
+ * emits it and the wizard renders a friendly "try again" screen — now with
+ * open-beta wording, not the old closed, per-team "join the beta" copy. The
+ * PostHog-side flags (`product-autonomy`, `signals-scout`) are unchanged by
+ * the wizard-side "self-driving" rename.
  */
 
 import { existsSync, statSync } from 'fs';
@@ -39,10 +44,10 @@ export const SELF_DRIVING_ABORT_CASES: AbortCase[] = [
     match: /^self-driving is not available for this project$/i,
     message: 'PostHog Self-driving is not available for this project',
     body:
-      'Self-driving is in beta and is enabled per ' +
-      'team by PostHog. This project does not appear to have access yet. ' +
-      'Reach out to your PostHog contact (or wizard@posthog.com) to join ' +
-      'the beta, then run the wizard again.',
+      'Self-driving is in open beta and available to every team, so this ' +
+      'is unexpected — the PostHog Signals API could not be reached for ' +
+      'this project. Nothing was changed. Try again in a moment, and if it ' +
+      'keeps happening reach out to wizard@posthog.com.',
   },
   {
     // Skill emits: [ABORT] github connection declined

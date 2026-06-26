@@ -72,8 +72,13 @@ Wizard mechanics:
 Follow these steps IN ORDER. Do not skip or reorder.
 
 STEP 1 — Check Self-driving access. (skill: "Check access")
-   Probe the Signals API as the skill describes. If the API is not
-   available for this project (permission or not-found errors), emit
+   Self-driving is in open beta and available to every team, so there is
+   no access gate to probe. Do NOT call any MCP tool here — mark this task
+   in_progress and then completed right away and emit the
+   ${AgentSignals.STATUS} line, so the user sees an immediate first step.
+   Only if the Signals API later turns out to be genuinely unreachable for
+   this project (a hard error on every Signals call, unexpected in open
+   beta) should you emit
    ${AgentSignals.ABORT} self-driving is not available for this project
    and halt.
 
