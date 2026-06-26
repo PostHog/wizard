@@ -8,15 +8,10 @@
 import type { WizardSession } from '../../wizard-session';
 import { OutroKind } from '../../wizard-session';
 import { getUI } from '../../../ui';
-import {
-  initializeAgent,
-  runAgent as executeAgent,
-  AgentErrorType,
-  AgentSignals,
-} from '../agent-interface';
+import { AgentErrorType, AgentSignals } from '../agent-interface';
 import { restoreClaudeSettings } from '../claude-settings';
 import { getCloudUrlFromRegion } from '../../../utils/urls';
-import { logToFile, getLogFilePath } from '../../../utils/debug';
+import { logToFile } from '../../../utils/debug';
 import { createBenchmarkPipeline } from '../../middleware/benchmark';
 import {
   wizardAbort,
@@ -25,7 +20,6 @@ import {
 } from '../../../utils/wizard-abort';
 import { analytics } from '../../../utils/analytics';
 import { formatScanReport, writeScanReport } from '../../yara-hooks';
-import { detectNodePackageManagers } from '../../detection/package-manager';
 import { installSkillById } from '../../wizard-tools';
 import { createWizardAskBridge } from '../../wizard-ask-bridge';
 import type { ProgramConfig } from '../../programs/program-step';
@@ -33,6 +27,7 @@ import { assemblePrompt } from '../agent-prompt';
 import type { ProgramRun, BootstrapResult } from './shared/types';
 import { abortOnInstallFailure } from './shared/errors';
 import { shouldDisableAsk, sessionToOptions } from './shared/bootstrap';
+import { resolvePair, getRunner, MODELS } from './runner-plan';
 
 export async function runLinearProgram(
   session: WizardSession,
@@ -47,9 +42,7 @@ export async function runLinearProgram(
     accessToken,
     projectId,
     cloudRegion,
-    mcpUrl,
     wizardFlags,
-    wizardMetadata,
     project,
   } = boot;
 
@@ -101,33 +94,6 @@ export async function runLinearProgram(
         timeoutMs: config.askTimeoutMs,
       });
 
-  getUI().log.step('Initializing Claude agent...');
-  const agent = await initializeAgent(
-    {
-      workingDirectory: session.installDir,
-      posthogMcpUrl: mcpUrl,
-      posthogApiKey: accessToken,
-      posthogApiHost: host,
-      additionalMcpServers: config.additionalMcpServers,
-      detectPackageManager:
-        config.detectPackageManager ?? detectNodePackageManagers,
-      skillsBaseUrl,
-      wizardFlags,
-      wizardMetadata,
-      integrationLabel: config.integrationLabel,
-      askBridge,
-      askMaxQuestions: config.maxQuestions,
-      allowedTools: programConfig.allowedTools,
-      disallowedTools: programConfig.disallowedTools,
-      getPendingQuestion: () => session.pendingQuestion,
-    },
-    sessionToOptions(session),
-  );
-  getUI().log.step(`Verbose logs: ${getLogFilePath()}`);
-  getUI().log.success("Agent initialized. Let's get cooking!");
-
-  logToFile('[agent-runner] agent initialized');
-
   const middleware = session.benchmark
     ? createBenchmarkPipeline(spinner, sessionToOptions(session))
     : undefined;
@@ -150,23 +116,23 @@ export async function runLinearProgram(
   });
   logToFile(`[agent-runner] prompt assembled (${prompt.length} chars)`);
 
-  // 8. Run agent
-  const agentResult = await executeAgent(
-    agent,
+  // 8. Resolve the (runner, model) pair from the central plan and run the agent
+  // through the selected runner. The runner owns the agent loop + model
+  // transport; everything around it (skill install, prompt, ask bridge, error
+  // routing, outro) stays here so every runner shares it.
+  const pair = resolvePair({ program: programConfig.id, flags: wizardFlags });
+  const agentResult = await getRunner(pair.runner).run({
+    session,
+    config,
+    programConfig,
+    boot,
     prompt,
-    sessionToOptions(session),
+    skillPath,
     spinner,
-    {
-      estimatedDurationMinutes: config.estimatedDurationMinutes,
-      spinnerMessage: config.spinnerMessage,
-      successMessage: config.successMessage,
-      errorMessage: config.errorMessage ?? `${config.integrationLabel} failed`,
-      additionalFeatureQueue: config.additionalFeatureQueue ?? [],
-      abortCases: config.abortCases,
-      emitStepEvents: config.trackStepProgress ?? false,
-    },
+    askBridge,
     middleware,
-  );
+    model: MODELS[pair.model],
+  });
 
   // 9. Error handling (full set from both runners)
   if (agentResult.error === AgentErrorType.ABORT) {

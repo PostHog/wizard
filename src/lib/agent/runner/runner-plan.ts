@@ -1,0 +1,110 @@
+/**
+ * The agent-runner plan — the one central place that decides how a program runs.
+ *
+ * A program maps (via the `ROUTES` config map) to a **router** (control-flow
+ * shape: `linear` | `orchestrator`) and a **(runner, model) pair**. The base
+ * decision is just the map read; control is then asserted at named insertion
+ * points (`resolvePair` here; `resolveRouter` arrives with the flag middleware)
+ * — each an ordered middleware chain whose terminal is the map. Existing flags
+ * plug in as middleware, one per flag (see #692b); the core never reads a flag.
+ *
+ * Two registries bound by pairs:
+ *   RUNNERS  leaf engines (`anthropic` now; `pi` registers later)
+ *   MODELS   model alias → gateway id (retires the hardcoded model literals)
+ */
+
+import { DEFAULT_AGENT_MODEL } from '@lib/constants';
+import { logToFile } from '@utils/debug';
+import type { ProgramId } from '@lib/programs/program-registry';
+import type { AgentRunner } from './backends/types';
+import { anthropicBackend } from './backends/anthropic';
+
+export type RunnerName = 'anthropic' | 'pi';
+export type RouterName = 'linear' | 'orchestrator';
+export type ModelAlias = 'sonnet' | 'opus';
+
+/** What a leaf of agent work resolves to. */
+export interface Pair {
+  runner: RunnerName;
+  model: ModelAlias;
+}
+
+/** Model alias → gateway model id. Replaces the hardcoded model literals. */
+export const MODELS: Record<ModelAlias, string> = {
+  sonnet: DEFAULT_AGENT_MODEL,
+  opus: 'claude-opus-4-8',
+};
+
+/** Leaf engines. `pi` registers in a later PR. */
+export const RUNNERS: Partial<Record<RunnerName, AgentRunner>> = {
+  anthropic: anthropicBackend,
+};
+
+/** Look up a registered runner, or fail loudly if a route names an absent one. */
+export function getRunner(name: RunnerName): AgentRunner {
+  const runner = RUNNERS[name];
+  if (!runner) {
+    throw new Error(`No agent runner registered for '${name}'.`);
+  }
+  return runner;
+}
+
+/**
+ * A program's default plan. `roles` overlays the pair per orchestrator sub-task
+ * role; the linear router always resolves `role = 'default'`.
+ */
+export interface Route {
+  router: RouterName;
+  runner: RunnerName;
+  model: ModelAlias;
+  roles?: Record<string, Partial<Pair>>;
+}
+
+/** The fall-through when a program has no `ROUTES` entry. */
+export const DEFAULT_ROUTE: Route = {
+  router: 'linear',
+  runner: 'anthropic',
+  model: 'sonnet',
+};
+
+/**
+ * Per-program overrides. Sparse — anything absent inherits `DEFAULT_ROUTE`, so
+ * with no entries every program resolves to `linear / anthropic / sonnet`
+ * (today's behavior).
+ */
+export const ROUTES: Partial<Record<ProgramId, Route>> = {};
+
+/** Everything a resolver middleware may branch on. Built once per run. */
+export interface ResolveCtx {
+  program: ProgramId;
+  flags: Record<string, string>;
+}
+
+/** A resolver middleware: defer via `next()`, or assert by returning a value. */
+export type Mw<D> = (ctx: ResolveCtx, next: () => D) => D;
+
+/** Run a middleware chain over `ctx`, terminating in `base` (the map read). */
+export function runChain<D>(chain: Mw<D>[], ctx: ResolveCtx, base: () => D): D {
+  const dispatch = (i: number): D =>
+    i < chain.length ? chain[i](ctx, () => dispatch(i + 1)) : base();
+  return dispatch(0);
+}
+
+/**
+ * The pair insertion point. The chain is empty until the flag middleware lands;
+ * the terminal is the config map read. Called per leaf with a role.
+ */
+const PAIR_MIDDLEWARE: Mw<Pair>[] = [];
+
+export function resolvePair(ctx: ResolveCtx, role = 'default'): Pair {
+  const pair = runChain(PAIR_MIDDLEWARE, ctx, () => {
+    const route = ROUTES[ctx.program] ?? DEFAULT_ROUTE;
+    return { runner: route.runner, model: route.model, ...route.roles?.[role] };
+  });
+  logToFile(
+    `[runner] resolved: program=${ctx.program} runner=${pair.runner} model=${
+      MODELS[pair.model]
+    }`,
+  );
+  return pair;
+}
