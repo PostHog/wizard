@@ -50,10 +50,7 @@ import {
   type SettingsConflict,
   type SettingsConflictSource,
 } from './claude-settings';
-import {
-  detectStoredClaudeLogin,
-  hasStoredClaudeLogin,
-} from './stored-login';
+import { detectStoredClaudeLogin, hasStoredClaudeLogin } from './stored-login';
 
 // Dynamic import cache for ESM module
 let _sdkModule: any = null;

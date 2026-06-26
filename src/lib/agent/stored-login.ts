@@ -33,6 +33,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import path from 'path';
 import { spawnSync } from 'node:child_process';
+import { logToFile } from '@utils/debug';
 
 /** macOS keychain service name Claude Code stores its login under. */
 const KEYCHAIN_SERVICE = 'Claude Code-credentials';
@@ -57,13 +58,17 @@ export function detectStoredClaudeLogin(
   platform: NodeJS.Platform = process.platform,
 ): StoredClaudeLogin {
   // Honor CLAUDE_CONFIG_DIR the same way the SDK does when resolving creds.
-  const configDir = process.env.CLAUDE_CONFIG_DIR || path.join(homeDir, '.claude');
+  const configDir =
+    process.env.CLAUDE_CONFIG_DIR || path.join(homeDir, '.claude');
 
+  const credentialsPath = path.join(configDir, '.credentials.json');
   let credentialsFile = false;
   try {
-    credentialsFile = fs.existsSync(path.join(configDir, '.credentials.json'));
+    credentialsFile = fs.existsSync(credentialsPath);
   } catch {
-    // unreadable — treat as absent
+    logToFile(
+      `[stored-login] checked ${credentialsPath} — unreadable, treating as absent`,
+    );
   }
 
   let keychain = false;
@@ -78,7 +83,9 @@ export function detectStoredClaudeLogin(
       );
       keychain = res.status === 0;
     } catch {
-      // `security` missing or failed — treat as absent
+      logToFile(
+        `[stored-login] checked keychain '${KEYCHAIN_SERVICE}' — lookup cleared, treating as absent`,
+      );
     }
   }
 

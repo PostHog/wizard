@@ -4,10 +4,7 @@ import path from 'path';
 
 jest.mock('node:child_process', () => ({ spawnSync: jest.fn() }));
 
-import {
-  detectStoredClaudeLogin,
-  hasStoredClaudeLogin,
-} from '../stored-login';
+import { detectStoredClaudeLogin, hasStoredClaudeLogin } from '../stored-login';
 
 const { spawnSync } = require('node:child_process');
 const spawnSyncMock = spawnSync as jest.Mock;
