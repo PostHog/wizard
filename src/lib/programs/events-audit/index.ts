@@ -4,7 +4,7 @@ import type { WizardSession } from '@lib/wizard-session';
 import { OutroKind } from '@lib/wizard-session';
 import { SPINNER_MESSAGE } from '@lib/framework-config';
 import { isUsingTypeScript } from '@utils/setup-utils';
-import { getCloudUrlFromRegion } from '@utils/urls';
+import { getCloudUrl } from '@utils/urls';
 import { WIZARD_TOOL_NAMES } from '@lib/wizard-tools';
 import { EVENTS_AUDIT_PROGRAM } from './steps.js';
 import { AUDIT_CHECKS_KEY } from '@lib/programs/audit/types';
@@ -68,7 +68,7 @@ Project context:
 
       buildOutroData: (sess, _credentials, cloudRegion) => {
         const cloudUrl = cloudRegion
-          ? getCloudUrlFromRegion(cloudRegion)
+          ? getCloudUrl(cloudRegion, sess.baseUrl)
           : undefined;
         const continueUrl =
           sess.signup && cloudUrl
