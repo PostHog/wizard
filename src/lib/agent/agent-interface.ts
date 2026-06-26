@@ -611,7 +611,7 @@ export async function initializeAgent(
       logToFile(
         `Pre-existing Claude login detected (credentialsFile=${storedLogin.credentialsFile}, ` +
           `keychain=${storedLogin.keychain}). It can outrank the wizard's gateway token ` +
-          `and cause a 401 — 'claude logout' clears it.`,
+          `and cause a 401 — 'claude auth logout' clears it.`,
       );
       analytics.wizardCapture('claude stored login detected', {
         credentials_file: storedLogin.credentialsFile,
