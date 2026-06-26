@@ -78,6 +78,31 @@ check(
 );
 
 check(
+  'AuthErrorScreen — managed login names conflicting credentials + places',
+  <AuthErrorScreen
+    store={fakeStore({
+      authErrorDetail: {
+        hasSettingsConflict: false,
+        usingManagedLogin: true,
+        credentialPlaces: [
+          'A logged-in Claude session: /home/dev/.claude/.credentials.json',
+          'A logged-in Claude session: macOS keychain item "Claude Code-credentials"',
+        ],
+        logFilePath: '/tmp/posthog-wizard.log',
+      },
+    })}
+  />,
+  [
+    'Conflicting Anthropic credentials',
+    '/home/dev/.claude/.credentials.json',
+    'Claude Code-credentials',
+    'claude auth logout',
+  ],
+  // Must not fall through to the generic key-guidance copy.
+  ['Region mismatch'],
+);
+
+check(
   'AuthErrorScreen — no conflict falls back to key guidance',
   <AuthErrorScreen
     store={fakeStore({

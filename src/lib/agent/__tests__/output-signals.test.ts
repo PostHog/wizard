@@ -52,4 +52,37 @@ describe('AgentOutputSignals', () => {
     expect(signals.apiErrorMessage()).toBeUndefined();
     expect(signals.remark()).toBeUndefined();
   });
+
+  describe('apiKeySource', () => {
+    it('flags a stored "/login managed key" as a managed login', () => {
+      const signals = new AgentOutputSignals();
+      signals.recordApiKeySource('/login managed key');
+
+      expect(signals.apiKeySource).toBe('/login managed key');
+      expect(signals.usedManagedLogin()).toBe(true);
+    });
+
+    it('does not flag an explicit API key as a managed login', () => {
+      const signals = new AgentOutputSignals();
+      signals.recordApiKeySource('ANTHROPIC_API_KEY');
+
+      expect(signals.usedManagedLogin()).toBe(false);
+    });
+
+    it('is absent (and not a managed login) when never recorded', () => {
+      const signals = new AgentOutputSignals();
+
+      expect(signals.apiKeySource).toBeUndefined();
+      expect(signals.usedManagedLogin()).toBe(false);
+    });
+
+    it('ignores an undefined source so a later real value can win', () => {
+      const signals = new AgentOutputSignals();
+      signals.recordApiKeySource(undefined);
+      expect(signals.apiKeySource).toBeUndefined();
+
+      signals.recordApiKeySource('/login managed key');
+      expect(signals.usedManagedLogin()).toBe(true);
+    });
+  });
 });

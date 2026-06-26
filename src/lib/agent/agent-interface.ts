@@ -105,14 +105,56 @@ export interface AuthErrorContext {
   conflictKeys: string[];
   gatewayUrl: string;
   region: 'eu' | 'us' | 'local';
+  /** SDK `apiKeySource` from the init message, when known. */
+  apiKeySource?: string;
+  /**
+   * True when the SDK authenticated from a stored Claude login (`apiKeySource`
+   * is a "/login managed key") — i.e. conflicting Anthropic credentials, not
+   * the gateway token the wizard injected.
+   */
+  usingManagedLogin: boolean;
+  /** Human-readable places a conflicting Anthropic credential may live. */
+  credentialPlaces: string[];
+}
+
+/** Places the agent could have picked up a non-PostHog credential. */
+function findCredentialPlaces(
+  conflicts: SettingsConflict[],
+  homeDir: string,
+): string[] {
+  const places: string[] = [];
+
+  const stored = detectStoredClaudeLogin(homeDir);
+  const configDir =
+    process.env.CLAUDE_CONFIG_DIR || path.join(homeDir, '.claude');
+  if (stored.credentialsFile) {
+    places.push(
+      `A logged-in Claude session: ${path.join(
+        configDir,
+        '.credentials.json',
+      )}`,
+    );
+  }
+  if (stored.keychain) {
+    places.push(
+      'A logged-in Claude session: macOS keychain item "Claude Code-credentials"',
+    );
+  }
+  for (const c of conflicts) {
+    places.push(`${c.path} sets ${c.keys.join(', ')}`);
+  }
+  return places;
 }
 
 export function buildAuthErrorContext(
   workingDirectory: string,
   gatewayUrl: string,
   homeDir: string = os.homedir(),
+  apiKeySource?: string,
 ): AuthErrorContext {
   const conflicts = checkAllSettingsConflicts(workingDirectory, homeDir);
+  // The SDK reports a stored Claude login as a "/login managed key".
+  const usingManagedLogin = /login|managed key/i.test(apiKeySource ?? '');
   return {
     hasSettingsConflict: conflicts.length > 0,
     conflicts,
@@ -120,6 +162,9 @@ export function buildAuthErrorContext(
     conflictKeys: [...new Set(conflicts.flatMap((c) => c.keys))],
     gatewayUrl,
     region: regionFromGatewayUrl(gatewayUrl),
+    apiKeySource,
+    usingManagedLogin,
+    credentialPlaces: findCredentialPlaces(conflicts, homeDir),
   };
 }
 
@@ -1142,11 +1187,15 @@ export async function runAgent(
         const authError = buildAuthErrorContext(
           options.installDir,
           process.env.ANTHROPIC_BASE_URL ?? '',
+          os.homedir(),
+          signals.apiKeySource,
         );
         logToFile('Agent error: 401, showing auth error screen', authError);
         getUI().showAuthError({
           hasSettingsConflict: authError.hasSettingsConflict,
           conflicts: authError.conflicts,
+          usingManagedLogin: authError.usingManagedLogin,
+          credentialPlaces: authError.credentialPlaces,
           logFilePath: getLogFilePath(),
         });
         await wizardAbort({
@@ -1157,6 +1206,8 @@ export async function runAgent(
             conflictKeys: authError.conflictKeys,
             gatewayUrl: authError.gatewayUrl,
             region: authError.region,
+            usingManagedLogin: authError.usingManagedLogin,
+            apiKeySource: authError.apiKeySource,
           }),
         });
       }
@@ -1668,10 +1719,16 @@ function handleSDKMessage(
 
     case 'system': {
       if (message.subtype === 'init') {
+        // Capture which credential the SDK authenticated with. A managed-login
+        // source (`"/login managed key"`) means it used a stored Claude login
+        // rather than the gateway token we injected — the prime suspect for a
+        // subsequent 401 (consumed by the auth-error handler below).
+        signals.recordApiKeySource(message.apiKeySource);
         logToFile('Agent session initialized', {
           model: message.model,
           tools: message.tools?.length,
           mcpServers: message.mcp_servers,
+          apiKeySource: message.apiKeySource,
         });
       }
       break;
