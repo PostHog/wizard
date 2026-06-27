@@ -12,9 +12,11 @@
  * follow-ups (#525, #524 skills) — v1 uses pi's built-in coding tools.
  */
 
-import { getUI } from '../../../../ui';
-import { logToFile } from '../../../../utils/debug';
-import { getLlmGatewayUrlFromHost } from '../../../../utils/urls';
+import fs from 'fs';
+import path from 'path';
+import { getUI } from '@ui';
+import { getLogFilePath, logToFile } from '@utils/debug';
+import { getLlmGatewayUrlFromHost } from '@utils/urls';
 import {
   POSTHOG_FLAG_HEADER_PREFIX,
   POSTHOG_PROPERTY_HEADER_PREFIX,
@@ -40,6 +42,23 @@ function gatewayApiFor(
     ? 'openai-completions'
     : 'anthropic-messages';
 }
+
+/**
+ * pi-specific runtime guidance appended to the shared commandments. Targets the
+ * top run-slowness causes (profiled): the agent reaching for blocked `bash
+ * ls/find` to explore (each retry is a model round-trip), re-fetching the skill
+ * menu, and writing literal PostHog URLs that the YARA scanner blocks at write
+ * time. Steering it once up front avoids the retry spirals.
+ */
+const PI_RUNTIME_NOTES = [
+  '',
+  '## This runtime',
+  "- To see a directory's files, call the `read` tool with the directory path (e.g. read '.' or read 'src/'); it returns the listing. Use `read` for files too. NEVER run `ls`, `find`, `cat`, or `grep` through `bash` — they are blocked and waste a turn.",
+  '- `bash` is ONLY for install/build/typecheck/lint/format. Run installs SYNCHRONOUSLY (e.g. `npm install <pkg>`); do not background with `&`, chain with `&&`, or pipe — all are blocked.',
+  '- Call `load_skill_menu` once to choose the skill, then `install_skill`. Do not call `load_skill_menu` again this session.',
+  "- Never write a PostHog URL or token as a literal in source (e.g. 'https://us.i.posthog.com') — it is blocked. Read them from environment variables (process.env.POSTHOG_HOST, os.environ['POSTHOG_HOST'], etc.).",
+  '- Update the task list FREQUENTLY as you work — mark items `completed` the moment you finish them and `in_progress` as you pick them up, so the displayed step always reflects where you actually are. Keep titles broad and action-oriented (the area of work), not specific files or sub-steps.',
+].join('\n');
 
 /**
  * Gateway HTTP headers, mirroring `buildAgentEnv` on the anthropic path: always
@@ -88,6 +107,11 @@ export const piBackend: AgentRunner = {
   async run(inputs: BackendRunInputs): Promise<AgentResult> {
     const { session, boot, prompt, spinner, config, programConfig } = inputs;
     const modelId = inputs.model;
+
+    // Init banner (parity #5).
+    getUI().log.step('Initializing Wizard agent...');
+    getUI().log.step(`Verbose logs: ${getLogFilePath()}`);
+    getUI().log.success("Agent initialized. Let's get cooking!");
 
     spinner.start(config.spinnerMessage ?? 'Customizing your PostHog setup...');
 
@@ -158,7 +182,7 @@ export const piBackend: AgentRunner = {
       const resourceLoader = new DefaultResourceLoader({
         cwd: session.installDir,
         agentDir: getAgentDir(),
-        systemPrompt: getWizardCommandments(),
+        systemPrompt: getWizardCommandments() + '\n' + PI_RUNTIME_NOTES,
         noExtensions: true,
         noSkills: true,
         noContextFiles: true,
@@ -239,7 +263,7 @@ export const piBackend: AgentRunner = {
             break;
           }
           case 'agent_end': {
-            logToFile(`[pi] agent_end (willRetry=${event.willRetry})`);
+            logToFile(`[pi] agent_end (willRetry=${String(event.willRetry)})`);
             break;
           }
           default:
@@ -263,6 +287,16 @@ export const piBackend: AgentRunner = {
           `[pi] terminated: YARA violation (blocked ${security.state.blockedCount} call(s))`,
         );
         return { error: AgentErrorType.YARA_VIOLATION };
+      }
+
+      // The skill plans events into .posthog-events.json then asks to remove it
+      // on completion; pi's `rm` is fence-blocked, so the agent can't — clean it
+      // up host-side rather than leave a stale (often empty) artifact (#15).
+      try {
+        const planFile = path.join(session.installDir, '.posthog-events.json');
+        if (fs.existsSync(planFile)) await fs.promises.rm(planFile);
+      } catch (err) {
+        logToFile(`[pi] .posthog-events.json cleanup skipped: ${String(err)}`);
       }
 
       spinner.stop(config.successMessage ?? 'PostHog integration complete');
