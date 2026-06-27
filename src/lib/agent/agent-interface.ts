@@ -51,6 +51,7 @@ import {
   type SettingsConflictSource,
 } from './claude-settings';
 import { detectStoredClaudeLogin, hasStoredClaudeLogin } from './stored-login';
+import { sanitizeAgentSubprocessEnv } from './agent-env-isolation';
 
 // Dynamic import cache for ESM module
 let _sdkModule: any = null;
@@ -1030,10 +1031,12 @@ export async function runAgent(
           },
         },
         env: {
-          ...process.env,
-          // Drop any shell ANTHROPIC_API_KEY so it can't override the wizard's
-          // OAuth gateway token.
-          ANTHROPIC_API_KEY: undefined,
+          // Strip every non-gateway credential/routing knob (shell
+          // ANTHROPIC_API_KEY, CLAUDE_CODE_USE_BEDROCK/VERTEX, alternate base
+          // URLs, fd/indirection token sources) so the spawned binary can only
+          // authenticate through the gateway routing set in initializeAgent.
+          // See agent-env-isolation.ts.
+          ...sanitizeAgentSubprocessEnv(process.env),
           // Defer MCP tool schemas to avoid bloating the system prompt.
           // The posthog-wizard MCP exposes many query tools with large schemas;
           // without deferral these consume ~113k tokens upfront, leaving

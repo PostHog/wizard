@@ -19,6 +19,7 @@ import { getLlmGatewayUrlFromHost } from '@utils/urls';
 import { runtimeEnv } from '@env';
 import { logToFile } from '@utils/debug';
 import { buildAgentEnv } from '@lib/agent/agent-interface';
+import { sanitizeAgentSubprocessEnv } from '@lib/agent/agent-env-isolation';
 
 // Cached SDK module — first call pays the dynamic-import cost; later
 // calls reuse the same module.
@@ -315,10 +316,12 @@ export async function* runMcpPromptViaSdk(args: {
         // wizard skill execution.
         allowedTools: ['mcp__posthog-wizard__*'],
         env: {
-          ...process.env,
-          // Drop any shell ANTHROPIC_API_KEY so it can't silently bypass the
-          // PostHog LLM gateway and defeat quota tracking and the OAuth flow.
-          ANTHROPIC_API_KEY: undefined,
+          // Strip every non-gateway credential/routing knob (shell
+          // ANTHROPIC_API_KEY, CLAUDE_CODE_USE_BEDROCK/VERTEX, alternate base
+          // URLs, fd/indirection token sources) so the spawned binary can't
+          // silently bypass the PostHog gateway and defeat quota tracking and
+          // the OAuth flow. See agent-env-isolation.ts.
+          ...sanitizeAgentSubprocessEnv(process.env),
           // Defer MCP tool schemas to avoid bloating the system prompt.
           // posthog-wizard exposes many query tools with large schemas;
           // without deferral these consume ~113k tokens upfront, which

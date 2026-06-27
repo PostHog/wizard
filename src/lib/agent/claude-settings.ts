@@ -12,11 +12,21 @@ import * as fs from 'fs';
 import * as os from 'os';
 import { analytics } from '@utils/analytics';
 import { registerCleanup } from '@utils/wizard-abort';
+import {
+  BLOCKED_AGENT_ENV_KEYS,
+  BLOCKED_AGENT_ENV_PATTERNS,
+} from './agent-env-isolation';
 
+// A settings.json `env` block is applied by the native binary itself, so the
+// subprocess-env sanitizer can't strip it — the only defense is to detect the
+// file and back it up / remove it. Flag the gateway-routing vars (a project
+// pinning these overrides the wizard) plus every credential/routing knob the
+// subprocess sanitizer strips (a settings env block can re-introduce any).
 const BLOCKING_ENV_KEYS = [
-  'ANTHROPIC_API_KEY',
   'ANTHROPIC_BASE_URL',
   'ANTHROPIC_AUTH_TOKEN',
+  'CLAUDE_CODE_OAUTH_TOKEN',
+  ...BLOCKED_AGENT_ENV_KEYS,
 ];
 const BLOCKING_SETTINGS_KEYS = ['apiKeyHelper'];
 
@@ -54,10 +64,16 @@ function checkSettingsFile(filePath: string): string[] {
     const parsed = JSON.parse(raw);
     const matched: string[] = [];
 
-    // Check env block for blocking env keys
+    // Check env block for blocking env keys (exact names + provider-variant
+    // patterns like ANTHROPIC_*_BASE_URL / CLAUDE_CODE_SKIP_*_AUTH).
     const envBlock = parsed?.env;
     if (envBlock && typeof envBlock === 'object') {
       matched.push(...BLOCKING_ENV_KEYS.filter((key) => key in envBlock));
+      matched.push(
+        ...Object.keys(envBlock).filter((key) =>
+          BLOCKED_AGENT_ENV_PATTERNS.some((pattern) => pattern.test(key)),
+        ),
+      );
     }
 
     // Check top-level settings keys
@@ -67,7 +83,8 @@ function checkSettingsFile(filePath: string): string[] {
       ),
     );
 
-    return matched;
+    // A key can match both the exact list and a pattern — dedupe.
+    return [...new Set(matched)];
   } catch {
     // File doesn't exist or isn't valid JSON — skip
     return [];
@@ -98,11 +115,30 @@ export function checkClaudeSettingsOverrides(
 }
 
 /**
- * Managed settings path on macOS.
- * IT/MDM-deployed settings — readable by all users, writable only by root.
+ * Org-managed (IT/MDM-deployed) settings path, per platform. Readable by all
+ * users, writable only by root/admin. Claude Code always reads this file
+ * regardless of `settingSources`, so an `apiKeyHelper` / `env` override here
+ * redirects the agent off the gateway and the wizard cannot remove it — it
+ * must fail closed. Checking only the macOS path (the prior behavior) let a
+ * Linux/Windows managed override slip past the fail-closed gate undetected.
  */
-const MANAGED_SETTINGS_PATH =
-  '/Library/Application Support/ClaudeCode/managed-settings.json';
+export function managedSettingsPath(
+  platform: NodeJS.Platform = process.platform,
+): string {
+  switch (platform) {
+    case 'darwin':
+      return '/Library/Application Support/ClaudeCode/managed-settings.json';
+    case 'win32':
+      return path.join(
+        process.env.ProgramData || 'C:\\ProgramData',
+        'ClaudeCode',
+        'managed-settings.json',
+      );
+    default:
+      // Linux and other POSIX platforms.
+      return '/etc/claude-code/managed-settings.json';
+  }
+}
 
 /**
  * Check every settings file Claude Code reads for blocking keys that conflict
@@ -114,6 +150,7 @@ const MANAGED_SETTINGS_PATH =
 export function checkAllSettingsConflicts(
   workingDirectory: string,
   homeDir: string = os.homedir(),
+  platform: NodeJS.Platform = process.platform,
 ): SettingsConflict[] {
   const conflicts: SettingsConflict[] = [];
   const home = homeDir;
@@ -125,7 +162,7 @@ export function checkAllSettingsConflicts(
   }[] = [
     {
       source: 'managed',
-      paths: [MANAGED_SETTINGS_PATH],
+      paths: [managedSettingsPath(platform)],
       writable: false,
     },
     {
@@ -162,6 +199,47 @@ export function checkAllSettingsConflicts(
   }
 
   return conflicts;
+}
+
+/** A settings conflict sorted into how the wizard should respond to it. */
+export interface ClassifiedSettingsConflicts {
+  /**
+   * Writable project `.claude/settings.json` — the SDK reads it under
+   * `settingSources: ['project']`, but the wizard can back it up and remove it
+   * (restored at outro). Neutralize automatically, no prompt.
+   */
+  autoFix: SettingsConflict[];
+  /**
+   * Org-managed settings — the SDK reads them on every run regardless of
+   * `settingSources`, and they are root/admin-owned so the wizard cannot remove
+   * them. Cannot be neutralized: the user (or their IT admin) must fix the file.
+   */
+  failClosed: SettingsConflict[];
+  /**
+   * User global (`~/.claude/…`) and project-local (`settings.local.json`)
+   * settings. Already neutralized: `settingSources: ['project']` makes the SDK
+   * ignore both (verified empirically). Warn for the record, but don't block.
+   */
+  warnOnly: SettingsConflict[];
+}
+
+/**
+ * Sort detected conflicts by how the wizard can respond, following the rule:
+ * **neutralize where possible; where it can't, let the user make the change.**
+ *
+ * NOTE: the `warnOnly` bucket assumes the agent runs with
+ * `settingSources: ['project']` (set in `agent-interface.ts` and
+ * `mcp-prompt-streaming.ts`). If that ever widens to include `'user'` / `'local'`,
+ * those sources stop being neutralized and must move out of `warnOnly`.
+ */
+export function classifySettingsConflicts(
+  conflicts: SettingsConflict[],
+): ClassifiedSettingsConflicts {
+  return {
+    autoFix: conflicts.filter((c) => c.writable),
+    failClosed: conflicts.filter((c) => !c.writable && c.source === 'managed'),
+    warnOnly: conflicts.filter((c) => !c.writable && c.source !== 'managed'),
+  };
 }
 
 /**
