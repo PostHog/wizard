@@ -1,0 +1,49 @@
+                               PostHog Wizard v2.33.0                                                                    Feedback: wizard@posthog.com 
+
+                                Learn                                                      Tasks
+
+                                Welcome.                                                   ◻ Check project structure and plan event tracking
+                                                                                           ◻ Install PostHog and configure environment
+                                The Wizard is an agent.
+                                                                                           ⠧ Progress: 0/2 completed
+                                It handles the entire PostHog setup process on your
+                                behalf.
+
+                                As we speak, it's building a plan to set up PostHog in
+                                your project.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                               ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+                                ┊ Agent initialized. Let's get cooking!
+                                ◆ Writing your PostHog setup with events, error capture and more...
+
+                                 Status   Event plan   Tail logs   Visualizer   HN 
+
+                                ←→ switch tab  s toggle status
