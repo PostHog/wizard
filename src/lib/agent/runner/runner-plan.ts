@@ -13,15 +13,16 @@
  *   MODELS   model alias → gateway id (retires the hardcoded model literals)
  */
 
-import { DEFAULT_AGENT_MODEL } from '@lib/constants';
+import { DEFAULT_AGENT_MODEL, WIZARD_RUNNER_FLAG_KEY } from '@lib/constants';
 import { logToFile } from '@utils/debug';
 import type { ProgramId } from '@lib/programs/program-registry';
 import type { AgentRunner } from './backends/types';
 import { anthropicBackend } from './backends/anthropic';
+import { piBackend } from './backends/pi';
 
 export type RunnerName = 'anthropic' | 'pi';
 export type RouterName = 'linear' | 'orchestrator';
-export type ModelAlias = 'sonnet' | 'opus';
+export type ModelAlias = 'sonnet' | 'opus' | 'gpt5';
 
 /** What a leaf of agent work resolves to. */
 export interface Pair {
@@ -33,11 +34,14 @@ export interface Pair {
 export const MODELS: Record<ModelAlias, string> = {
   sonnet: DEFAULT_AGENT_MODEL,
   opus: 'claude-opus-4-8',
+  // OpenAI-class peer of sonnet, served by the gateway over OpenAI completions.
+  gpt5: 'openai/gpt-5',
 };
 
-/** Leaf engines. `pi` registers in a later PR. */
+/** Leaf engines. */
 export const RUNNERS: Partial<Record<RunnerName, AgentRunner>> = {
   anthropic: anthropicBackend,
+  pi: piBackend,
 };
 
 /** Look up a registered runner, or fail loudly if a route names an absent one. */
@@ -94,7 +98,20 @@ export function runChain<D>(chain: Mw<D>[], ctx: ResolveCtx, base: () => D): D {
  * The pair insertion point. The chain is empty until the flag middleware lands;
  * the terminal is the config map read. Called per leaf with a role.
  */
-const PAIR_MIDDLEWARE: Mw<Pair>[] = [];
+/**
+ * `wizard-runner` flag → override the resolved pair's runner (model stays from
+ * config). Defers-then-modifies: always takes the base pair, then overlays the
+ * runner field iff the flag names a known runner.
+ */
+const wizardRunner: Mw<Pair> = (ctx, next) => {
+  const pair = next();
+  const flag = ctx.flags[WIZARD_RUNNER_FLAG_KEY];
+  return flag === 'anthropic' || flag === 'pi'
+    ? { ...pair, runner: flag }
+    : pair;
+};
+
+const PAIR_MIDDLEWARE: Mw<Pair>[] = [wizardRunner];
 
 export function resolvePair(ctx: ResolveCtx, role = 'default'): Pair {
   const pair = runChain(PAIR_MIDDLEWARE, ctx, () => {
