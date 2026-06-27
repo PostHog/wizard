@@ -594,27 +594,4 @@ describe('buildAuthErrorContext', () => {
       ctx.credentialPlaces.some((p) => p.includes('.credentials.json')),
     ).toBe(true);
   });
-
-  it('reads the real ~/.claude even after CLAUDE_CONFIG_DIR was isolated', () => {
-    fs.mkdirSync(path.join(home, '.claude'));
-    fs.writeFileSync(path.join(home, '.claude', '.credentials.json'), '{}');
-    // Simulate the run having isolated CLAUDE_CONFIG_DIR to a throwaway dir.
-    process.env.CLAUDE_CONFIG_DIR = fs.mkdtempSync(
-      path.join(os.tmpdir(), 'wz-isolated-'),
-    );
-
-    const ctx = buildAuthErrorContext(
-      home,
-      GATEWAY,
-      home,
-      '/login managed key',
-    );
-
-    // Still names the real login the user must clear, not the isolated dir.
-    expect(
-      ctx.credentialPlaces.some((p) =>
-        p.includes(path.join(home, '.claude', '.credentials.json')),
-      ),
-    ).toBe(true);
-  });
 });

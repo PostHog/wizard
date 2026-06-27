@@ -50,11 +50,7 @@ import {
   type SettingsConflict,
   type SettingsConflictSource,
 } from './claude-settings';
-import {
-  detectStoredClaudeLogin,
-  hasStoredClaudeLogin,
-  isolateClaudeConfigDir,
-} from './stored-login';
+import { detectStoredClaudeLogin, hasStoredClaudeLogin } from './stored-login';
 
 // Dynamic import cache for ESM module
 let _sdkModule: any = null;
@@ -128,19 +124,13 @@ function findCredentialPlaces(
 ): string[] {
   const places: string[] = [];
 
-  // Look at the REAL ~/.claude, not process.env.CLAUDE_CONFIG_DIR — by the time
-  // a 401 fires the run has isolated CLAUDE_CONFIG_DIR to a throwaway dir, so
-  // the credential the user must clear lives under their real home.
-  const realConfigDir = path.join(homeDir, '.claude');
-  const stored = detectStoredClaudeLogin(
-    homeDir,
-    process.platform,
-    realConfigDir,
-  );
+  const stored = detectStoredClaudeLogin(homeDir);
+  const configDir =
+    process.env.CLAUDE_CONFIG_DIR || path.join(homeDir, '.claude');
   if (stored.credentialsFile) {
     places.push(
       `A logged-in Claude session: ${path.join(
-        realConfigDir,
+        configDir,
         '.credentials.json',
       )}`,
     );
@@ -670,17 +660,6 @@ export async function initializeAgent(
         keychain: storedLogin.keychain,
       });
     }
-
-    // Neutralize it: isolate the agent's Claude config dir to a throwaway
-    // location so the SDK can't resolve that stored login and send it to the
-    // gateway. Done AFTER detection above so the telemetry still fires. The
-    // wizard's CLAUDE_CODE_OAUTH_TOKEN is the only credential left for the SDK.
-    const isolatedConfigDir = isolateClaudeConfigDir();
-    process.env.CLAUDE_CONFIG_DIR = isolatedConfigDir;
-    logToFile(
-      'Isolated CLAUDE_CONFIG_DIR for the agent run:',
-      isolatedConfigDir,
-    );
 
     const initConflicts = checkAllSettingsConflicts(options.installDir);
     logToFile(

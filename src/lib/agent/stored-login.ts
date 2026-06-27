@@ -2,39 +2,27 @@
  * Detect a pre-existing Claude Code login on the machine.
  *
  * The wizard authenticates the agent's LLM calls by injecting its PostHog OAuth
- * token via `CLAUDE_CODE_OAUTH_TOKEN` / `ANTHROPIC_AUTH_TOKEN`. But if the user
- * is already logged into Claude Code/Desktop, the Agent SDK can prefer that
+ * token via `CLAUDE_CODE_OAUTH_TOKEN` / `ANTHROPIC_AUTH_TOKEN`. If the user is
+ * already logged into Claude Code/Desktop, the Agent SDK can instead use that
  * stored `/login` credential (reported as `apiKeySource: "/login managed key"`)
- * and send it to the PostHog gateway instead — which rejects it with a 401,
- * since it's not a PostHog token.
+ * and send it to the PostHog gateway, which rejects it with a 401.
  *
  * The settings-conflict scan ({@link checkAllSettingsConflicts}) only inspects
- * `settings.json` files for `ANTHROPIC_*` env overrides / `apiKeyHelper`; it has
- * no awareness of an actual logged-in session. This fills that gap: it checks
- * the two places the stored login lives so a run can log/report it.
+ * `settings.json` for `ANTHROPIC_*` overrides / `apiKeyHelper`; it has no
+ * awareness of an actual logged-in session. This fills that gap so a run can
+ * log and report the potential conflict behind a gateway 401.
  *
- * Existence-only: it never reads the credential value (no `-w`), so no secret is
- * ever exposed.
- *
- * The locations checked here mirror the SDK's own credential resolution. Source
- * (the bundled SDK we run — npmjs.com/package/@anthropic-ai/claude-agent-sdk):
- *   node_modules/@anthropic-ai/claude-agent-sdk@0.3.169 → sdk.mjs:
- *     const dir = opts?.CLAUDE_CONFIG_DIR ?? process.env.CLAUDE_CONFIG_DIR;
- *     const base = dir ?? join(home, ".claude");
- *     readFile(join(base, ".credentials.json"));   // ← credentials file
- *     if (!dir && !ANTHROPIC_API_KEY && !CLAUDE_CODE_OAUTH_TOKEN)
- *       readKeychain();                             // ← macOS keychain (only when CLAUDE_CONFIG_DIR is unset)
- * The `apiKeySource: "/login managed key"` label itself is emitted by the
- * compiled CLI the SDK extracts at runtime, not by this JS — so the exact
- * precedence (stored login vs CLAUDE_CODE_OAUTH_TOKEN) isn't visible in source
- * and is confirmed empirically via scripts/gateway-auth-probe.no-jest.ts.
+ * Existence-only: it never reads the credential value (no `-w`), so no secret
+ * is ever exposed. The locations checked mirror the SDK's own resolution
+ * (npmjs.com/package/@anthropic-ai/claude-agent-sdk → sdk.mjs): a
+ * `.credentials.json` under `CLAUDE_CONFIG_DIR` / `~/.claude`, and the macOS
+ * keychain item below.
  */
 import * as fs from 'fs';
 import * as os from 'os';
 import path from 'path';
 import { spawnSync } from 'node:child_process';
 import { logToFile } from '@utils/debug';
-import { registerCleanup } from '@utils/wizard-abort';
 import { analytics } from '@utils/analytics';
 
 /** macOS keychain service name Claude Code stores its login under. */
@@ -54,18 +42,16 @@ export const hasStoredClaudeLogin = (login: StoredClaudeLogin): boolean =>
 /**
  * Look for a stored Claude login. `homeDir` / `platform` are injectable for
  * tests; production uses the real home dir and platform.
- *
- * `configDir` defaults to the SDK's own resolution (CLAUDE_CONFIG_DIR, else
- * `~/.claude`). Pass it explicitly to look at the *real* config dir even after
- * the run has isolated CLAUDE_CONFIG_DIR (see {@link isolateClaudeConfigDir}).
  */
 export function detectStoredClaudeLogin(
   homeDir: string = os.homedir(),
   platform: NodeJS.Platform = process.platform,
-  configDir: string = process.env.CLAUDE_CONFIG_DIR ||
-    path.join(homeDir, '.claude'),
 ): StoredClaudeLogin {
+  // Honor CLAUDE_CONFIG_DIR the same way the SDK does when resolving creds.
+  const configDir =
+    process.env.CLAUDE_CONFIG_DIR || path.join(homeDir, '.claude');
   const credentialsPath = path.join(configDir, '.credentials.json');
+
   let credentialsFile = false;
   try {
     credentialsFile = fs.existsSync(credentialsPath);
@@ -102,30 +88,4 @@ export function detectStoredClaudeLogin(
   }
 
   return { credentialsFile, keychain };
-}
-
-/**
- * Neutralize the conflict: point the agent's Claude config dir at a fresh,
- * empty throwaway directory so the SDK cannot resolve a stored `/login`
- * credential (file or keychain — keychain reads are skipped once
- * CLAUDE_CONFIG_DIR is set) and send it to the PostHog gateway. The wizard's
- * injected `CLAUDE_CODE_OAUTH_TOKEN` is unaffected. The caller sets
- * `process.env.CLAUDE_CONFIG_DIR` to the returned path. Registers best-effort
- * cleanup of the directory at process exit.
- */
-export function isolateClaudeConfigDir(): string {
-  const dir = fs.mkdtempSync(
-    path.join(os.tmpdir(), 'posthog-wizard-claude-config-'),
-  );
-  registerCleanup(() => {
-    try {
-      fs.rmSync(dir, { recursive: true, force: true });
-    } catch (error) {
-      logToFile(`[stored-login] failed to clean up isolated config dir ${dir}`);
-      analytics.captureException(
-        error instanceof Error ? error : new Error(String(error)),
-      );
-    }
-  });
-  return dir;
 }
