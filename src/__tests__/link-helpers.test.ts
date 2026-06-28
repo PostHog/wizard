@@ -46,9 +46,9 @@ describe('truncateUrlLabel', () => {
   it('always shows the full host even when the host fills the budget', () => {
     const url = `https://very-long-subdomain.example.com/${'a'.repeat(80)}`;
     const label = truncateUrlLabel(url, 30);
-    expect(label.startsWith('https://very-long-subdomain.example.com')).toBe(
-      true,
-    );
+    const parsed = new URL(label.slice(0, -1));
+    expect(parsed.protocol).toBe('https:');
+    expect(parsed.hostname).toBe('very-long-subdomain.example.com');
     expect(label.endsWith('…')).toBe(true);
   });
 
