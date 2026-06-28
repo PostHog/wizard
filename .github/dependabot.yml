@@ -10,11 +10,11 @@ updates:
       prefix: 'chore'
       include: 'scope'
     groups:
-      # Batch routine bumps; isolate warlock so a new rule category (which
-      # breaks the typed copy map in src/lib/yara-hooks.ts) lands in its own PR.
-      npm-dependencies:
+      npm-dependencies: # batch routine bumps into one PR
         patterns:
           - '*'
+        # Isolate warlock: a new rule category breaks the typed copy map
+        # (src/lib/yara-hooks.ts), so its bump needs its own PR.
         exclude-patterns:
           - '@posthog/warlock'
 
