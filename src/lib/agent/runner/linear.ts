@@ -24,7 +24,11 @@ import {
   registerCleanup,
 } from '../../../utils/wizard-abort';
 import { analytics } from '../../../utils/analytics';
-import { formatScanReport, writeScanReport } from '../../yara-hooks';
+import {
+  formatScanReport,
+  formatYaraAbortMessage,
+  writeScanReport,
+} from '../../yara-hooks';
 import { detectNodePackageManagers } from '../../detection/package-manager';
 import { installSkillById } from '../../wizard-tools';
 import { createWizardAskBridge } from '../../wizard-ask-bridge';
@@ -231,8 +235,7 @@ export async function runLinearProgram(
 
   if (agentResult.error === AgentErrorType.YARA_VIOLATION) {
     await wizardAbort({
-      message:
-        'Security violation detected.\nPlease report this to: wizard@posthog.com',
+      message: formatYaraAbortMessage(),
       error: new WizardError('YARA scanner terminated session', {
         integration: config.integrationLabel,
         error_type: AgentErrorType.YARA_VIOLATION,
