@@ -98,11 +98,18 @@ export function checkClaudeSettingsOverrides(
 }
 
 /**
- * Managed settings path on macOS.
- * IT/MDM-deployed settings — readable by all users, writable only by root.
+ * IT/MDM-deployed managed settings — readable by all users, writable only by
+ * root, and applied by Claude Code regardless of `settingSources`. The path is
+ * platform-specific; checking only the macOS one (the old behavior) meant a
+ * managed `ANTHROPIC_BASE_URL` on Linux/Windows went undetected and redirected
+ * every agent call off the PostHog gateway — even in an interactive run. A
+ * non-current-platform path simply won't exist, so checking all three is safe.
  */
-const MANAGED_SETTINGS_PATH =
-  '/Library/Application Support/ClaudeCode/managed-settings.json';
+export const MANAGED_SETTINGS_PATHS = [
+  '/Library/Application Support/ClaudeCode/managed-settings.json', // macOS
+  '/etc/claude-code/managed-settings.json', // Linux
+  'C:\\ProgramData\\ClaudeCode\\managed-settings.json', // Windows
+];
 
 /**
  * Check every settings file Claude Code reads for blocking keys that conflict
@@ -114,6 +121,7 @@ const MANAGED_SETTINGS_PATH =
 export function checkAllSettingsConflicts(
   workingDirectory: string,
   homeDir: string = os.homedir(),
+  managedPaths: string[] = MANAGED_SETTINGS_PATHS,
 ): SettingsConflict[] {
   const conflicts: SettingsConflict[] = [];
   const home = homeDir;
@@ -125,7 +133,7 @@ export function checkAllSettingsConflicts(
   }[] = [
     {
       source: 'managed',
-      paths: [MANAGED_SETTINGS_PATH],
+      paths: managedPaths,
       writable: false,
     },
     {
