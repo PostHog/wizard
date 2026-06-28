@@ -1,0 +1,29 @@
+# Dependabot keeps dependencies current by opening version-bump PRs.
+# Every PR runs the Build / Lint / Test workflow (.github/workflows/build.yml),
+# which is the gate that must pass before a human merges.
+#
+# Why @posthog/warlock is pulled out of the group: a warlock bump can add a new
+# rule category. The user-facing abort copy lives in a typed
+# `Record<Category, string>` (src/lib/yara-hooks.ts), so a new category breaks
+# `pnpm build` until the matching copy is added. Keeping warlock ungrouped means
+# that signal lands in its own PR instead of being hidden inside a batch of
+# unrelated bumps.
+version: 2
+updates:
+  - package-ecosystem: 'npm' # also covers the pnpm workspace
+    directory: '/'
+    schedule:
+      interval: 'weekly'
+    open-pull-requests-limit: 10
+    # Conventional-commit prefix so titles pass pr-conventional-commit.yml.
+    commit-message:
+      prefix: 'chore'
+      include: 'scope'
+    groups:
+      # Batch routine updates into a single rolling PR to keep noise low.
+      # Everything EXCEPT warlock, which we want isolated (see header).
+      npm-dependencies:
+        patterns:
+          - '*'
+        exclude-patterns:
+          - '@posthog/warlock'
