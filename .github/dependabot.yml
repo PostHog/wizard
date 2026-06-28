@@ -1,38 +1,26 @@
-# Dependabot keeps dependencies current by opening version-bump PRs.
-# Every PR runs the Build / Lint / Test workflow (.github/workflows/build.yml),
-# which is the gate that must pass before a human merges.
-#
-# Why @posthog/warlock is pulled out of the group: a warlock bump can add a new
-# rule category. The user-facing abort copy lives in a typed
-# `Record<Category, string>` (src/lib/yara-hooks.ts), so a new category breaks
-# `pnpm build` until the matching copy is added. Keeping warlock ungrouped means
-# that signal lands in its own PR instead of being hidden inside a batch of
-# unrelated bumps.
+# Weekly version-bump PRs, gated by build.yml before merge.
 version: 2
 updates:
-  - package-ecosystem: 'npm' # also covers the pnpm workspace
+  - package-ecosystem: 'npm' # covers the pnpm workspace
     directory: '/'
     schedule:
       interval: 'weekly'
     open-pull-requests-limit: 10
-    # Conventional-commit prefix so titles pass pr-conventional-commit.yml.
-    commit-message:
+    commit-message: # prefix keeps titles conventional-commit valid
       prefix: 'chore'
       include: 'scope'
     groups:
-      # Batch routine updates into a single rolling PR to keep noise low.
-      # Everything EXCEPT warlock, which we want isolated (see header).
+      # Batch routine bumps; isolate warlock so a new rule category (which
+      # breaks the typed copy map in src/lib/yara-hooks.ts) lands in its own PR.
       npm-dependencies:
         patterns:
           - '*'
         exclude-patterns:
           - '@posthog/warlock'
 
-  # GitHub Actions are pinned by commit SHA (e.g. actions/checkout@<sha>), which
-  # is the secure choice but means the pins go stale and miss upstream security
-  # patches. Dependabot bumps the SHA and updates the trailing version comment.
+  # Actions are SHA-pinned; bump the SHA and its version comment.
   - package-ecosystem: 'github-actions'
-    directory: '/' # scans .github/workflows
+    directory: '/'
     schedule:
       interval: 'weekly'
     open-pull-requests-limit: 5
@@ -40,7 +28,6 @@ updates:
       prefix: 'ci'
       include: 'scope'
     groups:
-      # One rolling PR for all action bumps.
       github-actions:
         patterns:
           - '*'
