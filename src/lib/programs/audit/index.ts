@@ -7,7 +7,7 @@ import type { ProgramRun } from '@lib/agent/agent-runner';
 import type { WizardSession } from '@lib/wizard-session';
 import { OutroKind } from '@lib/wizard-session';
 import { WIZARD_TOOL_NAMES } from '@lib/wizard-tools';
-import { getCloudUrl } from '@utils/urls';
+import { HostResolution } from '@lib/host-resolution';
 import { AUDIT_ABORT_CASES } from './detect.js';
 import { AUDIT_CHECKS_KEY, AUDIT_REPORT_FILE } from './types.js';
 import { AUDIT_SEED_CHECKS, seedAuditLedger } from './seed.js';
@@ -69,8 +69,10 @@ const auditRun = async (session: WizardSession): Promise<ProgramRun> => {
     // agent emits via `[DASHBOARD_URL]` / `[NOTEBOOK_URL]` are surfaced
     // on the post-run screen.
     buildOutroData: (session, _credentials, cloudRegion) => {
+      // TODO: clean up in #755
       const cloudUrl = cloudRegion
-        ? getCloudUrl(cloudRegion, session.baseUrl)
+        ? HostResolution.fromRegion(cloudRegion, { baseUrl: session.baseUrl })
+            .appHost
         : undefined;
       const continueUrl =
         session.signup && cloudUrl
