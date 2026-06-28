@@ -27,3 +27,20 @@ updates:
           - '*'
         exclude-patterns:
           - '@posthog/warlock'
+
+  # GitHub Actions are pinned by commit SHA (e.g. actions/checkout@<sha>), which
+  # is the secure choice but means the pins go stale and miss upstream security
+  # patches. Dependabot bumps the SHA and updates the trailing version comment.
+  - package-ecosystem: 'github-actions'
+    directory: '/' # scans .github/workflows
+    schedule:
+      interval: 'weekly'
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: 'ci'
+      include: 'scope'
+    groups:
+      # One rolling PR for all action bumps.
+      github-actions:
+        patterns:
+          - '*'
