@@ -1,5 +1,6 @@
 import {
   osc8Hyperlink,
+  truncateUrlLabel,
   extractUrls,
   splitPromptIntoSegments,
 } from '@ui/tui/primitives/link-helpers';
@@ -20,6 +21,46 @@ describe('osc8Hyperlink', () => {
     expect(osc8Hyperlink('https://x.test', 'open')).toBe(
       `${ESC}]8;;https://x.test${BEL}open${ESC}]8;;${BEL}`,
     );
+  });
+});
+
+describe('truncateUrlLabel', () => {
+  it('leaves a short url untouched', () => {
+    expect(truncateUrlLabel('https://x.test/foo')).toBe('https://x.test/foo');
+  });
+
+  it('keeps the scheme + host and collapses the noisy tail', () => {
+    const url =
+      'https://github.com/login/oauth/authorize?client_id=abc123&state=xyz&redirect_uri=https%3A%2F%2Fapp.posthog.com%2Fcallback';
+    const label = truncateUrlLabel(url, 56);
+    expect(label.length).toBeLessThanOrEqual(56);
+    expect(label.startsWith('https://github.com/login/oauth/authorize')).toBe(
+      true,
+    );
+    expect(label.endsWith('…')).toBe(true);
+    // The bulk of the query-string noise is hidden.
+    expect(label).not.toContain('state=');
+    expect(label).not.toContain('redirect_uri');
+  });
+
+  it('always shows the full host even when the host fills the budget', () => {
+    const url = `https://very-long-subdomain.example.com/${'a'.repeat(80)}`;
+    const label = truncateUrlLabel(url, 30);
+    expect(label.startsWith('https://very-long-subdomain.example.com')).toBe(
+      true,
+    );
+    expect(label.endsWith('…')).toBe(true);
+  });
+
+  it('does not ellipsize a host-only url with no tail to hide', () => {
+    const url = `https://${'a'.repeat(80)}.example.com`;
+    expect(truncateUrlLabel(url, 30)).toBe(url);
+  });
+
+  it('falls back to head truncation for a non-url string', () => {
+    const label = truncateUrlLabel('not a url '.repeat(20), 20);
+    expect(label.length).toBe(20);
+    expect(label.endsWith('…')).toBe(true);
   });
 });
 

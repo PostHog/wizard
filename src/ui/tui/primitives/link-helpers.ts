@@ -20,6 +20,8 @@ const ESC = String.fromCharCode(0x1b);
 const BEL = String.fromCharCode(0x07);
 const OSC_8 = `${ESC}]8;;`;
 
+const ELLIPSIS = '…';
+
 /** Matches an http(s) URL run (no surrounding whitespace). */
 const URL_RUN = /https?:\/\/[^\s]+/g;
 
@@ -37,6 +39,43 @@ function trimTrailingPunctuation(url: string): string {
  */
 export function osc8Hyperlink(url: string, label: string = url): string {
   return `${OSC_8}${url}${BEL}${label}${OSC_8}${BEL}`;
+}
+
+/**
+ * Shorten a URL for *display only*, keeping the trust-relevant head visible.
+ *
+ * A long authorize URL is mostly query-string noise (`?client_id=…&state=…`).
+ * The part a user needs to judge where they're being sent, the scheme and host,
+ * sits at the front. So we always keep `scheme://host` intact and collapse the
+ * long path/query tail to an ellipsis, never the other way round.
+ *
+ * This is purely the visible label. Callers pair it with `osc8Hyperlink(url,
+ * label)` so the click target, and the copy/open keybinds, stay the full URL.
+ * Returns the URL unchanged when it already fits within `maxLength`.
+ */
+export function truncateUrlLabel(url: string, maxLength = 56): string {
+  if (url.length <= maxLength) return url;
+
+  let head: string;
+  let tail: string;
+  try {
+    const parsed = new URL(url);
+    head = `${parsed.protocol}//${parsed.host}`;
+    tail = url.slice(head.length);
+  } catch {
+    // Not parseable as a URL: fall back to a plain head truncation.
+    return url.slice(0, Math.max(1, maxLength - ELLIPSIS.length)) + ELLIPSIS;
+  }
+
+  // The host alone already fills (or overflows) the budget: show it whole (it's
+  // the trust signal) and ellipsize only if we're actually hiding a tail.
+  if (head.length >= maxLength - ELLIPSIS.length) {
+    return tail.length > 0 ? head + ELLIPSIS : head;
+  }
+
+  // Fill the remaining room with as much of the path/query as fits, then ellipsize.
+  const room = maxLength - head.length - ELLIPSIS.length;
+  return head + tail.slice(0, room) + ELLIPSIS;
 }
 
 /** Extract every http(s) URL in `text`, trailing punctuation removed. */
