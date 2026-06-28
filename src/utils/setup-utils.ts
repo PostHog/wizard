@@ -29,6 +29,7 @@ import {
   detectRegionFromToken,
 } from './urls';
 import { performOAuthFlow } from './oauth';
+import { resolveGrantedProject } from './project-resolution';
 import { provisionNewAccount } from './provisioning';
 import {
   fetchUserData,
@@ -472,6 +473,7 @@ export async function getOrAskForProjectData(
       email: _options.email,
       region: _options.region,
       programId: _options.programId,
+      projectId: _options.projectId,
     }),
   );
 
@@ -541,6 +543,9 @@ async function askForWizardLogin(options: {
   /** Used to pick the right scope set via `getOAuthScopesForProgram`.
    *  Omitted → default `WIZARD_OAUTH_SCOPES`. */
   programId?: ProgramId | null;
+  /** `--project-id`, if passed. When the user granted access to it on the consent
+   *  screen we use it directly; otherwise we fall back to the first granted team. */
+  projectId?: number;
 }): Promise<ProjectData & { cloudRegion: CloudRegion }> {
   if (options.signup) {
     return askForProvisioningSignup(options.email, options.region);
@@ -549,9 +554,31 @@ async function askForWizardLogin(options: {
   const tokenResponse = await performOAuthFlow({
     scopes: [...getOAuthScopesForProgram(options.programId)],
     signup: false,
+    projectId: options.projectId,
   });
 
-  const projectId = tokenResponse.scoped_teams?.[0];
+  // `--project-id`, when provided, is authoritative — but only if the user actually
+  // granted access to it on the consent screen. If they authorized a different
+  // project, fail loudly instead of silently capturing into the wrong one. With no
+  // `--project-id` this falls back to the granted project, unchanged for every program.
+  const resolution = resolveGrantedProject(
+    options.projectId,
+    tokenResponse.scoped_teams,
+  );
+  if (!resolution.ok) {
+    const error = new Error(
+      `You authorized project ${resolution.granted}, but setup is targeting project ${resolution.requested}. Re-run and grant access to project ${resolution.requested} on the authorization screen.`,
+    );
+    analytics.captureException(error, {
+      step: 'wizard_login',
+      requested_project_id: resolution.requested,
+      granted_project_id: resolution.granted,
+    });
+    getUI().log.error(error.message);
+    await abort();
+  }
+
+  const projectId = resolution.ok ? resolution.projectId : undefined;
 
   if (projectId === undefined) {
     const error = new Error(
