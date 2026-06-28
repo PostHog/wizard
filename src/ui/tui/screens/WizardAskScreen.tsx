@@ -149,21 +149,20 @@ export const WizardAskScreen = ({ store }: WizardAskScreenProps) => {
           <Text>{question.prompt}</Text>
         )}
       </Box>
-      {canActOnLink && (
-        <Box marginTop={1} flexDirection="column">
-          <Text dimColor>
-            Press <Text color={Colors.accent}>[O]</Text> to open it in your
-            browser, or <Text color={Colors.accent}>[C]</Text> to copy the link.
-          </Text>
+      {/* Key hints (o / c) live in the bottom KeyboardHintsBar; this block only
+          confirms the action once taken, so there's no redundant in-modal prose
+          for the confirmation to collide with on redraw. */}
+      {canActOnLink && linkStatus !== 'idle' && (
+        <Box marginTop={1}>
           {linkStatus === 'opened' ? (
             <Text color={Colors.success}>
               {Icons.check} Opening the link in your browser…
             </Text>
-          ) : linkStatus === 'copied' ? (
+          ) : (
             <Text color={Colors.success}>
-              {Icons.check} Link copied to clipboard — paste it in your browser.
+              {Icons.check} Link copied to clipboard. Paste it in your browser.
             </Text>
-          ) : null}
+          )}
         </Box>
       )}
       <Box marginTop={1}>
