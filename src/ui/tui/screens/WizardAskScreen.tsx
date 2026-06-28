@@ -152,8 +152,8 @@ export const WizardAskScreen = ({ store }: WizardAskScreenProps) => {
       {canActOnLink && (
         <Box marginTop={1} flexDirection="column">
           <Text dimColor>
-            Press <Text color={Colors.accent}>o</Text> to open it in your
-            browser, or <Text color={Colors.accent}>c</Text> to copy the link.
+            Press <Text color={Colors.accent}>[O]</Text> to open it in your
+            browser, or <Text color={Colors.accent}>[C]</Text> to copy the link.
           </Text>
           {linkStatus === 'opened' ? (
             <Text color={Colors.success}>
