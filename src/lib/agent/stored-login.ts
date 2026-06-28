@@ -40,6 +40,14 @@ export const hasStoredClaudeLogin = (login: StoredClaudeLogin): boolean =>
   login.credentialsFile || login.keychain;
 
 /**
+ * The directory Claude Code resolves credentials/config from — `CLAUDE_CONFIG_DIR`
+ * if set, else `~/.claude`. Mirrors the SDK's own resolution; single source of
+ * truth so callers can't drift from it.
+ */
+export const claudeConfigDir = (homeDir: string = os.homedir()): string =>
+  process.env.CLAUDE_CONFIG_DIR || path.join(homeDir, '.claude');
+
+/**
  * Look for a stored Claude login. `homeDir` / `platform` are injectable for
  * tests; production uses the real home dir and platform.
  */
@@ -47,10 +55,10 @@ export function detectStoredClaudeLogin(
   homeDir: string = os.homedir(),
   platform: NodeJS.Platform = process.platform,
 ): StoredClaudeLogin {
-  // Honor CLAUDE_CONFIG_DIR the same way the SDK does when resolving creds.
-  const configDir =
-    process.env.CLAUDE_CONFIG_DIR || path.join(homeDir, '.claude');
-  const credentialsPath = path.join(configDir, '.credentials.json');
+  const credentialsPath = path.join(
+    claudeConfigDir(homeDir),
+    '.credentials.json',
+  );
 
   let credentialsFile = false;
   try {

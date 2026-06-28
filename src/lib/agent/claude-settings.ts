@@ -17,6 +17,26 @@ import {
   BLOCKED_AGENT_ENV_PATTERNS,
 } from './agent-env-isolation';
 
+/** The file names Claude Code accepts for project settings, in priority order. */
+const SETTINGS_FILENAMES = ['settings.json', 'settings'] as const;
+/** Suffix for the wizard's pristine-copy backup of a settings file. */
+const BACKUP_SUFFIX = '.wizard-backup';
+
+/**
+ * The candidate settings files under `<workingDirectory>/.claude` and their
+ * backup paths. Centralizes the file-name list + backup suffix that backup,
+ * restore, and orphan-recovery all walk.
+ */
+function settingsBackupTargets(
+  workingDirectory: string,
+): { claudeDir: string; original: string; backup: string }[] {
+  const claudeDir = path.join(workingDirectory, '.claude');
+  return SETTINGS_FILENAMES.map((name) => {
+    const original = path.join(claudeDir, name);
+    return { claudeDir, original, backup: original + BACKUP_SUFFIX };
+  });
+}
+
 // A settings.json `env` block is applied by the native binary itself, so the
 // subprocess-env sanitizer can't strip it — the only defense is to detect the
 // file and back it up / remove it. Flag the gateway-routing vars (a project
@@ -92,29 +112,6 @@ function checkSettingsFile(filePath: string): string[] {
 }
 
 /**
- * Check if .claude/settings.json in the project directory contains env
- * overrides or apiKeyHelper that block the Wizard from accessing the PostHog LLM Gateway.
- * Returns the list of matched key names, or an empty array if none found.
- *
- * @deprecated Use {@link checkAllSettingsConflicts} for comprehensive detection.
- */
-export function checkClaudeSettingsOverrides(
-  workingDirectory: string,
-): string[] {
-  const candidates = [
-    path.join(workingDirectory, '.claude', 'settings.json'),
-    path.join(workingDirectory, '.claude', 'settings'),
-  ];
-
-  for (const filePath of candidates) {
-    const matched = checkSettingsFile(filePath);
-    if (matched.length > 0) return matched;
-  }
-
-  return [];
-}
-
-/**
  * Org-managed (IT/MDM-deployed) settings path, per platform. Readable by all
  * users, writable only by root/admin. Claude Code always reads this file
  * regardless of `settingSources`, so an `apiKeyHelper` / `env` override here
@@ -175,10 +172,9 @@ export function checkAllSettingsConflicts(
     },
     {
       source: 'project',
-      paths: [
-        path.join(workingDirectory, '.claude', 'settings.json'),
-        path.join(workingDirectory, '.claude', 'settings'),
-      ],
+      paths: SETTINGS_FILENAMES.map((name) =>
+        path.join(workingDirectory, '.claude', name),
+      ),
       writable: true,
     },
     {
@@ -250,7 +246,7 @@ export function classifySettingsConflicts(
  */
 function ensureBackupGitignored(claudeDir: string): void {
   const gitignorePath = path.join(claudeDir, '.gitignore');
-  const entry = '*.wizard-backup';
+  const entry = `*${BACKUP_SUFFIX}`;
   try {
     const existing = fs.existsSync(gitignorePath)
       ? fs.readFileSync(gitignorePath, 'utf-8')
@@ -270,25 +266,25 @@ function ensureBackupGitignored(claudeDir: string): void {
  * cleanup.
  */
 export function backupAndFixClaudeSettings(workingDirectory: string): boolean {
-  for (const name of ['settings.json', 'settings']) {
-    const filePath = path.join(workingDirectory, '.claude', name);
-    if (!fs.existsSync(filePath)) continue;
-    const backupPath = `${filePath}.wizard-backup`;
+  for (const { claudeDir, original, backup } of settingsBackupTargets(
+    workingDirectory,
+  )) {
+    if (!fs.existsSync(original)) continue;
     try {
       // Don't clobber a backup an earlier run already wrote — it holds the
       // pristine original. recoverOrphanedSettingsBackups resolves cross-run
       // orphans at process start, so a backup still present at this point
       // is from the current process and the current file is the modified one.
-      if (!fs.existsSync(backupPath)) {
-        fs.copyFileSync(filePath, backupPath);
+      if (!fs.existsSync(backup)) {
+        fs.copyFileSync(original, backup);
         // Mirror the source's mode so a 0600 settings.json (apiKeyHelper,
         // API keys) doesn't become a 0644 backup readable by other local
         // users. copyFileSync would otherwise apply default umask.
-        const mode = fs.statSync(filePath).mode & 0o777;
-        fs.chmodSync(backupPath, mode);
+        const mode = fs.statSync(original).mode & 0o777;
+        fs.chmodSync(backup, mode);
       }
-      ensureBackupGitignored(path.join(workingDirectory, '.claude'));
-      fs.unlinkSync(filePath);
+      ensureBackupGitignored(claudeDir);
+      fs.unlinkSync(original);
       analytics.wizardCapture('backedup-claude-settings');
       registerCleanup(() => {
         try {
@@ -315,9 +311,7 @@ export function backupAndFixClaudeSettings(workingDirectory: string): boolean {
  * calls (outro then cleanup) idempotent and avoids leaving an orphan behind.
  */
 export function restoreClaudeSettings(workingDirectory: string): void {
-  for (const name of ['settings.json', 'settings']) {
-    const original = path.join(workingDirectory, '.claude', name);
-    const backup = `${original}.wizard-backup`;
+  for (const { original, backup } of settingsBackupTargets(workingDirectory)) {
     if (!fs.existsSync(backup)) continue;
     try {
       fs.copyFileSync(backup, original);
@@ -345,9 +339,7 @@ export function restoreClaudeSettings(workingDirectory: string): void {
  * already moved them aside.
  */
 export function recoverOrphanedSettingsBackups(workingDirectory: string): void {
-  for (const name of ['settings.json', 'settings']) {
-    const original = path.join(workingDirectory, '.claude', name);
-    const backup = `${original}.wizard-backup`;
+  for (const { original, backup } of settingsBackupTargets(workingDirectory)) {
     if (!fs.existsSync(backup) || fs.existsSync(original)) continue;
     try {
       fs.copyFileSync(backup, original);

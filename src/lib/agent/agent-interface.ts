@@ -50,7 +50,11 @@ import {
   type SettingsConflict,
   type SettingsConflictSource,
 } from './claude-settings';
-import { detectStoredClaudeLogin, hasStoredClaudeLogin } from './stored-login';
+import {
+  detectStoredClaudeLogin,
+  hasStoredClaudeLogin,
+  claudeConfigDir,
+} from './stored-login';
 import { sanitizeAgentSubprocessEnv } from './agent-env-isolation';
 
 // Dynamic import cache for ESM module
@@ -126,8 +130,7 @@ function findCredentialPlaces(
   const places: string[] = [];
 
   const stored = detectStoredClaudeLogin(homeDir);
-  const configDir =
-    process.env.CLAUDE_CONFIG_DIR || path.join(homeDir, '.claude');
+  const configDir = claudeConfigDir(homeDir);
   if (stored.credentialsFile) {
     places.push(
       `A logged-in Claude session: ${path.join(
