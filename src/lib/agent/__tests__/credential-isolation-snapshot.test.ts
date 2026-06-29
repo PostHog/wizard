@@ -20,7 +20,8 @@ import type { SettingsConflict } from '@lib/agent/claude-settings';
 // Every env-based avenue (one key each), plus the gateway routing and benign
 // env that must survive. Grouped by avenue for readability; the snapshot sorts.
 const ALL_PATHS_ENV: NodeJS.ProcessEnv = {
-  // — gateway routing the wizard pins (must be PRESERVED) —
+  // — gateway routing the wizard pins (STRIPPED from the inherited env and
+  //   re-injected fresh at the spawn site, so a user shell value can't leak in) —
   ANTHROPIC_BASE_URL: 'https://gateway.us.posthog.com/wizard',
   ANTHROPIC_AUTH_TOKEN: 'phx_gateway',
   CLAUDE_CODE_OAUTH_TOKEN: 'phx_gateway',
@@ -32,27 +33,43 @@ const ALL_PATHS_ENV: NodeJS.ProcessEnv = {
   GOOGLE_APPLICATION_CREDENTIALS: '/home/dev/gcp.json',
   // — direct API key (outranks the gateway token) —
   ANTHROPIC_API_KEY: 'sk-ant-api03-FAKE',
-  // — provider activation (off-gateway routing) —
+  // — provider activation (off-gateway routing) — all five at the same tier —
   CLAUDE_CODE_USE_BEDROCK: '1',
   CLAUDE_CODE_USE_VERTEX: '1',
-  // — alternate base URLs (explicit + an unseen variant via pattern) —
+  CLAUDE_CODE_USE_FOUNDRY: '1',
+  CLAUDE_CODE_USE_MANTLE: '1',
+  CLAUDE_CODE_USE_ANTHROPIC_AWS: '1',
+  // — alternate base URLs (explicit + an unseen variant via pattern + the
+  //   CLAUDE_CODE_ prefixed one the pattern can't catch) —
   ANTHROPIC_BEDROCK_BASE_URL: 'https://x',
   ANTHROPIC_AWS_BASE_URL: 'https://x',
   ANTHROPIC_VERTEX_BASE_URL: 'https://x',
   ANTHROPIC_FOUNDRY_BASE_URL: 'https://x',
   ANTHROPIC_BEDROCK_MANTLE_BASE_URL: 'https://x',
   ANTHROPIC_NEWPROVIDER_BASE_URL: 'https://x',
+  CLAUDE_CODE_API_BASE_URL: 'https://x',
   // — third-party / alternate provider keys —
   ANTHROPIC_AWS_API_KEY: 'x',
   ANTHROPIC_FOUNDRY_API_KEY: 'x',
   AWS_BEARER_TOKEN_BEDROCK: 'x',
+  // — workload-identity / federation auth (inline token + selectors) —
+  ANTHROPIC_IDENTITY_TOKEN: 'x',
+  ANTHROPIC_FEDERATION_RULE_ID: 'x',
+  ANTHROPIC_SERVICE_ACCOUNT_ID: 'x',
   // — file-descriptor / file / indirection token sources —
   CLAUDE_CODE_API_KEY_FILE_DESCRIPTOR: '7',
   CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR: '8',
+  CLAUDE_CODE_WEBSOCKET_AUTH_FILE_DESCRIPTOR: '9',
   ANTHROPIC_IDENTITY_TOKEN_FILE: '/tmp/id',
   CLAUDE_CODE_HOST_AUTH_ENV_VAR: 'SOME_OTHER_VAR',
   CLAUDE_CODE_SESSION_ACCESS_TOKEN: 'x',
   CLAUDE_CODE_CLIENT_KEY: 'x',
+  // — OAuth refresh / bearer + host-auth-deferral flags —
+  CLAUDE_CODE_OAUTH_REFRESH_TOKEN: 'x',
+  CLAUDE_CODE_HFI_BEARER_TOKEN: 'x',
+  CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST: '1',
+  CLAUDE_CODE_SDK_HAS_HOST_AUTH_REFRESH: '1',
+  CLAUDE_CODE_SDK_HAS_OAUTH_REFRESH: '1',
   // — skip-auth flags (explicit + pattern) —
   CLAUDE_CODE_SKIP_BEDROCK_AUTH: '1',
   CLAUDE_CODE_SKIP_VERTEX_AUTH: '1',

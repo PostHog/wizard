@@ -316,12 +316,18 @@ export async function* runMcpPromptViaSdk(args: {
         // wizard skill execution.
         allowedTools: ['mcp__posthog-wizard__*'],
         env: {
-          // Strip every non-gateway credential/routing knob (shell
-          // ANTHROPIC_API_KEY, CLAUDE_CODE_USE_BEDROCK/VERTEX, alternate base
-          // URLs, fd/indirection token sources) so the spawned binary can't
-          // silently bypass the PostHog gateway and defeat quota tracking and
-          // the OAuth flow. See agent-env-isolation.ts.
+          // Drop the ENTIRE ANTHROPIC_*/CLAUDE_CODE_* namespace from the
+          // inherited env so no shell/settings value can silently bypass the
+          // PostHog gateway and defeat quota tracking / the OAuth flow; the
+          // wizard's own gateway routing is injected fresh below. See
+          // agent-env-isolation.ts.
           ...sanitizeAgentSubprocessEnv(process.env),
+          // Gateway routing — injected explicitly (set on process.env above;
+          // the strip removed them from the inherited copy, so re-add here).
+          ANTHROPIC_BASE_URL: process.env.ANTHROPIC_BASE_URL,
+          ANTHROPIC_AUTH_TOKEN: process.env.ANTHROPIC_AUTH_TOKEN,
+          CLAUDE_CODE_OAUTH_TOKEN: process.env.CLAUDE_CODE_OAUTH_TOKEN,
+          CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS: 'true',
           // Defer MCP tool schemas to avoid bloating the system prompt.
           // posthog-wizard exposes many query tools with large schemas;
           // without deferral these consume ~113k tokens upfront, which
