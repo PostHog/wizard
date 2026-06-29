@@ -18,6 +18,15 @@ export const DEFAULT_AGENT_MODEL = 'claude-sonnet-4-6';
  */
 export const HAIKU_MODEL = 'claude-haiku-4-5-20251001';
 
+/**
+ * Background/small-fast model for the Claude Agent SDK's auxiliary operations
+ * (topic detection, summarization, quota probes). Pinned via env vars so the
+ * SDK never falls back to its built-in default — a retired Haiku snapshot the
+ * LLM gateway doesn't serve. Bare alias (no date) so the gateway's strict
+ * Bedrock lookup matches, same convention as DEFAULT_AGENT_MODEL.
+ */
+export const DEFAULT_HAIKU_MODEL = 'claude-haiku-4-5';
+
 // ── Integration / CLI ───────────────────────────────────────────────
 
 /**
