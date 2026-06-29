@@ -25,7 +25,12 @@
 import fs from 'fs';
 import path from 'path';
 import fg from 'fast-glob';
-import type { ScanMatch, TriageMatch, LLMProvider } from '@posthog/warlock';
+import type {
+  ScanMatch,
+  TriageMatch,
+  LLMProvider,
+  Category,
+} from '@posthog/warlock';
 import { logToFile } from '@utils/debug';
 import { analytics } from '@utils/analytics';
 import { getUI } from '@ui';
@@ -230,6 +235,57 @@ export function writeScanReport(): string | null {
     return null;
   }
   return WIZARD_YARA_REPORT_FILE;
+}
+
+// ─── User-facing abort copy ──────────────────────────────────────
+//
+// The abort screen is the one security surface a user actually sees, so it must
+// say what was caught and that we protected them, in plain language, instead of
+// a bare "Security violation detected." Warlock owns the rules and categories;
+// this map is the wizard's *presentation* of a category it already detected. We
+// deliberately do not surface warlock's own rule `description` here: it is
+// written for maintainers (it ships to telemetry) and reads as technical. The
+// `Category` type is a stable, append-only warlock API, so a new category just
+// falls through to the generic line below rather than breaking the build.
+
+const CATEGORY_DESCRIPTIONS: Record<Category, string> = {
+  prompt_injection:
+    'hit hidden instructions in a file it read, a possible attempt to hijack the setup',
+  exfiltration: 'tried to send data to an outside location',
+  destructive_operations: 'tried to run a destructive command',
+  supply_chain: 'tried to pull in untrusted code',
+  posthog_pii: 'tried to write personal data (PII) into your project',
+  posthog_hardcoded_key: 'tried to hardcode a PostHog key into your project',
+  hardcoded_secret: 'tried to hardcode a secret into your project',
+};
+
+/** Most recent violation that terminated the run, or null. */
+function lastTerminatingViolation(): ScanReportEntry | null {
+  for (let i = scanViolations.length - 1; i >= 0; i--) {
+    if (scanViolations[i].action === 'aborted') return scanViolations[i];
+  }
+  return null;
+}
+
+/**
+ * Build the user-facing copy for the security abort screen: what the scanner
+ * caught and what we did about it. This screen renders only because the run was
+ * stopped, so the "what we did" half is constant. Falls back to a generic line
+ * when no specific violation was recorded (e.g. the scanner itself errored and
+ * failed closed before a match was logged).
+ */
+export function formatYaraAbortMessage(): string {
+  const v = lastTerminatingViolation();
+  const what =
+    (v && CATEGORY_DESCRIPTIONS[v.category as Category]) ??
+    'did something our security scanner flagged';
+
+  return (
+    'Security check stopped the setup.\n\n' +
+    `The agent ${what}. We stopped the run to keep your project safe.\n` +
+    'No unsafe changes were left in your project.\n\n' +
+    'If this looks wrong, let us know: wizard@posthog.com'
+  );
 }
 
 // ─── Hook Timeouts (ms) ─────────────────────────────────────────

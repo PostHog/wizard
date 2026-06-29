@@ -1245,7 +1245,7 @@ export async function runAgent(
     // A YARA hook detected a terminal violation and aborted the run.
     if (yaraViolationReason) {
       logToFile('Agent error: YARA_VIOLATION');
-      spinner.stop('Security violation detected');
+      spinner.stop('Security check stopped the setup');
       return { error: AgentErrorType.YARA_VIOLATION };
     }
 
@@ -1305,7 +1305,7 @@ export async function runAgent(
     // never mistaken for a success-cleanup race or a generic abort.
     if (yaraViolationReason) {
       logToFile('Agent error: YARA_VIOLATION');
-      spinner.stop('Security violation detected');
+      spinner.stop('Security check stopped the setup');
       return { error: AgentErrorType.YARA_VIOLATION };
     }
 
