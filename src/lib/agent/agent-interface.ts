@@ -18,6 +18,7 @@ import {
   WIZARD_USER_AGENT,
   WIZARD_WARLOCK_DISABLED_FLAG_KEY,
   DEFAULT_AGENT_MODEL,
+  DEFAULT_HAIKU_MODEL,
 } from '@lib/constants';
 import {
   type AdditionalFeature,
@@ -970,6 +971,19 @@ export async function runAgent(
           // Drop any shell ANTHROPIC_API_KEY so it can't override the wizard's
           // OAuth gateway token.
           ANTHROPIC_API_KEY: undefined,
+          // Pin the SDK's small/fast background model. The main query() call
+          // pins the primary model (claude-sonnet-4-6), but the Claude Agent
+          // SDK uses a separate small/fast model for background work (topic
+          // detection, summarization, quota probes). Left unset, the SDK falls
+          // back to its built-in default — a retired claude-3-5-haiku snapshot
+          // the PostHog LLM gateway doesn't serve — so every background call
+          // 404s with not_found_error. It's silent: those rows carry no
+          // $ai_http_status, so it only surfaces in AI observability. Pin to
+          // gateway-supported bare aliases (both the current env name and the
+          // legacy one) so the SDK can never reach for a retired snapshot.
+          ANTHROPIC_DEFAULT_HAIKU_MODEL: DEFAULT_HAIKU_MODEL,
+          ANTHROPIC_SMALL_FAST_MODEL: DEFAULT_HAIKU_MODEL,
+          ANTHROPIC_DEFAULT_SONNET_MODEL: DEFAULT_AGENT_MODEL,
           // Defer MCP tool schemas to avoid bloating the system prompt.
           // The posthog-wizard MCP exposes many query tools with large schemas;
           // without deferral these consume ~113k tokens upfront, leaving
