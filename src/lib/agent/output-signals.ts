@@ -1,10 +1,15 @@
 /**
  * Parses the signal-bearing lines out of agent output and discards the rest.
  *
- * The agent and SDK communicate non-content events (auth/API errors, YARA
- * violations, missing MCP/resource, the end-of-run remark) by emitting marker
- * strings inside their prose. `AgentOutputSignals` keeps only the lines that
- * carry such a marker, so the buffer stays bounded regardless of run length.
+ * The agent and SDK communicate non-content events (auth/API errors, missing
+ * MCP/resource, the end-of-run remark) by emitting marker strings inside
+ * their prose. `AgentOutputSignals` keeps only the lines that carry such a
+ * marker, so the buffer stays bounded regardless of run length.
+ *
+ * YARA violations are deliberately NOT detected here: scanning the agent's
+ * prose for "[YARA ...]" markers false-positives when the agent merely
+ * *mentions* a non-terminal block. Terminal YARA outcomes flow through the
+ * hooks' onTerminate callback (`yaraViolationReason` in runAgent) instead.
  */
 
 import { AgentSignals } from './signals';
@@ -18,8 +23,6 @@ import { AgentSignals } from './signals';
  */
 const OUTPUT_SIGNALS = {
   API_ERROR: 'API Error:',
-  YARA_CRITICAL: '[YARA CRITICAL]',
-  YARA_SCANNER_ERROR: '[YARA] Scanner error',
   MCP_MISSING: AgentSignals.ERROR_MCP_MISSING,
   RESOURCE_MISSING: AgentSignals.ERROR_RESOURCE_MISSING,
   WIZARD_REMARK: AgentSignals.WIZARD_REMARK,
@@ -30,10 +33,34 @@ const SIGNAL_NEEDLES = Object.values(OUTPUT_SIGNALS);
 
 export class AgentOutputSignals {
   private readonly lines: string[] = [];
+  private apiKeySourceValue: string | undefined;
 
   /** Parse step: keep the line only if it carries a known signal; drop prose. */
   push(text: string): void {
     if (SIGNAL_NEEDLES.some((n) => text.includes(n))) this.lines.push(text);
+  }
+
+  /**
+   * Record the SDK's `apiKeySource` from its `init` message (e.g.
+   * `"/login managed key"`, `"ANTHROPIC_API_KEY"`). Used to triage a 401:
+   * a managed-login source means the SDK authenticated with a stored Claude
+   * login rather than the gateway token the wizard injected.
+   */
+  recordApiKeySource(source: string | undefined): void {
+    if (source) this.apiKeySourceValue = source;
+  }
+
+  get apiKeySource(): string | undefined {
+    return this.apiKeySourceValue;
+  }
+
+  /**
+   * True when the SDK authed from a stored `/login` credential (the
+   * "managed key") instead of an explicit `ANTHROPIC_API_KEY` — the signature
+   * of conflicting Anthropic credentials behind a gateway 401.
+   */
+  usedManagedLogin(): boolean {
+    return /login|managed key/i.test(this.apiKeySourceValue ?? '');
   }
 
   private get text(): string {
@@ -52,10 +79,6 @@ export class AgentOutputSignals {
   /** True for a specific HTTP status, e.g. 401 (auth) or 429 (rate limit). */
   hasApiErrorStatus(code: number): boolean {
     return this.text.includes(`${OUTPUT_SIGNALS.API_ERROR} ${code}`);
-  }
-
-  hasYaraViolation(): boolean {
-    return this.has('YARA_CRITICAL') || this.has('YARA_SCANNER_ERROR');
   }
 
   /** Joined `API Error: …` lines for the user-facing message, or undefined. */

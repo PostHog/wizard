@@ -1,5 +1,43 @@
 # Changelog
 
+## [2.34.0](https://github.com/PostHog/wizard/compare/v2.33.0...v2.34.0) (2026-06-29)
+
+
+### Features
+
+* **oauth:** honor --project-id on the OAuth login path ([#743](https://github.com/PostHog/wizard/issues/743)) ([48d8362](https://github.com/PostHog/wizard/commit/48d836225aa4ec3e2e565438b467cd078a25cda8))
+
+
+### Bug Fixes
+
+* **agent:** isolate the agent SDK to PostHog gateway credentials ([#744](https://github.com/PostHog/wizard/issues/744)) ([7848ed0](https://github.com/PostHog/wizard/commit/7848ed05e759f671021f7fc43a3cb6459bd40436))
+* **self-driving:** github auth screen ([#741](https://github.com/PostHog/wizard/issues/741)) ([41076b1](https://github.com/PostHog/wizard/commit/41076b157916a338c2b2cfa4319f02a6392e4b3b))
+
+## [2.33.0](https://github.com/PostHog/wizard/compare/v2.32.0...v2.33.0) (2026-06-26)
+
+
+### Features
+
+* add experimental headless mode for published, non-interactive runs ([#732](https://github.com/PostHog/wizard/issues/732)) ([6a4a48d](https://github.com/PostHog/wizard/commit/6a4a48dc737e5cd1c71a21d1d3f8ae50a9437e39))
+* **self-driving:** Simplify step 1 of self-driving Wizard, as we don't need to check FFs anymore ([#739](https://github.com/PostHog/wizard/issues/739)) ([48e4516](https://github.com/PostHog/wizard/commit/48e45168600d9ff4979a62fa21fbc7073a09db54))
+* stream wizard run state to PostHog in headless mode ([#734](https://github.com/PostHog/wizard/issues/734)) ([69caa2a](https://github.com/PostHog/wizard/commit/69caa2a02d5d644b84b5977b06dab0718720d8c2))
+
+## [2.32.0](https://github.com/PostHog/wizard/compare/v2.31.0...v2.32.0) (2026-06-25)
+
+
+### Features
+
+* **commands:** add flat `mcp-analytics` command ([#731](https://github.com/PostHog/wizard/issues/731)) ([de3f487](https://github.com/PostHog/wizard/commit/de3f48729824f6dbf3cf2fc939862b3ce8c2fb77))
+
+## [2.31.0](https://github.com/PostHog/wizard/compare/v2.30.0...v2.31.0) (2026-06-25)
+
+
+### Features
+
+* **e2e-harness:** drive and snapshot the real wizard TUI ([#702](https://github.com/PostHog/wizard/issues/702)) ([bd875c3](https://github.com/PostHog/wizard/commit/bd875c36b1e1fe1823d0a3a94fa979948a87b34f))
+* tag LLM gateway traces with build type ([#727](https://github.com/PostHog/wizard/issues/727)) ([f97c53f](https://github.com/PostHog/wizard/commit/f97c53f9fc23a873df53678d2a7fb42d779c5c47))
+* tag LLM gateway traces with program_id and run identifiers ([#726](https://github.com/PostHog/wizard/issues/726)) ([fcdf70f](https://github.com/PostHog/wizard/commit/fcdf70faa9c390540664c895b28cf9654b65fd5d))
+
 ## [2.30.0](https://github.com/PostHog/wizard/compare/v2.29.0...v2.30.0) (2026-06-23)
 
 

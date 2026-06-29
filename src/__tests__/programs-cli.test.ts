@@ -1,22 +1,26 @@
-const mockRunWizard = jest.fn();
-const mockRunWizardCI = jest.fn();
+const { mockRunWizard, mockRunWizardCI } = vi.hoisted(() => ({
+  mockRunWizard: vi.fn(),
+  mockRunWizardCI: vi.fn(),
+}));
 
-jest.mock('@lib/runners', () => ({
+vi.mock('@lib/runners', () => ({
   runWizard: mockRunWizard,
   runWizardCI: mockRunWizardCI,
 }));
 
-jest.mock('@lib/wizard-tools', () => {
-  const actual = jest.requireActual('@lib/wizard-tools');
+vi.mock('@lib/wizard-tools', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@lib/wizard-tools')>();
   return {
     ...actual,
-    fetchSkillMenu: jest.fn(),
+    fetchSkillMenu: vi.fn(),
   };
 });
 
 import type { Arguments } from 'yargs';
+import type { MockedFunction } from 'vitest';
 import { auditCommand } from '../commands/audit';
 import { migrateCommand } from '../commands/migrate';
+import { mcpAnalyticsCommand } from '../commands/mcp-analytics';
 import { revenueCommand } from '../commands/revenue';
 import { warehouseCommand } from '../commands/warehouse';
 import { uploadSourcemapsCommand } from '../commands/upload-sourcemaps';
@@ -31,7 +35,7 @@ import { auditConfig } from '@lib/programs/audit/index';
 import { webAnalyticsDoctorConfig } from '@lib/programs/web-analytics-doctor/index';
 import { parseCommand } from './helpers/parse-command.no-jest';
 
-const mockFetchSkillMenu = fetchSkillMenu as jest.MockedFunction<
+const mockFetchSkillMenu = fetchSkillMenu as MockedFunction<
   typeof fetchSkillMenu
 >;
 
@@ -54,7 +58,7 @@ function mockMenu(cliEntries: CliEntry[]): void {
 
 describe('top-level command shapes', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   test('audit registers as a family with a [skill] positional', () => {
@@ -76,6 +80,11 @@ describe('top-level command shapes', () => {
     expect(revenueCommand.children).toBeUndefined();
   });
 
+  test('mcp-analytics is a flat skill command', () => {
+    expect(mcpAnalyticsCommand.name).toBe('mcp-analytics');
+    expect(mcpAnalyticsCommand.children).toBeUndefined();
+  });
+
   test('warehouse is a flat skill command', () => {
     expect(warehouseCommand.name).toBe('warehouse');
     expect(warehouseCommand.children).toBeUndefined();
@@ -90,7 +99,7 @@ describe('top-level command shapes', () => {
 
 describe('dispatchFamily', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   test('routes a skill-backed subcommand to runWizard with the resolved skillId', async () => {
@@ -150,7 +159,7 @@ describe('dispatchFamily', () => {
 
 describe('flat skill commands', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   test('migrate dispatches with migrate-statsig skillId', () => {
@@ -167,6 +176,12 @@ describe('flat skill commands', () => {
     revenueCommand.handler!(makeArgv({ debug: true }));
     const [config] = mockRunWizard.mock.calls[0] as [{ skillId?: string }];
     expect(config.skillId).toBe('revenue-analytics-setup');
+  });
+
+  test('mcp-analytics dispatches with mcp-analytics skillId', () => {
+    mcpAnalyticsCommand.handler!(makeArgv({ debug: true }));
+    const [config] = mockRunWizard.mock.calls[0] as [{ skillId?: string }];
+    expect(config.skillId).toBe('mcp-analytics');
   });
 
   test('warehouse dispatches with data-warehouse-source-setup skillId', () => {

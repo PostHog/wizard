@@ -8,6 +8,7 @@ import {
 } from '@lib/programs/self-driving/index';
 import { WIZARD_TOOL_NAMES } from '@lib/wizard-tools';
 import { buildSession } from '@lib/wizard-session';
+import type { Mock } from 'vitest';
 
 function makeTmpDir(): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'self-driving-detect-'));
@@ -20,12 +21,12 @@ function cleanup(dir: string): void {
 describe('detectSelfDrivingPrerequisites', () => {
   let tmpDir: string;
   let ctx: Record<string, unknown>;
-  let setCtx: jest.Mock;
+  let setCtx: Mock;
 
   beforeEach(() => {
     tmpDir = makeTmpDir();
     ctx = {};
-    setCtx = jest.fn((key: string, value: unknown) => {
+    setCtx = vi.fn((key: string, value: unknown) => {
       ctx[key] = value;
     });
   });
@@ -65,6 +66,20 @@ describe('SELF_DRIVING_ABORT_CASES', () => {
     expect(matched).toHaveLength(1);
     expect(matched[0].message).toBeTruthy();
     expect(matched[0].body).toBeTruthy();
+  });
+
+  it('frames the unavailable-access abort as open beta, not a closed per-team beta', () => {
+    // STEP 1 no longer gates on access — Self-driving is open beta — but the
+    // abort is kept as a safety net. Its copy must say the product is still
+    // in beta while dropping the old closed/per-team "join the beta" framing.
+    const [accessCase] = SELF_DRIVING_ABORT_CASES.filter((c) =>
+      c.match.test('self-driving is not available for this project'),
+    );
+    expect(accessCase).toBeDefined();
+    const copy = `${accessCase.message} ${accessCase.body}`.toLowerCase();
+    expect(copy).toContain('open beta');
+    expect(copy).not.toContain('per team');
+    expect(copy).not.toContain('join the beta');
   });
 });
 

@@ -13,7 +13,6 @@ describe('AgentOutputSignals', () => {
     expect(signals.hasApiErrorStatus(429)).toBe(false);
     expect(signals.has('MCP_MISSING')).toBe(true);
     expect(signals.has('RESOURCE_MISSING')).toBe(false);
-    expect(signals.hasYaraViolation()).toBe(false);
     expect(signals.remark()).toBeUndefined();
   });
 
@@ -24,16 +23,6 @@ describe('AgentOutputSignals', () => {
     expect(signals.hasApiError()).toBe(true); // generic match via the prefix
     expect(signals.hasApiErrorStatus(503)).toBe(true);
     expect(signals.hasApiErrorStatus(500)).toBe(false);
-  });
-
-  it('detects YARA violations from either marker', () => {
-    const critical = new AgentOutputSignals();
-    critical.push('[YARA CRITICAL] prompt injection detected');
-    expect(critical.hasYaraViolation()).toBe(true);
-
-    const scannerErr = new AgentOutputSignals();
-    scannerErr.push('[YARA] Scanner error: failed to load rules');
-    expect(scannerErr.hasYaraViolation()).toBe(true);
   });
 
   it('extracts only the API Error lines for the message', () => {
@@ -62,5 +51,38 @@ describe('AgentOutputSignals', () => {
 
     expect(signals.apiErrorMessage()).toBeUndefined();
     expect(signals.remark()).toBeUndefined();
+  });
+
+  describe('apiKeySource', () => {
+    it('flags a stored "/login managed key" as a managed login', () => {
+      const signals = new AgentOutputSignals();
+      signals.recordApiKeySource('/login managed key');
+
+      expect(signals.apiKeySource).toBe('/login managed key');
+      expect(signals.usedManagedLogin()).toBe(true);
+    });
+
+    it('does not flag an explicit API key as a managed login', () => {
+      const signals = new AgentOutputSignals();
+      signals.recordApiKeySource('ANTHROPIC_API_KEY');
+
+      expect(signals.usedManagedLogin()).toBe(false);
+    });
+
+    it('is absent (and not a managed login) when never recorded', () => {
+      const signals = new AgentOutputSignals();
+
+      expect(signals.apiKeySource).toBeUndefined();
+      expect(signals.usedManagedLogin()).toBe(false);
+    });
+
+    it('ignores an undefined source so a later real value can win', () => {
+      const signals = new AgentOutputSignals();
+      signals.recordApiKeySource(undefined);
+      expect(signals.apiKeySource).toBeUndefined();
+
+      signals.recordApiKeySource('/login managed key');
+      expect(signals.usedManagedLogin()).toBe(true);
+    });
   });
 });

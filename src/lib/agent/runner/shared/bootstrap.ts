@@ -15,6 +15,7 @@ import { buildRunTags } from '@lib/agent/agent-interface';
 import {
   checkAllSettingsConflicts,
   backupAndFixClaudeSettings,
+  classifySettingsConflicts,
 } from '@lib/agent/claude-settings';
 import {
   evaluateWizardReadiness,
@@ -155,10 +156,52 @@ export async function bootstrapProgram(
         keys: conflict.keys,
       });
     }
-    await getUI().showSettingsOverride(settingsConflicts, () =>
-      backupAndFixClaudeSettings(session.installDir),
-    );
-    logToFile('[agent-runner] settings override resolved');
+
+    const { autoFix, failClosed, warnOnly } =
+      classifySettingsConflicts(settingsConflicts);
+
+    // User-global and project-local files are already neutralized — the agent
+    // runs with settingSources:['project'], so the SDK never reads them. Record
+    // it and move on; don't make the user act on a setting that can't bite.
+    for (const conflict of warnOnly) {
+      logToFile(
+        `[agent-runner] settings conflict in ${conflict.source} (${conflict.path}) ` +
+          `neutralized by settingSources:['project'] — not blocking`,
+      );
+      analytics.wizardCapture('settings conflict neutralized', {
+        level: conflict.source,
+        keys: conflict.keys,
+      });
+    }
+
+    // Writable project settings.json — the SDK *does* read it, but we can back
+    // it up and remove it (restored at outro). Neutralize without prompting.
+    let unfixable = failClosed;
+    if (autoFix.length > 0) {
+      const fixed = backupAndFixClaudeSettings(session.installDir);
+      if (fixed) {
+        logToFile('[agent-runner] auto-neutralized writable settings conflict');
+        analytics.wizardCapture('settings conflict auto-neutralized', {
+          keys: autoFix.flatMap((c) => c.keys),
+        });
+      } else {
+        // Couldn't remove it — don't run into the redirect; fail closed instead.
+        logToFile(
+          '[agent-runner] could not back up writable settings conflict — failing closed',
+        );
+        unfixable = [...failClosed, ...autoFix];
+      }
+    }
+
+    // What we cannot neutralize (org-managed, always read by the SDK; or a
+    // writable file we failed to back up) must be fixed by the user. Fail
+    // closed: the screen names the file + keys and exits.
+    if (unfixable.length > 0) {
+      await getUI().showSettingsOverride(unfixable, () =>
+        backupAndFixClaudeSettings(session.installDir),
+      );
+      logToFile('[agent-runner] settings override resolved');
+    }
   }
 
   analytics.wizardCapture('agent started', {
@@ -235,6 +278,7 @@ export async function bootstrapProgram(
     programId: programConfig.id,
     integration: config.integrationLabel,
     runId: analytics.runId,
+    build: analytics.build,
     skillId: config.skillId,
   });
 

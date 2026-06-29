@@ -1,4 +1,13 @@
-import { runAgent, createStopHook } from '@lib/agent/agent-interface';
+import * as fs from 'fs';
+import * as os from 'os';
+import path from 'path';
+import {
+  runAgent,
+  createStopHook,
+  isWarlockDisabled,
+  buildAuthErrorContext,
+} from '@lib/agent/agent-interface';
+import { WIZARD_WARLOCK_DISABLED_FLAG_KEY } from '@lib/constants';
 import { AgentOutputSignals } from '@lib/agent/output-signals';
 import type { WizardRunOptions } from '@utils/types';
 import type { SpinnerHandle } from '@ui';
@@ -8,54 +17,54 @@ import {
 } from '@lib/wizard-session';
 
 // Mock dependencies
-jest.mock('../../utils/analytics');
-jest.mock('../../utils/debug');
+vi.mock('../../utils/analytics');
+vi.mock('../../utils/debug');
 
 // Mock the SDK module
-const mockQuery = jest.fn();
-jest.mock('@anthropic-ai/claude-agent-sdk', () => ({
+const mockQuery = vi.fn();
+vi.mock('@anthropic-ai/claude-agent-sdk', () => ({
   query: (...args: unknown[]) => mockQuery(...args),
 }));
 
 // Mock the UI layer
 const mockUIInstance = {
   log: {
-    step: jest.fn(),
-    success: jest.fn(),
-    error: jest.fn(),
-    warn: jest.fn(),
-    info: jest.fn(),
+    step: vi.fn(),
+    success: vi.fn(),
+    error: vi.fn(),
+    warn: vi.fn(),
+    info: vi.fn(),
   },
-  spinner: jest.fn(),
-  select: jest.fn(),
-  confirm: jest.fn(),
-  text: jest.fn(),
-  intro: jest.fn(),
-  outro: jest.fn(),
-  cancel: jest.fn(),
-  note: jest.fn(),
-  isCancel: jest.fn(),
-  setDetectedFramework: jest.fn(),
-  setCredentials: jest.fn(),
-  pushStatus: jest.fn(),
-  setLoginUrl: jest.fn(),
-  showBlockingOutage: jest.fn(),
-  setReadinessWarnings: jest.fn(),
-  showSettingsOverride: jest.fn(),
-  startRun: jest.fn(),
-  syncTodos: jest.fn(),
-  groupMultiselect: jest.fn(),
-  multiselect: jest.fn(),
+  spinner: vi.fn(),
+  select: vi.fn(),
+  confirm: vi.fn(),
+  text: vi.fn(),
+  intro: vi.fn(),
+  outro: vi.fn(),
+  cancel: vi.fn(),
+  note: vi.fn(),
+  isCancel: vi.fn(),
+  setDetectedFramework: vi.fn(),
+  setCredentials: vi.fn(),
+  pushStatus: vi.fn(),
+  setLoginUrl: vi.fn(),
+  showBlockingOutage: vi.fn(),
+  setReadinessWarnings: vi.fn(),
+  showSettingsOverride: vi.fn(),
+  startRun: vi.fn(),
+  syncTodos: vi.fn(),
+  groupMultiselect: vi.fn(),
+  multiselect: vi.fn(),
 };
-jest.mock('../../ui', () => ({
+vi.mock('../../ui', () => ({
   getUI: () => mockUIInstance,
 }));
 
 describe('runAgent', () => {
   let mockSpinner: {
-    start: jest.Mock;
-    stop: jest.Mock;
-    message: jest.Mock;
+    start: Mock;
+    stop: Mock;
+    message: Mock;
   };
 
   const defaultOptions: WizardRunOptions = {
@@ -76,12 +85,12 @@ describe('runAgent', () => {
   };
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
 
     mockSpinner = {
-      start: jest.fn(),
-      stop: jest.fn(),
-      message: jest.fn(),
+      start: vi.fn(),
+      stop: vi.fn(),
+      message: vi.fn(),
     };
 
     mockUIInstance.spinner.mockReturnValue(mockSpinner);
@@ -477,5 +486,112 @@ describe('createStopHook', () => {
     const first = hook(hookInput);
     expect(first).toHaveProperty('decision', 'block');
     expect((first as { reason: string }).reason).toContain('WIZARD-REMARK');
+  });
+});
+
+describe('isWarlockDisabled (kill switch)', () => {
+  const ENV_KEY = 'POSTHOG_WIZARD_WARLOCK_DISABLED';
+  const originalEnv = process.env[ENV_KEY];
+
+  afterEach(() => {
+    if (originalEnv === undefined) {
+      delete process.env[ENV_KEY];
+    } else {
+      process.env[ENV_KEY] = originalEnv;
+    }
+  });
+
+  // Fail-safe: scanning stays ON unless something explicitly says 'true'.
+  it('is disabled (false) by default — no flags, no env', () => {
+    delete process.env[ENV_KEY];
+    expect(isWarlockDisabled()).toBe(false);
+    expect(isWarlockDisabled({})).toBe(false);
+  });
+
+  it('stays enabled when the flag is absent or not exactly "true"', () => {
+    delete process.env[ENV_KEY];
+    expect(isWarlockDisabled({ 'some-other-flag': 'true' })).toBe(false);
+    expect(
+      isWarlockDisabled({ [WIZARD_WARLOCK_DISABLED_FLAG_KEY]: 'false' }),
+    ).toBe(false);
+    // A boolean serialized to anything but the literal 'true' must not disable.
+    expect(
+      isWarlockDisabled({ [WIZARD_WARLOCK_DISABLED_FLAG_KEY]: 'True' }),
+    ).toBe(false);
+  });
+
+  it('disables scanning when the flag resolves to "true"', () => {
+    delete process.env[ENV_KEY];
+    expect(
+      isWarlockDisabled({ [WIZARD_WARLOCK_DISABLED_FLAG_KEY]: 'true' }),
+    ).toBe(true);
+  });
+
+  it('disables scanning via the local env override even with empty flags', () => {
+    process.env[ENV_KEY] = 'true';
+    expect(isWarlockDisabled({})).toBe(true);
+    expect(isWarlockDisabled()).toBe(true);
+  });
+
+  it('env override only triggers on exactly "true"', () => {
+    process.env[ENV_KEY] = '1';
+    expect(isWarlockDisabled({})).toBe(false);
+  });
+});
+
+describe('buildAuthErrorContext', () => {
+  const GATEWAY = 'https://gateway.us.posthog.com/wizard';
+  let home: string;
+
+  beforeEach(() => {
+    home = fs.mkdtempSync(path.join(os.tmpdir(), 'wz-auth-ctx-'));
+    delete process.env.CLAUDE_CONFIG_DIR;
+  });
+
+  afterEach(() => {
+    delete process.env.CLAUDE_CONFIG_DIR;
+    try {
+      fs.rmSync(home, { recursive: true, force: true });
+    } catch {
+      /* best-effort */
+    }
+  });
+
+  it('flags usingManagedLogin when apiKeySource is a /login managed key', () => {
+    const ctx = buildAuthErrorContext(
+      home,
+      GATEWAY,
+      home,
+      '/login managed key',
+    );
+    expect(ctx.usingManagedLogin).toBe(true);
+    expect(ctx.apiKeySource).toBe('/login managed key');
+  });
+
+  it('does not flag an explicit API key as a managed login', () => {
+    expect(
+      buildAuthErrorContext(home, GATEWAY, home, 'ANTHROPIC_API_KEY')
+        .usingManagedLogin,
+    ).toBe(false);
+    // Absent apiKeySource is also not a managed login.
+    expect(buildAuthErrorContext(home, GATEWAY, home).usingManagedLogin).toBe(
+      false,
+    );
+  });
+
+  it('lists the logged-in session when ~/.claude/.credentials.json exists', () => {
+    fs.mkdirSync(path.join(home, '.claude'));
+    fs.writeFileSync(path.join(home, '.claude', '.credentials.json'), '{}');
+
+    const ctx = buildAuthErrorContext(
+      home,
+      GATEWAY,
+      home,
+      '/login managed key',
+    );
+
+    expect(
+      ctx.credentialPlaces.some((p) => p.includes('.credentials.json')),
+    ).toBe(true);
   });
 });

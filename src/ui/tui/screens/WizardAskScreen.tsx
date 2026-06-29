@@ -17,7 +17,8 @@ import {
   extractUrls,
 } from '@ui/tui/primitives/index';
 import { Colors, Icons } from '@ui/tui/styles';
-import { copyToClipboard } from '@utils/clipboard';
+import { copyToClipboard, openInBrowser } from '@utils/clipboard';
+import { useKeyBindings } from '@ui/tui/hooks/useKeyBindings';
 import type { AskAnswers, AskQuestion } from '@lib/wizard-session';
 
 interface WizardAskScreenProps {
@@ -37,7 +38,11 @@ export const WizardAskScreen = ({ store }: WizardAskScreenProps) => {
   const [index, setIndex] = useState(0);
   const [answers, setAnswers] = useState<AskAnswers>({});
   const [lastPendingId, setLastPendingId] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
+  // What the user last did with the link, so the overlay can confirm it. The
+  // auto-copy below seeds 'copied'; pressing `o`/`c` overrides it.
+  const [linkStatus, setLinkStatus] = useState<'idle' | 'copied' | 'opened'>(
+    'idle',
+  );
 
   // For rich-link prompts (opt-in programs only) copy a lone URL to the
   // clipboard, so users on terminals without OSC 8 support can still paste it.
@@ -48,17 +53,56 @@ export const WizardAskScreen = ({ store }: WizardAskScreenProps) => {
   const promptUrls = richLinks ? extractUrls(currentPrompt) : [];
   const soleUrl = promptUrls.length === 1 ? promptUrls[0] : null;
 
+  // The `o`/`c` keybinds would steal keystrokes from a free-text answer, so
+  // only offer them on picker questions (where the user isn't typing).
+  const isTextQuestion = pending?.questions[index]?.kind === 'text';
+  const canActOnLink = !!soleUrl && !isTextQuestion;
+
   useEffect(() => {
-    setCopied(false);
+    setLinkStatus('idle');
     if (!soleUrl) return;
     let active = true;
     void copyToClipboard(soleUrl).then((ok) => {
-      if (active && ok) setCopied(true);
+      // Only seed 'copied' if the user hasn't already acted (e.g. pressed `o`
+      // before this async copy resolved) — don't clobber their action.
+      if (active && ok) setLinkStatus((s) => (s === 'idle' ? 'copied' : s));
     });
     return () => {
       active = false;
     };
   }, [soleUrl]);
+
+  // Explicit, discoverable link actions. OSC 8 makes the link clickable only on
+  // terminals that support it (not macOS Terminal.app), so `o` opens it in the
+  // browser directly — the one path that works everywhere — and `c` copies it
+  // as a fallback. Both register hints in the bar via useKeyBindings.
+  useKeyBindings(
+    'wizard-ask-link',
+    canActOnLink && soleUrl
+      ? [
+          {
+            match: 'o',
+            label: 'o',
+            action: 'open in browser',
+            handler: () => {
+              void openInBrowser(soleUrl).then((ok) => {
+                if (ok) setLinkStatus('opened');
+              });
+            },
+          },
+          {
+            match: 'c',
+            label: 'c',
+            action: 'copy link',
+            handler: () => {
+              void copyToClipboard(soleUrl).then((ok) => {
+                if (ok) setLinkStatus('copied');
+              });
+            },
+          },
+        ]
+      : [],
+  );
 
   if (!pending) return null;
 
@@ -105,12 +149,20 @@ export const WizardAskScreen = ({ store }: WizardAskScreenProps) => {
           <Text>{question.prompt}</Text>
         )}
       </Box>
-      {pending.richLinks && copied && (
+      {/* Key hints (o / c) live in the bottom KeyboardHintsBar; this block only
+          confirms the action once taken, so there's no redundant in-modal prose
+          for the confirmation to collide with on redraw. */}
+      {canActOnLink && linkStatus !== 'idle' && (
         <Box marginTop={1}>
-          <Text dimColor>
-            Link copied to clipboard — paste it in your browser if it isn&apos;t
-            clickable.
-          </Text>
+          {linkStatus === 'opened' ? (
+            <Text color={Colors.success}>
+              {Icons.check} Opening the link in your browser…
+            </Text>
+          ) : (
+            <Text color={Colors.success}>
+              {Icons.check} Link copied to clipboard. Paste it in your browser.
+            </Text>
+          )}
         </Box>
       )}
       <Box marginTop={1}>

@@ -15,7 +15,7 @@ Each domain has a dedicated boundary:
 - **Frameworks** → `FrameworkConfig` in `src/frameworks/<name>/`
 - **Integration knowledge** → markdown skills in the
 [context-mill](https://github.com/PostHog/context-mill) repo
-- **Security policy** → YARA-X rules in the [warlock](https://github.com/PostHog/warlock) sibling repo. The wizard wires the scanner via PostToolUse/PreToolUse hooks (`src/lib/yara-hooks.ts`); the rule content itself lives in warlock.
+- **Security policy** → YARA-X rules in the [warlock](https://github.com/PostHog/warlock) sibling repo. The wizard wires the scanner via PostToolUse/PreToolUse hooks (`src/lib/yara-hooks.ts`); the rule content itself lives in warlock. To disable scanning in the field without a release, see the kill-switch runbook: `docs/runbooks/warlock-kill-switch.md`. ONLY USE THIS IF ABSOLUTELY NECESSARY.
 - **Programs** → step arrays in `src/lib/programs/`
 - **TUI** → screen components and primitives in `src/ui/tui/`
 

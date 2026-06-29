@@ -47,6 +47,14 @@ export interface SpinnerHandle {
 export interface AuthErrorDetail {
   hasSettingsConflict: boolean;
   conflicts?: SettingsConflict[];
+  /**
+   * True when the agent SDK authenticated from a stored Claude login
+   * (`apiKeySource: "/login managed key"`) instead of the wizard's gateway
+   * token — conflicting Anthropic credentials. Takes priority in the screen.
+   */
+  usingManagedLogin?: boolean;
+  /** Human-readable places a conflicting Anthropic credential may live. */
+  credentialPlaces?: string[];
   logFilePath: string;
 }
 
