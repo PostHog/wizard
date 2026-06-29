@@ -1,7 +1,11 @@
+import * as fs from 'fs';
+import * as os from 'os';
+import path from 'path';
 import {
   runAgent,
   createStopHook,
   isWarlockDisabled,
+  buildAuthErrorContext,
 } from '@lib/agent/agent-interface';
 import { WIZARD_WARLOCK_DISABLED_FLAG_KEY } from '@lib/constants';
 import { AgentOutputSignals } from '@lib/agent/output-signals';
@@ -532,5 +536,62 @@ describe('isWarlockDisabled (kill switch)', () => {
   it('env override only triggers on exactly "true"', () => {
     process.env[ENV_KEY] = '1';
     expect(isWarlockDisabled({})).toBe(false);
+  });
+});
+
+describe('buildAuthErrorContext', () => {
+  const GATEWAY = 'https://gateway.us.posthog.com/wizard';
+  let home: string;
+
+  beforeEach(() => {
+    home = fs.mkdtempSync(path.join(os.tmpdir(), 'wz-auth-ctx-'));
+    delete process.env.CLAUDE_CONFIG_DIR;
+  });
+
+  afterEach(() => {
+    delete process.env.CLAUDE_CONFIG_DIR;
+    try {
+      fs.rmSync(home, { recursive: true, force: true });
+    } catch {
+      /* best-effort */
+    }
+  });
+
+  it('flags usingManagedLogin when apiKeySource is a /login managed key', () => {
+    const ctx = buildAuthErrorContext(
+      home,
+      GATEWAY,
+      home,
+      '/login managed key',
+    );
+    expect(ctx.usingManagedLogin).toBe(true);
+    expect(ctx.apiKeySource).toBe('/login managed key');
+  });
+
+  it('does not flag an explicit API key as a managed login', () => {
+    expect(
+      buildAuthErrorContext(home, GATEWAY, home, 'ANTHROPIC_API_KEY')
+        .usingManagedLogin,
+    ).toBe(false);
+    // Absent apiKeySource is also not a managed login.
+    expect(buildAuthErrorContext(home, GATEWAY, home).usingManagedLogin).toBe(
+      false,
+    );
+  });
+
+  it('lists the logged-in session when ~/.claude/.credentials.json exists', () => {
+    fs.mkdirSync(path.join(home, '.claude'));
+    fs.writeFileSync(path.join(home, '.claude', '.credentials.json'), '{}');
+
+    const ctx = buildAuthErrorContext(
+      home,
+      GATEWAY,
+      home,
+      '/login managed key',
+    );
+
+    expect(
+      ctx.credentialPlaces.some((p) => p.includes('.credentials.json')),
+    ).toBe(true);
   });
 });
