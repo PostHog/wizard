@@ -14,10 +14,12 @@ import { LoadingBox, PickerMenu } from '@ui/tui/primitives/index';
 import { Colors, Icons } from '@ui/tui/styles';
 import {
   SOURCE_MAPS_CONTEXT_KEYS,
+  SOURCE_MAPS_DOCS_URL,
   VARIANT_DISPLAY_NAME,
 } from '@lib/programs/error-tracking-upload-source-maps/index';
 import {
   detectSourceMapsProjects,
+  isNativePlatform,
   type DetectedProject,
   type DetectionReport,
 } from '@lib/programs/error-tracking-upload-source-maps/detect-agentic';
@@ -123,6 +125,13 @@ export const SourceMapsDetectScreen = ({
           </Text>
           <Text dimColor>{state.message}</Text>
         </Box>
+        <Box flexDirection="column" marginBottom={1}>
+          <Text>
+            This is usually transient — re-run the command to try again. To set
+            up source-map upload by hand, follow:
+          </Text>
+          <Text color={Colors.primary}>{SOURCE_MAPS_DOCS_URL}</Text>
+        </Box>
         <PickerMenu
           options={[{ label: 'Exit', value: EXIT }]}
           onSelect={() => process.exit(1)}
@@ -136,18 +145,31 @@ export const SourceMapsDetectScreen = ({
   const blocked = report.projects.filter((p) => !p.instrumentable);
 
   if (instrumentable.length === 0) {
+    const hasNative = blocked.some(isNativePlatform);
     return (
       <Box flexDirection="column">
         <Box flexDirection="column" marginBottom={1}>
-          <Text color={Colors.error} bold>
-            {Icons.squareFilled} Nothing to instrument yet
+          <Text color={Colors.accent} bold>
+            {Icons.warning} Nothing to wire up automatically
           </Text>
           <Text dimColor>
-            None of the {report.projects.length} projects found can have
-            source-map upload set up.
+            The wizard couldn't set up source-map upload for any of the{' '}
+            {report.projects.length} project
+            {report.projects.length === 1 ? '' : 's'} it found
+            {hasNative ? " — native apps aren't automated yet" : ''}.
           </Text>
         </Box>
         <BlockedSummary blocked={blocked} />
+        <Box flexDirection="column" marginTop={1}>
+          <Text>
+            You can still upload source maps manually
+            {hasNative
+              ? ' — the docs cover React Native, iOS, Android and Flutter too'
+              : ''}
+            :
+          </Text>
+          <Text color={Colors.primary}>{SOURCE_MAPS_DOCS_URL}</Text>
+        </Box>
         <Box marginTop={1}>
           <PickerMenu
             options={[{ label: 'Exit', value: EXIT }]}
