@@ -143,7 +143,8 @@ jobs:
     if: |
       github.event_name == 'issue_comment' &&
       github.event.issue.pull_request &&
-      startsWith(github.event.comment.body, '/wizard-ci')
+      startsWith(github.event.comment.body, '/wizard-ci') &&
+      !startsWith(github.event.comment.body, '/wizard-ci-snapshots')
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -206,13 +207,13 @@ jobs:
             console.log(`Triggered wizard-ci for app: ${app}`);
 
   # ============================================================================
-  # HANDLE SNAPSHOTS: Parse /wizard-snapshots and trigger the snapshots workflow
+  # HANDLE SNAPSHOTS: Parse /wizard-ci-snapshots and trigger the snapshots workflow
   # ============================================================================
   handle-snapshots-command:
     if: |
       github.event_name == 'issue_comment' &&
       github.event.issue.pull_request &&
-      startsWith(github.event.comment.body, '/wizard-snapshots')
+      startsWith(github.event.comment.body, '/wizard-ci-snapshots')
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -241,9 +242,9 @@ jobs:
               return;
             }
 
-            // /wizard-snapshots <app> [wizard_ref] — ref defaults to this PR's branch.
+            // /wizard-ci-snapshots <app> [wizard_ref] — ref defaults to this PR's branch.
             const m = context.payload.comment.body.match(
-              /\/wizard-snapshots\s+(\S+)(?:\s+(\S+))?/
+              /\/wizard-ci-snapshots\s+(\S+)(?:\s+(\S+))?/
             );
             const app = m ? m[1] : 'basic-integration/javascript-node/express-todo';
             const wizardRef = m && m[2] ? m[2] : pr.data.head.ref;
