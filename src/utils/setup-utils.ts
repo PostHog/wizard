@@ -420,7 +420,13 @@ export async function getOrAskForProjectData(
   if (_options.ci && _options.apiKey) {
     getUI().log.info('Using provided API key (CI mode - OAuth bypassed)');
 
-    const cloudRegion = await detectRegionFromToken(_options.apiKey);
+    // Trust the explicitly-provided region. detectRegionFromToken probes
+    // `/api/users/@me/` on both us and eu and takes whichever answers first;
+    // under load the wrong region can win, and the subsequent project fetch
+    // then targets the wrong cloud and hangs (~120s) before failing. CI always
+    // passes --region, so only fall back to detection when it's truly absent.
+    const cloudRegion =
+      _options.region ?? (await detectRegionFromToken(_options.apiKey));
     const host = getHostFromRegion(cloudRegion);
     const cloudUrl = getCloudUrlFromRegion(cloudRegion);
 
