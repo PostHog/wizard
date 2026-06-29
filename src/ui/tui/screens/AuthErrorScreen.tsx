@@ -30,6 +30,8 @@ export const AuthErrorScreen = ({ store }: AuthErrorScreenProps) => {
   const detail = store.session.authErrorDetail;
   const hasSettingsConflict = detail?.hasSettingsConflict ?? true;
   const conflicts = detail?.conflicts ?? [];
+  const usingManagedLogin = detail?.usingManagedLogin ?? false;
+  const credentialPlaces = detail?.credentialPlaces ?? [];
   const logFilePath = detail?.logFilePath;
 
   return (
@@ -38,7 +40,39 @@ export const AuthErrorScreen = ({ store }: AuthErrorScreenProps) => {
         {'✘'} Authentication error
       </Text>
 
-      {hasSettingsConflict ? (
+      {usingManagedLogin ? (
+        <>
+          <Box flexDirection="column" marginTop={1}>
+            <Text>
+              Conflicting Anthropic credentials. The agent signed in with an
+              existing Claude login instead of the PostHog token the Wizard
+              provided, so the LLM Gateway rejected it (401).
+            </Text>
+          </Box>
+
+          {credentialPlaces.length > 0 && (
+            <Box flexDirection="column" marginTop={1} paddingLeft={2}>
+              <Text dimColor>Conflicting credentials may come from:</Text>
+              {credentialPlaces.map((place) => (
+                <Text key={place}>
+                  {'•'} {place}
+                </Text>
+              ))}
+            </Box>
+          )}
+
+          <Box marginTop={1}>
+            <Text dimColor>
+              Log out of Claude Code (clears the stored login), then re-run the
+              Wizard:
+            </Text>
+          </Box>
+
+          <Box flexDirection="column" marginTop={1} paddingLeft={2}>
+            <Text color="cyan">claude auth logout</Text>
+          </Box>
+        </>
+      ) : hasSettingsConflict ? (
         <>
           <Box flexDirection="column" marginTop={1}>
             <Text>
