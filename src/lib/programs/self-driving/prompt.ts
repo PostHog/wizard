@@ -8,6 +8,10 @@ import { getUiHostFromHost } from '@utils/urls';
  * every step (which MCP tools to call, which sources/scouts apply, how
  * to verify); this prompt carries the order, the wizard-specific
  * mechanics (wizard_ask, abort signals), and the project URLs.
+ *
+ * Integration (when the project has no PostHog yet) runs as a separate phase
+ * before this — the real integration program, with its own screens and task
+ * list — so this prompt only covers the Self-driving steps.
  */
 export function buildSelfDrivingPrompt(ctx: PromptContext): string {
   const uiHost = getUiHostFromHost(ctx.host).replace(/\/$/, '');

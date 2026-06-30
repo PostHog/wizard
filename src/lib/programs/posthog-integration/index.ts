@@ -1,8 +1,8 @@
-import type { ProgramConfig } from '@lib/programs/program-step';
-import type { ProgramRun } from '@lib/agent/agent-runner';
+import type { ProgramConfig, ProgramStep } from '@lib/programs/program-step';
+import { runAgent, type ProgramRun } from '@lib/agent/agent-runner';
 import { WIZARD_TOOL_NAMES } from '@lib/wizard-tools';
 import type { WizardSession } from '@lib/wizard-session';
-import { OutroKind } from '@lib/wizard-session';
+import { OutroKind, RunPhase } from '@lib/wizard-session';
 import { AgentSignals } from '@lib/agent/agent-interface';
 import {
   DEFAULT_PACKAGE_INSTALLATION,
@@ -277,3 +277,20 @@ Important: Use the detect_package_manager tool (from the wizard-tools MCP server
 };
 
 export { POSTHOG_INTEGRATION_PROGRAM } from './steps.js';
+
+/**
+ * Self-contained run step that runs the integration agent. Other programs
+ * import this and splice it into their own step list to compose the
+ * integration's work as one of their run steps — self-driving sets up PostHog
+ * this way before its own run. The host program supplies `show`/`onRunPrep`/
+ * `targetDir`; this carries the run.
+ */
+export const integrationRunStep: ProgramStep = {
+  id: 'run',
+  label: 'Integration',
+  screenId: 'run',
+  run: (session) => runAgent(posthogIntegrationConfig, session),
+  isComplete: (session) =>
+    session.runPhase === RunPhase.Completed ||
+    session.runPhase === RunPhase.Error,
+};

@@ -1323,4 +1323,28 @@ describe('WizardStore', () => {
       expect(resolved).toBe(true);
     });
   });
+
+  describe('setIntegrate (self-driving integration check)', () => {
+    it('records "no" as integrate=true', () => {
+      const store = createStore(Program.SelfDriving);
+      store.session = buildSession({});
+      store.setIntegrate(true);
+      expect(store.session.integrate).toBe(true);
+    });
+
+    it('records "yes, already integrated" as integrate=false', () => {
+      const store = createStore(Program.SelfDriving);
+      store.session = buildSession({});
+      store.setIntegrate(false);
+      expect(store.session.integrate).toBe(false);
+    });
+
+    it('defaults to null (undecided) before the question', () => {
+      expect(buildSession({}).integrate).toBeNull();
+    });
+
+    it('--integrate pre-resolves the decision to true', () => {
+      expect(buildSession({ integrate: true }).integrate).toBe(true);
+    });
+  });
 });

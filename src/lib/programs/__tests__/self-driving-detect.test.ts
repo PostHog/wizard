@@ -6,6 +6,7 @@ import {
   selfDrivingConfig,
   SELF_DRIVING_ABORT_CASES,
 } from '@lib/programs/self-driving/index';
+import { detectPostHogPresent } from '@lib/programs/self-driving/detect';
 import { WIZARD_TOOL_NAMES } from '@lib/wizard-tools';
 import { buildSession } from '@lib/wizard-session';
 import type { Mock } from 'vitest';
@@ -97,10 +98,12 @@ describe('selfDrivingConfig', () => {
     expect(typeof last === 'object' ? last.pause : undefined).toBe(5000);
   });
 
-  it('gives wizard_ask a 30-min timeout for the browser-handoff steps', () => {
+  it('gives wizard_ask a 30-min timeout for the browser-handoff steps', async () => {
+    // `run` is resolved per-session so the prompt can carry the integrate flag.
     const { run } = selfDrivingConfig;
-    const timeout = typeof run === 'object' ? run.askTimeoutMs : undefined;
-    expect(timeout).toBe(30 * 60 * 1000);
+    const resolved =
+      typeof run === 'function' ? await run(buildSession({})) : run;
+    expect(resolved?.askTimeoutMs).toBe(30 * 60 * 1000);
   });
 
   it('wires the self-driving-setup skill and CLI command', () => {
@@ -116,10 +119,51 @@ describe('selfDrivingConfig', () => {
     expect(stepIds).toEqual([
       'detect',
       'intro',
+      'integration-check',
       'health-check',
       'auth',
+      'integrate-detect',
+      'integrate-run',
+      'self-driving-handoff',
       'run',
       'outro',
     ]);
+  });
+});
+
+describe('detectPostHogPresent', () => {
+  it('returns true when a manifest declares a PostHog package', () => {
+    const dir = makeTmpDir();
+    try {
+      fs.writeFileSync(
+        path.join(dir, 'package.json'),
+        JSON.stringify({ dependencies: { 'posthog-node': '^4.0.0' } }),
+      );
+      expect(detectPostHogPresent(dir)).toBe(true);
+    } finally {
+      cleanup(dir);
+    }
+  });
+
+  it('returns false when no manifest mentions PostHog', () => {
+    const dir = makeTmpDir();
+    try {
+      fs.writeFileSync(
+        path.join(dir, 'package.json'),
+        JSON.stringify({ dependencies: { express: '^4.0.0' } }),
+      );
+      expect(detectPostHogPresent(dir)).toBe(false);
+    } finally {
+      cleanup(dir);
+    }
+  });
+
+  it('returns false for an empty project', () => {
+    const dir = makeTmpDir();
+    try {
+      expect(detectPostHogPresent(dir)).toBe(false);
+    } finally {
+      cleanup(dir);
+    }
   });
 });
