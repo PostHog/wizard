@@ -18,4 +18,16 @@ describe('buildSelfDrivingPrompt', () => {
     expect(prompt).toContain('STEP 1 — Check Self-driving access');
     expect(prompt).toContain('Connect GitHub');
   });
+
+  it('enables products before sources, then runs the renumbered tail', () => {
+    const prompt = buildSelfDrivingPrompt(ctx);
+    // The new "Enable products" step lands before "Enable signal sources".
+    expect(prompt).toContain('STEP 4 — Enable products');
+    expect(prompt).toContain('STEP 5 — Enable signal sources');
+    expect(prompt.indexOf('STEP 4 — Enable products')).toBeLessThan(
+      prompt.indexOf('STEP 5 — Enable signal sources'),
+    );
+    // Tail steps renumbered through to the report.
+    expect(prompt).toContain('STEP 9 — Write the report and hand off');
+  });
 });

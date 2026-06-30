@@ -151,6 +151,13 @@ export const AGENT_SKILL_SCOPE_ADDITIONS = [
  *     `llma-skill-file-get`) and author the user-approved custom
  *     `signals-scout-*` skills (`llma-skill-create`). Canonical scout
  *     bodies are never edited.
+ *   • product_enablement:write — the "Enable products" step turns on
+ *     Session Replay / Error Tracking / Support so their sources have
+ *     data to read (`products-enable`). A purpose-built scope: the
+ *     server owns each enable recipe, so this can flip the product
+ *     toggles without the far broader `project:write`. NOTE: net-new —
+ *     must be added to the wizard OAuth app's scope ceiling on the
+ *     PostHog side before it can be granted (see README / ARCHITECTURE §9).
  */
 export const SELF_DRIVING_SCOPE_ADDITIONS = [
   'task:read',
@@ -165,6 +172,7 @@ export const SELF_DRIVING_SCOPE_ADDITIONS = [
   'external_data_source:write',
   'llm_skill:read',
   'llm_skill:write',
+  'product_enablement:write',
 ] as const;
 
 /**
