@@ -109,9 +109,11 @@ STEP 3b — Enable products. (skill: "Enable products")
    Turn ON the PostHog products Signals reads from — Session Replay,
    Error Tracking, and Support — so the sources you enable next have data
    to read. These are server-side enables with conservative defaults
-   (owned by the server, not you); the project-state block above tells you
-   what is already ON, so you can skip those, though every enable is
-   idempotent anyway. For a web app, also make sure this repo's posthog-js
+   (owned by the server, not you). The project-state block above covers
+   only Session Replay and Error Tracking, so you can skip those if they
+   are already ON; it does not show Support, but every enable is idempotent
+   so enabling any of them again is safe regardless. For a web app, also
+   make sure this repo's posthog-js
    init doesn't disable them; for a pure backend or mobile app the server
    flip is inert, so just record that for the report and move on. The skill
    names the exact tool and the per-platform detail.

@@ -457,7 +457,7 @@ self-driving-created warehouse pipelines** (scoped to `created_via=MCP`), then r
 the wizard log. `DEBUG`-only. By default it leaves the **product toggles** (replay / error tracking /
 conversations) alone — so a plain run resets *just* self-driving state.
 
-Add **`--reset-products`** to also handle the step-4 products: it reports their state *before* resetting, so
+Add **`--reset-products`** to also handle the step-3b products: it reports their state *before* resetting, so
 it **doubles as a verifier** for the "Enable products" step, then turns them back off.
 
 **Smoke-test loop** (run the posthog commands from the `posthog/` repo root):
@@ -490,7 +490,7 @@ entirely to reset just the self-driving state and leave the products as they are
 
 ---
 
-## 9. Planned: proactive product enablement (replay / error tracking / support)
+## 9. Proactive product enablement (replay / error tracking / support)
 
 > [!IMPORTANT]
 > **IMPLEMENTED** (step 3b above), with **one manual step outstanding**: the `product_enablement:write`

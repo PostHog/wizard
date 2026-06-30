@@ -146,7 +146,7 @@ export const AGENT_SKILL_SCOPE_ADDITIONS = [
  *     what's actually connected (`external-data-sources-list`) instead
  *     of taking the user's word for it.
  *   • llm_skill:read / llm_skill:write — the custom-scouts step
- *     (skill step 7b): read the seeded `authoring-signals-scouts`
+ *     (skill step 6b): read the seeded `authoring-signals-scouts`
  *     guide and canonical scout bodies (`llma-skill-get` /
  *     `llma-skill-file-get`) and author the user-approved custom
  *     `signals-scout-*` skills (`llma-skill-create`). Canonical scout
