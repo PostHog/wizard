@@ -15,7 +15,7 @@ import {
   AgentSignals,
 } from '../agent-interface';
 import { restoreClaudeSettings } from '../claude-settings';
-import { getCloudUrlFromRegion } from '../../../utils/urls';
+import { HostResolution } from '@lib/host-resolution';
 import { logToFile, getLogFilePath } from '../../../utils/debug';
 import { createBenchmarkPipeline } from '../../middleware/benchmark';
 import {
@@ -293,8 +293,13 @@ export async function runLinearProgram(
         message: config.successMessage,
         reportFile: config.reportFile,
         docsUrl: config.docsUrl,
+        // TODO: clean up in #755
         continueUrl: session.signup
-          ? `${getCloudUrlFromRegion(cloudRegion)}/products?source=wizard`
+          ? `${
+              HostResolution.fromRegion(cloudRegion, {
+                baseUrl: session.baseUrl,
+              }).appHost
+            }/products?source=wizard`
           : undefined,
       };
   if (outroData) {

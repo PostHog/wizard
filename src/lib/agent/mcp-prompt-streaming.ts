@@ -15,7 +15,7 @@
 import type { AgentChunk } from '@ui/tui/services/mcp-suggested-prompts-services';
 import type { Credentials } from '@lib/wizard-session';
 import { WIZARD_USER_AGENT } from '@lib/constants';
-import { getLlmGatewayUrlFromHost } from '@utils/urls';
+import { HostResolution } from '@lib/host-resolution';
 import { runtimeEnv } from '@env';
 import { logToFile } from '@utils/debug';
 import { buildAgentEnv } from '@lib/agent/agent-interface';
@@ -196,11 +196,14 @@ export async function* runMcpPromptViaSdk(args: {
   // authenticate directly against Anthropic and 401s with "Invalid
   // authentication credentials".
   process.env.CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS = 'true';
+
   // Route through the PostHog LLM gateway, authed with the user's OAuth token.
-  const gatewayUrl = getLlmGatewayUrlFromHost(credentials.host);
+  // TODO: clean up in #755
+  const gatewayUrl = HostResolution.fromApiHost(credentials.host).gatewayUrl;
   process.env.ANTHROPIC_BASE_URL = gatewayUrl;
   process.env.ANTHROPIC_AUTH_TOKEN = credentials.accessToken;
   process.env.CLAUDE_CODE_OAUTH_TOKEN = credentials.accessToken;
+
   logToFile(
     `[runMcpPromptViaSdk] gatewayUrl=${gatewayUrl} tokenPrefix=${
       credentials.accessToken

@@ -517,6 +517,7 @@ describe('CLI argument parsing', () => {
         'new@example.com',
         '',
         'US',
+        { baseUrl: undefined },
       );
       const args = getLastBuildSessionArgs();
       expect(args.apiKey).toBe('phx_from_signup');
@@ -529,6 +530,7 @@ describe('CLI argument parsing', () => {
         'new@example.com',
         'Test User',
         'US',
+        { baseUrl: undefined },
       );
     });
 
@@ -539,6 +541,7 @@ describe('CLI argument parsing', () => {
         'new@example.com',
         '',
         'EU',
+        { baseUrl: undefined },
       );
     });
 

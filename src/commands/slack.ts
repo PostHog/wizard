@@ -28,7 +28,10 @@ function runSlackConnect(argv: Arguments): void {
       const { startTUI } = await import('@ui/tui/start-tui');
       const { buildSession } = await import('@lib/wizard-session');
       const tui = startTUI(VERSION, Program.SlackConnect);
-      tui.store.session = buildSession({ debug });
+      tui.store.session = buildSession({
+        debug,
+        baseUrl: argv.baseUrl as string | undefined,
+      });
     } catch (err) {
       // TUI unavailable — connecting Slack has no headless fallback.
       setUI(new LoggingUI());

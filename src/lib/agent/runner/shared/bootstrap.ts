@@ -228,6 +228,7 @@ export async function bootstrapProgram(
     projectId: session.projectId,
     email: session.email,
     region: session.region,
+    baseUrl: session.baseUrl,
     programId: programConfig.id,
   });
 

@@ -177,6 +177,14 @@ export interface WizardSession {
   apiKey?: string;
   email?: string;
   region?: CloudRegion;
+  /**
+   * Explicit PostHog base URL (`--base-url`). When set, it pins every PostHog
+   * origin — API host, cloud/app URL, OAuth server — and `region` is ignored.
+   * The runtime equivalent of the dev-build localhost routing; lets the shipped
+   * wizard target a local/self-hosted stack. Threaded into the URL helpers in
+   * `@utils/urls`. Empty/unset → region-based resolution.
+   */
+  baseUrl?: string;
   benchmark: boolean;
   yaraReport: boolean;
   projectId?: number;
@@ -300,6 +308,7 @@ export function buildSession(args: {
   apiKey?: string;
   email?: string;
   region?: CloudRegion;
+  baseUrl?: string;
   integration?: Integration;
   benchmark?: boolean;
   yaraReport?: boolean;
@@ -316,6 +325,7 @@ export function buildSession(args: {
     apiKey: args.apiKey,
     email: args.email,
     region: args.region,
+    baseUrl: args.baseUrl,
     benchmark: args.benchmark ?? false,
     yaraReport: args.yaraReport ?? false,
     projectId: parseProjectIdArg(args.projectId),
