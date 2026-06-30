@@ -1,0 +1,36 @@
+{
+  "program": "self-driving",
+  "summary": "Self-driving, integration-first: answer \"no\" to the integration check so the runner runs the real integration program as a prelude first (its own screens + task list — not captured in this self-driving control-plane trace), then the self-driving intro, run, and its own outro (no keep-skills — the outro exits).",
+  "profile": {
+    "setup": "first",
+    "healthCheck": "dismiss",
+    "mcp": "skip",
+    "slack": "skip",
+    "skills": "delete",
+    "ask": "first",
+    "integrate": true
+  },
+  "path": [
+    {
+      "screen": "self-driving-integration-check",
+      "auto": "answer \"no, set it up first\" → integrate=true. The runner then runs the integration program as a prelude (its own flow) before continuing. \"--integrate\" pre-answers this and skips the screen."
+    },
+    {
+      "screen": "self-driving-intro",
+      "auto": "confirm & continue — \"now we can set up Self-driving\" (shown after any integration prelude)"
+    },
+    {
+      "screen": "health-check",
+      "auto": "dismiss outage — proceed even if the readiness probe flags an issue"
+    },
+    { "screen": "auth", "auto": "(external) — the runner injects credentials" },
+    {
+      "screen": "run",
+      "auto": "(external) — the Self-driving agent run (signal sources, scouts, inbox)"
+    },
+    {
+      "screen": "outro",
+      "auto": "dismiss — terminal: self-driving has no keep-skills, so the outro exits the wizard"
+    }
+  ]
+}

@@ -17,10 +17,17 @@ import fs from 'fs';
 import net from 'net';
 import { startTUI } from '@ui/tui/start-tui';
 import { VERSION } from '@lib/version';
-import { Program } from '@lib/programs/program-registry';
+import {
+  Program,
+  getProgramConfig,
+  type ProgramId,
+} from '@lib/programs/program-registry';
 import { buildSession } from '@lib/wizard-session';
-import { posthogIntegrationConfig } from '@lib/programs/posthog-integration';
 import { runAgent } from '@lib/agent/agent-runner';
+import {
+  hasRunPhases,
+  runInProgramPhases,
+} from '@lib/runners/in-program-phases';
 import { getOrAskForProjectData } from '@utils/setup-utils';
 import { logToFile } from '@utils/debug';
 import { WizardCiDriver } from '@e2e-harness/wizard-ci-driver';
@@ -41,8 +48,13 @@ async function main() {
       : '')
   ).trim();
   const projectId = process.env.PROJECT_ID!;
+  // Which program to drive — defaults to the integration flow. Set PROGRAM to
+  // an id (e.g. `self-driving`) to host a different one.
+  const programId =
+    (process.env.PROGRAM as ProgramId) || Program.PostHogIntegration;
+  const programConfig = getProgramConfig(programId);
 
-  const { store } = startTUI(VERSION, Program.PostHogIntegration);
+  const { store } = startTUI(VERSION, programId);
   store.session = buildSession({
     installDir: process.env.APP_DIR!,
     ci: true,
@@ -50,6 +62,11 @@ async function main() {
     projectId,
     region: 'us',
   });
+  // Optional skip-ahead: pre-resolve the self-driving integration check so its
+  // screen never shows (INTEGRATE=true integrates first; false = already set up).
+  if (process.env.INTEGRATE === 'true' || process.env.INTEGRATE === 'false') {
+    store.setIntegrate(process.env.INTEGRATE === 'true');
+  }
   const driver = new WizardCiDriver(store);
 
   // Resolve credentials from the phx key (same bearer as an OAuth token) and set
@@ -60,7 +77,7 @@ async function main() {
       ci: true,
       apiKey,
       projectId: Number(projectId),
-      programId: Program.PostHogIntegration,
+      programId,
     });
     store.setCredentials({
       accessToken: d.accessToken,
@@ -70,12 +87,22 @@ async function main() {
     });
   };
 
-  // Pass the intro and health-check gates and run the real integration agent.
-  // The auth and run screens never advance on their own; this is what moves them.
-  const runIntegration = async () => {
+  // Pass the pre-run gates and run the program's real agent. The auth and run
+  // screens never advance on their own; this is what moves them. Mirrors
+  // run-wizard's flow, including in-program run phases.
+  const runProgram = async () => {
     await store.getGate('intro');
+    await store.getGate('integration-check');
     await store.getGate('health-check');
-    await runAgent(posthogIntegrationConfig, store.session);
+
+    // In-program run phases (self-driving's detect → integrate → handoff), the
+    // same path run-wizard takes — here `authenticate` resolves the phx key, not
+    // OAuth, since the session is built with ci + apiKey.
+    if (hasRunPhases(programConfig, store.session)) {
+      await runInProgramPhases(store, programConfig);
+    }
+
+    await runAgent(programConfig, store.session);
   };
 
   if (process.env.MODE === 'serve') return serve();
@@ -115,7 +142,7 @@ async function main() {
             runStatus = 'running';
             void (async () => {
               try {
-                await runIntegration();
+                await runProgram();
                 runStatus = 'done';
               } catch (e) {
                 runStatus = 'failed';
@@ -160,7 +187,7 @@ async function main() {
   // ---- CI route: self-drive the fixed profile, snapshot each screen ----
   async function fixed() {
     const CTRL = process.env.SNAP_CTRL!;
-    const profile: WizardE2eProfile = profileFor(Program.PostHogIntegration);
+    const profile: WizardE2eProfile = profileFor(programId);
     const screenPath: string[] = [];
     // Snapshot on key moments — a screen change, a task-list update, or a
     // runPhase change — so the run screen's progression (the agent working) is
@@ -176,6 +203,10 @@ async function main() {
         overlay: store.router.hasOverlay,
         tasks: store.tasks.map((t) => [t.label, t.status, t.done]),
         phase: store.session.runPhase,
+        // Snap on within-screen state too: when a screen publishes new
+        // framework-context (e.g. the detector's projects), so the picker frame
+        // is captured, not just the loading state. Generic — keys, not values.
+        ctx: Object.keys(store.session.frameworkContext).sort().join(','),
       });
     const snap = (): Promise<void> => {
       const sig = signature();
@@ -218,22 +249,12 @@ async function main() {
     };
     const drive = driverLoop();
 
-    await store.runReadyHooks();
-    await runIntegration();
-    const deadline = Date.now() + 120_000;
-    while (!store.session.skillsComplete && Date.now() < deadline)
-      await driver.waitForChange(5_000);
-    // The run reached skillsComplete, so the driver loop is done — but it may be
-    // parked in waitForChange, so don't block on it; the process exit ends it.
-    stop = true;
-    void drive;
-    unsub();
-    await snap(); // the final screen
-    await chain; // flush any pending snapshots
-
-    // Structured result the --e2e assertion path reads: run phase, posthog deps,
-    // env file, and the screens walked.
-    if (process.env.E2E_RESULT_JSON) {
+    // Write the structured result the --e2e assertion path reads. Programs whose
+    // outro is terminal (self-driving) exit via the outro's ExitScreen before
+    // the end-of-run path below, so capture it the moment the outro is reached;
+    // integration re-writes it after keep-skills (skillsComplete).
+    const writeResult = (): void => {
+      if (!process.env.E2E_RESULT_JSON) return;
       const appDir = process.env.APP_DIR!;
       let deps: string[] = [];
       try {
@@ -273,7 +294,25 @@ async function main() {
           2,
         ),
       );
-    }
+    };
+    const unsubResult = store.subscribe(() => {
+      if (store.currentScreen === 'outro') writeResult();
+    });
+
+    await store.runReadyHooks();
+    await runProgram();
+    const deadline = Date.now() + 120_000;
+    while (!store.session.skillsComplete && Date.now() < deadline)
+      await driver.waitForChange(5_000);
+    // The run reached skillsComplete, so the driver loop is done — but it may be
+    // parked in waitForChange, so don't block on it; the process exit ends it.
+    stop = true;
+    void drive;
+    unsub();
+    unsubResult();
+    await snap(); // the final screen
+    await chain; // flush any pending snapshots
+    writeResult(); // final write (integration: after keep-skills)
     process.exit(0);
   }
 }

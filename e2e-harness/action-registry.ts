@@ -70,6 +70,8 @@ export const NO_ACTION_SCREENS: ReadonlySet<ScreenName> = new Set<ScreenName>([
   ScreenId.Exit,
   ScreenId.AuditRun,
   ScreenId.DoctorReport,
+  // The detector + picker are interactive; no headless e2e drives this screen.
+  ScreenId.SelfDrivingIntegrationDetect,
   ScreenId.SourceMapsDetect,
   ScreenId.SourceMapsOutro,
   ScreenId.AuditOutro,
@@ -100,6 +102,28 @@ export const ACTION_REGISTRY: Partial<Record<ScreenName, DriverAction[]>> = {
   [ScreenId.DoctorIntro]: [confirmSetupAction],
   [ScreenId.WarehouseIntro]: [confirmSetupAction],
   [ScreenId.SelfDrivingIntro]: [confirmSetupAction],
+
+  // ── Self-driving integration check ────────────────────────────────────
+  [ScreenId.SelfDrivingIntegrationCheck]: [
+    {
+      id: 'set_integrate',
+      description:
+        'Answer the self-driving integration check. integrate=true sets up ' +
+        'the PostHog SDK first; false goes straight to Self-driving.',
+      params: { integrate: 'boolean (default false)' },
+      apply: (store, params) => store.setIntegrate(params.integrate === true),
+    },
+  ],
+
+  // ── Self-driving handoff (after the integration run) ───────────────────
+  [ScreenId.SelfDrivingHandoff]: [
+    {
+      id: 'confirm_self_driving_handoff',
+      description:
+        'Acknowledge the post-integration handoff and start the Self-driving run.',
+      apply: (store) => store.confirmSelfDrivingHandoff(),
+    },
+  ],
 
   // ── Health check — dismiss a blocking outage ──────────────────────────
   [ScreenId.HealthCheck]: [

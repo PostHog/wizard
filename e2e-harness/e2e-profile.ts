@@ -29,6 +29,12 @@ export interface WizardE2eProfile {
   skills: 'keep' | 'delete';
   /** Default answer strategy for an agent `wizard_ask` overlay. */
   ask: 'first';
+  /**
+   * Self-driving integration-check answer: `true` → "no, set it up first"
+   * (integrate the SDK as part of the run); `false` → "yes, already
+   * integrated". Only read on the integration-check screen.
+   */
+  integrate?: boolean;
 }
 
 /** Happy-path default: take every screen forward, leave nothing behind. */
@@ -39,6 +45,7 @@ export const DEFAULT_E2E_PROFILE: WizardE2eProfile = {
   slack: 'skip',
   skills: 'delete',
   ask: 'first',
+  integrate: false,
 };
 
 /** What the harness should do for the current screen. */
@@ -91,6 +98,17 @@ export function decideE2eAction(
         action: { id: 'choose', params: { key: q.key, value: opt.value } },
       };
     }
+
+    case ScreenId.SelfDrivingIntegrationCheck:
+      return {
+        action: {
+          id: 'set_integrate',
+          params: { integrate: profile.integrate === true },
+        },
+      };
+
+    case ScreenId.SelfDrivingHandoff:
+      return { action: { id: 'confirm_self_driving_handoff' } };
 
     case ScreenId.Outro:
       return { action: { id: 'dismiss_outro' } };
@@ -145,6 +163,7 @@ export const E2E_DRIVABLE_SCREENS: readonly ScreenName[] = [
   ScreenId.Intro,
   ScreenId.HealthCheck,
   ScreenId.Setup,
+  ScreenId.SelfDrivingIntegrationCheck,
   ScreenId.Outro,
   ScreenId.Mcp,
   ScreenId.McpSuggestedPrompts,
