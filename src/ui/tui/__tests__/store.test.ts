@@ -18,18 +18,18 @@ import { buildSession } from '@lib/wizard-session';
 import { Integration } from '@lib/constants';
 import { analytics } from '@utils/analytics';
 
-jest.mock('../../../utils/analytics.js', () => ({
+vi.mock('../../../utils/analytics.js', () => ({
   analytics: {
-    capture: jest.fn(),
-    wizardCapture: jest.fn(),
-    setTag: jest.fn(),
-    shutdown: jest.fn().mockResolvedValue(undefined),
+    capture: vi.fn(),
+    wizardCapture: vi.fn(),
+    setTag: vi.fn(),
+    shutdown: vi.fn().mockResolvedValue(undefined),
   },
-  sessionProperties: jest.fn(() => ({})),
+  sessionProperties: vi.fn(() => ({})),
 }));
 
-jest.mock('../../../lib/health-checks/readiness.js', () => ({
-  evaluateWizardReadiness: jest.fn().mockResolvedValue({
+vi.mock('../../../lib/health-checks/readiness.js', () => ({
+  evaluateWizardReadiness: vi.fn().mockResolvedValue({
     decision: 'yes',
     health: {},
     reasons: [],
@@ -40,18 +40,17 @@ jest.mock('../../../lib/health-checks/readiness.js', () => ({
     YesWithWarnings: 'yes-with-warnings',
   },
   SERVICE_LABELS: {},
-  getBlockingServiceKeys: jest.fn(() => []),
+  getBlockingServiceKeys: vi.fn(() => []),
 }));
 
 function createStore(program?: ProgramId): WizardStore {
   return new WizardStore(program);
 }
 
-const wizardCaptureMock = analytics.wizardCapture as jest.Mock;
-const evaluateWizardReadinessMock =
-  evaluateWizardReadiness as jest.MockedFunction<
-    typeof evaluateWizardReadiness
-  >;
+const wizardCaptureMock = analytics.wizardCapture as Mock;
+const evaluateWizardReadinessMock = evaluateWizardReadiness as MockedFunction<
+  typeof evaluateWizardReadiness
+>;
 
 async function flushMicrotasks(): Promise<void> {
   await Promise.resolve();
@@ -60,7 +59,7 @@ async function flushMicrotasks(): Promise<void> {
 
 describe('WizardStore', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     evaluateWizardReadinessMock.mockResolvedValue({
       decision: WizardReadiness.Yes,
       health: {} as never,
@@ -100,7 +99,7 @@ describe('WizardStore', () => {
   describe('change notification', () => {
     it('emitChange increments version and notifies subscribers', () => {
       const store = createStore();
-      const listener = jest.fn();
+      const listener = vi.fn();
       store.subscribe(listener);
 
       store.emitChange();
@@ -123,7 +122,7 @@ describe('WizardStore', () => {
   describe('subscribe / getSnapshot', () => {
     it('subscribe registers a listener that fires on change', () => {
       const store = createStore();
-      const cb = jest.fn();
+      const cb = vi.fn();
       store.subscribe(cb);
 
       store.emitChange();
@@ -132,7 +131,7 @@ describe('WizardStore', () => {
 
     it('subscribe returns an unsubscribe function', () => {
       const store = createStore();
-      const cb = jest.fn();
+      const cb = vi.fn();
       const unsub = store.subscribe(cb);
 
       unsub();
@@ -149,7 +148,7 @@ describe('WizardStore', () => {
 
     it('is compatible with useSyncExternalStore contract', () => {
       const store = createStore();
-      const cb = jest.fn();
+      const cb = vi.fn();
       const unsub = store.subscribe(cb);
 
       const v1 = store.getSnapshot();
@@ -167,7 +166,7 @@ describe('WizardStore', () => {
   describe('session setters', () => {
     it('completeSetup sets setupConfirmed and resolves intro gate', async () => {
       const store = createStore();
-      const cb = jest.fn();
+      const cb = vi.fn();
       store.subscribe(cb);
 
       store.completeSetup();
@@ -278,7 +277,7 @@ describe('WizardStore', () => {
 
     it('every setter emits exactly one change event', () => {
       const store = createStore();
-      const cb = jest.fn();
+      const cb = vi.fn();
       store.subscribe(cb);
 
       store.completeSetup();
@@ -506,7 +505,7 @@ describe('WizardStore', () => {
 
     it('pushOverlay emits change and increments version', () => {
       const store = createStore();
-      const cb = jest.fn();
+      const cb = vi.fn();
       store.subscribe(cb);
 
       store.pushOverlay(Overlay.SettingsOverride);
@@ -519,7 +518,7 @@ describe('WizardStore', () => {
       const store = createStore();
       store.pushOverlay(Overlay.SettingsOverride);
 
-      const cb = jest.fn();
+      const cb = vi.fn();
       store.subscribe(cb);
       store.popOverlay();
 
@@ -635,7 +634,7 @@ describe('WizardStore', () => {
 
     it('pushStatus emits change', () => {
       const store = createStore();
-      const cb = jest.fn();
+      const cb = vi.fn();
       store.subscribe(cb);
 
       store.pushStatus('msg');
@@ -699,7 +698,7 @@ describe('WizardStore', () => {
         { label: 'Install SDK', status: TaskStatus.Pending, done: false },
       ]);
 
-      const cb = jest.fn();
+      const cb = vi.fn();
       store.subscribe(cb);
       store.updateTask(99, true);
 
@@ -774,7 +773,7 @@ describe('WizardStore', () => {
 
     it('emits change', () => {
       const store = createStore();
-      const cb = jest.fn();
+      const cb = vi.fn();
       store.subscribe(cb);
       store.syncTodos([{ content: 'task', status: 'pending' }]);
       expect(cb).toHaveBeenCalled();
@@ -801,7 +800,7 @@ describe('WizardStore', () => {
   describe('concurrent mutations', () => {
     it('rapid-fire setters each increment version by 1', () => {
       const store = createStore();
-      const cb = jest.fn();
+      const cb = vi.fn();
       store.subscribe(cb);
 
       store.completeSetup();
@@ -925,7 +924,7 @@ describe('WizardStore', () => {
   describe('multiple subscribers', () => {
     it('supports many concurrent subscribers', () => {
       const store = createStore();
-      const callbacks = Array.from({ length: 50 }, () => jest.fn());
+      const callbacks = Array.from({ length: 50 }, () => vi.fn());
       const unsubs = callbacks.map((cb) => store.subscribe(cb));
 
       store.emitChange();
@@ -942,7 +941,7 @@ describe('WizardStore', () => {
 
     it('double-unsubscribe is safe', () => {
       const store = createStore();
-      const cb = jest.fn();
+      const cb = vi.fn();
       const unsub = store.subscribe(cb);
 
       unsub();
@@ -1002,7 +1001,7 @@ describe('WizardStore', () => {
       store.setTasks([
         { label: 'Task', status: TaskStatus.Pending, done: false },
       ]);
-      const cb = jest.fn();
+      const cb = vi.fn();
       store.subscribe(cb);
       store.updateTask(-1, true);
       expect(cb).not.toHaveBeenCalled();
@@ -1322,6 +1321,30 @@ describe('WizardStore', () => {
       store.completeSetup();
       await store.getGate('intro');
       expect(resolved).toBe(true);
+    });
+  });
+
+  describe('setIntegrate (self-driving integration check)', () => {
+    it('records "no" as integrate=true', () => {
+      const store = createStore(Program.SelfDriving);
+      store.session = buildSession({});
+      store.setIntegrate(true);
+      expect(store.session.integrate).toBe(true);
+    });
+
+    it('records "yes, already integrated" as integrate=false', () => {
+      const store = createStore(Program.SelfDriving);
+      store.session = buildSession({});
+      store.setIntegrate(false);
+      expect(store.session.integrate).toBe(false);
+    });
+
+    it('defaults to null (undecided) before the question', () => {
+      expect(buildSession({}).integrate).toBeNull();
+    });
+
+    it('--integrate pre-resolves the decision to true', () => {
+      expect(buildSession({ integrate: true }).integrate).toBe(true);
     });
   });
 });

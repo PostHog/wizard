@@ -6,13 +6,13 @@ import {
 import { analytics } from '@utils/analytics';
 import type { AskAnswers, PendingQuestion } from '@lib/wizard-session';
 
-jest.mock('../../utils/analytics', () => ({
+vi.mock('../../utils/analytics', () => ({
   analytics: {
-    wizardCapture: jest.fn(),
+    wizardCapture: vi.fn(),
   },
 }));
 
-const wizardCaptureMock = analytics.wizardCapture as jest.Mock;
+const wizardCaptureMock = analytics.wizardCapture as Mock;
 
 beforeEach(() => {
   wizardCaptureMock.mockClear();
@@ -189,7 +189,7 @@ describe('createWizardAskBridge', () => {
 
   describe('timeout', () => {
     it('resolves every field with the cancelled sentinel when the user does not answer in time', async () => {
-      jest.useFakeTimers();
+      vi.useFakeTimers();
       try {
         // showQuestion intentionally never resolves — the timeout has to win.
         const bridge = createWizardAskBridge({
@@ -205,7 +205,7 @@ describe('createWizardAskBridge', () => {
           ],
         });
 
-        jest.advanceTimersByTime(1000);
+        vi.advanceTimersByTime(1000);
 
         await expect(promise).resolves.toEqual({
           goal: CANCELLED_SENTINEL,
@@ -217,7 +217,7 @@ describe('createWizardAskBridge', () => {
         );
         expect(cancelledCall?.[1]).toMatchObject({ timed_out: true });
       } finally {
-        jest.useRealTimers();
+        vi.useRealTimers();
       }
     });
   });

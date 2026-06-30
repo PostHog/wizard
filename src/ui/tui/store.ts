@@ -279,6 +279,25 @@ export class WizardStore {
   }
 
   /**
+   * Resolve once `predicate(session)` is true. Unlike a gate, this is created
+   * at the await point and evaluated live against the current session, so it
+   * never latches on a startup value — the orchestrator uses it to wait for a
+   * decision (a project picked, a handoff acknowledged) without the "true while
+   * undecided" trap that latched gate predicates have.
+   */
+  waitUntil(predicate: (session: WizardSession) => boolean): Promise<void> {
+    if (predicate(this.session)) return Promise.resolve();
+    return new Promise((resolve) => {
+      const unsub = this.subscribe(() => {
+        if (predicate(this.session)) {
+          unsub();
+          resolve();
+        }
+      });
+    });
+  }
+
+  /**
    * Re-evaluate every gate predicate against the current session and
    * resolve any whose predicate now returns true. Called after every
    * emitChange(), so gates unblock as soon as the session mutation
@@ -365,6 +384,9 @@ export class WizardStore {
 
   setCredentials(credentials: WizardSession['credentials']): void {
     this.$session.setKey('credentials', credentials);
+    if (credentials?.projectId) {
+      analytics.setTag('project_id', credentials.projectId);
+    }
     analytics.wizardCapture('auth complete', {
       project_id: credentials?.projectId,
     });
@@ -388,6 +410,7 @@ export class WizardStore {
     this.$session.setKey('integration', integration);
     this.$session.setKey('frameworkConfig', config);
     this.$session.setKey('unsupportedVersion', null);
+    if (integration) analytics.setTag('integration', integration);
     this.emitChange();
   }
 
@@ -398,6 +421,7 @@ export class WizardStore {
 
   setDetectedFramework(label: string): void {
     this.$session.setKey('detectedFrameworkLabel', label);
+    analytics.setTag('detected_framework', label);
     this.emitChange();
   }
 
@@ -664,6 +688,44 @@ export class WizardStore {
 
   setSlackConnected(connected: boolean): void {
     this.$session.setKey('slackConnected', connected);
+    this.emitChange();
+  }
+
+  /**
+   * Self-driving integration-check answer. `true` → integrate the SDK as part
+   * of this run; `false` → PostHog is already set up, go straight to
+   * Self-driving. Resolves `session.integrate` from null.
+   */
+  setIntegrate(integrate: boolean): void {
+    this.$session.setKey('integrate', integrate);
+    analytics.wizardCapture('self-driving integration check', {
+      self_driving_integrate: integrate,
+      ...sessionProperties(this.session),
+    });
+    this.emitChange();
+  }
+
+  /**
+   * Self-driving handoff confirmed — the user acknowledged the post-integration
+   * screen, so the Self-driving run can begin. Gate resolves via _checkGates().
+   */
+  confirmSelfDrivingHandoff(): void {
+    this.$session.setKey('selfDrivingHandoffConfirmed', true);
+    this.emitChange();
+  }
+
+  /**
+   * Mark a composed run step complete (e.g. self-driving's `integrate-run`).
+   * Records the step id so its `isComplete` predicate holds, clears the task
+   * list, and resets run phase to Idle so the next run step starts fresh.
+   */
+  completeRunStep(stepId: string): void {
+    const done = this.session.completedRuns;
+    if (!done.includes(stepId)) {
+      this.$session.setKey('completedRuns', [...done, stepId]);
+    }
+    this.$tasks.set([]);
+    this.$session.setKey('runPhase', RunPhase.Idle);
     this.emitChange();
   }
 

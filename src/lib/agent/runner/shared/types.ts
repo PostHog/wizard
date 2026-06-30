@@ -15,6 +15,17 @@ import type { ApiProject } from '@lib/api';
 export type { PromptContext, Credentials };
 
 /**
+ * Which runner arm executed a run. Stamped onto wizard analytics and the gateway
+ * trace tags after the fork (see `runProgram`), so runs segment by arm. `PI` is
+ * planned — the pi-coding-agent runner is not wired yet.
+ */
+export enum WizardVariant {
+  BASE = 'base',
+  ORCHESTRATOR = 'orchestrator',
+  PI = 'pi',
+}
+
+/**
  * A known `[ABORT] <reason>` case. First matching entry is rendered on
  * the error outro; unmatched aborts use a generic fallback.
  */
@@ -79,6 +90,14 @@ export interface ProgramRun {
    * key in the browser) before they can answer.
    */
   askTimeoutMs?: number;
+  /**
+   * Emit a `wizard: step` analytics event on each agent task-list transition
+   * (in_progress / completed) so this program can build a step-level drop-off
+   * funnel — including silent steps that ask the user nothing. The step name is
+   * whatever the agent set on the task. Defaults to off, so no other program's
+   * analytics change; opt in per program.
+   */
+  trackStepProgress?: boolean;
 }
 
 /**

@@ -11,21 +11,39 @@ import * as crypto from 'node:crypto';
 import axios from 'axios';
 import { z } from 'zod';
 import {
-  IS_DEV,
   POSTHOG_DEV_CLIENT_ID,
   POSTHOG_US_CLIENT_ID,
   WIZARD_PROVISIONING_SCOPES,
   WIZARD_USER_AGENT,
 } from '@lib/constants';
+import { resolveBaseUrl } from './urls';
 import { logToFile } from './debug';
 import { analytics } from './analytics';
 
-const WIZARD_CLIENT_ID = IS_DEV ? POSTHOG_DEV_CLIENT_ID : POSTHOG_US_CLIENT_ID;
 const API_VERSION = '0.1d';
 
-const PROVISIONING_BASE_URL = IS_DEV
-  ? 'http://localhost:8010'
-  : 'https://us.posthog.com';
+/**
+ * Provisioning host. Follows a `--base-url` override (and IS_DEV → localhost),
+ * else the region-agnostic prod provisioning host (always US; the target region
+ * is passed in the request body).
+ *
+ * // TODO: Make this work with EU provisioning.
+ */
+const getProvisioningBaseUrl = (baseUrl?: string): string =>
+  resolveBaseUrl(baseUrl) ?? 'https://us.posthog.com';
+
+/**
+ * OAuth client ID for provisioning. A pinned base URL means a dev-seeded stack
+ * that registers the dev client; prod uses the US client.
+ *
+ * TODO: same assumption as `getOAuthClientId` in oauth.ts — a pinned base URL is
+ * treated as a dev-seeded instance. Make configurable if we ever point
+ * `--base-url` at a non-dev instance with its own OAuth app.
+ *
+ * TODO: Make this work with EU provisioning.
+ */
+const getProvisioningClientId = (baseUrl?: string): string =>
+  resolveBaseUrl(baseUrl) ? POSTHOG_DEV_CLIENT_ID : POSTHOG_US_CLIENT_ID;
 
 function generateCodeVerifier(): string {
   return crypto.randomBytes(32).toString('base64url');
@@ -101,21 +119,22 @@ export async function provisionNewAccount(
   email: string,
   name: string,
   region: 'US' | 'EU' = 'US',
-  opts?: { orgName?: string; projectName?: string },
+  opts?: { orgName?: string; projectName?: string; baseUrl?: string },
 ): Promise<ProvisioningResult> {
   const codeVerifier = generateCodeVerifier();
   const codeChallenge = generateCodeChallenge(codeVerifier);
+  const provisioningBaseUrl = getProvisioningBaseUrl(opts?.baseUrl);
 
   logToFile('[provisioning] starting account creation');
 
   // Step 1: Create account
   const accountRes = await axios.post(
-    `${PROVISIONING_BASE_URL}/api/agentic/provisioning/account_requests`,
+    `${provisioningBaseUrl}/api/agentic/provisioning/account_requests`,
     {
       id: crypto.randomUUID(),
       email,
       name,
-      client_id: WIZARD_CLIENT_ID,
+      client_id: getProvisioningClientId(opts?.baseUrl),
       code_challenge: codeChallenge,
       code_challenge_method: 'S256',
       scopes: WIZARD_PROVISIONING_SCOPES,
@@ -160,7 +179,7 @@ export async function provisionNewAccount(
 
   // Step 2: Exchange code for tokens
   const tokenRes = await axios.post(
-    `${PROVISIONING_BASE_URL}/api/agentic/oauth/token`,
+    `${provisioningBaseUrl}/api/agentic/oauth/token`,
     new URLSearchParams({
       grant_type: 'authorization_code',
       code,
@@ -182,7 +201,7 @@ export async function provisionNewAccount(
 
   // Step 3: Provision resources
   const resourceRes = await axios.post(
-    `${PROVISIONING_BASE_URL}/api/agentic/provisioning/resources`,
+    `${provisioningBaseUrl}/api/agentic/provisioning/resources`,
     {
       service_id: 'analytics',
       ...(opts?.projectName

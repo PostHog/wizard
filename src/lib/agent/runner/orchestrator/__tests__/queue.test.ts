@@ -8,8 +8,8 @@ import {
   type TaskHandoff,
 } from '@lib/agent/runner/orchestrator/queue';
 
-jest.mock('@utils/analytics', () => ({
-  analytics: { captureException: jest.fn(), wizardCapture: jest.fn() },
+vi.mock('@utils/analytics', () => ({
+  analytics: { captureException: vi.fn(), wizardCapture: vi.fn() },
 }));
 
 function tmpDir(): string {

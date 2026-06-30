@@ -304,9 +304,9 @@ describe('health-checks', () => {
   const originalFetch = global.fetch;
 
   beforeEach(() => {
-    jest.restoreAllMocks();
+    vi.restoreAllMocks();
     resetPosthogHealthCache();
-    (global as any).fetch = jest.fn(allHealthyFetchMock);
+    (global as any).fetch = vi.fn(allHealthyFetchMock);
   });
 
   afterAll(() => {
@@ -332,7 +332,7 @@ describe('health-checks', () => {
         indicator: 'minor',
         description: 'Minor Service Outage',
       });
-      (global.fetch as jest.Mock).mockImplementation(
+      (global.fetch as Mock).mockImplementation(
         overrideFetch({
           [URLS.anthropicStatus]: () =>
             Promise.resolve(
@@ -353,7 +353,7 @@ describe('health-checks', () => {
         indicator: 'major',
         description: 'Partial System Outage',
       });
-      (global.fetch as jest.Mock).mockImplementation(
+      (global.fetch as Mock).mockImplementation(
         overrideFetch({
           [URLS.anthropicStatus]: () =>
             Promise.resolve(
@@ -373,7 +373,7 @@ describe('health-checks', () => {
         indicator: 'critical',
         description: 'Major Service Outage',
       });
-      (global.fetch as jest.Mock).mockImplementation(
+      (global.fetch as Mock).mockImplementation(
         overrideFetch({
           [URLS.anthropicStatus]: () =>
             Promise.resolve(
@@ -386,7 +386,7 @@ describe('health-checks', () => {
     });
 
     it('returns degraded when statuspage returns HTTP 500', async () => {
-      (global.fetch as jest.Mock).mockImplementation(
+      (global.fetch as Mock).mockImplementation(
         overrideFetch({
           [URLS.anthropicStatus]: () =>
             Promise.resolve(
@@ -400,7 +400,7 @@ describe('health-checks', () => {
     });
 
     it('returns degraded when fetch throws (network failure)', async () => {
-      (global.fetch as jest.Mock).mockImplementation(
+      (global.fetch as Mock).mockImplementation(
         overrideFetch({
           [URLS.anthropicStatus]: () =>
             Promise.reject(
@@ -443,7 +443,7 @@ describe('health-checks', () => {
           },
         ],
       };
-      (global.fetch as jest.Mock).mockImplementation(
+      (global.fetch as Mock).mockImplementation(
         overrideFetch({
           [URLS.posthogIncidentIo]: () =>
             Promise.resolve(
@@ -456,7 +456,7 @@ describe('health-checks', () => {
     });
 
     it('returns NoConnection when posthogstatus.com fetch fails with a network error', async () => {
-      (global.fetch as jest.Mock).mockImplementation(
+      (global.fetch as Mock).mockImplementation(
         overrideFetch({
           [URLS.posthogIncidentIo]: () =>
             Promise.reject(new Error('getaddrinfo ENOTFOUND')),
@@ -469,7 +469,7 @@ describe('health-checks', () => {
     it('returns NoConnection when posthogstatus.com fetch times out', async () => {
       const abortError = new Error('aborted');
       abortError.name = 'AbortError';
-      (global.fetch as jest.Mock).mockImplementation(
+      (global.fetch as Mock).mockImplementation(
         overrideFetch({
           [URLS.posthogIncidentIo]: () => Promise.reject(abortError),
         }),
@@ -479,7 +479,7 @@ describe('health-checks', () => {
     });
 
     it('returns Down when posthogstatus.com returns an HTTP error', async () => {
-      (global.fetch as jest.Mock).mockImplementation(
+      (global.fetch as Mock).mockImplementation(
         overrideFetch({
           [URLS.posthogIncidentIo]: () =>
             Promise.resolve(new Response('Bad Gateway', { status: 502 })),
@@ -505,7 +505,7 @@ describe('health-checks', () => {
           },
         ],
       };
-      (global.fetch as jest.Mock).mockImplementation(
+      (global.fetch as Mock).mockImplementation(
         overrideFetch({
           [URLS.posthogIncidentIo]: () =>
             Promise.resolve(
@@ -546,7 +546,7 @@ describe('health-checks', () => {
         indicator: 'minor',
         description: 'Minor Service Outage',
       });
-      (global.fetch as jest.Mock).mockImplementation(
+      (global.fetch as Mock).mockImplementation(
         overrideFetch({
           [URLS.cloudflareStatus]: () =>
             Promise.resolve(
@@ -599,7 +599,7 @@ describe('health-checks', () => {
           },
         ],
       };
-      (global.fetch as jest.Mock).mockImplementation(
+      (global.fetch as Mock).mockImplementation(
         overrideFetch({
           [URLS.posthogIncidentIo]: () =>
             Promise.resolve(
@@ -644,7 +644,7 @@ describe('health-checks', () => {
           },
         ],
       };
-      (global.fetch as jest.Mock).mockImplementation(
+      (global.fetch as Mock).mockImplementation(
         overrideFetch({
           [URLS.posthogIncidentIo]: () =>
             Promise.resolve(
@@ -693,7 +693,7 @@ describe('health-checks', () => {
           },
         ],
       });
-      (global.fetch as jest.Mock).mockImplementation(
+      (global.fetch as Mock).mockImplementation(
         overrideFetch({
           [URLS.npmSummary]: () =>
             Promise.resolve(
@@ -732,7 +732,7 @@ describe('health-checks', () => {
     });
 
     it('returns down on 302 — the gateway probe stays strict, redirects are not OK here', async () => {
-      (global.fetch as jest.Mock).mockImplementation(
+      (global.fetch as Mock).mockImplementation(
         overrideFetch({
           [URLS.llmGatewayLiveness]: () =>
             Promise.resolve(new Response(null, { status: 302 })),
@@ -744,7 +744,7 @@ describe('health-checks', () => {
     });
 
     it('returns down when gateway responds 503 (e.g. deploying)', async () => {
-      (global.fetch as jest.Mock).mockImplementation(
+      (global.fetch as Mock).mockImplementation(
         overrideFetch({
           [URLS.llmGatewayLiveness]: () =>
             Promise.resolve(
@@ -758,7 +758,7 @@ describe('health-checks', () => {
     });
 
     it('returns down when gateway responds 502 (bad gateway)', async () => {
-      (global.fetch as jest.Mock).mockImplementation(
+      (global.fetch as Mock).mockImplementation(
         overrideFetch({
           [URLS.llmGatewayLiveness]: () =>
             Promise.resolve(new Response('Bad Gateway', { status: 502 })),
@@ -770,7 +770,7 @@ describe('health-checks', () => {
     });
 
     it('returns no-connection on DNS resolution failure (no status-page corroboration)', async () => {
-      (global.fetch as jest.Mock).mockImplementation(
+      (global.fetch as Mock).mockImplementation(
         overrideFetch({
           [URLS.llmGatewayLiveness]: () =>
             Promise.reject(
@@ -786,7 +786,7 @@ describe('health-checks', () => {
     it('returns no-connection on timeout (AbortError)', async () => {
       const abortError = new Error('The operation was aborted.');
       abortError.name = 'AbortError';
-      (global.fetch as jest.Mock).mockImplementation(
+      (global.fetch as Mock).mockImplementation(
         overrideFetch({
           [URLS.llmGatewayLiveness]: () => Promise.reject(abortError),
         }),
@@ -798,7 +798,7 @@ describe('health-checks', () => {
 
     it('retries on network errors and recovers if a later attempt succeeds', async () => {
       let calls = 0;
-      (global.fetch as jest.Mock).mockImplementation(
+      (global.fetch as Mock).mockImplementation(
         overrideFetch({
           [URLS.llmGatewayLiveness]: () => {
             calls++;
@@ -819,7 +819,7 @@ describe('health-checks', () => {
 
     it('retries on persistent HTTP errors and stays Down after all attempts fail', async () => {
       let calls = 0;
-      (global.fetch as jest.Mock).mockImplementation(
+      (global.fetch as Mock).mockImplementation(
         overrideFetch({
           [URLS.llmGatewayLiveness]: () => {
             calls++;
@@ -838,7 +838,7 @@ describe('health-checks', () => {
 
     it('retries on transient 5xx and recovers if a later attempt succeeds', async () => {
       let calls = 0;
-      (global.fetch as jest.Mock).mockImplementation(
+      (global.fetch as Mock).mockImplementation(
         overrideFetch({
           [URLS.llmGatewayLiveness]: () => {
             calls++;
@@ -861,7 +861,7 @@ describe('health-checks', () => {
 
     it('returns Down (not NoConnection) when last attempt got an HTTP response after earlier network errors', async () => {
       let calls = 0;
-      (global.fetch as jest.Mock).mockImplementation(
+      (global.fetch as Mock).mockImplementation(
         overrideFetch({
           [URLS.llmGatewayLiveness]: () => {
             calls++;
@@ -894,7 +894,7 @@ describe('health-checks', () => {
     });
 
     it('returns healthy when worker responds 302 (redirect to docs, not followed)', async () => {
-      (global.fetch as jest.Mock).mockImplementation(
+      (global.fetch as Mock).mockImplementation(
         overrideFetch({
           [URLS.mcpLanding]: () =>
             Promise.resolve(new Response(null, { status: 302 })),
@@ -910,7 +910,7 @@ describe('health-checks', () => {
     });
 
     it('returns down on 400 — only 2xx-3xx counts as up', async () => {
-      (global.fetch as jest.Mock).mockImplementation(
+      (global.fetch as Mock).mockImplementation(
         overrideFetch({
           [URLS.mcpLanding]: () =>
             Promise.resolve(new Response('Bad Request', { status: 400 })),
@@ -922,7 +922,7 @@ describe('health-checks', () => {
     });
 
     it('returns down when worker responds 500', async () => {
-      (global.fetch as jest.Mock).mockImplementation(
+      (global.fetch as Mock).mockImplementation(
         overrideFetch({
           [URLS.mcpLanding]: () =>
             Promise.resolve(
@@ -936,7 +936,7 @@ describe('health-checks', () => {
     });
 
     it('returns down when Cloudflare returns 522 (connection timed out)', async () => {
-      (global.fetch as jest.Mock).mockImplementation(
+      (global.fetch as Mock).mockImplementation(
         overrideFetch({
           [URLS.mcpLanding]: () =>
             Promise.resolve(new Response('', { status: 522 })),
@@ -948,7 +948,7 @@ describe('health-checks', () => {
     });
 
     it('returns no-connection on network failure', async () => {
-      (global.fetch as jest.Mock).mockImplementation(
+      (global.fetch as Mock).mockImplementation(
         overrideFetch({
           [URLS.mcpLanding]: () => Promise.reject(new Error('fetch failed')),
         }),
@@ -975,7 +975,7 @@ describe('health-checks', () => {
     });
 
     it('returns down on 404 (release published without the asset)', async () => {
-      (global.fetch as jest.Mock).mockImplementation(
+      (global.fetch as Mock).mockImplementation(
         overrideFetch({
           [URLS.githubReleasesSkillMenu]: () =>
             Promise.resolve(new Response('Not Found', { status: 404 })),
@@ -1032,7 +1032,7 @@ describe('health-checks', () => {
           },
         ],
       };
-      (global.fetch as jest.Mock).mockImplementation(
+      (global.fetch as Mock).mockImplementation(
         overrideFetch({
           [URLS.posthogIncidentIo]: () =>
             Promise.resolve(
@@ -1058,7 +1058,7 @@ describe('health-checks', () => {
       // tricked reconciliation into upgrading the gateway probe to Down
       // and showing the red "Ongoing service disruptions" screen — the
       // exact false positive this PR fixes.
-      (global.fetch as jest.Mock).mockImplementation(
+      (global.fetch as Mock).mockImplementation(
         overrideFetch({
           [URLS.posthogIncidentIo]: () =>
             Promise.reject(new Error('ECONNRESET')),
@@ -1077,7 +1077,7 @@ describe('health-checks', () => {
     });
 
     it('keeps llmGateway/mcp as NoConnection when status page reports no incident', async () => {
-      (global.fetch as jest.Mock).mockImplementation(
+      (global.fetch as Mock).mockImplementation(
         overrideFetch({
           [URLS.llmGatewayLiveness]: () =>
             Promise.reject(new Error('ETIMEDOUT')),
@@ -1093,9 +1093,8 @@ describe('health-checks', () => {
 
     it('fires all fetch calls in parallel', async () => {
       await checkAllExternalServices();
-      const calledUrls = (global.fetch as jest.Mock).mock.calls.map(
-        (c: unknown[]) =>
-          typeof c[0] === 'string' ? c[0] : (c[0] as URL).toString(),
+      const calledUrls = (global.fetch as Mock).mock.calls.map((c: unknown[]) =>
+        typeof c[0] === 'string' ? c[0] : (c[0] as URL).toString(),
       );
       // PostHog uses a single incident.io endpoint for both overall + components
       expect(calledUrls).toHaveLength(10);
@@ -1126,7 +1125,7 @@ describe('health-checks', () => {
         indicator: 'minor',
         description: 'Minor Service Outage',
       });
-      (global.fetch as jest.Mock).mockImplementation(
+      (global.fetch as Mock).mockImplementation(
         overrideFetch({
           [URLS.anthropicStatus]: () =>
             Promise.resolve(
@@ -1142,7 +1141,7 @@ describe('health-checks', () => {
     });
 
     it('returns No when LLM Gateway is down (downBlocksRun)', async () => {
-      (global.fetch as jest.Mock).mockImplementation(
+      (global.fetch as Mock).mockImplementation(
         overrideFetch({
           [URLS.llmGatewayLiveness]: () =>
             Promise.resolve(
@@ -1158,7 +1157,7 @@ describe('health-checks', () => {
     });
 
     it('returns No when MCP is down (downBlocksRun)', async () => {
-      (global.fetch as jest.Mock).mockImplementation(
+      (global.fetch as Mock).mockImplementation(
         overrideFetch({
           [URLS.mcpLanding]: () =>
             Promise.resolve(new Response('Bad Gateway', { status: 502 })),
@@ -1179,7 +1178,7 @@ describe('health-checks', () => {
         indicator: 'critical',
         description: 'Major Service Outage',
       });
-      (global.fetch as jest.Mock).mockImplementation(
+      (global.fetch as Mock).mockImplementation(
         overrideFetch({
           [URLS.npmStatus]: () =>
             Promise.resolve(
@@ -1202,7 +1201,7 @@ describe('health-checks', () => {
         indicator: 'minor',
         description: 'Minor Service Outage',
       });
-      (global.fetch as jest.Mock).mockImplementation(
+      (global.fetch as Mock).mockImplementation(
         overrideFetch({
           [URLS.cloudflareStatus]: () =>
             Promise.resolve(

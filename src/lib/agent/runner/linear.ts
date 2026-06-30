@@ -15,7 +15,7 @@ import {
   AgentSignals,
 } from '../agent-interface';
 import { restoreClaudeSettings } from '../claude-settings';
-import { getCloudUrlFromRegion } from '../../../utils/urls';
+import { HostResolution } from '@lib/host-resolution';
 import { logToFile, getLogFilePath } from '../../../utils/debug';
 import { createBenchmarkPipeline } from '../../middleware/benchmark';
 import {
@@ -24,7 +24,11 @@ import {
   registerCleanup,
 } from '../../../utils/wizard-abort';
 import { analytics } from '../../../utils/analytics';
-import { formatScanReport, writeScanReport } from '../../yara-hooks';
+import {
+  formatScanReport,
+  formatYaraAbortMessage,
+  writeScanReport,
+} from '../../yara-hooks';
 import { detectNodePackageManagers } from '../../detection/package-manager';
 import { installSkillById } from '../../wizard-tools';
 import { createWizardAskBridge } from '../../wizard-ask-bridge';
@@ -39,6 +43,7 @@ export async function runLinearProgram(
   config: ProgramRun,
   programConfig: ProgramConfig,
   boot: BootstrapResult,
+  composed = false,
 ): Promise<void> {
   const {
     skillsBaseUrl,
@@ -163,6 +168,7 @@ export async function runLinearProgram(
       errorMessage: config.errorMessage ?? `${config.integrationLabel} failed`,
       additionalFeatureQueue: config.additionalFeatureQueue ?? [],
       abortCases: config.abortCases,
+      emitStepEvents: config.trackStepProgress ?? false,
     },
     middleware,
   );
@@ -230,8 +236,7 @@ export async function runLinearProgram(
 
   if (agentResult.error === AgentErrorType.YARA_VIOLATION) {
     await wizardAbort({
-      message:
-        'Security violation detected.\nPlease report this to: wizard@posthog.com',
+      message: formatYaraAbortMessage(),
       error: new WizardError('YARA scanner terminated session', {
         integration: config.integrationLabel,
         error_type: AgentErrorType.YARA_VIOLATION,
@@ -270,6 +275,10 @@ export async function runLinearProgram(
     });
   }
 
+  // A composed sub-run (integration inside self-driving) skips the terminal
+  // outro + analytics shutdown so the shared client survives the host's run.
+  if (composed) return;
+
   // 11. Outro
   // Push outro data through the UI (not via direct `session.outroData = ...`
   // mutation) so the live store gets the value. agent-runner's `session`
@@ -289,8 +298,13 @@ export async function runLinearProgram(
         message: config.successMessage,
         reportFile: config.reportFile,
         docsUrl: config.docsUrl,
+        // TODO: clean up in #755
         continueUrl: session.signup
-          ? `${getCloudUrlFromRegion(cloudRegion)}/products?source=wizard`
+          ? `${
+              HostResolution.fromRegion(cloudRegion, {
+                baseUrl: session.baseUrl,
+              }).appHost
+            }/products?source=wizard`
           : undefined,
       };
   if (outroData) {

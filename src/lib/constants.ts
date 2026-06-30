@@ -4,6 +4,20 @@
 
 import { VERSION } from './version';
 
+// ── Models ──────────────────────────────────────────────────────────
+
+/**
+ * Default model for agent runs. Bare model IDs (no `anthropic/` prefix) so the
+ * LLM gateway's Bedrock fallback can match map_to_bedrock_model().
+ */
+export const DEFAULT_AGENT_MODEL = 'claude-sonnet-4-6';
+
+/**
+ * Cheaper, faster model for mechanical agent work (e.g. repo classification
+ * during source-map detection). Passed via AgentConfig.modelOverride.
+ */
+export const HAIKU_MODEL = 'claude-haiku-4-5-20251001';
+
 // ── Integration / CLI ───────────────────────────────────────────────
 
 /**
@@ -105,9 +119,6 @@ export const ANALYTICS_TEAM_TAG = 'docs-and-wizard';
 
 // ── OAuth / Auth ────────────────────────────────────────────────────
 
-export const POSTHOG_OAUTH_URL = IS_DEV
-  ? 'http://localhost:8010'
-  : 'https://oauth.posthog.com';
 export const OAUTH_PORTS = [8239, 8238, 8240, 8237, 8236, 8235] as const;
 export const POSTHOG_US_CLIENT_ID = 'c4Rdw8DIxgtQfA80IiSnGKlNX8QN00cFWF00QQhM';
 export const POSTHOG_EU_CLIENT_ID = 'bx2C5sZRN03TkdjraCcetvQFPGH6N2Y9vRLkcKEy';
@@ -174,17 +185,16 @@ export const WIZARD_OAUTH_SCOPES = [
 
 export const WIZARD_INTERACTION_EVENT_NAME = 'wizard interaction';
 export const WIZARD_REMARK_EVENT_NAME = 'wizard remark';
-/** Feature flag key whose value selects a variant from WIZARD_VARIANTS. */
-export const WIZARD_VARIANT_FLAG_KEY = 'wizard-variant';
 /** Boolean feature flag that routes a run to the experimental orchestrator runner. */
 export const WIZARD_ORCHESTRATOR_FLAG_KEY = 'wizard-orchestrator';
 /** Feature flag key that gates the intro-screen "Tools" menu. */
 export const WIZARD_TOOLS_MENU_FLAG_KEY = 'wizard-tools-menu';
-/** Variant key -> metadata for wizard run (VARIANT flag selects which entry to use). */
-export const WIZARD_VARIANTS: Record<string, Record<string, string>> = {
-  base: { VARIANT: 'base' },
-  subagents: { VARIANT: 'subagents' },
-};
+/**
+ * Kill switch: when this flag resolves to 'true', Warlock/YARA scanning is
+ * disabled for the run. Defaults off (scanning on) — a missing flag or a failed
+ * flag fetch must never silently disable a security control.
+ */
+export const WIZARD_WARLOCK_DISABLED_FLAG_KEY = 'wizard-warlock-disabled';
 /** User-Agent for wizard HTTP requests and MCP server identification. */
 export const WIZARD_USER_AGENT = `posthog/wizard; version: ${VERSION}`;
 

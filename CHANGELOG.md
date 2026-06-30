@@ -1,5 +1,96 @@
 # Changelog
 
+## [2.36.0](https://github.com/PostHog/wizard/compare/v2.35.0...v2.36.0) (2026-06-30)
+
+
+### Features
+
+* **self-driving:** integrate first when the project has no PostHog ([#760](https://github.com/PostHog/wizard/issues/760)) ([3049d9c](https://github.com/PostHog/wizard/commit/3049d9c9e0e6e244c14b831181cdce012365fd60))
+
+
+### Bug Fixes
+
+* Don't stop analytics after integration run inside self-driving ([#771](https://github.com/PostHog/wizard/issues/771)) ([a7fe755](https://github.com/PostHog/wizard/commit/a7fe755d5e793899a54ca62f0e17dda9967908e7))
+
+## [2.35.0](https://github.com/PostHog/wizard/compare/v2.34.0...v2.35.0) (2026-06-30)
+
+
+### Features
+
+* **auth:** add --base-url to point the wizard at a custom PostHog stack ([#746](https://github.com/PostHog/wizard/issues/746)) ([80b6967](https://github.com/PostHog/wizard/commit/80b69675d1c89d406e094209f97f50065ded10a4))
+* **warlock:** explicit security scanner abort copy ([#751](https://github.com/PostHog/wizard/issues/751)) ([a4c6fd1](https://github.com/PostHog/wizard/commit/a4c6fd103a48eb69a1e87cfebeb6ee378f497986))
+
+
+### Bug Fixes
+
+* **setup:** honor the provided region in CI instead of probing [@me](https://github.com/me) ([#763](https://github.com/PostHog/wizard/issues/763)) ([f9215b3](https://github.com/PostHog/wizard/commit/f9215b37e4956ea83dbf0c94008432c3bf79f845))
+
+## [2.34.0](https://github.com/PostHog/wizard/compare/v2.33.0...v2.34.0) (2026-06-29)
+
+
+### Features
+
+* **oauth:** honor --project-id on the OAuth login path ([#743](https://github.com/PostHog/wizard/issues/743)) ([48d8362](https://github.com/PostHog/wizard/commit/48d836225aa4ec3e2e565438b467cd078a25cda8))
+
+
+### Bug Fixes
+
+* **agent:** isolate the agent SDK to PostHog gateway credentials ([#744](https://github.com/PostHog/wizard/issues/744)) ([7848ed0](https://github.com/PostHog/wizard/commit/7848ed05e759f671021f7fc43a3cb6459bd40436))
+* **self-driving:** github auth screen ([#741](https://github.com/PostHog/wizard/issues/741)) ([41076b1](https://github.com/PostHog/wizard/commit/41076b157916a338c2b2cfa4319f02a6392e4b3b))
+
+## [2.33.0](https://github.com/PostHog/wizard/compare/v2.32.0...v2.33.0) (2026-06-26)
+
+
+### Features
+
+* add experimental headless mode for published, non-interactive runs ([#732](https://github.com/PostHog/wizard/issues/732)) ([6a4a48d](https://github.com/PostHog/wizard/commit/6a4a48dc737e5cd1c71a21d1d3f8ae50a9437e39))
+* **self-driving:** Simplify step 1 of self-driving Wizard, as we don't need to check FFs anymore ([#739](https://github.com/PostHog/wizard/issues/739)) ([48e4516](https://github.com/PostHog/wizard/commit/48e45168600d9ff4979a62fa21fbc7073a09db54))
+* stream wizard run state to PostHog in headless mode ([#734](https://github.com/PostHog/wizard/issues/734)) ([69caa2a](https://github.com/PostHog/wizard/commit/69caa2a02d5d644b84b5977b06dab0718720d8c2))
+
+## [2.32.0](https://github.com/PostHog/wizard/compare/v2.31.0...v2.32.0) (2026-06-25)
+
+
+### Features
+
+* **commands:** add flat `mcp-analytics` command ([#731](https://github.com/PostHog/wizard/issues/731)) ([de3f487](https://github.com/PostHog/wizard/commit/de3f48729824f6dbf3cf2fc939862b3ce8c2fb77))
+
+## [2.31.0](https://github.com/PostHog/wizard/compare/v2.30.0...v2.31.0) (2026-06-25)
+
+
+### Features
+
+* **e2e-harness:** drive and snapshot the real wizard TUI ([#702](https://github.com/PostHog/wizard/issues/702)) ([bd875c3](https://github.com/PostHog/wizard/commit/bd875c36b1e1fe1823d0a3a94fa979948a87b34f))
+* tag LLM gateway traces with build type ([#727](https://github.com/PostHog/wizard/issues/727)) ([f97c53f](https://github.com/PostHog/wizard/commit/f97c53f9fc23a873df53678d2a7fb42d779c5c47))
+* tag LLM gateway traces with program_id and run identifiers ([#726](https://github.com/PostHog/wizard/issues/726)) ([fcdf70f](https://github.com/PostHog/wizard/commit/fcdf70faa9c390540664c895b28cf9654b65fd5d))
+
+## [2.30.0](https://github.com/PostHog/wizard/compare/v2.29.0...v2.30.0) (2026-06-23)
+
+
+### Features
+
+* Track steps progression for Wizard. ([#718](https://github.com/PostHog/wizard/issues/718)) ([896f190](https://github.com/PostHog/wizard/commit/896f190d6ddc73f2c7d5381f53f01bc001698116))
+
+## [2.29.0](https://github.com/PostHog/wizard/compare/v2.28.1...v2.29.0) (2026-06-23)
+
+
+### Features
+
+* agentic detection for source-map upload flow ([#689](https://github.com/PostHog/wizard/issues/689)) ([940bf67](https://github.com/PostHog/wizard/commit/940bf6791e80b54eb4964baa41b88f0e6742ca9e))
+* detect more data warehouse sources in onboarding ([#711](https://github.com/PostHog/wizard/issues/711)) ([b206169](https://github.com/PostHog/wizard/commit/b20616915158813f41ee7c9f0c0abc15386ea532))
+
+
+### Bug Fixes
+
+* **analytics:** tag every event with program_id ([#714](https://github.com/PostHog/wizard/issues/714)) ([4db5a0f](https://github.com/PostHog/wizard/commit/4db5a0f7aa84a4daa86e70789f592adc6c5563d3))
+* **self-driving:** Rename "canonical" scouts to "built-in" in self-driving prompt ([#717](https://github.com/PostHog/wizard/issues/717)) ([e99450e](https://github.com/PostHog/wizard/commit/e99450e82951f1a5237f7fd75e9ebe9d981152e8))
+
+## [2.28.1](https://github.com/PostHog/wizard/compare/v2.28.0...v2.28.1) (2026-06-23)
+
+
+### Bug Fixes
+
+* **self-driving:** Differentiate the source vs scout tips, rename "fleet" to "troop" ([#712](https://github.com/PostHog/wizard/issues/712)) ([edacabc](https://github.com/PostHog/wizard/commit/edacabc57660f1f4944a0c1cecdfa52f5f88986a))
+
 ## [2.28.0](https://github.com/PostHog/wizard/compare/v2.27.0...v2.28.0) (2026-06-23)
 
 

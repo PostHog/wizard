@@ -5,18 +5,74 @@
  * `session.installDir` is a real, readable directory. We deliberately do
  * NOT require the base posthog-integration report to be present — it is a
  * report many users never commit, and `requires: ['posthog-integration']`
- * is metadata, not a hard runtime gate. Real readiness (integration state
- * + beta access) is established by the agent's STEP 1 Signals API probe at
- * the start of the run. The beta gates (the `product-autonomy` access flag
- * and `signals-scout` enrollment — PostHog-side flag names, unchanged by
- * the wizard-side "self-driving" rename) are PostHog-internal flags with no
- * customer-facing read API, which is why that probe lives in the run and
- * emits a structured `[ABORT]` when the product is not available.
+ * is metadata, not a hard runtime gate.
+ *
+ * Self-driving is now in OPEN beta — available to every team — so STEP 1
+ * no longer probes the Signals API as an access gate; it completes
+ * instantly so the run opens with a fast first checkmark. The
+ * `self-driving is not available for this project` abort below is kept
+ * only as a safety net: if the Signals API genuinely can't be reached
+ * during the run (a hard error that is unexpected in open beta), the skill
+ * emits it and the wizard renders a friendly "try again" screen — now with
+ * open-beta wording, not the old closed, per-team "join the beta" copy. The
+ * PostHog-side flags (`product-autonomy`, `signals-scout`) are unchanged by
+ * the wizard-side "self-driving" rename.
  */
 
-import { existsSync, statSync } from 'fs';
+import { existsSync, statSync, readFileSync } from 'fs';
+import { join } from 'path';
 import type { WizardSession } from '@lib/wizard-session';
 import type { AbortCase } from '@lib/agent/agent-runner';
+
+/** frameworkContext key holding the deterministic PostHog-presence result. */
+export const POSTHOG_PRESENT_KEY = 'postHogPresent';
+
+/**
+ * frameworkContext key holding the repo-relative path of the project the user
+ * picked on the integration-detect screen ("." for the repo root). The
+ * integrate-run phase scopes its install dir to this so a monorepo integrates
+ * into the chosen sub-app, not the root.
+ */
+export const SELF_DRIVING_INTEGRATE_PATH_KEY = 'selfDrivingIntegratePath';
+
+// Matches `posthog` at a dependency boundary (line start, or after a
+// quote/slash/=/space), so it skips the substring glued inside another word.
+const POSTHOG_PACKAGE_RE = /(^|["'\s/=])posthog/im;
+
+/**
+ * Deterministic, offline check: does the project already have a PostHog SDK?
+ * Scans the common dependency manifests at the install dir for a `posthog`
+ * package — the same signal the agentic detector reports as `hasPostHog`, but
+ * instant and credential-free. Drives whether self-driving asks to integrate
+ * first ("not found") or proceeds straight to setup ("found").
+ */
+export function detectPostHogPresent(installDir: string): boolean {
+  const manifests = [
+    'package.json',
+    'requirements.txt',
+    'pyproject.toml',
+    'Pipfile',
+    'Gemfile',
+    'go.mod',
+    'composer.json',
+    'pubspec.yaml',
+  ];
+  // Also check a few common sub-app dirs so monorepos (frontend/, backend/)
+  // are caught; deliberately not a recursive tree walk.
+  const dirs = ['.', 'app', 'frontend', 'backend'];
+  for (const dir of dirs) {
+    for (const name of manifests) {
+      const path = join(installDir, dir, name);
+      if (!existsSync(path)) continue;
+      try {
+        if (POSTHOG_PACKAGE_RE.test(readFileSync(path, 'utf8'))) return true;
+      } catch {
+        /* unreadable — ignore */
+      }
+    }
+  }
+  return false;
+}
 
 /**
  * Structured detection errors. The intro screen renders each kind into
@@ -39,10 +95,10 @@ export const SELF_DRIVING_ABORT_CASES: AbortCase[] = [
     match: /^self-driving is not available for this project$/i,
     message: 'PostHog Self-driving is not available for this project',
     body:
-      'Self-driving is in beta and is enabled per ' +
-      'team by PostHog. This project does not appear to have access yet. ' +
-      'Reach out to your PostHog contact (or wizard@posthog.com) to join ' +
-      'the beta, then run the wizard again.',
+      'Self-driving is in open beta and available to every team, so this ' +
+      'is unexpected — the PostHog Signals API could not be reached for ' +
+      'this project. Nothing was changed. Try again in a moment, and if it ' +
+      'keeps happening reach out to wizard@posthog.com.',
   },
   {
     // Skill emits: [ABORT] github connection declined
@@ -104,4 +160,9 @@ export function detectSelfDrivingPrerequisites(
     fail({ kind: 'bad-directory', path: installDir, reason: 'unreadable' });
     return;
   }
+
+  // Deterministic PostHog-presence check — drives the integration-check
+  // screen: found → skip straight to self-driving; not found → ask to set up
+  // PostHog first.
+  setFrameworkContext(POSTHOG_PRESENT_KEY, detectPostHogPresent(installDir));
 }

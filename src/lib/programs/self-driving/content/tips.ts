@@ -15,13 +15,13 @@ export const SELF_DRIVING_TIPS: Tip[] = [
     id: 'what-is-a-signal-source',
     title: "What's a signal source?",
     description:
-      'A signal source is a PostHog product or connected tool — errors, session replays, support, GitHub or Linear issues — that feeds findings into your Self-driving inbox.',
+      'A signal source is one of the streams PostHog plugs straight into — your errors, session replays, support, GitHub or Linear issues. Each one watches its own stream and speaks up the moment something specific goes wrong there.',
   },
   {
     id: 'what-is-a-scout',
     title: "What's a scout?",
     description:
-      'Scouts are scheduled checks that scan your data and flag issues — a spike in errors, a dropping funnel — straight to your inbox.',
+      'A scout is like an analyst PostHog runs for you on a schedule: rather than watching one stream, it ranges freely across your product data, looking for the bigger trends and surprises — a spike in errors, a funnel quietly dropping — that no single stream would catch.',
   },
   {
     id: 'findings-in-inbox',

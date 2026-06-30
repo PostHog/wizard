@@ -23,12 +23,9 @@ import { getOAuthScopesForProgram } from '@lib/oauth/program-scopes';
 import type { ProgramId } from '@lib/programs/program-registry';
 import { analytics } from './analytics';
 import { getUI } from '@ui';
-import {
-  getCloudUrlFromRegion,
-  getHostFromRegion,
-  detectRegionFromToken,
-} from './urls';
+import { HostResolution } from '@lib/host-resolution';
 import { performOAuthFlow } from './oauth';
+import { resolveGrantedProject } from './project-resolution';
 import { provisionNewAccount } from './provisioning';
 import {
   fetchUserData,
@@ -400,6 +397,9 @@ export async function getOrAskForProjectData(
   _options: Pick<WizardRunOptions, 'signup' | 'ci' | 'apiKey' | 'projectId'> & {
     email?: string;
     region?: CloudRegion;
+    /** Explicit base URL override (`--base-url`, from `session.baseUrl`). When
+     *  set, pins every PostHog origin and bypasses region resolution. */
+    baseUrl?: string;
     /** Optional — picks the OAuth scope set via
      *  `getOAuthScopesForProgram`. Omitted → default
      *  `WIZARD_OAUTH_SCOPES`. Threaded into `askForWizardLogin`. */
@@ -419,9 +419,14 @@ export async function getOrAskForProjectData(
   if (_options.ci && _options.apiKey) {
     getUI().log.info('Using provided API key (CI mode - OAuth bypassed)');
 
-    const cloudRegion = await detectRegionFromToken(_options.apiKey);
-    const host = getHostFromRegion(cloudRegion);
-    const cloudUrl = getCloudUrlFromRegion(cloudRegion);
+    const hosts = await HostResolution.fromAccessToken(_options.apiKey, {
+      region: _options.region,
+      baseUrl: _options.baseUrl,
+    });
+
+    const cloudRegion = hosts.region;
+    const host = hosts.apiHost;
+    const cloudUrl = hosts.appHost;
 
     const projectData =
       _options.projectId != null
@@ -471,12 +476,17 @@ export async function getOrAskForProjectData(
       signup: _options.signup,
       email: _options.email,
       region: _options.region,
+      baseUrl: _options.baseUrl,
       programId: _options.programId,
+      projectId: _options.projectId,
     }),
   );
 
   if (!projectApiKey) {
-    const cloudUrl = getCloudUrlFromRegion(cloudRegion);
+    // TODO: clean up in #755
+    const cloudUrl = HostResolution.fromRegion(cloudRegion, {
+      baseUrl: _options.baseUrl,
+    }).appHost;
     getUI().log.error(`Didn't receive a project token. This shouldn't happen :(
 
 Please let us know if you think this is a bug in the wizard:
@@ -538,20 +548,52 @@ async function askForWizardLogin(options: {
   signup: boolean;
   email?: string;
   region?: CloudRegion;
+  /** Explicit base URL override (`--base-url`); pins every PostHog origin. */
+  baseUrl?: string;
   /** Used to pick the right scope set via `getOAuthScopesForProgram`.
    *  Omitted → default `WIZARD_OAUTH_SCOPES`. */
   programId?: ProgramId | null;
+  /** `--project-id`, if passed. When the user granted access to it on the consent
+   *  screen we use it directly; otherwise we fall back to the first granted team. */
+  projectId?: number;
 }): Promise<ProjectData & { cloudRegion: CloudRegion }> {
   if (options.signup) {
-    return askForProvisioningSignup(options.email, options.region);
+    return askForProvisioningSignup(
+      options.email,
+      options.region,
+      options.baseUrl,
+    );
   }
 
   const tokenResponse = await performOAuthFlow({
     scopes: [...getOAuthScopesForProgram(options.programId)],
     signup: false,
+    projectId: options.projectId,
+    baseUrl: options.baseUrl,
   });
 
-  const projectId = tokenResponse.scoped_teams?.[0];
+  // `--project-id`, when provided, is authoritative — but only if the user actually
+  // granted access to it on the consent screen. If they authorized a different
+  // project, fail loudly instead of silently capturing into the wrong one. With no
+  // `--project-id` this falls back to the granted project, unchanged for every program.
+  const resolution = resolveGrantedProject(
+    options.projectId,
+    tokenResponse.scoped_teams,
+  );
+  if (!resolution.ok) {
+    const error = new Error(
+      `You authorized project ${resolution.granted}, but setup is targeting project ${resolution.requested}. Re-run and grant access to project ${resolution.requested} on the authorization screen.`,
+    );
+    analytics.captureException(error, {
+      step: 'wizard_login',
+      requested_project_id: resolution.requested,
+      granted_project_id: resolution.granted,
+    });
+    getUI().log.error(error.message);
+    await abort();
+  }
+
+  const projectId = resolution.ok ? resolution.projectId : undefined;
 
   if (projectId === undefined) {
     const error = new Error(
@@ -565,9 +607,13 @@ async function askForWizardLogin(options: {
     await abort();
   }
 
-  const cloudRegion = await detectRegionFromToken(tokenResponse.access_token);
-  const cloudUrl = getCloudUrlFromRegion(cloudRegion);
-  const host = getHostFromRegion(cloudRegion);
+  const hosts = await HostResolution.fromAccessToken(
+    tokenResponse.access_token,
+    { baseUrl: options.baseUrl },
+  );
+  const cloudRegion = hosts.region;
+  const cloudUrl = hosts.appHost;
+  const host = hosts.apiHost;
 
   const projectData = await fetchProjectData(
     tokenResponse.access_token,
@@ -598,6 +644,7 @@ async function askForWizardLogin(options: {
 async function askForProvisioningSignup(
   email?: string,
   region?: CloudRegion,
+  baseUrl?: string,
 ): Promise<ProjectData & { cloudRegion: CloudRegion }> {
   if (!email || !email.includes('@')) {
     getUI().log.error(
@@ -616,6 +663,7 @@ async function askForProvisioningSignup(
     const result = await provisionNewAccount(email, '', provisionRegion, {
       orgName,
       projectName,
+      baseUrl,
     });
 
     spinner.stop('Account created!');
@@ -642,7 +690,8 @@ async function askForProvisioningSignup(
       getUI().log.info(
         'This email already has a PostHog account. Switching to login flow...',
       );
-      return askForWizardLogin({ signup: false });
+
+      return askForWizardLogin({ signup: false, baseUrl });
     }
 
     getUI().log.error(`Failed to create account: ${message}`);

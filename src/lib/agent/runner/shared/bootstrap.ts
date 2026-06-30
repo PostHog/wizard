@@ -8,13 +8,14 @@
  */
 
 import type { WizardSession } from '@lib/wizard-session';
-import { getOrAskForProjectData } from '@utils/setup-utils';
-import { analytics, groupsFromUser } from '@utils/analytics';
+import { analytics } from '@utils/analytics';
 import { getUI } from '@ui';
-import { buildWizardMetadata } from '@lib/agent/agent-interface';
+import { authenticate } from './authenticate';
+import { buildRunTags } from '@lib/agent/agent-interface';
 import {
   checkAllSettingsConflicts,
   backupAndFixClaudeSettings,
+  classifySettingsConflicts,
 } from '@lib/agent/claude-settings';
 import {
   evaluateWizardReadiness,
@@ -155,10 +156,52 @@ export async function bootstrapProgram(
         keys: conflict.keys,
       });
     }
-    await getUI().showSettingsOverride(settingsConflicts, () =>
-      backupAndFixClaudeSettings(session.installDir),
-    );
-    logToFile('[agent-runner] settings override resolved');
+
+    const { autoFix, failClosed, warnOnly } =
+      classifySettingsConflicts(settingsConflicts);
+
+    // User-global and project-local files are already neutralized — the agent
+    // runs with settingSources:['project'], so the SDK never reads them. Record
+    // it and move on; don't make the user act on a setting that can't bite.
+    for (const conflict of warnOnly) {
+      logToFile(
+        `[agent-runner] settings conflict in ${conflict.source} (${conflict.path}) ` +
+          `neutralized by settingSources:['project'] — not blocking`,
+      );
+      analytics.wizardCapture('settings conflict neutralized', {
+        level: conflict.source,
+        keys: conflict.keys,
+      });
+    }
+
+    // Writable project settings.json — the SDK *does* read it, but we can back
+    // it up and remove it (restored at outro). Neutralize without prompting.
+    let unfixable = failClosed;
+    if (autoFix.length > 0) {
+      const fixed = backupAndFixClaudeSettings(session.installDir);
+      if (fixed) {
+        logToFile('[agent-runner] auto-neutralized writable settings conflict');
+        analytics.wizardCapture('settings conflict auto-neutralized', {
+          keys: autoFix.flatMap((c) => c.keys),
+        });
+      } else {
+        // Couldn't remove it — don't run into the redirect; fail closed instead.
+        logToFile(
+          '[agent-runner] could not back up writable settings conflict — failing closed',
+        );
+        unfixable = [...failClosed, ...autoFix];
+      }
+    }
+
+    // What we cannot neutralize (org-managed, always read by the SDK; or a
+    // writable file we failed to back up) must be fixed by the user. Fail
+    // closed: the screen names the file + keys and exits.
+    if (unfixable.length > 0) {
+      await getUI().showSettingsOverride(unfixable, () =>
+        backupAndFixClaudeSettings(session.installDir),
+      );
+      logToFile('[agent-runner] settings override resolved');
+    }
   }
 
   analytics.wizardCapture('agent started', {
@@ -167,38 +210,14 @@ export async function bootstrapProgram(
     skill_id: config.skillId ?? null,
   });
 
-  // 4. OAuth
-  logToFile('[agent-runner] starting OAuth');
-  const {
-    projectApiKey,
-    host,
-    accessToken,
-    projectId,
-    cloudRegion,
-    roleAtOrganization,
-    user,
-    project,
-  } = await getOrAskForProjectData({
-    signup: session.signup,
-    ci: session.ci,
-    apiKey: session.apiKey,
-    projectId: session.projectId,
-    email: session.email,
-    region: session.region,
-    programId: programConfig.id,
-  });
-
-  session.credentials = { accessToken, projectApiKey, host, projectId };
-  session.roleAtOrganization = roleAtOrganization;
-  session.apiUser = user;
-  getUI().setCredentials(session.credentials);
-  getUI().setRoleAtOrganization(roleAtOrganization);
-  getUI().setApiUser(user);
-
-  // Identify the user (email, name) before evaluating flags, so flags can target
-  // the individual user and not just $app_name.
-  if (user) analytics.identifyUser(user);
-  analytics.setGroups(groupsFromUser(user, host));
+  // 4. Authenticate — idempotent within a run (see authenticate()). A second
+  // agent run in the same invocation (self-driving's integration phase) reuses
+  // the first login; it does not launch another OAuth. authenticate() also
+  // identifies the user and sets analytics groups.
+  await authenticate(session, programConfig.id);
+  const { projectApiKey, host, accessToken, projectId } = session.credentials!;
+  const cloudRegion = session.cloudRegion!;
+  const project = session.apiProject;
 
   // 4.5. AI opt-in enforcement. Parks here while AiOptInRequiredScreen is
   // up if the org hasn't approved third-party AI — BEFORE the skill
@@ -210,13 +229,34 @@ export async function bootstrapProgram(
   await getUI().waitForAiOptIn();
   logToFile('[agent-runner] AI opt-in gate cleared');
 
-  // Feature flags, variant metadata, and MCP url. Both arms need these, and the
-  // fork decision reads the flags.
+  // Park for any interactive step the user must complete AFTER authenticating
+  // but BEFORE the agent runs — e.g. the source-maps project picker, which
+  // needs credentials to scan and writes its choice to frameworkContext that
+  // the run prompt reads. Generic: await every gated step between auth and run.
+  const authIndex = programConfig.steps.findIndex((s) => s.screenId === 'auth');
+  const runIndex = programConfig.steps.findIndex((s) => s.screenId === 'run');
+  if (authIndex !== -1 && runIndex > authIndex) {
+    for (const step of programConfig.steps.slice(authIndex + 1, runIndex)) {
+      if (step.gate) {
+        logToFile(`[agent-runner] awaiting post-auth gate: ${step.id}`);
+        await getUI().waitForGate(step.id);
+        logToFile(`[agent-runner] post-auth gate cleared: ${step.id}`);
+      }
+    }
+  }
+
+  // Feature flags and MCP url. Both arms need these, and the fork decision reads
+  // the flags.
   const wizardFlags = await analytics.getAllFlagsForWizard();
-  const wizardMetadata = buildWizardMetadata(wizardFlags);
-  // Tag every wizard event with the variant so runs segment in PostHog; the
-  // orchestrator arm overwrites this with its own variant when it forks.
-  analytics.setTag('variant', wizardMetadata.VARIANT);
+  // Gateway trace tags for this run. The runner stamps its variant onto this
+  // after the fork (see runProgram), so the value reflects which arm ran.
+  const wizardMetadata = buildRunTags({
+    programId: programConfig.id,
+    integration: config.integrationLabel,
+    runId: analytics.runId,
+    build: analytics.build,
+    skillId: config.skillId,
+  });
 
   // One MCP url for every region: the server resolves the user's region from
   // the bearer token, so the EU subdomain (a Claude Code OAuth workaround) is

@@ -1,33 +1,32 @@
 import { CodexMCPClient } from '@steps/add-mcp-server-to-clients/clients/codex';
+import { execSync, spawnSync } from 'node:child_process';
+import * as fs from 'node:fs';
+import { analytics } from '@utils/analytics';
 
-jest.mock('node:child_process', () => ({
-  execSync: jest.fn(),
-  spawnSync: jest.fn(),
+vi.mock('node:child_process', () => ({
+  execSync: vi.fn(),
+  spawnSync: vi.fn(),
 }));
 
-jest.mock('node:fs', () => ({
-  existsSync: jest.fn(),
-  readFileSync: jest.fn(),
-  rmSync: jest.fn(),
+vi.mock('node:fs', () => ({
+  existsSync: vi.fn(),
+  readFileSync: vi.fn(),
+  rmSync: vi.fn(),
 }));
 
-jest.mock('../../../../utils/analytics', () => ({
-  analytics: { captureException: jest.fn() },
+vi.mock('../../../../utils/analytics', () => ({
+  analytics: { captureException: vi.fn() },
 }));
 
 describe('CodexMCPClient', () => {
-  const { execSync, spawnSync } = require('node:child_process');
-  const fs = require('node:fs');
-  const analytics = require('@utils/analytics').analytics;
-
-  const spawnSyncMock = spawnSync as jest.Mock;
-  const execSyncMock = execSync as jest.Mock;
-  const readFileSyncMock = fs.readFileSync as jest.Mock;
+  const spawnSyncMock = spawnSync as Mock;
+  const execSyncMock = execSync as Mock;
+  const readFileSyncMock = fs.readFileSync as Mock;
 
   const CODEX_PATH = '/usr/local/bin/codex';
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     // Default: codex found via command -v
     execSyncMock.mockReturnValue(Buffer.from(CODEX_PATH + '\n'));
   });
@@ -194,7 +193,6 @@ describe('CodexMCPClient', () => {
     });
 
     it('clears stale cache and retries when marketplace is already added from a different source', async () => {
-      const { rmSync } = require('node:fs');
       spawnSyncMock
         .mockReturnValueOnce({
           status: 1,
@@ -204,7 +202,7 @@ describe('CodexMCPClient', () => {
         .mockReturnValueOnce({ status: 0, stderr: '' });
       const client = new CodexMCPClient();
       await expect(client.installPlugin()).resolves.toEqual({ success: true });
-      expect(rmSync).toHaveBeenCalledWith(
+      expect(fs.rmSync).toHaveBeenCalledWith(
         expect.stringContaining('marketplaces/posthog'),
         { recursive: true, force: true },
       );

@@ -275,4 +275,14 @@ export class LoggingUI implements WizardUI {
   setFrameworkContext(_key: string, _value: unknown): void {
     // No-op in CI mode
   }
+
+  getFrameworkContext(_key: string): unknown {
+    // No frameworkContext in CI mode
+    return undefined;
+  }
+
+  waitForGate(_stepId: string): Promise<void> {
+    // No interactive gates in CI mode
+    return Promise.resolve();
+  }
 }

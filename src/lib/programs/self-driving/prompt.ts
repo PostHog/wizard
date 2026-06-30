@@ -8,6 +8,10 @@ import { getUiHostFromHost } from '@utils/urls';
  * every step (which MCP tools to call, which sources/scouts apply, how
  * to verify); this prompt carries the order, the wizard-specific
  * mechanics (wizard_ask, abort signals), and the project URLs.
+ *
+ * Integration (when the project has no PostHog yet) runs as a separate phase
+ * before this — the real integration program, with its own screens and task
+ * list — so this prompt only covers the Self-driving steps.
  */
 export function buildSelfDrivingPrompt(ctx: PromptContext): string {
   const uiHost = getUiHostFromHost(ctx.host).replace(/\/$/, '');
@@ -20,10 +24,10 @@ export function buildSelfDrivingPrompt(ctx: PromptContext): string {
     value === true ? 'ON' : value === false ? 'OFF' : 'unknown';
   const optIns = ctx.teamProductOptIns;
 
-  return `You are setting up PostHog Self-driving for this project: you will enable the right signal sources, make sure GitHub is connected, tune the scout fleet, design custom scouts for what this product uniquely needs, and hand the user a configured inbox.
+  return `You are setting up PostHog Self-driving for this project: you will enable the right signal sources, make sure GitHub is connected, tune the scout troop, design custom scouts for what this product uniquely needs, and hand the user a configured inbox.
 
 Project URLs:
-- Integrations settings (GitHub App install): ${integrationsSettingsUrl}
+- Integrations settings: ${integrationsSettingsUrl}
 - Organization AI settings: ${orgAiSettingsUrl}
 - New data warehouse source (Linear / Zendesk / GitHub issues / pganalyze): ${newWarehouseSourceUrl}
 - Self-driving inbox: ${inboxUrl}
@@ -50,7 +54,7 @@ tasks, in this order:
   3. Connect GitHub (required)
   4. Enable signal sources
   5. Offer issue-tracker integrations
-  6. Configure the scout fleet
+  6. Configure the scout troop
   7. Design custom scouts
   8. Write report and hand off
 Drive the list with TaskUpdate — mark a task in_progress when you start
@@ -72,8 +76,13 @@ Wizard mechanics:
 Follow these steps IN ORDER. Do not skip or reorder.
 
 STEP 1 — Check Self-driving access. (skill: "Check access")
-   Probe the Signals API as the skill describes. If the API is not
-   available for this project (permission or not-found errors), emit
+   Self-driving is in open beta and available to every team, so there is
+   no access gate to probe. Do NOT call any MCP tool here — mark this task
+   in_progress and then completed right away and emit the
+   ${AgentSignals.STATUS} line, so the user sees an immediate first step.
+   Only if the Signals API later turns out to be genuinely unreachable for
+   this project (a hard error on every Signals call, unexpected in open
+   beta) should you emit
    ${AgentSignals.ABORT} self-driving is not available for this project
    and halt.
 
@@ -88,9 +97,10 @@ STEP 2 — Read project and current Signals state. (skill: "Read context")
 
 STEP 3 — Connect GitHub. REQUIRED. (skill: "Connect GitHub")
    Signals cannot research or fix issues without code access. Check for
-   an existing GitHub integration first; if absent, send the user to
-   ${integrationsSettingsUrl} via wizard_ask and verify the connection
-   after they confirm. If the user cannot connect now, emit
+   an existing GitHub integration first; if absent, send the user
+   through the GitHub App connection via wizard_ask exactly as the skill
+   describes (it builds the one-click authorize link), and verify the
+   connection after they confirm. If the user cannot connect now, emit
    ${AgentSignals.ABORT} github connection declined
    and halt — never finish setup without GitHub.
 
@@ -108,20 +118,20 @@ STEP 5 — Offer issue-tracker integrations. (skill: "Connected tools")
    never sends the user to paste credentials and never re-prompts. Enable
    a source only for a tool the user picked.
 
-STEP 6 — Configure the scout fleet. (skill: "Scouts")
-   Materialize the fleet, then enable only a small set — the "general"
+STEP 6 — Configure the scout troop. (skill: "Scouts")
+   Materialize the troop, then enable only a small set — the "general"
    scout plus the one or two specialists for the products this project
    uses most — and disable the rest, per the skill.
 
 STEP 7 — Design custom scouts for this product. (skill: "Custom scouts")
    You are the only actor that has read this repo — turn that into
    coverage per the skill: a real gap analysis of the project's
-   watchable surfaces against what the canonical fleet already covers,
+   watchable surfaces against what the built-in troop already covers,
    then custom scouts for the uncovered ones. Keep scout bodies
    high-level: describe the behavior and signal conditions to watch,
    referencing repo evidence by file/function name — never paste raw
    source, secrets, env values, or customer data into a scout body.
-   Never edit canonical scout bodies. Propose all candidates in ONE
+   Never edit built-in scout bodies. Propose all candidates in ONE
    batched wizard_ask
    before creating anything; the user declining everything (or finding
    no gap at all) is a valid outcome, not an abort. Mark the task

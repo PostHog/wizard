@@ -1,27 +1,100 @@
 /**
  * YARA hook wiring for the Claude Agent SDK.
  *
- * Creates PreToolUse and PostToolUse hook callback arrays that
- * integrate the YARA scanner into the wizard's agent loop. These
- * hooks are registered in the SDK's query() options alongside the
- * existing Stop hook.
+ * Creates PreToolUse and PostToolUse hook callback arrays that integrate the
+ * real @posthog/warlock security scanner (YARA-X via WASM) into the wizard's
+ * agent loop. These hooks are registered in the SDK's query() options alongside
+ * the existing Stop hook.
  *
- * PreToolUse hooks block dangerous commands before execution.
- * PostToolUse hooks detect violations in written code and prompt
- * injection in read content, and scan context-mill skill downloads.
+ * PreToolUse hooks block dangerous commands before execution. PostToolUse hooks
+ * detect violations in written code and prompt injection in read content, and
+ * scan context-mill skill downloads.
+ *
+ * Warlock owns the rules; this file owns the *policy* — how a match maps to a
+ * block / revert / terminate response, plus the optional LLM triage pass that
+ * filters false positives before we act.
+ *
+ * Naming: "yara" is the technique — scanning content against YARA rules — so the
+ * wizard-side wiring keeps that name. "warlock" is the engine package that runs
+ * the rules. Both names showing up here is intentional.
+ *
+ * This is Layer 2 (L2) in the wizard's defense-in-depth model, complementing the
+ * prompt-based commandments (L0) and the canUseTool() allowlist (L1).
  */
 
 import fs from 'fs';
 import path from 'path';
 import fg from 'fast-glob';
-import { scan, scanSkillDirectory } from './yara-scanner';
-import type { YaraMatch, ScanResult } from './yara-scanner';
+import type {
+  ScanMatch,
+  TriageMatch,
+  LLMProvider,
+  Category,
+} from '@posthog/warlock';
 import { logToFile } from '@utils/debug';
 import { analytics } from '@utils/analytics';
+import { getUI } from '@ui';
+import type { WizardSession } from '@lib/wizard-session';
 import { isSkillInstallCommand } from './skill-install';
+import { WIZARD_YARA_REPORT_FILE } from '@utils/paths';
+// TODO(wizard#594): invert this dependency.
+// L2 infra (yara-hooks) imports product-specific filename constants from
+// individual programs. The leaf `constants.ts` modules break the *import*
+// cycle but don't fix the *layering* concern: this file knowing about
+// `events-audit`, `posthog-integration`, and `audit` violates "product
+// knowledge never enters infrastructure code." Proper fix is inverted —
+// programs declare their own doc paths, the hooks read from a generic
+// registry. For now: every new program emitting a PII-shaped report has
+// to be added here. Land that cleanup before adding a fourth entry.
+import {
+  SETUP_REPORT_FILE as EVENTS_AUDIT_REPORT_FILE,
+  EVENT_INVENTORY_FILE,
+  EVENT_INVENTORY_PART_PATTERN,
+} from '@lib/programs/events-audit/constants';
+import { AUDIT_REPORT_FILE } from '@lib/programs/audit/types';
+import { EVENT_PLAN_FILE } from '@lib/programs/posthog-integration/constants';
+
+// ─── Warlock module accessor ─────────────────────────────────────
+// Warlock is ESM-only and lazily inits its WASM engine + compiles rules on the
+// first scan() call. We import it once and cache the module promise so the
+// warmed engine (a warlock-internal singleton) is shared across every hook.
+// Mirrors the lazy `await import(...)` pattern used for the agent SDK.
+
+type WarlockModule = typeof import('@posthog/warlock');
+
+let warlockModulePromise: Promise<WarlockModule> | null = null;
+
+function getWarlock(): Promise<WarlockModule> {
+  if (!warlockModulePromise) {
+    // Clear the cache on rejection so a transient failure (flaky disk, ESM
+    // resolver hiccup) doesn't poison the cache for the rest of the process
+    // lifetime. Without this, one rejected import permanently locks every
+    // hook into fail-closed-terminate until restart.
+    warlockModulePromise = import('@posthog/warlock').catch((err) => {
+      warlockModulePromise = null;
+      throw err;
+    });
+  }
+  return warlockModulePromise;
+}
+
+/**
+ * Pay the WASM-init + rule-compile cost up front, off the hook path, so the
+ * first real tool-call scan doesn't eat cold-start under a hook timeout.
+ * Best-effort: a failure here is non-fatal — hooks still fail closed per scan.
+ */
+export async function prewarmYaraScanner(): Promise<void> {
+  try {
+    const warlock = await getWarlock();
+    await warlock.scan('');
+    logToFile('[YARA] warlock pre-warmed');
+  } catch (err) {
+    logToFile('[YARA] warlock pre-warm failed:', err);
+  }
+}
 
 // ─── Types ───────────────────────────────────────────────────────
-// Using loose types to avoid tight coupling to SDK version.
+// Loose hook types to avoid tight coupling to the SDK version.
 // The SDK hook types are: HookCallbackMatcher[], where each matcher
 // has { matcher?: string, hooks: HookCallback[], timeout?: number }
 
@@ -39,6 +112,9 @@ export interface HookCallbackMatcher {
   timeout?: number;
 }
 
+/** Which content surface a warlock rule applies to (from rule `scan_context`). */
+type ScanContext = 'command' | 'input' | 'output';
+
 // ─── Scan Report Accumulator ─────────────────────────────────────
 
 type ScanAction = 'blocked' | 'reverted' | 'warned' | 'aborted';
@@ -46,9 +122,19 @@ type ScanAction = 'blocked' | 'reverted' | 'warned' | 'aborted';
 interface ScanReportEntry {
   rule: string;
   severity: string;
+  category: string;
   action: ScanAction;
   phase: string;
   tool: string;
+  /** Rule description — the human-readable "why". Rule-static, safe to report. */
+  description: string;
+  /** Triage outcome, when triage ran. */
+  triageVerdict?: string;
+  /**
+   * Free-text triage rationale. May quote scanned content, so it is written to
+   * the local report file only — NEVER sent to PostHog (see captureScanReport).
+   */
+  triageReason?: string;
 }
 
 let scanCount = 0;
@@ -58,8 +144,32 @@ function recordScan(): void {
   scanCount++;
 }
 
-function recordViolation(entry: ScanReportEntry): void {
-  scanViolations.push(entry);
+// recordMatch is the single entry point for a violation (log + telemetry +
+// report). scanViolations is appended only there.
+
+/**
+ * Log a match to the run log + PostHog, and record it in the run's scan report.
+ * Single entry point so every violation is reported consistently.
+ */
+function recordMatch(
+  phase: string,
+  tool: string,
+  match: ScanMatch,
+  action: ScanAction,
+): void {
+  const triage = (match as TriageMatch).triage;
+  logYaraMatch(phase, tool, match, action);
+  scanViolations.push({
+    rule: match.rule,
+    severity: match.metadata.severity ?? 'unknown',
+    category: match.metadata.category ?? 'unknown',
+    action,
+    phase,
+    tool,
+    description: match.metadata.description ?? '',
+    triageVerdict: triage?.verdict,
+    triageReason: triage?.reason,
+  });
 }
 
 /** Reset counters (for testing) */
@@ -105,8 +215,6 @@ export function formatScanReport(): string | null {
   return lines.join('\n');
 }
 
-import { WIZARD_YARA_REPORT_FILE } from '@utils/paths';
-
 /** Write the scan report to a JSON file. Returns the file path, or null if no scans occurred. */
 export function writeScanReport(): string | null {
   if (scanCount === 0) return null;
@@ -129,37 +237,167 @@ export function writeScanReport(): string | null {
   return WIZARD_YARA_REPORT_FILE;
 }
 
-// ─── Hook Timeouts (ms) ─────────────────────────────────────────
+// ─── User-facing abort copy ──────────────────────────────────────
+//
+// The abort screen is the one security surface a user actually sees, so it must
+// say what was caught and that we protected them, in plain language, instead of
+// a bare "Security violation detected." Warlock owns the rules and categories;
+// this map is the wizard's *presentation* of a category it already detected. We
+// deliberately do not surface warlock's own rule `description` here: it is
+// written for maintainers (it ships to telemetry) and reads as technical. The
+// `Category` type is a stable, append-only warlock API, so a new category just
+// falls through to the generic line below rather than breaking the build.
 
-/** Timeout for synchronous scan hooks (PreToolUse, PostToolUse Write/Edit/Read) */
-const HOOK_TIMEOUT_MS = 60;
-/** Timeout for skill install hook (involves filesystem I/O) */
-const SKILL_SCAN_HOOK_TIMEOUT_MS = 120;
+const CATEGORY_DESCRIPTIONS: Record<Category, string> = {
+  prompt_injection:
+    'hit hidden instructions in a file it read, a possible attempt to hijack the setup',
+  exfiltration: 'tried to send data to an outside location',
+  destructive_operations: 'tried to run a destructive command',
+  supply_chain: 'tried to pull in untrusted code',
+  posthog_pii: 'tried to write personal data (PII) into your project',
+  posthog_hardcoded_key: 'tried to hardcode a PostHog key into your project',
+  hardcoded_secret: 'tried to hardcode a secret into your project',
+};
+
+/** Most recent violation that terminated the run, or null. */
+function lastTerminatingViolation(): ScanReportEntry | null {
+  for (let i = scanViolations.length - 1; i >= 0; i--) {
+    if (scanViolations[i].action === 'aborted') return scanViolations[i];
+  }
+  return null;
+}
+
+/**
+ * Build the user-facing copy for the security abort screen: what the scanner
+ * caught and what we did about it. This screen renders only because the run was
+ * stopped, so the "what we did" half is constant. Falls back to a generic line
+ * when no specific violation was recorded (e.g. the scanner itself errored and
+ * failed closed before a match was logged).
+ */
+export function formatYaraAbortMessage(): string {
+  const v = lastTerminatingViolation();
+  const what =
+    (v && CATEGORY_DESCRIPTIONS[v.category as Category]) ??
+    'did something our security scanner flagged';
+
+  return (
+    'Security check stopped the setup.\n\n' +
+    `The agent ${what}. We stopped the run to keep your project safe.\n` +
+    'No unsafe changes were left in your project.\n\n' +
+    'If this looks wrong, let us know: wizard@posthog.com'
+  );
+}
+
+// ─── Hook Timeouts (ms) ─────────────────────────────────────────
+// Generous because triage adds an LLM round-trip, and because a *fired* hook
+// timeout means the protective action is dropped (fail-open). The triage HTTP
+// call has its own shorter internal timeout (see agent-interface), so a hung
+// triage fails inside our catch (fail-closed) before these fire.
+
+/** Timeout for scan hooks (PreToolUse, PostToolUse Write/Edit/Read/Grep) */
+const HOOK_TIMEOUT_MS = 30_000;
+/** Timeout for the skill install hook (filesystem I/O + multiple scans) */
+const SKILL_SCAN_HOOK_TIMEOUT_MS = 30_000;
+
+/**
+ * Chunk size for scanning (100 KB). Oversized content is scanned in
+ * overlapping chunks so coverage is complete — nothing is silently truncated.
+ * The size also bounds what a single triage call pastes into the LLM prompt
+ * (~25K tokens), so triage always sees the chunk its matches came from.
+ */
+const SCAN_CHUNK_SIZE = 100_000;
+/**
+ * Overlap between adjacent chunks so a pattern straddling a chunk boundary
+ * still lands whole inside at least one chunk. YARA rule strings are at most
+ * a few hundred bytes; 4 KB is generous.
+ */
+const SCAN_CHUNK_OVERLAP = 4_096;
 
 // ─── Logging ─────────────────────────────────────────────────────
 
 function logYaraMatch(
   phase: string,
   tool: string,
-  match: YaraMatch,
+  match: ScanMatch,
   action: ScanAction,
 ): void {
+  const severity = match.metadata.severity ?? 'unknown';
+  const category = match.metadata.category ?? 'unknown';
+  const ruleAction = match.metadata.action ?? 'unknown';
+  const description = match.metadata.description ?? '';
   logToFile(
-    `[YARA] ${phase}:${tool} [${action.toUpperCase()}] rule "${
-      match.rule.name
-    }" ` +
-      `(severity: ${match.rule.severity}, category: ${match.rule.category})\n` +
-      `  Description: ${match.rule.description}\n` +
-      `  Matched text: "${match.matchedText.substring(0, 200)}"`,
+    `[YARA] ${phase}:${tool} [${action.toUpperCase()}] rule "${match.rule}" ` +
+      `(severity: ${severity}, category: ${category}, action: ${ruleAction})\n` +
+      `  Description: ${description}`,
   );
   analytics.wizardCapture('yara rule matched', {
-    rule: match.rule.name,
-    severity: match.rule.severity,
-    category: match.rule.category,
+    rule: match.rule,
+    severity: match.metadata.severity,
+    category: match.metadata.category,
+    rule_action: match.metadata.action,
     action,
     phase,
     tool,
+    // Rule-static description — the "why". The free-text triage reason is
+    // deliberately omitted (it can quote scanned content; stays local-only).
+    description: match.metadata.description,
+    triage_verdict: (match as TriageMatch).triage?.verdict,
   });
+}
+
+/**
+ * Send the run's full scan report to PostHog so maintainers can see why a run
+ * was flagged, warned, or aborted. This is the maintainer-facing report — it is
+ * NEVER shown to the user. No-op if nothing was scanned. The free-text triage
+ * reason is omitted to avoid sending scanned content off the user's machine.
+ */
+export function captureScanReport(): void {
+  if (scanCount === 0) return;
+  analytics.wizardCapture('yara scan report', {
+    total_scans: scanCount,
+    violation_count: scanViolations.length,
+    clean_count: scanCount - scanViolations.length,
+    violations: scanViolations.map((v) => ({
+      rule: v.rule,
+      severity: v.severity,
+      category: v.category,
+      action: v.action,
+      phase: v.phase,
+      tool: v.tool,
+      description: v.description,
+      triage_verdict: v.triageVerdict,
+    })),
+  });
+  // Reset after sending so a second captureScanReport on this same run
+  // (e.g. success-path call followed by an abort during shutdown) can't
+  // ship duplicate telemetry. Also protects future chained-program runs.
+  scanCount = 0;
+  scanViolations.length = 0;
+}
+
+/**
+ * End-of-run flush for the scan report. Wired once at the runner seam so every
+ * harness (linear, orchestrator, and any future shape) reports without having
+ * to know warlock exists — scanning is already harness-agnostic (it runs from
+ * SDK Pre/PostToolUse hooks), and this keeps reporting at a single shared seam.
+ *
+ * Order matters: write the local --yara-report file FIRST (it reads scanCount /
+ * scanViolations), THEN send telemetry. captureScanReport() zeroes scan state,
+ * which is what makes this whole function idempotent — a second call from
+ * another termination path (e.g. finally after an abort already flushed) finds
+ * scanCount === 0 and every step no-ops.
+ */
+export function flushScanReport(
+  session: Pick<WizardSession, 'yaraReport'>,
+): void {
+  if (session.yaraReport) {
+    const reportPath = writeScanReport();
+    if (reportPath) {
+      const summary = formatScanReport();
+      getUI().log.info(`YARA scan report: ${reportPath}${summary ?? ''}`);
+    }
+  }
+  captureScanReport();
 }
 
 // ─── Wizard-documentation allowlist ───────────────────────────────
@@ -177,19 +415,13 @@ function logYaraMatch(
 // actual violations.
 
 const WIZARD_DOC_BASENAMES = new Set([
-  // events-audit
-  '.posthog-events-inventory.json',
-  'posthog-events-audit-report.md',
-  // doctor (audit)
-  'posthog-audit-report.md',
-  // posthog-integration event plan
-  '.posthog-events.json',
+  EVENT_INVENTORY_FILE,
+  EVENTS_AUDIT_REPORT_FILE,
+  AUDIT_REPORT_FILE,
+  EVENT_PLAN_FILE,
 ]);
 
-const WIZARD_DOC_PATTERNS: RegExp[] = [
-  // events-audit subagent part-files (e.g. `.posthog-events-inventory.part-3.json`)
-  /^\.posthog-events-inventory\.part-\d+\.json$/,
-];
+const WIZARD_DOC_PATTERNS: RegExp[] = [EVENT_INVENTORY_PART_PATTERN];
 
 function isWizardDocumentationPath(filePath: string | undefined): boolean {
   if (!filePath) return false;
@@ -208,62 +440,231 @@ const SEVERITY_RANK: Record<string, number> = {
 };
 
 /** Return the highest-severity match from a list of matches. */
-function highestSeverityMatch(matches: YaraMatch[]): YaraMatch {
+function highestSeverityMatch(matches: ScanMatch[]): ScanMatch {
   return matches.reduce((worst, m) =>
-    (SEVERITY_RANK[m.rule.severity] ?? 0) >
-    (SEVERITY_RANK[worst.rule.severity] ?? 0)
+    (SEVERITY_RANK[m.metadata.severity ?? ''] ?? 0) >
+    (SEVERITY_RANK[worst.metadata.severity ?? ''] ?? 0)
       ? m
       : worst,
   );
+}
+
+// ─── Scan + triage core ──────────────────────────────────────────
+
+/**
+ * Keep only matches whose rule targets this content surface. Rules carry a
+ * `scan_context` of 'command' | 'input' | 'output'. An undefined context is
+ * treated as "applies everywhere" (fail-safe — a rule that forgets the tag
+ * still gets enforced rather than silently skipped).
+ */
+function matchesForContext(
+  matches: ScanMatch[],
+  ctx: ScanContext,
+): ScanMatch[] {
+  return matches.filter((m) => {
+    const c = m.metadata.scan_context as string | undefined;
+    return c === ctx || c === undefined;
+  });
+}
+
+/**
+ * Drop false positives via warlock's LLM triage. Fail-closed: if no provider is
+ * available, or the triage call throws, every match is treated as real — we
+ * never silently suppress a flagged match.
+ *
+ * Every overruled match is reported to PostHog (rule metadata only, never the
+ * free-text reason) so maintainers can alert on triage-overrule patterns — the
+ * signal that someone is either tripping a noisy rule or trying to talk the
+ * triage model out of a real finding.
+ */
+async function triageFilter(
+  content: string,
+  matches: ScanMatch[],
+  ctx: ScanContext,
+  llmProvider: LLMProvider | undefined,
+): Promise<ScanMatch[]> {
+  if (matches.length === 0) return [];
+  if (!llmProvider) {
+    logToFile(
+      `[YARA] triage skipped (no provider) — treating ${matches.length} match(es) as real`,
+    );
+    return matches;
+  }
+  try {
+    const warlock = await getWarlock();
+    const triaged = await warlock.triageMatches(content, matches, llmProvider);
+    const kept = triaged.filter((m) => m.triage.verdict === 'true_positive');
+    for (const m of triaged) {
+      if (m.triage.verdict === 'true_positive') continue;
+      logToFile(
+        `[YARA] triage overruled rule "${m.rule}" (${
+          m.metadata.severity ?? 'unknown'
+        }) — not acting on it`,
+      );
+      analytics.wizardCapture('yara triage overruled', {
+        rule: m.rule,
+        severity: m.metadata.severity,
+        category: m.metadata.category,
+        scan_context: ctx,
+        // The free-text triage reason is deliberately omitted — it can quote
+        // scanned content, which must never leave the user's machine.
+      });
+    }
+    logToFile(
+      `[YARA] triage: ${matches.length} flagged → ${kept.length} kept as real`,
+    );
+    return kept;
+  } catch (err) {
+    logToFile('[YARA] triage failed — treating all matches as real:', err);
+    return matches;
+  }
+}
+
+/** A chunk of scanned content together with the matches found inside it. */
+interface FlaggedChunk {
+  chunk: string;
+  matches: ScanMatch[];
+}
+
+/**
+ * Split oversized content into overlapping chunks so the scanner covers all
+ * of it. Content that fits in one chunk is returned as-is.
+ */
+function chunkContent(content: string): string[] {
+  if (content.length <= SCAN_CHUNK_SIZE) return [content];
+  const chunks: string[] = [];
+  const step = SCAN_CHUNK_SIZE - SCAN_CHUNK_OVERLAP;
+  for (let start = 0; start < content.length; start += step) {
+    chunks.push(content.slice(start, start + SCAN_CHUNK_SIZE));
+    if (start + SCAN_CHUNK_SIZE >= content.length) break;
+  }
+  return chunks;
+}
+
+/**
+ * Scan content against warlock rules — chunked when oversized, so nothing is
+ * skipped — and keep only matches for this content surface. Chunks scan
+ * sequentially (the WASM engine is single-threaded; parallelism buys nothing).
+ * Returns each flagged chunk with its matches so triage can later judge every
+ * match against the exact content it came from.
+ */
+async function scanForContext(
+  content: string,
+  ctx: ScanContext,
+): Promise<FlaggedChunk[]> {
+  const warlock = await getWarlock();
+  const chunks = chunkContent(content);
+  if (chunks.length > 1) {
+    logToFile(
+      `[YARA] content is ${content.length} chars — scanning ${chunks.length} overlapping chunks`,
+    );
+    // Alertable signal: oversized content should be rare; a spike could mean
+    // someone is padding content to probe the scanner.
+    analytics.wizardCapture('yara scan chunked', {
+      content_length: content.length,
+      chunk_count: chunks.length,
+      scan_context: ctx,
+    });
+  }
+  const flagged: FlaggedChunk[] = [];
+  for (const chunk of chunks) {
+    const result = await warlock.scan(chunk);
+    if (!result.matched) continue;
+    const matches = matchesForContext(result.matches, ctx);
+    if (matches.length === 0) continue;
+    flagged.push({ chunk, matches });
+  }
+  return flagged;
+}
+
+/** The overlap between chunks can surface the same rule twice; count it once. */
+function dedupeByRule(matches: ScanMatch[]): ScanMatch[] {
+  const seen = new Set<string>();
+  return matches.filter((m) => {
+    if (seen.has(m.rule)) return false;
+    seen.add(m.rule);
+    return true;
+  });
+}
+
+/**
+ * Triage each flagged chunk against its own content — the evidence is always
+ * inside the window the LLM sees. Triage calls run in parallel (each is just
+ * an HTTP round trip) so N flagged chunks cost ~1× triage latency, not N×.
+ */
+async function triageFlagged(
+  flagged: FlaggedChunk[],
+  ctx: ScanContext,
+  llmProvider: LLMProvider | undefined,
+): Promise<ScanMatch[]> {
+  const triaged = await Promise.all(
+    flagged.map(({ chunk, matches }) =>
+      triageFilter(chunk, matches, ctx, llmProvider),
+    ),
+  );
+  return dedupeByRule(triaged.flat());
+}
+
+/** Scan content, filter to the relevant context, triage. Returns real matches. */
+async function scanAndTriage(
+  content: string,
+  ctx: ScanContext,
+  llmProvider: LLMProvider | undefined,
+): Promise<ScanMatch[]> {
+  const flagged = await scanForContext(content, ctx);
+  return triageFlagged(flagged, ctx, llmProvider);
 }
 
 // ─── PreToolUse Hooks ────────────────────────────────────────────
 
 /**
  * Create PreToolUse hook matchers for YARA scanning.
- * Scans Bash commands before execution for exfiltration,
- * destructive operations, and supply chain violations.
+ * Scans Bash commands before execution for exfiltration, destructive
+ * operations, and supply chain violations ('command'-context rules).
  */
-export function createPreToolUseYaraHooks(): HookCallbackMatcher[] {
+export function createPreToolUseYaraHooks(
+  // Accepted for API symmetry with createPostToolUseYaraHooks, but
+  // intentionally unused: PreToolUse Bash always blocks on any flagged
+  // command regardless of triage verdict, so the LLM call would be wasted.
+  // Future PreToolUse hooks that need triage can wire this through.
+  _llmProvider?: LLMProvider,
+): HookCallbackMatcher[] {
   return [
     {
       hooks: [
-        (input: HookInput): Promise<HookOutput> => {
+        async (input: HookInput): Promise<HookOutput> => {
           try {
             const toolName = input.tool_name as string;
-            if (toolName !== 'Bash') return Promise.resolve({});
+            if (toolName !== 'Bash') return {};
 
             const toolInput = input.tool_input as Record<string, unknown>;
             const command =
               typeof toolInput?.command === 'string' ? toolInput.command : '';
 
-            if (!command) return Promise.resolve({});
+            if (!command) return {};
 
             recordScan();
-            const result = scan(command, 'PreToolUse', 'Bash');
-            if (!result.matched) return Promise.resolve({});
+            // Skip triage on PreToolUse Bash: any flagged command is blocked
+            // regardless of triage verdict, so the LLM call would be wasted.
+            const matches = await scanAndTriage(command, 'command', undefined);
+            if (matches.length === 0) return {};
 
-            const match = highestSeverityMatch(result.matches);
-            logYaraMatch('PreToolUse', 'Bash', match, 'blocked');
-            recordViolation({
-              rule: match.rule.name,
-              severity: match.rule.severity,
-              action: 'blocked',
-              phase: 'PreToolUse',
-              tool: 'Bash',
-            });
+            const match = highestSeverityMatch(matches);
+            recordMatch('PreToolUse', 'Bash', match, 'blocked');
 
-            return Promise.resolve({
+            return {
               decision: 'block',
-              reason: `[YARA] ${match.rule.name}: ${match.rule.description}. Command blocked for security.`,
-            });
+              reason: `[YARA] ${match.rule}: ${
+                match.metadata.description ?? 'security policy violation'
+              }. Command blocked for security.`,
+            };
           } catch (error) {
             logToFile('[YARA] PreToolUse hook error:', error);
             // Fail closed: block the command if scanning fails
-            return Promise.resolve({
+            return {
               decision: 'block',
               reason: '[YARA] Scanner error — command blocked as a precaution.',
-            });
+            };
           }
         },
       ],
@@ -278,88 +679,111 @@ export function createPreToolUseYaraHooks(): HookCallbackMatcher[] {
  * Create PostToolUse hook matchers for YARA scanning.
  *
  * Three matchers:
- * 1. Write/Edit — scan written content for PII, secrets, config violations
- * 2. Read/Grep — scan read content for prompt injection
+ * 1. Write/Edit — scan written content ('output'-context rules: PII, secrets)
+ * 2. Read/Grep — scan read content ('input'-context rules: prompt injection)
  * 3. Bash (skill install) — scan downloaded skill files for poisoned content
+ *
+ * `onTerminate` is invoked on the terminal paths (critical prompt injection in
+ * read content, a poisoned skill, or a scanner error under fail-closed). It is
+ * what ACTUALLY stops the run — returning `stopReason` from a PostToolUse hook
+ * is not honored by the SDK, so the caller wires this to the run's
+ * AbortController (see agent-interface).
  */
-export function createPostToolUseYaraHooks(): HookCallbackMatcher[] {
+export function createPostToolUseYaraHooks(
+  llmProvider: LLMProvider | undefined,
+  // REQUIRED, not optional: the SDK ignores `stopReason` from PostToolUse
+  // hooks, so terminal paths (critical prompt injection, poisoned skill,
+  // fail-closed scanner error) depend entirely on this callback firing.
+  // Making it required at compile time prevents a future caller from
+  // silently regressing every terminal path to a no-op.
+  onTerminate: (reason: string) => void,
+): HookCallbackMatcher[] {
   return [
     // ── Write/Edit content scanning ──
     {
       hooks: [
-        (input: HookInput): Promise<HookOutput> => {
+        async (input: HookInput): Promise<HookOutput> => {
           try {
             const toolName = input.tool_name as string;
-            if (toolName !== 'Write' && toolName !== 'Edit')
-              return Promise.resolve({});
+            if (toolName !== 'Write' && toolName !== 'Edit') return {};
 
             const toolInput = input.tool_input as Record<string, unknown>;
-            // For Write, scan the content being written
-            // For Edit, scan the new_str (replacement text)
+            // For Write, scan the content being written.
+            // For Edit, scan the new_string (replacement text).
             const content =
               toolName === 'Write'
                 ? (toolInput?.content as string) ?? ''
-                : (toolInput?.new_str as string) ?? '';
+                : (toolInput?.new_string as string) ?? '';
 
-            if (!content) return Promise.resolve({});
+            if (!content) return {};
 
             recordScan();
-            const tool = toolName;
-            const result = scan(content, 'PostToolUse', tool);
-            if (!result.matched) return Promise.resolve({});
+            const flagged = await scanForContext(content, 'output');
+            if (flagged.length === 0) return {};
 
             // Wizard-documentation paths: suppress posthog_pii matches that
             // come from the agent verbatim-copying the user's existing
             // capture calls into an inventory / report, or planning new
             // events with PII-shaped property keys. Every other category
-            // still triggers the revert.
+            // still triggers the revert. Suppression runs BEFORE triage so
+            // we never pay an LLM round trip for a match we're about to
+            // discard anyway.
+            // TODO(warlock#33): once warlock PR #33 lands with its
+            // more-precise PII rules, the wizard-side suppression below
+            // should become unnecessary — remove `WIZARD_DOC_BASENAMES`,
+            // `WIZARD_DOC_PATTERNS`, and `isWizardDocumentationPath` and
+            // verify the noisy-PII issue stays fixed.
             const filePath = toolInput?.file_path as string | undefined;
-            if (isWizardDocumentationPath(filePath)) {
-              const nonPiiMatches = result.matches.filter(
-                (m) => m.rule.category !== 'posthog_pii',
+            const activeFlagged = isWizardDocumentationPath(filePath)
+              ? flagged
+                  .map(({ chunk, matches }) => ({
+                    chunk,
+                    matches: matches.filter(
+                      (m) => m.metadata.category !== 'posthog_pii',
+                    ),
+                  }))
+                  .filter(({ matches }) => matches.length > 0)
+              : flagged;
+            if (activeFlagged.length === 0) {
+              logToFile(
+                `[YARA] posthog_pii match suppressed on wizard doc ${path.basename(
+                  filePath ?? '',
+                )} (rule: ${flagged[0]?.matches[0]?.rule})`,
               );
-              if (nonPiiMatches.length === 0) {
-                logToFile(
-                  `[YARA] posthog_pii match suppressed on wizard doc ${path.basename(
-                    filePath ?? '',
-                  )} (rule: ${result.matches[0]?.rule.name})`,
-                );
-                return Promise.resolve({});
-              }
-              // Some non-PII rule also fired — fall through and revert on
-              // that one. Replace the matches set so the user sees the
-              // actually-actionable rule, not the suppressed PII one.
-              result.matches = nonPiiMatches;
+              return {};
             }
 
-            const match = highestSeverityMatch(result.matches);
-            logYaraMatch('PostToolUse', tool, match, 'reverted');
-            recordViolation({
-              rule: match.rule.name,
-              severity: match.rule.severity,
-              action: 'reverted',
-              phase: 'PostToolUse',
-              tool,
-            });
+            const matches = await triageFlagged(
+              activeFlagged,
+              'output',
+              llmProvider,
+            );
+            if (matches.length === 0) return {};
 
-            return Promise.resolve({
+            const match = highestSeverityMatch(matches);
+            recordMatch('PostToolUse', toolName, match, 'reverted');
+
+            return {
               hookSpecificOutput: {
                 hookEventName: 'PostToolUse',
                 additionalContext:
-                  `[YARA VIOLATION] ${match.rule.name}: ${match.rule.description}. ` +
+                  `[YARA VIOLATION] ${match.rule}: ${
+                    match.metadata.description ?? ''
+                  }. ` +
                   `You MUST revert this change immediately. The content you just wrote violates security policy.`,
               },
-            });
+            };
           } catch (error) {
             logToFile('[YARA] PostToolUse Write/Edit hook error:', error);
-            // Fail closed: instruct the agent to revert if scanning fails
-            return Promise.resolve({
-              hookSpecificOutput: {
-                hookEventName: 'PostToolUse',
-                additionalContext:
-                  '[YARA] Scanner error — you MUST revert this change as a precaution.',
-              },
-            });
+            // Fail closed: if scanning is broken on a Write/Edit, the next
+            // Read/skill-install scan is also going to be broken — terminate
+            // cleanly instead of looping the agent through "please revert"
+            // until a Read finally aborts. Matches Read/Grep + skill-install
+            // catch behavior; consistent fail-closed across all PostToolUse.
+            const reason =
+              '[YARA] Scanner error while scanning written content — session terminated as a precaution.';
+            onTerminate(reason);
+            return { stopReason: reason };
           }
         },
       ],
@@ -369,65 +793,61 @@ export function createPostToolUseYaraHooks(): HookCallbackMatcher[] {
     // ── Read/Grep prompt injection scanning ──
     {
       hooks: [
-        (input: HookInput): Promise<HookOutput> => {
+        async (input: HookInput): Promise<HookOutput> => {
           try {
             const toolName = input.tool_name as string;
-            if (toolName !== 'Read' && toolName !== 'Grep')
-              return Promise.resolve({});
+            if (toolName !== 'Read' && toolName !== 'Grep') return {};
 
             const toolResponse = input.tool_response;
+            // Guard before stringify: `JSON.stringify(undefined ?? '')`
+            // returns the 2-char string '""', which is truthy and slips
+            // past the empty-content check below. Exit early when the SDK
+            // gave us no response payload.
+            if (toolResponse == null) return {};
             const content =
               typeof toolResponse === 'string'
                 ? toolResponse
-                : JSON.stringify(toolResponse ?? '');
+                : JSON.stringify(toolResponse);
 
-            if (!content) return Promise.resolve({});
+            if (!content) return {};
 
             recordScan();
-            const tool = toolName;
-            const result = scan(content, 'PostToolUse', tool);
-            if (!result.matched) return Promise.resolve({});
+            const matches = await scanAndTriage(content, 'input', llmProvider);
+            if (matches.length === 0) return {};
 
-            const match = highestSeverityMatch(result.matches);
+            const match = highestSeverityMatch(matches);
 
-            if (match.rule.severity === 'critical') {
-              logYaraMatch('PostToolUse', tool, match, 'aborted');
-              recordViolation({
-                rule: match.rule.name,
-                severity: match.rule.severity,
-                action: 'aborted',
-                phase: 'PostToolUse',
-                tool,
-              });
-              // Prompt injection: abort the session — context is poisoned
-              return Promise.resolve({
-                stopReason:
-                  `[YARA CRITICAL] ${match.rule.name}: Prompt injection detected in file content. ` +
-                  `Agent context is potentially poisoned. Session terminated for safety.`,
-              });
+            // Critical severity or a rule asking us to block => terminate; the
+            // agent's context may be poisoned by injected instructions.
+            const isTerminal =
+              match.metadata.severity === 'critical' ||
+              match.metadata.action === 'block';
+
+            if (isTerminal) {
+              recordMatch('PostToolUse', toolName, match, 'aborted');
+              const reason =
+                `[YARA CRITICAL] ${match.rule}: Prompt injection detected in file content. ` +
+                `Agent context is potentially poisoned. Session terminated for safety.`;
+              onTerminate(reason);
+              return { stopReason: reason };
             }
 
-            logYaraMatch('PostToolUse', tool, match, 'warned');
-            recordViolation({
-              rule: match.rule.name,
-              severity: match.rule.severity,
-              action: 'warned',
-              phase: 'PostToolUse',
-              tool,
-            });
-            return Promise.resolve({
+            recordMatch('PostToolUse', toolName, match, 'warned');
+            return {
               hookSpecificOutput: {
                 hookEventName: 'PostToolUse',
-                additionalContext: `[YARA WARNING] ${match.rule.name}: ${match.rule.description}`,
+                additionalContext: `[YARA WARNING] ${match.rule}: ${
+                  match.metadata.description ?? ''
+                }`,
               },
-            });
+            };
           } catch (error) {
             logToFile('[YARA] PostToolUse Read/Grep hook error:', error);
             // Fail closed: terminate session if scanning fails on read content
-            return Promise.resolve({
-              stopReason:
-                '[YARA] Scanner error while scanning read content — session terminated as a precaution.',
-            });
+            const reason =
+              '[YARA] Scanner error while scanning read content — session terminated as a precaution.';
+            onTerminate(reason);
+            return { stopReason: reason };
           }
         },
       ],
@@ -458,37 +878,38 @@ export function createPostToolUseYaraHooks(): HookCallbackMatcher[] {
             const skillDir = dirMatch[1];
             const cwd = (input.cwd as string) ?? process.cwd();
             recordScan();
-            const result = await scanSkillFiles(cwd, skillDir);
+            const matches = await scanSkillFiles(cwd, skillDir, llmProvider);
 
-            if (!result.matched) return {};
+            if (matches.length === 0) return {};
 
-            const match = highestSeverityMatch(result.matches);
-            logYaraMatch(
+            // INTENTIONAL ASYMMETRY: skill-install terminates on ANY
+            // post-triage match, while Read/Grep only terminates on
+            // critical-or-block. Skills are downloaded code from an
+            // external source; any flagged content in them is treated as
+            // poisoned. Read/Grep, by contrast, may scan project files
+            // the user wrote themselves where a medium-severity match
+            // can warrant a warning instead of a terminate.
+            // TODO(wizard#593): document / lock in this contract with a test.
+            const match = highestSeverityMatch(matches);
+            recordMatch(
               'PostToolUse',
               'Bash (skill install)',
               match,
               'aborted',
             );
-            recordViolation({
-              rule: match.rule.name,
-              severity: match.rule.severity,
-              action: 'aborted',
-              phase: 'PostToolUse',
-              tool: 'Bash (skill)',
-            });
 
-            return {
-              stopReason:
-                `[YARA CRITICAL] Poisoned skill detected in ${skillDir}: ${match.rule.name}. ` +
-                `The downloaded skill contains potential prompt injection. Session terminated for safety.`,
-            };
+            const reason =
+              `[YARA CRITICAL] Poisoned skill detected in ${skillDir}: ${match.rule}. ` +
+              `The downloaded skill contains potential prompt injection. Session terminated for safety.`;
+            onTerminate(reason);
+            return { stopReason: reason };
           } catch (error) {
             logToFile('[YARA] PostToolUse skill install hook error:', error);
             // Fail closed: terminate if skill scanning fails
-            return {
-              stopReason:
-                '[YARA] Scanner error while scanning skill files — session terminated as a precaution.',
-            };
+            const reason =
+              '[YARA] Scanner error while scanning skill files — session terminated as a precaution.';
+            onTerminate(reason);
+            return { stopReason: reason };
           }
         },
       ],
@@ -501,16 +922,20 @@ export function createPostToolUseYaraHooks(): HookCallbackMatcher[] {
 
 /**
  * Read and scan all text files in a skill directory for prompt injection.
+ * Scans each file sequentially (single-threaded WASM — parallelism buys
+ * nothing), unions the 'input'-context matches, then triages once across the
+ * combined content. Returns the real (post-triage) matches.
  */
 async function scanSkillFiles(
   cwd: string,
   skillDir: string,
-): Promise<ScanResult> {
+  llmProvider: LLMProvider | undefined,
+): Promise<ScanMatch[]> {
   const absoluteDir = path.resolve(cwd, skillDir);
 
   if (!fs.existsSync(absoluteDir)) {
     logToFile(`[YARA] Skill directory does not exist: ${absoluteDir}`);
-    return { matched: false };
+    return [];
   }
 
   const files = await fg('**/*.{md,txt,yaml,yml,json,js,ts,py,rb,sh}', {
@@ -518,11 +943,10 @@ async function scanSkillFiles(
     absolute: true,
   });
 
-  const fileContents: Array<{ path: string; content: string }> = [];
+  const fileContents: string[] = [];
   for (const filePath of files) {
     try {
-      const content = fs.readFileSync(filePath, 'utf-8');
-      fileContents.push({ path: filePath, content });
+      fileContents.push(fs.readFileSync(filePath, 'utf-8'));
     } catch (err) {
       logToFile(`[YARA] Could not read skill file ${filePath}:`, err);
     }
@@ -530,11 +954,26 @@ async function scanSkillFiles(
 
   if (fileContents.length === 0) {
     logToFile(`[YARA] No text files found in skill directory: ${absoluteDir}`);
-    return { matched: false };
+    return [];
   }
 
   logToFile(
     `[YARA] Scanning ${fileContents.length} files in skill directory: ${skillDir}`,
   );
-  return scanSkillDirectory(fileContents);
+
+  // Pass 1 (sequential): scan each file through the chunk-aware path —
+  // full coverage even for oversized files, and every flagged chunk keeps a
+  // reference to the exact content its matches came from.
+  const flagged: FlaggedChunk[] = [];
+  for (const content of fileContents) {
+    flagged.push(...(await scanForContext(content, 'input')));
+  }
+
+  // Pass 2 (parallel, inside triageFlagged): triage each flagged chunk
+  // against its own content concurrently. Triage is just an axios call —
+  // running them in parallel cuts total wall-clock from N × triage-timeout
+  // to ~1×. Important because the hook's HOOK_TIMEOUT_MS is 30s; serial
+  // triage on 2+ matched files could blow the hook timeout under a slow
+  // Haiku.
+  return triageFlagged(flagged, 'input', llmProvider);
 }

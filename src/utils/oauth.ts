@@ -6,15 +6,14 @@ import { logToFile } from './debug';
 import { z } from 'zod';
 import { getUI } from '@ui';
 import {
-  IS_DEV,
   ISSUES_URL,
   OAUTH_PORTS,
   OAUTH_TIMEOUT_MS,
   POSTHOG_DEV_CLIENT_ID,
-  POSTHOG_OAUTH_URL,
   POSTHOG_PROXY_CLIENT_ID,
   WIZARD_USER_AGENT,
 } from '@lib/constants';
+import { getOAuthUrl, resolveBaseUrl } from './urls';
 import { abort } from './setup-utils';
 import { openTrackedLink, withUtm } from './links';
 import { analytics } from './analytics';
@@ -66,6 +65,29 @@ export function isAuthorizationTimeout(error: Error): boolean {
 interface OAuthConfig {
   scopes: string[];
   signup?: boolean;
+  /** Project to pre-select on the consent screen (the `--project-id` flag). */
+  projectId?: number;
+  /**
+   * Explicit base URL override (`--base-url`, from `session.baseUrl`). Pins the
+   * OAuth server and selects the matching client ID.
+   */
+  baseUrl?: string;
+}
+
+/**
+ * OAuth client ID for the current target. A pinned base URL (`--base-url`, or
+ * IS_DEV's implicit localhost) means we're talking to a dev-seeded stack, which
+ * registers the dev client; prod uses the proxy client.
+ *
+ * TODO: this assumes any pinned base URL is a dev-seeded instance that
+ * registers POSTHOG_DEV_CLIENT_ID. If we ever point `--base-url` at a non-dev
+ * instance with its own OAuth app, make the client ID configurable (e.g. a
+ * `--oauth-client-id` flag) instead of always falling back to the dev client.
+ */
+function getOAuthClientId(baseUrl?: string): string {
+  return resolveBaseUrl(baseUrl)
+    ? POSTHOG_DEV_CLIENT_ID
+    : POSTHOG_PROXY_CLIENT_ID;
 }
 
 function getLocalOAuthOrigin(port: number): string {
@@ -281,16 +303,16 @@ async function exchangeCodeForToken(
   code: string,
   codeVerifier: string,
   callbackUrl: string,
+  baseUrl?: string,
 ): Promise<OAuthTokenResponse> {
-  const clientId = IS_DEV ? POSTHOG_DEV_CLIENT_ID : POSTHOG_PROXY_CLIENT_ID;
+  const clientId = getOAuthClientId(baseUrl);
+  const oauthUrl = getOAuthUrl(baseUrl);
 
-  logToFile(
-    `[oauth] exchanging code for token at ${POSTHOG_OAUTH_URL}/oauth/token`,
-  );
+  logToFile(`[oauth] exchanging code for token at ${oauthUrl}/oauth/token`);
   let response;
   try {
     response = await axios.post(
-      `${POSTHOG_OAUTH_URL}/oauth/token`,
+      `${oauthUrl}/oauth/token`,
       {
         grant_type: 'authorization_code',
         code,
@@ -334,16 +356,15 @@ async function exchangeCodeForToken(
 export async function performOAuthFlow(
   config: OAuthConfig,
 ): Promise<OAuthTokenResponse> {
-  const clientId = IS_DEV ? POSTHOG_DEV_CLIENT_ID : POSTHOG_PROXY_CLIENT_ID;
+  const clientId = getOAuthClientId(config.baseUrl);
+  const oauthUrl = getOAuthUrl(config.baseUrl);
   const codeVerifier = generateCodeVerifier();
   const codeChallenge = generateCodeChallenge(codeVerifier);
   let shouldRetry = false;
 
   logToFile(
-    `[oauth] starting flow against ${POSTHOG_OAUTH_URL} ` +
-      `(${
-        IS_DEV ? 'dev' : 'prod'
-      } client), requested scopes: ${config.scopes.join(' ')}`,
+    `[oauth] starting flow against ${oauthUrl}, ` +
+      `requested scopes: ${config.scopes.join(' ')}`,
   );
 
   do {
@@ -357,7 +378,7 @@ export async function performOAuthFlow(
 
     for (const port of OAUTH_PORTS) {
       const callbackUrl = getCallbackUrl(port);
-      const authUrl = new URL(`${POSTHOG_OAUTH_URL}/oauth/authorize`);
+      const authUrl = new URL(`${oauthUrl}/oauth/authorize`);
       authUrl.searchParams.set('client_id', clientId);
       authUrl.searchParams.set('redirect_uri', callbackUrl);
       authUrl.searchParams.set('response_type', 'code');
@@ -365,15 +386,17 @@ export async function performOAuthFlow(
       authUrl.searchParams.set('code_challenge_method', 'S256');
       authUrl.searchParams.set('scope', config.scopes.join(' '));
       authUrl.searchParams.set('required_access_level', 'project');
+      if (config.projectId !== undefined) {
+        // Pre-select this project on the consent screen so the user just clicks Authorize.
+        authUrl.searchParams.set('team_id', String(config.projectId));
+      }
 
       // UTM-tag both kickoff URLs so the journey into the app is
       // attributable to the wizard command that started it.
       const taggedAuthUrl = withUtm(authUrl.toString(), 'oauth-authorize');
       const signupUrl = new URL(
         withUtm(
-          `${POSTHOG_OAUTH_URL}/signup?next=${encodeURIComponent(
-            taggedAuthUrl,
-          )}`,
+          `${oauthUrl}/signup?next=${encodeURIComponent(taggedAuthUrl)}`,
           'oauth-signup',
         ),
       );
@@ -435,6 +458,7 @@ export async function performOAuthFlow(
           code,
           codeVerifier,
           callbackUrl,
+          config.baseUrl,
         );
 
         server.close();

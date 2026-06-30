@@ -1,7 +1,7 @@
 import type { Arguments } from 'yargs';
 
-jest.mock('../commands/basic-integration/skill', () => ({
-  runSkillMode: jest.fn(),
+vi.mock('../commands/basic-integration/skill', () => ({
+  runSkillMode: vi.fn(),
 }));
 
 import { runSkillMode } from '../commands/basic-integration/skill';
@@ -54,18 +54,18 @@ describe('skill command validation', () => {
 });
 
 describe('skill command handler', () => {
-  beforeEach(() => jest.clearAllMocks());
+  beforeEach(() => vi.clearAllMocks());
 
   test('bridges the positional onto runSkillMode as the skill id', () => {
     skillCommand.handler!(makeArgv({ skillName: 'audit-events', ci: false }));
     expect(runSkillMode).toHaveBeenCalledTimes(1);
-    const passed = (runSkillMode as jest.Mock).mock.calls[0][0];
+    const passed = (runSkillMode as Mock).mock.calls[0][0];
     expect(passed.skill).toBe('audit-events');
   });
 
   test('trims surrounding whitespace from the skill id', () => {
     skillCommand.handler!(makeArgv({ skillName: '  audit-events  ' }));
-    const passed = (runSkillMode as jest.Mock).mock.calls[0][0];
+    const passed = (runSkillMode as Mock).mock.calls[0][0];
     expect(passed.skill).toBe('audit-events');
   });
 });

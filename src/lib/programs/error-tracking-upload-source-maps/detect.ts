@@ -50,6 +50,23 @@ const DISPLAY_NAME: Record<SkillVariant, string> = {
   rollup: 'Rollup',
 };
 
+/**
+ * Variants the wizard can wire up source-map upload for automatically. The
+ * native variants (react-native, android, flutter, ios) are recognised but not
+ * yet automatable, so the agentic picker treats them as non-instrumentable.
+ */
+export const AUTOMATABLE_VARIANTS: readonly SkillVariant[] = [
+  'web',
+  'nextjs',
+  'node',
+  'react',
+  'angular',
+  'nuxt',
+  'vite',
+  'webpack',
+  'rollup',
+];
+
 const POSTHOG_SDKS = [
   'posthog-js',
   'posthog-node',
@@ -248,6 +265,10 @@ export const SOURCE_MAPS_CONTEXT_KEYS = {
   displayName: 'sourceMapsDisplayName',
   packagePaths: 'sourceMapsPackagePaths',
   detectError: 'detectError',
+  // Set by the agentic picker once the user chooses a project to instrument.
+  selectedVariant: 'sourceMapsSelectedVariant',
+  selectedDisplayName: 'sourceMapsSelectedDisplayName',
+  selectedPath: 'sourceMapsSelectedPath',
 } as const;
 
 /**

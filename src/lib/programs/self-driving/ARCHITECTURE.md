@@ -29,6 +29,7 @@ prefix are in `wizard`; cross-repo paths are prefixed `posthog/…` / `context-m
 | Why a team gets no findings | §6 |
 | What to change for prod | §7 |
 | Local dev + reset | §8 |
+| Proactive product enablement (planned) | §9 |
 
 ---
 
@@ -42,7 +43,7 @@ prefix are in `wizard`; cross-repo paths are prefixed `posthog/…` / `context-m
   truth for *how* each step runs — tools, recipes, verification. The wizard ships only the skill
   **ID**; the body is fetched at runtime and can change independently of the wizard release.
 - **`posthog` (backend + gating).** The models the agent writes (`SignalSourceConfig`,
-  `SignalScoutConfig`, custom `LLMSkill` scouts), the MCP tools, the on-demand fleet `sync`
+  `SignalScoutConfig`, custom `LLMSkill` scouts), the MCP tools, the on-demand troop `sync`
   endpoint, the canonical scouts, and the gating (two flags, AI consent, GitHub) that decides
   whether anything runs.
 
@@ -59,26 +60,26 @@ matching context-mill file carries the HOW.
 
 **Step backbone (expected action, one line each):**
 
-1. **Check access** — probe the Signals API; if it's not available for the team, abort cleanly (`[ABORT] self-driving is not available for this project`).
+1. **Check access** — **instant, no probe.** Self-driving is in **open beta** (available to every team), so there is no access gate to check; the step just marks itself in_progress→completed (no MCP call) so the step-tracking funnel still fires and the user gets an immediate first checkmark. `[ABORT] self-driving is not available for this project` is kept only as a safety net for a genuine Signals-API outage during the run.
 2. **Read context** — build an evidence picture of which products are in use (setup report + `signals-scout-project-profile-get` + cheap usage probes + a light repo scan); read-only.
 3. **Connect GitHub** — required; if no `github` integration, send the user through the GitHub App install (one-click authorize deep-link) and re-verify; abort if declined.
 4. **Enable sources** — always enable the scout gate; enable native sources (error tracking, replay, support) only where step-2 evidence shows the product is in use.
 5. **Offer issue trackers** — one multi-select (GitHub Issues / Linear / Zendesk / pganalyze). Auto-connect what the run can: GitHub Issues (pick a repo) and Linear (one-click OAuth link → single silent `integrations-list` check → create, never nudge). Zendesk / pganalyze need credentials the run never collects, so they're armed as dormant responders + a report follow-up — no UI redirect, no verification (a downstream reminder prompts the user to finish). Enable a (possibly dormant) responder for every pick.
-6. **Configure scout fleet** — materialize the canonical fleet, then enable a deliberately small set: `general` (always) + the **1–2 specialists** for the products this project uses most; never `error-tracking`/`session-replay` (consumed as native sources); disable the rest. The enabled fleet lands at **2–5** (general + 1–2 specialists + 0–2 custom).
-7. **Design custom scouts** — gap-analyze the repo against the fleet, propose **at most 2** candidates in one ask (each a plain-language `label` + a dimmed `description`, behind a leading "None — keep the canonical fleet" default option), create the approved subset (the only place custom scouts are made).
+6. **Configure scout troop** — materialize the canonical troop, then enable a deliberately small set: `general` (always) + the **1–2 specialists** for the products this project uses most; never `error-tracking`/`session-replay` (consumed as native sources); disable the rest. The enabled troop lands at **2–5** (general + 1–2 specialists + 0–2 custom).
+7. **Design custom scouts** — gap-analyze the repo against the troop, propose **at most 2** candidates in one ask (each a plain-language `label` + a dimmed `description`, behind a leading "None — keep the built-in troop" default option), create the approved subset (the only place custom scouts are made).
 8. **Write report** — write `./posthog-self-driving-report.md` (everything changed + follow-ups); findings reach the inbox in ~30 min.
 
 The table below adds the skill reference and the tool/MCP surface for each.
 
 | # | Step | Skill ref / file | Tools · surface |
 |---|---|---|---|
-| 1 | Check access | `1-check-access.md` | Probe `inbox-source-configs-list` (no readable beta flag — the API *is* the probe). Fail → `[ABORT] self-driving is not available for this project`. |
+| 1 | Check access | `1-check-access.md` | **No probe — instant** (open beta: available to every team). Marks the task in_progress→completed immediately, calls no MCP tool. The `[ABORT] self-driving is not available for this project` string remains a safety net for a genuine Signals-API outage during the run, not a beta gate. |
 | 2 | Read project & Signals state | `2-read-context.md` | `./posthog-setup-report.md` + `signals-scout-project-profile-get` + cheap usage probes. Prompt opt-ins are authoritative ("repo evidence rules a product IN, never OUT"). |
-| 3 | Connect GitHub (REQUIRED) | `3-github.md` | `integrations-list` for `kind:"github"`; else `wizard_ask` → `/settings/environment-integrations`, re-verify. Can't → `[ABORT] github connection declined`. |
+| 3 | Connect GitHub (REQUIRED) | `3-github.md` | `integrations-list` for `kind:"github"`; else `wizard_ask` with the one-click `integrations/authorize?kind=github` deep-link (the single link covers fresh install / link-existing / re-auth — no separate settings "re-link" path), re-verify after a manual "done". Can't → `[ABORT] github connection declined`. |
 | 4 | Enable signal sources | `4-sources.md` | Create/enable `SignalSourceConfig` rows for products in use (`inbox-source-configs-*`). Always enables the scout gate `signals_scout`/`cross_source_issue`. Never enables an unconfirmed tool. |
 | 5 | Offer issue-tracker integrations | `5-connected-tools.md` (+ `5a`, `5b`) | One batched multi-select for GitHub Issues / Linear / Zendesk / pganalyze. GitHub Issues & Linear auto-connect via `external-data-sources-create` (Linear: OAuth link + one silent `integrations-list`, never nudge); Zendesk / pganalyze are armed dormant + report follow-up (no UI redirect, no verify). Enable a (possibly dormant) responder per pick. |
-| 6 | Configure the scout fleet | `6-scouts.md` | `signals-scout-config-sync` materializes the fleet (~19 scouts, grows over time); enable `general` + the **1–2 specialists** for the most-used products (agent judgment over step-2 evidence), never `error-tracking`/`session-replay` (covered by native sources), fall back to one universal cross-product scout if no surface qualifies, disable all the rest (`signals-scout-config-update {enabled:false}`). Never touches `emit`/`run_interval`. |
-| 7 | Design custom scouts | `6b-tailor-scouts.md` | The **only** place custom scouts are created. Gap-analyze repo surfaces vs the fleet; propose **at most 2** in ONE `wizard_ask`, each option carrying a `description` (an optional `wizard_ask` option field rendered dimmed/wrapped under the label) plus a leading "None" option that's the default highlight (so an empty submit declines); create approved ones via `llma-skill-create` (`signals-scout-<scope>`). **Canonical bodies never edited.** Declining is valid, not an abort. |
+| 6 | Configure the scout troop | `6-scouts.md` | `signals-scout-config-sync` materializes the troop (~19 scouts, grows over time); enable `general` + the **1–2 specialists** for the most-used products (agent judgment over step-2 evidence), never `error-tracking`/`session-replay` (covered by native sources), fall back to one universal cross-product scout if no surface qualifies, disable all the rest (`signals-scout-config-update {enabled:false}`). Never touches `emit`/`run_interval`. |
+| 7 | Design custom scouts | `6b-tailor-scouts.md` | The **only** place custom scouts are created. Gap-analyze repo surfaces vs the troop; propose **at most 2** in ONE `wizard_ask`, each option carrying a `description` (an optional `wizard_ask` option field rendered dimmed/wrapped under the label) plus a leading "None" option that's the default highlight (so an empty submit declines); create approved ones via `llma-skill-create` (`signals-scout-<scope>`). **Canonical bodies never edited.** Declining is valid, not an abort. |
 | 8 | Write report & hand off | `7-report.md` | Write `./posthog-self-driving-report.md`; findings appear in the inbox in ~30 min. |
 
 **Abort contract:** the skill emits exact `[ABORT] <reason>` strings; the wizard matches them
@@ -136,7 +137,7 @@ auth-code flow:
 |---|---|
 | `task:read`, `task:write` | The signal **source** config API (`inbox-source-configs-*`) is under the generic `task` scope (not a Signals-specific one). |
 | `integration:read` | `integrations-list` — verify GitHub (STEP 3). |
-| `signal_scout:read`, `signal_scout:write` | List/sync/tune the scout fleet (STEP 6). |
+| `signal_scout:read`, `signal_scout:write` | List/sync/tune the scout troop (STEP 6). |
 | `session_recording:read`, `survey:read`, `error_tracking:read` | Read-only usage probes (STEP 2). |
 | `external_data_source:read`, `external_data_source:write` | Create/verify warehouse sources (STEP 5). |
 | `llm_skill:read`, `llm_skill:write` | Read the authoring guide + canonical bodies, create approved custom scouts (STEP 7). |
@@ -189,20 +190,20 @@ gate the flow flips on is `signals_scout`/`cross_source_issue`. MCP: `inbox-sour
 the `task` scope); `-destroy` disabled. Enabling can trigger server-side side-effects (backfills,
 schedules, data-import sync).
 
-**Scout fleet.** `SignalScoutConfig` (`models.py`): per `(team, skill_name)`, `enabled` (participation),
-`emit` (dry-run vs emit, default on), `run_interval_minutes` (default 60). Canonical fleet (~19 `signals-scout-*` skills, and growing) in
+**Scout troop.** `SignalScoutConfig` (`models.py`): per `(team, skill_name)`, `enabled` (participation),
+`emit` (dry-run vs emit, default on), `run_interval_minutes` (default 60). Canonical troop (~19 `signals-scout-*` skills, and growing) in
 `posthog/products/signals/skills/`. STEP 6 does **not** hardcode the list — it works from whatever
 `signals-scout-config-sync` returns and enables a **deliberately small set**: `general` is the only
 **always-on** scout; **1–2 specialists** are enabled for the products this project uses most (agent
 judgment over step-2 evidence — `top_events` volume, recent activity, active config counts). The
-specialist candidate pool is the rest of the fleet — the surface-specific scouts (`product-analytics`,
+specialist candidate pool is the rest of the troop — the surface-specific scouts (`product-analytics`,
 `web-analytics`, `feature-flags`, `surveys`, `revenue-analytics`, `ai-observability`, `logs`,
 `csp-violations`, `experiments`, `customer-analytics`, `data-pipelines`, `replay-vision`) plus the
 cross-product `anomaly-detection`/`observability-gaps`/`health-checks`/`inbox-validation` —
 **excluding** `error-tracking`/`session-replay`, which are deliberately never enabled because step 4
 consumes them as native sources (a scout would duplicate that pipeline). If no surface clearly
 qualifies, one universal cross-product scout (`anomaly-detection` or `health-checks`) is the fallback
-so ≥1 specialist always runs. Everything else is disabled; the enabled fleet caps at **2–5** (general
+so ≥1 specialist always runs. Everything else is disabled; the enabled troop caps at **2–5** (general
 + 1–2 specialists + 0–2 custom from STEP 7). Per `6-scouts.md`; plus the `authoring-signals-scouts`
 companion (not a scout). `lazy_seed.py` mirrors the on-disk canonical skills into per-team `LLMSkill` rows:
 `sync_canonical_skills` only ever touches rows stamped `metadata.seeded_by == "signals_scout_harness"`
@@ -231,6 +232,14 @@ scoped to `created_via=MCP`.
 ---
 
 ## 6. Gating & prerequisites — "will it actually work?"
+
+> [!NOTE]
+> **Open beta — the wizard no longer probes access.** Self-driving is in open
+> beta (available to every team), so STEP 1 dropped its `inbox-source-configs-list`
+> access probe and runs instantly; the wizard surfaces no beta gate of its own.
+> The PostHog-side gates below still apply **server-side** (a flag not yet at 100%
+> just means findings won't surface), and the `[ABORT] self-driving is not available
+> for this project` path is now only a safety net for a genuine Signals-API outage.
 
 1. **UI flag `product-autonomy`** (`posthog/frontend/src/lib/constants.tsx`,
    `FEATURE_FLAGS.PRODUCT_AUTONOMY`). Frontend-only — gates the Inbox scene, nav item, and source-config
@@ -281,8 +290,10 @@ Plus the **Temporal coordinator schedule** (`signals-scout-coordinator-schedule`
 3. **posthog backend deploy** of the `feat/signals-scout-config-sync` work: the `sync` endpoint, companion
    seeding (`lazy_seed.py`), and the 10 canonical scout skills.
 4. **Temporal coordinator schedule** running in prod.
-5. **Flag rollout:** `signals-scout` 100%-on with target teams in `guaranteed_team_ids`; `product-autonomy`
-   on for target users.
+5. **Flag rollout (open beta = everyone):** `signals-scout` 100%-on for all teams (still the real
+   server gate for dispatch); `product-autonomy` on for all users. The wizard no longer probes access
+   in STEP 1, so an un-flagged team isn't turned away at setup — it just won't see findings until the
+   server-side flags are on.
 6. **Per-team runtime** (user's responsibility): org AI consent on, GitHub connected.
 
 > [!NOTE]
@@ -338,7 +349,7 @@ Plus the **Temporal coordinator schedule** (`signals-scout-coordinator-schedule`
 > 6. **Don't make the user wait ~30 min for the first scan (if avoidable).** The report/outro
 >    promises findings "within ~30 minutes" because fresh scout configs only run on the next
 >    Temporal coordinator tick (`signals-scout-coordinator-schedule`) — STEP 6's
->    `signals-scout-config-sync` materializes the fleet immediately but doesn't dispatch a run.
+>    `signals-scout-config-sync` materializes the troop immediately but doesn't dispatch a run.
 >    Explore triggering an immediate coordinator run for this team right after setup (e.g. an
 >    on-demand schedule trigger exposed as an MCP tool the wizard calls in STEP 6/8), then
 >    update the outro/report copy. **Partly unavoidable:** scouts still take a few minutes to
@@ -357,10 +368,10 @@ Plus the **Temporal coordinator schedule** (`signals-scout-coordinator-schedule`
 >    of the full item-4 rename).
 > 8. Update Inbox UI to propose to run Wizard command for self-driving
 > 9. ~~**Disable scouts that replicate pipeline (error tracking/replay).**~~ **DONE — folded into the
->     STEP 6 fleet-narrowing.** The `error-tracking` and `session-replay` scouts are now disabled
+>     STEP 6 troop-narrowing.** The `error-tracking` and `session-replay` scouts are now disabled
 >     unconditionally (step 4 consumes both as native sources, so a scout duplicates that pipeline) —
 >     and step 6 was tightened beyond just this: it now enables only `general` + the 1–2 specialists
->     for the most-used products, capping the enabled fleet at 2–5 (was ~12). Pure **context-mill**
+>     for the most-used products, capping the enabled troop at 2–5 (was ~12). Pure **context-mill**
 >     change (`6-scouts.md`, with `2-read-context.md` gathering a usage ranking and `6b` barring custom
 >     scouts from re-covering ET/replay); no wizard-code dependency (the prompt + this doc are lockstep
 >     wording only), so it ships with the next `mcp-publish` skill release like the decline-first
@@ -375,7 +386,7 @@ Plus the **Temporal coordinator schedule** (`signals-scout-coordinator-schedule`
 >     `WizardAskScreen.tsx` forwarding + per-row spacing only when present) — **multi-path only, dormant
 >     when unset → no other program changes**; context-mill `7b` populates it per proposed scout. (c)
 >     **Decline option first on every self-driving `wizard_ask`** so it is the default highlight and an
->     accidental `enter` declines: step 7 ("None — keep the canonical fleet"), step 5 ("None of these"),
+>     accidental `enter` declines: step 7 ("None — keep the built-in troop"), step 5 ("None of these"),
 >     5a ("Skip GitHub Issues" + fallback "Skip for now"), 5b ("Skip Linear"). **Exception: step 3's
 >     GitHub gate** keeps the affirmative first and the decline ("I can't connect…", which aborts) last,
 >     since the run can't proceed without GitHub. Enforced as a cross-cutting rule in `description.md`
@@ -413,6 +424,11 @@ Plus the **Temporal coordinator schedule** (`signals-scout-coordinator-schedule`
 >     predicate; (c) **no deck** (Tips from the start) — needs a generic "empty deck ⇒ complete
 >     immediately" guard in `LearnCard` / `RunScreen`, because an empty `getContentBlocks` never fires
 >     `onSequenceComplete` and would otherwise hang on a blank Learn pane. UI polish — deferred.
+> 13. **Proactive product enablement (replay / error tracking / support).** A new "Enable products"
+>     step turns products ON (web server-flip) **before** STEP 4 enables their sources — via an
+>     intent-based `products-enable` MCP tool (one narrow `product_enablement:write` scope,
+>     server-owned recipes) instead of `project:write`; Support is flag-on + a report CTA. Full design,
+>     decisions, telemetry, and the cross-repo work list are in **§9**.
 
 ---
 
@@ -423,7 +439,7 @@ Run: `POSTHOG_WIZARD_DEBUG=1 NODE_ENV=development pnpm try --install-dir=<test p
 `localhost:8787`; OAuth at the local PostHog (`localhost:8010`). Local team 1 is enrolled via the DEBUG
 fallback (§6).
 
-Each run mutates state (sources, fleet, custom scouts, warehouse sources, report), so re-testing needs a
+Each run mutates state (sources, troop, custom scouts, warehouse sources, report), so re-testing needs a
 teardown. Use the dev-only posthog command (full docs in `posthog/products/signals/ARCHITECTURE.md` →
 "Resetting self-driving state for local re-testing"):
 
@@ -431,10 +447,146 @@ teardown. Use the dev-only posthog command (full docs in `posthog/products/signa
 python manage.py reset_signals_self_driving --team-id 1 --yes --install-dir <test project>
 ```
 
-It deletes the team's sources, scout fleet config, custom scouts (preserving canonical/companion via the
+It deletes the team's sources, scout troop config, custom scouts (preserving canonical/companion via the
 `seeded_by` marker), run-state, emitted findings (via `cleanup_signals`), and **soft-deletes the
 self-driving-created warehouse pipelines** (scoped to `created_via=MCP`), then removes the report and cycles
 the wizard log. `DEBUG`-only.
+
+---
+
+## 9. Planned: proactive product enablement (replay / error tracking / support)
+
+> [!IMPORTANT]
+> **PLANNED — not yet implemented.** Design + cross-repo work list for a new step that turns PostHog
+> products ON (so the signal sources have data to read) **before** STEP 4 enables the sources. Captured
+> from the design session; spans **wizard + posthog + context-mill** (+ a one-time OAuth-ceiling edit).
+> Symbol names are durable; `file:line` anchors are point-in-time. Keep in lockstep once it lands.
+
+### 9.1 Decisions (settled)
+
+- **New "Enable products" step** runs after §2 step 2 (*Read context*) and **before** STEP 4 (*Enable
+  sources*). It turns on **Session Replay** + **Error Tracking** every run; **Support/Conversations** is
+  flag-on + a report CTA only (9.4). **STEP 4 is unchanged** — once products are on, its existing "enable
+  sources for products in use" rule picks them up.
+- **One path for everyone.** No free/paid fork, no consent prompt, no per-framework skill fork.
+- **No billing writes.** The "$0 spend cap" idea is **dropped**: `custom_limits_usd` is org-wide, set via an
+  `INTERNAL`-scoped endpoint (`ee/api/billing.py`) unreachable by any OAuth token, and a $0 cap *harms*
+  existing paying users (caps + drops data across all their projects; `ee/billing/quota_limiting.py`).
+  `remote_config.py` even force-disables replay when recordings are quota-limited. Cost overruns are handled
+  **reactively (refunds)** — a product decision.
+- **Transparency + PII.** No prompt, but the **report/outro discloses** what was enabled, and the replay
+  recipe **sets conservative masking** server-side. `recording_domains` defaults to *all domains incl.
+  production*, so masking is the safeguard. **TODO: verify the posthog-js default masking** first.
+- **Web first.** A server-side flip only activates products for SDKs that read remote config (posthog-js).
+  Backend/mobile need generated **code** → phase 2 (9.6).
+
+### 9.2 Write path — intent-based `products-enable`, NOT `project:write`
+
+- **Not `project:write`:** it makes `ProjectViewSet` (a `ModelViewSet`, `scope_object="project"`) writable →
+  authorizes `DELETE /api/projects/:id` + ~60 team fields incl. `access_control` (RBAC),
+  `session_recording_masking_config` (PII), `app_urls`, `test_account_filters` (`posthog/api/project.py`
+  `team_passthrough_fields`). Every *existing* wizard write scope is a product-object write — none can delete
+  the project or rewrite security/privacy config. It's also a **permanent, org-wide ceiling** change on a
+  **public npm** tool (every external user grants it), and breaks self-driving's "read-only + narrow product
+  writes" property.
+- **Not per-product settings viewsets:** doesn't scale — each new product (logs, heatmaps, surveys…) =
+  another viewset + tool + scope. (Precedent that *does* work this way: `ErrorTrackingSettingsViewSet`,
+  `scope_object="error_tracking"`, in `posthog/products/error_tracking/backend/presentation/views/settings.py`.)
+- **Chosen — one intent-based surface.** `products-enable {products: ProductKey[]}`, gated by **one** new
+  narrow scope **`product_enablement:write`**. The caller names *which* products; the **server owns the
+  recipe** per product (toggle + companion defaults). The caller passes **no field values**, so it cannot
+  weaken masking or set bad limits. **Adding a product later = register a recipe + add an enum key** — no
+  wizard/scope/ceiling change. Most enable-levers are flat Team opt-in bools in the same
+  `team_passthrough_fields` list (`heatmaps_opt_in`, `surveys_opt_in`, `capture_console_log_opt_in`,
+  `capture_performance_opt_in`, `autocapture_opt_out`, `session_recording_opt_in`,
+  `autocapture_exceptions_opt_in`, `conversations_enabled`), so one surface covers them all.
+
+### 9.3 Recipes (server-owned, posthog)
+
+A thin `ProductEnablementViewSet` iterates the requested keys → dispatches to a per-product recipe each
+product module registers. Primary toggle is **always** set; companion settings are applied **only if unset**
+(don't clobber a user's existing custom config). Examples:
+
+- `session_replay` → `team.session_recording_opt_in = True`; if `session_recording_masking_config` unset →
+  default masking. (`posthog/models/team/team.py:361`.)
+- `error_tracking` → `team.autocapture_exceptions_opt_in = True`; `ErrorTrackingSettings.objects.get_or_create`
+  for default limits. (`team.py:466`; `ErrorTrackingSettings` model defaults, `error_tracking/backend/models.py:604`.)
+- `conversations` (later) → `team.conversations_enabled = True` (`team.py:438`).
+
+Open: whether replay should **always enforce** a masking floor vs apply-if-unset (per-recipe choice).
+
+### 9.4 Mechanism facts (verified — don't re-derive)
+
+- **Replay (web):** `session_recording_opt_in=true` → `remote_config.py:262` emits the `sessionRecording`
+  block → posthog-js `isRecordingEnabled = window && serverEnabled && !disable_session_recording && !optedOut`
+  → records **on next page load**. No code change for a default-config web SDK.
+- **Error tracking (web):** `autocapture_exceptions_opt_in=true` → `remote_config.py:240` emits
+  `autocaptureExceptions` → posthog-js hooks `window.onerror`/rejections (uses the remote flag when the client
+  `capture_exceptions` is unset). No code change.
+- **The step CHECKS (and edits) the init snippet:** if the wizard's posthog-js init set
+  `disable_session_recording: true` / `capture_exceptions: false`, the client overrides the remote flag and
+  the flip is **inert**. Phase-1 reads the init in the user's repo and edits it to not override (warlock/YARA
+  scans apply to the edit). Snippet content lives in context-mill (off-disk).
+- **Backend/mobile:** the Team flags are **inert** (no posthog-js to read them) → phase 2.
+- **Conversations is inert as a flag flip:** the `conversations` signal source reads `Ticket` rows
+  (`products/signals/backend/emission/fetchers/conversations.py`); tickets are created only by a connected
+  channel — widget/email/Slack/Teams (`create_with_number`, `products/conversations/backend/signals.py:79`).
+  So phase 1 = flip `conversations_enabled` (cheap, "eases the start") + enable the `conversations`
+  `SignalSourceConfig` (already callable, `task:write`) + a **report CTA** ("connect a channel"). Real fix =
+  the widget embed (phase 2). NB enabling auto-generates `widget_public_token` (`team.py:2367`) but leaves
+  `widget_enabled=false`.
+
+### 9.5 Framework coverage (90-day wizard telemetry, `internal-j`)
+
+Break `wizard: setup confirmed` down by `properties.integration` (on the terminal `setup wizard finished`
+event, `integration` is nested under `properties.tags`). Buckets:
+
+- **Web ~58%** (nextjs 41%, react-router, astro, tanstack-*, vue, sveltekit, nuxt, angular, javascript_web)
+  → **covered by the phase-1 server flip** (client replay + client errors).
+- **Pure backend ~23%** (javascript_node **16.8%**, fastapi, python, flask, ruby) → flip is a **no-op**;
+  needs code (phase 2).
+- **Mobile ~14%** (react-native **10.1%**, swift, android) → no-op; SDK-init code (phase 2).
+- **Hybrid ~3%** (laravel, django, rails) → partial (only if they load posthog-js). Undetected ~4%.
+
+**Phase-2 priority is node-first** (16.8% — the single biggest slice the flip misses), then react-native.
+
+### 9.6 Phase 2 (deferred — context-mill, no new posthog scope)
+
+The backend/mobile lever is generated **code** (the agent already edits the repo), so it's a context-mill
+skill change, not platform work:
+
+- Backend error tracking, **node-first** → python/fastapi/flask → ruby/php: enable exception autocapture in
+  the SDK init (e.g. python `enable_exception_autocapture=True`).
+- Mobile (RN/swift/android): SDK-init replay + exception options (min-version-gated).
+- **Support widget embed** (web): inject the widget snippet + `widget_enabled` → makes Conversations actually
+  produce tickets (upgrades 9.4's CTA to auto-done).
+- Server-side error tracking for full-stack web (e.g. Next.js API routes via posthog-node).
+
+### 9.7 Cross-repo work list
+
+- **posthog:** `ProductEnablementViewSet` + `products-enable` MCP tool + per-product recipes
+  (replay/error-tracking now; conversations later) + new scope object `product_enablement` (`posthog/scopes.py`).
+  **Admin-RBAC decision:** the new route bypasses the `field_access_control('project','admin')` check
+  (enforced only in `project.py`) — relax for an opt-in enable, or replicate.
+- **OAuth ceiling (manual, both regions):** add `product_enablement:write` to the wizard OAuth app
+  `OAuthApplication.scopes` — US prod client `c4Rdw8DIxgtQfA80IiSnGKlNX8QN00cFWF00QQhM` + dev
+  `DC5uRLVbGI02YQ82grxgnK6Qn12SXWpCqdPb60oZ`. Net-new (mechanics: §7 item 1).
+- **wizard:** add `product_enablement:write` to `SELF_DRIVING_SCOPE_ADDITIONS` (`program-scopes.ts`); new
+  "Enable products" step in `prompt.ts` (detect web via `session.integration` → call `products-enable` with
+  the list → check/edit the posthog-js init; backend/mobile skip + record for the report). Keep the existing
+  replay/exception opt-in reads (idempotency); the `customer_id` consent threading is **not** needed. Update
+  the §2 step backbone + this doc.
+- **context-mill:** new skill ref `…-enable-products.md` before `4-sources.md`; update `description.md` step
+  list (→ 9 steps); `7-report.md` adds the "enabled products" disclosure + the Conversations CTA.
+
+### 9.8 Open items
+
+- Verify posthog-js **default masking**; decide always-enforce vs apply-if-unset (9.3).
+- **Admin-RBAC** bypass decision (9.7).
+- **Logs** likely isn't a Team opt-in toggle (OTel ingestion, "on when data arrives") — verify before adding a recipe.
+- Idempotent enable; silent re-enable **will re-enable a setting a user turned off deliberately** (the flag
+  default `False` can't distinguish "never set" from "off on purpose") — accepted under "enable everyone."
+- Refund operational process (no consent, no cap).
 
 ---
 

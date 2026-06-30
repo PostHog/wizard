@@ -256,6 +256,291 @@ export const SOURCE_DETECTORS: SourceDetector[] = [
     },
   },
   {
+    kind: 'Plaid',
+    label: 'Plaid',
+    mode: 'in-cli',
+    signals: {
+      npm: ['plaid'],
+      python: ['plaid-python', 'plaid'],
+      ruby: ['plaid'],
+      envKeys: [/^PLAID_/],
+    },
+  },
+  {
+    kind: 'Braintree',
+    label: 'Braintree',
+    mode: 'in-cli',
+    signals: {
+      npm: ['braintree'],
+      python: ['braintree'],
+      ruby: ['braintree'],
+      envKeys: [/^BRAINTREE_/],
+    },
+  },
+  {
+    kind: 'Square',
+    label: 'Square',
+    mode: 'in-cli',
+    signals: {
+      npm: ['square'],
+      python: ['squareup'],
+      ruby: ['square'],
+      envKeys: [/^SQUARE_/],
+    },
+  },
+  {
+    kind: 'GoCardless',
+    label: 'GoCardless',
+    mode: 'in-cli',
+    signals: {
+      npm: ['gocardless-nodejs'],
+      python: ['gocardless-pro'],
+      ruby: ['gocardless_pro'],
+      envKeys: [/^GOCARDLESS_/],
+    },
+  },
+  {
+    kind: 'Mollie',
+    label: 'Mollie',
+    mode: 'in-cli',
+    signals: {
+      npm: ['@mollie/api-client'],
+      python: ['mollie-api-python'],
+      envKeys: [/^MOLLIE_/],
+    },
+  },
+  {
+    kind: 'CheckoutCom',
+    label: 'Checkout.com',
+    mode: 'in-cli',
+    signals: {
+      npm: ['checkout-sdk-node'],
+      python: ['checkout-sdk'],
+      // Checkout.com's own convention is the CKO_ prefix.
+      envKeys: [/^CKO_/, /^CHECKOUT_COM_/],
+    },
+  },
+  {
+    kind: 'Recurly',
+    label: 'Recurly',
+    mode: 'in-cli',
+    signals: {
+      npm: ['recurly'],
+      python: ['recurly'],
+      ruby: ['recurly'],
+      envKeys: [/^RECURLY_/],
+    },
+  },
+  {
+    kind: 'RevenueCat',
+    label: 'RevenueCat',
+    mode: 'in-cli',
+    signals: {
+      npm: [
+        '@revenuecat/purchases-js',
+        'react-native-purchases',
+        '@revenuecat/purchases-capacitor',
+      ],
+      envKeys: [/^REVENUE_?CAT_/],
+    },
+  },
+  {
+    kind: 'Twilio',
+    label: 'Twilio',
+    mode: 'in-cli',
+    signals: {
+      npm: ['twilio'],
+      python: ['twilio'],
+      ruby: ['twilio-ruby'],
+      envKeys: [/^TWILIO_/],
+    },
+  },
+  {
+    kind: 'SendGrid',
+    label: 'SendGrid',
+    mode: 'in-cli',
+    signals: {
+      npm: ['@sendgrid/mail', '@sendgrid/client'],
+      python: ['sendgrid'],
+      ruby: ['sendgrid-ruby'],
+      envKeys: [/^SENDGRID_/],
+    },
+  },
+  {
+    kind: 'Mailgun',
+    label: 'Mailgun',
+    mode: 'in-cli',
+    signals: {
+      npm: ['mailgun.js', 'mailgun-js'],
+      python: ['mailgun'],
+      ruby: ['mailgun-ruby'],
+      envKeys: [/^MAILGUN_/],
+    },
+  },
+  {
+    kind: 'Postmark',
+    label: 'Postmark',
+    mode: 'in-cli',
+    signals: {
+      npm: ['postmark'],
+      python: ['postmarker'],
+      ruby: ['postmark'],
+      envKeys: [/^POSTMARK_/],
+    },
+  },
+  {
+    kind: 'Brevo',
+    label: 'Brevo',
+    mode: 'in-cli',
+    signals: {
+      npm: ['@getbrevo/brevo', 'sib-api-v3-sdk'],
+      python: ['sib-api-v3-sdk'],
+      envKeys: [/^BREVO_/],
+    },
+  },
+  {
+    kind: 'MailerLite',
+    label: 'MailerLite',
+    mode: 'in-cli',
+    signals: {
+      npm: ['@mailerlite/mailerlite-nodejs'],
+      python: ['mailerlite'],
+      envKeys: [/^MAILERLITE_/],
+    },
+  },
+  {
+    kind: 'Mailjet',
+    label: 'Mailjet',
+    mode: 'in-cli',
+    signals: {
+      npm: ['node-mailjet'],
+      python: ['mailjet-rest'],
+      // Mailjet's documented env convention is MJ_APIKEY_PUBLIC / *_PRIVATE.
+      envKeys: [/^MAILJET_/, /^MJ_APIKEY_/],
+    },
+  },
+  {
+    kind: 'LaunchDarkly',
+    label: 'LaunchDarkly',
+    mode: 'in-cli',
+    signals: {
+      npm: [
+        'launchdarkly-node-server-sdk',
+        '@launchdarkly/node-server-sdk',
+        'launchdarkly-js-client-sdk',
+        'launchdarkly-react-client-sdk',
+      ],
+      python: ['launchdarkly-server-sdk'],
+      ruby: ['launchdarkly-server-sdk'],
+      envKeys: [/^LAUNCHDARKLY_/, /^LD_SDK_KEY$/],
+    },
+  },
+  {
+    kind: 'Optimizely',
+    label: 'Optimizely',
+    mode: 'in-cli',
+    signals: {
+      npm: ['@optimizely/optimizely-sdk'],
+      python: ['optimizely-sdk'],
+      envKeys: [/^OPTIMIZELY_/],
+    },
+  },
+  {
+    kind: 'Braze',
+    label: 'Braze',
+    mode: 'in-cli',
+    signals: {
+      npm: ['@braze/web-sdk', '@braze/react-native-sdk'],
+      python: ['braze-client'],
+      envKeys: [/^BRAZE_/],
+    },
+  },
+  {
+    kind: 'Rollbar',
+    label: 'Rollbar',
+    mode: 'in-cli',
+    signals: {
+      npm: ['rollbar'],
+      python: ['rollbar', 'pyrollbar'],
+      ruby: ['rollbar'],
+      envKeys: [/^ROLLBAR_/],
+    },
+  },
+  {
+    kind: 'Okta',
+    label: 'Okta',
+    mode: 'in-cli',
+    signals: {
+      npm: ['@okta/okta-sdk-nodejs', '@okta/okta-auth-js', '@okta/okta-react'],
+      python: ['okta'],
+      envKeys: [/^OKTA_/],
+    },
+  },
+  {
+    kind: 'WorkOS',
+    label: 'WorkOS',
+    mode: 'in-cli',
+    signals: {
+      npm: ['@workos-inc/node'],
+      python: ['workos'],
+      envKeys: [/^WORKOS_/],
+    },
+  },
+  {
+    kind: 'Notion',
+    label: 'Notion',
+    mode: 'in-cli',
+    signals: {
+      npm: ['@notionhq/client'],
+      python: ['notion-client'],
+      envKeys: [/^NOTION_/],
+    },
+  },
+  {
+    kind: 'FullStory',
+    label: 'FullStory',
+    mode: 'in-cli',
+    signals: {
+      npm: ['@fullstory/browser', '@fullstory/react-native'],
+      envKeys: [/^FULLSTORY_/],
+    },
+  },
+  {
+    kind: 'Amplitude',
+    label: 'Amplitude',
+    mode: 'in-cli',
+    signals: {
+      npm: [
+        '@amplitude/analytics-browser',
+        '@amplitude/analytics-node',
+        '@amplitude/analytics-react-native',
+        'amplitude-js',
+      ],
+      python: ['amplitude-analytics'],
+      envKeys: [/^AMPLITUDE_/],
+    },
+  },
+  {
+    kind: 'Mixpanel',
+    label: 'Mixpanel',
+    mode: 'in-cli',
+    signals: {
+      npm: ['mixpanel', 'mixpanel-browser'],
+      python: ['mixpanel'],
+      ruby: ['mixpanel-ruby'],
+      envKeys: [/^MIXPANEL_/],
+    },
+  },
+  {
+    kind: 'Pendo',
+    label: 'Pendo',
+    mode: 'in-cli',
+    signals: {
+      npm: ['@pendo/agent'],
+      envKeys: [/^PENDO_/],
+    },
+  },
+  {
     kind: 'Salesforce',
     label: 'Salesforce',
     mode: 'deep-link',
@@ -302,6 +587,29 @@ export const SOURCE_DETECTORS: SourceDetector[] = [
     signals: {
       npm: ['@linear/sdk'],
       envKeys: [/^LINEAR_API_KEY$/],
+    },
+  },
+  {
+    // OAuth-only in PostHog (Slack app integration), so deep-link.
+    kind: 'Slack',
+    label: 'Slack',
+    mode: 'deep-link',
+    signals: {
+      npm: ['@slack/web-api', '@slack/bolt'],
+      python: ['slack-sdk', 'slack-bolt'],
+      envKeys: [/^SLACK_(BOT|APP|SIGNING|CLIENT)_/],
+    },
+  },
+  {
+    // 'Github' (not 'GitHub') — matches the ExternalDataSourceType value.
+    // Default auth is the GitHub App integration (OAuth), so deep-link.
+    kind: 'Github',
+    label: 'GitHub',
+    mode: 'deep-link',
+    signals: {
+      npm: ['@octokit/rest', '@octokit/core', '@octokit/graphql', 'octokit'],
+      python: ['pygithub'],
+      ruby: ['octokit'],
     },
   },
 ];

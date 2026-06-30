@@ -82,6 +82,63 @@ describe('detectWarehouseSources', () => {
     expect(byKind.Resend).toBe('in-cli');
   });
 
+  it('detects newly added in-cli SaaS sources by their SDK package', () => {
+    writePackageJson(tmpDir, {
+      twilio: '^5.0.0',
+      '@sendgrid/mail': '^8.0.0',
+      plaid: '^25.0.0',
+      braintree: '^3.0.0',
+      square: '^38.0.0',
+      'launchdarkly-node-server-sdk': '^7.0.0',
+      '@notionhq/client': '^2.0.0',
+      '@mollie/api-client': '^4.0.0',
+    });
+    const detected = detectWarehouseSources(tmpDir);
+    const byKind = Object.fromEntries(detected.map((s) => [s.kind, s.mode]));
+    expect(byKind.Twilio).toBe('in-cli');
+    expect(byKind.SendGrid).toBe('in-cli');
+    expect(byKind.Plaid).toBe('in-cli');
+    expect(byKind.Braintree).toBe('in-cli');
+    expect(byKind.Square).toBe('in-cli');
+    expect(byKind.LaunchDarkly).toBe('in-cli');
+    expect(byKind.Notion).toBe('in-cli');
+    expect(byKind.Mollie).toBe('in-cli');
+  });
+
+  it('detects Slack and GitHub as deep-link OAuth sources', () => {
+    writePackageJson(tmpDir, {
+      '@slack/web-api': '^7.0.0',
+      '@octokit/rest': '^21.0.0',
+    });
+    const detected = detectWarehouseSources(tmpDir);
+    const byKind = Object.fromEntries(detected.map((s) => [s.kind, s.mode]));
+    expect(byKind.Slack).toBe('deep-link');
+    // ExternalDataSourceType value is 'Github', not 'GitHub'.
+    expect(byKind.Github).toBe('deep-link');
+  });
+
+  it('detects sources from Python and Ruby deps and env keys', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'requirements.txt'),
+      'launchdarkly-server-sdk==9.0.0\nrollbar==1.0.0\n',
+    );
+    fs.writeFileSync(path.join(tmpDir, 'Gemfile'), "gem 'recurly'\n");
+    fs.writeFileSync(
+      path.join(tmpDir, '.env'),
+      'TWILIO_AUTH_TOKEN=x\nMJ_APIKEY_PUBLIC=y\nCKO_SECRET_KEY=z\n',
+    );
+    expect(kinds(tmpDir)).toEqual(
+      [
+        'CheckoutCom',
+        'LaunchDarkly',
+        'Mailjet',
+        'Recurly',
+        'Rollbar',
+        'Twilio',
+      ].sort(),
+    );
+  });
+
   it('detects Postgres from a Python requirement', () => {
     fs.writeFileSync(
       path.join(tmpDir, 'requirements.txt'),

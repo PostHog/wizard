@@ -47,6 +47,14 @@ export interface SpinnerHandle {
 export interface AuthErrorDetail {
   hasSettingsConflict: boolean;
   conflicts?: SettingsConflict[];
+  /**
+   * True when the agent SDK authenticated from a stored Claude login
+   * (`apiKeySource: "/login managed key"`) instead of the wizard's gateway
+   * token — conflicting Anthropic credentials. Takes priority in the screen.
+   */
+  usingManagedLogin?: boolean;
+  /** Human-readable places a conflicting Anthropic credential may live. */
+  credentialPlaces?: string[];
   logFilePath: string;
 }
 
@@ -202,4 +210,14 @@ export interface WizardUI {
 
   // ── Generic frameworkContext setter for program file watchers ─────
   setFrameworkContext(key: string, value: unknown): void;
+
+  /** Read a frameworkContext value from the LIVE session (store may have
+   * forked the reference the runner holds). Used by run configs to read
+   * values written by post-auth screens (e.g. the source-maps picker). */
+  getFrameworkContext(key: string): unknown;
+
+  /** Park until the named program step's gate predicate flips true. Resolves
+   * immediately if the step has no gate. Mirrors waitForAiOptIn for any
+   * post-auth interactive step the agent run must wait on. */
+  waitForGate(stepId: string): Promise<void>;
 }
