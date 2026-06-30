@@ -27,6 +27,10 @@ import { runAgent } from '@lib/agent/agent-runner';
 import { authenticate } from '@lib/agent/runner/shared/authenticate';
 import { getOrAskForProjectData } from '@utils/setup-utils';
 import { logToFile } from '@utils/debug';
+import { detectFramework } from '@lib/detection/index';
+import { FRAMEWORK_REGISTRY } from '@lib/registry';
+import { SELF_DRIVING_INTEGRATE_PATH_KEY } from '@lib/programs/self-driving/detect';
+import { ScreenId } from '@ui/tui/router';
 import { WizardCiDriver } from '@e2e-harness/wizard-ci-driver';
 import {
   decideE2eAction,
@@ -249,6 +253,26 @@ async function main() {
         await snap(); // capture this screen as presented, before acting
         const state = driver.readState();
         const before = state.currentScreen;
+
+        // Headless detect: the screen runs a real detector + an interactive
+        // pick the store driver can't actuate. Inject the pick by detecting the
+        // framework at the install dir (single-app fixtures), mirroring the
+        // offline trace test, so the composed integrate-run can proceed.
+        if (
+          state.currentScreen === ScreenId.SelfDrivingIntegrationDetect &&
+          state.session.integration == null
+        ) {
+          const integration = await detectFramework(store.session.installDir);
+          if (integration) {
+            store.setFrameworkContext(SELF_DRIVING_INTEGRATE_PATH_KEY, '.');
+            store.setFrameworkConfig(
+              integration,
+              FRAMEWORK_REGISTRY[integration],
+            );
+          }
+          continue;
+        }
+
         let acted = false;
         try {
           const decision = decideE2eAction(state, profile);
