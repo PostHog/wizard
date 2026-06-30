@@ -289,7 +289,10 @@ export const integrationRunStep: ProgramStep = {
   id: 'run',
   label: 'Integration',
   screenId: 'run',
-  run: (session) => runAgent(posthogIntegrationConfig, session),
+  // composed: runs inside the host program (self-driving), so skip the
+  // integration's terminal outro + analytics shutdown of the shared client.
+  run: (session) =>
+    runAgent(posthogIntegrationConfig, session, { composed: true }),
   isComplete: (session) =>
     session.runPhase === RunPhase.Completed ||
     session.runPhase === RunPhase.Error,

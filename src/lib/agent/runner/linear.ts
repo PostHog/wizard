@@ -43,6 +43,7 @@ export async function runLinearProgram(
   config: ProgramRun,
   programConfig: ProgramConfig,
   boot: BootstrapResult,
+  composed = false,
 ): Promise<void> {
   const {
     skillsBaseUrl,
@@ -273,6 +274,10 @@ export async function runLinearProgram(
       projectId,
     });
   }
+
+  // A composed sub-run (integration inside self-driving) skips the terminal
+  // outro + analytics shutdown so the shared client survives the host's run.
+  if (composed) return;
 
   // 11. Outro
   // Push outro data through the UI (not via direct `session.outroData = ...`

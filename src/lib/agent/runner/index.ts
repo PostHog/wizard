@@ -45,6 +45,7 @@ export { shouldDisableAsk } from './shared/bootstrap';
 export async function runAgent(
   programConfig: ProgramConfig,
   session: WizardSession,
+  options: { composed?: boolean } = {},
 ): Promise<void> {
   if (!programConfig.run) {
     throw new Error(`Program "${programConfig.id}" has no run configuration.`);
@@ -55,7 +56,7 @@ export async function runAgent(
       ? await programConfig.run(session)
       : programConfig.run;
 
-  await runProgram(session, runDef, programConfig);
+  await runProgram(session, runDef, programConfig, options);
 }
 
 /**
@@ -69,6 +70,7 @@ export async function runProgram(
   session: WizardSession,
   config: ProgramRun,
   programConfig: ProgramConfig,
+  options: { composed?: boolean } = {},
 ): Promise<void> {
   const boot = await bootstrapProgram(session, config, programConfig);
 
@@ -85,11 +87,18 @@ export async function runProgram(
     if (isOrchestratorEnabled(boot.wizardFlags)) {
       getUI().log.info('Task-queue orchestrator enabled.');
       stampVariant(boot, WizardVariant.ORCHESTRATOR);
+      // composed-run guard is linear-only; the orchestrator is experimental.
       return await runOrchestrator(session, programConfig, boot);
     }
 
     stampVariant(boot, WizardVariant.BASE);
-    return await runLinearProgram(session, config, programConfig, boot);
+    return await runLinearProgram(
+      session,
+      config,
+      programConfig,
+      boot,
+      options.composed ?? false,
+    );
   } finally {
     flushScanReport(session);
   }
