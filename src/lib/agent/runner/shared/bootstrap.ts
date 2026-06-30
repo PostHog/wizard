@@ -8,9 +8,9 @@
  */
 
 import type { WizardSession } from '@lib/wizard-session';
-import { getOrAskForProjectData } from '@utils/setup-utils';
-import { analytics, groupsFromUser } from '@utils/analytics';
+import { analytics } from '@utils/analytics';
 import { getUI } from '@ui';
+import { authenticate } from './authenticate';
 import { buildRunTags } from '@lib/agent/agent-interface';
 import {
   checkAllSettingsConflicts,
@@ -210,39 +210,14 @@ export async function bootstrapProgram(
     skill_id: config.skillId ?? null,
   });
 
-  // 4. OAuth
-  logToFile('[agent-runner] starting OAuth');
-  const {
-    projectApiKey,
-    host,
-    accessToken,
-    projectId,
-    cloudRegion,
-    roleAtOrganization,
-    user,
-    project,
-  } = await getOrAskForProjectData({
-    signup: session.signup,
-    ci: session.ci,
-    apiKey: session.apiKey,
-    projectId: session.projectId,
-    email: session.email,
-    region: session.region,
-    baseUrl: session.baseUrl,
-    programId: programConfig.id,
-  });
-
-  session.credentials = { accessToken, projectApiKey, host, projectId };
-  session.roleAtOrganization = roleAtOrganization;
-  session.apiUser = user;
-  getUI().setCredentials(session.credentials);
-  getUI().setRoleAtOrganization(roleAtOrganization);
-  getUI().setApiUser(user);
-
-  // Identify the user (email, name) before evaluating flags, so flags can target
-  // the individual user and not just $app_name.
-  if (user) analytics.identifyUser(user);
-  analytics.setGroups(groupsFromUser(user, host));
+  // 4. Authenticate — idempotent within a run (see authenticate()). A second
+  // agent run in the same invocation (self-driving's integration phase) reuses
+  // the first login; it does not launch another OAuth. authenticate() also
+  // identifies the user and sets analytics groups.
+  await authenticate(session, programConfig.id);
+  const { projectApiKey, host, accessToken, projectId } = session.credentials!;
+  const cloudRegion = session.cloudRegion!;
+  const project = session.apiProject;
 
   // 4.5. AI opt-in enforcement. Parks here while AiOptInRequiredScreen is
   // up if the org hasn't approved third-party AI — BEFORE the skill

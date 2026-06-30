@@ -6,6 +6,7 @@ import {
   selfDrivingConfig,
   SELF_DRIVING_ABORT_CASES,
 } from '@lib/programs/self-driving/index';
+import { detectPostHogPresent } from '@lib/programs/self-driving/detect';
 import { WIZARD_TOOL_NAMES } from '@lib/wizard-tools';
 import { buildSession } from '@lib/wizard-session';
 import type { Mock } from 'vitest';
@@ -97,10 +98,12 @@ describe('selfDrivingConfig', () => {
     expect(typeof last === 'object' ? last.pause : undefined).toBe(5000);
   });
 
-  it('gives wizard_ask a 30-min timeout for the browser-handoff steps', () => {
+  it('gives wizard_ask a 30-min timeout for the browser-handoff steps', async () => {
+    // `run` is resolved per-session so the prompt can carry the integrate flag.
     const { run } = selfDrivingConfig;
-    const timeout = typeof run === 'object' ? run.askTimeoutMs : undefined;
-    expect(timeout).toBe(30 * 60 * 1000);
+    const resolved =
+      typeof run === 'function' ? await run(buildSession({})) : run;
+    expect(resolved?.askTimeoutMs).toBe(30 * 60 * 1000);
   });
 
   it('wires the self-driving-setup skill and CLI command', () => {
@@ -116,10 +119,113 @@ describe('selfDrivingConfig', () => {
     expect(stepIds).toEqual([
       'detect',
       'intro',
+      'integration-check',
       'health-check',
       'auth',
+      'integrate-detect',
+      'integrate-run',
+      'self-driving-handoff',
       'run',
       'outro',
     ]);
+  });
+});
+
+describe('detectPostHogPresent', () => {
+  it('returns true when a manifest declares a PostHog package', () => {
+    const dir = makeTmpDir();
+    try {
+      fs.writeFileSync(
+        path.join(dir, 'package.json'),
+        JSON.stringify({ dependencies: { 'posthog-node': '^4.0.0' } }),
+      );
+      expect(detectPostHogPresent(dir)).toBe(true);
+    } finally {
+      cleanup(dir);
+    }
+  });
+
+  it('returns false when no manifest mentions PostHog', () => {
+    const dir = makeTmpDir();
+    try {
+      fs.writeFileSync(
+        path.join(dir, 'package.json'),
+        JSON.stringify({ dependencies: { express: '^4.0.0' } }),
+      );
+      expect(detectPostHogPresent(dir)).toBe(false);
+    } finally {
+      cleanup(dir);
+    }
+  });
+
+  it('does not match "posthog" glued inside a larger package name', () => {
+    // Only fires at a dependency boundary, so `posthog` glued inside another
+    // package name isn't a false positive. (A bare word in prose still matches.)
+    const dir = makeTmpDir();
+    try {
+      fs.writeFileSync(
+        path.join(dir, 'requirements.txt'),
+        'myposthogtool==1.0.0\n',
+      );
+      expect(detectPostHogPresent(dir)).toBe(false);
+    } finally {
+      cleanup(dir);
+    }
+  });
+
+  it('detects PostHog declared as a dependency across manifest formats', () => {
+    const cases: Array<[string, string]> = [
+      ['package.json', '{"dependencies":{"posthog-node":"^4.0.0"}}'],
+      ['requirements.txt', 'flask==3.0\nposthog==3.7.0\n'],
+      ['Gemfile', "source 'https://rubygems.org'\ngem 'posthog'\n"],
+      ['go.mod', 'module x\nrequire github.com/posthog/posthog-go v1.2.0\n'],
+      ['pubspec.yaml', 'dependencies:\n  posthog: ^4.0.0\n'],
+    ];
+    for (const [name, contents] of cases) {
+      const dir = makeTmpDir();
+      try {
+        fs.writeFileSync(path.join(dir, name), contents);
+        expect(detectPostHogPresent(dir), name).toBe(true);
+      } finally {
+        cleanup(dir);
+      }
+    }
+  });
+
+  it('detects PostHog in a common sub-app dir (monorepo)', () => {
+    const dir = makeTmpDir();
+    try {
+      fs.mkdirSync(path.join(dir, 'frontend'));
+      fs.writeFileSync(
+        path.join(dir, 'frontend', 'package.json'),
+        '{"dependencies":{"posthog-js":"^1.0.0"}}',
+      );
+      expect(detectPostHogPresent(dir)).toBe(true);
+    } finally {
+      cleanup(dir);
+    }
+  });
+
+  it('does not scan arbitrary nested dirs (no recursive walk)', () => {
+    const dir = makeTmpDir();
+    try {
+      fs.mkdirSync(path.join(dir, 'services', 'api'), { recursive: true });
+      fs.writeFileSync(
+        path.join(dir, 'services', 'api', 'package.json'),
+        '{"dependencies":{"posthog-node":"^4.0.0"}}',
+      );
+      expect(detectPostHogPresent(dir)).toBe(false);
+    } finally {
+      cleanup(dir);
+    }
+  });
+
+  it('returns false for an empty project', () => {
+    const dir = makeTmpDir();
+    try {
+      expect(detectPostHogPresent(dir)).toBe(false);
+    } finally {
+      cleanup(dir);
+    }
   });
 });

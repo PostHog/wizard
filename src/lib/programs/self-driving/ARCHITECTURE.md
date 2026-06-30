@@ -29,6 +29,7 @@ prefix are in `wizard`; cross-repo paths are prefixed `posthog/…` / `context-m
 | Why a team gets no findings | §6 |
 | What to change for prod | §7 |
 | Local dev + reset | §8 |
+| Proactive product enablement (planned) | §9 |
 
 ---
 
@@ -423,6 +424,11 @@ Plus the **Temporal coordinator schedule** (`signals-scout-coordinator-schedule`
 >     predicate; (c) **no deck** (Tips from the start) — needs a generic "empty deck ⇒ complete
 >     immediately" guard in `LearnCard` / `RunScreen`, because an empty `getContentBlocks` never fires
 >     `onSequenceComplete` and would otherwise hang on a blank Learn pane. UI polish — deferred.
+> 13. **Proactive product enablement (replay / error tracking / support).** A new "Enable products"
+>     step turns products ON (web server-flip) **before** STEP 4 enables their sources — via an
+>     intent-based `products-enable` MCP tool (one narrow `product_enablement:write` scope,
+>     server-owned recipes) instead of `project:write`; Support is flag-on + a report CTA. Full design,
+>     decisions, telemetry, and the cross-repo work list are in **§9**.
 
 ---
 
@@ -445,6 +451,142 @@ It deletes the team's sources, scout troop config, custom scouts (preserving can
 `seeded_by` marker), run-state, emitted findings (via `cleanup_signals`), and **soft-deletes the
 self-driving-created warehouse pipelines** (scoped to `created_via=MCP`), then removes the report and cycles
 the wizard log. `DEBUG`-only.
+
+---
+
+## 9. Planned: proactive product enablement (replay / error tracking / support)
+
+> [!IMPORTANT]
+> **PLANNED — not yet implemented.** Design + cross-repo work list for a new step that turns PostHog
+> products ON (so the signal sources have data to read) **before** STEP 4 enables the sources. Captured
+> from the design session; spans **wizard + posthog + context-mill** (+ a one-time OAuth-ceiling edit).
+> Symbol names are durable; `file:line` anchors are point-in-time. Keep in lockstep once it lands.
+
+### 9.1 Decisions (settled)
+
+- **New "Enable products" step** runs after §2 step 2 (*Read context*) and **before** STEP 4 (*Enable
+  sources*). It turns on **Session Replay** + **Error Tracking** every run; **Support/Conversations** is
+  flag-on + a report CTA only (9.4). **STEP 4 is unchanged** — once products are on, its existing "enable
+  sources for products in use" rule picks them up.
+- **One path for everyone.** No free/paid fork, no consent prompt, no per-framework skill fork.
+- **No billing writes.** The "$0 spend cap" idea is **dropped**: `custom_limits_usd` is org-wide, set via an
+  `INTERNAL`-scoped endpoint (`ee/api/billing.py`) unreachable by any OAuth token, and a $0 cap *harms*
+  existing paying users (caps + drops data across all their projects; `ee/billing/quota_limiting.py`).
+  `remote_config.py` even force-disables replay when recordings are quota-limited. Cost overruns are handled
+  **reactively (refunds)** — a product decision.
+- **Transparency + PII.** No prompt, but the **report/outro discloses** what was enabled, and the replay
+  recipe **sets conservative masking** server-side. `recording_domains` defaults to *all domains incl.
+  production*, so masking is the safeguard. **TODO: verify the posthog-js default masking** first.
+- **Web first.** A server-side flip only activates products for SDKs that read remote config (posthog-js).
+  Backend/mobile need generated **code** → phase 2 (9.6).
+
+### 9.2 Write path — intent-based `products-enable`, NOT `project:write`
+
+- **Not `project:write`:** it makes `ProjectViewSet` (a `ModelViewSet`, `scope_object="project"`) writable →
+  authorizes `DELETE /api/projects/:id` + ~60 team fields incl. `access_control` (RBAC),
+  `session_recording_masking_config` (PII), `app_urls`, `test_account_filters` (`posthog/api/project.py`
+  `team_passthrough_fields`). Every *existing* wizard write scope is a product-object write — none can delete
+  the project or rewrite security/privacy config. It's also a **permanent, org-wide ceiling** change on a
+  **public npm** tool (every external user grants it), and breaks self-driving's "read-only + narrow product
+  writes" property.
+- **Not per-product settings viewsets:** doesn't scale — each new product (logs, heatmaps, surveys…) =
+  another viewset + tool + scope. (Precedent that *does* work this way: `ErrorTrackingSettingsViewSet`,
+  `scope_object="error_tracking"`, in `posthog/products/error_tracking/backend/presentation/views/settings.py`.)
+- **Chosen — one intent-based surface.** `products-enable {products: ProductKey[]}`, gated by **one** new
+  narrow scope **`product_enablement:write`**. The caller names *which* products; the **server owns the
+  recipe** per product (toggle + companion defaults). The caller passes **no field values**, so it cannot
+  weaken masking or set bad limits. **Adding a product later = register a recipe + add an enum key** — no
+  wizard/scope/ceiling change. Most enable-levers are flat Team opt-in bools in the same
+  `team_passthrough_fields` list (`heatmaps_opt_in`, `surveys_opt_in`, `capture_console_log_opt_in`,
+  `capture_performance_opt_in`, `autocapture_opt_out`, `session_recording_opt_in`,
+  `autocapture_exceptions_opt_in`, `conversations_enabled`), so one surface covers them all.
+
+### 9.3 Recipes (server-owned, posthog)
+
+A thin `ProductEnablementViewSet` iterates the requested keys → dispatches to a per-product recipe each
+product module registers. Primary toggle is **always** set; companion settings are applied **only if unset**
+(don't clobber a user's existing custom config). Examples:
+
+- `session_replay` → `team.session_recording_opt_in = True`; if `session_recording_masking_config` unset →
+  default masking. (`posthog/models/team/team.py:361`.)
+- `error_tracking` → `team.autocapture_exceptions_opt_in = True`; `ErrorTrackingSettings.objects.get_or_create`
+  for default limits. (`team.py:466`; `ErrorTrackingSettings` model defaults, `error_tracking/backend/models.py:604`.)
+- `conversations` (later) → `team.conversations_enabled = True` (`team.py:438`).
+
+Open: whether replay should **always enforce** a masking floor vs apply-if-unset (per-recipe choice).
+
+### 9.4 Mechanism facts (verified — don't re-derive)
+
+- **Replay (web):** `session_recording_opt_in=true` → `remote_config.py:262` emits the `sessionRecording`
+  block → posthog-js `isRecordingEnabled = window && serverEnabled && !disable_session_recording && !optedOut`
+  → records **on next page load**. No code change for a default-config web SDK.
+- **Error tracking (web):** `autocapture_exceptions_opt_in=true` → `remote_config.py:240` emits
+  `autocaptureExceptions` → posthog-js hooks `window.onerror`/rejections (uses the remote flag when the client
+  `capture_exceptions` is unset). No code change.
+- **The step CHECKS (and edits) the init snippet:** if the wizard's posthog-js init set
+  `disable_session_recording: true` / `capture_exceptions: false`, the client overrides the remote flag and
+  the flip is **inert**. Phase-1 reads the init in the user's repo and edits it to not override (warlock/YARA
+  scans apply to the edit). Snippet content lives in context-mill (off-disk).
+- **Backend/mobile:** the Team flags are **inert** (no posthog-js to read them) → phase 2.
+- **Conversations is inert as a flag flip:** the `conversations` signal source reads `Ticket` rows
+  (`products/signals/backend/emission/fetchers/conversations.py`); tickets are created only by a connected
+  channel — widget/email/Slack/Teams (`create_with_number`, `products/conversations/backend/signals.py:79`).
+  So phase 1 = flip `conversations_enabled` (cheap, "eases the start") + enable the `conversations`
+  `SignalSourceConfig` (already callable, `task:write`) + a **report CTA** ("connect a channel"). Real fix =
+  the widget embed (phase 2). NB enabling auto-generates `widget_public_token` (`team.py:2367`) but leaves
+  `widget_enabled=false`.
+
+### 9.5 Framework coverage (90-day wizard telemetry, `internal-j`)
+
+Break `wizard: setup confirmed` down by `properties.integration` (on the terminal `setup wizard finished`
+event, `integration` is nested under `properties.tags`). Buckets:
+
+- **Web ~58%** (nextjs 41%, react-router, astro, tanstack-*, vue, sveltekit, nuxt, angular, javascript_web)
+  → **covered by the phase-1 server flip** (client replay + client errors).
+- **Pure backend ~23%** (javascript_node **16.8%**, fastapi, python, flask, ruby) → flip is a **no-op**;
+  needs code (phase 2).
+- **Mobile ~14%** (react-native **10.1%**, swift, android) → no-op; SDK-init code (phase 2).
+- **Hybrid ~3%** (laravel, django, rails) → partial (only if they load posthog-js). Undetected ~4%.
+
+**Phase-2 priority is node-first** (16.8% — the single biggest slice the flip misses), then react-native.
+
+### 9.6 Phase 2 (deferred — context-mill, no new posthog scope)
+
+The backend/mobile lever is generated **code** (the agent already edits the repo), so it's a context-mill
+skill change, not platform work:
+
+- Backend error tracking, **node-first** → python/fastapi/flask → ruby/php: enable exception autocapture in
+  the SDK init (e.g. python `enable_exception_autocapture=True`).
+- Mobile (RN/swift/android): SDK-init replay + exception options (min-version-gated).
+- **Support widget embed** (web): inject the widget snippet + `widget_enabled` → makes Conversations actually
+  produce tickets (upgrades 9.4's CTA to auto-done).
+- Server-side error tracking for full-stack web (e.g. Next.js API routes via posthog-node).
+
+### 9.7 Cross-repo work list
+
+- **posthog:** `ProductEnablementViewSet` + `products-enable` MCP tool + per-product recipes
+  (replay/error-tracking now; conversations later) + new scope object `product_enablement` (`posthog/scopes.py`).
+  **Admin-RBAC decision:** the new route bypasses the `field_access_control('project','admin')` check
+  (enforced only in `project.py`) — relax for an opt-in enable, or replicate.
+- **OAuth ceiling (manual, both regions):** add `product_enablement:write` to the wizard OAuth app
+  `OAuthApplication.scopes` — US prod client `c4Rdw8DIxgtQfA80IiSnGKlNX8QN00cFWF00QQhM` + dev
+  `DC5uRLVbGI02YQ82grxgnK6Qn12SXWpCqdPb60oZ`. Net-new (mechanics: §7 item 1).
+- **wizard:** add `product_enablement:write` to `SELF_DRIVING_SCOPE_ADDITIONS` (`program-scopes.ts`); new
+  "Enable products" step in `prompt.ts` (detect web via `session.integration` → call `products-enable` with
+  the list → check/edit the posthog-js init; backend/mobile skip + record for the report). Keep the existing
+  replay/exception opt-in reads (idempotency); the `customer_id` consent threading is **not** needed. Update
+  the §2 step backbone + this doc.
+- **context-mill:** new skill ref `…-enable-products.md` before `4-sources.md`; update `description.md` step
+  list (→ 9 steps); `7-report.md` adds the "enabled products" disclosure + the Conversations CTA.
+
+### 9.8 Open items
+
+- Verify posthog-js **default masking**; decide always-enforce vs apply-if-unset (9.3).
+- **Admin-RBAC** bypass decision (9.7).
+- **Logs** likely isn't a Team opt-in toggle (OTel ingestion, "on when data arrives") — verify before adding a recipe.
+- Idempotent enable; silent re-enable **will re-enable a setting a user turned off deliberately** (the flag
+  default `False` can't distinguish "never set" from "off on purpose") — accepted under "enable everyone."
+- Refund operational process (no consent, no cap).
 
 ---
 

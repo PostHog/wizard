@@ -68,6 +68,12 @@ vi.mock('../lib/programs/posthog-integration/index', () => ({
     steps: [],
     run: null,
   },
+  integrationRunStep: {
+    id: 'run',
+    label: 'Integration',
+    screenId: 'run',
+    run: () => Promise.resolve(),
+  },
 }));
 vi.mock('../utils/environment', () => ({
   isNonInteractiveEnvironment: () => false,

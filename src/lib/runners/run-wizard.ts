@@ -1,12 +1,58 @@
 import { VERSION } from '@lib/version';
 import { logToFile, getLogFilePath } from '@utils/debug';
+import { runAgent } from '@lib/agent/agent-runner';
+import { authenticate } from '@lib/agent/runner/shared/authenticate';
 import type { ProgramConfig } from '@lib/programs/program-step';
 import type { startTUI as StartTUIFn } from '@ui/tui/start-tui';
+import type { WizardStore } from '@ui/tui/store';
+import type { WizardSession } from '@lib/wizard-session';
 import type { TaskStreamPush as TaskStreamPushClass } from '@lib/task-stream/task-stream-push';
 import { resolveNoTelemetry } from './resolve-no-telemetry';
 import { runCleanups } from '@utils/wizard-abort';
 
 const WIZARD_VERSION = VERSION;
+
+type Step = ProgramConfig['steps'][number];
+
+/** The session a run step's agent runs in: scoped to the step's target dir
+ * (e.g. a monorepo sub-app) with its own framework context, after any prep.
+ * A step without `targetDir` runs in the live session, unchanged. */
+async function prepareRunSession(
+  step: Step,
+  live: WizardSession,
+): Promise<WizardSession> {
+  const session = step.targetDir
+    ? {
+        ...live,
+        installDir: step.targetDir(live),
+        frameworkContext: { ...live.frameworkContext },
+      }
+    : live;
+  if (step.onRunPrep) await step.onRunPrep(session);
+  return session;
+}
+
+/** Advance one step of a composed run to completion: the auth screen
+ * authenticates (every later run reuses it); a step carrying its own `run`
+ * thunk runs that agent in its dir and is recorded in `completedRuns`; the
+ * host program's own run screen runs `config.run`; any other screen waits for
+ * the user to satisfy `isComplete`. */
+async function advanceStep(
+  step: Step,
+  store: WizardStore,
+  config: ProgramConfig,
+): Promise<void> {
+  if (step.screenId === 'auth') {
+    await authenticate(store.session, config.id);
+  } else if (step.run) {
+    await step.run(await prepareRunSession(step, store.session));
+    store.completeRunStep(step.id);
+  } else if (step.screenId === 'run') {
+    await runAgent(config, await prepareRunSession(step, store.session));
+  } else if (step.isComplete) {
+    await store.waitUntil(step.isComplete);
+  }
+}
 
 /**
  * Run a full wizard program in the TUI. Handles the full lifecycle: start TUI,
@@ -50,6 +96,7 @@ export function runWizard(
         benchmark: options.benchmark as boolean | undefined,
         yaraReport: options.yaraReport as boolean | undefined,
         noTelemetry: resolveNoTelemetry(options),
+        integrate: options.integrate as boolean | undefined,
       });
       session.programLabel = config.id;
       if (options.skillId) {
@@ -107,12 +154,25 @@ export function runWizard(
       process.on('SIGTERM', onSignal);
 
       await activeTui.store.runReadyHooks();
+      // Settle the pre-run screens. `integration-check` is a no-op gate for
+      // programs without it.
       await activeTui.store.getGate('intro');
+      await activeTui.store.getGate('integration-check');
       await activeTui.store.getGate('health-check');
 
       const skipAgent = config.run == null;
+      const shown = (s: ProgramConfig['steps'][number]) =>
+        !s.show || s.show(activeTui.store.session);
 
-      if (skipAgent) {
+      if (config.steps.some((s) => s.run)) {
+        // A composed program: its step list splices in run steps that carry
+        // their own agent (self-driving runs the integration before its own
+        // run). Walk the list once, advancing each step to completion.
+        for (const step of config.steps) {
+          if (step.screenId === 'outro') break; // run-completion wait owns it
+          if (shown(step)) await advanceStep(step, activeTui.store, config);
+        }
+      } else if (skipAgent) {
         const { getOrAskForProjectData } = await import('@utils/setup-utils');
         const { projectApiKey, host, accessToken, projectId } =
           await getOrAskForProjectData({
@@ -130,7 +190,6 @@ export function runWizard(
           projectId,
         });
       } else {
-        const { runAgent } = await import('@lib/agent/agent-runner');
         await runAgent(config, activeTui.store.session);
       }
 
