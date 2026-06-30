@@ -15,8 +15,8 @@
  * network latency. The registry's type list also drives `enqueue_task`
  * validation.
  */
-import type { QueueStore, QueuedTask } from './runner/orchestrator/queue';
-import type { ResolvedTask } from './runner/orchestrator/executor';
+import type { QueueStore, QueuedTask } from './runner/mode/orchestrator/queue';
+import type { ResolvedTask } from './runner/mode/orchestrator/executor';
 import { DEFAULT_AGENT_MODEL } from '@lib/constants';
 
 /**

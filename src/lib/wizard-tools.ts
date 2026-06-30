@@ -29,7 +29,7 @@ import { createSecretVault, type SecretVault } from './secret-vault';
 import {
   buildOrchestratorTools,
   type OrchestratorToolsContext,
-} from './agent/runner/orchestrator/queue-tools';
+} from './agent/runner/mode/orchestrator/queue-tools';
 
 // ---------------------------------------------------------------------------
 // SDK dynamic import (ESM module loaded once, cached)

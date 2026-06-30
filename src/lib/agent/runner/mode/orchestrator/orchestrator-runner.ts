@@ -26,7 +26,7 @@ import { analytics } from '@utils/analytics';
 import { ciExcludedTaskTypes } from '@utils/ci-flag-overrides';
 import { logToFile } from '@utils/debug';
 import type { ProgramConfig } from '@lib/programs/program-step';
-import type { BootstrapResult } from '../shared/types';
+import type { BootstrapResult } from '../../shared/types';
 import type { WizardRunOptions } from '@utils/types';
 import {
   QueueStore,

@@ -5,11 +5,11 @@ import {
   QueueStore,
   type QueuedTask,
   type TaskHandoff,
-} from '@lib/agent/runner/orchestrator/queue';
+} from '@lib/agent/runner/mode/orchestrator/queue';
 import {
   drainQueue,
   type RunTask,
-} from '@lib/agent/runner/orchestrator/executor';
+} from '@lib/agent/runner/mode/orchestrator/executor';
 
 vi.mock('@utils/analytics', () => ({
   analytics: { captureException: vi.fn(), wizardCapture: vi.fn() },
