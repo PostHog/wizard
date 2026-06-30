@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.36.0](https://github.com/PostHog/wizard/compare/v2.35.0...v2.36.0) (2026-06-30)
+
+
+### Features
+
+* **self-driving:** integrate first when the project has no PostHog ([#760](https://github.com/PostHog/wizard/issues/760)) ([3049d9c](https://github.com/PostHog/wizard/commit/3049d9c9e0e6e244c14b831181cdce012365fd60))
+
+
+### Bug Fixes
+
+* Don't stop analytics after integration run inside self-driving ([#771](https://github.com/PostHog/wizard/issues/771)) ([a7fe755](https://github.com/PostHog/wizard/commit/a7fe755d5e793899a54ca62f0e17dda9967908e7))
+
 ## [2.35.0](https://github.com/PostHog/wizard/compare/v2.34.0...v2.35.0) (2026-06-30)
 
 
