@@ -101,10 +101,10 @@ function traceFlow(
         FRAMEWORK_REGISTRY[Integration.javascriptNode],
       );
     } else if (screen === ScreenId.Run) {
-      // The run screen is shared by in-program run phases (steps with
-      // `runProgram`, e.g. self-driving's integrate-run) and the main run. If
-      // the active run step is such a phase, simulate completePhase; otherwise
-      // complete the main run.
+      // The run screen is shared by composed run steps (a step carrying its own
+      // `run` thunk, e.g. self-driving's integrate-run) and the program's own
+      // run. Complete the active run step the way the runner would: a composed
+      // step via completeRunStep, the main run via runPhase.
       const steps = getProgramConfig(store.router.activeProgram).steps;
       const runStep = steps.find(
         (s) =>
@@ -112,8 +112,8 @@ function traceFlow(
           (!s.show || s.show(store.session)) &&
           (!s.isComplete || !s.isComplete(store.session)),
       );
-      if (runStep?.runProgram) {
-        store.completePhase(runStep.id);
+      if (runStep?.run) {
+        store.completeRunStep(runStep.id);
       } else {
         store.setRunPhase(RunPhase.Completed);
       }
