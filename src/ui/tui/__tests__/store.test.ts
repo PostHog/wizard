@@ -1347,4 +1347,29 @@ describe('WizardStore', () => {
       expect(buildSession({ integrate: true }).integrate).toBe(true);
     });
   });
+
+  describe('chooseProvisionAccount (self-driving "no account" branch)', () => {
+    it('flips signup and records email + region, and integrates', () => {
+      const store = createStore(Program.SelfDriving);
+      store.session = buildSession({});
+
+      store.chooseProvisionAccount('dev@example.com', 'eu');
+
+      expect(store.session.signup).toBe(true);
+      expect(store.session.email).toBe('dev@example.com');
+      expect(store.session.region).toBe('eu');
+      expect(store.session.integrate).toBe(true);
+    });
+
+    it('emits exactly one change event', () => {
+      const store = createStore(Program.SelfDriving);
+      store.session = buildSession({});
+      const cb = vi.fn();
+      store.subscribe(cb);
+
+      store.chooseProvisionAccount('dev@example.com', 'us');
+
+      expect(cb).toHaveBeenCalledTimes(1);
+    });
+  });
 });
