@@ -24,10 +24,7 @@ import {
 } from '@lib/programs/program-registry';
 import { buildSession } from '@lib/wizard-session';
 import { runAgent } from '@lib/agent/agent-runner';
-import {
-  hasRunPhases,
-  runInProgramPhases,
-} from '@lib/runners/in-program-phases';
+import { authenticate } from '@lib/agent/runner/shared/authenticate';
 import { getOrAskForProjectData } from '@utils/setup-utils';
 import { logToFile } from '@utils/debug';
 import { WizardCiDriver } from '@e2e-harness/wizard-ci-driver';
@@ -95,14 +92,37 @@ async function main() {
     await store.getGate('integration-check');
     await store.getGate('health-check');
 
-    // In-program run phases (self-driving's detect → integrate → handoff), the
-    // same path run-wizard takes — here `authenticate` resolves the phx key, not
-    // OAuth, since the session is built with ci + apiKey.
-    if (hasRunPhases(programConfig, store.session)) {
-      await runInProgramPhases(store, programConfig);
+    // Mirror run-wizard's composed walk for programs whose steps splice in
+    // their own run steps (self-driving: detect → integrate → handoff → run).
+    // `authenticate` here resolves the phx key, not OAuth, since the session is
+    // built with ci + apiKey.
+    if (programConfig.steps.some((s) => s.run)) {
+      for (const step of programConfig.steps) {
+        if (step.screenId === 'outro') break;
+        if (step.show && !step.show(store.session)) continue;
+        if (step.screenId === 'auth') {
+          await authenticate(store.session, programConfig.id);
+        } else if (step.run) {
+          const live = store.session;
+          const runSession = step.targetDir
+            ? {
+                ...live,
+                installDir: step.targetDir(live),
+                frameworkContext: { ...live.frameworkContext },
+              }
+            : live;
+          if (step.onRunPrep) await step.onRunPrep(runSession);
+          await step.run(runSession);
+          store.completeRunStep(step.id);
+        } else if (step.screenId === 'run') {
+          await runAgent(programConfig, store.session);
+        } else if (step.isComplete) {
+          await store.waitUntil(step.isComplete);
+        }
+      }
+    } else {
+      await runAgent(programConfig, store.session);
     }
-
-    await runAgent(programConfig, store.session);
   };
 
   if (process.env.MODE === 'serve') return serve();
