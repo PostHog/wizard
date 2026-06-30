@@ -15,7 +15,7 @@ import { FRAMEWORK_REGISTRY } from '@lib/registry';
 import { wizardAbort } from '@utils/wizard-abort';
 import { WIZARD_INTERACTION_EVENT_NAME } from '@lib/constants';
 import { getUI } from '@ui/index';
-import { getCloudUrl } from '@utils/urls';
+import { HostResolution } from '@lib/host-resolution';
 import { requestDeepLink } from '@utils/provisioning';
 import { openTrackedLink, withUtm } from '@utils/links';
 import type { CloudRegion } from '@utils/types';
@@ -33,8 +33,12 @@ function resolveContinueUrl(
   if (!session.signup) return undefined;
   if (typeof deepLink === 'string' && deepLink) return deepLink;
   if (cloudRegion)
+    // TODO: clean up in #755
     return withUtm(
-      `${getCloudUrl(cloudRegion, session.baseUrl)}/products?source=wizard`,
+      `${
+        HostResolution.fromRegion(cloudRegion, { baseUrl: session.baseUrl })
+          .appHost
+      }/products?source=wizard`,
       'outro-continue',
     );
   return undefined;

@@ -23,7 +23,7 @@ import { getOAuthScopesForProgram } from '@lib/oauth/program-scopes';
 import type { ProgramId } from '@lib/programs/program-registry';
 import { analytics } from './analytics';
 import { getUI } from '@ui';
-import { getCloudUrl, getHost, detectRegion } from './urls';
+import { HostResolution } from '@lib/host-resolution';
 import { performOAuthFlow } from './oauth';
 import { resolveGrantedProject } from './project-resolution';
 import { provisionNewAccount } from './provisioning';
@@ -419,15 +419,14 @@ export async function getOrAskForProjectData(
   if (_options.ci && _options.apiKey) {
     getUI().log.info('Using provided API key (CI mode - OAuth bypassed)');
 
-    // Trust the explicitly-provided region. detectRegionFromToken probes
-    // `/api/users/@me/` on both us and eu and takes whichever answers first;
-    // under load the wrong region can win, and the subsequent project fetch
-    // then targets the wrong cloud and hangs (~120s) before failing. CI always
-    // passes --region, so only fall back to detection when it's truly absent.
-    const cloudRegion = _options.region ?? (await detectRegion(_options.apiKey, _options.baseUrl));
-    
-    const host = getHost(cloudRegion, _options.baseUrl);
-    const cloudUrl = getCloudUrl(cloudRegion, _options.baseUrl);
+    const hosts = await HostResolution.fromAccessToken(_options.apiKey, {
+      region: _options.region,
+      baseUrl: _options.baseUrl,
+    });
+
+    const cloudRegion = hosts.region;
+    const host = hosts.apiHost;
+    const cloudUrl = hosts.appHost;
 
     const projectData =
       _options.projectId != null
@@ -484,7 +483,10 @@ export async function getOrAskForProjectData(
   );
 
   if (!projectApiKey) {
-    const cloudUrl = getCloudUrl(cloudRegion, _options.baseUrl);
+    // TODO: clean up in #755
+    const cloudUrl = HostResolution.fromRegion(cloudRegion, {
+      baseUrl: _options.baseUrl,
+    }).appHost;
     getUI().log.error(`Didn't receive a project token. This shouldn't happen :(
 
 Please let us know if you think this is a bug in the wizard:
@@ -605,12 +607,13 @@ async function askForWizardLogin(options: {
     await abort();
   }
 
-  const cloudRegion = await detectRegion(
+  const hosts = await HostResolution.fromAccessToken(
     tokenResponse.access_token,
-    options.baseUrl,
+    { baseUrl: options.baseUrl },
   );
-  const cloudUrl = getCloudUrl(cloudRegion, options.baseUrl);
-  const host = getHost(cloudRegion, options.baseUrl);
+  const cloudRegion = hosts.region;
+  const cloudUrl = hosts.appHost;
+  const host = hosts.apiHost;
 
   const projectData = await fetchProjectData(
     tokenResponse.access_token,
