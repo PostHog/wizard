@@ -5,9 +5,15 @@ import {
   runAgent,
   createStopHook,
   isWarlockDisabled,
+  resolveAgentModel,
   buildAuthErrorContext,
 } from '@lib/agent/agent-interface';
-import { WIZARD_WARLOCK_DISABLED_FLAG_KEY } from '@lib/constants';
+import {
+  DEFAULT_AGENT_MODEL,
+  SONNET_5_MODEL,
+  WIZARD_SONNET_5_FLAG_KEY,
+  WIZARD_WARLOCK_DISABLED_FLAG_KEY,
+} from '@lib/constants';
 import { AgentOutputSignals } from '@lib/agent/output-signals';
 import type { WizardRunOptions } from '@utils/types';
 import type { SpinnerHandle } from '@ui';
@@ -536,6 +542,34 @@ describe('isWarlockDisabled (kill switch)', () => {
   it('env override only triggers on exactly "true"', () => {
     process.env[ENV_KEY] = '1';
     expect(isWarlockDisabled({})).toBe(false);
+  });
+});
+
+describe('resolveAgentModel (sonnet-5 opt-in)', () => {
+  // Fail-safe: an unset or fetch-failed flag map must NOT shift everyone
+  // onto Sonnet 5. The default has to be the explicit DEFAULT_AGENT_MODEL.
+  it('stays on the default with no flags or an empty flag map', () => {
+    expect(resolveAgentModel()).toBe(DEFAULT_AGENT_MODEL);
+    expect(resolveAgentModel({})).toBe(DEFAULT_AGENT_MODEL);
+  });
+
+  it('stays on the default when the flag is anything other than "true"', () => {
+    expect(resolveAgentModel({ [WIZARD_SONNET_5_FLAG_KEY]: 'false' })).toBe(
+      DEFAULT_AGENT_MODEL,
+    );
+    // Case-sensitive match: only the literal 'true' opts in.
+    expect(resolveAgentModel({ [WIZARD_SONNET_5_FLAG_KEY]: 'True' })).toBe(
+      DEFAULT_AGENT_MODEL,
+    );
+    expect(resolveAgentModel({ 'some-other-flag': 'true' })).toBe(
+      DEFAULT_AGENT_MODEL,
+    );
+  });
+
+  it('opts into Sonnet 5 when the flag resolves to "true"', () => {
+    expect(resolveAgentModel({ [WIZARD_SONNET_5_FLAG_KEY]: 'true' })).toBe(
+      SONNET_5_MODEL,
+    );
   });
 });
 

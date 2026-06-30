@@ -13,6 +13,13 @@ import { VERSION } from './version';
 export const DEFAULT_AGENT_MODEL = 'claude-sonnet-4-6';
 
 /**
+ * Newer Sonnet, opt-in via the `wizard-sonnet-5` feature flag (see
+ * `resolveAgentModel` in `agent-interface.ts`). Kept separate from
+ * `DEFAULT_AGENT_MODEL` so the off-by-default behavior is obvious.
+ */
+export const SONNET_5_MODEL = 'claude-sonnet-5';
+
+/**
  * Cheaper, faster model for mechanical agent work (e.g. repo classification
  * during source-map detection). Passed via AgentConfig.modelOverride.
  */
@@ -187,6 +194,14 @@ export const WIZARD_INTERACTION_EVENT_NAME = 'wizard interaction';
 export const WIZARD_REMARK_EVENT_NAME = 'wizard remark';
 /** Boolean feature flag that routes a run to the experimental orchestrator runner. */
 export const WIZARD_ORCHESTRATOR_FLAG_KEY = 'wizard-orchestrator';
+/**
+ * Boolean feature flag that opts the main agent runner into Sonnet 5
+ * (`SONNET_5_MODEL`). When false or missing, the main runner uses
+ * `DEFAULT_AGENT_MODEL` (Sonnet 4.6). Only the main runner reads this — the
+ * MCP suggested-prompts screen and the orchestrator task default stay on
+ * `DEFAULT_AGENT_MODEL` regardless.
+ */
+export const WIZARD_SONNET_5_FLAG_KEY = 'wizard-sonnet-5';
 /** Feature flag key that gates the intro-screen "Tools" menu. */
 export const WIZARD_TOOLS_MENU_FLAG_KEY = 'wizard-tools-menu';
 /**
