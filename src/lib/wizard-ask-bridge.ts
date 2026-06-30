@@ -65,7 +65,7 @@ function buildCancelledAnswers(questions: AskQuestion[]): AskAnswers {
   return out;
 }
 
-function isFullyCancelled(answers: AskAnswers): boolean {
+export function isFullyCancelled(answers: AskAnswers): boolean {
   const values = Object.values(answers);
   if (values.length === 0) return false;
   return values.every((v) => v === CANCELLED_SENTINEL);

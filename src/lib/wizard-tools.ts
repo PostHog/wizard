@@ -24,7 +24,7 @@ import {
   type AuditCheck,
   type AuditStatus,
 } from './programs/audit/types';
-import type { WizardAskBridge } from './wizard-ask-bridge';
+import { type WizardAskBridge, isFullyCancelled } from './wizard-ask-bridge';
 import { createSecretVault, type SecretVault } from './secret-vault';
 import {
   buildOrchestratorTools,
@@ -986,7 +986,7 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
       .boolean()
       .optional()
       .describe(
-        "Only valid for kind='text'. When true, the user's answer is stored in the wizard's secret vault and returned to you as { secretRef: 'secret:...' } instead of the raw string. Use for API keys, tokens, and any other secret the user types in.",
+        "Only valid for kind='text'. When true, the user's answer is stored in the wizard's secret vault and returned to you as { secretRef: 'secret:...' } instead of the raw string. Use for API keys, tokens, and any other secret the user types in. The secretRef is only resolved by wizard-tools that accept it (e.g. set_env_values) — it is NOT resolved when passed to other MCP tools (e.g. PostHog data-warehouse tools), which will reject it. For a secret that must reach another tool, write it to the env with set_env_values first, or use that tool's own credential-reference flow.",
       ),
   });
 
@@ -994,7 +994,11 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
     'wizard_ask',
     'Ask the user one or more structured questions and wait for their answers. ' +
       'Use this whenever you would otherwise inline a question in your text output. ' +
-      'Batch related questions into a single call — do not call this multiple times in a row.',
+      'Batch related questions into a single call (up to 8) rather than asking one at a ' +
+      'time; sequential calls are fine when later questions genuinely depend on earlier ' +
+      'answers. A fully cancelled or timed-out response does NOT count against the per-run ' +
+      'cap — treat it as "the user declined" and fall back gracefully (e.g. hand over a ' +
+      'deep link) without worrying about a wasted call.',
     {
       questions: z.array(askQuestionSchema).min(1).max(8),
     },
@@ -1090,6 +1094,15 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
 
       try {
         const answers = await askBridge.request({ questions: args.questions });
+
+        // A fully cancelled/timed-out ask (the user dismissed the overlay or let
+        // it time out) shouldn't burn the per-run cap. Otherwise one cancellation
+        // exhausts the budget for every remaining source and forces a deep-link
+        // fallback even when the user was willing to answer. Refund the slot we
+        // optimistically took so cancellation is free.
+        if (isFullyCancelled(answers)) {
+          askCallCount -= 1;
+        }
 
         // For any question marked sensitive, move the raw answer into the
         // vault and replace it with an opaque ref before returning to the
