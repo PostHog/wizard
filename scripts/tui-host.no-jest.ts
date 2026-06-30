@@ -27,8 +27,10 @@ import { runAgent } from '@lib/agent/agent-runner';
 import { authenticate } from '@lib/agent/runner/shared/authenticate';
 import { getOrAskForProjectData } from '@utils/setup-utils';
 import { logToFile } from '@utils/debug';
+import { join } from 'path';
 import { detectFramework } from '@lib/detection/index';
 import { FRAMEWORK_REGISTRY } from '@lib/registry';
+import type { Integration } from '@lib/constants';
 import { SELF_DRIVING_INTEGRATE_PATH_KEY } from '@lib/programs/self-driving/detect';
 import { ScreenId } from '@ui/tui/router';
 import { WizardCiDriver } from '@e2e-harness/wizard-ci-driver';
@@ -40,6 +42,39 @@ import { profileFor } from '@e2e-harness/profiles';
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const mark = (m: string) => logToFile(`[tui-host] ${m}`);
+
+/**
+ * Pick the project to set PostHog up in, headlessly: the repo root if it's a
+ * single app, else the first instrumentable sub-app of a monorepo (under
+ * `apps/` or `packages/`). Mirrors what the detect screen's picker commits, so
+ * the e2e host can drive a monorepo fixture (e.g. a Turborepo) without
+ * keystrokes — the store driver can't actuate the interactive picker.
+ */
+async function pickIntegrationTarget(
+  root: string,
+): Promise<{ integration: Integration; path: string } | null> {
+  // A monorepo: integrate a real sub-app, not the workspace root (which tends
+  // to detect as generic node). Scan apps/ then packages/ for the first one
+  // with a framework. Fall back to the root for a single-app fixture.
+  for (const group of ['apps', 'packages']) {
+    let entries: string[];
+    try {
+      entries = fs.readdirSync(join(root, group)).sort();
+    } catch {
+      continue; // group dir absent
+    }
+    for (const name of entries) {
+      const rel = `${group}/${name}`;
+      if (!fs.statSync(join(root, rel)).isDirectory()) continue;
+      const fw = await detectFramework(join(root, rel));
+      if (fw && FRAMEWORK_REGISTRY[fw]) return { integration: fw, path: rel };
+    }
+  }
+  const rootFw = await detectFramework(root);
+  return rootFw && FRAMEWORK_REGISTRY[rootFw]
+    ? { integration: rootFw, path: '.' }
+    : null;
+}
 
 async function main() {
   const apiKey = (
@@ -255,19 +290,22 @@ async function main() {
         const before = state.currentScreen;
 
         // Headless detect: the screen runs a real detector + an interactive
-        // pick the store driver can't actuate. Inject the pick by detecting the
-        // framework at the install dir (single-app fixtures), mirroring the
-        // offline trace test, so the composed integrate-run can proceed.
+        // pick the store driver can't actuate. Inject the pick — the repo root
+        // for a single app, or a monorepo's first instrumentable sub-app — so
+        // the composed integrate-run can proceed.
         if (
           state.currentScreen === ScreenId.SelfDrivingIntegrationDetect &&
           state.session.integration == null
         ) {
-          const integration = await detectFramework(store.session.installDir);
-          if (integration) {
-            store.setFrameworkContext(SELF_DRIVING_INTEGRATE_PATH_KEY, '.');
+          const pick = await pickIntegrationTarget(store.session.installDir);
+          if (pick) {
+            store.setFrameworkContext(
+              SELF_DRIVING_INTEGRATE_PATH_KEY,
+              pick.path,
+            );
             store.setFrameworkConfig(
-              integration,
-              FRAMEWORK_REGISTRY[integration],
+              pick.integration,
+              FRAMEWORK_REGISTRY[pick.integration],
             );
           }
           continue;
