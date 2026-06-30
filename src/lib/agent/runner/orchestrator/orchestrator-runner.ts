@@ -105,6 +105,9 @@ export async function runOrchestrator(
 
   const options = sessionRunOptions(session);
 
+  // Set by bootstrapProgram before the fork — guaranteed non-null here.
+  const credentials = session.credentials!;
+
   // The WHAT (agent prompts) is served from context-mill. Fetch the registry
   // once up front: its types drive enqueue validation, and resolving a task to
   // its run config is then synchronous, with no mid-drain network latency.
@@ -219,9 +222,9 @@ export async function runOrchestrator(
   // The client injects the basics (project context + the I/O contract) around
   // every authored agent-prompt body.
   const promptContext: OrchestratorPromptContext = {
-    projectId: boot.projectId,
-    projectApiKey: boot.projectApiKey,
-    host: boot.host,
+    projectId: credentials.projectId,
+    projectApiKey: credentials.projectApiKey,
+    host: credentials.host,
     examplePath,
     commandmentsPath,
   };
@@ -253,9 +256,9 @@ export async function runOrchestrator(
   // so its context has no task id.
   const agentConfigFor = (currentTaskId?: string): AgentConfig => ({
     workingDirectory: session.installDir,
-    posthogMcpUrl: boot.mcpUrl,
-    posthogApiKey: boot.accessToken,
-    posthogApiHost: boot.host,
+    posthogMcpUrl: credentials.host.mcpUrl,
+    posthogApiKey: credentials.accessToken,
+    host: credentials.host,
     detectPackageManager: detectNodePackageManagers,
     skillsBaseUrl: boot.skillsBaseUrl,
     wizardFlags: boot.wizardFlags,

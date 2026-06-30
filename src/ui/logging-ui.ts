@@ -20,6 +20,7 @@ import {
 } from '@lib/health-checks/readiness';
 import type {
   AskAnswers,
+  Credentials,
   OutroData,
   PendingQuestion,
 } from '@lib/wizard-session';
@@ -216,12 +217,7 @@ export class LoggingUI implements WizardUI {
     // No-op in CI mode
   }
 
-  setCredentials(_credentials: {
-    accessToken: string;
-    projectApiKey: string;
-    host: string;
-    projectId: number;
-  }): void {
+  setCredentials(_credentials: Credentials): void {
     // No-op in CI mode — credentials are handled directly
   }
 

@@ -227,16 +227,12 @@ export async function detectProjectsWithAgent(
   const cwd = session.installDir;
   const runOptions = sessionToWizardOptions(session);
 
-  const mcpUrl = session.localMcp
-    ? 'http://localhost:8787/mcp'
-    : 'https://mcp.posthog.com/mcp';
-
   const agent = await initializeAgent(
     {
       workingDirectory: cwd,
-      posthogMcpUrl: mcpUrl,
+      posthogMcpUrl: host.mcpUrl,
       posthogApiKey: accessToken,
-      posthogApiHost: host,
+      host,
       detectPackageManager: detectNodePackageManagers,
       skillsBaseUrl: getSkillsBaseUrl(session.localMcp),
       integrationLabel: 'agentic-detect',

@@ -17,6 +17,7 @@
  */
 import type { QueueStore, QueuedTask } from './runner/orchestrator/queue';
 import type { ResolvedTask } from './runner/orchestrator/executor';
+import type { HostResolution } from '@lib/host-resolution';
 
 /**
  * The basics the client injects around every agent-prompt body. The `/agents/`
@@ -27,7 +28,7 @@ import type { ResolvedTask } from './runner/orchestrator/executor';
 export interface OrchestratorPromptContext {
   projectId: number;
   projectApiKey: string;
-  host: string;
+  host: HostResolution;
   /** Path to the framework's reference implementation (EXAMPLE.md), if available. */
   examplePath?: string;
   /** Path to the framework's rules (COMMANDMENTS.md), if available. */
@@ -40,7 +41,7 @@ function projectContext(ctx: OrchestratorPromptContext): string {
 Project context:
 - PostHog Project ID: ${ctx.projectId}
 - PostHog public token: ${ctx.projectApiKey}
-- PostHog Host: ${ctx.host}`;
+- PostHog Host: ${ctx.host.apiHost}`;
 }
 
 /** Points the agent at the framework's reference integration to learn patterns from. */

@@ -98,8 +98,10 @@ export const AiOptInRequiredScreen = ({
     }
     setRetrying(true);
     setRetryError(null);
-    // TODO: clean up in #755
-    void fetchUserData(accessToken, HostResolution.fromRegion(region, { baseUrl: session.baseUrl }).appHost)
+    const cloudUrl =
+      session.credentials?.host.appHost ??
+      HostResolution.fromRegion(region, { baseUrl: session.baseUrl }).appHost;
+    void fetchUserData(accessToken, cloudUrl)
       .then((user) => {
         store.setApiUser(user);
       })

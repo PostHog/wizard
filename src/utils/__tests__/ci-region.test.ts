@@ -62,7 +62,7 @@ describe('getOrAskForProjectData CI region', () => {
       123,
       'https://eu.posthog.com',
     );
-    expect(result.cloudRegion).toBe('eu');
+    expect(result.host.region).toBe('eu');
   });
 
   it('falls back to detection only when no region is provided', async () => {

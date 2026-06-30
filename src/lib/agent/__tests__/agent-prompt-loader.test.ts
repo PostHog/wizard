@@ -13,6 +13,7 @@ import {
   type OrchestratorPromptContext,
 } from '../agent-prompt-loader';
 import { QueueStore } from '@lib/agent/runner/orchestrator/queue';
+import { HostResolution } from '@lib/host-resolution';
 
 function tmpDir(): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'agent-loader-test-'));
@@ -280,7 +281,7 @@ describe('assembleTaskPrompt', () => {
   const ctx: OrchestratorPromptContext = {
     projectId: 1,
     projectApiKey: 'phc_x',
-    host: 'https://us.posthog.com',
+    host: HostResolution.fromApiHost('https://us.posthog.com'),
   };
 
   it('points the agent at its installed task instructions', () => {

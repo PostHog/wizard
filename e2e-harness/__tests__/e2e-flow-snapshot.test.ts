@@ -17,6 +17,7 @@ import { WizardStore } from '@ui/tui/store';
 import { InkUI } from '@ui/tui/ink-ui';
 import { setUI } from '@ui/index';
 import { buildSession, RunPhase } from '@lib/wizard-session';
+import { HostResolution } from '@lib/host-resolution';
 import { Integration } from '@lib/constants';
 import { FRAMEWORK_REGISTRY } from '@lib/registry';
 import { WizardReadiness } from '@lib/health-checks/readiness';
@@ -66,7 +67,7 @@ function traceFlow(
       store.setCredentials({
         accessToken: 'phx_x',
         projectApiKey: 'phc_x',
-        host: 'https://us.posthog.com',
+        host: HostResolution.fromApiHost('https://us.posthog.com'),
         projectId: 1,
       });
     } else if (screen === ScreenId.Run) {
