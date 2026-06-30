@@ -155,7 +155,8 @@ export class HostResolution {
     accessToken: string,
     opts: HostResolutionOptions = {},
   ): Promise<HostResolution> {
-    const region = opts.region ?? (await detectRegion(accessToken, opts.baseUrl));
+    const region =
+      opts.region ?? (await detectRegion(accessToken, opts.baseUrl));
     return HostResolution.fromRegion(region, opts);
   }
 }
