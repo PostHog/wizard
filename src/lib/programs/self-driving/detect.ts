@@ -57,13 +57,18 @@ export function detectPostHogPresent(installDir: string): boolean {
     'composer.json',
     'pubspec.yaml',
   ];
-  for (const name of manifests) {
-    const path = join(installDir, name);
-    if (!existsSync(path)) continue;
-    try {
-      if (POSTHOG_PACKAGE_RE.test(readFileSync(path, 'utf8'))) return true;
-    } catch {
-      /* unreadable — ignore */
+  // Also check a few common sub-app dirs so monorepos (frontend/, backend/)
+  // are caught; deliberately not a recursive tree walk.
+  const dirs = ['.', 'app', 'frontend', 'backend'];
+  for (const dir of dirs) {
+    for (const name of manifests) {
+      const path = join(installDir, dir, name);
+      if (!existsSync(path)) continue;
+      try {
+        if (POSTHOG_PACKAGE_RE.test(readFileSync(path, 'utf8'))) return true;
+      } catch {
+        /* unreadable — ignore */
+      }
     }
   }
   return false;

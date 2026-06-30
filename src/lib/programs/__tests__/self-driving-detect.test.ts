@@ -192,6 +192,34 @@ describe('detectPostHogPresent', () => {
     }
   });
 
+  it('detects PostHog in a common sub-app dir (monorepo)', () => {
+    const dir = makeTmpDir();
+    try {
+      fs.mkdirSync(path.join(dir, 'frontend'));
+      fs.writeFileSync(
+        path.join(dir, 'frontend', 'package.json'),
+        '{"dependencies":{"posthog-js":"^1.0.0"}}',
+      );
+      expect(detectPostHogPresent(dir)).toBe(true);
+    } finally {
+      cleanup(dir);
+    }
+  });
+
+  it('does not scan arbitrary nested dirs (no recursive walk)', () => {
+    const dir = makeTmpDir();
+    try {
+      fs.mkdirSync(path.join(dir, 'services', 'api'), { recursive: true });
+      fs.writeFileSync(
+        path.join(dir, 'services', 'api', 'package.json'),
+        '{"dependencies":{"posthog-node":"^4.0.0"}}',
+      );
+      expect(detectPostHogPresent(dir)).toBe(false);
+    } finally {
+      cleanup(dir);
+    }
+  });
+
   it('returns false for an empty project', () => {
     const dir = makeTmpDir();
     try {
