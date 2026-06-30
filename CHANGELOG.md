@@ -1,5 +1,18 @@
 # Changelog
 
+## [2.35.0](https://github.com/PostHog/wizard/compare/v2.34.0...v2.35.0) (2026-06-30)
+
+
+### Features
+
+* **auth:** add --base-url to point the wizard at a custom PostHog stack ([#746](https://github.com/PostHog/wizard/issues/746)) ([80b6967](https://github.com/PostHog/wizard/commit/80b69675d1c89d406e094209f97f50065ded10a4))
+* **warlock:** explicit security scanner abort copy ([#751](https://github.com/PostHog/wizard/issues/751)) ([a4c6fd1](https://github.com/PostHog/wizard/commit/a4c6fd103a48eb69a1e87cfebeb6ee378f497986))
+
+
+### Bug Fixes
+
+* **setup:** honor the provided region in CI instead of probing [@me](https://github.com/me) ([#763](https://github.com/PostHog/wizard/issues/763)) ([f9215b3](https://github.com/PostHog/wizard/commit/f9215b37e4956ea83dbf0c94008432c3bf79f845))
+
 ## [2.34.0](https://github.com/PostHog/wizard/compare/v2.33.0...v2.34.0) (2026-06-29)
 
 
