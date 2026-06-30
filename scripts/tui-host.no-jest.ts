@@ -90,6 +90,12 @@ async function main() {
     (process.env.PROGRAM as ProgramId) || Program.PostHogIntegration;
   const programConfig = getProgramConfig(programId);
 
+  // This host answers wizard_ask via its e2e driver, so keep the ask bridge
+  // wired even though the session is `ci` (which here is only for headless
+  // auth). Without it, ask-driven flows like self-driving abort with
+  // requires-interactive-mode the moment they need to ask a question.
+  process.env.WIZARD_ASK_AUTODRIVE = '1';
+
   const { store } = startTUI(VERSION, programId);
   store.session = buildSession({
     installDir: process.env.APP_DIR!,

@@ -146,7 +146,7 @@ exports[`e2e flow snapshot — self-driving > already-integrated (skips SDK setu
 exports[`e2e flow snapshot — self-driving > integration-first (no existing PostHog) walks a stable path 1`] = `
 {
   "profile": {
-    "ask": "first",
+    "ask": "cancel",
     "healthCheck": "dismiss",
     "integrate": true,
     "mcp": "skip",

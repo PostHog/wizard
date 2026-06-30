@@ -93,10 +93,12 @@ export async function runLinearProgram(
 
   getUI().startRun();
 
-  // wizard_ask is only available in interactive mode. CI/signup users have
-  // no way to answer; we omit the bridge so the tool returns an actionable
-  // error rather than hanging on a never-resolving prompt.
-  const askDisabled = shouldDisableAsk(session);
+  // wizard_ask needs an answerer. A human answers at the keyboard; the e2e
+  // snapshot/MCP host answers via its driver and sets WIZARD_ASK_AUTODRIVE.
+  // CI/signup with neither has no answerer, so we omit the bridge and the tool
+  // returns an actionable error rather than hanging on a never-resolving prompt.
+  const askDisabled =
+    shouldDisableAsk(session) && process.env.WIZARD_ASK_AUTODRIVE !== '1';
   const askBridge = askDisabled
     ? undefined
     : createWizardAskBridge({
