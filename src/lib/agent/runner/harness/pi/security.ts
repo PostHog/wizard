@@ -9,7 +9,7 @@
  * run terminates as a YARA violation.
  *
  * This is the one fence. Subagents run their own pi session with the SAME
- * extension installed (see pi-subagent.ts), so a child cannot escape it.
+ * extension installed (see subagent.ts), so a child cannot escape it.
  */
 
 import { wizardCanUseTool } from '@lib/agent/agent-interface';

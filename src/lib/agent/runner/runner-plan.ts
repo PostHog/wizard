@@ -16,9 +16,9 @@
 import { DEFAULT_AGENT_MODEL, WIZARD_RUNNER_FLAG_KEY } from '@lib/constants';
 import { logToFile } from '@utils/debug';
 import type { ProgramId } from '@lib/programs/program-registry';
-import type { AgentRunner } from './backends/types';
-import { anthropicBackend } from './backends/anthropic';
-import { piBackend } from './backends/pi';
+import type { AgentRunner } from './harness/types';
+import { anthropicBackend } from './harness/anthropic';
+import { piBackend } from './harness/pi';
 
 export type RunnerName = 'anthropic' | 'pi';
 export type RouterName = 'linear' | 'orchestrator';

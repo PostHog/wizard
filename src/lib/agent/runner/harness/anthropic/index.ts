@@ -13,7 +13,7 @@ import {
 import { getLogFilePath, logToFile } from '@utils/debug';
 import { detectNodePackageManagers } from '@lib/detection/package-manager';
 import { sessionToOptions } from '@lib/agent/runner/shared/bootstrap';
-import type { AgentResult, AgentRunner, BackendRunInputs } from './types';
+import type { AgentResult, AgentRunner, BackendRunInputs } from '../types';
 
 export const anthropicBackend: AgentRunner = {
   name: 'anthropic',

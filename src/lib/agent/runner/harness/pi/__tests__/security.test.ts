@@ -3,7 +3,7 @@ import {
   createSecurityExtension,
   MAX_TOOL_CALLS,
   type PiExtensionApiLike,
-} from '../pi-security';
+} from '../security';
 
 const block = (toolName: string, input: Record<string, unknown>) =>
   evaluateToolCall(toolName, input).block;

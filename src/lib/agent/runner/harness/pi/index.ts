@@ -25,7 +25,7 @@ import {
 import { AgentErrorType } from '@lib/agent/agent-interface';
 import { AgentSignals } from '@lib/agent/signals';
 import { getWizardCommandments } from '@lib/agent/commandments';
-import type { AgentResult, AgentRunner, BackendRunInputs } from './types';
+import type { AgentResult, AgentRunner, BackendRunInputs } from '../types';
 
 /** Provider registered on the in-memory registry for this run. */
 const GATEWAY_PROVIDER = 'posthog-gateway';
@@ -270,7 +270,7 @@ export const piBackend: AgentRunner = {
       // allowlist + .env fencing + YARA). `noExtensions: true` only suppresses
       // disk-discovered extensions; explicit `extensionFactories` still load,
       // so the fence is on while the target project can't inject its own.
-      const { createSecurityExtension } = await import('./pi-security');
+      const { createSecurityExtension } = await import('./security');
       const security = createSecurityExtension({
         disallowedTools: programConfig.disallowedTools,
       });
@@ -285,7 +285,7 @@ export const piBackend: AgentRunner = {
       >;
       let mcpCleanup: (() => void) | undefined;
       try {
-        const { setupPostHogMcp } = await import('./pi-mcp');
+        const { setupPostHogMcp } = await import('./mcp');
         const mcp = await setupPostHogMcp({
           agentDir: getAgentDir(),
           mcpUrl: boot.mcpUrl,
@@ -317,9 +317,9 @@ export const piBackend: AgentRunner = {
       // the code changes. Loaded lazily — it pulls in typebox (ESM), which must
       // stay out of the static module graph so CommonJS unit tests can load the
       // backend seam without parsing it.
-      const { createWizardPiTools } = await import('./pi-tools');
-      const { createWizardPiTaskTools } = await import('./pi-tasks');
-      const { createDispatchAgentTool } = await import('./pi-subagent');
+      const { createWizardPiTools } = await import('./tools');
+      const { createWizardPiTaskTools } = await import('./tasks');
+      const { createDispatchAgentTool } = await import('./subagent');
       // The one bash the agent (and its subagents) may use: every subprocess it
       // spawns gets a scrubbed env, so no secret or ambient variable reaches an
       // `npm install`. Shared with the subagent so the lockdown is inherited.
