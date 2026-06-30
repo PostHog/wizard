@@ -35,6 +35,10 @@ export const POSTHOG_PRESENT_KEY = 'postHogPresent';
  */
 export const SELF_DRIVING_INTEGRATE_PATH_KEY = 'selfDrivingIntegratePath';
 
+// Matches `posthog` at a dependency boundary (line start, or after a
+// quote/slash/=/space), so it skips the substring glued inside another word.
+const POSTHOG_PACKAGE_RE = /(^|["'\s/=])posthog/im;
+
 /**
  * Deterministic, offline check: does the project already have a PostHog SDK?
  * Scans the common dependency manifests at the install dir for a `posthog`
@@ -57,7 +61,7 @@ export function detectPostHogPresent(installDir: string): boolean {
     const path = join(installDir, name);
     if (!existsSync(path)) continue;
     try {
-      if (/posthog/i.test(readFileSync(path, 'utf8'))) return true;
+      if (POSTHOG_PACKAGE_RE.test(readFileSync(path, 'utf8'))) return true;
     } catch {
       /* unreadable — ignore */
     }

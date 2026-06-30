@@ -158,6 +158,40 @@ describe('detectPostHogPresent', () => {
     }
   });
 
+  it('does not match "posthog" glued inside a larger package name', () => {
+    // Only fires at a dependency boundary, so `posthog` glued inside another
+    // package name isn't a false positive. (A bare word in prose still matches.)
+    const dir = makeTmpDir();
+    try {
+      fs.writeFileSync(
+        path.join(dir, 'requirements.txt'),
+        'myposthogtool==1.0.0\n',
+      );
+      expect(detectPostHogPresent(dir)).toBe(false);
+    } finally {
+      cleanup(dir);
+    }
+  });
+
+  it('detects PostHog declared as a dependency across manifest formats', () => {
+    const cases: Array<[string, string]> = [
+      ['package.json', '{"dependencies":{"posthog-node":"^4.0.0"}}'],
+      ['requirements.txt', 'flask==3.0\nposthog==3.7.0\n'],
+      ['Gemfile', "source 'https://rubygems.org'\ngem 'posthog'\n"],
+      ['go.mod', 'module x\nrequire github.com/posthog/posthog-go v1.2.0\n'],
+      ['pubspec.yaml', 'dependencies:\n  posthog: ^4.0.0\n'],
+    ];
+    for (const [name, contents] of cases) {
+      const dir = makeTmpDir();
+      try {
+        fs.writeFileSync(path.join(dir, name), contents);
+        expect(detectPostHogPresent(dir), name).toBe(true);
+      } finally {
+        cleanup(dir);
+      }
+    }
+  });
+
   it('returns false for an empty project', () => {
     const dir = makeTmpDir();
     try {
