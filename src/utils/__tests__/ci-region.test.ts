@@ -1,5 +1,5 @@
 import { getOrAskForProjectData } from '@utils/setup-utils';
-import { detectRegionFromToken } from '@utils/urls';
+import { detectRegion } from '@utils/urls';
 import { fetchProjectData } from '@lib/api';
 
 vi.mock('@ui', () => ({
@@ -8,9 +8,12 @@ vi.mock('@ui', () => ({
   }),
 }));
 vi.mock('@utils/urls', () => ({
-  detectRegionFromToken: vi.fn(),
-  getHostFromRegion: (r: string) => `https://${r}.posthog.com`,
-  getCloudUrlFromRegion: (r: string) => `https://${r}.posthog.com`,
+  detectRegion: vi.fn(),
+  getHost: (r: string) => `https://${r}.posthog.com`,
+  getCloudUrl: (r: string) => `https://${r}.posthog.com`,
+  getLlmGatewayUrl: (host: string) => `${host}/llm-gateway`,
+  getUiHostFromHost: (host: string) => host,
+  resolveBaseUrl: (baseUrl?: string) => baseUrl,
 }));
 vi.mock('@lib/api', () => ({
   fetchProjectData: vi.fn(),
@@ -24,9 +27,7 @@ vi.mock('@utils/analytics', () => ({
   },
 }));
 
-const mockedDetect = detectRegionFromToken as unknown as ReturnType<
-  typeof vi.fn
->;
+const mockedDetect = detectRegion as unknown as ReturnType<typeof vi.fn>;
 const mockedFetchProject = fetchProjectData as unknown as ReturnType<
   typeof vi.fn
 >;
