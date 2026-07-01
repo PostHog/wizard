@@ -17,6 +17,7 @@
 
 import type { WizardSession } from '@lib/wizard-session';
 import type { AdditionalFeature } from '@lib/wizard-session';
+import type { Harness } from '@lib/constants';
 import type { ProgramConfig } from '@lib/programs/program-step';
 import type { SpinnerHandle } from '@ui';
 import type { WizardAskBridge } from '@lib/wizard-ask-bridge';
@@ -95,7 +96,7 @@ export interface TaskRunInputs {
 /** A drop-in agent runner: consumes a fully-assembled run, returns a result. */
 export interface AgentRunner {
   /** Stable name used for logs + telemetry (matches the flag variant). */
-  readonly name: 'anthropic' | 'pi';
+  readonly name: Harness;
   run(inputs: BackendRunInputs): Promise<AgentResult>;
   /**
    * Drive one orchestrator-mode unit of work. Optional — a harness that has
