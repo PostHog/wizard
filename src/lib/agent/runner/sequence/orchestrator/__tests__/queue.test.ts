@@ -6,7 +6,7 @@ import {
   QUEUE_DIR_NAME,
   type QueueFile,
   type TaskHandoff,
-} from '@lib/agent/runner/mode/orchestrator/queue';
+} from '@lib/agent/runner/sequence/orchestrator/queue';
 
 vi.mock('@utils/analytics', () => ({
   analytics: { captureException: vi.fn(), wizardCapture: vi.fn() },

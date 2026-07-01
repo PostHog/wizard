@@ -21,7 +21,7 @@ import type { ProgramConfig } from '@lib/programs/program-step';
 import type { SpinnerHandle } from '@ui';
 import type { WizardAskBridge } from '@lib/wizard-ask-bridge';
 import type { AgentErrorType } from '@lib/agent/agent-interface';
-import type { OrchestratorToolsContext } from '@lib/agent/runner/mode/orchestrator/queue-tools';
+import type { OrchestratorToolsContext } from '@lib/agent/runner/sequence/orchestrator/queue-tools';
 import type {
   ProgramRun,
   BootstrapResult,
