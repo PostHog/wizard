@@ -367,7 +367,9 @@ const WIZARD_DOC_BASENAMES = new Set([
 
 const WIZARD_DOC_PATTERNS: RegExp[] = [EVENT_INVENTORY_PART_PATTERN];
 
-function isWizardDocumentationPath(filePath: string | undefined): boolean {
+export function isWizardDocumentationPath(
+  filePath: string | undefined,
+): boolean {
   if (!filePath) return false;
   const basename = path.basename(filePath);
   if (WIZARD_DOC_BASENAMES.has(basename)) return true;
