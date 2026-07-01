@@ -24,6 +24,11 @@ function storeWithOutro(
   return store;
 }
 
+/** Force `tokenHudVisible` to `visible`, regardless of its IS_DEV default. */
+function setHudVisible(store: WizardStore, visible: boolean): void {
+  if (store.tokenHudVisible !== visible) store.toggleTokenHud();
+}
+
 describe('getExitLine', () => {
   it('echoes the handoff prompt on its own line so it survives in scrollback', () => {
     const prompt =
@@ -116,5 +121,102 @@ describe('getExitLine', () => {
     );
     expect(line).toMatch(/exited\.$/);
     expect(line).not.toContain('coding agent');
+  });
+
+  describe('token/cost tally (hidden Ctrl+T HUD survives into scrollback)', () => {
+    it('appends the running cost estimate on a success outro when the HUD is visible', () => {
+      const store = storeWithOutro({
+        kind: OutroKind.Success,
+        message: 'Done!',
+      });
+      setHudVisible(store, true);
+      store.addTokenUsage({
+        inputTokens: 1_000_000,
+        outputTokens: 0,
+        cacheReadTokens: 0,
+        cacheCreationTokens: 0,
+        cacheCreation5m: 0,
+        cacheCreation1h: 0,
+      });
+
+      const line = stripAnsi(getExitLine(store));
+
+      expect(line).toContain('Cost (estimate): $3.00');
+      expect(line).toContain('in 1.00M');
+    });
+
+    it('labels the tally "Final cost" once reconciled to the SDK total', () => {
+      const store = storeWithOutro({
+        kind: OutroKind.Success,
+        message: 'Done!',
+      });
+      setHudVisible(store, true);
+      store.addTokenUsage({
+        inputTokens: 1_000_000,
+        outputTokens: 0,
+        cacheReadTokens: 0,
+        cacheCreationTokens: 0,
+        cacheCreation5m: 0,
+        cacheCreation1h: 0,
+      });
+      store.setFinalTokenCostUsd(1.5);
+
+      const line = stripAnsi(getExitLine(store));
+
+      expect(line).toContain('Final cost: $1.50');
+    });
+
+    it('appends the tally after the "exited" line for non-success outcomes too', () => {
+      const store = storeWithOutro({ kind: OutroKind.Error, message: 'boom' });
+      setHudVisible(store, true);
+      store.addTokenUsage({
+        inputTokens: 1_000_000,
+        outputTokens: 0,
+        cacheReadTokens: 0,
+        cacheCreationTokens: 0,
+        cacheCreation5m: 0,
+        cacheCreation1h: 0,
+      });
+
+      const line = stripAnsi(getExitLine(store));
+
+      expect(line).toMatch(/exited\./);
+      expect(line).toContain('Cost (estimate): $3.00');
+    });
+
+    it('omits the tally entirely when the run never produced any usage', () => {
+      const store = storeWithOutro({
+        kind: OutroKind.Success,
+        message: 'Done!',
+      });
+      setHudVisible(store, true);
+
+      const line = stripAnsi(getExitLine(store));
+
+      expect(line).not.toContain('Cost');
+    });
+
+    it('omits the tally when the HUD was toggled off, even with usage to show', () => {
+      // The user explicitly hid the HUD (or it's a production run, where it
+      // defaults hidden) -- the cost tally shouldn't appear out of nowhere
+      // in scrollback for someone who never asked to see it.
+      const store = storeWithOutro({
+        kind: OutroKind.Success,
+        message: 'Done!',
+      });
+      setHudVisible(store, false);
+      store.addTokenUsage({
+        inputTokens: 1_000_000,
+        outputTokens: 0,
+        cacheReadTokens: 0,
+        cacheCreationTokens: 0,
+        cacheCreation5m: 0,
+        cacheCreation1h: 0,
+      });
+
+      const line = stripAnsi(getExitLine(store));
+
+      expect(line).not.toContain('Cost');
+    });
   });
 });

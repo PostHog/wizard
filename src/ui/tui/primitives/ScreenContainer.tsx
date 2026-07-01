@@ -10,9 +10,13 @@
  * screen content (inside the transition area) so all screens get it.
  */
 
-import { Box } from 'ink';
+import { Box, useInput } from 'ink';
 import { useSyncExternalStore, type ReactNode } from 'react';
 import { TitleBar } from '@ui/tui/components/TitleBar';
+import {
+  TokenCostHud,
+  tokenCostHudRowCount,
+} from '@ui/tui/components/TokenCostHud';
 import { useStdoutDimensions } from '@ui/tui/hooks/useStdoutDimensions';
 import { KeyboardHintsProvider } from '@ui/tui/hooks/useKeyboardHints';
 import { DissolveTransition } from './DissolveTransition.js';
@@ -41,9 +45,28 @@ export const ScreenContainer = ({ store, screens }: ScreenContainerProps) => {
     () => store.getSnapshot(),
   );
 
+  // Hidden shortcut: Ctrl+T toggles the token/cost HUD. Deliberately not
+  // wired through useKeyBindings, so it never appears in the hints bar.
+  // Mounted here (not on any individual screen) so it works everywhere —
+  // ScreenContainer is the one component alive for the whole process.
+  useInput((input, key) => {
+    if (key.ctrl && input === 't') store.toggleTokenHud();
+  });
+
   const terminalWidth = columns;
   const width = getContentWidth(terminalWidth);
-  const contentHeight = Math.max(5, rows - 3);
+  const hudVisible = store.tokenHudVisible;
+  // Text width inside TokenCostHud's own paddingX={1} (1 column each side).
+  const hudContentWidth = Math.max(1, width - 2);
+  // 1 row when the "Ctrl+T to hide" hint fits on the cost line's row, 2 when
+  // it needs its own row below (see tokenCostHudRowCount) — plus a one-row
+  // spacer below the HUD. Budget the exact total so it can never disagree
+  // with what TokenCostHud actually renders and push content past the
+  // terminal height.
+  const hudRows = hudVisible
+    ? tokenCostHudRowCount(store.tokenUsage, hudContentWidth) + 1
+    : 0;
+  const contentHeight = Math.max(5, rows - 3 - hudRows);
   const contentAreaWidth = Math.max(10, width - 2);
   const direction = store.lastNavDirection === 'pop' ? 'right' : 'left';
   const activeScreen = screens[store.currentScreen] ?? null;
@@ -52,6 +75,12 @@ export const ScreenContainer = ({ store, screens }: ScreenContainerProps) => {
     <Box flexDirection="column" height={rows} width={width}>
       <TitleBar version={store.version} width={width} />
       <Box height={1} />
+      {hudVisible && (
+        <>
+          <TokenCostHud usage={store.tokenUsage} width={hudContentWidth} />
+          <Box height={1} />
+        </>
+      )}
       <Box flexDirection="column" flexGrow={1} paddingX={1}>
         <DissolveTransition
           transitionKey={store.currentScreen}
