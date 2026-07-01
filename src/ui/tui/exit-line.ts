@@ -23,13 +23,17 @@ const BOLD = '\x1b[1m';
 const DIM = '\x1b[2m';
 
 /**
- * The hidden Ctrl+T HUD only shows on demand and the outro screen's
- * "any key" dismissal can beat it to the punch — so the run's final
- * token/cost tally is also echoed here unconditionally, guaranteeing it's
- * visible in scrollback regardless of whether the user ever opened the HUD.
- * `null` when the run never produced any usage (e.g. non-agent programs).
+ * Mirrors the hidden Ctrl+T HUD's tally into post-exit scrollback — but only
+ * when the HUD is actually visible at exit (`store.tokenHudVisible`, which
+ * defaults on in dev/test and off in production; `useDismissOnAnyKey`
+ * already keeps Ctrl+T from also dismissing the outro screen underneath
+ * it). A production run where the user never toggled it on shouldn't have a
+ * cost number appear from nowhere once the TUI tears down. `null` when the
+ * HUD is hidden, or the run never produced any usage (e.g. non-agent
+ * programs).
  */
 function tokenCostLine(store: WizardStore): string | null {
+  if (!store.tokenHudVisible) return null;
   const usage = store.tokenUsage;
   const totalTokens =
     usage.inputTokens +

@@ -13,7 +13,10 @@
 import { Box, useInput } from 'ink';
 import { useSyncExternalStore, type ReactNode } from 'react';
 import { TitleBar } from '@ui/tui/components/TitleBar';
-import { TokenCostHud } from '@ui/tui/components/TokenCostHud';
+import {
+  TokenCostHud,
+  tokenCostHudRowCount,
+} from '@ui/tui/components/TokenCostHud';
 import { useStdoutDimensions } from '@ui/tui/hooks/useStdoutDimensions';
 import { KeyboardHintsProvider } from '@ui/tui/hooks/useKeyboardHints';
 import { DissolveTransition } from './DissolveTransition.js';
@@ -53,10 +56,17 @@ export const ScreenContainer = ({ store, screens }: ScreenContainerProps) => {
   const terminalWidth = columns;
   const width = getContentWidth(terminalWidth);
   const hudVisible = store.tokenHudVisible;
-  // The HUD is exactly two rows (cost line + "Ctrl+T to hide" hint), plus a
-  // one-row spacer below it (see TokenCostHud) — budget for all three here
-  // so adding them doesn't push the screen content past the terminal height.
-  const contentHeight = Math.max(5, rows - 3 - (hudVisible ? 3 : 0));
+  // Text width inside TokenCostHud's own paddingX={1} (1 column each side).
+  const hudContentWidth = Math.max(1, width - 2);
+  // 1 row when the "Ctrl+T to hide" hint fits on the cost line's row, 2 when
+  // it needs its own row below (see tokenCostHudRowCount) — plus a one-row
+  // spacer below the HUD. Budget the exact total so it can never disagree
+  // with what TokenCostHud actually renders and push content past the
+  // terminal height.
+  const hudRows = hudVisible
+    ? tokenCostHudRowCount(store.tokenUsage, hudContentWidth) + 1
+    : 0;
+  const contentHeight = Math.max(5, rows - 3 - hudRows);
   const contentAreaWidth = Math.max(10, width - 2);
   const direction = store.lastNavDirection === 'pop' ? 'right' : 'left';
   const activeScreen = screens[store.currentScreen] ?? null;
@@ -67,7 +77,7 @@ export const ScreenContainer = ({ store, screens }: ScreenContainerProps) => {
       <Box height={1} />
       {hudVisible && (
         <>
-          <TokenCostHud usage={store.tokenUsage} />
+          <TokenCostHud usage={store.tokenUsage} width={hudContentWidth} />
           <Box height={1} />
         </>
       )}
