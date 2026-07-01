@@ -12,7 +12,7 @@ import {
   type AgentRegistry,
   type OrchestratorPromptContext,
 } from '../agent-prompt-loader';
-import { QueueStore } from '@lib/agent/runner/orchestrator/queue';
+import { QueueStore } from '@lib/agent/runner/sequence/orchestrator/queue';
 
 function tmpDir(): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'agent-loader-test-'));

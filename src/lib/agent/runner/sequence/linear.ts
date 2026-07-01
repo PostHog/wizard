@@ -5,29 +5,29 @@
  * program-level static metadata (tool allow/disallow lists, etc.).
  */
 
-import type { WizardSession } from '../../wizard-session';
-import { OutroKind } from '../../wizard-session';
-import { getUI } from '../../../ui';
-import { AgentErrorType, AgentSignals } from '../agent-interface';
-import { restoreClaudeSettings } from '../claude-settings';
-import { getCloudUrlFromRegion } from '../../../utils/urls';
-import { logToFile } from '../../../utils/debug';
-import { createBenchmarkPipeline } from '../../middleware/benchmark';
+import type { WizardSession } from '../../../wizard-session';
+import { OutroKind } from '../../../wizard-session';
+import { getUI } from '../../../../ui';
+import { AgentErrorType, AgentSignals } from '../../agent-interface';
+import { restoreClaudeSettings } from '../../claude-settings';
+import { getCloudUrlFromRegion } from '../../../../utils/urls';
+import { logToFile } from '../../../../utils/debug';
+import { createBenchmarkPipeline } from '../../../middleware/benchmark';
 import {
   wizardAbort,
   WizardError,
   registerCleanup,
-} from '../../../utils/wizard-abort';
-import { analytics } from '../../../utils/analytics';
-import { formatScanReport, writeScanReport } from '../../yara-hooks';
-import { installSkillById } from '../../wizard-tools';
-import { createWizardAskBridge } from '../../wizard-ask-bridge';
-import type { ProgramConfig } from '../../programs/program-step';
-import { assemblePrompt } from '../agent-prompt';
-import type { ProgramRun, BootstrapResult } from './shared/types';
-import { abortOnInstallFailure } from './shared/errors';
-import { shouldDisableAsk, sessionToOptions } from './shared/bootstrap';
-import { resolvePair, getRunner, MODELS } from './runner-plan';
+} from '../../../../utils/wizard-abort';
+import { analytics } from '../../../../utils/analytics';
+import { formatScanReport, writeScanReport } from '../../../yara-hooks';
+import { installSkillById } from '../../../wizard-tools';
+import { createWizardAskBridge } from '../../../wizard-ask-bridge';
+import type { ProgramConfig } from '../../../programs/program-step';
+import { assemblePrompt } from '../../agent-prompt';
+import type { ProgramRun, BootstrapResult } from '../shared/types';
+import { abortOnInstallFailure } from '../shared/errors';
+import { shouldDisableAsk, sessionToOptions } from '../shared/bootstrap';
+import { resolvePair, getRunner, MODELS } from '../runner-plan';
 
 export async function runLinearProgram(
   session: WizardSession,

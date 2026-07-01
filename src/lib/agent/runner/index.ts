@@ -20,12 +20,12 @@ import type { WizardSession } from '../../wizard-session';
 import { analytics } from '@utils/analytics';
 import { isOrchestratorEnabled } from '../agent-interface';
 import { getUI } from '../../../ui';
-import { runOrchestrator } from './orchestrator/orchestrator-runner';
+import { runOrchestrator } from './sequence/orchestrator/orchestrator-runner';
 import type { ProgramConfig } from '../../programs/program-step';
 import { WizardVariant } from './shared/types';
 import type { ProgramRun, BootstrapResult } from './shared/types';
 import { bootstrapProgram } from './shared/bootstrap';
-import { runLinearProgram } from './linear';
+import { runLinearProgram } from './sequence/linear';
 import { flushScanReport } from '../../yara-hooks';
 import { registerCleanup } from '../../../utils/wizard-abort';
 
