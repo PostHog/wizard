@@ -1,8 +1,33 @@
 import {
   computeTokenCostUsd,
+  pricePerMtokForModel,
   formatTokenCount,
   formatCostUsd,
 } from '@lib/agent/token-pricing';
+
+describe('pricePerMtokForModel', () => {
+  it('defaults to Sonnet pricing when no model is given', () => {
+    expect(pricePerMtokForModel(undefined)).toEqual({
+      input: 3,
+      output: 15,
+      cacheRead: 0.3,
+      cacheCreation5m: 3.75,
+      cacheCreation1h: 6,
+    });
+  });
+
+  it('matches Haiku by substring, ignoring the dated version suffix', () => {
+    expect(pricePerMtokForModel('claude-haiku-4-5-20251001').input).toBe(1);
+  });
+
+  it('matches Opus by substring', () => {
+    expect(pricePerMtokForModel('claude-opus-4-5-20251101').input).toBe(15);
+  });
+
+  it('falls back to Sonnet pricing for an unrecognized model', () => {
+    expect(pricePerMtokForModel('claude-mystery-9000').input).toBe(3);
+  });
+});
 
 describe('computeTokenCostUsd', () => {
   it('prices input, output, and cache-read tokens at their per-Mtok rates', () => {
@@ -27,6 +52,40 @@ describe('computeTokenCostUsd', () => {
 
   it('returns 0 for an all-zero usage delta', () => {
     expect(computeTokenCostUsd(0, 0, 0, 0, 0, 0)).toBe(0);
+  });
+
+  it('defaults to Sonnet pricing when no model is passed', () => {
+    const cost = computeTokenCostUsd(1_000_000, 0, 0, 0, 0, 0);
+    expect(cost).toBeCloseTo(3, 5);
+  });
+
+  it('prices a Haiku turn at Haiku rates, not Sonnet', () => {
+    const cost = computeTokenCostUsd(
+      1_000_000,
+      1_000_000,
+      0,
+      0,
+      0,
+      0,
+      'claude-haiku-4-5-20251001',
+    );
+    // $1/Mtok input + $5/Mtok output -- 1/3 and 1/3 of the Sonnet cost this
+    // same delta would get without a model, so a Haiku-overridden run (e.g.
+    // source-map detection) doesn't get billed at Sonnet's rate.
+    expect(cost).toBeCloseTo(1 + 5, 5);
+  });
+
+  it('prices an Opus turn at Opus rates', () => {
+    const cost = computeTokenCostUsd(
+      1_000_000,
+      0,
+      0,
+      0,
+      0,
+      0,
+      'claude-opus-4-5-20251101',
+    );
+    expect(cost).toBeCloseTo(15, 5);
   });
 });
 

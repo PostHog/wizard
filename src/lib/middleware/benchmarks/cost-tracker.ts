@@ -14,6 +14,11 @@ export interface CostData {
 
 // Pricing table + formula moved to `@lib/agent/token-pricing` so the live
 // token/cost HUD's per-turn estimate can't drift from this benchmark's.
+// No model is passed here (falls back to Sonnet pricing) -- MiddlewareContext
+// has no model field to thread through, and `--benchmark` always measures
+// the default flow, never a Haiku-overridden program. Still reconciles to
+// the SDK's authoritative total_cost_usd in onFinalize below, same as the
+// live HUD, so this only risks the unreconciled per-phase breakdown.
 const computeCost = computeTokenCostUsd;
 
 export class CostTrackerPlugin implements Middleware {

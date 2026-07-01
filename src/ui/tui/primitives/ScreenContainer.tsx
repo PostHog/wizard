@@ -53,10 +53,10 @@ export const ScreenContainer = ({ store, screens }: ScreenContainerProps) => {
   const terminalWidth = columns;
   const width = getContentWidth(terminalWidth);
   const hudVisible = store.tokenHudVisible;
-  // The HUD is exactly one row, plus a one-row spacer below it (see
-  // TokenCostHud) — budget for both here so adding them doesn't push the
-  // screen content past the terminal height.
-  const contentHeight = Math.max(5, rows - 3 - (hudVisible ? 2 : 0));
+  // The HUD is exactly two rows (cost line + "Ctrl+T to hide" hint), plus a
+  // one-row spacer below it (see TokenCostHud) — budget for all three here
+  // so adding them doesn't push the screen content past the terminal height.
+  const contentHeight = Math.max(5, rows - 3 - (hudVisible ? 3 : 0));
   const contentAreaWidth = Math.max(10, width - 2);
   const direction = store.lastNavDirection === 'pop' ? 'right' : 'left';
   const activeScreen = screens[store.currentScreen] ?? null;

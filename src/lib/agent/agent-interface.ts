@@ -1603,18 +1603,26 @@ function handleSDKMessage(
       // middleware's TokenTrackerPlugin/CacheTrackerPlugin extraction (no
       // dedup for SDK-retried turns — see addTokenUsage's doc comment), so
       // this stays live-updating for every run, not just `--benchmark`.
-      const usage = message.message?.usage as
+      // `message.message` is a BetaMessage (the raw Anthropic API response),
+      // which carries `model` alongside `usage` — read per turn, not from
+      // the run's nominal model, since a subagent dispatched via the Agent
+      // tool can genuinely run on a different model than the main session.
+      const assistantApiMessage = message.message as
         | {
-            input_tokens?: number;
-            output_tokens?: number;
-            cache_read_input_tokens?: number;
-            cache_creation_input_tokens?: number;
-            cache_creation?: {
-              ephemeral_5m_input_tokens?: number;
-              ephemeral_1h_input_tokens?: number;
+            model?: string;
+            usage?: {
+              input_tokens?: number;
+              output_tokens?: number;
+              cache_read_input_tokens?: number;
+              cache_creation_input_tokens?: number;
+              cache_creation?: {
+                ephemeral_5m_input_tokens?: number;
+                ephemeral_1h_input_tokens?: number;
+              };
             };
           }
         | undefined;
+      const usage = assistantApiMessage?.usage;
       if (usage) {
         getUI().addTokenUsage({
           inputTokens: Number(usage.input_tokens ?? 0),
@@ -1627,6 +1635,7 @@ function handleSDKMessage(
           cacheCreation1h: Number(
             usage.cache_creation?.ephemeral_1h_input_tokens ?? 0,
           ),
+          model: assistantApiMessage?.model,
         });
       }
 

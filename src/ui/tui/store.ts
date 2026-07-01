@@ -15,7 +15,12 @@
 
 import { atom, map } from 'nanostores';
 import { logToFile } from '@utils/debug';
-import { TaskStatus, isTaskStatus, type AuthErrorDetail } from '@ui/wizard-ui';
+import {
+  TaskStatus,
+  isTaskStatus,
+  type AuthErrorDetail,
+  type TokenUsageDelta,
+} from '@ui/wizard-ui';
 import {
   type WizardSession,
   type OutroData,
@@ -50,6 +55,7 @@ import type {
 import { getProgramConfig } from '@lib/programs/program-registry';
 import { withAiOptInGate } from '@lib/programs/ai-opt-in-gate';
 import { EXPANDED_COUNT } from '@ui/tui/constants';
+import { IS_DEV } from '@lib/constants';
 import { computeTokenCostUsd } from '@lib/agent/token-pricing';
 
 export { TaskStatus, ScreenId, Overlay, Program, RunPhase, McpOutcome };
@@ -175,7 +181,11 @@ export class WizardStore {
     null,
   );
   private $tokenUsage = atom<TokenUsageSnapshot>(EMPTY_TOKEN_USAGE);
-  private $tokenHudVisible = atom(false);
+  // Defaults on for local/dev/test runs (tsx, `pnpm try`, vitest) so
+  // contributors see it without needing to know the shortcut; defaults off
+  // for the published build, where it stays genuinely hidden. Still
+  // Ctrl+T-toggleable either way.
+  private $tokenHudVisible = atom(IS_DEV);
 
   private _onTasksChanged: (() => void) | null = null;
   /** Last screen seen — used to detect screen transitions for analytics. */
@@ -911,14 +921,7 @@ export class WizardStore {
    * for a hidden debug HUD, not a billing record, and `setFinalTokenCostUsd`
    * corrects the total once the run's authoritative cost is known.
    */
-  addTokenUsage(delta: {
-    inputTokens: number;
-    outputTokens: number;
-    cacheReadTokens: number;
-    cacheCreationTokens: number;
-    cacheCreation5m: number;
-    cacheCreation1h: number;
-  }): void {
+  addTokenUsage(delta: TokenUsageDelta): void {
     const cur = this.$tokenUsage.get();
     if (cur.costIsFinal) return;
     const deltaCostUsd = computeTokenCostUsd(
@@ -928,6 +931,7 @@ export class WizardStore {
       delta.cacheCreation5m,
       delta.cacheCreation1h,
       delta.cacheCreationTokens,
+      delta.model,
     );
     this.$tokenUsage.set({
       inputTokens: cur.inputTokens + delta.inputTokens,

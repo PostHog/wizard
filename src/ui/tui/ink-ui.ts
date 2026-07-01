@@ -6,7 +6,12 @@
  * The router derives the active screen from session state.
  */
 
-import type { WizardUI, SpinnerHandle, AuthErrorDetail } from '@ui/wizard-ui';
+import type {
+  WizardUI,
+  SpinnerHandle,
+  AuthErrorDetail,
+  TokenUsageDelta,
+} from '@ui/wizard-ui';
 import type { WizardStore } from './store.js';
 import type { SettingsConflict } from '@lib/agent/claude-settings';
 import type { WizardReadinessResult } from '@lib/health-checks/readiness';
@@ -240,14 +245,7 @@ export class InkUI implements WizardUI {
     this.store.setNotebookUrl(url);
   }
 
-  addTokenUsage(delta: {
-    inputTokens: number;
-    outputTokens: number;
-    cacheReadTokens: number;
-    cacheCreationTokens: number;
-    cacheCreation5m: number;
-    cacheCreation1h: number;
-  }): void {
+  addTokenUsage(delta: TokenUsageDelta): void {
     this.store.addTokenUsage(delta);
   }
 

@@ -620,7 +620,7 @@ describe('WizardStore', () => {
   });
 
   describe('tokenUsage / toggleTokenHud (hidden Ctrl+T HUD)', () => {
-    it('starts at zero and hidden', () => {
+    it('starts at zero usage, and visible by default in dev/test (IS_DEV)', () => {
       const store = createStore();
       expect(store.tokenUsage).toEqual({
         inputTokens: 0,
@@ -630,15 +630,18 @@ describe('WizardStore', () => {
         costUsd: 0,
         costIsFinal: false,
       });
-      expect(store.tokenHudVisible).toBe(false);
+      // Defaults to IS_DEV, which is true under vitest (NODE_ENV=test) --
+      // see WizardStore's $tokenHudVisible doc comment.
+      expect(store.tokenHudVisible).toBe(true);
     });
 
-    it('toggleTokenHud flips visibility each call', () => {
+    it('toggleTokenHud flips visibility each call, from whatever it started at', () => {
       const store = createStore();
+      const initial = store.tokenHudVisible;
       store.toggleTokenHud();
-      expect(store.tokenHudVisible).toBe(true);
+      expect(store.tokenHudVisible).toBe(!initial);
       store.toggleTokenHud();
-      expect(store.tokenHudVisible).toBe(false);
+      expect(store.tokenHudVisible).toBe(initial);
     });
 
     it('addTokenUsage accumulates token counts and cost across calls', () => {
@@ -665,6 +668,35 @@ describe('WizardStore', () => {
       // $3/Mtok input + $15/Mtok output, from the shared pricing table.
       expect(store.tokenUsage.costUsd).toBeCloseTo(2 * 3 + 15, 5);
       expect(store.tokenUsage.costIsFinal).toBe(false);
+    });
+
+    it('prices each delta at its own model, not a single run-wide rate', () => {
+      // A Haiku-overridden turn (e.g. source-map detection) followed by a
+      // default-model turn -- each must be priced at its own rate, since a
+      // subagent can genuinely run on a different model than the main
+      // session's turns.
+      const store = createStore();
+      store.addTokenUsage({
+        inputTokens: 1_000_000,
+        outputTokens: 0,
+        cacheReadTokens: 0,
+        cacheCreationTokens: 0,
+        cacheCreation5m: 0,
+        cacheCreation1h: 0,
+        model: 'claude-haiku-4-5-20251001',
+      });
+      store.addTokenUsage({
+        inputTokens: 1_000_000,
+        outputTokens: 0,
+        cacheReadTokens: 0,
+        cacheCreationTokens: 0,
+        cacheCreation5m: 0,
+        cacheCreation1h: 0,
+      });
+
+      // $1 (Haiku) + $3 (Sonnet default) -- not $6 if both were priced as
+      // Sonnet, and not $2 if both were priced as Haiku.
+      expect(store.tokenUsage.costUsd).toBeCloseTo(1 + 3, 5);
     });
 
     it('setFinalTokenCostUsd overwrites the running estimate and marks it final', () => {
