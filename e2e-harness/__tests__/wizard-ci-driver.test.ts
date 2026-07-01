@@ -172,6 +172,46 @@ describe('WizardCiDriver — wizard_ask overlay', () => {
   });
 });
 
+describe('WizardCiDriver — self-driving integration check', () => {
+  function selfDrivingStore(): WizardStore {
+    const store = new WizardStore(Program.SelfDriving);
+    setUI(new InkUI(store));
+    store.session = buildSession({ installDir: '/tmp/ci-driver-sd', ci: true });
+    return store;
+  }
+
+  it('exposes the integration check and commits set_integrate', () => {
+    const store = selfDrivingStore();
+    const driver = new WizardCiDriver(store);
+
+    // Intro → integration-check.
+    store.completeSetup();
+    const state = driver.readState();
+    expect(state.currentScreen).toBe(ScreenId.SelfDrivingIntegrationCheck);
+    expect(state.session.integrate).toBeNull();
+    expect(state.actions.map((a) => a.id)).toContain('set_integrate');
+
+    // Answer "no, set it up first" → integrate=true, advances off the screen.
+    const next = driver.performAction('set_integrate', { integrate: true });
+    expect(next.session.integrate).toBe(true);
+    expect(next.currentScreen).not.toBe(ScreenId.SelfDrivingIntegrationCheck);
+  });
+
+  it('skips the integration check when --integrate pre-resolved it', () => {
+    const store = selfDrivingStore();
+    store.session = buildSession({
+      installDir: '/tmp/ci-driver-sd',
+      integrate: true,
+    });
+    const driver = new WizardCiDriver(store);
+
+    store.completeSetup();
+    expect(driver.readState().currentScreen).not.toBe(
+      ScreenId.SelfDrivingIntegrationCheck,
+    );
+  });
+});
+
 describe('action registry exhaustiveness', () => {
   it('every screen and overlay is either actionable or explicitly no-action', () => {
     const allScreens = [...Object.values(ScreenId), ...Object.values(Overlay)];

@@ -22,6 +22,10 @@ exports[`e2e flow snapshot — posthog-integration > Next.js (with a setup quest
     },
     {
       "action": "choose",
+      "params": {
+        "key": "router",
+        "value": "app-router",
+      },
       "screen": "setup",
     },
     {
@@ -38,6 +42,9 @@ exports[`e2e flow snapshot — posthog-integration > Next.js (with a setup quest
     },
     {
       "action": "set_mcp_outcome",
+      "params": {
+        "outcome": "skipped",
+      },
       "screen": "mcp",
     },
     {
@@ -46,6 +53,9 @@ exports[`e2e flow snapshot — posthog-integration > Next.js (with a setup quest
     },
     {
       "action": "keep_skills",
+      "params": {
+        "kept": false,
+      },
       "screen": "keep-skills",
     },
   ],
@@ -78,6 +88,9 @@ exports[`e2e flow snapshot — posthog-integration > Node (no setup question) wa
     },
     {
       "action": "set_mcp_outcome",
+      "params": {
+        "outcome": "skipped",
+      },
       "screen": "mcp",
     },
     {
@@ -86,7 +99,101 @@ exports[`e2e flow snapshot — posthog-integration > Node (no setup question) wa
     },
     {
       "action": "keep_skills",
+      "params": {
+        "kept": false,
+      },
       "screen": "keep-skills",
+    },
+  ],
+}
+`;
+
+exports[`e2e flow snapshot — self-driving > already-integrated (skips SDK setup) walks a stable path 1`] = `
+{
+  "program": "self-driving",
+  "trace": [
+    {
+      "action": "confirm_setup",
+      "screen": "self-driving-intro",
+    },
+    {
+      "action": "set_integrate",
+      "params": {
+        "integrate": false,
+      },
+      "screen": "self-driving-integration-check",
+    },
+    {
+      "action": "dismiss_outage",
+      "screen": "health-check",
+    },
+    {
+      "action": "(external)",
+      "screen": "auth",
+    },
+    {
+      "action": "(external)",
+      "screen": "run",
+    },
+    {
+      "action": "dismiss_outro",
+      "screen": "outro",
+    },
+  ],
+}
+`;
+
+exports[`e2e flow snapshot — self-driving > integration-first (no existing PostHog) walks a stable path 1`] = `
+{
+  "profile": {
+    "ask": "cancel",
+    "healthCheck": "dismiss",
+    "integrate": true,
+    "mcp": "skip",
+    "setup": "first",
+    "skills": "delete",
+    "slack": "skip",
+  },
+  "program": "self-driving",
+  "trace": [
+    {
+      "action": "confirm_setup",
+      "screen": "self-driving-intro",
+    },
+    {
+      "action": "set_integrate",
+      "params": {
+        "integrate": true,
+      },
+      "screen": "self-driving-integration-check",
+    },
+    {
+      "action": "dismiss_outage",
+      "screen": "health-check",
+    },
+    {
+      "action": "(external)",
+      "screen": "auth",
+    },
+    {
+      "action": "(external)",
+      "screen": "self-driving-integration-detect",
+    },
+    {
+      "action": "(external)",
+      "screen": "run",
+    },
+    {
+      "action": "confirm_self_driving_handoff",
+      "screen": "self-driving-handoff",
+    },
+    {
+      "action": "(external)",
+      "screen": "run",
+    },
+    {
+      "action": "dismiss_outro",
+      "screen": "outro",
     },
   ],
 }
