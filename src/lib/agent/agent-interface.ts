@@ -289,17 +289,6 @@ export function isWarlockDisabled(flags: Record<string, string> = {}): boolean {
 }
 
 /**
- * Whether this run uses the experimental task-queue orchestrator. Gated by the
- * boolean `wizard-orchestrator` feature flag, targeted to the user in the wizard's
- * analytics project.
- */
-export function isOrchestratorEnabled(
-  flags: Record<string, string> = {},
-): boolean {
-  return flags[WIZARD_ORCHESTRATOR_FLAG_KEY] === 'true';
-}
-
-/**
  * Build env for the SDK subprocess: process.env plus ANTHROPIC_CUSTOM_HEADERS, which always
  * includes `x-posthog-use-bedrock-fallback: true` so the LLM gateway falls back to Bedrock on
  * Anthropic 5xx, plus any wizard metadata/flags.
@@ -1081,7 +1070,8 @@ export async function runAgent(
         signals,
         receivedSuccessResult,
         tasks,
-        isOrchestratorEnabled(agentConfig.wizardFlags ?? {}),
+        (agentConfig.wizardFlags ?? {})[WIZARD_ORCHESTRATOR_FLAG_KEY] ===
+          'true',
         emitStepEvents,
       );
 
