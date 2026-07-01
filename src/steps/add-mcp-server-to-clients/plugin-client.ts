@@ -7,6 +7,7 @@ export interface PluginCapable {
   supportsPlugin(): boolean;
   isPluginInstalled(): Promise<boolean>;
   installPlugin(): Promise<PluginInstallResult>;
+  uninstallPlugin(): Promise<{ success: boolean }>;
 }
 
 export function isPluginCapable<T>(client: T): client is T & PluginCapable {
@@ -14,6 +15,7 @@ export function isPluginCapable<T>(client: T): client is T & PluginCapable {
     typeof client === 'object' &&
     client !== null &&
     'supportsPlugin' in client &&
-    'installPlugin' in client
+    'installPlugin' in client &&
+    'uninstallPlugin' in client
   );
 }
