@@ -16,9 +16,11 @@ import {
   WIZARD_REMARK_EVENT_NAME,
   POSTHOG_PROPERTY_HEADER_PREFIX,
   WIZARD_ORCHESTRATOR_FLAG_KEY,
+  WIZARD_SONNET_5_FLAG_KEY,
   WIZARD_USER_AGENT,
   WIZARD_WARLOCK_DISABLED_FLAG_KEY,
   DEFAULT_AGENT_MODEL,
+  SONNET_5_MODEL,
 } from '@lib/constants';
 import {
   type AdditionalFeature,
@@ -348,6 +350,21 @@ export function isOrchestratorEnabled(
   flags: Record<string, string> = {},
 ): boolean {
   return flags[WIZARD_ORCHESTRATOR_FLAG_KEY] === 'true';
+}
+
+/**
+ * Pick the model the main agent runner should use this run. Defaults to
+ * `DEFAULT_AGENT_MODEL` (Sonnet 4.6); flips to `SONNET_5_MODEL` only when
+ * the `wizard-sonnet-5` flag resolves to the literal string 'true'. A
+ * missing flag, an empty flag map (the safe default returned when the flag
+ * fetch fails), or any other value stays on the default — Sonnet 5 must
+ * be an explicit opt-in so a flag-fetch failure can't shift everyone onto
+ * a different model.
+ */
+export function resolveAgentModel(flags: Record<string, string> = {}): string {
+  return flags[WIZARD_SONNET_5_FLAG_KEY] === 'true'
+    ? SONNET_5_MODEL
+    : DEFAULT_AGENT_MODEL;
 }
 
 /**
@@ -712,7 +729,7 @@ export async function initializeAgent(
 
     // Bare model IDs (no `anthropic/` prefix) so the LLM gateway's Bedrock
     // fallback can match map_to_bedrock_model()'s strict lookup.
-    const model = config.modelOverride ?? DEFAULT_AGENT_MODEL;
+    const model = config.modelOverride ?? resolveAgentModel(config.wizardFlags);
 
     const agentRunConfig: AgentRunConfig = {
       workingDirectory: config.workingDirectory,
