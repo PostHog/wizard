@@ -98,6 +98,25 @@ function classify(
   return { instrumentable: true };
 }
 
+/**
+ * Native / mobile stacks the wizard can't automate yet (no automatable skill
+ * variant, so `variant` is null) but which *do* have a documented manual
+ * source-map upload path. Used only to tailor the dead-end guidance on the
+ * detect screen — matched against the agent's free-text `framework` label.
+ */
+const NATIVE_FRAMEWORK_RE =
+  /react[\s-]?native|expo|flutter|\bios\b|android|swift|kotlin|hermes/i;
+
+/**
+ * True when a blocked project is a native/mobile stack (React Native, iOS,
+ * Android, Flutter). These have no automatable variant but the docs cover
+ * manual source-map / symbol upload, so the screen points the user there
+ * instead of treating it as a flat dead end.
+ */
+export function isNativePlatform(project: DetectedProject): boolean {
+  return project.variant == null && NATIVE_FRAMEWORK_RE.test(project.framework);
+}
+
 /** Map a generic detection report into source-maps projects. */
 function toSourceMapsReport(report: AgenticDetectionReport): DetectionReport {
   return {

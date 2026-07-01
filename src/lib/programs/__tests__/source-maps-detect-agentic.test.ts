@@ -1,6 +1,8 @@
 import {
   coerceReport,
+  isNativePlatform,
   SOURCE_MAPS_TARGETS,
+  type DetectedProject,
 } from '@lib/programs/error-tracking-upload-source-maps/detect-agentic';
 import { AUTOMATABLE_VARIANTS } from '@lib/programs/error-tracking-upload-source-maps/detect';
 
@@ -31,6 +33,40 @@ describe('SOURCE_MAPS_TARGETS precedence', () => {
     for (const other of ['react', 'node', 'vite']) {
       expect(rank(other)).toBeLessThan(rank('web'));
     }
+  });
+});
+
+describe('isNativePlatform', () => {
+  const project = (over: Partial<DetectedProject>): DetectedProject => ({
+    path: '.',
+    framework: 'Unknown',
+    variant: null,
+    hasPostHog: true,
+    instrumentable: false,
+    ...over,
+  });
+
+  it('flags native/mobile stacks the agent reports', () => {
+    for (const framework of [
+      'React Native',
+      'react-native',
+      'Expo',
+      'Flutter',
+      'iOS',
+      'Android (Kotlin)',
+      'Swift',
+    ]) {
+      expect(isNativePlatform(project({ framework }))).toBe(true);
+    }
+  });
+
+  it('does not flag a supported web stack', () => {
+    // A variant means it's automatable — never route it to the manual path.
+    expect(
+      isNativePlatform(project({ framework: 'Next.js', variant: 'nextjs' })),
+    ).toBe(false);
+    // Unsupported but non-native (e.g. a backend language) stays generic.
+    expect(isNativePlatform(project({ framework: 'Rust' }))).toBe(false);
   });
 });
 
