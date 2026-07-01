@@ -1,10 +1,11 @@
 import { buildSelfDrivingPrompt } from '@lib/programs/self-driving/prompt';
 import type { PromptContext } from '@lib/agent/agent-runner';
+import { HostResolution } from '@lib/host-resolution';
 
 const ctx: PromptContext = {
   projectId: 123,
   projectApiKey: 'phc_test',
-  host: 'https://us.posthog.com',
+  host: HostResolution.fromApiHost('https://us.posthog.com'),
 };
 
 describe('buildSelfDrivingPrompt', () => {

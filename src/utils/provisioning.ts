@@ -19,6 +19,7 @@ import {
 import { resolveBaseUrl } from './urls';
 import { logToFile } from './debug';
 import { analytics } from './analytics';
+import type { HostResolution } from '@lib/host-resolution';
 
 const API_VERSION = '0.1d';
 
@@ -245,13 +246,11 @@ export async function provisionNewAccount(
  */
 export async function requestDeepLink(
   accessToken: string,
-  host: string,
+  host: HostResolution,
   opts?: { purpose?: string; path?: string },
 ): Promise<string | null> {
   try {
-    const baseUrl = host
-      .replace('us.i.posthog.com', 'us.posthog.com')
-      .replace('eu.i.posthog.com', 'eu.posthog.com');
+    const baseUrl = host.appHost;
 
     const res = await axios.post(
       `${baseUrl}/api/agentic/provisioning/deep_links`,

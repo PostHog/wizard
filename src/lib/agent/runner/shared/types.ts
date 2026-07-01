@@ -9,7 +9,6 @@ import type {
 } from '@lib/wizard-session';
 import type { PromptContext } from '@lib/agent/agent-prompt';
 import type { PackageManagerDetector } from '@lib/detection/package-manager';
-import type { CloudRegion } from '@utils/types';
 import type { ApiProject } from '@lib/api';
 
 export type { PromptContext, Credentials };
@@ -69,7 +68,6 @@ export interface ProgramRun {
   buildOutroData?: (
     session: WizardSession,
     credentials: Credentials,
-    cloudRegion: CloudRegion | undefined,
   ) => WizardSession['outroData'];
   /**
    * Per-run cap on `wizard_ask` invocations. Defaults to 10. The 4th call
@@ -102,17 +100,13 @@ export interface ProgramRun {
 
 /**
  * Result of the shared bootstrap, consumed by both the linear and the
- * orchestrator arm. Credentials, role, and user are already applied to the
- * session by `bootstrapProgram`; this carries the values both arms still need.
+ * orchestrator arm. Credentials (including the resolved host family and its MCP
+ * url), role, and user are already applied to the session by `bootstrapProgram`
+ * — the arms read those from `session.credentials`. This carries only the
+ * run-scoped extras that don't live on the session.
  */
 export interface BootstrapResult {
   skillsBaseUrl: string;
-  projectApiKey: Credentials['projectApiKey'];
-  host: Credentials['host'];
-  accessToken: Credentials['accessToken'];
-  projectId: Credentials['projectId'];
-  cloudRegion: CloudRegion;
-  mcpUrl: string;
   wizardFlags: Record<string, string>;
   wizardMetadata: Record<string, string>;
   /** Full project payload, for project-level prompt context (opt-ins). */

@@ -15,11 +15,13 @@ import type { FrameworkConfig } from './framework-config';
 import type { WizardReadinessResult } from './health-checks/readiness';
 import type { SettingsConflict } from './agent/claude-settings';
 import type { ApiUser, ApiProject } from './api';
+import type { HostResolution } from './host-resolution';
 
 export interface Credentials {
   accessToken: string;
   projectApiKey: string;
-  host: string;
+  /** Resolved at auth time and immutable thereafter — see {@link HostResolution}. */
+  host: HostResolution;
   projectId: number;
 }
 
@@ -234,11 +236,11 @@ export interface WizardSession {
   apiUser: ApiUser | null;
 
   /**
-   * Cloud region and project payload resolved at authentication, kept so a
-   * second agent run in the same invocation (e.g. self-driving's integration
-   * phase) reuses the first login wholesale instead of re-authenticating.
+   * Project payload resolved at authentication, kept so a second agent run in
+   * the same invocation (e.g. self-driving's integration phase) reuses the
+   * first login wholesale instead of re-authenticating. The resolved region
+   * lives on `credentials.host.region`.
    */
-  cloudRegion: CloudRegion | null;
   apiProject: ApiProject | null;
 
   // Lifecycle
@@ -394,7 +396,6 @@ export function buildSession(args: {
     credentials: null,
     roleAtOrganization: null,
     apiUser: null,
-    cloudRegion: null,
     apiProject: null,
     readinessResult: null,
     outageDismissed: false,

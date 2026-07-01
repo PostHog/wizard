@@ -26,7 +26,7 @@ import {
 } from '@lib/wizard-session';
 import { wizardAbort, WizardError } from '@utils/wizard-abort';
 import { createCustomHeaders } from '@utils/custom-headers';
-import { HostResolution } from '@lib/host-resolution';
+import type { HostResolution } from '@lib/host-resolution';
 import { LINTING_TOOLS } from '@lib/safe-tools';
 import { createWizardToolsServer, WIZARD_TOOL_NAMES } from '@lib/wizard-tools';
 import {
@@ -177,7 +177,7 @@ export type AgentConfig = {
   workingDirectory: string;
   posthogMcpUrl: string;
   posthogApiKey: string;
-  posthogApiHost: string;
+  host: HostResolution;
   additionalMcpServers?: Record<string, { url: string }>;
   detectPackageManager: PackageManagerDetector;
   /** Base URL for the skills server (context-mill dev or GitHub releases) */
@@ -631,16 +631,12 @@ export async function initializeAgent(
   logToFile('Install directory:', options.installDir);
 
   try {
-    // TODO: clean up in #755
-    const gatewayUrl = HostResolution.fromApiHost(
-      config.posthogApiHost,
-    ).gatewayUrl;
-
     // Configure model routing (inherited by the SDK subprocess). All model
     // calls route through the PostHog LLM gateway, authed with the user's
     // OAuth token.
     // Disable experimental betas (like input_examples) the gateway doesn't support.
     process.env.CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS = 'true';
+    const gatewayUrl = config.host.gatewayUrl;
     process.env.ANTHROPIC_BASE_URL = gatewayUrl;
     process.env.ANTHROPIC_AUTH_TOKEN = config.posthogApiKey;
 

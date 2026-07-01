@@ -15,8 +15,6 @@
 import type { AgentChunk } from '@ui/tui/services/mcp-suggested-prompts-services';
 import type { Credentials } from '@lib/wizard-session';
 import { WIZARD_USER_AGENT } from '@lib/constants';
-import { HostResolution } from '@lib/host-resolution';
-import { runtimeEnv } from '@env';
 import { logToFile } from '@utils/debug';
 import { buildAgentEnv } from '@lib/agent/agent-interface';
 import { sanitizeAgentSubprocessEnv } from '@lib/agent/agent-env-isolation';
@@ -42,13 +40,6 @@ const MODEL = 'claude-sonnet-4-6';
 // still capping runaway loops. Worth tuning down once we see real
 // telemetry on average turn counts per prompt.
 const MAX_TURNS = 30;
-
-// One MCP url for every region: the server resolves the user's region from
-// the bearer token, so the EU subdomain (a Claude Code OAuth workaround) is
-// not needed here.
-function resolveMcpUrl(): string {
-  return runtimeEnv('MCP_URL') || 'https://mcp.posthog.com/mcp';
-}
 
 /**
  * Extract a short, single-line summary from an arbitrary value. Used
@@ -198,8 +189,7 @@ export async function* runMcpPromptViaSdk(args: {
   process.env.CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS = 'true';
 
   // Route through the PostHog LLM gateway, authed with the user's OAuth token.
-  // TODO: clean up in #755
-  const gatewayUrl = HostResolution.fromApiHost(credentials.host).gatewayUrl;
+  const gatewayUrl = credentials.host.gatewayUrl;
   process.env.ANTHROPIC_BASE_URL = gatewayUrl;
   process.env.ANTHROPIC_AUTH_TOKEN = credentials.accessToken;
   process.env.CLAUDE_CODE_OAUTH_TOKEN = credentials.accessToken;
@@ -223,7 +213,7 @@ export async function* runMcpPromptViaSdk(args: {
       once: true,
     });
 
-  const mcpUrl = resolveMcpUrl();
+  const mcpUrl = credentials.host.mcpUrl;
   logToFile(
     `[runMcpPromptViaSdk] mcpUrl=${mcpUrl} model=${MODEL} resume=${
       resumeSessionId ?? '(none)'

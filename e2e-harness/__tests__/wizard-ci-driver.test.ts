@@ -13,6 +13,7 @@ import { WizardStore } from '@ui/tui/store';
 import { InkUI } from '@ui/tui/ink-ui';
 import { setUI } from '@ui/index';
 import { buildSession, RunPhase, McpOutcome } from '@lib/wizard-session';
+import { HostResolution } from '@lib/host-resolution';
 import { Integration } from '@lib/constants';
 import { FRAMEWORK_REGISTRY } from '@lib/registry';
 import { WizardReadiness } from '@lib/health-checks/readiness';
@@ -72,7 +73,7 @@ describe('WizardCiDriver — full integration flow', () => {
     store.setCredentials({
       accessToken: 'phx_secret_should_not_leak',
       projectApiKey: 'phc_public',
-      host: 'https://us.posthog.com',
+      host: HostResolution.fromApiHost('https://us.posthog.com'),
       projectId: 42,
     });
 
@@ -112,7 +113,7 @@ describe('WizardCiDriver — full integration flow', () => {
     store.setCredentials({
       accessToken: 'phx_secret_should_not_leak',
       projectApiKey: 'phc_public',
-      host: 'https://us.posthog.com',
+      host: HostResolution.fromApiHost('https://us.posthog.com'),
       projectId: 7,
     });
     const state = driver.readState();

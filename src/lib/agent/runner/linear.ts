@@ -15,7 +15,6 @@ import {
   AgentSignals,
 } from '../agent-interface';
 import { restoreClaudeSettings } from '../claude-settings';
-import { HostResolution } from '@lib/host-resolution';
 import { logToFile, getLogFilePath } from '../../../utils/debug';
 import { createBenchmarkPipeline } from '../../middleware/benchmark';
 import {
@@ -45,18 +44,10 @@ export async function runLinearProgram(
   boot: BootstrapResult,
   composed = false,
 ): Promise<void> {
-  const {
-    skillsBaseUrl,
-    projectApiKey,
-    host,
-    accessToken,
-    projectId,
-    cloudRegion,
-    mcpUrl,
-    wizardFlags,
-    wizardMetadata,
-    project,
-  } = boot;
+  const { skillsBaseUrl, wizardFlags, wizardMetadata, project } = boot;
+  // Set by bootstrapProgram before the fork — guaranteed non-null here.
+  const credentials = session.credentials!;
+  const { projectApiKey, host, accessToken, projectId } = credentials;
 
   // 5. Skill install (if skillId provided)
   let skillPath: string | undefined;
@@ -110,9 +101,9 @@ export async function runLinearProgram(
   const agent = await initializeAgent(
     {
       workingDirectory: session.installDir,
-      posthogMcpUrl: mcpUrl,
+      posthogMcpUrl: host.mcpUrl,
       posthogApiKey: accessToken,
-      posthogApiHost: host,
+      host,
       additionalMcpServers: config.additionalMcpServers,
       detectPackageManager:
         config.detectPackageManager ?? detectNodePackageManagers,
@@ -267,12 +258,7 @@ export async function runLinearProgram(
 
   // 10. Post-run hooks
   if (config.postRun) {
-    await config.postRun(session, {
-      accessToken,
-      projectApiKey,
-      host,
-      projectId,
-    });
+    await config.postRun(session, credentials);
   }
 
   // A composed sub-run (integration inside self-driving) skips the terminal
@@ -288,23 +274,14 @@ export async function runLinearProgram(
   // that the screen never reads. UI.setOutroData() goes through the store
   // and also merges in any post-snapshot URLs from the live session.
   const outroData = config.buildOutroData
-    ? config.buildOutroData(
-        session,
-        { accessToken, projectApiKey, host, projectId },
-        cloudRegion,
-      )
+    ? config.buildOutroData(session, credentials)
     : {
         kind: OutroKind.Success,
         message: config.successMessage,
         reportFile: config.reportFile,
         docsUrl: config.docsUrl,
-        // TODO: clean up in #755
         continueUrl: session.signup
-          ? `${
-              HostResolution.fromRegion(cloudRegion, {
-                baseUrl: session.baseUrl,
-              }).appHost
-            }/products?source=wizard`
+          ? `${host.appHost}/products?source=wizard`
           : undefined,
       };
   if (outroData) {

@@ -1,6 +1,5 @@
 import { AgentSignals } from '@lib/agent/agent-interface';
 import type { PromptContext } from '@lib/agent/agent-runner';
-import { getUiHostFromHost } from '@utils/urls';
 
 /**
  * Build the self-driving run prompt. The installed
@@ -14,7 +13,7 @@ import { getUiHostFromHost } from '@utils/urls';
  * list — so this prompt only covers the Self-driving steps.
  */
 export function buildSelfDrivingPrompt(ctx: PromptContext): string {
-  const uiHost = getUiHostFromHost(ctx.host).replace(/\/$/, '');
+  const uiHost = ctx.host.appHost.replace(/\/$/, '');
   const projectBase = `${uiHost}/project/${ctx.projectId}`;
   const integrationsSettingsUrl = `${projectBase}/settings/environment-integrations`;
   const orgAiSettingsUrl = `${uiHost}/settings/organization#organization-ai-consent`;

@@ -7,7 +7,6 @@ import {
   fetchHealthIssues,
   type HealthIssue,
 } from '@lib/programs/posthog-doctor/index';
-import { getUiHostFromHost } from '@utils/urls';
 import { OutroKind } from '@lib/wizard-session';
 import { ApiError } from '@lib/api';
 import { POSTHOG_DOCS_URL } from '@lib/constants';
@@ -30,17 +29,17 @@ export const DoctorReportScreen = ({ store }: DoctorReportScreenProps) => {
 
   const { credentials } = store.session;
   const accessToken = credentials?.accessToken;
-  const host = credentials?.host;
+  const apiHost = credentials?.host.apiHost;
   const projectId = credentials?.projectId;
 
   const [state, setState] = useState<FetchState>({ kind: 'loading' });
 
   useEffect(() => {
-    if (!accessToken || !host || projectId == null) return;
+    if (!accessToken || !apiHost || projectId == null) return;
     let cancelled = false;
     void (async () => {
       try {
-        const issues = await fetchHealthIssues(accessToken, host, projectId);
+        const issues = await fetchHealthIssues(accessToken, apiHost, projectId);
         if (!cancelled) {
           setState({ kind: 'ready', issues });
         }
@@ -59,7 +58,7 @@ export const DoctorReportScreen = ({ store }: DoctorReportScreenProps) => {
     return () => {
       cancelled = true;
     };
-  }, [accessToken, host, projectId]);
+  }, [accessToken, apiHost, projectId]);
 
   if (!credentials) {
     return <LoadingBox message="Waiting for authentication..." />;
@@ -68,20 +67,24 @@ export const DoctorReportScreen = ({ store }: DoctorReportScreenProps) => {
   if (state.kind === 'loading') {
     return (
       <Box flexDirection="column">
-        <Header host={credentials.host} projectId={credentials.projectId} />
+        <Header
+          host={credentials.host.apiHost}
+          projectId={credentials.projectId}
+        />
         <LoadingBox message="Fetching health issues..." />
       </Box>
     );
   }
 
-  const healthUrl = `${getUiHostFromHost(credentials.host)}/project/${
-    credentials.projectId
-  }/health`;
+  const healthUrl = `${credentials.host.appHost}/project/${credentials.projectId}/health`;
 
   if (state.kind === 'error') {
     return (
       <Box flexDirection="column">
-        <Header host={credentials.host} projectId={credentials.projectId} />
+        <Header
+          host={credentials.host.apiHost}
+          projectId={credentials.projectId}
+        />
         <Box flexDirection="column" marginY={1}>
           <Text color={Colors.error} bold>
             {Icons.squareFilled} Failed to fetch health issues
@@ -108,7 +111,10 @@ export const DoctorReportScreen = ({ store }: DoctorReportScreenProps) => {
   if (issues.length === 0) {
     return (
       <Box flexDirection="column">
-        <Header host={credentials.host} projectId={credentials.projectId} />
+        <Header
+          host={credentials.host.apiHost}
+          projectId={credentials.projectId}
+        />
         <Box marginY={1}>
           <Text color={Colors.success} bold>
             {Icons.check} No active issues — you're all set!
@@ -131,7 +137,10 @@ export const DoctorReportScreen = ({ store }: DoctorReportScreenProps) => {
 
   return (
     <Box flexDirection="column">
-      <Header host={credentials.host} projectId={credentials.projectId} />
+      <Header
+        host={credentials.host.apiHost}
+        projectId={credentials.projectId}
+      />
       <Box marginTop={1}>
         <Text>{formatSummaryLine(issues)}</Text>
       </Box>

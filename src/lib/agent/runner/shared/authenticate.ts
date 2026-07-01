@@ -29,7 +29,6 @@ export async function authenticate(
     host,
     accessToken,
     projectId,
-    cloudRegion,
     roleAtOrganization,
     user,
     project,
@@ -41,11 +40,11 @@ export async function authenticate(
     email: session.email,
     region: session.region,
     baseUrl: session.baseUrl,
+    localMcp: session.localMcp,
     programId,
   });
 
   session.credentials = { accessToken, projectApiKey, host, projectId };
-  session.cloudRegion = cloudRegion;
   session.apiProject = project;
   session.roleAtOrganization = roleAtOrganization;
   session.apiUser = user;
@@ -57,5 +56,5 @@ export async function authenticate(
   // Identify the user (email, name) before flags are evaluated, so flags can
   // target the individual user and not just $app_name.
   if (user) analytics.identifyUser(user);
-  analytics.setGroups(groupsFromUser(user, host));
+  analytics.setGroups(groupsFromUser(user, host.apiHost));
 }
