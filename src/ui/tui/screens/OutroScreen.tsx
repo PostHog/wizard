@@ -6,12 +6,13 @@
  * ship their own screen component (see audit/AuditOutroScreen.tsx).
  */
 
-import { Box, Text, useInput } from 'ink';
+import { Box, Text } from 'ink';
 import { useSyncExternalStore } from 'react';
 import type { WizardStore } from '@ui/tui/store';
 import { OutroKind } from '@lib/wizard-session';
 import { Colors } from '@ui/tui/styles';
 import { withUtm } from '@utils/links';
+import { useDismissOnAnyKey } from '@ui/tui/hooks/useDismissOnAnyKey';
 
 interface OutroScreenProps {
   store: WizardStore;
@@ -23,14 +24,9 @@ export const OutroScreen = ({ store }: OutroScreenProps) => {
     () => store.getSnapshot(),
   );
 
-  useInput((_input, key) => {
-    // Ignore modifier-combo keypresses (e.g. Ctrl+T toggling the token/cost
-    // HUD) — see AuthErrorScreen for why this guard is needed. Dismissal
-    // here chains into ExitScreen's process.exit(), so without this guard
-    // toggling the HUD on the outro screen would kill the process instead.
-    if (key.ctrl || key.meta) return;
-    store.setOutroDismissed();
-  });
+  // Dismissal here chains into ExitScreen's process.exit(), so a modifier
+  // combo (e.g. Ctrl+T toggling the token/cost HUD) must not trigger it too.
+  useDismissOnAnyKey(() => store.setOutroDismissed());
 
   const outroData = store.session.outroData;
 

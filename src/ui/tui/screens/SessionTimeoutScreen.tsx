@@ -7,11 +7,12 @@
  * the only way forward is to re-run the wizard for a fresh login window.
  */
 
-import { Box, Text, useInput } from 'ink';
+import { Box, Text } from 'ink';
 import { useSyncExternalStore } from 'react';
 import type { WizardStore } from '@ui/tui/store';
 import { Colors } from '@ui/tui/styles';
 import { OAUTH_TIMEOUT_MS } from '@lib/constants';
+import { useDismissOnAnyKey } from '@ui/tui/hooks/useDismissOnAnyKey';
 
 interface SessionTimeoutScreenProps {
   store: WizardStore;
@@ -25,12 +26,7 @@ export const SessionTimeoutScreen = ({ store }: SessionTimeoutScreenProps) => {
     () => store.getSnapshot(),
   );
 
-  useInput((_input, key) => {
-    // Ignore modifier-combo keypresses (e.g. Ctrl+T toggling the token/cost
-    // HUD) — see AuthErrorScreen for why this guard is needed.
-    if (key.ctrl || key.meta) return;
-    process.exit(1);
-  });
+  useDismissOnAnyKey(() => process.exit(1));
 
   return (
     <Box flexDirection="column" flexGrow={1}>

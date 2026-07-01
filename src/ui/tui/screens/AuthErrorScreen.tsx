@@ -8,10 +8,11 @@
  *     expired, or wrong region. Don't blame Claude Code in this case.
  */
 
-import { Box, Text, useInput } from 'ink';
+import { Box, Text } from 'ink';
 import { useSyncExternalStore } from 'react';
 import type { WizardStore } from '@ui/tui/store';
 import { Colors } from '@ui/tui/styles';
+import { useDismissOnAnyKey } from '@ui/tui/hooks/useDismissOnAnyKey';
 
 interface AuthErrorScreenProps {
   store: WizardStore;
@@ -23,15 +24,7 @@ export const AuthErrorScreen = ({ store }: AuthErrorScreenProps) => {
     () => store.getSnapshot(),
   );
 
-  useInput((_input, key) => {
-    // Ignore modifier-combo keypresses (e.g. Ctrl+T toggling the token/cost
-    // HUD) — this handler means "any (plain) key exits", not "any keypress
-    // Ink can parse". Ink calls every mounted useInput callback for a given
-    // keypress with no stopPropagation, so a global hidden shortcut would
-    // otherwise also exit this screen.
-    if (key.ctrl || key.meta) return;
-    process.exit(1);
-  });
+  useDismissOnAnyKey(() => process.exit(1));
 
   const detail = store.session.authErrorDetail;
   const hasSettingsConflict = detail?.hasSettingsConflict ?? true;
