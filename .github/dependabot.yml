@@ -1,0 +1,37 @@
+# Weekly version-bump PRs, gated by build.yml before merge.
+version: 2
+updates:
+  - package-ecosystem: 'npm' # covers the pnpm workspace
+    directory: '/'
+    schedule:
+      interval: 'weekly'
+    open-pull-requests-limit: 10
+    cooldown: # wait out a release before bumping (supply-chain safety)
+      default-days: 7
+    commit-message: # prefix keeps titles conventional-commit valid
+      prefix: 'chore'
+      include: 'scope'
+    groups:
+      npm-dependencies: # batch routine bumps into one PR
+        patterns:
+          - '*'
+        # Isolate warlock: a new rule category breaks the typed copy map
+        # (src/lib/yara-hooks.ts), so its bump needs its own PR.
+        exclude-patterns:
+          - '@posthog/warlock'
+
+  # Actions are SHA-pinned; bump the SHA and its version comment.
+  - package-ecosystem: 'github-actions'
+    directory: '/'
+    schedule:
+      interval: 'weekly'
+    open-pull-requests-limit: 5
+    cooldown:
+      default-days: 7
+    commit-message:
+      prefix: 'ci'
+      include: 'scope'
+    groups:
+      github-actions:
+        patterns:
+          - '*'
