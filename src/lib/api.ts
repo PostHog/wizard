@@ -132,10 +132,47 @@ export class ApiError extends Error {
     message: string,
     public readonly statusCode?: number,
     public readonly endpoint?: string,
+    // True when the failure is a transient connectivity blip (connect
+    // timeout, refused, DNS hiccup) rather than an actionable API/auth
+    // error. Callers that already degrade gracefully use this to skip
+    // capturing unactionable network noise. See isTransientNetworkError.
+    public readonly isTransient: boolean = false,
   ) {
     super(message);
     this.name = 'ApiError';
   }
+}
+
+// Node's connect path (`internalConnectMultiple`) throws a messageless
+// AggregateError when every candidate address times out or is refused; axios
+// otherwise surfaces connectivity failures as a response-less AxiosError with
+// one of these codes. None of them are actionable — they're the network being
+// flaky, not a bug or an auth problem.
+const TRANSIENT_NETWORK_CODES = new Set([
+  'ETIMEDOUT',
+  'ECONNREFUSED',
+  'ECONNRESET',
+  'ECONNABORTED',
+  'ENOTFOUND',
+  'EAI_AGAIN',
+  'ENETUNREACH',
+  'EHOSTUNREACH',
+]);
+
+/**
+ * Whether an error is a transient network/connectivity failure as opposed to
+ * an actionable API response (401/403/404/…) or a schema mismatch. Recognises
+ * the messageless connect-timeout `AggregateError` as well as response-less
+ * axios errors carrying a known connection error code.
+ */
+export function isTransientNetworkError(error: unknown): boolean {
+  if (error instanceof AggregateError) return true;
+  if (axios.isAxiosError(error)) {
+    return (
+      !error.response && !!error.code && TRANSIENT_NETWORK_CODES.has(error.code)
+    );
+  }
+  return false;
 }
 
 export async function fetchUserData(
@@ -236,9 +273,12 @@ const IntegrationsResponseSchema = z.object({
 
 /**
  * Check whether the project already has a Slack integration connected.
- * Requires the `integration:read` scope. Throws on failure — callers
- * (including the SlackConnectScreen poll) decide how to degrade and
- * are responsible for capturing the error exactly once.
+ * Requires the `integration:read` scope. Throws an {@link ApiError} on
+ * failure — routed through {@link handleApiError} so the thrown error always
+ * carries a real message (a raw connect-timeout AggregateError has none) and
+ * flags transient connectivity blips via `isTransient`. Callers (including
+ * the SlackConnectScreen poll) decide how to degrade and are responsible for
+ * capturing the error exactly once.
  */
 export async function fetchSlackConnected(
   accessToken: string,
@@ -246,22 +286,41 @@ export async function fetchSlackConnected(
   baseUrl: string,
   signal?: AbortSignal,
 ): Promise<boolean> {
-  const response = await axios.get(
-    `${baseUrl}/api/projects/${projectId}/integrations/`,
-    {
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        'User-Agent': WIZARD_USER_AGENT,
+  try {
+    const response = await axios.get(
+      `${baseUrl}/api/projects/${projectId}/integrations/`,
+      {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'User-Agent': WIZARD_USER_AGENT,
+        },
+        signal,
       },
-      signal,
-    },
-  );
-  const parsed = IntegrationsResponseSchema.safeParse(response.data);
-  if (!parsed.success) return false;
-  return parsed.data.results.some((i) => i.kind === 'slack');
+    );
+    const parsed = IntegrationsResponseSchema.safeParse(response.data);
+    if (!parsed.success) return false;
+    return parsed.data.results.some((i) => i.kind === 'slack');
+  } catch (error) {
+    throw handleApiError(error, 'check Slack integration');
+  }
 }
 
 export function handleApiError(error: unknown, operation: string): ApiError {
+  if (isTransientNetworkError(error)) {
+    // A messageless AggregateError has no `.code`; fall back to a stable
+    // label so the captured error is still triageable rather than blank.
+    const code = axios.isAxiosError(error) ? error.code : undefined;
+    const endpoint = axios.isAxiosError(error) ? error.config?.url : undefined;
+    return new ApiError(
+      `Network connection failed (${
+        code ?? 'connect timeout'
+      }) while trying to ${operation}`,
+      undefined,
+      endpoint,
+      true,
+    );
+  }
+
   if (axios.isAxiosError(error)) {
     const axiosError = error as AxiosError<{ detail?: string }>;
     const status = axiosError.response?.status;
