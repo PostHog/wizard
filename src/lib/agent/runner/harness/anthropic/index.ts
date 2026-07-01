@@ -23,12 +23,12 @@ import { detectNodePackageManagers } from '@lib/detection/package-manager';
 import { sessionToOptions } from '@lib/agent/runner/shared/bootstrap';
 import type {
   AgentResult,
-  AgentRunner,
+  AgentHarness,
   BackendRunInputs,
   TaskRunInputs,
 } from '../types';
 
-export const anthropicBackend: AgentRunner = {
+export const anthropicBackend: AgentHarness = {
   name: Harness.anthropic,
 
   async run(inputs: BackendRunInputs): Promise<AgentResult> {
