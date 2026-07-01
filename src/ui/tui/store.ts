@@ -178,6 +178,18 @@ export class WizardStore {
   private _resolvePendingQuestion: ((answers: AskAnswers) => void) | null =
     null;
 
+  /**
+   * URLs already auto-opened via the WizardAsk overlay's richLinks flow.
+   * Keyed on the raw URL so a retry round that re-asks the same question
+   * with the same link (e.g. self-driving's up-to-3 GitHub-connect retry
+   * rounds) never reopens a browser tab for a link the user already has
+   * open. A genuinely different URL is still eligible to open. Session-
+   * scoped — lives as long as this store instance, i.e. one wizard run —
+   * rather than component-local state, since the overlay's local state
+   * resets on every fresh `pendingQuestion` even when the link is unchanged.
+   */
+  private _autoOpenedLinks = new Set<string>();
+
   constructor(program: ProgramId = Program.PostHogIntegration) {
     this.router = new WizardRouter(program);
     this._initFromProgram(program);
@@ -594,6 +606,17 @@ export class WizardStore {
       cancelled[q.id] = '__cancelled__';
     }
     this.resolvePendingQuestion(cancelled);
+  }
+
+  /** Whether `url` was already auto-opened during this wizard run. */
+  hasAutoOpenedLink(url: string): boolean {
+    return this._autoOpenedLinks.has(url);
+  }
+
+  /** Record that `url` was auto-opened, so a later retry with the same
+   *  link (same or a fresh WizardAsk overlay mount) doesn't reopen it. */
+  markLinkAutoOpened(url: string): void {
+    this._autoOpenedLinks.add(url);
   }
 
   /**

@@ -14,6 +14,7 @@ import {
   LinkText,
   ModalOverlay,
   PickerMenu,
+  extractFirstUrl,
   extractUrls,
 } from '@ui/tui/primitives/index';
 import { Colors, Icons } from '@ui/tui/styles';
@@ -52,6 +53,11 @@ export const WizardAskScreen = ({ store }: WizardAskScreenProps) => {
   const currentPrompt = pending?.questions[index]?.prompt ?? '';
   const promptUrls = richLinks ? extractUrls(currentPrompt) : [];
   const soleUrl = promptUrls.length === 1 ? promptUrls[0] : null;
+  // The primary action link, even on a prompt that mentions a second,
+  // secondary URL (e.g. self-driving's GitHub-connect prompt, which follows
+  // the authorize link with an "already connected?" settings URL) — see
+  // the auto-open effect below.
+  const firstUrl = richLinks ? extractFirstUrl(currentPrompt) : null;
 
   // The `o`/`c` keybinds would steal keystrokes from a free-text answer, so
   // only offer them on picker questions (where the user isn't typing).
@@ -79,6 +85,26 @@ export const WizardAskScreen = ({ store }: WizardAskScreenProps) => {
     // 'idle' so the o/c hint shows until the user acts.
     void copyToClipboard(soleUrl);
   }, [soleUrl]);
+
+  // Auto-open the primary link so the user doesn't have to reach for `o`
+  // themselves — additive on top of the explicit o/c actions above, which
+  // stay available to reopen or copy afterward. `store.hasAutoOpenedLink`
+  // is session-scoped (survives this overlay unmounting/remounting between
+  // separate wizard_ask calls), so a retry round that re-asks with the same
+  // link — e.g. self-driving's GitHub-connect retries — never reopens a
+  // browser tab; a genuinely different URL still opens normally. Runs for
+  // both the single- and multi-URL case (unlike the o/c hint, which only
+  // shows for a lone URL), so it also covers GitHub-connect's two-URL
+  // prompt. Reconciles `linkStatus` only when the opened URL is the one the
+  // o/c hint is about, so that hint doesn't lie about being 'idle' once the
+  // link is already open.
+  useEffect(() => {
+    if (!firstUrl || store.hasAutoOpenedLink(firstUrl)) return;
+    store.markLinkAutoOpened(firstUrl);
+    void openInBrowser(firstUrl).then((ok) => {
+      if (ok && firstUrl === soleUrl) setLinkStatus('opened');
+    });
+  }, [firstUrl, soleUrl, store]);
 
   // Explicit, discoverable link actions. OSC 8 makes the link clickable only on
   // terminals that support it (not macOS Terminal.app), so `o` opens it in the

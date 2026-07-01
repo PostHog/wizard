@@ -2,6 +2,7 @@ import {
   osc8Hyperlink,
   truncateUrlLabel,
   extractUrls,
+  extractFirstUrl,
   splitPromptIntoSegments,
 } from '@ui/tui/primitives/link-helpers';
 
@@ -83,6 +84,26 @@ describe('extractUrls', () => {
   it('strips trailing sentence punctuation', () => {
     expect(extractUrls('see https://x.test.')).toEqual(['https://x.test']);
     expect(extractUrls('(https://x.test)')).toEqual(['https://x.test']);
+  });
+});
+
+describe('extractFirstUrl', () => {
+  it('returns the first url by textual position when there are several', () => {
+    // e.g. self-driving's GitHub-connect prompt: the authorize link, then a
+    // later "already connected?" settings-page URL.
+    expect(
+      extractFirstUrl(
+        `Open this link: ${LINEAR_URL}\n\n(Need something else? See https://x.test/settings.)`,
+      ),
+    ).toBe(LINEAR_URL);
+  });
+
+  it('returns the sole url when there is exactly one', () => {
+    expect(extractFirstUrl(`open ${LINEAR_URL} now`)).toBe(LINEAR_URL);
+  });
+
+  it('returns null when there is no url', () => {
+    expect(extractFirstUrl('no links here')).toBeNull();
   });
 });
 

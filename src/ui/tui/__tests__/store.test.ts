@@ -619,6 +619,60 @@ describe('WizardStore', () => {
     });
   });
 
+  describe('hasAutoOpenedLink / markLinkAutoOpened', () => {
+    it('reports a url as not-yet-opened until marked', () => {
+      const store = createStore();
+      const url = 'https://x.test/authorize';
+      expect(store.hasAutoOpenedLink(url)).toBe(false);
+      store.markLinkAutoOpened(url);
+      expect(store.hasAutoOpenedLink(url)).toBe(true);
+    });
+
+    it('tracks each url independently', () => {
+      const store = createStore();
+      store.markLinkAutoOpened('https://x.test/a');
+      expect(store.hasAutoOpenedLink('https://x.test/a')).toBe(true);
+      expect(store.hasAutoOpenedLink('https://x.test/b')).toBe(false);
+    });
+
+    it('is session-scoped: survives across separate wizard_ask requests on the same store, mirroring a GitHub-connect retry round', () => {
+      const store = createStore();
+      const url =
+        'http://localhost:8010/api/environments/1/integrations/authorize?kind=github';
+      store.markLinkAutoOpened(url);
+
+      void store.requestQuestion({
+        id: 'github-connect-1',
+        source: 'self-driving-setup',
+        richLinks: true,
+        questions: [
+          {
+            id: 'github-connect',
+            prompt: url,
+            kind: 'single' as const,
+            options: [],
+          },
+        ],
+      });
+      store.cancelPendingQuestion();
+      void store.requestQuestion({
+        id: 'github-connect-2',
+        source: 'self-driving-setup',
+        richLinks: true,
+        questions: [
+          {
+            id: 'github-connect',
+            prompt: url,
+            kind: 'single' as const,
+            options: [],
+          },
+        ],
+      });
+
+      expect(store.hasAutoOpenedLink(url)).toBe(true);
+    });
+  });
+
   // ── Agent observation state ──────────────────────────────────────
 
   describe('statusMessages', () => {

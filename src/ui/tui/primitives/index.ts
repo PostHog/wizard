@@ -19,6 +19,7 @@ export {
   osc8Hyperlink,
   truncateUrlLabel,
   extractUrls,
+  extractFirstUrl,
   splitPromptIntoSegments,
 } from './link-helpers.js';
 export type { PromptSegment } from './link-helpers.js';

@@ -84,6 +84,19 @@ export function extractUrls(text: string): string[] {
   return matches.map(trimTrailingPunctuation);
 }
 
+/**
+ * The first http(s) URL in `text` by textual position, or `null` if there
+ * isn't one. Unlike the `o`/`c` keybinds below (which only activate for a
+ * prompt with exactly one URL, to keep "copy the link" unambiguous), this
+ * is used to auto-open the primary action link even on a prompt that also
+ * mentions a secondary URL (e.g. self-driving's GitHub-connect prompt,
+ * which follows the authorize link with an "already connected? re-link
+ * here" settings URL).
+ */
+export function extractFirstUrl(text: string): string | null {
+  return extractUrls(text)[0] ?? null;
+}
+
 export type PromptSegment =
   | { type: 'text'; value: string }
   | { type: 'url'; value: string };
