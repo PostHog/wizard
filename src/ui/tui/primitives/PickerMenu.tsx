@@ -227,7 +227,7 @@ const SinglePickerMenu = <T,>({
   return (
     <Box flexDirection="column" alignItems={align}>
       <PromptLabel message={message} />
-      <Box flexDirection="row" gap={4}>
+      <Box flexDirection="row" gap={4} marginTop={message ? 1 : 0}>
         {columnArrays.map((colOpts, colIdx) => (
           <Box key={colIdx} flexDirection="column">
             {colOpts.map((opt, rowIdx) => {
