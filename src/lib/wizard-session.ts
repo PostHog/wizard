@@ -10,7 +10,7 @@
  * Business logic reads from the session. Never calls a prompt.
  */
 
-import type { Integration } from './constants';
+import type { Harness, Integration, Sequence } from './constants';
 import type { FrameworkConfig } from './framework-config';
 import type { WizardReadinessResult } from './health-checks/readiness';
 import type { SettingsConflict } from './agent/claude-settings';
@@ -182,6 +182,19 @@ export interface WizardSession {
   projectId?: number;
   noTelemetry: boolean;
 
+  /**
+   * CLI override of the resolved harness. When set, `bootstrap.ts` overlays
+   * `wizardFlags[WIZARD_RUNNER_FLAG_KEY]` with this value *after* the
+   * PostHog authorization snapshot is taken. See `cli-plan.md`.
+   */
+  harness?: Harness;
+  /**
+   * CLI override of the resolved sequence. When set, `bootstrap.ts` overlays
+   * `wizardFlags[WIZARD_ORCHESTRATOR_FLAG_KEY]` (as `'true'` / `'false'`)
+   * *after* the PostHog authorization snapshot is taken. See `cli-plan.md`.
+   */
+  sequence?: Sequence;
+
   // From detection + screens
   setupConfirmed: boolean;
   integration: Integration | null;
@@ -305,6 +318,8 @@ export function buildSession(args: {
   yaraReport?: boolean;
   projectId?: string;
   noTelemetry?: boolean;
+  harness?: Harness;
+  sequence?: Sequence;
 }): WizardSession {
   return {
     debug: args.debug ?? false,
@@ -320,6 +335,8 @@ export function buildSession(args: {
     yaraReport: args.yaraReport ?? false,
     projectId: parseProjectIdArg(args.projectId),
     noTelemetry: args.noTelemetry ?? false,
+    harness: args.harness,
+    sequence: args.sequence,
 
     setupConfirmed: false,
     integration: args.integration ?? null,

@@ -25,7 +25,8 @@ import type { BootstrapResult } from '../../shared/types';
 // Orchestrator mode hard-codes `anthropic` here until pi implements `runTask`.
 // When that lands, this becomes a `resolvePair(...)`-driven harness pick — see
 // `switchboard-interface.md` (step 4).
-import { getRunner, type RunnerName } from '../../runner-plan';
+import { getRunner } from '../../runner-plan';
+import { Harness } from '@lib/constants';
 import type { AgentRunner } from '../../harness/types';
 import {
   QueueStore,
@@ -69,7 +70,7 @@ function toTodoStatus(status: TaskStatus): string {
 function resolveOrchestratorHarness(): AgentRunner & {
   runTask: NonNullable<AgentRunner['runTask']>;
 } {
-  const name: RunnerName = 'anthropic';
+  const name = Harness.anthropic;
   const harness = getRunner(name);
   if (!harness.runTask) {
     throw new Error(

@@ -1,6 +1,7 @@
 import { VERSION } from '@lib/version';
 import { logToFile, getLogFilePath } from '@utils/debug';
 import type { ProgramConfig } from '@lib/programs/program-step';
+import type { Harness, Sequence } from '@lib/constants';
 import type { startTUI as StartTUIFn } from '@ui/tui/start-tui';
 import type { TaskStreamPush as TaskStreamPushClass } from '@lib/task-stream/task-stream-push';
 import { resolveNoTelemetry } from './resolve-no-telemetry';
@@ -49,6 +50,8 @@ export function runWizard(
         benchmark: options.benchmark as boolean | undefined,
         yaraReport: options.yaraReport as boolean | undefined,
         noTelemetry: resolveNoTelemetry(options),
+        harness: options.harness as Harness | undefined,
+        sequence: options.sequence as Sequence | undefined,
       });
       session.programLabel = config.id;
       if (options.skillId) {

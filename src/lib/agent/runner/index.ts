@@ -19,6 +19,7 @@
 import type { WizardSession } from '../../wizard-session';
 import { analytics } from '@utils/analytics';
 import { isOrchestratorEnabled } from '../agent-interface';
+import { Sequence } from '@lib/constants';
 import { getUI } from '../../../ui';
 import { runOrchestrator } from './sequence/orchestrator/orchestrator-runner';
 import type { ProgramConfig } from '../../programs/program-step';
@@ -82,7 +83,12 @@ export async function runProgram(
   // harmless no-op. No harness has to know reporting exists.
   registerCleanup(() => flushScanReport(session));
   try {
-    if (isOrchestratorEnabled(boot.wizardFlags)) {
+    // CLI wins; otherwise fall back to the PostHog flag.
+    const useOrchestrator =
+      session.sequence !== undefined
+        ? session.sequence === Sequence.orchestrator
+        : isOrchestratorEnabled(boot.wizardFlags);
+    if (useOrchestrator) {
       getUI().log.info('Task-queue orchestrator enabled.');
       stampVariant(boot, WizardVariant.ORCHESTRATOR);
       return await runOrchestrator(session, programConfig, boot);

@@ -1,4 +1,4 @@
-import { POSTHOG_DOCS_URL } from '@lib/constants';
+import { POSTHOG_DOCS_URL, type Harness, type Sequence } from '@lib/constants';
 import { getUI, setUI } from '@ui';
 import { LoggingUI } from '@ui/logging-ui';
 import type { ProgramConfig } from '@lib/programs/program-step';
@@ -113,6 +113,8 @@ export function runNonInteractive(
       benchmark: options.benchmark as boolean | undefined,
       yaraReport: options.yaraReport as boolean | undefined,
       noTelemetry: resolveNoTelemetry(options),
+      harness: options.harness as Harness | undefined,
+      sequence: options.sequence as Sequence | undefined,
       ...env,
     });
     session.programLabel = config.id;

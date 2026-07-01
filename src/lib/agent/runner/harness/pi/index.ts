@@ -18,6 +18,7 @@ import { getUI } from '@ui';
 import { getLogFilePath, logToFile } from '@utils/debug';
 import { getLlmGatewayUrlFromHost } from '@utils/urls';
 import {
+  Harness,
   POSTHOG_FLAG_HEADER_PREFIX,
   POSTHOG_PROPERTY_HEADER_PREFIX,
   WIZARD_USER_AGENT,
@@ -191,7 +192,7 @@ function applyOutroMarkers(textBlock: string): void {
 }
 
 export const piBackend: AgentRunner = {
-  name: 'pi',
+  name: Harness.pi,
 
   async run(inputs: BackendRunInputs): Promise<AgentResult> {
     const { session, boot, prompt, spinner, config, programConfig } = inputs;

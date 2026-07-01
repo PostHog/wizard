@@ -120,7 +120,11 @@ export async function runLinearProgram(
   // through the selected runner. The runner owns the agent loop + model
   // transport; everything around it (skill install, prompt, ask bridge, error
   // routing, outro) stays here so every runner shares it.
-  const pair = resolvePair({ program: programConfig.id, flags: wizardFlags });
+  const pair = resolvePair({
+    program: programConfig.id,
+    flags: wizardFlags,
+    cliHarness: session.harness,
+  });
   const agentResult = await getRunner(pair.runner).run({
     session,
     config,
