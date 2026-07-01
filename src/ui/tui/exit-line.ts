@@ -13,7 +13,7 @@
  * function (start-tui.ts itself pulls in the whole render tree).
  */
 
-import type { WizardStore } from './store.js';
+import { totalTokenCount, type WizardStore } from './store.js';
 import { OutroKind } from '@lib/wizard-session';
 import { formatTokenCount, formatCostUsd } from '@lib/agent/token-pricing';
 
@@ -35,12 +35,7 @@ const DIM = '\x1b[2m';
 function tokenCostLine(store: WizardStore): string | null {
   if (!store.tokenHudVisible) return null;
   const usage = store.tokenUsage;
-  const totalTokens =
-    usage.inputTokens +
-    usage.outputTokens +
-    usage.cacheReadTokens +
-    usage.cacheCreationTokens;
-  if (totalTokens === 0) return null;
+  if (totalTokenCount(usage) === 0) return null;
 
   const label = usage.costIsFinal ? 'Final cost' : 'Cost (estimate)';
   return (

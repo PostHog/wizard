@@ -14,12 +14,12 @@ export interface CostData {
 
 // Pricing table + formula moved to `@lib/agent/token-pricing` so the live
 // token/cost HUD's per-turn estimate can't drift from this benchmark's.
-// No model is passed here (falls back to Sonnet pricing) -- MiddlewareContext
-// has no model field to thread through, and `--benchmark` always measures
-// the default flow, never a Haiku-overridden program. Still reconciles to
-// the SDK's authoritative total_cost_usd in onFinalize below, same as the
-// live HUD, so this only risks the unreconciled per-phase breakdown.
-const computeCost = computeTokenCostUsd;
+// No model is passed to computeTokenCostUsd below (falls back to Sonnet
+// pricing) -- MiddlewareContext has no model field to thread through, and
+// `--benchmark` always measures the default flow, never a Haiku-overridden
+// program. Still reconciles to the SDK's authoritative total_cost_usd in
+// onFinalize below, same as the live HUD, so this only risks the
+// unreconciled per-phase breakdown.
 
 export class CostTrackerPlugin implements Middleware {
   readonly name = 'cost';
@@ -45,14 +45,14 @@ export class CostTrackerPlugin implements Middleware {
     const c1h = cacheSnap?.cacheCreation1h ?? 0;
     const baseIn = Math.max(0, totalIn - read - creation);
 
-    const phaseCost = computeCost(
-      baseIn,
-      tokenSnap?.outputTokens ?? 0,
-      read,
-      c5m,
-      c1h,
-      creation,
-    );
+    const phaseCost = computeTokenCostUsd({
+      inputTokens: baseIn,
+      outputTokens: tokenSnap?.outputTokens ?? 0,
+      cacheReadTokens: read,
+      cacheCreation5m: c5m,
+      cacheCreation1h: c1h,
+      cacheCreationTokens: creation,
+    });
 
     this.phaseCosts.push({ phase: fromPhase, cost: phaseCost });
     this.totalCost += phaseCost;
@@ -77,14 +77,14 @@ export class CostTrackerPlugin implements Middleware {
     const c1h = cacheSnap?.cacheCreation1h ?? 0;
     const baseIn = Math.max(0, totalIn - read - creation);
 
-    const lastPhaseCost = computeCost(
-      baseIn,
-      tokenSnap?.outputTokens ?? 0,
-      read,
-      c5m,
-      c1h,
-      creation,
-    );
+    const lastPhaseCost = computeTokenCostUsd({
+      inputTokens: baseIn,
+      outputTokens: tokenSnap?.outputTokens ?? 0,
+      cacheReadTokens: read,
+      cacheCreation5m: c5m,
+      cacheCreation1h: c1h,
+      cacheCreationTokens: creation,
+    });
 
     this.phaseCosts.push({ phase: ctx.currentPhase, cost: lastPhaseCost });
     this.totalCost += lastPhaseCost;

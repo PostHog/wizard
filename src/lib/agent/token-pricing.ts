@@ -101,35 +101,39 @@ export function pricePerMtokForModel(model?: string): PricePerMtok | undefined {
 }
 
 /**
- * Cost in USD for one usage delta, priced at `model`'s exact rates (see
- * `pricePerMtokForModel`) — 0 when `model` is given but not in the table,
- * rather than guessing. `cacheCreation5m`/`cacheCreation1h` come from the
- * SDK's `usage.cache_creation` breakdown, which is only reported on some
- * turns — when both are 0, `cacheCreationFallback` (the plain
- * `cache_creation_input_tokens` total) is priced at the 5m rate instead, so a
- * turn without the breakdown still gets a reasonable estimate rather than
+ * Cost in USD for one usage delta, priced at `usage.model`'s exact rates
+ * (see `pricePerMtokForModel`) — 0 when `model` is given but not in the
+ * table, rather than guessing. `cacheCreation5m`/`cacheCreation1h` come from
+ * the SDK's `usage.cache_creation` breakdown, which is only reported on
+ * some turns — when both are 0, `cacheCreationTokens` (the plain
+ * `cache_creation_input_tokens` total) is priced at the 5m rate instead, so
+ * a turn without the breakdown still gets a reasonable estimate rather than
  * being priced at $0.
+ *
+ * Takes the same shape as `TokenUsageDelta` (`@ui/wizard-ui`) so a caller
+ * that already has one — `WizardStore.addTokenUsage` — can pass it straight
+ * through instead of re-listing its fields in a fixed positional order.
  */
-export function computeTokenCostUsd(
-  inputTokens: number,
-  outputTokens: number,
-  cacheReadTokens: number,
-  cacheCreation5m: number,
-  cacheCreation1h: number,
-  cacheCreationFallback: number,
-  model?: string,
-): number {
-  const price = pricePerMtokForModel(model);
+export function computeTokenCostUsd(usage: {
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadTokens: number;
+  cacheCreation5m: number;
+  cacheCreation1h: number;
+  cacheCreationTokens: number;
+  model?: string;
+}): number {
+  const price = pricePerMtokForModel(usage.model);
   if (!price) return 0;
-  const hasBreakdown = cacheCreation5m > 0 || cacheCreation1h > 0;
+  const hasBreakdown = usage.cacheCreation5m > 0 || usage.cacheCreation1h > 0;
   return (
-    inputTokens * (price.input / 1e6) +
-    outputTokens * (price.output / 1e6) +
-    cacheReadTokens * (price.cacheRead / 1e6) +
+    usage.inputTokens * (price.input / 1e6) +
+    usage.outputTokens * (price.output / 1e6) +
+    usage.cacheReadTokens * (price.cacheRead / 1e6) +
     (hasBreakdown
-      ? cacheCreation5m * (price.cacheCreation5m / 1e6) +
-        cacheCreation1h * (price.cacheCreation1h / 1e6)
-      : cacheCreationFallback * (price.cacheCreation5m / 1e6))
+      ? usage.cacheCreation5m * (price.cacheCreation5m / 1e6) +
+        usage.cacheCreation1h * (price.cacheCreation1h / 1e6)
+      : usage.cacheCreationTokens * (price.cacheCreation5m / 1e6))
   );
 }
 

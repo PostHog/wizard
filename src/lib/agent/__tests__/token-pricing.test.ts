@@ -42,13 +42,27 @@ describe('pricePerMtokForModel', () => {
 describe('computeTokenCostUsd', () => {
   it('prices input, output, and cache-read tokens at their per-Mtok rates', () => {
     // 1M input ($3) + 1M output ($15) + 1M cache-read ($0.30), no cache creation.
-    const cost = computeTokenCostUsd(1_000_000, 1_000_000, 1_000_000, 0, 0, 0);
+    const cost = computeTokenCostUsd({
+      inputTokens: 1_000_000,
+      outputTokens: 1_000_000,
+      cacheReadTokens: 1_000_000,
+      cacheCreation5m: 0,
+      cacheCreation1h: 0,
+      cacheCreationTokens: 0,
+    });
     expect(cost).toBeCloseTo(3 + 15 + 0.3, 5);
   });
 
   it('prices cache creation at the 5m/1h breakdown rates when present', () => {
     // 1M ephemeral-5m ($3.75) + 1M ephemeral-1h ($6), fallback total ignored.
-    const cost = computeTokenCostUsd(0, 0, 0, 1_000_000, 1_000_000, 2_000_000);
+    const cost = computeTokenCostUsd({
+      inputTokens: 0,
+      outputTokens: 0,
+      cacheReadTokens: 0,
+      cacheCreation5m: 1_000_000,
+      cacheCreation1h: 1_000_000,
+      cacheCreationTokens: 2_000_000,
+    });
     expect(cost).toBeCloseTo(3.75 + 6, 5);
   });
 
@@ -56,20 +70,27 @@ describe('computeTokenCostUsd', () => {
     // Some SDK turns report cache_creation_input_tokens without the
     // ephemeral_5m/1h breakdown -- price the whole total at the 5m rate
     // rather than treating it as free.
-    const cost = computeTokenCostUsd(0, 0, 0, 0, 0, 1_000_000);
+    const cost = computeTokenCostUsd({
+      inputTokens: 0,
+      outputTokens: 0,
+      cacheReadTokens: 0,
+      cacheCreation5m: 0,
+      cacheCreation1h: 0,
+      cacheCreationTokens: 1_000_000,
+    });
     expect(cost).toBeCloseTo(3.75, 5);
   });
 
   it('prices a Haiku turn at Haiku rates, not Sonnet', () => {
-    const cost = computeTokenCostUsd(
-      1_000_000,
-      1_000_000,
-      0,
-      0,
-      0,
-      0,
-      'claude-haiku-4-5-20251001',
-    );
+    const cost = computeTokenCostUsd({
+      inputTokens: 1_000_000,
+      outputTokens: 1_000_000,
+      cacheReadTokens: 0,
+      cacheCreation5m: 0,
+      cacheCreation1h: 0,
+      cacheCreationTokens: 0,
+      model: 'claude-haiku-4-5-20251001',
+    });
     // $1/Mtok input + $5/Mtok output -- 1/3 and 1/3 of the Sonnet cost this
     // same delta would get without a model, so a Haiku-overridden run (e.g.
     // source-map detection) doesn't get billed at Sonnet's rate.
@@ -77,15 +98,15 @@ describe('computeTokenCostUsd', () => {
   });
 
   it('prices an Opus 4.5 turn at Opus 4.5 rates, not Opus 4.1', () => {
-    const cost = computeTokenCostUsd(
-      1_000_000,
-      0,
-      0,
-      0,
-      0,
-      0,
-      'claude-opus-4-5-20251101',
-    );
+    const cost = computeTokenCostUsd({
+      inputTokens: 1_000_000,
+      outputTokens: 0,
+      cacheReadTokens: 0,
+      cacheCreation5m: 0,
+      cacheCreation1h: 0,
+      cacheCreationTokens: 0,
+      model: 'claude-opus-4-5-20251101',
+    });
     // $5/Mtok input -- Opus 4.5 is half of Opus 4.1's $15/Mtok published rate.
     expect(cost).toBeCloseTo(5, 5);
   });

@@ -99,6 +99,17 @@ const EMPTY_TOKEN_USAGE: TokenUsageSnapshot = {
   costIsFinal: false,
 };
 
+/** Total tokens across all counters in a `TokenUsageSnapshot` — used by
+ *  both `TokenCostHud` and `exit-line.ts` to detect "no agent turns yet". */
+export function totalTokenCount(usage: TokenUsageSnapshot): number {
+  return (
+    usage.inputTokens +
+    usage.outputTokens +
+    usage.cacheReadTokens +
+    usage.cacheCreationTokens
+  );
+}
+
 interface GateEntry {
   predicate: (session: WizardSession) => boolean;
   promise: Promise<void>;
@@ -924,15 +935,7 @@ export class WizardStore {
   addTokenUsage(delta: TokenUsageDelta): void {
     const cur = this.$tokenUsage.get();
     if (cur.costIsFinal) return;
-    const deltaCostUsd = computeTokenCostUsd(
-      delta.inputTokens,
-      delta.outputTokens,
-      delta.cacheReadTokens,
-      delta.cacheCreation5m,
-      delta.cacheCreation1h,
-      delta.cacheCreationTokens,
-      delta.model,
-    );
+    const deltaCostUsd = computeTokenCostUsd(delta);
     this.$tokenUsage.set({
       inputTokens: cur.inputTokens + delta.inputTokens,
       outputTokens: cur.outputTokens + delta.outputTokens,

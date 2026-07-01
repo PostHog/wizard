@@ -16,7 +16,7 @@
  */
 import { Box, Text } from 'ink';
 import { Colors } from '@ui/tui/styles';
-import type { TokenUsageSnapshot } from '@ui/tui/store';
+import { totalTokenCount, type TokenUsageSnapshot } from '@ui/tui/store';
 import { formatTokenCount, formatCostUsd } from '@lib/agent/token-pricing';
 
 /** Self-documents the hidden shortcut once the panel is showing. */
@@ -34,15 +34,10 @@ interface TokenCostLineParts {
 }
 
 function tokenCostLineParts(usage: TokenUsageSnapshot): TokenCostLineParts {
-  const totalTokens =
-    usage.inputTokens +
-    usage.outputTokens +
-    usage.cacheReadTokens +
-    usage.cacheCreationTokens;
   const label = usage.costIsFinal ? 'Final cost' : 'Cost (running)';
   const costPart = `${label}: ${formatCostUsd(usage.costUsd)}`;
 
-  if (totalTokens === 0) {
+  if (totalTokenCount(usage) === 0) {
     return { costPart, breakdownPart: ' · no agent turns yet' };
   }
   return {
@@ -55,20 +50,45 @@ function tokenCostLineParts(usage: TokenUsageSnapshot): TokenCostLineParts {
   };
 }
 
+interface TokenCostLineLayout {
+  costPart: string;
+  breakdownPart: string;
+  /** True when "Ctrl+T to hide" fits on the cost line's row at `width`
+   *  columns (with `MIN_GAP` to spare); false when it needs its own row. */
+  hintFitsInline: boolean;
+  /** Blank columns to pad before the hint when it fits inline. */
+  gap: number;
+}
+
+/** Single source of truth for both `tokenCostHudRowCount` (so
+ *  `ScreenContainer`'s height budget can never disagree with what renders)
+ *  and the component's own render — computed once per call rather than
+ *  separately in each. */
+function layoutTokenCostLine(
+  usage: TokenUsageSnapshot,
+  width: number,
+): TokenCostLineLayout {
+  const { costPart, breakdownPart } = tokenCostLineParts(usage);
+  const lineLength = costPart.length + breakdownPart.length;
+  return {
+    costPart,
+    breakdownPart,
+    hintFitsInline: lineLength + MIN_GAP + HINT_TEXT.length <= width,
+    gap: Math.max(MIN_GAP, width - lineLength - HINT_TEXT.length),
+  };
+}
+
 /**
  * How many rows `TokenCostHud` renders for `usage` at `width` columns of
- * available text space — 1 when the hint fits on the cost line's row (with
- * `MIN_GAP` to spare), 2 when it needs its own row below. `ScreenContainer`
- * calls this with the exact same `usage`/`width` it passes to the
- * component, so its height budget can never disagree with what renders.
+ * available text space — 1 when the hint fits on the cost line's row, 2
+ * when it needs its own row below. `ScreenContainer` calls this with the
+ * exact same `usage`/`width` it passes to the component.
  */
 export function tokenCostHudRowCount(
   usage: TokenUsageSnapshot,
   width: number,
 ): 1 | 2 {
-  const { costPart, breakdownPart } = tokenCostLineParts(usage);
-  const lineLength = costPart.length + breakdownPart.length;
-  return lineLength + MIN_GAP + HINT_TEXT.length <= width ? 1 : 2;
+  return layoutTokenCostLine(usage, width).hintFitsInline ? 1 : 2;
 }
 
 interface TokenCostHudProps {
@@ -80,20 +100,20 @@ interface TokenCostHudProps {
 }
 
 export const TokenCostHud = ({ usage, width }: TokenCostHudProps) => {
-  const { costPart, breakdownPart } = tokenCostLineParts(usage);
-  const inline = tokenCostHudRowCount(usage, width) === 1;
-  const lineLength = costPart.length + breakdownPart.length;
-  const gap = Math.max(MIN_GAP, width - lineLength - HINT_TEXT.length);
+  const { costPart, breakdownPart, hintFitsInline, gap } = layoutTokenCostLine(
+    usage,
+    width,
+  );
 
   return (
     <Box flexDirection="column" paddingX={1}>
       <Text wrap="truncate">
         <Text color={Colors.accent}>{costPart}</Text>
         <Text dimColor>{breakdownPart}</Text>
-        {inline && <Text>{' '.repeat(gap)}</Text>}
-        {inline && <Text dimColor>{HINT_TEXT}</Text>}
+        {hintFitsInline && <Text>{' '.repeat(gap)}</Text>}
+        {hintFitsInline && <Text dimColor>{HINT_TEXT}</Text>}
       </Text>
-      {!inline && (
+      {!hintFitsInline && (
         <Text dimColor wrap="truncate">
           {HINT_TEXT}
         </Text>
