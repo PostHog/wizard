@@ -890,6 +890,13 @@ export async function runAgent(
       cache_read_input_tokens: usage?.cache_read_input_tokens,
       ...config?.analyticsProperties,
     });
+    // Reconcile the hidden Ctrl+T HUD's running cost estimate to the SDK's
+    // authoritative total — same trick the benchmark's
+    // CostTrackerPlugin.onFinalize uses to correct per-turn drift.
+    const totalCostUsd = Number(lastResultMessage?.total_cost_usd ?? 0);
+    if (totalCostUsd > 0) {
+      getUI().setFinalTokenCostUsd(totalCostUsd);
+    }
     try {
       middleware?.finalize(lastResultMessage, durationMs);
     } catch (e) {
@@ -1592,6 +1599,37 @@ function handleSDKMessage(
 
   switch (message.type) {
     case 'assistant': {
+      // Feed the hidden Ctrl+T token/cost HUD. Mirrors the benchmark
+      // middleware's TokenTrackerPlugin/CacheTrackerPlugin extraction (no
+      // dedup for SDK-retried turns — see addTokenUsage's doc comment), so
+      // this stays live-updating for every run, not just `--benchmark`.
+      const usage = message.message?.usage as
+        | {
+            input_tokens?: number;
+            output_tokens?: number;
+            cache_read_input_tokens?: number;
+            cache_creation_input_tokens?: number;
+            cache_creation?: {
+              ephemeral_5m_input_tokens?: number;
+              ephemeral_1h_input_tokens?: number;
+            };
+          }
+        | undefined;
+      if (usage) {
+        getUI().addTokenUsage({
+          inputTokens: Number(usage.input_tokens ?? 0),
+          outputTokens: Number(usage.output_tokens ?? 0),
+          cacheReadTokens: Number(usage.cache_read_input_tokens ?? 0),
+          cacheCreationTokens: Number(usage.cache_creation_input_tokens ?? 0),
+          cacheCreation5m: Number(
+            usage.cache_creation?.ephemeral_5m_input_tokens ?? 0,
+          ),
+          cacheCreation1h: Number(
+            usage.cache_creation?.ephemeral_1h_input_tokens ?? 0,
+          ),
+        });
+      }
+
       // Extract text content from assistant messages
       const content = message.message?.content;
       if (Array.isArray(content)) {

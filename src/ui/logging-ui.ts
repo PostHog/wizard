@@ -268,6 +268,21 @@ export class LoggingUI implements WizardUI {
     // No-op in CI mode
   }
 
+  addTokenUsage(_delta: {
+    inputTokens: number;
+    outputTokens: number;
+    cacheReadTokens: number;
+    cacheCreationTokens: number;
+    cacheCreation5m: number;
+    cacheCreation1h: number;
+  }): void {
+    // No-op — the hidden Ctrl+T HUD is TUI-only
+  }
+
+  setFinalTokenCostUsd(_costUsd: number): void {
+    // No-op — the hidden Ctrl+T HUD is TUI-only
+  }
+
   setOutroData(_data: import('@lib/wizard-session').OutroData): void {
     // No-op in CI mode
   }

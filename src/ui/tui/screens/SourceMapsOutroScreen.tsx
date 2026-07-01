@@ -29,7 +29,10 @@ export const SourceMapsOutroScreen = ({
     () => store.getSnapshot(),
   );
 
-  useInput(() => {
+  useInput((_input, key) => {
+    // Ignore modifier-combo keypresses (e.g. Ctrl+T toggling the token/cost
+    // HUD) — see AuthErrorScreen for why this guard is needed.
+    if (key.ctrl || key.meta) return;
     store.setOutroDismissed();
   });
 

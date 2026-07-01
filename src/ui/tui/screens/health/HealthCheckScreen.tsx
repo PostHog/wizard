@@ -34,7 +34,10 @@ const EXAMPLE_PROMPT =
   'Integrate PostHog into this project using the skill files in .posthog/skills/. Read SKILL.md first, then follow the numbered program files in order.';
 
 const SkillsDownloadedScreen = () => {
-  useInput(() => {
+  useInput((_input, key) => {
+    // Ignore modifier-combo keypresses (e.g. Ctrl+T toggling the token/cost
+    // HUD) — see AuthErrorScreen for why this guard is needed.
+    if (key.ctrl || key.meta) return;
     process.exit(0);
   });
 

@@ -23,7 +23,12 @@ export const OutroScreen = ({ store }: OutroScreenProps) => {
     () => store.getSnapshot(),
   );
 
-  useInput(() => {
+  useInput((_input, key) => {
+    // Ignore modifier-combo keypresses (e.g. Ctrl+T toggling the token/cost
+    // HUD) — see AuthErrorScreen for why this guard is needed. Dismissal
+    // here chains into ExitScreen's process.exit(), so without this guard
+    // toggling the HUD on the outro screen would kill the process instead.
+    if (key.ctrl || key.meta) return;
     store.setOutroDismissed();
   });
 

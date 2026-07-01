@@ -50,6 +50,7 @@ import type {
 import { getProgramConfig } from '@lib/programs/program-registry';
 import { withAiOptInGate } from '@lib/programs/ai-opt-in-gate';
 import { EXPANDED_COUNT } from '@ui/tui/constants';
+import { computeTokenCostUsd } from '@lib/agent/token-pricing';
 
 export { TaskStatus, ScreenId, Overlay, Program, RunPhase, McpOutcome };
 export type { ScreenName, OutroData, WizardSession, ProgramId };
@@ -66,6 +67,31 @@ export interface PlannedEvent {
   name: string;
   description: string;
 }
+
+/**
+ * Running token/cost estimate for the hidden Ctrl+T HUD. Accumulated live
+ * from each assistant turn's usage (see `agent-interface.ts`), then
+ * reconciled to the SDK's authoritative `total_cost_usd` once the run
+ * completes — `costIsFinal` flips so the HUD can show the number as exact
+ * rather than a running estimate.
+ */
+export interface TokenUsageSnapshot {
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadTokens: number;
+  cacheCreationTokens: number;
+  costUsd: number;
+  costIsFinal: boolean;
+}
+
+const EMPTY_TOKEN_USAGE: TokenUsageSnapshot = {
+  inputTokens: 0,
+  outputTokens: 0,
+  cacheReadTokens: 0,
+  cacheCreationTokens: 0,
+  costUsd: 0,
+  costIsFinal: false,
+};
 
 interface GateEntry {
   predicate: (session: WizardSession) => boolean;
@@ -148,6 +174,8 @@ export class WizardStore {
   private $currentStage = atom<{ stage: string; startedAt: number } | null>(
     null,
   );
+  private $tokenUsage = atom<TokenUsageSnapshot>(EMPTY_TOKEN_USAGE);
+  private $tokenHudVisible = atom(false);
 
   private _onTasksChanged: (() => void) | null = null;
   /** Last screen seen — used to detect screen transitions for analytics. */
@@ -858,6 +886,66 @@ export class WizardStore {
         ? [...msgs.slice(msgs.length - MAX_STATUS_MESSAGES + 1), message]
         : [...msgs, message];
     this.$statusMessages.set(next);
+    this.emitChange();
+  }
+
+  get tokenUsage(): TokenUsageSnapshot {
+    return this.$tokenUsage.get();
+  }
+
+  get tokenHudVisible(): boolean {
+    return this.$tokenHudVisible.get();
+  }
+
+  /** Hidden Ctrl+T shortcut — see ScreenContainer. Not registered as a
+   *  keyboard hint, so it never shows in the hints bar. */
+  toggleTokenHud(): void {
+    this.$tokenHudVisible.set(!this.$tokenHudVisible.get());
+    this.emitChange();
+  }
+
+  /**
+   * Accumulate one assistant turn's token usage into the running estimate.
+   * Approximate by design (no dedup for SDK-retried/replayed turns, unlike
+   * the benchmark middleware's TurnCounterPlugin) — it's a live indicator
+   * for a hidden debug HUD, not a billing record, and `setFinalTokenCostUsd`
+   * corrects the total once the run's authoritative cost is known.
+   */
+  addTokenUsage(delta: {
+    inputTokens: number;
+    outputTokens: number;
+    cacheReadTokens: number;
+    cacheCreationTokens: number;
+    cacheCreation5m: number;
+    cacheCreation1h: number;
+  }): void {
+    const cur = this.$tokenUsage.get();
+    if (cur.costIsFinal) return;
+    const deltaCostUsd = computeTokenCostUsd(
+      delta.inputTokens,
+      delta.outputTokens,
+      delta.cacheReadTokens,
+      delta.cacheCreation5m,
+      delta.cacheCreation1h,
+      delta.cacheCreationTokens,
+    );
+    this.$tokenUsage.set({
+      inputTokens: cur.inputTokens + delta.inputTokens,
+      outputTokens: cur.outputTokens + delta.outputTokens,
+      cacheReadTokens: cur.cacheReadTokens + delta.cacheReadTokens,
+      cacheCreationTokens: cur.cacheCreationTokens + delta.cacheCreationTokens,
+      costUsd: cur.costUsd + deltaCostUsd,
+      costIsFinal: false,
+    });
+    this.emitChange();
+  }
+
+  /** Reconcile the running cost estimate to the SDK's authoritative total
+   *  once the agent run completes — same trick the benchmark's
+   *  CostTrackerPlugin.onFinalize uses to correct any per-turn drift. */
+  setFinalTokenCostUsd(costUsd: number): void {
+    const cur = this.$tokenUsage.get();
+    this.$tokenUsage.set({ ...cur, costUsd, costIsFinal: true });
     this.emitChange();
   }
 

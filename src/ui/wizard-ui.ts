@@ -203,6 +203,21 @@ export interface WizardUI {
   // ── Notebook URL emitted by the agent via [NOTEBOOK_URL] marker ──
   setNotebookUrl(url: string): void;
 
+  /** Accumulate one assistant turn's token usage into the hidden Ctrl+T
+   *  token/cost HUD's running estimate. No-op outside the TUI. */
+  addTokenUsage(delta: {
+    inputTokens: number;
+    outputTokens: number;
+    cacheReadTokens: number;
+    cacheCreationTokens: number;
+    cacheCreation5m: number;
+    cacheCreation1h: number;
+  }): void;
+
+  /** Reconcile the HUD's running cost estimate to the SDK's authoritative
+   *  `total_cost_usd` once the agent run completes. No-op outside the TUI. */
+  setFinalTokenCostUsd(costUsd: number): void;
+
   // ── Outro payload built by agent-runner ──
   // Replaces the direct `session.outroData = X` mutation that breaks once
   // setKey-based store mutations have forked the session reference.

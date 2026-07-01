@@ -619,6 +619,111 @@ describe('WizardStore', () => {
     });
   });
 
+  describe('tokenUsage / toggleTokenHud (hidden Ctrl+T HUD)', () => {
+    it('starts at zero and hidden', () => {
+      const store = createStore();
+      expect(store.tokenUsage).toEqual({
+        inputTokens: 0,
+        outputTokens: 0,
+        cacheReadTokens: 0,
+        cacheCreationTokens: 0,
+        costUsd: 0,
+        costIsFinal: false,
+      });
+      expect(store.tokenHudVisible).toBe(false);
+    });
+
+    it('toggleTokenHud flips visibility each call', () => {
+      const store = createStore();
+      store.toggleTokenHud();
+      expect(store.tokenHudVisible).toBe(true);
+      store.toggleTokenHud();
+      expect(store.tokenHudVisible).toBe(false);
+    });
+
+    it('addTokenUsage accumulates token counts and cost across calls', () => {
+      const store = createStore();
+      store.addTokenUsage({
+        inputTokens: 1_000_000,
+        outputTokens: 0,
+        cacheReadTokens: 0,
+        cacheCreationTokens: 0,
+        cacheCreation5m: 0,
+        cacheCreation1h: 0,
+      });
+      store.addTokenUsage({
+        inputTokens: 1_000_000,
+        outputTokens: 1_000_000,
+        cacheReadTokens: 0,
+        cacheCreationTokens: 0,
+        cacheCreation5m: 0,
+        cacheCreation1h: 0,
+      });
+
+      expect(store.tokenUsage.inputTokens).toBe(2_000_000);
+      expect(store.tokenUsage.outputTokens).toBe(1_000_000);
+      // $3/Mtok input + $15/Mtok output, from the shared pricing table.
+      expect(store.tokenUsage.costUsd).toBeCloseTo(2 * 3 + 15, 5);
+      expect(store.tokenUsage.costIsFinal).toBe(false);
+    });
+
+    it('setFinalTokenCostUsd overwrites the running estimate and marks it final', () => {
+      const store = createStore();
+      store.addTokenUsage({
+        inputTokens: 1_000_000,
+        outputTokens: 0,
+        cacheReadTokens: 0,
+        cacheCreationTokens: 0,
+        cacheCreation5m: 0,
+        cacheCreation1h: 0,
+      });
+
+      store.setFinalTokenCostUsd(1.23);
+
+      expect(store.tokenUsage.costUsd).toBe(1.23);
+      expect(store.tokenUsage.costIsFinal).toBe(true);
+      // Token counts (not cost) are untouched by reconciliation.
+      expect(store.tokenUsage.inputTokens).toBe(1_000_000);
+    });
+
+    it('addTokenUsage is a no-op once the cost has been finalized', () => {
+      const store = createStore();
+      store.setFinalTokenCostUsd(1.0);
+
+      store.addTokenUsage({
+        inputTokens: 1_000_000,
+        outputTokens: 0,
+        cacheReadTokens: 0,
+        cacheCreationTokens: 0,
+        cacheCreation5m: 0,
+        cacheCreation1h: 0,
+      });
+
+      // A late-arriving turn (e.g. post-success cleanup) must not perturb
+      // the already-reconciled final number.
+      expect(store.tokenUsage.costUsd).toBe(1.0);
+      expect(store.tokenUsage.inputTokens).toBe(0);
+    });
+
+    it('emits a change so subscribers re-render', () => {
+      const store = createStore();
+      const versions: number[] = [];
+      store.subscribe(() => versions.push(store.getSnapshot()));
+
+      store.toggleTokenHud();
+      store.addTokenUsage({
+        inputTokens: 1,
+        outputTokens: 0,
+        cacheReadTokens: 0,
+        cacheCreationTokens: 0,
+        cacheCreation5m: 0,
+        cacheCreation1h: 0,
+      });
+
+      expect(versions.length).toBe(2);
+    });
+  });
+
   // ── Agent observation state ──────────────────────────────────────
 
   describe('statusMessages', () => {

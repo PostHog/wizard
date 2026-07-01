@@ -240,6 +240,21 @@ export class InkUI implements WizardUI {
     this.store.setNotebookUrl(url);
   }
 
+  addTokenUsage(delta: {
+    inputTokens: number;
+    outputTokens: number;
+    cacheReadTokens: number;
+    cacheCreationTokens: number;
+    cacheCreation5m: number;
+    cacheCreation1h: number;
+  }): void {
+    this.store.addTokenUsage(delta);
+  }
+
+  setFinalTokenCostUsd(costUsd: number): void {
+    this.store.setFinalTokenCostUsd(costUsd);
+  }
+
   setOutroData(data: OutroData): void {
     // Merge in URLs the agent emitted via `[DASHBOARD_URL]` / `[NOTEBOOK_URL]`
     // markers. These land on the live store during the run; agent-runner's

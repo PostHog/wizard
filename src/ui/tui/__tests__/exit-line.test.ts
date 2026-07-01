@@ -117,4 +117,72 @@ describe('getExitLine', () => {
     expect(line).toMatch(/exited\.$/);
     expect(line).not.toContain('coding agent');
   });
+
+  describe('token/cost tally (hidden Ctrl+T HUD survives into scrollback)', () => {
+    it('appends the running cost estimate on a success outro', () => {
+      const store = storeWithOutro({
+        kind: OutroKind.Success,
+        message: 'Done!',
+      });
+      store.addTokenUsage({
+        inputTokens: 1_000_000,
+        outputTokens: 0,
+        cacheReadTokens: 0,
+        cacheCreationTokens: 0,
+        cacheCreation5m: 0,
+        cacheCreation1h: 0,
+      });
+
+      const line = stripAnsi(getExitLine(store));
+
+      expect(line).toContain('Cost (estimate): $3.00');
+      expect(line).toContain('in 1.00M');
+    });
+
+    it('labels the tally "Final cost" once reconciled to the SDK total', () => {
+      const store = storeWithOutro({
+        kind: OutroKind.Success,
+        message: 'Done!',
+      });
+      store.addTokenUsage({
+        inputTokens: 1_000_000,
+        outputTokens: 0,
+        cacheReadTokens: 0,
+        cacheCreationTokens: 0,
+        cacheCreation5m: 0,
+        cacheCreation1h: 0,
+      });
+      store.setFinalTokenCostUsd(1.5);
+
+      const line = stripAnsi(getExitLine(store));
+
+      expect(line).toContain('Final cost: $1.50');
+    });
+
+    it('appends the tally after the "exited" line for non-success outcomes too', () => {
+      const store = storeWithOutro({ kind: OutroKind.Error, message: 'boom' });
+      store.addTokenUsage({
+        inputTokens: 1_000_000,
+        outputTokens: 0,
+        cacheReadTokens: 0,
+        cacheCreationTokens: 0,
+        cacheCreation5m: 0,
+        cacheCreation1h: 0,
+      });
+
+      const line = stripAnsi(getExitLine(store));
+
+      expect(line).toMatch(/exited\./);
+      expect(line).toContain('Cost (estimate): $3.00');
+    });
+
+    it('omits the tally entirely when the run never produced any usage', () => {
+      const line = stripAnsi(
+        getExitLine(
+          storeWithOutro({ kind: OutroKind.Success, message: 'Done!' }),
+        ),
+      );
+      expect(line).not.toContain('Cost');
+    });
+  });
 });

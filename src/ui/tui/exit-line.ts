@@ -15,15 +15,45 @@
 
 import type { WizardStore } from './store.js';
 import { OutroKind } from '@lib/wizard-session';
+import { formatTokenCount, formatCostUsd } from '@lib/agent/token-pricing';
 
 const RESET_ATTRS = '\x1b[0m';
 const GREEN = '\x1b[32m';
 const BOLD = '\x1b[1m';
 const DIM = '\x1b[2m';
 
+/**
+ * The hidden Ctrl+T HUD only shows on demand and the outro screen's
+ * "any key" dismissal can beat it to the punch — so the run's final
+ * token/cost tally is also echoed here unconditionally, guaranteeing it's
+ * visible in scrollback regardless of whether the user ever opened the HUD.
+ * `null` when the run never produced any usage (e.g. non-agent programs).
+ */
+function tokenCostLine(store: WizardStore): string | null {
+  const usage = store.tokenUsage;
+  const totalTokens =
+    usage.inputTokens +
+    usage.outputTokens +
+    usage.cacheReadTokens +
+    usage.cacheCreationTokens;
+  if (totalTokens === 0) return null;
+
+  const label = usage.costIsFinal ? 'Final cost' : 'Cost (estimate)';
+  return (
+    `${DIM}${label}: ${formatCostUsd(usage.costUsd)}` +
+    ` (in ${formatTokenCount(usage.inputTokens)}` +
+    ` · out ${formatTokenCount(usage.outputTokens)}` +
+    ` · cache read ${formatTokenCount(usage.cacheReadTokens)}` +
+    ` · cache write ${formatTokenCount(
+      usage.cacheCreationTokens,
+    )})${RESET_ATTRS}`
+  );
+}
+
 export function getExitLine(store: WizardStore): string {
   const outro = store.session.outroData;
   const label = store.session.programLabel ?? 'Wizard';
+  const costLine = tokenCostLine(store);
 
   if (outro?.kind === OutroKind.Success) {
     const message = outro.message ?? `${label} completed successfully.`;
@@ -58,8 +88,12 @@ export function getExitLine(store: WizardStore): string {
       );
     }
 
+    if (costLine) parts.push(costLine);
+
     return parts.join('\n\n');
   }
 
-  return `${DIM}${label} exited.${RESET_ATTRS}`;
+  return costLine
+    ? `${DIM}${label} exited.${RESET_ATTRS}\n\n${costLine}`
+    : `${DIM}${label} exited.${RESET_ATTRS}`;
 }
