@@ -2,19 +2,35 @@ import path from 'path';
 import fs from 'fs';
 import type { Dirent } from 'fs';
 import { analytics } from './analytics';
+import { logToFile } from './debug';
 import type { WizardRunOptions } from './types';
 
 /**
- * Report a swallowed filesystem error to error tracking. Traversal stays
- * best-effort — the caller still skips the failing entry — but the failure is
- * no longer silent. Preserves the original Error (and its `code`, e.g. EACCES
- * / ENOENT) when available.
+ * Filesystem error codes that are expected during best-effort traversal of an
+ * arbitrary project tree: a broken symlink whose target is gone (ENOENT) or an
+ * entry we lack permission to read (EACCES / EPERM). The caller already skips
+ * these entries and keeps going, so they are normal operating conditions — not
+ * exceptions worth surfacing in error tracking. (A stale `~/Library/Logs`
+ * symlink alone produced 39 noise events across 3 users in ~4 hours.)
+ */
+const BENIGN_FS_ERROR_CODES = new Set(['ENOENT', 'EACCES', 'EPERM']);
+
+/**
+ * Report a swallowed filesystem error from best-effort traversal. Traversal
+ * still skips the failing entry either way; this just decides where the failure
+ * is recorded. Expected codes (broken symlinks, unreadable entries — see
+ * `BENIGN_FS_ERROR_CODES`) are downgraded to a debug log line so they don't
+ * clutter error tracking; genuinely unexpected failures are still captured as
+ * exceptions. Preserves the original Error (and its `code`) when available.
  */
 function reportFsError(step: string, path: string, error: unknown): void {
-  analytics.captureException(
-    error instanceof Error ? error : new Error(String(error)),
-    { step, path },
-  );
+  const err = error instanceof Error ? error : new Error(String(error));
+  const code = (error as NodeJS.ErrnoException | undefined)?.code;
+  if (code && BENIGN_FS_ERROR_CODES.has(code)) {
+    logToFile(`[fs] ${step} skipped ${path} (${code})`);
+    return;
+  }
+  analytics.captureException(err, { step, path });
 }
 
 export function getDotGitignore({
@@ -67,8 +83,8 @@ export const IGNORED_DIRS = new Set<string>([
  * regular file — including dotfiles like `.env` (the caller decides what it
  * cares about). Skips `IGNORED_DIRS` and hidden directories, follows symlinked
  * directories with realpath-based loop protection, and descends at most
- * `maxDepth` levels below `rootDir`. Filesystem errors are reported to error
- * tracking and then skipped: a missing/unreadable root simply yields no
+ * `maxDepth` levels below `rootDir`. Filesystem errors are recorded (see
+ * `reportFsError`) and then skipped: a missing/unreadable root simply yields no
  * callbacks (best-effort).
  *
  * Shared by the detection layers (warehouse sources, etc.) so traversal policy
