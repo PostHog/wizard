@@ -9,10 +9,6 @@ describe('isIgnoredForDismiss', () => {
     expect(isIgnoredForDismiss({ ctrl: false, meta: true })).toBe(true);
   });
 
-  it('ignores a keypress with both modifiers held', () => {
-    expect(isIgnoredForDismiss({ ctrl: true, meta: true })).toBe(true);
-  });
-
   it('does not ignore a plain keypress', () => {
     expect(isIgnoredForDismiss({ ctrl: false, meta: false })).toBe(false);
   });

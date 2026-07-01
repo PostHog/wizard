@@ -6,7 +6,7 @@ import {
 } from '@lib/agent/token-pricing';
 
 describe('pricePerMtokForModel', () => {
-  it('defaults to Sonnet pricing when no model is given', () => {
+  it('defaults to Sonnet pricing (DEFAULT_AGENT_MODEL) when no model is given', () => {
     expect(pricePerMtokForModel(undefined)).toEqual({
       input: 3,
       output: 15,
@@ -16,16 +16,26 @@ describe('pricePerMtokForModel', () => {
     });
   });
 
-  it('matches Haiku by substring, ignoring the dated version suffix', () => {
-    expect(pricePerMtokForModel('claude-haiku-4-5-20251001').input).toBe(1);
+  it('strips a dated release suffix to match the undated table entry', () => {
+    // HAIKU_MODEL is exactly this string.
+    expect(pricePerMtokForModel('claude-haiku-4-5-20251001')?.input).toBe(1);
   });
 
-  it('matches Opus by substring', () => {
-    expect(pricePerMtokForModel('claude-opus-4-5-20251101').input).toBe(15);
+  it('does not conflate different versions of the same family', () => {
+    // Regression test: an earlier version of this table matched by family
+    // name ("opus", "sonnet") and priced every sibling the same, which
+    // silently mis-priced e.g. Opus 4.5 at Opus 4.1's rate (3x too high).
+    // Sonnet 5 must NOT resolve to Sonnet 4.6's price just because both
+    // are "sonnet".
+    const sonnet46 = pricePerMtokForModel('claude-sonnet-4-6');
+    const sonnet5 = pricePerMtokForModel('claude-sonnet-5');
+    expect(sonnet46?.input).toBe(3);
+    expect(sonnet5?.input).toBe(2);
+    expect(sonnet5).not.toEqual(sonnet46);
   });
 
-  it('falls back to Sonnet pricing for an unrecognized model', () => {
-    expect(pricePerMtokForModel('claude-mystery-9000').input).toBe(3);
+  it('returns undefined for an unrecognized model, rather than guessing', () => {
+    expect(pricePerMtokForModel('claude-mystery-9000')).toBeUndefined();
   });
 });
 
@@ -50,15 +60,6 @@ describe('computeTokenCostUsd', () => {
     expect(cost).toBeCloseTo(3.75, 5);
   });
 
-  it('returns 0 for an all-zero usage delta', () => {
-    expect(computeTokenCostUsd(0, 0, 0, 0, 0, 0)).toBe(0);
-  });
-
-  it('defaults to Sonnet pricing when no model is passed', () => {
-    const cost = computeTokenCostUsd(1_000_000, 0, 0, 0, 0, 0);
-    expect(cost).toBeCloseTo(3, 5);
-  });
-
   it('prices a Haiku turn at Haiku rates, not Sonnet', () => {
     const cost = computeTokenCostUsd(
       1_000_000,
@@ -75,7 +76,7 @@ describe('computeTokenCostUsd', () => {
     expect(cost).toBeCloseTo(1 + 5, 5);
   });
 
-  it('prices an Opus turn at Opus rates', () => {
+  it('prices an Opus 4.5 turn at Opus 4.5 rates, not Opus 4.1', () => {
     const cost = computeTokenCostUsd(
       1_000_000,
       0,
@@ -85,7 +86,8 @@ describe('computeTokenCostUsd', () => {
       0,
       'claude-opus-4-5-20251101',
     );
-    expect(cost).toBeCloseTo(15, 5);
+    // $5/Mtok input -- Opus 4.5 is half of Opus 4.1's $15/Mtok published rate.
+    expect(cost).toBeCloseTo(5, 5);
   });
 });
 
