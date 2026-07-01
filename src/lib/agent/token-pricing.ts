@@ -18,12 +18,13 @@
  * Deliberately matched by *exact* model id, not family name (no
  * `model.includes('opus')`-style fallback): different versions of the same
  * family are priced differently — e.g. Claude Opus 4.5 ($5/$25 per Mtok) is
- * half of Opus 4.1's rate ($15/$75), and Claude Sonnet 5 ($2/$10) undercuts
- * Sonnet 4.6 ($3/$15) — so matching on "opus" or "sonnet" alone silently
- * mis-prices a newer/older sibling at the wrong rate. The only normalization
- * applied is stripping a trailing release-date suffix (`stripDateSuffix`),
- * since Anthropic's dated and undated ids for the *same* version always
- * carry the same price (verified for every entry below).
+ * half of Opus 4.1's rate ($15/$75) — so matching on "opus" or "sonnet"
+ * alone silently mis-prices a newer/older sibling at the wrong rate. The
+ * only normalization applied is stripping a trailing release-date suffix
+ * (`stripDateSuffix`), since Anthropic's dated and undated ids for the
+ * *same* version always carry the same price (verified for every entry
+ * below). Claude Sonnet 5 is the one exception with a *time-dependent*
+ * price — see `sonnet5Price` — rather than a fixed table entry.
  *
  * Prices verified against https://models.dev/api.json (Anthropic section)
  * on 2026-07-01 — re-verify there when adding an entry or bumping
@@ -70,13 +71,32 @@ function pricingFromInput(input: number, output: number): PricePerMtok {
  * priced correctly in case a subagent or a future default ever reports one
  * (a turn on an id NOT in this table contributes $0 to the live estimate
  * rather than guessing — see `pricePerMtokForModel`).
+ *
+ * `'claude-sonnet-5'` is intentionally absent — its price is time-dependent
+ * (promotional launch discount), so it's resolved separately by
+ * `pricePerMtokForModel` via `SONNET_5_PRICE`.
  */
 const PRICE_TABLE: Record<string, PricePerMtok> = {
   [DEFAULT_AGENT_MODEL]: pricingFromInput(3, 15),
   'claude-haiku-4-5': pricingFromInput(1, 5), // HAIKU_MODEL + a date suffix
   'claude-opus-4-5': pricingFromInput(5, 25),
-  'claude-sonnet-5': pricingFromInput(2, 10),
 };
+
+/**
+ * Claude Sonnet 5 launched at a promotional discount through 2026-08-31
+ * UTC; from 2026-09-01 it reverts to the same rate as Sonnet 4.6 ($3/$15)
+ * — not a coincidence, Anthropic prices it identically to 4.6 once the
+ * promo ends. Re-verify against https://models.dev/api.json if this ever
+ * looks off, and delete this special case once the promo window has
+ * passed (its `PRICE_TABLE[DEFAULT_AGENT_MODEL]` price is the same anyway).
+ */
+const SONNET_5_PROMO_ENDS_UTC = new Date('2026-09-01T00:00:00Z');
+
+function sonnet5Price(now: Date): PricePerMtok {
+  return now < SONNET_5_PROMO_ENDS_UTC
+    ? pricingFromInput(2, 10)
+    : pricingFromInput(3, 15);
+}
 
 /** Strips a trailing 8-digit release-date suffix (e.g. `-20251001`) — never
  *  the version segment, so differently-versioned models are never conflated.
@@ -94,10 +114,19 @@ function stripDateSuffix(model: string): string {
  * guessing from its family name — seeing `undefined` and skipping that
  * delta is strictly more accurate than the family-fallback this replaced,
  * which silently priced e.g. every Opus turn at Opus 4.1's rate.
+ *
+ * `now` is injectable (defaults to the real clock) only so
+ * `sonnet5Price`'s promo-window check is deterministic in tests — no
+ * other entry in this table is time-dependent.
  */
-export function pricePerMtokForModel(model?: string): PricePerMtok | undefined {
+export function pricePerMtokForModel(
+  model?: string,
+  now: Date = new Date(),
+): PricePerMtok | undefined {
   if (!model) return PRICE_TABLE[DEFAULT_AGENT_MODEL];
-  return PRICE_TABLE[model] ?? PRICE_TABLE[stripDateSuffix(model)];
+  const undated = stripDateSuffix(model);
+  if (undated === 'claude-sonnet-5') return sonnet5Price(now);
+  return PRICE_TABLE[model] ?? PRICE_TABLE[undated];
 }
 
 /**
