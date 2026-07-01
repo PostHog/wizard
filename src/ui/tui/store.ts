@@ -27,6 +27,7 @@ import {
   type DiscoveredFeature,
   type PendingQuestion,
   type AskAnswers,
+  type CloudRegion,
   AdditionalFeature,
   McpOutcome,
   RunPhase,
@@ -749,6 +750,29 @@ export class WizardStore {
     this.$session.setKey('integrate', integrate);
     analytics.wizardCapture('self-driving integration check', {
       self_driving_integrate: integrate,
+      ...sessionProperties(this.session),
+    });
+    this.emitChange();
+  }
+
+  /**
+   * Self-driving "no PostHog account" branch of the integration check. The
+   * project has no SDK, so we always integrate (`integrate = true`); and since
+   * the user has no account, we flip `signup` and record the `email` / `region`
+   * collected on the screen so `authenticate` → `getOrAskForProjectData` takes
+   * the provisioning path (create account + email a login link) instead of
+   * OAuth. The "yes, I have an account" branch uses `setIntegrate(true)` and
+   * leaves `signup` false so auth runs the normal OAuth login.
+   */
+  chooseProvisionAccount(email: string, region: CloudRegion): void {
+    this.$session.setKey('signup', true);
+    this.$session.setKey('email', email);
+    this.$session.setKey('region', region);
+    this.$session.setKey('integrate', true);
+    analytics.wizardCapture('self-driving integration check', {
+      self_driving_integrate: true,
+      self_driving_has_account: false,
+      provision_region: region,
       ...sessionProperties(this.session),
     });
     this.emitChange();

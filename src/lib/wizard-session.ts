@@ -271,11 +271,15 @@ export interface WizardSession {
 
   /**
    * Self-driving only: whether to integrate PostHog as part of this run.
-   * `null` until decided — the integration-check screen asks "do you already
-   * have PostHog?" and sets it (No → true, Yes → false). The `--integrate`
-   * flag pre-sets it to `true`, skipping the question. When `true`, the
-   * self-driving prompt has the agent set up the SDK before the Self-driving
-   * steps. Unused by other programs.
+   * `null` until decided. When detection finds no PostHog SDK, the
+   * integration-check screen sets this to `true` (Self-driving needs an SDK,
+   * so we always integrate in that case) — and, on the same screen, asks
+   * whether the user already has a PostHog account: "yes" leaves `signup`
+   * false (OAuth login); "no" flips `signup` and collects `email`/`region`
+   * so auth provisions a new account. The `--integrate` flag pre-sets this to
+   * `true`, skipping the screen entirely and defaulting to the OAuth login.
+   * When `true`, the self-driving prompt has the agent set up the SDK before
+   * the Self-driving steps. Unused by other programs.
    */
   integrate: boolean | null;
 
