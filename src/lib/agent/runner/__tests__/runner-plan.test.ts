@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { PROGRAM_REGISTRY } from '@lib/programs/program-registry';
+import { Harness } from '@lib/constants';
 import { ROUTES, MODELS, resolvePair } from '@lib/agent/runner/runner-plan';
 
 const PROGRAM_IDS = PROGRAM_REGISTRY.map((c) => c.id);
@@ -20,7 +21,7 @@ describe('runner-plan ROUTES', () => {
   it('resolves every program to a registered runner and a known model', () => {
     for (const program of PROGRAM_IDS) {
       const pair = resolvePair({ program, flags: {} });
-      expect(['anthropic', 'pi']).toContain(pair.runner);
+      expect(Object.values(Harness)).toContain(pair.runner);
       expect(MODELS[pair.model]).toBeTruthy();
     }
   });

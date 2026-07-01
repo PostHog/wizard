@@ -13,15 +13,22 @@
  *   MODELS   model alias → gateway id (retires the hardcoded model literals)
  */
 
-import { DEFAULT_AGENT_MODEL, WIZARD_RUNNER_FLAG_KEY } from '@lib/constants';
+import {
+  DEFAULT_AGENT_MODEL,
+  WIZARD_RUNNER_FLAG_KEY,
+  Harness,
+  Sequence,
+} from '@lib/constants';
 import { logToFile } from '@utils/debug';
 import type { ProgramId } from '@lib/programs/program-registry';
 import type { AgentRunner } from './harness/types';
 import { anthropicBackend } from './harness/anthropic';
 import { piBackend } from './harness/pi';
 
-export type RunnerName = 'anthropic' | 'pi';
-export type RouterName = 'linear' | 'orchestrator';
+/** Legacy alias — new code should use `Harness` from `@lib/constants`. */
+export type RunnerName = Harness;
+/** Legacy alias — new code should use `Sequence` from `@lib/constants`. */
+export type RouterName = Sequence;
 export type ModelAlias = 'sonnet' | 'opus' | 'gpt5';
 
 /** What a leaf of agent work resolves to. */
@@ -66,8 +73,8 @@ export interface Route {
 
 /** The shared default plan. Every program points here until it overrides. */
 export const DEFAULT_ROUTE: Route = {
-  router: 'linear',
-  runner: 'anthropic',
+  router: Sequence.linear,
+  runner: Harness.anthropic,
   model: 'sonnet',
 };
 
@@ -102,6 +109,8 @@ export const ROUTES: Partial<Record<ProgramId, Route>> = {
 export interface ResolveCtx {
   program: ProgramId;
   flags: Record<string, string>;
+  /** CLI override (`--harness` / `POSTHOG_WIZARD_HARNESS`). Wins over `flags`. */
+  cliHarness?: Harness;
 }
 
 /** A resolver middleware: defer via `next()`, or assert by returning a value. */
@@ -119,14 +128,16 @@ export function runChain<D>(chain: Mw<D>[], ctx: ResolveCtx, base: () => D): D {
  * the terminal is the config map read. Called per leaf with a role.
  */
 /**
- * `wizard-runner` flag → override the resolved pair's runner (model stays from
- * config). Defers-then-modifies: always takes the base pair, then overlays the
- * runner field iff the flag names a known runner.
+ * Override the resolved pair's runner. CLI (`ctx.cliHarness`) wins over the
+ * PostHog `wizard-runner` flag; model always stays from config.
+ * Defers-then-modifies: always takes the base pair, then overlays the runner
+ * field iff a CLI value or a known flag value is present.
  */
 const wizardRunner: Mw<Pair> = (ctx, next) => {
   const pair = next();
+  if (ctx.cliHarness) return { ...pair, runner: ctx.cliHarness };
   const flag = ctx.flags[WIZARD_RUNNER_FLAG_KEY];
-  return flag === 'anthropic' || flag === 'pi'
+  return flag === Harness.anthropic || flag === Harness.pi
     ? { ...pair, runner: flag }
     : pair;
 };

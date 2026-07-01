@@ -18,6 +18,28 @@ export const DEFAULT_AGENT_MODEL = 'claude-sonnet-4-6';
  */
 export const HAIKU_MODEL = 'claude-haiku-4-5-20251001';
 
+// ── Agent runner routing axes ────────────────────────────────────────
+
+/**
+ * The two agent runner routing axes: **harness** (which agent SDK drives the LLM)
+ * and **sequence** (which pipeline shape orchestrates the work). Single source
+ * of truth for yargs `choices`, session fields, the runner registry, and tests
+ * — `Object.values(Harness)` gives an iterable of the values when an array is
+ * needed. Adding a member is enough to pick it up everywhere.
+ *
+ * Naming matches the directory layout — see `src/lib/agent/runner/harness/`
+ * and `src/lib/agent/runner/sequence/`.
+ */
+export enum Harness {
+  anthropic = 'anthropic',
+  pi = 'pi',
+}
+
+export enum Sequence {
+  linear = 'linear',
+  orchestrator = 'orchestrator',
+}
+
 // ── Integration / CLI ───────────────────────────────────────────────
 
 /**

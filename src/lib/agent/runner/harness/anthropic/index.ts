@@ -13,6 +13,7 @@
  */
 
 import { getUI } from '@ui';
+import { Harness } from '@lib/constants';
 import {
   initializeAgent,
   runAgent as executeAgent,
@@ -28,7 +29,7 @@ import type {
 } from '../types';
 
 export const anthropicBackend: AgentRunner = {
-  name: 'anthropic',
+  name: Harness.anthropic,
 
   async run(inputs: BackendRunInputs): Promise<AgentResult> {
     const {

@@ -1,3 +1,5 @@
+import type { Harness, Sequence } from '@lib/constants';
+
 export type CloudRegion = 'us' | 'eu';
 
 export type AIModel =
@@ -28,4 +30,9 @@ export type WizardRunOptions = {
   projectId?: number;
 
   localMcp: boolean;
+
+  /** CLI override of the resolved harness. See `cli-plan.md`. */
+  harness?: Harness;
+  /** CLI override of the resolved sequence. See `cli-plan.md`. */
+  sequence?: Sequence;
 };

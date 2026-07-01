@@ -3,6 +3,7 @@ import { hideBin } from 'yargs/helpers';
 import type { Argv } from 'yargs';
 import { IS_PRODUCTION_BUILD } from '@env';
 import { HEADLESS_FLAG } from '@lib/headless-mode';
+import { Harness, Sequence } from '@lib/constants';
 import { toCommandModule, type Command } from './commands/command';
 
 /**
@@ -83,6 +84,20 @@ export const GLOBAL_OPTIONS = {
     describe:
       'Print YARA scanner summary after the agent run\nenv: POSTHOG_WIZARD_YARA_REPORT',
     type: 'boolean' as const,
+    hidden: true,
+  },
+  harness: {
+    describe:
+      'Override the agent harness (anthropic | pi). Non-default choices require the corresponding PostHog authorization; see cli-plan.md\nenv: POSTHOG_WIZARD_HARNESS',
+    choices: Object.values(Harness),
+    type: 'string' as const,
+    hidden: true,
+  },
+  sequence: {
+    describe:
+      'Override the runner sequence (linear | orchestrator). Non-default choices require the corresponding PostHog authorization; see cli-plan.md\nenv: POSTHOG_WIZARD_SEQUENCE',
+    choices: Object.values(Sequence),
+    type: 'string' as const,
     hidden: true,
   },
 };
