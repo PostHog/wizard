@@ -26,7 +26,7 @@ import {
 import { AgentErrorType } from '@lib/agent/agent-interface';
 import { AgentSignals } from '@lib/agent/signals';
 import { getWizardCommandments } from '@lib/agent/commandments';
-import type { AgentResult, AgentRunner, BackendRunInputs } from '../types';
+import type { AgentResult, AgentHarness, BackendRunInputs } from '../types';
 
 /** Provider registered on the in-memory registry for this run. */
 const GATEWAY_PROVIDER = 'posthog-gateway';
@@ -191,7 +191,7 @@ function applyOutroMarkers(textBlock: string): void {
   }
 }
 
-export const piBackend: AgentRunner = {
+export const piBackend: AgentHarness = {
   name: Harness.pi,
 
   async run(inputs: BackendRunInputs): Promise<AgentResult> {
