@@ -28,12 +28,17 @@ function areaRank(area: string): number {
   return idx === -1 ? AREA_ORDER.length : idx;
 }
 
-/** Issues at the top (error → warning → suggestion), then passes, then pending todos. */
+/** Issues at the top (error → warning → suggestion), then passes, then pending todos.
+ *  Ties broken by `id` so two ledgers with identical contents always render in
+ *  identical order, regardless of the agent's write sequence
+ *  (PostHog/wizard#736 — non-determinism). */
 export function sortChecks(checks: ReadonlyArray<AuditCheck>): AuditCheck[] {
   return [...checks].sort((a, b) => {
     const da = STATUS_ORDER[a.status] - STATUS_ORDER[b.status];
     if (da !== 0) return da;
-    return a.area.localeCompare(b.area);
+    const dArea = a.area.localeCompare(b.area);
+    if (dArea !== 0) return dArea;
+    return a.id.localeCompare(b.id);
   });
 }
 
@@ -55,9 +60,13 @@ export function groupChecksByArea(
   }
   const groups: AreaGroup[] = [];
   for (const [area, areaChecks] of byArea) {
-    const sorted = [...areaChecks].sort(
-      (a, b) => STATUS_ORDER[a.status] - STATUS_ORDER[b.status],
-    );
+    const sorted = [...areaChecks].sort((a, b) => {
+      const ds = STATUS_ORDER[a.status] - STATUS_ORDER[b.status];
+      if (ds !== 0) return ds;
+      // Tiebreak by id so identical ledgers render in identical order,
+      // regardless of the agent's write sequence (#736).
+      return a.id.localeCompare(b.id);
+    });
     const resolved = sorted.filter((c) => c.status !== 'pending').length;
     groups.push({
       area,
