@@ -35,6 +35,7 @@ import { mcpCommand } from './src/commands/mcp';
 import { mcpAnalyticsCommand } from './src/commands/mcp-analytics';
 import { auditCommand } from './src/commands/audit';
 import { doctorCommand } from './src/commands/doctor';
+import { ingestionWarningsCommand } from './src/commands/ingestion-warnings';
 import { migrateCommand } from './src/commands/migrate';
 import { revenueCommand } from './src/commands/revenue';
 import { warehouseCommand } from './src/commands/warehouse';
@@ -66,6 +67,7 @@ Wizard.use(basicIntegrationCommand)
   .use(cliCommand)
   .use(auditCommand)
   .use(doctorCommand)
+  .use(ingestionWarningsCommand)
   .use(migrateCommand)
   .use(revenueCommand)
   .use(warehouseCommand)

@@ -18,6 +18,7 @@ import { warehouseSourceConfig } from './warehouse-source/index.js';
 import { auditConfig } from './audit/index.js';
 import { eventsAuditConfig } from './events-audit/index.js';
 import { posthogDoctorConfig } from './posthog-doctor/index.js';
+import { ingestionWarningsConfig } from './ingestion-warnings/index.js';
 import { webAnalyticsDoctorConfig } from './web-analytics-doctor/index.js';
 import { migrationConfig } from './migration/index.js';
 import { errorTrackingUploadSourceMapsConfig } from './error-tracking-upload-source-maps/index.js';
@@ -70,6 +71,7 @@ export const PROGRAM_REGISTRY = [
   auditConfig,
   eventsAuditConfig,
   posthogDoctorConfig,
+  ingestionWarningsConfig,
   webAnalyticsDoctorConfig,
   migrationConfig,
   selfDrivingConfig,
@@ -95,6 +97,7 @@ export const Program = {
   Audit: auditConfig.id,
   EventsAudit: eventsAuditConfig.id,
   PosthogDoctor: posthogDoctorConfig.id,
+  IngestionWarnings: ingestionWarningsConfig.id,
   WebAnalyticsDoctor: webAnalyticsDoctorConfig.id,
   SelfDriving: selfDrivingConfig.id,
   AgentSkill: agentSkillConfig.id,
