@@ -202,6 +202,11 @@ export async function runLinearProgram(
         error_type: AgentErrorType.ABORT,
         reason,
       }),
+      // A matched AbortCase is a deliberate, well-handled exit (e.g. the user
+      // declining the GitHub connection in self-driving). Skip error-tracking
+      // capture for these — the `agent aborted` product event above already
+      // records them. Reserve captureException for the generic/unmatched abort.
+      captureError: !matched,
     });
   }
 

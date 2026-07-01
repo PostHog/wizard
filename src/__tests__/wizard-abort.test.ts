@@ -118,6 +118,31 @@ describe('wizardAbort', () => {
     expect(mockAnalytics.captureException).not.toHaveBeenCalled();
   });
 
+  it('does not capture error when captureError is false (expected abort)', async () => {
+    const error = new WizardError('Agent aborted: github connection declined', {
+      integration: 'self-driving',
+    });
+
+    await expect(wizardAbort({ error, captureError: false })).rejects.toThrow(
+      'process.exit called',
+    );
+
+    // The exception is suppressed for well-handled exits...
+    expect(mockAnalytics.captureException).not.toHaveBeenCalled();
+    // ...but the run still shuts down so the rest of the flow is unaffected.
+    expect(mockAnalytics.shutdown).toHaveBeenCalled();
+  });
+
+  it('captures error when captureError is true (default)', async () => {
+    const error = new Error('something broke');
+
+    await expect(wizardAbort({ error, captureError: true })).rejects.toThrow(
+      'process.exit called',
+    );
+
+    expect(mockAnalytics.captureException).toHaveBeenCalledWith(error, {});
+  });
+
   it('includes WizardError context in analytics capture', async () => {
     const error = new WizardError('MCP missing', {
       integration: 'nextjs',

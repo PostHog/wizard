@@ -27,6 +27,15 @@ interface WizardAbortOptions {
   outroData?: OutroData;
   error?: Error | WizardError;
   exitCode?: number;
+  /**
+   * Whether to report `error` to error tracking via
+   * `analytics.captureException`. Defaults to `true`. Set `false` for
+   * expected, well-handled exits (e.g. a matched `AbortCase` such as a
+   * user declining the GitHub connection) so they don't mint spurious
+   * error-tracking issues. The product event (`wizardCapture`) is emitted
+   * separately by the caller regardless.
+   */
+  captureError?: boolean;
 }
 
 const cleanupFns: Array<() => void> = [];
@@ -59,6 +68,7 @@ export async function wizardAbort(
     outroData,
     error,
     exitCode = 1,
+    captureError = true,
   } = options ?? {};
 
   logToFile(`[wizard-abort] exitCode=${exitCode}, message: ${message}`);
@@ -69,8 +79,8 @@ export async function wizardAbort(
   // 1. Run registered cleanup functions
   runCleanups();
 
-  // 2. Capture error in analytics (if provided)
-  if (error) {
+  // 2. Capture error in analytics (if provided and not an expected abort)
+  if (error && captureError) {
     analytics.captureException(error, {
       ...((error instanceof WizardError && error.context) || {}),
     });
