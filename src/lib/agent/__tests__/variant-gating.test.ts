@@ -1,4 +1,4 @@
-import { isOrchestratorEnabled } from '@lib/agent/agent-interface';
+import { isOrchestratorEnabled } from '@lib/agent/runner/switchboard';
 
 describe('isOrchestratorEnabled', () => {
   it('is true only when the wizard-orchestrator flag is true', () => {

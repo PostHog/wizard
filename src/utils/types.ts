@@ -31,8 +31,8 @@ export type WizardRunOptions = {
 
   localMcp: boolean;
 
-  /** `--harness` override. */
+  /** CLI override of the resolved harness. See `cli-plan.md`. */
   harness?: Harness;
-  /** `--sequence` override. */
+  /** CLI override of the resolved sequence. See `cli-plan.md`. */
   sequence?: Sequence;
 };

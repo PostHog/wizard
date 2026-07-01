@@ -229,7 +229,7 @@ export async function bootstrapProgram(
   // Feature flags and MCP url. Both arms need these, and the fork decision reads
   // the flags. This map is PostHog-side only — CLI `--harness` / `--sequence`
   // precedence lives at the resolution sites (`runner/index.ts` for sequence,
-  // `resolvePair` for harness), not here.
+  // `resolveHarness` for harness), not here.
   const wizardFlags = await analytics.getAllFlagsForWizard();
 
   // Gateway trace tags for this run. The runner stamps its variant onto this

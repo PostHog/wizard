@@ -182,9 +182,17 @@ export interface WizardSession {
   projectId?: number;
   noTelemetry: boolean;
 
-  /** `--harness` override, read by `resolvePair`. Wins over the runner flag. */
+  /**
+   * CLI override of the resolved harness. When set, `bootstrap.ts` overlays
+   * `wizardFlags[WIZARD_RUNNER_FLAG_KEY]` with this value *after* the
+   * PostHog authorization snapshot is taken. See `cli-plan.md`.
+   */
   harness?: Harness;
-  /** `--sequence` override, read in `runProgram`. Wins over the orchestrator flag. */
+  /**
+   * CLI override of the resolved sequence. When set, `bootstrap.ts` overlays
+   * `wizardFlags[WIZARD_ORCHESTRATOR_FLAG_KEY]` (as `'true'` / `'false'`)
+   * *after* the PostHog authorization snapshot is taken. See `cli-plan.md`.
+   */
   sequence?: Sequence;
 
   // From detection + screens

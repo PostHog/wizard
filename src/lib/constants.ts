@@ -18,6 +18,18 @@ export const DEFAULT_AGENT_MODEL = 'claude-sonnet-4-6';
  */
 export const HAIKU_MODEL = 'claude-haiku-4-5-20251001';
 
+/**
+ * Larger model for planning / hard work. Named the switchboard could route to
+ * from `PROGRAM_BINDINGS[id].model` or `contextMillOverride`.
+ */
+export const OPUS_MODEL = 'claude-opus-4-8';
+
+/**
+ * OpenAI-class peer of sonnet, served by the LLM gateway over OpenAI
+ * completions. Enables cross-provider A/B without a wizard release.
+ */
+export const GPT5_MODEL = 'openai/gpt-5';
+
 // ── Agent runner routing axes ────────────────────────────────────────
 
 /**
