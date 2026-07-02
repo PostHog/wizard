@@ -6,7 +6,7 @@
  * in `linear.ts` so every runner shares them.
  *
  * `anthropic` (claude-agent-sdk) is the control. `pi` (pi.dev) is the
- * challenger. The runner is chosen by `resolvePair` in `runner-plan.ts`.
+ * challenger. The harness is chosen by `resolveHarness` in `switchboard.ts`.
  *
  * Orchestrator mode (the experimental task-queue pipeline) drives the harness
  * through the OPTIONAL `runTask` method below — one call per seed plan and one
@@ -17,6 +17,7 @@
 
 import type { WizardSession } from '@lib/wizard-session';
 import type { AdditionalFeature } from '@lib/wizard-session';
+import type { Harness } from '@lib/constants';
 import type { ProgramConfig } from '@lib/programs/program-step';
 import type { SpinnerHandle } from '@ui';
 import type { WizardAskBridge } from '@lib/wizard-ask-bridge';
@@ -93,9 +94,9 @@ export interface TaskRunInputs {
 }
 
 /** A drop-in agent runner: consumes a fully-assembled run, returns a result. */
-export interface AgentRunner {
+export interface AgentHarness {
   /** Stable name used for logs + telemetry (matches the flag variant). */
-  readonly name: 'anthropic' | 'pi';
+  readonly name: Harness;
   run(inputs: BackendRunInputs): Promise<AgentResult>;
   /**
    * Drive one orchestrator-mode unit of work. Optional — a harness that has

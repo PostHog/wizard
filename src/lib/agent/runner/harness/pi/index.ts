@@ -18,6 +18,7 @@ import { getUI } from '@ui';
 import { getLogFilePath, logToFile } from '@utils/debug';
 import { getLlmGatewayUrlFromHost } from '@utils/urls';
 import {
+  Harness,
   POSTHOG_FLAG_HEADER_PREFIX,
   POSTHOG_PROPERTY_HEADER_PREFIX,
   WIZARD_USER_AGENT,
@@ -25,7 +26,7 @@ import {
 import { AgentErrorType } from '@lib/agent/agent-interface';
 import { AgentSignals } from '@lib/agent/signals';
 import { getWizardCommandments } from '@lib/agent/commandments';
-import type { AgentResult, AgentRunner, BackendRunInputs } from '../types';
+import type { AgentResult, AgentHarness, BackendRunInputs } from '../types';
 
 /** Provider registered on the in-memory registry for this run. */
 const GATEWAY_PROVIDER = 'posthog-gateway';
@@ -190,8 +191,8 @@ function applyOutroMarkers(textBlock: string): void {
   }
 }
 
-export const piBackend: AgentRunner = {
-  name: 'pi',
+export const piBackend: AgentHarness = {
+  name: Harness.pi,
 
   async run(inputs: BackendRunInputs): Promise<AgentResult> {
     const { session, boot, prompt, spinner, config, programConfig } = inputs;

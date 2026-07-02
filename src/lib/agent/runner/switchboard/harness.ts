@@ -1,0 +1,75 @@
+/**
+ * Harness axis: registry, middleware, resolver. Mirrors `sequence.ts`.
+ */
+
+import { IS_PRODUCTION_BUILD } from '@env';
+import { Harness, WIZARD_RUNNER_FLAG_KEY } from '@lib/constants';
+import { logToFile } from '@utils/debug';
+import { anthropicBackend } from '../harness/anthropic';
+import { piBackend } from '../harness/pi';
+import type { AgentHarness } from '../harness/types';
+import {
+  DEFAULT_BINDING,
+  PROGRAM_BINDINGS,
+  runChain,
+  type HarnessPick,
+  type Middleware,
+  type SwitchboardCtx,
+} from '.';
+
+export const HARNESS_OPTIONS: Partial<Record<Harness, AgentHarness>> = {
+  [Harness.anthropic]: anthropicBackend,
+  [Harness.pi]: piBackend,
+};
+
+export function getHarness(name: Harness): AgentHarness {
+  const harness = HARNESS_OPTIONS[name];
+  if (!harness) {
+    throw new Error(`No harness registered for '${name}'.`);
+  }
+  return harness;
+}
+
+/** `wizard-runner` flag → harness override, iff the flag names a known harness. Model stays from binding. */
+const flagRunnerOverride: Middleware<HarnessPick> = (ctx, next) => {
+  const pick = next();
+  const flag = ctx.flags[WIZARD_RUNNER_FLAG_KEY];
+  return flag === Harness.anthropic || flag === Harness.pi
+    ? { ...pick, harness: flag }
+    : pick;
+};
+
+/** `--harness` override. Dev/test only — the option is gated out of published builds. */
+const cliHarnessOverride: Middleware<HarnessPick> = (ctx, next) => {
+  const pick = next();
+  return ctx.cliHarness ? { ...pick, harness: ctx.cliHarness } : pick;
+};
+
+// Order = precedence: CLI > flag > binding default. The prod spread collapses
+// to [], dropping cliHarnessOverride from the chain.
+const HARNESS_MIDDLEWARE: Middleware<HarnessPick>[] = [
+  ...(IS_PRODUCTION_BUILD ? [] : [cliHarnessOverride]),
+  flagRunnerOverride,
+];
+
+/**
+ * Resolve the harness for a role. Linear callers omit `role`; orchestrator
+ * callers pass `'seed'` or `task.type`. `contextMillOverride[role]` overlays.
+ */
+export function resolveHarness(
+  ctx: SwitchboardCtx,
+  role = 'default',
+): HarnessPick {
+  const pick = runChain(HARNESS_MIDDLEWARE, ctx, () => {
+    const binding = PROGRAM_BINDINGS[ctx.program] ?? DEFAULT_BINDING;
+    return {
+      harness: binding.harness,
+      model: binding.model,
+      ...binding.contextMillOverride?.[role],
+    };
+  });
+  logToFile(
+    `[switchboard] resolved: program=${ctx.program} harness=${pick.harness} model=${pick.model}`,
+  );
+  return pick;
+}

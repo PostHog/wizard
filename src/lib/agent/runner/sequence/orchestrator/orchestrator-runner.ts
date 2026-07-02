@@ -13,7 +13,6 @@
 import { randomUUID } from 'crypto';
 import { existsSync, rmSync } from 'fs';
 import * as path from 'path';
-import { DEFAULT_AGENT_MODEL } from '@lib/constants';
 import { OutroKind, type WizardSession } from '@lib/wizard-session';
 import { installSkillById, fetchSkillMenu } from '@lib/wizard-tools';
 import { getUI } from '@ui';
@@ -22,11 +21,12 @@ import { ciExcludedTaskTypes } from '@utils/ci-flag-overrides';
 import { logToFile } from '@utils/debug';
 import type { ProgramConfig } from '@lib/programs/program-step';
 import type { BootstrapResult } from '../../shared/types';
-// Orchestrator mode hard-codes `anthropic` here until pi implements `runTask`.
-// When that lands, this becomes a `resolvePair(...)`-driven harness pick — see
-// `switchboard-interface.md` (step 4).
-import { getRunner, type RunnerName } from '../../runner-plan';
-import type { AgentRunner } from '../../harness/types';
+import {
+  getHarness,
+  resolveHarness,
+  type HarnessPick,
+} from '../../switchboard';
+import type { AgentHarness } from '../../harness/types';
 import {
   QueueStore,
   QUEUE_DIR_NAME,
@@ -60,24 +60,21 @@ function toTodoStatus(status: TaskStatus): string {
 }
 
 /**
- * Resolve the harness for an orchestrator run. Hard-coded to `anthropic`
- * because pi has not implemented `runTask` yet; the registry-based check
- * below is what makes adding pi later a one-line change. `getRunner` is also
- * how we get the future `resolvePair(...).runner` resolution into orchestrator
- * mode without re-plumbing.
+ * Look up the harness impl for a resolved pick and enforce the `runTask`
+ * capability. Pi trips this today with the honest impl-gap error instead of
+ * silently downgrading to anthropic.
  */
-function resolveOrchestratorHarness(): AgentRunner & {
-  runTask: NonNullable<AgentRunner['runTask']>;
+function requireTaskHarness(pick: HarnessPick): AgentHarness & {
+  runTask: NonNullable<AgentHarness['runTask']>;
 } {
-  const name: RunnerName = 'anthropic';
-  const harness = getRunner(name);
+  const harness = getHarness(pick.harness);
   if (!harness.runTask) {
     throw new Error(
-      `Harness "${name}" does not implement runTask; orchestrator mode requires it.`,
+      `Harness "${pick.harness}" does not implement runTask; orchestrator mode requires it.`,
     );
   }
-  return harness as AgentRunner & {
-    runTask: NonNullable<AgentRunner['runTask']>;
+  return harness as AgentHarness & {
+    runTask: NonNullable<AgentHarness['runTask']>;
   };
 }
 
@@ -109,7 +106,13 @@ export async function runOrchestrator(
 ): Promise<void> {
   const runId = randomUUID();
 
-  const harness = resolveOrchestratorHarness();
+  // Switchboard context — reused for every per-role harness resolution below.
+  const switchboardCtx = {
+    program: programConfig.id,
+    flags: boot.wizardFlags,
+    cliHarness: session.harness,
+    cliSequence: session.sequence,
+  };
 
   // The WHAT (agent prompts) is served from context-mill. Fetch the registry
   // once up front: its types drive enqueue validation, and resolving a task to
@@ -268,20 +271,26 @@ export async function runOrchestrator(
   // 1. Seed the queue with the orchestrator agent. It is itself an agent prompt
   // (the WHAT), so its model and tools come from its frontmatter. The seed
   // plans the graph, it is not a task.
-  const seedResult = await harness.runTask({
+  //
+  // Prompt-frontmatter model wins over the switchboard pick (§3.6 of the
+  // switchboard plan) — the switchboard's model is the fallback when the
+  // prompt is silent.
+  const seedPick = resolveHarness(switchboardCtx, 'seed');
+  const seedHarness = requireTaskHarness(seedPick);
+  const seedResult = await seedHarness.runTask({
     session,
     programConfig,
     boot,
     prompt: assembleSeedPrompt(promptContext, seedPrompt.body),
     spinner,
-    model: seedPrompt.model ?? DEFAULT_AGENT_MODEL,
+    model: seedPrompt.model ?? seedPick.model,
     ...agentRunTools(seedPrompt),
     orchestrator: orchestratorCtx(),
     spinnerMessage: 'Planning the integration...',
     successMessage: 'Planned the integration',
     additionalFeatureQueue: [],
     requestRemark: false,
-    analyticsProperties: { task_type: 'seed' },
+    analyticsProperties: { task_type: 'seed', harness: seedPick.harness },
   });
   if (seedResult.error) {
     logToFile(
@@ -341,13 +350,19 @@ export async function runOrchestrator(
       // Empty spinner messages suppress the per-task spinner line (the queue
       // panel shows progress); errors still surface — the harness stops the
       // spinner with its own error text.
-      await harness.runTask({
+      //
+      // Per-task role = task.type — the switchboard consults
+      // PROGRAM_BINDINGS[id].contextMillOverride?.[task.type] for wizard-side
+      // per-agent overrides. Prompt-frontmatter model still wins (§3.6).
+      const taskPick = resolveHarness(switchboardCtx, task.type);
+      const taskHarness = requireTaskHarness(taskPick);
+      await taskHarness.runTask({
         session,
         programConfig,
         boot,
         prompt: assembleTaskPrompt(promptContext, resolved.prompt, skillPaths),
         spinner,
-        model: resolved.model,
+        model: resolved.model ?? taskPick.model,
         allowedTools: resolved.allowedTools,
         disallowedTools: resolved.disallowedTools,
         orchestrator: orchestratorCtx(task.id),
@@ -355,7 +370,11 @@ export async function runOrchestrator(
         successMessage: '',
         additionalFeatureQueue: [],
         requestRemark,
-        analyticsProperties: { task_type: task.type, task_id: task.id },
+        analyticsProperties: {
+          task_type: task.type,
+          task_id: task.id,
+          harness: taskPick.harness,
+        },
       });
     } finally {
       renderQueue();

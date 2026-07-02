@@ -27,7 +27,7 @@ import { assemblePrompt } from '../../agent-prompt';
 import type { ProgramRun, BootstrapResult } from '../shared/types';
 import { abortOnInstallFailure } from '../shared/errors';
 import { shouldDisableAsk, sessionToOptions } from '../shared/bootstrap';
-import { resolvePair, getRunner, MODELS } from '../runner-plan';
+import { resolveHarness, getHarness } from '../switchboard';
 
 export async function runLinearProgram(
   session: WizardSession,
@@ -120,8 +120,12 @@ export async function runLinearProgram(
   // through the selected runner. The runner owns the agent loop + model
   // transport; everything around it (skill install, prompt, ask bridge, error
   // routing, outro) stays here so every runner shares it.
-  const pair = resolvePair({ program: programConfig.id, flags: wizardFlags });
-  const agentResult = await getRunner(pair.runner).run({
+  const pick = resolveHarness({
+    program: programConfig.id,
+    flags: wizardFlags,
+    cliHarness: session.harness,
+  });
+  const agentResult = await getHarness(pick.harness).run({
     session,
     config,
     programConfig,
@@ -131,7 +135,7 @@ export async function runLinearProgram(
     spinner,
     askBridge,
     middleware,
-    model: MODELS[pair.model],
+    model: pick.model,
   });
 
   // 9. Error handling (full set from both runners)

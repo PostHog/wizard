@@ -18,6 +18,40 @@ export const DEFAULT_AGENT_MODEL = 'claude-sonnet-4-6';
  */
 export const HAIKU_MODEL = 'claude-haiku-4-5-20251001';
 
+/**
+ * Larger model for planning / hard work. Named the switchboard could route to
+ * from `PROGRAM_BINDINGS[id].model` or `contextMillOverride`.
+ */
+export const OPUS_MODEL = 'claude-opus-4-8';
+
+/**
+ * OpenAI-class peer of sonnet, served by the LLM gateway over OpenAI
+ * completions. Enables cross-provider A/B without a wizard release.
+ */
+export const GPT5_MODEL = 'openai/gpt-5';
+
+// ── Agent runner routing axes ────────────────────────────────────────
+
+/**
+ * The two agent runner routing axes: **harness** (which agent SDK drives the LLM)
+ * and **sequence** (which pipeline shape orchestrates the work). Single source
+ * of truth for yargs `choices`, session fields, the runner registry, and tests
+ * — `Object.values(Harness)` gives an iterable of the values when an array is
+ * needed. Adding a member is enough to pick it up everywhere.
+ *
+ * Naming matches the directory layout — see `src/lib/agent/runner/harness/`
+ * and `src/lib/agent/runner/sequence/`.
+ */
+export enum Harness {
+  anthropic = 'anthropic',
+  pi = 'pi',
+}
+
+export enum Sequence {
+  linear = 'linear',
+  orchestrator = 'orchestrator',
+}
+
 // ── Integration / CLI ───────────────────────────────────────────────
 
 /**
