@@ -12,6 +12,7 @@ import {
   resolveHarness,
   resolveSequence,
 } from '@lib/agent/runner/switchboard';
+import { modelCapabilities } from '@lib/agent/runner/switchboard/models';
 
 const PROGRAM_IDS = PROGRAM_REGISTRY.map((c) => c.id);
 
@@ -99,6 +100,30 @@ describe('switchboard resolveHarness — CLI precedence', () => {
       cliModel: 'openai/gpt-5',
     });
     expect(pick).toEqual({ harness: Harness.anthropic, model: 'openai/gpt-5' });
+  });
+});
+
+describe('switchboard modelCapabilities', () => {
+  it('marks the known reasoning models as reasoning', () => {
+    for (const m of [
+      'claude-sonnet-4-6',
+      'claude-opus-4-8',
+      'claude-haiku-4-5-20251001',
+      'openai/gpt-5',
+    ]) {
+      expect(modelCapabilities(m).reasoning).toBe(true);
+    }
+  });
+
+  it('defaults a non-reasoning openai model (gpt-4o) to no reasoning', () => {
+    // The bug that no-op'd gpt-4o: reasoning:true → reasoning_effort → gateway
+    // UnsupportedParamsError.
+    expect(modelCapabilities('openai/gpt-4o').reasoning).toBe(false);
+  });
+
+  it('defaults unknown models by transport: anthropic on, openai off', () => {
+    expect(modelCapabilities('claude-future-9').reasoning).toBe(true);
+    expect(modelCapabilities('openai/whatever').reasoning).toBe(false);
   });
 });
 

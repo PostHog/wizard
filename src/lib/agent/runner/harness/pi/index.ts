@@ -26,6 +26,7 @@ import {
 import { AgentErrorType } from '@lib/agent/agent-interface';
 import { AgentSignals } from '@lib/agent/signals';
 import { getWizardCommandments } from '@lib/agent/commandments';
+import { modelCapabilities } from '../../switchboard/models';
 import type { AgentResult, AgentHarness, BackendRunInputs } from '../types';
 
 /** Provider registered on the in-memory registry for this run. */
@@ -244,7 +245,11 @@ export const piBackend: AgentHarness = {
             id: modelId,
             name: `${modelId} (PostHog Gateway)`,
             api,
-            reasoning: true,
+            // Whether to request reasoning effort is a model trait resolved by
+            // the switchboard, not a harness guess: non-reasoning openai models
+            // reject `reasoning_effort` (gpt-4o → gateway UnsupportedParamsError
+            // → the run no-ops).
+            reasoning: modelCapabilities(modelId).reasoning,
             input: ['text'],
             cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
             contextWindow: 1_000_000,
