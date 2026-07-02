@@ -22,9 +22,10 @@ import { ciExcludedTaskTypes } from '@utils/ci-flag-overrides';
 import { logToFile } from '@utils/debug';
 import type { ProgramConfig } from '@lib/programs/program-step';
 import type { BootstrapResult } from '../../shared/types';
-// Orchestrator mode hard-codes `anthropic` here until pi implements `runTask`.
-// When that lands, this becomes a `resolvePair(...)`-driven harness pick — see
-// `switchboard-interface.md` (step 4).
+// Orchestrator resolves its harness from the CLI `--harness` override (default
+// anthropic); the `runTask` guard below rejects a harness that can't run tasks.
+// When pi implements `runTask` this can move to a `resolvePair(...)`-driven pick
+// — see `switchboard-interface.md` (step 4) in the workbench repo.
 import { getRunner } from '../../runner-plan';
 import { Harness } from '@lib/constants';
 import type { AgentRunner } from '../../harness/types';
@@ -61,16 +62,17 @@ function toTodoStatus(status: TaskStatus): string {
 }
 
 /**
- * Resolve the harness for an orchestrator run. Hard-coded to `anthropic`
- * because pi has not implemented `runTask` yet; the registry-based check
- * below is what makes adding pi later a one-line change. `getRunner` is also
- * how we get the future `resolvePair(...).runner` resolution into orchestrator
- * mode without re-plumbing.
+ * Resolve the harness for an orchestrator run. The CLI `--harness` override
+ * wins; default is `anthropic`. A harness that can't run tasks (pi has no
+ * `runTask` yet) hits the guard below and fails loudly rather than silently
+ * downgrading to anthropic. `getRunner` is also how the future
+ * `resolvePair(...).runner` resolution reaches orchestrator mode without
+ * re-plumbing.
  */
-function resolveOrchestratorHarness(): AgentRunner & {
+function resolveOrchestratorHarness(session: WizardSession): AgentRunner & {
   runTask: NonNullable<AgentRunner['runTask']>;
 } {
-  const name = Harness.anthropic;
+  const name = session.harness ?? Harness.anthropic;
   const harness = getRunner(name);
   if (!harness.runTask) {
     throw new Error(
@@ -110,7 +112,7 @@ export async function runOrchestrator(
 ): Promise<void> {
   const runId = randomUUID();
 
-  const harness = resolveOrchestratorHarness();
+  const harness = resolveOrchestratorHarness(session);
 
   // The WHAT (agent prompts) is served from context-mill. Fetch the registry
   // once up front: its types drive enqueue validation, and resolving a task to
