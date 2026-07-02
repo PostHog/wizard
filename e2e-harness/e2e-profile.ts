@@ -27,12 +27,9 @@ export interface WizardE2eProfile {
   slack: 'skip';
   /** Keep or delete the wizard-installed skills at the end. */
   skills: 'keep' | 'delete';
-  /**
-   * Answer strategy for an agent `wizard_ask` overlay. `first` picks the first
-   * option; `cancel` declines every ask so the agent sets nothing up — used by
-   * flows whose questions would otherwise need real OAuth (self-driving).
-   */
-  ask: 'first' | 'cancel';
+  /** Answer strategy for an agent `wizard_ask` overlay: the first option (its
+   * affirmative "continue" — e.g. self-driving's "GitHub connected → done"). */
+  ask: 'first';
   /**
    * Self-driving integration-check answer: `true` → "no, set it up first"
    * (integrate the SDK as part of the run); `false` → "yes, already
@@ -144,9 +141,6 @@ export function decideE2eAction(
       };
 
     case Overlay.WizardAsk: {
-      // `cancel`: decline the ask so the agent sets nothing up and proceeds.
-      if (profile.ask === 'cancel')
-        return { action: { id: 'cancel_question' } };
       const q = state.pendingQuestion?.questions[0];
       if (!q) return { wait: true };
       // 'first': first option for single/multi, sentinel for free text.
