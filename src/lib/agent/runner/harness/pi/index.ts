@@ -63,6 +63,7 @@ const PI_RUNTIME_NOTES = [
   '- `bash` already runs in the project root, and its full output is returned to you. Run commands BARE: no `cd` into the project, no `--dir`/`-w`/workspace flags, no `2>&1` or `| tail` for output. Just `pnpm add <pkg>` or `pnpm typecheck` — adding any of those wrappers gets the command blocked.',
   '- If a `bash` command is blocked, do NOT retry it or a reworded variant — the fence is deterministic and will block it again. Change approach: inspect with `read`/`grep`, fix the `edit` and continue, or skip a step that is not essential. Retrying blocked commands only wastes turns.',
   '- Call `load_skill_menu` once to choose the skill, then `install_skill`. Do not call `load_skill_menu` again this session.',
+  "- Follow the skill's steps in order. Read its setup guidance and finish the SDK initialization for every runtime the integration targets (typically both client and server) BEFORE adding any event capture — a capture against an uninitialized SDK silently no-ops, so initialization comes first. Do not jump ahead to the fix/revise step just to get a build passing.",
   "- Never write a PostHog URL or token as a literal in source (e.g. 'https://us.i.posthog.com') — it is blocked. Read them from environment variables (process.env.POSTHOG_HOST, os.environ['POSTHOG_HOST'], etc.).",
   '- The PostHog dashboard and insight tools are in your tool list directly, named `posthog_<tool>` (e.g. `posthog_dashboard-create`, `posthog_insight-create`). Use them for the dashboard step — call them like any other tool. Do not guess names; use the ones present in your tool list.',
   '- Update the task list FREQUENTLY as you work — mark items `completed` the moment you finish them and `in_progress` as you pick them up, so the displayed step always reflects where you actually are. Keep titles broad and action-oriented (the area of work), not specific files or sub-steps.',
@@ -229,6 +230,7 @@ export const piBackend: AgentHarness = {
       // model id; OpenAI completions is served at `/v1/...`, so it keeps the
       // `/v1` the Anthropic SDK strips.
       const api = gatewayApiFor(modelId);
+      const caps = modelCapabilities(modelId);
       const gatewayUrl = getLlmGatewayUrl(boot.host);
       const baseUrl =
         api === 'openai-completions' ? `${gatewayUrl}/v1` : gatewayUrl;
@@ -248,8 +250,8 @@ export const piBackend: AgentHarness = {
             // Whether to request reasoning effort is a model trait resolved by
             // the switchboard, not a harness guess: non-reasoning openai models
             // reject `reasoning_effort` (gpt-4o → gateway UnsupportedParamsError
-            // → the run no-ops).
-            reasoning: modelCapabilities(modelId).reasoning,
+            // → the run no-ops). The effort level rides on the session below.
+            reasoning: caps.reasoning,
             input: ['text'],
             cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
             contextWindow: 1_000_000,
@@ -375,6 +377,9 @@ export const piBackend: AgentHarness = {
       const { session: agentSession } = await createAgentSession({
         model,
         modelRegistry: registry,
+        // Reasoning effort from the switchboard capability matrix (undefined =
+        // pi's default). Sent as `reasoning_effort` for openai-completions.
+        thinkingLevel: caps.thinkingLevel,
         cwd: session.installDir,
         sessionManager: SessionManager.inMemory(session.installDir),
         resourceLoader,

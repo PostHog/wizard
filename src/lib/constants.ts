@@ -30,6 +30,14 @@ export const OPUS_MODEL = 'claude-opus-4-8';
  */
 export const GPT5_MODEL = 'openai/gpt-5';
 
+/**
+ * Smaller, faster, cheaper openai reasoning model. The pi runner is paired with
+ * this (a reasoning model follows the integration skill; the mini tier keeps a
+ * run to a few minutes where flagship gpt-5 takes far longer). Reasoning effort
+ * is set per-model in the switchboard capability matrix.
+ */
+export const GPT5_MINI_MODEL = 'openai/gpt-5-mini';
+
 // ── Agent runner routing axes ────────────────────────────────────────
 
 /**

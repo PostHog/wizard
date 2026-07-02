@@ -2,9 +2,12 @@ import { describe, it, expect } from 'vitest';
 import { PROGRAM_REGISTRY } from '@lib/programs/program-registry';
 import {
   DEFAULT_AGENT_MODEL,
+  GPT5_MINI_MODEL,
+  GPT5_MODEL,
   Harness,
   Sequence,
   WIZARD_ORCHESTRATOR_FLAG_KEY,
+  WIZARD_RUNNER_FLAG_KEY,
 } from '@lib/constants';
 import {
   PROGRAM_BINDINGS,
@@ -75,6 +78,30 @@ describe('switchboard resolveHarness — CLI precedence', () => {
     expect(pick.harness).toBe(Harness.pi);
   });
 
+  it('the pi runner flag pairs pi with gpt-5-mini, anthropic keeps sonnet', () => {
+    expect(
+      resolveHarness({
+        program: 'posthog-integration',
+        flags: { [WIZARD_RUNNER_FLAG_KEY]: 'pi' },
+      }),
+    ).toEqual({ harness: Harness.pi, model: GPT5_MINI_MODEL });
+    expect(
+      resolveHarness({
+        program: 'posthog-integration',
+        flags: { [WIZARD_RUNNER_FLAG_KEY]: 'anthropic' },
+      }),
+    ).toEqual({ harness: Harness.anthropic, model: DEFAULT_AGENT_MODEL });
+  });
+
+  it('a --model override still wins over the pi runner flag pairing', () => {
+    const pick = resolveHarness({
+      program: 'posthog-integration',
+      flags: { [WIZARD_RUNNER_FLAG_KEY]: 'pi' },
+      cliModel: 'openai/o4-mini',
+    });
+    expect(pick).toEqual({ harness: Harness.pi, model: 'openai/o4-mini' });
+  });
+
   it('unknown flag value falls back to the binding default', () => {
     const pick = resolveHarness({
       program: 'posthog-integration',
@@ -119,6 +146,15 @@ describe('switchboard modelCapabilities', () => {
     // The bug that no-op'd gpt-4o: reasoning:true → reasoning_effort → gateway
     // UnsupportedParamsError.
     expect(modelCapabilities('openai/gpt-4o').reasoning).toBe(false);
+  });
+
+  it('sets reasoning effort per model: gpt-5 low (fast flagship), gpt-5-mini medium', () => {
+    expect(modelCapabilities(GPT5_MODEL).thinkingLevel).toBe('low');
+    expect(modelCapabilities(GPT5_MINI_MODEL).thinkingLevel).toBe('medium');
+    // Anthropic default carries no explicit effort — the harness default stands.
+    expect(
+      modelCapabilities(DEFAULT_AGENT_MODEL).thinkingLevel,
+    ).toBeUndefined();
   });
 
   it('defaults unknown models by transport: anthropic on, openai off', () => {

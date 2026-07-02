@@ -3,7 +3,11 @@
  */
 
 import { IS_PRODUCTION_BUILD } from '@env';
-import { Harness, WIZARD_RUNNER_FLAG_KEY } from '@lib/constants';
+import {
+  GPT5_MINI_MODEL,
+  Harness,
+  WIZARD_RUNNER_FLAG_KEY,
+} from '@lib/constants';
 import { logToFile } from '@utils/debug';
 import { anthropicBackend } from '../harness/anthropic';
 import { piBackend } from '../harness/pi';
@@ -30,13 +34,21 @@ export function getHarness(name: Harness): AgentHarness {
   return harness;
 }
 
-/** `wizard-runner` flag → harness override, iff the flag names a known harness. Model stays from binding. */
+/**
+ * The model a harness is paired with when the runner flag selects it. anthropic
+ * keeps the binding model (sonnet); pi runs on the cheap/fast gpt-5-mini. A
+ * `--model` CLI override still wins — it overlays after this in the chain.
+ */
+const RUNNER_MODEL: Partial<Record<Harness, string>> = {
+  [Harness.pi]: GPT5_MINI_MODEL,
+};
+
+/** `wizard-runner` flag → harness override, iff the flag names a known harness. */
 const flagRunnerOverride: Middleware<HarnessPick> = (ctx, next) => {
   const pick = next();
   const flag = ctx.flags[WIZARD_RUNNER_FLAG_KEY];
-  return flag === Harness.anthropic || flag === Harness.pi
-    ? { ...pick, harness: flag }
-    : pick;
+  if (flag !== Harness.anthropic && flag !== Harness.pi) return pick;
+  return { harness: flag, model: RUNNER_MODEL[flag] ?? pick.model };
 };
 
 /** `--harness` override. Dev/test only — the option is gated out of published builds. */
