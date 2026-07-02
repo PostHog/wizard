@@ -113,11 +113,7 @@ export class Wizard {
           type: 'boolean',
           hidden: true,
         })
-        // Runner overrides — dev/test only, same lifecycle as --ci. Left
-        // undeclared in published builds so the override paths (runner-plan.ts
-        // middleware, runner/index.ts sequence read) tree-shake away and can
-        // never be reached in the shipped package. See cli-plan.md in the
-        // workbench repo.
+        // Runner overrides — dev/test only, same lifecycle as --ci.
         .option('harness', {
           describe:
             'Override the agent harness (anthropic | pi). Wins over the PostHog runner flag.\nenv: POSTHOG_WIZARD_HARNESS',
@@ -190,12 +186,8 @@ export class Wizard {
         process.exit(1);
       }
 
-      // Same treatment as --ci: the --harness / --sequence runner overrides are
-      // dev/test-only and left undeclared in published builds. strictOptions
-      // would reject the flags as unknown, and POSTHOG_WIZARD_HARNESS /
-      // POSTHOG_WIZARD_SEQUENCE silently no-op (yargs only resolves env vars for
-      // declared options) — which would look like the override took effect while
-      // it didn't. Detect both up front and exit with a message that explains why.
+      // --harness / --sequence are dev/test-only. In published builds the env
+      // vars would silently no-op, so reject them explicitly instead.
       const argvHasOverride = args.some(
         (a) =>
           a === '--harness' ||

@@ -182,19 +182,9 @@ export interface WizardSession {
   projectId?: number;
   noTelemetry: boolean;
 
-  /**
-   * CLI override of the resolved harness (`--harness` / `POSTHOG_WIZARD_HARNESS`).
-   * Read by `resolvePair` as `cliHarness` to override the resolved runner; wins
-   * over the PostHog runner flag. Undefined when the option is unset. See
-   * `cli-plan.md` in the workbench repo.
-   */
+  /** `--harness` override, read by `resolvePair`. Wins over the runner flag. */
   harness?: Harness;
-  /**
-   * CLI override of the resolved sequence (`--sequence` / `POSTHOG_WIZARD_SEQUENCE`).
-   * Read in `runProgram` (runner/index.ts) to pick orchestrator vs linear; wins
-   * over the PostHog orchestrator flag. Undefined when the option is unset. See
-   * `cli-plan.md` in the workbench repo.
-   */
+  /** `--sequence` override, read in `runProgram`. Wins over the orchestrator flag. */
   sequence?: Sequence;
 
   // From detection + screens
