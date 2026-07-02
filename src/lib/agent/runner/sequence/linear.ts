@@ -129,6 +129,7 @@ export async function runLinearProgram(
     program: programConfig.id,
     flags: wizardFlags,
     cliHarness: session.harness,
+    cliModel: session.model,
   });
   const agentResult = await getHarness(pick.harness).run({
     session,

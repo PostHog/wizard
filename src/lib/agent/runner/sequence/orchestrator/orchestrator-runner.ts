@@ -112,6 +112,7 @@ export async function runOrchestrator(
     flags: boot.wizardFlags,
     cliHarness: session.harness,
     cliSequence: session.sequence,
+    cliModel: session.model,
   };
 
   // The WHAT (agent prompts) is served from context-mill. Fetch the registry

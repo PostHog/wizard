@@ -22,6 +22,8 @@ export interface SwitchboardCtx {
   cliHarness?: Harness;
   /** CLI override (`--sequence`). Wins over `flags`. */
   cliSequence?: Sequence;
+  /** CLI override (`--model`, gateway id). Wins over the binding's model. */
+  cliModel?: string;
 }
 
 /** A resolver middleware: defer via `next()`, or assert by returning a value. */

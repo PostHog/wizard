@@ -116,6 +116,7 @@ export function runNonInteractive(
       noTelemetry: resolveNoTelemetry(options),
       harness: options.harness as Harness | undefined,
       sequence: options.sequence as Sequence | undefined,
+      model: options.model as string | undefined,
       ...env,
     });
     session.programLabel = config.id;

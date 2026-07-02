@@ -1,10 +1,16 @@
 import { describe, it, expect } from 'vitest';
 import { PROGRAM_REGISTRY } from '@lib/programs/program-registry';
-import { DEFAULT_AGENT_MODEL, Harness } from '@lib/constants';
+import {
+  DEFAULT_AGENT_MODEL,
+  Harness,
+  Sequence,
+  WIZARD_ORCHESTRATOR_FLAG_KEY,
+} from '@lib/constants';
 import {
   PROGRAM_BINDINGS,
   DEFAULT_BINDING,
   resolveHarness,
+  resolveSequence,
 } from '@lib/agent/runner/switchboard';
 
 const PROGRAM_IDS = PROGRAM_REGISTRY.map((c) => c.id);
@@ -74,5 +80,60 @@ describe('switchboard resolveHarness — CLI precedence', () => {
       flags: { 'wizard-runner': 'banana' },
     });
     expect(pick.harness).toBe(Harness.anthropic);
+  });
+
+  it('CLI cliModel overlays the binding model, independent of harness', () => {
+    const pick = resolveHarness({
+      program: 'posthog-integration',
+      flags: {},
+      cliHarness: Harness.pi,
+      cliModel: 'openai/gpt-5',
+    });
+    expect(pick).toEqual({ harness: Harness.pi, model: 'openai/gpt-5' });
+  });
+
+  it('cliModel alone leaves the harness at the binding default', () => {
+    const pick = resolveHarness({
+      program: 'posthog-integration',
+      flags: {},
+      cliModel: 'openai/gpt-5',
+    });
+    expect(pick).toEqual({ harness: Harness.anthropic, model: 'openai/gpt-5' });
+  });
+});
+
+describe('switchboard resolveSequence — orchestrator stays flag-gated', () => {
+  it('defaults to linear with no CLI override and no flag', () => {
+    expect(resolveSequence({ program: 'posthog-integration', flags: {} })).toBe(
+      Sequence.linear,
+    );
+  });
+
+  it('the wizard-orchestrator flag selects orchestrator', () => {
+    expect(
+      resolveSequence({
+        program: 'posthog-integration',
+        flags: { [WIZARD_ORCHESTRATOR_FLAG_KEY]: 'true' },
+      }),
+    ).toBe(Sequence.orchestrator);
+  });
+
+  it('CLI cliSequence wins over the flag', () => {
+    expect(
+      resolveSequence({
+        program: 'posthog-integration',
+        flags: { [WIZARD_ORCHESTRATOR_FLAG_KEY]: 'true' },
+        cliSequence: Sequence.linear,
+      }),
+    ).toBe(Sequence.linear);
+  });
+
+  it('a non-"true" flag value stays linear', () => {
+    expect(
+      resolveSequence({
+        program: 'posthog-integration',
+        flags: { [WIZARD_ORCHESTRATOR_FLAG_KEY]: 'linear' },
+      }),
+    ).toBe(Sequence.linear);
   });
 });

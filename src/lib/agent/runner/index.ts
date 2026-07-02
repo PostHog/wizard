@@ -121,6 +121,7 @@ function resolveProgramRunner(
     flags: boot.wizardFlags,
     cliHarness: session.harness,
     cliSequence: session.sequence,
+    cliModel: session.model,
   });
   tagBinding(boot, binding);
   return binding;

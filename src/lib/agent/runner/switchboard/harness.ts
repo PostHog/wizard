@@ -45,10 +45,16 @@ const cliHarnessOverride: Middleware<HarnessPick> = (ctx, next) => {
   return ctx.cliHarness ? { ...pick, harness: ctx.cliHarness } : pick;
 };
 
+/** `--model` override. Dev/test only — the option is gated out of published builds. */
+const cliModelOverride: Middleware<HarnessPick> = (ctx, next) => {
+  const pick = next();
+  return ctx.cliModel ? { ...pick, model: ctx.cliModel } : pick;
+};
+
 // Order = precedence: CLI > flag > binding default. The prod spread collapses
-// to [], dropping cliHarnessOverride from the chain.
+// to [], dropping the CLI overrides from the chain.
 const HARNESS_MIDDLEWARE: Middleware<HarnessPick>[] = [
-  ...(IS_PRODUCTION_BUILD ? [] : [cliHarnessOverride]),
+  ...(IS_PRODUCTION_BUILD ? [] : [cliHarnessOverride, cliModelOverride]),
   flagRunnerOverride,
 ];
 

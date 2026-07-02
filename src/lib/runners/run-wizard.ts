@@ -99,6 +99,7 @@ export function runWizard(
         noTelemetry: resolveNoTelemetry(options),
         harness: options.harness as Harness | undefined,
         sequence: options.sequence as Sequence | undefined,
+        model: options.model as string | undefined,
         integrate: options.integrate as boolean | undefined,
       });
       session.programLabel = config.id;

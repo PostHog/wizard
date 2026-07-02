@@ -133,6 +133,12 @@ export class Wizard {
           choices: Object.values(Sequence),
           type: 'string',
           hidden: true,
+        })
+        .option('model', {
+          describe:
+            'Override the agent model (gateway id, e.g. claude-sonnet-4-6 | openai/gpt-5). Wins over the binding default.\nenv: POSTHOG_WIZARD_MODEL',
+          type: 'string',
+          hidden: true,
         });
     }
 
@@ -192,23 +198,27 @@ export class Wizard {
         process.exit(1);
       }
 
-      // --harness / --sequence are dev/test-only. In published builds the env
-      // vars would silently no-op, so reject them explicitly instead.
+      // --harness / --sequence / --model are dev/test-only. In published builds
+      // the env vars would silently no-op, so reject them explicitly instead.
       const argvHasOverride = args.some(
         (a) =>
           a === '--harness' ||
           a.startsWith('--harness=') ||
           a === '--sequence' ||
-          a.startsWith('--sequence='),
+          a.startsWith('--sequence=') ||
+          a === '--model' ||
+          a.startsWith('--model='),
       );
       const envHasOverride =
         (process.env.POSTHOG_WIZARD_HARNESS != null &&
           process.env.POSTHOG_WIZARD_HARNESS !== '') ||
         (process.env.POSTHOG_WIZARD_SEQUENCE != null &&
-          process.env.POSTHOG_WIZARD_SEQUENCE !== '');
+          process.env.POSTHOG_WIZARD_SEQUENCE !== '') ||
+        (process.env.POSTHOG_WIZARD_MODEL != null &&
+          process.env.POSTHOG_WIZARD_MODEL !== '');
       if (argvHasOverride || envHasOverride) {
         process.stderr.write(
-          `\n\x1b[1;91m✖ The --harness and --sequence overrides are not available in published builds.\x1b[0m\n\n`,
+          `\n\x1b[1;91m✖ The --harness, --sequence, and --model overrides are not available in published builds.\x1b[0m\n\n`,
         );
         process.exit(1);
       }
