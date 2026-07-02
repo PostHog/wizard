@@ -100,6 +100,13 @@ function traceFlow(
         Integration.javascriptNode,
         FRAMEWORK_REGISTRY[Integration.javascriptNode],
       );
+    } else if (screen === ScreenId.SourceMapsDetect) {
+      // The detect screen runs an agentic scan + an interactive pick; commit
+      // the pick through the driver the way the e2e host injection does.
+      driver.performAction('pick_source_maps_project', {
+        variant: 'node',
+        path: '.',
+      });
     } else if (screen === ScreenId.Run) {
       // The run screen is shared by composed run steps (a step carrying its own
       // `run` thunk, e.g. self-driving's integrate-run) and the program's own
@@ -167,6 +174,18 @@ describe('e2e flow snapshot — self-driving', () => {
     expect({
       program: 'self-driving',
       trace: traceFlow(Program.SelfDriving, alreadyIntegrated),
+    }).toMatchSnapshot();
+  });
+});
+
+describe('e2e flow snapshot — upload-source-maps', () => {
+  const profile = profileFor(Program.ErrorTrackingUploadSourceMaps);
+
+  it('walks a stable path', () => {
+    expect({
+      program: 'error-tracking-upload-source-maps',
+      profile,
+      trace: traceFlow(Program.ErrorTrackingUploadSourceMaps, profile),
     }).toMatchSnapshot();
   });
 });

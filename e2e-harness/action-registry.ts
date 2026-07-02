@@ -16,6 +16,10 @@ import type { WizardStore } from '@ui/tui/store';
 import { ScreenId, Overlay, type ScreenName } from '@ui/tui/router';
 import { McpOutcome } from '@lib/wizard-session';
 import type { AskAnswers } from '@lib/wizard-session';
+import {
+  SOURCE_MAPS_CONTEXT_KEYS,
+  VARIANT_DISPLAY_NAME,
+} from '@lib/programs/error-tracking-upload-source-maps/index';
 
 /** One commit action legal on a given screen. */
 export interface DriverAction {
@@ -60,8 +64,7 @@ function requireString(
  *     (agent sets runPhase), ai-opt-in (org approval / ci auto-consent), exit,
  *     and the no-dismiss terminal overlays.
  *   - screens of programs the integration e2e profile never enters (audit,
- *     doctor, source-maps). source-maps-detect is interactive, so wire it into
- *     ACTION_REGISTRY when a source-maps profile starts driving that program.
+ *     doctor).
  */
 export const NO_ACTION_SCREENS: ReadonlySet<ScreenName> = new Set<ScreenName>([
   ScreenId.Auth,
@@ -72,8 +75,6 @@ export const NO_ACTION_SCREENS: ReadonlySet<ScreenName> = new Set<ScreenName>([
   ScreenId.DoctorReport,
   // The detector + picker are interactive; no headless e2e drives this screen.
   ScreenId.SelfDrivingIntegrationDetect,
-  ScreenId.SourceMapsDetect,
-  ScreenId.SourceMapsOutro,
   ScreenId.AuditOutro,
   Overlay.ManagedSettings,
   Overlay.AuthError,
@@ -122,6 +123,45 @@ export const ACTION_REGISTRY: Partial<Record<ScreenName, DriverAction[]>> = {
       description:
         'Acknowledge the post-integration handoff and start the Self-driving run.',
       apply: (store) => store.confirmSelfDrivingHandoff(),
+    },
+  ],
+
+  // ── Source-maps project pick + outro ───────────────────────────────────
+  [ScreenId.SourceMapsDetect]: [
+    {
+      id: 'pick_source_maps_project',
+      description:
+        'Commit the project to wire source-map upload for, as the detect ' +
+        "screen's picker would. The candidate list lives in the screen's " +
+        'agentic report, so the caller supplies the pick.',
+      params: {
+        variant: 'skill variant (e.g. "node", "nextjs")',
+        path: 'project path relative to the repo root ("." = root)',
+      },
+      apply: (store, params) => {
+        const variant = requireString(
+          'pick_source_maps_project',
+          params,
+          'variant',
+        );
+        const path = requireString('pick_source_maps_project', params, 'path');
+        store.setFrameworkContext(
+          SOURCE_MAPS_CONTEXT_KEYS.selectedVariant,
+          variant,
+        );
+        store.setFrameworkContext(
+          SOURCE_MAPS_CONTEXT_KEYS.selectedDisplayName,
+          (VARIANT_DISPLAY_NAME as Record<string, string>)[variant] ?? variant,
+        );
+        store.setFrameworkContext(SOURCE_MAPS_CONTEXT_KEYS.selectedPath, path);
+      },
+    },
+  ],
+  [ScreenId.SourceMapsOutro]: [
+    {
+      id: 'dismiss_outro',
+      description: 'Dismiss the source-maps outro (sets outroDismissed).',
+      apply: (store) => store.setOutroDismissed(),
     },
   ],
 
