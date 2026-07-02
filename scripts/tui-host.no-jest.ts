@@ -344,16 +344,33 @@ async function main() {
     const writeResult = (): void => {
       if (!process.env.E2E_RESULT_JSON) return;
       const appDir = process.env.APP_DIR!;
-      let deps: string[] = [];
-      try {
-        const pkg = JSON.parse(
-          fs.readFileSync(`${appDir}/package.json`, 'utf8'),
-        );
-        deps = Object.keys({ ...pkg.dependencies, ...pkg.devDependencies });
-      } catch {
-        /* some frameworks have no package.json */
+      // Scan the root and any workspace package.json — a monorepo installs the
+      // SDK into the picked sub-app (e.g. apps/expo), not the root, so a
+      // root-only read would miss it. Mirrors pickIntegrationTarget's
+      // apps/packages scan.
+      const pkgPaths = [`${appDir}/package.json`];
+      for (const ws of ['apps', 'packages']) {
+        try {
+          for (const sub of fs.readdirSync(`${appDir}/${ws}`))
+            pkgPaths.push(`${appDir}/${ws}/${sub}/package.json`);
+        } catch {
+          /* not a monorepo */
+        }
       }
-      const posthogDeps = deps.filter((d) => d.includes('posthog'));
+      const deps: string[] = [];
+      for (const p of pkgPaths) {
+        try {
+          const pkg = JSON.parse(fs.readFileSync(p, 'utf8'));
+          deps.push(
+            ...Object.keys({ ...pkg.dependencies, ...pkg.devDependencies }),
+          );
+        } catch {
+          /* missing or no package.json */
+        }
+      }
+      const posthogDeps = [
+        ...new Set(deps.filter((d) => d.includes('posthog'))),
+      ];
       let envFile: string | null = null;
       try {
         const hit = fs
