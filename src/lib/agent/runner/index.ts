@@ -19,6 +19,7 @@
 import type { WizardSession } from '../../wizard-session';
 import { analytics } from '@utils/analytics';
 import { isOrchestratorEnabled } from '../agent-interface';
+import { IS_PRODUCTION_BUILD } from '@env';
 import { Sequence } from '@lib/constants';
 import { getUI } from '../../../ui';
 import { runOrchestrator } from './sequence/orchestrator/orchestrator-runner';
@@ -83,10 +84,14 @@ export async function runProgram(
   // harmless no-op. No harness has to know reporting exists.
   registerCleanup(() => flushScanReport(session));
   try {
-    // CLI wins; otherwise fall back to the PostHog flag.
+    // CLI `--sequence` wins; otherwise fall back to the PostHog flag. The
+    // option is gated out of published builds (see wizard.ts), so `cliSequence`
+    // is a constant `undefined` in prod — `IS_PRODUCTION_BUILD` inlines to
+    // `true` and rolldown folds the override arm away, leaving only the flag.
+    const cliSequence = IS_PRODUCTION_BUILD ? undefined : session.sequence;
     const useOrchestrator =
-      session.sequence !== undefined
-        ? session.sequence === Sequence.orchestrator
+      cliSequence !== undefined
+        ? cliSequence === Sequence.orchestrator
         : isOrchestratorEnabled(boot.wizardFlags);
     if (useOrchestrator) {
       getUI().log.info('Task-queue orchestrator enabled.');
