@@ -86,20 +86,6 @@ export const GLOBAL_OPTIONS = {
     type: 'boolean' as const,
     hidden: true,
   },
-  harness: {
-    describe:
-      'Override the agent harness (anthropic | pi). Non-default choices require the corresponding PostHog authorization; see cli-plan.md\nenv: POSTHOG_WIZARD_HARNESS',
-    choices: Object.values(Harness),
-    type: 'string' as const,
-    hidden: true,
-  },
-  sequence: {
-    describe:
-      'Override the runner sequence (linear | orchestrator). Non-default choices require the corresponding PostHog authorization; see cli-plan.md\nenv: POSTHOG_WIZARD_SEQUENCE',
-    choices: Object.values(Sequence),
-    type: 'string' as const,
-    hidden: true,
-  },
 };
 
 export class Wizard {
@@ -119,13 +105,33 @@ export class Wizard {
     // --ci and headless are kept as separate flags so they can diverge — see
     // basic-integration's dispatch. headless is deliberately not advertised.
     if (!IS_PRODUCTION_BUILD) {
-      cli = cli.option('ci', {
-        default: false,
-        describe:
-          'Enable CI mode for non-interactive execution\nenv: POSTHOG_WIZARD_CI',
-        type: 'boolean',
-        hidden: true,
-      });
+      cli = cli
+        .option('ci', {
+          default: false,
+          describe:
+            'Enable CI mode for non-interactive execution\nenv: POSTHOG_WIZARD_CI',
+          type: 'boolean',
+          hidden: true,
+        })
+        // Runner overrides — dev/test only, same lifecycle as --ci. Left
+        // undeclared in published builds so the override paths (runner-plan.ts
+        // middleware, runner/index.ts sequence read) tree-shake away and can
+        // never be reached in the shipped package. See cli-plan.md in the
+        // workbench repo.
+        .option('harness', {
+          describe:
+            'Override the agent harness (anthropic | pi). Wins over the PostHog runner flag.\nenv: POSTHOG_WIZARD_HARNESS',
+          choices: Object.values(Harness),
+          type: 'string',
+          hidden: true,
+        })
+        .option('sequence', {
+          describe:
+            'Override the runner sequence (linear | orchestrator). Wins over the PostHog orchestrator flag.\nenv: POSTHOG_WIZARD_SEQUENCE',
+          choices: Object.values(Sequence),
+          type: 'string',
+          hidden: true,
+        });
     }
 
     this.cli = cli
@@ -180,6 +186,31 @@ export class Wizard {
       if (argvHasCI || envHasCI) {
         process.stderr.write(
           `\n\x1b[1;91m✖ CI mode is not currently supported in published builds.\x1b[0m\n\n`,
+        );
+        process.exit(1);
+      }
+
+      // Same treatment as --ci: the --harness / --sequence runner overrides are
+      // dev/test-only and left undeclared in published builds. strictOptions
+      // would reject the flags as unknown, and POSTHOG_WIZARD_HARNESS /
+      // POSTHOG_WIZARD_SEQUENCE silently no-op (yargs only resolves env vars for
+      // declared options) — which would look like the override took effect while
+      // it didn't. Detect both up front and exit with a message that explains why.
+      const argvHasOverride = args.some(
+        (a) =>
+          a === '--harness' ||
+          a.startsWith('--harness=') ||
+          a === '--sequence' ||
+          a.startsWith('--sequence='),
+      );
+      const envHasOverride =
+        (process.env.POSTHOG_WIZARD_HARNESS != null &&
+          process.env.POSTHOG_WIZARD_HARNESS !== '') ||
+        (process.env.POSTHOG_WIZARD_SEQUENCE != null &&
+          process.env.POSTHOG_WIZARD_SEQUENCE !== '');
+      if (argvHasOverride || envHasOverride) {
+        process.stderr.write(
+          `\n\x1b[1;91m✖ The --harness and --sequence overrides are not available in published builds.\x1b[0m\n\n`,
         );
         process.exit(1);
       }

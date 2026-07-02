@@ -19,6 +19,7 @@ import {
   Harness,
   Sequence,
 } from '@lib/constants';
+import { IS_PRODUCTION_BUILD } from '@env';
 import { logToFile } from '@utils/debug';
 import type { ProgramId } from '@lib/programs/program-registry';
 import type { AgentRunner } from './harness/types';
@@ -128,21 +129,38 @@ export function runChain<D>(chain: Mw<D>[], ctx: ResolveCtx, base: () => D): D {
  * the terminal is the config map read. Called per leaf with a role.
  */
 /**
- * Override the resolved pair's runner. CLI (`ctx.cliHarness`) wins over the
- * PostHog `wizard-runner` flag; model always stays from config.
- * Defers-then-modifies: always takes the base pair, then overlays the runner
- * field iff a CLI value or a known flag value is present.
+ * PostHog `wizard-runner` flag → override the resolved pair's runner. Model
+ * always stays from config. Defers-then-modifies: takes the base pair, then
+ * overlays the runner field iff the flag names a known harness.
  */
-const wizardRunner: Mw<Pair> = (ctx, next) => {
+const flagRunnerOverride: Mw<Pair> = (ctx, next) => {
   const pair = next();
-  if (ctx.cliHarness) return { ...pair, runner: ctx.cliHarness };
   const flag = ctx.flags[WIZARD_RUNNER_FLAG_KEY];
   return flag === Harness.anthropic || flag === Harness.pi
     ? { ...pair, runner: flag }
     : pair;
 };
 
-const PAIR_MIDDLEWARE: Mw<Pair>[] = [wizardRunner];
+/**
+ * CLI `--harness` override. Sits ahead of `flagRunnerOverride` in the chain so
+ * it wraps — and therefore wins over — the flag result. Dev/test only: the
+ * option that populates `ctx.cliHarness` is gated out of published builds (see
+ * wizard.ts), and this entry is dropped from the chain below in prod, so the
+ * override path is unreachable and tree-shaken there.
+ */
+const cliHarnessOverride: Mw<Pair> = (ctx, next) => {
+  const pair = next();
+  return ctx.cliHarness ? { ...pair, runner: ctx.cliHarness } : pair;
+};
+
+// Order = priority: the first entry wraps the rest, so it has the last word.
+// `IS_PRODUCTION_BUILD` inlines to `true` in published builds, collapsing the
+// spread to `[]` and leaving `cliHarnessOverride` unreferenced for rolldown to
+// drop.
+const PAIR_MIDDLEWARE: Mw<Pair>[] = [
+  ...(IS_PRODUCTION_BUILD ? [] : [cliHarnessOverride]),
+  flagRunnerOverride,
+];
 
 export function resolvePair(ctx: ResolveCtx, role = 'default'): Pair {
   const pair = runChain(PAIR_MIDDLEWARE, ctx, () => {
