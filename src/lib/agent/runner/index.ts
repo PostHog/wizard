@@ -84,10 +84,8 @@ export async function runProgram(
   // harmless no-op. No harness has to know reporting exists.
   registerCleanup(() => flushScanReport(session));
   try {
-    // CLI `--sequence` wins; otherwise fall back to the PostHog flag. The
-    // option is gated out of published builds (see wizard.ts), so `cliSequence`
-    // is a constant `undefined` in prod — `IS_PRODUCTION_BUILD` inlines to
-    // `true` and rolldown folds the override arm away, leaving only the flag.
+    // CLI `--sequence` wins over the flag. Forced undefined in prod (the option
+    // is gated out there), so only the flag decides.
     const cliSequence = IS_PRODUCTION_BUILD ? undefined : session.sequence;
     const useOrchestrator =
       cliSequence !== undefined

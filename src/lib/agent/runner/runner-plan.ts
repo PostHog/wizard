@@ -124,15 +124,7 @@ export function runChain<D>(chain: Mw<D>[], ctx: ResolveCtx, base: () => D): D {
   return dispatch(0);
 }
 
-/**
- * The pair insertion point. The chain is empty until the flag middleware lands;
- * the terminal is the config map read. Called per leaf with a role.
- */
-/**
- * PostHog `wizard-runner` flag → override the resolved pair's runner. Model
- * always stays from config. Defers-then-modifies: takes the base pair, then
- * overlays the runner field iff the flag names a known harness.
- */
+/** `wizard-runner` flag → runner override, iff the flag names a known harness. Model stays from config. */
 const flagRunnerOverride: Mw<Pair> = (ctx, next) => {
   const pair = next();
   const flag = ctx.flags[WIZARD_RUNNER_FLAG_KEY];
@@ -141,22 +133,14 @@ const flagRunnerOverride: Mw<Pair> = (ctx, next) => {
     : pair;
 };
 
-/**
- * CLI `--harness` override. Sits ahead of `flagRunnerOverride` in the chain so
- * it wraps — and therefore wins over — the flag result. Dev/test only: the
- * option that populates `ctx.cliHarness` is gated out of published builds (see
- * wizard.ts), and this entry is dropped from the chain below in prod, so the
- * override path is unreachable and tree-shaken there.
- */
+/** `--harness` override. Dev/test only — the option is gated out of published builds. */
 const cliHarnessOverride: Mw<Pair> = (ctx, next) => {
   const pair = next();
   return ctx.cliHarness ? { ...pair, runner: ctx.cliHarness } : pair;
 };
 
-// Order = priority: the first entry wraps the rest, so it has the last word.
-// `IS_PRODUCTION_BUILD` inlines to `true` in published builds, collapsing the
-// spread to `[]` and leaving `cliHarnessOverride` unreferenced for rolldown to
-// drop.
+// First entry wraps the rest, so it wins. The prod spread collapses to [],
+// dropping cliHarnessOverride from the chain.
 const PAIR_MIDDLEWARE: Mw<Pair>[] = [
   ...(IS_PRODUCTION_BUILD ? [] : [cliHarnessOverride]),
   flagRunnerOverride,
