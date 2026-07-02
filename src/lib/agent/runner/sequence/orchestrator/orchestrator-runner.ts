@@ -64,7 +64,7 @@ function toTodoStatus(status: TaskStatus): string {
  * capability. Pi trips this today with the honest impl-gap error instead of
  * silently downgrading to anthropic.
  */
-function harnessForPick(pick: HarnessPick): AgentHarness & {
+function requireTaskHarness(pick: HarnessPick): AgentHarness & {
   runTask: NonNullable<AgentHarness['runTask']>;
 } {
   const harness = getHarness(pick.harness);
@@ -276,7 +276,7 @@ export async function runOrchestrator(
   // switchboard plan) — the switchboard's model is the fallback when the
   // prompt is silent.
   const seedPick = resolveHarness(switchboardCtx, 'seed');
-  const seedHarness = harnessForPick(seedPick);
+  const seedHarness = requireTaskHarness(seedPick);
   const seedResult = await seedHarness.runTask({
     session,
     programConfig,
@@ -355,7 +355,7 @@ export async function runOrchestrator(
       // PROGRAM_BINDINGS[id].contextMillOverride?.[task.type] for wizard-side
       // per-agent overrides. Prompt-frontmatter model still wins (§3.6).
       const taskPick = resolveHarness(switchboardCtx, task.type);
-      const taskHarness = harnessForPick(taskPick);
+      const taskHarness = requireTaskHarness(taskPick);
       await taskHarness.runTask({
         session,
         programConfig,

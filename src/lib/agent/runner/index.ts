@@ -85,7 +85,7 @@ export async function runProgram(
   registerCleanup(() => flushScanReport(session));
 
   try {
-    const binding = bindProgramViaSwitchboard(session, programConfig, boot);
+    const binding = resolveProgramRunner(session, programConfig, boot);
     if (binding.sequence === Sequence.orchestrator) {
       getUI().log.info('Task-queue orchestrator enabled.');
     }
@@ -101,16 +101,15 @@ export async function runProgram(
 }
 
 /**
- * Bind a program to a routing decision through the switchboard: resolve which
- * sequence and harness will run it (CLI → PostHog flag → per-program binding
- * → default), then tag both axes onto analytics. Returns the resolved binding
- * for downstream dispatch.
+ * Resolve which sequence and harness will run a program (CLI → PostHog flag →
+ * per-program binding → default), tag both axes onto analytics, and return the
+ * binding for downstream dispatch.
  *
  * The one place `runner/index.ts` reaches into the switchboard — every other
  * concern (bootstrap, cleanup, dispatch, per-task per-role harness picks) is
  * either upstream or downstream of this call.
  */
-function bindProgramViaSwitchboard(
+function resolveProgramRunner(
   session: WizardSession,
   programConfig: ProgramConfig,
   boot: BootstrapResult,
