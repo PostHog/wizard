@@ -71,8 +71,6 @@ export default defineConfig({
       '**/node_modules/**',
       '**/dist/**',
       '**/e2e-tests/**',
-      // The e2e harness and its tests live in a separate stacked PR.
-      '**/e2e-harness/**',
       '**/*.no-jest.*',
       '**/*.d.ts',
     ],

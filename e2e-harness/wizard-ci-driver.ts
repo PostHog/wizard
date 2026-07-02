@@ -51,6 +51,8 @@ export interface CiState {
     detectedFrameworkLabel: string | null;
     detectionComplete: boolean;
     setupConfirmed: boolean;
+    /** Self-driving integration-check answer; null until decided. */
+    integrate: boolean | null;
     hasCredentials: boolean;
     projectId: number | null;
     mcpComplete: boolean;
@@ -98,6 +100,7 @@ export class WizardCiDriver {
         detectedFrameworkLabel: s.detectedFrameworkLabel,
         detectionComplete: s.detectionComplete,
         setupConfirmed: s.setupConfirmed,
+        integrate: s.integrate,
         hasCredentials: s.credentials !== null,
         projectId: s.credentials?.projectId ?? null,
         mcpComplete: s.mcpComplete,
