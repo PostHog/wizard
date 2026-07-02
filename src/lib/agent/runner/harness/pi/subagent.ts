@@ -14,6 +14,10 @@
  */
 
 import { Type } from 'typebox';
+// This module is reached only via dynamic import() from ./index.ts when the pi
+// runner runs, so these @earendil imports never evaluate on Node 20 — where the
+// dep is skipped (optionalDependency, needs Node >=22.19). Keep pi-only imports
+// in lazily-loaded modules like this one, never on a startup-reachable path.
 import { defineTool } from '@earendil-works/pi-coding-agent';
 import type { ToolDefinition } from '@earendil-works/pi-coding-agent';
 import { logToFile } from '@utils/debug';

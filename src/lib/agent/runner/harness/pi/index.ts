@@ -206,6 +206,12 @@ export const piBackend: AgentHarness = {
     spinner.start(config.spinnerMessage ?? 'Customizing your PostHog setup...');
 
     try {
+      // pi's engine (@earendil-works/*) requires Node >=22.19 and ships as an
+      // optionalDependency, so it's absent on Node 20. Loading it — and the
+      // pi-only modules below (./tools, ./tasks, ./subagent, ./security, ./mcp)
+      // — lazily here keeps it off the startup path: the wizard still installs
+      // and runs the default (anthropic) path on Node 20, and a pi run there
+      // throws on this import and is caught by the surrounding try.
       const {
         createAgentSession,
         DefaultResourceLoader,
