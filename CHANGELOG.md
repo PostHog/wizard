@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.37.0](https://github.com/PostHog/wizard/compare/v2.36.0...v2.37.0) (2026-07-01)
+
+
+### Features
+
+* Allow enabling products from Wizard ([#776](https://github.com/PostHog/wizard/issues/776)) ([198741f](https://github.com/PostHog/wizard/commit/198741ff1c529ce7f53ff8e90ac7c303ba69abd5))
+
+
+### Bug Fixes
+
+* **warehouse:** don't count cancelled wizard_ask against the per-run cap ([#770](https://github.com/PostHog/wizard/issues/770)) ([9f4b717](https://github.com/PostHog/wizard/commit/9f4b717f8b5f5f6099a5cde2ba0030f92f0016ef))
+
 ## [2.36.0](https://github.com/PostHog/wizard/compare/v2.35.0...v2.36.0) (2026-06-30)
 
 

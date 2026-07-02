@@ -52,11 +52,12 @@ tasks, in this order:
   1. Check Self-driving access
   2. Read project and current Self-driving state
   3. Connect GitHub (required)
+  3b. Enable products (replay, error tracking, support)
   4. Enable signal sources
   5. Offer issue-tracker integrations
   6. Configure the scout troop
-  7. Design custom scouts
-  8. Write report and hand off
+  6b. Design custom scouts
+  7. Write report and hand off
 Drive the list with TaskUpdate — mark a task in_progress when you start
 it and completed when done. If a step turns out to be a no-op (e.g.
 GitHub is already connected), still mark its task completed.
@@ -104,6 +105,19 @@ STEP 3 — Connect GitHub. REQUIRED. (skill: "Connect GitHub")
    ${AgentSignals.ABORT} github connection declined
    and halt — never finish setup without GitHub.
 
+STEP 3b — Enable products. (skill: "Enable products")
+   Turn ON the PostHog products Signals reads from — Session Replay,
+   Error Tracking, and Support — so the sources you enable next have data
+   to read. These are server-side enables with conservative defaults
+   (owned by the server, not you). The project-state block above covers
+   only Session Replay and Error Tracking, so you can skip those if they
+   are already ON; it does not show Support, but every enable is idempotent
+   so enabling any of them again is safe regardless. For a web app, also
+   make sure this repo's posthog-js
+   init doesn't disable them; for a pure backend or mobile app the server
+   flip is inert, so just record that for the report and move on. The skill
+   names the exact tool and the per-platform detail.
+
 STEP 4 — Enable signal sources. (skill: "Enable sources")
    Enable the sources that match what this product actually uses, per
    the skill. Never enable a source for a tool the user hasn't
@@ -123,7 +137,7 @@ STEP 6 — Configure the scout troop. (skill: "Scouts")
    scout plus the one or two specialists for the products this project
    uses most — and disable the rest, per the skill.
 
-STEP 7 — Design custom scouts for this product. (skill: "Custom scouts")
+STEP 6b — Design custom scouts for this product. (skill: "Custom scouts")
    You are the only actor that has read this repo — turn that into
    coverage per the skill: a real gap analysis of the project's
    watchable surfaces against what the built-in troop already covers,
@@ -137,7 +151,7 @@ STEP 7 — Design custom scouts for this product. (skill: "Custom scouts")
    no gap at all) is a valid outcome, not an abort. Mark the task
    completed either way.
 
-STEP 8 — Write the report and hand off. (skill: "Report")
+STEP 7 — Write the report and hand off. (skill: "Report")
    Write the report per the skill, including follow-ups for anything
    deferred. Tell the user findings will start appearing in their inbox
    at ${inboxUrl} within about 30 minutes.`;
