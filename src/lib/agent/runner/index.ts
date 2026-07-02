@@ -47,6 +47,7 @@ export { shouldDisableAsk } from './shared/bootstrap';
 export async function runAgent(
   programConfig: ProgramConfig,
   session: WizardSession,
+  options: { composed?: boolean } = {},
 ): Promise<void> {
   if (!programConfig.run) {
     throw new Error(`Program "${programConfig.id}" has no run configuration.`);
@@ -57,7 +58,7 @@ export async function runAgent(
       ? await programConfig.run(session)
       : programConfig.run;
 
-  await runProgram(session, runDef, programConfig);
+  await runProgram(session, runDef, programConfig, options);
 }
 
 /**
@@ -71,6 +72,7 @@ export async function runProgram(
   session: WizardSession,
   config: ProgramRun,
   programConfig: ProgramConfig,
+  options: { composed?: boolean } = {},
 ): Promise<void> {
   const boot = await bootstrapProgram(session, config, programConfig);
 
@@ -83,7 +85,6 @@ export async function runProgram(
   // flushScanReport is idempotent (it zeroes scan state), so the overlap is a
   // harmless no-op. No harness has to know reporting exists.
   registerCleanup(() => flushScanReport(session));
-
   try {
     const binding = resolveProgramRunner(session, programConfig, boot);
     if (binding.sequence === Sequence.orchestrator) {
@@ -94,6 +95,7 @@ export async function runProgram(
       config,
       programConfig,
       boot,
+      options.composed ?? false,
     );
   } finally {
     flushScanReport(session);

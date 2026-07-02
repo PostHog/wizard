@@ -15,10 +15,11 @@
 import type { AgentChunk } from '@ui/tui/services/mcp-suggested-prompts-services';
 import type { Credentials } from '@lib/wizard-session';
 import { DEFAULT_AGENT_MODEL, WIZARD_USER_AGENT } from '@lib/constants';
-import { getLlmGatewayUrlFromHost } from '@utils/urls';
+import { HostResolution } from '@lib/host-resolution';
 import { runtimeEnv } from '@env';
 import { logToFile } from '@utils/debug';
 import { buildAgentEnv } from '@lib/agent/agent-interface';
+import { sanitizeAgentSubprocessEnv } from '@lib/agent/agent-env-isolation';
 
 // Cached SDK module — first call pays the dynamic-import cost; later
 // calls reuse the same module.
@@ -195,11 +196,14 @@ export async function* runMcpPromptViaSdk(args: {
   // authenticate directly against Anthropic and 401s with "Invalid
   // authentication credentials".
   process.env.CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS = 'true';
+
   // Route through the PostHog LLM gateway, authed with the user's OAuth token.
-  const gatewayUrl = getLlmGatewayUrlFromHost(credentials.host);
+  // TODO: clean up in #755
+  const gatewayUrl = HostResolution.fromApiHost(credentials.host).gatewayUrl;
   process.env.ANTHROPIC_BASE_URL = gatewayUrl;
   process.env.ANTHROPIC_AUTH_TOKEN = credentials.accessToken;
   process.env.CLAUDE_CODE_OAUTH_TOKEN = credentials.accessToken;
+
   logToFile(
     `[runMcpPromptViaSdk] gatewayUrl=${gatewayUrl} tokenPrefix=${
       credentials.accessToken
@@ -315,10 +319,18 @@ export async function* runMcpPromptViaSdk(args: {
         // wizard skill execution.
         allowedTools: ['mcp__posthog-wizard__*'],
         env: {
-          ...process.env,
-          // Drop any shell ANTHROPIC_API_KEY so it can't silently bypass the
-          // PostHog LLM gateway and defeat quota tracking and the OAuth flow.
-          ANTHROPIC_API_KEY: undefined,
+          // Drop the ENTIRE ANTHROPIC_*/CLAUDE_CODE_* namespace from the
+          // inherited env so no shell/settings value can silently bypass the
+          // PostHog gateway and defeat quota tracking / the OAuth flow; the
+          // wizard's own gateway routing is injected fresh below. See
+          // agent-env-isolation.ts.
+          ...sanitizeAgentSubprocessEnv(process.env),
+          // Gateway routing — injected explicitly (set on process.env above;
+          // the strip removed them from the inherited copy, so re-add here).
+          ANTHROPIC_BASE_URL: process.env.ANTHROPIC_BASE_URL,
+          ANTHROPIC_AUTH_TOKEN: process.env.ANTHROPIC_AUTH_TOKEN,
+          CLAUDE_CODE_OAUTH_TOKEN: process.env.CLAUDE_CODE_OAUTH_TOKEN,
+          CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS: 'true',
           // Defer MCP tool schemas to avoid bloating the system prompt.
           // posthog-wizard exposes many query tools with large schemas;
           // without deferral these consume ~113k tokens upfront, which

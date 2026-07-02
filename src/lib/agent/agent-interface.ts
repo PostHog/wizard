@@ -7,6 +7,7 @@ import path from 'path';
 import * as os from 'os';
 import { createRequire } from 'node:module';
 import { getUI, type SpinnerHandle } from '@ui';
+import type { TokenUsageDelta } from '@ui/wizard-ui';
 import { debug, logToFile, initLogFile, getLogFilePath } from '@utils/debug';
 import type { WizardRunOptions } from '@utils/types';
 import { analytics } from '@utils/analytics';
@@ -25,7 +26,7 @@ import {
 } from '@lib/wizard-session';
 import { wizardAbort, WizardError } from '@utils/wizard-abort';
 import { createCustomHeaders } from '@utils/custom-headers';
-import { getLlmGatewayUrlFromHost } from '@utils/urls';
+import { HostResolution } from '@lib/host-resolution';
 import { LINTING_TOOLS } from '@lib/safe-tools';
 import { createWizardToolsServer, WIZARD_TOOL_NAMES } from '@lib/wizard-tools';
 import {
@@ -50,6 +51,12 @@ import {
   type SettingsConflict,
   type SettingsConflictSource,
 } from './claude-settings';
+import {
+  detectStoredClaudeLogin,
+  hasStoredClaudeLogin,
+  claudeConfigDir,
+} from './stored-login';
+import { sanitizeAgentSubprocessEnv } from './agent-env-isolation';
 
 // Dynamic import cache for ESM module
 let _sdkModule: any = null;
@@ -104,14 +111,55 @@ export interface AuthErrorContext {
   conflictKeys: string[];
   gatewayUrl: string;
   region: 'eu' | 'us' | 'local';
+  /** SDK `apiKeySource` from the init message, when known. */
+  apiKeySource?: string;
+  /**
+   * True when the SDK authenticated from a stored Claude login (`apiKeySource`
+   * is a "/login managed key") — i.e. conflicting Anthropic credentials, not
+   * the gateway token the wizard injected.
+   */
+  usingManagedLogin: boolean;
+  /** Human-readable places a conflicting Anthropic credential may live. */
+  credentialPlaces: string[];
+}
+
+/** Places the agent could have picked up a non-PostHog credential. */
+function findCredentialPlaces(
+  conflicts: SettingsConflict[],
+  homeDir: string,
+): string[] {
+  const places: string[] = [];
+
+  const stored = detectStoredClaudeLogin(homeDir);
+  const configDir = claudeConfigDir(homeDir);
+  if (stored.credentialsFile) {
+    places.push(
+      `A logged-in Claude session: ${path.join(
+        configDir,
+        '.credentials.json',
+      )}`,
+    );
+  }
+  if (stored.keychain) {
+    places.push(
+      'A logged-in Claude session: macOS keychain item "Claude Code-credentials"',
+    );
+  }
+  for (const c of conflicts) {
+    places.push(`${c.path} sets ${c.keys.join(', ')}`);
+  }
+  return places;
 }
 
 export function buildAuthErrorContext(
   workingDirectory: string,
   gatewayUrl: string,
   homeDir: string = os.homedir(),
+  apiKeySource?: string,
 ): AuthErrorContext {
   const conflicts = checkAllSettingsConflicts(workingDirectory, homeDir);
+  // The SDK reports a stored Claude login as a "/login managed key".
+  const usingManagedLogin = /login|managed key/i.test(apiKeySource ?? '');
   return {
     hasSettingsConflict: conflicts.length > 0,
     conflicts,
@@ -119,6 +167,9 @@ export function buildAuthErrorContext(
     conflictKeys: [...new Set(conflicts.flatMap((c) => c.keys))],
     gatewayUrl,
     region: regionFromGatewayUrl(gatewayUrl),
+    apiKeySource,
+    usingManagedLogin,
+    credentialPlaces: findCredentialPlaces(conflicts, homeDir),
   };
 }
 
@@ -569,16 +620,22 @@ export async function initializeAgent(
   logToFile('Install directory:', options.installDir);
 
   try {
+    // TODO: clean up in #755
+    const gatewayUrl = HostResolution.fromApiHost(
+      config.posthogApiHost,
+    ).gatewayUrl;
+
     // Configure model routing (inherited by the SDK subprocess). All model
     // calls route through the PostHog LLM gateway, authed with the user's
     // OAuth token.
     // Disable experimental betas (like input_examples) the gateway doesn't support.
     process.env.CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS = 'true';
-    const gatewayUrl = getLlmGatewayUrlFromHost(config.posthogApiHost);
     process.env.ANTHROPIC_BASE_URL = gatewayUrl;
     process.env.ANTHROPIC_AUTH_TOKEN = config.posthogApiKey;
+
     // Use CLAUDE_CODE_OAUTH_TOKEN to override any stored /login credentials
     process.env.CLAUDE_CODE_OAUTH_TOKEN = config.posthogApiKey;
+
     logToFile('Configured LLM gateway:', gatewayUrl);
     logToFile(
       'API key prefix:',
@@ -586,6 +643,24 @@ export async function initializeAgent(
         ? `${config.posthogApiKey.slice(0, 4)}***`
         : '(missing)',
     );
+
+    // A pre-existing Claude login (the SDK's "/login managed key") can outrank
+    // the gateway token we just set and get sent to the PostHog gateway, which
+    // 401s it. The settings-conflict scan can't see it, so detect + report it
+    // here — this is the leading suspect behind the gateway auth_failed reports.
+    const storedLogin = detectStoredClaudeLogin();
+    if (hasStoredClaudeLogin(storedLogin)) {
+      logToFile(
+        `Pre-existing Claude login detected (credentialsFile=${storedLogin.credentialsFile}, ` +
+          `keychain=${storedLogin.keychain}). It can outrank the wizard's gateway token ` +
+          `and cause a 401 — 'claude auth logout' clears it.`,
+      );
+      analytics.wizardCapture('claude stored login detected', {
+        credentials_file: storedLogin.credentialsFile,
+        keychain: storedLogin.keychain,
+      });
+    }
+
     const initConflicts = checkAllSettingsConflicts(options.installDir);
     logToFile(
       'Settings conflicts at agent init:',
@@ -805,6 +880,13 @@ export async function runAgent(
       cache_read_input_tokens: usage?.cache_read_input_tokens,
       ...config?.analyticsProperties,
     });
+    // Reconcile the hidden Ctrl+T HUD's running cost estimate to the SDK's
+    // authoritative total — same trick the benchmark's
+    // CostTrackerPlugin.onFinalize uses to correct per-turn drift.
+    const totalCostUsd = Number(lastResultMessage?.total_cost_usd ?? 0);
+    if (totalCostUsd > 0) {
+      getUI().setFinalTokenCostUsd(totalCostUsd);
+    }
     try {
       middleware?.finalize(lastResultMessage, durationMs);
     } catch (e) {
@@ -955,10 +1037,18 @@ export async function runAgent(
           },
         },
         env: {
-          ...process.env,
-          // Drop any shell ANTHROPIC_API_KEY so it can't override the wizard's
-          // OAuth gateway token.
-          ANTHROPIC_API_KEY: undefined,
+          // Drop the ENTIRE ANTHROPIC_*/CLAUDE_CODE_* namespace from the
+          // inherited env so no shell/settings value can leak into or outrank
+          // the agent's routing; the wizard's own gateway routing is injected
+          // fresh below. See agent-env-isolation.ts.
+          ...sanitizeAgentSubprocessEnv(process.env),
+          // Gateway routing — injected explicitly (initializeAgent set these on
+          // process.env for in-process readers; the strip above removed them
+          // from the inherited copy, so re-add the wizard's own values here).
+          ANTHROPIC_BASE_URL: process.env.ANTHROPIC_BASE_URL,
+          ANTHROPIC_AUTH_TOKEN: process.env.ANTHROPIC_AUTH_TOKEN,
+          CLAUDE_CODE_OAUTH_TOKEN: process.env.CLAUDE_CODE_OAUTH_TOKEN,
+          CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS: 'true',
           // Defer MCP tool schemas to avoid bloating the system prompt.
           // The posthog-wizard MCP exposes many query tools with large schemas;
           // without deferral these consume ~113k tokens upfront, leaving
@@ -1113,11 +1203,15 @@ export async function runAgent(
         const authError = buildAuthErrorContext(
           options.installDir,
           process.env.ANTHROPIC_BASE_URL ?? '',
+          os.homedir(),
+          signals.apiKeySource,
         );
         logToFile('Agent error: 401, showing auth error screen', authError);
         getUI().showAuthError({
           hasSettingsConflict: authError.hasSettingsConflict,
           conflicts: authError.conflicts,
+          usingManagedLogin: authError.usingManagedLogin,
+          credentialPlaces: authError.credentialPlaces,
           logFilePath: getLogFilePath(),
         });
         await wizardAbort({
@@ -1128,6 +1222,8 @@ export async function runAgent(
             conflictKeys: authError.conflictKeys,
             gatewayUrl: authError.gatewayUrl,
             region: authError.region,
+            usingManagedLogin: authError.usingManagedLogin,
+            apiKeySource: authError.apiKeySource,
           }),
         });
       }
@@ -1153,7 +1249,7 @@ export async function runAgent(
     // A YARA hook detected a terminal violation and aborted the run.
     if (yaraViolationReason) {
       logToFile('Agent error: YARA_VIOLATION');
-      spinner.stop('Security violation detected');
+      spinner.stop('Security check stopped the setup');
       return { error: AgentErrorType.YARA_VIOLATION };
     }
 
@@ -1213,7 +1309,7 @@ export async function runAgent(
     // never mistaken for a success-cleanup race or a generic abort.
     if (yaraViolationReason) {
       logToFile('Agent error: YARA_VIOLATION');
-      spinner.stop('Security violation detected');
+      spinner.stop('Security check stopped the setup');
       return { error: AgentErrorType.YARA_VIOLATION };
     }
 
@@ -1456,6 +1552,48 @@ function extractTaskIdFromResult(content: unknown): string | undefined {
   return undefined;
 }
 
+/**
+ * Extracts a `TokenUsageDelta` for the hidden Ctrl+T token/cost HUD from an
+ * SDK assistant message, or `null` when the message carries no usage (e.g.
+ * a duplicate/retried turn). `message.message` is a BetaMessage (the raw
+ * Anthropic API response), which carries `model` alongside `usage` — read
+ * per turn, not from the run's nominal model, since a subagent dispatched
+ * via the Agent tool can genuinely run on a different model than the main
+ * session.
+ */
+function extractTokenUsageDelta(message: SDKMessage): TokenUsageDelta | null {
+  const apiMessage = message.message as
+    | {
+        model?: string;
+        usage?: {
+          input_tokens?: number;
+          output_tokens?: number;
+          cache_read_input_tokens?: number;
+          cache_creation_input_tokens?: number;
+          cache_creation?: {
+            ephemeral_5m_input_tokens?: number;
+            ephemeral_1h_input_tokens?: number;
+          };
+        };
+      }
+    | undefined;
+  const usage = apiMessage?.usage;
+  if (!usage) return null;
+  return {
+    inputTokens: Number(usage.input_tokens ?? 0),
+    outputTokens: Number(usage.output_tokens ?? 0),
+    cacheReadTokens: Number(usage.cache_read_input_tokens ?? 0),
+    cacheCreationTokens: Number(usage.cache_creation_input_tokens ?? 0),
+    cacheCreation5m: Number(
+      usage.cache_creation?.ephemeral_5m_input_tokens ?? 0,
+    ),
+    cacheCreation1h: Number(
+      usage.cache_creation?.ephemeral_1h_input_tokens ?? 0,
+    ),
+    model: apiMessage?.model,
+  };
+}
+
 function handleSDKMessage(
   message: SDKMessage,
   options: WizardRunOptions,
@@ -1494,6 +1632,13 @@ function handleSDKMessage(
 
   switch (message.type) {
     case 'assistant': {
+      // Feed the hidden Ctrl+T token/cost HUD. Mirrors the benchmark
+      // middleware's TokenTrackerPlugin/CacheTrackerPlugin extraction (no
+      // dedup for SDK-retried turns — see addTokenUsage's doc comment), so
+      // this stays live-updating for every run, not just `--benchmark`.
+      const tokenUsageDelta = extractTokenUsageDelta(message);
+      if (tokenUsageDelta) getUI().addTokenUsage(tokenUsageDelta);
+
       // Extract text content from assistant messages
       const content = message.message?.content;
       if (Array.isArray(content)) {
@@ -1639,10 +1784,16 @@ function handleSDKMessage(
 
     case 'system': {
       if (message.subtype === 'init') {
+        // Capture which credential the SDK authenticated with. A managed-login
+        // source (`"/login managed key"`) means it used a stored Claude login
+        // rather than the gateway token we injected — the prime suspect for a
+        // subsequent 401 (consumed by the auth-error handler below).
+        signals.recordApiKeySource(message.apiKeySource);
         logToFile('Agent session initialized', {
           model: message.model,
           tools: message.tools?.length,
           mcpServers: message.mcp_servers,
+          apiKeySource: message.apiKeySource,
         });
       }
       break;

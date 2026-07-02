@@ -68,6 +68,30 @@ export interface ProgramStep {
   screenId?: string;
 
   /**
+   * For a run step (`screenId: 'run'`): runs this step's own agent. A program
+   * exports a self-contained run step and another imports it into its step list
+   * — e.g. posthog-integration exports a run step that runs its agent, and
+   * self-driving imports it before its own run step. Omit to run the host
+   * program's own agent (`config.run`).
+   */
+  run?: (session: WizardSession) => Promise<void>;
+
+  /**
+   * For a run step: prepare a derived session before its agent runs — e.g.
+   * gather framework context for the chosen project. The session it receives is
+   * the run's own, so writes don't leak into later runs.
+   */
+  onRunPrep?: (session: WizardSession) => Promise<void>;
+
+  /**
+   * For a run step: the working directory its agent runs in, resolved from the
+   * session (e.g. self-driving's integration runs in the picked monorepo
+   * sub-app, not the repo root). The runner scopes a derived session to this
+   * dir for that run only. Defaults to `session.installDir`.
+   */
+  targetDir?: (session: WizardSession) => string;
+
+  /**
    * Whether this step should be visible in the current program.
    * If omitted, the step is always visible.
    */

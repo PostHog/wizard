@@ -19,9 +19,60 @@
  * the wizard-side "self-driving" rename.
  */
 
-import { existsSync, statSync } from 'fs';
+import { existsSync, statSync, readFileSync } from 'fs';
+import { join } from 'path';
 import type { WizardSession } from '@lib/wizard-session';
 import type { AbortCase } from '@lib/agent/agent-runner';
+
+/** frameworkContext key holding the deterministic PostHog-presence result. */
+export const POSTHOG_PRESENT_KEY = 'postHogPresent';
+
+/**
+ * frameworkContext key holding the repo-relative path of the project the user
+ * picked on the integration-detect screen ("." for the repo root). The
+ * integrate-run phase scopes its install dir to this so a monorepo integrates
+ * into the chosen sub-app, not the root.
+ */
+export const SELF_DRIVING_INTEGRATE_PATH_KEY = 'selfDrivingIntegratePath';
+
+// Matches `posthog` at a dependency boundary (line start, or after a
+// quote/slash/=/space), so it skips the substring glued inside another word.
+const POSTHOG_PACKAGE_RE = /(^|["'\s/=])posthog/im;
+
+/**
+ * Deterministic, offline check: does the project already have a PostHog SDK?
+ * Scans the common dependency manifests at the install dir for a `posthog`
+ * package — the same signal the agentic detector reports as `hasPostHog`, but
+ * instant and credential-free. Drives whether self-driving asks to integrate
+ * first ("not found") or proceeds straight to setup ("found").
+ */
+export function detectPostHogPresent(installDir: string): boolean {
+  const manifests = [
+    'package.json',
+    'requirements.txt',
+    'pyproject.toml',
+    'Pipfile',
+    'Gemfile',
+    'go.mod',
+    'composer.json',
+    'pubspec.yaml',
+  ];
+  // Also check a few common sub-app dirs so monorepos (frontend/, backend/)
+  // are caught; deliberately not a recursive tree walk.
+  const dirs = ['.', 'app', 'frontend', 'backend'];
+  for (const dir of dirs) {
+    for (const name of manifests) {
+      const path = join(installDir, dir, name);
+      if (!existsSync(path)) continue;
+      try {
+        if (POSTHOG_PACKAGE_RE.test(readFileSync(path, 'utf8'))) return true;
+      } catch {
+        /* unreadable — ignore */
+      }
+    }
+  }
+  return false;
+}
 
 /**
  * Structured detection errors. The intro screen renders each kind into
@@ -109,4 +160,9 @@ export function detectSelfDrivingPrerequisites(
     fail({ kind: 'bad-directory', path: installDir, reason: 'unreadable' });
     return;
   }
+
+  // Deterministic PostHog-presence check — drives the integration-check
+  // screen: found → skip straight to self-driving; not found → ask to set up
+  // PostHog first.
+  setFrameworkContext(POSTHOG_PRESENT_KEY, detectPostHogPresent(installDir));
 }

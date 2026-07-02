@@ -14,7 +14,7 @@ import type { Harness, Integration, Sequence } from './constants';
 import type { FrameworkConfig } from './framework-config';
 import type { WizardReadinessResult } from './health-checks/readiness';
 import type { SettingsConflict } from './agent/claude-settings';
-import type { ApiUser } from './api';
+import type { ApiUser, ApiProject } from './api';
 
 export interface Credentials {
   accessToken: string;
@@ -177,6 +177,14 @@ export interface WizardSession {
   apiKey?: string;
   email?: string;
   region?: CloudRegion;
+  /**
+   * Explicit PostHog base URL (`--base-url`). When set, it pins every PostHog
+   * origin — API host, cloud/app URL, OAuth server — and `region` is ignored.
+   * The runtime equivalent of the dev-build localhost routing; lets the shipped
+   * wizard target a local/self-hosted stack. Threaded into the URL helpers in
+   * `@utils/urls`. Empty/unset → region-based resolution.
+   */
+  baseUrl?: string;
   benchmark: boolean;
   yaraReport: boolean;
   projectId?: number;
@@ -238,6 +246,14 @@ export interface WizardSession {
    */
   apiUser: ApiUser | null;
 
+  /**
+   * Cloud region and project payload resolved at authentication, kept so a
+   * second agent run in the same invocation (e.g. self-driving's integration
+   * phase) reuses the first login wholesale instead of re-authenticating.
+   */
+  cloudRegion: CloudRegion | null;
+  apiProject: ApiProject | null;
+
   // Lifecycle
   runPhase: RunPhase;
   loginUrl: string | null;
@@ -265,6 +281,31 @@ export interface WizardSession {
   slackConnected: boolean | null;
   skillsComplete: boolean;
   outroDismissed: boolean;
+
+  /**
+   * Self-driving only: whether to integrate PostHog as part of this run.
+   * `null` until decided — the integration-check screen asks "do you already
+   * have PostHog?" and sets it (No → true, Yes → false). The `--integrate`
+   * flag pre-sets it to `true`, skipping the question. When `true`, the
+   * self-driving prompt has the agent set up the SDK before the Self-driving
+   * steps. Unused by other programs.
+   */
+  integrate: boolean | null;
+
+  /**
+   * Ids of composed run steps that have completed — e.g. self-driving's
+   * `integrate-run`. Lets a run step's `isComplete` hold after it ran,
+   * independent of the shared `runPhase`.
+   */
+  completedRuns: string[];
+
+  /**
+   * Self-driving only: whether the user confirmed the handoff screen shown
+   * after the integration run ("PostHog is installed — now set up Self-driving").
+   * Gates the Self-driving run so it doesn't start until acknowledged. Only
+   * reached in the integrate path; the already-has-PostHog path skips it.
+   */
+  selfDrivingHandoffConfirmed: boolean;
 
   // Runtime
   readinessResult: WizardReadinessResult | null;
@@ -313,6 +354,7 @@ export function buildSession(args: {
   apiKey?: string;
   email?: string;
   region?: CloudRegion;
+  baseUrl?: string;
   integration?: Integration;
   benchmark?: boolean;
   yaraReport?: boolean;
@@ -320,6 +362,7 @@ export function buildSession(args: {
   noTelemetry?: boolean;
   harness?: Harness;
   sequence?: Sequence;
+  integrate?: boolean;
 }): WizardSession {
   return {
     debug: args.debug ?? false,
@@ -331,6 +374,7 @@ export function buildSession(args: {
     apiKey: args.apiKey,
     email: args.email,
     region: args.region,
+    baseUrl: args.baseUrl,
     benchmark: args.benchmark ?? false,
     yaraReport: args.yaraReport ?? false,
     projectId: parseProjectIdArg(args.projectId),
@@ -357,11 +401,18 @@ export function buildSession(args: {
     slackConnected: null,
     skillsComplete: false,
     outroDismissed: false,
+    // `--integrate` forces integration (skip the question); otherwise the
+    // integration-check screen resolves it from null.
+    integrate: args.integrate === true ? true : null,
+    completedRuns: [],
+    selfDrivingHandoffConfirmed: false,
     loginUrl: null,
     authorizeUrl: null,
     credentials: null,
     roleAtOrganization: null,
     apiUser: null,
+    cloudRegion: null,
+    apiProject: null,
     readinessResult: null,
     outageDismissed: false,
     settingsOverrideKeys: null,

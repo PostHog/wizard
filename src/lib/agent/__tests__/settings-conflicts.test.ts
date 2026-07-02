@@ -6,7 +6,12 @@ vi.mock('@utils/analytics', () => ({
   analytics: { captureException: vi.fn(), wizardCapture: vi.fn() },
 }));
 
-import { checkAllSettingsConflicts } from '@lib/agent/claude-settings';
+import {
+  checkAllSettingsConflicts,
+  managedSettingsPath,
+  classifySettingsConflicts,
+} from '@lib/agent/claude-settings';
+import type { SettingsConflict } from '@lib/agent/claude-settings';
 import { buildAuthErrorContext } from '@lib/agent/agent-interface';
 
 const OVERRIDE = JSON.stringify({ apiKeyHelper: 'echo sk-x' });
@@ -95,6 +100,36 @@ describe('checkAllSettingsConflicts', () => {
     );
   });
 
+  it('detects an off-gateway provider flag in a project env block', () => {
+    write(
+      project,
+      'settings.json',
+      JSON.stringify({ env: { CLAUDE_CODE_USE_BEDROCK: '1' } }),
+    );
+
+    const conflicts = checkAllSettingsConflicts(project, home);
+
+    expect(conflicts).toHaveLength(1);
+    expect(conflicts[0]).toMatchObject({
+      source: 'project',
+      keys: ['CLAUDE_CODE_USE_BEDROCK'],
+    });
+  });
+
+  it('detects an alternate base URL variant via pattern match', () => {
+    write(
+      project,
+      'settings.json',
+      JSON.stringify({ env: { ANTHROPIC_VERTEX_BASE_URL: 'https://x' } }),
+    );
+
+    const conflicts = checkAllSettingsConflicts(project, home);
+
+    expect(conflicts[0]?.keys).toContain('ANTHROPIC_VERTEX_BASE_URL');
+    // matches both the explicit list and the pattern — must not duplicate.
+    expect(conflicts[0]?.keys).toEqual(['ANTHROPIC_VERTEX_BASE_URL']);
+  });
+
   it('reports conflicts from several sources at once', () => {
     write(home, 'settings.json', OVERRIDE);
     write(project, 'settings.json', ENV_OVERRIDE);
@@ -104,6 +139,79 @@ describe('checkAllSettingsConflicts', () => {
     );
 
     expect(sources).toEqual(expect.arrayContaining(['user', 'project']));
+  });
+});
+
+describe('managedSettingsPath', () => {
+  it('resolves the org-managed path per platform', () => {
+    expect(managedSettingsPath('darwin')).toBe(
+      '/Library/Application Support/ClaudeCode/managed-settings.json',
+    );
+    // Linux/POSIX — the path that was previously unchecked.
+    expect(managedSettingsPath('linux')).toBe(
+      '/etc/claude-code/managed-settings.json',
+    );
+    expect(managedSettingsPath('win32')).toMatch(
+      /ClaudeCode[\\/]managed-settings\.json$/,
+    );
+  });
+
+  it('is consulted by checkAllSettingsConflicts for the active platform', () => {
+    // No managed file on the test box, so no managed conflict — but the call
+    // must accept the platform arg and stay side-effect free.
+    expect(checkAllSettingsConflicts(project, home, 'linux')).toEqual([]);
+  });
+});
+
+describe('classifySettingsConflicts', () => {
+  const conflict = (
+    source: SettingsConflict['source'],
+    writable: boolean,
+  ): SettingsConflict => ({
+    source,
+    path: `/x/${source}`,
+    keys: ['ANTHROPIC_BASE_URL'],
+    writable,
+  });
+
+  it('routes a writable project file to autoFix (neutralize)', () => {
+    const { autoFix, failClosed, warnOnly } = classifySettingsConflicts([
+      conflict('project', true),
+    ]);
+    expect(autoFix).toHaveLength(1);
+    expect(failClosed).toEqual([]);
+    expect(warnOnly).toEqual([]);
+  });
+
+  it('routes managed settings to failClosed (cannot neutralize)', () => {
+    const { autoFix, failClosed, warnOnly } = classifySettingsConflicts([
+      conflict('managed', false),
+    ]);
+    expect(failClosed).toHaveLength(1);
+    expect(autoFix).toEqual([]);
+    expect(warnOnly).toEqual([]);
+  });
+
+  it('routes user + project-local to warnOnly (already neutralized by settingSources)', () => {
+    const { warnOnly, autoFix, failClosed } = classifySettingsConflicts([
+      conflict('user', false),
+      conflict('project-local', false),
+    ]);
+    expect(warnOnly).toHaveLength(2);
+    expect(autoFix).toEqual([]);
+    expect(failClosed).toEqual([]);
+  });
+
+  it('sorts a mixed set into the three buckets', () => {
+    const { autoFix, failClosed, warnOnly } = classifySettingsConflicts([
+      conflict('project', true),
+      conflict('managed', false),
+      conflict('user', false),
+      conflict('project-local', false),
+    ]);
+    expect(autoFix.map((c) => c.source)).toEqual(['project']);
+    expect(failClosed.map((c) => c.source)).toEqual(['managed']);
+    expect(warnOnly.map((c) => c.source)).toEqual(['user', 'project-local']);
   });
 });
 

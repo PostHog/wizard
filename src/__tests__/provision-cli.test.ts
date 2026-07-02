@@ -33,6 +33,12 @@ vi.mock('../lib/programs/posthog-integration/index', () => ({
     steps: [],
     run: null,
   },
+  integrationRunStep: {
+    id: 'run',
+    label: 'Integration',
+    screenId: 'run',
+    run: () => Promise.resolve(),
+  },
 }));
 vi.mock('../utils/environment', () => ({
   isNonInteractiveEnvironment: () => false,
@@ -217,6 +223,7 @@ describe('wizard provision subcommand', () => {
       'user@example.com',
       '',
       'EU',
+      { baseUrl: undefined },
     );
   });
 
@@ -235,6 +242,7 @@ describe('wizard provision subcommand', () => {
       'user@example.com',
       'Test User',
       'US',
+      { baseUrl: undefined },
     );
   });
 

@@ -16,7 +16,7 @@ import fs from 'fs';
 import path from 'path';
 import { getUI } from '@ui';
 import { getLogFilePath, logToFile } from '@utils/debug';
-import { getLlmGatewayUrlFromHost } from '@utils/urls';
+import { getLlmGatewayUrl } from '@utils/urls';
 import {
   Harness,
   POSTHOG_FLAG_HEADER_PREFIX,
@@ -228,7 +228,7 @@ export const piBackend: AgentHarness = {
       // model id; OpenAI completions is served at `/v1/...`, so it keeps the
       // `/v1` the Anthropic SDK strips.
       const api = gatewayApiFor(modelId);
-      const gatewayUrl = getLlmGatewayUrlFromHost(boot.host);
+      const gatewayUrl = getLlmGatewayUrl(boot.host);
       const baseUrl =
         api === 'openai-completions' ? `${gatewayUrl}/v1` : gatewayUrl;
       const registry = ModelRegistry.inMemory(AuthStorage.create());

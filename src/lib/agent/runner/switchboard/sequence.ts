@@ -28,18 +28,20 @@ export interface SequenceRunner {
     config: ProgramRun,
     programConfig: ProgramConfig,
     boot: BootstrapResult,
+    /** Composed sub-run (integration inside self-driving); linear-only. */
+    composed: boolean,
   ): Promise<void>;
 }
 
 export const SEQUENCE_OPTIONS: Partial<Record<Sequence, SequenceRunner>> = {
   [Sequence.linear]: {
     name: Sequence.linear,
-    run: (session, config, programConfig, boot) =>
-      runLinearProgram(session, config, programConfig, boot),
+    run: (session, config, programConfig, boot, composed) =>
+      runLinearProgram(session, config, programConfig, boot, composed),
   },
   [Sequence.orchestrator]: {
     name: Sequence.orchestrator,
-    run: (session, _config, programConfig, boot) =>
+    run: (session, _config, programConfig, boot, _composed) =>
       runOrchestrator(session, programConfig, boot),
   },
 };

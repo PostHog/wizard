@@ -8,6 +8,7 @@ import { posthogIntegrationConfig } from '@lib/programs/posthog-integration/inde
 
 type Options = Arguments & {
   region?: string;
+  baseUrl?: string;
   installDir?: string;
   apiKey?: string;
   signup?: boolean;
@@ -156,6 +157,7 @@ async function provisionForSignup(
       options.email as string,
       options.name ?? '',
       signupRegion,
+      { baseUrl: options.baseUrl },
     );
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
