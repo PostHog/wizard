@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.38.0](https://github.com/PostHog/wizard/compare/v2.37.0...v2.38.0) (2026-07-02)
+
+
+### Features
+
+* **tui:** Hidden Ctrl+T HUD showing running/final LLM token cost ([#783](https://github.com/PostHog/wizard/issues/783)) ([b7ef4ba](https://github.com/PostHog/wizard/commit/b7ef4ba7930e7ef7e2614d0ade7e5f461fb36b83))
+
+
+### Bug Fixes
+
+* **tui:** disable crashing Visualizer tab ([#787](https://github.com/PostHog/wizard/issues/787)) ([18bd38e](https://github.com/PostHog/wizard/commit/18bd38eb5a4c09660060256938c1c9b85b5ad4ad))
+
 ## [2.37.0](https://github.com/PostHog/wizard/compare/v2.36.0...v2.37.0) (2026-07-01)
 
 
