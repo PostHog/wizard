@@ -58,18 +58,26 @@ export const WizardAskScreen = ({ store }: WizardAskScreenProps) => {
   const isTextQuestion = pending?.questions[index]?.kind === 'text';
   const canActOnLink = !!soleUrl && !isTextQuestion;
 
+  // Split the prompt at the link so the o/c hint sits right under it, with
+  // trailing text below. Falls back to the whole prompt when there's no
+  // single-link split.
+  const linkSplitIndex =
+    canActOnLink && soleUrl ? currentPrompt.indexOf(soleUrl) : -1;
+  const splitLink = soleUrl !== null && linkSplitIndex !== -1;
+  const linkEnd = splitLink && soleUrl ? linkSplitIndex + soleUrl.length : 0;
+  const promptHead = splitLink
+    ? currentPrompt.slice(0, linkEnd)
+    : currentPrompt;
+  const linkTrailingText = splitLink
+    ? currentPrompt.slice(linkEnd).replace(/^\s+/, '')
+    : '';
+
   useEffect(() => {
     setLinkStatus('idle');
     if (!soleUrl) return;
-    let active = true;
-    void copyToClipboard(soleUrl).then((ok) => {
-      // Only seed 'copied' if the user hasn't already acted (e.g. pressed `o`
-      // before this async copy resolved) — don't clobber their action.
-      if (active && ok) setLinkStatus((s) => (s === 'idle' ? 'copied' : s));
-    });
-    return () => {
-      active = false;
-    };
+    // Seed the clipboard silently for terminals without OSC 8. Status stays
+    // 'idle' so the o/c hint shows until the user acts.
+    void copyToClipboard(soleUrl);
   }, [soleUrl]);
 
   // Explicit, discoverable link actions. OSC 8 makes the link clickable only on
@@ -144,17 +152,20 @@ export const WizardAskScreen = ({ store }: WizardAskScreenProps) => {
       )}
       <Box flexDirection="column">
         {pending.richLinks ? (
-          <LinkText text={question.prompt} />
+          <LinkText text={promptHead} />
         ) : (
           <Text>{question.prompt}</Text>
         )}
       </Box>
-      {/* Key hints (o / c) live in the bottom KeyboardHintsBar; this block only
-          confirms the action once taken, so there's no redundant in-modal prose
-          for the confirmation to collide with on redraw. */}
-      {canActOnLink && linkStatus !== 'idle' && (
+      {/* o/c hint until the user acts, then a confirmation. */}
+      {canActOnLink && (
         <Box marginTop={1}>
-          {linkStatus === 'opened' ? (
+          {linkStatus === 'idle' ? (
+            <Text dimColor>
+              Press <Text color={Colors.accent}>o</Text> to open it in your
+              browser, or <Text color={Colors.accent}>c</Text> to copy the link.
+            </Text>
+          ) : linkStatus === 'opened' ? (
             <Text color={Colors.success}>
               {Icons.check} Opening the link in your browser…
             </Text>
@@ -163,6 +174,12 @@ export const WizardAskScreen = ({ store }: WizardAskScreenProps) => {
               {Icons.check} Link copied to clipboard. Paste it in your browser.
             </Text>
           )}
+        </Box>
+      )}
+      {/* Prompt text after the link */}
+      {linkTrailingText && (
+        <Box marginTop={1}>
+          <Text>{linkTrailingText}</Text>
         </Box>
       )}
       <Box marginTop={1}>

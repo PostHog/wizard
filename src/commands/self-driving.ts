@@ -8,6 +8,12 @@ export const selfDrivingCommand: Command = {
   description: selfDrivingConfig.description,
   options: {
     ...skillProgramOptions,
+    integrate: {
+      describe:
+        'Integrate the PostHog SDK first, then set up Self-driving — skips the "do you already have PostHog?" question. Use when the project isn\'t set up yet.',
+      type: 'boolean',
+      default: false,
+    },
     ...(selfDrivingConfig.cliOptions ?? {}),
   },
   check: (argv) => {

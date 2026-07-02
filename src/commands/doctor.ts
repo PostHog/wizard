@@ -55,6 +55,7 @@ async function runDoctorCI(options: Record<string, unknown>): Promise<void> {
       projectId: options.projectId
         ? Number(options.projectId as string)
         : undefined,
+      baseUrl: options.baseUrl as string | undefined,
     });
 
     const issues = await fetchHealthIssues(accessToken, host, projectId);

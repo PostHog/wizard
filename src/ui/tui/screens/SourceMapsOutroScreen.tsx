@@ -11,11 +11,12 @@
 
 import { join } from 'node:path';
 import type { ReactNode } from 'react';
-import { Box, Text, useInput } from 'ink';
+import { Box, Text } from 'ink';
 import { useSyncExternalStore } from 'react';
 import type { WizardStore } from '@ui/tui/store';
 import { OutroKind } from '@lib/wizard-session';
 import { Colors } from '@ui/tui/styles';
+import { useDismissOnAnyKey } from '@ui/tui/hooks/useDismissOnAnyKey';
 
 interface SourceMapsOutroScreenProps {
   store: WizardStore;
@@ -29,9 +30,7 @@ export const SourceMapsOutroScreen = ({
     () => store.getSnapshot(),
   );
 
-  useInput(() => {
-    store.setOutroDismissed();
-  });
+  useDismissOnAnyKey(() => store.setOutroDismissed());
 
   const outroData = store.session.outroData;
 

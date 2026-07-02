@@ -55,6 +55,8 @@ const mockUIInstance = {
   syncTodos: vi.fn(),
   groupMultiselect: vi.fn(),
   multiselect: vi.fn(),
+  addTokenUsage: vi.fn(),
+  setFinalTokenCostUsd: vi.fn(),
 };
 vi.mock('../../ui', () => ({
   getUI: () => mockUIInstance,

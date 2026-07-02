@@ -71,6 +71,12 @@ export const GLOBAL_OPTIONS = {
     type: 'boolean' as const,
     hidden: true,
   },
+  'base-url': {
+    describe:
+      'Override the PostHog base URL (e.g. http://localhost:8010), bypassing region resolution. Pins the API host, cloud URL, and OAuth server.\nenv: POSTHOG_WIZARD_BASE_URL',
+    type: 'string' as const,
+    hidden: true,
+  },
   benchmark: {
     default: false,
     describe:

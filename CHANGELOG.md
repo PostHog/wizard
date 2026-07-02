@@ -1,5 +1,42 @@
 # Changelog
 
+## [2.37.0](https://github.com/PostHog/wizard/compare/v2.36.0...v2.37.0) (2026-07-01)
+
+
+### Features
+
+* Allow enabling products from Wizard ([#776](https://github.com/PostHog/wizard/issues/776)) ([198741f](https://github.com/PostHog/wizard/commit/198741ff1c529ce7f53ff8e90ac7c303ba69abd5))
+
+
+### Bug Fixes
+
+* **warehouse:** don't count cancelled wizard_ask against the per-run cap ([#770](https://github.com/PostHog/wizard/issues/770)) ([9f4b717](https://github.com/PostHog/wizard/commit/9f4b717f8b5f5f6099a5cde2ba0030f92f0016ef))
+
+## [2.36.0](https://github.com/PostHog/wizard/compare/v2.35.0...v2.36.0) (2026-06-30)
+
+
+### Features
+
+* **self-driving:** integrate first when the project has no PostHog ([#760](https://github.com/PostHog/wizard/issues/760)) ([3049d9c](https://github.com/PostHog/wizard/commit/3049d9c9e0e6e244c14b831181cdce012365fd60))
+
+
+### Bug Fixes
+
+* Don't stop analytics after integration run inside self-driving ([#771](https://github.com/PostHog/wizard/issues/771)) ([a7fe755](https://github.com/PostHog/wizard/commit/a7fe755d5e793899a54ca62f0e17dda9967908e7))
+
+## [2.35.0](https://github.com/PostHog/wizard/compare/v2.34.0...v2.35.0) (2026-06-30)
+
+
+### Features
+
+* **auth:** add --base-url to point the wizard at a custom PostHog stack ([#746](https://github.com/PostHog/wizard/issues/746)) ([80b6967](https://github.com/PostHog/wizard/commit/80b69675d1c89d406e094209f97f50065ded10a4))
+* **warlock:** explicit security scanner abort copy ([#751](https://github.com/PostHog/wizard/issues/751)) ([a4c6fd1](https://github.com/PostHog/wizard/commit/a4c6fd103a48eb69a1e87cfebeb6ee378f497986))
+
+
+### Bug Fixes
+
+* **setup:** honor the provided region in CI instead of probing [@me](https://github.com/me) ([#763](https://github.com/PostHog/wizard/issues/763)) ([f9215b3](https://github.com/PostHog/wizard/commit/f9215b37e4956ea83dbf0c94008432c3bf79f845))
+
 ## [2.34.0](https://github.com/PostHog/wizard/compare/v2.33.0...v2.34.0) (2026-06-29)
 
 
