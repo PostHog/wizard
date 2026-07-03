@@ -447,7 +447,7 @@ export async function getOrAskForProjectData(
       roleAtOrganization = user.role_at_organization ?? null;
     } catch (err) {
       logToFile(
-        '[ci-auth] user lookup failed (key lacks user:read?) — flags evaluate anonymously; pass --email to keep email-targeted flags matching:',
+        '[ci-auth] user lookup failed:',
         err instanceof Error ? err.message : String(err),
       );
     }
@@ -456,10 +456,9 @@ export async function getOrAskForProjectData(
       logToFile(
         '[ci-auth] identified via API key; flags evaluate as the key owner',
       );
-    } else if (_options.email) {
-      analytics.setFlagTargetingEmail(_options.email);
-      logToFile(
-        '[ci-auth] flag targeting via --email person-property override',
+    } else {
+      getUI().log.warn(
+        'Could not resolve the API key user (key needs user:read scope) — feature flags evaluate anonymously; user-targeted flags will not match.',
       );
     }
 
