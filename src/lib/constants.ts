@@ -229,11 +229,7 @@ export const WIZARD_INTERACTION_EVENT_NAME = 'wizard interaction';
 export const WIZARD_REMARK_EVENT_NAME = 'wizard remark';
 /** Boolean feature flag that routes a run to the experimental orchestrator runner. */
 export const WIZARD_ORCHESTRATOR_FLAG_KEY = 'wizard-orchestrator';
-/**
- * Boolean feature flag that routes a run to the pi harness (pi.dev coding
- * agent) paired with gpt-5-mini. Off/missing resolves to the binding default
- * (anthropic + sonnet) — a failed flag fetch can never opt anyone in.
- */
+/** Boolean flag: on → pi harness + gpt-5-mini; off/missing → binding default. */
 export const WIZARD_USE_PI_HARNESS_FLAG_KEY = 'wizard-use-pi-harness';
 /** Feature flag key that gates the intro-screen "Tools" menu. */
 export const WIZARD_TOOLS_MENU_FLAG_KEY = 'wizard-tools-menu';

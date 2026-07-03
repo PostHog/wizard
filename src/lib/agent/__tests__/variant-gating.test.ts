@@ -30,8 +30,7 @@ describe('pi + orchestrator gating', () => {
   const program = 'posthog-integration' as const;
 
   it('clamps the sequence to linear when both flags select pi + orchestrator', () => {
-    // pi has no runTask — this flag combination must never resolve to a
-    // crashing cohort; the clamp middleware forces linear.
+    // pi has no runTask — the clamp forces linear.
     const binding = resolveBinding({
       program,
       flags: {

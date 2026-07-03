@@ -273,10 +273,7 @@ export class Analytics {
       distinctId: this.distinctId ?? this.anonymousId,
       event: 'setup wizard finished',
       properties: {
-        // The full tag bag rides flat so the terminal event is filterable by
-        // harness/sequence/program like every other event — completion-rate
-        // breakdowns read these directly. The nested `tags` snapshot stays for
-        // back-compat with existing queries.
+        // Flat for filtering; the nested `tags` snapshot stays for back-compat.
         ...this.tags,
         run_id: this._runId,
         ...(this.sessionId ? { $session_id: this.sessionId } : {}),

@@ -34,11 +34,7 @@ export function getHarness(name: Harness): AgentHarness {
   return harness;
 }
 
-/**
- * `wizard-use-pi-harness` flag on → pi paired with the cheap/fast gpt-5-mini.
- * Off/missing → binding default (anthropic + sonnet). A `--model` CLI override
- * still wins — it overlays after this in the chain.
- */
+/** `wizard-use-pi-harness` flag on → pi + gpt-5-mini; otherwise binding default. */
 const flagRunnerOverride: Middleware<HarnessPick> = (ctx, next) => {
   const pick = next();
   if (ctx.flags[WIZARD_USE_PI_HARNESS_FLAG_KEY] !== 'true') return pick;

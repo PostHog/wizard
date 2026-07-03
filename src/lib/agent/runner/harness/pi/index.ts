@@ -210,11 +210,8 @@ export const piBackend: AgentHarness = {
 
     spinner.start(config.spinnerMessage ?? 'Customizing your PostHog setup...');
 
-    // Run telemetry, mirroring the anthropic path's `agent completed` /
-    // `agent aborted` shape (same property names) so one insight serves both
-    // harnesses. Cost/token fields are deliberately absent — pi's SDK exposes
-    // none, and the gateway's $ai_generation events already track them
-    // symmetrically per run.
+    // Same `agent completed`/`agent aborted` shape as anthropic. No cost/token
+    // fields — the gateway's $ai_generation already tracks those.
     const startTime = Date.now();
     const signals = new AgentOutputSignals();
     let assistantTurns = 0;
@@ -431,8 +428,6 @@ export const piBackend: AgentHarness = {
             if (assistant) {
               logToFile(`[pi] assistant: ${assistant.slice(0, 1000)}`);
               applyOutroMarkers(assistant);
-              // Retain signal-bearing lines (the [WIZARD-REMARK] reflection)
-              // the same way the anthropic path parses its output stream.
               for (const line of assistant.split('\n')) signals.push(line);
             }
             break;
@@ -470,9 +465,7 @@ export const piBackend: AgentHarness = {
         // model/api key, or on a transport error.
         await agentSession.prompt(prompt);
 
-        // End-of-run reflection, parity with the anthropic Stop hook: ask once
-        // after the run completes, parse the [WIZARD-REMARK] out of the reply.
-        // Best-effort — a failed remark turn never fails a successful run.
+        // Best-effort remark ask — a failed turn never fails a successful run.
         if (!security.state.criticalViolation) {
           try {
             await agentSession.prompt(REMARK_INSTRUCTION);

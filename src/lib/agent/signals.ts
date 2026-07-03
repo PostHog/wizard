@@ -37,11 +37,7 @@ export const AgentSignals = {
 
 export type AgentSignal = (typeof AgentSignals)[keyof typeof AgentSignals];
 
-/**
- * The end-of-run reflection ask, shared by both harnesses so the remarks they
- * produce are comparable: the anthropic path delivers it via its Stop hook,
- * the pi path as a follow-up prompt after the run completes.
- */
+/** End-of-run reflection ask, shared by both harnesses so remarks are comparable. */
 export const REMARK_INSTRUCTION = `Before concluding, provide a brief remark about what information or guidance would have been useful to have in the integration prompt or documentation for this run. Specifically cite anything that would have prevented tool failures, erroneous edits, or other wasted turns. Format your response exactly as: ${AgentSignals.WIZARD_REMARK} Your remark here`;
 
 /**
