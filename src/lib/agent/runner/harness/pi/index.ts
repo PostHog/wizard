@@ -189,6 +189,8 @@ export const piBackend: AgentHarness = {
     const startTime = Date.now();
     const signals = new AgentOutputSignals();
     let assistantTurns = 0;
+    let editWriteCount = 0;
+    let bashCount = 0;
     const runDurations = () => {
       const durationMs = Date.now() - startTime;
       return {
@@ -410,6 +412,9 @@ export const piBackend: AgentHarness = {
             break;
           }
           case 'tool_execution_start': {
+            if (event.toolName === 'edit' || event.toolName === 'write')
+              editWriteCount += 1;
+            if (event.toolName === 'bash') bashCount += 1;
             const args = JSON.stringify(event.args ?? {}).slice(0, 200);
             logToFile(`[pi] → ${event.toolName} ${args}`);
             // Don't surface raw tool names in the spinner — the anthropic path
@@ -452,17 +457,45 @@ export const piBackend: AgentHarness = {
         for (
           let nudges = 0;
           !security.state.criticalViolation &&
-          openTasks().length > 0 &&
+          (openTasks().length > 0 || editWriteCount === 0) &&
           nudges < 2;
           nudges++
         ) {
           const remaining = openTasks()
             .map((t) => t.content)
             .join('; ');
-          logToFile(`[pi] continuation nudge ${nudges + 1}: ${remaining}`);
+          const reason =
+            editWriteCount === 0
+              ? 'You have not modified any project files yet — the integration is not implemented.'
+              : `Your task list still has incomplete items: ${remaining}.`;
+          logToFile(`[pi] continuation nudge ${nudges + 1}: ${reason}`);
           await agentSession.prompt(
-            `Your task list still has incomplete items: ${remaining}. Continue the workflow now and complete them. Do not stop while a task is open unless it is genuinely impossible — in that case mark it completed and state why.`,
+            `${reason} Continue the workflow now and complete it. Do not stop while work is outstanding unless it is genuinely impossible — in that case mark the task completed and state why.`,
           );
+        }
+
+        // The evaluator hard-caps on build sanity. If the project defines a
+        // verification script and bash never ran, ask once.
+        if (!security.state.criticalViolation && bashCount === 0) {
+          try {
+            const pkg = JSON.parse(
+              fs.readFileSync(
+                path.join(session.installDir, 'package.json'),
+                'utf8',
+              ),
+            ) as { scripts?: Record<string, string> };
+            const script = ['typecheck', 'type-check', 'build', 'lint'].find(
+              (name) => pkg.scripts?.[name],
+            );
+            if (script) {
+              logToFile(`[pi] verification nudge: '${script}' never ran`);
+              await agentSession.prompt(
+                `Before finishing: run the project's \`${script}\` script via bash and fix any failures it reports in the files you changed.`,
+              );
+            }
+          } catch (err) {
+            logToFile(`[pi] verification nudge skipped: ${String(err)}`);
+          }
         }
 
         // Best-effort remark ask — a failed turn never fails a successful run.

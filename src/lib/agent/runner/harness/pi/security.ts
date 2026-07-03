@@ -124,7 +124,10 @@ function preExecutionYaraBlock(
   if (matches.length === 0) return undefined;
 
   const m = matches[0];
-  return `[YARA] ${m.rule.name}: ${m.rule.description}. Blocked for security.`;
+  // Include the matched content: without it, literal models retry the same
+  // blocked write verbatim (they can't see what to repair).
+  const snippet = m.matchedText.slice(0, 120);
+  return `[YARA] ${m.rule.name}: ${m.rule.description}. Blocked because of: \`${snippet}\` — remove or replace that content, then retry the corrected version.`;
 }
 
 /**
