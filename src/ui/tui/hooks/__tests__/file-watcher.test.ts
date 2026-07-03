@@ -16,8 +16,12 @@ const { createdWatchers } = vi.hoisted(() => ({
 
 vi.mock('fs', async (importActual) => {
   const actual = await importActual<typeof import('fs')>();
-  const watch: typeof actual.watch = (...args: Parameters<typeof actual.watch>) => {
-    const watcher = (actual.watch as (...a: unknown[]) => fs.FSWatcher)(...args);
+  const watch: typeof actual.watch = (
+    ...args: Parameters<typeof actual.watch>
+  ) => {
+    const watcher = (actual.watch as (...a: unknown[]) => fs.FSWatcher)(
+      ...args,
+    );
     createdWatchers.push(watcher);
     return watcher;
   };
