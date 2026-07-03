@@ -7,10 +7,11 @@ YARA activity — and validate both the monitoring and the model on 15 open-sour
 first.
 
 **Status:** Phase 2 (dashboard + alerts) is SHIPPED as of 2026-07-03 — the
-[wizard-switchboard dashboard](https://us.posthog.com/project/2/dashboard/1793563)
-(30 insights) and 5 alerts are live in project 2; see the shipped-state section of
-`02-dashboard-spec.md` for the full inventory. Phase 1 (telemetry parity PR),
-Phase 3 (validation run), and Phase 4 (flag cut) are still to do.
+[wizard-switchboard dashboard](https://us.posthog.com/project/2/dashboard/1793563) is
+live in project 2, curated to **10 tiles in priority order (remarks, cost, runtime,
+completion, errors, YARA)**, with 20 more deep-dive insights saved off-dashboard and
+5 alerts armed; see the shipped inventory in `02-dashboard-spec.md`. Phase 1
+(telemetry parity PR), Phase 3 (validation run), and Phase 4 (flag cut) are still to do.
 
 ## Documents
 

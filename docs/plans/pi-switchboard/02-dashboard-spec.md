@@ -1,12 +1,15 @@
 # Phase 2 — Dashboard, insights & alerts spec
 
-> **✅ SHIPPED 2026-07-03.** Everything below exists in project 2:
-> **[wizard-switchboard (dashboard 1793563)](https://us.posthog.com/project/2/dashboard/1793563)**
-> — 30 insights + 5 armed alerts. See [Shipped inventory](#shipped-inventory) at the
-> bottom for every insight link and the as-built alert configs. Deltas from the original
-> spec discovered during the build are folded into the tile definitions below and marked
-> *(as built)*. Spot-verified against live data: A1 shows 25 pi runs, C1 renders
-> anthropic percentiles, C3 shows pi at ~$0.42–0.60/run vs anthropic ~$2.6–3.3/run.
+> **✅ SHIPPED 2026-07-03.** Live in project 2:
+> **[wizard-switchboard (dashboard 1793563)](https://us.posthog.com/project/2/dashboard/1793563)**.
+> The dashboard is deliberately curated to **10 tiles in priority order — remarks, cost,
+> runtime, completion, errors, YARA** (matching the stated monitoring priorities; the
+> "Wizard v2 overview" dashboard sets the curation bar). The other 20 insights from this
+> spec exist as **saved deep-dive insights** (tagged `switchboard`, not on the dashboard),
+> and all **5 alerts are armed** on their insights independent of dashboard membership.
+> See [Shipped inventory](#shipped-inventory) for every link. Deltas discovered during
+> the build are marked *(as built)* in the tile definitions below. Spot-verified live:
+> A1 shows 25 pi runs; C3 shows pi at ~$0.42–0.60/run vs anthropic ~$2.6–3.3/run.
 
 Build target: one dashboard in **PostHog Cloud US, project 2** ("PostHog App + Website" —
 where the wizard's hardcoded telemetry lands).
@@ -309,35 +312,45 @@ PostHog **experiment** on that flag rather than eyeballed dashboard deltas:
 
 Dashboard: **[wizard-switchboard — 1793563](https://us.posthog.com/project/2/dashboard/1793563)** (pinned, tags `wizard`/`switchboard`).
 
-| Tile | Insight (short_id link) |
+### On the dashboard — 10 tiles, priority order (two per row)
+
+| # | Priority | Tile | Insight |
+|---|---|---|---|
+| 1 | remarks | G2 recent remarks table | [mTiRZTvj](https://us.posthog.com/project/2/insights/mTiRZTvj) |
+| 2 | cost | C3 LLM cost per run (canonical) | [T7eVkhiq](https://us.posthog.com/project/2/insights/T7eVkhiq) |
+| 3 | runtime | C1 runtime p50/p90 | [W2f0NFjX](https://us.posthog.com/project/2/insights/W2f0NFjX) |
+| 4 | runtime | C5 LLM latency & TTFT | [8Hmai6ey](https://us.posthog.com/project/2/insights/8Hmai6ey) |
+| 5 | completion | A2i completion rate % (interim; swap for A2 post-parity) | [Sb3G7gAa](https://us.posthog.com/project/2/insights/Sb3G7gAa) |
+| 6 | completion | A3 run outcomes | [r7iojoAC](https://us.posthog.com/project/2/insights/r7iojoAC) |
+| 7 | completion | A1 runs/day (exposure/SRM) | [5RGn3QKe](https://us.posthog.com/project/2/insights/5RGn3QKe) |
+| 8 | errors | D1 API errors by type | [AjCvWuo0](https://us.posthog.com/project/2/insights/AjCvWuo0) |
+| 9 | errors | E1 stuck runs table | [eFKdijAJ](https://us.posthog.com/project/2/insights/eFKdijAJ) |
+| 10 | yara | F1 YARA matches by rule | [Ngk3X9hY](https://us.posthog.com/project/2/insights/Ngk3X9hY) |
+
+### Deep-dive insights — saved, tagged `switchboard`, NOT on the dashboard
+
+| Tile | Insight |
 |---|---|
-| A1 runs/day by harness | [5RGn3QKe](https://us.posthog.com/project/2/insights/5RGn3QKe) |
-| A2 completion rate % (post-parity) | [92V7p8Jw](https://us.posthog.com/project/2/insights/92V7p8Jw) |
-| A2i completion rate % (interim, delete post-parity) | [Sb3G7gAa](https://us.posthog.com/project/2/insights/Sb3G7gAa) |
-| A3 run outcomes | [r7iojoAC](https://us.posthog.com/project/2/insights/r7iojoAC) |
+| A2 completion rate % (post-parity trends; promote onto the dashboard replacing A2i once parity 1.2 ships) | [92V7p8Jw](https://us.posthog.com/project/2/insights/92V7p8Jw) |
 | B1 wizard funnel | [Pr7WSZry](https://us.posthog.com/project/2/insights/Pr7WSZry) |
 | B2 agent step progress | [khNVjCEG](https://us.posthog.com/project/2/insights/khNVjCEG) |
-| C1 runtime p50/p90 | [W2f0NFjX](https://us.posthog.com/project/2/insights/W2f0NFjX) |
 | C2 runtime p90 by framework | [6Yi7mbRJ](https://us.posthog.com/project/2/insights/6Yi7mbRJ) |
-| C3 LLM cost per run (canonical) | [T7eVkhiq](https://us.posthog.com/project/2/insights/T7eVkhiq) |
 | C4 token economics | [JYUTFPEa](https://us.posthog.com/project/2/insights/JYUTFPEa) |
-| C5 LLM latency & TTFT | [8Hmai6ey](https://us.posthog.com/project/2/insights/8Hmai6ey) |
 | C6 SDK cost cross-check | [LVxIoaOw](https://us.posthog.com/project/2/insights/LVxIoaOw) |
-| D1 API errors by type | [AjCvWuo0](https://us.posthog.com/project/2/insights/AjCvWuo0) |
 | D2 aborts by reason | [YujUyOtB](https://us.posthog.com/project/2/insights/YujUyOtB) |
 | D3 API errors per run | [txvaDMn6](https://us.posthog.com/project/2/insights/txvaDMn6) |
 | D4 wizard exceptions | [khHLCSFL](https://us.posthog.com/project/2/insights/khHLCSFL) |
 | D5 gateway HTTP errors | [MZeJAs4p](https://us.posthog.com/project/2/insights/MZeJAs4p) |
-| E1 stuck runs table | [eFKdijAJ](https://us.posthog.com/project/2/insights/eFKdijAJ) |
 | E2 version mix | [dAohPkbs](https://us.posthog.com/project/2/insights/dAohPkbs) |
-| F1 YARA matches by rule | [Ngk3X9hY](https://us.posthog.com/project/2/insights/Ngk3X9hY) |
 | F2 YARA violations per report | [dliVo8Ol](https://us.posthog.com/project/2/insights/dliVo8Ol) |
 | F3 YARA triage overruled | [ryG3mBhX](https://us.posthog.com/project/2/insights/ryG3mBhX) |
-| F4 warlock kill-switch (alerted) | [zZVpQ8t3](https://us.posthog.com/project/2/insights/zZVpQ8t3) |
+| F4 warlock kill-switch (hourly alert lives here) | [zZVpQ8t3](https://us.posthog.com/project/2/insights/zZVpQ8t3) |
 | F5 bash denied | [ZT7H4uQ1](https://us.posthog.com/project/2/insights/ZT7H4uQ1) |
 | G1 remark volume | [pMpVC2js](https://us.posthog.com/project/2/insights/pMpVC2js) |
-| G2 recent remarks table | [mTiRZTvj](https://us.posthog.com/project/2/insights/mTiRZTvj) |
 | ALERT twin: pi completion rate | [PD8zw80V](https://us.posthog.com/project/2/insights/PD8zw80V) |
 | ALERT twin: pi API errors | [Uk9MaDf8](https://us.posthog.com/project/2/insights/Uk9MaDf8) |
 | ALERT twin: pi high-severity YARA | [PlN2GPOE](https://us.posthog.com/project/2/insights/PlN2GPOE) |
 | ALERT twin: stuck pi runs | [55w4IwfY](https://us.posthog.com/project/2/insights/55w4IwfY) |
+
+Alerts are attached to insights, not tiles — all 5 remain armed regardless of dashboard
+membership.
