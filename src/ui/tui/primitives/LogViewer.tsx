@@ -96,13 +96,17 @@ export const LogViewer = ({ filePath, height }: LogViewerProps) => {
       watcher = fs.watch(filePath, () => scheduleRead());
     } catch {
       const interval = setInterval(() => {
+        // Probe with a *non-throwing* `existsSync` rather than `accessSync`:
+        // the "file not there yet" state is expected on every tick until the
+        // file appears, and a throw here gets picked up by exception
+        // autocapture and reported as a spurious `$exception`.
+        if (!fs.existsSync(filePath)) return; // Still waiting for the file.
         try {
-          fs.accessSync(filePath);
+          watcher = fs.watch(filePath, () => scheduleRead());
           readTail();
           clearInterval(interval);
-          watcher = fs.watch(filePath, () => scheduleRead());
         } catch {
-          // Still waiting for the file to appear
+          // Raced with the file disappearing; keep polling and retry.
         }
       }, 1000);
 
