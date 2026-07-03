@@ -82,13 +82,13 @@ describe('switchboard resolveHarness — CLI precedence', () => {
     expect(pick.harness).toBe(Harness.pi);
   });
 
-  it('the pi flag pairs pi with gpt-5; off keeps anthropic + sonnet', () => {
+  it('the pi flag pairs pi with gpt-5-mini; off keeps anthropic + sonnet', () => {
     expect(
       resolveHarness({
         program: 'posthog-integration',
         flags: { [WIZARD_USE_PI_HARNESS_FLAG_KEY]: 'true' },
       }),
-    ).toEqual({ harness: Harness.pi, model: GPT5_MODEL });
+    ).toEqual({ harness: Harness.pi, model: GPT5_MINI_MODEL });
     expect(
       resolveHarness({
         program: 'posthog-integration',
