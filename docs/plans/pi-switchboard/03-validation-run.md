@@ -100,10 +100,17 @@ Query project 2 by the run's `run_id`:
       `wizard: agent completed` (with `duration_ms`, `model`) →
       `setup wizard finished` (flat `harness`, correct `status`).
 - [ ] `wizard remark` present (both variants, post-parity 1.4) and text is sane.
-- [ ] `$ai_generation` traces in the gateway project carry the harness property and
-      per-run cost sums to something plausible.
+- [ ] `$ai_generation` events (same project 2) for the run carry `harness` and cost:
+      ```sql
+      SELECT count() AS generations,
+             any(properties.$ai_model) AS model,   -- unprefixed, e.g. 'gpt-5-mini'
+             round(sum(properties.$ai_total_cost_usd), 3) AS run_cost_usd
+      FROM events
+      WHERE event = '$ai_generation' AND properties.run_id = '<run_id>'
+        AND timestamp >= now() - INTERVAL 1 DAY
+      ```
 - [ ] Run appears in dashboard tiles under `build = ci` filter (spot-check A1, A2, C1,
-      C4, F2 per variant; every ⚠️-marked tile must be seen populating for pi at least
+      C3, F2 per variant; every ⚠️-marked tile must be seen populating for pi at least
       once across the matrix).
 - [ ] Run does NOT appear in the `build = prod` default view.
 
@@ -130,7 +137,7 @@ One row per run in the manifest:
 | repo / framework / variant / run_id | manifest |
 | completed (bool) + failure stage if not | telemetry + result JSON |
 | wall-clock duration | manifest; cross-check `duration_ms` |
-| cost (gateway USD) | `$ai_generation` sum for run |
+| cost (USD) | sum of `$ai_total_cost_usd` over the run's `$ai_generation` events (project 2) |
 | api errors / aborts / yara matches | telemetry |
 | diff quality 1–5 | human review: 5 = mergeable as-is; 3 = works, non-idiomatic; 1 = broken or destructive |
 | events verified end-to-end (bool) | checklist Q |

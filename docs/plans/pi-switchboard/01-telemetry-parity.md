@@ -3,10 +3,32 @@
 **Why first:** as of current `main`, the pi harness never emits `wizard: agent completed`,
 `wizard remark`, `wizard: agent initial context`, or `wizard: bash denied`, and the
 terminal `setup wizard finished` event carries no flat `harness` property. Built today,
-the dashboard's cost, runtime, and remarks tiles would show anthropic-only data — which
-reads as "pi is broken" when it's actually "pi is mute". Close the gaps, then build.
+the dashboard's runtime and remarks tiles would show anthropic-only data — which reads
+as "pi is broken" when it's actually "pi is mute". (Cost, tokens, and per-call latency
+are NOT affected: AI observability already covers those symmetrically — see below.)
+Close the remaining gaps, then build.
 
 All changes are wizard-side; no context-mill or warlock changes needed.
+
+## What PostHog already tracks — do NOT re-add (verified live 2026-07-03)
+
+The LLM gateway emits `$ai_generation` into project 2 for **both** harnesses, with the
+wizard attribution set (`run_id`, `program_id`, `integration`, `build`, `harness`,
+`sequence`) as flat properties. Pi traffic is already flowing (25 dev runs observed,
+including `gpt-5-mini`). The parity PR must not duplicate any of this:
+
+| Signal | Already covered by | Notes |
+|---|---|---|
+| LLM cost (USD) | `$ai_total_cost_usd` (+ input/output/cache cost splits) per generation | symmetric across harnesses; sum by `run_id` for per-run cost |
+| Token usage | `$ai_input_tokens`, `$ai_output_tokens`, `$ai_cache_read_input_tokens`, `$ai_reasoning_tokens` | symmetric |
+| Per-call latency / TTFT | `$ai_latency`, `$ai_time_to_first_token` | symmetric |
+| Model / provider | `$ai_model`, `$ai_provider` | `$ai_model` is unprefixed (`gpt-5-mini`) |
+| Provider-side errors | `$ai_http_status`, `$ai_stop_reason` | fires even when wizard-side events don't |
+| Tool-call volume | `$ai_tool_call_count` | symmetric |
+
+What AI observability **cannot** provide (genuinely wizard-side, hence this PR):
+run-level outcome (`setup wizard finished` status), run-level wall-clock duration,
+remarks, bash-denied policy hits, and YARA events. That's the whole scope below.
 
 ## Changes
 
@@ -16,11 +38,11 @@ All changes are wizard-side; no context-mill or warlock changes needed.
   `src/lib/agent/runner/sequence/linear.ts` if a harness-agnostic emission point is
   cleaner — prefer the shared seam per the design discipline: the linear runner already
   owns the error-routing events).
-- **What:** on run end, capture `wizard: agent completed` with at minimum `duration_ms`,
-  `duration_seconds`, `model`. Include `num_turns` and token counts **if** the
-  `@earendil-works/pi-coding-agent` session exposes usage; omit fields rather than
-  fabricate. Do not fabricate `total_cost_usd` — leave absent for pi (cost comes from the
-  gateway; see dashboard spec tile C4).
+- **What:** on run end, capture `wizard: agent completed` with `duration_ms`,
+  `duration_seconds`, `model` (plus `num_turns` if the pi session exposes it trivially).
+  **Deliberately omit cost and token fields** — AI observability already tracks those
+  symmetrically per generation via `$ai_generation` (see the table above); duplicating
+  them wizard-side would create a second, diverging accounting.
 - On the error path, capture `wizard: agent aborted` with `duration_ms` + `model`
   (today pi's error duration is logged to file only).
 - **Property-name contract:** reuse the exact anthropic property names so one insight
@@ -95,6 +117,9 @@ confirm, by querying project 2 for each `run_id`:
 - [ ] pi run: `wizard: agent started` → `wizard: agent completed` (with `duration_ms`,
       `model: openai/gpt-5-mini`) → `wizard: yara scan report` → `setup wizard finished`
       with **flat** `harness: pi`.
+- [ ] pi run: `$ai_generation` events for the same `run_id` show `harness: pi`,
+      `$ai_model: gpt-5-mini`, and non-zero `$ai_total_cost_usd` (no wizard change
+      needed — this asserts the already-working gateway path stays intact).
 - [ ] pi run with a forced abort: `wizard: agent aborted` carries `duration_ms`.
 - [ ] pi run with a blocked bash command: `wizard: bash denied` fires.
 - [ ] (if 1.4) pi run: `wizard remark` fires with non-empty `remark`.

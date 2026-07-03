@@ -90,25 +90,49 @@ trust it with variant data.
 - **Purpose:** framework mix is the main confounder for runtime; this catches
   "pi is fine except on Django".
 
-### C3. `Switchboard: SDK-reported cost per run`
-- **Type:** Trends. Event `wizard: agent completed`, average of `total_cost_usd`,
-  breakdown `harness`.
-- **Caveat (annotate on the tile):** anthropic-only — the pi SDK exposes no cost, and the
-  anthropic figure excludes YARA-triage side-calls. Cross-variant cost comparison uses C4.
+### C3. `Switchboard: LLM cost per run by harness` — canonical cost tile
+- **Type:** SQL. Reads `$ai_generation` — **same project**, no parity dependency; the
+  gateway already emits it symmetrically for both harnesses with wizard attribution
+  properties (verified live 2026-07-03, including pi + `gpt-5-mini` runs).
+- **Query:**
+  ```sql
+  SELECT toStartOfDay(timestamp) AS day,
+         properties.harness AS harness,
+         round(sum(properties.$ai_total_cost_usd), 2) AS daily_spend_usd,
+         count(DISTINCT properties.run_id) AS runs,
+         round(sum(properties.$ai_total_cost_usd)
+               / count(DISTINCT properties.run_id), 3) AS cost_per_run_usd
+  FROM events
+  WHERE event = '$ai_generation'
+    AND properties.program_id = 'posthog-integration'
+    AND properties.build = 'prod'
+    AND timestamp >= now() - INTERVAL 14 DAY
+  GROUP BY day, harness ORDER BY day
+  ```
+- **Note:** on `$ai_generation` the model property is `$ai_model` with *unprefixed*
+  values (`gpt-5-mini`); the wizard-side `model` property uses gateway ids
+  (`openai/gpt-5-mini`). Pre-switchboard traffic (before 2026-07-01) has no `harness`
+  property and groups as null — expected.
 
-### C4. `Switchboard: gateway cost by harness` — canonical cost tile
-- **Type:** Trends on `$ai_generation` in the **LLM gateway's project** (⚠️ open task:
-  confirm which project and the exact property names produced by the
-  `X-POSTHOG-PROPERTY-HARNESS` / `-SEQUENCE` trace headers).
-- **Series:** sum of `$ai_total_cost_usd` (daily spend) and average per trace,
-  breakdown by the harness trace property.
-- **Purpose:** the only apples-to-apples cost number across variants. If it can't live on
-  the same dashboard (different project), link it from a text tile.
+### C4. `Switchboard: token economics by harness`
+- **Type:** Trends. Event `$ai_generation`; averages of `$ai_input_tokens`,
+  `$ai_output_tokens`, `$ai_cache_read_input_tokens`, `$ai_reasoning_tokens`;
+  breakdown `harness`; filter `program_id = posthog-integration`.
+- **Purpose:** cache-hit and reasoning-token economics differ per provider; explains
+  cost/runtime deltas. Fully symmetric — no wizard change needed.
 
-### C5. `Switchboard: token economics` ⚠️ 1.1 (pi fields best-effort)
-- **Type:** Trends. Event `wizard: agent completed`; averages of `input_tokens`,
-  `output_tokens`, `cache_read_input_tokens`; breakdown `harness`.
-- **Purpose:** cache-hit economics differ per provider; explains cost/runtime deltas.
+### C5. `Switchboard: LLM latency & TTFT by harness`
+- **Type:** Trends. Event `$ai_generation`; average of `$ai_latency` and average of
+  `$ai_time_to_first_token`; breakdown `harness`; filter
+  `program_id = posthog-integration`.
+- **Purpose:** separates *model* speed from *agent-loop* speed — if C1 (run duration)
+  regresses but C5 doesn't, the problem is turn count / loop behavior, not gpt-5-mini.
+
+### C6. `Switchboard: SDK-reported cost (cross-check)` — optional
+- **Type:** Trends. Event `wizard: agent completed`, average of `total_cost_usd`.
+- **Caveat (annotate on the tile):** anthropic-only SDK accounting; excludes YARA-triage
+  side-calls; expected to drift from C3. Exists only to catch gross gateway
+  cost-attribution bugs — C3 is canonical.
 
 ## Row D — Errors
 
@@ -130,6 +154,13 @@ trust it with variant data.
 - **Type:** Trends. Event `$exception`, count, breakdown `harness`, filter
   `$app_name = wizard`.
 - **Note:** exceptions re-attach tags via `before_send`, so `harness` is present.
+
+### D5. `Switchboard: gateway HTTP errors by harness`
+- **Type:** Trends. Event `$ai_generation`, count, filter `$ai_http_status ≥ 400` and
+  `program_id = posthog-integration`, breakdown `harness`.
+- **Purpose:** provider-side failures (quota, outage, bad request against gpt-5-mini)
+  observed at the gateway — fires even when the wizard-side error event is lost with a
+  crashed run. Complements D1, which only sees errors the wizard survived to report.
 
 ## Row E — Reliability nets
 
@@ -245,5 +276,6 @@ PostHog **experiment** on that flag rather than eyeballed dashboard deltas:
 - [ ] Alert twins created, thresholds set, each test-fired once (temporarily invert the
       threshold to force a fire).
 - [ ] Annotations added: parity release, flag creation.
-- [ ] C4 gateway project + property names confirmed and the tile (or link) in place.
+- [ ] `$ai_generation` tiles (C3–C5, D5) verified against live pi dev traffic
+      (`build = dev/ci`) — property names already confirmed 2026-07-03.
 - [ ] Dashboard link recorded in `03-validation-run.md` runbook and team channel.

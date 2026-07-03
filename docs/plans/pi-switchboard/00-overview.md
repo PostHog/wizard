@@ -45,7 +45,19 @@ first.
   (via `analytics.setTag` in `tagBinding()`, `src/lib/agent/runner/index.ts`), and onto
   LLM gateway traces via `X-POSTHOG-PROPERTY-HARNESS` / `-SEQUENCE` headers.
   Verified live: `harness` exists as a property on `wizard: agent completed`,
-  `wizard remark`, and the yara events; only `anthropic` values observed so far.
+  `wizard remark`, and the yara events.
+- **AI observability already covers LLM cost, tokens, and latency for BOTH harnesses —
+  no wizard-side cost/token telemetry is needed.** The gateway
+  (`gateway.{us,eu}.posthog.com/wizard`, `src/utils/urls.ts`) emits `$ai_generation`
+  events into the **same project 2**, carrying `$ai_total_cost_usd`, input/output/
+  cache/reasoning token counts, `$ai_latency`, `$ai_time_to_first_token`,
+  `$ai_http_status`, `$ai_model`, plus the wizard attribution set as lowercase
+  properties from the `X-POSTHOG-PROPERTY-*` headers: `run_id`, `program_id`,
+  `integration`, `build`, `harness`, `sequence`. Verified live 2026-07-03: `harness`/
+  `sequence` present on wizard generations since 2026-07-01, including 25 pi runs
+  (1,169 generations, $14.57) across `gpt-5-mini` / `gpt-5` / `o4-mini` dev traffic.
+  Caveat: `$ai_model` values are unprefixed (`gpt-5-mini`), unlike the wizard-side
+  `model` property (`openai/gpt-5-mini`) — filters must use the right form per event.
 - **Exception:** the terminal `setup wizard finished` event does *not* carry flat
   `harness`/`sequence` (verified live — only a nested `tags` blob, `run_id`, `status`).
   Fixing this is part of the parity PR; a SQL workaround exists in the interim.
@@ -61,13 +73,11 @@ These are folded into the detail docs but collected here so none get lost:
   may drop its tail events (including `setup wizard finished`). Verify flush behavior on
   the error path during the parity PR (`src/utils/analytics.ts` `shutdown()`); the
   "stuck runs" insight (dashboard spec, tile E6) is the detection net either way.
-- **Cost asymmetry.** Anthropic's `total_cost_usd` comes from the claude-agent-sdk result
-  and may not include the YARA triage LLM side-calls; pi has no SDK cost at all and no
-  triage calls. Decide on one canonical cost source for cross-variant comparison —
-  recommendation: gateway `$ai_generation` totals grouped by the `HARNESS` trace
-  property, with the SDK number as a secondary check. **Open task:** confirm which
-  PostHog project the LLM gateway's `$ai_generation` events land in and the exact
-  property names the `X-POSTHOG-PROPERTY-*` headers produce.
+- **Two cost numbers exist — the gateway one is canonical.** `total_cost_usd` on
+  `wizard: agent completed` is SDK-side accounting (anthropic-only, excludes YARA-triage
+  side-calls); `$ai_generation`'s `$ai_total_cost_usd` summed per `run_id` is symmetric
+  across harnesses and verified live for pi. Cost/token tiles read `$ai_generation`;
+  the SDK number is at most an annotated cross-check. Never mix the two in one tile.
 - **YARA asymmetry.** Pi has no LLM triage on YARA matches (blocks outright), so pi will
   abort runs anthropic would have survived, and `yara triage overruled` never fires for
   pi. Either wire triage into `harness/pi/security.ts` or annotate every yara tile and

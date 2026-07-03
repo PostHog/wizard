@@ -38,7 +38,7 @@ order:
 | Step | pi rollout | Advance when |
 |---|---|---|
 | 1 | 5% | ≥ ~50 pi runs observed, checks 1–5 clean |
-| 2 | 25% | checks clean; cost tile (C4) tracking budget |
+| 2 | 25% | checks clean; cost tile (C3) tracking budget |
 | 3 | 50% | checks clean; if running the experiment, let it reach significance here |
 | 4 | decision | hold at 50/50, ship pi as default, or roll back — written decision either way |
 
