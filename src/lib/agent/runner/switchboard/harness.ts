@@ -4,10 +4,12 @@
 
 import { IS_PRODUCTION_BUILD } from '@env';
 import {
+  DEFAULT_AGENT_MODEL,
   GPT5_4_MODEL,
   GPT5_MINI_MODEL,
   GPT5_MODEL,
   Harness,
+  SONNET_5_MODEL,
   WIZARD_PI_MODEL_FLAG_KEY,
   WIZARD_USE_PI_HARNESS_FLAG_KEY,
 } from '@lib/constants';
@@ -42,6 +44,8 @@ const PI_MODEL_FLAG_VARIANTS: Record<string, string> = {
   'gpt-5': GPT5_MODEL,
   'gpt-5-4': GPT5_4_MODEL,
   'gpt-5-mini': GPT5_MINI_MODEL,
+  'sonnet-4-6': DEFAULT_AGENT_MODEL,
+  'sonnet-5': SONNET_5_MODEL,
 };
 
 /**

@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { PROGRAM_REGISTRY } from '@lib/programs/program-registry';
 import {
   DEFAULT_AGENT_MODEL,
+  SONNET_5_MODEL,
   GPT5_MINI_MODEL,
   GPT5_MODEL,
   GPT5_4_MODEL,
@@ -119,6 +120,8 @@ describe('switchboard resolveHarness — CLI precedence', () => {
     expect(pick('gpt-5')).toBe(GPT5_MODEL);
     expect(pick('gpt-5-4')).toBe(GPT5_4_MODEL);
     expect(pick('gpt-5-mini')).toBe(GPT5_MINI_MODEL);
+    expect(pick('sonnet-4-6')).toBe(DEFAULT_AGENT_MODEL);
+    expect(pick('sonnet-5')).toBe(SONNET_5_MODEL);
     expect(pick('banana')).toBe(GPT5_4_MODEL);
     expect(pick()).toBe(GPT5_4_MODEL);
   });

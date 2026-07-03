@@ -12,6 +12,9 @@ import { VERSION } from './version';
  */
 export const DEFAULT_AGENT_MODEL = 'claude-sonnet-4-6';
 
+/** Next sonnet generation. A `wizard-pi-model` option for pi-vs-anthropic parity. */
+export const SONNET_5_MODEL = 'claude-sonnet-5';
+
 /**
  * Cheaper, faster model for mechanical agent work (e.g. repo classification
  * during source-map detection). Passed via AgentConfig.modelOverride.

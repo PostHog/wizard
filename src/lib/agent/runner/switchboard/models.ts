@@ -11,6 +11,7 @@
  */
 import {
   DEFAULT_AGENT_MODEL,
+  SONNET_5_MODEL,
   OPUS_MODEL,
   HAIKU_MODEL,
   GPT5_MODEL,
@@ -38,6 +39,7 @@ export interface ModelCapabilities {
 /** Explicit per-model traits. Anything absent falls back to `defaultCaps`. */
 export const MODEL_CAPABILITIES: Record<string, ModelCapabilities> = {
   [DEFAULT_AGENT_MODEL]: { reasoning: true }, // claude-sonnet-4-6
+  [SONNET_5_MODEL]: { reasoning: true },
   [OPUS_MODEL]: { reasoning: true },
   [HAIKU_MODEL]: { reasoning: true },
   // Flagship openai reasoning model at low effort: capable but kept fast, so a
