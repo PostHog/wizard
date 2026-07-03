@@ -39,12 +39,12 @@ export const MODEL_CAPABILITIES: Record<string, ModelCapabilities> = {
   [DEFAULT_AGENT_MODEL]: { reasoning: true }, // claude-sonnet-4-6
   [OPUS_MODEL]: { reasoning: true },
   [HAIKU_MODEL]: { reasoning: true },
-  // Flagship openai reasoning models at medium effort — under tuning
-  // (posthog-code/pi-model-tuning single-app trials).
-  [GPT5_MODEL]: { reasoning: true, thinkingLevel: 'medium' },
-  [GPT5_4_MODEL]: { reasoning: true, thinkingLevel: 'medium' },
-  // Small/cheap tier compensates with max reasoning effort.
-  [GPT5_MINI_MODEL]: { reasoning: true, thinkingLevel: 'xhigh' },
+  // Flagships at low effort: tuning trials showed medium buys the same 4/5
+  // at ~3x the cost and time; the completion guard covers early stops.
+  [GPT5_MODEL]: { reasoning: true, thinkingLevel: 'low' },
+  [GPT5_4_MODEL]: { reasoning: true, thinkingLevel: 'low' },
+  // Mini at medium: xhigh scored LOWER (3/5) at 3x cost.
+  [GPT5_MINI_MODEL]: { reasoning: true, thinkingLevel: 'medium' },
   'openai/o4-mini': { reasoning: true },
 };
 

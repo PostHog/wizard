@@ -82,13 +82,13 @@ describe('switchboard resolveHarness — CLI precedence', () => {
     expect(pick.harness).toBe(Harness.pi);
   });
 
-  it('the pi flag pairs pi with gpt-5-mini; off keeps anthropic + sonnet', () => {
+  it('the pi flag pairs pi with gpt-5; off keeps anthropic + sonnet', () => {
     expect(
       resolveHarness({
         program: 'posthog-integration',
         flags: { [WIZARD_USE_PI_HARNESS_FLAG_KEY]: 'true' },
       }),
-    ).toEqual({ harness: Harness.pi, model: GPT5_MINI_MODEL });
+    ).toEqual({ harness: Harness.pi, model: GPT5_MODEL });
     expect(
       resolveHarness({
         program: 'posthog-integration',
@@ -214,9 +214,9 @@ describe('switchboard modelCapabilities', () => {
     expect(modelCapabilities('openai/gpt-4o').reasoning).toBe(false);
   });
 
-  it('sets reasoning effort per model: flagships medium, mini xhigh', () => {
-    expect(modelCapabilities(GPT5_MODEL).thinkingLevel).toBe('medium');
-    expect(modelCapabilities(GPT5_MINI_MODEL).thinkingLevel).toBe('xhigh');
+  it('sets reasoning effort per model: flagships low, mini medium', () => {
+    expect(modelCapabilities(GPT5_MODEL).thinkingLevel).toBe('low');
+    expect(modelCapabilities(GPT5_MINI_MODEL).thinkingLevel).toBe('medium');
     // Anthropic default carries no explicit effort — the harness default stands.
     expect(
       modelCapabilities(DEFAULT_AGENT_MODEL).thinkingLevel,
