@@ -1,4 +1,13 @@
 import { AgentOutputSignals } from '@lib/agent/output-signals';
+import { AgentSignals, REMARK_INSTRUCTION } from '@lib/agent/signals';
+
+describe('REMARK_INSTRUCTION', () => {
+  it('carries the marker but no literal placeholder a model could echo', () => {
+    // gpt-5-mini echoed "Your remark here" verbatim from the old wording.
+    expect(REMARK_INSTRUCTION).toContain(AgentSignals.WIZARD_REMARK);
+    expect(REMARK_INSTRUCTION).not.toMatch(/your remark here/i);
+  });
+});
 
 describe('AgentOutputSignals', () => {
   it('drops prose but detects each signal marker', () => {
