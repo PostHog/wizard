@@ -10,6 +10,7 @@ import { SELF_DRIVING_PROGRAM } from './steps.js';
 import { SELF_DRIVING_ABORT_CASES } from './detect.js';
 import { buildSelfDrivingPrompt } from './prompt.js';
 import { getTips } from './content/tips.js';
+import { analytics } from '@utils/analytics';
 
 export const SELF_DRIVING_SKILL_ID = 'self-driving-setup';
 const REPORT_FILE = 'posthog-self-driving-report.md';
@@ -30,7 +31,11 @@ async function removeInstalledSkill(installDir: string): Promise<void> {
   const skillDir = join(installDir, '.claude', 'skills', SELF_DRIVING_SKILL_ID);
   try {
     await access(join(skillDir, WIZARD_MARKER));
-  } catch {
+  } catch (err) {
+    analytics.captureException(
+      err instanceof Error ? err : new Error(String(err)),
+      { step: 'remove_installed_skill' },
+    );
     return;
   }
   await rm(skillDir, { recursive: true, force: true }).catch(() => undefined);

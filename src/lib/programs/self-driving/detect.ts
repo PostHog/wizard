@@ -23,6 +23,7 @@ import { existsSync, statSync, readFileSync } from 'fs';
 import { join } from 'path';
 import type { WizardSession } from '@lib/wizard-session';
 import type { AbortCase } from '@lib/agent/agent-runner';
+import { analytics } from '@utils/analytics';
 
 /** frameworkContext key holding the deterministic PostHog-presence result. */
 export const POSTHOG_PRESENT_KEY = 'postHogPresent';
@@ -66,7 +67,11 @@ export function detectPostHogPresent(installDir: string): boolean {
       if (!existsSync(path)) continue;
       try {
         if (POSTHOG_PACKAGE_RE.test(readFileSync(path, 'utf8'))) return true;
-      } catch {
+      } catch (err) {
+        analytics.captureException(
+          err instanceof Error ? err : new Error(String(err)),
+          { step: 'detect_posthog_present' },
+        );
         /* unreadable — ignore */
       }
     }
@@ -156,7 +161,11 @@ export function detectSelfDrivingPrerequisites(
       fail({ kind: 'bad-directory', path: installDir, reason: 'not-dir' });
       return;
     }
-  } catch {
+  } catch (err) {
+    analytics.captureException(
+      err instanceof Error ? err : new Error(String(err)),
+      { step: 'detect_self_driving_prerequisites' },
+    );
     fail({ kind: 'bad-directory', path: installDir, reason: 'unreadable' });
     return;
   }

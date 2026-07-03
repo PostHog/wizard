@@ -57,7 +57,7 @@ vi.mock('../lib/detection/index', () => ({
   gatherFrameworkContext: vi.fn().mockResolvedValue({}),
 }));
 vi.mock('../utils/analytics', () => ({
-  analytics: { setTag: vi.fn() },
+  analytics: { setTag: vi.fn(), captureException: vi.fn() },
 }));
 vi.mock('../utils/wizard-abort', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../utils/wizard-abort')>()),

@@ -38,7 +38,11 @@ function lockfileHeaderContains(
       .readFileSync(path.join(installDir, file), 'utf-8')
       .slice(0, 500);
     return head.includes(needle);
-  } catch {
+  } catch (err) {
+    analytics.captureException(
+      err instanceof Error ? err : new Error(String(err)),
+      { step: 'lockfile_header_contains' },
+    );
     return false;
   }
 }

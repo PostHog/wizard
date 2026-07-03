@@ -4,6 +4,7 @@ import { getUI } from '@ui';
 import type { WizardRunOptions } from '@utils/types';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import { analytics } from '@utils/analytics';
 
 export enum FastAPIProjectType {
   STANDARD = 'standard', // Basic FastAPI app
@@ -42,7 +43,11 @@ export function getFastAPIVersionBucket(version: string | undefined): string {
       return '0.x';
     }
     return `${majorVersion}.x`;
-  } catch {
+  } catch (err) {
+    analytics.captureException(
+      err instanceof Error ? err : new Error(String(err)),
+      { step: 'get_fast_api_version_bucket' },
+    );
     return 'unknown';
   }
 }
@@ -83,7 +88,11 @@ export async function getFastAPIVersion(
       if (pyprojectMatch) {
         return pyprojectMatch[1];
       }
-    } catch {
+    } catch (err) {
+      analytics.captureException(
+        err instanceof Error ? err : new Error(String(err)),
+        { step: 'get_fast_api_version' },
+      );
       // Skip files that can't be read
       continue;
     }
@@ -113,7 +122,11 @@ async function hasAPIRouter({
       ) {
         return true;
       }
-    } catch {
+    } catch (err) {
+      analytics.captureException(
+        err instanceof Error ? err : new Error(String(err)),
+        { step: 'has_api_router' },
+      );
       continue;
     }
   }
@@ -142,7 +155,11 @@ async function hasTemplates({
       ) {
         return true;
       }
-    } catch {
+    } catch (err) {
+      analytics.captureException(
+        err instanceof Error ? err : new Error(String(err)),
+        { step: 'has_templates' },
+      );
       continue;
     }
   }
@@ -231,7 +248,11 @@ export async function findFastAPIAppFile(
       ) {
         return appFile;
       }
-    } catch {
+    } catch (err) {
+      analytics.captureException(
+        err instanceof Error ? err : new Error(String(err)),
+        { step: 'find_fast_api_app_file' },
+      );
       continue;
     }
   }
@@ -248,7 +269,11 @@ export async function findFastAPIAppFile(
       if (content.includes('FastAPI(')) {
         return pyFile;
       }
-    } catch {
+    } catch (err) {
+      analytics.captureException(
+        err instanceof Error ? err : new Error(String(err)),
+        { step: 'find_fast_api_app_file' },
+      );
       continue;
     }
   }

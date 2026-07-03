@@ -4,6 +4,7 @@ import { runWizard, runWizardCI } from '@lib/runners';
 import type { ProgramConfig } from '@lib/programs/program-step';
 
 import { skillProgramOptions } from '../skill-program-options';
+import { analytics } from '@utils/analytics';
 
 /**
  * Dispatch a parsed yargs invocation to the wizard runner. Applies the
@@ -24,6 +25,10 @@ export function runCommandHandler(work: () => void | Promise<void>): void {
     try {
       await work();
     } catch (err) {
+      analytics.captureException(
+        err instanceof Error ? err : new Error(String(err)),
+        { step: 'run_command_handler' },
+      );
       const msg = err instanceof Error ? err.message : String(err);
       process.stderr.write(`\n\x1b[1;91m✖ ${msg}\x1b[0m\n\n`);
       process.exit(1);

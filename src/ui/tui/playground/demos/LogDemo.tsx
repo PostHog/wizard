@@ -10,6 +10,7 @@ import * as path from 'path';
 import * as os from 'os';
 import { LogViewer } from '@ui/tui/primitives/index';
 import { Colors } from '@ui/tui/styles';
+import { analytics } from '@utils/analytics';
 
 const DEMO_LOG_PATH = path.join(os.tmpdir(), 'posthog-playground.log');
 
@@ -48,7 +49,11 @@ export const LogDemo = () => {
       clearInterval(timer);
       try {
         fs.unlinkSync(DEMO_LOG_PATH);
-      } catch {
+      } catch (err) {
+        analytics.captureException(
+          err instanceof Error ? err : new Error(String(err)),
+          { step: 'log_demo' },
+        );
         // ignore
       }
     };

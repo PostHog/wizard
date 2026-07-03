@@ -184,6 +184,10 @@ export const McpSuggestedPromptsScreen = ({
         store.setLoginUrl(null);
         setPhase(startedTutorialRef.current ? Phase.Greeting : Phase.Choose);
       } catch (err) {
+        analytics.captureException(
+          err instanceof Error ? err : new Error(String(err)),
+          { step: 'mcp_suggested_prompts_screen' },
+        );
         if (cancelled) return;
         const message = err instanceof Error ? err.message : String(err);
         logToFile(`[McpSuggestedPromptsScreen] login failed: ${message}`);
@@ -279,6 +283,10 @@ export const McpSuggestedPromptsScreen = ({
           }
         }
       } catch (err) {
+        analytics.captureException(
+          err instanceof Error ? err : new Error(String(err)),
+          { step: 'mcp_suggested_prompts_screen' },
+        );
         if (controller.signal.aborted) return;
         const text = err instanceof Error ? err.message : String(err);
         setRunChunks((prev) => [...prev, { kind: 'error', text }]);

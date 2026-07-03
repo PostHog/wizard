@@ -13,6 +13,7 @@ import type { WizardStore } from '@ui/tui/store';
 import { PickerMenu } from '@ui/tui/primitives/index';
 import { Colors } from '@ui/tui/styles';
 import type { SetupQuestion } from '@lib/framework-config';
+import { analytics } from '@utils/analytics';
 
 interface SetupScreenProps {
   store: WizardStore;
@@ -45,7 +46,11 @@ export const SetupScreen = ({ store }: SetupScreenProps) => {
           if (detected !== null) {
             store.setFrameworkContext(q.key, detected);
           }
-        } catch {
+        } catch (err) {
+          analytics.captureException(
+            err instanceof Error ? err : new Error(String(err)),
+            { step: 'setup_screen' },
+          );
           // Detection failed — will ask the user
         }
       }

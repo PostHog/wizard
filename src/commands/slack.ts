@@ -4,6 +4,7 @@ import { LoggingUI } from '@ui/logging-ui';
 import { Program } from '@lib/programs/program-registry';
 import { VERSION } from '@lib/version';
 import type { Command } from './command';
+import { analytics } from '@utils/analytics';
 
 export const slackCommand: Command = {
   name: 'slack',
@@ -33,6 +34,10 @@ function runSlackConnect(argv: Arguments): void {
         baseUrl: argv.baseUrl as string | undefined,
       });
     } catch (err) {
+      analytics.captureException(
+        err instanceof Error ? err : new Error(String(err)),
+        { step: 'run_slack_connect' },
+      );
       // TUI unavailable — connecting Slack has no headless fallback.
       setUI(new LoggingUI());
       getUI().log.error(

@@ -16,6 +16,7 @@ import {
   findLaravelBootstrapFile,
   detectLaravelStructure,
 } from './utils';
+import { analytics } from '@utils/analytics';
 
 type LaravelContext = {
   projectType?: LaravelProjectType;
@@ -64,7 +65,11 @@ export const LARAVEL_AGENT_CONFIG: FrameworkConfig<LaravelContext> = {
           if (content.includes('Laravel') || content.includes('Artisan')) {
             return true;
           }
-        } catch {
+        } catch (err) {
+          analytics.captureException(
+            err instanceof Error ? err : new Error(String(err)),
+            { step: 'laravel_wizard_agent_detect' },
+          );
           // Continue to other checks
         }
       }
@@ -80,7 +85,11 @@ export const LARAVEL_AGENT_CONFIG: FrameworkConfig<LaravelContext> = {
           ) {
             return true;
           }
-        } catch {
+        } catch (err) {
+          analytics.captureException(
+            err instanceof Error ? err : new Error(String(err)),
+            { step: 'laravel_wizard_agent_detect' },
+          );
           // Continue to other checks
         }
       }

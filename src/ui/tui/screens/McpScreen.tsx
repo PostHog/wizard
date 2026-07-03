@@ -30,6 +30,7 @@ import {
   ALL_FEATURE_VALUES,
   isAllFeaturesSelected,
 } from '@steps/add-mcp-server-to-clients/defaults';
+import { analytics } from '@utils/analytics';
 
 export type McpMode = 'install' | 'remove';
 
@@ -113,7 +114,11 @@ export const McpScreen = ({
           setClients(detected);
           setPhase(Phase.Ask);
         }
-      } catch {
+      } catch (err) {
+        analytics.captureException(
+          err instanceof Error ? err : new Error(String(err)),
+          { step: 'mcp_screen' },
+        );
         setPhase(Phase.None);
         setTimeout(() => markDone(store, McpOutcome.Failed), 1500);
       }
@@ -199,12 +204,20 @@ export const McpScreen = ({
           features,
           store.session.apiKey,
         );
-      } catch {
+      } catch (err) {
+        analytics.captureException(
+          err instanceof Error ? err : new Error(String(err)),
+          { step: 'do_install' },
+        );
         // mcpResult stays []
       }
       try {
         pluginResult = await installer.installPlugins(pluginCapableNames);
-      } catch {
+      } catch (err) {
+        analytics.captureException(
+          err instanceof Error ? err : new Error(String(err)),
+          { step: 'do_install' },
+        );
         // best-effort
       }
     } else {
@@ -216,7 +229,11 @@ export const McpScreen = ({
           features,
           store.session.apiKey,
         );
-      } catch {
+      } catch (err) {
+        analytics.captureException(
+          err instanceof Error ? err : new Error(String(err)),
+          { step: 'do_install' },
+        );
         // mcpResult stays []
       }
     }
@@ -245,7 +262,11 @@ export const McpScreen = ({
     try {
       result = await installer.remove();
       setResultClients(result);
-    } catch {
+    } catch (err) {
+      analytics.captureException(
+        err instanceof Error ? err : new Error(String(err)),
+        { step: 'do_remove' },
+      );
       setResultClients([]);
     }
     setPhase(Phase.Done);

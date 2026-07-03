@@ -7,6 +7,7 @@ import { createVersionBucket } from '@utils/semver';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as semver from 'semver';
+import { analytics } from '@utils/analytics';
 
 export enum ReactRouterMode {
   V6 = 'v6',
@@ -52,7 +53,11 @@ async function hasCreateBrowserRouter({
       if (content.includes('createBrowserRouter')) {
         return true;
       }
-    } catch {
+    } catch (err) {
+      analytics.captureException(
+        err instanceof Error ? err : new Error(String(err)),
+        { step: 'has_create_browser_router' },
+      );
       continue;
     }
   }
@@ -81,7 +86,11 @@ async function hasDeclarativeRouter({
       ) {
         return true;
       }
-    } catch {
+    } catch (err) {
+      analytics.captureException(
+        err instanceof Error ? err : new Error(String(err)),
+        { step: 'has_declarative_router' },
+      );
       continue;
     }
   }

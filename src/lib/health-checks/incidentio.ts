@@ -4,6 +4,7 @@ import {
   type ComponentHealthResult,
   type ComponentStatus,
 } from './types';
+import { analytics } from '@utils/analytics';
 
 interface IncidentIoAffectedComponent {
   id: string;
@@ -133,6 +134,9 @@ async function fetchPosthogStatus(
       },
     };
   } catch (e) {
+    analytics.captureException(e instanceof Error ? e : new Error(String(e)), {
+      step: 'fetch_posthog_status',
+    });
     if (e instanceof Error && e.name === 'AbortError') {
       const err = errResult('Request timed out', 'network');
       return { overall: err, components: err };

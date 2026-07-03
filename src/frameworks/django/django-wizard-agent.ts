@@ -15,6 +15,7 @@ import {
   DjangoProjectType,
   findDjangoSettingsFile,
 } from './utils';
+import { analytics } from '@utils/analytics';
 
 type DjangoContext = {
   projectType?: DjangoProjectType;
@@ -67,7 +68,11 @@ export const DJANGO_AGENT_CONFIG: FrameworkConfig<DjangoContext> = {
             ) {
               return true;
             }
-          } catch {
+          } catch (err) {
+            analytics.captureException(
+              err instanceof Error ? err : new Error(String(err)),
+              { step: 'django_wizard_agent_detect' },
+            );
             continue;
           }
         }
@@ -95,7 +100,11 @@ export const DJANGO_AGENT_CONFIG: FrameworkConfig<DjangoContext> = {
           ) {
             return true;
           }
-        } catch {
+        } catch (err) {
+          analytics.captureException(
+            err instanceof Error ? err : new Error(String(err)),
+            { step: 'django_wizard_agent_detect' },
+          );
           continue;
         }
       }

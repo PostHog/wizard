@@ -199,7 +199,11 @@ export async function fetchRecentActivity(
       const t = Date.parse(entry.created_at);
       return Number.isFinite(t) && t >= sinceMs;
     });
-  } catch {
+  } catch (err) {
+    analytics.captureException(
+      err instanceof Error ? err : new Error(String(err)),
+      { step: 'fetch_recent_activity' },
+    );
     return [];
   }
 }

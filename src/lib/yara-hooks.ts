@@ -89,6 +89,10 @@ export async function prewarmYaraScanner(): Promise<void> {
     await warlock.scan('');
     logToFile('[YARA] warlock pre-warmed');
   } catch (err) {
+    analytics.captureException(
+      err instanceof Error ? err : new Error(String(err)),
+      { step: 'prewarm_yara_scanner' },
+    );
     logToFile('[YARA] warlock pre-warm failed:', err);
   }
 }
@@ -266,6 +270,10 @@ export function writeScanReport(): string | null {
   try {
     fs.writeFileSync(WIZARD_YARA_REPORT_FILE, JSON.stringify(report, null, 2));
   } catch (err) {
+    analytics.captureException(
+      err instanceof Error ? err : new Error(String(err)),
+      { step: 'write_scan_report' },
+    );
     logToFile('[YARA] Failed to write scan report:', err);
     return null;
   }
@@ -552,6 +560,10 @@ async function triageFilter(
     );
     return kept;
   } catch (err) {
+    analytics.captureException(
+      err instanceof Error ? err : new Error(String(err)),
+      { step: 'triage_filter' },
+    );
     logToFile('[YARA] triage failed — treating all matches as real:', err);
     return matches;
   }
@@ -696,6 +708,10 @@ export function createPreToolUseYaraHooks(
               }. Command blocked for security.`,
             };
           } catch (error) {
+            analytics.captureException(
+              error instanceof Error ? error : new Error(String(error)),
+              { step: 'create_pre_tool_use_yara_hooks' },
+            );
             logToFile('[YARA] PreToolUse hook error:', error);
             // Fail closed: block the command if scanning fails
             return {
@@ -811,6 +827,10 @@ export function createPostToolUseYaraHooks(
               },
             };
           } catch (error) {
+            analytics.captureException(
+              error instanceof Error ? error : new Error(String(error)),
+              { step: 'create_post_tool_use_yara_hooks' },
+            );
             logToFile('[YARA] PostToolUse Write/Edit hook error:', error);
             // Fail closed: if scanning is broken on a Write/Edit, the next
             // Read/skill-install scan is also going to be broken — terminate
@@ -879,6 +899,10 @@ export function createPostToolUseYaraHooks(
               },
             };
           } catch (error) {
+            analytics.captureException(
+              error instanceof Error ? error : new Error(String(error)),
+              { step: 'create_post_tool_use_yara_hooks' },
+            );
             logToFile('[YARA] PostToolUse Read/Grep hook error:', error);
             // Fail closed: terminate session if scanning fails on read content
             const reason =
@@ -941,6 +965,10 @@ export function createPostToolUseYaraHooks(
             onTerminate(reason);
             return { stopReason: reason };
           } catch (error) {
+            analytics.captureException(
+              error instanceof Error ? error : new Error(String(error)),
+              { step: 'create_post_tool_use_yara_hooks' },
+            );
             logToFile('[YARA] PostToolUse skill install hook error:', error);
             // Fail closed: terminate if skill scanning fails
             const reason =
@@ -985,6 +1013,10 @@ async function scanSkillFiles(
     try {
       fileContents.push(fs.readFileSync(filePath, 'utf-8'));
     } catch (err) {
+      analytics.captureException(
+        err instanceof Error ? err : new Error(String(err)),
+        { step: 'scan_skill_files' },
+      );
       logToFile(`[YARA] Could not read skill file ${filePath}:`, err);
     }
   }

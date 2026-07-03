@@ -4,6 +4,7 @@ import type { WizardRunOptions } from '@utils/types';
 import { createVersionBucket } from '@utils/semver';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import { analytics } from '@utils/analytics';
 
 export enum FlaskProjectType {
   STANDARD = 'standard', // Basic Flask app
@@ -67,7 +68,11 @@ export async function getFlaskVersion(
       if (pyprojectMatch) {
         return pyprojectMatch[1];
       }
-    } catch {
+    } catch (err) {
+      analytics.captureException(
+        err instanceof Error ? err : new Error(String(err)),
+        { step: 'get_flask_version' },
+      );
       // Skip files that can't be read
       continue;
     }
@@ -99,7 +104,11 @@ async function hasFlaskRESTful({
       ) {
         return true;
       }
-    } catch {
+    } catch (err) {
+      analytics.captureException(
+        err instanceof Error ? err : new Error(String(err)),
+        { step: 'has_flask_restful' },
+      );
       continue;
     }
   }
@@ -119,7 +128,11 @@ async function hasFlaskRESTful({
       ) {
         return true;
       }
-    } catch {
+    } catch (err) {
+      analytics.captureException(
+        err instanceof Error ? err : new Error(String(err)),
+        { step: 'has_flask_restful' },
+      );
       continue;
     }
   }
@@ -147,7 +160,11 @@ async function hasFlaskRESTX({
       if (content.includes('flask-restx') || content.includes('Flask-RESTX')) {
         return true;
       }
-    } catch {
+    } catch (err) {
+      analytics.captureException(
+        err instanceof Error ? err : new Error(String(err)),
+        { step: 'has_flask_restx' },
+      );
       continue;
     }
   }
@@ -167,7 +184,11 @@ async function hasFlaskRESTX({
       ) {
         return true;
       }
-    } catch {
+    } catch (err) {
+      analytics.captureException(
+        err instanceof Error ? err : new Error(String(err)),
+        { step: 'has_flask_restx' },
+      );
       continue;
     }
   }
@@ -195,7 +216,11 @@ async function hasFlaskSmorest({
       if (content.includes('flask-smorest')) {
         return true;
       }
-    } catch {
+    } catch (err) {
+      analytics.captureException(
+        err instanceof Error ? err : new Error(String(err)),
+        { step: 'has_flask_smorest' },
+      );
       continue;
     }
   }
@@ -215,7 +240,11 @@ async function hasFlaskSmorest({
       ) {
         return true;
       }
-    } catch {
+    } catch (err) {
+      analytics.captureException(
+        err instanceof Error ? err : new Error(String(err)),
+        { step: 'has_flask_smorest' },
+      );
       continue;
     }
   }
@@ -244,7 +273,11 @@ async function hasBlueprints({
       ) {
         return true;
       }
-    } catch {
+    } catch (err) {
+      analytics.captureException(
+        err instanceof Error ? err : new Error(String(err)),
+        { step: 'has_blueprints' },
+      );
       continue;
     }
   }
@@ -342,7 +375,11 @@ export async function findFlaskAppFile(
       ) {
         return appFile;
       }
-    } catch {
+    } catch (err) {
+      analytics.captureException(
+        err instanceof Error ? err : new Error(String(err)),
+        { step: 'find_flask_app_file' },
+      );
       continue;
     }
   }
@@ -362,7 +399,11 @@ export async function findFlaskAppFile(
       ) {
         return pyFile;
       }
-    } catch {
+    } catch (err) {
+      analytics.captureException(
+        err instanceof Error ? err : new Error(String(err)),
+        { step: 'find_flask_app_file' },
+      );
       continue;
     }
   }

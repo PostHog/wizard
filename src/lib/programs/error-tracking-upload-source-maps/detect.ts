@@ -13,6 +13,7 @@ import { join, relative } from 'path';
 import { IGNORED_DIRS } from '@utils/file-utils';
 import type { WizardSession } from '@lib/wizard-session';
 import type { AbortCase } from '@lib/agent/agent-runner';
+import { analytics } from '@utils/analytics';
 
 /**
  * Skill variants published under the `error-tracking-upload-source-maps`
@@ -140,7 +141,11 @@ function collectSignals(installDir: string, maxDepth = 3): ProjectSignals {
     let entries: Dirent[];
     try {
       entries = readdirSync(dir, { withFileTypes: true });
-    } catch {
+    } catch (err) {
+      analytics.captureException(
+        err instanceof Error ? err : new Error(String(err)),
+        { step: 'detect_scan' },
+      );
       return;
     }
 
@@ -166,7 +171,11 @@ function collectSignals(installDir: string, maxDepth = 3): ProjectSignals {
               path: relative(installDir, fullPath) || 'package.json',
               deps,
             });
-          } catch {
+          } catch (err) {
+            analytics.captureException(
+              err instanceof Error ? err : new Error(String(err)),
+              { step: 'detect_scan' },
+            );
             // skip malformed package.json
           }
         } else if (entry.name === 'Podfile') {
@@ -297,7 +306,11 @@ export function detectSourceMapsPrerequisites(
       fail({ kind: 'bad-directory', path: installDir, reason: 'not-dir' });
       return;
     }
-  } catch {
+  } catch (err) {
+    analytics.captureException(
+      err instanceof Error ? err : new Error(String(err)),
+      { step: 'detect_source_maps_prerequisites' },
+    );
     fail({ kind: 'bad-directory', path: installDir, reason: 'unreadable' });
     return;
   }

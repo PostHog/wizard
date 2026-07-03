@@ -14,6 +14,7 @@ import {
   getPackageManagerName,
   PythonPackageManager,
 } from './utils';
+import { analytics } from '@utils/analytics';
 
 type PythonContext = {
   packageManager?: PythonPackageManager;
@@ -79,7 +80,11 @@ export const PYTHON_AGENT_CONFIG: FrameworkConfig<PythonContext> = {
           ) {
             return false; // Django detected, use django agent instead
           }
-        } catch {
+        } catch (err) {
+          analytics.captureException(
+            err instanceof Error ? err : new Error(String(err)),
+            { step: 'python_wizard_agent_detect' },
+          );
           continue;
         }
       }
@@ -97,7 +102,11 @@ export const PYTHON_AGENT_CONFIG: FrameworkConfig<PythonContext> = {
           ) {
             return false; // Flask detected, use flask agent instead
           }
-        } catch {
+        } catch (err) {
+          analytics.captureException(
+            err instanceof Error ? err : new Error(String(err)),
+            { step: 'python_wizard_agent_detect' },
+          );
           continue;
         }
       }
@@ -129,7 +138,11 @@ export const PYTHON_AGENT_CONFIG: FrameworkConfig<PythonContext> = {
           ) {
             return false; // Flask detected, use flask agent instead
           }
-        } catch {
+        } catch (err) {
+          analytics.captureException(
+            err instanceof Error ? err : new Error(String(err)),
+            { step: 'python_wizard_agent_detect' },
+          );
           continue;
         }
       }

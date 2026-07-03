@@ -4,6 +4,7 @@ import type { WizardRunOptions } from '@utils/types';
 import { createVersionBucket } from '@utils/semver';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import { analytics } from '@utils/analytics';
 
 export enum RailsProjectType {
   STANDARD = 'standard', // Traditional Rails app (rails new)
@@ -35,7 +36,11 @@ function readGemfile(
   const gemfilePath = path.join(installDir, 'Gemfile');
   try {
     return fs.readFileSync(gemfilePath, 'utf-8');
-  } catch {
+  } catch (err) {
+    analytics.captureException(
+      err instanceof Error ? err : new Error(String(err)),
+      { step: 'read_gemfile' },
+    );
     return undefined;
   }
 }
@@ -99,7 +104,11 @@ export function getRailsProjectType(
         getUI().setDetectedFramework('Rails API-only');
         return RailsProjectType.API;
       }
-    } catch {
+    } catch (err) {
+      analytics.captureException(
+        err instanceof Error ? err : new Error(String(err)),
+        { step: 'get_rails_project_type' },
+      );
       // Continue to default
     }
   }
@@ -162,7 +171,11 @@ export async function isRailsProject(
       ) {
         return true;
       }
-    } catch {
+    } catch (err) {
+      analytics.captureException(
+        err instanceof Error ? err : new Error(String(err)),
+        { step: 'is_rails_project' },
+      );
       // Continue to other checks
     }
   }

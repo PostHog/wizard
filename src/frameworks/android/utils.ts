@@ -3,6 +3,7 @@ import { createVersionBucket } from '@utils/semver';
 import fg from 'fast-glob';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import { analytics } from '@utils/analytics';
 
 const IGNORE_PATTERNS = ['**/build/**', '**/.gradle/**', '**/node_modules/**'];
 
@@ -26,7 +27,11 @@ export async function getMinSdkVersion(
       // Match: minSdk = 24, minSdkVersion 21, minSdkVersion = 21
       const match = content.match(/minSdk(?:Version)?\s*=?\s*(\d+)/);
       if (match) return match[1];
-    } catch {
+    } catch (err) {
+      analytics.captureException(
+        err instanceof Error ? err : new Error(String(err)),
+        { step: 'get_min_sdk_version' },
+      );
       continue;
     }
   }

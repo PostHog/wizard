@@ -15,6 +15,7 @@ import {
   FlaskProjectType,
   findFlaskAppFile,
 } from './utils';
+import { analytics } from '@utils/analytics';
 
 type FlaskContext = {
   projectType?: FlaskProjectType;
@@ -71,7 +72,11 @@ export const FLASK_AGENT_CONFIG: FrameworkConfig<FlaskContext> = {
           ) {
             return true;
           }
-        } catch {
+        } catch (err) {
+          analytics.captureException(
+            err instanceof Error ? err : new Error(String(err)),
+            { step: 'flask_wizard_agent_detect' },
+          );
           continue;
         }
       }
@@ -103,7 +108,11 @@ export const FLASK_AGENT_CONFIG: FrameworkConfig<FlaskContext> = {
           ) {
             return true;
           }
-        } catch {
+        } catch (err) {
+          analytics.captureException(
+            err instanceof Error ? err : new Error(String(err)),
+            { step: 'flask_wizard_agent_detect' },
+          );
           continue;
         }
       }

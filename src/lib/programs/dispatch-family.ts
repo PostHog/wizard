@@ -25,7 +25,11 @@ async function exitDispatchError(
   analytics.wizardCapture('cli dispatch error', { reason, ...properties });
   try {
     await analytics.flush();
-  } catch {
+  } catch (err) {
+    analytics.captureException(
+      err instanceof Error ? err : new Error(String(err)),
+      { step: 'exit_dispatch_error' },
+    );
     /* flush is best-effort; never block the exit */
   }
   process.stderr.write(message);

@@ -18,6 +18,7 @@ import fs from 'fs';
 import path from 'path';
 import { createJiti } from 'jiti';
 import { logToFile } from '@utils/debug';
+import { analytics } from '@utils/analytics';
 
 const MCP_TOKEN_ENV = 'POSTHOG_MCP_TOKEN';
 /**
@@ -60,7 +61,11 @@ export async function setupPostHogMcp(opts: {
     try {
       config = JSON.parse(previous);
       config.mcpServers ??= {};
-    } catch {
+    } catch (err) {
+      analytics.captureException(
+        err instanceof Error ? err : new Error(String(err)),
+        { step: 'setup_posthog_mcp' },
+      );
       config = { mcpServers: {} };
     }
   }
@@ -129,6 +134,10 @@ export async function setupPostHogMcp(opts: {
       await manager.closeAll().catch(() => undefined);
     }
   } catch (err) {
+    analytics.captureException(
+      err instanceof Error ? err : new Error(String(err)),
+      { step: 'setup_posthog_mcp' },
+    );
     logToFile(`[pi-mcp] cache warm skipped (proxy fallback): ${String(err)}`);
   }
 
@@ -143,6 +152,10 @@ export async function setupPostHogMcp(opts: {
       if (previous != null) fs.writeFileSync(configPath, previous, 'utf8');
       else fs.rmSync(configPath, { force: true });
     } catch (err) {
+      analytics.captureException(
+        err instanceof Error ? err : new Error(String(err)),
+        { step: 'mcp_cleanup' },
+      );
       logToFile(`[pi-mcp] config cleanup skipped: ${String(err)}`);
     }
     delete process.env[MCP_TOKEN_ENV];

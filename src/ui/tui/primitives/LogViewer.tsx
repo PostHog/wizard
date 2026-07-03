@@ -14,6 +14,7 @@ import { Box, Text } from 'ink';
 import { useState, useEffect } from 'react';
 import * as fs from 'fs';
 import { useStdoutDimensions } from '@ui/tui/hooks/useStdoutDimensions';
+import { analytics } from '@utils/analytics';
 
 /** Rows consumed by TitleBar + spacer + ScreenContainer padding + status bar +
  *  tab bar, with a couple rows of headroom so the tail never crowds the status
@@ -67,7 +68,11 @@ export const LogViewer = ({ filePath, height }: LogViewerProps) => {
     const readTail = () => {
       try {
         setLines(readTailLines(filePath, visibleLines));
-      } catch {
+      } catch (err) {
+        analytics.captureException(
+          err instanceof Error ? err : new Error(String(err)),
+          { step: 'read_tail' },
+        );
         setLines(['(No log file found)']);
       }
     };
@@ -94,14 +99,22 @@ export const LogViewer = ({ filePath, height }: LogViewerProps) => {
     let watcher: fs.FSWatcher | undefined;
     try {
       watcher = fs.watch(filePath, () => scheduleRead());
-    } catch {
+    } catch (err) {
+      analytics.captureException(
+        err instanceof Error ? err : new Error(String(err)),
+        { step: 'log_viewer' },
+      );
       const interval = setInterval(() => {
         try {
           fs.accessSync(filePath);
           readTail();
           clearInterval(interval);
           watcher = fs.watch(filePath, () => scheduleRead());
-        } catch {
+        } catch (err) {
+          analytics.captureException(
+            err instanceof Error ? err : new Error(String(err)),
+            { step: 'log_viewer' },
+          );
           // Still waiting for the file to appear
         }
       }, 1000);

@@ -1,5 +1,6 @@
 import { execSync } from 'node:child_process';
 import type { WizardRunOptions } from '@utils/types';
+import { analytics } from '@utils/analytics';
 
 export enum PythonPackageManager {
   UV = 'uv',
@@ -27,7 +28,11 @@ export function getPythonVersion(
       .trim()
       .replace('Python ', '');
     return version;
-  } catch {
+  } catch (err) {
+    analytics.captureException(
+      err instanceof Error ? err : new Error(String(err)),
+      { step: 'get_python_version' },
+    );
     return undefined;
   }
 }
@@ -82,7 +87,11 @@ export async function detectPackageManager(
       if (content.includes('[tool.rye]')) {
         return PythonPackageManager.RYE;
       }
-    } catch {
+    } catch (err) {
+      analytics.captureException(
+        err instanceof Error ? err : new Error(String(err)),
+        { step: 'detect_package_manager' },
+      );
       // Continue checking
     }
   }
@@ -135,7 +144,11 @@ export async function detectPackageManager(
         return PythonPackageManager.PIP;
       }
     }
-  } catch {
+  } catch (err) {
+    analytics.captureException(
+      err instanceof Error ? err : new Error(String(err)),
+      { step: 'detect_package_manager' },
+    );
     // Continue
   }
 

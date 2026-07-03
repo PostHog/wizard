@@ -33,7 +33,11 @@ export class VercelEnvironmentProvider extends EnvironmentProvider {
       execSync('vercel --version', { stdio: 'ignore' });
       analytics.setTag('vercel-cli-installed', true);
       return true;
-    } catch {
+    } catch (err) {
+      analytics.captureException(
+        err instanceof Error ? err : new Error(String(err)),
+        { step: 'has_vercel_cli' },
+      );
       analytics.setTag('vercel-cli-installed', false);
       return false;
     }

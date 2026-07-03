@@ -9,6 +9,7 @@
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import { DiscoveredFeature } from '@lib/wizard-session';
+import { analytics } from '@utils/analytics';
 
 const STRIPE_PACKAGES = ['stripe', '@stripe/stripe-js'];
 
@@ -69,7 +70,11 @@ function discoverNodeFeatures(
   };
   try {
     packageJson = JSON.parse(packageJsonText);
-  } catch {
+  } catch (err) {
+    analytics.captureException(
+      err instanceof Error ? err : new Error(String(err)),
+      { step: 'discover_node_features' },
+    );
     return;
   }
 
@@ -111,7 +116,11 @@ function discoverPythonFeatures(
 function safeRead(installDir: string, file: string): string | null {
   try {
     return readFileSync(join(installDir, file), 'utf-8');
-  } catch {
+  } catch (err) {
+    analytics.captureException(
+      err instanceof Error ? err : new Error(String(err)),
+      { step: 'safe_read' },
+    );
     return null;
   }
 }

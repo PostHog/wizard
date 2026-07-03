@@ -3,6 +3,7 @@ import fs from 'fs/promises';
 import path from 'path';
 import type { WizardRunOptions } from '@utils/types';
 import { createVersionBucket } from '@utils/semver';
+import { analytics } from '@utils/analytics';
 
 export const getAstroVersionBucket = createVersionBucket();
 
@@ -53,7 +54,11 @@ export async function getAstroRenderingMode({
           dep.includes('cloudflare') ||
           dep.includes('deno')),
     );
-  } catch {
+  } catch (err) {
+    analytics.captureException(
+      err instanceof Error ? err : new Error(String(err)),
+      { step: 'get_astro_rendering_mode' },
+    );
     // package.json not found or invalid
   }
 
@@ -65,7 +70,11 @@ export async function getAstroRenderingMode({
       if (outputMatch) {
         outputMode = outputMatch[1];
       }
-    } catch {
+    } catch (err) {
+      analytics.captureException(
+        err instanceof Error ? err : new Error(String(err)),
+        { step: 'get_astro_rendering_mode' },
+      );
       // Config file not readable
     }
   }
@@ -88,7 +97,11 @@ export async function getAstroRenderingMode({
         usesViewTransitions = true;
         break;
       }
-    } catch {
+    } catch (err) {
+      analytics.captureException(
+        err instanceof Error ? err : new Error(String(err)),
+        { step: 'get_astro_rendering_mode' },
+      );
       // File not readable
     }
   }

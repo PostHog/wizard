@@ -170,6 +170,10 @@ function captureHealthCheckBlocked(result: WizardReadinessResult): void {
       retries_used: retriesUsed,
     });
   } catch (err) {
+    analytics.captureException(
+      err instanceof Error ? err : new Error(String(err)),
+      { step: 'capture_health_check_blocked' },
+    );
     logToFile(
       `[health-checks] failed to capture analytics: ${
         err instanceof Error ? err.message : String(err)

@@ -64,6 +64,10 @@ export function detectStoredClaudeLogin(
   try {
     credentialsFile = fs.existsSync(credentialsPath);
   } catch (error) {
+    analytics.captureException(
+      error instanceof Error ? error : new Error(String(error)),
+      { step: 'detect_stored_claude_login' },
+    );
     const message = error instanceof Error ? error.message : String(error);
     logToFile(
       `[stored-login] checked ${credentialsPath} — unreadable (${message}), treating as absent`,
@@ -85,6 +89,10 @@ export function detectStoredClaudeLogin(
       );
       keychain = res.status === 0;
     } catch (error) {
+      analytics.captureException(
+        error instanceof Error ? error : new Error(String(error)),
+        { step: 'detect_stored_claude_login' },
+      );
       const message = error instanceof Error ? error.message : String(error);
       logToFile(
         `[stored-login] checked keychain '${KEYCHAIN_SERVICE}' — lookup cleared (${message}), treating as absent`,

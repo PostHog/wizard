@@ -45,7 +45,11 @@ export function runCleanups(): void {
   for (const fn of fns) {
     try {
       fn();
-    } catch {
+    } catch (err) {
+      analytics.captureException(
+        err instanceof Error ? err : new Error(String(err)),
+        { step: 'run_cleanups' },
+      );
       /* cleanup should not prevent exit */
     }
   }

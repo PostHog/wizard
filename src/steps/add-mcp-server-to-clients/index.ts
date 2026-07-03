@@ -171,6 +171,10 @@ export const installPlugins = async (
       const result = await client.installPlugin();
       if (result.success) installed.push(client.name);
     } catch (err) {
+      analytics.captureException(
+        err instanceof Error ? err : new Error(String(err)),
+        { step: 'install_plugins' },
+      );
       debug(`[installPlugins] installPlugin threw for ${client.name}: ${err}`);
     }
   }

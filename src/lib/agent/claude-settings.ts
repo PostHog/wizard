@@ -105,7 +105,11 @@ function checkSettingsFile(filePath: string): string[] {
 
     // A key can match both the exact list and a pattern — dedupe.
     return [...new Set(matched)];
-  } catch {
+  } catch (err) {
+    analytics.captureException(
+      err instanceof Error ? err : new Error(String(err)),
+      { step: 'check_settings_file' },
+    );
     // File doesn't exist or isn't valid JSON — skip
     return [];
   }

@@ -52,7 +52,11 @@ const listCommand: Command = {
         });
         try {
           await analytics.flush();
-        } catch {
+        } catch (err) {
+          analytics.captureException(
+            err instanceof Error ? err : new Error(String(err)),
+            { step: 'skill_handler' },
+          );
           /* best-effort */
         }
         process.stderr.write(

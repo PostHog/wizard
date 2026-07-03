@@ -101,6 +101,10 @@ export async function fetchSkillMenu(
     logToFile(`fetchSkillMenu: failed with HTTP ${resp.status}`);
     return null;
   } catch (err: any) {
+    analytics.captureException(
+      err instanceof Error ? err : new Error(String(err)),
+      { step: 'fetch_skill_menu' },
+    );
     logToFile(`fetchSkillMenu: error: ${err.message}`);
     return null;
   }
@@ -132,7 +136,11 @@ export function downloadSkill(
     fs.writeFileSync(path.join(skillDir, '.posthog-wizard'), '');
     try {
       fs.unlinkSync(tmpFile);
-    } catch {
+    } catch (err) {
+      analytics.captureException(
+        err instanceof Error ? err : new Error(String(err)),
+        { step: 'download_skill' },
+      );
       /* ignore cleanup errors */
     }
 
@@ -141,6 +149,10 @@ export function downloadSkill(
     );
     return { success: true };
   } catch (err: any) {
+    analytics.captureException(
+      err instanceof Error ? err : new Error(String(err)),
+      { step: 'download_skill' },
+    );
     logToFile(`downloadSkill: error: ${err.message}`);
     return { success: false, error: err.message };
   }
@@ -483,7 +495,11 @@ function readLedger(targetPath: string): AuditCheck[] {
   try {
     const parsed = JSON.parse(fs.readFileSync(targetPath, 'utf8'));
     return coerceAuditChecks(parsed);
-  } catch {
+  } catch (err) {
+    analytics.captureException(
+      err instanceof Error ? err : new Error(String(err)),
+      { step: 'read_ledger' },
+    );
     return [];
   }
 }
@@ -1148,6 +1164,10 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
           ],
         };
       } catch (err: any) {
+        analytics.captureException(
+          err instanceof Error ? err : new Error(String(err)),
+          { step: 'create_wizard_tools_server' },
+        );
         logToFile(`wizard_ask: error: ${err?.message ?? err}`);
         return {
           content: [

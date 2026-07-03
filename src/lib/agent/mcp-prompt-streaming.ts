@@ -20,6 +20,7 @@ import { runtimeEnv } from '@env';
 import { logToFile } from '@utils/debug';
 import { buildAgentEnv } from '@lib/agent/agent-interface';
 import { sanitizeAgentSubprocessEnv } from '@lib/agent/agent-env-isolation';
+import { analytics } from '@utils/analytics';
 
 // Cached SDK module — first call pays the dynamic-import cost; later
 // calls reuse the same module.
@@ -62,7 +63,11 @@ function summarize(value: unknown, maxLen = 120): string {
   else {
     try {
       text = JSON.stringify(value);
-    } catch {
+    } catch (err) {
+      analytics.captureException(
+        err instanceof Error ? err : new Error(String(err)),
+        { step: 'summarize' },
+      );
       text = String(value);
     }
   }
@@ -357,6 +362,10 @@ export async function* runMcpPromptViaSdk(args: {
       }
     }
   } catch (err) {
+    analytics.captureException(
+      err instanceof Error ? err : new Error(String(err)),
+      { step: 'run_mcp_prompt_via_sdk' },
+    );
     const text = err instanceof Error ? err.message : String(err);
     logToFile(`[runMcpPromptViaSdk] error: ${text}`);
     yield { kind: 'error', text };

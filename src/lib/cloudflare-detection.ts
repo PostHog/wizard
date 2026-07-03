@@ -1,6 +1,7 @@
 import fg from 'fast-glob';
 import { logToFile } from '@utils/debug';
 import { tryGetPackageJson } from '@utils/setup-utils';
+import { analytics } from '@utils/analytics';
 
 const CLOUDFLARE_PACKAGES = [
   '@react-router/cloudflare',
@@ -82,6 +83,10 @@ export async function fetchCloudflareReference(
     );
     return null;
   } catch (err: any) {
+    analytics.captureException(
+      err instanceof Error ? err : new Error(String(err)),
+      { step: 'fetch_cloudflare_reference' },
+    );
     logToFile(`[cloudflare-detection] reference fetch error: ${err.message}`);
     return null;
   }

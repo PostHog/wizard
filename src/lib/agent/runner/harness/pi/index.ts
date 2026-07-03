@@ -323,6 +323,10 @@ export const piBackend: AgentHarness = {
         extensionFactories.push(mcp.extensionFactory);
         mcpCleanup = mcp.cleanup;
       } catch (err) {
+        analytics.captureException(
+          err instanceof Error ? err : new Error(String(err)),
+          { step: 'pi_run' },
+        );
         logToFile(`[pi] PostHog MCP setup skipped: ${String(err)}`);
       }
 
@@ -469,6 +473,10 @@ export const piBackend: AgentHarness = {
           try {
             await agentSession.prompt(REMARK_INSTRUCTION);
           } catch (err) {
+            analytics.captureException(
+              err instanceof Error ? err : new Error(String(err)),
+              { step: 'pi_run' },
+            );
             logToFile(`[pi] remark request failed: ${String(err)}`);
           }
         }
@@ -500,6 +508,10 @@ export const piBackend: AgentHarness = {
         const planFile = path.join(session.installDir, '.posthog-events.json');
         if (fs.existsSync(planFile)) await fs.promises.rm(planFile);
       } catch (err) {
+        analytics.captureException(
+          err instanceof Error ? err : new Error(String(err)),
+          { step: 'pi_run' },
+        );
         logToFile(`[pi] .posthog-events.json cleanup skipped: ${String(err)}`);
       }
 
@@ -518,6 +530,10 @@ export const piBackend: AgentHarness = {
       spinner.stop(config.successMessage ?? 'PostHog integration complete');
       return {};
     } catch (err) {
+      analytics.captureException(
+        err instanceof Error ? err : new Error(String(err)),
+        { step: 'pi_run' },
+      );
       const message = err instanceof Error ? err.message : String(err);
       logToFile(`[pi] run error: ${message}`);
       spinner.stop(config.errorMessage ?? `${config.integrationLabel} failed`);

@@ -3,6 +3,7 @@ import type { WizardRunOptions } from '@utils/types';
 import { createVersionBucket } from '@utils/semver';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import { analytics } from '@utils/analytics';
 
 export enum RubyPackageManager {
   BUNDLER = 'bundler',
@@ -69,7 +70,11 @@ export function getRubyVersion(
     if (/^[0-9]+\.[0-9]+/.test(version)) {
       return version;
     }
-  } catch {
+  } catch (err) {
+    analytics.captureException(
+      err instanceof Error ? err : new Error(String(err)),
+      { step: 'get_ruby_version' },
+    );
     // Continue to other checks
   }
 
@@ -81,7 +86,11 @@ export function getRubyVersion(
     if (match) {
       return match[1];
     }
-  } catch {
+  } catch (err) {
+    analytics.captureException(
+      err instanceof Error ? err : new Error(String(err)),
+      { step: 'get_ruby_version' },
+    );
     // No Gemfile
   }
 
@@ -105,7 +114,11 @@ export async function isRubyProject(
       if (/^\s*gem\s+['"]rails['"]/im.test(content)) {
         return false; // Rails project, use rails agent instead
       }
-    } catch {
+    } catch (err) {
+      analytics.captureException(
+        err instanceof Error ? err : new Error(String(err)),
+        { step: 'is_ruby_project' },
+      );
       // Continue checking
     }
     return true;

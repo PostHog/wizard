@@ -56,7 +56,11 @@ export class ClaudeCodeMCPClient
       debug('  Found claude in PATH');
       this.claudeBinaryPath = 'claude';
       return 'claude';
-    } catch {
+    } catch (err) {
+      analytics.captureException(
+        err instanceof Error ? err : new Error(String(err)),
+        { step: 'find_claude_binary' },
+      );
       // Not in PATH
     }
 
@@ -82,6 +86,10 @@ export class ClaudeCodeMCPClient
       debug(`  Claude Code detected: ${version}`);
       return Promise.resolve(true);
     } catch (error) {
+      analytics.captureException(
+        error instanceof Error ? error : new Error(String(error)),
+        { step: 'is_client_supported' },
+      );
       debug(
         `  Claude Code check failed: ${
           error instanceof Error ? error.message : String(error)
@@ -100,7 +108,11 @@ export class ClaudeCodeMCPClient
         .toString()
         .toLowerCase();
       return Promise.resolve(output.includes(serverName));
-    } catch {
+    } catch (err) {
+      analytics.captureException(
+        err instanceof Error ? err : new Error(String(err)),
+        { step: 'is_server_installed' },
+      );
       return Promise.resolve(false);
     }
   }
@@ -187,7 +199,11 @@ export class ClaudeCodeMCPClient
         stdio: 'pipe',
       }).toString();
       return Promise.resolve(output.toLowerCase().includes('posthog'));
-    } catch {
+    } catch (err) {
+      analytics.captureException(
+        err instanceof Error ? err : new Error(String(err)),
+        { step: 'is_plugin_installed' },
+      );
       return Promise.resolve(false);
     }
   }

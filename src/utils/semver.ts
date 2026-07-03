@@ -6,6 +6,7 @@ import {
   valid,
   validRange,
 } from 'semver';
+import { analytics } from './analytics';
 
 /**
  * Version strings from package.json that are not semver ranges.
@@ -85,7 +86,11 @@ export function createVersionBucket(minMajorVersion?: number) {
         return `<${minMajorVersion}.0.0`;
       }
       return `${majorVersion}.x`;
-    } catch {
+    } catch (err) {
+      analytics.captureException(
+        err instanceof Error ? err : new Error(String(err)),
+        { step: 'create_version_bucket' },
+      );
       return 'unknown';
     }
   };

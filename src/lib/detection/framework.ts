@@ -8,6 +8,7 @@
 
 import { Integration, DETECTION_TIMEOUT_MS } from '@lib/constants';
 import { FRAMEWORK_REGISTRY } from '@lib/registry';
+import { analytics } from '@utils/analytics';
 
 /**
  * Loop through all registered frameworks and return the first one
@@ -29,7 +30,11 @@ export async function detectFramework(
       if (detected) {
         return integration;
       }
-    } catch {
+    } catch (err) {
+      analytics.captureException(
+        err instanceof Error ? err : new Error(String(err)),
+        { step: 'detect_framework' },
+      );
       // Skip frameworks whose detection throws
     }
   }

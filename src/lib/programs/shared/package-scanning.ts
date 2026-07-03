@@ -2,6 +2,7 @@ import type { Dirent } from 'fs';
 import { readFileSync, readdirSync } from 'fs';
 import { join, relative } from 'path';
 import { IGNORED_DIRS } from '@utils/file-utils';
+import { analytics } from '@utils/analytics';
 
 export const POSTHOG_SDKS = [
   'posthog-js',
@@ -40,7 +41,11 @@ export function findPackageJsons(
     let entries: Dirent[];
     try {
       entries = readdirSync(dir, { withFileTypes: true });
-    } catch {
+    } catch (err) {
+      analytics.captureException(
+        err instanceof Error ? err : new Error(String(err)),
+        { step: 'package_scanning_scan' },
+      );
       return;
     }
 
@@ -67,7 +72,11 @@ export function findPackageJsons(
             posthogSdks,
             stripeSdks,
           });
-        } catch {
+        } catch (err) {
+          analytics.captureException(
+            err instanceof Error ? err : new Error(String(err)),
+            { step: 'package_scanning_scan' },
+          );
           // Skip malformed package.json
         }
       } else if (entry.isDirectory()) {
