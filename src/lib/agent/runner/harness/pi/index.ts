@@ -60,6 +60,7 @@ function gatewayApiFor(
 const PI_RUNTIME_NOTES = [
   '',
   '## This runtime',
+  'Below are important guidance on the harness constraints you are bound to. Follow them as commandments.',
   '- When you need several INDEPENDENT operations — reading or searching multiple files, creating several insights — issue them as multiple tool calls in a SINGLE turn. They run in parallel and save round-trips; doing them one-per-turn is much slower. Only sequence calls when one needs a previous call’s output.',
   '- Explore with the `ls`, `find`, and `grep` tools (list a directory, find files by name, search file contents). `read` is for FILES only — reading a directory errors. NEVER inspect files through `bash`; `ls`, `find`, `cat`, `sed`, `head`, `xxd`, `python -c` and the like are all blocked. To see the exact bytes of a file (e.g. whitespace before a precise `edit`), use `read`.',
   '- `bash` is ONLY for install/build/typecheck/lint/format commands the project itself defines (its package manager and scripts). Run installs synchronously and wait (e.g. `npm install <pkg>`); `&`, `&&`, and pipes are all blocked. Do not invoke standalone toolchain binaries the project has not configured (ad-hoc formatters, version probes) — they are blocked.',
