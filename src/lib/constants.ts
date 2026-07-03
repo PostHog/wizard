@@ -30,6 +30,9 @@ export const OPUS_MODEL = 'claude-opus-4-8';
  */
 export const GPT5_MODEL = 'openai/gpt-5';
 
+/** Newer sonnet-class openai flagship (list: $2.50/$15 per MTok). */
+export const GPT5_4_MODEL = 'openai/gpt-5.4';
+
 /**
  * Smaller, faster, cheaper openai reasoning model. The pi runner is paired with
  * this (a reasoning model follows the integration skill; the mini tier keeps a

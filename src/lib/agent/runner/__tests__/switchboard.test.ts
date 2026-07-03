@@ -4,6 +4,7 @@ import {
   DEFAULT_AGENT_MODEL,
   GPT5_MINI_MODEL,
   GPT5_MODEL,
+  GPT5_4_MODEL,
   Harness,
   Sequence,
   WIZARD_ORCHESTRATOR_FLAG_KEY,
@@ -80,13 +81,13 @@ describe('switchboard resolveHarness — CLI precedence', () => {
     expect(pick.harness).toBe(Harness.pi);
   });
 
-  it('the pi flag pairs pi with gpt-5; off keeps anthropic + sonnet', () => {
+  it('the pi flag pairs pi with gpt-5.4; off keeps anthropic + sonnet', () => {
     expect(
       resolveHarness({
         program: 'posthog-integration',
         flags: { [WIZARD_USE_PI_HARNESS_FLAG_KEY]: 'true' },
       }),
-    ).toEqual({ harness: Harness.pi, model: GPT5_MODEL });
+    ).toEqual({ harness: Harness.pi, model: GPT5_4_MODEL });
     expect(
       resolveHarness({
         program: 'posthog-integration',

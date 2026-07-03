@@ -14,6 +14,7 @@ import {
   OPUS_MODEL,
   HAIKU_MODEL,
   GPT5_MODEL,
+  GPT5_4_MODEL,
   GPT5_MINI_MODEL,
 } from '@lib/constants';
 
@@ -41,6 +42,7 @@ export const MODEL_CAPABILITIES: Record<string, ModelCapabilities> = {
   // Flagship openai reasoning model at low effort: capable but kept fast, so a
   // run finishes in a few minutes instead of the long high-effort default.
   [GPT5_MODEL]: { reasoning: true, thinkingLevel: 'low' },
+  [GPT5_4_MODEL]: { reasoning: true, thinkingLevel: 'low' },
   // The pi runner's paired model — a smaller openai reasoning model. Medium
   // effort: enough to follow the skill's setup completely, still fast.
   [GPT5_MINI_MODEL]: { reasoning: true, thinkingLevel: 'medium' },
