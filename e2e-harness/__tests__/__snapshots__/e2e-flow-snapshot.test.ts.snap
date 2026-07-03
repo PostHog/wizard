@@ -198,3 +198,46 @@ exports[`e2e flow snapshot — self-driving > integration-first (no existing Pos
   ],
 }
 `;
+
+exports[`e2e flow snapshot — upload-source-maps > walks a stable path 1`] = `
+{
+  "profile": {
+    "ask": "first",
+    "healthCheck": "dismiss",
+    "mcp": "skip",
+    "setup": "first",
+    "skills": "delete",
+    "slack": "skip",
+  },
+  "program": "error-tracking-upload-source-maps",
+  "trace": [
+    {
+      "action": "confirm_setup",
+      "screen": "source-maps-intro",
+    },
+    {
+      "action": "(external)",
+      "screen": "auth",
+    },
+    {
+      "action": "(external)",
+      "screen": "source-maps-detect",
+    },
+    {
+      "action": "(external)",
+      "screen": "run",
+    },
+    {
+      "action": "dismiss_outro",
+      "screen": "source-maps-outro",
+    },
+    {
+      "action": "keep_skills",
+      "params": {
+        "kept": false,
+      },
+      "screen": "keep-skills",
+    },
+  ],
+}
+`;

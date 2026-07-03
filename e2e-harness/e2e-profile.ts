@@ -112,6 +112,7 @@ export function decideE2eAction(
       return { action: { id: 'confirm_self_driving_handoff' } };
 
     case ScreenId.Outro:
+    case ScreenId.SourceMapsOutro:
       return { action: { id: 'dismiss_outro' } };
 
     case ScreenId.Mcp:
@@ -166,6 +167,7 @@ export const E2E_DRIVABLE_SCREENS: readonly ScreenName[] = [
   ScreenId.Setup,
   ScreenId.SelfDrivingIntegrationCheck,
   ScreenId.Outro,
+  ScreenId.SourceMapsOutro,
   ScreenId.Mcp,
   ScreenId.McpSuggestedPrompts,
   ScreenId.SlackConnect,

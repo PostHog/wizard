@@ -20,6 +20,7 @@ import { ScreenId, Overlay } from '@ui/tui/router';
 import { Program } from '@lib/programs/program-registry';
 import { WizardCiDriver, UnknownActionError } from '../wizard-ci-driver';
 import { ACTION_REGISTRY, NO_ACTION_SCREENS } from '../action-registry';
+import { SOURCE_MAPS_CONTEXT_KEYS } from '@lib/programs/error-tracking-upload-source-maps/index';
 
 function freshStore(): WizardStore {
   const store = new WizardStore(Program.PostHogIntegration);
@@ -209,6 +210,58 @@ describe('WizardCiDriver — self-driving integration check', () => {
     expect(driver.readState().currentScreen).not.toBe(
       ScreenId.SelfDrivingIntegrationCheck,
     );
+  });
+});
+
+describe('WizardCiDriver — source-maps project pick', () => {
+  function sourceMapsStore(): WizardStore {
+    const store = new WizardStore(Program.ErrorTrackingUploadSourceMaps);
+    setUI(new InkUI(store));
+    store.session = buildSession({ installDir: '/tmp/ci-driver-sm', ci: true });
+    return store;
+  }
+
+  function toDetectScreen(store: WizardStore): void {
+    // Intro → auth → detect.
+    store.completeSetup();
+    store.setCredentials({
+      accessToken: 'phx_x',
+      projectApiKey: 'phc_x',
+      host: 'https://us.posthog.com',
+      projectId: 1,
+    });
+  }
+
+  it('commits the pick the way the detect screen would and advances', () => {
+    const store = sourceMapsStore();
+    const driver = new WizardCiDriver(store);
+
+    toDetectScreen(store);
+    const state = driver.readState();
+    expect(state.currentScreen).toBe(ScreenId.SourceMapsDetect);
+    expect(state.actions.map((a) => a.id)).toContain(
+      'pick_source_maps_project',
+    );
+
+    const next = driver.performAction('pick_source_maps_project', {
+      variant: 'node',
+      path: '.',
+    });
+    const ctx = store.session.frameworkContext;
+    expect(ctx[SOURCE_MAPS_CONTEXT_KEYS.selectedVariant]).toBe('node');
+    expect(ctx[SOURCE_MAPS_CONTEXT_KEYS.selectedDisplayName]).toBe('Node.js');
+    expect(ctx[SOURCE_MAPS_CONTEXT_KEYS.selectedPath]).toBe('.');
+    expect(next.currentScreen).toBe(ScreenId.Run);
+  });
+
+  it('requires the variant and path params', () => {
+    const store = sourceMapsStore();
+    const driver = new WizardCiDriver(store);
+
+    toDetectScreen(store);
+    expect(() =>
+      driver.performAction('pick_source_maps_project', { variant: 'node' }),
+    ).toThrow('requires param "path"');
   });
 });
 

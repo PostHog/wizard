@@ -32,7 +32,11 @@ import { detectFramework } from '@lib/detection/index';
 import { FRAMEWORK_REGISTRY } from '@lib/registry';
 import type { Integration } from '@lib/constants';
 import { SELF_DRIVING_INTEGRATE_PATH_KEY } from '@lib/programs/self-driving/detect';
-import { ScreenId } from '@ui/tui/router';
+import {
+  detectSourceMapsPrerequisites,
+  SOURCE_MAPS_CONTEXT_KEYS,
+} from '@lib/programs/error-tracking-upload-source-maps/index';
+import { ScreenId, Overlay } from '@ui/tui/router';
 import { WizardCiDriver } from '@e2e-harness/wizard-ci-driver';
 import {
   decideE2eAction,
@@ -253,6 +257,18 @@ async function main() {
   async function fixed() {
     const CTRL = process.env.SNAP_CTRL!;
     const profile: WizardE2eProfile = profileFor(programId);
+    // Program-specific wizard_ask answers the generic 'first' strategy can't
+    // give. Source-maps STEP 1 wants a real upload key — the driver supplies
+    // the raw value and the wizard_ask tool vaults it, so the agent only ever
+    // sees a secretRef — and STEP 8's "test it now?" must be declined: nobody
+    // is at the keyboard to run a build. An unset env answer falls through to
+    // the generic strategy (the 'e2e' sentinel).
+    const askOverrides: Record<string, Record<string, string | undefined>> = {
+      [Program.ErrorTrackingUploadSourceMaps]: {
+        'api-key': process.env.SOURCE_MAPS_CLI_KEY,
+        'test-affordance': 'no',
+      },
+    };
     const screenPath: string[] = [];
     // Snapshot on key moments — a screen change, a task-list update, or a
     // runPhase change — so the run screen's progression (the agent working) is
@@ -315,6 +331,48 @@ async function main() {
             );
           }
           continue;
+        }
+
+        // Headless source-maps detect: the screen's candidate list lives in
+        // its own agentic report (React state), so compute the pick here with
+        // the static prerequisite detector — right for a single-app fixture —
+        // and commit it through the driver the way the picker would.
+        if (
+          state.currentScreen === ScreenId.SourceMapsDetect &&
+          store.session.frameworkContext[
+            SOURCE_MAPS_CONTEXT_KEYS.selectedVariant
+          ] == null
+        ) {
+          const ctx: Record<string, unknown> = {};
+          detectSourceMapsPrerequisites(store.session, (k, v) => {
+            ctx[k] = v;
+          });
+          const variant = ctx[SOURCE_MAPS_CONTEXT_KEYS.skillVariant];
+          if (typeof variant !== 'string') {
+            mark(
+              'source-maps detect found nothing to instrument: ' +
+                JSON.stringify(ctx[SOURCE_MAPS_CONTEXT_KEYS.detectError]),
+            );
+            process.exit(1);
+          }
+          driver.performAction('pick_source_maps_project', {
+            variant,
+            path: '.',
+          });
+          continue;
+        }
+
+        // Program-specific ask answers take precedence over the generic
+        // profile strategy.
+        if (state.currentScreen === Overlay.WizardAsk) {
+          const q = state.pendingQuestion?.questions[0];
+          const override = q ? askOverrides[programId]?.[q.id] : undefined;
+          if (q && override !== undefined) {
+            driver.performAction('answer_question', {
+              answers: { [q.id]: override },
+            });
+            continue;
+          }
         }
 
         let acted = false;
