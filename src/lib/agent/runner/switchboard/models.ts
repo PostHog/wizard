@@ -39,13 +39,12 @@ export const MODEL_CAPABILITIES: Record<string, ModelCapabilities> = {
   [DEFAULT_AGENT_MODEL]: { reasoning: true }, // claude-sonnet-4-6
   [OPUS_MODEL]: { reasoning: true },
   [HAIKU_MODEL]: { reasoning: true },
-  // Flagship openai reasoning model at low effort: capable but kept fast, so a
-  // run finishes in a few minutes instead of the long high-effort default.
-  [GPT5_MODEL]: { reasoning: true, thinkingLevel: 'low' },
-  [GPT5_4_MODEL]: { reasoning: true, thinkingLevel: 'low' },
-  // The pi runner's paired model — a smaller openai reasoning model. Medium
-  // effort: enough to follow the skill's setup completely, still fast.
-  [GPT5_MINI_MODEL]: { reasoning: true, thinkingLevel: 'medium' },
+  // Flagship openai reasoning models at medium effort — under tuning
+  // (posthog-code/pi-model-tuning single-app trials).
+  [GPT5_MODEL]: { reasoning: true, thinkingLevel: 'medium' },
+  [GPT5_4_MODEL]: { reasoning: true, thinkingLevel: 'medium' },
+  // Small/cheap tier compensates with max reasoning effort.
+  [GPT5_MINI_MODEL]: { reasoning: true, thinkingLevel: 'xhigh' },
   'openai/o4-mini': { reasoning: true },
 };
 

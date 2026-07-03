@@ -19,6 +19,19 @@ describe('REMARK_INSTRUCTION', () => {
     expect(signals.remark()).toBeUndefined();
   });
 
+  it('returns the genuine remark when an instruction echo precedes it', () => {
+    // Field bug (gpt-5.4): the model repeated the ask verbatim, then answered
+    // on the next line — first-match extraction lost the real remark.
+    const signals = new AgentOutputSignals();
+    signals.push(REMARK_INSTRUCTION);
+    signals.push(
+      `${AgentSignals.WIZARD_REMARK} Docs should state capture() properties must avoid PII.`,
+    );
+    expect(signals.remark()).toBe(
+      'Docs should state capture() properties must avoid PII.',
+    );
+  });
+
   it('keeps a genuine remark', () => {
     const signals = new AgentOutputSignals();
     signals.push(

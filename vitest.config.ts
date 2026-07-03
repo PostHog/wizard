@@ -29,8 +29,19 @@ function resolveTsForJs(): Plugin {
   };
 }
 
+/** Import `.md` files as strings — mirrors tsdown's md-as-text plugin. */
+function mdAsText(): Plugin {
+  return {
+    name: 'md-as-text',
+    transform(code, id) {
+      if (!id.endsWith('.md')) return null;
+      return { code: `export default ${JSON.stringify(code)};`, map: null };
+    },
+  };
+}
+
 export default defineConfig({
-  plugins: [resolveTsForJs()],
+  plugins: [resolveTsForJs(), mdAsText()],
   // The source targets the React 19 automatic JSX runtime (tsconfig
   // `"jsx": "react-jsx"`); mirror that here so the TUI `.tsx` tests transform.
   esbuild: { jsx: 'automatic' },

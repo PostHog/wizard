@@ -1,6 +1,16 @@
 import { defineConfig } from 'tsdown';
 
+/** Bundle `.md` imports as strings (switchboard prompt notes). */
+const mdAsText = {
+  name: 'md-as-text',
+  transform(code: string, id: string) {
+    if (!id.endsWith('.md')) return null;
+    return { code: `export default ${JSON.stringify(code)};`, map: null };
+  },
+};
+
 export default defineConfig({
+  plugins: [mdAsText],
   entry: ['bin.ts'],
   outDir: 'dist',
   format: 'esm',

@@ -19,6 +19,7 @@ import {
   type SwitchboardCtx,
 } from '@lib/agent/runner/switchboard';
 import { modelCapabilities } from '@lib/agent/runner/switchboard/models';
+import { runtimeNotes } from '@lib/agent/runner/switchboard/prompts';
 
 const PROGRAM_IDS = PROGRAM_REGISTRY.map((c) => c.id);
 
@@ -182,6 +183,19 @@ describe('switchboard decision trace', () => {
   });
 });
 
+describe('switchboard runtime notes', () => {
+  it('attaches pi harness notes plus gpt-5-family model notes', () => {
+    const notes = runtimeNotes(Harness.pi, GPT5_4_MODEL);
+    expect(notes).toContain('## This runtime');
+    expect(notes).toContain('## Model notes');
+    expect(notes).toContain('PII');
+  });
+
+  it('returns nothing for anthropic + sonnet', () => {
+    expect(runtimeNotes(Harness.anthropic, DEFAULT_AGENT_MODEL)).toBe('');
+  });
+});
+
 describe('switchboard modelCapabilities', () => {
   it('marks the known reasoning models as reasoning', () => {
     for (const m of [
@@ -200,9 +214,9 @@ describe('switchboard modelCapabilities', () => {
     expect(modelCapabilities('openai/gpt-4o').reasoning).toBe(false);
   });
 
-  it('sets reasoning effort per model: gpt-5 low (fast flagship), gpt-5-mini medium', () => {
-    expect(modelCapabilities(GPT5_MODEL).thinkingLevel).toBe('low');
-    expect(modelCapabilities(GPT5_MINI_MODEL).thinkingLevel).toBe('medium');
+  it('sets reasoning effort per model: flagships medium, mini xhigh', () => {
+    expect(modelCapabilities(GPT5_MODEL).thinkingLevel).toBe('medium');
+    expect(modelCapabilities(GPT5_MINI_MODEL).thinkingLevel).toBe('xhigh');
     // Anthropic default carries no explicit effort — the harness default stands.
     expect(
       modelCapabilities(DEFAULT_AGENT_MODEL).thinkingLevel,

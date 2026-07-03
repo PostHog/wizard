@@ -89,19 +89,21 @@ export class AgentOutputSignals {
     return m ? m.join('\n') : undefined;
   }
 
-  /** Text after the single `[WIZARD-REMARK]` marker, trimmed, or undefined. */
+  /** Text after a `[WIZARD-REMARK]` marker, trimmed, or undefined. */
   remark(): string | undefined {
     const re = new RegExp(
       `${OUTPUT_SIGNALS.WIZARD_REMARK.replace(
         /[.*+?^${}()|[\]\\]/g,
         '\\$&',
       )}\\s*(.+?)(?:\\n|$)`,
-      's',
+      'gs',
     );
-    const text = this.text.match(re)?.[1]?.trim() || undefined;
-    // Literal models echo fragments of the ask itself ("Your remark here",
-    // "followed by the remark itself.") — an echo is not a remark.
-    if (text && REMARK_INSTRUCTION.includes(text)) return undefined;
-    return text;
+    // Literal models echo the ask itself (sometimes verbatim, before the real
+    // remark) — skip instruction substrings and return the first genuine one.
+    for (const match of this.text.matchAll(re)) {
+      const text = match[1]?.trim();
+      if (text && !REMARK_INSTRUCTION.includes(text)) return text;
+    }
+    return undefined;
   }
 }
