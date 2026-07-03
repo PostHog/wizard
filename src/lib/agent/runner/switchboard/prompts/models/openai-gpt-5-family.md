@@ -4,3 +4,4 @@
 - Construct the server-side PostHog client ONCE in a shared module and export that singleton; never `new PostHog(...)` per request, per route, or per capture call.
 - Instrument the handful of events that describe the user journey end-to-end (auth, core actions, errors) rather than exhaustively covering every handler — match the depth shown in the skill's example project.
 - If the project's build or typecheck fails ONLY because required app environment variables (database URLs, third-party secrets) are missing in this environment, do not chase it: note the limitation, verify your changes by reading the files, and continue.
+- Use EXACTLY the environment variable names shown in the skill's example project (e.g. `NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN`) — do not invent alternates or rename them.

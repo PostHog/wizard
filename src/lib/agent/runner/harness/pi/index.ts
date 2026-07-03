@@ -323,6 +323,7 @@ export const piBackend: AgentHarness = {
       // backend seam without parsing it.
       const { createWizardPiTools } = await import('./tools');
       const { createWizardPiTaskTools } = await import('./tasks');
+      const { tools: taskTools, store: taskStore } = createWizardPiTaskTools();
       const { createDispatchAgentTool } = await import('./subagent');
       // The one bash the agent (and its subagents) may use: every subprocess it
       // spawns gets a scrubbed env, so no secret or ambient variable reaches an
@@ -354,8 +355,9 @@ export const piBackend: AgentHarness = {
           skillsBaseUrl: boot.skillsBaseUrl,
         }),
         // Task/todo tools (#526): render the todo list live in the TUI, parity
-        // with the anthropic path.
-        ...createWizardPiTaskTools().tools,
+        // with the anthropic path. The store also drives the end-of-turn
+        // completion guard below.
+        ...taskTools,
         // Controlled subagent dispatch (#526): a nested fenced session with a
         // read-only toolset and no dispatch_agent of its own, so it can't
         // escape the fence or recurse.
@@ -439,6 +441,29 @@ export const piBackend: AgentHarness = {
         // Non-streaming: resolves when the agent run completes. Throws if no
         // model/api key, or on a transport error.
         await agentSession.prompt(prompt);
+
+        // pi ends the run when the model stops emitting tool calls — some
+        // models stop mid-plan (observed: gpt-5 ended after planning, zero
+        // edits). While the task list has open items, nudge it to continue.
+        const openTasks = () =>
+          Array.from(taskStore.values()).filter(
+            (t) => t.status !== 'completed',
+          );
+        for (
+          let nudges = 0;
+          !security.state.criticalViolation &&
+          openTasks().length > 0 &&
+          nudges < 2;
+          nudges++
+        ) {
+          const remaining = openTasks()
+            .map((t) => t.content)
+            .join('; ');
+          logToFile(`[pi] continuation nudge ${nudges + 1}: ${remaining}`);
+          await agentSession.prompt(
+            `Your task list still has incomplete items: ${remaining}. Continue the workflow now and complete them. Do not stop while a task is open unless it is genuinely impossible — in that case mark it completed and state why.`,
+          );
+        }
 
         // Best-effort remark ask — a failed turn never fails a successful run.
         if (!security.state.criticalViolation) {
