@@ -15,3 +15,4 @@
 - Name events in snake_case (e.g. todo_created), never with spaces.
 - Do not delete or empty `.posthog-events.json` — the wizard cleans it up after the run.
 - Never end your turn while any task on your list is still `pending` or `in_progress`. Ending the turn ends the run — an unfinished plan ships nothing. Work every task to `completed` (or mark it completed with a one-line reason if genuinely impossible), and only then stop.
+- If the security scanner blocks an `edit` or `write`, never retry it unchanged — the same content will be blocked again. Remove the offending part (a PII property, a hardcoded PostHog URL/token) and write the corrected version on the next attempt.
