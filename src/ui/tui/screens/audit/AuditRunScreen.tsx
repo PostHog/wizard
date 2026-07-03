@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from 'react';
+import { useMemo, useSyncExternalStore } from 'react';
 import { join } from 'node:path';
 import { Box } from 'ink';
 import type { WizardStore } from '@ui/tui/store';
@@ -8,6 +8,7 @@ import {
   LogViewer,
   HNViewer,
 } from '@ui/tui/primitives/index';
+import type { KeyBinding } from '@ui/tui/hooks/useKeyBindings';
 import { useStdoutDimensions } from '@ui/tui/hooks/useStdoutDimensions';
 import { useFileWatcher } from '@ui/tui/hooks/file-watcher';
 import { AuditChecksViewer } from './AuditChecksViewer/AuditChecksViewer.js';
@@ -63,6 +64,18 @@ export const AuditRunScreen = ({ store }: AuditRunScreenProps) => {
       notebookUrl={store.session.notebookUrl}
     />
   );
+  const nudgeBindings = useMemo<KeyBinding[]>(
+    () => [
+      {
+        match: 'n',
+        label: 'n',
+        action: 'nudge agent',
+        priority: 20,
+        handler: () => store.nudgeAgent(),
+      },
+    ],
+    [store],
+  );
 
   // Narrow terminals: drop the area pane.
   const statusComponent =
@@ -94,6 +107,7 @@ export const AuditRunScreen = ({ store }: AuditRunScreenProps) => {
       tabs={tabs}
       statusMessage={statuses}
       expandableStatus
+      extraBindings={nudgeBindings}
       store={store}
     />
   );

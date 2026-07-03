@@ -107,6 +107,14 @@ export interface WizardUI {
   note(message: string): void;
   pushStatus(message: string): void;
 
+  /** User-triggered guidance for an active agent run. TUI-only callers emit it
+   *  into the live prompt stream; non-interactive implementations may never
+   *  resolve. */
+  waitForAgentNudge(
+    afterId?: number,
+    signal?: AbortSignal,
+  ): Promise<{ id: number; message: string } | null>;
+
   // ── Spinner ───────────────────────────────────────────────────────
   spinner(): SpinnerHandle;
 

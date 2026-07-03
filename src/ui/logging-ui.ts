@@ -93,6 +93,16 @@ export class LoggingUI implements WizardUI {
     console.log(`◇  ${message}`);
   }
 
+  waitForAgentNudge(
+    _afterId?: number,
+    signal?: AbortSignal,
+  ): Promise<{ id: number; message: string } | null> {
+    if (signal?.aborted) return Promise.resolve(null);
+    return new Promise((resolve) => {
+      signal?.addEventListener('abort', () => resolve(null), { once: true });
+    });
+  }
+
   setDetectedFramework(label: string): void {
     console.log(`✔  Framework: ${label}`);
   }

@@ -208,6 +208,14 @@ export type AgentConfig = {
     | import('@lib/wizard-session').PendingQuestion
     | null;
   /**
+   * Optional live user guidance channel. TUI implementations resolve whenever
+   * the operator asks the agent to move on; non-interactive hosts omit it.
+   */
+  waitForAgentNudge?: (
+    afterId?: number,
+    signal?: AbortSignal,
+  ) => Promise<{ id: number; message: string } | null>;
+  /**
    * Orchestrator queue context. Present only when the `wizard-orchestrator`
    * flag routes the run here; threaded into wizard-tools so the orchestrator
    * tools register.
@@ -299,6 +307,10 @@ type AgentRunConfig = {
   getPendingQuestion?: () =>
     | import('@lib/wizard-session').PendingQuestion
     | null;
+  waitForAgentNudge?: (
+    afterId?: number,
+    signal?: AbortSignal,
+  ) => Promise<{ id: number; message: string } | null>;
 };
 
 /**
@@ -712,6 +724,7 @@ export async function initializeAgent(
       allowedTools: config.allowedTools,
       disallowedTools: config.disallowedTools,
       getPendingQuestion: config.getPendingQuestion,
+      waitForAgentNudge: config.waitForAgentNudge,
     };
 
     logToFile('Agent config:', {
@@ -833,6 +846,30 @@ export async function runAgent(
       message: { role: 'user', content: prompt },
       parent_tool_use_id: null,
     };
+    let lastNudgeId = 0;
+    while (agentConfig.waitForAgentNudge) {
+      const nudgeAbort = new AbortController();
+      const nextNudge = agentConfig.waitForAgentNudge(
+        lastNudgeId,
+        nudgeAbort.signal,
+      );
+      const next = await Promise.race([
+        resultReceived.then(() => {
+          nudgeAbort.abort();
+          return null;
+        }),
+        nextNudge,
+      ]);
+      if (!next) return;
+      lastNudgeId = next.id;
+      logToFile(`[agent] user nudge sent: ${next.message}`);
+      yield {
+        type: 'user',
+        session_id: '',
+        message: { role: 'user', content: next.message },
+        parent_tool_use_id: null,
+      };
+    }
     await resultReceived;
   };
 
