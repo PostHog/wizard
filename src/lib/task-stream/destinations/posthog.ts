@@ -23,7 +23,6 @@ import type {
   StreamEvent,
 } from '@lib/task-stream/types';
 import type { Credentials } from '@lib/wizard-session';
-import { analytics } from '@utils/analytics';
 
 export interface PostHogDestinationOptions {
   /**
@@ -135,10 +134,6 @@ export class PostHogDestination implements TaskStreamDestination {
       try {
         response = await this.fetchImpl(url, init);
       } catch (err) {
-        analytics.captureException(
-          err instanceof Error ? err : new Error(String(err)),
-          { step: 'post_with_retry' },
-        );
         if (attempt >= MAX_ATTEMPTS) {
           this.onError(err instanceof Error ? err : new Error(String(err)));
           return;
@@ -185,11 +180,7 @@ export class PostHogDestination implements TaskStreamDestination {
         let detail = '';
         try {
           detail = await response.text();
-        } catch (err) {
-          analytics.captureException(
-            err instanceof Error ? err : new Error(String(err)),
-            { step: 'post_with_retry' },
-          );
+        } catch {
           // ignore
         }
         this.onError(new Error(`wizard/sessions bad request (400): ${detail}`));

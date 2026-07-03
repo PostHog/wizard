@@ -96,11 +96,7 @@ export function isInGitRepo(): boolean {
     childProcess.execSync('git rev-parse --show-toplevel', {
       stdio: 'ignore',
     });
-  } catch (err) {
-    analytics.captureException(
-      err instanceof Error ? err : new Error(String(err)),
-      { step: 'is_in_git_repo' },
-    );
+  } catch {
     return false;
   }
   return true;
@@ -136,11 +132,7 @@ function parseGitRemote(): { org: string; repo: string } | null {
     // git@github.com:acme-corp/my-app.git or https://github.com/acme-corp/my-app.git
     const match = url.match(/[/:]([\w.-]+)\/([\w.-]+?)(?:\.git)?$/);
     if (match) return { org: match[1], repo: match[2] };
-  } catch (err) {
-    analytics.captureException(
-      err instanceof Error ? err : new Error(String(err)),
-      { step: 'parse_git_remote' },
-    );
+  } catch {
     // not in a git repo or no remote
   }
   return null;
@@ -178,11 +170,7 @@ export function getUncommittedOrUntrackedFiles(): string[] {
         stdio: ['ignore', 'pipe', 'ignore'],
       })
       .toString();
-  } catch (err) {
-    analytics.captureException(
-      err instanceof Error ? err : new Error(String(err)),
-      { step: 'get_uncommitted_or_untracked_files' },
-    );
+  } catch {
     return [];
   }
 
@@ -213,11 +201,7 @@ export async function isReact19Installed({
       acceptableVersions: '>=19.0.0',
       canBeLatest: true,
     });
-  } catch (err) {
-    analytics.captureException(
-      err instanceof Error ? err : new Error(String(err)),
-      { step: 'is_react19_installed' },
-    );
+  } catch {
     return false;
   }
 }
@@ -266,10 +250,6 @@ export async function installPackage({
     try {
       await execAsync(installCommand, { cwd: installDir });
     } catch (e) {
-      analytics.captureException(
-        e instanceof Error ? e : new Error(String(e)),
-        { step: 'install_package' },
-      );
       const { stdout = '', stderr = '' } = (e ?? {}) as {
         stdout?: string;
         stderr?: string;
@@ -319,11 +299,7 @@ export async function getPackageDotJson({
   let raw: string;
   try {
     raw = await fs.promises.readFile(pkgPath, 'utf8');
-  } catch (err) {
-    analytics.captureException(
-      err instanceof Error ? err : new Error(String(err)),
-      { step: 'get_package_dot_json' },
-    );
+  } catch {
     getUI().log.error(
       'Could not find package.json. Make sure to run the wizard in the root of your app!',
     );
@@ -334,11 +310,7 @@ export async function getPackageDotJson({
   try {
     const parsed = JSON.parse(raw) as PackageJson | null;
     return parsed ?? {};
-  } catch (err) {
-    analytics.captureException(
-      err instanceof Error ? err : new Error(String(err)),
-      { step: 'get_package_dot_json' },
-    );
+  } catch {
     getUI().log.error(
       `Unable to parse your package.json. Make sure it has a valid format!`,
     );
@@ -360,11 +332,7 @@ export async function tryGetPackageJson({
       'utf8',
     );
     return JSON.parse(packageJsonFileContents) as PackageJson;
-  } catch (err) {
-    analytics.captureException(
-      err instanceof Error ? err : new Error(String(err)),
-      { step: 'try_get_package_json' },
-    );
+  } catch {
     return null;
   }
 }
@@ -382,11 +350,7 @@ export async function updatePackageDotJson(
       flag: 'w',
     });
     return;
-  } catch (err) {
-    analytics.captureException(
-      err instanceof Error ? err : new Error(String(err)),
-      { step: 'update_package_dot_json' },
-    );
+  } catch {
     getUI().log.error(`Unable to update your package.json.`);
     await abort();
   }
@@ -421,11 +385,7 @@ export function isUsingTypeScript({
   try {
     fs.accessSync(join(installDir, 'tsconfig.json'));
     return true;
-  } catch (err) {
-    analytics.captureException(
-      err instanceof Error ? err : new Error(String(err)),
-      { step: 'is_using_type_script' },
-    );
+  } catch {
     return false;
   }
 }
@@ -486,10 +446,6 @@ export async function getOrAskForProjectData(
       user = await fetchUserData(_options.apiKey, cloudUrl);
       roleAtOrganization = user.role_at_organization ?? null;
     } catch (err) {
-      analytics.captureException(
-        err instanceof Error ? err : new Error(String(err)),
-        { step: 'get_or_ask_for_project_data' },
-      );
       logToFile(
         '[ci-auth] user lookup failed:',
         err instanceof Error ? err.message : String(err),
@@ -787,9 +743,6 @@ export async function createNewConfigFile(
 
     return true;
   } catch (e) {
-    analytics.captureException(e instanceof Error ? e : new Error(String(e)), {
-      step: 'create_new_config_file',
-    });
     debug(e);
     getUI().log.warn(
       `Could not create a new ${prettyFilename} file. Please create one manually and follow the instructions below.`,

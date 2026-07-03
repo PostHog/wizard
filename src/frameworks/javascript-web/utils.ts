@@ -2,7 +2,6 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { detectAllPackageManagers } from '@utils/package-manager';
 import type { WizardRunOptions } from '@utils/types';
-import { analytics } from '@utils/analytics';
 
 export type JavaScriptContext = {
   packageManagerName?: string;
@@ -78,11 +77,7 @@ export function detectBundler(
     if (allDeps['parcel']) return 'parcel';
     if (allDeps['rollup']) return 'rollup';
     return undefined;
-  } catch (err) {
-    analytics.captureException(
-      err instanceof Error ? err : new Error(String(err)),
-      { step: 'detect_bundler' },
-    );
+  } catch {
     return undefined;
   }
 }
@@ -109,11 +104,7 @@ export function hasIndexHtml(
     let entries: fs.Dirent[];
     try {
       entries = fs.readdirSync(dir, { withFileTypes: true });
-    } catch (err) {
-      analytics.captureException(
-        err instanceof Error ? err : new Error(String(err)),
-        { step: 'utils_search' },
-      );
+    } catch {
       return false;
     }
 

@@ -2,7 +2,6 @@ import type { WizardRunOptions } from '@utils/types';
 import fg from 'fast-glob';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { analytics } from '@utils/analytics';
 
 export enum SwiftProjectType {
   SWIFTUI = 'swiftui',
@@ -61,11 +60,7 @@ export async function detectSwiftProjectType(
       if (content.includes('import UIKit')) {
         hasUIKit = true;
       }
-    } catch (err) {
-      analytics.captureException(
-        err instanceof Error ? err : new Error(String(err)),
-        { step: 'detect_swift_project_type' },
-      );
+    } catch {
       continue;
     }
   }

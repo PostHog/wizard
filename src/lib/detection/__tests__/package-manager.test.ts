@@ -14,7 +14,7 @@ vi.mock('../../../telemetry', () => ({
   withProgress: (_name: string, fn: () => unknown) => fn(),
 }));
 vi.mock('../../../utils/analytics', () => ({
-  analytics: { setTag: vi.fn(), captureException: vi.fn() },
+  analytics: { setTag: vi.fn() },
 }));
 
 function makeTmpDir(): string {

@@ -38,11 +38,7 @@ export class CodexMCPClient extends DefaultMCPClient implements PluginCapable {
         this.codexBinaryPath = resolved;
         return resolved;
       }
-    } catch (err) {
-      analytics.captureException(
-        err instanceof Error ? err : new Error(String(err)),
-        { step: 'find_codex_binary' },
-      );
+    } catch {
       // not in PATH
     }
     return null;
@@ -127,11 +123,7 @@ export class CodexMCPClient extends DefaultMCPClient implements PluginCapable {
       return Promise.resolve(
         contents.toLowerCase().includes('[marketplaces.posthog]'),
       );
-    } catch (err) {
-      analytics.captureException(
-        err instanceof Error ? err : new Error(String(err)),
-        { step: 'is_plugin_installed' },
-      );
+    } catch {
       return Promise.resolve(false);
     }
   }
@@ -161,11 +153,7 @@ export class CodexMCPClient extends DefaultMCPClient implements PluginCapable {
       );
       try {
         fs.rmSync(staleDir, { recursive: true, force: true });
-      } catch (err) {
-        analytics.captureException(
-          err instanceof Error ? err : new Error(String(err)),
-          { step: 'install_plugin' },
-        );
+      } catch {
         // ignore — retry anyway
       }
       result = run();

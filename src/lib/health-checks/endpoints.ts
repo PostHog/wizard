@@ -1,7 +1,6 @@
 import { REMOTE_SKILLS_BASE_URL } from '@lib/constants';
 import { logToFile } from '@utils/debug';
 import { ServiceHealthStatus, type BaseHealthResult } from './types';
-import { analytics } from '@utils/analytics';
 
 // ---------------------------------------------------------------------------
 // Direct endpoint health checks
@@ -57,9 +56,6 @@ async function attemptFetch(
     clearTimeout(tid);
     return { kind: 'response', res };
   } catch (e) {
-    analytics.captureException(e instanceof Error ? e : new Error(String(e)), {
-      step: 'attempt_fetch',
-    });
     clearTimeout(tid);
     const err = e instanceof Error ? e : new Error('Unknown error');
     return { kind: 'error', error: err, timedOut: err.name === 'AbortError' };

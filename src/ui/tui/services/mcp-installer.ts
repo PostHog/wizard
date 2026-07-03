@@ -102,10 +102,6 @@ export function createMcpInstaller(): McpInstaller {
             );
           }
         } catch (err) {
-          analytics.captureException(
-            err instanceof Error ? err : new Error(String(err)),
-            { step: 'mcp_installer_install' },
-          );
           logToFile(
             `[McpInstaller] addServer threw for ${client.name}: ${
               err instanceof Error ? err.message : String(err)

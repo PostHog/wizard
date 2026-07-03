@@ -4,7 +4,6 @@ import { LoggingUI } from '@ui/logging-ui';
 import { Program } from '@lib/programs/program-registry';
 import { VERSION } from '@lib/version';
 import type { Command } from '../command';
-import { analytics } from '@utils/analytics';
 
 export const mcpRemoveCommand: Command = {
   name: 'remove',
@@ -33,11 +32,7 @@ function runMcpRemove(argv: Arguments): void {
         localMcp,
         baseUrl: argv.baseUrl as string | undefined,
       });
-    } catch (err) {
-      analytics.captureException(
-        err instanceof Error ? err : new Error(String(err)),
-        { step: 'run_mcp_remove' },
-      );
+    } catch {
       setUI(new LoggingUI());
       const { removeMCPServerFromClientsStep } = await import(
         '@steps/add-mcp-server-to-clients/index'

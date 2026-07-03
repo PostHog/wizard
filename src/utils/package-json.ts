@@ -1,6 +1,5 @@
 import { readFileSync } from 'fs';
 import path from 'path';
-import { analytics } from './analytics';
 
 export type PackageJson = {
   dependencies?: Record<string, string>;
@@ -76,11 +75,7 @@ export function getInstalledPackageVersion(
       version?: string;
     };
     return manifest.version;
-  } catch (err) {
-    analytics.captureException(
-      err instanceof Error ? err : new Error(String(err)),
-      { step: 'get_installed_package_version' },
-    );
+  } catch {
     return undefined;
   }
 }

@@ -22,7 +22,6 @@ import type { DurationData } from './duration-tracker';
 import type { CompactionData } from './compaction-tracker';
 import type { ContextSizeData } from './context-size-tracker';
 import type { BenchmarkData, StepUsage } from '@lib/middleware/benchmark';
-import { analytics } from '@utils/analytics';
 
 /**
  * Sum token usage across all models from the SDK's modelUsage field.
@@ -175,10 +174,6 @@ export class JsonWriterPlugin implements Middleware {
         `● ${AgentSignals.BENCHMARK} Results written to ${this.outputPath}`,
       );
     } catch (error) {
-      analytics.captureException(
-        error instanceof Error ? error : new Error(String(error)),
-        { step: 'write_benchmark_data' },
-      );
       logToFile('Failed to write benchmark data:', error);
     }
   }

@@ -4,7 +4,6 @@ import { LoggingUI } from '@ui/logging-ui';
 import { Program } from '@lib/programs/program-registry';
 import { VERSION } from '@lib/version';
 import type { Command } from '../command';
-import { analytics } from '@utils/analytics';
 
 export const mcpTutorialCommand: Command = {
   name: 'tutorial',
@@ -35,10 +34,6 @@ function runMcpTutorial(argv: Arguments): void {
         baseUrl: argv.baseUrl as string | undefined,
       });
     } catch (err) {
-      analytics.captureException(
-        err instanceof Error ? err : new Error(String(err)),
-        { step: 'run_mcp_tutorial' },
-      );
       // TUI unavailable — the tutorial has no headless fallback.
       setUI(new LoggingUI());
       getUI().log.error(

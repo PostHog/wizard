@@ -9,7 +9,6 @@ import { existsSync, statSync } from 'fs';
 import type { WizardSession } from '@lib/wizard-session';
 import type { AbortCase } from '@lib/agent/agent-runner';
 import { findPackageJsons } from '@lib/programs/shared/package-scanning';
-import { analytics } from '@utils/analytics';
 
 export {
   findPackageJsons,
@@ -83,11 +82,7 @@ export function detectRevenuePrerequisites(
       fail({ kind: 'bad-directory', path: installDir, reason: 'not-dir' });
       return;
     }
-  } catch (err) {
-    analytics.captureException(
-      err instanceof Error ? err : new Error(String(err)),
-      { step: 'detect_revenue_prerequisites' },
-    );
+  } catch {
     fail({ kind: 'bad-directory', path: installDir, reason: 'unreadable' });
     return;
   }

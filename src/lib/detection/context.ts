@@ -10,7 +10,6 @@ import * as semver from 'semver';
 import { DETECTION_TIMEOUT_MS } from '@lib/constants';
 import type { FrameworkConfig } from '@lib/framework-config';
 import type { WizardRunOptions } from '@utils/types';
-import { analytics } from '@utils/analytics';
 
 /**
  * Run a framework's `gatherContext()` to collect variant-specific
@@ -31,11 +30,7 @@ export async function gatherFrameworkContext(
         setTimeout(() => resolve({}), DETECTION_TIMEOUT_MS),
       ),
     ]);
-  } catch (err) {
-    analytics.captureException(
-      err instanceof Error ? err : new Error(String(err)),
-      { step: 'gather_framework_context' },
-    );
+  } catch {
     return {};
   }
 }

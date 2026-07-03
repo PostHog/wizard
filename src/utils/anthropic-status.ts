@@ -1,4 +1,3 @@
-import { analytics } from './analytics';
 const CLAUDE_STATUS_URL = 'https://status.claude.com/api/v2/status.json';
 
 type StatusIndicator = 'none' | 'minor' | 'major' | 'critical';
@@ -63,10 +62,6 @@ export async function checkAnthropicStatus(): Promise<StatusCheckResult> {
         return { status: 'unknown', error: `Unknown indicator: ${indicator}` };
     }
   } catch (error) {
-    analytics.captureException(
-      error instanceof Error ? error : new Error(String(error)),
-      { step: 'check_anthropic_status' },
-    );
     if (error instanceof Error && error.name === 'AbortError') {
       return { status: 'unknown', error: 'Request timed out' };
     }

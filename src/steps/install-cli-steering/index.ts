@@ -4,7 +4,6 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 
 import { debug } from '@utils/debug';
-import { analytics } from '@utils/analytics';
 
 /**
  * A coding agent whose global instructions file the PostHog CLI steering
@@ -24,11 +23,7 @@ export interface CliSteeringTarget {
 const dirExists = (...segments: string[]): boolean => {
   try {
     return fs.existsSync(path.join(os.homedir(), ...segments));
-  } catch (err) {
-    analytics.captureException(
-      err instanceof Error ? err : new Error(String(err)),
-      { step: 'dir_exists' },
-    );
+  } catch {
     return false;
   }
 };

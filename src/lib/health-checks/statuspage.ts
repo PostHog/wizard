@@ -3,7 +3,6 @@ import {
   type BaseHealthResult,
   type ComponentHealthResult,
 } from './types';
-import { analytics } from '@utils/analytics';
 
 // ---------------------------------------------------------------------------
 // Statuspage.io v2 API helpers
@@ -75,9 +74,6 @@ async function fetchStatuspageIndicator(
       rawIndicator: indicator ?? undefined,
     };
   } catch (e) {
-    analytics.captureException(e instanceof Error ? e : new Error(String(e)), {
-      step: 'fetch_statuspage_indicator',
-    });
     if (e instanceof Error && e.name === 'AbortError')
       return errResult('Request timed out');
     return errResult(e instanceof Error ? e.message : 'Unknown error');
@@ -114,9 +110,6 @@ async function fetchStatuspageSummary(
       degradedOrDownComponents: affected.length > 0 ? affected : undefined,
     };
   } catch (e) {
-    analytics.captureException(e instanceof Error ? e : new Error(String(e)), {
-      step: 'fetch_statuspage_summary',
-    });
     if (e instanceof Error && e.name === 'AbortError')
       return errResult('Request timed out');
     return errResult(e instanceof Error ? e.message : 'Unknown error');

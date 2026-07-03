@@ -21,7 +21,6 @@ import {
 } from '@lib/yara-scanner';
 import { isWizardDocumentationPath, recordExternalScan } from '@lib/yara-hooks';
 import { logToFile } from '@utils/debug';
-import { analytics } from '@utils/analytics';
 
 /** yara-scanner match → the report shape `recordExternalScan` expects. */
 function toReportViolation(m: YaraMatch) {
@@ -153,10 +152,6 @@ export function evaluateToolCall(
 
     return { block: false };
   } catch (err) {
-    analytics.captureException(
-      err instanceof Error ? err : new Error(String(err)),
-      { step: 'evaluate_tool_call' },
-    );
     logToFile('[pi-security] gate error — failing closed:', err);
     return {
       block: true,
@@ -247,10 +242,6 @@ export function createSecurityExtension(ctx: ToolGateContext = {}): {
           );
         }
       } catch (err) {
-        analytics.captureException(
-          err instanceof Error ? err : new Error(String(err)),
-          { step: 'security_factory' },
-        );
         // Fail closed: a scanner error on output latches a violation.
         state.criticalViolation = true;
         logToFile('[pi-security] post-scan error — failing closed:', err);

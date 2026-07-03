@@ -23,7 +23,6 @@ import {
   checkGithubReleasesHealth,
 } from './endpoints';
 import { logToFile } from '@utils/debug';
-import { analytics } from '@utils/analytics';
 
 // ---------------------------------------------------------------------------
 // Service labels (used in human-readable reason strings)
@@ -277,10 +276,6 @@ export async function evaluateWizardReadiness(
 
     return { decision: WizardReadiness.Yes, health, reasons };
   } catch (err) {
-    analytics.captureException(
-      err instanceof Error ? err : new Error(String(err)),
-      { step: 'evaluate_wizard_readiness' },
-    );
     logToFile(
       `[health-checks] error: ${err instanceof Error ? err.message : err}`,
     );

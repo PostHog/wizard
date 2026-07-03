@@ -11,7 +11,6 @@ import { logToFile } from '@utils/debug';
 import { AgentSignals } from '@lib/agent/agent-interface';
 import { runtimeEnv } from '@env';
 import { WIZARD_BENCHMARK_FILE, WIZARD_LOG_FILE } from '@utils/paths';
-import { analytics } from '@utils/analytics';
 
 export interface BenchmarkConfig {
   /** Enable/disable individual metric plugins */
@@ -80,11 +79,7 @@ export function loadBenchmarkConfig(installDir: string): BenchmarkConfig {
 
     logToFile(`${AgentSignals.BENCHMARK} Loaded config from ${configPath}`);
     return config;
-  } catch (err) {
-    analytics.captureException(
-      err instanceof Error ? err : new Error(String(err)),
-      { step: 'load_benchmark_config' },
-    );
+  } catch {
     // No config file or invalid JSON — use defaults
     const config = structuredClone(DEFAULT_CONFIG);
 

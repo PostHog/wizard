@@ -276,11 +276,7 @@ export async function requestDeepLink(
       return url;
     }
     return null;
-  } catch (err) {
-    analytics.captureException(
-      err instanceof Error ? err : new Error(String(err)),
-      { step: 'request_deep_link' },
-    );
+  } catch {
     logToFile('[provisioning] deep link request failed, skipping');
     return null;
   }

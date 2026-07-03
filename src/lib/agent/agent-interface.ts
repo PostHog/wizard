@@ -894,10 +894,6 @@ export async function runAgent(
     try {
       middleware?.finalize(lastResultMessage, durationMs);
     } catch (e) {
-      analytics.captureException(
-        e instanceof Error ? e : new Error(String(e)),
-        { step: 'complete_with_success' },
-      );
       logToFile(`${AgentSignals.BENCHMARK} Middleware finalize error:`, e);
     }
     spinner.stop(successMessage);
@@ -1239,10 +1235,6 @@ export async function runAgent(
       try {
         middleware?.onMessage(message);
       } catch (e) {
-        analytics.captureException(
-          e instanceof Error ? e : new Error(String(e)),
-          { step: 'run_agent' },
-        );
         logToFile(`${AgentSignals.BENCHMARK} Middleware onMessage error:`, e);
       }
 
@@ -1548,11 +1540,7 @@ function extractTaskIdFromResult(content: unknown): string | undefined {
       const parsed = JSON.parse(s);
       const id = parsed?.task?.id ?? parsed?.taskId ?? parsed?.id;
       return typeof id === 'string' ? id : undefined;
-    } catch (err) {
-      analytics.captureException(
-        err instanceof Error ? err : new Error(String(err)),
-        { step: 'try_parse' },
-      );
+    } catch {
       return undefined;
     }
   };

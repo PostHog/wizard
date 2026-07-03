@@ -127,11 +127,7 @@ export function extractOAuthCode(input: string): string | null {
     looksLikeUrl = true;
     const code = url.searchParams.get('code');
     if (code) return code;
-  } catch (err) {
-    analytics.captureException(
-      err instanceof Error ? err : new Error(String(err)),
-      { step: 'extract_oauth_code' },
-    );
+  } catch {
     // Not a parseable URL — fall through to the looser checks below.
   }
 
@@ -290,11 +286,7 @@ function getPortProcessInfo(port: number): {
     const pid = fields[1] ?? 'unknown';
     const user = fields[2] ?? 'unknown';
     return { command, pid, port, user };
-  } catch (err) {
-    analytics.captureException(
-      err instanceof Error ? err : new Error(String(err)),
-      { step: 'get_port_process_info' },
-    );
+  } catch {
     return { command: 'unknown', pid: 'unknown', port, user: 'unknown' };
   }
 }

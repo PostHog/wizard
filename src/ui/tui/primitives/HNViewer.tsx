@@ -9,7 +9,6 @@ import { Box, Text } from 'ink';
 import { useState, useEffect } from 'react';
 import { Colors } from '@ui/tui/styles';
 import { useKeyBindings } from '@ui/tui/hooks/useKeyBindings';
-import { analytics } from '@utils/analytics';
 
 const HN_API = 'https://hacker-news.firebaseio.com/v0';
 
@@ -40,11 +39,7 @@ export const HNViewer = () => {
         );
 
         setStories(items);
-      } catch (err) {
-        analytics.captureException(
-          err instanceof Error ? err : new Error(String(err)),
-          { step: 'hn_viewer' },
-        );
+      } catch {
         // Silently fail — tab just stays empty
       }
       setLoading(false);

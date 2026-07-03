@@ -10,7 +10,6 @@ import type { WizardSession } from '@lib/wizard-session';
 import type { TaskStreamPush as TaskStreamPushClass } from '@lib/task-stream/task-stream-push';
 import { resolveNoTelemetry } from './resolve-no-telemetry';
 import { runCleanups } from '@utils/wizard-abort';
-import { analytics } from '@utils/analytics';
 
 const WIZARD_VERSION = VERSION;
 
@@ -149,11 +148,7 @@ export function runWizard(
           .finally(() => {
             try {
               activeTui.unmount();
-            } catch (err) {
-              analytics.captureException(
-                err instanceof Error ? err : new Error(String(err)),
-                { step: 'run_wizard' },
-              );
+            } catch {
               // terminal may already be torn down
             }
             process.exit(130);
@@ -227,10 +222,6 @@ export function runWizard(
       activeTui.unmount();
       process.exit(0);
     } catch (err) {
-      analytics.captureException(
-        err instanceof Error ? err : new Error(String(err)),
-        { step: 'run_wizard' },
-      );
       // File-log first — the cleanup below can throw or exit.
       logToFile('[run-wizard] FATAL:', err);
       // Run cleanups before anything async so settings are restored even if
@@ -246,22 +237,14 @@ export function runWizard(
       if (taskStream) {
         try {
           await taskStream.shutdown(2000);
-        } catch (err) {
-          analytics.captureException(
-            err instanceof Error ? err : new Error(String(err)),
-            { step: 'run_wizard' },
-          );
+        } catch {
           // ignore
         }
       }
       if (tui) {
         try {
           tui.unmount();
-        } catch (err) {
-          analytics.captureException(
-            err instanceof Error ? err : new Error(String(err)),
-            { step: 'run_wizard' },
-          );
+        } catch {
           // ignore
         }
       }

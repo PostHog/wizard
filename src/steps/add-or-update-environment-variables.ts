@@ -76,10 +76,6 @@ export async function addOrUpdateEnvironmentVariablesStep({
 
         addedEnvVariables = true;
       } catch (error) {
-        analytics.captureException(
-          error instanceof Error ? error : new Error(String(error)),
-          { step: 'add_or_update_environment_variables_step' },
-        );
         getUI().log.warn(
           `Failed to update environment variables in ${relativeEnvFilePath}. Please update them manually.`,
         );
@@ -107,10 +103,6 @@ export async function addOrUpdateEnvironmentVariablesStep({
 
         addedEnvVariables = true;
       } catch (error) {
-        analytics.captureException(
-          error instanceof Error ? error : new Error(String(error)),
-          { step: 'add_or_update_environment_variables_step' },
-        );
         getUI().log.warn(
           `Failed to create ${relativeEnvFilePath} with environment variables. Please add them manually.`,
         );
@@ -152,10 +144,6 @@ export async function addOrUpdateEnvironmentVariablesStep({
           getUI().log.success(`Updated .gitignore to include ${envFileName}.`);
           addedGitignore = true;
         } catch (error) {
-          analytics.captureException(
-            error instanceof Error ? error : new Error(String(error)),
-            { step: 'add_or_update_environment_variables_step' },
-          );
           getUI().log.warn(
             `Failed to update .gitignore to include ${envFileName}.`,
           );
@@ -186,10 +174,6 @@ export async function addOrUpdateEnvironmentVariablesStep({
         getUI().log.success(`Created .gitignore with environment files.`);
         addedGitignore = true;
       } catch (error) {
-        analytics.captureException(
-          error instanceof Error ? error : new Error(String(error)),
-          { step: 'add_or_update_environment_variables_step' },
-        );
         getUI().log.warn(`Failed to create .gitignore with environment files.`);
 
         analytics.wizardCapture('env vars error', {

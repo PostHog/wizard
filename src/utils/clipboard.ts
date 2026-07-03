@@ -18,7 +18,6 @@
  */
 import { spawn } from 'node:child_process';
 import { logToFile } from './debug.js';
-import { analytics } from './analytics';
 
 interface ClipboardCommand {
   cmd: string;
@@ -49,11 +48,7 @@ function writeWith(
       child.stdin.on('error', () => resolve(false));
       child.on('close', (code) => resolve(code === 0));
       child.stdin.end(text);
-    } catch (err) {
-      analytics.captureException(
-        err instanceof Error ? err : new Error(String(err)),
-        { step: 'write_with' },
-      );
+    } catch {
       resolve(false);
     }
   });
@@ -104,11 +99,7 @@ function spawnOpener({ cmd, args }: ClipboardCommand): Promise<boolean> {
       const child = spawn(cmd, args, { stdio: 'ignore' });
       child.on('error', () => resolve(false));
       child.on('close', (code) => resolve(code === 0));
-    } catch (err) {
-      analytics.captureException(
-        err instanceof Error ? err : new Error(String(err)),
-        { step: 'spawn_opener' },
-      );
+    } catch {
       resolve(false);
     }
   });

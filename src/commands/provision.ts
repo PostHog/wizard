@@ -3,7 +3,6 @@ import { getUI, setUI } from '@ui';
 import { LoggingUI } from '@ui/logging-ui';
 import type { ProvisioningResult } from '@utils/provisioning';
 import type { Command } from './command';
-import { analytics } from '@utils/analytics';
 
 export const provisionCommand: Command = {
   name: 'provision',
@@ -75,10 +74,6 @@ async function provision({
     emitResult(result, jsonMode);
     process.exit(0);
   } catch (error) {
-    analytics.captureException(
-      error instanceof Error ? error : new Error(String(error)),
-      { step: 'provision' },
-    );
     emitError(error, jsonMode);
     process.exit(1);
   }

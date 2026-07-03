@@ -23,7 +23,6 @@ import {
   type IntegrationProject,
   type IntegrationDetectionReport,
 } from '@lib/programs/self-driving/detect-agentic';
-import { analytics } from '@utils/analytics';
 
 interface SelfDrivingIntegrationDetectScreenProps {
   store: WizardStore;
@@ -82,10 +81,6 @@ export const SelfDrivingIntegrationDetectScreen = ({
         );
         if (!cancelled) setState({ kind: 'ready', report });
       } catch (err) {
-        analytics.captureException(
-          err instanceof Error ? err : new Error(String(err)),
-          { step: 'self_driving_integration_detect_screen' },
-        );
         if (!cancelled) {
           setState({
             kind: 'error',

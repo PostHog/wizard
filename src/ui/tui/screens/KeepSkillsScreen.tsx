@@ -18,7 +18,6 @@ import type { WizardStore } from '@ui/tui/store';
 import { ConfirmationInput } from '@ui/tui/primitives/index';
 import { Colors } from '@ui/tui/styles';
 import { CONTEXT_MILL_URL } from '@lib/constants';
-import { analytics } from '@utils/analytics';
 
 interface KeepSkillsScreenProps {
   store: WizardStore;
@@ -56,11 +55,7 @@ export const KeepSkillsScreen = ({ store }: KeepSkillsScreenProps) => {
         for (const dir of dirs) {
           try {
             await access(join(skillsDir, dir.name, WIZARD_MARKER));
-          } catch (err) {
-            analytics.captureException(
-              err instanceof Error ? err : new Error(String(err)),
-              { step: 'keep_skills_screen' },
-            );
+          } catch {
             continue;
           }
           const children = (await readdir(join(skillsDir, dir.name))).filter(
@@ -74,11 +69,7 @@ export const KeepSkillsScreen = ({ store }: KeepSkillsScreenProps) => {
         }
         setSkills(result);
         setPhase(Phase.Ask);
-      } catch (err) {
-        analytics.captureException(
-          err instanceof Error ? err : new Error(String(err)),
-          { step: 'keep_skills_screen' },
-        );
+      } catch {
         store.setSkillsComplete(true);
         process.exit(0);
       }
@@ -98,11 +89,7 @@ export const KeepSkillsScreen = ({ store }: KeepSkillsScreenProps) => {
           recursive: true,
           force: true,
         });
-      } catch (err) {
-        analytics.captureException(
-          err instanceof Error ? err : new Error(String(err)),
-          { step: 'handle_remove' },
-        );
+      } catch {
         // Best-effort removal
       }
     }
@@ -111,11 +98,7 @@ export const KeepSkillsScreen = ({ store }: KeepSkillsScreenProps) => {
       if (remaining.length === 0) {
         await rm(skillsDir, { recursive: true, force: true });
       }
-    } catch (err) {
-      analytics.captureException(
-        err instanceof Error ? err : new Error(String(err)),
-        { step: 'handle_remove' },
-      );
+    } catch {
       // Best-effort cleanup
     }
     setPhase(Phase.Done);

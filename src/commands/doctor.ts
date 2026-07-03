@@ -9,7 +9,6 @@ import {
 } from '@lib/programs/posthog-doctor/index';
 import { skillProgramOptions } from './skill-program-options';
 import type { Command } from './command';
-import { analytics } from '@utils/analytics';
 
 export const doctorCommand: Command = {
   name: 'doctor',
@@ -78,10 +77,6 @@ async function runDoctorCI(options: Record<string, unknown>): Promise<void> {
     }
     process.exit(1);
   } catch (error) {
-    analytics.captureException(
-      error instanceof Error ? error : new Error(String(error)),
-      { step: 'run_doctor_ci' },
-    );
     const { ApiError } = await import('@lib/api');
     const message =
       error instanceof ApiError && error.statusCode === 401

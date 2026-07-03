@@ -4,7 +4,6 @@ import { hasDeclaredDependency } from '@utils/package-json';
 import { createVersionBucket } from '@utils/semver';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { analytics } from '@utils/analytics';
 
 export enum TanStackRouterMode {
   FILE_BASED = 'file-based',
@@ -46,11 +45,7 @@ async function hasFileBasedRouting({
     ) {
       return true;
     }
-  } catch (err) {
-    analytics.captureException(
-      err instanceof Error ? err : new Error(String(err)),
-      { step: 'has_file_based_routing' },
-    );
+  } catch {
     // package.json not found or unreadable
   }
 
@@ -67,11 +62,7 @@ async function hasFileBasedRouting({
       if (content.includes('createFileRoute')) {
         return true;
       }
-    } catch (err) {
-      analytics.captureException(
-        err instanceof Error ? err : new Error(String(err)),
-        { step: 'has_file_based_routing' },
-      );
+    } catch {
       continue;
     }
   }
@@ -102,11 +93,7 @@ async function hasCodeBasedRouting({
       if (content.includes('createFileRoute')) {
         hasCreateFileRoute = true;
       }
-    } catch (err) {
-      analytics.captureException(
-        err instanceof Error ? err : new Error(String(err)),
-        { step: 'has_code_based_routing' },
-      );
+    } catch {
       continue;
     }
   }

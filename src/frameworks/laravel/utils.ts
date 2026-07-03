@@ -4,7 +4,6 @@ import type { WizardRunOptions } from '@utils/types';
 import { createVersionBucket } from '@utils/semver';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { analytics } from '@utils/analytics';
 
 export enum LaravelProjectType {
   STANDARD = 'standard', // Basic Laravel app
@@ -42,11 +41,7 @@ export function getComposerJson(
   try {
     const content = fs.readFileSync(composerPath, 'utf-8');
     return JSON.parse(content);
-  } catch (err) {
-    analytics.captureException(
-      err instanceof Error ? err : new Error(String(err)),
-      { step: 'get_composer_json' },
-    );
+  } catch {
     return undefined;
   }
 }
@@ -108,11 +103,7 @@ async function hasLaravelCodePattern(
     try {
       const content = fs.readFileSync(path.join(installDir, phpFile), 'utf-8');
       if (searchPattern.test(content)) return true;
-    } catch (err) {
-      analytics.captureException(
-        err instanceof Error ? err : new Error(String(err)),
-        { step: 'has_laravel_code_pattern' },
-      );
+    } catch {
       continue;
     }
   }
@@ -256,11 +247,7 @@ export function detectLaravelStructure(
     if (majorVersion >= 11) return 'latest'; // Laravel 11+ (new structure)
     if (majorVersion >= 9) return 'modern'; // Laravel 9-10
     return 'legacy'; // Laravel 8 and below
-  } catch (err) {
-    analytics.captureException(
-      err instanceof Error ? err : new Error(String(err)),
-      { step: 'detect_laravel_structure' },
-    );
+  } catch {
     return 'modern';
   }
 }

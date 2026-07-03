@@ -14,7 +14,6 @@
 
 import * as fs from 'fs';
 import { useEffect } from 'react';
-import { analytics } from '@utils/analytics';
 
 const DEFAULT_POLL_INTERVAL_MS = 5000;
 const DEFAULT_ATTACH_RETRY_INTERVAL_MS = 1000;
@@ -53,11 +52,7 @@ export function startFileWatcher(
       lastMtimeMs = stat.mtimeMs;
       const parsed: unknown = JSON.parse(fs.readFileSync(path, 'utf-8'));
       onUpdate(parsed);
-    } catch (err) {
-      analytics.captureException(
-        err instanceof Error ? err : new Error(String(err)),
-        { step: 'file_watcher_read' },
-      );
+    } catch {
       // File missing or not yet valid JSON.
     }
   };
@@ -67,11 +62,7 @@ export function startFileWatcher(
   try {
     watchers.push(fs.watch(path, () => read(true)));
     read(true);
-  } catch (err) {
-    analytics.captureException(
-      err instanceof Error ? err : new Error(String(err)),
-      { step: 'start_file_watcher' },
-    );
+  } catch {
     // File doesn't exist yet — retry attaching the watch periodically until
     // it appears. The poll above already covers updates; this just upgrades
     // latency once the file shows up.
@@ -82,11 +73,7 @@ export function startFileWatcher(
         const idx = intervals.indexOf(attachInterval);
         if (idx >= 0) intervals.splice(idx, 1);
         watchers.push(fs.watch(path, () => read(true)));
-      } catch (err) {
-        analytics.captureException(
-          err instanceof Error ? err : new Error(String(err)),
-          { step: 'start_file_watcher' },
-        );
+      } catch {
         // Still waiting.
       }
     }, attachRetryIntervalMs);

@@ -1,4 +1,3 @@
-import { analytics } from '@utils/analytics';
 /**
  * Link-rendering helpers for terminal prompts.
  *
@@ -63,11 +62,7 @@ export function truncateUrlLabel(url: string, maxLength = 56): string {
     const parsed = new URL(url);
     head = `${parsed.protocol}//${parsed.host}`;
     tail = url.slice(head.length);
-  } catch (err) {
-    analytics.captureException(
-      err instanceof Error ? err : new Error(String(err)),
-      { step: 'truncate_url_label' },
-    );
+  } catch {
     // Not parseable as a URL: fall back to a plain head truncation.
     return url.slice(0, Math.max(1, maxLength - ELLIPSIS.length)) + ELLIPSIS;
   }

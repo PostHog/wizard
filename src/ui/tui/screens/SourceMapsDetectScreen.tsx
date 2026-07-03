@@ -21,7 +21,6 @@ import {
   type DetectedProject,
   type DetectionReport,
 } from '@lib/programs/error-tracking-upload-source-maps/detect-agentic';
-import { analytics } from '@utils/analytics';
 
 interface SourceMapsDetectScreenProps {
   store: WizardStore;
@@ -69,10 +68,6 @@ export const SourceMapsDetectScreen = ({
         });
         if (!cancelled) setState({ kind: 'ready', report });
       } catch (err) {
-        analytics.captureException(
-          err instanceof Error ? err : new Error(String(err)),
-          { step: 'source_maps_detect_screen' },
-        );
         if (!cancelled) {
           setState({
             kind: 'error',

@@ -12,7 +12,6 @@ import { OutroKind } from '@lib/wizard-session';
 import { ApiError } from '@lib/api';
 import { POSTHOG_DOCS_URL } from '@lib/constants';
 import { IssueTable, SEVERITY_LABEL, SEVERITY_ORDER } from './IssueTable.js';
-import { analytics } from '@utils/analytics';
 
 interface DoctorReportScreenProps {
   store: WizardStore;
@@ -46,10 +45,6 @@ export const DoctorReportScreen = ({ store }: DoctorReportScreenProps) => {
           setState({ kind: 'ready', issues });
         }
       } catch (err) {
-        analytics.captureException(
-          err instanceof Error ? err : new Error(String(err)),
-          { step: 'doctor_report_screen' },
-        );
         if (!cancelled) {
           const message =
             err instanceof ApiError && err.statusCode === 401

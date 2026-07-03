@@ -28,11 +28,7 @@ export function withUtm(url: string, content: string): string {
   let parsed: URL;
   try {
     parsed = new URL(url);
-  } catch (err) {
-    analytics.captureException(
-      err instanceof Error ? err : new Error(String(err)),
-      { step: 'with_utm' },
-    );
+  } catch {
     return url;
   }
   if (parsed.searchParams.has('utm_source')) return url;

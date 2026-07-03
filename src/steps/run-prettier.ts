@@ -62,10 +62,6 @@ export async function runPrettierStep({
         );
       });
     } catch (e) {
-      analytics.captureException(
-        e instanceof Error ? e : new Error(String(e)),
-        { step: 'run_prettier_step' },
-      );
       prettierSpinner.stop(
         'Prettier failed to run. You may want to format the changes manually.',
       );

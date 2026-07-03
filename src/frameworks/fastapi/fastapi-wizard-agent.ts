@@ -15,7 +15,6 @@ import {
 import fg from 'fast-glob';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { analytics } from '@utils/analytics';
 
 /**
  * FastAPI framework configuration for the universal agent runner
@@ -79,11 +78,7 @@ export const FASTAPI_AGENT_CONFIG: FrameworkConfig = {
           ) {
             return true;
           }
-        } catch (err) {
-          analytics.captureException(
-            err instanceof Error ? err : new Error(String(err)),
-            { step: 'fastapi_wizard_agent_detect' },
-          );
+        } catch {
           continue;
         }
       }
@@ -116,11 +111,7 @@ export const FASTAPI_AGENT_CONFIG: FrameworkConfig = {
           ) {
             return true;
           }
-        } catch (err) {
-          analytics.captureException(
-            err instanceof Error ? err : new Error(String(err)),
-            { step: 'fastapi_wizard_agent_detect' },
-          );
+        } catch {
           continue;
         }
       }

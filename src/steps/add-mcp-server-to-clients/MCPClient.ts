@@ -2,7 +2,6 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as jsonc from 'jsonc-parser';
 import { getDefaultServerConfig } from './defaults';
-import { analytics } from '@utils/analytics';
 
 export type MCPServerConfig = Record<string, unknown>;
 
@@ -55,11 +54,7 @@ export abstract class DefaultMCPClient extends MCPClient {
       return (
         serverPropertyName in config && serverName in config[serverPropertyName]
       );
-    } catch (err) {
-      analytics.captureException(
-        err instanceof Error ? err : new Error(String(err)),
-        { step: 'is_server_installed' },
-      );
+    } catch {
       return false;
     }
   }
@@ -113,11 +108,7 @@ export abstract class DefaultMCPClient extends MCPClient {
       await fs.promises.writeFile(configPath, modifiedContent, 'utf8');
 
       return { success: true };
-    } catch (err) {
-      analytics.captureException(
-        err instanceof Error ? err : new Error(String(err)),
-        { step: 'add_server' },
-      );
+    } catch {
       return { success: false };
     }
   }
@@ -158,11 +149,7 @@ export abstract class DefaultMCPClient extends MCPClient {
 
         return { success: true };
       }
-    } catch (err) {
-      analytics.captureException(
-        err instanceof Error ? err : new Error(String(err)),
-        { step: 'remove_server' },
-      );
+    } catch {
       //
     }
 

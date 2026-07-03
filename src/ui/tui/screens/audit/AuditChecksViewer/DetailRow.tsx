@@ -1,7 +1,6 @@
 import { Box, Text } from 'ink';
 import type { AuditCheck } from '@lib/programs/audit/types';
 import type { ViewerLayout } from './layout.js';
-import { analytics } from '@utils/analytics';
 
 interface DetailRowProps {
   item: AuditCheck;
@@ -18,11 +17,7 @@ function formatDetails(raw: string): string[] {
   let parsed: unknown;
   try {
     parsed = JSON.parse(trimmed);
-  } catch (err) {
-    analytics.captureException(
-      err instanceof Error ? err : new Error(String(err)),
-      { step: 'format_details' },
-    );
+  } catch {
     return [raw];
   }
   if (parsed === null || typeof parsed !== 'object') return [raw];

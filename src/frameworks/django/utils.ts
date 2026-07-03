@@ -4,7 +4,6 @@ import type { WizardRunOptions } from '@utils/types';
 import { createVersionBucket } from '@utils/semver';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { analytics } from '@utils/analytics';
 
 export enum DjangoProjectType {
   STANDARD = 'standard', // Traditional Django project (django-admin startproject)
@@ -66,11 +65,7 @@ export async function getDjangoVersion(
       if (pyprojectMatch) {
         return pyprojectMatch[1];
       }
-    } catch (err) {
-      analytics.captureException(
-        err instanceof Error ? err : new Error(String(err)),
-        { step: 'get_django_version' },
-      );
+    } catch {
       // Skip files that can't be read
       continue;
     }
@@ -99,11 +94,7 @@ async function hasDRF({
       if (content.includes('djangorestframework')) {
         return true;
       }
-    } catch (err) {
-      analytics.captureException(
-        err instanceof Error ? err : new Error(String(err)),
-        { step: 'has_drf' },
-      );
+    } catch {
       continue;
     }
   }
@@ -123,11 +114,7 @@ async function hasDRF({
       if (content.includes('rest_framework')) {
         return true;
       }
-    } catch (err) {
-      analytics.captureException(
-        err instanceof Error ? err : new Error(String(err)),
-        { step: 'has_drf' },
-      );
+    } catch {
       continue;
     }
   }
@@ -155,11 +142,7 @@ async function hasWagtail({
       if (content.includes('wagtail')) {
         return true;
       }
-    } catch (err) {
-      analytics.captureException(
-        err instanceof Error ? err : new Error(String(err)),
-        { step: 'has_wagtail' },
-      );
+    } catch {
       continue;
     }
   }
@@ -187,11 +170,7 @@ async function hasChannels({
       if (content.includes('channels')) {
         return true;
       }
-    } catch (err) {
-      analytics.captureException(
-        err instanceof Error ? err : new Error(String(err)),
-        { step: 'has_channels' },
-      );
+    } catch {
       continue;
     }
   }
@@ -291,11 +270,7 @@ export async function findDjangoSettingsFile(
       if (content.includes('ROOT_URLCONF')) {
         return settingsFile;
       }
-    } catch (err) {
-      analytics.captureException(
-        err instanceof Error ? err : new Error(String(err)),
-        { step: 'find_django_settings_file' },
-      );
+    } catch {
       continue;
     }
   }
@@ -330,11 +305,7 @@ export async function findDjangoUrlsFile(
           return urlconfPath;
         }
       }
-    } catch (err) {
-      analytics.captureException(
-        err instanceof Error ? err : new Error(String(err)),
-        { step: 'find_django_urls_file' },
-      );
+    } catch {
       // Fall through to glob search
     }
   }
@@ -356,11 +327,7 @@ export async function findDjangoUrlsFile(
       if (content.includes('urlpatterns')) {
         return urlsFile;
       }
-    } catch (err) {
-      analytics.captureException(
-        err instanceof Error ? err : new Error(String(err)),
-        { step: 'find_django_urls_file' },
-      );
+    } catch {
       continue;
     }
   }
