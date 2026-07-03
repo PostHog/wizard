@@ -12,7 +12,7 @@
  * hooks' onTerminate callback (`yaraViolationReason` in runAgent) instead.
  */
 
-import { AgentSignals } from './signals';
+import { AgentSignals, REMARK_INSTRUCTION } from './signals';
 
 /**
  * Single source of truth for the substrings runAgent scans agent output for.
@@ -98,6 +98,10 @@ export class AgentOutputSignals {
       )}\\s*(.+?)(?:\\n|$)`,
       's',
     );
-    return this.text.match(re)?.[1]?.trim() || undefined;
+    const text = this.text.match(re)?.[1]?.trim() || undefined;
+    // Literal models echo fragments of the ask itself ("Your remark here",
+    // "followed by the remark itself.") — an echo is not a remark.
+    if (text && REMARK_INSTRUCTION.includes(text)) return undefined;
+    return text;
   }
 }
