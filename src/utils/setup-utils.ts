@@ -5,7 +5,7 @@ import { basename, isAbsolute, join, relative } from 'node:path';
 import { promisify } from 'node:util';
 
 import { withProgress } from '../telemetry';
-import { debug } from './debug';
+import { debug, logToFile } from './debug';
 import type { PackageJson } from './package-json';
 import {
   type PackageManager,
@@ -445,10 +445,23 @@ export async function getOrAskForProjectData(
     try {
       user = await fetchUserData(_options.apiKey, cloudUrl);
       roleAtOrganization = user.role_at_organization ?? null;
-    } catch {
-      // best-effort
+    } catch (err) {
+      logToFile(
+        '[ci-auth] user lookup failed (key lacks user:read?) — flags evaluate anonymously; pass --email to keep email-targeted flags matching:',
+        err instanceof Error ? err.message : String(err),
+      );
     }
-    if (user) analytics.identifyUser(user);
+    if (user) {
+      analytics.identifyUser(user);
+      logToFile(
+        '[ci-auth] identified via API key; flags evaluate as the key owner',
+      );
+    } else if (_options.email) {
+      analytics.setFlagTargetingEmail(_options.email);
+      logToFile(
+        '[ci-auth] flag targeting via --email person-property override',
+      );
+    }
 
     return {
       host,

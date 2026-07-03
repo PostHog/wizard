@@ -166,6 +166,16 @@ export class Analytics {
     return { $app_name: this.appName, ...this.personProperties };
   }
 
+  /**
+   * Email override for flag targeting when no identified user exists (CI keys
+   * without user:read). No identify/alias — flag evaluation only.
+   */
+  setFlagTargetingEmail(email: string) {
+    if (this.distinctId) return;
+    this.personProperties = { ...this.personProperties, email };
+    this.activeFlags = null;
+  }
+
   setTag(key: string, value: string | boolean | number | null | undefined) {
     this.tags[key] = value;
   }
