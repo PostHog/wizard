@@ -433,6 +433,10 @@ function matchesAllowedPrefix(command: string): boolean {
     scriptIndex++;
   }
 
+  // `i` is the npm/pnpm/bun shorthand for `install`. Exact-token match —
+  // adding 'i' to SAFE_SCRIPTS would startsWith-allow anything i-prefixed.
+  if (parts[scriptIndex] === 'i') return true;
+
   // Get the script/command portion (may include args)
   const scriptPart = parts.slice(scriptIndex).join(' ');
 
