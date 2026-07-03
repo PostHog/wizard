@@ -4,7 +4,10 @@
 for `harness = pi` — and (b) that gpt-5-mini on the pi harness actually integrates
 PostHog acceptably, before any prod traffic sees it.
 
-**Gate:** parity PR (Phase 1) released in the build under test; dashboard (Phase 2) live.
+**Gate:** parity PR (Phase 1) released in the build under test; dashboard (Phase 2)
+✅ live: [wizard-switchboard](https://us.posthog.com/project/2/dashboard/1793563)
+(insight inventory in `02-dashboard-spec.md`). While validating, apply a dashboard-level
+filter `build = ci` — build is deliberately not baked into the tiles.
 
 ## Design
 

@@ -108,6 +108,15 @@ remarks, bash-denied policy hits, and YARA events. That's the whole scope below.
   "stuck runs" insight (dashboard E6) detects this in prod either way, but know the
   answer before reading the test results.
 
+### 1.8 (optional) Tag the binding before `agent started` fires
+
+- Verified live: `wizard: agent started` carries no `harness`/`sequence` — it's
+  captured in `bootstrapProgram()` before `tagBinding()` runs in `runProgram()`. The
+  shipped dashboard works around this (exposure tile A1 and the stuck-runs net join
+  harness from `$ai_generation` by `run_id`), so this is not blocking — but resolving
+  the binding before the bootstrap capture would let wizard-side events carry the
+  variant from the first event and simplify several dashboard queries later.
+
 ## Acceptance criteria
 
 Run the wizard headlessly against one throwaway app per variant

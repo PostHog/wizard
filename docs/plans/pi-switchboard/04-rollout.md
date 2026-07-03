@@ -1,6 +1,9 @@
 # Phase 4 — Flag cut, ramp & rollback
 
-**Gate:** Phases 1–3 complete; go/no-go passed; alerts armed.
+**Gate:** Phases 1–3 complete; go/no-go passed. Dashboard + alerts are already live
+([wizard-switchboard](https://us.posthog.com/project/2/dashboard/1793563); 5 alerts
+armed 2026-07-03 — see `02-dashboard-spec.md` shipped inventory), but each alert still
+needs one test-fire before the cut.
 
 ## Flag configuration
 

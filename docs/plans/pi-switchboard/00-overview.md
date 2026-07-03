@@ -6,7 +6,11 @@ the cut so we can compare variants on remarks, cost, runtime, completion rate, e
 YARA activity — and validate both the monitoring and the model on 15 open-source projects
 first.
 
-**Status:** planning. Nothing in this folder has shipped.
+**Status:** Phase 2 (dashboard + alerts) is SHIPPED as of 2026-07-03 — the
+[wizard-switchboard dashboard](https://us.posthog.com/project/2/dashboard/1793563)
+(30 insights) and 5 alerts are live in project 2; see the shipped-state section of
+`02-dashboard-spec.md` for the full inventory. Phase 1 (telemetry parity PR),
+Phase 3 (validation run), and Phase 4 (flag cut) are still to do.
 
 ## Documents
 
@@ -21,9 +25,10 @@ first.
 
 1. **Telemetry parity** (wizard PR) — without it, cost/runtime/remarks are silent for pi
    and the comparison is unreadable.
-2. **Dashboard + alerts** (PostHog project 2) — build against `02-dashboard-spec.md`.
-   Validate every tile renders with existing anthropic traffic *before* pi traffic exists;
-   a tile that can't be proven with control data can't be trusted with variant data.
+2. **Dashboard + alerts** (PostHog project 2) — ✅ DONE (2026-07-03), built per
+   `02-dashboard-spec.md`. Exposure, cost, and runtime tiles spot-verified against live
+   data (early tagged traffic already shows pi at ~$0.4–0.6/run vs anthropic ~$2.6–3.3).
+   Tiles marked post-parity render but stay empty for pi until Phase 1 ships.
 3. **Validation run** — 15 OSS repos × {anthropic, pi}, headless with snapshotting,
    against a fresh PostHog project + custom `phx_` key. Verifies monitoring end-to-end
    and model quality.
@@ -45,7 +50,9 @@ first.
   (via `analytics.setTag` in `tagBinding()`, `src/lib/agent/runner/index.ts`), and onto
   LLM gateway traces via `X-POSTHOG-PROPERTY-HARNESS` / `-SEQUENCE` headers.
   Verified live: `harness` exists as a property on `wizard: agent completed`,
-  `wizard remark`, and the yara events.
+  `wizard remark`, and the yara events. **Exception:** `wizard: agent started` does NOT
+  carry `harness` (it's captured before `tagBinding()` runs), so exposure counting rides
+  on `$ai_generation` distinct `run_id`s instead — see parity item 1.8.
 - **AI observability already covers LLM cost, tokens, and latency for BOTH harnesses —
   no wizard-side cost/token telemetry is needed.** The gateway
   (`gateway.{us,eu}.posthog.com/wizard`, `src/utils/urls.ts`) emits `$ai_generation`

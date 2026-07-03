@@ -1,14 +1,25 @@
 # Phase 2 — Dashboard, insights & alerts spec
 
+> **✅ SHIPPED 2026-07-03.** Everything below exists in project 2:
+> **[wizard-switchboard (dashboard 1793563)](https://us.posthog.com/project/2/dashboard/1793563)**
+> — 30 insights + 5 armed alerts. See [Shipped inventory](#shipped-inventory) at the
+> bottom for every insight link and the as-built alert configs. Deltas from the original
+> spec discovered during the build are folded into the tile definitions below and marked
+> *(as built)*. Spot-verified against live data: A1 shows 25 pi runs, C1 renders
+> anthropic percentiles, C3 shows pi at ~$0.42–0.60/run vs anthropic ~$2.6–3.3/run.
+
 Build target: one dashboard in **PostHog Cloud US, project 2** ("PostHog App + Website" —
 where the wizard's hardcoded telemetry lands).
 
-- **Dashboard name:** `Wizard switchboard: anthropic vs pi`
-- **Insight naming convention:** every insight is prefixed `Switchboard:` so they're
-  findable and obviously part of this set.
-- **Dashboard-level filters (defaults):** `program_id = posthog-integration`,
-  `build = prod`. During the validation run, view with `build = ci` (or `headless`)
-  and the test window instead — same tiles, different filter.
+- **Dashboard name:** `wizard-switchboard` *(as built)*
+- **Insight naming convention:** every insight is prefixed `Switchboard <tile-id>:` and
+  tagged `wizard` + `switchboard` so they're findable and obviously part of this set.
+- **Filters (as built):** `program_id = posthog-integration` is baked into each insight
+  where the event carries it (the terminal `setup wizard finished` event doesn't carry
+  it flat, so A2/A3/A2i are unfiltered). `build` is deliberately NOT baked into
+  dashboard tiles — apply it as a dashboard-level filter in the UI (`prod` for
+  monitoring, `ci`/`dev` for the validation run). The ALERT-twin insights DO bake
+  `build = prod` so alerts never fire on dev/CI noise.
 - **Standard breakdown:** `harness` (values `anthropic` | `pi`). Both are flat event
   properties on all events below except where noted.
 - **Date range default:** last 14 days, daily interval.
@@ -22,22 +33,24 @@ trust it with variant data.
 
 ## Row A — Exposure & completion (the headline row)
 
-### A1. `Switchboard: runs per day by harness`
-- **Type:** SQL (trends-style bar over time). Distinct `run_id` avoids double-counting
-  multi-agent-invocation runs.
-- **Query:**
+### A1. `Switchboard A1: runs per day by harness`
+- **Type:** SQL, bar. Distinct `run_id` avoids double-counting multi-agent-invocation
+  runs.
+- **Query** *(as built — on `$ai_generation`, because `wizard: agent started` turned out
+  to carry no `harness`; see parity 1.8)*:
   ```sql
   SELECT toStartOfDay(timestamp) AS day,
-         properties.harness AS harness,
+         coalesce(properties.harness, 'unknown') AS harness,
          count(DISTINCT properties.run_id) AS runs
   FROM events
-  WHERE event = 'wizard: agent started'
-    AND properties.build = 'prod'
+  WHERE event = '$ai_generation'
     AND properties.program_id = 'posthog-integration'
+    AND timestamp >= now() - INTERVAL 14 DAY
   GROUP BY day, harness ORDER BY day
   ```
 - **Purpose:** exposure. Also the **SRM check**: the anthropic:pi ratio must track the
   configured flag ratio; drift means biased exposure (e.g. pi dying before first event).
+  Pre-2026-07-01 traffic groups as `unknown` (no harness header yet) — expected.
 
 ### A2. `Switchboard: completion rate by harness`
 - **Type:** Trends, formula. ⚠️ needs parity 1.2 (flat `harness` on the terminal event).
@@ -66,7 +79,9 @@ trust it with variant data.
 ### B1. `Switchboard: wizard funnel by harness`
 - **Type:** Funnel, ordered, conversion window 2 hours, breakdown `harness`.
 - **Steps:** `wizard: started` → `wizard: auth complete` → `wizard: agent started` →
-  `setup wizard finished` (filter `status = success`, ⚠️ 1.2 for breakdown on this step).
+  `setup wizard finished` (filter `status = success`). Breakdown uses **last-touch
+  attribution** *(as built)* since steps 1–3 lack `harness`; the breakdown populates
+  per-harness after parity 1.2.
 - **Purpose:** *where* variants drop, not just that they drop. Steps 1–3 are pre-variant
   (harness resolves at agent start), so divergence should only appear at the last step —
   if it appears earlier, tagging is wrong.
@@ -146,9 +161,11 @@ trust it with variant data.
   breakdowns `reason` × `harness`.
 - **Purpose:** separates YARA-caused aborts from model give-ups (feeds the 1.6 decision).
 
-### D3. `Switchboard: error events per run`
-- **Type:** Trends, formula. Series A: `wizard: agent api error` count; Series B:
-  `wizard: agent started` count. Formula `A / B`; breakdown `harness`.
+### D3. `Switchboard D3: API errors per run by harness`
+- **Type:** SQL *(as built — a trends formula can't breakdown by `harness` when the
+  denominator event lacks the property; `$ai_generation` distinct `run_id` is the
+  denominator instead)*: `countIf(api error) / count(DISTINCT run_id)` per day per
+  harness over `events IN ('wizard: agent api error', '$ai_generation')`.
 
 ### D4. `Switchboard: exceptions by harness`
 - **Type:** Trends. Event `$exception`, count, breakdown `harness`, filter
@@ -184,9 +201,9 @@ trust it with variant data.
 - **Purpose:** completion rate only counts runs that *reported*; this catches the ones
   that didn't. A harness-skewed stuck list is the strongest "pull the flag" signal.
 
-### E2. `Switchboard: wizard version mix`
-- **Type:** Trends. Event `wizard: agent started`, count, breakdowns `$lib_version` ×
-  `harness`.
+### E2. `Switchboard E2: wizard version mix by harness`
+- **Type:** Trends. Event `wizard: agent completed` *(as built — `agent started` lacks
+  `harness`)*, count, breakdowns `$lib_version` × `harness`.
 - **Purpose:** isolates the parity-PR release; pre-parity pi runs must not be read as
   "pi emits nothing".
 
@@ -244,13 +261,17 @@ trust it with variant data.
 Insight alerts are simplest on dedicated single-series insights, so create thin
 `ALERT:`-prefixed twins rather than alerting on the breakdown tiles:
 
-| Alert insight | Definition | Threshold | Why |
+*(As built — all 5 armed and enabled 2026-07-03, subscribed: vincent@posthog.com. The
+warlock alert sits directly on F4; the other four have thin ALERT-twin insights with
+`build = prod` baked in. Slack delivery can be added later via a CDP destination.)*
+
+| Alert (as built) | On insight | Config | Why |
 |---|---|---|---|
-| `ALERT: pi completion rate` | A2 formula, filtered `harness = pi`, no breakdown | absolute: below **70%** over 24h (tune to anthropic baseline − 10pts once measured) | primary regression tripwire |
-| `ALERT: pi api errors` | D1 count, filtered `harness = pi` | relative: increase > 100% day-over-day, min volume guard | quota/outage on gpt-5-mini |
-| `ALERT: warlock disabled` | F4 | absolute: ≥ 1 | kill-switch should never fire silently |
-| `ALERT: pi high-severity yara` | F1 count, `harness = pi`, `severity` high | absolute: ≥ 1 during ramp week, relax later | pi has no triage (1.6) |
-| `ALERT: stuck runs (pi)` | E1 reduced to a count, `harness = pi` | absolute: ≥ 3/day | silent-failure net |
+| `Switchboard: pi completion rate below 70%` | ALERT twin ([PD8zw80V](https://us.posthog.com/project/2/insights/PD8zw80V)) — daily pi completion % via tags-JSON (works pre-parity) | daily, absolute, lower bound 70 (retune to anthropic baseline − 10pts once measured) | primary regression tripwire |
+| `Switchboard: pi API errors spiking (>100% day-over-day)` | ALERT twin ([Uk9MaDf8](https://us.posthog.com/project/2/insights/Uk9MaDf8)) | daily, relative_increase, +100% | quota/outage on gpt-5-mini |
+| `Switchboard: warlock kill-switch fired` | F4 directly ([zZVpQ8t3](https://us.posthog.com/project/2/insights/zZVpQ8t3)) | **hourly**, absolute, upper bound 0 (any event fires) | kill-switch must never fire silently |
+| `Switchboard: pi high-severity YARA match` | ALERT twin ([PlN2GPOE](https://us.posthog.com/project/2/insights/PlN2GPOE)) — `severity in (high, critical)` | daily, absolute, upper bound 0 | pi has no triage (1.6); relax after ramp week |
+| `Switchboard: stuck pi runs (3+ in 24h)` | ALERT twin ([55w4IwfY](https://us.posthog.com/project/2/insights/55w4IwfY)) | daily, absolute, upper bound 2 | silent-failure net |
 
 ## Optional: formalize as an experiment
 
@@ -270,12 +291,53 @@ PostHog **experiment** on that flag rather than eyeballed dashboard deltas:
 
 ## Build checklist
 
-- [ ] All insights created with `Switchboard:` prefix; dashboard assembled in row order.
-- [ ] Every tile renders non-empty with anthropic-only prod data (except tiles marked
-      pi-dependent, which must render post-parity with `build=ci` test traffic).
-- [ ] Alert twins created, thresholds set, each test-fired once (temporarily invert the
-      threshold to force a fire).
-- [ ] Annotations added: parity release, flag creation.
-- [ ] `$ai_generation` tiles (C3–C5, D5) verified against live pi dev traffic
-      (`build = dev/ci`) — property names already confirmed 2026-07-03.
-- [ ] Dashboard link recorded in `03-validation-run.md` runbook and team channel.
+- [x] All insights created with `Switchboard <tile-id>:` prefix, tagged
+      `wizard`/`switchboard`, assembled on the dashboard in row order (2026-07-03).
+- [x] Spot-verified computing insights against live data: A1 (25 pi runs visible),
+      C1 (anthropic percentiles render), C3 (pi ~$0.42–0.60/run vs anthropic
+      ~$2.6–3.3/run in early tagged traffic).
+- [x] Alert twins created and armed with thresholds (see table above).
+- [x] `$ai_generation` tiles (A1, C3–C5, D3, D5) verified against live pi dev traffic.
+- [ ] Each alert test-fired once (temporarily invert the threshold to force a fire).
+- [ ] Annotations added at parity release and flag creation (do when those happen).
+- [ ] G3 daily AI remark digest subscription — deliberately deferred to flag-cut time
+      so it doesn't email anthropic-only summaries for weeks first.
+- [ ] Full post-parity tile sweep during the Phase 3 validation run (every ⚠️ tile must
+      be seen populating for `harness = pi`).
+
+## Shipped inventory
+
+Dashboard: **[wizard-switchboard — 1793563](https://us.posthog.com/project/2/dashboard/1793563)** (pinned, tags `wizard`/`switchboard`).
+
+| Tile | Insight (short_id link) |
+|---|---|
+| A1 runs/day by harness | [5RGn3QKe](https://us.posthog.com/project/2/insights/5RGn3QKe) |
+| A2 completion rate % (post-parity) | [92V7p8Jw](https://us.posthog.com/project/2/insights/92V7p8Jw) |
+| A2i completion rate % (interim, delete post-parity) | [Sb3G7gAa](https://us.posthog.com/project/2/insights/Sb3G7gAa) |
+| A3 run outcomes | [r7iojoAC](https://us.posthog.com/project/2/insights/r7iojoAC) |
+| B1 wizard funnel | [Pr7WSZry](https://us.posthog.com/project/2/insights/Pr7WSZry) |
+| B2 agent step progress | [khNVjCEG](https://us.posthog.com/project/2/insights/khNVjCEG) |
+| C1 runtime p50/p90 | [W2f0NFjX](https://us.posthog.com/project/2/insights/W2f0NFjX) |
+| C2 runtime p90 by framework | [6Yi7mbRJ](https://us.posthog.com/project/2/insights/6Yi7mbRJ) |
+| C3 LLM cost per run (canonical) | [T7eVkhiq](https://us.posthog.com/project/2/insights/T7eVkhiq) |
+| C4 token economics | [JYUTFPEa](https://us.posthog.com/project/2/insights/JYUTFPEa) |
+| C5 LLM latency & TTFT | [8Hmai6ey](https://us.posthog.com/project/2/insights/8Hmai6ey) |
+| C6 SDK cost cross-check | [LVxIoaOw](https://us.posthog.com/project/2/insights/LVxIoaOw) |
+| D1 API errors by type | [AjCvWuo0](https://us.posthog.com/project/2/insights/AjCvWuo0) |
+| D2 aborts by reason | [YujUyOtB](https://us.posthog.com/project/2/insights/YujUyOtB) |
+| D3 API errors per run | [txvaDMn6](https://us.posthog.com/project/2/insights/txvaDMn6) |
+| D4 wizard exceptions | [khHLCSFL](https://us.posthog.com/project/2/insights/khHLCSFL) |
+| D5 gateway HTTP errors | [MZeJAs4p](https://us.posthog.com/project/2/insights/MZeJAs4p) |
+| E1 stuck runs table | [eFKdijAJ](https://us.posthog.com/project/2/insights/eFKdijAJ) |
+| E2 version mix | [dAohPkbs](https://us.posthog.com/project/2/insights/dAohPkbs) |
+| F1 YARA matches by rule | [Ngk3X9hY](https://us.posthog.com/project/2/insights/Ngk3X9hY) |
+| F2 YARA violations per report | [dliVo8Ol](https://us.posthog.com/project/2/insights/dliVo8Ol) |
+| F3 YARA triage overruled | [ryG3mBhX](https://us.posthog.com/project/2/insights/ryG3mBhX) |
+| F4 warlock kill-switch (alerted) | [zZVpQ8t3](https://us.posthog.com/project/2/insights/zZVpQ8t3) |
+| F5 bash denied | [ZT7H4uQ1](https://us.posthog.com/project/2/insights/ZT7H4uQ1) |
+| G1 remark volume | [pMpVC2js](https://us.posthog.com/project/2/insights/pMpVC2js) |
+| G2 recent remarks table | [mTiRZTvj](https://us.posthog.com/project/2/insights/mTiRZTvj) |
+| ALERT twin: pi completion rate | [PD8zw80V](https://us.posthog.com/project/2/insights/PD8zw80V) |
+| ALERT twin: pi API errors | [Uk9MaDf8](https://us.posthog.com/project/2/insights/Uk9MaDf8) |
+| ALERT twin: pi high-severity YARA | [PlN2GPOE](https://us.posthog.com/project/2/insights/PlN2GPOE) |
+| ALERT twin: stuck pi runs | [55w4IwfY](https://us.posthog.com/project/2/insights/55w4IwfY) |
