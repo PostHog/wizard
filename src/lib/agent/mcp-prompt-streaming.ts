@@ -14,7 +14,7 @@
 
 import type { AgentChunk } from '@ui/tui/services/mcp-suggested-prompts-services';
 import type { Credentials } from '@lib/wizard-session';
-import { WIZARD_USER_AGENT } from '@lib/constants';
+import { DEFAULT_AGENT_MODEL, WIZARD_USER_AGENT } from '@lib/constants';
 import { HostResolution } from '@lib/host-resolution';
 import { runtimeEnv } from '@env';
 import { logToFile } from '@utils/debug';
@@ -34,7 +34,7 @@ async function loadSdk(): Promise<any> {
   return _sdkModule;
 }
 
-const MODEL = 'claude-sonnet-4-6';
+const MODEL = DEFAULT_AGENT_MODEL;
 
 // Bounded turn count so a single prompt can't loop forever on the
 // user's nickel. 20 gives the agent room for non-trivial multi-step

@@ -3,6 +3,7 @@ import { logToFile, getLogFilePath } from '@utils/debug';
 import { runAgent } from '@lib/agent/agent-runner';
 import { authenticate } from '@lib/agent/runner/shared/authenticate';
 import type { ProgramConfig } from '@lib/programs/program-step';
+import type { Harness, Sequence } from '@lib/constants';
 import type { startTUI as StartTUIFn } from '@ui/tui/start-tui';
 import type { WizardStore } from '@ui/tui/store';
 import type { WizardSession } from '@lib/wizard-session';
@@ -96,6 +97,9 @@ export function runWizard(
         benchmark: options.benchmark as boolean | undefined,
         yaraReport: options.yaraReport as boolean | undefined,
         noTelemetry: resolveNoTelemetry(options),
+        harness: options.harness as Harness | undefined,
+        sequence: options.sequence as Sequence | undefined,
+        model: options.model as string | undefined,
         integrate: options.integrate as boolean | undefined,
       });
       session.programLabel = config.id;

@@ -18,6 +18,48 @@ export const DEFAULT_AGENT_MODEL = 'claude-sonnet-4-6';
  */
 export const HAIKU_MODEL = 'claude-haiku-4-5-20251001';
 
+/**
+ * Larger model for planning / hard work. Named the switchboard could route to
+ * from `PROGRAM_BINDINGS[id].model` or `contextMillOverride`.
+ */
+export const OPUS_MODEL = 'claude-opus-4-8';
+
+/**
+ * OpenAI-class peer of sonnet, served by the LLM gateway over OpenAI
+ * completions. Enables cross-provider A/B without a wizard release.
+ */
+export const GPT5_MODEL = 'openai/gpt-5';
+
+/**
+ * Smaller, faster, cheaper openai reasoning model. The pi runner is paired with
+ * this (a reasoning model follows the integration skill; the mini tier keeps a
+ * run to a few minutes where flagship gpt-5 takes far longer). Reasoning effort
+ * is set per-model in the switchboard capability matrix.
+ */
+export const GPT5_MINI_MODEL = 'openai/gpt-5-mini';
+
+// ── Agent runner routing axes ────────────────────────────────────────
+
+/**
+ * The two agent runner routing axes: **harness** (which agent SDK drives the LLM)
+ * and **sequence** (which pipeline shape orchestrates the work). Single source
+ * of truth for yargs `choices`, session fields, the runner registry, and tests
+ * — `Object.values(Harness)` gives an iterable of the values when an array is
+ * needed. Adding a member is enough to pick it up everywhere.
+ *
+ * Naming matches the directory layout — see `src/lib/agent/runner/harness/`
+ * and `src/lib/agent/runner/sequence/`.
+ */
+export enum Harness {
+  anthropic = 'anthropic',
+  pi = 'pi',
+}
+
+export enum Sequence {
+  linear = 'linear',
+  orchestrator = 'orchestrator',
+}
+
 // ── Integration / CLI ───────────────────────────────────────────────
 
 /**
@@ -187,6 +229,13 @@ export const WIZARD_INTERACTION_EVENT_NAME = 'wizard interaction';
 export const WIZARD_REMARK_EVENT_NAME = 'wizard remark';
 /** Boolean feature flag that routes a run to the experimental orchestrator runner. */
 export const WIZARD_ORCHESTRATOR_FLAG_KEY = 'wizard-orchestrator';
+/**
+ * Multivariate feature flag that selects the agent runner: `anthropic` (control,
+ * claude-agent-sdk) or `pi` (pi.dev coding agent). Read by the `wizardRunner`
+ * resolver middleware. Multivariate over boolean so telemetry reads the runner
+ * name directly. Unknown/missing resolves to `anthropic`.
+ */
+export const WIZARD_RUNNER_FLAG_KEY = 'wizard-runner';
 /** Feature flag key that gates the intro-screen "Tools" menu. */
 export const WIZARD_TOOLS_MENU_FLAG_KEY = 'wizard-tools-menu';
 /**

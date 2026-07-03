@@ -212,7 +212,7 @@ export type AgentConfig = {
    * flag routes the run here; threaded into wizard-tools so the orchestrator
    * tools register.
    */
-  orchestrator?: import('@lib/agent/runner/orchestrator/queue-tools').OrchestratorToolsContext;
+  orchestrator?: import('@lib/agent/runner/sequence/orchestrator/queue-tools').OrchestratorToolsContext;
 };
 
 /**
@@ -337,17 +337,6 @@ export function isWarlockDisabled(flags: Record<string, string> = {}): boolean {
     flags[WIZARD_WARLOCK_DISABLED_FLAG_KEY] === 'true' ||
     runtimeEnv('POSTHOG_WIZARD_WARLOCK_DISABLED') === 'true'
   );
-}
-
-/**
- * Whether this run uses the experimental task-queue orchestrator. Gated by the
- * boolean `wizard-orchestrator` feature flag, targeted to the user in the wizard's
- * analytics project.
- */
-export function isOrchestratorEnabled(
-  flags: Record<string, string> = {},
-): boolean {
-  return flags[WIZARD_ORCHESTRATOR_FLAG_KEY] === 'true';
 }
 
 /**
@@ -1171,7 +1160,8 @@ export async function runAgent(
         signals,
         receivedSuccessResult,
         tasks,
-        isOrchestratorEnabled(agentConfig.wizardFlags ?? {}),
+        (agentConfig.wizardFlags ?? {})[WIZARD_ORCHESTRATOR_FLAG_KEY] ===
+          'true',
         emitStepEvents,
       );
 
