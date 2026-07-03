@@ -210,8 +210,7 @@ export const piBackend: AgentHarness = {
 
     spinner.start(config.spinnerMessage ?? 'Customizing your PostHog setup...');
 
-    // Same `agent completed`/`agent aborted` shape as anthropic. No cost/token
-    // fields — the gateway's $ai_generation already tracks those.
+    // Same `agent completed`/`agent aborted` shape as anthropic.
     const startTime = Date.now();
     const signals = new AgentOutputSignals();
     let assistantTurns = 0;
@@ -252,6 +251,18 @@ export const piBackend: AgentHarness = {
       // `/v1` the Anthropic SDK strips.
       const api = gatewayApiFor(modelId);
       const caps = modelCapabilities(modelId);
+      // Pricing from pi-ai's catalog (by bare model name) so getSessionStats()
+      // can cost the run; zeros when unknown.
+      const { getModels } = await import('@earendil-works/pi-ai');
+      const bareModelId = modelId.split('/').pop() ?? modelId;
+      const catalogCost = (['openai', 'anthropic'] as const)
+        .flatMap((p) => getModels(p))
+        .find((m) => m.id === bareModelId)?.cost ?? {
+        input: 0,
+        output: 0,
+        cacheRead: 0,
+        cacheWrite: 0,
+      };
       const gatewayUrl = getLlmGatewayUrl(boot.host);
       const baseUrl =
         api === 'openai-completions' ? `${gatewayUrl}/v1` : gatewayUrl;
@@ -274,7 +285,7 @@ export const piBackend: AgentHarness = {
             // → the run no-ops). The effort level rides on the session below.
             reasoning: caps.reasoning,
             input: ['text'],
-            cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+            cost: catalogCost,
             contextWindow: 1_000_000,
             maxTokens: 64_000,
           },
@@ -504,10 +515,17 @@ export const piBackend: AgentHarness = {
         logToFile(`[pi] .posthog-events.json cleanup skipped: ${String(err)}`);
       }
 
+      const stats = agentSession.getSessionStats();
       analytics.wizardCapture('agent completed', {
         ...runDurations(),
         model: modelId,
         num_turns: assistantTurns,
+        // Cost omitted when pricing is unknown — a flat $0 would mislead.
+        ...(stats.cost > 0 ? { total_cost_usd: stats.cost } : {}),
+        input_tokens: stats.tokens.input,
+        output_tokens: stats.tokens.output,
+        cache_creation_input_tokens: stats.tokens.cacheWrite,
+        cache_read_input_tokens: stats.tokens.cacheRead,
       });
       spinner.stop(config.successMessage ?? 'PostHog integration complete');
       return {};
