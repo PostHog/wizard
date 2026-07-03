@@ -13,9 +13,24 @@
  */
 
 import { wizardCanUseTool } from '@lib/agent/agent-interface';
-import { scan, type HookPhase, type ToolTarget } from '@lib/yara-scanner';
-import { isWizardDocumentationPath } from '@lib/yara-hooks';
+import {
+  scan,
+  type HookPhase,
+  type ToolTarget,
+  type YaraMatch,
+} from '@lib/yara-scanner';
+import { isWizardDocumentationPath, recordExternalScan } from '@lib/yara-hooks';
 import { logToFile } from '@utils/debug';
+
+/** yara-scanner match → the report shape `recordExternalScan` expects. */
+function toReportViolation(m: YaraMatch) {
+  return {
+    rule: m.rule.name,
+    severity: m.rule.severity,
+    category: m.rule.category,
+    description: m.rule.description,
+  };
+}
 
 /** Runaway backstop: hard cap on tool calls per (sub)agent session. */
 export const MAX_TOOL_CALLS = 250;
@@ -98,15 +113,14 @@ function preExecutionYaraBlock(
   if (!content) return undefined;
 
   const result = scan(content, phase, target);
-  if (!result.matched) return undefined;
-
-  let matches = result.matches;
+  let matches = result.matched ? result.matches : [];
   if (
     (target === 'Write' || target === 'Edit') &&
     isWizardDocumentationPath(str(input.path))
   ) {
     matches = matches.filter((m) => m.rule.category !== 'posthog_pii');
   }
+  recordExternalScan(phase, target, matches.map(toReportViolation), 'blocked');
   if (matches.length === 0) return undefined;
 
   const m = matches[0];
@@ -214,11 +228,17 @@ export function createSecurityExtension(ctx: ToolGateContext = {}): {
       if (!text) return {};
       try {
         const result = scan(text, 'PostToolUse', target);
-        if (result.matched) {
+        const matches = result.matched ? result.matches : [];
+        recordExternalScan(
+          'PostToolUse',
+          target,
+          matches.map(toReportViolation),
+          'aborted',
+        );
+        if (matches.length > 0) {
           state.criticalViolation = true;
-          const m = result.matches[0];
           logToFile(
-            `[pi-security] POST-SCAN VIOLATION ${event.toolName}: ${m.rule.name}`,
+            `[pi-security] POST-SCAN VIOLATION ${event.toolName}: ${matches[0].rule.name}`,
           );
         }
       } catch (err) {
