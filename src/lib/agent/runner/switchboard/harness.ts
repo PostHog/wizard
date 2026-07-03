@@ -4,7 +4,7 @@
 
 import { IS_PRODUCTION_BUILD } from '@env';
 import {
-  GPT5_4_MODEL,
+  GPT5_MODEL,
   Harness,
   WIZARD_USE_PI_HARNESS_FLAG_KEY,
 } from '@lib/constants';
@@ -34,12 +34,12 @@ export function getHarness(name: Harness): AgentHarness {
   return harness;
 }
 
-/** `wizard-use-pi-harness` flag on → pi + gpt-5.4; otherwise binding default. */
+/** `wizard-use-pi-harness` flag on → pi + gpt-5; otherwise binding default. */
 const flagRunnerOverride: Middleware<HarnessPick> = (ctx, next) => {
   const pick = next();
   if (ctx.flags[WIZARD_USE_PI_HARNESS_FLAG_KEY] !== 'true') return pick;
   if (ctx.trace) Object.assign(ctx.trace, { harness: 'flag', model: 'flag' });
-  return { harness: Harness.pi, model: GPT5_4_MODEL };
+  return { harness: Harness.pi, model: GPT5_MODEL };
 };
 
 /** `--harness` override. Dev/test only — the option is gated out of published builds. */
