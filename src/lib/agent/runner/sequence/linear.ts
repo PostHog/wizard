@@ -168,6 +168,10 @@ export async function runLinearProgram(
     });
     await wizardAbort({
       outroData,
+      // A matched, `expected` abort case (e.g. the user declining the GitHub
+      // connection) is a benign outcome — render the outro and fire the
+      // `agent aborted` event above, but keep it out of error tracking.
+      expected: matched?.expected ?? false,
       error: new WizardError(`Agent aborted: ${reason}`, {
         integration: config.integrationLabel,
         error_type: AgentErrorType.ABORT,

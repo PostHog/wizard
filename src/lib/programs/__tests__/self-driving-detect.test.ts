@@ -69,6 +69,30 @@ describe('SELF_DRIVING_ABORT_CASES', () => {
     expect(matched[0].body).toBeTruthy();
   });
 
+  it('marks benign, user/environment-driven aborts as expected (kept out of error tracking)', () => {
+    // Declining GitHub or running non-interactively are normal outcomes, not
+    // exceptions worth triaging — they must be flagged `expected` so
+    // wizardAbort skips captureException.
+    const expectedReasons = [
+      'github connection declined',
+      'requires-interactive-mode',
+      'requirements-incomplete',
+    ];
+    for (const reason of expectedReasons) {
+      const [c] = SELF_DRIVING_ABORT_CASES.filter((c) => c.match.test(reason));
+      expect(c?.expected, reason).toBe(true);
+    }
+  });
+
+  it('keeps the unavailable-access abort as a genuine (unexpected) error', () => {
+    // Signals being unreachable in open beta is a real failure — it should
+    // still be reported to error tracking.
+    const [c] = SELF_DRIVING_ABORT_CASES.filter((c) =>
+      c.match.test('self-driving is not available for this project'),
+    );
+    expect(c?.expected).not.toBe(true);
+  });
+
   it('frames the unavailable-access abort as open beta, not a closed per-team beta', () => {
     // STEP 1 no longer gates on access — Self-driving is open beta — but the
     // abort is kept as a safety net. Its copy must say the product is still

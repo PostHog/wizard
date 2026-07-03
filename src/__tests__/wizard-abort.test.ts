@@ -132,6 +132,34 @@ describe('wizardAbort', () => {
     });
   });
 
+  it('does not capture an expected abort as an exception', async () => {
+    // A benign, user-driven abort (e.g. declining the GitHub connection) still
+    // carries a WizardError for context/logging, but must not reach error
+    // tracking — it is a normal outcome, not an exception to triage.
+    const error = new WizardError('Agent aborted: github connection declined', {
+      integration: 'self-driving',
+      error_type: 'ABORT',
+    });
+
+    await expect(wizardAbort({ error, expected: true })).rejects.toThrow(
+      'process.exit called',
+    );
+
+    expect(mockAnalytics.captureException).not.toHaveBeenCalled();
+    expect(mockAnalytics.shutdown).toHaveBeenCalledWith('cancelled');
+  });
+
+  it('still captures an unexpected abort even when an error is provided', async () => {
+    const error = new WizardError('Agent aborted: unreachable', {});
+
+    await expect(wizardAbort({ error, expected: false })).rejects.toThrow(
+      'process.exit called',
+    );
+
+    expect(mockAnalytics.captureException).toHaveBeenCalledWith(error, {});
+    expect(mockAnalytics.shutdown).toHaveBeenCalledWith('error');
+  });
+
   it('runs registered cleanup functions before analytics and display', async () => {
     const callOrder: string[] = [];
 
