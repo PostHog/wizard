@@ -8,10 +8,12 @@ first.
 
 **Status:** Phase 2 (dashboard + alerts) is SHIPPED as of 2026-07-03 — the
 [wizard-switchboard dashboard](https://us.posthog.com/project/2/dashboard/1793563) is
-live in project 2, curated to **10 tiles in priority order (remarks, cost, runtime,
-completion, errors, YARA)**, with 20 more deep-dive insights saved off-dashboard and
-5 alerts armed; see the shipped inventory in `02-dashboard-spec.md`. Phase 1
-(telemetry parity PR), Phase 3 (validation run), and Phase 4 (flag cut) are still to do.
+live in project 2: **12 tiles in priority order (remarks, cost, runtime, completion,
+side-by-side runner funnels + before/after conversion trend, errors, YARA)**, 16
+deep-dive insights saved off-dashboard, 2 runner cohorts, and 5 alerts armed; see
+`02-dashboard-spec.md` (the as-built source of truth). Phase 1 (telemetry parity PR —
+note remark support is now REQUIRED), Phase 3 (validation run), and Phase 4 (flag cut)
+are still to do.
 
 ## Documents
 

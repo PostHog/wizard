@@ -65,18 +65,19 @@ remarks, bash-denied policy hits, and YARA events. That's the whole scope below.
   `analytics.wizardCapture('bash denied', { reason, command })` the anthropic
   `canUseTool` callback fires.
 
-### 1.4 Remark support for pi — strongly recommended
+### 1.4 Remark support for pi — REQUIRED (upgraded 2026-07-03)
 
-- **Why:** remarks are one of the primary signals being monitored; anthropic collects
-  them via a Stop hook (`createStopHook()` in `src/lib/agent/agent-interface.ts`), which
-  pi has no equivalent of.
+Remarks are the #1 monitoring priority and the top tile on the shipped dashboard —
+without this item that tile stays half-empty for the variant under test. Originally
+"strongly recommended"; now required for the flag cut.
+
+- **Why:** anthropic collects remarks via a Stop hook (`createStopHook()` in
+  `src/lib/agent/agent-interface.ts`), which pi has no equivalent of.
 - **What:** pi is in-process — append the `[WIZARD-REMARK]` instruction
   (`AgentSignals.WIZARD_REMARK`, `src/lib/agent/signals.ts`) to the final prompt (honor
   the existing `requestRemark` field on `BackendRunInputs`), parse the output with
   `AgentOutputSignals.remark()`, and capture `wizard remark` with the same single
   `remark` property.
-- **Fallback if deferred:** annotate the remarks tiles "anthropic only" and exclude
-  remark volume from go/no-go.
 
 ### 1.5 Guard pi + orchestrator — required (test, possibly code)
 
@@ -131,6 +132,6 @@ confirm, by querying project 2 for each `run_id`:
       needed — this asserts the already-working gateway path stays intact).
 - [ ] pi run with a forced abort: `wizard: agent aborted` carries `duration_ms`.
 - [ ] pi run with a blocked bash command: `wizard: bash denied` fires.
-- [ ] (if 1.4) pi run: `wizard remark` fires with non-empty `remark`.
+- [ ] pi run: `wizard remark` fires with non-empty `remark` (1.4 — required).
 - [ ] variant-gating test covers pi + orchestrator.
 - [ ] `pnpm build && pnpm test && pnpm fix` green.
