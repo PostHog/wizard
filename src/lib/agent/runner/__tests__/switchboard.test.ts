@@ -7,7 +7,7 @@ import {
   Harness,
   Sequence,
   WIZARD_ORCHESTRATOR_FLAG_KEY,
-  WIZARD_RUNNER_FLAG_KEY,
+  WIZARD_USE_PI_HARNESS_FLAG_KEY,
 } from '@lib/constants';
 import {
   PROGRAM_BINDINGS,
@@ -61,51 +61,51 @@ describe('switchboard PROGRAM_BINDINGS', () => {
 });
 
 describe('switchboard resolveHarness — CLI precedence', () => {
-  it('CLI cliHarness wins over PostHog wizard-runner flag', () => {
+  it('CLI cliHarness wins over the wizard-use-pi-harness flag', () => {
     const pick = resolveHarness({
       program: 'posthog-integration',
-      flags: { 'wizard-runner': 'anthropic' },
+      flags: { [WIZARD_USE_PI_HARNESS_FLAG_KEY]: 'false' },
       cliHarness: Harness.pi,
     });
     expect(pick.harness).toBe(Harness.pi);
   });
 
-  it('PostHog wizard-runner flag overlays when no CLI is set', () => {
+  it('the wizard-use-pi-harness flag overlays when no CLI is set', () => {
     const pick = resolveHarness({
       program: 'posthog-integration',
-      flags: { 'wizard-runner': 'pi' },
+      flags: { [WIZARD_USE_PI_HARNESS_FLAG_KEY]: 'true' },
     });
     expect(pick.harness).toBe(Harness.pi);
   });
 
-  it('the pi runner flag pairs pi with gpt-5-mini, anthropic keeps sonnet', () => {
+  it('the pi flag pairs pi with gpt-5-mini; off keeps anthropic + sonnet', () => {
     expect(
       resolveHarness({
         program: 'posthog-integration',
-        flags: { [WIZARD_RUNNER_FLAG_KEY]: 'pi' },
+        flags: { [WIZARD_USE_PI_HARNESS_FLAG_KEY]: 'true' },
       }),
     ).toEqual({ harness: Harness.pi, model: GPT5_MINI_MODEL });
     expect(
       resolveHarness({
         program: 'posthog-integration',
-        flags: { [WIZARD_RUNNER_FLAG_KEY]: 'anthropic' },
+        flags: { [WIZARD_USE_PI_HARNESS_FLAG_KEY]: 'false' },
       }),
     ).toEqual({ harness: Harness.anthropic, model: DEFAULT_AGENT_MODEL });
   });
 
-  it('a --model override still wins over the pi runner flag pairing', () => {
+  it('a --model override still wins over the pi flag pairing', () => {
     const pick = resolveHarness({
       program: 'posthog-integration',
-      flags: { [WIZARD_RUNNER_FLAG_KEY]: 'pi' },
+      flags: { [WIZARD_USE_PI_HARNESS_FLAG_KEY]: 'true' },
       cliModel: 'openai/o4-mini',
     });
     expect(pick).toEqual({ harness: Harness.pi, model: 'openai/o4-mini' });
   });
 
-  it('unknown flag value falls back to the binding default', () => {
+  it('a non-"true" flag value falls back to the binding default', () => {
     const pick = resolveHarness({
       program: 'posthog-integration',
-      flags: { 'wizard-runner': 'banana' },
+      flags: { [WIZARD_USE_PI_HARNESS_FLAG_KEY]: 'banana' },
     });
     expect(pick.harness).toBe(Harness.anthropic);
   });

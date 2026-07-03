@@ -230,12 +230,11 @@ export const WIZARD_REMARK_EVENT_NAME = 'wizard remark';
 /** Boolean feature flag that routes a run to the experimental orchestrator runner. */
 export const WIZARD_ORCHESTRATOR_FLAG_KEY = 'wizard-orchestrator';
 /**
- * Multivariate feature flag that selects the agent runner: `anthropic` (control,
- * claude-agent-sdk) or `pi` (pi.dev coding agent). Read by the `wizardRunner`
- * resolver middleware. Multivariate over boolean so telemetry reads the runner
- * name directly. Unknown/missing resolves to `anthropic`.
+ * Boolean feature flag that routes a run to the pi harness (pi.dev coding
+ * agent) paired with gpt-5-mini. Off/missing resolves to the binding default
+ * (anthropic + sonnet) — a failed flag fetch can never opt anyone in.
  */
-export const WIZARD_RUNNER_FLAG_KEY = 'wizard-runner';
+export const WIZARD_USE_PI_HARNESS_FLAG_KEY = 'wizard-use-pi-harness';
 /** Feature flag key that gates the intro-screen "Tools" menu. */
 export const WIZARD_TOOLS_MENU_FLAG_KEY = 'wizard-tools-menu';
 /**

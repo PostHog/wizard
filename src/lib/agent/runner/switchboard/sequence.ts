@@ -78,8 +78,8 @@ const orchestratorFeatureFlagMw: Middleware<Sequence> = (ctx, next) =>
 
 /**
  * pi has no `runTask`, so orchestrator mode throws on it. When the harness
- * axis resolves to pi (the `wizard-runner` flag), clamp the flag-driven
- * sequence to linear so `wizard-runner=pi` + `wizard-orchestrator=true` can
+ * axis resolves to pi (the `wizard-use-pi-harness` flag), clamp the flag-driven
+ * sequence to linear so `wizard-use-pi-harness` + `wizard-orchestrator` can
  * never combine into a crashing cohort. Sits BELOW the CLI override — a dev
  * build forcing `--sequence orchestrator` still reproduces the hard error.
  */

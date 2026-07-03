@@ -1,7 +1,7 @@
 /**
  * The `pi` backend — the challenger. Drives pi.dev's coding agent
  * (`@earendil-works/pi-coding-agent`) against the PostHog LLM gateway, behind
- * `wizard-runner=pi`. It owns the agent loop and model transport; prompt
+ * `wizard-use-pi-harness`. It owns the agent loop and model transport; prompt
  * assembly, error routing, and the outro stay in `linear.ts`, shared with the
  * `anthropic` control.
  *

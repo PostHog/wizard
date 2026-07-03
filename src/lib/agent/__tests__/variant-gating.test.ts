@@ -2,7 +2,7 @@ import {
   Harness,
   Sequence,
   WIZARD_ORCHESTRATOR_FLAG_KEY,
-  WIZARD_RUNNER_FLAG_KEY,
+  WIZARD_USE_PI_HARNESS_FLAG_KEY,
 } from '@lib/constants';
 import {
   isOrchestratorEnabled,
@@ -35,7 +35,7 @@ describe('pi + orchestrator gating', () => {
     const binding = resolveBinding({
       program,
       flags: {
-        [WIZARD_RUNNER_FLAG_KEY]: Harness.pi,
+        [WIZARD_USE_PI_HARNESS_FLAG_KEY]: 'true',
         [WIZARD_ORCHESTRATOR_FLAG_KEY]: 'true',
       },
     });
@@ -47,7 +47,7 @@ describe('pi + orchestrator gating', () => {
     const binding = resolveBinding({
       program,
       flags: {
-        [WIZARD_RUNNER_FLAG_KEY]: Harness.anthropic,
+        [WIZARD_USE_PI_HARNESS_FLAG_KEY]: 'false',
         [WIZARD_ORCHESTRATOR_FLAG_KEY]: 'true',
       },
     });
@@ -58,7 +58,7 @@ describe('pi + orchestrator gating', () => {
   it('resolves pi alone to linear (the binding default)', () => {
     const binding = resolveBinding({
       program,
-      flags: { [WIZARD_RUNNER_FLAG_KEY]: Harness.pi },
+      flags: { [WIZARD_USE_PI_HARNESS_FLAG_KEY]: 'true' },
     });
     expect(binding.harness).toBe(Harness.pi);
     expect(binding.sequence).toBe(Sequence.linear);
