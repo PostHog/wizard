@@ -206,7 +206,7 @@ function applyOutroMarkers(textBlock: string): void {
  * The text of the last `[STATUS] …` line in a block, if any. Last wins so the
  * spinner shows the most recent action when a turn prints several.
  */
-function lastStatusLine(textBlock: string): string | undefined {
+export function lastStatusLine(textBlock: string): string | undefined {
   let status: string | undefined;
   for (const line of textBlock.split('\n')) {
     const idx = line.indexOf(AgentSignals.STATUS);
