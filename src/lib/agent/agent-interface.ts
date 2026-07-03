@@ -38,7 +38,7 @@ import { createTriageLLMProvider } from './triage-provider';
 import { getWizardCommandments } from './commandments';
 import { classifyToolToStage } from './agent-phase';
 import type { PackageManagerDetector } from '@lib/detection/package-manager';
-import { AgentSignals, AgentErrorType } from './signals';
+import { AgentSignals, AgentErrorType, REMARK_INSTRUCTION } from './signals';
 import { AgentOutputSignals } from './output-signals';
 
 // Signal vocabulary and the output parser live in dedicated modules; re-export
@@ -269,7 +269,7 @@ export function createStopHook(
       logToFile('Stop hook: requesting reflection');
       return {
         decision: 'block',
-        reason: `Before concluding, provide a brief remark about what information or guidance would have been useful to have in the integration prompt or documentation for this run. Specifically cite anything that would have prevented tool failures, erroneous edits, or other wasted turns. Format your response exactly as: ${AgentSignals.WIZARD_REMARK} Your remark here`,
+        reason: REMARK_INSTRUCTION,
       };
     }
 

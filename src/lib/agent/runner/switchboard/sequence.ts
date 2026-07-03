@@ -4,8 +4,13 @@
  */
 
 import { IS_PRODUCTION_BUILD } from '@env';
-import { Sequence, WIZARD_ORCHESTRATOR_FLAG_KEY } from '@lib/constants';
+import {
+  Harness,
+  Sequence,
+  WIZARD_ORCHESTRATOR_FLAG_KEY,
+} from '@lib/constants';
 import { logToFile } from '@utils/debug';
+import { resolveHarness } from './harness';
 import type { WizardSession } from '@lib/wizard-session';
 import type { ProgramConfig } from '@lib/programs/program-step';
 import type { ProgramRun, BootstrapResult } from '../shared/types';
@@ -71,10 +76,28 @@ const cliSequenceMw: Middleware<Sequence> = (ctx, next) =>
 const orchestratorFeatureFlagMw: Middleware<Sequence> = (ctx, next) =>
   isOrchestratorEnabled(ctx.flags) ? Sequence.orchestrator : next();
 
-// Order = precedence: CLI > flag > binding default. The prod spread collapses
-// to [], dropping cliSequenceMw from the chain.
+/**
+ * pi has no `runTask`, so orchestrator mode throws on it. When the harness
+ * axis resolves to pi (the `wizard-runner` flag), clamp the flag-driven
+ * sequence to linear so `wizard-runner=pi` + `wizard-orchestrator=true` can
+ * never combine into a crashing cohort. Sits BELOW the CLI override — a dev
+ * build forcing `--sequence orchestrator` still reproduces the hard error.
+ */
+const piLinearClampMw: Middleware<Sequence> = (ctx, next) => {
+  if (resolveHarness(ctx).harness !== Harness.pi) return next();
+  if (isOrchestratorEnabled(ctx.flags)) {
+    logToFile(
+      '[switchboard] wizard-orchestrator ignored: pi has no runTask, clamping to linear',
+    );
+  }
+  return Sequence.linear;
+};
+
+// Order = precedence: CLI > pi clamp > flag > binding default. The prod spread
+// collapses to [], dropping cliSequenceMw from the chain.
 const SEQUENCE_MIDDLEWARE: Middleware<Sequence>[] = [
   ...(IS_PRODUCTION_BUILD ? [] : [cliSequenceMw]),
+  piLinearClampMw,
   orchestratorFeatureFlagMw,
 ];
 

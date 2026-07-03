@@ -21,10 +21,13 @@ import {
   Harness,
   POSTHOG_FLAG_HEADER_PREFIX,
   POSTHOG_PROPERTY_HEADER_PREFIX,
+  WIZARD_REMARK_EVENT_NAME,
   WIZARD_USER_AGENT,
 } from '@lib/constants';
+import { analytics } from '@utils/analytics';
 import { AgentErrorType } from '@lib/agent/agent-interface';
-import { AgentSignals } from '@lib/agent/signals';
+import { AgentSignals, REMARK_INSTRUCTION } from '@lib/agent/signals';
+import { AgentOutputSignals } from '@lib/agent/output-signals';
 import { getWizardCommandments } from '@lib/agent/commandments';
 import { modelCapabilities } from '../../switchboard/models';
 import type { AgentResult, AgentHarness, BackendRunInputs } from '../types';
@@ -206,6 +209,27 @@ export const piBackend: AgentHarness = {
     getUI().log.success("Agent initialized. Let's get cooking!");
 
     spinner.start(config.spinnerMessage ?? 'Customizing your PostHog setup...');
+
+    // Run telemetry, mirroring the anthropic path's `agent completed` /
+    // `agent aborted` shape (same property names) so one insight serves both
+    // harnesses. Cost/token fields are deliberately absent — pi's SDK exposes
+    // none, and the gateway's $ai_generation events already track them
+    // symmetrically per run.
+    const startTime = Date.now();
+    const signals = new AgentOutputSignals();
+    let assistantTurns = 0;
+    const runDurations = () => {
+      const durationMs = Date.now() - startTime;
+      return {
+        duration_ms: durationMs,
+        duration_seconds: Math.round(durationMs / 1000),
+      };
+    };
+    const captureAborted = () =>
+      analytics.wizardCapture('agent aborted', {
+        ...runDurations(),
+        model: modelId,
+      });
 
     try {
       const {
@@ -402,10 +426,14 @@ export const piBackend: AgentHarness = {
       const unsubscribe = agentSession.subscribe((event) => {
         switch (event.type) {
           case 'message_end': {
+            assistantTurns += 1;
             const assistant = extractText(event.message).trim();
             if (assistant) {
               logToFile(`[pi] assistant: ${assistant.slice(0, 1000)}`);
               applyOutroMarkers(assistant);
+              // Retain signal-bearing lines (the [WIZARD-REMARK] reflection)
+              // the same way the anthropic path parses its output stream.
+              for (const line of assistant.split('\n')) signals.push(line);
             }
             break;
           }
@@ -441,6 +469,17 @@ export const piBackend: AgentHarness = {
         // Non-streaming: resolves when the agent run completes. Throws if no
         // model/api key, or on a transport error.
         await agentSession.prompt(prompt);
+
+        // End-of-run reflection, parity with the anthropic Stop hook: ask once
+        // after the run completes, parse the [WIZARD-REMARK] out of the reply.
+        // Best-effort — a failed remark turn never fails a successful run.
+        if (!security.state.criticalViolation) {
+          try {
+            await agentSession.prompt(REMARK_INSTRUCTION);
+          } catch (err) {
+            logToFile(`[pi] remark request failed: ${String(err)}`);
+          }
+        }
       } finally {
         unsubscribe();
         mcpCleanup?.();
@@ -453,7 +492,13 @@ export const piBackend: AgentHarness = {
         logToFile(
           `[pi] terminated: YARA violation (blocked ${security.state.blockedCount} call(s))`,
         );
+        captureAborted();
         return { error: AgentErrorType.YARA_VIOLATION };
+      }
+
+      const remark = signals.remark();
+      if (remark) {
+        analytics.capture(WIZARD_REMARK_EVENT_NAME, { remark });
       }
 
       // The skill plans events into .posthog-events.json then asks to remove it
@@ -466,6 +511,11 @@ export const piBackend: AgentHarness = {
         logToFile(`[pi] .posthog-events.json cleanup skipped: ${String(err)}`);
       }
 
+      analytics.wizardCapture('agent completed', {
+        ...runDurations(),
+        model: modelId,
+        num_turns: assistantTurns,
+      });
       spinner.stop(config.successMessage ?? 'PostHog integration complete');
       return {};
     } catch (err) {
@@ -473,6 +523,7 @@ export const piBackend: AgentHarness = {
       logToFile(`[pi] run error: ${message}`);
       spinner.stop(config.errorMessage ?? `${config.integrationLabel} failed`);
       getUI().log.error(`pi backend error: ${message}`);
+      captureAborted();
 
       const lower = message.toLowerCase();
       if (lower.includes('rate limit') || lower.includes('429')) {
