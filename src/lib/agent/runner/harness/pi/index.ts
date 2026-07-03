@@ -202,6 +202,21 @@ function applyOutroMarkers(textBlock: string): void {
   }
 }
 
+/**
+ * The text of the last `[STATUS] …` line in a block, if any. Last wins so the
+ * spinner shows the most recent action when a turn prints several.
+ */
+function lastStatusLine(textBlock: string): string | undefined {
+  let status: string | undefined;
+  for (const line of textBlock.split('\n')) {
+    const idx = line.indexOf(AgentSignals.STATUS);
+    if (idx !== -1) {
+      status = line.slice(idx + AgentSignals.STATUS.length).trim();
+    }
+  }
+  return status || undefined;
+}
+
 export const piBackend: AgentHarness = {
   name: Harness.pi,
 
@@ -433,6 +448,13 @@ export const piBackend: AgentHarness = {
             if (assistant) {
               logToFile(`[pi] assistant: ${assistant.slice(0, 1000)}`);
               applyOutroMarkers(assistant);
+              // Surface [STATUS] lines into the live spinner + status history,
+              // mirroring the anthropic path — pi otherwise drops them.
+              const statusText = lastStatusLine(assistant);
+              if (statusText) {
+                getUI().pushStatus(statusText);
+                spinner.message(statusText);
+              }
               for (const line of assistant.split('\n')) signals.push(line);
             }
             break;
