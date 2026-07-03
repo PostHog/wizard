@@ -38,19 +38,24 @@ export function getHarness(name: Harness): AgentHarness {
 const flagRunnerOverride: Middleware<HarnessPick> = (ctx, next) => {
   const pick = next();
   if (ctx.flags[WIZARD_USE_PI_HARNESS_FLAG_KEY] !== 'true') return pick;
+  if (ctx.trace) Object.assign(ctx.trace, { harness: 'flag', model: 'flag' });
   return { harness: Harness.pi, model: GPT5_MINI_MODEL };
 };
 
 /** `--harness` override. Dev/test only — the option is gated out of published builds. */
 const cliHarnessOverride: Middleware<HarnessPick> = (ctx, next) => {
   const pick = next();
-  return ctx.cliHarness ? { ...pick, harness: ctx.cliHarness } : pick;
+  if (!ctx.cliHarness) return pick;
+  if (ctx.trace) ctx.trace.harness = 'cli';
+  return { ...pick, harness: ctx.cliHarness };
 };
 
 /** `--model` override. Dev/test only — the option is gated out of published builds. */
 const cliModelOverride: Middleware<HarnessPick> = (ctx, next) => {
   const pick = next();
-  return ctx.cliModel ? { ...pick, model: ctx.cliModel } : pick;
+  if (!ctx.cliModel) return pick;
+  if (ctx.trace) ctx.trace.model = 'cli';
+  return { ...pick, model: ctx.cliModel };
 };
 
 // Order = precedence: CLI > flag > binding default. The prod spread collapses
@@ -69,6 +74,8 @@ export function resolveHarness(
   role = 'default',
 ): HarnessPick {
   const pick = runChain(HARNESS_MIDDLEWARE, ctx, () => {
+    if (ctx.trace)
+      Object.assign(ctx.trace, { harness: 'binding', model: 'binding' });
     const binding = PROGRAM_BINDINGS[ctx.program] ?? DEFAULT_BINDING;
     return {
       harness: binding.harness,
@@ -77,7 +84,11 @@ export function resolveHarness(
     };
   });
   logToFile(
-    `[switchboard] resolved: program=${ctx.program} harness=${pick.harness} model=${pick.model}`,
+    `[switchboard] resolved: program=${ctx.program} harness=${pick.harness}` +
+      `${ctx.trace?.harness ? ` (${ctx.trace.harness})` : ''} model=${
+        pick.model
+      }` +
+      `${ctx.trace?.model ? ` (${ctx.trace.model})` : ''}`,
   );
   return pick;
 }

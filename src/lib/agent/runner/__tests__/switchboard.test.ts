@@ -12,8 +12,10 @@ import {
 import {
   PROGRAM_BINDINGS,
   DEFAULT_BINDING,
+  resolveBinding,
   resolveHarness,
   resolveSequence,
+  type SwitchboardCtx,
 } from '@lib/agent/runner/switchboard';
 import { modelCapabilities } from '@lib/agent/runner/switchboard/models';
 
@@ -127,6 +129,55 @@ describe('switchboard resolveHarness — CLI precedence', () => {
       cliModel: 'openai/gpt-5',
     });
     expect(pick).toEqual({ harness: Harness.anthropic, model: 'openai/gpt-5' });
+  });
+});
+
+describe('switchboard decision trace', () => {
+  it('stamps binding sources when nothing overrides', () => {
+    const ctx: SwitchboardCtx = { program: 'posthog-integration', flags: {} };
+    resolveBinding(ctx);
+    expect(ctx.trace).toEqual({
+      harness: 'binding',
+      model: 'binding',
+      sequence: 'binding',
+    });
+  });
+
+  it('stamps flag + pi-clamp sources when the pi flag decides', () => {
+    const ctx: SwitchboardCtx = {
+      program: 'posthog-integration',
+      flags: { [WIZARD_USE_PI_HARNESS_FLAG_KEY]: 'true' },
+    };
+    resolveBinding(ctx);
+    expect(ctx.trace).toEqual({
+      harness: 'flag',
+      model: 'flag',
+      sequence: 'pi-clamp',
+    });
+  });
+
+  it('stamps cli sources over the flag', () => {
+    const ctx: SwitchboardCtx = {
+      program: 'posthog-integration',
+      flags: { [WIZARD_USE_PI_HARNESS_FLAG_KEY]: 'true' },
+      cliHarness: Harness.anthropic,
+      cliModel: 'openai/gpt-5',
+    };
+    resolveBinding(ctx);
+    expect(ctx.trace).toEqual({
+      harness: 'cli',
+      model: 'cli',
+      sequence: 'binding',
+    });
+  });
+
+  it('stamps flag source when the orchestrator flag decides the sequence', () => {
+    const ctx: SwitchboardCtx = {
+      program: 'posthog-integration',
+      flags: { [WIZARD_ORCHESTRATOR_FLAG_KEY]: 'true' },
+    };
+    resolveBinding(ctx);
+    expect(ctx.trace?.sequence).toBe('flag');
   });
 });
 
