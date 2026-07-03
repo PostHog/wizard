@@ -102,40 +102,6 @@ export function createWizardPiTaskTools(): {
     },
   });
 
-  const taskReorder = defineTool({
-    name: 'TaskReorder',
-    label: 'Reorder tasks',
-    description:
-      'Reorder the todo list to the given sequence of task ids (top = first). Ids you omit keep their existing order at the end. Task ids are unchanged.',
-    promptSnippet:
-      'TaskReorder(taskIds) — reorder the todo list to this execution order',
-    parameters: Type.Object({
-      taskIds: Type.Array(Type.String(), {
-        description: 'Task ids in the desired top-to-bottom order',
-      }),
-    }),
-    // eslint-disable-next-line @typescript-eslint/require-await -- pi tool contract returns a Promise
-    async execute(_id, args) {
-      const ordered: Array<[string, TaskEntry]> = [];
-      const seen = new Set<string>();
-      for (const id of args.taskIds) {
-        const entry = store.get(id);
-        if (entry && !seen.has(id)) {
-          ordered.push([id, entry]);
-          seen.add(id);
-        }
-      }
-      // Any task the caller left out keeps its place, after the listed ones.
-      for (const [id, entry] of store) {
-        if (!seen.has(id)) ordered.push([id, entry]);
-      }
-      store.clear();
-      for (const [id, entry] of ordered) store.set(id, entry);
-      syncToTui(store);
-      return text(`Reordered ${ordered.length} tasks`);
-    },
-  });
-
   const taskGet = defineTool({
     name: 'TaskGet',
     label: 'Get task',
@@ -167,8 +133,5 @@ export function createWizardPiTaskTools(): {
     },
   });
 
-  return {
-    tools: [taskCreate, taskUpdate, taskReorder, taskGet, taskList],
-    store,
-  };
+  return { tools: [taskCreate, taskUpdate, taskGet, taskList], store };
 }
