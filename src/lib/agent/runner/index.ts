@@ -21,6 +21,8 @@ import { analytics } from '@utils/analytics';
 import {
   Sequence,
   WIZARD_ORCHESTRATOR_FLAG_KEY,
+  WIZARD_PI_EFFORT_FLAG_KEY,
+  WIZARD_PI_MODEL_FLAG_KEY,
   WIZARD_USE_PI_HARNESS_FLAG_KEY,
 } from '@lib/constants';
 import { logToFile } from '@utils/debug';
@@ -147,6 +149,8 @@ function captureSwitchboardDecision(
   analytics.wizardCapture('switchboard resolved', {
     program: ctx.program,
     flag_use_pi_harness: ctx.flags[WIZARD_USE_PI_HARNESS_FLAG_KEY],
+    flag_pi_model: ctx.flags[WIZARD_PI_MODEL_FLAG_KEY],
+    flag_pi_effort: ctx.flags[WIZARD_PI_EFFORT_FLAG_KEY],
     flag_orchestrator: ctx.flags[WIZARD_ORCHESTRATOR_FLAG_KEY],
     cli_harness: ctx.cliHarness,
     cli_sequence: ctx.cliSequence,

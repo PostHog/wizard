@@ -5,7 +5,10 @@
 import { IS_PRODUCTION_BUILD } from '@env';
 import {
   GPT5_4_MODEL,
+  GPT5_MINI_MODEL,
+  GPT5_MODEL,
   Harness,
+  WIZARD_PI_MODEL_FLAG_KEY,
   WIZARD_USE_PI_HARNESS_FLAG_KEY,
 } from '@lib/constants';
 import { logToFile } from '@utils/debug';
@@ -34,12 +37,26 @@ export function getHarness(name: Harness): AgentHarness {
   return harness;
 }
 
-/** `wizard-use-pi-harness` flag on → pi + gpt-5.4; otherwise binding default. */
+/** `wizard-pi-model` variant key → gateway id (variant keys can't carry `/` or `.`). */
+const PI_MODEL_FLAG_VARIANTS: Record<string, string> = {
+  'gpt-5': GPT5_MODEL,
+  'gpt-5-4': GPT5_4_MODEL,
+  'gpt-5-mini': GPT5_MINI_MODEL,
+};
+
+/**
+ * `wizard-use-pi-harness` on → pi, paired with the `wizard-pi-model` variant
+ * (unknown/missing variant → gpt-5.4). Otherwise binding default.
+ */
 const flagRunnerOverride: Middleware<HarnessPick> = (ctx, next) => {
   const pick = next();
   if (ctx.flags[WIZARD_USE_PI_HARNESS_FLAG_KEY] !== 'true') return pick;
   if (ctx.trace) Object.assign(ctx.trace, { harness: 'flag', model: 'flag' });
-  return { harness: Harness.pi, model: GPT5_4_MODEL };
+  const variant = ctx.flags[WIZARD_PI_MODEL_FLAG_KEY] ?? '';
+  return {
+    harness: Harness.pi,
+    model: PI_MODEL_FLAG_VARIANTS[variant] ?? GPT5_4_MODEL,
+  };
 };
 
 /** `--harness` override. Dev/test only — the option is gated out of published builds. */

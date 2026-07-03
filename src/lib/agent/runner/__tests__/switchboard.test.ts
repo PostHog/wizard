@@ -6,6 +6,8 @@ import {
   GPT5_MODEL,
   GPT5_4_MODEL,
   Harness,
+  WIZARD_PI_EFFORT_FLAG_KEY,
+  WIZARD_PI_MODEL_FLAG_KEY,
   Sequence,
   WIZARD_ORCHESTRATOR_FLAG_KEY,
   WIZARD_USE_PI_HARNESS_FLAG_KEY,
@@ -103,6 +105,22 @@ describe('switchboard resolveHarness — CLI precedence', () => {
       cliModel: 'openai/o4-mini',
     });
     expect(pick).toEqual({ harness: Harness.pi, model: 'openai/o4-mini' });
+  });
+
+  it('the wizard-pi-model variant selects the model; unknown falls back to gpt-5.4', () => {
+    const base = { [WIZARD_USE_PI_HARNESS_FLAG_KEY]: 'true' };
+    const pick = (variant?: string) =>
+      resolveHarness({
+        program: 'posthog-integration',
+        flags: variant
+          ? { ...base, [WIZARD_PI_MODEL_FLAG_KEY]: variant }
+          : base,
+      }).model;
+    expect(pick('gpt-5')).toBe(GPT5_MODEL);
+    expect(pick('gpt-5-4')).toBe(GPT5_4_MODEL);
+    expect(pick('gpt-5-mini')).toBe(GPT5_MINI_MODEL);
+    expect(pick('banana')).toBe(GPT5_4_MODEL);
+    expect(pick()).toBe(GPT5_4_MODEL);
   });
 
   it('a non-"true" flag value falls back to the binding default', () => {
@@ -212,6 +230,24 @@ describe('switchboard modelCapabilities', () => {
   it('defaults unknown models by transport: anthropic on, openai off', () => {
     expect(modelCapabilities('claude-future-9').reasoning).toBe(true);
     expect(modelCapabilities('openai/whatever').reasoning).toBe(false);
+  });
+});
+
+describe('switchboard wizard-pi-effort flag', () => {
+  it('overrides effort for reasoning models; ignores invalid; skips non-reasoning', () => {
+    expect(
+      modelCapabilities(GPT5_4_MODEL, { [WIZARD_PI_EFFORT_FLAG_KEY]: 'high' })
+        .thinkingLevel,
+    ).toBe('high');
+    expect(
+      modelCapabilities(GPT5_4_MODEL, { [WIZARD_PI_EFFORT_FLAG_KEY]: 'banana' })
+        .thinkingLevel,
+    ).toBe('low');
+    expect(
+      modelCapabilities('openai/gpt-4o', {
+        [WIZARD_PI_EFFORT_FLAG_KEY]: 'high',
+      }).thinkingLevel,
+    ).toBeUndefined();
   });
 });
 

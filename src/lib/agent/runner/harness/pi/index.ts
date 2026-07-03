@@ -250,7 +250,7 @@ export const piBackend: AgentHarness = {
       // model id; OpenAI completions is served at `/v1/...`, so it keeps the
       // `/v1` the Anthropic SDK strips.
       const api = gatewayApiFor(modelId);
-      const caps = modelCapabilities(modelId);
+      const caps = modelCapabilities(modelId, boot.wizardFlags);
       const gatewayUrl = getLlmGatewayUrl(boot.host);
       const baseUrl =
         api === 'openai-completions' ? `${gatewayUrl}/v1` : gatewayUrl;

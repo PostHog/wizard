@@ -16,6 +16,7 @@ import {
   GPT5_MODEL,
   GPT5_4_MODEL,
   GPT5_MINI_MODEL,
+  WIZARD_PI_EFFORT_FLAG_KEY,
 } from '@lib/constants';
 
 /** Reasoning effort. pi maps it to `reasoning_effort` for openai-completions. */
@@ -61,6 +62,24 @@ function defaultCaps(modelId: string): ModelCapabilities {
 }
 
 /** Capabilities for a gateway model id, table override then transport default. */
-export function modelCapabilities(modelId: string): ModelCapabilities {
-  return MODEL_CAPABILITIES[modelId] ?? defaultCaps(modelId);
+const EFFORT_FLAG_VARIANTS: readonly ThinkingLevel[] = [
+  'minimal',
+  'low',
+  'medium',
+  'high',
+  'xhigh',
+];
+
+export function modelCapabilities(
+  modelId: string,
+  flags: Record<string, string> = {},
+): ModelCapabilities {
+  const caps = MODEL_CAPABILITIES[modelId] ?? defaultCaps(modelId);
+  // `wizard-pi-effort` overrides the table for reasoning models only; an
+  // unknown variant is ignored.
+  const effort = flags[WIZARD_PI_EFFORT_FLAG_KEY] as ThinkingLevel;
+  if (caps.reasoning && EFFORT_FLAG_VARIANTS.includes(effort)) {
+    return { ...caps, thinkingLevel: effort };
+  }
+  return caps;
 }

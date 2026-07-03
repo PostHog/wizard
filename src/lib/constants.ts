@@ -232,8 +232,12 @@ export const WIZARD_INTERACTION_EVENT_NAME = 'wizard interaction';
 export const WIZARD_REMARK_EVENT_NAME = 'wizard remark';
 /** Boolean feature flag that routes a run to the experimental orchestrator runner. */
 export const WIZARD_ORCHESTRATOR_FLAG_KEY = 'wizard-orchestrator';
-/** Boolean flag: on → pi harness + gpt-5; off/missing → binding default. */
+/** Boolean flag: on → pi harness + the pi model pairing; off/missing → binding default. */
 export const WIZARD_USE_PI_HARNESS_FLAG_KEY = 'wizard-use-pi-harness';
+/** Multivariate flag: pi's model. Variant keys map to gateway ids in `PI_MODEL_FLAG_VARIANTS`. */
+export const WIZARD_PI_MODEL_FLAG_KEY = 'wizard-pi-model';
+/** Multivariate flag: reasoning-effort override for pi models (minimal/low/medium/high/xhigh). */
+export const WIZARD_PI_EFFORT_FLAG_KEY = 'wizard-pi-effort';
 /** Feature flag key that gates the intro-screen "Tools" menu. */
 export const WIZARD_TOOLS_MENU_FLAG_KEY = 'wizard-tools-menu';
 /**
