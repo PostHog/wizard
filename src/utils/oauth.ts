@@ -6,7 +6,6 @@ import { logToFile } from './debug';
 import { z } from 'zod';
 import { getUI } from '@ui';
 import {
-  ISSUES_URL,
   OAUTH_PORTS,
   OAUTH_TIMEOUT_MS,
   POSTHOG_DEV_CLIENT_ID,
@@ -17,6 +16,13 @@ import { getOAuthUrl, resolveBaseUrl } from './urls';
 import { abort } from './setup-utils';
 import { openTrackedLink, withUtm } from './links';
 import { analytics } from './analytics';
+import {
+  OAuthError,
+  buildCallbackErrorHtml,
+  buildOAuthFailureMessage,
+  oauthErrorFromCallbackParams,
+  oauthErrorFromTokenBody,
+} from './oauth-errors';
 
 const OAUTH_CALLBACK_STYLES = `
   <style>
@@ -191,9 +197,15 @@ async function startCallbackServer(
       const error = url.searchParams.get('error');
 
       if (error) {
-        const isAccessDenied = error === 'access_denied';
-        const safeError = error.replace(/[^\x20-\x7e]/g, '').slice(0, 200);
-        logToFile(`[oauth] callback received with error: ${safeError}`);
+        // Carries error_description / error_uri (RFC 6749 §4.1.2.1) along
+        // with the code, so the terminal message can show the server's own
+        // explanation instead of just the bare code.
+        const oauthError = oauthErrorFromCallbackParams(url.searchParams);
+        const isAccessDenied = oauthError.code === 'access_denied';
+        logToFile(
+          `[oauth] callback received with error: ${oauthError.code}` +
+            (oauthError.description ? ` (${oauthError.description})` : ''),
+        );
         res.writeHead(isAccessDenied ? 200 : 400, {
           'Content-Type': 'text/html; charset=utf-8',
         });
@@ -207,17 +219,13 @@ async function startCallbackServer(
               ${OAUTH_CALLBACK_STYLES}
             </head>
             <body>
-              <p>${
-                isAccessDenied
-                  ? 'Authorization cancelled.'
-                  : `Authorization failed.`
-              }</p>
+              ${buildCallbackErrorHtml(oauthError)}
               <p>Return to your terminal. This window will close automatically.</p>
               <script>window.close();</script>
             </body>
           </html>
         `);
-        callbackReject(new Error(`OAuth error: ${error}`));
+        callbackReject(oauthError);
         return;
       }
 
@@ -333,6 +341,19 @@ async function exchangeCodeForToken(
       `[oauth] token exchange failed${status ? ` (HTTP ${status})` : ''}:`,
       e instanceof Error ? e.message : e,
     );
+    // Surface the OAuth error body (RFC 6749 §5.2) when the token endpoint
+    // sent one — otherwise `invalid_grant`, PKCE mismatches, etc. reach the
+    // user as a bare axios "Request failed with status code 400".
+    const oauthError = axios.isAxiosError(e)
+      ? oauthErrorFromTokenBody(e.response?.data)
+      : null;
+    if (oauthError) {
+      logToFile(
+        `[oauth] token endpoint error: ${oauthError.code}` +
+          (oauthError.description ? ` (${oauthError.description})` : ''),
+      );
+      throw oauthError;
+    }
     throw e;
   }
 
@@ -470,6 +491,7 @@ export async function performOAuthFlow(
       } catch (e) {
         const error = e instanceof Error ? e : new Error('Unknown error');
         const timedOut = isAuthorizationTimeout(error);
+        const oauthError = error instanceof OAuthError ? error : null;
 
         loginSpinner.stop(
           timedOut ? 'Session timed out.' : 'Authorization failed.',
@@ -477,23 +499,43 @@ export async function performOAuthFlow(
         server.close();
 
         logToFile('[oauth] flow failed:', error);
+        if (oauthError?.description) {
+          logToFile(
+            `[oauth] server error_description: ${oauthError.description}`,
+          );
+        }
+
+        const accessDenied = oauthError
+          ? oauthError.code === 'access_denied'
+          : error.message.includes('access_denied');
 
         if (timedOut) {
           // Overlay bypasses the auth-step gating (which never completes
           // without credentials), so the user sees the failure instead of a
           // spinner that never stops; any key exits.
           getUI().showSessionTimeout();
-        } else if (error.message.includes('access_denied')) {
+        } else if (accessDenied) {
           getUI().log.info(
             `Authorization was cancelled.\n\nYou denied access to PostHog. To use the wizard, you need to authorize access to your PostHog account.\n\nYou can try again by re-running the wizard.`,
           );
         } else {
           getUI().log.error(
-            `Authorization failed:\n\n${error.message}\n\nIf you think this is a bug in the PostHog wizard, please create an issue:\n${ISSUES_URL}`,
+            buildOAuthFailureMessage({
+              error,
+              requestedScopes: config.scopes,
+              clientId,
+              oauthUrl,
+              // Same condition that selects the dev client ID: a resolvable
+              // base URL means a dev-seeded stack, where "fix your local
+              // OAuth app" beats pointing at the production runbook.
+              isDevStack: resolveBaseUrl(config.baseUrl) !== undefined,
+            }),
           );
         }
 
-        const oauthErrorCode = error.message.startsWith('OAuth error: ')
+        const oauthErrorCode = oauthError
+          ? oauthError.code
+          : error.message.startsWith('OAuth error: ')
           ? error.message.slice('OAuth error: '.length)
           : timedOut
           ? 'timeout'
@@ -502,6 +544,7 @@ export async function performOAuthFlow(
         analytics.captureException(error, {
           step: 'oauth_flow',
           oauth_error_code: oauthErrorCode,
+          oauth_error_description: oauthError?.description,
           client_id: clientId,
           requested_scopes: config.scopes.join(' '),
           // Collapse OAuth callback failures of the same kind into one issue
