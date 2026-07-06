@@ -43,8 +43,7 @@ describe('log file writing', () => {
   });
 
   it('never throws when the log path is unwritable even after the mkdir retry', () => {
-    // A file where the parent directory should be makes both the append and
-    // the mkdir retry fail — the classic worst case for the fallback.
+    // A file where the parent dir should be defeats the mkdir retry too.
     const blocker = path.join(tmpRoot, 'blocker');
     fs.writeFileSync(blocker, '');
     configureLogFile({ path: path.join(blocker, 'wizard.log'), enabled: true });

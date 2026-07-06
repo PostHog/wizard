@@ -106,13 +106,8 @@ export async function fetchSkillMenu(
   }
 }
 
-/**
- * Zip extraction tools tried in order. `unzip` is absent from stock Windows
- * (the wizard's most common silent skill-install failure), while `tar` on
- * Windows 10+ and macOS is bsdtar, which reads zip archives natively; GNU tar
- * on Linux can't, so `unzip` stays first where it's near-universal.
- * PowerShell's Expand-Archive is the Windows last resort.
- */
+// Stock Windows has no unzip; its tar (and macOS's) is bsdtar, which reads
+// zip — GNU tar on Linux doesn't, so unzip stays first.
 function zipExtractionAttempts(
   zipFile: string,
   destDir: string,
@@ -138,10 +133,7 @@ function zipExtractionAttempts(
   return attempts;
 }
 
-/**
- * Extract a zip with the first available tool. Returns the tool that worked;
- * throws with every tool's error when all fail.
- */
+/** Extract with the first tool that works; throws naming every failure. */
 function extractZip(
   zipFile: string,
   destDir: string,
@@ -177,9 +169,7 @@ export function downloadSkill(
 
   try {
     fs.mkdirSync(skillDir, { recursive: true });
-    // The temp dir is not guaranteed to exist (Windows %TEMP% can point at
-    // an uncreated per-user folder) and curl won't create it — the download
-    // fails before extraction is even attempted.
+    // %TEMP% may not exist on Windows, and curl won't create it.
     fs.mkdirSync(path.dirname(tmpFile), { recursive: true });
     execFileSync('curl', ['-sL', skillEntry.downloadUrl, '-o', tmpFile], {
       timeout: 30000,
@@ -199,9 +189,7 @@ export function downloadSkill(
     return { success: true };
   } catch (err: any) {
     logToFile(`downloadSkill: error: ${err.message}`);
-    // A run that loses its skill degrades silently — the agent integrates
-    // from its own knowledge and the run still reports success — so the
-    // failure must be visible in analytics, not just the local log.
+    // A skill-less run still reports success — keep the failure visible.
     analytics.wizardCapture('skill install failed', {
       skill_id: skillEntry.id,
       step,
@@ -867,9 +855,7 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
           ],
         };
       } else {
-        // The agent path swallows this into a tool-result string and the run
-        // continues degraded (no skill knowledge) while still reporting
-        // success — report to error tracking so it's not invisible.
+        // The agent only sees a tool-result string — report the failure too.
         analytics.captureException(
           new Error('Skill install failed: download-failed'),
           {

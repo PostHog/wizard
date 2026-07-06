@@ -43,12 +43,8 @@ export function configureLogFile(opts: {
 let ensuredLogDir = false;
 let reportedLogFailure = false;
 
-/**
- * A log write that still fails after the mkdir retry can't be logged to the
- * file — report it to error tracking instead, once per process so a dead
- * disk doesn't emit an exception per log line. Dynamic import because
- * analytics logs through this module; a static import would be a cycle.
- */
+// Failed log writes go to error tracking, once per process. Dynamic import:
+// analytics logs through this module, so a static import would be a cycle.
 function reportLogFailureOnce(err: unknown): void {
   if (reportedLogFailure) return;
   reportedLogFailure = true;
@@ -68,13 +64,8 @@ function reportLogFailureOnce(err: unknown): void {
     });
 }
 
-/**
- * Append to the log file, creating its directory on the first failure — the
- * log lives in the temp dir, which is not guaranteed to exist (Windows %TEMP%
- * can point at an uncreated per-user folder, and POSTHOG_WIZARD_LOG_DIR may
- * name a directory nobody made). Without this every logToFile call fails
- * silently and the run leaves no log at all.
- */
+// The log's directory isn't guaranteed to exist (Windows %TEMP%,
+// POSTHOG_WIZARD_LOG_DIR) — create it on first failure.
 function appendLine(text: string): void {
   try {
     appendFileSync(logFilePath, text);
