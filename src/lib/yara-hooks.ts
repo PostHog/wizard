@@ -117,7 +117,7 @@ type ScanContext = 'command' | 'input' | 'output';
 
 // ─── Scan Report Accumulator ─────────────────────────────────────
 
-type ScanAction = 'blocked' | 'reverted' | 'warned' | 'aborted';
+export type ScanAction = 'blocked' | 'reverted' | 'warned' | 'aborted';
 
 interface ScanReportEntry {
   rule: string;
@@ -176,6 +176,41 @@ function recordMatch(
 export function resetScanReport(): void {
   scanCount = 0;
   scanViolations.length = 0;
+}
+
+/**
+ * Scan bookkeeping for harnesses that run a scanner outside these hooks (pi):
+ * counts the scan and routes violations through `recordMatch`, so they reach
+ * the run log, per-match telemetry, and the end-of-run scan report.
+ */
+export function recordExternalScan(
+  phase: string,
+  tool: string,
+  violations: Array<{
+    rule: string;
+    severity: string;
+    category: string;
+    description: string;
+  }>,
+  action: ScanAction,
+): void {
+  recordScan();
+  for (const v of violations) {
+    recordMatch(
+      phase,
+      tool,
+      {
+        rule: v.rule,
+        metadata: {
+          severity: v.severity as ScanMatch['metadata']['severity'],
+          category: v.category as ScanMatch['metadata']['category'],
+          description: v.description,
+        },
+        matchedStrings: [],
+      },
+      action,
+    );
+  }
 }
 
 /** Format the scan report summary. Returns null if no scans occurred */

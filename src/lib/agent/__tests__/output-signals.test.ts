@@ -1,4 +1,34 @@
 import { AgentOutputSignals } from '@lib/agent/output-signals';
+import { AgentSignals, REMARK_INSTRUCTION } from '@lib/agent/signals';
+
+describe('REMARK_INSTRUCTION', () => {
+  it('carries the marker but no literal placeholder a model could echo', () => {
+    // gpt-5-mini echoed "Your remark here" verbatim from the old wording.
+    expect(REMARK_INSTRUCTION).toContain(AgentSignals.WIZARD_REMARK);
+    expect(REMARK_INSTRUCTION).not.toMatch(/your remark here/i);
+  });
+
+  it('drops a remark that merely echoes the instruction', () => {
+    // Field bug twice over: gpt-5-mini replied with whatever trailed the
+    // marker in the format clause. Any instruction substring is an echo.
+    const echoed = REMARK_INSTRUCTION.split(AgentSignals.WIZARD_REMARK)[1]
+      .trim()
+      .slice(0, 40);
+    const signals = new AgentOutputSignals();
+    signals.push(`${AgentSignals.WIZARD_REMARK} ${echoed}`);
+    expect(signals.remark()).toBeUndefined();
+  });
+
+  it('keeps a genuine remark', () => {
+    const signals = new AgentOutputSignals();
+    signals.push(
+      `${AgentSignals.WIZARD_REMARK} The Astro skill lacked hybrid-render env var docs.`,
+    );
+    expect(signals.remark()).toBe(
+      'The Astro skill lacked hybrid-render env var docs.',
+    );
+  });
+});
 
 describe('AgentOutputSignals', () => {
   it('drops prose but detects each signal marker', () => {

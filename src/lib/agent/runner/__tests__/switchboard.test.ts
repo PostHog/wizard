@@ -2,18 +2,24 @@ import { describe, it, expect } from 'vitest';
 import { PROGRAM_REGISTRY } from '@lib/programs/program-registry';
 import {
   DEFAULT_AGENT_MODEL,
+  SONNET_5_MODEL,
   GPT5_MINI_MODEL,
   GPT5_MODEL,
+  GPT5_4_MODEL,
   Harness,
+  WIZARD_PI_EFFORT_FLAG_KEY,
+  WIZARD_PI_MODEL_FLAG_KEY,
   Sequence,
   WIZARD_ORCHESTRATOR_FLAG_KEY,
-  WIZARD_RUNNER_FLAG_KEY,
+  WIZARD_USE_PI_HARNESS_FLAG_KEY,
 } from '@lib/constants';
 import {
   PROGRAM_BINDINGS,
   DEFAULT_BINDING,
+  resolveBinding,
   resolveHarness,
   resolveSequence,
+  type SwitchboardCtx,
 } from '@lib/agent/runner/switchboard';
 import { modelCapabilities } from '@lib/agent/runner/switchboard/models';
 
@@ -61,51 +67,69 @@ describe('switchboard PROGRAM_BINDINGS', () => {
 });
 
 describe('switchboard resolveHarness — CLI precedence', () => {
-  it('CLI cliHarness wins over PostHog wizard-runner flag', () => {
+  it('CLI cliHarness wins over the wizard-use-pi-harness flag', () => {
     const pick = resolveHarness({
       program: 'posthog-integration',
-      flags: { 'wizard-runner': 'anthropic' },
+      flags: { [WIZARD_USE_PI_HARNESS_FLAG_KEY]: 'false' },
       cliHarness: Harness.pi,
     });
     expect(pick.harness).toBe(Harness.pi);
   });
 
-  it('PostHog wizard-runner flag overlays when no CLI is set', () => {
+  it('the wizard-use-pi-harness flag overlays when no CLI is set', () => {
     const pick = resolveHarness({
       program: 'posthog-integration',
-      flags: { 'wizard-runner': 'pi' },
+      flags: { [WIZARD_USE_PI_HARNESS_FLAG_KEY]: 'true' },
     });
     expect(pick.harness).toBe(Harness.pi);
   });
 
-  it('the pi runner flag pairs pi with gpt-5-mini, anthropic keeps sonnet', () => {
+  it('the pi flag pairs pi with gpt-5.4; off keeps anthropic + sonnet', () => {
     expect(
       resolveHarness({
         program: 'posthog-integration',
-        flags: { [WIZARD_RUNNER_FLAG_KEY]: 'pi' },
+        flags: { [WIZARD_USE_PI_HARNESS_FLAG_KEY]: 'true' },
       }),
-    ).toEqual({ harness: Harness.pi, model: GPT5_MINI_MODEL });
+    ).toEqual({ harness: Harness.pi, model: GPT5_4_MODEL });
     expect(
       resolveHarness({
         program: 'posthog-integration',
-        flags: { [WIZARD_RUNNER_FLAG_KEY]: 'anthropic' },
+        flags: { [WIZARD_USE_PI_HARNESS_FLAG_KEY]: 'false' },
       }),
     ).toEqual({ harness: Harness.anthropic, model: DEFAULT_AGENT_MODEL });
   });
 
-  it('a --model override still wins over the pi runner flag pairing', () => {
+  it('a --model override still wins over the pi flag pairing', () => {
     const pick = resolveHarness({
       program: 'posthog-integration',
-      flags: { [WIZARD_RUNNER_FLAG_KEY]: 'pi' },
+      flags: { [WIZARD_USE_PI_HARNESS_FLAG_KEY]: 'true' },
       cliModel: 'openai/o4-mini',
     });
     expect(pick).toEqual({ harness: Harness.pi, model: 'openai/o4-mini' });
   });
 
-  it('unknown flag value falls back to the binding default', () => {
+  it('the wizard-pi-model variant selects the model; unknown falls back to gpt-5.4', () => {
+    const base = { [WIZARD_USE_PI_HARNESS_FLAG_KEY]: 'true' };
+    const pick = (variant?: string) =>
+      resolveHarness({
+        program: 'posthog-integration',
+        flags: variant
+          ? { ...base, [WIZARD_PI_MODEL_FLAG_KEY]: variant }
+          : base,
+      }).model;
+    expect(pick('gpt-5')).toBe(GPT5_MODEL);
+    expect(pick('gpt-5-4')).toBe(GPT5_4_MODEL);
+    expect(pick('gpt-5-mini')).toBe(GPT5_MINI_MODEL);
+    expect(pick('sonnet-4-6')).toBe(DEFAULT_AGENT_MODEL);
+    expect(pick('sonnet-5')).toBe(SONNET_5_MODEL);
+    expect(pick('banana')).toBe(GPT5_4_MODEL);
+    expect(pick()).toBe(GPT5_4_MODEL);
+  });
+
+  it('a non-"true" flag value falls back to the binding default', () => {
     const pick = resolveHarness({
       program: 'posthog-integration',
-      flags: { 'wizard-runner': 'banana' },
+      flags: { [WIZARD_USE_PI_HARNESS_FLAG_KEY]: 'banana' },
     });
     expect(pick.harness).toBe(Harness.anthropic);
   });
@@ -127,6 +151,55 @@ describe('switchboard resolveHarness — CLI precedence', () => {
       cliModel: 'openai/gpt-5',
     });
     expect(pick).toEqual({ harness: Harness.anthropic, model: 'openai/gpt-5' });
+  });
+});
+
+describe('switchboard decision trace', () => {
+  it('stamps binding sources when nothing overrides', () => {
+    const ctx: SwitchboardCtx = { program: 'posthog-integration', flags: {} };
+    resolveBinding(ctx);
+    expect(ctx.trace).toEqual({
+      harness: 'binding',
+      model: 'binding',
+      sequence: 'binding',
+    });
+  });
+
+  it('stamps flag + pi-clamp sources when the pi flag decides', () => {
+    const ctx: SwitchboardCtx = {
+      program: 'posthog-integration',
+      flags: { [WIZARD_USE_PI_HARNESS_FLAG_KEY]: 'true' },
+    };
+    resolveBinding(ctx);
+    expect(ctx.trace).toEqual({
+      harness: 'flag',
+      model: 'flag',
+      sequence: 'pi-clamp',
+    });
+  });
+
+  it('stamps cli sources over the flag', () => {
+    const ctx: SwitchboardCtx = {
+      program: 'posthog-integration',
+      flags: { [WIZARD_USE_PI_HARNESS_FLAG_KEY]: 'true' },
+      cliHarness: Harness.anthropic,
+      cliModel: 'openai/gpt-5',
+    };
+    resolveBinding(ctx);
+    expect(ctx.trace).toEqual({
+      harness: 'cli',
+      model: 'cli',
+      sequence: 'binding',
+    });
+  });
+
+  it('stamps flag source when the orchestrator flag decides the sequence', () => {
+    const ctx: SwitchboardCtx = {
+      program: 'posthog-integration',
+      flags: { [WIZARD_ORCHESTRATOR_FLAG_KEY]: 'true' },
+    };
+    resolveBinding(ctx);
+    expect(ctx.trace?.sequence).toBe('flag');
   });
 });
 
@@ -160,6 +233,24 @@ describe('switchboard modelCapabilities', () => {
   it('defaults unknown models by transport: anthropic on, openai off', () => {
     expect(modelCapabilities('claude-future-9').reasoning).toBe(true);
     expect(modelCapabilities('openai/whatever').reasoning).toBe(false);
+  });
+});
+
+describe('switchboard wizard-pi-effort flag', () => {
+  it('overrides effort for reasoning models; ignores invalid; skips non-reasoning', () => {
+    expect(
+      modelCapabilities(GPT5_4_MODEL, { [WIZARD_PI_EFFORT_FLAG_KEY]: 'high' })
+        .thinkingLevel,
+    ).toBe('high');
+    expect(
+      modelCapabilities(GPT5_4_MODEL, { [WIZARD_PI_EFFORT_FLAG_KEY]: 'banana' })
+        .thinkingLevel,
+    ).toBe('low');
+    expect(
+      modelCapabilities('openai/gpt-4o', {
+        [WIZARD_PI_EFFORT_FLAG_KEY]: 'high',
+      }).thinkingLevel,
+    ).toBeUndefined();
   });
 });
 
