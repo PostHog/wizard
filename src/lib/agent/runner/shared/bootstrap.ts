@@ -79,7 +79,10 @@ export async function bootstrapProgram(
   // 1. Init logging + debug
   initLogFile();
   session.skillId = config.skillId ?? config.integrationLabel;
-  logToFile(`[agent-runner] START ${config.integrationLabel}`);
+  logToFile(
+    `[agent-runner] START ${config.integrationLabel} build=${analytics.build}` +
+      `${session.ci ? ' (non-interactive)' : ''}`,
+  );
 
   if (session.debug) {
     enableDebugLogs();
