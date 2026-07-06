@@ -107,6 +107,59 @@ export async function fetchSkillMenu(
 }
 
 /**
+ * Zip extraction tools tried in order. `unzip` is absent from stock Windows
+ * (the wizard's most common silent skill-install failure), while `tar` on
+ * Windows 10+ and macOS is bsdtar, which reads zip archives natively; GNU tar
+ * on Linux can't, so `unzip` stays first where it's near-universal.
+ * PowerShell's Expand-Archive is the Windows last resort.
+ */
+function zipExtractionAttempts(
+  zipFile: string,
+  destDir: string,
+): Array<{ tool: string; args: string[] }> {
+  const attempts = [
+    { tool: 'unzip', args: ['-o', zipFile, '-d', destDir] },
+    { tool: 'tar', args: ['-xf', zipFile, '-C', destDir] },
+  ];
+  if (process.platform === 'win32') {
+    const quote = (s: string) => `'${s.replace(/'/g, "''")}'`;
+    attempts.push({
+      tool: 'powershell.exe',
+      args: [
+        '-NoProfile',
+        '-NonInteractive',
+        '-Command',
+        `Expand-Archive -LiteralPath ${quote(zipFile)} -DestinationPath ${quote(
+          destDir,
+        )} -Force`,
+      ],
+    });
+  }
+  return attempts;
+}
+
+/**
+ * Extract a zip with the first available tool. Returns the tool that worked;
+ * throws with every tool's error when all fail.
+ */
+function extractZip(
+  zipFile: string,
+  destDir: string,
+  exec: typeof execFileSync = execFileSync,
+): string {
+  const failures: string[] = [];
+  for (const { tool, args } of zipExtractionAttempts(zipFile, destDir)) {
+    try {
+      exec(tool, args, { timeout: 30000 });
+      return tool;
+    } catch (err: any) {
+      failures.push(`${tool}: ${err.message}`);
+    }
+  }
+  throw new Error(`could not extract zip — ${failures.join('; ')}`);
+}
+
+/**
  * Download and extract a skill.
  * By default installs to `<installDir>/.claude/skills/<id>/`.
  * Pass `skillsRoot` to override the base directory (e.g. `.posthog/skills`).
@@ -120,15 +173,19 @@ export function downloadSkill(
     ? path.join(installDir, skillsRoot, skillEntry.id)
     : path.join(installDir, '.claude', 'skills', skillEntry.id);
   const tmpFile = skillTmpPath(skillEntry.id);
+  let step: 'download' | 'extract' = 'download';
 
   try {
     fs.mkdirSync(skillDir, { recursive: true });
+    // The temp dir is not guaranteed to exist (Windows %TEMP% can point at
+    // an uncreated per-user folder) and curl won't create it — the download
+    // fails before extraction is even attempted.
+    fs.mkdirSync(path.dirname(tmpFile), { recursive: true });
     execFileSync('curl', ['-sL', skillEntry.downloadUrl, '-o', tmpFile], {
       timeout: 30000,
     });
-    execFileSync('unzip', ['-o', tmpFile, '-d', skillDir], {
-      timeout: 30000,
-    });
+    step = 'extract';
+    const extractedWith = extractZip(tmpFile, skillDir);
     fs.writeFileSync(path.join(skillDir, '.posthog-wizard'), '');
     try {
       fs.unlinkSync(tmpFile);
@@ -137,11 +194,20 @@ export function downloadSkill(
     }
 
     logToFile(
-      `downloadSkill: installed ${skillEntry.id} from ${skillEntry.downloadUrl}`,
+      `downloadSkill: installed ${skillEntry.id} from ${skillEntry.downloadUrl} (extracted via ${extractedWith})`,
     );
     return { success: true };
   } catch (err: any) {
     logToFile(`downloadSkill: error: ${err.message}`);
+    // A run that loses its skill degrades silently — the agent integrates
+    // from its own knowledge and the run still reports success — so the
+    // failure must be visible in analytics, not just the local log.
+    analytics.wizardCapture('skill install failed', {
+      skill_id: skillEntry.id,
+      step,
+      platform: process.platform,
+      error: String(err.message).slice(0, 500),
+    });
     return { success: false, error: err.message };
   }
 }
@@ -801,6 +867,18 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
           ],
         };
       } else {
+        // The agent path swallows this into a tool-result string and the run
+        // continues degraded (no skill knowledge) while still reporting
+        // success — report to error tracking so it's not invisible.
+        analytics.captureException(
+          new Error('Skill install failed: download-failed'),
+          {
+            source: 'install_skill_tool',
+            skill_id: args.skillId,
+            error_detail: String(result.error).slice(0, 500),
+            platform: process.platform,
+          },
+        );
         return {
           content: [
             {
@@ -1211,6 +1289,8 @@ export const WIZARD_TOOL_NAMES = {
 // ---------------------------------------------------------------------------
 
 export const __test = {
+  extractZip,
+  zipExtractionAttempts,
   writeLedgerAtomic,
   readLedger,
   applyAuditAdditions,

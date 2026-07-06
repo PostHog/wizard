@@ -1,4 +1,4 @@
-import { appendFileSync } from 'fs';
+import { appendFileSync, mkdirSync } from 'fs';
 import path from 'path';
 import { inspect } from 'node:util';
 import { getUI } from '@ui';
@@ -33,8 +33,35 @@ export function configureLogFile(opts: {
   path?: string;
   enabled?: boolean;
 }): void {
-  if (opts.path !== undefined) logFilePath = opts.path;
+  if (opts.path !== undefined) {
+    logFilePath = opts.path;
+    ensuredLogDir = false;
+  }
   if (opts.enabled !== undefined) fileLoggingEnabled = opts.enabled;
+}
+
+let ensuredLogDir = false;
+
+/**
+ * Append to the log file, creating its directory on the first failure — the
+ * log lives in the temp dir, which is not guaranteed to exist (Windows %TEMP%
+ * can point at an uncreated per-user folder, and POSTHOG_WIZARD_LOG_DIR may
+ * name a directory nobody made). Without this every logToFile call fails
+ * silently and the run leaves no log at all.
+ */
+function appendLine(text: string): void {
+  try {
+    appendFileSync(logFilePath, text);
+  } catch {
+    if (ensuredLogDir) return;
+    ensuredLogDir = true;
+    try {
+      mkdirSync(path.dirname(logFilePath), { recursive: true });
+      appendFileSync(logFilePath, text);
+    } catch {
+      // Logging must never crash the wizard.
+    }
+  }
 }
 
 export function configureLogFileFromEnvironment(): void {
@@ -46,25 +73,16 @@ export function configureLogFileFromEnvironment(): void {
 
 export function initLogFile(): void {
   if (!fileLoggingEnabled) return;
-  try {
-    const divider = '='.repeat(60);
-    appendFileSync(
-      logFilePath,
-      `\n${divider}\nPostHog Wizard Run: ${new Date().toISOString()}\n${divider}\n`,
-    );
-  } catch {
-    // Logging must never crash the wizard.
-  }
+  const divider = '='.repeat(60);
+  appendLine(
+    `\n${divider}\nPostHog Wizard Run: ${new Date().toISOString()}\n${divider}\n`,
+  );
 }
 
 export function logToFile(...args: unknown[]): void {
   if (!fileLoggingEnabled) return;
-  try {
-    const ts = new Date().toISOString();
-    appendFileSync(logFilePath, `[${ts}] ${renderLine(args)}\n`);
-  } catch {
-    // Logging must never crash the wizard.
-  }
+  const ts = new Date().toISOString();
+  appendLine(`[${ts}] ${renderLine(args)}\n`);
 }
 
 export function debug(...args: unknown[]): void {
