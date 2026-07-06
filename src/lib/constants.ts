@@ -127,6 +127,8 @@ export const DEFAULT_HOST_URL = IS_DEV
   ? 'http://localhost:8010'
   : 'https://us.i.posthog.com';
 export const ISSUES_URL = 'https://github.com/posthog/wizard/issues';
+/** Public status page, linked from transient-failure guidance (e.g. OAuth server_error). */
+export const POSTHOG_STATUS_PAGE_URL = 'https://www.posthogstatus.com';
 export const CONTEXT_MILL_URL = 'https://github.com/PostHog/context-mill';
 /**
  * Latest context-mill release page — the BYOAI download link shown in
