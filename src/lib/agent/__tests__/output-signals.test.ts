@@ -28,6 +28,20 @@ describe('REMARK_INSTRUCTION', () => {
       'The Astro skill lacked hybrid-render env var docs.',
     );
   });
+
+  it('extracts the real remark even when the model echoes the ask first', () => {
+    // Field bug: gpt-5.4 echoed the whole instruction (which carries the
+    // marker) BEFORE answering. The parser must skip the echo and keep
+    // scanning to the real remark, not give up on the first marker.
+    const signals = new AgentOutputSignals();
+    signals.push(REMARK_INSTRUCTION); // the echoed ask — carries the marker
+    signals.push(
+      `${AgentSignals.WIZARD_REMARK} posthog-node was already installed in this repo.`,
+    );
+    expect(signals.remark()).toBe(
+      'posthog-node was already installed in this repo.',
+    );
+  });
 });
 
 describe('AgentOutputSignals', () => {

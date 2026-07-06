@@ -96,12 +96,17 @@ export class AgentOutputSignals {
         /[.*+?^${}()|[\]\\]/g,
         '\\$&',
       )}\\s*(.+?)(?:\\n|$)`,
-      's',
+      'gs',
     );
-    const text = this.text.match(re)?.[1]?.trim() || undefined;
-    // Literal models echo fragments of the ask itself ("Your remark here",
-    // "followed by the remark itself.") — an echo is not a remark.
-    if (text && REMARK_INSTRUCTION.includes(text)) return undefined;
-    return text;
+    // Scan EVERY `[WIZARD-REMARK]` occurrence. Literal models echo the ask
+    // itself first ("…starts with [WIZARD-REMARK] and no other lines…"), which
+    // carries the marker too — skip any match that is a fragment of the ask and
+    // keep scanning to the real remark, rather than giving up on the first echo.
+    let match: RegExpExecArray | null;
+    while ((match = re.exec(this.text)) !== null) {
+      const text = match[1]?.trim();
+      if (text && !REMARK_INSTRUCTION.includes(text)) return text;
+    }
+    return undefined;
   }
 }
