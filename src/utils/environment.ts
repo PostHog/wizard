@@ -21,6 +21,23 @@ export function isNonInteractiveEnvironment(): boolean {
   return false;
 }
 
+/**
+ * Whether stdin can enter raw mode — the Ink TUI's hard requirement.
+ *
+ * Ink's `useInput` mounts an effect that calls `stdin.setRawMode`, which throws
+ * "Raw mode is not supported" when stdin isn't a raw-mode-capable TTY (piped
+ * input, CI, sandboxed `npx` shells, some IDE terminals). That throw fires
+ * inside a React passive effect, so it escapes any try/catch around `render()`
+ * and crashes the process. Mirror Ink's own condition here so callers can
+ * detect the situation *before* rendering and degrade gracefully instead.
+ */
+export function isRawModeSupported(): boolean {
+  return (
+    Boolean(process.stdin.isTTY) &&
+    typeof process.stdin.setRawMode === 'function'
+  );
+}
+
 export function readEnvironment(): Record<string, unknown> {
   const result = readEnv('POSTHOG_WIZARD');
 

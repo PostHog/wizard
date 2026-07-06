@@ -77,6 +77,7 @@ vi.mock('../lib/programs/posthog-integration/index', () => ({
 }));
 vi.mock('../utils/environment', () => ({
   isNonInteractiveEnvironment: () => false,
+  isRawModeSupported: () => true,
   readEnvironment: () => ({}),
 }));
 // CI-path dynamic imports need mocks to prevent unhandled rejections

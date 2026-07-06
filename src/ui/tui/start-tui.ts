@@ -15,6 +15,7 @@ import { App } from './App.js';
 import { enterDarkTerminal, releaseTerminal } from './terminal.js';
 import { analytics } from '@utils/analytics';
 import { logToFile } from '@utils/debug';
+import { isRawModeSupported } from '@utils/environment';
 import { getExitLine } from './exit-line.js';
 
 export { releaseTerminal };
@@ -27,6 +28,19 @@ export function startTUI(
   store: WizardStore;
   waitForSetup: () => Promise<void>;
 } {
+  // Ink's `useInput` calls `stdin.setRawMode` from a passive effect, so a
+  // non-raw-mode stdin throws asynchronously *after* render() returns —
+  // escaping any surrounding try/catch and crashing the process. Fail fast and
+  // synchronously here instead, so callers can catch this (its message matches
+  // the `isTUIUnavailable` guards) and degrade to the non-interactive UI.
+  if (!isRawModeSupported()) {
+    throw new Error(
+      'Raw mode is not supported on the current process.stdin, which the ' +
+        'wizard TUI requires. This happens with piped input, CI, or other ' +
+        'non-interactive terminals.',
+    );
+  }
+
   enterDarkTerminal();
 
   const store = new WizardStore(program);
