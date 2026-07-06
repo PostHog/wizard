@@ -51,6 +51,9 @@ export type DetectEvent = (line: string) => void;
  * Every project-manifest / workspace-marker filename the wizard's frameworks
  * are identified by. One brace-expansion Glob over all of these locates every
  * project root in the repo in a single call, regardless of language.
+ *
+ * Counterpart: POSTHOG_MANIFESTS in @lib/programs/self-driving/detect (SDK
+ * grep); keep the two in sync.
  */
 export const PROJECT_MANIFESTS: readonly string[] = [
   // JS/TS + workspace markers
@@ -68,17 +71,25 @@ export const PROJECT_MANIFESTS: readonly string[] = [
   // Ruby / PHP
   'Gemfile',
   'composer.json',
-  // Rust / Go
+  // Rust / Go / Elixir / JVM / .NET: no framework targets yet, but found so
+  // an existing PostHog SDK is reported (feeds self-driving's "continue" path).
   'Cargo.toml',
   'go.mod',
+  'mix.exs',
+  'pom.xml',
+  '*.csproj',
   // Mobile / native
   'Package.swift',
   'Podfile',
+  'project.yml',
+  'project.pbxproj',
   'pubspec.yaml',
   'build.gradle',
   'build.gradle.kts',
   'settings.gradle',
   'settings.gradle.kts',
+  // Gradle version catalog (holds dependency coordinates).
+  'gradle/libs.versions.toml',
 ];
 
 /** The single brace-expansion glob covering every supported manifest. */
@@ -114,12 +125,12 @@ function buildPrompt(
     'A "project" is a directory containing one or more of the manifest files below. Find projects by their manifests, NOT by walking directories — never report a directory that has no manifest.',
     '',
     'Do exactly this:',
-    `1. Run Glob ONCE with this pattern to find every project manifest in the repo in a single call: "${manifestGlob()}". Discard any result whose path contains node_modules/, dist/, build/, .next/, out/, coverage/, vendor/, .venv/, site-packages/, or target/. Group the remaining results by directory — each directory is one project.`,
+    `1. Run Glob ONCE with this pattern to find every project manifest in the repo in a single call: "${manifestGlob()}". Discard any result whose path contains node_modules/, dist/, build/, .next/, out/, coverage/, vendor/, .venv/, site-packages/, target/, Pods/, Carthage/, or DerivedData/. Group the remaining results by directory — each directory is one project. Three exceptions to "directory = project": a project.pbxproj lives inside a "<Name>.xcodeproj/" wrapper, so the project root is the PARENT of that .xcodeproj directory; a project.yml at a directory root is an XcodeGen-generated Xcode app rooted at that directory; a gradle/libs.versions.toml is a version catalog belonging to the gradle project rooted at the PARENT of that gradle/ directory (read it alongside the build.gradle when deciding hasPostHog), never its own project.`,
     '2. Decide repoType: "monorepo" if the root package.json has a "workspaces" field OR a pnpm-workspace.yaml / turbo.json / nx.json / lerna.json was found at the root, else "single".',
     '3. For EACH project directory, Read its manifest(s) ONCE. From the dependency lists decide:',
-    '   - the human-readable framework name (e.g. "Next.js", "Django", "Rails"),',
+    '   - the human-readable framework name (e.g. "Next.js", "Django", "Rails", "iOS (Swift)"),',
     '   - the matching target id from the list below. That list is ordered by priority — most specific first — so when a project could match more than one target (e.g. it uses several of the listed technologies), pick the one listed EARLIEST. Use null only if none matches,',
-    '   - hasPostHog: true if any dependency is a PostHog SDK (name contains "posthog", e.g. posthog-js, posthog-node, @posthog/*, posthog (pip/gem)), else false.',
+    `   - hasPostHog: true if any dependency is a PostHog SDK. This includes: a name containing "posthog" in any ecosystem (e.g. posthog-js, posthog-node, @posthog/*, posthog for pip/gem/hex, a com.posthog:* gradle/maven coordinate, a PostHog NuGet PackageReference); an SPM package named "PostHog" or a repositoryURL of github.com/PostHog/posthog-ios (in Package.swift or a .pbxproj); or a "pod 'PostHog'" line in a Podfile. Else false.`,
     '   Do NOT read any file other than these manifests.',
     '',
     'Target ids (id → name), in priority order — most specific first; if several match a project, keep the one listed earliest:',

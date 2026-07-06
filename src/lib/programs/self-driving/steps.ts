@@ -85,7 +85,10 @@ export const SELF_DRIVING_PROGRAM: ProgramStep[] = [
     screenId: 'self-driving-integration-detect',
     show: (session) =>
       session.integrate === true && session.integration == null,
-    isComplete: (session) => session.integration != null,
+    // Complete on a picked project OR "continue with existing"
+    // (integrate=false); without the latter the orchestrator's waitUntil hangs.
+    isComplete: (session) =>
+      session.integration != null || session.integrate === false,
   },
   {
     // The integration's own run step, imported and composed here: it runs the

@@ -17,6 +17,16 @@ describe('manifestGlob', () => {
       'go.mod',
       'build.gradle',
       'pubspec.yaml',
+      // Apple: SPM, CocoaPods, XcodeGen spec, plain-Xcode pbxproj.
+      'Package.swift',
+      'Podfile',
+      'project.yml',
+      'project.pbxproj',
+      // SDK-only ecosystems (no framework target); feed the "continue" path.
+      'mix.exs',
+      'pom.xml',
+      '*.csproj',
+      'gradle/libs.versions.toml',
     ]) {
       expect(glob).toContain(name);
     }

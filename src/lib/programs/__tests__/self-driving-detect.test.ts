@@ -7,6 +7,9 @@ import {
   SELF_DRIVING_ABORT_CASES,
 } from '@lib/programs/self-driving/index';
 import { detectPostHogPresent } from '@lib/programs/self-driving/detect';
+import { toIntegrationReport } from '@lib/programs/self-driving/detect-agentic';
+import type { AgenticDetectionReport } from '@lib/detection/agentic';
+import { Integration } from '@lib/constants';
 import { WIZARD_TOOL_NAMES } from '@lib/wizard-tools';
 import { buildSession } from '@lib/wizard-session';
 import type { Mock } from 'vitest';
@@ -158,6 +161,19 @@ describe('detectPostHogPresent', () => {
     }
   });
 
+  it('detects a scoped @posthog/* package as the only PostHog dependency', () => {
+    const dir = makeTmpDir();
+    try {
+      fs.writeFileSync(
+        path.join(dir, 'package.json'),
+        JSON.stringify({ dependencies: { '@posthog/ai': '^8.0.0' } }),
+      );
+      expect(detectPostHogPresent(dir)).toBe(true);
+    } finally {
+      cleanup(dir);
+    }
+  });
+
   it('does not match "posthog" glued inside a larger package name', () => {
     // Only fires at a dependency boundary, so `posthog` glued inside another
     // package name isn't a false positive. (A bare word in prose still matches.)
@@ -227,5 +243,174 @@ describe('detectPostHogPresent', () => {
     } finally {
       cleanup(dir);
     }
+  });
+
+  it('detects PostHog across mobile / native manifest formats', () => {
+    const cases: Array<[string, string]> = [
+      // Apple: SPM, CocoaPods (+ lockfile), XcodeGen spec.
+      [
+        'Package.swift',
+        '.package(url: "https://github.com/PostHog/posthog-ios.git", from: "3.0.0")',
+      ],
+      ['Podfile', "target 'App' do\n  pod 'PostHog'\nend\n"],
+      ['Podfile.lock', 'PODS:\n  - PostHog (3.7.0)\n'],
+      [
+        'project.yml',
+        'name: App\npackages:\n  PostHog:\n    url: https://github.com/PostHog/posthog-ios\n    from: 3.0.0\n',
+      ],
+      // Gradle coordinate (":" boundary) + version catalog.
+      [
+        'build.gradle',
+        "dependencies {\n  implementation 'com.posthog:posthog-android:3.+'\n}\n",
+      ],
+      [
+        'gradle/libs.versions.toml',
+        '[libraries]\nposthog = { module = "com.posthog:posthog-android", version = "3.0" }\n',
+      ],
+      // Maven, Elixir, Rust, legacy Python.
+      [
+        'pom.xml',
+        '<dependency><groupId>com.posthog.java</groupId><artifactId>posthog</artifactId></dependency>',
+      ],
+      ['mix.exs', 'defp deps do\n  [{:posthog, "~> 1.0"}]\nend\n'],
+      ['Cargo.toml', '[dependencies]\nposthog-rs = "0.3"\n'],
+      ['setup.py', 'setup(install_requires=["posthog>=3.0"])\n'],
+    ];
+    for (const [name, contents] of cases) {
+      const dir = makeTmpDir();
+      try {
+        const file = path.join(dir, name);
+        fs.mkdirSync(path.dirname(file), { recursive: true });
+        fs.writeFileSync(file, contents);
+        expect(detectPostHogPresent(dir), name).toBe(true);
+      } finally {
+        cleanup(dir);
+      }
+    }
+  });
+
+  it('detects PostHog in a .NET project via csproj PackageReference', () => {
+    const dir = makeTmpDir();
+    try {
+      fs.writeFileSync(
+        path.join(dir, 'MyApp.csproj'),
+        '<ItemGroup><PackageReference Include="PostHog" Version="1.0.0" /></ItemGroup>',
+      );
+      expect(detectPostHogPresent(dir)).toBe(true);
+    } finally {
+      cleanup(dir);
+    }
+  });
+
+  it('detects PostHog in a plain Xcode project via project.pbxproj', () => {
+    const dir = makeTmpDir();
+    try {
+      fs.mkdirSync(path.join(dir, 'MyApp.xcodeproj'));
+      fs.writeFileSync(
+        path.join(dir, 'MyApp.xcodeproj', 'project.pbxproj'),
+        'repositoryURL = "https://github.com/PostHog/posthog-ios";\n',
+      );
+      expect(detectPostHogPresent(dir)).toBe(true);
+    } finally {
+      cleanup(dir);
+    }
+  });
+
+  it('returns false for an Xcode project without PostHog', () => {
+    const dir = makeTmpDir();
+    try {
+      fs.mkdirSync(path.join(dir, 'MyApp.xcodeproj'));
+      fs.writeFileSync(
+        path.join(dir, 'MyApp.xcodeproj', 'project.pbxproj'),
+        'repositoryURL = "https://github.com/apple/swift-argument-parser";\n',
+      );
+      expect(detectPostHogPresent(dir)).toBe(false);
+    } finally {
+      cleanup(dir);
+    }
+  });
+
+  it('detects PostHog in an ios/ sub-app dir', () => {
+    const dir = makeTmpDir();
+    try {
+      fs.mkdirSync(path.join(dir, 'ios'));
+      fs.writeFileSync(
+        path.join(dir, 'ios', 'Podfile'),
+        "target 'App' do\n  pod 'PostHog'\nend\n",
+      );
+      expect(detectPostHogPresent(dir)).toBe(true);
+    } finally {
+      cleanup(dir);
+    }
+  });
+});
+
+describe('integrate-detect step', () => {
+  const step = selfDrivingConfig.steps.find((s) => s.id === 'integrate-detect');
+
+  it('is incomplete while integrating and no project picked yet', () => {
+    const session = buildSession({});
+    session.integrate = true;
+    session.integration = null;
+    expect(step?.isComplete?.(session)).toBe(false);
+  });
+
+  it('is complete once a project is picked to integrate', () => {
+    const session = buildSession({});
+    session.integrate = true;
+    session.integration = Integration.nextjs;
+    expect(step?.isComplete?.(session)).toBe(true);
+  });
+
+  it('is complete once the user continues with an existing install', () => {
+    // integrate=false must complete the step or the orchestrator hangs.
+    const session = buildSession({});
+    session.integrate = false;
+    session.integration = null;
+    expect(step?.isComplete?.(session)).toBe(true);
+  });
+});
+
+describe('toIntegrationReport', () => {
+  const build = (
+    p: Partial<AgenticDetectionReport['projects'][number]>,
+  ): AgenticDetectionReport => ({
+    repoType: 'single',
+    projects: [
+      { path: '.', framework: 'App', targetId: null, hasPostHog: false, ...p },
+    ],
+  });
+
+  it('marks a supported project that already has PostHog as continuable, not instrumentable', () => {
+    const [p] = toIntegrationReport(
+      build({ targetId: Integration.nextjs, hasPostHog: true }),
+    ).projects;
+    expect(p.instrumentable).toBe(false);
+    expect(p.continuable).toBe(true);
+  });
+
+  it('marks an unsupported project that already has PostHog as continuable', () => {
+    // Self-driving needs PostHog present, not a wizard-supported framework.
+    const [p] = toIntegrationReport(
+      build({ targetId: null, hasPostHog: true }),
+    ).projects;
+    expect(p.continuable).toBe(true);
+    expect(p.instrumentable).toBe(false);
+  });
+
+  it('marks a supported project without PostHog as instrumentable, not continuable', () => {
+    const [p] = toIntegrationReport(
+      build({ targetId: Integration.nextjs, hasPostHog: false }),
+    ).projects;
+    expect(p.instrumentable).toBe(true);
+    expect(p.continuable).toBe(false);
+  });
+
+  it('marks an unsupported project without PostHog as neither', () => {
+    const [p] = toIntegrationReport(
+      build({ targetId: null, hasPostHog: false }),
+    ).projects;
+    expect(p.instrumentable).toBe(false);
+    expect(p.continuable).toBe(false);
   });
 });
