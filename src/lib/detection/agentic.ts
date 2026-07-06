@@ -18,6 +18,7 @@ import {
   runAgent as executeAgent,
   AgentSignals,
 } from '@lib/agent/agent-interface';
+import { isAbsolute } from 'path';
 import { detectNodePackageManagers } from './package-manager.js';
 import { getSkillsBaseUrl, HAIKU_MODEL } from '@lib/constants';
 import type { WizardSession } from '@lib/wizard-session';
@@ -158,8 +159,19 @@ function extractJson(text: string): unknown {
 }
 
 /**
+ * Clamp an agent-reported project path to a safe repo-relative dir. The path
+ * is LLM output: absolute paths or `..` segments could steer later phases
+ * (e.g. integrate-run's targetDir) outside the repo, so they clamp to '.'.
+ */
+function coercePath(raw: unknown): string {
+  if (typeof raw !== 'string' || raw.length === 0) return '.';
+  if (isAbsolute(raw) || raw.split(/[\\/]/).includes('..')) return '.';
+  return raw;
+}
+
+/**
  * Validate the agent's raw JSON into a report, clamping each targetId to the
- * supplied set. Exported for testing.
+ * supplied set and each path to a repo-relative dir. Exported for testing.
  */
 export function coerceAgenticReport(
   parsed: unknown,
@@ -175,7 +187,7 @@ export function coerceAgenticReport(
         ? p.targetId
         : null;
     return {
-      path: typeof p.path === 'string' ? p.path : '.',
+      path: coercePath(p.path),
       framework: typeof p.framework === 'string' ? p.framework : 'Unknown',
       targetId,
       hasPostHog: p.hasPostHog === true,

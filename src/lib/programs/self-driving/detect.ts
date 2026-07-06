@@ -41,8 +41,9 @@ export const SELF_DRIVING_INTEGRATE_PATH_KEY = 'selfDrivingIntegratePath';
 const POSTHOG_PACKAGE_RE = /(^|["'\s/=:.@])posthog/im;
 
 // Manifests grepped for a posthog dependency. Distinct from PROJECT_MANIFESTS
-// in @lib/detection/agentic (project-root discovery); keep the two in sync.
-const POSTHOG_MANIFESTS = [
+// in @lib/detection/agentic (project-root discovery); keep the two in sync
+// (a test asserts the shared ecosystem names appear in both). Exported for it.
+export const POSTHOG_MANIFESTS = [
   'package.json',
   'requirements.txt',
   'pyproject.toml',

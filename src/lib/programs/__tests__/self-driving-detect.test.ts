@@ -6,9 +6,15 @@ import {
   selfDrivingConfig,
   SELF_DRIVING_ABORT_CASES,
 } from '@lib/programs/self-driving/index';
-import { detectPostHogPresent } from '@lib/programs/self-driving/detect';
+import {
+  detectPostHogPresent,
+  POSTHOG_MANIFESTS,
+} from '@lib/programs/self-driving/detect';
 import { toIntegrationReport } from '@lib/programs/self-driving/detect-agentic';
-import type { AgenticDetectionReport } from '@lib/detection/agentic';
+import {
+  PROJECT_MANIFESTS,
+  type AgenticDetectionReport,
+} from '@lib/detection/agentic';
 import { Integration } from '@lib/constants';
 import { WIZARD_TOOL_NAMES } from '@lib/wizard-tools';
 import { buildSession } from '@lib/wizard-session';
@@ -412,5 +418,59 @@ describe('toIntegrationReport', () => {
     ).projects;
     expect(p.instrumentable).toBe(false);
     expect(p.continuable).toBe(false);
+  });
+});
+
+describe('manifest list sync', () => {
+  it('keeps the shared ecosystem manifests in both detection layers', () => {
+    // POSTHOG_MANIFESTS (deterministic grep) and PROJECT_MANIFESTS (Haiku
+    // root discovery) serve different jobs but must both know each shipped
+    // ecosystem — a drift here caused a real gap during review.
+    const shared = [
+      'package.json',
+      'requirements.txt',
+      'Gemfile',
+      'composer.json',
+      'go.mod',
+      'pubspec.yaml',
+      'Package.swift',
+      'Podfile',
+      'project.yml',
+      'build.gradle',
+      'build.gradle.kts',
+      'gradle/libs.versions.toml',
+      'pom.xml',
+      'mix.exs',
+      'Cargo.toml',
+    ];
+    for (const name of shared) {
+      expect(POSTHOG_MANIFESTS, `deterministic list: ${name}`).toContain(name);
+      expect(PROJECT_MANIFESTS, `haiku list: ${name}`).toContain(name);
+    }
+  });
+});
+
+describe('integrate-run targetDir', () => {
+  const targetDir = selfDrivingConfig.steps.find(
+    (s) => s.id === 'integrate-run',
+  )?.targetDir;
+
+  const dirFor = (picked: string): string | undefined => {
+    const session = buildSession({ installDir: '/repo' });
+    session.frameworkContext.selfDrivingIntegratePath = picked;
+    return typeof targetDir === 'function' ? targetDir(session) : targetDir;
+  };
+
+  it('scopes to the picked sub-app inside the repo', () => {
+    expect(dirFor('apps/web')).toBe('/repo/apps/web');
+    expect(dirFor('.')).toBe('/repo');
+  });
+
+  it('falls back to the repo root when the picked path escapes it', () => {
+    // Defense-in-depth: the path is LLM output; coerceAgenticReport clamps
+    // it, but the resolver must not trust the session value either.
+    expect(dirFor('../../etc')).toBe('/repo');
+    expect(dirFor('/etc')).toBe('/repo');
+    expect(dirFor('a/../..')).toBe('/repo');
   });
 });

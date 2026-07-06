@@ -85,4 +85,23 @@ describe('coerceAgenticReport', () => {
     expect(p.targetId).toBeNull();
     expect(p.hasPostHog).toBe(false);
   });
+
+  it('clamps escaping paths to "." — the path is LLM output', () => {
+    // Absolute or ..-containing paths could steer integrate-run's targetDir
+    // outside the repo (prompt-injection vector), so they must not survive.
+    const clamp = (path: string) =>
+      coerceAgenticReport({ projects: [{ path }] }, TARGETS).projects[0].path;
+    expect(clamp('/etc')).toBe('.');
+    expect(clamp('../../x')).toBe('.');
+    expect(clamp('a/../../x')).toBe('.');
+    expect(clamp('..\\x')).toBe('.');
+  });
+
+  it('keeps legitimate repo-relative paths', () => {
+    const keep = (path: string) =>
+      coerceAgenticReport({ projects: [{ path }] }, TARGETS).projects[0].path;
+    expect(keep('apps/web')).toBe('apps/web');
+    expect(keep('.')).toBe('.');
+    expect(keep('ios')).toBe('ios');
+  });
 });
