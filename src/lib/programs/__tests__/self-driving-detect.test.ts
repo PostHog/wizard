@@ -228,12 +228,30 @@ describe('detectPostHogPresent', () => {
     }
   });
 
-  it('does not scan arbitrary nested dirs (no recursive walk)', () => {
+  it('walks monorepo sub-apps but stays bounded (not a full recursive walk)', () => {
     const dir = makeTmpDir();
     try {
+      // Depth 2 (services/api) IS scanned — that's the shallow-walk fix.
       fs.mkdirSync(path.join(dir, 'services', 'api'), { recursive: true });
       fs.writeFileSync(
         path.join(dir, 'services', 'api', 'package.json'),
+        '{"dependencies":{"posthog-node":"^4.0.0"}}',
+      );
+      expect(detectPostHogPresent(dir)).toBe(true);
+    } finally {
+      cleanup(dir);
+    }
+  });
+
+  it('does not walk past the bounded depth', () => {
+    const dir = makeTmpDir();
+    try {
+      // Depth 3 (services/api/internal) is past WALK_MAX_DEPTH — not scanned.
+      fs.mkdirSync(path.join(dir, 'services', 'api', 'internal'), {
+        recursive: true,
+      });
+      fs.writeFileSync(
+        path.join(dir, 'services', 'api', 'internal', 'package.json'),
         '{"dependencies":{"posthog-node":"^4.0.0"}}',
       );
       expect(detectPostHogPresent(dir)).toBe(false);
@@ -345,6 +363,82 @@ describe('detectPostHogPresent', () => {
         "target 'App' do\n  pod 'PostHog'\nend\n",
       );
       expect(detectPostHogPresent(dir)).toBe(true);
+    } finally {
+      cleanup(dir);
+    }
+  });
+
+  it('detects PostHog nested in a monorepo sub-app off the named-dir allowlist', () => {
+    // The iOS app lives at apps/mobile — not one of POSTHOG_DIRS. The shallow
+    // walk reaches it; the old hardcoded-dir check would miss it entirely.
+    const dir = makeTmpDir();
+    try {
+      fs.writeFileSync(
+        path.join(dir, 'package.json'),
+        JSON.stringify({ private: true, workspaces: ['apps/*'] }),
+      );
+      const app = path.join(dir, 'apps', 'mobile');
+      fs.mkdirSync(app, { recursive: true });
+      fs.writeFileSync(
+        path.join(app, 'Podfile'),
+        "target 'HogHollow' do\n  pod 'PostHog'\nend\n",
+      );
+      expect(detectPostHogPresent(dir)).toBe(true);
+    } finally {
+      cleanup(dir);
+    }
+  });
+
+  it('detects PostHog via a nested .xcodeproj in a monorepo sub-app', () => {
+    const dir = makeTmpDir();
+    try {
+      const app = path.join(dir, 'apps', 'mobile', 'HogHollow.xcodeproj');
+      fs.mkdirSync(app, { recursive: true });
+      fs.writeFileSync(
+        path.join(app, 'project.pbxproj'),
+        'repositoryURL = "https://github.com/PostHog/posthog-ios";\n',
+      );
+      expect(detectPostHogPresent(dir)).toBe(true);
+    } finally {
+      cleanup(dir);
+    }
+  });
+
+  it('does NOT false-positive on a vendored posthog inside node_modules', () => {
+    // The walk skips node_modules; a bundled posthog dependency there must not
+    // read as the project having installed PostHog itself.
+    const dir = makeTmpDir();
+    try {
+      fs.writeFileSync(
+        path.join(dir, 'package.json'),
+        JSON.stringify({ dependencies: { express: '^4.0.0' } }),
+      );
+      const vendored = path.join(dir, 'node_modules', 'posthog-js');
+      fs.mkdirSync(vendored, { recursive: true });
+      fs.writeFileSync(
+        path.join(vendored, 'package.json'),
+        JSON.stringify({ name: 'posthog-js', version: '1.0.0' }),
+      );
+      expect(detectPostHogPresent(dir)).toBe(false);
+    } finally {
+      cleanup(dir);
+    }
+  });
+
+  it('returns false for a monorepo with no PostHog in any sub-app', () => {
+    const dir = makeTmpDir();
+    try {
+      fs.writeFileSync(
+        path.join(dir, 'package.json'),
+        JSON.stringify({ private: true, workspaces: ['apps/*'] }),
+      );
+      const web = path.join(dir, 'apps', 'web');
+      fs.mkdirSync(web, { recursive: true });
+      fs.writeFileSync(
+        path.join(web, 'package.json'),
+        JSON.stringify({ dependencies: { next: '15.0.0' } }),
+      );
+      expect(detectPostHogPresent(dir)).toBe(false);
     } finally {
       cleanup(dir);
     }

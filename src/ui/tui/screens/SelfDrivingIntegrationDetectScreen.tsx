@@ -252,17 +252,38 @@ export const SelfDrivingIntegrationDetectScreen = ({
   }
 
   const single = instrumentable.length === 1;
+  // Disabled rows act as section headings + spacers — navigation skips them.
+  const HEAD = 'head:';
+  const spacer = (id: string) => ({
+    label: ' ',
+    value: `${HEAD}${id}`,
+    disabled: true,
+  });
+  const heading = (id: string, label: string) => ({
+    label,
+    value: `${HEAD}${id}`,
+    disabled: true,
+    header: true,
+  });
   const options = [
+    heading('new', 'New PostHog integration:'),
     ...instrumentable.map((p) => ({
       label: projectLabel(p),
       value: `${NEW}${p.path}`,
+      indent: true,
     })),
-    ...existing.map((p) => ({
-      label: `Continue with existing PostHog ${Icons.bullet} ${projectLabel(
-        p,
-      )}`,
-      value: `${EXISTING}${p.path}`,
-    })),
+    ...(existing.length > 0
+      ? [
+          spacer('gap1'),
+          heading('existing', 'Existing integrations:'),
+          ...existing.map((p) => ({
+            label: projectLabel(p),
+            value: `${EXISTING}${p.path}`,
+            indent: true,
+          })),
+        ]
+      : []),
+    spacer('gap2'),
     { label: 'Cancel', value: CANCEL },
   ];
 
@@ -279,9 +300,7 @@ export const SelfDrivingIntegrationDetectScreen = ({
         message={
           single && existing.length === 0
             ? 'Set up PostHog here? Confirm to continue.'
-            : existing.length > 0
-            ? 'Set up PostHog, or continue with an existing install?'
-            : 'Which project should we set up PostHog in?'
+            : undefined
         }
         options={options}
         onSelect={dispatch}

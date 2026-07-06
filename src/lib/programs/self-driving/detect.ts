@@ -19,7 +19,13 @@
  * the wizard-side "self-driving" rename.
  */
 
-import { existsSync, statSync, readFileSync, readdirSync } from 'fs';
+import {
+  existsSync,
+  statSync,
+  readFileSync,
+  readdirSync,
+  type Dirent,
+} from 'fs';
 import { join } from 'path';
 import type { WizardSession } from '@lib/wizard-session';
 import type { AbortCase } from '@lib/agent/agent-runner';
@@ -80,6 +86,63 @@ const POSTHOG_DIRS = [
   'android/app',
 ];
 
+// Heavy or vendored trees the shallow walk never descends into — they hold
+// dependencies, not a project's own manifest, and would false-positive on a
+// bundled posthog package.
+const WALK_SKIP_DIRS = new Set([
+  'node_modules',
+  'Pods',
+  'Carthage',
+  'DerivedData',
+  '.build',
+  'build',
+  'dist',
+  'out',
+  '.next',
+  'coverage',
+  'vendor',
+  '.venv',
+  'site-packages',
+  'target',
+  '.git',
+]);
+
+// How deep below the install dir the shallow walk goes. 2 covers the common
+// monorepo shape (apps/<name>, packages/<name>) without a full tree walk.
+const WALK_MAX_DEPTH = 2;
+
+/**
+ * The install dir plus every directory within WALK_MAX_DEPTH levels (skipping
+ * heavy/vendored trees and dotdirs), unioned with the explicit POSTHOG_DIRS. A
+ * full shallow walk on top of the named dirs, so a monorepo's nested apps
+ * (e.g. `apps/mobile`) are seen without hardcoding the path.
+ */
+function scanDirs(installDir: string): string[] {
+  const rels = new Set<string>(POSTHOG_DIRS);
+  const walk = (rel: string, depth: number): void => {
+    rels.add(rel);
+    if (depth >= WALK_MAX_DEPTH) return;
+    let entries: Dirent[];
+    try {
+      entries = readdirSync(join(installDir, rel), { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const e of entries) {
+      if (!e.isDirectory()) continue;
+      if (e.name.startsWith('.') || WALK_SKIP_DIRS.has(e.name)) continue;
+      // .xcodeproj/.xcworkspace are inspected via projectFileHasPostHog at the
+      // parent dir — descending into the wrapper finds nothing useful.
+      if (e.name.endsWith('.xcodeproj') || e.name.endsWith('.xcworkspace')) {
+        continue;
+      }
+      walk(rel === '.' ? e.name : `${rel}/${e.name}`, depth + 1);
+    }
+  };
+  walk('.', 0);
+  return [...rels];
+}
+
 /**
  * True if a `*.xcodeproj/project.pbxproj` or `*.csproj`/`*.fsproj` in
  * `dirPath` references PostHog.
@@ -115,7 +178,7 @@ function projectFileHasPostHog(dirPath: string): boolean {
  * first ("not found") or proceeds straight to setup ("found").
  */
 export function detectPostHogPresent(installDir: string): boolean {
-  for (const dir of POSTHOG_DIRS) {
+  for (const dir of scanDirs(installDir)) {
     const dirPath = join(installDir, dir);
     for (const name of POSTHOG_MANIFESTS) {
       const path = join(dirPath, name);
