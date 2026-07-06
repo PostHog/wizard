@@ -398,6 +398,7 @@ export const piBackend: AgentHarness = {
         ...createWizardPiTools({
           workingDirectory: session.installDir,
           skillsBaseUrl: boot.skillsBaseUrl,
+          detectPackageManager: config.detectPackageManager,
         }),
         // Task/todo tools (#526): render the todo list live in the TUI, parity
         // with the anthropic path.
