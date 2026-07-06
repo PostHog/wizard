@@ -113,7 +113,7 @@ export interface HookCallbackMatcher {
 }
 
 /** Which content surface a warlock rule applies to (from rule `scan_context`). */
-type ScanContext = 'command' | 'input' | 'output';
+export type ScanContext = 'command' | 'input' | 'output';
 
 // ─── Scan Report Accumulator ─────────────────────────────────────
 
@@ -607,8 +607,12 @@ async function triageFlagged(
   return dedupeByRule(triaged.flat());
 }
 
-/** Scan content, filter to the relevant context, triage. Returns real matches. */
-async function scanAndTriage(
+/**
+ * Scan content, filter to the relevant context, triage. Returns real matches.
+ * Exported for harnesses that run their own hook loop (pi) so every harness
+ * scans through the same warlock engine, chunking, and triage policy.
+ */
+export async function scanAndTriage(
   content: string,
   ctx: ScanContext,
   llmProvider: LLMProvider | undefined,
