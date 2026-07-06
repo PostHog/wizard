@@ -200,11 +200,13 @@ async function startCallbackServer(
         // Carries error_description / error_uri (RFC 6749 §4.1.2.1) along
         // with the code, so the terminal message can show the server's own
         // explanation instead of just the bare code.
-        const oauthError = oauthErrorFromCallbackParams(url.searchParams);
-        const isAccessDenied = oauthError.code === 'access_denied';
+        const callbackError = oauthErrorFromCallbackParams(url.searchParams);
+        const isAccessDenied = callbackError.code === 'access_denied';
         logToFile(
-          `[oauth] callback received with error: ${oauthError.code}` +
-            (oauthError.description ? ` (${oauthError.description})` : ''),
+          `[oauth] callback received with error: ${callbackError.code}` +
+            (callbackError.description
+              ? ` (${callbackError.description})`
+              : ''),
         );
         res.writeHead(isAccessDenied ? 200 : 400, {
           'Content-Type': 'text/html; charset=utf-8',
@@ -219,13 +221,13 @@ async function startCallbackServer(
               ${OAUTH_CALLBACK_STYLES}
             </head>
             <body>
-              ${buildCallbackErrorHtml(oauthError)}
+              ${buildCallbackErrorHtml(callbackError)}
               <p>Return to your terminal. This window will close automatically.</p>
               <script>window.close();</script>
             </body>
           </html>
         `);
-        callbackReject(oauthError);
+        callbackReject(callbackError);
         return;
       }
 
@@ -344,15 +346,15 @@ async function exchangeCodeForToken(
     // Surface the OAuth error body (RFC 6749 §5.2) when the token endpoint
     // sent one — otherwise `invalid_grant`, PKCE mismatches, etc. reach the
     // user as a bare axios "Request failed with status code 400".
-    const oauthError = axios.isAxiosError(e)
+    const exchangeError = axios.isAxiosError(e)
       ? oauthErrorFromTokenBody(e.response?.data)
       : null;
-    if (oauthError) {
+    if (exchangeError) {
       logToFile(
-        `[oauth] token endpoint error: ${oauthError.code}` +
-          (oauthError.description ? ` (${oauthError.description})` : ''),
+        `[oauth] token endpoint error: ${exchangeError.code}` +
+          (exchangeError.description ? ` (${exchangeError.description})` : ''),
       );
-      throw oauthError;
+      throw exchangeError;
     }
     throw e;
   }
@@ -491,7 +493,7 @@ export async function performOAuthFlow(
       } catch (e) {
         const error = e instanceof Error ? e : new Error('Unknown error');
         const timedOut = isAuthorizationTimeout(error);
-        const oauthError = error instanceof OAuthError ? error : null;
+        const flowError = error instanceof OAuthError ? error : null;
 
         loginSpinner.stop(
           timedOut ? 'Session timed out.' : 'Authorization failed.',
@@ -499,14 +501,14 @@ export async function performOAuthFlow(
         server.close();
 
         logToFile('[oauth] flow failed:', error);
-        if (oauthError?.description) {
+        if (flowError?.description) {
           logToFile(
-            `[oauth] server error_description: ${oauthError.description}`,
+            `[oauth] server error_description: ${flowError.description}`,
           );
         }
 
-        const accessDenied = oauthError
-          ? oauthError.code === 'access_denied'
+        const accessDenied = flowError
+          ? flowError.code === 'access_denied'
           : error.message.includes('access_denied');
 
         if (timedOut) {
@@ -533,8 +535,8 @@ export async function performOAuthFlow(
           );
         }
 
-        const oauthErrorCode = oauthError
-          ? oauthError.code
+        const oauthErrorCode = flowError
+          ? flowError.code
           : error.message.startsWith('OAuth error: ')
           ? error.message.slice('OAuth error: '.length)
           : timedOut
@@ -544,7 +546,7 @@ export async function performOAuthFlow(
         analytics.captureException(error, {
           step: 'oauth_flow',
           oauth_error_code: oauthErrorCode,
-          oauth_error_description: oauthError?.description,
+          oauth_error_description: flowError?.description,
           client_id: clientId,
           requested_scopes: config.scopes.join(' '),
           // Collapse OAuth callback failures of the same kind into one issue

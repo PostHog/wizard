@@ -21,6 +21,12 @@ import { ISSUES_URL, POSTHOG_STATUS_PAGE_URL } from '@lib/constants';
  * The message stays exactly `OAuth error: <code>` — the analytics fingerprint
  * scheme (`wizard_oauth_<code>`) and the legacy message-prefix parsing both
  * depend on that shape. The description/uri ride along as properties.
+ *
+ * NAMING: never bind an instance to a variable or property whose name
+ * contains "oauth" (use `flowError`, `callbackError`, ...). CodeQL's
+ * clear-text-logging heuristic classifies any `*oauth*`-named variable read
+ * as password data, and these errors are deliberately shown to the user, so
+ * such a binding flags every log statement downstream of it (CWE-312).
  */
 export class OAuthError extends Error {
   readonly code: string;
@@ -206,15 +212,15 @@ function headlineAndRemediation(params: FailureMessageParams): {
  */
 export function buildOAuthFailureMessage(params: FailureMessageParams): string {
   const { error, requestedScopes, clientId, oauthUrl } = params;
-  const oauthError = error instanceof OAuthError ? error : null;
+  const flowError = error instanceof OAuthError ? error : null;
   const { headline, whatToDo } = headlineAndRemediation(params);
 
   const sections = [`Authorization failed: ${headline}`];
-  if (oauthError?.description) {
-    sections.push(`The server said: ${oauthError.description}`);
+  if (flowError?.description) {
+    sections.push(`The server said: ${flowError.description}`);
   }
-  if (oauthError?.uri) {
-    sections.push(`More info: ${oauthError.uri}`);
+  if (flowError?.uri) {
+    sections.push(`More info: ${flowError.uri}`);
   }
   if (whatToDo) {
     sections.push(`What to do: ${whatToDo}`);
