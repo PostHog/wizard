@@ -12,6 +12,9 @@ import { VERSION } from './version';
  */
 export const DEFAULT_AGENT_MODEL = 'claude-sonnet-4-6';
 
+/** Next sonnet generation. A `wizard-pi-model` option for pi-vs-anthropic parity. */
+export const SONNET_5_MODEL = 'claude-sonnet-5';
+
 /**
  * Cheaper, faster model for mechanical agent work (e.g. repo classification
  * during source-map detection). Passed via AgentConfig.modelOverride.
@@ -29,6 +32,9 @@ export const OPUS_MODEL = 'claude-opus-4-8';
  * completions. Enables cross-provider A/B without a wizard release.
  */
 export const GPT5_MODEL = 'openai/gpt-5';
+
+/** Newer sonnet-class openai flagship (list: $2.50/$15 per MTok). */
+export const GPT5_4_MODEL = 'openai/gpt-5.4';
 
 /**
  * Smaller, faster, cheaper openai reasoning model. The pi runner is paired with
@@ -121,6 +127,8 @@ export const DEFAULT_HOST_URL = IS_DEV
   ? 'http://localhost:8010'
   : 'https://us.i.posthog.com';
 export const ISSUES_URL = 'https://github.com/posthog/wizard/issues';
+/** Public status page, linked from transient-failure guidance (e.g. OAuth server_error). */
+export const POSTHOG_STATUS_PAGE_URL = 'https://www.posthogstatus.com';
 export const CONTEXT_MILL_URL = 'https://github.com/PostHog/context-mill';
 /**
  * Latest context-mill release page — the BYOAI download link shown in
@@ -229,13 +237,12 @@ export const WIZARD_INTERACTION_EVENT_NAME = 'wizard interaction';
 export const WIZARD_REMARK_EVENT_NAME = 'wizard remark';
 /** Boolean feature flag that routes a run to the experimental orchestrator runner. */
 export const WIZARD_ORCHESTRATOR_FLAG_KEY = 'wizard-orchestrator';
-/**
- * Multivariate feature flag that selects the agent runner: `anthropic` (control,
- * claude-agent-sdk) or `pi` (pi.dev coding agent). Read by the `wizardRunner`
- * resolver middleware. Multivariate over boolean so telemetry reads the runner
- * name directly. Unknown/missing resolves to `anthropic`.
- */
-export const WIZARD_RUNNER_FLAG_KEY = 'wizard-runner';
+/** Boolean flag: on → pi harness + the pi model pairing; off/missing → binding default. */
+export const WIZARD_USE_PI_HARNESS_FLAG_KEY = 'wizard-use-pi-harness';
+/** Multivariate flag: pi's model. Variant keys map to gateway ids in `PI_MODEL_FLAG_VARIANTS`. */
+export const WIZARD_PI_MODEL_FLAG_KEY = 'wizard-pi-model';
+/** Multivariate flag: reasoning-effort override for pi models (minimal/low/medium/high/xhigh). */
+export const WIZARD_PI_EFFORT_FLAG_KEY = 'wizard-pi-effort';
 /** Feature flag key that gates the intro-screen "Tools" menu. */
 export const WIZARD_TOOLS_MENU_FLAG_KEY = 'wizard-tools-menu';
 /**

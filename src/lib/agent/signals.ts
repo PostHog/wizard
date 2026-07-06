@@ -38,6 +38,14 @@ export const AgentSignals = {
 export type AgentSignal = (typeof AgentSignals)[keyof typeof AgentSignals];
 
 /**
+ * End-of-run reflection ask, shared by both harnesses so remarks are
+ * comparable. The format clause comes FIRST and nothing trails the marker —
+ * literal models (gpt-5-mini) echo whatever text follows it. The parser also
+ * drops remarks that quote this instruction (see AgentOutputSignals.remark).
+ */
+export const REMARK_INSTRUCTION = `Reply with a single line that starts with ${AgentSignals.WIZARD_REMARK} and no other lines. In that line, state briefly what information or guidance would have been useful to have in the integration prompt or documentation for this run — specifically anything that would have prevented tool failures, erroneous edits, or other wasted turns.`;
+
+/**
  * Error types that can be returned from agent execution.
  * These correspond to the error signals that the agent emits.
  */

@@ -4,8 +4,13 @@
  */
 
 import { IS_PRODUCTION_BUILD } from '@env';
-import { Sequence, WIZARD_ORCHESTRATOR_FLAG_KEY } from '@lib/constants';
+import {
+  Harness,
+  Sequence,
+  WIZARD_ORCHESTRATOR_FLAG_KEY,
+} from '@lib/constants';
 import { logToFile } from '@utils/debug';
+import { resolveHarness } from './harness';
 import type { WizardSession } from '@lib/wizard-session';
 import type { ProgramConfig } from '@lib/programs/program-step';
 import type { ProgramRun, BootstrapResult } from '../shared/types';
@@ -64,28 +69,53 @@ export function isOrchestratorEnabled(
 }
 
 /** `--sequence` override. Dev/test only — the option is gated out of published builds. */
-const cliSequenceMw: Middleware<Sequence> = (ctx, next) =>
-  ctx.cliSequence ?? next();
+const cliSequenceMw: Middleware<Sequence> = (ctx, next) => {
+  if (!ctx.cliSequence) return next();
+  if (ctx.trace) ctx.trace.sequence = 'cli';
+  return ctx.cliSequence;
+};
 
 /** PostHog `wizard-orchestrator` flag → orchestrator. */
-const orchestratorFeatureFlagMw: Middleware<Sequence> = (ctx, next) =>
-  isOrchestratorEnabled(ctx.flags) ? Sequence.orchestrator : next();
+const orchestratorFeatureFlagMw: Middleware<Sequence> = (ctx, next) => {
+  if (!isOrchestratorEnabled(ctx.flags)) return next();
+  if (ctx.trace) ctx.trace.sequence = 'flag';
+  return Sequence.orchestrator;
+};
 
-// Order = precedence: CLI > flag > binding default. The prod spread collapses
-// to [], dropping cliSequenceMw from the chain.
+/**
+ * pi has no `runTask`, so a flag-driven orchestrator pick clamps to linear.
+ * Sits below the CLI override so `--sequence orchestrator` still reproduces
+ * the hard error in dev builds.
+ */
+const piLinearClampMw: Middleware<Sequence> = (ctx, next) => {
+  if (resolveHarness(ctx).harness !== Harness.pi) return next();
+  if (isOrchestratorEnabled(ctx.flags)) {
+    logToFile(
+      '[switchboard] wizard-orchestrator ignored: pi has no runTask, clamping to linear',
+    );
+  }
+  if (ctx.trace) ctx.trace.sequence = 'pi-clamp';
+  return Sequence.linear;
+};
+
+// Order = precedence: CLI > pi clamp > flag > binding default. The prod spread
+// collapses to [], dropping cliSequenceMw from the chain.
 const SEQUENCE_MIDDLEWARE: Middleware<Sequence>[] = [
   ...(IS_PRODUCTION_BUILD ? [] : [cliSequenceMw]),
+  piLinearClampMw,
   orchestratorFeatureFlagMw,
 ];
 
 /** CLI wins over `wizard-orchestrator` flag wins over binding default. */
 export function resolveSequence(ctx: SwitchboardCtx): Sequence {
   const sequence = runChain(SEQUENCE_MIDDLEWARE, ctx, () => {
+    if (ctx.trace) ctx.trace.sequence = 'binding';
     const binding = PROGRAM_BINDINGS[ctx.program] ?? DEFAULT_BINDING;
     return binding.sequence;
   });
   logToFile(
-    `[switchboard] resolved: program=${ctx.program} sequence=${sequence}`,
+    `[switchboard] resolved: program=${ctx.program} sequence=${sequence}` +
+      `${ctx.trace?.sequence ? ` (${ctx.trace.sequence})` : ''}`,
   );
   return sequence;
 }

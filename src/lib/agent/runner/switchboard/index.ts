@@ -14,6 +14,13 @@ import { resolveSequence } from './sequence';
 
 // ── Shared machinery ────────────────────────────────────────────────────
 
+/** Which precedence rung decided each axis. Stamped by middlewares as they assert. */
+export interface SwitchboardTrace {
+  harness?: 'cli' | 'flag' | 'binding';
+  model?: 'cli' | 'flag' | 'binding';
+  sequence?: 'cli' | 'pi-clamp' | 'flag' | 'binding';
+}
+
 /** Everything a resolver middleware may branch on. Built once per run. */
 export interface SwitchboardCtx {
   program: ProgramId;
@@ -24,6 +31,8 @@ export interface SwitchboardCtx {
   cliSequence?: Sequence;
   /** CLI override (`--model`, gateway id). Wins over the binding's model. */
   cliModel?: string;
+  /** Filled during resolution; read by the caller for telemetry. */
+  trace?: SwitchboardTrace;
 }
 
 /** A resolver middleware: defer via `next()`, or assert by returning a value. */
@@ -116,6 +125,7 @@ export function resolveBinding(
   ctx: SwitchboardCtx,
   role = 'default',
 ): ProgramBinding {
+  ctx.trace ??= {};
   const sequence = resolveSequence(ctx);
   const { harness, model } = resolveHarness(ctx, role);
   return { sequence, harness, model };
