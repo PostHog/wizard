@@ -24,7 +24,10 @@ import {
   scanAndTriage,
   type ScanContext,
 } from '@lib/yara-hooks';
-import { createTriageLLMProvider } from '@lib/agent/triage-provider';
+import {
+  createTriageLLMProvider,
+  type TriageGatewayAuth,
+} from '@lib/agent/triage-provider';
 import { logToFile } from '@utils/debug';
 
 /** Runaway backstop: hard cap on tool calls per (sub)agent session. */
@@ -34,6 +37,13 @@ export interface ToolGateContext {
   disallowedTools?: readonly string[];
   /** True while a wizard_ask overlay is open (interactive); blocks Write/Edit. */
   getWizardAskPending?: () => boolean;
+  /**
+   * Gateway auth for the LLM triage pass. pi auths the gateway
+   * programmatically and never sets ANTHROPIC_BASE_URL/AUTH_TOKEN on the env,
+   * so without this triage silently no-ops and every flagged match is acted
+   * on (fail-closed, but no false-positive filtering).
+   */
+  triageAuth?: TriageGatewayAuth;
 }
 
 export interface GateDecision {
@@ -201,7 +211,7 @@ export function createSecurityExtension(ctx: ToolGateContext = {}): {
 
   // One triage provider per extension. Undefined (no gateway auth) means
   // triage is skipped and every flagged match is acted on — fail closed.
-  const llmProvider = createTriageLLMProvider();
+  const llmProvider = createTriageLLMProvider(ctx.triageAuth);
 
   const factory = (pi: PiExtensionApiLike): void => {
     pi.on('tool_call', async (event) => {

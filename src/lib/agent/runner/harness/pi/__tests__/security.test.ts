@@ -1,4 +1,4 @@
-import { scan, type ScanMatch } from '@posthog/warlock';
+import { scan, triageMatches, type ScanMatch } from '@posthog/warlock';
 import {
   evaluateToolCall,
   createSecurityExtension,
@@ -201,6 +201,28 @@ describe('pi-security: extension state machine (fail-closed + runaway + latch)',
       block: true,
       reason: expect.stringContaining('security violation'),
     });
+  });
+
+  test('with triageAuth, a triage false_positive verdict unblocks the write', async () => {
+    const { factory, state } = createSecurityExtension({
+      triageAuth: { baseURL: 'https://gw.example', authToken: 'tok' },
+    });
+    const { pi, handlers } = fakePi();
+    factory(pi);
+    mockedScan.mockResolvedValueOnce({ matched: true, matches: [piiMatch] });
+    vi.mocked(triageMatches).mockResolvedValueOnce([
+      {
+        ...piiMatch,
+        triage: { verdict: 'false_positive', reason: 'documentation example' },
+      },
+    ]);
+    expect(
+      await handlers.tool_call({
+        toolName: 'write',
+        input: { path: 'src/x.ts', content: 'benign content' },
+      }),
+    ).toEqual({});
+    expect(state.blockedCount).toBe(0);
   });
 
   test('a scanner error on tool output latches (fail closed)', async () => {
