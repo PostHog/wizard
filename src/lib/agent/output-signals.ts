@@ -98,10 +98,7 @@ export class AgentOutputSignals {
       )}\\s*(.+?)(?:\\n|$)`,
       'gs',
     );
-    // Scan EVERY `[WIZARD-REMARK]` occurrence. Literal models echo the ask
-    // itself first ("…starts with [WIZARD-REMARK] and no other lines…"), which
-    // carries the marker too — skip any match that is a fragment of the ask and
-    // keep scanning to the real remark, rather than giving up on the first echo.
+    // Return the first marker match whose text isn't an echo of the ask.
     let match: RegExpExecArray | null;
     while ((match = re.exec(this.text)) !== null) {
       const text = match[1]?.trim();
