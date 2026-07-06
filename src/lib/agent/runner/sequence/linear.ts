@@ -31,6 +31,7 @@ import { assemblePrompt } from '../../agent-prompt';
 import type { ProgramRun, BootstrapResult } from '../shared/types';
 import { abortOnInstallFailure } from '../shared/errors';
 import { shouldDisableAsk, sessionToOptions } from '../shared/bootstrap';
+import { gateReportOnDisk } from '../shared/outro';
 import { resolveHarness, getHarness } from '../switchboard';
 
 export async function runLinearProgram(
@@ -279,7 +280,14 @@ export async function runLinearProgram(
           : undefined,
       };
   if (outroData) {
-    getUI().setOutroData(outroData);
+    // Gate the report reference on reality, not intent. `reportFile` is only
+    // ever written by the agent (an optional, soft step), so on the runs that
+    // never complete the agent it points at a file that was never created. The
+    // exit line and outro screens promise "check the report" purely from
+    // `reportFile` being set, and the handoff prompt tells the user's coding
+    // agent to read that same missing file. This mirrors the existsSync guard
+    // the orchestrator runner already applies before building its outro.
+    getUI().setOutroData(gateReportOnDisk(outroData, session.installDir));
   }
 
   getUI().outro(config.successMessage);

@@ -1,3 +1,4 @@
+import { isAbsolute, join } from 'node:path';
 import { getExitLine } from '@ui/tui/exit-line';
 import { WizardStore, Program } from '@ui/tui/store';
 import { OutroKind } from '@lib/wizard-session';
@@ -95,17 +96,35 @@ describe('getExitLine', () => {
     expect(line).toContain('• Review findings');
   });
 
-  it('appends the report suffix when the message does not already mention it', () => {
+  it('appends the report suffix with the resolved absolute path (not a bare ./)', () => {
+    const store = storeWithOutro({
+      kind: OutroKind.Success,
+      message: 'Done!',
+      reportFile: 'posthog-setup-report.md',
+    });
+    const line = stripAnsi(getExitLine(store));
+    const expectedPath = join(
+      store.session.installDir,
+      'posthog-setup-report.md',
+    );
+    expect(line).toContain(`Check ${expectedPath} for details.`);
+    // Absolute path so users who passed --install-dir look in the right place.
+    expect(isAbsolute(expectedPath)).toBe(true);
+    expect(line).not.toContain('./posthog-setup-report.md');
+  });
+
+  it('leaves an already-absolute report path (orchestrator queue fallback) untouched', () => {
+    const abs = '/tmp/some-project/.posthog-wizard/queue.json';
     const line = stripAnsi(
       getExitLine(
         storeWithOutro({
           kind: OutroKind.Success,
           message: 'Done!',
-          reportFile: 'posthog-setup-report.md',
+          reportFile: abs,
         }),
       ),
     );
-    expect(line).toContain('Check ./posthog-setup-report.md for details.');
+    expect(line).toContain(`Check ${abs} for details.`);
   });
 
   it('falls back to a default headline when the outro has no message', () => {
