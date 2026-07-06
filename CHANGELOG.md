@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.38.1](https://github.com/PostHog/wizard/compare/v2.38.0...v2.38.1) (2026-07-06)
+
+
+### Bug Fixes
+
+* **agent:** remark dropped when the model echoes the ask ([#806](https://github.com/PostHog/wizard/issues/806)) ([c7db44e](https://github.com/PostHog/wizard/commit/c7db44e4d80eb54e929a694415c750b92c36d5c1))
+* **skills:** survive missing unzip and missing temp dir on Windows ([#807](https://github.com/PostHog/wizard/issues/807)) ([2595fc0](https://github.com/PostHog/wizard/commit/2595fc02fb453b592b20a572871957e27c4dc404))
+
 ## [2.38.0](https://github.com/PostHog/wizard/compare/v2.37.0...v2.38.0) (2026-07-06)
 
 
