@@ -10,7 +10,11 @@
  */
 
 import { z } from 'zod';
-import { ISSUES_URL, POSTHOG_STATUS_PAGE_URL } from '@lib/constants';
+import {
+  ISSUES_URL,
+  POSTHOG_STATUS_PAGE_URL,
+  WIZARD_CONTACT_EMAIL,
+} from '@lib/constants';
 
 /**
  * A structured OAuth failure (RFC 6749 §4.1.2.1 authorize errors, §5.2 token
@@ -169,7 +173,7 @@ function headlineAndRemediation(params: FailureMessageParams): {
           'PostHog rejected one or more of the requested scopes (invalid_scope).',
         whatToDo: isDevStack
           ? 'The wizard OAuth app on your local stack allows fewer scopes than the wizard requests (its OAuthApplication.scopes ceiling). Re-run your local wizard OAuth app setup so it allows every scope listed below, or add the missing ones in Django admin, then try again.'
-          : 'The wizard OAuth app\'s server-side scope ceiling (OAuthApplication.scopes) is missing scopes the wizard requests. This needs a fix on the PostHog side: point support or on-call at the "scope-ceiling-invalid-scope" runbook in PostHog/runbooks. Re-running the wizard will not help until the ceiling is updated.',
+          : `The wizard OAuth app's server-side scope ceiling (OAuthApplication.scopes) is missing scopes the wizard requests. This needs a fix on the PostHog side, so email ${WIZARD_CONTACT_EMAIL} with the details below (PostHog staff: the "scope-ceiling-invalid-scope" runbook in PostHog/runbooks has the fix). Re-running the wizard will not help until the ceiling is updated.`,
       };
     case 'invalid_client':
       return {
@@ -208,7 +212,8 @@ function headlineAndRemediation(params: FailureMessageParams): {
 /**
  * Terminal message for a failed OAuth flow. Always ends with the request
  * context (target host, client ID, requested scopes) so a pasted bug report
- * is actionable without follow-up questions, plus the issues link.
+ * is actionable without follow-up questions, plus how to get help: the
+ * support email (Zendesk-backed) and the issues link.
  */
 export function buildOAuthFailureMessage(params: FailureMessageParams): string {
   const { error, requestedScopes, clientId, oauthUrl } = params;
@@ -234,7 +239,7 @@ export function buildOAuthFailureMessage(params: FailureMessageParams): string {
     ].join('\n'),
   );
   sections.push(
-    `If you think this is a bug in the PostHog wizard, please create an issue:\n${ISSUES_URL}`,
+    `Need help? Email ${WIZARD_CONTACT_EMAIL} with the details above, or create an issue:\n${ISSUES_URL}`,
   );
   return sections.join('\n\n');
 }

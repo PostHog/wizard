@@ -7,7 +7,11 @@ import {
   oauthErrorFromTokenBody,
   sanitizeOAuthParam,
 } from '@utils/oauth-errors';
-import { ISSUES_URL, POSTHOG_STATUS_PAGE_URL } from '@lib/constants';
+import {
+  ISSUES_URL,
+  POSTHOG_STATUS_PAGE_URL,
+  WIZARD_CONTACT_EMAIL,
+} from '@lib/constants';
 
 describe('OAuthError', () => {
   it('keeps the exact legacy message shape so fingerprint parsing still works', () => {
@@ -160,7 +164,7 @@ describe('buildOAuthFailureMessage', () => {
     isDevStack: false,
   };
 
-  it('always includes the bug-report details and the issues link', () => {
+  it('always includes the bug-report details, support email, and issues link', () => {
     const message = buildOAuthFailureMessage({
       ...base,
       error: new OAuthError('invalid_scope'),
@@ -170,6 +174,7 @@ describe('buildOAuthFailureMessage', () => {
     expect(message).toContain(
       'requested scopes: user:read project:read notebook:write',
     );
+    expect(message).toContain(WIZARD_CONTACT_EMAIL);
     expect(message).toContain(ISSUES_URL);
   });
 
@@ -197,13 +202,18 @@ describe('buildOAuthFailureMessage', () => {
     expect(message).not.toContain('More info:');
   });
 
-  it('points invalid_scope at the production runbook off a dev stack', () => {
+  it('points invalid_scope at support (with the staff runbook) off a dev stack', () => {
     const message = buildOAuthFailureMessage({
       ...base,
       error: new OAuthError('invalid_scope'),
     });
     expect(message).toContain('rejected one or more of the requested scopes');
     expect(message).toContain('What to do:');
+    // The user-facing action is emailing support; the runbook is the
+    // pointer for PostHog staff picking the report up.
+    expect(message).toContain(
+      `email ${WIZARD_CONTACT_EMAIL} with the details below`,
+    );
     expect(message).toContain('scope-ceiling-invalid-scope');
     expect(message).toContain('PostHog/runbooks');
     expect(message).not.toContain('local wizard OAuth app');
