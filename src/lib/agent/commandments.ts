@@ -19,6 +19,8 @@ const WIZARD_COMMANDMENTS = [
 
   'Keep PostHog data capture at its defaults unless the user explicitly asks otherwise. Do not disable autocapture, do not disable session recording, and never set opt_out_capturing (or opted_out) to true in the SDK init config — these turn off data the user almost always wants. Note: posthog.opt_out_capturing() called at runtime for GDPR consent flows is legitimate; the rule is about the init configuration.',
 
+  "Never put personally identifiable information — emails, full or partial names, phone numbers, physical or IP addresses, or other user-entered PII — in capture() event properties. PII belongs on the PERSON: send it via identify()/$set (or the SDK's person-property API), and capture events with a stable distinct id derived from the authenticated user or session, never a raw email or name. This holds for every SDK, client and server.",
+
   'Prefer minimal, targeted edits that achieve the requested behavior while preserving existing structure and style. Avoid large refactors, broad reformatting, or unrelated changes unless explicitly requested.',
 
   'Do not spawn subagents unless explicitly instructed to do so.',
