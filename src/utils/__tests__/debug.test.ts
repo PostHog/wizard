@@ -42,6 +42,17 @@ describe('log file writing', () => {
     expect(fs.readFileSync(logPath, 'utf8')).toContain('PostHog Wizard Run:');
   });
 
+  it('never throws when the log path is unwritable even after the mkdir retry', () => {
+    // A file where the parent directory should be makes both the append and
+    // the mkdir retry fail — the classic worst case for the fallback.
+    const blocker = path.join(tmpRoot, 'blocker');
+    fs.writeFileSync(blocker, '');
+    configureLogFile({ path: path.join(blocker, 'wizard.log'), enabled: true });
+
+    expect(() => logToFile('goes nowhere')).not.toThrow();
+    expect(() => logToFile('still nowhere')).not.toThrow();
+  });
+
   it('keeps writing to an existing directory as before', () => {
     const logPath = path.join(tmpRoot, 'wizard.log');
     configureLogFile({ path: logPath, enabled: true });

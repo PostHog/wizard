@@ -41,6 +41,32 @@ export function configureLogFile(opts: {
 }
 
 let ensuredLogDir = false;
+let reportedLogFailure = false;
+
+/**
+ * A log write that still fails after the mkdir retry can't be logged to the
+ * file — report it to error tracking instead, once per process so a dead
+ * disk doesn't emit an exception per log line. Dynamic import because
+ * analytics logs through this module; a static import would be a cycle.
+ */
+function reportLogFailureOnce(err: unknown): void {
+  if (reportedLogFailure) return;
+  reportedLogFailure = true;
+  void import('./analytics')
+    .then(({ analytics }) =>
+      analytics.captureException(
+        err instanceof Error ? err : new Error(String(err)),
+        {
+          source: 'log-file-write',
+          log_path: logFilePath,
+          platform: process.platform,
+        },
+      ),
+    )
+    .catch(() => {
+      // Reporting must never crash the wizard either.
+    });
+}
 
 /**
  * Append to the log file, creating its directory on the first failure — the
@@ -52,14 +78,17 @@ let ensuredLogDir = false;
 function appendLine(text: string): void {
   try {
     appendFileSync(logFilePath, text);
-  } catch {
-    if (ensuredLogDir) return;
+  } catch (err) {
+    if (ensuredLogDir) {
+      reportLogFailureOnce(err);
+      return;
+    }
     ensuredLogDir = true;
     try {
       mkdirSync(path.dirname(logFilePath), { recursive: true });
       appendFileSync(logFilePath, text);
-    } catch {
-      // Logging must never crash the wizard.
+    } catch (retryErr) {
+      reportLogFailureOnce(retryErr);
     }
   }
 }
