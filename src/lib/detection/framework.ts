@@ -10,14 +10,43 @@ import { Integration, DETECTION_TIMEOUT_MS } from '@lib/constants';
 import { FRAMEWORK_REGISTRY } from '@lib/registry';
 
 /**
- * Loop through all registered frameworks and return the first one
- * whose `detect()` predicate matches the given directory.
- * Returns undefined if no framework is detected or detection times out.
+ * Language fallbacks, tried ONLY after every real framework has failed to
+ * match — their predicates are broad (any package.json, any .py project), so
+ * running them earlier would shadow specific frameworks. Order within the
+ * phase matters too: `javascript_web` (lockfile + a frontend signal) is more
+ * specific than `javascriptNode` (any package.json at all), so web is tried
+ * first and generic Node is the last resort of the entire detection.
+ */
+const LANGUAGE_FALLBACKS: readonly Integration[] = [
+  Integration.python,
+  Integration.ruby,
+  Integration.javascript_web,
+  Integration.javascriptNode,
+];
+
+/**
+ * The full detection order: every framework (enum order), then the language
+ * fallbacks. Built explicitly rather than trusting enum declaration order,
+ * so adding an Integration in the wrong place can't silently put a broad
+ * fallback ahead of a specific framework. Exported for the ordering tests.
+ */
+export const DETECTION_ORDER: readonly Integration[] = [
+  ...Object.values(Integration).filter(
+    (integration) => !LANGUAGE_FALLBACKS.includes(integration),
+  ),
+  ...LANGUAGE_FALLBACKS,
+];
+
+/**
+ * Return the first integration in DETECTION_ORDER whose `detect()` predicate
+ * matches the given directory: real frameworks first, language fallbacks
+ * after, generic Node last of all. Returns undefined if nothing matches or
+ * detection times out.
  */
 export async function detectFramework(
   installDir: string,
 ): Promise<Integration | undefined> {
-  for (const integration of Object.values(Integration)) {
+  for (const integration of DETECTION_ORDER) {
     const config = FRAMEWORK_REGISTRY[integration];
     try {
       const detected = await Promise.race([
