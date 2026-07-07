@@ -5,8 +5,9 @@
  * questions use those nouns, and explains why GitHub is required before
  * the connect ask lands.
  *
- * Users on the integrate path just watched the integration deck, which
- * already taught the platform story, so that scene is skipped for them.
+ * One deck for every self-driving run. On the integrate path it plays
+ * during the install run (the pane belongs to whichever run screen shows
+ * first), so it doubles as the wait-time read.
  */
 
 import { Text } from 'ink';
@@ -20,8 +21,6 @@ import { PIPELINE_BLOCK } from './pipeline-diagram.js';
 const CLEAR: ContentBlock = { type: 'clear', pause: 2000 };
 
 export const getContentBlocks = (store?: WizardStore): ContentBlock[] => {
-  const integrateFirst = store?.session.integrate === true;
-
   return [
     // Scene 1 — orient
     {
@@ -68,31 +67,30 @@ export const getContentBlocks = (store?: WizardStore): ContentBlock[] => {
 
     CLEAR,
 
-    // Scene 3 — platform story (skipped when the integration deck just
-    // taught it)
-    ...(integrateFirst
-      ? []
-      : ([
-          {
-            content: 'Your PostHog tools all share one data layer.',
-            pause: 4000,
-          },
-          {
-            content:
-              'Analytics, replays, errors, flags: they all share the same users, mapped across every tool.',
-            pause: 6000,
-          },
-          {
-            content: 'Together, they show how people really use your product.',
-            pause: 5000,
-          },
-          {
-            content:
-              "Piecing that together used to be manual work. That's what Self-driving automates.",
-            pause: 6000,
-          },
-          CLEAR,
-        ] satisfies ContentBlock[])),
+    // Scene 3 — platform story
+    {
+      content: 'Your PostHog tools all share one data layer.',
+      pause: 4000,
+    },
+
+    {
+      content:
+        'Analytics, replays, errors, flags: they all share the same users, mapped across every tool.',
+      pause: 6000,
+    },
+
+    {
+      content: 'Together, they show how people really use your product.',
+      pause: 5000,
+    },
+
+    {
+      content:
+        "Piecing that together used to be manual work. That's what Self-driving automates.",
+      pause: 6000,
+    },
+
+    CLEAR,
 
     // Scene 4 — the differentiator, and why GitHub
     {

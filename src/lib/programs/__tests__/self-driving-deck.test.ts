@@ -7,7 +7,6 @@
  */
 
 import type { ReactNode, ReactElement } from 'react';
-import type { WizardStore } from '@ui/tui/store';
 import { getContentBlocks } from '@lib/programs/self-driving/content/index';
 
 /** paneWidth in LearnCard at 80 cols: (min(120, 80) - 2) / 2 - 2 */
@@ -21,14 +20,8 @@ function textOf(node: ReactNode): string {
   return textOf(el.props?.children);
 }
 
-const storeWith = (integrate: boolean | null): WizardStore =>
-  ({ session: { integrate } } as unknown as WizardStore);
-
-describe.each([
-  ['fresh path', storeWith(null)],
-  ['integrate path', storeWith(true)],
-])('self-driving learn deck (%s)', (_label, store) => {
-  const blocks = getContentBlocks(store);
+describe('self-driving learn deck', () => {
+  const blocks = getContentBlocks();
 
   it('has blocks', () => {
     expect(blocks.length).toBeGreaterThan(0);
@@ -59,22 +52,4 @@ describe.each([
     }
     expect(long).toEqual([]);
   });
-});
-
-it('skips the platform-story scene on the integrate path', () => {
-  const fresh = getContentBlocks(storeWith(null));
-  const integrate = getContentBlocks(storeWith(true));
-  expect(integrate.length).toBeLessThan(fresh.length);
-
-  const texts = (bs: ReturnType<typeof getContentBlocks>) =>
-    bs
-      .filter(
-        (b): b is { content: string } =>
-          typeof b === 'object' &&
-          'content' in b &&
-          typeof b.content === 'string',
-      )
-      .map((b) => b.content);
-  expect(texts(fresh).join(' ')).toContain('one data layer');
-  expect(texts(integrate).join(' ')).not.toContain('one data layer');
 });
