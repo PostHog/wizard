@@ -193,11 +193,14 @@ export const WAREHOUSE_SOURCE_SCOPE_ADDITIONS = [
  *
  * The step polls `/api/projects/:id/integrations/` (`fetchSlackConnected`)
  * to render the already-connected variant and to flip live once the user
- * completes the Slack OAuth step in the browser. Without `integration:read`
- * the first poll 403s, the screen stops polling, and an already-connected
- * project is nagged with the connect nudge. Used by the default integration
- * run (the step ends the run) and by the standalone `wizard slack` flow
- * (the step is the whole program).
+ * completes the Slack OAuth step in the browser. If the poll can't read
+ * integrations — a missing `integration:read` scope (403) or an
+ * invalid/expired token (401) — the screen stops polling and an
+ * already-connected project is nagged with the connect nudge. Both auth
+ * statuses are treated as an expected degradation (a benign analytics
+ * event, not a captured exception). Used by the default integration run
+ * (the step ends the run) and by the standalone `wizard slack` flow (the
+ * step is the whole program).
  */
 export const CONNECT_SLACK_SCOPE_ADDITIONS = ['integration:read'] as const;
 
