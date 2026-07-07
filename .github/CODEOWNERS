@@ -4,7 +4,7 @@
 # The last matching pattern wins per file. `team-wizard-docs` is the default
 # reviewer; team overrides below take precedence for team-owned programs.
 
-# Default
+# Default owner
 *                                                       @PostHog/team-wizard-docs
 
 # Team-owned programs
