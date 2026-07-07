@@ -1,4 +1,5 @@
 import * as fs from 'fs';
+import * as http from 'http';
 import * as os from 'os';
 import * as path from 'path';
 import { zipSync } from 'fflate';
@@ -7,6 +8,7 @@ import {
   DEFAULT_ASK_MAX_QUESTIONS,
   WIZARD_TOOL_NAMES,
   __test,
+  downloadSkill,
   ensureGitignoreCoverage,
   evaluateAskCap,
   mergeEnvValues,
@@ -488,5 +490,141 @@ describe('downloadWithRetry', () => {
         maxAttempts: 3,
       }),
     ).rejects.toThrow(/attempt 1.*attempt 2.*attempt 3/s);
+  });
+
+  it('fails fast on a non-retryable client error, without retrying or sleeping', async () => {
+    let attempts = 0;
+    let slept = false;
+
+    await expect(
+      __test.downloadWithRetry(url, {
+        fetchImpl: (() => {
+          attempts += 1;
+          return Promise.resolve({
+            ok: false,
+            status: 404,
+            statusText: 'Not Found',
+            arrayBuffer: () => Promise.resolve(new ArrayBuffer(0)),
+          });
+        }) as any,
+        sleepImpl: () => {
+          slept = true;
+          return Promise.resolve();
+        },
+        maxAttempts: 3,
+      }),
+    ).rejects.toThrow(/HTTP 404 Not Found/);
+
+    expect(attempts).toBe(1);
+    expect(slept).toBe(false);
+  });
+
+  it('still retries a 429 rate-limit response', async () => {
+    let attempts = 0;
+
+    await expect(
+      __test.downloadWithRetry(url, {
+        fetchImpl: (() => {
+          attempts += 1;
+          return Promise.resolve({
+            ok: false,
+            status: 429,
+            statusText: 'Too Many Requests',
+            arrayBuffer: () => Promise.resolve(new ArrayBuffer(0)),
+          });
+        }) as any,
+        sleepImpl: noSleep,
+        maxAttempts: 3,
+      }),
+    ).rejects.toThrow(/attempt 3: HTTP 429/);
+
+    expect(attempts).toBe(3);
+  });
+});
+
+describe('downloadSkill (e2e over HTTP)', () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = makeTmpDir();
+  });
+  afterEach(() => cleanup(tmpDir));
+
+  // A minimal valid zip the real unzipSync path can extract.
+  const dummyZip = (): Uint8Array =>
+    zipSync({ 'SKILL.md': new TextEncoder().encode('# dummy skill\n') });
+
+  // Start a throwaway HTTP server on a random port; returns its base URL + closer.
+  async function startServer(
+    handler: http.RequestListener,
+  ): Promise<{ baseUrl: string; close: () => Promise<void> }> {
+    const server = http.createServer(handler);
+    await new Promise<void>((resolve) =>
+      server.listen(0, '127.0.0.1', resolve),
+    );
+    const { port } = server.address() as import('net').AddressInfo;
+    return {
+      baseUrl: `http://127.0.0.1:${port}`,
+      close: () => new Promise((resolve) => server.close(() => resolve())),
+    };
+  }
+
+  const skillFile = () =>
+    path.join(tmpDir, '.claude', 'skills', 'dummy', 'SKILL.md');
+
+  it('downloads and extracts a skill served by the mock server', async () => {
+    const zip = dummyZip();
+    const server = await startServer((_req, res) => {
+      res.writeHead(200, { 'Content-Type': 'application/zip' });
+      res.end(Buffer.from(zip));
+    });
+
+    try {
+      const result = await downloadSkill(
+        {
+          id: 'dummy',
+          name: 'Dummy',
+          downloadUrl: `${server.baseUrl}/skill.zip`,
+        },
+        tmpDir,
+      );
+
+      expect(result.success).toBe(true);
+      expect(fs.readFileSync(skillFile(), 'utf8')).toContain('dummy skill');
+    } finally {
+      await server.close();
+    }
+  });
+
+  it('recovers when the server fails transiently before serving the file', async () => {
+    const zip = dummyZip();
+    let hits = 0;
+    const server = await startServer((_req, res) => {
+      hits += 1;
+      if (hits === 1) {
+        res.writeHead(503, { 'Content-Type': 'text/plain' });
+        res.end('temporarily unavailable');
+        return;
+      }
+      res.writeHead(200, { 'Content-Type': 'application/zip' });
+      res.end(Buffer.from(zip));
+    });
+
+    try {
+      const result = await downloadSkill(
+        {
+          id: 'dummy',
+          name: 'Dummy',
+          downloadUrl: `${server.baseUrl}/skill.zip`,
+        },
+        tmpDir,
+      );
+
+      expect(result.success).toBe(true);
+      expect(hits).toBe(2); // one 503, then the successful retry
+      expect(fs.existsSync(skillFile())).toBe(true);
+    } finally {
+      await server.close();
+    }
   });
 });
