@@ -39,8 +39,6 @@ describe('Integration enum order (drives first-match detection)', () => {
   ];
 
   test('every language fallback comes after every framework', () => {
-    // Broad fallback predicates (any package.json, any .py file) would
-    // shadow specific frameworks if declared earlier.
     const firstFallback = Math.min(...fallbacks.map((f) => order.indexOf(f)));
     const lastFramework = Math.max(
       ...order
@@ -51,9 +49,7 @@ describe('Integration enum order (drives first-match detection)', () => {
   });
 
   test('generic Node is the last resort of the entire detection', () => {
-    // javascriptNode matches on package.json alone — anything after it would
-    // be unreachable for any JS project. In particular javascript_web
-    // (lockfile + frontend signal) must be tried first.
+    // javascriptNode matches any package.json; anything after it is unreachable.
     expect(order[order.length - 1]).toBe(Integration.javascriptNode);
   });
 });
@@ -87,9 +83,6 @@ describe('detectFramework (end-to-end over real project dirs)', () => {
   });
 
   test('a plain browser app (lockfile + index.html, no bundler) resolves to javascript_web', async () => {
-    // The bug beyond Vite: with javascriptNode declared before
-    // javascript_web, node claimed every frontend project that matched no
-    // specific framework.
     const opts = project({
       'package.json': JSON.stringify({ dependencies: {} }),
       'package-lock.json': '{}',

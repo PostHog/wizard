@@ -91,10 +91,7 @@ export enum Integration {
   android = 'android',
   rails = 'rails',
 
-  // Language fallbacks. Within these, javascript_web (lockfile + a frontend
-  // signal like index.html or a bundler) must come before javascriptNode
-  // (any package.json at all) — node is the last resort of the whole
-  // detection, or it claims every frameworkless frontend project.
+  // Language fallbacks. Keep javascriptNode last: it matches any package.json.
   python = 'python',
   ruby = 'ruby',
   javascript_web = 'javascript_web',
