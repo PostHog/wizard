@@ -1,9 +1,8 @@
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { DETECTION_ORDER, detectFramework } from '@lib/detection/framework';
+import { detectFramework } from '@lib/detection/framework';
 import { Integration } from '@lib/constants';
-import { JAVASCRIPT_NODE_AGENT_CONFIG } from '../../../frameworks/javascript-node/javascript-node-wizard-agent';
 import { ANDROID_AGENT_CONFIG } from '../../../frameworks/android/android-wizard-agent';
 
 /** A throwaway project dir seeded with the given files. */
@@ -30,49 +29,32 @@ afterAll(() => {
   }
 });
 
-const FALLBACKS = [
-  Integration.python,
-  Integration.ruby,
-  Integration.javascript_web,
-  Integration.javascriptNode,
-];
-
-describe('DETECTION_ORDER (fallback phase invariants)', () => {
-  test('covers every Integration exactly once', () => {
-    expect([...DETECTION_ORDER].sort()).toEqual(
-      Object.values(Integration).sort(),
-    );
-    expect(new Set(DETECTION_ORDER).size).toBe(DETECTION_ORDER.length);
-  });
+describe('Integration enum order (drives first-match detection)', () => {
+  const order = Object.values(Integration);
+  const fallbacks = [
+    Integration.python,
+    Integration.ruby,
+    Integration.javascript_web,
+    Integration.javascriptNode,
+  ];
 
   test('every language fallback comes after every framework', () => {
     // Broad fallback predicates (any package.json, any .py file) would
-    // shadow specific frameworks if tried earlier.
-    const firstFallback = Math.min(
-      ...FALLBACKS.map((f) => DETECTION_ORDER.indexOf(f)),
-    );
+    // shadow specific frameworks if declared earlier.
+    const firstFallback = Math.min(...fallbacks.map((f) => order.indexOf(f)));
     const lastFramework = Math.max(
-      ...DETECTION_ORDER.filter((i) => !FALLBACKS.includes(i)).map((i) =>
-        DETECTION_ORDER.indexOf(i),
-      ),
+      ...order
+        .filter((i) => !fallbacks.includes(i))
+        .map((i) => order.indexOf(i)),
     );
     expect(firstFallback).toBeGreaterThan(lastFramework);
   });
 
   test('generic Node is the last resort of the entire detection', () => {
     // javascriptNode matches on package.json alone — anything after it would
-    // be unreachable for any JS project.
-    expect(DETECTION_ORDER[DETECTION_ORDER.length - 1]).toBe(
-      Integration.javascriptNode,
-    );
-  });
-
-  test('javascript_web is tried before javascriptNode', () => {
-    // web requires a lockfile + a frontend signal; node requires only
-    // package.json. Specific before broad, or web is unreachable.
-    expect(DETECTION_ORDER.indexOf(Integration.javascript_web)).toBeLessThan(
-      DETECTION_ORDER.indexOf(Integration.javascriptNode),
-    );
+    // be unreachable for any JS project. In particular javascript_web
+    // (lockfile + frontend signal) must be tried first.
+    expect(order[order.length - 1]).toBe(Integration.javascriptNode);
   });
 });
 
@@ -105,9 +87,9 @@ describe('detectFramework (end-to-end over real project dirs)', () => {
   });
 
   test('a plain browser app (lockfile + index.html, no bundler) resolves to javascript_web', async () => {
-    // The ordering fix beyond Vite: before the explicit fallback phase,
-    // javascriptNode sat ahead of javascript_web and claimed every frontend
-    // project that matched no specific framework.
+    // The bug beyond Vite: with javascriptNode declared before
+    // javascript_web, node claimed every frontend project that matched no
+    // specific framework.
     const opts = project({
       'package.json': JSON.stringify({ dependencies: {} }),
       'package-lock.json': '{}',
@@ -136,37 +118,6 @@ describe('detectFramework (end-to-end over real project dirs)', () => {
       'android/app/src/main/kotlin/MainActivity.kt': 'class MainActivity',
     });
     await expect(detectFramework(opts.installDir)).resolves.toBeUndefined();
-  });
-});
-
-describe('javascript-node detect (generic Node fallback)', () => {
-  const detect = JAVASCRIPT_NODE_AGENT_CONFIG.detection.detect;
-
-  test('claims a plain Node project', async () => {
-    const opts = project({
-      'package.json': JSON.stringify({ dependencies: { express: '^4' } }),
-    });
-    await expect(detect(opts)).resolves.toBe(true);
-  });
-
-  test('does not claim a project with vite in devDependencies', async () => {
-    const opts = project({
-      'package.json': JSON.stringify({
-        dependencies: { react: '^19' },
-        devDependencies: { vite: '^6' },
-      }),
-    });
-    await expect(detect(opts)).resolves.toBe(false);
-  });
-
-  test('does not claim a project with a vite config file', async () => {
-    for (const config of ['vite.config.ts', 'vite.config.mjs']) {
-      const opts = project({
-        'package.json': JSON.stringify({ dependencies: {} }),
-        [config]: 'export default {}',
-      });
-      await expect(detect(opts)).resolves.toBe(false);
-    }
   });
 });
 

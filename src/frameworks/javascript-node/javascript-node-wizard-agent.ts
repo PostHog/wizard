@@ -1,20 +1,8 @@
 /* Generic Node.js language wizard using posthog-agent with PostHog MCP */
-import * as fs from 'node:fs';
-import * as path from 'node:path';
 import type { FrameworkConfig } from '@lib/framework-config';
 import { Integration } from '@lib/constants';
 import { tryGetPackageJson } from '@utils/setup-utils';
-import { hasDeclaredDependency } from '@utils/package-json';
 import { detectNodePackageManagers } from '@lib/detection/package-manager';
-
-const VITE_CONFIG_FILES = [
-  'vite.config.js',
-  'vite.config.ts',
-  'vite.config.mjs',
-  'vite.config.mts',
-  'vite.config.cjs',
-  'vite.config.cts',
-];
 
 type JavaScriptNodeContext = Record<string, unknown>;
 
@@ -34,20 +22,7 @@ export const JAVASCRIPT_NODE_AGENT_CONFIG: FrameworkConfig<JavaScriptNodeContext
       detectPackageManager: detectNodePackageManagers,
       detect: async (options) => {
         const packageJson = await tryGetPackageJson(options);
-        if (!packageJson) return false;
-        // A Vite project is a frontend build, not a server-side Node app.
-        // This config sits before `javascript_web` in the detection loop and
-        // matches on package.json alone, so without this exclusion it claims
-        // every Vite app and integrates posthog-node into a browser project.
-        if (hasDeclaredDependency('vite', packageJson)) return false;
-        if (
-          VITE_CONFIG_FILES.some((file) =>
-            fs.existsSync(path.join(options.installDir, file)),
-          )
-        ) {
-          return false;
-        }
-        return true;
+        return !!packageJson;
       },
     },
 
