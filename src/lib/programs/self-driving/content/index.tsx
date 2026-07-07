@@ -173,7 +173,7 @@ export const getContentBlocks = (store?: WizardStore): ContentBlock[] => {
     { content: 'Reports land in your Self-driving inbox.', pause: 4000 },
 
     {
-      content: 'Dig in with the agent, tag teammates, or kick off a PR.',
+      content: 'Investigate with the agent, tag teammates, or kick off a PR.',
       pause: 6000,
     },
 
@@ -224,8 +224,7 @@ export const getContentBlocks = (store?: WizardStore): ContentBlock[] => {
     },
 
     {
-      content:
-        'With Self-driving, product usage data becomes real, shippable change.',
+      content: 'Product usage data becomes real, shippable change.',
       pause: 5000,
     },
 
