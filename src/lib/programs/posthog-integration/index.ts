@@ -188,6 +188,9 @@ STEP 1: Call load_skill_menu (from the wizard-tools MCP server) to see available
 
 STEP 2: Call install_skill (from the wizard-tools MCP server) with the chosen skill ID (e.g., "integration-nextjs-app-router").
    Do NOT run any shell commands to install skills.
+   If install_skill fails, emit: ${
+     AgentSignals.ERROR_RESOURCE_MISSING
+   } Could not install the skill and halt. Do NOT attempt the integration from memory without the skill.
 
 STEP 3: Load the installed skill's SKILL.md file to understand what references are available.
 
