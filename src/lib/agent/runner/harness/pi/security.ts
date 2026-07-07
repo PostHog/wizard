@@ -19,13 +19,7 @@ import {
   type ToolTarget,
   type YaraMatch,
 } from '@lib/yara-scanner';
-import {
-  createRepeatBlockTracker,
-  isWizardDocumentationPath,
-  recordExternalScan,
-  repeatBlockReason,
-  type RepeatBlockTracker,
-} from '@lib/yara-hooks';
+import { isWizardDocumentationPath, recordExternalScan } from '@lib/yara-hooks';
 import { logToFile } from '@utils/debug';
 
 /** yara-scanner match → the report shape `recordExternalScan` expects. */
@@ -45,14 +39,6 @@ export interface ToolGateContext {
   disallowedTools?: readonly string[];
   /** True while a wizard_ask overlay is open (interactive); blocks Write/Edit. */
   getWizardAskPending?: () => boolean;
-  /**
-   * Per-run tracker of YARA-blocked payloads. When the agent retries content
-   * that was already blocked, the block reason escalates ("change the code,
-   * not the retry" → "report it and move on"). The extension wires one in;
-   * absent (tests calling `evaluateToolCall` directly) every block reads as
-   * a first attempt.
-   */
-  repeatTracker?: RepeatBlockTracker;
 }
 
 export interface GateDecision {
@@ -101,7 +87,6 @@ function toClaudePolicyCall(
 function preExecutionYaraBlock(
   toolName: string,
   input: Record<string, unknown>,
-  repeatTracker?: RepeatBlockTracker,
 ): string | undefined {
   let content: string;
   let target: ToolTarget;
@@ -139,9 +124,7 @@ function preExecutionYaraBlock(
   if (matches.length === 0) return undefined;
 
   const m = matches[0];
-  const reason = `[YARA] ${m.rule.name}: ${m.rule.description}. Blocked for security.`;
-  const attempt = repeatTracker?.attempt(target, content) ?? 1;
-  return repeatBlockReason(attempt, target, reason);
+  return `[YARA] ${m.rule.name}: ${m.rule.description}. Blocked for security.`;
 }
 
 /**
@@ -164,11 +147,7 @@ export function evaluateToolCall(
       return { block: true, reason: decision.message };
     }
 
-    const yaraReason = preExecutionYaraBlock(
-      toolName,
-      input,
-      ctx.repeatTracker,
-    );
+    const yaraReason = preExecutionYaraBlock(toolName, input);
     if (yaraReason) return { block: true, reason: yaraReason };
 
     return { block: false };
@@ -215,13 +194,6 @@ export function createSecurityExtension(ctx: ToolGateContext = {}): {
     toolCalls: 0,
   };
 
-  // One tracker per extension = per (sub)agent session, so an identical
-  // payload retried after a block gets the escalating reason.
-  const gateCtx: ToolGateContext = {
-    ...ctx,
-    repeatTracker: ctx.repeatTracker ?? createRepeatBlockTracker(),
-  };
-
   const factory = (pi: PiExtensionApiLike): void => {
     pi.on('tool_call', (event) => {
       // A latched post-scan violation blocks everything that follows.
@@ -238,11 +210,7 @@ export function createSecurityExtension(ctx: ToolGateContext = {}): {
           reason: `Stopped: exceeded ${MAX_TOOL_CALLS} tool calls (runaway guard).`,
         };
       }
-      const decision = evaluateToolCall(
-        event.toolName,
-        event.input ?? {},
-        gateCtx,
-      );
+      const decision = evaluateToolCall(event.toolName, event.input ?? {}, ctx);
       if (decision.block) {
         state.blockedCount += 1;
         logToFile(`[pi-security] BLOCK ${event.toolName}: ${decision.reason}`);
