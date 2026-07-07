@@ -17,7 +17,6 @@ import {
   POSTHOG_PROPERTY_HEADER_PREFIX,
   WIZARD_ORCHESTRATOR_FLAG_KEY,
   WIZARD_USER_AGENT,
-  WIZARD_WARLOCK_DISABLED_FLAG_KEY,
   DEFAULT_AGENT_MODEL,
 } from '@lib/constants';
 import {
@@ -325,18 +324,15 @@ export function buildRunTags(args: {
 }
 
 /**
- * Whether the Warlock/YARA kill switch is engaged for this run. Off by default:
- * scanning is disabled only when the feature flag resolves to the explicit
- * string 'true', or the local POSTHOG_WIZARD_WARLOCK_DISABLED env override is
- * set. A missing flag, an empty flag map (the safe default returned when the
- * flag fetch fails), or any other value all leave scanning ON — a network blip
- * must never silently disable a security control.
+ * Whether Warlock/YARA scanning is disabled for this run. Off by default:
+ * scanning is disabled only by the local POSTHOG_WIZARD_WARLOCK_DISABLED env
+ * override, set to the explicit string 'true'. This is a local/CI escape hatch
+ * only — there is deliberately no remote flag to switch off a security control
+ * (we rely on version-locking @posthog/warlock + the release-gate smoke test
+ * instead). Any other value leaves scanning ON.
  */
-export function isWarlockDisabled(flags: Record<string, string> = {}): boolean {
-  return (
-    flags[WIZARD_WARLOCK_DISABLED_FLAG_KEY] === 'true' ||
-    runtimeEnv('POSTHOG_WIZARD_WARLOCK_DISABLED') === 'true'
-  );
+export function isWarlockDisabled(): boolean {
+  return runtimeEnv('POSTHOG_WIZARD_WARLOCK_DISABLED') === 'true';
 }
 
 /**
@@ -944,14 +940,12 @@ export async function runAgent(
       signalDone!();
     };
 
-    // Kill switch for Warlock/YARA scanning (off by default — see
+    // Local/CI escape hatch for Warlock/YARA scanning (off by default — see
     // isWarlockDisabled for the fail-safe semantics).
-    const warlockDisabled = isWarlockDisabled(agentConfig.wizardFlags);
+    const warlockDisabled = isWarlockDisabled();
     if (warlockDisabled) {
-      logToFile(
-        '[warlock] kill switch active — YARA scanning disabled for run',
-      );
-      analytics.wizardCapture('warlock disabled', { reason: 'kill-switch' });
+      logToFile('[warlock] scanning disabled for run (local env override)');
+      analytics.wizardCapture('warlock disabled', { reason: 'env-override' });
     }
 
     const response = query({
