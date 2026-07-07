@@ -552,6 +552,18 @@ export function wizardCanUseTool(
   // Normalize: remove safe stderr redirection (2>&1, 2>&2, etc.)
   const normalized = command.replace(/\s*\d*>&\d+\s*/g, ' ').trim();
 
+  // Allow removing the wizard's own event-plan artifact. The integration
+  // skill's conclude step instructs the agent to delete it, and on the
+  // anthropic path Bash is in allowedTools so this always succeeds there
+  // (canUseTool is never consulted); only the pi fence routes every bash
+  // command through this policy, where the generic allowlist made this the
+  // #1 denial (~31/week) and a retry loop. Exact-match: the plan file at the
+  // project root, optional -f, nothing else.
+  if (/^rm\s+(-f\s+)?(\.\/)?\.posthog-events\.json$/.test(normalized)) {
+    logToFile(`Allowing event-plan cleanup: ${command}`);
+    return { behavior: 'allow', updatedInput: input };
+  }
+
   // Check for pipe to tail/head (safe output limiting)
   const pipeMatch = normalized.match(/^(.+?)\s*\|\s*(tail|head)(\s+\S+)*\s*$/);
   if (pipeMatch) {
@@ -860,6 +872,15 @@ export async function runAgent(
     const remark = signals.remark();
     if (remark) {
       analytics.capture(WIZARD_REMARK_EVENT_NAME, { remark });
+    }
+
+    // A failed install_skill is non-fatal — the agent continues best-effort
+    // without the skill — but every such run must be measurable.
+    const skillFailure = signals.skillInstallFailure();
+    if (skillFailure !== undefined) {
+      analytics.wizardCapture('agent continued without skill', {
+        detail: skillFailure,
+      });
     }
 
     // Token usage comes from the SDK result message and is per agent run —

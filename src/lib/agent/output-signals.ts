@@ -25,6 +25,7 @@ const OUTPUT_SIGNALS = {
   API_ERROR: 'API Error:',
   MCP_MISSING: AgentSignals.ERROR_MCP_MISSING,
   RESOURCE_MISSING: AgentSignals.ERROR_RESOURCE_MISSING,
+  SKILL_INSTALL_FAILED: AgentSignals.SKILL_INSTALL_FAILED,
   WIZARD_REMARK: AgentSignals.WIZARD_REMARK,
 } as const;
 
@@ -87,6 +88,20 @@ export class AgentOutputSignals {
       new RegExp(`${OUTPUT_SIGNALS.API_ERROR} [^\\n]+`, 'g'),
     );
     return m ? m.join('\n') : undefined;
+  }
+
+  /**
+   * Text after the `[SKILL-INSTALL-FAILED]` marker (skill id + reason),
+   * trimmed — or undefined when the skill installed fine. A marker with no
+   * trailing text still reports as '' so the failure is never lost.
+   */
+  skillInstallFailure(): string | undefined {
+    const marker = OUTPUT_SIGNALS.SKILL_INSTALL_FAILED;
+    for (const line of this.lines) {
+      const idx = line.indexOf(marker);
+      if (idx !== -1) return line.slice(idx + marker.length).trim();
+    }
+    return undefined;
   }
 
   /** Text after the single `[WIZARD-REMARK]` marker, trimmed, or undefined. */
