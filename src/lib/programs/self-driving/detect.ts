@@ -19,7 +19,13 @@
  * the wizard-side "self-driving" rename.
  */
 
-import { existsSync, statSync, readFileSync } from 'fs';
+import {
+  existsSync,
+  statSync,
+  readFileSync,
+  readdirSync,
+  type Dirent,
+} from 'fs';
 import { join } from 'path';
 import type { WizardSession } from '@lib/wizard-session';
 import type { AbortCase } from '@lib/agent/agent-runner';
@@ -35,9 +41,134 @@ export const POSTHOG_PRESENT_KEY = 'postHogPresent';
  */
 export const SELF_DRIVING_INTEGRATE_PATH_KEY = 'selfDrivingIntegratePath';
 
-// Matches `posthog` at a dependency boundary (line start, or after a
-// quote/slash/=/space), so it skips the substring glued inside another word.
-const POSTHOG_PACKAGE_RE = /(^|["'\s/=])posthog/im;
+// Matches `posthog` at a dependency boundary (line start, or after "'/=:.@ or
+// whitespace): catches `com.posthog:posthog-android` and `@posthog/ai`, skips
+// substrings inside other words.
+const POSTHOG_PACKAGE_RE = /(^|["'\s/=:.@])posthog/im;
+
+// Manifests grepped for a posthog dependency. Distinct from PROJECT_MANIFESTS
+// in @lib/detection/agentic (project-root discovery); keep the two in sync
+// (a test asserts the shared ecosystem names appear in both). Exported for it.
+export const POSTHOG_MANIFESTS = [
+  'package.json',
+  'requirements.txt',
+  'pyproject.toml',
+  'Pipfile',
+  'setup.py',
+  'Gemfile',
+  'go.mod',
+  'composer.json',
+  'pubspec.yaml',
+  // Apple: SPM manifest, CocoaPods (+ lockfile), XcodeGen spec.
+  'Package.swift',
+  'Podfile',
+  'Podfile.lock',
+  'project.yml',
+  // Android / JVM (libs.versions.toml holds gradle coordinates).
+  'build.gradle',
+  'build.gradle.kts',
+  'gradle/libs.versions.toml',
+  'pom.xml',
+  // Elixir / Rust.
+  'mix.exs',
+  'Cargo.toml',
+];
+
+// Named sub-app dirs always checked (ios/android: RN/Flutter native shells).
+// scanDirs unions these with a bounded depth-2 walk of the install dir.
+const POSTHOG_DIRS = [
+  '.',
+  'app',
+  'frontend',
+  'backend',
+  'ios',
+  'android',
+  'android/app',
+];
+
+// Heavy or vendored trees the shallow walk never descends into — they hold
+// dependencies, not a project's own manifest, and would false-positive on a
+// bundled posthog package.
+const WALK_SKIP_DIRS = new Set([
+  'node_modules',
+  'Pods',
+  'Carthage',
+  'DerivedData',
+  '.build',
+  'build',
+  'dist',
+  'out',
+  '.next',
+  'coverage',
+  'vendor',
+  '.venv',
+  'site-packages',
+  'target',
+  '.git',
+]);
+
+// How deep below the install dir the shallow walk goes. 2 covers the common
+// monorepo shape (apps/<name>, packages/<name>) without a full tree walk.
+const WALK_MAX_DEPTH = 2;
+
+/**
+ * The install dir plus every directory within WALK_MAX_DEPTH levels (skipping
+ * heavy/vendored trees and dotdirs), unioned with the explicit POSTHOG_DIRS. A
+ * full shallow walk on top of the named dirs, so a monorepo's nested apps
+ * (e.g. `apps/mobile`) are seen without hardcoding the path.
+ */
+function scanDirs(installDir: string): string[] {
+  const rels = new Set<string>(POSTHOG_DIRS);
+  const walk = (rel: string, depth: number): void => {
+    rels.add(rel);
+    if (depth >= WALK_MAX_DEPTH) return;
+    let entries: Dirent[];
+    try {
+      entries = readdirSync(join(installDir, rel), { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const e of entries) {
+      if (!e.isDirectory()) continue;
+      if (e.name.startsWith('.') || WALK_SKIP_DIRS.has(e.name)) continue;
+      // .xcodeproj/.xcworkspace are inspected via projectFileHasPostHog at the
+      // parent dir — descending into the wrapper finds nothing useful.
+      if (e.name.endsWith('.xcodeproj') || e.name.endsWith('.xcworkspace')) {
+        continue;
+      }
+      walk(rel === '.' ? e.name : `${rel}/${e.name}`, depth + 1);
+    }
+  };
+  walk('.', 0);
+  return [...rels];
+}
+
+/**
+ * True if a `*.xcodeproj/project.pbxproj` or `*.csproj`/`*.fsproj` in
+ * `dirPath` references PostHog.
+ */
+function projectFileHasPostHog(dirPath: string): boolean {
+  let entries: string[];
+  try {
+    entries = readdirSync(dirPath);
+  } catch {
+    return false;
+  }
+  for (const entry of entries) {
+    const target = entry.endsWith('.xcodeproj')
+      ? join(dirPath, entry, 'project.pbxproj')
+      : entry.endsWith('.csproj') || entry.endsWith('.fsproj')
+      ? join(dirPath, entry)
+      : null;
+    if (!target || !existsSync(target)) continue;
+    try {
+      if (POSTHOG_PACKAGE_RE.test(readFileSync(target, 'utf8'))) return true;
+    } catch {
+      /* unreadable — ignore */
+    }
+  }
+  return false;
+}
 
 /**
  * Deterministic, offline check: does the project already have a PostHog SDK?
@@ -47,22 +178,10 @@ const POSTHOG_PACKAGE_RE = /(^|["'\s/=])posthog/im;
  * first ("not found") or proceeds straight to setup ("found").
  */
 export function detectPostHogPresent(installDir: string): boolean {
-  const manifests = [
-    'package.json',
-    'requirements.txt',
-    'pyproject.toml',
-    'Pipfile',
-    'Gemfile',
-    'go.mod',
-    'composer.json',
-    'pubspec.yaml',
-  ];
-  // Also check a few common sub-app dirs so monorepos (frontend/, backend/)
-  // are caught; deliberately not a recursive tree walk.
-  const dirs = ['.', 'app', 'frontend', 'backend'];
-  for (const dir of dirs) {
-    for (const name of manifests) {
-      const path = join(installDir, dir, name);
+  for (const dir of scanDirs(installDir)) {
+    const dirPath = join(installDir, dir);
+    for (const name of POSTHOG_MANIFESTS) {
+      const path = join(dirPath, name);
       if (!existsSync(path)) continue;
       try {
         if (POSTHOG_PACKAGE_RE.test(readFileSync(path, 'utf8'))) return true;
@@ -70,6 +189,8 @@ export function detectPostHogPresent(installDir: string): boolean {
         /* unreadable — ignore */
       }
     }
+    // Variably-named project files (.xcodeproj, .csproj/.fsproj).
+    if (projectFileHasPostHog(dirPath)) return true;
   }
   return false;
 }

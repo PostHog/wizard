@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.38.2](https://github.com/PostHog/wizard/compare/v2.38.1...v2.38.2) (2026-07-07)
+
+
+### Bug Fixes
+
+* **self-driving:** detect existing native PostHog installs, offer continue-with-existing ([#803](https://github.com/PostHog/wizard/issues/803)) ([dbe9893](https://github.com/PostHog/wizard/commit/dbe989388aa1b3315f0d70faf05c2626d096b4d5))
+
 ## [2.38.1](https://github.com/PostHog/wizard/compare/v2.38.0...v2.38.1) (2026-07-06)
 
 
