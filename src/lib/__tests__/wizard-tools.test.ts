@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
+import { zipSync } from 'fflate';
 import {
   ASK_BATCH_THRESHOLD,
   DEFAULT_ASK_MAX_QUESTIONS,
@@ -357,52 +358,52 @@ describe('evaluateAskCap', () => {
   });
 });
 
-describe('extractZip', () => {
-  const zip = '/tmp/skill.zip';
-  const dest = '/tmp/skill-dest';
+describe('extractZipArchive', () => {
+  let dest: string;
 
-  it('falls through to the next tool when one is missing', () => {
-    const calls: string[] = [];
-    const exec = ((cmd: string) => {
-      calls.push(cmd);
-      if (cmd === 'unzip') throw new Error('spawnSync unzip ENOENT');
-    }) as any;
-    expect(__test.extractZip(zip, dest, exec)).toBe('tar');
-    expect(calls).toEqual(['unzip', 'tar']);
+  beforeEach(() => {
+    dest = fs.mkdtempSync(path.join(os.tmpdir(), 'wizard-zip-'));
   });
 
-  it('names every attempted tool when all of them fail', () => {
-    const exec = ((cmd: string) => {
-      throw new Error(`spawnSync ${cmd} ENOENT`);
-    }) as any;
-    expect(() => __test.extractZip(zip, dest, exec)).toThrow(
-      /unzip.*ENOENT.*tar.*ENOENT/s,
+  afterEach(() => {
+    cleanup(dest);
+  });
+
+  it('writes files and nested directories from the archive', () => {
+    const zip = zipSync({
+      'SKILL.md': new TextEncoder().encode('# skill'),
+      'references/deep/notes.md': new TextEncoder().encode('notes'),
+    });
+
+    const written = __test.extractZipArchive(zip, dest);
+
+    expect(written).toBe(2);
+    expect(fs.readFileSync(path.join(dest, 'SKILL.md'), 'utf8')).toBe(
+      '# skill',
     );
+    expect(
+      fs.readFileSync(path.join(dest, 'references/deep/notes.md'), 'utf8'),
+    ).toBe('notes');
   });
 
-  it('adds PowerShell Expand-Archive as the Windows last resort, with quotes escaped', () => {
-    const platform = Object.getOwnPropertyDescriptor(process, 'platform')!;
-    Object.defineProperty(process, 'platform', { value: 'win32' });
-    try {
-      const attempts = __test.zipExtractionAttempts(
-        "C:\\Users\\o'brien\\skill.zip",
-        'C:\\dest',
-      );
-      expect(attempts.map((a) => a.tool)).toEqual([
-        'unzip',
-        'tar',
-        'powershell.exe',
-      ]);
-      const command = attempts[2].args.join(' ');
-      expect(command).toContain('Expand-Archive');
-      expect(command).toContain("o''brien");
-    } finally {
-      Object.defineProperty(process, 'platform', platform);
-    }
+  it('rejects zip-slip entries that escape the destination', () => {
+    const zip = zipSync({
+      '../evil.txt': new TextEncoder().encode('pwned'),
+    });
+
+    expect(() => __test.extractZipArchive(zip, dest)).toThrow(
+      /escapes destination/,
+    );
+    expect(fs.existsSync(path.join(dest, '..', 'evil.txt'))).toBe(false);
   });
 
-  it('keeps the POSIX attempt list free of PowerShell', () => {
-    const tools = __test.zipExtractionAttempts(zip, dest).map((a) => a.tool);
-    expect(tools).toEqual(['unzip', 'tar']);
+  it('rejects absolute entry paths', () => {
+    const zip = zipSync({
+      '/etc/evil.txt': new TextEncoder().encode('pwned'),
+    });
+
+    expect(() => __test.extractZipArchive(zip, dest)).toThrow(
+      /escapes destination/,
+    );
   });
 });

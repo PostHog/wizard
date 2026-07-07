@@ -11,11 +11,10 @@
 
 import path from 'path';
 import fs from 'fs';
-import { execFileSync } from 'child_process';
+import { unzipSync } from 'fflate';
 import { z } from 'zod';
 import { logToFile } from '@utils/debug';
 import { analytics } from '@utils/analytics';
-import { skillTmpPath } from '@utils/paths';
 import { writeJsonAtomic, makeMutex } from '@utils/atomic-ledger';
 import type { PackageManagerDetector } from './detection/package-manager';
 import {
@@ -106,49 +105,24 @@ export async function fetchSkillMenu(
   }
 }
 
-// Stock Windows has no unzip; its tar (and macOS's) is bsdtar, which reads
-// zip — GNU tar on Linux doesn't, so unzip stays first.
-function zipExtractionAttempts(
-  zipFile: string,
-  destDir: string,
-): Array<{ tool: string; args: string[] }> {
-  const attempts = [
-    { tool: 'unzip', args: ['-o', zipFile, '-d', destDir] },
-    { tool: 'tar', args: ['-xf', zipFile, '-C', destDir] },
-  ];
-  if (process.platform === 'win32') {
-    const quote = (s: string) => `'${s.replace(/'/g, "''")}'`;
-    attempts.push({
-      tool: 'powershell.exe',
-      args: [
-        '-NoProfile',
-        '-NonInteractive',
-        '-Command',
-        `Expand-Archive -LiteralPath ${quote(zipFile)} -DestinationPath ${quote(
-          destDir,
-        )} -Force`,
-      ],
-    });
-  }
-  return attempts;
-}
-
-/** Extract with the first tool that works; throws naming every failure. */
-function extractZip(
-  zipFile: string,
-  destDir: string,
-  exec: typeof execFileSync = execFileSync,
-): string {
-  const failures: string[] = [];
-  for (const { tool, args } of zipExtractionAttempts(zipFile, destDir)) {
-    try {
-      exec(tool, args, { timeout: 30000 });
-      return tool;
-    } catch (err: any) {
-      failures.push(`${tool}: ${err.message}`);
+/** Extract a zip buffer, refusing entries that escape destDir (zip-slip). */
+function extractZipArchive(zip: Uint8Array, destDir: string): number {
+  const root = path.resolve(destDir);
+  let written = 0;
+  for (const [entryPath, data] of Object.entries(unzipSync(zip))) {
+    const target = path.resolve(root, entryPath);
+    if (target !== root && !target.startsWith(root + path.sep)) {
+      throw new Error(`zip entry escapes destination: ${entryPath}`);
     }
+    if (entryPath.endsWith('/')) {
+      fs.mkdirSync(target, { recursive: true });
+      continue;
+    }
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    fs.writeFileSync(target, data);
+    written++;
   }
-  throw new Error(`could not extract zip — ${failures.join('; ')}`);
+  return written;
 }
 
 /**
@@ -156,35 +130,29 @@ function extractZip(
  * By default installs to `<installDir>/.claude/skills/<id>/`.
  * Pass `skillsRoot` to override the base directory (e.g. `.posthog/skills`).
  */
-export function downloadSkill(
+export async function downloadSkill(
   skillEntry: SkillEntry,
   installDir: string,
   skillsRoot?: string,
-): { success: boolean; error?: string } {
+): Promise<{ success: boolean; error?: string }> {
   const skillDir = skillsRoot
     ? path.join(installDir, skillsRoot, skillEntry.id)
     : path.join(installDir, '.claude', 'skills', skillEntry.id);
-  const tmpFile = skillTmpPath(skillEntry.id);
   let step: 'download' | 'extract' = 'download';
 
   try {
     fs.mkdirSync(skillDir, { recursive: true });
-    // %TEMP% may not exist on Windows, and curl won't create it.
-    fs.mkdirSync(path.dirname(tmpFile), { recursive: true });
-    execFileSync('curl', ['-sL', skillEntry.downloadUrl, '-o', tmpFile], {
-      timeout: 30000,
+    const resp = await fetch(skillEntry.downloadUrl, {
+      signal: AbortSignal.timeout(30000),
     });
+    if (!resp.ok) throw new Error(`download failed with HTTP ${resp.status}`);
+    const zip = new Uint8Array(await resp.arrayBuffer());
     step = 'extract';
-    const extractedWith = extractZip(tmpFile, skillDir);
+    const fileCount = extractZipArchive(zip, skillDir);
     fs.writeFileSync(path.join(skillDir, '.posthog-wizard'), '');
-    try {
-      fs.unlinkSync(tmpFile);
-    } catch {
-      /* ignore cleanup errors */
-    }
 
     logToFile(
-      `downloadSkill: installed ${skillEntry.id} from ${skillEntry.downloadUrl} (extracted via ${extractedWith})`,
+      `downloadSkill: installed ${skillEntry.id} from ${skillEntry.downloadUrl} (${fileCount} files)`,
     );
     return { success: true };
   } catch (err: any) {
@@ -234,7 +202,7 @@ export async function installSkillById(
     .find((s) => s.id === skillId);
   if (!skill) return { kind: 'skill-not-found', skillId };
 
-  const result = downloadSkill(skill, installDir, skillsRoot);
+  const result = await downloadSkill(skill, installDir, skillsRoot);
   if (!result.success) {
     return { kind: 'download-failed', message: result.error ?? 'unknown' };
   }
@@ -816,7 +784,7 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
           'Skill ID from the skill menu (e.g., "integration-nextjs-app-router")',
         ),
     },
-    (args: { skillId: string }) => {
+    async (args: { skillId: string }) => {
       if (!/^[a-z0-9][a-z0-9_-]*$/.test(args.skillId)) {
         return {
           content: [
@@ -844,7 +812,7 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
         };
       }
 
-      const result = downloadSkill(skill, workingDirectory);
+      const result = await downloadSkill(skill, workingDirectory);
       if (result.success) {
         return {
           content: [
@@ -1275,8 +1243,7 @@ export const WIZARD_TOOL_NAMES = {
 // ---------------------------------------------------------------------------
 
 export const __test = {
-  extractZip,
-  zipExtractionAttempts,
+  extractZipArchive,
   writeLedgerAtomic,
   readLedger,
   applyAuditAdditions,
