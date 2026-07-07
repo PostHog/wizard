@@ -21,6 +21,7 @@ import { McpSuggestedPromptsDemo } from './demos/McpSuggestedPromptsDemo.js';
 import { KeyboardHintsDemo } from './demos/KeyboardHintsDemo.js';
 import { AuditChecksDemo } from './demos/AuditChecksDemo.js';
 import { LearnDeckDemo } from './demos/LearnDeckDemo.js';
+import { TipsDemo } from './demos/TipsDemo.js';
 import { EndScreensDemo } from './demos/EndScreensDemo.js';
 import { AiOptInDemo } from './demos/AiOptInDemo.js';
 
@@ -78,6 +79,11 @@ export const PlaygroundApp = ({ store }: PlaygroundAppProps) => {
       id: 'learn-deck',
       label: 'Learn deck',
       component: <LearnDeckDemo store={store} />,
+    },
+    {
+      id: 'tips',
+      label: 'Tips',
+      component: <TipsDemo store={store} />,
     },
     {
       id: 'end-screens',
