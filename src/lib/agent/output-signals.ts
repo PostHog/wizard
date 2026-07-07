@@ -96,12 +96,14 @@ export class AgentOutputSignals {
         /[.*+?^${}()|[\]\\]/g,
         '\\$&',
       )}\\s*(.+?)(?:\\n|$)`,
-      's',
+      'gs',
     );
-    const text = this.text.match(re)?.[1]?.trim() || undefined;
-    // Literal models echo fragments of the ask itself ("Your remark here",
-    // "followed by the remark itself.") — an echo is not a remark.
-    if (text && REMARK_INSTRUCTION.includes(text)) return undefined;
-    return text;
+    // Return the first marker match whose text isn't an echo of the ask.
+    let match: RegExpExecArray | null;
+    while ((match = re.exec(this.text)) !== null) {
+      const text = match[1]?.trim();
+      if (text && !REMARK_INSTRUCTION.includes(text)) return text;
+    }
+    return undefined;
   }
 }

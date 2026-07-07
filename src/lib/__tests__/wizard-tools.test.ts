@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
+import { zipSync } from 'fflate';
 import {
   ASK_BATCH_THRESHOLD,
   DEFAULT_ASK_MAX_QUESTIONS,
@@ -354,5 +355,55 @@ describe('evaluateAskCap', () => {
       reason: 'max_questions',
       message: expect.any(String),
     });
+  });
+});
+
+describe('extractZipArchive', () => {
+  let dest: string;
+
+  beforeEach(() => {
+    dest = fs.mkdtempSync(path.join(os.tmpdir(), 'wizard-zip-'));
+  });
+
+  afterEach(() => {
+    cleanup(dest);
+  });
+
+  it('writes files and nested directories from the archive', () => {
+    const zip = zipSync({
+      'SKILL.md': new TextEncoder().encode('# skill'),
+      'references/deep/notes.md': new TextEncoder().encode('notes'),
+    });
+
+    const written = __test.extractZipArchive(zip, dest);
+
+    expect(written).toBe(2);
+    expect(fs.readFileSync(path.join(dest, 'SKILL.md'), 'utf8')).toBe(
+      '# skill',
+    );
+    expect(
+      fs.readFileSync(path.join(dest, 'references/deep/notes.md'), 'utf8'),
+    ).toBe('notes');
+  });
+
+  it('rejects zip-slip entries that escape the destination', () => {
+    const zip = zipSync({
+      '../evil.txt': new TextEncoder().encode('pwned'),
+    });
+
+    expect(() => __test.extractZipArchive(zip, dest)).toThrow(
+      /escapes destination/,
+    );
+    expect(fs.existsSync(path.join(dest, '..', 'evil.txt'))).toBe(false);
+  });
+
+  it('rejects absolute entry paths', () => {
+    const zip = zipSync({
+      '/etc/evil.txt': new TextEncoder().encode('pwned'),
+    });
+
+    expect(() => __test.extractZipArchive(zip, dest)).toThrow(
+      /escapes destination/,
+    );
   });
 });
