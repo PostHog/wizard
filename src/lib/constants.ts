@@ -151,8 +151,7 @@ export const WIZARD_CONTACT_EMAIL = 'wizard@posthog.com';
 export const REMOTE_SKILLS_BASE_URL =
   'https://github.com/PostHog/context-mill/releases/latest/download';
 /** Local base URL when `--local-mcp` is set (served by context-mill dev server). */
-export const LOCAL_SKILLS_BASE_URL =
-  process.env.WIZARD_LOCAL_SKILLS_BASE_URL || 'http://localhost:8765';
+export const LOCAL_SKILLS_BASE_URL = 'http://localhost:8765';
 
 /**
  * Pick the skills base URL based on the session's localMcp flag.
