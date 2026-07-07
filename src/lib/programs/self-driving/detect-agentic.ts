@@ -43,6 +43,8 @@ export type IntegrationProject = {
   hasPostHog: boolean;
   /** integration != null && !hasPostHog — PostHog can be set up here. */
   instrumentable: boolean;
+  /** hasPostHog: skip integration and continue straight to Self-driving. */
+  continuable: boolean;
   /** Why the project can't be set up (only when !instrumentable). */
   reason?: string;
 };
@@ -68,8 +70,8 @@ function classify(
   return { instrumentable: true };
 }
 
-/** Map a generic detection report into classified integration projects. */
-function toIntegrationReport(
+/** Map a detection report into classified projects (exported for tests). */
+export function toIntegrationReport(
   report: AgenticDetectionReport,
 ): IntegrationDetectionReport {
   return {
@@ -84,6 +86,7 @@ function toIntegrationReport(
         framework: p.framework,
         integration,
         hasPostHog: p.hasPostHog,
+        continuable: p.hasPostHog,
         ...classify(integration, p.hasPostHog),
       };
     }),
