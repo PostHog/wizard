@@ -74,8 +74,8 @@ export const POSTHOG_MANIFESTS = [
   'Cargo.toml',
 ];
 
-// Sub-app dirs checked alongside the root (ios/android: RN/Flutter native
-// shells); deliberately not a recursive tree walk.
+// Named sub-app dirs always checked (ios/android: RN/Flutter native shells).
+// scanDirs unions these with a bounded depth-2 walk of the install dir.
 const POSTHOG_DIRS = [
   '.',
   'app',
