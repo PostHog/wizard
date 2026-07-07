@@ -24,6 +24,10 @@ import {
   parseEnvKeys,
   resolveEnvPath,
 } from '@lib/wizard-tools';
+import {
+  detectNodePackageManagers,
+  type PackageManagerDetector,
+} from '@lib/detection/package-manager';
 
 function text(s: string): {
   content: [{ type: 'text'; text: string }];
@@ -35,10 +39,14 @@ function text(s: string): {
 export interface PiToolsContext {
   workingDirectory: string;
   skillsBaseUrl: string;
+  /** Framework's package-manager detector. Defaults to Node detection. */
+  detectPackageManager?: PackageManagerDetector;
 }
 
 export function createWizardPiTools(ctx: PiToolsContext): ToolDefinition[] {
   const { workingDirectory, skillsBaseUrl } = ctx;
+  const detectPackageManager =
+    ctx.detectPackageManager ?? detectNodePackageManagers;
 
   // Fetch the skill menu at most once per run — the agent calls load_skill_menu
   // 2-3× otherwise, each a fresh HTTP round-trip (profiled slowness).
@@ -169,5 +177,22 @@ export function createWizardPiTools(ctx: PiToolsContext): ToolDefinition[] {
     },
   });
 
-  return [loadSkillMenu, installSkill, checkEnvKeys, setEnvValues];
+  const detectPm = defineTool({
+    name: 'detect_package_manager',
+    label: 'Detect package manager',
+    description:
+      "Detect the project's package manager(s). Returns the name and the install command for each. Call this before installing a dependency, then RUN the returned install command (with the posthog package) via bash — the SDK package must end up in the project manifest, or the app will not build.",
+    promptSnippet:
+      'detect_package_manager() — find the PM + install command, then run it via bash to add the SDK',
+    parameters: Type.Object({}),
+    async execute() {
+      const result = await detectPackageManager(workingDirectory);
+      logToFile(
+        `[pi] detect_package_manager: ${result.detected.length} detected`,
+      );
+      return text(JSON.stringify(result, null, 2));
+    },
+  });
+
+  return [loadSkillMenu, installSkill, checkEnvKeys, setEnvValues, detectPm];
 }

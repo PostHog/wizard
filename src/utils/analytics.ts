@@ -273,8 +273,8 @@ export class Analytics {
       distinctId: this.distinctId ?? this.anonymousId,
       event: 'setup wizard finished',
       properties: {
-        // Hoisted out of `tags` so the run's terminal event is filterable by
-        // run, and joins the session when one was opened (post-OAuth runs).
+        // Flat for filtering; the nested `tags` snapshot stays for back-compat.
+        ...this.tags,
         run_id: this._runId,
         ...(this.sessionId ? { $session_id: this.sessionId } : {}),
         status,

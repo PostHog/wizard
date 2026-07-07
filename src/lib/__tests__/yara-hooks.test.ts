@@ -6,6 +6,7 @@ import {
   repeatBlockReason,
   writeScanReport,
   captureScanReport,
+  recordExternalScan,
   resetScanReport,
 } from '@lib/yara-hooks';
 import { scan, triageMatches } from '@posthog/warlock';
@@ -1047,6 +1048,57 @@ describe('yara-hooks', () => {
       const reported = JSON.stringify(call?.[1] ?? {});
       expect(reported).not.toContain('secret content');
       expect(reported).toContain('true_positive'); // verdict is safe to report
+    });
+  });
+
+  // ── recordExternalScan (pi's scan path) ─────────────────────
+  describe('recordExternalScan', () => {
+    it('counts clean scans so the end-of-run report fires', () => {
+      recordExternalScan('PreToolUse', 'Bash', [], 'blocked');
+      captureScanReport();
+
+      expect(mockAnalytics.analytics.wizardCapture).toHaveBeenCalledWith(
+        'yara scan report',
+        expect.objectContaining({ total_scans: 1, violation_count: 0 }),
+      );
+    });
+
+    it('routes violations through the shared match reporting', () => {
+      recordExternalScan(
+        'PostToolUse',
+        'Write',
+        [
+          {
+            rule: 'hardcoded_posthog_host',
+            severity: 'high',
+            category: 'posthog_config',
+            description: 'Hardcoded PostHog host',
+          },
+        ],
+        'blocked',
+      );
+
+      expect(mockAnalytics.analytics.wizardCapture).toHaveBeenCalledWith(
+        'yara rule matched',
+        expect.objectContaining({
+          rule: 'hardcoded_posthog_host',
+          action: 'blocked',
+          phase: 'PostToolUse',
+          tool: 'Write',
+        }),
+      );
+
+      captureScanReport();
+      expect(mockAnalytics.analytics.wizardCapture).toHaveBeenCalledWith(
+        'yara scan report',
+        expect.objectContaining({
+          total_scans: 1,
+          violation_count: 1,
+          violations: expect.arrayContaining([
+            expect.objectContaining({ rule: 'hardcoded_posthog_host' }),
+          ]),
+        }),
+      );
     });
   });
 });
