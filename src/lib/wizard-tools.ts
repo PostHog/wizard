@@ -106,6 +106,51 @@ export async function fetchSkillMenu(
   }
 }
 
+// Stock Windows has no unzip; its tar (and macOS's) is bsdtar, which reads
+// zip — GNU tar on Linux doesn't, so unzip stays first.
+function zipExtractionAttempts(
+  zipFile: string,
+  destDir: string,
+): Array<{ tool: string; args: string[] }> {
+  const attempts = [
+    { tool: 'unzip', args: ['-o', zipFile, '-d', destDir] },
+    { tool: 'tar', args: ['-xf', zipFile, '-C', destDir] },
+  ];
+  if (process.platform === 'win32') {
+    const quote = (s: string) => `'${s.replace(/'/g, "''")}'`;
+    attempts.push({
+      tool: 'powershell.exe',
+      args: [
+        '-NoProfile',
+        '-NonInteractive',
+        '-Command',
+        `Expand-Archive -LiteralPath ${quote(zipFile)} -DestinationPath ${quote(
+          destDir,
+        )} -Force`,
+      ],
+    });
+  }
+  return attempts;
+}
+
+/** Extract with the first tool that works; throws naming every failure. */
+function extractZip(
+  zipFile: string,
+  destDir: string,
+  exec: typeof execFileSync = execFileSync,
+): string {
+  const failures: string[] = [];
+  for (const { tool, args } of zipExtractionAttempts(zipFile, destDir)) {
+    try {
+      exec(tool, args, { timeout: 30000 });
+      return tool;
+    } catch (err: any) {
+      failures.push(`${tool}: ${err.message}`);
+    }
+  }
+  throw new Error(`could not extract zip — ${failures.join('; ')}`);
+}
+
 /**
  * Download and extract a skill.
  * By default installs to `<installDir>/.claude/skills/<id>/`.
@@ -120,15 +165,17 @@ export function downloadSkill(
     ? path.join(installDir, skillsRoot, skillEntry.id)
     : path.join(installDir, '.claude', 'skills', skillEntry.id);
   const tmpFile = skillTmpPath(skillEntry.id);
+  let step: 'download' | 'extract' = 'download';
 
   try {
     fs.mkdirSync(skillDir, { recursive: true });
+    // %TEMP% may not exist on Windows, and curl won't create it.
+    fs.mkdirSync(path.dirname(tmpFile), { recursive: true });
     execFileSync('curl', ['-sL', skillEntry.downloadUrl, '-o', tmpFile], {
       timeout: 30000,
     });
-    execFileSync('unzip', ['-o', tmpFile, '-d', skillDir], {
-      timeout: 30000,
-    });
+    step = 'extract';
+    const extractedWith = extractZip(tmpFile, skillDir);
     fs.writeFileSync(path.join(skillDir, '.posthog-wizard'), '');
     try {
       fs.unlinkSync(tmpFile);
@@ -137,11 +184,18 @@ export function downloadSkill(
     }
 
     logToFile(
-      `downloadSkill: installed ${skillEntry.id} from ${skillEntry.downloadUrl}`,
+      `downloadSkill: installed ${skillEntry.id} from ${skillEntry.downloadUrl} (extracted via ${extractedWith})`,
     );
     return { success: true };
   } catch (err: any) {
     logToFile(`downloadSkill: error: ${err.message}`);
+    // A skill-less run still reports success — keep the failure visible.
+    analytics.wizardCapture('skill install failed', {
+      skill_id: skillEntry.id,
+      step,
+      platform: process.platform,
+      error: String(err.message).slice(0, 500),
+    });
     return { success: false, error: err.message };
   }
 }
@@ -801,6 +855,16 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
           ],
         };
       } else {
+        // The agent only sees a tool-result string — report the failure too.
+        analytics.captureException(
+          new Error('Skill install failed: download-failed'),
+          {
+            source: 'install_skill_tool',
+            skill_id: args.skillId,
+            error_detail: String(result.error).slice(0, 500),
+            platform: process.platform,
+          },
+        );
         return {
           content: [
             {
@@ -1211,6 +1275,8 @@ export const WIZARD_TOOL_NAMES = {
 // ---------------------------------------------------------------------------
 
 export const __test = {
+  extractZip,
+  zipExtractionAttempts,
   writeLedgerAtomic,
   readLedger,
   applyAuditAdditions,

@@ -21,6 +21,7 @@ import type { LLMProvider, ScanMatch } from '@posthog/warlock';
 import { wizardCanUseTool } from '@lib/agent/agent-interface';
 import {
   isWizardDocumentationPath,
+  recordExternalScan,
   scanAndTriage,
   type ScanContext,
 } from '@lib/yara-hooks';
@@ -29,6 +30,16 @@ import {
   type TriageGatewayAuth,
 } from '@lib/agent/triage-provider';
 import { logToFile } from '@utils/debug';
+
+/** warlock ScanMatch → the report shape `recordExternalScan` expects. */
+function toReportViolation(m: ScanMatch) {
+  return {
+    rule: m.rule,
+    severity: m.metadata.severity ?? 'unknown',
+    category: m.metadata.category ?? 'unknown',
+    description: m.metadata.description ?? '',
+  };
+}
 
 /** Runaway backstop: hard cap on tool calls per (sub)agent session. */
 export const MAX_TOOL_CALLS = 250;
@@ -114,21 +125,31 @@ async function preExecutionYaraBlock(
   let content: string;
   let ctx: ScanContext;
   let triage: LLMProvider | undefined;
+  // Report labels for the scan report (phase/tool), matching the anthropic
+  // hooks so pi and anthropic runs read the same in telemetry.
+  let phase: string;
+  let tool: string;
   switch (toolName) {
     case 'bash':
       content = str(input.command);
       ctx = 'command';
       triage = undefined;
+      phase = 'PreToolUse';
+      tool = 'Bash';
       break;
     case 'write':
       content = str(input.content);
       ctx = 'output';
       triage = llmProvider;
+      phase = 'PostToolUse';
+      tool = 'Write';
       break;
     case 'edit':
       content = JSON.stringify(input.edits ?? '');
       ctx = 'output';
       triage = llmProvider;
+      phase = 'PostToolUse';
+      tool = 'Edit';
       break;
     default:
       return undefined;
@@ -139,6 +160,7 @@ async function preExecutionYaraBlock(
   if (ctx === 'output' && isWizardDocumentationPath(str(input.path))) {
     matches = matches.filter((m) => m.metadata.category !== 'posthog_pii');
   }
+  recordExternalScan(phase, tool, matches.map(toReportViolation), 'blocked');
   if (matches.length === 0) return undefined;
 
   return blockMessage(matches[0]);
@@ -253,6 +275,12 @@ export function createSecurityExtension(ctx: ToolGateContext = {}): {
         // 'input'-context rules (prompt injection in read content), with
         // triage — same policy as the anthropic PostToolUse Read hook.
         const matches = await scanAndTriage(text, 'input', llmProvider);
+        recordExternalScan(
+          'PostToolUse',
+          event.toolName === 'read' ? 'Read' : 'Bash',
+          matches.map(toReportViolation),
+          'aborted',
+        );
         if (matches.length > 0) {
           state.criticalViolation = true;
           logToFile(

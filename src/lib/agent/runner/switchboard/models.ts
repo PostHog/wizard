@@ -11,10 +11,13 @@
  */
 import {
   DEFAULT_AGENT_MODEL,
+  SONNET_5_MODEL,
   OPUS_MODEL,
   HAIKU_MODEL,
   GPT5_MODEL,
+  GPT5_4_MODEL,
   GPT5_MINI_MODEL,
+  WIZARD_PI_EFFORT_FLAG_KEY,
 } from '@lib/constants';
 
 /** Reasoning effort. pi maps it to `reasoning_effort` for openai-completions. */
@@ -36,11 +39,13 @@ export interface ModelCapabilities {
 /** Explicit per-model traits. Anything absent falls back to `defaultCaps`. */
 export const MODEL_CAPABILITIES: Record<string, ModelCapabilities> = {
   [DEFAULT_AGENT_MODEL]: { reasoning: true }, // claude-sonnet-4-6
+  [SONNET_5_MODEL]: { reasoning: true },
   [OPUS_MODEL]: { reasoning: true },
   [HAIKU_MODEL]: { reasoning: true },
   // Flagship openai reasoning model at low effort: capable but kept fast, so a
   // run finishes in a few minutes instead of the long high-effort default.
   [GPT5_MODEL]: { reasoning: true, thinkingLevel: 'low' },
+  [GPT5_4_MODEL]: { reasoning: true, thinkingLevel: 'low' },
   // The pi runner's paired model — a smaller openai reasoning model. Medium
   // effort: enough to follow the skill's setup completely, still fast.
   [GPT5_MINI_MODEL]: { reasoning: true, thinkingLevel: 'medium' },
@@ -59,6 +64,24 @@ function defaultCaps(modelId: string): ModelCapabilities {
 }
 
 /** Capabilities for a gateway model id, table override then transport default. */
-export function modelCapabilities(modelId: string): ModelCapabilities {
-  return MODEL_CAPABILITIES[modelId] ?? defaultCaps(modelId);
+const EFFORT_FLAG_VARIANTS: readonly ThinkingLevel[] = [
+  'minimal',
+  'low',
+  'medium',
+  'high',
+  'xhigh',
+];
+
+export function modelCapabilities(
+  modelId: string,
+  flags: Record<string, string> = {},
+): ModelCapabilities {
+  const caps = MODEL_CAPABILITIES[modelId] ?? defaultCaps(modelId);
+  // `wizard-pi-effort` overrides the table for reasoning models only; an
+  // unknown variant is ignored.
+  const effort = flags[WIZARD_PI_EFFORT_FLAG_KEY] as ThinkingLevel;
+  if (caps.reasoning && EFFORT_FLAG_VARIANTS.includes(effort)) {
+    return { ...caps, thinkingLevel: effort };
+  }
+  return caps;
 }

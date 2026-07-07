@@ -356,3 +356,53 @@ describe('evaluateAskCap', () => {
     });
   });
 });
+
+describe('extractZip', () => {
+  const zip = '/tmp/skill.zip';
+  const dest = '/tmp/skill-dest';
+
+  it('falls through to the next tool when one is missing', () => {
+    const calls: string[] = [];
+    const exec = ((cmd: string) => {
+      calls.push(cmd);
+      if (cmd === 'unzip') throw new Error('spawnSync unzip ENOENT');
+    }) as any;
+    expect(__test.extractZip(zip, dest, exec)).toBe('tar');
+    expect(calls).toEqual(['unzip', 'tar']);
+  });
+
+  it('names every attempted tool when all of them fail', () => {
+    const exec = ((cmd: string) => {
+      throw new Error(`spawnSync ${cmd} ENOENT`);
+    }) as any;
+    expect(() => __test.extractZip(zip, dest, exec)).toThrow(
+      /unzip.*ENOENT.*tar.*ENOENT/s,
+    );
+  });
+
+  it('adds PowerShell Expand-Archive as the Windows last resort, with quotes escaped', () => {
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')!;
+    Object.defineProperty(process, 'platform', { value: 'win32' });
+    try {
+      const attempts = __test.zipExtractionAttempts(
+        "C:\\Users\\o'brien\\skill.zip",
+        'C:\\dest',
+      );
+      expect(attempts.map((a) => a.tool)).toEqual([
+        'unzip',
+        'tar',
+        'powershell.exe',
+      ]);
+      const command = attempts[2].args.join(' ');
+      expect(command).toContain('Expand-Archive');
+      expect(command).toContain("o''brien");
+    } finally {
+      Object.defineProperty(process, 'platform', platform);
+    }
+  });
+
+  it('keeps the POSIX attempt list free of PowerShell', () => {
+    const tools = __test.zipExtractionAttempts(zip, dest).map((a) => a.tool);
+    expect(tools).toEqual(['unzip', 'tar']);
+  });
+});

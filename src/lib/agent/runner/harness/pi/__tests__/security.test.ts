@@ -85,6 +85,15 @@ describe('pi-security: blocked-action corpus (parity with the anthropic fence)',
     expect(await block('bash', { command: 'pnpm tsc' })).toBe(false);
   });
 
+  test('allows the `i` install shorthand without widening to other i-commands', async () => {
+    expect(
+      await block('bash', { command: 'npm i posthog-js --no-audit --no-fund' }),
+    ).toBe(false);
+    expect(await block('bash', { command: 'pnpm i' })).toBe(false);
+    expect(await block('bash', { command: 'bun i posthog-js' })).toBe(false);
+    expect(await block('bash', { command: 'npm init' })).toBe(true);
+  });
+
   test('allows editing source files and the sanctioned env tools', async () => {
     expect(await block('read', { path: 'index.js' })).toBe(false);
     expect(

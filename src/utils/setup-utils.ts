@@ -5,7 +5,7 @@ import { basename, isAbsolute, join, relative } from 'node:path';
 import { promisify } from 'node:util';
 
 import { withProgress } from '../telemetry';
-import { debug } from './debug';
+import { debug, logToFile } from './debug';
 import type { PackageJson } from './package-json';
 import {
   type PackageManager,
@@ -445,10 +445,22 @@ export async function getOrAskForProjectData(
     try {
       user = await fetchUserData(_options.apiKey, cloudUrl);
       roleAtOrganization = user.role_at_organization ?? null;
-    } catch {
-      // best-effort
+    } catch (err) {
+      logToFile(
+        '[ci-auth] user lookup failed:',
+        err instanceof Error ? err.message : String(err),
+      );
     }
-    if (user) analytics.identifyUser(user);
+    if (user) {
+      analytics.identifyUser(user);
+      logToFile(
+        '[ci-auth] identified via API key; flags evaluate as the key owner',
+      );
+    } else {
+      getUI().log.warn(
+        'Could not resolve the API key user (key needs user:read scope) — feature flags evaluate anonymously; user-targeted flags will not match.',
+      );
+    }
 
     return {
       host,

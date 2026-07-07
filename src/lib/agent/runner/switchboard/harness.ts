@@ -4,9 +4,14 @@
 
 import { IS_PRODUCTION_BUILD } from '@env';
 import {
+  DEFAULT_AGENT_MODEL,
+  GPT5_4_MODEL,
   GPT5_MINI_MODEL,
+  GPT5_MODEL,
   Harness,
-  WIZARD_RUNNER_FLAG_KEY,
+  SONNET_5_MODEL,
+  WIZARD_PI_MODEL_FLAG_KEY,
+  WIZARD_USE_PI_HARNESS_FLAG_KEY,
 } from '@lib/constants';
 import { logToFile } from '@utils/debug';
 import { anthropicBackend } from '../harness/anthropic';
@@ -34,33 +39,44 @@ export function getHarness(name: Harness): AgentHarness {
   return harness;
 }
 
-/**
- * The model a harness is paired with when the runner flag selects it. anthropic
- * keeps the binding model (sonnet); pi runs on the cheap/fast gpt-5-mini. A
- * `--model` CLI override still wins — it overlays after this in the chain.
- */
-const RUNNER_MODEL: Partial<Record<Harness, string>> = {
-  [Harness.pi]: GPT5_MINI_MODEL,
+/** `wizard-pi-model` variant key → gateway id (variant keys can't carry `/` or `.`). */
+const PI_MODEL_FLAG_VARIANTS: Record<string, string> = {
+  'gpt-5': GPT5_MODEL,
+  'gpt-5-4': GPT5_4_MODEL,
+  'gpt-5-mini': GPT5_MINI_MODEL,
+  'sonnet-4-6': DEFAULT_AGENT_MODEL,
+  'sonnet-5': SONNET_5_MODEL,
 };
 
-/** `wizard-runner` flag → harness override, iff the flag names a known harness. */
+/**
+ * `wizard-use-pi-harness` on → pi, paired with the `wizard-pi-model` variant
+ * (unknown/missing variant → gpt-5.4). Otherwise binding default.
+ */
 const flagRunnerOverride: Middleware<HarnessPick> = (ctx, next) => {
   const pick = next();
-  const flag = ctx.flags[WIZARD_RUNNER_FLAG_KEY];
-  if (flag !== Harness.anthropic && flag !== Harness.pi) return pick;
-  return { harness: flag, model: RUNNER_MODEL[flag] ?? pick.model };
+  if (ctx.flags[WIZARD_USE_PI_HARNESS_FLAG_KEY] !== 'true') return pick;
+  if (ctx.trace) Object.assign(ctx.trace, { harness: 'flag', model: 'flag' });
+  const variant = ctx.flags[WIZARD_PI_MODEL_FLAG_KEY] ?? '';
+  return {
+    harness: Harness.pi,
+    model: PI_MODEL_FLAG_VARIANTS[variant] ?? GPT5_4_MODEL,
+  };
 };
 
 /** `--harness` override. Dev/test only — the option is gated out of published builds. */
 const cliHarnessOverride: Middleware<HarnessPick> = (ctx, next) => {
   const pick = next();
-  return ctx.cliHarness ? { ...pick, harness: ctx.cliHarness } : pick;
+  if (!ctx.cliHarness) return pick;
+  if (ctx.trace) ctx.trace.harness = 'cli';
+  return { ...pick, harness: ctx.cliHarness };
 };
 
 /** `--model` override. Dev/test only — the option is gated out of published builds. */
 const cliModelOverride: Middleware<HarnessPick> = (ctx, next) => {
   const pick = next();
-  return ctx.cliModel ? { ...pick, model: ctx.cliModel } : pick;
+  if (!ctx.cliModel) return pick;
+  if (ctx.trace) ctx.trace.model = 'cli';
+  return { ...pick, model: ctx.cliModel };
 };
 
 // Order = precedence: CLI > flag > binding default. The prod spread collapses
@@ -79,6 +95,8 @@ export function resolveHarness(
   role = 'default',
 ): HarnessPick {
   const pick = runChain(HARNESS_MIDDLEWARE, ctx, () => {
+    if (ctx.trace)
+      Object.assign(ctx.trace, { harness: 'binding', model: 'binding' });
     const binding = PROGRAM_BINDINGS[ctx.program] ?? DEFAULT_BINDING;
     return {
       harness: binding.harness,
@@ -87,7 +105,11 @@ export function resolveHarness(
     };
   });
   logToFile(
-    `[switchboard] resolved: program=${ctx.program} harness=${pick.harness} model=${pick.model}`,
+    `[switchboard] resolved: program=${ctx.program} harness=${pick.harness}` +
+      `${ctx.trace?.harness ? ` (${ctx.trace.harness})` : ''} model=${
+        pick.model
+      }` +
+      `${ctx.trace?.model ? ` (${ctx.trace.model})` : ''}`,
   );
   return pick;
 }

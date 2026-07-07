@@ -18,7 +18,14 @@
 
 import type { WizardSession } from '../../wizard-session';
 import { analytics } from '@utils/analytics';
-import { Sequence } from '@lib/constants';
+import {
+  Sequence,
+  WIZARD_ORCHESTRATOR_FLAG_KEY,
+  WIZARD_PI_EFFORT_FLAG_KEY,
+  WIZARD_PI_MODEL_FLAG_KEY,
+  WIZARD_USE_PI_HARNESS_FLAG_KEY,
+} from '@lib/constants';
+import { logToFile } from '@utils/debug';
 import { getUI } from '../../../ui';
 import type { ProgramConfig } from '../../programs/program-step';
 import type { ProgramRun, BootstrapResult } from './shared/types';
@@ -27,6 +34,7 @@ import {
   getSequence,
   resolveBinding,
   type ProgramBinding,
+  type SwitchboardCtx,
 } from './switchboard';
 import { flushScanReport } from '../../yara-hooks';
 import { registerCleanup } from '../../../utils/wizard-abort';
@@ -116,15 +124,57 @@ function resolveProgramRunner(
   programConfig: ProgramConfig,
   boot: BootstrapResult,
 ): ProgramBinding {
-  const binding = resolveBinding({
+  const ctx = {
     program: programConfig.id,
     flags: boot.wizardFlags,
     cliHarness: session.harness,
     cliSequence: session.sequence,
     cliModel: session.model,
-  });
+  };
+  const binding = resolveBinding(ctx);
   tagBinding(boot, binding);
+  captureSwitchboardDecision(ctx, binding);
   return binding;
+}
+
+/**
+ * One event + one log line per run: what entered the switchboard, which
+ * precedence rung decided each axis, and the final pick.
+ */
+function captureSwitchboardDecision(
+  ctx: SwitchboardCtx,
+  binding: ProgramBinding,
+): void {
+  const trace = ctx.trace ?? {};
+  analytics.wizardCapture('switchboard resolved', {
+    program: ctx.program,
+    flag_use_pi_harness: ctx.flags[WIZARD_USE_PI_HARNESS_FLAG_KEY],
+    flag_pi_model: ctx.flags[WIZARD_PI_MODEL_FLAG_KEY],
+    flag_pi_effort: ctx.flags[WIZARD_PI_EFFORT_FLAG_KEY],
+    flag_orchestrator: ctx.flags[WIZARD_ORCHESTRATOR_FLAG_KEY],
+    cli_harness: ctx.cliHarness,
+    cli_sequence: ctx.cliSequence,
+    cli_model: ctx.cliModel,
+    harness_source: trace.harness,
+    model_source: trace.model,
+    sequence_source: trace.sequence,
+    harness: binding.harness,
+    model: binding.model,
+    sequence: binding.sequence,
+  });
+  logToFile(
+    `[switchboard] decision: program=${ctx.program}` +
+      ` in(use-pi-harness=${
+        ctx.flags[WIZARD_USE_PI_HARNESS_FLAG_KEY] ?? '-'
+      },` +
+      ` orchestrator=${ctx.flags[WIZARD_ORCHESTRATOR_FLAG_KEY] ?? '-'},` +
+      ` cli=${ctx.cliHarness ?? '-'}/${ctx.cliSequence ?? '-'}/${
+        ctx.cliModel ?? '-'
+      })` +
+      ` → harness=${binding.harness} (${trace.harness ?? '?'})` +
+      ` model=${binding.model} (${trace.model ?? '?'})` +
+      ` sequence=${binding.sequence} (${trace.sequence ?? '?'})`,
+  );
 }
 
 /**
