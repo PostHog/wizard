@@ -103,7 +103,15 @@ function preExecutionYaraBlock(
       phase = 'PostToolUse';
       break;
     case 'edit':
-      content = JSON.stringify(input.edits ?? '');
+      // Scan ONLY the replacement text. `edits` is [{oldText, newText}] and
+      // oldText is pre-existing file content the agent is changing — scanning
+      // it blocked edits whose *surroundings* contained a violation, and even
+      // edits that were removing one (field FPs: capture edits adjacent to
+      // existing identify() PII; pre-existing violations blocking their own
+      // replacement). Matches the anthropic path, which scans new_string only.
+      content = (Array.isArray(input.edits) ? input.edits : [])
+        .map((e) => str((e as Record<string, unknown>)?.newText))
+        .join('\n');
       target = 'Edit';
       phase = 'PostToolUse';
       break;

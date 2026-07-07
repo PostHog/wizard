@@ -77,6 +77,16 @@ const PRE_BASH: Array<{ phase: HookPhase; tool: ToolTarget }> = [
 
 // ── §1 PostHog API Violations ────────────────────────────────────
 
+// Matches warlock's posthog_pii_in_capture_call shape: a PII-named key at the
+// top level of the first `{ ... }` object, followed by `:`/`=`. The previous
+// looser patterns (`/\.capture\s*\([^)]{0,200}email/i`) matched the word
+// anywhere inside the call — event NAMES (`capture('email_verified', ...)`),
+// substrings of benign keys, and `$set` payloads all fired. Field FPs from the
+// 2026-07-07 triage: minimal-payload auth events, a benign `location` property,
+// and `$set` blocks — the exact remediation our own runtime notes tell the
+// agent to use ("move the field onto the person via identify()/$set"), so
+// matching `$set` sent agents in circles. `$set: { email }` is canonical and
+// deliberately not matched, same as warlock.
 const pii_in_capture_call: YaraRule = {
   name: 'pii_in_capture_call',
   description:
@@ -85,25 +95,23 @@ const pii_in_capture_call: YaraRule = {
   category: 'posthog_pii',
   appliesTo: POST_WRITE_EDIT,
   patterns: [
-    // Direct PII field names in capture properties
-    /\.capture\s*\([^)]{0,200}email/i,
-    /\.capture\s*\([^)]{0,200}phone/i,
-    /\.capture\s*\([^)]{0,200}full[_\s]?name/i,
-    /\.capture\s*\([^)]{0,200}first[_\s]?name/i,
-    /\.capture\s*\([^)]{0,200}last[_\s]?name/i,
-    /\.capture\s*\([^)]{0,200}(street|mailing|home|billing)[_\s]?address/i,
-    /\.capture\s*\([^)]{0,200}(ssn|social[_\s]?security)/i,
-    /\.capture\s*\([^)]{0,200}(date[_\s]?of[_\s]?birth|dob|birthday)/i,
-    /\.capture\s*\([^)]{0,200}\$ip/,
-    // identify() allows email/phone/name (standard PostHog user properties),
-    // but highly sensitive PII is still blocked in identify().
-    /\.identify\s*\([^)]{0,200}(ssn|social[_\s]?security)/i,
-    /\.identify\s*\([^)]{0,200}(card[_\s]?number|cvv|credit[_\s]?card)/i,
-    /\.identify\s*\([^)]{0,200}(date[_\s]?of[_\s]?birth|dob|birthday)/i,
-    /\.identify\s*\([^)]{0,200}(street|mailing|home|billing)[_\s]?address/i,
-    // PII in $set properties via capture (bound to same object)
-    /\$set[^}]{0,200}email/i,
-    /\$set[^}]{0,200}phone/i,
+    // posthog.capture() — all PII fields are a problem here
+    /\.capture\s*\([^{]*\{[^{}]*\b(email_address|emailAddress|emailAddr|email)\b['"]?\s*[:=]/i,
+    /\.capture\s*\([^{]*\{[^{}]*\b(phone_number|phoneNumber|phoneNum|phoneNo|phone|mobile_number|mobileNumber|mobile|telephone)\b['"]?\s*[:=]/i,
+    /\.capture\s*\([^{]*\{[^{}]*\b(full_name|fullName|legal_name|legalName)\b['"]?\s*[:=]/i,
+    /\.capture\s*\([^{]*\{[^{}]*\b(first_name|firstName|fname)\b['"]?\s*[:=]/i,
+    /\.capture\s*\([^{]*\{[^{}]*\b(last_name|lastName|family_name|familyName|surname|lname)\b['"]?\s*[:=]/i,
+    /\.capture\s*\([^{]*\{[^{}]*\b(street_address|streetAddress|home_address|homeAddress|billing_address|billingAddress|mailing_address|mailingAddress)\b['"]?\s*[:=]/i,
+    /\.capture\s*\([^{]*\{[^{}]*\b(social_security_number|socialSecurityNumber|social_security|socialSecurity|ssn)\b['"]?\s*[:=]/i,
+    /\.capture\s*\([^{]*\{[^{}]*\b(date_of_birth|dateOfBirth|birth_date|birthDate|birthday|dob)\b['"]?\s*[:=]/i,
+    /\.capture\s*\([^{]*\{[^{}]*\b(credit_card|creditCard|card_number|cardNumber|cc_number|ccNumber|cvv|cvc)\b['"]?\s*[:=]/i,
+    /\.capture\s*\([^{]*\{[^{}]*\$ip\b['"]?\s*[:=]/,
+    // posthog.identify() — email/phone/names are standard identifying fields;
+    // only sensitive PII is blocked here.
+    /\.identify\s*\([^{]*\{[^{}]*\b(social_security_number|socialSecurityNumber|social_security|socialSecurity|ssn)\b['"]?\s*[:=]/i,
+    /\.identify\s*\([^{]*\{[^{}]*\b(credit_card|creditCard|card_number|cardNumber|cc_number|ccNumber|cvv|cvc)\b['"]?\s*[:=]/i,
+    /\.identify\s*\([^{]*\{[^{}]*\b(date_of_birth|dateOfBirth|birth_date|birthDate|birthday|dob)\b['"]?\s*[:=]/i,
+    /\.identify\s*\([^{]*\{[^{}]*\b(street_address|streetAddress|home_address|homeAddress|billing_address|billingAddress|mailing_address|mailingAddress)\b['"]?\s*[:=]/i,
   ],
 };
 
@@ -151,7 +159,13 @@ const hardcoded_posthog_host: YaraRule = {
   severity: 'high',
   category: 'posthog_hardcoded_key',
   appliesTo: POST_WRITE_EDIT,
-  patterns: [/['"]https:\/\/(us|eu)\.i\.posthog\.com['"]/],
+  patterns: [
+    // A host literal in FALLBACK position is the documented pattern
+    // (`process.env.POSTHOG_HOST || 'https://us.i.posthog.com'`, `?? '…'`,
+    // python `or '…'`) — the env var still wins, so don't block it. The
+    // lookbehind skips literals directly preceded by a fallback operator.
+    /(?<!(\|\||\?\?|\bor)\s{0,4})['"]https:\/\/(us|eu)\.i\.posthog\.com['"]/,
+  ],
 };
 
 const session_recording_disabled: YaraRule = {

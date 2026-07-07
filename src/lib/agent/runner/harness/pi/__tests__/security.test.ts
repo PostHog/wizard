@@ -152,3 +152,35 @@ describe('pi-security: extension state machine (fail-closed + runaway + latch)',
     expect(state.toolCalls).toBeGreaterThan(MAX_TOOL_CALLS);
   });
 });
+
+describe('pi-security: edit scanning is scoped to the replacement text', () => {
+  test('an edit whose oldText holds a violation but whose newText is clean passes', () => {
+    // Field FP: pre-existing violations in the repo blocked their own
+    // replacement — the scan covered oldText (existing file content).
+    expect(
+      evaluateToolCall('edit', {
+        path: 'src/analytics.ts',
+        edits: [
+          {
+            oldText: `posthog.capture('signup', { email: user.email })`,
+            newText: `posthog.capture('signup', { plan: user.plan })`,
+          },
+        ],
+      }).block,
+    ).toBe(false);
+  });
+
+  test('an edit whose newText introduces a violation still blocks', () => {
+    const decision = evaluateToolCall('edit', {
+      path: 'src/analytics.ts',
+      edits: [
+        {
+          oldText: `posthog.capture('signup')`,
+          newText: `posthog.capture('signup', { email: user.email })`,
+        },
+      ],
+    });
+    expect(decision.block).toBe(true);
+    expect(decision.reason).toContain('pii_in_capture_call');
+  });
+});
