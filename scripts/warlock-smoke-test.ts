@@ -1,36 +1,14 @@
 /**
- * Real-warlock rule smoke test — the release gate for @posthog/warlock bumps.
- *
- * The wizard unit suite MOCKS @posthog/warlock (ESM + WASM can't load under the
- * test runner), so it validates the wizard's decision logic but never warlock's
- * actual rule behavior. This script imports the REAL package and scans one
- * representative fixture per rule CATEGORY, asserting the category still fires.
- * It runs in the `postbuild` chain, so `pnpm build` — and therefore every CI
- * build and every publish — fails if a pinned warlock bump guts a category the
- * wizard depends on.
- *
- * Scope, deliberately: one fixture per category, NOT per rule. Exhaustive
- * per-rule +/- coverage is warlock's own job (every rule ships with a positive
- * and negative test in the warlock repo); duplicating it here would just drift.
- * This gate answers a narrower question — "does a bump still detect each class
- * of threat the wizard acts on?" — plus the handful of wizard-specific false-
- * positive contracts that have actually bitten us (PII allows $set / $set_once,
- * and doesn't bleed across calls).
- *
- * A coverage guard below asserts every value in warlock's exported CATEGORIES
- * has a fixture, so adding a category upstream fails this test until someone
- * decides whether the wizard should gate it.
- *
- * This is the safety net that replaces the `wizard-warlock-disabled` kill-switch
- * flag: instead of disabling a bad scanner remotely after it ships, we pin the
- * version and refuse to ship a version whose rules don't behave.
+ * Release gate for @posthog/warlock bumps. The unit suite mocks warlock, so
+ * nothing exercises the real rules; this scans one fixture per category with the
+ * real package and fails `pnpm build` (→ every CI build + publish) if a bump
+ * guts a category. One-per-category, not per-rule — per-rule coverage is
+ * warlock's job. Replaces the removed `wizard-warlock-disabled` kill switch.
  */
 
 import { scan, CATEGORIES, type Category } from '@posthog/warlock';
 
-// Secret-shaped fixtures are assembled at runtime so no scannable secret literal
-// is ever committed (would trip the repo's secret scanners and warlock's own
-// self-scan). warlock still sees the full pattern at scan() time.
+// Assembled at runtime so no scannable secret literal is committed.
 const fakeStripeKey = 'sk_' + 'live_' + '5'.repeat(24);
 const fakePosthogKey = 'phx_' + 'a'.repeat(43);
 
@@ -42,8 +20,7 @@ interface Positive {
   expectRemediationIncludes?: string;
 }
 
-// One representative positive per category. Each must match AND surface its
-// expected category (a fixture that fires on the wrong category is a failure).
+// One positive per category — must match, on the expected category.
 const POSITIVES: Positive[] = [
   {
     category: 'prompt_injection',
@@ -83,8 +60,7 @@ const POSITIVES: Positive[] = [
   },
 ];
 
-// Wizard-specific false-positive contracts — these must NOT match. They guard
-// the behaviors that caused the PII incident, so a regression is caught here too.
+// Wizard FP contracts — must NOT match (the PII-incident behaviors).
 const NEGATIVES: { name: string; content: string }[] = [
   {
     name: '$set person properties are allowed',
@@ -108,8 +84,7 @@ async function run(): Promise<void> {
   const failures: string[] = [];
   const fail = (msg: string) => failures.push(msg);
 
-  // Coverage guard: every warlock category must have a positive fixture, so an
-  // upstream category addition fails the build until the wizard gates it.
+  // Fail if warlock adds a category we don't cover.
   const covered = new Set(POSITIVES.map((p) => p.category));
   const uncovered = CATEGORIES.filter((c) => !covered.has(c));
   if (uncovered.length > 0) {
