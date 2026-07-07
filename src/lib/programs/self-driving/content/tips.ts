@@ -39,7 +39,7 @@ export const SELF_DRIVING_TIPS: Tip[] = [
     id: 'work-anywhere',
     title: 'Work anywhere',
     description:
-      'Your inbox is in the PostHog app, Slack (tag @PostHog or an inbox channel), and MCP. You can work from anywhere.',
+      'Your inbox is in the PostHog app, Slack (tag @PostHog), and MCP. You can work from anywhere.',
   },
 ];
 
