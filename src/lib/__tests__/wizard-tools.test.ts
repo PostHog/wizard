@@ -407,3 +407,86 @@ describe('extractZipArchive', () => {
     );
   });
 });
+
+describe('downloadWithRetry', () => {
+  const url = 'https://example.com/skill.zip';
+  const noSleep = () => Promise.resolve();
+  const okResponse = () =>
+    Promise.resolve({
+      ok: true,
+      status: 200,
+      statusText: 'OK',
+      arrayBuffer: () => Promise.resolve(new ArrayBuffer(3)),
+    });
+
+  it('returns the body on first success without sleeping', async () => {
+    let fetches = 0;
+
+    const bytes = await __test.downloadWithRetry(url, {
+      fetchImpl: (() => {
+        fetches += 1;
+        return okResponse();
+      }) as any,
+      sleepImpl: () => {
+        throw new Error('should not sleep');
+      },
+    });
+
+    expect(fetches).toBe(1);
+    expect(bytes).toHaveLength(3);
+  });
+
+  it('retries with exponential backoff before succeeding', async () => {
+    let attempts = 0;
+    const sleeps: number[] = [];
+
+    const bytes = await __test.downloadWithRetry(url, {
+      fetchImpl: (() => {
+        attempts += 1;
+        if (attempts < 3) return Promise.reject(new Error('fetch failed'));
+        return okResponse();
+      }) as any,
+      sleepImpl: (ms: number) => {
+        sleeps.push(ms);
+        return Promise.resolve();
+      },
+      backoffMs: 500,
+    });
+
+    expect(attempts).toBe(3);
+    expect(sleeps).toEqual([500, 1000]);
+    expect(bytes).toHaveLength(3);
+  });
+
+  it('treats a non-ok response as a failure and retries it', async () => {
+    let attempts = 0;
+
+    await expect(
+      __test.downloadWithRetry(url, {
+        fetchImpl: (() => {
+          attempts += 1;
+          return Promise.resolve({
+            ok: false,
+            status: 503,
+            statusText: 'Service Unavailable',
+            arrayBuffer: () => Promise.resolve(new ArrayBuffer(0)),
+          });
+        }) as any,
+        sleepImpl: noSleep,
+        maxAttempts: 2,
+      }),
+    ).rejects.toThrow(/HTTP 503 Service Unavailable/);
+
+    expect(attempts).toBe(2);
+  });
+
+  it('reports every attempt when all retries fail', async () => {
+    await expect(
+      __test.downloadWithRetry(url, {
+        fetchImpl: (() => Promise.reject(new Error('network down'))) as any,
+        sleepImpl: noSleep,
+        maxAttempts: 3,
+      }),
+    ).rejects.toThrow(/attempt 1.*attempt 2.*attempt 3/s);
+  });
+});
