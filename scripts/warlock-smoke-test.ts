@@ -1,4 +1,5 @@
 /**
+ * These tests sanity check that Warlock _can_ run. Quality checks are evaluated in CI.
  * Release gate for @posthog/warlock bumps. The unit suite mocks warlock, so
  * nothing exercises the real rules; this scans one fixture per category with the
  * real package and fails `pnpm build` (→ every CI build + publish) if a bump
