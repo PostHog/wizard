@@ -1,8 +1,8 @@
 /**
- * Sidebar tips for the self-driving run. Unlike the generic
- * onboarding tips (`DEFAULT_TIPS`), these explain Signals' core nouns —
- * signal sources and scouts — in plain language, so the agent's
- * questions during the run land with a user who's never seen the terms.
+ * Sidebar tips for the self-driving run — short footnotes on the
+ * vocabulary ladder (signal source → scout → signal → report → measured
+ * loop). The learn deck (`./index.tsx`) carries the teaching; these stay
+ * one to two lines each so the pane never overflows.
  *
  * Product knowledge lives here in the program, not in the generic
  * `TipsCard`. Wired onto the program's `getTips`.
@@ -12,22 +12,34 @@ import type { Tip } from '@ui/tui/components/TipsCard';
 
 export const SELF_DRIVING_TIPS: Tip[] = [
   {
-    id: 'what-is-a-signal-source',
-    title: "What's a signal source?",
+    id: 'signal-source',
+    title: 'Signal source',
     description:
-      'A signal source is one of the streams PostHog plugs straight into — your errors, session replays, support, GitHub or Linear issues. Each one watches its own stream and speaks up the moment something specific goes wrong there.',
+      'A stream PostHog watches: errors, replays, support, GitHub or Linear issues.',
   },
   {
-    id: 'what-is-a-scout',
-    title: "What's a scout?",
+    id: 'scout',
+    title: 'Scout',
     description:
-      'A scout is like an analyst PostHog runs for you on a schedule: rather than watching one stream, it ranges freely across your product data, looking for the bigger trends and surprises — a spike in errors, a funnel quietly dropping — that no single stream would catch.',
+      'An agent on a schedule, watching your sources for anomalies and patterns.',
   },
   {
-    id: 'findings-in-inbox',
-    title: 'Findings land in your inbox',
+    id: 'signal-report',
+    title: 'Signal → report',
     description:
-      'Once setup finishes, PostHog starts scanning within ~30 minutes and surfaces what it finds in your Self-driving inbox — grouped, researched, and ready to act on.',
+      'One finding with evidence and a suggested action. Signals group into prioritized reports in your inbox.',
+  },
+  {
+    id: 'the-loop',
+    title: 'The loop',
+    description:
+      'After a fix ships, PostHog measures the result. If the pattern persists, a new signal reopens the work.',
+  },
+  {
+    id: 'work-anywhere',
+    title: 'Work anywhere',
+    description:
+      'Your inbox is in the PostHog app, Slack (tag @PostHog or an inbox channel), and MCP. You can work from anywhere.',
   },
 ];
 
