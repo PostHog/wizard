@@ -17,6 +17,7 @@
  * extension installed (see subagent.ts), so a child cannot escape it.
  */
 
+import path from 'path';
 import type { LLMProvider, ScanMatch } from '@posthog/warlock';
 import { wizardCanUseTool } from '@lib/agent/agent-interface';
 import {
@@ -74,6 +75,38 @@ export interface GateDecision {
 }
 
 const str = (v: unknown): string => (typeof v === 'string' ? v : '');
+
+/**
+ * pi-only carve-out from the shared bash allowlist: a plain `rm` of specific
+ * project files. The integration skill directs the agent to delete its own
+ * bookkeeping file (the event plan) at the end of a run; the shared policy
+ * blocks every `rm`, which left pi agents burning turns on delete-vs-empty
+ * workarounds (top end-of-run remark, wizard#793). Scoped here — NOT in
+ * `wizardCanUseTool` — so the anthropic control arm's policy is untouched
+ * mid-rollout.
+ *
+ * Scope is strict: optional `-f` plus one or more bare relative paths inside
+ * the project — no recursion, no other flags, no globs, no absolute or home
+ * paths, no `..` traversal, and never a `.env` file. The YARA command scan
+ * still runs after this allowance, and recursive/forced variants stay covered
+ * by warlock's destructive-delete rules.
+ */
+function isScopedFileRemoval(command: string): boolean {
+  const parts = command.trim().split(/\s+/);
+  if (parts[0] !== 'rm') return false;
+  let pathStart = 1;
+  if (parts[pathStart] === '-f') pathStart++;
+  const paths = parts.slice(pathStart);
+  if (paths.length === 0) return false;
+  return paths.every(
+    (p) =>
+      !p.startsWith('-') &&
+      !/[*?[\]{}~]/.test(p) &&
+      !path.isAbsolute(p) &&
+      !p.split(/[\\/]/).includes('..') &&
+      !path.basename(p).startsWith('.env'),
+  );
+}
 
 /**
  * Translate a pi tool name to the claude-cased name + input the shared policy
@@ -205,7 +238,14 @@ export async function evaluateToolCall(
       wizardAskPending: ctx.getWizardAskPending?.() ?? false,
     });
     if (decision.behavior === 'deny') {
-      return { block: true, reason: decision.message };
+      // Scoped `rm` is allowed on pi even though the shared allowlist denies
+      // it (see isScopedFileRemoval) — fall through to the YARA command scan
+      // instead of blocking.
+      const scopedRm =
+        toolName === 'bash' && isScopedFileRemoval(str(input.command));
+      if (!scopedRm) {
+        return { block: true, reason: decision.message };
+      }
     }
 
     const yaraReason = await preExecutionYaraBlock(

@@ -393,3 +393,41 @@ describe('pi-security: repeat-block escalation (identical retries after a YARA b
     expect(second.reason).not.toContain('ALREADY blocked');
   });
 });
+
+// pi-only scoped rm: the integration skill tells the agent to delete its own
+// bookkeeping file (the event plan) at the end of a run. The shared allowlist
+// denies every `rm` (and still does on the anthropic control arm); the pi
+// fence carves out a plain `rm [-f] <relative-file>` and nothing more.
+describe('pi-security: scoped rm carve-out', () => {
+  test('allows deleting relative project files', async () => {
+    expect(await block('bash', { command: 'rm .posthog-events.json' })).toBe(
+      false,
+    );
+    expect(await block('bash', { command: 'rm -f src/tmp/plan.json' })).toBe(
+      false,
+    );
+    expect(await block('bash', { command: 'rm a.txt b.txt' })).toBe(false);
+  });
+
+  test('still blocks recursive and flagged variants', async () => {
+    expect(await block('bash', { command: 'rm -rf node_modules' })).toBe(true);
+    expect(await block('bash', { command: 'rm -r src' })).toBe(true);
+    expect(await block('bash', { command: 'rm --force x.txt' })).toBe(true);
+    expect(await block('bash', { command: 'rm -f -r x' })).toBe(true);
+  });
+
+  test('still blocks globs, absolute, home, and traversal paths', async () => {
+    expect(await block('bash', { command: 'rm *.json' })).toBe(true);
+    expect(await block('bash', { command: 'rm /etc/passwd' })).toBe(true);
+    expect(await block('bash', { command: 'rm ~/x.txt' })).toBe(true);
+    expect(await block('bash', { command: 'rm ../outside.txt' })).toBe(true);
+    expect(await block('bash', { command: 'rm src/../../out.txt' })).toBe(true);
+  });
+
+  test('still blocks .env deletion and bare rm', async () => {
+    expect(await block('bash', { command: 'rm .env' })).toBe(true);
+    expect(await block('bash', { command: 'rm config/.env.local' })).toBe(true);
+    expect(await block('bash', { command: 'rm' })).toBe(true);
+    expect(await block('bash', { command: 'rm -f' })).toBe(true);
+  });
+});

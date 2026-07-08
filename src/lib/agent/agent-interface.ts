@@ -414,33 +414,6 @@ const DANGEROUS_OPERATORS = /[;`$()]/;
 export { isSkillInstallCommand } from '@lib/skill-install';
 
 /**
- * File deletion parity with the claude-agent-sdk harness, where a plain
- * `rm <file>` simply works: skills legitimately direct the agent to delete
- * its own bookkeeping files (e.g. the event plan) at the end of a run, and
- * blocking every `rm` left agents inventing empty-the-file workarounds.
- * Scope is strict — optional `-f` plus one or more bare relative paths inside
- * the project: no recursion, no other flags, no globs, no absolute or home
- * paths, no `..` traversal, and never a `.env` file. Recursive/forced
- * variants additionally stay covered by warlock's destructive-delete rules.
- */
-function isScopedFileRemoval(command: string): boolean {
-  const parts = command.split(/\s+/);
-  if (parts[0] !== 'rm') return false;
-  let pathStart = 1;
-  if (parts[pathStart] === '-f') pathStart++;
-  const paths = parts.slice(pathStart);
-  if (paths.length === 0) return false;
-  return paths.every(
-    (p) =>
-      !p.startsWith('-') &&
-      !/[*?[\]{}~]/.test(p) &&
-      !path.isAbsolute(p) &&
-      !p.split(/[\\/]/).includes('..') &&
-      !path.basename(p).startsWith('.env'),
-  );
-}
-
-/**
  * Check if command is an allowed package manager command.
  * Matches: <pkg-manager> [run|exec] <safe-script> [args...]
  */
@@ -615,9 +588,8 @@ export function wizardCanUseTool(
     };
   }
 
-  // Check if command starts with any allowed prefix (package manager
-  // commands), or is a scoped single-file deletion
-  if (matchesAllowedPrefix(normalized) || isScopedFileRemoval(normalized)) {
+  // Check if command starts with any allowed prefix (package manager commands)
+  if (matchesAllowedPrefix(normalized)) {
     logToFile(`Allowing bash command: ${command}`);
     debug(`Allowing bash command: ${command}`);
     return { behavior: 'allow', updatedInput: input };
@@ -631,7 +603,7 @@ export function wizardCanUseTool(
   });
   return {
     behavior: 'deny',
-    message: `Bash command not allowed. Only install, build, typecheck, lint, and formatting commands — plus plain \`rm <relative-file>\` deletions inside the project — are permitted.`,
+    message: `Bash command not allowed. Only install, build, typecheck, lint, and formatting commands are permitted.`,
   };
 }
 
