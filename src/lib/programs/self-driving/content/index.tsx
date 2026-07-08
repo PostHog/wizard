@@ -95,7 +95,7 @@ export const getContentBlocks = (store?: WizardStore): ContentBlock[] => {
     // Scene 4 — the differentiator, and why GitHub
     {
       content:
-        'A coding agent has your code, but not your product usage context.',
+        'A coding agent sees your code, but not how your product is used.',
       pause: 5000,
     },
 
