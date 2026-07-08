@@ -94,6 +94,10 @@ export class Analytics {
     // runs to 'headless'.
     this.tags.build = IS_PRODUCTION_BUILD ? 'prod' : 'dev';
 
+    // Where the run executes, on every event: the experimental headless flag is a
+    // cloud run (runNonInteractive upgrades this to 'cloud'); everything else is local.
+    this.tags.run_surface = 'local';
+
     this.anonymousId = uuidv4();
 
     // One id per process = one id per wizard run, registered in the tag bag

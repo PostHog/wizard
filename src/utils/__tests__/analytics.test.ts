@@ -71,6 +71,7 @@ describe('Analytics', () => {
           $app_name: 'wizard',
           build: 'dev',
           run_id: 'run-uuid',
+          run_surface: 'local',
           ...properties,
         },
       );
@@ -91,6 +92,7 @@ describe('Analytics', () => {
           $app_name: 'wizard',
           build: 'dev',
           run_id: 'run-uuid',
+          run_surface: 'local',
           testTag: 'testValue',
           ...properties,
         },
@@ -112,6 +114,7 @@ describe('Analytics', () => {
           $app_name: 'wizard',
           build: 'dev',
           run_id: 'run-uuid',
+          run_surface: 'local',
           $session_id: 'session-uuid',
         },
       );
@@ -130,6 +133,7 @@ describe('Analytics', () => {
           $app_name: 'wizard',
           build: 'dev',
           run_id: 'run-uuid',
+          run_surface: 'local',
         },
       );
     });
@@ -150,6 +154,7 @@ describe('Analytics', () => {
           $app_name: 'wizard',
           build: 'dev',
           run_id: 'run-uuid',
+          run_surface: 'local',
           environment: 'test',
           version: '1.0.0',
           integration: 'nextjs',
@@ -173,6 +178,7 @@ describe('Analytics', () => {
           $app_name: 'wizard',
           build: 'dev',
           run_id: 'run-uuid',
+          run_surface: 'local',
           integration: 'react',
         },
       );
@@ -191,6 +197,7 @@ describe('Analytics', () => {
           $app_name: 'wizard',
           build: 'dev',
           run_id: 'run-uuid',
+          run_surface: 'local',
         },
       );
     });
@@ -214,6 +221,25 @@ describe('Analytics', () => {
       expect(
         (mockPostHogInstance.captureException as Mock).mock.calls.at(-1)?.[2],
       ).toMatchObject({ build: 'prod' });
+    });
+  });
+
+  describe('run_surface tag', () => {
+    it("defaults every event to 'local'", () => {
+      analytics.captureException(new Error('e'));
+
+      expect(
+        (mockPostHogInstance.captureException as Mock).mock.calls.at(-1)?.[2],
+      ).toMatchObject({ run_surface: 'local' });
+    });
+
+    it("upgrades to 'cloud' when the headless path sets it", () => {
+      analytics.setTag('run_surface', 'cloud');
+      analytics.captureException(new Error('e'));
+
+      expect(
+        (mockPostHogInstance.captureException as Mock).mock.calls.at(-1)?.[2],
+      ).toMatchObject({ run_surface: 'cloud' });
     });
   });
 
@@ -322,6 +348,7 @@ describe('Analytics', () => {
         $app_name: 'wizard',
         build: 'dev',
         run_id: 'run-uuid',
+        run_surface: 'local',
         command: 'slack',
         $exception_list: [{ type: 'Error' }],
       });
@@ -485,6 +512,7 @@ describe('Analytics', () => {
           $app_name: 'wizard',
           build: 'dev',
           run_id: 'run-uuid',
+          run_surface: 'local',
           integration: 'nextjs',
           localMcp: true,
           debug: false,
@@ -510,6 +538,7 @@ describe('Analytics', () => {
           $app_name: 'wizard',
           build: 'dev',
           run_id: 'run-uuid',
+          run_surface: 'local',
           $session_id: 'session-uuid',
           integration: 'svelte',
         },

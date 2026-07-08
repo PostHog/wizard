@@ -79,6 +79,8 @@ export function runNonInteractive(
   // (cloud / CI/CD) tags 'headless'; a dev/test `--ci` run upgrades 'dev' to
   // 'ci'. The mode string is the tag value.
   analytics.setTag('build', mode);
+  // Headless is the cloud run path; every other run keeps the 'local' default.
+  if (mode === 'headless') analytics.setTag('run_surface', 'cloud');
 
   void (async () => {
     const path = await import('path');
