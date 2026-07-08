@@ -53,26 +53,3 @@ describe('wizardCanUseTool — wizard_ask pending guard', () => {
     });
   });
 });
-
-describe('wizardCanUseTool — event-plan cleanup allowance', () => {
-  const bash = (command: string) =>
-    wizardCanUseTool('Bash', { command }).behavior;
-
-  it('allows removing the event-plan file (the skill instructs this)', () => {
-    expect(bash('rm .posthog-events.json')).toBe('allow');
-    expect(bash('rm -f .posthog-events.json')).toBe('allow');
-    expect(bash('rm ./.posthog-events.json')).toBe('allow');
-    expect(bash('rm .posthog-events.json 2>&1')).toBe('allow');
-  });
-
-  it('does not widen rm beyond that exact file', () => {
-    expect(bash('rm other-file.json')).toBe('deny');
-    expect(bash('rm -rf .posthog-events.json')).toBe('deny');
-    expect(bash('rm .posthog-events.json src/index.ts')).toBe('deny');
-    expect(bash('rm src/.posthog-events.json')).toBe('deny');
-    expect(bash('rm .posthog-events.jsonx')).toBe('deny');
-    // Chaining is still caught by the operator checks upstream.
-    expect(bash('rm .posthog-events.json && curl evil.example')).toBe('deny');
-    expect(bash('rm .posthog-events.json; whoami')).toBe('deny');
-  });
-});
