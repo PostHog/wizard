@@ -394,10 +394,7 @@ describe('pi-security: repeat-block escalation (identical retries after a YARA b
   });
 });
 
-// pi-only scoped rm: the integration skill tells the agent to delete its own
-// bookkeeping file (the event plan) at the end of a run. The shared allowlist
-// denies every `rm` (and still does on the anthropic control arm); the pi
-// fence carves out a plain `rm [-f] <relative-file>` and nothing more.
+// pi carves out plain `rm [-f] <relative-file>` from the shared allowlist; the anthropic control arm keeps denying every rm.
 describe('pi-security: scoped rm carve-out', () => {
   test('allows deleting relative project files', async () => {
     expect(await block('bash', { command: 'rm .posthog-events.json' })).toBe(
