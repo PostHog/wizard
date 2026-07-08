@@ -343,6 +343,9 @@ export const piBackend: AgentHarness = {
         // agent's model uses. Without this, pi has no ANTHROPIC_* env (it
         // auths programmatically) and triage would silently no-op.
         triageAuth: { baseURL: gatewayUrl, authToken: boot.accessToken },
+        // Enables read-before-write on write/edit (claude-agent-sdk parity —
+        // see file-state.ts). Same root the pi tools resolve paths against.
+        workingDirectory: session.installDir,
       });
 
       // Pay warlock's WASM-init + rule-compile cost now, off the tool-call
