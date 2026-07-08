@@ -63,7 +63,7 @@ export const SelfDrivingIntroScreen = ({
         <Text>
           {'•'} Watches your signal sources: errors, replays, connected tools
         </Text>
-        <Text>{'•'} Runs scouts, scheduled agents that scan for issues</Text>
+        <Text>{'•'} Runs scouts – scheduled agents that scan for issues</Text>
         <Text>{'•'} Groups signals into prioritized reports in your inbox</Text>
         <Text>{'•'} Researches findings in your code via GitHub</Text>
         <Text>
