@@ -283,17 +283,38 @@ describe('switchboard modelCapabilities', () => {
 });
 
 describe('switchboard wizard-pi-effort flag', () => {
+  const PI_ON = { [WIZARD_USE_PI_HARNESS_FLAG_KEY]: 'true' };
+
   it('overrides effort for reasoning models; ignores invalid; skips non-reasoning', () => {
     expect(
-      modelCapabilities(GPT5_4_MODEL, { [WIZARD_PI_EFFORT_FLAG_KEY]: 'high' })
-        .thinkingLevel,
+      modelCapabilities(GPT5_4_MODEL, {
+        ...PI_ON,
+        [WIZARD_PI_EFFORT_FLAG_KEY]: 'high',
+      }).thinkingLevel,
     ).toBe('high');
     expect(
-      modelCapabilities(GPT5_4_MODEL, { [WIZARD_PI_EFFORT_FLAG_KEY]: 'banana' })
-        .thinkingLevel,
+      modelCapabilities(GPT5_4_MODEL, {
+        ...PI_ON,
+        [WIZARD_PI_EFFORT_FLAG_KEY]: 'banana',
+      }).thinkingLevel,
     ).toBe('low');
     expect(
       modelCapabilities('openai/gpt-4o', {
+        ...PI_ON,
+        [WIZARD_PI_EFFORT_FLAG_KEY]: 'high',
+      }).thinkingLevel,
+    ).toBeUndefined();
+  });
+
+  it('is inert unless the pi-harness flag is on — effort cannot ride a non-pi pick', () => {
+    // Effort set but the pi flag off: the override is ignored, so the model's
+    // own table effort stands (gpt-5.4 → low) and anthropic keeps no effort.
+    expect(
+      modelCapabilities(GPT5_4_MODEL, { [WIZARD_PI_EFFORT_FLAG_KEY]: 'high' })
+        .thinkingLevel,
+    ).toBe('low');
+    expect(
+      modelCapabilities(DEFAULT_AGENT_MODEL, {
         [WIZARD_PI_EFFORT_FLAG_KEY]: 'high',
       }).thinkingLevel,
     ).toBeUndefined();
