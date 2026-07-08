@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { PROGRAM_REGISTRY } from '@lib/programs/program-registry';
 import {
   DEFAULT_AGENT_MODEL,
@@ -22,6 +22,17 @@ import {
   type SwitchboardCtx,
 } from '@lib/agent/runner/switchboard';
 import { modelCapabilities } from '@lib/agent/runner/switchboard/models';
+
+// RUN_SURFACE is read live in flagRunnerOverride; a getter lets a test flip it.
+const envState = vi.hoisted(() => ({
+  runSurface: 'local' as 'cloud' | 'local',
+}));
+vi.mock('@env', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@env')>()),
+  get RUN_SURFACE() {
+    return envState.runSurface;
+  },
+}));
 
 const PROGRAM_IDS = PROGRAM_REGISTRY.map((c) => c.id);
 
@@ -161,6 +172,30 @@ describe('switchboard resolveHarness — pi flag is gated to posthog-integration
       flags: { [WIZARD_USE_PI_HARNESS_FLAG_KEY]: 'true' },
     });
     expect(pick).toEqual({ harness: Harness.pi, model: GPT5_4_MODEL });
+  });
+
+  it('disables the pi flag on the cloud run surface, even for posthog-integration', () => {
+    envState.runSurface = 'cloud';
+    try {
+      const pick = resolveHarness({
+        program: 'posthog-integration',
+        flags: { [WIZARD_USE_PI_HARNESS_FLAG_KEY]: 'true' },
+      });
+      expect(pick).toEqual({
+        harness: Harness.anthropic,
+        model: DEFAULT_AGENT_MODEL,
+      });
+    } finally {
+      envState.runSurface = 'local';
+    }
+  });
+
+  it('keeps the pi flag on the local run surface for posthog-integration', () => {
+    const pick = resolveHarness({
+      program: 'posthog-integration',
+      flags: { [WIZARD_USE_PI_HARNESS_FLAG_KEY]: 'true' },
+    });
+    expect(pick.harness).toBe(Harness.pi);
   });
 
   it('ignores the pi flag for self-driving — stays on the anthropic default', () => {
@@ -318,6 +353,20 @@ describe('switchboard wizard-pi-effort flag', () => {
         [WIZARD_PI_EFFORT_FLAG_KEY]: 'high',
       }).thinkingLevel,
     ).toBeUndefined();
+  });
+
+  it('is inert on the cloud surface even with the pi flag on', () => {
+    envState.runSurface = 'cloud';
+    try {
+      expect(
+        modelCapabilities(GPT5_4_MODEL, {
+          [WIZARD_USE_PI_HARNESS_FLAG_KEY]: 'true',
+          [WIZARD_PI_EFFORT_FLAG_KEY]: 'high',
+        }).thinkingLevel,
+      ).toBe('low');
+    } finally {
+      envState.runSurface = 'local';
+    }
   });
 });
 

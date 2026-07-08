@@ -2,7 +2,7 @@
  * Harness axis: registry, middleware, resolver. Mirrors `sequence.ts`.
  */
 
-import { IS_PRODUCTION_BUILD } from '@env';
+import { IS_PRODUCTION_BUILD, RUN_SURFACE } from '@env';
 import {
   DEFAULT_AGENT_MODEL,
   GPT5_4_MODEL,
@@ -60,6 +60,8 @@ const PI_FLAG_PROGRAMS = new Set<ProgramId>(['posthog-integration']);
 const flagRunnerOverride: Middleware<HarnessPick> = (ctx, next) => {
   const pick = next();
   if (ctx.flags[WIZARD_USE_PI_HARNESS_FLAG_KEY] !== 'true') return pick;
+  // The pi experiment is disabled on the cloud (headless) run surface.
+  if (RUN_SURFACE === 'cloud') return pick;
   if (!PI_FLAG_PROGRAMS.has(ctx.program)) return pick;
   if (ctx.trace) Object.assign(ctx.trace, { harness: 'flag', model: 'flag' });
   const variant = ctx.flags[WIZARD_PI_MODEL_FLAG_KEY] ?? '';
