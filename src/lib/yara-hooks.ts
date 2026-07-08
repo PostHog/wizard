@@ -24,6 +24,7 @@
 
 import fs from 'fs';
 import path from 'path';
+import { createHash } from 'crypto';
 import fg from 'fast-glob';
 import type {
   ScanMatch,
@@ -467,6 +468,68 @@ export function isWizardDocumentationPath(
   return WIZARD_DOC_PATTERNS.some((re) => re.test(basename));
 }
 
+// ─── Repeat-block tracker ─────────────────────────────────────────
+//
+// Field data (switchboard YARA tile): an agent whose edit gets blocked often
+// retries the identical payload — the scan is deterministic, so every retry
+// blocks again and the run burns turns (~4.2 blocks per affected run). The
+// runtime notes already say "don't retry"; the data shows the prompt alone
+// doesn't hold. This is the code-side guard: remember the exact payloads we
+// blocked, and when the same content comes back, escalate the block reason —
+// first to "change the code, not the retry", then to "report it and move on".
+// Used by both fences: the anthropic PreToolUse Bash hook below, and the pi
+// security extension's pre-execution scan (bash/write/edit).
+
+/** Identical-payload attempt at which the agent is told to move on. */
+const REPEAT_BLOCK_MOVE_ON_ATTEMPT = 3;
+
+export interface RepeatBlockTracker {
+  /**
+   * Record a YARA block of `content` on `tool`; returns the attempt count
+   * for that exact payload (1 = first time blocked).
+   */
+  attempt(tool: string, content: string): number;
+}
+
+/** Per-run tracker of YARA-blocked payloads (keyed by tool + content hash). */
+export function createRepeatBlockTracker(): RepeatBlockTracker {
+  const counts = new Map<string, number>();
+  return {
+    attempt(tool: string, content: string): number {
+      const key = `${tool} ${createHash('sha256')
+        .update(content)
+        .digest('hex')}`;
+      const next = (counts.get(key) ?? 0) + 1;
+      counts.set(key, next);
+      return next;
+    },
+  };
+}
+
+/**
+ * The block reason for the given attempt: the plain reason the first time,
+ * an explicit "this exact retry can never work" on the second, and a
+ * "report it and move on" instruction from the third on.
+ */
+export function repeatBlockReason(
+  attempt: number,
+  tool: string,
+  baseReason: string,
+): string {
+  if (attempt <= 1) return baseReason;
+  if (attempt < REPEAT_BLOCK_MOVE_ON_ATTEMPT) {
+    return (
+      `${baseReason} This exact ${tool} content was ALREADY blocked — the scan is ` +
+      'deterministic, so retrying identical content will always block again. ' +
+      'Change the code to remove the flagged pattern instead of retrying.'
+    );
+  }
+  return (
+    `${baseReason} This exact ${tool} content has now been blocked ${attempt} times. ` +
+    'STOP retrying it. Note the blocked change in the setup report and move on to the next task.'
+  );
+}
+
 // ─── Severity helpers ────────────────────────────────────────────
 
 const SEVERITY_RANK: Record<string, number> = {
@@ -670,6 +733,7 @@ export function createPreToolUseYaraHooks(
   // Future PreToolUse hooks that need triage can wire this through.
   _llmProvider?: LLMProvider,
 ): HookCallbackMatcher[] {
+  const repeatTracker = createRepeatBlockTracker();
   return [
     {
       hooks: [
@@ -693,11 +757,16 @@ export function createPreToolUseYaraHooks(
             const match = highestSeverityMatch(matches);
             recordMatch('PreToolUse', 'Bash', match, 'blocked');
 
+            const attempt = repeatTracker.attempt('Bash', command);
             return {
               decision: 'block',
-              reason: `[YARA] ${match.rule}: ${
-                match.metadata.description ?? 'security policy violation'
-              }. Command blocked for security.`,
+              reason: repeatBlockReason(
+                attempt,
+                'Bash',
+                `[YARA] ${match.rule}: ${
+                  match.metadata.description ?? 'security policy violation'
+                }. Command blocked for security.`,
+              ),
             };
           } catch (error) {
             logToFile('[YARA] PreToolUse hook error:', error);

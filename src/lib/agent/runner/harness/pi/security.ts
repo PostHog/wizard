@@ -20,9 +20,12 @@
 import type { LLMProvider, ScanMatch } from '@posthog/warlock';
 import { wizardCanUseTool } from '@lib/agent/agent-interface';
 import {
+  createRepeatBlockTracker,
   isWizardDocumentationPath,
   recordExternalScan,
+  repeatBlockReason,
   scanAndTriage,
+  type RepeatBlockTracker,
   type ScanContext,
 } from '@lib/yara-hooks';
 import {
@@ -55,6 +58,14 @@ export interface ToolGateContext {
    * on (fail-closed, but no false-positive filtering).
    */
   triageAuth?: TriageGatewayAuth;
+  /**
+   * Per-run tracker of YARA-blocked payloads. When the agent retries content
+   * that was already blocked, the block reason escalates ("change the code,
+   * not the retry" → "report it and move on"). The extension wires one in;
+   * absent (tests calling `evaluateToolCall` directly) every block reads as
+   * a first attempt.
+   */
+  repeatTracker?: RepeatBlockTracker;
 }
 
 export interface GateDecision {
@@ -121,6 +132,7 @@ async function preExecutionYaraBlock(
   toolName: string,
   input: Record<string, unknown>,
   llmProvider: LLMProvider | undefined,
+  repeatTracker?: RepeatBlockTracker,
 ): Promise<string | undefined> {
   let content: string;
   let ctx: ScanContext;
@@ -145,7 +157,15 @@ async function preExecutionYaraBlock(
       tool = 'Write';
       break;
     case 'edit':
-      content = JSON.stringify(input.edits ?? '');
+      // Scan ONLY the replacement text. `edits` is [{oldText, newText}] and
+      // oldText is pre-existing file content the agent is changing — scanning
+      // it blocks edits whose *surroundings* contain a violation, and even
+      // edits that are removing one (field FPs: capture edits adjacent to
+      // existing identify() PII; pre-existing violations blocking their own
+      // replacement). Matches the anthropic path, which scans new_string only.
+      content = (Array.isArray(input.edits) ? input.edits : [])
+        .map((e) => str((e as Record<string, unknown>)?.newText))
+        .join('\n');
       ctx = 'output';
       triage = llmProvider;
       phase = 'PostToolUse';
@@ -163,7 +183,8 @@ async function preExecutionYaraBlock(
   recordExternalScan(phase, tool, matches.map(toReportViolation), 'blocked');
   if (matches.length === 0) return undefined;
 
-  return blockMessage(matches[0]);
+  const attempt = repeatTracker?.attempt(toolName, content) ?? 1;
+  return repeatBlockReason(attempt, toolName, blockMessage(matches[0]));
 }
 
 /**
@@ -191,6 +212,7 @@ export async function evaluateToolCall(
       toolName,
       input,
       llmProvider,
+      ctx.repeatTracker,
     );
     if (yaraReason) return { block: true, reason: yaraReason };
 
@@ -235,6 +257,13 @@ export function createSecurityExtension(ctx: ToolGateContext = {}): {
   // triage is skipped and every flagged match is acted on — fail closed.
   const llmProvider = createTriageLLMProvider(ctx.triageAuth);
 
+  // One tracker per extension = per (sub)agent session, so an identical
+  // payload retried after a block gets the escalating reason.
+  const gateCtx: ToolGateContext = {
+    ...ctx,
+    repeatTracker: ctx.repeatTracker ?? createRepeatBlockTracker(),
+  };
+
   const factory = (pi: PiExtensionApiLike): void => {
     pi.on('tool_call', async (event) => {
       // A latched post-scan violation blocks everything that follows.
@@ -254,7 +283,7 @@ export function createSecurityExtension(ctx: ToolGateContext = {}): {
       const decision = await evaluateToolCall(
         event.toolName,
         event.input ?? {},
-        ctx,
+        gateCtx,
         llmProvider,
       );
       if (decision.block) {

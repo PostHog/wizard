@@ -268,3 +268,128 @@ describe('pi-security: extension state machine (fail-closed + runaway + latch)',
     expect(state.toolCalls).toBeGreaterThan(MAX_TOOL_CALLS);
   });
 });
+
+describe('pi-security: edit scanning is scoped to the replacement text', () => {
+  test('scans only newText — oldText (pre-existing content) never reaches the scanner', async () => {
+    // Field FPs: a violation in the surrounding/replaced code blocked edits
+    // that were clean — including edits REMOVING the violation.
+    await evaluateToolCall('edit', {
+      path: 'src/analytics.ts',
+      edits: [
+        {
+          oldText: "posthog.capture('signup', { email: user.email })",
+          newText: "posthog.capture('signup', { plan: user.plan })",
+        },
+        { oldText: 'const a = 1;', newText: 'const a = 2;' },
+      ],
+    });
+    expect(mockedScan).toHaveBeenCalledTimes(1);
+    const scanned = mockedScan.mock.calls[0][0];
+    expect(scanned).toContain("posthog.capture('signup', { plan: user.plan })");
+    expect(scanned).toContain('const a = 2;');
+    expect(scanned).not.toContain('email');
+    expect(scanned).not.toContain('const a = 1;');
+  });
+
+  test('an edit whose newText introduces a violation still blocks', async () => {
+    mockedScan.mockResolvedValueOnce({ matched: true, matches: [piiMatch] });
+    const decision = await evaluateToolCall('edit', {
+      path: 'src/analytics.ts',
+      edits: [
+        {
+          oldText: "posthog.capture('signup')",
+          newText: "posthog.capture('signup', { email: user.email })",
+        },
+      ],
+    });
+    expect(decision.block).toBe(true);
+    expect(decision.reason).toContain('posthog_pii_in_capture_call');
+  });
+
+  test('an edits array with only empty newText skips the scan entirely', async () => {
+    const decision = await evaluateToolCall('edit', {
+      path: 'src/analytics.ts',
+      edits: [{ oldText: 'delete me', newText: '' }],
+    });
+    expect(decision.block).toBe(false);
+    expect(mockedScan).not.toHaveBeenCalled();
+  });
+});
+
+describe('pi-security: repeat-block escalation (identical retries after a YARA block)', () => {
+  function fakePi() {
+    const handlers: Record<string, (e: any) => any> = {};
+    const pi: PiExtensionApiLike = {
+      on: (event: string, handler: (e: any) => any) => {
+        handlers[event] = handler;
+      },
+    } as PiExtensionApiLike;
+    return { pi, handlers };
+  }
+
+  const piiWrite = {
+    toolName: 'write',
+    input: {
+      path: 'src/analytics.ts',
+      content: "posthog.capture('login', { email: user.email })",
+    },
+  };
+
+  test('an identical YARA-blocked write escalates, then says report-and-move-on', async () => {
+    const { factory } = createSecurityExtension();
+    const { pi, handlers } = fakePi();
+    factory(pi);
+
+    mockedScan.mockResolvedValueOnce({ matched: true, matches: [piiMatch] });
+    const first = await handlers.tool_call(piiWrite);
+    expect(first.block).toBe(true);
+    // The remediation still leads — escalation decorates, never replaces it.
+    expect(first.reason).toContain('identify()');
+    expect(first.reason).not.toContain('ALREADY blocked');
+
+    mockedScan.mockResolvedValueOnce({ matched: true, matches: [piiMatch] });
+    const second = await handlers.tool_call(piiWrite);
+    expect(second.block).toBe(true);
+    expect(second.reason).toContain('ALREADY blocked');
+    expect(second.reason).toContain('Change the code');
+
+    mockedScan.mockResolvedValueOnce({ matched: true, matches: [piiMatch] });
+    const third = await handlers.tool_call(piiWrite);
+    expect(third.block).toBe(true);
+    expect(third.reason).toContain('blocked 3 times');
+    expect(third.reason).toContain('setup report');
+  });
+
+  test('different blocked content is a fresh first attempt, not a repeat', async () => {
+    const { factory } = createSecurityExtension();
+    const { pi, handlers } = fakePi();
+    factory(pi);
+
+    mockedScan.mockResolvedValueOnce({ matched: true, matches: [piiMatch] });
+    await handlers.tool_call(piiWrite);
+
+    mockedScan.mockResolvedValueOnce({ matched: true, matches: [piiMatch] });
+    const other = await handlers.tool_call({
+      toolName: 'write',
+      input: {
+        path: 'src/checkout.ts',
+        content: "posthog.capture('purchase', { phone: user.phone })",
+      },
+    });
+    expect(other.block).toBe(true);
+    expect(other.reason).not.toContain('ALREADY blocked');
+  });
+
+  test('policy denies (non-YARA) never gain repeat-escalation text', async () => {
+    const { factory } = createSecurityExtension();
+    const { pi, handlers } = fakePi();
+    factory(pi);
+
+    const deny = () =>
+      handlers.tool_call({ toolName: 'bash', input: { command: 'cat .env' } });
+    await deny();
+    const second = await deny();
+    expect(second.block).toBe(true);
+    expect(second.reason).not.toContain('ALREADY blocked');
+  });
+});
