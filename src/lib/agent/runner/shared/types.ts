@@ -100,13 +100,14 @@ export interface ProgramRun {
 
 /**
  * Result of the shared bootstrap, consumed by both the linear and the
- * orchestrator arm. Credentials (including the resolved host family and its MCP
- * url), role, and user are already applied to the session by `bootstrapProgram`
- * — the arms read those from `session.credentials`. This carries only the
- * run-scoped extras that don't live on the session.
+ * orchestrator arm. `bootstrapProgram` runs `authenticate` before returning, so
+ * `credentials` is guaranteed non-null here — the single narrowing point owns
+ * the invariant, and downstream readers get a properly non-null type for free.
  */
 export interface BootstrapResult {
   skillsBaseUrl: string;
+  /** Auth outputs (incl. the resolved host family and its MCP url), narrowed at the boundary. */
+  credentials: Credentials;
   wizardFlags: Record<string, string>;
   wizardMetadata: Record<string, string>;
   /** Full project payload, for project-level prompt context (opt-ins). */

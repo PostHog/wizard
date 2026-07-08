@@ -44,9 +44,8 @@ export async function runLinearProgram(
   boot: BootstrapResult,
   composed = false,
 ): Promise<void> {
-  const { skillsBaseUrl, wizardFlags, wizardMetadata, project } = boot;
-  // Set by bootstrapProgram before the fork — guaranteed non-null here.
-  const credentials = session.credentials!;
+  const { skillsBaseUrl, credentials, wizardFlags, wizardMetadata, project } =
+    boot;
   const { projectApiKey, host, accessToken, projectId } = credentials;
 
   // 5. Skill install (if skillId provided)

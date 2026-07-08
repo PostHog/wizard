@@ -255,10 +255,11 @@ export async function bootstrapProgram(
   });
 
   // Credentials (incl. the resolved host family and its MCP url) live on
-  // `session.credentials`; the arms read them from there. This carries only the
-  // run-scoped extras that aren't on the session.
+  // `session.credentials`; narrow once at this boundary — `authenticate` above
+  // set them — so downstream readers get a non-null type without asserting.
   return {
     skillsBaseUrl,
+    credentials: session.credentials!,
     wizardFlags,
     wizardMetadata,
     project,

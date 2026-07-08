@@ -105,8 +105,7 @@ export async function runOrchestrator(
 
   const options = sessionRunOptions(session);
 
-  // Set by bootstrapProgram before the fork — guaranteed non-null here.
-  const credentials = session.credentials!;
+  const { credentials } = boot;
 
   // The WHAT (agent prompts) is served from context-mill. Fetch the registry
   // once up front: its types drive enqueue validation, and resolving a task to
