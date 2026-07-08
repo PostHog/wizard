@@ -39,7 +39,7 @@ export const getContentBlocks = (store?: WizardStore): ContentBlock[] => {
 
     {
       content:
-        'Unlike our basic install wizard, it needs your input a few times. Stick around.',
+        'We'll occasionally need your input. Stick around.',
       pause: 6000,
     },
 
