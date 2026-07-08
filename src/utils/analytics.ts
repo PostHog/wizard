@@ -94,8 +94,7 @@ export class Analytics {
     // runs to 'headless'.
     this.tags.build = IS_PRODUCTION_BUILD ? 'prod' : 'dev';
 
-    // Where the run executes, on every event: the experimental headless flag is a
-    // cloud run (runNonInteractive upgrades this to 'cloud'); everything else is local.
+    // Local by default; runNonInteractive upgrades the headless path to 'cloud'.
     this.tags.run_surface = 'local';
 
     this.anonymousId = uuidv4();
