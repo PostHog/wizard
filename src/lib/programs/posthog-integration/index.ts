@@ -190,7 +190,7 @@ STEP 2: Call install_skill (from the wizard-tools MCP server) with the chosen sk
    Do NOT run any shell commands to install skills.
    If install_skill fails, emit on its own line: ${
      AgentSignals.SKILL_INSTALL_FAILED
-   } <skill id — one-line reason>. Then CONTINUE the integration without the skill, following these steps and your knowledge of ${
+   } <skill id — one-line reason>. Then CONTINUE and SKIP to STEP 5 the integration without the skill, following these steps and your knowledge of ${
           config.metadata.name
         } and PostHog's official docs, and note in the setup report that the skill could not be installed.
 
