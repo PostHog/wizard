@@ -12,8 +12,6 @@
  * follow-ups (#525, #524 skills) — v1 uses pi's built-in coding tools.
  */
 
-import fs from 'fs';
-import path from 'path';
 import { getUI } from '@ui';
 import { getLogFilePath, logToFile } from '@utils/debug';
 import { getLlmGatewayUrl } from '@utils/urls';
@@ -564,16 +562,6 @@ export const piBackend: AgentHarness = {
       const remark = signals.remark();
       if (remark) {
         analytics.capture(WIZARD_REMARK_EVENT_NAME, { remark });
-      }
-
-      // The skill plans events into .posthog-events.json then asks to remove it
-      // on completion; pi's `rm` is fence-blocked, so the agent can't — clean it
-      // up host-side rather than leave a stale (often empty) artifact (#15).
-      try {
-        const planFile = path.join(session.installDir, '.posthog-events.json');
-        if (fs.existsSync(planFile)) await fs.promises.rm(planFile);
-      } catch (err) {
-        logToFile(`[pi] .posthog-events.json cleanup skipped: ${String(err)}`);
       }
 
       const stats = agentSession.getSessionStats();

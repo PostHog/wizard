@@ -37,6 +37,7 @@ import {
   type SwitchboardCtx,
 } from './switchboard';
 import { flushScanReport } from '../../yara-hooks';
+import { removeProgramArtifacts } from './shared/artifacts';
 import { registerCleanup } from '../../../utils/wizard-abort';
 
 export type {
@@ -93,6 +94,10 @@ export async function runProgram(
   // flushScanReport is idempotent (it zeroes scan state), so the overlap is a
   // harmless no-op. No harness has to know reporting exists.
   registerCleanup(() => flushScanReport(session));
+  // Same dual coverage for the program's declared run artifacts
+  // (ProgramConfig.cleanupArtifacts): removal is idempotent, so the
+  // abort-path/finally overlap is a harmless no-op.
+  registerCleanup(() => removeProgramArtifacts(session, programConfig));
   try {
     const binding = resolveProgramRunner(session, programConfig, boot);
     if (binding.sequence === Sequence.orchestrator) {
@@ -107,6 +112,7 @@ export async function runProgram(
     );
   } finally {
     flushScanReport(session);
+    removeProgramArtifacts(session, programConfig);
   }
 }
 

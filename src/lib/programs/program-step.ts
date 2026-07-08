@@ -236,6 +236,14 @@ export interface ProgramConfig {
    */
   reportFile?: string;
   /**
+   * Bookkeeping files (relative to installDir) this program's agent run
+   * leaves behind — e.g. the event plan the skill writes and then cannot
+   * reliably delete because `rm` is fenced. The runner removes them
+   * host-side on every termination path, for every harness, so no skill
+   * or commandment has to teach the agent how to clean up.
+   */
+  cleanupArtifacts?: readonly string[];
+  /**
    * LearnCard deck rendered in the shared `RunScreen` while the agent
    * runs. Lives at `<program>/content/index.tsx` by convention.
    * Programs that ship a custom RunScreen variant (audit) or skip the

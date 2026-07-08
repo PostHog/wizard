@@ -20,6 +20,7 @@ import { requestDeepLink } from '@utils/provisioning';
 import { openTrackedLink, withUtm } from '@utils/links';
 import type { CloudRegion } from '@utils/types';
 import { POSTHOG_INTEGRATION_PROGRAM } from './steps.js';
+import { EVENT_PLAN_FILE } from './constants.js';
 import { getContentBlocks } from './content/index.js';
 import { buildCodingAgentPrompt } from './handoff.js';
 
@@ -53,6 +54,10 @@ export const posthogIntegrationConfig: ProgramConfig = {
   id: 'posthog-integration',
   steps: POSTHOG_INTEGRATION_PROGRAM,
   getContentBlocks,
+  // The skill writes its event plan here; the runner deletes it host-side
+  // after the run (see ProgramConfig.cleanupArtifacts), so the agent never
+  // has to fight the fenced `rm` to clean it up.
+  cleanupArtifacts: [EVENT_PLAN_FILE],
   // Basic integration runs without structured user input; drop wizard_ask
   // so the model can't pop modal prompts mid-run. The runner forwards this
   // list to the general-purpose subagent as well, so dispatched subagents

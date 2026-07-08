@@ -9,6 +9,29 @@ describe('getWizardCommandments', () => {
     expect(getWizardCommandments()).toMatchSnapshot();
   });
 
+  // The two rules below answer the most common end-of-run agent remarks
+  // (wizard#793 rollout): "do new files need a prior read?" and "how do I
+  // delete .posthog-events.json without rm?". Locked down so a future edit
+  // can't silently reintroduce the ambiguity.
+  describe('file handling rules', () => {
+    const text = getWizardCommandments();
+
+    it('scopes read-before-write to files that already exist', () => {
+      expect(text).toMatch(/any file that already exists/i);
+    });
+
+    it('exempts brand-new files from the prior read', () => {
+      expect(text).toMatch(/brand-new files are the exception/i);
+      expect(text).toMatch(/never required first/i);
+    });
+
+    it('tells the agent to leave wizard bookkeeping files alone', () => {
+      expect(text).toMatch(/\.posthog-events\.json/);
+      expect(text).toMatch(/skip that step/i);
+      expect(text).toMatch(/host-side after the run/i);
+    });
+  });
+
   // Targeted assertions for the wizard_ask Path A translation rules.
   // These are the rules a skill author depends on when leaving their prose
   // unchanged — they need to keep working as the commandment list evolves.

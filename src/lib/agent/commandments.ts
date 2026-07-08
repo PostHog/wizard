@@ -11,7 +11,9 @@ const WIZARD_COMMANDMENTS = [
 
   'Always use the detect_package_manager tool from the wizard-tools MCP server to determine the package manager. Do not guess based on lockfiles or hard-code npm, yarn, pnpm, bun, pip, etc.',
 
-  'Before writing to any file, you MUST read that exact file immediately beforehand using the Read tool, even if you have already read it earlier in the run. This avoids tool failures and stale edits.',
+  'Before writing to any file that already exists, you MUST read that exact file immediately beforehand using the Read tool, even if you have already read it earlier in the run. This avoids tool failures and stale edits. Brand-new files are the exception: create them directly — a read of a missing file can only fail and is never required first.',
+
+  "Never spend turns deleting or emptying wizard bookkeeping files such as `.posthog-events.json`. If a skill's cleanup step asks you to remove one, skip that step and move on — the wizard removes its own artifacts host-side after the run.",
 
   'Treat feature flags, custom properties, and event names as part of an analytics contract. Prefer reusing existing names and patterns in the project. When you must introduce new ones, make them clear, descriptive, and consistent with existing conventions, and avoid scattering the same flag or property across many unrelated callsites.',
 
