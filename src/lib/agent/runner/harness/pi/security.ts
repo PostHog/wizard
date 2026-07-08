@@ -76,10 +76,14 @@ export interface GateDecision {
 
 const str = (v: unknown): string => (typeof v === 'string' ? v : '');
 
-/** True when every rm target is a plain file path we are willing to let the agent delete. */
+// Shell metacharacters that chain, substitute, or redirect. A command carrying
+// any of these is more than one action, so we never treat it as a plain `rm`.
+const SHELL_OPERATORS = /[;&|`$(){}<>\n]/;
+
+/** True when a target is a bare relative project file we're willing to delete. */
 function isDeletableProjectFile(target: string): boolean {
   const isAnotherFlag = target.startsWith('-');
-  const hasGlobOrHomeChars = /[*?[\]{}~]/.test(target);
+  const hasGlobOrHomeChars = /[*?[\]~]/.test(target);
   const leavesProject =
     path.isAbsolute(target) || target.split(/[\\/]/).includes('..');
   const isEnvFile = path.basename(target).startsWith('.env');
@@ -87,9 +91,18 @@ function isDeletableProjectFile(target: string): boolean {
   return !isAnotherFlag && !hasGlobOrHomeChars && !leavesProject && !isEnvFile;
 }
 
-/** Matches `rm [-f] <file...>` where every file is a bare relative path inside the project. */
+/**
+ * A plain `rm [-f] <file...>` of project files — the deletion shape the
+ * anthropic arm permits (there bash isn't allowlisted; the shared YARA
+ * destructive-delete rules catch the dangerous forms). pi rescues the same
+ * shape here so the fall-through YARA scan can judge it, but refuses any
+ * shell operator so this can't smuggle a second command past the allowlist.
+ */
 function isScopedFileRemoval(command: string): boolean {
-  const [executable, ...args] = command.trim().split(/\s+/);
+  const trimmed = command.trim();
+  if (SHELL_OPERATORS.test(trimmed)) return false;
+
+  const [executable, ...args] = trimmed.split(/\s+/);
   if (executable !== 'rm') return false;
 
   if (args[0] === '-f') args.shift();
@@ -227,11 +240,13 @@ export async function evaluateToolCall(
       disallowedTools: ctx.disallowedTools,
       wizardAskPending: ctx.getWizardAskPending?.() ?? false,
     });
-    // pi allows scoped rm even though the shared allowlist denies it; the YARA scan below still applies.
-    const allowedOnPiAnyway =
+    // The allowlist is a pi-only restriction; the anthropic arm runs bash
+    // unrestricted and leans on the shared YARA scan. Let a plain `rm` of
+    // project files through to that same scan so pi matches that behavior.
+    const allowedLikeAnthropic =
       toolName === 'bash' && isScopedFileRemoval(str(input.command));
 
-    if (decision.behavior === 'deny' && !allowedOnPiAnyway) {
+    if (decision.behavior === 'deny' && !allowedLikeAnthropic) {
       return { block: true, reason: decision.message };
     }
 
