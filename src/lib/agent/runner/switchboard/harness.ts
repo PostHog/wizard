@@ -14,6 +14,7 @@ import {
   WIZARD_USE_PI_HARNESS_FLAG_KEY,
 } from '@lib/constants';
 import { logToFile } from '@utils/debug';
+import type { ProgramId } from '@lib/programs/program-registry';
 import { anthropicBackend } from '../harness/anthropic';
 import { piBackend } from '../harness/pi';
 import type { AgentHarness } from '../harness/types';
@@ -48,13 +49,18 @@ const PI_MODEL_FLAG_VARIANTS: Record<string, string> = {
   'sonnet-5': SONNET_5_MODEL,
 };
 
+/** Programs the wizard-use-pi-harness flag may switch to pi; off this set the flag is a no-op and the binding default stands. */
+const PI_FLAG_PROGRAMS = new Set<ProgramId>(['posthog-integration']);
+
 /**
  * `wizard-use-pi-harness` on → pi, paired with the `wizard-pi-model` variant
- * (unknown/missing variant → gpt-5.4). Otherwise binding default.
+ * (unknown/missing variant → gpt-5.4). Off `PI_FLAG_PROGRAMS`, the flag is
+ * ignored and the binding default stands.
  */
 const flagRunnerOverride: Middleware<HarnessPick> = (ctx, next) => {
   const pick = next();
   if (ctx.flags[WIZARD_USE_PI_HARNESS_FLAG_KEY] !== 'true') return pick;
+  if (!PI_FLAG_PROGRAMS.has(ctx.program)) return pick;
   if (ctx.trace) Object.assign(ctx.trace, { harness: 'flag', model: 'flag' });
   const variant = ctx.flags[WIZARD_PI_MODEL_FLAG_KEY] ?? '';
   return {
