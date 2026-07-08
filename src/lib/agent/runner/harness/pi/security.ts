@@ -67,6 +67,8 @@ export interface ToolGateContext {
    * a first attempt.
    */
   repeatTracker?: RepeatBlockTracker;
+  /** Project root; rm is only allowed for files resolving strictly inside it. */
+  workingDirectory?: string;
 }
 
 export interface GateDecision {
@@ -80,25 +82,28 @@ const str = (v: unknown): string => (typeof v === 'string' ? v : '');
 // any of these is more than one action, so we never treat it as a plain `rm`.
 const SHELL_OPERATORS = /[;&|`$(){}<>\n]/;
 
-/** True when a target is a bare relative project file we're willing to delete. */
-function isDeletableProjectFile(target: string): boolean {
-  const isAnotherFlag = target.startsWith('-');
-  const hasGlobOrHomeChars = /[*?[\]~]/.test(target);
-  const leavesProject =
-    path.isAbsolute(target) || target.split(/[\\/]/).includes('..');
-  const isEnvFile = path.basename(target).startsWith('.env');
+/** True when a target resolves to a file strictly inside the project root. */
+function isDeletableProjectFile(target: string, root: string): boolean {
+  if (target.startsWith('-')) return false; // a flag, not a file
+  if (/[*?[\]~]/.test(target)) return false; // glob / home expansion
+  if (path.basename(target).startsWith('.env')) return false; // secrets
 
-  return !isAnotherFlag && !hasGlobOrHomeChars && !leavesProject && !isEnvFile;
+  const resolved = path.resolve(root, target);
+  return resolved !== root && resolved.startsWith(root + path.sep);
 }
 
 /**
- * A plain `rm [-f] <file...>` of project files — the deletion shape the
- * anthropic arm permits (there bash isn't allowlisted; the shared YARA
- * destructive-delete rules catch the dangerous forms). pi rescues the same
- * shape here so the fall-through YARA scan can judge it, but refuses any
- * shell operator so this can't smuggle a second command past the allowlist.
+ * A plain `rm [-f] <file...>` whose every target is a file inside the project
+ * root — the deletion shape the anthropic arm permits (there bash isn't
+ * allowlisted; the shared YARA destructive-delete rules catch the dangerous
+ * forms). pi rescues the same shape so the fall-through YARA scan can judge
+ * it, but refuses any shell operator so it can't smuggle a second command.
  */
-function isScopedFileRemoval(command: string): boolean {
+function isScopedFileRemoval(
+  command: string,
+  root: string | undefined,
+): boolean {
+  if (!root) return false; // no root to contain against → never rescue
   const trimmed = command.trim();
   if (SHELL_OPERATORS.test(trimmed)) return false;
 
@@ -108,7 +113,7 @@ function isScopedFileRemoval(command: string): boolean {
   if (args[0] === '-f') args.shift();
   if (args.length === 0) return false;
 
-  return args.every(isDeletableProjectFile);
+  return args.every((arg) => isDeletableProjectFile(arg, root));
 }
 
 /**
@@ -244,7 +249,8 @@ export async function evaluateToolCall(
     // unrestricted and leans on the shared YARA scan. Let a plain `rm` of
     // project files through to that same scan so pi matches that behavior.
     const allowedLikeAnthropic =
-      toolName === 'bash' && isScopedFileRemoval(str(input.command));
+      toolName === 'bash' &&
+      isScopedFileRemoval(str(input.command), ctx.workingDirectory);
 
     if (decision.behavior === 'deny' && !allowedLikeAnthropic) {
       return { block: true, reason: decision.message };

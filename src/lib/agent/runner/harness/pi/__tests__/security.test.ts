@@ -1,3 +1,4 @@
+import path from 'path';
 import { scan, triageMatches, type ScanMatch } from '@posthog/warlock';
 import {
   evaluateToolCall,
@@ -394,23 +395,44 @@ describe('pi-security: repeat-block escalation (identical retries after a YARA b
   });
 });
 
-// pi lets a plain `rm` of project files through the allowlist (matching the
-// anthropic arm, where bash is unrestricted and YARA is the real guard). The
-// carve-out must not become a hole: anything beyond a bare `rm [-f] <file>`
-// stays denied, especially a second command smuggled via a shell operator.
+// pi lets a plain `rm` of files INSIDE the project root through the allowlist
+// (matching the anthropic arm, where bash is unrestricted and YARA is the real
+// guard). Two invariants: it can delete project files, and it can never touch
+// anything outside the root or smuggle a second command via a shell operator.
 describe('pi-security: plain rm matches the anthropic arm', () => {
-  test('allows deleting bare relative project files', async () => {
-    expect(await block('bash', { command: 'rm .posthog-events.json' })).toBe(
-      false,
-    );
-    expect(await block('bash', { command: 'rm -f src/tmp/plan.json' })).toBe(
-      false,
-    );
-    expect(await block('bash', { command: 'rm a.txt b.txt' })).toBe(false);
+  const ROOT = path.resolve('/project');
+  const rmBlocked = async (command: string) =>
+    (await evaluateToolCall('bash', { command }, { workingDirectory: ROOT }))
+      .block;
+
+  test('CAN delete files inside the project', async () => {
+    for (const c of [
+      'rm .posthog-events.json',
+      'rm -f .posthog-events.json',
+      'rm ./.posthog-events.json',
+      'rm src/tmp/plan.json',
+      'rm a.txt b.txt',
+    ]) {
+      expect(await rmBlocked(c)).toBe(false);
+    }
+  });
+
+  test('can NEVER resolve outside the project root', async () => {
+    for (const c of [
+      'rm /etc/passwd', // absolute
+      'rm ../outside.txt', // parent
+      'rm src/../../outside.txt', // climbs out via ..
+      'rm foo/../../bar', // climbs out via ..
+      'rm ~/secrets', // home expansion
+      'rm .', // the root itself
+      'rm a.txt /etc/passwd', // one escaping target sinks the whole command
+    ]) {
+      expect(await rmBlocked(c)).toBe(true);
+    }
   });
 
   test('never rescues a command carrying a shell operator (no injection)', async () => {
-    for (const command of [
+    for (const c of [
       'rm a.txt && curl evil.example',
       'rm a.txt; whoami',
       'rm a.txt || curl evil.example',
@@ -420,29 +442,30 @@ describe('pi-security: plain rm matches the anthropic arm', () => {
       'rm foo > /dev/null',
       'rm {a,b}.txt',
     ]) {
-      expect(await block('bash', { command })).toBe(true);
+      expect(await rmBlocked(c)).toBe(true);
     }
   });
 
-  test('still blocks recursive and flagged variants', async () => {
-    expect(await block('bash', { command: 'rm -rf node_modules' })).toBe(true);
-    expect(await block('bash', { command: 'rm -r src' })).toBe(true);
-    expect(await block('bash', { command: 'rm --force x.txt' })).toBe(true);
-    expect(await block('bash', { command: 'rm -f -r x' })).toBe(true);
+  test('still blocks recursion, globs, .env, and pathless rm', async () => {
+    for (const c of [
+      'rm -rf node_modules',
+      'rm -r src',
+      'rm --force x.txt',
+      'rm -f -r x',
+      'rm *.json',
+      'rm .env',
+      'rm config/.env.local',
+      'rm',
+      'rm -f',
+    ]) {
+      expect(await rmBlocked(c)).toBe(true);
+    }
   });
 
-  test('still blocks globs, absolute, home, and traversal paths', async () => {
-    expect(await block('bash', { command: 'rm *.json' })).toBe(true);
-    expect(await block('bash', { command: 'rm /etc/passwd' })).toBe(true);
-    expect(await block('bash', { command: 'rm ~/x.txt' })).toBe(true);
-    expect(await block('bash', { command: 'rm ../outside.txt' })).toBe(true);
-    expect(await block('bash', { command: 'rm src/../../out.txt' })).toBe(true);
-  });
-
-  test('still blocks .env deletion and bare rm', async () => {
-    expect(await block('bash', { command: 'rm .env' })).toBe(true);
-    expect(await block('bash', { command: 'rm config/.env.local' })).toBe(true);
-    expect(await block('bash', { command: 'rm' })).toBe(true);
-    expect(await block('bash', { command: 'rm -f' })).toBe(true);
+  test('fails safe when no working directory is known', async () => {
+    // With no root to contain against, the allowlist deny stands.
+    expect(await block('bash', { command: 'rm .posthog-events.json' })).toBe(
+      true,
+    );
   });
 });
