@@ -745,10 +745,15 @@ export class WizardStore {
    * of this run; `false` → PostHog is already set up, go straight to
    * Self-driving. Resolves `session.integrate` from null.
    */
-  setIntegrate(integrate: boolean): void {
+  setIntegrate(
+    integrate: boolean,
+    extra?: { via?: string; path?: string },
+  ): void {
     this.$session.setKey('integrate', integrate);
     analytics.wizardCapture('self-driving integration check', {
       self_driving_integrate: integrate,
+      ...(extra?.via ? { self_driving_integrate_via: extra.via } : {}),
+      ...(extra?.path ? { self_driving_integrate_path: extra.path } : {}),
       ...sessionProperties(this.session),
     });
     this.emitChange();

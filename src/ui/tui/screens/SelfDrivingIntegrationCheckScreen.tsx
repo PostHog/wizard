@@ -33,9 +33,12 @@ export const SelfDrivingIntegrationCheckScreen = ({
 
       <Box marginTop={1} flexDirection="column">
         <Text dimColor>
-          We didn&apos;t find an existing PostHog integration in your project.
-          Before you can self-drive, you&apos;ll need to integrate PostHog into
-          your project to capture events and generate signals.
+          This will kick off an agent to explore your project and 
+          find existing PostHog integrations.
+          
+          Self-driving reads PostHog data, so we&apos;ll 
+          set that up first: it gives your signal
+          sources something to watch.
         </Text>
       </Box>
 

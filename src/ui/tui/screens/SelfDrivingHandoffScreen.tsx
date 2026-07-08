@@ -43,15 +43,14 @@ export const SelfDrivingHandoffScreen = ({
         <Text>Now let&apos;s make your product self-driving.</Text>
         <Box marginTop={1}>
           <Text dimColor>
-            PostHog is now integrated in your project. Now, let&apos;s connect
-            to GitHub, turns on signal sources, and runs scouts that watch your
-            product data and surface what needs attention.
+            Next, the agent connects GitHub, turns on signal sources, and tunes
+            the scouts that watch your product data.
           </Text>
         </Box>
         <Box marginTop={1}>
           <Text dimColor>
-            This should take about 20 minutes and will occasionally need your
-            input.
+            About 10 more minutes, and it needs your input a few times. Keep
+            this terminal open.
           </Text>
         </Box>
       </Box>

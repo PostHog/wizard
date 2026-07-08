@@ -1,11 +1,10 @@
 /**
  * SelfDrivingIntegrationDetectScreen — runs the Haiku detector over the repo,
- * streams progress, then renders a picker of the projects PostHog can be set up
- * in (a supported framework, no SDK yet). The user picks one — a single project
- * or the repo root is still shown as a one-item menu to confirm — and the choice
- * (framework + path) is written to the session; the integrate-run phase sets
- * PostHog up there. On a detection error, falls back to a manual framework
- * picker so the run can still proceed.
+ * streams progress, then renders a picker of projects. Two kinds are offered:
+ * set-up-here (supported framework, no SDK yet; writes framework + path for
+ * the integrate-run phase) and continue-with-existing (already has PostHog;
+ * sets integrate=false and skips straight to Self-driving). On a detection
+ * error, falls back to a manual framework picker.
  *
  * Runs after auth — the detector needs credentials.
  */
@@ -56,12 +55,22 @@ export const SelfDrivingIntegrationDetectScreen = ({
   const [activity, setActivity] = useState<string[]>([]);
   const started = useRef(false);
 
-  // Commit a chosen project: framework + path → session. The run phase reads
-  // both (path scopes the install dir to the sub-app).
+  // Commit a chosen project to integrate: framework + path → session. The run
+  // phase reads both (path scopes the install dir to the sub-app).
   const choose = (p: IntegrationProject) => {
     if (!p.integration) return;
     store.setFrameworkContext(SELF_DRIVING_INTEGRATE_PATH_KEY, p.path);
     store.setFrameworkConfig(p.integration, FRAMEWORK_REGISTRY[p.integration]);
+  };
+
+  // PostHog already installed here: integrate=false completes integrate-detect
+  // and drops the integrate-run / handoff steps from the walk.
+  const continueWithExisting = (p: IntegrationProject) => {
+    store.setFrameworkContext(SELF_DRIVING_INTEGRATE_PATH_KEY, p.path);
+    store.setIntegrate(false, {
+      via: 'existing-integration-detected',
+      path: p.path,
+    });
   };
 
   // Run the detector once, after auth.
@@ -162,9 +171,32 @@ export const SelfDrivingIntegrationDetectScreen = ({
 
   const { report } = state;
   const instrumentable = report.projects.filter((p) => p.instrumentable);
-  const blocked = report.projects.filter((p) => !p.instrumentable);
+  // Already has PostHog → offer "continue with existing" instead of hiding it.
+  const existing = report.projects.filter((p) => p.continuable);
+  const unsupported = report.projects.filter(
+    (p) => !p.instrumentable && !p.continuable,
+  );
 
-  if (instrumentable.length === 0) {
+  // Values are prefixed so one picker can mix new: and existing: entries.
+  const NEW = 'new:';
+  const EXISTING = 'existing:';
+  const dispatch = (value: string | string[]) => {
+    const v = Array.isArray(value) ? value[0] : value;
+    if (v === CANCEL) {
+      process.exit(0);
+      return;
+    }
+    if (v.startsWith(EXISTING)) {
+      const p = existing.find((x) => x.path === v.slice(EXISTING.length));
+      if (p) continueWithExisting(p);
+      return;
+    }
+    const p = instrumentable.find((x) => x.path === v.slice(NEW.length));
+    if (p) choose(p);
+  };
+
+  // Nothing to instrument, nothing already installed: a genuine dead end.
+  if (instrumentable.length === 0 && existing.length === 0) {
     return (
       <Box flexDirection="column">
         <Box flexDirection="column" marginBottom={1}>
@@ -176,7 +208,7 @@ export const SelfDrivingIntegrationDetectScreen = ({
             set up.
           </Text>
         </Box>
-        <BlockedSummary blocked={blocked} />
+        <UnsupportedSummary unsupported={unsupported} />
         <Box marginTop={1}>
           <PickerMenu
             options={[{ label: 'Exit', value: CANCEL }]}
@@ -187,9 +219,71 @@ export const SelfDrivingIntegrationDetectScreen = ({
     );
   }
 
+  // Only already-installed projects: continue straight to Self-driving.
+  if (instrumentable.length === 0) {
+    return (
+      <Box flexDirection="column">
+        <Box flexDirection="column" marginBottom={1}>
+          <Text bold color={Colors.accent}>
+            {Icons.check} PostHog is already set up
+          </Text>
+          <Text dimColor>Continue straight to Self-driving.</Text>
+        </Box>
+        <PickerMenu
+          message={
+            existing.length === 1
+              ? 'Continue with your existing PostHog install?'
+              : 'Which project should Self-driving use?'
+          }
+          options={[
+            ...existing.map((p) => ({
+              label: projectLabel(p),
+              value: `${EXISTING}${p.path}`,
+            })),
+            { label: 'Exit', value: CANCEL },
+          ]}
+          onSelect={dispatch}
+        />
+        <Box marginTop={1}>
+          <UnsupportedSummary unsupported={unsupported} />
+        </Box>
+      </Box>
+    );
+  }
+
   const single = instrumentable.length === 1;
+  // Disabled rows act as section headings + spacers — navigation skips them.
+  const HEAD = 'head:';
+  const spacer = (id: string) => ({
+    label: ' ',
+    value: `${HEAD}${id}`,
+    disabled: true,
+  });
+  const heading = (id: string, label: string) => ({
+    label,
+    value: `${HEAD}${id}`,
+    disabled: true,
+    header: true,
+  });
   const options = [
-    ...instrumentable.map((p) => ({ label: projectLabel(p), value: p.path })),
+    heading('new', 'New PostHog integration:'),
+    ...instrumentable.map((p) => ({
+      label: projectLabel(p),
+      value: `${NEW}${p.path}`,
+      indent: true,
+    })),
+    ...(existing.length > 0
+      ? [
+          spacer('gap1'),
+          heading('existing', 'Existing integrations:'),
+          ...existing.map((p) => ({
+            label: projectLabel(p),
+            value: `${EXISTING}${p.path}`,
+            indent: true,
+          })),
+        ]
+      : []),
+    spacer('gap2'),
     { label: 'Cancel', value: CANCEL },
   ];
 
@@ -204,51 +298,37 @@ export const SelfDrivingIntegrationDetectScreen = ({
 
       <PickerMenu
         message={
-          single
+          single && existing.length === 0
             ? 'Set up PostHog here? Confirm to continue.'
-            : 'Which project should we set up PostHog in?'
+            : undefined
         }
         options={options}
-        onSelect={(value) => {
-          const path = Array.isArray(value) ? value[0] : value;
-          if (path === CANCEL) {
-            process.exit(0);
-            return;
-          }
-          const chosen = instrumentable.find((p) => p.path === path);
-          if (chosen) choose(chosen);
-        }}
+        onSelect={dispatch}
       />
 
       <Box marginTop={1}>
-        <BlockedSummary blocked={blocked} />
+        <UnsupportedSummary unsupported={unsupported} />
       </Box>
     </Box>
   );
 };
 
 /**
- * Collapses the projects we didn't offer into short count lines — already has
- * PostHog, or an unsupported stack. A monorepo can have many, so we summarise.
+ * Collapses unsupported-stack projects into a count line (already-has-PostHog
+ * projects are real picker options, not summarised).
  */
-const BlockedSummary = ({ blocked }: { blocked: IntegrationProject[] }) => {
-  const alreadyIntegrated = blocked.filter((p) => p.hasPostHog).length;
-  const unsupported = blocked.length - alreadyIntegrated;
-  if (blocked.length === 0) return null;
+const UnsupportedSummary = ({
+  unsupported,
+}: {
+  unsupported: IntegrationProject[];
+}) => {
+  if (unsupported.length === 0) return null;
   return (
     <Box flexDirection="column">
-      {alreadyIntegrated > 0 && (
-        <Text dimColor>
-          (… {alreadyIntegrated} project{alreadyIntegrated === 1 ? '' : 's'}{' '}
-          already {alreadyIntegrated === 1 ? 'has' : 'have'} PostHog)
-        </Text>
-      )}
-      {unsupported > 0 && (
-        <Text dimColor>
-          (… {unsupported} project{unsupported === 1 ? '' : 's'} not supported
-          yet)
-        </Text>
-      )}
+      <Text dimColor>
+        (… {unsupported.length} project{unsupported.length === 1 ? '' : 's'} not
+        supported yet)
+      </Text>
     </Box>
   );
 };
