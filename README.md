@@ -113,6 +113,31 @@ The wizard scans your dependencies and `.env` key names (never the values) to
 identify sources. Database and API-key sources are created from the terminal;
 OAuth sources open the PostHog app's new-source flow in your browser.
 
+## Wizard ownership
+
+Reviews are auto-requested via [`.github/CODEOWNERS`](.github/CODEOWNERS) — the
+file is the source of truth; this table just mirrors it for readability.
+`team-wizard-docs` is the default reviewer; the team-owned programs below
+route review to their owning team instead.
+
+| Path | Owning team |
+|---|---|
+| `*` (everything else, including all other programs) | `@PostHog/team-wizard-docs` |
+| `src/lib/agent/` | `@PostHog/team-wizard-docs` |
+| `src/lib/programs/posthog-integration/` | `@PostHog/team-wizard-docs` |
+| `src/lib/programs/error-tracking-upload-source-maps/` | `@PostHog/team-error-tracking` |
+| `src/lib/programs/mcp-analytics/` | `@PostHog/team-mcp-analytics` |
+| `src/lib/programs/revenue-analytics/` | `@PostHog/team-web-analytics` |
+| `src/lib/programs/self-driving/` | `@PostHog/team-self-driving` |
+| `src/lib/programs/warehouse-source/` | `@PostHog/team-warehouse-sources` |
+| `src/lib/programs/web-analytics-doctor/` | `@PostHog/team-web-analytics` |
+
+Ownership is by directory. Programs not listed above
+(`agent-skill`, `audit`, `events-audit`, `mcp`, `migration`, `posthog-doctor`,
+`shared`, `slack`) fall through the default and are owned by
+`team-wizard-docs`. Today CODEOWNERS only auto-requests review — approval is
+not a merge gate.
+
 ## Headless signup + install (agents / CI)
 
 > ⚠️ `--ci` is **not currently supported in published builds** (see [CI Mode](#ci-mode)).
