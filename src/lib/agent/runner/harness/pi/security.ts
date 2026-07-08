@@ -32,7 +32,6 @@ import {
   createTriageLLMProvider,
   type TriageGatewayAuth,
 } from '@lib/agent/triage-provider';
-import { createFileReadTracker, type FileReadTracker } from './file-state';
 import { logToFile } from '@utils/debug';
 
 /** warlock ScanMatch → the report shape `recordExternalScan` expects. */
@@ -67,16 +66,6 @@ export interface ToolGateContext {
    * a first attempt.
    */
   repeatTracker?: RepeatBlockTracker;
-  /**
-   * Project root the pi tools resolve relative paths against. When set, the
-   * extension enforces read-before-write on write/edit with the same
-   * semantics (and block messages) as the claude-agent-sdk tools — see
-   * file-state.ts. Absent → the gate is off (tests exercising only the
-   * security policy).
-   */
-  workingDirectory?: string;
-  /** Read-before-write state; tests may inject one directly. */
-  fileReadTracker?: FileReadTracker;
 }
 
 export interface GateDecision {
@@ -219,13 +208,6 @@ export async function evaluateToolCall(
       return { block: true, reason: decision.message };
     }
 
-    // Read-before-write, before the YARA scan — a call this blocks would
-    // waste the WASM scan and a possible triage LLM round-trip.
-    if (ctx.fileReadTracker && (toolName === 'write' || toolName === 'edit')) {
-      const staleReason = ctx.fileReadTracker.gate(str(input.path));
-      if (staleReason) return { block: true, reason: staleReason };
-    }
-
     const yaraReason = await preExecutionYaraBlock(
       toolName,
       input,
@@ -283,17 +265,6 @@ export function createSecurityExtension(ctx: ToolGateContext = {}): {
   };
 
   const factory = (pi: PiExtensionApiLike): void => {
-    // Read-before-write state is per SESSION (the factory runs once for the
-    // parent and once per subagent), matching the claude-agent-sdk where each
-    // conversation tracks its own reads. Subagents are read-only, so their
-    // trackers never gate anything.
-    const fileReadTracker =
-      ctx.fileReadTracker ??
-      (ctx.workingDirectory
-        ? createFileReadTracker(ctx.workingDirectory)
-        : undefined);
-    const sessionCtx: ToolGateContext = { ...gateCtx, fileReadTracker };
-
     pi.on('tool_call', async (event) => {
       // A latched post-scan violation blocks everything that follows.
       if (state.criticalViolation) {
@@ -312,7 +283,7 @@ export function createSecurityExtension(ctx: ToolGateContext = {}): {
       const decision = await evaluateToolCall(
         event.toolName,
         event.input ?? {},
-        sessionCtx,
+        gateCtx,
         llmProvider,
       );
       if (decision.block) {
@@ -324,18 +295,6 @@ export function createSecurityExtension(ctx: ToolGateContext = {}): {
     });
 
     pi.on('tool_result', async (event) => {
-      // Feed the read-before-write state: a successful read observes the
-      // file; a successful write/edit means the agent knows the new content
-      // (no re-read required before its next mutation — same as the
-      // claude-agent-sdk tools).
-      if (fileReadTracker && !event.isError) {
-        const resultPath = str((event.input ?? {}).path);
-        if (resultPath) {
-          if (event.toolName === 'read') fileReadTracker.noteRead(resultPath);
-          else if (event.toolName === 'write' || event.toolName === 'edit')
-            fileReadTracker.noteMutation(resultPath);
-        }
-      }
       if (!isPostScanTool(event.toolName)) return {};
       const text = (event.content ?? [])
         .map((c) => (c && c.type === 'text' ? c.text : ''))
@@ -389,8 +348,6 @@ export interface PiExtensionApiLike {
     event: 'tool_result',
     handler: (event: {
       toolName: string;
-      /** The tool call's input — pi's ToolResultEventBase carries it. */
-      input?: Record<string, unknown>;
       content?: Array<{ type: string; text?: string }>;
       isError?: boolean;
     }) => Record<string, never> | Promise<Record<string, never>>,
