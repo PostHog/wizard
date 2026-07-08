@@ -33,8 +33,11 @@ export const SelfDrivingIntegrationCheckScreen = ({
 
       <Box marginTop={1} flexDirection="column">
         <Text dimColor>
-          We didn&apos;t find PostHog in your project. Self-driving reads
-          PostHog data, so we&apos;ll set that up first: it gives your signal
+          This will kick off an agent to explore your project and 
+          find existing PostHog integrations.
+          
+          Self-driving reads PostHog data, so we&apos;ll 
+          set that up first: it gives your signal
           sources something to watch.
         </Text>
       </Box>
