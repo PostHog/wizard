@@ -29,15 +29,28 @@ interface AnthropicTextBlock {
   text?: string;
 }
 
+export interface TriageGatewayAuth {
+  baseURL: string;
+  authToken: string;
+}
+
 /**
- * Build the triage LLM provider from the gateway auth on process.env (set by
- * initializeAgent before any agent run). Returns undefined if auth isn't
+ * Build the triage LLM provider. Auth comes from the explicit `auth` param
+ * when given (the pi harness — it auths the gateway programmatically and never
+ * sets the env vars), otherwise from the gateway auth on process.env (set by
+ * initializeAgent on the anthropic path). Returns undefined if neither is
  * configured — callers then skip triage and fail closed (act on every flagged
  * match), so a missing key never silently disables the scanner.
+ *
+ * The triage model is independent of the agent's model: it is a classifier
+ * judging scan matches, and the gateway routes it by model id regardless of
+ * which model runs the coding agent.
  */
-export function createTriageLLMProvider(): LLMProvider | undefined {
-  const baseURL = process.env.ANTHROPIC_BASE_URL;
-  const authToken = process.env.ANTHROPIC_AUTH_TOKEN;
+export function createTriageLLMProvider(
+  auth?: TriageGatewayAuth,
+): LLMProvider | undefined {
+  const baseURL = auth?.baseURL ?? process.env.ANTHROPIC_BASE_URL;
+  const authToken = auth?.authToken ?? process.env.ANTHROPIC_AUTH_TOKEN;
 
   if (!baseURL || !authToken) {
     logToFile(
