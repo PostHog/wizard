@@ -29,3 +29,11 @@ export const HEADLESS_FLAG = 'headless-DONOTUSE-EXPERIMENTAL';
 export function isHeadless(options: Record<string, unknown>): boolean {
   return options[HEADLESS_FLAG] === true;
 }
+
+/** Detect the headless flag straight off argv, before yargs parses — the analytics singleton initializes at import, ahead of the parse. */
+export function isHeadlessArgv(
+  argv: readonly string[] = process.argv,
+): boolean {
+  const flag = `--${HEADLESS_FLAG}`;
+  return argv.some((a) => a === flag || a.startsWith(`${flag}=`));
+}

@@ -233,13 +233,19 @@ describe('Analytics', () => {
       ).toMatchObject({ run_surface: 'local' });
     });
 
-    it("upgrades to 'cloud' when the headless path sets it", () => {
-      analytics.setTag('run_surface', 'cloud');
-      analytics.captureException(new Error('e'));
+    it("tags 'cloud' when launched with the headless flag", () => {
+      const origArgv = process.argv;
+      process.argv = [...origArgv, '--headless-DONOTUSE-EXPERIMENTAL'];
+      try {
+        const cloud = new Analytics();
+        cloud.captureException(new Error('e'));
 
-      expect(
-        (mockPostHogInstance.captureException as Mock).mock.calls.at(-1)?.[2],
-      ).toMatchObject({ run_surface: 'cloud' });
+        expect(
+          (mockPostHogInstance.captureException as Mock).mock.calls.at(-1)?.[2],
+        ).toMatchObject({ run_surface: 'cloud' });
+      } finally {
+        process.argv = origArgv;
+      }
     });
   });
 
