@@ -38,8 +38,7 @@ export const getContentBlocks = (store?: WizardStore): ContentBlock[] => {
     },
 
     {
-      content:
-        'We'll occasionally need your input. Stick around.',
+      content: "We'll occasionally need your input. Stick around.",
       pause: 6000,
     },
 
