@@ -7,10 +7,9 @@ import {
 import type { WizardSession } from '@lib/wizard-session';
 import type { ApiUser } from '@lib/api';
 import { v4 as uuidv4 } from 'uuid';
-import { IS_PRODUCTION_BUILD } from '@env';
+import { IS_PRODUCTION_BUILD, RUN_SURFACE } from '@env';
 import { debug, logToFile } from './debug';
 import { applyCiFlagOverrides } from './ci-flag-overrides';
-import { isHeadlessArgv } from '@lib/headless-mode';
 
 /**
  * Extract a standard property bag from the current session.
@@ -95,8 +94,7 @@ export class Analytics {
     // runs to 'headless'.
     this.tags.build = IS_PRODUCTION_BUILD ? 'prod' : 'dev';
 
-    // Cloud on the experimental headless path, local everywhere else.
-    this.tags.run_surface = isHeadlessArgv() ? 'cloud' : 'local';
+    this.tags.run_surface = RUN_SURFACE;
 
     this.anonymousId = uuidv4();
 

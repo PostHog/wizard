@@ -13,11 +13,17 @@ vi.mock('uuid');
 // matching every other test. vi.hoisted() runs before the hoisted vi.mock
 // factory, so the getter can read the flag at import time without hitting the
 // temporal dead zone.
-const envState = vi.hoisted(() => ({ isProductionBuild: false }));
+const envState = vi.hoisted(() => ({
+  isProductionBuild: false,
+  runSurface: 'local' as 'cloud' | 'local',
+}));
 vi.mock('@env', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@env')>()),
   get IS_PRODUCTION_BUILD() {
     return envState.isProductionBuild;
+  },
+  get RUN_SURFACE() {
+    return envState.runSurface;
   },
 }));
 
@@ -233,9 +239,8 @@ describe('Analytics', () => {
       ).toMatchObject({ run_surface: 'local' });
     });
 
-    it("tags 'cloud' when launched with the headless flag", () => {
-      const origArgv = process.argv;
-      process.argv = [...origArgv, '--headless-DONOTUSE-EXPERIMENTAL'];
+    it("tags 'cloud' on the headless launch surface", () => {
+      envState.runSurface = 'cloud';
       try {
         const cloud = new Analytics();
         cloud.captureException(new Error('e'));
@@ -244,7 +249,7 @@ describe('Analytics', () => {
           (mockPostHogInstance.captureException as Mock).mock.calls.at(-1)?.[2],
         ).toMatchObject({ run_surface: 'cloud' });
       } finally {
-        process.argv = origArgv;
+        envState.runSurface = 'local';
       }
     });
   });
