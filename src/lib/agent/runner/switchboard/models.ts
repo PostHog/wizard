@@ -18,6 +18,7 @@ import {
   GPT5_4_MODEL,
   GPT5_MINI_MODEL,
   WIZARD_PI_EFFORT_FLAG_KEY,
+  WIZARD_USE_PI_HARNESS_FLAG_KEY,
 } from '@lib/constants';
 
 /** Reasoning effort. pi maps it to `reasoning_effort` for openai-completions. */
@@ -77,8 +78,8 @@ export function modelCapabilities(
   flags: Record<string, string> = {},
 ): ModelCapabilities {
   const caps = MODEL_CAPABILITIES[modelId] ?? defaultCaps(modelId);
-  // `wizard-pi-effort` overrides the table for reasoning models only; an
-  // unknown variant is ignored.
+  // The wizard-pi-effort override applies only when the pi-harness flag selected the run; otherwise the model's own table effort stands.
+  if (flags[WIZARD_USE_PI_HARNESS_FLAG_KEY] !== 'true') return caps;
   const effort = flags[WIZARD_PI_EFFORT_FLAG_KEY] as ThinkingLevel;
   if (caps.reasoning && EFFORT_FLAG_VARIANTS.includes(effort)) {
     return { ...caps, thinkingLevel: effort };
