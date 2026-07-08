@@ -7,7 +7,7 @@ import {
 import type { WizardSession } from '@lib/wizard-session';
 import type { ApiUser } from '@lib/api';
 import { v4 as uuidv4 } from 'uuid';
-import { IS_PRODUCTION_BUILD } from '@env';
+import { IS_PRODUCTION_BUILD, RUN_SURFACE } from '@env';
 import { debug, logToFile } from './debug';
 import { applyCiFlagOverrides } from './ci-flag-overrides';
 
@@ -93,6 +93,8 @@ export class Analytics {
     // upgrade this in runWizardCI: dev `--ci` runs to 'ci', published headless
     // runs to 'headless'.
     this.tags.build = IS_PRODUCTION_BUILD ? 'prod' : 'dev';
+
+    this.tags.run_surface = RUN_SURFACE;
 
     this.anonymousId = uuidv4();
 
