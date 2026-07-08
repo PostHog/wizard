@@ -49,15 +49,7 @@ const PI_MODEL_FLAG_VARIANTS: Record<string, string> = {
   'sonnet-5': SONNET_5_MODEL,
 };
 
-/**
- * Programs the `wizard-use-pi-harness` flag is allowed to switch to pi. pi
- * reliably drives the linear posthog-integration flow, but on the step-gated
- * skill programs (self-driving, audit, …) it batch-reads all the per-step
- * reference files at once and shortcuts to the final step, marking every task
- * done without making the intervening MCP calls — nothing actually configured.
- * Until that ordering holds under pi, the flag is a no-op off this flow and the
- * binding default (anthropic) stands.
- */
+/** Programs the wizard-use-pi-harness flag may switch to pi; off this set the flag is a no-op and the binding default stands. */
 const PI_FLAG_PROGRAMS = new Set<ProgramId>(['posthog-integration']);
 
 /**
