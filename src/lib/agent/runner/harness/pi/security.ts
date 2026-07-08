@@ -76,22 +76,26 @@ export interface GateDecision {
 
 const str = (v: unknown): string => (typeof v === 'string' ? v : '');
 
-/** `rm [-f]` of bare relative project files only — no flags/globs/`..`/absolute/`.env` paths. */
+/** True when every rm target is a plain file path we are willing to let the agent delete. */
+function isDeletableProjectFile(target: string): boolean {
+  const isAnotherFlag = target.startsWith('-');
+  const hasGlobOrHomeChars = /[*?[\]{}~]/.test(target);
+  const leavesProject =
+    path.isAbsolute(target) || target.split(/[\\/]/).includes('..');
+  const isEnvFile = path.basename(target).startsWith('.env');
+
+  return !isAnotherFlag && !hasGlobOrHomeChars && !leavesProject && !isEnvFile;
+}
+
+/** Matches `rm [-f] <file...>` where every file is a bare relative path inside the project. */
 function isScopedFileRemoval(command: string): boolean {
-  const parts = command.trim().split(/\s+/);
-  if (parts[0] !== 'rm') return false;
-  let pathStart = 1;
-  if (parts[pathStart] === '-f') pathStart++;
-  const paths = parts.slice(pathStart);
-  if (paths.length === 0) return false;
-  return paths.every(
-    (p) =>
-      !p.startsWith('-') &&
-      !/[*?[\]{}~]/.test(p) &&
-      !path.isAbsolute(p) &&
-      !p.split(/[\\/]/).includes('..') &&
-      !path.basename(p).startsWith('.env'),
-  );
+  const [executable, ...args] = command.trim().split(/\s+/);
+  if (executable !== 'rm') return false;
+
+  if (args[0] === '-f') args.shift();
+  if (args.length === 0) return false;
+
+  return args.every(isDeletableProjectFile);
 }
 
 /**
@@ -223,13 +227,12 @@ export async function evaluateToolCall(
       disallowedTools: ctx.disallowedTools,
       wizardAskPending: ctx.getWizardAskPending?.() ?? false,
     });
-    if (decision.behavior === 'deny') {
-      // pi-only rm carve-out: fall through to the YARA scan instead of blocking.
-      const scopedRm =
-        toolName === 'bash' && isScopedFileRemoval(str(input.command));
-      if (!scopedRm) {
-        return { block: true, reason: decision.message };
-      }
+    // pi allows scoped rm even though the shared allowlist denies it; the YARA scan below still applies.
+    const allowedOnPiAnyway =
+      toolName === 'bash' && isScopedFileRemoval(str(input.command));
+
+    if (decision.behavior === 'deny' && !allowedOnPiAnyway) {
+      return { block: true, reason: decision.message };
     }
 
     const yaraReason = await preExecutionYaraBlock(
