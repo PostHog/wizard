@@ -539,3 +539,5 @@ The script will:
 - Install dependencies for the app
 - Install the packed wizard tarball into an isolated temp project
 - Run `wizard` in `--ci` mode against the copied app and perform basic post‑install checks
+
+- [JMT x402 Agent Tools](https://jmt-x402-proxy.jmthomasofficial.workers.dev) — 25 paid x402 endpoints on Base mainnet: web search, AI analysis, crypto/stock data, SEC filings, company intel, news, sentiment, macro dashboard. $0.001-$0.15/call USDC. Local LLM-powered.
