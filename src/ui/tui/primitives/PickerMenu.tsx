@@ -36,6 +36,14 @@ interface PickerOption<T> {
   /** Dimmed and unselectable; navigation skips over it. */
   disabled?: boolean;
   /**
+   * Section heading: unselectable (navigation skips it, like `disabled`) but
+   * rendered as a bold header rather than a muted row. Set `disabled` too so
+   * the skip logic treats it as non-selectable.
+   */
+  header?: boolean;
+  /** Indent the label one level, e.g. items nested under a `header` row. */
+  indent?: boolean;
+  /**
    * Multi-select only: marks this option mutually exclusive with every other
    * option. Selecting it clears all other picks; selecting any non-exclusive
    * option clears it. Used e.g. for a browser connector that can't be
@@ -233,28 +241,31 @@ const SinglePickerMenu = <T,>({
             {colOpts.map((opt, rowIdx) => {
               const flatIdx = colIdx * rows + rowIdx;
               const isFocused = flatIdx === focused;
-              const label = opt.hint ? `${opt.label} (${opt.hint})` : opt.label;
+              const base = opt.hint ? `${opt.label} (${opt.hint})` : opt.label;
+              const label = opt.indent ? `  ${base}` : base;
               return (
                 <Box key={flatIdx} gap={1} marginBottom={optionMarginBottom}>
                   <Text
                     color={isFocused ? Colors.accent : undefined}
                     dimColor={!isFocused}
                   >
-                    {isFocused ? Icons.triangleSmallRight : ' '}
+                    {isFocused && !opt.header ? Icons.triangleSmallRight : ' '}
                   </Text>
                   {opt.icon && (
                     <Text color={opt.icon.color}>{opt.icon.glyph}</Text>
                   )}
                   <Text
                     color={
-                      opt.disabled
+                      opt.header
+                        ? undefined
+                        : opt.disabled
                         ? Colors.muted
                         : isFocused
                         ? Colors.accent
                         : undefined
                     }
-                    bold={isFocused && !opt.disabled}
-                    dimColor={!isFocused || opt.disabled}
+                    bold={opt.header || (isFocused && !opt.disabled)}
+                    dimColor={!opt.header && (!isFocused || opt.disabled)}
                   >
                     {label}
                   </Text>

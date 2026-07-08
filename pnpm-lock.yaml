@@ -24,14 +24,17 @@ importers:
         specifier: ^0.3.40
         version: 0.3.40(openai@6.26.0(ws@8.18.1)(zod@3.25.76))
       '@posthog/warlock':
-        specifier: 0.2.2
-        version: 0.2.2
+        specifier: 0.2.3
+        version: 0.2.3
       axios:
         specifier: 1.7.4
         version: 1.7.4
       fast-glob:
         specifier: ^3.3.3
         version: 3.3.3
+      fflate:
+        specifier: ^0.8.3
+        version: 0.8.3
       glob:
         specifier: 9.3.5
         version: 9.3.5
@@ -1766,8 +1769,8 @@ packages:
   '@posthog/core@1.23.1':
     resolution: {integrity: sha512-GViD5mOv/mcbZcyzz3z9CS0R79JzxVaqEz4sP5Dsea178M/j3ZWe6gaHDZB9yuyGfcmIMQ/8K14yv+7QrK4sQQ==}
 
-  '@posthog/warlock@0.2.2':
-    resolution: {integrity: sha512-fpN9eZJ7JvOFej6gfsW1DETJTyo7S2xuu5NQsnBYl8C/cYCmGc8Q0IPiVfBGkIifF1Cic0fzkytFusImxzv4ww==}
+  '@posthog/warlock@0.2.3':
+    resolution: {integrity: sha512-ZlKWA8jU5IlPW5nZ40aE5/MYq/z3HeuKjLiTlH+OyffvDOQkQQ24nBNrMI4tLagGb2tkiNv5l9puAKlSllzWRw==}
     engines: {node: ^20.20.0 || >=22.22.0}
 
   '@protobufjs/aspromise@1.1.2':
@@ -3213,6 +3216,9 @@ packages:
   fetch-blob@3.2.0:
     resolution: {integrity: sha512-7yAQpD2UMJzLi1Dqv7qFYnPbaPx7ZfFK6PiIxQ4PfkGPyNyl2Ugx+a/umUonmKqjhM4DnfbMvdX6otXq83soQQ==}
     engines: {node: ^12.20 || >= 14.13}
+
+  fflate@0.8.3:
+    resolution: {integrity: sha512-tbZNuJrLwGUp3zshBtdy4W+ORxZuIh8a5ilyIEQDC5rY1f3U20JMry0Ll3WBzU58EZKsEuJFXhb5gwv8CsPvgA==}
 
   figures@2.0.0:
     resolution: {integrity: sha512-Oa2M9atig69ZkfwiApY8F2Yy+tzMbazyvqv21R0NsSC8floSOC09BbT1ITWAdoMGQvJ/aZnR1KMwdx9tvHnTNA==}
@@ -7197,7 +7203,7 @@ snapshots:
     dependencies:
       cross-spawn: 7.0.6
 
-  '@posthog/warlock@0.2.2':
+  '@posthog/warlock@0.2.3':
     dependencies:
       '@virustotal/yara-x': 1.15.0
 
@@ -8664,6 +8670,8 @@ snapshots:
     dependencies:
       node-domexception: 1.0.0
       web-streams-polyfill: 3.3.3
+
+  fflate@0.8.3: {}
 
   figures@2.0.0:
     dependencies:

@@ -14,7 +14,7 @@
  * run. No keep-skills step: the setup skill is transient, so postRun removes it.
  */
 
-import { resolve } from 'path';
+import { resolve, sep } from 'path';
 import type { ProgramStep } from '@lib/programs/program-step';
 import { RunPhase, type WizardSession } from '@lib/wizard-session';
 import { HEALTH_CHECK_STEP } from '@lib/programs/shared/health-check-step';
@@ -30,12 +30,18 @@ import { prepSelfDrivingIntegration } from './detect-agentic.js';
 const postHogPresent = (session: WizardSession): boolean =>
   session.frameworkContext[POSTHOG_PRESENT_KEY] === true;
 
-/** Absolute dir to integrate into: the picked sub-app, else the repo root. */
+/**
+ * Absolute dir to integrate into: the picked sub-app, else the repo root.
+ * The picked path originates from LLM output; if it resolves outside the
+ * repo (defense-in-depth on top of the coerce-layer clamp), fall back to
+ * the root rather than run the agent elsewhere.
+ */
 const integrationDir = (session: WizardSession): string => {
   const rel = session.frameworkContext[SELF_DRIVING_INTEGRATE_PATH_KEY];
-  return typeof rel === 'string' && rel !== '.'
-    ? resolve(session.installDir, rel)
-    : session.installDir;
+  if (typeof rel !== 'string' || rel === '.') return session.installDir;
+  const root = resolve(session.installDir);
+  const dir = resolve(root, rel);
+  return dir === root || dir.startsWith(root + sep) ? dir : root;
 };
 
 export const SELF_DRIVING_PROGRAM: ProgramStep[] = [
@@ -85,7 +91,10 @@ export const SELF_DRIVING_PROGRAM: ProgramStep[] = [
     screenId: 'self-driving-integration-detect',
     show: (session) =>
       session.integrate === true && session.integration == null,
-    isComplete: (session) => session.integration != null,
+    // Complete on a picked project OR "continue with existing"
+    // (integrate=false); without the latter the orchestrator's waitUntil hangs.
+    isComplete: (session) =>
+      session.integration != null || session.integrate === false,
   },
   {
     // The integration's own run step, imported and composed here: it runs the

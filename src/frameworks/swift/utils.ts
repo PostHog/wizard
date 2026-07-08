@@ -25,14 +25,17 @@ export async function detectSwiftProjectType(
 ): Promise<SwiftProjectType | undefined> {
   const { installDir } = options;
 
-  // Check if this is a pure SPM package (Package.swift without .xcodeproj)
+  // Pure SPM package: Package.swift with no Xcode project/workspace and no
+  // XcodeGen spec (project.yml generates an app's .xcodeproj, often
+  // uncommitted) — same app signals as the framework detect glob.
   const hasPackageSwift = fs.existsSync(path.join(installDir, 'Package.swift'));
-  const xcodeProjects = await fg('*.xcodeproj', {
+  const hasXcodeGenSpec = fs.existsSync(path.join(installDir, 'project.yml'));
+  const xcodeProjects = await fg('*.{xcodeproj,xcworkspace}', {
     cwd: installDir,
     onlyDirectories: true,
   });
 
-  if (hasPackageSwift && xcodeProjects.length === 0) {
+  if (hasPackageSwift && xcodeProjects.length === 0 && !hasXcodeGenSpec) {
     return SwiftProjectType.SPM;
   }
 
