@@ -1,6 +1,5 @@
 import * as childProcess from 'node:child_process';
 import * as fs from 'node:fs';
-import * as os from 'node:os';
 import { basename, isAbsolute, join, relative } from 'node:path';
 import { promisify } from 'node:util';
 
@@ -161,11 +160,21 @@ export function detectOrgAndProject(email: string): {
   return { orgName, projectName };
 }
 
+/**
+ * Paths of files that are modified, staged, or untracked, relative to the
+ * current directory.
+ *
+ * Uses `-z` rather than the default line-oriented output: git C-quotes any path
+ * containing a space or a non-ASCII byte (`"with space.ts"`, `"caf\303\251.ts"`),
+ * so the default format cannot be split on whitespace without corrupting those
+ * names. `-z` emits raw, unquoted paths separated by NUL, which no path may
+ * contain.
+ */
 export function getUncommittedOrUntrackedFiles(): string[] {
   let gitStatus: string;
   try {
     gitStatus = childProcess
-      .execSync('git status --porcelain=v1', {
+      .execSync('git status --porcelain=v1 -z', {
         // we only care about stdout
         stdio: ['ignore', 'pipe', 'ignore'],
       })
@@ -174,14 +183,31 @@ export function getUncommittedOrUntrackedFiles(): string[] {
     return [];
   }
 
-  const result: string[] = [];
-  for (const rawLine of gitStatus.split(os.EOL)) {
-    const line = rawLine.trim();
-    if (!line) continue;
-    const match = /^\S+\s+(\S+)/.exec(line);
-    result.push(`- ${match?.[1]}`);
+  const entries = gitStatus.split('\0');
+  const files: string[] = [];
+
+  for (let i = 0; i < entries.length; i++) {
+    const entry = entries[i];
+    if (!entry) continue;
+
+    // Each entry is `XY <path>`, where X is the staged status and Y the
+    // unstaged one.
+    const [x, y] = entry;
+    const filePath = entry.slice(3);
+
+    // Rename and copy entries are followed by a second NUL-terminated field
+    // holding the original path. `entry` already carries the new path, so step
+    // over the original.
+    if (x === 'R' || x === 'C') i++;
+
+    // A deleted path is gone from disk. Handing it to a formatter only makes
+    // the formatter exit non-zero.
+    if (x === 'D' || y === 'D') continue;
+
+    if (filePath) files.push(filePath);
   }
-  return result;
+
+  return files;
 }
 
 export async function isReact19Installed({
