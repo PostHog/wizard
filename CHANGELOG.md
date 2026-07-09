@@ -1,5 +1,19 @@
 # Changelog
 
+## [2.40.0](https://github.com/PostHog/wizard/compare/v2.39.0...v2.40.0) (2026-07-09)
+
+
+### Features
+
+* **e2e-harness:** preserve ANSI color in snapshot frames ([#730](https://github.com/PostHog/wizard/issues/730)) ([406b41d](https://github.com/PostHog/wizard/commit/406b41dcdb605b1aae0f5f88dfd692357d246731))
+
+
+### Bug Fixes
+
+* **agent:** corrected read-before-write prompt, install_skill capture-and-continue ([#816](https://github.com/PostHog/wizard/issues/816)) ([c12cdb4](https://github.com/PostHog/wizard/commit/c12cdb4cb2c71684aaa387dec7ba613893f0b798))
+* **detection:** stop generic Node claiming Vite apps and Android claiming Flutter ([#817](https://github.com/PostHog/wizard/issues/817)) ([f76a176](https://github.com/PostHog/wizard/commit/f76a176dffea88a740934c3938d645c152e83aaf))
+* pin wizard-internal MCP connections to tools mode ([#851](https://github.com/PostHog/wizard/issues/851)) ([16759b2](https://github.com/PostHog/wizard/commit/16759b23f15bc73d5d3405eb4a85067f51b47c97))
+
 ## [2.39.0](https://github.com/PostHog/wizard/compare/v2.38.2...v2.39.0) (2026-07-08)
 
 
