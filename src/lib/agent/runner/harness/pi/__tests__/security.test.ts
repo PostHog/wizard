@@ -446,6 +446,17 @@ describe('pi-security: plain rm matches the anthropic arm', () => {
     }
   });
 
+  test('never rescues quoted or backslash-escaped paths', async () => {
+    for (const c of [
+      'rm "../secret"',
+      "rm '/etc/passwd'",
+      'rm \\$HOME/thing',
+      'rm "a.txt"',
+    ]) {
+      expect(await rmBlocked(c)).toBe(true);
+    }
+  });
+
   test('still blocks recursion, globs, .env, and pathless rm', async () => {
     for (const c of [
       'rm -rf node_modules',
@@ -467,5 +478,18 @@ describe('pi-security: plain rm matches the anthropic arm', () => {
     expect(await block('bash', { command: 'rm .posthog-events.json' })).toBe(
       true,
     );
+  });
+
+  test('normalizes a relative workingDirectory', async () => {
+    const relRoot = path.relative(process.cwd(), path.resolve('/project'));
+    expect(
+      (
+        await evaluateToolCall(
+          'bash',
+          { command: 'rm plan.json' },
+          { workingDirectory: relRoot },
+        )
+      ).block,
+    ).toBe(false);
   });
 });

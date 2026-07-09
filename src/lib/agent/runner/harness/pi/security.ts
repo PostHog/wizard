@@ -80,7 +80,7 @@ const str = (v: unknown): string => (typeof v === 'string' ? v : '');
 
 // Shell metacharacters that chain, substitute, or redirect. A command carrying
 // any of these is more than one action, so we never treat it as a plain `rm`.
-const SHELL_OPERATORS = /[;&|`$(){}<>\n]/;
+const SHELL_OPERATORS = /[;&|`$(){}<>\n'"\\]/;
 
 /** True when a target resolves to a file strictly inside the project root. */
 function isDeletableProjectFile(target: string, root: string): boolean {
@@ -101,9 +101,10 @@ function isDeletableProjectFile(target: string, root: string): boolean {
  */
 function isScopedFileRemoval(
   command: string,
-  root: string | undefined,
+  rawRoot: string | undefined,
 ): boolean {
-  if (!root) return false; // no root to contain against → never rescue
+  if (!rawRoot) return false; // no root to contain against → never rescue
+  const root = path.resolve(rawRoot);
   const trimmed = command.trim();
   if (SHELL_OPERATORS.test(trimmed)) return false;
 
