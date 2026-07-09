@@ -8,7 +8,7 @@
  */
 
 import type { WizardSession } from '@lib/wizard-session';
-import { withMcpToolsModePin } from '@lib/host-resolution';
+import { mcpUrlFor } from '@lib/host-resolution';
 import { analytics } from '@utils/analytics';
 import { getUI } from '@ui';
 import { authenticate } from './authenticate';
@@ -29,7 +29,6 @@ import { enableDebugLogs, logToFile, initLogFile } from '@utils/debug';
 import { wizardAbort } from '@utils/wizard-abort';
 import { isNonInteractiveEnvironment } from '@utils/environment';
 import { getSkillsBaseUrl } from '@lib/constants';
-import { runtimeEnv } from '@env';
 import type { WizardRunOptions } from '@utils/types';
 import type { ProgramConfig } from '@lib/programs/program-step';
 import type { ProgramRun, BootstrapResult } from './types';
@@ -267,13 +266,8 @@ export async function bootstrapProgram(
 
   // One MCP url for every region: the server resolves the user's region from
   // the bearer token, so the EU subdomain (a Claude Code OAuth workaround) is
-  // not needed here. `mode=tools` keeps the named-tool roster the agent
-  // prompts and skills expect (see withMcpToolsModePin).
-  const mcpUrl = withMcpToolsModePin(
-    session.localMcp
-      ? 'http://localhost:8787/mcp'
-      : runtimeEnv('MCP_URL') || 'https://mcp.posthog.com/mcp',
-  );
+  // not needed here.
+  const mcpUrl = mcpUrlFor(session.localMcp);
 
   return {
     skillsBaseUrl,
