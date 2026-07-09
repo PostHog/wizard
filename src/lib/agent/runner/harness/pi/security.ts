@@ -17,6 +17,8 @@
  * extension installed (see subagent.ts), so a child cannot escape it.
  */
 
+import fs from 'fs';
+import path from 'path';
 import type { LLMProvider, ScanMatch } from '@posthog/warlock';
 import { wizardCanUseTool } from '@lib/agent/agent-interface';
 import {
@@ -66,6 +68,8 @@ export interface ToolGateContext {
    * a first attempt.
    */
   repeatTracker?: RepeatBlockTracker;
+  /** Project root; rm is only allowed for files resolving strictly inside it. */
+  workingDirectory?: string;
 }
 
 export interface GateDecision {
@@ -74,6 +78,106 @@ export interface GateDecision {
 }
 
 const str = (v: unknown): string => (typeof v === 'string' ? v : '');
+
+// Shell metacharacters that chain, substitute, or redirect. A command carrying
+// any of these is more than one action, so we never treat it as a plain `rm`.
+const SHELL_OPERATORS = /[;&|`$(){}<>\n'"\\]/;
+
+/** True when a target resolves to a file strictly inside the project root. */
+function isDeletableProjectFile(
+  target: string,
+  root: string,
+  p: typeof path,
+): boolean {
+  if (target.startsWith('-')) return false; // a flag, not a file
+  if (/[*?[\]~]/.test(target)) return false; // glob / home expansion
+  if (p.basename(target).startsWith('.env')) return false; // secrets
+
+  const resolved = p.resolve(root, target);
+  return resolved !== root && resolved.startsWith(root + p.sep);
+}
+
+/**
+ * A plain `rm [-f] <file...>` whose every target is a file inside the project
+ * root — the deletion shape the anthropic arm permits (there bash isn't
+ * allowlisted; the shared YARA destructive-delete rules catch the dangerous
+ * forms). pi rescues the same shape so the fall-through YARA scan can judge
+ * it, but refuses any shell operator so it can't smuggle a second command.
+ * Path checks run through the host's `path` (win32 on Windows, posix elsewhere);
+ * pi always executes commands via a POSIX bash, so targets use forward slashes.
+ */
+export function isScopedFileRemoval(
+  command: string,
+  rawRoot: string | undefined,
+  p: typeof path = path,
+): boolean {
+  if (!rawRoot) return false; // no root to contain against → never rescue
+  const root = p.resolve(rawRoot);
+  const trimmed = command.trim();
+  if (SHELL_OPERATORS.test(trimmed)) return false;
+
+  const [executable, ...args] = trimmed.split(/\s+/);
+  if (executable !== 'rm') return false;
+
+  if (args[0] === '-f') args.shift();
+  if (args.length === 0) return false;
+
+  return args.every((arg) => isDeletableProjectFile(arg, root, p));
+}
+
+/** A write that removes more than this fraction of an existing file's
+ * non-whitespace content reads as a destructive whole-file rewrite. */
+const OVERWRITE_SHRINK_LIMIT = 0.3;
+
+/** Existing files below this many non-whitespace chars are stubs; replacing one
+ * wholesale is legitimate, so the shrink guard leaves them alone. */
+const OVERWRITE_MIN_CHARS = 400;
+
+const nonWhitespaceLength = (s: string): number => s.replace(/\s+/g, '').length;
+
+/**
+ * Refuse a write that replaces an existing file with far less content than it
+ * held, steering the agent back to targeted edits. Prior art — the destructive
+ * whole-file rewrite is a known model failure that targeted-edit formats exist to
+ * prevent: Aider's search/replace and unified-diff, OpenAI's apply_patch,
+ * Anthropic's str_replace with replace_all; pi's edit tool has no replace_all, so
+ * a rejected scoped edit can fall back to a lossy full write. Additive by design:
+ * the wizard only adds instrumentation, so a large shrink is the rewrite, not intent.
+ */
+export function overwriteShrinkReason(
+  existing: string,
+  next: string,
+): string | undefined {
+  const before = nonWhitespaceLength(existing);
+  if (before < OVERWRITE_MIN_CHARS) return undefined;
+  const after = nonWhitespaceLength(next);
+  if (after >= before * (1 - OVERWRITE_SHRINK_LIMIT)) return undefined;
+  const removed = Math.round((1 - after / before) * 100);
+  return `This write replaces an existing file and removes ~${removed}% of its content. Make targeted edits instead of rewriting the whole file; only write a file in full when creating it.`;
+}
+
+/**
+ * Read the file a write would replace and flag a destructive shrink. A path that
+ * does not exist yet is a new file, so it never triggers; with no project root to
+ * resolve against (unit tests calling `evaluateToolCall` bare), it stays inert.
+ */
+async function overwriteShrinkBlock(
+  input: Record<string, unknown>,
+  workingDirectory: string | undefined,
+): Promise<string | undefined> {
+  const target = str(input.path);
+  if (!workingDirectory || !target) return undefined;
+  let existing: string;
+  try {
+    existing = await fs.promises.readFile(
+      path.resolve(workingDirectory, target),
+      'utf8',
+    );
+  } catch {
+    return undefined; // new file (ENOENT) or unreadable — nothing to preserve
+  }
+  return overwriteShrinkReason(existing, str(input.content));
+}
 
 /**
  * Translate a pi tool name to the claude-cased name + input the shared policy
@@ -204,7 +308,14 @@ export async function evaluateToolCall(
       disallowedTools: ctx.disallowedTools,
       wizardAskPending: ctx.getWizardAskPending?.() ?? false,
     });
-    if (decision.behavior === 'deny') {
+    // The allowlist is a pi-only restriction; the anthropic arm runs bash
+    // unrestricted and leans on the shared YARA scan. Let a plain `rm` of
+    // project files through to that same scan so pi matches that behavior.
+    const allowedLikeAnthropic =
+      toolName === 'bash' &&
+      isScopedFileRemoval(str(input.command), ctx.workingDirectory);
+
+    if (decision.behavior === 'deny' && !allowedLikeAnthropic) {
       return { block: true, reason: decision.message };
     }
 
@@ -215,6 +326,14 @@ export async function evaluateToolCall(
       ctx.repeatTracker,
     );
     if (yaraReason) return { block: true, reason: yaraReason };
+
+    if (toolName === 'write') {
+      const shrinkReason = await overwriteShrinkBlock(
+        input,
+        ctx.workingDirectory,
+      );
+      if (shrinkReason) return { block: true, reason: shrinkReason };
+    }
 
     return { block: false };
   } catch (err) {

