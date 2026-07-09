@@ -91,11 +91,11 @@ export enum Integration {
   android = 'android',
   rails = 'rails',
 
-  // Language fallbacks
+  // Language fallbacks. Keep javascriptNode last: it matches any package.json.
   python = 'python',
   ruby = 'ruby',
-  javascriptNode = 'javascript_node',
   javascript_web = 'javascript_web',
+  javascriptNode = 'javascript_node',
 }
 
 export interface Args {
