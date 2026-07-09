@@ -223,6 +223,13 @@ export class InkUI implements WizardUI {
     this.store.pushStatus(message);
   }
 
+  waitForAgentNudge(
+    afterId?: number,
+    signal?: AbortSignal,
+  ): Promise<{ id: number; message: string } | null> {
+    return this.store.waitForAgentNudge(afterId, signal);
+  }
+
   syncTodos(
     todos: Array<{ content: string; status: string; activeForm?: string }>,
   ): void {

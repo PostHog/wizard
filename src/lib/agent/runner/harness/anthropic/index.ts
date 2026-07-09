@@ -71,6 +71,8 @@ export const anthropicBackend: AgentHarness = {
         allowedTools: programConfig.allowedTools,
         disallowedTools: programConfig.disallowedTools,
         getPendingQuestion: () => session.pendingQuestion,
+        waitForAgentNudge: (afterId, signal) =>
+          getUI().waitForAgentNudge(afterId, signal),
         modelOverride: model,
       },
       sessionToOptions(session),
@@ -133,6 +135,8 @@ export const anthropicBackend: AgentHarness = {
         wizardMetadata: boot.wizardMetadata,
         integrationLabel: programConfig.id,
         orchestrator,
+        waitForAgentNudge: (afterId, signal) =>
+          getUI().waitForAgentNudge(afterId, signal),
       },
       options,
     );

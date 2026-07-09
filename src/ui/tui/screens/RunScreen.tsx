@@ -18,6 +18,7 @@ import {
   EventPlanViewer,
   HNViewer,
 } from '@ui/tui/primitives/index';
+import type { KeyBinding } from '@ui/tui/hooks/useKeyBindings';
 import type { ProgressItem } from '@ui/tui/primitives/index';
 import { ADDITIONAL_FEATURE_LABELS } from '@lib/wizard-session';
 import { LearnCard } from '@ui/tui/components/LearnCard';
@@ -98,6 +99,18 @@ export const RunScreen = ({ store }: RunScreenProps) => {
   // Program-supplied tips for the right pane; undefined falls back to
   // DEFAULT_TIPS inside TipsCard, so non-self-driving programs are unaffected.
   const programTips = getProgramConfig(activeProgram).getTips?.(store);
+  const nudgeBindings = useMemo<KeyBinding[]>(
+    () => [
+      {
+        match: 'n',
+        label: 'n',
+        action: 'nudge agent',
+        priority: 20,
+        handler: () => store.nudgeAgent(),
+      },
+    ],
+    [store],
+  );
 
   const leftPane = store.learnCardComplete ? (
     <TipsCard store={store} tips={programTips} />
@@ -145,6 +158,7 @@ export const RunScreen = ({ store }: RunScreenProps) => {
       tabs={tabs}
       statusMessage={statuses}
       expandableStatus
+      extraBindings={nudgeBindings}
       store={store}
     />
   );

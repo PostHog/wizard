@@ -794,6 +794,47 @@ describe('WizardStore', () => {
     });
   });
 
+  describe('agent nudges', () => {
+    it('records a nudge with a monotonic id and status message', () => {
+      const store = createStore();
+
+      store.nudgeAgent('Move to the next task.');
+
+      expect(store.agentNudge).toEqual({
+        id: 1,
+        message: 'Move to the next task.',
+      });
+      expect(store.statusMessages).toEqual(['Sent a nudge to the agent.']);
+      expect(wizardCaptureMock).toHaveBeenCalledWith(
+        'agent nudged',
+        expect.objectContaining({ program_id: Program.PostHogIntegration }),
+      );
+    });
+
+    it('waits for the next nudge after the given id', async () => {
+      const store = createStore();
+      store.nudgeAgent('First nudge');
+
+      const next = store.waitForAgentNudge(1);
+      store.nudgeAgent('Second nudge');
+
+      await expect(next).resolves.toEqual({
+        id: 2,
+        message: 'Second nudge',
+      });
+    });
+
+    it('resolves null when the wait is aborted', async () => {
+      const store = createStore();
+      const controller = new AbortController();
+
+      const next = store.waitForAgentNudge(0, controller.signal);
+      controller.abort();
+
+      await expect(next).resolves.toBeNull();
+    });
+  });
+
   describe('tasks', () => {
     it('setTasks replaces the task list', () => {
       const store = createStore();

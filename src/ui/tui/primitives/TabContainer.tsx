@@ -33,6 +33,7 @@ interface TabContainerProps {
   expandableStatus?: boolean;
   /** Store reference — required when expandableStatus is true so status state is shared. */
   store?: WizardStore;
+  extraBindings?: KeyBinding[];
 }
 
 export const TabContainer = ({
@@ -40,6 +41,7 @@ export const TabContainer = ({
   statusMessage,
   expandableStatus = false,
   store,
+  extraBindings = [],
 }: TabContainerProps) => {
   const [activeTab, setActiveTab] = useState(0);
   // Fallback to local state when no store is provided
@@ -78,8 +80,8 @@ export const TabContainer = ({
         },
       });
     }
-    return b;
-  }, [tabs.length, expandableStatus, store]);
+    return [...b, ...extraBindings];
+  }, [tabs.length, expandableStatus, store, extraBindings]);
 
   useKeyBindings('tab-container', bindings);
 

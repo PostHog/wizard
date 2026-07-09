@@ -191,6 +191,7 @@ export class WizardStore {
   private $currentStage = atom<{ stage: string; startedAt: number } | null>(
     null,
   );
+  private $agentNudge = atom<{ id: number; message: string } | null>(null);
   private $tokenUsage = atom<TokenUsageSnapshot>(EMPTY_TOKEN_USAGE);
   // Defaults on for local/dev/test runs (tsx, `pnpm try`, vitest) so
   // contributors see it without needing to know the shortcut; defaults off
@@ -199,6 +200,7 @@ export class WizardStore {
   private $tokenHudVisible = atom(IS_DEV);
 
   private _onTasksChanged: (() => void) | null = null;
+  private _nudgeSeq = 0;
   /** Last screen seen — used to detect screen transitions for analytics. */
   private _lastScreen: ScreenName | null = null;
 
@@ -388,6 +390,10 @@ export class WizardStore {
 
   get currentStage(): { stage: string; startedAt: number } | null {
     return this.$currentStage.get();
+  }
+
+  get agentNudge(): { id: number; message: string } | null {
+    return this.$agentNudge.get();
   }
 
   /** No-op when the stage hasn't changed, so `startedAt` survives across
@@ -913,6 +919,44 @@ export class WizardStore {
         : [...msgs, message];
     this.$statusMessages.set(next);
     this.emitChange();
+  }
+
+  nudgeAgent(
+    message = 'Please finish the current line of work and move on if you are stuck.',
+  ): void {
+    this._nudgeSeq += 1;
+    this.$agentNudge.set({ id: this._nudgeSeq, message });
+    this.emitChange();
+    this.pushStatus('Sent a nudge to the agent.');
+    analytics.wizardCapture('agent nudged', {
+      program_id: this.router.activeProgram,
+      ...sessionProperties(this.session),
+    });
+  }
+
+  waitForAgentNudge(
+    afterId = 0,
+    signal?: AbortSignal,
+  ): Promise<{ id: number; message: string } | null> {
+    const current = this.$agentNudge.get();
+    if (current && current.id > afterId) return Promise.resolve(current);
+    if (signal?.aborted) return Promise.resolve(null);
+    return new Promise((resolve) => {
+      let unsub: (() => void) | null = null;
+      const onAbort = () => {
+        unsub?.();
+        resolve(null);
+      };
+      signal?.addEventListener('abort', onAbort, { once: true });
+      unsub = this.subscribe(() => {
+        const next = this.$agentNudge.get();
+        if (next && next.id > afterId) {
+          unsub?.();
+          signal?.removeEventListener('abort', onAbort);
+          resolve(next);
+        }
+      });
+    });
   }
 
   get tokenUsage(): TokenUsageSnapshot {
