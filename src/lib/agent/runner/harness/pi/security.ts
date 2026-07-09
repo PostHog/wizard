@@ -83,13 +83,17 @@ const str = (v: unknown): string => (typeof v === 'string' ? v : '');
 const SHELL_OPERATORS = /[;&|`$(){}<>\n'"\\]/;
 
 /** True when a target resolves to a file strictly inside the project root. */
-function isDeletableProjectFile(target: string, root: string): boolean {
+function isDeletableProjectFile(
+  target: string,
+  root: string,
+  p: typeof path,
+): boolean {
   if (target.startsWith('-')) return false; // a flag, not a file
   if (/[*?[\]~]/.test(target)) return false; // glob / home expansion
-  if (path.basename(target).startsWith('.env')) return false; // secrets
+  if (p.basename(target).startsWith('.env')) return false; // secrets
 
-  const resolved = path.resolve(root, target);
-  return resolved !== root && resolved.startsWith(root + path.sep);
+  const resolved = p.resolve(root, target);
+  return resolved !== root && resolved.startsWith(root + p.sep);
 }
 
 /**
@@ -98,13 +102,16 @@ function isDeletableProjectFile(target: string, root: string): boolean {
  * allowlisted; the shared YARA destructive-delete rules catch the dangerous
  * forms). pi rescues the same shape so the fall-through YARA scan can judge
  * it, but refuses any shell operator so it can't smuggle a second command.
+ * Path checks run through the host's `path` (win32 on Windows, posix elsewhere);
+ * pi always executes commands via a POSIX bash, so targets use forward slashes.
  */
-function isScopedFileRemoval(
+export function isScopedFileRemoval(
   command: string,
   rawRoot: string | undefined,
+  p: typeof path = path,
 ): boolean {
   if (!rawRoot) return false; // no root to contain against → never rescue
-  const root = path.resolve(rawRoot);
+  const root = p.resolve(rawRoot);
   const trimmed = command.trim();
   if (SHELL_OPERATORS.test(trimmed)) return false;
 
@@ -114,7 +121,7 @@ function isScopedFileRemoval(
   if (args[0] === '-f') args.shift();
   if (args.length === 0) return false;
 
-  return args.every((arg) => isDeletableProjectFile(arg, root));
+  return args.every((arg) => isDeletableProjectFile(arg, root, p));
 }
 
 /**

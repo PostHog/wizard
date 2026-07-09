@@ -3,6 +3,7 @@ import { scan, triageMatches, type ScanMatch } from '@posthog/warlock';
 import {
   evaluateToolCall,
   createSecurityExtension,
+  isScopedFileRemoval,
   MAX_TOOL_CALLS,
   type PiExtensionApiLike,
 } from '../security';
@@ -492,4 +493,61 @@ describe('pi-security: plain rm matches the anthropic arm', () => {
       ).block,
     ).toBe(false);
   });
+});
+
+// The containment logic runs through the host's `path` (win32 on Windows, posix
+// elsewhere). Inject each flavor to prove the same invariants hold on both.
+describe('pi-security: rm containment holds under Windows and POSIX path rules', () => {
+  const flavors = [
+    ['win32', path.win32, 'C:\\Users\\me\\project'],
+    ['posix', path.posix, '/home/me/project'],
+  ] as const;
+
+  for (const [name, p, root] of flavors) {
+    describe(name, () => {
+      const rescued = (command: string, r: string | undefined = root) =>
+        isScopedFileRemoval(command, r, p);
+
+      test('rescues in-root deletes written with forward slashes', () => {
+        for (const c of [
+          'rm .posthog-events.json',
+          'rm src/tmp/plan.json',
+          'rm -f a.txt b.txt',
+        ]) {
+          expect(rescued(c)).toBe(true);
+        }
+      });
+
+      test('normalizes a relative root', () => {
+        expect(rescued('rm plan.json', 'project')).toBe(true);
+      });
+
+      test('never escapes the root, including sibling-prefix dirs', () => {
+        for (const c of [
+          'rm ../outside',
+          'rm src/../../outside',
+          'rm ../project-evil/x',
+          'rm /c/Windows/system32/x',
+        ]) {
+          expect(rescued(c)).toBe(false);
+        }
+      });
+
+      test('rejects backslash paths (pi runs POSIX bash, never cmd.exe)', () => {
+        expect(rescued('rm src\\tmp\\plan.json')).toBe(false);
+      });
+
+      test('still rejects quotes, globs, .env, and recursion', () => {
+        for (const c of [
+          'rm "a.txt"',
+          "rm '/etc/passwd'",
+          'rm *.json',
+          'rm config/.env.local',
+          'rm -rf src',
+        ]) {
+          expect(rescued(c)).toBe(false);
+        }
+      });
+    });
+  }
 });
