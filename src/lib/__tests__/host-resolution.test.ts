@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { HostResolution } from '@lib/host-resolution';
+import { HostResolution, withMcpToolsModePin } from '@lib/host-resolution';
 
 /**
  * Contract test for HostResolution — the durable record of what the host family
@@ -74,5 +74,31 @@ describe('HostResolution.fromAccessToken', () => {
   it('short-circuits to us in dev/test without a network probe', async () => {
     const h = await HostResolution.fromAccessToken('any-token');
     expect(h.region).toBe('us');
+  });
+});
+
+describe('withMcpToolsModePin', () => {
+  it('pins mode=tools on the prod url', () => {
+    expect(withMcpToolsModePin('https://mcp.posthog.com/mcp')).toBe(
+      'https://mcp.posthog.com/mcp?mode=tools',
+    );
+  });
+
+  it('pins mode=tools on the local dev url', () => {
+    expect(withMcpToolsModePin('http://localhost:8787/mcp')).toBe(
+      'http://localhost:8787/mcp?mode=tools',
+    );
+  });
+
+  it('preserves existing query params while pinning', () => {
+    expect(
+      withMcpToolsModePin('https://mcp.posthog.com/mcp?features=flags'),
+    ).toBe('https://mcp.posthog.com/mcp?features=flags&mode=tools');
+  });
+
+  it('leaves an explicit mode override untouched', () => {
+    expect(withMcpToolsModePin('https://mcp.posthog.com/mcp?mode=cli')).toBe(
+      'https://mcp.posthog.com/mcp?mode=cli',
+    );
   });
 });

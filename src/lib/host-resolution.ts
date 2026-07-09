@@ -63,6 +63,20 @@ function mcpUrlFor(localMcp: boolean): string {
   return runtimeEnv('MCP_URL') || PROD_MCP_URL;
 }
 
+/**
+ * The wizard's internal agent runs speak the named-tool roster, so their MCP
+ * url carries `mode=tools`; an explicit `mode` on the url (e.g. an `MCP_URL`
+ * override) wins, so both server shapes stay reachable in dev.
+ * TODO(#849): drop the pin once both harnesses run on the single-exec CLI mode.
+ */
+export function withMcpToolsModePin(mcpUrl: string): string {
+  const url = new URL(mcpUrl);
+  if (!url.searchParams.has('mode')) {
+    url.searchParams.set('mode', 'tools');
+  }
+  return url.toString();
+}
+
 export class HostResolution {
   /** The resolved cloud region. `'us'` when a base URL is pinned. */
   readonly region: CloudRegion;
