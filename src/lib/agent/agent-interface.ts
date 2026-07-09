@@ -858,6 +858,15 @@ export async function runAgent(
       analytics.capture(WIZARD_REMARK_EVENT_NAME, { remark });
     }
 
+    // A failed install_skill is non-fatal — the agent continues best-effort
+    // without the skill — but every such run must be measurable.
+    const skillFailure = signals.skillInstallFailure();
+    if (skillFailure !== undefined) {
+      analytics.wizardCapture('agent continued without skill', {
+        detail: skillFailure,
+      });
+    }
+
     // Token usage comes from the SDK result message and is per agent run —
     // for the orchestrator that means per task, the secondary cost to watch.
     const usage = lastResultMessage?.usage as

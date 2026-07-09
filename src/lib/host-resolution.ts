@@ -27,8 +27,11 @@ import {
 import { runtimeEnv } from '@env';
 import type { CloudRegion } from '@utils/types';
 
-const LOCAL_MCP_URL = 'http://localhost:8787/mcp';
-const PROD_MCP_URL = 'https://mcp.posthog.com/mcp';
+// The wizard's internal agents speak the named-tool roster, so the default
+// urls pin `mode=tools`; an `MCP_URL` override is taken verbatim.
+// TODO(#849): drop the pin once both harnesses run on the single-exec CLI mode.
+const LOCAL_MCP_URL = 'http://localhost:8787/mcp?mode=tools';
+const PROD_MCP_URL = 'https://mcp.posthog.com/mcp?mode=tools';
 
 /** Construction-time inputs that aren't implied by the region. */
 export interface HostResolutionOptions {
@@ -58,7 +61,7 @@ function assetHostFromApiHost(apiHost: string): string {
   return apiHost;
 }
 
-function mcpUrlFor(localMcp: boolean): string {
+export function mcpUrlFor(localMcp: boolean): string {
   if (localMcp) return LOCAL_MCP_URL;
   return runtimeEnv('MCP_URL') || PROD_MCP_URL;
 }

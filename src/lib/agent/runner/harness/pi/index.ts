@@ -568,6 +568,15 @@ export const piBackend: AgentHarness = {
         analytics.capture(WIZARD_REMARK_EVENT_NAME, { remark });
       }
 
+      // A failed install_skill is non-fatal — the agent continues best-effort
+      // without the skill — but every such run must be measurable.
+      const skillFailure = signals.skillInstallFailure();
+      if (skillFailure !== undefined) {
+        analytics.wizardCapture('agent continued without skill', {
+          detail: skillFailure,
+        });
+      }
+
       // The skill plans events into .posthog-events.json then asks to remove it
       // on completion; pi's `rm` is fence-blocked, so the agent can't — clean it
       // up host-side rather than leave a stale (often empty) artifact (#15).
