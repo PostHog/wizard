@@ -1,5 +1,30 @@
 # Changelog
 
+## [2.39.0](https://github.com/PostHog/wizard/compare/v2.38.2...v2.39.0) (2026-07-08)
+
+
+### Features
+
+* **analytics:** tag every event with run_surface (cloud/local) ([#831](https://github.com/PostHog/wizard/issues/831)) ([e21add5](https://github.com/PostHog/wizard/commit/e21add5852fea8afeb7f2252a9b18845b157b966))
+* **self-driving:** learn deck and copy rewrites ([#819](https://github.com/PostHog/wizard/issues/819)) ([2767689](https://github.com/PostHog/wizard/commit/27676890eb6dd5bfac757cdb969bfa08f369df46))
+
+
+### Bug Fixes
+
+* **deps:** bump @posthog/warlock to 0.2.3 ([#827](https://github.com/PostHog/wizard/issues/827)) ([2c33885](https://github.com/PostHog/wizard/commit/2c33885145c12280674dddea8a399114be8a41e4))
+* **pi:** scan through warlock, delete the resurrected legacy scanner ([#804](https://github.com/PostHog/wizard/issues/804)) ([383ac5d](https://github.com/PostHog/wizard/commit/383ac5dc7f63da21d8127b4b96d12c62af7179f2))
+* **skills:** retry skill downloads with backoff ([#814](https://github.com/PostHog/wizard/issues/814)) ([dd943f7](https://github.com/PostHog/wizard/commit/dd943f724e306062f9f65d8ef9ac3cc6488482a7))
+* **switchboard:** disable the pi-harness flag on the headless (cloud) path ([#832](https://github.com/PostHog/wizard/issues/832)) ([f28f3f0](https://github.com/PostHog/wizard/commit/f28f3f01f235dbd88276cf37affcc8d75a4b4293))
+* **switchboard:** gate the pi harness flag to posthog-integration only ([#824](https://github.com/PostHog/wizard/issues/824)) ([eb5c61e](https://github.com/PostHog/wizard/commit/eb5c61e5bb569a3e46d9510bcf659091da56bb8b))
+* **yara:** repeat-block escalation + scan only edit replacement text (stacked on [#804](https://github.com/PostHog/wizard/issues/804)) ([#820](https://github.com/PostHog/wizard/issues/820)) ([2b589ad](https://github.com/PostHog/wizard/commit/2b589ad01bfe5150ffabc68d0644a472261260a1))
+
+## [2.38.2](https://github.com/PostHog/wizard/compare/v2.38.1...v2.38.2) (2026-07-07)
+
+
+### Bug Fixes
+
+* **self-driving:** detect existing native PostHog installs, offer continue-with-existing ([#803](https://github.com/PostHog/wizard/issues/803)) ([dbe9893](https://github.com/PostHog/wizard/commit/dbe989388aa1b3315f0d70faf05c2626d096b4d5))
+
 ## [2.38.1](https://github.com/PostHog/wizard/compare/v2.38.0...v2.38.1) (2026-07-06)
 
 

@@ -245,12 +245,6 @@ export const WIZARD_PI_MODEL_FLAG_KEY = 'wizard-pi-model';
 export const WIZARD_PI_EFFORT_FLAG_KEY = 'wizard-pi-effort';
 /** Feature flag key that gates the intro-screen "Tools" menu. */
 export const WIZARD_TOOLS_MENU_FLAG_KEY = 'wizard-tools-menu';
-/**
- * Kill switch: when this flag resolves to 'true', Warlock/YARA scanning is
- * disabled for the run. Defaults off (scanning on) — a missing flag or a failed
- * flag fetch must never silently disable a security control.
- */
-export const WIZARD_WARLOCK_DISABLED_FLAG_KEY = 'wizard-warlock-disabled';
 /** User-Agent for wizard HTTP requests and MCP server identification. */
 export const WIZARD_USER_AGENT = `posthog/wizard; version: ${VERSION}`;
 

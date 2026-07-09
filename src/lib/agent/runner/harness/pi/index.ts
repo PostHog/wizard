@@ -338,7 +338,17 @@ export const piBackend: AgentHarness = {
       const { createSecurityExtension } = await import('./security');
       const security = createSecurityExtension({
         disallowedTools: programConfig.disallowedTools,
+        // Triage speaks the Anthropic messages API (it appends /v1/messages),
+        // so it gets the bare gateway URL regardless of which API shape the
+        // agent's model uses. Without this, pi has no ANTHROPIC_* env (it
+        // auths programmatically) and triage would silently no-op.
+        triageAuth: { baseURL: gatewayUrl, authToken: boot.accessToken },
       });
+
+      // Pay warlock's WASM-init + rule-compile cost now, off the tool-call
+      // path, so the first scanned call doesn't eat cold-start latency.
+      const { prewarmYaraScanner } = await import('@lib/yara-hooks');
+      void prewarmYaraScanner();
 
       // Wire the real PostHog MCP into pi (#10): load pi's MCP adapter and point
       // it at the hosted MCP the anthropic path uses, so dashboards/insights are
