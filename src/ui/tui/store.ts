@@ -15,7 +15,12 @@
 
 import { atom, map } from 'nanostores';
 import { logToFile } from '@utils/debug';
-import { TaskStatus, isTaskStatus, type AuthErrorDetail } from '@ui/wizard-ui';
+import {
+  TaskStatus,
+  isTaskStatus,
+  type AuthErrorDetail,
+  type TokenUsageDelta,
+} from '@ui/wizard-ui';
 import {
   type WizardSession,
   type OutroData,
@@ -50,6 +55,8 @@ import type {
 import { getProgramConfig } from '@lib/programs/program-registry';
 import { withAiOptInGate } from '@lib/programs/ai-opt-in-gate';
 import { EXPANDED_COUNT } from '@ui/tui/constants';
+import { IS_DEV } from '@lib/constants';
+import { computeTokenCostUsd } from '@lib/agent/token-pricing';
 
 export { TaskStatus, ScreenId, Overlay, Program, RunPhase, McpOutcome };
 export type { ScreenName, OutroData, WizardSession, ProgramId };
@@ -65,6 +72,42 @@ export interface TaskItem {
 export interface PlannedEvent {
   name: string;
   description: string;
+}
+
+/**
+ * Running token/cost estimate for the hidden Ctrl+T HUD. Accumulated live
+ * from each assistant turn's usage (see `agent-interface.ts`), then
+ * reconciled to the SDK's authoritative `total_cost_usd` once the run
+ * completes — `costIsFinal` flips so the HUD can show the number as exact
+ * rather than a running estimate.
+ */
+export interface TokenUsageSnapshot {
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadTokens: number;
+  cacheCreationTokens: number;
+  costUsd: number;
+  costIsFinal: boolean;
+}
+
+const EMPTY_TOKEN_USAGE: TokenUsageSnapshot = {
+  inputTokens: 0,
+  outputTokens: 0,
+  cacheReadTokens: 0,
+  cacheCreationTokens: 0,
+  costUsd: 0,
+  costIsFinal: false,
+};
+
+/** Total tokens across all counters in a `TokenUsageSnapshot` — used by
+ *  both `TokenCostHud` and `exit-line.ts` to detect "no agent turns yet". */
+export function totalTokenCount(usage: TokenUsageSnapshot): number {
+  return (
+    usage.inputTokens +
+    usage.outputTokens +
+    usage.cacheReadTokens +
+    usage.cacheCreationTokens
+  );
 }
 
 interface GateEntry {
@@ -148,6 +191,12 @@ export class WizardStore {
   private $currentStage = atom<{ stage: string; startedAt: number } | null>(
     null,
   );
+  private $tokenUsage = atom<TokenUsageSnapshot>(EMPTY_TOKEN_USAGE);
+  // Defaults on for local/dev/test runs (tsx, `pnpm try`, vitest) so
+  // contributors see it without needing to know the shortcut; defaults off
+  // for the published build, where it stays genuinely hidden. Still
+  // Ctrl+T-toggleable either way.
+  private $tokenHudVisible = atom(IS_DEV);
 
   private _onTasksChanged: (() => void) | null = null;
   /** Last screen seen — used to detect screen transitions for analytics. */
@@ -276,6 +325,25 @@ export class WizardStore {
    */
   getGate(stepId: string): Promise<void> {
     return this._gates.get(stepId)?.promise ?? Promise.resolve();
+  }
+
+  /**
+   * Resolve once `predicate(session)` is true. Unlike a gate, this is created
+   * at the await point and evaluated live against the current session, so it
+   * never latches on a startup value — the orchestrator uses it to wait for a
+   * decision (a project picked, a handoff acknowledged) without the "true while
+   * undecided" trap that latched gate predicates have.
+   */
+  waitUntil(predicate: (session: WizardSession) => boolean): Promise<void> {
+    if (predicate(this.session)) return Promise.resolve();
+    return new Promise((resolve) => {
+      const unsub = this.subscribe(() => {
+        if (predicate(this.session)) {
+          unsub();
+          resolve();
+        }
+      });
+    });
   }
 
   /**
@@ -672,6 +740,49 @@ export class WizardStore {
     this.emitChange();
   }
 
+  /**
+   * Self-driving integration-check answer. `true` → integrate the SDK as part
+   * of this run; `false` → PostHog is already set up, go straight to
+   * Self-driving. Resolves `session.integrate` from null.
+   */
+  setIntegrate(
+    integrate: boolean,
+    extra?: { via?: string; path?: string },
+  ): void {
+    this.$session.setKey('integrate', integrate);
+    analytics.wizardCapture('self-driving integration check', {
+      self_driving_integrate: integrate,
+      ...(extra?.via ? { self_driving_integrate_via: extra.via } : {}),
+      ...(extra?.path ? { self_driving_integrate_path: extra.path } : {}),
+      ...sessionProperties(this.session),
+    });
+    this.emitChange();
+  }
+
+  /**
+   * Self-driving handoff confirmed — the user acknowledged the post-integration
+   * screen, so the Self-driving run can begin. Gate resolves via _checkGates().
+   */
+  confirmSelfDrivingHandoff(): void {
+    this.$session.setKey('selfDrivingHandoffConfirmed', true);
+    this.emitChange();
+  }
+
+  /**
+   * Mark a composed run step complete (e.g. self-driving's `integrate-run`).
+   * Records the step id so its `isComplete` predicate holds, clears the task
+   * list, and resets run phase to Idle so the next run step starts fresh.
+   */
+  completeRunStep(stepId: string): void {
+    const done = this.session.completedRuns;
+    if (!done.includes(stepId)) {
+      this.$session.setKey('completedRuns', [...done, stepId]);
+    }
+    this.$tasks.set([]);
+    this.$session.setKey('runPhase', RunPhase.Idle);
+    this.emitChange();
+  }
+
   setOutroDismissed(): void {
     this.$session.setKey('outroDismissed', true);
     this.emitChange();
@@ -801,6 +912,52 @@ export class WizardStore {
         ? [...msgs.slice(msgs.length - MAX_STATUS_MESSAGES + 1), message]
         : [...msgs, message];
     this.$statusMessages.set(next);
+    this.emitChange();
+  }
+
+  get tokenUsage(): TokenUsageSnapshot {
+    return this.$tokenUsage.get();
+  }
+
+  get tokenHudVisible(): boolean {
+    return this.$tokenHudVisible.get();
+  }
+
+  /** Hidden Ctrl+T shortcut — see ScreenContainer. Not registered as a
+   *  keyboard hint, so it never shows in the hints bar. */
+  toggleTokenHud(): void {
+    this.$tokenHudVisible.set(!this.$tokenHudVisible.get());
+    this.emitChange();
+  }
+
+  /**
+   * Accumulate one assistant turn's token usage into the running estimate.
+   * Approximate by design (no dedup for SDK-retried/replayed turns, unlike
+   * the benchmark middleware's TurnCounterPlugin) — it's a live indicator
+   * for a hidden debug HUD, not a billing record, and `setFinalTokenCostUsd`
+   * corrects the total once the run's authoritative cost is known.
+   */
+  addTokenUsage(delta: TokenUsageDelta): void {
+    const cur = this.$tokenUsage.get();
+    if (cur.costIsFinal) return;
+    const deltaCostUsd = computeTokenCostUsd(delta);
+    this.$tokenUsage.set({
+      inputTokens: cur.inputTokens + delta.inputTokens,
+      outputTokens: cur.outputTokens + delta.outputTokens,
+      cacheReadTokens: cur.cacheReadTokens + delta.cacheReadTokens,
+      cacheCreationTokens: cur.cacheCreationTokens + delta.cacheCreationTokens,
+      costUsd: cur.costUsd + deltaCostUsd,
+      costIsFinal: false,
+    });
+    this.emitChange();
+  }
+
+  /** Reconcile the running cost estimate to the SDK's authoritative total
+   *  once the agent run completes — same trick the benchmark's
+   *  CostTrackerPlugin.onFinalize uses to correct any per-turn drift. */
+  setFinalTokenCostUsd(costUsd: number): void {
+    const cur = this.$tokenUsage.get();
+    this.$tokenUsage.set({ ...cur, costUsd, costIsFinal: true });
     this.emitChange();
   }
 

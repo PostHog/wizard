@@ -7,6 +7,38 @@ const { mockBuildSessionCli, mockProvisionNewAccountCli } = vi.hoisted(() => ({
   mockProvisionNewAccountCli: vi.fn(),
 }));
 
+// Headless-only machinery, stubbed so the headless path doesn't construct a
+// real WizardStore (which would re-call the mocked buildSession) or open a real
+// network stream. The spies assert the stream is wired in headless and not CI.
+const { mockStreamAttach, mockStreamShutdown } = vi.hoisted(() => ({
+  mockStreamAttach: vi.fn(),
+  mockStreamShutdown: vi.fn(),
+}));
+vi.mock('../lib/task-stream/index', () => ({
+  // shutdown() hardcodes a resolved Promise (not a bare vi.fn) so the
+  // interactive runWizard's dangling SIGTERM handler — which calls
+  // shutdown().catch() and outlives these tests — never hits undefined.catch.
+  TaskStreamPush: class {
+    attach() {
+      mockStreamAttach();
+    }
+    shutdown() {
+      mockStreamShutdown();
+      return Promise.resolve();
+    }
+  },
+  PostHogDestination: class {},
+}));
+vi.mock('../ui/tui/store', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../ui/tui/store')>()),
+  WizardStore: class {
+    session: unknown;
+    setRunPhase = vi.fn();
+    setOutroData = vi.fn();
+    syncTodos = vi.fn();
+  },
+}));
+
 vi.mock('semver', () => ({ satisfies: () => true }));
 // importOriginal keeps real exports (e.g. RunPhase) while overriding
 // buildSession — vitest throws on access to exports a partial mock omits.
@@ -35,6 +67,12 @@ vi.mock('../lib/programs/posthog-integration/index', () => ({
     id: 'posthog-integration',
     steps: [],
     run: null,
+  },
+  integrationRunStep: {
+    id: 'run',
+    label: 'Integration',
+    screenId: 'run',
+    run: () => Promise.resolve(),
   },
 }));
 vi.mock('../utils/environment', () => ({
@@ -272,6 +310,118 @@ describe('CLI argument parsing', () => {
       const args = getLastBuildSessionArgs();
       expect(args.apiKey).toBe('phx_test_key');
     });
+
+    test("tags the build as 'ci'", async () => {
+      await runCLI([
+        '--ci',
+        '--api-key',
+        'phx_test',
+        '--install-dir',
+        '/tmp/test',
+      ]);
+
+      const { analytics } = await import('../utils/analytics');
+      expect(analytics.setTag).toHaveBeenCalledWith('build', 'ci');
+    });
+
+    test('does not stream wizard-session state in CI', async () => {
+      await runCLI([
+        '--ci',
+        '--api-key',
+        'phx_test',
+        '--install-dir',
+        '/tmp/test',
+      ]);
+
+      expect(mockStreamAttach).not.toHaveBeenCalled();
+    });
+  });
+
+  // The experimental headless flag is the published-build sibling of --ci: it
+  // routes through the same non-interactive runner (session.ci === true), but
+  // is its own flag and tags the build distinctly so the two modes segment in
+  // analytics. Its CLI name is intentionally ugly/undocumented — sourced from
+  // @lib/headless-mode so this test never has to spell it out.
+  describe('headless flag', () => {
+    // Source of truth: HEADLESS_FLAG in src/lib/headless-mode.ts. Hardcoded
+    // here (not imported) to keep this file free of top-level imports — see the
+    // note at the top of the file.
+    const headlessFlag = '--headless-DONOTUSE-EXPERIMENTAL';
+
+    test('routes through the CI runner (builds a ci session)', async () => {
+      await runCLI([
+        headlessFlag,
+        '--api-key',
+        'pha_test',
+        '--install-dir',
+        '/tmp/test',
+      ]);
+
+      const args = getLastBuildSessionArgs();
+      expect(args.ci).toBe(true);
+    });
+
+    test("tags the build as 'headless' (not 'ci')", async () => {
+      await runCLI([
+        headlessFlag,
+        '--api-key',
+        'pha_test',
+        '--install-dir',
+        '/tmp/test',
+      ]);
+
+      const { analytics } = await import('../utils/analytics');
+      expect(analytics.setTag).toHaveBeenCalledWith('build', 'headless');
+      expect(analytics.setTag).not.toHaveBeenCalledWith('build', 'ci');
+    });
+
+    // The dispatch checks the headless flag before --ci, so headless wins when
+    // both are passed. Not a supported combination, but pin the precedence.
+    test('takes precedence over --ci when both are passed', async () => {
+      await runCLI([
+        '--ci',
+        headlessFlag,
+        '--api-key',
+        'pha_test',
+        '--install-dir',
+        '/tmp/test',
+      ]);
+
+      const { analytics } = await import('../utils/analytics');
+      expect(analytics.setTag).toHaveBeenCalledWith('build', 'headless');
+      expect(analytics.setTag).not.toHaveBeenCalledWith('build', 'ci');
+    });
+
+    test('attaches and flushes the wizard-session stream', async () => {
+      await runCLI([
+        headlessFlag,
+        '--api-key',
+        'pha_test',
+        '--install-dir',
+        '/tmp/test',
+      ]);
+
+      expect(mockStreamAttach).toHaveBeenCalled();
+      expect(mockStreamShutdown).toHaveBeenCalled();
+    });
+
+    test('does not require --region when headless is set', async () => {
+      await runCLI([
+        headlessFlag,
+        '--api-key',
+        'pha_test',
+        '--install-dir',
+        '/tmp/test',
+      ]);
+
+      expect(process.exit).not.toHaveBeenCalledWith(1);
+    });
+
+    test('requires --api-key when headless is set', async () => {
+      await runCLI([headlessFlag, '--install-dir', '/tmp/test']);
+
+      expect(process.exit).toHaveBeenCalledWith(1);
+    });
   });
 
   describe('CI environment variables', () => {
@@ -373,6 +523,7 @@ describe('CLI argument parsing', () => {
         'new@example.com',
         '',
         'US',
+        { baseUrl: undefined },
       );
       const args = getLastBuildSessionArgs();
       expect(args.apiKey).toBe('phx_from_signup');
@@ -385,6 +536,7 @@ describe('CLI argument parsing', () => {
         'new@example.com',
         'Test User',
         'US',
+        { baseUrl: undefined },
       );
     });
 
@@ -395,6 +547,7 @@ describe('CLI argument parsing', () => {
         'new@example.com',
         '',
         'EU',
+        { baseUrl: undefined },
       );
     });
 

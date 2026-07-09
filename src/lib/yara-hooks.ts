@@ -24,8 +24,14 @@
 
 import fs from 'fs';
 import path from 'path';
+import { createHash } from 'crypto';
 import fg from 'fast-glob';
-import type { ScanMatch, TriageMatch, LLMProvider } from '@posthog/warlock';
+import type {
+  ScanMatch,
+  TriageMatch,
+  LLMProvider,
+  Category,
+} from '@posthog/warlock';
 import { logToFile } from '@utils/debug';
 import { analytics } from '@utils/analytics';
 import { getUI } from '@ui';
@@ -108,11 +114,11 @@ export interface HookCallbackMatcher {
 }
 
 /** Which content surface a warlock rule applies to (from rule `scan_context`). */
-type ScanContext = 'command' | 'input' | 'output';
+export type ScanContext = 'command' | 'input' | 'output';
 
 // ─── Scan Report Accumulator ─────────────────────────────────────
 
-type ScanAction = 'blocked' | 'reverted' | 'warned' | 'aborted';
+export type ScanAction = 'blocked' | 'reverted' | 'warned' | 'aborted';
 
 interface ScanReportEntry {
   rule: string;
@@ -173,6 +179,41 @@ export function resetScanReport(): void {
   scanViolations.length = 0;
 }
 
+/**
+ * Scan bookkeeping for harnesses that run a scanner outside these hooks (pi):
+ * counts the scan and routes violations through `recordMatch`, so they reach
+ * the run log, per-match telemetry, and the end-of-run scan report.
+ */
+export function recordExternalScan(
+  phase: string,
+  tool: string,
+  violations: Array<{
+    rule: string;
+    severity: string;
+    category: string;
+    description: string;
+  }>,
+  action: ScanAction,
+): void {
+  recordScan();
+  for (const v of violations) {
+    recordMatch(
+      phase,
+      tool,
+      {
+        rule: v.rule,
+        metadata: {
+          severity: v.severity as ScanMatch['metadata']['severity'],
+          category: v.category as ScanMatch['metadata']['category'],
+          description: v.description,
+        },
+        matchedStrings: [],
+      },
+      action,
+    );
+  }
+}
+
 /** Format the scan report summary. Returns null if no scans occurred */
 export function formatScanReport(): string | null {
   if (scanCount === 0) return null;
@@ -230,6 +271,57 @@ export function writeScanReport(): string | null {
     return null;
   }
   return WIZARD_YARA_REPORT_FILE;
+}
+
+// ─── User-facing abort copy ──────────────────────────────────────
+//
+// The abort screen is the one security surface a user actually sees, so it must
+// say what was caught and that we protected them, in plain language, instead of
+// a bare "Security violation detected." Warlock owns the rules and categories;
+// this map is the wizard's *presentation* of a category it already detected. We
+// deliberately do not surface warlock's own rule `description` here: it is
+// written for maintainers (it ships to telemetry) and reads as technical. The
+// `Category` type is a stable, append-only warlock API, so a new category just
+// falls through to the generic line below rather than breaking the build.
+
+const CATEGORY_DESCRIPTIONS: Record<Category, string> = {
+  prompt_injection:
+    'hit hidden instructions in a file it read, a possible attempt to hijack the setup',
+  exfiltration: 'tried to send data to an outside location',
+  destructive_operations: 'tried to run a destructive command',
+  supply_chain: 'tried to pull in untrusted code',
+  posthog_pii: 'tried to write personal data (PII) into your project',
+  posthog_hardcoded_key: 'tried to hardcode a PostHog key into your project',
+  hardcoded_secret: 'tried to hardcode a secret into your project',
+};
+
+/** Most recent violation that terminated the run, or null. */
+function lastTerminatingViolation(): ScanReportEntry | null {
+  for (let i = scanViolations.length - 1; i >= 0; i--) {
+    if (scanViolations[i].action === 'aborted') return scanViolations[i];
+  }
+  return null;
+}
+
+/**
+ * Build the user-facing copy for the security abort screen: what the scanner
+ * caught and what we did about it. This screen renders only because the run was
+ * stopped, so the "what we did" half is constant. Falls back to a generic line
+ * when no specific violation was recorded (e.g. the scanner itself errored and
+ * failed closed before a match was logged).
+ */
+export function formatYaraAbortMessage(): string {
+  const v = lastTerminatingViolation();
+  const what =
+    (v && CATEGORY_DESCRIPTIONS[v.category as Category]) ??
+    'did something our security scanner flagged';
+
+  return (
+    'Security check stopped the setup.\n\n' +
+    `The agent ${what}. We stopped the run to keep your project safe.\n` +
+    'No unsafe changes were left in your project.\n\n' +
+    'If this looks wrong, let us know: wizard@posthog.com'
+  );
 }
 
 // ─── Hook Timeouts (ms) ─────────────────────────────────────────
@@ -367,11 +459,75 @@ const WIZARD_DOC_BASENAMES = new Set([
 
 const WIZARD_DOC_PATTERNS: RegExp[] = [EVENT_INVENTORY_PART_PATTERN];
 
-function isWizardDocumentationPath(filePath: string | undefined): boolean {
+export function isWizardDocumentationPath(
+  filePath: string | undefined,
+): boolean {
   if (!filePath) return false;
   const basename = path.basename(filePath);
   if (WIZARD_DOC_BASENAMES.has(basename)) return true;
   return WIZARD_DOC_PATTERNS.some((re) => re.test(basename));
+}
+
+// ─── Repeat-block tracker ─────────────────────────────────────────
+//
+// Field data (switchboard YARA tile): an agent whose edit gets blocked often
+// retries the identical payload — the scan is deterministic, so every retry
+// blocks again and the run burns turns (~4.2 blocks per affected run). The
+// runtime notes already say "don't retry"; the data shows the prompt alone
+// doesn't hold. This is the code-side guard: remember the exact payloads we
+// blocked, and when the same content comes back, escalate the block reason —
+// first to "change the code, not the retry", then to "report it and move on".
+// Used by both fences: the anthropic PreToolUse Bash hook below, and the pi
+// security extension's pre-execution scan (bash/write/edit).
+
+/** Identical-payload attempt at which the agent is told to move on. */
+const REPEAT_BLOCK_MOVE_ON_ATTEMPT = 3;
+
+export interface RepeatBlockTracker {
+  /**
+   * Record a YARA block of `content` on `tool`; returns the attempt count
+   * for that exact payload (1 = first time blocked).
+   */
+  attempt(tool: string, content: string): number;
+}
+
+/** Per-run tracker of YARA-blocked payloads (keyed by tool + content hash). */
+export function createRepeatBlockTracker(): RepeatBlockTracker {
+  const counts = new Map<string, number>();
+  return {
+    attempt(tool: string, content: string): number {
+      const key = `${tool} ${createHash('sha256')
+        .update(content)
+        .digest('hex')}`;
+      const next = (counts.get(key) ?? 0) + 1;
+      counts.set(key, next);
+      return next;
+    },
+  };
+}
+
+/**
+ * The block reason for the given attempt: the plain reason the first time,
+ * an explicit "this exact retry can never work" on the second, and a
+ * "report it and move on" instruction from the third on.
+ */
+export function repeatBlockReason(
+  attempt: number,
+  tool: string,
+  baseReason: string,
+): string {
+  if (attempt <= 1) return baseReason;
+  if (attempt < REPEAT_BLOCK_MOVE_ON_ATTEMPT) {
+    return (
+      `${baseReason} This exact ${tool} content was ALREADY blocked — the scan is ` +
+      'deterministic, so retrying identical content will always block again. ' +
+      'Change the code to remove the flagged pattern instead of retrying.'
+    );
+  }
+  return (
+    `${baseReason} This exact ${tool} content has now been blocked ${attempt} times. ` +
+    'STOP retrying it. Note the blocked change in the setup report and move on to the next task.'
+  );
 }
 
 // ─── Severity helpers ────────────────────────────────────────────
@@ -549,8 +705,12 @@ async function triageFlagged(
   return dedupeByRule(triaged.flat());
 }
 
-/** Scan content, filter to the relevant context, triage. Returns real matches. */
-async function scanAndTriage(
+/**
+ * Scan content, filter to the relevant context, triage. Returns real matches.
+ * Exported for harnesses that run their own hook loop (pi) so every harness
+ * scans through the same warlock engine, chunking, and triage policy.
+ */
+export async function scanAndTriage(
   content: string,
   ctx: ScanContext,
   llmProvider: LLMProvider | undefined,
@@ -573,6 +733,7 @@ export function createPreToolUseYaraHooks(
   // Future PreToolUse hooks that need triage can wire this through.
   _llmProvider?: LLMProvider,
 ): HookCallbackMatcher[] {
+  const repeatTracker = createRepeatBlockTracker();
   return [
     {
       hooks: [
@@ -596,11 +757,16 @@ export function createPreToolUseYaraHooks(
             const match = highestSeverityMatch(matches);
             recordMatch('PreToolUse', 'Bash', match, 'blocked');
 
+            const attempt = repeatTracker.attempt('Bash', command);
             return {
               decision: 'block',
-              reason: `[YARA] ${match.rule}: ${
-                match.metadata.description ?? 'security policy violation'
-              }. Command blocked for security.`,
+              reason: repeatBlockReason(
+                attempt,
+                'Bash',
+                `[YARA] ${match.rule}: ${
+                  match.metadata.description ?? 'security policy violation'
+                }. Command blocked for security.`,
+              ),
             };
           } catch (error) {
             logToFile('[YARA] PreToolUse hook error:', error);

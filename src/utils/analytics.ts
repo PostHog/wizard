@@ -7,7 +7,7 @@ import {
 import type { WizardSession } from '@lib/wizard-session';
 import type { ApiUser } from '@lib/api';
 import { v4 as uuidv4 } from 'uuid';
-import { IS_PRODUCTION_BUILD } from '@env';
+import { IS_PRODUCTION_BUILD, RUN_SURFACE } from '@env';
 import { debug, logToFile } from './debug';
 import { applyCiFlagOverrides } from './ci-flag-overrides';
 
@@ -87,11 +87,14 @@ export class Analytics {
     });
 
     this.tags = { $app_name: this.appName };
-    // Tag every run with its build type so prod / dev / ci segment cleanly
-    // in analytics. tsdown inlines IS_PRODUCTION_BUILD to `true` in published
-    // builds and `false` for dev/tsx/test runs. CI runs (always non-prod
-    // builds) upgrade this to 'ci' in runWizardCI.
+    // Tag every run with its build type so prod / dev / ci / headless segment
+    // cleanly in analytics. tsdown inlines IS_PRODUCTION_BUILD to `true` in
+    // published builds and `false` for dev/tsx/test runs. Non-interactive runs
+    // upgrade this in runWizardCI: dev `--ci` runs to 'ci', published headless
+    // runs to 'headless'.
     this.tags.build = IS_PRODUCTION_BUILD ? 'prod' : 'dev';
+
+    this.tags.run_surface = RUN_SURFACE;
 
     this.anonymousId = uuidv4();
 
@@ -111,6 +114,11 @@ export class Analytics {
   /** Per-process run id, tagged on every event and gateway trace. */
   get runId(): string {
     return this._runId;
+  }
+
+  /** Build type for this run ('prod' | 'dev' | 'ci' | 'headless') — the same value tagged on every analytics event. */
+  get build(): string {
+    return String(this.tags.build ?? 'dev');
   }
 
   /**
@@ -267,8 +275,8 @@ export class Analytics {
       distinctId: this.distinctId ?? this.anonymousId,
       event: 'setup wizard finished',
       properties: {
-        // Hoisted out of `tags` so the run's terminal event is filterable by
-        // run, and joins the session when one was opened (post-OAuth runs).
+        // Flat for filtering; the nested `tags` snapshot stays for back-compat.
+        ...this.tags,
         run_id: this._runId,
         ...(this.sessionId ? { $session_id: this.sessionId } : {}),
         status,

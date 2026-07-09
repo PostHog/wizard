@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
+import { zipSync } from 'fflate';
 import {
   ASK_BATCH_THRESHOLD,
   DEFAULT_ASK_MAX_QUESTIONS,
@@ -354,5 +355,138 @@ describe('evaluateAskCap', () => {
       reason: 'max_questions',
       message: expect.any(String),
     });
+  });
+});
+
+describe('extractZipArchive', () => {
+  let dest: string;
+
+  beforeEach(() => {
+    dest = fs.mkdtempSync(path.join(os.tmpdir(), 'wizard-zip-'));
+  });
+
+  afterEach(() => {
+    cleanup(dest);
+  });
+
+  it('writes files and nested directories from the archive', () => {
+    const zip = zipSync({
+      'SKILL.md': new TextEncoder().encode('# skill'),
+      'references/deep/notes.md': new TextEncoder().encode('notes'),
+    });
+
+    const written = __test.extractZipArchive(zip, dest);
+
+    expect(written).toBe(2);
+    expect(fs.readFileSync(path.join(dest, 'SKILL.md'), 'utf8')).toBe(
+      '# skill',
+    );
+    expect(
+      fs.readFileSync(path.join(dest, 'references/deep/notes.md'), 'utf8'),
+    ).toBe('notes');
+  });
+
+  it('rejects zip-slip entries that escape the destination', () => {
+    const zip = zipSync({
+      '../evil.txt': new TextEncoder().encode('pwned'),
+    });
+
+    expect(() => __test.extractZipArchive(zip, dest)).toThrow(
+      /escapes destination/,
+    );
+    expect(fs.existsSync(path.join(dest, '..', 'evil.txt'))).toBe(false);
+  });
+
+  it('rejects absolute entry paths', () => {
+    const zip = zipSync({
+      '/etc/evil.txt': new TextEncoder().encode('pwned'),
+    });
+
+    expect(() => __test.extractZipArchive(zip, dest)).toThrow(
+      /escapes destination/,
+    );
+  });
+});
+
+describe('downloadWithRetry', () => {
+  const url = 'https://example.com/skill.zip';
+  const noSleep = () => Promise.resolve();
+  const okResponse = () =>
+    Promise.resolve({
+      ok: true,
+      status: 200,
+      statusText: 'OK',
+      arrayBuffer: () => Promise.resolve(new ArrayBuffer(3)),
+    });
+
+  it('returns the body on first success without sleeping', async () => {
+    let fetches = 0;
+
+    const bytes = await __test.downloadWithRetry(url, {
+      fetchImpl: (() => {
+        fetches += 1;
+        return okResponse();
+      }) as any,
+      sleepImpl: () => {
+        throw new Error('should not sleep');
+      },
+    });
+
+    expect(fetches).toBe(1);
+    expect(bytes).toHaveLength(3);
+  });
+
+  it('retries with exponential backoff before succeeding', async () => {
+    let attempts = 0;
+    const sleeps: number[] = [];
+
+    const bytes = await __test.downloadWithRetry(url, {
+      fetchImpl: (() => {
+        attempts += 1;
+        if (attempts < 3) return Promise.reject(new Error('fetch failed'));
+        return okResponse();
+      }) as any,
+      sleepImpl: (ms: number) => {
+        sleeps.push(ms);
+        return Promise.resolve();
+      },
+      backoffMs: 500,
+    });
+
+    expect(attempts).toBe(3);
+    expect(sleeps).toEqual([500, 1000]);
+    expect(bytes).toHaveLength(3);
+  });
+
+  it('treats a non-ok response as a failure and retries it', async () => {
+    let attempts = 0;
+
+    await expect(
+      __test.downloadWithRetry(url, {
+        fetchImpl: (() => {
+          attempts += 1;
+          return Promise.resolve({
+            ok: false,
+            status: 503,
+            statusText: 'Service Unavailable',
+            arrayBuffer: () => Promise.resolve(new ArrayBuffer(0)),
+          });
+        }) as any,
+        sleepImpl: noSleep,
+        maxAttempts: 2,
+      }),
+    ).rejects.toThrow(/HTTP 503 Service Unavailable/);
+
+    expect(attempts).toBe(2);
+  });
+
+  it('reports every attempt when all retries fail', async () => {
+    await expect(
+      __test.downloadWithRetry(url, {
+        fetchImpl: (() => Promise.reject(new Error('network down'))) as any,
+        sleepImpl: noSleep,
+        maxAttempts: 3,
+      }),
+    ).rejects.toThrow(/attempt 1.*attempt 2.*attempt 3/s);
   });
 });

@@ -21,7 +21,7 @@ import { useKeyBindings } from '@ui/tui/hooks/useKeyBindings';
 import { Colors } from '@ui/tui/styles';
 import { useSkillEntry } from '@ui/tui/screens/SkillSourceInfo';
 import { fetchUserData } from '@lib/api';
-import { getCloudUrlFromRegion } from '@utils/urls';
+import { HostResolution } from '@lib/host-resolution';
 import { CONTEXT_MILL_RELEASES_URL, POSTHOG_APP_URL } from '@lib/constants';
 import { analytics } from '@utils/analytics';
 import { LoadingBox } from '@ui/tui/primitives/index';
@@ -98,7 +98,11 @@ export const AiOptInRequiredScreen = ({
     }
     setRetrying(true);
     setRetryError(null);
-    void fetchUserData(accessToken, getCloudUrlFromRegion(region))
+    // TODO: clean up in #755
+    void fetchUserData(
+      accessToken,
+      HostResolution.fromRegion(region, { baseUrl: session.baseUrl }).appHost,
+    )
       .then((user) => {
         store.setApiUser(user);
       })

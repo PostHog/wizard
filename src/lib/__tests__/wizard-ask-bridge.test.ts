@@ -1,6 +1,7 @@
 import {
   CANCELLED_SENTINEL,
   createWizardAskBridge,
+  isFullyCancelled,
 } from '@lib/wizard-ask-bridge';
 import { analytics } from '@utils/analytics';
 import type { AskAnswers, PendingQuestion } from '@lib/wizard-session';
@@ -159,6 +160,30 @@ describe('createWizardAskBridge', () => {
           ([name]) => name === 'wizard_ask answered',
         ),
       ).toBe(false);
+    });
+  });
+
+  describe('isFullyCancelled', () => {
+    // Gates the per-run cap refund in wizard-tools: a fully cancelled ask must
+    // not burn a wizard_ask slot, while any real answer must still count.
+    it('is true only when every field is the cancelled sentinel', () => {
+      expect(
+        isFullyCancelled({ a: CANCELLED_SENTINEL, b: CANCELLED_SENTINEL }),
+      ).toBe(true);
+    });
+
+    it('is false when at least one field has a real answer', () => {
+      expect(isFullyCancelled({ a: CANCELLED_SENTINEL, b: 'real' })).toBe(
+        false,
+      );
+    });
+
+    it('is false when nothing was cancelled', () => {
+      expect(isFullyCancelled({ a: 'x', b: ['y', 'z'] })).toBe(false);
+    });
+
+    it('is false for an empty answer map', () => {
+      expect(isFullyCancelled({})).toBe(false);
     });
   });
 

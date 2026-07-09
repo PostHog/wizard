@@ -1,8 +1,8 @@
-import type { ProgramConfig } from '@lib/programs/program-step';
-import type { ProgramRun } from '@lib/agent/agent-runner';
+import type { ProgramConfig, ProgramStep } from '@lib/programs/program-step';
+import { runAgent, type ProgramRun } from '@lib/agent/agent-runner';
 import { WIZARD_TOOL_NAMES } from '@lib/wizard-tools';
 import type { WizardSession } from '@lib/wizard-session';
-import { OutroKind } from '@lib/wizard-session';
+import { OutroKind, RunPhase } from '@lib/wizard-session';
 import { AgentSignals } from '@lib/agent/agent-interface';
 import {
   DEFAULT_PACKAGE_INSTALLATION,
@@ -15,7 +15,7 @@ import { FRAMEWORK_REGISTRY } from '@lib/registry';
 import { wizardAbort } from '@utils/wizard-abort';
 import { WIZARD_INTERACTION_EVENT_NAME } from '@lib/constants';
 import { getUI } from '@ui/index';
-import { getCloudUrlFromRegion } from '@utils/urls';
+import { HostResolution } from '@lib/host-resolution';
 import { requestDeepLink } from '@utils/provisioning';
 import { openTrackedLink, withUtm } from '@utils/links';
 import type { CloudRegion } from '@utils/types';
@@ -26,15 +26,19 @@ import { buildCodingAgentPrompt } from './handoff.js';
 const DASHBOARD_DEEP_LINK_KEY = 'dashboardDeepLink';
 
 function resolveContinueUrl(
-  sess: WizardSession,
+  session: WizardSession,
   cloudRegion: CloudRegion | undefined,
   deepLink: unknown,
 ): string | undefined {
-  if (!sess.signup) return undefined;
+  if (!session.signup) return undefined;
   if (typeof deepLink === 'string' && deepLink) return deepLink;
   if (cloudRegion)
+    // TODO: clean up in #755
     return withUtm(
-      `${getCloudUrlFromRegion(cloudRegion)}/products?source=wizard`,
+      `${
+        HostResolution.fromRegion(cloudRegion, { baseUrl: session.baseUrl })
+          .appHost
+      }/products?source=wizard`,
       'outro-continue',
     );
   return undefined;
@@ -196,7 +200,7 @@ STEP 5: Set up environment variables for PostHog using the wizard-tools MCP serv
    }, which you'll find in example code. The tool will also ensure .gitignore coverage. Don't assume the presence of keys means the value is up to date. Write the correct value each time.
    - Reference these environment variables in the code files you create instead of hardcoding the public token and host.
 
-Important: Use the detect_package_manager tool (from the wizard-tools MCP server) to determine which package manager the project uses. Do not manually search for lockfiles or config files. Always install packages as a background task. Don't await completion; proceed with other work immediately after starting the installation. You must read a file immediately before attempting to write it, even if you have previously read it; failure to do so will cause a tool failure.
+Important: Use the detect_package_manager tool (from the wizard-tools MCP server) to determine which package manager the project uses, then run its install command to add the SDK. Do not manually search for lockfiles or config files. You must read a file immediately before attempting to write it, even if you have previously read it; failure to do so will cause a tool failure.
 
 
 `;
@@ -273,3 +277,23 @@ Important: Use the detect_package_manager tool (from the wizard-tools MCP server
 };
 
 export { POSTHOG_INTEGRATION_PROGRAM } from './steps.js';
+
+/**
+ * Self-contained run step that runs the integration agent. Other programs
+ * import this and splice it into their own step list to compose the
+ * integration's work as one of their run steps — self-driving sets up PostHog
+ * this way before its own run. The host program supplies `show`/`onRunPrep`/
+ * `targetDir`; this carries the run.
+ */
+export const integrationRunStep: ProgramStep = {
+  id: 'run',
+  label: 'Integration',
+  screenId: 'run',
+  // composed: runs inside the host program (self-driving), so skip the
+  // integration's terminal outro + analytics shutdown of the shared client.
+  run: (session) =>
+    runAgent(posthogIntegrationConfig, session, { composed: true }),
+  isComplete: (session) =>
+    session.runPhase === RunPhase.Completed ||
+    session.runPhase === RunPhase.Error,
+};

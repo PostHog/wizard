@@ -143,7 +143,8 @@ jobs:
     if: |
       github.event_name == 'issue_comment' &&
       github.event.issue.pull_request &&
-      startsWith(github.event.comment.body, '/wizard-ci')
+      startsWith(github.event.comment.body, '/wizard-ci') &&
+      !startsWith(github.event.comment.body, '/wizard-ci-snapshots')
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -204,3 +205,76 @@ jobs:
             });
 
             console.log(`Triggered wizard-ci for app: ${app}`);
+
+  # ============================================================================
+  # HANDLE SNAPSHOTS: Parse /wizard-ci-snapshots and trigger the snapshots workflow
+  # ============================================================================
+  handle-snapshots-command:
+    if: |
+      github.event_name == 'issue_comment' &&
+      github.event.issue.pull_request &&
+      startsWith(github.event.comment.body, '/wizard-ci-snapshots')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Generate GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@d72941d797fd3113feb6b93fd0dec494b13a2547 # v1.12.0
+        with:
+          app-id: ${{ secrets.GH_APP_POSTHOG_WIZARD_CI_BOT_APP_ID }}
+          private-key: ${{ secrets.GH_APP_POSTHOG_WIZARD_CI_BOT_PRIVATE_KEY }}
+          owner: PostHog
+          repositories: wizard-workbench,wizard
+
+      - name: Parse command and trigger snapshots
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7.1.0
+        with:
+          github-token: ${{ steps.app-token.outputs.token }}
+          script: |
+            // Only trigger on open PRs (including drafts).
+            const pr = await github.rest.pulls.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.payload.issue.number
+            });
+            if (pr.data.state !== 'open') {
+              console.log(`PR is ${pr.data.state}, skipping trigger`);
+              return;
+            }
+
+            // /wizard-ci-snapshots <app> [wizard_ref] — ref defaults to this PR's branch.
+            const m = context.payload.comment.body.match(
+              /\/wizard-ci-snapshots\s+(\S+)(?:\s+(\S+))?/
+            );
+            const app = m ? m[1] : 'basic-integration/javascript-node/express-todo';
+            const wizardRef = m && m[2] ? m[2] : pr.data.head.ref;
+
+            await github.rest.reactions.createForIssueComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              comment_id: context.payload.comment.id,
+              content: 'rocket'
+            });
+
+            // Same wizard-ci-trigger dispatch as /wizard-ci, plus snapshots:true —
+            // wizard-ci.yml's one SNAPSHOTS branch runs the real-TUI review instead
+            // of the evaluator. It checks out its own trusted ref; no untrusted PR
+            // code is checked out here.
+            await github.rest.repos.createDispatchEvent({
+              owner: 'PostHog',
+              repo: 'wizard-workbench',
+              event_type: 'wizard-ci-trigger',
+              client_payload: {
+                app: app,
+                source: 'wizard-pr',
+                source_repo: 'wizard',
+                source_pr_number: context.payload.issue.number,
+                source_pr_url: pr.data.html_url,
+                wizard_ref: wizardRef,
+                notify_slack: 'false',
+                notify_pr: 'true',
+                snapshots: true
+              }
+            });
+
+            console.log(`Triggered snapshots for app: ${app} (ref ${wizardRef})`);

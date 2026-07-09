@@ -11,11 +11,10 @@
 
 import path from 'path';
 import fs from 'fs';
-import { execFileSync } from 'child_process';
+import { unzipSync } from 'fflate';
 import { z } from 'zod';
 import { logToFile } from '@utils/debug';
 import { analytics } from '@utils/analytics';
-import { skillTmpPath } from '@utils/paths';
 import { writeJsonAtomic, makeMutex } from '@utils/atomic-ledger';
 import type { PackageManagerDetector } from './detection/package-manager';
 import {
@@ -24,12 +23,12 @@ import {
   type AuditCheck,
   type AuditStatus,
 } from './programs/audit/types';
-import type { WizardAskBridge } from './wizard-ask-bridge';
+import { type WizardAskBridge, isFullyCancelled } from './wizard-ask-bridge';
 import { createSecretVault, type SecretVault } from './secret-vault';
 import {
   buildOrchestratorTools,
   type OrchestratorToolsContext,
-} from './agent/runner/orchestrator/queue-tools';
+} from './agent/runner/sequence/orchestrator/queue-tools';
 
 // ---------------------------------------------------------------------------
 // SDK dynamic import (ESM module loaded once, cached)
@@ -106,42 +105,106 @@ export async function fetchSkillMenu(
   }
 }
 
+/** Extract a zip buffer, refusing entries that escape destDir (zip-slip). */
+function extractZipArchive(zip: Uint8Array, destDir: string): number {
+  const root = path.resolve(destDir);
+  let written = 0;
+  for (const [entryPath, data] of Object.entries(unzipSync(zip))) {
+    const target = path.resolve(root, entryPath);
+    if (target !== root && !target.startsWith(root + path.sep)) {
+      throw new Error(`zip entry escapes destination: ${entryPath}`);
+    }
+    if (entryPath.endsWith('/')) {
+      fs.mkdirSync(target, { recursive: true });
+      continue;
+    }
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    fs.writeFileSync(target, data);
+    written++;
+  }
+  return written;
+}
+
+const DOWNLOAD_TIMEOUT_MS = 60000; // per attempt
+const DOWNLOAD_MAX_ATTEMPTS = 3;
+const DOWNLOAD_BACKOFF_MS = 500; // doubles each retry
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/** Download a URL to a buffer, retrying transient failures with backoff. */
+async function downloadWithRetry(
+  url: string,
+  opts: {
+    fetchImpl?: typeof fetch;
+    sleepImpl?: (ms: number) => Promise<void>;
+    timeoutMs?: number;
+    maxAttempts?: number;
+    backoffMs?: number;
+  } = {},
+): Promise<Uint8Array> {
+  const {
+    fetchImpl = fetch,
+    sleepImpl = sleep,
+    timeoutMs = DOWNLOAD_TIMEOUT_MS,
+    maxAttempts = DOWNLOAD_MAX_ATTEMPTS,
+    backoffMs = DOWNLOAD_BACKOFF_MS,
+  } = opts;
+
+  const failures: string[] = [];
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const resp = await fetchImpl(url, {
+        signal: AbortSignal.timeout(timeoutMs),
+      });
+      if (!resp.ok) throw new Error(`HTTP ${resp.status} ${resp.statusText}`);
+      return new Uint8Array(await resp.arrayBuffer());
+    } catch (err: any) {
+      failures.push(`attempt ${attempt}: ${err.message}`);
+      if (attempt < maxAttempts) {
+        await sleepImpl(backoffMs * 2 ** (attempt - 1));
+      }
+    }
+  }
+  throw new Error(`download failed — ${failures.join('; ')}`);
+}
+
 /**
  * Download and extract a skill.
  * By default installs to `<installDir>/.claude/skills/<id>/`.
  * Pass `skillsRoot` to override the base directory (e.g. `.posthog/skills`).
  */
-export function downloadSkill(
+export async function downloadSkill(
   skillEntry: SkillEntry,
   installDir: string,
   skillsRoot?: string,
-): { success: boolean; error?: string } {
+): Promise<{ success: boolean; error?: string }> {
   const skillDir = skillsRoot
     ? path.join(installDir, skillsRoot, skillEntry.id)
     : path.join(installDir, '.claude', 'skills', skillEntry.id);
-  const tmpFile = skillTmpPath(skillEntry.id);
+  let step: 'download' | 'extract' = 'download';
 
   try {
     fs.mkdirSync(skillDir, { recursive: true });
-    execFileSync('curl', ['-sL', skillEntry.downloadUrl, '-o', tmpFile], {
-      timeout: 30000,
-    });
-    execFileSync('unzip', ['-o', tmpFile, '-d', skillDir], {
-      timeout: 30000,
-    });
+    const zip = await downloadWithRetry(skillEntry.downloadUrl);
+    step = 'extract';
+    const fileCount = extractZipArchive(zip, skillDir);
     fs.writeFileSync(path.join(skillDir, '.posthog-wizard'), '');
-    try {
-      fs.unlinkSync(tmpFile);
-    } catch {
-      /* ignore cleanup errors */
-    }
 
     logToFile(
-      `downloadSkill: installed ${skillEntry.id} from ${skillEntry.downloadUrl}`,
+      `downloadSkill: installed ${skillEntry.id} from ${skillEntry.downloadUrl} (${fileCount} files)`,
     );
     return { success: true };
   } catch (err: any) {
     logToFile(`downloadSkill: error: ${err.message}`);
+    // A skill-less run still reports success — keep the failure visible.
+    analytics.wizardCapture('skill install failed', {
+      skill_id: skillEntry.id,
+      step,
+      platform: process.platform,
+      error: String(err.message).slice(0, 500),
+    });
     return { success: false, error: err.message };
   }
 }
@@ -180,7 +243,7 @@ export async function installSkillById(
     .find((s) => s.id === skillId);
   if (!skill) return { kind: 'skill-not-found', skillId };
 
-  const result = downloadSkill(skill, installDir, skillsRoot);
+  const result = await downloadSkill(skill, installDir, skillsRoot);
   if (!result.success) {
     return { kind: 'download-failed', message: result.error ?? 'unknown' };
   }
@@ -762,7 +825,7 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
           'Skill ID from the skill menu (e.g., "integration-nextjs-app-router")',
         ),
     },
-    (args: { skillId: string }) => {
+    async (args: { skillId: string }) => {
       if (!/^[a-z0-9][a-z0-9_-]*$/.test(args.skillId)) {
         return {
           content: [
@@ -790,7 +853,7 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
         };
       }
 
-      const result = downloadSkill(skill, workingDirectory);
+      const result = await downloadSkill(skill, workingDirectory);
       if (result.success) {
         return {
           content: [
@@ -801,6 +864,16 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
           ],
         };
       } else {
+        // The agent only sees a tool-result string — report the failure too.
+        analytics.captureException(
+          new Error('Skill install failed: download-failed'),
+          {
+            source: 'install_skill_tool',
+            skill_id: args.skillId,
+            error_detail: String(result.error).slice(0, 500),
+            platform: process.platform,
+          },
+        );
         return {
           content: [
             {
@@ -986,7 +1059,7 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
       .boolean()
       .optional()
       .describe(
-        "Only valid for kind='text'. When true, the user's answer is stored in the wizard's secret vault and returned to you as { secretRef: 'secret:...' } instead of the raw string. Use for API keys, tokens, and any other secret the user types in.",
+        "Only valid for kind='text'. When true, the user's answer is stored in the wizard's secret vault and returned to you as { secretRef: 'secret:...' } instead of the raw string. Use for API keys, tokens, and any other secret the user types in. The secretRef is only resolved by wizard-tools that accept it (e.g. set_env_values) — it is NOT resolved when passed to other MCP tools (e.g. PostHog data-warehouse tools), which will reject it. For a secret that must reach another tool, write it to the env with set_env_values first, or use that tool's own credential-reference flow.",
       ),
   });
 
@@ -994,7 +1067,11 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
     'wizard_ask',
     'Ask the user one or more structured questions and wait for their answers. ' +
       'Use this whenever you would otherwise inline a question in your text output. ' +
-      'Batch related questions into a single call — do not call this multiple times in a row.',
+      'Batch related questions into a single call (up to 8) rather than asking one at a ' +
+      'time; sequential calls are fine when later questions genuinely depend on earlier ' +
+      'answers. A fully cancelled or timed-out response does NOT count against the per-run ' +
+      'cap — treat it as "the user declined" and fall back gracefully (e.g. hand over a ' +
+      'deep link) without worrying about a wasted call.',
     {
       questions: z.array(askQuestionSchema).min(1).max(8),
     },
@@ -1090,6 +1167,15 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
 
       try {
         const answers = await askBridge.request({ questions: args.questions });
+
+        // A fully cancelled/timed-out ask (the user dismissed the overlay or let
+        // it time out) shouldn't burn the per-run cap. Otherwise one cancellation
+        // exhausts the budget for every remaining source and forces a deep-link
+        // fallback even when the user was willing to answer. Refund the slot we
+        // optimistically took so cancellation is free.
+        if (isFullyCancelled(answers)) {
+          askCallCount -= 1;
+        }
 
         // For any question marked sensitive, move the raw answer into the
         // vault and replace it with an opaque ref before returning to the
@@ -1198,6 +1284,8 @@ export const WIZARD_TOOL_NAMES = {
 // ---------------------------------------------------------------------------
 
 export const __test = {
+  extractZipArchive,
+  downloadWithRetry,
   writeLedgerAtomic,
   readLedger,
   applyAuditAdditions,

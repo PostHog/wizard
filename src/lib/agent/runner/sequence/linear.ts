@@ -5,40 +5,40 @@
  * program-level static metadata (tool allow/disallow lists, etc.).
  */
 
-import type { WizardSession } from '../../wizard-session';
-import { OutroKind } from '../../wizard-session';
-import { getUI } from '../../../ui';
-import {
-  initializeAgent,
-  runAgent as executeAgent,
-  AgentErrorType,
-  AgentSignals,
-} from '../agent-interface';
-import { restoreClaudeSettings } from '../claude-settings';
-import { getCloudUrlFromRegion } from '../../../utils/urls';
-import { logToFile, getLogFilePath } from '../../../utils/debug';
-import { createBenchmarkPipeline } from '../../middleware/benchmark';
+import type { WizardSession } from '../../../wizard-session';
+import { OutroKind } from '../../../wizard-session';
+import { getUI } from '../../../../ui';
+import { AgentErrorType, AgentSignals } from '../../agent-interface';
+import { restoreClaudeSettings } from '../../claude-settings';
+import { HostResolution } from '@lib/host-resolution';
+import { logToFile } from '../../../../utils/debug';
+import { createBenchmarkPipeline } from '../../../middleware/benchmark';
 import {
   wizardAbort,
   WizardError,
   registerCleanup,
-} from '../../../utils/wizard-abort';
-import { analytics } from '../../../utils/analytics';
-import { formatScanReport, writeScanReport } from '../../yara-hooks';
-import { detectNodePackageManagers } from '../../detection/package-manager';
-import { installSkillById } from '../../wizard-tools';
-import { createWizardAskBridge } from '../../wizard-ask-bridge';
-import type { ProgramConfig } from '../../programs/program-step';
-import { assemblePrompt } from '../agent-prompt';
-import type { ProgramRun, BootstrapResult } from './shared/types';
-import { abortOnInstallFailure } from './shared/errors';
-import { shouldDisableAsk, sessionToOptions } from './shared/bootstrap';
+} from '../../../../utils/wizard-abort';
+import { analytics } from '../../../../utils/analytics';
+import {
+  formatScanReport,
+  formatYaraAbortMessage,
+  writeScanReport,
+} from '../../../yara-hooks';
+import { installSkillById } from '../../../wizard-tools';
+import { createWizardAskBridge } from '../../../wizard-ask-bridge';
+import type { ProgramConfig } from '../../../programs/program-step';
+import { assemblePrompt } from '../../agent-prompt';
+import type { ProgramRun, BootstrapResult } from '../shared/types';
+import { abortOnInstallFailure } from '../shared/errors';
+import { shouldDisableAsk, sessionToOptions } from '../shared/bootstrap';
+import { resolveHarness, getHarness } from '../switchboard';
 
 export async function runLinearProgram(
   session: WizardSession,
   config: ProgramRun,
   programConfig: ProgramConfig,
   boot: BootstrapResult,
+  composed = false,
 ): Promise<void> {
   const {
     skillsBaseUrl,
@@ -47,9 +47,7 @@ export async function runLinearProgram(
     accessToken,
     projectId,
     cloudRegion,
-    mcpUrl,
     wizardFlags,
-    wizardMetadata,
     project,
   } = boot;
 
@@ -101,33 +99,6 @@ export async function runLinearProgram(
         timeoutMs: config.askTimeoutMs,
       });
 
-  getUI().log.step('Initializing Claude agent...');
-  const agent = await initializeAgent(
-    {
-      workingDirectory: session.installDir,
-      posthogMcpUrl: mcpUrl,
-      posthogApiKey: accessToken,
-      posthogApiHost: host,
-      additionalMcpServers: config.additionalMcpServers,
-      detectPackageManager:
-        config.detectPackageManager ?? detectNodePackageManagers,
-      skillsBaseUrl,
-      wizardFlags,
-      wizardMetadata,
-      integrationLabel: config.integrationLabel,
-      askBridge,
-      askMaxQuestions: config.maxQuestions,
-      allowedTools: programConfig.allowedTools,
-      disallowedTools: programConfig.disallowedTools,
-      getPendingQuestion: () => session.pendingQuestion,
-    },
-    sessionToOptions(session),
-  );
-  getUI().log.step(`Verbose logs: ${getLogFilePath()}`);
-  getUI().log.success("Agent initialized. Let's get cooking!");
-
-  logToFile('[agent-runner] agent initialized');
-
   const middleware = session.benchmark
     ? createBenchmarkPipeline(spinner, sessionToOptions(session))
     : undefined;
@@ -150,23 +121,28 @@ export async function runLinearProgram(
   });
   logToFile(`[agent-runner] prompt assembled (${prompt.length} chars)`);
 
-  // 8. Run agent
-  const agentResult = await executeAgent(
-    agent,
+  // 8. Resolve the (runner, model) pair from the central plan and run the agent
+  // through the selected runner. The runner owns the agent loop + model
+  // transport; everything around it (skill install, prompt, ask bridge, error
+  // routing, outro) stays here so every runner shares it.
+  const pick = resolveHarness({
+    program: programConfig.id,
+    flags: wizardFlags,
+    cliHarness: session.harness,
+    cliModel: session.model,
+  });
+  const agentResult = await getHarness(pick.harness).run({
+    session,
+    config,
+    programConfig,
+    boot,
     prompt,
-    sessionToOptions(session),
+    skillPath,
     spinner,
-    {
-      estimatedDurationMinutes: config.estimatedDurationMinutes,
-      spinnerMessage: config.spinnerMessage,
-      successMessage: config.successMessage,
-      errorMessage: config.errorMessage ?? `${config.integrationLabel} failed`,
-      additionalFeatureQueue: config.additionalFeatureQueue ?? [],
-      abortCases: config.abortCases,
-      emitStepEvents: config.trackStepProgress ?? false,
-    },
+    askBridge,
     middleware,
-  );
+    model: pick.model,
+  });
 
   // 9. Error handling (full set from both runners)
   if (agentResult.error === AgentErrorType.ABORT) {
@@ -231,8 +207,7 @@ export async function runLinearProgram(
 
   if (agentResult.error === AgentErrorType.YARA_VIOLATION) {
     await wizardAbort({
-      message:
-        'Security violation detected.\nPlease report this to: wizard@posthog.com',
+      message: formatYaraAbortMessage(),
       error: new WizardError('YARA scanner terminated session', {
         integration: config.integrationLabel,
         error_type: AgentErrorType.YARA_VIOLATION,
@@ -271,6 +246,10 @@ export async function runLinearProgram(
     });
   }
 
+  // A composed sub-run (integration inside self-driving) skips the terminal
+  // outro + analytics shutdown so the shared client survives the host's run.
+  if (composed) return;
+
   // 11. Outro
   // Push outro data through the UI (not via direct `session.outroData = ...`
   // mutation) so the live store gets the value. agent-runner's `session`
@@ -290,8 +269,13 @@ export async function runLinearProgram(
         message: config.successMessage,
         reportFile: config.reportFile,
         docsUrl: config.docsUrl,
+        // TODO: clean up in #755
         continueUrl: session.signup
-          ? `${getCloudUrlFromRegion(cloudRegion)}/products?source=wizard`
+          ? `${
+              HostResolution.fromRegion(cloudRegion, {
+                baseUrl: session.baseUrl,
+              }).appHost
+            }/products?source=wizard`
           : undefined,
       };
   if (outroData) {

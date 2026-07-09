@@ -32,6 +32,7 @@ if (process.env.NODE_ENV === 'test') {
 import { Wizard } from './src/wizard';
 import { basicIntegrationCommand } from './src/commands/basic-integration';
 import { mcpCommand } from './src/commands/mcp';
+import { mcpAnalyticsCommand } from './src/commands/mcp-analytics';
 import { auditCommand } from './src/commands/audit';
 import { doctorCommand } from './src/commands/doctor';
 import { migrateCommand } from './src/commands/migrate';
@@ -61,6 +62,7 @@ function resolveInstallDir(): string {
 
 Wizard.use(basicIntegrationCommand)
   .use(mcpCommand)
+  .use(mcpAnalyticsCommand)
   .use(cliCommand)
   .use(auditCommand)
   .use(doctorCommand)

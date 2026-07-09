@@ -1,4 +1,48 @@
 import { AgentOutputSignals } from '@lib/agent/output-signals';
+import { AgentSignals, REMARK_INSTRUCTION } from '@lib/agent/signals';
+
+describe('REMARK_INSTRUCTION', () => {
+  it('carries the marker but no literal placeholder a model could echo', () => {
+    // gpt-5-mini echoed "Your remark here" verbatim from the old wording.
+    expect(REMARK_INSTRUCTION).toContain(AgentSignals.WIZARD_REMARK);
+    expect(REMARK_INSTRUCTION).not.toMatch(/your remark here/i);
+  });
+
+  it('drops a remark that merely echoes the instruction', () => {
+    // Field bug twice over: gpt-5-mini replied with whatever trailed the
+    // marker in the format clause. Any instruction substring is an echo.
+    const echoed = REMARK_INSTRUCTION.split(AgentSignals.WIZARD_REMARK)[1]
+      .trim()
+      .slice(0, 40);
+    const signals = new AgentOutputSignals();
+    signals.push(`${AgentSignals.WIZARD_REMARK} ${echoed}`);
+    expect(signals.remark()).toBeUndefined();
+  });
+
+  it('keeps a genuine remark', () => {
+    const signals = new AgentOutputSignals();
+    signals.push(
+      `${AgentSignals.WIZARD_REMARK} The Astro skill lacked hybrid-render env var docs.`,
+    );
+    expect(signals.remark()).toBe(
+      'The Astro skill lacked hybrid-render env var docs.',
+    );
+  });
+
+  it('extracts the real remark even when the model echoes the ask first', () => {
+    // Field bug: gpt-5.4 echoed the whole instruction (which carries the
+    // marker) BEFORE answering. The parser must skip the echo and keep
+    // scanning to the real remark, not give up on the first marker.
+    const signals = new AgentOutputSignals();
+    signals.push(REMARK_INSTRUCTION); // the echoed ask — carries the marker
+    signals.push(
+      `${AgentSignals.WIZARD_REMARK} posthog-node was already installed in this repo.`,
+    );
+    expect(signals.remark()).toBe(
+      'posthog-node was already installed in this repo.',
+    );
+  });
+});
 
 describe('AgentOutputSignals', () => {
   it('drops prose but detects each signal marker', () => {
@@ -51,5 +95,38 @@ describe('AgentOutputSignals', () => {
 
     expect(signals.apiErrorMessage()).toBeUndefined();
     expect(signals.remark()).toBeUndefined();
+  });
+
+  describe('apiKeySource', () => {
+    it('flags a stored "/login managed key" as a managed login', () => {
+      const signals = new AgentOutputSignals();
+      signals.recordApiKeySource('/login managed key');
+
+      expect(signals.apiKeySource).toBe('/login managed key');
+      expect(signals.usedManagedLogin()).toBe(true);
+    });
+
+    it('does not flag an explicit API key as a managed login', () => {
+      const signals = new AgentOutputSignals();
+      signals.recordApiKeySource('ANTHROPIC_API_KEY');
+
+      expect(signals.usedManagedLogin()).toBe(false);
+    });
+
+    it('is absent (and not a managed login) when never recorded', () => {
+      const signals = new AgentOutputSignals();
+
+      expect(signals.apiKeySource).toBeUndefined();
+      expect(signals.usedManagedLogin()).toBe(false);
+    });
+
+    it('ignores an undefined source so a later real value can win', () => {
+      const signals = new AgentOutputSignals();
+      signals.recordApiKeySource(undefined);
+      expect(signals.apiKeySource).toBeUndefined();
+
+      signals.recordApiKeySource('/login managed key');
+      expect(signals.usedManagedLogin()).toBe(true);
+    });
   });
 });

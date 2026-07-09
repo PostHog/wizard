@@ -1,9 +1,12 @@
 import {
   createPreToolUseYaraHooks,
   createPostToolUseYaraHooks,
+  createRepeatBlockTracker,
   formatScanReport,
+  repeatBlockReason,
   writeScanReport,
   captureScanReport,
+  recordExternalScan,
   resetScanReport,
 } from '@lib/yara-hooks';
 import { scan, triageMatches } from '@posthog/warlock';
@@ -1046,5 +1049,126 @@ describe('yara-hooks', () => {
       expect(reported).not.toContain('secret content');
       expect(reported).toContain('true_positive'); // verdict is safe to report
     });
+  });
+
+  // ── recordExternalScan (pi's scan path) ─────────────────────
+  describe('recordExternalScan', () => {
+    it('counts clean scans so the end-of-run report fires', () => {
+      recordExternalScan('PreToolUse', 'Bash', [], 'blocked');
+      captureScanReport();
+
+      expect(mockAnalytics.analytics.wizardCapture).toHaveBeenCalledWith(
+        'yara scan report',
+        expect.objectContaining({ total_scans: 1, violation_count: 0 }),
+      );
+    });
+
+    it('routes violations through the shared match reporting', () => {
+      recordExternalScan(
+        'PostToolUse',
+        'Write',
+        [
+          {
+            rule: 'hardcoded_posthog_host',
+            severity: 'high',
+            category: 'posthog_config',
+            description: 'Hardcoded PostHog host',
+          },
+        ],
+        'blocked',
+      );
+
+      expect(mockAnalytics.analytics.wizardCapture).toHaveBeenCalledWith(
+        'yara rule matched',
+        expect.objectContaining({
+          rule: 'hardcoded_posthog_host',
+          action: 'blocked',
+          phase: 'PostToolUse',
+          tool: 'Write',
+        }),
+      );
+
+      captureScanReport();
+      expect(mockAnalytics.analytics.wizardCapture).toHaveBeenCalledWith(
+        'yara scan report',
+        expect.objectContaining({
+          total_scans: 1,
+          violation_count: 1,
+          violations: expect.arrayContaining([
+            expect.objectContaining({ rule: 'hardcoded_posthog_host' }),
+          ]),
+        }),
+      );
+    });
+  });
+});
+
+describe('repeat-block tracker (identical retries after a block)', () => {
+  test('counts attempts per exact (tool, content) payload', () => {
+    const tracker = createRepeatBlockTracker();
+    expect(tracker.attempt('Edit', 'const a = 1;')).toBe(1);
+    expect(tracker.attempt('Edit', 'const a = 1;')).toBe(2);
+    expect(tracker.attempt('Edit', 'const a = 1;')).toBe(3);
+    // Different content or a different tool is a fresh first attempt.
+    expect(tracker.attempt('Edit', 'const a = 2;')).toBe(1);
+    expect(tracker.attempt('Write', 'const a = 1;')).toBe(1);
+  });
+
+  test('reason is unchanged on the first block', () => {
+    expect(repeatBlockReason(1, 'Edit', '[YARA] rule: bad.')).toBe(
+      '[YARA] rule: bad.',
+    );
+  });
+
+  test('second attempt says the retry can never work', () => {
+    const reason = repeatBlockReason(2, 'Edit', '[YARA] rule: bad.');
+    expect(reason).toContain('[YARA] rule: bad.');
+    expect(reason).toContain('ALREADY blocked');
+    expect(reason).toContain('Change the code');
+  });
+
+  test('third and later attempts tell the agent to report and move on', () => {
+    for (const attempt of [3, 4, 7]) {
+      const reason = repeatBlockReason(attempt, 'Write', '[YARA] rule: bad.');
+      expect(reason).toContain(`blocked ${attempt} times`);
+      expect(reason).toContain('setup report');
+      expect(reason).toContain('move on');
+    }
+  });
+
+  test('PreToolUse Bash escalates when the same blocked command is retried', async () => {
+    mockScan.mockResolvedValue({
+      matched: true,
+      matches: [
+        {
+          rule: 'destructive_rm',
+          metadata: {
+            severity: 'critical',
+            category: 'destructive_operations',
+            description: 'Detects destructive rm',
+            scan_context: 'command',
+          },
+          matchedStrings: [],
+        },
+      ],
+    });
+    const [matcher] = createPreToolUseYaraHooks();
+    const run = () =>
+      matcher.hooks[0](
+        { tool_name: 'Bash', tool_input: { command: 'rm -rf build' } },
+        undefined,
+        { signal: dummySignal },
+      );
+
+    const first = await run();
+    expect(first.decision).toBe('block');
+    expect(first.reason).not.toContain('ALREADY blocked');
+
+    const second = await run();
+    expect(second.reason).toContain('ALREADY blocked');
+
+    const third = await run();
+    expect(third.reason).toContain('blocked 3 times');
+    expect(third.reason).toContain('setup report');
   });
 });

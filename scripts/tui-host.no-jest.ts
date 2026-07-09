@@ -18,6 +18,7 @@ import net from 'net';
 import { startTUI } from '@ui/tui/start-tui';
 import { VERSION } from '@lib/version';
 import { Program } from '@lib/programs/program-registry';
+import type { Harness, Sequence } from '@lib/constants';
 import { buildSession } from '@lib/wizard-session';
 import { posthogIntegrationConfig } from '@lib/programs/posthog-integration';
 import { runAgent } from '@lib/agent/agent-runner';
@@ -49,6 +50,11 @@ async function main() {
     apiKey,
     projectId,
     region: 'us',
+    // Switchboard variation overrides (see e2e.json `variations`), threaded by
+    // the snapshot driver as one run per variation. Empty ⇒ resolved default.
+    harness: (process.env.SNAP_HARNESS || undefined) as Harness | undefined,
+    sequence: (process.env.SNAP_SEQUENCE || undefined) as Sequence | undefined,
+    model: process.env.SNAP_MODEL || undefined,
   });
   const driver = new WizardCiDriver(store);
 

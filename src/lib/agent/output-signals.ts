@@ -12,7 +12,7 @@
  * hooks' onTerminate callback (`yaraViolationReason` in runAgent) instead.
  */
 
-import { AgentSignals } from './signals';
+import { AgentSignals, REMARK_INSTRUCTION } from './signals';
 
 /**
  * Single source of truth for the substrings runAgent scans agent output for.
@@ -33,10 +33,34 @@ const SIGNAL_NEEDLES = Object.values(OUTPUT_SIGNALS);
 
 export class AgentOutputSignals {
   private readonly lines: string[] = [];
+  private apiKeySourceValue: string | undefined;
 
   /** Parse step: keep the line only if it carries a known signal; drop prose. */
   push(text: string): void {
     if (SIGNAL_NEEDLES.some((n) => text.includes(n))) this.lines.push(text);
+  }
+
+  /**
+   * Record the SDK's `apiKeySource` from its `init` message (e.g.
+   * `"/login managed key"`, `"ANTHROPIC_API_KEY"`). Used to triage a 401:
+   * a managed-login source means the SDK authenticated with a stored Claude
+   * login rather than the gateway token the wizard injected.
+   */
+  recordApiKeySource(source: string | undefined): void {
+    if (source) this.apiKeySourceValue = source;
+  }
+
+  get apiKeySource(): string | undefined {
+    return this.apiKeySourceValue;
+  }
+
+  /**
+   * True when the SDK authed from a stored `/login` credential (the
+   * "managed key") instead of an explicit `ANTHROPIC_API_KEY` — the signature
+   * of conflicting Anthropic credentials behind a gateway 401.
+   */
+  usedManagedLogin(): boolean {
+    return /login|managed key/i.test(this.apiKeySourceValue ?? '');
   }
 
   private get text(): string {
@@ -72,8 +96,14 @@ export class AgentOutputSignals {
         /[.*+?^${}()|[\]\\]/g,
         '\\$&',
       )}\\s*(.+?)(?:\\n|$)`,
-      's',
+      'gs',
     );
-    return this.text.match(re)?.[1]?.trim() || undefined;
+    // Return the first marker match whose text isn't an echo of the ask.
+    let match: RegExpExecArray | null;
+    while ((match = re.exec(this.text)) !== null) {
+      const text = match[1]?.trim();
+      if (text && !REMARK_INSTRUCTION.includes(text)) return text;
+    }
+    return undefined;
   }
 }
