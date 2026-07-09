@@ -246,7 +246,7 @@ describe('switchboard decision trace', () => {
     });
   });
 
-  it('stamps flag + pi-clamp sources when the pi flag decides', () => {
+  it('stamps flag + binding sources when the pi flag decides (pi has runTask, no clamp)', () => {
     const ctx: SwitchboardCtx = {
       program: 'posthog-integration',
       flags: { [WIZARD_USE_PI_HARNESS_FLAG_KEY]: 'true' },
@@ -255,8 +255,22 @@ describe('switchboard decision trace', () => {
     expect(ctx.trace).toEqual({
       harness: 'flag',
       model: 'flag',
-      sequence: 'pi-clamp',
+      sequence: 'binding',
     });
+  });
+
+  it('runs the orchestrator on pi when both flags are on', () => {
+    const ctx: SwitchboardCtx = {
+      program: 'posthog-integration',
+      flags: {
+        [WIZARD_USE_PI_HARNESS_FLAG_KEY]: 'true',
+        [WIZARD_ORCHESTRATOR_FLAG_KEY]: 'true',
+      },
+    };
+    const binding = resolveBinding(ctx);
+    expect(binding.harness).toBe(Harness.pi);
+    expect(binding.sequence).toBe(Sequence.orchestrator);
+    expect(ctx.trace?.sequence).toBe('flag');
   });
 
   it('stamps cli sources over the flag', () => {

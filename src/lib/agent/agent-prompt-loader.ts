@@ -159,7 +159,8 @@ export function buildRegistry(
 }
 
 interface AgentMenu {
-  agents: { id: string; downloadUrl: string }[];
+  /** `flow` arrived with context-mill's flow-scoped agents folder; older menus omit it. */
+  agents: { id: string; flow?: string; downloadUrl: string }[];
 }
 
 /** A native tool passes through; an orchestrator tool gets its MCP-qualified name. */
@@ -254,8 +255,14 @@ export async function loadAgentRegistry(
   const menuRaw = await fetchText(`${skillsBaseUrl}/agent-menu.json`);
   const menu = JSON.parse(menuRaw) as AgentMenu;
 
+  // Menus that carry a flow per entry let us skip other flows' prompts before
+  // fetching them; entries without one are fetched and filtered by their
+  // frontmatter in buildRegistry, as before.
+  const entries = (menu.agents ?? []).filter(
+    (entry) => !entry.flow || entry.flow === flow,
+  );
   const prompts = await Promise.all(
-    (menu.agents ?? []).map(async (entry) => {
+    entries.map(async (entry) => {
       const text = await fetchText(entry.downloadUrl);
       return parseAgentPrompt(text, entry.id);
     }),
