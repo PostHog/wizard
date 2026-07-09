@@ -1,9 +1,12 @@
+import fs from 'fs';
+import os from 'os';
 import path from 'path';
 import { scan, triageMatches, type ScanMatch } from '@posthog/warlock';
 import {
   evaluateToolCall,
   createSecurityExtension,
   isScopedFileRemoval,
+  overwriteShrinkReason,
   MAX_TOOL_CALLS,
   type PiExtensionApiLike,
 } from '../security';
@@ -550,4 +553,55 @@ describe('pi-security: rm containment holds under Windows and POSIX path rules',
       });
     });
   }
+});
+
+describe('pi-security: overwrite shrink guard (destructive whole-file rewrite)', () => {
+  // ~960 non-whitespace chars — comfortably above OVERWRITE_MIN_CHARS.
+  const big = 'const value = compute();\n'.repeat(40);
+
+  test('flags a write that guts most of an existing file', () => {
+    const reason = overwriteShrinkReason(big, 'const value = compute();');
+    expect(reason).toMatch(/removes ~\d+% of its content/);
+    expect(reason).toContain('targeted edits');
+  });
+
+  test('allows growth, an unchanged rewrite, and a small trim', () => {
+    expect(overwriteShrinkReason(big, big + '\nextra();')).toBeUndefined();
+    expect(overwriteShrinkReason(big, big)).toBeUndefined();
+    expect(
+      overwriteShrinkReason(big, big.slice(0, Math.floor(big.length * 0.85))),
+    ).toBeUndefined();
+  });
+
+  test('leaves stub files below the floor alone', () => {
+    expect(overwriteShrinkReason('const a = 1;', '')).toBeUndefined();
+  });
+
+  test('blocks a gutting write on disk, allows a brand-new file', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pi-shrink-'));
+    fs.writeFileSync(path.join(dir, 'existing.ts'), big);
+
+    const gut = await evaluateToolCall(
+      'write',
+      { path: 'existing.ts', content: 'const value = compute();' },
+      { workingDirectory: dir },
+    );
+    expect(gut.block).toBe(true);
+    expect(gut.reason).toContain('targeted edits');
+
+    const fresh = await evaluateToolCall(
+      'write',
+      { path: 'brand-new.ts', content: 'const value = compute();' },
+      { workingDirectory: dir },
+    );
+    expect(fresh.block).toBe(false);
+  });
+
+  test('stays inert with no working directory (bare evaluateToolCall)', async () => {
+    const decision = await evaluateToolCall('write', {
+      path: 'existing.ts',
+      content: 'x',
+    });
+    expect(decision.block).toBe(false);
+  });
 });

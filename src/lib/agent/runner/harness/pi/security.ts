@@ -17,6 +17,7 @@
  * extension installed (see subagent.ts), so a child cannot escape it.
  */
 
+import fs from 'fs';
 import path from 'path';
 import type { LLMProvider, ScanMatch } from '@posthog/warlock';
 import { wizardCanUseTool } from '@lib/agent/agent-interface';
@@ -122,6 +123,60 @@ export function isScopedFileRemoval(
   if (args.length === 0) return false;
 
   return args.every((arg) => isDeletableProjectFile(arg, root, p));
+}
+
+/** A write that removes more than this fraction of an existing file's
+ * non-whitespace content reads as a destructive whole-file rewrite. */
+const OVERWRITE_SHRINK_LIMIT = 0.3;
+
+/** Existing files below this many non-whitespace chars are stubs; replacing one
+ * wholesale is legitimate, so the shrink guard leaves them alone. */
+const OVERWRITE_MIN_CHARS = 400;
+
+const nonWhitespaceLength = (s: string): number => s.replace(/\s+/g, '').length;
+
+/**
+ * Refuse a write that replaces an existing file with far less content than it
+ * held, steering the agent back to targeted edits. Prior art — the destructive
+ * whole-file rewrite is a known model failure that targeted-edit formats exist to
+ * prevent: Aider's search/replace and unified-diff, OpenAI's apply_patch,
+ * Anthropic's str_replace with replace_all; pi's edit tool has no replace_all, so
+ * a rejected scoped edit can fall back to a lossy full write. Additive by design:
+ * the wizard only adds instrumentation, so a large shrink is the rewrite, not intent.
+ */
+export function overwriteShrinkReason(
+  existing: string,
+  next: string,
+): string | undefined {
+  const before = nonWhitespaceLength(existing);
+  if (before < OVERWRITE_MIN_CHARS) return undefined;
+  const after = nonWhitespaceLength(next);
+  if (after >= before * (1 - OVERWRITE_SHRINK_LIMIT)) return undefined;
+  const removed = Math.round((1 - after / before) * 100);
+  return `This write replaces an existing file and removes ~${removed}% of its content. Make targeted edits instead of rewriting the whole file; only write a file in full when creating it.`;
+}
+
+/**
+ * Read the file a write would replace and flag a destructive shrink. A path that
+ * does not exist yet is a new file, so it never triggers; with no project root to
+ * resolve against (unit tests calling `evaluateToolCall` bare), it stays inert.
+ */
+async function overwriteShrinkBlock(
+  input: Record<string, unknown>,
+  workingDirectory: string | undefined,
+): Promise<string | undefined> {
+  const target = str(input.path);
+  if (!workingDirectory || !target) return undefined;
+  let existing: string;
+  try {
+    existing = await fs.promises.readFile(
+      path.resolve(workingDirectory, target),
+      'utf8',
+    );
+  } catch {
+    return undefined; // new file (ENOENT) or unreadable — nothing to preserve
+  }
+  return overwriteShrinkReason(existing, str(input.content));
 }
 
 /**
@@ -271,6 +326,14 @@ export async function evaluateToolCall(
       ctx.repeatTracker,
     );
     if (yaraReason) return { block: true, reason: yaraReason };
+
+    if (toolName === 'write') {
+      const shrinkReason = await overwriteShrinkBlock(
+        input,
+        ctx.workingDirectory,
+      );
+      if (shrinkReason) return { block: true, reason: shrinkReason };
+    }
 
     return { block: false };
   } catch (err) {
