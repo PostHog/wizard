@@ -88,15 +88,18 @@ const PI_RUNTIME_NOTES = [
 ].join('\n');
 
 /**
- * The MCP server strips the project env block from the exec tool description for
- * clients it believes support server `instructions`, and pi-mcp-adapter never
- * surfaces that `instructions` payload — so the agent would otherwise run its
- * `posthog_exec` calls without knowing which project it is acting on. The wizard
- * already holds this context in the bootstrap result, so ride it into the system
- * prompt. The server resolves the region from the bearer token; these are for
- * the agent's reference.
+ * MCP context for the system prompt. pi-mcp-adapter never surfaces the server's
+ * `instructions` payload (which the anthropic path gets natively), so the agent
+ * would otherwise run its `posthog_exec` calls without the server's steer to
+ * prioritize skills, the active project/environment, or the tool domains to
+ * search. When the warm-connect captured those instructions, ride them in
+ * verbatim; otherwise fall back to the project context the wizard already holds
+ * in the bootstrap result so the agent at least knows which project it acts on.
  */
-function piProjectContext(boot: BootstrapResult): string {
+function piMcpContext(boot: BootstrapResult, instructions?: string): string {
+  if (instructions) {
+    return ['', '## PostHog MCP server', instructions].join('\n');
+  }
   const project = boot.project?.name
     ? `${boot.project.name} (id ${boot.projectId})`
     : `id ${boot.projectId}`;
@@ -276,6 +279,12 @@ export const piBackend: AgentHarness = {
     const startTime = Date.now();
     const signals = new AgentOutputSignals();
     let assistantTurns = 0;
+    // Tool calls across the whole run. Zero means the agent only ever produced
+    // text and never acted — a no-op that leaves the project untouched.
+    let toolCalls = 0;
+    // Whether the agent installed an integration skill. A run that never skills
+    // has skipped the whole guided workflow.
+    let skillInstalled = false;
     const runDurations = () => {
       const durationMs = Date.now() - startTime;
       return {
@@ -386,6 +395,7 @@ export const piBackend: AgentHarness = {
         (pi: unknown) => void
       >;
       let mcpCleanup: (() => void) | undefined;
+      let mcpInstructions: string | undefined;
       try {
         const { setupPostHogMcp } = await import('./mcp');
         const mcp = await setupPostHogMcp({
@@ -396,6 +406,7 @@ export const piBackend: AgentHarness = {
         });
         extensionFactories.push(mcp.extensionFactory);
         mcpCleanup = mcp.cleanup;
+        mcpInstructions = mcp.instructions;
       } catch (err) {
         logToFile(`[pi] PostHog MCP setup skipped: ${String(err)}`);
       }
@@ -408,7 +419,7 @@ export const piBackend: AgentHarness = {
           '\n' +
           PI_RUNTIME_NOTES +
           '\n' +
-          piProjectContext(boot),
+          piMcpContext(boot, mcpInstructions),
         noExtensions: true,
         noSkills: true,
         noContextFiles: true,
@@ -521,6 +532,7 @@ export const piBackend: AgentHarness = {
             break;
           }
           case 'tool_execution_start': {
+            toolCalls += 1;
             const args = JSON.stringify(event.args ?? {}).slice(0, 200);
             logToFile(`[pi] → ${event.toolName} ${args}`);
             // Don't surface raw tool names in the spinner — the anthropic path
@@ -536,6 +548,8 @@ export const piBackend: AgentHarness = {
                   300,
                 )}`,
               );
+            } else if (event.toolName === 'install_skill') {
+              skillInstalled = true;
             }
             break;
           }
@@ -591,6 +605,42 @@ export const piBackend: AgentHarness = {
         );
         captureAborted();
         return { error: AgentErrorType.YARA_VIOLATION };
+      }
+
+      // Completion guards, from most to least severe. pi ends a run the moment
+      // the model returns a turn with no tool call, so a run can reach the outro
+      // having done nothing (or having stopped mid-plan) — a hollow success we
+      // must not report.
+      //
+      // 1. Zero tool calls: the agent only ever produced text; the project was
+      //    never touched.
+      if (toolCalls === 0) {
+        spinner.stop('Agent made no changes');
+        logToFile(
+          `[pi] no progress: ${assistantTurns} assistant turn(s), 0 tool calls — failing the run`,
+        );
+        analytics.wizardCapture('agent no progress', {
+          assistant_turns: assistantTurns,
+        });
+        captureAborted();
+        return { error: AgentErrorType.NO_PROGRESS };
+      }
+
+      // 2. Acted but stopped short: planned tasks left open, or the guided skill
+      //    workflow was never installed. The nudge loop above already gave it
+      //    every chance to finish the open tasks.
+      const openTasks = hasOpenTasks(wizardTaskTools.store);
+      if (openTasks || !skillInstalled) {
+        spinner.stop('Agent stopped before finishing');
+        logToFile(
+          `[pi] incomplete: openTasks=${openTasks} skillInstalled=${skillInstalled} — failing the run`,
+        );
+        analytics.wizardCapture('agent incomplete tasks', {
+          open_tasks: openTasks,
+          skill_installed: skillInstalled,
+        });
+        captureAborted();
+        return { error: AgentErrorType.INCOMPLETE_TASKS };
       }
 
       const remark = signals.remark();

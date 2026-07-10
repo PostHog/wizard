@@ -26,6 +26,14 @@ export interface PostHogMcpSetup {
   extensionFactory: (pi: unknown) => void;
   /** Restore prior config + drop the token env var. Call after the run. */
   cleanup: () => void;
+  /**
+   * The MCP server's `instructions` payload, captured at warm-connect. The
+   * adapter drops it, so the caller rides it into the system prompt — it carries
+   * the "prioritize skills over tools" steer, the active project/environment, and
+   * the tool domains the agent searches to discover tools. Undefined if the
+   * warm-connect failed.
+   */
+  instructions?: string;
 }
 
 export async function setupPostHogMcp(opts: {
@@ -62,9 +70,14 @@ export async function setupPostHogMcp(opts: {
     bearerTokenEnv: MCP_TOKEN_ENV,
     headers: { 'User-Agent': userAgent },
     lifecycle: 'lazy',
-    // CLI mode's roster is a single `exec` tool, so register everything the
-    // server exposes as direct tools — no curation needed.
-    directTools: true,
+    // CLI mode exposes a single `exec` tool that carries the whole protocol —
+    // register only it. `directTools: true` would also mint one direct tool per
+    // MCP *resource*, named `posthog_get_<resource-name>`; the server's skill
+    // resource names are full sentences, so those names blow past Anthropic's
+    // 128-char tool-name limit and the API rejects the entire request. Scope to
+    // `exec` and turn resource-tools off so no oversized name is ever generated.
+    directTools: ['exec'],
+    exposeResources: false,
   };
   config.mcpServers.posthog = server;
   // No proxy `mcp` tool: the proxy's search indirection both pollutes context
@@ -85,6 +98,10 @@ export async function setupPostHogMcp(opts: {
   writeConfig();
 
   const jiti = createJiti(import.meta.url);
+
+  // The MCP server's `instructions` payload, captured below. The adapter never
+  // surfaces it, so the caller injects it into the system prompt.
+  let instructions: string | undefined;
 
   // Pre-warm: connect once and seed the adapter's metadata cache so the first
   // real call doesn't pay connect latency. Best-effort — if it fails the run
@@ -107,6 +124,13 @@ export async function setupPostHogMcp(opts: {
             },
           },
         });
+        // The server's `instructions` carry the "prioritize skills over tools"
+        // steer, the active environment, and the tool domains — the guidance the
+        // agent needs to discover and use the MCP. The adapter drops them, so
+        // grab them straight off the SDK client for the system prompt.
+        const client = (conn as { client?: { getInstructions?: () => string } })
+          .client;
+        instructions = client?.getInstructions?.() || undefined;
         // The exec tool's description carries the whole command protocol; log
         // its length so adapter truncation of the schema is detectable.
         const execTool = conn.tools.find((t: { name: string }) =>
@@ -115,7 +139,8 @@ export async function setupPostHogMcp(opts: {
         const execDescLen = execTool?.description?.length ?? 0;
         logToFile(
           `[pi-mcp] warmed: ${conn.tools.length} tools, all direct; ` +
-            `exec description ${execDescLen} chars`,
+            `exec description ${execDescLen} chars; ` +
+            `instructions ${instructions?.length ?? 0} chars`,
         );
       }
     } finally {
@@ -141,5 +166,5 @@ export async function setupPostHogMcp(opts: {
     delete process.env[MCP_TOKEN_ENV];
   };
 
-  return { extensionFactory, cleanup };
+  return { extensionFactory, cleanup, instructions };
 }
