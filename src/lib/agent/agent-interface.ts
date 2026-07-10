@@ -208,20 +208,19 @@ export type AgentConfig = {
     | import('@lib/wizard-session').PendingQuestion
     | null;
   /**
-   * Optional live user guidance channel. TUI implementations resolve whenever
-   * the operator asks the agent to move on; non-interactive hosts omit it.
-   */
-  waitForAgentNudge?: (
-    afterId?: number,
-    signal?: AbortSignal,
-  ) => Promise<{ id: number; message: string } | null>;
-  /**
    * Orchestrator queue context. Present only when the `wizard-orchestrator`
    * flag routes the run here; threaded into wizard-tools so the orchestrator
    * tools register.
    */
   orchestrator?: import('@lib/agent/runner/sequence/orchestrator/queue-tools').OrchestratorToolsContext;
 };
+
+export type AgentNudge = { id: number; message: string };
+
+export type AgentNudgeSource = (
+  afterId?: number,
+  signal?: AbortSignal,
+) => Promise<AgentNudge | null>;
 
 /**
  * Stop hook return type: either allow stop or block with a reason.
@@ -307,10 +306,6 @@ type AgentRunConfig = {
   getPendingQuestion?: () =>
     | import('@lib/wizard-session').PendingQuestion
     | null;
-  waitForAgentNudge?: (
-    afterId?: number,
-    signal?: AbortSignal,
-  ) => Promise<{ id: number; message: string } | null>;
 };
 
 /**
@@ -724,7 +719,6 @@ export async function initializeAgent(
       allowedTools: config.allowedTools,
       disallowedTools: config.disallowedTools,
       getPendingQuestion: config.getPendingQuestion,
-      waitForAgentNudge: config.waitForAgentNudge,
     };
 
     logToFile('Agent config:', {
@@ -792,6 +786,13 @@ export async function runAgent(
      * aborted` events (e.g. the orchestrator's task type and id).
      */
     analyticsProperties?: Record<string, unknown>;
+    /**
+     * Optional live user guidance channel. TUI implementations resolve
+     * whenever the operator asks the agent to move on; non-interactive hosts
+     * omit it. Kept on the execution call, not initializeAgent(), because it is
+     * an interactive transport concern rather than agent bootstrap config.
+     */
+    waitForAgentNudge?: AgentNudgeSource;
   },
   middleware?: {
     onMessage(message: any): void;
@@ -847,9 +848,9 @@ export async function runAgent(
       parent_tool_use_id: null,
     };
     let lastNudgeId = 0;
-    while (agentConfig.waitForAgentNudge) {
+    while (config?.waitForAgentNudge) {
       const nudgeAbort = new AbortController();
-      const nextNudge = agentConfig.waitForAgentNudge(
+      const nextNudge = config.waitForAgentNudge(
         lastNudgeId,
         nudgeAbort.signal,
       );

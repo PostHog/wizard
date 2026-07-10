@@ -21,7 +21,10 @@ import type { Harness } from '@lib/constants';
 import type { ProgramConfig } from '@lib/programs/program-step';
 import type { SpinnerHandle } from '@ui';
 import type { WizardAskBridge } from '@lib/wizard-ask-bridge';
-import type { AgentErrorType } from '@lib/agent/agent-interface';
+import type {
+  AgentErrorType,
+  AgentNudgeSource,
+} from '@lib/agent/agent-interface';
 import type { OrchestratorToolsContext } from '@lib/agent/runner/sequence/orchestrator/queue-tools';
 import type {
   ProgramRun,
@@ -56,6 +59,8 @@ export interface BackendRunInputs {
   middleware?: RunMiddleware;
   /** Gateway model id resolved from the (runner, model) pair. */
   model: string;
+  /** Optional live user guidance source for harnesses that support mid-run input. */
+  waitForAgentNudge?: AgentNudgeSource;
 }
 
 /** What a runner reports back: an error classification, or nothing on success. */
@@ -91,6 +96,8 @@ export interface TaskRunInputs {
   requestRemark: boolean;
   /** Per-call analytics properties merged into `agent completed` / `agent aborted` events. */
   analyticsProperties: Record<string, unknown>;
+  /** Optional live user guidance source for harnesses that support mid-run input. */
+  waitForAgentNudge?: AgentNudgeSource;
 }
 
 /** A drop-in agent runner: consumes a fully-assembled run, returns a result. */

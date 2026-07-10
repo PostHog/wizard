@@ -42,6 +42,7 @@ export const anthropicBackend: AgentHarness = {
       askBridge,
       middleware,
       model,
+      waitForAgentNudge,
     } = inputs;
     const {
       skillsBaseUrl,
@@ -71,8 +72,6 @@ export const anthropicBackend: AgentHarness = {
         allowedTools: programConfig.allowedTools,
         disallowedTools: programConfig.disallowedTools,
         getPendingQuestion: () => session.pendingQuestion,
-        waitForAgentNudge: (afterId, signal) =>
-          getUI().waitForAgentNudge(afterId, signal),
         modelOverride: model,
       },
       sessionToOptions(session),
@@ -95,6 +94,7 @@ export const anthropicBackend: AgentHarness = {
         additionalFeatureQueue: config.additionalFeatureQueue ?? [],
         abortCases: config.abortCases,
         emitStepEvents: config.trackStepProgress ?? false,
+        waitForAgentNudge,
       },
       middleware,
     );
@@ -117,6 +117,7 @@ export const anthropicBackend: AgentHarness = {
       additionalFeatureQueue,
       requestRemark,
       analyticsProperties,
+      waitForAgentNudge,
     } = inputs;
     const options = sessionToOptions(session);
 
@@ -135,8 +136,6 @@ export const anthropicBackend: AgentHarness = {
         wizardMetadata: boot.wizardMetadata,
         integrationLabel: programConfig.id,
         orchestrator,
-        waitForAgentNudge: (afterId, signal) =>
-          getUI().waitForAgentNudge(afterId, signal),
       },
       options,
     );
@@ -153,6 +152,7 @@ export const anthropicBackend: AgentHarness = {
         additionalFeatureQueue,
         requestRemark,
         analyticsProperties,
+        waitForAgentNudge,
       },
     );
   },

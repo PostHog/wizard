@@ -292,6 +292,8 @@ export async function runOrchestrator(
     additionalFeatureQueue: [],
     requestRemark: false,
     analyticsProperties: { task_type: 'seed', harness: seedPick.harness },
+    waitForAgentNudge: (afterId, signal) =>
+      getUI().waitForAgentNudge(afterId, signal),
   });
   if (seedResult.error) {
     logToFile(
@@ -376,6 +378,8 @@ export async function runOrchestrator(
           task_id: task.id,
           harness: taskPick.harness,
         },
+        waitForAgentNudge: (afterId, signal) =>
+          getUI().waitForAgentNudge(afterId, signal),
       });
     } finally {
       renderQueue();

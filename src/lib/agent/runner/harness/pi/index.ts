@@ -439,8 +439,38 @@ export const piBackend: AgentHarness = {
 
       try {
         // Non-streaming: resolves when the agent run completes. Throws if no
-        // model/api key, or on a transport error.
-        await agentSession.prompt(prompt);
+        // model/api key, or on a transport error. While it runs, forward user
+        // nudges through pi's steering queue so the shared TUI control has the
+        // same behavior as the Anthropic prompt stream.
+        const promptRun = agentSession.prompt(prompt);
+        const nudgeAbort = new AbortController();
+        const nudgeLoop = inputs.waitForAgentNudge
+          ? (async () => {
+              let lastNudgeId = 0;
+              while (inputs.waitForAgentNudge) {
+                const next = await inputs.waitForAgentNudge(
+                  lastNudgeId,
+                  nudgeAbort.signal,
+                );
+                if (!next) return;
+                lastNudgeId = next.id;
+                logToFile(`[pi] user nudge sent: ${next.message}`);
+                try {
+                  await agentSession.steer(next.message);
+                } catch (err) {
+                  logToFile(`[pi] user nudge ignored: ${String(err)}`);
+                }
+              }
+            })()
+          : undefined;
+        try {
+          await promptRun;
+        } finally {
+          nudgeAbort.abort();
+          await nudgeLoop?.catch((err) => {
+            logToFile(`[pi] nudge loop stopped: ${String(err)}`);
+          });
+        }
       } finally {
         unsubscribe();
         mcpCleanup?.();
