@@ -300,9 +300,6 @@ export const piBackend: AgentHarness = {
     // Tool calls across the whole run. Zero means the agent only ever produced
     // text and never acted — a no-op that leaves the project untouched.
     let toolCalls = 0;
-    // Whether the agent installed an integration skill. A run that never skills
-    // has skipped the whole guided workflow.
-    let skillInstalled = false;
     const runDurations = () => {
       const durationMs = Date.now() - startTime;
       return {
@@ -566,8 +563,6 @@ export const piBackend: AgentHarness = {
                   300,
                 )}`,
               );
-            } else if (event.toolName === 'install_skill') {
-              skillInstalled = true;
             }
             break;
           }
@@ -644,19 +639,16 @@ export const piBackend: AgentHarness = {
         return { error: AgentErrorType.NO_PROGRESS };
       }
 
-      // 2. Acted but stopped short: planned tasks left open, or the guided skill
-      //    workflow was never installed. The nudge loop above already gave it
-      //    every chance to finish the open tasks.
-      const openTasks = hasOpenTasks(wizardTaskTools.store);
-      if (openTasks || !skillInstalled) {
+      // 2. Acted but stopped short: the agent left tasks in its own plan
+      //    unfinished. The nudge loop above already gave it every chance to
+      //    complete them. We gate only on open tasks — deliberately NOT on
+      //    "did it install_skill this run", which false-fails valid runs that
+      //    reuse a skill already on disk, complete the work another way, or run
+      //    a program that doesn't use the skill workflow at all.
+      if (hasOpenTasks(wizardTaskTools.store)) {
         spinner.stop('Agent stopped before finishing');
-        logToFile(
-          `[pi] incomplete: openTasks=${openTasks} skillInstalled=${skillInstalled} — failing the run`,
-        );
-        analytics.wizardCapture('agent incomplete tasks', {
-          open_tasks: openTasks,
-          skill_installed: skillInstalled,
-        });
+        logToFile('[pi] incomplete: tasks left open — failing the run');
+        analytics.wizardCapture('agent incomplete tasks', { open_tasks: true });
         captureAborted();
         return { error: AgentErrorType.INCOMPLETE_TASKS };
       }
