@@ -276,6 +276,8 @@ export const piBackend: AgentHarness = {
         // agent's model uses. Without this, pi has no ANTHROPIC_* env (it
         // auths programmatically) and triage would silently no-op.
         triageAuth: { baseURL: gatewayUrl, authToken: boot.accessToken },
+        // Where pi's bash runs; the rm allowance is confined to this tree.
+        workingDirectory: session.installDir,
       });
 
       // Pay warlock's WASM-init + rule-compile cost now, off the tool-call
@@ -501,6 +503,15 @@ export const piBackend: AgentHarness = {
       const remark = signals.remark();
       if (remark) {
         analytics.capture(WIZARD_REMARK_EVENT_NAME, { remark });
+      }
+
+      // A failed install_skill is non-fatal — the agent continues best-effort
+      // without the skill — but every such run must be measurable.
+      const skillFailure = signals.skillInstallFailure();
+      if (skillFailure !== undefined) {
+        analytics.wizardCapture('agent continued without skill', {
+          detail: skillFailure,
+        });
       }
 
       // The skill plans events into .posthog-events.json then asks to remove it

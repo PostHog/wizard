@@ -15,8 +15,7 @@
 import type { AgentChunk } from '@ui/tui/services/mcp-suggested-prompts-services';
 import type { Credentials } from '@lib/wizard-session';
 import { DEFAULT_AGENT_MODEL, WIZARD_USER_AGENT } from '@lib/constants';
-import { HostResolution } from '@lib/host-resolution';
-import { runtimeEnv } from '@env';
+import { HostResolution, mcpUrlFor } from '@lib/host-resolution';
 import { logToFile } from '@utils/debug';
 import { buildAgentEnv } from '@lib/agent/agent-interface';
 import { sanitizeAgentSubprocessEnv } from '@lib/agent/agent-env-isolation';
@@ -47,7 +46,7 @@ const MAX_TURNS = 30;
 // the bearer token, so the EU subdomain (a Claude Code OAuth workaround) is
 // not needed here.
 function resolveMcpUrl(): string {
-  return runtimeEnv('MCP_URL') || 'https://mcp.posthog.com/mcp';
+  return mcpUrlFor(false);
 }
 
 /**
