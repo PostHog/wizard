@@ -24,7 +24,10 @@ Both entry points are implemented:
   user's OAuth token (`CLAUDE_CODE_OAUTH_TOKEN` + `ANTHROPIC_BASE_URL`).
   Bedrock fallback via `x-posthog-use-bedrock-fallback: true`.
 - **Context window:** 1M-context beta (`context-1m-2025-08-07`) so large
-  projects don't overflow during compaction.
+  projects don't overflow during compaction. The billed working context is
+  bounded separately by `settings.autoCompactWindow` (`AGENT_AUTO_COMPACT_WINDOW`,
+  200K) — auto-compaction fires at that size rather than deferring to the 1M
+  ceiling, keeping per-generation input cost near the pre-1M band.
 - **Custom headers:** wizard flags (`X-POSTHOG-FLAG-*`) and metadata
   (`X-POSTHOG-PROPERTY-*`) piggyback on every gateway request for tracing.
 - **Model routing:** `AgentConfig.modelOverride` accepts any gateway model id

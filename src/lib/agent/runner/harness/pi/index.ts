@@ -23,6 +23,7 @@ import {
   POSTHOG_PROPERTY_HEADER_PREFIX,
   WIZARD_REMARK_EVENT_NAME,
   WIZARD_USER_AGENT,
+  CONTEXT_1M_BETA,
 } from '@lib/constants';
 import { analytics } from '@utils/analytics';
 import { AgentErrorType } from '@lib/agent/agent-interface';
@@ -153,7 +154,9 @@ function buildGatewayHeaders(
     'x-posthog-use-bedrock-fallback': 'true',
     // 1M context window, same as the anthropic edition — pi otherwise runs at
     // 200k and overflows on larger projects (the post-run compaction failures).
-    'anthropic-beta': 'context-1m-2025-08-07',
+    // Note: pi drives its own compaction (pi-coding-agent), so the anthropic
+    // edition's `autoCompactWindow` cost guard does not apply here.
+    'anthropic-beta': CONTEXT_1M_BETA,
   };
   for (const [key, value] of Object.entries(wizardMetadata)) {
     const name = key.startsWith(POSTHOG_PROPERTY_HEADER_PREFIX)

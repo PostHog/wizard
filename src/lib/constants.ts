@@ -44,6 +44,27 @@ export const GPT5_4_MODEL = 'openai/gpt-5.4';
  */
 export const GPT5_MINI_MODEL = 'openai/gpt-5-mini';
 
+/**
+ * Anthropic 1M-context beta. Enabled on the agent so a run has physical
+ * headroom for compaction to succeed on large projects — but it does NOT set
+ * the working-context size the model actually pays for on every turn; that is
+ * `AGENT_AUTO_COMPACT_WINDOW` below.
+ */
+export const CONTEXT_1M_BETA = 'context-1m-2025-08-07';
+
+/**
+ * Working-context ceiling (tokens) at which the SDK auto-compacts, passed via
+ * `Options.settings.autoCompactWindow`. Decoupled from the physical window: the
+ * 1M beta ({@link CONTEXT_1M_BETA}) gives compaction room to run, while this
+ * keeps the per-turn input the run is billed for near the ~110-200K band.
+ *
+ * Without it, once the gateway honors the 1M beta the SDK defers compaction to
+ * ~1M, so a long linear run's context climbs past 600K and per-generation cost
+ * balloons (the 2026-07-09 spend regression). Must stay within the SDK's
+ * accepted range (100K-1M).
+ */
+export const AGENT_AUTO_COMPACT_WINDOW = 200_000;
+
 // ── Agent runner routing axes ────────────────────────────────────────
 
 /**
