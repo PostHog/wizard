@@ -98,11 +98,29 @@ const PI_RUNTIME_NOTES = [
  */
 function piMcpContext(boot: BootstrapResult, instructions?: string): string {
   if (instructions) {
+    // Produces a blank line + heading + the verbatim server instructions, e.g.:
+    //
+    //   ## PostHog MCP server
+    //   Below are tools available in the MCP. Prioritize skills over tools.
+    //   ### Active environment
+    //   You are currently in project "acme" (id: 228144, token: phc_…).
+    //   Base URL: us.posthog.com — add /project/228144 for project-scoped paths.
+    //   Project timezone: UTC.
+    //   …
+    //   # Tool domains
+    //   agent-feedback|dashboard|docs-search|execute-sql|insight|…|user
     return ['', '## PostHog MCP server', instructions].join('\n');
   }
   const project = boot.project?.name
     ? `${boot.project.name} (id ${boot.projectId})`
     : `id ${boot.projectId}`;
+  // Fallback when the warm-connect captured no instructions. Produces, e.g.:
+  //
+  //   ## PostHog project
+  //   Your `posthog_exec` calls run against this project:
+  //   - Project: acme (id 228144)
+  //   - Host: https://us.i.posthog.com
+  //   - Region: us
   return [
     '',
     '## PostHog project',
