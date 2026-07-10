@@ -117,6 +117,7 @@ function taskRuntimeNotes(opts: {
     "- To inspect or change a project's `.env` files use `check_env_keys` and `set_env_values` — a plain `read`, `edit`, or `write` of any `.env*` file is blocked.",
     '- Status updates are PLAIN TEXT you write in your reply, NOT a tool call. When you begin a new action, put a line starting with the literal marker [STATUS] and a short present-tense phrase in the SAME turn as a tool call. Never send a turn that is ONLY a [STATUS] line — a turn with no tool call ends the run.',
     '- When you are done, call `complete_task` exactly once with your structured handoff, in the same turn as your closing words. Do not stop before calling it.',
+    '- Name events in snake_case (e.g. todo_created), never with spaces.',
   ];
   if (opts.bash) {
     lines.push(
