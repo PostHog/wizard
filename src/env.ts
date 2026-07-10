@@ -63,6 +63,10 @@ type RuntimeEnvKey =
   | 'DEBUG'
   // Agent / MCP
   | 'MCP_URL'
+  // Field kill switch for the MCP tool-surface mode (see mcpUrlFor). Declared
+  // as the hidden `mcp-mode` global option so yargs' POSTHOG_WIZARD env prefix
+  // accepts it instead of strict-rejecting the run.
+  | 'POSTHOG_WIZARD_MCP_MODE'
   | 'POSTHOG_API_KEY'
   // Platform: terminal detection
   | 'TERM'

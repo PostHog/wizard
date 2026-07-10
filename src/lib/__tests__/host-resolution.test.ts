@@ -77,23 +77,86 @@ describe('HostResolution.fromAccessToken', () => {
   });
 });
 
+/** Run `fn` with an env var pinned, restoring the prior value afterwards. */
+function withEnv(key: string, value: string | undefined, fn: () => void) {
+  const prev = process.env[key];
+  if (value === undefined) delete process.env[key];
+  else process.env[key] = value;
+  try {
+    fn();
+  } finally {
+    if (prev === undefined) delete process.env[key];
+    else process.env[key] = prev;
+  }
+}
+
 describe('mcpUrlFor', () => {
-  it('pins mode=tools on the prod url', () => {
-    expect(mcpUrlFor(false)).toBe('https://mcp.posthog.com/mcp?mode=tools');
+  it('builds the bare prod url when no mode is requested (server default)', () => {
+    expect(mcpUrlFor()).toBe('https://mcp.posthog.com/mcp');
+    expect(mcpUrlFor({})).toBe('https://mcp.posthog.com/mcp');
   });
 
-  it('pins mode=tools on the local dev url', () => {
-    expect(mcpUrlFor(true)).toBe('http://localhost:8787/mcp?mode=tools');
+  it('pins the requested mode on the prod url', () => {
+    expect(mcpUrlFor({ mode: 'tools' })).toBe(
+      'https://mcp.posthog.com/mcp?mode=tools',
+    );
+    expect(mcpUrlFor({ mode: 'cli' })).toBe(
+      'https://mcp.posthog.com/mcp?mode=cli',
+    );
+  });
+
+  it('pins the requested mode on the local dev url', () => {
+    expect(mcpUrlFor({ local: true, mode: 'tools' })).toBe(
+      'http://localhost:8787/mcp?mode=tools',
+    );
+    expect(mcpUrlFor({ local: true })).toBe('http://localhost:8787/mcp');
+  });
+
+  it('adds a features filter, before the mode param', () => {
+    expect(mcpUrlFor({ features: ['dashboards', 'insights'] })).toBe(
+      'https://mcp.posthog.com/mcp?features=dashboards,insights',
+    );
+    expect(mcpUrlFor({ features: ['dashboards'], mode: 'tools' })).toBe(
+      'https://mcp.posthog.com/mcp?features=dashboards&mode=tools',
+    );
+    expect(mcpUrlFor({ features: [] })).toBe('https://mcp.posthog.com/mcp');
   });
 
   it('takes an MCP_URL override verbatim', () => {
-    const prev = process.env.MCP_URL;
-    process.env.MCP_URL = 'https://mcp.example.com/mcp?mode=cli';
-    try {
-      expect(mcpUrlFor(false)).toBe('https://mcp.example.com/mcp?mode=cli');
-    } finally {
-      if (prev === undefined) delete process.env.MCP_URL;
-      else process.env.MCP_URL = prev;
-    }
+    withEnv('MCP_URL', 'https://mcp.example.com/mcp?mode=cli', () => {
+      expect(mcpUrlFor({ mode: 'tools' })).toBe(
+        'https://mcp.example.com/mcp?mode=cli',
+      );
+    });
+  });
+
+  it('prefers the local dev server over an MCP_URL override', () => {
+    withEnv('MCP_URL', 'https://mcp.example.com/mcp', () => {
+      expect(mcpUrlFor({ local: true, mode: 'tools' })).toBe(
+        'http://localhost:8787/mcp?mode=tools',
+      );
+    });
+  });
+
+  it('lets the POSTHOG_WIZARD_MCP_MODE kill switch win over the requested mode', () => {
+    withEnv('POSTHOG_WIZARD_MCP_MODE', 'cli', () => {
+      expect(mcpUrlFor({ mode: 'tools' })).toBe(
+        'https://mcp.posthog.com/mcp?mode=cli',
+      );
+    });
+    withEnv('POSTHOG_WIZARD_MCP_MODE', 'tools', () => {
+      expect(mcpUrlFor()).toBe('https://mcp.posthog.com/mcp?mode=tools');
+      expect(mcpUrlFor({ local: true, mode: 'cli' })).toBe(
+        'http://localhost:8787/mcp?mode=tools',
+      );
+    });
+  });
+
+  it('ignores an invalid POSTHOG_WIZARD_MCP_MODE value', () => {
+    withEnv('POSTHOG_WIZARD_MCP_MODE', 'bogus', () => {
+      expect(mcpUrlFor({ mode: 'tools' })).toBe(
+        'https://mcp.posthog.com/mcp?mode=tools',
+      );
+    });
   });
 });

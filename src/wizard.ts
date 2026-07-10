@@ -72,6 +72,17 @@ export const GLOBAL_OPTIONS = {
     type: 'boolean' as const,
     hidden: true,
   },
+  'mcp-mode': {
+    // Field kill switch for the MCP CLI-mode migration (#842): wins over the
+    // mode any internal call site requests, wherever the wizard builds an MCP
+    // url (see mcpUrlFor). Declared unconditionally so it works in published
+    // builds, unlike the dev-only runner overrides.
+    describe:
+      'Pin the PostHog MCP tool-surface mode (tools | cli)\nenv: POSTHOG_WIZARD_MCP_MODE',
+    choices: ['tools', 'cli'] as const,
+    type: 'string' as const,
+    hidden: true,
+  },
   'base-url': {
     describe:
       'Override the PostHog base URL (e.g. http://localhost:8010), bypassing region resolution. Pins the API host, cloud URL, and OAuth server.\nenv: POSTHOG_WIZARD_BASE_URL',
@@ -100,7 +111,16 @@ export class Wizard {
   private constructor() {
     let cli = yargs(hideBin(process.argv))
       .env('POSTHOG_WIZARD')
-      .options(GLOBAL_OPTIONS);
+      .options(GLOBAL_OPTIONS)
+      // mcpUrlFor reads the kill switch from the environment (it runs far
+      // below any argv threading), so mirror the flag spelling into the env
+      // var yargs would have populated it from.
+      .middleware((argv) => {
+        const mode = (argv as Record<string, unknown>)['mcp-mode'];
+        if (typeof mode === 'string' && mode !== '') {
+          process.env.POSTHOG_WIZARD_MCP_MODE = mode;
+        }
+      });
 
     // CI mode (--ci) is only supported in dev/test. It is left undeclared in
     // published builds (NODE_ENV==='production'), so .strictOptions() rejects

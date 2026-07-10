@@ -44,9 +44,10 @@ const MAX_TURNS = 30;
 
 // One MCP url for every region: the server resolves the user's region from
 // the bearer token, so the EU subdomain (a Claude Code OAuth workaround) is
-// not needed here.
+// not needed here. Pinned to the named-tool roster the tutorial's prompts
+// still speak.
 function resolveMcpUrl(): string {
-  return mcpUrlFor(false);
+  return mcpUrlFor({ mode: 'tools' });
 }
 
 /**

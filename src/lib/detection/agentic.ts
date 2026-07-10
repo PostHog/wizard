@@ -21,6 +21,7 @@ import {
 import { isAbsolute } from 'path';
 import { detectNodePackageManagers } from './package-manager.js';
 import { getSkillsBaseUrl, HAIKU_MODEL } from '@lib/constants';
+import { mcpUrlFor } from '@lib/host-resolution';
 import type { WizardSession } from '@lib/wizard-session';
 import type { WizardRunOptions } from '@utils/types';
 import type { SpinnerHandle } from '@ui';
@@ -250,9 +251,7 @@ export async function detectProjectsWithAgent(
   const cwd = session.installDir;
   const runOptions = sessionToWizardOptions(session);
 
-  const mcpUrl = session.localMcp
-    ? 'http://localhost:8787/mcp'
-    : 'https://mcp.posthog.com/mcp';
+  const mcpUrl = mcpUrlFor({ local: session.localMcp, mode: 'tools' });
 
   const agent = await initializeAgent(
     {

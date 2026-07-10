@@ -1,4 +1,5 @@
 import z from 'zod';
+import { mcpUrlFor } from '@lib/host-resolution';
 
 export const DefaultMCPClientConfig = z
   .object({
@@ -243,21 +244,16 @@ export const isAllFeaturesSelected = (features: string[]): boolean =>
   ALL_FEATURE_VALUES.every((feature) => features.includes(feature));
 
 export const buildMCPUrl = (selectedFeatures?: string[], local?: boolean) => {
-  const host = local ? 'http://localhost:8787' : 'https://mcp.posthog.com';
-  const baseUrl = `${host}/mcp`;
-
-  const params: string[] = [];
-
-  // Add features param if not all features selected
-  if (
+  // All-features-selected is equivalent to no filter server-side, so the
+  // param is only added when the user narrowed the catalog. No mode param:
+  // the user's client gets the server's default tool surface.
+  const features =
     selectedFeatures &&
     selectedFeatures.length > 0 &&
     !isAllFeaturesSelected(selectedFeatures)
-  ) {
-    params.push(`features=${selectedFeatures.join(',')}`);
-  }
-
-  return params.length > 0 ? `${baseUrl}?${params.join('&')}` : baseUrl;
+      ? selectedFeatures
+      : undefined;
+  return mcpUrlFor({ local, features });
 };
 
 export const getNativeHTTPServerConfig = (

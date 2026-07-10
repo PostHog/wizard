@@ -27,11 +27,17 @@ import {
 import { runtimeEnv } from '@env';
 import type { CloudRegion } from '@utils/types';
 
-// The wizard's internal agents speak the named-tool roster, so the default
-// urls pin `mode=tools`; an `MCP_URL` override is taken verbatim.
-// TODO(#849): drop the pin once both harnesses run on the single-exec CLI mode.
-const LOCAL_MCP_URL = 'http://localhost:8787/mcp?mode=tools';
-const PROD_MCP_URL = 'https://mcp.posthog.com/mcp?mode=tools';
+const LOCAL_MCP_BASE = 'http://localhost:8787/mcp';
+const PROD_MCP_BASE = 'https://mcp.posthog.com/mcp';
+
+/**
+ * The MCP server's tool-surface modes: `tools` serves the ~252-named-tool
+ * roster, `cli` serves a single `exec` tool that reaches the same catalog
+ * through command strings. A url without a `mode` param gets the server
+ * default, which is CLI mode for the wizard's client (only Cursor and ChatGPT
+ * are allowlisted to keep the named roster).
+ */
+export type McpMode = 'tools' | 'cli';
 
 /** Construction-time inputs that aren't implied by the region. */
 export interface HostResolutionOptions {
@@ -61,9 +67,41 @@ function assetHostFromApiHost(apiHost: string): string {
   return apiHost;
 }
 
-export function mcpUrlFor(localMcp: boolean): string {
-  if (localMcp) return LOCAL_MCP_URL;
-  return runtimeEnv('MCP_URL') || PROD_MCP_URL;
+export interface McpUrlOptions {
+  /** `--local-mcp`: point at the local dev MCP server. Wins over `MCP_URL`. */
+  local?: boolean;
+  /**
+   * Tool-surface mode to pin on the url; omitted → the server default. The
+   * wizard's internal agent connections pass `'tools'` — their prompts and
+   * installed skills still speak the named-tool roster.
+   * TODO(#849): drop the pins once both harnesses run on the single-exec CLI mode.
+   */
+  mode?: McpMode;
+  /** `features=` filter narrowing the tool catalog the url can reach. */
+  features?: string[];
+}
+
+/**
+ * The one place an MCP server url is built. One url for every region — the
+ * server resolves the user's region from the bearer token. Two overrides:
+ * `MCP_URL` (dev: point at any server) replaces the whole url verbatim, and
+ * `POSTHOG_WIZARD_MCP_MODE` / `--mcp-mode` (the field kill switch for the
+ * CLI-mode migration, #842) wins over the requested mode.
+ */
+export function mcpUrlFor(opts: McpUrlOptions = {}): string {
+  if (!opts.local) {
+    const urlOverride = runtimeEnv('MCP_URL');
+    if (urlOverride) return urlOverride;
+  }
+  const params: string[] = [];
+  if (opts.features && opts.features.length > 0) {
+    params.push(`features=${opts.features.join(',')}`);
+  }
+  const envMode = runtimeEnv('POSTHOG_WIZARD_MCP_MODE');
+  const mode = envMode === 'tools' || envMode === 'cli' ? envMode : opts.mode;
+  if (mode) params.push(`mode=${mode}`);
+  const base = opts.local ? LOCAL_MCP_BASE : PROD_MCP_BASE;
+  return params.length > 0 ? `${base}?${params.join('&')}` : base;
 }
 
 export class HostResolution {
@@ -89,6 +127,8 @@ export class HostResolution {
    * PostHog MCP server URL the agent connects to. Region-independent — the
    * server resolves the user's region from the bearer token — so this is driven
    * only by `--local-mcp` and the `MCP_URL` override, not by region/base-url.
+   * Pinned to the named-tool roster (`mode=tools`), like every internal agent
+   * connection.
    */
   readonly mcpUrl: string;
 
@@ -125,7 +165,7 @@ export class HostResolution {
       appHost: getCloudUrl(region, opts.baseUrl),
       assetHost: assetHostFor(region, opts.baseUrl),
       gatewayUrl: getLlmGatewayUrl(apiHost),
-      mcpUrl: mcpUrlFor(opts.localMcp ?? false),
+      mcpUrl: mcpUrlFor({ local: opts.localMcp, mode: 'tools' }),
     });
   }
 
@@ -145,7 +185,7 @@ export class HostResolution {
       appHost: getUiHostFromHost(apiHost),
       assetHost: assetHostFromApiHost(apiHost),
       gatewayUrl: getLlmGatewayUrl(apiHost),
-      mcpUrl: mcpUrlFor(opts.localMcp ?? false),
+      mcpUrl: mcpUrlFor({ local: opts.localMcp, mode: 'tools' }),
     });
   }
 
