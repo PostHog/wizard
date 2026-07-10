@@ -43,12 +43,12 @@ describe('HostResolution.fromApiHost', () => {
 });
 
 describe('HostResolution mcpUrl', () => {
-  it('defaults to the region-independent prod MCP url, pinned to tools mode', () => {
+  it('defaults to the region-independent prod MCP url (server serves cli mode)', () => {
     expect(HostResolution.fromApiHost('https://us.i.posthog.com').mcpUrl).toBe(
-      'https://mcp.posthog.com/mcp?mode=tools',
+      'https://mcp.posthog.com/mcp',
     );
     expect(HostResolution.fromApiHost('https://eu.i.posthog.com').mcpUrl).toBe(
-      'https://mcp.posthog.com/mcp?mode=tools',
+      'https://mcp.posthog.com/mcp',
     );
   });
 
@@ -56,7 +56,7 @@ describe('HostResolution mcpUrl', () => {
     const h = HostResolution.fromApiHost('https://us.i.posthog.com', {
       localMcp: true,
     });
-    expect(h.mcpUrl).toBe('http://localhost:8787/mcp?mode=tools');
+    expect(h.mcpUrl).toBe('http://localhost:8787/mcp');
   });
 });
 
@@ -78,12 +78,12 @@ describe('HostResolution.fromAccessToken', () => {
 });
 
 describe('mcpUrlFor', () => {
-  it('pins mode=tools on the prod url', () => {
-    expect(mcpUrlFor(false)).toBe('https://mcp.posthog.com/mcp?mode=tools');
+  it('builds the bare prod url (server serves the wizard cli mode)', () => {
+    expect(mcpUrlFor(false)).toBe('https://mcp.posthog.com/mcp');
   });
 
-  it('pins mode=tools on the local dev url', () => {
-    expect(mcpUrlFor(true)).toBe('http://localhost:8787/mcp?mode=tools');
+  it('builds the bare local dev url', () => {
+    expect(mcpUrlFor(true)).toBe('http://localhost:8787/mcp');
   });
 
   it('takes an MCP_URL override verbatim', () => {
