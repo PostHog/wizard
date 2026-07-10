@@ -34,6 +34,12 @@ jobs:
             -H "Accept: application/vnd.github.v3+json" \
             | jq -r '[.[] | select(.type == "dir") | .name] | sort | .[]')
 
+          # Only advertise directories whose workflow is CI-capable (apps/manifest.json).
+          # Left empty on fetch failure, in which case no filtering is applied.
+          CI_CAPABLE=$(curl -s "https://api.github.com/repos/PostHog/wizard-workbench/contents/apps/manifest.json" \
+            -H "Accept: application/vnd.github.raw" \
+            | jq -r '[.workflows[] | select(.ciCapable == true) | .dir] | .[]' 2>/dev/null || echo "")
+
           # Build lists by category
           CATEGORY_LIST=""
           APP_LIST_VISIBLE=""
@@ -42,6 +48,11 @@ jobs:
           VISIBLE_COUNT=3
 
           for category in $CATEGORIES; do
+            # Skip directories the manifest marks as not CI-capable.
+            if [ -n "$CI_CAPABLE" ] && ! echo "$CI_CAPABLE" | grep -qxF "$category"; then
+              continue
+            fi
+
             # Fetch apps in this category
             APPS=$(curl -s "https://api.github.com/repos/PostHog/wizard-workbench/contents/apps/$category" \
               -H "Accept: application/vnd.github.v3+json" \
