@@ -382,7 +382,7 @@ export const McpScreen = ({
 
         {phase === Phase.FeatureSelect && (
           <GroupedPickerMenu
-            message="Select features to enable"
+            message="Select the PostHog areas your agent can reach"
             groups={AVAILABLE_FEATURES}
             initialSelected={[]}
             onSelect={(features) => {
@@ -395,7 +395,7 @@ export const McpScreen = ({
           <Box flexDirection="column">
             <Box marginBottom={1}>
               <Text dimColor>
-                You&apos;ll choose which features and tools to enable in
+                You&apos;ll choose which PostHog areas to enable in
                 Claude&apos;s UI after connecting.
               </Text>
             </Box>

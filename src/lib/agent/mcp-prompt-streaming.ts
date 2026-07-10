@@ -92,10 +92,14 @@ function messageToChunks(message: any): AgentChunk[] {
         } else if (type === 'tool_use') {
           const name = (block as { name?: string }).name ?? 'tool';
           const input = (block as { input?: unknown }).input;
+          // CLI mode's exec tool takes a `command` string; keep it verbatim so
+          // the screen can recover the inner tool name for follow-ups.
+          const command = (input as { command?: unknown })?.command;
           chunks.push({
             kind: 'tool-call',
             toolName: name,
             detail: summarize(input),
+            command: typeof command === 'string' ? command : undefined,
           });
         }
       }
