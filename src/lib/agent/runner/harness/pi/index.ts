@@ -33,6 +33,7 @@ import { modelCapabilities } from '../../switchboard/models';
 import type { AgentResult, AgentHarness, BackendRunInputs } from '../types';
 import type { BootstrapResult } from '@lib/agent/runner/shared/types';
 import type { TaskStore } from './tasks';
+import { completionFailure } from './completion';
 
 /** Provider registered on the in-memory registry for this run. */
 const GATEWAY_PROVIDER = 'posthog-gateway';
@@ -87,40 +88,16 @@ const PI_RUNTIME_NOTES = [
   '- Name events in snake_case (e.g. todo_created), never with spaces.',
 ].join('\n');
 
-/**
- * MCP context for the system prompt. pi-mcp-adapter never surfaces the server's
- * `instructions` payload (which the anthropic path gets natively), so the agent
- * would otherwise run its `posthog_exec` calls without the server's steer to
- * prioritize skills, the active project/environment, or the tool domains to
- * search. When the warm-connect captured those instructions, ride them in
- * verbatim; otherwise fall back to the project context the wizard already holds
- * in the bootstrap result so the agent at least knows which project it acts on.
- */
+/** Injects the MCP server `instructions` pi-mcp-adapter drops (project env, skill steer, tool domains) into the system prompt, falling back to a bootstrap-derived project block when the warm-connect captured none. */
 function piMcpContext(boot: BootstrapResult, instructions?: string): string {
   if (instructions) {
-    // Produces a blank line + heading + the verbatim server instructions, e.g.:
-    //
-    //   ## PostHog MCP server
-    //   Below are tools available in the MCP. Prioritize skills over tools.
-    //   ### Active environment
-    //   You are currently in project "acme" (id: 228144, token: phc_…).
-    //   Base URL: us.posthog.com — add /project/228144 for project-scoped paths.
-    //   Project timezone: UTC.
-    //   …
-    //   # Tool domains
-    //   agent-feedback|dashboard|docs-search|execute-sql|insight|…|user
+    // Heading + verbatim server instructions (see PR #862 for a full sample).
     return ['', '## PostHog MCP server', instructions].join('\n');
   }
   const project = boot.project?.name
     ? `${boot.project.name} (id ${boot.projectId})`
     : `id ${boot.projectId}`;
-  // Fallback when the warm-connect captured no instructions. Produces, e.g.:
-  //
-  //   ## PostHog project
-  //   Your `posthog_exec` calls run against this project:
-  //   - Project: acme (id 228144)
-  //   - Host: https://us.i.posthog.com
-  //   - Region: us
+  // Fallback: a `## PostHog project` block with name/id, host, region.
   return [
     '',
     '## PostHog project',
@@ -620,37 +597,27 @@ export const piBackend: AgentHarness = {
         return { error: AgentErrorType.YARA_VIOLATION };
       }
 
-      // Completion guards, from most to least severe. pi ends a run the moment
-      // the model returns a turn with no tool call, so a run can reach the outro
-      // having done nothing (or having stopped mid-plan) — a hollow success we
-      // must not report.
-      //
-      // 1. Zero tool calls: the agent only ever produced text; the project was
-      //    never touched.
-      if (toolCalls === 0) {
+      // pi ends a run on any tool-call-less turn, so guard against a hollow
+      // success reaching the outro (nothing done, or stopped mid-plan).
+      const openTasks = hasOpenTasks(wizardTaskTools.store);
+      const failure = completionFailure({ toolCalls, openTasks });
+      if (failure === AgentErrorType.NO_PROGRESS) {
         spinner.stop('Agent made no changes');
         logToFile(
-          `[pi] no progress: ${assistantTurns} assistant turn(s), 0 tool calls — failing the run`,
+          `[pi] no progress: ${assistantTurns} assistant turn(s), 0 tool calls`,
         );
         analytics.wizardCapture('agent no progress', {
           assistant_turns: assistantTurns,
         });
         captureAborted();
-        return { error: AgentErrorType.NO_PROGRESS };
+        return { error: failure };
       }
-
-      // 2. Acted but stopped short: the agent left tasks in its own plan
-      //    unfinished. The nudge loop above already gave it every chance to
-      //    complete them. We gate only on open tasks — deliberately NOT on
-      //    "did it install_skill this run", which false-fails valid runs that
-      //    reuse a skill already on disk, complete the work another way, or run
-      //    a program that doesn't use the skill workflow at all.
-      if (hasOpenTasks(wizardTaskTools.store)) {
+      if (failure === AgentErrorType.INCOMPLETE_TASKS) {
         spinner.stop('Agent stopped before finishing');
-        logToFile('[pi] incomplete: tasks left open — failing the run');
+        logToFile('[pi] incomplete: tasks left open');
         analytics.wizardCapture('agent incomplete tasks', { open_tasks: true });
         captureAborted();
-        return { error: AgentErrorType.INCOMPLETE_TASKS };
+        return { error: failure };
       }
 
       const remark = signals.remark();

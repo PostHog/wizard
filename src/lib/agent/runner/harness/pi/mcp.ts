@@ -70,20 +70,12 @@ export async function setupPostHogMcp(opts: {
     bearerTokenEnv: MCP_TOKEN_ENV,
     headers: { 'User-Agent': userAgent },
     lifecycle: 'lazy',
-    // CLI mode exposes a single `exec` tool that carries the whole protocol —
-    // register only it. `directTools: true` would also mint one direct tool per
-    // MCP *resource*, named `posthog_get_<resource-name>`; the server's skill
-    // resource names are full sentences, so those names blow past Anthropic's
-    // 128-char tool-name limit and the API rejects the entire request. Scope to
-    // `exec` and turn resource-tools off so no oversized name is ever generated.
+    // Register only `exec`: `directTools: true` also mints a `posthog_get_<name>` tool per MCP resource, whose sentence-length names overflow Anthropic's 128-char tool-name limit and 400 the whole request.
     directTools: ['exec'],
     exposeResources: false,
   };
   config.mcpServers.posthog = server;
-  // No proxy `mcp` tool: the proxy's search indirection both pollutes context
-  // and makes the agent fumble. The single `exec` tool is registered directly.
-  // (If the warm-connect fails and no direct tools resolve, the adapter
-  // re-enables the proxy automatically as a fallback.)
+  // Disable the proxy `mcp` tool (its search indirection pollutes context); the adapter re-enables it only if no direct tools resolve.
   const settings = (config as { settings?: Record<string, unknown> }).settings;
   (config as { settings?: Record<string, unknown> }).settings = {
     ...settings,
@@ -99,13 +91,10 @@ export async function setupPostHogMcp(opts: {
 
   const jiti = createJiti(import.meta.url);
 
-  // The MCP server's `instructions` payload, captured below. The adapter never
-  // surfaces it, so the caller injects it into the system prompt.
+  // The server `instructions` (adapter drops them), captured below for the system prompt.
   let instructions: string | undefined;
 
-  // Pre-warm: connect once and seed the adapter's metadata cache so the first
-  // real call doesn't pay connect latency. Best-effort — if it fails the run
-  // still gets the `mcp` proxy as a fallback.
+  // Pre-warm: connect once to seed the adapter's metadata cache; best-effort (proxy fallback on failure).
   try {
     const sm = await jiti.import('pi-mcp-adapter/server-manager.ts');
     const mc = await jiti.import('pi-mcp-adapter/metadata-cache.ts');
@@ -124,15 +113,11 @@ export async function setupPostHogMcp(opts: {
             },
           },
         });
-        // The server's `instructions` carry the "prioritize skills over tools"
-        // steer, the active environment, and the tool domains — the guidance the
-        // agent needs to discover and use the MCP. The adapter drops them, so
-        // grab them straight off the SDK client for the system prompt.
+        // The adapter drops the server `instructions` (skill steer + env + tool domains), so read them off the SDK client.
         const client = (conn as { client?: { getInstructions?: () => string } })
           .client;
         instructions = client?.getInstructions?.() || undefined;
-        // The exec tool's description carries the whole command protocol; log
-        // its length so adapter truncation of the schema is detectable.
+        // Log the exec description length so adapter truncation of the protocol is detectable.
         const execTool = conn.tools.find((t: { name: string }) =>
           /(^|_)exec$/.test(t.name),
         ) as { description?: string } | undefined;
