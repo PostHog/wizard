@@ -8,7 +8,7 @@
  */
 
 import type { WizardSession } from '@lib/wizard-session';
-import { mcpUrlFor } from '@lib/host-resolution';
+import { HostResolution } from '@lib/host-resolution';
 import { analytics } from '@utils/analytics';
 import { getUI } from '@ui';
 import { authenticate } from './authenticate';
@@ -266,9 +266,12 @@ export async function bootstrapProgram(
 
   // One MCP url for every region: the server resolves the user's region from
   // the bearer token, so the EU subdomain (a Claude Code OAuth workaround) is
-  // not needed here. Pinned to the named-tool roster the pi harness still
-  // speaks (#846); the anthropic arm derives its own CLI-mode url.
-  const mcpUrl = mcpUrlFor({ local: session.localMcp, mode: 'tools' });
+  // not needed here. CLI mode (a single exec tool) for every harness; read off
+  // the resolved host family so there's one place the mode lives.
+  const mcpUrl = HostResolution.fromRegion(cloudRegion, {
+    baseUrl: session.baseUrl,
+    localMcp: session.localMcp,
+  }).mcpUrl;
 
   return {
     skillsBaseUrl,

@@ -15,11 +15,7 @@
 import type { AgentChunk } from '@ui/tui/services/mcp-suggested-prompts-services';
 import type { Credentials } from '@lib/wizard-session';
 import { DEFAULT_AGENT_MODEL, WIZARD_USER_AGENT } from '@lib/constants';
-import {
-  HostResolution,
-  mcpModeFromUrl,
-  mcpUrlFor,
-} from '@lib/host-resolution';
+import { HostResolution, mcpModeFromUrl } from '@lib/host-resolution';
 import { logToFile } from '@utils/debug';
 import { buildAgentEnv } from '@lib/agent/agent-interface';
 import { sanitizeAgentSubprocessEnv } from '@lib/agent/agent-env-isolation';
@@ -45,13 +41,6 @@ const MODEL = DEFAULT_AGENT_MODEL;
 // still capping runaway loops. Worth tuning down once we see real
 // telemetry on average turn counts per prompt.
 const MAX_TURNS = 30;
-
-// One MCP url for every region: the server resolves the user's region from
-// the bearer token, so the EU subdomain (a Claude Code OAuth workaround) is
-// not needed here. CLI mode: the whole PostHog surface is a single exec tool.
-function resolveMcpUrl(): string {
-  return mcpUrlFor({ mode: 'cli' });
-}
 
 /**
  * Extract a short, single-line summary from an arbitrary value. Used
@@ -202,7 +191,8 @@ export async function* runMcpPromptViaSdk(args: {
 
   // Route through the PostHog LLM gateway, authed with the user's OAuth token.
   // TODO: clean up in #755
-  const gatewayUrl = HostResolution.fromApiHost(credentials.host).gatewayUrl;
+  const hosts = HostResolution.fromApiHost(credentials.host);
+  const gatewayUrl = hosts.gatewayUrl;
   process.env.ANTHROPIC_BASE_URL = gatewayUrl;
   process.env.ANTHROPIC_AUTH_TOKEN = credentials.accessToken;
   process.env.CLAUDE_CODE_OAUTH_TOKEN = credentials.accessToken;
@@ -226,7 +216,9 @@ export async function* runMcpPromptViaSdk(args: {
       once: true,
     });
 
-  const mcpUrl = resolveMcpUrl();
+  // One MCP url for every region: the server resolves the user's region from
+  // the bearer token. CLI mode: the whole PostHog surface is a single exec tool.
+  const mcpUrl = hosts.mcpUrl;
   logToFile(
     `[runMcpPromptViaSdk] mcpUrl=${mcpUrl} model=${MODEL} resume=${
       resumeSessionId ?? '(none)'

@@ -72,9 +72,8 @@ export interface McpUrlOptions {
   local?: boolean;
   /**
    * Tool-surface mode to pin on the url; omitted → the server default. The
-   * wizard's internal agent connections pass `'tools'` — their prompts and
-   * installed skills still speak the named-tool roster.
-   * TODO(#849): drop the pins once both harnesses run on the single-exec CLI mode.
+   * wizard's internal agent connections pass `'cli'` — the single-exec surface
+   * the installed skills speak. `POSTHOG_WIZARD_MCP_MODE` overrides this.
    */
   mode?: McpMode;
   /** `features=` filter narrowing the tool catalog the url can reach. */
@@ -140,8 +139,8 @@ export class HostResolution {
    * PostHog MCP server URL the agent connects to. Region-independent — the
    * server resolves the user's region from the bearer token — so this is driven
    * only by `--local-mcp` and the `MCP_URL` override, not by region/base-url.
-   * Pinned to the named-tool roster (`mode=tools`), like every internal agent
-   * connection.
+   * Pinned to CLI mode (`mode=cli`) — the single-exec tool surface every
+   * internal agent connection now uses.
    */
   readonly mcpUrl: string;
 
@@ -178,7 +177,7 @@ export class HostResolution {
       appHost: getCloudUrl(region, opts.baseUrl),
       assetHost: assetHostFor(region, opts.baseUrl),
       gatewayUrl: getLlmGatewayUrl(apiHost),
-      mcpUrl: mcpUrlFor({ local: opts.localMcp, mode: 'tools' }),
+      mcpUrl: mcpUrlFor({ local: opts.localMcp, mode: 'cli' }),
     });
   }
 
@@ -198,7 +197,7 @@ export class HostResolution {
       appHost: getUiHostFromHost(apiHost),
       assetHost: assetHostFromApiHost(apiHost),
       gatewayUrl: getLlmGatewayUrl(apiHost),
-      mcpUrl: mcpUrlFor({ local: opts.localMcp, mode: 'tools' }),
+      mcpUrl: mcpUrlFor({ local: opts.localMcp, mode: 'cli' }),
     });
   }
 

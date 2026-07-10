@@ -47,12 +47,12 @@ describe('HostResolution.fromApiHost', () => {
 });
 
 describe('HostResolution mcpUrl', () => {
-  it('defaults to the region-independent prod MCP url, pinned to tools mode', () => {
+  it('defaults to the region-independent prod MCP url, pinned to cli mode', () => {
     expect(HostResolution.fromApiHost('https://us.i.posthog.com').mcpUrl).toBe(
-      'https://mcp.posthog.com/mcp?mode=tools',
+      'https://mcp.posthog.com/mcp?mode=cli',
     );
     expect(HostResolution.fromApiHost('https://eu.i.posthog.com').mcpUrl).toBe(
-      'https://mcp.posthog.com/mcp?mode=tools',
+      'https://mcp.posthog.com/mcp?mode=cli',
     );
   });
 
@@ -60,7 +60,7 @@ describe('HostResolution mcpUrl', () => {
     const h = HostResolution.fromApiHost('https://us.i.posthog.com', {
       localMcp: true,
     });
-    expect(h.mcpUrl).toBe('http://localhost:8787/mcp?mode=tools');
+    expect(h.mcpUrl).toBe('http://localhost:8787/mcp?mode=cli');
   });
 });
 
