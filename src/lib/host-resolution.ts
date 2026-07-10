@@ -27,11 +27,10 @@ import {
 import { runtimeEnv } from '@env';
 import type { CloudRegion } from '@utils/types';
 
-// The wizard's internal agents speak the named-tool roster, so the default
-// urls pin `mode=tools`; an `MCP_URL` override is taken verbatim.
-// TODO(#849): drop the pin once both harnesses run on the single-exec CLI mode.
-const LOCAL_MCP_URL = 'http://localhost:8787/mcp?mode=tools';
-const PROD_MCP_URL = 'https://mcp.posthog.com/mcp?mode=tools';
+// The wizard's client gets CLI mode (a single `exec` tool) by server default,
+// so no mode is pinned; an `MCP_URL` override is taken verbatim.
+const LOCAL_MCP_URL = 'http://localhost:8787/mcp';
+const PROD_MCP_URL = 'https://mcp.posthog.com/mcp';
 
 /** Construction-time inputs that aren't implied by the region. */
 export interface HostResolutionOptions {

@@ -311,6 +311,10 @@ export async function* runMcpPromptViaSdk(args: {
               Authorization: `Bearer ${credentials.accessToken}`,
               'User-Agent': WIZARD_USER_AGENT,
             },
+            // CLI mode's single `exec` tool carries the full command reference
+            // on its schema — keep it in context, never deferred behind tool
+            // search.
+            alwaysLoad: true,
           },
         },
         // Only let the agent use MCP tools — no shell, no file I/O,
@@ -330,11 +334,6 @@ export async function* runMcpPromptViaSdk(args: {
           ANTHROPIC_AUTH_TOKEN: process.env.ANTHROPIC_AUTH_TOKEN,
           CLAUDE_CODE_OAUTH_TOKEN: process.env.CLAUDE_CODE_OAUTH_TOKEN,
           CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS: 'true',
-          // Defer MCP tool schemas to avoid bloating the system prompt.
-          // posthog-wizard exposes many query tools with large schemas;
-          // without deferral these consume ~113k tokens upfront, which
-          // matters especially when follow-ups resume sessions.
-          ENABLE_TOOL_SEARCH: 'auto:0',
           // SDK 0.3.142+ connects MCP servers in the background by
           // default; without this the agent may try to call tools
           // before posthog-wizard is connected on turn 1.
