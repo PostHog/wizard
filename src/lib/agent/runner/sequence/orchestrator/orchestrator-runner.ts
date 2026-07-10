@@ -78,25 +78,44 @@ function requireTaskHarness(pick: HarnessPick): AgentHarness & {
   };
 }
 
+/** Every skill id the menu knows, across categories. */
+async function fetchSkillMenuIds(skillsBaseUrl: string): Promise<string[]> {
+  const menu = await fetchSkillMenu(skillsBaseUrl);
+  if (!menu) return [];
+  return Object.values(menu.categories)
+    .flat()
+    .map((s) => s.id);
+}
+
+/**
+ * Resolve a bare skill id + the session's framework to the menu id: the bare
+ * id itself (single-variant skills collapse to it), else exact
+ * `<id>-<framework>` (the 1:1 frameworks — django, python, flask, …), else the
+ * first granular variant under the framework (e.g. `-nextjs-app-router`).
+ * Undefined when nothing matches.
+ */
+function resolveSkillVariantId(
+  menuIds: readonly string[],
+  skillId: string,
+  framework: string | undefined,
+): string | undefined {
+  if (menuIds.includes(skillId)) return skillId;
+  if (!framework) return undefined;
+  const exact = `${skillId}-${framework}`;
+  if (menuIds.includes(exact)) return exact;
+  return menuIds.find((id) => id.startsWith(`${exact}-`));
+}
+
 /**
  * The framework reference is the full `integration` skill. `session.skillId` is
  * the bare framework (e.g. `django`), but the skill menu ids it as
- * `integration-<variant>`. Resolve to the menu id: exact `integration-<framework>`
- * (the 1:1 frameworks — django, python, flask, …), else the first granular variant
- * under it (e.g. `integration-nextjs-app-router`). Undefined when none exists.
+ * `integration-<variant>`.
  */
-async function resolveReferenceSkillId(
-  skillsBaseUrl: string,
+function resolveReferenceSkillId(
+  menuIds: readonly string[],
   framework: string,
-): Promise<string | undefined> {
-  const menu = await fetchSkillMenu(skillsBaseUrl);
-  if (!menu) return undefined;
-  const ids = Object.values(menu.categories)
-    .flat()
-    .map((s) => s.id);
-  const exact = `integration-${framework}`;
-  if (ids.includes(exact)) return exact;
-  return ids.find((id) => id.startsWith(`integration-${framework}-`));
+): string | undefined {
+  return resolveSkillVariantId(menuIds, 'integration', framework);
 }
 
 export async function runOrchestrator(
@@ -196,8 +215,9 @@ export async function runOrchestrator(
   // skill — only the example file is read, when the agent's prompt points at it.
   let examplePath: string | undefined;
   let commandmentsPath: string | undefined;
+  const menuSkillIds = await fetchSkillMenuIds(boot.skillsBaseUrl);
   const referenceSkillId = session.skillId
-    ? await resolveReferenceSkillId(boot.skillsBaseUrl, session.skillId)
+    ? resolveReferenceSkillId(menuSkillIds, session.skillId)
     : undefined;
   if (referenceSkillId) {
     const ref = await installSkillById(
@@ -322,8 +342,24 @@ export async function runOrchestrator(
       // The prompt points the agent at them instead.
       const skillPaths: string[] = [];
       for (const skillId of resolved.skills) {
-        const result = await installSkillById(
+        // Agent prompts name the bare step-skill (`posthog-integration-install`);
+        // SDK-divergent steps ship per-framework variants, so resolve against
+        // the menu with the session's framework before installing.
+        const variantId = resolveSkillVariantId(
+          menuSkillIds,
           skillId,
+          session.skillId,
+        );
+        if (!variantId) {
+          logToFile(
+            `[orchestrator] no skill variant type=${
+              task.type
+            } skill=${skillId} framework=${session.skillId ?? 'none'}`,
+          );
+          continue;
+        }
+        const result = await installSkillById(
+          variantId,
           session.installDir,
           boot.skillsBaseUrl,
           taskSkillsRoot,
@@ -332,7 +368,7 @@ export async function runOrchestrator(
           skillPaths.push(path.join(result.path, 'SKILL.md'));
         } else {
           logToFile(
-            `[orchestrator] skill install failed type=${task.type} skill=${skillId} ${result.kind}`,
+            `[orchestrator] skill install failed type=${task.type} skill=${variantId} ${result.kind}`,
           );
         }
       }

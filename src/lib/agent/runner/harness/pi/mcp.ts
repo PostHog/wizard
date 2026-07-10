@@ -104,7 +104,14 @@ export async function setupPostHogMcp(opts: {
         const direct = conn.tools
           .map((t) => t.name)
           .filter((n) => DIRECT_TOOL_PATTERN.test(n));
-        server.directTools = direct.length > 0 ? direct : true;
+        // Always an explicit tool list, never `true`: `true` also surfaces
+        // every MCP RESOURCE as a generated `get_<slug>` tool, and the MCP's
+        // ~170 skill resources include slugs past Anthropic's 128-char tool
+        // name cap — a 400 on every model call. When the pattern matches
+        // nothing (the single-exec MCP surface exposes only `exec`), register
+        // the real tools as-is.
+        server.directTools =
+          direct.length > 0 ? direct : conn.tools.map((t) => t.name);
         writeConfig();
         mc.saveMetadataCache({
           version: 1,

@@ -324,6 +324,10 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
     const unsubscribe = agentSession.subscribe((event) => {
       switch (event.type) {
         case 'message_end': {
+          // User prompts also emit message_end; only assistant turns count.
+          if ((event.message as { role?: string })?.role !== 'assistant') {
+            break;
+          }
           assistantTurns += 1;
           const assistant = extractText(event.message).trim();
           if (assistant) {
