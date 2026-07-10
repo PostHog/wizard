@@ -215,6 +215,38 @@ export async function runLinearProgram(
     });
   }
 
+  if (agentResult.error === AgentErrorType.NO_PROGRESS) {
+    analytics.wizardCapture('agent no progress', {
+      integration: config.integrationLabel,
+      error_type: AgentErrorType.NO_PROGRESS,
+    });
+    await wizardAbort({
+      message:
+        'The Wizard exited without changing your project. Please contact the ' +
+        'PostHog team with wizard@posthog.com about this error.',
+      error: new WizardError('Agent made no progress', {
+        integration: config.integrationLabel,
+        error_type: AgentErrorType.NO_PROGRESS,
+      }),
+    });
+  }
+
+  if (agentResult.error === AgentErrorType.INCOMPLETE_TASKS) {
+    analytics.wizardCapture('agent incomplete tasks', {
+      integration: config.integrationLabel,
+      error_type: AgentErrorType.INCOMPLETE_TASKS,
+    });
+    await wizardAbort({
+      message:
+        'The Wizard exited without completing its planned tasks. Please contact ' +
+        'the PostHog team with wizard@posthog.com about this error.',
+      error: new WizardError('Agent left planned tasks incomplete', {
+        integration: config.integrationLabel,
+        error_type: AgentErrorType.INCOMPLETE_TASKS,
+      }),
+    });
+  }
+
   if (
     agentResult.error === AgentErrorType.RATE_LIMIT ||
     agentResult.error === AgentErrorType.API_ERROR
