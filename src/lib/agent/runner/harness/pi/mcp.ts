@@ -4,10 +4,10 @@
  * does, with `jiti` (pi's runtime `.ts` loader, already a transitive dep). The
  * adapter connects to the same hosted MCP the anthropic path uses (`boot.mcpUrl`).
  *
- * To match the anthropic path (which has `dashboard-create` etc. as first-class
- * tools), we pre-warm the adapter's metadata cache by connecting once and then
- * register the dashboard/insight/query tools as DIRECT tools — so the agent
- * calls them in one step instead of through the fragile `mcp` proxy search.
+ * In CLI mode the server exposes a single `exec` tool that carries the whole
+ * command protocol on its schema. We pre-warm the adapter's metadata cache by
+ * connecting once and register the roster as DIRECT tools — so the agent calls
+ * `exec` in one step instead of through the fragile `mcp` proxy search.
  *
  * The bearer token is passed by env-var NAME (`bearerTokenEnv`), so it lives only
  * in the wizard process for the adapter's in-process client. It is never written
@@ -20,14 +20,6 @@ import { createJiti } from 'jiti';
 import { logToFile } from '@utils/debug';
 
 const MCP_TOKEN_ENV = 'POSTHOG_MCP_TOKEN';
-/**
- * Which PostHog MCP tools to surface as first-class tools. Only the few the
- * dashboard step needs — creating a dashboard and adding insights to it. The
- * broad `/dashboard|insight|query/` matched ~30 tools, which bloated context
- * (and tripped post-run compaction); the create/add verbs are enough.
- */
-const DIRECT_TOOL_PATTERN =
-  /(dashboard|insight)[-_]?(create)|(create)[-_]?(dashboard|insight)|add[-_]?insight|dashboard[-_]?add/i;
 
 export interface PostHogMcpSetup {
   /** pi ExtensionFactory to add to the resource loader's `extensionFactories`. */
@@ -70,11 +62,13 @@ export async function setupPostHogMcp(opts: {
     bearerTokenEnv: MCP_TOKEN_ENV,
     headers: { 'User-Agent': userAgent },
     lifecycle: 'lazy',
+    // CLI mode's roster is a single `exec` tool, so register everything the
+    // server exposes as direct tools — no curation needed.
+    directTools: true,
   };
   config.mcpServers.posthog = server;
-  // No proxy `mcp` tool: the PostHog MCP exposes ~30 tools, and the proxy's
-  // search indirection both pollutes context and makes the agent fumble. We
-  // register only the curated dashboard/insight tools as direct tools below.
+  // No proxy `mcp` tool: the proxy's search indirection both pollutes context
+  // and makes the agent fumble. The single `exec` tool is registered directly.
   // (If the warm-connect fails and no direct tools resolve, the adapter
   // re-enables the proxy automatically as a fallback.)
   const settings = (config as { settings?: Record<string, unknown> }).settings;
@@ -92,8 +86,9 @@ export async function setupPostHogMcp(opts: {
 
   const jiti = createJiti(import.meta.url);
 
-  // Pre-warm: connect once, pick the data tools, register them as direct tools.
-  // Best-effort — if it fails the run still gets the `mcp` proxy as a fallback.
+  // Pre-warm: connect once and seed the adapter's metadata cache so the first
+  // real call doesn't pay connect latency. Best-effort — if it fails the run
+  // still gets the `mcp` proxy as a fallback.
   try {
     const sm = await jiti.import('pi-mcp-adapter/server-manager.ts');
     const mc = await jiti.import('pi-mcp-adapter/metadata-cache.ts');
@@ -101,11 +96,6 @@ export async function setupPostHogMcp(opts: {
     try {
       const conn = await manager.connect('posthog', server);
       if (conn.status === 'connected' && conn.tools.length > 0) {
-        const direct = conn.tools
-          .map((t) => t.name)
-          .filter((n) => DIRECT_TOOL_PATTERN.test(n));
-        server.directTools = direct.length > 0 ? direct : true;
-        writeConfig();
         mc.saveMetadataCache({
           version: 1,
           servers: {
@@ -117,12 +107,15 @@ export async function setupPostHogMcp(opts: {
             },
           },
         });
+        // The exec tool's description carries the whole command protocol; log
+        // its length so adapter truncation of the schema is detectable.
+        const execTool = conn.tools.find((t: { name: string }) =>
+          /(^|_)exec$/.test(t.name),
+        ) as { description?: string } | undefined;
+        const execDescLen = execTool?.description?.length ?? 0;
         logToFile(
-          `[pi-mcp] warmed: ${conn.tools.length} tools, ${
-            Array.isArray(server.directTools)
-              ? server.directTools.length
-              : 'all'
-          } direct`,
+          `[pi-mcp] warmed: ${conn.tools.length} tools, all direct; ` +
+            `exec description ${execDescLen} chars`,
         );
       }
     } finally {
