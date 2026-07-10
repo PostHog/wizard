@@ -70,4 +70,8 @@ export enum AgentErrorType {
   YARA_VIOLATION = 'WIZARD_YARA_VIOLATION',
   /** Agent intentionally aborted the program (emitted [ABORT] <reason>) */
   ABORT = 'WIZARD_ABORT',
+  /** Agent ended without making a single tool call — a no-op run that did no work */
+  NO_PROGRESS = 'WIZARD_NO_PROGRESS',
+  /** Agent acted but stopped short — planned tasks left open and/or no skill installed */
+  INCOMPLETE_TASKS = 'WIZARD_INCOMPLETE_TASKS',
 }
