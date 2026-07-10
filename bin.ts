@@ -1,7 +1,11 @@
 #!/usr/bin/env node
 import { satisfies } from 'semver';
 
-const NODE_VERSION_RANGE = '>=18.17.0';
+// Keep in sync with `engines.node` in package.json. npx does not enforce
+// engines, so this preflight is the only thing standing between an old Node
+// runtime and a cryptic dependency crash (e.g. undici's markAsUncloneable
+// TypeError on Node < 22.10).
+const NODE_VERSION_RANGE = '>=22.22.0';
 
 // Have to run this above the other imports because they are importing clack that
 // has the problematic imports.
