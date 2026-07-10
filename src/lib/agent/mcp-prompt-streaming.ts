@@ -15,7 +15,11 @@
 import type { AgentChunk } from '@ui/tui/services/mcp-suggested-prompts-services';
 import type { Credentials } from '@lib/wizard-session';
 import { DEFAULT_AGENT_MODEL, WIZARD_USER_AGENT } from '@lib/constants';
-import { HostResolution, mcpUrlFor } from '@lib/host-resolution';
+import {
+  HostResolution,
+  mcpModeFromUrl,
+  mcpUrlFor,
+} from '@lib/host-resolution';
 import { logToFile } from '@utils/debug';
 import { buildAgentEnv } from '@lib/agent/agent-interface';
 import { sanitizeAgentSubprocessEnv } from '@lib/agent/agent-env-isolation';
@@ -44,10 +48,9 @@ const MAX_TURNS = 30;
 
 // One MCP url for every region: the server resolves the user's region from
 // the bearer token, so the EU subdomain (a Claude Code OAuth workaround) is
-// not needed here. Pinned to the named-tool roster the tutorial's prompts
-// still speak.
+// not needed here. CLI mode: the whole PostHog surface is a single exec tool.
 function resolveMcpUrl(): string {
-  return mcpUrlFor({ mode: 'tools' });
+  return mcpUrlFor({ mode: 'cli' });
 }
 
 /**
@@ -312,6 +315,11 @@ export async function* runMcpPromptViaSdk(args: {
               Authorization: `Bearer ${credentials.accessToken}`,
               'User-Agent': WIZARD_USER_AGENT,
             },
+            // CLI mode's single exec tool carries the full command reference
+            // on its schema — keep it in context, never deferred behind tool
+            // search. The tools-mode roster stays deferred (see
+            // ENABLE_TOOL_SEARCH below).
+            ...(mcpModeFromUrl(mcpUrl) === 'cli' ? { alwaysLoad: true } : {}),
           },
         },
         // Only let the agent use MCP tools — no shell, no file I/O,
@@ -331,11 +339,14 @@ export async function* runMcpPromptViaSdk(args: {
           ANTHROPIC_AUTH_TOKEN: process.env.ANTHROPIC_AUTH_TOKEN,
           CLAUDE_CODE_OAUTH_TOKEN: process.env.CLAUDE_CODE_OAUTH_TOKEN,
           CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS: 'true',
-          // Defer MCP tool schemas to avoid bloating the system prompt.
-          // posthog-wizard exposes many query tools with large schemas;
-          // without deferral these consume ~113k tokens upfront, which
-          // matters especially when follow-ups resume sessions.
-          ENABLE_TOOL_SEARCH: 'auto:0',
+          // Under the tools-mode roster, defer MCP tool schemas behind
+          // tool search — loaded upfront they consume ~113k tokens, which
+          // matters especially when follow-ups resume sessions. CLI mode's
+          // surface is a single always-loaded exec tool (see mcpServers
+          // above), so the SDK default applies there.
+          ...(mcpModeFromUrl(mcpUrl) === 'tools'
+            ? { ENABLE_TOOL_SEARCH: 'auto:0' }
+            : {}),
           // SDK 0.3.142+ connects MCP servers in the background by
           // default; without this the agent may try to call tools
           // before posthog-wizard is connected on turn 1.

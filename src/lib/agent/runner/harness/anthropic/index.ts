@@ -21,6 +21,7 @@ import {
 import { getLogFilePath, logToFile } from '@utils/debug';
 import { detectNodePackageManagers } from '@lib/detection/package-manager';
 import { sessionToOptions } from '@lib/agent/runner/shared/bootstrap';
+import { mcpUrlFor } from '@lib/host-resolution';
 import type {
   AgentResult,
   AgentHarness,
@@ -43,14 +44,13 @@ export const anthropicBackend: AgentHarness = {
       middleware,
       model,
     } = inputs;
-    const {
-      skillsBaseUrl,
-      accessToken,
-      host,
-      mcpUrl,
-      wizardFlags,
-      wizardMetadata,
-    } = boot;
+    const { skillsBaseUrl, accessToken, host, wizardFlags, wizardMetadata } =
+      boot;
+
+    // CLI mode: the PostHog MCP surface is a single exec tool whose schema
+    // carries the command grammar the installed skills speak. boot.mcpUrl
+    // keeps the tools-mode pin for the pi arm (#846).
+    const mcpUrl = mcpUrlFor({ local: session.localMcp, mode: 'cli' });
 
     getUI().log.step('Initializing Claude agent...');
     const agent = await initializeAgent(
@@ -124,7 +124,7 @@ export const anthropicBackend: AgentHarness = {
     const agent = await initializeAgent(
       {
         workingDirectory: session.installDir,
-        posthogMcpUrl: boot.mcpUrl,
+        posthogMcpUrl: mcpUrlFor({ local: session.localMcp, mode: 'cli' }),
         posthogApiKey: boot.accessToken,
         posthogApiHost: boot.host,
         detectPackageManager: detectNodePackageManagers,

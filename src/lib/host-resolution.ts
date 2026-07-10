@@ -104,6 +104,19 @@ export function mcpUrlFor(opts: McpUrlOptions = {}): string {
   return params.length > 0 ? `${base}?${params.join('&')}` : base;
 }
 
+/**
+ * The tool surface a given MCP url gets served. A url without a `mode` param
+ * (including any `MCP_URL` override) gets the server default — CLI mode for
+ * the wizard's client.
+ */
+export function mcpModeFromUrl(url: string): McpMode {
+  try {
+    return new URL(url).searchParams.get('mode') === 'tools' ? 'tools' : 'cli';
+  } catch {
+    return 'cli';
+  }
+}
+
 export class HostResolution {
   /** The resolved cloud region. `'us'` when a base URL is pinned. */
   readonly region: CloudRegion;

@@ -25,7 +25,7 @@ import {
 } from '@lib/wizard-session';
 import { wizardAbort, WizardError } from '@utils/wizard-abort';
 import { createCustomHeaders } from '@utils/custom-headers';
-import { HostResolution } from '@lib/host-resolution';
+import { HostResolution, mcpModeFromUrl } from '@lib/host-resolution';
 import { LINTING_TOOLS } from '@lib/safe-tools';
 import { createWizardToolsServer, WIZARD_TOOL_NAMES } from '@lib/wizard-tools';
 import {
@@ -86,6 +86,12 @@ function getClaudeCodeExecutablePath(): string {
 type SDKMessage = any;
 type McpServersConfig = any;
 type AbortCaseMatcher = { match: RegExp };
+
+/** Tool-surface mode of the posthog-wizard entry in an agent's MCP config. */
+function posthogWizardMcpMode(mcpServers: McpServersConfig): 'tools' | 'cli' {
+  const url = (mcpServers?.['posthog-wizard'] as { url?: string })?.url;
+  return mcpModeFromUrl(url ?? '');
+}
 
 /** Region implied by the resolved gateway URL, for telemetry and display. */
 function regionFromGatewayUrl(gatewayUrl: string): 'eu' | 'us' | 'local' {
@@ -680,6 +686,13 @@ export async function initializeAgent(
           Authorization: `Bearer ${config.posthogApiKey}`,
           'User-Agent': WIZARD_USER_AGENT,
         },
+        // CLI mode's single exec tool carries the full command reference on
+        // its schema — the agent needs it in context, never deferred behind
+        // tool search. The tools-mode roster (~113k tokens of schemas) stays
+        // deferred (see ENABLE_TOOL_SEARCH below).
+        ...(mcpModeFromUrl(config.posthogMcpUrl) === 'cli'
+          ? { alwaysLoad: true }
+          : {}),
       },
       ...Object.fromEntries(
         Object.entries(config.additionalMcpServers ?? {}).map(
@@ -1056,19 +1069,20 @@ export async function runAgent(
           ANTHROPIC_AUTH_TOKEN: process.env.ANTHROPIC_AUTH_TOKEN,
           CLAUDE_CODE_OAUTH_TOKEN: process.env.CLAUDE_CODE_OAUTH_TOKEN,
           CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS: 'true',
-          // Defer MCP tool schemas to avoid bloating the system prompt.
-          // The posthog-wizard MCP exposes many query tools with large schemas;
-          // without deferral these consume ~113k tokens upfront, leaving
-          // almost no room in Sonnet's 200k context window.
-          ENABLE_TOOL_SEARCH: 'auto:0',
+          // Under the tools-mode roster, defer MCP tool schemas behind tool
+          // search — loaded upfront they consume ~113k tokens, leaving almost
+          // no room in Sonnet's 200k context window. CLI mode's surface is a
+          // single always-loaded exec tool (see initializeAgent), so the SDK
+          // default applies there.
+          ...(posthogWizardMcpMode(agentConfig.mcpServers) === 'tools'
+            ? { ENABLE_TOOL_SEARCH: 'auto:0' }
+            : {}),
           // SDK 0.3.142 made MCP servers connect in the background by default;
-          // the agent may start its first turn before posthog-wizard is ready
-          // (audit programs call audit_seed_checks on turn 1, integration
-          // programs call load_skill_menu / install_skill). Restore the prior
-          // blocking behavior so the SDK waits up to 5s for MCP connect before
-          // turn 1. `alwaysLoad: true` on the server would also work but it
-          // disables tool search deferral and re-inflates the system prompt by
-          // ~113k tokens (the reason ENABLE_TOOL_SEARCH=auto:0 is set above).
+          // the agent may start its first turn before posthog-wizard or
+          // wizard-tools is ready (audit programs call audit_seed_checks on
+          // turn 1, integration programs call load_skill_menu /
+          // install_skill). Restore the prior blocking behavior so the SDK
+          // waits up to 5s for MCP connect before turn 1.
           MCP_CONNECTION_NONBLOCKING: '0',
           // PostHog gateway headers: Bedrock fallback + property/flag tags.
           ANTHROPIC_CUSTOM_HEADERS: buildAgentEnv(

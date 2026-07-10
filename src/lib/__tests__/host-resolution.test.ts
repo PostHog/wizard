@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { HostResolution, mcpUrlFor } from '@lib/host-resolution';
+import {
+  HostResolution,
+  mcpModeFromUrl,
+  mcpUrlFor,
+} from '@lib/host-resolution';
 
 /**
  * Contract test for HostResolution — the durable record of what the host family
@@ -158,5 +162,27 @@ describe('mcpUrlFor', () => {
         'https://mcp.posthog.com/mcp?mode=tools',
       );
     });
+  });
+});
+
+describe('mcpModeFromUrl', () => {
+  it('reads a pinned mode off the url', () => {
+    expect(mcpModeFromUrl('https://mcp.posthog.com/mcp?mode=tools')).toBe(
+      'tools',
+    );
+    expect(mcpModeFromUrl('http://localhost:8787/mcp?mode=cli')).toBe('cli');
+    expect(
+      mcpModeFromUrl(
+        'https://mcp.posthog.com/mcp?features=insights&mode=tools',
+      ),
+    ).toBe('tools');
+  });
+
+  it('resolves to the server default (cli) when no mode is pinned', () => {
+    expect(mcpModeFromUrl('https://mcp.posthog.com/mcp')).toBe('cli');
+    expect(mcpModeFromUrl('https://mcp.posthog.com/mcp?features=sql')).toBe(
+      'cli',
+    );
+    expect(mcpModeFromUrl('not a url')).toBe('cli');
   });
 });

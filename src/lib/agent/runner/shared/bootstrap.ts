@@ -266,8 +266,8 @@ export async function bootstrapProgram(
 
   // One MCP url for every region: the server resolves the user's region from
   // the bearer token, so the EU subdomain (a Claude Code OAuth workaround) is
-  // not needed here. Pinned to the named-tool roster the harness prompts and
-  // installed skills still speak.
+  // not needed here. Pinned to the named-tool roster the pi harness still
+  // speaks (#846); the anthropic arm derives its own CLI-mode url.
   const mcpUrl = mcpUrlFor({ local: session.localMcp, mode: 'tools' });
 
   return {
