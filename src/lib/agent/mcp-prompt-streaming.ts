@@ -14,7 +14,11 @@
 
 import type { AgentChunk } from '@ui/tui/services/mcp-suggested-prompts-services';
 import type { Credentials } from '@lib/wizard-session';
-import { DEFAULT_AGENT_MODEL, WIZARD_USER_AGENT } from '@lib/constants';
+import {
+  DEFAULT_AGENT_MODEL,
+  WIZARD_USER_AGENT,
+  CONTEXT_1M_BETA,
+} from '@lib/constants';
 import { HostResolution, mcpUrlFor } from '@lib/host-resolution';
 import { logToFile } from '@utils/debug';
 import { buildAgentEnv } from '@lib/agent/agent-interface';
@@ -265,8 +269,9 @@ export async function* runMcpPromptViaSdk(args: {
         permissionMode: 'acceptEdits',
         maxTurns: MAX_TURNS,
         // Match agent-interface.ts — the 1M context beta is what keeps
-        // resumed follow-up sessions from truncating after a few turns.
-        betas: ['context-1m-2025-08-07'],
+        // resumed follow-up sessions from truncating after a few turns. This
+        // flow is bounded by maxTurns above, so it needs no autoCompactWindow.
+        betas: [CONTEXT_1M_BETA],
         // Only load project-level skills/settings. Without this the SDK
         // defaults to ['user', 'project'] and a user's
         // `~/.claude/settings.json` (apiKeyHelper / env block) can

@@ -18,6 +18,8 @@ import {
   WIZARD_ORCHESTRATOR_FLAG_KEY,
   WIZARD_USER_AGENT,
   DEFAULT_AGENT_MODEL,
+  CONTEXT_1M_BETA,
+  AGENT_AUTO_COMPACT_WINDOW,
 } from '@lib/constants';
 import {
   type AdditionalFeature,
@@ -964,7 +966,13 @@ export async function runAgent(
         model: agentConfig.model,
         cwd: agentConfig.workingDirectory,
         permissionMode: 'acceptEdits',
-        betas: ['context-1m-2025-08-07'],
+        betas: [CONTEXT_1M_BETA],
+        // The 1M beta gives compaction room to run without overflowing on
+        // large projects, but on its own it lets the working context (and the
+        // per-turn input we're billed for) grow toward 1M once the gateway
+        // honors the beta. Pin the auto-compact window so compaction fires at a
+        // bounded size, keeping per-generation input near the pre-1M band.
+        settings: { autoCompactWindow: AGENT_AUTO_COMPACT_WINDOW },
         mcpServers: agentConfig.mcpServers,
         agents: {
           'general-purpose': {
