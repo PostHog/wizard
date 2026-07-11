@@ -15,9 +15,13 @@
  * network latency. The registry's type list also drives `enqueue_task`
  * validation.
  */
-import type { QueueStore, QueuedTask } from './runner/orchestrator/queue';
-import type { ResolvedTask } from './runner/orchestrator/executor';
+import type {
+  QueueStore,
+  QueuedTask,
+} from './runner/sequence/orchestrator/queue';
+import type { ResolvedTask } from './runner/sequence/orchestrator/executor';
 import type { HostResolution } from '@lib/host-resolution';
+import { DEFAULT_AGENT_MODEL } from '@lib/constants';
 
 /**
  * The basics the client injects around every agent-prompt body. The `/agents/`
@@ -98,7 +102,7 @@ export function assembleSeedPrompt(
 }
 
 /** Used when neither the enqueue call nor the prompt frontmatter names a model. */
-const DEFAULT_TASK_MODEL = 'claude-sonnet-4-6';
+const DEFAULT_TASK_MODEL = DEFAULT_AGENT_MODEL;
 
 /** Orchestrator tools are MCP tools under the `posthog-wizard` server. Frontmatter
  *  names them short (e.g. `enqueue_task`); the SDK gates on the full name. */

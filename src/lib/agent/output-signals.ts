@@ -12,7 +12,7 @@
  * hooks' onTerminate callback (`yaraViolationReason` in runAgent) instead.
  */
 
-import { AgentSignals } from './signals';
+import { AgentSignals, REMARK_INSTRUCTION } from './signals';
 
 /**
  * Single source of truth for the substrings runAgent scans agent output for.
@@ -25,6 +25,7 @@ const OUTPUT_SIGNALS = {
   API_ERROR: 'API Error:',
   MCP_MISSING: AgentSignals.ERROR_MCP_MISSING,
   RESOURCE_MISSING: AgentSignals.ERROR_RESOURCE_MISSING,
+  SKILL_INSTALL_FAILED: AgentSignals.SKILL_INSTALL_FAILED,
   WIZARD_REMARK: AgentSignals.WIZARD_REMARK,
 } as const;
 
@@ -89,6 +90,20 @@ export class AgentOutputSignals {
     return m ? m.join('\n') : undefined;
   }
 
+  /**
+   * Text after the `[SKILL-INSTALL-FAILED]` marker (skill id + reason),
+   * trimmed — or undefined when the skill installed fine. A marker with no
+   * trailing text still reports as '' so the failure is never lost.
+   */
+  skillInstallFailure(): string | undefined {
+    const marker = OUTPUT_SIGNALS.SKILL_INSTALL_FAILED;
+    for (const line of this.lines) {
+      const idx = line.indexOf(marker);
+      if (idx !== -1) return line.slice(idx + marker.length).trim();
+    }
+    return undefined;
+  }
+
   /** Text after the single `[WIZARD-REMARK]` marker, trimmed, or undefined. */
   remark(): string | undefined {
     const re = new RegExp(
@@ -96,8 +111,14 @@ export class AgentOutputSignals {
         /[.*+?^${}()|[\]\\]/g,
         '\\$&',
       )}\\s*(.+?)(?:\\n|$)`,
-      's',
+      'gs',
     );
-    return this.text.match(re)?.[1]?.trim() || undefined;
+    // Return the first marker match whose text isn't an echo of the ask.
+    let match: RegExpExecArray | null;
+    while ((match = re.exec(this.text)) !== null) {
+      const text = match[1]?.trim();
+      if (text && !REMARK_INSTRUCTION.includes(text)) return text;
+    }
+    return undefined;
   }
 }

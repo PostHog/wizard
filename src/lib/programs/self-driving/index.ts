@@ -4,18 +4,18 @@ import type { ProgramConfig } from '@lib/programs/program-step';
 import type { ProgramRun } from '@lib/agent/agent-runner';
 import { OutroKind } from '@lib/wizard-session';
 import { createSkillProgram } from '../agent-skill/index.js';
-import { getContentBlocks as agentSkillContentBlocks } from '../agent-skill/content/index.js';
 import { SELF_DRIVING_PROGRAM } from './steps.js';
 import { SELF_DRIVING_ABORT_CASES } from './detect.js';
 import { buildSelfDrivingPrompt } from './prompt.js';
 import { getTips } from './content/tips.js';
+import { getContentBlocks } from './content/index.js';
 
 export const SELF_DRIVING_SKILL_ID = 'self-driving-setup';
 const REPORT_FILE = 'posthog-self-driving-report.md';
 const DOCS_URL = 'https://posthog.com/docs';
 const SUCCESS_MESSAGE =
-  'Self-driving is on! PostHog will start scanning within ~30 minutes ' +
-  'and surface findings in your inbox.';
+  'Self-driving is on. PostHog is scanning your project; first findings ' +
+  'hit your inbox within ~30 minutes.';
 const WIZARD_MARKER = '.posthog-wizard';
 
 /**
@@ -75,16 +75,15 @@ const run: ProgramRun = {
     const inboxUrl = `${uiHost}/project/${credentials.projectId}/inbox`;
     return {
       kind: OutroKind.Success as const,
-      message:
-        'Self-driving is on. PostHog is scanning your project — ' +
-        'first findings hit your inbox within ~30 minutes.',
+      message: SUCCESS_MESSAGE,
       primaryLink: { label: 'Your Self-driving inbox', url: inboxUrl },
       nextSteps: {
         heading: 'In your inbox you can:',
         items: [
-          'Review the findings PostHog surfaces',
-          'Triage what matters and dismiss the noise',
-          'Kick off fixes and open issues',
+          'Investigate reports with the agent',
+          'Tag teammates to loop them in',
+          'Kick off a PR when you like the proposed fix',
+          'Or work from Slack (tag @PostHog) and MCP',
         ],
       },
       reportFile: REPORT_FILE,
@@ -110,18 +109,7 @@ export const selfDrivingConfig: ProgramConfig = {
   steps: SELF_DRIVING_PROGRAM,
   run,
   getTips,
-  // The shared agent-skill Learn deck lingers ~60s on its last block before
-  // RunScreen flips to the Self-driving Tips pane; shorten that final pause
-  // so the scout/source/inbox tips appear promptly (the Tasks pane already
-  // shows progress). Same deck, just a quicker hand-off.
-  getContentBlocks: (store) => {
-    const blocks = agentSkillContentBlocks(store);
-    return blocks.map((b, i) =>
-      i === blocks.length - 1 && typeof b === 'object'
-        ? { ...b, pause: 5000 }
-        : b,
-    );
-  },
+  getContentBlocks,
 };
 
 export { SELF_DRIVING_PROGRAM } from './steps.js';

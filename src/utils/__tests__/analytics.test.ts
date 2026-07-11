@@ -13,11 +13,17 @@ vi.mock('uuid');
 // matching every other test. vi.hoisted() runs before the hoisted vi.mock
 // factory, so the getter can read the flag at import time without hitting the
 // temporal dead zone.
-const envState = vi.hoisted(() => ({ isProductionBuild: false }));
+const envState = vi.hoisted(() => ({
+  isProductionBuild: false,
+  runSurface: 'local' as 'cloud' | 'local',
+}));
 vi.mock('@env', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@env')>()),
   get IS_PRODUCTION_BUILD() {
     return envState.isProductionBuild;
+  },
+  get RUN_SURFACE() {
+    return envState.runSurface;
   },
 }));
 
@@ -71,6 +77,7 @@ describe('Analytics', () => {
           $app_name: 'wizard',
           build: 'dev',
           run_id: 'run-uuid',
+          run_surface: 'local',
           ...properties,
         },
       );
@@ -91,6 +98,7 @@ describe('Analytics', () => {
           $app_name: 'wizard',
           build: 'dev',
           run_id: 'run-uuid',
+          run_surface: 'local',
           testTag: 'testValue',
           ...properties,
         },
@@ -112,6 +120,7 @@ describe('Analytics', () => {
           $app_name: 'wizard',
           build: 'dev',
           run_id: 'run-uuid',
+          run_surface: 'local',
           $session_id: 'session-uuid',
         },
       );
@@ -130,6 +139,7 @@ describe('Analytics', () => {
           $app_name: 'wizard',
           build: 'dev',
           run_id: 'run-uuid',
+          run_surface: 'local',
         },
       );
     });
@@ -150,6 +160,7 @@ describe('Analytics', () => {
           $app_name: 'wizard',
           build: 'dev',
           run_id: 'run-uuid',
+          run_surface: 'local',
           environment: 'test',
           version: '1.0.0',
           integration: 'nextjs',
@@ -173,6 +184,7 @@ describe('Analytics', () => {
           $app_name: 'wizard',
           build: 'dev',
           run_id: 'run-uuid',
+          run_surface: 'local',
           integration: 'react',
         },
       );
@@ -191,6 +203,7 @@ describe('Analytics', () => {
           $app_name: 'wizard',
           build: 'dev',
           run_id: 'run-uuid',
+          run_surface: 'local',
         },
       );
     });
@@ -214,6 +227,30 @@ describe('Analytics', () => {
       expect(
         (mockPostHogInstance.captureException as Mock).mock.calls.at(-1)?.[2],
       ).toMatchObject({ build: 'prod' });
+    });
+  });
+
+  describe('run_surface tag', () => {
+    it("defaults every event to 'local'", () => {
+      analytics.captureException(new Error('e'));
+
+      expect(
+        (mockPostHogInstance.captureException as Mock).mock.calls.at(-1)?.[2],
+      ).toMatchObject({ run_surface: 'local' });
+    });
+
+    it("tags 'cloud' on the headless launch surface", () => {
+      envState.runSurface = 'cloud';
+      try {
+        const cloud = new Analytics();
+        cloud.captureException(new Error('e'));
+
+        expect(
+          (mockPostHogInstance.captureException as Mock).mock.calls.at(-1)?.[2],
+        ).toMatchObject({ run_surface: 'cloud' });
+      } finally {
+        envState.runSurface = 'local';
+      }
     });
   });
 
@@ -322,6 +359,7 @@ describe('Analytics', () => {
         $app_name: 'wizard',
         build: 'dev',
         run_id: 'run-uuid',
+        run_surface: 'local',
         command: 'slack',
         $exception_list: [{ type: 'Error' }],
       });
@@ -485,6 +523,7 @@ describe('Analytics', () => {
           $app_name: 'wizard',
           build: 'dev',
           run_id: 'run-uuid',
+          run_surface: 'local',
           integration: 'nextjs',
           localMcp: true,
           debug: false,
@@ -510,6 +549,7 @@ describe('Analytics', () => {
           $app_name: 'wizard',
           build: 'dev',
           run_id: 'run-uuid',
+          run_surface: 'local',
           $session_id: 'session-uuid',
           integration: 'svelte',
         },

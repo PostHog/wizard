@@ -7,7 +7,7 @@ import {
 import type { WizardSession } from '@lib/wizard-session';
 import type { ApiUser } from '@lib/api';
 import { v4 as uuidv4 } from 'uuid';
-import { IS_PRODUCTION_BUILD } from '@env';
+import { IS_PRODUCTION_BUILD, RUN_SURFACE } from '@env';
 import { debug, logToFile } from './debug';
 import { applyCiFlagOverrides } from './ci-flag-overrides';
 
@@ -93,6 +93,8 @@ export class Analytics {
     // upgrade this in runWizardCI: dev `--ci` runs to 'ci', published headless
     // runs to 'headless'.
     this.tags.build = IS_PRODUCTION_BUILD ? 'prod' : 'dev';
+
+    this.tags.run_surface = RUN_SURFACE;
 
     this.anonymousId = uuidv4();
 
@@ -273,8 +275,8 @@ export class Analytics {
       distinctId: this.distinctId ?? this.anonymousId,
       event: 'setup wizard finished',
       properties: {
-        // Hoisted out of `tags` so the run's terminal event is filterable by
-        // run, and joins the session when one was opened (post-OAuth runs).
+        // Flat for filtering; the nested `tags` snapshot stays for back-compat.
+        ...this.tags,
         run_id: this._runId,
         ...(this.sessionId ? { $session_id: this.sessionId } : {}),
         status,

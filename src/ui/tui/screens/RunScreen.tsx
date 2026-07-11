@@ -24,7 +24,6 @@ import { LearnCard } from '@ui/tui/components/LearnCard';
 import { TipsCard } from '@ui/tui/components/TipsCard';
 import { useStdoutDimensions } from '@ui/tui/hooks/useStdoutDimensions';
 import { useFileWatcher } from '@ui/tui/hooks/file-watcher';
-import { VisualizerTab } from '@ui/tui/components/PhaseVisuals';
 import { EVENT_PLAN_FILE } from '@lib/programs/posthog-integration/index';
 
 import { getProgramConfig } from '@lib/programs/program-registry';
@@ -136,11 +135,8 @@ export const RunScreen = ({ store }: RunScreenProps) => {
       label: 'Tail logs',
       component: <LogViewer filePath={WIZARD_LOG_FILE} />,
     },
-    {
-      id: 'visualizer',
-      label: 'Visualizer',
-      component: <VisualizerTab store={store} />,
-    },
+    // Visualizer tab temporarily disabled: Tumblers crashes on short panels
+    // (negative pin row -> grid[undefined]). Component + demo left intact.
     { id: 'hn', label: 'HN', component: <HNViewer /> },
   ];
 

@@ -8,10 +8,11 @@
  *     expired, or wrong region. Don't blame Claude Code in this case.
  */
 
-import { Box, Text, useInput } from 'ink';
+import { Box, Text } from 'ink';
 import { useSyncExternalStore } from 'react';
 import type { WizardStore } from '@ui/tui/store';
 import { Colors } from '@ui/tui/styles';
+import { useDismissOnAnyKey } from '@ui/tui/hooks/useDismissOnAnyKey';
 
 interface AuthErrorScreenProps {
   store: WizardStore;
@@ -23,9 +24,7 @@ export const AuthErrorScreen = ({ store }: AuthErrorScreenProps) => {
     () => store.getSnapshot(),
   );
 
-  useInput(() => {
-    process.exit(1);
-  });
+  useDismissOnAnyKey(() => process.exit(1));
 
   const detail = store.session.authErrorDetail;
   const hasSettingsConflict = detail?.hasSettingsConflict ?? true;

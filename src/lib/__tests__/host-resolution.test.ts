@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { HostResolution } from '@lib/host-resolution';
+import { HostResolution, mcpUrlFor } from '@lib/host-resolution';
 
 /**
  * Contract test for HostResolution — the durable record of what the host family
@@ -43,7 +43,7 @@ describe('HostResolution.fromApiHost', () => {
 });
 
 describe('HostResolution mcpUrl', () => {
-  it('defaults to the region-independent prod MCP url', () => {
+  it('defaults to the region-independent prod MCP url (server serves cli mode)', () => {
     expect(HostResolution.fromApiHost('https://us.i.posthog.com').mcpUrl).toBe(
       'https://mcp.posthog.com/mcp',
     );
@@ -74,5 +74,26 @@ describe('HostResolution.fromAccessToken', () => {
   it('short-circuits to us in dev/test without a network probe', async () => {
     const h = await HostResolution.fromAccessToken('any-token');
     expect(h.region).toBe('us');
+  });
+});
+
+describe('mcpUrlFor', () => {
+  it('builds the bare prod url (server serves the wizard cli mode)', () => {
+    expect(mcpUrlFor(false)).toBe('https://mcp.posthog.com/mcp');
+  });
+
+  it('builds the bare local dev url', () => {
+    expect(mcpUrlFor(true)).toBe('http://localhost:8787/mcp');
+  });
+
+  it('takes an MCP_URL override verbatim', () => {
+    const prev = process.env.MCP_URL;
+    process.env.MCP_URL = 'https://mcp.example.com/mcp?mode=cli';
+    try {
+      expect(mcpUrlFor(false)).toBe('https://mcp.example.com/mcp?mode=cli');
+    } finally {
+      if (prev === undefined) delete process.env.MCP_URL;
+      else process.env.MCP_URL = prev;
+    }
   });
 });

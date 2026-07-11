@@ -14,7 +14,7 @@
 
 import type { AgentChunk } from '@ui/tui/services/mcp-suggested-prompts-services';
 import type { Credentials } from '@lib/wizard-session';
-import { WIZARD_USER_AGENT } from '@lib/constants';
+import { DEFAULT_AGENT_MODEL, WIZARD_USER_AGENT } from '@lib/constants';
 import { logToFile } from '@utils/debug';
 import { buildAgentEnv } from '@lib/agent/agent-interface';
 import { sanitizeAgentSubprocessEnv } from '@lib/agent/agent-env-isolation';
@@ -32,7 +32,7 @@ async function loadSdk(): Promise<any> {
   return _sdkModule;
 }
 
-const MODEL = 'claude-sonnet-4-6';
+const MODEL = DEFAULT_AGENT_MODEL;
 
 // Bounded turn count so a single prompt can't loop forever on the
 // user's nickel. 20 gives the agent room for non-trivial multi-step
@@ -84,10 +84,14 @@ function messageToChunks(message: any): AgentChunk[] {
         } else if (type === 'tool_use') {
           const name = (block as { name?: string }).name ?? 'tool';
           const input = (block as { input?: unknown }).input;
+          // CLI mode's exec tool takes a `command` string; keep it verbatim so
+          // the screen can recover the inner tool name for follow-ups.
+          const command = (input as { command?: unknown })?.command;
           chunks.push({
             kind: 'tool-call',
             toolName: name,
             detail: summarize(input),
+            command: typeof command === 'string' ? command : undefined,
           });
         }
       }
@@ -302,6 +306,10 @@ export async function* runMcpPromptViaSdk(args: {
               Authorization: `Bearer ${credentials.accessToken}`,
               'User-Agent': WIZARD_USER_AGENT,
             },
+            // CLI mode's single `exec` tool carries the full command reference
+            // on its schema — keep it in context, never deferred behind tool
+            // search.
+            alwaysLoad: true,
           },
         },
         // Only let the agent use MCP tools — no shell, no file I/O,
@@ -321,11 +329,6 @@ export async function* runMcpPromptViaSdk(args: {
           ANTHROPIC_AUTH_TOKEN: process.env.ANTHROPIC_AUTH_TOKEN,
           CLAUDE_CODE_OAUTH_TOKEN: process.env.CLAUDE_CODE_OAUTH_TOKEN,
           CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS: 'true',
-          // Defer MCP tool schemas to avoid bloating the system prompt.
-          // posthog-wizard exposes many query tools with large schemas;
-          // without deferral these consume ~113k tokens upfront, which
-          // matters especially when follow-ups resume sessions.
-          ENABLE_TOOL_SEARCH: 'auto:0',
           // SDK 0.3.142+ connects MCP servers in the background by
           // default; without this the agent may try to call tools
           // before posthog-wizard is connected on turn 1.

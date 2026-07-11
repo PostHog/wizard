@@ -13,21 +13,20 @@
 import { randomUUID } from 'crypto';
 import { existsSync, rmSync } from 'fs';
 import * as path from 'path';
-import {
-  initializeAgent,
-  runAgent,
-  type AgentConfig,
-} from '@lib/agent/agent-interface';
 import { OutroKind, type WizardSession } from '@lib/wizard-session';
-import { detectNodePackageManagers } from '@lib/detection/package-manager';
 import { installSkillById, fetchSkillMenu } from '@lib/wizard-tools';
 import { getUI } from '@ui';
 import { analytics } from '@utils/analytics';
 import { ciExcludedTaskTypes } from '@utils/ci-flag-overrides';
 import { logToFile } from '@utils/debug';
 import type { ProgramConfig } from '@lib/programs/program-step';
-import type { BootstrapResult } from '../shared/types';
-import type { WizardRunOptions } from '@utils/types';
+import type { BootstrapResult } from '../../shared/types';
+import {
+  getHarness,
+  resolveHarness,
+  type HarnessPick,
+} from '../../switchboard';
+import type { AgentHarness } from '../../harness/types';
 import {
   QueueStore,
   QUEUE_DIR_NAME,
@@ -60,18 +59,22 @@ function toTodoStatus(status: TaskStatus): string {
   }
 }
 
-function sessionRunOptions(session: WizardSession): WizardRunOptions {
-  return {
-    installDir: session.installDir,
-    debug: session.debug,
-    default: false,
-    signup: session.signup,
-    localMcp: session.localMcp,
-    ci: session.ci,
-    benchmark: session.benchmark,
-    projectId: session.projectId,
-    apiKey: session.apiKey,
-    yaraReport: session.yaraReport,
+/**
+ * Look up the harness impl for a resolved pick and enforce the `runTask`
+ * capability. Pi trips this today with the honest impl-gap error instead of
+ * silently downgrading to anthropic.
+ */
+function requireTaskHarness(pick: HarnessPick): AgentHarness & {
+  runTask: NonNullable<AgentHarness['runTask']>;
+} {
+  const harness = getHarness(pick.harness);
+  if (!harness.runTask) {
+    throw new Error(
+      `Harness "${pick.harness}" does not implement runTask; orchestrator mode requires it.`,
+    );
+  }
+  return harness as AgentHarness & {
+    runTask: NonNullable<AgentHarness['runTask']>;
   };
 }
 
@@ -103,9 +106,14 @@ export async function runOrchestrator(
 ): Promise<void> {
   const runId = randomUUID();
 
-  const options = sessionRunOptions(session);
-
-  const { credentials } = boot;
+  // Switchboard context — reused for every per-role harness resolution below.
+  const switchboardCtx = {
+    program: programConfig.id,
+    flags: boot.wizardFlags,
+    cliHarness: session.harness,
+    cliSequence: session.sequence,
+    cliModel: session.model,
+  };
 
   // The WHAT (agent prompts) is served from context-mill. Fetch the registry
   // once up front: its types drive enqueue validation, and resolving a task to
@@ -221,9 +229,9 @@ export async function runOrchestrator(
   // The client injects the basics (project context + the I/O contract) around
   // every authored agent-prompt body.
   const promptContext: OrchestratorPromptContext = {
-    projectId: credentials.projectId,
-    projectApiKey: credentials.projectApiKey,
-    host: credentials.host,
+    projectId: boot.credentials.projectId,
+    projectApiKey: boot.credentials.projectApiKey,
+    host: boot.credentials.host,
     examplePath,
     commandmentsPath,
   };
@@ -249,25 +257,14 @@ export async function runOrchestrator(
       })),
     );
 
-  // Each agent gets its own config so its wizard-tools server is bound to the
-  // task it runs — independent tasks run in parallel, and attribution of
-  // complete_task / enqueue_task must hold per agent. The seed is not a task,
-  // so its context has no task id.
-  const agentConfigFor = (currentTaskId?: string): AgentConfig => ({
-    workingDirectory: session.installDir,
-    posthogMcpUrl: credentials.host.mcpUrl,
-    posthogApiKey: credentials.accessToken,
-    host: credentials.host,
-    detectPackageManager: detectNodePackageManagers,
-    skillsBaseUrl: boot.skillsBaseUrl,
-    wizardFlags: boot.wizardFlags,
-    wizardMetadata: boot.wizardMetadata,
-    integrationLabel: programConfig.id,
-    orchestrator: {
-      store,
-      validTypes: registry.types,
-      currentTaskId,
-    },
+  // Each task's run binds the wizard-tools MCP server to a per-task
+  // orchestrator context so complete_task / enqueue_task attribute correctly
+  // when independent tasks run in parallel. The seed is not a task, so its
+  // context has no task id.
+  const orchestratorCtx = (currentTaskId?: string) => ({
+    store,
+    validTypes: registry.types,
+    currentTaskId,
   });
 
   const spinner = getUI().spinner();
@@ -275,24 +272,27 @@ export async function runOrchestrator(
   // 1. Seed the queue with the orchestrator agent. It is itself an agent prompt
   // (the WHAT), so its model and tools come from its frontmatter. The seed
   // plans the graph, it is not a task.
-  const seedAgent = await initializeAgent(agentConfigFor(), options);
-  const seedResult = await runAgent(
-    {
-      ...seedAgent,
-      model: seedPrompt.model ?? seedAgent.model,
-      ...agentRunTools(seedPrompt),
-    },
-    assembleSeedPrompt(promptContext, seedPrompt.body),
-    options,
+  //
+  // Prompt-frontmatter model wins over the switchboard pick (§3.6 of the
+  // switchboard plan) — the switchboard's model is the fallback when the
+  // prompt is silent.
+  const seedPick = resolveHarness(switchboardCtx, 'seed');
+  const seedHarness = requireTaskHarness(seedPick);
+  const seedResult = await seedHarness.runTask({
+    session,
+    programConfig,
+    boot,
+    prompt: assembleSeedPrompt(promptContext, seedPrompt.body),
     spinner,
-    {
-      spinnerMessage: 'Planning the integration...',
-      successMessage: 'Planned the integration',
-      additionalFeatureQueue: [],
-      requestRemark: false,
-      analyticsProperties: { task_type: 'seed' },
-    },
-  );
+    model: seedPrompt.model ?? seedPick.model,
+    ...agentRunTools(seedPrompt),
+    orchestrator: orchestratorCtx(),
+    spinnerMessage: 'Planning the integration...',
+    successMessage: 'Planned the integration',
+    additionalFeatureQueue: [],
+    requestRemark: false,
+    analyticsProperties: { task_type: 'seed', harness: seedPick.harness },
+  });
   if (seedResult.error) {
     logToFile(
       `[orchestrator] seed error: ${seedResult.error} ${
@@ -316,7 +316,6 @@ export async function runOrchestrator(
     renderQueue();
     try {
       const resolved = resolveTask(registry, task, store);
-      const agent = await initializeAgent(agentConfigFor(task.id), options);
       // Task instructions are one-run scaffolding, not durable skills, so they
       // install under the run dir rather than .claude/skills — the SDK must not
       // auto-load them and they must never land in the project (or a CI PR).
@@ -349,27 +348,35 @@ export async function runOrchestrator(
         );
       const requestRemark = isLastTask && !remarkRequested;
       if (requestRemark) remarkRequested = true;
-      await runAgent(
-        {
-          ...agent,
-          model: resolved.model,
-          allowedTools: resolved.allowedTools,
-          disallowedTools: resolved.disallowedTools,
-        },
-        assembleTaskPrompt(promptContext, resolved.prompt, skillPaths),
-        options,
+      // Empty spinner messages suppress the per-task spinner line (the queue
+      // panel shows progress); errors still surface — the harness stops the
+      // spinner with its own error text.
+      //
+      // Per-task role = task.type — the switchboard consults
+      // PROGRAM_BINDINGS[id].contextMillOverride?.[task.type] for wizard-side
+      // per-agent overrides. Prompt-frontmatter model still wins (§3.6).
+      const taskPick = resolveHarness(switchboardCtx, task.type);
+      const taskHarness = requireTaskHarness(taskPick);
+      await taskHarness.runTask({
+        session,
+        programConfig,
+        boot,
+        prompt: assembleTaskPrompt(promptContext, resolved.prompt, skillPaths),
         spinner,
-        // Empty messages suppress the per-task spinner lines (the spinner renders
-        // only when a message is set); the queue panel shows progress. Errors
-        // still surface — runAgent stops the spinner with its own error text.
-        {
-          spinnerMessage: '',
-          successMessage: '',
-          additionalFeatureQueue: [],
-          requestRemark,
-          analyticsProperties: { task_type: task.type, task_id: task.id },
+        model: resolved.model ?? taskPick.model,
+        allowedTools: resolved.allowedTools,
+        disallowedTools: resolved.disallowedTools,
+        orchestrator: orchestratorCtx(task.id),
+        spinnerMessage: '',
+        successMessage: '',
+        additionalFeatureQueue: [],
+        requestRemark,
+        analyticsProperties: {
+          task_type: task.type,
+          task_id: task.id,
+          harness: taskPick.harness,
         },
-      );
+      });
     } finally {
       renderQueue();
     }

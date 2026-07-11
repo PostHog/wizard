@@ -9,6 +9,7 @@ import {
   type WizardUI,
   type SpinnerHandle,
   type AuthErrorDetail,
+  type TokenUsageDelta,
 } from './wizard-ui';
 import type { SettingsConflict } from '@lib/agent/claude-settings';
 import type { ApiUser } from '@lib/api';
@@ -262,6 +263,14 @@ export class LoggingUI implements WizardUI {
 
   setNotebookUrl(_url: string): void {
     // No-op in CI mode
+  }
+
+  addTokenUsage(_delta: TokenUsageDelta): void {
+    // No-op — the hidden Ctrl+T HUD is TUI-only
+  }
+
+  setFinalTokenCostUsd(_costUsd: number): void {
+    // No-op — the hidden Ctrl+T HUD is TUI-only
   }
 
   setOutroData(_data: import('@lib/wizard-session').OutroData): void {

@@ -4,7 +4,7 @@ import { fetchProjectData } from '@lib/api';
 
 vi.mock('@ui', () => ({
   getUI: () => ({
-    log: { info: vi.fn(), error: vi.fn(), success: vi.fn() },
+    log: { info: vi.fn(), error: vi.fn(), success: vi.fn(), warn: vi.fn() },
   }),
 }));
 vi.mock('@utils/urls', () => ({

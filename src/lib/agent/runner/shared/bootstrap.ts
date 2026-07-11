@@ -78,7 +78,10 @@ export async function bootstrapProgram(
   // 1. Init logging + debug
   initLogFile();
   session.skillId = config.skillId ?? config.integrationLabel;
-  logToFile(`[agent-runner] START ${config.integrationLabel}`);
+  logToFile(
+    `[agent-runner] START ${config.integrationLabel} build=${analytics.build}` +
+      `${session.ci ? ' (non-interactive)' : ''}`,
+  );
 
   if (session.debug) {
     enableDebugLogs();
@@ -243,7 +246,11 @@ export async function bootstrapProgram(
   }
 
   // Feature flags. Both arms need these, and the fork decision reads the flags.
+  // This map is PostHog-side only — CLI `--harness` / `--sequence` precedence
+  // lives at the resolution sites (`runner/index.ts` for sequence,
+  // `resolveHarness` for harness), not here.
   const wizardFlags = await analytics.getAllFlagsForWizard();
+
   // Gateway trace tags for this run. The runner stamps its variant onto this
   // after the fork (see runProgram), so the value reflects which arm ran.
   const wizardMetadata = buildRunTags({

@@ -3,6 +3,7 @@ import { hideBin } from 'yargs/helpers';
 import type { Argv } from 'yargs';
 import { IS_PRODUCTION_BUILD } from '@env';
 import { HEADLESS_FLAG } from '@lib/headless-mode';
+import { Harness, Sequence } from '@lib/constants';
 import { toCommandModule, type Command } from './commands/command';
 
 /**
@@ -110,13 +111,35 @@ export class Wizard {
     // --ci and headless are kept as separate flags so they can diverge — see
     // basic-integration's dispatch. headless is deliberately not advertised.
     if (!IS_PRODUCTION_BUILD) {
-      cli = cli.option('ci', {
-        default: false,
-        describe:
-          'Enable CI mode for non-interactive execution\nenv: POSTHOG_WIZARD_CI',
-        type: 'boolean',
-        hidden: true,
-      });
+      cli = cli
+        .option('ci', {
+          default: false,
+          describe:
+            'Enable CI mode for non-interactive execution\nenv: POSTHOG_WIZARD_CI',
+          type: 'boolean',
+          hidden: true,
+        })
+        // Runner overrides — dev/test only, same lifecycle as --ci.
+        .option('harness', {
+          describe:
+            'Override the agent harness (anthropic | pi). Wins over the PostHog runner flag.\nenv: POSTHOG_WIZARD_HARNESS',
+          choices: Object.values(Harness),
+          type: 'string',
+          hidden: true,
+        })
+        .option('sequence', {
+          describe:
+            'Override the runner sequence (linear | orchestrator). Wins over the PostHog orchestrator flag.\nenv: POSTHOG_WIZARD_SEQUENCE',
+          choices: Object.values(Sequence),
+          type: 'string',
+          hidden: true,
+        })
+        .option('model', {
+          describe:
+            'Override the agent model (gateway id, e.g. claude-sonnet-4-6 | openai/gpt-5). Wins over the binding default.\nenv: POSTHOG_WIZARD_MODEL',
+          type: 'string',
+          hidden: true,
+        });
     }
 
     this.cli = cli
@@ -171,6 +194,31 @@ export class Wizard {
       if (argvHasCI || envHasCI) {
         process.stderr.write(
           `\n\x1b[1;91m✖ CI mode is not currently supported in published builds.\x1b[0m\n\n`,
+        );
+        process.exit(1);
+      }
+
+      // --harness / --sequence / --model are dev/test-only. In published builds
+      // the env vars would silently no-op, so reject them explicitly instead.
+      const argvHasOverride = args.some(
+        (a) =>
+          a === '--harness' ||
+          a.startsWith('--harness=') ||
+          a === '--sequence' ||
+          a.startsWith('--sequence=') ||
+          a === '--model' ||
+          a.startsWith('--model='),
+      );
+      const envHasOverride =
+        (process.env.POSTHOG_WIZARD_HARNESS != null &&
+          process.env.POSTHOG_WIZARD_HARNESS !== '') ||
+        (process.env.POSTHOG_WIZARD_SEQUENCE != null &&
+          process.env.POSTHOG_WIZARD_SEQUENCE !== '') ||
+        (process.env.POSTHOG_WIZARD_MODEL != null &&
+          process.env.POSTHOG_WIZARD_MODEL !== '');
+      if (argvHasOverride || envHasOverride) {
+        process.stderr.write(
+          `\n\x1b[1;91m✖ The --harness, --sequence, and --model overrides are not available in published builds.\x1b[0m\n\n`,
         );
         process.exit(1);
       }

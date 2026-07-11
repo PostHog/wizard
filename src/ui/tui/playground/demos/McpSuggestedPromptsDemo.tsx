@@ -18,9 +18,10 @@
  *   C   chunk delay:       50ms | 200ms | 800ms
  *
  * Tip: switch S to "with-tools" and the FollowUp picker after the run
- * will show context-aware suggestions based on the last tool (mock
- * tool names are MCP-prefixed and pass through the normalization in
- * getFollowUps).
+ * will show context-aware suggestions based on the last tool. The mock
+ * calls are CLI-mode `exec` chunks (`mcp__posthog-wizard__exec` + a
+ * `call <tool> …` command), so they exercise getFollowUps' inner-tool
+ * extraction.
  */
 
 import { Box, Text, useInput } from 'ink';
@@ -75,12 +76,14 @@ const SCRIPTS: Record<StreamScript, AgentChunk[]> = {
     { kind: 'text', text: 'Looking up your project…' },
     {
       kind: 'tool-call',
-      toolName: 'mcp__posthog-wizard__query-trends',
-      detail: '{ event: "signup", interval: "day", window: "7d" }',
+      toolName: 'mcp__posthog-wizard__exec',
+      detail: 'call query-trends { event: "signup", interval: "day" }',
+      command:
+        'call query-trends {"event":"signup","interval":"day","window":"7d"}',
     },
     {
       kind: 'tool-result',
-      toolName: 'mcp__posthog-wizard__query-trends',
+      toolName: 'mcp__posthog-wizard__exec',
       detail: '{ rows: 7, total: 482, change: +8.4% }',
     },
     {
@@ -89,12 +92,14 @@ const SCRIPTS: Record<StreamScript, AgentChunk[]> = {
     },
     {
       kind: 'tool-call',
-      toolName: 'mcp__posthog-wizard__create-insight',
-      detail: '{ name: "Weekly signups", query: <trends>, save: true }',
+      toolName: 'mcp__posthog-wizard__exec',
+      detail: 'call create-insight { name: "Weekly signups", save: true }',
+      command:
+        'call create-insight {"name":"Weekly signups","query":"<trends>","save":true}',
     },
     {
       kind: 'tool-result',
-      toolName: 'mcp__posthog-wizard__create-insight',
+      toolName: 'mcp__posthog-wizard__exec',
       detail:
         '{ id: "ins_abc123", url: "https://app.posthog.com/i/ins_abc123" }',
     },
@@ -108,8 +113,9 @@ const SCRIPTS: Record<StreamScript, AgentChunk[]> = {
     { kind: 'text', text: 'Looking at the most recent errors…' },
     {
       kind: 'tool-call',
-      toolName: 'mcp__posthog-wizard__list-errors',
-      detail: '{ window: "7d", limit: 5 }',
+      toolName: 'mcp__posthog-wizard__exec',
+      detail: 'call query-error-tracking-issue { window: "7d", limit: 5 }',
+      command: 'call query-error-tracking-issue {"window":"7d","limit":5}',
     },
     {
       kind: 'error',

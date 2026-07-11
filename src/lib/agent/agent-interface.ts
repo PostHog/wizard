@@ -7,6 +7,7 @@ import path from 'path';
 import * as os from 'os';
 import { createRequire } from 'node:module';
 import { getUI, type SpinnerHandle } from '@ui';
+import type { TokenUsageDelta } from '@ui/wizard-ui';
 import { debug, logToFile, initLogFile, getLogFilePath } from '@utils/debug';
 import type { WizardRunOptions } from '@utils/types';
 import { analytics } from '@utils/analytics';
@@ -16,7 +17,6 @@ import {
   POSTHOG_PROPERTY_HEADER_PREFIX,
   WIZARD_ORCHESTRATOR_FLAG_KEY,
   WIZARD_USER_AGENT,
-  WIZARD_WARLOCK_DISABLED_FLAG_KEY,
   DEFAULT_AGENT_MODEL,
 } from '@lib/constants';
 import {
@@ -37,7 +37,7 @@ import { createTriageLLMProvider } from './triage-provider';
 import { getWizardCommandments } from './commandments';
 import { classifyToolToStage } from './agent-phase';
 import type { PackageManagerDetector } from '@lib/detection/package-manager';
-import { AgentSignals, AgentErrorType } from './signals';
+import { AgentSignals, AgentErrorType, REMARK_INSTRUCTION } from './signals';
 import { AgentOutputSignals } from './output-signals';
 
 // Signal vocabulary and the output parser live in dedicated modules; re-export
@@ -211,7 +211,7 @@ export type AgentConfig = {
    * flag routes the run here; threaded into wizard-tools so the orchestrator
    * tools register.
    */
-  orchestrator?: import('@lib/agent/runner/orchestrator/queue-tools').OrchestratorToolsContext;
+  orchestrator?: import('@lib/agent/runner/sequence/orchestrator/queue-tools').OrchestratorToolsContext;
 };
 
 /**
@@ -268,7 +268,7 @@ export function createStopHook(
       logToFile('Stop hook: requesting reflection');
       return {
         decision: 'block',
-        reason: `Before concluding, provide a brief remark about what information or guidance would have been useful to have in the integration prompt or documentation for this run. Specifically cite anything that would have prevented tool failures, erroneous edits, or other wasted turns. Format your response exactly as: ${AgentSignals.WIZARD_REMARK} Your remark here`,
+        reason: REMARK_INSTRUCTION,
       };
     }
 
@@ -324,29 +324,15 @@ export function buildRunTags(args: {
 }
 
 /**
- * Whether the Warlock/YARA kill switch is engaged for this run. Off by default:
- * scanning is disabled only when the feature flag resolves to the explicit
- * string 'true', or the local POSTHOG_WIZARD_WARLOCK_DISABLED env override is
- * set. A missing flag, an empty flag map (the safe default returned when the
- * flag fetch fails), or any other value all leave scanning ON — a network blip
- * must never silently disable a security control.
+ * Whether Warlock/YARA scanning is disabled for this run. Off by default:
+ * scanning is disabled only by the local POSTHOG_WIZARD_WARLOCK_DISABLED env
+ * override, set to the explicit string 'true'. This is a local/CI escape hatch
+ * only — there is deliberately no remote flag to switch off a security control
+ * (we rely on version-locking @posthog/warlock + the release-gate smoke test
+ * instead). Any other value leaves scanning ON.
  */
-export function isWarlockDisabled(flags: Record<string, string> = {}): boolean {
-  return (
-    flags[WIZARD_WARLOCK_DISABLED_FLAG_KEY] === 'true' ||
-    runtimeEnv('POSTHOG_WIZARD_WARLOCK_DISABLED') === 'true'
-  );
-}
-
-/**
- * Whether this run uses the experimental task-queue orchestrator. Gated by the
- * boolean `wizard-orchestrator` feature flag, targeted to the user in the wizard's
- * analytics project.
- */
-export function isOrchestratorEnabled(
-  flags: Record<string, string> = {},
-): boolean {
-  return flags[WIZARD_ORCHESTRATOR_FLAG_KEY] === 'true';
+export function isWarlockDisabled(): boolean {
+  return runtimeEnv('POSTHOG_WIZARD_WARLOCK_DISABLED') === 'true';
 }
 
 /**
@@ -442,6 +428,10 @@ function matchesAllowedPrefix(command: string): boolean {
   if (parts[scriptIndex] === 'run' || parts[scriptIndex] === 'exec') {
     scriptIndex++;
   }
+
+  // `i` is the npm/pnpm/bun shorthand for `install`. Exact-token match —
+  // adding 'i' to SAFE_SCRIPTS would startsWith-allow anything i-prefixed.
+  if (parts[scriptIndex] === 'i') return true;
 
   // Get the script/command portion (may include args)
   const scriptPart = parts.slice(scriptIndex).join(' ');
@@ -686,6 +676,9 @@ export async function initializeAgent(
           Authorization: `Bearer ${config.posthogApiKey}`,
           'User-Agent': WIZARD_USER_AGENT,
         },
+        // CLI mode's single `exec` tool carries the full command reference on
+        // its schema — keep it in context, never deferred behind tool search.
+        alwaysLoad: true,
       },
       ...Object.fromEntries(
         Object.entries(config.additionalMcpServers ?? {}).map(
@@ -864,6 +857,15 @@ export async function runAgent(
       analytics.capture(WIZARD_REMARK_EVENT_NAME, { remark });
     }
 
+    // A failed install_skill is non-fatal — the agent continues best-effort
+    // without the skill — but every such run must be measurable.
+    const skillFailure = signals.skillInstallFailure();
+    if (skillFailure !== undefined) {
+      analytics.wizardCapture('agent continued without skill', {
+        detail: skillFailure,
+      });
+    }
+
     // Token usage comes from the SDK result message and is per agent run —
     // for the orchestrator that means per task, the secondary cost to watch.
     const usage = lastResultMessage?.usage as
@@ -886,6 +888,13 @@ export async function runAgent(
       cache_read_input_tokens: usage?.cache_read_input_tokens,
       ...config?.analyticsProperties,
     });
+    // Reconcile the hidden Ctrl+T HUD's running cost estimate to the SDK's
+    // authoritative total — same trick the benchmark's
+    // CostTrackerPlugin.onFinalize uses to correct per-turn drift.
+    const totalCostUsd = Number(lastResultMessage?.total_cost_usd ?? 0);
+    if (totalCostUsd > 0) {
+      getUI().setFinalTokenCostUsd(totalCostUsd);
+    }
     try {
       middleware?.finalize(lastResultMessage, durationMs);
     } catch (e) {
@@ -939,14 +948,12 @@ export async function runAgent(
       signalDone!();
     };
 
-    // Kill switch for Warlock/YARA scanning (off by default — see
+    // Local/CI escape hatch for Warlock/YARA scanning (off by default — see
     // isWarlockDisabled for the fail-safe semantics).
-    const warlockDisabled = isWarlockDisabled(agentConfig.wizardFlags);
+    const warlockDisabled = isWarlockDisabled();
     if (warlockDisabled) {
-      logToFile(
-        '[warlock] kill switch active — YARA scanning disabled for run',
-      );
-      analytics.wizardCapture('warlock disabled', { reason: 'kill-switch' });
+      logToFile('[warlock] scanning disabled for run (local env override)');
+      analytics.wizardCapture('warlock disabled', { reason: 'env-override' });
     }
 
     const response = query({
@@ -1048,19 +1055,12 @@ export async function runAgent(
           ANTHROPIC_AUTH_TOKEN: process.env.ANTHROPIC_AUTH_TOKEN,
           CLAUDE_CODE_OAUTH_TOKEN: process.env.CLAUDE_CODE_OAUTH_TOKEN,
           CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS: 'true',
-          // Defer MCP tool schemas to avoid bloating the system prompt.
-          // The posthog-wizard MCP exposes many query tools with large schemas;
-          // without deferral these consume ~113k tokens upfront, leaving
-          // almost no room in Sonnet's 200k context window.
-          ENABLE_TOOL_SEARCH: 'auto:0',
           // SDK 0.3.142 made MCP servers connect in the background by default;
           // the agent may start its first turn before posthog-wizard is ready
           // (audit programs call audit_seed_checks on turn 1, integration
           // programs call load_skill_menu / install_skill). Restore the prior
           // blocking behavior so the SDK waits up to 5s for MCP connect before
-          // turn 1. `alwaysLoad: true` on the server would also work but it
-          // disables tool search deferral and re-inflates the system prompt by
-          // ~113k tokens (the reason ENABLE_TOOL_SEARCH=auto:0 is set above).
+          // turn 1.
           MCP_CONNECTION_NONBLOCKING: '0',
           // PostHog gateway headers: Bedrock fallback + property/flag tags.
           ANTHROPIC_CUSTOM_HEADERS: buildAgentEnv(
@@ -1159,7 +1159,8 @@ export async function runAgent(
         signals,
         receivedSuccessResult,
         tasks,
-        isOrchestratorEnabled(agentConfig.wizardFlags ?? {}),
+        (agentConfig.wizardFlags ?? {})[WIZARD_ORCHESTRATOR_FLAG_KEY] ===
+          'true',
         emitStepEvents,
       );
 
@@ -1550,6 +1551,48 @@ function extractTaskIdFromResult(content: unknown): string | undefined {
   return undefined;
 }
 
+/**
+ * Extracts a `TokenUsageDelta` for the hidden Ctrl+T token/cost HUD from an
+ * SDK assistant message, or `null` when the message carries no usage (e.g.
+ * a duplicate/retried turn). `message.message` is a BetaMessage (the raw
+ * Anthropic API response), which carries `model` alongside `usage` — read
+ * per turn, not from the run's nominal model, since a subagent dispatched
+ * via the Agent tool can genuinely run on a different model than the main
+ * session.
+ */
+function extractTokenUsageDelta(message: SDKMessage): TokenUsageDelta | null {
+  const apiMessage = message.message as
+    | {
+        model?: string;
+        usage?: {
+          input_tokens?: number;
+          output_tokens?: number;
+          cache_read_input_tokens?: number;
+          cache_creation_input_tokens?: number;
+          cache_creation?: {
+            ephemeral_5m_input_tokens?: number;
+            ephemeral_1h_input_tokens?: number;
+          };
+        };
+      }
+    | undefined;
+  const usage = apiMessage?.usage;
+  if (!usage) return null;
+  return {
+    inputTokens: Number(usage.input_tokens ?? 0),
+    outputTokens: Number(usage.output_tokens ?? 0),
+    cacheReadTokens: Number(usage.cache_read_input_tokens ?? 0),
+    cacheCreationTokens: Number(usage.cache_creation_input_tokens ?? 0),
+    cacheCreation5m: Number(
+      usage.cache_creation?.ephemeral_5m_input_tokens ?? 0,
+    ),
+    cacheCreation1h: Number(
+      usage.cache_creation?.ephemeral_1h_input_tokens ?? 0,
+    ),
+    model: apiMessage?.model,
+  };
+}
+
 function handleSDKMessage(
   message: SDKMessage,
   options: WizardRunOptions,
@@ -1588,6 +1631,13 @@ function handleSDKMessage(
 
   switch (message.type) {
     case 'assistant': {
+      // Feed the hidden Ctrl+T token/cost HUD. Mirrors the benchmark
+      // middleware's TokenTrackerPlugin/CacheTrackerPlugin extraction (no
+      // dedup for SDK-retried turns — see addTokenUsage's doc comment), so
+      // this stays live-updating for every run, not just `--benchmark`.
+      const tokenUsageDelta = extractTokenUsageDelta(message);
+      if (tokenUsageDelta) getUI().addTokenUsage(tokenUsageDelta);
+
       // Extract text content from assistant messages
       const content = message.message?.content;
       if (Array.isArray(content)) {

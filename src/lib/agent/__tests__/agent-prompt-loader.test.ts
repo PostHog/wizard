@@ -12,7 +12,7 @@ import {
   type AgentRegistry,
   type OrchestratorPromptContext,
 } from '../agent-prompt-loader';
-import { QueueStore } from '@lib/agent/runner/orchestrator/queue';
+import { QueueStore } from '@lib/agent/runner/sequence/orchestrator/queue';
 import { HostResolution } from '@lib/host-resolution';
 
 function tmpDir(): string {

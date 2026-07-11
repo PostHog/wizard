@@ -7,7 +7,7 @@
  *   3. Blocking outage: shows affected services with Continue/Exit
  */
 
-import { Box, Text, useInput } from 'ink';
+import { Box, Text } from 'ink';
 import { useState, useSyncExternalStore } from 'react';
 import type { WizardStore } from '@ui/tui/store';
 import {
@@ -25,6 +25,7 @@ import { ServiceHealthStatus } from '@lib/health-checks/types';
 import { wizardAbort } from '@utils/wizard-abort';
 import { fetchSkillMenu, downloadSkill } from '@lib/wizard-tools';
 import { REMOTE_SKILLS_BASE_URL } from '@lib/constants';
+import { useDismissOnAnyKey } from '@ui/tui/hooks/useDismissOnAnyKey';
 
 interface HealthCheckScreenProps {
   store: WizardStore;
@@ -34,9 +35,7 @@ const EXAMPLE_PROMPT =
   'Integrate PostHog into this project using the skill files in .posthog/skills/. Read SKILL.md first, then follow the numbered program files in order.';
 
 const SkillsDownloadedScreen = () => {
-  useInput(() => {
-    process.exit(0);
-  });
+  useDismissOnAnyKey(() => process.exit(0));
 
   return (
     <Box flexDirection="column" flexGrow={1}>
@@ -152,7 +151,11 @@ export const HealthCheckScreen = ({ store }: HealthCheckScreenProps) => {
         s.id.startsWith(prefix),
       );
       for (const skill of skills) {
-        downloadSkill(skill, store.session.installDir, '.posthog/skills');
+        await downloadSkill(
+          skill,
+          store.session.installDir,
+          '.posthog/skills',
+        );
       }
     }
     setDownloaded(true);

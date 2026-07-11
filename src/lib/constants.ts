@@ -12,11 +12,59 @@ import { VERSION } from './version';
  */
 export const DEFAULT_AGENT_MODEL = 'claude-sonnet-4-6';
 
+/** Next sonnet generation. A `wizard-pi-model` option for pi-vs-anthropic parity. */
+export const SONNET_5_MODEL = 'claude-sonnet-5';
+
 /**
  * Cheaper, faster model for mechanical agent work (e.g. repo classification
  * during source-map detection). Passed via AgentConfig.modelOverride.
  */
 export const HAIKU_MODEL = 'claude-haiku-4-5-20251001';
+
+/**
+ * Larger model for planning / hard work. Named the switchboard could route to
+ * from `PROGRAM_BINDINGS[id].model` or `contextMillOverride`.
+ */
+export const OPUS_MODEL = 'claude-opus-4-8';
+
+/**
+ * OpenAI-class peer of sonnet, served by the LLM gateway over OpenAI
+ * completions. Enables cross-provider A/B without a wizard release.
+ */
+export const GPT5_MODEL = 'openai/gpt-5';
+
+/** Newer sonnet-class openai flagship (list: $2.50/$15 per MTok). */
+export const GPT5_4_MODEL = 'openai/gpt-5.4';
+
+/**
+ * Smaller, faster, cheaper openai reasoning model. The pi runner is paired with
+ * this (a reasoning model follows the integration skill; the mini tier keeps a
+ * run to a few minutes where flagship gpt-5 takes far longer). Reasoning effort
+ * is set per-model in the switchboard capability matrix.
+ */
+export const GPT5_MINI_MODEL = 'openai/gpt-5-mini';
+
+// ── Agent runner routing axes ────────────────────────────────────────
+
+/**
+ * The two agent runner routing axes: **harness** (which agent SDK drives the LLM)
+ * and **sequence** (which pipeline shape orchestrates the work). Single source
+ * of truth for yargs `choices`, session fields, the runner registry, and tests
+ * — `Object.values(Harness)` gives an iterable of the values when an array is
+ * needed. Adding a member is enough to pick it up everywhere.
+ *
+ * Naming matches the directory layout — see `src/lib/agent/runner/harness/`
+ * and `src/lib/agent/runner/sequence/`.
+ */
+export enum Harness {
+  anthropic = 'anthropic',
+  pi = 'pi',
+}
+
+export enum Sequence {
+  linear = 'linear',
+  orchestrator = 'orchestrator',
+}
 
 // ── Integration / CLI ───────────────────────────────────────────────
 
@@ -43,11 +91,11 @@ export enum Integration {
   android = 'android',
   rails = 'rails',
 
-  // Language fallbacks
+  // Language fallbacks. Keep javascriptNode last: it matches any package.json.
   python = 'python',
   ruby = 'ruby',
-  javascriptNode = 'javascript_node',
   javascript_web = 'javascript_web',
+  javascriptNode = 'javascript_node',
 }
 
 export interface Args {
@@ -79,6 +127,8 @@ export const DEFAULT_HOST_URL = IS_DEV
   ? 'http://localhost:8010'
   : 'https://us.i.posthog.com';
 export const ISSUES_URL = 'https://github.com/posthog/wizard/issues';
+/** Public status page, linked from transient-failure guidance (e.g. OAuth server_error). */
+export const POSTHOG_STATUS_PAGE_URL = 'https://www.posthogstatus.com';
 export const CONTEXT_MILL_URL = 'https://github.com/PostHog/context-mill';
 /**
  * Latest context-mill release page — the BYOAI download link shown in
@@ -187,14 +237,14 @@ export const WIZARD_INTERACTION_EVENT_NAME = 'wizard interaction';
 export const WIZARD_REMARK_EVENT_NAME = 'wizard remark';
 /** Boolean feature flag that routes a run to the experimental orchestrator runner. */
 export const WIZARD_ORCHESTRATOR_FLAG_KEY = 'wizard-orchestrator';
+/** Boolean flag: on → pi harness + the pi model pairing; off/missing → binding default. */
+export const WIZARD_USE_PI_HARNESS_FLAG_KEY = 'wizard-use-pi-harness';
+/** Multivariate flag: pi's model. Variant keys map to gateway ids in `PI_MODEL_FLAG_VARIANTS`. */
+export const WIZARD_PI_MODEL_FLAG_KEY = 'wizard-pi-model';
+/** Multivariate flag: reasoning-effort override for pi models (minimal/low/medium/high/xhigh). */
+export const WIZARD_PI_EFFORT_FLAG_KEY = 'wizard-pi-effort';
 /** Feature flag key that gates the intro-screen "Tools" menu. */
 export const WIZARD_TOOLS_MENU_FLAG_KEY = 'wizard-tools-menu';
-/**
- * Kill switch: when this flag resolves to 'true', Warlock/YARA scanning is
- * disabled for the run. Defaults off (scanning on) — a missing flag or a failed
- * flag fetch must never silently disable a security control.
- */
-export const WIZARD_WARLOCK_DISABLED_FLAG_KEY = 'wizard-warlock-disabled';
 /** User-Agent for wizard HTTP requests and MCP server identification. */
 export const WIZARD_USER_AGENT = `posthog/wizard; version: ${VERSION}`;
 

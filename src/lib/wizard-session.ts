@@ -10,7 +10,7 @@
  * Business logic reads from the session. Never calls a prompt.
  */
 
-import type { Integration } from './constants';
+import type { Harness, Integration, Sequence } from './constants';
 import type { FrameworkConfig } from './framework-config';
 import type { WizardReadinessResult } from './health-checks/readiness';
 import type { SettingsConflict } from './agent/claude-settings';
@@ -192,6 +192,13 @@ export interface WizardSession {
   projectId?: number;
   noTelemetry: boolean;
 
+  /** `--harness` override, read by `resolveHarness`. Wins over the runner flag. */
+  harness?: Harness;
+  /** `--sequence` override, read in `runProgram`. Wins over the orchestrator flag. */
+  sequence?: Sequence;
+  /** `--model` override (gateway id), read by `resolveHarness`. Wins over the binding's model. */
+  model?: string;
+
   // From detection + screens
   setupConfirmed: boolean;
   integration: Integration | null;
@@ -349,6 +356,9 @@ export function buildSession(args: {
   yaraReport?: boolean;
   projectId?: string;
   noTelemetry?: boolean;
+  harness?: Harness;
+  sequence?: Sequence;
+  model?: string;
   integrate?: boolean;
 }): WizardSession {
   return {
@@ -366,6 +376,9 @@ export function buildSession(args: {
     yaraReport: args.yaraReport ?? false,
     projectId: parseProjectIdArg(args.projectId),
     noTelemetry: args.noTelemetry ?? false,
+    harness: args.harness,
+    sequence: args.sequence,
+    model: args.model,
 
     setupConfirmed: false,
     integration: args.integration ?? null,

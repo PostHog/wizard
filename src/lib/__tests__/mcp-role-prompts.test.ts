@@ -159,6 +159,57 @@ describe('getFollowUps', () => {
     expect(prefixed[0].label).toBe(direct[0].label);
   });
 
+  it('recovers the inner tool from a CLI-mode exec command', () => {
+    // CLI mode: every call is the single `exec` tool; the real tool is named
+    // in the command string. Follow-ups should match the tools-mode result.
+    const toolsMode = getFollowUps({
+      ...baseArgs,
+      lastToolName: 'query-trends',
+    });
+    const cliMode = getFollowUps({
+      ...baseArgs,
+      lastToolName: 'mcp__posthog-wizard__exec',
+      lastToolCommand: 'call query-trends {"event":"signup"}',
+    });
+    expect(cliMode[0].label).toBe(toolsMode[0].label);
+  });
+
+  it('parses the inner tool past exec --flag options', () => {
+    const flagged = getFollowUps({
+      ...baseArgs,
+      lastToolName: 'exec',
+      lastToolCommand: 'call --force query-trends {"event":"signup"}',
+    });
+    const plain = getFollowUps({ ...baseArgs, lastToolName: 'query-trends' });
+    expect(flagged[0].label).toBe(plain[0].label);
+  });
+
+  it('falls through to generics for non-call exec commands', () => {
+    for (const command of ['search dashboard', 'info query-trends', 'tools']) {
+      const fs = getFollowUps({
+        ...baseArgs,
+        lastToolName: 'mcp__posthog-wizard__exec',
+        lastToolCommand: command,
+      });
+      // No inner tool → generic pool, same as an unknown tool.
+      expect(fs[0].label).toMatch(
+        /deeper|angle|surprise|slice|compare|actionable/i,
+      );
+      expect(fs[fs.length - 1].prompt).toBe(FOLLOW_UP_EXIT_SENTINEL);
+    }
+  });
+
+  it('falls through to generics for a bare exec with no command', () => {
+    const fs = getFollowUps({
+      ...baseArgs,
+      lastToolName: 'mcp__posthog-wizard__exec',
+    });
+    expect(fs[0].label).toMatch(
+      /deeper|angle|surprise|slice|compare|actionable/i,
+    );
+    expect(fs[fs.length - 1].prompt).toBe(FOLLOW_UP_EXIT_SENTINEL);
+  });
+
   it('falls back to generic follow-ups for unknown tool names', () => {
     const fs = getFollowUps({
       ...baseArgs,

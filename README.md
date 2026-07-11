@@ -49,7 +49,31 @@ npx @posthog/wizard mcp add
 npx @posthog/wizard mcp remove
 ```
 
-## Audit
+## Wizard programs
+
+The wizard's commands are grouped into **programs** — self-contained agentic jobs that install, audit, or wire up a specific piece of PostHog. They're powered by skills from the [context mill](https://github.com/PostHog/context-mill).
+
+### PostHog integration (default)
+
+Running the wizard with no arguments installs PostHog into your project. It detects your framework, wires up initialization, instruments a starter set of events, and walks you through a first dashboard:
+
+```bash
+npx @posthog/wizard
+```
+
+Powered by the `posthog-integration` program. Most other programs below build on it (they declare `requires: ['posthog-integration']`) and will offer to run it first if PostHog isn't already set up.
+
+### Self-driving
+
+Autonomously sets up PostHog self-driving end-to-end. It connects GitHub, enables Session Replay and Error Tracking, wires up signal sources, and configures a Signals scout troop that watches your project for you.
+
+```bash
+npx @posthog/wizard self-driving
+```
+
+If PostHog isn't already installed, the wizard runs the default integration first (composed run) before starting the self-driving setup.
+
+### Audit
 
 Audit an existing PostHog integration for correctness and best practices. The
 `audit` command is a **family**. With no subcommand it runs the **events**
@@ -79,17 +103,7 @@ new audits appear without a wizard release (`web-analytics` is wizard-native).
 > (`wizard audit --help` still labels the positional `[skill]` — read it as "pick
 > a subcommand.")
 
-## Run a single skill
-
-Run any context-mill skill directly by name, even if it isn't exposed as its own
-command:
-
-```bash
-npx @posthog/wizard skill list              # list every available skill
-npx @posthog/wizard skill <skill-name>      # run one by name
-```
-
-## Revenue Analytics
+### Revenue Analytics
 
 Wire up an existing PostHog + Stripe project for revenue analytics:
 
@@ -100,7 +114,7 @@ npx @posthog/wizard revenue-analytics
 Requires PostHog and Stripe SDKs already installed. Supports `--ci` with the
 same flags as the main wizard. (Renamed from `revenue` in the CLI overhaul.)
 
-## Data Warehouse
+### Data Warehouse
 
 Detect data sources your project already uses (Postgres, MySQL, MongoDB,
 Snowflake, BigQuery, Stripe, …) and connect them to PostHog's data warehouse:
@@ -112,6 +126,49 @@ npx @posthog/wizard warehouse
 The wizard scans your dependencies and `.env` key names (never the values) to
 identify sources. Database and API-key sources are created from the terminal;
 OAuth sources open the PostHog app's new-source flow in your browser.
+
+### Upload source maps
+
+Upload JavaScript source maps to PostHog error tracking so stack traces are symbolicated back to your original code:
+
+```bash
+npx @posthog/wizard upload-source-maps
+```
+
+### Run skill
+
+Run any context-mill skill directly by name, even if it isn't exposed as its own
+command:
+
+```bash
+npx @posthog/wizard skill list              # list every available skill
+npx @posthog/wizard skill <skill-name>      # run one by name
+```
+
+## Wizard ownership
+
+Reviews are auto-requested via [`.github/CODEOWNERS`](.github/CODEOWNERS) — the
+file is the source of truth; this table just mirrors it for readability.
+`team-wizard-docs` is the default reviewer; the team-owned programs below
+route review to their owning team instead.
+
+| Path | Owning team |
+|---|---|
+| `*` (everything else, including all other programs) | `@PostHog/team-wizard-docs` |
+| `src/lib/agent/` | `@PostHog/team-wizard-docs` |
+| `src/lib/programs/posthog-integration/` | `@PostHog/team-wizard-docs` |
+| `src/lib/programs/error-tracking-upload-source-maps/` | `@PostHog/team-error-tracking` |
+| `src/lib/programs/mcp-analytics/` | `@PostHog/team-mcp-analytics` |
+| `src/lib/programs/revenue-analytics/` | `@PostHog/team-web-analytics` |
+| `src/lib/programs/self-driving/` | `@PostHog/team-self-driving` |
+| `src/lib/programs/warehouse-source/` | `@PostHog/team-warehouse-sources` |
+| `src/lib/programs/web-analytics-doctor/` | `@PostHog/team-web-analytics` |
+
+Ownership is by directory. Programs not listed above
+(`agent-skill`, `audit`, `events-audit`, `mcp`, `migration`, `posthog-doctor`,
+`shared`, `slack`) fall through the default and are owned by
+`team-wizard-docs`. Today CODEOWNERS only auto-requests review — approval is
+not a merge gate.
 
 ## Headless signup + install (agents / CI)
 
@@ -216,11 +273,14 @@ When creating your personal API key, ensure it has the following scopes enabled:
 
 The wizard's OAuth app on the PostHog side caps the scopes its tokens may
 carry (`OAuthApplication.scopes`). Any scope requested in this repo (see
-`src/lib/oauth/program-scopes.ts`) must be present in that list. Current
-ceiling, for bookkeeping:
+`src/lib/oauth/program-scopes.ts`) must be present in that list. This is
+the allow-list to keep in sync — a net-new scope (e.g.
+`product_enablement:write`) must be added to the live
+`OAuthApplication.scopes` on the PostHog side before a token can be granted
+it:
 
 ```
-user:read,project:read,llm_gateway:read,dashboard:read,dashboard:write,insight:read,insight:write,query:read,notebook:read,notebook:write,health_issue:read,wizard_session:read,wizard_session:write,feature_flag:read,experiment:read,experiment_saved_metric:read,survey:read,session_recording:read,error_tracking:read,web_analytics:read,llm_analytics:read,cohort:read,person:read,annotation:read,annotation:write,activity_log:read,property_definition:read,event_definition:read,action:read,warehouse_table:read,warehouse_view:read,external_data_source:read,external_data_source:write,alert:read,subscription:read,feature_flag:write,integration:read,organization:read,task:read,task:write,signal_scout:read,signal_scout:write,external_data_source:read,external_data_source:write,llm_skill:read,llm_skill:write
+user:read,project:read,llm_gateway:read,dashboard:read,dashboard:write,insight:read,insight:write,query:read,notebook:read,notebook:write,health_issue:read,wizard_session:read,wizard_session:write,feature_flag:read,experiment:read,experiment_saved_metric:read,survey:read,session_recording:read,error_tracking:read,web_analytics:read,llm_analytics:read,cohort:read,person:read,annotation:read,annotation:write,activity_log:read,property_definition:read,event_definition:read,action:read,warehouse_table:read,warehouse_view:read,external_data_source:read,external_data_source:write,alert:read,subscription:read,feature_flag:write,integration:read,organization:read,task:read,task:write,signal_scout:read,signal_scout:write,external_data_source:read,external_data_source:write,llm_skill:read,llm_skill:write,product_enablement:write
 ```
 
 # Command changes (CLI overhaul)
