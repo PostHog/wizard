@@ -1,7 +1,9 @@
+import fs from 'fs';
+import path from 'path';
 import type { ProgramConfig, ProgramStep } from '@lib/programs/program-step';
 import { runAgent, type ProgramRun } from '@lib/agent/agent-runner';
 import { WIZARD_TOOL_NAMES } from '@lib/wizard-tools';
-import type { WizardSession } from '@lib/wizard-session';
+import type { Credentials, WizardSession } from '@lib/wizard-session';
 import { OutroKind, RunPhase } from '@lib/wizard-session';
 import { AgentSignals } from '@lib/agent/agent-interface';
 import {
@@ -17,12 +19,25 @@ import { WIZARD_INTERACTION_EVENT_NAME } from '@lib/constants';
 import { getUI } from '@ui/index';
 import { requestDeepLink } from '@utils/provisioning';
 import { openTrackedLink, withUtm } from '@utils/links';
+import { createNotebook } from '@utils/notebook';
 import type { HostResolution } from '@lib/host-resolution';
 import { POSTHOG_INTEGRATION_PROGRAM } from './steps.js';
 import { getContentBlocks } from './content/index.js';
 import { buildCodingAgentPrompt } from './handoff.js';
 
 const DASHBOARD_DEEP_LINK_KEY = 'dashboardDeepLink';
+
+// Mirror the local setup report into a PostHog notebook; undefined if no report or the upload failed.
+async function mirrorReportToNotebook(
+  session: WizardSession,
+  credentials: Credentials,
+): Promise<string | undefined> {
+  const reportPath = path.join(session.installDir, SETUP_REPORT_FILE);
+  if (!fs.existsSync(reportPath)) return undefined;
+  const markdown = fs.readFileSync(reportPath, 'utf8');
+  const title = `PostHog setup (wizard) – ${path.basename(session.installDir)}`;
+  return (await createNotebook(credentials, title, markdown)) ?? undefined;
+}
 
 function resolveContinueUrl(
   sess: WizardSession,
@@ -240,6 +255,14 @@ Important: Use the detect_package_manager tool (from the wizard-tools MCP server
             });
           }
         }
+
+        // Mirror the report into a PostHog notebook and open it; the local .md stays authoritative.
+        const notebookUrl =
+          sess.notebookUrl ?? (await mirrorReportToNotebook(sess, credentials));
+        if (notebookUrl) {
+          getUI().setNotebookUrl(notebookUrl);
+          openTrackedLink(notebookUrl, 'notebook', { auto: true });
+        }
       },
 
       buildOutroData: (sess, credentials) => {
@@ -268,6 +291,8 @@ Important: Use the detect_package_manager tool (from the wizard-tools MCP server
           changes,
           docsUrl: config.metadata.docsUrl,
           continueUrl,
+          // Set once the report is mirrored into a notebook; absent otherwise.
+          notebookUrl: sess.notebookUrl ?? undefined,
           handoffPrompt: buildCodingAgentPrompt(SETUP_REPORT_FILE),
         };
       },
