@@ -66,6 +66,32 @@ describe('markdownToNotebookDoc', () => {
     expect(ordered.content[0].content).toHaveLength(2);
   });
 
+  it('maps "- [ ]" / "- [x]" checklists to a taskList of taskItems', () => {
+    const doc = markdownToNotebookDoc('- [ ] todo\n- [x] done');
+    expect(doc.content[0]).toEqual({
+      type: 'taskList',
+      content: [
+        {
+          type: 'taskItem',
+          attrs: { checked: false },
+          content: [{ type: 'paragraph', content: [{ type: 'text', text: 'todo' }] }],
+        },
+        {
+          type: 'taskItem',
+          attrs: { checked: true },
+          content: [{ type: 'paragraph', content: [{ type: 'text', text: 'done' }] }],
+        },
+      ],
+    });
+    // No literal "[ ]" text survives — that's what tiptap escapes to "\[ \]".
+    expect(JSON.stringify(doc)).not.toContain('[ ]');
+  });
+
+  it('keeps plain bullets separate from adjacent task items', () => {
+    const doc = markdownToNotebookDoc('- plain\n- [ ] task');
+    expect(doc.content.map((n) => n.type)).toEqual(['bulletList', 'taskList']);
+  });
+
   it('parses a pipe table into header + cell rows', () => {
     const doc = markdownToNotebookDoc(
       ['| Event | File |', '| --- | --- |', '| `signup` | app.ts |'].join('\n'),

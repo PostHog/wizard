@@ -87,6 +87,7 @@ function paragraph(line: string): NotebookNode {
 
 const HEADING = /^(#{1,6})\s+(.*)$/;
 const HR = /^ {0,3}([-*_])( *\1){2,} *$/;
+const TASK = /^\s*[-*+]\s+\[([ xX])\]\s+(.*)$/;
 const UL = /^\s*[-*+]\s+(.*)$/;
 const OL = /^\s*\d+\.\s+(.*)$/;
 const TABLE_SEP = /^\s*\|?(?:\s*:?-+:?\s*\|)+\s*:?-+:?\s*\|?\s*$/;
@@ -112,9 +113,26 @@ export function markdownToNotebookDoc(markdown: string): NotebookDoc {
   const listItems = (match: RegExp): NotebookNode[] => {
     const items: NotebookNode[] = [];
     while (i < lines.length) {
+      // Task lines also match the bullet pattern, but form their own taskList.
+      if (TASK.test(lines[i])) break;
       const m = lines[i].match(match);
       if (!m) break;
       items.push({ type: 'listItem', content: [paragraph(m[1])] });
+      i++;
+    }
+    return items;
+  };
+
+  const taskItems = (): NotebookNode[] => {
+    const items: NotebookNode[] = [];
+    while (i < lines.length) {
+      const m = lines[i].match(TASK);
+      if (!m) break;
+      items.push({
+        type: 'taskItem',
+        attrs: { checked: m[1].toLowerCase() === 'x' },
+        content: [paragraph(m[2])],
+      });
       i++;
     }
     return items;
@@ -185,6 +203,11 @@ export function markdownToNotebookDoc(markdown: string): NotebookDoc {
         i++;
       }
       content.push({ type: 'table', content: rows });
+      continue;
+    }
+
+    if (TASK.test(line)) {
+      content.push({ type: 'taskList', content: taskItems() });
       continue;
     }
 
