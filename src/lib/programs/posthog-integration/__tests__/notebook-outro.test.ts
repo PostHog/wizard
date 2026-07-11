@@ -59,7 +59,11 @@ function makeNodeProject(opts: { report?: boolean }): string {
   tmpDirs.push(dir);
   fs.writeFileSync(
     path.join(dir, 'package.json'),
-    JSON.stringify({ name: 'node-single-file', version: '1.0.0', main: 'index.js' }),
+    JSON.stringify({
+      name: 'node-single-file',
+      version: '1.0.0',
+      main: 'index.js',
+    }),
   );
   fs.writeFileSync(path.join(dir, 'index.js'), "console.log('hi');\n");
   if (opts.report) {
@@ -72,7 +76,10 @@ function makeNodeProject(opts: { report?: boolean }): string {
 }
 
 // Build a Node.js session; a UI must be set — run()/postRun() log through getUI().
-function nodeSession(installDir: string, notebookUrl: string | null): WizardSession {
+function nodeSession(
+  installDir: string,
+  notebookUrl: string | null,
+): WizardSession {
   const store = new WizardStore(Program.PostHogIntegration);
   setUI(new InkUI(store));
 
