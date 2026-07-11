@@ -10,7 +10,6 @@ import { OutroKind } from '../../../wizard-session';
 import { getUI } from '../../../../ui';
 import { AgentErrorType, AgentSignals } from '../../agent-interface';
 import { restoreClaudeSettings } from '../../claude-settings';
-import { HostResolution } from '@lib/host-resolution';
 import { logToFile } from '../../../../utils/debug';
 import { createBenchmarkPipeline } from '../../../middleware/benchmark';
 import {
@@ -41,7 +40,7 @@ export async function runLinearProgram(
   composed = false,
 ): Promise<void> {
   const { skillsBaseUrl, credentials, wizardFlags, project } = boot;
-  const { projectApiKey, host, accessToken, projectId } = credentials;
+  const { projectApiKey, host, projectId } = credentials;
 
   // 5. Skill install (if skillId provided)
   let skillPath: string | undefined;

@@ -16,7 +16,6 @@ import fs from 'fs';
 import path from 'path';
 import { getUI } from '@ui';
 import { getLogFilePath, logToFile } from '@utils/debug';
-import { getLlmGatewayUrl } from '@utils/urls';
 import {
   Harness,
   POSTHOG_FLAG_HEADER_PREFIX,
@@ -368,7 +367,10 @@ export const piBackend: AgentHarness = {
         // so it gets the bare gateway URL regardless of which API shape the
         // agent's model uses. Without this, pi has no ANTHROPIC_* env (it
         // auths programmatically) and triage would silently no-op.
-        triageAuth: { baseURL: gatewayUrl, authToken: boot.credentials.accessToken },
+        triageAuth: {
+          baseURL: gatewayUrl,
+          authToken: boot.credentials.accessToken,
+        },
         // Where pi's bash runs; the rm allowance is confined to this tree.
         workingDirectory: session.installDir,
       });
