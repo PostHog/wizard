@@ -60,6 +60,7 @@ export class Analytics {
   private activeFlags: Record<string, string> | null = null;
   private groups: Record<string, string> = {};
   private personProperties: Record<string, string> = {};
+  private terminalEventSent = false;
 
   constructor() {
     this.client = new PostHog(ANALYTICS_POSTHOG_PUBLIC_PROJECT_WRITE_KEY, {
@@ -270,6 +271,15 @@ export class Analytics {
     if (Object.keys(this.tags).length === 0) {
       return;
     }
+
+    // First status wins. The interrupt fallback in start-tui fires
+    // shutdown('cancelled') on every TUI teardown; without this guard a run
+    // that already reported 'success' would emit a second, contradicting
+    // terminal event when the user dismisses the outro.
+    if (this.terminalEventSent) {
+      return;
+    }
+    this.terminalEventSent = true;
 
     this.client.capture({
       distinctId: this.distinctId ?? this.anonymousId,
