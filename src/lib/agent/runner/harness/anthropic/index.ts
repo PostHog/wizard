@@ -43,22 +43,16 @@ export const anthropicBackend: AgentHarness = {
       middleware,
       model,
     } = inputs;
-    const {
-      skillsBaseUrl,
-      accessToken,
-      host,
-      mcpUrl,
-      wizardFlags,
-      wizardMetadata,
-    } = boot;
+    const { skillsBaseUrl, credentials, wizardFlags, wizardMetadata } = boot;
+    const { accessToken, host } = credentials;
 
     getUI().log.step('Initializing Claude agent...');
     const agent = await initializeAgent(
       {
         workingDirectory: session.installDir,
-        posthogMcpUrl: mcpUrl,
+        posthogMcpUrl: host.mcpUrl,
         posthogApiKey: accessToken,
-        posthogApiHost: host,
+        host,
         additionalMcpServers: config.additionalMcpServers,
         detectPackageManager:
           config.detectPackageManager ?? detectNodePackageManagers,
@@ -124,9 +118,9 @@ export const anthropicBackend: AgentHarness = {
     const agent = await initializeAgent(
       {
         workingDirectory: session.installDir,
-        posthogMcpUrl: boot.mcpUrl,
-        posthogApiKey: boot.accessToken,
-        posthogApiHost: boot.host,
+        posthogMcpUrl: boot.credentials.host.mcpUrl,
+        posthogApiKey: boot.credentials.accessToken,
+        host: boot.credentials.host,
         detectPackageManager: detectNodePackageManagers,
         skillsBaseUrl: boot.skillsBaseUrl,
         wizardFlags: boot.wizardFlags,

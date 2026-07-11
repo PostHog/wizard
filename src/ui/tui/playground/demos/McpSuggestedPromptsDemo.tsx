@@ -31,6 +31,7 @@ import { McpSuggestedPromptsScreen } from '@ui/tui/screens/McpSuggestedPromptsSc
 import { Colors } from '@ui/tui/styles';
 import { Integration } from '@lib/constants';
 import { McpOutcome } from '@lib/wizard-session';
+import { HostResolution } from '@lib/host-resolution';
 import { TAILORED_ROLES } from '@lib/mcp-role-prompts';
 import type {
   AgentChunk,
@@ -162,7 +163,7 @@ function createMockServices(
         credentials: {
           accessToken: 'phx_mock',
           projectApiKey: 'phc_mock',
-          host: 'http://127.0.0.1:1',
+          host: HostResolution.fromApiHost('http://127.0.0.1:1'),
           projectId: 1,
         },
         roleAtOrganization: cfg.role,

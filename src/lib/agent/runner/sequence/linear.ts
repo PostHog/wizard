@@ -10,7 +10,6 @@ import { OutroKind } from '../../../wizard-session';
 import { getUI } from '../../../../ui';
 import { AgentErrorType, AgentSignals } from '../../agent-interface';
 import { restoreClaudeSettings } from '../../claude-settings';
-import { HostResolution } from '@lib/host-resolution';
 import { logToFile } from '../../../../utils/debug';
 import { createBenchmarkPipeline } from '../../../middleware/benchmark';
 import {
@@ -40,16 +39,8 @@ export async function runLinearProgram(
   boot: BootstrapResult,
   composed = false,
 ): Promise<void> {
-  const {
-    skillsBaseUrl,
-    projectApiKey,
-    host,
-    accessToken,
-    projectId,
-    cloudRegion,
-    wizardFlags,
-    project,
-  } = boot;
+  const { skillsBaseUrl, credentials, wizardFlags, project } = boot;
+  const { projectApiKey, host, projectId } = credentials;
 
   // 5. Skill install (if skillId provided)
   let skillPath: string | undefined;
@@ -270,12 +261,7 @@ export async function runLinearProgram(
 
   // 10. Post-run hooks
   if (config.postRun) {
-    await config.postRun(session, {
-      accessToken,
-      projectApiKey,
-      host,
-      projectId,
-    });
+    await config.postRun(session, credentials);
   }
 
   // A composed sub-run (integration inside self-driving) skips the terminal
@@ -291,23 +277,14 @@ export async function runLinearProgram(
   // that the screen never reads. UI.setOutroData() goes through the store
   // and also merges in any post-snapshot URLs from the live session.
   const outroData = config.buildOutroData
-    ? config.buildOutroData(
-        session,
-        { accessToken, projectApiKey, host, projectId },
-        cloudRegion,
-      )
+    ? config.buildOutroData(session, credentials)
     : {
         kind: OutroKind.Success,
         message: config.successMessage,
         reportFile: config.reportFile,
         docsUrl: config.docsUrl,
-        // TODO: clean up in #755
         continueUrl: session.signup
-          ? `${
-              HostResolution.fromRegion(cloudRegion, {
-                baseUrl: session.baseUrl,
-              }).appHost
-            }/products?source=wizard`
+          ? `${host.appHost}/products?source=wizard`
           : undefined,
       };
   if (outroData) {

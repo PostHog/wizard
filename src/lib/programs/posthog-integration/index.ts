@@ -15,10 +15,9 @@ import { FRAMEWORK_REGISTRY } from '@lib/registry';
 import { wizardAbort } from '@utils/wizard-abort';
 import { WIZARD_INTERACTION_EVENT_NAME } from '@lib/constants';
 import { getUI } from '@ui/index';
-import { HostResolution } from '@lib/host-resolution';
 import { requestDeepLink } from '@utils/provisioning';
 import { openTrackedLink, withUtm } from '@utils/links';
-import type { CloudRegion } from '@utils/types';
+import type { HostResolution } from '@lib/host-resolution';
 import { POSTHOG_INTEGRATION_PROGRAM } from './steps.js';
 import { getContentBlocks } from './content/index.js';
 import { buildCodingAgentPrompt } from './handoff.js';
@@ -26,22 +25,13 @@ import { buildCodingAgentPrompt } from './handoff.js';
 const DASHBOARD_DEEP_LINK_KEY = 'dashboardDeepLink';
 
 function resolveContinueUrl(
-  session: WizardSession,
-  cloudRegion: CloudRegion | undefined,
+  sess: WizardSession,
+  host: HostResolution,
   deepLink: unknown,
 ): string | undefined {
-  if (!session.signup) return undefined;
+  if (!sess.signup) return undefined;
   if (typeof deepLink === 'string' && deepLink) return deepLink;
-  if (cloudRegion)
-    // TODO: clean up in #755
-    return withUtm(
-      `${
-        HostResolution.fromRegion(cloudRegion, { baseUrl: session.baseUrl })
-          .appHost
-      }/products?source=wizard`,
-      'outro-continue',
-    );
-  return undefined;
+  return withUtm(`${host.appHost}/products?source=wizard`, 'outro-continue');
 }
 
 export const SETUP_REPORT_FILE = 'posthog-setup-report.md';
@@ -168,7 +158,7 @@ Project context:
 - Framework: ${config.metadata.name} ${frameworkVersion || 'latest'}
 - TypeScript: ${typeScriptDetected ? 'Yes' : 'No'}
 - PostHog public token: ${ctx.projectApiKey}
-- PostHog Host: ${ctx.host}
+- PostHog Host: ${ctx.host.apiHost}
 - Project type: ${config.prompts.projectTypeDetection}
 - Package installation: ${
           config.prompts.packageInstallation ?? DEFAULT_PACKAGE_INSTALLATION
@@ -214,7 +204,7 @@ Important: Use the detect_package_manager tool (from the wizard-tools MCP server
       postRun: async (sess, credentials) => {
         const envVars = config.environment.getEnvVars(
           credentials.projectApiKey,
-          credentials.host,
+          credentials.host.apiHost,
         );
         if (config.environment.uploadToHosting) {
           const { uploadEnvironmentVariablesStep } = await import(
@@ -252,13 +242,17 @@ Important: Use the detect_package_manager tool (from the wizard-tools MCP server
         }
       },
 
-      buildOutroData: (sess, credentials, cloudRegion) => {
+      buildOutroData: (sess, credentials) => {
         const envVars = config.environment.getEnvVars(
           credentials.projectApiKey,
-          credentials.host,
+          credentials.host.apiHost,
         );
         const deepLink = sess.frameworkContext[DASHBOARD_DEEP_LINK_KEY];
-        const continueUrl = resolveContinueUrl(sess, cloudRegion, deepLink);
+        const continueUrl = resolveContinueUrl(
+          sess,
+          credentials.host,
+          deepLink,
+        );
 
         const changes = [
           ...config.ui.getOutroChanges(frameworkContext),

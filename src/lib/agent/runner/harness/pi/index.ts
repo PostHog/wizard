@@ -16,7 +16,6 @@ import fs from 'fs';
 import path from 'path';
 import { getUI } from '@ui';
 import { getLogFilePath, logToFile } from '@utils/debug';
-import { getLlmGatewayUrl } from '@utils/urls';
 import {
   Harness,
   POSTHOG_FLAG_HEADER_PREFIX,
@@ -95,16 +94,16 @@ function piMcpContext(boot: BootstrapResult, instructions?: string): string {
     return ['', '## PostHog MCP server', instructions].join('\n');
   }
   const project = boot.project?.name
-    ? `${boot.project.name} (id ${boot.projectId})`
-    : `id ${boot.projectId}`;
+    ? `${boot.project.name} (id ${boot.credentials.projectId})`
+    : `id ${boot.credentials.projectId}`;
   // Fallback: a `## PostHog project` block with name/id, host, region.
   return [
     '',
     '## PostHog project',
     'Your `posthog_exec` calls run against this project:',
     `- Project: ${project}`,
-    `- Host: ${boot.host}`,
-    `- Region: ${boot.cloudRegion}`,
+    `- Host: ${boot.credentials.host.apiHost}`,
+    `- Region: ${boot.credentials.host.region}`,
   ].join('\n');
 }
 
@@ -314,14 +313,14 @@ export const piBackend: AgentHarness = {
       // `/v1` the Anthropic SDK strips.
       const api = gatewayApiFor(modelId);
       const caps = modelCapabilities(modelId, boot.wizardFlags);
-      const gatewayUrl = getLlmGatewayUrl(boot.host);
+      const gatewayUrl = boot.credentials.host.gatewayUrl;
       const baseUrl =
         api === 'openai-completions' ? `${gatewayUrl}/v1` : gatewayUrl;
       const registry = ModelRegistry.inMemory(AuthStorage.create());
       registry.registerProvider(GATEWAY_PROVIDER, {
         name: 'PostHog Gateway',
         baseUrl,
-        apiKey: boot.accessToken,
+        apiKey: boot.credentials.accessToken,
         authHeader: true,
         api,
         headers: buildGatewayHeaders(boot.wizardMetadata, boot.wizardFlags),
@@ -368,7 +367,10 @@ export const piBackend: AgentHarness = {
         // so it gets the bare gateway URL regardless of which API shape the
         // agent's model uses. Without this, pi has no ANTHROPIC_* env (it
         // auths programmatically) and triage would silently no-op.
-        triageAuth: { baseURL: gatewayUrl, authToken: boot.accessToken },
+        triageAuth: {
+          baseURL: gatewayUrl,
+          authToken: boot.credentials.accessToken,
+        },
         // Where pi's bash runs; the rm allowance is confined to this tree.
         workingDirectory: session.installDir,
       });
@@ -392,8 +394,8 @@ export const piBackend: AgentHarness = {
         const { setupPostHogMcp } = await import('./mcp');
         const mcp = await setupPostHogMcp({
           agentDir: getAgentDir(),
-          mcpUrl: boot.mcpUrl,
-          accessToken: boot.accessToken,
+          mcpUrl: boot.credentials.host.mcpUrl,
+          accessToken: boot.credentials.accessToken,
           userAgent: WIZARD_USER_AGENT,
         });
         extensionFactories.push(mcp.extensionFactory);

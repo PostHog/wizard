@@ -3,7 +3,6 @@ import { access, rm } from 'node:fs/promises';
 import type { ProgramConfig } from '@lib/programs/program-step';
 import type { ProgramRun } from '@lib/agent/agent-runner';
 import { OutroKind } from '@lib/wizard-session';
-import { getUiHostFromHost } from '@utils/urls';
 import { createSkillProgram } from '../agent-skill/index.js';
 import { SELF_DRIVING_PROGRAM } from './steps.js';
 import { SELF_DRIVING_ABORT_CASES } from './detect.js';
@@ -72,7 +71,7 @@ const run: ProgramRun = {
   },
 
   buildOutroData: (_session, credentials) => {
-    const uiHost = getUiHostFromHost(credentials.host).replace(/\/$/, '');
+    const uiHost = credentials.host.appHost.replace(/\/$/, '');
     const inboxUrl = `${uiHost}/project/${credentials.projectId}/inbox`;
     return {
       kind: OutroKind.Success as const,

@@ -7,7 +7,6 @@ import type { ProgramRun } from '@lib/agent/agent-runner';
 import type { WizardSession } from '@lib/wizard-session';
 import { OutroKind } from '@lib/wizard-session';
 import { WIZARD_TOOL_NAMES } from '@lib/wizard-tools';
-import { HostResolution } from '@lib/host-resolution';
 import { AUDIT_ABORT_CASES } from './detect.js';
 import { AUDIT_CHECKS_KEY, AUDIT_REPORT_FILE } from './types.js';
 import { AUDIT_SEED_CHECKS, seedAuditLedger } from './seed.js';
@@ -68,16 +67,11 @@ const auditRun = async (session: WizardSession): Promise<ProgramRun> => {
     // Override the default outro so the dashboard + notebook URLs the
     // agent emits via `[DASHBOARD_URL]` / `[NOTEBOOK_URL]` are surfaced
     // on the post-run screen.
-    buildOutroData: (session, _credentials, cloudRegion) => {
-      // TODO: clean up in #755
-      const cloudUrl = cloudRegion
-        ? HostResolution.fromRegion(cloudRegion, { baseUrl: session.baseUrl })
-            .appHost
+    buildOutroData: (sess, credentials) => {
+      const cloudUrl = credentials.host.appHost;
+      const continueUrl = sess.signup
+        ? `${cloudUrl}/products?source=wizard`
         : undefined;
-      const continueUrl =
-        session.signup && cloudUrl
-          ? `${cloudUrl}/products?source=wizard`
-          : undefined;
 
       // Note: `sess` here is the agent-runner's snapshot of session at
       // runAgent() invocation time. Any URL emissions during the run land

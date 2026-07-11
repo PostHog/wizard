@@ -1,4 +1,5 @@
 import { buildSession, McpOutcome, RunPhase } from '@lib/wizard-session';
+import { HostResolution } from '@lib/host-resolution';
 import { WizardReadiness } from '@lib/health-checks/readiness';
 import { WizardRouter, ScreenId, Overlay, Program } from '@ui/tui/router';
 import { Integration } from '@lib/constants';
@@ -25,7 +26,7 @@ describe('WizardRouter', () => {
       session.credentials = {
         accessToken: 'tok',
         projectApiKey: 'pk',
-        host: 'https://app.posthog.com',
+        host: HostResolution.fromApiHost('https://app.posthog.com'),
         projectId: 1,
       };
 
@@ -67,7 +68,7 @@ describe('WizardRouter', () => {
       session.credentials = {
         accessToken: 'tok',
         projectApiKey: 'pk',
-        host: 'https://app.posthog.com',
+        host: HostResolution.fromApiHost('https://app.posthog.com'),
         projectId: 1,
       };
       session.runPhase = RunPhase.Completed;
@@ -227,7 +228,7 @@ describe('WizardRouter', () => {
       session.credentials = {
         accessToken: 'tok',
         projectApiKey: 'pk',
-        host: 'https://app.posthog.com',
+        host: HostResolution.fromApiHost('https://app.posthog.com'),
         projectId: 1,
       };
       return session;

@@ -229,9 +229,9 @@ export async function runOrchestrator(
   // The client injects the basics (project context + the I/O contract) around
   // every authored agent-prompt body.
   const promptContext: OrchestratorPromptContext = {
-    projectId: boot.projectId,
-    projectApiKey: boot.projectApiKey,
-    host: boot.host,
+    projectId: boot.credentials.projectId,
+    projectApiKey: boot.credentials.projectApiKey,
+    host: boot.credentials.host,
     examplePath,
     commandmentsPath,
   };
