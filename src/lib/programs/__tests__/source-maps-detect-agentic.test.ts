@@ -9,7 +9,21 @@ describe('SOURCE_MAPS_TARGETS precedence', () => {
   const rank = (id: string) => ids.indexOf(id);
 
   it('covers every automatable variant exactly once', () => {
-    expect([...ids].sort()).toEqual([...AUTOMATABLE_VARIANTS].sort());
+    for (const variant of AUTOMATABLE_VARIANTS) {
+      expect(ids.filter((id) => id === variant)).toHaveLength(1);
+    }
+  });
+
+  it('ranks unsupported native guards ahead of the Android target', () => {
+    expect(SOURCE_MAPS_TARGETS).toContainEqual({
+      id: 'android',
+      name: 'Android',
+    });
+    for (const nativeGuard of ['react-native', 'flutter', 'ios']) {
+      expect(rank(nativeGuard)).toBeGreaterThanOrEqual(0);
+      expect(rank(nativeGuard)).toBeLessThan(rank('android'));
+    }
+    expect(rank('android')).toBeLessThan(rank('nextjs'));
   });
 
   it('ranks bundlers ahead of the generic React variant', () => {
@@ -55,6 +69,76 @@ describe('coerceReport', () => {
     expect(p.instrumentable).toBe(true);
     expect(p.reason).toBeUndefined();
   });
+
+  it('retains an Android project with PostHog as instrumentable', () => {
+    const report = coerceReport({
+      repoType: 'single',
+      projects: [
+        {
+          path: '.',
+          framework: 'Android',
+          targetId: 'android',
+          hasPostHog: true,
+        },
+      ],
+    });
+
+    expect(report.projects[0]).toEqual({
+      path: '.',
+      framework: 'Android',
+      variant: 'android',
+      hasPostHog: true,
+      instrumentable: true,
+    });
+  });
+
+  it('blocks an Android project that has no PostHog SDK yet', () => {
+    const report = coerceReport({
+      repoType: 'single',
+      projects: [
+        {
+          path: '.',
+          framework: 'Android',
+          targetId: 'android',
+          hasPostHog: false,
+        },
+      ],
+    });
+
+    expect(report.projects[0]).toEqual(
+      expect.objectContaining({
+        variant: 'android',
+        hasPostHog: false,
+        instrumentable: false,
+        reason: expect.stringMatching(/no posthog sdk/i),
+      }),
+    );
+  });
+
+  it.each(['React Native', 'Expo', 'Flutter', 'iOS'])(
+    'blocks a native %s project misclassified as Android',
+    (framework) => {
+      const report = coerceReport({
+        repoType: 'single',
+        projects: [
+          {
+            path: '.',
+            framework,
+            targetId: 'android',
+            hasPostHog: true,
+          },
+        ],
+      });
+
+      expect(report.projects[0]).toEqual(
+        expect.objectContaining({
+          variant: null,
+          instrumentable: false,
+          reason: expect.stringMatching(/isn't supported/i),
+        }),
+      );
+    },
+  );
 
   it('blocks a supported project that has no PostHog SDK yet', () => {
     const report = coerceReport({
