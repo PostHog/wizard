@@ -2,23 +2,25 @@
  * Headless project scoping — agentic monorepo detection for headless
  * basic-integration runs.
  *
- * Mirrors self-driving's pattern: detection only decides WHICH directory the
- * unchanged integration program runs against. Where self-driving's picker
- * screen lets the user choose and `targetDir` re-points the install dir, this
- * re-points `session.installDir` to the project the agent labels
- * `recommended` (the main client/frontend/mobile app) — no user in the loop.
- * The program's own `ciPreRun` then detects the framework inside that
- * directory exactly as it does for a single-project repo.
+ * Mirrors self-driving's pattern: the host composes the UNTOUCHED integration
+ * program and only decides which directory it runs against. Where self-driving
+ * splices `integrationRunStep` into its own steps and supplies `targetDir`,
+ * the headless install entry wraps the program config with
+ * `withHeadlessAgenticScope`, whose `ciPreRun` preamble re-points
+ * `session.installDir` to the project the agent labels `recommended` (the
+ * main client/frontend/mobile app) before delegating to the program's own
+ * `ciPreRun` — which then detects the framework inside that directory exactly
+ * as it does for a single-project repo.
  *
- * Gated on the `basic-integration-agentic-detection` feature flag and scoped
- * to the posthog-integration program — that policy lives here so the
- * non-interactive runner stays mechanical. Every failure path leaves
- * `session.installDir` untouched, falling back to today's behavior.
+ * Gated on the `basic-integration-agentic-detection` feature flag. Every
+ * failure path leaves `session.installDir` untouched, falling back to the
+ * unwrapped behavior.
  */
 
 import { resolve, sep } from 'path';
 import { authenticate } from '@lib/agent/runner/shared/authenticate';
 import { BASIC_INTEGRATION_AGENTIC_DETECTION_FLAG_KEY } from '@lib/constants';
+import type { ProgramConfig } from '@lib/programs/program-step';
 import type { ProgramId } from '@lib/programs/program-registry';
 import { FRAMEWORK_REGISTRY } from '@lib/registry';
 import type { WizardSession } from '@lib/wizard-session';
@@ -36,6 +38,22 @@ import {
 const INTEGRATION_TARGETS: DetectTarget[] = Object.entries(
   FRAMEWORK_REGISTRY,
 ).map(([id, config]) => ({ id, name: config.metadata.name }));
+
+/**
+ * Compose a program config with the agentic scoping preamble: `ciPreRun`
+ * first scopes `session.installDir` to the recommended project, then
+ * delegates to the program's own `ciPreRun`. The program itself is untouched
+ * — apply this at the headless install entry, never inside a program.
+ */
+export function withHeadlessAgenticScope(config: ProgramConfig): ProgramConfig {
+  return {
+    ...config,
+    ciPreRun: async (session: WizardSession): Promise<void> => {
+      await applyAgenticScope(session, config.id);
+      await config.ciPreRun?.(session);
+    },
+  };
+}
 
 /**
  * Pick the project a headless run should integrate: the recommended project
@@ -69,18 +87,15 @@ export function resolveProjectDir(installDir: string, rel: string): string {
 }
 
 /**
- * Scope a headless basic-integration run to the repo's recommended project.
- * No-op unless the program is posthog-integration and the
+ * Scope the session to the repo's recommended project. No-op unless the
  * `basic-integration-agentic-detection` flag is on for this user. On success
  * only `session.installDir` changes; detection failure or an empty result
  * logs, tags analytics, and returns with the session untouched.
  */
-export async function applyHeadlessAgenticScope(
+async function applyAgenticScope(
   session: WizardSession,
   programId: ProgramId,
 ): Promise<void> {
-  if (programId !== 'posthog-integration') return;
-
   // The detector needs credentials and the flag must evaluate as the
   // logged-in user; authenticate is idempotent, so bootstrap's later call
   // becomes a no-op instead of a second login.

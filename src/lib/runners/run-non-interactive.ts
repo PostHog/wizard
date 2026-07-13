@@ -172,17 +172,6 @@ export function runNonInteractive(
     };
 
     try {
-      // Headless-only fork: agentic monorepo detection may re-scope
-      // session.installDir to the repo's recommended project before the
-      // program's own detection runs. Flag-gated + program-scoped inside the
-      // helper; a no-op everywhere else. Errors route through the catch below.
-      if (mode === 'headless') {
-        const { applyHeadlessAgenticScope } = await import(
-          '@lib/detection/headless-scope'
-        );
-        await applyHeadlessAgenticScope(session, config.id);
-      }
-
       if (config.ciPreRun) {
         await config.ciPreRun(session);
       } else {
