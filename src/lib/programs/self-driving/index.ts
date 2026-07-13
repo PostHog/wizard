@@ -87,7 +87,7 @@ const run: ProgramRun = {
         ],
       },
       body:
-        'Pricing: scouts, signals, and reports are free — you pay a flat ' +
+        'Pricing: scouts, signals, and reports are free. You pay a flat ' +
         '$15 only when a report ships a PR.',
       reportFile: REPORT_FILE,
     };
