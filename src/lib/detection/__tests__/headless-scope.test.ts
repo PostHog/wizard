@@ -5,9 +5,7 @@ import type {
 import {
   chooseProject,
   resolveProjectDir,
-  withHeadlessAgenticScope,
 } from '@lib/detection/headless-scope';
-import { posthogIntegrationConfig } from '@lib/programs/posthog-integration/index';
 
 const project = (overrides: Partial<AgenticProject>): AgenticProject => ({
   path: '.',
@@ -71,20 +69,6 @@ describe('chooseProject', () => {
     const instrumented = { ...api, hasPostHog: true };
     expect(chooseProject(report(unsupported, instrumented))).toBeNull();
     expect(chooseProject(report())).toBeNull();
-  });
-});
-
-describe('withHeadlessAgenticScope', () => {
-  it('wraps ciPreRun and leaves everything else — including the original — untouched', () => {
-    const wrapped = withHeadlessAgenticScope(posthogIntegrationConfig);
-
-    expect(wrapped).not.toBe(posthogIntegrationConfig);
-    expect(wrapped.ciPreRun).toBeDefined();
-    expect(wrapped.ciPreRun).not.toBe(posthogIntegrationConfig.ciPreRun);
-    // The program itself must stay a black box: same id, same steps, same run.
-    expect(wrapped.id).toBe(posthogIntegrationConfig.id);
-    expect(wrapped.steps).toBe(posthogIntegrationConfig.steps);
-    expect(wrapped.run).toBe(posthogIntegrationConfig.run);
   });
 });
 

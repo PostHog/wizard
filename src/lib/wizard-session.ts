@@ -173,6 +173,13 @@ export interface WizardSession {
   debug: boolean;
   installDir: string;
   ci: boolean;
+  /**
+   * True for headless runs (the published-build non-interactive path; see
+   * @lib/headless-mode). Headless also sets `ci: true` — this is the finer
+   * split for behavior that diverges between the two non-interactive modes,
+   * so programs can gate on it declaratively instead of sniffing argv.
+   */
+  headless: boolean;
   signup: boolean;
   localMcp: boolean;
   mcpFeatures?: string[];
@@ -344,6 +351,7 @@ export function buildSession(args: {
   debug?: boolean;
   installDir?: string;
   ci?: boolean;
+  headless?: boolean;
   signup?: boolean;
   localMcp?: boolean;
   mcpFeatures?: string[];
@@ -365,6 +373,7 @@ export function buildSession(args: {
     debug: args.debug ?? false,
     installDir: args.installDir ?? process.cwd(),
     ci: args.ci ?? false,
+    headless: args.headless ?? false,
     signup: args.signup ?? false,
     localMcp: args.localMcp ?? false,
     mcpFeatures: args.mcpFeatures,

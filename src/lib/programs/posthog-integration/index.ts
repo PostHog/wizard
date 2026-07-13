@@ -11,6 +11,7 @@ import {
 import { tryGetPackageJson, isUsingTypeScript } from '@utils/setup-utils';
 import { analytics } from '@utils/analytics';
 import { detectFramework, gatherFrameworkContext } from '@lib/detection/index';
+import { applyHeadlessAgenticScope } from '@lib/detection/headless-scope';
 import { FRAMEWORK_REGISTRY } from '@lib/registry';
 import { wizardAbort } from '@utils/wizard-abort';
 import { WIZARD_INTERACTION_EVENT_NAME } from '@lib/constants';
@@ -52,6 +53,14 @@ export const posthogIntegrationConfig: ProgramConfig = {
   // CI-mode prerequisite work: the headless equivalent of the detect step's
   // onReady hook. Auto-detect the framework, then gather context.
   ciPreRun: async (session: WizardSession): Promise<void> => {
+    // Headless-only, feature-flagged phase (flag gate inside, where
+    // credentials exist to evaluate it): the agentic scan may re-point
+    // session.installDir to the repo's recommended project, so the
+    // deterministic detection below runs in that directory.
+    if (session.headless) {
+      await applyHeadlessAgenticScope(session, 'posthog-integration');
+    }
+
     const integration = await detectFramework(session.installDir);
     if (!integration) {
       await wizardAbort({

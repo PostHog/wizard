@@ -5,7 +5,6 @@ import { runWizardCI, runWizardHeadless } from '@lib/runners';
 import type { NonInteractiveMode } from '@lib/runners';
 import { provisionNewAccount } from '@utils/provisioning';
 import { posthogIntegrationConfig } from '@lib/programs/posthog-integration/index';
-import { withHeadlessAgenticScope } from '@lib/detection/headless-scope';
 
 type Options = Arguments & {
   region?: string;
@@ -50,12 +49,6 @@ function runNonInteractiveInstall(
   const headless = mode === 'headless';
   const label = headless ? 'Headless' : 'CI';
   const runWizard = headless ? runWizardHeadless : runWizardCI;
-  // Headless composes the untouched integration program the way self-driving
-  // does: the wrapper's ciPreRun preamble decides which project dir the run
-  // is scoped to (feature-flag-gated inside; see @lib/detection/headless-scope).
-  const config = headless
-    ? withHeadlessAgenticScope(posthogIntegrationConfig)
-    : posthogIntegrationConfig;
 
   // Base validation (region/install-dir/api-key) is owned by the runner.
   // This layer only adds the signup branch on top.
@@ -87,7 +80,7 @@ function runNonInteractiveInstall(
       options.apiKey = provisioned.personalApiKey;
       if (options.projectId == null) options.projectId = provisioned.projectId;
     }
-    runWizard(config, options);
+    runWizard(posthogIntegrationConfig, options);
   })().catch(() => {
     process.exit(1);
   });

@@ -2,25 +2,23 @@
  * Headless project scoping — agentic monorepo detection for headless
  * basic-integration runs.
  *
- * Mirrors self-driving's pattern: the host composes the UNTOUCHED integration
- * program and only decides which directory it runs against. Where self-driving
- * splices `integrationRunStep` into its own steps and supplies `targetDir`,
- * the headless install entry wraps the program config with
- * `withHeadlessAgenticScope`, whose `ciPreRun` preamble re-points
- * `session.installDir` to the project the agent labels `recommended` (the
- * main client/frontend/mobile app) before delegating to the program's own
- * `ciPreRun` — which then detects the framework inside that directory exactly
- * as it does for a single-project repo.
+ * The integration program declares this as the first phase of its
+ * non-interactive prep (`ciPreRun`), gated on `session.headless` and — inside
+ * here, where credentials exist to evaluate it — the
+ * `basic-integration-agentic-detection` feature flag. When both are on, the
+ * scan re-points `session.installDir` to the project the agent labels
+ * `recommended` (the main client/frontend/mobile app), and the program's own
+ * deterministic detection then runs inside that directory exactly as it does
+ * for a single-project repo — the same "detection only decides which
+ * directory" split self-driving uses via `targetDir`.
  *
- * Gated on the `basic-integration-agentic-detection` feature flag. Every
- * failure path leaves `session.installDir` untouched, falling back to the
- * unwrapped behavior.
+ * Every failure path leaves `session.installDir` untouched, falling back to
+ * the unscoped behavior.
  */
 
 import { resolve, sep } from 'path';
 import { authenticate } from '@lib/agent/runner/shared/authenticate';
 import { BASIC_INTEGRATION_AGENTIC_DETECTION_FLAG_KEY } from '@lib/constants';
-import type { ProgramConfig } from '@lib/programs/program-step';
 import type { ProgramId } from '@lib/programs/program-registry';
 import { FRAMEWORK_REGISTRY } from '@lib/registry';
 import type { WizardSession } from '@lib/wizard-session';
@@ -38,22 +36,6 @@ import {
 const INTEGRATION_TARGETS: DetectTarget[] = Object.entries(
   FRAMEWORK_REGISTRY,
 ).map(([id, config]) => ({ id, name: config.metadata.name }));
-
-/**
- * Compose a program config with the agentic scoping preamble: `ciPreRun`
- * first scopes `session.installDir` to the recommended project, then
- * delegates to the program's own `ciPreRun`. The program itself is untouched
- * — apply this at the headless install entry, never inside a program.
- */
-export function withHeadlessAgenticScope(config: ProgramConfig): ProgramConfig {
-  return {
-    ...config,
-    ciPreRun: async (session: WizardSession): Promise<void> => {
-      await applyAgenticScope(session, config.id);
-      await config.ciPreRun?.(session);
-    },
-  };
-}
 
 /**
  * Pick the project a headless run should integrate: the recommended project
@@ -92,7 +74,7 @@ export function resolveProjectDir(installDir: string, rel: string): string {
  * only `session.installDir` changes; detection failure or an empty result
  * logs, tags analytics, and returns with the session untouched.
  */
-async function applyAgenticScope(
+export async function applyHeadlessAgenticScope(
   session: WizardSession,
   programId: ProgramId,
 ): Promise<void> {
