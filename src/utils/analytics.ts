@@ -66,7 +66,15 @@ export class Analytics {
       host: ANALYTICS_HOST_URL,
       flushAt: 1,
       flushInterval: 0,
-      enableExceptionAutocapture: true,
+      // Only arm exception autocapture in published/production builds. Enabling
+      // it installs a process-global unhandledRejection/uncaughtException handler
+      // at import time, and the `analytics` singleton is constructed eagerly on
+      // import. In dev/test runs (IS_PRODUCTION_BUILD === false) that handler
+      // ships test-only throws — e.g. the mocked `process.exit() called`
+      // rejection from provision-cli.test.ts — straight to the live
+      // error-tracking project, polluting production triage with `build: dev`
+      // noise. Gating on the build keeps the production error stream clean.
+      enableExceptionAutocapture: IS_PRODUCTION_BUILD,
       before_send: (event) => {
         if (!event) return event;
         if (Object.keys(this.groups).length > 0) {
