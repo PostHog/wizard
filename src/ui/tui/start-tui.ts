@@ -78,8 +78,20 @@ export function startTUI(
   // end the process — background handles (e.g. the OAuth callback
   // server) keep the event loop alive, leaving a zombie wizard with no
   // UI. Follow the app teardown with a real exit.
-  void waitUntilExit().then(() => {
+  void waitUntilExit().then(async () => {
+    // `cleaned` still false here means Ink tore itself down (ctrl+c) rather
+    // than a runner-driven exit — flush the terminal analytics event before
+    // the process dies, or interrupted runs vanish from the funnel entirely.
+    // shutdown() is a no-op when a runner already reported a real status.
+    const interrupted = !cleaned;
     cleanup();
+    if (interrupted) {
+      try {
+        await analytics.shutdown('cancelled');
+      } catch {
+        /* never block exit on a flush failure */
+      }
+    }
     process.exit(process.exitCode ?? 0);
   });
 
