@@ -97,7 +97,15 @@ are a cross-repo contract — change one, change both repos.
 **Program definition** (`src/lib/programs/self-driving/`, five files):
 `index.ts` (config + lifecycle), `prompt.ts` (the 9 steps + mechanics + project URLs),
 `detect.ts` (prerequisite check + abort vocabulary), `steps.ts` (TUI screen sequence
-`detect → intro → health-check → auth → run → outro`), and `content/tips.ts` (the
+`detect → intro → integration-check → health-check → auth → events-check → integrate-detect →
+integrate-run → self-driving-handoff → run → outro`; the integration screens show only on the
+no-PostHog path, and `events-check` only on the already-present path — after auth it probes the
+project's event definitions via `fetchHasCustomEvents` (`src/lib/api.ts`,
+`event_type=event_custom`, scope `event_definition:read`, fail-open) and, when the project
+captures only default events, proposes a product analytics setup that routes into the same
+integrate path — the standard integration program is the analytics setup, and
+`detect-agentic.ts`'s `instrumentExisting` mode lets the picker target already-integrated
+projects), and `content/tips.ts` (the
 program-owned `Tips`-sidebar copy that defines signal sources + scouts in plain
 language, wired via `getTips`; `RunScreen` falls back to `DEFAULT_TIPS` for every
 other program, so nothing else is affected). `selfDrivingConfig` is built from the
@@ -134,7 +142,7 @@ No bridge (CI/non-interactive) → returns an error telling the agent to default
 overlay; cancelled/timed-out fields resolve to `CANCELLED_SENTINEL = '__cancelled__'`.
 
 **OAuth scopes** (`src/lib/oauth/program-scopes.ts`). Base `WIZARD_OAUTH_SCOPES`
-(`src/lib/constants.ts`) ∪ `SELF_DRIVING_SCOPE_ADDITIONS` — **12 strings**, requested via a PKCE
+(`src/lib/constants.ts`) ∪ `SELF_DRIVING_SCOPE_ADDITIONS` — **14 strings**, requested via a PKCE
 auth-code flow:
 
 | Scope | Why |
@@ -145,6 +153,8 @@ auth-code flow:
 | `session_recording:read`, `survey:read`, `error_tracking:read` | Read-only usage probes (STEP 2). |
 | `external_data_source:read`, `external_data_source:write` | Create/verify warehouse sources (STEP 5). |
 | `llm_skill:read`, `llm_skill:write` | Read the authoring guide + canonical bodies, create approved custom scouts (STEP 7). |
+| `event_definition:read` | The events-check screen's custom-events probe (`fetchHasCustomEvents`), before the run. Already in the prod ceiling (mcp-tutorial requests it). |
+| `product_enablement:write` | STEP 3b `products-enable` — server-owned enable recipes (§9). |
 
 The prod `OAuthApplication.scopes` ceiling is an **exhaustive allow-list** (`posthog/scopes.py`,
 `scopes_within_ceiling`) — anything outside it is rejected at `/authorize`. Several of these

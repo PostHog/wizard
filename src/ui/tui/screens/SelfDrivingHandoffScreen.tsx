@@ -1,9 +1,10 @@
 /**
  * SelfDrivingHandoffScreen — the bridge between the integration run and the
- * Self-driving run. Shown only in the integrate path (PostHog wasn't present, so
- * the wizard set it up first); the already-has-PostHog path skips straight to
- * Self-driving with no note. Confirms the SDK is in, then hands off to the
- * Self-driving run.
+ * Self-driving run. Shown only in the integrate path: PostHog wasn't present
+ * and the wizard set it up first, or the events-check found only default
+ * events and the wizard added product analytics. Any other path skips
+ * straight to Self-driving with no note. Confirms the work is in, then hands
+ * off to the Self-driving run.
  */
 
 import { Box, Text } from 'ink';
@@ -13,7 +14,10 @@ import type { WizardStore } from '@ui/tui/store';
 import { PickerMenu } from '@ui/tui/primitives/index';
 import { Colors } from '@ui/tui/styles';
 import { SETUP_REPORT_FILE } from '@lib/programs/posthog-integration/index';
-import { SELF_DRIVING_INTEGRATE_PATH_KEY } from '@lib/programs/self-driving/detect';
+import {
+  SELF_DRIVING_CUSTOM_EVENTS_KEY,
+  SELF_DRIVING_INTEGRATE_PATH_KEY,
+} from '@lib/programs/self-driving/detect';
 
 interface SelfDrivingHandoffScreenProps {
   store: WizardStore;
@@ -33,10 +37,15 @@ export const SelfDrivingHandoffScreen = ({
   const dir = typeof rel === 'string' && rel !== '.' ? `${rel}/` : '';
   const reportPath = `./${dir}${SETUP_REPORT_FILE}`;
 
+  // The events-check path re-ran the integration for analytics events on an
+  // existing install — "installed" would undersell what just happened.
+  const eventsPath =
+    store.session.frameworkContext[SELF_DRIVING_CUSTOM_EVENTS_KEY] === false;
+
   return (
     <Box flexDirection="column" flexGrow={1}>
       <Text bold color={Colors.accent}>
-        ✔ PostHog is installed
+        ✔ {eventsPath ? 'Product analytics is set up' : 'PostHog is installed'}
       </Text>
 
       <Box marginTop={1} flexDirection="column">

@@ -41,6 +41,18 @@ export const POSTHOG_PRESENT_KEY = 'postHogPresent';
  */
 export const SELF_DRIVING_INTEGRATE_PATH_KEY = 'selfDrivingIntegratePath';
 
+/**
+ * frameworkContext key holding the events-check probe result: does the
+ * PostHog project have any custom (non-`$`) event definitions? Unset until
+ * the probe runs (it needs credentials, so only after auth, and only on the
+ * PostHog-already-present path). `false` means the project captures only
+ * default events (or none) — the events-check screen then proposes setting
+ * up product analytics via the integrate path, and the integration-detect
+ * screen reads the same key to let already-integrated projects be
+ * instrumented instead of only "continued with".
+ */
+export const SELF_DRIVING_CUSTOM_EVENTS_KEY = 'selfDrivingCustomEvents';
+
 // Matches `posthog` at a dependency boundary (line start, or after "'/=:.@ or
 // whitespace): catches `com.posthog:posthog-android` and `@posthog/ai`, skips
 // substrings inside other words.

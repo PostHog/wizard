@@ -151,6 +151,11 @@ export const AGENT_SKILL_SCOPE_ADDITIONS = [
  *     `llma-skill-file-get`) and author the user-approved custom
  *     `signals-scout-*` skills (`llma-skill-create`). Canonical scout
  *     bodies are never edited.
+ *   • event_definition:read — the events-check screen probes whether the
+ *     project has any custom (non-`$`) event definitions
+ *     (`fetchHasCustomEvents`) to decide whether to propose a product
+ *     analytics setup before the run. Already in the wizard OAuth app's
+ *     production scope ceiling (the mcp-tutorial program requests it).
  *   • product_enablement:write — the "Enable products" step turns on
  *     Session Replay / Error Tracking / Support so their sources have
  *     data to read (`products-enable`). A purpose-built scope: the
@@ -172,6 +177,7 @@ export const SELF_DRIVING_SCOPE_ADDITIONS = [
   'external_data_source:write',
   'llm_skill:read',
   'llm_skill:write',
+  'event_definition:read',
   'product_enablement:write',
 ] as const;
 

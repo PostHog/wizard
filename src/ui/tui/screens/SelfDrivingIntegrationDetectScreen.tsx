@@ -16,7 +16,10 @@ import { LoadingBox, PickerMenu } from '@ui/tui/primitives/index';
 import { Colors, Icons } from '@ui/tui/styles';
 import { Integration } from '@lib/constants';
 import { FRAMEWORK_REGISTRY } from '@lib/registry';
-import { SELF_DRIVING_INTEGRATE_PATH_KEY } from '@lib/programs/self-driving/detect';
+import {
+  SELF_DRIVING_CUSTOM_EVENTS_KEY,
+  SELF_DRIVING_INTEGRATE_PATH_KEY,
+} from '@lib/programs/self-driving/detect';
 import {
   detectSelfDrivingIntegrationProjects,
   type IntegrationProject,
@@ -50,6 +53,12 @@ export const SelfDrivingIntegrationDetectScreen = ({
 
   const { credentials } = store.session;
   const accessToken = credentials?.accessToken;
+
+  // The events-check screen found only default events and the user accepted
+  // a product analytics setup — projects that already have the SDK are the
+  // instrument targets here, not continue-with-existing rows.
+  const instrumentExisting =
+    store.session.frameworkContext[SELF_DRIVING_CUSTOM_EVENTS_KEY] === false;
 
   const [state, setState] = useState<DetectState>({ kind: 'loading' });
   const [activity, setActivity] = useState<string[]>([]);
@@ -87,6 +96,7 @@ export const SelfDrivingIntegrationDetectScreen = ({
               setActivity((prev) => [...prev, line].slice(-MAX_ACTIVITY_LINES));
             }
           },
+          { instrumentExisting },
         );
         if (!cancelled) setState({ kind: 'ready', report });
       } catch (err) {
@@ -101,7 +111,7 @@ export const SelfDrivingIntegrationDetectScreen = ({
     return () => {
       cancelled = true;
     };
-  }, [accessToken, store]);
+  }, [accessToken, store, instrumentExisting]);
 
   if (!credentials) {
     return <LoadingBox message="Waiting for authentication..." />;
@@ -266,7 +276,12 @@ export const SelfDrivingIntegrationDetectScreen = ({
     header: true,
   });
   const options = [
-    heading('new', 'New PostHog integration:'),
+    heading(
+      'new',
+      instrumentExisting
+        ? 'Add product analytics to:'
+        : 'New PostHog integration:',
+    ),
     ...instrumentable.map((p) => ({
       label: projectLabel(p),
       value: `${NEW}${p.path}`,
@@ -299,7 +314,9 @@ export const SelfDrivingIntegrationDetectScreen = ({
       <PickerMenu
         message={
           single && existing.length === 0
-            ? 'Set up PostHog here? Confirm to continue.'
+            ? instrumentExisting
+              ? 'Add product analytics here? Confirm to continue.'
+              : 'Set up PostHog here? Confirm to continue.'
             : undefined
         }
         options={options}

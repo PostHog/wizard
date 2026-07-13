@@ -41,9 +41,11 @@ export type IntegrationProject = {
   integration: Integration | null;
   /** Whether a PostHog SDK is already installed in this project. */
   hasPostHog: boolean;
-  /** integration != null && !hasPostHog — PostHog can be set up here. */
+  /** Supported framework without PostHog — or with it, when the
+   * events-check path asked for existing installs to be instrumentable. */
   instrumentable: boolean;
-  /** hasPostHog: skip integration and continue straight to Self-driving. */
+  /** hasPostHog and not picked as an instrument target: skip integration
+   * and continue straight to Self-driving. */
   continuable: boolean;
   /** Why the project can't be set up (only when !instrumentable). */
   reason?: string;
@@ -54,9 +56,22 @@ export type IntegrationDetectionReport = {
   projects: IntegrationProject[];
 };
 
+export type IntegrationDetectOptions = {
+  /**
+   * Treat projects that already have the PostHog SDK as instrumentable
+   * (a supported framework is still required). Used by the events-check
+   * path: the user accepted a product analytics setup for a project whose
+   * SDK is already installed, so "already has PostHog" is the point, not a
+   * disqualifier. Such projects stop being offered as continue-with-existing
+   * so they don't appear in the picker twice.
+   */
+  instrumentExisting?: boolean;
+};
+
 function classify(
   integration: Integration | null,
   hasPostHog: boolean,
+  instrumentExisting: boolean,
 ): { instrumentable: boolean; reason?: string } {
   if (integration == null) {
     return {
@@ -64,7 +79,7 @@ function classify(
       reason: 'Not a framework the wizard can set up yet',
     };
   }
-  if (hasPostHog) {
+  if (hasPostHog && !instrumentExisting) {
     return { instrumentable: false, reason: 'Already has the PostHog SDK' };
   }
   return { instrumentable: true };
@@ -73,7 +88,9 @@ function classify(
 /** Map a detection report into classified projects (exported for tests). */
 export function toIntegrationReport(
   report: AgenticDetectionReport,
+  options: IntegrationDetectOptions = {},
 ): IntegrationDetectionReport {
+  const instrumentExisting = options.instrumentExisting === true;
   return {
     repoType: report.repoType,
     projects: report.projects.map((p) => {
@@ -81,13 +98,20 @@ export function toIntegrationReport(
         p.targetId && INTEGRATION_IDS.has(p.targetId)
           ? (p.targetId as Integration)
           : null;
+      const classified = classify(
+        integration,
+        p.hasPostHog,
+        instrumentExisting,
+      );
       return {
         path: p.path,
         framework: p.framework,
         integration,
         hasPostHog: p.hasPostHog,
-        continuable: p.hasPostHog,
-        ...classify(integration, p.hasPostHog),
+        // Instrumentable-with-PostHog (events-check mode) projects are picker
+        // targets, not continue-with-existing rows.
+        continuable: p.hasPostHog && !classified.instrumentable,
+        ...classified,
       };
     }),
   };
@@ -97,13 +121,14 @@ export function toIntegrationReport(
 export async function detectSelfDrivingIntegrationProjects(
   session: WizardSession,
   onEvent?: DetectEvent,
+  options?: IntegrationDetectOptions,
 ): Promise<IntegrationDetectionReport> {
   const report = await detectProjectsWithAgent(session, {
     targets: INTEGRATION_TARGETS,
     purpose: 'set up a PostHog SDK integration',
     onEvent,
   });
-  return toIntegrationReport(report);
+  return toIntegrationReport(report, options);
 }
 
 /**

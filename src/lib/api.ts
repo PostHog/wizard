@@ -261,6 +261,42 @@ export async function fetchSlackConnected(
   return parsed.data.results.some((i) => i.kind === 'slack');
 }
 
+/** Minimal shape of `/api/projects/:id/event_definitions/` — we only need
+ * to know whether any row came back, so results stay opaque. */
+const EventDefinitionsResponseSchema = z.object({
+  results: z.array(z.unknown()),
+});
+
+/**
+ * Check whether the project has any custom event definitions — events the
+ * user's own code captures, as opposed to PostHog's built-in `$`-prefixed
+ * ones (`$pageview`, `$autocapture`, ...). Uses the same
+ * `event_type=event_custom` server-side filter as the PostHog UI's "custom
+ * events" view, so "none" here means exactly what the user sees there.
+ * Requires the `event_definition:read` scope. Throws on failure — callers
+ * decide how to degrade (self-driving's events check fails open and skips
+ * its proposal).
+ */
+export async function fetchHasCustomEvents(
+  accessToken: string,
+  projectId: number,
+  baseUrl: string,
+  signal?: AbortSignal,
+): Promise<boolean> {
+  const response = await axios.get(
+    `${baseUrl}/api/projects/${projectId}/event_definitions/`,
+    {
+      params: { event_type: 'event_custom', limit: 1 },
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'User-Agent': WIZARD_USER_AGENT,
+      },
+      signal,
+    },
+  );
+  return EventDefinitionsResponseSchema.parse(response.data).results.length > 0;
+}
+
 export function handleApiError(error: unknown, operation: string): ApiError {
   if (axios.isAxiosError(error)) {
     const axiosError = error as AxiosError<{ detail?: string }>;

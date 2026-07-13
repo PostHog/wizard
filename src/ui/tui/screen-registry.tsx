@@ -29,6 +29,7 @@ import { SourceMapsOutroScreen } from './screens/SourceMapsOutroScreen.js';
 import { AgentSkillIntroScreen } from './screens/AgentSkillIntroScreen.js';
 import { SelfDrivingIntroScreen } from './screens/SelfDrivingIntroScreen.js';
 import { SelfDrivingIntegrationCheckScreen } from './screens/SelfDrivingIntegrationCheckScreen.js';
+import { SelfDrivingEventsCheckScreen } from './screens/SelfDrivingEventsCheckScreen.js';
 import { SelfDrivingIntegrationDetectScreen } from './screens/SelfDrivingIntegrationDetectScreen.js';
 import { SelfDrivingHandoffScreen } from './screens/SelfDrivingHandoffScreen.js';
 import { AuditIntroScreen } from './screens/audit/AuditIntroScreen.js';
@@ -90,6 +91,9 @@ export function createScreens(
     [ScreenId.SelfDrivingIntro]: <SelfDrivingIntroScreen store={store} />,
     [ScreenId.SelfDrivingIntegrationCheck]: (
       <SelfDrivingIntegrationCheckScreen store={store} />
+    ),
+    [ScreenId.SelfDrivingEventsCheck]: (
+      <SelfDrivingEventsCheckScreen store={store} />
     ),
     [ScreenId.SelfDrivingIntegrationDetect]: (
       <SelfDrivingIntegrationDetectScreen store={store} />

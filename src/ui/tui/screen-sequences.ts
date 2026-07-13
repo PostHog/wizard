@@ -26,6 +26,7 @@ export enum ScreenId {
   AgentSkillIntro = 'agent-skill-intro',
   SelfDrivingIntro = 'self-driving-intro',
   SelfDrivingIntegrationCheck = 'self-driving-integration-check',
+  SelfDrivingEventsCheck = 'self-driving-events-check',
   SelfDrivingIntegrationDetect = 'self-driving-integration-detect',
   SelfDrivingHandoff = 'self-driving-handoff',
   AuditIntro = 'audit-intro',

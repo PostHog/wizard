@@ -1,17 +1,21 @@
 /**
  * Self-driving program step list.
  *
- * detect → intro → integration-check → health-check → auth → integrate-detect →
- * integrate-run → self-driving-handoff → run → outro. A deterministic check in
- * `detect` decides whether PostHog is already in the project: found → the
- * integration screens are skipped and the integrate-run phase never shows; not
- * found → integration-check reports it and the only action sets up PostHog.
- * After auth, `integrate-detect` runs the Haiku detector and has the user pick
- * which project to set PostHog up in (a monorepo can have several);
- * `integrate-run` then runs the real integration program's agent (its own task
- * list) in that project. `self-driving-handoff` then bridges to Self-driving
- * ("PostHog is installed — now set up Self-driving") before the Self-driving
- * run. No keep-skills step: the setup skill is transient, so postRun removes it.
+ * detect → intro → integration-check → health-check → auth → events-check →
+ * integrate-detect → integrate-run → self-driving-handoff → run → outro. A
+ * deterministic check in `detect` decides whether PostHog is already in the
+ * project: found → the integration screens are skipped and the integrate-run
+ * phase never shows; not found → integration-check reports it and the only
+ * action sets up PostHog. On the already-present path, `events-check` probes
+ * the project's event definitions after auth: only default (or no) events →
+ * it proposes setting up product analytics, which routes into the same
+ * integrate path. After auth, `integrate-detect` runs the Haiku detector and
+ * has the user pick which project to set PostHog up in (a monorepo can have
+ * several); `integrate-run` then runs the real integration program's agent
+ * (its own task list) in that project. `self-driving-handoff` then bridges to
+ * Self-driving ("PostHog is installed — now set up Self-driving") before the
+ * Self-driving run. No keep-skills step: the setup skill is transient, so
+ * postRun removes it.
  */
 
 import { resolve, sep } from 'path';
@@ -22,6 +26,7 @@ import { integrationRunStep } from '@lib/programs/posthog-integration/index';
 import {
   detectSelfDrivingPrerequisites,
   POSTHOG_PRESENT_KEY,
+  SELF_DRIVING_CUSTOM_EVENTS_KEY,
   SELF_DRIVING_INTEGRATE_PATH_KEY,
 } from './detect.js';
 import { prepSelfDrivingIntegration } from './detect-agentic.js';
@@ -79,6 +84,21 @@ export const SELF_DRIVING_PROGRAM: ProgramStep[] = [
     label: 'Authentication',
     screenId: 'auth',
     isComplete: (session) => session.credentials !== null,
+  },
+  {
+    // Shown only on the PostHog-already-present path: after auth, probe
+    // whether the project captures any custom events. Default-only (or no)
+    // events → propose setting up product analytics first; accepting sets
+    // integrate=true and reuses the whole integrate path below (the standard
+    // integration program IS the analytics setup). Custom events found (or
+    // the probe failed — fail open, never nag) → completes silently.
+    id: 'events-check',
+    label: 'Events',
+    screenId: 'self-driving-events-check',
+    show: (session) => postHogPresent(session) && session.integrate === null,
+    isComplete: (session) =>
+      session.frameworkContext[SELF_DRIVING_CUSTOM_EVENTS_KEY] === true ||
+      session.integrate !== null,
   },
   {
     // After auth, before the integration runs: the detector scans the repo and

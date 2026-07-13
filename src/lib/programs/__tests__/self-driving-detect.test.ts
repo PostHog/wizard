@@ -9,6 +9,8 @@ import {
 import {
   detectPostHogPresent,
   POSTHOG_MANIFESTS,
+  POSTHOG_PRESENT_KEY,
+  SELF_DRIVING_CUSTOM_EVENTS_KEY,
 } from '@lib/programs/self-driving/detect';
 import { toIntegrationReport } from '@lib/programs/self-driving/detect-agentic';
 import {
@@ -133,6 +135,7 @@ describe('selfDrivingConfig', () => {
       'integration-check',
       'health-check',
       'auth',
+      'events-check',
       'integrate-detect',
       'integrate-run',
       'self-driving-handoff',
@@ -447,6 +450,51 @@ describe('detectPostHogPresent', () => {
   });
 });
 
+describe('events-check step', () => {
+  const step = selfDrivingConfig.steps.find((s) => s.id === 'events-check');
+
+  it('shows only on the PostHog-already-present path with no decision made', () => {
+    const session = buildSession({});
+    session.frameworkContext[POSTHOG_PRESENT_KEY] = true;
+    expect(step?.show?.(session)).toBe(true);
+  });
+
+  it('is hidden when PostHog is absent (the integrate path owns that flow)', () => {
+    const session = buildSession({});
+    session.frameworkContext[POSTHOG_PRESENT_KEY] = false;
+    expect(step?.show?.(session)).toBe(false);
+  });
+
+  it('is hidden when --integrate pre-decided the flow', () => {
+    const session = buildSession({});
+    session.frameworkContext[POSTHOG_PRESENT_KEY] = true;
+    session.integrate = true;
+    expect(step?.show?.(session)).toBe(false);
+  });
+
+  it('is incomplete until the probe lands', () => {
+    const session = buildSession({});
+    session.frameworkContext[POSTHOG_PRESENT_KEY] = true;
+    expect(step?.isComplete?.(session)).toBe(false);
+  });
+
+  it('completes silently when custom events exist', () => {
+    const session = buildSession({});
+    session.frameworkContext[SELF_DRIVING_CUSTOM_EVENTS_KEY] = true;
+    expect(step?.isComplete?.(session)).toBe(true);
+  });
+
+  it('completes once the user answers the default-events proposal either way', () => {
+    for (const answer of [true, false]) {
+      const session = buildSession({});
+      session.frameworkContext[SELF_DRIVING_CUSTOM_EVENTS_KEY] = false;
+      expect(step?.isComplete?.(session)).toBe(false);
+      session.integrate = answer;
+      expect(step?.isComplete?.(session)).toBe(true);
+    }
+  });
+});
+
 describe('integrate-detect step', () => {
   const step = selfDrivingConfig.steps.find((s) => s.id === 'integrate-detect');
 
@@ -514,6 +562,39 @@ describe('toIntegrationReport', () => {
     ).projects;
     expect(p.instrumentable).toBe(false);
     expect(p.continuable).toBe(false);
+  });
+
+  describe('instrumentExisting (events-check accepted a product analytics setup)', () => {
+    const opts = { instrumentExisting: true };
+
+    it('makes a supported project with PostHog instrumentable, not continuable', () => {
+      // The existing SDK is the point — the pick targets it for analytics
+      // events, and dropping continuable keeps it out of the picker twice.
+      const [p] = toIntegrationReport(
+        build({ targetId: Integration.nextjs, hasPostHog: true }),
+        opts,
+      ).projects;
+      expect(p.instrumentable).toBe(true);
+      expect(p.continuable).toBe(false);
+    });
+
+    it('still requires a supported framework', () => {
+      const [p] = toIntegrationReport(
+        build({ targetId: null, hasPostHog: true }),
+        opts,
+      ).projects;
+      expect(p.instrumentable).toBe(false);
+      expect(p.continuable).toBe(true);
+    });
+
+    it('leaves the no-PostHog classification unchanged', () => {
+      const [p] = toIntegrationReport(
+        build({ targetId: Integration.nextjs, hasPostHog: false }),
+        opts,
+      ).projects;
+      expect(p.instrumentable).toBe(true);
+      expect(p.continuable).toBe(false);
+    });
   });
 });
 
