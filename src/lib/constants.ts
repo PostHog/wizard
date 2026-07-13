@@ -245,15 +245,9 @@ export const WIZARD_PI_MODEL_FLAG_KEY = 'wizard-pi-model';
 export const WIZARD_PI_EFFORT_FLAG_KEY = 'wizard-pi-effort';
 /** Feature flag key that gates the intro-screen "Tools" menu. */
 export const WIZARD_TOOLS_MENU_FLAG_KEY = 'wizard-tools-menu';
-/** Boolean flag: agentic project scoping for non-interactive basic-integration runs. Wizard-local — see isGatewayForwardedFlag. */
+/** Boolean flag: agentic project scoping for non-interactive basic-integration runs. Not `wizard-` prefixed, so gateway flag-header forwarding skips it. */
 export const BASIC_INTEGRATION_AGENTIC_DETECTION_FLAG_KEY =
   'basic-integration-agentic-detection';
-
-/** Forward this flag to the LLM gateway as an X-POSTHOG-FLAG-* header? `wizard*` names forward; wizard-local flags are skipped by name so a rename can't silently forward them. */
-export function isGatewayForwardedFlag(flagKey: string): boolean {
-  if (flagKey === BASIC_INTEGRATION_AGENTIC_DETECTION_FLAG_KEY) return false;
-  return flagKey.toLowerCase().startsWith('wizard');
-}
 /** User-Agent for wizard HTTP requests and MCP server identification. */
 export const WIZARD_USER_AGENT = `posthog/wizard; version: ${VERSION}`;
 

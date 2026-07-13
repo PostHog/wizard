@@ -22,7 +22,6 @@ import {
   POSTHOG_PROPERTY_HEADER_PREFIX,
   WIZARD_REMARK_EVENT_NAME,
   WIZARD_USER_AGENT,
-  isGatewayForwardedFlag,
 } from '@lib/constants';
 import { analytics } from '@utils/analytics';
 import { AgentErrorType } from '@lib/agent/agent-interface';
@@ -186,7 +185,7 @@ function buildGatewayHeaders(
     headers[name] = value;
   }
   for (const [flagKey, variant] of Object.entries(wizardFlags)) {
-    if (!isGatewayForwardedFlag(flagKey)) continue;
+    if (!flagKey.toLowerCase().startsWith('wizard')) continue;
     headers[POSTHOG_FLAG_HEADER_PREFIX + flagKey.toUpperCase()] = variant;
   }
   return headers;

@@ -6,11 +6,7 @@ import {
   chooseIntegrationProject,
   scopeInstallDirToProject,
 } from '@lib/detection/project-scope';
-import {
-  BASIC_INTEGRATION_AGENTIC_DETECTION_FLAG_KEY,
-  WIZARD_ORCHESTRATOR_FLAG_KEY,
-  isGatewayForwardedFlag,
-} from '@lib/constants';
+import { BASIC_INTEGRATION_AGENTIC_DETECTION_FLAG_KEY } from '@lib/constants';
 import { authenticate } from '@lib/agent/runner/shared/authenticate';
 import { buildSession } from '@lib/wizard-session';
 import { analytics } from '@utils/analytics';
@@ -192,16 +188,5 @@ describe('scopeInstallDirToProject', () => {
       project_count: 1,
       supported_count: 0,
     });
-  });
-});
-
-describe('isGatewayForwardedFlag', () => {
-  it('forwards wizard-prefixed flags but skips wizard-local ones by name, not prefix', () => {
-    // The skip must survive a rename to wizard-* — that's the point of the explicit list.
-    expect(isGatewayForwardedFlag(WIZARD_ORCHESTRATOR_FLAG_KEY)).toBe(true);
-    expect(
-      isGatewayForwardedFlag(BASIC_INTEGRATION_AGENTIC_DETECTION_FLAG_KEY),
-    ).toBe(false);
-    expect(isGatewayForwardedFlag('unrelated-flag')).toBe(false);
   });
 });
