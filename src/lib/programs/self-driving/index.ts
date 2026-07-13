@@ -82,10 +82,13 @@ const run: ProgramRun = {
         items: [
           'Investigate reports with the agent',
           'Tag teammates to loop them in',
-          'Kick off a PR when you like the proposed fix',
+          'Kick off a PR when you like the proposed fix ($15 flat)',
           'Or work from Slack (tag @PostHog) and MCP',
         ],
       },
+      body:
+        'Pricing: scouts, signals, and reports are free — you pay a flat ' +
+        '$15 only when a report ships a PR.',
       reportFile: REPORT_FILE,
     };
   },
