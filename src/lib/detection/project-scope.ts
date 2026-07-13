@@ -1,21 +1,19 @@
 /**
- * Agentic (Haiku) detection for basic-integration's non-interactive phase.
+ * Non-interactive project scoping — run the agentic detector and pick which
+ * project a run should integrate.
  *
- * Mirrors self-driving's detect-agentic, minus the picker: CI/headless runs
- * have no screen, so `ciPreRun`'s first phase runs the shared Haiku detector
- * (with the integration framework targets and a recommendation) and
- * auto-chooses the project. The choice re-points `session.installDir` — the
- * same "detection only decides which directory" split self-driving gets via
- * `targetDir` — so the program's deterministic detection runs inside that
- * directory. Gated on the basic-integration-agentic-detection flag; flag
- * off, scan failure, or nothing choosable all leave the session untouched.
+ * CI/headless basic-integration runs have no picker screen, so `ciPreRun`'s
+ * first phase runs the shared Haiku detector (with the integration framework
+ * targets and a recommendation) and auto-chooses the project. The choice
+ * re-points `session.installDir` — the same "detection only decides which
+ * directory" split self-driving gets via `targetDir` — so the program's
+ * deterministic detection runs inside that directory. Gated on the
+ * basic-integration-agentic-detection flag; flag off, scan failure, or
+ * nothing choosable all leave the session untouched.
  */
 
 import { resolve, sep } from 'path';
-import {
-  detectProjectsWithAgent,
-  type AgenticProject,
-} from '@lib/detection/agentic';
+import { detectProjectsWithAgent, type AgenticProject } from './agentic.js';
 import { authenticate } from '@lib/agent/runner/shared/authenticate';
 import { FRAMEWORK_REGISTRY } from '@lib/registry';
 import { BASIC_INTEGRATION_AGENTIC_DETECTION_FLAG_KEY } from '@lib/constants';
