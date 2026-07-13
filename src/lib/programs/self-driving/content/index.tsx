@@ -174,6 +174,12 @@ export const getContentBlocks = (store?: WizardStore): ContentBlock[] => {
       pause: 6000,
     },
 
+    {
+      content:
+        'That PR is the only thing you pay for: a flat $15 per report that ships one. Watching is free.',
+      pause: 6000,
+    },
+
     CLEAR,
 
     // Scene 9 — the loop kicker
