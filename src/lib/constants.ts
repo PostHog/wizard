@@ -44,6 +44,9 @@ export const GPT5_4_MODEL = 'openai/gpt-5.4';
  */
 export const GPT5_MINI_MODEL = 'openai/gpt-5-mini';
 
+/** Latest openai flagship generation (`luna` line). A `wizard-pi-model` option for cross-provider A/B. */
+export const GPT5_6_LUNA_MODEL = 'openai/gpt-5.6-luna';
+
 // ── Agent runner routing axes ────────────────────────────────────────
 
 /**

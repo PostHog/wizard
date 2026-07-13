@@ -6,6 +6,7 @@ import {
   GPT5_MINI_MODEL,
   GPT5_MODEL,
   GPT5_4_MODEL,
+  GPT5_6_LUNA_MODEL,
   Harness,
   WIZARD_PI_EFFORT_FLAG_KEY,
   WIZARD_PI_MODEL_FLAG_KEY,
@@ -131,6 +132,7 @@ describe('switchboard resolveHarness — CLI precedence', () => {
     expect(pick('gpt-5')).toBe(GPT5_MODEL);
     expect(pick('gpt-5-4')).toBe(GPT5_4_MODEL);
     expect(pick('gpt-5-mini')).toBe(GPT5_MINI_MODEL);
+    expect(pick('gpt-5-6-luna')).toBe(GPT5_6_LUNA_MODEL);
     expect(pick('sonnet-4-6')).toBe(DEFAULT_AGENT_MODEL);
     expect(pick('sonnet-5')).toBe(SONNET_5_MODEL);
     expect(pick('banana')).toBe(GPT5_4_MODEL);
@@ -305,6 +307,9 @@ describe('switchboard modelCapabilities', () => {
   it('sets reasoning effort per model: gpt-5 low (fast flagship), gpt-5-mini medium', () => {
     expect(modelCapabilities(GPT5_MODEL).thinkingLevel).toBe('low');
     expect(modelCapabilities(GPT5_MINI_MODEL).thinkingLevel).toBe('medium');
+    // luna is a reasoning model despite the openai/ prefix; it opts in past the default-off.
+    expect(modelCapabilities(GPT5_6_LUNA_MODEL).reasoning).toBe(true);
+    expect(modelCapabilities(GPT5_6_LUNA_MODEL).thinkingLevel).toBe('low');
     // Anthropic default carries no explicit effort — the harness default stands.
     expect(
       modelCapabilities(DEFAULT_AGENT_MODEL).thinkingLevel,
