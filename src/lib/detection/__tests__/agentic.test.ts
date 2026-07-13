@@ -105,3 +105,69 @@ describe('coerceAgenticReport', () => {
     expect(keep('ios')).toBe('ios');
   });
 });
+
+describe('coerceAgenticReport recommendation', () => {
+  const projects = [
+    {
+      path: 'apps/api',
+      framework: 'Express',
+      targetId: 'node',
+      hasPostHog: false,
+    },
+    {
+      path: 'apps/web',
+      framework: 'Next.js',
+      targetId: 'nextjs',
+      hasPostHog: false,
+      recommended: true,
+    },
+  ];
+
+  it('strips recommended entirely when the scan did not ask for it', () => {
+    // Consumers that never opted in (self-driving, source-maps) must never
+    // see the field, even when the agent emits it anyway.
+    const report = coerceAgenticReport({ projects }, TARGETS);
+    for (const p of report.projects) {
+      expect('recommended' in p).toBe(false);
+    }
+  });
+
+  it('keeps the recommended label when the scan asked for it', () => {
+    const report = coerceAgenticReport({ projects }, TARGETS, {
+      recommend: true,
+    });
+    expect(report.projects.map((p) => p.recommended)).toEqual([false, true]);
+  });
+
+  it('keeps at most one recommended project — the first', () => {
+    const doubled = projects.map((p) => ({ ...p, recommended: true }));
+    const report = coerceAgenticReport({ projects: doubled }, TARGETS, {
+      recommend: true,
+    });
+    expect(report.projects.map((p) => p.recommended)).toEqual([true, false]);
+  });
+
+  it('coerces malformed recommended values to false', () => {
+    const report = coerceAgenticReport(
+      {
+        projects: [
+          { path: '.', recommended: 'yes' },
+          { path: 'ios', recommended: 1 },
+        ],
+      },
+      TARGETS,
+      { recommend: true },
+    );
+    expect(report.projects.map((p) => p.recommended)).toEqual([false, false]);
+  });
+
+  it('keeps the label while an escaping path clamps to "."', () => {
+    const report = coerceAgenticReport(
+      { projects: [{ path: '/etc', recommended: true }] },
+      TARGETS,
+      { recommend: true },
+    );
+    expect(report.projects[0].path).toBe('.');
+    expect(report.projects[0].recommended).toBe(true);
+  });
+});
