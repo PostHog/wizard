@@ -1,5 +1,5 @@
 import type { AgenticProject } from '@lib/detection/agentic';
-import { chooseIntegrationProject } from '@lib/programs/posthog-integration/index';
+import { chooseIntegrationProject } from '@lib/programs/posthog-integration/detect-agentic';
 
 const project = (overrides: Partial<AgenticProject>): AgenticProject => ({
   path: '.',
