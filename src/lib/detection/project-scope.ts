@@ -1,16 +1,4 @@
-/**
- * Non-interactive project scoping — run the agentic detector and pick which
- * project a run should integrate.
- *
- * CI/headless basic-integration runs have no picker screen, so `ciPreRun`'s
- * first phase runs the shared Haiku detector (with the integration framework
- * targets and a recommendation) and auto-chooses the project. The choice
- * re-points `session.installDir` — the same "detection only decides which
- * directory" split self-driving gets via `targetDir` — so the program's
- * deterministic detection runs inside that directory. Gated on the
- * basic-integration-agentic-detection flag; flag off, scan failure, or
- * nothing choosable all leave the session untouched.
- */
+/** Non-interactive project scoping — scan the repo agentically and pick which project the run integrates. */
 
 import {
   detectProjectsWithAgent,
@@ -33,18 +21,12 @@ const INTEGRATION_TARGETS: DetectTarget[] = Object.entries(
   FRAMEWORK_REGISTRY,
 ).map(([id, config]) => ({ id, name: config.metadata.name }));
 
-/**
- * Run the agentic detector configured for the wizard's integration
- * frameworks. The single home of the target list and scan purpose — shared
- * by self-driving's picker (which layers its display classification on top)
- * and the non-interactive scoping below.
- */
+/** Run the agentic detector for the wizard's integration frameworks — the single home of targets + purpose. */
 export async function detectIntegrationProjects(
   session: WizardSession,
   options: { recommend?: boolean; onEvent?: DetectEvent } = {},
 ): Promise<AgenticDetectionReport> {
-  // Spread first: targets and purpose are the two things this function
-  // exists to own, so they must win if the options type ever widens.
+  // Spread first so the targets and purpose this function owns always win.
   return detectProjectsWithAgent(session, {
     ...options,
     targets: INTEGRATION_TARGETS,
@@ -52,14 +34,7 @@ export async function detectIntegrationProjects(
   });
 }
 
-/**
- * Pick the project a non-interactive run should integrate, from the raw scan
- * report: the recommended project when it matches a supported framework —
- * even if it already has PostHog, since skipping the main app would silently
- * instrument a secondary project and the integration handles existing
- * installs — else the first supported project without PostHog. A pure
- * function so the precedence is unit-testable without a UI.
- */
+/** Pick the recommended-if-supported project (even with PostHog — the main app wins), else the first supported PostHog-free one. */
 export function chooseIntegrationProject(
   projects: AgenticProject[],
 ): AgenticProject | undefined {
@@ -69,11 +44,7 @@ export function chooseIntegrationProject(
   );
 }
 
-/**
- * Every run through the phase fires exactly one of these — `wizard: agentic
- * detection` with `outcome` — so funnels can branch on it with no untracked
- * gap (an unfired path here would read as a mysteriously low rollout).
- */
+/** Every run fires exactly one `wizard: agentic detection` event with one of these outcomes — no untracked exits. */
 export type AgenticDetectionOutcome =
   | 'flag-off'
   | 'error'
@@ -88,25 +59,15 @@ function captureOutcome(
   analytics.wizardCapture('agentic detection', { outcome, ...properties });
 }
 
-/**
- * Non-interactive monorepo phase (headless + CI), gated on the
- * basic-integration-agentic-detection flag: run the agentic project scan
- * with the wizard's frameworks as targets, auto-choose the recommended
- * project (no user in the loop — self-driving makes the same choice with its
- * picker screen), and re-point `session.installDir` so the deterministic
- * detection that follows runs in that directory.
- */
+/** Flag-gated non-interactive monorepo phase: scan, auto-choose the recommended project, re-point session.installDir; every failure leaves the session untouched. */
 export async function scopeInstallDirToProject(
   session: WizardSession,
 ): Promise<void> {
-  // The detector needs credentials and the flag must evaluate as the
-  // logged-in user; authenticate is idempotent, so bootstrap's later call
-  // becomes a no-op instead of a second login.
+  // Idempotent early auth: the detector needs credentials and the flag must evaluate as the logged-in user.
   await authenticate(session, 'posthog-integration');
   const flags = await analytics.getAllFlagsForWizard();
   if (flags[BASIC_INTEGRATION_AGENTIC_DETECTION_FLAG_KEY] !== 'true') {
-    // A failed flag fetch surfaces as an empty map (logged inside
-    // getAllFlagsForWizard), so flag-off also covers "flags unavailable".
+    // A failed flag fetch surfaces as an empty map, so flag-off also covers "flags unavailable".
     captureOutcome('flag-off');
     return;
   }

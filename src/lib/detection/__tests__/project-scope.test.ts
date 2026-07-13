@@ -15,8 +15,7 @@ import { authenticate } from '@lib/agent/runner/shared/authenticate';
 import { buildSession } from '@lib/wizard-session';
 import { analytics } from '@utils/analytics';
 
-// The two network edges of scopeInstallDirToProject. Everything else
-// (chooseIntegrationProject, resolveProjectDir, the session) runs real.
+// Mock only the two network edges of scopeInstallDirToProject; everything else runs real.
 vi.mock('@lib/agent/runner/shared/authenticate', () => ({
   authenticate: vi.fn().mockResolvedValue(undefined),
 }));
@@ -51,9 +50,7 @@ describe('chooseIntegrationProject', () => {
   });
 
   it('picks the recommended project even when it already has PostHog', () => {
-    // The main app wins over a PostHog-free secondary project: skipping it
-    // would silently instrument an API service or docs site instead, and the
-    // integration handles existing installs.
+    // The main app wins — skipping it would silently instrument a secondary project instead.
     const withPostHog = { ...web, hasPostHog: true };
     expect(chooseIntegrationProject([api, withPostHog])?.path).toBe('apps/web');
   });
@@ -108,8 +105,7 @@ describe('scopeInstallDirToProject', () => {
   });
 
   const outcomeEvent = () => {
-    // Every path fires exactly one `agentic detection` event — no untracked
-    // exits, so funnels built on the outcome property see every run.
+    // Every path fires exactly one `agentic detection` event — funnels on outcome see every run.
     const calls = captureSpy.mock.calls.filter(
       ([name]) => name === 'agentic detection',
     );
@@ -118,9 +114,7 @@ describe('scopeInstallDirToProject', () => {
   };
 
   it('fires flag-off and never scans when the flag is off (or the fetch failed)', async () => {
-    // A failed flag fetch surfaces as an empty map, so this path also covers
-    // "flags unavailable" — without the event, rollout funnels would read
-    // low with no way to tell why.
+    // A failed flag fetch surfaces as an empty map, so this path also covers "flags unavailable".
     const session = buildSession({ installDir: '/repo' });
     await scopeInstallDirToProject(session);
 
@@ -203,8 +197,7 @@ describe('scopeInstallDirToProject', () => {
 
 describe('isGatewayForwardedFlag', () => {
   it('forwards wizard-prefixed flags but skips wizard-local ones by name, not prefix', () => {
-    // The skip must survive a rename of the flag to match its wizard-*
-    // siblings — that's the whole point of the explicit list.
+    // The skip must survive a rename to wizard-* — that's the point of the explicit list.
     expect(isGatewayForwardedFlag(WIZARD_ORCHESTRATOR_FLAG_KEY)).toBe(true);
     expect(
       isGatewayForwardedFlag(BASIC_INTEGRATION_AGENTIC_DETECTION_FLAG_KEY),

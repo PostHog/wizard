@@ -38,11 +38,7 @@ export type AgenticProject = {
   targetId: string | null;
   /** Whether a PostHog SDK is already installed in this project. */
   hasPostHog: boolean;
-  /**
-   * True on the single project the agent picked as the main user-facing app.
-   * Only present when the scan requested a recommendation (`recommend: true`);
-   * scans that didn't ask never carry the field.
-   */
+  /** True on the one project picked as the main user-facing app; only present when the scan set `recommend`. */
   recommended?: boolean;
 };
 
@@ -114,11 +110,7 @@ export type AgenticDetectOptions = {
   targets: readonly DetectTarget[];
   /** One short clause describing what the scan is for (frames the prompt). */
   purpose?: string;
-  /**
-   * Ask the agent to label exactly one project `recommended` — the main
-   * user-facing client app (frontend web or mobile). Off by default so
-   * existing scans keep their prompt and result shape unchanged.
-   */
+  /** Ask the agent to label exactly one project `recommended` (the main client app). Off by default. */
   recommend?: boolean;
   /** Streaming activity callback for the UI. */
   onEvent?: DetectEvent;
@@ -195,13 +187,7 @@ function coercePath(raw: unknown): string {
   return raw;
 }
 
-/**
- * Resolve an agent-reported project path to an absolute directory, clamped
- * to the working dir. Caller-side counterpart of coercePath's clamp: report
- * paths are LLM output (and may round-trip through the session), so a value
- * that isn't a string or resolves outside the root falls back to the root
- * rather than steering a later phase elsewhere.
- */
+/** Resolve an agent-reported path to an absolute dir clamped to the root — the caller-side counterpart of coercePath. */
 export function resolveProjectDir(installDir: string, rel: unknown): string {
   if (typeof rel !== 'string' || rel === '.') return installDir;
   const root = resolve(installDir);
@@ -211,10 +197,8 @@ export function resolveProjectDir(installDir: string, rel: unknown): string {
 
 /**
  * Validate the agent's raw JSON into a report, clamping each targetId to the
- * supplied set and each path to a repo-relative dir. When the scan didn't
- * request a recommendation, any `recommended` the agent emitted is stripped —
- * callers that never asked must never see it; when it did, at most one project
- * keeps `recommended: true` (the first). Exported for testing.
+ * supplied set and each path to a repo-relative dir. Exported for testing.
+ * `recommended` is stripped unless requested; at most one (the first) survives.
  */
 export function coerceAgenticReport(
   parsed: unknown,

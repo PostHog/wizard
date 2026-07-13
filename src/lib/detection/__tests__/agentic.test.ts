@@ -147,8 +147,7 @@ describe('coerceAgenticReport recommendation', () => {
   ];
 
   it('strips recommended entirely when the scan did not ask for it', () => {
-    // Consumers that never opted in (self-driving, source-maps) must never
-    // see the field, even when the agent emits it anyway.
+    // Consumers that never opted in must never see the field, even when the agent emits it anyway.
     const report = coerceAgenticReport({ projects }, TARGETS);
     for (const p of report.projects) {
       expect('recommended' in p).toBe(false);

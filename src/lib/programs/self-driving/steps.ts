@@ -30,11 +30,7 @@ import { prepSelfDrivingIntegration } from './detect-agentic.js';
 const postHogPresent = (session: WizardSession): boolean =>
   session.frameworkContext[POSTHOG_PRESENT_KEY] === true;
 
-/**
- * Absolute dir to integrate into: the picked sub-app, else the repo root.
- * The picked path originates from LLM output; the shared resolver clamps
- * anything that escapes the repo back to the root.
- */
+/** Absolute dir to integrate into: the picked sub-app (LLM output — the shared resolver clamps escapes), else the repo root. */
 const integrationDir = (session: WizardSession): string =>
   resolveProjectDir(
     session.installDir,
