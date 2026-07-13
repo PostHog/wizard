@@ -44,8 +44,14 @@ export const GPT5_4_MODEL = 'openai/gpt-5.4';
  */
 export const GPT5_MINI_MODEL = 'openai/gpt-5-mini';
 
-/** Latest openai flagship generation (`luna` line). A `wizard-pi-model` option for cross-provider A/B. */
+// Latest openai flagship generation. The 5.6 line ships tiered variants —
+// `luna` (fast/cheap: $1/$6 per MTok), `terra` (mid: $2.50/$15), `sol` (top:
+// $5/$30) — plus the `gpt-5.5` flagship. All are `wizard-pi-model` options for
+// cross-provider A/B; gateway ids carry no `/` or `.` in the variant keys.
 export const GPT5_6_LUNA_MODEL = 'openai/gpt-5.6-luna';
+export const GPT5_6_TERRA_MODEL = 'openai/gpt-5.6-terra';
+export const GPT5_6_SOL_MODEL = 'openai/gpt-5.6-sol';
+export const GPT5_5_MODEL = 'openai/gpt-5.5';
 
 // ── Agent runner routing axes ────────────────────────────────────────
 
