@@ -18,6 +18,7 @@ import {
   WIZARD_ORCHESTRATOR_FLAG_KEY,
   WIZARD_USER_AGENT,
   DEFAULT_AGENT_MODEL,
+  isGatewayForwardedFlag,
 } from '@lib/constants';
 import {
   type AdditionalFeature,
@@ -355,7 +356,7 @@ export function buildAgentEnv(
     );
   }
   for (const [flagKey, variant] of Object.entries(wizardFlags)) {
-    if (!flagKey.toLowerCase().startsWith('wizard')) continue;
+    if (!isGatewayForwardedFlag(flagKey)) continue;
     headers.addFlag(flagKey, variant);
   }
   const encoded = headers.encode();

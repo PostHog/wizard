@@ -248,11 +248,24 @@ export const WIZARD_TOOLS_MENU_FLAG_KEY = 'wizard-tools-menu';
 /**
  * Boolean flag: in non-interactive basic-integration runs (headless + CI),
  * scan the repo with the agentic project detector and scope the run to the
- * recommended project. Deliberately not `wizard-` prefixed, so the gateway
- * header forwarding (which forwards `wizard*` flag keys) skips it.
+ * recommended project. Wizard-local — excluded from gateway header
+ * forwarding via `isGatewayForwardedFlag`, not by naming convention.
  */
 export const BASIC_INTEGRATION_AGENTIC_DETECTION_FLAG_KEY =
   'basic-integration-agentic-detection';
+
+/**
+ * Should a feature flag be forwarded to the LLM gateway as an
+ * `X-POSTHOG-FLAG-*` header? The `wizard` name prefix is the forwarding
+ * contract, but wizard-local flags are skipped by name — explicitly, so a
+ * rename to match the `wizard-*` siblings can't silently start forwarding
+ * a flag that was meant to stay local. Single source of truth for every
+ * harness's header builder.
+ */
+export function isGatewayForwardedFlag(flagKey: string): boolean {
+  if (flagKey === BASIC_INTEGRATION_AGENTIC_DETECTION_FLAG_KEY) return false;
+  return flagKey.toLowerCase().startsWith('wizard');
+}
 /** User-Agent for wizard HTTP requests and MCP server identification. */
 export const WIZARD_USER_AGENT = `posthog/wizard; version: ${VERSION}`;
 

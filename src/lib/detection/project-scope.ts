@@ -43,10 +43,12 @@ export async function detectIntegrationProjects(
   session: WizardSession,
   options: { recommend?: boolean; onEvent?: DetectEvent } = {},
 ): Promise<AgenticDetectionReport> {
+  // Spread first: targets and purpose are the two things this function
+  // exists to own, so they must win if the options type ever widens.
   return detectProjectsWithAgent(session, {
+    ...options,
     targets: INTEGRATION_TARGETS,
     purpose: 'set up a PostHog SDK integration',
-    ...options,
   });
 }
 
@@ -83,7 +85,15 @@ export async function scopeInstallDirToProject(
   // becomes a no-op instead of a second login.
   await authenticate(session, 'posthog-integration');
   const flags = await analytics.getAllFlagsForWizard();
-  if (flags[BASIC_INTEGRATION_AGENTIC_DETECTION_FLAG_KEY] !== 'true') return;
+  if (flags[BASIC_INTEGRATION_AGENTIC_DETECTION_FLAG_KEY] !== 'true') {
+    // Tagged so every run through this phase carries exactly one
+    // agentic_detection value — an untagged gap here would make rollout
+    // percentages unreadable. A failed flag fetch surfaces as an empty map
+    // (logged inside getAllFlagsForWizard), so this value also covers
+    // "flags unavailable".
+    analytics.setTag('agentic_detection', 'flag-off');
+    return;
+  }
 
   getUI().log.info('Scanning the repo for projects...');
   let projects: AgenticProject[];
