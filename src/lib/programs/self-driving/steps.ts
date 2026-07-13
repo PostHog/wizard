@@ -14,8 +14,8 @@
  * run. No keep-skills step: the setup skill is transient, so postRun removes it.
  */
 
-import { resolve, sep } from 'path';
 import type { ProgramStep } from '@lib/programs/program-step';
+import { resolveProjectDir } from '@lib/detection/agentic';
 import { RunPhase, type WizardSession } from '@lib/wizard-session';
 import { HEALTH_CHECK_STEP } from '@lib/programs/shared/health-check-step';
 import { integrationRunStep } from '@lib/programs/posthog-integration/index';
@@ -32,17 +32,14 @@ const postHogPresent = (session: WizardSession): boolean =>
 
 /**
  * Absolute dir to integrate into: the picked sub-app, else the repo root.
- * The picked path originates from LLM output; if it resolves outside the
- * repo (defense-in-depth on top of the coerce-layer clamp), fall back to
- * the root rather than run the agent elsewhere.
+ * The picked path originates from LLM output; the shared resolver clamps
+ * anything that escapes the repo back to the root.
  */
-const integrationDir = (session: WizardSession): string => {
-  const rel = session.frameworkContext[SELF_DRIVING_INTEGRATE_PATH_KEY];
-  if (typeof rel !== 'string' || rel === '.') return session.installDir;
-  const root = resolve(session.installDir);
-  const dir = resolve(root, rel);
-  return dir === root || dir.startsWith(root + sep) ? dir : root;
-};
+const integrationDir = (session: WizardSession): string =>
+  resolveProjectDir(
+    session.installDir,
+    session.frameworkContext[SELF_DRIVING_INTEGRATE_PATH_KEY],
+  );
 
 export const SELF_DRIVING_PROGRAM: ProgramStep[] = [
   {

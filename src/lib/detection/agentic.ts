@@ -18,7 +18,7 @@ import {
   runAgent as executeAgent,
   AgentSignals,
 } from '@lib/agent/agent-interface';
-import { isAbsolute } from 'path';
+import { isAbsolute, resolve, sep } from 'path';
 import { detectNodePackageManagers } from './package-manager.js';
 import { getSkillsBaseUrl, HAIKU_MODEL } from '@lib/constants';
 import type { WizardSession } from '@lib/wizard-session';
@@ -193,6 +193,20 @@ function coercePath(raw: unknown): string {
   if (typeof raw !== 'string' || raw.length === 0) return '.';
   if (isAbsolute(raw) || raw.split(/[\\/]/).includes('..')) return '.';
   return raw;
+}
+
+/**
+ * Resolve an agent-reported project path to an absolute directory, clamped
+ * to the working dir. Caller-side counterpart of coercePath's clamp: report
+ * paths are LLM output (and may round-trip through the session), so a value
+ * that isn't a string or resolves outside the root falls back to the root
+ * rather than steering a later phase elsewhere.
+ */
+export function resolveProjectDir(installDir: string, rel: unknown): string {
+  if (typeof rel !== 'string' || rel === '.') return installDir;
+  const root = resolve(installDir);
+  const dir = resolve(root, rel);
+  return dir === root || dir.startsWith(root + sep) ? dir : root;
 }
 
 /**

@@ -12,8 +12,14 @@
  * nothing choosable all leave the session untouched.
  */
 
-import { resolve, sep } from 'path';
-import { detectProjectsWithAgent, type AgenticProject } from './agentic.js';
+import {
+  detectProjectsWithAgent,
+  resolveProjectDir,
+  type AgenticDetectionReport,
+  type AgenticProject,
+  type DetectEvent,
+  type DetectTarget,
+} from './agentic.js';
 import { authenticate } from '@lib/agent/runner/shared/authenticate';
 import { FRAMEWORK_REGISTRY } from '@lib/registry';
 import { BASIC_INTEGRATION_AGENTIC_DETECTION_FLAG_KEY } from '@lib/constants';
@@ -21,6 +27,28 @@ import type { WizardSession } from '@lib/wizard-session';
 import { getUI } from '@ui/index';
 import { analytics } from '@utils/analytics';
 import { logToFile } from '@utils/debug';
+
+/** Integration framework targets for the agentic detector (id → display name). */
+const INTEGRATION_TARGETS: DetectTarget[] = Object.entries(
+  FRAMEWORK_REGISTRY,
+).map(([id, config]) => ({ id, name: config.metadata.name }));
+
+/**
+ * Run the agentic detector configured for the wizard's integration
+ * frameworks. The single home of the target list and scan purpose — shared
+ * by self-driving's picker (which layers its display classification on top)
+ * and the non-interactive scoping below.
+ */
+export async function detectIntegrationProjects(
+  session: WizardSession,
+  options: { recommend?: boolean; onEvent?: DetectEvent } = {},
+): Promise<AgenticDetectionReport> {
+  return detectProjectsWithAgent(session, {
+    targets: INTEGRATION_TARGETS,
+    purpose: 'set up a PostHog SDK integration',
+    ...options,
+  });
+}
 
 /**
  * Pick the project a non-interactive run should integrate, from the raw scan
@@ -60,12 +88,7 @@ export async function scopeInstallDirToProject(
   getUI().log.info('Scanning the repo for projects...');
   let projects: AgenticProject[];
   try {
-    ({ projects } = await detectProjectsWithAgent(session, {
-      targets: Object.entries(FRAMEWORK_REGISTRY).map(([id, config]) => ({
-        id,
-        name: config.metadata.name,
-      })),
-      purpose: 'set up a PostHog SDK integration',
+    ({ projects } = await detectIntegrationProjects(session, {
       recommend: true,
       onEvent: (line) => logToFile('[agentic detect]', line),
     }));
@@ -88,11 +111,7 @@ export async function scopeInstallDirToProject(
     return;
   }
 
-  // The path is LLM output — same containment fallback as self-driving's
-  // integrationDir.
-  const root = resolve(session.installDir);
-  const dir = resolve(root, project.path);
-  session.installDir = dir === root || dir.startsWith(root + sep) ? dir : root;
+  session.installDir = resolveProjectDir(session.installDir, project.path);
   analytics.setTag(
     'agentic_detection',
     project.recommended ? 'recommended' : 'first-instrumentable',

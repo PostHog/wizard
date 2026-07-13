@@ -1,4 +1,8 @@
-import { coerceAgenticReport, manifestGlob } from '@lib/detection/agentic';
+import {
+  coerceAgenticReport,
+  manifestGlob,
+  resolveProjectDir,
+} from '@lib/detection/agentic';
 
 const TARGETS = ['nextjs', 'node', 'vite'];
 
@@ -103,6 +107,25 @@ describe('coerceAgenticReport', () => {
     expect(keep('apps/web')).toBe('apps/web');
     expect(keep('.')).toBe('.');
     expect(keep('ios')).toBe('ios');
+  });
+});
+
+describe('resolveProjectDir', () => {
+  it('scopes to the chosen sub-app inside the repo', () => {
+    expect(resolveProjectDir('/repo', 'apps/web')).toBe('/repo/apps/web');
+    expect(resolveProjectDir('/repo', '.')).toBe('/repo');
+  });
+
+  it('keeps the root for non-string values (session round-trips are unknown)', () => {
+    expect(resolveProjectDir('/repo', undefined)).toBe('/repo');
+    expect(resolveProjectDir('/repo', 42)).toBe('/repo');
+  });
+
+  it('falls back to the repo root when the path escapes it', () => {
+    // Defense-in-depth on top of coercePath: the value is LLM output.
+    expect(resolveProjectDir('/repo', '../../etc')).toBe('/repo');
+    expect(resolveProjectDir('/repo', '/etc')).toBe('/repo');
+    expect(resolveProjectDir('/repo', 'a/../..')).toBe('/repo');
   });
 });
 
