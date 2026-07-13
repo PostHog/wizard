@@ -176,7 +176,7 @@ export const getContentBlocks = (store?: WizardStore): ContentBlock[] => {
 
     {
       content:
-        'That PR is the only thing you pay for: a flat $15 per report that ships one. Watching is free.',
+        'That PR is the only thing you pay for: a flat $15 per report that ships a PR. Watching is free.',
       pause: 6000,
     },
 
