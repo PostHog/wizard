@@ -88,43 +88,67 @@ describe('scopeInstallDirToProject', () => {
   });
 
   let flagsSpy: ReturnType<typeof vi.spyOn>;
-  let tagSpy: ReturnType<typeof vi.spyOn>;
+  let captureSpy: ReturnType<typeof vi.spyOn>;
+  let exceptionSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
     vi.clearAllMocks();
     flagsSpy = vi
       .spyOn(analytics, 'getAllFlagsForWizard')
       .mockResolvedValue({});
-    tagSpy = vi.spyOn(analytics, 'setTag').mockImplementation(() => undefined);
+    captureSpy = vi
+      .spyOn(analytics, 'wizardCapture')
+      .mockImplementation(() => undefined);
+    exceptionSpy = vi
+      .spyOn(analytics, 'captureException')
+      .mockImplementation(() => undefined);
   });
   afterEach(() => {
     vi.restoreAllMocks();
   });
 
-  it('tags flag-off and never scans when the flag is off (or the fetch failed)', async () => {
+  const outcomeEvent = () => {
+    // Every path fires exactly one `agentic detection` event — no untracked
+    // exits, so funnels built on the outcome property see every run.
+    const calls = captureSpy.mock.calls.filter(
+      ([name]) => name === 'agentic detection',
+    );
+    expect(calls).toHaveLength(1);
+    return calls[0][1] as Record<string, unknown>;
+  };
+
+  it('fires flag-off and never scans when the flag is off (or the fetch failed)', async () => {
     // A failed flag fetch surfaces as an empty map, so this path also covers
-    // "flags unavailable" — without the tag, rollout percentages would read
+    // "flags unavailable" — without the event, rollout funnels would read
     // low with no way to tell why.
     const session = buildSession({ installDir: '/repo' });
     await scopeInstallDirToProject(session);
 
     expect(vi.mocked(authenticate)).toHaveBeenCalledTimes(1);
     expect(session.installDir).toBe('/repo');
-    expect(tagSpy).toHaveBeenCalledWith('agentic_detection', 'flag-off');
+    expect(outcomeEvent()).toMatchObject({ outcome: 'flag-off' });
     expect(scan).not.toHaveBeenCalled();
   });
 
-  it('re-points installDir at the recommended project and tags recommended', async () => {
+  it('re-points installDir at the recommended project and fires recommended with scan facts', async () => {
     flagsSpy.mockResolvedValue(FLAG_ON);
     scan.mockResolvedValue({ repoType: 'monorepo', projects: [web] });
     const session = buildSession({ installDir: '/repo' });
     await scopeInstallDirToProject(session);
 
     expect(session.installDir).toBe('/repo/apps/web');
-    expect(tagSpy).toHaveBeenCalledWith('agentic_detection', 'recommended');
+    expect(outcomeEvent()).toMatchObject({
+      outcome: 'recommended',
+      repo_type: 'monorepo',
+      project_count: 1,
+      supported_count: 1,
+      has_recommendation: true,
+      chosen_framework: 'nextjs',
+      chosen_path: 'apps/web',
+    });
   });
 
-  it('tags first-instrumentable when the fallback pick wins', async () => {
+  it('fires first-instrumentable when the fallback pick wins', async () => {
     flagsSpy.mockResolvedValue(FLAG_ON);
     scan.mockResolvedValue({
       repoType: 'monorepo',
@@ -136,23 +160,30 @@ describe('scopeInstallDirToProject', () => {
     await scopeInstallDirToProject(session);
 
     expect(session.installDir).toBe('/repo/apps/api');
-    expect(tagSpy).toHaveBeenCalledWith(
-      'agentic_detection',
-      'first-instrumentable',
-    );
+    expect(outcomeEvent()).toMatchObject({
+      outcome: 'first-instrumentable',
+      has_recommendation: false,
+    });
   });
 
-  it('leaves the session untouched and tags error-fallback when the scan throws', async () => {
+  it('leaves the session untouched, fires error, and reports the exception when the scan throws', async () => {
     flagsSpy.mockResolvedValue(FLAG_ON);
-    scan.mockRejectedValue(new Error('agent unavailable'));
+    const failure = new Error('agent unavailable');
+    scan.mockRejectedValue(failure);
     const session = buildSession({ installDir: '/repo' });
     await scopeInstallDirToProject(session);
 
     expect(session.installDir).toBe('/repo');
-    expect(tagSpy).toHaveBeenCalledWith('agentic_detection', 'error-fallback');
+    expect(outcomeEvent()).toMatchObject({
+      outcome: 'error',
+      error_message: 'agent unavailable',
+    });
+    expect(exceptionSpy).toHaveBeenCalledWith(failure, {
+      step: 'agentic_detection',
+    });
   });
 
-  it('leaves the session untouched and tags none-fallback when nothing qualifies', async () => {
+  it('leaves the session untouched and fires no-project when nothing qualifies', async () => {
     flagsSpy.mockResolvedValue(FLAG_ON);
     scan.mockResolvedValue({
       repoType: 'monorepo',
@@ -162,7 +193,11 @@ describe('scopeInstallDirToProject', () => {
     await scopeInstallDirToProject(session);
 
     expect(session.installDir).toBe('/repo');
-    expect(tagSpy).toHaveBeenCalledWith('agentic_detection', 'none-fallback');
+    expect(outcomeEvent()).toMatchObject({
+      outcome: 'no-project',
+      project_count: 1,
+      supported_count: 0,
+    });
   });
 });
 

@@ -70,6 +70,25 @@ export function chooseIntegrationProject(
 }
 
 /**
+ * Every run through the phase fires exactly one of these — `wizard: agentic
+ * detection` with `outcome` — so funnels can branch on it with no untracked
+ * gap (an unfired path here would read as a mysteriously low rollout).
+ */
+export type AgenticDetectionOutcome =
+  | 'flag-off'
+  | 'error'
+  | 'no-project'
+  | 'recommended'
+  | 'first-instrumentable';
+
+function captureOutcome(
+  outcome: AgenticDetectionOutcome,
+  properties: Record<string, unknown> = {},
+): void {
+  analytics.wizardCapture('agentic detection', { outcome, ...properties });
+}
+
+/**
  * Non-interactive monorepo phase (headless + CI), gated on the
  * basic-integration-agentic-detection flag: run the agentic project scan
  * with the wizard's frameworks as targets, auto-choose the recommended
@@ -86,35 +105,45 @@ export async function scopeInstallDirToProject(
   await authenticate(session, 'posthog-integration');
   const flags = await analytics.getAllFlagsForWizard();
   if (flags[BASIC_INTEGRATION_AGENTIC_DETECTION_FLAG_KEY] !== 'true') {
-    // Tagged so every run through this phase carries exactly one
-    // agentic_detection value — an untagged gap here would make rollout
-    // percentages unreadable. A failed flag fetch surfaces as an empty map
-    // (logged inside getAllFlagsForWizard), so this value also covers
-    // "flags unavailable".
-    analytics.setTag('agentic_detection', 'flag-off');
+    // A failed flag fetch surfaces as an empty map (logged inside
+    // getAllFlagsForWizard), so flag-off also covers "flags unavailable".
+    captureOutcome('flag-off');
     return;
   }
 
   getUI().log.info('Scanning the repo for projects...');
-  let projects: AgenticProject[];
+  const startedAt = Date.now();
+  let report: AgenticDetectionReport;
   try {
-    ({ projects } = await detectIntegrationProjects(session, {
+    report = await detectIntegrationProjects(session, {
       recommend: true,
       onEvent: (line) => logToFile('[agentic detect]', line),
-    }));
+    });
   } catch (err) {
-    analytics.setTag('agentic_detection', 'error-fallback');
+    const error = err instanceof Error ? err : new Error(String(err));
+    analytics.captureException(error, { step: 'agentic_detection' });
+    captureOutcome('error', {
+      duration_ms: Date.now() - startedAt,
+      error_message: error.message,
+    });
     getUI().log.warn(
-      `Project scan failed (${
-        err instanceof Error ? err.message : String(err)
-      }); continuing with the install dir as-is.`,
+      `Project scan failed (${error.message}); continuing with the install dir as-is.`,
     );
     return;
   }
 
+  const { projects } = report;
+  const scanProperties = {
+    duration_ms: Date.now() - startedAt,
+    repo_type: report.repoType,
+    project_count: projects.length,
+    supported_count: projects.filter((p) => p.targetId != null).length,
+    has_recommendation: projects.some((p) => p.recommended === true),
+  };
+
   const project = chooseIntegrationProject(projects);
   if (!project) {
-    analytics.setTag('agentic_detection', 'none-fallback');
+    captureOutcome('no-project', scanProperties);
     getUI().log.info(
       'The scan found no supported project; continuing with the install dir as-is.',
     );
@@ -122,9 +151,10 @@ export async function scopeInstallDirToProject(
   }
 
   session.installDir = resolveProjectDir(session.installDir, project.path);
-  analytics.setTag(
-    'agentic_detection',
-    project.recommended ? 'recommended' : 'first-instrumentable',
-  );
+  captureOutcome(project.recommended ? 'recommended' : 'first-instrumentable', {
+    ...scanProperties,
+    chosen_framework: project.targetId,
+    chosen_path: project.path,
+  });
   getUI().log.info(`Continuing with ${project.path} (${project.framework}).`);
 }
