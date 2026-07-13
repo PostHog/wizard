@@ -1,37 +1,109 @@
 /**
  * Agentic (Haiku) detection for self-driving's integration phase.
  *
- * Thin adapter over the shared integration-project vocabulary
- * (@lib/detection/integration-projects): the integration-detect screen runs
- * `detectSelfDrivingIntegrationProjects`, shows the project map, and the user
- * picks one — self-driving's chooser is the picker screen, so no
- * recommendation is requested. The screen writes the choice to the session;
- * `prepSelfDrivingIntegration` then gathers the chosen project's framework
- * context before the integration agent runs (the runner scopes the install
- * dir).
+ * Mirrors source-maps: the integration-detect screen runs `detectSelfDriving-
+ * IntegrationProjects` (the shared Haiku detector with the integration framework
+ * targets), shows a project map, and the user picks one. This file supplies the
+ * targets, maps the result back to `Integration`s, and classifies each project
+ * as instrumentable (a framework the wizard supports that doesn't already have
+ * PostHog). The screen writes the choice to the session; `prepSelfDriving-
+ * Integration` then gathers the chosen project's framework context before the
+ * integration agent runs (the runner scopes the install dir).
  */
 
 import {
-  detectIntegrationProjects,
+  detectProjectsWithAgent,
+  type DetectTarget,
+  type AgenticDetectionReport,
   type DetectEvent,
-  type IntegrationDetectionReport,
-} from '@lib/detection/integration-projects';
+} from '@lib/detection/agentic';
 import { gatherFrameworkContext } from '@lib/detection/index';
+import { FRAMEWORK_REGISTRY } from '@lib/registry';
+import { Integration } from '@lib/constants';
 import type { WizardSession } from '@lib/wizard-session';
 
 export type { DetectEvent };
-export {
-  toIntegrationReport,
-  type IntegrationProject,
-  type IntegrationDetectionReport,
-} from '@lib/detection/integration-projects';
+
+/** Integration framework targets for the agentic detector (id → display name). */
+const INTEGRATION_TARGETS: DetectTarget[] = Object.entries(
+  FRAMEWORK_REGISTRY,
+).map(([id, config]) => ({ id, name: config.metadata.name }));
+
+const INTEGRATION_IDS = new Set<string>(Object.values(Integration));
+
+/** One project, classified for a PostHog SDK integration. */
+export type IntegrationProject = {
+  /** Path relative to the repo root ("." for the root). */
+  path: string;
+  /** Human-readable framework the agent detected (e.g. "Next.js"). */
+  framework: string;
+  /** A supported framework when it matches one, else null. */
+  integration: Integration | null;
+  /** Whether a PostHog SDK is already installed in this project. */
+  hasPostHog: boolean;
+  /** integration != null && !hasPostHog — PostHog can be set up here. */
+  instrumentable: boolean;
+  /** hasPostHog: skip integration and continue straight to Self-driving. */
+  continuable: boolean;
+  /** Why the project can't be set up (only when !instrumentable). */
+  reason?: string;
+};
+
+export type IntegrationDetectionReport = {
+  repoType: 'monorepo' | 'single';
+  projects: IntegrationProject[];
+};
+
+function classify(
+  integration: Integration | null,
+  hasPostHog: boolean,
+): { instrumentable: boolean; reason?: string } {
+  if (integration == null) {
+    return {
+      instrumentable: false,
+      reason: 'Not a framework the wizard can set up yet',
+    };
+  }
+  if (hasPostHog) {
+    return { instrumentable: false, reason: 'Already has the PostHog SDK' };
+  }
+  return { instrumentable: true };
+}
+
+/** Map a detection report into classified projects (exported for tests). */
+export function toIntegrationReport(
+  report: AgenticDetectionReport,
+): IntegrationDetectionReport {
+  return {
+    repoType: report.repoType,
+    projects: report.projects.map((p) => {
+      const integration =
+        p.targetId && INTEGRATION_IDS.has(p.targetId)
+          ? (p.targetId as Integration)
+          : null;
+      return {
+        path: p.path,
+        framework: p.framework,
+        integration,
+        hasPostHog: p.hasPostHog,
+        continuable: p.hasPostHog,
+        ...classify(integration, p.hasPostHog),
+      };
+    }),
+  };
+}
 
 /** Run the Haiku detector over the repo and classify projects for integration. */
 export async function detectSelfDrivingIntegrationProjects(
   session: WizardSession,
   onEvent?: DetectEvent,
 ): Promise<IntegrationDetectionReport> {
-  return detectIntegrationProjects(session, { onEvent });
+  const report = await detectProjectsWithAgent(session, {
+    targets: INTEGRATION_TARGETS,
+    purpose: 'set up a PostHog SDK integration',
+    onEvent,
+  });
+  return toIntegrationReport(report);
 }
 
 /**

@@ -105,7 +105,6 @@ export function runNonInteractive(
       debug: options.debug as boolean | undefined,
       installDir,
       ci: true,
-      headless: mode === 'headless',
       signup: options.signup as boolean | undefined,
       localMcp: options.localMcp as boolean | undefined,
       apiKey,

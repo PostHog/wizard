@@ -246,10 +246,10 @@ export const WIZARD_PI_EFFORT_FLAG_KEY = 'wizard-pi-effort';
 /** Feature flag key that gates the intro-screen "Tools" menu. */
 export const WIZARD_TOOLS_MENU_FLAG_KEY = 'wizard-tools-menu';
 /**
- * Boolean flag: in headless basic-integration runs, scan the repo with the
- * agentic project detector and scope the run to the recommended project.
- * Deliberately not `wizard-` prefixed, so the gateway header forwarding
- * (which forwards `wizard*` flag keys) skips it.
+ * Boolean flag: in non-interactive basic-integration runs (headless + CI),
+ * scan the repo with the agentic project detector and scope the run to the
+ * recommended project. Deliberately not `wizard-` prefixed, so the gateway
+ * header forwarding (which forwards `wizard*` flag keys) skips it.
  */
 export const BASIC_INTEGRATION_AGENTIC_DETECTION_FLAG_KEY =
   'basic-integration-agentic-detection';
