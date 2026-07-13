@@ -85,7 +85,18 @@ export const posthogIntegrationConfig: ProgramConfig = {
   },
 
   run: async (session: WizardSession): Promise<ProgramRun> => {
-    const config = session.frameworkConfig!;
+    // `frameworkConfig` defaults to null and is only populated by `ciPreRun`
+    // (or an interactive detect screen). This `run` can still be reached with
+    // it null — most notably the composed self-driving headless path, where no
+    // screen ever picks a project and `prepSelfDrivingIntegration` bails. Guard
+    // and abort cleanly with the same message `ciPreRun` uses, instead of
+    // dereferencing `config.detection` and crashing with an opaque TypeError.
+    const config = session.frameworkConfig;
+    if (!config) {
+      await wizardAbort({
+        message: 'Could not auto-detect your framework for this project.',
+      });
+    }
 
     const typeScriptDetected = isUsingTypeScript({
       installDir: session.installDir,
