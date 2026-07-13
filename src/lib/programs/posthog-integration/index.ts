@@ -11,10 +11,19 @@ import {
 import { tryGetPackageJson, isUsingTypeScript } from '@utils/setup-utils';
 import { analytics } from '@utils/analytics';
 import { detectFramework, gatherFrameworkContext } from '@lib/detection/index';
-import { applyHeadlessAgenticScope } from '@lib/detection/headless-scope';
+import {
+  chooseProject,
+  detectIntegrationProjects,
+  resolveProjectDir,
+} from '@lib/detection/integration-projects';
+import { authenticate } from '@lib/agent/runner/shared/authenticate';
 import { FRAMEWORK_REGISTRY } from '@lib/registry';
 import { wizardAbort } from '@utils/wizard-abort';
-import { WIZARD_INTERACTION_EVENT_NAME } from '@lib/constants';
+import { logToFile } from '@utils/debug';
+import {
+  BASIC_INTEGRATION_AGENTIC_DETECTION_FLAG_KEY,
+  WIZARD_INTERACTION_EVENT_NAME,
+} from '@lib/constants';
 import { getUI } from '@ui/index';
 import { requestDeepLink } from '@utils/provisioning';
 import { openTrackedLink, withUtm } from '@utils/links';
@@ -38,6 +47,68 @@ function resolveContinueUrl(
 export const SETUP_REPORT_FILE = 'posthog-setup-report.md';
 export { EVENT_PLAN_FILE } from './constants.js';
 
+/**
+ * Headless monorepo phase, gated on the basic-integration-agentic-detection
+ * flag: scan the repo, auto-choose the recommended project (no user in the
+ * loop — self-driving makes the same choice with its picker screen), and
+ * re-point `session.installDir` so the deterministic detection that follows
+ * runs in that directory. Flag off, scan failure, or nothing choosable all
+ * leave the session untouched.
+ */
+async function scopeHeadlessInstallDir(session: WizardSession): Promise<void> {
+  // The detector needs credentials and the flag must evaluate as the
+  // logged-in user; authenticate is idempotent, so bootstrap's later call
+  // becomes a no-op instead of a second login.
+  await authenticate(session, 'posthog-integration');
+  const flags = await analytics.getAllFlagsForWizard();
+  if (flags[BASIC_INTEGRATION_AGENTIC_DETECTION_FLAG_KEY] !== 'true') return;
+
+  getUI().log.info('Scanning the repo for projects...');
+  let report;
+  try {
+    report = await detectIntegrationProjects(session, {
+      recommend: true,
+      onEvent: (line) => logToFile('[headless detect]', line),
+    });
+  } catch (err) {
+    analytics.setTag('agentic_detection', 'error-fallback');
+    getUI().log.warn(
+      `Project scan failed (${
+        err instanceof Error ? err.message : String(err)
+      }); continuing with the install dir as-is.`,
+    );
+    return;
+  }
+
+  for (const p of report.projects) {
+    const notes = [
+      p.hasPostHog ? '(has PostHog)' : '',
+      p.recommended ? '[recommended]' : '',
+    ]
+      .filter(Boolean)
+      .join(' ');
+    getUI().log.info(
+      `Found ${p.path} — ${p.framework}${notes ? ` ${notes}` : ''}`,
+    );
+  }
+
+  const project = chooseProject(report);
+  if (!project) {
+    analytics.setTag('agentic_detection', 'none-fallback');
+    getUI().log.info(
+      'The scan found no supported project; continuing with the install dir as-is.',
+    );
+    return;
+  }
+
+  session.installDir = resolveProjectDir(session.installDir, project.path);
+  analytics.setTag(
+    'agentic_detection',
+    project.recommended ? 'recommended' : 'first-instrumentable',
+  );
+  getUI().log.info(`Continuing with ${project.path} (${project.framework}).`);
+}
+
 export const posthogIntegrationConfig: ProgramConfig = {
   command: 'integrate',
   description: 'Set up PostHog SDK integration',
@@ -53,12 +124,8 @@ export const posthogIntegrationConfig: ProgramConfig = {
   // CI-mode prerequisite work: the headless equivalent of the detect step's
   // onReady hook. Auto-detect the framework, then gather context.
   ciPreRun: async (session: WizardSession): Promise<void> => {
-    // Headless-only, feature-flagged phase (flag gate inside, where
-    // credentials exist to evaluate it): the agentic scan may re-point
-    // session.installDir to the repo's recommended project, so the
-    // deterministic detection below runs in that directory.
     if (session.headless) {
-      await applyHeadlessAgenticScope(session, 'posthog-integration');
+      await scopeHeadlessInstallDir(session);
     }
 
     const integration = await detectFramework(session.installDir);
