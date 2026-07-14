@@ -185,6 +185,13 @@ export interface WizardUI {
    */
   requestQuestion(question: PendingQuestion): Promise<AskAnswers>;
 
+  /**
+   * Dismiss the in-flight wizard_ask overlay, resolving its request with
+   * cancelled sentinels. No-op when nothing is pending. The ask bridge calls
+   * this on timeout so a stale pending question can't block later asks.
+   */
+  cancelPendingQuestion(): void;
+
   // ── Display state ──────────────────────────────────────────────────
   /** Set the detected framework label (e.g., "Django with Wagtail CMS") */
   setDetectedFramework(label: string): void;
