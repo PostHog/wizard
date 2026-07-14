@@ -179,6 +179,10 @@ export class LoggingUI implements WizardUI {
     );
   }
 
+  cancelPendingQuestion(): void {
+    // Nothing to dismiss — requestQuestion never opens an overlay here.
+  }
+
   showAuthError(detail?: AuthErrorDetail): void {
     console.log(`✖  Authentication failed (401)`);
     if (detail?.hasSettingsConflict) {

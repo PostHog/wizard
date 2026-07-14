@@ -1221,6 +1221,10 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
           ],
         };
       } catch (err: any) {
+        // A failed ask never reached the user, so it shouldn't burn the
+        // per-run cap either — otherwise a transient bridge error eats the
+        // budget for every remaining source.
+        askCallCount -= 1;
         logToFile(`wizard_ask: error: ${err?.message ?? err}`);
         return {
           content: [
