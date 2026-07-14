@@ -64,6 +64,9 @@ export interface GatewayProviderInputs {
   wizardMetadata: Record<string, string>;
   wizardFlags: Record<string, string>;
   modelId: string;
+  // Linear runs honour the wizard-pi-effort flag; orchestrator tasks pass false
+  // so each per-agent model keeps its own tuned effort from the table.
+  applyEffortFlag?: boolean;
 }
 
 /**
@@ -78,10 +81,16 @@ export function buildGatewayProvider(inputs: GatewayProviderInputs): {
   gatewayUrl: string;
   baseUrl: string;
 } {
-  const { gatewayUrl, accessToken, wizardMetadata, wizardFlags, modelId } =
-    inputs;
+  const {
+    gatewayUrl,
+    accessToken,
+    wizardMetadata,
+    wizardFlags,
+    modelId,
+    applyEffortFlag = true,
+  } = inputs;
   const api = gatewayApiFor(modelId);
-  const caps = modelCapabilities(modelId, wizardFlags);
+  const caps = modelCapabilities(modelId, wizardFlags, { applyEffortFlag });
   const baseUrl =
     api === 'openai-completions' ? `${gatewayUrl}/v1` : gatewayUrl;
   const provider = {
