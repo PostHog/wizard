@@ -156,5 +156,28 @@ describe('AgentOutputSignals', () => {
 
       expect(signals.skillInstallFailure()).toBeUndefined();
     });
+
+    it('ignores the model parroting the prompt instruction', () => {
+      const signals = new AgentOutputSignals();
+      signals.push(
+        "If install_skill fails, emit on its own line: [SKILL-INSTALL-FAILED] <skill id — one-line reason>. Then CONTINUE and SKIP to STEP 5 the integration without the skill, following these steps and your knowledge of Next.js and PostHog's official docs, and note in the setup report that the skill could not be installed.",
+      );
+
+      expect(signals.skillInstallFailure()).toBeUndefined();
+    });
+
+    it('still reports a real failure after a parroted instruction', () => {
+      const signals = new AgentOutputSignals();
+      signals.push(
+        'emit: [SKILL-INSTALL-FAILED] <skill id — one-line reason>. Then CONTINUE',
+      );
+      signals.push(
+        '[SKILL-INSTALL-FAILED] integration-nextjs-app-router — download timed out',
+      );
+
+      expect(signals.skillInstallFailure()).toBe(
+        'integration-nextjs-app-router — download timed out',
+      );
+    });
   });
 });

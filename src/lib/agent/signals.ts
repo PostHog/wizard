@@ -46,6 +46,17 @@ export const AgentSignals = {
 export type AgentSignal = (typeof AgentSignals)[keyof typeof AgentSignals];
 
 /**
+ * The fill-in shown in the integration prompt's failure instruction
+ * ("If install_skill fails, emit: [SKILL-INSTALL-FAILED] <skill id — one-line
+ * reason>. Then CONTINUE…"). Literal models parrot that instruction verbatim
+ * while restating their plan, so the parser treats a marker whose detail
+ * still contains this placeholder as an echo, not a real failure (see
+ * AgentOutputSignals.skillInstallFailure). Shared so prompt and parser
+ * cannot drift.
+ */
+export const SKILL_INSTALL_FAILED_PLACEHOLDER = '<skill id — one-line reason>';
+
+/**
  * End-of-run reflection ask, shared by both harnesses so remarks are
  * comparable. The format clause comes FIRST and nothing trails the marker —
  * literal models (gpt-5-mini) echo whatever text follows it. The parser also

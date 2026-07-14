@@ -12,7 +12,11 @@
  * hooks' onTerminate callback (`yaraViolationReason` in runAgent) instead.
  */
 
-import { AgentSignals, REMARK_INSTRUCTION } from './signals';
+import {
+  AgentSignals,
+  REMARK_INSTRUCTION,
+  SKILL_INSTALL_FAILED_PLACEHOLDER,
+} from './signals';
 
 /**
  * Single source of truth for the substrings runAgent scans agent output for.
@@ -93,13 +97,19 @@ export class AgentOutputSignals {
   /**
    * Text after the `[SKILL-INSTALL-FAILED]` marker (skill id + reason),
    * trimmed — or undefined when the skill installed fine. A marker with no
-   * trailing text still reports as '' so the failure is never lost.
+   * trailing text still reports as '' so the failure is never lost. A detail
+   * that still contains the instruction's `<skill id — one-line reason>`
+   * placeholder is the model parroting the prompt, not a failure — skipped,
+   * like remark() skips echoes of REMARK_INSTRUCTION.
    */
   skillInstallFailure(): string | undefined {
     const marker = OUTPUT_SIGNALS.SKILL_INSTALL_FAILED;
     for (const line of this.lines) {
       const idx = line.indexOf(marker);
-      if (idx !== -1) return line.slice(idx + marker.length).trim();
+      if (idx === -1) continue;
+      const detail = line.slice(idx + marker.length).trim();
+      if (detail.includes(SKILL_INSTALL_FAILED_PLACEHOLDER)) continue;
+      return detail;
     }
     return undefined;
   }
