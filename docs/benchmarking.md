@@ -53,12 +53,30 @@ Apps used in the 2026-07 benchmark, as worked examples of the spread:
 | Monica | `monicahq/monica` | Laravel + Inertia/Vue |
 | Papermark | `mfts/papermark` | Next.js — already shipped posthog-js; kept as the augment-existing case, excluded from quality scoring |
 
-## Setup
+## Setup (from a bare machine)
 
-1. Shallow-clone each target app once; treat the clone as a read-only source.
-2. Define each config as a set of flag overrides (harness, model, effort) plus
-   a baseline config with the overrides off.
-3. Provision a test-project API key. Never commit it; read it from a file.
+```bash
+# 1. The stack — the wizard (runs the benchmark) and its workbench (owns the judge)
+git clone https://github.com/PostHog/wizard && cd wizard
+git checkout <branch under test>            # the code you are benchmarking
+pnpm install && node scripts/generate-version.cjs   # version.ts is generated, not committed
+cd .. && git clone https://github.com/PostHog/wizard-workbench   # optional: automated judging
+
+# 2. Credentials — a personal API key for a DEDICATED test project
+#    (runs create real events and dashboards in it). Note the project id.
+echo 'phx_...' > ~/wizard-bench-key.txt
+
+# 3. Target apps — shallow-clone each once; treat as read-only sources
+mkdir -p ~/bench/src && cd ~/bench/src
+git clone --depth 1 https://github.com/<org>/<app>
+```
+
+Also install the toolchains your chosen apps need (node, python, php+composer,
+ruby, gradle) — a missing toolchain fails runs for reasons that are yours, not
+the model's.
+
+Define each config as a `WIZARD_CI_FLAG_OVERRIDES` JSON (harness + model +
+effort), plus the baseline as `{"wizard-use-pi-harness":"false"}`.
 
 ## Tooling
 
@@ -71,15 +89,8 @@ Everything below ships in this repo (`wizard/`) and its workbench
   (`wizard/e2e-harness/wizard-ci-driver.ts`, `wizard/e2e-harness/profiles.ts`)
   through auth, the agent run, and the outro, and writes each screen as an
   `NN-<screen>.ans` frame. An `NN-outro.ans` frame is the flow-completion
-  signal. `tsx` runs source — no build step.
-
-  ```bash
-  SNAP_OUT=<frames dir> APP_DIR=<app copy> \
-  POSTHOG_KEY_FILE=<key file> PROJECT_ID=<test project id> \
-  WIZARD_CI_FLAG_OVERRIDES='{"wizard-use-pi-harness":"true","wizard-pi-model":"<variant>","wizard-pi-effort":"<level>"}' \
-    npx tsx scripts/tui-snapshots.no-jest.ts
-  ```
-
+  signal. `tsx` runs source — no build step. Invocation: see the run-cell
+  recipe below.
 - **Config selection:** the three flag axes are `wizard-use-pi-harness`,
   `wizard-pi-model` (variant keys defined in
   `wizard/src/lib/agent/runner/switchboard/harness.ts`), and
@@ -87,25 +98,64 @@ Everything below ships in this repo (`wizard/`) and its workbench
   `wizard/src/lib/agent/runner/switchboard/models.ts`). The baseline is
   `{"wizard-use-pi-harness":"false"}` — never an empty override, or live
   remote flags leak into the baseline.
-- **Cost capture:** anthropic-harness runs report `modelUsage` (with
-  `costUSD`) in the debug log (`/tmp/posthog-wizard.log`); pi-harness runs
-  expose session token totals — price them at the model's list rate. Capture
-  per run: the shared log interleaves under parallelism.
 
-## Per-run procedure
+## Running one cell
 
-For each cell, in a fresh working directory:
+The canonical recipe — save as `run-cell.sh` and run from anywhere:
 
-1. Copy the app source, excluding dependency and build directories.
-2. `git init`, commit everything as `base` **with `--no-verify`**, branch `integ`.
-3. Run the wizard headlessly against the copy (the e2e harness drives the TUI
-   to the outro; select the config via `WIZARD_CI_FLAG_OVERRIDES`), with a
-   watchdog that kills the run and all its children at the cap.
-4. `git add -A && git commit --no-verify` on `integ`.
-5. Record per run, to per-run files (never a shared log):
-   - elapsed seconds, whether the outro was reached, whether the cap fired
-   - the diff (`base..integ`) and its file count
-   - token usage → cost at the model's list price (input, cached input, output)
+```bash
+#!/bin/bash
+# run-cell.sh <label> <app_src> <flags_json>   e.g.:
+#   run-cell.sh maybe-luna-med ~/bench/src/maybe \
+#     '{"wizard-use-pi-harness":"true","wizard-pi-model":"gpt-5-6-luna","wizard-pi-effort":"medium"}'
+set -uo pipefail
+LABEL="$1"; SRC="$2"; FLAGS="$3"
+WIZARD=~/wizard            # the checkout under test
+BENCH=~/bench; WORK="$BENCH/$LABEL"; OUT="$BENCH/$LABEL-out"; CAP=600
+
+rm -rf "$WORK" "$OUT"; mkdir -p "$WORK" "$OUT"
+rsync -a --exclude node_modules --exclude .git --exclude build --exclude dist \
+  --exclude .next --exclude .svelte-kit --exclude .turbo "$SRC/" "$WORK/"
+git -C "$WORK" init -q && git -C "$WORK" add -A
+git -C "$WORK" -c user.email=b@b -c user.name=b commit -qm base --no-verify
+git -C "$WORK" checkout -q -b integ
+
+cd "$WIZARD"; SECONDS=0
+SNAP_OUT="$OUT/frames" APP_DIR="$WORK" \
+POSTHOG_KEY_FILE=~/wizard-bench-key.txt PROJECT_ID=<test project id> \
+WIZARD_CI_FLAG_OVERRIDES="$FLAGS" \
+  npx tsx scripts/tui-snapshots.no-jest.ts > "$OUT/stdout.txt" 2>&1 &
+RUN=$!
+( sleep $CAP; kill -TERM $RUN 2>/dev/null; sleep 3; kill -9 $RUN 2>/dev/null
+  pkill -9 -f "$WORK" 2>/dev/null ) & WD=$!
+wait $RUN 2>/dev/null; EL=$SECONDS
+pkill -P $WD 2>/dev/null; kill $WD 2>/dev/null   # never `wait` the watchdog
+
+git -C "$WORK" add -A >/dev/null 2>&1
+git -C "$WORK" -c user.email=b@b -c user.name=b commit -qm integ --no-verify >/dev/null 2>&1
+git -C "$WORK" diff main integ > "$OUT/diff.patch"
+OUTRO=NO; ls "$OUT/frames" | grep -q outro && OUTRO=YES
+TIMEOUT=NO; [ $EL -ge $CAP ] && TIMEOUT=YES
+echo "label=$LABEL elapsed=${EL}s outro=$OUTRO timeout=$TIMEOUT \
+files=$(git -C "$WORK" diff --name-only main integ | wc -l | tr -d ' ')" \
+  | tee "$OUT/result.txt"
+```
+
+Both commits are `--no-verify` (see Traps). The diff, frames, stdout, and
+result line are the cell's complete artifact set — everything else (the shared
+debug log) is unreliable under parallelism.
+
+## Running the matrix
+
+- One app at a time; per app, launch its configs in parallel (≤4 on one
+  machine) and `wait`. Contention inflates absolute times roughly uniformly.
+- Cost: anthropic-harness cells report `modelUsage.costUSD` in
+  `/tmp/posthog-wizard.log` — zero the log before each app's wave and slice
+  the block per baseline run. pi-harness cells do not persist token totals;
+  add a temporary hook in the pi harness success path that writes the session
+  token stats to a per-run file, and price them at list rates.
+- Rerun any anomalous cell solo (zeroed log, no parallelism) before drawing a
+  conclusion from it.
 
 ## Traps — each of these has produced a wrong conclusion
 
