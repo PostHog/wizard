@@ -303,20 +303,24 @@ export async function evaluateToolCall(
   llmProvider?: LLMProvider,
 ): Promise<GateDecision> {
   try {
-    const policy = toClaudePolicyCall(toolName, input);
-    const decision = wizardCanUseTool(policy.name, policy.input, {
-      disallowedTools: ctx.disallowedTools,
-      wizardAskPending: ctx.getWizardAskPending?.() ?? false,
-    });
     // The allowlist is a pi-only restriction; the anthropic arm runs bash
     // unrestricted and leans on the shared YARA scan. Let a plain `rm` of
     // project files through to that same scan so pi matches that behavior.
+    // Checked BEFORE wizardCanUseTool: its deny path captures a `bash denied`
+    // analytics event, which would record every allowed scoped rm as denied.
     const allowedLikeAnthropic =
       toolName === 'bash' &&
       isScopedFileRemoval(str(input.command), ctx.workingDirectory);
 
-    if (decision.behavior === 'deny' && !allowedLikeAnthropic) {
-      return { block: true, reason: decision.message };
+    if (!allowedLikeAnthropic) {
+      const policy = toClaudePolicyCall(toolName, input);
+      const decision = wizardCanUseTool(policy.name, policy.input, {
+        disallowedTools: ctx.disallowedTools,
+        wizardAskPending: ctx.getWizardAskPending?.() ?? false,
+      });
+      if (decision.behavior === 'deny') {
+        return { block: true, reason: decision.message };
+      }
     }
 
     const yaraReason = await preExecutionYaraBlock(

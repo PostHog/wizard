@@ -484,6 +484,23 @@ describe('pi-security: plain rm matches the anthropic arm', () => {
     );
   });
 
+  test('an allowed scoped rm never captures a `bash denied` event', async () => {
+    // wizardCanUseTool records analytics on every deny, so the rescue must be
+    // decided BEFORE consulting it — otherwise each allowed rm still shows up
+    // in telemetry as denied.
+    const { analytics } = await import('@utils/analytics');
+    const capture = vi.spyOn(analytics, 'wizardCapture');
+    try {
+      expect(await rmBlocked('rm .posthog-events.json')).toBe(false);
+      expect(capture).not.toHaveBeenCalledWith(
+        'bash denied',
+        expect.anything(),
+      );
+    } finally {
+      capture.mockRestore();
+    }
+  });
+
   test('normalizes a relative workingDirectory', async () => {
     const relRoot = path.relative(process.cwd(), path.resolve('/project'));
     expect(
