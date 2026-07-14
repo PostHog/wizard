@@ -26,6 +26,7 @@ import { buildCodingAgentPrompt } from './handoff.js';
 import { EVENT_PLAN_FILE } from './constants.js';
 
 const DASHBOARD_DEEP_LINK_KEY = 'dashboardDeepLink';
+const HOSTING_ENV_SKIP_KEY = 'hostingEnvUploadSkipped';
 
 function resolveContinueUrl(
   sess: WizardSession,
@@ -263,20 +264,23 @@ ${warehouseReportInstruction(session)}
           const { uploadEnvironmentVariablesStep } = await import(
             '@steps/index'
           );
-          const uploadedEnvVars = await uploadEnvironmentVariablesStep(
+          const { uploadedKeys, skip } = await uploadEnvironmentVariablesStep(
             envVars,
             {
               integration: config.metadata.integration,
               session: sess,
             },
           );
-          if (uploadedEnvVars.length > 0) {
+          if (uploadedKeys.length > 0) {
             analytics.capture(WIZARD_INTERACTION_EVENT_NAME, {
               action: 'wizard_env_vars_uploaded',
               integration: config.metadata.integration,
-              variable_count: uploadedEnvVars.length,
-              variable_keys: uploadedEnvVars,
+              variable_count: uploadedKeys.length,
+              variable_keys: uploadedKeys,
             });
+          }
+          if (skip) {
+            sess.frameworkContext[HOSTING_ENV_SKIP_KEY] = skip.provider;
           }
         }
 
@@ -307,10 +311,14 @@ ${warehouseReportInstruction(session)}
           deepLink,
         );
 
+        const hostingEnvSkip = sess.frameworkContext[HOSTING_ENV_SKIP_KEY];
         const changes = [
           ...config.ui.getOutroChanges(frameworkContext),
           Object.keys(envVars).length > 0
             ? 'Added environment variables to .env file'
+            : '',
+          typeof hostingEnvSkip === 'string'
+            ? `⚠️ Not added to ${hostingEnvSkip} — add them there too, or your deployed site won't send events`
             : '',
         ].filter(Boolean);
 

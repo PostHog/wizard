@@ -1,13 +1,40 @@
 import { execSync, spawn, spawnSync } from 'child_process';
-import { EnvironmentProvider } from '@steps/upload-environment-variables/EnvironmentProvider';
+import {
+  EnvironmentProvider,
+  EnvUploadSkipCause,
+  type EnvUploadSkip,
+} from '@steps/upload-environment-variables/EnvironmentProvider';
 import * as fs from 'fs';
 import * as path from 'path';
 import { getUI } from '@ui';
 import { analytics } from '@utils/analytics';
 
+type EnvAddResult = { code: number | null; stderr: string };
+
+const ALREADY_EXISTS_MARKERS = [
+  'already exists',
+  'already been added',
+  'vercel env rm',
+];
+
+const REMEDY_BY_CAUSE: Record<EnvUploadSkipCause, string> = {
+  [EnvUploadSkipCause.CliMissing]:
+    "the Vercel CLI isn't installed. Install it with `npm i -g vercel`, run `vercel link`, then:",
+  [EnvUploadSkipCause.ProjectUnlinked]:
+    "this directory isn't linked to a Vercel project. Run `vercel link`, then:",
+  [EnvUploadSkipCause.Unauthenticated]:
+    "you're not logged in to the Vercel CLI. Run `vercel login`, then:",
+};
+
 export class VercelEnvironmentProvider extends EnvironmentProvider {
   name = 'Vercel';
   environments = ['production', 'preview', 'development'];
+
+  private checks: {
+    hasCli: boolean;
+    isLinked: boolean;
+    isAuthenticated: boolean;
+  } | null = null;
 
   constructor(options: { installDir: string }) {
     super(options);
@@ -15,12 +42,30 @@ export class VercelEnvironmentProvider extends EnvironmentProvider {
 
   // eslint-disable-next-line @typescript-eslint/require-await
   async detect(): Promise<boolean> {
-    const vercelDetected =
-      this.hasVercelCli() && this.isProjectLinked() && this.isAuthenticated();
+    const hasCli = this.hasVercelCli();
+    const isLinked = hasCli && this.isProjectLinked();
+    const isAuthenticated = isLinked && this.isAuthenticated();
+
+    this.checks = { hasCli, isLinked, isAuthenticated };
+
+    const vercelDetected = hasCli && isLinked && isAuthenticated;
 
     analytics.setTag('vercel-detected', vercelDetected);
+    analytics.setTag('vercel-markers-found', this.hasDeployMarkers());
 
     return vercelDetected;
+  }
+
+  /**
+   * Cheap filesystem signal that the project deploys to Vercel, independent of
+   * whether the CLI is usable — `detect()` can't tell "not a Vercel project"
+   * apart from "Vercel project the wizard can't reach".
+   */
+  hasDeployMarkers(): boolean {
+    return (
+      this.hasDotVercelDir() ||
+      fs.existsSync(path.join(this.options.installDir, 'vercel.json'))
+    );
   }
 
   hasDotVercelDir(): boolean {
@@ -78,12 +123,46 @@ export class VercelEnvironmentProvider extends EnvironmentProvider {
     return true;
   }
 
-  async uploadEnvironmentVariable(
+  describeSkip(keys: string[]): EnvUploadSkip | null {
+    if (!this.checks || !this.hasDeployMarkers()) return null;
+
+    const cause = this.skipCause();
+    if (!cause) return null;
+
+    const keyList = keys.map((key) => `  - ${key}`).join('\n');
+    const addCommands = keys
+      .map((key) => `  vercel env add ${key} production`)
+      .join('\n');
+
+    return {
+      provider: this.name,
+      cause,
+      message: `Your project appears to deploy to ${this.name}, but the wizard couldn't upload environment variables — ${REMEDY_BY_CAUSE[cause]}
+
+${addCommands}
+
+Until these are set in ${this.name}, your deployed site won't send events to PostHog. You can also add them under Settings → Environment Variables in your ${this.name} project:
+
+${keyList}
+
+The values are in your local .env file.`,
+    };
+  }
+
+  private skipCause(): EnvUploadSkipCause | null {
+    if (!this.checks) return null;
+    if (!this.checks.hasCli) return EnvUploadSkipCause.CliMissing;
+    if (!this.checks.isLinked) return EnvUploadSkipCause.ProjectUnlinked;
+    if (!this.checks.isAuthenticated) return EnvUploadSkipCause.Unauthenticated;
+    return null;
+  }
+
+  private runEnvAdd(
     key: string,
     value: string,
     environment: string,
-  ): Promise<void> {
-    await new Promise<void>((resolve, reject) => {
+  ): Promise<EnvAddResult> {
+    return new Promise<EnvAddResult>((resolve, reject) => {
       const proc = spawn('vercel', ['env', 'add', key, environment], {
         stdio: ['pipe', 'pipe', 'pipe'],
       });
@@ -96,28 +175,59 @@ export class VercelEnvironmentProvider extends EnvironmentProvider {
       proc.stdin.write(value);
       proc.stdin.end();
 
-      proc.on('close', (code) => {
-        if (
-          stderr.includes('already exists') ||
-          stderr.includes('already been added') ||
-          stderr.includes('vercel env rm')
-        ) {
-          reject(
-            new Error(
-              `❌ Environment variable ${key} already exists in ${this.name}. Please upload it manually.`,
-            ),
-          );
-        } else if (code === 0) {
-          resolve();
-        } else {
-          reject(
-            new Error(
-              `❌ Failed to upload environment variable ${key} to ${this.name}. Please upload it manually.`,
-            ),
-          );
-        }
-      });
+      proc.on('error', reject);
+      proc.on('close', (code) => resolve({ code, stderr }));
     });
+  }
+
+  private removeEnvironmentVariable(
+    key: string,
+    environment: string,
+  ): Promise<void> {
+    return new Promise<void>((resolve, reject) => {
+      const proc = spawn('vercel', ['env', 'rm', key, environment, '-y'], {
+        stdio: ['pipe', 'pipe', 'pipe'],
+      });
+
+      proc.on('error', reject);
+      proc.on('close', (code) =>
+        code === 0
+          ? resolve()
+          : reject(
+              new Error(
+                `❌ Failed to replace existing environment variable ${key} in ${this.name}. Please upload it manually.`,
+              ),
+            ),
+      );
+    });
+  }
+
+  async uploadEnvironmentVariable(
+    key: string,
+    value: string,
+    environment: string,
+  ): Promise<void> {
+    const added = await this.runEnvAdd(key, value, environment);
+    if (added.code === 0) return;
+
+    const alreadyExists = ALREADY_EXISTS_MARKERS.some((marker) =>
+      added.stderr.includes(marker),
+    );
+    if (!alreadyExists) {
+      throw new Error(
+        `❌ Failed to upload environment variable ${key} to ${this.name}. Please upload it manually.`,
+      );
+    }
+
+    // Vercel has no upsert for env vars, so replace the stale value.
+    await this.removeEnvironmentVariable(key, environment);
+
+    const readded = await this.runEnvAdd(key, value, environment);
+    if (readded.code !== 0) {
+      throw new Error(
+        `❌ Failed to update existing environment variable ${key} in ${this.name}. Please upload it manually.`,
+      );
+    }
   }
 
   async uploadEnvVars(

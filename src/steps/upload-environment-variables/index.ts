@@ -3,8 +3,14 @@ import { withProgress } from '../../telemetry';
 import { analytics } from '@utils/analytics';
 import { getUI } from '@ui';
 import type { WizardSession } from '@lib/wizard-session';
+import type { EnvUploadSkip } from './EnvironmentProvider';
 import { EnvironmentProvider } from './EnvironmentProvider';
 import { VercelEnvironmentProvider } from './providers/vercel';
+
+export type EnvUploadOutcome = {
+  uploadedKeys: string[];
+  skip: EnvUploadSkip | null;
+};
 
 export const uploadEnvironmentVariablesStep = async (
   envVars: Record<string, string>,
@@ -15,7 +21,7 @@ export const uploadEnvironmentVariablesStep = async (
     integration: Integration;
     session: WizardSession;
   },
-): Promise<string[]> => {
+): Promise<EnvUploadOutcome> => {
   const providers: EnvironmentProvider[] = [
     new VercelEnvironmentProvider({ installDir: session.installDir }),
   ];
@@ -30,11 +36,24 @@ export const uploadEnvironmentVariablesStep = async (
   }
 
   if (!provider) {
+    const keys = Object.keys(envVars);
+    const skip =
+      providers
+        .map((p) => p.describeSkip(keys))
+        .find((s): s is EnvUploadSkip => s !== null) ?? null;
+
     analytics.wizardCapture('env upload skipped', {
       reason: 'no environment provider found',
       integration,
+      deploy_target: skip?.provider ?? null,
+      skip_cause: skip?.cause ?? null,
     });
-    return [];
+
+    if (skip) {
+      getUI().log.warn(skip.message);
+    }
+
+    return { uploadedKeys: [], skip };
   }
 
   // Auto-accept — the agent already wrote env vars via MCP tools
@@ -52,5 +71,8 @@ export const uploadEnvironmentVariablesStep = async (
     integration,
   });
 
-  return Object.keys(results).filter((key) => results[key]);
+  return {
+    uploadedKeys: Object.keys(results).filter((key) => results[key]),
+    skip: null,
+  };
 };
