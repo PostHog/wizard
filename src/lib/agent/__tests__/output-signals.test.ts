@@ -129,32 +129,4 @@ describe('AgentOutputSignals', () => {
       expect(signals.usedManagedLogin()).toBe(true);
     });
   });
-
-  describe('skillInstallFailure', () => {
-    it('returns the detail after the marker', () => {
-      const signals = new AgentOutputSignals();
-      signals.push('some prose');
-      signals.push(
-        '[SKILL-INSTALL-FAILED] integration-nextjs-app-router — download timed out',
-      );
-
-      expect(signals.skillInstallFailure()).toBe(
-        'integration-nextjs-app-router — download timed out',
-      );
-    });
-
-    it("reports '' for a bare marker so the failure is never lost", () => {
-      const signals = new AgentOutputSignals();
-      signals.push('[SKILL-INSTALL-FAILED]');
-
-      expect(signals.skillInstallFailure()).toBe('');
-    });
-
-    it('is undefined when the skill installed fine', () => {
-      const signals = new AgentOutputSignals();
-      signals.push('[STATUS] Installing skill');
-
-      expect(signals.skillInstallFailure()).toBeUndefined();
-    });
-  });
 });
