@@ -63,7 +63,9 @@ export const DiffCascade = ({ width, height }: VisualProps) => {
   return (
     <Panel>
       {Array.from({ length: height }).map((_, y) => {
-        const line = lines[y];
+        // The line buffer can lag `height` for a frame after a resize; fall
+        // back to a blank line rather than dereferencing `undefined`.
+        const line = lines[y] ?? { sign: ' ' as const, text: '' };
         const cap = width - 2;
         const text = `${line.sign} ${line.text}`.slice(0, cap);
         const color =
