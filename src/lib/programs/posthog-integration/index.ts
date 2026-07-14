@@ -268,6 +268,8 @@ Important: Use the detect_package_manager tool (from the wizard-tools MCP server
           changes,
           docsUrl: config.metadata.docsUrl,
           continueUrl,
+          // Set once the agent mirrors the report into a notebook and emits [NOTEBOOK_URL].
+          notebookUrl: sess.notebookUrl ?? undefined,
           handoffPrompt: buildCodingAgentPrompt(SETUP_REPORT_FILE),
         };
       },
