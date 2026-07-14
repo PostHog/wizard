@@ -77,6 +77,9 @@ export interface TaskRunInputs {
   spinner: SpinnerHandle;
   /** Gateway model id resolved from the task's agent prompt. */
   model: string;
+  /** Reasoning effort from the agent prompt's per-profile frontmatter; overrides
+   * the model's table default when set. */
+  effort?: string;
   /** Per-task tool overrides from the agent prompt's frontmatter. */
   allowedTools?: readonly string[];
   disallowedTools?: readonly string[];

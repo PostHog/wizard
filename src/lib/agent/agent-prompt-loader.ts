@@ -122,12 +122,30 @@ export interface AgentPrompt {
   flow?: string;
   /** Marks the flow's planner: it seeds the queue and is not an enqueueable task. */
   seed: boolean;
-  model?: string;
+  /** Per-profile model + effort. `pi` = the gpt/pi harness, `sdk` = the anthropic
+   * harness. The mapping is not 1:1 across providers, so each agent names both. */
+  modelPi?: string;
+  effortPi?: string;
+  modelSdk?: string;
+  effortSdk?: string;
   skills: string[];
   allowedTools: string[];
   disallowedTools: string[];
   dependsOn: string[];
   body: string;
+}
+
+/** The model + effort an agent runs on for a given harness — `pi` picks the gpt
+ * column, anything else the sdk (anthropic) column. */
+export function promptModelFor(
+  prompt: AgentPrompt,
+  harness: string,
+): { model?: string; effort?: string } {
+  const pi = harness === 'pi';
+  return {
+    model: pi ? prompt.modelPi : prompt.modelSdk,
+    effort: pi ? prompt.effortPi : prompt.effortSdk,
+  };
 }
 
 export interface AgentRegistry {
@@ -220,13 +238,16 @@ export function parseAgentPrompt(
     }
   }
 
-  const model = typeof fields.model === 'string' ? fields.model : undefined;
+  const str = (v: unknown) => (typeof v === 'string' ? v : undefined);
   return {
     type: typeof fields.type === 'string' ? fields.type : fallbackType,
     label: typeof fields.label === 'string' ? fields.label : undefined,
     flow: typeof fields.flow === 'string' ? fields.flow : undefined,
     seed: fields.seed === 'true',
-    model,
+    modelPi: str(fields.model_pi),
+    effortPi: str(fields.effort_pi),
+    modelSdk: str(fields.model_sdk),
+    effortSdk: str(fields.effort_sdk),
     skills: toStringArray(fields.skills),
     allowedTools: toStringArray(fields.allowedTools),
     disallowedTools: toStringArray(fields.disallowedTools),
@@ -358,14 +379,24 @@ export function resolveTask(
     .join('\n\n');
 
   return {
-    model: taskModel(registry, task),
     ...agentRunTools(prompt),
     prompt: body,
     skills: prompt.skills,
   };
 }
 
-/** The model a task runs on: enqueue override, then prompt frontmatter, then default. */
-export function taskModel(registry: AgentRegistry, task: QueuedTask): string {
-  return task.model ?? registry.get(task.type)?.model ?? DEFAULT_TASK_MODEL;
+/** The model + effort a task runs on for a harness: enqueue override, then the
+ * prompt's per-profile frontmatter, then the default model. */
+export function taskModelSpec(
+  registry: AgentRegistry,
+  task: QueuedTask,
+  harness: string,
+): { model: string; effort?: string } {
+  const picked = promptModelFor(registry.get(task.type) ?? EMPTY_PROMPT, harness);
+  return {
+    model: task.model ?? picked.model ?? DEFAULT_TASK_MODEL,
+    effort: picked.effort,
+  };
 }
+
+const EMPTY_PROMPT = {} as AgentPrompt;

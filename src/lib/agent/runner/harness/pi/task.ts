@@ -154,6 +154,7 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
     prompt,
     spinner,
     model: modelId,
+    effort,
     allowedTools,
     disallowedTools,
     orchestrator,
@@ -207,8 +208,10 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
       wizardMetadata: boot.wizardMetadata,
       wizardFlags: boot.wizardFlags,
       modelId,
-      // Per-task agents own their effort via the model table, not the run-wide flag.
+      // Per-task agents own their effort via the prompt frontmatter (falling back
+      // to the model table), not the run-wide wizard-pi-effort flag.
       applyEffortFlag: false,
+      effort,
     });
     const registry = ModelRegistry.inMemory(AuthStorage.create());
     registry.registerProvider(GATEWAY_PROVIDER, provider as never);

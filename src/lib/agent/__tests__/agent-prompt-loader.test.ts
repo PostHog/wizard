@@ -6,8 +6,9 @@ import {
   assembleTaskPrompt,
   buildRegistry,
   parseAgentPrompt,
+  promptModelFor,
   resolveTask,
-  taskModel,
+  taskModelSpec,
   type AgentPrompt,
   type AgentRegistry,
   type OrchestratorPromptContext,
@@ -29,7 +30,9 @@ function registryOf(prompts: AgentPrompt[]): AgentRegistry {
 describe('parseAgentPrompt', () => {
   const sample = `---
 type: instrument-events
-model: claude-sonnet-4-6     # cheapest model that succeeds
+model_pi: openai/gpt-5.6-terra     # per-profile model targets
+effort_pi: medium
+model_sdk: claude-sonnet-4-6
 skills: [instrument-events]
 allowedTools: [Read, Edit, Grep, Glob, Bash]
 disallowedTools: [enqueue_task]
@@ -43,16 +46,30 @@ Add at least one capture call.
   it('parses frontmatter scalars and inline arrays', () => {
     const p = parseAgentPrompt(sample, 'fallback');
     expect(p.type).toBe('instrument-events');
-    expect(p.model).toBe('claude-sonnet-4-6');
+    expect(p.modelPi).toBe('openai/gpt-5.6-terra');
+    expect(p.effortPi).toBe('medium');
+    expect(p.modelSdk).toBe('claude-sonnet-4-6');
     expect(p.skills).toEqual(['instrument-events']);
     expect(p.allowedTools).toEqual(['Read', 'Edit', 'Grep', 'Glob', 'Bash']);
     expect(p.disallowedTools).toEqual(['enqueue_task']);
     expect(p.dependsOn).toEqual(['init']);
   });
 
+  it('resolves the per-harness model + effort, not 1:1 across providers', () => {
+    const p = parseAgentPrompt(sample, 'fallback');
+    expect(promptModelFor(p, 'pi')).toEqual({
+      model: 'openai/gpt-5.6-terra',
+      effort: 'medium',
+    });
+    expect(promptModelFor(p, 'anthropic')).toEqual({
+      model: 'claude-sonnet-4-6',
+      effort: undefined,
+    });
+  });
+
   it('strips inline comments and keeps the body', () => {
     const p = parseAgentPrompt(sample, 'fallback');
-    expect(p.model).not.toContain('#');
+    expect(p.modelPi).not.toContain('#');
     expect(p.body).toContain('## Goal');
     expect(p.body).not.toContain('---');
   });
@@ -162,7 +179,9 @@ describe('resolveTask', () => {
   const prompt: AgentPrompt = {
     type: 'capture',
     seed: false,
-    model: 'claude-haiku-4-5-20251001',
+    modelPi: 'openai/gpt-5.6-luna',
+    effortPi: 'low',
+    modelSdk: 'claude-haiku-4-5-20251001',
     skills: ['instrument-events'],
     allowedTools: ['Read', 'Edit'],
     disallowedTools: ['enqueue_task'],
@@ -176,21 +195,32 @@ describe('resolveTask', () => {
     expect(() => resolveTask(registry, task, store)).toThrow(/capture/);
   });
 
-  it('resolves model, tools, and skills from the prompt', () => {
+  it('resolves tools and skills from the prompt', () => {
     const registry = registryOf([prompt]);
     const task = store.enqueue({ type: 'capture' });
     const resolved = resolveTask(registry, task, store);
-    expect(resolved.model).toBe('claude-haiku-4-5-20251001');
     expect(resolved.skills).toEqual(['instrument-events']);
     expect(resolved.disallowedTools).toEqual([
       'mcp__posthog-wizard__enqueue_task',
     ]);
   });
 
+  it('resolves per-harness model + effort from the prompt', () => {
+    const registry = registryOf([prompt]);
+    const task = store.enqueue({ type: 'capture' });
+    expect(taskModelSpec(registry, task, 'pi')).toEqual({
+      model: 'openai/gpt-5.6-luna',
+      effort: 'low',
+    });
+    expect(taskModelSpec(registry, task, 'anthropic').model).toBe(
+      'claude-haiku-4-5-20251001',
+    );
+  });
+
   it('prefers the enqueue model override over the prompt model', () => {
     const registry = registryOf([prompt]);
     const task = store.enqueue({ type: 'capture', model: 'override-x' });
-    expect(resolveTask(registry, task, store).model).toBe('override-x');
+    expect(taskModelSpec(registry, task, 'pi').model).toBe('override-x');
   });
 
   it("appends upstream dependencies' handoffs as context", () => {
@@ -260,20 +290,25 @@ describe('resolveTask', () => {
   });
 });
 
-describe('taskModel', () => {
+describe('taskModelSpec', () => {
   const prompt = parseAgentPrompt(
-    '---\nmodel: prompt-model\n---\nx',
+    '---\nmodel_pi: prompt-model\n---\nx',
     'capture',
   );
 
   it('prefers the enqueue override, then the prompt, then the default', () => {
     const registry = registryOf([prompt]);
     const task = { type: 'capture' };
-    expect(taskModel(registry, { ...task, model: 'override' } as never)).toBe(
-      'override',
+    expect(
+      taskModelSpec(registry, { ...task, model: 'override' } as never, 'pi')
+        .model,
+    ).toBe('override');
+    expect(taskModelSpec(registry, task as never, 'pi').model).toBe(
+      'prompt-model',
     );
-    expect(taskModel(registry, task as never)).toBe('prompt-model');
-    expect(taskModel(registryOf([]), task as never)).toBe('claude-sonnet-4-6');
+    expect(taskModelSpec(registryOf([]), task as never, 'pi').model).toBe(
+      'claude-sonnet-4-6',
+    );
   });
 });
 

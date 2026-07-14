@@ -10,7 +10,7 @@ import {
   POSTHOG_FLAG_HEADER_PREFIX,
   POSTHOG_PROPERTY_HEADER_PREFIX,
 } from '@lib/constants';
-import { modelCapabilities } from '../../switchboard/models';
+import { modelCapabilities, type ThinkingLevel } from '../../switchboard/models';
 
 /** Provider registered on the in-memory registry for this run. */
 export const GATEWAY_PROVIDER = 'posthog-gateway';
@@ -67,6 +67,9 @@ export interface GatewayProviderInputs {
   // Linear runs honour the wizard-pi-effort flag; orchestrator tasks pass false
   // so each per-agent model keeps its own tuned effort from the table.
   applyEffortFlag?: boolean;
+  // Explicit per-agent effort from the prompt frontmatter — overrides the table
+  // default for a reasoning model when set.
+  effort?: string;
 }
 
 /**
@@ -88,9 +91,15 @@ export function buildGatewayProvider(inputs: GatewayProviderInputs): {
     wizardFlags,
     modelId,
     applyEffortFlag = true,
+    effort,
   } = inputs;
   const api = gatewayApiFor(modelId);
-  const caps = modelCapabilities(modelId, wizardFlags, { applyEffortFlag });
+  const tableCaps = modelCapabilities(modelId, wizardFlags, { applyEffortFlag });
+  // An explicit frontmatter effort wins over the table for a reasoning model.
+  const caps =
+    effort && tableCaps.reasoning
+      ? { ...tableCaps, thinkingLevel: effort as ThinkingLevel }
+      : tableCaps;
   const baseUrl =
     api === 'openai-completions' ? `${gatewayUrl}/v1` : gatewayUrl;
   const provider = {
