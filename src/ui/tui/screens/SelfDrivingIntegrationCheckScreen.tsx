@@ -21,6 +21,9 @@ import { useState, useSyncExternalStore } from 'react';
 import type { WizardStore } from '@ui/tui/store';
 import type { CloudRegion } from '@lib/wizard-session';
 import { PickerMenu } from '@ui/tui/primitives/index';
+import { PrivacyPanel } from '@ui/tui/components/PrivacyPanel';
+import { IntroScreenLayout } from '@ui/tui/screens/IntroScreenLayout';
+import { POSTHOG_PRIVACY_URL, POSTHOG_TERMS_URL } from '@lib/constants';
 import { Colors } from '@ui/tui/styles';
 
 interface SelfDrivingIntegrationCheckScreenProps {
@@ -45,14 +48,44 @@ export const SelfDrivingIntegrationCheckScreen = ({
   // the region step can hand both to the store in one commit.
   const [email, setEmail] = useState(store.session.email ?? '');
   const [emailError, setEmailError] = useState<string | null>(null);
+  const [showPrivacy, setShowPrivacy] = useState(false);
 
-  // Esc steps back toward the account question (the picker owns input on 'ask').
-  useInput((_input, key) => {
+  useInput((input, key) => {
+    // While the privacy overlay is open, only Esc closes it; the overlay's own
+    // Back menu handles the rest.
+    if (showPrivacy) {
+      if (key.escape) setShowPrivacy(false);
+      return;
+    }
+
+    // [I] opens the full privacy panel. Skipped on the email stage so the
+    // keystroke reaches the text field instead.
+    if ((input === 'i' || input === 'I') && stage !== 'email') {
+      setShowPrivacy(true);
+      return;
+    }
+
+    // Esc steps back toward the account question (the picker owns input on 'ask').
     if (key.escape && stage !== 'ask') {
       setEmailError(null);
       setStage(stage === 'region' ? 'email' : 'ask');
     }
   });
+
+  if (showPrivacy) {
+    return (
+      <IntroScreenLayout
+        installDir={store.session.installDir}
+        title="Wizard privacy & usage"
+        showSubtitle={false}
+        showDetection={false}
+        body={<PrivacyPanel />}
+        menuOptions={[{ label: 'Back', value: 'back' }]}
+        menuAlign="left"
+        onSelect={() => setShowPrivacy(false)}
+      />
+    );
+  }
 
   if (stage === 'region') {
     return (
@@ -80,9 +113,19 @@ export const SelfDrivingIntegrationCheckScreen = ({
             }}
           />
         </Box>
+        <Box marginTop={1} flexDirection="column">
+          <Text dimColor>By creating an account you agree to our terms.</Text>
+          <Text dimColor>
+            Terms: <Text color="cyan">{POSTHOG_TERMS_URL}</Text>
+          </Text>
+          <Text dimColor>
+            Privacy: <Text color="cyan">{POSTHOG_PRIVACY_URL}</Text>
+          </Text>
+        </Box>
         <Box marginTop={1}>
           <Text dimColor>
-            <Text color={Colors.accent}>[Esc]</Text> back
+            <Text color={Colors.accent}>[Esc]</Text> back{'  ·  '}
+            <Text color={Colors.accent}>[I]</Text> privacy & usage
           </Text>
         </Box>
       </Box>
@@ -141,15 +184,11 @@ export const SelfDrivingIntegrationCheckScreen = ({
 
       <Box marginTop={1} flexDirection="column">
         <Text dimColor>
-          This will kick off an agent to explore your project and 
-          find existing PostHog integrations.
-          
-          Self-driving reads PostHog data, so we&apos;ll 
-          set that up first: it gives your signal
-          sources something to watch.
-
-          To do that we need to connect to PostHog — do you already have
-          an account?
+          This will kick off an agent to explore your project and find existing
+          PostHog integrations. Self-driving reads PostHog data, so we&apos;ll
+          set that up first: it gives your signal sources something to watch. To
+          do that we need to connect to PostHog — do you already have an
+          account?
         </Text>
       </Box>
 
@@ -164,7 +203,7 @@ export const SelfDrivingIntegrationCheckScreen = ({
             {
               label: 'No, create one for me',
               value: 'provision',
-              hint: 'we\'ll email you a login link',
+              hint: "we'll email you a login link",
             },
           ]}
           onSelect={(value) => {
@@ -176,6 +215,12 @@ export const SelfDrivingIntegrationCheckScreen = ({
             }
           }}
         />
+      </Box>
+
+      <Box marginTop={1}>
+        <Text dimColor>
+          <Text color={Colors.accent}>[I]</Text> privacy & usage
+        </Text>
       </Box>
     </Box>
   );
