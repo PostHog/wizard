@@ -484,6 +484,29 @@ describe('pi-security: plain rm matches the anthropic arm', () => {
     );
   });
 
+  test('captures `bash denied` only when a command is actually blocked', async () => {
+    // The event fires at the enforcement point on a real deny — never for an
+    // allowed scoped rm, which the shared predicate permits outright.
+    const { analytics } = await import('@utils/analytics');
+    const capture = vi.spyOn(analytics, 'wizardCapture');
+    try {
+      expect(await rmBlocked('rm .posthog-events.json')).toBe(false);
+      expect(capture).not.toHaveBeenCalledWith(
+        'bash denied',
+        expect.anything(),
+      );
+
+      capture.mockClear();
+      expect(await rmBlocked('rm -rf node_modules')).toBe(true);
+      expect(capture).toHaveBeenCalledWith('bash denied', {
+        reason: 'not in allowlist',
+        command: 'rm -rf node_modules',
+      });
+    } finally {
+      capture.mockRestore();
+    }
+  });
+
   test('normalizes a relative workingDirectory', async () => {
     const relRoot = path.relative(process.cwd(), path.resolve('/project'));
     expect(

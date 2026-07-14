@@ -44,6 +44,7 @@ import { AgentOutputSignals } from './output-signals';
 // so existing importers of these from agent-interface keep working.
 export { AgentSignals, AgentErrorType } from './signals';
 export type { AgentSignal } from './signals';
+import { isScopedFileRemoval } from './bash-policy';
 export { AgentOutputSignals } from './output-signals';
 import {
   checkAllSettingsConflicts,
@@ -462,10 +463,16 @@ export function wizardCanUseTool(
   context: {
     wizardAskPending?: boolean;
     disallowedTools?: readonly string[];
+    /**
+     * Project root. When set, a plain `rm` of a file inside it is allowed
+     * (parity with the anthropic arm — see isScopedFileRemoval). Callers on
+     * the pi path pass this; the anthropic path auto-approves Bash anyway.
+     */
+    workingDirectory?: string;
   } = {},
 ):
   | { behavior: 'allow'; updatedInput: Record<string, unknown> }
-  | { behavior: 'deny'; message: string } {
+  | { behavior: 'deny'; message: string; reason: string } {
   // Hard gate on the program's disallow list. The SDK's own disallowedTools
   // option blocks tools at the parent level, but does NOT reliably propagate
   // to dispatched subagents (their AgentDefinition has its own field which the
@@ -477,6 +484,7 @@ export function wizardCanUseTool(
     return {
       behavior: 'deny',
       message: `Tool ${toolName} is disabled for this program.`,
+      reason: 'disallowed tool',
     };
   }
 
@@ -488,6 +496,7 @@ export function wizardCanUseTool(
     return {
       behavior: 'deny',
       message: `${toolName} is paused while a wizard_ask question is open. Wait for the user's answer to come back as a tool result before writing files.`,
+      reason: 'wizard_ask pending',
     };
   }
 
@@ -500,6 +509,7 @@ export function wizardCanUseTool(
       return {
         behavior: 'deny',
         message: `Direct ${toolName} of ${basename} is not allowed. Use the wizard-tools MCP server (check_env_keys / set_env_values) to read or modify environment variables.`,
+        reason: 'env file',
       };
     }
     return { behavior: 'allow', updatedInput: input };
@@ -517,6 +527,7 @@ export function wizardCanUseTool(
         message: `Grep on ${path.basename(
           grepPath,
         )} is not allowed. Use the wizard-tools MCP server (check_env_keys) to check environment variables.`,
+        reason: 'env file',
       };
     }
     return { behavior: 'allow', updatedInput: input };
@@ -531,17 +542,22 @@ export function wizardCanUseTool(
     typeof input.command === 'string' ? input.command : ''
   ).trim();
 
+  // A plain `rm` of a file inside the project is allowed — parity with the
+  // anthropic arm, which runs bash unsandboxed-by-allowlist and lets the
+  // shared YARA destructive-delete rules judge it. Checked first so it isn't
+  // caught by the allowlist below (rm is not a package-manager command).
+  if (isScopedFileRemoval(command, context.workingDirectory)) {
+    return { behavior: 'allow', updatedInput: input };
+  }
+
   // Block definitely dangerous operators: ; ` $ ( )
   if (DANGEROUS_OPERATORS.test(command)) {
     logToFile(`Denying bash command with dangerous operators: ${command}`);
     debug(`Denying bash command with dangerous operators: ${command}`);
-    analytics.wizardCapture('bash denied', {
-      reason: 'dangerous operators',
-      command,
-    });
     return {
       behavior: 'deny',
       message: `Bash command not allowed. Shell operators like ; \` $ ( ) are not permitted.`,
+      reason: 'dangerous operators',
     };
   }
 
@@ -557,13 +573,10 @@ export function wizardCanUseTool(
     if (/[|&]/.test(baseCommand)) {
       logToFile(`Denying bash command with multiple pipes: ${command}`);
       debug(`Denying bash command with multiple pipes: ${command}`);
-      analytics.wizardCapture('bash denied', {
-        reason: 'multiple pipes',
-        command,
-      });
       return {
         behavior: 'deny',
         message: `Bash command not allowed. Only single pipe to tail/head is permitted.`,
+        reason: 'multiple pipes',
       };
     }
 
@@ -578,13 +591,10 @@ export function wizardCanUseTool(
   if (/[|&]/.test(normalized)) {
     logToFile(`Denying bash command with pipe/&: ${command}`);
     debug(`Denying bash command with pipe/&: ${command}`);
-    analytics.wizardCapture('bash denied', {
-      reason: 'disallowed pipe',
-      command,
-    });
     return {
       behavior: 'deny',
       message: `Bash command not allowed. Pipes are only permitted with tail/head for output limiting.`,
+      reason: 'disallowed pipe',
     };
   }
 
@@ -597,14 +607,32 @@ export function wizardCanUseTool(
 
   logToFile(`Denying bash command: ${command}`);
   debug(`Denying bash command: ${command}`);
-  analytics.wizardCapture('bash denied', {
-    reason: 'not in allowlist',
-    command,
-  });
   return {
     behavior: 'deny',
     message: `Bash command not allowed. Only install, build, typecheck, lint, and formatting commands are permitted.`,
+    reason: 'not in allowlist',
   };
+}
+
+/**
+ * Emit the `bash denied` analytics event for a denied Bash call. Kept out of
+ * `wizardCanUseTool` (a pure predicate) and called by each harness at its own
+ * enforcement point, so the event fires exactly when a command is actually
+ * blocked — never when the caller allows it (e.g. a scoped `rm`), and never as
+ * a side effect the predicate can't see the outcome of. Non-Bash denials are
+ * ignored to preserve the metric's meaning.
+ */
+export function captureBashDenied(
+  toolName: string,
+  input: unknown,
+  reason: string,
+): void {
+  if (toolName !== 'Bash') return;
+  const command =
+    typeof (input as { command?: unknown })?.command === 'string'
+      ? (input as { command: string }).command
+      : '';
+  analytics.wizardCapture('bash denied', { reason, command });
 }
 
 /**
@@ -1076,9 +1104,13 @@ export async function runAgent(
             {
               wizardAskPending: agentConfig.getPendingQuestion?.() != null,
               disallowedTools: agentConfig.disallowedTools,
+              workingDirectory: agentConfig.workingDirectory,
             },
           );
           logToFile('canUseTool result:', result);
+          if (result.behavior === 'deny') {
+            captureBashDenied(toolName, input, result.reason);
+          }
           return Promise.resolve(result);
         },
         systemPrompt: {

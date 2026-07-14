@@ -20,7 +20,13 @@
 import fs from 'fs';
 import path from 'path';
 import type { LLMProvider, ScanMatch } from '@posthog/warlock';
-import { wizardCanUseTool } from '@lib/agent/agent-interface';
+import {
+  wizardCanUseTool,
+  captureBashDenied,
+} from '@lib/agent/agent-interface';
+// Re-exported so existing importers (and tests) keep resolving it here; the
+// canonical definition is the shared bash-policy module.
+export { isScopedFileRemoval } from '@lib/agent/bash-policy';
 import {
   createRepeatBlockTracker,
   isWizardDocumentationPath,
@@ -78,52 +84,6 @@ export interface GateDecision {
 }
 
 const str = (v: unknown): string => (typeof v === 'string' ? v : '');
-
-// Shell metacharacters that chain, substitute, or redirect. A command carrying
-// any of these is more than one action, so we never treat it as a plain `rm`.
-const SHELL_OPERATORS = /[;&|`$(){}<>\n'"\\]/;
-
-/** True when a target resolves to a file strictly inside the project root. */
-function isDeletableProjectFile(
-  target: string,
-  root: string,
-  p: typeof path,
-): boolean {
-  if (target.startsWith('-')) return false; // a flag, not a file
-  if (/[*?[\]~]/.test(target)) return false; // glob / home expansion
-  if (p.basename(target).startsWith('.env')) return false; // secrets
-
-  const resolved = p.resolve(root, target);
-  return resolved !== root && resolved.startsWith(root + p.sep);
-}
-
-/**
- * A plain `rm [-f] <file...>` whose every target is a file inside the project
- * root — the deletion shape the anthropic arm permits (there bash isn't
- * allowlisted; the shared YARA destructive-delete rules catch the dangerous
- * forms). pi rescues the same shape so the fall-through YARA scan can judge
- * it, but refuses any shell operator so it can't smuggle a second command.
- * Path checks run through the host's `path` (win32 on Windows, posix elsewhere);
- * pi always executes commands via a POSIX bash, so targets use forward slashes.
- */
-export function isScopedFileRemoval(
-  command: string,
-  rawRoot: string | undefined,
-  p: typeof path = path,
-): boolean {
-  if (!rawRoot) return false; // no root to contain against → never rescue
-  const root = p.resolve(rawRoot);
-  const trimmed = command.trim();
-  if (SHELL_OPERATORS.test(trimmed)) return false;
-
-  const [executable, ...args] = trimmed.split(/\s+/);
-  if (executable !== 'rm') return false;
-
-  if (args[0] === '-f') args.shift();
-  if (args.length === 0) return false;
-
-  return args.every((arg) => isDeletableProjectFile(arg, root, p));
-}
 
 /** A write that removes more than this fraction of an existing file's
  * non-whitespace content reads as a destructive whole-file rewrite. */
@@ -303,19 +263,19 @@ export async function evaluateToolCall(
   llmProvider?: LLMProvider,
 ): Promise<GateDecision> {
   try {
+    // Same allowlist the anthropic arm uses. Passing workingDirectory lets the
+    // predicate itself allow a plain `rm` of a project file (parity with
+    // anthropic, which runs bash unsandboxed-by-allowlist) — no pi-only
+    // override. The `bash denied` event is emitted here, at the real
+    // enforcement point, so it fires only when the command is actually blocked.
     const policy = toClaudePolicyCall(toolName, input);
     const decision = wizardCanUseTool(policy.name, policy.input, {
       disallowedTools: ctx.disallowedTools,
       wizardAskPending: ctx.getWizardAskPending?.() ?? false,
+      workingDirectory: ctx.workingDirectory,
     });
-    // The allowlist is a pi-only restriction; the anthropic arm runs bash
-    // unrestricted and leans on the shared YARA scan. Let a plain `rm` of
-    // project files through to that same scan so pi matches that behavior.
-    const allowedLikeAnthropic =
-      toolName === 'bash' &&
-      isScopedFileRemoval(str(input.command), ctx.workingDirectory);
-
-    if (decision.behavior === 'deny' && !allowedLikeAnthropic) {
+    if (decision.behavior === 'deny') {
+      captureBashDenied(policy.name, policy.input, decision.reason);
       return { block: true, reason: decision.message };
     }
 
