@@ -25,7 +25,7 @@ import {
 } from '@lib/wizard-session';
 import { wizardAbort, WizardError } from '@utils/wizard-abort';
 import { createCustomHeaders } from '@utils/custom-headers';
-import { HostResolution } from '@lib/host-resolution';
+import type { HostResolution } from '@lib/host-resolution';
 import { LINTING_TOOLS } from '@lib/safe-tools';
 import { createWizardToolsServer, WIZARD_TOOL_NAMES } from '@lib/wizard-tools';
 import {
@@ -176,7 +176,7 @@ export type AgentConfig = {
   workingDirectory: string;
   posthogMcpUrl: string;
   posthogApiKey: string;
-  posthogApiHost: string;
+  host: HostResolution;
   additionalMcpServers?: Record<string, { url: string }>;
   detectPackageManager: PackageManagerDetector;
   /** Base URL for the skills server (context-mill dev or GitHub releases) */
@@ -620,16 +620,12 @@ export async function initializeAgent(
   logToFile('Install directory:', options.installDir);
 
   try {
-    // TODO: clean up in #755
-    const gatewayUrl = HostResolution.fromApiHost(
-      config.posthogApiHost,
-    ).gatewayUrl;
-
     // Configure model routing (inherited by the SDK subprocess). All model
     // calls route through the PostHog LLM gateway, authed with the user's
     // OAuth token.
     // Disable experimental betas (like input_examples) the gateway doesn't support.
     process.env.CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS = 'true';
+    const gatewayUrl = config.host.gatewayUrl;
     process.env.ANTHROPIC_BASE_URL = gatewayUrl;
     process.env.ANTHROPIC_AUTH_TOKEN = config.posthogApiKey;
 
@@ -680,6 +676,9 @@ export async function initializeAgent(
           Authorization: `Bearer ${config.posthogApiKey}`,
           'User-Agent': WIZARD_USER_AGENT,
         },
+        // CLI mode's single `exec` tool carries the full command reference on
+        // its schema — keep it in context, never deferred behind tool search.
+        alwaysLoad: true,
       },
       ...Object.fromEntries(
         Object.entries(config.additionalMcpServers ?? {}).map(
@@ -1056,19 +1055,12 @@ export async function runAgent(
           ANTHROPIC_AUTH_TOKEN: process.env.ANTHROPIC_AUTH_TOKEN,
           CLAUDE_CODE_OAUTH_TOKEN: process.env.CLAUDE_CODE_OAUTH_TOKEN,
           CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS: 'true',
-          // Defer MCP tool schemas to avoid bloating the system prompt.
-          // The posthog-wizard MCP exposes many query tools with large schemas;
-          // without deferral these consume ~113k tokens upfront, leaving
-          // almost no room in Sonnet's 200k context window.
-          ENABLE_TOOL_SEARCH: 'auto:0',
           // SDK 0.3.142 made MCP servers connect in the background by default;
           // the agent may start its first turn before posthog-wizard is ready
           // (audit programs call audit_seed_checks on turn 1, integration
           // programs call load_skill_menu / install_skill). Restore the prior
           // blocking behavior so the SDK waits up to 5s for MCP connect before
-          // turn 1. `alwaysLoad: true` on the server would also work but it
-          // disables tool search deferral and re-inflates the system prompt by
-          // ~113k tokens (the reason ENABLE_TOOL_SEARCH=auto:0 is set above).
+          // turn 1.
           MCP_CONNECTION_NONBLOCKING: '0',
           // PostHog gateway headers: Bedrock fallback + property/flag tags.
           ANTHROPIC_CUSTOM_HEADERS: buildAgentEnv(

@@ -1,5 +1,48 @@
 # Changelog
 
+## [2.43.0](https://github.com/PostHog/wizard/compare/v2.42.0...v2.43.0) (2026-07-14)
+
+
+### Features
+
+* **self-driving:** default to the single connected repo for GitHub Issues ([#878](https://github.com/PostHog/wizard/issues/878)) ([93b5d87](https://github.com/PostHog/wizard/commit/93b5d8734c7f463930b8b3588745017c9601986f))
+* **self-driving:** ground custom-scout gap analysis in for-agents context ([#876](https://github.com/PostHog/wizard/issues/876)) ([3ddf98e](https://github.com/PostHog/wizard/commit/3ddf98ecd590c0dfc40f8b37c44818a79db50606))
+* **self-driving:** show PR pricing in the learn deck, tips and outro ([#875](https://github.com/PostHog/wizard/issues/875)) ([bdfff61](https://github.com/PostHog/wizard/commit/bdfff610ce4a8f116f72883d007e86e43bd6eedd))
+* surface the notebook link in the integration outro ([#882](https://github.com/PostHog/wizard/issues/882)) ([6c2656d](https://github.com/PostHog/wizard/commit/6c2656daa8aab62ef9cd8d146dacd166bdfebab5))
+* **switchboard:** add gpt-5.6 line + gpt-5.5 as pi model options, and a pi anti-reformat guard ([#886](https://github.com/PostHog/wizard/issues/886)) ([75a3438](https://github.com/PostHog/wizard/commit/75a3438b0b6da6096e9755230b416bf94e4bea61))
+
+
+### Bug Fixes
+
+* **warehouse:** unblock wizard_ask after a timed-out prompt ([#872](https://github.com/PostHog/wizard/issues/872)) ([c4d2f30](https://github.com/PostHog/wizard/commit/c4d2f3043af1caf5d691a1d706bd514000d5d007))
+
+## [2.42.0](https://github.com/PostHog/wizard/compare/v2.41.0...v2.42.0) (2026-07-13)
+
+
+### Features
+
+* **warehouse:** close warehouse-source telemetry gaps ([#873](https://github.com/PostHog/wizard/issues/873)) ([fdafff8](https://github.com/PostHog/wizard/commit/fdafff85ff5efa5c333f55ece8fee42afe901583))
+
+
+### Bug Fixes
+
+* **ci:** only advertise CI-capable app categories in the wizard-ci menu ([#867](https://github.com/PostHog/wizard/issues/867)) ([41f5536](https://github.com/PostHog/wizard/commit/41f5536a1cf051628cd5738b76a7fa62198b386b))
+* **mcp:** describe MCP features as PostHog areas, not a tool roster ([#861](https://github.com/PostHog/wizard/issues/861)) ([669431c](https://github.com/PostHog/wizard/commit/669431c3aa0b83d0ac50de2f50f5ce360cd9cdba))
+* **pi:** emit real values for prompt placeholders (links + templating) ([#868](https://github.com/PostHog/wizard/issues/868)) ([fae04d2](https://github.com/PostHog/wizard/commit/fae04d23a0ee189cc82ed12a8a8831def3f3a8ec))
+* sync Node preflight range with package.json engines ([#854](https://github.com/PostHog/wizard/issues/854)) ([569051b](https://github.com/PostHog/wizard/commit/569051b5a7e1dbe313a55a6808f1ed85027f431b))
+
+## [2.41.0](https://github.com/PostHog/wizard/compare/v2.40.0...v2.41.0) (2026-07-10)
+
+
+### Features
+
+* switch the wizard's MCP connections to CLI mode ([#858](https://github.com/PostHog/wizard/issues/858)) ([9c3a1c1](https://github.com/PostHog/wizard/commit/9c3a1c1c4b16cb32d57d82f53a5e1e7d634572bd))
+
+
+### Bug Fixes
+
+* **pi:** allow rm of files inside the working directory ([#834](https://github.com/PostHog/wizard/issues/834)) ([7e030af](https://github.com/PostHog/wizard/commit/7e030af5c2c34460575904222c0701d54cf8c42f))
+
 ## [2.40.0](https://github.com/PostHog/wizard/compare/v2.39.0...v2.40.0) (2026-07-09)
 
 

@@ -4,7 +4,6 @@ import type { WizardSession } from '@lib/wizard-session';
 import { OutroKind } from '@lib/wizard-session';
 import { SPINNER_MESSAGE } from '@lib/framework-config';
 import { isUsingTypeScript } from '@utils/setup-utils';
-import { HostResolution } from '@lib/host-resolution';
 import { WIZARD_TOOL_NAMES } from '@lib/wizard-tools';
 import { EVENTS_AUDIT_PROGRAM } from './steps.js';
 import { AUDIT_CHECKS_KEY } from '@lib/programs/audit/types';
@@ -63,19 +62,14 @@ Project context:
 - PostHog Project ID: ${ctx.projectId}
 - TypeScript: ${typeScriptDetected ? 'Yes' : 'No'}
 - PostHog public token: ${ctx.projectApiKey}
-- PostHog Host: ${ctx.host}
+- PostHog Host: ${ctx.host.apiHost}
 `,
 
-      buildOutroData: (sess, _credentials, cloudRegion) => {
-        // TODO: clean up in #755
-        const cloudUrl = cloudRegion
-          ? HostResolution.fromRegion(cloudRegion, { baseUrl: sess.baseUrl })
-              .appHost
+      buildOutroData: (sess, credentials) => {
+        const cloudUrl = credentials.host.appHost;
+        const continueUrl = sess.signup
+          ? `${cloudUrl}/products?source=wizard`
           : undefined;
-        const continueUrl =
-          sess.signup && cloudUrl
-            ? `${cloudUrl}/products?source=wizard`
-            : undefined;
         // The agent emits `[DASHBOARD_URL] <url>` once it creates the
         // dashboard; the SDK-message interceptor stores it on the session.
         // Fall back to the dashboards index if nothing was emitted.

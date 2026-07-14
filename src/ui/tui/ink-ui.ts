@@ -18,6 +18,7 @@ import type { WizardReadinessResult } from '@lib/health-checks/readiness';
 import type { ApiUser } from '@lib/api';
 import type {
   AskAnswers,
+  Credentials,
   OutroData,
   PendingQuestion,
 } from '@lib/wizard-session';
@@ -81,12 +82,7 @@ export class InkUI implements WizardUI {
     });
   }
 
-  setCredentials(credentials: {
-    accessToken: string;
-    projectApiKey: string;
-    host: string;
-    projectId: number;
-  }): void {
+  setCredentials(credentials: Credentials): void {
     this.store.setCredentials(credentials);
   }
 
@@ -173,6 +169,10 @@ export class InkUI implements WizardUI {
 
   requestQuestion(question: PendingQuestion): Promise<AskAnswers> {
     return this.store.requestQuestion(question);
+  }
+
+  cancelPendingQuestion(): void {
+    this.store.cancelPendingQuestion();
   }
 
   startRun(): void {

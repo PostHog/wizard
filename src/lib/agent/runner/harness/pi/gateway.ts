@@ -6,7 +6,6 @@
  * its own (lazily imported, properly typed) pi ModelRegistry.
  */
 
-import { getLlmGatewayUrl } from '@utils/urls';
 import {
   POSTHOG_FLAG_HEADER_PREFIX,
   POSTHOG_PROPERTY_HEADER_PREFIX,
@@ -60,7 +59,7 @@ export function buildGatewayHeaders(
 }
 
 export interface GatewayProviderInputs {
-  host: string;
+  gatewayUrl: string;
   accessToken: string;
   wizardMetadata: Record<string, string>;
   wizardFlags: Record<string, string>;
@@ -79,10 +78,10 @@ export function buildGatewayProvider(inputs: GatewayProviderInputs): {
   gatewayUrl: string;
   baseUrl: string;
 } {
-  const { host, accessToken, wizardMetadata, wizardFlags, modelId } = inputs;
+  const { gatewayUrl, accessToken, wizardMetadata, wizardFlags, modelId } =
+    inputs;
   const api = gatewayApiFor(modelId);
   const caps = modelCapabilities(modelId, wizardFlags);
-  const gatewayUrl = getLlmGatewayUrl(host);
   const baseUrl =
     api === 'openai-completions' ? `${gatewayUrl}/v1` : gatewayUrl;
   const provider = {

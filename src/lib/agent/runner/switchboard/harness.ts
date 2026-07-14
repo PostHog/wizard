@@ -6,6 +6,10 @@ import { IS_PRODUCTION_BUILD, RUN_SURFACE } from '@env';
 import {
   DEFAULT_AGENT_MODEL,
   GPT5_4_MODEL,
+  GPT5_5_MODEL,
+  GPT5_6_LUNA_MODEL,
+  GPT5_6_SOL_MODEL,
+  GPT5_6_TERRA_MODEL,
   GPT5_MINI_MODEL,
   GPT5_MODEL,
   Harness,
@@ -45,6 +49,10 @@ const PI_MODEL_FLAG_VARIANTS: Record<string, string> = {
   'gpt-5': GPT5_MODEL,
   'gpt-5-4': GPT5_4_MODEL,
   'gpt-5-mini': GPT5_MINI_MODEL,
+  'gpt-5-5': GPT5_5_MODEL,
+  'gpt-5-6-luna': GPT5_6_LUNA_MODEL,
+  'gpt-5-6-terra': GPT5_6_TERRA_MODEL,
+  'gpt-5-6-sol': GPT5_6_SOL_MODEL,
   'sonnet-4-6': DEFAULT_AGENT_MODEL,
   'sonnet-5': SONNET_5_MODEL,
 };

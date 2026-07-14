@@ -202,8 +202,8 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
     } = sdk;
 
     const { provider, caps, gatewayUrl } = buildGatewayProvider({
-      host: boot.host,
-      accessToken: boot.accessToken,
+      gatewayUrl: boot.credentials.host.gatewayUrl,
+      accessToken: boot.credentials.accessToken,
       wizardMetadata: boot.wizardMetadata,
       wizardFlags: boot.wizardFlags,
       modelId,
@@ -223,7 +223,7 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
     const { createSecurityExtension } = await import('./security');
     const security = createSecurityExtension({
       disallowedTools: fenceDisallowList(disallowedTools),
-      triageAuth: { baseURL: gatewayUrl, authToken: boot.accessToken },
+      triageAuth: { baseURL: gatewayUrl, authToken: boot.credentials.accessToken },
     });
     const { prewarmYaraScanner } = await import('@lib/yara-hooks');
     void prewarmYaraScanner();
@@ -239,8 +239,8 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
       const { setupPostHogMcp } = await import('./mcp');
       const mcp = await setupPostHogMcp({
         agentDir: getAgentDir(),
-        mcpUrl: boot.mcpUrl,
-        accessToken: boot.accessToken,
+        mcpUrl: boot.credentials.host.mcpUrl,
+        accessToken: boot.credentials.accessToken,
         userAgent: WIZARD_USER_AGENT,
       });
       extensionFactories.push(mcp.extensionFactory);

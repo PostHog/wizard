@@ -8,7 +8,6 @@
  */
 
 import type { WizardSession } from '@lib/wizard-session';
-import { mcpUrlFor } from '@lib/host-resolution';
 import { analytics } from '@utils/analytics';
 import { getUI } from '@ui';
 import { authenticate } from './authenticate';
@@ -218,8 +217,6 @@ export async function bootstrapProgram(
   // the first login; it does not launch another OAuth. authenticate() also
   // identifies the user and sets analytics groups.
   await authenticate(session, programConfig.id);
-  const { projectApiKey, host, accessToken, projectId } = session.credentials!;
-  const cloudRegion = session.cloudRegion!;
   const project = session.apiProject;
 
   // 4.5. AI opt-in enforcement. Parks here while AiOptInRequiredScreen is
@@ -248,9 +245,9 @@ export async function bootstrapProgram(
     }
   }
 
-  // Feature flags and MCP url. Both arms need these, and the fork decision reads
-  // the flags. This map is PostHog-side only — CLI `--harness` / `--sequence`
-  // precedence lives at the resolution sites (`runner/index.ts` for sequence,
+  // Feature flags. Both arms need these, and the fork decision reads the flags.
+  // This map is PostHog-side only — CLI `--harness` / `--sequence` precedence
+  // lives at the resolution sites (`runner/index.ts` for sequence,
   // `resolveHarness` for harness), not here.
   const wizardFlags = await analytics.getAllFlagsForWizard();
 
@@ -264,19 +261,12 @@ export async function bootstrapProgram(
     skillId: config.skillId,
   });
 
-  // One MCP url for every region: the server resolves the user's region from
-  // the bearer token, so the EU subdomain (a Claude Code OAuth workaround) is
-  // not needed here.
-  const mcpUrl = mcpUrlFor(session.localMcp);
-
+  // Credentials (incl. the resolved host family and its MCP url) live on
+  // `session.credentials`; narrow once at this boundary — `authenticate` above
+  // set them — so downstream readers get a non-null type without asserting.
   return {
     skillsBaseUrl,
-    projectApiKey,
-    host,
-    accessToken,
-    projectId,
-    cloudRegion,
-    mcpUrl,
+    credentials: session.credentials!,
     wizardFlags,
     wizardMetadata,
     project,
