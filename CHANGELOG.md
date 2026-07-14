@@ -1,5 +1,20 @@
 # Changelog
 
+## [2.42.0](https://github.com/PostHog/wizard/compare/v2.41.0...v2.42.0) (2026-07-13)
+
+
+### Features
+
+* **warehouse:** close warehouse-source telemetry gaps ([#873](https://github.com/PostHog/wizard/issues/873)) ([fdafff8](https://github.com/PostHog/wizard/commit/fdafff85ff5efa5c333f55ece8fee42afe901583))
+
+
+### Bug Fixes
+
+* **ci:** only advertise CI-capable app categories in the wizard-ci menu ([#867](https://github.com/PostHog/wizard/issues/867)) ([41f5536](https://github.com/PostHog/wizard/commit/41f5536a1cf051628cd5738b76a7fa62198b386b))
+* **mcp:** describe MCP features as PostHog areas, not a tool roster ([#861](https://github.com/PostHog/wizard/issues/861)) ([669431c](https://github.com/PostHog/wizard/commit/669431c3aa0b83d0ac50de2f50f5ce360cd9cdba))
+* **pi:** emit real values for prompt placeholders (links + templating) ([#868](https://github.com/PostHog/wizard/issues/868)) ([fae04d2](https://github.com/PostHog/wizard/commit/fae04d23a0ee189cc82ed12a8a8831def3f3a8ec))
+* sync Node preflight range with package.json engines ([#854](https://github.com/PostHog/wizard/issues/854)) ([569051b](https://github.com/PostHog/wizard/commit/569051b5a7e1dbe313a55a6808f1ed85027f431b))
+
 ## [2.41.0](https://github.com/PostHog/wizard/compare/v2.40.0...v2.41.0) (2026-07-10)
 
 

@@ -36,6 +36,12 @@ export const SELF_DRIVING_TIPS: Tip[] = [
       'After a fix ships, PostHog measures the result. If the pattern persists, a new signal reopens the work.',
   },
   {
+    id: 'pricing',
+    title: 'What it costs',
+    description:
+      'Watching is free. You pay a flat $15 only when a report ships a PR.',
+  },
+  {
     id: 'work-anywhere',
     title: 'Work anywhere',
     description:

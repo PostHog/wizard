@@ -388,6 +388,24 @@ describe('Analytics', () => {
     });
   });
 
+  describe('shutdown', () => {
+    it('emits the terminal event once — the first status wins over the interrupt fallback', async () => {
+      analytics.setTag('program_id', 'warehouse-source');
+
+      await analytics.shutdown('success');
+      // start-tui's ctrl+c fallback fires this on every TUI teardown.
+      await analytics.shutdown('cancelled');
+
+      const finishedCalls = mockPostHogInstance.capture.mock.calls.filter(
+        ([arg]) => arg.event === 'setup wizard finished',
+      );
+      expect(finishedCalls).toHaveLength(1);
+      expect(finishedCalls[0][0].properties).toMatchObject({
+        status: 'success',
+      });
+    });
+  });
+
   describe('groups (before_send injection)', () => {
     type TestEvent = Record<string, unknown> & {
       groups?: Record<string, string>;
