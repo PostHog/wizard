@@ -13,7 +13,10 @@ import {
   hasIndexHtml,
   type JavaScriptContext,
 } from './utils';
-import { detectNodePackageManagers } from '@lib/detection/package-manager';
+import {
+  detectNodePackageManagers,
+  NODE_PACKAGE_MANAGERS,
+} from '@lib/detection/package-manager';
 
 export const JAVASCRIPT_WEB_AGENT_CONFIG: FrameworkConfig<JavaScriptContext> = {
   metadata: {
@@ -36,6 +39,7 @@ export const JAVASCRIPT_WEB_AGENT_CONFIG: FrameworkConfig<JavaScriptContext> = {
     usesPackageJson: false,
     getVersion: () => undefined,
     detectPackageManager: detectNodePackageManagers,
+    allowedPackageManagers: NODE_PACKAGE_MANAGERS,
     detect: async (options) => {
       const packageJson = await tryGetPackageJson(options);
       if (!packageJson) {

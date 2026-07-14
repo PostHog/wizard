@@ -2,7 +2,10 @@
 import type { FrameworkConfig } from '@lib/framework-config';
 import { Integration } from '@lib/constants';
 import { tryGetPackageJson } from '@utils/setup-utils';
-import { detectNodePackageManagers } from '@lib/detection/package-manager';
+import {
+  detectNodePackageManagers,
+  NODE_PACKAGE_MANAGERS,
+} from '@lib/detection/package-manager';
 
 type JavaScriptNodeContext = Record<string, unknown>;
 
@@ -20,6 +23,7 @@ export const JAVASCRIPT_NODE_AGENT_CONFIG: FrameworkConfig<JavaScriptNodeContext
       usesPackageJson: false,
       getVersion: () => undefined,
       detectPackageManager: detectNodePackageManagers,
+      allowedPackageManagers: NODE_PACKAGE_MANAGERS,
       detect: async (options) => {
         const packageJson = await tryGetPackageJson(options);
         return !!packageJson;

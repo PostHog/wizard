@@ -37,6 +37,10 @@ import { createTriageLLMProvider } from './triage-provider';
 import { getWizardCommandments } from './commandments';
 import { classifyToolToStage } from './agent-phase';
 import type { PackageManagerDetector } from '@lib/detection/package-manager';
+import {
+  NODE_PACKAGE_MANAGERS,
+  PYTHON_PACKAGE_MANAGERS,
+} from '@lib/detection/package-manager';
 import { AgentSignals, AgentErrorType, REMARK_INSTRUCTION } from './signals';
 import { AgentOutputSignals } from './output-signals';
 
@@ -179,6 +183,11 @@ export type AgentConfig = {
   host: HostResolution;
   additionalMcpServers?: Record<string, { url: string }>;
   detectPackageManager: PackageManagerDetector;
+  /**
+   * Bash-fence package-manager binaries the agent may invoke for the active
+   * framework. Unset falls back to the fence's JS+Python default.
+   */
+  allowedPackageManagers?: readonly string[];
   /** Base URL for the skills server (context-mill dev or GitHub releases) */
   skillsBaseUrl: string;
   /** Feature flag key -> variant (evaluated at start of run). */
@@ -287,6 +296,8 @@ type AgentRunConfig = {
   model: string;
   wizardFlags?: Record<string, string>;
   wizardMetadata?: Record<string, string>;
+  /** Bash-fence package-manager binaries for the active framework. */
+  allowedPackageManagers?: readonly string[];
   /** Extra tools added on top of BASE_ALLOWED_TOOLS for this run. */
   allowedTools?: readonly string[];
   /** Tools removed from BASE_ALLOWED_TOOLS for this run. */
@@ -364,21 +375,15 @@ export function buildAgentEnv(
 }
 
 /**
- * Package managers that can be used to run commands.
+ * Package managers allowed when the run has no framework-specific list (audit,
+ * revenue-analytics, and other frameworkless programs). Frameworks declare
+ * their own set via `FrameworkConfig.detection.allowedPackageManagers`, which
+ * flows into `wizardCanUseTool`'s context; this JS+Python default preserves the
+ * historical behavior for everything else.
  */
-const PACKAGE_MANAGERS = [
-  // JavaScript
-  'npm',
-  'pnpm',
-  'yarn',
-  'bun',
-  'npx',
-  // Python
-  'pip',
-  'pip3',
-  'poetry',
-  'pipenv',
-  'uv',
+const DEFAULT_PACKAGE_MANAGERS: readonly string[] = [
+  ...NODE_PACKAGE_MANAGERS,
+  ...PYTHON_PACKAGE_MANAGERS,
 ];
 
 /**
@@ -391,8 +396,25 @@ const SAFE_SCRIPTS = [
   'install',
   'add',
   'ci',
+  'require', // composer require
+  'get', // go get
+  'mod', // go mod tidy/download
+  'package', // swift package add-dependency/resolve
+  'pub', // flutter/dart pub add/get
+  'deps', // mix deps.get / deps.compile
+  'restore', // dotnet/nuget restore
+  'update', // composer/bundle/pod/carthage update
+  'resolve', // swift package resolve
+  'bootstrap', // carthage bootstrap
+  // npx-wrapped tooling (parts[0] is npx, so the tool name is the "script")
+  'expo', // npx expo install/prebuild
+  'pod-install', // npx pod-install
+  'cap', // npx cap sync/add (Capacitor)
   // Build
   'build',
+  'compile', // mvn compile, mix compile
+  'assemble', // ./gradlew assembleDebug
+  'dependencies', // ./gradlew dependencies
   // Type checking (various naming conventions)
   'tsc',
   'typecheck',
@@ -417,9 +439,12 @@ export { isSkillInstallCommand } from '@lib/skill-install';
  * Check if command is an allowed package manager command.
  * Matches: <pkg-manager> [run|exec] <safe-script> [args...]
  */
-function matchesAllowedPrefix(command: string): boolean {
+function matchesAllowedPrefix(
+  command: string,
+  managers: readonly string[],
+): boolean {
   const parts = command.split(/\s+/);
-  if (parts.length === 0 || !PACKAGE_MANAGERS.includes(parts[0])) {
+  if (parts.length === 0 || !managers.includes(parts[0])) {
     return false;
   }
 
@@ -462,6 +487,11 @@ export function wizardCanUseTool(
   context: {
     wizardAskPending?: boolean;
     disallowedTools?: readonly string[];
+    /**
+     * Package-manager binaries allowed for this run (the active framework's
+     * set). Falls back to DEFAULT_PACKAGE_MANAGERS when unset.
+     */
+    allowedPackageManagers?: readonly string[];
   } = {},
 ):
   | { behavior: 'allow'; updatedInput: Record<string, unknown> }
@@ -531,6 +561,10 @@ export function wizardCanUseTool(
     typeof input.command === 'string' ? input.command : ''
   ).trim();
 
+  // Package managers allowed for this run: the active framework's set, or the
+  // JS+Python default for frameworkless programs.
+  const managers = context.allowedPackageManagers ?? DEFAULT_PACKAGE_MANAGERS;
+
   // Block definitely dangerous operators: ; ` $ ( )
   if (DANGEROUS_OPERATORS.test(command)) {
     logToFile(`Denying bash command with dangerous operators: ${command}`);
@@ -567,7 +601,7 @@ export function wizardCanUseTool(
       };
     }
 
-    if (matchesAllowedPrefix(baseCommand)) {
+    if (matchesAllowedPrefix(baseCommand, managers)) {
       logToFile(`Allowing bash command with output limiter: ${command}`);
       debug(`Allowing bash command with output limiter: ${command}`);
       return { behavior: 'allow', updatedInput: input };
@@ -589,7 +623,7 @@ export function wizardCanUseTool(
   }
 
   // Check if command starts with any allowed prefix (package manager commands)
-  if (matchesAllowedPrefix(normalized)) {
+  if (matchesAllowedPrefix(normalized, managers)) {
     logToFile(`Allowing bash command: ${command}`);
     debug(`Allowing bash command: ${command}`);
     return { behavior: 'allow', updatedInput: input };
@@ -710,6 +744,7 @@ export async function initializeAgent(
       wizardMetadata: config.wizardMetadata,
       allowedTools: config.allowedTools,
       disallowedTools: config.disallowedTools,
+      allowedPackageManagers: config.allowedPackageManagers,
       getPendingQuestion: config.getPendingQuestion,
     };
 
@@ -1076,6 +1111,7 @@ export async function runAgent(
             {
               wizardAskPending: agentConfig.getPendingQuestion?.() != null,
               disallowedTools: agentConfig.disallowedTools,
+              allowedPackageManagers: agentConfig.allowedPackageManagers,
             },
           );
           logToFile('canUseTool result:', result);

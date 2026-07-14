@@ -2,7 +2,10 @@
 import type { WizardRunOptions } from '@utils/types';
 import type { FrameworkConfig } from '@lib/framework-config';
 import { PYTHON_PACKAGE_INSTALLATION } from '@lib/framework-config';
-import { detectPythonPackageManagers } from '@lib/detection/package-manager';
+import {
+  detectPythonPackageManagers,
+  PYTHON_PACKAGE_MANAGERS,
+} from '@lib/detection/package-manager';
 import { Integration } from '@lib/constants';
 import fg from 'fast-glob';
 import * as fs from 'node:fs';
@@ -103,6 +106,7 @@ export const DJANGO_AGENT_CONFIG: FrameworkConfig<DjangoContext> = {
       return false;
     },
     detectPackageManager: detectPythonPackageManagers,
+    allowedPackageManagers: PYTHON_PACKAGE_MANAGERS,
   },
 
   environment: {

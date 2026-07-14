@@ -2,7 +2,10 @@
 import type { WizardRunOptions } from '@utils/types';
 import type { FrameworkConfig } from '@lib/framework-config';
 import { PYTHON_PACKAGE_INSTALLATION } from '@lib/framework-config';
-import { detectPythonPackageManagers } from '@lib/detection/package-manager';
+import {
+  detectPythonPackageManagers,
+  PYTHON_PACKAGE_MANAGERS,
+} from '@lib/detection/package-manager';
 import { Integration } from '@lib/constants';
 import {
   getFastAPIVersion,
@@ -119,6 +122,7 @@ export const FASTAPI_AGENT_CONFIG: FrameworkConfig = {
       return false;
     },
     detectPackageManager: detectPythonPackageManagers,
+    allowedPackageManagers: PYTHON_PACKAGE_MANAGERS,
   },
 
   environment: {

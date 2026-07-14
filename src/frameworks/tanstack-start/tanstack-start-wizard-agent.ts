@@ -1,7 +1,10 @@
 /* TanStack Start wizard using posthog-agent with PostHog MCP */
 import type { WizardRunOptions } from '@utils/types';
 import type { FrameworkConfig } from '@lib/framework-config';
-import { detectNodePackageManagers } from '@lib/detection/package-manager';
+import {
+  detectNodePackageManagers,
+  NODE_PACKAGE_MANAGERS,
+} from '@lib/detection/package-manager';
 import { Integration } from '@lib/constants';
 import {
   getDeclaredVersion,
@@ -43,6 +46,7 @@ export const TANSTACK_START_AGENT_CONFIG: FrameworkConfig<TanStackStartContext> 
           : false;
       },
       detectPackageManager: detectNodePackageManagers,
+      allowedPackageManagers: NODE_PACKAGE_MANAGERS,
     },
 
     environment: {

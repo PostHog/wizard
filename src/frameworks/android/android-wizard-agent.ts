@@ -10,7 +10,10 @@ import {
   getKotlinVersionBucket,
   getMinSdkVersion,
 } from './utils';
-import { gradlePackageManager } from '@lib/detection/package-manager';
+import {
+  gradlePackageManager,
+  ANDROID_PACKAGE_MANAGERS,
+} from '@lib/detection/package-manager';
 
 type AndroidContext = {
   kotlinVersion?: string;
@@ -38,6 +41,7 @@ export const ANDROID_AGENT_CONFIG: FrameworkConfig<AndroidContext> = {
     getInstalledVersion: (options: WizardRunOptions) =>
       getMinSdkVersion(options),
     detectPackageManager: gradlePackageManager,
+    allowedPackageManagers: ANDROID_PACKAGE_MANAGERS,
     detect: async (options) => {
       const { installDir } = options;
 
