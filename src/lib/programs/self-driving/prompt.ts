@@ -126,7 +126,11 @@ STEP 5 — Offer issue-tracker integrations. (skill: "Connected tools")
    One batched multi-select wizard_ask for the external tools the skill
    lists. The run auto-connects the ones it can (GitHub Issues, and
    Linear via a one-click OAuth link), verifying each with a single
-   silent check — never nudge. It arms the rest as dormant responders to
+   silent check — never nudge. For GitHub Issues: when the GitHub
+   integration has exactly one repository connected, use that repo by
+   default and skip repo research entirely — research which repo
+   matches this project only when several are connected. It arms the
+   rest as dormant responders to
    finish later: for tools it can't auto-connect (Zendesk, pganalyze) it
    never sends the user to paste credentials and never re-prompts. Enable
    a source only for a tool the user picked.
