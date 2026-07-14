@@ -274,6 +274,71 @@ describe('provisionNewAccount', () => {
     expect(resourceCall[1]).toEqual({ service_id: 'analytics' });
   });
 
+  const axiosHttpError = (status: number, data?: unknown) =>
+    Object.assign(new Error(`Request failed with status code ${status}`), {
+      isAxiosError: true,
+      response: { status, data },
+    });
+
+  it('throws a step-aware auth error when account_requests returns 401', async () => {
+    mockedAxios.post.mockRejectedValueOnce(axiosHttpError(401));
+
+    const promise = provisionNewAccount('auth@example.com', '');
+    await expect(promise).rejects.toThrow(/account_requests/);
+    await expect(promise).rejects.toThrow(/HTTP 401/);
+    await expect(promise).rejects.toThrow(/authentication failed/);
+    // The opaque axios default must not leak through.
+    await expect(promise).rejects.not.toThrow(
+      'Request failed with status code 401',
+    );
+  });
+
+  it('throws a step-aware auth error when oauth/token returns 401', async () => {
+    mockedAxios.post
+      .mockResolvedValueOnce({
+        data: { id: 'req_t', type: 'oauth', oauth: { code: 'code_t' } },
+      })
+      .mockRejectedValueOnce(
+        axiosHttpError(401, { detail: 'Invalid authorization code' }),
+      );
+
+    const promise = provisionNewAccount('token@example.com', '');
+    await expect(promise).rejects.toThrow(/oauth\/token/);
+    await expect(promise).rejects.toThrow(/authentication failed/);
+    await expect(promise).rejects.toThrow(/Invalid authorization code/);
+  });
+
+  it('throws a step-aware error when resources returns 401', async () => {
+    mockedAxios.post
+      .mockResolvedValueOnce({
+        data: { id: 'req_r', type: 'oauth', oauth: { code: 'code_r' } },
+      })
+      .mockResolvedValueOnce({
+        data: {
+          token_type: 'bearer',
+          access_token: 'pha_r',
+          refresh_token: 'phr_r',
+          expires_in: 3600,
+        },
+      })
+      .mockRejectedValueOnce(axiosHttpError(401));
+
+    await expect(
+      provisionNewAccount('resource@example.com', ''),
+    ).rejects.toThrow(/resources/);
+  });
+
+  it('reports the status for non-auth HTTP errors', async () => {
+    mockedAxios.post.mockRejectedValueOnce(
+      axiosHttpError(500, { detail: 'Something broke' }),
+    );
+
+    const promise = provisionNewAccount('boom@example.com', '');
+    await expect(promise).rejects.toThrow(/account_requests/);
+    await expect(promise).rejects.toThrow(/HTTP 500/);
+    await expect(promise).rejects.toThrow(/Something broke/);
+  });
+
   it('includes timeouts on all requests', async () => {
     mockedAxios.post
       .mockResolvedValueOnce({
