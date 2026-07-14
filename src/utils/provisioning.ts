@@ -8,7 +8,7 @@
  */
 
 import * as crypto from 'node:crypto';
-import axios from 'axios';
+import axios, { type AxiosError, type AxiosResponse } from 'axios';
 import { z } from 'zod';
 import {
   POSTHOG_DEV_CLIENT_ID,
@@ -22,6 +22,99 @@ import { analytics } from './analytics';
 import type { HostResolution } from '@lib/host-resolution';
 
 const API_VERSION = '0.1d';
+
+/** Human-readable label for each step of the provisioning flow. */
+type ProvisioningStep = 'account_requests' | 'oauth/token' | 'resources';
+
+/**
+ * Detect an axios error without relying on `axios.isAxiosError`, which is
+ * replaced by a no-op when the module is auto-mocked under test.
+ */
+function isAxiosError(error: unknown): error is AxiosError {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    (error as { isAxiosError?: boolean }).isAxiosError === true
+  );
+}
+
+/**
+ * Pull a human-readable detail out of a provisioning error response body,
+ * which may be shaped as `{ detail }`, `{ error: { message } }`, or
+ * `{ message }` depending on which layer rejected the request.
+ */
+function extractResponseDetail(data: unknown): string | undefined {
+  if (!data || typeof data !== 'object') return undefined;
+  const body = data as Record<string, unknown>;
+  if (typeof body.detail === 'string') return body.detail;
+  if (typeof body.message === 'string') return body.message;
+  const nested = body.error;
+  if (nested && typeof nested === 'object') {
+    const msg = (nested as Record<string, unknown>).message;
+    if (typeof msg === 'string') return msg;
+  }
+  return undefined;
+}
+
+/**
+ * Translate a raw axios failure into a descriptive, step-aware error.
+ *
+ * Without this, a non-2xx provisioning response surfaces as the opaque
+ * "Request failed with status code 401", which tells neither the user nor
+ * error tracking which step failed or that auth was rejected.
+ */
+function describeProvisioningError(
+  step: ProvisioningStep,
+  error: unknown,
+): Error {
+  if (!isAxiosError(error)) {
+    return error instanceof Error ? error : new Error(String(error));
+  }
+
+  const status = error.response?.status;
+  const detail = extractResponseDetail(error.response?.data);
+  const suffix = detail ? ` (${detail})` : '';
+
+  if (status === 401 || status === 403) {
+    return new Error(
+      `Provisioning step "${step}" was rejected by PostHog (HTTP ${status}): ` +
+        `authentication failed${suffix}.`,
+    );
+  }
+
+  if (status !== undefined) {
+    return new Error(
+      `Provisioning step "${step}" failed: PostHog responded with HTTP ${status}${suffix}.`,
+    );
+  }
+
+  if (error.code === 'ECONNABORTED' || error.code === 'ETIMEDOUT') {
+    return new Error(
+      `Provisioning step "${step}" timed out contacting PostHog. Please try again.`,
+    );
+  }
+
+  return new Error(
+    `Provisioning step "${step}" could not reach PostHog` +
+      `${error.code ? ` (${error.code})` : ''}.`,
+  );
+}
+
+/**
+ * Run a single provisioning request, converting any non-2xx / network
+ * failure into a descriptive, step-aware error. Mirrors the graceful
+ * handling used in `requestDeepLink`.
+ */
+async function provisioningPost<T>(
+  step: ProvisioningStep,
+  request: () => Promise<AxiosResponse<T>>,
+): Promise<AxiosResponse<T>> {
+  try {
+    return await request();
+  } catch (error) {
+    throw describeProvisioningError(step, error);
+  }
+}
 
 /**
  * Provisioning host. Follows a `--base-url` override (and IS_DEV → localhost),
@@ -129,29 +222,31 @@ export async function provisionNewAccount(
   logToFile('[provisioning] starting account creation');
 
   // Step 1: Create account
-  const accountRes = await axios.post(
-    `${provisioningBaseUrl}/api/agentic/provisioning/account_requests`,
-    {
-      id: crypto.randomUUID(),
-      email,
-      name,
-      client_id: getProvisioningClientId(opts?.baseUrl),
-      code_challenge: codeChallenge,
-      code_challenge_method: 'S256',
-      scopes: WIZARD_PROVISIONING_SCOPES,
-      configuration: {
-        region,
-        ...(opts?.orgName ? { organization_name: opts.orgName } : {}),
+  const accountRes = await provisioningPost('account_requests', () =>
+    axios.post(
+      `${provisioningBaseUrl}/api/agentic/provisioning/account_requests`,
+      {
+        id: crypto.randomUUID(),
+        email,
+        name,
+        client_id: getProvisioningClientId(opts?.baseUrl),
+        code_challenge: codeChallenge,
+        code_challenge_method: 'S256',
+        scopes: WIZARD_PROVISIONING_SCOPES,
+        configuration: {
+          region,
+          ...(opts?.orgName ? { organization_name: opts.orgName } : {}),
+        },
       },
-    },
-    {
-      headers: {
-        'Content-Type': 'application/json',
-        'API-Version': API_VERSION,
-        'User-Agent': WIZARD_USER_AGENT,
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          'API-Version': API_VERSION,
+          'User-Agent': WIZARD_USER_AGENT,
+        },
+        timeout: 30_000,
       },
-      timeout: 30_000,
-    },
+    ),
   );
 
   const accountData = AccountRequestResponseSchema.parse(accountRes.data);
@@ -179,21 +274,23 @@ export async function provisionNewAccount(
   logToFile('[provisioning] account created, exchanging code for tokens');
 
   // Step 2: Exchange code for tokens
-  const tokenRes = await axios.post(
-    `${provisioningBaseUrl}/api/agentic/oauth/token`,
-    new URLSearchParams({
-      grant_type: 'authorization_code',
-      code,
-      code_verifier: codeVerifier,
-    }).toString(),
-    {
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        'API-Version': API_VERSION,
-        'User-Agent': WIZARD_USER_AGENT,
+  const tokenRes = await provisioningPost('oauth/token', () =>
+    axios.post(
+      `${provisioningBaseUrl}/api/agentic/oauth/token`,
+      new URLSearchParams({
+        grant_type: 'authorization_code',
+        code,
+        code_verifier: codeVerifier,
+      }).toString(),
+      {
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'API-Version': API_VERSION,
+          'User-Agent': WIZARD_USER_AGENT,
+        },
+        timeout: 30_000,
       },
-      timeout: 30_000,
-    },
+    ),
   );
 
   const tokenData = TokenResponseSchema.parse(tokenRes.data);
@@ -201,23 +298,25 @@ export async function provisionNewAccount(
   logToFile('[provisioning] tokens received, provisioning resources');
 
   // Step 3: Provision resources
-  const resourceRes = await axios.post(
-    `${provisioningBaseUrl}/api/agentic/provisioning/resources`,
-    {
-      service_id: 'analytics',
-      ...(opts?.projectName
-        ? { configuration: { project_name: opts.projectName } }
-        : {}),
-    },
-    {
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${tokenData.access_token}`,
-        'API-Version': API_VERSION,
-        'User-Agent': WIZARD_USER_AGENT,
+  const resourceRes = await provisioningPost('resources', () =>
+    axios.post(
+      `${provisioningBaseUrl}/api/agentic/provisioning/resources`,
+      {
+        service_id: 'analytics',
+        ...(opts?.projectName
+          ? { configuration: { project_name: opts.projectName } }
+          : {}),
       },
-      timeout: 30_000,
-    },
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${tokenData.access_token}`,
+          'API-Version': API_VERSION,
+          'User-Agent': WIZARD_USER_AGENT,
+        },
+        timeout: 30_000,
+      },
+    ),
   );
 
   const resourceData = ResourceResponseSchema.parse(resourceRes.data);
