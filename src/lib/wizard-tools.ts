@@ -25,7 +25,6 @@ import {
 } from './programs/audit/types';
 import { type WizardAskBridge, isFullyCancelled } from './wizard-ask-bridge';
 import { createSecretVault, type SecretVault } from './secret-vault';
-import type { SkillInstallTracker } from './agent/skill-install-tracker';
 import {
   buildOrchestratorTools,
   type OrchestratorToolsContext,
@@ -255,6 +254,28 @@ export async function installSkillById(
   return { kind: 'ok', path: relPath };
 }
 
+/**
+ * One line per failed install for the `agent continued without skill` event —
+ * or undefined when a skill installed (even after earlier failures) or no
+ * install was ever attempted.
+ */
+export function skillInstallFailureDetail(
+  installs: readonly InstallSkillResult[],
+): string | undefined {
+  if (installs.length === 0 || installs.some((r) => r.kind === 'ok')) {
+    return undefined;
+  }
+  return installs
+    .map((r) =>
+      r.kind === 'skill-not-found'
+        ? `${r.skillId}: skill-not-found`
+        : r.kind === 'download-failed'
+        ? `download-failed: ${r.message}`
+        : r.kind,
+    )
+    .join('; ');
+}
+
 // ---------------------------------------------------------------------------
 // Options for creating the wizard tools server
 // ---------------------------------------------------------------------------
@@ -300,14 +321,6 @@ export interface WizardToolsOptions {
    * linear path.
    */
   orchestrator?: OrchestratorToolsContext;
-
-  /**
-   * Run-scoped install_skill outcome record. The install_skill tool reports
-   * every success/failure here so the run loop can capture `agent continued
-   * without skill` from ground truth at run end. Optional so unit tests can
-   * build a server without one.
-   */
-  skillInstallTracker?: SkillInstallTracker;
 }
 
 /** Default per-run cap on wizard_ask calls when no override is provided. */
@@ -602,7 +615,6 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
     askMaxQuestions = DEFAULT_ASK_MAX_QUESTIONS,
     secretVault = createSecretVault(),
     orchestrator,
-    skillInstallTracker,
   } = options;
   const sdk = await getSDKModule();
   const { tool, createSdkMcpServer } = sdk;
@@ -611,6 +623,10 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
   let askCallCount = 0;
   // The adjacency nudge fires once per run; after that only the total cap applies.
   let askAdjacencyNudged = false;
+
+  // Every install_skill outcome this run, surfaced to the caller alongside
+  // the server so the run loop can report a run that ended skill-less.
+  const skillInstalls: InstallSkillResult[] = [];
 
   // Pre-fetch skill menu so category names are available in the tool schema
   let cachedSkillMenu: Record<string, SkillEntry[]> = {};
@@ -837,7 +853,7 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
     },
     async (args: { skillId: string }) => {
       if (!/^[a-z0-9][a-z0-9_-]*$/.test(args.skillId)) {
-        skillInstallTracker?.recordFailure(`${args.skillId}: invalid-skill-id`);
+        skillInstalls.push({ kind: 'skill-not-found', skillId: args.skillId });
         return {
           content: [
             {
@@ -853,7 +869,7 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
       const allSkills: SkillEntry[] = Object.values(cachedSkillMenu).flat();
       const skill = allSkills.find((s) => s.id === args.skillId);
       if (!skill) {
-        skillInstallTracker?.recordFailure(`${args.skillId}: skill-not-found`);
+        skillInstalls.push({ kind: 'skill-not-found', skillId: args.skillId });
         return {
           content: [
             {
@@ -867,7 +883,10 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
 
       const result = await downloadSkill(skill, workingDirectory);
       if (result.success) {
-        skillInstallTracker?.recordSuccess();
+        skillInstalls.push({
+          kind: 'ok',
+          path: `.claude/skills/${args.skillId}`,
+        });
         return {
           content: [
             {
@@ -877,12 +896,10 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
           ],
         };
       } else {
-        skillInstallTracker?.recordFailure(
-          `${args.skillId}: download-failed — ${String(result.error).slice(
-            0,
-            200,
-          )}`,
-        );
+        skillInstalls.push({
+          kind: 'download-failed',
+          message: String(result.error ?? 'unknown'),
+        });
         // The agent only sees a tool-result string — report the failure too.
         analytics.captureException(
           new Error('Skill install failed: download-failed'),
@@ -1264,7 +1281,7 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
     ? buildOrchestratorTools(tool, orchestrator)
     : [];
 
-  return createSdkMcpServer({
+  const server = createSdkMcpServer({
     name: SERVER_NAME,
     version: '1.0.0',
     tools: [
@@ -1280,6 +1297,8 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
       ...orchestratorTools,
     ],
   });
+
+  return { server, skillInstalls };
 }
 
 /** Tool names exposed by the wizard-tools server, keyed for selective use. */

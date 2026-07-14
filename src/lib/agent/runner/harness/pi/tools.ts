@@ -28,7 +28,7 @@ import {
   detectNodePackageManagers,
   type PackageManagerDetector,
 } from '@lib/detection/package-manager';
-import type { SkillInstallTracker } from '@lib/agent/skill-install-tracker';
+import type { InstallSkillResult } from '@lib/wizard-tools';
 
 function text(s: string): {
   content: [{ type: 'text'; text: string }];
@@ -42,17 +42,17 @@ export interface PiToolsContext {
   skillsBaseUrl: string;
   /** Framework's package-manager detector. Defaults to Node detection. */
   detectPackageManager?: PackageManagerDetector;
-  /**
-   * Run-scoped install_skill outcome record; the run loop reads it at run end
-   * to capture `agent continued without skill` from ground truth.
-   */
-  skillInstallTracker?: SkillInstallTracker;
 }
 
-export function createWizardPiTools(ctx: PiToolsContext): ToolDefinition[] {
-  const { workingDirectory, skillsBaseUrl, skillInstallTracker } = ctx;
+export function createWizardPiTools(ctx: PiToolsContext): {
+  tools: ToolDefinition[];
+  /** Every install_skill outcome, in call order. */
+  skillInstalls: readonly InstallSkillResult[];
+} {
+  const { workingDirectory, skillsBaseUrl } = ctx;
   const detectPackageManager =
     ctx.detectPackageManager ?? detectNodePackageManagers;
+  const skillInstalls: InstallSkillResult[] = [];
 
   // Fetch the skill menu at most once per run — the agent calls load_skill_menu
   // 2-3× otherwise, each a fresh HTTP round-trip (profiled slowness).
@@ -99,15 +99,14 @@ export function createWizardPiTools(ctx: PiToolsContext): ToolDefinition[] {
         workingDirectory,
         skillsBaseUrl,
       );
+      skillInstalls.push(result);
       if (result.kind !== 'ok') {
         logToFile(`[pi] install_skill ${args.skillId}: ${result.kind}`);
-        skillInstallTracker?.recordFailure(`${args.skillId}: ${result.kind}`);
         return text(
           `Error installing skill "${args.skillId}": ${result.kind}. Use load_skill_menu to see valid IDs.`,
         );
       }
       logToFile(`[pi] install_skill ${args.skillId} -> ${result.path}`);
-      skillInstallTracker?.recordSuccess();
       return text(
         `Installed "${args.skillId}" at ${result.path}. Read ${result.path}/SKILL.md and follow it.`,
       );
@@ -202,5 +201,8 @@ export function createWizardPiTools(ctx: PiToolsContext): ToolDefinition[] {
     },
   });
 
-  return [loadSkillMenu, installSkill, checkEnvKeys, setEnvValues, detectPm];
+  return {
+    tools: [loadSkillMenu, installSkill, checkEnvKeys, setEnvValues, detectPm],
+    skillInstalls,
+  };
 }

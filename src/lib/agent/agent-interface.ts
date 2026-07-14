@@ -27,7 +27,12 @@ import { wizardAbort, WizardError } from '@utils/wizard-abort';
 import { createCustomHeaders } from '@utils/custom-headers';
 import type { HostResolution } from '@lib/host-resolution';
 import { LINTING_TOOLS } from '@lib/safe-tools';
-import { createWizardToolsServer, WIZARD_TOOL_NAMES } from '@lib/wizard-tools';
+import {
+  createWizardToolsServer,
+  skillInstallFailureDetail,
+  WIZARD_TOOL_NAMES,
+  type InstallSkillResult,
+} from '@lib/wizard-tools';
 import {
   createPreToolUseYaraHooks,
   createPostToolUseYaraHooks,
@@ -39,10 +44,6 @@ import { classifyToolToStage } from './agent-phase';
 import type { PackageManagerDetector } from '@lib/detection/package-manager';
 import { AgentSignals, AgentErrorType, REMARK_INSTRUCTION } from './signals';
 import { AgentOutputSignals } from './output-signals';
-import {
-  createSkillInstallTracker,
-  type SkillInstallTracker,
-} from './skill-install-tracker';
 
 // Signal vocabulary and the output parser live in dedicated modules; re-export
 // so existing importers of these from agent-interface keep working.
@@ -302,11 +303,8 @@ type AgentRunConfig = {
   getPendingQuestion?: () =>
     | import('@lib/wizard-session').PendingQuestion
     | null;
-  /**
-   * install_skill outcomes, recorded by the wizard-tools server and read at
-   * run end to capture `agent continued without skill` from ground truth.
-   */
-  skillInstallTracker?: SkillInstallTracker;
+  /** Every install_skill outcome, from the wizard-tools server. */
+  skillInstalls?: readonly InstallSkillResult[];
 };
 
 /**
@@ -696,21 +694,16 @@ export async function initializeAgent(
       ),
     };
 
-    // install_skill outcomes for this run: recorded by the wizard-tools
-    // server, read at run end by runAgent's completion handler.
-    const skillInstallTracker = createSkillInstallTracker();
-
     // Add in-process wizard tools (env files, package manager detection, skill loading)
-    const wizardToolsServer = await createWizardToolsServer({
+    const wizardTools = await createWizardToolsServer({
       workingDirectory: config.workingDirectory,
       detectPackageManager: config.detectPackageManager,
       skillsBaseUrl: config.skillsBaseUrl,
       askBridge: config.askBridge,
       askMaxQuestions: config.askMaxQuestions,
       orchestrator: config.orchestrator,
-      skillInstallTracker,
     });
-    mcpServers['wizard-tools'] = wizardToolsServer;
+    mcpServers['wizard-tools'] = wizardTools.server;
 
     // Bare model IDs (no `anthropic/` prefix) so the LLM gateway's Bedrock
     // fallback can match map_to_bedrock_model()'s strict lookup.
@@ -725,7 +718,7 @@ export async function initializeAgent(
       allowedTools: config.allowedTools,
       disallowedTools: config.disallowedTools,
       getPendingQuestion: config.getPendingQuestion,
-      skillInstallTracker,
+      skillInstalls: wizardTools.skillInstalls,
     };
 
     logToFile('Agent config:', {
@@ -873,10 +866,10 @@ export async function runAgent(
     }
 
     // A failed install_skill is non-fatal — the agent continues best-effort
-    // without the skill — but every such run must be measurable. Derived from
-    // the install_skill tool outcomes, not the agent's prose.
-    const skillFailure =
-      agentConfig.skillInstallTracker?.continuedWithoutSkill();
+    // without the skill — but every such run must be measurable.
+    const skillFailure = skillInstallFailureDetail(
+      agentConfig.skillInstalls ?? [],
+    );
     if (skillFailure) {
       analytics.wizardCapture('agent continued without skill', {
         detail: skillFailure,
