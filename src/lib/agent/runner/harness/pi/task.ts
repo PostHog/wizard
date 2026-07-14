@@ -414,8 +414,9 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
     }
 
     const stats = agentSession.getSessionStats();
+    const durations = runDurations();
     analytics.wizardCapture('agent completed', {
-      ...runDurations(),
+      ...durations,
       model: modelId,
       num_turns: assistantTurns,
       input_tokens: stats.tokens.input,
@@ -424,10 +425,15 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
       cache_read_input_tokens: stats.tokens.cacheRead,
       ...analyticsProperties,
     });
-    // Token usage on one parseable line so a run's per-task cost is observable
-    // from the log, not only from analytics.
+    // Per-task usage on one parseable line so a run's per-task time and cost are
+    // observable from the log, not only from analytics.
+    const taskType =
+      typeof (analyticsProperties as { task_type?: unknown })?.task_type ===
+      'string'
+        ? (analyticsProperties as { task_type: string }).task_type
+        : modelId;
     logToFile(
-      `[pi-task] usage model=${modelId} turns=${assistantTurns} in=${stats.tokens.input} out=${stats.tokens.output} cacheR=${stats.tokens.cacheRead} cacheW=${stats.tokens.cacheWrite}`,
+      `[pi-task] usage task=${taskType} model=${modelId} dur=${durations.duration_seconds}s turns=${assistantTurns} in=${stats.tokens.input} out=${stats.tokens.output} cacheR=${stats.tokens.cacheRead} cacheW=${stats.tokens.cacheWrite}`,
     );
     if (successMessage) spinner.stop(successMessage);
     return {};
