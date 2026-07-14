@@ -257,6 +257,18 @@ export const WIZARD_TOOLS_MENU_FLAG_KEY = 'wizard-tools-menu';
 /** User-Agent for wizard HTTP requests and MCP server identification. */
 export const WIZARD_USER_AGENT = `posthog/wizard; version: ${VERSION}`;
 
+/**
+ * User-Agent for a specific program's MCP calls, tagged with `program: <id>` so the
+ * backend can attribute work per program (e.g. the `self-driving` program's warehouse
+ * sources are recorded as `created_via=self_driving` rather than plain `wizard`). The
+ * base `posthog/wizard` token is preserved, so anything keying only on that still matches.
+ */
+export function wizardUserAgentForProgram(programId?: string): string {
+  return programId
+    ? `${WIZARD_USER_AGENT}; program: ${programId}`
+    : WIZARD_USER_AGENT;
+}
+
 // ── HTTP headers ─────────────────────────────────────────────────────
 
 /** Header prefix for PostHog properties (e.g. X-POSTHOG-PROPERTY-VARIANT). */
