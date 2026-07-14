@@ -44,6 +44,8 @@ it.
 
 ## What's next
 
-The same report is meant to feed an interactive basic-integration picker later,
-with `recommended` pre-selected as the default. Rolling this out is just moving
-the flag off 0%.
+- The same report is meant to feed an interactive basic-integration picker
+  later, with `recommended` pre-selected as the default.
+- Fuller monorepo support: suggesting and implementing a sane number of defaults
+  across the projects it finds.
+- Rolling this out is just moving the flag off 0%.
