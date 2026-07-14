@@ -28,6 +28,7 @@ import {
   detectNodePackageManagers,
   type PackageManagerDetector,
 } from '@lib/detection/package-manager';
+import type { SkillInstallTracker } from '@lib/agent/skill-install-tracker';
 
 function text(s: string): {
   content: [{ type: 'text'; text: string }];
@@ -41,10 +42,15 @@ export interface PiToolsContext {
   skillsBaseUrl: string;
   /** Framework's package-manager detector. Defaults to Node detection. */
   detectPackageManager?: PackageManagerDetector;
+  /**
+   * Run-scoped install_skill outcome record; the run loop reads it at run end
+   * to capture `agent continued without skill` from ground truth.
+   */
+  skillInstallTracker?: SkillInstallTracker;
 }
 
 export function createWizardPiTools(ctx: PiToolsContext): ToolDefinition[] {
-  const { workingDirectory, skillsBaseUrl } = ctx;
+  const { workingDirectory, skillsBaseUrl, skillInstallTracker } = ctx;
   const detectPackageManager =
     ctx.detectPackageManager ?? detectNodePackageManagers;
 
@@ -95,11 +101,13 @@ export function createWizardPiTools(ctx: PiToolsContext): ToolDefinition[] {
       );
       if (result.kind !== 'ok') {
         logToFile(`[pi] install_skill ${args.skillId}: ${result.kind}`);
+        skillInstallTracker?.recordFailure(`${args.skillId}: ${result.kind}`);
         return text(
           `Error installing skill "${args.skillId}": ${result.kind}. Use load_skill_menu to see valid IDs.`,
         );
       }
       logToFile(`[pi] install_skill ${args.skillId} -> ${result.path}`);
+      skillInstallTracker?.recordSuccess();
       return text(
         `Installed "${args.skillId}" at ${result.path}. Read ${result.path}/SKILL.md and follow it.`,
       );

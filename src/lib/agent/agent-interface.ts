@@ -39,6 +39,10 @@ import { classifyToolToStage } from './agent-phase';
 import type { PackageManagerDetector } from '@lib/detection/package-manager';
 import { AgentSignals, AgentErrorType, REMARK_INSTRUCTION } from './signals';
 import { AgentOutputSignals } from './output-signals';
+import {
+  createSkillInstallTracker,
+  type SkillInstallTracker,
+} from './skill-install-tracker';
 
 // Signal vocabulary and the output parser live in dedicated modules; re-export
 // so existing importers of these from agent-interface keep working.
@@ -298,6 +302,11 @@ type AgentRunConfig = {
   getPendingQuestion?: () =>
     | import('@lib/wizard-session').PendingQuestion
     | null;
+  /**
+   * install_skill outcomes, recorded by the wizard-tools server and read at
+   * run end to capture `agent continued without skill` from ground truth.
+   */
+  skillInstallTracker?: SkillInstallTracker;
 };
 
 /**
@@ -687,6 +696,10 @@ export async function initializeAgent(
       ),
     };
 
+    // install_skill outcomes for this run: recorded by the wizard-tools
+    // server, read at run end by runAgent's completion handler.
+    const skillInstallTracker = createSkillInstallTracker();
+
     // Add in-process wizard tools (env files, package manager detection, skill loading)
     const wizardToolsServer = await createWizardToolsServer({
       workingDirectory: config.workingDirectory,
@@ -695,6 +708,7 @@ export async function initializeAgent(
       askBridge: config.askBridge,
       askMaxQuestions: config.askMaxQuestions,
       orchestrator: config.orchestrator,
+      skillInstallTracker,
     });
     mcpServers['wizard-tools'] = wizardToolsServer;
 
@@ -711,6 +725,7 @@ export async function initializeAgent(
       allowedTools: config.allowedTools,
       disallowedTools: config.disallowedTools,
       getPendingQuestion: config.getPendingQuestion,
+      skillInstallTracker,
     };
 
     logToFile('Agent config:', {
@@ -855,6 +870,17 @@ export async function runAgent(
     const remark = signals.remark();
     if (remark) {
       analytics.capture(WIZARD_REMARK_EVENT_NAME, { remark });
+    }
+
+    // A failed install_skill is non-fatal — the agent continues best-effort
+    // without the skill — but every such run must be measurable. Derived from
+    // the install_skill tool outcomes, not the agent's prose.
+    const skillFailure =
+      agentConfig.skillInstallTracker?.continuedWithoutSkill();
+    if (skillFailure) {
+      analytics.wizardCapture('agent continued without skill', {
+        detail: skillFailure,
+      });
     }
 
     // Token usage comes from the SDK result message and is per agent run —

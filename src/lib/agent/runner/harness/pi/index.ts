@@ -27,6 +27,7 @@ import { analytics } from '@utils/analytics';
 import { AgentErrorType } from '@lib/agent/agent-interface';
 import { AgentSignals, REMARK_INSTRUCTION } from '@lib/agent/signals';
 import { AgentOutputSignals } from '@lib/agent/output-signals';
+import { createSkillInstallTracker } from '@lib/agent/skill-install-tracker';
 import { getWizardCommandments } from '@lib/agent/commandments';
 import { modelCapabilities } from '../../switchboard/models';
 import type { AgentResult, AgentHarness, BackendRunInputs } from '../types';
@@ -436,6 +437,8 @@ export const piBackend: AgentHarness = {
       const { createDispatchAgentTool } = await import('./subagent');
       // Created once so the run loop can read the store for the completion guard.
       const wizardTaskTools = createWizardPiTaskTools();
+      // install_skill outcomes, read at run end for `agent continued without skill`.
+      const skillInstallTracker = createSkillInstallTracker();
       // The one bash the agent (and its subagents) may use: every subprocess it
       // spawns gets a scrubbed env, so no secret or ambient variable reaches an
       // `npm install`. Shared with the subagent so the lockdown is inherited.
@@ -465,6 +468,7 @@ export const piBackend: AgentHarness = {
           workingDirectory: session.installDir,
           skillsBaseUrl: boot.skillsBaseUrl,
           detectPackageManager: config.detectPackageManager,
+          skillInstallTracker,
         }),
         // Task/todo tools (#526): render the todo list live in the TUI, parity
         // with the anthropic path.
@@ -627,6 +631,16 @@ export const piBackend: AgentHarness = {
       const remark = signals.remark();
       if (remark) {
         analytics.capture(WIZARD_REMARK_EVENT_NAME, { remark });
+      }
+
+      // A failed install_skill is non-fatal — the agent continues best-effort
+      // without the skill — but every such run must be measurable. Derived
+      // from the install_skill tool outcomes, not the agent's prose.
+      const skillFailure = skillInstallTracker.continuedWithoutSkill();
+      if (skillFailure) {
+        analytics.wizardCapture('agent continued without skill', {
+          detail: skillFailure,
+        });
       }
 
       // The skill plans events into .posthog-events.json then asks to remove it
