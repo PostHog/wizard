@@ -31,8 +31,14 @@ export const Tumblers = ({ width, height }: VisualProps) => {
 
   const cylinderTop = 1;
   const cylinderBottom = height - 2;
+  // Clamp to the cylinder interior: on short panels the raw formula can drop a
+  // pin's target above cylinderTop (even negative), which used to be written
+  // back as a settled height and indexed as grid[negativeRow][pinX] -> crash.
   const targetForPin = (i: number) =>
-    cylinderBottom - 1 - (i % 3) - Math.floor(i / 2);
+    Math.max(
+      cylinderTop,
+      Math.min(cylinderBottom, cylinderBottom - 1 - (i % 3) - Math.floor(i / 2)),
+    );
 
   if (state.pulse > 0) {
     state.pulse -= 1;
@@ -73,13 +79,15 @@ export const Tumblers = ({ width, height }: VisualProps) => {
     if (pinX >= width) continue;
     const top = state.heights[i] || cylinderTop;
     for (let y = top; y <= cylinderBottom; y++) {
-      grid[y][pinX] = '█';
+      if (y >= 0 && y < height) grid[y][pinX] = '█';
     }
   }
   // Falling pin
   if (state.pulse === 0 && state.current < pinCount) {
     const pinX = 1 + state.current * 2 + 1;
-    if (pinX < width) grid[state.fallY][pinX] = '█';
+    if (pinX < width && state.fallY >= 0 && state.fallY < height) {
+      grid[state.fallY][pinX] = '█';
+    }
   }
 
   const pulsing = state.pulse > 0;

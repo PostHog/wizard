@@ -21,6 +21,7 @@ import {
 import type { ProgressItem } from '@ui/tui/primitives/index';
 import { ADDITIONAL_FEATURE_LABELS } from '@lib/wizard-session';
 import { LearnCard } from '@ui/tui/components/LearnCard';
+import { VisualizerTab } from '@ui/tui/components/PhaseVisuals';
 import { TipsCard } from '@ui/tui/components/TipsCard';
 import { useStdoutDimensions } from '@ui/tui/hooks/useStdoutDimensions';
 import { useFileWatcher } from '@ui/tui/hooks/file-watcher';
@@ -135,8 +136,11 @@ export const RunScreen = ({ store }: RunScreenProps) => {
       label: 'Tail logs',
       component: <LogViewer filePath={WIZARD_LOG_FILE} />,
     },
-    // Visualizer tab temporarily disabled: Tumblers crashes on short panels
-    // (negative pin row -> grid[undefined]). Component + demo left intact.
+    {
+      id: 'visualizer',
+      label: 'Visualizer',
+      component: <VisualizerTab store={store} />,
+    },
     { id: 'hn', label: 'HN', component: <HNViewer /> },
   ];
 
