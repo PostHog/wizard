@@ -9,33 +9,38 @@ it.
 
 ## What it does
 
-Before the integration runs, an agent scans the repo and returns a report: a
-list of projects, each with its path, detected framework, whether it maps to a
-supported target, whether it already has PostHog, and exactly one flagged
-`recommended` (the main user-facing app — frontend or mobile over servers, libs,
-tooling). We take the recommended supported project, or fall back to the first
-supported PostHog-free one, and re-point the install dir there. On a single-repo
-project it recommends `.` and nothing moves. If the scan fails or finds nothing,
-we leave the install dir alone and run exactly like today.
+- Before the integration runs, an agent scans the repo and returns a report:
+  every project with its path, detected framework, whether it maps to a
+  supported target, whether it already has PostHog, and exactly one flagged
+  `recommended` (the main user-facing app — frontend or mobile over servers,
+  libs, tooling).
+- We take the recommended supported project, else the first supported
+  PostHog-free one, and re-point the install dir there.
+- On a single-repo project it recommends `.`, so nothing moves.
+- If the scan fails or finds nothing, we leave the install dir alone and run
+  exactly like today.
 
 ## What flag gates it
 
-`basic-integration-agentic-detection`, default off. On, the scan runs; off (or a
-failed flag fetch), it's skipped and you're back on root detection. Read once at
-the start of each run. Locally: set
-`WIZARD_CI_FLAG_OVERRIDES='{"basic-integration-agentic-detection":"true"}'` on a
-dev/`--ci` run.
+- `basic-integration-agentic-detection`, default off.
+- On, the scan runs; off (or a failed flag fetch), it's skipped and you're back
+  on root detection.
+- Read once at the start of each run.
+- Locally: set
+  `WIZARD_CI_FLAG_OVERRIDES='{"basic-integration-agentic-detection":"true"}'` on
+  a dev/`--ci` run.
 
 ## What it affects
 
-Only non-interactive basic-integration runs — headless and `--ci`. Interactive
-runs have their own detect step and never enter it. The phase is
-`scopeInstallDirToProject` in `src/lib/detection/project-scope.ts`, called from
-the top of `ciPreRun` in `src/lib/programs/posthog-integration/index.ts`; the
-detector itself is `detectProjectsWithAgent` in `src/lib/detection/agentic.ts`.
-Self-driving uses the same detector with its own chooser. Each run fires one
-`wizard: agentic detection` event tagged with the outcome
-(`flag-off | error | no-project | recommended | first-instrumentable`).
+- Only non-interactive basic-integration runs — headless and `--ci`. Interactive
+  runs have their own detect step and never enter it.
+- Phase: `scopeInstallDirToProject` in `src/lib/detection/project-scope.ts`,
+  called from the top of `ciPreRun` in
+  `src/lib/programs/posthog-integration/index.ts`.
+- Detector: `detectProjectsWithAgent` in `src/lib/detection/agentic.ts`;
+  self-driving uses the same detector with its own chooser.
+- Each run fires one `wizard: agentic detection` event tagged with the outcome
+  (`flag-off | error | no-project | recommended | first-instrumentable`).
 
 ## What's next
 
