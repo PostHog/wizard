@@ -14,14 +14,13 @@ import {
   GPT5_MODEL,
   Harness,
   SONNET_5_MODEL,
-  WIZARD_PI_MODEL_FLAG_KEY,
-  WIZARD_USE_PI_HARNESS_FLAG_KEY,
 } from '@lib/constants';
 import { logToFile } from '@utils/debug';
-import type { ProgramId } from '@lib/programs/program-registry';
 import { anthropicBackend } from '../harness/anthropic';
 import { piBackend } from '../harness/pi';
 import type { AgentHarness } from '../harness/types';
+import type { ThinkingLevel } from './models';
+import { PI_FLAG_CONFIGS } from './pi-flags';
 import {
   DEFAULT_BINDING,
   PROGRAM_BINDINGS,
@@ -57,25 +56,35 @@ const PI_MODEL_FLAG_VARIANTS: Record<string, string> = {
   'sonnet-5': SONNET_5_MODEL,
 };
 
-/** Programs the wizard-use-pi-harness flag may switch to pi; off this set the flag is a no-op and the binding default stands. */
-const PI_FLAG_PROGRAMS = new Set<ProgramId>(['posthog-integration']);
+/** Valid effort-flag variants; anything else leaves the model's table default. */
+const EFFORT_FLAG_VARIANTS: readonly ThinkingLevel[] = [
+  'minimal',
+  'low',
+  'medium',
+  'high',
+  'xhigh',
+];
 
 /**
- * `wizard-use-pi-harness` on → pi, paired with the `wizard-pi-model` variant
- * (unknown/missing variant → gpt-5.4). Off `PI_FLAG_PROGRAMS`, the flag is
- * ignored and the binding default stands.
+ * The program's `useFlag` on → pi, paired with its `modelFlag` variant
+ * (unknown/missing variant → the config's fallback model) and its `effortFlag`
+ * as the resolved thinking level (invalid/missing → none). A program without
+ * a `PI_FLAG_CONFIGS` entry ignores the flags and the binding default stands.
  */
 const flagRunnerOverride: Middleware<HarnessPick> = (ctx, next) => {
   const pick = next();
-  if (ctx.flags[WIZARD_USE_PI_HARNESS_FLAG_KEY] !== 'true') return pick;
+  const cfg = PI_FLAG_CONFIGS[ctx.program];
+  if (!cfg) return pick;
+  if (ctx.flags[cfg.useFlag] !== 'true') return pick;
   // The pi experiment is disabled on the cloud (headless) run surface.
   if (RUN_SURFACE === 'cloud') return pick;
-  if (!PI_FLAG_PROGRAMS.has(ctx.program)) return pick;
   if (ctx.trace) Object.assign(ctx.trace, { harness: 'flag', model: 'flag' });
-  const variant = ctx.flags[WIZARD_PI_MODEL_FLAG_KEY] ?? '';
+  const variant = ctx.flags[cfg.modelFlag] ?? '';
+  const effort = ctx.flags[cfg.effortFlag] as ThinkingLevel;
   return {
     harness: Harness.pi,
-    model: PI_MODEL_FLAG_VARIANTS[variant] ?? GPT5_4_MODEL,
+    model: PI_MODEL_FLAG_VARIANTS[variant] ?? cfg.fallbackModel,
+    thinkingLevel: EFFORT_FLAG_VARIANTS.includes(effort) ? effort : undefined,
   };
 };
 

@@ -10,6 +10,7 @@
 import { DEFAULT_AGENT_MODEL, Harness, Sequence } from '@lib/constants';
 import type { ProgramId } from '@lib/programs/program-registry';
 import { resolveHarness } from './harness';
+import type { ThinkingLevel } from './models';
 import { resolveSequence } from './sequence';
 
 // ── Shared machinery ────────────────────────────────────────────────────
@@ -73,6 +74,8 @@ export interface HarnessPick {
   harness: Harness;
   /** Gateway model id (string). */
   model: string;
+  /** Reasoning-effort override (e.g. from a pi effort flag). Absent → the model's table default. */
+  thinkingLevel?: ThinkingLevel;
 }
 
 export interface ProgramBinding {

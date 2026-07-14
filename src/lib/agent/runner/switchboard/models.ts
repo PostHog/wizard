@@ -21,10 +21,7 @@ import {
   GPT5_6_SOL_MODEL,
   GPT5_6_TERRA_MODEL,
   GPT5_MINI_MODEL,
-  WIZARD_PI_EFFORT_FLAG_KEY,
-  WIZARD_USE_PI_HARNESS_FLAG_KEY,
 } from '@lib/constants';
-import { RUN_SURFACE } from '@env';
 
 /** Reasoning effort. pi maps it to `reasoning_effort` for openai-completions. */
 export type ThinkingLevel =
@@ -75,29 +72,19 @@ function defaultCaps(modelId: string): ModelCapabilities {
   return { reasoning: !modelId.startsWith('openai/') };
 }
 
-/** Capabilities for a gateway model id, table override then transport default. */
-const EFFORT_FLAG_VARIANTS: readonly ThinkingLevel[] = [
-  'minimal',
-  'low',
-  'medium',
-  'high',
-  'xhigh',
-];
-
+/**
+ * Capabilities for a gateway model id, table override then transport default.
+ * `effortOverride` is a switchboard-resolved effort (e.g. from a pi effort
+ * flag); it applies only when the model reasons at all — a non-reasoning model
+ * rejects reasoning effort, so the override is dropped.
+ */
 export function modelCapabilities(
   modelId: string,
-  flags: Record<string, string> = {},
+  effortOverride?: ThinkingLevel,
 ): ModelCapabilities {
   const caps = MODEL_CAPABILITIES[modelId] ?? defaultCaps(modelId);
-  // The wizard-pi-effort override applies only to a pi run — inert on the cloud surface or without the pi flag.
-  if (
-    RUN_SURFACE === 'cloud' ||
-    flags[WIZARD_USE_PI_HARNESS_FLAG_KEY] !== 'true'
-  )
-    return caps;
-  const effort = flags[WIZARD_PI_EFFORT_FLAG_KEY] as ThinkingLevel;
-  if (caps.reasoning && EFFORT_FLAG_VARIANTS.includes(effort)) {
-    return { ...caps, thinkingLevel: effort };
+  if (caps.reasoning && effortOverride) {
+    return { ...caps, thinkingLevel: effortOverride };
   }
   return caps;
 }

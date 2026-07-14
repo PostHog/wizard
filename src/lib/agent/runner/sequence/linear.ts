@@ -134,6 +134,7 @@ export async function runLinearProgram(
     askBridge,
     middleware,
     model: pick.model,
+    thinkingLevel: pick.thinkingLevel,
   });
 
   // 9. Error handling (full set from both runners)

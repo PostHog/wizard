@@ -15,6 +15,9 @@ import {
   WIZARD_PI_MODEL_FLAG_KEY,
   Sequence,
   WIZARD_ORCHESTRATOR_FLAG_KEY,
+  WIZARD_SELF_DRIVING_PI_EFFORT_FLAG_KEY,
+  WIZARD_SELF_DRIVING_PI_MODEL_FLAG_KEY,
+  WIZARD_SELF_DRIVING_USE_PI_HARNESS_FLAG_KEY,
   WIZARD_USE_PI_HARNESS_FLAG_KEY,
 } from '@lib/constants';
 import {
@@ -243,6 +246,93 @@ describe('switchboard resolveHarness — pi flag is gated to posthog-integration
   });
 });
 
+describe('switchboard resolveHarness — self-driving pi flag trio', () => {
+  const SD_ON = { [WIZARD_SELF_DRIVING_USE_PI_HARNESS_FLAG_KEY]: 'true' };
+
+  it('routes self-driving to pi + terra when the flag is on and no variant is set', () => {
+    const pick = resolveHarness({ program: 'self-driving', flags: SD_ON });
+    expect(pick).toEqual({ harness: Harness.pi, model: GPT5_6_TERRA_MODEL });
+  });
+
+  it('the self-driving model variant selects the model; unknown falls back to terra', () => {
+    const pick = (variant?: string) =>
+      resolveHarness({
+        program: 'self-driving',
+        flags: variant
+          ? { ...SD_ON, [WIZARD_SELF_DRIVING_PI_MODEL_FLAG_KEY]: variant }
+          : SD_ON,
+      }).model;
+    expect(pick('gpt-5-4')).toBe(GPT5_4_MODEL);
+    expect(pick('sonnet-5')).toBe(SONNET_5_MODEL);
+    expect(pick('gpt-5-6-terra')).toBe(GPT5_6_TERRA_MODEL);
+    expect(pick('banana')).toBe(GPT5_6_TERRA_MODEL);
+    expect(pick()).toBe(GPT5_6_TERRA_MODEL);
+  });
+
+  it('ignores the self-driving flag for posthog-integration — trios do not cross', () => {
+    const pick = resolveHarness({
+      program: 'posthog-integration',
+      flags: SD_ON,
+    });
+    expect(pick).toEqual({
+      harness: Harness.anthropic,
+      model: DEFAULT_AGENT_MODEL,
+    });
+  });
+
+  it('disables the self-driving flag on the cloud run surface', () => {
+    envState.runSurface = 'cloud';
+    try {
+      const pick = resolveHarness({ program: 'self-driving', flags: SD_ON });
+      expect(pick).toEqual({
+        harness: Harness.anthropic,
+        model: DEFAULT_AGENT_MODEL,
+      });
+    } finally {
+      envState.runSurface = 'local';
+    }
+  });
+
+  it('clamps a flag-driven orchestrator pick to linear for a self-driving pi run', () => {
+    const ctx: SwitchboardCtx = {
+      program: 'self-driving',
+      flags: { ...SD_ON, [WIZARD_ORCHESTRATOR_FLAG_KEY]: 'true' },
+    };
+    resolveBinding(ctx);
+    expect(ctx.trace).toEqual({
+      harness: 'flag',
+      model: 'flag',
+      sequence: 'pi-clamp',
+    });
+  });
+
+  it('resolves the self-driving effort flag onto the pick; pairs do not cross', () => {
+    expect(
+      resolveHarness({
+        program: 'self-driving',
+        flags: { ...SD_ON, [WIZARD_SELF_DRIVING_PI_EFFORT_FLAG_KEY]: 'high' },
+      }).thinkingLevel,
+    ).toBe('high');
+    // The integration effort flag is inert for a self-driving run…
+    expect(
+      resolveHarness({
+        program: 'self-driving',
+        flags: { ...SD_ON, [WIZARD_PI_EFFORT_FLAG_KEY]: 'high' },
+      }).thinkingLevel,
+    ).toBeUndefined();
+    // …and the self-driving effort flag is inert for a posthog-integration run.
+    expect(
+      resolveHarness({
+        program: 'posthog-integration',
+        flags: {
+          [WIZARD_USE_PI_HARNESS_FLAG_KEY]: 'true',
+          [WIZARD_SELF_DRIVING_PI_EFFORT_FLAG_KEY]: 'high',
+        },
+      }).thinkingLevel,
+    ).toBeUndefined();
+  });
+});
+
 describe('switchboard decision trace', () => {
   it('stamps binding sources when nothing overrides', () => {
     const ctx: SwitchboardCtx = { program: 'posthog-integration', flags: {} };
@@ -337,51 +427,36 @@ describe('switchboard modelCapabilities', () => {
 
 describe('switchboard wizard-pi-effort flag', () => {
   const PI_ON = { [WIZARD_USE_PI_HARNESS_FLAG_KEY]: 'true' };
+  const pickLevel = (flags: Record<string, string>) =>
+    resolveHarness({ program: 'posthog-integration', flags }).thinkingLevel;
 
-  it('overrides effort for reasoning models; ignores invalid; skips non-reasoning', () => {
+  it('resolves a valid effort variant onto the pick; ignores invalid', () => {
+    expect(pickLevel({ ...PI_ON, [WIZARD_PI_EFFORT_FLAG_KEY]: 'high' })).toBe(
+      'high',
+    );
     expect(
-      modelCapabilities(GPT5_4_MODEL, {
-        ...PI_ON,
-        [WIZARD_PI_EFFORT_FLAG_KEY]: 'high',
-      }).thinkingLevel,
-    ).toBe('high');
+      pickLevel({ ...PI_ON, [WIZARD_PI_EFFORT_FLAG_KEY]: 'banana' }),
+    ).toBeUndefined();
+  });
+
+  it('the override rides only a reasoning model — dropped for non-reasoning', () => {
+    expect(modelCapabilities(GPT5_4_MODEL, 'high').thinkingLevel).toBe('high');
+    expect(modelCapabilities(GPT5_4_MODEL).thinkingLevel).toBe('low');
     expect(
-      modelCapabilities(GPT5_4_MODEL, {
-        ...PI_ON,
-        [WIZARD_PI_EFFORT_FLAG_KEY]: 'banana',
-      }).thinkingLevel,
-    ).toBe('low');
-    expect(
-      modelCapabilities('openai/gpt-4o', {
-        ...PI_ON,
-        [WIZARD_PI_EFFORT_FLAG_KEY]: 'high',
-      }).thinkingLevel,
+      modelCapabilities('openai/gpt-4o', 'high').thinkingLevel,
     ).toBeUndefined();
   });
 
   it('is inert unless the pi-harness flag is on — effort cannot ride a non-pi pick', () => {
-    // Effort set but the pi flag off: the override is ignored, so the model's
-    // own table effort stands (gpt-5.4 → low) and anthropic keeps no effort.
-    expect(
-      modelCapabilities(GPT5_4_MODEL, { [WIZARD_PI_EFFORT_FLAG_KEY]: 'high' })
-        .thinkingLevel,
-    ).toBe('low');
-    expect(
-      modelCapabilities(DEFAULT_AGENT_MODEL, {
-        [WIZARD_PI_EFFORT_FLAG_KEY]: 'high',
-      }).thinkingLevel,
-    ).toBeUndefined();
+    expect(pickLevel({ [WIZARD_PI_EFFORT_FLAG_KEY]: 'high' })).toBeUndefined();
   });
 
   it('is inert on the cloud surface even with the pi flag on', () => {
     envState.runSurface = 'cloud';
     try {
       expect(
-        modelCapabilities(GPT5_4_MODEL, {
-          [WIZARD_USE_PI_HARNESS_FLAG_KEY]: 'true',
-          [WIZARD_PI_EFFORT_FLAG_KEY]: 'high',
-        }).thinkingLevel,
-      ).toBe('low');
+        pickLevel({ ...PI_ON, [WIZARD_PI_EFFORT_FLAG_KEY]: 'high' }),
+      ).toBeUndefined();
     } finally {
       envState.runSurface = 'local';
     }
