@@ -86,6 +86,7 @@ export async function runLinearProgram(
     : createWizardAskBridge({
         getSource: () => session.skillId ?? config.integrationLabel,
         showQuestion: (q) => getUI().requestQuestion(q),
+        cancelQuestion: () => getUI().cancelPendingQuestion(),
         richLinks: config.richLinks ?? false,
         timeoutMs: config.askTimeoutMs,
       });
