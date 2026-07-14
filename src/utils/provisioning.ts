@@ -12,6 +12,7 @@ import axios from 'axios';
 import { z } from 'zod';
 import {
   POSTHOG_DEV_CLIENT_ID,
+  POSTHOG_EU_CLIENT_ID,
   POSTHOG_US_CLIENT_ID,
   WIZARD_PROVISIONING_SCOPES,
   WIZARD_USER_AGENT,
@@ -25,26 +26,37 @@ const API_VERSION = '0.1d';
 
 /**
  * Provisioning host. Follows a `--base-url` override (and IS_DEV → localhost),
- * else the region-agnostic prod provisioning host (always US; the target region
- * is passed in the request body).
- *
- * // TODO: Make this work with EU provisioning.
+ * else the prod provisioning host for the target region. Unlike the login OAuth
+ * flow (which goes through the region-agnostic `oauth.posthog.com` proxy), the
+ * provisioning API is region-specific: an EU account must be created against
+ * `eu.posthog.com`, and the subsequent token-exchange / resources calls stay on
+ * the same host (they carry the account's bearer token).
  */
-const getProvisioningBaseUrl = (baseUrl?: string): string =>
-  resolveBaseUrl(baseUrl) ?? 'https://us.posthog.com';
+const getProvisioningBaseUrl = (
+  region: 'US' | 'EU',
+  baseUrl?: string,
+): string => {
+  const override = resolveBaseUrl(baseUrl);
+  if (override) return override;
+  return region === 'EU' ? 'https://eu.posthog.com' : 'https://us.posthog.com';
+};
 
 /**
  * OAuth client ID for provisioning. A pinned base URL means a dev-seeded stack
- * that registers the dev client; prod uses the US client.
+ * that registers the dev client; prod uses the client registered for the target
+ * region (the wizard OAuth app is registered separately per region).
  *
  * TODO: same assumption as `getOAuthClientId` in oauth.ts — a pinned base URL is
  * treated as a dev-seeded instance. Make configurable if we ever point
  * `--base-url` at a non-dev instance with its own OAuth app.
- *
- * TODO: Make this work with EU provisioning.
  */
-const getProvisioningClientId = (baseUrl?: string): string =>
-  resolveBaseUrl(baseUrl) ? POSTHOG_DEV_CLIENT_ID : POSTHOG_US_CLIENT_ID;
+const getProvisioningClientId = (
+  region: 'US' | 'EU',
+  baseUrl?: string,
+): string => {
+  if (resolveBaseUrl(baseUrl)) return POSTHOG_DEV_CLIENT_ID;
+  return region === 'EU' ? POSTHOG_EU_CLIENT_ID : POSTHOG_US_CLIENT_ID;
+};
 
 function generateCodeVerifier(): string {
   return crypto.randomBytes(32).toString('base64url');
@@ -124,7 +136,7 @@ export async function provisionNewAccount(
 ): Promise<ProvisioningResult> {
   const codeVerifier = generateCodeVerifier();
   const codeChallenge = generateCodeChallenge(codeVerifier);
-  const provisioningBaseUrl = getProvisioningBaseUrl(opts?.baseUrl);
+  const provisioningBaseUrl = getProvisioningBaseUrl(region, opts?.baseUrl);
 
   logToFile('[provisioning] starting account creation');
 
@@ -135,7 +147,7 @@ export async function provisionNewAccount(
       id: crypto.randomUUID(),
       email,
       name,
-      client_id: getProvisioningClientId(opts?.baseUrl),
+      client_id: getProvisioningClientId(region, opts?.baseUrl),
       code_challenge: codeChallenge,
       code_challenge_method: 'S256',
       scopes: WIZARD_PROVISIONING_SCOPES,
