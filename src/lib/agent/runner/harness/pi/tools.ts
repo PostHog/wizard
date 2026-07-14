@@ -6,9 +6,13 @@
  * `installSkillById`, `parseEnvKeys`, `mergeEnvValues`). Same tool names as the
  * MCP server so the shared prompt is unchanged.
  *
- * v1 covers the four tools a framework integration needs. `wizard_ask` is
- * interactive-only (disabled in CI) and the secret-vault `secretRef` path is a
- * follow-up — CI passes literal values.
+ * Beyond the framework-integration tools, `wizard_ask` is wired here too so
+ * interactive programs (self-driving) can conduct their interview on pi: it
+ * mirrors the MCP tool's schema + per-run caps and drives the same host
+ * askBridge. When no bridge is supplied (CI / non-interactive) it still
+ * registers but returns the "not available" error, exactly like the MCP path.
+ * Sensitive answers come back literally — the secret-vault `secretRef` path is
+ * still a follow-up, the same limitation set_env_values carries.
  */
 
 import fs from 'fs';
@@ -18,12 +22,16 @@ import { defineTool } from '@earendil-works/pi-coding-agent';
 import type { ToolDefinition } from '@earendil-works/pi-coding-agent';
 import { logToFile } from '@utils/debug';
 import {
+  DEFAULT_ASK_MAX_QUESTIONS,
+  WIZARD_TOOL_NAMES,
+  evaluateAskCap,
   fetchSkillMenu,
   installSkillById,
   mergeEnvValues,
   parseEnvKeys,
   resolveEnvPath,
 } from '@lib/wizard-tools';
+import { isFullyCancelled, type WizardAskBridge } from '@lib/wizard-ask-bridge';
 import {
   detectNodePackageManagers,
   type PackageManagerDetector,
@@ -41,12 +49,39 @@ export interface PiToolsContext {
   skillsBaseUrl: string;
   /** Framework's package-manager detector. Defaults to Node detection. */
   detectPackageManager?: PackageManagerDetector;
+  /**
+   * Host bridge that drives the `wizard_ask` overlay. Omitted in CI /
+   * non-interactive runs, where the tool registers but errors on call — the
+   * agent then falls back to sensible defaults.
+   */
+  askBridge?: WizardAskBridge;
+  /** Per-run cap on wizard_ask calls. Defaults to {@link DEFAULT_ASK_MAX_QUESTIONS}. */
+  maxQuestions?: number;
+  /**
+   * Notified when a wizard_ask overlay opens (true) and closes (false), so the
+   * security gate can block Write/Edit while the user is answering — parity
+   * with the anthropic path's wizard_ask overlay guard.
+   */
+  onAskPendingChange?: (pending: boolean) => void;
+  /**
+   * The program's disallow list. `wizard_ask` is skipped at registration when
+   * it's on this list — pi tools carry bare names, so the security gate's
+   * MCP-prefixed exact-match wouldn't catch it (posthog-integration disables it
+   * this way). Gating here is the reliable block.
+   */
+  disallowedTools?: readonly string[];
 }
 
 export function createWizardPiTools(ctx: PiToolsContext): ToolDefinition[] {
-  const { workingDirectory, skillsBaseUrl } = ctx;
+  const { workingDirectory, skillsBaseUrl, askBridge, onAskPendingChange } =
+    ctx;
   const detectPackageManager =
     ctx.detectPackageManager ?? detectNodePackageManagers;
+  const askMaxQuestions = ctx.maxQuestions ?? DEFAULT_ASK_MAX_QUESTIONS;
+  // Per-run wizard_ask accounting (total cap + one-time adjacency nudge),
+  // mirroring the MCP server's counters.
+  let askCallCount = 0;
+  let askAdjacencyNudged = false;
 
   // Fetch the skill menu at most once per run — the agent calls load_skill_menu
   // 2-3× otherwise, each a fresh HTTP round-trip (profiled slowness).
@@ -194,5 +229,144 @@ export function createWizardPiTools(ctx: PiToolsContext): ToolDefinition[] {
     },
   });
 
-  return [loadSkillMenu, installSkill, checkEnvKeys, setEnvValues, detectPm];
+  // -- wizard_ask -----------------------------------------------------------
+  // Native mirror of the MCP `wizard_ask` tool so interactive programs can ask
+  // the user through pi. Same tool name + schema as the MCP server, so the
+  // shared prompt is unchanged; it drives the same host askBridge that opens
+  // the TUI overlay and resolves with the answers.
+  const wizardAsk = defineTool({
+    name: 'wizard_ask',
+    label: 'Ask the user',
+    description:
+      'Ask the user one or more structured questions and wait for their answers. ' +
+      'Use this whenever you would otherwise inline a question in your text output. ' +
+      'Batch related questions into a single call (up to 8) rather than asking one at ' +
+      'a time; sequential calls are fine when later questions genuinely depend on ' +
+      'earlier answers. A fully cancelled or timed-out response does NOT count against ' +
+      'the per-run cap — treat it as "the user declined" and fall back gracefully.',
+    promptSnippet:
+      'wizard_ask(questions) — ask the user structured questions and wait for answers',
+    parameters: Type.Object({
+      questions: Type.Array(
+        Type.Object({
+          id: Type.String({
+            description: 'Stable key for the answer in the response map',
+          }),
+          prompt: Type.String({
+            description: 'Question text shown to the user',
+          }),
+          kind: Type.Union(
+            [
+              Type.Literal('single'),
+              Type.Literal('multi'),
+              Type.Literal('text'),
+            ],
+            {
+              description:
+                "'single' = pick one option, 'multi' = pick any, 'text' = free-form single-line answer",
+            },
+          ),
+          options: Type.Optional(
+            Type.Array(
+              Type.Object({
+                label: Type.String(),
+                value: Type.String(),
+                description: Type.Optional(Type.String()),
+              }),
+              {
+                description:
+                  'Required for kind=single|multi; ignored for kind=text',
+              },
+            ),
+          ),
+          required: Type.Optional(
+            Type.Boolean({ description: 'Defaults to true' }),
+          ),
+          sensitive: Type.Optional(
+            Type.Boolean({
+              description:
+                "Only valid for kind='text'. Marks the answer as a secret the user types in (API keys, tokens). On pi this is returned literally today — do not echo it back into your text output.",
+            }),
+          ),
+        }),
+        { minItems: 1, maxItems: 8 },
+      ),
+    }),
+    async execute(_id, args) {
+      if (!askBridge) {
+        return text(
+          'Error: wizard_ask is not available in this environment (CI / non-interactive). Proceed with sensible defaults or emit [ABORT] requirements-incomplete.',
+        );
+      }
+
+      const cap = evaluateAskCap(
+        askCallCount,
+        askMaxQuestions,
+        askAdjacencyNudged,
+      );
+      if (cap.kind === 'capped') {
+        if (cap.reason === 'adjacency') askAdjacencyNudged = true;
+        return text(cap.message);
+      }
+
+      // The schema can't enforce per-kind requirements or unique ids.
+      const ids = new Set<string>();
+      for (const q of args.questions) {
+        if ((q.kind === 'single' || q.kind === 'multi') && !q.options?.length) {
+          return text(
+            `Error: question "${q.id}" has kind="${q.kind}" but no options. Provide at least one { label, value }, or use kind="text".`,
+          );
+        }
+        if (q.sensitive && q.kind !== 'text') {
+          return text(
+            `Error: question "${q.id}" sets sensitive=true but kind="${q.kind}". Only kind="text" answers can be sensitive.`,
+          );
+        }
+        if (ids.has(q.id)) {
+          return text(
+            `Error: duplicate question id "${q.id}". Each question needs a unique id.`,
+          );
+        }
+        ids.add(q.id);
+      }
+
+      // Optimistically take the slot; refund it on a cancellation or a bridge
+      // error so a declined/failed ask doesn't burn the budget for later ones.
+      askCallCount += 1;
+      // Block Write/Edit for as long as the overlay is open, so the agent can't
+      // mutate files while it's waiting on the user's answer.
+      onAskPendingChange?.(true);
+      try {
+        const answers = await askBridge.request({ questions: args.questions });
+        if (isFullyCancelled(answers)) askCallCount -= 1;
+        logToFile(
+          `[pi] wizard_ask: resolved ${
+            Object.keys(answers).length
+          } answer(s) for ${args.questions.length} question(s)`,
+        );
+        return text(JSON.stringify({ answers }, null, 2));
+      } catch (err) {
+        askCallCount -= 1;
+        const message = err instanceof Error ? err.message : String(err);
+        logToFile(`[pi] wizard_ask: error: ${message}`);
+        return text(`Error: wizard_ask failed: ${message}`);
+      } finally {
+        onAskPendingChange?.(false);
+      }
+    },
+  });
+
+  const tools = [
+    loadSkillMenu,
+    installSkill,
+    checkEnvKeys,
+    setEnvValues,
+    detectPm,
+  ];
+  // Register wizard_ask only when the program allows it. posthog-integration
+  // disallows it (runs without structured user input); self-driving keeps it.
+  const askDisallowed =
+    ctx.disallowedTools?.includes(WIZARD_TOOL_NAMES.wizardAsk) ?? false;
+  if (!askDisallowed) tools.push(wizardAsk);
+  return tools;
 }

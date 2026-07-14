@@ -362,9 +362,14 @@ export const piBackend: AgentHarness = {
       // allowlist + .env fencing + YARA). `noExtensions: true` only suppresses
       // disk-discovered extensions; explicit `extensionFactories` still load,
       // so the fence is on while the target project can't inject its own.
+      // Shared flag: true while a wizard_ask overlay is open. The ask tool
+      // flips it; the security gate reads it to block Write/Edit meanwhile.
+      const askState = { pending: false };
+
       const { createSecurityExtension } = await import('./security');
       const security = createSecurityExtension({
         disallowedTools: programConfig.disallowedTools,
+        getWizardAskPending: () => askState.pending,
         // Triage speaks the Anthropic messages API (it appends /v1/messages),
         // so it gets the bare gateway URL regardless of which API shape the
         // agent's model uses. Without this, pi has no ANTHROPIC_* env (it
@@ -465,6 +470,17 @@ export const piBackend: AgentHarness = {
           workingDirectory: session.installDir,
           skillsBaseUrl: boot.skillsBaseUrl,
           detectPackageManager: config.detectPackageManager,
+          // The host ask bridge — lets interactive programs (self-driving) ask
+          // the user through pi. Threaded from the runner, same path as the
+          // anthropic harness. Absent in CI → the tool errors on call.
+          askBridge: inputs.askBridge,
+          maxQuestions: config.maxQuestions,
+          onAskPendingChange: (pending) => {
+            askState.pending = pending;
+          },
+          // Skip wizard_ask when the program disallows it (bare pi tool names
+          // don't match the MCP-prefixed disallow list at the security gate).
+          disallowedTools: programConfig.disallowedTools,
         }),
         // Task/todo tools (#526): render the todo list live in the TUI, parity
         // with the anthropic path.
