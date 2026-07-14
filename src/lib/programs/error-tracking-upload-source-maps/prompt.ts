@@ -36,6 +36,57 @@ export function buildSourceMapsUploadPrompt(
     ? `- Project directory (relative to repo root): ${projectPath}`
     : '- Project directory: the repo root';
 
+  // iOS never reads a .env file — Xcode does not load one at build time. The
+  // secret personal API key goes in a gitignored xcconfig (surfaced to the
+  // dSYM-upload Run Script phase as a build setting); the non-secret project
+  // id + host are exported inside that same Run Script phase. Every other
+  // platform keeps the dotenv flow.
+  const isIos = variant === 'ios';
+  const credentialSteps = isIos
+    ? `STEP 4 — Make the credentials readable at build time. (skill: "Make credentials available at build time")
+   iOS does NOT use .env — Xcode never loads one. Follow the skill's iOS
+   step, which routes credentials through Xcode build settings instead of a
+   dotenv file. Do NOT install \`dotenv\` or any loader, and do NOT create a
+   .env file for this platform.
+
+STEP 5 — Write the credentials. (skill: "Write credentials to the env file")
+   The secret goes in a GITIGNORED xcconfig, not a .env:
+   - Call set_env_values with the xcconfig path the skill names (e.g.
+     \`PostHog.xcconfig\`). Because the path ends in \`.xcconfig\`, the tool
+     writes Xcode \`KEY = VALUE\` style and adds the file to .gitignore for
+     you. Write ONLY the secret there, passing the STEP 1 secretRef as a
+     value object (never a literal string):
+       filePath: "PostHog.xcconfig"
+       values: { "POSTHOG_CLI_API_KEY": { secretRef: "<the ref from STEP 1>" } }
+     The wizard resolves the ref locally, so you never see the key value.
+   - The non-secret values are NOT written to the xcconfig. Per the skill,
+     assign the xcconfig to the target's build configuration (so
+     \`POSTHOG_CLI_API_KEY\` reaches the Run Script phase as a build setting)
+     and add these as \`export\` lines inside the dSYM-upload Run Script
+     phase: POSTHOG_CLI_PROJECT_ID=${projectId} and POSTHOG_CLI_HOST=${host}.
+   - If the skill asks, also write a committed \`PostHog.example.xcconfig\`
+     placeholder (empty value) so teammates see the setting exists.`
+    : `STEP 4 — Make the credentials readable at build time. (skill: "Make credentials available at build time")
+   Follow the skill's step. Wizard-specific: if it calls for a loader (e.g.
+   \`dotenv\`), install it SILENTLY — do NOT ask the user or call wizard_ask.
+   Skip this step entirely if the platform already auto-loads .env.
+
+STEP 5 — Write the credentials to the env file. (skill: "Write credentials to the env file")
+   Use the wizard-tools MCP server. Reuse the env file the skill tells you to
+   pick — the prerequisite PostHog integration usually already wrote
+   POSTHOG_* vars to one, so seed your keys alongside them.
+   - First call check_env_keys on that file (returns present/absent, never
+     values — don't read the file directly).
+   - Then call set_env_values, passing the STEP 1 secretRef as a value
+     object, not a literal string:
+       values: {
+         "POSTHOG_CLI_API_KEY": { secretRef: "<the ref from STEP 1>" },
+         "POSTHOG_CLI_PROJECT_ID": "${projectId}",
+         "POSTHOG_CLI_HOST": "${host}"
+       }
+   Variable names follow the skill's per-uploader conventions. The wizard
+   resolves the ref locally before writing, so you never see the key value.`;
+
   return `You are wiring up PostHog Error Tracking source map upload for this ${platformLabel} project.
 
 Project context:
@@ -117,26 +168,7 @@ STEP 3 — Apply build-config changes. (skill: "Apply build-config changes")
    Make the bundler / build-config changes the skill's step instructs. The
    skill and its reference are the source of truth for this platform.
 
-STEP 4 — Make the credentials readable at build time. (skill: "Make credentials available at build time")
-   Follow the skill's step. Wizard-specific: if it calls for a loader (e.g.
-   \`dotenv\`), install it SILENTLY — do NOT ask the user or call wizard_ask.
-   Skip this step entirely if the platform already auto-loads .env.
-
-STEP 5 — Write the credentials to the env file. (skill: "Write credentials to the env file")
-   Use the wizard-tools MCP server. Reuse the env file the skill tells you to
-   pick — the prerequisite PostHog integration usually already wrote
-   POSTHOG_* vars to one, so seed your keys alongside them.
-   - First call check_env_keys on that file (returns present/absent, never
-     values — don't read the file directly).
-   - Then call set_env_values, passing the STEP 1 secretRef as a value
-     object, not a literal string:
-       values: {
-         "POSTHOG_CLI_API_KEY": { secretRef: "<the ref from STEP 1>" },
-         "POSTHOG_CLI_PROJECT_ID": "${projectId}",
-         "POSTHOG_CLI_HOST": "${host}"
-       }
-   Variable names follow the skill's per-uploader conventions. The wizard
-   resolves the ref locally before writing, so you never see the key value.
+${credentialSteps}
 
 STEP 6 — Identify the build AND run commands. (skill: "Identify the build and run commands")
    Per the skill, resolve the production BUILD command and the RUN command

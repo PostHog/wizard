@@ -412,21 +412,44 @@ export function parseEnvKeys(content: string): Set<string> {
 }
 
 /**
- * Merge key-value pairs into existing .env content.
+ * Assignment style for {@link mergeEnvValues}.
+ * - `dotenv`: `KEY=VALUE` — standard .env files.
+ * - `xcconfig`: `KEY = VALUE` — Xcode build-configuration files. Spaces around
+ *   `=` are the canonical form Xcode emits; this keeps the file idiomatic so an
+ *   iOS developer reading it sees a normal xcconfig, not a mislabelled .env.
+ */
+export type EnvAssignmentStyle = 'dotenv' | 'xcconfig';
+
+/**
+ * Merge key-value pairs into existing .env / .xcconfig content.
  * Updates existing keys in-place, appends new keys at the end.
  */
 export function mergeEnvValues(
   content: string,
   values: Record<string, string>,
+  style: EnvAssignmentStyle = 'dotenv',
 ): string {
+  const render = (key: string, value: string): string =>
+    style === 'xcconfig' ? `${key} = ${value}` : `${key}=${value}`;
+
   let result = content;
   const updatedKeys = new Set<string>();
 
   for (const [key, value] of Object.entries(values)) {
-    const regex = new RegExp(`^(\\s*${key}\\s*=).*$`, 'm');
-    if (regex.test(result)) {
-      result = result.replace(regex, `$1${value}`);
-      updatedKeys.add(key);
+    if (style === 'xcconfig') {
+      // Rewrite the whole assignment so spacing normalises to `KEY = VALUE`.
+      const regex = new RegExp(`^\\s*${key}\\s*=.*$`, 'm');
+      if (regex.test(result)) {
+        result = result.replace(regex, render(key, value));
+        updatedKeys.add(key);
+      }
+    } else {
+      // Preserve the existing `KEY=` prefix exactly; only swap the value.
+      const regex = new RegExp(`^(\\s*${key}\\s*=).*$`, 'm');
+      if (regex.test(result)) {
+        result = result.replace(regex, `$1${value}`);
+        updatedKeys.add(key);
+      }
     }
   }
 
@@ -438,7 +461,7 @@ export function mergeEnvValues(
       result += '\n';
     }
     for (const [key, value] of newKeys) {
-      result += `${key}=${value}\n`;
+      result += `${render(key, value)}\n`;
     }
   }
 
@@ -654,11 +677,13 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
 
   const setEnvValues = tool(
     'set_env_values',
-    'Create or update environment variable keys in a .env file. Creates the file if it does not exist. Ensures .gitignore coverage. Each value can be either a literal string or a secret reference of the form `{ "secretRef": "secret:..." }` returned by another tool (e.g. wizard_ask). Secret references are resolved locally — the actual value is written to the file but never returned to the agent.',
+    'Create or update environment variable keys in a .env file. Creates the file if it does not exist. Ensures .gitignore coverage. When the target path ends in `.xcconfig`, values are written in Xcode build-configuration style (`KEY = VALUE`) instead of dotenv style — use this to place iOS build-time credentials in a gitignored xcconfig. Each value can be either a literal string or a secret reference of the form `{ "secretRef": "secret:..." }` returned by another tool (e.g. wizard_ask). Secret references are resolved locally — the actual value is written to the file but never returned to the agent.',
     {
       filePath: z
         .string()
-        .describe('Path to the .env file, relative to the project root'),
+        .describe(
+          'Path to the .env or .xcconfig file, relative to the project root',
+        ),
       values: z
         .record(
           z.string(),
@@ -726,7 +751,12 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
       const existing = fs.existsSync(resolved)
         ? fs.readFileSync(resolved, 'utf8')
         : '';
-      const content = mergeEnvValues(existing, resolvedValues);
+      const style: EnvAssignmentStyle = args.filePath
+        .toLowerCase()
+        .endsWith('.xcconfig')
+        ? 'xcconfig'
+        : 'dotenv';
+      const content = mergeEnvValues(existing, resolvedValues, style);
 
       // Ensure parent directory exists
       const dir = path.dirname(resolved);
