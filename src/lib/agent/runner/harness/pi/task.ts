@@ -424,6 +424,11 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
       cache_read_input_tokens: stats.tokens.cacheRead,
       ...analyticsProperties,
     });
+    // Token usage on one parseable line so a run's per-task cost is observable
+    // from the log, not only from analytics.
+    logToFile(
+      `[pi-task] usage model=${modelId} turns=${assistantTurns} in=${stats.tokens.input} out=${stats.tokens.output} cacheR=${stats.tokens.cacheRead} cacheW=${stats.tokens.cacheWrite}`,
+    );
     if (successMessage) spinner.stop(successMessage);
     return {};
   } catch (err) {
