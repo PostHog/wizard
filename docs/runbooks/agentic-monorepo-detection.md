@@ -17,8 +17,8 @@ it.
 - We take the recommended supported project, else the first supported
   PostHog-free one, and re-point the install dir there.
 - On a single-repo project it recommends `.`, so nothing moves.
-- If the scan fails or finds nothing, we leave the install dir alone and run
-  exactly like today.
+- If the scan errors or finds nothing, `session.installDir` is left untouched
+  and the run falls back to the old root detection, exactly like flag-off.
 
 ## What flag gates it
 
