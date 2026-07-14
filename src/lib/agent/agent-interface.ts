@@ -456,6 +456,14 @@ function matchesAllowedPrefix(command: string): boolean {
  * answered. The SDK's tool-result protocol already pauses the agent here;
  * this guard is a belt-and-suspenders second line.
  */
+// `.env` example/template files (`.env.example`, `.env.sample`, `.env.template`,
+// `.env.dist`) carry no secrets and are meant to be committed — they document the
+// keys other developers must set. The fence lets them through so the integration
+// can write one; YARA still scans the content for any real secret.
+function isEnvExampleFile(basename: string): boolean {
+  return /\.(example|sample|template|dist)$/.test(basename);
+}
+
 export function wizardCanUseTool(
   toolName: string,
   input: Record<string, unknown>,
@@ -495,7 +503,7 @@ export function wizardCanUseTool(
   if (toolName === 'Read' || toolName === 'Write' || toolName === 'Edit') {
     const filePath = typeof input.file_path === 'string' ? input.file_path : '';
     const basename = path.basename(filePath);
-    if (basename.startsWith('.env')) {
+    if (basename.startsWith('.env') && !isEnvExampleFile(basename)) {
       logToFile(`Denying ${toolName} on env file: ${filePath}`);
       return {
         behavior: 'deny',
@@ -510,7 +518,8 @@ export function wizardCanUseTool(
   // so broad searches like `Grep { path: "." }` are already safe.
   if (toolName === 'Grep') {
     const grepPath = typeof input.path === 'string' ? input.path : '';
-    if (grepPath && path.basename(grepPath).startsWith('.env')) {
+    const grepBase = path.basename(grepPath);
+    if (grepPath && grepBase.startsWith('.env') && !isEnvExampleFile(grepBase)) {
       logToFile(`Denying Grep on env file: ${grepPath}`);
       return {
         behavior: 'deny',
