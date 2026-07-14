@@ -10,7 +10,7 @@
 import { DEFAULT_AGENT_MODEL, Harness, Sequence } from '@lib/constants';
 import type { ProgramId } from '@lib/programs/program-registry';
 import { resolveHarness } from './harness';
-import type { ThinkingLevel } from './models';
+import type { EffortLevel } from './models';
 import { resolveSequence } from './sequence';
 
 // ── Shared machinery ────────────────────────────────────────────────────
@@ -75,13 +75,15 @@ export interface HarnessPick {
   /** Gateway model id (string). */
   model: string;
   /** Reasoning-effort override (e.g. from a pi effort flag). Absent → the model's table default. */
-  thinkingLevel?: ThinkingLevel;
+  thinkingLevel?: EffortLevel;
 }
 
 export interface ProgramBinding {
   sequence: Sequence;
   harness: Harness;
   model: string;
+  /** Reasoning-effort override for the model. Absent → the model's table default. */
+  thinkingLevel?: EffortLevel;
   /**
    * Per-role overrides applied only in orchestrator mode — keys are
    * agent-prompt `type` values published by context-mill (`'seed'`,
@@ -130,8 +132,8 @@ export function resolveBinding(
 ): ProgramBinding {
   ctx.trace ??= {};
   const sequence = resolveSequence(ctx);
-  const { harness, model } = resolveHarness(ctx, role);
-  return { sequence, harness, model };
+  const { harness, model, thinkingLevel } = resolveHarness(ctx, role);
+  return { sequence, harness, model, thinkingLevel };
 }
 
 // ── Unified re-export surface ───────────────────────────────────────────

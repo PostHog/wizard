@@ -23,7 +23,7 @@ import type { SpinnerHandle } from '@ui';
 import type { WizardAskBridge } from '@lib/wizard-ask-bridge';
 import type { AgentErrorType } from '@lib/agent/agent-interface';
 import type { OrchestratorToolsContext } from '@lib/agent/runner/sequence/orchestrator/queue-tools';
-import type { ThinkingLevel } from '@lib/agent/runner/switchboard/models';
+import type { EffortLevel } from '@lib/agent/runner/switchboard/models';
 import type {
   ProgramRun,
   BootstrapResult,
@@ -58,7 +58,7 @@ export interface BackendRunInputs {
   /** Gateway model id resolved from the (runner, model) pair. */
   model: string;
   /** Switchboard-resolved reasoning-effort override. Absent → the model's table default. */
-  thinkingLevel?: ThinkingLevel;
+  thinkingLevel?: EffortLevel;
 }
 
 /** What a runner reports back: an error classification, or nothing on success. */

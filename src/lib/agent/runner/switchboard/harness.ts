@@ -19,7 +19,7 @@ import { logToFile } from '@utils/debug';
 import { anthropicBackend } from '../harness/anthropic';
 import { piBackend } from '../harness/pi';
 import type { AgentHarness } from '../harness/types';
-import type { ThinkingLevel } from './models';
+import type { EffortLevel } from './models';
 import { PI_FLAG_CONFIGS } from './pi-flags';
 import {
   DEFAULT_BINDING,
@@ -43,7 +43,10 @@ export function getHarness(name: Harness): AgentHarness {
   return harness;
 }
 
-/** `wizard-pi-model` variant key → gateway id (variant keys can't carry `/` or `.`). */
+/**
+ * Model-flag variant key → gateway id (variant keys can't carry `/` or `.`).
+ * Shared vocabulary for every trio's `modelFlag` in `PI_FLAG_CONFIGS`.
+ */
 const PI_MODEL_FLAG_VARIANTS: Record<string, string> = {
   'gpt-5': GPT5_MODEL,
   'gpt-5-4': GPT5_4_MODEL,
@@ -57,7 +60,7 @@ const PI_MODEL_FLAG_VARIANTS: Record<string, string> = {
 };
 
 /** Valid effort-flag variants; anything else leaves the model's table default. */
-const EFFORT_FLAG_VARIANTS: readonly ThinkingLevel[] = [
+const EFFORT_FLAG_VARIANTS: readonly EffortLevel[] = [
   'minimal',
   'low',
   'medium',
@@ -80,7 +83,7 @@ const flagRunnerOverride: Middleware<HarnessPick> = (ctx, next) => {
   if (RUN_SURFACE === 'cloud') return pick;
   if (ctx.trace) Object.assign(ctx.trace, { harness: 'flag', model: 'flag' });
   const variant = ctx.flags[cfg.modelFlag] ?? '';
-  const effort = ctx.flags[cfg.effortFlag] as ThinkingLevel;
+  const effort = ctx.flags[cfg.effortFlag] as EffortLevel;
   return {
     harness: Harness.pi,
     model: PI_MODEL_FLAG_VARIANTS[variant] ?? cfg.fallbackModel,
@@ -126,6 +129,7 @@ export function resolveHarness(
     return {
       harness: binding.harness,
       model: binding.model,
+      thinkingLevel: binding.thinkingLevel,
       ...binding.contextMillOverride?.[role],
     };
   });

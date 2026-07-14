@@ -169,6 +169,7 @@ function captureSwitchboardDecision(
     sequence_source: trace.sequence,
     harness: binding.harness,
     model: binding.model,
+    thinking_level: binding.thinkingLevel,
     sequence: binding.sequence,
   });
   logToFile(

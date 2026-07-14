@@ -296,9 +296,20 @@ describe('switchboard resolveHarness — self-driving pi flag trio', () => {
   it('clamps a flag-driven orchestrator pick to linear for a self-driving pi run', () => {
     const ctx: SwitchboardCtx = {
       program: 'self-driving',
-      flags: { ...SD_ON, [WIZARD_ORCHESTRATOR_FLAG_KEY]: 'true' },
+      flags: {
+        ...SD_ON,
+        [WIZARD_ORCHESTRATOR_FLAG_KEY]: 'true',
+        [WIZARD_SELF_DRIVING_PI_EFFORT_FLAG_KEY]: 'high',
+      },
     };
-    resolveBinding(ctx);
+    const binding = resolveBinding(ctx);
+    // The resolved effort rides the binding (telemetry reads it from here).
+    expect(binding).toEqual({
+      sequence: Sequence.linear,
+      harness: Harness.pi,
+      model: GPT5_6_TERRA_MODEL,
+      thinkingLevel: 'high',
+    });
     expect(ctx.trace).toEqual({
       harness: 'flag',
       model: 'flag',

@@ -32,6 +32,12 @@ export type ThinkingLevel =
   | 'high'
   | 'xhigh';
 
+/**
+ * An effort *override* is always a positive level — `'off'` is a model trait
+ * (`reasoning: false`), not something a flag may force onto a reasoning model.
+ */
+export type EffortLevel = Exclude<ThinkingLevel, 'off'>;
+
 export interface ModelCapabilities {
   /** Model supports reasoning; safe to request reasoning effort. */
   reasoning: boolean;
@@ -80,7 +86,7 @@ function defaultCaps(modelId: string): ModelCapabilities {
  */
 export function modelCapabilities(
   modelId: string,
-  effortOverride?: ThinkingLevel,
+  effortOverride?: EffortLevel,
 ): ModelCapabilities {
   const caps = MODEL_CAPABILITIES[modelId] ?? defaultCaps(modelId);
   if (caps.reasoning && effortOverride) {
