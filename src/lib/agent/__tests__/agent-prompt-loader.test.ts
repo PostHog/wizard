@@ -163,7 +163,7 @@ describe('buildRegistry', () => {
       [
         prompt({ type: 'plan-audit', flow: 'audit', seed: true }),
         prompt({ type: 'fix-events', flow: 'audit' }),
-        prompt({ type: 'install', flow: 'posthog-integration' }),
+        prompt({ type: 'install', flow: 'integration-v2' }),
         prompt({ type: 'example' }),
       ],
       'audit',

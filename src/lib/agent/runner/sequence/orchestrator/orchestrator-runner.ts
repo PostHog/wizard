@@ -140,15 +140,14 @@ export async function runOrchestrator(
   // The WHAT (agent prompts) is served from context-mill. Fetch the registry
   // once up front: its types drive enqueue validation, and resolving a task to
   // its run config is then synchronous, with no mid-drain network latency.
-  const registry = await loadAgentRegistry(
-    boot.skillsBaseUrl,
-    programConfig.id,
-    { exclude: ciExcludedTaskTypes() },
-  );
+  const flow = programConfig.agentFlow ?? programConfig.id;
+  const registry = await loadAgentRegistry(boot.skillsBaseUrl, flow, {
+    exclude: ciExcludedTaskTypes(),
+  });
   const seedPrompt = registry.seed;
   if (!seedPrompt) {
     throw new Error(
-      `No seed agent prompt (frontmatter \`seed: true\`) for flow "${programConfig.id}" is available from ${boot.skillsBaseUrl}.`,
+      `No seed agent prompt (frontmatter \`seed: true\`) for flow "${flow}" is available from ${boot.skillsBaseUrl}.`,
     );
   }
 
@@ -388,7 +387,7 @@ export async function runOrchestrator(
       // The prompt points the agent at them instead.
       const skillPaths: string[] = [];
       for (const skillId of resolved.skills) {
-        // Agent prompts name the bare step-skill (`posthog-integration-install`);
+        // Agent prompts name the bare step-skill (`integration-v2-install`);
         // SDK-divergent steps ship per-framework variants, so resolve against
         // the menu with the session's framework before installing.
         const variantId = resolveSkillVariantId(

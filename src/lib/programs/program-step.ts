@@ -197,6 +197,12 @@ export interface ProgramConfig {
   /** Unique program id — matches the Program enum value */
   id: string;
   /**
+   * Content-mill flow the orchestrator loads its agent prompts + step-skills
+   * from (`agents/<flow>/` and `skills/<flow>/`). Defaults to `id`; set it when
+   * the content-mill flow name diverges from the program id.
+   */
+  agentFlow?: string;
+  /**
    * Whether this program's agent run requires third-party AI services.
    *
    * When true (the default), the wizard checks

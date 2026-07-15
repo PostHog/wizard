@@ -71,18 +71,18 @@ const INTEGRATION_ENTRIES = [
 const MENU: SkillEntry[] = [
   ...INTEGRATION_ENTRIES,
   {
-    id: 'posthog-integration-build',
-    group: 'posthog-integration-build',
+    id: 'integration-v2-build',
+    group: 'integration-v2-build',
     name: 'build',
-    downloadUrl: 'https://example.test/posthog-integration-build.zip',
+    downloadUrl: 'https://example.test/integration-v2-build.zip',
   },
 ];
 
 describe('resolveSkillVariantId — menu-declared framework resolution', () => {
   it('resolves a bare single-variant skill id to itself', () => {
-    expect(
-      resolveSkillVariantId(MENU, 'posthog-integration-build', 'django'),
-    ).toBe('posthog-integration-build');
+    expect(resolveSkillVariantId(MENU, 'integration-v2-build', 'django')).toBe(
+      'integration-v2-build',
+    );
   });
 
   it('resolves a full menu id to itself, regardless of framework', () => {

@@ -27,6 +27,7 @@ import {
 } from './runner/switchboard/models';
 import { logToFile } from '@utils/debug';
 import { analytics } from '@utils/analytics';
+import { fetchWithRetry } from '@lib/fetch-retry';
 
 /**
  * The basics the client injects around every agent-prompt body. The `/agents/`
@@ -274,10 +275,7 @@ export function parseAgentPrompt(
 }
 
 async function fetchText(url: string): Promise<string> {
-  const res = await fetch(url);
-  if (!res.ok) {
-    throw new Error(`Fetch ${url} failed: ${res.status} ${res.statusText}`);
-  }
+  const res = await fetchWithRetry(url);
   return res.text();
 }
 

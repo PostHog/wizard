@@ -379,6 +379,11 @@ const PACKAGE_MANAGERS = [
   'poetry',
   'pipenv',
   'uv',
+  // PHP
+  'composer',
+  // Ruby
+  'bundle',
+  'gem',
 ];
 
 /**
@@ -391,6 +396,7 @@ const SAFE_SCRIPTS = [
   'install',
   'add',
   'ci',
+  'require', // composer require
   // Build
   'build',
   // Type checking (various naming conventions)
