@@ -14,6 +14,8 @@ import { randomUUID } from 'crypto';
 import { existsSync, rmSync } from 'fs';
 import * as path from 'path';
 import { OutroKind, type WizardSession } from '@lib/wizard-session';
+import { POSTHOG_DOCS_URL, type Integration } from '@lib/constants';
+import { FRAMEWORK_REGISTRY } from '@lib/registry';
 import {
   installSkillById,
   fetchSkillMenu,
@@ -269,14 +271,18 @@ export async function runOrchestrator(
     }
   }
   if (missingVariants.length > 0) {
+    // The framework's own docs page from its config; generic docs when detection found none.
+    const docsUrl = session.skillId
+      ? FRAMEWORK_REGISTRY[session.skillId as Integration]?.docsUrl
+      : undefined;
     await wizardAbort({
       message:
         'Setup instructions for this project failed to download.\n' +
         'Please try again, or contact wizard@posthog.com.\n\n' +
         'You can also set up with your agent by downloading the skills here:\n' +
-        '  https://github.com/PostHog/skills\n' +
+        '  https://github.com/PostHog/context-mill/releases\n' +
         'or integrate manually here:\n' +
-        '  https://posthog.com/docs/getting-started/install',
+        `  ${docsUrl ?? POSTHOG_DOCS_URL}`,
       error: new WizardError('Orchestrator preflight: skill variant missing', {
         missing: missingVariants.join(', '),
         framework: session.skillId,
