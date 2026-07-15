@@ -60,9 +60,11 @@ export const MODEL_CAPABILITIES: Record<string, ModelCapabilities> = {
   [GPT5_MODEL]: { reasoning: true, thinkingLevel: 'low' },
   [GPT5_4_MODEL]: { reasoning: true, thinkingLevel: 'low' },
   // Latest openai flagship line; all reasoning models, so they must opt in past
-  // the openai-completions default (reasoning off). Low effort keeps a run fast.
+  // the openai-completions default (reasoning off). Luna stays low for cheap,
+  // short-context mechanical work; terra runs medium as the sonnet-tier parallel
+  // — enough reasoning depth for the judgment tasks without high's latency blowup.
   [GPT5_6_LUNA_MODEL]: { reasoning: true, thinkingLevel: 'low' },
-  [GPT5_6_TERRA_MODEL]: { reasoning: true, thinkingLevel: 'low' },
+  [GPT5_6_TERRA_MODEL]: { reasoning: true, thinkingLevel: 'medium' },
   [GPT5_6_SOL_MODEL]: { reasoning: true, thinkingLevel: 'low' },
   [GPT5_5_MODEL]: { reasoning: true, thinkingLevel: 'low' },
   // The pi runner's paired model — a smaller openai reasoning model. Medium
