@@ -17,6 +17,31 @@ export const SOURCE_MAPS_DETECTION_FAILED_PROMPT = `Detection did not pick a sou
 Emit: ${AgentSignals.ABORT} unsupported-platform
 Then halt.`;
 
+type TestDonePromptContext = { uiHost: string; projectId: number };
+
+/**
+ * Per-platform overrides appended to the STEP 8 test-done prompt template.
+ * Platforms whose build/run flow doesn't fit the CLI-shaped template
+ * (IDE-driven builds) pin their exact prompt here. Supporting a new
+ * platform (android, react-native, …) means adding an entry — the prompt
+ * body stays untouched.
+ */
+const TEST_DONE_PROMPT_OVERRIDES: Partial<
+  Record<SkillVariant, (ctx: TestDonePromptContext) => string>
+> = {
+  ios: ({ uiHost, projectId }) => `
+   iOS override for the test-done prompt — everything happens in Xcode; no
+   xcodebuild commands, no debugger-detach or relaunch steps. Use exactly:
+        prompt: "1) In Xcode: Edit Scheme > Run > Build Configuration > Release, then Run — the Release build uploads dSYMs automatically.\\n\\n2) Tap the \\"<your test button label>\\" button in the app.\\n\\n3) Open Error Tracking in PostHog (${uiHost}/project/${projectId}/error_tracking) and confirm the test error appears with a source-resolved stack trace.\\n\\nWhen you're done, select Continue and I'll revert the test code."`,
+};
+
+function testDonePromptOverride(
+  variant: SkillVariant,
+  ctx: TestDonePromptContext,
+): string {
+  return TEST_DONE_PROMPT_OVERRIDES[variant]?.(ctx) ?? '';
+}
+
 export function buildSourceMapsUploadPrompt(
   params: SourceMapsUploadPromptParams,
 ): string {
@@ -178,27 +203,16 @@ STEP 8 — Offer to test the local setup. (skill: "Test the local setup")
    If "yes", follow the skill's "Test the local setup" step for the
    platform-appropriate affordance, the captureException shape, the
    placement, and the read-before-edit / always-revert rules. Then pause for
-   the user with wizard_ask, baking the STEP 6 build-and-run flow (and the
-   exact button label / route) into the prompt as literal, copy-pasteable
-   numbered steps:
-   - Steps 1-2 come from STEP 6: the production build, then launching the
-     app and triggering the test affordance. Quote CLI commands verbatim.
-     When the skill says the platform builds through an IDE (e.g. Xcode:
-     Run with Build Configuration = Release), write that IDE action as the
-     step instead — do NOT invent CLI build commands, debugger steps, or
-     relaunch steps the skill doesn't state. When build and run are one
-     action (an IDE Run), fold them into step 1 and make step 2 just
-     triggering the affordance.
-   - The last step is always the Error Tracking check, exactly as in the
-     template.
-   Separate each numbered step with \\n\\n so the TUI renders them as
-   distinct lines:
+   the user with wizard_ask, baking the EXACT build and run commands from
+   STEP 6 (and the exact button label / route) into the prompt as literal,
+   copy-pasteable steps. Separate each numbered step with \\n\\n so the TUI
+   renders them as distinct lines:
         {
           id: "test-done",
-          prompt: "1) <production build step from STEP 6 — it uploads source maps and builds the app with the test affordance>\\n\\n2) <run step from STEP 6>, then click the \\"<your test button label>\\" button (or hit \`<your test route>\`).\\n\\n3) Open Error Tracking in PostHog (${uiHost}/project/${projectId}/error_tracking) and confirm the test error appears with a source-resolved stack trace pointing at real source files (not minified bundle paths).\\n\\nWhen you're done, select Continue and I'll revert the test code.",
+          prompt: "1) Run \`<your detected build command>\` to upload source maps and build the app with the test affordance.\\n\\n2) Start the app with \`<your detected run command>\`, then click the \\"<your test button label>\\" button (or hit \`<your test route>\`).\\n\\n3) Open Error Tracking in PostHog (${uiHost}/project/${projectId}/error_tracking) and confirm the test error appears with a source-resolved stack trace pointing at real source files (not minified bundle paths).\\n\\nWhen you're done, select Continue and I'll revert the test code.",
           kind: "single",
           options: [{ label: "Continue (revert test code)", value: "continue" }]
-        }
+        }${testDonePromptOverride(variant, { uiHost, projectId })}
    After the user continues, revert the test code per the skill's rules and
    surface any failure in STEP 9.
 
