@@ -54,8 +54,7 @@ STEP 5 — Write the credentials. (skill: "Write credentials to the env file")
        values: {
          "POSTHOG_CLI_API_KEY": { secretRef: "<the ref from STEP 1>" },
          "POSTHOG_CLI_PROJECT_ID": "${projectId}",
-         "POSTHOG_CLI_HOST": "${xcconfigHost}",
-         "POSTHOG_INCLUDE_SOURCE": "1"
+         "POSTHOG_CLI_HOST": "${xcconfigHost}"
        }
    Write the host value EXACTLY as shown — the \`$()\` keeps \`//\` from
    starting an xcconfig comment. Wire the file per the skill's iOS example.`
