@@ -418,7 +418,9 @@ export function wizardCanUseTool(
   if (toolName === 'Read' || toolName === 'Write' || toolName === 'Edit') {
     const filePath = typeof input.file_path === 'string' ? input.file_path : '';
     const basename = path.basename(filePath);
-    const isEnvExample = /^\.env\.(example|sample|template|dist)$/.test(basename);
+    const isEnvExample = /^\.env\.(example|sample|template|dist)$/.test(
+      basename,
+    );
     if (basename.startsWith('.env') && !isEnvExample) {
       logToFile(`Denying ${toolName} on env file: ${filePath}`);
       return {

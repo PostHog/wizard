@@ -7,7 +7,7 @@
 const WIZARD_COMMANDMENTS = [
   'Never hallucinate a PostHog project token, host, or any other secret. Always use the real values that have been configured for this project (for example via environment variables).',
 
-  "Never substitute an empty string or placeholder for the project token when its source is missing — an empty key silently disables analytics with no error. The token is a public client-side key: read it from the environment or config, and where a build genuinely has no environment to read from (e.g. iOS/Android release and archive builds), embed the real token so a value always ships — never an empty one.",
+  'Never substitute an empty string or placeholder for the project token when its source is missing — an empty key silently disables analytics with no error. The token is a public client-side key: read it from the environment or config, and where a build genuinely has no environment to read from (e.g. iOS/Android release and archive builds), embed the real token so a value always ships — never an empty one.',
 
   'Never write API keys, access tokens, or other secrets directly into source code. Always reference environment variables instead, and rely on the wizard-tools MCP server (check_env_keys / set_env_values) to create or update .env files.',
 
