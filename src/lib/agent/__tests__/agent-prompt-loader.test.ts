@@ -234,19 +234,27 @@ describe('resolveTask', () => {
   it('resolves per-harness model + effort from the prompt', () => {
     const registry = registryOf([prompt]);
     const task = store.enqueue({ type: 'capture' });
-    expect(taskModelSpec(registry, task, Harness.pi)).toEqual({
+    expect(
+      taskModelSpec(registry, task, { harness: Harness.pi, model: 'pick-m' }),
+    ).toEqual({
       model: 'openai/gpt-5.6-luna',
       effort: 'low',
     });
-    expect(taskModelSpec(registry, task, Harness.anthropic).model).toBe(
-      'claude-haiku-4-5-20251001',
-    );
+    expect(
+      taskModelSpec(registry, task, {
+        harness: Harness.anthropic,
+        model: 'pick-m',
+      }).model,
+    ).toBe('claude-haiku-4-5-20251001');
   });
 
   it('prefers the enqueue model override over the prompt model', () => {
     const registry = registryOf([prompt]);
     const task = store.enqueue({ type: 'capture', model: 'override-x' });
-    expect(taskModelSpec(registry, task, Harness.pi).model).toBe('override-x');
+    expect(
+      taskModelSpec(registry, task, { harness: Harness.pi, model: 'pick-m' })
+        .model,
+    ).toBe('override-x');
   });
 
   it("appends upstream dependencies' handoffs as context", () => {
@@ -322,26 +330,27 @@ describe('taskModelSpec', () => {
     'capture',
   );
 
-  it('prefers the enqueue override, then the prompt; no default baked in', () => {
+  it('prefers the enqueue override, then the prompt, then the switchboard pick', () => {
     const registry = registryOf([prompt]);
     const task = { type: 'capture' };
+    const pick = { harness: Harness.pi, model: 'pick-m' };
     expect(
-      taskModelSpec(
-        registry,
-        { ...task, model: 'override' } as never,
-        Harness.pi,
-      ).model,
+      taskModelSpec(registry, { ...task, model: 'override' } as never, pick)
+        .model,
     ).toBe('override');
-    expect(taskModelSpec(registry, task as never, Harness.pi).model).toBe(
+    expect(taskModelSpec(registry, task as never, pick).model).toBe(
       'prompt-model',
     );
-    // An empty column stays undefined — the caller falls back to its switchboard pick.
+    // An empty column falls back to the pick, per harness.
     expect(
-      taskModelSpec(registry, task as never, Harness.anthropic).model,
-    ).toBeUndefined();
-    expect(
-      taskModelSpec(registryOf([]), task as never, Harness.pi).model,
-    ).toBeUndefined();
+      taskModelSpec(registry, task as never, {
+        harness: Harness.anthropic,
+        model: 'pick-m',
+      }).model,
+    ).toBe('pick-m');
+    expect(taskModelSpec(registryOf([]), task as never, pick).model).toBe(
+      'pick-m',
+    );
   });
 });
 

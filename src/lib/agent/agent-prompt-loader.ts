@@ -21,6 +21,7 @@ import type {
 } from './runner/sequence/orchestrator/queue';
 import type { ResolvedTask } from './runner/sequence/orchestrator/executor';
 import type { HostResolution } from '@lib/host-resolution';
+import type { HarnessPick } from './runner/switchboard';
 import { Harness } from '@lib/constants';
 import {
   isThinkingLevel,
@@ -397,18 +398,18 @@ export function resolveTask(
   };
 }
 
-/** Enqueue override, then per-profile frontmatter; no default — the caller falls back to its switchboard pick. */
+/** Enqueue override, then per-profile frontmatter, then the switchboard pick — the whole precedence in one place. */
 export function taskModelSpec(
   registry: AgentRegistry,
   task: QueuedTask,
-  harness: Harness,
-): { model?: string; effort?: ThinkingLevel } {
+  pick: HarnessPick,
+): { model: string; effort?: ThinkingLevel } {
   const prompt = registry.get(task.type);
-  const picked = prompt
-    ? promptModelFor(prompt, harness)
-    : { model: undefined, effort: undefined };
+  const picked: { model?: string; effort?: ThinkingLevel } = prompt
+    ? promptModelFor(prompt, pick.harness)
+    : {};
   return {
-    model: task.model ?? picked.model,
+    model: task.model ?? picked.model ?? pick.model,
     effort: picked.effort,
   };
 }
