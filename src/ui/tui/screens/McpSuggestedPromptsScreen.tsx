@@ -152,6 +152,9 @@ export const McpSuggestedPromptsScreen = ({
   // context-aware follow-up suggestions in FollowUp. Cleared at the
   // start of each new run.
   const [lastToolName, setLastToolName] = useState<string | null>(null);
+  // CLI mode's exec command string for the last tool call — recovers the inner
+  // tool name so follow-ups stay context-aware under both server modes.
+  const [lastToolCommand, setLastToolCommand] = useState<string | null>(null);
   // Every prompt the user has picked this session — initial + follow-ups.
   // Used to filter out already-seen suggestions in getFollowUps().
   const [branchHistory, setBranchHistory] = useState<string[]>([]);
@@ -216,6 +219,7 @@ export const McpSuggestedPromptsScreen = ({
     setRunStartedAt(startedAt);
     setRunChunks([]);
     setLastToolName(null);
+    setLastToolCommand(null);
     setRunDurationSecs(null);
 
     const finishStream = (
@@ -262,6 +266,7 @@ export const McpSuggestedPromptsScreen = ({
           setRunChunks((prev) => [...prev, chunk]);
           if (chunk.kind === 'tool-call') {
             setLastToolName(chunk.toolName);
+            setLastToolCommand(chunk.command ?? null);
           }
           if (chunk.kind === 'done') {
             // Remember the SDK session id so the next follow-up can
@@ -490,6 +495,7 @@ export const McpSuggestedPromptsScreen = ({
             <Box marginTop={1} flexShrink={0} flexDirection="column">
               <FollowUpPhase
                 lastToolName={lastToolName}
+                lastToolCommand={lastToolCommand}
                 lastPrompt={runningPrompt}
                 chunks={runChunks}
                 role={session.roleAtOrganization}
@@ -924,6 +930,7 @@ const ChunkLine = ({ chunk }: ChunkLineProps) => {
 
 interface FollowUpPhaseProps {
   lastToolName: string | null;
+  lastToolCommand: string | null;
   lastPrompt: string | null;
   chunks: AgentChunk[];
   role: string | null;
@@ -935,6 +942,7 @@ interface FollowUpPhaseProps {
 
 const FollowUpPhase = ({
   lastToolName,
+  lastToolCommand,
   lastPrompt,
   chunks,
   role,
@@ -947,11 +955,12 @@ const FollowUpPhase = ({
     () =>
       getFollowUps({
         lastToolName,
+        lastToolCommand,
         lastPrompt: lastPrompt || '',
         role,
         branchHistory,
       }),
-    [lastToolName, lastPrompt, role, branchHistory],
+    [lastToolName, lastToolCommand, lastPrompt, role, branchHistory],
   );
 
   // When the cap is reached, only the exit entry is available. Follow-up

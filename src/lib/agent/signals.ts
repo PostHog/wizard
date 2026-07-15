@@ -12,6 +12,14 @@ export const AgentSignals = {
   /** Signal emitted when the agent cannot access the setup resource */
   ERROR_RESOURCE_MISSING: '[ERROR-RESOURCE-MISSING]',
   /**
+   * Signal emitted when `install_skill` failed and the agent is continuing
+   * the integration WITHOUT the skill (best-effort from its own knowledge).
+   * Format: "[SKILL-INSTALL-FAILED] <skill id — reason>". Non-fatal by
+   * design: a freestyled integration beats an outright failure, but the run
+   * must be measurable — the runner captures it as an analytics event.
+   */
+  SKILL_INSTALL_FAILED: '[SKILL-INSTALL-FAILED]',
+  /**
    * Signal emitted when the agent cannot complete the program and is
    * aborting intentionally (distinct from errors). Format: "[ABORT] <reason>".
    * Programs can declare an onAbort handler to render a custom screen.
@@ -62,4 +70,8 @@ export enum AgentErrorType {
   YARA_VIOLATION = 'WIZARD_YARA_VIOLATION',
   /** Agent intentionally aborted the program (emitted [ABORT] <reason>) */
   ABORT = 'WIZARD_ABORT',
+  /** Agent ended without making a single tool call — a no-op run that did no work */
+  NO_PROGRESS = 'WIZARD_NO_PROGRESS',
+  /** Agent acted but stopped short — planned tasks left open and/or no skill installed */
+  INCOMPLETE_TASKS = 'WIZARD_INCOMPLETE_TASKS',
 }

@@ -106,7 +106,7 @@ export class PostHogDestination implements TaskStreamDestination {
     creds: Credentials,
     body: object,
   ): { url: string; init: Parameters<typeof fetch>[1] } {
-    const url = `${creds.host.replace(/\/$/, '')}/api/projects/${
+    const url = `${creds.host.apiHost.replace(/\/$/, '')}/api/projects/${
       creds.projectId
     }/wizard/sessions/`;
     return {

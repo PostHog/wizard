@@ -14,11 +14,7 @@ import {
 } from './package-manager';
 import type { CloudRegion, WizardRunOptions } from './types';
 import { getDeclaredVersion } from './package-json';
-import {
-  DEFAULT_HOST_URL,
-  DUMMY_PROJECT_API_KEY,
-  ISSUES_URL,
-} from '@lib/constants';
+import { DUMMY_PROJECT_API_KEY, ISSUES_URL } from '@lib/constants';
 import { getOAuthScopesForProgram } from '@lib/oauth/program-scopes';
 import type { ProgramId } from '@lib/programs/program-registry';
 import { analytics } from './analytics';
@@ -39,7 +35,7 @@ import { wizardAbort } from './wizard-abort';
 interface ProjectData {
   projectApiKey: string;
   accessToken: string;
-  host: string;
+  host: HostResolution;
   distinctId: string;
   projectId: number;
   /**
@@ -400,17 +396,18 @@ export async function getOrAskForProjectData(
     /** Explicit base URL override (`--base-url`, from `session.baseUrl`). When
      *  set, pins every PostHog origin and bypasses region resolution. */
     baseUrl?: string;
+    /** `--local-mcp`: forwarded into the resolved host so `host.mcpUrl` is local. */
+    localMcp?: boolean;
     /** Optional — picks the OAuth scope set via
      *  `getOAuthScopesForProgram`. Omitted → default
      *  `WIZARD_OAUTH_SCOPES`. Threaded into `askForWizardLogin`. */
     programId?: ProgramId | null;
   },
 ): Promise<{
-  host: string;
+  host: HostResolution;
   projectApiKey: string;
   accessToken: string;
   projectId: number;
-  cloudRegion: CloudRegion;
   roleAtOrganization: string | null;
   user: ApiUser | null;
   project: ApiProject | null;
@@ -419,14 +416,12 @@ export async function getOrAskForProjectData(
   if (_options.ci && _options.apiKey) {
     getUI().log.info('Using provided API key (CI mode - OAuth bypassed)');
 
-    const hosts = await HostResolution.fromAccessToken(_options.apiKey, {
+    const host = await HostResolution.fromAccessToken(_options.apiKey, {
       region: _options.region,
+      localMcp: _options.localMcp,
       baseUrl: _options.baseUrl,
     });
-
-    const cloudRegion = hosts.region;
-    const host = hosts.apiHost;
-    const cloudUrl = hosts.appHost;
+    const cloudUrl = host.appHost;
 
     const projectData =
       _options.projectId != null
@@ -467,7 +462,6 @@ export async function getOrAskForProjectData(
       projectApiKey: projectData.api_token,
       accessToken: _options.apiKey,
       projectId: projectData.id,
-      cloudRegion,
       roleAtOrganization,
       user,
       project: projectData.project,
@@ -479,7 +473,6 @@ export async function getOrAskForProjectData(
     projectApiKey,
     accessToken,
     projectId,
-    cloudRegion,
     roleAtOrganization,
     user,
     project,
@@ -491,14 +484,12 @@ export async function getOrAskForProjectData(
       baseUrl: _options.baseUrl,
       programId: _options.programId,
       projectId: _options.projectId,
+      localMcp: _options.localMcp,
     }),
   );
 
   if (!projectApiKey) {
-    // TODO: clean up in #755
-    const cloudUrl = HostResolution.fromRegion(cloudRegion, {
-      baseUrl: _options.baseUrl,
-    }).appHost;
+    const cloudUrl = host.appHost;
     getUI().log.error(`Didn't receive a project token. This shouldn't happen :(
 
 Please let us know if you think this is a bug in the wizard:
@@ -512,10 +503,9 @@ ${cloudUrl}/settings/project#variables`);
 
   return {
     accessToken,
-    host: host || DEFAULT_HOST_URL,
+    host,
     projectApiKey: projectApiKey || DUMMY_PROJECT_API_KEY,
     projectId,
-    cloudRegion,
     roleAtOrganization: roleAtOrganization ?? null,
     user: user ?? null,
     project: project ?? null,
@@ -568,12 +558,15 @@ async function askForWizardLogin(options: {
   /** `--project-id`, if passed. When the user granted access to it on the consent
    *  screen we use it directly; otherwise we fall back to the first granted team. */
   projectId?: number;
-}): Promise<ProjectData & { cloudRegion: CloudRegion }> {
+  /** `--local-mcp`: forwarded into the resolved host so `host.mcpUrl` is local. */
+  localMcp?: boolean;
+}): Promise<ProjectData> {
   if (options.signup) {
     return askForProvisioningSignup(
       options.email,
       options.region,
       options.baseUrl,
+      options.localMcp,
     );
   }
 
@@ -619,13 +612,14 @@ async function askForWizardLogin(options: {
     await abort();
   }
 
-  const hosts = await HostResolution.fromAccessToken(
+  const host = await HostResolution.fromAccessToken(
     tokenResponse.access_token,
-    { baseUrl: options.baseUrl },
+    {
+      localMcp: options.localMcp,
+      baseUrl: options.baseUrl,
+    },
   );
-  const cloudRegion = hosts.region;
-  const cloudUrl = hosts.appHost;
-  const host = hosts.apiHost;
+  const cloudUrl = host.appHost;
 
   const projectData = await fetchProjectData(
     tokenResponse.access_token,
@@ -640,7 +634,6 @@ async function askForWizardLogin(options: {
     host,
     distinctId: userData.distinct_id,
     projectId: projectId!,
-    cloudRegion,
     roleAtOrganization: userData.role_at_organization ?? null,
     user: userData,
     project: projectData,
@@ -657,7 +650,8 @@ async function askForProvisioningSignup(
   email?: string,
   region?: CloudRegion,
   baseUrl?: string,
-): Promise<ProjectData & { cloudRegion: CloudRegion }> {
+  localMcp?: boolean,
+): Promise<ProjectData> {
   if (!email || !email.includes('@')) {
     getUI().log.error(
       'Email is required for signup. Use --email your@email.com with --signup.',
@@ -681,8 +675,7 @@ async function askForProvisioningSignup(
     spinner.stop('Account created!');
     getUI().log.success('Welcome to PostHog!');
 
-    const host = result.host;
-    const cloudRegion: CloudRegion = host.includes('eu.') ? 'eu' : 'us';
+    const host = HostResolution.fromApiHost(result.host, { localMcp });
 
     analytics.setTag('provisioning-signup', true);
 
@@ -692,7 +685,6 @@ async function askForProvisioningSignup(
       host,
       distinctId: email,
       projectId: parseInt(result.projectId, 10) || 0,
-      cloudRegion,
     };
   } catch (error) {
     spinner.stop('Account creation failed.');
@@ -703,7 +695,7 @@ async function askForProvisioningSignup(
         'This email already has a PostHog account. Switching to login flow...',
       );
 
-      return askForWizardLogin({ signup: false, baseUrl });
+      return askForWizardLogin({ signup: false, baseUrl, localMcp });
     }
 
     getUI().log.error(`Failed to create account: ${message}`);

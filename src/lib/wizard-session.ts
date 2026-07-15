@@ -15,11 +15,13 @@ import type { FrameworkConfig } from './framework-config';
 import type { WizardReadinessResult } from './health-checks/readiness';
 import type { SettingsConflict } from './agent/claude-settings';
 import type { ApiUser, ApiProject } from './api';
+import type { HostResolution } from './host-resolution';
 
 export interface Credentials {
   accessToken: string;
   projectApiKey: string;
-  host: string;
+  /** Resolved at auth time and immutable thereafter — see {@link HostResolution}. */
+  host: HostResolution;
   projectId: number;
 }
 
@@ -241,11 +243,11 @@ export interface WizardSession {
   apiUser: ApiUser | null;
 
   /**
-   * Cloud region and project payload resolved at authentication, kept so a
-   * second agent run in the same invocation (e.g. self-driving's integration
-   * phase) reuses the first login wholesale instead of re-authenticating.
+   * Project payload resolved at authentication, kept so a second agent run in
+   * the same invocation (e.g. self-driving's integration phase) reuses the
+   * first login wholesale instead of re-authenticating. The resolved region
+   * lives on `credentials.host.region`.
    */
-  cloudRegion: CloudRegion | null;
   apiProject: ApiProject | null;
 
   // Lifecycle
@@ -278,11 +280,15 @@ export interface WizardSession {
 
   /**
    * Self-driving only: whether to integrate PostHog as part of this run.
-   * `null` until decided — the integration-check screen asks "do you already
-   * have PostHog?" and sets it (No → true, Yes → false). The `--integrate`
-   * flag pre-sets it to `true`, skipping the question. When `true`, the
-   * self-driving prompt has the agent set up the SDK before the Self-driving
-   * steps. Unused by other programs.
+   * `null` until decided. When detection finds no PostHog SDK, the
+   * integration-check screen sets this to `true` (Self-driving needs an SDK,
+   * so we always integrate in that case) — and, on the same screen, asks
+   * whether the user already has a PostHog account: "yes" leaves `signup`
+   * false (OAuth login); "no" flips `signup` and collects `email`/`region`
+   * so auth provisions a new account. The `--integrate` flag pre-sets this to
+   * `true`, skipping the screen entirely and defaulting to the OAuth login.
+   * When `true`, the self-driving prompt has the agent set up the SDK before
+   * the Self-driving steps. Unused by other programs.
    */
   integrate: boolean | null;
 
@@ -407,7 +413,6 @@ export function buildSession(args: {
     credentials: null,
     roleAtOrganization: null,
     apiUser: null,
-    cloudRegion: null,
     apiProject: null,
     readinessResult: null,
     outageDismissed: false,

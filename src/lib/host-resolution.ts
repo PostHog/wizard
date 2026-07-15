@@ -27,6 +27,8 @@ import {
 import { runtimeEnv } from '@env';
 import type { CloudRegion } from '@utils/types';
 
+// The wizard's client gets CLI mode (a single `exec` tool) by server default,
+// so no mode is pinned; an `MCP_URL` override is taken verbatim.
 const LOCAL_MCP_URL = 'http://localhost:8787/mcp';
 const PROD_MCP_URL = 'https://mcp.posthog.com/mcp';
 
@@ -58,7 +60,7 @@ function assetHostFromApiHost(apiHost: string): string {
   return apiHost;
 }
 
-function mcpUrlFor(localMcp: boolean): string {
+export function mcpUrlFor(localMcp: boolean): string {
   if (localMcp) return LOCAL_MCP_URL;
   return runtimeEnv('MCP_URL') || PROD_MCP_URL;
 }

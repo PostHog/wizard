@@ -28,7 +28,6 @@ import { enableDebugLogs, logToFile, initLogFile } from '@utils/debug';
 import { wizardAbort } from '@utils/wizard-abort';
 import { isNonInteractiveEnvironment } from '@utils/environment';
 import { getSkillsBaseUrl } from '@lib/constants';
-import { runtimeEnv } from '@env';
 import type { WizardRunOptions } from '@utils/types';
 import type { ProgramConfig } from '@lib/programs/program-step';
 import type { ProgramRun, BootstrapResult } from './types';
@@ -218,8 +217,6 @@ export async function bootstrapProgram(
   // the first login; it does not launch another OAuth. authenticate() also
   // identifies the user and sets analytics groups.
   await authenticate(session, programConfig.id);
-  const { projectApiKey, host, accessToken, projectId } = session.credentials!;
-  const cloudRegion = session.cloudRegion!;
   const project = session.apiProject;
 
   // 4.5. AI opt-in enforcement. Parks here while AiOptInRequiredScreen is
@@ -248,9 +245,9 @@ export async function bootstrapProgram(
     }
   }
 
-  // Feature flags and MCP url. Both arms need these, and the fork decision reads
-  // the flags. This map is PostHog-side only — CLI `--harness` / `--sequence`
-  // precedence lives at the resolution sites (`runner/index.ts` for sequence,
+  // Feature flags. Both arms need these, and the fork decision reads the flags.
+  // This map is PostHog-side only — CLI `--harness` / `--sequence` precedence
+  // lives at the resolution sites (`runner/index.ts` for sequence,
   // `resolveHarness` for harness), not here.
   const wizardFlags = await analytics.getAllFlagsForWizard();
 
@@ -264,21 +261,12 @@ export async function bootstrapProgram(
     skillId: config.skillId,
   });
 
-  // One MCP url for every region: the server resolves the user's region from
-  // the bearer token, so the EU subdomain (a Claude Code OAuth workaround) is
-  // not needed here.
-  const mcpUrl = session.localMcp
-    ? 'http://localhost:8787/mcp'
-    : runtimeEnv('MCP_URL') || 'https://mcp.posthog.com/mcp';
-
+  // Credentials (incl. the resolved host family and its MCP url) live on
+  // `session.credentials`; narrow once at this boundary — `authenticate` above
+  // set them — so downstream readers get a non-null type without asserting.
   return {
     skillsBaseUrl,
-    projectApiKey,
-    host,
-    accessToken,
-    projectId,
-    cloudRegion,
-    mcpUrl,
+    credentials: session.credentials!,
     wizardFlags,
     wizardMetadata,
     project,

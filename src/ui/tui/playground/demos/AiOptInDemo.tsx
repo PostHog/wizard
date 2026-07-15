@@ -16,6 +16,7 @@ import { useEffect, useState } from 'react';
 import { Box, Text } from 'ink';
 import { WizardStore } from '@ui/tui/store';
 import { AiOptInRequiredScreen } from '@ui/tui/screens/AiOptInRequiredScreen';
+import { HostResolution } from '@lib/host-resolution';
 
 type Variant = 'admin' | 'non-admin';
 
@@ -29,7 +30,7 @@ export const AiOptInDemo = ({ variant }: AiOptInDemoProps) => {
     s.setCredentials({
       accessToken: 'demo-fake-token',
       projectApiKey: 'demo-fake-project-key',
-      host: 'https://us.posthog.com',
+      host: HostResolution.fromApiHost('https://us.posthog.com'),
       projectId: 0,
     });
     return s;
