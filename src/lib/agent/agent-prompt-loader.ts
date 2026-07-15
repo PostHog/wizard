@@ -26,6 +26,7 @@ import {
   type ThinkingLevel,
 } from './runner/switchboard/models';
 import { logToFile } from '@utils/debug';
+import { analytics } from '@utils/analytics';
 
 /**
  * The basics the client injects around every agent-prompt body. The `/agents/`
@@ -248,6 +249,11 @@ export function parseAgentPrompt(
     logToFile(
       `[agent-prompt] ${fallbackType}: ignoring invalid ${key} "${String(v)}"`,
     );
+    analytics.wizardCapture('agent prompt invalid effort', {
+      task_type: fallbackType,
+      key,
+      value: String(v),
+    });
     return undefined;
   };
   return {
