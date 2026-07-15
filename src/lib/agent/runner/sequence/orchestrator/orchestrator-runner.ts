@@ -13,8 +13,13 @@
 import { randomUUID } from 'crypto';
 import { existsSync, rmSync } from 'fs';
 import * as path from 'path';
+import { IS_PRODUCTION_BUILD } from '@env';
 import { OutroKind, type WizardSession } from '@lib/wizard-session';
-import { installSkillById, fetchSkillMenu } from '@lib/wizard-tools';
+import {
+  installSkillById,
+  fetchSkillMenu,
+  type SkillEntry,
+} from '@lib/wizard-tools';
 import { getUI } from '@ui';
 import { analytics } from '@utils/analytics';
 import { ciExcludedTaskTypes } from '@utils/ci-flag-overrides';
@@ -79,47 +84,27 @@ function requireTaskHarness(pick: HarnessPick): AgentHarness & {
   };
 }
 
-/** Every skill id the menu knows, across categories. */
-async function fetchSkillMenuIds(skillsBaseUrl: string): Promise<string[]> {
+/** Every skill entry the menu knows, across categories. */
+async function fetchSkillMenuEntries(
+  skillsBaseUrl: string,
+): Promise<SkillEntry[]> {
   const menu = await fetchSkillMenu(skillsBaseUrl);
   if (!menu) return [];
-  return Object.values(menu.categories)
-    .flat()
-    .map((s) => s.id);
+  return Object.values(menu.categories).flat();
 }
 
-/**
- * Resolve a bare skill id + the session's framework to the menu id: the bare
- * id itself (single-variant skills collapse to it), else exact
- * `<id>-<framework>` (the 1:1 frameworks — django, python, flask, …), else the
- * first granular variant under the framework (e.g. `-nextjs-app-router`).
- * Undefined when nothing matches.
- */
-/**
- * Framework enums whose context-mill variant id differs from the enum value.
- * The orchestrator resolves variants programmatically (the linear flow's agent
- * picks from the menu by hand and self-corrects), so without these it silently
- * resolves nothing and the tasks run skill-less — a zero-diff run. The value is
- * the variant-id token (or its prefix, for a family the `startsWith` fallback
- * then narrows).
- */
-const FRAMEWORK_VARIANT_ALIASES: Record<string, string> = {
-  rails: 'ruby-on-rails',
-  'react-router': 'react-react-router',
-  'tanstack-router': 'react-tanstack-router',
-};
-
+/** Menu id for a bare skill id + framework via the menu's declared group/framework/default fields; undefined when nothing matches. */
 export function resolveSkillVariantId(
-  menuIds: readonly string[],
+  entries: readonly SkillEntry[],
   skillId: string,
   framework: string | undefined,
 ): string | undefined {
-  if (menuIds.includes(skillId)) return skillId;
+  if (entries.some((e) => e.id === skillId)) return skillId;
   if (!framework) return undefined;
-  const variant = FRAMEWORK_VARIANT_ALIASES[framework] ?? framework;
-  const exact = `${skillId}-${variant}`;
-  if (menuIds.includes(exact)) return exact;
-  return menuIds.find((id) => id.startsWith(`${exact}-`));
+  const family = entries.filter(
+    (e) => e.group === skillId && e.framework === framework,
+  );
+  return (family.find((e) => e.default) ?? family[0])?.id;
 }
 
 /**
@@ -128,10 +113,10 @@ export function resolveSkillVariantId(
  * `integration-<variant>`.
  */
 function resolveReferenceSkillId(
-  menuIds: readonly string[],
+  entries: readonly SkillEntry[],
   framework: string,
 ): string | undefined {
-  return resolveSkillVariantId(menuIds, 'integration', framework);
+  return resolveSkillVariantId(entries, 'integration', framework);
 }
 
 export async function runOrchestrator(
@@ -178,13 +163,10 @@ export async function runOrchestrator(
 
   const store = new QueueStore(session.installDir, runId, {
     onTransition: (event, task) => {
+      const pick = resolveHarness(switchboardCtx, task.type);
       const base = {
         type: task.type,
-        model: taskModelSpec(
-          registry,
-          task,
-          resolveHarness(switchboardCtx, task.type).harness,
-        ).model,
+        model: taskModelSpec(registry, task, pick.harness).model ?? pick.model,
         attempts: task.attempts,
       };
       switch (event) {
@@ -235,9 +217,9 @@ export async function runOrchestrator(
   // skill — only the example file is read, when the agent's prompt points at it.
   let examplePath: string | undefined;
   let commandmentsPath: string | undefined;
-  const menuSkillIds = await fetchSkillMenuIds(boot.skillsBaseUrl);
+  const menuSkillEntries = await fetchSkillMenuEntries(boot.skillsBaseUrl);
   const referenceSkillId = session.skillId
-    ? resolveReferenceSkillId(menuSkillIds, session.skillId)
+    ? resolveReferenceSkillId(menuSkillEntries, session.skillId)
     : undefined;
   if (referenceSkillId) {
     const ref = await installSkillById(
@@ -263,6 +245,41 @@ export async function runOrchestrator(
   } else if (session.skillId) {
     logToFile(
       `[orchestrator] no integration skill for framework "${session.skillId}"`,
+    );
+  }
+
+  // Preflight every task's mini-skills. A missing variant means the task runs
+  // skill-less — a silent zero-diff — so log + capture it on every build. In
+  // dev and CI the run then crashes so the gap can't slip through a test pass;
+  // the throw sits behind !IS_PRODUCTION_BUILD, which tsdown inlines to a
+  // literal, so it is stripped from the published bundle (real users get the
+  // degraded run, never a crash).
+  const missingVariants: string[] = [];
+  for (const type of registry.types) {
+    for (const skillId of registry.get(type)?.skills ?? []) {
+      if (resolveSkillVariantId(menuSkillEntries, skillId, session.skillId)) {
+        continue;
+      }
+      missingVariants.push(`${type}/${skillId}`);
+      logToFile(
+        `[orchestrator] no skill variant type=${type} skill=${skillId} framework=${
+          session.skillId ?? 'none'
+        }`,
+      );
+      analytics.wizardCapture('orchestrator skill variant missing', {
+        task_type: type,
+        skill: skillId,
+        framework: session.skillId,
+      });
+    }
+  }
+  if (!IS_PRODUCTION_BUILD && missingVariants.length > 0) {
+    throw new Error(
+      `Orchestrator preflight: no skill variant for ${missingVariants.join(
+        ', ',
+      )} (framework=${
+        session.skillId ?? 'none'
+      }) — fix the context-mill menu or the framework mapping.`,
     );
   }
 
@@ -368,7 +385,7 @@ export async function runOrchestrator(
         // SDK-divergent steps ship per-framework variants, so resolve against
         // the menu with the session's framework before installing.
         const variantId = resolveSkillVariantId(
-          menuSkillIds,
+          menuSkillEntries,
           skillId,
           session.skillId,
         );

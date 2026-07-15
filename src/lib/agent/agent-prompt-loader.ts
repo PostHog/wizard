@@ -21,7 +21,12 @@ import type {
 } from './runner/sequence/orchestrator/queue';
 import type { ResolvedTask } from './runner/sequence/orchestrator/executor';
 import type { HostResolution } from '@lib/host-resolution';
-import { DEFAULT_AGENT_MODEL } from '@lib/constants';
+import {
+  isThinkingLevel,
+  type ThinkingLevel,
+} from './runner/switchboard/models';
+import { logToFile } from '@utils/debug';
+import { analytics } from '@utils/analytics';
 
 /**
  * The basics the client injects around every agent-prompt body. The `/agents/`
@@ -101,9 +106,6 @@ export function assembleSeedPrompt(
   return [projectContext(ctx), SEED_BASICS, body].join('\n\n');
 }
 
-/** Used when neither the enqueue call nor the prompt frontmatter names a model. */
-const DEFAULT_TASK_MODEL = DEFAULT_AGENT_MODEL;
-
 /** Orchestrator tools are MCP tools under the `posthog-wizard` server. Frontmatter
  *  names them short (e.g. `enqueue_task`); the SDK gates on the full name. */
 const ORCHESTRATOR_TOOL_PREFIX = 'mcp__posthog-wizard__';
@@ -125,9 +127,9 @@ export interface AgentPrompt {
   /** Per-profile model + effort. `pi` = the gpt/pi harness, `sdk` = the anthropic
    * harness. The mapping is not 1:1 across providers, so each agent names both. */
   modelPi?: string;
-  effortPi?: string;
+  effortPi?: ThinkingLevel;
   modelSdk?: string;
-  effortSdk?: string;
+  effortSdk?: ThinkingLevel;
   skills: string[];
   allowedTools: string[];
   disallowedTools: string[];
@@ -140,7 +142,7 @@ export interface AgentPrompt {
 export function promptModelFor(
   prompt: AgentPrompt,
   harness: string,
-): { model?: string; effort?: string } {
+): { model?: string; effort?: ThinkingLevel } {
   const pi = harness === 'pi';
   return {
     model: pi ? prompt.modelPi : prompt.modelSdk,
@@ -209,12 +211,13 @@ function toStringArray(value: unknown): string[] {
  * Parse the leading `---` frontmatter block and the markdown body. The
  * frontmatter is a small, known schema (scalars and inline `[a, b]` arrays), so
  * a tiny parser covers it without a YAML dependency. Inline `# comments` after a
- * value are stripped. `fallbackType` is the menu id, used when the body omits
- * `type:`.
+ * value are stripped. `fallbackType` (the menu id) and `fallbackFlow` (the
+ * menu entry's flow) apply when the frontmatter omits `type:`/`flow:`.
  */
 export function parseAgentPrompt(
   text: string,
   fallbackType: string,
+  fallbackFlow?: string,
 ): AgentPrompt {
   const match = text.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/);
   const frontmatter = match ? match[1] : '';
@@ -239,15 +242,29 @@ export function parseAgentPrompt(
   }
 
   const str = (v: unknown) => (typeof v === 'string' ? v : undefined);
+  // Effort is remote data — reject typos here so downstream carries ThinkingLevel.
+  const effort = (v: unknown, key: string): ThinkingLevel | undefined => {
+    if (v === undefined) return undefined;
+    if (isThinkingLevel(v)) return v;
+    logToFile(
+      `[agent-prompt] ${fallbackType}: ignoring invalid ${key} "${String(v)}"`,
+    );
+    analytics.wizardCapture('agent prompt invalid effort', {
+      task_type: fallbackType,
+      key,
+      value: String(v),
+    });
+    return undefined;
+  };
   return {
     type: typeof fields.type === 'string' ? fields.type : fallbackType,
     label: typeof fields.label === 'string' ? fields.label : undefined,
-    flow: typeof fields.flow === 'string' ? fields.flow : undefined,
+    flow: typeof fields.flow === 'string' ? fields.flow : fallbackFlow,
     seed: fields.seed === 'true',
     modelPi: str(fields.model_pi),
-    effortPi: str(fields.effort_pi),
+    effortPi: effort(fields.effort_pi, 'effort_pi'),
     modelSdk: str(fields.model_sdk),
-    effortSdk: str(fields.effort_sdk),
+    effortSdk: effort(fields.effort_sdk, 'effort_sdk'),
     skills: toStringArray(fields.skills),
     allowedTools: toStringArray(fields.allowedTools),
     disallowedTools: toStringArray(fields.disallowedTools),
@@ -286,7 +303,7 @@ export async function loadAgentRegistry(
   const prompts = await Promise.all(
     entries.map(async (entry) => {
       const text = await fetchText(entry.downloadUrl);
-      return parseAgentPrompt(text, entry.id);
+      return parseAgentPrompt(text, entry.id, entry.flow);
     }),
   );
 
@@ -386,18 +403,18 @@ export function resolveTask(
 }
 
 /** The model + effort a task runs on for a harness: enqueue override, then the
- * prompt's per-profile frontmatter, then the default model. */
+ * prompt's per-profile frontmatter; the caller's switchboard pick is the fallback. */
 export function taskModelSpec(
   registry: AgentRegistry,
   task: QueuedTask,
   harness: string,
-): { model: string; effort?: string } {
+): { model?: string; effort?: ThinkingLevel } {
   const picked = promptModelFor(
     registry.get(task.type) ?? EMPTY_PROMPT,
     harness,
   );
   return {
-    model: task.model ?? picked.model ?? DEFAULT_TASK_MODEL,
+    model: task.model ?? picked.model,
     effort: picked.effort,
   };
 }

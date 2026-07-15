@@ -27,13 +27,20 @@ import {
 import { RUN_SURFACE } from '@env';
 
 /** Reasoning effort. pi maps it to `reasoning_effort` for openai-completions. */
-export type ThinkingLevel =
-  | 'off'
-  | 'minimal'
-  | 'low'
-  | 'medium'
-  | 'high'
-  | 'xhigh';
+const THINKING_LEVELS = [
+  'off',
+  'minimal',
+  'low',
+  'medium',
+  'high',
+  'xhigh',
+] as const;
+export type ThinkingLevel = (typeof THINKING_LEVELS)[number];
+
+/** Whether a value (e.g. remote prompt frontmatter) names a valid effort. */
+export function isThinkingLevel(value: unknown): value is ThinkingLevel {
+  return (THINKING_LEVELS as readonly unknown[]).includes(value);
+}
 
 export interface ModelCapabilities {
   /** Model supports reasoning; safe to request reasoning effort. */

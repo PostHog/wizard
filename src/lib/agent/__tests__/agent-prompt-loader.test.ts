@@ -67,6 +67,30 @@ Add at least one capture call.
     });
   });
 
+  it('drops an effort that is not a ThinkingLevel — remote typos never reach a session', () => {
+    const p = parseAgentPrompt(
+      '---\nmodel_pi: m\neffort_pi: mediun\neffort_sdk: high\n---\nx',
+      'capture',
+    );
+    expect(p.effortPi).toBeUndefined();
+    expect(p.effortSdk).toBe('high');
+  });
+
+  it('falls back to the menu entry flow when frontmatter omits it', () => {
+    const p = parseAgentPrompt(
+      '---\ntype: install\n---\nx',
+      'install',
+      'my-flow',
+    );
+    expect(p.flow).toBe('my-flow');
+    const declared = parseAgentPrompt(
+      '---\nflow: audit\n---\nx',
+      'install',
+      'my-flow',
+    );
+    expect(declared.flow).toBe('audit');
+  });
+
   it('strips inline comments and keeps the body', () => {
     const p = parseAgentPrompt(sample, 'fallback');
     expect(p.modelPi).not.toContain('#');
@@ -93,9 +117,10 @@ Add at least one capture call.
     );
   });
 
-  it('defaults missing array fields to empty and model to undefined', () => {
+  it('defaults missing array fields to empty and models to undefined', () => {
     const p = parseAgentPrompt('no frontmatter at all', 'stub');
-    expect(p.model).toBeUndefined();
+    expect(p.modelPi).toBeUndefined();
+    expect(p.modelSdk).toBeUndefined();
     expect(p.skills).toEqual([]);
     expect(p.dependsOn).toEqual([]);
     expect(p.body).toBe('no frontmatter at all');
@@ -296,7 +321,7 @@ describe('taskModelSpec', () => {
     'capture',
   );
 
-  it('prefers the enqueue override, then the prompt, then the default', () => {
+  it('prefers the enqueue override, then the prompt; the switchboard pick is the caller fallback', () => {
     const registry = registryOf([prompt]);
     const task = { type: 'capture' };
     expect(
@@ -306,9 +331,13 @@ describe('taskModelSpec', () => {
     expect(taskModelSpec(registry, task as never, 'pi').model).toBe(
       'prompt-model',
     );
-    expect(taskModelSpec(registryOf([]), task as never, 'pi').model).toBe(
-      'claude-sonnet-4-6',
-    );
+    // An empty column stays undefined — the caller falls back to its switchboard pick.
+    expect(
+      taskModelSpec(registry, task as never, 'anthropic').model,
+    ).toBeUndefined();
+    expect(
+      taskModelSpec(registryOf([]), task as never, 'pi').model,
+    ).toBeUndefined();
   });
 });
 

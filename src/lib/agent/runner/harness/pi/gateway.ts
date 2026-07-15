@@ -70,9 +70,10 @@ export interface GatewayProviderInputs {
   // Linear runs honour the wizard-pi-effort flag; orchestrator tasks pass false
   // so each per-agent model keeps its own tuned effort from the table.
   applyEffortFlag?: boolean;
-  // Explicit per-agent effort from the prompt frontmatter — overrides the table
-  // default for a reasoning model when set.
-  effort?: string;
+  // Explicit per-agent effort from the prompt frontmatter — validated to a
+  // ThinkingLevel at the parse boundary; overrides the table default for a
+  // reasoning model when set.
+  effort?: ThinkingLevel;
 }
 
 /**
@@ -103,7 +104,7 @@ export function buildGatewayProvider(inputs: GatewayProviderInputs): {
   // An explicit frontmatter effort wins over the table for a reasoning model.
   const caps =
     effort && tableCaps.reasoning
-      ? { ...tableCaps, thinkingLevel: effort as ThinkingLevel }
+      ? { ...tableCaps, thinkingLevel: effort }
       : tableCaps;
   const baseUrl =
     api === 'openai-completions' ? `${gatewayUrl}/v1` : gatewayUrl;
