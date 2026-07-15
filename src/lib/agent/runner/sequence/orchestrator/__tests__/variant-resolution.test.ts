@@ -60,9 +60,7 @@ describe('resolveSkillVariantId — framework/variant parity', () => {
       astro: 'astro-hybrid',
     };
     const enums = Object.values(Integration);
-    const menu = enums.map(
-      (e) => `${SKILL}-${(alias as Record<string, string>)[e] ?? e}`,
-    );
+    const menu = enums.map((e) => `${SKILL}-${alias[e] ?? e}`);
     for (const e of enums) {
       expect(resolveSkillVariantId(menu, SKILL, e)).toBeDefined();
     }
