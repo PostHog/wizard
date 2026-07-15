@@ -65,8 +65,6 @@ const auditRun = async (session: WizardSession): Promise<ProgramRun> => {
 
   return {
     ...baseRun,
-    // Hand the finished ledger to the signals setup review (fail-silent,
-    // interactive runs only — see setup-review.ts for the why).
     postRun: uploadSetupReview,
     // Override the default outro so the dashboard + notebook URLs the
     // agent emits via `[DASHBOARD_URL]` / `[NOTEBOOK_URL]` are surfaced

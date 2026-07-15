@@ -1,25 +1,14 @@
 /**
- * Post-audit setup-review upload — the local counterpart of the cloud
- * wizard setup review.
- *
- * The cloud flow captures the audit's check ledger inside the sandbox and
- * feeds it to the signals setup review when the instrumentation PR merges
- * (posthog: run_wizard_audit activity → merge webhook →
- * WizardSetupReviewWorkflow). A local `wizard audit` produces the exact same
- * ledger in the user's working tree, so this module closes the gap: after a
- * successful local audit it POSTs the ledger to
- * `/api/projects/{id}/wizard/sessions/setup_review/`, and the server turns
- * the failing checks into complimentary implementation PRs in the inbox.
- *
- * Best-effort by design, like the cloud activity: a failed upload only means
- * no setup-review signals — it never fails or delays the audit itself, so
- * every exit path here is fail-silent (debug log only). The server owns all
- * policy: one review per team ever, org AI consent, billing exemption.
+ * Post-audit setup-review upload — the local counterpart of the cloud wizard
+ * setup review (posthog: run_wizard_audit activity → merge webhook →
+ * WizardSetupReviewWorkflow). POSTs the audit's check ledger so the server
+ * can turn failing checks into complimentary PRs in the inbox. Best-effort:
+ * fail-silent everywhere, the server owns all policy (one review per team,
+ * consent, billing exemption).
  *
  * Skipped when `session.ci` is set: cloud/headless runs capture the ledger
- * themselves and deliberately wait for the PR merge before reviewing —
- * uploading from inside the sandbox would fire the review before the
- * integration exists on the default branch.
+ * themselves and wait for the PR merge — uploading from the sandbox would
+ * fire the review before the integration exists on the default branch.
  */
 
 import * as childProcess from 'node:child_process';
@@ -34,10 +23,8 @@ import { AUDIT_CHECKS_FILE, coerceAuditChecks } from './types.js';
 export const MAX_UPLOAD_CHECKS = 50;
 
 /**
- * Resolve the project's `owner/repo` from its `origin` remote. The signals
- * pipeline selects the implementation repo from this value, so only a real
- * remote counts — no remote (or a non-GitHub-shaped URL) means there is
- * nothing the review could ship a PR to, and the upload is skipped.
+ * Resolve the project's `owner/repo` from its `origin` remote. Null means
+ * there is no repo the review could ship a PR to, and the upload is skipped.
  */
 export function parseRepositoryFromGitRemote(
   installDir: string,
@@ -59,11 +46,7 @@ export function parseRepositoryFromGitRemote(
   return null;
 }
 
-/**
- * Upload the audit's check ledger for the signals setup review.
- * Wired as the audit program's `postRun`, so it only fires after a
- * successful run. Never throws.
- */
+/** The audit program's `postRun` — fires only after a successful run. Never throws. */
 export async function uploadSetupReview(
   session: WizardSession,
   credentials: Credentials,
