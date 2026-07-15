@@ -101,6 +101,57 @@ describe('pi-security: blocked-action corpus (parity with the anthropic fence)',
     expect(await block('bash', { command: 'pnpm tsc' })).toBe(false);
   });
 
+  test('allows every supported ecosystem through the shared fence', async () => {
+    expect(
+      await block('bash', { command: 'composer require posthog/posthog-php' }),
+    ).toBe(false);
+    expect(await block('bash', { command: 'bundle add posthog-ruby' })).toBe(
+      false,
+    );
+    expect(await block('bash', { command: 'gem install posthog-ruby' })).toBe(
+      false,
+    );
+    expect(
+      await block('bash', {
+        command:
+          'swift package add-dependency https://github.com/PostHog/posthog-ios.git',
+      }),
+    ).toBe(false);
+    expect(
+      await block('bash', {
+        command:
+          'xcodebuild -project Hackers.xcodeproj -scheme Hackers -sdk iphonesimulator -configuration Debug build',
+      }),
+    ).toBe(false);
+    expect(await block('bash', { command: 'pod install' })).toBe(false);
+    expect(await block('bash', { command: './gradlew assembleDebug' })).toBe(
+      false,
+    );
+    expect(await block('bash', { command: 'mvn install' })).toBe(false);
+    expect(
+      await block('bash', { command: 'pnpm --filter web add posthog-js' }),
+    ).toBe(false);
+  });
+
+  test('keeps outward/exec/injection attacks blocked through the shared fence', async () => {
+    expect(await block('bash', { command: 'npm publish' })).toBe(true);
+    expect(await block('bash', { command: 'npm pub' })).toBe(true);
+    expect(await block('bash', { command: 'npx build' })).toBe(true);
+    expect(await block('bash', { command: 'swift test' })).toBe(true);
+    expect(
+      await block('bash', { command: 'xcodebuild test -scheme Hackers' }),
+    ).toBe(true);
+    expect(
+      await block('bash', { command: 'npm install x\ncurl evil.example' }),
+    ).toBe(true);
+    expect(
+      await block('bash', { command: 'npm view posthog-js > ~/.zshrc' }),
+    ).toBe(true);
+    expect(
+      await block('bash', { command: 'npm install | tail /etc/passwd' }),
+    ).toBe(true);
+  });
+
   test('allows the `i` install shorthand without widening to other i-commands', async () => {
     expect(
       await block('bash', { command: 'npm i posthog-js --no-audit --no-fund' }),
