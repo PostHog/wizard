@@ -1,14 +1,7 @@
 /**
- * The pi session machinery shared by the harness's two entry points: the
- * linear `run()` (index.ts) and the orchestrator's per-task `runTask()`
- * (task.ts). One copy of the gateway/registry wiring, the hermetic resource
- * loader, the coding-tool definitions, the session event handler, and the
- * error/usage bookkeeping — so the two runs configure the same machinery
- * instead of drifting apart (the 429 sniff and the analytics shape especially).
- *
- * No typebox in this module graph: index.ts imports it statically (the
- * CommonJS unit-test seam loads it), while the SDK itself always arrives as
- * the caller's lazy import, passed in as `sdk`.
+ * pi session machinery shared by the linear run (index.ts) and the
+ * orchestrator's per-task runs (task.ts). No typebox in this module graph —
+ * the SDK always arrives as the caller's lazy import, passed in as `sdk`.
  */
 
 import { getUI, type SpinnerHandle } from '@ui';
@@ -137,13 +130,7 @@ export function lastStatusLine(textBlock: string): string | undefined {
   return status || undefined;
 }
 
-/**
- * Register the PostHog gateway on a fresh in-memory registry and resolve the
- * model. Undefined when the model can't be resolved — the caller returns its
- * API_ERROR. `applyEffortFlag`/`effort` follow `buildGatewayProvider`:
- * the linear run honours the wizard-pi-effort flag, a per-task run passes
- * `applyEffortFlag: false` and its own frontmatter effort.
- */
+/** Register the PostHog gateway on a fresh in-memory registry and resolve the model; undefined when it can't be. */
 export function resolveGatewayModel(
   sdk: PiSdk,
   boot: BootstrapResult,
@@ -173,12 +160,7 @@ export function resolveGatewayModel(
   return { registry, model, caps, gatewayUrl };
 }
 
-/**
- * Wire the real PostHog MCP, best-effort: if the adapter can't load or
- * connect, the run continues (minus the posthog_* tools) rather than failing.
- * The caller pushes `extensionFactory` after the security factory and calls
- * `cleanup` when the session ends.
- */
+/** Wire the real PostHog MCP, best-effort — on failure the run continues without the posthog_* tools. */
 export async function connectPostHogMcp(
   sdk: PiSdk,
   boot: BootstrapResult,
@@ -202,11 +184,7 @@ export async function connectPostHogMcp(
   }
 }
 
-/**
- * The stock coding tools rooted at `dir`, each tagged with its execution mode
- * and bash wired to the scrubbed subprocess env. Factories, not instances, so
- * a caller registers exactly the tools its allow list grants.
- */
+/** The stock coding tools rooted at `dir` (modes tagged, bash env-scrubbed), as factories so callers register only what their allow list grants. */
 export function piCodingToolFactories(sdk: PiSdk, dir: string) {
   return {
     read: () => withMode(sdk.createReadToolDefinition(dir), 'parallel'),
@@ -225,13 +203,7 @@ export function piCodingToolFactories(sdk: PiSdk, dir: string) {
   } as const;
 }
 
-/**
- * A hermetic pi session: the given system prompt and extensions only — no
- * disk-discovered extensions, skills, context files, prompt templates, or
- * themes from the target project — with pi's default built-in tools disabled
- * so `customTools` is the entire tool surface. Fires the extension lifecycle
- * (`bindExtensions`) before returning, which the MCP adapter connects on.
- */
+/** A hermetic pi session: nothing loads from the target project, `customTools` is the entire tool surface, extensions are bound before returning. */
 export async function createHermeticSession(
   sdk: PiSdk,
   opts: {
@@ -277,13 +249,7 @@ export interface SessionCounts {
   toolCalls: number;
 }
 
-/**
- * Map pi session events onto the run spinner + the log file, mirroring the
- * anthropic path's log shape (assistant turns + tool I/O) and driving the
- * single run spinner with one stable status at a time. `[STATUS]` lines
- * surface into the live spinner and status history; outro markers apply as
- * they stream; every assistant line feeds `signals`.
- */
+/** Map pi session events onto the spinner, status history, signals, and log, keeping the counters live. */
 export function watchSession(
   agentSession: PiAgentSession,
   opts: { tag: string; spinner: SpinnerHandle; signals: AgentOutputSignals },
@@ -367,12 +333,7 @@ export function classifyRunError(err: unknown): {
   return { error, message };
 }
 
-/**
- * The `agent completed` capture both entry points send, plus one parseable
- * usage line in the log so a run's per-unit time and cost are observable
- * without analytics access. `task=` appears only when the run carries a
- * task_type (orchestrator units); the linear run has none.
- */
+/** The `agent completed` capture plus one parseable usage log line (`task=` only when a task_type rides along). */
 export function captureAgentUsage(opts: {
   tag: string;
   modelId: string;

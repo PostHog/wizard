@@ -1,11 +1,8 @@
 /**
  * Orchestrator-mode execution on pi: one fresh pi session per unit of work —
- * the seed plan, or one drained task. The session machinery (gateway model,
- * hermetic loader, event watching, error/usage bookkeeping) is `shared.ts`,
- * common with the linear run; the linear pipeline's own concerns (skill menu,
- * todo panel, event-plan cleanup) stay in `index.ts`. This module configures
- * the leaner per-task session: the task's allowed coding tools, the wizard env
- * tools, and the in-process orchestrator queue tools.
+ * the seed plan, or one drained task. The session machinery lives in
+ * `shared.ts`; this module configures the leaner per-task session: the task's
+ * allowed coding tools, the wizard env tools, and the queue tools.
  *
  * The task's `allowedTools` / `disallowedTools` arrive in the wizard's tool
  * vocabulary (`Read`, `Edit`, `Glob`, …, plus MCP-qualified orchestrator names

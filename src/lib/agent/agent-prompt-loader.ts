@@ -211,10 +211,8 @@ function toStringArray(value: unknown): string[] {
  * Parse the leading `---` frontmatter block and the markdown body. The
  * frontmatter is a small, known schema (scalars and inline `[a, b]` arrays), so
  * a tiny parser covers it without a YAML dependency. Inline `# comments` after a
- * value are stripped. `fallbackType` is the menu id, used when the body omits
- * `type:`; `fallbackFlow` is the menu entry's flow, used when the body omits
- * `flow:` — so a prompt the menu placed in a flow is never silently dropped
- * by the registry's flow filter.
+ * value are stripped. `fallbackType` (the menu id) and `fallbackFlow` (the
+ * menu entry's flow) apply when the frontmatter omits `type:`/`flow:`.
  */
 export function parseAgentPrompt(
   text: string,
@@ -244,8 +242,7 @@ export function parseAgentPrompt(
   }
 
   const str = (v: unknown) => (typeof v === 'string' ? v : undefined);
-  // Effort is remote data; a typo must not ride into a session as a bogus
-  // reasoning level. Validate here so downstream code carries ThinkingLevel.
+  // Effort is remote data — reject typos here so downstream carries ThinkingLevel.
   const effort = (v: unknown, key: string): ThinkingLevel | undefined => {
     if (v === undefined) return undefined;
     if (isThinkingLevel(v)) return v;
@@ -400,10 +397,7 @@ export function resolveTask(
   };
 }
 
-/** The model + effort a task runs on for a harness: enqueue override, then the
- * prompt's per-profile frontmatter. No default is baked in here — the caller
- * falls back to its switchboard pick, so each harness degrades to its own
- * column's model rather than everything collapsing to the anthropic default. */
+/** Enqueue override, then per-profile frontmatter; no default — the caller falls back to its switchboard pick. */
 export function taskModelSpec(
   registry: AgentRegistry,
   task: QueuedTask,

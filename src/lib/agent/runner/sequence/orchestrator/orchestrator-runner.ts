@@ -92,15 +92,7 @@ async function fetchSkillMenuEntries(
   return Object.values(menu.categories).flat();
 }
 
-/**
- * Resolve a bare skill id + the session's framework to the menu id, from the
- * `group`/`framework`/`default` fields the menu declares: a full menu id (or
- * single-variant skill) resolves to itself; otherwise the entry whose group is
- * the bare id and whose framework matches — the family's marked default when
- * several variants serve one framework (e.g. app vs pages router). No wizard-
- * side vocabulary: context-mill owns which variant serves which framework, so
- * a rename there cannot silently strand the resolution here.
- */
+/** Menu id for a bare skill id + framework via the menu's declared group/framework/default fields; undefined when nothing matches. */
 export function resolveSkillVariantId(
   entries: readonly SkillEntry[],
   skillId: string,
@@ -255,10 +247,7 @@ export async function runOrchestrator(
     );
   }
 
-  // Preflight the HOW: resolve every task's mini-skills against the menu now,
-  // so a variant gap between the registry and the menu surfaces (log +
-  // analytics) before any agent runs — not as a silently skill-less task
-  // discovered mid-drain, whose zero-diff run would look like a success.
+  // Preflight every task's mini-skills so a missing variant surfaces before any agent runs.
   for (const type of registry.types) {
     for (const skillId of registry.get(type)?.skills ?? []) {
       if (!resolveSkillVariantId(menuSkillEntries, skillId, session.skillId)) {

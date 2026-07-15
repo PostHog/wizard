@@ -335,8 +335,7 @@ describe('taskModelSpec', () => {
     expect(taskModelSpec(registry, task as never, Harness.pi).model).toBe(
       'prompt-model',
     );
-    // An empty column stays undefined — the CALLER falls back to its
-    // switchboard pick, so a pi run degrades to the pi model, not sonnet.
+    // An empty column stays undefined — the caller falls back to its switchboard pick.
     expect(
       taskModelSpec(registry, task as never, Harness.anthropic).model,
     ).toBeUndefined();

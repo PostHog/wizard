@@ -139,9 +139,6 @@ export const piBackend: AgentHarness = {
       const sdk = await import('@earendil-works/pi-coding-agent');
       const { getAgentDir } = sdk;
 
-      // The gateway provider spec + registry wiring is shared with the
-      // orchestrator's per-task sessions (shared.ts / gateway.ts). Linear runs
-      // honour the wizard-pi-effort flag (the default).
       const gateway = resolveGatewayModel(sdk, boot, modelId);
       if (!gateway) {
         return {
@@ -180,10 +177,7 @@ export const piBackend: AgentHarness = {
       const { prewarmYaraScanner } = await import('@lib/yara-hooks');
       void prewarmYaraScanner();
 
-      // Wire the real PostHog MCP into pi (#10), best-effort — if it can't
-      // load or connect, the run continues (minus the dashboard step) rather
-      // than failing the whole integration. The security factory is always
-      // first.
+      // Real PostHog MCP (#10), best-effort; the security factory is always first.
       const extensionFactories = [security.factory] as Array<
         (pi: unknown) => void
       >;
@@ -202,10 +196,7 @@ export const piBackend: AgentHarness = {
       const { createDispatchAgentTool } = await import('./subagent');
       // Created once so the run loop can read the store for the completion guard.
       const wizardTaskTools = createWizardPiTaskTools();
-      // Built-ins re-registered explicitly (`noTools: 'builtin'` in the shared
-      // session builder disables pi's defaults): reads/searches parallel,
-      // edit/write/bash sequential, bash on the scrubbed env. The one bash is
-      // shared with the subagent so the lockdown is inherited.
+      // The one env-scrubbed bash is shared with the subagent so the lockdown is inherited.
       const coding = piCodingToolFactories(sdk, session.installDir);
       const scrubbedBash = coding.bash();
 
@@ -259,8 +250,7 @@ export const piBackend: AgentHarness = {
         customTools,
       });
 
-      // Map pi events onto the run spinner + the log file; counts drive the
-      // no-progress guard below.
+      // counts drive the no-progress guard below.
       const { counts, unsubscribe } = watchSession(agentSession, {
         tag: '[pi]',
         spinner,

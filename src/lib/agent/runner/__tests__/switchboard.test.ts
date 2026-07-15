@@ -328,8 +328,7 @@ describe('switchboard modelCapabilities', () => {
     expect(modelCapabilities(GPT5_MODEL).thinkingLevel).toBe('low');
     expect(modelCapabilities(GPT5_MINI_MODEL).thinkingLevel).toBe('medium');
     // The gpt-5.6 line + gpt-5.5 are reasoning models despite the openai/ prefix; they opt in past the default-off.
-    // All low in the table — the table tunes the LINEAR run; orchestrator
-    // agents raise effort per task via their prompt frontmatter instead.
+    // All low — the table tunes the linear run; orchestrator agents raise effort via frontmatter.
     for (const m of [
       GPT5_6_LUNA_MODEL,
       GPT5_6_TERRA_MODEL,
@@ -404,9 +403,7 @@ describe('switchboard wizard-pi-effort flag', () => {
   });
 
   it('opts out with applyEffortFlag:false — orchestrator tasks keep the table effort', () => {
-    // The flag is a linear-run knob; a per-task agent ignores it and keeps the
-    // table level (its own effort comes from prompt frontmatter instead),
-    // even with the flag set to high.
+    // The flag is a linear-run knob; a per-task agent ignores it even when set to high.
     expect(
       modelCapabilities(
         GPT5_6_TERRA_MODEL,

@@ -60,10 +60,7 @@ export const MODEL_CAPABILITIES: Record<string, ModelCapabilities> = {
   [GPT5_MODEL]: { reasoning: true, thinkingLevel: 'low' },
   [GPT5_4_MODEL]: { reasoning: true, thinkingLevel: 'low' },
   // Latest openai flagship line; all reasoning models, so they must opt in past
-  // the openai-completions default (reasoning off). Low effort keeps the
-  // linear run fast — this table tunes the LINEAR run only. Orchestrator
-  // agents own their effort per task via prompt frontmatter (`effort_pi`),
-  // which overrides the table without changing it.
+  // the openai-completions default (reasoning off). Low effort keeps a run fast.
   [GPT5_6_LUNA_MODEL]: { reasoning: true, thinkingLevel: 'low' },
   [GPT5_6_TERRA_MODEL]: { reasoning: true, thinkingLevel: 'low' },
   [GPT5_6_SOL_MODEL]: { reasoning: true, thinkingLevel: 'low' },

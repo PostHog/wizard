@@ -3,9 +3,7 @@ import { resolveSkillVariantId } from '../orchestrator-runner';
 import { Integration } from '@lib/constants';
 import type { SkillEntry } from '@lib/wizard-tools';
 
-// The integration group exactly as the context-mill build emits it into
-// skill-menu.json (id + group + framework + default), so this suite pins the
-// real cross-repo contract instead of a fixture that mirrors the resolver.
+// Pinned from the real built skill-menu.json, so this suite tests the actual cross-repo contract.
 const INTEGRATION_ENTRIES = [
   { id: 'integration-nextjs-app-router', framework: 'nextjs', default: true },
   { id: 'integration-nextjs-pages-router', framework: 'nextjs' },
