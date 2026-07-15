@@ -1,6 +1,6 @@
 import { isNonInteractiveEnvironment } from '@utils/environment';
 import { setEntryCommand } from '@utils/links';
-import { isHeadless } from '@lib/headless-mode';
+import { headlessOption, isHeadless } from '@lib/headless-mode';
 import { provisionCommand } from '../provision';
 import type { Command } from '../command';
 
@@ -29,6 +29,9 @@ export const basicIntegrationCommand: Command = {
       type: 'boolean',
       hidden: true,
     },
+    // The experimental headless flag — declared here (and on `audit`) rather
+    // than globally. Routed by this command's handler via runHeadlessInstall.
+    ...headlessOption,
   },
   check: (argv) => {
     // --playground is the standalone TUI demo; it can't combine with a
