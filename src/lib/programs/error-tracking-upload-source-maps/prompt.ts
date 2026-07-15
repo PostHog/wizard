@@ -219,6 +219,15 @@ STEP 8 — Offer to test the local setup. (skill: "Test the local setup")
           prompt: "1) Run \`<your detected build command>\` to upload source maps and build the app with the test affordance.\\n\\n2) Start the app with \`<your detected run command>\`, then click the \\"<your test button label>\\" button (or hit \`<your test route>\`).\\n\\n3) Open Error Tracking in PostHog (${uiHost}/project/${projectId}/error_tracking) and confirm the test error appears with a source-resolved stack trace pointing at real source files (not minified bundle paths).\\n\\nWhen you're done, select Continue and I'll revert the test code.",
           kind: "single",
           options: [{ label: "Continue (revert test code)", value: "continue" }]
+        }${
+          isIos
+            ? `
+   iOS override for the test-done prompt: everything happens in Xcode — do
+   NOT mix in xcodebuild commands, and do NOT add debugger-detach or
+   relaunch steps (the test captures an exception event; it is not a crash).
+   Use exactly:
+        prompt: "1) In Xcode: Edit Scheme > Run > Build Configuration > Release, then Run — the Release build uploads dSYMs automatically.\\n\\n2) Tap the \\"<your test button label>\\" button in the app.\\n\\n3) Open Error Tracking in PostHog (${uiHost}/project/${projectId}/error_tracking) and confirm the test error appears with a source-resolved stack trace.\\n\\nWhen you're done, select Continue and I'll revert the test code."`
+            : ''
         }
    After the user continues, revert the test code per the skill's rules and
    surface any failure in STEP 9.
