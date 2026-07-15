@@ -63,7 +63,9 @@ STEP 5 — Write the credentials. (skill: "Write credentials to the env file")
      assign the xcconfig to the target's build configuration (so
      \`POSTHOG_CLI_API_KEY\` reaches the Run Script phase as a build setting)
      and add these as \`export\` lines inside the dSYM-upload Run Script
-     phase: POSTHOG_CLI_PROJECT_ID=${projectId} and POSTHOG_CLI_HOST=${host}.
+     phase: POSTHOG_CLI_PROJECT_ID=${projectId} and POSTHOG_CLI_HOST=${uiHost}.
+     POSTHOG_CLI_HOST is the API host above — NEVER the \`*.i.posthog.com\`
+     ingestion host the app's PostHogConfig uses.
    - If the skill asks, also write a committed \`PostHog.example.xcconfig\`
      placeholder (empty value) so teammates see the setting exists.`
     : `STEP 4 — Make the credentials readable at build time. (skill: "Make credentials available at build time")
@@ -82,8 +84,10 @@ STEP 5 — Write the credentials to the env file. (skill: "Write credentials to 
        values: {
          "POSTHOG_CLI_API_KEY": { secretRef: "<the ref from STEP 1>" },
          "POSTHOG_CLI_PROJECT_ID": "${projectId}",
-         "POSTHOG_CLI_HOST": "${host}"
+         "POSTHOG_CLI_HOST": "${uiHost}"
        }
+   POSTHOG_CLI_HOST is the API host — never the \`*.i.posthog.com\`
+   ingestion host the SDK snippet may use.
    Variable names follow the skill's per-uploader conventions. The wizard
    resolves the ref locally before writing, so you never see the key value.`;
 
