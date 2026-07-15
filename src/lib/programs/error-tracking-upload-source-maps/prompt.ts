@@ -36,38 +36,28 @@ export function buildSourceMapsUploadPrompt(
     ? `- Project directory (relative to repo root): ${projectPath}`
     : '- Project directory: the repo root';
 
-  // iOS never reads a .env file — Xcode does not load one at build time. The
-  // secret personal API key goes in a gitignored xcconfig (surfaced to the
-  // dSYM-upload Run Script phase as a build setting); the non-secret project
-  // id + host are exported inside that same Run Script phase. Every other
-  // platform keeps the dotenv flow.
+  // iOS never reads a .env file — all three POSTHOG_CLI_* values go in a
+  // gitignored xcconfig (the host with the $() escape, since // starts an
+  // xcconfig comment). Every other platform keeps the dotenv flow.
   const isIos = variant === 'ios';
+  const xcconfigHost = uiHost.replace('://', ':/$()/');
   const credentialSteps = isIos
     ? `STEP 4 — Make the credentials readable at build time. (skill: "Make credentials available at build time")
-   iOS does NOT use .env — Xcode never loads one. Follow the skill's iOS
-   step, which routes credentials through Xcode build settings instead of a
-   dotenv file. Do NOT install \`dotenv\` or any loader, and do NOT create a
-   .env file for this platform.
+   iOS does NOT use .env. Follow the skill's iOS step. Do NOT install
+   \`dotenv\` or any loader, and do NOT create a .env file.
 
 STEP 5 — Write the credentials. (skill: "Write credentials to the env file")
-   The secret goes in a GITIGNORED xcconfig, not a .env:
-   - Call set_env_values with the xcconfig path the skill names (e.g.
-     \`PostHog.xcconfig\`). Because the path ends in \`.xcconfig\`, the tool
-     writes Xcode \`KEY = VALUE\` style and adds the file to .gitignore for
-     you. Write ONLY the secret there, passing the STEP 1 secretRef as a
-     value object (never a literal string):
+   All three values go in a GITIGNORED xcconfig, not a .env. Call
+   set_env_values once — the \`.xcconfig\` path makes the tool write Xcode
+   \`KEY = VALUE\` style and gitignore the file:
        filePath: "PostHog.xcconfig"
-       values: { "POSTHOG_CLI_API_KEY": { secretRef: "<the ref from STEP 1>" } }
-     The wizard resolves the ref locally, so you never see the key value.
-   - The non-secret values are NOT written to the xcconfig. Per the skill,
-     assign the xcconfig to the target's build configuration (so
-     \`POSTHOG_CLI_API_KEY\` reaches the Run Script phase as a build setting)
-     and add these as \`export\` lines inside the dSYM-upload Run Script
-     phase: POSTHOG_CLI_PROJECT_ID=${projectId} and POSTHOG_CLI_HOST=${uiHost}.
-     POSTHOG_CLI_HOST is the API host above — NEVER the \`*.i.posthog.com\`
-     ingestion host the app's PostHogConfig uses.
-   - If the skill asks, also write a committed \`PostHog.example.xcconfig\`
-     placeholder (empty value) so teammates see the setting exists.`
+       values: {
+         "POSTHOG_CLI_API_KEY": { secretRef: "<the ref from STEP 1>" },
+         "POSTHOG_CLI_PROJECT_ID": "${projectId}",
+         "POSTHOG_CLI_HOST": "${xcconfigHost}"
+       }
+   Write the host value EXACTLY as shown — the \`$()\` keeps \`//\` from
+   starting an xcconfig comment. Wire the file per the skill's iOS example.`
     : `STEP 4 — Make the credentials readable at build time. (skill: "Make credentials available at build time")
    Follow the skill's step. Wizard-specific: if it calls for a loader (e.g.
    \`dotenv\`), install it SILENTLY — do NOT ask the user or call wizard_ask.
@@ -86,8 +76,6 @@ STEP 5 — Write the credentials to the env file. (skill: "Write credentials to 
          "POSTHOG_CLI_PROJECT_ID": "${projectId}",
          "POSTHOG_CLI_HOST": "${uiHost}"
        }
-   POSTHOG_CLI_HOST is the API host — never the \`*.i.posthog.com\`
-   ingestion host the SDK snippet may use.
    Variable names follow the skill's per-uploader conventions. The wizard
    resolves the ref locally before writing, so you never see the key value.`;
 
@@ -222,10 +210,8 @@ STEP 8 — Offer to test the local setup. (skill: "Test the local setup")
         }${
           isIos
             ? `
-   iOS override for the test-done prompt: everything happens in Xcode — do
-   NOT mix in xcodebuild commands, and do NOT add debugger-detach or
-   relaunch steps (the test captures an exception event; it is not a crash).
-   Use exactly:
+   iOS override for the test-done prompt — everything happens in Xcode; no
+   xcodebuild commands, no debugger-detach or relaunch steps. Use exactly:
         prompt: "1) In Xcode: Edit Scheme > Run > Build Configuration > Release, then Run — the Release build uploads dSYMs automatically.\\n\\n2) Tap the \\"<your test button label>\\" button in the app.\\n\\n3) Open Error Tracking in PostHog (${uiHost}/project/${projectId}/error_tracking) and confirm the test error appears with a source-resolved stack trace.\\n\\nWhen you're done, select Continue and I'll revert the test code."`
             : ''
         }
