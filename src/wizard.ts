@@ -2,7 +2,6 @@ import yargs from 'yargs';
 import { hideBin } from 'yargs/helpers';
 import type { Argv } from 'yargs';
 import { IS_PRODUCTION_BUILD } from '@env';
-import { HEADLESS_FLAG } from '@lib/headless-mode';
 import { Harness, Sequence } from '@lib/constants';
 import { toCommandModule, type Command } from './commands/command';
 
@@ -54,17 +53,9 @@ export const GLOBAL_OPTIONS = {
   },
   // ── Internal modes ─────────────────────────────────────────────────
   // Hidden from `--help`. See CONTRIBUTING.md for what each one does.
-  [HEADLESS_FLAG]: {
-    default: false,
-    // EXPERIMENTAL + UNSTABLE: the non-interactive published-build run path.
-    // Declared unconditionally (unlike --ci) so it works in the shipped
-    // package, but hidden and intentionally ugly-named — the contract may
-    // break without notice, so it must not be advertised. See @lib/headless-mode.
-    describe:
-      'EXPERIMENTAL — do not use. Unstable, subject to breaking changes.',
-    type: 'boolean' as const,
-    hidden: true,
-  },
+  // NB: the experimental headless flag is deliberately NOT global — it's
+  // declared per-command (basic integration + audit) via `headlessOption`
+  // in @lib/headless-mode, so no other command accepts it.
   'local-mcp': {
     default: false,
     describe:
@@ -107,9 +98,11 @@ export class Wizard {
     // it there as an unknown argument — exactly like any other unrecognized
     // flag. init() additionally detects it up front to print a clearer message.
     // The published-build, non-interactive path is the experimental headless
-    // flag (declared unconditionally in GLOBAL_OPTIONS, see @lib/headless-mode);
-    // --ci and headless are kept as separate flags so they can diverge — see
-    // basic-integration's dispatch. headless is deliberately not advertised.
+    // flag — declared per-command on basic integration + audit via
+    // `headlessOption` (see @lib/headless-mode), not globally, so no other
+    // command accepts it. --ci and headless are kept as separate flags so they
+    // can diverge — see basic-integration's dispatch. headless is deliberately
+    // not advertised.
     if (!IS_PRODUCTION_BUILD) {
       cli = cli
         .option('ci', {

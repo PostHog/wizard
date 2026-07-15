@@ -1,5 +1,36 @@
 # Changelog
 
+## [2.44.0](https://github.com/PostHog/wizard/compare/v2.43.0...v2.44.0) (2026-07-15)
+
+
+### Features
+
+* **cli:** honor headless flag in family/native command dispatch ([#893](https://github.com/PostHog/wizard/issues/893)) ([84695ed](https://github.com/PostHog/wizard/commit/84695edef14fb16ce339f602d79a6cc33bf957fd))
+* **cli:** scope headless flag to base integration + audit ([#905](https://github.com/PostHog/wizard/issues/905)) ([a99c5f2](https://github.com/PostHog/wizard/commit/a99c5f2e247eeccffd4dd0b510a34f4ed054767c))
+* **self-driving:** attribute self-driving sources as created_via=self_driving ([#899](https://github.com/PostHog/wizard/issues/899)) ([7dbd53f](https://github.com/PostHog/wizard/commit/7dbd53f38d1e06a0fa708ab60a8eaf50ddfaeddc))
+* **self-driving:** provision an account when no PostHog is found ([#774](https://github.com/PostHog/wizard/issues/774)) ([6483fb0](https://github.com/PostHog/wizard/commit/6483fb0cabc5c031873f7f83c4b34559c72bc551))
+
+
+### Bug Fixes
+
+* **auth:** copy-link key + narrow-terminal guard on the OAuth screen ([#839](https://github.com/PostHog/wizard/issues/839)) ([139bda8](https://github.com/PostHog/wizard/commit/139bda8d80781136345f216db95e2c11269a5302))
+
+## [2.43.0](https://github.com/PostHog/wizard/compare/v2.42.0...v2.43.0) (2026-07-14)
+
+
+### Features
+
+* **self-driving:** default to the single connected repo for GitHub Issues ([#878](https://github.com/PostHog/wizard/issues/878)) ([93b5d87](https://github.com/PostHog/wizard/commit/93b5d8734c7f463930b8b3588745017c9601986f))
+* **self-driving:** ground custom-scout gap analysis in for-agents context ([#876](https://github.com/PostHog/wizard/issues/876)) ([3ddf98e](https://github.com/PostHog/wizard/commit/3ddf98ecd590c0dfc40f8b37c44818a79db50606))
+* **self-driving:** show PR pricing in the learn deck, tips and outro ([#875](https://github.com/PostHog/wizard/issues/875)) ([bdfff61](https://github.com/PostHog/wizard/commit/bdfff610ce4a8f116f72883d007e86e43bd6eedd))
+* surface the notebook link in the integration outro ([#882](https://github.com/PostHog/wizard/issues/882)) ([6c2656d](https://github.com/PostHog/wizard/commit/6c2656daa8aab62ef9cd8d146dacd166bdfebab5))
+* **switchboard:** add gpt-5.6 line + gpt-5.5 as pi model options, and a pi anti-reformat guard ([#886](https://github.com/PostHog/wizard/issues/886)) ([75a3438](https://github.com/PostHog/wizard/commit/75a3438b0b6da6096e9755230b416bf94e4bea61))
+
+
+### Bug Fixes
+
+* **warehouse:** unblock wizard_ask after a timed-out prompt ([#872](https://github.com/PostHog/wizard/issues/872)) ([c4d2f30](https://github.com/PostHog/wizard/commit/c4d2f3043af1caf5d691a1d706bd514000d5d007))
+
 ## [2.42.0](https://github.com/PostHog/wizard/compare/v2.41.0...v2.42.0) (2026-07-13)
 
 

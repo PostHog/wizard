@@ -16,7 +16,7 @@ import {
   WIZARD_REMARK_EVENT_NAME,
   POSTHOG_PROPERTY_HEADER_PREFIX,
   WIZARD_ORCHESTRATOR_FLAG_KEY,
-  WIZARD_USER_AGENT,
+  wizardUserAgentForProgram,
   DEFAULT_AGENT_MODEL,
 } from '@lib/constants';
 import {
@@ -708,7 +708,9 @@ export async function initializeAgent(
         url: config.posthogMcpUrl,
         headers: {
           Authorization: `Bearer ${config.posthogApiKey}`,
-          'User-Agent': WIZARD_USER_AGENT,
+          // Tag the UA with the running program so the backend can attribute what this
+          // run creates (e.g. self-driving warehouse sources → created_via=self_driving).
+          'User-Agent': wizardUserAgentForProgram(config.integrationLabel),
         },
         // CLI mode's single `exec` tool carries the full command reference on
         // its schema — keep it in context, never deferred behind tool search.

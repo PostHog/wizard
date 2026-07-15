@@ -80,7 +80,7 @@ export const AVAILABLE_FEATURES = {
   'AI Engineering': [
     {
       value: 'llm_analytics',
-      label: 'LLM Analytics',
+      label: 'AI Observability',
       hint: 'LLM usage and cost tracking',
     },
   ],
