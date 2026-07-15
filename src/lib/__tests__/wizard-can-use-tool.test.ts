@@ -95,6 +95,22 @@ describe('bash fence — allows real toolchain commands (from skills + field log
     expect(allow('uv add posthog')).toBe('allow');
     expect(allow('uv pip install posthog')).toBe('allow');
     expect(allow('uv sync')).toBe('allow');
+    // Django's system check — the only sanctioned `python` shape (e2e sweep).
+    expect(allow('python manage.py check')).toBe('allow');
+    expect(allow('python3 manage.py check')).toBe('allow');
+    expect(allow('python manage.py runserver')).toBe('deny');
+    expect(allow('python manage.py migrate')).toBe('deny');
+    expect(allow('python -c "import os"')).toBe('deny');
+    expect(allow('python evil.py manage.py check')).toBe('deny');
+  });
+
+  it('sveltekit typecheck forms (false-blocked in the e2e sweep)', () => {
+    expect(allow('npm run check')).toBe('allow');
+    expect(allow('npm exec svelte-check -- --tsconfig ./tsconfig.json')).toBe(
+      'allow',
+    );
+    expect(allow('npx svelte-check')).toBe('allow');
+    expect(allow('npm run checkout')).toBe('deny'); // boundary still holds
   });
 
   it('php + ruby ecosystems', () => {

@@ -44,6 +44,7 @@ const NODE_SCRIPT_NAMES = [
   'typecheck',
   'type-check',
   'check-types',
+  'check', // SvelteKit's canonical typecheck script (svelte-check)
   'types',
 ];
 
@@ -263,6 +264,15 @@ function commandDecision(command: string): BashFenceDecision {
   if (GRADLE_MANAGERS.has(bin)) return gradleDecision(parts, command);
   if (MAVEN_MANAGERS.has(bin)) return mavenDecision(parts, command);
   if (bin === 'xcodebuild') return xcodebuildDecision(parts, command);
+  // Django's system check — the one sanctioned `python` shape; bare python
+  // stays denied (python -c is arbitrary code).
+  if (
+    (bin === 'python' || bin === 'python3') &&
+    parts[1] === 'manage.py' &&
+    parts[2] === 'check'
+  ) {
+    return { allowed: true };
+  }
   if (bin === 'uv' && parts[1] === 'pip') {
     if (parts[2] && PIP_SUBCOMMANDS.includes(parts[2]))
       return { allowed: true };
