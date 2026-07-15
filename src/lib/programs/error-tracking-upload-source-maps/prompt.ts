@@ -67,9 +67,7 @@ STEP 5 — Write the credentials. (skill: "Write credentials to the env file")
      POSTHOG_CLI_HOST is the API host above — NEVER the \`*.i.posthog.com\`
      ingestion host the app's PostHogConfig uses.
    - If the skill asks, also write a committed \`PostHog.example.xcconfig\`
-     placeholder (empty value) so teammates see the setting exists.
-   - The upload-symbols.sh invocation MUST begin with the
-     \`POSTHOG_INCLUDE_SOURCE=1\` prefix.`
+     placeholder (empty value) so teammates see the setting exists.`
     : `STEP 4 — Make the credentials readable at build time. (skill: "Make credentials available at build time")
    Follow the skill's step. Wizard-specific: if it calls for a loader (e.g.
    \`dotenv\`), install it SILENTLY — do NOT ask the user or call wizard_ask.
