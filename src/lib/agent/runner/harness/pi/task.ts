@@ -1,8 +1,10 @@
 /**
  * Orchestrator-mode execution on pi: one fresh pi session per unit of work —
- * the seed plan, or one drained task. The session machinery lives in
- * `shared.ts`; this module configures the leaner per-task session: the task's
- * allowed coding tools, the wizard env tools, and the queue tools.
+ * the seed plan, or one drained task. The linear pipeline's concerns (skill
+ * menu, todo panel, event-plan cleanup) stay in `index.ts`; this module builds
+ * the leaner per-task session: gateway model, security fence, the task's
+ * allowed coding tools, the wizard env tools, and the in-process orchestrator
+ * queue tools.
  *
  * The task's `allowedTools` / `disallowedTools` arrive in the wizard's tool
  * vocabulary (`Read`, `Edit`, `Glob`, …, plus MCP-qualified orchestrator names
@@ -14,25 +16,24 @@
  * Loaded lazily from `index.ts` (typebox/ESM constraint, same as tools.ts).
  */
 
+import { getUI } from '@ui';
 import { logToFile } from '@utils/debug';
 import { analytics } from '@utils/analytics';
-import { WIZARD_REMARK_EVENT_NAME } from '@lib/constants';
+import { WIZARD_REMARK_EVENT_NAME, WIZARD_USER_AGENT } from '@lib/constants';
 import { AgentErrorType } from '@lib/agent/agent-interface';
 import { REMARK_INSTRUCTION } from '@lib/agent/signals';
 import { AgentOutputSignals } from '@lib/agent/output-signals';
 import { TaskStatus } from '../../sequence/orchestrator/queue';
 import type { OrchestratorToolsContext } from '../../sequence/orchestrator/queue-tools';
 import type { AgentResult, TaskRunInputs } from '../types';
+import { buildGatewayProvider, GATEWAY_PROVIDER } from './gateway';
 import {
-  captureAgentUsage,
-  classifyRunError,
-  connectPostHogMcp,
-  createHermeticSession,
-  piCodingToolFactories,
-  resolveGatewayModel,
-  startRunClock,
-  watchSession,
-} from './shared';
+  applyOutroMarkers,
+  buildScrubbedEnv,
+  extractText,
+  lastStatusLine,
+  withMode,
+} from './index';
 
 /** wizard tool vocabulary → the pi tool definitions it unlocks. */
 const CODING_TOOL_MAP: Record<string, readonly string[]> = {
@@ -166,8 +167,16 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
 
   if (spinnerMessage) spinner.start(spinnerMessage);
 
+  const startTime = Date.now();
   const signals = new AgentOutputSignals();
-  const runDurations = startRunClock();
+  let assistantTurns = 0;
+  const runDurations = () => {
+    const durationMs = Date.now() - startTime;
+    return {
+      duration_ms: durationMs,
+      duration_seconds: Math.round(durationMs / 1000),
+    };
+  };
   const captureAborted = () =>
     analytics.wizardCapture('agent aborted', {
       ...runDurations(),
@@ -177,20 +186,42 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
 
   try {
     const sdk = await import('@earendil-works/pi-coding-agent');
+    const {
+      createAgentSession,
+      DefaultResourceLoader,
+      SessionManager,
+      AuthStorage,
+      ModelRegistry,
+      getAgentDir,
+      createLsToolDefinition,
+      createFindToolDefinition,
+      createGrepToolDefinition,
+      createBashToolDefinition,
+      createReadToolDefinition,
+      createEditToolDefinition,
+      createWriteToolDefinition,
+    } = sdk;
 
-    // Per-task agents own their effort via the prompt frontmatter (falling
-    // back to the model table), not the run-wide wizard-pi-effort flag.
-    const gateway = resolveGatewayModel(sdk, boot, modelId, {
+    const { provider, caps, gatewayUrl } = buildGatewayProvider({
+      gatewayUrl: boot.credentials.host.gatewayUrl,
+      accessToken: boot.credentials.accessToken,
+      wizardMetadata: boot.wizardMetadata,
+      wizardFlags: boot.wizardFlags,
+      modelId,
+      // Per-task agents own their effort via the prompt frontmatter (falling back
+      // to the model table), not the run-wide wizard-pi-effort flag.
       applyEffortFlag: false,
       effort,
     });
-    if (!gateway) {
+    const registry = ModelRegistry.inMemory(AuthStorage.create());
+    registry.registerProvider(GATEWAY_PROVIDER, provider as never);
+    const model = registry.find(GATEWAY_PROVIDER, modelId);
+    if (!model) {
       return {
         error: AgentErrorType.API_ERROR,
         message: 'pi: gateway model could not be resolved',
       };
     }
-    const { registry, model, caps, gatewayUrl } = gateway;
 
     // The same fail-closed fence as the linear run, with the task's disallow
     // list layered in (both the wizard-vocabulary and pi-short names).
@@ -210,19 +241,63 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
     const extensionFactories = [security.factory] as Array<
       (pi: unknown) => void
     >;
-    const mcp = await connectPostHogMcp(sdk, boot, '[pi-task]');
-    if (mcp.extensionFactory) extensionFactories.push(mcp.extensionFactory);
-    const mcpCleanup = mcp.cleanup;
-    const posthogMcp = mcp.extensionFactory !== undefined;
+    let mcpCleanup: (() => void) | undefined;
+    let posthogMcp = false;
+    try {
+      const { setupPostHogMcp } = await import('./mcp');
+      const mcp = await setupPostHogMcp({
+        agentDir: getAgentDir(),
+        mcpUrl: boot.credentials.host.mcpUrl,
+        accessToken: boot.credentials.accessToken,
+        userAgent: WIZARD_USER_AGENT,
+      });
+      extensionFactories.push(mcp.extensionFactory);
+      mcpCleanup = mcp.cleanup;
+      posthogMcp = true;
+    } catch (err) {
+      logToFile(`[pi-task] PostHog MCP setup skipped: ${String(err)}`);
+    }
 
     const codingTools = allowedPiCodingTools(allowedTools);
     const orchestratorTools = allowedOrchestratorTools(disallowedTools);
+
+    const { getWizardCommandments } = await import('@lib/agent/commandments');
+    const resourceLoader = new DefaultResourceLoader({
+      cwd: session.installDir,
+      agentDir: getAgentDir(),
+      systemPrompt:
+        getWizardCommandments() +
+        '\n' +
+        taskRuntimeNotes({ bash: codingTools.has('bash'), posthogMcp }),
+      noExtensions: true,
+      noSkills: true,
+      noContextFiles: true,
+      noPromptTemplates: true,
+      noThemes: true,
+      extensionFactories,
+    });
+    await resourceLoader.reload();
 
     // The task's coding tools, gated by its allow list. Reads and searches run
     // in parallel; mutating tools stay sequential. Bash subprocesses get the
     // scrubbed env, same as the linear run.
     const dir = session.installDir;
-    const codingToolDefs = Object.entries(piCodingToolFactories(sdk, dir))
+    const codingToolFactories = {
+      read: () => withMode(createReadToolDefinition(dir), 'parallel'),
+      edit: () => withMode(createEditToolDefinition(dir), 'sequential'),
+      write: () => withMode(createWriteToolDefinition(dir), 'sequential'),
+      bash: () =>
+        withMode(
+          createBashToolDefinition(dir, {
+            spawnHook: (ctx) => ({ ...ctx, env: buildScrubbedEnv() }),
+          }),
+          'sequential',
+        ),
+      ls: () => withMode(createLsToolDefinition(dir), 'parallel'),
+      find: () => withMode(createFindToolDefinition(dir), 'parallel'),
+      grep: () => withMode(createGrepToolDefinition(dir), 'parallel'),
+    } as const;
+    const codingToolDefs = Object.entries(codingToolFactories)
       .filter(([name]) => codingTools.has(name))
       .map(([, make]) => make());
 
@@ -243,24 +318,58 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
       orchestratorTools.has(t.name),
     );
 
-    const { getWizardCommandments } = await import('@lib/agent/commandments');
-    const agentSession = await createHermeticSession(sdk, {
-      cwd: dir,
-      systemPrompt:
-        getWizardCommandments() +
-        '\n' +
-        taskRuntimeNotes({ bash: codingTools.has('bash'), posthogMcp }),
-      extensionFactories,
+    const { session: agentSession } = await createAgentSession({
       model,
-      registry,
+      modelRegistry: registry,
       thinkingLevel: caps.thinkingLevel,
+      cwd: dir,
+      sessionManager: SessionManager.inMemory(dir),
+      resourceLoader,
+      noTools: 'builtin',
       customTools: [...codingToolDefs, ...wizardTools, ...queueTools],
     });
+    await agentSession.bindExtensions({});
 
-    const { counts, unsubscribe } = watchSession(agentSession, {
-      tag: '[pi-task]',
-      spinner,
-      signals,
+    const unsubscribe = agentSession.subscribe((event) => {
+      switch (event.type) {
+        case 'message_end': {
+          // User prompts also emit message_end; only assistant turns count.
+          if ((event.message as { role?: string })?.role !== 'assistant') {
+            break;
+          }
+          assistantTurns += 1;
+          const assistant = extractText(event.message).trim();
+          if (assistant) {
+            logToFile(`[pi-task] assistant: ${assistant.slice(0, 1000)}`);
+            applyOutroMarkers(assistant);
+            const statusText = lastStatusLine(assistant);
+            if (statusText) {
+              getUI().pushStatus(statusText);
+              spinner.message(statusText);
+            }
+            for (const line of assistant.split('\n')) signals.push(line);
+          }
+          break;
+        }
+        case 'tool_execution_start': {
+          const args = JSON.stringify(event.args ?? {}).slice(0, 200);
+          logToFile(`[pi-task] → ${event.toolName} ${args}`);
+          break;
+        }
+        case 'tool_execution_end': {
+          if (event.isError) {
+            logToFile(
+              `[pi-task] ✗ ${event.toolName}: ${String(event.result).slice(
+                0,
+                300,
+              )}`,
+            );
+          }
+          break;
+        }
+        default:
+          break;
+      }
     });
 
     try {
@@ -310,23 +419,41 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
       analytics.capture(WIZARD_REMARK_EVENT_NAME, { remark });
     }
 
-    captureAgentUsage({
-      tag: '[pi-task]',
-      modelId,
-      counts,
-      durations: runDurations(),
-      stats: agentSession.getSessionStats(),
-      analyticsProperties,
+    const stats = agentSession.getSessionStats();
+    const durations = runDurations();
+    analytics.wizardCapture('agent completed', {
+      ...durations,
+      model: modelId,
+      num_turns: assistantTurns,
+      input_tokens: stats.tokens.input,
+      output_tokens: stats.tokens.output,
+      cache_creation_input_tokens: stats.tokens.cacheWrite,
+      cache_read_input_tokens: stats.tokens.cacheRead,
+      ...analyticsProperties,
     });
+    // Per-task usage on one parseable line so a run's per-task time and cost are
+    // observable from the log, not only from analytics.
+    const taskType =
+      typeof (analyticsProperties as { task_type?: unknown })?.task_type ===
+      'string'
+        ? (analyticsProperties as { task_type: string }).task_type
+        : modelId;
+    logToFile(
+      `[pi-task] usage task=${taskType} model=${modelId} dur=${durations.duration_seconds}s turns=${assistantTurns} in=${stats.tokens.input} out=${stats.tokens.output} cacheR=${stats.tokens.cacheRead} cacheW=${stats.tokens.cacheWrite}`,
+    );
     if (successMessage) spinner.stop(successMessage);
     return {};
   } catch (err) {
-    const { error, message } = classifyRunError(err);
+    const message = err instanceof Error ? err.message : String(err);
     logToFile(`[pi-task] run error: ${message}`);
     if (errorMessage || spinnerMessage) {
       spinner.stop(errorMessage ?? 'Task failed');
     }
     captureAborted();
-    return { error, message };
+    const lower = message.toLowerCase();
+    if (lower.includes('rate limit') || lower.includes('429')) {
+      return { error: AgentErrorType.RATE_LIMIT, message };
+    }
+    return { error: AgentErrorType.API_ERROR, message };
   }
 }

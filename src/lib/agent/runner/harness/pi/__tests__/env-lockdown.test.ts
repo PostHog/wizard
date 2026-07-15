@@ -4,7 +4,7 @@
  * drops everything else — the leak that exposed the test key before.
  */
 
-import { buildScrubbedEnv } from '../shared';
+import { buildScrubbedEnv } from '..';
 
 describe('buildScrubbedEnv', () => {
   const saved = { ...process.env };
