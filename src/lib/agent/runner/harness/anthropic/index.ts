@@ -56,7 +56,6 @@ export const anthropicBackend: AgentHarness = {
         additionalMcpServers: config.additionalMcpServers,
         detectPackageManager:
           config.detectPackageManager ?? detectNodePackageManagers,
-        allowedPackageManagers: config.allowedPackageManagers,
         skillsBaseUrl,
         wizardFlags,
         wizardMetadata,

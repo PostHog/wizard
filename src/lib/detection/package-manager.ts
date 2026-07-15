@@ -41,61 +41,6 @@ export type PackageManagerDetector = (
 ) => Promise<PackageManagerInfo>;
 
 // ---------------------------------------------------------------------------
-// Bash-fence allowlists
-//
-// The package-manager *binaries* each ecosystem's agent may invoke via `bash`.
-// A FrameworkConfig declares which of these its agent is allowed to run
-// (FrameworkConfig.detection.allowedPackageManagers); the value flows into the
-// bash fence (wizardCanUseTool). Kept next to the detectors so the toolchain
-// knowledge for an ecosystem lives in one place.
-// ---------------------------------------------------------------------------
-
-/** JavaScript / TypeScript */
-export const NODE_PACKAGE_MANAGERS = [
-  'npm',
-  'pnpm',
-  'yarn',
-  'bun',
-  'npx',
-] as const;
-
-/** Python — mirrors the managers detectPythonPackageManagers can return */
-export const PYTHON_PACKAGE_MANAGERS = [
-  'pip',
-  'pip3',
-  'poetry',
-  'pipenv',
-  'uv',
-  'pdm',
-  'hatch',
-  'rye',
-  'conda',
-] as const;
-
-/** PHP */
-export const PHP_PACKAGE_MANAGERS = ['composer'] as const;
-
-/** Ruby */
-export const RUBY_PACKAGE_MANAGERS = ['bundle', 'bundler', 'gem'] as const;
-
-/** iOS / macOS — Swift Package Manager, CocoaPods, Carthage */
-export const SWIFT_PACKAGE_MANAGERS = ['swift', 'pod', 'carthage'] as const;
-
-/**
- * Android / JVM — Gradle + Maven, including the project-local wrappers. The
- * `./gradlew` / `./mvnw` forms are literal first-token matches; `.` and `/`
- * are not shell operators, so they clear the fence's operator gate.
- */
-export const ANDROID_PACKAGE_MANAGERS = [
-  'gradle',
-  'gradlew',
-  './gradlew',
-  'mvn',
-  'mvnw',
-  './mvnw',
-] as const;
-
-// ---------------------------------------------------------------------------
 // Node.js helper
 // ---------------------------------------------------------------------------
 

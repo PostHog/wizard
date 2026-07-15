@@ -1,9 +1,6 @@
 /* SvelteKit wizard using posthog-agent with PostHog MCP */
 import type { FrameworkConfig } from '@lib/framework-config';
-import {
-  detectNodePackageManagers,
-  NODE_PACKAGE_MANAGERS,
-} from '@lib/detection/package-manager';
+import { detectNodePackageManagers } from '@lib/detection/package-manager';
 import { Integration } from '@lib/constants';
 import {
   getDeclaredVersion,
@@ -37,7 +34,6 @@ export const SVELTEKIT_AGENT_CONFIG: FrameworkConfig<SvelteKitContext> = {
     },
     minimumVersion: '2.0.0',
     detectPackageManager: detectNodePackageManagers,
-    allowedPackageManagers: NODE_PACKAGE_MANAGERS,
   },
 
   environment: {

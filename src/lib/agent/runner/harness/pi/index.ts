@@ -375,8 +375,6 @@ export const piBackend: AgentHarness = {
         },
         // Where pi's bash runs; the rm allowance is confined to this tree.
         workingDirectory: session.installDir,
-        // Per-framework bash-fence package managers (composer, gem, gradle…).
-        allowedPackageManagers: config.allowedPackageManagers,
       });
 
       // Pay warlock's WASM-init + rule-compile cost now, off the tool-call

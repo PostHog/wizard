@@ -70,11 +70,6 @@ export interface ToolGateContext {
   repeatTracker?: RepeatBlockTracker;
   /** Project root; rm is only allowed for files resolving strictly inside it. */
   workingDirectory?: string;
-  /**
-   * Bash-fence package-manager binaries for the active framework. Unset falls
-   * back to the fence's JS+Python default (see wizardCanUseTool).
-   */
-  allowedPackageManagers?: readonly string[];
 }
 
 export interface GateDecision {
@@ -312,7 +307,6 @@ export async function evaluateToolCall(
     const decision = wizardCanUseTool(policy.name, policy.input, {
       disallowedTools: ctx.disallowedTools,
       wizardAskPending: ctx.getWizardAskPending?.() ?? false,
-      allowedPackageManagers: ctx.allowedPackageManagers,
     });
     // The allowlist is a pi-only restriction; the anthropic arm runs bash
     // unrestricted and leans on the shared YARA scan. Let a plain `rm` of

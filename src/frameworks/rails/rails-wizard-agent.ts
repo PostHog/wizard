@@ -1,10 +1,7 @@
 /* Ruby on Rails wizard using posthog-agent with PostHog MCP */
 import type { WizardRunOptions } from '@utils/types';
 import type { FrameworkConfig } from '@lib/framework-config';
-import {
-  bundlerPackageManager,
-  RUBY_PACKAGE_MANAGERS,
-} from '@lib/detection/package-manager';
+import { bundlerPackageManager } from '@lib/detection/package-manager';
 import { Integration } from '@lib/constants';
 import {
   getRailsVersion,
@@ -45,7 +42,6 @@ export const RAILS_AGENT_CONFIG: FrameworkConfig<RailsContext> = {
       Promise.resolve(getRailsVersion(options)),
     detect: async (options) => isRailsProject(options),
     detectPackageManager: bundlerPackageManager,
-    allowedPackageManagers: RUBY_PACKAGE_MANAGERS,
   },
 
   environment: {

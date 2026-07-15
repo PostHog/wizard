@@ -132,7 +132,6 @@ export const posthogIntegrationConfig: ProgramConfig = {
       integrationLabel: config.metadata.integration,
       additionalMcpServers: config.metadata.additionalMcpServers,
       detectPackageManager: config.detection.detectPackageManager,
-      allowedPackageManagers: config.detection.allowedPackageManagers,
       spinnerMessage: SPINNER_MESSAGE,
       successMessage: config.ui.successMessage,
       estimatedDurationMinutes: config.ui.estimatedDurationMinutes,

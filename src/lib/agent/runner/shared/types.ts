@@ -42,11 +42,6 @@ export interface ProgramRun {
   additionalMcpServers?: Record<string, { url: string }>;
   /** Package manager detector. Defaults to detectNodePackageManagers. */
   detectPackageManager?: PackageManagerDetector;
-  /**
-   * Bash-fence package-manager binaries for the active framework. Unset for
-   * frameworkless programs, which fall back to the fence's JS+Python default.
-   */
-  allowedPackageManagers?: readonly string[];
   spinnerMessage: string;
   successMessage: string;
   estimatedDurationMinutes: number;

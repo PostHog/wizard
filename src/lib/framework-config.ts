@@ -121,14 +121,6 @@ export interface FrameworkDetection {
 
   /** Detect the project's package manager(s). Used by the in-process MCP tool. */
   detectPackageManager: PackageManagerDetector;
-
-  /**
-   * Bash-fence allowlist: the package-manager binaries this framework's agent
-   * may invoke via `bash` (e.g. `['composer']` for Laravel, node + pods +
-   * gradle for React Native). Flows into wizardCanUseTool. Use the shared
-   * ecosystem constants from `@lib/detection/package-manager`.
-   */
-  allowedPackageManagers: readonly string[];
 }
 
 /**

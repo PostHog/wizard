@@ -1,11 +1,7 @@
 /* Laravel wizard using posthog-agent with PostHog MCP */
 import type { WizardRunOptions } from '@utils/types';
 import type { FrameworkConfig } from '@lib/framework-config';
-import {
-  composerPackageManager,
-  PHP_PACKAGE_MANAGERS,
-  NODE_PACKAGE_MANAGERS,
-} from '@lib/detection/package-manager';
+import { composerPackageManager } from '@lib/detection/package-manager';
 import { Integration } from '@lib/constants';
 import fg from 'fast-glob';
 import * as fs from 'node:fs';
@@ -97,7 +93,6 @@ export const LARAVEL_AGENT_CONFIG: FrameworkConfig<LaravelContext> = {
       return hasLaravelStructure.length > 0;
     },
     detectPackageManager: composerPackageManager,
-    allowedPackageManagers: [...PHP_PACKAGE_MANAGERS, ...NODE_PACKAGE_MANAGERS],
   },
 
   environment: {

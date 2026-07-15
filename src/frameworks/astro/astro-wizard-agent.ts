@@ -1,10 +1,7 @@
 /* Astro wizard using posthog-agent with PostHog MCP */
 import type { WizardRunOptions } from '@utils/types';
 import type { FrameworkConfig } from '@lib/framework-config';
-import {
-  detectNodePackageManagers,
-  NODE_PACKAGE_MANAGERS,
-} from '@lib/detection/package-manager';
+import { detectNodePackageManagers } from '@lib/detection/package-manager';
 import { Integration } from '@lib/constants';
 import {
   getDeclaredVersion,
@@ -53,7 +50,6 @@ export const ASTRO_AGENT_CONFIG: FrameworkConfig<AstroContext> = {
       return packageJson ? hasDeclaredDependency('astro', packageJson) : false;
     },
     detectPackageManager: detectNodePackageManagers,
-    allowedPackageManagers: NODE_PACKAGE_MANAGERS,
   },
 
   environment: {
