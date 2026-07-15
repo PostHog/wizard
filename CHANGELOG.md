@@ -1,5 +1,20 @@
 # Changelog
 
+## [2.44.0](https://github.com/PostHog/wizard/compare/v2.43.0...v2.44.0) (2026-07-15)
+
+
+### Features
+
+* **cli:** honor headless flag in family/native command dispatch ([#893](https://github.com/PostHog/wizard/issues/893)) ([84695ed](https://github.com/PostHog/wizard/commit/84695edef14fb16ce339f602d79a6cc33bf957fd))
+* **cli:** scope headless flag to base integration + audit ([#905](https://github.com/PostHog/wizard/issues/905)) ([a99c5f2](https://github.com/PostHog/wizard/commit/a99c5f2e247eeccffd4dd0b510a34f4ed054767c))
+* **self-driving:** attribute self-driving sources as created_via=self_driving ([#899](https://github.com/PostHog/wizard/issues/899)) ([7dbd53f](https://github.com/PostHog/wizard/commit/7dbd53f38d1e06a0fa708ab60a8eaf50ddfaeddc))
+* **self-driving:** provision an account when no PostHog is found ([#774](https://github.com/PostHog/wizard/issues/774)) ([6483fb0](https://github.com/PostHog/wizard/commit/6483fb0cabc5c031873f7f83c4b34559c72bc551))
+
+
+### Bug Fixes
+
+* **auth:** copy-link key + narrow-terminal guard on the OAuth screen ([#839](https://github.com/PostHog/wizard/issues/839)) ([139bda8](https://github.com/PostHog/wizard/commit/139bda8d80781136345f216db95e2c11269a5302))
+
 ## [2.43.0](https://github.com/PostHog/wizard/compare/v2.42.0...v2.43.0) (2026-07-14)
 
 
