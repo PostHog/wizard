@@ -106,6 +106,18 @@ export function resolveSkillVariantId(
   return (family.find((e) => e.default) ?? family[0])?.id;
 }
 
+/**
+ * The framework reference is the full `integration` skill. `session.skillId` is
+ * the bare framework (e.g. `django`), but the skill menu ids it as
+ * `integration-<variant>`.
+ */
+function resolveReferenceSkillId(
+  entries: readonly SkillEntry[],
+  framework: string,
+): string | undefined {
+  return resolveSkillVariantId(entries, 'integration', framework);
+}
+
 export async function runOrchestrator(
   session: WizardSession,
   programConfig: ProgramConfig,
@@ -150,16 +162,12 @@ export async function runOrchestrator(
 
   const store = new QueueStore(session.installDir, runId, {
     onTransition: (event, task) => {
-      // Lazy — enqueue/requeue never read it, and resolveHarness logs per call.
-      const base = () => ({
+      const pick = resolveHarness(switchboardCtx, task.type);
+      const base = {
         type: task.type,
-        model: taskModelSpec(
-          registry,
-          task,
-          resolveHarness(switchboardCtx, task.type),
-        ).model,
+        model: taskModelSpec(registry, task, pick.harness).model ?? pick.model,
         attempts: task.attempts,
-      });
+      };
       switch (event) {
         case 'enqueue':
           analytics.wizardCapture('orchestrator task enqueued', {
@@ -170,28 +178,28 @@ export async function runOrchestrator(
           break;
         case 'start':
           analytics.wizardCapture('orchestrator task started', {
-            ...base(),
+            ...base,
             ...metrics.recordStart(Date.now()),
           });
           break;
         case 'complete':
           metrics.recordComplete(Date.now());
           analytics.wizardCapture('orchestrator task completed', {
-            ...base(),
+            ...base,
             duration_ms: durationMs(task),
           });
           break;
         case 'skip':
           metrics.recordTerminal(Date.now());
           analytics.wizardCapture('orchestrator task skipped', {
-            ...base(),
+            ...base,
             duration_ms: durationMs(task),
           });
           break;
         case 'fail':
           metrics.recordTerminal(Date.now());
           analytics.wizardCapture('orchestrator task failed', {
-            ...base(),
+            ...base,
             duration_ms: durationMs(task),
             error: task.error?.type,
           });
@@ -209,9 +217,8 @@ export async function runOrchestrator(
   let examplePath: string | undefined;
   let commandmentsPath: string | undefined;
   const menuSkillEntries = await fetchSkillMenuEntries(boot.skillsBaseUrl);
-  // `session.skillId` is the bare framework (e.g. `django`); the menu ids the reference as `integration-<variant>`.
   const referenceSkillId = session.skillId
-    ? resolveSkillVariantId(menuSkillEntries, 'integration', session.skillId)
+    ? resolveReferenceSkillId(menuSkillEntries, session.skillId)
     : undefined;
   if (referenceSkillId) {
     const ref = await installSkillById(
@@ -407,14 +414,14 @@ export async function runOrchestrator(
       // per-agent overrides. Prompt-frontmatter model still wins (§3.6).
       const taskPick = resolveHarness(switchboardCtx, task.type);
       const taskHarness = requireTaskHarness(taskPick);
-      const taskModel = taskModelSpec(registry, task, taskPick);
+      const taskModel = taskModelSpec(registry, task, taskPick.harness);
       await taskHarness.runTask({
         session,
         programConfig,
         boot,
         prompt: assembleTaskPrompt(promptContext, resolved.prompt, skillPaths),
         spinner,
-        model: taskModel.model,
+        model: taskModel.model ?? taskPick.model,
         effort: taskModel.effort,
         allowedTools: resolved.allowedTools,
         disallowedTools: resolved.disallowedTools,

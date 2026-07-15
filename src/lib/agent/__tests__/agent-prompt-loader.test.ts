@@ -15,7 +15,6 @@ import {
 } from '../agent-prompt-loader';
 import { QueueStore } from '@lib/agent/runner/sequence/orchestrator/queue';
 import { HostResolution } from '@lib/host-resolution';
-import { Harness } from '@lib/constants';
 
 function tmpDir(): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'agent-loader-test-'));
@@ -58,11 +57,11 @@ Add at least one capture call.
 
   it('resolves the per-harness model + effort, not 1:1 across providers', () => {
     const p = parseAgentPrompt(sample, 'fallback');
-    expect(promptModelFor(p, Harness.pi)).toEqual({
+    expect(promptModelFor(p, 'pi')).toEqual({
       model: 'openai/gpt-5.6-terra',
       effort: 'medium',
     });
-    expect(promptModelFor(p, Harness.anthropic)).toEqual({
+    expect(promptModelFor(p, 'anthropic')).toEqual({
       model: 'claude-sonnet-4-6',
       effort: undefined,
     });
@@ -234,27 +233,19 @@ describe('resolveTask', () => {
   it('resolves per-harness model + effort from the prompt', () => {
     const registry = registryOf([prompt]);
     const task = store.enqueue({ type: 'capture' });
-    expect(
-      taskModelSpec(registry, task, { harness: Harness.pi, model: 'pick-m' }),
-    ).toEqual({
+    expect(taskModelSpec(registry, task, 'pi')).toEqual({
       model: 'openai/gpt-5.6-luna',
       effort: 'low',
     });
-    expect(
-      taskModelSpec(registry, task, {
-        harness: Harness.anthropic,
-        model: 'pick-m',
-      }).model,
-    ).toBe('claude-haiku-4-5-20251001');
+    expect(taskModelSpec(registry, task, 'anthropic').model).toBe(
+      'claude-haiku-4-5-20251001',
+    );
   });
 
   it('prefers the enqueue model override over the prompt model', () => {
     const registry = registryOf([prompt]);
     const task = store.enqueue({ type: 'capture', model: 'override-x' });
-    expect(
-      taskModelSpec(registry, task, { harness: Harness.pi, model: 'pick-m' })
-        .model,
-    ).toBe('override-x');
+    expect(taskModelSpec(registry, task, 'pi').model).toBe('override-x');
   });
 
   it("appends upstream dependencies' handoffs as context", () => {
@@ -330,27 +321,23 @@ describe('taskModelSpec', () => {
     'capture',
   );
 
-  it('prefers the enqueue override, then the prompt, then the switchboard pick', () => {
+  it('prefers the enqueue override, then the prompt; the switchboard pick is the caller fallback', () => {
     const registry = registryOf([prompt]);
     const task = { type: 'capture' };
-    const pick = { harness: Harness.pi, model: 'pick-m' };
     expect(
-      taskModelSpec(registry, { ...task, model: 'override' } as never, pick)
+      taskModelSpec(registry, { ...task, model: 'override' } as never, 'pi')
         .model,
     ).toBe('override');
-    expect(taskModelSpec(registry, task as never, pick).model).toBe(
+    expect(taskModelSpec(registry, task as never, 'pi').model).toBe(
       'prompt-model',
     );
-    // An empty column falls back to the pick, per harness.
+    // An empty column stays undefined — the caller falls back to its switchboard pick.
     expect(
-      taskModelSpec(registry, task as never, {
-        harness: Harness.anthropic,
-        model: 'pick-m',
-      }).model,
-    ).toBe('pick-m');
-    expect(taskModelSpec(registryOf([]), task as never, pick).model).toBe(
-      'pick-m',
-    );
+      taskModelSpec(registry, task as never, 'anthropic').model,
+    ).toBeUndefined();
+    expect(
+      taskModelSpec(registryOf([]), task as never, 'pi').model,
+    ).toBeUndefined();
   });
 });
 

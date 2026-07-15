@@ -21,8 +21,6 @@ import type {
 } from './runner/sequence/orchestrator/queue';
 import type { ResolvedTask } from './runner/sequence/orchestrator/executor';
 import type { HostResolution } from '@lib/host-resolution';
-import type { HarnessPick } from './runner/switchboard';
-import { Harness } from '@lib/constants';
 import {
   isThinkingLevel,
   type ThinkingLevel,
@@ -142,9 +140,9 @@ export interface AgentPrompt {
  * column, anything else the sdk (anthropic) column. */
 export function promptModelFor(
   prompt: AgentPrompt,
-  harness: Harness,
+  harness: string,
 ): { model?: string; effort?: ThinkingLevel } {
-  const pi = harness === Harness.pi;
+  const pi = harness === 'pi';
   return {
     model: pi ? prompt.modelPi : prompt.modelSdk,
     effort: pi ? prompt.effortPi : prompt.effortSdk,
@@ -398,18 +396,21 @@ export function resolveTask(
   };
 }
 
-/** Enqueue override, then per-profile frontmatter, then the switchboard pick — the whole precedence in one place. */
+/** The model + effort a task runs on for a harness: enqueue override, then the
+ * prompt's per-profile frontmatter; the caller's switchboard pick is the fallback. */
 export function taskModelSpec(
   registry: AgentRegistry,
   task: QueuedTask,
-  pick: HarnessPick,
-): { model: string; effort?: ThinkingLevel } {
-  const prompt = registry.get(task.type);
-  const picked: { model?: string; effort?: ThinkingLevel } = prompt
-    ? promptModelFor(prompt, pick.harness)
-    : {};
+  harness: string,
+): { model?: string; effort?: ThinkingLevel } {
+  const picked = promptModelFor(
+    registry.get(task.type) ?? EMPTY_PROMPT,
+    harness,
+  );
   return {
-    model: task.model ?? picked.model ?? pick.model,
+    model: task.model ?? picked.model,
     effort: picked.effort,
   };
 }
+
+const EMPTY_PROMPT = {} as AgentPrompt;
