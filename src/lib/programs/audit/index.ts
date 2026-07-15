@@ -10,6 +10,7 @@ import { WIZARD_TOOL_NAMES } from '@lib/wizard-tools';
 import { AUDIT_ABORT_CASES } from './detect.js';
 import { AUDIT_CHECKS_KEY, AUDIT_REPORT_FILE } from './types.js';
 import { AUDIT_SEED_CHECKS, seedAuditLedger } from './seed.js';
+import { uploadSetupReview } from './setup-review.js';
 
 /** Audit-specific screens for the shared agent-skill pipeline. */
 const AUDIT_SCREEN_BY_STEP: Record<string, string> = {
@@ -64,6 +65,9 @@ const auditRun = async (session: WizardSession): Promise<ProgramRun> => {
 
   return {
     ...baseRun,
+    // Hand the finished ledger to the signals setup review (fail-silent,
+    // interactive runs only — see setup-review.ts for the why).
+    postRun: uploadSetupReview,
     // Override the default outro so the dashboard + notebook URLs the
     // agent emits via `[DASHBOARD_URL]` / `[NOTEBOOK_URL]` are surfaced
     // on the post-run screen.
