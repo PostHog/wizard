@@ -47,14 +47,15 @@ export function buildSourceMapsUploadPrompt(
    \`dotenv\` or any loader, and do NOT create a .env file.
 
 STEP 5 — Write the credentials. (skill: "Write credentials to the env file")
-   All three values go in a GITIGNORED xcconfig, not a .env. Call
+   The whole config goes in a GITIGNORED xcconfig, not a .env. Call
    set_env_values once — the \`.xcconfig\` path makes the tool write Xcode
    \`KEY = VALUE\` style and gitignore the file:
        filePath: "PostHog.xcconfig"
        values: {
          "POSTHOG_CLI_API_KEY": { secretRef: "<the ref from STEP 1>" },
          "POSTHOG_CLI_PROJECT_ID": "${projectId}",
-         "POSTHOG_CLI_HOST": "${xcconfigHost}"
+         "POSTHOG_CLI_HOST": "${xcconfigHost}",
+         "POSTHOG_INCLUDE_SOURCE": "1"
        }
    Write the host value EXACTLY as shown — the \`$()\` keeps \`//\` from
    starting an xcconfig comment. Wire the file per the skill's iOS example.`
