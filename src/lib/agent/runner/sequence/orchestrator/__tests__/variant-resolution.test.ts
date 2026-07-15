@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { resolveSkillVariantId } from '../orchestrator-runner';
 import { Integration } from '@lib/constants';
-import type { SkillEntry } from '@lib/wizard-tools';
+import { selectBundleVariant } from '@lib/wizard-tools';
+import type { SkillBundle, SkillEntry } from '@lib/wizard-tools';
 
 // Pinned from the real built skill-menu.json, so this suite tests the actual cross-repo contract.
 const INTEGRATION_ENTRIES = [
@@ -67,6 +68,16 @@ const INTEGRATION_ENTRIES = [
   }),
 );
 
+// A bundled group is one menu entry listing the frameworks it covers.
+const CAPTURE_BUNDLE_ENTRY: SkillEntry = {
+  id: 'integration-v2-capture',
+  group: 'integration-v2-capture',
+  name: 'capture',
+  bundle: true,
+  frameworks: ['nextjs', 'astro', 'django', 'rails'],
+  downloadUrl: 'https://example.test/integration-v2-capture.json',
+};
+
 // A single-variant skill collapses to the bare group id in the menu.
 const MENU: SkillEntry[] = [
   ...INTEGRATION_ENTRIES,
@@ -76,6 +87,7 @@ const MENU: SkillEntry[] = [
     name: 'build',
     downloadUrl: 'https://example.test/integration-v2-build.zip',
   },
+  CAPTURE_BUNDLE_ENTRY,
 ];
 
 describe('resolveSkillVariantId — menu-declared framework resolution', () => {
@@ -142,5 +154,63 @@ describe('resolveSkillVariantId — menu-declared framework resolution', () => {
         `framework "${framework}" resolved nothing`,
       ).toBeDefined();
     }
+  });
+
+  it('resolves a bundled group to its bare id when the bundle covers the framework', () => {
+    expect(
+      resolveSkillVariantId(MENU, 'integration-v2-capture', 'nextjs'),
+    ).toBe('integration-v2-capture');
+  });
+
+  it('reports a bundled group as missing when it does not cover the framework', () => {
+    expect(
+      resolveSkillVariantId(MENU, 'integration-v2-capture', 'cobol'),
+    ).toBeUndefined();
+    expect(
+      resolveSkillVariantId(MENU, 'integration-v2-capture', undefined),
+    ).toBeUndefined();
+  });
+});
+
+// Pinned from the real built integration-v2-capture.json: framework is the family, shortId the unique key.
+const CAPTURE_BUNDLE: SkillBundle = {
+  id: 'integration-v2-capture',
+  variants: {
+    'nextjs-app-router': {
+      framework: 'nextjs',
+      default: true,
+      files: { 'SKILL.md': 'app router' },
+    },
+    'nextjs-pages-router': { framework: 'nextjs', files: {} },
+    'astro-static': { framework: 'astro', files: {} },
+    'astro-hybrid': {
+      framework: 'astro',
+      default: true,
+      files: { 'SKILL.md': 'hybrid' },
+    },
+    django: { framework: 'django', files: { 'SKILL.md': 'django' } },
+    'react-vite': { files: { 'SKILL.md': 'vite' } },
+  },
+};
+
+describe('selectBundleVariant — picking a variant inside a bundle', () => {
+  it('picks the marked default when a framework family has several variants', () => {
+    expect(
+      selectBundleVariant(CAPTURE_BUNDLE, 'nextjs')?.files['SKILL.md'],
+    ).toBe('app router');
+    expect(
+      selectBundleVariant(CAPTURE_BUNDLE, 'astro')?.files['SKILL.md'],
+    ).toBe('hybrid');
+  });
+
+  it('picks a single-variant family without needing a default marker', () => {
+    expect(
+      selectBundleVariant(CAPTURE_BUNDLE, 'django')?.files['SKILL.md'],
+    ).toBe('django');
+  });
+
+  it('returns nothing without a framework or without a match', () => {
+    expect(selectBundleVariant(CAPTURE_BUNDLE, undefined)).toBeUndefined();
+    expect(selectBundleVariant(CAPTURE_BUNDLE, 'cobol')).toBeUndefined();
   });
 });
