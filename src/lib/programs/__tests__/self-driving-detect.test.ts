@@ -135,6 +135,7 @@ describe('selfDrivingConfig', () => {
       'auth',
       'integrate-detect',
       'integrate-run',
+      'audit-run',
       'self-driving-handoff',
       'run',
       'outro',

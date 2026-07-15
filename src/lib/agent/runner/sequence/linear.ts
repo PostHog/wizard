@@ -137,6 +137,19 @@ export async function runLinearProgram(
   });
 
   // 9. Error handling (full set from both runners)
+  if (
+    agentResult.error &&
+    agentResult.error !== AgentErrorType.YARA_VIOLATION &&
+    config.bestEffort
+  ) {
+    analytics.wizardCapture('agent best-effort failure', {
+      integration: config.integrationLabel,
+      error_type: agentResult.error,
+      error_message: agentResult.message ?? null,
+    });
+    return;
+  }
+
   if (agentResult.error === AgentErrorType.ABORT) {
     const reason = agentResult.message ?? '';
     const matched = config.abortCases?.find((c) => c.match.test(reason));

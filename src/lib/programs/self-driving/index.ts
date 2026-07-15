@@ -4,7 +4,8 @@ import type { ProgramConfig } from '@lib/programs/program-step';
 import type { ProgramRun } from '@lib/agent/agent-runner';
 import { OutroKind } from '@lib/wizard-session';
 import { createSkillProgram } from '../agent-skill/index.js';
-import { SELF_DRIVING_PROGRAM } from './steps.js';
+import { uploadSetupReview } from '../audit/setup-review.js';
+import { integrationDir, SELF_DRIVING_PROGRAM } from './steps.js';
 import { SELF_DRIVING_ABORT_CASES } from './detect.js';
 import { buildSelfDrivingPrompt } from './prompt.js';
 import { getTips } from './content/tips.js';
@@ -66,8 +67,16 @@ const run: ProgramRun = {
   // only self-driving runs emit these; every other program is unchanged.
   trackStepProgress: true,
 
-  postRun: async (session) => {
+  postRun: async (session, credentials) => {
     await removeInstalledSkill(session.installDir);
+    // Ship the audit-run step's check ledger for the signals setup review.
+    // Deliberately here, not on the audit run itself: self-driving has just
+    // connected GitHub, so the review's PRs have a repo to land in. No-op when
+    // the audit was skipped or produced nothing.
+    await uploadSetupReview(
+      { ...session, installDir: integrationDir(session) },
+      credentials,
+    );
   },
 
   buildOutroData: (_session, credentials) => {

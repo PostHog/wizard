@@ -3,7 +3,7 @@ import {
   createSkillProgram,
 } from '@lib/programs/agent-skill/index';
 import type { ProgramStep, ProgramConfig } from '@lib/programs/program-step';
-import type { ProgramRun } from '@lib/agent/agent-runner';
+import { runAgent, type ProgramRun } from '@lib/agent/agent-runner';
 import type { WizardSession } from '@lib/wizard-session';
 import { OutroKind } from '@lib/wizard-session';
 import { WIZARD_TOOL_NAMES } from '@lib/wizard-tools';
@@ -100,4 +100,31 @@ export const auditConfig: ProgramConfig = {
   run: auditRun,
   allowedTools: ['Agent'],
   disallowedTools: [WIZARD_TOOL_NAMES.wizardAsk],
+};
+
+/**
+ * Composed variant for host programs: best-effort (an audit failure never
+ * takes the host down) and without the upload postRun — the host uploads the
+ * ledger when its own run succeeds, so the review only fires once the full
+ * setup (e.g. self-driving's GitHub connect) is in place.
+ */
+const composedAuditConfig: ProgramConfig = {
+  ...auditConfig,
+  run: async (session) => ({
+    ...(await auditRun(session)),
+    postRun: undefined,
+    bestEffort: true,
+  }),
+};
+
+/**
+ * Self-contained run step that runs the audit agent. Other programs import
+ * this and splice it into their own step list, supplying `show`/`targetDir`.
+ */
+export const auditRunStep: ProgramStep = {
+  id: 'audit-run',
+  label: 'Setup audit',
+  screenId: 'run',
+  run: (session) => runAgent(composedAuditConfig, session, { composed: true }),
+  isComplete: (session) => session.completedRuns.includes('audit-run'),
 };

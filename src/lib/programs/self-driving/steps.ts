@@ -2,7 +2,7 @@
  * Self-driving program step list.
  *
  * detect → intro → integration-check → health-check → auth → integrate-detect →
- * integrate-run → self-driving-handoff → run → outro. A deterministic check in
+ * integrate-run → audit-run → self-driving-handoff → run → outro. A deterministic check in
  * `detect` decides whether PostHog is already in the project: found → the
  * integration screens are skipped and the integrate-run phase never shows; not
  * found → integration-check reports it and the only action sets up PostHog.
@@ -19,6 +19,7 @@ import type { ProgramStep } from '@lib/programs/program-step';
 import { RunPhase, type WizardSession } from '@lib/wizard-session';
 import { HEALTH_CHECK_STEP } from '@lib/programs/shared/health-check-step';
 import { integrationRunStep } from '@lib/programs/posthog-integration/index';
+import { auditRunStep } from '@lib/programs/audit/index';
 import {
   detectSelfDrivingPrerequisites,
   POSTHOG_PRESENT_KEY,
@@ -36,7 +37,7 @@ const postHogPresent = (session: WizardSession): boolean =>
  * repo (defense-in-depth on top of the coerce-layer clamp), fall back to
  * the root rather than run the agent elsewhere.
  */
-const integrationDir = (session: WizardSession): string => {
+export const integrationDir = (session: WizardSession): string => {
   const rel = session.frameworkContext[SELF_DRIVING_INTEGRATE_PATH_KEY];
   if (typeof rel !== 'string' || rel === '.') return session.installDir;
   const root = resolve(session.installDir);
@@ -108,6 +109,17 @@ export const SELF_DRIVING_PROGRAM: ProgramStep[] = [
     targetDir: integrationDir,
     show: (session) => session.integrate === true,
     isComplete: (session) => session.completedRuns.includes('integrate-run'),
+  },
+  {
+    // The audit's run step, composed like integrate-run: it audits whatever
+    // PostHog setup exists (pre-existing or the one integrate-run just wrote)
+    // and leaves the check ledger on disk; the host postRun uploads it for the
+    // signals setup review once self-driving is fully set up. Best-effort — an
+    // audit failure never blocks the self-driving setup. Skipped when the user
+    // declined the integration (no PostHog to audit).
+    ...auditRunStep,
+    targetDir: integrationDir,
+    show: (session) => postHogPresent(session) || session.integrate === true,
   },
   {
     // Handoff after the integration run: "PostHog is installed — now set up

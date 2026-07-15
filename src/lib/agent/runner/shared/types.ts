@@ -53,6 +53,13 @@ export interface ProgramRun {
   abortCases?: AbortCase[];
   /** Runs after agent completes, before outro (e.g. env var upload). */
   postRun?: (session: WizardSession, credentials: Credentials) => Promise<void>;
+  /**
+   * A complimentary run whose failure must not take the program down: agent
+   * errors degrade to "no result" (analytics + return) instead of aborting.
+   * YARA violations still abort. For composed sub-runs like the audit inside
+   * self-driving; the host program's own run must never set this.
+   */
+  bestEffort?: boolean;
   /** Custom outro data. Omit for default built from successMessage/reportFile/docsUrl. */
   buildOutroData?: (
     session: WizardSession,
