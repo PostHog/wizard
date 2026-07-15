@@ -28,6 +28,7 @@ import {
   detectNodePackageManagers,
   type PackageManagerDetector,
 } from '@lib/detection/package-manager';
+import type { InstallSkillResult } from '@lib/wizard-tools';
 
 function text(s: string): {
   content: [{ type: 'text'; text: string }];
@@ -43,10 +44,15 @@ export interface PiToolsContext {
   detectPackageManager?: PackageManagerDetector;
 }
 
-export function createWizardPiTools(ctx: PiToolsContext): ToolDefinition[] {
+export function createWizardPiTools(ctx: PiToolsContext): {
+  tools: ToolDefinition[];
+  /** Every install_skill outcome, in call order. */
+  skillInstalls: readonly InstallSkillResult[];
+} {
   const { workingDirectory, skillsBaseUrl } = ctx;
   const detectPackageManager =
     ctx.detectPackageManager ?? detectNodePackageManagers;
+  const skillInstalls: InstallSkillResult[] = [];
 
   // Fetch the skill menu at most once per run — the agent calls load_skill_menu
   // 2-3× otherwise, each a fresh HTTP round-trip (profiled slowness).
@@ -93,6 +99,7 @@ export function createWizardPiTools(ctx: PiToolsContext): ToolDefinition[] {
         workingDirectory,
         skillsBaseUrl,
       );
+      skillInstalls.push(result);
       if (result.kind !== 'ok') {
         logToFile(`[pi] install_skill ${args.skillId}: ${result.kind}`);
         return text(
@@ -194,5 +201,8 @@ export function createWizardPiTools(ctx: PiToolsContext): ToolDefinition[] {
     },
   });
 
-  return [loadSkillMenu, installSkill, checkEnvKeys, setEnvValues, detectPm];
+  return {
+    tools: [loadSkillMenu, installSkill, checkEnvKeys, setEnvValues, detectPm],
+    skillInstalls,
+  };
 }

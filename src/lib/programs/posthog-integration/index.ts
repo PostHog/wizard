@@ -178,11 +178,9 @@ STEP 1: Call load_skill_menu (from the wizard-tools MCP server) to see available
 
 STEP 2: Call install_skill (from the wizard-tools MCP server) with the chosen skill ID (e.g., "integration-nextjs-app-router").
    Do NOT run any shell commands to install skills.
-   If install_skill fails, emit on its own line: ${
-     AgentSignals.SKILL_INSTALL_FAILED
-   } <skill id — one-line reason>. Then CONTINUE and SKIP to STEP 5 the integration without the skill, following these steps and your knowledge of ${
-          config.metadata.name
-        } and PostHog's official docs, and note in the setup report that the skill could not be installed.
+   If install_skill fails, CONTINUE and SKIP to STEP 5 — do the integration without the skill, following these steps and your knowledge of ${
+     config.metadata.name
+   } and PostHog's official docs, and note in the setup report that the skill could not be installed.
 
 STEP 3: Load the installed skill's SKILL.md file to understand what references are available.
 

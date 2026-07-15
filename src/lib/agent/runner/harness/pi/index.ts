@@ -27,6 +27,7 @@ import { analytics } from '@utils/analytics';
 import { AgentErrorType } from '@lib/agent/agent-interface';
 import { AgentSignals, REMARK_INSTRUCTION } from '@lib/agent/signals';
 import { AgentOutputSignals } from '@lib/agent/output-signals';
+import { skillInstallFailureDetail } from '@lib/wizard-tools';
 import { getWizardCommandments } from '@lib/agent/commandments';
 import { modelCapabilities } from '../../switchboard/models';
 import type { AgentResult, AgentHarness, BackendRunInputs } from '../types';
@@ -436,6 +437,11 @@ export const piBackend: AgentHarness = {
       const { createDispatchAgentTool } = await import('./subagent');
       // Created once so the run loop can read the store for the completion guard.
       const wizardTaskTools = createWizardPiTaskTools();
+      const wizardPiTools = createWizardPiTools({
+        workingDirectory: session.installDir,
+        skillsBaseUrl: boot.skillsBaseUrl,
+        detectPackageManager: config.detectPackageManager,
+      });
       // The one bash the agent (and its subagents) may use: every subprocess it
       // spawns gets a scrubbed env, so no secret or ambient variable reaches an
       // `npm install`. Shared with the subagent so the lockdown is inherited.
@@ -461,11 +467,7 @@ export const piBackend: AgentHarness = {
         withMode(createLsToolDefinition(session.installDir), 'parallel'),
         withMode(createFindToolDefinition(session.installDir), 'parallel'),
         withMode(createGrepToolDefinition(session.installDir), 'parallel'),
-        ...createWizardPiTools({
-          workingDirectory: session.installDir,
-          skillsBaseUrl: boot.skillsBaseUrl,
-          detectPackageManager: config.detectPackageManager,
-        }),
+        ...wizardPiTools.tools,
         // Task/todo tools (#526): render the todo list live in the TUI, parity
         // with the anthropic path.
         ...wizardTaskTools.tools,
@@ -631,8 +633,10 @@ export const piBackend: AgentHarness = {
 
       // A failed install_skill is non-fatal — the agent continues best-effort
       // without the skill — but every such run must be measurable.
-      const skillFailure = signals.skillInstallFailure();
-      if (skillFailure !== undefined) {
+      const skillFailure = skillInstallFailureDetail(
+        wizardPiTools.skillInstalls,
+      );
+      if (skillFailure) {
         analytics.wizardCapture('agent continued without skill', {
           detail: skillFailure,
         });

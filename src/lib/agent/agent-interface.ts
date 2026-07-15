@@ -27,7 +27,12 @@ import { wizardAbort, WizardError } from '@utils/wizard-abort';
 import { createCustomHeaders } from '@utils/custom-headers';
 import type { HostResolution } from '@lib/host-resolution';
 import { LINTING_TOOLS } from '@lib/safe-tools';
-import { createWizardToolsServer, WIZARD_TOOL_NAMES } from '@lib/wizard-tools';
+import {
+  createWizardToolsServer,
+  skillInstallFailureDetail,
+  WIZARD_TOOL_NAMES,
+  type InstallSkillResult,
+} from '@lib/wizard-tools';
 import {
   createPreToolUseYaraHooks,
   createPostToolUseYaraHooks,
@@ -298,6 +303,8 @@ type AgentRunConfig = {
   getPendingQuestion?: () =>
     | import('@lib/wizard-session').PendingQuestion
     | null;
+  /** Every install_skill outcome, from the wizard-tools server. */
+  skillInstalls?: readonly InstallSkillResult[];
 };
 
 /**
@@ -690,7 +697,7 @@ export async function initializeAgent(
     };
 
     // Add in-process wizard tools (env files, package manager detection, skill loading)
-    const wizardToolsServer = await createWizardToolsServer({
+    const wizardTools = await createWizardToolsServer({
       workingDirectory: config.workingDirectory,
       detectPackageManager: config.detectPackageManager,
       skillsBaseUrl: config.skillsBaseUrl,
@@ -698,7 +705,7 @@ export async function initializeAgent(
       askMaxQuestions: config.askMaxQuestions,
       orchestrator: config.orchestrator,
     });
-    mcpServers['wizard-tools'] = wizardToolsServer;
+    mcpServers['wizard-tools'] = wizardTools.server;
 
     // Bare model IDs (no `anthropic/` prefix) so the LLM gateway's Bedrock
     // fallback can match map_to_bedrock_model()'s strict lookup.
@@ -713,6 +720,7 @@ export async function initializeAgent(
       allowedTools: config.allowedTools,
       disallowedTools: config.disallowedTools,
       getPendingQuestion: config.getPendingQuestion,
+      skillInstalls: wizardTools.skillInstalls,
     };
 
     logToFile('Agent config:', {
@@ -861,8 +869,10 @@ export async function runAgent(
 
     // A failed install_skill is non-fatal — the agent continues best-effort
     // without the skill — but every such run must be measurable.
-    const skillFailure = signals.skillInstallFailure();
-    if (skillFailure !== undefined) {
+    const skillFailure = skillInstallFailureDetail(
+      agentConfig.skillInstalls ?? [],
+    );
+    if (skillFailure) {
       analytics.wizardCapture('agent continued without skill', {
         detail: skillFailure,
       });

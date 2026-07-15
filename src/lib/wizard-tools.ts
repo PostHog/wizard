@@ -254,6 +254,28 @@ export async function installSkillById(
   return { kind: 'ok', path: relPath };
 }
 
+/**
+ * One line per failed install for the `agent continued without skill` event —
+ * or undefined when a skill installed (even after earlier failures) or no
+ * install was ever attempted.
+ */
+export function skillInstallFailureDetail(
+  installs: readonly InstallSkillResult[],
+): string | undefined {
+  if (installs.length === 0 || installs.some((r) => r.kind === 'ok')) {
+    return undefined;
+  }
+  return installs
+    .map((r) =>
+      r.kind === 'skill-not-found'
+        ? `${r.skillId}: skill-not-found`
+        : r.kind === 'download-failed'
+        ? `download-failed: ${r.message}`
+        : r.kind,
+    )
+    .join('; ');
+}
+
 // ---------------------------------------------------------------------------
 // Options for creating the wizard tools server
 // ---------------------------------------------------------------------------
@@ -602,6 +624,10 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
   // The adjacency nudge fires once per run; after that only the total cap applies.
   let askAdjacencyNudged = false;
 
+  // Every install_skill outcome this run, surfaced to the caller alongside
+  // the server so the run loop can report a run that ended skill-less.
+  const skillInstalls: InstallSkillResult[] = [];
+
   // Pre-fetch skill menu so category names are available in the tool schema
   let cachedSkillMenu: Record<string, SkillEntry[]> = {};
   let categoryNames: [string, ...string[]] = ['integration'];
@@ -827,6 +853,7 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
     },
     async (args: { skillId: string }) => {
       if (!/^[a-z0-9][a-z0-9_-]*$/.test(args.skillId)) {
+        skillInstalls.push({ kind: 'skill-not-found', skillId: args.skillId });
         return {
           content: [
             {
@@ -842,6 +869,7 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
       const allSkills: SkillEntry[] = Object.values(cachedSkillMenu).flat();
       const skill = allSkills.find((s) => s.id === args.skillId);
       if (!skill) {
+        skillInstalls.push({ kind: 'skill-not-found', skillId: args.skillId });
         return {
           content: [
             {
@@ -855,6 +883,10 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
 
       const result = await downloadSkill(skill, workingDirectory);
       if (result.success) {
+        skillInstalls.push({
+          kind: 'ok',
+          path: `.claude/skills/${args.skillId}`,
+        });
         return {
           content: [
             {
@@ -864,6 +896,10 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
           ],
         };
       } else {
+        skillInstalls.push({
+          kind: 'download-failed',
+          message: String(result.error ?? 'unknown'),
+        });
         // The agent only sees a tool-result string — report the failure too.
         analytics.captureException(
           new Error('Skill install failed: download-failed'),
@@ -1245,7 +1281,7 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
     ? buildOrchestratorTools(tool, orchestrator)
     : [];
 
-  return createSdkMcpServer({
+  const server = createSdkMcpServer({
     name: SERVER_NAME,
     version: '1.0.0',
     tools: [
@@ -1261,6 +1297,8 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
       ...orchestratorTools,
     ],
   });
+
+  return { server, skillInstalls };
 }
 
 /** Tool names exposed by the wizard-tools server, keyed for selective use. */

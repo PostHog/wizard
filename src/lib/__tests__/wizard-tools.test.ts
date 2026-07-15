@@ -12,6 +12,7 @@ import {
   mergeEnvValues,
   parseEnvKeys,
   resolveEnvPath,
+  skillInstallFailureDetail,
 } from '@lib/wizard-tools';
 import type { AuditCheck } from '@lib/programs/audit/types';
 
@@ -295,6 +296,33 @@ describe('makeMutex', () => {
       }),
     ).rejects.toThrow('boom');
     await expect(run(() => 42)).resolves.toBe(42);
+  });
+});
+
+describe('skillInstallFailureDetail', () => {
+  it('is undefined when no install was attempted', () => {
+    expect(skillInstallFailureDetail([])).toBeUndefined();
+  });
+
+  it('is undefined when any install succeeded — the run has a skill', () => {
+    expect(
+      skillInstallFailureDetail([
+        { kind: 'skill-not-found', skillId: 'integration-nextjs' },
+        { kind: 'ok', path: '.claude/skills/integration-nextjs-app-router' },
+      ]),
+    ).toBeUndefined();
+  });
+
+  it('joins the failures when the run never got a skill', () => {
+    expect(
+      skillInstallFailureDetail([
+        { kind: 'skill-not-found', skillId: 'integration-nextjs' },
+        { kind: 'download-failed', message: 'HTTP 502' },
+        { kind: 'menu-fetch-failed' },
+      ]),
+    ).toBe(
+      'integration-nextjs: skill-not-found; download-failed: HTTP 502; menu-fetch-failed',
+    );
   });
 });
 
