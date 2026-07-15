@@ -95,14 +95,29 @@ async function fetchSkillMenuIds(skillsBaseUrl: string): Promise<string[]> {
  * first granular variant under the framework (e.g. `-nextjs-app-router`).
  * Undefined when nothing matches.
  */
-function resolveSkillVariantId(
+/**
+ * Framework enums whose context-mill variant id differs from the enum value.
+ * The orchestrator resolves variants programmatically (the linear flow's agent
+ * picks from the menu by hand and self-corrects), so without these it silently
+ * resolves nothing and the tasks run skill-less — a zero-diff run. The value is
+ * the variant-id token (or its prefix, for a family the `startsWith` fallback
+ * then narrows).
+ */
+const FRAMEWORK_VARIANT_ALIASES: Record<string, string> = {
+  rails: 'ruby-on-rails',
+  'react-router': 'react-react-router',
+  'tanstack-router': 'react-tanstack-router',
+};
+
+export function resolveSkillVariantId(
   menuIds: readonly string[],
   skillId: string,
   framework: string | undefined,
 ): string | undefined {
   if (menuIds.includes(skillId)) return skillId;
   if (!framework) return undefined;
-  const exact = `${skillId}-${framework}`;
+  const variant = FRAMEWORK_VARIANT_ALIASES[framework] ?? framework;
+  const exact = `${skillId}-${variant}`;
   if (menuIds.includes(exact)) return exact;
   return menuIds.find((id) => id.startsWith(`${exact}-`));
 }
