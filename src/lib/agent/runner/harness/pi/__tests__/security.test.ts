@@ -81,6 +81,17 @@ describe('pi-security: blocked-action corpus (parity with the anthropic fence)',
     expect(await block('grep', { path: '.env' })).toBe(true);
   });
 
+  test('allows .env example/template files — they document keys, hold no secrets', async () => {
+    expect(
+      await block('write', { path: '.env.example', content: 'KEY=' }),
+    ).toBe(false);
+    expect(await block('read', { path: '.env.example' })).toBe(false);
+    expect(await block('edit', { path: '.env.sample', edits: [] })).toBe(false);
+    expect(await block('write', { path: '.env.template', content: '' })).toBe(
+      false,
+    );
+  });
+
   test('allows the sanctioned build/install bash commands', async () => {
     expect(await block('bash', { command: 'npm install' })).toBe(false);
     expect(await block('bash', { command: 'pnpm build' })).toBe(false);

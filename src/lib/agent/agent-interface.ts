@@ -412,11 +412,16 @@ export function wizardCanUseTool(
     };
   }
 
-  // Block direct reads/writes of .env files — use wizard-tools MCP instead
+  // Block direct reads/writes of real .env files — use wizard-tools MCP instead.
+  // Example/template files (.env.example, .env.sample, .env.template, .env.dist)
+  // carry no secrets and are meant to be committed, so they stay writable.
   if (toolName === 'Read' || toolName === 'Write' || toolName === 'Edit') {
     const filePath = typeof input.file_path === 'string' ? input.file_path : '';
     const basename = path.basename(filePath);
-    if (basename.startsWith('.env')) {
+    const isEnvExample = /^\.env\.(example|sample|template|dist)$/.test(
+      basename,
+    );
+    if (basename.startsWith('.env') && !isEnvExample) {
       logToFile(`Denying ${toolName} on env file: ${filePath}`);
       return {
         behavior: 'deny',
