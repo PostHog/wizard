@@ -271,7 +271,12 @@ export async function runOrchestrator(
   if (missingVariants.length > 0) {
     await wizardAbort({
       message:
-        'Setup instructions for this project failed to download.\nPlease try again, or contact wizard@posthog.com.',
+        'Setup instructions for this project failed to download.\n' +
+        'Please try again, or contact wizard@posthog.com.\n\n' +
+        'You can also set up with your agent by downloading the skills here:\n' +
+        '  https://github.com/PostHog/skills\n' +
+        'or integrate manually here:\n' +
+        '  https://posthog.com/docs/getting-started/install',
       error: new WizardError('Orchestrator preflight: skill variant missing', {
         missing: missingVariants.join(', '),
         framework: session.skillId,
