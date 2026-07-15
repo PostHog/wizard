@@ -625,7 +625,9 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
     {
       filePath: z
         .string()
-        .describe('Path to the .env file, relative to the project root'),
+        .describe(
+          'Path to the .env file, relative to the project directory the wizard runs in — pass ".env", never a path re-prefixed with the project\'s location inside a parent git repo',
+        ),
       keys: z
         .array(z.string())
         .describe('Environment variable key names to check'),
@@ -659,7 +661,9 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
     {
       filePath: z
         .string()
-        .describe('Path to the .env file, relative to the project root'),
+        .describe(
+          'Path to the .env file, relative to the project directory the wizard runs in — pass ".env", never a path re-prefixed with the project\'s location inside a parent git repo',
+        ),
       values: z
         .record(
           z.string(),
@@ -729,10 +733,23 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
         : '';
       const content = mergeEnvValues(existing, resolvedValues);
 
-      // Ensure parent directory exists
+      // Env files belong in directories that already exist. Refusing to create
+      // parents catches the classic agent mistake of re-prefixing the project's
+      // repo-relative location (e.g. "apps/web/.env" while already running in
+      // apps/web), which would otherwise silently nest a duplicate tree.
       const dir = path.dirname(resolved);
       if (!fs.existsSync(dir)) {
-        fs.mkdirSync(dir, { recursive: true });
+        return {
+          content: [
+            {
+              type: 'text' as const,
+              text: `Error: parent directory does not exist: "${path.dirname(
+                args.filePath,
+              )}". filePath is resolved against the project directory the wizard runs in — for its root env file pass just ".env".`,
+            },
+          ],
+          isError: true,
+        };
       }
 
       fs.writeFileSync(resolved, content, 'utf8');

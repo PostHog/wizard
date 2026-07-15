@@ -34,7 +34,7 @@ export function buildSourceMapsUploadPrompt(
   const inSubproject = projectPath != null && projectPath !== '.';
   const projectLine = inSubproject
     ? `- Project directory (relative to repo root): ${projectPath}`
-    : '- Project directory: the repo root';
+    : "- Project directory: the wizard's working directory (even when it sits inside a larger git repo, this directory is the project root)";
 
   const isIos = variant === 'ios';
   const credentialSteps = `STEP 4 — Make the credentials readable at build time. (skill: "Make credentials available at build time")
@@ -47,7 +47,9 @@ STEP 5 — Write the credentials to the env file. (skill: "Write credentials to 
    pick — the prerequisite PostHog integration usually already wrote
    POSTHOG_* vars to one, so seed your keys alongside them.
    - First call check_env_keys on that file (returns present/absent, never
-     values — don't read the file directly).
+     values — don't read the file directly). Tool filePaths are relative to
+     the project directory: pass ".env", NOT the project's path inside a
+     parent repo.
    - Then call set_env_values, passing the STEP 1 secretRef as a value
      object, not a literal string:
        values: {
