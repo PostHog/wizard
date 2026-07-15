@@ -13,8 +13,9 @@
 import { randomUUID } from 'crypto';
 import { existsSync, rmSync } from 'fs';
 import * as path from 'path';
-import { IS_PRODUCTION_BUILD } from '@env';
 import { OutroKind, type WizardSession } from '@lib/wizard-session';
+import { POSTHOG_DOCS_URL, type Integration } from '@lib/constants';
+import { FRAMEWORK_REGISTRY } from '@lib/registry';
 import {
   installSkillById,
   fetchSkillMenu,
@@ -24,6 +25,7 @@ import { getUI } from '@ui';
 import { analytics } from '@utils/analytics';
 import { ciExcludedTaskTypes } from '@utils/ci-flag-overrides';
 import { logToFile } from '@utils/debug';
+import { wizardAbort, WizardError } from '@utils/wizard-abort';
 import type { ProgramConfig } from '@lib/programs/program-step';
 import type { BootstrapResult } from '../../shared/types';
 import {
@@ -248,12 +250,7 @@ export async function runOrchestrator(
     );
   }
 
-  // Preflight every task's mini-skills. A missing variant means the task runs
-  // skill-less — a silent zero-diff — so log + capture it on every build. In
-  // dev and CI the run then crashes so the gap can't slip through a test pass;
-  // the throw sits behind !IS_PRODUCTION_BUILD, which tsdown inlines to a
-  // literal, so it is stripped from the published bundle (real users get the
-  // degraded run, never a crash).
+  // Preflight every task's mini-skills: a miss would run tasks skill-less, so fail properly instead.
   const missingVariants: string[] = [];
   for (const type of registry.types) {
     for (const skillId of registry.get(type)?.skills ?? []) {
@@ -273,14 +270,24 @@ export async function runOrchestrator(
       });
     }
   }
-  if (!IS_PRODUCTION_BUILD && missingVariants.length > 0) {
-    throw new Error(
-      `Orchestrator preflight: no skill variant for ${missingVariants.join(
-        ', ',
-      )} (framework=${
-        session.skillId ?? 'none'
-      }) — fix the context-mill menu or the framework mapping.`,
-    );
+  if (missingVariants.length > 0) {
+    // The framework's own docs page from its config; generic docs when detection found none.
+    const docsUrl = session.skillId
+      ? FRAMEWORK_REGISTRY[session.skillId as Integration]?.docsUrl
+      : undefined;
+    await wizardAbort({
+      message:
+        'Setup instructions for this project failed to download.\n' +
+        'Please try again, or contact wizard@posthog.com.\n\n' +
+        'You can also set up with your agent by downloading the skills here:\n' +
+        '  https://github.com/PostHog/context-mill/releases\n' +
+        'or integrate manually here:\n' +
+        `  ${docsUrl ?? POSTHOG_DOCS_URL}`,
+      error: new WizardError('Orchestrator preflight: skill variant missing', {
+        missing: missingVariants.join(', '),
+        framework: session.skillId,
+      }),
+    });
   }
 
   // The client injects the basics (project context + the I/O contract) around
