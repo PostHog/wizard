@@ -228,7 +228,10 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
     const { createSecurityExtension } = await import('./security');
     const security = createSecurityExtension({
       disallowedTools: fenceDisallowList(disallowedTools),
-      triageAuth: { baseURL: gatewayUrl, authToken: boot.credentials.accessToken },
+      triageAuth: {
+        baseURL: gatewayUrl,
+        authToken: boot.credentials.accessToken,
+      },
     });
     const { prewarmYaraScanner } = await import('@lib/yara-hooks');
     void prewarmYaraScanner();

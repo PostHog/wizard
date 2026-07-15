@@ -519,7 +519,11 @@ export function wizardCanUseTool(
   if (toolName === 'Grep') {
     const grepPath = typeof input.path === 'string' ? input.path : '';
     const grepBase = path.basename(grepPath);
-    if (grepPath && grepBase.startsWith('.env') && !isEnvExampleFile(grepBase)) {
+    if (
+      grepPath &&
+      grepBase.startsWith('.env') &&
+      !isEnvExampleFile(grepBase)
+    ) {
       logToFile(`Denying Grep on env file: ${grepPath}`);
       return {
         behavior: 'deny',

@@ -392,7 +392,10 @@ export function taskModelSpec(
   task: QueuedTask,
   harness: string,
 ): { model: string; effort?: string } {
-  const picked = promptModelFor(registry.get(task.type) ?? EMPTY_PROMPT, harness);
+  const picked = promptModelFor(
+    registry.get(task.type) ?? EMPTY_PROMPT,
+    harness,
+  );
   return {
     model: task.model ?? picked.model ?? DEFAULT_TASK_MODEL,
     effort: picked.effort,

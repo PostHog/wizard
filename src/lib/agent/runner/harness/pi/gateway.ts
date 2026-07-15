@@ -10,7 +10,10 @@ import {
   POSTHOG_FLAG_HEADER_PREFIX,
   POSTHOG_PROPERTY_HEADER_PREFIX,
 } from '@lib/constants';
-import { modelCapabilities, type ThinkingLevel } from '../../switchboard/models';
+import {
+  modelCapabilities,
+  type ThinkingLevel,
+} from '../../switchboard/models';
 
 /** Provider registered on the in-memory registry for this run. */
 export const GATEWAY_PROVIDER = 'posthog-gateway';
@@ -94,7 +97,9 @@ export function buildGatewayProvider(inputs: GatewayProviderInputs): {
     effort,
   } = inputs;
   const api = gatewayApiFor(modelId);
-  const tableCaps = modelCapabilities(modelId, wizardFlags, { applyEffortFlag });
+  const tableCaps = modelCapabilities(modelId, wizardFlags, {
+    applyEffortFlag,
+  });
   // An explicit frontmatter effort wins over the table for a reasoning model.
   const caps =
     effort && tableCaps.reasoning
