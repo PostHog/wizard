@@ -1,10 +1,10 @@
 /**
  * Bash command fence: exact per-manager allowlists + shell-shape gates.
  *
- * In effect this gates the pi harness only — on the Anthropic arm `Bash` is
- * pre-allowed (BASE_ALLOWED_TOOLS), so canUseTool never sees it and the SDK's
- * OS sandbox + YARA hooks gate execution instead. pi has no OS sandbox yet,
- * so this string fence is its only execution gate.
+ * Runs on both harnesses (wizardCanUseTool is the shared permission callback).
+ * On the Anthropic arm it layers on top of the SDK's OS sandbox + YARA; the pi
+ * harness has no OS sandbox, so this string fence is its only execution gate —
+ * which is why it must be exact rather than keyword-fuzzy.
  *
  * Threat model: the agent can already Write project files, so commands that
  * execute project-defined code (installs, builds) are equivalent risk by
