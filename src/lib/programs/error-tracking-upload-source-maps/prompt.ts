@@ -36,29 +36,8 @@ export function buildSourceMapsUploadPrompt(
     ? `- Project directory (relative to repo root): ${projectPath}`
     : '- Project directory: the repo root';
 
-  // iOS never reads a .env file — all three POSTHOG_CLI_* values go in a
-  // gitignored xcconfig (the host with the $() escape, since // starts an
-  // xcconfig comment). Every other platform keeps the dotenv flow.
   const isIos = variant === 'ios';
-  const xcconfigHost = uiHost.replace('://', ':/$()/');
-  const credentialSteps = isIos
-    ? `STEP 4 — Make the credentials readable at build time. (skill: "Make credentials available at build time")
-   iOS does NOT use .env. Follow the skill's iOS step. Do NOT install
-   \`dotenv\` or any loader, and do NOT create a .env file.
-
-STEP 5 — Write the credentials. (skill: "Write credentials to the env file")
-   The whole config goes in a GITIGNORED xcconfig, not a .env. Call
-   set_env_values once — the \`.xcconfig\` path makes the tool write Xcode
-   \`KEY = VALUE\` style and gitignore the file:
-       filePath: "PostHog.xcconfig"
-       values: {
-         "POSTHOG_CLI_API_KEY": { secretRef: "<the ref from STEP 1>" },
-         "POSTHOG_CLI_PROJECT_ID": "${projectId}",
-         "POSTHOG_CLI_HOST": "${xcconfigHost}"
-       }
-   Write the host value EXACTLY as shown — the \`$()\` keeps \`//\` from
-   starting an xcconfig comment. Wire the file per the skill's iOS example.`
-    : `STEP 4 — Make the credentials readable at build time. (skill: "Make credentials available at build time")
+  const credentialSteps = `STEP 4 — Make the credentials readable at build time. (skill: "Make credentials available at build time")
    Follow the skill's step. Wizard-specific: if it calls for a loader (e.g.
    \`dotenv\`), install it SILENTLY — do NOT ask the user or call wizard_ask.
    Skip this step entirely if the platform already auto-loads .env.

@@ -105,21 +105,6 @@ describe('mergeEnvValues', () => {
       'FOO=new\nDB_URL=postgres://new:5432/db?opt=1\nBAR=added\n',
     );
   });
-
-  it('writes and updates xcconfig-style assignments with spaces around the equals', () => {
-    const result = mergeEnvValues(
-      'POSTHOG_CLI_API_KEY = phx_old',
-      {
-        POSTHOG_CLI_API_KEY: 'phx_new',
-        OTHER_SETTING: 'added',
-      },
-      'xcconfig',
-    );
-
-    expect(result).toBe(
-      'POSTHOG_CLI_API_KEY = phx_new\nOTHER_SETTING = added\n',
-    );
-  });
 });
 
 describe('ensureGitignoreCoverage', () => {
