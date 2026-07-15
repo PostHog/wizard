@@ -1,6 +1,7 @@
 import axios, { AxiosError } from 'axios';
 import { z } from 'zod';
 import { analytics } from '@utils/analytics';
+import { sleep } from './helper-functions';
 import { WIZARD_USER_AGENT } from './constants';
 
 /**
@@ -127,37 +128,122 @@ export const ApiProjectSchema = z.object({
 export type ApiUser = z.infer<typeof ApiUserSchema>;
 export type ApiProject = z.infer<typeof ApiProjectSchema>;
 
+/**
+ * Failure category for an {@link ApiError}. Lets callers decide whether to
+ * retry (network / timeout / server) and gives error-tracking a stable
+ * discriminant instead of one opaque "Failed to …" bucket.
+ */
+export type ApiErrorKind =
+  | 'network' // request never got a response (DNS, refused, offline)
+  | 'timeout' // request aborted by a timeout
+  | 'server' // 5xx from the backend
+  | 'auth' // 401
+  | 'forbidden' // 403
+  | 'not_found' // 404
+  | 'client' // other 4xx
+  | 'parse' // response body failed schema validation
+  | 'unknown'; // non-axios, non-zod error
+
 export class ApiError extends Error {
   constructor(
     message: string,
     public readonly statusCode?: number,
     public readonly endpoint?: string,
+    public readonly kind: ApiErrorKind = 'unknown',
+    options?: { cause?: unknown },
   ) {
-    super(message);
+    super(message, options);
     this.name = 'ApiError';
   }
+
+  /**
+   * Transient failures worth a retry before surfacing a hard error — a
+   * network blip, a timeout, or a 5xx. Auth/permission/parse failures won't
+   * get better on retry.
+   */
+  get isTransient(): boolean {
+    return (
+      this.kind === 'network' ||
+      this.kind === 'timeout' ||
+      this.kind === 'server'
+    );
+  }
+
+  /**
+   * Flat property bag for analytics / error-tracking so the status code,
+   * endpoint, failure kind, and underlying cause actually land on the
+   * captured `$exception` instead of collapsing into one opaque message.
+   */
+  toProperties(): Record<string, unknown> {
+    const causeMessage =
+      this.cause instanceof Error
+        ? this.cause.message
+        : this.cause != null
+        ? String(this.cause)
+        : undefined;
+    return {
+      endpoint: this.endpoint,
+      statusCode: this.statusCode,
+      error_kind: this.kind,
+      cause: causeMessage,
+    };
+  }
 }
+
+// Auth-fetch retry budget. The `/api/users/@me/` call sits on the OAuth login
+// path (setup-utils) where a hard failure blocks setup, and the failures we
+// see in the field are overwhelmingly transient (network blips / 5xx). A short
+// retry with backoff rides over those before we surface a hard error. Only
+// transient failures (see ApiError.isTransient) are retried — 401/403/404 and
+// parse errors fail fast.
+const USER_FETCH_MAX_ATTEMPTS = 3;
+const USER_FETCH_BACKOFF_MS = 300; // doubles each retry
+
+export type FetchUserDataOptions = {
+  maxAttempts?: number;
+  backoffMs?: number;
+  sleepImpl?: (ms: number) => Promise<void>;
+};
 
 export async function fetchUserData(
   accessToken: string,
   baseUrl: string,
+  opts: FetchUserDataOptions = {},
 ): Promise<ApiUser> {
-  try {
-    const response = await axios.get(`${baseUrl}/api/users/@me/`, {
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        'User-Agent': WIZARD_USER_AGENT,
-      },
-    });
+  const {
+    maxAttempts = USER_FETCH_MAX_ATTEMPTS,
+    backoffMs = USER_FETCH_BACKOFF_MS,
+    sleepImpl = sleep,
+  } = opts;
 
-    return ApiUserSchema.parse(response.data);
-  } catch (error) {
-    const apiError = handleApiError(error, 'fetch user data');
-    analytics.captureException(apiError, {
-      endpoint: '/api/users/@me/',
-      baseUrl,
-    });
-    throw apiError;
+  for (let attempt = 1; ; attempt++) {
+    try {
+      const response = await axios.get(`${baseUrl}/api/users/@me/`, {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'User-Agent': WIZARD_USER_AGENT,
+        },
+      });
+
+      return ApiUserSchema.parse(response.data);
+    } catch (error) {
+      const apiError = handleApiError(error, 'fetch user data');
+      if (attempt < maxAttempts && apiError.isTransient) {
+        await sleepImpl(backoffMs * 2 ** (attempt - 1));
+        continue;
+      }
+
+      // Capture exactly once, after retries are exhausted, with the status,
+      // endpoint, failure kind, and underlying cause attached so
+      // error-tracking can tell a transient blip from a real regression.
+      analytics.captureException(apiError, {
+        ...apiError.toProperties(),
+        endpoint: '/api/users/@me/',
+        baseUrl,
+        attempts: attempt,
+      });
+      throw apiError;
+    }
   }
 }
 
@@ -221,6 +307,7 @@ export async function fetchProjectData(
   } catch (error) {
     const apiError = handleApiError(error, 'fetch project data');
     analytics.captureException(apiError, {
+      ...apiError.toProperties(),
       endpoint: `/api/projects/${projectId}/`,
       baseUrl,
       projectId,
@@ -273,6 +360,8 @@ export function handleApiError(error: unknown, operation: string): ApiError {
         `Authentication failed while trying to ${operation}`,
         status,
         endpoint,
+        'auth',
+        { cause: axiosError },
       );
     }
 
@@ -281,6 +370,8 @@ export function handleApiError(error: unknown, operation: string): ApiError {
         `Access denied while trying to ${operation}`,
         status,
         endpoint,
+        'forbidden',
+        { cause: axiosError },
       );
     }
 
@@ -289,20 +380,75 @@ export function handleApiError(error: unknown, operation: string): ApiError {
         `Resource not found while trying to ${operation}`,
         status,
         endpoint,
+        'not_found',
+        { cause: axiosError },
       );
     }
 
-    const message = detail || `Failed to ${operation}`;
-    return new ApiError(message, status, endpoint);
+    // No response at all — the request never reached the backend or timed
+    // out. Previously this collapsed into a bare `Failed to ${operation}`
+    // with a null status, so a DNS blip, an offline machine, and a dropped
+    // connection were all indistinguishable in error-tracking. Surface the
+    // transport-level code (ECONNABORTED, ETIMEDOUT, ENOTFOUND, …) and mark
+    // the failure kind so callers can retry and the issue carries a cause.
+    if (!axiosError.response) {
+      const code = axiosError.code;
+      const isTimeout =
+        code === 'ECONNABORTED' ||
+        code === 'ETIMEDOUT' ||
+        axiosError.message.toLowerCase().includes('timeout');
+      const reason = code ?? axiosError.message ?? 'no response';
+      return new ApiError(
+        `${
+          isTimeout ? 'Request timed out' : 'Network error'
+        } while trying to ${operation} (${reason})`,
+        undefined,
+        endpoint,
+        isTimeout ? 'timeout' : 'network',
+        { cause: axiosError },
+      );
+    }
+
+    // 5xx — the backend responded but failed. Retryable, and worth carrying
+    // the status so a transient blip is distinguishable from a real 5xx
+    // regression. 4xx we don't special-case falls through as a client error.
+    if (status !== undefined && status >= 500) {
+      const message = detail
+        ? `Server error (${status}) while trying to ${operation}: ${detail}`
+        : `Server error (${status}) while trying to ${operation}`;
+      return new ApiError(message, status, endpoint, 'server', {
+        cause: axiosError,
+      });
+    }
+
+    const statusPart = status !== undefined ? ` (${status})` : '';
+    const message = detail
+      ? `Failed to ${operation}${statusPart}: ${detail}`
+      : `Failed to ${operation}${statusPart}`;
+    return new ApiError(message, status, endpoint, 'client', {
+      cause: axiosError,
+    });
   }
 
   if (error instanceof z.ZodError) {
-    return new ApiError(`Invalid response format while trying to ${operation}`);
+    return new ApiError(
+      `Invalid response format while trying to ${operation}: ${error.issues
+        .map((i) => `${i.path.join('.') || '(root)'} ${i.message}`)
+        .join('; ')}`,
+      undefined,
+      undefined,
+      'parse',
+      { cause: error },
+    );
   }
 
   return new ApiError(
     `Unexpected error while trying to ${operation}: ${
       error instanceof Error ? error.message : 'Unknown error'
     }`,
+    undefined,
+    undefined,
+    'unknown',
+    { cause: error },
   );
 }
