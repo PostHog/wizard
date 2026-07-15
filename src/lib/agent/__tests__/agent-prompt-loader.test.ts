@@ -15,6 +15,7 @@ import {
 } from '../agent-prompt-loader';
 import { QueueStore } from '@lib/agent/runner/sequence/orchestrator/queue';
 import { HostResolution } from '@lib/host-resolution';
+import { Harness } from '@lib/constants';
 
 function tmpDir(): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'agent-loader-test-'));
@@ -57,14 +58,38 @@ Add at least one capture call.
 
   it('resolves the per-harness model + effort, not 1:1 across providers', () => {
     const p = parseAgentPrompt(sample, 'fallback');
-    expect(promptModelFor(p, 'pi')).toEqual({
+    expect(promptModelFor(p, Harness.pi)).toEqual({
       model: 'openai/gpt-5.6-terra',
       effort: 'medium',
     });
-    expect(promptModelFor(p, 'anthropic')).toEqual({
+    expect(promptModelFor(p, Harness.anthropic)).toEqual({
       model: 'claude-sonnet-4-6',
       effort: undefined,
     });
+  });
+
+  it('drops an effort that is not a ThinkingLevel — remote typos never reach a session', () => {
+    const p = parseAgentPrompt(
+      '---\nmodel_pi: m\neffort_pi: mediun\neffort_sdk: high\n---\nx',
+      'capture',
+    );
+    expect(p.effortPi).toBeUndefined();
+    expect(p.effortSdk).toBe('high');
+  });
+
+  it('falls back to the menu entry flow when frontmatter omits it', () => {
+    const p = parseAgentPrompt(
+      '---\ntype: install\n---\nx',
+      'install',
+      'my-flow',
+    );
+    expect(p.flow).toBe('my-flow');
+    const declared = parseAgentPrompt(
+      '---\nflow: audit\n---\nx',
+      'install',
+      'my-flow',
+    );
+    expect(declared.flow).toBe('audit');
   });
 
   it('strips inline comments and keeps the body', () => {
@@ -93,9 +118,10 @@ Add at least one capture call.
     );
   });
 
-  it('defaults missing array fields to empty and model to undefined', () => {
+  it('defaults missing array fields to empty and models to undefined', () => {
     const p = parseAgentPrompt('no frontmatter at all', 'stub');
-    expect(p.model).toBeUndefined();
+    expect(p.modelPi).toBeUndefined();
+    expect(p.modelSdk).toBeUndefined();
     expect(p.skills).toEqual([]);
     expect(p.dependsOn).toEqual([]);
     expect(p.body).toBe('no frontmatter at all');
@@ -208,11 +234,11 @@ describe('resolveTask', () => {
   it('resolves per-harness model + effort from the prompt', () => {
     const registry = registryOf([prompt]);
     const task = store.enqueue({ type: 'capture' });
-    expect(taskModelSpec(registry, task, 'pi')).toEqual({
+    expect(taskModelSpec(registry, task, Harness.pi)).toEqual({
       model: 'openai/gpt-5.6-luna',
       effort: 'low',
     });
-    expect(taskModelSpec(registry, task, 'anthropic').model).toBe(
+    expect(taskModelSpec(registry, task, Harness.anthropic).model).toBe(
       'claude-haiku-4-5-20251001',
     );
   });
@@ -220,7 +246,7 @@ describe('resolveTask', () => {
   it('prefers the enqueue model override over the prompt model', () => {
     const registry = registryOf([prompt]);
     const task = store.enqueue({ type: 'capture', model: 'override-x' });
-    expect(taskModelSpec(registry, task, 'pi').model).toBe('override-x');
+    expect(taskModelSpec(registry, task, Harness.pi).model).toBe('override-x');
   });
 
   it("appends upstream dependencies' handoffs as context", () => {
@@ -296,19 +322,27 @@ describe('taskModelSpec', () => {
     'capture',
   );
 
-  it('prefers the enqueue override, then the prompt, then the default', () => {
+  it('prefers the enqueue override, then the prompt; no default baked in', () => {
     const registry = registryOf([prompt]);
     const task = { type: 'capture' };
     expect(
-      taskModelSpec(registry, { ...task, model: 'override' } as never, 'pi')
-        .model,
+      taskModelSpec(
+        registry,
+        { ...task, model: 'override' } as never,
+        Harness.pi,
+      ).model,
     ).toBe('override');
-    expect(taskModelSpec(registry, task as never, 'pi').model).toBe(
+    expect(taskModelSpec(registry, task as never, Harness.pi).model).toBe(
       'prompt-model',
     );
-    expect(taskModelSpec(registryOf([]), task as never, 'pi').model).toBe(
-      'claude-sonnet-4-6',
-    );
+    // An empty column stays undefined — the CALLER falls back to its
+    // switchboard pick, so a pi run degrades to the pi model, not sonnet.
+    expect(
+      taskModelSpec(registry, task as never, Harness.anthropic).model,
+    ).toBeUndefined();
+    expect(
+      taskModelSpec(registryOf([]), task as never, Harness.pi).model,
+    ).toBeUndefined();
   });
 });
 

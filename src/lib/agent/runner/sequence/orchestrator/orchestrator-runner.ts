@@ -14,7 +14,11 @@ import { randomUUID } from 'crypto';
 import { existsSync, rmSync } from 'fs';
 import * as path from 'path';
 import { OutroKind, type WizardSession } from '@lib/wizard-session';
-import { installSkillById, fetchSkillMenu } from '@lib/wizard-tools';
+import {
+  installSkillById,
+  fetchSkillMenu,
+  type SkillEntry,
+} from '@lib/wizard-tools';
 import { getUI } from '@ui';
 import { analytics } from '@utils/analytics';
 import { ciExcludedTaskTypes } from '@utils/ci-flag-overrides';
@@ -79,47 +83,35 @@ function requireTaskHarness(pick: HarnessPick): AgentHarness & {
   };
 }
 
-/** Every skill id the menu knows, across categories. */
-async function fetchSkillMenuIds(skillsBaseUrl: string): Promise<string[]> {
+/** Every skill entry the menu knows, across categories. */
+async function fetchSkillMenuEntries(
+  skillsBaseUrl: string,
+): Promise<SkillEntry[]> {
   const menu = await fetchSkillMenu(skillsBaseUrl);
   if (!menu) return [];
-  return Object.values(menu.categories)
-    .flat()
-    .map((s) => s.id);
+  return Object.values(menu.categories).flat();
 }
 
 /**
- * Resolve a bare skill id + the session's framework to the menu id: the bare
- * id itself (single-variant skills collapse to it), else exact
- * `<id>-<framework>` (the 1:1 frameworks — django, python, flask, …), else the
- * first granular variant under the framework (e.g. `-nextjs-app-router`).
- * Undefined when nothing matches.
+ * Resolve a bare skill id + the session's framework to the menu id, from the
+ * `group`/`framework`/`default` fields the menu declares: a full menu id (or
+ * single-variant skill) resolves to itself; otherwise the entry whose group is
+ * the bare id and whose framework matches — the family's marked default when
+ * several variants serve one framework (e.g. app vs pages router). No wizard-
+ * side vocabulary: context-mill owns which variant serves which framework, so
+ * a rename there cannot silently strand the resolution here.
  */
-/**
- * Framework enums whose context-mill variant id differs from the enum value.
- * The orchestrator resolves variants programmatically (the linear flow's agent
- * picks from the menu by hand and self-corrects), so without these it silently
- * resolves nothing and the tasks run skill-less — a zero-diff run. The value is
- * the variant-id token (or its prefix, for a family the `startsWith` fallback
- * then narrows).
- */
-const FRAMEWORK_VARIANT_ALIASES: Record<string, string> = {
-  rails: 'ruby-on-rails',
-  'react-router': 'react-react-router',
-  'tanstack-router': 'react-tanstack-router',
-};
-
 export function resolveSkillVariantId(
-  menuIds: readonly string[],
+  entries: readonly SkillEntry[],
   skillId: string,
   framework: string | undefined,
 ): string | undefined {
-  if (menuIds.includes(skillId)) return skillId;
+  if (entries.some((e) => e.id === skillId)) return skillId;
   if (!framework) return undefined;
-  const variant = FRAMEWORK_VARIANT_ALIASES[framework] ?? framework;
-  const exact = `${skillId}-${variant}`;
-  if (menuIds.includes(exact)) return exact;
-  return menuIds.find((id) => id.startsWith(`${exact}-`));
+  const family = entries.filter(
+    (e) => e.group === skillId && e.framework === framework,
+  );
+  return (family.find((e) => e.default) ?? family[0])?.id;
 }
 
 /**
@@ -128,10 +120,10 @@ export function resolveSkillVariantId(
  * `integration-<variant>`.
  */
 function resolveReferenceSkillId(
-  menuIds: readonly string[],
+  entries: readonly SkillEntry[],
   framework: string,
 ): string | undefined {
-  return resolveSkillVariantId(menuIds, 'integration', framework);
+  return resolveSkillVariantId(entries, 'integration', framework);
 }
 
 export async function runOrchestrator(
@@ -178,13 +170,10 @@ export async function runOrchestrator(
 
   const store = new QueueStore(session.installDir, runId, {
     onTransition: (event, task) => {
+      const pick = resolveHarness(switchboardCtx, task.type);
       const base = {
         type: task.type,
-        model: taskModelSpec(
-          registry,
-          task,
-          resolveHarness(switchboardCtx, task.type).harness,
-        ).model,
+        model: taskModelSpec(registry, task, pick.harness).model ?? pick.model,
         attempts: task.attempts,
       };
       switch (event) {
@@ -235,9 +224,9 @@ export async function runOrchestrator(
   // skill — only the example file is read, when the agent's prompt points at it.
   let examplePath: string | undefined;
   let commandmentsPath: string | undefined;
-  const menuSkillIds = await fetchSkillMenuIds(boot.skillsBaseUrl);
+  const menuSkillEntries = await fetchSkillMenuEntries(boot.skillsBaseUrl);
   const referenceSkillId = session.skillId
-    ? resolveReferenceSkillId(menuSkillIds, session.skillId)
+    ? resolveReferenceSkillId(menuSkillEntries, session.skillId)
     : undefined;
   if (referenceSkillId) {
     const ref = await installSkillById(
@@ -264,6 +253,27 @@ export async function runOrchestrator(
     logToFile(
       `[orchestrator] no integration skill for framework "${session.skillId}"`,
     );
+  }
+
+  // Preflight the HOW: resolve every task's mini-skills against the menu now,
+  // so a variant gap between the registry and the menu surfaces (log +
+  // analytics) before any agent runs — not as a silently skill-less task
+  // discovered mid-drain, whose zero-diff run would look like a success.
+  for (const type of registry.types) {
+    for (const skillId of registry.get(type)?.skills ?? []) {
+      if (!resolveSkillVariantId(menuSkillEntries, skillId, session.skillId)) {
+        logToFile(
+          `[orchestrator] no skill variant type=${type} skill=${skillId} framework=${
+            session.skillId ?? 'none'
+          }`,
+        );
+        analytics.wizardCapture('orchestrator skill variant missing', {
+          task_type: type,
+          skill: skillId,
+          framework: session.skillId,
+        });
+      }
+    }
   }
 
   // The client injects the basics (project context + the I/O contract) around
@@ -368,7 +378,7 @@ export async function runOrchestrator(
         // SDK-divergent steps ship per-framework variants, so resolve against
         // the menu with the session's framework before installing.
         const variantId = resolveSkillVariantId(
-          menuSkillIds,
+          menuSkillEntries,
           skillId,
           session.skillId,
         );

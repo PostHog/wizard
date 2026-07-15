@@ -328,6 +328,8 @@ describe('switchboard modelCapabilities', () => {
     expect(modelCapabilities(GPT5_MODEL).thinkingLevel).toBe('low');
     expect(modelCapabilities(GPT5_MINI_MODEL).thinkingLevel).toBe('medium');
     // The gpt-5.6 line + gpt-5.5 are reasoning models despite the openai/ prefix; they opt in past the default-off.
+    // All low in the table — the table tunes the LINEAR run; orchestrator
+    // agents raise effort per task via their prompt frontmatter instead.
     for (const m of [
       GPT5_6_LUNA_MODEL,
       GPT5_6_TERRA_MODEL,
@@ -335,12 +337,8 @@ describe('switchboard modelCapabilities', () => {
       GPT5_5_MODEL,
     ]) {
       expect(modelCapabilities(m).reasoning).toBe(true);
+      expect(modelCapabilities(m).thinkingLevel).toBe('low');
     }
-    // luna/sol/5.5 stay low (fast); terra runs medium as the sonnet-tier parallel.
-    expect(modelCapabilities(GPT5_6_LUNA_MODEL).thinkingLevel).toBe('low');
-    expect(modelCapabilities(GPT5_6_TERRA_MODEL).thinkingLevel).toBe('medium');
-    expect(modelCapabilities(GPT5_6_SOL_MODEL).thinkingLevel).toBe('low');
-    expect(modelCapabilities(GPT5_5_MODEL).thinkingLevel).toBe('low');
     // Anthropic default carries no explicit effort — the harness default stands.
     expect(
       modelCapabilities(DEFAULT_AGENT_MODEL).thinkingLevel,
@@ -406,15 +404,16 @@ describe('switchboard wizard-pi-effort flag', () => {
   });
 
   it('opts out with applyEffortFlag:false — orchestrator tasks keep the table effort', () => {
-    // The flag is a linear-run knob; a per-task agent ignores it and keeps its
-    // own tuned level (terra medium), even with the flag set to high.
+    // The flag is a linear-run knob; a per-task agent ignores it and keeps the
+    // table level (its own effort comes from prompt frontmatter instead),
+    // even with the flag set to high.
     expect(
       modelCapabilities(
         GPT5_6_TERRA_MODEL,
         { ...PI_ON, [WIZARD_PI_EFFORT_FLAG_KEY]: 'high' },
         { applyEffortFlag: false },
       ).thinkingLevel,
-    ).toBe('medium');
+    ).toBe('low');
     expect(
       modelCapabilities(
         GPT5_6_LUNA_MODEL,

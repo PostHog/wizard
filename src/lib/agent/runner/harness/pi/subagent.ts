@@ -17,6 +17,7 @@ import { Type } from 'typebox';
 import { defineTool } from '@earendil-works/pi-coding-agent';
 import type { ToolDefinition } from '@earendil-works/pi-coding-agent';
 import { logToFile } from '@utils/debug';
+import { extractText } from './shared';
 
 /**
  * Read-only built-ins a subagent may use. bash is supplied separately as the
@@ -37,21 +38,6 @@ function text(s: string): {
   details: unknown;
 } {
   return { content: [{ type: 'text', text: s }], details: {} };
-}
-
-function extractText(message: unknown): string {
-  const content = (message as { content?: unknown })?.content;
-  if (typeof content === 'string') return content;
-  if (Array.isArray(content)) {
-    return content
-      .filter((c): c is { type: string; text: string } => {
-        const b = c as { type?: string; text?: unknown };
-        return b?.type === 'text' && typeof b.text === 'string';
-      })
-      .map((c) => c.text)
-      .join('');
-  }
-  return '';
 }
 
 export interface SubagentContext {

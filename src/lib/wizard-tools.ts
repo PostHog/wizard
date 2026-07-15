@@ -46,7 +46,17 @@ async function getSDKModule(): Promise<any> {
 // Skill types
 // ---------------------------------------------------------------------------
 
-export type SkillEntry = { id: string; name: string; downloadUrl: string };
+export type SkillEntry = {
+  id: string;
+  name: string;
+  downloadUrl: string;
+  /** The hyphenated skill-group prefix of `id` (e.g. `posthog-integration-install`). */
+  group?: string;
+  /** The detection id this variant serves (e.g. `rails`, `react-router`). */
+  framework?: string;
+  /** The variant a bare framework id resolves to when its family has several. */
+  default?: boolean;
+};
 
 /**
  * Entry in the wizard's runtime CLI registry. Mirrors the shape context-mill

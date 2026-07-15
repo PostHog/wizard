@@ -27,13 +27,20 @@ import {
 import { RUN_SURFACE } from '@env';
 
 /** Reasoning effort. pi maps it to `reasoning_effort` for openai-completions. */
-export type ThinkingLevel =
-  | 'off'
-  | 'minimal'
-  | 'low'
-  | 'medium'
-  | 'high'
-  | 'xhigh';
+const THINKING_LEVELS = [
+  'off',
+  'minimal',
+  'low',
+  'medium',
+  'high',
+  'xhigh',
+] as const;
+export type ThinkingLevel = (typeof THINKING_LEVELS)[number];
+
+/** Whether a value (e.g. remote prompt frontmatter) names a valid effort. */
+export function isThinkingLevel(value: unknown): value is ThinkingLevel {
+  return (THINKING_LEVELS as readonly unknown[]).includes(value);
+}
 
 export interface ModelCapabilities {
   /** Model supports reasoning; safe to request reasoning effort. */
@@ -53,11 +60,12 @@ export const MODEL_CAPABILITIES: Record<string, ModelCapabilities> = {
   [GPT5_MODEL]: { reasoning: true, thinkingLevel: 'low' },
   [GPT5_4_MODEL]: { reasoning: true, thinkingLevel: 'low' },
   // Latest openai flagship line; all reasoning models, so they must opt in past
-  // the openai-completions default (reasoning off). Luna stays low for cheap,
-  // short-context mechanical work; terra runs medium as the sonnet-tier parallel
-  // — enough reasoning depth for the judgment tasks without high's latency blowup.
+  // the openai-completions default (reasoning off). Low effort keeps the
+  // linear run fast — this table tunes the LINEAR run only. Orchestrator
+  // agents own their effort per task via prompt frontmatter (`effort_pi`),
+  // which overrides the table without changing it.
   [GPT5_6_LUNA_MODEL]: { reasoning: true, thinkingLevel: 'low' },
-  [GPT5_6_TERRA_MODEL]: { reasoning: true, thinkingLevel: 'medium' },
+  [GPT5_6_TERRA_MODEL]: { reasoning: true, thinkingLevel: 'low' },
   [GPT5_6_SOL_MODEL]: { reasoning: true, thinkingLevel: 'low' },
   [GPT5_5_MODEL]: { reasoning: true, thinkingLevel: 'low' },
   // The pi runner's paired model — a smaller openai reasoning model. Medium
