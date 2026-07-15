@@ -57,19 +57,16 @@ export type SkillEntry = {
   framework?: string;
   /** The variant a bare framework id resolves to when its family has several. */
   default?: boolean;
-  /** This entry is one JSON holding every variant; `framework` picks one at install time. */
+  /** This entry's download is a bundle JSON of every variant, not a single skill's zip. */
   bundle?: boolean;
-  /** Frameworks a bundle covers, so a variant miss is caught before downloading it. */
-  frameworks?: string[];
+  /** Menu-only: the variants inside a bundle, expanded into entries of their own on fetch. */
+  variants?: { id: string; framework?: string; default?: boolean }[];
 };
 
-/** A bundle's variants, keyed by the variant's short id. */
+/** A bundle's files, keyed by variant short id then path. */
 export type SkillBundle = {
   id: string;
-  variants: Record<
-    string,
-    { framework?: string; default?: boolean; files: Record<string, string> }
-  >;
+  variants: Record<string, Record<string, string>>;
 };
 
 /**
@@ -101,6 +98,18 @@ export interface SkillMenu {
 // Standalone skill helpers (usable before the MCP server is created)
 // ---------------------------------------------------------------------------
 
+/** Expand a bundle entry into one entry per variant, so the menu reads the same whether a group ships bundled or as zips. */
+export function expandBundleEntry(entry: SkillEntry): SkillEntry[] {
+  if (!entry.bundle || !entry.variants) return [entry];
+  return entry.variants.map((variant) => ({
+    ...variant,
+    name: entry.name,
+    group: entry.group,
+    bundle: true,
+    downloadUrl: entry.downloadUrl,
+  }));
+}
+
 /**
  * Fetch the skill menu from the skills server.
  * Returns parsed data on success, `null` on failure.
@@ -114,6 +123,9 @@ export async function fetchSkillMenu(
     logToFile(`fetchSkillMenu: fetching from ${menuUrl}`);
     const resp = await fetchWithRetry(menuUrl, opts);
     const data = (await resp.json()) as SkillMenu;
+    for (const [category, entries] of Object.entries(data.categories)) {
+      data.categories[category] = entries.flatMap(expandBundleEntry);
+    }
     logToFile(
       `fetchSkillMenu: loaded (${
         Object.keys(data.categories).length
@@ -146,34 +158,19 @@ function extractZipArchive(zip: Uint8Array, destDir: string): number {
   return written;
 }
 
-/** Pick a bundle's variant for `framework`, mirroring the menu's framework/default resolution. */
-export function selectBundleVariant(
-  bundle: SkillBundle,
-  framework: string | undefined,
-): SkillBundle['variants'][string] | undefined {
-  const family = framework
-    ? Object.values(bundle.variants).filter((v) => v.framework === framework)
-    : [];
-  return family.find((v) => v.default) ?? family[0];
-}
-
-/** Write a bundle's variant for `framework` into destDir. */
-function writeBundleVariant(
+/** Unpack the one variant this entry names out of a bundle; the rest is noise and never hits disk. */
+function extractBundle(
   bundle: SkillBundle,
   destDir: string,
-  framework: string | undefined,
+  entryId: string,
 ): number {
-  const variant = selectBundleVariant(bundle, framework);
-  if (!variant) {
-    throw new Error(
-      `bundle ${bundle.id} has no variant for framework "${
-        framework ?? 'none'
-      }"`,
-    );
+  const files = bundle.variants[entryId.slice(bundle.id.length + 1)];
+  if (!files) {
+    throw new Error(`bundle ${bundle.id} has no variant "${entryId}"`);
   }
   const root = path.resolve(destDir);
   let written = 0;
-  for (const [entryPath, contents] of Object.entries(variant.files)) {
+  for (const [entryPath, contents] of Object.entries(files)) {
     const target = path.resolve(root, entryPath);
     if (target !== root && !target.startsWith(root + path.sep)) {
       throw new Error(`bundle entry escapes destination: ${entryPath}`);
@@ -203,7 +200,6 @@ export async function downloadSkill(
   skillEntry: SkillEntry,
   installDir: string,
   skillsRoot?: string,
-  framework?: string,
 ): Promise<{ success: boolean; error?: string }> {
   const skillDir = skillsRoot
     ? path.join(installDir, skillsRoot, skillEntry.id)
@@ -215,10 +211,10 @@ export async function downloadSkill(
     const data = await downloadWithRetry(skillEntry.downloadUrl);
     step = 'extract';
     const fileCount = skillEntry.bundle
-      ? writeBundleVariant(
+      ? extractBundle(
           JSON.parse(Buffer.from(data).toString('utf8')) as SkillBundle,
           skillDir,
-          framework,
+          skillEntry.id,
         )
       : extractZipArchive(data, skillDir);
     fs.writeFileSync(path.join(skillDir, '.posthog-wizard'), '');
@@ -265,7 +261,6 @@ export async function installSkillById(
   installDir: string,
   skillsBaseUrl: string,
   skillsRoot?: string,
-  framework?: string,
 ): Promise<InstallSkillResult> {
   const menu = await fetchSkillMenu(skillsBaseUrl);
   if (!menu) return { kind: 'menu-fetch-failed' };
@@ -275,7 +270,7 @@ export async function installSkillById(
     .find((s) => s.id === skillId);
   if (!skill) return { kind: 'skill-not-found', skillId };
 
-  const result = await downloadSkill(skill, installDir, skillsRoot, framework);
+  const result = await downloadSkill(skill, installDir, skillsRoot);
   if (!result.success) {
     return { kind: 'download-failed', message: result.error ?? 'unknown' };
   }

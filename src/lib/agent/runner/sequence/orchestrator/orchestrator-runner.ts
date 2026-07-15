@@ -101,13 +101,6 @@ export function resolveSkillVariantId(
   skillId: string,
   framework: string | undefined,
 ): string | undefined {
-  // A bundle is one entry per group; its variants resolve at install time, so only check it covers the framework.
-  const bundle = entries.find((e) => e.bundle && e.id === skillId);
-  if (bundle) {
-    return framework && bundle.frameworks?.includes(framework)
-      ? skillId
-      : undefined;
-  }
   if (entries.some((e) => e.id === skillId)) return skillId;
   if (!framework) return undefined;
   const family = entries.filter(
@@ -415,7 +408,6 @@ export async function runOrchestrator(
           session.installDir,
           boot.skillsBaseUrl,
           taskSkillsRoot,
-          session.skillId,
         );
         if (result.kind === 'ok') {
           skillPaths.push(path.join(result.path, 'SKILL.md'));
