@@ -13,6 +13,7 @@
 import { randomUUID } from 'crypto';
 import { existsSync, rmSync } from 'fs';
 import * as path from 'path';
+import { IS_PRODUCTION_BUILD } from '@env';
 import { OutroKind, type WizardSession } from '@lib/wizard-session';
 import {
   installSkillById,
@@ -247,22 +248,39 @@ export async function runOrchestrator(
     );
   }
 
-  // Preflight every task's mini-skills so a missing variant surfaces before any agent runs.
+  // Preflight every task's mini-skills. A missing variant means the task runs
+  // skill-less — a silent zero-diff — so log + capture it on every build. In
+  // dev and CI the run then crashes so the gap can't slip through a test pass;
+  // the throw sits behind !IS_PRODUCTION_BUILD, which tsdown inlines to a
+  // literal, so it is stripped from the published bundle (real users get the
+  // degraded run, never a crash).
+  const missingVariants: string[] = [];
   for (const type of registry.types) {
     for (const skillId of registry.get(type)?.skills ?? []) {
-      if (!resolveSkillVariantId(menuSkillEntries, skillId, session.skillId)) {
-        logToFile(
-          `[orchestrator] no skill variant type=${type} skill=${skillId} framework=${
-            session.skillId ?? 'none'
-          }`,
-        );
-        analytics.wizardCapture('orchestrator skill variant missing', {
-          task_type: type,
-          skill: skillId,
-          framework: session.skillId,
-        });
+      if (resolveSkillVariantId(menuSkillEntries, skillId, session.skillId)) {
+        continue;
       }
+      missingVariants.push(`${type}/${skillId}`);
+      logToFile(
+        `[orchestrator] no skill variant type=${type} skill=${skillId} framework=${
+          session.skillId ?? 'none'
+        }`,
+      );
+      analytics.wizardCapture('orchestrator skill variant missing', {
+        task_type: type,
+        skill: skillId,
+        framework: session.skillId,
+      });
     }
+  }
+  if (!IS_PRODUCTION_BUILD && missingVariants.length > 0) {
+    throw new Error(
+      `Orchestrator preflight: no skill variant for ${missingVariants.join(
+        ', ',
+      )} (framework=${
+        session.skillId ?? 'none'
+      }) — fix the context-mill menu or the framework mapping.`,
+    );
   }
 
   // The client injects the basics (project context + the I/O contract) around
