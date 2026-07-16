@@ -135,6 +135,7 @@
     "test:watch": "vitest",
     "prepare": "husky",
     "screens:check": "tsx scripts/check-screens.tsx",
+    "osc8:playground": "tsx scripts/osc8-playground.tsx",
     "wizard-ci-explore": "tsx scripts/wizard-ci-explore.no-jest.ts",
     "wizard-ci-replay": "tsx scripts/tui-replay.no-jest.ts"
   },

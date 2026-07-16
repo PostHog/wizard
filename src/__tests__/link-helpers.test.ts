@@ -22,6 +22,12 @@ describe('osc8Hyperlink', () => {
       `${ESC}]8;;https://x.test${BEL}open${ESC}]8;;${BEL}`,
     );
   });
+
+  it('emits an id param when given, grouping wrapped fragments', () => {
+    expect(osc8Hyperlink('https://x.test', 'open', '42')).toBe(
+      `${ESC}]8;id=42;https://x.test${BEL}open${ESC}]8;;${BEL}`,
+    );
+  });
 });
 
 describe('truncateUrlLabel', () => {

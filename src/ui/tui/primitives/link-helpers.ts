@@ -7,11 +7,16 @@
  * border glyphs and padding.
  *
  * The fix is an explicit OSC 8 hyperlink: the escape carries the exact target
- * out of band, independent of the visible layout, and Ink's wrap re-emits it on
- * every wrapped line — so the click target stays correct even when the URL
- * wraps to fit the overlay. Each standalone URL gets its own line so the escape
- * brackets exactly one URL. Terminals without OSC 8 support ignore the escape
- * and show the visible text.
+ * out of band, independent of the visible layout, so the click target is
+ * correct regardless of how the terminal auto-detects URLs.
+ *
+ * Crucially, the link must NOT wrap. Ink wraps text with `wrap-ansi`, which
+ * re-emits SGR colour on each new line but does not re-emit the OSC 8 envelope
+ * — so a link split across a wrap boundary has its escape corrupted and stops
+ * working in every terminal. We therefore pull each URL onto its own line and
+ * render a display label short enough to fit (see `LinkText`, `wrap="truncate"`)
+ * so the escape always brackets exactly one unwrapped run. Terminals without
+ * OSC 8 support ignore the escape and show the visible text.
  */
 
 // OSC 8 hyperlink escape: ESC ] 8 ; ; <url> BEL <label> ESC ] 8 ; ; BEL.
@@ -36,9 +41,20 @@ function trimTrailingPunctuation(url: string): string {
  * Wrap `label` (defaults to the URL) in an OSC 8 hyperlink escape pointing
  * at `url`. Terminals that support OSC 8 make the whole run clickable to the
  * exact `url`; terminals that don't render `label` as plain text.
+ *
+ * `id` is optional and only matters when a single logical link is emitted as
+ * more than one run (e.g. it wraps across lines): runs sharing an `id` are
+ * grouped by the terminal so they hover-highlight as one. A link that fits on
+ * one line needs no `id` — VTE assigns one per run and iTerm2 groups adjacent
+ * same-URI cells on its own.
  */
-export function osc8Hyperlink(url: string, label: string = url): string {
-  return `${OSC_8}${url}${BEL}${label}${OSC_8}${BEL}`;
+export function osc8Hyperlink(
+  url: string,
+  label: string = url,
+  id?: string,
+): string {
+  const open = `${ESC}]8;${id ? `id=${id}` : ''};${url}${BEL}`;
+  return `${open}${label}${OSC_8}${BEL}`;
 }
 
 /**

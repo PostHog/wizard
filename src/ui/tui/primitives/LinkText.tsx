@@ -30,7 +30,7 @@ export const LinkText = ({ text }: LinkTextProps) => {
     <Box flexDirection="column">
       {segments.map((segment, i) =>
         segment.type === 'url' ? (
-          <Text key={i} color={Colors.accent} underline wrap="wrap">
+          <Text key={i} color={Colors.accent} underline wrap="truncate">
             {osc8Hyperlink(segment.value, truncateUrlLabel(segment.value))}
           </Text>
         ) : (
