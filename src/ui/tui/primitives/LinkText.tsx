@@ -9,7 +9,7 @@
  * Used by the `wizard_ask` overlay only for programs that opt into rich link
  * rendering (see `PendingQuestion.richLinks`). Other flows are untouched.
  */
-import { Box, Text } from 'ink';
+import { Box, Text, Transform } from 'ink';
 import { Colors } from '@ui/tui/styles';
 import {
   osc8Hyperlink,
@@ -27,9 +27,19 @@ export const LinkText = ({ text }: LinkTextProps) => {
     <Box flexDirection="column">
       {segments.map((segment, i) =>
         segment.type === 'url' ? (
-          <Text key={i} color={Colors.accent} underline wrap="truncate">
-            {osc8Hyperlink(segment.value, truncateUrlLabel(segment.value))}
-          </Text>
+          // The OSC 8 escape must wrap the *rendered* line, not sit inside the
+          // Text as content — Ink tokenizes Text content per cell and mangles
+          // an embedded escape. `<Transform>` runs after layout, so it brackets
+          // the finished (already coloured, truncated) string cleanly. This is
+          // how ink-link does it.
+          <Transform
+            key={i}
+            transform={(line) => osc8Hyperlink(segment.value, line)}
+          >
+            <Text color={Colors.accent} underline wrap="truncate">
+              {truncateUrlLabel(segment.value)}
+            </Text>
+          </Transform>
         ) : (
           <Text key={i}>{segment.value}</Text>
         ),
