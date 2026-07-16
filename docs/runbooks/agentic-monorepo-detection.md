@@ -23,13 +23,13 @@ it.
 
 ## What flag gates it
 
-- `basic-integration-agentic-detection`, default off.
+- `wizard-basic-integration-agentic-detection`, default off.
 - On, the scan runs; off (or a failed flag fetch), it's skipped and you're back
   on root detection.
 - Read once at the start of each run.
 - Locally: set
-  `WIZARD_CI_FLAG_OVERRIDES='{"basic-integration-agentic-detection":"true"}'` on
-  a dev/`--ci` run.
+  `WIZARD_CI_FLAG_OVERRIDES='{"wizard-basic-integration-agentic-detection":"true"}'`
+  on a dev/`--ci` run.
 
 ## What it affects
 
@@ -41,8 +41,7 @@ it.
 - Detector: `detectProjectsWithAgent` in `src/lib/detection/agentic.ts`;
   self-driving uses the same detector with its own chooser.
 - Each run fires one `wizard: agentic detection` event tagged with the outcome
-  (`flag-off | error | timeout | no-project | recommended |
-  first-instrumentable`).
+  (`flag-off | error | timeout | no-project | recommended | first-instrumentable`).
 
 ## What's next
 

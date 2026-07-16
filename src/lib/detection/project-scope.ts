@@ -12,7 +12,7 @@ import { authenticate } from '@lib/agent/runner/shared/authenticate';
 import { FRAMEWORK_REGISTRY } from '@lib/registry';
 import {
   AGENTIC_DETECTION_TIMEOUT_MS,
-  BASIC_INTEGRATION_AGENTIC_DETECTION_FLAG_KEY,
+  WIZARD_BASIC_INTEGRATION_AGENTIC_DETECTION_FLAG_KEY,
 } from '@lib/constants';
 import type { WizardSession } from '@lib/wizard-session';
 import { getUI } from '@ui/index';
@@ -73,7 +73,7 @@ export async function scopeInstallDirToProject(
   // Idempotent early auth: the detector needs credentials and the flag must evaluate as the logged-in user.
   await authenticate(session, 'posthog-integration');
   const flags = await analytics.getAllFlagsForWizard();
-  if (flags[BASIC_INTEGRATION_AGENTIC_DETECTION_FLAG_KEY] !== 'true') {
+  if (flags[WIZARD_BASIC_INTEGRATION_AGENTIC_DETECTION_FLAG_KEY] !== 'true') {
     // A failed flag fetch surfaces as an empty map, so flag-off also covers "flags unavailable".
     captureOutcome('flag-off');
     return;

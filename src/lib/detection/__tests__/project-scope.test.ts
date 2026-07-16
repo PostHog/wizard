@@ -8,7 +8,7 @@ import {
 } from '@lib/detection/project-scope';
 import {
   AGENTIC_DETECTION_TIMEOUT_MS,
-  BASIC_INTEGRATION_AGENTIC_DETECTION_FLAG_KEY,
+  WIZARD_BASIC_INTEGRATION_AGENTIC_DETECTION_FLAG_KEY,
 } from '@lib/constants';
 import { authenticate } from '@lib/agent/runner/shared/authenticate';
 import { buildSession } from '@lib/wizard-session';
@@ -75,7 +75,9 @@ describe('chooseIntegrationProject', () => {
 
 describe('scopeInstallDirToProject', () => {
   const scan = vi.mocked(detectProjectsWithAgent);
-  const FLAG_ON = { [BASIC_INTEGRATION_AGENTIC_DETECTION_FLAG_KEY]: 'true' };
+  const FLAG_ON = {
+    [WIZARD_BASIC_INTEGRATION_AGENTIC_DETECTION_FLAG_KEY]: 'true',
+  };
   const web = project({
     path: 'apps/web',
     framework: 'Next.js',
