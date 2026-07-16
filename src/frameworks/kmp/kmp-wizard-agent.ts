@@ -75,7 +75,7 @@ export const KMP_AGENT_CONFIG: FrameworkConfig = {
     packageInstallation:
       'Add the PostHog KMP SDK to the shared module\'s commonMain dependencies in build.gradle.kts: within the kotlin { sourceSets { ... } } block, add implementation("com.posthog:posthog-kmp:<VERSION>") to commonMain.dependencies. Match the existing dependency format (Groovy vs Kotlin DSL).',
     getAdditionalContextLines: () => [
-      'Framework docs: https://posthog.com/docs/libraries/kmp',
+      'Framework docs ID: kmp (use posthog://docs/frameworks/kmp for documentation)',
       'Initialize once, early in the app lifecycle, from shared code. All PostHog APIs live in the com.posthog.kmp package.',
       'Setup call: PostHog.setup(config = PostHogConfig(apiKey = "<POSTHOG_PROJECT_TOKEN>", host = "<POSTHOG_HOST>"), context = PostHogContext())',
       'PostHogContext is platform-specific: on Android pass the Application via PostHogContext(application); on iOS and Web use the no-argument PostHogContext().',
