@@ -42,6 +42,7 @@ export function normalizeEventPlan(parsed: unknown): PlannedEvent[] | null {
 
 export class EventPlanWatcher {
   private handle: FileWatcherHandle | null = null;
+  private captured = false;
 
   constructor(
     private readonly store: WizardStore,
@@ -50,13 +51,17 @@ export class EventPlanWatcher {
   ) {}
 
   start(): void {
-    if (this.handle) return;
+    if (this.handle || this.captured) return;
 
     this.handle = startFileWatcher(
       this.path,
       (parsed) => {
         const events = normalizeEventPlan(parsed);
-        if (events) this.store.setEventPlan(events);
+        if (!events || events.length === 0) return;
+
+        this.captured = true;
+        this.store.setEventPlan(events);
+        this.stop();
       },
       {
         ignoreInitialFile: true,
@@ -67,6 +72,7 @@ export class EventPlanWatcher {
   }
 
   refresh(): void {
+    if (this.captured) return;
     this.handle?.refresh();
   }
 

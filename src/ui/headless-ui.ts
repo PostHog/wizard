@@ -7,7 +7,7 @@ import type { WizardStore } from './tui/store';
  * `LoggingUI` (not `InkUI`) because its blocking/gate methods would wait on a
  * TUI that never renders; the runner drives phase transitions on the store
  * directly, so only UI-originated per-run updates tee through here. Runner
- * machinery mirrors agent-authored artifacts such as the event plan directly
+ * machinery loads agent-authored artifacts such as the event plan directly
  * into the store.
  */
 export class HeadlessUI extends LoggingUI {

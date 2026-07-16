@@ -82,7 +82,7 @@ export interface TaskStreamPushOptions {
   store: WizardStore;
   programId: string;
   destinations: TaskStreamDestination[];
-  /** Optional absolute event-plan path to mirror into the store. */
+  /** Optional absolute event-plan path to load into the store once. */
   eventPlanPath?: string;
   /** When false, destination subscription/delivery remains disabled. */
   enabled?: boolean;
@@ -126,7 +126,7 @@ export class TaskStreamPush {
   }
 
   /**
-   * Mirror the event plan and subscribe to store changes. Destination delivery
+   * Load the event plan and subscribe to store changes. Destination delivery
    * remains disabled when `enabled === false`, but the plan still populates the
    * store for local and headless consumers.
    */
