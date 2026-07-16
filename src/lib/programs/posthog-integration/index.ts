@@ -21,6 +21,7 @@ import type { HostResolution } from '@lib/host-resolution';
 import { POSTHOG_INTEGRATION_PROGRAM } from './steps.js';
 import { getContentBlocks } from './content/index.js';
 import { buildCodingAgentPrompt } from './handoff.js';
+import { EVENT_PLAN_FILE } from './constants.js';
 
 const DASHBOARD_DEEP_LINK_KEY = 'dashboardDeepLink';
 
@@ -42,6 +43,7 @@ export const posthogIntegrationConfig: ProgramConfig = {
   description: 'Set up PostHog SDK integration',
   id: 'posthog-integration',
   agentFlow: 'integration-v2',
+  eventPlanFile: EVENT_PLAN_FILE,
   steps: POSTHOG_INTEGRATION_PROGRAM,
   getContentBlocks,
   // Basic integration runs without structured user input; drop wizard_ask

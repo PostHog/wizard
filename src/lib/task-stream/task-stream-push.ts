@@ -7,7 +7,7 @@
  *   - task updates               debounced 250ms (trailing edge)
  *   - phase transitions          flush immediately, bypass debounce
  *   - RunPhase.Idle              skipped (no push)
- *   - enabled === false          attach is a no-op
+ *   - enabled === false          destination delivery is disabled
  *   - shutdown(timeoutMs)        cancel pending, flush terminal phase
  *                                with timeout, never throw
  *
@@ -82,7 +82,9 @@ export interface TaskStreamPushOptions {
   store: WizardStore;
   programId: string;
   destinations: TaskStreamDestination[];
-  /** When false, `attach` is a no-op and no destination ever fires. */
+  /** Optional absolute event-plan path to mirror into the store. */
+  eventPlanPath?: string;
+  /** When false, destination subscription/delivery remains disabled. */
   enabled?: boolean;
 }
 
@@ -92,7 +94,7 @@ export class TaskStreamPush {
   private readonly startedAt: string;
   private readonly programId: string;
   private readonly sessionId: string;
-  private readonly eventPlanWatcher: EventPlanWatcher;
+  private readonly eventPlanWatcher: EventPlanWatcher | null;
 
   private enabled: boolean;
   private created = false;
@@ -109,8 +111,15 @@ export class TaskStreamPush {
     this.programId = sanitizeChannelId(opts.programId);
     this.destinations = opts.destinations;
     this.enabled = opts.enabled ?? true;
-    this.eventPlanWatcher = new EventPlanWatcher(this.store);
-    this.startedAt = secondPrecisionIso(new Date());
+    const startedAt = new Date();
+    this.eventPlanWatcher = opts.eventPlanPath
+      ? new EventPlanWatcher(
+          this.store,
+          opts.eventPlanPath,
+          startedAt.getTime(),
+        )
+      : null;
+    this.startedAt = secondPrecisionIso(startedAt);
     // skillId may not be set yet — fall back to programId so the
     // session_id is stable for the whole run regardless of when the
     // program metadata is populated.
@@ -126,7 +135,7 @@ export class TaskStreamPush {
    * store for local and headless consumers.
    */
   attach(store?: WizardStore): void {
-    this.eventPlanWatcher.start();
+    this.eventPlanWatcher?.start();
     if (!this.enabled) return;
     if (this.unsubscribe) return;
     const target = store ?? this.store;
@@ -135,7 +144,7 @@ export class TaskStreamPush {
 
   /** Stop subscribing. Does not flush. */
   detach(): void {
-    this.eventPlanWatcher.stop();
+    this.eventPlanWatcher?.stop();
     if (this.unsubscribe) {
       this.unsubscribe();
       this.unsubscribe = null;
@@ -155,6 +164,7 @@ export class TaskStreamPush {
     timeoutMs: number = DEFAULT_SHUTDOWN_TIMEOUT_MS,
   ): Promise<void> {
     this.shuttingDown = true;
+    this.eventPlanWatcher?.refresh();
     if (this.debounceTimer) {
       clearTimeout(this.debounceTimer);
       this.debounceTimer = null;

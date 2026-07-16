@@ -132,4 +132,35 @@ describe('startFileWatcher', () => {
     await wait(150);
     expect(onUpdate.mock.calls.at(-1)?.[0]).toEqual({ v: 2 });
   });
+
+  it('refreshes synchronously before shutdown', () => {
+    const onUpdate = vi.fn();
+    const target = path.join(workdir, 'data.json');
+    handle = startFileWatcher(target, onUpdate, { pollIntervalMs: 10_000 });
+    writeFileSync(target, JSON.stringify({ final: true }));
+
+    handle.refresh();
+
+    expect(onUpdate).toHaveBeenCalledWith({ final: true });
+  });
+
+  it('enforces mtime and file-size bounds', () => {
+    const onUpdate = vi.fn();
+    const target = path.join(workdir, 'data.json');
+    writeFileSync(target, JSON.stringify({ stale: true }));
+    handle = startFileWatcher(target, onUpdate, {
+      minMtimeMs: Date.now() + 1,
+      maxFileSizeBytes: 20,
+    });
+
+    handle.refresh();
+    expect(onUpdate).not.toHaveBeenCalled();
+
+    handle.stop();
+    writeFileSync(target, JSON.stringify({ oversized: 'x'.repeat(100) }));
+    handle = startFileWatcher(target, onUpdate, { maxFileSizeBytes: 20 });
+    handle.refresh();
+
+    expect(onUpdate).not.toHaveBeenCalled();
+  });
 });

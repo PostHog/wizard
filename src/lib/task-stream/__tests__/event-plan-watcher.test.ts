@@ -1,4 +1,10 @@
-import { mkdtempSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
+import {
+  mkdtempSync,
+  rmSync,
+  symlinkSync,
+  unlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
@@ -43,25 +49,41 @@ describe('EventPlanWatcher', () => {
         { event_name: 'signed_up', event_description: 'User signs up' },
         { name: 'invited_user', description: 'User sends an invite' },
         { event: 'created_team' },
+        { event_name: 42, name: 'valid_fallback' },
+        { event_name: 'x'.repeat(401) },
+        { event_name: '   ' },
         { description: 'missing name' },
       ]),
     ).toEqual([
       { name: 'signed_up', description: 'User signs up' },
       { name: 'invited_user', description: 'User sends an invite' },
       { name: 'created_team', description: '' },
+      { name: 'valid_fallback', description: '' },
     ]);
+  });
+
+  it('caps event count and description length', () => {
+    const events = Array.from({ length: 60 }, (_, index) => ({
+      event_name: `event_${index}`,
+      event_description: 'x'.repeat(5000),
+    }));
+
+    const normalized = normalizeEventPlan(events);
+
+    expect(normalized).toHaveLength(50);
+    expect(normalized?.[0].description).toHaveLength(4000);
   });
 
   it('captures the plan when the file is written after startup', async () => {
     const store = createStore(installDir);
-    watcher = new EventPlanWatcher(store, {
+    const path = join(installDir, EVENT_PLAN_FILE);
+    watcher = new EventPlanWatcher(store, path, Date.now(), {
       pollIntervalMs: 30,
-      attachRetryIntervalMs: 20,
     });
     watcher.start();
 
     writeFileSync(
-      join(installDir, EVENT_PLAN_FILE),
+      path,
       JSON.stringify([{ event_name: 'completed_onboarding' }]),
     );
     await wait(120);
@@ -73,10 +95,12 @@ describe('EventPlanWatcher', () => {
 
   it('keeps the last captured plan after the file is deleted', async () => {
     const path = join(installDir, EVENT_PLAN_FILE);
-    writeFileSync(path, JSON.stringify([{ event_name: 'created_report' }]));
     const store = createStore(installDir);
-    watcher = new EventPlanWatcher(store, { pollIntervalMs: 30 });
+    watcher = new EventPlanWatcher(store, path, Date.now(), {
+      pollIntervalMs: 30,
+    });
     watcher.start();
+    writeFileSync(path, JSON.stringify([{ event_name: 'created_report' }]));
     await wait(40);
 
     unlinkSync(path);
@@ -85,5 +109,35 @@ describe('EventPlanWatcher', () => {
     expect(store.eventPlan).toEqual([
       { name: 'created_report', description: '' },
     ]);
+  });
+
+  it('ignores a plan file that predates the current run', () => {
+    const path = join(installDir, EVENT_PLAN_FILE);
+    writeFileSync(path, JSON.stringify([{ event_name: 'stale_event' }]));
+    const store = createStore(installDir);
+    watcher = new EventPlanWatcher(store, path, Date.now() + 1);
+
+    watcher.start();
+    watcher.refresh();
+
+    expect(store.eventPlan).toEqual([]);
+  });
+
+  it('rejects oversized and symbolic-link plan files', () => {
+    const path = join(installDir, EVENT_PLAN_FILE);
+    const store = createStore(installDir);
+    watcher = new EventPlanWatcher(store, path, Date.now());
+    watcher.start();
+
+    writeFileSync(path, JSON.stringify([{ event_name: 'x'.repeat(300_000) }]));
+    watcher.refresh();
+    expect(store.eventPlan).toEqual([]);
+
+    unlinkSync(path);
+    const target = join(installDir, 'external-plan.json');
+    writeFileSync(target, JSON.stringify([{ event_name: 'linked_event' }]));
+    symlinkSync(target, path);
+    watcher.refresh();
+    expect(store.eventPlan).toEqual([]);
   });
 });

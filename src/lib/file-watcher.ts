@@ -7,11 +7,14 @@
  */
 
 import * as fs from 'fs';
+import { basename, dirname } from 'node:path';
 
 const DEFAULT_POLL_INTERVAL_MS = 5000;
 const DEFAULT_ATTACH_RETRY_INTERVAL_MS = 1000;
+const DEFAULT_WATCH_DEBOUNCE_MS = 25;
 
 export interface FileWatcherHandle {
+  refresh(): void;
   stop(): void;
 }
 
@@ -20,6 +23,12 @@ export interface FileWatcherOptions {
   pollIntervalMs?: number;
   /** ms between attach attempts while waiting for the file to appear. */
   attachRetryIntervalMs?: number;
+  /** ms to coalesce duplicate filesystem events. */
+  watchDebounceMs?: number;
+  /** Ignore files older than this timestamp. */
+  minMtimeMs?: number;
+  /** Refuse to read files larger than this many bytes. */
+  maxFileSizeBytes?: number;
 }
 
 /** Watch `path` for JSON updates and call `onUpdate(parsed)` whenever the
@@ -33,14 +42,32 @@ export function startFileWatcher(
   const pollIntervalMs = options.pollIntervalMs ?? DEFAULT_POLL_INTERVAL_MS;
   const attachRetryIntervalMs =
     options.attachRetryIntervalMs ?? DEFAULT_ATTACH_RETRY_INTERVAL_MS;
+  const watchDebounceMs = options.watchDebounceMs ?? DEFAULT_WATCH_DEBOUNCE_MS;
 
   const watchers: fs.FSWatcher[] = [];
   const intervals: Array<ReturnType<typeof setInterval>> = [];
+  const targetDir = dirname(path);
+  const targetName = basename(path);
   let lastMtimeMs = 0;
+  let watchDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+  let stopped = false;
 
   const read = (force = false) => {
     try {
-      const stat = fs.statSync(path);
+      const stat = fs.lstatSync(path);
+      if (!stat.isFile() || stat.isSymbolicLink()) return;
+      if (
+        options.minMtimeMs !== undefined &&
+        stat.mtimeMs < options.minMtimeMs
+      ) {
+        return;
+      }
+      if (
+        options.maxFileSizeBytes !== undefined &&
+        stat.size > options.maxFileSizeBytes
+      ) {
+        return;
+      }
       if (!force && stat.mtimeMs === lastMtimeMs) return;
       lastMtimeMs = stat.mtimeMs;
       const parsed: unknown = JSON.parse(fs.readFileSync(path, 'utf-8'));
@@ -50,22 +77,40 @@ export function startFileWatcher(
     }
   };
 
+  const scheduleRead = () => {
+    if (stopped) return;
+    if (watchDebounceTimer) clearTimeout(watchDebounceTimer);
+    watchDebounceTimer = setTimeout(() => {
+      watchDebounceTimer = null;
+      read(true);
+    }, watchDebounceMs);
+  };
+
+  const attachWatch = () => {
+    watchers.push(
+      fs.watch(targetDir, (_eventType, filename) => {
+        if (filename == null || filename.toString() === targetName) {
+          scheduleRead();
+        }
+      }),
+    );
+  };
+
   intervals.push(setInterval(() => read(), pollIntervalMs));
 
   try {
-    watchers.push(fs.watch(path, () => read(true)));
+    attachWatch();
     read(true);
   } catch {
-    // File doesn't exist yet — retry attaching the watch periodically until
-    // it appears. The poll above already covers updates; this just upgrades
-    // latency once the file shows up.
+    // Parent directory does not exist yet. Polling still covers a later file;
+    // retry attaching the low-latency directory watcher until it appears.
     const attachInterval = setInterval(() => {
       try {
-        fs.accessSync(path);
+        fs.accessSync(targetDir);
         clearInterval(attachInterval);
         const idx = intervals.indexOf(attachInterval);
         if (idx >= 0) intervals.splice(idx, 1);
-        watchers.push(fs.watch(path, () => read(true)));
+        attachWatch();
         read(true);
       } catch {
         // Still waiting.
@@ -75,7 +120,20 @@ export function startFileWatcher(
   }
 
   return {
+    refresh() {
+      if (stopped) return;
+      if (watchDebounceTimer) {
+        clearTimeout(watchDebounceTimer);
+        watchDebounceTimer = null;
+      }
+      read(true);
+    },
     stop() {
+      stopped = true;
+      if (watchDebounceTimer) {
+        clearTimeout(watchDebounceTimer);
+        watchDebounceTimer = null;
+      }
       for (const watcher of watchers) watcher.close();
       for (const interval of intervals) clearInterval(interval);
     },

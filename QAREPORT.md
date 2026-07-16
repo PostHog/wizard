@@ -18,30 +18,29 @@
   plans after deletion.
 - Adds coverage for normalization, file deletion, disabled delivery, and
   terminal payloads.
-- Reviewers found lifecycle, stale-artifact, and input-bounding risks in the
-  shared watcher.
+- Follow-up fixes resolve the lifecycle, stale-artifact, input-bounding, and
+  documentation findings.
 
 ### Key findings
 
-- 🟡 **High-confidence convergence:** a plan written immediately before
-  completion can be missed by the terminal push.
-- 🟡 **High-confidence convergence:** every program can ingest a stale plan left
-  by an earlier or unrelated run.
-- 🟡 Malformed or oversized plan files are synchronously parsed without runtime
-  bounds.
-- 🟢 Internal `enabled: false` documentation still claims `attach()` is a
-  complete no-op.
+- ✅ Terminal shutdown performs a final authoritative plan refresh before
+  flushing.
+- ✅ Event-plan watching is opt-in through `ProgramConfig` and ignores files
+  predating the run.
+- ✅ Files, event counts, names, descriptions, and file types are bounded and
+  validated.
+- ✅ Directory watch events are debounced and disabled-mode documentation
+  matches behavior.
 
 ---
 
 ## 🏁 Verdict
 
-> 💬 **APPROVE WITH NITS**
+> ✅ **APPROVE**
 
-Overall risk is **MEDIUM** under the QA scoring rules because multiple
-independent reviewers found medium-severity issues. The two convergent
-correctness findings should be resolved before relying on terminal event-plan
-delivery in production.
+All actionable findings from the initial **MEDIUM**-risk review are resolved
+with regression coverage. The final implementation is scoped to
+event-plan-producing programs and guarantees bounded terminal capture.
 
 ---
 
@@ -66,10 +65,10 @@ validation.
 
 ## 📝 Findings
 
-| #   | Status  | Priority  | Finding                                  | Location                                       | Agents                                                           | Reasoning                                                                                                          | Suggested fix                                                                                                   |
-| --- | ------- | --------- | ---------------------------------------- | ---------------------------------------------- | ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------- |
-| 1   | ⬜ Open | 🟡 Medium | Final push can miss a late plan write    | `src/lib/task-stream/task-stream-push.ts:162`  | reliability, frontend, compatibility, generalist-a, generalist-b | Shutdown stops the watcher before an authoritative final read; retry and polling delays can outlive the run.       | Add `EventPlanWatcher.refresh()` and call it before detaching and flushing; test immediate write then shutdown. |
-| 2   | ⬜ Open | 🟡 Medium | Stale plans leak into unrelated runs     | `src/lib/task-stream/task-stream-push.ts:129`  | security, frontend, performance, generalist-a, generalist-b      | Every task stream reads pre-existing artifacts, so interrupted runs or repository files can be misattributed.      | Scope watching through program configuration and ignore/remove files that predate the current qualifying run.   |
-| 3   | ⬜ Open | 🟡 Medium | Plan input is unbounded and unvalidated  | `src/lib/task-stream/event-plan-watcher.ts:20` | security, performance, generalist-b                              | Type casts provide no runtime safety; large or malformed values can block the event loop or cause rejected pushes. | Enforce regular-file and size limits, string validation, event-count caps, and bounded field lengths.           |
-| 4   | ⬜ Open | 🟡 Medium | Watch events amplify synchronous parsing | `src/lib/file-watcher.ts:46`                   | performance                                                      | Filesystems may emit duplicate events, and every forced read synchronously reparses the entire file.               | Debounce watch events, preserve deduplication, and consider asynchronous bounded reads.                         |
-| 5   | ⬜ Open | 🟢 Low    | Disabled-mode contract is outdated       | `src/lib/task-stream/task-stream-push.ts:10`   | copy                                                             | Comments and a test name say `attach()` is a no-op even though local event-plan watching now starts.               | Clarify that only destination subscription/delivery is disabled; local artifact watching remains active.        |
+| #   | Status      | Priority  | Finding                                  | Location                                      | Agents                                                           | Resolution                                                                                                  | Validation                                                        |
+| --- | ----------- | --------- | ---------------------------------------- | --------------------------------------------- | ---------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| 1   | ✅ Resolved | 🟡 Medium | Final push can miss a late plan write    | `src/lib/task-stream/task-stream-push.ts:164` | reliability, frontend, compatibility, generalist-a, generalist-b | Shutdown refreshes the bounded plan reader before detaching and flushing.                                   | Immediate write → completion → shutdown regression test.          |
+| 2   | ✅ Resolved | 🟡 Medium | Stale plans leak into unrelated runs     | `src/lib/programs/program-step.ts:226`        | security, frontend, performance, generalist-a, generalist-b      | Watching is an explicit program capability and files older than the run are ignored.                        | Unconfigured and stale-artifact tests.                            |
+| 3   | ✅ Resolved | 🟡 Medium | Plan input is unbounded and unvalidated  | `src/lib/task-stream/event-plan-watcher.ts:8` | security, performance, generalist-b                              | Runtime validation caps file size, event count, name length, and description length; symlinks are rejected. | Invalid-field, oversized-file, count, length, and symlink tests.  |
+| 4   | ✅ Resolved | 🟡 Medium | Watch events amplify synchronous parsing | `src/lib/file-watcher.ts:81`                  | performance                                                      | Parent-directory events are coalesced before bounded reads, while polling retains mtime deduplication.      | Atomic rename, recreation, synchronous refresh, and bounds tests. |
+| 5   | ✅ Resolved | 🟢 Low    | Disabled-mode contract is outdated       | `src/lib/task-stream/task-stream-push.ts:10`  | copy                                                             | Comments and test names distinguish local watching from destination delivery.                               | Focused task-stream tests.                                        |
