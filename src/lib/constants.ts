@@ -96,6 +96,7 @@ export enum Integration {
   fastapi = 'fastapi',
   laravel = 'laravel',
   sveltekit = 'sveltekit',
+  kmp = 'kmp',
   swift = 'swift',
   android = 'android',
   rails = 'rails',

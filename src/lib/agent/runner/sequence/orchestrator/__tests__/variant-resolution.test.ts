@@ -50,6 +50,7 @@ const INTEGRATION_ENTRIES = [
   { id: 'integration-elixir' },
   { id: 'integration-go' },
   { id: 'integration-swift', framework: 'swift' },
+  { id: 'integration-kmp', framework: 'kmp' },
   { id: 'integration-flutter' },
   { id: 'integration-react-native', framework: 'react-native', default: true },
   { id: 'integration-expo', framework: 'react-native' },
