@@ -19,6 +19,7 @@ import { ModalDemo } from './demos/ModalDemo.js';
 import { McpDemo } from './demos/McpDemo.js';
 import { McpSuggestedPromptsDemo } from './demos/McpSuggestedPromptsDemo.js';
 import { KeyboardHintsDemo } from './demos/KeyboardHintsDemo.js';
+import { LinkTextDemo } from './demos/LinkTextDemo.js';
 import { AuditChecksDemo } from './demos/AuditChecksDemo.js';
 import { LearnDeckDemo } from './demos/LearnDeckDemo.js';
 import { EndScreensDemo } from './demos/EndScreensDemo.js';
@@ -68,6 +69,11 @@ export const PlaygroundApp = ({ store }: PlaygroundAppProps) => {
       id: 'hints',
       label: 'KeyHints',
       component: <KeyboardHintsDemo />,
+    },
+    {
+      id: 'link-text',
+      label: 'LinkText',
+      component: <LinkTextDemo />,
     },
     {
       id: 'audit-checks',
