@@ -3,7 +3,10 @@ import * as os from 'os';
 import * as path from 'path';
 
 import { applyResolveChecksOutput } from '@lib/programs/cloud-audit/ledger-bridge';
-import { resolveInWorkdir } from '@lib/programs/cloud-audit/client-tools';
+import {
+  execClientTool,
+  resolveInWorkdir,
+} from '@lib/programs/cloud-audit/client-tools';
 import { CLOUD_AUDIT_PLACEHOLDER_CHECKS } from '@lib/programs/cloud-audit/seed';
 import { readLedger } from '@lib/programs/audit/ledger';
 import { AUDIT_CHECKS_FILE, type AuditCheck } from '@lib/programs/audit/types';
@@ -214,6 +217,33 @@ describe('cloud audit', () => {
       // The other three stay pending, and the placeholder is gone.
       expect(rows.slice(1).every((c) => c.status === 'pending')).toBe(true);
       expect(rows.map((c) => c.id)).not.toContain('cloud-audit-connect');
+    });
+  });
+
+  describe('read_ledger client tool', () => {
+    it('returns the accumulated ledger the wizard has written to disk', async () => {
+      // The agent re-grounds from this instead of its own context before writing
+      // the report; if it stops returning the on-disk ledger, the report silently
+      // reverts to memory and the corruption protection is gone with no error.
+      const checks: AuditCheck[] = [
+        {
+          id: 'a',
+          area: 'Event Capture',
+          label: 'Static event names',
+          status: 'pass',
+        },
+      ];
+      seed(checks);
+
+      await expect(execClientTool(dir, 'read_ledger')).resolves.toEqual({
+        checks,
+      });
+    });
+
+    it('returns an empty ledger before any resolution has been written', async () => {
+      await expect(execClientTool(dir, 'read_ledger')).resolves.toEqual({
+        checks: [],
+      });
     });
   });
 

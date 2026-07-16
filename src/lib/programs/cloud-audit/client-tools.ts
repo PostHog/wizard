@@ -14,6 +14,9 @@ import { execFile } from 'child_process';
 import * as path from 'path';
 import { promisify } from 'util';
 
+import { readLedger } from '@lib/programs/audit/ledger';
+import { AUDIT_CHECKS_FILE, type AuditCheck } from '@lib/programs/audit/types';
+
 const execFileP = promisify(execFile);
 
 /** Tool ids this client advertises to the platform on session start. */
@@ -22,6 +25,7 @@ export const CLOUD_AUDIT_CLIENT_TOOLS = [
   'read_file',
   'list_files',
   'write_file',
+  'read_ledger',
 ] as const;
 
 /**
@@ -163,6 +167,19 @@ async function writeFile(
 }
 
 /**
+ * Read back the run's authoritative ledger — the checklist the wizard accumulates
+ * on disk from the agent's `resolve_checks` calls (see ledger-bridge). This is the
+ * agent's re-grounding path: rather than trust its own context to remember what it
+ * has resolved across a long run, it reads its resolved state back from here and
+ * builds the report's per-check results from what this returns. Empty until the
+ * first resolution lands. Not scoped through `resolveInWorkdir` — the path is ours,
+ * not model-supplied.
+ */
+function readLedgerTool(workdir: string): { checks: AuditCheck[] } {
+  return { checks: readLedger(path.join(workdir, AUDIT_CHECKS_FILE)) };
+}
+
+/**
  * Execute one client tool call against the project on disk. Throws on unknown
  * tool ids and on any path that escapes the project root; the caller turns a
  * throw into a `client_tool_result` error so the agent can react.
@@ -181,6 +198,8 @@ export async function execClientTool(
       return listFiles(workdir, args as { dir?: string });
     case 'write_file':
       return writeFile(workdir, args as { path?: string; content?: string });
+    case 'read_ledger':
+      return readLedgerTool(workdir);
     default:
       throw new Error(`unknown client tool: ${toolId}`);
   }
