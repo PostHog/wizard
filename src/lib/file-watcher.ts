@@ -8,6 +8,7 @@
 
 import * as fs from 'fs';
 import { basename, dirname } from 'node:path';
+import { logToFile } from '@utils/debug';
 
 const DEFAULT_POLL_INTERVAL_MS = 5000;
 const DEFAULT_ATTACH_RETRY_INTERVAL_MS = 1000;
@@ -51,6 +52,7 @@ export function startFileWatcher(
   let lastMtimeMs = 0;
   let ignoredInitialSignature: string | null = null;
   let watchDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+  let lastReadErrorSignature: string | null = null;
   let stopped = false;
 
   const signature = (stat: fs.Stats): string =>
@@ -67,26 +69,48 @@ export function startFileWatcher(
     }
   }
 
+  const logReadError = (errorSignature: string, message: string) => {
+    if (lastReadErrorSignature === errorSignature) return;
+    lastReadErrorSignature = errorSignature;
+    logToFile(`[file-watcher] ${message}: ${path}`);
+  };
+
   const read = (force = false) => {
+    let stat: fs.Stats;
     try {
-      const stat = fs.lstatSync(path);
-      if (!stat.isFile() || stat.isSymbolicLink()) return;
+      stat = fs.lstatSync(path);
+    } catch {
+      return;
+    }
+
+    if (!stat.isFile() || stat.isSymbolicLink()) return;
+    const fileSignature = signature(stat);
+
+    try {
       if (ignoredInitialSignature) {
-        if (signature(stat) === ignoredInitialSignature) return;
+        if (fileSignature === ignoredInitialSignature) return;
         ignoredInitialSignature = null;
       }
       if (
         options.maxFileSizeBytes !== undefined &&
         stat.size > options.maxFileSizeBytes
       ) {
+        logReadError(
+          `oversized:${fileSignature}`,
+          `refusing oversized JSON file (${stat.size} bytes, limit ${options.maxFileSizeBytes} bytes)`,
+        );
         return;
       }
       if (!force && stat.mtimeMs === lastMtimeMs) return;
       lastMtimeMs = stat.mtimeMs;
       const parsed: unknown = JSON.parse(fs.readFileSync(path, 'utf-8'));
+      lastReadErrorSignature = null;
       onUpdate(parsed);
-    } catch {
-      // File missing or not yet valid JSON.
+    } catch (error) {
+      logReadError(
+        `invalid:${fileSignature}:${String(error)}`,
+        `could not read valid JSON (${String(error)})`,
+      );
     }
   };
 
@@ -113,7 +137,11 @@ export function startFileWatcher(
 
   try {
     attachWatch();
-    read(true);
+    // Defer the initial callback until the caller has received the handle, so
+    // callbacks that stop their watcher cannot race handle assignment.
+    queueMicrotask(() => {
+      if (!stopped) read(true);
+    });
   } catch {
     // Parent directory does not exist yet. Polling still covers a later file;
     // retry attaching the low-latency directory watcher until it appears.
