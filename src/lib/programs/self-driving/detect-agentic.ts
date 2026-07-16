@@ -17,7 +17,7 @@ import {
   type AgenticDetectionReport,
   type DetectEvent,
 } from '@lib/detection/agentic';
-import { gatherFrameworkContext } from '@lib/detection/index';
+import { detectFramework, gatherFrameworkContext } from '@lib/detection/index';
 import { FRAMEWORK_REGISTRY } from '@lib/registry';
 import { Integration } from '@lib/constants';
 import type { WizardSession } from '@lib/wizard-session';
@@ -120,6 +120,20 @@ export async function prepSelfDrivingIntegration(
   // `session` is the phase's derived session — its installDir is already the
   // picked project (the integrate-run step's `targetDir`), so just gather that
   // project's framework context.
+  //
+  // The interactive integration-detect screen sets `integration` +
+  // `frameworkConfig` when the user picks a project. In a headless run there's
+  // no screen, so detect the framework here (mirroring posthog-integration's
+  // `ciPreRun`); otherwise the composed integration step would run with
+  // `frameworkConfig === null` and crash on `config.detection`.
+  if (!session.frameworkConfig) {
+    const integration = await detectFramework(session.installDir);
+    if (integration) {
+      session.integration = integration;
+      session.frameworkConfig = FRAMEWORK_REGISTRY[integration];
+    }
+  }
+
   const frameworkConfig = session.frameworkConfig;
   if (!frameworkConfig) return;
 
