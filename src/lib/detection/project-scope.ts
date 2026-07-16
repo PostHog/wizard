@@ -125,17 +125,8 @@ export async function scopeInstallDirToProject(
     project_count: projects.length,
     supported_count: projects.filter((p) => p.targetId != null).length,
     has_recommendation: recommended !== undefined,
-    // What the agent recommended, whether or not we took it — a rejected
-    // recommendation is otherwise invisible on the fallback outcomes.
     recommended_path: recommended?.path ?? null,
-    recommended_framework: recommended?.targetId ?? null,
-    projects: projects.map((p) => ({
-      path: p.path,
-      framework: p.framework,
-      target_id: p.targetId,
-      has_posthog: p.hasPostHog,
-      recommended: p.recommended === true,
-    })),
+    projects,
   };
 
   const project = chooseIntegrationProject(projects);
