@@ -74,6 +74,7 @@ type RuntimeEnvKey =
   | 'ConEmuTask'
   // Platform: paths
   | 'APPDATA'
+  | 'OPENCODE_CONFIG_DIR'
   | 'XDG_CONFIG_HOME';
 
 /** Read a runtime environment variable. Only allowlisted keys compile. */

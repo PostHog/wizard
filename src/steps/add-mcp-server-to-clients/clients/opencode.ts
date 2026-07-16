@@ -1,110 +1,86 @@
-import { DefaultMCPClient } from '@steps/add-mcp-server-to-clients/MCPClient';
-import {
-  DefaultMCPClientConfig,
-  getNativeHTTPServerConfig,
-} from '@steps/add-mcp-server-to-clients/defaults';
-import { z } from 'zod';
-import { spawnSync } from 'child_process';
-import * as os from 'os';
+import z from 'zod';
 import * as path from 'path';
+import * as os from 'os';
 import * as fs from 'fs';
-import { debug } from '@utils/debug';
+import { execSync } from 'node:child_process';
+import {
+  DefaultMCPClient,
+  MCPServerConfig,
+} from '@steps/add-mcp-server-to-clients/MCPClient';
+import { getNativeHTTPServerConfig } from '@steps/add-mcp-server-to-clients/defaults';
+import { runtimeEnv } from '@env';
 
-export const OpenCodeMCPConfig = DefaultMCPClientConfig;
+export const OpenCodeMCPConfig = z
+  .object({
+    mcp: z.record(
+      z.string(),
+      z.union([
+        z.object({
+          type: z.literal('remote'),
+          url: z.string(),
+          headers: z.record(z.string(), z.string()).optional(),
+        }),
+      ]),
+    ),
+  })
+  .passthrough();
 
-export type OpenCodeMCPConfig = z.infer<typeof DefaultMCPClientConfig>;
+export type OpenCodeMCPConfig = z.infer<typeof OpenCodeMCPConfig>;
 
 export class OpenCodeMCPClient extends DefaultMCPClient {
   name = 'OpenCode';
+  private opencodeBinaryPath: string | null = null;
+
+  override getServerPropertyName(): string {
+    return 'mcp';
+  }
+
+  private findOpenCodeBinary(): string | null {
+    if (this.opencodeBinaryPath) return this.opencodeBinaryPath;
+    try {
+      const resolved = execSync('command -v opencode', { stdio: 'pipe' })
+        .toString()
+        .trim();
+      if (resolved) {
+        this.opencodeBinaryPath = resolved;
+        return resolved;
+      }
+    } catch {
+      // not in PATH
+    }
+    return null;
+  }
 
   isClientSupported(): Promise<boolean> {
-    try {
-      debug('  Checking for OpenCode...');
-      const result = spawnSync('opencode', ['--version'], { stdio: 'pipe' });
-      if (result.status === 0) {
-        const version = result.stdout.toString().trim();
-        debug(`  OpenCode detected: ${version}`);
-        return Promise.resolve(true);
-      }
-      debug('  OpenCode not found');
-      return Promise.resolve(false);
-    } catch {
-      debug('  OpenCode not found');
-      return Promise.resolve(false);
-    }
+    return Promise.resolve(this.findOpenCodeBinary() !== null);
   }
 
   getConfigPath(): Promise<string> {
-    return Promise.resolve(
-      path.join(os.homedir(), '.config', 'opencode', 'opencode.json'),
-    );
+    const configDir = this.resolveConfigDir();
+    const jsoncPath = path.join(configDir, 'opencode.jsonc');
+    const jsonPath = path.join(configDir, 'opencode.json');
+    if (fs.existsSync(jsoncPath)) return Promise.resolve(jsoncPath);
+    return Promise.resolve(jsonPath);
   }
 
-  async isServerInstalled(local?: boolean): Promise<boolean> {
-    try {
-      const configPath = await this.getConfigPath();
-      if (!fs.existsSync(configPath)) return false;
+  private resolveConfigDir(): string {
+    const envDir = runtimeEnv('OPENCODE_CONFIG_DIR');
+    if (envDir) return envDir;
 
-      const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-      const serverName = local ? 'posthog-local' : 'posthog';
+    const xdgHome = runtimeEnv('XDG_CONFIG_HOME');
+    if (xdgHome) return path.join(xdgHome, 'opencode');
 
-      return config.mcp?.[serverName] !== undefined;
-    } catch {
-      return false;
-    }
+    return path.join(os.homedir(), '.config', 'opencode');
   }
 
-  addServer(
-    apiKey?: string,
+  override getServerConfig(
+    apiKey: string | undefined,
     selectedFeatures?: string[],
     local?: boolean,
-  ): Promise<{ success: boolean }> {
-    try {
-      const serverName = local ? 'posthog-local' : 'posthog';
-      const url = this.getURL(selectedFeatures, local);
-
-      const args = ['mcp', 'add', serverName, '--url', url];
-
-      if (apiKey) {
-        args.push('--header', `Authorization=Bearer ${apiKey}`);
-      }
-
-      const result = spawnSync('opencode', args, { stdio: 'pipe' });
-
-      if (result.status === 0) {
-        return Promise.resolve({ success: true });
-      }
-
-      debug(`  OpenCode mcp add failed: ${result.stderr.toString()}`);
-      return Promise.resolve({ success: false });
-    } catch (error) {
-      debug(`  OpenCode mcp add error: ${error}`);
-      return Promise.resolve({ success: false });
-    }
-  }
-
-  async removeServer(local?: boolean): Promise<{ success: boolean }> {
-    try {
-      const configPath = await this.getConfigPath();
-      if (!fs.existsSync(configPath)) return { success: false };
-
-      const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-      const serverName = local ? 'posthog-local' : 'posthog';
-
-      if (config.mcp?.[serverName]) {
-        delete config.mcp[serverName];
-        fs.writeFileSync(configPath, JSON.stringify(config, null, 2), 'utf8');
-        return { success: true };
-      }
-
-      return { success: false };
-    } catch {
-      return { success: false };
-    }
-  }
-
-  private getURL(selectedFeatures?: string[], local?: boolean): string {
-    return getNativeHTTPServerConfig(undefined, selectedFeatures, local)
-      .url as string;
+  ): MCPServerConfig {
+    return {
+      type: 'remote',
+      ...getNativeHTTPServerConfig(apiKey, selectedFeatures, local),
+    };
   }
 }
