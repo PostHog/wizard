@@ -59,6 +59,20 @@ const OAuthTokenResponseSchema = z.object({
 
 export type OAuthTokenResponse = z.infer<typeof OAuthTokenResponseSchema>;
 
+export const WIZARD_COMPLETION_SCOPE = 'event_definition:write';
+
+export function parseOAuthScopes(scope: string): string[] {
+  return scope.split(/\s+/).filter(Boolean);
+}
+
+export function assertWizardCompletionScope(scope: string): void {
+  if (parseOAuthScopes(scope).includes(WIZARD_COMPLETION_SCOPE)) return;
+
+  throw new Error(
+    `Your existing PostHog Wizard authorization is missing the ${WIZARD_COMPLETION_SCOPE} permission required to finish setup. Reconnect the wizard and approve the updated permissions. If PostHog reuses the old approval, revoke the existing Wizard authorization first, then rerun the wizard.`,
+  );
+}
+
 // Stable marker for the authorization-flow timeout. Detection keys off the exact
 // message rather than a loose substring — `.includes('timeout')` never matched
 // `'timed out'`, which silently routed timeouts to the generic failure message.
