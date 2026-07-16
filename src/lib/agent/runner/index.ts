@@ -11,7 +11,8 @@
  *
  * The pipeline runs a shared bootstrap (logging, health check, settings, OAuth,
  * flags, MCP url), then forks. The `orchestrator` variant routes to the
- * experimental task-queue runner. Every other variant runs the fixed linear
+ * experimental task-queue runner. A run marked `executor: 'cloud'` routes to the
+ * hosted agent-platform runner. Every other variant runs the fixed linear
  * pipeline:
  *   [skill install] → agent init → prompt → run → errors → [postRun] → outro
  */
@@ -24,6 +25,8 @@ import type { ProgramConfig } from '../../programs/program-step';
 import type { ProgramRun } from './shared/types';
 import { bootstrapProgram } from './shared/bootstrap';
 import { runLinearProgram } from './linear';
+import { runCloudProgram } from './cloud';
+import { WizardError, wizardAbort } from '../../../utils/wizard-abort';
 
 export type {
   ProgramRun,
@@ -71,6 +74,28 @@ export async function runProgram(
   if (isOrchestratorEnabled(boot.wizardFlags)) {
     getUI().log.info('Task-queue orchestrator enabled.');
     return runOrchestrator(session, programConfig, boot);
+  }
+
+  if (config.executor === 'cloud') {
+    const outcome = await runCloudProgram(session, config, programConfig, boot);
+    if (outcome === 'ok') {
+      return;
+    }
+    // Cloud failed. If the program declared a fallback, run it locally on the
+    // same bootstrap — the user lands on the classic audit, no re-auth.
+    if (config.fallback) {
+      getUI().log.info('Hosted audit unavailable — running the audit locally.');
+      const fallbackRun = await config.fallback(session);
+      return runLinearProgram(session, fallbackRun, programConfig, boot);
+    }
+    // No fallback and nothing to degrade to — the cloud config can't run on the
+    // linear pipeline (no skill, no prompt), so surface the failure.
+    return wizardAbort({
+      message: `${config.integrationLabel} failed and no local fallback is configured.`,
+      error: new WizardError('Cloud run failed with no fallback', {
+        integration: config.integrationLabel,
+      }),
+    });
   }
 
   return runLinearProgram(session, config, programConfig, boot);

@@ -16,6 +16,7 @@ import {
   WIZARD_VARIANT_FLAG_KEY,
   WIZARD_VARIANTS,
   WIZARD_ORCHESTRATOR_FLAG_KEY,
+  WIZARD_CLOUD_AUDIT_FLAG_KEY,
   WIZARD_USER_AGENT,
   DEFAULT_AGENT_MODEL,
 } from '@lib/constants';
@@ -270,6 +271,16 @@ export function isOrchestratorEnabled(
   flags: Record<string, string> = {},
 ): boolean {
   return flags[WIZARD_ORCHESTRATOR_FLAG_KEY] === 'true';
+}
+
+/**
+ * Whether the audit runs on the hosted agent platform instead of a local agent
+ * subprocess. Gated by the boolean `wizard-cloud-audit` flag.
+ */
+export function isCloudAuditEnabled(
+  flags: Record<string, string> = {},
+): boolean {
+  return flags[WIZARD_CLOUD_AUDIT_FLAG_KEY] === 'true';
 }
 
 /**

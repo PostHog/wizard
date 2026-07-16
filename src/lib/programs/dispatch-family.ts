@@ -1,6 +1,7 @@
 import type { Arguments } from 'yargs';
 
 import { auditConfig } from '@lib/programs/audit/index';
+import { cloudAuditConfig } from '@lib/programs/cloud-audit/index';
 import { agentSkillConfig } from '@lib/programs/program-registry';
 import { webAnalyticsDoctorConfig } from '@lib/programs/web-analytics-doctor/index';
 import type { ProgramConfig } from '@lib/programs/program-step';
@@ -45,7 +46,7 @@ async function exitDispatchError(
 
 /** Wizard-native subcommands keyed by family. */
 const NATIVE_HANDLERS: Record<string, Record<string, ProgramConfig>> = {
-  audit: { 'web-analytics': webAnalyticsDoctorConfig },
+  audit: { 'web-analytics': webAnalyticsDoctorConfig, cloud: cloudAuditConfig },
 };
 
 /**

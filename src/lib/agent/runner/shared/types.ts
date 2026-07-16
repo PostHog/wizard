@@ -33,6 +33,25 @@ export interface AbortCase {
  * assembles the final prompt from `prompt` + `skillId`.
  */
 export interface ProgramRun {
+  /**
+   * Which pipeline executes this run. Defaults to `linear` — a local Claude
+   * Agent SDK subprocess. `cloud` runs the agent server-side on the PostHog
+   * agent platform and lends it this machine's filesystem via client tools;
+   * the fields below that describe a local agent (`skillId`, `customPrompt`,
+   * `additionalMcpServers`, `detectPackageManager`) are ignored there, since
+   * the agent's instructions live in its own frozen bundle.
+   */
+  executor?: 'linear' | 'cloud';
+  /**
+   * A local run to fall back to if the `cloud` executor fails (any error,
+   * unexpected stream end, or a completed run that wrote no report). The runner
+   * resolves this only on cloud failure and runs it through the linear pipeline,
+   * reusing the already-computed bootstrap — so the user lands on the classic
+   * local audit with no re-auth. It's a resolver (not a value) so its side
+   * effects — seeding the classic ledger — happen at fallback time, mirroring
+   * how `run` itself is resolved. Ignored unless `executor` is `cloud`.
+   */
+  fallback?: (session: WizardSession) => ProgramRun | Promise<ProgramRun>;
   /** Analytics label (e.g. 'revenue-analytics-setup', 'nextjs') */
   integrationLabel: string;
   /** Skill ID to pre-install. Omit for agent-driven skill discovery. */

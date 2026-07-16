@@ -4,31 +4,22 @@ import {
 } from '@lib/programs/agent-skill/index';
 import type { ProgramStep, ProgramConfig } from '@lib/programs/program-step';
 import type { ProgramRun } from '@lib/agent/agent-runner';
+import { isCloudAuditEnabled } from '@lib/agent/agent-interface';
+import { buildCloudAuditRun } from '@lib/programs/cloud-audit/index';
 import type { WizardSession } from '@lib/wizard-session';
 import { OutroKind } from '@lib/wizard-session';
 import { WIZARD_TOOL_NAMES } from '@lib/wizard-tools';
+import { analytics } from '@utils/analytics';
 import { getCloudUrlFromRegion } from '@utils/urls';
+import { withAuditScreens } from './screens.js';
 import { AUDIT_ABORT_CASES } from './detect.js';
 import { AUDIT_CHECKS_KEY, AUDIT_REPORT_FILE } from './types.js';
 import { AUDIT_SEED_CHECKS, seedAuditLedger } from './seed.js';
-
-/** Audit-specific screens for the shared agent-skill pipeline. */
-const AUDIT_SCREEN_BY_STEP: Record<string, string> = {
-  intro: 'audit-intro',
-  run: 'audit-run',
-  outro: 'audit-outro',
-};
 
 const seedBeforeAuditRun = (session: WizardSession): void => {
   seedAuditLedger(session.installDir);
   session.frameworkContext[AUDIT_CHECKS_KEY] = AUDIT_SEED_CHECKS;
 };
-
-const withAuditScreens = (steps: ProgramStep[]): ProgramStep[] =>
-  steps.map((step) => {
-    const override = AUDIT_SCREEN_BY_STEP[step.id];
-    return override ? { ...step, screenId: override } : step;
-  });
 
 const auditSteps: ProgramStep[] = withAuditScreens(AGENT_SKILL_STEPS);
 
@@ -51,7 +42,14 @@ const baseConfig = createSkillProgram({
   abortCases: AUDIT_ABORT_CASES,
 });
 
-const auditRun = async (session: WizardSession): Promise<ProgramRun> => {
+/**
+ * The classic local audit run: a Claude Agent SDK subprocess driving the `audit`
+ * skill. Seeds the ledger as a side effect, so it's a resolver, not a value.
+ * Used directly when the cloud flag is off, and as the cloud arm's fallback.
+ */
+const buildClassicAuditRun = async (
+  session: WizardSession,
+): Promise<ProgramRun> => {
   seedBeforeAuditRun(session);
 
   if (!baseConfig.run) {
@@ -94,6 +92,23 @@ const auditRun = async (session: WizardSession): Promise<ProgramRun> => {
       };
     },
   };
+};
+
+const auditRun = async (session: WizardSession): Promise<ProgramRun> => {
+  // The cloud audit is the same product run a different way, so it forks here
+  // rather than as a separate command — `wizard audit` is the only entry users
+  // know, and this keeps the two arms A/B-comparable on identical screens.
+  // (`wizard audit cloud` reaches the cloud arm directly, flag or no flag.)
+  const flags = await analytics.getAllFlagsForWizard();
+  if (isCloudAuditEnabled(flags)) {
+    // Attach the classic run as the fallback: any cloud failure silently
+    // lands the user on the local audit, on the same bootstrap. The cloud
+    // arm seeds its own placeholder ledger; the fallback reseeds the classic
+    // checklist when it runs.
+    return { ...buildCloudAuditRun(session), fallback: buildClassicAuditRun };
+  }
+
+  return buildClassicAuditRun(session);
 };
 
 export const auditConfig: ProgramConfig = {

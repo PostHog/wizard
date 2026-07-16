@@ -16,6 +16,7 @@ import { posthogIntegrationConfig } from './posthog-integration/index.js';
 import { revenueAnalyticsConfig } from './revenue-analytics/index.js';
 import { warehouseSourceConfig } from './warehouse-source/index.js';
 import { auditConfig } from './audit/index.js';
+import { cloudAuditConfig } from './cloud-audit/index.js';
 import { eventsAuditConfig } from './events-audit/index.js';
 import { posthogDoctorConfig } from './posthog-doctor/index.js';
 import { webAnalyticsDoctorConfig } from './web-analytics-doctor/index.js';
@@ -67,6 +68,7 @@ export const PROGRAM_REGISTRY = [
   warehouseSourceConfig,
   errorTrackingUploadSourceMapsConfig,
   auditConfig,
+  cloudAuditConfig,
   eventsAuditConfig,
   posthogDoctorConfig,
   webAnalyticsDoctorConfig,
@@ -91,6 +93,7 @@ export const Program = {
   ErrorTrackingUploadSourceMaps: errorTrackingUploadSourceMapsConfig.id,
   Migration: migrationConfig.id,
   Audit: auditConfig.id,
+  CloudAudit: cloudAuditConfig.id,
   EventsAudit: eventsAuditConfig.id,
   PosthogDoctor: posthogDoctorConfig.id,
   WebAnalyticsDoctor: webAnalyticsDoctorConfig.id,

@@ -194,6 +194,14 @@ export const WIZARD_VARIANT_FLAG_KEY = 'wizard-variant';
 export const WIZARD_ORCHESTRATOR_FLAG_KEY = 'wizard-orchestrator';
 /** Feature flag key that gates the intro-screen "Tools" menu. */
 export const WIZARD_TOOLS_MENU_FLAG_KEY = 'wizard-tools-menu';
+/**
+ * Boolean feature flag that runs `wizard audit` against the hosted agent
+ * platform instead of a local Claude Agent SDK subprocess. The platform is
+ * internal-only and its `posthog` auth mode requires the caller to be in the
+ * agent's own org, so this flag must stay targeted to PostHog staff — an
+ * external user who got it enabled would only reach a 403.
+ */
+export const WIZARD_CLOUD_AUDIT_FLAG_KEY = 'wizard-cloud-audit';
 /** Variant key -> metadata for wizard run (VARIANT flag selects which entry to use). */
 export const WIZARD_VARIANTS: Record<string, Record<string, string>> = {
   base: { VARIANT: 'base' },
