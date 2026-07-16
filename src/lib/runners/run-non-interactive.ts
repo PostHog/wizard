@@ -6,6 +6,7 @@ import { analytics } from '@utils/analytics';
 import { resolveNoTelemetry } from './resolve-no-telemetry';
 import type { WizardStore } from '@ui/tui/store';
 import type { TaskStreamPush } from '@lib/task-stream/task-stream-push';
+import { join } from 'node:path';
 import type { OutroData, RunPhase as RunPhaseT } from '@lib/wizard-session';
 
 /**
@@ -153,6 +154,9 @@ export function runNonInteractive(
             onError: (e) => logToFile('[headless task-stream]', e.message),
           }),
         ],
+        eventPlanPath: config.eventPlanFile
+          ? join(session.installDir, config.eventPlanFile)
+          : undefined,
         enabled: !session.noTelemetry,
       });
       taskStream.attach();

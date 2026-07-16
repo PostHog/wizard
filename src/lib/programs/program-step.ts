@@ -242,6 +242,13 @@ export interface ProgramConfig {
    */
   reportFile?: string;
   /**
+   * Agent-authored event-plan artifact to mirror into the wizard session.
+   * Relative to `session.installDir`. Programs that do not produce an event
+   * plan leave this unset, so generic runner machinery does not inspect a
+   * stale or unrelated `.posthog-events.json` file.
+   */
+  eventPlanFile?: string;
+  /**
    * LearnCard deck rendered in the shared `RunScreen` while the agent
    * runs. Lives at `<program>/content/index.tsx` by convention.
    * Programs that ship a custom RunScreen variant (audit) or skip the
