@@ -10,6 +10,10 @@ import type { WizardSession } from '@lib/wizard-session';
 import type { TaskStreamPush as TaskStreamPushClass } from '@lib/task-stream/task-stream-push';
 import { resolveNoTelemetry } from './resolve-no-telemetry';
 import { runCleanups } from '@utils/wizard-abort';
+import { isRawModeSupported } from '@utils/environment';
+import { getUI, setUI } from '@ui';
+import { LoggingUI } from '@ui/logging-ui';
+import { runNonInteractive } from './run-non-interactive';
 
 const WIZARD_VERSION = VERSION;
 
@@ -64,6 +68,25 @@ export function runWizard(
   config: ProgramConfig,
   options: Record<string, unknown>,
 ): void {
+  // The interactive TUI needs a raw-mode-capable stdin. Piped input, CI,
+  // sandboxed `npx` shells, and some IDE terminals don't provide one, and Ink
+  // crashes the process with an uncatchable async "Raw mode is not supported"
+  // throw when it tries to render. Detect that up front and degrade to the
+  // non-interactive logging pipeline instead of crashing.
+  if (!isRawModeSupported()) {
+    setUI(new LoggingUI());
+    getUI().log.warn(
+      'No interactive terminal detected (stdin is not a TTY). The wizard needs ' +
+        'an interactive terminal for its guided flow, so it will run in ' +
+        'non-interactive mode instead. Pass --api-key to run non-interactively.',
+    );
+    // The interactive flow defaults the install dir to the cwd; preserve that
+    // so the non-interactive path doesn't fault on a missing --install-dir.
+    if (!options.installDir) options.installDir = process.cwd();
+    runNonInteractive(config, options, 'ci');
+    return;
+  }
+
   let tui: ReturnType<typeof StartTUIFn> | null = null;
   let taskStream: TaskStreamPushClass | null = null;
   let onSignal: (() => void) | null = null;

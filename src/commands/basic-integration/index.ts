@@ -1,4 +1,7 @@
-import { isNonInteractiveEnvironment } from '@utils/environment';
+import {
+  isNonInteractiveEnvironment,
+  isRawModeSupported,
+} from '@utils/environment';
 import { setEntryCommand } from '@utils/links';
 import { headlessOption, isHeadless } from '@lib/headless-mode';
 import { provisionCommand } from '../provision';
@@ -63,7 +66,13 @@ export const basicIntegrationCommand: Command = {
         const { runCIInstall } = await import('./ci-install');
         return runCIInstall(argv);
       }
-      if (isNonInteractiveEnvironment()) {
+      // `isNonInteractiveEnvironment` only inspects stdout/stderr, but the TUI
+      // also needs a raw-mode-capable stdin. Some shells (sandboxed `npx`, a few
+      // IDE terminals) give us a TTY stdout while stdin can't enter raw mode —
+      // that combination slips past the stdout check and used to crash Ink with
+      // an uncatchable "Raw mode is not supported" throw. Treat it as
+      // non-interactive here so we surface the friendly message instead.
+      if (isNonInteractiveEnvironment() || !isRawModeSupported()) {
         const { failNonInteractive } = await import('./non-interactive');
         return failNonInteractive();
       }
