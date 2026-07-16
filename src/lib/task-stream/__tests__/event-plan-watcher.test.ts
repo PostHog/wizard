@@ -77,7 +77,7 @@ describe('EventPlanWatcher', () => {
   it('captures the plan when the file is written after startup', async () => {
     const store = createStore(installDir);
     const path = join(installDir, EVENT_PLAN_FILE);
-    watcher = new EventPlanWatcher(store, path, Date.now(), {
+    watcher = new EventPlanWatcher(store, path, {
       pollIntervalMs: 30,
     });
     watcher.start();
@@ -96,7 +96,7 @@ describe('EventPlanWatcher', () => {
   it('keeps the last captured plan after the file is deleted', async () => {
     const path = join(installDir, EVENT_PLAN_FILE);
     const store = createStore(installDir);
-    watcher = new EventPlanWatcher(store, path, Date.now(), {
+    watcher = new EventPlanWatcher(store, path, {
       pollIntervalMs: 30,
     });
     watcher.start();
@@ -115,7 +115,7 @@ describe('EventPlanWatcher', () => {
     const path = join(installDir, EVENT_PLAN_FILE);
     writeFileSync(path, JSON.stringify([{ event_name: 'stale_event' }]));
     const store = createStore(installDir);
-    watcher = new EventPlanWatcher(store, path, Date.now() + 1);
+    watcher = new EventPlanWatcher(store, path);
 
     watcher.start();
     watcher.refresh();
@@ -126,7 +126,7 @@ describe('EventPlanWatcher', () => {
   it('rejects oversized and symbolic-link plan files', () => {
     const path = join(installDir, EVENT_PLAN_FILE);
     const store = createStore(installDir);
-    watcher = new EventPlanWatcher(store, path, Date.now());
+    watcher = new EventPlanWatcher(store, path);
     watcher.start();
 
     writeFileSync(path, JSON.stringify([{ event_name: 'x'.repeat(300_000) }]));

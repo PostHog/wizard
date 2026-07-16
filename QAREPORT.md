@@ -25,8 +25,8 @@
 
 - ✅ Terminal shutdown performs a final authoritative plan refresh before
   flushing.
-- ✅ Event-plan watching is opt-in through `ProgramConfig` and ignores files
-  predating the run.
+- ✅ Event-plan watching is opt-in through `ProgramConfig` and ignores an
+  unchanged artifact present when the run starts.
 - ✅ Files, event counts, names, descriptions, and file types are bounded and
   validated.
 - ✅ Directory watch events are debounced and disabled-mode documentation
@@ -68,7 +68,7 @@ validation.
 | #   | Status      | Priority  | Finding                                  | Location                                      | Agents                                                           | Resolution                                                                                                  | Validation                                                        |
 | --- | ----------- | --------- | ---------------------------------------- | --------------------------------------------- | ---------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
 | 1   | ✅ Resolved | 🟡 Medium | Final push can miss a late plan write    | `src/lib/task-stream/task-stream-push.ts:164` | reliability, frontend, compatibility, generalist-a, generalist-b | Shutdown refreshes the bounded plan reader before detaching and flushing.                                   | Immediate write → completion → shutdown regression test.          |
-| 2   | ✅ Resolved | 🟡 Medium | Stale plans leak into unrelated runs     | `src/lib/programs/program-step.ts:226`        | security, frontend, performance, generalist-a, generalist-b      | Watching is an explicit program capability and files older than the run are ignored.                        | Unconfigured and stale-artifact tests.                            |
+| 2   | ✅ Resolved | 🟡 Medium | Stale plans leak into unrelated runs     | `src/lib/programs/program-step.ts:226`        | security, frontend, performance, generalist-a, generalist-b      | Watching is an explicit program capability and an unchanged file present at startup is ignored.             | Unconfigured and stale-artifact tests.                            |
 | 3   | ✅ Resolved | 🟡 Medium | Plan input is unbounded and unvalidated  | `src/lib/task-stream/event-plan-watcher.ts:8` | security, performance, generalist-b                              | Runtime validation caps file size, event count, name length, and description length; symlinks are rejected. | Invalid-field, oversized-file, count, length, and symlink tests.  |
 | 4   | ✅ Resolved | 🟡 Medium | Watch events amplify synchronous parsing | `src/lib/file-watcher.ts:81`                  | performance                                                      | Parent-directory events are coalesced before bounded reads, while polling retains mtime deduplication.      | Atomic rename, recreation, synchronous refresh, and bounds tests. |
 | 5   | ✅ Resolved | 🟢 Low    | Disabled-mode contract is outdated       | `src/lib/task-stream/task-stream-push.ts:10`  | copy                                                             | Comments and test names distinguish local watching from destination delivery.                               | Focused task-stream tests.                                        |

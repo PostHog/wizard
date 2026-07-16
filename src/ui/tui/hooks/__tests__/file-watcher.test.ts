@@ -144,19 +144,26 @@ describe('startFileWatcher', () => {
     expect(onUpdate).toHaveBeenCalledWith({ final: true });
   });
 
-  it('enforces mtime and file-size bounds', () => {
+  it('ignores a pre-existing file until it changes', () => {
     const onUpdate = vi.fn();
     const target = path.join(workdir, 'data.json');
     writeFileSync(target, JSON.stringify({ stale: true }));
     handle = startFileWatcher(target, onUpdate, {
-      minMtimeMs: Date.now() + 1,
-      maxFileSizeBytes: 20,
+      ignoreInitialFile: true,
     });
 
     handle.refresh();
     expect(onUpdate).not.toHaveBeenCalled();
 
-    handle.stop();
+    writeFileSync(target, JSON.stringify({ current: true }));
+    handle.refresh();
+    expect(onUpdate).toHaveBeenCalledWith({ current: true });
+  });
+
+  it('enforces file-size bounds', () => {
+    const onUpdate = vi.fn();
+    const target = path.join(workdir, 'data.json');
+
     writeFileSync(target, JSON.stringify({ oversized: 'x'.repeat(100) }));
     handle = startFileWatcher(target, onUpdate, { maxFileSizeBytes: 20 });
     handle.refresh();

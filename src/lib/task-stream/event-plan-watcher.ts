@@ -46,7 +46,6 @@ export class EventPlanWatcher {
   constructor(
     private readonly store: WizardStore,
     private readonly path: string,
-    private readonly startedAtMs: number,
     private readonly options: FileWatcherOptions = {},
   ) {}
 
@@ -60,7 +59,7 @@ export class EventPlanWatcher {
         if (events) this.store.setEventPlan(events);
       },
       {
-        minMtimeMs: this.startedAtMs,
+        ignoreInitialFile: true,
         maxFileSizeBytes: MAX_EVENT_PLAN_FILE_BYTES,
         ...this.options,
       },

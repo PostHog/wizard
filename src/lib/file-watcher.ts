@@ -25,8 +25,8 @@ export interface FileWatcherOptions {
   attachRetryIntervalMs?: number;
   /** ms to coalesce duplicate filesystem events. */
   watchDebounceMs?: number;
-  /** Ignore files older than this timestamp. */
-  minMtimeMs?: number;
+  /** Ignore the file that exists when the watcher starts until it changes. */
+  ignoreInitialFile?: boolean;
   /** Refuse to read files larger than this many bytes. */
   maxFileSizeBytes?: number;
 }
@@ -49,18 +49,31 @@ export function startFileWatcher(
   const targetDir = dirname(path);
   const targetName = basename(path);
   let lastMtimeMs = 0;
+  let ignoredInitialSignature: string | null = null;
   let watchDebounceTimer: ReturnType<typeof setTimeout> | null = null;
   let stopped = false;
+
+  const signature = (stat: fs.Stats): string =>
+    `${stat.dev}:${stat.ino}:${stat.size}:${stat.mtimeMs}:${stat.ctimeMs}`;
+
+  if (options.ignoreInitialFile) {
+    try {
+      const stat = fs.lstatSync(path);
+      if (stat.isFile() && !stat.isSymbolicLink()) {
+        ignoredInitialSignature = signature(stat);
+      }
+    } catch {
+      // No initial file to ignore.
+    }
+  }
 
   const read = (force = false) => {
     try {
       const stat = fs.lstatSync(path);
       if (!stat.isFile() || stat.isSymbolicLink()) return;
-      if (
-        options.minMtimeMs !== undefined &&
-        stat.mtimeMs < options.minMtimeMs
-      ) {
-        return;
+      if (ignoredInitialSignature) {
+        if (signature(stat) === ignoredInitialSignature) return;
+        ignoredInitialSignature = null;
       }
       if (
         options.maxFileSizeBytes !== undefined &&

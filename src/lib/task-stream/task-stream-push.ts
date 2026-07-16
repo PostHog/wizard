@@ -113,11 +113,7 @@ export class TaskStreamPush {
     this.enabled = opts.enabled ?? true;
     const startedAt = new Date();
     this.eventPlanWatcher = opts.eventPlanPath
-      ? new EventPlanWatcher(
-          this.store,
-          opts.eventPlanPath,
-          startedAt.getTime(),
-        )
+      ? new EventPlanWatcher(this.store, opts.eventPlanPath)
       : null;
     this.startedAt = secondPrecisionIso(startedAt);
     // skillId may not be set yet — fall back to programId so the
