@@ -49,6 +49,14 @@ export interface WizardAskBridgeOptions {
    * Propagated onto every {@link PendingQuestion} this bridge creates.
    */
   richLinks?: boolean;
+  /**
+   * Dismiss the host's in-flight question overlay. Called when the timeout
+   * wins the race: without it the host keeps its pending-question state, and
+   * every later `wizard_ask` in the run fails with "another request is
+   * pending" — one unanswered prompt would block credential collection for
+   * all remaining sources.
+   */
+  cancelQuestion?: () => void;
 }
 
 /** Sentinel returned for unanswered fields on cancellation or timeout. */
@@ -88,12 +96,13 @@ export function createWizardAskBridge(
       const startedAt = Date.now();
       let timer: ReturnType<typeof setTimeout> | undefined;
 
-      // Race the user against the timeout. Whichever fires first wins; the
-      // other branch is harmless because the overlay still resolves via the
-      // store when the user eventually submits (and the answers are simply
-      // discarded).
+      // Race the user against the timeout. Whichever fires first wins. On
+      // timeout we also cancel the host's overlay: resolving our side alone
+      // would leave the host's pending-question state set, and the next
+      // wizard_ask would be rejected as a duplicate request.
       const timeoutPromise = new Promise<AskAnswers>((resolve) => {
         timer = setTimeout(() => {
+          opts.cancelQuestion?.();
           resolve(buildCancelledAnswers(questions));
         }, timeoutMs);
       });

@@ -22,6 +22,7 @@ import type { HostResolution } from '@lib/host-resolution';
 import { POSTHOG_INTEGRATION_PROGRAM } from './steps.js';
 import { getContentBlocks } from './content/index.js';
 import { buildCodingAgentPrompt } from './handoff.js';
+import { EVENT_PLAN_FILE } from './constants.js';
 
 const DASHBOARD_DEEP_LINK_KEY = 'dashboardDeepLink';
 
@@ -42,6 +43,8 @@ export const posthogIntegrationConfig: ProgramConfig = {
   command: 'integrate',
   description: 'Set up PostHog SDK integration',
   id: 'posthog-integration',
+  agentFlow: 'integration-v2',
+  eventPlanFile: EVENT_PLAN_FILE,
   steps: POSTHOG_INTEGRATION_PROGRAM,
   getContentBlocks,
   // Basic integration runs without structured user input; drop wizard_ask
@@ -271,6 +274,8 @@ Important: Use the detect_package_manager tool (from the wizard-tools MCP server
           changes,
           docsUrl: config.metadata.docsUrl,
           continueUrl,
+          // Set once the agent mirrors the report into a notebook and emits [NOTEBOOK_URL].
+          notebookUrl: sess.notebookUrl ?? undefined,
           handoffPrompt: buildCodingAgentPrompt(SETUP_REPORT_FILE),
         };
       },

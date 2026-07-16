@@ -25,6 +25,7 @@ import {
 } from './programs/audit/types';
 import { type WizardAskBridge, isFullyCancelled } from './wizard-ask-bridge';
 import { createSecretVault, type SecretVault } from './secret-vault';
+import { fetchWithRetry, type RetryOpts } from './fetch-retry';
 import {
   buildOrchestratorTools,
   type OrchestratorToolsContext,
@@ -46,7 +47,17 @@ async function getSDKModule(): Promise<any> {
 // Skill types
 // ---------------------------------------------------------------------------
 
-export type SkillEntry = { id: string; name: string; downloadUrl: string };
+export type SkillEntry = {
+  id: string;
+  name: string;
+  downloadUrl: string;
+  /** The hyphenated skill-group prefix of `id` (e.g. `posthog-integration-install`). */
+  group?: string;
+  /** The detection id this variant serves (e.g. `rails`, `react-router`). */
+  framework?: string;
+  /** The variant a bare framework id resolves to when its family has several. */
+  default?: boolean;
+};
 
 /**
  * Entry in the wizard's runtime CLI registry. Mirrors the shape context-mill
@@ -83,22 +94,19 @@ export interface SkillMenu {
  */
 export async function fetchSkillMenu(
   skillsBaseUrl: string,
+  opts: RetryOpts = {},
 ): Promise<SkillMenu | null> {
+  const menuUrl = `${skillsBaseUrl}/skill-menu.json`;
   try {
-    const menuUrl = `${skillsBaseUrl}/skill-menu.json`;
     logToFile(`fetchSkillMenu: fetching from ${menuUrl}`);
-    const resp = await fetch(menuUrl);
-    if (resp.ok) {
-      const data = (await resp.json()) as SkillMenu;
-      logToFile(
-        `fetchSkillMenu: loaded (${
-          Object.keys(data.categories).length
-        } categories)`,
-      );
-      return data;
-    }
-    logToFile(`fetchSkillMenu: failed with HTTP ${resp.status}`);
-    return null;
+    const resp = await fetchWithRetry(menuUrl, opts);
+    const data = (await resp.json()) as SkillMenu;
+    logToFile(
+      `fetchSkillMenu: loaded (${
+        Object.keys(data.categories).length
+      } categories)`,
+    );
+    return data;
   } catch (err: any) {
     logToFile(`fetchSkillMenu: error: ${err.message}`);
     return null;
@@ -125,49 +133,13 @@ function extractZipArchive(zip: Uint8Array, destDir: string): number {
   return written;
 }
 
-const DOWNLOAD_TIMEOUT_MS = 60000; // per attempt
-const DOWNLOAD_MAX_ATTEMPTS = 3;
-const DOWNLOAD_BACKOFF_MS = 500; // doubles each retry
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
 /** Download a URL to a buffer, retrying transient failures with backoff. */
 async function downloadWithRetry(
   url: string,
-  opts: {
-    fetchImpl?: typeof fetch;
-    sleepImpl?: (ms: number) => Promise<void>;
-    timeoutMs?: number;
-    maxAttempts?: number;
-    backoffMs?: number;
-  } = {},
+  opts: RetryOpts = {},
 ): Promise<Uint8Array> {
-  const {
-    fetchImpl = fetch,
-    sleepImpl = sleep,
-    timeoutMs = DOWNLOAD_TIMEOUT_MS,
-    maxAttempts = DOWNLOAD_MAX_ATTEMPTS,
-    backoffMs = DOWNLOAD_BACKOFF_MS,
-  } = opts;
-
-  const failures: string[] = [];
-  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-    try {
-      const resp = await fetchImpl(url, {
-        signal: AbortSignal.timeout(timeoutMs),
-      });
-      if (!resp.ok) throw new Error(`HTTP ${resp.status} ${resp.statusText}`);
-      return new Uint8Array(await resp.arrayBuffer());
-    } catch (err: any) {
-      failures.push(`attempt ${attempt}: ${err.message}`);
-      if (attempt < maxAttempts) {
-        await sleepImpl(backoffMs * 2 ** (attempt - 1));
-      }
-    }
-  }
-  throw new Error(`download failed — ${failures.join('; ')}`);
+  const resp = await fetchWithRetry(url, opts);
+  return new Uint8Array(await resp.arrayBuffer());
 }
 
 /**
@@ -1221,6 +1193,10 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
           ],
         };
       } catch (err: any) {
+        // A failed ask never reached the user, so it shouldn't burn the
+        // per-run cap either — otherwise a transient bridge error eats the
+        // budget for every remaining source.
+        askCallCount -= 1;
         logToFile(`wizard_ask: error: ${err?.message ?? err}`);
         return {
           content: [
@@ -1285,6 +1261,7 @@ export const WIZARD_TOOL_NAMES = {
 
 export const __test = {
   extractZipArchive,
+  fetchWithRetry,
   downloadWithRetry,
   writeLedgerAtomic,
   readLedger,

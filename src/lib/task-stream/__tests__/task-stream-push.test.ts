@@ -6,6 +6,10 @@ import type {
 } from '@lib/task-stream/types';
 import type { WizardStore, TaskItem } from '@ui/tui/store';
 import { RunPhase } from '@lib/wizard-session';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { EVENT_PLAN_FILE } from '@lib/programs/posthog-integration/constants';
 
 type Listener = () => void;
 
@@ -14,6 +18,7 @@ interface MockStoreState {
   skillId: string | null;
   tasks: TaskItem[];
   eventPlan: unknown[];
+  installDir?: string;
 }
 
 function createMockStore(overrides: Partial<MockStoreState> = {}) {
@@ -32,6 +37,7 @@ function createMockStore(overrides: Partial<MockStoreState> = {}) {
         runPhase: state.runPhase,
         skillId: state.skillId,
         outroData: null,
+        installDir: state.installDir,
       };
     },
     get tasks() {
@@ -39,6 +45,10 @@ function createMockStore(overrides: Partial<MockStoreState> = {}) {
     },
     get eventPlan() {
       return state.eventPlan;
+    },
+    setEventPlan(eventPlan: unknown[]) {
+      state.eventPlan = eventPlan;
+      for (const cb of listeners) cb();
     },
     subscribe(cb: Listener) {
       listeners.push(cb);
@@ -84,6 +94,7 @@ function createPush(
   opts: {
     dest?: ReturnType<typeof createMockDestination>;
     enabled?: boolean;
+    eventPlanPath?: string;
   } = {},
 ) {
   const dest = opts.dest ?? createMockDestination();
@@ -91,6 +102,7 @@ function createPush(
     store,
     programId: 'test-program',
     destinations: [dest],
+    eventPlanPath: opts.eventPlanPath,
     enabled: opts.enabled,
   });
   return { push, dest };
@@ -102,6 +114,47 @@ describe('TaskStreamPush', () => {
   });
 
   // ── Existing event-sequencing behaviour ────────────────────────
+
+  it('populates the event plan when destination delivery is disabled', async () => {
+    const installDir = mkdtempSync(join(tmpdir(), 'wizard-headless-plan-'));
+    const eventPlanPath = join(installDir, EVENT_PLAN_FILE);
+    const store = createMockStore({ installDir });
+    const { push, dest } = createPush(store, {
+      enabled: false,
+      eventPlanPath,
+    });
+
+    push.attach();
+    writeFileSync(
+      eventPlanPath,
+      JSON.stringify([{ event_name: 'created_workspace' }]),
+    );
+    await push.shutdown(2000);
+
+    expect(store.eventPlan).toEqual([
+      { name: 'created_workspace', description: '' },
+    ]);
+    expect(dest.calls).toHaveLength(0);
+
+    rmSync(installDir, { recursive: true, force: true });
+  });
+
+  it('does not inspect event-plan artifacts unless explicitly configured', () => {
+    const installDir = mkdtempSync(join(tmpdir(), 'wizard-unrelated-plan-'));
+    writeFileSync(
+      join(installDir, EVENT_PLAN_FILE),
+      JSON.stringify([{ event_name: 'stale_event' }]),
+    );
+    const store = createMockStore({ installDir });
+    const { push } = createPush(store);
+
+    push.attach();
+
+    expect(store.eventPlan).toEqual([]);
+
+    push.detach();
+    rmSync(installDir, { recursive: true, force: true });
+  });
 
   describe('event ordering (imperative push)', () => {
     it('first push sends CREATE', async () => {
@@ -301,7 +354,7 @@ describe('TaskStreamPush', () => {
   });
 
   describe('spec: enabled=false', () => {
-    it('attach is a no-op and no destination ever fires', () => {
+    it('does not subscribe or deliver to destinations', () => {
       const store = createMockStore({ runPhase: RunPhase.Running });
       const { push, dest } = createPush(store, { enabled: false });
 
@@ -441,6 +494,43 @@ describe('TaskStreamPush', () => {
   });
 
   describe('spec: shutdown flushes terminal phase', () => {
+    it('includes the captured event plan in the final Completed push', async () => {
+      const installDir = mkdtempSync(join(tmpdir(), 'wizard-final-plan-'));
+      const eventPlanPath = join(installDir, EVENT_PLAN_FILE);
+      const plan = [
+        { name: 'created_dashboard', description: 'User creates a dashboard' },
+      ];
+      const store = createMockStore({
+        installDir,
+        runPhase: RunPhase.Running,
+      });
+      const { push, dest } = createPush(store, { eventPlanPath });
+
+      try {
+        push.attach();
+        store._emit();
+        await flushMicrotasks();
+
+        writeFileSync(
+          eventPlanPath,
+          JSON.stringify([
+            {
+              event_name: plan[0].name,
+              event_description: plan[0].description,
+            },
+          ]),
+        );
+        store._setAndEmit({ runPhase: RunPhase.Completed });
+        await push.shutdown(2000);
+
+        expect(dest.calls.at(-1)?.[0]).toBe(StreamEvent.Complete);
+        expect(dest.calls.at(-1)?.[1].event_plan).toEqual({ events: plan });
+      } finally {
+        push.detach();
+        rmSync(installDir, { recursive: true, force: true });
+      }
+    });
+
     it('shutdown awaits one final push when phase is terminal', async () => {
       const store = createMockStore({ runPhase: RunPhase.Completed });
       const { push, dest } = createPush(store);

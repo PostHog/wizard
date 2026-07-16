@@ -16,6 +16,10 @@ import {
   HAIKU_MODEL,
   GPT5_MODEL,
   GPT5_4_MODEL,
+  GPT5_5_MODEL,
+  GPT5_6_LUNA_MODEL,
+  GPT5_6_SOL_MODEL,
+  GPT5_6_TERRA_MODEL,
   GPT5_MINI_MODEL,
   WIZARD_PI_EFFORT_FLAG_KEY,
   WIZARD_USE_PI_HARNESS_FLAG_KEY,
@@ -23,13 +27,20 @@ import {
 import { RUN_SURFACE } from '@env';
 
 /** Reasoning effort. pi maps it to `reasoning_effort` for openai-completions. */
-export type ThinkingLevel =
-  | 'off'
-  | 'minimal'
-  | 'low'
-  | 'medium'
-  | 'high'
-  | 'xhigh';
+const THINKING_LEVELS = [
+  'off',
+  'minimal',
+  'low',
+  'medium',
+  'high',
+  'xhigh',
+] as const;
+export type ThinkingLevel = (typeof THINKING_LEVELS)[number];
+
+/** Whether a value (e.g. remote prompt frontmatter) names a valid effort. */
+export function isThinkingLevel(value: unknown): value is ThinkingLevel {
+  return (THINKING_LEVELS as readonly unknown[]).includes(value);
+}
 
 export interface ModelCapabilities {
   /** Model supports reasoning; safe to request reasoning effort. */
@@ -48,6 +59,14 @@ export const MODEL_CAPABILITIES: Record<string, ModelCapabilities> = {
   // run finishes in a few minutes instead of the long high-effort default.
   [GPT5_MODEL]: { reasoning: true, thinkingLevel: 'low' },
   [GPT5_4_MODEL]: { reasoning: true, thinkingLevel: 'low' },
+  // Latest openai flagship line; all reasoning models, so they must opt in past
+  // the openai-completions default (reasoning off). Luna stays low for cheap,
+  // short-context mechanical work; terra runs medium as the sonnet-tier parallel
+  // — enough reasoning depth for the judgment tasks without high's latency blowup.
+  [GPT5_6_LUNA_MODEL]: { reasoning: true, thinkingLevel: 'low' },
+  [GPT5_6_TERRA_MODEL]: { reasoning: true, thinkingLevel: 'medium' },
+  [GPT5_6_SOL_MODEL]: { reasoning: true, thinkingLevel: 'low' },
+  [GPT5_5_MODEL]: { reasoning: true, thinkingLevel: 'low' },
   // The pi runner's paired model — a smaller openai reasoning model. Medium
   // effort: enough to follow the skill's setup completely, still fast.
   [GPT5_MINI_MODEL]: { reasoning: true, thinkingLevel: 'medium' },
@@ -77,8 +96,13 @@ const EFFORT_FLAG_VARIANTS: readonly ThinkingLevel[] = [
 export function modelCapabilities(
   modelId: string,
   flags: Record<string, string> = {},
+  opts: { applyEffortFlag?: boolean } = {},
 ): ModelCapabilities {
   const caps = MODEL_CAPABILITIES[modelId] ?? defaultCaps(modelId);
+  // The wizard-pi-effort override is a linear single-agent knob. Orchestrator
+  // tasks carry their own per-agent model, so their effort comes from the table
+  // (each agent's frontmatter model → its tuned level); they opt out here.
+  if (opts.applyEffortFlag === false) return caps;
   // The wizard-pi-effort override applies only to a pi run — inert on the cloud surface or without the pi flag.
   if (
     RUN_SURFACE === 'cloud' ||

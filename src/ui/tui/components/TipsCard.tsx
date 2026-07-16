@@ -80,7 +80,7 @@ export const DEFAULT_TIPS: Tip[] = [
     toggle: {
       key: 'l',
       feature: AdditionalFeature.LLM,
-      enabledLabel: 'LLM analytics setup queued next',
+      enabledLabel: 'AI observability setup queued next',
       prompt: 'We detected LLM dependencies in your project.',
       isEnabled: (store) => store.session.llmOptIn,
     },

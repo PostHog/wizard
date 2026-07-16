@@ -16,7 +16,7 @@ import {
   WIZARD_REMARK_EVENT_NAME,
   POSTHOG_PROPERTY_HEADER_PREFIX,
   WIZARD_ORCHESTRATOR_FLAG_KEY,
-  WIZARD_USER_AGENT,
+  wizardUserAgentForProgram,
   DEFAULT_AGENT_MODEL,
 } from '@lib/constants';
 import {
@@ -26,7 +26,7 @@ import {
 import { wizardAbort, WizardError } from '@utils/wizard-abort';
 import { createCustomHeaders } from '@utils/custom-headers';
 import type { HostResolution } from '@lib/host-resolution';
-import { LINTING_TOOLS } from '@lib/safe-tools';
+import { evaluateBashCommand } from './bash-fence';
 import { createWizardToolsServer, WIZARD_TOOL_NAMES } from '@lib/wizard-tools';
 import {
   createPreToolUseYaraHooks,
@@ -363,92 +363,13 @@ export function buildAgentEnv(
   return encoded;
 }
 
-/**
- * Package managers that can be used to run commands.
- */
-const PACKAGE_MANAGERS = [
-  // JavaScript
-  'npm',
-  'pnpm',
-  'yarn',
-  'bun',
-  'npx',
-  // Python
-  'pip',
-  'pip3',
-  'poetry',
-  'pipenv',
-  'uv',
-];
-
-/**
- * Safe scripts/commands that can be run with any package manager.
- * Uses startsWith matching, so 'build' matches 'build', 'build:prod', etc.
- * Note: Linting tools are in LINTING_TOOLS and checked separately.
- */
-const SAFE_SCRIPTS = [
-  // Package installation
-  'install',
-  'add',
-  'ci',
-  // Build
-  'build',
-  // Type checking (various naming conventions)
-  'tsc',
-  'typecheck',
-  'type-check',
-  'check-types',
-  'types',
-  // Linting/formatting script names (actual tools are in LINTING_TOOLS)
-  'lint',
-  'format',
-];
-
-/**
- * Dangerous shell operators that could allow command injection.
- * Note: We handle `2>&1` and `| tail/head` separately as safe patterns.
- */
-const DANGEROUS_OPERATORS = /[;`$()]/;
-
 // Re-export for backwards compatibility — canonical source is skill-install.ts
 export { isSkillInstallCommand } from '@lib/skill-install';
 
 /**
- * Check if command is an allowed package manager command.
- * Matches: <pkg-manager> [run|exec] <safe-script> [args...]
- */
-function matchesAllowedPrefix(command: string): boolean {
-  const parts = command.split(/\s+/);
-  if (parts.length === 0 || !PACKAGE_MANAGERS.includes(parts[0])) {
-    return false;
-  }
-
-  // Skip 'run' or 'exec' if present
-  let scriptIndex = 1;
-  if (parts[scriptIndex] === 'run' || parts[scriptIndex] === 'exec') {
-    scriptIndex++;
-  }
-
-  // `i` is the npm/pnpm/bun shorthand for `install`. Exact-token match —
-  // adding 'i' to SAFE_SCRIPTS would startsWith-allow anything i-prefixed.
-  if (parts[scriptIndex] === 'i') return true;
-
-  // Get the script/command portion (may include args)
-  const scriptPart = parts.slice(scriptIndex).join(' ');
-
-  // Check if script starts with any safe script name or linting tool
-  return (
-    SAFE_SCRIPTS.some((safe) => scriptPart.startsWith(safe)) ||
-    LINTING_TOOLS.some((tool) => scriptPart.startsWith(tool))
-  );
-}
-
-/**
- * Permission hook that allows only safe commands.
- * - Package manager install commands
- * - Build/typecheck/lint commands for verification
- * - Piping to tail/head for output limiting is allowed
- * - Stderr redirection (2>&1) is allowed
+ * Permission hook that allows only safe commands. Bash commands are gated by
+ * the exact per-manager fence in bash-fence.ts (install/build/typecheck/lint
+ * commands, single | tail/head, 2>&1).
  *
  * `wizardAskPending` is true while a wizard_ask overlay is open — when set,
  * Write/Edit calls are denied as a defense-in-depth measure against a
@@ -491,11 +412,16 @@ export function wizardCanUseTool(
     };
   }
 
-  // Block direct reads/writes of .env files — use wizard-tools MCP instead
+  // Block direct reads/writes of real .env files — use wizard-tools MCP instead.
+  // Example/template files (.env.example, .env.sample, .env.template, .env.dist)
+  // carry no secrets and are meant to be committed, so they stay writable.
   if (toolName === 'Read' || toolName === 'Write' || toolName === 'Edit') {
     const filePath = typeof input.file_path === 'string' ? input.file_path : '';
     const basename = path.basename(filePath);
-    if (basename.startsWith('.env')) {
+    const isEnvExample = /^\.env\.(example|sample|template|dist)$/.test(
+      basename,
+    );
+    if (basename.startsWith('.env') && !isEnvExample) {
       logToFile(`Denying ${toolName} on env file: ${filePath}`);
       return {
         behavior: 'deny',
@@ -531,80 +457,20 @@ export function wizardCanUseTool(
     typeof input.command === 'string' ? input.command : ''
   ).trim();
 
-  // Block definitely dangerous operators: ; ` $ ( )
-  if (DANGEROUS_OPERATORS.test(command)) {
-    logToFile(`Denying bash command with dangerous operators: ${command}`);
-    debug(`Denying bash command with dangerous operators: ${command}`);
-    analytics.wizardCapture('bash denied', {
-      reason: 'dangerous operators',
-      command,
-    });
-    return {
-      behavior: 'deny',
-      message: `Bash command not allowed. Shell operators like ; \` $ ( ) are not permitted.`,
-    };
-  }
-
-  // Normalize: remove safe stderr redirection (2>&1, 2>&2, etc.)
-  const normalized = command.replace(/\s*\d*>&\d+\s*/g, ' ').trim();
-
-  // Check for pipe to tail/head (safe output limiting)
-  const pipeMatch = normalized.match(/^(.+?)\s*\|\s*(tail|head)(\s+\S+)*\s*$/);
-  if (pipeMatch) {
-    const baseCommand = pipeMatch[1].trim();
-
-    // Block if base command has pipes or & (multiple chaining)
-    if (/[|&]/.test(baseCommand)) {
-      logToFile(`Denying bash command with multiple pipes: ${command}`);
-      debug(`Denying bash command with multiple pipes: ${command}`);
-      analytics.wizardCapture('bash denied', {
-        reason: 'multiple pipes',
-        command,
-      });
-      return {
-        behavior: 'deny',
-        message: `Bash command not allowed. Only single pipe to tail/head is permitted.`,
-      };
-    }
-
-    if (matchesAllowedPrefix(baseCommand)) {
-      logToFile(`Allowing bash command with output limiter: ${command}`);
-      debug(`Allowing bash command with output limiter: ${command}`);
-      return { behavior: 'allow', updatedInput: input };
-    }
-  }
-
-  // Block remaining pipes and & (not covered by tail/head case above)
-  if (/[|&]/.test(normalized)) {
-    logToFile(`Denying bash command with pipe/&: ${command}`);
-    debug(`Denying bash command with pipe/&: ${command}`);
-    analytics.wizardCapture('bash denied', {
-      reason: 'disallowed pipe',
-      command,
-    });
-    return {
-      behavior: 'deny',
-      message: `Bash command not allowed. Pipes are only permitted with tail/head for output limiting.`,
-    };
-  }
-
-  // Check if command starts with any allowed prefix (package manager commands)
-  if (matchesAllowedPrefix(normalized)) {
+  const decision = evaluateBashCommand(command);
+  if (decision.allowed) {
     logToFile(`Allowing bash command: ${command}`);
     debug(`Allowing bash command: ${command}`);
     return { behavior: 'allow', updatedInput: input };
   }
 
-  logToFile(`Denying bash command: ${command}`);
-  debug(`Denying bash command: ${command}`);
+  logToFile(`Denying bash command (${decision.analyticsReason}): ${command}`);
+  debug(`Denying bash command (${decision.analyticsReason}): ${command}`);
   analytics.wizardCapture('bash denied', {
-    reason: 'not in allowlist',
+    reason: decision.analyticsReason,
     command,
   });
-  return {
-    behavior: 'deny',
-    message: `Bash command not allowed. Only install, build, typecheck, lint, and formatting commands are permitted.`,
-  };
+  return { behavior: 'deny', message: decision.message };
 }
 
 /**
@@ -674,7 +540,9 @@ export async function initializeAgent(
         url: config.posthogMcpUrl,
         headers: {
           Authorization: `Bearer ${config.posthogApiKey}`,
-          'User-Agent': WIZARD_USER_AGENT,
+          // Tag the UA with the running program so the backend can attribute what this
+          // run creates (e.g. self-driving warehouse sources → created_via=self_driving).
+          'User-Agent': wizardUserAgentForProgram(config.integrationLabel),
         },
         // CLI mode's single `exec` tool carries the full command reference on
         // its schema — keep it in context, never deferred behind tool search.

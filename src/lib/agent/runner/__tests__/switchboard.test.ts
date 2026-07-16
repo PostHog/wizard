@@ -6,6 +6,10 @@ import {
   GPT5_MINI_MODEL,
   GPT5_MODEL,
   GPT5_4_MODEL,
+  GPT5_5_MODEL,
+  GPT5_6_LUNA_MODEL,
+  GPT5_6_SOL_MODEL,
+  GPT5_6_TERRA_MODEL,
   Harness,
   WIZARD_PI_EFFORT_FLAG_KEY,
   WIZARD_PI_MODEL_FLAG_KEY,
@@ -131,6 +135,10 @@ describe('switchboard resolveHarness — CLI precedence', () => {
     expect(pick('gpt-5')).toBe(GPT5_MODEL);
     expect(pick('gpt-5-4')).toBe(GPT5_4_MODEL);
     expect(pick('gpt-5-mini')).toBe(GPT5_MINI_MODEL);
+    expect(pick('gpt-5-6-luna')).toBe(GPT5_6_LUNA_MODEL);
+    expect(pick('gpt-5-6-terra')).toBe(GPT5_6_TERRA_MODEL);
+    expect(pick('gpt-5-6-sol')).toBe(GPT5_6_SOL_MODEL);
+    expect(pick('gpt-5-5')).toBe(GPT5_5_MODEL);
     expect(pick('sonnet-4-6')).toBe(DEFAULT_AGENT_MODEL);
     expect(pick('sonnet-5')).toBe(SONNET_5_MODEL);
     expect(pick('banana')).toBe(GPT5_4_MODEL);
@@ -246,7 +254,7 @@ describe('switchboard decision trace', () => {
     });
   });
 
-  it('stamps flag + pi-clamp sources when the pi flag decides', () => {
+  it('stamps flag + binding sources when the pi flag decides (pi has runTask, no clamp)', () => {
     const ctx: SwitchboardCtx = {
       program: 'posthog-integration',
       flags: { [WIZARD_USE_PI_HARNESS_FLAG_KEY]: 'true' },
@@ -255,8 +263,22 @@ describe('switchboard decision trace', () => {
     expect(ctx.trace).toEqual({
       harness: 'flag',
       model: 'flag',
-      sequence: 'pi-clamp',
+      sequence: 'binding',
     });
+  });
+
+  it('runs the orchestrator on pi when both flags are on', () => {
+    const ctx: SwitchboardCtx = {
+      program: 'posthog-integration',
+      flags: {
+        [WIZARD_USE_PI_HARNESS_FLAG_KEY]: 'true',
+        [WIZARD_ORCHESTRATOR_FLAG_KEY]: 'true',
+      },
+    };
+    const binding = resolveBinding(ctx);
+    expect(binding.harness).toBe(Harness.pi);
+    expect(binding.sequence).toBe(Sequence.orchestrator);
+    expect(ctx.trace?.sequence).toBe('flag');
   });
 
   it('stamps cli sources over the flag', () => {
@@ -305,6 +327,20 @@ describe('switchboard modelCapabilities', () => {
   it('sets reasoning effort per model: gpt-5 low (fast flagship), gpt-5-mini medium', () => {
     expect(modelCapabilities(GPT5_MODEL).thinkingLevel).toBe('low');
     expect(modelCapabilities(GPT5_MINI_MODEL).thinkingLevel).toBe('medium');
+    // The gpt-5.6 line + gpt-5.5 are reasoning models despite the openai/ prefix; they opt in past the default-off.
+    for (const m of [
+      GPT5_6_LUNA_MODEL,
+      GPT5_6_TERRA_MODEL,
+      GPT5_6_SOL_MODEL,
+      GPT5_5_MODEL,
+    ]) {
+      expect(modelCapabilities(m).reasoning).toBe(true);
+    }
+    // luna/sol/5.5 stay low (fast); terra runs medium as the sonnet-tier parallel.
+    expect(modelCapabilities(GPT5_6_LUNA_MODEL).thinkingLevel).toBe('low');
+    expect(modelCapabilities(GPT5_6_TERRA_MODEL).thinkingLevel).toBe('medium');
+    expect(modelCapabilities(GPT5_6_SOL_MODEL).thinkingLevel).toBe('low');
+    expect(modelCapabilities(GPT5_5_MODEL).thinkingLevel).toBe('low');
     // Anthropic default carries no explicit effort — the harness default stands.
     expect(
       modelCapabilities(DEFAULT_AGENT_MODEL).thinkingLevel,
@@ -367,6 +403,25 @@ describe('switchboard wizard-pi-effort flag', () => {
     } finally {
       envState.runSurface = 'local';
     }
+  });
+
+  it('opts out with applyEffortFlag:false — orchestrator tasks keep the table effort', () => {
+    // The flag is a linear-run knob; a per-task agent ignores it and keeps its
+    // own tuned level (terra medium), even with the flag set to high.
+    expect(
+      modelCapabilities(
+        GPT5_6_TERRA_MODEL,
+        { ...PI_ON, [WIZARD_PI_EFFORT_FLAG_KEY]: 'high' },
+        { applyEffortFlag: false },
+      ).thinkingLevel,
+    ).toBe('medium');
+    expect(
+      modelCapabilities(
+        GPT5_6_LUNA_MODEL,
+        { ...PI_ON, [WIZARD_PI_EFFORT_FLAG_KEY]: 'high' },
+        { applyEffortFlag: false },
+      ).thinkingLevel,
+    ).toBe('low');
   });
 });
 

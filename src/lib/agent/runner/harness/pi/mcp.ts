@@ -2,7 +2,7 @@
  * Wire the real PostHog MCP into the pi backend (#10). pi has no built-in MCP,
  * but `pi-mcp-adapter` is pi's own MCP extension — we load it the way pi itself
  * does, with `jiti` (pi's runtime `.ts` loader, already a transitive dep). The
- * adapter connects to the same hosted MCP the anthropic path uses (`boot.mcpUrl`).
+ * adapter connects to the same hosted MCP the anthropic path uses (`boot.credentials.host.mcpUrl`).
  *
  * In CLI mode the server exposes a single `exec` tool that carries the whole
  * command protocol on its schema. We pre-warm the adapter's metadata cache by

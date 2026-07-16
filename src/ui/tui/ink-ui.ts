@@ -171,6 +171,10 @@ export class InkUI implements WizardUI {
     return this.store.requestQuestion(question);
   }
 
+  cancelPendingQuestion(): void {
+    this.store.cancelPendingQuestion();
+  }
+
   startRun(): void {
     this.store.setRunPhase(RunPhase.Running);
   }

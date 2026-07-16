@@ -58,12 +58,12 @@ export enum AdditionalFeature {
 
 /** Human-readable labels for additional features (used in TUI progress) */
 export const ADDITIONAL_FEATURE_LABELS: Record<AdditionalFeature, string> = {
-  [AdditionalFeature.LLM]: 'LLM analytics',
+  [AdditionalFeature.LLM]: 'AI observability',
 };
 
 /** Agent prompts for each additional feature, injected via the stop hook */
 export const ADDITIONAL_FEATURE_PROMPTS: Record<AdditionalFeature, string> = {
-  [AdditionalFeature.LLM]: `Now integrate LLM analytics with PostHog. Use the PostHog MCP server to find the appropriate LLM analytics skill, install it, and follow its workflow. PostHog basics are already installed. Update the setup report markdown file when complete with additions from this task. `,
+  [AdditionalFeature.LLM]: `Now integrate AI observability with PostHog. Use the PostHog MCP server to find the appropriate AI observability skill, install it, and follow its workflow. PostHog basics are already installed. Update the setup report markdown file when complete with additions from this task. `,
 };
 
 /** Outcome of the MCP server installation step */
@@ -280,11 +280,15 @@ export interface WizardSession {
 
   /**
    * Self-driving only: whether to integrate PostHog as part of this run.
-   * `null` until decided — the integration-check screen asks "do you already
-   * have PostHog?" and sets it (No → true, Yes → false). The `--integrate`
-   * flag pre-sets it to `true`, skipping the question. When `true`, the
-   * self-driving prompt has the agent set up the SDK before the Self-driving
-   * steps. Unused by other programs.
+   * `null` until decided. When detection finds no PostHog SDK, the
+   * integration-check screen sets this to `true` (Self-driving needs an SDK,
+   * so we always integrate in that case) — and, on the same screen, asks
+   * whether the user already has a PostHog account: "yes" leaves `signup`
+   * false (OAuth login); "no" flips `signup` and collects `email`/`region`
+   * so auth provisions a new account. The `--integrate` flag pre-sets this to
+   * `true`, skipping the screen entirely and defaulting to the OAuth login.
+   * When `true`, the self-driving prompt has the agent set up the SDK before
+   * the Self-driving steps. Unused by other programs.
    */
   integrate: boolean | null;
 
