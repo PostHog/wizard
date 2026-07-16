@@ -164,6 +164,13 @@ function extractBundle(
   destDir: string,
   entryId: string,
 ): number {
+  if (
+    typeof bundle?.id !== 'string' ||
+    typeof bundle?.variants !== 'object' ||
+    bundle.variants === null
+  ) {
+    throw new Error('malformed bundle: expected { id, variants }');
+  }
   const files = bundle.variants[entryId.slice(bundle.id.length + 1)];
   if (!files) {
     throw new Error(`bundle ${bundle.id} has no variant "${entryId}"`);
@@ -1316,6 +1323,7 @@ export const WIZARD_TOOL_NAMES = {
 
 export const __test = {
   extractZipArchive,
+  extractBundle,
   fetchWithRetry,
   downloadWithRetry,
   writeLedgerAtomic,

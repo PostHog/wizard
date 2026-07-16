@@ -409,6 +409,89 @@ describe('extractZipArchive', () => {
   });
 });
 
+describe('extractBundle', () => {
+  let dest: string;
+
+  const bundle = (files: Record<string, string>) => ({
+    id: 'integration-v2-capture',
+    variants: { django: files },
+  });
+
+  beforeEach(() => {
+    dest = fs.mkdtempSync(path.join(os.tmpdir(), 'wizard-bundle-'));
+  });
+
+  afterEach(() => {
+    cleanup(dest);
+  });
+
+  it('writes only the named variant, including nested paths', () => {
+    const written = __test.extractBundle(
+      bundle({ 'SKILL.md': '# skill', 'references/deep/notes.md': 'notes' }),
+      dest,
+      'integration-v2-capture-django',
+    );
+
+    expect(written).toBe(2);
+    expect(fs.readFileSync(path.join(dest, 'SKILL.md'), 'utf8')).toBe(
+      '# skill',
+    );
+    expect(
+      fs.readFileSync(path.join(dest, 'references/deep/notes.md'), 'utf8'),
+    ).toBe('notes');
+  });
+
+  it('rejects entries that escape the destination', () => {
+    expect(() =>
+      __test.extractBundle(
+        bundle({ '../evil.txt': 'pwned' }),
+        dest,
+        'integration-v2-capture-django',
+      ),
+    ).toThrow(/escapes destination/);
+    expect(fs.existsSync(path.join(dest, '..', 'evil.txt'))).toBe(false);
+  });
+
+  it('rejects absolute entry paths', () => {
+    expect(() =>
+      __test.extractBundle(
+        bundle({ '/etc/evil.txt': 'pwned' }),
+        dest,
+        'integration-v2-capture-django',
+      ),
+    ).toThrow(/escapes destination/);
+  });
+
+  it('throws when the bundle lacks the named variant', () => {
+    expect(() =>
+      __test.extractBundle(
+        bundle({ 'SKILL.md': '# skill' }),
+        dest,
+        'integration-v2-capture-nextjs',
+      ),
+    ).toThrow(/has no variant/);
+  });
+
+  it('throws a clean error on JSON that is not a bundle', () => {
+    for (const malformed of [
+      null,
+      [],
+      'oops',
+      { id: 'x' },
+      { variants: {} },
+      { id: 'x', variants: null },
+    ]) {
+      expect(() =>
+        __test.extractBundle(
+          malformed as never,
+          dest,
+          'integration-v2-capture-django',
+        ),
+      ).toThrow(/malformed bundle/);
+    }
+  });
+});
+
 describe('downloadWithRetry', () => {
   const url = 'https://example.com/skill.zip';
   const noSleep = () => Promise.resolve();
