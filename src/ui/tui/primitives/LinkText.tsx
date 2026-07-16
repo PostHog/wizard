@@ -1,13 +1,10 @@
 /**
  * LinkText — renders prompt text with URLs as OSC 8 hyperlinks.
  *
- * Every URL (standalone or inline in prose) is pulled onto its own line. Long
- * URLs are truncated for display (`scheme://host` kept, the noisy path/query
- * tail collapsed to an ellipsis) so the overlay stays clean instead of a URL
- * wrapping across several lines. The OSC 8 escape carries the *full* URL as the
- * click target regardless of the shortened label, and `WizardAskScreen` opens
- * (`o`) / copies (`c`) the full URL too, so no path loses the real destination.
- * Prose renders unchanged.
+ * Each URL is pulled onto its own line and truncated for display, so it never
+ * wraps; the OSC 8 escape still carries the full URL as the click target, and
+ * `WizardAskScreen` opens (`o`) / copies (`c`) the full URL too. Prose renders
+ * unchanged.
  *
  * Used by the `wizard_ask` overlay only for programs that opt into rich link
  * rendering (see `PendingQuestion.richLinks`). Other flows are untouched.

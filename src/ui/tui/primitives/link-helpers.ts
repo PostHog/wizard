@@ -1,22 +1,12 @@
 /**
  * Link-rendering helpers for terminal prompts.
  *
- * Terminals that auto-linkify text scan *visual* lines, so a URL the TUI wraps
- * across lines — or pads with box-border characters — gets a wrong click
- * target: the terminal opens half a URL, or one stitched back together with
- * border glyphs and padding.
- *
- * The fix is an explicit OSC 8 hyperlink: the escape carries the exact target
- * out of band, independent of the visible layout, so the click target is
- * correct regardless of how the terminal auto-detects URLs.
- *
- * Crucially, the link must NOT wrap. Ink wraps text with `wrap-ansi`, which
- * re-emits SGR colour on each new line but does not re-emit the OSC 8 envelope
- * — so a link split across a wrap boundary has its escape corrupted and stops
- * working in every terminal. We therefore pull each URL onto its own line and
- * render a display label short enough to fit (see `LinkText`, `wrap="truncate"`)
- * so the escape always brackets exactly one unwrapped run. Terminals without
- * OSC 8 support ignore the escape and show the visible text.
+ * Terminals auto-linkify by scanning *visual* lines, so a wrapped URL gets a
+ * broken click target. The fix is an explicit OSC 8 hyperlink, which carries
+ * the exact target out of band, independent of layout. To keep the escape
+ * intact we render each URL on its own line with a label short enough not to
+ * wrap (see `LinkText`, `wrap="truncate"`). Terminals without OSC 8 support
+ * ignore the escape and show the visible text.
  */
 
 // OSC 8 hyperlink escape: ESC ] 8 ; ; <url> BEL <label> ESC ] 8 ; ; BEL.
@@ -42,11 +32,8 @@ function trimTrailingPunctuation(url: string): string {
  * at `url`. Terminals that support OSC 8 make the whole run clickable to the
  * exact `url`; terminals that don't render `label` as plain text.
  *
- * `id` is optional and only matters when a single logical link is emitted as
- * more than one run (e.g. it wraps across lines): runs sharing an `id` are
- * grouped by the terminal so they hover-highlight as one. A link that fits on
- * one line needs no `id` — VTE assigns one per run and iTerm2 groups adjacent
- * same-URI cells on its own.
+ * Optional `id` groups runs of a link split across lines so they highlight as
+ * one; a link that fits on one line doesn't need it.
  */
 export function osc8Hyperlink(
   url: string,
@@ -58,16 +45,12 @@ export function osc8Hyperlink(
 }
 
 /**
- * Shorten a URL for *display only*, keeping the trust-relevant head visible.
+ * Shorten a URL for *display only*, always keeping `scheme://host` intact (the
+ * trust signal) and collapsing the noisy path/query tail to an ellipsis.
  *
- * A long authorize URL is mostly query-string noise (`?client_id=…&state=…`).
- * The part a user needs to judge where they're being sent, the scheme and host,
- * sits at the front. So we always keep `scheme://host` intact and collapse the
- * long path/query tail to an ellipsis, never the other way round.
- *
- * This is purely the visible label. Callers pair it with `osc8Hyperlink(url,
- * label)` so the click target, and the copy/open keybinds, stay the full URL.
- * Returns the URL unchanged when it already fits within `maxLength`.
+ * Purely the visible label — callers pair it with `osc8Hyperlink(url, label)`
+ * so the click target and copy/open keybinds stay the full URL. Returns the URL
+ * unchanged when it already fits within `maxLength`.
  */
 export function truncateUrlLabel(url: string, maxLength = 56): string {
   if (url.length <= maxLength) return url;
@@ -105,17 +88,11 @@ export type PromptSegment =
   | { type: 'url'; value: string };
 
 /**
- * Split prompt text into renderable segments, breaking *every* URL out onto its
- * own `url` segment — whether it sits alone on a line or inline within prose.
- * Pulling it out matters: `LinkText` renders a `url` segment as a single OSC 8
- * hyperlink, so the click target stays the exact full URL even when it wraps. A
- * URL left inline in a `text` segment is plain text the terminal may auto-detect
- * per *visual* line, which opens a broken half-URL when it wraps.
- *
- * Consecutive URL-free lines stay grouped in one `text` segment (newlines
- * preserved) so paragraph spacing is unchanged. The prose surrounding an inline
- * URL is kept as `text` segments before/after it (trailing URL punctuation stays
- * with the prose), so it reads the same minus the link being on its own line.
+ * Split prompt text into renderable segments, breaking every URL (standalone or
+ * inline) onto its own `url` segment so `LinkText` can render it as a single
+ * OSC 8 hyperlink. URL-free lines stay grouped in one `text` segment (newlines
+ * preserved), and prose around an inline URL is kept as `text` before/after it,
+ * so the text reads the same apart from the link being on its own line.
  */
 export function splitPromptIntoSegments(text: string): PromptSegment[] {
   const segments: PromptSegment[] = [];
