@@ -68,6 +68,15 @@ export const AUTOMATABLE_VARIANTS: readonly SkillVariant[] = [
   'rollup',
 ];
 
+/**
+ * Variants whose build shells out to a machine-global `posthog-cli` with no
+ * npx / local-dep fallback, so the wizard pre-installs it (see
+ * `ensurePostHogCli` in `index.ts`). Add a variant here when it needs that. JS
+ * variants stay out — they reach the CLI via npx or a devDependency.
+ */
+export const VARIANTS_REQUIRING_POSTHOG_CLI: ReadonlySet<SkillVariant> =
+  new Set(['ios']);
+
 const POSTHOG_SDKS = [
   'posthog-js',
   'posthog-node',

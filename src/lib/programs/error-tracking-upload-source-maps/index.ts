@@ -10,14 +10,43 @@ import {
 import {
   SOURCE_MAPS_ABORT_CASES,
   SOURCE_MAPS_CONTEXT_KEYS,
+  VARIANTS_REQUIRING_POSTHOG_CLI,
   type SkillVariant,
 } from './detect.js';
 import { getContentBlocks } from './content/index.js';
 import { getUiHostFromHost } from '@utils/urls';
 import { getUI } from '@ui';
+import { installOrUpdatePostHogCli } from '@steps/install-cli-steering';
+import { logToFile } from '@utils/debug';
 
 const REPORT_FILE = 'posthog-source-maps-report.md';
 const DOCS_URL = 'https://posthog.com/docs/error-tracking/upload-source-maps';
+
+let postHogCliInstallAttempted = false;
+
+/**
+ * Pre-install posthog-cli for variants that need a machine-global copy (see
+ * `VARIANTS_REQUIRING_POSTHOG_CLI`). The agent can't do it — warlock blocks
+ * `npm install -g` — so the wizard installs it in-process (spawnSync skips the
+ * agent's YARA hooks). Called from customPrompt, not a step hook: source-maps
+ * is non-composed, so `onRunPrep` never fires; customPrompt runs after the
+ * picker and just before the agent on every path. Warn, don't fail.
+ */
+function ensurePostHogCli(): void {
+  if (postHogCliInstallAttempted) return;
+  postHogCliInstallAttempted = true;
+
+  const result = installOrUpdatePostHogCli();
+  logToFile(
+    `[source-maps] posthog-cli pre-install result=${JSON.stringify(result)}`,
+  );
+  if (!result.success) {
+    getUI().log.warn(
+      `Could not pre-install posthog-cli (${result.error}). Your Xcode build ` +
+        `will fail to upload dSYMs until it's installed: npm install -g @posthog/cli@latest`,
+    );
+  }
+}
 
 export const errorTrackingUploadSourceMapsConfig: ProgramConfig = {
   command: 'upload-source-maps',
@@ -74,6 +103,8 @@ export const errorTrackingUploadSourceMapsConfig: ProgramConfig = {
           // runner renders a friendly outro.
           return SOURCE_MAPS_DETECTION_FAILED_PROMPT;
         }
+
+        if (VARIANTS_REQUIRING_POSTHOG_CLI.has(variant)) ensurePostHogCli();
 
         const uiHost = getUiHostFromHost(ctx.host).replace(/\/$/, '');
 
