@@ -15,11 +15,32 @@
  * the scary name out of every other file so a future rename is one edit here.
  */
 
+import type { Options } from 'yargs';
+
 /**
  * The on-CLI flag name. Intentionally ugly + undocumented; do not surface it in
  * `--help`, the README, or user-facing error messages.
  */
 export const HEADLESS_FLAG = 'headless-DONOTUSE-EXPERIMENTAL';
+
+/**
+ * The yargs option declaration for the headless flag. Declared per-command
+ * (basic integration + audit) rather than globally, so no other command
+ * accepts it. Spread into a command's `options` to opt it into headless.
+ */
+export const headlessOption: Record<string, Options> = {
+  [HEADLESS_FLAG]: {
+    default: false,
+    // EXPERIMENTAL + UNSTABLE: the non-interactive published-build run path.
+    // Declared unconditionally (unlike --ci) so it works in the shipped
+    // package, but hidden and intentionally ugly-named — the contract may
+    // break without notice, so it must not be advertised.
+    describe:
+      'EXPERIMENTAL — do not use. Unstable, subject to breaking changes.',
+    type: 'boolean',
+    hidden: true,
+  },
+};
 
 /**
  * Read the headless signal off a parsed argv / options bag. yargs always sets

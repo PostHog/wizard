@@ -1,6 +1,5 @@
 import { AgentSignals } from '@lib/agent/agent-interface';
 import type { PromptContext } from '@lib/agent/agent-runner';
-import { getUiHostFromHost } from '@utils/urls';
 
 /**
  * Build the self-driving run prompt. The installed
@@ -14,7 +13,7 @@ import { getUiHostFromHost } from '@utils/urls';
  * list — so this prompt only covers the Self-driving steps.
  */
 export function buildSelfDrivingPrompt(ctx: PromptContext): string {
-  const uiHost = getUiHostFromHost(ctx.host).replace(/\/$/, '');
+  const uiHost = ctx.host.appHost.replace(/\/$/, '');
   const projectBase = `${uiHost}/project/${ctx.projectId}`;
   const integrationsSettingsUrl = `${projectBase}/settings/environment-integrations`;
   const orgAiSettingsUrl = `${uiHost}/settings/organization#organization-ai-consent`;
@@ -127,7 +126,11 @@ STEP 5 — Offer issue-tracker integrations. (skill: "Connected tools")
    One batched multi-select wizard_ask for the external tools the skill
    lists. The run auto-connects the ones it can (GitHub Issues, and
    Linear via a one-click OAuth link), verifying each with a single
-   silent check — never nudge. It arms the rest as dormant responders to
+   silent check — never nudge. For GitHub Issues: when the GitHub
+   integration has exactly one repository connected, use that repo by
+   default and skip repo research entirely — research which repo
+   matches this project only when several are connected. It arms the
+   rest as dormant responders to
    finish later: for tools it can't auto-connect (Zendesk, pganalyze) it
    never sends the user to paste credentials and never re-prompts. Enable
    a source only for a tool the user picked.
@@ -141,7 +144,11 @@ STEP 6b — Design custom scouts for this product. (skill: "Custom scouts")
    You are the only actor that has read this repo — turn that into
    coverage per the skill: a real gap analysis of the project's
    watchable surfaces against what the built-in troop already covers,
-   then custom scouts for the uncovered ones. Keep scout bodies
+   then custom scouts for the uncovered ones. Start the gap analysis
+   from the repo's for-agents context when present (AGENTS.md,
+   CLAUDE.md, ARCHITECTURE.md, .cursor/rules, agent-facing docs) — it
+   is a maintained map of the product's surfaces and vocabulary, so
+   read it before scanning source. Keep scout bodies
    high-level: describe the behavior and signal conditions to watch,
    referencing repo evidence by file/function name — never paste raw
    source, secrets, env values, or customer data into a scout body.

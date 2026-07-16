@@ -219,6 +219,29 @@ function normalizeToolName(toolName: string | null): string | null {
   return idx >= 0 ? toolName.slice(idx + 2) : toolName;
 }
 
+/**
+ * CLI mode wraps every real tool in a single `exec` tool whose `command`
+ * string names the inner tool: `call query-trends {…}` → `query-trends`. The
+ * inner name is the first token after `call` (past any `--flag` options).
+ */
+const EXEC_INNER_TOOL = /^call\s+(?:--\w+\s+)*([a-z0-9-]+)/;
+
+/**
+ * Resolve the `TOOL_FOLLOW_UPS` lookup key from the last tool call, under both
+ * server modes. Tools mode passes the real tool name directly; CLI mode passes
+ * `exec` plus the command string, so we extract the inner tool from it. A
+ * non-`call` exec command (`search`, `info`) has no inner tool and yields null,
+ * so the lookup falls through to the generic pools.
+ */
+function resolveToolKey(
+  toolName: string | null,
+  toolCommand: string | null,
+): string | null {
+  const normalized = normalizeToolName(toolName);
+  if (normalized !== 'exec') return normalized;
+  return toolCommand?.match(EXEC_INNER_TOOL)?.[1] ?? null;
+}
+
 /** Pick `n` items from a pool starting at a rotation offset. */
 function pickRotated<T>(pool: T[], n: number, rotation: number): T[] {
   if (pool.length === 0) return [];
@@ -300,12 +323,14 @@ export function getRoleGreeting(role: string | null | undefined): RoleGreeting {
  */
 export function getFollowUps(args: {
   lastToolName: string | null;
+  /** CLI mode's exec `command` string, used to recover the inner tool name. */
+  lastToolCommand?: string | null;
   lastPrompt: string;
   role: string | null | undefined;
   branchHistory: string[];
 }): PromptOption[] {
-  const { lastToolName, role, branchHistory } = args;
-  const normalized = normalizeToolName(lastToolName);
+  const { lastToolName, lastToolCommand, role, branchHistory } = args;
+  const normalized = resolveToolKey(lastToolName, lastToolCommand ?? null);
   const depth = branchHistory.length;
 
   // Build the candidate pool — order matters because dedup keeps the

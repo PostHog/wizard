@@ -15,6 +15,7 @@ import {
   evaluateWizardReadiness,
 } from '@lib/health-checks/readiness';
 import { buildSession } from '@lib/wizard-session';
+import { HostResolution } from '@lib/host-resolution';
 import { Integration } from '@lib/constants';
 import { analytics } from '@utils/analytics';
 
@@ -187,7 +188,7 @@ describe('WizardStore', () => {
       const creds = {
         accessToken: 'tok',
         projectApiKey: 'pk',
-        host: 'https://app.posthog.com',
+        host: HostResolution.fromApiHost('https://app.posthog.com'),
         projectId: 42,
       };
       store.setCredentials(creds);
@@ -316,7 +317,7 @@ describe('WizardStore', () => {
       store.setCredentials({
         accessToken: 'tok',
         projectApiKey: 'pk',
-        host: 'h',
+        host: HostResolution.fromApiHost('h'),
         projectId: 42,
       });
       expect(wizardCaptureMock).toHaveBeenCalledWith('auth complete', {
@@ -412,7 +413,7 @@ describe('WizardStore', () => {
       store.setCredentials({
         accessToken: 'tok',
         projectApiKey: 'pk',
-        host: 'h',
+        host: HostResolution.fromApiHost('h'),
         projectId: 1,
       });
       expect(store.currentScreen).toBe(ScreenId.Run);
@@ -429,7 +430,7 @@ describe('WizardStore', () => {
       store.setCredentials({
         accessToken: 'tok',
         projectApiKey: 'pk',
-        host: 'h',
+        host: HostResolution.fromApiHost('h'),
         projectId: 1,
       });
       store.setRunPhase(RunPhase.Completed);
@@ -447,7 +448,7 @@ describe('WizardStore', () => {
       store.setCredentials({
         accessToken: 'tok',
         projectApiKey: 'pk',
-        host: 'h',
+        host: HostResolution.fromApiHost('h'),
         projectId: 1,
       });
       store.setRunPhase(RunPhase.Completed);
@@ -466,7 +467,7 @@ describe('WizardStore', () => {
       store.setCredentials({
         accessToken: 'tok',
         projectApiKey: 'pk',
-        host: 'h',
+        host: HostResolution.fromApiHost('h'),
         projectId: 1,
       });
       store.setRunPhase(RunPhase.Completed);
@@ -1016,7 +1017,7 @@ describe('WizardStore', () => {
         // -> settings-override (overlay still on top)
         accessToken: 'tok',
         projectApiKey: 'pk',
-        host: 'h',
+        host: HostResolution.fromApiHost('h'),
         projectId: 1,
       });
       store.popOverlay(); // -> health-check (readinessResult still null)
@@ -1161,7 +1162,7 @@ describe('WizardStore', () => {
       store.setCredentials({
         accessToken: 'tok',
         projectApiKey: 'pk',
-        host: 'h',
+        host: HostResolution.fromApiHost('h'),
         projectId: 1,
       });
       store.setRunPhase(RunPhase.Error);
@@ -1216,7 +1217,7 @@ describe('WizardStore', () => {
       store.setCredentials({
         accessToken: 'tok',
         projectApiKey: 'pk',
-        host: 'https://app.posthog.com',
+        host: HostResolution.fromApiHost('https://app.posthog.com'),
         projectId: 1,
       });
       expect(store.currentScreen).toBe(ScreenId.Run);
@@ -1265,7 +1266,7 @@ describe('WizardStore', () => {
       store.setCredentials({
         accessToken: 'tok',
         projectApiKey: 'pk',
-        host: 'https://app.posthog.com',
+        host: HostResolution.fromApiHost('https://app.posthog.com'),
         projectId: 1,
       });
       expect(store.currentScreen).toBe(ScreenId.Run);
@@ -1303,7 +1304,7 @@ describe('WizardStore', () => {
       store.setCredentials({
         accessToken: 'tok',
         projectApiKey: 'pk',
-        host: 'https://app.posthog.com',
+        host: HostResolution.fromApiHost('https://app.posthog.com'),
         projectId: 1,
       });
       expect(store.currentScreen).toBe(ScreenId.Run);
@@ -1417,7 +1418,7 @@ describe('WizardStore', () => {
       store.setCredentials({
         accessToken: 'tok',
         projectApiKey: 'pk',
-        host: 'h',
+        host: HostResolution.fromApiHost('h'),
         projectId: 1,
       });
       wizardCaptureMock.mockClear();
@@ -1482,6 +1483,31 @@ describe('WizardStore', () => {
 
     it('--integrate pre-resolves the decision to true', () => {
       expect(buildSession({ integrate: true }).integrate).toBe(true);
+    });
+  });
+
+  describe('chooseProvisionAccount (self-driving "no account" branch)', () => {
+    it('flips signup and records email + region, and integrates', () => {
+      const store = createStore(Program.SelfDriving);
+      store.session = buildSession({});
+
+      store.chooseProvisionAccount('dev@example.com', 'eu');
+
+      expect(store.session.signup).toBe(true);
+      expect(store.session.email).toBe('dev@example.com');
+      expect(store.session.region).toBe('eu');
+      expect(store.session.integrate).toBe(true);
+    });
+
+    it('emits exactly one change event', () => {
+      const store = createStore(Program.SelfDriving);
+      store.session = buildSession({});
+      const cb = vi.fn();
+      store.subscribe(cb);
+
+      store.chooseProvisionAccount('dev@example.com', 'us');
+
+      expect(cb).toHaveBeenCalledTimes(1);
     });
   });
 });

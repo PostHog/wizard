@@ -11,6 +11,7 @@
 import type { SettingsConflict } from '@lib/agent/claude-settings';
 import type { WizardReadinessResult } from '@lib/health-checks/readiness';
 import type { ApiUser } from '@lib/api';
+import type { Credentials } from '@lib/wizard-session';
 import type {
   AskAnswers,
   OutroData,
@@ -115,12 +116,7 @@ export interface WizardUI {
   startRun(): void;
 
   /** Store OAuth/API credentials. Resolves past AuthScreen in TUI. */
-  setCredentials(credentials: {
-    accessToken: string;
-    projectApiKey: string;
-    host: string;
-    projectId: number;
-  }): void;
+  setCredentials(credentials: Credentials): void;
 
   /**
    * Persist the user's `role_at_organization` once it's been fetched from
@@ -188,6 +184,13 @@ export interface WizardUI {
    * surface a clear "not available" error to the agent.
    */
   requestQuestion(question: PendingQuestion): Promise<AskAnswers>;
+
+  /**
+   * Dismiss the in-flight wizard_ask overlay, resolving its request with
+   * cancelled sentinels. No-op when nothing is pending. The ask bridge calls
+   * this on timeout so a stale pending question can't block later asks.
+   */
+  cancelPendingQuestion(): void;
 
   // ── Display state ──────────────────────────────────────────────────
   /** Set the detected framework label (e.g., "Django with Wagtail CMS") */

@@ -21,6 +21,7 @@ import {
 } from '@lib/health-checks/readiness';
 import type {
   AskAnswers,
+  Credentials,
   OutroData,
   PendingQuestion,
 } from '@lib/wizard-session';
@@ -178,6 +179,10 @@ export class LoggingUI implements WizardUI {
     );
   }
 
+  cancelPendingQuestion(): void {
+    // Nothing to dismiss — requestQuestion never opens an overlay here.
+  }
+
   showAuthError(detail?: AuthErrorDetail): void {
     console.log(`✖  Authentication failed (401)`);
     if (detail?.hasSettingsConflict) {
@@ -217,12 +222,7 @@ export class LoggingUI implements WizardUI {
     // No-op in CI mode
   }
 
-  setCredentials(_credentials: {
-    accessToken: string;
-    projectApiKey: string;
-    host: string;
-    projectId: number;
-  }): void {
+  setCredentials(_credentials: Credentials): void {
     // No-op in CI mode — credentials are handled directly
   }
 

@@ -15,7 +15,6 @@
 import type { AgentChunk } from '@ui/tui/services/mcp-suggested-prompts-services';
 import type { Credentials } from '@lib/wizard-session';
 import { DEFAULT_AGENT_MODEL, WIZARD_USER_AGENT } from '@lib/constants';
-import { HostResolution, mcpUrlFor } from '@lib/host-resolution';
 import { logToFile } from '@utils/debug';
 import { buildAgentEnv } from '@lib/agent/agent-interface';
 import { sanitizeAgentSubprocessEnv } from '@lib/agent/agent-env-isolation';
@@ -41,13 +40,6 @@ const MODEL = DEFAULT_AGENT_MODEL;
 // still capping runaway loops. Worth tuning down once we see real
 // telemetry on average turn counts per prompt.
 const MAX_TURNS = 30;
-
-// One MCP url for every region: the server resolves the user's region from
-// the bearer token, so the EU subdomain (a Claude Code OAuth workaround) is
-// not needed here.
-function resolveMcpUrl(): string {
-  return mcpUrlFor(false);
-}
 
 /**
  * Extract a short, single-line summary from an arbitrary value. Used
@@ -92,10 +84,14 @@ function messageToChunks(message: any): AgentChunk[] {
         } else if (type === 'tool_use') {
           const name = (block as { name?: string }).name ?? 'tool';
           const input = (block as { input?: unknown }).input;
+          // CLI mode's exec tool takes a `command` string; keep it verbatim so
+          // the screen can recover the inner tool name for follow-ups.
+          const command = (input as { command?: unknown })?.command;
           chunks.push({
             kind: 'tool-call',
             toolName: name,
             detail: summarize(input),
+            command: typeof command === 'string' ? command : undefined,
           });
         }
       }
@@ -197,8 +193,7 @@ export async function* runMcpPromptViaSdk(args: {
   process.env.CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS = 'true';
 
   // Route through the PostHog LLM gateway, authed with the user's OAuth token.
-  // TODO: clean up in #755
-  const gatewayUrl = HostResolution.fromApiHost(credentials.host).gatewayUrl;
+  const gatewayUrl = credentials.host.gatewayUrl;
   process.env.ANTHROPIC_BASE_URL = gatewayUrl;
   process.env.ANTHROPIC_AUTH_TOKEN = credentials.accessToken;
   process.env.CLAUDE_CODE_OAUTH_TOKEN = credentials.accessToken;
@@ -222,7 +217,7 @@ export async function* runMcpPromptViaSdk(args: {
       once: true,
     });
 
-  const mcpUrl = resolveMcpUrl();
+  const mcpUrl = credentials.host.mcpUrl;
   logToFile(
     `[runMcpPromptViaSdk] mcpUrl=${mcpUrl} model=${MODEL} resume=${
       resumeSessionId ?? '(none)'

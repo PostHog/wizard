@@ -36,7 +36,7 @@ export const PRODUCT_SUITE_BLOCK: ContentBlock = {
     </Text>,
     <Text>
       <Text color="cyan">{'  ◆ '}</Text>
-      {'LLM Analytics         '}
+      {'AI Observability      '}
       <Text color="cyan">{'◆ '}</Text>
       {'Surveys'}
     </Text>,

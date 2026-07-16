@@ -4,6 +4,7 @@ import * as path from 'node:path';
 import { detectFramework } from '@lib/detection/framework';
 import { Integration } from '@lib/constants';
 import { ANDROID_AGENT_CONFIG } from '../../../frameworks/android/android-wizard-agent';
+import { KMP_AGENT_CONFIG } from '../../../frameworks/kmp/kmp-wizard-agent';
 
 /** A throwaway project dir seeded with the given files. */
 function makeProject(files: Record<string, string>): string {
@@ -51,6 +52,17 @@ describe('Integration enum order (drives first-match detection)', () => {
   test('generic Node is the last resort of the entire detection', () => {
     // javascriptNode matches any package.json; anything after it is unreachable.
     expect(order[order.length - 1]).toBe(Integration.javascriptNode);
+  });
+
+  test('kmp is ordered before android and swift (more specific detection wins)', () => {
+    // A KMP project also looks like an Android/Swift project, so KMP must be
+    // checked first for first-match detection to resolve it correctly.
+    expect(order.indexOf(Integration.kmp)).toBeLessThan(
+      order.indexOf(Integration.android),
+    );
+    expect(order.indexOf(Integration.kmp)).toBeLessThan(
+      order.indexOf(Integration.swift),
+    );
   });
 });
 
@@ -103,6 +115,28 @@ describe('detectFramework (end-to-end over real project dirs)', () => {
     );
   });
 
+  test('a Kotlin Multiplatform project resolves to kmp', async () => {
+    const opts = project({
+      'settings.gradle.kts': 'include(":shared")',
+      'shared/build.gradle.kts': `plugins { kotlin("multiplatform") }\nkotlin {\n  sourceSets {\n    commonMain.dependencies {}\n  }\n}\n`,
+      'shared/src/commonMain/kotlin/App.kt': 'class App',
+    });
+    await expect(detectFramework(opts.installDir)).resolves.toBe(
+      Integration.kmp,
+    );
+  });
+
+  test('a plain Android project still resolves to android (kmp ordered ahead does not hijack it)', async () => {
+    const opts = project({
+      'build.gradle': `plugins { id 'com.android.application' }`,
+      'app/src/main/AndroidManifest.xml': '<manifest/>',
+      'app/src/main/kotlin/MainActivity.kt': 'class MainActivity',
+    });
+    await expect(detectFramework(opts.installDir)).resolves.toBe(
+      Integration.android,
+    );
+  });
+
   test('a Flutter project is not claimed by anything', async () => {
     const opts = project({
       'pubspec.yaml': 'name: my_flutter_app\nenvironment:\n  sdk: ^3.0.0\n',
@@ -129,6 +163,41 @@ describe('android detect', () => {
       'pubspec.yaml': 'name: my_flutter_app\nenvironment:\n  sdk: ^3.0.0\n',
       'android/build.gradle': androidGradle,
       'android/app/src/main/AndroidManifest.xml': '<manifest/>',
+      'android/app/src/main/kotlin/MainActivity.kt': 'class MainActivity',
+    });
+    await expect(detect(opts)).resolves.toBe(false);
+  });
+});
+
+describe('kmp detect', () => {
+  const detect = KMP_AGENT_CONFIG.detection.detect;
+
+  test('claims a project applying the Kotlin Multiplatform plugin', async () => {
+    const opts = project({
+      'shared/build.gradle.kts': `plugins { kotlin("multiplatform") }`,
+    });
+    await expect(detect(opts)).resolves.toBe(true);
+  });
+
+  test('claims a project with a commonMain source set', async () => {
+    const opts = project({
+      'shared/src/commonMain/kotlin/App.kt': 'class App',
+    });
+    await expect(detect(opts)).resolves.toBe(true);
+  });
+
+  test('does not claim a plain Android project', async () => {
+    const opts = project({
+      'build.gradle': `plugins { id 'com.android.application' }`,
+      'app/src/main/kotlin/MainActivity.kt': 'class MainActivity',
+    });
+    await expect(detect(opts)).resolves.toBe(false);
+  });
+
+  test('does not claim a Flutter project', async () => {
+    const opts = project({
+      'pubspec.yaml': 'name: my_flutter_app\nenvironment:\n  sdk: ^3.0.0\n',
+      'android/build.gradle': `plugins { id 'com.android.application' }`,
       'android/app/src/main/kotlin/MainActivity.kt': 'class MainActivity',
     });
     await expect(detect(opts)).resolves.toBe(false);

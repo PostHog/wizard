@@ -14,11 +14,18 @@ import { randomUUID } from 'crypto';
 import { existsSync, rmSync } from 'fs';
 import * as path from 'path';
 import { OutroKind, type WizardSession } from '@lib/wizard-session';
-import { installSkillById, fetchSkillMenu } from '@lib/wizard-tools';
+import { POSTHOG_DOCS_URL, type Integration } from '@lib/constants';
+import { FRAMEWORK_REGISTRY } from '@lib/registry';
+import {
+  installSkillById,
+  fetchSkillMenu,
+  type SkillEntry,
+} from '@lib/wizard-tools';
 import { getUI } from '@ui';
 import { analytics } from '@utils/analytics';
 import { ciExcludedTaskTypes } from '@utils/ci-flag-overrides';
 import { logToFile } from '@utils/debug';
+import { wizardAbort, WizardError } from '@utils/wizard-abort';
 import type { ProgramConfig } from '@lib/programs/program-step';
 import type { BootstrapResult } from '../../shared/types';
 import {
@@ -40,8 +47,9 @@ import {
   assembleSeedPrompt,
   assembleTaskPrompt,
   loadAgentRegistry,
+  promptModelFor,
   resolveTask,
-  taskModel,
+  taskModelSpec,
   type OrchestratorPromptContext,
 } from '@lib/agent/agent-prompt-loader';
 
@@ -78,25 +86,39 @@ function requireTaskHarness(pick: HarnessPick): AgentHarness & {
   };
 }
 
+/** Every skill entry the menu knows, across categories. */
+async function fetchSkillMenuEntries(
+  skillsBaseUrl: string,
+): Promise<SkillEntry[]> {
+  const menu = await fetchSkillMenu(skillsBaseUrl);
+  if (!menu) return [];
+  return Object.values(menu.categories).flat();
+}
+
+/** Menu id for a bare skill id + framework via the menu's declared group/framework/default fields; undefined when nothing matches. */
+export function resolveSkillVariantId(
+  entries: readonly SkillEntry[],
+  skillId: string,
+  framework: string | undefined,
+): string | undefined {
+  if (entries.some((e) => e.id === skillId)) return skillId;
+  if (!framework) return undefined;
+  const family = entries.filter(
+    (e) => e.group === skillId && e.framework === framework,
+  );
+  return (family.find((e) => e.default) ?? family[0])?.id;
+}
+
 /**
  * The framework reference is the full `integration` skill. `session.skillId` is
  * the bare framework (e.g. `django`), but the skill menu ids it as
- * `integration-<variant>`. Resolve to the menu id: exact `integration-<framework>`
- * (the 1:1 frameworks — django, python, flask, …), else the first granular variant
- * under it (e.g. `integration-nextjs-app-router`). Undefined when none exists.
+ * `integration-<variant>`.
  */
-async function resolveReferenceSkillId(
-  skillsBaseUrl: string,
+function resolveReferenceSkillId(
+  entries: readonly SkillEntry[],
   framework: string,
-): Promise<string | undefined> {
-  const menu = await fetchSkillMenu(skillsBaseUrl);
-  if (!menu) return undefined;
-  const ids = Object.values(menu.categories)
-    .flat()
-    .map((s) => s.id);
-  const exact = `integration-${framework}`;
-  if (ids.includes(exact)) return exact;
-  return ids.find((id) => id.startsWith(`integration-${framework}-`));
+): string | undefined {
+  return resolveSkillVariantId(entries, 'integration', framework);
 }
 
 export async function runOrchestrator(
@@ -118,15 +140,14 @@ export async function runOrchestrator(
   // The WHAT (agent prompts) is served from context-mill. Fetch the registry
   // once up front: its types drive enqueue validation, and resolving a task to
   // its run config is then synchronous, with no mid-drain network latency.
-  const registry = await loadAgentRegistry(
-    boot.skillsBaseUrl,
-    programConfig.id,
-    { exclude: ciExcludedTaskTypes() },
-  );
+  const flow = programConfig.agentFlow ?? programConfig.id;
+  const registry = await loadAgentRegistry(boot.skillsBaseUrl, flow, {
+    exclude: ciExcludedTaskTypes(),
+  });
   const seedPrompt = registry.seed;
   if (!seedPrompt) {
     throw new Error(
-      `No seed agent prompt (frontmatter \`seed: true\`) for flow "${programConfig.id}" is available from ${boot.skillsBaseUrl}.`,
+      `No seed agent prompt (frontmatter \`seed: true\`) for flow "${flow}" is available from ${boot.skillsBaseUrl}.`,
     );
   }
 
@@ -143,9 +164,10 @@ export async function runOrchestrator(
 
   const store = new QueueStore(session.installDir, runId, {
     onTransition: (event, task) => {
+      const pick = resolveHarness(switchboardCtx, task.type);
       const base = {
         type: task.type,
-        model: taskModel(registry, task),
+        model: taskModelSpec(registry, task, pick.harness).model ?? pick.model,
         attempts: task.attempts,
       };
       switch (event) {
@@ -196,8 +218,9 @@ export async function runOrchestrator(
   // skill — only the example file is read, when the agent's prompt points at it.
   let examplePath: string | undefined;
   let commandmentsPath: string | undefined;
+  const menuSkillEntries = await fetchSkillMenuEntries(boot.skillsBaseUrl);
   const referenceSkillId = session.skillId
-    ? await resolveReferenceSkillId(boot.skillsBaseUrl, session.skillId)
+    ? resolveReferenceSkillId(menuSkillEntries, session.skillId)
     : undefined;
   if (referenceSkillId) {
     const ref = await installSkillById(
@@ -226,12 +249,52 @@ export async function runOrchestrator(
     );
   }
 
+  // Preflight every task's mini-skills: a miss would run tasks skill-less, so fail properly instead.
+  const missingVariants: string[] = [];
+  for (const type of registry.types) {
+    for (const skillId of registry.get(type)?.skills ?? []) {
+      if (resolveSkillVariantId(menuSkillEntries, skillId, session.skillId)) {
+        continue;
+      }
+      missingVariants.push(`${type}/${skillId}`);
+      logToFile(
+        `[orchestrator] no skill variant type=${type} skill=${skillId} framework=${
+          session.skillId ?? 'none'
+        }`,
+      );
+      analytics.wizardCapture('orchestrator skill variant missing', {
+        task_type: type,
+        skill: skillId,
+        framework: session.skillId,
+      });
+    }
+  }
+  if (missingVariants.length > 0) {
+    // The framework's own docs page from its config; generic docs when detection found none.
+    const docsUrl = session.skillId
+      ? FRAMEWORK_REGISTRY[session.skillId as Integration]?.docsUrl
+      : undefined;
+    await wizardAbort({
+      message:
+        'Setup instructions for this project failed to download.\n' +
+        'Please try again, or contact wizard@posthog.com.\n\n' +
+        'You can also set up with your agent by downloading the skills here:\n' +
+        '  https://github.com/PostHog/context-mill/releases\n' +
+        'or integrate manually here:\n' +
+        `  ${docsUrl ?? POSTHOG_DOCS_URL}`,
+      error: new WizardError('Orchestrator preflight: skill variant missing', {
+        missing: missingVariants.join(', '),
+        framework: session.skillId,
+      }),
+    });
+  }
+
   // The client injects the basics (project context + the I/O contract) around
   // every authored agent-prompt body.
   const promptContext: OrchestratorPromptContext = {
-    projectId: boot.projectId,
-    projectApiKey: boot.projectApiKey,
-    host: boot.host,
+    projectId: boot.credentials.projectId,
+    projectApiKey: boot.credentials.projectApiKey,
+    host: boot.credentials.host,
     examplePath,
     commandmentsPath,
   };
@@ -278,13 +341,15 @@ export async function runOrchestrator(
   // prompt is silent.
   const seedPick = resolveHarness(switchboardCtx, 'seed');
   const seedHarness = requireTaskHarness(seedPick);
+  const seedModel = promptModelFor(seedPrompt, seedPick.harness);
   const seedResult = await seedHarness.runTask({
     session,
     programConfig,
     boot,
     prompt: assembleSeedPrompt(promptContext, seedPrompt.body),
     spinner,
-    model: seedPrompt.model ?? seedPick.model,
+    model: seedModel.model ?? seedPick.model,
+    effort: seedModel.effort,
     ...agentRunTools(seedPrompt),
     orchestrator: orchestratorCtx(),
     spinnerMessage: 'Planning the integration...',
@@ -322,8 +387,24 @@ export async function runOrchestrator(
       // The prompt points the agent at them instead.
       const skillPaths: string[] = [];
       for (const skillId of resolved.skills) {
-        const result = await installSkillById(
+        // Agent prompts name the bare step-skill (`integration-v2-install`);
+        // SDK-divergent steps ship per-framework variants, so resolve against
+        // the menu with the session's framework before installing.
+        const variantId = resolveSkillVariantId(
+          menuSkillEntries,
           skillId,
+          session.skillId,
+        );
+        if (!variantId) {
+          logToFile(
+            `[orchestrator] no skill variant type=${
+              task.type
+            } skill=${skillId} framework=${session.skillId ?? 'none'}`,
+          );
+          continue;
+        }
+        const result = await installSkillById(
+          variantId,
           session.installDir,
           boot.skillsBaseUrl,
           taskSkillsRoot,
@@ -332,7 +413,7 @@ export async function runOrchestrator(
           skillPaths.push(path.join(result.path, 'SKILL.md'));
         } else {
           logToFile(
-            `[orchestrator] skill install failed type=${task.type} skill=${skillId} ${result.kind}`,
+            `[orchestrator] skill install failed type=${task.type} skill=${variantId} ${result.kind}`,
           );
         }
       }
@@ -357,13 +438,15 @@ export async function runOrchestrator(
       // per-agent overrides. Prompt-frontmatter model still wins (§3.6).
       const taskPick = resolveHarness(switchboardCtx, task.type);
       const taskHarness = requireTaskHarness(taskPick);
+      const taskModel = taskModelSpec(registry, task, taskPick.harness);
       await taskHarness.runTask({
         session,
         programConfig,
         boot,
         prompt: assembleTaskPrompt(promptContext, resolved.prompt, skillPaths),
         spinner,
-        model: resolved.model ?? taskPick.model,
+        model: taskModel.model ?? taskPick.model,
+        effort: taskModel.effort,
         allowedTools: resolved.allowedTools,
         disallowedTools: resolved.disallowedTools,
         orchestrator: orchestratorCtx(task.id),

@@ -14,7 +14,6 @@ import {
   type SkillVariant,
 } from './detect.js';
 import { getContentBlocks } from './content/index.js';
-import { getUiHostFromHost } from '@utils/urls';
 import { getUI } from '@ui';
 import { installOrUpdatePostHogCli } from '@steps/install-cli-steering';
 import { logToFile } from '@utils/debug';
@@ -106,7 +105,7 @@ export const errorTrackingUploadSourceMapsConfig: ProgramConfig = {
 
         if (VARIANTS_REQUIRING_POSTHOG_CLI.has(variant)) ensurePostHogCli();
 
-        const uiHost = getUiHostFromHost(ctx.host).replace(/\/$/, '');
+        const uiHost = ctx.host.appHost.replace(/\/$/, '');
 
         return buildSourceMapsUploadPrompt({
           displayName,
@@ -114,7 +113,7 @@ export const errorTrackingUploadSourceMapsConfig: ProgramConfig = {
           skillId,
           projectPath,
           projectId: ctx.projectId,
-          host: ctx.host,
+          host: ctx.host.apiHost,
           settingsUrl: `${uiHost}/project/${ctx.projectId}/settings/user-api-keys`,
           uiHost,
         });

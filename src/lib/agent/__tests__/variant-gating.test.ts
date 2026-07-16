@@ -29,8 +29,8 @@ describe('isOrchestratorEnabled', () => {
 describe('pi + orchestrator gating', () => {
   const program = 'posthog-integration' as const;
 
-  it('clamps the sequence to linear when both flags select pi + orchestrator', () => {
-    // pi has no runTask — the clamp forces linear.
+  it('runs the orchestrator on pi when both flags select pi + orchestrator', () => {
+    // pi implements runTask — the capability clamp passes and the flag stands.
     const binding = resolveBinding({
       program,
       flags: {
@@ -39,7 +39,7 @@ describe('pi + orchestrator gating', () => {
       },
     });
     expect(binding.harness).toBe(Harness.pi);
-    expect(binding.sequence).toBe(Sequence.linear);
+    expect(binding.sequence).toBe(Sequence.orchestrator);
   });
 
   it('leaves the orchestrator flag effective for the anthropic harness', () => {
