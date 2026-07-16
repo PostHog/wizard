@@ -17,8 +17,9 @@ it.
 - We take the recommended supported project, else the first supported
   PostHog-free one, and re-point the install dir there.
 - On a single-repo project it recommends `.`, so nothing moves.
-- If the scan errors or finds nothing, `session.installDir` is left untouched
-  and the run falls back to the old root detection, exactly like flag-off.
+- If the scan errors, times out (60s, `AGENTIC_DETECTION_TIMEOUT_MS`), or finds
+  nothing, `session.installDir` is left untouched and the run falls back to the
+  old root detection, exactly like flag-off.
 
 ## What flag gates it
 
@@ -40,7 +41,8 @@ it.
 - Detector: `detectProjectsWithAgent` in `src/lib/detection/agentic.ts`;
   self-driving uses the same detector with its own chooser.
 - Each run fires one `wizard: agentic detection` event tagged with the outcome
-  (`flag-off | error | no-project | recommended | first-instrumentable`).
+  (`flag-off | error | timeout | no-project | recommended |
+  first-instrumentable`).
 
 ## What's next
 

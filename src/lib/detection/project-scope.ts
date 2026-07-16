@@ -10,7 +10,10 @@ import {
 } from './agentic.js';
 import { authenticate } from '@lib/agent/runner/shared/authenticate';
 import { FRAMEWORK_REGISTRY } from '@lib/registry';
-import { BASIC_INTEGRATION_AGENTIC_DETECTION_FLAG_KEY } from '@lib/constants';
+import {
+  AGENTIC_DETECTION_TIMEOUT_MS,
+  BASIC_INTEGRATION_AGENTIC_DETECTION_FLAG_KEY,
+} from '@lib/constants';
 import type { WizardSession } from '@lib/wizard-session';
 import { getUI } from '@ui/index';
 import { analytics } from '@utils/analytics';
@@ -48,9 +51,13 @@ export function chooseIntegrationProject(
 export type AgenticDetectionOutcome =
   | 'flag-off'
   | 'error'
+  | 'timeout'
   | 'no-project'
   | 'recommended'
   | 'first-instrumentable';
+
+/** Sentinel for a scan that outran AGENTIC_DETECTION_TIMEOUT_MS. */
+const TIMED_OUT = Symbol('timed-out');
 
 function captureOutcome(
   outcome: AgenticDetectionOutcome,
@@ -74,12 +81,19 @@ export async function scopeInstallDirToProject(
 
   getUI().log.info('Scanning the repo for projects...');
   const startedAt = Date.now();
-  let report: AgenticDetectionReport;
+  let report: AgenticDetectionReport | typeof TIMED_OUT;
   try {
-    report = await detectIntegrationProjects(session, {
-      recommend: true,
-      onEvent: (line) => logToFile('[agentic detect]', line),
-    });
+    report = await Promise.race([
+      detectIntegrationProjects(session, {
+        recommend: true,
+        onEvent: (line) => logToFile('[agentic detect]', line),
+      }),
+      // The agent has no abort plumbing, so a timed-out scan is abandoned in the
+      // background rather than cancelled; the run stops waiting on it either way.
+      new Promise<typeof TIMED_OUT>((resolve) =>
+        setTimeout(() => resolve(TIMED_OUT), AGENTIC_DETECTION_TIMEOUT_MS),
+      ),
+    ]);
   } catch (err) {
     const error = err instanceof Error ? err : new Error(String(err));
     analytics.captureException(error, { step: 'agentic_detection' });
@@ -89,6 +103,16 @@ export async function scopeInstallDirToProject(
     });
     getUI().log.warn(
       `Project scan failed (${error.message}); continuing with the install dir as-is.`,
+    );
+    return;
+  }
+
+  if (report === TIMED_OUT) {
+    captureOutcome('timeout', { duration_ms: Date.now() - startedAt });
+    getUI().log.warn(
+      `Project scan timed out after ${
+        AGENTIC_DETECTION_TIMEOUT_MS / 1000
+      }s; continuing with the install dir as-is.`,
     );
     return;
   }

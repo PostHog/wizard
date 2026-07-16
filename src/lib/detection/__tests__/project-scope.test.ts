@@ -6,7 +6,10 @@ import {
   chooseIntegrationProject,
   scopeInstallDirToProject,
 } from '@lib/detection/project-scope';
-import { BASIC_INTEGRATION_AGENTIC_DETECTION_FLAG_KEY } from '@lib/constants';
+import {
+  AGENTIC_DETECTION_TIMEOUT_MS,
+  BASIC_INTEGRATION_AGENTIC_DETECTION_FLAG_KEY,
+} from '@lib/constants';
 import { authenticate } from '@lib/agent/runner/shared/authenticate';
 import { buildSession } from '@lib/wizard-session';
 import { analytics } from '@utils/analytics';
@@ -171,6 +174,27 @@ describe('scopeInstallDirToProject', () => {
     expect(exceptionSpy).toHaveBeenCalledWith(failure, {
       step: 'agentic_detection',
     });
+  });
+
+  it('leaves the session untouched and fires timeout when the scan outruns the budget', async () => {
+    // The scan is abandoned, not cancelled — the run must not wait on it forever.
+    vi.useFakeTimers();
+    try {
+      flagsSpy.mockResolvedValue(FLAG_ON);
+      scan.mockReturnValue(new Promise(() => undefined));
+      const session = buildSession({ installDir: '/repo' });
+      const done = scopeInstallDirToProject(session);
+      await vi.advanceTimersByTimeAsync(AGENTIC_DETECTION_TIMEOUT_MS);
+      await done;
+
+      expect(session.installDir).toBe('/repo');
+      expect(outcomeEvent()).toMatchObject({
+        outcome: 'timeout',
+        duration_ms: AGENTIC_DETECTION_TIMEOUT_MS,
+      });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('leaves the session untouched and fires no-project when nothing qualifies', async () => {
