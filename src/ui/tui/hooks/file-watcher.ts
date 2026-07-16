@@ -66,15 +66,23 @@ export function startFileWatcher(
     // File doesn't exist yet — retry attaching the watch periodically until
     // it appears. The poll above already covers updates; this just upgrades
     // latency once the file shows up.
+    //
+    // Probe with a *non-throwing* `existsSync` rather than `accessSync`: the
+    // "file not there yet" state is expected and hit on every tick until the
+    // agent writes the file, and a throw here gets picked up by exception
+    // autocapture and reported as a spurious `$exception` once a second.
     const attachInterval = setInterval(() => {
+      if (!fs.existsSync(path)) return; // Still waiting for the file.
       try {
-        fs.accessSync(path);
+        // Attach the watch first, then stop retrying — so a file that is
+        // removed between the existence check and `fs.watch` just leaves the
+        // poll running for the next tick instead of dropping the watcher.
+        watchers.push(fs.watch(path, () => read(true)));
         clearInterval(attachInterval);
         const idx = intervals.indexOf(attachInterval);
         if (idx >= 0) intervals.splice(idx, 1);
-        watchers.push(fs.watch(path, () => read(true)));
       } catch {
-        // Still waiting.
+        // Raced with the file disappearing; keep polling and retry.
       }
     }, attachRetryIntervalMs);
     intervals.push(attachInterval);

@@ -1,3 +1,4 @@
+import * as fs from 'fs';
 import { mkdtempSync, rmSync, writeFileSync, renameSync, unlinkSync } from 'fs';
 import { tmpdir } from 'os';
 import path from 'path';
@@ -5,6 +6,18 @@ import {
   startFileWatcher,
   type FileWatcherHandle,
 } from '@ui/tui/hooks/file-watcher';
+
+// Wrap `fs` so we can assert the watcher never reaches for the throwing
+// `accessSync` existence probe. All other fs calls pass through untouched.
+vi.mock('fs', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('fs')>();
+  return {
+    ...actual,
+    accessSync: vi.fn((...args: Parameters<typeof actual.accessSync>) =>
+      actual.accessSync(...args),
+    ),
+  };
+});
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -86,6 +99,27 @@ describe('startFileWatcher', () => {
     await wait(150);
 
     expect(onUpdate.mock.calls.at(-1)?.[0]).toEqual({ ready: true });
+  });
+
+  it('never probes for the missing file with a throwing accessSync', async () => {
+    // Regression: the attach-retry loop used to poll with `fs.accessSync`,
+    // which throws ENOENT every tick while the file is absent. With exception
+    // autocapture on, each throw was reported as a spurious `$exception`.
+    const accessSync = vi.mocked(fs.accessSync);
+    accessSync.mockClear();
+    const onUpdate = vi.fn();
+    const target = path.join(workdir, 'never.json');
+
+    handle = startFileWatcher(target, onUpdate, {
+      pollIntervalMs: 20,
+      attachRetryIntervalMs: 20,
+    });
+
+    // Several retry ticks elapse with the file still absent.
+    await wait(120);
+
+    expect(accessSync).not.toHaveBeenCalled();
+    expect(onUpdate).not.toHaveBeenCalled();
   });
 
   it('swallows invalid JSON without throwing', async () => {
