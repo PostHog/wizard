@@ -48,9 +48,9 @@ const baseConfig = createSkillProgram({
  * program to the agents-platform harness, and the remote sequence falls back to
  * this run if the hosted arm fails.
  */
-export const buildClassicAuditRun = async (
+export async function buildClassicAuditRun(
   session: WizardSession,
-): Promise<ProgramRun> => {
+): Promise<ProgramRun> {
   seedBeforeAuditRun(session);
 
   if (!baseConfig.run) {
@@ -90,7 +90,7 @@ export const buildClassicAuditRun = async (
       };
     },
   };
-};
+}
 
 export const auditConfig: ProgramConfig = {
   ...baseConfig,
