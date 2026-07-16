@@ -247,6 +247,36 @@ describe('cloud audit', () => {
     });
   });
 
+  describe('file tools delegate to pi', () => {
+    // The wizard no longer implements read/grep/list/write itself — it routes to
+    // pi's built-in tools. These catch a broken factory call, arg mapping, or a
+    // lost jail, which would otherwise only surface in a live hosted run.
+    it('read_file returns the file content through pi', async () => {
+      fs.writeFileSync(path.join(dir, 'app.py'), 'posthog.capture("signup")\n');
+      const result = (await execClientTool(dir, 'read_file', {
+        path: 'app.py',
+      })) as { content: Array<{ text?: string }> };
+      const text = result.content.map((c) => c.text ?? '').join('');
+      expect(text).toContain('posthog.capture("signup")');
+    });
+
+    it('write_file lands the file on disk through pi', async () => {
+      await execClientTool(dir, 'write_file', {
+        path: 'report.md',
+        content: '# audit\n',
+      });
+      expect(fs.readFileSync(path.join(dir, 'report.md'), 'utf8')).toBe(
+        '# audit\n',
+      );
+    });
+
+    it('still jails a model path that escapes the project root', async () => {
+      await expect(
+        execClientTool(dir, 'read_file', { path: '../../etc/passwd' }),
+      ).rejects.toThrow(/escapes/);
+    });
+  });
+
   describe('resolveInWorkdir', () => {
     it.each([
       ['a parent traversal', '../../etc/passwd'],
