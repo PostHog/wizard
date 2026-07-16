@@ -27,6 +27,7 @@ import {
   StreamTaskStatus,
   StreamEvent,
 } from './types';
+import { EventPlanWatcher } from './event-plan-watcher';
 
 /** Trailing-edge debounce window for non-phase-change emits. */
 const DEBOUNCE_MS = 250;
@@ -91,6 +92,7 @@ export class TaskStreamPush {
   private readonly startedAt: string;
   private readonly programId: string;
   private readonly sessionId: string;
+  private readonly eventPlanWatcher: EventPlanWatcher;
 
   private enabled: boolean;
   private created = false;
@@ -107,6 +109,7 @@ export class TaskStreamPush {
     this.programId = sanitizeChannelId(opts.programId);
     this.destinations = opts.destinations;
     this.enabled = opts.enabled ?? true;
+    this.eventPlanWatcher = new EventPlanWatcher(this.store);
     this.startedAt = secondPrecisionIso(new Date());
     // skillId may not be set yet — fall back to programId so the
     // session_id is stable for the whole run regardless of when the
@@ -118,10 +121,12 @@ export class TaskStreamPush {
   }
 
   /**
-   * Subscribe to store changes. No-op when `enabled === false`.
-   * Idempotent — repeat calls are ignored.
+   * Mirror the event plan and subscribe to store changes. Destination delivery
+   * remains disabled when `enabled === false`, but the plan still populates the
+   * store for local and headless consumers.
    */
   attach(store?: WizardStore): void {
+    this.eventPlanWatcher.start();
     if (!this.enabled) return;
     if (this.unsubscribe) return;
     const target = store ?? this.store;
@@ -130,6 +135,7 @@ export class TaskStreamPush {
 
   /** Stop subscribing. Does not flush. */
   detach(): void {
+    this.eventPlanWatcher.stop();
     if (this.unsubscribe) {
       this.unsubscribe();
       this.unsubscribe = null;

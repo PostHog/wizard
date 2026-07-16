@@ -6,6 +6,10 @@ import type {
 } from '@lib/task-stream/types';
 import type { WizardStore, TaskItem } from '@ui/tui/store';
 import { RunPhase } from '@lib/wizard-session';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { EVENT_PLAN_FILE } from '@lib/programs/posthog-integration/constants';
 
 type Listener = () => void;
 
@@ -14,6 +18,7 @@ interface MockStoreState {
   skillId: string | null;
   tasks: TaskItem[];
   eventPlan: unknown[];
+  installDir?: string;
 }
 
 function createMockStore(overrides: Partial<MockStoreState> = {}) {
@@ -32,6 +37,7 @@ function createMockStore(overrides: Partial<MockStoreState> = {}) {
         runPhase: state.runPhase,
         skillId: state.skillId,
         outroData: null,
+        installDir: state.installDir,
       };
     },
     get tasks() {
@@ -39,6 +45,10 @@ function createMockStore(overrides: Partial<MockStoreState> = {}) {
     },
     get eventPlan() {
       return state.eventPlan;
+    },
+    setEventPlan(eventPlan: unknown[]) {
+      state.eventPlan = eventPlan;
+      for (const cb of listeners) cb();
     },
     subscribe(cb: Listener) {
       listeners.push(cb);
@@ -102,6 +112,26 @@ describe('TaskStreamPush', () => {
   });
 
   // ── Existing event-sequencing behaviour ────────────────────────
+
+  it('populates the event plan when destination delivery is disabled', () => {
+    const installDir = mkdtempSync(join(tmpdir(), 'wizard-headless-plan-'));
+    writeFileSync(
+      join(installDir, EVENT_PLAN_FILE),
+      JSON.stringify([{ event_name: 'created_workspace' }]),
+    );
+    const store = createMockStore({ installDir });
+    const { push, dest } = createPush(store, { enabled: false });
+
+    push.attach();
+
+    expect(store.eventPlan).toEqual([
+      { name: 'created_workspace', description: '' },
+    ]);
+    expect(dest.calls).toHaveLength(0);
+
+    push.detach();
+    rmSync(installDir, { recursive: true, force: true });
+  });
 
   describe('event ordering (imperative push)', () => {
     it('first push sends CREATE', async () => {

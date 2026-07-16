@@ -6,8 +6,9 @@ import type { WizardStore } from './tui/store';
  * wizard-session sync (`TaskStreamPush`) can observe a headless run. We extend
  * `LoggingUI` (not `InkUI`) because its blocking/gate methods would wait on a
  * TUI that never renders; the runner drives phase transitions on the store
- * directly, so only the per-run updates (today: the task list) tee through here.
- * To stream more later, override `setEventPlan` / `setStage` the same way.
+ * directly, so only UI-originated per-run updates tee through here. Runner
+ * machinery mirrors agent-authored artifacts such as the event plan directly
+ * into the store.
  */
 export class HeadlessUI extends LoggingUI {
   constructor(private readonly store: WizardStore) {
