@@ -118,12 +118,24 @@ export async function scopeInstallDirToProject(
   }
 
   const { projects } = report;
+  const recommended = projects.find((p) => p.recommended === true);
   const scanProperties = {
     duration_ms: Date.now() - startedAt,
     repo_type: report.repoType,
     project_count: projects.length,
     supported_count: projects.filter((p) => p.targetId != null).length,
-    has_recommendation: projects.some((p) => p.recommended === true),
+    has_recommendation: recommended !== undefined,
+    // What the agent recommended, whether or not we took it — a rejected
+    // recommendation is otherwise invisible on the fallback outcomes.
+    recommended_path: recommended?.path ?? null,
+    recommended_framework: recommended?.targetId ?? null,
+    projects: projects.map((p) => ({
+      path: p.path,
+      framework: p.framework,
+      target_id: p.targetId,
+      has_posthog: p.hasPostHog,
+      recommended: p.recommended === true,
+    })),
   };
 
   const project = chooseIntegrationProject(projects);

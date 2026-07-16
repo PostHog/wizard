@@ -140,7 +140,35 @@ describe('scopeInstallDirToProject', () => {
       has_recommendation: true,
       chosen_framework: 'nextjs',
       chosen_path: 'apps/web',
+      recommended_path: 'apps/web',
+      recommended_framework: 'nextjs',
     });
+  });
+
+  it('carries every scanned project on the event, not just the counts', async () => {
+    // The rollout needs to see what the scan saw — unsupported projects included.
+    flagsSpy.mockResolvedValue(FLAG_ON);
+    const rust = project({ path: 'crates/core', framework: 'Rust' });
+    scan.mockResolvedValue({ repoType: 'monorepo', projects: [rust, web] });
+    const session = buildSession({ installDir: '/repo' });
+    await scopeInstallDirToProject(session);
+
+    expect(outcomeEvent().projects).toEqual([
+      {
+        path: 'crates/core',
+        framework: 'Rust',
+        target_id: null,
+        has_posthog: false,
+        recommended: false,
+      },
+      {
+        path: 'apps/web',
+        framework: 'Next.js',
+        target_id: 'nextjs',
+        has_posthog: false,
+        recommended: true,
+      },
+    ]);
   });
 
   it('fires first-instrumentable when the fallback pick wins', async () => {
@@ -158,6 +186,8 @@ describe('scopeInstallDirToProject', () => {
     expect(outcomeEvent()).toMatchObject({
       outcome: 'first-instrumentable',
       has_recommendation: false,
+      recommended_path: null,
+      recommended_framework: null,
     });
   });
 
@@ -175,6 +205,30 @@ describe('scopeInstallDirToProject', () => {
     });
     expect(exceptionSpy).toHaveBeenCalledWith(failure, {
       step: 'agentic_detection',
+    });
+  });
+
+  it('reports the recommendation it rejected when falling back to the first instrumentable', async () => {
+    // Without this you can see the fallback fired but never what was recommended or why it lost.
+    flagsSpy.mockResolvedValue(FLAG_ON);
+    scan.mockResolvedValue({
+      repoType: 'monorepo',
+      projects: [
+        project({ path: 'ios', framework: 'Cordova', recommended: true }),
+        project({ path: 'apps/api', framework: 'Express', targetId: 'node' }),
+      ],
+    });
+    const session = buildSession({ installDir: '/repo' });
+    await scopeInstallDirToProject(session);
+
+    expect(session.installDir).toBe('/repo/apps/api');
+    expect(outcomeEvent()).toMatchObject({
+      outcome: 'first-instrumentable',
+      has_recommendation: true,
+      recommended_path: 'ios',
+      recommended_framework: null,
+      chosen_path: 'apps/api',
+      chosen_framework: 'node',
     });
   });
 
