@@ -471,6 +471,42 @@ describe('TaskStreamPush', () => {
   });
 
   describe('spec: shutdown flushes terminal phase', () => {
+    it('includes the captured event plan in the final Completed push', async () => {
+      const installDir = mkdtempSync(join(tmpdir(), 'wizard-final-plan-'));
+      const plan = [
+        { name: 'created_dashboard', description: 'User creates a dashboard' },
+      ];
+      writeFileSync(
+        join(installDir, EVENT_PLAN_FILE),
+        JSON.stringify([
+          {
+            event_name: plan[0].name,
+            event_description: plan[0].description,
+          },
+        ]),
+      );
+      const store = createMockStore({
+        installDir,
+        runPhase: RunPhase.Running,
+      });
+      const { push, dest } = createPush(store);
+
+      try {
+        push.attach();
+        store._emit();
+        await flushMicrotasks();
+
+        store._setAndEmit({ runPhase: RunPhase.Completed });
+        await push.shutdown(2000);
+
+        expect(dest.calls.at(-1)?.[0]).toBe(StreamEvent.Complete);
+        expect(dest.calls.at(-1)?.[1].event_plan).toEqual({ events: plan });
+      } finally {
+        push.detach();
+        rmSync(installDir, { recursive: true, force: true });
+      }
+    });
+
     it('shutdown awaits one final push when phase is terminal', async () => {
       const store = createMockStore({ runPhase: RunPhase.Completed });
       const { push, dest } = createPush(store);
