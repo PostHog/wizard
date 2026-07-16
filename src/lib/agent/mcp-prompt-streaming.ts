@@ -14,11 +14,10 @@
 
 import type { AgentChunk } from '@ui/tui/services/mcp-suggested-prompts-services';
 import type { Credentials } from '@lib/wizard-session';
-import { WIZARD_USER_AGENT } from '@lib/constants';
-import { getLlmGatewayUrlFromHost } from '@utils/urls';
-import { runtimeEnv } from '@env';
+import { DEFAULT_AGENT_MODEL, WIZARD_USER_AGENT } from '@lib/constants';
 import { logToFile } from '@utils/debug';
 import { buildAgentEnv } from '@lib/agent/agent-interface';
+import { sanitizeAgentSubprocessEnv } from '@lib/agent/agent-env-isolation';
 
 // Cached SDK module — first call pays the dynamic-import cost; later
 // calls reuse the same module.
@@ -33,7 +32,7 @@ async function loadSdk(): Promise<any> {
   return _sdkModule;
 }
 
-const MODEL = 'claude-sonnet-4-6';
+const MODEL = DEFAULT_AGENT_MODEL;
 
 // Bounded turn count so a single prompt can't loop forever on the
 // user's nickel. 20 gives the agent room for non-trivial multi-step
@@ -41,13 +40,6 @@ const MODEL = 'claude-sonnet-4-6';
 // still capping runaway loops. Worth tuning down once we see real
 // telemetry on average turn counts per prompt.
 const MAX_TURNS = 30;
-
-// One MCP url for every region: the server resolves the user's region from
-// the bearer token, so the EU subdomain (a Claude Code OAuth workaround) is
-// not needed here.
-function resolveMcpUrl(): string {
-  return runtimeEnv('MCP_URL') || 'https://mcp.posthog.com/mcp';
-}
 
 /**
  * Extract a short, single-line summary from an arbitrary value. Used
@@ -92,10 +84,14 @@ function messageToChunks(message: any): AgentChunk[] {
         } else if (type === 'tool_use') {
           const name = (block as { name?: string }).name ?? 'tool';
           const input = (block as { input?: unknown }).input;
+          // CLI mode's exec tool takes a `command` string; keep it verbatim so
+          // the screen can recover the inner tool name for follow-ups.
+          const command = (input as { command?: unknown })?.command;
           chunks.push({
             kind: 'tool-call',
             toolName: name,
             detail: summarize(input),
+            command: typeof command === 'string' ? command : undefined,
           });
         }
       }
@@ -195,11 +191,13 @@ export async function* runMcpPromptViaSdk(args: {
   // authenticate directly against Anthropic and 401s with "Invalid
   // authentication credentials".
   process.env.CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS = 'true';
+
   // Route through the PostHog LLM gateway, authed with the user's OAuth token.
-  const gatewayUrl = getLlmGatewayUrlFromHost(credentials.host);
+  const gatewayUrl = credentials.host.gatewayUrl;
   process.env.ANTHROPIC_BASE_URL = gatewayUrl;
   process.env.ANTHROPIC_AUTH_TOKEN = credentials.accessToken;
   process.env.CLAUDE_CODE_OAUTH_TOKEN = credentials.accessToken;
+
   logToFile(
     `[runMcpPromptViaSdk] gatewayUrl=${gatewayUrl} tokenPrefix=${
       credentials.accessToken
@@ -219,7 +217,7 @@ export async function* runMcpPromptViaSdk(args: {
       once: true,
     });
 
-  const mcpUrl = resolveMcpUrl();
+  const mcpUrl = credentials.host.mcpUrl;
   logToFile(
     `[runMcpPromptViaSdk] mcpUrl=${mcpUrl} model=${MODEL} resume=${
       resumeSessionId ?? '(none)'
@@ -308,6 +306,10 @@ export async function* runMcpPromptViaSdk(args: {
               Authorization: `Bearer ${credentials.accessToken}`,
               'User-Agent': WIZARD_USER_AGENT,
             },
+            // CLI mode's single `exec` tool carries the full command reference
+            // on its schema — keep it in context, never deferred behind tool
+            // search.
+            alwaysLoad: true,
           },
         },
         // Only let the agent use MCP tools — no shell, no file I/O,
@@ -315,15 +317,18 @@ export async function* runMcpPromptViaSdk(args: {
         // wizard skill execution.
         allowedTools: ['mcp__posthog-wizard__*'],
         env: {
-          ...process.env,
-          // Drop any shell ANTHROPIC_API_KEY so it can't silently bypass the
-          // PostHog LLM gateway and defeat quota tracking and the OAuth flow.
-          ANTHROPIC_API_KEY: undefined,
-          // Defer MCP tool schemas to avoid bloating the system prompt.
-          // posthog-wizard exposes many query tools with large schemas;
-          // without deferral these consume ~113k tokens upfront, which
-          // matters especially when follow-ups resume sessions.
-          ENABLE_TOOL_SEARCH: 'auto:0',
+          // Drop the ENTIRE ANTHROPIC_*/CLAUDE_CODE_* namespace from the
+          // inherited env so no shell/settings value can silently bypass the
+          // PostHog gateway and defeat quota tracking / the OAuth flow; the
+          // wizard's own gateway routing is injected fresh below. See
+          // agent-env-isolation.ts.
+          ...sanitizeAgentSubprocessEnv(process.env),
+          // Gateway routing — injected explicitly (set on process.env above;
+          // the strip removed them from the inherited copy, so re-add here).
+          ANTHROPIC_BASE_URL: process.env.ANTHROPIC_BASE_URL,
+          ANTHROPIC_AUTH_TOKEN: process.env.ANTHROPIC_AUTH_TOKEN,
+          CLAUDE_CODE_OAUTH_TOKEN: process.env.CLAUDE_CODE_OAUTH_TOKEN,
+          CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS: 'true',
           // SDK 0.3.142+ connects MCP servers in the background by
           // default; without this the agent may try to call tools
           // before posthog-wizard is connected on turn 1.

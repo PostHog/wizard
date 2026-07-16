@@ -11,11 +11,10 @@
 
 import path from 'path';
 import fs from 'fs';
-import { execFileSync } from 'child_process';
+import { unzipSync } from 'fflate';
 import { z } from 'zod';
 import { logToFile } from '@utils/debug';
 import { analytics } from '@utils/analytics';
-import { skillTmpPath } from '@utils/paths';
 import { makeMutex } from '@utils/atomic-ledger';
 import type { PackageManagerDetector } from './detection/package-manager';
 import {
@@ -30,12 +29,13 @@ import {
   readLedger,
   writeLedgerAtomic,
 } from './programs/audit/ledger';
-import type { WizardAskBridge } from './wizard-ask-bridge';
+import { type WizardAskBridge, isFullyCancelled } from './wizard-ask-bridge';
 import { createSecretVault, type SecretVault } from './secret-vault';
+import { fetchWithRetry, type RetryOpts } from './fetch-retry';
 import {
   buildOrchestratorTools,
   type OrchestratorToolsContext,
-} from './agent/runner/orchestrator/queue-tools';
+} from './agent/runner/sequence/orchestrator/queue-tools';
 
 // ---------------------------------------------------------------------------
 // SDK dynamic import (ESM module loaded once, cached)
@@ -53,7 +53,27 @@ async function getSDKModule(): Promise<any> {
 // Skill types
 // ---------------------------------------------------------------------------
 
-export type SkillEntry = { id: string; name: string; downloadUrl: string };
+export type SkillEntry = {
+  id: string;
+  name: string;
+  downloadUrl: string;
+  /** The hyphenated skill-group prefix of `id` (e.g. `posthog-integration-install`). */
+  group?: string;
+  /** The detection id this variant serves (e.g. `rails`, `react-router`). */
+  framework?: string;
+  /** The variant a bare framework id resolves to when its family has several. */
+  default?: boolean;
+  /** This entry's download is a bundle JSON of every variant, not a single skill's zip. */
+  bundle?: boolean;
+  /** Menu-only: the variants inside a bundle, expanded into entries of their own on fetch. */
+  variants?: { id: string; framework?: string; default?: boolean }[];
+};
+
+/** A bundle's files, keyed by variant short id then path. */
+export type SkillBundle = {
+  id: string;
+  variants: Record<string, Record<string, string>>;
+};
 
 /**
  * Entry in the wizard's runtime CLI registry. Mirrors the shape context-mill
@@ -84,32 +104,104 @@ export interface SkillMenu {
 // Standalone skill helpers (usable before the MCP server is created)
 // ---------------------------------------------------------------------------
 
+/** Expand a bundle entry into one entry per variant, so the menu reads the same whether a group ships bundled or as zips. */
+export function expandBundleEntry(entry: SkillEntry): SkillEntry[] {
+  if (!entry.bundle || !entry.variants) return [entry];
+  return entry.variants.map((variant) => ({
+    ...variant,
+    name: entry.name,
+    group: entry.group,
+    bundle: true,
+    downloadUrl: entry.downloadUrl,
+  }));
+}
+
 /**
  * Fetch the skill menu from the skills server.
  * Returns parsed data on success, `null` on failure.
  */
 export async function fetchSkillMenu(
   skillsBaseUrl: string,
+  opts: RetryOpts = {},
 ): Promise<SkillMenu | null> {
+  const menuUrl = `${skillsBaseUrl}/skill-menu.json`;
   try {
-    const menuUrl = `${skillsBaseUrl}/skill-menu.json`;
     logToFile(`fetchSkillMenu: fetching from ${menuUrl}`);
-    const resp = await fetch(menuUrl);
-    if (resp.ok) {
-      const data = (await resp.json()) as SkillMenu;
-      logToFile(
-        `fetchSkillMenu: loaded (${
-          Object.keys(data.categories).length
-        } categories)`,
-      );
-      return data;
+    const resp = await fetchWithRetry(menuUrl, opts);
+    const data = (await resp.json()) as SkillMenu;
+    for (const [category, entries] of Object.entries(data.categories)) {
+      data.categories[category] = entries.flatMap(expandBundleEntry);
     }
-    logToFile(`fetchSkillMenu: failed with HTTP ${resp.status}`);
-    return null;
+    logToFile(
+      `fetchSkillMenu: loaded (${
+        Object.keys(data.categories).length
+      } categories)`,
+    );
+    return data;
   } catch (err: any) {
     logToFile(`fetchSkillMenu: error: ${err.message}`);
     return null;
   }
+}
+
+/** Extract a zip buffer, refusing entries that escape destDir (zip-slip). */
+function extractZipArchive(zip: Uint8Array, destDir: string): number {
+  const root = path.resolve(destDir);
+  let written = 0;
+  for (const [entryPath, data] of Object.entries(unzipSync(zip))) {
+    const target = path.resolve(root, entryPath);
+    if (target !== root && !target.startsWith(root + path.sep)) {
+      throw new Error(`zip entry escapes destination: ${entryPath}`);
+    }
+    if (entryPath.endsWith('/')) {
+      fs.mkdirSync(target, { recursive: true });
+      continue;
+    }
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    fs.writeFileSync(target, data);
+    written++;
+  }
+  return written;
+}
+
+/** Unpack the one variant this entry names out of a bundle; the rest is noise and never hits disk. */
+function extractBundle(
+  bundle: SkillBundle,
+  destDir: string,
+  entryId: string,
+): number {
+  if (
+    typeof bundle?.id !== 'string' ||
+    typeof bundle?.variants !== 'object' ||
+    bundle.variants === null
+  ) {
+    throw new Error('malformed bundle: expected { id, variants }');
+  }
+  const files = bundle.variants[entryId.slice(bundle.id.length + 1)];
+  if (!files) {
+    throw new Error(`bundle ${bundle.id} has no variant "${entryId}"`);
+  }
+  const root = path.resolve(destDir);
+  let written = 0;
+  for (const [entryPath, contents] of Object.entries(files)) {
+    const target = path.resolve(root, entryPath);
+    if (target !== root && !target.startsWith(root + path.sep)) {
+      throw new Error(`bundle entry escapes destination: ${entryPath}`);
+    }
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    fs.writeFileSync(target, contents);
+    written++;
+  }
+  return written;
+}
+
+/** Download a URL to a buffer, retrying transient failures with backoff. */
+async function downloadWithRetry(
+  url: string,
+  opts: RetryOpts = {},
+): Promise<Uint8Array> {
+  const resp = await fetchWithRetry(url, opts);
+  return new Uint8Array(await resp.arrayBuffer());
 }
 
 /**
@@ -117,37 +209,42 @@ export async function fetchSkillMenu(
  * By default installs to `<installDir>/.claude/skills/<id>/`.
  * Pass `skillsRoot` to override the base directory (e.g. `.posthog/skills`).
  */
-export function downloadSkill(
+export async function downloadSkill(
   skillEntry: SkillEntry,
   installDir: string,
   skillsRoot?: string,
-): { success: boolean; error?: string } {
+): Promise<{ success: boolean; error?: string }> {
   const skillDir = skillsRoot
     ? path.join(installDir, skillsRoot, skillEntry.id)
     : path.join(installDir, '.claude', 'skills', skillEntry.id);
-  const tmpFile = skillTmpPath(skillEntry.id);
+  let step: 'download' | 'extract' = 'download';
 
   try {
     fs.mkdirSync(skillDir, { recursive: true });
-    execFileSync('curl', ['-sL', skillEntry.downloadUrl, '-o', tmpFile], {
-      timeout: 30000,
-    });
-    execFileSync('unzip', ['-o', tmpFile, '-d', skillDir], {
-      timeout: 30000,
-    });
+    const data = await downloadWithRetry(skillEntry.downloadUrl);
+    step = 'extract';
+    const fileCount = skillEntry.bundle
+      ? extractBundle(
+          JSON.parse(Buffer.from(data).toString('utf8')) as SkillBundle,
+          skillDir,
+          skillEntry.id,
+        )
+      : extractZipArchive(data, skillDir);
     fs.writeFileSync(path.join(skillDir, '.posthog-wizard'), '');
-    try {
-      fs.unlinkSync(tmpFile);
-    } catch {
-      /* ignore cleanup errors */
-    }
 
     logToFile(
-      `downloadSkill: installed ${skillEntry.id} from ${skillEntry.downloadUrl}`,
+      `downloadSkill: installed ${skillEntry.id} from ${skillEntry.downloadUrl} (${fileCount} files)`,
     );
     return { success: true };
   } catch (err: any) {
     logToFile(`downloadSkill: error: ${err.message}`);
+    // A skill-less run still reports success — keep the failure visible.
+    analytics.wizardCapture('skill install failed', {
+      skill_id: skillEntry.id,
+      step,
+      platform: process.platform,
+      error: String(err.message).slice(0, 500),
+    });
     return { success: false, error: err.message };
   }
 }
@@ -186,7 +283,7 @@ export async function installSkillById(
     .find((s) => s.id === skillId);
   if (!skill) return { kind: 'skill-not-found', skillId };
 
-  const result = downloadSkill(skill, installDir, skillsRoot);
+  const result = await downloadSkill(skill, installDir, skillsRoot);
   if (!result.success) {
     return { kind: 'download-failed', message: result.error ?? 'unknown' };
   }
@@ -667,7 +764,7 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
           'Skill ID from the skill menu (e.g., "integration-nextjs-app-router")',
         ),
     },
-    (args: { skillId: string }) => {
+    async (args: { skillId: string }) => {
       if (!/^[a-z0-9][a-z0-9_-]*$/.test(args.skillId)) {
         return {
           content: [
@@ -695,7 +792,7 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
         };
       }
 
-      const result = downloadSkill(skill, workingDirectory);
+      const result = await downloadSkill(skill, workingDirectory);
       if (result.success) {
         return {
           content: [
@@ -706,6 +803,16 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
           ],
         };
       } else {
+        // The agent only sees a tool-result string — report the failure too.
+        analytics.captureException(
+          new Error('Skill install failed: download-failed'),
+          {
+            source: 'install_skill_tool',
+            skill_id: args.skillId,
+            error_detail: String(result.error).slice(0, 500),
+            platform: process.platform,
+          },
+        );
         return {
           content: [
             {
@@ -891,7 +998,7 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
       .boolean()
       .optional()
       .describe(
-        "Only valid for kind='text'. When true, the user's answer is stored in the wizard's secret vault and returned to you as { secretRef: 'secret:...' } instead of the raw string. Use for API keys, tokens, and any other secret the user types in.",
+        "Only valid for kind='text'. When true, the user's answer is stored in the wizard's secret vault and returned to you as { secretRef: 'secret:...' } instead of the raw string. Use for API keys, tokens, and any other secret the user types in. The secretRef is only resolved by wizard-tools that accept it (e.g. set_env_values) — it is NOT resolved when passed to other MCP tools (e.g. PostHog data-warehouse tools), which will reject it. For a secret that must reach another tool, write it to the env with set_env_values first, or use that tool's own credential-reference flow.",
       ),
   });
 
@@ -899,7 +1006,11 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
     'wizard_ask',
     'Ask the user one or more structured questions and wait for their answers. ' +
       'Use this whenever you would otherwise inline a question in your text output. ' +
-      'Batch related questions into a single call — do not call this multiple times in a row.',
+      'Batch related questions into a single call (up to 8) rather than asking one at a ' +
+      'time; sequential calls are fine when later questions genuinely depend on earlier ' +
+      'answers. A fully cancelled or timed-out response does NOT count against the per-run ' +
+      'cap — treat it as "the user declined" and fall back gracefully (e.g. hand over a ' +
+      'deep link) without worrying about a wasted call.',
     {
       questions: z.array(askQuestionSchema).min(1).max(8),
     },
@@ -996,6 +1107,15 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
       try {
         const answers = await askBridge.request({ questions: args.questions });
 
+        // A fully cancelled/timed-out ask (the user dismissed the overlay or let
+        // it time out) shouldn't burn the per-run cap. Otherwise one cancellation
+        // exhausts the budget for every remaining source and forces a deep-link
+        // fallback even when the user was willing to answer. Refund the slot we
+        // optimistically took so cancellation is free.
+        if (isFullyCancelled(answers)) {
+          askCallCount -= 1;
+        }
+
         // For any question marked sensitive, move the raw answer into the
         // vault and replace it with an opaque ref before returning to the
         // agent — so the secret never enters the LLM conversation.
@@ -1040,6 +1160,10 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
           ],
         };
       } catch (err: any) {
+        // A failed ask never reached the user, so it shouldn't burn the
+        // per-run cap either — otherwise a transient bridge error eats the
+        // budget for every remaining source.
+        askCallCount -= 1;
         logToFile(`wizard_ask: error: ${err?.message ?? err}`);
         return {
           content: [
@@ -1103,6 +1227,10 @@ export const WIZARD_TOOL_NAMES = {
 // ---------------------------------------------------------------------------
 
 export const __test = {
+  extractZipArchive,
+  extractBundle,
+  fetchWithRetry,
+  downloadWithRetry,
   writeLedgerAtomic,
   readLedger,
   applyAuditAdditions,

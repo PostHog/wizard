@@ -21,7 +21,6 @@ import { useKeyBindings } from '@ui/tui/hooks/useKeyBindings';
 import { Colors } from '@ui/tui/styles';
 import { useSkillEntry } from '@ui/tui/screens/SkillSourceInfo';
 import { fetchUserData } from '@lib/api';
-import { getCloudUrlFromRegion } from '@utils/urls';
 import { CONTEXT_MILL_RELEASES_URL, POSTHOG_APP_URL } from '@lib/constants';
 import { analytics } from '@utils/analytics';
 import { LoadingBox } from '@ui/tui/primitives/index';
@@ -47,7 +46,6 @@ export const AiOptInRequiredScreen = ({
   const isAdmin = (org?.membership_level ?? 0) >= ORG_ADMIN_LEVEL;
   const variant: 'admin' | 'non-admin' = isAdmin ? 'admin' : 'non-admin';
 
-  const region = session.region ?? 'us';
   const projectId = session.credentials?.projectId;
   // Use the region-agnostic app.posthog.com URL so the redirect routes
   // the user to their actual region (us / eu) based on their profile.
@@ -91,14 +89,14 @@ export const AiOptInRequiredScreen = ({
 
   const handleRetry = () => {
     analytics.wizardCapture('ai opt-in action', { variant, action: 'retry' });
-    const accessToken = session.credentials?.accessToken;
-    if (!accessToken) {
+    const credentials = session.credentials;
+    if (!credentials?.accessToken) {
       setRetryError('Missing credentials — cannot retry.');
       return;
     }
     setRetrying(true);
     setRetryError(null);
-    void fetchUserData(accessToken, getCloudUrlFromRegion(region))
+    void fetchUserData(credentials.accessToken, credentials.host.appHost)
       .then((user) => {
         store.setApiUser(user);
       })

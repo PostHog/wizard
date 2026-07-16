@@ -2,11 +2,11 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 
-import { applyResolveChecksOutput } from '@lib/programs/cloud-audit/ledger-bridge';
+import { applyResolveChecksOutput } from '@lib/agent/runner/harness/agents-platform/ledger-bridge';
 import {
   execClientTool,
   resolveInWorkdir,
-} from '@lib/programs/cloud-audit/client-tools';
+} from '@lib/agent/runner/harness/agents-platform/client-tools';
 import { CLOUD_AUDIT_PLACEHOLDER_CHECKS } from '@lib/programs/cloud-audit/seed';
 import { readLedger } from '@lib/programs/audit/ledger';
 import { AUDIT_CHECKS_FILE, type AuditCheck } from '@lib/programs/audit/types';

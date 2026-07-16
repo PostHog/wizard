@@ -41,6 +41,11 @@ export const ANDROID_AGENT_CONFIG: FrameworkConfig<AndroidContext> = {
     detect: async (options) => {
       const { installDir } = options;
 
+      // pubspec.yaml means Flutter — its android/ subtree would match below.
+      if (fs.existsSync(path.join(installDir, 'pubspec.yaml'))) {
+        return false;
+      }
+
       // Strategy 1: Check for build.gradle(.kts) with Android plugin
       for (const name of ['build.gradle', 'build.gradle.kts']) {
         const buildGradlePath = path.join(installDir, name);

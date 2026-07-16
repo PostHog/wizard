@@ -9,12 +9,12 @@ import {
   gradlePackageManager,
 } from '@lib/detection/package-manager';
 
-jest.mock('../../../utils/debug');
-jest.mock('../../../telemetry', () => ({
+vi.mock('../../../utils/debug');
+vi.mock('../../../telemetry', () => ({
   withProgress: (_name: string, fn: () => unknown) => fn(),
 }));
-jest.mock('../../../utils/analytics', () => ({
-  analytics: { setTag: jest.fn() },
+vi.mock('../../../utils/analytics', () => ({
+  analytics: { setTag: vi.fn() },
 }));
 
 function makeTmpDir(): string {

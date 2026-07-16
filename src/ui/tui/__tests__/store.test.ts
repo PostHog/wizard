@@ -15,21 +15,22 @@ import {
   evaluateWizardReadiness,
 } from '@lib/health-checks/readiness';
 import { buildSession } from '@lib/wizard-session';
+import { HostResolution } from '@lib/host-resolution';
 import { Integration } from '@lib/constants';
 import { analytics } from '@utils/analytics';
 
-jest.mock('../../../utils/analytics.js', () => ({
+vi.mock('../../../utils/analytics.js', () => ({
   analytics: {
-    capture: jest.fn(),
-    wizardCapture: jest.fn(),
-    setTag: jest.fn(),
-    shutdown: jest.fn().mockResolvedValue(undefined),
+    capture: vi.fn(),
+    wizardCapture: vi.fn(),
+    setTag: vi.fn(),
+    shutdown: vi.fn().mockResolvedValue(undefined),
   },
-  sessionProperties: jest.fn(() => ({})),
+  sessionProperties: vi.fn(() => ({})),
 }));
 
-jest.mock('../../../lib/health-checks/readiness.js', () => ({
-  evaluateWizardReadiness: jest.fn().mockResolvedValue({
+vi.mock('../../../lib/health-checks/readiness.js', () => ({
+  evaluateWizardReadiness: vi.fn().mockResolvedValue({
     decision: 'yes',
     health: {},
     reasons: [],
@@ -40,18 +41,17 @@ jest.mock('../../../lib/health-checks/readiness.js', () => ({
     YesWithWarnings: 'yes-with-warnings',
   },
   SERVICE_LABELS: {},
-  getBlockingServiceKeys: jest.fn(() => []),
+  getBlockingServiceKeys: vi.fn(() => []),
 }));
 
 function createStore(program?: ProgramId): WizardStore {
   return new WizardStore(program);
 }
 
-const wizardCaptureMock = analytics.wizardCapture as jest.Mock;
-const evaluateWizardReadinessMock =
-  evaluateWizardReadiness as jest.MockedFunction<
-    typeof evaluateWizardReadiness
-  >;
+const wizardCaptureMock = analytics.wizardCapture as Mock;
+const evaluateWizardReadinessMock = evaluateWizardReadiness as MockedFunction<
+  typeof evaluateWizardReadiness
+>;
 
 async function flushMicrotasks(): Promise<void> {
   await Promise.resolve();
@@ -60,7 +60,7 @@ async function flushMicrotasks(): Promise<void> {
 
 describe('WizardStore', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     evaluateWizardReadinessMock.mockResolvedValue({
       decision: WizardReadiness.Yes,
       health: {} as never,
@@ -100,7 +100,7 @@ describe('WizardStore', () => {
   describe('change notification', () => {
     it('emitChange increments version and notifies subscribers', () => {
       const store = createStore();
-      const listener = jest.fn();
+      const listener = vi.fn();
       store.subscribe(listener);
 
       store.emitChange();
@@ -123,7 +123,7 @@ describe('WizardStore', () => {
   describe('subscribe / getSnapshot', () => {
     it('subscribe registers a listener that fires on change', () => {
       const store = createStore();
-      const cb = jest.fn();
+      const cb = vi.fn();
       store.subscribe(cb);
 
       store.emitChange();
@@ -132,7 +132,7 @@ describe('WizardStore', () => {
 
     it('subscribe returns an unsubscribe function', () => {
       const store = createStore();
-      const cb = jest.fn();
+      const cb = vi.fn();
       const unsub = store.subscribe(cb);
 
       unsub();
@@ -149,7 +149,7 @@ describe('WizardStore', () => {
 
     it('is compatible with useSyncExternalStore contract', () => {
       const store = createStore();
-      const cb = jest.fn();
+      const cb = vi.fn();
       const unsub = store.subscribe(cb);
 
       const v1 = store.getSnapshot();
@@ -167,7 +167,7 @@ describe('WizardStore', () => {
   describe('session setters', () => {
     it('completeSetup sets setupConfirmed and resolves intro gate', async () => {
       const store = createStore();
-      const cb = jest.fn();
+      const cb = vi.fn();
       store.subscribe(cb);
 
       store.completeSetup();
@@ -188,7 +188,7 @@ describe('WizardStore', () => {
       const creds = {
         accessToken: 'tok',
         projectApiKey: 'pk',
-        host: 'https://app.posthog.com',
+        host: HostResolution.fromApiHost('https://app.posthog.com'),
         projectId: 42,
       };
       store.setCredentials(creds);
@@ -278,7 +278,7 @@ describe('WizardStore', () => {
 
     it('every setter emits exactly one change event', () => {
       const store = createStore();
-      const cb = jest.fn();
+      const cb = vi.fn();
       store.subscribe(cb);
 
       store.completeSetup();
@@ -317,7 +317,7 @@ describe('WizardStore', () => {
       store.setCredentials({
         accessToken: 'tok',
         projectApiKey: 'pk',
-        host: 'h',
+        host: HostResolution.fromApiHost('h'),
         projectId: 42,
       });
       expect(wizardCaptureMock).toHaveBeenCalledWith('auth complete', {
@@ -413,7 +413,7 @@ describe('WizardStore', () => {
       store.setCredentials({
         accessToken: 'tok',
         projectApiKey: 'pk',
-        host: 'h',
+        host: HostResolution.fromApiHost('h'),
         projectId: 1,
       });
       expect(store.currentScreen).toBe(ScreenId.Run);
@@ -430,7 +430,7 @@ describe('WizardStore', () => {
       store.setCredentials({
         accessToken: 'tok',
         projectApiKey: 'pk',
-        host: 'h',
+        host: HostResolution.fromApiHost('h'),
         projectId: 1,
       });
       store.setRunPhase(RunPhase.Completed);
@@ -448,7 +448,7 @@ describe('WizardStore', () => {
       store.setCredentials({
         accessToken: 'tok',
         projectApiKey: 'pk',
-        host: 'h',
+        host: HostResolution.fromApiHost('h'),
         projectId: 1,
       });
       store.setRunPhase(RunPhase.Completed);
@@ -467,7 +467,7 @@ describe('WizardStore', () => {
       store.setCredentials({
         accessToken: 'tok',
         projectApiKey: 'pk',
-        host: 'h',
+        host: HostResolution.fromApiHost('h'),
         projectId: 1,
       });
       store.setRunPhase(RunPhase.Completed);
@@ -506,7 +506,7 @@ describe('WizardStore', () => {
 
     it('pushOverlay emits change and increments version', () => {
       const store = createStore();
-      const cb = jest.fn();
+      const cb = vi.fn();
       store.subscribe(cb);
 
       store.pushOverlay(Overlay.SettingsOverride);
@@ -519,7 +519,7 @@ describe('WizardStore', () => {
       const store = createStore();
       store.pushOverlay(Overlay.SettingsOverride);
 
-      const cb = jest.fn();
+      const cb = vi.fn();
       store.subscribe(cb);
       store.popOverlay();
 
@@ -620,6 +620,143 @@ describe('WizardStore', () => {
     });
   });
 
+  describe('tokenUsage / toggleTokenHud (hidden Ctrl+T HUD)', () => {
+    it('starts at zero usage, and visible by default in dev/test (IS_DEV)', () => {
+      const store = createStore();
+      expect(store.tokenUsage).toEqual({
+        inputTokens: 0,
+        outputTokens: 0,
+        cacheReadTokens: 0,
+        cacheCreationTokens: 0,
+        costUsd: 0,
+        costIsFinal: false,
+      });
+      // Defaults to IS_DEV, which is true under vitest (NODE_ENV=test) --
+      // see WizardStore's $tokenHudVisible doc comment.
+      expect(store.tokenHudVisible).toBe(true);
+    });
+
+    it('toggleTokenHud flips visibility each call, from whatever it started at', () => {
+      const store = createStore();
+      const initial = store.tokenHudVisible;
+      store.toggleTokenHud();
+      expect(store.tokenHudVisible).toBe(!initial);
+      store.toggleTokenHud();
+      expect(store.tokenHudVisible).toBe(initial);
+    });
+
+    it('addTokenUsage accumulates token counts and cost across calls', () => {
+      const store = createStore();
+      store.addTokenUsage({
+        inputTokens: 1_000_000,
+        outputTokens: 0,
+        cacheReadTokens: 0,
+        cacheCreationTokens: 0,
+        cacheCreation5m: 0,
+        cacheCreation1h: 0,
+      });
+      store.addTokenUsage({
+        inputTokens: 1_000_000,
+        outputTokens: 1_000_000,
+        cacheReadTokens: 0,
+        cacheCreationTokens: 0,
+        cacheCreation5m: 0,
+        cacheCreation1h: 0,
+      });
+
+      expect(store.tokenUsage.inputTokens).toBe(2_000_000);
+      expect(store.tokenUsage.outputTokens).toBe(1_000_000);
+      // $3/Mtok input + $15/Mtok output, from the shared pricing table.
+      expect(store.tokenUsage.costUsd).toBeCloseTo(2 * 3 + 15, 5);
+      expect(store.tokenUsage.costIsFinal).toBe(false);
+    });
+
+    it('prices each delta at its own model, not a single run-wide rate', () => {
+      // A Haiku-overridden turn (e.g. source-map detection) followed by a
+      // default-model turn -- each must be priced at its own rate, since a
+      // subagent can genuinely run on a different model than the main
+      // session's turns.
+      const store = createStore();
+      store.addTokenUsage({
+        inputTokens: 1_000_000,
+        outputTokens: 0,
+        cacheReadTokens: 0,
+        cacheCreationTokens: 0,
+        cacheCreation5m: 0,
+        cacheCreation1h: 0,
+        model: 'claude-haiku-4-5-20251001',
+      });
+      store.addTokenUsage({
+        inputTokens: 1_000_000,
+        outputTokens: 0,
+        cacheReadTokens: 0,
+        cacheCreationTokens: 0,
+        cacheCreation5m: 0,
+        cacheCreation1h: 0,
+      });
+
+      // $1 (Haiku) + $3 (Sonnet default) -- not $6 if both were priced as
+      // Sonnet, and not $2 if both were priced as Haiku.
+      expect(store.tokenUsage.costUsd).toBeCloseTo(1 + 3, 5);
+    });
+
+    it('setFinalTokenCostUsd overwrites the running estimate and marks it final', () => {
+      const store = createStore();
+      store.addTokenUsage({
+        inputTokens: 1_000_000,
+        outputTokens: 0,
+        cacheReadTokens: 0,
+        cacheCreationTokens: 0,
+        cacheCreation5m: 0,
+        cacheCreation1h: 0,
+      });
+
+      store.setFinalTokenCostUsd(1.23);
+
+      expect(store.tokenUsage.costUsd).toBe(1.23);
+      expect(store.tokenUsage.costIsFinal).toBe(true);
+      // Token counts (not cost) are untouched by reconciliation.
+      expect(store.tokenUsage.inputTokens).toBe(1_000_000);
+    });
+
+    it('addTokenUsage is a no-op once the cost has been finalized', () => {
+      const store = createStore();
+      store.setFinalTokenCostUsd(1.0);
+
+      store.addTokenUsage({
+        inputTokens: 1_000_000,
+        outputTokens: 0,
+        cacheReadTokens: 0,
+        cacheCreationTokens: 0,
+        cacheCreation5m: 0,
+        cacheCreation1h: 0,
+      });
+
+      // A late-arriving turn (e.g. post-success cleanup) must not perturb
+      // the already-reconciled final number.
+      expect(store.tokenUsage.costUsd).toBe(1.0);
+      expect(store.tokenUsage.inputTokens).toBe(0);
+    });
+
+    it('emits a change so subscribers re-render', () => {
+      const store = createStore();
+      const versions: number[] = [];
+      store.subscribe(() => versions.push(store.getSnapshot()));
+
+      store.toggleTokenHud();
+      store.addTokenUsage({
+        inputTokens: 1,
+        outputTokens: 0,
+        cacheReadTokens: 0,
+        cacheCreationTokens: 0,
+        cacheCreation5m: 0,
+        cacheCreation1h: 0,
+      });
+
+      expect(versions.length).toBe(2);
+    });
+  });
+
   // ── Agent observation state ──────────────────────────────────────
 
   describe('statusMessages', () => {
@@ -635,7 +772,7 @@ describe('WizardStore', () => {
 
     it('pushStatus emits change', () => {
       const store = createStore();
-      const cb = jest.fn();
+      const cb = vi.fn();
       store.subscribe(cb);
 
       store.pushStatus('msg');
@@ -699,7 +836,7 @@ describe('WizardStore', () => {
         { label: 'Install SDK', status: TaskStatus.Pending, done: false },
       ]);
 
-      const cb = jest.fn();
+      const cb = vi.fn();
       store.subscribe(cb);
       store.updateTask(99, true);
 
@@ -774,7 +911,7 @@ describe('WizardStore', () => {
 
     it('emits change', () => {
       const store = createStore();
-      const cb = jest.fn();
+      const cb = vi.fn();
       store.subscribe(cb);
       store.syncTodos([{ content: 'task', status: 'pending' }]);
       expect(cb).toHaveBeenCalled();
@@ -801,7 +938,7 @@ describe('WizardStore', () => {
   describe('concurrent mutations', () => {
     it('rapid-fire setters each increment version by 1', () => {
       const store = createStore();
-      const cb = jest.fn();
+      const cb = vi.fn();
       store.subscribe(cb);
 
       store.completeSetup();
@@ -880,7 +1017,7 @@ describe('WizardStore', () => {
         // -> settings-override (overlay still on top)
         accessToken: 'tok',
         projectApiKey: 'pk',
-        host: 'h',
+        host: HostResolution.fromApiHost('h'),
         projectId: 1,
       });
       store.popOverlay(); // -> health-check (readinessResult still null)
@@ -925,7 +1062,7 @@ describe('WizardStore', () => {
   describe('multiple subscribers', () => {
     it('supports many concurrent subscribers', () => {
       const store = createStore();
-      const callbacks = Array.from({ length: 50 }, () => jest.fn());
+      const callbacks = Array.from({ length: 50 }, () => vi.fn());
       const unsubs = callbacks.map((cb) => store.subscribe(cb));
 
       store.emitChange();
@@ -942,7 +1079,7 @@ describe('WizardStore', () => {
 
     it('double-unsubscribe is safe', () => {
       const store = createStore();
-      const cb = jest.fn();
+      const cb = vi.fn();
       const unsub = store.subscribe(cb);
 
       unsub();
@@ -1002,7 +1139,7 @@ describe('WizardStore', () => {
       store.setTasks([
         { label: 'Task', status: TaskStatus.Pending, done: false },
       ]);
-      const cb = jest.fn();
+      const cb = vi.fn();
       store.subscribe(cb);
       store.updateTask(-1, true);
       expect(cb).not.toHaveBeenCalled();
@@ -1025,7 +1162,7 @@ describe('WizardStore', () => {
       store.setCredentials({
         accessToken: 'tok',
         projectApiKey: 'pk',
-        host: 'h',
+        host: HostResolution.fromApiHost('h'),
         projectId: 1,
       });
       store.setRunPhase(RunPhase.Error);
@@ -1080,7 +1217,7 @@ describe('WizardStore', () => {
       store.setCredentials({
         accessToken: 'tok',
         projectApiKey: 'pk',
-        host: 'https://app.posthog.com',
+        host: HostResolution.fromApiHost('https://app.posthog.com'),
         projectId: 1,
       });
       expect(store.currentScreen).toBe(ScreenId.Run);
@@ -1129,7 +1266,7 @@ describe('WizardStore', () => {
       store.setCredentials({
         accessToken: 'tok',
         projectApiKey: 'pk',
-        host: 'https://app.posthog.com',
+        host: HostResolution.fromApiHost('https://app.posthog.com'),
         projectId: 1,
       });
       expect(store.currentScreen).toBe(ScreenId.Run);
@@ -1167,7 +1304,7 @@ describe('WizardStore', () => {
       store.setCredentials({
         accessToken: 'tok',
         projectApiKey: 'pk',
-        host: 'https://app.posthog.com',
+        host: HostResolution.fromApiHost('https://app.posthog.com'),
         projectId: 1,
       });
       expect(store.currentScreen).toBe(ScreenId.Run);
@@ -1281,7 +1418,7 @@ describe('WizardStore', () => {
       store.setCredentials({
         accessToken: 'tok',
         projectApiKey: 'pk',
-        host: 'h',
+        host: HostResolution.fromApiHost('h'),
         projectId: 1,
       });
       wizardCaptureMock.mockClear();
@@ -1322,6 +1459,55 @@ describe('WizardStore', () => {
       store.completeSetup();
       await store.getGate('intro');
       expect(resolved).toBe(true);
+    });
+  });
+
+  describe('setIntegrate (self-driving integration check)', () => {
+    it('records "no" as integrate=true', () => {
+      const store = createStore(Program.SelfDriving);
+      store.session = buildSession({});
+      store.setIntegrate(true);
+      expect(store.session.integrate).toBe(true);
+    });
+
+    it('records "yes, already integrated" as integrate=false', () => {
+      const store = createStore(Program.SelfDriving);
+      store.session = buildSession({});
+      store.setIntegrate(false);
+      expect(store.session.integrate).toBe(false);
+    });
+
+    it('defaults to null (undecided) before the question', () => {
+      expect(buildSession({}).integrate).toBeNull();
+    });
+
+    it('--integrate pre-resolves the decision to true', () => {
+      expect(buildSession({ integrate: true }).integrate).toBe(true);
+    });
+  });
+
+  describe('chooseProvisionAccount (self-driving "no account" branch)', () => {
+    it('flips signup and records email + region, and integrates', () => {
+      const store = createStore(Program.SelfDriving);
+      store.session = buildSession({});
+
+      store.chooseProvisionAccount('dev@example.com', 'eu');
+
+      expect(store.session.signup).toBe(true);
+      expect(store.session.email).toBe('dev@example.com');
+      expect(store.session.region).toBe('eu');
+      expect(store.session.integrate).toBe(true);
+    });
+
+    it('emits exactly one change event', () => {
+      const store = createStore(Program.SelfDriving);
+      store.session = buildSession({});
+      const cb = vi.fn();
+      store.subscribe(cb);
+
+      store.chooseProvisionAccount('dev@example.com', 'us');
+
+      expect(cb).toHaveBeenCalledTimes(1);
     });
   });
 });

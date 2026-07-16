@@ -15,6 +15,8 @@
  * this module instead.
  */
 
+import { HEADLESS_FLAG } from '@lib/headless-mode';
+
 // ── Build-time constants ─────────────────────────────────────────────
 // tsdown replaces `process.env.NODE_ENV` with a string literal.
 // After build these are just `"production"`, `false`, etc.
@@ -31,6 +33,13 @@ export const IS_DEV =
  * that aren't supported in the shipped package — e.g. `--ci` mode.
  */
 export const IS_PRODUCTION_BUILD = process.env.NODE_ENV === 'production';
+
+/** 'cloud' when launched with the experimental headless flag, else 'local' — resolved once from argv at launch. */
+export const RUN_SURFACE: 'cloud' | 'local' = process.argv.some(
+  (a) => a === `--${HEADLESS_FLAG}` || a.startsWith(`--${HEADLESS_FLAG}=`),
+)
+  ? 'cloud'
+  : 'local';
 
 // ── Runtime environment ──────────────────────────────────────────────
 
@@ -49,6 +58,8 @@ type RuntimeEnvKey =
   | 'POSTHOG_WIZARD_BENCHMARK_FILE'
   | 'POSTHOG_WIZARD_LOG_DIR'
   | 'POSTHOG_WIZARD_DEBUG'
+  // Local/CI escape hatch to disable Warlock scanning without the PostHog flag.
+  | 'POSTHOG_WIZARD_WARLOCK_DISABLED'
   | 'DEBUG'
   // Agent / MCP
   | 'MCP_URL'

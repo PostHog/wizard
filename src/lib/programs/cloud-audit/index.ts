@@ -12,13 +12,13 @@
  */
 import type { ProgramRun } from '@lib/agent/agent-runner';
 import { AGENT_SKILL_STEPS } from '@lib/programs/agent-skill/index';
+import { buildClassicAuditRun } from '@lib/programs/audit/index';
 import { withAuditScreens } from '@lib/programs/audit/screens';
 import type { ProgramConfig, ProgramStep } from '@lib/programs/program-step';
 import { AUDIT_REPORT_FILE } from '@lib/programs/audit/types';
 import { WIZARD_TOOL_NAMES } from '@lib/wizard-tools';
 import type { WizardSession } from '@lib/wizard-session';
 import { OutroKind } from '@lib/wizard-session';
-import { getCloudUrlFromRegion } from '@utils/urls';
 
 import { seedCloudAuditLedger } from './seed.js';
 
@@ -37,7 +37,6 @@ export function buildCloudAuditRun(session: WizardSession): ProgramRun {
   seedCloudAuditLedger(session.installDir);
 
   return {
-    executor: 'cloud',
     integrationLabel: 'cloud-audit',
     spinnerMessage: 'Auditing PostHog integration...',
     successMessage: SUCCESS_MESSAGE,
@@ -46,21 +45,15 @@ export function buildCloudAuditRun(session: WizardSession): ProgramRun {
     reportFile: AUDIT_REPORT_FILE,
     docsUrl: DOCS_URL,
 
-    buildOutroData: (sess, _credentials, cloudRegion) => {
-      const cloudUrl = cloudRegion
-        ? getCloudUrlFromRegion(cloudRegion)
-        : undefined;
-      return {
-        kind: OutroKind.Success as const,
-        message: SUCCESS_MESSAGE,
-        reportFile: AUDIT_REPORT_FILE,
-        docsUrl: DOCS_URL,
-        continueUrl:
-          sess.signup && cloudUrl
-            ? `${cloudUrl}/products?source=wizard`
-            : undefined,
-      };
-    },
+    buildOutroData: (sess, credentials) => ({
+      kind: OutroKind.Success as const,
+      message: SUCCESS_MESSAGE,
+      reportFile: AUDIT_REPORT_FILE,
+      docsUrl: DOCS_URL,
+      continueUrl: sess.signup
+        ? `${credentials.host.appHost}/products?source=wizard`
+        : undefined,
+    }),
   };
 }
 
@@ -81,6 +74,10 @@ export const cloudAuditConfig: ProgramConfig = {
   requiresAi: true,
   disallowedTools: [WIZARD_TOOL_NAMES.wizardAsk],
 
-  run: (session: WizardSession): Promise<ProgramRun> =>
+  // Bound to the `remote` sequence in the switchboard (PROGRAM_BINDINGS), so the
+  // remote sequence resolves `remoteRun`; `run` is the local fallback if the
+  // hosted arm fails.
+  run: buildClassicAuditRun,
+  remoteRun: (session: WizardSession): Promise<ProgramRun> =>
     Promise.resolve(buildCloudAuditRun(session)),
 };

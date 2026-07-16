@@ -55,9 +55,14 @@ async function runDoctorCI(options: Record<string, unknown>): Promise<void> {
       projectId: options.projectId
         ? Number(options.projectId as string)
         : undefined,
+      baseUrl: options.baseUrl as string | undefined,
     });
 
-    const issues = await fetchHealthIssues(accessToken, host, projectId);
+    const issues = await fetchHealthIssues(
+      accessToken,
+      host.apiHost,
+      projectId,
+    );
     if (issues.length === 0) {
       getUI().log.success('No active issues — your project looks healthy.');
       process.exit(0);

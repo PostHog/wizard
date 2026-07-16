@@ -1,7 +1,13 @@
 import {
-  buildWizardMetadata,
+  Harness,
+  Sequence,
+  WIZARD_ORCHESTRATOR_FLAG_KEY,
+  WIZARD_USE_PI_HARNESS_FLAG_KEY,
+} from '@lib/constants';
+import {
   isOrchestratorEnabled,
-} from '@lib/agent/agent-interface';
+  resolveBinding,
+} from '@lib/agent/runner/switchboard';
 
 describe('isOrchestratorEnabled', () => {
   it('is true only when the wizard-orchestrator flag is true', () => {
@@ -20,17 +26,40 @@ describe('isOrchestratorEnabled', () => {
   });
 });
 
-describe('buildWizardMetadata', () => {
-  it('selects a known variant header from the flag', () => {
-    expect(buildWizardMetadata({ 'wizard-variant': 'subagents' })).toEqual({
-      VARIANT: 'subagents',
+describe('pi + orchestrator gating', () => {
+  const program = 'posthog-integration' as const;
+
+  it('runs the orchestrator on pi when both flags select pi + orchestrator', () => {
+    // pi implements runTask — the capability clamp passes and the flag stands.
+    const binding = resolveBinding({
+      program,
+      flags: {
+        [WIZARD_USE_PI_HARNESS_FLAG_KEY]: 'true',
+        [WIZARD_ORCHESTRATOR_FLAG_KEY]: 'true',
+      },
     });
+    expect(binding.harness).toBe(Harness.pi);
+    expect(binding.sequence).toBe(Sequence.orchestrator);
   });
 
-  it('falls back to the base variant for unknown or missing flags', () => {
-    expect(buildWizardMetadata({ 'wizard-variant': 'nope' })).toEqual({
-      VARIANT: 'base',
+  it('leaves the orchestrator flag effective for the anthropic harness', () => {
+    const binding = resolveBinding({
+      program,
+      flags: {
+        [WIZARD_USE_PI_HARNESS_FLAG_KEY]: 'false',
+        [WIZARD_ORCHESTRATOR_FLAG_KEY]: 'true',
+      },
     });
-    expect(buildWizardMetadata({})).toEqual({ VARIANT: 'base' });
+    expect(binding.harness).toBe(Harness.anthropic);
+    expect(binding.sequence).toBe(Sequence.orchestrator);
+  });
+
+  it('resolves pi alone to linear (the binding default)', () => {
+    const binding = resolveBinding({
+      program,
+      flags: { [WIZARD_USE_PI_HARNESS_FLAG_KEY]: 'true' },
+    });
+    expect(binding.harness).toBe(Harness.pi);
+    expect(binding.sequence).toBe(Sequence.linear);
   });
 });

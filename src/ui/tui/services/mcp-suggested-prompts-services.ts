@@ -23,7 +23,9 @@ import type { ApiUser } from '@lib/api';
  */
 export type AgentChunk =
   | { kind: 'text'; text: string }
-  | { kind: 'tool-call'; toolName: string; detail: string }
+  /** `command` carries CLI mode's exec command string (`call <tool> …`) so the
+   *  screen can recover the inner tool for context-aware follow-ups. */
+  | { kind: 'tool-call'; toolName: string; detail: string; command?: string }
   | { kind: 'tool-result'; toolName: string; detail: string }
   | { kind: 'error'; text: string }
   /** Stream completed. `sessionId` is the SDK session ID of the just-
@@ -75,7 +77,7 @@ export interface McpSuggestedPromptsServices {
  * actually invoked.
  */
 export function createMcpSuggestedPromptsServices(
-  _store: WizardStore,
+  store: WizardStore,
 ): McpSuggestedPromptsServices {
   return {
     performLogin: async () => {
@@ -86,6 +88,7 @@ export function createMcpSuggestedPromptsServices(
         projectId: undefined,
         email: undefined,
         region: undefined,
+        baseUrl: store.session.baseUrl,
         // Widens the OAuth scope grant: base `WIZARD_OAUTH_SCOPES` plus
         // read on every product surface (flags, experiments, surveys,
         // replays, errors, web/LLM analytics, cohorts, persons) plus

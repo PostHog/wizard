@@ -7,17 +7,25 @@
 const WIZARD_COMMANDMENTS = [
   'Never hallucinate a PostHog project token, host, or any other secret. Always use the real values that have been configured for this project (for example via environment variables).',
 
+  'Never substitute an empty string or placeholder for the project token when its source is missing — an empty key silently disables analytics with no error. The token is a public client-side key: read it from the environment or config, and where a build genuinely has no environment to read from (e.g. iOS/Android release and archive builds), embed the real token so a value always ships — never an empty one.',
+
   'Never write API keys, access tokens, or other secrets directly into source code. Always reference environment variables instead, and rely on the wizard-tools MCP server (check_env_keys / set_env_values) to create or update .env files.',
 
   'Always use the detect_package_manager tool from the wizard-tools MCP server to determine the package manager. Do not guess based on lockfiles or hard-code npm, yarn, pnpm, bun, pip, etc.',
-
-  'When installing packages, start the installation as a background task and then continue with other work. Do not block waiting for installs to finish unless explicitly instructed.',
 
   'Before writing to any file, you MUST read that exact file immediately beforehand using the Read tool, even if you have already read it earlier in the run. This avoids tool failures and stale edits.',
 
   'Treat feature flags, custom properties, and event names as part of an analytics contract. Prefer reusing existing names and patterns in the project. When you must introduce new ones, make them clear, descriptive, and consistent with existing conventions, and avoid scattering the same flag or property across many unrelated callsites.',
 
+  'Keep PostHog data capture at its defaults unless the user explicitly asks otherwise. Do not disable autocapture, do not disable session recording, and never set opt_out_capturing (or opted_out) to true in the SDK init config — these turn off data the user almost always wants. Note: posthog.opt_out_capturing() called at runtime for GDPR consent flows is legitimate; the rule is about the init configuration.',
+
+  "Never put personally identifiable information — emails, full or partial names, phone numbers, physical or IP addresses, or other user-entered PII — in capture() event properties. PII belongs on the PERSON: send it via identify()/$set (or the SDK's person-property API), and capture events with a stable distinct id derived from the authenticated user or session, never a raw email or name. This holds for every SDK, client and server.",
+
   'Prefer minimal, targeted edits that achieve the requested behavior while preserving existing structure and style. Avoid large refactors, broad reformatting, or unrelated changes unless explicitly requested.',
+
+  'When you change a file that already exists, edit it in place. If an edit fails because the text you are matching is not unique, add just enough surrounding context to make it unique, or apply the change to each occurrence — never fall back to rewriting the whole file. Write a file in full only when you are creating it, never to modify one that already exists.',
+
+  'Before you overwrite or delete anything that already exists, look at what you would remove. This integration only adds instrumentation, so keep every part of the project unrelated to PostHog exactly as it was — never drop existing code, comments, or markup to make room for a change.',
 
   'Do not spawn subagents unless explicitly instructed to do so.',
 

@@ -12,11 +12,75 @@ import { VERSION } from './version';
  */
 export const DEFAULT_AGENT_MODEL = 'claude-sonnet-4-6';
 
+/** Next sonnet generation. A `wizard-pi-model` option for pi-vs-anthropic parity. */
+export const SONNET_5_MODEL = 'claude-sonnet-5';
+
 /**
  * Cheaper, faster model for mechanical agent work (e.g. repo classification
  * during source-map detection). Passed via AgentConfig.modelOverride.
  */
 export const HAIKU_MODEL = 'claude-haiku-4-5-20251001';
+
+/**
+ * Larger model for planning / hard work. Named the switchboard could route to
+ * from `PROGRAM_BINDINGS[id].model` or `contextMillOverride`.
+ */
+export const OPUS_MODEL = 'claude-opus-4-8';
+
+/**
+ * OpenAI-class peer of sonnet, served by the LLM gateway over OpenAI
+ * completions. Enables cross-provider A/B without a wizard release.
+ */
+export const GPT5_MODEL = 'openai/gpt-5';
+
+/** Newer sonnet-class openai flagship (list: $2.50/$15 per MTok). */
+export const GPT5_4_MODEL = 'openai/gpt-5.4';
+
+/**
+ * Smaller, faster, cheaper openai reasoning model. The pi runner is paired with
+ * this (a reasoning model follows the integration skill; the mini tier keeps a
+ * run to a few minutes where flagship gpt-5 takes far longer). Reasoning effort
+ * is set per-model in the switchboard capability matrix.
+ */
+export const GPT5_MINI_MODEL = 'openai/gpt-5-mini';
+
+// Latest openai flagship generation. The 5.6 line ships tiered variants —
+// `luna` (fast/cheap: $1/$6 per MTok), `terra` (mid: $2.50/$15), `sol` (top:
+// $5/$30) — plus the `gpt-5.5` flagship. All are `wizard-pi-model` options for
+// cross-provider A/B; gateway ids carry no `/` or `.` in the variant keys.
+export const GPT5_6_LUNA_MODEL = 'openai/gpt-5.6-luna';
+export const GPT5_6_TERRA_MODEL = 'openai/gpt-5.6-terra';
+export const GPT5_6_SOL_MODEL = 'openai/gpt-5.6-sol';
+export const GPT5_5_MODEL = 'openai/gpt-5.5';
+
+// ── Agent runner routing axes ────────────────────────────────────────
+
+/**
+ * The two agent runner routing axes: **harness** (which agent SDK drives the LLM)
+ * and **sequence** (which pipeline shape orchestrates the work). Single source
+ * of truth for yargs `choices`, session fields, the runner registry, and tests
+ * — `Object.values(Harness)` gives an iterable of the values when an array is
+ * needed. Adding a member is enough to pick it up everywhere.
+ *
+ * Naming matches the directory layout — see `src/lib/agent/runner/harness/`
+ * and `src/lib/agent/runner/sequence/`.
+ */
+export enum Harness {
+  anthropic = 'anthropic',
+  pi = 'pi',
+  /** The hosted PostHog agent platform. The agent runs server-side off a frozen
+   *  bundle and reaches back for this machine's filesystem via client tools. */
+  agentsPlatform = 'agents-platform',
+}
+
+export enum Sequence {
+  linear = 'linear',
+  orchestrator = 'orchestrator',
+  /** Remote bundle execution: the agent runs server-side on the agent platform,
+   *  so there is no local skill install or prompt assembly. Pairs with the
+   *  `agents-platform` harness. */
+  remote = 'remote',
+}
 
 // ── Integration / CLI ───────────────────────────────────────────────
 
@@ -39,15 +103,16 @@ export enum Integration {
   fastapi = 'fastapi',
   laravel = 'laravel',
   sveltekit = 'sveltekit',
+  kmp = 'kmp',
   swift = 'swift',
   android = 'android',
   rails = 'rails',
 
-  // Language fallbacks
+  // Language fallbacks. Keep javascriptNode last: it matches any package.json.
   python = 'python',
   ruby = 'ruby',
-  javascriptNode = 'javascript_node',
   javascript_web = 'javascript_web',
+  javascriptNode = 'javascript_node',
 }
 
 export interface Args {
@@ -79,6 +144,8 @@ export const DEFAULT_HOST_URL = IS_DEV
   ? 'http://localhost:8010'
   : 'https://us.i.posthog.com';
 export const ISSUES_URL = 'https://github.com/posthog/wizard/issues';
+/** Public status page, linked from transient-failure guidance (e.g. OAuth server_error). */
+export const POSTHOG_STATUS_PAGE_URL = 'https://www.posthogstatus.com';
 export const CONTEXT_MILL_URL = 'https://github.com/PostHog/context-mill';
 /**
  * Latest context-mill release page — the BYOAI download link shown in
@@ -119,9 +186,6 @@ export const ANALYTICS_TEAM_TAG = 'docs-and-wizard';
 
 // ── OAuth / Auth ────────────────────────────────────────────────────
 
-export const POSTHOG_OAUTH_URL = IS_DEV
-  ? 'http://localhost:8010'
-  : 'https://oauth.posthog.com';
 export const OAUTH_PORTS = [8239, 8238, 8240, 8237, 8236, 8235] as const;
 export const POSTHOG_US_CLIENT_ID = 'c4Rdw8DIxgtQfA80IiSnGKlNX8QN00cFWF00QQhM';
 export const POSTHOG_EU_CLIENT_ID = 'bx2C5sZRN03TkdjraCcetvQFPGH6N2Y9vRLkcKEy';
@@ -188,27 +252,42 @@ export const WIZARD_OAUTH_SCOPES = [
 
 export const WIZARD_INTERACTION_EVENT_NAME = 'wizard interaction';
 export const WIZARD_REMARK_EVENT_NAME = 'wizard remark';
-/** Feature flag key whose value selects a variant from WIZARD_VARIANTS. */
-export const WIZARD_VARIANT_FLAG_KEY = 'wizard-variant';
 /** Boolean feature flag that routes a run to the experimental orchestrator runner. */
 export const WIZARD_ORCHESTRATOR_FLAG_KEY = 'wizard-orchestrator';
+/** Boolean flag: on → pi harness + the pi model pairing; off/missing → binding default. */
+export const WIZARD_USE_PI_HARNESS_FLAG_KEY = 'wizard-use-pi-harness';
+/** Multivariate flag: pi's model. Variant keys map to gateway ids in `PI_MODEL_FLAG_VARIANTS`. */
+export const WIZARD_PI_MODEL_FLAG_KEY = 'wizard-pi-model';
+/** Multivariate flag: reasoning-effort override for pi models (minimal/low/medium/high/xhigh). */
+export const WIZARD_PI_EFFORT_FLAG_KEY = 'wizard-pi-effort';
 /** Feature flag key that gates the intro-screen "Tools" menu. */
 export const WIZARD_TOOLS_MENU_FLAG_KEY = 'wizard-tools-menu';
 /**
- * Boolean feature flag that runs `wizard audit` against the hosted agent
- * platform instead of a local Claude Agent SDK subprocess. The platform is
- * internal-only and its `posthog` auth mode requires the caller to be in the
- * agent's own org, so this flag must stay targeted to PostHog staff — an
- * external user who got it enabled would only reach a 403.
+ * Boolean feature flag that binds `wizard audit` to the `remote` sequence on the
+ * `agents-platform` harness — the audit runs on the hosted agent platform instead
+ * of a local agent subprocess. The platform is internal-only and its `posthog`
+ * auth mode requires the caller to be in the agent's own org, so this flag must
+ * stay targeted to PostHog staff — an external user who got it enabled would only
+ * reach a 403.
  */
 export const WIZARD_CLOUD_AUDIT_FLAG_KEY = 'wizard-cloud-audit';
-/** Variant key -> metadata for wizard run (VARIANT flag selects which entry to use). */
-export const WIZARD_VARIANTS: Record<string, Record<string, string>> = {
-  base: { VARIANT: 'base' },
-  subagents: { VARIANT: 'subagents' },
-};
+/** Boolean flag: agentic project scoping for non-interactive basic-integration runs. */
+export const WIZARD_BASIC_INTEGRATION_AGENTIC_DETECTION_FLAG_KEY =
+  'wizard-basic-integration-agentic-detection';
 /** User-Agent for wizard HTTP requests and MCP server identification. */
 export const WIZARD_USER_AGENT = `posthog/wizard; version: ${VERSION}`;
+
+/**
+ * User-Agent for a specific program's MCP calls, tagged with `program: <id>` so the
+ * backend can attribute work per program (e.g. the `self-driving` program's warehouse
+ * sources are recorded as `created_via=self_driving` rather than plain `wizard`). The
+ * base `posthog/wizard` token is preserved, so anything keying only on that still matches.
+ */
+export function wizardUserAgentForProgram(programId?: string): string {
+  return programId
+    ? `${WIZARD_USER_AGENT}; program: ${programId}`
+    : WIZARD_USER_AGENT;
+}
 
 // ── HTTP headers ─────────────────────────────────────────────────────
 
@@ -221,6 +300,9 @@ export const POSTHOG_FLAG_HEADER_PREFIX = 'X-POSTHOG-FLAG-';
 
 /** Timeout for framework / project detection probes (ms). */
 export const DETECTION_TIMEOUT_MS = 10_000;
+
+/** Timeout for the agentic project scan (ms); past it the run falls back to root detection. */
+export const AGENTIC_DETECTION_TIMEOUT_MS = 60_000;
 
 /**
  * Timeout for the OAuth authorization flow (ms).

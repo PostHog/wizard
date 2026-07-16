@@ -3,20 +3,19 @@ import { access, rm } from 'node:fs/promises';
 import type { ProgramConfig } from '@lib/programs/program-step';
 import type { ProgramRun } from '@lib/agent/agent-runner';
 import { OutroKind } from '@lib/wizard-session';
-import { getUiHostFromHost } from '@utils/urls';
 import { createSkillProgram } from '../agent-skill/index.js';
-import { getContentBlocks as agentSkillContentBlocks } from '../agent-skill/content/index.js';
 import { SELF_DRIVING_PROGRAM } from './steps.js';
 import { SELF_DRIVING_ABORT_CASES } from './detect.js';
 import { buildSelfDrivingPrompt } from './prompt.js';
 import { getTips } from './content/tips.js';
+import { getContentBlocks } from './content/index.js';
 
 export const SELF_DRIVING_SKILL_ID = 'self-driving-setup';
 const REPORT_FILE = 'posthog-self-driving-report.md';
 const DOCS_URL = 'https://posthog.com/docs';
 const SUCCESS_MESSAGE =
-  'Self-driving is on! PostHog will start scanning within ~30 minutes ' +
-  'and surface findings in your inbox.';
+  'Self-driving is on. PostHog is scanning your project; first findings ' +
+  'hit your inbox within ~30 minutes.';
 const WIZARD_MARKER = '.posthog-wizard';
 
 /**
@@ -72,22 +71,24 @@ const run: ProgramRun = {
   },
 
   buildOutroData: (_session, credentials) => {
-    const uiHost = getUiHostFromHost(credentials.host).replace(/\/$/, '');
+    const uiHost = credentials.host.appHost.replace(/\/$/, '');
     const inboxUrl = `${uiHost}/project/${credentials.projectId}/inbox`;
     return {
       kind: OutroKind.Success as const,
-      message:
-        'Self-driving is on. PostHog is scanning your project — ' +
-        'first findings hit your inbox within ~30 minutes.',
+      message: SUCCESS_MESSAGE,
       primaryLink: { label: 'Your Self-driving inbox', url: inboxUrl },
       nextSteps: {
         heading: 'In your inbox you can:',
         items: [
-          'Review the findings PostHog surfaces',
-          'Triage what matters and dismiss the noise',
-          'Kick off fixes and open issues',
+          'Investigate reports with the agent',
+          'Tag teammates to loop them in',
+          'Kick off a PR when you like the proposed fix ($15 flat)',
+          'Or work from Slack (tag @PostHog) and MCP',
         ],
       },
+      body:
+        'Pricing: scouts, signals, and reports are free. You pay a flat ' +
+        '$15 only when a report ships a PR.',
       reportFile: REPORT_FILE,
     };
   },
@@ -111,18 +112,7 @@ export const selfDrivingConfig: ProgramConfig = {
   steps: SELF_DRIVING_PROGRAM,
   run,
   getTips,
-  // The shared agent-skill Learn deck lingers ~60s on its last block before
-  // RunScreen flips to the Self-driving Tips pane; shorten that final pause
-  // so the scout/source/inbox tips appear promptly (the Tasks pane already
-  // shows progress). Same deck, just a quicker hand-off.
-  getContentBlocks: (store) => {
-    const blocks = agentSkillContentBlocks(store);
-    return blocks.map((b, i) =>
-      i === blocks.length - 1 && typeof b === 'object'
-        ? { ...b, pause: 5000 }
-        : b,
-    );
-  },
+  getContentBlocks,
 };
 
 export { SELF_DRIVING_PROGRAM } from './steps.js';

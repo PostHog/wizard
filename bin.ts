@@ -1,7 +1,11 @@
 #!/usr/bin/env node
 import { satisfies } from 'semver';
 
-const NODE_VERSION_RANGE = '>=18.17.0';
+// Keep in sync with `engines.node` in package.json. npx does not enforce
+// engines, so this preflight is the only thing standing between an old Node
+// runtime and a cryptic dependency crash (e.g. undici's markAsUncloneable
+// TypeError on Node < 22.10).
+const NODE_VERSION_RANGE = '>=22.22.0';
 
 // Have to run this above the other imports because they are importing clack that
 // has the problematic imports.
@@ -32,6 +36,7 @@ if (process.env.NODE_ENV === 'test') {
 import { Wizard } from './src/wizard';
 import { basicIntegrationCommand } from './src/commands/basic-integration';
 import { mcpCommand } from './src/commands/mcp';
+import { mcpAnalyticsCommand } from './src/commands/mcp-analytics';
 import { auditCommand } from './src/commands/audit';
 import { doctorCommand } from './src/commands/doctor';
 import { migrateCommand } from './src/commands/migrate';
@@ -61,6 +66,7 @@ function resolveInstallDir(): string {
 
 Wizard.use(basicIntegrationCommand)
   .use(mcpCommand)
+  .use(mcpAnalyticsCommand)
   .use(cliCommand)
   .use(auditCommand)
   .use(doctorCommand)

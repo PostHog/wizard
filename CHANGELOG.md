@@ -1,5 +1,217 @@
 # Changelog
 
+## [2.45.0](https://github.com/PostHog/wizard/compare/v2.44.0...v2.45.0) (2026-07-16)
+
+
+### Features
+
+* add Kotlin Multiplatform (KMP) framework support ([#906](https://github.com/PostHog/wizard/issues/906)) ([983dbe0](https://github.com/PostHog/wizard/commit/983dbe0a6c6da64547d1df80a002762203a68ff3))
+* **headless:** agentic monorepo detection behind basic-integration-agentic-detection flag ([#884](https://github.com/PostHog/wizard/issues/884)) ([b153327](https://github.com/PostHog/wizard/commit/b153327f8cfa0287c0b4f3b79a78ba3363414f23))
+* **orchestrator:** install step-skills from a per-group bundle ([#911](https://github.com/PostHog/wizard/issues/911)) ([c02199a](https://github.com/PostHog/wizard/commit/c02199ae8eb598c7239efc68936830e928176768))
+* **pi:** orchestrator runTask — per-task pi sessions with in-process queue tools ([#853](https://github.com/PostHog/wizard/issues/853)) ([da2706e](https://github.com/PostHog/wizard/commit/da2706e09bfd4e13cffdf8c95553531bb6e56c06))
+
+
+### Bug Fixes
+
+* **fence:** exact per-manager bash allowlist with agent feedback ([#888](https://github.com/PostHog/wizard/issues/888)) ([#892](https://github.com/PostHog/wizard/issues/892)) ([d9c016d](https://github.com/PostHog/wizard/commit/d9c016dcc2df313f26039a62ea51c8732802097e))
+* upload event plans in headless runs ([#891](https://github.com/PostHog/wizard/issues/891)) ([dcaf90f](https://github.com/PostHog/wizard/commit/dcaf90f65a46d9afa83f3339b9ceb34b829ddd9e))
+
+## [2.44.0](https://github.com/PostHog/wizard/compare/v2.43.0...v2.44.0) (2026-07-15)
+
+
+### Features
+
+* **cli:** honor headless flag in family/native command dispatch ([#893](https://github.com/PostHog/wizard/issues/893)) ([84695ed](https://github.com/PostHog/wizard/commit/84695edef14fb16ce339f602d79a6cc33bf957fd))
+* **cli:** scope headless flag to base integration + audit ([#905](https://github.com/PostHog/wizard/issues/905)) ([a99c5f2](https://github.com/PostHog/wizard/commit/a99c5f2e247eeccffd4dd0b510a34f4ed054767c))
+* **self-driving:** attribute self-driving sources as created_via=self_driving ([#899](https://github.com/PostHog/wizard/issues/899)) ([7dbd53f](https://github.com/PostHog/wizard/commit/7dbd53f38d1e06a0fa708ab60a8eaf50ddfaeddc))
+* **self-driving:** provision an account when no PostHog is found ([#774](https://github.com/PostHog/wizard/issues/774)) ([6483fb0](https://github.com/PostHog/wizard/commit/6483fb0cabc5c031873f7f83c4b34559c72bc551))
+
+
+### Bug Fixes
+
+* **auth:** copy-link key + narrow-terminal guard on the OAuth screen ([#839](https://github.com/PostHog/wizard/issues/839)) ([139bda8](https://github.com/PostHog/wizard/commit/139bda8d80781136345f216db95e2c11269a5302))
+
+## [2.43.0](https://github.com/PostHog/wizard/compare/v2.42.0...v2.43.0) (2026-07-14)
+
+
+### Features
+
+* **self-driving:** default to the single connected repo for GitHub Issues ([#878](https://github.com/PostHog/wizard/issues/878)) ([93b5d87](https://github.com/PostHog/wizard/commit/93b5d8734c7f463930b8b3588745017c9601986f))
+* **self-driving:** ground custom-scout gap analysis in for-agents context ([#876](https://github.com/PostHog/wizard/issues/876)) ([3ddf98e](https://github.com/PostHog/wizard/commit/3ddf98ecd590c0dfc40f8b37c44818a79db50606))
+* **self-driving:** show PR pricing in the learn deck, tips and outro ([#875](https://github.com/PostHog/wizard/issues/875)) ([bdfff61](https://github.com/PostHog/wizard/commit/bdfff610ce4a8f116f72883d007e86e43bd6eedd))
+* surface the notebook link in the integration outro ([#882](https://github.com/PostHog/wizard/issues/882)) ([6c2656d](https://github.com/PostHog/wizard/commit/6c2656daa8aab62ef9cd8d146dacd166bdfebab5))
+* **switchboard:** add gpt-5.6 line + gpt-5.5 as pi model options, and a pi anti-reformat guard ([#886](https://github.com/PostHog/wizard/issues/886)) ([75a3438](https://github.com/PostHog/wizard/commit/75a3438b0b6da6096e9755230b416bf94e4bea61))
+
+
+### Bug Fixes
+
+* **warehouse:** unblock wizard_ask after a timed-out prompt ([#872](https://github.com/PostHog/wizard/issues/872)) ([c4d2f30](https://github.com/PostHog/wizard/commit/c4d2f3043af1caf5d691a1d706bd514000d5d007))
+
+## [2.42.0](https://github.com/PostHog/wizard/compare/v2.41.0...v2.42.0) (2026-07-13)
+
+
+### Features
+
+* **warehouse:** close warehouse-source telemetry gaps ([#873](https://github.com/PostHog/wizard/issues/873)) ([fdafff8](https://github.com/PostHog/wizard/commit/fdafff85ff5efa5c333f55ece8fee42afe901583))
+
+
+### Bug Fixes
+
+* **ci:** only advertise CI-capable app categories in the wizard-ci menu ([#867](https://github.com/PostHog/wizard/issues/867)) ([41f5536](https://github.com/PostHog/wizard/commit/41f5536a1cf051628cd5738b76a7fa62198b386b))
+* **mcp:** describe MCP features as PostHog areas, not a tool roster ([#861](https://github.com/PostHog/wizard/issues/861)) ([669431c](https://github.com/PostHog/wizard/commit/669431c3aa0b83d0ac50de2f50f5ce360cd9cdba))
+* **pi:** emit real values for prompt placeholders (links + templating) ([#868](https://github.com/PostHog/wizard/issues/868)) ([fae04d2](https://github.com/PostHog/wizard/commit/fae04d23a0ee189cc82ed12a8a8831def3f3a8ec))
+* sync Node preflight range with package.json engines ([#854](https://github.com/PostHog/wizard/issues/854)) ([569051b](https://github.com/PostHog/wizard/commit/569051b5a7e1dbe313a55a6808f1ed85027f431b))
+
+## [2.41.0](https://github.com/PostHog/wizard/compare/v2.40.0...v2.41.0) (2026-07-10)
+
+
+### Features
+
+* switch the wizard's MCP connections to CLI mode ([#858](https://github.com/PostHog/wizard/issues/858)) ([9c3a1c1](https://github.com/PostHog/wizard/commit/9c3a1c1c4b16cb32d57d82f53a5e1e7d634572bd))
+
+
+### Bug Fixes
+
+* **pi:** allow rm of files inside the working directory ([#834](https://github.com/PostHog/wizard/issues/834)) ([7e030af](https://github.com/PostHog/wizard/commit/7e030af5c2c34460575904222c0701d54cf8c42f))
+
+## [2.40.0](https://github.com/PostHog/wizard/compare/v2.39.0...v2.40.0) (2026-07-09)
+
+
+### Features
+
+* **e2e-harness:** preserve ANSI color in snapshot frames ([#730](https://github.com/PostHog/wizard/issues/730)) ([406b41d](https://github.com/PostHog/wizard/commit/406b41dcdb605b1aae0f5f88dfd692357d246731))
+
+
+### Bug Fixes
+
+* **agent:** corrected read-before-write prompt, install_skill capture-and-continue ([#816](https://github.com/PostHog/wizard/issues/816)) ([c12cdb4](https://github.com/PostHog/wizard/commit/c12cdb4cb2c71684aaa387dec7ba613893f0b798))
+* **detection:** stop generic Node claiming Vite apps and Android claiming Flutter ([#817](https://github.com/PostHog/wizard/issues/817)) ([f76a176](https://github.com/PostHog/wizard/commit/f76a176dffea88a740934c3938d645c152e83aaf))
+* pin wizard-internal MCP connections to tools mode ([#851](https://github.com/PostHog/wizard/issues/851)) ([16759b2](https://github.com/PostHog/wizard/commit/16759b23f15bc73d5d3405eb4a85067f51b47c97))
+
+## [2.39.0](https://github.com/PostHog/wizard/compare/v2.38.2...v2.39.0) (2026-07-08)
+
+
+### Features
+
+* **analytics:** tag every event with run_surface (cloud/local) ([#831](https://github.com/PostHog/wizard/issues/831)) ([e21add5](https://github.com/PostHog/wizard/commit/e21add5852fea8afeb7f2252a9b18845b157b966))
+* **self-driving:** learn deck and copy rewrites ([#819](https://github.com/PostHog/wizard/issues/819)) ([2767689](https://github.com/PostHog/wizard/commit/27676890eb6dd5bfac757cdb969bfa08f369df46))
+
+
+### Bug Fixes
+
+* **deps:** bump @posthog/warlock to 0.2.3 ([#827](https://github.com/PostHog/wizard/issues/827)) ([2c33885](https://github.com/PostHog/wizard/commit/2c33885145c12280674dddea8a399114be8a41e4))
+* **pi:** scan through warlock, delete the resurrected legacy scanner ([#804](https://github.com/PostHog/wizard/issues/804)) ([383ac5d](https://github.com/PostHog/wizard/commit/383ac5dc7f63da21d8127b4b96d12c62af7179f2))
+* **skills:** retry skill downloads with backoff ([#814](https://github.com/PostHog/wizard/issues/814)) ([dd943f7](https://github.com/PostHog/wizard/commit/dd943f724e306062f9f65d8ef9ac3cc6488482a7))
+* **switchboard:** disable the pi-harness flag on the headless (cloud) path ([#832](https://github.com/PostHog/wizard/issues/832)) ([f28f3f0](https://github.com/PostHog/wizard/commit/f28f3f01f235dbd88276cf37affcc8d75a4b4293))
+* **switchboard:** gate the pi harness flag to posthog-integration only ([#824](https://github.com/PostHog/wizard/issues/824)) ([eb5c61e](https://github.com/PostHog/wizard/commit/eb5c61e5bb569a3e46d9510bcf659091da56bb8b))
+* **yara:** repeat-block escalation + scan only edit replacement text (stacked on [#804](https://github.com/PostHog/wizard/issues/804)) ([#820](https://github.com/PostHog/wizard/issues/820)) ([2b589ad](https://github.com/PostHog/wizard/commit/2b589ad01bfe5150ffabc68d0644a472261260a1))
+
+## [2.38.2](https://github.com/PostHog/wizard/compare/v2.38.1...v2.38.2) (2026-07-07)
+
+
+### Bug Fixes
+
+* **self-driving:** detect existing native PostHog installs, offer continue-with-existing ([#803](https://github.com/PostHog/wizard/issues/803)) ([dbe9893](https://github.com/PostHog/wizard/commit/dbe989388aa1b3315f0d70faf05c2626d096b4d5))
+
+## [2.38.1](https://github.com/PostHog/wizard/compare/v2.38.0...v2.38.1) (2026-07-06)
+
+
+### Bug Fixes
+
+* **agent:** remark dropped when the model echoes the ask ([#806](https://github.com/PostHog/wizard/issues/806)) ([c7db44e](https://github.com/PostHog/wizard/commit/c7db44e4d80eb54e929a694415c750b92c36d5c1))
+* **skills:** survive missing unzip and missing temp dir on Windows ([#807](https://github.com/PostHog/wizard/issues/807)) ([2595fc0](https://github.com/PostHog/wizard/commit/2595fc02fb453b592b20a572871957e27c4dc404))
+
+## [2.38.0](https://github.com/PostHog/wizard/compare/v2.37.0...v2.38.0) (2026-07-06)
+
+
+### Features
+
+* **oauth:** explain OAuth failures with per-code remediation ([#801](https://github.com/PostHog/wizard/issues/801)) ([0434348](https://github.com/PostHog/wizard/commit/0434348d42a33650dbe5cce02097837d086f8581))
+* **pi:** real PostHog MCP dashboard, env lockdown, perf parity ([#701](https://github.com/PostHog/wizard/issues/701)) ([9730dfd](https://github.com/PostHog/wizard/commit/9730dfd97cb95b3b74b80e0ee6d4b2d723b0d953))
+* **pi:** telemetry parity with anthropic + pi/orchestrator clamp middleware ([#793](https://github.com/PostHog/wizard/issues/793)) ([3aafb51](https://github.com/PostHog/wizard/commit/3aafb515f484d2eb8bc109532689032eda31f38f))
+* **tui:** Hidden Ctrl+T HUD showing running/final LLM token cost ([#783](https://github.com/PostHog/wizard/issues/783)) ([b7ef4ba](https://github.com/PostHog/wizard/commit/b7ef4ba7930e7ef7e2614d0ade7e5f461fb36b83))
+
+
+### Bug Fixes
+
+* **pi:** completion guard + [STATUS]-alongside-tool ([#805](https://github.com/PostHog/wizard/issues/805)) ([4fc86b2](https://github.com/PostHog/wizard/commit/4fc86b2a653e0eb142b6c10bcbb7cfcb18de57c6))
+* **tui:** disable crashing Visualizer tab ([#787](https://github.com/PostHog/wizard/issues/787)) ([18bd38e](https://github.com/PostHog/wizard/commit/18bd38eb5a4c09660060256938c1c9b85b5ad4ad))
+
+## [2.37.0](https://github.com/PostHog/wizard/compare/v2.36.0...v2.37.0) (2026-07-01)
+
+
+### Features
+
+* Allow enabling products from Wizard ([#776](https://github.com/PostHog/wizard/issues/776)) ([198741f](https://github.com/PostHog/wizard/commit/198741ff1c529ce7f53ff8e90ac7c303ba69abd5))
+
+
+### Bug Fixes
+
+* **warehouse:** don't count cancelled wizard_ask against the per-run cap ([#770](https://github.com/PostHog/wizard/issues/770)) ([9f4b717](https://github.com/PostHog/wizard/commit/9f4b717f8b5f5f6099a5cde2ba0030f92f0016ef))
+
+## [2.36.0](https://github.com/PostHog/wizard/compare/v2.35.0...v2.36.0) (2026-06-30)
+
+
+### Features
+
+* **self-driving:** integrate first when the project has no PostHog ([#760](https://github.com/PostHog/wizard/issues/760)) ([3049d9c](https://github.com/PostHog/wizard/commit/3049d9c9e0e6e244c14b831181cdce012365fd60))
+
+
+### Bug Fixes
+
+* Don't stop analytics after integration run inside self-driving ([#771](https://github.com/PostHog/wizard/issues/771)) ([a7fe755](https://github.com/PostHog/wizard/commit/a7fe755d5e793899a54ca62f0e17dda9967908e7))
+
+## [2.35.0](https://github.com/PostHog/wizard/compare/v2.34.0...v2.35.0) (2026-06-30)
+
+
+### Features
+
+* **auth:** add --base-url to point the wizard at a custom PostHog stack ([#746](https://github.com/PostHog/wizard/issues/746)) ([80b6967](https://github.com/PostHog/wizard/commit/80b69675d1c89d406e094209f97f50065ded10a4))
+* **warlock:** explicit security scanner abort copy ([#751](https://github.com/PostHog/wizard/issues/751)) ([a4c6fd1](https://github.com/PostHog/wizard/commit/a4c6fd103a48eb69a1e87cfebeb6ee378f497986))
+
+
+### Bug Fixes
+
+* **setup:** honor the provided region in CI instead of probing [@me](https://github.com/me) ([#763](https://github.com/PostHog/wizard/issues/763)) ([f9215b3](https://github.com/PostHog/wizard/commit/f9215b37e4956ea83dbf0c94008432c3bf79f845))
+
+## [2.34.0](https://github.com/PostHog/wizard/compare/v2.33.0...v2.34.0) (2026-06-29)
+
+
+### Features
+
+* **oauth:** honor --project-id on the OAuth login path ([#743](https://github.com/PostHog/wizard/issues/743)) ([48d8362](https://github.com/PostHog/wizard/commit/48d836225aa4ec3e2e565438b467cd078a25cda8))
+
+
+### Bug Fixes
+
+* **agent:** isolate the agent SDK to PostHog gateway credentials ([#744](https://github.com/PostHog/wizard/issues/744)) ([7848ed0](https://github.com/PostHog/wizard/commit/7848ed05e759f671021f7fc43a3cb6459bd40436))
+* **self-driving:** github auth screen ([#741](https://github.com/PostHog/wizard/issues/741)) ([41076b1](https://github.com/PostHog/wizard/commit/41076b157916a338c2b2cfa4319f02a6392e4b3b))
+
+## [2.33.0](https://github.com/PostHog/wizard/compare/v2.32.0...v2.33.0) (2026-06-26)
+
+
+### Features
+
+* add experimental headless mode for published, non-interactive runs ([#732](https://github.com/PostHog/wizard/issues/732)) ([6a4a48d](https://github.com/PostHog/wizard/commit/6a4a48dc737e5cd1c71a21d1d3f8ae50a9437e39))
+* **self-driving:** Simplify step 1 of self-driving Wizard, as we don't need to check FFs anymore ([#739](https://github.com/PostHog/wizard/issues/739)) ([48e4516](https://github.com/PostHog/wizard/commit/48e45168600d9ff4979a62fa21fbc7073a09db54))
+* stream wizard run state to PostHog in headless mode ([#734](https://github.com/PostHog/wizard/issues/734)) ([69caa2a](https://github.com/PostHog/wizard/commit/69caa2a02d5d644b84b5977b06dab0718720d8c2))
+
+## [2.32.0](https://github.com/PostHog/wizard/compare/v2.31.0...v2.32.0) (2026-06-25)
+
+
+### Features
+
+* **commands:** add flat `mcp-analytics` command ([#731](https://github.com/PostHog/wizard/issues/731)) ([de3f487](https://github.com/PostHog/wizard/commit/de3f48729824f6dbf3cf2fc939862b3ce8c2fb77))
+
+## [2.31.0](https://github.com/PostHog/wizard/compare/v2.30.0...v2.31.0) (2026-06-25)
+
+
+### Features
+
+* **e2e-harness:** drive and snapshot the real wizard TUI ([#702](https://github.com/PostHog/wizard/issues/702)) ([bd875c3](https://github.com/PostHog/wizard/commit/bd875c36b1e1fe1823d0a3a94fa979948a87b34f))
+* tag LLM gateway traces with build type ([#727](https://github.com/PostHog/wizard/issues/727)) ([f97c53f](https://github.com/PostHog/wizard/commit/f97c53f9fc23a873df53678d2a7fb42d779c5c47))
+* tag LLM gateway traces with program_id and run identifiers ([#726](https://github.com/PostHog/wizard/issues/726)) ([fcdf70f](https://github.com/PostHog/wizard/commit/fcdf70faa9c390540664c895b28cf9654b65fd5d))
+
 ## [2.30.0](https://github.com/PostHog/wizard/compare/v2.29.0...v2.30.0) (2026-06-23)
 
 

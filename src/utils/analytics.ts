@@ -7,7 +7,7 @@ import {
 import type { WizardSession } from '@lib/wizard-session';
 import type { ApiUser } from '@lib/api';
 import { v4 as uuidv4 } from 'uuid';
-import { IS_PRODUCTION_BUILD } from '@env';
+import { IS_PRODUCTION_BUILD, RUN_SURFACE } from '@env';
 import { debug, logToFile } from './debug';
 import { applyCiFlagOverrides } from './ci-flag-overrides';
 
@@ -54,12 +54,13 @@ export class Analytics {
     {};
   private distinctId?: string;
   private anonymousId: string;
-  private runId: string;
+  private _runId: string;
   private sessionId: string | null = null;
   private appName = 'wizard';
   private activeFlags: Record<string, string> | null = null;
   private groups: Record<string, string> = {};
   private personProperties: Record<string, string> = {};
+  private terminalEventSent = false;
 
   constructor() {
     this.client = new PostHog(ANALYTICS_POSTHOG_PUBLIC_PROJECT_WRITE_KEY, {
@@ -87,11 +88,14 @@ export class Analytics {
     });
 
     this.tags = { $app_name: this.appName };
-    // Tag every run with its build type so prod / dev / ci segment cleanly
-    // in analytics. tsdown inlines IS_PRODUCTION_BUILD to `true` in published
-    // builds and `false` for dev/tsx/test runs. CI runs (always non-prod
-    // builds) upgrade this to 'ci' in runWizardCI.
+    // Tag every run with its build type so prod / dev / ci / headless segment
+    // cleanly in analytics. tsdown inlines IS_PRODUCTION_BUILD to `true` in
+    // published builds and `false` for dev/tsx/test runs. Non-interactive runs
+    // upgrade this in runWizardCI: dev `--ci` runs to 'ci', published headless
+    // runs to 'headless'.
     this.tags.build = IS_PRODUCTION_BUILD ? 'prod' : 'dev';
+
+    this.tags.run_surface = RUN_SURFACE;
 
     this.anonymousId = uuidv4();
 
@@ -102,10 +106,20 @@ export class Analytics {
     // from `anonymousId`, the pre-login *person* id that gets aliased onto
     // the real user at login. `$session_id` is intentionally not set here —
     // it stays null until OAuth completes (see identifyUser).
-    this.runId = uuidv4();
-    this.tags.run_id = this.runId;
+    this._runId = uuidv4();
+    this.tags.run_id = this._runId;
 
     this.distinctId = undefined;
+  }
+
+  /** Per-process run id, tagged on every event and gateway trace. */
+  get runId(): string {
+    return this._runId;
+  }
+
+  /** Build type for this run ('prod' | 'dev' | 'ci' | 'headless') — the same value tagged on every analytics event. */
+  get build(): string {
+    return String(this.tags.build ?? 'dev');
   }
 
   /**
@@ -258,13 +272,22 @@ export class Analytics {
       return;
     }
 
+    // First status wins. The interrupt fallback in start-tui fires
+    // shutdown('cancelled') on every TUI teardown; without this guard a run
+    // that already reported 'success' would emit a second, contradicting
+    // terminal event when the user dismisses the outro.
+    if (this.terminalEventSent) {
+      return;
+    }
+    this.terminalEventSent = true;
+
     this.client.capture({
       distinctId: this.distinctId ?? this.anonymousId,
       event: 'setup wizard finished',
       properties: {
-        // Hoisted out of `tags` so the run's terminal event is filterable by
-        // run, and joins the session when one was opened (post-OAuth runs).
-        run_id: this.runId,
+        // Flat for filtering; the nested `tags` snapshot stays for back-compat.
+        ...this.tags,
+        run_id: this._runId,
         ...(this.sessionId ? { $session_id: this.sessionId } : {}),
         status,
         tags: this.tags,

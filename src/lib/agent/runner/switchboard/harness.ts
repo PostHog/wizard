@@ -1,0 +1,152 @@
+/**
+ * Harness axis: registry, middleware, resolver. Mirrors `sequence.ts`.
+ */
+
+import { IS_PRODUCTION_BUILD, RUN_SURFACE } from '@env';
+import {
+  DEFAULT_AGENT_MODEL,
+  GPT5_4_MODEL,
+  GPT5_5_MODEL,
+  GPT5_6_LUNA_MODEL,
+  GPT5_6_SOL_MODEL,
+  GPT5_6_TERRA_MODEL,
+  GPT5_MINI_MODEL,
+  GPT5_MODEL,
+  Harness,
+  SONNET_5_MODEL,
+  WIZARD_CLOUD_AUDIT_FLAG_KEY,
+  WIZARD_PI_MODEL_FLAG_KEY,
+  WIZARD_USE_PI_HARNESS_FLAG_KEY,
+} from '@lib/constants';
+import { logToFile } from '@utils/debug';
+import type { ProgramId } from '@lib/programs/program-registry';
+import { anthropicBackend } from '../harness/anthropic';
+import { agentsPlatformBackend } from '../harness/agents-platform';
+import { piBackend } from '../harness/pi';
+import type { AgentHarness } from '../harness/types';
+import {
+  DEFAULT_BINDING,
+  PROGRAM_BINDINGS,
+  runChain,
+  type HarnessPick,
+  type Middleware,
+  type SwitchboardCtx,
+} from '.';
+
+export const HARNESS_OPTIONS: Partial<Record<Harness, AgentHarness>> = {
+  [Harness.anthropic]: anthropicBackend,
+  [Harness.pi]: piBackend,
+  [Harness.agentsPlatform]: agentsPlatformBackend,
+};
+
+/** Programs the `wizard-cloud-audit` flag may route to the agents-platform harness. */
+export const CLOUD_AUDIT_PROGRAMS = new Set<ProgramId>(['audit']);
+
+export function getHarness(name: Harness): AgentHarness {
+  const harness = HARNESS_OPTIONS[name];
+  if (!harness) {
+    throw new Error(`No harness registered for '${name}'.`);
+  }
+  return harness;
+}
+
+/** `wizard-pi-model` variant key → gateway id (variant keys can't carry `/` or `.`). */
+const PI_MODEL_FLAG_VARIANTS: Record<string, string> = {
+  'gpt-5': GPT5_MODEL,
+  'gpt-5-4': GPT5_4_MODEL,
+  'gpt-5-mini': GPT5_MINI_MODEL,
+  'gpt-5-5': GPT5_5_MODEL,
+  'gpt-5-6-luna': GPT5_6_LUNA_MODEL,
+  'gpt-5-6-terra': GPT5_6_TERRA_MODEL,
+  'gpt-5-6-sol': GPT5_6_SOL_MODEL,
+  'sonnet-4-6': DEFAULT_AGENT_MODEL,
+  'sonnet-5': SONNET_5_MODEL,
+};
+
+/** Programs the wizard-use-pi-harness flag may switch to pi; off this set the flag is a no-op and the binding default stands. */
+const PI_FLAG_PROGRAMS = new Set<ProgramId>(['posthog-integration']);
+
+/**
+ * `wizard-use-pi-harness` on → pi, paired with the `wizard-pi-model` variant
+ * (unknown/missing variant → gpt-5.4). Off `PI_FLAG_PROGRAMS`, the flag is
+ * ignored and the binding default stands.
+ */
+const flagRunnerOverride: Middleware<HarnessPick> = (ctx, next) => {
+  const pick = next();
+  if (ctx.flags[WIZARD_USE_PI_HARNESS_FLAG_KEY] !== 'true') return pick;
+  // The pi experiment is disabled on the cloud (headless) run surface.
+  if (RUN_SURFACE === 'cloud') return pick;
+  if (!PI_FLAG_PROGRAMS.has(ctx.program)) return pick;
+  if (ctx.trace) Object.assign(ctx.trace, { harness: 'flag', model: 'flag' });
+  const variant = ctx.flags[WIZARD_PI_MODEL_FLAG_KEY] ?? '';
+  return {
+    harness: Harness.pi,
+    model: PI_MODEL_FLAG_VARIANTS[variant] ?? GPT5_4_MODEL,
+  };
+};
+
+/** `--harness` override. Dev/test only — the option is gated out of published builds. */
+const cliHarnessOverride: Middleware<HarnessPick> = (ctx, next) => {
+  const pick = next();
+  if (!ctx.cliHarness) return pick;
+  if (ctx.trace) ctx.trace.harness = 'cli';
+  return { ...pick, harness: ctx.cliHarness };
+};
+
+/** `--model` override. Dev/test only — the option is gated out of published builds. */
+const cliModelOverride: Middleware<HarnessPick> = (ctx, next) => {
+  const pick = next();
+  if (!ctx.cliModel) return pick;
+  if (ctx.trace) ctx.trace.model = 'cli';
+  return { ...pick, model: ctx.cliModel };
+};
+
+/**
+ * `wizard-cloud-audit` on → the agents-platform harness, on the programs that
+ * declare a remote arm. Paired with the sequence-axis flag that picks `remote`
+ * (see sequence.ts). Off `CLOUD_AUDIT_PROGRAMS`, the flag is a no-op. The model
+ * is server-side (bundle-defined), so the value carried here is inert.
+ */
+const cloudAuditHarnessMw: Middleware<HarnessPick> = (ctx, next) => {
+  const pick = next();
+  if (ctx.flags[WIZARD_CLOUD_AUDIT_FLAG_KEY] !== 'true') return pick;
+  if (!CLOUD_AUDIT_PROGRAMS.has(ctx.program)) return pick;
+  if (ctx.trace) ctx.trace.harness = 'flag';
+  return { harness: Harness.agentsPlatform, model: pick.model };
+};
+
+// Order = precedence: CLI > flag > binding default. The prod spread collapses
+// to [], dropping the CLI overrides from the chain.
+const HARNESS_MIDDLEWARE: Middleware<HarnessPick>[] = [
+  ...(IS_PRODUCTION_BUILD ? [] : [cliHarnessOverride, cliModelOverride]),
+  flagRunnerOverride,
+  cloudAuditHarnessMw,
+];
+
+/**
+ * Resolve the harness for a role. Linear callers omit `role`; orchestrator
+ * callers pass `'seed'` or `task.type`. `contextMillOverride[role]` overlays.
+ */
+export function resolveHarness(
+  ctx: SwitchboardCtx,
+  role = 'default',
+): HarnessPick {
+  const pick = runChain(HARNESS_MIDDLEWARE, ctx, () => {
+    if (ctx.trace)
+      Object.assign(ctx.trace, { harness: 'binding', model: 'binding' });
+    const binding = PROGRAM_BINDINGS[ctx.program] ?? DEFAULT_BINDING;
+    return {
+      harness: binding.harness,
+      model: binding.model,
+      ...binding.contextMillOverride?.[role],
+    };
+  });
+  logToFile(
+    `[switchboard] resolved: program=${ctx.program} harness=${pick.harness}` +
+      `${ctx.trace?.harness ? ` (${ctx.trace.harness})` : ''} model=${
+        pick.model
+      }` +
+      `${ctx.trace?.model ? ` (${ctx.trace.model})` : ''}`,
+  );
+  return pick;
+}

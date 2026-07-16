@@ -1,5 +1,6 @@
 import { isNonInteractiveEnvironment } from '@utils/environment';
 import { setEntryCommand } from '@utils/links';
+import { headlessOption, isHeadless } from '@lib/headless-mode';
 import { provisionCommand } from '../provision';
 import type { Command } from '../command';
 
@@ -28,11 +29,15 @@ export const basicIntegrationCommand: Command = {
       type: 'boolean',
       hidden: true,
     },
+    // The experimental headless flag — declared here (and on `audit`) rather
+    // than globally. Routed by this command's handler via runHeadlessInstall.
+    ...headlessOption,
   },
   check: (argv) => {
-    // --playground is the standalone TUI demo; it can't combine with --ci.
-    if (argv.playground && argv.ci) {
-      throw new Error('--playground cannot be combined with --ci.');
+    // --playground is the standalone TUI demo; it can't combine with a
+    // non-interactive run (either --ci or the experimental headless flag).
+    if (argv.playground && (argv.ci || isHeadless(argv))) {
+      throw new Error('--playground cannot be combined with a headless run.');
     }
     return true;
   },
@@ -42,6 +47,18 @@ export const basicIntegrationCommand: Command = {
     // Each mode file is loaded only when its branch is taken, so a plain
     // `npx @posthog/wizard` never pulls in the CI or playground paths.
     void (async () => {
+      // ── The CI / headless division ───────────────────────────────────
+      // --ci (dev/test only) and the experimental headless flag (the
+      // published-build, non-interactive path; see @lib/headless-mode) both
+      // request a non-interactive install, but route to dedicated entry points
+      // — runHeadlessInstall vs runCIInstall (and below them runWizardHeadless
+      // vs runWizardCI). Both share one pipeline today but are separate
+      // functions end-to-end, so headless can diverge later without touching
+      // the CI path or its callers.
+      if (isHeadless(argv)) {
+        const { runHeadlessInstall } = await import('./ci-install');
+        return runHeadlessInstall(argv);
+      }
       if (argv.ci) {
         const { runCIInstall } = await import('./ci-install');
         return runCIInstall(argv);

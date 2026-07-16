@@ -1,17 +1,22 @@
 import axios from 'axios';
 import { provisionNewAccount } from '@utils/provisioning';
 
-jest.mock('axios');
-jest.mock('../debug', () => ({ logToFile: jest.fn() }));
-jest.mock('../analytics', () => ({
-  analytics: { captureException: jest.fn() },
+vi.mock('axios');
+// Return the override verbatim so region-based prod routing applies (no IS_DEV
+// localhost); undefined means no override.
+vi.mock('../urls', () => ({
+  resolveBaseUrl: (baseUrl?: string) => baseUrl,
+}));
+vi.mock('../debug', () => ({ logToFile: vi.fn() }));
+vi.mock('../analytics', () => ({
+  analytics: { captureException: vi.fn() },
 }));
 
-const mockedAxios = axios as jest.Mocked<typeof axios>;
+const mockedAxios = axios as Mocked<typeof axios>;
 
 describe('provisionNewAccount', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   it('completes the full PKCE flow and returns credentials', async () => {
@@ -201,6 +206,53 @@ describe('provisionNewAccount', () => {
       region: 'EU',
     });
     expect(result.host).toBe('https://eu.posthog.com');
+
+    // EU provisioning must target the EU host with the EU client, and every
+    // follow-up call (token exchange, resources) stays on the EU host.
+    for (const call of mockedAxios.post.mock.calls) {
+      expect(call[0]).toContain('https://eu.posthog.com');
+    }
+    expect((accountCall[1] as Record<string, unknown>).client_id).toBe(
+      'bx2C5sZRN03TkdjraCcetvQFPGH6N2Y9vRLkcKEy',
+    );
+  });
+
+  it('routes US provisioning to the US host and client', async () => {
+    mockedAxios.post
+      .mockResolvedValueOnce({
+        data: { id: 'req_us', type: 'oauth', oauth: { code: 'code_us' } },
+      })
+      .mockResolvedValueOnce({
+        data: {
+          token_type: 'bearer',
+          access_token: 'pha_us',
+          refresh_token: 'phr_us',
+          expires_in: 3600,
+        },
+      })
+      .mockResolvedValueOnce({
+        data: {
+          status: 'complete',
+          id: '7',
+          service_id: 'analytics',
+          complete: {
+            access_configuration: {
+              api_key: 'phc_us',
+              host: 'https://us.posthog.com',
+            },
+          },
+        },
+      });
+
+    await provisionNewAccount('us@example.com', '', 'US');
+
+    for (const call of mockedAxios.post.mock.calls) {
+      expect(call[0]).toContain('https://us.posthog.com');
+    }
+    const accountCall = mockedAxios.post.mock.calls[0];
+    expect((accountCall[1] as Record<string, unknown>).client_id).toBe(
+      'c4Rdw8DIxgtQfA80IiSnGKlNX8QN00cFWF00QQhM',
+    );
   });
 
   it('sends project name in resources configuration', async () => {

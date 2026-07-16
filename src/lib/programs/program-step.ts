@@ -68,6 +68,30 @@ export interface ProgramStep {
   screenId?: string;
 
   /**
+   * For a run step (`screenId: 'run'`): runs this step's own agent. A program
+   * exports a self-contained run step and another imports it into its step list
+   * — e.g. posthog-integration exports a run step that runs its agent, and
+   * self-driving imports it before its own run step. Omit to run the host
+   * program's own agent (`config.run`).
+   */
+  run?: (session: WizardSession) => Promise<void>;
+
+  /**
+   * For a run step: prepare a derived session before its agent runs — e.g.
+   * gather framework context for the chosen project. The session it receives is
+   * the run's own, so writes don't leak into later runs.
+   */
+  onRunPrep?: (session: WizardSession) => Promise<void>;
+
+  /**
+   * For a run step: the working directory its agent runs in, resolved from the
+   * session (e.g. self-driving's integration runs in the picked monorepo
+   * sub-app, not the repo root). The runner scopes a derived session to this
+   * dir for that run only. Defaults to `session.installDir`.
+   */
+  targetDir?: (session: WizardSession) => string;
+
+  /**
    * Whether this step should be visible in the current program.
    * If omitted, the step is always visible.
    */
@@ -173,6 +197,12 @@ export interface ProgramConfig {
   /** Unique program id — matches the Program enum value */
   id: string;
   /**
+   * Content-mill flow the orchestrator loads its agent prompts + step-skills
+   * from (`agents/<flow>/` and `skills/<flow>/`). Defaults to `id`; set it when
+   * the content-mill flow name diverges from the program id.
+   */
+  agentFlow?: string;
+  /**
    * Whether this program's agent run requires third-party AI services.
    *
    * When true (the default), the wizard checks
@@ -197,6 +227,13 @@ export interface ProgramConfig {
   /** Agent run config. Static object or async function for dynamic config. */
   run?: ProgramRun | ((session: WizardSession) => Promise<ProgramRun>);
   /**
+   * The program's remote arm: how it runs server-side on the agent platform.
+   * When present, the switchboard may bind this program to the `remote` sequence
+   * (via a flag), which resolves this instead of `run` and falls back to `run`
+   * if the hosted arm fails. Omit for programs with no hosted equivalent.
+   */
+  remoteRun?: (session: WizardSession) => ProgramRun | Promise<ProgramRun>;
+  /**
    * CI-mode pre-run strategy. When set, runWizardCI awaits this after building
    * the ci:true session and before the agent runs, instead of walking step
    * onReady hooks. Use for headless prerequisite work (e.g. framework
@@ -211,6 +248,13 @@ export interface ProgramConfig {
    * read it synchronously without resolving a deferred `run` function.
    */
   reportFile?: string;
+  /**
+   * Agent-authored event-plan artifact to mirror into the wizard session.
+   * Relative to `session.installDir`. Programs that do not produce an event
+   * plan leave this unset, so generic runner machinery does not inspect a
+   * stale or unrelated `.posthog-events.json` file.
+   */
+  eventPlanFile?: string;
   /**
    * LearnCard deck rendered in the shared `RunScreen` while the agent
    * runs. Lives at `<program>/content/index.tsx` by convention.

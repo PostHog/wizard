@@ -7,7 +7,11 @@ description: How data moves through the wizard — from CLI args to the screen t
 
 ## The runner pipeline
 
-Every wizard run — framework integration, revenue analytics, audit, generic skill — executes the same pipeline in `agent-runner.ts`. The pipeline is fixed. What varies is the `ProgramRun` configuration object.
+> **Source of truth: [`src/lib/agent/runner/README.md`](../../../../src/lib/agent/runner/README.md).** Read it before changing anything under `runner/`; this section is orientation.
+
+After bootstrap, the **switchboard** (`runner/switchboard/`) resolves a `{ sequence, harness, model }` binding for the program and dispatches to the sequence — `linear` (one conversation), `orchestrator` (a task queue), or `remote` (server-side execution on the agent platform). Each sequence drives an SDK **harness** (`anthropic`, `pi`, `agents-platform`). A new execution mode is a sequence + harness bound to a program through the switchboard, not a branch in a program's config.
+
+The **linear** sequence is the default and the common case. It runs the fixed pipeline below; what varies within it is the `ProgramRun` configuration object.
 
 ```
  1. Init logging + debug
@@ -98,7 +102,9 @@ PostToolUse warlock hook [L2] → scan output, instruct revert or terminate
 Result returned to agent
 ```
 
-The L2 detection layer is the [warlock](https://github.com/PostHog/warlock) sibling repo — an engine-only YARA-X scanner that returns matches with `category`, `severity`, and `action` (recommendation: `block` / `revert` / `warn`). The wizard wires it into the SDK's PreToolUse/PostToolUse hooks (`src/lib/yara-hooks.ts`) and decides how to respond per match. Adding a new detection means contributing a rule to warlock, not editing wizard code. (A legacy in-repo regex scanner at `src/lib/yara-scanner.ts` is being retired as warlock takes over.)
+The L2 detection layer is the [warlock](https://github.com/PostHog/warlock) sibling repo — an engine-only YARA-X scanner that returns matches with `category`, `severity`, and `action` (recommendation: `block` / `revert` / `warn`). The wizard wires it into the SDK's PreToolUse/PostToolUse hooks (`src/lib/yara-hooks.ts`) and decides how to respond per match. Adding a new detection means contributing a rule to warlock, not editing wizard code. Flagged matches go through warlock's LLM triage (`triageMatches`) to drop false positives before the wizard acts; the triage provider reuses the gateway auth via `triage-provider.ts`.
+
+**Naming — `yara` vs `warlock`.** These name two different things, and the split is intentional. YARA is the technique: scanning content against YARA rules. The wizard-side wiring keeps that name — `yara-hooks.ts`, `createPreToolUseYaraHooks`, the `[YARA …]` messages, `WIZARD_YARA_REPORT_FILE`. warlock is the engine package that actually runs the rules: `@posthog/warlock`, a real YARA-X engine, called via `getWarlock()` and the import. Think `parseJson()` versus the V8 engine underneath — the technique names the wizard's layer, the library names the dependency it calls. When you touch the scanning layer you will see both names, and that is expected.
 
 The sandbox (filesystem + network scoping) is configured once in the SDK `query()` call and enforced by the SDK runtime — not by wizard code.
 

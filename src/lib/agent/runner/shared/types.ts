@@ -9,7 +9,6 @@ import type {
 } from '@lib/wizard-session';
 import type { PromptContext } from '@lib/agent/agent-prompt';
 import type { PackageManagerDetector } from '@lib/detection/package-manager';
-import type { CloudRegion } from '@utils/types';
 import type { ApiProject } from '@lib/api';
 
 export type { PromptContext, Credentials };
@@ -33,25 +32,6 @@ export interface AbortCase {
  * assembles the final prompt from `prompt` + `skillId`.
  */
 export interface ProgramRun {
-  /**
-   * Which pipeline executes this run. Defaults to `linear` — a local Claude
-   * Agent SDK subprocess. `cloud` runs the agent server-side on the PostHog
-   * agent platform and lends it this machine's filesystem via client tools;
-   * the fields below that describe a local agent (`skillId`, `customPrompt`,
-   * `additionalMcpServers`, `detectPackageManager`) are ignored there, since
-   * the agent's instructions live in its own frozen bundle.
-   */
-  executor?: 'linear' | 'cloud';
-  /**
-   * A local run to fall back to if the `cloud` executor fails (any error,
-   * unexpected stream end, or a completed run that wrote no report). The runner
-   * resolves this only on cloud failure and runs it through the linear pipeline,
-   * reusing the already-computed bootstrap — so the user lands on the classic
-   * local audit with no re-auth. It's a resolver (not a value) so its side
-   * effects — seeding the classic ledger — happen at fallback time, mirroring
-   * how `run` itself is resolved. Ignored unless `executor` is `cloud`.
-   */
-  fallback?: (session: WizardSession) => ProgramRun | Promise<ProgramRun>;
   /** Analytics label (e.g. 'revenue-analytics-setup', 'nextjs') */
   integrationLabel: string;
   /** Skill ID to pre-install. Omit for agent-driven skill discovery. */
@@ -77,7 +57,6 @@ export interface ProgramRun {
   buildOutroData?: (
     session: WizardSession,
     credentials: Credentials,
-    cloudRegion: CloudRegion | undefined,
   ) => WizardSession['outroData'];
   /**
    * Per-run cap on `wizard_ask` invocations. Defaults to 10. The 4th call
@@ -110,17 +89,14 @@ export interface ProgramRun {
 
 /**
  * Result of the shared bootstrap, consumed by both the linear and the
- * orchestrator arm. Credentials, role, and user are already applied to the
- * session by `bootstrapProgram`; this carries the values both arms still need.
+ * orchestrator arm. `bootstrapProgram` runs `authenticate` before returning, so
+ * `credentials` is guaranteed non-null here — the single narrowing point owns
+ * the invariant, and downstream readers get a properly non-null type for free.
  */
 export interface BootstrapResult {
   skillsBaseUrl: string;
-  projectApiKey: Credentials['projectApiKey'];
-  host: Credentials['host'];
-  accessToken: Credentials['accessToken'];
-  projectId: Credentials['projectId'];
-  cloudRegion: CloudRegion;
-  mcpUrl: string;
+  /** Auth outputs (incl. the resolved host family and its MCP url), narrowed at the boundary. */
+  credentials: Credentials;
   wizardFlags: Record<string, string>;
   wizardMetadata: Record<string, string>;
   /** Full project payload, for project-level prompt context (opt-ins). */

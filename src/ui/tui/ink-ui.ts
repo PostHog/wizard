@@ -6,13 +6,19 @@
  * The router derives the active screen from session state.
  */
 
-import type { WizardUI, SpinnerHandle, AuthErrorDetail } from '@ui/wizard-ui';
+import type {
+  WizardUI,
+  SpinnerHandle,
+  AuthErrorDetail,
+  TokenUsageDelta,
+} from '@ui/wizard-ui';
 import type { WizardStore } from './store.js';
 import type { SettingsConflict } from '@lib/agent/claude-settings';
 import type { WizardReadinessResult } from '@lib/health-checks/readiness';
 import type { ApiUser } from '@lib/api';
 import type {
   AskAnswers,
+  Credentials,
   OutroData,
   PendingQuestion,
 } from '@lib/wizard-session';
@@ -76,12 +82,7 @@ export class InkUI implements WizardUI {
     });
   }
 
-  setCredentials(credentials: {
-    accessToken: string;
-    projectApiKey: string;
-    host: string;
-    projectId: number;
-  }): void {
+  setCredentials(credentials: Credentials): void {
     this.store.setCredentials(credentials);
   }
 
@@ -170,6 +171,10 @@ export class InkUI implements WizardUI {
     return this.store.requestQuestion(question);
   }
 
+  cancelPendingQuestion(): void {
+    this.store.cancelPendingQuestion();
+  }
+
   startRun(): void {
     this.store.setRunPhase(RunPhase.Running);
   }
@@ -238,6 +243,14 @@ export class InkUI implements WizardUI {
 
   setNotebookUrl(url: string): void {
     this.store.setNotebookUrl(url);
+  }
+
+  addTokenUsage(delta: TokenUsageDelta): void {
+    this.store.addTokenUsage(delta);
+  }
+
+  setFinalTokenCostUsd(costUsd: number): void {
+    this.store.setFinalTokenCostUsd(costUsd);
   }
 
   setOutroData(data: OutroData): void {

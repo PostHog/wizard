@@ -9,6 +9,7 @@ import {
   type WizardUI,
   type SpinnerHandle,
   type AuthErrorDetail,
+  type TokenUsageDelta,
 } from './wizard-ui';
 import type { SettingsConflict } from '@lib/agent/claude-settings';
 import type { ApiUser } from '@lib/api';
@@ -20,6 +21,7 @@ import {
 } from '@lib/health-checks/readiness';
 import type {
   AskAnswers,
+  Credentials,
   OutroData,
   PendingQuestion,
 } from '@lib/wizard-session';
@@ -177,6 +179,10 @@ export class LoggingUI implements WizardUI {
     );
   }
 
+  cancelPendingQuestion(): void {
+    // Nothing to dismiss — requestQuestion never opens an overlay here.
+  }
+
   showAuthError(detail?: AuthErrorDetail): void {
     console.log(`✖  Authentication failed (401)`);
     if (detail?.hasSettingsConflict) {
@@ -216,12 +222,7 @@ export class LoggingUI implements WizardUI {
     // No-op in CI mode
   }
 
-  setCredentials(_credentials: {
-    accessToken: string;
-    projectApiKey: string;
-    host: string;
-    projectId: number;
-  }): void {
+  setCredentials(_credentials: Credentials): void {
     // No-op in CI mode — credentials are handled directly
   }
 
@@ -266,6 +267,14 @@ export class LoggingUI implements WizardUI {
 
   setNotebookUrl(_url: string): void {
     // No-op in CI mode
+  }
+
+  addTokenUsage(_delta: TokenUsageDelta): void {
+    // No-op — the hidden Ctrl+T HUD is TUI-only
+  }
+
+  setFinalTokenCostUsd(_costUsd: number): void {
+    // No-op — the hidden Ctrl+T HUD is TUI-only
   }
 
   setOutroData(_data: import('@lib/wizard-session').OutroData): void {

@@ -13,7 +13,6 @@ import {
   type SkillVariant,
 } from './detect.js';
 import { getContentBlocks } from './content/index.js';
-import { getUiHostFromHost } from '@utils/urls';
 import { getUI } from '@ui';
 
 const REPORT_FILE = 'posthog-source-maps-report.md';
@@ -75,7 +74,7 @@ export const errorTrackingUploadSourceMapsConfig: ProgramConfig = {
           return SOURCE_MAPS_DETECTION_FAILED_PROMPT;
         }
 
-        const uiHost = getUiHostFromHost(ctx.host).replace(/\/$/, '');
+        const uiHost = ctx.host.appHost.replace(/\/$/, '');
 
         return buildSourceMapsUploadPrompt({
           displayName,
@@ -83,7 +82,7 @@ export const errorTrackingUploadSourceMapsConfig: ProgramConfig = {
           skillId,
           projectPath,
           projectId: ctx.projectId,
-          host: ctx.host,
+          host: ctx.host.apiHost,
           settingsUrl: `${uiHost}/project/${ctx.projectId}/settings/user-api-keys`,
           uiHost,
         });

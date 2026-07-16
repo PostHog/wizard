@@ -11,21 +11,52 @@ import * as crypto from 'node:crypto';
 import axios from 'axios';
 import { z } from 'zod';
 import {
-  IS_DEV,
   POSTHOG_DEV_CLIENT_ID,
+  POSTHOG_EU_CLIENT_ID,
   POSTHOG_US_CLIENT_ID,
   WIZARD_PROVISIONING_SCOPES,
   WIZARD_USER_AGENT,
 } from '@lib/constants';
+import { resolveBaseUrl } from './urls';
 import { logToFile } from './debug';
 import { analytics } from './analytics';
+import type { HostResolution } from '@lib/host-resolution';
 
-const WIZARD_CLIENT_ID = IS_DEV ? POSTHOG_DEV_CLIENT_ID : POSTHOG_US_CLIENT_ID;
 const API_VERSION = '0.1d';
 
-const PROVISIONING_BASE_URL = IS_DEV
-  ? 'http://localhost:8010'
-  : 'https://us.posthog.com';
+/**
+ * Provisioning host. Follows a `--base-url` override (and IS_DEV → localhost),
+ * else the prod provisioning host for the target region. Unlike the login OAuth
+ * flow (which goes through the region-agnostic `oauth.posthog.com` proxy), the
+ * provisioning API is region-specific: an EU account must be created against
+ * `eu.posthog.com`, and the subsequent token-exchange / resources calls stay on
+ * the same host (they carry the account's bearer token).
+ */
+const getProvisioningBaseUrl = (
+  region: 'US' | 'EU',
+  baseUrl?: string,
+): string => {
+  const override = resolveBaseUrl(baseUrl);
+  if (override) return override;
+  return region === 'EU' ? 'https://eu.posthog.com' : 'https://us.posthog.com';
+};
+
+/**
+ * OAuth client ID for provisioning. A pinned base URL means a dev-seeded stack
+ * that registers the dev client; prod uses the client registered for the target
+ * region (the wizard OAuth app is registered separately per region).
+ *
+ * TODO: same assumption as `getOAuthClientId` in oauth.ts — a pinned base URL is
+ * treated as a dev-seeded instance. Make configurable if we ever point
+ * `--base-url` at a non-dev instance with its own OAuth app.
+ */
+const getProvisioningClientId = (
+  region: 'US' | 'EU',
+  baseUrl?: string,
+): string => {
+  if (resolveBaseUrl(baseUrl)) return POSTHOG_DEV_CLIENT_ID;
+  return region === 'EU' ? POSTHOG_EU_CLIENT_ID : POSTHOG_US_CLIENT_ID;
+};
 
 function generateCodeVerifier(): string {
   return crypto.randomBytes(32).toString('base64url');
@@ -101,21 +132,22 @@ export async function provisionNewAccount(
   email: string,
   name: string,
   region: 'US' | 'EU' = 'US',
-  opts?: { orgName?: string; projectName?: string },
+  opts?: { orgName?: string; projectName?: string; baseUrl?: string },
 ): Promise<ProvisioningResult> {
   const codeVerifier = generateCodeVerifier();
   const codeChallenge = generateCodeChallenge(codeVerifier);
+  const provisioningBaseUrl = getProvisioningBaseUrl(region, opts?.baseUrl);
 
   logToFile('[provisioning] starting account creation');
 
   // Step 1: Create account
   const accountRes = await axios.post(
-    `${PROVISIONING_BASE_URL}/api/agentic/provisioning/account_requests`,
+    `${provisioningBaseUrl}/api/agentic/provisioning/account_requests`,
     {
       id: crypto.randomUUID(),
       email,
       name,
-      client_id: WIZARD_CLIENT_ID,
+      client_id: getProvisioningClientId(region, opts?.baseUrl),
       code_challenge: codeChallenge,
       code_challenge_method: 'S256',
       scopes: WIZARD_PROVISIONING_SCOPES,
@@ -160,7 +192,7 @@ export async function provisionNewAccount(
 
   // Step 2: Exchange code for tokens
   const tokenRes = await axios.post(
-    `${PROVISIONING_BASE_URL}/api/agentic/oauth/token`,
+    `${provisioningBaseUrl}/api/agentic/oauth/token`,
     new URLSearchParams({
       grant_type: 'authorization_code',
       code,
@@ -182,7 +214,7 @@ export async function provisionNewAccount(
 
   // Step 3: Provision resources
   const resourceRes = await axios.post(
-    `${PROVISIONING_BASE_URL}/api/agentic/provisioning/resources`,
+    `${provisioningBaseUrl}/api/agentic/provisioning/resources`,
     {
       service_id: 'analytics',
       ...(opts?.projectName
@@ -226,13 +258,11 @@ export async function provisionNewAccount(
  */
 export async function requestDeepLink(
   accessToken: string,
-  host: string,
+  host: HostResolution,
   opts?: { purpose?: string; path?: string },
 ): Promise<string | null> {
   try {
-    const baseUrl = host
-      .replace('us.i.posthog.com', 'us.posthog.com')
-      .replace('eu.i.posthog.com', 'eu.posthog.com');
+    const baseUrl = host.appHost;
 
     const res = await axios.post(
       `${baseUrl}/api/agentic/provisioning/deep_links`,

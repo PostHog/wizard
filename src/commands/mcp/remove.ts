@@ -27,7 +27,11 @@ function runMcpRemove(argv: Arguments): void {
       const { startTUI } = await import('@ui/tui/start-tui');
       const { buildSession } = await import('@lib/wizard-session');
       const tui = startTUI(VERSION, Program.McpRemove);
-      tui.store.session = buildSession({ debug, localMcp });
+      tui.store.session = buildSession({
+        debug,
+        localMcp,
+        baseUrl: argv.baseUrl as string | undefined,
+      });
     } catch {
       setUI(new LoggingUI());
       const { removeMCPServerFromClientsStep } = await import(

@@ -1,88 +1,77 @@
-import { runProgram } from '../index';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-// The runner fork routes on the cloud outcome + whether a fallback is declared.
-// Mock the heavy collaborators so the test asserts only the routing decision.
-jest.mock('../shared/bootstrap', () => ({
-  bootstrapProgram: jest.fn().mockResolvedValue({ wizardFlags: {} }),
-  shouldDisableAsk: jest.fn(),
-}));
-jest.mock('../cloud', () => ({ runCloudProgram: jest.fn() }));
-jest.mock('../linear', () => ({ runLinearProgram: jest.fn() }));
-jest.mock('../orchestrator/orchestrator-runner', () => ({
-  runOrchestrator: jest.fn(),
-}));
-jest.mock('../../agent-interface', () => ({
-  isOrchestratorEnabled: jest.fn().mockReturnValue(false),
-}));
-jest.mock('../../../../ui', () => ({
-  getUI: () => ({ log: { info: jest.fn() } }),
-}));
-jest.mock('../../../../utils/wizard-abort', () => ({
-  wizardAbort: jest.fn(),
-  WizardError: class WizardError extends Error {},
+import { runRemoteProgram } from '../sequence/remote';
+import { AgentErrorType } from '../../agent-interface';
+import { getHarness } from '../switchboard';
+import { runLinearProgram } from '../sequence/linear';
+
+// The remote sequence drives the agents-platform harness, then either finishes
+// (success) or degrades to the local linear pipeline (harness error / no remote
+// arm). Mock the collaborators so the test asserts only that routing decision.
+vi.mock('../switchboard', () => ({ getHarness: vi.fn() }));
+vi.mock('../sequence/linear', () => ({ runLinearProgram: vi.fn() }));
+vi.mock('@utils/analytics', () => ({ analytics: { shutdown: vi.fn() } }));
+vi.mock('@utils/debug', () => ({ logToFile: vi.fn() }));
+vi.mock('@ui', () => ({
+  getUI: () => ({
+    startRun: vi.fn(),
+    spinner: () => ({ start: vi.fn(), stop: vi.fn(), message: vi.fn() }),
+    log: { info: vi.fn() },
+    setOutroData: vi.fn(),
+    outro: vi.fn(),
+  }),
 }));
 
-describe('runProgram — cloud fork + failover', () => {
-  /* eslint-disable @typescript-eslint/no-require-imports */
-  const { runCloudProgram } = require('../cloud');
-  const { runLinearProgram } = require('../linear');
-  const { wizardAbort } = require('../../../../utils/wizard-abort');
-  /* eslint-enable @typescript-eslint/no-require-imports */
+describe('runRemoteProgram — hosted arm + failover', () => {
+  const session = { installDir: '/tmp/x', signup: false } as never;
+  const boot = {
+    credentials: { host: { appHost: 'https://us.posthog.com' } },
+  } as never;
+  const classicRun = { integrationLabel: 'audit' } as never;
+  const remoteRun = {
+    integrationLabel: 'cloud-audit',
+    successMessage: 'done',
+    reportFile: 'r.md',
+    docsUrl: 'https://d',
+  };
 
-  const session = { installDir: '/tmp/x' } as never;
-  const programConfig = { id: 'audit' } as never;
+  const mockHarnessRun = vi.fn();
+  const remoteRunResolver = vi.fn();
+  const programConfig = { id: 'audit', remoteRun: remoteRunResolver } as never;
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
+    vi.mocked(getHarness).mockReturnValue({ run: mockHarnessRun } as never);
+    remoteRunResolver.mockResolvedValue(remoteRun);
   });
 
-  it('runs cloud and stops there when it succeeds — no fallback, no linear', async () => {
-    runCloudProgram.mockResolvedValue('ok');
-    const fallback = jest.fn();
+  it('runs the hosted arm and stops there on success — never touches linear', async () => {
+    mockHarnessRun.mockResolvedValue({});
 
-    await runProgram(
-      session,
-      { executor: 'cloud', fallback } as never,
-      programConfig,
-    );
+    await runRemoteProgram(session, classicRun, programConfig, boot, false);
 
-    expect(runCloudProgram).toHaveBeenCalledTimes(1);
-    expect(fallback).not.toHaveBeenCalled();
+    expect(mockHarnessRun).toHaveBeenCalledTimes(1);
+    // The harness gets the resolved REMOTE run, not the classic one passed in.
+    expect(mockHarnessRun.mock.calls[0][0].config).toBe(remoteRun);
     expect(runLinearProgram).not.toHaveBeenCalled();
-    expect(wizardAbort).not.toHaveBeenCalled();
   });
 
-  it('falls over to the linear pipeline with the resolved fallback run when cloud fails', async () => {
-    runCloudProgram.mockResolvedValue('failed');
-    const fallbackRun = { integrationLabel: 'audit' };
-    const fallback = jest.fn().mockResolvedValue(fallbackRun);
+  it('falls back to the local linear pipeline with the classic run when the hosted arm errors', async () => {
+    mockHarnessRun.mockResolvedValue({ error: AgentErrorType.API_ERROR });
 
-    await runProgram(
-      session,
-      { executor: 'cloud', fallback } as never,
-      programConfig,
-    );
+    await runRemoteProgram(session, classicRun, programConfig, boot, false);
 
-    expect(fallback).toHaveBeenCalledWith(session);
-    // The fallback's run — not the cloud config — is what reaches the linear arm.
     expect(runLinearProgram).toHaveBeenCalledTimes(1);
-    expect(runLinearProgram.mock.calls[0][1]).toBe(fallbackRun);
-    expect(wizardAbort).not.toHaveBeenCalled();
+    // The classic run — not the remote config — is what reaches the local arm.
+    expect(vi.mocked(runLinearProgram).mock.calls[0][1]).toBe(classicRun);
   });
 
-  it('aborts (never runs the cloud config on the linear arm) when cloud fails with no fallback', async () => {
-    runCloudProgram.mockResolvedValue('failed');
+  it('degrades to linear when the program declares no remote arm', async () => {
+    const noRemote = { id: 'audit' } as never;
 
-    await runProgram(session, { executor: 'cloud' } as never, programConfig);
+    await runRemoteProgram(session, classicRun, noRemote, boot, false);
 
-    expect(wizardAbort).toHaveBeenCalledTimes(1);
-    expect(runLinearProgram).not.toHaveBeenCalled();
-  });
-
-  it('never touches the cloud arm for a linear program', async () => {
-    await runProgram(session, { executor: 'linear' } as never, programConfig);
-
-    expect(runCloudProgram).not.toHaveBeenCalled();
+    expect(mockHarnessRun).not.toHaveBeenCalled();
     expect(runLinearProgram).toHaveBeenCalledTimes(1);
   });
 });

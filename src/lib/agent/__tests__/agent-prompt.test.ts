@@ -1,5 +1,6 @@
 import { assemblePrompt, type PromptContext } from '@lib/agent/agent-prompt';
 import type { ProgramRun } from '@lib/agent/agent-runner';
+import { HostResolution } from '@lib/host-resolution';
 
 function makeRunDef(overrides: Partial<ProgramRun> = {}): ProgramRun {
   return {
@@ -16,7 +17,7 @@ function makeRunDef(overrides: Partial<ProgramRun> = {}): ProgramRun {
 const baseCtx: PromptContext = {
   projectId: 42,
   projectApiKey: 'phc_test123',
-  host: 'https://app.posthog.com',
+  host: HostResolution.fromApiHost('https://app.posthog.com'),
 };
 
 describe('assemblePrompt', () => {
@@ -29,7 +30,7 @@ describe('assemblePrompt', () => {
   });
 
   it('composes three sections in order: default → custom → skill', () => {
-    const customFn = jest.fn(() => 'CUSTOM_INSTRUCTIONS');
+    const customFn = vi.fn(() => 'CUSTOM_INSTRUCTIONS');
     const runDef = makeRunDef({ customPrompt: customFn });
     const ctx: PromptContext = { ...baseCtx, skillPath: '/skills/test' };
 

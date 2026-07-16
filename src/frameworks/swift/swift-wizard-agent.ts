@@ -37,13 +37,17 @@ export const SWIFT_AGENT_CONFIG: FrameworkConfig<SwiftContext> = {
     detect: async (options) => {
       const { installDir } = options;
 
-      // Check for Xcode project
-      const xcodeProjects = await fg('*.xcodeproj', {
+      // Xcode project/workspace, or an XcodeGen `project.yml` (the generated
+      // .xcodeproj is often uncommitted).
+      const xcodeProjects = await fg('*.{xcodeproj,xcworkspace}', {
         cwd: installDir,
         onlyDirectories: true,
       });
+      const hasXcodeGenSpec = fs.existsSync(
+        path.join(installDir, 'project.yml'),
+      );
 
-      if (xcodeProjects.length > 0) {
+      if (xcodeProjects.length > 0 || hasXcodeGenSpec) {
         // Verify it contains Swift source files
         const swiftFiles = await fg('**/*.swift', {
           cwd: installDir,

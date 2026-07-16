@@ -4,13 +4,11 @@ import {
 } from '@lib/programs/agent-skill/index';
 import type { ProgramStep, ProgramConfig } from '@lib/programs/program-step';
 import type { ProgramRun } from '@lib/agent/agent-runner';
-import { isCloudAuditEnabled } from '@lib/agent/agent-interface';
 import { buildCloudAuditRun } from '@lib/programs/cloud-audit/index';
 import type { WizardSession } from '@lib/wizard-session';
 import { OutroKind } from '@lib/wizard-session';
 import { WIZARD_TOOL_NAMES } from '@lib/wizard-tools';
-import { analytics } from '@utils/analytics';
-import { getCloudUrlFromRegion } from '@utils/urls';
+import { headlessOption } from '@lib/headless-mode';
 import { withAuditScreens } from './screens.js';
 import { AUDIT_ABORT_CASES } from './detect.js';
 import { AUDIT_CHECKS_KEY, AUDIT_REPORT_FILE } from './types.js';
@@ -45,9 +43,12 @@ const baseConfig = createSkillProgram({
 /**
  * The classic local audit run: a Claude Agent SDK subprocess driving the `audit`
  * skill. Seeds the ledger as a side effect, so it's a resolver, not a value.
- * Used directly when the cloud flag is off, and as the cloud arm's fallback.
+ * This is the program's default `run`; the switchboard swaps in the `remote`
+ * sequence (see `remoteRun`) when the `wizard-cloud-audit` flag binds this
+ * program to the agents-platform harness, and the remote sequence falls back to
+ * this run if the hosted arm fails.
  */
-const buildClassicAuditRun = async (
+export const buildClassicAuditRun = async (
   session: WizardSession,
 ): Promise<ProgramRun> => {
   seedBeforeAuditRun(session);
@@ -66,14 +67,11 @@ const buildClassicAuditRun = async (
     // Override the default outro so the dashboard + notebook URLs the
     // agent emits via `[DASHBOARD_URL]` / `[NOTEBOOK_URL]` are surfaced
     // on the post-run screen.
-    buildOutroData: (sess, _credentials, cloudRegion) => {
-      const cloudUrl = cloudRegion
-        ? getCloudUrlFromRegion(cloudRegion)
+    buildOutroData: (sess, credentials) => {
+      const cloudUrl = credentials.host.appHost;
+      const continueUrl = sess.signup
+        ? `${cloudUrl}/products?source=wizard`
         : undefined;
-      const continueUrl =
-        sess.signup && cloudUrl
-          ? `${cloudUrl}/products?source=wizard`
-          : undefined;
 
       // Note: `sess` here is the agent-runner's snapshot of session at
       // runAgent() invocation time. Any URL emissions during the run land
@@ -87,34 +85,26 @@ const buildClassicAuditRun = async (
         reportFile: baseRun.reportFile,
         docsUrl: baseRun.docsUrl,
         continueUrl,
-        dashboardUrl: sess.dashboardUrl ?? undefined,
-        notebookUrl: sess.notebookUrl ?? undefined,
+        dashboardUrl: session.dashboardUrl ?? undefined,
+        notebookUrl: session.notebookUrl ?? undefined,
       };
     },
   };
 };
 
-const auditRun = async (session: WizardSession): Promise<ProgramRun> => {
-  // The cloud audit is the same product run a different way, so it forks here
-  // rather than as a separate command — `wizard audit` is the only entry users
-  // know, and this keeps the two arms A/B-comparable on identical screens.
-  // (`wizard audit cloud` reaches the cloud arm directly, flag or no flag.)
-  const flags = await analytics.getAllFlagsForWizard();
-  if (isCloudAuditEnabled(flags)) {
-    // Attach the classic run as the fallback: any cloud failure silently
-    // lands the user on the local audit, on the same bootstrap. The cloud
-    // arm seeds its own placeholder ledger; the fallback reseeds the classic
-    // checklist when it runs.
-    return { ...buildCloudAuditRun(session), fallback: buildClassicAuditRun };
-  }
-
-  return buildClassicAuditRun(session);
-};
-
 export const auditConfig: ProgramConfig = {
   ...baseConfig,
   steps: auditSteps,
-  run: auditRun,
+  run: buildClassicAuditRun,
+  // The audit's remote arm: the same product run server-side on the agent
+  // platform. The `remote` sequence resolves this when the switchboard binds
+  // `audit` to that sequence (via the `wizard-cloud-audit` flag). `run` above
+  // stays the local default and the remote sequence's fallback.
+  remoteRun: buildCloudAuditRun,
   allowedTools: ['Agent'],
   disallowedTools: [WIZARD_TOOL_NAMES.wizardAsk],
+  // The experimental headless flag — declared on `audit` (and basic
+  // integration) rather than globally. mergeCommandOptions lands it on the
+  // `wizard audit` command; dispatchProgram routes it to runWizardHeadless.
+  cliOptions: { ...headlessOption },
 };

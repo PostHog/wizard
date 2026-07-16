@@ -2,10 +2,12 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 
-const captureException = jest.fn();
-const wizardCapture = jest.fn();
+const { captureException, wizardCapture } = vi.hoisted(() => ({
+  captureException: vi.fn(),
+  wizardCapture: vi.fn(),
+}));
 
-jest.mock('@utils/analytics', () => ({
+vi.mock('@utils/analytics', () => ({
   analytics: {
     captureException: (...args: unknown[]) => captureException(...args),
     wizardCapture: (...args: unknown[]) => wizardCapture(...args),

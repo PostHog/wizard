@@ -18,6 +18,7 @@ import {
   runAgent as executeAgent,
   AgentSignals,
 } from '@lib/agent/agent-interface';
+import { isAbsolute, resolve, sep } from 'path';
 import { detectNodePackageManagers } from './package-manager.js';
 import { getSkillsBaseUrl, HAIKU_MODEL } from '@lib/constants';
 import type { WizardSession } from '@lib/wizard-session';
@@ -37,6 +38,8 @@ export type AgenticProject = {
   targetId: string | null;
   /** Whether a PostHog SDK is already installed in this project. */
   hasPostHog: boolean;
+  /** True on the one project picked as the main user-facing app; only present when the scan set `recommend`. */
+  recommended?: boolean;
 };
 
 export type AgenticDetectionReport = {
@@ -51,6 +54,9 @@ export type DetectEvent = (line: string) => void;
  * Every project-manifest / workspace-marker filename the wizard's frameworks
  * are identified by. One brace-expansion Glob over all of these locates every
  * project root in the repo in a single call, regardless of language.
+ *
+ * Counterpart: POSTHOG_MANIFESTS in @lib/programs/self-driving/detect (SDK
+ * grep); keep the two in sync.
  */
 export const PROJECT_MANIFESTS: readonly string[] = [
   // JS/TS + workspace markers
@@ -68,17 +74,25 @@ export const PROJECT_MANIFESTS: readonly string[] = [
   // Ruby / PHP
   'Gemfile',
   'composer.json',
-  // Rust / Go
+  // Rust / Go / Elixir / JVM / .NET: no framework targets yet, but found so
+  // an existing PostHog SDK is reported (feeds self-driving's "continue" path).
   'Cargo.toml',
   'go.mod',
+  'mix.exs',
+  'pom.xml',
+  '*.csproj',
   // Mobile / native
   'Package.swift',
   'Podfile',
+  'project.yml',
+  'project.pbxproj',
   'pubspec.yaml',
   'build.gradle',
   'build.gradle.kts',
   'settings.gradle',
   'settings.gradle.kts',
+  // Gradle version catalog (holds dependency coordinates).
+  'gradle/libs.versions.toml',
 ];
 
 /** The single brace-expansion glob covering every supported manifest. */
@@ -96,6 +110,8 @@ export type AgenticDetectOptions = {
   targets: readonly DetectTarget[];
   /** One short clause describing what the scan is for (frames the prompt). */
   purpose?: string;
+  /** Ask the agent to label exactly one project `recommended` (the main client app). Off by default. */
+  recommend?: boolean;
   /** Streaming activity callback for the UI. */
   onEvent?: DetectEvent;
 };
@@ -104,8 +120,12 @@ function buildPrompt(
   cwd: string,
   targets: readonly DetectTarget[],
   purpose: string,
+  recommend: boolean,
 ): string {
   const targetList = targets.map((t) => `- ${t.id} → ${t.name}`).join('\n');
+  const projectShape = `{"path":string,"framework":string,"targetId":string|null,"hasPostHog":boolean${
+    recommend ? ',"recommended":boolean' : ''
+  }}`;
   return [
     `You are scanning a code repository to ${purpose}. Be fast and mechanical — do not over-explore. Keep any reasoning to one short sentence, then run the tool calls and output the JSON.`,
     '',
@@ -114,23 +134,33 @@ function buildPrompt(
     'A "project" is a directory containing one or more of the manifest files below. Find projects by their manifests, NOT by walking directories — never report a directory that has no manifest.',
     '',
     'Do exactly this:',
-    `1. Run Glob ONCE with this pattern to find every project manifest in the repo in a single call: "${manifestGlob()}". Discard any result whose path contains node_modules/, dist/, build/, .next/, out/, coverage/, vendor/, .venv/, site-packages/, or target/. Group the remaining results by directory — each directory is one project.`,
+    `1. Run Glob ONCE with this pattern to find every project manifest in the repo in a single call: "${manifestGlob()}". Discard any result whose path contains node_modules/, dist/, build/, .next/, out/, coverage/, vendor/, .venv/, site-packages/, target/, Pods/, Carthage/, or DerivedData/. Group the remaining results by directory — each directory is one project. Three exceptions to "directory = project": a project.pbxproj lives inside a "<Name>.xcodeproj/" wrapper, so the project root is the PARENT of that .xcodeproj directory; a project.yml at a directory root is an XcodeGen-generated Xcode app rooted at that directory; a gradle/libs.versions.toml is a version catalog belonging to the gradle project rooted at the PARENT of that gradle/ directory (read it alongside the build.gradle when deciding hasPostHog), never its own project.`,
     '2. Decide repoType: "monorepo" if the root package.json has a "workspaces" field OR a pnpm-workspace.yaml / turbo.json / nx.json / lerna.json was found at the root, else "single".',
     '3. For EACH project directory, Read its manifest(s) ONCE. From the dependency lists decide:',
     '   - the human-readable framework name (e.g. "Next.js", "Django", "Rails"),',
     '   - the matching target id from the list below. That list is ordered by priority — most specific first — so when a project could match more than one target (e.g. it uses several of the listed technologies), pick the one listed EARLIEST. Use null only if none matches,',
-    '   - hasPostHog: true if any dependency is a PostHog SDK (name contains "posthog", e.g. posthog-js, posthog-node, @posthog/*, posthog (pip/gem)), else false.',
+    `   - hasPostHog: true if any dependency is a PostHog SDK. This includes: a name containing "posthog" in any ecosystem (e.g. posthog-js, posthog-node, @posthog/*, posthog for pip/gem/hex, a com.posthog:* gradle/maven coordinate, a PostHog NuGet PackageReference); an SPM package named "PostHog" or a repositoryURL of github.com/PostHog/posthog-ios (in Package.swift or a .pbxproj); or a "pod 'PostHog'" line in a Podfile. Else false.`,
     '   Do NOT read any file other than these manifests.',
+    ...(recommend
+      ? [
+          '4. Pick exactly ONE project as recommended — the main user-facing client application. Prefer a frontend web app or a mobile app over backend servers/APIs, libraries, CLIs, tooling, and example/demo/docs apps. If several client apps exist, pick the primary production app; if no client app exists, pick the primary application project.',
+        ]
+      : []),
     '',
     'Target ids (id → name), in priority order — most specific first; if several match a project, keep the one listed earliest:',
     targetList,
     '',
     'Output requirements:',
     '- Respond with ONLY a single JSON object. No prose, no markdown code fences.',
-    '- Shape: {"repoType":"monorepo"|"single","projects":[{"path":string,"framework":string,"targetId":string|null,"hasPostHog":boolean}]}',
+    `- Shape: {"repoType":"monorepo"|"single","projects":[${projectShape}]}`,
     '- "path" is the project directory relative to the working directory; use "." for the repo root.',
     '- "targetId" MUST be exactly one of the target ids above when it matches; if several match, use the one listed earliest; otherwise null.',
     '- Include projects whose stack matches no target too (targetId: null).',
+    ...(recommend
+      ? [
+          '- Exactly one project has "recommended": true; every other project has "recommended": false.',
+        ]
+      : []),
     `- If there are no manifests at all, respond with exactly: ${AgentSignals.ABORT} detection failed`,
   ].join('\n');
 }
@@ -147,27 +177,53 @@ function extractJson(text: string): unknown {
 }
 
 /**
+ * Clamp an agent-reported project path to a safe repo-relative dir. The path
+ * is LLM output: absolute paths or `..` segments could steer later phases
+ * (e.g. integrate-run's targetDir) outside the repo, so they clamp to '.'.
+ */
+function coercePath(raw: unknown): string {
+  if (typeof raw !== 'string' || raw.length === 0) return '.';
+  if (isAbsolute(raw) || raw.split(/[\\/]/).includes('..')) return '.';
+  return raw;
+}
+
+/** Resolve an agent-reported path to an absolute dir clamped to the root — the caller-side counterpart of coercePath. */
+export function resolveProjectDir(installDir: string, rel: unknown): string {
+  if (typeof rel !== 'string' || rel === '.') return installDir;
+  const root = resolve(installDir);
+  const dir = resolve(root, rel);
+  return dir === root || dir.startsWith(root + sep) ? dir : root;
+}
+
+/**
  * Validate the agent's raw JSON into a report, clamping each targetId to the
- * supplied set. Exported for testing.
+ * supplied set and each path to a repo-relative dir. Exported for testing.
+ * `recommended` is stripped unless requested; at most one (the first) survives.
  */
 export function coerceAgenticReport(
   parsed: unknown,
   validTargetIds: readonly string[],
+  options?: { recommend?: boolean },
 ): AgenticDetectionReport {
+  const recommend = options?.recommend === true;
   const obj = (parsed ?? {}) as Record<string, unknown>;
   const repoType = obj.repoType === 'monorepo' ? 'monorepo' : 'single';
   const rawProjects = Array.isArray(obj.projects) ? obj.projects : [];
+  let recommendedSeen = false;
   const projects: AgenticProject[] = rawProjects.map((raw) => {
     const p = (raw ?? {}) as Record<string, unknown>;
     const targetId =
       typeof p.targetId === 'string' && validTargetIds.includes(p.targetId)
         ? p.targetId
         : null;
+    const recommended = recommend && !recommendedSeen && p.recommended === true;
+    recommendedSeen ||= recommended;
     return {
-      path: typeof p.path === 'string' ? p.path : '.',
+      path: coercePath(p.path),
       framework: typeof p.framework === 'string' ? p.framework : 'Unknown',
       targetId,
       hasPostHog: p.hasPostHog === true,
+      ...(recommend ? { recommended } : {}),
     };
   });
   return { repoType, projects };
@@ -221,22 +277,19 @@ export async function detectProjectsWithAgent(
   const {
     targets,
     purpose = 'set up a PostHog integration',
+    recommend = false,
     onEvent,
   } = options;
   const { accessToken, host } = session.credentials;
   const cwd = session.installDir;
   const runOptions = sessionToWizardOptions(session);
 
-  const mcpUrl = session.localMcp
-    ? 'http://localhost:8787/mcp'
-    : 'https://mcp.posthog.com/mcp';
-
   const agent = await initializeAgent(
     {
       workingDirectory: cwd,
-      posthogMcpUrl: mcpUrl,
+      posthogMcpUrl: host.mcpUrl,
       posthogApiKey: accessToken,
-      posthogApiHost: host,
+      host,
       detectPackageManager: detectNodePackageManagers,
       skillsBaseUrl: getSkillsBaseUrl(session.localMcp),
       integrationLabel: 'agentic-detect',
@@ -277,7 +330,7 @@ export async function detectProjectsWithAgent(
 
   const result = await executeAgent(
     agent,
-    buildPrompt(cwd, targets, purpose),
+    buildPrompt(cwd, targets, purpose, recommend),
     runOptions,
     NOOP_SPINNER,
     {
@@ -298,6 +351,7 @@ export async function detectProjectsWithAgent(
     return coerceAgenticReport(
       extractJson(output),
       targets.map((t) => t.id),
+      { recommend },
     );
   } catch (err) {
     // The prompt tells the agent to emit `[ABORT] detection failed` when the
