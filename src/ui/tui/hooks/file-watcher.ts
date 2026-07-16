@@ -44,8 +44,14 @@ export function startFileWatcher(
   const watchers: fs.FSWatcher[] = [];
   const intervals: Array<ReturnType<typeof setInterval>> = [];
   let lastMtimeMs = 0;
+  // Once stopped, already-scheduled timer and watch callbacks must not touch
+  // the path again — `clearInterval`/`close()` don't unqueue a callback that
+  // already fired, and the path (or its directory) may vanish out from under a
+  // straggler.
+  let stopped = false;
 
   const read = (force = false) => {
+    if (stopped) return;
     try {
       const stat = fs.statSync(path);
       if (!force && stat.mtimeMs === lastMtimeMs) return;
@@ -57,33 +63,63 @@ export function startFileWatcher(
     }
   };
 
+  // Attach an `fs.watch` with an `'error'` handler. Without the handler a
+  // watcher error (e.g. the watched path's directory is removed) is emitted on
+  // an EventEmitter with no listener, which Node re-throws as an uncaught
+  // exception. Returns true if the watch attached.
+  const attachWatch = (): boolean => {
+    try {
+      const watcher = fs.watch(path, () => read(true));
+      watcher.on('error', () => {
+        // The watched path went away. Drop this watcher and swallow — the poll
+        // loop keeps updates flowing and re-attach is handled elsewhere.
+        try {
+          watcher.close();
+        } catch {
+          // Already closed.
+        }
+      });
+      watchers.push(watcher);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
   intervals.push(setInterval(() => read(), pollIntervalMs));
 
-  try {
-    watchers.push(fs.watch(path, () => read(true)));
+  if (attachWatch()) {
     read(true);
-  } catch {
+  } else {
     // File doesn't exist yet — retry attaching the watch periodically until
     // it appears. The poll above already covers updates; this just upgrades
     // latency once the file shows up.
     const attachInterval = setInterval(() => {
+      if (stopped) return;
       try {
         fs.accessSync(path);
-        clearInterval(attachInterval);
-        const idx = intervals.indexOf(attachInterval);
-        if (idx >= 0) intervals.splice(idx, 1);
-        watchers.push(fs.watch(path, () => read(true)));
       } catch {
-        // Still waiting.
+        return; // Still waiting.
       }
+      clearInterval(attachInterval);
+      const idx = intervals.indexOf(attachInterval);
+      if (idx >= 0) intervals.splice(idx, 1);
+      attachWatch();
     }, attachRetryIntervalMs);
     intervals.push(attachInterval);
   }
 
   return {
     stop() {
-      for (const w of watchers) w.close();
+      stopped = true;
       for (const i of intervals) clearInterval(i);
+      for (const w of watchers) {
+        try {
+          w.close();
+        } catch {
+          // Already closed.
+        }
+      }
     },
   };
 }

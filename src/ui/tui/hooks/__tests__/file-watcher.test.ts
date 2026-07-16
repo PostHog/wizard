@@ -1,3 +1,4 @@
+import * as fs from 'fs';
 import { mkdtempSync, rmSync, writeFileSync, renameSync, unlinkSync } from 'fs';
 import { tmpdir } from 'os';
 import path from 'path';
@@ -5,6 +6,27 @@ import {
   startFileWatcher,
   type FileWatcherHandle,
 } from '@ui/tui/hooks/file-watcher';
+
+// Capture the FSWatcher instances the hook attaches by wrapping the real
+// fs.watch. The vitest ESM namespace is frozen (neither vi.spyOn nor direct
+// assignment works), so we mock the module and delegate to the actual impl.
+const { createdWatchers } = vi.hoisted(() => ({
+  createdWatchers: [] as import('fs').FSWatcher[],
+}));
+
+vi.mock('fs', async (importActual) => {
+  const actual = await importActual<typeof import('fs')>();
+  const watch: typeof actual.watch = (
+    ...args: Parameters<typeof actual.watch>
+  ) => {
+    const watcher = (actual.watch as (...a: unknown[]) => fs.FSWatcher)(
+      ...args,
+    );
+    createdWatchers.push(watcher);
+    return watcher;
+  };
+  return { ...actual, default: actual, watch };
+});
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -14,11 +36,16 @@ describe('startFileWatcher', () => {
 
   beforeEach(() => {
     workdir = mkdtempSync(path.join(tmpdir(), 'wizard-fw-'));
+    createdWatchers.length = 0;
   });
 
-  afterEach(() => {
+  afterEach(async () => {
+    // Stop the watcher before deleting its directory, then yield once so any
+    // already-scheduled timer/watch callbacks drain against the still-present
+    // path rather than a vanished one.
     handle?.stop();
     handle = undefined;
+    await wait(0);
     rmSync(workdir, { recursive: true, force: true });
   });
 
@@ -113,6 +140,26 @@ describe('startFileWatcher', () => {
     await wait(150);
 
     expect(onUpdate).not.toHaveBeenCalled();
+  });
+
+  it('handles fs.watch error events instead of letting them go unhandled', () => {
+    const onUpdate = vi.fn();
+    const target = path.join(workdir, 'data.json');
+    writeFileSync(target, JSON.stringify({ v: 1 }));
+
+    handle = startFileWatcher(target, onUpdate, { pollIntervalMs: 1000 });
+
+    // When the watched path's directory is removed, Node emits an 'error'
+    // event on the FSWatcher; on an emitter with no 'error' listener that is
+    // re-thrown as an uncaught exception — the reported crash. The hook must
+    // register a listener so this is swallowed.
+    const watcher = createdWatchers[0];
+    expect(watcher).toBeDefined();
+
+    const enoent = Object.assign(new Error('ENOENT: watched path removed'), {
+      code: 'ENOENT',
+    });
+    expect(() => watcher.emit('error', enoent)).not.toThrow();
   });
 
   it('survives the file being deleted and recreated', async () => {
