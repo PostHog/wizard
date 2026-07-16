@@ -5,7 +5,7 @@ export type SourceMapsUploadPromptParams = {
   displayName: string | undefined;
   variant: SkillVariant;
   skillId: string;
-  /** Project to instrument, relative to the repo root ("." or undefined = root). */
+  /** Project to instrument, relative to the wizard working directory ("." or undefined = root). */
   projectPath?: string;
   projectId: number;
   host: string;
@@ -16,31 +16,6 @@ export type SourceMapsUploadPromptParams = {
 export const SOURCE_MAPS_DETECTION_FAILED_PROMPT = `Detection did not pick a source maps skill variant for this project.
 Emit: ${AgentSignals.ABORT} unsupported-platform
 Then halt.`;
-
-type TestDonePromptContext = { uiHost: string; projectId: number };
-
-/**
- * Per-platform overrides appended to the STEP 8 test-done prompt template.
- * Platforms whose build/run flow doesn't fit the CLI-shaped template
- * (IDE-driven builds) pin their exact prompt here. Supporting a new
- * platform (android, react-native, …) means adding an entry — the prompt
- * body stays untouched.
- */
-const TEST_DONE_PROMPT_OVERRIDES: Partial<
-  Record<SkillVariant, (ctx: TestDonePromptContext) => string>
-> = {
-  ios: ({ uiHost, projectId }) => `
-   iOS override for the test-done prompt — everything happens in Xcode; no
-   xcodebuild commands, no debugger-detach or relaunch steps. Use exactly:
-        prompt: "1) In Xcode: Edit Scheme > Run > Build Configuration > Release, then Run — the Release build uploads dSYMs automatically.\\n\\n2) Tap the \\"<your test button label>\\" button in the app.\\n\\n3) Open Error Tracking in PostHog (${uiHost}/project/${projectId}/error_tracking) and confirm the test error appears with a source-resolved stack trace.\\n\\nWhen you're done, select Continue and I'll revert the test code."`,
-};
-
-function testDonePromptOverride(
-  variant: SkillVariant,
-  ctx: TestDonePromptContext,
-): string {
-  return TEST_DONE_PROMPT_OVERRIDES[variant]?.(ctx) ?? '';
-}
 
 export function buildSourceMapsUploadPrompt(
   params: SourceMapsUploadPromptParams,
@@ -58,8 +33,11 @@ export function buildSourceMapsUploadPrompt(
   const platformLabel = displayName ?? variant;
   const inSubproject = projectPath != null && projectPath !== '.';
   const projectLine = inSubproject
-    ? `- Project directory (relative to repo root): ${projectPath}`
+    ? `- Project directory (relative to the wizard's working directory): ${projectPath}`
     : "- Project directory: the wizard's working directory (even when it sits inside a larger git repo, this directory is the project root)";
+  const envFilePathGuidance = inSubproject
+    ? `Tool filePaths are relative to the wizard's working directory, not the selected project directory. Treat the skill's env path as relative to the selected project and prefix it with \`${projectPath}/\` when calling the tools: for example, pass \`${projectPath}/.env\`, not \`.env\` (which would target the wizard's working directory).`
+    : `Tool filePaths are relative to the wizard's working directory. For an env file at this project root, pass \`.env\`; never prefix it with this directory's path inside an ancestor repository.`;
 
   const credentialSteps = `STEP 4 — Make the credentials readable at build time. (skill: "Make credentials available at build time")
    Follow the skill's step. Wizard-specific: if it calls for a loader (e.g.
@@ -71,9 +49,8 @@ STEP 5 — Write the credentials to the env file. (skill: "Write credentials to 
    pick — the prerequisite PostHog integration usually already wrote
    POSTHOG_* vars to one, so seed your keys alongside them.
    - First call check_env_keys on that file (returns present/absent, never
-     values — don't read the file directly). Tool filePaths are relative to
-     the project directory: pass ".env", NOT the project's path inside a
-     parent repo.
+     values — don't read the file directly).
+   - Env tool path rule: ${envFilePathGuidance}
    - Then call set_env_values, passing the STEP 1 secretRef as a value
      object, not a literal string:
        values: {
@@ -203,16 +180,27 @@ STEP 8 — Offer to test the local setup. (skill: "Test the local setup")
    If "yes", follow the skill's "Test the local setup" step for the
    platform-appropriate affordance, the captureException shape, the
    placement, and the read-before-edit / always-revert rules. Then pause for
-   the user with wizard_ask, baking the EXACT build and run commands from
-   STEP 6 (and the exact button label / route) into the prompt as literal,
-   copy-pasteable steps. Separate each numbered step with \\n\\n so the TUI
-   renders them as distinct lines:
+   the user with wizard_ask, baking the build-and-run flow (and the exact
+   button label / route) into the prompt as literal, copy-pasteable
+   numbered steps:
+   - Steps 1-2: the production build, then launching the app and
+     triggering the test affordance. Source them from STEP 6 and the
+     skill's "Test the local setup" step — when the skill gives the
+     platform's test flow as verbatim steps (IDE-driven platforms like
+     Xcode do), use its wording and do NOT invent CLI build commands,
+     debugger steps, or relaunch steps it doesn't state. Quote CLI
+     commands verbatim. When build and run are one action (an IDE Run),
+     fold them into step 1 and make step 2 just triggering the affordance.
+   - The last step is always the Error Tracking check, exactly as in the
+     template.
+   Separate each numbered step with \\n\\n so the TUI renders them as
+   distinct lines:
         {
           id: "test-done",
-          prompt: "1) Run \`<your detected build command>\` to upload source maps and build the app with the test affordance.\\n\\n2) Start the app with \`<your detected run command>\`, then click the \\"<your test button label>\\" button (or hit \`<your test route>\`).\\n\\n3) Open Error Tracking in PostHog (${uiHost}/project/${projectId}/error_tracking) and confirm the test error appears with a source-resolved stack trace pointing at real source files (not minified bundle paths).\\n\\nWhen you're done, select Continue and I'll revert the test code.",
+          prompt: "1) <production build step — it uploads source maps and builds the app with the test affordance>\\n\\n2) <run step>, then click the \\"<your test button label>\\" button (or hit \`<your test route>\`).\\n\\n3) Open Error Tracking in PostHog (${uiHost}/project/${projectId}/error_tracking) and confirm the test error appears with a source-resolved stack trace pointing at real source files (not minified bundle paths).\\n\\nWhen you're done, select Continue and I'll revert the test code.",
           kind: "single",
           options: [{ label: "Continue (revert test code)", value: "continue" }]
-        }${testDonePromptOverride(variant, { uiHost, projectId })}
+        }
    After the user continues, revert the test code per the skill's rules and
    surface any failure in STEP 9.
 

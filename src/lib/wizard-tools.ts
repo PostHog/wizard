@@ -353,6 +353,9 @@ export function evaluateAskCap(
 // Env file helpers
 // ---------------------------------------------------------------------------
 
+export const ENV_FILE_PATH_DESCRIPTION =
+  'Path to the .env file, relative to the wizard working directory. Pass ".env" for a file in that directory, or include the selected subproject path (for example, "packages/app/.env") for a nested project. Never prefix it with the wizard working directory\'s path inside an ancestor repository.';
+
 /**
  * Resolve filePath relative to workingDirectory, rejecting path traversal.
  */
@@ -623,11 +626,7 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
     'check_env_keys',
     'Check which environment variable keys are present or missing in a .env file. Never reveals values.',
     {
-      filePath: z
-        .string()
-        .describe(
-          'Path to the .env file, relative to the project directory the wizard runs in — pass ".env", never a path re-prefixed with the project\'s location inside a parent git repo',
-        ),
+      filePath: z.string().describe(ENV_FILE_PATH_DESCRIPTION),
       keys: z
         .array(z.string())
         .describe('Environment variable key names to check'),
@@ -659,11 +658,7 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
     'set_env_values',
     'Create or update environment variable keys in a .env file. Creates the file if it does not exist. Ensures .gitignore coverage. Each value can be either a literal string or a secret reference of the form `{ "secretRef": "secret:..." }` returned by another tool (e.g. wizard_ask). Secret references are resolved locally — the actual value is written to the file but never returned to the agent.',
     {
-      filePath: z
-        .string()
-        .describe(
-          'Path to the .env file, relative to the project directory the wizard runs in — pass ".env", never a path re-prefixed with the project\'s location inside a parent git repo',
-        ),
+      filePath: z.string().describe(ENV_FILE_PATH_DESCRIPTION),
       values: z
         .record(
           z.string(),
@@ -734,9 +729,10 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
       const content = mergeEnvValues(existing, resolvedValues);
 
       // Env files belong in directories that already exist. Refusing to create
-      // parents catches the classic agent mistake of re-prefixing the project's
-      // repo-relative location (e.g. "apps/web/.env" while already running in
-      // apps/web), which would otherwise silently nest a duplicate tree.
+      // parents catches the classic agent mistake of re-prefixing the wizard
+      // working directory with its ancestor-repo-relative location (e.g.
+      // "apps/web/.env" while already running in apps/web), which would
+      // otherwise silently nest a duplicate tree.
       const dir = path.dirname(resolved);
       if (!fs.existsSync(dir)) {
         return {
@@ -745,7 +741,7 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
               type: 'text' as const,
               text: `Error: parent directory does not exist: "${path.dirname(
                 args.filePath,
-              )}". filePath is resolved against the project directory the wizard runs in — for its root env file pass just ".env".`,
+              )}". filePath is resolved against the wizard working directory — pass ".env" for a file there, or "<subproject>/.env" for an existing nested project.`,
             },
           ],
           isError: true,
