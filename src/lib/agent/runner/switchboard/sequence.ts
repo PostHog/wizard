@@ -6,7 +6,7 @@
 import { IS_PRODUCTION_BUILD } from '@env';
 import { Sequence } from '@lib/constants';
 import { logToFile } from '@utils/debug';
-import { isOrchestratorEnabled } from './flags';
+import { isOrchestratorEnabled, resolveFlagRoute } from './flags';
 import { getHarness, resolveHarness } from './harness';
 import type { WizardSession } from '@lib/wizard-session';
 import type { ProgramConfig } from '@lib/programs/program-step';
@@ -65,6 +65,14 @@ const cliSequenceMw: Middleware<Sequence> = (ctx, next) => {
   return ctx.cliSequence;
 };
 
+/** A program's own flag route may pin the sequence; wins over the global orchestrator flag. */
+const flagRouteSequenceMw: Middleware<Sequence> = (ctx, next) => {
+  const route = resolveFlagRoute(ctx.program, ctx.flags, ctx.flagPayloads);
+  if (!route?.sequence) return next();
+  if (ctx.trace) ctx.trace.sequence = 'flag';
+  return route.sequence;
+};
+
 /** PostHog `wizard-orchestrator` flag → orchestrator. */
 const orchestratorFeatureFlagMw: Middleware<Sequence> = (ctx, next) => {
   if (!isOrchestratorEnabled(ctx.flags)) return next();
@@ -96,6 +104,7 @@ const runTaskCapabilityClampMw: Middleware<Sequence> = (ctx, next) => {
 const SEQUENCE_MIDDLEWARE: Middleware<Sequence>[] = [
   ...(IS_PRODUCTION_BUILD ? [] : [cliSequenceMw]),
   runTaskCapabilityClampMw,
+  flagRouteSequenceMw,
   orchestratorFeatureFlagMw,
 ];
 

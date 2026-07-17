@@ -3,6 +3,7 @@
  * self-driving, orchestrator, …); `schemes.ts` owns the shared config shapes
  * and resolution. The switchboard only calls the resolvers exported here.
  */
+import { RUN_SURFACE } from '@env';
 import type { ProgramId } from '@lib/programs/program-registry';
 import { BASIC_INTEGRATION_FLAGS } from './basic-integration';
 import { SELF_DRIVING_FLAGS } from './self-driving';
@@ -18,12 +19,14 @@ export const FLAG_CONFIGS: Partial<Record<ProgramId, ConfigFlag>> = {
   'self-driving': SELF_DRIVING_FLAGS,
 };
 
-/** The flag-driven pi route for a program, or undefined when its flags don't validly route it. */
+/** The flag-driven route for a program, or undefined when its flags don't validly route it. */
 export function resolveFlagRoute(
   program: ProgramId,
   flags: Record<string, string>,
   flagPayloads?: Record<string, unknown>,
 ): FlagRoute | undefined {
+  // Flag experiments are disabled on the cloud (headless) run surface.
+  if (RUN_SURFACE === 'cloud') return undefined;
   const cfg = FLAG_CONFIGS[program];
   return cfg && routeFromConfigFlag(cfg, flags, flagPayloads);
 }

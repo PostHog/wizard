@@ -286,6 +286,60 @@ describe('switchboard resolveHarness — self-driving pi payload flag', () => {
     expect(pick(sdPayload({ model: 'gpt-5-4', effort: 'banana' }))).toEqual(
       NON_FLAGGED,
     );
+    expect(pick(sdPayload({ model: 'gpt-5-4', harness: 'banana' }))).toEqual(
+      NON_FLAGGED,
+    );
+    expect(pick(sdPayload({ model: 'gpt-5-4', sequence: 'banana' }))).toEqual(
+      NON_FLAGGED,
+    );
+  });
+
+  it('payload harness/sequence override their axes when present', () => {
+    // Harness in the payload wins over the pi default.
+    expect(
+      resolveHarness({
+        program: 'self-driving',
+        flags: SD_ON,
+        flagPayloads: sdPayload({ model: 'sonnet-5', harness: 'anthropic' }),
+      }),
+    ).toEqual({
+      harness: Harness.anthropic,
+      model: SONNET_5_MODEL,
+      thinkingLevel: undefined,
+    });
+    // Sequence in the payload pins the sequence axis without the global flag.
+    const ctx: SwitchboardCtx = {
+      program: 'self-driving',
+      flags: SD_ON,
+      flagPayloads: sdPayload({
+        model: 'gpt-5-6-terra',
+        sequence: 'orchestrator',
+      }),
+    };
+    const binding = resolveBinding(ctx);
+    expect(binding.sequence).toBe(Sequence.orchestrator);
+    expect(ctx.trace?.sequence).toBe('flag');
+  });
+
+  it('a full payload can pin every axis at once', () => {
+    const ctx: SwitchboardCtx = {
+      program: 'self-driving',
+      flags: SD_ON,
+      flagPayloads: sdPayload({
+        model: 'sonnet-5',
+        effort: 'low',
+        harness: 'anthropic',
+        sequence: 'orchestrator',
+      }),
+    };
+    const binding = resolveBinding(ctx);
+    expect(binding).toEqual({
+      sequence: Sequence.orchestrator,
+      harness: Harness.anthropic,
+      model: SONNET_5_MODEL,
+      thinkingLevel: 'low',
+    });
+    expect(ctx.trace?.sequence).toBe('flag');
   });
 
   it('a rejected payload does not stamp flag sources on the trace', () => {

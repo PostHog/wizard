@@ -14,6 +14,8 @@ import {
   GPT5_6_TERRA_MODEL,
   GPT5_MINI_MODEL,
   GPT5_MODEL,
+  Harness,
+  Sequence,
   SONNET_5_MODEL,
 } from '@lib/constants';
 import { logToFile } from '@utils/debug';
@@ -43,10 +45,12 @@ const EFFORT_FLAG_VARIANTS = [
   'xhigh',
 ] as const satisfies readonly EffortLevel[];
 
-/** A resolved flag route: gateway model id + optional effort override. */
+/** A resolved flag route. Absent fields keep the axis's default (pi harness, sequence resolved by its own chain, table effort). */
 export interface FlagRoute {
   model: string;
   thinkingLevel?: EffortLevel;
+  harness?: Harness;
+  sequence?: Sequence;
 }
 
 // ── Config schemes ────────────────────────────────────────────────────────
@@ -71,10 +75,12 @@ export interface PayloadConfigFlag {
 
 export type ConfigFlag = MultivariateConfigFlag | PayloadConfigFlag;
 
-/** `{model, effort}` payload shape; extra keys tolerated for forward compat. */
+/** `{model, effort?, harness?, sequence?}` payload shape; extra keys tolerated for forward compat. */
 const payloadConfigFlagSchema = z.object({
   model: z.string().refine((key) => key in MODEL_FLAG_VARIANTS),
   effort: z.enum(EFFORT_FLAG_VARIANTS).optional(),
+  harness: z.nativeEnum(Harness).optional(),
+  sequence: z.nativeEnum(Sequence).optional(),
 });
 
 // ── Resolution ────────────────────────────────────────────────────────────
@@ -94,6 +100,8 @@ function parseFlagPayload(raw: unknown): FlagRoute | undefined {
   return {
     model: MODEL_FLAG_VARIANTS[parsed.data.model],
     thinkingLevel: parsed.data.effort,
+    harness: parsed.data.harness,
+    sequence: parsed.data.sequence,
   };
 }
 

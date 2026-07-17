@@ -2,7 +2,7 @@
  * Harness axis: registry, middleware, resolver. Mirrors `sequence.ts`.
  */
 
-import { IS_PRODUCTION_BUILD, RUN_SURFACE } from '@env';
+import { IS_PRODUCTION_BUILD } from '@env';
 import { Harness } from '@lib/constants';
 import { logToFile } from '@utils/debug';
 import { anthropicBackend } from '../harness/anthropic';
@@ -37,12 +37,14 @@ export function getHarness(name: Harness): AgentHarness {
  */
 const flagRunnerOverride: Middleware<HarnessPick> = (ctx, next) => {
   const pick = next();
-  // The pi experiment is disabled on the cloud (headless) run surface.
-  if (RUN_SURFACE === 'cloud') return pick;
   const route = resolveFlagRoute(ctx.program, ctx.flags, ctx.flagPayloads);
   if (!route) return pick;
   if (ctx.trace) Object.assign(ctx.trace, { harness: 'flag', model: 'flag' });
-  return { harness: Harness.pi, ...route };
+  return {
+    harness: route.harness ?? Harness.pi,
+    model: route.model,
+    thinkingLevel: route.thinkingLevel,
+  };
 };
 
 /** `--harness` override. Dev/test only — the option is gated out of published builds. */
