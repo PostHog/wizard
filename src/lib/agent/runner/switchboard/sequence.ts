@@ -8,8 +8,8 @@ import { Sequence } from '@lib/constants';
 import { logToFile } from '@utils/debug';
 import {
   isOrchestratorEnabled,
-  orchestratorFlagRoutes,
   resolveFlagRoute,
+  resolveFlagSequence,
 } from './flags';
 import { getHarness, resolveHarness } from './harness';
 import type { WizardSession } from '@lib/wizard-session';
@@ -77,11 +77,12 @@ const flagRouteSequenceMw: Middleware<Sequence> = (ctx, next) => {
   return route.sequence;
 };
 
-/** PostHog `wizard-orchestrator` flag → orchestrator, only for covered programs. */
-const orchestratorFeatureFlagMw: Middleware<Sequence> = (ctx, next) => {
-  if (!orchestratorFlagRoutes(ctx.program, ctx.flags)) return next();
+/** Sequence experiments (e.g. wizard-orchestrator), each inert outside its declared programs. */
+const sequenceExperimentMw: Middleware<Sequence> = (ctx, next) => {
+  const sequence = resolveFlagSequence(ctx.program, ctx.flags);
+  if (!sequence) return next();
   if (ctx.trace) ctx.trace.sequence = 'flag';
-  return Sequence.orchestrator;
+  return sequence;
 };
 
 /**
@@ -109,7 +110,7 @@ const SEQUENCE_MIDDLEWARE: Middleware<Sequence>[] = [
   ...(IS_PRODUCTION_BUILD ? [] : [cliSequenceMw]),
   runTaskCapabilityClampMw,
   flagRouteSequenceMw,
-  orchestratorFeatureFlagMw,
+  sequenceExperimentMw,
 ];
 
 /** CLI wins over `wizard-orchestrator` flag wins over binding default. */

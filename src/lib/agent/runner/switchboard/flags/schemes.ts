@@ -90,6 +90,8 @@ export interface HarnessExperiment {
 export interface SequenceExperiment {
   programs: readonly ProgramId[];
   flag: string;
+  /** Sequence the flag routes covered programs to. */
+  sequence: Sequence;
 }
 
 /** `{model, effort?, harness?, sequence?}` payload shape; extra keys tolerated for forward compat. */

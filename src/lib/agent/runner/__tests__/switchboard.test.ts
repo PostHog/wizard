@@ -26,6 +26,10 @@ import {
   resolveSequence,
   type SwitchboardCtx,
 } from '@lib/agent/runner/switchboard';
+import {
+  HARNESS_EXPERIMENTS,
+  SEQUENCE_EXPERIMENTS,
+} from '@lib/agent/runner/switchboard/flags';
 import { modelCapabilities } from '@lib/agent/runner/switchboard/models';
 
 // RUN_SURFACE is read live in flagRunnerOverride; a getter lets a test flip it.
@@ -596,5 +600,94 @@ describe('switchboard resolveSequence — orchestrator stays flag-gated', () => 
         flags: { [WIZARD_ORCHESTRATOR_FLAG_KEY]: 'linear' },
       }),
     ).toBe(Sequence.linear);
+  });
+});
+
+// Derived from the experiment declarations, not hardcoded flag keys: a new
+// experiment added to HARNESS_EXPERIMENTS / SEQUENCE_EXPERIMENTS is covered by
+// these loops automatically, and one NOT added there cannot route at all.
+describe('switchboard flag scoping lockdown — experiments never leak across programs', () => {
+  const ALL_PROGRAMS = PROGRAM_REGISTRY.map((p) => p.id);
+  const isCovered = (program: (typeof ALL_PROGRAMS)[number]) =>
+    HARNESS_EXPERIMENTS.some((e) => e.program === program) ||
+    SEQUENCE_EXPERIMENTS.some((e) => e.programs.includes(program));
+
+  /** Every experiment's flags forced on at once. */
+  const allFlagsOn = () => {
+    const flags: Record<string, string> = {};
+    const payloads: Record<string, unknown> = {};
+    for (const e of HARNESS_EXPERIMENTS) {
+      flags[e.flags.useFlag] = 'true';
+      if (e.flags.modelFlag) {
+        flags[e.flags.modelFlag] = 'gpt-5-4';
+        flags[e.flags.effortFlag] = 'high';
+      } else {
+        payloads[e.flags.useFlag] = { model: 'gpt-5-4', effort: 'high' };
+      }
+    }
+    for (const e of SEQUENCE_EXPERIMENTS) flags[e.flag] = 'true';
+    return { flags, payloads };
+  };
+
+  it('every experiment scope names real registry programs', () => {
+    for (const e of HARNESS_EXPERIMENTS) {
+      expect(ALL_PROGRAMS).toContain(e.program);
+    }
+    for (const e of SEQUENCE_EXPERIMENTS) {
+      expect(e.programs.length).toBeGreaterThan(0);
+      for (const p of e.programs) expect(ALL_PROGRAMS).toContain(p);
+    }
+  });
+
+  it('with every experiment flag on, uncovered programs resolve exactly as with no flags', () => {
+    const { flags, payloads } = allFlagsOn();
+    for (const program of ALL_PROGRAMS) {
+      if (isCovered(program)) continue;
+      const ctx: SwitchboardCtx = { program, flags, flagPayloads: payloads };
+      expect(resolveBinding(ctx)).toEqual(
+        resolveBinding({ program, flags: {} }),
+      );
+      expect(ctx.trace).toEqual({
+        harness: 'binding',
+        model: 'binding',
+        sequence: 'binding',
+      });
+    }
+  });
+
+  it('each harness experiment routes ONLY its declared program', () => {
+    for (const exp of HARNESS_EXPERIMENTS) {
+      const flags: Record<string, string> = { [exp.flags.useFlag]: 'true' };
+      const payloads: Record<string, unknown> = {};
+      if (exp.flags.modelFlag) flags[exp.flags.modelFlag] = 'gpt-5-4';
+      else payloads[exp.flags.useFlag] = { model: 'gpt-5-4' };
+      expect(
+        resolveHarness({
+          program: exp.program,
+          flags,
+          flagPayloads: payloads,
+        }),
+      ).toMatchObject({ harness: Harness.pi, model: GPT5_4_MODEL });
+      for (const program of ALL_PROGRAMS) {
+        if (program === exp.program) continue;
+        expect(
+          resolveHarness({ program, flags, flagPayloads: payloads }),
+        ).toEqual(resolveHarness({ program, flags: {} }));
+      }
+    }
+  });
+
+  it('each sequence experiment routes ONLY its declared programs', () => {
+    for (const exp of SEQUENCE_EXPERIMENTS) {
+      const flags = { [exp.flag]: 'true' };
+      for (const program of ALL_PROGRAMS) {
+        const resolved = resolveSequence({ program, flags });
+        if (exp.programs.includes(program)) {
+          expect(resolved).toBe(exp.sequence);
+        } else {
+          expect(resolved).toBe(resolveSequence({ program, flags: {} }));
+        }
+      }
+    }
   });
 });
