@@ -1,5 +1,21 @@
 # Changelog
 
+## [2.45.0](https://github.com/PostHog/wizard/compare/v2.44.0...v2.45.0) (2026-07-16)
+
+
+### Features
+
+* add Kotlin Multiplatform (KMP) framework support ([#906](https://github.com/PostHog/wizard/issues/906)) ([983dbe0](https://github.com/PostHog/wizard/commit/983dbe0a6c6da64547d1df80a002762203a68ff3))
+* **headless:** agentic monorepo detection behind basic-integration-agentic-detection flag ([#884](https://github.com/PostHog/wizard/issues/884)) ([b153327](https://github.com/PostHog/wizard/commit/b153327f8cfa0287c0b4f3b79a78ba3363414f23))
+* **orchestrator:** install step-skills from a per-group bundle ([#911](https://github.com/PostHog/wizard/issues/911)) ([c02199a](https://github.com/PostHog/wizard/commit/c02199ae8eb598c7239efc68936830e928176768))
+* **pi:** orchestrator runTask — per-task pi sessions with in-process queue tools ([#853](https://github.com/PostHog/wizard/issues/853)) ([da2706e](https://github.com/PostHog/wizard/commit/da2706e09bfd4e13cffdf8c95553531bb6e56c06))
+
+
+### Bug Fixes
+
+* **fence:** exact per-manager bash allowlist with agent feedback ([#888](https://github.com/PostHog/wizard/issues/888)) ([#892](https://github.com/PostHog/wizard/issues/892)) ([d9c016d](https://github.com/PostHog/wizard/commit/d9c016dcc2df313f26039a62ea51c8732802097e))
+* upload event plans in headless runs ([#891](https://github.com/PostHog/wizard/issues/891)) ([dcaf90f](https://github.com/PostHog/wizard/commit/dcaf90f65a46d9afa83f3339b9ceb34b829ddd9e))
+
 ## [2.44.0](https://github.com/PostHog/wizard/compare/v2.43.0...v2.44.0) (2026-07-15)
 
 

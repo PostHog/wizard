@@ -57,6 +57,16 @@ export type SkillEntry = {
   framework?: string;
   /** The variant a bare framework id resolves to when its family has several. */
   default?: boolean;
+  /** This entry's download is a bundle JSON of every variant, not a single skill's zip. */
+  bundle?: boolean;
+  /** Menu-only: the variants inside a bundle, expanded into entries of their own on fetch. */
+  variants?: { id: string; framework?: string; default?: boolean }[];
+};
+
+/** A bundle's files, keyed by variant short id then path. */
+export type SkillBundle = {
+  id: string;
+  variants: Record<string, Record<string, string>>;
 };
 
 /**
@@ -88,6 +98,18 @@ export interface SkillMenu {
 // Standalone skill helpers (usable before the MCP server is created)
 // ---------------------------------------------------------------------------
 
+/** Expand a bundle entry into one entry per variant, so the menu reads the same whether a group ships bundled or as zips. */
+export function expandBundleEntry(entry: SkillEntry): SkillEntry[] {
+  if (!entry.bundle || !entry.variants) return [entry];
+  return entry.variants.map((variant) => ({
+    ...variant,
+    name: entry.name,
+    group: entry.group,
+    bundle: true,
+    downloadUrl: entry.downloadUrl,
+  }));
+}
+
 /**
  * Fetch the skill menu from the skills server.
  * Returns parsed data on success, `null` on failure.
@@ -101,6 +123,9 @@ export async function fetchSkillMenu(
     logToFile(`fetchSkillMenu: fetching from ${menuUrl}`);
     const resp = await fetchWithRetry(menuUrl, opts);
     const data = (await resp.json()) as SkillMenu;
+    for (const [category, entries] of Object.entries(data.categories)) {
+      data.categories[category] = entries.flatMap(expandBundleEntry);
+    }
     logToFile(
       `fetchSkillMenu: loaded (${
         Object.keys(data.categories).length
@@ -133,6 +158,37 @@ function extractZipArchive(zip: Uint8Array, destDir: string): number {
   return written;
 }
 
+/** Unpack the one variant this entry names out of a bundle; the rest is noise and never hits disk. */
+function extractBundle(
+  bundle: SkillBundle,
+  destDir: string,
+  entryId: string,
+): number {
+  if (
+    typeof bundle?.id !== 'string' ||
+    typeof bundle?.variants !== 'object' ||
+    bundle.variants === null
+  ) {
+    throw new Error('malformed bundle: expected { id, variants }');
+  }
+  const files = bundle.variants[entryId.slice(bundle.id.length + 1)];
+  if (!files) {
+    throw new Error(`bundle ${bundle.id} has no variant "${entryId}"`);
+  }
+  const root = path.resolve(destDir);
+  let written = 0;
+  for (const [entryPath, contents] of Object.entries(files)) {
+    const target = path.resolve(root, entryPath);
+    if (target !== root && !target.startsWith(root + path.sep)) {
+      throw new Error(`bundle entry escapes destination: ${entryPath}`);
+    }
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    fs.writeFileSync(target, contents);
+    written++;
+  }
+  return written;
+}
+
 /** Download a URL to a buffer, retrying transient failures with backoff. */
 async function downloadWithRetry(
   url: string,
@@ -159,9 +215,15 @@ export async function downloadSkill(
 
   try {
     fs.mkdirSync(skillDir, { recursive: true });
-    const zip = await downloadWithRetry(skillEntry.downloadUrl);
+    const data = await downloadWithRetry(skillEntry.downloadUrl);
     step = 'extract';
-    const fileCount = extractZipArchive(zip, skillDir);
+    const fileCount = skillEntry.bundle
+      ? extractBundle(
+          JSON.parse(Buffer.from(data).toString('utf8')) as SkillBundle,
+          skillDir,
+          skillEntry.id,
+        )
+      : extractZipArchive(data, skillDir);
     fs.writeFileSync(path.join(skillDir, '.posthog-wizard'), '');
 
     logToFile(
@@ -1278,6 +1340,7 @@ export const WIZARD_TOOL_NAMES = {
 
 export const __test = {
   extractZipArchive,
+  extractBundle,
   fetchWithRetry,
   downloadWithRetry,
   writeLedgerAtomic,
