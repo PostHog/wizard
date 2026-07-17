@@ -14,13 +14,11 @@ export const OpenCodeMCPConfig = z
   .object({
     mcp: z.record(
       z.string(),
-      z.union([
-        z.object({
-          type: z.literal('remote'),
-          url: z.string(),
-          headers: z.record(z.string(), z.string()).optional(),
-        }),
-      ]),
+      z.object({
+        type: z.literal('remote'),
+        url: z.string(),
+        headers: z.record(z.string(), z.string()).optional(),
+      }),
     ),
   })
   .passthrough();
