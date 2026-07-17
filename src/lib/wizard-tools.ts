@@ -707,6 +707,9 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
       // otherwise silently nest a duplicate tree.
       const dir = path.dirname(resolved);
       if (!fs.existsSync(dir)) {
+        analytics.wizardCapture('set_env_values parent dir missing', {
+          platform: process.platform,
+        });
         return {
           content: [
             {

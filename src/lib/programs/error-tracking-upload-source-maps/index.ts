@@ -16,7 +16,7 @@ import {
 import { getContentBlocks } from './content/index.js';
 import { getUI } from '@ui';
 import { installOrUpdatePostHogCli } from '@steps/install-cli-steering';
-import { logToFile } from '@utils/debug';
+import { analytics } from '@utils/analytics';
 
 const REPORT_FILE = 'posthog-source-maps-report.md';
 const DOCS_URL = 'https://posthog.com/docs/error-tracking/upload-source-maps';
@@ -24,22 +24,25 @@ const DOCS_URL = 'https://posthog.com/docs/error-tracking/upload-source-maps';
 let postHogCliInstallAttempted = false;
 
 /**
- * Pre-install posthog-cli for variants that need a machine-global copy (see
- * `VARIANTS_REQUIRING_POSTHOG_CLI`). The agent can't do it — warlock blocks
- * `npm install -g` — so the wizard installs it in-process (spawnSync skips the
- * agent's YARA hooks). Called from customPrompt, not a step hook: source-maps
- * is non-composed, so `onRunPrep` never fires; customPrompt runs after the
- * picker and just before the agent on every path. Warn, don't fail.
+ * Pre-install posthog-cli for variants that need a machine-global copy
+ * (`VARIANTS_REQUIRING_POSTHOG_CLI`). The agent can't — warlock blocks
+ * `npm install -g` — so the wizard does it in-process. Warn, don't fail.
  */
-function ensurePostHogCli(): void {
+function ensurePostHogCli(variant: SkillVariant): void {
   if (postHogCliInstallAttempted) return;
   postHogCliInstallAttempted = true;
 
   const result = installOrUpdatePostHogCli();
-  logToFile(
-    `[source-maps] posthog-cli pre-install result=${JSON.stringify(result)}`,
-  );
   if (!result.success) {
+    analytics.wizardCapture('source maps posthog-cli preinstall failed', {
+      variant,
+      error: String(result.error).slice(0, 500),
+    });
+    analytics.captureException(
+      result.errorObject ??
+        new Error(`posthog-cli pre-install failed: ${result.error}`),
+      { source: 'source_maps_cli_preinstall', variant },
+    );
     getUI().log.warn(
       `Could not pre-install posthog-cli (${result.error}). Your Xcode build ` +
         `will fail to upload dSYMs until it's installed: npm install -g @posthog/cli@latest`,
@@ -103,7 +106,8 @@ export const errorTrackingUploadSourceMapsConfig: ProgramConfig = {
           return SOURCE_MAPS_DETECTION_FAILED_PROMPT;
         }
 
-        if (VARIANTS_REQUIRING_POSTHOG_CLI.has(variant)) ensurePostHogCli();
+        if (VARIANTS_REQUIRING_POSTHOG_CLI.has(variant))
+          ensurePostHogCli(variant);
 
         const uiHost = ctx.host.appHost.replace(/\/$/, '');
 
