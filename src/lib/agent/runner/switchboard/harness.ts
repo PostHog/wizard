@@ -68,8 +68,14 @@ const EFFORT_FLAG_VARIANTS: readonly EffortLevel[] = [
   'xhigh',
 ];
 
-/** The useFlag's `{model, effort}` payload, when a config carries no trio flags. */
-function parsePiFlagPayload(raw: unknown): { model?: string; effort?: string } {
+/**
+ * The useFlag's `{model, effort}` payload, strictly validated. Returns
+ * undefined on any unexpected shape — missing/unparseable payload, unknown
+ * model variant, invalid effort — so the caller keeps the non-flagged default.
+ */
+function parsePiFlagPayload(
+  raw: unknown,
+): { model: string; effort?: EffortLevel } | undefined {
   const value =
     typeof raw === 'string'
       ? (() => {
@@ -81,21 +87,25 @@ function parsePiFlagPayload(raw: unknown): { model?: string; effort?: string } {
         })()
       : raw;
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
-    return {};
+    return undefined;
   }
   const { model, effort } = value as Record<string, unknown>;
-  return {
-    model: typeof model === 'string' ? model : undefined,
-    effort: typeof effort === 'string' ? effort : undefined,
-  };
+  const mapped =
+    typeof model === 'string' ? PI_MODEL_FLAG_VARIANTS[model] : undefined;
+  if (!mapped) return undefined;
+  if (effort === undefined) return { model: mapped };
+  if (EFFORT_FLAG_VARIANTS.includes(effort as EffortLevel)) {
+    return { model: mapped, effort: effort as EffortLevel };
+  }
+  return undefined;
 }
 
 /**
- * The program's `useFlag` on → pi. Model/effort come from the trio flags when
- * the config names them, else from the useFlag's `{model, effort}` payload —
- * either way an unknown/missing model variant falls back to the config's
- * model, an invalid/missing effort leaves the table default. A program without
- * a `PI_FLAG_CONFIGS` entry ignores the flags and the binding default stands.
+ * The program's `useFlag` on → pi. Trio configs read their multivariate flags
+ * (unknown variant → the config's fallback model, invalid effort → table
+ * default). Payload configs read the useFlag's `{model, effort}` payload and
+ * fail closed: anything unexpected keeps the non-flagged binding default
+ * (anthropic). A program without a `PI_FLAG_CONFIGS` entry ignores the flags.
  */
 const flagRunnerOverride: Middleware<HarnessPick> = (ctx, next) => {
   const pick = next();
@@ -104,20 +114,26 @@ const flagRunnerOverride: Middleware<HarnessPick> = (ctx, next) => {
   if (ctx.flags[cfg.useFlag] !== 'true') return pick;
   // The pi experiment is disabled on the cloud (headless) run surface.
   if (RUN_SURFACE === 'cloud') return pick;
+  let model: string;
+  let thinkingLevel: EffortLevel | undefined;
+  if ('modelFlag' in cfg) {
+    const variant = ctx.flags[cfg.modelFlag] ?? '';
+    const effort = ctx.flags[cfg.effortFlag] as EffortLevel;
+    model = PI_MODEL_FLAG_VARIANTS[variant] ?? cfg.fallbackModel;
+    thinkingLevel = EFFORT_FLAG_VARIANTS.includes(effort) ? effort : undefined;
+  } else {
+    const payload = parsePiFlagPayload(ctx.flagPayloads?.[cfg.useFlag]);
+    if (!payload) {
+      logToFile(
+        `[switchboard] ${cfg.useFlag} on but payload missing/invalid — keeping the non-flagged default`,
+      );
+      return pick;
+    }
+    model = payload.model;
+    thinkingLevel = payload.effort;
+  }
   if (ctx.trace) Object.assign(ctx.trace, { harness: 'flag', model: 'flag' });
-  const payload = cfg.modelFlag
-    ? undefined
-    : parsePiFlagPayload(ctx.flagPayloads?.[cfg.useFlag]);
-  const variant =
-    (cfg.modelFlag ? ctx.flags[cfg.modelFlag] : payload?.model) ?? '';
-  const effort = (
-    cfg.effortFlag ? ctx.flags[cfg.effortFlag] : payload?.effort
-  ) as EffortLevel;
-  return {
-    harness: Harness.pi,
-    model: PI_MODEL_FLAG_VARIANTS[variant] ?? cfg.fallbackModel,
-    thinkingLevel: EFFORT_FLAG_VARIANTS.includes(effort) ? effort : undefined,
-  };
+  return { harness: Harness.pi, model, thinkingLevel };
 };
 
 /** `--harness` override. Dev/test only — the option is gated out of published builds. */

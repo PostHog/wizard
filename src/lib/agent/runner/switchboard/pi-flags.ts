@@ -10,7 +10,6 @@
  */
 import {
   GPT5_4_MODEL,
-  GPT5_6_TERRA_MODEL,
   WIZARD_PI_EFFORT_FLAG_KEY,
   WIZARD_PI_MODEL_FLAG_KEY,
   WIZARD_SELF_DRIVING_USE_PI_HARNESS_FLAG_KEY,
@@ -18,16 +17,25 @@ import {
 } from '@lib/constants';
 import type { ProgramId } from '@lib/programs/program-registry';
 
-export interface PiFlagConfig {
+/** Trio scheme: model/effort ride their own multivariate flags. */
+export interface PiFlagTrioConfig {
   /** Boolean flag: 'true' → route this program to pi. */
   useFlag: string;
-  /** Multivariate flag: variant key → gateway id via `PI_MODEL_FLAG_VARIANTS`. Absent → model comes from the useFlag's `{model, effort}` payload. */
-  modelFlag?: string;
-  /** Multivariate flag: reasoning-effort override (minimal/low/medium/high/xhigh). Absent → effort comes from the useFlag's payload. */
-  effortFlag?: string;
+  /** Multivariate flag: variant key → gateway id via `PI_MODEL_FLAG_VARIANTS`. */
+  modelFlag: string;
+  /** Multivariate flag: reasoning-effort override (minimal/low/medium/high/xhigh). */
+  effortFlag: string;
   /** Model when the variant is missing or unknown. */
   fallbackModel: string;
 }
+
+/** Payload scheme: the useFlag's `{model, effort}` payload carries both; anything invalid keeps the non-flagged binding default. */
+export interface PiFlagPayloadConfig {
+  useFlag: string;
+  modelFlag?: never;
+}
+
+export type PiFlagConfig = PiFlagTrioConfig | PiFlagPayloadConfig;
 
 /** Programs whose pi experiment is flag-driven; absent → the flags are a no-op. */
 export const PI_FLAG_CONFIGS: Partial<Record<ProgramId, PiFlagConfig>> = {
@@ -39,6 +47,5 @@ export const PI_FLAG_CONFIGS: Partial<Record<ProgramId, PiFlagConfig>> = {
   },
   'self-driving': {
     useFlag: WIZARD_SELF_DRIVING_USE_PI_HARNESS_FLAG_KEY,
-    fallbackModel: GPT5_6_TERRA_MODEL,
   },
 };

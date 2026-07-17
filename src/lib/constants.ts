@@ -253,7 +253,7 @@ export const WIZARD_USE_PI_HARNESS_FLAG_KEY = 'wizard-use-pi-harness';
 export const WIZARD_PI_MODEL_FLAG_KEY = 'wizard-pi-model';
 /** Multivariate flag: reasoning-effort override for pi models (minimal/low/medium/high/xhigh). */
 export const WIZARD_PI_EFFORT_FLAG_KEY = 'wizard-pi-effort';
-/** Boolean flag: on → pi for self-driving. Payload carries `{model, effort}` (wizard-pi-model variant key + effort level). */
+/** Boolean flag: on → pi for self-driving. Payload carries `{model, effort}` (wizard-pi-model variant key + effort level); missing/invalid payload keeps the non-flagged default. */
 export const WIZARD_SELF_DRIVING_USE_PI_HARNESS_FLAG_KEY =
   'wizard-self-driving-use-pi-harness';
 /** Feature flag key that gates the intro-screen "Tools" menu. */
