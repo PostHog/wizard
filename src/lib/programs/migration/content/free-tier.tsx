@@ -37,7 +37,7 @@ export const FREE_TIER_BLOCK: ContentBlock = {
     <Text>
       <Text color={Colors.accent}>{'    100,000  '}</Text>
       <Text>events </Text>
-      <Text dimColor>LLM analytics</Text>
+      <Text dimColor>AI observability</Text>
     </Text>,
     <Text>
       <Text color={Colors.accent}>{'      50 GB  '}</Text>

@@ -96,6 +96,7 @@ export enum Integration {
   fastapi = 'fastapi',
   laravel = 'laravel',
   sveltekit = 'sveltekit',
+  kmp = 'kmp',
   swift = 'swift',
   android = 'android',
   rails = 'rails',
@@ -263,6 +264,9 @@ export const WIZARD_SELF_DRIVING_PI_EFFORT_FLAG_KEY =
   'wizard-self-driving-pi-effort';
 /** Feature flag key that gates the intro-screen "Tools" menu. */
 export const WIZARD_TOOLS_MENU_FLAG_KEY = 'wizard-tools-menu';
+/** Boolean flag: agentic project scoping for non-interactive basic-integration runs. */
+export const WIZARD_BASIC_INTEGRATION_AGENTIC_DETECTION_FLAG_KEY =
+  'wizard-basic-integration-agentic-detection';
 /** User-Agent for wizard HTTP requests and MCP server identification. */
 export const WIZARD_USER_AGENT = `posthog/wizard; version: ${VERSION}`;
 
@@ -289,6 +293,9 @@ export const POSTHOG_FLAG_HEADER_PREFIX = 'X-POSTHOG-FLAG-';
 
 /** Timeout for framework / project detection probes (ms). */
 export const DETECTION_TIMEOUT_MS = 10_000;
+
+/** Timeout for the agentic project scan (ms); past it the run falls back to root detection. */
+export const AGENTIC_DETECTION_TIMEOUT_MS = 60_000;
 
 /**
  * Timeout for the OAuth authorization flow (ms).

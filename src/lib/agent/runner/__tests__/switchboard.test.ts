@@ -293,7 +293,7 @@ describe('switchboard resolveHarness — self-driving pi flag trio', () => {
     }
   });
 
-  it('clamps a flag-driven orchestrator pick to linear for a self-driving pi run', () => {
+  it('runs the orchestrator for a flag-driven self-driving pi run (pi has runTask, no clamp)', () => {
     const ctx: SwitchboardCtx = {
       program: 'self-driving',
       flags: {
@@ -305,7 +305,7 @@ describe('switchboard resolveHarness — self-driving pi flag trio', () => {
     const binding = resolveBinding(ctx);
     // The resolved effort rides the binding (telemetry reads it from here).
     expect(binding).toEqual({
-      sequence: Sequence.linear,
+      sequence: Sequence.orchestrator,
       harness: Harness.pi,
       model: GPT5_6_TERRA_MODEL,
       thinkingLevel: 'high',
@@ -313,7 +313,7 @@ describe('switchboard resolveHarness — self-driving pi flag trio', () => {
     expect(ctx.trace).toEqual({
       harness: 'flag',
       model: 'flag',
-      sequence: 'pi-clamp',
+      sequence: 'flag',
     });
   });
 
@@ -355,7 +355,7 @@ describe('switchboard decision trace', () => {
     });
   });
 
-  it('stamps flag + pi-clamp sources when the pi flag decides', () => {
+  it('stamps flag + binding sources when the pi flag decides (pi has runTask, no clamp)', () => {
     const ctx: SwitchboardCtx = {
       program: 'posthog-integration',
       flags: { [WIZARD_USE_PI_HARNESS_FLAG_KEY]: 'true' },
@@ -364,8 +364,22 @@ describe('switchboard decision trace', () => {
     expect(ctx.trace).toEqual({
       harness: 'flag',
       model: 'flag',
-      sequence: 'pi-clamp',
+      sequence: 'binding',
     });
+  });
+
+  it('runs the orchestrator on pi when both flags are on', () => {
+    const ctx: SwitchboardCtx = {
+      program: 'posthog-integration',
+      flags: {
+        [WIZARD_USE_PI_HARNESS_FLAG_KEY]: 'true',
+        [WIZARD_ORCHESTRATOR_FLAG_KEY]: 'true',
+      },
+    };
+    const binding = resolveBinding(ctx);
+    expect(binding.harness).toBe(Harness.pi);
+    expect(binding.sequence).toBe(Sequence.orchestrator);
+    expect(ctx.trace?.sequence).toBe('flag');
   });
 
   it('stamps cli sources over the flag', () => {
@@ -422,8 +436,12 @@ describe('switchboard modelCapabilities', () => {
       GPT5_5_MODEL,
     ]) {
       expect(modelCapabilities(m).reasoning).toBe(true);
-      expect(modelCapabilities(m).thinkingLevel).toBe('low');
     }
+    // luna/sol/5.5 stay low (fast); terra runs medium as the sonnet-tier parallel.
+    expect(modelCapabilities(GPT5_6_LUNA_MODEL).thinkingLevel).toBe('low');
+    expect(modelCapabilities(GPT5_6_TERRA_MODEL).thinkingLevel).toBe('medium');
+    expect(modelCapabilities(GPT5_6_SOL_MODEL).thinkingLevel).toBe('low');
+    expect(modelCapabilities(GPT5_5_MODEL).thinkingLevel).toBe('low');
     // Anthropic default carries no explicit effort — the harness default stands.
     expect(
       modelCapabilities(DEFAULT_AGENT_MODEL).thinkingLevel,

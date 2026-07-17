@@ -23,7 +23,10 @@ import type { SpinnerHandle } from '@ui';
 import type { WizardAskBridge } from '@lib/wizard-ask-bridge';
 import type { AgentErrorType } from '@lib/agent/agent-interface';
 import type { OrchestratorToolsContext } from '@lib/agent/runner/sequence/orchestrator/queue-tools';
-import type { EffortLevel } from '@lib/agent/runner/switchboard/models';
+import type {
+  EffortLevel,
+  ThinkingLevel,
+} from '@lib/agent/runner/switchboard/models';
 import type {
   ProgramRun,
   BootstrapResult,
@@ -80,6 +83,9 @@ export interface TaskRunInputs {
   spinner: SpinnerHandle;
   /** Gateway model id resolved from the task's agent prompt. */
   model: string;
+  /** Reasoning effort from the agent prompt's per-profile frontmatter; overrides
+   * the model's table default when set. */
+  effort?: ThinkingLevel;
   /** Per-task tool overrides from the agent prompt's frontmatter. */
   allowedTools?: readonly string[];
   disallowedTools?: readonly string[];

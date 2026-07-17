@@ -23,6 +23,7 @@ import type { ToolDefinition } from '@earendil-works/pi-coding-agent';
 import { logToFile } from '@utils/debug';
 import {
   DEFAULT_ASK_MAX_QUESTIONS,
+  ENV_FILE_PATH_DESCRIPTION,
   WIZARD_TOOL_NAMES,
   evaluateAskCap,
   fetchSkillMenu,
@@ -149,7 +150,7 @@ export function createWizardPiTools(ctx: PiToolsContext): ToolDefinition[] {
     promptSnippet: 'check_env_keys(filePath, keys) — see which .env keys exist',
     parameters: Type.Object({
       filePath: Type.String({
-        description: 'Path to the .env file, relative to the project root',
+        description: ENV_FILE_PATH_DESCRIPTION,
       }),
       keys: Type.Array(Type.String(), {
         description: 'Environment variable key names to check',
@@ -177,7 +178,7 @@ export function createWizardPiTools(ctx: PiToolsContext): ToolDefinition[] {
       'set_env_values(filePath, values) — write .env keys (never hardcode secrets in source)',
     parameters: Type.Object({
       filePath: Type.String({
-        description: 'Path to the .env file, relative to the project root',
+        description: ENV_FILE_PATH_DESCRIPTION,
       }),
       values: Type.Record(Type.String(), Type.String(), {
         description: 'Key → literal value',

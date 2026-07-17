@@ -18,8 +18,6 @@ import { getUI } from '@ui';
 import { getLogFilePath, logToFile } from '@utils/debug';
 import {
   Harness,
-  POSTHOG_FLAG_HEADER_PREFIX,
-  POSTHOG_PROPERTY_HEADER_PREFIX,
   WIZARD_REMARK_EVENT_NAME,
   WIZARD_USER_AGENT,
 } from '@lib/constants';
@@ -28,29 +26,16 @@ import { AgentErrorType } from '@lib/agent/agent-interface';
 import { AgentSignals, REMARK_INSTRUCTION } from '@lib/agent/signals';
 import { AgentOutputSignals } from '@lib/agent/output-signals';
 import { getWizardCommandments } from '@lib/agent/commandments';
-import { modelCapabilities } from '../../switchboard/models';
-import type { AgentResult, AgentHarness, BackendRunInputs } from '../types';
+import { buildGatewayProvider, GATEWAY_PROVIDER } from './gateway';
+import type {
+  AgentResult,
+  AgentHarness,
+  BackendRunInputs,
+  TaskRunInputs,
+} from '../types';
 import type { BootstrapResult } from '@lib/agent/runner/shared/types';
 import type { TaskStore } from './tasks';
 import { completionFailure } from './completion';
-
-/** Provider registered on the in-memory registry for this run. */
-const GATEWAY_PROVIDER = 'posthog-gateway';
-
-/**
- * The gateway speaks two shapes on two endpoints: Anthropic models over
- * `anthropic-messages` (the SDK appends `/v1/messages`, so the base URL has no
- * `/v1`), and OpenAI-class models (`openai/gpt-5`, …) over OpenAI completions at
- * `/v1/chat/completions` (base URL keeps `/v1`). Infer the shape from the model
- * id so a pair's model selects the right transport.
- */
-function gatewayApiFor(
-  modelId: string,
-): 'anthropic-messages' | 'openai-completions' {
-  return modelId.startsWith('openai/')
-    ? 'openai-completions'
-    : 'anthropic-messages';
-}
 
 /**
  * pi-specific runtime guidance appended to the shared commandments. Targets the
@@ -70,6 +55,7 @@ const PI_RUNTIME_NOTES = [
   '- NEVER run a project-wide `format` or `lint --fix` script (e.g. `prettier --write .`, `eslint --fix`, a bare `pnpm format`). They rewrite files you never touched — reordering imports, changing quotes, reflowing whitespace — producing a huge diff of unrelated churn that violates the minimal-edits rule. Format or lint-fix ONLY the specific files you changed; if the project offers no way to scope its script to those files, skip it and keep your own edits clean by hand. Running a build or typecheck to verify is fine; reformatting untouched files is not.',
   '- If a `bash` command is blocked, do NOT retry it or a reworded variant — the fence is deterministic and will block it again. Change approach: inspect with `read`/`grep`, fix the `edit` and continue, or skip a step that is not essential. Retrying blocked commands only wastes turns.',
   '- If you get stuck on something outside your control — a package install that keeps failing, a command you are not permitted to run, or a fix outside the scope of this integration — do NOT spiral retrying it. Note it in the setup report for the user to resolve, and move on with the rest of the work.',
+  "- For Python, install into a virtual environment, never the system interpreter (which is often externally managed and rejects a direct `pip install`). Reuse the project's existing venv if there is one — look for `.venv/` or `venv/`, or a tool-managed one (Poetry, uv, Pipenv); otherwise create it once with `python -m venv .venv`. Then use that interpreter explicitly: `.venv/bin/pip install …` and `.venv/bin/python …`.",
   '- A `[YARA]` block from the security scanner is on YOUR side — it caught a real problem in the edit you just tried (PII in a `capture()`, a hardcoded secret or host URL). Read the block reason, understand exactly what it flagged, and change the CODE to comply — e.g. a PII block means move that field off the event and onto the person via `identify()`/`$set`, keeping the event itself. Retrying the same edit will just block again, and dropping the step loses the instrumentation — so fix it to satisfy the scanner, then continue.',
   '- Call `load_skill_menu` once to choose the skill, then `install_skill`. Do not call `load_skill_menu` again this session.',
   "- Follow the skill's steps in order. Finish the SDK setup — install it, import it at the top of the module, and INITIALIZE it at the framework's entry point for every runtime the integration targets (typically both client and server) — BEFORE adding any event capture. A capture against an uninitialized SDK silently no-ops, so initialization comes first. If you're stuck and cannot install an SDK, add capture calls and add a clear note at the top of the integration report. Never guard a capture behind a runtime \"if the SDK happens to be installed\" check or a dynamic `require`; that ships an uninitialized SDK and no events fire. Do not jump ahead to the fix/revise step just to get a build passing.",
@@ -159,41 +145,13 @@ export function buildScrubbedEnv(): NodeJS.ProcessEnv {
  * or concurrent installs. pi-agent-core runs a batch in parallel only when no
  * tool in it is `sequential`.
  */
-function withMode<T>(tool: T, mode: 'sequential' | 'parallel'): T {
+export function withMode<T>(tool: T, mode: 'sequential' | 'parallel'): T {
   (tool as { executionMode?: 'sequential' | 'parallel' }).executionMode = mode;
   return tool;
 }
 
-/**
- * Gateway HTTP headers, mirroring `buildAgentEnv` on the anthropic path: always
- * the Bedrock-fallback header, plus wizard metadata (`X-POSTHOG-PROPERTY-*`) and
- * wizard feature flags (`X-POSTHOG-FLAG-*`).
- */
-function buildGatewayHeaders(
-  wizardMetadata: Record<string, string>,
-  wizardFlags: Record<string, string>,
-): Record<string, string> {
-  const headers: Record<string, string> = {
-    'x-posthog-use-bedrock-fallback': 'true',
-    // 1M context window, same as the anthropic edition — pi otherwise runs at
-    // 200k and overflows on larger projects (the post-run compaction failures).
-    'anthropic-beta': 'context-1m-2025-08-07',
-  };
-  for (const [key, value] of Object.entries(wizardMetadata)) {
-    const name = key.startsWith(POSTHOG_PROPERTY_HEADER_PREFIX)
-      ? key
-      : `${POSTHOG_PROPERTY_HEADER_PREFIX}${key}`;
-    headers[name] = value;
-  }
-  for (const [flagKey, variant] of Object.entries(wizardFlags)) {
-    if (!flagKey.toLowerCase().startsWith('wizard')) continue;
-    headers[POSTHOG_FLAG_HEADER_PREFIX + flagKey.toUpperCase()] = variant;
-  }
-  return headers;
-}
-
 /** Pull plain text out of a pi AgentMessage (content is text/image blocks). */
-function extractText(message: unknown): string {
+export function extractText(message: unknown): string {
   const content = (message as { content?: unknown })?.content;
   if (typeof content === 'string') return content;
   if (Array.isArray(content)) {
@@ -213,7 +171,7 @@ function extractText(message: unknown): string {
  * the MCP creates them) into the outro link, mirroring the anthropic path's
  * signal parsing (#9). The marker carries the URL the MCP returned.
  */
-function applyOutroMarkers(textBlock: string): void {
+export function applyOutroMarkers(textBlock: string): void {
   const markers: Array<[string, (url: string) => void]> = [
     [AgentSignals.DASHBOARD_URL, (url) => getUI().setDashboardUrl(url)],
     [AgentSignals.NOTEBOOK_URL, (url) => getUI().setNotebookUrl(url)],
@@ -308,41 +266,18 @@ export const piBackend: AgentHarness = {
         createWriteToolDefinition,
       } = await import('@earendil-works/pi-coding-agent');
 
-      // Register the PostHog gateway. Auth is the posthog token as a bearer;
-      // headers carry Bedrock-fallback + wizard metadata/flags — identical to
-      // the claude-agent-sdk path. The transport shape is inferred from the
-      // model id; OpenAI completions is served at `/v1/...`, so it keeps the
-      // `/v1` the Anthropic SDK strips.
-      const api = gatewayApiFor(modelId);
-      const caps = modelCapabilities(modelId, inputs.thinkingLevel);
-      const gatewayUrl = boot.credentials.host.gatewayUrl;
-      const baseUrl =
-        api === 'openai-completions' ? `${gatewayUrl}/v1` : gatewayUrl;
-      const registry = ModelRegistry.inMemory(AuthStorage.create());
-      registry.registerProvider(GATEWAY_PROVIDER, {
-        name: 'PostHog Gateway',
-        baseUrl,
-        apiKey: boot.credentials.accessToken,
-        authHeader: true,
-        api,
-        headers: buildGatewayHeaders(boot.wizardMetadata, boot.wizardFlags),
-        models: [
-          {
-            id: modelId,
-            name: `${modelId} (PostHog Gateway)`,
-            api,
-            // Whether to request reasoning effort is a model trait resolved by
-            // the switchboard, not a harness guess: non-reasoning openai models
-            // reject `reasoning_effort` (gpt-4o → gateway UnsupportedParamsError
-            // → the run no-ops). The effort level rides on the session below.
-            reasoning: caps.reasoning,
-            input: ['text'],
-            cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-            contextWindow: 1_000_000,
-            maxTokens: 64_000,
-          },
-        ],
+      // the claude-agent-sdk path. The provider spec is shared with the
+      // orchestrator's per-task sessions (gateway.ts).
+      const { provider, caps, gatewayUrl } = buildGatewayProvider({
+        gatewayUrl: boot.credentials.host.gatewayUrl,
+        accessToken: boot.credentials.accessToken,
+        wizardMetadata: boot.wizardMetadata,
+        wizardFlags: boot.wizardFlags,
+        modelId,
+        effort: inputs.thinkingLevel,
       });
+      const registry = ModelRegistry.inMemory(AuthStorage.create());
+      registry.registerProvider(GATEWAY_PROVIDER, provider as never);
 
       const model = registry.find(GATEWAY_PROVIDER, modelId);
       if (!model) {
@@ -351,7 +286,6 @@ export const piBackend: AgentHarness = {
           message: 'pi: gateway model could not be resolved',
         };
       }
-      logToFile(`[pi] gateway ${baseUrl} model ${modelId} (${api})`);
 
       // System prompt = wizard commandments. Skip project context files /
       // user extensions / skills so the run is hermetic; skills discovery is a
@@ -527,6 +461,10 @@ export const piBackend: AgentHarness = {
       const unsubscribe = agentSession.subscribe((event) => {
         switch (event.type) {
           case 'message_end': {
+            // User prompts also emit message_end; only assistant turns count.
+            if ((event.message as { role?: string })?.role !== 'assistant') {
+              break;
+            }
             assistantTurns += 1;
             const assistant = extractText(event.message).trim();
             if (assistant) {
@@ -691,5 +629,14 @@ export const piBackend: AgentHarness = {
       }
       return { error: AgentErrorType.API_ERROR, message };
     }
+  },
+
+  // Orchestrator mode: one fresh pi session per seed plan / drained task, with
+  // the in-process queue tools registered as pi custom tools. Lazily imported —
+  // task.ts pulls in typebox (ESM), which must stay out of the static module
+  // graph so CommonJS unit tests can load the backend seam without parsing it.
+  async runTask(inputs: TaskRunInputs): Promise<AgentResult> {
+    const { runPiTask } = await import('./task');
+    return runPiTask(inputs);
   },
 };

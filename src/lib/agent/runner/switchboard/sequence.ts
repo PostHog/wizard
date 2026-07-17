@@ -4,13 +4,9 @@
  */
 
 import { IS_PRODUCTION_BUILD } from '@env';
-import {
-  Harness,
-  Sequence,
-  WIZARD_ORCHESTRATOR_FLAG_KEY,
-} from '@lib/constants';
+import { Sequence, WIZARD_ORCHESTRATOR_FLAG_KEY } from '@lib/constants';
 import { logToFile } from '@utils/debug';
-import { resolveHarness } from './harness';
+import { getHarness, resolveHarness } from './harness';
 import type { WizardSession } from '@lib/wizard-session';
 import type { ProgramConfig } from '@lib/programs/program-step';
 import type { ProgramRun, BootstrapResult } from '../shared/types';
@@ -83,26 +79,29 @@ const orchestratorFeatureFlagMw: Middleware<Sequence> = (ctx, next) => {
 };
 
 /**
- * pi has no `runTask`, so a flag-driven orchestrator pick clamps to linear.
- * Sits below the CLI override so `--sequence orchestrator` still reproduces
- * the hard error in dev builds.
+ * The orchestrator drives harnesses through `runTask`; a harness that has not
+ * implemented it clamps the run to linear. A capability check, not a harness
+ * identity check — a harness gains orchestrator support by implementing the
+ * method, with no switchboard change. Sits below the CLI override so
+ * `--sequence orchestrator` still reproduces the hard error in dev builds.
  */
-const piLinearClampMw: Middleware<Sequence> = (ctx, next) => {
-  if (resolveHarness(ctx).harness !== Harness.pi) return next();
+const runTaskCapabilityClampMw: Middleware<Sequence> = (ctx, next) => {
+  const pick = resolveHarness(ctx);
+  if (getHarness(pick.harness).runTask) return next();
   if (isOrchestratorEnabled(ctx.flags)) {
     logToFile(
-      '[switchboard] wizard-orchestrator ignored: pi has no runTask, clamping to linear',
+      `[switchboard] wizard-orchestrator ignored: ${pick.harness} has no runTask, clamping to linear`,
     );
   }
-  if (ctx.trace) ctx.trace.sequence = 'pi-clamp';
+  if (ctx.trace) ctx.trace.sequence = 'runtask-clamp';
   return Sequence.linear;
 };
 
-// Order = precedence: CLI > pi clamp > flag > binding default. The prod spread
-// collapses to [], dropping cliSequenceMw from the chain.
+// Order = precedence: CLI > capability clamp > flag > binding default. The
+// prod spread collapses to [], dropping cliSequenceMw from the chain.
 const SEQUENCE_MIDDLEWARE: Middleware<Sequence>[] = [
   ...(IS_PRODUCTION_BUILD ? [] : [cliSequenceMw]),
-  piLinearClampMw,
+  runTaskCapabilityClampMw,
   orchestratorFeatureFlagMw,
 ];
 

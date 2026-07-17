@@ -25,6 +25,7 @@ import {
 } from './programs/audit/types';
 import { type WizardAskBridge, isFullyCancelled } from './wizard-ask-bridge';
 import { createSecretVault, type SecretVault } from './secret-vault';
+import { fetchWithRetry, type RetryOpts } from './fetch-retry';
 import {
   buildOrchestratorTools,
   type OrchestratorToolsContext,
@@ -46,7 +47,27 @@ async function getSDKModule(): Promise<any> {
 // Skill types
 // ---------------------------------------------------------------------------
 
-export type SkillEntry = { id: string; name: string; downloadUrl: string };
+export type SkillEntry = {
+  id: string;
+  name: string;
+  downloadUrl: string;
+  /** The hyphenated skill-group prefix of `id` (e.g. `posthog-integration-install`). */
+  group?: string;
+  /** The detection id this variant serves (e.g. `rails`, `react-router`). */
+  framework?: string;
+  /** The variant a bare framework id resolves to when its family has several. */
+  default?: boolean;
+  /** This entry's download is a bundle JSON of every variant, not a single skill's zip. */
+  bundle?: boolean;
+  /** Menu-only: the variants inside a bundle, expanded into entries of their own on fetch. */
+  variants?: { id: string; framework?: string; default?: boolean }[];
+};
+
+/** A bundle's files, keyed by variant short id then path. */
+export type SkillBundle = {
+  id: string;
+  variants: Record<string, Record<string, string>>;
+};
 
 /**
  * Entry in the wizard's runtime CLI registry. Mirrors the shape context-mill
@@ -77,28 +98,40 @@ export interface SkillMenu {
 // Standalone skill helpers (usable before the MCP server is created)
 // ---------------------------------------------------------------------------
 
+/** Expand a bundle entry into one entry per variant, so the menu reads the same whether a group ships bundled or as zips. */
+export function expandBundleEntry(entry: SkillEntry): SkillEntry[] {
+  if (!entry.bundle || !entry.variants) return [entry];
+  return entry.variants.map((variant) => ({
+    ...variant,
+    name: entry.name,
+    group: entry.group,
+    bundle: true,
+    downloadUrl: entry.downloadUrl,
+  }));
+}
+
 /**
  * Fetch the skill menu from the skills server.
  * Returns parsed data on success, `null` on failure.
  */
 export async function fetchSkillMenu(
   skillsBaseUrl: string,
+  opts: RetryOpts = {},
 ): Promise<SkillMenu | null> {
+  const menuUrl = `${skillsBaseUrl}/skill-menu.json`;
   try {
-    const menuUrl = `${skillsBaseUrl}/skill-menu.json`;
     logToFile(`fetchSkillMenu: fetching from ${menuUrl}`);
-    const resp = await fetch(menuUrl);
-    if (resp.ok) {
-      const data = (await resp.json()) as SkillMenu;
-      logToFile(
-        `fetchSkillMenu: loaded (${
-          Object.keys(data.categories).length
-        } categories)`,
-      );
-      return data;
+    const resp = await fetchWithRetry(menuUrl, opts);
+    const data = (await resp.json()) as SkillMenu;
+    for (const [category, entries] of Object.entries(data.categories)) {
+      data.categories[category] = entries.flatMap(expandBundleEntry);
     }
-    logToFile(`fetchSkillMenu: failed with HTTP ${resp.status}`);
-    return null;
+    logToFile(
+      `fetchSkillMenu: loaded (${
+        Object.keys(data.categories).length
+      } categories)`,
+    );
+    return data;
   } catch (err: any) {
     logToFile(`fetchSkillMenu: error: ${err.message}`);
     return null;
@@ -125,49 +158,44 @@ function extractZipArchive(zip: Uint8Array, destDir: string): number {
   return written;
 }
 
-const DOWNLOAD_TIMEOUT_MS = 60000; // per attempt
-const DOWNLOAD_MAX_ATTEMPTS = 3;
-const DOWNLOAD_BACKOFF_MS = 500; // doubles each retry
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+/** Unpack the one variant this entry names out of a bundle; the rest is noise and never hits disk. */
+function extractBundle(
+  bundle: SkillBundle,
+  destDir: string,
+  entryId: string,
+): number {
+  if (
+    typeof bundle?.id !== 'string' ||
+    typeof bundle?.variants !== 'object' ||
+    bundle.variants === null
+  ) {
+    throw new Error('malformed bundle: expected { id, variants }');
+  }
+  const files = bundle.variants[entryId.slice(bundle.id.length + 1)];
+  if (!files) {
+    throw new Error(`bundle ${bundle.id} has no variant "${entryId}"`);
+  }
+  const root = path.resolve(destDir);
+  let written = 0;
+  for (const [entryPath, contents] of Object.entries(files)) {
+    const target = path.resolve(root, entryPath);
+    if (target !== root && !target.startsWith(root + path.sep)) {
+      throw new Error(`bundle entry escapes destination: ${entryPath}`);
+    }
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    fs.writeFileSync(target, contents);
+    written++;
+  }
+  return written;
 }
 
 /** Download a URL to a buffer, retrying transient failures with backoff. */
 async function downloadWithRetry(
   url: string,
-  opts: {
-    fetchImpl?: typeof fetch;
-    sleepImpl?: (ms: number) => Promise<void>;
-    timeoutMs?: number;
-    maxAttempts?: number;
-    backoffMs?: number;
-  } = {},
+  opts: RetryOpts = {},
 ): Promise<Uint8Array> {
-  const {
-    fetchImpl = fetch,
-    sleepImpl = sleep,
-    timeoutMs = DOWNLOAD_TIMEOUT_MS,
-    maxAttempts = DOWNLOAD_MAX_ATTEMPTS,
-    backoffMs = DOWNLOAD_BACKOFF_MS,
-  } = opts;
-
-  const failures: string[] = [];
-  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-    try {
-      const resp = await fetchImpl(url, {
-        signal: AbortSignal.timeout(timeoutMs),
-      });
-      if (!resp.ok) throw new Error(`HTTP ${resp.status} ${resp.statusText}`);
-      return new Uint8Array(await resp.arrayBuffer());
-    } catch (err: any) {
-      failures.push(`attempt ${attempt}: ${err.message}`);
-      if (attempt < maxAttempts) {
-        await sleepImpl(backoffMs * 2 ** (attempt - 1));
-      }
-    }
-  }
-  throw new Error(`download failed — ${failures.join('; ')}`);
+  const resp = await fetchWithRetry(url, opts);
+  return new Uint8Array(await resp.arrayBuffer());
 }
 
 /**
@@ -187,9 +215,15 @@ export async function downloadSkill(
 
   try {
     fs.mkdirSync(skillDir, { recursive: true });
-    const zip = await downloadWithRetry(skillEntry.downloadUrl);
+    const data = await downloadWithRetry(skillEntry.downloadUrl);
     step = 'extract';
-    const fileCount = extractZipArchive(zip, skillDir);
+    const fileCount = skillEntry.bundle
+      ? extractBundle(
+          JSON.parse(Buffer.from(data).toString('utf8')) as SkillBundle,
+          skillDir,
+          skillEntry.id,
+        )
+      : extractZipArchive(data, skillDir);
     fs.writeFileSync(path.join(skillDir, '.posthog-wizard'), '');
 
     logToFile(
@@ -353,6 +387,9 @@ export function evaluateAskCap(
 // Env file helpers
 // ---------------------------------------------------------------------------
 
+export const ENV_FILE_PATH_DESCRIPTION =
+  'Path to the .env file, relative to the wizard working directory. Pass ".env" for a file in that directory, or include the selected subproject path (for example, "packages/app/.env") for a nested project. Never prefix it with the wizard working directory\'s path inside an ancestor repository.';
+
 /**
  * Resolve filePath relative to workingDirectory, rejecting path traversal.
  */
@@ -423,6 +460,7 @@ export function mergeEnvValues(
   const updatedKeys = new Set<string>();
 
   for (const [key, value] of Object.entries(values)) {
+    // Preserve the existing `KEY=` prefix exactly; only swap the value.
     const regex = new RegExp(`^(\\s*${key}\\s*=).*$`, 'm');
     if (regex.test(result)) {
       result = result.replace(regex, `$1${value}`);
@@ -622,9 +660,7 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
     'check_env_keys',
     'Check which environment variable keys are present or missing in a .env file. Never reveals values.',
     {
-      filePath: z
-        .string()
-        .describe('Path to the .env file, relative to the project root'),
+      filePath: z.string().describe(ENV_FILE_PATH_DESCRIPTION),
       keys: z
         .array(z.string())
         .describe('Environment variable key names to check'),
@@ -656,9 +692,7 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
     'set_env_values',
     'Create or update environment variable keys in a .env file. Creates the file if it does not exist. Ensures .gitignore coverage. Each value can be either a literal string or a secret reference of the form `{ "secretRef": "secret:..." }` returned by another tool (e.g. wizard_ask). Secret references are resolved locally — the actual value is written to the file but never returned to the agent.',
     {
-      filePath: z
-        .string()
-        .describe('Path to the .env file, relative to the project root'),
+      filePath: z.string().describe(ENV_FILE_PATH_DESCRIPTION),
       values: z
         .record(
           z.string(),
@@ -728,10 +762,27 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
         : '';
       const content = mergeEnvValues(existing, resolvedValues);
 
-      // Ensure parent directory exists
+      // Env files belong in directories that already exist. Refusing to create
+      // parents catches the classic agent mistake of re-prefixing the wizard
+      // working directory with its ancestor-repo-relative location (e.g.
+      // "apps/web/.env" while already running in apps/web), which would
+      // otherwise silently nest a duplicate tree.
       const dir = path.dirname(resolved);
       if (!fs.existsSync(dir)) {
-        fs.mkdirSync(dir, { recursive: true });
+        analytics.wizardCapture('set_env_values parent dir missing', {
+          platform: process.platform,
+        });
+        return {
+          content: [
+            {
+              type: 'text' as const,
+              text: `Error: parent directory does not exist: "${path.dirname(
+                args.filePath,
+              )}". filePath is resolved against the wizard working directory — pass ".env" for a file there, or "<subproject>/.env" for an existing nested project.`,
+            },
+          ],
+          isError: true,
+        };
       }
 
       fs.writeFileSync(resolved, content, 'utf8');
@@ -1289,6 +1340,8 @@ export const WIZARD_TOOL_NAMES = {
 
 export const __test = {
   extractZipArchive,
+  extractBundle,
+  fetchWithRetry,
   downloadWithRetry,
   writeLedgerAtomic,
   readLedger,
