@@ -4,15 +4,9 @@
  * fenced `.env` edits — are exposed to pi as native `defineTool` tools backed
  * by the same helpers the claude-agent-sdk path uses (`fetchSkillMenu`,
  * `installSkillById`, `parseEnvKeys`, `mergeEnvValues`). Same tool names as the
- * MCP server so the shared prompt is unchanged.
- *
- * Beyond the framework-integration tools, `wizard_ask` is wired here too so
- * interactive programs (self-driving) can conduct their interview on pi: it
- * mirrors the MCP tool's schema + per-run caps and drives the same host
- * askBridge. When no bridge is supplied (CI / non-interactive) it still
- * registers but returns the "not available" error, exactly like the MCP path.
- * Sensitive answers come back literally — the secret-vault `secretRef` path is
- * still a follow-up, the same limitation set_env_values carries.
+ * MCP server so the shared prompt is unchanged. `wizard_ask` is wired here too
+ * (same schema, caps, and askBridge as the MCP tool) so interactive programs
+ * can interview the user on pi; without a bridge (CI) it errors on call.
  */
 
 import fs from 'fs';
@@ -20,6 +14,7 @@ import path from 'path';
 import { Type } from 'typebox';
 import { defineTool } from '@earendil-works/pi-coding-agent';
 import type { ToolDefinition } from '@earendil-works/pi-coding-agent';
+import { analytics } from '@utils/analytics';
 import { logToFile } from '@utils/debug';
 import {
   DEFAULT_ASK_MAX_QUESTIONS,
@@ -33,6 +28,7 @@ import {
   resolveEnvPath,
 } from '@lib/wizard-tools';
 import { isFullyCancelled, type WizardAskBridge } from '@lib/wizard-ask-bridge';
+import { withMode } from './index';
 import {
   detectNodePackageManagers,
   type PackageManagerDetector,
@@ -50,26 +46,13 @@ export interface PiToolsContext {
   skillsBaseUrl: string;
   /** Framework's package-manager detector. Defaults to Node detection. */
   detectPackageManager?: PackageManagerDetector;
-  /**
-   * Host bridge that drives the `wizard_ask` overlay. Omitted in CI /
-   * non-interactive runs, where the tool registers but errors on call — the
-   * agent then falls back to sensible defaults.
-   */
+  /** Drives the `wizard_ask` overlay. Omitted in CI → the tool errors on call. */
   askBridge?: WizardAskBridge;
   /** Per-run cap on wizard_ask calls. Defaults to {@link DEFAULT_ASK_MAX_QUESTIONS}. */
   maxQuestions?: number;
-  /**
-   * Notified when a wizard_ask overlay opens (true) and closes (false), so the
-   * security gate can block Write/Edit while the user is answering — parity
-   * with the anthropic path's wizard_ask overlay guard.
-   */
+  /** Overlay open/closed signal — the security gate blocks Write/Edit while open. */
   onAskPendingChange?: (pending: boolean) => void;
-  /**
-   * The program's disallow list. `wizard_ask` is skipped at registration when
-   * it's on this list — pi tools carry bare names, so the security gate's
-   * MCP-prefixed exact-match wouldn't catch it (posthog-integration disables it
-   * this way). Gating here is the reliable block.
-   */
+  /** Program disallow list; gates wizard_ask here since pi tools carry bare names the MCP-prefixed security gate misses. */
   disallowedTools?: readonly string[];
 }
 
@@ -230,11 +213,8 @@ export function createWizardPiTools(ctx: PiToolsContext): ToolDefinition[] {
     },
   });
 
-  // -- wizard_ask -----------------------------------------------------------
-  // Native mirror of the MCP `wizard_ask` tool so interactive programs can ask
-  // the user through pi. Same tool name + schema as the MCP server, so the
-  // shared prompt is unchanged; it drives the same host askBridge that opens
-  // the TUI overlay and resolves with the answers.
+  // Native mirror of the MCP `wizard_ask` tool: same name, schema, and
+  // askBridge, so the shared prompt is unchanged.
   const wizardAsk = defineTool({
     name: 'wizard_ask',
     label: 'Ask the user',
@@ -307,6 +287,14 @@ export function createWizardPiTools(ctx: PiToolsContext): ToolDefinition[] {
       );
       if (cap.kind === 'capped') {
         if (cap.reason === 'adjacency') askAdjacencyNudged = true;
+        logToFile(
+          `[pi] wizard_ask capped: reason=${cap.reason} count=${askCallCount}`,
+        );
+        analytics.wizardCapture('wizard_ask capped', {
+          reason: cap.reason,
+          call_count: askCallCount,
+          max_questions: askMaxQuestions,
+        });
         return text(cap.message);
       }
 
@@ -366,8 +354,10 @@ export function createWizardPiTools(ctx: PiToolsContext): ToolDefinition[] {
   ];
   // Register wizard_ask only when the program allows it. posthog-integration
   // disallows it (runs without structured user input); self-driving keeps it.
+  // Sequential: the ask bridge holds a single in-flight question slot, so a
+  // batched turn must never dispatch two asks (or an ask + a write) at once.
   const askDisallowed =
     ctx.disallowedTools?.includes(WIZARD_TOOL_NAMES.wizardAsk) ?? false;
-  if (!askDisallowed) tools.push(wizardAsk);
+  if (!askDisallowed) tools.push(withMode(wizardAsk, 'sequential'));
   return tools;
 }
