@@ -62,6 +62,17 @@ export function getSequence(name: Sequence): SequenceRunner {
 
 // ── Middleware + resolver ───────────────────────────────────────────────
 
+/**
+ * A composed sub-run (integration inside self-driving) is structurally
+ * linear: the orchestrator owns the full run lifecycle (queue, outro) and
+ * cannot nest. Sits above every override, including CLI.
+ */
+const composedClampMw: Middleware<Sequence> = (ctx, next) => {
+  if (!ctx.composed) return next();
+  if (ctx.trace) ctx.trace.sequence = 'composed';
+  return Sequence.linear;
+};
+
 /** `--sequence` override. Dev/test only — the option is gated out of published builds. */
 const cliSequenceMw: Middleware<Sequence> = (ctx, next) => {
   if (!ctx.cliSequence) return next();
@@ -107,6 +118,7 @@ const runTaskCapabilityClampMw: Middleware<Sequence> = (ctx, next) => {
 // Order = precedence: CLI > capability clamp > flag > binding default. The
 // prod spread collapses to [], dropping cliSequenceMw from the chain.
 const SEQUENCE_MIDDLEWARE: Middleware<Sequence>[] = [
+  composedClampMw,
   ...(IS_PRODUCTION_BUILD ? [] : [cliSequenceMw]),
   runTaskCapabilityClampMw,
   flagRouteSequenceMw,

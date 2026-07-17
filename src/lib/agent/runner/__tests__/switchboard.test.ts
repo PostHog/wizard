@@ -690,4 +690,28 @@ describe('switchboard flag scoping lockdown — experiments never leak across pr
       }
     }
   });
+
+  it('a composed sub-run is linear for every program, whatever the flags say', () => {
+    const { flags, payloads } = allFlagsOn();
+    for (const program of ALL_PROGRAMS) {
+      const ctx: SwitchboardCtx = {
+        program,
+        composed: true,
+        flags,
+        flagPayloads: payloads,
+        trace: {},
+      };
+      expect(resolveSequence(ctx)).toBe(Sequence.linear);
+      expect(ctx.trace?.sequence).toBe('composed');
+    }
+    // The dev CLI override cannot orchestrate a composed run either.
+    expect(
+      resolveSequence({
+        program: 'posthog-integration',
+        composed: true,
+        flags: {},
+        cliSequence: Sequence.orchestrator,
+      }),
+    ).toBe(Sequence.linear);
+  });
 });

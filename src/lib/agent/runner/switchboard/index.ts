@@ -19,12 +19,14 @@ import { resolveSequence } from './sequence';
 export interface SwitchboardTrace {
   harness?: 'cli' | 'flag' | 'binding';
   model?: 'cli' | 'flag' | 'binding';
-  sequence?: 'cli' | 'runtask-clamp' | 'flag' | 'binding';
+  sequence?: 'cli' | 'composed' | 'runtask-clamp' | 'flag' | 'binding';
 }
 
 /** Everything a resolver middleware may branch on. Built once per run. */
 export interface SwitchboardCtx {
   program: ProgramId;
+  /** Composed sub-run (a dependency inside a parent program). Structurally linear — no override can orchestrate it. */
+  composed?: boolean;
   flags: Record<string, string>;
   /** Flag payloads from the same snapshot (payload-carrying flags, e.g. self-driving pi). */
   flagPayloads?: Record<string, unknown>;

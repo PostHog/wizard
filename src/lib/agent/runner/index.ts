@@ -95,7 +95,12 @@ export async function runProgram(
   // harmless no-op. No harness has to know reporting exists.
   registerCleanup(() => flushScanReport(session));
   try {
-    const binding = resolveProgramRunner(session, programConfig, boot);
+    const binding = resolveProgramRunner(
+      session,
+      programConfig,
+      boot,
+      options.composed ?? false,
+    );
     if (binding.sequence === Sequence.orchestrator) {
       getUI().log.info('Task-queue orchestrator enabled.');
     }
@@ -124,9 +129,11 @@ function resolveProgramRunner(
   session: WizardSession,
   programConfig: ProgramConfig,
   boot: BootstrapResult,
+  composed: boolean,
 ): ProgramBinding {
   const ctx = {
     program: programConfig.id,
+    composed,
     flags: boot.wizardFlags,
     flagPayloads: boot.wizardFlagPayloads,
     cliHarness: session.harness,
