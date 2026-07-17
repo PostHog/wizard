@@ -266,7 +266,7 @@ export function createWizardPiTools(ctx: PiToolsContext): ToolDefinition[] {
           sensitive: Type.Optional(
             Type.Boolean({
               description:
-                "Only valid for kind='text'. Marks the answer as a secret the user types in (API keys, tokens). On pi this is returned literally today — do not echo it back into your text output.",
+                'Not supported on this harness: sensitive questions are rejected (no secret vault yet). Collect secrets via a browser/connect link instead of chat.',
             }),
           ),
         }),
@@ -306,9 +306,12 @@ export function createWizardPiTools(ctx: PiToolsContext): ToolDefinition[] {
             `Error: question "${q.id}" has kind="${q.kind}" but no options. Provide at least one { label, value }, or use kind="text".`,
           );
         }
-        if (q.sensitive && q.kind !== 'text') {
+        // Fail closed: pi has no secret-vault wiring yet, so a sensitive
+        // answer would enter the model conversation literally. Reject until
+        // the vault is wired (the MCP path already vaults via secretRef).
+        if (q.sensitive) {
           return text(
-            `Error: question "${q.id}" sets sensitive=true but kind="${q.kind}". Only kind="text" answers can be sensitive.`,
+            `Error: question "${q.id}" sets sensitive=true, but sensitive answers are not supported on this harness yet. Do not collect the secret in chat — point the user at a browser/connect link instead.`,
           );
         }
         if (ids.has(q.id)) {
