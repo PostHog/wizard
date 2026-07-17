@@ -4,6 +4,7 @@ import * as path from 'path';
 import {
   QueueStore,
   QUEUE_DIR_NAME,
+  unfinishedSteps,
   type QueueFile,
   type TaskHandoff,
 } from '@lib/agent/runner/sequence/orchestrator/queue';
@@ -181,5 +182,40 @@ describe('QueueStore', () => {
     listened.start(t.id);
     listened.complete(t.id);
     expect(listened.get(t.id)?.status).toBe('done');
+  });
+});
+
+describe('unfinishedSteps', () => {
+  const counts = (over: Partial<Record<string, number>> = {}) => ({
+    pending: 0,
+    running: 0,
+    done: 0,
+    skipped: 0,
+    failed: 0,
+    ...over,
+  });
+
+  it('reports a fully done run as finished', () => {
+    expect(unfinishedSteps(counts({ done: 9 }))).toBe(0);
+  });
+
+  it('treats a skipped step as a real outcome, not unfinished work', () => {
+    expect(unfinishedSteps(counts({ done: 7, skipped: 2 }))).toBe(0);
+  });
+
+  it('counts a failed step as unfinished', () => {
+    expect(unfinishedSteps(counts({ done: 8, failed: 1 }))).toBe(1);
+  });
+
+  it('counts a step that never ran as unfinished', () => {
+    expect(unfinishedSteps(counts({ done: 4, pending: 5 }))).toBe(5);
+  });
+
+  it('counts a step still running as unfinished', () => {
+    expect(unfinishedSteps(counts({ done: 8, running: 1 }))).toBe(1);
+  });
+
+  it('counts the 4/9 partial run that the outro used to call a success', () => {
+    expect(unfinishedSteps(counts({ done: 4, pending: 4, failed: 1 }))).toBe(5);
   });
 });

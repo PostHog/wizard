@@ -38,6 +38,7 @@ import {
   QueueStore,
   QUEUE_DIR_NAME,
   TaskStatus,
+  unfinishedSteps,
   type QueuedTask,
 } from './queue';
 import { drainQueue, type RunTask } from './executor';
@@ -515,14 +516,7 @@ export async function runOrchestrator(
     ? 'posthog-setup-report.md'
     : store.queuePath;
 
-  // A step the agent skipped is a real outcome — it reported the step does not
-  // apply. A step that failed, or never ran before the queue drained, means the
-  // integration is incomplete, and saying otherwise sends the user away believing
-  // in work that does not exist.
-  const unfinished =
-    summary[TaskStatus.Failed] +
-    summary[TaskStatus.Pending] +
-    summary[TaskStatus.Running];
+  const unfinished = unfinishedSteps(summary);
 
   const message = unfinished
     ? `PostHog partially set up: ${summary.done}/${summary.total} steps completed.`
