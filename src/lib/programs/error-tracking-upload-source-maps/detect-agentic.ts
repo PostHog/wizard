@@ -46,12 +46,21 @@ export type DetectionReport = {
 
 /**
  * Variant precedence for the agentic picker (most specific first). The detector
- * keeps the EARLIEST matching target, so this ordering is what makes a React app
- * built with Vite resolve to `vite` (bundler-plugin upload) instead of the
- * generic `react` posthog-cli path. Mirrors `pickJsVariant` in detect.ts:
- * opinionated frameworks → bundlers → bare React → Node → generic web.
+ * keeps the EARLIEST matching target. Unsupported native targets are included
+ * as guards before iOS so React Native, Flutter, and Android projects with
+ * nested Xcode manifests are not misclassified as instrumentable iOS apps.
+ * JS ordering mirrors `pickJsVariant` in detect.ts: opinionated frameworks →
+ * bundlers → bare React → Node → generic web.
  */
+const NON_AUTOMATABLE_NATIVE_VARIANTS: readonly SkillVariant[] = [
+  'react-native',
+  'flutter',
+  'android',
+];
+
 const VARIANT_PRECEDENCE: readonly SkillVariant[] = [
+  ...NON_AUTOMATABLE_NATIVE_VARIANTS,
+  'ios',
   'nextjs',
   'nuxt',
   'angular',
@@ -69,13 +78,14 @@ const precedenceRank = (v: SkillVariant): number => {
 };
 
 /**
- * Source-maps targets: the variants the wizard can automate, by id → name,
- * ordered by VARIANT_PRECEDENCE so the detector's "earliest match wins"
- * tie-break selects the most specific variant. Derived from AUTOMATABLE_VARIANTS
- * so a newly-automatable variant is never silently dropped (unranked ones sort
- * last). Exported for testing.
+ * Source-map detection targets, ordered by VARIANT_PRECEDENCE. Unsupported
+ * native variants remain in the target list so the detector can identify and
+ * block them instead of falling through to iOS or a JS target.
  */
-export const SOURCE_MAPS_TARGETS: DetectTarget[] = [...AUTOMATABLE_VARIANTS]
+export const SOURCE_MAPS_TARGETS: DetectTarget[] = [
+  ...NON_AUTOMATABLE_NATIVE_VARIANTS,
+  ...AUTOMATABLE_VARIANTS,
+]
   .sort((a, b) => precedenceRank(a) - precedenceRank(b))
   .map((v) => ({ id: v, name: VARIANT_DISPLAY_NAME[v] }));
 
@@ -98,12 +108,20 @@ function classify(
   return { instrumentable: true };
 }
 
+function isAutomatableVariant(value: string | null): value is SkillVariant {
+  return value !== null && AUTOMATABLE_VARIANTS.includes(value as SkillVariant);
+}
+
 /** Map a generic detection report into source-maps projects. */
 function toSourceMapsReport(report: AgenticDetectionReport): DetectionReport {
   return {
     repoType: report.repoType,
     projects: report.projects.map((p) => {
-      const variant = (p.targetId as SkillVariant | null) ?? null;
+      const variant =
+        isAutomatableVariant(p.targetId) &&
+        !/\b(?:react[\s-]*native|expo|flutter|android)\b/i.test(p.framework)
+          ? p.targetId
+          : null;
       return {
         path: p.path,
         framework: p.framework,
@@ -117,12 +135,15 @@ function toSourceMapsReport(report: AgenticDetectionReport): DetectionReport {
 
 /**
  * Validate the agent's raw JSON into a source-maps detection report. Exported
- * for testing — clamps variants to the automatable set and classifies
- * instrumentability.
+ * for testing — recognises detection-only native targets, then clamps them to
+ * non-instrumentable projects.
  */
 export function coerceReport(parsed: unknown): DetectionReport {
   return toSourceMapsReport(
-    coerceAgenticReport(parsed, AUTOMATABLE_VARIANTS as readonly string[]),
+    coerceAgenticReport(
+      parsed,
+      SOURCE_MAPS_TARGETS.map((target) => target.id),
+    ),
   );
 }
 
