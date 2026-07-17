@@ -515,18 +515,36 @@ export async function runOrchestrator(
     ? 'posthog-setup-report.md'
     : store.queuePath;
 
-  const message = conflict
+  // A step the agent skipped is a real outcome — it reported the step does not
+  // apply. A step that failed, or never ran before the queue drained, means the
+  // integration is incomplete, and saying otherwise sends the user away believing
+  // in work that does not exist.
+  const unfinished =
+    summary[TaskStatus.Failed] +
+    summary[TaskStatus.Pending] +
+    summary[TaskStatus.Running];
+
+  const message = unfinished
+    ? `PostHog partially set up: ${summary.done}/${summary.total} steps completed.`
+    : conflict
     ? 'PostHog set up, with one conflict to review.'
     : `PostHog set up: ${summary.done}/${summary.total} steps completed.`;
+
+  const unfinishedBody = unfinished
+    ? `⚠ ${unfinished} step${
+        unfinished === 1 ? '' : 's'
+      } did not complete. The integration is incomplete — check the report before relying on it.`
+    : undefined;
+
   getUI().setOutroData({
-    kind: OutroKind.Success,
+    kind: unfinished ? OutroKind.Error : OutroKind.Success,
     message,
     body: conflict
       ? `⚠ Build conflict: ${conflict}\nFull details are in the report.`
-      : undefined,
+      : unfinishedBody,
     reportFile,
     docsUrl: 'https://posthog.com/docs/ai-engineering/ai-wizard',
   });
   getUI().outro(message);
-  await analytics.shutdown('success');
+  await analytics.shutdown(unfinished ? 'error' : 'success');
 }
