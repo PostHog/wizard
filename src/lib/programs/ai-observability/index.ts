@@ -1,6 +1,10 @@
-import type { ProgramConfig } from '@lib/programs/program-step';
+import type { ProgramConfig, ProgramStep } from '@lib/programs/program-step';
 import { AGENT_SKILL_STEPS } from '@lib/programs/agent-skill/index';
 import { getContentBlocks } from '@lib/programs/agent-skill/content/index';
+
+const AI_OBSERVABILITY_STEPS: ProgramStep[] = AGENT_SKILL_STEPS.map((step) =>
+  step.id === 'intro' ? { ...step, screenId: 'ai-observability-intro' } : step,
+);
 
 const AI_OBSERVABILITY_REPORT_FILE = 'posthog-ai-observability-report.md';
 
@@ -40,7 +44,7 @@ export const aiObservabilityConfig: ProgramConfig = {
   command: 'ai-observability',
   description: 'Add PostHog AI Observability to your LLM calls',
   id: 'ai-observability',
-  steps: AGENT_SKILL_STEPS,
+  steps: AI_OBSERVABILITY_STEPS,
   reportFile: AI_OBSERVABILITY_REPORT_FILE,
   getContentBlocks,
   run: {
