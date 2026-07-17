@@ -4,7 +4,8 @@
  * flag behavior and cross-program isolation live in one file per experiment
  * under `switchboard/flags/__tests__/`.
  *
- * Every resolution test is (SwitchboardCtx in) → (full resolveBinding out).
+ * Every resolution test is a BindingCase: (SwitchboardCtx in) → (full
+ * four-axis resolveBinding out), optionally pinning the trace.
  * `modelCapabilities` is the second pure stage (effective effort) and is
  * asserted directly.
  */
@@ -31,15 +32,15 @@ import {
   type SwitchboardCtx,
 } from '@lib/agent/runner/switchboard';
 import { modelCapabilities } from '@lib/agent/runner/switchboard/models';
+import { runBindingCases } from '@lib/agent/runner/switchboard/flags/__tests__/binding-cases';
 
 const PROGRAM_IDS = PROGRAM_REGISTRY.map((c) => c.id);
-const bind = (ctx: SwitchboardCtx) => resolveBinding(ctx);
 const DEFAULT_RESOLVED = {
   sequence: Sequence.linear,
   harness: Harness.anthropic,
   model: DEFAULT_AGENT_MODEL,
   thinkingLevel: undefined,
-};
+} as const;
 
 describe('switchboard PROGRAM_BINDINGS', () => {
   // `ProgramId` widens to `string`, so the type can't force coverage. This is
@@ -59,132 +60,121 @@ describe('switchboard PROGRAM_BINDINGS', () => {
   // Pins today's behavior: the seam changes nothing until a binding is moved.
   it('resolves every program, unflagged, to the same default binding', () => {
     for (const program of PROGRAM_IDS) {
-      expect(bind({ program, flags: {} })).toEqual(DEFAULT_RESOLVED);
+      expect(resolveBinding({ program, flags: {} })).toEqual(DEFAULT_RESOLVED);
     }
   });
 
-  it('falls back to DEFAULT_BINDING for an unmapped program', () => {
-    expect(bind({ program: 'not-a-program', flags: {} })).toEqual({
-      sequence: DEFAULT_BINDING.sequence,
-      harness: DEFAULT_BINDING.harness,
-      model: DEFAULT_BINDING.model,
-      thinkingLevel: undefined,
-    });
-  });
+  runBindingCases([
+    {
+      name: 'falls back to DEFAULT_BINDING for an unmapped program',
+      ctx: { program: 'not-a-program', flags: {} },
+      binding: {
+        sequence: DEFAULT_BINDING.sequence,
+        harness: DEFAULT_BINDING.harness,
+        model: DEFAULT_BINDING.model,
+        thinkingLevel: undefined,
+      },
+      trace: { harness: 'binding', model: 'binding', sequence: 'binding' },
+    },
+  ]);
 });
 
 describe('switchboard CLI precedence (dev builds)', () => {
-  it('cliHarness wins over the wizard-use-pi-harness flag', () => {
-    expect(
-      bind({
+  runBindingCases([
+    {
+      name: 'cliHarness wins over the wizard-use-pi-harness flag',
+      ctx: {
         program: 'posthog-integration',
         flags: { [WIZARD_USE_PI_HARNESS_FLAG_KEY]: 'false' },
         cliHarness: Harness.pi,
-      }),
-    ).toEqual({ ...DEFAULT_RESOLVED, harness: Harness.pi });
-  });
-
-  it('cliModel wins over the flag pairing; the flag still routes the harness', () => {
-    expect(
-      bind({
+      },
+      binding: { ...DEFAULT_RESOLVED, harness: Harness.pi },
+      trace: { harness: 'cli', model: 'binding', sequence: 'binding' },
+    },
+    {
+      name: 'cliModel wins over the flag pairing; the flag still routes the harness',
+      ctx: {
         program: 'posthog-integration',
         flags: { [WIZARD_USE_PI_HARNESS_FLAG_KEY]: 'true' },
         cliModel: 'openai/o4-mini',
-      }),
-    ).toEqual({
-      sequence: Sequence.linear,
-      harness: Harness.pi,
-      model: 'openai/o4-mini',
-      thinkingLevel: undefined,
-    });
-  });
-
-  it('cliHarness + cliModel pin both axes', () => {
-    expect(
-      bind({
+      },
+      binding: {
+        sequence: Sequence.linear,
+        harness: Harness.pi,
+        model: 'openai/o4-mini',
+        thinkingLevel: undefined,
+      },
+      trace: { harness: 'flag', model: 'cli', sequence: 'binding' },
+    },
+    {
+      name: 'cliHarness + cliModel pin both axes',
+      ctx: {
         program: 'posthog-integration',
         flags: {},
         cliHarness: Harness.pi,
         cliModel: 'openai/gpt-5',
-      }),
-    ).toEqual({
-      sequence: Sequence.linear,
-      harness: Harness.pi,
-      model: 'openai/gpt-5',
-      thinkingLevel: undefined,
-    });
-  });
-
-  it('cliModel alone leaves every other axis at the binding default', () => {
-    expect(
-      bind({
+      },
+      binding: {
+        sequence: Sequence.linear,
+        harness: Harness.pi,
+        model: 'openai/gpt-5',
+        thinkingLevel: undefined,
+      },
+      trace: { harness: 'cli', model: 'cli', sequence: 'binding' },
+    },
+    {
+      name: 'cliModel alone leaves every other axis at the binding default',
+      ctx: {
         program: 'posthog-integration',
         flags: {},
         cliModel: 'openai/gpt-5',
-      }),
-    ).toEqual({ ...DEFAULT_RESOLVED, model: 'openai/gpt-5' });
-  });
+      },
+      binding: { ...DEFAULT_RESOLVED, model: 'openai/gpt-5' },
+      trace: { harness: 'binding', model: 'cli', sequence: 'binding' },
+    },
+  ]);
 });
 
 describe('switchboard decision trace', () => {
-  it('stamps binding sources when nothing overrides', () => {
-    const ctx: SwitchboardCtx = { program: 'posthog-integration', flags: {} };
-    bind(ctx);
-    expect(ctx.trace).toEqual({
-      harness: 'binding',
-      model: 'binding',
-      sequence: 'binding',
-    });
-  });
-
-  it('stamps flag + binding sources when the pi flag decides (pi has runTask, no clamp)', () => {
-    const ctx: SwitchboardCtx = {
-      program: 'posthog-integration',
-      flags: { [WIZARD_USE_PI_HARNESS_FLAG_KEY]: 'true' },
-    };
-    bind(ctx);
-    expect(ctx.trace).toEqual({
-      harness: 'flag',
-      model: 'flag',
-      sequence: 'binding',
-    });
-  });
-
-  it('both flags on: orchestrator on pi, sequence traced to the flag', () => {
-    const ctx: SwitchboardCtx = {
-      program: 'posthog-integration',
-      flags: {
-        [WIZARD_USE_PI_HARNESS_FLAG_KEY]: 'true',
-        [WIZARD_ORCHESTRATOR_FLAG_KEY]: 'true',
+  runBindingCases([
+    {
+      name: 'nothing overrides → all axes traced to the binding',
+      ctx: { program: 'posthog-integration', flags: {} },
+      binding: DEFAULT_RESOLVED,
+      trace: { harness: 'binding', model: 'binding', sequence: 'binding' },
+    },
+    {
+      name: 'pi flag decides harness+model; sequence stays binding (pi has runTask, no clamp)',
+      ctx: {
+        program: 'posthog-integration',
+        flags: { [WIZARD_USE_PI_HARNESS_FLAG_KEY]: 'true' },
       },
-    };
-    expect(bind(ctx)).toEqual({
-      sequence: Sequence.orchestrator,
-      harness: Harness.pi,
-      model: GPT5_4_MODEL,
-      thinkingLevel: undefined,
-    });
-    expect(ctx.trace).toEqual({
-      harness: 'flag',
-      model: 'flag',
-      sequence: 'flag',
-    });
-  });
-
-  it('stamps cli sources over the flag', () => {
-    const ctx: SwitchboardCtx = {
-      program: 'posthog-integration',
-      flags: { [WIZARD_USE_PI_HARNESS_FLAG_KEY]: 'true' },
-      cliHarness: Harness.anthropic,
-      cliModel: 'openai/gpt-5',
-    };
-    bind(ctx);
-    expect(ctx.trace).toEqual({
-      harness: 'cli',
-      model: 'cli',
-      sequence: 'binding',
-    });
-  });
+      binding: {
+        sequence: Sequence.linear,
+        harness: Harness.pi,
+        model: GPT5_4_MODEL,
+        thinkingLevel: undefined,
+      },
+      trace: { harness: 'flag', model: 'flag', sequence: 'binding' },
+    },
+    {
+      name: 'both flags on → orchestrator on pi, every axis traced to its flag',
+      ctx: {
+        program: 'posthog-integration',
+        flags: {
+          [WIZARD_USE_PI_HARNESS_FLAG_KEY]: 'true',
+          [WIZARD_ORCHESTRATOR_FLAG_KEY]: 'true',
+        },
+      },
+      binding: {
+        sequence: Sequence.orchestrator,
+        harness: Harness.pi,
+        model: GPT5_4_MODEL,
+        thinkingLevel: undefined,
+      },
+      trace: { harness: 'flag', model: 'flag', sequence: 'flag' },
+    },
+  ]);
 });
 
 describe('switchboard composed clamp', () => {
@@ -198,38 +188,42 @@ describe('switchboard composed clamp', () => {
       };
       // Only the orchestrator flag is on → harness/model stay at the binding
       // default, and the composed clamp holds the sequence at linear.
-      expect(bind(ctx)).toEqual(DEFAULT_RESOLVED);
+      expect(resolveBinding(ctx)).toEqual(DEFAULT_RESOLVED);
       expect(ctx.trace?.sequence).toBe('composed');
     }
   });
 
-  it('the dev CLI override cannot orchestrate a composed run either', () => {
-    expect(
-      bind({
+  runBindingCases([
+    {
+      name: 'the dev CLI override cannot orchestrate a composed run either',
+      ctx: {
         program: 'posthog-integration',
         composed: true,
         flags: {},
         cliSequence: Sequence.orchestrator,
-      }),
-    ).toEqual(DEFAULT_RESOLVED);
-  });
-
-  it('a composed run keeps its flag-routed harness — only the sequence is clamped', () => {
-    const ctx: SwitchboardCtx = {
-      program: 'posthog-integration',
-      composed: true,
-      flags: {
-        [WIZARD_USE_PI_HARNESS_FLAG_KEY]: 'true',
-        [WIZARD_ORCHESTRATOR_FLAG_KEY]: 'true',
       },
-    };
-    expect(bind(ctx)).toEqual({
-      sequence: Sequence.linear,
-      harness: Harness.pi,
-      model: GPT5_4_MODEL,
-      thinkingLevel: undefined,
-    });
-  });
+      binding: DEFAULT_RESOLVED,
+      trace: { harness: 'binding', model: 'binding', sequence: 'composed' },
+    },
+    {
+      name: 'a composed run keeps its flag-routed harness — only the sequence is clamped',
+      ctx: {
+        program: 'posthog-integration',
+        composed: true,
+        flags: {
+          [WIZARD_USE_PI_HARNESS_FLAG_KEY]: 'true',
+          [WIZARD_ORCHESTRATOR_FLAG_KEY]: 'true',
+        },
+      },
+      binding: {
+        sequence: Sequence.linear,
+        harness: Harness.pi,
+        model: GPT5_4_MODEL,
+        thinkingLevel: undefined,
+      },
+      trace: { harness: 'flag', model: 'flag', sequence: 'composed' },
+    },
+  ]);
 });
 
 describe('switchboard modelCapabilities (stage 2: effective effort)', () => {
