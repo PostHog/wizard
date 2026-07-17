@@ -80,11 +80,11 @@ const cliSequenceMw: Middleware<Sequence> = (ctx, next) => {
   return ctx.cliSequence;
 };
 
-/** A program's own flag route may pin the sequence; wins over the global orchestrator flag. */
+/** A program's own flag route may pin the sequence; wins over the global orchestrator flag. Traced as 'payload' to stay distinguishable from sequence experiments ('flag'). */
 const flagRouteSequenceMw: Middleware<Sequence> = (ctx, next) => {
   const route = resolveFlagRoute(ctx.program, ctx.flags, ctx.flagPayloads);
   if (!route?.sequence) return next();
-  if (ctx.trace) ctx.trace.sequence = 'flag';
+  if (ctx.trace) ctx.trace.sequence = 'payload';
   return route.sequence;
 };
 

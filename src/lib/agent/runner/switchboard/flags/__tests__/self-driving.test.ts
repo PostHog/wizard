@@ -100,7 +100,9 @@ describe('self-driving experiment — payload in, binding out', () => {
           model: GPT5_6_TERRA_MODEL,
           thinkingLevel: undefined,
         },
-        trace: { harness: 'flag', model: 'flag', sequence: 'flag' },
+        // 'payload' (the program's own route) vs 'flag' (a sequence
+        // experiment) — telemetry can tell which flag moved the sequence.
+        trace: { harness: 'flag', model: 'flag', sequence: 'payload' },
       },
       {
         name: 'full payload → pins every axis at once',

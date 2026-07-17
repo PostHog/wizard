@@ -68,7 +68,7 @@ export interface MultivariateConfigFlag {
   fallbackModel: string;
 }
 
-/** Boolean-flag scheme: the useFlag's zod-validated `{model, effort}` payload carries both; anything invalid keeps the non-flagged binding default. */
+/** Boolean-flag scheme: the useFlag's zod-validated `{model, effort?, harness?, sequence?}` payload picks the route; anything invalid keeps the non-flagged binding default. */
 export interface PayloadConfigFlag {
   useFlag: string;
   modelFlag?: never;

@@ -72,7 +72,7 @@ interface ProgramBinding {
 interface SwitchboardTrace {
   harness?:  'cli' | 'flag' | 'binding';
   model?:    'cli' | 'flag' | 'binding';
-  sequence?: 'cli' | 'composed' | 'runtask-clamp' | 'flag' | 'binding';
+  sequence?: 'cli' | 'composed' | 'runtask-clamp' | 'payload' | 'flag' | 'binding';
 }
 ```
 

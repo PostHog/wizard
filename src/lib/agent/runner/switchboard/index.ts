@@ -19,7 +19,13 @@ import { resolveSequence } from './sequence';
 export interface SwitchboardTrace {
   harness?: 'cli' | 'flag' | 'binding';
   model?: 'cli' | 'flag' | 'binding';
-  sequence?: 'cli' | 'composed' | 'runtask-clamp' | 'flag' | 'binding';
+  sequence?:
+    | 'cli'
+    | 'composed'
+    | 'runtask-clamp'
+    | 'payload'
+    | 'flag'
+    | 'binding';
 }
 
 /** Everything a resolver middleware may branch on. Built once per run. */
