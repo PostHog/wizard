@@ -144,6 +144,6 @@ export {
   SEQUENCE_OPTIONS,
   getSequence,
   resolveSequence,
-  isOrchestratorEnabled,
   type SequenceRunner,
 } from './sequence';
+export { isOrchestratorEnabled } from './flags';

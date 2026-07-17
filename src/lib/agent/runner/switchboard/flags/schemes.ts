@@ -1,9 +1,8 @@
 /**
- * Pi experiment flags — everything about how PostHog flags route a program to
- * the pi harness lives here: the flag vocabulary (model variant keys, effort
- * levels), the per-program configs, payload validation, and route resolution.
- * `harness.ts` only calls `resolvePiFlagRoute`, so the switchboard seam stays
- * clean. Leaf module: imports only constants, zod, and types.
+ * Flag config schemes — the shapes a PostHog flag set can take to route a
+ * program to the pi harness, plus the shared vocabulary and the per-config
+ * resolution. Experiment modules in this folder declare *which* flags they
+ * use; this module owns *how* a config resolves to a route.
  */
 import { z } from 'zod';
 import {
@@ -16,19 +15,14 @@ import {
   GPT5_MINI_MODEL,
   GPT5_MODEL,
   SONNET_5_MODEL,
-  WIZARD_PI_EFFORT_FLAG_KEY,
-  WIZARD_PI_MODEL_FLAG_KEY,
-  WIZARD_SELF_DRIVING_USE_PI_HARNESS_FLAG_KEY,
-  WIZARD_USE_PI_HARNESS_FLAG_KEY,
 } from '@lib/constants';
-import type { ProgramId } from '@lib/programs/program-registry';
 import { logToFile } from '@utils/debug';
 import type { EffortLevel } from '../models';
 
 // ── Shared vocabulary ─────────────────────────────────────────────────────
 
 /** Model variant key → gateway id (variant keys can't carry `/` or `.`). */
-const PI_MODEL_FLAG_VARIANTS: Record<string, string> = {
+const MODEL_FLAG_VARIANTS: Record<string, string> = {
   'gpt-5': GPT5_MODEL,
   'gpt-5-4': GPT5_4_MODEL,
   'gpt-5-mini': GPT5_MINI_MODEL,
@@ -50,18 +44,18 @@ const EFFORT_FLAG_VARIANTS = [
 ] as const satisfies readonly EffortLevel[];
 
 /** A resolved flag route: gateway model id + optional effort override. */
-export interface PiFlagRoute {
+export interface FlagRoute {
   model: string;
   thinkingLevel?: EffortLevel;
 }
 
 // ── Config schemes ────────────────────────────────────────────────────────
 
-/** Trio scheme: model/effort ride their own multivariate flags. */
-interface PiFlagTrioConfig {
+/** Multivariate scheme: model/effort ride their own multivariate flags. */
+export interface MultivariateConfigFlag {
   /** Boolean flag: 'true' → route this program to pi. */
   useFlag: string;
-  /** Multivariate flag: variant key → gateway id via `PI_MODEL_FLAG_VARIANTS`. */
+  /** Multivariate flag: variant key → gateway id via `MODEL_FLAG_VARIANTS`. */
   modelFlag: string;
   /** Multivariate flag: reasoning-effort override. */
   effortFlag: string;
@@ -69,40 +63,24 @@ interface PiFlagTrioConfig {
   fallbackModel: string;
 }
 
-/** Payload scheme: the useFlag's `{model, effort}` payload carries both; anything invalid keeps the non-flagged binding default. */
-interface PiFlagPayloadConfig {
+/** Boolean-flag scheme: the useFlag's zod-validated `{model, effort}` payload carries both; anything invalid keeps the non-flagged binding default. */
+export interface PayloadConfigFlag {
   useFlag: string;
   modelFlag?: never;
 }
 
-export type PiFlagConfig = PiFlagTrioConfig | PiFlagPayloadConfig;
+export type ConfigFlag = MultivariateConfigFlag | PayloadConfigFlag;
 
 /** `{model, effort}` payload shape; extra keys tolerated for forward compat. */
-const piFlagPayloadSchema = z.object({
-  model: z.string().refine((key) => key in PI_MODEL_FLAG_VARIANTS),
+const payloadConfigFlagSchema = z.object({
+  model: z.string().refine((key) => key in MODEL_FLAG_VARIANTS),
   effort: z.enum(EFFORT_FLAG_VARIANTS).optional(),
 });
-
-// ── Per-program configs ───────────────────────────────────────────────────
-
-export const PI_FLAG_CONFIGS: Partial<Record<ProgramId, PiFlagConfig>> = {
-  // ── posthog-integration: trio scheme (use + model + effort flags) ──
-  'posthog-integration': {
-    useFlag: WIZARD_USE_PI_HARNESS_FLAG_KEY,
-    modelFlag: WIZARD_PI_MODEL_FLAG_KEY,
-    effortFlag: WIZARD_PI_EFFORT_FLAG_KEY,
-    fallbackModel: GPT5_4_MODEL,
-  },
-  // ── self-driving: payload scheme ({model, effort} on the use flag) ──
-  'self-driving': {
-    useFlag: WIZARD_SELF_DRIVING_USE_PI_HARNESS_FLAG_KEY,
-  },
-};
 
 // ── Resolution ────────────────────────────────────────────────────────────
 
 /** Validate a payload (object or JSON string) into a route; undefined on any unexpected shape. */
-function parsePiFlagPayload(raw: unknown): PiFlagRoute | undefined {
+function parseFlagPayload(raw: unknown): FlagRoute | undefined {
   let value = raw;
   if (typeof raw === 'string') {
     try {
@@ -111,36 +89,34 @@ function parsePiFlagPayload(raw: unknown): PiFlagRoute | undefined {
       return undefined;
     }
   }
-  const parsed = piFlagPayloadSchema.safeParse(value);
+  const parsed = payloadConfigFlagSchema.safeParse(value);
   if (!parsed.success) return undefined;
   return {
-    model: PI_MODEL_FLAG_VARIANTS[parsed.data.model],
+    model: MODEL_FLAG_VARIANTS[parsed.data.model],
     thinkingLevel: parsed.data.effort,
   };
 }
 
 /**
- * The flag-driven pi route for a program, or undefined when the flags don't
- * validly route it: no config, use flag off, or a payload that fails
- * validation — the caller then keeps the non-flagged binding default.
+ * Resolve one config against the flag snapshot, or undefined when it doesn't
+ * validly route: use flag off, or a payload that fails validation — the
+ * caller then keeps the non-flagged binding default.
  */
-export function resolvePiFlagRoute(
-  program: ProgramId,
+export function routeFromConfigFlag(
+  cfg: ConfigFlag,
   flags: Record<string, string>,
   flagPayloads?: Record<string, unknown>,
-): PiFlagRoute | undefined {
-  const cfg = PI_FLAG_CONFIGS[program];
-  if (!cfg) return undefined;
+): FlagRoute | undefined {
   if (flags[cfg.useFlag] !== 'true') return undefined;
   if (cfg.modelFlag) {
     const effort = flags[cfg.effortFlag] as EffortLevel;
     return {
       model:
-        PI_MODEL_FLAG_VARIANTS[flags[cfg.modelFlag] ?? ''] ?? cfg.fallbackModel,
+        MODEL_FLAG_VARIANTS[flags[cfg.modelFlag] ?? ''] ?? cfg.fallbackModel,
       thinkingLevel: EFFORT_FLAG_VARIANTS.includes(effort) ? effort : undefined,
     };
   }
-  const route = parsePiFlagPayload(flagPayloads?.[cfg.useFlag]);
+  const route = parseFlagPayload(flagPayloads?.[cfg.useFlag]);
   if (!route) {
     logToFile(
       `[switchboard] ${cfg.useFlag} on but payload missing/invalid — keeping the non-flagged default`,

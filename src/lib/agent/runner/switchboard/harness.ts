@@ -8,7 +8,7 @@ import { logToFile } from '@utils/debug';
 import { anthropicBackend } from '../harness/anthropic';
 import { piBackend } from '../harness/pi';
 import type { AgentHarness } from '../harness/types';
-import { resolvePiFlagRoute } from './flags';
+import { resolveFlagRoute } from './flags';
 import {
   DEFAULT_BINDING,
   PROGRAM_BINDINGS,
@@ -39,7 +39,7 @@ const flagRunnerOverride: Middleware<HarnessPick> = (ctx, next) => {
   const pick = next();
   // The pi experiment is disabled on the cloud (headless) run surface.
   if (RUN_SURFACE === 'cloud') return pick;
-  const route = resolvePiFlagRoute(ctx.program, ctx.flags, ctx.flagPayloads);
+  const route = resolveFlagRoute(ctx.program, ctx.flags, ctx.flagPayloads);
   if (!route) return pick;
   if (ctx.trace) Object.assign(ctx.trace, { harness: 'flag', model: 'flag' });
   return { harness: Harness.pi, ...route };

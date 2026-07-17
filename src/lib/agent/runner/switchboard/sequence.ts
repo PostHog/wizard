@@ -4,8 +4,9 @@
  */
 
 import { IS_PRODUCTION_BUILD } from '@env';
-import { Sequence, WIZARD_ORCHESTRATOR_FLAG_KEY } from '@lib/constants';
+import { Sequence } from '@lib/constants';
 import { logToFile } from '@utils/debug';
+import { isOrchestratorEnabled } from './flags';
 import { getHarness, resolveHarness } from './harness';
 import type { WizardSession } from '@lib/wizard-session';
 import type { ProgramConfig } from '@lib/programs/program-step';
@@ -56,13 +57,6 @@ export function getSequence(name: Sequence): SequenceRunner {
 }
 
 // ── Middleware + resolver ───────────────────────────────────────────────
-
-/** The `wizard-orchestrator` flag is on. */
-export function isOrchestratorEnabled(
-  flags: Record<string, string> = {},
-): boolean {
-  return flags[WIZARD_ORCHESTRATOR_FLAG_KEY] === 'true';
-}
 
 /** `--sequence` override. Dev/test only — the option is gated out of published builds. */
 const cliSequenceMw: Middleware<Sequence> = (ctx, next) => {
