@@ -23,8 +23,6 @@ import {
   WIZARD_ORCHESTRATOR_FLAG_KEY,
   WIZARD_PI_EFFORT_FLAG_KEY,
   WIZARD_PI_MODEL_FLAG_KEY,
-  WIZARD_SELF_DRIVING_PI_EFFORT_FLAG_KEY,
-  WIZARD_SELF_DRIVING_PI_MODEL_FLAG_KEY,
   WIZARD_SELF_DRIVING_USE_PI_HARNESS_FLAG_KEY,
   WIZARD_USE_PI_HARNESS_FLAG_KEY,
 } from '@lib/constants';
@@ -130,6 +128,7 @@ function resolveProgramRunner(
   const ctx = {
     program: programConfig.id,
     flags: boot.wizardFlags,
+    flagPayloads: boot.wizardFlagPayloads,
     cliHarness: session.harness,
     cliSequence: session.sequence,
     cliModel: session.model,
@@ -156,10 +155,9 @@ function captureSwitchboardDecision(
     flag_pi_effort: ctx.flags[WIZARD_PI_EFFORT_FLAG_KEY],
     flag_self_driving_use_pi_harness:
       ctx.flags[WIZARD_SELF_DRIVING_USE_PI_HARNESS_FLAG_KEY],
-    flag_self_driving_pi_model:
-      ctx.flags[WIZARD_SELF_DRIVING_PI_MODEL_FLAG_KEY],
-    flag_self_driving_pi_effort:
-      ctx.flags[WIZARD_SELF_DRIVING_PI_EFFORT_FLAG_KEY],
+    flag_self_driving_pi_payload: JSON.stringify(
+      ctx.flagPayloads?.[WIZARD_SELF_DRIVING_USE_PI_HARNESS_FLAG_KEY] ?? null,
+    ),
     flag_orchestrator: ctx.flags[WIZARD_ORCHESTRATOR_FLAG_KEY],
     cli_harness: ctx.cliHarness,
     cli_sequence: ctx.cliSequence,

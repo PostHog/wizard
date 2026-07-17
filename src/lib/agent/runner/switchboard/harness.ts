@@ -68,10 +68,33 @@ const EFFORT_FLAG_VARIANTS: readonly EffortLevel[] = [
   'xhigh',
 ];
 
+/** The useFlag's `{model, effort}` payload, when a config carries no trio flags. */
+function parsePiFlagPayload(raw: unknown): { model?: string; effort?: string } {
+  const value =
+    typeof raw === 'string'
+      ? (() => {
+          try {
+            return JSON.parse(raw) as unknown;
+          } catch {
+            return undefined;
+          }
+        })()
+      : raw;
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    return {};
+  }
+  const { model, effort } = value as Record<string, unknown>;
+  return {
+    model: typeof model === 'string' ? model : undefined,
+    effort: typeof effort === 'string' ? effort : undefined,
+  };
+}
+
 /**
- * The program's `useFlag` on → pi, paired with its `modelFlag` variant
- * (unknown/missing variant → the config's fallback model) and its `effortFlag`
- * as the resolved thinking level (invalid/missing → none). A program without
+ * The program's `useFlag` on → pi. Model/effort come from the trio flags when
+ * the config names them, else from the useFlag's `{model, effort}` payload —
+ * either way an unknown/missing model variant falls back to the config's
+ * model, an invalid/missing effort leaves the table default. A program without
  * a `PI_FLAG_CONFIGS` entry ignores the flags and the binding default stands.
  */
 const flagRunnerOverride: Middleware<HarnessPick> = (ctx, next) => {
@@ -82,8 +105,14 @@ const flagRunnerOverride: Middleware<HarnessPick> = (ctx, next) => {
   // The pi experiment is disabled on the cloud (headless) run surface.
   if (RUN_SURFACE === 'cloud') return pick;
   if (ctx.trace) Object.assign(ctx.trace, { harness: 'flag', model: 'flag' });
-  const variant = ctx.flags[cfg.modelFlag] ?? '';
-  const effort = ctx.flags[cfg.effortFlag] as EffortLevel;
+  const payload = cfg.modelFlag
+    ? undefined
+    : parsePiFlagPayload(ctx.flagPayloads?.[cfg.useFlag]);
+  const variant =
+    (cfg.modelFlag ? ctx.flags[cfg.modelFlag] : payload?.model) ?? '';
+  const effort = (
+    cfg.effortFlag ? ctx.flags[cfg.effortFlag] : payload?.effort
+  ) as EffortLevel;
   return {
     harness: Harness.pi,
     model: PI_MODEL_FLAG_VARIANTS[variant] ?? cfg.fallbackModel,

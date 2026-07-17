@@ -58,6 +58,7 @@ export class Analytics {
   private sessionId: string | null = null;
   private appName = 'wizard';
   private activeFlags: Record<string, string> | null = null;
+  private activeFlagPayloads: Record<string, unknown> = {};
   private groups: Record<string, string> = {};
   private personProperties: Record<string, string> = {};
   private terminalEventSent = false;
@@ -162,6 +163,7 @@ export class Analytics {
     // intro screen reads the tools-menu flag) was anonymous — drop it so the
     // next read re-evaluates as this user.
     this.activeFlags = null;
+    this.activeFlagPayloads = {};
   }
 
   /** Person properties sent with flag evaluation: app name plus the user's. */
@@ -237,6 +239,7 @@ export class Analytics {
       return this.activeFlags;
     }
     const out: Record<string, string> = {};
+    let payloads: Record<string, unknown> = {};
     try {
       const distinctId = this.distinctId ?? this.anonymousId;
       logToFile('[flags] evaluating as', {
@@ -252,6 +255,7 @@ export class Analytics {
         if (value === undefined) continue;
         out[key] = typeof value === 'boolean' ? String(value) : String(value);
       }
+      payloads = result.featureFlagPayloads ?? {};
     } catch (error) {
       debug('Failed to get all feature flags:', error);
       this.captureException(
@@ -262,9 +266,16 @@ export class Analytics {
     // Outside the fetch guard on purpose: a malformed CI override must fail
     // the run loudly, and a valid one applies even when the fetch failed —
     // CI routing stays deterministic either way.
-    this.activeFlags = applyCiFlagOverrides(out);
+    const merged = applyCiFlagOverrides(out, payloads);
+    this.activeFlags = merged.flags;
+    this.activeFlagPayloads = merged.payloads;
     logToFile('[flags] evaluated', this.activeFlags);
     return this.activeFlags;
+  }
+
+  /** Flag payloads from the same snapshot; empty until the flags are fetched. */
+  getWizardFlagPayloads(): Record<string, unknown> {
+    return this.activeFlagPayloads;
   }
 
   async shutdown(status: 'success' | 'error' | 'cancelled') {

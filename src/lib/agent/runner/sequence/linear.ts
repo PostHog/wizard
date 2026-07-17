@@ -120,6 +120,7 @@ export async function runLinearProgram(
   const pick = resolveHarness({
     program: programConfig.id,
     flags: wizardFlags,
+    flagPayloads: boot.wizardFlagPayloads,
     cliHarness: session.harness,
     cliModel: session.model,
   });

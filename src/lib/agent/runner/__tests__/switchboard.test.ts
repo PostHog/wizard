@@ -15,8 +15,6 @@ import {
   WIZARD_PI_MODEL_FLAG_KEY,
   Sequence,
   WIZARD_ORCHESTRATOR_FLAG_KEY,
-  WIZARD_SELF_DRIVING_PI_EFFORT_FLAG_KEY,
-  WIZARD_SELF_DRIVING_PI_MODEL_FLAG_KEY,
   WIZARD_SELF_DRIVING_USE_PI_HARNESS_FLAG_KEY,
   WIZARD_USE_PI_HARNESS_FLAG_KEY,
 } from '@lib/constants';
@@ -246,21 +244,23 @@ describe('switchboard resolveHarness — pi flag is gated to posthog-integration
   });
 });
 
-describe('switchboard resolveHarness — self-driving pi flag trio', () => {
+describe('switchboard resolveHarness — self-driving pi payload flag', () => {
   const SD_ON = { [WIZARD_SELF_DRIVING_USE_PI_HARNESS_FLAG_KEY]: 'true' };
+  const sdPayload = (payload: unknown) => ({
+    [WIZARD_SELF_DRIVING_USE_PI_HARNESS_FLAG_KEY]: payload,
+  });
 
-  it('routes self-driving to pi + terra when the flag is on and no variant is set', () => {
+  it('routes self-driving to pi + terra when the flag is on with no payload', () => {
     const pick = resolveHarness({ program: 'self-driving', flags: SD_ON });
     expect(pick).toEqual({ harness: Harness.pi, model: GPT5_6_TERRA_MODEL });
   });
 
-  it('the self-driving model variant selects the model; unknown falls back to terra', () => {
-    const pick = (variant?: string) =>
+  it('the payload model variant selects the model; unknown falls back to terra', () => {
+    const pick = (model?: string) =>
       resolveHarness({
         program: 'self-driving',
-        flags: variant
-          ? { ...SD_ON, [WIZARD_SELF_DRIVING_PI_MODEL_FLAG_KEY]: variant }
-          : SD_ON,
+        flags: SD_ON,
+        flagPayloads: model ? sdPayload({ model }) : undefined,
       }).model;
     expect(pick('gpt-5-4')).toBe(GPT5_4_MODEL);
     expect(pick('sonnet-5')).toBe(SONNET_5_MODEL);
@@ -269,10 +269,26 @@ describe('switchboard resolveHarness — self-driving pi flag trio', () => {
     expect(pick()).toBe(GPT5_6_TERRA_MODEL);
   });
 
-  it('ignores the self-driving flag for posthog-integration — trios do not cross', () => {
+  it('parses a JSON-string payload; malformed payloads fall back whole', () => {
+    const pick = (payload: unknown) =>
+      resolveHarness({
+        program: 'self-driving',
+        flags: SD_ON,
+        flagPayloads: sdPayload(payload),
+      });
+    const parsed = pick('{"model": "gpt-5-4", "effort": "low"}');
+    expect(parsed.model).toBe(GPT5_4_MODEL);
+    expect(parsed.thinkingLevel).toBe('low');
+    const malformed = pick('{not json');
+    expect(malformed.model).toBe(GPT5_6_TERRA_MODEL);
+    expect(malformed.thinkingLevel).toBeUndefined();
+  });
+
+  it('ignores the self-driving flag for posthog-integration — configs do not cross', () => {
     const pick = resolveHarness({
       program: 'posthog-integration',
       flags: SD_ON,
+      flagPayloads: sdPayload({ model: 'gpt-5-4', effort: 'high' }),
     });
     expect(pick).toEqual({
       harness: Harness.anthropic,
@@ -296,11 +312,8 @@ describe('switchboard resolveHarness — self-driving pi flag trio', () => {
   it('runs the orchestrator for a flag-driven self-driving pi run (pi has runTask, no clamp)', () => {
     const ctx: SwitchboardCtx = {
       program: 'self-driving',
-      flags: {
-        ...SD_ON,
-        [WIZARD_ORCHESTRATOR_FLAG_KEY]: 'true',
-        [WIZARD_SELF_DRIVING_PI_EFFORT_FLAG_KEY]: 'high',
-      },
+      flags: { ...SD_ON, [WIZARD_ORCHESTRATOR_FLAG_KEY]: 'true' },
+      flagPayloads: sdPayload({ effort: 'high' }),
     };
     const binding = resolveBinding(ctx);
     // The resolved effort rides the binding (telemetry reads it from here).
@@ -317,13 +330,15 @@ describe('switchboard resolveHarness — self-driving pi flag trio', () => {
     });
   });
 
-  it('resolves the self-driving effort flag onto the pick; pairs do not cross', () => {
-    expect(
+  it('resolves the payload effort onto the pick; invalid effort is dropped', () => {
+    const level = (payload: unknown) =>
       resolveHarness({
         program: 'self-driving',
-        flags: { ...SD_ON, [WIZARD_SELF_DRIVING_PI_EFFORT_FLAG_KEY]: 'high' },
-      }).thinkingLevel,
-    ).toBe('high');
+        flags: SD_ON,
+        flagPayloads: sdPayload(payload),
+      }).thinkingLevel;
+    expect(level({ effort: 'high' })).toBe('high');
+    expect(level({ effort: 'banana' })).toBeUndefined();
     // The integration effort flag is inert for a self-driving run…
     expect(
       resolveHarness({
@@ -331,14 +346,12 @@ describe('switchboard resolveHarness — self-driving pi flag trio', () => {
         flags: { ...SD_ON, [WIZARD_PI_EFFORT_FLAG_KEY]: 'high' },
       }).thinkingLevel,
     ).toBeUndefined();
-    // …and the self-driving effort flag is inert for a posthog-integration run.
+    // …and the self-driving payload is inert for a posthog-integration run.
     expect(
       resolveHarness({
         program: 'posthog-integration',
-        flags: {
-          [WIZARD_USE_PI_HARNESS_FLAG_KEY]: 'true',
-          [WIZARD_SELF_DRIVING_PI_EFFORT_FLAG_KEY]: 'high',
-        },
+        flags: { [WIZARD_USE_PI_HARNESS_FLAG_KEY]: 'true' },
+        flagPayloads: sdPayload({ effort: 'high' }),
       }).thinkingLevel,
     ).toBeUndefined();
   });

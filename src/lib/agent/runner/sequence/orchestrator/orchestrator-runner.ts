@@ -132,6 +132,7 @@ export async function runOrchestrator(
   const switchboardCtx = {
     program: programConfig.id,
     flags: boot.wizardFlags,
+    flagPayloads: boot.wizardFlagPayloads,
     cliHarness: session.harness,
     cliSequence: session.sequence,
     cliModel: session.model,

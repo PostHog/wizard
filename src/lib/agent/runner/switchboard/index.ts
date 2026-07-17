@@ -26,6 +26,8 @@ export interface SwitchboardTrace {
 export interface SwitchboardCtx {
   program: ProgramId;
   flags: Record<string, string>;
+  /** Flag payloads from the same snapshot (payload-carrying flags, e.g. self-driving pi). */
+  flagPayloads?: Record<string, unknown>;
   /** CLI override (`--harness`). Wins over `flags`. */
   cliHarness?: Harness;
   /** CLI override (`--sequence`). Wins over `flags`. */
