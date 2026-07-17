@@ -111,6 +111,12 @@ declares its flag keys AND the program(s) they route (`HarnessExperiment` /
 zod-validated and fail closed: any unexpected payload resolves to no route and
 the non-flagged binding default stands.
 
+**Test convention: every resolution test is (ctx in) → full `resolveBinding`
+out.** Assert the whole four-axis object (`toEqual`), never a single axis via
+`resolveHarness`/`resolveSequence` — a partial assertion cannot see a flag
+moving an axis it doesn't look at. `modelCapabilities` is asserted directly as
+the second stage.
+
 **How this is held in place** (all under `switchboard/flags/__tests__/` plus
 `runner/__tests__/switchboard.test.ts`, mutation-tested):
 
