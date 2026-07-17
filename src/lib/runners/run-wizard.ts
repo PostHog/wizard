@@ -10,6 +10,7 @@ import type { WizardSession } from '@lib/wizard-session';
 import type { TaskStreamPush as TaskStreamPushClass } from '@lib/task-stream/task-stream-push';
 import { resolveNoTelemetry } from './resolve-no-telemetry';
 import { runCleanups } from '@utils/wizard-abort';
+import { join } from 'node:path';
 
 const WIZARD_VERSION = VERSION;
 
@@ -121,6 +122,9 @@ export function runWizard(
             onError: (err) => logToFile('[task-stream-push]', err.message),
           }),
         ],
+        eventPlanPath: config.eventPlanFile
+          ? join(session.installDir, config.eventPlanFile)
+          : undefined,
         enabled: taskStreamEnabled,
       });
       const activeStream = taskStream;

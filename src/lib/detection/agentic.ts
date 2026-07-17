@@ -18,7 +18,7 @@ import {
   runAgent as executeAgent,
   AgentSignals,
 } from '@lib/agent/agent-interface';
-import { isAbsolute } from 'path';
+import { isAbsolute, resolve, sep } from 'path';
 import { detectNodePackageManagers } from './package-manager.js';
 import { getSkillsBaseUrl, HAIKU_MODEL } from '@lib/constants';
 import type { WizardSession } from '@lib/wizard-session';
@@ -38,6 +38,8 @@ export type AgenticProject = {
   targetId: string | null;
   /** Whether a PostHog SDK is already installed in this project. */
   hasPostHog: boolean;
+  /** True on the one project picked as the main user-facing app; only present when the scan set `recommend`. */
+  recommended?: boolean;
 };
 
 export type AgenticDetectionReport = {
@@ -108,6 +110,8 @@ export type AgenticDetectOptions = {
   targets: readonly DetectTarget[];
   /** One short clause describing what the scan is for (frames the prompt). */
   purpose?: string;
+  /** Ask the agent to label exactly one project `recommended` (the main client app). Off by default. */
+  recommend?: boolean;
   /** Streaming activity callback for the UI. */
   onEvent?: DetectEvent;
 };
@@ -116,8 +120,12 @@ function buildPrompt(
   cwd: string,
   targets: readonly DetectTarget[],
   purpose: string,
+  recommend: boolean,
 ): string {
   const targetList = targets.map((t) => `- ${t.id} → ${t.name}`).join('\n');
+  const projectShape = `{"path":string,"framework":string,"targetId":string|null,"hasPostHog":boolean${
+    recommend ? ',"recommended":boolean' : ''
+  }}`;
   return [
     `You are scanning a code repository to ${purpose}. Be fast and mechanical — do not over-explore. Keep any reasoning to one short sentence, then run the tool calls and output the JSON.`,
     '',
@@ -133,16 +141,26 @@ function buildPrompt(
     '   - the matching target id from the list below. That list is ordered by priority — most specific first — so when a project could match more than one target (e.g. it uses several of the listed technologies), pick the one listed EARLIEST. Use null only if none matches,',
     `   - hasPostHog: true if any dependency is a PostHog SDK. This includes: a name containing "posthog" in any ecosystem (e.g. posthog-js, posthog-node, @posthog/*, posthog for pip/gem/hex, a com.posthog:* gradle/maven coordinate, a PostHog NuGet PackageReference); an SPM package named "PostHog" or a repositoryURL of github.com/PostHog/posthog-ios (in Package.swift or a .pbxproj); or a "pod 'PostHog'" line in a Podfile. Else false.`,
     '   Do NOT read any file other than these manifests.',
+    ...(recommend
+      ? [
+          '4. Pick exactly ONE project as recommended — the main user-facing client application. Prefer a frontend web app or a mobile app over backend servers/APIs, libraries, CLIs, tooling, and example/demo/docs apps. If several client apps exist, pick the primary production app; if no client app exists, pick the primary application project.',
+        ]
+      : []),
     '',
     'Target ids (id → name), in priority order — most specific first; if several match a project, keep the one listed earliest:',
     targetList,
     '',
     'Output requirements:',
     '- Respond with ONLY a single JSON object. No prose, no markdown code fences.',
-    '- Shape: {"repoType":"monorepo"|"single","projects":[{"path":string,"framework":string,"targetId":string|null,"hasPostHog":boolean}]}',
+    `- Shape: {"repoType":"monorepo"|"single","projects":[${projectShape}]}`,
     '- "path" is the project directory relative to the working directory; use "." for the repo root.',
     '- "targetId" MUST be exactly one of the target ids above when it matches; if several match, use the one listed earliest; otherwise null.',
     '- Include projects whose stack matches no target too (targetId: null).',
+    ...(recommend
+      ? [
+          '- Exactly one project has "recommended": true; every other project has "recommended": false.',
+        ]
+      : []),
     `- If there are no manifests at all, respond with exactly: ${AgentSignals.ABORT} detection failed`,
   ].join('\n');
 }
@@ -169,28 +187,43 @@ function coercePath(raw: unknown): string {
   return raw;
 }
 
+/** Resolve an agent-reported path to an absolute dir clamped to the root — the caller-side counterpart of coercePath. */
+export function resolveProjectDir(installDir: string, rel: unknown): string {
+  if (typeof rel !== 'string' || rel === '.') return installDir;
+  const root = resolve(installDir);
+  const dir = resolve(root, rel);
+  return dir === root || dir.startsWith(root + sep) ? dir : root;
+}
+
 /**
  * Validate the agent's raw JSON into a report, clamping each targetId to the
  * supplied set and each path to a repo-relative dir. Exported for testing.
+ * `recommended` is stripped unless requested; at most one (the first) survives.
  */
 export function coerceAgenticReport(
   parsed: unknown,
   validTargetIds: readonly string[],
+  options?: { recommend?: boolean },
 ): AgenticDetectionReport {
+  const recommend = options?.recommend === true;
   const obj = (parsed ?? {}) as Record<string, unknown>;
   const repoType = obj.repoType === 'monorepo' ? 'monorepo' : 'single';
   const rawProjects = Array.isArray(obj.projects) ? obj.projects : [];
+  let recommendedSeen = false;
   const projects: AgenticProject[] = rawProjects.map((raw) => {
     const p = (raw ?? {}) as Record<string, unknown>;
     const targetId =
       typeof p.targetId === 'string' && validTargetIds.includes(p.targetId)
         ? p.targetId
         : null;
+    const recommended = recommend && !recommendedSeen && p.recommended === true;
+    recommendedSeen ||= recommended;
     return {
       path: coercePath(p.path),
       framework: typeof p.framework === 'string' ? p.framework : 'Unknown',
       targetId,
       hasPostHog: p.hasPostHog === true,
+      ...(recommend ? { recommended } : {}),
     };
   });
   return { repoType, projects };
@@ -244,6 +277,7 @@ export async function detectProjectsWithAgent(
   const {
     targets,
     purpose = 'set up a PostHog integration',
+    recommend = false,
     onEvent,
   } = options;
   const { accessToken, host } = session.credentials;
@@ -296,7 +330,7 @@ export async function detectProjectsWithAgent(
 
   const result = await executeAgent(
     agent,
-    buildPrompt(cwd, targets, purpose),
+    buildPrompt(cwd, targets, purpose, recommend),
     runOptions,
     NOOP_SPINNER,
     {
@@ -317,6 +351,7 @@ export async function detectProjectsWithAgent(
     return coerceAgenticReport(
       extractJson(output),
       targets.map((t) => t.id),
+      { recommend },
     );
   } catch (err) {
     // The prompt tells the agent to emit `[ABORT] detection failed` when the
