@@ -41,6 +41,7 @@ import { auditCommand } from './src/commands/audit';
 import { doctorCommand } from './src/commands/doctor';
 import { migrateCommand } from './src/commands/migrate';
 import { revenueCommand } from './src/commands/revenue';
+import { aioCommand } from './src/commands/aio';
 import { warehouseCommand } from './src/commands/warehouse';
 import { selfDrivingCommand } from './src/commands/self-driving';
 import { slackCommand } from './src/commands/slack';
@@ -72,6 +73,7 @@ Wizard.use(basicIntegrationCommand)
   .use(doctorCommand)
   .use(migrateCommand)
   .use(revenueCommand)
+  .use(aioCommand)
   .use(warehouseCommand)
   .use(selfDrivingCommand)
   .use(slackCommand)

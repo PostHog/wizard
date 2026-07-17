@@ -102,6 +102,7 @@ export const DEFAULT_BINDING: ProgramBinding = {
 export const PROGRAM_BINDINGS: Partial<Record<ProgramId, ProgramBinding>> = {
   'posthog-integration': DEFAULT_BINDING,
   'revenue-analytics-setup': DEFAULT_BINDING,
+  'ai-observability': DEFAULT_BINDING,
   'warehouse-source': DEFAULT_BINDING,
   'error-tracking-upload-source-maps': DEFAULT_BINDING,
   audit: DEFAULT_BINDING,
