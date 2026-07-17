@@ -7,6 +7,8 @@
  * MCP server so the shared prompt is unchanged. `wizard_ask` is wired here too
  * (same schema, caps, and askBridge as the MCP tool) so interactive programs
  * can interview the user on pi; without a bridge (CI) it errors on call.
+ * Sensitive answers are vaulted to `{secretRef}` and resolved host-side by
+ * set_env_values — the raw value never enters the model conversation.
  */
 
 import fs from 'fs';
@@ -27,7 +29,12 @@ import {
   parseEnvKeys,
   resolveEnvPath,
 } from '@lib/wizard-tools';
-import { isFullyCancelled, type WizardAskBridge } from '@lib/wizard-ask-bridge';
+import {
+  CANCELLED_SENTINEL,
+  isFullyCancelled,
+  type WizardAskBridge,
+} from '@lib/wizard-ask-bridge';
+import { createSecretVault } from '@lib/secret-vault';
 import { withMode } from './index';
 import {
   detectNodePackageManagers,
@@ -66,6 +73,9 @@ export function createWizardPiTools(ctx: PiToolsContext): ToolDefinition[] {
   // mirroring the MCP server's counters.
   let askCallCount = 0;
   let askAdjacencyNudged = false;
+  // Session-scoped secret vault, same contract as the MCP server: wizard_ask
+  // mints `{secretRef}` for sensitive answers, set_env_values resolves them.
+  const secretVault = createSecretVault();
 
   // Fetch the skill menu at most once per run — the agent calls load_skill_menu
   // 2-3× otherwise, each a fresh HTTP round-trip (profiled slowness).
@@ -156,16 +166,21 @@ export function createWizardPiTools(ctx: PiToolsContext): ToolDefinition[] {
     name: 'set_env_values',
     label: 'Set env values',
     description:
-      'Create or update environment variable keys in a .env file (creates the file if missing). Pass literal string values.',
+      'Create or update environment variable keys in a .env file (creates the file if missing). Each value is either a literal string or a secret reference `{ "secretRef": "secret:..." }` returned by wizard_ask — refs are resolved locally, so the actual value is written to the file but never returned to the agent.',
     promptSnippet:
       'set_env_values(filePath, values) — write .env keys (never hardcode secrets in source)',
     parameters: Type.Object({
       filePath: Type.String({
         description: ENV_FILE_PATH_DESCRIPTION,
       }),
-      values: Type.Record(Type.String(), Type.String(), {
-        description: 'Key → literal value',
-      }),
+      values: Type.Record(
+        Type.String(),
+        Type.Union([Type.String(), Type.Object({ secretRef: Type.String() })]),
+        {
+          description:
+            'Key → (literal string OR { secretRef } pointing to a vaulted secret)',
+        },
+      ),
     }),
     async execute(_id, args) {
       const forbidden = Object.keys(args.values).find(
@@ -176,11 +191,26 @@ export function createWizardPiTools(ctx: PiToolsContext): ToolDefinition[] {
           `Error: "${forbidden}" is not a valid PostHog env var name. Use the framework-specific key (e.g. NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN).`,
         );
       }
+      // Resolve secret refs host-side; the value never reaches the agent.
+      const resolvedValues: Record<string, string> = {};
+      for (const [key, val] of Object.entries(args.values)) {
+        if (typeof val === 'string') {
+          resolvedValues[key] = val;
+          continue;
+        }
+        const secret = secretVault.get(val.secretRef);
+        if (secret === undefined) {
+          return text(
+            `Error: secret reference "${val.secretRef}" for key "${key}" is not known to the vault. The ref may have expired, been minted in a different run, or been mistyped.`,
+          );
+        }
+        resolvedValues[key] = secret;
+      }
       const resolved = resolveEnvPath(workingDirectory, args.filePath);
       const existing = fs.existsSync(resolved)
         ? await fs.promises.readFile(resolved, 'utf8')
         : '';
-      const merged = mergeEnvValues(existing, args.values);
+      const merged = mergeEnvValues(existing, resolvedValues);
       const dir = path.dirname(resolved);
       if (!fs.existsSync(dir))
         await fs.promises.mkdir(dir, { recursive: true });
@@ -266,7 +296,7 @@ export function createWizardPiTools(ctx: PiToolsContext): ToolDefinition[] {
           sensitive: Type.Optional(
             Type.Boolean({
               description:
-                'Not supported on this harness: sensitive questions are rejected (no secret vault yet). Collect secrets via a browser/connect link instead of chat.',
+                "Only valid for kind='text'. The answer is stored in the wizard's secret vault and returned as { secretRef: 'secret:...' } instead of the raw string. Use for API keys and tokens; the ref is resolved only by tools that accept it (e.g. set_env_values).",
             }),
           ),
         }),
@@ -306,12 +336,9 @@ export function createWizardPiTools(ctx: PiToolsContext): ToolDefinition[] {
             `Error: question "${q.id}" has kind="${q.kind}" but no options. Provide at least one { label, value }, or use kind="text".`,
           );
         }
-        // Fail closed: pi has no secret-vault wiring yet, so a sensitive
-        // answer would enter the model conversation literally. Reject until
-        // the vault is wired (the MCP path already vaults via secretRef).
-        if (q.sensitive) {
+        if (q.sensitive && q.kind !== 'text') {
           return text(
-            `Error: question "${q.id}" sets sensitive=true, but sensitive answers are not supported on this harness yet. Do not collect the secret in chat — point the user at a browser/connect link instead.`,
+            `Error: question "${q.id}" sets sensitive=true but kind="${q.kind}". Only kind="text" answers can be sensitive.`,
           );
         }
         if (ids.has(q.id)) {
@@ -331,12 +358,40 @@ export function createWizardPiTools(ctx: PiToolsContext): ToolDefinition[] {
       try {
         const answers = await askBridge.request({ questions: args.questions });
         if (isFullyCancelled(answers)) askCallCount -= 1;
+        // Sensitive answers go to the vault; the agent sees an opaque ref
+        // (same contract as the MCP wizard_ask).
+        const sensitiveById = new Map(
+          args.questions
+            .filter((q) => q.sensitive)
+            .map((q) => [q.id, q.prompt]),
+        );
+        const sanitised: Record<
+          string,
+          string | string[] | { secretRef: string }
+        > = {};
+        for (const [id, answer] of Object.entries(answers)) {
+          const label = sensitiveById.get(id);
+          if (
+            label !== undefined &&
+            typeof answer === 'string' &&
+            answer !== CANCELLED_SENTINEL
+          ) {
+            const ref = secretVault.put(answer, {
+              label,
+              source: 'wizard_ask',
+            });
+            sanitised[id] = { secretRef: ref };
+            logToFile(`[pi] wizard_ask: vaulted answer for "${id}" as ${ref}`);
+          } else {
+            sanitised[id] = answer;
+          }
+        }
         logToFile(
           `[pi] wizard_ask: resolved ${
             Object.keys(answers).length
           } answer(s) for ${args.questions.length} question(s)`,
         );
-        return text(JSON.stringify({ answers }, null, 2));
+        return text(JSON.stringify({ answers: sanitised }, null, 2));
       } catch (err) {
         askCallCount -= 1;
         const message = err instanceof Error ? err.message : String(err);
