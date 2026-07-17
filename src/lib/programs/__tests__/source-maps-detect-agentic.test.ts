@@ -9,7 +9,17 @@ describe('SOURCE_MAPS_TARGETS precedence', () => {
   const rank = (id: string) => ids.indexOf(id);
 
   it('covers every automatable variant exactly once', () => {
-    expect([...ids].sort()).toEqual([...AUTOMATABLE_VARIANTS].sort());
+    for (const variant of AUTOMATABLE_VARIANTS) {
+      expect(ids.filter((id) => id === variant)).toHaveLength(1);
+    }
+  });
+
+  it('ranks unsupported native guards ahead of the iOS target', () => {
+    expect(SOURCE_MAPS_TARGETS).toContainEqual({ id: 'ios', name: 'iOS' });
+    for (const nativeGuard of ['react-native', 'flutter', 'android']) {
+      expect(rank(nativeGuard)).toBeLessThan(rank('ios'));
+    }
+    expect(rank('ios')).toBeLessThan(rank('nextjs'));
   });
 
   it('ranks bundlers ahead of the generic React variant', () => {
@@ -55,6 +65,76 @@ describe('coerceReport', () => {
     expect(p.instrumentable).toBe(true);
     expect(p.reason).toBeUndefined();
   });
+
+  it('retains an iOS project with PostHog as instrumentable', () => {
+    const report = coerceReport({
+      repoType: 'single',
+      projects: [
+        {
+          path: '.',
+          framework: 'iOS',
+          targetId: 'ios',
+          hasPostHog: true,
+        },
+      ],
+    });
+
+    expect(report.projects[0]).toEqual({
+      path: '.',
+      framework: 'iOS',
+      variant: 'ios',
+      hasPostHog: true,
+      instrumentable: true,
+    });
+  });
+
+  it('blocks an iOS project that has no PostHog SDK yet', () => {
+    const report = coerceReport({
+      repoType: 'single',
+      projects: [
+        {
+          path: '.',
+          framework: 'iOS',
+          targetId: 'ios',
+          hasPostHog: false,
+        },
+      ],
+    });
+
+    expect(report.projects[0]).toEqual(
+      expect.objectContaining({
+        variant: 'ios',
+        hasPostHog: false,
+        instrumentable: false,
+        reason: expect.stringMatching(/no posthog sdk/i),
+      }),
+    );
+  });
+
+  it.each(['React Native', 'Expo', 'Flutter', 'Android'])(
+    'blocks a native %s project misclassified as iOS',
+    (framework) => {
+      const report = coerceReport({
+        repoType: 'single',
+        projects: [
+          {
+            path: '.',
+            framework,
+            targetId: 'ios',
+            hasPostHog: true,
+          },
+        ],
+      });
+
+      expect(report.projects[0]).toEqual(
+        expect.objectContaining({
+          variant: null,
+          instrumentable: false,
+          reason: expect.stringMatching(/isn't supported/i),
+        }),
+      );
+    },
+  );
 
   it('blocks a supported project that has no PostHog SDK yet', () => {
     const report = coerceReport({
