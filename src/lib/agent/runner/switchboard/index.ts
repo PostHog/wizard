@@ -115,6 +115,7 @@ export const PROGRAM_BINDINGS: Partial<Record<ProgramId, ProgramBinding>> = {
   'mcp-remove': DEFAULT_BINDING,
   'mcp-tutorial': DEFAULT_BINDING,
   'mcp-analytics': DEFAULT_BINDING,
+  'ai-observability': DEFAULT_BINDING,
   slack: DEFAULT_BINDING,
 };
 
