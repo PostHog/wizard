@@ -18,6 +18,7 @@ import {
   Sequence,
   SONNET_5_MODEL,
 } from '@lib/constants';
+import type { ProgramId } from '@lib/programs/program-registry';
 import { logToFile } from '@utils/debug';
 import type { EffortLevel } from '../models';
 
@@ -74,6 +75,22 @@ export interface PayloadConfigFlag {
 }
 
 export type ConfigFlag = MultivariateConfigFlag | PayloadConfigFlag;
+
+/**
+ * A harness-axis experiment: ONE program and the flags that route it. The
+ * scope is part of the declaration — the flags are inert for every other
+ * program.
+ */
+export interface HarnessExperiment {
+  program: ProgramId;
+  flags: ConfigFlag;
+}
+
+/** A sequence-axis experiment: one boolean flag, inert outside its listed programs. */
+export interface SequenceExperiment {
+  programs: readonly ProgramId[];
+  flag: string;
+}
 
 /** `{model, effort?, harness?, sequence?}` payload shape; extra keys tolerated for forward compat. */
 const payloadConfigFlagSchema = z.object({

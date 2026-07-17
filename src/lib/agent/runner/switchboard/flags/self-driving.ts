@@ -1,11 +1,17 @@
 /**
- * Self-driving pi experiment: boolean use flag whose `{model, effort}`
- * payload picks the variant; an invalid payload keeps the non-flagged
- * default.
+ * Self-driving pi experiment.
+ *
+ * Flag:   wizard-self-driving-use-pi-harness (bool; payload `{model, effort?,
+ *         harness?, sequence?}`)
+ * Routes: ONLY `self-driving` — any axis the payload pins. A missing or
+ *         invalid payload keeps the non-flagged binding default.
  */
 import { WIZARD_SELF_DRIVING_USE_PI_HARNESS_FLAG_KEY } from '@lib/constants';
-import type { ConfigFlag } from './schemes';
+import type { HarnessExperiment } from './schemes';
 
-export const SELF_DRIVING_FLAGS: ConfigFlag = {
-  useFlag: WIZARD_SELF_DRIVING_USE_PI_HARNESS_FLAG_KEY,
+export const SELF_DRIVING_EXPERIMENT: HarnessExperiment = {
+  program: 'self-driving',
+  flags: {
+    useFlag: WIZARD_SELF_DRIVING_USE_PI_HARNESS_FLAG_KEY,
+  },
 };

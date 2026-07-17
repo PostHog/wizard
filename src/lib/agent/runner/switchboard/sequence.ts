@@ -6,7 +6,11 @@
 import { IS_PRODUCTION_BUILD } from '@env';
 import { Sequence } from '@lib/constants';
 import { logToFile } from '@utils/debug';
-import { isOrchestratorEnabled, resolveFlagRoute } from './flags';
+import {
+  isOrchestratorEnabled,
+  orchestratorFlagRoutes,
+  resolveFlagRoute,
+} from './flags';
 import { getHarness, resolveHarness } from './harness';
 import type { WizardSession } from '@lib/wizard-session';
 import type { ProgramConfig } from '@lib/programs/program-step';
@@ -73,9 +77,9 @@ const flagRouteSequenceMw: Middleware<Sequence> = (ctx, next) => {
   return route.sequence;
 };
 
-/** PostHog `wizard-orchestrator` flag → orchestrator. */
+/** PostHog `wizard-orchestrator` flag → orchestrator, only for covered programs. */
 const orchestratorFeatureFlagMw: Middleware<Sequence> = (ctx, next) => {
-  if (!isOrchestratorEnabled(ctx.flags)) return next();
+  if (!orchestratorFlagRoutes(ctx.program, ctx.flags)) return next();
   if (ctx.trace) ctx.trace.sequence = 'flag';
   return Sequence.orchestrator;
 };

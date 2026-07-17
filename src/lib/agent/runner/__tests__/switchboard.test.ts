@@ -393,7 +393,7 @@ describe('switchboard resolveHarness — self-driving pi payload flag', () => {
     }
   });
 
-  it('runs the orchestrator for a flag-driven self-driving pi run (pi has runTask, no clamp)', () => {
+  it('ignores the global orchestrator flag — context-mill has no self-driving seed prompt', () => {
     const ctx: SwitchboardCtx = {
       program: 'self-driving',
       flags: { ...SD_ON, [WIZARD_ORCHESTRATOR_FLAG_KEY]: 'true' },
@@ -402,7 +402,7 @@ describe('switchboard resolveHarness — self-driving pi payload flag', () => {
     const binding = resolveBinding(ctx);
     // The resolved effort rides the binding (telemetry reads it from here).
     expect(binding).toEqual({
-      sequence: Sequence.orchestrator,
+      sequence: Sequence.linear,
       harness: Harness.pi,
       model: GPT5_6_TERRA_MODEL,
       thinkingLevel: 'high',
@@ -410,7 +410,7 @@ describe('switchboard resolveHarness — self-driving pi payload flag', () => {
     expect(ctx.trace).toEqual({
       harness: 'flag',
       model: 'flag',
-      sequence: 'flag',
+      sequence: 'binding',
     });
   });
 });
