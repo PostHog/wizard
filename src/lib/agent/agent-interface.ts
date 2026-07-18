@@ -33,7 +33,10 @@ import {
   createPostToolUseYaraHooks,
   prewarmYaraScanner,
 } from '@lib/yara-hooks';
-import { createTriageLLMProvider } from './triage-provider';
+import {
+  createTriageLLMProvider,
+  type TriageGatewayAuth,
+} from './triage-provider';
 import { getWizardCommandments } from './commandments';
 import { classifyToolToStage } from './agent-phase';
 import type { PackageManagerDetector } from '@lib/detection/package-manager';
@@ -298,6 +301,8 @@ type AgentRunConfig = {
   getPendingQuestion?: () =>
     | import('@lib/wizard-session').PendingQuestion
     | null;
+  /** Gateway auth for warlock triage LLM (anthropic path). */
+  triageAuth?: TriageGatewayAuth;
 };
 
 /**
@@ -579,6 +584,7 @@ export async function initializeAgent(
       allowedTools: config.allowedTools,
       disallowedTools: config.disallowedTools,
       getPendingQuestion: config.getPendingQuestion,
+      triageAuth: { baseURL: gatewayUrl, authToken: config.posthogApiKey },
     };
 
     logToFile('Agent config:', {
@@ -800,10 +806,10 @@ export async function runAgent(
     // each string against the parent's mcpServers map.
     const inheritedMcpServerNames = Object.keys(agentConfig.mcpServers);
 
-    // LLM provider for warlock triage (reuses the gateway auth set on
-    // process.env by initializeAgent). Undefined if auth is missing — hooks
-    // then skip triage and fail closed.
-    const triageProvider = createTriageLLMProvider();
+    // LLM provider for warlock triage (reuses the gateway auth threaded
+    // through AgentRunConfig.triageAuth by initializeAgent). Undefined if auth
+    // is missing — hooks then skip triage and fail closed.
+    const triageProvider = createTriageLLMProvider(agentConfig.triageAuth);
 
     // Actually stop the run when a YARA hook hits a terminal violation. The SDK
     // ignores `stopReason` from PostToolUse hooks, so we abort the query (like

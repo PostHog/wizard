@@ -36,11 +36,11 @@ export interface TriageGatewayAuth {
 
 /**
  * Build the triage LLM provider. Auth comes from the explicit `auth` param
- * when given (the pi harness — it auths the gateway programmatically and never
- * sets the env vars), otherwise from the gateway auth on process.env (set by
- * initializeAgent on the anthropic path). Returns undefined if neither is
- * configured — callers then skip triage and fail closed (act on every flagged
- * match), so a missing key never silently disables the scanner.
+ * when given (the pi harness passes it from ToolGateContext.triageAuth, the
+ * anthropic harness passes it from AgentRunConfig.triageAuth). Returns
+ * undefined if auth is absent — callers then skip triage and fail closed
+ * (act on every flagged match), so a missing key never silently disables the
+ * scanner.
  *
  * The triage model is independent of the agent's model: it is a classifier
  * judging scan matches, and the gateway routes it by model id regardless of
@@ -49,8 +49,8 @@ export interface TriageGatewayAuth {
 export function createTriageLLMProvider(
   auth?: TriageGatewayAuth,
 ): LLMProvider | undefined {
-  const baseURL = auth?.baseURL ?? process.env.ANTHROPIC_BASE_URL;
-  const authToken = auth?.authToken ?? process.env.ANTHROPIC_AUTH_TOKEN;
+  const baseURL = auth?.baseURL;
+  const authToken = auth?.authToken;
 
   if (!baseURL || !authToken) {
     logToFile(
