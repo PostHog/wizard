@@ -22,6 +22,7 @@ import { ManualAuthCodeScreen } from './screens/ManualAuthCodeScreen.js';
 import { PostHogIntegrationIntroScreen } from './screens/PostHogIntegrationIntroScreen.js';
 import { RevenueIntroScreen } from './screens/RevenueIntroScreen.js';
 import { WarehouseIntroScreen } from './screens/WarehouseIntroScreen.js';
+import { WarehouseOfferScreen } from './screens/WarehouseOfferScreen.js';
 import { MigrationIntroScreen } from './screens/MigrationIntroScreen.js';
 import { SourceMapsIntroScreen } from './screens/SourceMapsIntroScreen.js';
 import { SourceMapsDetectScreen } from './screens/SourceMapsDetectScreen.js';
@@ -82,6 +83,7 @@ export function createScreens(
     [ScreenId.Intro]: <PostHogIntegrationIntroScreen store={store} />,
     [ScreenId.RevenueIntro]: <RevenueIntroScreen store={store} />,
     [ScreenId.WarehouseIntro]: <WarehouseIntroScreen store={store} />,
+  [ScreenId.WarehouseOffer]: <WarehouseOfferScreen store={store} />,
     [ScreenId.SourceMapsIntro]: <SourceMapsIntroScreen store={store} />,
     [ScreenId.SourceMapsDetect]: <SourceMapsDetectScreen store={store} />,
     [ScreenId.SourceMapsOutro]: <SourceMapsOutroScreen store={store} />,

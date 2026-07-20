@@ -221,7 +221,18 @@ const PROGRAM_SCOPE_ADDITIONS: Partial<Record<ProgramId, readonly string[]>> = {
   'agent-skill': AGENT_SKILL_SCOPE_ADDITIONS,
   'self-driving': SELF_DRIVING_SCOPE_ADDITIONS,
   'warehouse-source': WAREHOUSE_SOURCE_SCOPE_ADDITIONS,
-  'posthog-integration': CONNECT_SLACK_SCOPE_ADDITIONS,
+  // Slack for the connect step that ends the run, warehouse because the
+  // default flow now offers to connect detected data sources inline (the
+  // warehouse run is composed into it — see POSTHOG_INTEGRATION_PROGRAM).
+  //
+  // Requested on every default run, not just ones that surface the offer: this
+  // map is keyed by program id with no access to the session, and scopes are
+  // resolved at auth time. Both are already within the wizard OAuth app's
+  // ceiling and self-driving requests the same pair.
+  'posthog-integration': [
+    ...CONNECT_SLACK_SCOPE_ADDITIONS,
+    ...WAREHOUSE_SOURCE_SCOPE_ADDITIONS,
+  ],
   slack: CONNECT_SLACK_SCOPE_ADDITIONS,
 };
 

@@ -10,7 +10,9 @@ import type { ProgramStep } from '@lib/programs/program-step';
 import type { WizardSession } from '@lib/wizard-session';
 import { RunPhase } from '@lib/wizard-session';
 import { HEALTH_CHECK_STEP } from '@lib/programs/shared/health-check-step';
+import { getDetectedWarehouseSources } from '@lib/programs/warehouse-source/detect';
 import { detectPostHogIntegration } from './detect.js';
+import { warehouseRunStep } from './warehouse-step.js';
 
 function needsSetup(session: WizardSession): boolean {
   const config = session.frameworkConfig;
@@ -46,6 +48,26 @@ export const POSTHOG_INTEGRATION_PROGRAM: ProgramStep[] = [
     isComplete: (session) => !needsSetup(session),
   },
   {
+    // "We found Postgres and Stripe — connect them to PostHog?". Shown only
+    // when detection actually found sources, so a project with nothing to
+    // connect never sees it and the flow is unchanged.
+    //
+    // Deliberately before `auth`, not after the integration run: the answer
+    // decides whether the warehouse run happens, and therefore which run is
+    // the last one (the last run owns the outro — see run-wizard's
+    // `hasLaterRun`). Asking afterwards would be too late to decide. Mirrors
+    // how self-driving settles `integrate` up front.
+    id: 'warehouse-offer',
+    label: 'Data sources',
+    screenId: 'warehouse-offer',
+    show: (session) =>
+      getDetectedWarehouseSources(session).length > 0 &&
+      session.warehouseOptIn === null,
+    // No `gate`: the composed walk in run-wizard blocks on `isComplete`, and
+    // nothing awaits a `warehouse-offer` gate, so one would just dangle.
+    isComplete: (session) => session.warehouseOptIn !== null,
+  },
+  {
     id: 'auth',
     label: 'Authentication',
     screenId: 'auth',
@@ -55,10 +77,17 @@ export const POSTHOG_INTEGRATION_PROGRAM: ProgramStep[] = [
     id: 'run',
     label: 'Integration',
     screenId: 'run',
+    // `completedRuns` first: when the warehouse run follows, it resets the
+    // shared `runPhase`, and without the durable signal this step would flip
+    // back to incomplete and the router would re-show the integration screen.
     isComplete: (session) =>
+      session.completedRuns.includes('run') ||
       session.runPhase === RunPhase.Completed ||
       session.runPhase === RunPhase.Error,
   },
+  // Connects the detected sources. Shown only when the offer was accepted;
+  // otherwise it never runs and the integration run above owns the outro.
+  warehouseRunStep,
   {
     id: 'outro',
     label: 'Done',

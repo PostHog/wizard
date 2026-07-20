@@ -17,6 +17,9 @@ import {
   gatherFrameworkContext,
   checkFrameworkVersion,
 } from '@lib/detection/index';
+import { analytics } from '@utils/analytics';
+import { detectWarehouseSources } from '@lib/warehouse-sources/detect';
+import { DETECTED_WAREHOUSE_SOURCES_KEY } from '@lib/programs/warehouse-source/detect';
 
 export async function detectPostHogIntegration(
   ctx: ProgramReadyContext,
@@ -71,5 +74,40 @@ export async function detectPostHogIntegration(
     ctx.addDiscoveredFeature(feature);
   }
 
+  detectWarehouseSourcesForOffer(ctx, installDir);
+
   ctx.setDetectionComplete();
+}
+
+/**
+ * Scan for data warehouse source signals (Postgres, Stripe, Hubspot, …) so the
+ * warehouse-offer step can propose connecting them as part of setup.
+ *
+ * Deliberately calls `detectWarehouseSources` rather than the warehouse
+ * program's own `detectWarehousePrerequisites`: that wrapper writes
+ * `frameworkContext.detectError` when it finds nothing, which is right for
+ * `wizard warehouse` (an empty result makes the whole program pointless) but
+ * would surface a spurious error on the IntroScreen here. Embedded, "no
+ * sources" is a silent skip — the offer step simply never shows.
+ */
+function detectWarehouseSourcesForOffer(
+  ctx: ProgramReadyContext,
+  installDir: string,
+): void {
+  const sources = detectWarehouseSources(installDir);
+  if (sources.length === 0) return;
+
+  // Tag every subsequent event with what was detected, so the funnel can
+  // separate "was never offered" from "was offered and declined".
+  analytics.setTag(
+    'warehouse_source_kinds',
+    sources.map((s) => s.kind).join(','),
+  );
+  analytics.setTag(
+    'warehouse_source_modes',
+    sources.map((s) => `${s.kind}:${s.mode}`).join(','),
+  );
+  analytics.setTag('warehouse_source_count', sources.length);
+
+  ctx.setFrameworkContext(DETECTED_WAREHOUSE_SOURCES_KEY, sources);
 }

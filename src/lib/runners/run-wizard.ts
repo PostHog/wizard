@@ -38,11 +38,15 @@ async function prepareRunSession(
  * authenticates (every later run reuses it); a step carrying its own `run`
  * thunk runs that agent in its dir and is recorded in `completedRuns`; the
  * host program's own run screen runs `config.run`; any other screen waits for
- * the user to satisfy `isComplete`. */
+ * the user to satisfy `isComplete`.
+ *
+ * `moreRunsFollow` marks the host run as composed when another run step is
+ * still to come — see `hasLaterRun`. */
 async function advanceStep(
   step: Step,
   store: WizardStore,
   config: ProgramConfig,
+  moreRunsFollow = false,
 ): Promise<void> {
   if (step.screenId === 'auth') {
     await authenticate(store.session, config.id);
@@ -50,10 +54,45 @@ async function advanceStep(
     await step.run(await prepareRunSession(step, store.session));
     store.completeRunStep(step.id);
   } else if (step.screenId === 'run') {
-    await runAgent(config, await prepareRunSession(step, store.session));
+    await runAgent(config, await prepareRunSession(step, store.session), {
+      composed: moreRunsFollow,
+    });
+    // Record it the same way a `run` thunk is recorded, so its `isComplete`
+    // survives the next run resetting the shared `runPhase`. Only when another
+    // run follows: for a terminal run the outro has already been pushed, and
+    // `completeRunStep` would clear the task list out from under it.
+    if (moreRunsFollow) store.completeRunStep(step.id);
   } else if (step.isComplete) {
     await store.waitUntil(step.isComplete);
   }
+}
+
+/**
+ * Whether any step after `index` will still run an agent.
+ *
+ * Exactly one run per invocation may be non-composed: that run owns the outro
+ * and the analytics shutdown (`runner/sequence/linear.ts`), so anything after
+ * it would render into a torn-down UI with a dead analytics client. The last
+ * run wins, which means the host program's own run screen has to be composed
+ * whenever a later run step is still coming.
+ *
+ * Evaluated live rather than precomputed, because `show` predicates depend on
+ * answers the user gives during the walk — the default flow's warehouse run is
+ * only shown once the offer screen has been answered.
+ *
+ * Stops at the outro for the same reason the walk does: a run step past it is
+ * never reached, so counting it would compose the last run that actually
+ * happens and leave nothing to push the outro.
+ */
+export function hasLaterRun(
+  steps: readonly Step[],
+  index: number,
+  session: WizardSession,
+): boolean {
+  const rest = steps.slice(index + 1);
+  const outroAt = rest.findIndex((s) => s.screenId === 'outro');
+  const reachable = outroAt === -1 ? rest : rest.slice(0, outroAt);
+  return reachable.some((s) => s.run != null && (!s.show || s.show(session)));
 }
 
 /**
@@ -175,10 +214,17 @@ export function runWizard(
       if (config.steps.some((s) => s.run)) {
         // A composed program: its step list splices in run steps that carry
         // their own agent (self-driving runs the integration before its own
-        // run). Walk the list once, advancing each step to completion.
-        for (const step of config.steps) {
+        // run; the default flow runs the warehouse setup after its own).
+        // Walk the list once, advancing each step to completion.
+        for (const [i, step] of config.steps.entries()) {
           if (step.screenId === 'outro') break; // run-completion wait owns it
-          if (shown(step)) await advanceStep(step, activeTui.store, config);
+          if (!shown(step)) continue;
+          await advanceStep(
+            step,
+            activeTui.store,
+            config,
+            hasLaterRun(config.steps, i, activeTui.store.session),
+          );
         }
       } else if (skipAgent) {
         const { getOrAskForProjectData } = await import('@utils/setup-utils');

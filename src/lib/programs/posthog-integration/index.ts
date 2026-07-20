@@ -2,7 +2,7 @@ import type { ProgramConfig, ProgramStep } from '@lib/programs/program-step';
 import { runAgent, type ProgramRun } from '@lib/agent/agent-runner';
 import { WIZARD_TOOL_NAMES } from '@lib/wizard-tools';
 import type { WizardSession } from '@lib/wizard-session';
-import { OutroKind, RunPhase } from '@lib/wizard-session';
+import { RunPhase } from '@lib/wizard-session';
 import { AgentSignals } from '@lib/agent/agent-interface';
 import {
   DEFAULT_PACKAGE_INSTALLATION,
@@ -18,25 +18,16 @@ import { WIZARD_INTERACTION_EVENT_NAME } from '@lib/constants';
 import { getUI } from '@ui/index';
 import { requestDeepLink } from '@utils/provisioning';
 import { openTrackedLink, withUtm } from '@utils/links';
-import type { HostResolution } from '@lib/host-resolution';
 import { POSTHOG_INTEGRATION_PROGRAM } from './steps.js';
 import { getContentBlocks } from './content/index.js';
-import { buildCodingAgentPrompt } from './handoff.js';
+import {
+  SETUP_REPORT_FILE,
+  DASHBOARD_DEEP_LINK_KEY,
+  buildIntegrationOutroData,
+} from './outro.js';
 import { EVENT_PLAN_FILE } from './constants.js';
 
-const DASHBOARD_DEEP_LINK_KEY = 'dashboardDeepLink';
-
-function resolveContinueUrl(
-  sess: WizardSession,
-  host: HostResolution,
-  deepLink: unknown,
-): string | undefined {
-  if (!sess.signup) return undefined;
-  if (typeof deepLink === 'string' && deepLink) return deepLink;
-  return withUtm(`${host.appHost}/products?source=wizard`, 'outro-continue');
-}
-
-export const SETUP_REPORT_FILE = 'posthog-setup-report.md';
+export { SETUP_REPORT_FILE, buildIntegrationOutroData } from './outro.js';
 export { EVENT_PLAN_FILE } from './constants.js';
 
 export const posthogIntegrationConfig: ProgramConfig = {
@@ -248,37 +239,8 @@ Important: Use the detect_package_manager tool (from the wizard-tools MCP server
         }
       },
 
-      buildOutroData: (sess, credentials) => {
-        const envVars = config.environment.getEnvVars(
-          credentials.projectApiKey,
-          credentials.host.apiHost,
-        );
-        const deepLink = sess.frameworkContext[DASHBOARD_DEEP_LINK_KEY];
-        const continueUrl = resolveContinueUrl(
-          sess,
-          credentials.host,
-          deepLink,
-        );
-
-        const changes = [
-          ...config.ui.getOutroChanges(frameworkContext),
-          Object.keys(envVars).length > 0
-            ? 'Added environment variables to .env file'
-            : '',
-        ].filter(Boolean);
-
-        return {
-          kind: OutroKind.Success as const,
-          message: 'Successfully installed PostHog!',
-          reportFile: SETUP_REPORT_FILE,
-          changes,
-          docsUrl: config.metadata.docsUrl,
-          continueUrl,
-          // Set once the agent mirrors the report into a notebook and emits [NOTEBOOK_URL].
-          notebookUrl: sess.notebookUrl ?? undefined,
-          handoffPrompt: buildCodingAgentPrompt(SETUP_REPORT_FILE),
-        };
-      },
+      buildOutroData: (sess, credentials) =>
+        buildIntegrationOutroData(sess, credentials),
     };
   },
 };

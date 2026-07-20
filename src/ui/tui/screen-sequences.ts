@@ -19,6 +19,7 @@ export enum ScreenId {
   Intro = 'intro',
   RevenueIntro = 'revenue-intro',
   WarehouseIntro = 'warehouse-intro',
+  WarehouseOffer = 'warehouse-offer',
   SourceMapsIntro = 'source-maps-intro',
   SourceMapsDetect = 'source-maps-detect',
   SourceMapsOutro = 'source-maps-outro',
