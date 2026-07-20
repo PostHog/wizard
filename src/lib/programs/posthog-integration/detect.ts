@@ -74,38 +74,55 @@ export async function detectPostHogIntegration(
     ctx.addDiscoveredFeature(feature);
   }
 
-  detectWarehouseSourcesForOffer(ctx, installDir);
+  detectWarehouseSourcesForSuggestion(ctx, installDir);
 
   ctx.setDetectionComplete();
 }
 
 /**
- * Scan for data warehouse source signals (Postgres, Stripe, Hubspot, …) so the
- * warehouse-offer step can propose connecting them as part of setup.
+ * Scan for data warehouse source signals (Postgres, Stripe, Hubspot, …).
+ *
+ * Measurement first: we don't yet know what share of runs even *have* a
+ * connectable source, and that number decides whether an inline connect flow
+ * is worth building. Running the scan here answers it from real runs.
+ *
+ * The result also drives a suggestion — a `nextSteps` bullet on the outro and
+ * a line in the setup report pointing at `wizard warehouse`. Deliberately a
+ * suggestion and not an inline agent run: chaining a second, credential-
+ * collecting agent run in front of the outro means any of its seven terminal
+ * failure paths (abort, no-progress, rate limit, …) would `process.exit()` and
+ * cost the user the success outro *and* the post-outro MCP / Slack steps, on a
+ * run where PostHog installed fine.
  *
  * Deliberately calls `detectWarehouseSources` rather than the warehouse
  * program's own `detectWarehousePrerequisites`: that wrapper writes
  * `frameworkContext.detectError` when it finds nothing, which is right for
  * `wizard warehouse` (an empty result makes the whole program pointless) but
- * would surface a spurious error on the IntroScreen here. Embedded, "no
- * sources" is a silent skip — the offer step simply never shows.
+ * here would surface a spurious error on the IntroScreen — and, in CI, trip
+ * the non-interactive prerequisites abort. No sources is a silent no-op.
  */
-function detectWarehouseSourcesForOffer(
+function detectWarehouseSourcesForSuggestion(
   ctx: ProgramReadyContext,
   installDir: string,
 ): void {
   const sources = detectWarehouseSources(installDir);
+
+  // Captured on every run, including the empty case — the denominator is the
+  // whole point. Without the zero rows "20% of runs have a Postgres" is
+  // unanswerable.
+  analytics.wizardCapture('warehouse sources detected', {
+    warehouse_source_count: sources.length,
+    warehouse_source_kinds: sources.map((s) => s.kind),
+    warehouse_source_modes: sources.map((s) => s.mode),
+  });
+
   if (sources.length === 0) return;
 
-  // Tag every subsequent event with what was detected, so the funnel can
-  // separate "was never offered" from "was offered and declined".
+  // Tag subsequent events too, so any downstream funnel can slice on what the
+  // project had available without re-joining to the event above.
   analytics.setTag(
     'warehouse_source_kinds',
     sources.map((s) => s.kind).join(','),
-  );
-  analytics.setTag(
-    'warehouse_source_modes',
-    sources.map((s) => `${s.kind}:${s.mode}`).join(','),
   );
   analytics.setTag('warehouse_source_count', sources.length);
 

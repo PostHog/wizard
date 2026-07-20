@@ -293,22 +293,6 @@ export interface WizardSession {
   integrate: boolean | null;
 
   /**
-   * Default integration flow only: whether to connect the data warehouse
-   * sources detected in the project as part of this run. `null` until decided.
-   *
-   * The warehouse-offer screen is shown only when detection actually found
-   * sources, so a project with nothing to connect leaves this `null` forever
-   * and the flow is unchanged. `true` splices in a second agent run (the
-   * `data-warehouse-source-setup` skill) after the integration run.
-   *
-   * Load-bearing beyond the screen: it decides which run is `composed`. The
-   * last run of an invocation owns the outro and the analytics shutdown, so
-   * when this is `true` the integration run must be composed and the warehouse
-   * run must not be. See POSTHOG_INTEGRATION_PROGRAM.
-   */
-  warehouseOptIn: boolean | null;
-
-  /**
    * Ids of composed run steps that have completed — e.g. self-driving's
    * `integrate-run`. Lets a run step's `isComplete` hold after it ran,
    * independent of the shared `runPhase`.
@@ -422,7 +406,6 @@ export function buildSession(args: {
     // `--integrate` forces integration (skip the question); otherwise the
     // integration-check screen resolves it from null.
     integrate: args.integrate === true ? true : null,
-    warehouseOptIn: null,
     completedRuns: [],
     selfDrivingHandoffConfirmed: false,
     loginUrl: null,

@@ -55,7 +55,6 @@ import type {
 } from '@lib/programs/program-step';
 import { getProgramConfig } from '@lib/programs/program-registry';
 import { withAiOptInGate } from '@lib/programs/ai-opt-in-gate';
-import { getDetectedWarehouseSources } from '@lib/programs/warehouse-source/detect';
 import { EXPANDED_COUNT } from '@ui/tui/constants';
 import { IS_DEV } from '@lib/constants';
 import { computeTokenCostUsd } from '@lib/agent/token-pricing';
@@ -756,24 +755,6 @@ export class WizardStore {
       self_driving_integrate: integrate,
       ...(extra?.via ? { self_driving_integrate_via: extra.via } : {}),
       ...(extra?.path ? { self_driving_integrate_path: extra.path } : {}),
-      ...sessionProperties(this.session),
-    });
-    this.emitChange();
-  }
-
-  /**
-   * Warehouse-offer answer in the default integration flow. `true` → connect
-   * the detected data warehouse sources after the SDK integration; `false` →
-   * skip. Resolves `session.warehouseOptIn` from null.
-   *
-   * Answered before auth, because the answer decides which agent run is
-   * `composed` (the last run owns the outro) — see POSTHOG_INTEGRATION_PROGRAM.
-   */
-  setWarehouseOptIn(optIn: boolean): void {
-    this.$session.setKey('warehouseOptIn', optIn);
-    analytics.wizardCapture('warehouse offer answered', {
-      warehouse_opt_in: optIn,
-      warehouse_source_count: getDetectedWarehouseSources(this.session).length,
       ...sessionProperties(this.session),
     });
     this.emitChange();
