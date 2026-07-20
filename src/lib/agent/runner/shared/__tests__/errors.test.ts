@@ -30,7 +30,6 @@ describe('resolveAbortOutcome', () => {
       config,
     );
 
-    // The whole point of the fix: expected user conditions carry no error.
     expect(error).toBeUndefined();
     expect(matched).toBe(ABORT_CASES[0]);
     expect(outroData).toEqual({
@@ -105,7 +104,6 @@ describe('resolveAbortOutcome', () => {
       docsUrl: 'https://posthog.com/docs',
     };
 
-    // The exact command the skill detected travels after the colon.
     const withCommand = resolveAbortOutcome(
       'manual install required: pnpm add @posthog/mcp posthog-node',
       dynamicConfig,
@@ -115,7 +113,6 @@ describe('resolveAbortOutcome', () => {
       body: 'run: pnpm add @posthog/mcp posthog-node',
     });
 
-    // A bare reason still matches; the body falls back gracefully.
     const bare = resolveAbortOutcome('manual install required', dynamicConfig);
     expect(bare.matched).toBe(dynamicCase);
     expect(bare.outroData).toMatchObject({ body: 'run: install manually' });

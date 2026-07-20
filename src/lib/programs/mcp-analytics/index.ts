@@ -27,10 +27,8 @@ const MCP_ANALYTICS_ABORT_CASES: AbortCase[] = [
       'product analytics, run `npx @posthog/wizard` instead.',
   },
   {
-    // SDK install must write a hoisted node_modules outside the agent's
-    // sandbox, so it fails. Expected, not a bug: hand off to the user instead
-    // of reporting it. Capture group is the optional install command the skill
-    // detected after the colon.
+    // SDK install fails when it must write a hoisted node_modules outside the
+    // agent's sandbox. Expected, not a bug: hand off to the user, don't report it.
     match: /^manual install required(?::\s*(.+))?$/i,
     message: 'One step left: finish installing PostHog.',
     body: (match) => {
