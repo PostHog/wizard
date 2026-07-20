@@ -26,6 +26,7 @@ import { AgentErrorType } from '@lib/agent/agent-interface';
 import { AgentSignals, REMARK_INSTRUCTION } from '@lib/agent/signals';
 import { AgentOutputSignals } from '@lib/agent/output-signals';
 import { getWizardCommandments } from '@lib/agent/commandments';
+import { piProgramGuidance } from './program-guidance';
 import { buildGatewayProvider, GATEWAY_PROVIDER } from './gateway';
 import type {
   AgentResult,
@@ -353,6 +354,7 @@ export const piBackend: AgentHarness = {
           getWizardCommandments() +
           '\n' +
           PI_RUNTIME_NOTES +
+          piProgramGuidance(programConfig.id) +
           '\n' +
           piMcpContext(boot, mcpInstructions),
         noExtensions: true,
@@ -491,14 +493,17 @@ export const piBackend: AgentHarness = {
             break;
           }
           case 'tool_execution_end': {
-            if (event.isError) {
-              logToFile(
-                `[pi] ✗ ${event.toolName}: ${String(event.result).slice(
-                  0,
-                  300,
-                )}`,
-              );
-            }
+            // Log every result in full, matching the anthropic path's
+            // SDK-message logging. Call-only logs make failed runs
+            // undiagnosable: a tool can fail (or return something the model
+            // misreads) with no trace of what came back.
+            logToFile(
+              `[pi] ${event.isError ? '✗' : '←'} ${event.toolName}: ${
+                typeof event.result === 'string'
+                  ? event.result
+                  : JSON.stringify(event.result ?? '')
+              }`,
+            );
             break;
           }
           case 'agent_end': {
