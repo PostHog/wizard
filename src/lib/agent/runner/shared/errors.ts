@@ -29,13 +29,28 @@ export function resolveAbortOutcome(
   error?: WizardError;
   matched: AbortCase | undefined;
 } {
-  const matched = config.abortCases?.find((c) => c.match.test(reason));
-  if (matched) {
+  let matched: AbortCase | undefined;
+  let matchResult: RegExpMatchArray | null = null;
+  for (const c of config.abortCases ?? []) {
+    const m = reason.match(c.match);
+    if (m) {
+      matched = c;
+      matchResult = m;
+      break;
+    }
+  }
+  if (matched && matchResult) {
+    // A function body reads captured groups (e.g. the detected install
+    // command) out of the reason; a string body is used as-is.
+    const body =
+      typeof matched.body === 'function'
+        ? matched.body(matchResult)
+        : matched.body;
     return {
       outroData: {
         kind: OutroKind.Error,
         message: matched.message,
-        body: matched.body,
+        body,
         docsUrl: matched.docsUrl,
       },
       // Expected condition — render the friendly outro, but do not report it.

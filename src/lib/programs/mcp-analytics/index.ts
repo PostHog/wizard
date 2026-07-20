@@ -30,33 +30,35 @@ const MCP_ANALYTICS_ABORT_CASES: AbortCase[] = [
     // The agent made the code changes but could not install the SDK packages.
     // Common in a monorepo: the install has to write a hoisted `node_modules`
     // outside the directory the agent is sandboxed to, so it fails. We keep
-    // that sandbox boundary tight on purpose (an auto-install would have to run
-    // package lifecycle scripts outside the sandbox, which we won't trade for),
-    // so we hand this last step to the user. Expected condition, not a bug:
+    // that sandbox boundary tight on purpose: an auto-install would have to run
+    // package lifecycle scripts outside the sandbox, which we won't trade for.
+    // So we hand this last step to the user. Expected condition, not a bug:
     // surface a clear handoff, don't report it to error tracking. See #920 /
-    // resolveAbortOutcome. The skill is left installed on this path (the
-    // keep-skills prompt is success-only), so the user can finish in their own
+    // resolveAbortOutcome. The skill is left installed on this path, since the
+    // keep-skills prompt is success-only, so the user can finish in their own
     // AI tool.
-    // TODO: the exact install command (yarn/npm/pnpm/bun) is known to the skill
-    // and travels in the [ABORT] reason. Today we render a static body; a
-    // follow-up could echo the skill's detected command verbatim so the user
-    // sees the precise line to run.
-    match: /^manual install required/i,
-    message: 'One step left: install the PostHog packages',
-    body:
-      'For your security, the wizard runs in a sandbox — a locked-down space ' +
-      "that can only write inside this project's folder. Installing your " +
-      'packages here needs to write outside that folder (your setup keeps ' +
-      'dependencies in a parent folder, which is common in a monorepo), and ' +
-      "the wizard won't reach outside its sandbox to do it. That limit is " +
-      "deliberate, not a bug, so we're handing this last step to you.\n\n" +
-      'Your code changes are already in place. Finish the install either way:\n\n' +
-      '  • Run it yourself: `yarn add @posthog/mcp posthog-node` (or ' +
-      'npm/pnpm/bun), then re-run `npx @posthog/wizard mcp-analytics` to verify.\n' +
-      '  • Or hand it to your AI coding tool, which is not sandboxed: the ' +
-      'mcp-analytics skill is still installed at `.claude/skills/mcp-analytics/` ' +
-      '— point Cursor, Claude Code, or your agent of choice at it to finish.\n\n' +
-      'Guide: https://posthog.com/docs/mcp-analytics',
+    //
+    // The regex captures the exact install command the skill detected (it
+    // travels after the colon in the reason), so the body shows the right one
+    // for their package manager instead of a hardcoded guess. Command is
+    // optional so an older skill emitting a bare reason still matches.
+    match: /^manual install required(?::\s*(.+))?$/i,
+    message: 'One step left: finish installing PostHog.',
+    body: (match) => {
+      const command = match[1]?.trim();
+      const terminalStep = command
+        ? `No AI tool handy? Run \`${command}\`, then re-run the wizard to verify.`
+        : 'No AI tool handy? Install `@posthog/mcp` and `posthog-node` with your package manager, then re-run the wizard to verify.';
+      return (
+        'For security, the wizard only writes inside this project folder. This ' +
+        "last step needs to write outside it, so it's yours.\n\n" +
+        'Your code changes are done. Your AI coding tool can finish the rest: ' +
+        'the mcp-analytics skill is set up in this project, so just ask your ' +
+        'agent to finish adding PostHog MCP analytics. Your tool can find it ' +
+        'at `.claude/skills/mcp-analytics`.\n\n' +
+        terminalStep
+      );
+    },
     docsUrl: 'https://posthog.com/docs/mcp-analytics',
   },
 ];

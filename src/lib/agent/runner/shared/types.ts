@@ -20,7 +20,13 @@ export type { PromptContext, Credentials };
 export interface AbortCase {
   match: RegExp;
   message: string;
-  body: string;
+  /**
+   * Outro body. Either a fixed string, or a function that receives the regex
+   * match against the abort reason so it can pull captured groups into the
+   * copy (e.g. the exact install command the skill detected and put in the
+   * `[ABORT]` reason).
+   */
+  body: string | ((match: RegExpMatchArray) => string);
   docsUrl?: string;
 }
 
