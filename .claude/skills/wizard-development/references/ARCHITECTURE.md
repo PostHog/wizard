@@ -7,7 +7,11 @@ description: How data moves through the wizard — from CLI args to the screen t
 
 ## The runner pipeline
 
-Every wizard run — framework integration, revenue analytics, audit, generic skill — executes the same pipeline in `agent-runner.ts`. The pipeline is fixed. What varies is the `ProgramRun` configuration object.
+> **Source of truth: [`src/lib/agent/runner/README.md`](../../../../src/lib/agent/runner/README.md).** Read it before changing anything under `runner/`; this section is orientation.
+
+After bootstrap, the **switchboard** (`runner/switchboard/`) resolves a `{ sequence, harness, model }` binding for the program and dispatches to the sequence — `linear` (one conversation), `orchestrator` (a task queue), or `remote` (server-side execution on the agent platform). Each sequence drives an SDK **harness** (`anthropic`, `pi`, `agents-platform`). A new execution mode is a sequence + harness bound to a program through the switchboard, not a branch in a program's config.
+
+The **linear** sequence is the default and the common case. It runs the fixed pipeline below; what varies within it is the `ProgramRun` configuration object.
 
 ```
  1. Init logging + debug

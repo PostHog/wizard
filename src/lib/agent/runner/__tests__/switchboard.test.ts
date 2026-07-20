@@ -11,6 +11,7 @@ import {
   GPT5_6_SOL_MODEL,
   GPT5_6_TERRA_MODEL,
   Harness,
+  WIZARD_CLOUD_AUDIT_FLAG_KEY,
   WIZARD_PI_EFFORT_FLAG_KEY,
   WIZARD_PI_MODEL_FLAG_KEY,
   Sequence,
@@ -66,11 +67,35 @@ describe('switchboard PROGRAM_BINDINGS', () => {
   // Pins today's behavior: the seam changes nothing until a binding is moved.
   it('defaults every program to anthropic + DEFAULT_AGENT_MODEL', () => {
     for (const program of PROGRAM_IDS) {
+      // cloud-audit is deliberately bound to the remote/agents-platform arm.
+      if (program === 'cloud-audit') continue;
       expect(resolveHarness({ program, flags: {} })).toEqual({
         harness: Harness.anthropic,
         model: DEFAULT_AGENT_MODEL,
       });
     }
+  });
+
+  it('binds cloud-audit to the agents-platform harness on the remote sequence', () => {
+    const ctx = { program: 'cloud-audit' as const, flags: {} };
+    expect(resolveHarness(ctx).harness).toBe(Harness.agentsPlatform);
+    expect(resolveSequence(ctx)).toBe(Sequence.remote);
+  });
+
+  it('routes audit to the agents-platform harness + remote sequence under the wizard-cloud-audit flag', () => {
+    const ctx = {
+      program: 'audit' as const,
+      flags: { [WIZARD_CLOUD_AUDIT_FLAG_KEY]: 'true' },
+    };
+    expect(resolveHarness(ctx).harness).toBe(Harness.agentsPlatform);
+    expect(resolveSequence(ctx)).toBe(Sequence.remote);
+    // Off the flag, audit stays on the local default.
+    expect(resolveHarness({ program: 'audit', flags: {} }).harness).toBe(
+      Harness.anthropic,
+    );
+    expect(resolveSequence({ program: 'audit', flags: {} })).toBe(
+      Sequence.linear,
+    );
   });
 
   it('falls back to DEFAULT_BINDING for an unmapped program', () => {
@@ -220,6 +245,8 @@ describe('switchboard resolveHarness — pi flag is gated to posthog-integration
   it('ignores the pi flag for every non-posthog-integration program', () => {
     for (const program of PROGRAM_IDS) {
       if (program === 'posthog-integration') continue;
+      // cloud-audit is bound to the agents-platform harness, not the anthropic default.
+      if (program === 'cloud-audit') continue;
       expect(
         resolveHarness({
           program,

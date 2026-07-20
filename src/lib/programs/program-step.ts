@@ -227,6 +227,13 @@ export interface ProgramConfig {
   /** Agent run config. Static object or async function for dynamic config. */
   run?: ProgramRun | ((session: WizardSession) => Promise<ProgramRun>);
   /**
+   * The program's remote arm: how it runs server-side on the agent platform.
+   * When present, the switchboard may bind this program to the `remote` sequence
+   * (via a flag), which resolves this instead of `run` and falls back to `run`
+   * if the hosted arm fails. Omit for programs with no hosted equivalent.
+   */
+  remoteRun?: (session: WizardSession) => ProgramRun | Promise<ProgramRun>;
+  /**
    * CI-mode pre-run strategy. When set, runWizardCI awaits this after building
    * the ci:true session and before the agent runs, instead of walking step
    * onReady hooks. Use for headless prerequisite work (e.g. framework

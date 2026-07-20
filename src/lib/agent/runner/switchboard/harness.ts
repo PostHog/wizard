@@ -14,12 +14,14 @@ import {
   GPT5_MODEL,
   Harness,
   SONNET_5_MODEL,
+  WIZARD_CLOUD_AUDIT_FLAG_KEY,
   WIZARD_PI_MODEL_FLAG_KEY,
   WIZARD_USE_PI_HARNESS_FLAG_KEY,
 } from '@lib/constants';
 import { logToFile } from '@utils/debug';
 import type { ProgramId } from '@lib/programs/program-registry';
 import { anthropicBackend } from '../harness/anthropic';
+import { agentsPlatformBackend } from '../harness/agents-platform';
 import { piBackend } from '../harness/pi';
 import type { AgentHarness } from '../harness/types';
 import {
@@ -34,7 +36,11 @@ import {
 export const HARNESS_OPTIONS: Partial<Record<Harness, AgentHarness>> = {
   [Harness.anthropic]: anthropicBackend,
   [Harness.pi]: piBackend,
+  [Harness.agentsPlatform]: agentsPlatformBackend,
 };
+
+/** Programs the `wizard-cloud-audit` flag may route to the agents-platform harness. */
+export const CLOUD_AUDIT_PROGRAMS = new Set<ProgramId>(['audit']);
 
 export function getHarness(name: Harness): AgentHarness {
   const harness = HARNESS_OPTIONS[name];
@@ -95,11 +101,26 @@ const cliModelOverride: Middleware<HarnessPick> = (ctx, next) => {
   return { ...pick, model: ctx.cliModel };
 };
 
+/**
+ * `wizard-cloud-audit` on → the agents-platform harness, on the programs that
+ * declare a remote arm. Paired with the sequence-axis flag that picks `remote`
+ * (see sequence.ts). Off `CLOUD_AUDIT_PROGRAMS`, the flag is a no-op. The model
+ * is server-side (bundle-defined), so the value carried here is inert.
+ */
+const cloudAuditHarnessMw: Middleware<HarnessPick> = (ctx, next) => {
+  const pick = next();
+  if (ctx.flags[WIZARD_CLOUD_AUDIT_FLAG_KEY] !== 'true') return pick;
+  if (!CLOUD_AUDIT_PROGRAMS.has(ctx.program)) return pick;
+  if (ctx.trace) ctx.trace.harness = 'flag';
+  return { harness: Harness.agentsPlatform, model: pick.model };
+};
+
 // Order = precedence: CLI > flag > binding default. The prod spread collapses
 // to [], dropping the CLI overrides from the chain.
 const HARNESS_MIDDLEWARE: Middleware<HarnessPick>[] = [
   ...(IS_PRODUCTION_BUILD ? [] : [cliHarnessOverride, cliModelOverride]),
   flagRunnerOverride,
+  cloudAuditHarnessMw,
 ];
 
 /**

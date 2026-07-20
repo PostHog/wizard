@@ -4,13 +4,18 @@
  */
 
 import { IS_PRODUCTION_BUILD } from '@env';
-import { Sequence, WIZARD_ORCHESTRATOR_FLAG_KEY } from '@lib/constants';
+import {
+  Sequence,
+  WIZARD_CLOUD_AUDIT_FLAG_KEY,
+  WIZARD_ORCHESTRATOR_FLAG_KEY,
+} from '@lib/constants';
 import { logToFile } from '@utils/debug';
-import { getHarness, resolveHarness } from './harness';
+import { CLOUD_AUDIT_PROGRAMS, getHarness, resolveHarness } from './harness';
 import type { WizardSession } from '@lib/wizard-session';
 import type { ProgramConfig } from '@lib/programs/program-step';
 import type { ProgramRun, BootstrapResult } from '../shared/types';
 import { runLinearProgram } from '../sequence/linear';
+import { runRemoteProgram } from '../sequence/remote';
 import { runOrchestrator } from '../sequence/orchestrator/orchestrator-runner';
 import {
   DEFAULT_BINDING,
@@ -39,6 +44,11 @@ export const SEQUENCE_OPTIONS: Partial<Record<Sequence, SequenceRunner>> = {
     name: Sequence.linear,
     run: (session, config, programConfig, boot, composed) =>
       runLinearProgram(session, config, programConfig, boot, composed),
+  },
+  [Sequence.remote]: {
+    name: Sequence.remote,
+    run: (session, config, programConfig, boot, composed) =>
+      runRemoteProgram(session, config, programConfig, boot, composed),
   },
   [Sequence.orchestrator]: {
     name: Sequence.orchestrator,
@@ -78,21 +88,32 @@ const orchestratorFeatureFlagMw: Middleware<Sequence> = (ctx, next) => {
   return Sequence.orchestrator;
 };
 
+/** PostHog `wizard-cloud-audit` flag → the `remote` sequence, on programs that declare a remote arm. */
+const cloudAuditFeatureFlagMw: Middleware<Sequence> = (ctx, next) => {
+  if (ctx.flags[WIZARD_CLOUD_AUDIT_FLAG_KEY] !== 'true') return next();
+  if (!CLOUD_AUDIT_PROGRAMS.has(ctx.program)) return next();
+  if (ctx.trace) ctx.trace.sequence = 'flag';
+  return Sequence.remote;
+};
+
 /**
  * The orchestrator drives harnesses through `runTask`; a harness that has not
- * implemented it clamps the run to linear. A capability check, not a harness
- * identity check — a harness gains orchestrator support by implementing the
- * method, with no switchboard change. Sits below the CLI override so
- * `--sequence orchestrator` still reproduces the hard error in dev builds.
+ * implemented it clamps the run back to linear. Only orchestrator needs
+ * `runTask` — linear and remote never go through the queue — so this defers to
+ * the rest of the chain first and only intervenes when the resolved sequence is
+ * orchestrator. A capability check, not a harness identity check: a harness
+ * gains orchestrator support by implementing the method, no switchboard change.
+ * Sits below the CLI override so `--sequence orchestrator` still reproduces the
+ * hard error in dev builds.
  */
 const runTaskCapabilityClampMw: Middleware<Sequence> = (ctx, next) => {
+  const picked = next();
+  if (picked !== Sequence.orchestrator) return picked;
   const pick = resolveHarness(ctx);
-  if (getHarness(pick.harness).runTask) return next();
-  if (isOrchestratorEnabled(ctx.flags)) {
-    logToFile(
-      `[switchboard] wizard-orchestrator ignored: ${pick.harness} has no runTask, clamping to linear`,
-    );
-  }
+  if (getHarness(pick.harness).runTask) return picked;
+  logToFile(
+    `[switchboard] wizard-orchestrator ignored: ${pick.harness} has no runTask, clamping to linear`,
+  );
   if (ctx.trace) ctx.trace.sequence = 'runtask-clamp';
   return Sequence.linear;
 };
@@ -102,6 +123,7 @@ const runTaskCapabilityClampMw: Middleware<Sequence> = (ctx, next) => {
 const SEQUENCE_MIDDLEWARE: Middleware<Sequence>[] = [
   ...(IS_PRODUCTION_BUILD ? [] : [cliSequenceMw]),
   runTaskCapabilityClampMw,
+  cloudAuditFeatureFlagMw,
   orchestratorFeatureFlagMw,
 ];
 

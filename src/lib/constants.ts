@@ -68,11 +68,18 @@ export const GPT5_5_MODEL = 'openai/gpt-5.5';
 export enum Harness {
   anthropic = 'anthropic',
   pi = 'pi',
+  /** The hosted PostHog agent platform. The agent runs server-side off a frozen
+   *  bundle and reaches back for this machine's filesystem via client tools. */
+  agentsPlatform = 'agents-platform',
 }
 
 export enum Sequence {
   linear = 'linear',
   orchestrator = 'orchestrator',
+  /** Remote bundle execution: the agent runs server-side on the agent platform,
+   *  so there is no local skill install or prompt assembly. Pairs with the
+   *  `agents-platform` harness. */
+  remote = 'remote',
 }
 
 // ── Integration / CLI ───────────────────────────────────────────────
@@ -255,6 +262,15 @@ export const WIZARD_PI_MODEL_FLAG_KEY = 'wizard-pi-model';
 export const WIZARD_PI_EFFORT_FLAG_KEY = 'wizard-pi-effort';
 /** Feature flag key that gates the intro-screen "Tools" menu. */
 export const WIZARD_TOOLS_MENU_FLAG_KEY = 'wizard-tools-menu';
+/**
+ * Boolean feature flag that binds `wizard audit` to the `remote` sequence on the
+ * `agents-platform` harness — the audit runs on the hosted agent platform instead
+ * of a local agent subprocess. The platform is internal-only and its `posthog`
+ * auth mode requires the caller to be in the agent's own org, so this flag must
+ * stay targeted to PostHog staff — an external user who got it enabled would only
+ * reach a 403.
+ */
+export const WIZARD_CLOUD_AUDIT_FLAG_KEY = 'wizard-cloud-audit';
 /** Boolean flag: agentic project scoping for non-interactive basic-integration runs. */
 export const WIZARD_BASIC_INTEGRATION_AGENTIC_DETECTION_FLAG_KEY =
   'wizard-basic-integration-agentic-detection';

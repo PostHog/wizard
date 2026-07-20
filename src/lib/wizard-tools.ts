@@ -15,14 +15,20 @@ import { unzipSync } from 'fflate';
 import { z } from 'zod';
 import { logToFile } from '@utils/debug';
 import { analytics } from '@utils/analytics';
-import { writeJsonAtomic, makeMutex } from '@utils/atomic-ledger';
+import { makeMutex } from '@utils/atomic-ledger';
 import type { PackageManagerDetector } from './detection/package-manager';
 import {
   AUDIT_CHECKS_FILE,
-  coerceAuditChecks,
   type AuditCheck,
   type AuditStatus,
 } from './programs/audit/types';
+import {
+  appendAuditChecksToLedger,
+  applyAuditAdditions,
+  applyAuditUpdates,
+  readLedger,
+  writeLedgerAtomic,
+} from './programs/audit/ledger';
 import { type WizardAskBridge, isFullyCancelled } from './wizard-ask-bridge';
 import { createSecretVault, type SecretVault } from './secret-vault';
 import { fetchWithRetry, type RetryOpts } from './fetch-retry';
@@ -510,107 +516,6 @@ const auditUpdateSchema = z.object({
   file: z.string().optional(),
   details: z.string().optional(),
 });
-
-/** Atomically write the audit ledger. Thin typed wrapper over writeJsonAtomic. */
-function writeLedgerAtomic(targetPath: string, checks: AuditCheck[]): void {
-  writeJsonAtomic(targetPath, checks);
-}
-
-/**
- * Apply a batch of patches to the ledger by id. Returns the new array and the
- * list of update ids that didn't match any existing check.
- */
-function applyAuditUpdates(
-  current: AuditCheck[],
-  updates: Array<{
-    id: string;
-    status: AuditStatus;
-    file?: string;
-    details?: string;
-  }>,
-): { next: AuditCheck[]; unknown: string[] } {
-  const byId = new Map(current.map((c) => [c.id, c]));
-  const unknown: string[] = [];
-
-  for (const u of updates) {
-    const existing = byId.get(u.id);
-    if (!existing) {
-      unknown.push(u.id);
-      continue;
-    }
-    byId.set(u.id, {
-      ...existing,
-      status: u.status,
-      ...(u.file !== undefined ? { file: u.file } : {}),
-      ...(u.details !== undefined ? { details: u.details } : {}),
-    });
-  }
-
-  return {
-    next: current.map((c) => byId.get(c.id) ?? c),
-    unknown,
-  };
-}
-
-/**
- * Append new checks to a seeded ledger. Duplicate ids are reported without
- * mutating the current ledger, including duplicates inside the additions.
- */
-function applyAuditAdditions(
-  current: AuditCheck[],
-  additions: AuditCheck[],
-): { next: AuditCheck[]; duplicates: string[] } {
-  const existingIds = new Set(current.map((c) => c.id));
-  const additionIds = new Set<string>();
-  const duplicates: string[] = [];
-
-  for (const check of additions) {
-    if (existingIds.has(check.id) || additionIds.has(check.id)) {
-      duplicates.push(check.id);
-      continue;
-    }
-    additionIds.add(check.id);
-  }
-
-  if (duplicates.length > 0) {
-    return { next: current, duplicates };
-  }
-
-  return { next: [...current, ...additions], duplicates: [] };
-}
-
-function readLedger(targetPath: string): AuditCheck[] {
-  if (!fs.existsSync(targetPath)) return [];
-  try {
-    const parsed = JSON.parse(fs.readFileSync(targetPath, 'utf8'));
-    return coerceAuditChecks(parsed);
-  } catch {
-    return [];
-  }
-}
-
-type AppendAuditChecksResult =
-  | { ok: true; added: number }
-  | { ok: false; reason: 'missing-ledger' }
-  | { ok: false; reason: 'duplicate-ids'; ids: string[] };
-
-function appendAuditChecksToLedger(
-  targetPath: string,
-  additions: AuditCheck[],
-): AppendAuditChecksResult {
-  if (!fs.existsSync(targetPath)) {
-    return { ok: false, reason: 'missing-ledger' };
-  }
-
-  const current = readLedger(targetPath);
-  const { next, duplicates } = applyAuditAdditions(current, additions);
-  if (duplicates.length > 0) {
-    return { ok: false, reason: 'duplicate-ids', ids: duplicates };
-  }
-
-  writeLedgerAtomic(targetPath, next);
-  return { ok: true, added: additions.length };
-}
 
 // ---------------------------------------------------------------------------
 // Server factory

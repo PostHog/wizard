@@ -105,6 +105,13 @@ export const PROGRAM_BINDINGS: Partial<Record<ProgramId, ProgramBinding>> = {
   'warehouse-source': DEFAULT_BINDING,
   'error-tracking-upload-source-maps': DEFAULT_BINDING,
   audit: DEFAULT_BINDING,
+  // The explicit `wizard audit cloud` command always runs on the hosted platform;
+  // plain `audit` reaches the same arm via the `wizard-cloud-audit` flag.
+  'cloud-audit': {
+    sequence: Sequence.remote,
+    harness: Harness.agentsPlatform,
+    model: DEFAULT_AGENT_MODEL,
+  },
   'events-audit': DEFAULT_BINDING,
   'posthog-doctor': DEFAULT_BINDING,
   'web-analytics-doctor': DEFAULT_BINDING,
