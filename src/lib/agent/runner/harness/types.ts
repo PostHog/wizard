@@ -59,8 +59,16 @@ export interface BackendRunInputs {
   model: string;
 }
 
-/** What a runner reports back: an error classification, or nothing on success. */
-export type AgentResult = { error?: AgentErrorType; message?: string };
+/**
+ * What a runner reports back: an error classification, or nothing on success.
+ * `manualSteps` carries agent-flagged follow-up actions (e.g. a sandbox-blocked
+ * install) surfaced on the success outro; a non-fatal run still succeeds.
+ */
+export type AgentResult = {
+  error?: AgentErrorType;
+  message?: string;
+  manualSteps?: string[];
+};
 
 /**
  * One orchestrator-mode unit of work — the seed plan, or one drained task.

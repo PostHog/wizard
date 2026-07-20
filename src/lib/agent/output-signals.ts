@@ -27,6 +27,7 @@ const OUTPUT_SIGNALS = {
   RESOURCE_MISSING: AgentSignals.ERROR_RESOURCE_MISSING,
   SKILL_INSTALL_FAILED: AgentSignals.SKILL_INSTALL_FAILED,
   WIZARD_REMARK: AgentSignals.WIZARD_REMARK,
+  MANUAL_STEP: AgentSignals.MANUAL_STEP,
 } as const;
 
 type OutputSignal = keyof typeof OUTPUT_SIGNALS;
@@ -102,6 +103,19 @@ export class AgentOutputSignals {
       if (idx !== -1) return line.slice(idx + marker.length).trim();
     }
     return undefined;
+  }
+
+  /** Trimmed text after each `[MANUAL-STEP]` marker; empty when there are none. */
+  manualSteps(): string[] {
+    const marker = OUTPUT_SIGNALS.MANUAL_STEP;
+    const steps: string[] = [];
+    for (const line of this.lines) {
+      const idx = line.indexOf(marker);
+      if (idx === -1) continue;
+      const text = line.slice(idx + marker.length).trim();
+      if (text) steps.push(text);
+    }
+    return steps;
   }
 
   /** Text after the single `[WIZARD-REMARK]` marker, trimmed, or undefined. */

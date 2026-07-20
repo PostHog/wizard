@@ -29,6 +29,7 @@ import type { ProgramConfig } from '../../../programs/program-step';
 import { assemblePrompt } from '../../agent-prompt';
 import type { ProgramRun, BootstrapResult } from '../shared/types';
 import { abortOnInstallFailure, resolveAbortOutcome } from '../shared/errors';
+import { applyManualSteps } from '../shared/outro';
 import { shouldDisableAsk, sessionToOptions } from '../shared/bootstrap';
 import { resolveHarness, getHarness } from '../switchboard';
 
@@ -257,7 +258,7 @@ export async function runLinearProgram(
   // the session reference — direct mutation then lands on a stale snapshot
   // that the screen never reads. UI.setOutroData() goes through the store
   // and also merges in any post-snapshot URLs from the live session.
-  const outroData = config.buildOutroData
+  const baseOutroData = config.buildOutroData
     ? config.buildOutroData(session, credentials)
     : {
         kind: OutroKind.Success,
@@ -268,6 +269,9 @@ export async function runLinearProgram(
           ? `${host.appHost}/products?source=wizard`
           : undefined,
       };
+  // Fold in any manual follow-up steps the agent flagged (a non-fatal handoff,
+  // e.g. an install it couldn't run in-sandbox) so they show on the Success outro.
+  const outroData = applyManualSteps(baseOutroData, agentResult.manualSteps);
   if (outroData) {
     getUI().setOutroData(outroData);
   }

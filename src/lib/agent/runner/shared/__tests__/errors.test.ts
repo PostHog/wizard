@@ -30,7 +30,6 @@ describe('resolveAbortOutcome', () => {
       config,
     );
 
-    // The whole point of the fix: expected user conditions carry no error.
     expect(error).toBeUndefined();
     expect(matched).toBe(ABORT_CASES[0]);
     expect(outroData).toEqual({

@@ -575,6 +575,15 @@ export const piBackend: AgentHarness = {
         });
       }
 
+      // Non-fatal follow-up steps the agent flagged (e.g. a sandbox-blocked
+      // install). The run still succeeds; the outro lists these for the user.
+      const manualSteps = signals.manualSteps();
+      if (manualSteps.length > 0) {
+        analytics.wizardCapture('agent manual step surfaced', {
+          count: manualSteps.length,
+        });
+      }
+
       // The skill plans events into .posthog-events.json then asks to remove it
       // on completion; pi's `rm` is fence-blocked, so the agent can't — clean it
       // up host-side rather than leave a stale (often empty) artifact (#15).
@@ -598,7 +607,7 @@ export const piBackend: AgentHarness = {
         cache_read_input_tokens: stats.tokens.cacheRead,
       });
       spinner.stop(config.successMessage ?? 'PostHog integration complete');
-      return {};
+      return manualSteps.length > 0 ? { manualSteps } : {};
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       logToFile(`[pi] run error: ${message}`);

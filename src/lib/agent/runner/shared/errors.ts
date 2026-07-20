@@ -9,13 +9,9 @@ import { OutroKind, type WizardSession } from '@lib/wizard-session';
 import type { AbortCase } from './types';
 
 /**
- * Decide how to surface an agent `[ABORT] <reason>`.
- *
- * A `[ABORT]` is "distinct from errors" (see `AgentSignals.ABORT`): when the
- * reason matches a program's declared {@link AbortCase} it's an expected user
- * condition — no MCP server, an unsupported language, an unrecognizable repo —
- * and must NOT be reported to error tracking. Only unrecognized aborts, which
- * likely signal a genuine bug, carry a `WizardError` for `captureException`.
+ * Decide how to surface an agent `[ABORT] <reason>`. A reason matching a
+ * declared AbortCase is an expected user condition and is not reported to error
+ * tracking; an unrecognized abort carries a WizardError so it is.
  */
 export function resolveAbortOutcome(
   reason: string,
@@ -38,7 +34,6 @@ export function resolveAbortOutcome(
         body: matched.body,
         docsUrl: matched.docsUrl,
       },
-      // Expected condition — render the friendly outro, but do not report it.
       error: undefined,
       matched,
     };
