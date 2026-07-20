@@ -44,15 +44,18 @@ const MCP_ANALYTICS_ABORT_CASES: AbortCase[] = [
     match: /^manual install required/i,
     message: 'One step left: install the PostHog packages',
     body:
-      "Your code changes are in place, but the wizard couldn't install the " +
-      'PostHog SDK packages for you. This is almost always a monorepo, where ' +
-      'the install has to write outside the folder the wizard runs in. We keep ' +
-      'that boundary tight on purpose, so we hand this last step to you:\n\n' +
+      'For your security, the wizard runs in a sandbox — a locked-down space ' +
+      "that can only write inside this project's folder. Installing your " +
+      'packages here needs to write outside that folder (your setup keeps ' +
+      'dependencies in a parent folder, which is common in a monorepo), and ' +
+      "the wizard won't reach outside its sandbox to do it. That limit is " +
+      "deliberate, not a bug, so we're handing this last step to you.\n\n" +
+      'Your code changes are already in place. Finish the install either way:\n\n' +
       '  • Run it yourself: `yarn add @posthog/mcp posthog-node` (or ' +
       'npm/pnpm/bun), then re-run `npx @posthog/wizard mcp-analytics` to verify.\n' +
-      '  • Or hand it to your AI coding tool: the mcp-analytics skill is still ' +
-      'installed at `.claude/skills/mcp-analytics/` — point Cursor, Claude ' +
-      'Code, or your agent of choice at it to pick up where we left off.\n\n' +
+      '  • Or hand it to your AI coding tool, which is not sandboxed: the ' +
+      'mcp-analytics skill is still installed at `.claude/skills/mcp-analytics/` ' +
+      '— point Cursor, Claude Code, or your agent of choice at it to finish.\n\n' +
       'Guide: https://posthog.com/docs/mcp-analytics',
     docsUrl: 'https://posthog.com/docs/mcp-analytics',
   },
