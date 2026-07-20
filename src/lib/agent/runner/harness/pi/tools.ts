@@ -28,12 +28,10 @@ import {
   mergeEnvValues,
   parseEnvKeys,
   resolveEnvPath,
+  resolveEnvSecretRefs,
+  vaultSensitiveAnswers,
 } from '@lib/wizard-tools';
-import {
-  CANCELLED_SENTINEL,
-  isFullyCancelled,
-  type WizardAskBridge,
-} from '@lib/wizard-ask-bridge';
+import { isFullyCancelled, type WizardAskBridge } from '@lib/wizard-ask-bridge';
 import { createSecretVault } from '@lib/secret-vault';
 import { withMode } from './index';
 import {
@@ -192,25 +190,17 @@ export function createWizardPiTools(ctx: PiToolsContext): ToolDefinition[] {
         );
       }
       // Resolve secret refs host-side; the value never reaches the agent.
-      const resolvedValues: Record<string, string> = {};
-      for (const [key, val] of Object.entries(args.values)) {
-        if (typeof val === 'string') {
-          resolvedValues[key] = val;
-          continue;
-        }
-        const secret = secretVault.get(val.secretRef);
-        if (secret === undefined) {
-          return text(
-            `Error: secret reference "${val.secretRef}" for key "${key}" is not known to the vault. The ref may have expired, been minted in a different run, or been mistyped.`,
-          );
-        }
-        resolvedValues[key] = secret;
+      const resolution = resolveEnvSecretRefs(args.values, secretVault);
+      if (!resolution.ok) {
+        return text(
+          `Error: secret reference "${resolution.secretRef}" for key "${resolution.key}" is not known to the vault. The ref may have expired, been minted in a different run, or been mistyped.`,
+        );
       }
       const resolved = resolveEnvPath(workingDirectory, args.filePath);
       const existing = fs.existsSync(resolved)
         ? await fs.promises.readFile(resolved, 'utf8')
         : '';
-      const merged = mergeEnvValues(existing, resolvedValues);
+      const merged = mergeEnvValues(existing, resolution.values);
       const dir = path.dirname(resolved);
       if (!fs.existsSync(dir))
         await fs.promises.mkdir(dir, { recursive: true });
@@ -360,32 +350,11 @@ export function createWizardPiTools(ctx: PiToolsContext): ToolDefinition[] {
         if (isFullyCancelled(answers)) askCallCount -= 1;
         // Sensitive answers go to the vault; the agent sees an opaque ref
         // (same contract as the MCP wizard_ask).
-        const sensitiveById = new Map(
-          args.questions
-            .filter((q) => q.sensitive)
-            .map((q) => [q.id, q.prompt]),
+        const sanitised = vaultSensitiveAnswers(
+          args.questions,
+          answers,
+          secretVault,
         );
-        const sanitised: Record<
-          string,
-          string | string[] | { secretRef: string }
-        > = {};
-        for (const [id, answer] of Object.entries(answers)) {
-          const label = sensitiveById.get(id);
-          if (
-            label !== undefined &&
-            typeof answer === 'string' &&
-            answer !== CANCELLED_SENTINEL
-          ) {
-            const ref = secretVault.put(answer, {
-              label,
-              source: 'wizard_ask',
-            });
-            sanitised[id] = { secretRef: ref };
-            logToFile(`[pi] wizard_ask: vaulted answer for "${id}" as ${ref}`);
-          } else {
-            sanitised[id] = answer;
-          }
-        }
         logToFile(
           `[pi] wizard_ask: resolved ${
             Object.keys(answers).length

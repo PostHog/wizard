@@ -119,6 +119,32 @@ describe('pi set_env_values — resolves vault refs host-side', () => {
     expect(env).toContain(`ZENDESK_TOKEN=${SECRET}`);
   });
 
+  it('mixed values map: literal + secretRef written together, secret still never in output', async () => {
+    const { wizardAsk, setEnvValues, workingDirectory } = makeTools({
+      token: SECRET,
+    });
+    const asked = await call(wizardAsk, {
+      questions: [
+        { id: 'token', prompt: 'Zendesk token', kind: 'text', sensitive: true },
+      ],
+    });
+    const { answers } = JSON.parse(textOf(asked)) as {
+      answers: { token: { secretRef: string } };
+    };
+
+    const written = await call(setEnvValues, {
+      filePath: '.env',
+      values: {
+        POSTHOG_HOST: 'https://us.posthog.com',
+        ZENDESK_TOKEN: answers.token,
+      },
+    });
+    expect(textOf(written)).not.toContain(SECRET);
+    const env = await readFile(join(workingDirectory, '.env'), 'utf8');
+    expect(env).toContain('POSTHOG_HOST=https://us.posthog.com');
+    expect(env).toContain(`ZENDESK_TOKEN=${SECRET}`);
+  });
+
   it('an unknown ref fails with a clear error and writes nothing', async () => {
     const { setEnvValues, workingDirectory } = makeTools({});
     const result = await call(setEnvValues, {

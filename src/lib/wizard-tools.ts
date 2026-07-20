@@ -23,7 +23,11 @@ import {
   type AuditCheck,
   type AuditStatus,
 } from './programs/audit/types';
-import { type WizardAskBridge, isFullyCancelled } from './wizard-ask-bridge';
+import {
+  CANCELLED_SENTINEL,
+  type WizardAskBridge,
+  isFullyCancelled,
+} from './wizard-ask-bridge';
 import { createSecretVault, type SecretVault } from './secret-vault';
 import { fetchWithRetry, type RetryOpts } from './fetch-retry';
 import {
@@ -484,6 +488,74 @@ export function mergeEnvValues(
 }
 
 // ---------------------------------------------------------------------------
+// Secret-vault plumbing shared by the MCP server and the pi-native tools —
+// one implementation so the vault contract cannot drift between harnesses.
+// ---------------------------------------------------------------------------
+
+/**
+ * Swap sensitive text answers for opaque vault refs before they return to
+ * the agent — the raw value never enters the LLM conversation. Cancelled
+ * answers pass through as the sentinel, unvaulted.
+ */
+export function vaultSensitiveAnswers(
+  questions: readonly { id: string; prompt: string; sensitive?: boolean }[],
+  answers: Record<string, string | string[]>,
+  vault: SecretVault,
+): Record<string, string | string[] | { secretRef: string }> {
+  const sensitiveById = new Map(
+    questions.filter((q) => q.sensitive).map((q) => [q.id, q.prompt]),
+  );
+  const sanitised: Record<string, string | string[] | { secretRef: string }> =
+    {};
+  for (const [id, answer] of Object.entries(answers)) {
+    const label = sensitiveById.get(id);
+    if (
+      label !== undefined &&
+      typeof answer === 'string' &&
+      answer !== CANCELLED_SENTINEL
+    ) {
+      const ref = vault.put(answer, { label, source: 'wizard_ask' });
+      sanitised[id] = { secretRef: ref };
+      logToFile(`wizard_ask: vaulted answer for "${id}" as ${ref}`);
+    } else {
+      sanitised[id] = answer;
+    }
+  }
+  return sanitised;
+}
+
+/** Resolution of a values map that may carry `{secretRef}` entries. */
+export type ResolvedEnvValues =
+  | { ok: true; values: Record<string, string>; refKeys: string[] }
+  | { ok: false; key: string; secretRef: string };
+
+/**
+ * Resolve `{secretRef}` entries host-side, so the value is written but never
+ * returned to the agent. Callers format their own error envelope from the
+ * failing key/ref.
+ */
+export function resolveEnvSecretRefs(
+  values: Record<string, string | { secretRef: string }>,
+  vault: SecretVault,
+): ResolvedEnvValues {
+  const resolved: Record<string, string> = {};
+  const refKeys: string[] = [];
+  for (const [key, val] of Object.entries(values)) {
+    if (typeof val === 'string') {
+      resolved[key] = val;
+      continue;
+    }
+    const secret = vault.get(val.secretRef);
+    if (secret === undefined) {
+      return { ok: false, key, secretRef: val.secretRef };
+    }
+    resolved[key] = secret;
+    refKeys.push(key);
+  }
+  return { ok: true, values: resolved, refKeys };
+}
+
+// ---------------------------------------------------------------------------
 // Audit ledger helpers
 // ---------------------------------------------------------------------------
 
@@ -723,28 +795,19 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
       }
 
       // Resolve any secret refs from the vault before writing.
-      const resolvedValues: Record<string, string> = {};
-      const resolvedRefKeys: string[] = [];
-      for (const [key, val] of Object.entries(args.values)) {
-        if (typeof val === 'string') {
-          resolvedValues[key] = val;
-        } else {
-          const secret = secretVault.get(val.secretRef);
-          if (secret === undefined) {
-            return {
-              content: [
-                {
-                  type: 'text' as const,
-                  text: `Error: secret reference "${val.secretRef}" for key "${key}" is not known to the vault. The ref may have expired, been minted in a different run, or been mistyped.`,
-                },
-              ],
-              isError: true,
-            };
-          }
-          resolvedValues[key] = secret;
-          resolvedRefKeys.push(key);
-        }
+      const resolution = resolveEnvSecretRefs(args.values, secretVault);
+      if (!resolution.ok) {
+        return {
+          content: [
+            {
+              type: 'text' as const,
+              text: `Error: secret reference "${resolution.secretRef}" for key "${resolution.key}" is not known to the vault. The ref may have expired, been minted in a different run, or been mistyped.`,
+            },
+          ],
+          isError: true,
+        };
       }
+      const { values: resolvedValues, refKeys: resolvedRefKeys } = resolution;
 
       const resolved = resolveEnvPath(workingDirectory, args.filePath);
       logToFile(
@@ -1228,35 +1291,12 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
           askCallCount -= 1;
         }
 
-        // For any question marked sensitive, move the raw answer into the
-        // vault and replace it with an opaque ref before returning to the
-        // agent — so the secret never enters the LLM conversation.
-        const sensitiveById = new Map(
-          args.questions
-            .filter((q) => q.sensitive)
-            .map((q) => [q.id, q.prompt]),
+        // Sensitive answers go to the vault; the agent sees an opaque ref.
+        const sanitised = vaultSensitiveAnswers(
+          args.questions,
+          answers,
+          secretVault,
         );
-        const sanitised: Record<
-          string,
-          string | string[] | { secretRef: string }
-        > = {};
-        for (const [id, answer] of Object.entries(answers)) {
-          const label = sensitiveById.get(id);
-          if (
-            label !== undefined &&
-            typeof answer === 'string' &&
-            answer !== '__cancelled__'
-          ) {
-            const ref = secretVault.put(answer, {
-              label,
-              source: 'wizard_ask',
-            });
-            sanitised[id] = { secretRef: ref };
-            logToFile(`wizard_ask: vaulted answer for "${id}" as ${ref}`);
-          } else {
-            sanitised[id] = answer;
-          }
-        }
 
         logToFile(
           `wizard_ask: resolved ${Object.keys(answers).length} answer(s) for ${
