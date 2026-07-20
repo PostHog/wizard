@@ -10,6 +10,7 @@
 import { DEFAULT_AGENT_MODEL, Harness, Sequence } from '@lib/constants';
 import type { ProgramId } from '@lib/programs/program-registry';
 import { resolveHarness } from './harness';
+import type { EffortLevel } from './models';
 import { resolveSequence } from './sequence';
 
 // ── Shared machinery ────────────────────────────────────────────────────
@@ -18,13 +19,23 @@ import { resolveSequence } from './sequence';
 export interface SwitchboardTrace {
   harness?: 'cli' | 'flag' | 'binding';
   model?: 'cli' | 'flag' | 'binding';
-  sequence?: 'cli' | 'runtask-clamp' | 'flag' | 'binding';
+  sequence?:
+    | 'cli'
+    | 'composed'
+    | 'runtask-clamp'
+    | 'payload'
+    | 'flag'
+    | 'binding';
 }
 
 /** Everything a resolver middleware may branch on. Built once per run. */
 export interface SwitchboardCtx {
   program: ProgramId;
+  /** Composed sub-run (a dependency inside a parent program). Structurally linear — no override can orchestrate it. */
+  composed?: boolean;
   flags: Record<string, string>;
+  /** Flag payloads from the same snapshot (payload-carrying flags, e.g. self-driving pi). */
+  flagPayloads?: Record<string, unknown>;
   /** CLI override (`--harness`). Wins over `flags`. */
   cliHarness?: Harness;
   /** CLI override (`--sequence`). Wins over `flags`. */
@@ -73,12 +84,16 @@ export interface HarnessPick {
   harness: Harness;
   /** Gateway model id (string). */
   model: string;
+  /** Reasoning-effort override (e.g. from a pi effort flag). Absent → the model's table default. */
+  thinkingLevel?: EffortLevel;
 }
 
 export interface ProgramBinding {
   sequence: Sequence;
   harness: Harness;
   model: string;
+  /** Reasoning-effort override for the model. Absent → the model's table default. */
+  thinkingLevel?: EffortLevel;
   /**
    * Per-role overrides applied only in orchestrator mode — keys are
    * agent-prompt `type` values published by context-mill (`'seed'`,
@@ -127,8 +142,8 @@ export function resolveBinding(
 ): ProgramBinding {
   ctx.trace ??= {};
   const sequence = resolveSequence(ctx);
-  const { harness, model } = resolveHarness(ctx, role);
-  return { sequence, harness, model };
+  const { harness, model, thinkingLevel } = resolveHarness(ctx, role);
+  return { sequence, harness, model, thinkingLevel };
 }
 
 // ── Unified re-export surface ───────────────────────────────────────────
@@ -137,6 +152,6 @@ export {
   SEQUENCE_OPTIONS,
   getSequence,
   resolveSequence,
-  isOrchestratorEnabled,
   type SequenceRunner,
 } from './sequence';
+export { isOrchestratorEnabled } from './flags';

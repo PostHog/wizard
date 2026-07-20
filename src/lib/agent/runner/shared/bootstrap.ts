@@ -250,6 +250,7 @@ export async function bootstrapProgram(
   // lives at the resolution sites (`runner/index.ts` for sequence,
   // `resolveHarness` for harness), not here.
   const wizardFlags = await analytics.getAllFlagsForWizard();
+  const wizardFlagPayloads = analytics.getWizardFlagPayloads();
 
   // Gateway trace tags for this run. The runner stamps its variant onto this
   // after the fork (see runProgram), so the value reflects which arm ran.
@@ -268,6 +269,7 @@ export async function bootstrapProgram(
     skillsBaseUrl,
     credentials: session.credentials!,
     wizardFlags,
+    wizardFlagPayloads,
     wizardMetadata,
     project,
   };
