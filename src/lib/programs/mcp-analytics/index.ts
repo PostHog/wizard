@@ -50,12 +50,13 @@ const MCP_ANALYTICS_ABORT_CASES: AbortCase[] = [
         ? `No AI tool handy? Run \`${command}\`, then re-run the wizard to verify.`
         : 'No AI tool handy? Install `@posthog/mcp` and `posthog-node` with your package manager, then re-run the wizard to verify.';
       return (
-        'For security, the wizard only writes inside this project folder. This ' +
-        "last step needs to write outside it, so it's yours.\n\n" +
-        'Your code changes are done. Your AI coding tool can finish the rest: ' +
-        'the mcp-analytics skill is set up in this project, so just ask your ' +
-        'agent to finish adding PostHog MCP analytics. Your tool can find it ' +
-        'at `.claude/skills/mcp-analytics`.\n\n' +
+		"For security, the Wizard only writes inside this project folder. To " +
+		"install the `mcp-analytic`, it needs to write outside it, so we're " +
+		"leaving it to you to complete. \n\n" +
+		"The code changes are complete. Your AI coding tool can finish the rest:" +
+		"the `mcp-analytics` skill is set up in this project, so just ask your " +
+        "agent to finish adding PostHog MCP analytics. Your tool can find it " +
+        "at `.claude/skills/mcp-analytics`.\n\n" +
         terminalStep
       );
     },
