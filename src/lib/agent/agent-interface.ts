@@ -706,7 +706,7 @@ export async function runAgent(
   // Helper to handle successful completion (used in normal path and race condition recovery)
   const completeWithSuccess = (
     suppressedError?: Error,
-  ): { error?: AgentErrorType; message?: string } => {
+  ): { error?: AgentErrorType; message?: string; manualSteps?: string[] } => {
     const durationMs = Date.now() - startTime;
     const durationSeconds = Math.round(durationMs / 1000);
 
@@ -731,6 +731,15 @@ export async function runAgent(
     if (skillFailure !== undefined) {
       analytics.wizardCapture('agent continued without skill', {
         detail: skillFailure,
+      });
+    }
+
+    // Non-fatal follow-up steps the agent flagged (e.g. a sandbox-blocked
+    // install). The run still succeeds; the outro lists these for the user.
+    const manualSteps = signals.manualSteps();
+    if (manualSteps.length > 0) {
+      analytics.wizardCapture('agent manual step surfaced', {
+        count: manualSteps.length,
       });
     }
 
@@ -769,7 +778,7 @@ export async function runAgent(
       logToFile(`${AgentSignals.BENCHMARK} Middleware finalize error:`, e);
     }
     spinner.stop(successMessage);
-    return {};
+    return manualSteps.length > 0 ? { manualSteps } : {};
   };
 
   // Abort controller — lets us force-kill the SDK query when we detect an

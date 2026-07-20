@@ -157,4 +157,26 @@ describe('AgentOutputSignals', () => {
       expect(signals.skillInstallFailure()).toBeUndefined();
     });
   });
+
+  describe('manualSteps', () => {
+    it('extracts the trimmed text after each marker', () => {
+      const signals = new AgentOutputSignals();
+      signals.push('Done with the code changes.');
+      signals.push('[MANUAL-STEP] Run `pnpm add @posthog/mcp posthog-node`.');
+      signals.push('[MANUAL-STEP] Then restart the server.');
+
+      expect(signals.manualSteps()).toEqual([
+        'Run `pnpm add @posthog/mcp posthog-node`.',
+        'Then restart the server.',
+      ]);
+    });
+
+    it('ignores prose and a bare marker with no text', () => {
+      const signals = new AgentOutputSignals();
+      signals.push('Just some prose, nothing to do here');
+      signals.push('[MANUAL-STEP]   ');
+
+      expect(signals.manualSteps()).toEqual([]);
+    });
+  });
 });

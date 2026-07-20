@@ -27,6 +27,12 @@ export const AgentSignals = {
   ABORT: '[ABORT]',
   /** Signal emitted when the agent provides a remark about its run */
   WIZARD_REMARK: '[WIZARD-REMARK]',
+  /**
+   * Non-fatal signal: the run is complete but one action remains for the user
+   * (e.g. an install that must run outside the sandbox). Format:
+   * "[MANUAL-STEP] <text>". Collected and shown on the success outro.
+   */
+  MANUAL_STEP: '[MANUAL-STEP]',
   /** Signal prefix for benchmark logging */
   BENCHMARK: '[BENCHMARK]',
   /**

@@ -26,29 +26,6 @@ const MCP_ANALYTICS_ABORT_CASES: AbortCase[] = [
       'but no MCP server was found in this project. If you just want PostHog ' +
       'product analytics, run `npx @posthog/wizard` instead.',
   },
-  {
-    // SDK install fails when it must write a hoisted node_modules outside the
-    // agent's sandbox. Expected, not a bug: hand off to the user, don't report it.
-    match: /^manual install required(?::\s*(.+))?$/i,
-    message: 'One step left: finish installing PostHog.',
-    body: (match) => {
-      const command = match[1]?.trim();
-      const terminalStep = command
-        ? `No AI tool handy? Run \`${command}\`, then re-run the wizard to verify.`
-        : 'No AI tool handy? Install `@posthog/mcp` and `posthog-node` with your package manager, then re-run the wizard to verify.';
-      return (
-        'For security, the Wizard only writes inside this project folder. To ' +
-        "install the `mcp-analytic`, it needs to write outside it, so we're " +
-        'leaving it to you to complete. \n\n' +
-        'The code changes are complete. Your AI coding tool can finish the rest:' +
-        'the `mcp-analytics` skill is set up in this project, so just ask your ' +
-        'agent to finish adding PostHog MCP analytics. Your tool can find it ' +
-        'at `.claude/skills/mcp-analytics`.\n\n' +
-        terminalStep
-      );
-    },
-    docsUrl: 'https://posthog.com/docs/mcp-analytics',
-  },
 ];
 
 /**

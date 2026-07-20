@@ -20,8 +20,7 @@ export type { PromptContext, Credentials };
 export interface AbortCase {
   match: RegExp;
   message: string;
-  /** Fixed string, or a function that reads captured groups from the abort reason. */
-  body: string | ((match: RegExpMatchArray) => string);
+  body: string;
   docsUrl?: string;
 }
 

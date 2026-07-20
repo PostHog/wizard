@@ -25,26 +25,13 @@ export function resolveAbortOutcome(
   error?: WizardError;
   matched: AbortCase | undefined;
 } {
-  let matched: AbortCase | undefined;
-  let matchResult: RegExpMatchArray | null = null;
-  for (const c of config.abortCases ?? []) {
-    const m = reason.match(c.match);
-    if (m) {
-      matched = c;
-      matchResult = m;
-      break;
-    }
-  }
-  if (matched && matchResult) {
-    const body =
-      typeof matched.body === 'function'
-        ? matched.body(matchResult)
-        : matched.body;
+  const matched = config.abortCases?.find((c) => c.match.test(reason));
+  if (matched) {
     return {
       outroData: {
         kind: OutroKind.Error,
         message: matched.message,
-        body,
+        body: matched.body,
         docsUrl: matched.docsUrl,
       },
       error: undefined,

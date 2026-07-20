@@ -91,30 +91,4 @@ describe('resolveAbortOutcome', () => {
     expect(matched).toBeUndefined();
     expect(error).toBeInstanceOf(WizardError);
   });
-
-  it('passes the regex match to a function body so it can echo a captured command', () => {
-    const dynamicCase: AbortCase = {
-      match: /^manual install required(?::\s*(.+))?$/i,
-      message: 'One step left',
-      body: (m) => `run: ${m[1]?.trim() ?? 'install manually'}`,
-    };
-    const dynamicConfig = {
-      abortCases: [dynamicCase],
-      integrationLabel: 'mcp-analytics',
-      docsUrl: 'https://posthog.com/docs',
-    };
-
-    const withCommand = resolveAbortOutcome(
-      'manual install required: pnpm add @posthog/mcp posthog-node',
-      dynamicConfig,
-    );
-    expect(withCommand.error).toBeUndefined();
-    expect(withCommand.outroData).toMatchObject({
-      body: 'run: pnpm add @posthog/mcp posthog-node',
-    });
-
-    const bare = resolveAbortOutcome('manual install required', dynamicConfig);
-    expect(bare.matched).toBe(dynamicCase);
-    expect(bare.outroData).toMatchObject({ body: 'run: install manually' });
-  });
 });
