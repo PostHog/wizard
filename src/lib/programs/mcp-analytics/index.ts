@@ -26,6 +26,29 @@ const MCP_ANALYTICS_ABORT_CASES: AbortCase[] = [
       'but no MCP server was found in this project. If you just want PostHog ' +
       'product analytics, run `npx @posthog/wizard` instead.',
   },
+  {
+    // The agent made the code changes but could not install the SDK packages.
+    // Common in a monorepo: the install has to write a hoisted `node_modules`
+    // outside the directory the agent is sandboxed to, so it fails. This is an
+    // expected user condition, not a bug — surface a clear handoff, don't report
+    // it to error tracking. See PR #920 / resolveAbortOutcome.
+    // TODO: the exact install command (yarn/npm/pnpm/bun) is known to the skill
+    // and travels in the [ABORT] reason. Today we render this static body; a
+    // follow-up should echo the skill's detected command verbatim so the user
+    // sees the precise line to run. Tracked with the wizard-tools install
+    // primitive that will let the wizard complete this install itself.
+    match: /^manual install required/i,
+    message: 'One step left: install the PostHog packages',
+    body:
+      'Your code changes are in place, but the PostHog SDK packages could not ' +
+      'be installed automatically. This usually happens in a monorepo, where ' +
+      'the install needs to write outside the directory the wizard runs in.\n\n' +
+      'Install them yourself, then re-run to verify:\n\n' +
+      '  yarn add @posthog/mcp posthog-node\n' +
+      '  # or: npm install / pnpm add / bun add\n\n' +
+      'Then run `npx @posthog/wizard mcp-analytics` again.',
+    docsUrl: 'https://posthog.com/docs/mcp-analytics',
+  },
 ];
 
 /**
