@@ -1,6 +1,7 @@
 import { getOrAskForProjectData } from '@utils/setup-utils';
 import { detectRegion } from '@utils/urls';
-import { fetchProjectData } from '@lib/api';
+import { fetchProjectData, fetchUserData } from '@lib/api';
+import { performOAuthFlow } from '@utils/oauth';
 
 vi.mock('@ui', () => ({
   getUI: () => ({
@@ -26,11 +27,16 @@ vi.mock('@utils/analytics', () => ({
     setTag: vi.fn(),
   },
 }));
+vi.mock('@utils/oauth', () => ({
+  performOAuthFlow: vi.fn(),
+}));
 
 const mockedDetect = detectRegion as unknown as ReturnType<typeof vi.fn>;
 const mockedFetchProject = fetchProjectData as unknown as ReturnType<
   typeof vi.fn
 >;
+const mockedFetchUser = fetchUserData as unknown as ReturnType<typeof vi.fn>;
+const mockedOAuthFlow = performOAuthFlow as unknown as ReturnType<typeof vi.fn>;
 
 const project = {
   id: 123,
@@ -75,5 +81,51 @@ describe('getOrAskForProjectData CI region', () => {
     });
 
     expect(mockedDetect).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('getOrAskForProjectData OAuth login region', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockedFetchProject.mockResolvedValue(project);
+    mockedFetchUser.mockResolvedValue({
+      distinct_id: 'user-1',
+      role_at_organization: null,
+    });
+    mockedOAuthFlow.mockResolvedValue({
+      access_token: 'pha_test',
+      scoped_teams: [123],
+    });
+  });
+
+  it('uses the provided region and never probes @me for it', async () => {
+    const result = await getOrAskForProjectData({
+      ci: false,
+      signup: false,
+      projectId: 123,
+      region: 'eu',
+    });
+
+    // Same contract as CI mode: a provided region skips the us/eu probe.
+    expect(mockedDetect).not.toHaveBeenCalled();
+    expect(mockedFetchProject).toHaveBeenCalledWith(
+      'pha_test',
+      123,
+      'https://eu.posthog.com',
+    );
+    expect(result.host.region).toBe('eu');
+  });
+
+  it('falls back to detection only when no region is provided', async () => {
+    mockedDetect.mockResolvedValue('eu');
+
+    await getOrAskForProjectData({ ci: false, signup: false, projectId: 123 });
+
+    expect(mockedDetect).toHaveBeenCalledTimes(1);
+    expect(mockedFetchProject).toHaveBeenCalledWith(
+      'pha_test',
+      123,
+      'https://eu.posthog.com',
+    );
   });
 });

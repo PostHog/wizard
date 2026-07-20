@@ -615,6 +615,7 @@ async function askForWizardLogin(options: {
   const host = await HostResolution.fromAccessToken(
     tokenResponse.access_token,
     {
+      region: options.region,
       localMcp: options.localMcp,
       baseUrl: options.baseUrl,
     },
@@ -695,7 +696,7 @@ async function askForProvisioningSignup(
         'This email already has a PostHog account. Switching to login flow...',
       );
 
-      return askForWizardLogin({ signup: false, baseUrl, localMcp });
+      return askForWizardLogin({ signup: false, region, baseUrl, localMcp });
     }
 
     getUI().log.error(`Failed to create account: ${message}`);

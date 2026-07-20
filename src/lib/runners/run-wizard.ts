@@ -4,6 +4,7 @@ import { runAgent } from '@lib/agent/agent-runner';
 import { authenticate } from '@lib/agent/runner/shared/authenticate';
 import type { ProgramConfig } from '@lib/programs/program-step';
 import type { Harness, Sequence } from '@lib/constants';
+import type { CloudRegion } from '@utils/types';
 import type { startTUI as StartTUIFn } from '@ui/tui/start-tui';
 import type { WizardStore } from '@ui/tui/store';
 import type { WizardSession } from '@lib/wizard-session';
@@ -94,6 +95,7 @@ export function runWizard(
         apiKey: options.apiKey as string | undefined,
         projectId: options.projectId as string | undefined,
         email: options.email as string | undefined,
+        region: options.region as CloudRegion | undefined,
         baseUrl: options.baseUrl as string | undefined,
         benchmark: options.benchmark as boolean | undefined,
         yaraReport: options.yaraReport as boolean | undefined,

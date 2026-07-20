@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { IS_DEV, WIZARD_USER_AGENT } from '@lib/constants';
+import { logToFile } from './debug';
 import type { CloudRegion } from './types';
 
 /**
@@ -83,6 +84,17 @@ export async function detectRegion(
 
   if (usResult.status === 'fulfilled') return 'us';
   if (euResult.status === 'fulfilled') return 'eu';
+
+  // Log why each probe failed — otherwise network-level failures are
+  // indistinguishable from a genuinely bad token.
+  const describeProbeFailure = ({ reason }: PromiseRejectedResult): string =>
+    axios.isAxiosError(reason)
+      ? `code=${reason.code ?? 'none'} status=${
+          reason.response?.status ?? 'none'
+        } ${reason.message}`
+      : String(reason);
+  logToFile('[detect-region] us probe failed:', describeProbeFailure(usResult));
+  logToFile('[detect-region] eu probe failed:', describeProbeFailure(euResult));
 
   throw new Error(
     'Could not determine cloud region from access token. Please check your PostHog account.',
