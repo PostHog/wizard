@@ -47,19 +47,19 @@ export type DetectionReport = {
 /**
  * Variant precedence for the agentic picker (most specific first). The detector
  * keeps the EARLIEST matching target. Unsupported native targets are included
- * as guards before iOS so React Native, Flutter, and Android projects with
- * nested Xcode manifests are not misclassified as instrumentable iOS apps.
- * JS ordering mirrors `pickJsVariant` in detect.ts: opinionated frameworks →
- * bundlers → bare React → Node → generic web.
+ * as guards before Android and iOS so React Native and Flutter projects with
+ * nested Gradle or Xcode manifests are not misclassified as instrumentable
+ * native apps. JS ordering mirrors `pickJsVariant` in detect.ts: opinionated
+ * frameworks → bundlers → bare React → Node → generic web.
  */
 const NON_AUTOMATABLE_NATIVE_VARIANTS: readonly SkillVariant[] = [
   'react-native',
   'flutter',
-  'android',
 ];
 
 const VARIANT_PRECEDENCE: readonly SkillVariant[] = [
   ...NON_AUTOMATABLE_NATIVE_VARIANTS,
+  'android',
   'ios',
   'nextjs',
   'nuxt',
@@ -119,7 +119,7 @@ function toSourceMapsReport(report: AgenticDetectionReport): DetectionReport {
     projects: report.projects.map((p) => {
       const variant =
         isAutomatableVariant(p.targetId) &&
-        !/\b(?:react[\s-]*native|expo|flutter|android)\b/i.test(p.framework)
+        !/\b(?:react[\s-]*native|expo|flutter)\b/i.test(p.framework)
           ? p.targetId
           : null;
       return {
