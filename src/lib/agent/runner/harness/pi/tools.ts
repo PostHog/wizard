@@ -30,7 +30,7 @@ import {
   resolveEnvPath,
   resolveEnvSecretRefs,
   vaultSensitiveAnswers,
-} from '@lib/wizard-tools';
+} from '@lib/wizard-tools/tools';
 import { isFullyCancelled, type WizardAskBridge } from '@lib/wizard-ask-bridge';
 import { createSecretVault } from '@lib/secret-vault';
 import { withMode } from './index';
