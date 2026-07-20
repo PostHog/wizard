@@ -201,6 +201,9 @@ export const DUMMY_PROJECT_API_KEY = '_YOUR_POSTHOG_PROJECT_TOKEN_';
  * - notebook:write    upload the events-audit report as a PostHog notebook
  *                     in step 6 of the events-audit skill (notebooks-create
  *                     MCP tool requires this scope)
+ * - event_definition:write
+ *                     create event definitions from the completed wizard
+ *                     session's event plan
  *
  * Must be a subset of `ALLOWED_PROVISIONING_SCOPES` in
  * `ee/api/agentic_provisioning/views.py` on the backend.
@@ -213,6 +216,7 @@ export const WIZARD_PROVISIONING_SCOPES = [
   'insight:write',
   'query:read',
   'notebook:write',
+  'event_definition:write',
 ] as const;
 
 /**
@@ -222,6 +226,8 @@ export const WIZARD_PROVISIONING_SCOPES = [
  * - health_issue:read     used by `wizard doctor`
  * - wizard_session:read   list / retrieve / stream sessions
  * - wizard_session:write  stream run state to /api/projects/{id}/wizard/sessions/
+ * - event_definition:write
+ *                          create event definitions when a session completes
  * - organization:read     read `organization.is_ai_data_processing_approved`
  *                         from /api/users/@me/ for the AI opt-in gate
  *

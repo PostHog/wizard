@@ -280,8 +280,12 @@ the allow-list to keep in sync — a net-new scope (e.g.
 it:
 
 ```
-user:read,project:read,llm_gateway:read,dashboard:read,dashboard:write,insight:read,insight:write,query:read,notebook:read,notebook:write,health_issue:read,wizard_session:read,wizard_session:write,feature_flag:read,experiment:read,experiment_saved_metric:read,survey:read,session_recording:read,error_tracking:read,web_analytics:read,llm_analytics:read,cohort:read,person:read,annotation:read,annotation:write,activity_log:read,property_definition:read,event_definition:read,action:read,warehouse_table:read,warehouse_view:read,external_data_source:read,external_data_source:write,alert:read,subscription:read,feature_flag:write,integration:read,organization:read,task:read,task:write,signal_scout:read,signal_scout:write,external_data_source:read,external_data_source:write,llm_skill:read,llm_skill:write,product_enablement:write
+user:read,project:read,llm_gateway:read,dashboard:read,dashboard:write,insight:read,insight:write,query:read,notebook:read,notebook:write,health_issue:read,wizard_session:read,wizard_session:write,feature_flag:read,experiment:read,experiment_saved_metric:read,survey:read,session_recording:read,error_tracking:read,web_analytics:read,llm_analytics:read,cohort:read,person:read,annotation:read,annotation:write,activity_log:read,property_definition:read,event_definition:read,event_definition:write,action:read,warehouse_table:read,warehouse_view:read,external_data_source:read,external_data_source:write,alert:read,subscription:read,feature_flag:write,integration:read,organization:read,task:read,task:write,signal_scout:read,signal_scout:write,external_data_source:read,external_data_source:write,llm_skill:read,llm_skill:write,product_enablement:write
 ```
+
+If an existing Wizard authorization predates a newly required scope, reconnect
+the Wizard OAuth app. Refresh tokens retain their original grant and cannot be
+used to silently add permissions.
 
 # Command changes (CLI overhaul)
 
