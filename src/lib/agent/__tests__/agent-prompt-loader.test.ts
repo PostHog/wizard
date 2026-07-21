@@ -281,7 +281,9 @@ describe('resolveTask', () => {
     expect(resolved.prompt).toContain(
       'ran the dev server and saw both events in the console',
     );
-    expect(resolved.prompt).toContain('the auth callback is the only login path');
+    expect(resolved.prompt).toContain(
+      'the auth callback is the only login path',
+    );
   });
 
   it('omits the context section when there are no handoffs', () => {
