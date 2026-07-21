@@ -67,12 +67,9 @@ export interface GatewayProviderInputs {
   wizardMetadata: Record<string, string>;
   wizardFlags: Record<string, string>;
   modelId: string;
-  // Linear runs honour the wizard-pi-effort flag; orchestrator tasks pass false
-  // so each per-agent model keeps its own tuned effort from the table.
-  applyEffortFlag?: boolean;
-  // Explicit per-agent effort from the prompt frontmatter — validated to a
-  // ThinkingLevel at the parse boundary; overrides the table default for a
-  // reasoning model when set.
+  // Resolved effort override — the switchboard's flag/payload pick on linear
+  // runs, the prompt-frontmatter effort on per-task agents. Overrides the
+  // table default for a reasoning model when set.
   effort?: ThinkingLevel;
 }
 
@@ -94,14 +91,11 @@ export function buildGatewayProvider(inputs: GatewayProviderInputs): {
     wizardMetadata,
     wizardFlags,
     modelId,
-    applyEffortFlag = true,
     effort,
   } = inputs;
   const api = gatewayApiFor(modelId);
-  const tableCaps = modelCapabilities(modelId, wizardFlags, {
-    applyEffortFlag,
-  });
-  // An explicit frontmatter effort wins over the table for a reasoning model.
+  const tableCaps = modelCapabilities(modelId);
+  // An explicit effort override wins over the table for a reasoning model.
   const caps =
     effort && tableCaps.reasoning
       ? { ...tableCaps, thinkingLevel: effort }

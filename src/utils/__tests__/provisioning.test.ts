@@ -102,6 +102,7 @@ describe('provisionNewAccount', () => {
       'insight:write',
       'query:read',
       'notebook:write',
+      'event_definition:write',
     ]);
 
     // Verify token exchange includes code_verifier

@@ -172,8 +172,8 @@ export const AuthScreen = ({ store }: AuthScreenProps) => {
           )}
           <Box marginTop={1}>
             <Text dimColor>
-              Press <Text color={Colors.accent}>[C]</Text> to copy the link ·
-              on a remote machine or devbox? Press{' '}
+              Press <Text color={Colors.accent}>[C]</Text> to copy the link · on
+              a remote machine or devbox? Press{' '}
               <Text color={Colors.accent}>[P]</Text> to paste the callback URL.
             </Text>
           </Box>

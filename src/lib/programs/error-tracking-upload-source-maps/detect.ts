@@ -52,10 +52,12 @@ const DISPLAY_NAME: Record<SkillVariant, string> = {
 
 /**
  * Variants the wizard can wire up source-map upload for automatically. The
- * native variants (react-native, android, flutter, ios) are recognised but not
- * yet automatable, so the agentic picker treats them as non-instrumentable.
+ * native variants (react-native, flutter) are recognised but not yet
+ * automatable, so the agentic picker treats them as non-instrumentable.
  */
 export const AUTOMATABLE_VARIANTS: readonly SkillVariant[] = [
+  'android',
+  'ios',
   'web',
   'nextjs',
   'node',
@@ -66,6 +68,13 @@ export const AUTOMATABLE_VARIANTS: readonly SkillVariant[] = [
   'webpack',
   'rollup',
 ];
+
+/**
+ * Variants the wizard pre-installs a machine-global `posthog-cli` for — their
+ * build shells out to it with no npx / local-dep fallback. JS variants stay out.
+ */
+export const VARIANTS_REQUIRING_POSTHOG_CLI: ReadonlySet<SkillVariant> =
+  new Set(['ios', 'android']);
 
 const POSTHOG_SDKS = [
   'posthog-js',
@@ -305,8 +314,8 @@ export function detectSourceMapsPrerequisites(
   const signals = collectSignals(installDir);
   const variant = selectVariant(signals);
 
-  // This program currently targets JS-like stacks only. Avoid selecting native
-  // platforms until dedicated skill variants are available.
+  // The legacy filesystem detector does not automate native platforms. The
+  // live source-map picker uses detectSourceMapsProjects instead.
   if (
     variant &&
     ['react-native', 'flutter', 'ios', 'android'].includes(variant)

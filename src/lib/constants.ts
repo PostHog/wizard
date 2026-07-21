@@ -201,6 +201,9 @@ export const DUMMY_PROJECT_API_KEY = '_YOUR_POSTHOG_PROJECT_TOKEN_';
  * - notebook:write    upload the events-audit report as a PostHog notebook
  *                     in step 6 of the events-audit skill (notebooks-create
  *                     MCP tool requires this scope)
+ * - event_definition:write
+ *                     create event definitions from the completed wizard
+ *                     session's event plan
  *
  * Must be a subset of `ALLOWED_PROVISIONING_SCOPES` in
  * `ee/api/agentic_provisioning/views.py` on the backend.
@@ -213,6 +216,7 @@ export const WIZARD_PROVISIONING_SCOPES = [
   'insight:write',
   'query:read',
   'notebook:write',
+  'event_definition:write',
 ] as const;
 
 /**
@@ -222,6 +226,8 @@ export const WIZARD_PROVISIONING_SCOPES = [
  * - health_issue:read     used by `wizard doctor`
  * - wizard_session:read   list / retrieve / stream sessions
  * - wizard_session:write  stream run state to /api/projects/{id}/wizard/sessions/
+ * - event_definition:write
+ *                          create event definitions when a session completes
  * - organization:read     read `organization.is_ai_data_processing_approved`
  *                         from /api/users/@me/ for the AI opt-in gate
  *
@@ -253,6 +259,9 @@ export const WIZARD_USE_PI_HARNESS_FLAG_KEY = 'wizard-use-pi-harness';
 export const WIZARD_PI_MODEL_FLAG_KEY = 'wizard-pi-model';
 /** Multivariate flag: reasoning-effort override for pi models (minimal/low/medium/high/xhigh). */
 export const WIZARD_PI_EFFORT_FLAG_KEY = 'wizard-pi-effort';
+/** Boolean flag: on → pi for self-driving. Payload carries `{model, effort?, harness?, sequence?}` (model = wizard-pi-model variant key); missing/invalid payload keeps the non-flagged default. */
+export const WIZARD_SELF_DRIVING_USE_PI_HARNESS_FLAG_KEY =
+  'wizard-self-driving-use-pi-harness';
 /** Feature flag key that gates the intro-screen "Tools" menu. */
 export const WIZARD_TOOLS_MENU_FLAG_KEY = 'wizard-tools-menu';
 /** Boolean flag: agentic project scoping for non-interactive basic-integration runs. */

@@ -17,6 +17,9 @@ import {
   gatherFrameworkContext,
   checkFrameworkVersion,
 } from '@lib/detection/index';
+import { analytics } from '@utils/analytics';
+import { detectWarehouseSources } from '@lib/warehouse-sources/detect';
+import { DETECTED_WAREHOUSE_SOURCES_KEY } from '@lib/programs/warehouse-source/detect';
 
 export async function detectPostHogIntegration(
   ctx: ProgramReadyContext,
@@ -71,5 +74,58 @@ export async function detectPostHogIntegration(
     ctx.addDiscoveredFeature(feature);
   }
 
+  detectWarehouseSourcesForSuggestion(ctx, installDir);
+
   ctx.setDetectionComplete();
+}
+
+/**
+ * Scan for data warehouse source signals (Postgres, Stripe, Hubspot, …) and,
+ * when found, stash them for a `wizard warehouse` suggestion on the outro.
+ *
+ * Deliberately a suggestion, not an inline agent run: a second credential-
+ * collecting agent run before the outro could `process.exit()` on any of its
+ * failure paths and cost the user the success outro on a run where PostHog
+ * installed fine.
+ *
+ * Calls `detectWarehouseSources` (a pure scan) rather than the warehouse
+ * program's `detectWarehousePrerequisites`, which writes a `detectError` when
+ * it finds nothing — that's right for `wizard warehouse` but here would show a
+ * spurious error and trip the CI prerequisites abort. No sources is a no-op.
+ *
+ * Best-effort: never let a scan failure break the surrounding detect step.
+ */
+function detectWarehouseSourcesForSuggestion(
+  ctx: ProgramReadyContext,
+  installDir: string,
+): void {
+  try {
+    const sources = detectWarehouseSources(installDir);
+
+    // Captured on every run, including the empty case — the denominator is the
+    // whole point. Without the zero rows "20% of runs have a Postgres" is
+    // unanswerable.
+    analytics.wizardCapture('warehouse sources detected', {
+      warehouse_source_count: sources.length,
+      warehouse_source_kinds: sources.map((s) => s.kind),
+      warehouse_source_modes: sources.map((s) => s.mode),
+    });
+
+    if (sources.length === 0) return;
+
+    // Tag subsequent events too, so any downstream funnel can slice on what the
+    // project had available without re-joining to the event above.
+    analytics.setTag(
+      'warehouse_source_kinds',
+      sources.map((s) => s.kind).join(','),
+    );
+    analytics.setTag('warehouse_source_count', sources.length);
+
+    ctx.setFrameworkContext(DETECTED_WAREHOUSE_SOURCES_KEY, sources);
+  } catch (error) {
+    analytics.captureException(
+      error instanceof Error ? error : new Error(String(error)),
+      { step: 'detectWarehouseSourcesForSuggestion' },
+    );
+  }
 }
