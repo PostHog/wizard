@@ -140,7 +140,9 @@ function classify(
  * reports a single `hasPostHog` boolean for ANY PostHog dependency in the
  * project — for `rust` that could be satisfied by an unrelated JS SDK in the
  * same directory, so the deterministic manifest read is authoritative.
- * Exported for testing.
+ * Comment-stripped substring matching, not TOML parsing: it still catches
+ * renamed (`package = "posthog-rs"`) and workspace-inherited deps, while a
+ * commented-out dependency no longer counts. Exported for testing.
  */
 export function rustSdkVerifier(
   installDir: string,
@@ -149,9 +151,12 @@ export function rustSdkVerifier(
     const dir =
       projectPath === '.' ? installDir : join(installDir, projectPath);
     try {
-      return readFileSync(join(dir, 'Cargo.toml'), 'utf-8').includes(
-        RUST_SDK_CRATE,
-      );
+      return readFileSync(join(dir, 'Cargo.toml'), 'utf-8')
+        .split('\n')
+        .some((line) => {
+          const code = line.split('#', 1)[0];
+          return code.includes(RUST_SDK_CRATE);
+        });
     } catch {
       return false;
     }

@@ -385,4 +385,20 @@ describe('rustSdkVerifier', () => {
   it('returns false when the manifest is missing', () => {
     expect(rustSdkVerifier(tmpDir)('.')).toBe(false);
   });
+
+  it('ignores a commented-out dependency', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'Cargo.toml'),
+      '[package]\nname = "svc"\n\n[dependencies]\n# posthog-rs = "0.20"\nserde = "1"\n',
+    );
+    expect(rustSdkVerifier(tmpDir)('.')).toBe(false);
+  });
+
+  it('accepts a renamed dependency on the crate', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'Cargo.toml'),
+      '[package]\nname = "svc"\n\n[dependencies]\nposthog = { package = "posthog-rs", version = "0.20" }\n',
+    );
+    expect(rustSdkVerifier(tmpDir)('.')).toBe(true);
+  });
 });
