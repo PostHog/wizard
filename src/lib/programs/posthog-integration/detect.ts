@@ -80,51 +80,52 @@ export async function detectPostHogIntegration(
 }
 
 /**
- * Scan for data warehouse source signals (Postgres, Stripe, Hubspot, …).
+ * Scan for data warehouse source signals (Postgres, Stripe, Hubspot, …) and,
+ * when found, stash them for a `wizard warehouse` suggestion on the outro.
  *
- * Measurement first: we don't yet know what share of runs even *have* a
- * connectable source, and that number decides whether an inline connect flow
- * is worth building. Running the scan here answers it from real runs.
+ * Deliberately a suggestion, not an inline agent run: a second credential-
+ * collecting agent run before the outro could `process.exit()` on any of its
+ * failure paths and cost the user the success outro on a run where PostHog
+ * installed fine.
  *
- * The result also drives a suggestion — a `nextSteps` bullet on the outro and
- * a line in the setup report pointing at `wizard warehouse`. Deliberately a
- * suggestion and not an inline agent run: chaining a second, credential-
- * collecting agent run in front of the outro means any of its seven terminal
- * failure paths (abort, no-progress, rate limit, …) would `process.exit()` and
- * cost the user the success outro *and* the post-outro MCP / Slack steps, on a
- * run where PostHog installed fine.
+ * Calls `detectWarehouseSources` (a pure scan) rather than the warehouse
+ * program's `detectWarehousePrerequisites`, which writes a `detectError` when
+ * it finds nothing — that's right for `wizard warehouse` but here would show a
+ * spurious error and trip the CI prerequisites abort. No sources is a no-op.
  *
- * Deliberately calls `detectWarehouseSources` rather than the warehouse
- * program's own `detectWarehousePrerequisites`: that wrapper writes
- * `frameworkContext.detectError` when it finds nothing, which is right for
- * `wizard warehouse` (an empty result makes the whole program pointless) but
- * here would surface a spurious error on the IntroScreen — and, in CI, trip
- * the non-interactive prerequisites abort. No sources is a silent no-op.
+ * Best-effort: never let a scan failure break the surrounding detect step.
  */
 function detectWarehouseSourcesForSuggestion(
   ctx: ProgramReadyContext,
   installDir: string,
 ): void {
-  const sources = detectWarehouseSources(installDir);
+  try {
+    const sources = detectWarehouseSources(installDir);
 
-  // Captured on every run, including the empty case — the denominator is the
-  // whole point. Without the zero rows "20% of runs have a Postgres" is
-  // unanswerable.
-  analytics.wizardCapture('warehouse sources detected', {
-    warehouse_source_count: sources.length,
-    warehouse_source_kinds: sources.map((s) => s.kind),
-    warehouse_source_modes: sources.map((s) => s.mode),
-  });
+    // Captured on every run, including the empty case — the denominator is the
+    // whole point. Without the zero rows "20% of runs have a Postgres" is
+    // unanswerable.
+    analytics.wizardCapture('warehouse sources detected', {
+      warehouse_source_count: sources.length,
+      warehouse_source_kinds: sources.map((s) => s.kind),
+      warehouse_source_modes: sources.map((s) => s.mode),
+    });
 
-  if (sources.length === 0) return;
+    if (sources.length === 0) return;
 
-  // Tag subsequent events too, so any downstream funnel can slice on what the
-  // project had available without re-joining to the event above.
-  analytics.setTag(
-    'warehouse_source_kinds',
-    sources.map((s) => s.kind).join(','),
-  );
-  analytics.setTag('warehouse_source_count', sources.length);
+    // Tag subsequent events too, so any downstream funnel can slice on what the
+    // project had available without re-joining to the event above.
+    analytics.setTag(
+      'warehouse_source_kinds',
+      sources.map((s) => s.kind).join(','),
+    );
+    analytics.setTag('warehouse_source_count', sources.length);
 
-  ctx.setFrameworkContext(DETECTED_WAREHOUSE_SOURCES_KEY, sources);
+    ctx.setFrameworkContext(DETECTED_WAREHOUSE_SOURCES_KEY, sources);
+  } catch (error) {
+    analytics.captureException(
+      error instanceof Error ? error : new Error(String(error)),
+      { step: 'detectWarehouseSourcesForSuggestion' },
+    );
+  }
 }
