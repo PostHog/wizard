@@ -424,14 +424,14 @@ export function createSecurityExtension(ctx: ToolGateContext = {}): {
         // triage — same policy as the anthropic PostToolUse Read hook.
         const matches = await scanAndTriage(text, 'input', llmProvider);
         const verdict = scanVerdict(matches);
-        if (!verdict) return {};
-
+        // Count the scan even when clean, like the anthropic hooks do.
         recordExternalScan(
           'PostToolUse',
           event.toolName === 'read' ? 'Read' : 'Bash',
           matches.map(toReportViolation),
-          verdict.action,
+          verdict?.action ?? 'warned',
         );
+        if (!verdict) return {};
         if (verdict.terminal) {
           state.criticalViolation = true;
           logToFile(
