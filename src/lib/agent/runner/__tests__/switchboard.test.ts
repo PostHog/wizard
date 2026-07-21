@@ -66,11 +66,19 @@ describe('switchboard PROGRAM_BINDINGS', () => {
   // Pins today's behavior: the seam changes nothing until a binding is moved.
   it('defaults every program to anthropic + DEFAULT_AGENT_MODEL', () => {
     for (const program of PROGRAM_IDS) {
+      if (program === 'ai-observability') continue; // pinned below
       expect(resolveHarness({ program, flags: {} })).toEqual({
         harness: Harness.anthropic,
         model: DEFAULT_AGENT_MODEL,
       });
     }
+  });
+
+  it('binds ai-observability to anthropic + sonnet 5', () => {
+    expect(resolveHarness({ program: 'ai-observability', flags: {} })).toEqual({
+      harness: Harness.anthropic,
+      model: SONNET_5_MODEL,
+    });
   });
 
   it('falls back to DEFAULT_BINDING for an unmapped program', () => {
