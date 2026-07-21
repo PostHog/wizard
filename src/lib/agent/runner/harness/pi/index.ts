@@ -26,6 +26,7 @@ import { AgentErrorType } from '@lib/agent/agent-interface';
 import { AgentSignals, REMARK_INSTRUCTION } from '@lib/agent/signals';
 import { AgentOutputSignals } from '@lib/agent/output-signals';
 import { getWizardCommandments } from '@lib/agent/commandments';
+import { piProgramGuidance } from './program-guidance';
 import { buildGatewayProvider, GATEWAY_PROVIDER } from './gateway';
 import type {
   AgentResult,
@@ -274,6 +275,7 @@ export const piBackend: AgentHarness = {
         wizardMetadata: boot.wizardMetadata,
         wizardFlags: boot.wizardFlags,
         modelId,
+        effort: inputs.thinkingLevel,
       });
       const registry = ModelRegistry.inMemory(AuthStorage.create());
       registry.registerProvider(GATEWAY_PROVIDER, provider as never);
@@ -295,9 +297,14 @@ export const piBackend: AgentHarness = {
       // allowlist + .env fencing + YARA). `noExtensions: true` only suppresses
       // disk-discovered extensions; explicit `extensionFactories` still load,
       // so the fence is on while the target project can't inject its own.
+      // Shared flag: true while a wizard_ask overlay is open. The ask tool
+      // flips it; the security gate reads it to block Write/Edit meanwhile.
+      const askState = { pending: false };
+
       const { createSecurityExtension } = await import('./security');
       const security = createSecurityExtension({
         disallowedTools: programConfig.disallowedTools,
+        getWizardAskPending: () => askState.pending,
         // Triage speaks the Anthropic messages API (it appends /v1/messages),
         // so it gets the bare gateway URL regardless of which API shape the
         // agent's model uses. Without this, pi has no ANTHROPIC_* env (it
@@ -347,6 +354,7 @@ export const piBackend: AgentHarness = {
           getWizardCommandments() +
           '\n' +
           PI_RUNTIME_NOTES +
+          piProgramGuidance(programConfig.id) +
           '\n' +
           piMcpContext(boot, mcpInstructions),
         noExtensions: true,
@@ -398,6 +406,17 @@ export const piBackend: AgentHarness = {
           workingDirectory: session.installDir,
           skillsBaseUrl: boot.skillsBaseUrl,
           detectPackageManager: config.detectPackageManager,
+          // The host ask bridge — lets interactive programs (self-driving) ask
+          // the user through pi. Threaded from the runner, same path as the
+          // anthropic harness. Absent in CI → the tool errors on call.
+          askBridge: inputs.askBridge,
+          maxQuestions: config.maxQuestions,
+          onAskPendingChange: (pending) => {
+            askState.pending = pending;
+          },
+          // Skip wizard_ask when the program disallows it (bare pi tool names
+          // don't match the MCP-prefixed disallow list at the security gate).
+          disallowedTools: programConfig.disallowedTools,
         }),
         // Task/todo tools (#526): render the todo list live in the TUI, parity
         // with the anthropic path.
@@ -474,14 +493,17 @@ export const piBackend: AgentHarness = {
             break;
           }
           case 'tool_execution_end': {
-            if (event.isError) {
-              logToFile(
-                `[pi] ✗ ${event.toolName}: ${String(event.result).slice(
-                  0,
-                  300,
-                )}`,
-              );
-            }
+            // Log every result in full, matching the anthropic path's
+            // SDK-message logging. Call-only logs make failed runs
+            // undiagnosable: a tool can fail (or return something the model
+            // misreads) with no trace of what came back.
+            logToFile(
+              `[pi] ${event.isError ? '✗' : '←'} ${event.toolName}: ${
+                typeof event.result === 'string'
+                  ? event.result
+                  : JSON.stringify(event.result ?? '')
+              }`,
+            );
             break;
           }
           case 'agent_end': {

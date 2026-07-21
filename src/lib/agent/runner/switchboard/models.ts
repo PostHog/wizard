@@ -21,10 +21,7 @@ import {
   GPT5_6_SOL_MODEL,
   GPT5_6_TERRA_MODEL,
   GPT5_MINI_MODEL,
-  WIZARD_PI_EFFORT_FLAG_KEY,
-  WIZARD_USE_PI_HARNESS_FLAG_KEY,
 } from '@lib/constants';
-import { RUN_SURFACE } from '@env';
 
 /** Reasoning effort. pi maps it to `reasoning_effort` for openai-completions. */
 const THINKING_LEVELS = [
@@ -41,6 +38,12 @@ export type ThinkingLevel = (typeof THINKING_LEVELS)[number];
 export function isThinkingLevel(value: unknown): value is ThinkingLevel {
   return (THINKING_LEVELS as readonly unknown[]).includes(value);
 }
+
+/**
+ * An effort *override* is always a positive level — `'off'` is a model trait
+ * (`reasoning: false`), not something a flag may force onto a reasoning model.
+ */
+export type EffortLevel = Exclude<ThinkingLevel, 'off'>;
 
 export interface ModelCapabilities {
   /** Model supports reasoning; safe to request reasoning effort. */
@@ -84,34 +87,19 @@ function defaultCaps(modelId: string): ModelCapabilities {
   return { reasoning: !modelId.startsWith('openai/') };
 }
 
-/** Capabilities for a gateway model id, table override then transport default. */
-const EFFORT_FLAG_VARIANTS: readonly ThinkingLevel[] = [
-  'minimal',
-  'low',
-  'medium',
-  'high',
-  'xhigh',
-];
-
+/**
+ * Capabilities for a gateway model id, table override then transport default.
+ * `effortOverride` is a switchboard-resolved effort (e.g. from a pi effort
+ * flag); it applies only when the model reasons at all — a non-reasoning model
+ * rejects reasoning effort, so the override is dropped.
+ */
 export function modelCapabilities(
   modelId: string,
-  flags: Record<string, string> = {},
-  opts: { applyEffortFlag?: boolean } = {},
+  effortOverride?: EffortLevel,
 ): ModelCapabilities {
   const caps = MODEL_CAPABILITIES[modelId] ?? defaultCaps(modelId);
-  // The wizard-pi-effort override is a linear single-agent knob. Orchestrator
-  // tasks carry their own per-agent model, so their effort comes from the table
-  // (each agent's frontmatter model → its tuned level); they opt out here.
-  if (opts.applyEffortFlag === false) return caps;
-  // The wizard-pi-effort override applies only to a pi run — inert on the cloud surface or without the pi flag.
-  if (
-    RUN_SURFACE === 'cloud' ||
-    flags[WIZARD_USE_PI_HARNESS_FLAG_KEY] !== 'true'
-  )
-    return caps;
-  const effort = flags[WIZARD_PI_EFFORT_FLAG_KEY] as ThinkingLevel;
-  if (caps.reasoning && EFFORT_FLAG_VARIANTS.includes(effort)) {
-    return { ...caps, thinkingLevel: effort };
+  if (caps.reasoning && effortOverride) {
+    return { ...caps, thinkingLevel: effortOverride };
   }
   return caps;
 }

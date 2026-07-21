@@ -18,14 +18,15 @@ import { logToFile } from './debug';
 
 export function applyCiFlagOverrides(
   flags: Record<string, string>,
-): Record<string, string> {
+  payloads: Record<string, unknown> = {},
+): { flags: Record<string, string>; payloads: Record<string, unknown> } {
   // Compared inline (not via env.ts's IS_PRODUCTION_BUILD) so tsdown replaces
   // it with a literal right here and the bundler can prove the rest of this
   // function unreachable in production builds. The smoke test enforces that.
-  if (process.env.NODE_ENV === 'production') return flags;
+  if (process.env.NODE_ENV === 'production') return { flags, payloads };
 
   const raw = runtimeEnv('WIZARD_CI_FLAG_OVERRIDES');
-  if (!raw) return flags;
+  if (!raw) return { flags, payloads };
 
   let overrides: Record<string, unknown>;
   try {
@@ -38,12 +39,20 @@ export function applyCiFlagOverrides(
     );
   }
 
-  const merged = { ...flags };
+  const mergedFlags = { ...flags };
+  const mergedPayloads = { ...payloads };
   for (const [key, value] of Object.entries(overrides)) {
-    merged[key] = String(value);
+    // An object/array override is a flag payload: the flag reads 'true' and
+    // the value rides the payload channel, matching a payload-carrying flag.
+    if (typeof value === 'object' && value !== null) {
+      mergedFlags[key] = 'true';
+      mergedPayloads[key] = value;
+    } else {
+      mergedFlags[key] = String(value);
+    }
   }
   logToFile('[flags] CI overrides applied', overrides);
-  return merged;
+  return { flags: mergedFlags, payloads: mergedPayloads };
 }
 
 /**
