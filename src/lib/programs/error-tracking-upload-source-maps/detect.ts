@@ -52,10 +52,11 @@ const DISPLAY_NAME: Record<SkillVariant, string> = {
 
 /**
  * Variants the wizard can wire up source-map upload for automatically. The
- * native variants (react-native, android, flutter) are recognised but not yet
+ * native variants (react-native, flutter) are recognised but not yet
  * automatable, so the agentic picker treats them as non-instrumentable.
  */
 export const AUTOMATABLE_VARIANTS: readonly SkillVariant[] = [
+  'android',
   'ios',
   'web',
   'nextjs',
@@ -73,7 +74,7 @@ export const AUTOMATABLE_VARIANTS: readonly SkillVariant[] = [
  * build shells out to it with no npx / local-dep fallback. JS variants stay out.
  */
 export const VARIANTS_REQUIRING_POSTHOG_CLI: ReadonlySet<SkillVariant> =
-  new Set(['ios']);
+  new Set(['ios', 'android']);
 
 const POSTHOG_SDKS = [
   'posthog-js',
