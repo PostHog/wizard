@@ -23,14 +23,13 @@ import type { LLMProvider, ScanMatch } from '@posthog/warlock';
 import { wizardCanUseTool } from '@lib/agent/agent-interface';
 import {
   createRepeatBlockTracker,
-  isTerminalMatch,
   isWizardDocumentationPath,
   recordExternalScan,
   repeatBlockReason,
   scanAndTriage,
   type RepeatBlockTracker,
-  type ScanContext,
 } from '@lib/yara-hooks';
+import { scanVerdict, type ScanContext } from '@lib/yara-policy';
 import {
   createTriageLLMProvider,
   type TriageGatewayAuth,
@@ -424,21 +423,25 @@ export function createSecurityExtension(ctx: ToolGateContext = {}): {
         // 'input'-context rules (prompt injection in read content), with
         // triage — same policy as the anthropic PostToolUse Read hook.
         const matches = await scanAndTriage(text, 'input', llmProvider);
-        const worst = matches.find(isTerminalMatch);
+        const verdict = scanVerdict(matches);
+        if (!verdict) return {};
+
         recordExternalScan(
           'PostToolUse',
           event.toolName === 'read' ? 'Read' : 'Bash',
           matches.map(toReportViolation),
-          worst ? 'aborted' : 'warned',
+          verdict.action,
         );
-        if (worst) {
+        if (verdict.terminal) {
           state.criticalViolation = true;
           logToFile(
-            `[pi-security] POST-SCAN VIOLATION ${event.toolName}: ${worst.rule}`,
+            `[pi-security] POST-SCAN VIOLATION ${event.toolName}: ${verdict.match.rule}`,
           );
-        } else if (matches.length > 0) {
+        } else {
           logToFile(
-            `[pi-security] POST-SCAN WARNING ${event.toolName}: ${matches[0].rule} (severity: ${matches[0].metadata.severity ?? 'unknown'})`,
+            `[pi-security] POST-SCAN WARNING ${event.toolName}: ${
+              verdict.match.rule
+            } (severity: ${verdict.match.metadata.severity ?? 'unknown'})`,
           );
         }
       } catch (err) {

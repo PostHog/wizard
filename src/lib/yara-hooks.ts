@@ -37,6 +37,8 @@ import { analytics } from '@utils/analytics';
 import { getUI } from '@ui';
 import type { WizardSession } from '@lib/wizard-session';
 import { isSkillInstallCommand } from './skill-install';
+import { highestSeverityMatch, scanVerdict } from './yara-policy';
+import type { ScanAction, ScanContext } from './yara-policy';
 import { WIZARD_YARA_REPORT_FILE } from '@utils/paths';
 // TODO(wizard#594): invert this dependency.
 // L2 infra (yara-hooks) imports product-specific filename constants from
@@ -113,12 +115,9 @@ export interface HookCallbackMatcher {
   timeout?: number;
 }
 
-/** Which content surface a warlock rule applies to (from rule `scan_context`). */
-export type ScanContext = 'command' | 'input' | 'output';
+export type { ScanAction, ScanContext } from './yara-policy';
 
 // ─── Scan Report Accumulator ─────────────────────────────────────
-
-export type ScanAction = 'blocked' | 'reverted' | 'warned' | 'aborted';
 
 interface ScanReportEntry {
   rule: string;
@@ -531,34 +530,7 @@ export function repeatBlockReason(
 }
 
 // ─── Severity helpers ────────────────────────────────────────────
-
-const SEVERITY_RANK: Record<string, number> = {
-  critical: 4,
-  high: 3,
-  medium: 2,
-  low: 1,
-};
-
-/** Severities that terminate the session outright, not just warn. */
-const TERMINAL_SEVERITIES = new Set(['critical']);
-
-/** A match that terminates the session rather than just warning. */
-export function isTerminalMatch(match: ScanMatch): boolean {
-  return (
-    TERMINAL_SEVERITIES.has(match.metadata.severity ?? '') ||
-    match.metadata.action === 'block'
-  );
-}
-
-/** Return the highest-severity match from a list of matches. */
-function highestSeverityMatch(matches: ScanMatch[]): ScanMatch {
-  return matches.reduce((worst, m) =>
-    (SEVERITY_RANK[m.metadata.severity ?? ''] ?? 0) >
-    (SEVERITY_RANK[worst.metadata.severity ?? ''] ?? 0)
-      ? m
-      : worst,
-  );
-}
+// Severity vocabulary and the terminate-or-warn decision live in yara-policy.
 
 // ─── Scan + triage core ──────────────────────────────────────────
 
@@ -934,12 +906,13 @@ export function createPostToolUseYaraHooks(
 
             recordScan();
             const matches = await scanAndTriage(content, 'input', llmProvider);
-            if (matches.length === 0) return {};
+            const verdict = scanVerdict(matches);
+            if (!verdict) return {};
 
-            const match = highestSeverityMatch(matches);
+            const { match } = verdict;
+            recordMatch('PostToolUse', toolName, match, verdict.action);
 
-            if (isTerminalMatch(match)) {
-              recordMatch('PostToolUse', toolName, match, 'aborted');
+            if (verdict.terminal) {
               const reason =
                 `[YARA CRITICAL] ${match.rule}: Prompt injection detected in file content. ` +
                 `Agent context is potentially poisoned. Session terminated for safety.`;
@@ -947,7 +920,6 @@ export function createPostToolUseYaraHooks(
               return { stopReason: reason };
             }
 
-            recordMatch('PostToolUse', toolName, match, 'warned');
             return {
               hookSpecificOutput: {
                 hookEventName: 'PostToolUse',
