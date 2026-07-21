@@ -30,7 +30,8 @@ export const aiObservabilityConfig: ProgramConfig = {
     // No `skillId`: linear.ts skips its pre-install step (see the gate on
     // `linear.ts:47`), so the agent must load the menu and install the right
     // variant itself. The prompt below tells it how.
-    customPrompt: () => `Instrument this project's LLM calls with PostHog AI Observability.
+    customPrompt:
+      () => `Instrument this project's LLM calls with PostHog AI Observability.
 
 This flow has no pre-installed skill — you install the right one yourself:
 
