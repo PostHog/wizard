@@ -55,6 +55,9 @@ const OAuthTokenResponseSchema = z.object({
   refresh_token: z.string().optional(),
   scoped_teams: z.array(z.number()).optional(),
   scoped_organizations: z.array(z.string()).optional(),
+  // Sent by PostHog Cloud (and passed through the oauth.posthog.com proxy); absent on self-hosted.
+  posthog_region: z.enum(['us', 'eu']).optional(),
+  posthog_base_url: z.string().optional(),
 });
 
 export type OAuthTokenResponse = z.infer<typeof OAuthTokenResponseSchema>;
@@ -376,6 +379,7 @@ async function exchangeCodeForToken(
   const token = OAuthTokenResponseSchema.parse(response.data);
   logToFile(
     `[oauth] token exchange succeeded, granted scopes: ${token.scope}` +
+      `${token.posthog_region ? `, region: ${token.posthog_region}` : ''}` +
       `${
         token.scoped_teams
           ? `, scoped_teams: [${token.scoped_teams.join(', ')}]`

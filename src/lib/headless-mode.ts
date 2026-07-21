@@ -50,3 +50,15 @@ export const headlessOption: Record<string, Options> = {
 export function isHeadless(options: Record<string, unknown>): boolean {
   return options[HEADLESS_FLAG] === true;
 }
+
+// `--region` only means something non-interactively (API-key auth has no OAuth
+// token response to read `posthog_region` from), so only headless-capable
+// commands declare it.
+export const regionOption: Record<string, Options> = {
+  region: {
+    describe: 'PostHog cloud region\nenv: POSTHOG_WIZARD_REGION',
+    choices: ['us', 'eu'],
+    type: 'string',
+    hidden: true,
+  },
+};

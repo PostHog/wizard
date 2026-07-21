@@ -19,11 +19,6 @@ export const GLOBAL_OPTIONS = {
     describe: 'Enable verbose logging\nenv: POSTHOG_WIZARD_DEBUG',
     type: 'boolean' as const,
   },
-  region: {
-    describe: 'PostHog cloud region\nenv: POSTHOG_WIZARD_REGION',
-    choices: ['us', 'eu'] as const,
-    type: 'string' as const,
-  },
   signup: {
     default: false,
     describe:

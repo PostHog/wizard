@@ -7,7 +7,7 @@ import type { ProgramRun } from '@lib/agent/agent-runner';
 import type { WizardSession } from '@lib/wizard-session';
 import { OutroKind } from '@lib/wizard-session';
 import { WIZARD_TOOL_NAMES } from '@lib/wizard-tools';
-import { headlessOption } from '@lib/headless-mode';
+import { headlessOption, regionOption } from '@lib/headless-mode';
 import { AUDIT_ABORT_CASES } from './detect.js';
 import { AUDIT_CHECKS_KEY, AUDIT_REPORT_FILE } from './types.js';
 import { AUDIT_SEED_CHECKS, seedAuditLedger } from './seed.js';
@@ -102,5 +102,5 @@ export const auditConfig: ProgramConfig = {
   // The experimental headless flag — declared on `audit` (and basic
   // integration) rather than globally. mergeCommandOptions lands it on the
   // `wizard audit` command; dispatchProgram routes it to runWizardHeadless.
-  cliOptions: { ...headlessOption },
+  cliOptions: { ...headlessOption, ...regionOption },
 };
