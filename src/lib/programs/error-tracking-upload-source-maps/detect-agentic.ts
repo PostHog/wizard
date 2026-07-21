@@ -20,6 +20,8 @@ import type { WizardSession } from '@lib/wizard-session';
 import {
   VARIANT_DISPLAY_NAME,
   AUTOMATABLE_VARIANTS,
+  MANUAL_SDK_VARIANTS,
+  RUST_SDK_CRATE,
   type SkillVariant,
 } from './detect.js';
 
@@ -47,6 +49,14 @@ export type DetectionReport = {
 };
 
 /**
+ * Variants the detector recognises so the picker can name and block them,
+ * without a shipped skill behind them yet. They rank LOW — a go.mod signal
+ * must not shadow a real JS/native target in the same directory, it only
+ * needs to beat the generic web fallback.
+ */
+const DETECTION_ONLY_VARIANTS: readonly SkillVariant[] = ['go'];
+
+/**
  * Variant precedence for the agentic picker (most specific first). The detector
  * keeps the EARLIEST matching target. React Native and Flutter both outrank
  * Android and iOS: their repos carry `android/` and `ios/` folders with real
@@ -67,6 +77,15 @@ const VARIANT_PRECEDENCE: readonly SkillVariant[] = [
   'rollup',
   'react',
   'node',
+  // Native binaries: only chosen when no JS target matches the project, but
+  // ahead of the generic web fallback so a go.mod / Cargo.toml project
+  // resolves to its debug-symbols variant instead of `web`. Deliberate
+  // tradeoff for the same-directory mixed case: a Go/Rust project with a
+  // tooling-only package.json (common) beats a root-level JS app sharing a
+  // directory with go.mod / Cargo.toml (rare — frontends usually live in a
+  // subdirectory, which classifies as its own project).
+  'go',
+  'rust',
   'web',
 ];
 
@@ -75,10 +94,40 @@ const precedenceRank = (v: SkillVariant): number => {
   return i === -1 ? Number.MAX_SAFE_INTEGER : i;
 };
 
-/** Source-map detection targets, ordered by VARIANT_PRECEDENCE. */
-export const SOURCE_MAPS_TARGETS: DetectTarget[] = [...AUTOMATABLE_VARIANTS]
+/**
+ * Source-map detection targets, ordered by VARIANT_PRECEDENCE. Detection-only
+ * variants stay in the target list so the detector can identify and block
+ * them instead of falling through to a JS target or the web fallback.
+ */
+export const SOURCE_MAPS_TARGETS: DetectTarget[] = [
+  ...DETECTION_ONLY_VARIANTS,
+  ...AUTOMATABLE_VARIANTS,
+]
   .sort((a, b) => precedenceRank(a) - precedenceRank(b))
   .map((v) => ({ id: v, name: VARIANT_DISPLAY_NAME[v] }));
+
+/**
+ * Checks a project's own Cargo.toml for the Rust SDK. The agentic detector
+ * reports a single `hasPostHog` boolean for ANY PostHog dependency in the
+ * project — for `rust` that could be satisfied by an unrelated JS SDK in the
+ * same directory, so the deterministic manifest read is authoritative.
+ * Exported for testing.
+ */
+export function rustSdkVerifier(
+  installDir: string,
+): (projectPath: string) => boolean {
+  return (projectPath) => {
+    const dir =
+      projectPath === '.' ? installDir : join(installDir, projectPath);
+    try {
+      return readFileSync(join(dir, 'Cargo.toml'), 'utf-8').includes(
+        RUST_SDK_CRATE,
+      );
+    } catch {
+      return false;
+    }
+  };
+}
 
 function isAutomatableVariant(value: string | null): value is SkillVariant {
   return value !== null && AUTOMATABLE_VARIANTS.includes(value as SkillVariant);
@@ -104,6 +153,13 @@ export type ProjectProbes = {
   hasBuildTarget: (path: string) => boolean;
   /** React Native: is the `expo` package installed in the project? */
   isExpoProject: (path: string) => boolean;
+  /**
+   * Rust: does the project's Cargo manifest tree carry the posthog-rs crate?
+   * Unlike the gate probes above, absence means "trust the agent's
+   * `hasPostHog`", not `false` — the probe REPLACES the agent's boolean when
+   * present, because any unrelated PostHog dependency can satisfy it.
+   */
+  verifyRustSdk?: (path: string) => boolean;
 };
 
 const NO_PROBES: ProjectProbes = {
@@ -152,10 +208,16 @@ function classifyProject(
   p: AgenticDetectionReport['projects'][number],
   probes: ProjectProbes,
 ): DetectedProject {
+  // For rust the deterministic Cargo.toml read overrides the agent's single
+  // hasPostHog boolean, which any unrelated PostHog dependency can satisfy.
+  const hasPostHog =
+    p.targetId === 'rust' && probes.verifyRustSdk
+      ? probes.verifyRustSdk(p.path)
+      : p.hasPostHog;
   const base = {
     path: p.path,
     framework: p.framework,
-    hasPostHog: p.hasPostHog,
+    hasPostHog,
   };
 
   // A React Native or Flutter labelled project only counts when it resolved to
@@ -196,12 +258,17 @@ function classifyProject(
     };
   }
 
-  if (!p.hasPostHog) {
+  if (!hasPostHog) {
+    // The wizard's default flow can't install the Rust SDK, so don't point
+    // users at it for that stack.
+    const install = MANUAL_SDK_VARIANTS.includes(p.targetId)
+      ? 'add the posthog-rs crate first'
+      : 'run `npx @posthog/wizard` first';
     return {
       ...base,
       variant: p.targetId,
       instrumentable: false,
-      reason: 'No PostHog SDK installed yet — run `npx @posthog/wizard` first',
+      reason: `No PostHog SDK installed yet — ${install}`,
     };
   }
 
@@ -252,5 +319,6 @@ export async function detectSourceMapsProjects(
   return toSourceMapsReport(report, {
     hasBuildTarget: (path) => projectHasBuildTarget(session.installDir, path),
     isExpoProject: (path) => projectHasExpo(session.installDir, path),
+    verifyRustSdk: rustSdkVerifier(session.installDir),
   });
 }
