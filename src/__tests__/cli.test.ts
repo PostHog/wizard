@@ -202,9 +202,9 @@ describe('CLI argument parsing', () => {
     return calls[calls.length - 1][0];
   }
 
-  // Note: --region is a yargs option that doesn't flow through buildSession in
-  // the non-CI path, so it's tested indirectly (no errors) rather than by
-  // inspecting values.
+  // Note: --region flows through buildSession only on the non-interactive
+  // paths; interactively it's ignored (OAuth reads the region off the token
+  // response), so the non-CI cases just assert parsing succeeds.
 
   describe('--region flag', () => {
     test.each(['us', 'eu'])(
@@ -309,6 +309,34 @@ describe('CLI argument parsing', () => {
 
       const args = getLastBuildSessionArgs();
       expect(args.apiKey).toBe('phx_test_key');
+    });
+
+    test('passes --region through to buildSession', async () => {
+      await runCLI([
+        '--ci',
+        '--region',
+        'eu',
+        '--api-key',
+        'phx_test',
+        '--install-dir',
+        '/tmp/test',
+      ]);
+
+      const args = getLastBuildSessionArgs();
+      expect(args.region).toBe('eu');
+    });
+
+    test('leaves region unset when --region is not passed', async () => {
+      await runCLI([
+        '--ci',
+        '--api-key',
+        'phx_test',
+        '--install-dir',
+        '/tmp/test',
+      ]);
+
+      const args = getLastBuildSessionArgs();
+      expect(args.region).toBeUndefined();
     });
 
     test("tags the build as 'ci'", async () => {
@@ -466,6 +494,7 @@ describe('CLI argument parsing', () => {
 
       const args = getLastBuildSessionArgs();
       expect(args.apiKey).toBe('phx_cli_key');
+      expect(args.region).toBe('eu');
     });
   });
 

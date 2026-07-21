@@ -625,9 +625,11 @@ async function askForWizardLogin(options: {
     await abort();
   }
 
+  // The issuing region comes with the token; the us/eu @me probe only runs when omitted.
   const host = await HostResolution.fromAccessToken(
     tokenResponse.access_token,
     {
+      region: tokenResponse.posthog_region,
       localMcp: options.localMcp,
       baseUrl: options.baseUrl,
     },
