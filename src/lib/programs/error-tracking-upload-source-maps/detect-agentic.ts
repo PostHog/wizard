@@ -142,7 +142,11 @@ function classify(
  * same directory, so the deterministic manifest read is authoritative.
  * Comment-stripped substring matching, not TOML parsing: it still catches
  * renamed (`package = "posthog-rs"`) and workspace-inherited deps, while a
- * commented-out dependency no longer counts. Exported for testing.
+ * commented-out dependency no longer counts. Known miss: a member manifest
+ * whose dep is aliased at the workspace root (`posthog.workspace = true`
+ * with the `package = "posthog-rs"` mapping only in the root manifest) —
+ * accepted; resolving that needs full workspace metadata. Exported for
+ * testing.
  */
 export function rustSdkVerifier(
   installDir: string,

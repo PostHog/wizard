@@ -53,6 +53,11 @@ describe('buildSourceMapsUploadPrompt rust workspace scope', () => {
 
     expect(prompt).toContain('Cargo workspace exception');
     expect(prompt).toContain('cargo locate-project --workspace');
+    // The env-path rule must carry the same exception, or STEP 5 writes the
+    // key into the member while the workspace upload reads the root .env.
+    expect(prompt).toContain(
+      'when the skill places the env file at the workspace root',
+    );
   });
 
   it('omits the workspace exception for root-scoped rust projects', () => {

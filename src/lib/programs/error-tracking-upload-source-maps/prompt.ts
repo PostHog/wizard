@@ -36,7 +36,11 @@ export function buildSourceMapsUploadPrompt(
     ? `- Project directory (relative to the wizard's working directory): ${projectPath}`
     : "- Project directory: the wizard's working directory (even when it sits inside a larger git repo, this directory is the project root)";
   const envFilePathGuidance = inSubproject
-    ? `Tool filePaths are relative to the wizard's working directory, not the selected project directory. Treat the skill's env path as relative to the selected project and prefix it with \`${projectPath}/\` when calling the tools: for example, pass \`${projectPath}/.env\`, not \`.env\` (which would target the wizard's working directory).`
+    ? `Tool filePaths are relative to the wizard's working directory, not the selected project directory. Treat the skill's env path as relative to the selected project and prefix it with \`${projectPath}/\` when calling the tools: for example, pass \`${projectPath}/.env\`, not \`.env\` (which would target the wizard's working directory).${
+        variant === 'rust'
+          ? ` Cargo workspace exception: when the skill places the env file at the workspace root instead, pass the path of the ROOT manifest's directory relative to the wizard's working directory (e.g. \`rust/.env\` for a workspace root at \`rust/\`, or plain \`.env\` when the workspace root IS the working directory) — not the member path.`
+          : ''
+      }`
     : `Tool filePaths are relative to the wizard's working directory. For an env file at this project root, pass \`.env\`; never prefix it with this directory's path inside an ancestor repository.`;
 
   const credentialSteps = `STEP 4 — Make the credentials readable at build time. (skill: "Make credentials available at build time")
