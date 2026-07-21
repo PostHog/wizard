@@ -1,5 +1,45 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
+exports[`e2e flow snapshot — ai-observability > walks intro → health → auth → run → outro → skills 1`] = `
+{
+  "profile": {
+    "ask": "first",
+    "healthCheck": "dismiss",
+    "mcp": "skip",
+    "setup": "first",
+    "skills": "delete",
+    "slack": "skip",
+  },
+  "program": "ai-observability",
+  "trace": [
+    {
+      "action": "confirm_setup",
+      "screen": "ai-observability-intro",
+    },
+    {
+      "action": "dismiss_outage",
+      "screen": "health-check",
+    },
+    {
+      "action": "(external)",
+      "screen": "auth",
+    },
+    {
+      "action": "(external)",
+      "screen": "run",
+    },
+    {
+      "action": "dismiss_outro",
+      "screen": "outro",
+    },
+    {
+      "action": "keep_skills",
+      "screen": "keep-skills",
+    },
+  ],
+}
+`;
+
 exports[`e2e flow snapshot — posthog-integration > Next.js (with a setup question) walks a stable path 1`] = `
 {
   "profile": {
