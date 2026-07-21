@@ -19,6 +19,7 @@ import { getUI } from '@ui/index';
 import { requestDeepLink } from '@utils/provisioning';
 import { openTrackedLink, withUtm } from '@utils/links';
 import type { HostResolution } from '@lib/host-resolution';
+import { getDetectedWarehouseSources } from '@lib/programs/warehouse-source/detect';
 import { POSTHOG_INTEGRATION_PROGRAM } from './steps.js';
 import { getContentBlocks } from './content/index.js';
 import { buildCodingAgentPrompt } from './handoff.js';
@@ -34,6 +35,52 @@ function resolveContinueUrl(
   if (!sess.signup) return undefined;
   if (typeof deepLink === 'string' && deepLink) return deepLink;
   return withUtm(`${host.appHost}/products?source=wizard`, 'outro-continue');
+}
+
+/**
+ * Outro suggestion for data sources found in the project but not connected.
+ *
+ * A pointer at `wizard warehouse`, not an inline flow. Connecting a source
+ * needs interactive credential collection, and chaining that as a second agent
+ * run before the outro would let any of its terminal failure paths
+ * `process.exit()` — costing the user the success outro and the post-outro
+ * MCP / Slack steps on a run where PostHog installed fine.
+ *
+ * Returns undefined when nothing was detected, so the outro is unchanged for
+ * projects with no connectable source.
+ */
+function buildWarehouseNextSteps(
+  sess: WizardSession,
+): { heading: string; items: string[] } | undefined {
+  const sources = getDetectedWarehouseSources(sess);
+  if (sources.length === 0) return undefined;
+
+  const labels = sources.map((s) => s.label).join(', ');
+  return {
+    heading: 'Query your other data in PostHog:',
+    items: [
+      `Found in this project: ${labels}`,
+      'Import it into the data warehouse with: npx @posthog/wizard warehouse',
+    ],
+  };
+}
+
+/**
+ * Prompt fragment asking the agent to note the detected data sources in the
+ * setup report's checklist.
+ *
+ * Empty string when nothing was detected, so the prompt is byte-identical to
+ * today for projects with no connectable source. Best-effort by nature — the
+ * agent may word it differently or skip it. That is acceptable here precisely
+ * because it is a note in a report: the outro `nextSteps` bullet carries the
+ * same information deterministically, so nothing is lost if the agent drops it.
+ */
+function warehouseReportInstruction(sess: WizardSession): string {
+  const sources = getDetectedWarehouseSources(sess);
+  if (sources.length === 0) return '';
+
+  const labels = sources.map((s) => s.label).join(', ');
+  return `Finally: this project also contains data sources PostHog can import (${labels}). In the setup report's "Verify before merging" checklist, add one item noting these were found and that \`npx @posthog/wizard warehouse\` will connect them to PostHog's data warehouse. Do not attempt to set them up yourself in this run.`;
 }
 
 export const SETUP_REPORT_FILE = 'posthog-setup-report.md';
@@ -203,7 +250,7 @@ STEP 5: Set up environment variables for PostHog using the wizard-tools MCP serv
 
 Important: Use the detect_package_manager tool (from the wizard-tools MCP server) to determine which package manager the project uses, then run its install command to add the SDK. Do not manually search for lockfiles or config files. If a file already EXISTS, read it immediately before you edit or overwrite it — writing from a stale read causes a tool failure. Creating a brand-new file needs no prior read: never read a path that does not exist yet; just write it.
 
-
+${warehouseReportInstruction(session)}
 `;
       },
 
@@ -274,6 +321,7 @@ Important: Use the detect_package_manager tool (from the wizard-tools MCP server
           changes,
           docsUrl: config.metadata.docsUrl,
           continueUrl,
+          nextSteps: buildWarehouseNextSteps(sess),
           // Set once the agent mirrors the report into a notebook and emits [NOTEBOOK_URL].
           notebookUrl: sess.notebookUrl ?? undefined,
           handoffPrompt: buildCodingAgentPrompt(SETUP_REPORT_FILE),
