@@ -2,6 +2,7 @@ export enum EnvUploadSkipCause {
   CliMissing = 'cli-missing',
   ProjectUnlinked = 'project-unlinked',
   Unauthenticated = 'unauthenticated',
+  UploadFailed = 'upload-failed',
 }
 
 export type EnvUploadSkip = {

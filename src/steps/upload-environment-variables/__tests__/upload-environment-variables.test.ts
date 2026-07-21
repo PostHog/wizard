@@ -135,4 +135,91 @@ describe('uploadEnvironmentVariablesStep', () => {
     });
     expect(mockWarn).not.toHaveBeenCalled();
   });
+
+  it('should not fire "env uploaded" when every upload fails', async () => {
+    stubVercel({
+      detected: true,
+      uploads: {
+        NEXT_PUBLIC_POSTHOG_KEY: false,
+        NEXT_PUBLIC_POSTHOG_HOST: false,
+      },
+    });
+
+    await uploadEnvironmentVariablesStep(ENV_VARS, stepArgs);
+
+    expect(mockWizardCapture).not.toHaveBeenCalledWith(
+      'env uploaded',
+      expect.anything(),
+    );
+  });
+
+  it('should fire "env uploaded" when at least one key is uploaded', async () => {
+    stubVercel({
+      detected: true,
+      uploads: {
+        NEXT_PUBLIC_POSTHOG_KEY: true,
+        NEXT_PUBLIC_POSTHOG_HOST: false,
+      },
+    });
+
+    await uploadEnvironmentVariablesStep(ENV_VARS, stepArgs);
+
+    expect(mockWizardCapture).toHaveBeenCalledWith('env uploaded', {
+      provider: 'Vercel',
+      integration: 'nextjs',
+    });
+  });
+
+  it('should return a loud skip when every upload fails despite a detected provider', async () => {
+    stubVercel({
+      detected: true,
+      uploads: {
+        NEXT_PUBLIC_POSTHOG_KEY: false,
+        NEXT_PUBLIC_POSTHOG_HOST: false,
+      },
+    });
+
+    const outcome = await uploadEnvironmentVariablesStep(ENV_VARS, stepArgs);
+
+    expect(outcome.uploadedKeys).toEqual([]);
+    expect(outcome.skip).toEqual(
+      expect.objectContaining({
+        provider: 'Vercel',
+        cause: EnvUploadSkipCause.UploadFailed,
+      }),
+    );
+    expect(outcome.skip?.message).toContain('NEXT_PUBLIC_POSTHOG_KEY');
+    expect(outcome.skip?.message).toContain('NEXT_PUBLIC_POSTHOG_HOST');
+    expect(mockWarn).toHaveBeenCalledWith(outcome.skip?.message);
+  });
+
+  it('should tag the upload-failed skip event with the provider and cause', async () => {
+    stubVercel({
+      detected: true,
+      uploads: {
+        NEXT_PUBLIC_POSTHOG_KEY: false,
+        NEXT_PUBLIC_POSTHOG_HOST: false,
+      },
+    });
+
+    await uploadEnvironmentVariablesStep(ENV_VARS, stepArgs);
+
+    expect(mockWizardCapture).toHaveBeenCalledWith(
+      'env upload skipped',
+      expect.objectContaining({
+        reason: 'all uploads failed',
+        deploy_target: 'Vercel',
+        skip_cause: EnvUploadSkipCause.UploadFailed,
+      }),
+    );
+  });
+
+  it('should not return a skip when a provider is detected but there were no env vars to upload', async () => {
+    stubVercel({ detected: true, uploads: {} });
+
+    const outcome = await uploadEnvironmentVariablesStep({}, stepArgs);
+
+    expect(outcome).toEqual({ uploadedKeys: [], skip: null });
+    expect(mockWarn).not.toHaveBeenCalled();
+  });
 });

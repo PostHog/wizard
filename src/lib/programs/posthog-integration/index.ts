@@ -28,6 +28,26 @@ import { EVENT_PLAN_FILE } from './constants.js';
 const DASHBOARD_DEEP_LINK_KEY = 'dashboardDeepLink';
 const HOSTING_ENV_SKIP_KEY = 'hostingEnvUploadSkipped';
 
+/**
+ * Setter/getter pair for the hosting-provider env-upload skip, both keyed off
+ * the same constant — postRun writes, buildOutroData reads. Exported and
+ * unit-tested together so a key typo on either side fails a test instead of
+ * silently dropping the outro warning.
+ */
+export function setHostingEnvUploadSkip(
+  sess: WizardSession,
+  provider: string | undefined,
+): void {
+  sess.frameworkContext[HOSTING_ENV_SKIP_KEY] = provider;
+}
+
+export function buildHostingEnvSkipWarning(sess: WizardSession): string {
+  const hostingEnvSkip = sess.frameworkContext[HOSTING_ENV_SKIP_KEY];
+  return typeof hostingEnvSkip === 'string'
+    ? `⚠️ Not added to ${hostingEnvSkip} — add them there too, or your deployed site won't send events`
+    : '';
+}
+
 function resolveContinueUrl(
   sess: WizardSession,
   host: HostResolution,
@@ -280,7 +300,7 @@ ${warehouseReportInstruction(session)}
             });
           }
           if (skip) {
-            sess.frameworkContext[HOSTING_ENV_SKIP_KEY] = skip.provider;
+            setHostingEnvUploadSkip(sess, skip.provider);
           }
         }
 
@@ -311,15 +331,12 @@ ${warehouseReportInstruction(session)}
           deepLink,
         );
 
-        const hostingEnvSkip = sess.frameworkContext[HOSTING_ENV_SKIP_KEY];
         const changes = [
           ...config.ui.getOutroChanges(frameworkContext),
           Object.keys(envVars).length > 0
             ? 'Added environment variables to .env file'
             : '',
-          typeof hostingEnvSkip === 'string'
-            ? `⚠️ Not added to ${hostingEnvSkip} — add them there too, or your deployed site won't send events`
-            : '',
+          buildHostingEnvSkipWarning(sess),
         ].filter(Boolean);
 
         return {

@@ -4,7 +4,7 @@ import { analytics } from '@utils/analytics';
 import { getUI } from '@ui';
 import type { WizardSession } from '@lib/wizard-session';
 import type { EnvUploadSkip } from './EnvironmentProvider';
-import { EnvironmentProvider } from './EnvironmentProvider';
+import { EnvironmentProvider, EnvUploadSkipCause } from './EnvironmentProvider';
 import { VercelEnvironmentProvider } from './providers/vercel';
 
 export type EnvUploadOutcome = {
@@ -66,13 +66,43 @@ export const uploadEnvironmentVariablesStep = async (
     },
   );
 
-  analytics.wizardCapture('env uploaded', {
+  const uploadedKeys = Object.keys(results).filter((key) => results[key]);
+  const attemptedKeys = Object.keys(envVars);
+
+  if (uploadedKeys.length > 0) {
+    analytics.wizardCapture('env uploaded', {
+      provider: provider.name,
+      integration,
+    });
+
+    return { uploadedKeys, skip: null };
+  }
+
+  // Partial success (some keys uploaded) is still success — only total
+  // failure, with at least one key attempted, becomes a loud skip.
+  if (attemptedKeys.length === 0) {
+    return { uploadedKeys, skip: null };
+  }
+
+  const keyList = attemptedKeys.map((key) => `  - ${key}`).join('\n');
+  const skip: EnvUploadSkip = {
     provider: provider.name,
+    cause: EnvUploadSkipCause.UploadFailed,
+    message: `The wizard found ${provider.name} but couldn't add the environment variables there — every upload failed. Add them under Settings → Environment Variables in your ${provider.name} project:
+
+${keyList}
+
+Until these are set in ${provider.name}, your deployed site won't send events to PostHog. The values are in your local .env file.`,
+  };
+
+  analytics.wizardCapture('env upload skipped', {
+    reason: 'all uploads failed',
     integration,
+    deploy_target: skip.provider,
+    skip_cause: skip.cause,
   });
 
-  return {
-    uploadedKeys: Object.keys(results).filter((key) => results[key]),
-    skip: null,
-  };
+  getUI().log.warn(skip.message);
+
+  return { uploadedKeys, skip };
 };

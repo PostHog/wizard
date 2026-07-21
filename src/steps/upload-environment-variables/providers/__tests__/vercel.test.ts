@@ -1,5 +1,6 @@
 import { VercelEnvironmentProvider } from '@steps/upload-environment-variables/providers/vercel';
 import { EnvUploadSkipCause } from '@steps/upload-environment-variables/EnvironmentProvider';
+import { getUI } from '@ui';
 import * as fs from 'fs';
 import * as child_process from 'child_process';
 
@@ -270,6 +271,48 @@ describe('VercelEnvironmentProvider', () => {
       });
 
       expect(calls.some((args) => args[1] === 'rm')).toBe(false);
+    });
+
+    it('should retry the re-add once after a successful rm before giving up', async () => {
+      const { calls } = mockSpawn((args, nth) => {
+        if (isProductionAdd(args)) {
+          if (nth === 0) return { code: 1, stderr: 'already exists' };
+          if (nth === 1) return { code: 1, stderr: 'timeout' }; // first retry after rm
+          return { code: 0 }; // second retry after rm succeeds
+        }
+        return { code: 0 };
+      });
+
+      await expect(provider.uploadEnvVars({ FOO: 'bar' })).resolves.toEqual({
+        FOO: true,
+      });
+
+      expect(calls).toContainEqual(['env', 'rm', 'FOO', 'production', '-y']);
+      expect(calls.filter(isProductionAdd)).toHaveLength(3);
+    });
+
+    it('should surface a REMOVED data-loss error when the rm succeeds but every re-add attempt fails', async () => {
+      const spinner = { start: vi.fn(), stop: vi.fn(), message: vi.fn() };
+      vi.spyOn(getUI(), 'spinner').mockReturnValue(spinner);
+
+      mockSpawn((args, nth) => {
+        if (isProductionAdd(args)) {
+          return nth === 0
+            ? { code: 1, stderr: 'already exists' }
+            : { code: 1, stderr: 'timeout' };
+        }
+        return { code: 0 };
+      });
+
+      await expect(provider.uploadEnvVars({ FOO: 'bar' })).resolves.toEqual({
+        FOO: false,
+      });
+
+      const stopMessage = spinner.stop.mock.calls
+        .map(([msg]: [string?]) => msg)
+        .find((msg: string | undefined) => msg?.includes('FOO'));
+      expect(stopMessage).toContain('REMOVED');
+      expect(stopMessage).toContain('production');
     });
   });
 });

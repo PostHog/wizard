@@ -17,7 +17,14 @@ const ALREADY_EXISTS_MARKERS = [
   'vercel env rm',
 ];
 
-const REMEDY_BY_CAUSE: Record<EnvUploadSkipCause, string> = {
+// UploadFailed is only ever constructed by the upload step itself (not by
+// describeSkip), so it has no detection-remedy copy here.
+type DescribeSkipCause = Exclude<
+  EnvUploadSkipCause,
+  EnvUploadSkipCause.UploadFailed
+>;
+
+const REMEDY_BY_CAUSE: Record<DescribeSkipCause, string> = {
   [EnvUploadSkipCause.CliMissing]:
     "the Vercel CLI isn't installed. Install it with `npm i -g vercel`, run `vercel link`, then:",
   [EnvUploadSkipCause.ProjectUnlinked]:
@@ -149,7 +156,7 @@ The values are in your local .env file.`,
     };
   }
 
-  private skipCause(): EnvUploadSkipCause | null {
+  private skipCause(): DescribeSkipCause | null {
     if (!this.checks) return null;
     if (!this.checks.hasCli) return EnvUploadSkipCause.CliMissing;
     if (!this.checks.isLinked) return EnvUploadSkipCause.ProjectUnlinked;
@@ -219,13 +226,18 @@ The values are in your local .env file.`,
       );
     }
 
-    // Vercel has no upsert for env vars, so replace the stale value.
+    // Vercel has no upsert for env vars, so replace the stale value. Once the
+    // rm succeeds there is no way back — retry the re-add once before
+    // surfacing an error that makes the data loss unmistakable.
     await this.removeEnvironmentVariable(key, environment);
 
-    const readded = await this.runEnvAdd(key, value, environment);
+    let readded = await this.runEnvAdd(key, value, environment);
+    if (readded.code !== 0) {
+      readded = await this.runEnvAdd(key, value, environment);
+    }
     if (readded.code !== 0) {
       throw new Error(
-        `❌ Failed to update existing environment variable ${key} in ${this.name}. Please upload it manually.`,
+        `❌ ${key} was REMOVED from ${this.name} (${environment}) while the wizard was updating it, and could not be re-added. The old value is gone — please re-create ${key} in ${this.name} manually.`,
       );
     }
   }
