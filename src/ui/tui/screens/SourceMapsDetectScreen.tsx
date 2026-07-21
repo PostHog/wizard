@@ -15,6 +15,7 @@ import { Colors, Icons } from '@ui/tui/styles';
 import {
   SOURCE_MAPS_CONTEXT_KEYS,
   VARIANT_DISPLAY_NAME,
+  MANUAL_SDK_VARIANTS,
 } from '@lib/programs/error-tracking-upload-source-maps/index';
 import {
   detectSourceMapsProjects,
@@ -214,7 +215,12 @@ export const SourceMapsDetectScreen = ({
  */
 const BlockedSummary = ({ blocked }: { blocked: DetectedProject[] }) => {
   const unsupported = blocked.filter((p) => p.variant == null).length;
-  const missingSdk = blocked.length - unsupported;
+  // The wizard can't install the Rust SDK, so its missing-SDK remediation is
+  // a manual install, not `npx @posthog/wizard`.
+  const manualSdk = blocked.filter(
+    (p) => p.variant != null && MANUAL_SDK_VARIANTS.includes(p.variant),
+  ).length;
+  const missingSdk = blocked.length - unsupported - manualSdk;
   if (blocked.length === 0) return null;
   return (
     <Box flexDirection="column">
@@ -228,6 +234,12 @@ const BlockedSummary = ({ blocked }: { blocked: DetectedProject[] }) => {
         <Text dimColor>
           (… {missingSdk} supported but missing the PostHog SDK — install it
           first with `npx @posthog/wizard`)
+        </Text>
+      )}
+      {manualSdk > 0 && (
+        <Text dimColor>
+          (… {manualSdk} supported but missing the PostHog SDK — add the
+          posthog-rs crate to the project first, then re-run)
         </Text>
       )}
     </Box>

@@ -152,6 +152,7 @@ export {
   SOURCE_MAPS_ABORT_CASES,
   SOURCE_MAPS_CONTEXT_KEYS,
   VARIANT_DISPLAY_NAME,
+  MANUAL_SDK_VARIANTS,
   type SkillVariant,
   type SourceMapsDetectError,
 } from './detect.js';

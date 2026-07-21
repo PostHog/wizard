@@ -7,6 +7,8 @@
  * instruments the chosen project.
  */
 
+import { readFileSync } from 'fs';
+import { join } from 'path';
 import {
   detectProjectsWithAgent,
   coerceAgenticReport,
@@ -18,6 +20,8 @@ import type { WizardSession } from '@lib/wizard-session';
 import {
   VARIANT_DISPLAY_NAME,
   AUTOMATABLE_VARIANTS,
+  MANUAL_SDK_VARIANTS,
+  RUST_SDK_CRATE,
   type SkillVariant,
 } from './detect.js';
 
@@ -57,6 +61,14 @@ const NON_AUTOMATABLE_NATIVE_VARIANTS: readonly SkillVariant[] = [
   'flutter',
 ];
 
+/**
+ * Variants the detector recognises so the picker can name and block them,
+ * without a shipped skill behind them yet. Unlike the guards above they rank
+ * LOW — a go.mod signal must not shadow a real JS/native target in the same
+ * directory, it only needs to beat the generic web fallback.
+ */
+const DETECTION_ONLY_VARIANTS: readonly SkillVariant[] = ['go'];
+
 const VARIANT_PRECEDENCE: readonly SkillVariant[] = [
   ...NON_AUTOMATABLE_NATIVE_VARIANTS,
   'android',
@@ -69,6 +81,15 @@ const VARIANT_PRECEDENCE: readonly SkillVariant[] = [
   'rollup',
   'react',
   'node',
+  // Native binaries: only chosen when no JS target matches the project, but
+  // ahead of the generic web fallback so a go.mod / Cargo.toml project
+  // resolves to its debug-symbols variant instead of `web`. Deliberate
+  // tradeoff for the same-directory mixed case: a Go/Rust project with a
+  // tooling-only package.json (common) beats a root-level JS app sharing a
+  // directory with go.mod / Cargo.toml (rare — frontends usually live in a
+  // subdirectory, which classifies as its own project).
+  'go',
+  'rust',
   'web',
 ];
 
@@ -84,6 +105,7 @@ const precedenceRank = (v: SkillVariant): number => {
  */
 export const SOURCE_MAPS_TARGETS: DetectTarget[] = [
   ...NON_AUTOMATABLE_NATIVE_VARIANTS,
+  ...DETECTION_ONLY_VARIANTS,
   ...AUTOMATABLE_VARIANTS,
 ]
   .sort((a, b) => precedenceRank(a) - precedenceRank(b))
@@ -100,12 +122,40 @@ function classify(
     };
   }
   if (!hasPostHog) {
+    // The wizard's default flow can't install the Rust SDK, so don't point
+    // users at it for that stack.
+    const install = MANUAL_SDK_VARIANTS.includes(variant)
+      ? 'add the posthog-rs crate first'
+      : 'run `npx @posthog/wizard` first';
     return {
       instrumentable: false,
-      reason: 'No PostHog SDK installed yet — run `npx @posthog/wizard` first',
+      reason: `No PostHog SDK installed yet — ${install}`,
     };
   }
   return { instrumentable: true };
+}
+
+/**
+ * Checks a project's own Cargo.toml for the Rust SDK. The agentic detector
+ * reports a single `hasPostHog` boolean for ANY PostHog dependency in the
+ * project — for `rust` that could be satisfied by an unrelated JS SDK in the
+ * same directory, so the deterministic manifest read is authoritative.
+ * Exported for testing.
+ */
+export function rustSdkVerifier(
+  installDir: string,
+): (projectPath: string) => boolean {
+  return (projectPath) => {
+    const dir =
+      projectPath === '.' ? installDir : join(installDir, projectPath);
+    try {
+      return readFileSync(join(dir, 'Cargo.toml'), 'utf-8').includes(
+        RUST_SDK_CRATE,
+      );
+    } catch {
+      return false;
+    }
+  };
 }
 
 function isAutomatableVariant(value: string | null): value is SkillVariant {
@@ -113,7 +163,10 @@ function isAutomatableVariant(value: string | null): value is SkillVariant {
 }
 
 /** Map a generic detection report into source-maps projects. */
-function toSourceMapsReport(report: AgenticDetectionReport): DetectionReport {
+function toSourceMapsReport(
+  report: AgenticDetectionReport,
+  verifyRustSdk?: (projectPath: string) => boolean,
+): DetectionReport {
   return {
     repoType: report.repoType,
     projects: report.projects.map((p) => {
@@ -122,12 +175,16 @@ function toSourceMapsReport(report: AgenticDetectionReport): DetectionReport {
         !/\b(?:react[\s-]*native|expo|flutter)\b/i.test(p.framework)
           ? p.targetId
           : null;
+      const hasPostHog =
+        variant === 'rust' && verifyRustSdk
+          ? verifyRustSdk(p.path)
+          : p.hasPostHog;
       return {
         path: p.path,
         framework: p.framework,
         variant,
-        hasPostHog: p.hasPostHog,
-        ...classify(variant, p.hasPostHog),
+        hasPostHog,
+        ...classify(variant, hasPostHog),
       };
     }),
   };
@@ -157,5 +214,5 @@ export async function detectSourceMapsProjects(
     purpose: 'set up PostHog Error Tracking source-map upload',
     onEvent,
   });
-  return toSourceMapsReport(report);
+  return toSourceMapsReport(report, rustSdkVerifier(session.installDir));
 }

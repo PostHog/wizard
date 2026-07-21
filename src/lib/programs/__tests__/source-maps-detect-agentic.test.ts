@@ -1,5 +1,9 @@
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
 import {
   coerceReport,
+  rustSdkVerifier,
   SOURCE_MAPS_TARGETS,
 } from '@lib/programs/error-tracking-upload-source-maps/detect-agentic';
 import { AUTOMATABLE_VARIANTS } from '@lib/programs/error-tracking-upload-source-maps/detect';
@@ -46,6 +50,15 @@ describe('SOURCE_MAPS_TARGETS precedence', () => {
   it('ranks the generic web fallback last among JS targets', () => {
     for (const other of ['react', 'node', 'vite']) {
       expect(rank(other)).toBeLessThan(rank('web'));
+    }
+  });
+
+  it('ranks native binaries after JS targets but ahead of the web fallback', () => {
+    expect(SOURCE_MAPS_TARGETS).toContainEqual({ id: 'rust', name: 'Rust' });
+    expect(SOURCE_MAPS_TARGETS).toContainEqual({ id: 'go', name: 'Go' });
+    for (const native of ['go', 'rust']) {
+      expect(rank('node')).toBeLessThan(rank(native));
+      expect(rank(native)).toBeLessThan(rank('web'));
     }
   });
 });
@@ -273,5 +286,103 @@ describe('coerceReport', () => {
   it('returns an empty report when projects is absent', () => {
     expect(coerceReport({}).projects).toEqual([]);
     expect(coerceReport(null).projects).toEqual([]);
+  });
+
+  it('retains a Rust project with PostHog as instrumentable', () => {
+    const report = coerceReport({
+      repoType: 'single',
+      projects: [
+        {
+          path: '.',
+          framework: 'Rust (Axum)',
+          targetId: 'rust',
+          hasPostHog: true,
+        },
+      ],
+    });
+
+    expect(report.projects[0]).toEqual({
+      path: '.',
+      framework: 'Rust (Axum)',
+      variant: 'rust',
+      hasPostHog: true,
+      instrumentable: true,
+    });
+  });
+
+  it('points a Rust project without the SDK at a manual crate install', () => {
+    const report = coerceReport({
+      repoType: 'single',
+      projects: [
+        {
+          path: '.',
+          framework: 'Rust',
+          targetId: 'rust',
+          hasPostHog: false,
+        },
+      ],
+    });
+
+    expect(report.projects[0]).toEqual(
+      expect.objectContaining({
+        variant: 'rust',
+        instrumentable: false,
+        reason: expect.stringMatching(/add the posthog-rs crate/i),
+      }),
+    );
+  });
+
+  it('recognises Go but blocks it as not yet supported', () => {
+    const report = coerceReport({
+      repoType: 'single',
+      projects: [
+        {
+          path: '.',
+          framework: 'Go',
+          targetId: 'go',
+          hasPostHog: true,
+        },
+      ],
+    });
+
+    expect(report.projects[0]).toEqual(
+      expect.objectContaining({
+        variant: null,
+        instrumentable: false,
+        reason: expect.stringMatching(/isn't supported/i),
+      }),
+    );
+  });
+});
+
+describe('rustSdkVerifier', () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wizard-rust-detect-'));
+  });
+
+  afterEach(() => {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('confirms the SDK from the project Cargo.toml, root or nested', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'Cargo.toml'),
+      '[package]\nname = "svc"\n\n[dependencies]\nposthog-rs = "0.20"\n',
+    );
+    fs.mkdirSync(path.join(tmpDir, 'crates', 'api'), { recursive: true });
+    fs.writeFileSync(
+      path.join(tmpDir, 'crates', 'api', 'Cargo.toml'),
+      '[package]\nname = "api"\n\n[dependencies]\nserde = "1"\n',
+    );
+
+    const verify = rustSdkVerifier(tmpDir);
+    expect(verify('.')).toBe(true);
+    expect(verify('crates/api')).toBe(false);
+  });
+
+  it('returns false when the manifest is missing', () => {
+    expect(rustSdkVerifier(tmpDir)('.')).toBe(false);
   });
 });
