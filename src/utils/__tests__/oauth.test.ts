@@ -1,4 +1,14 @@
-import { extractOAuthCode, isAuthorizationTimeout } from '@utils/oauth';
+import {
+  assertWizardCompletionScope,
+  extractOAuthCode,
+  isAuthorizationTimeout,
+  parseOAuthScopes,
+} from '@utils/oauth';
+import {
+  WIZARD_OAUTH_SCOPES,
+  WIZARD_PROVISIONING_SCOPES,
+} from '@lib/constants';
+import { getOAuthScopesForProgram } from '@lib/oauth/program-scopes';
 
 describe('extractOAuthCode', () => {
   it('extracts the code from a full callback URL', () => {
@@ -68,5 +78,44 @@ describe('isAuthorizationTimeout', () => {
     const error = new Error('Authorization timed out');
     expect(error.message).not.toContain('timeout');
     expect(isAuthorizationTimeout(error)).toBe(true);
+  });
+});
+
+describe('wizard OAuth scopes', () => {
+  it('requests both scopes required to complete wizard sessions', () => {
+    const scopes = getOAuthScopesForProgram(null);
+
+    expect(scopes).toContain('wizard_session:write');
+    expect(scopes).toContain('event_definition:write');
+    expect(WIZARD_OAUTH_SCOPES).toEqual(
+      expect.arrayContaining([...WIZARD_PROVISIONING_SCOPES]),
+    );
+  });
+
+  it('accepts a newly issued token with the completion scope', () => {
+    expect(() =>
+      assertWizardCompletionScope(
+        'user:read wizard_session:write event_definition:write',
+      ),
+    ).not.toThrow();
+  });
+
+  it('asks legacy authorizations to reconnect before completion', () => {
+    expect(() =>
+      assertWizardCompletionScope('user:read wizard_session:write'),
+    ).toThrow(/missing.*event_definition:write.*Reconnect.*revoke/is);
+  });
+
+  it('preserves unrelated granted scopes when parsing the token response', () => {
+    expect(
+      parseOAuthScopes(
+        'user:read project:read wizard_session:write event_definition:write',
+      ),
+    ).toEqual([
+      'user:read',
+      'project:read',
+      'wizard_session:write',
+      'event_definition:write',
+    ]);
   });
 });

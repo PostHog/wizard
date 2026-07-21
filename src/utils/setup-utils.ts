@@ -20,7 +20,7 @@ import type { ProgramId } from '@lib/programs/program-registry';
 import { analytics } from './analytics';
 import { getUI } from '@ui';
 import { HostResolution } from '@lib/host-resolution';
-import { performOAuthFlow } from './oauth';
+import { assertWizardCompletionScope, performOAuthFlow } from './oauth';
 import { resolveGrantedProject } from './project-resolution';
 import { provisionNewAccount } from './provisioning';
 import {
@@ -576,6 +576,19 @@ async function askForWizardLogin(options: {
     projectId: options.projectId,
     baseUrl: options.baseUrl,
   });
+
+  try {
+    assertWizardCompletionScope(tokenResponse.scope);
+  } catch (error) {
+    const scopeError =
+      error instanceof Error ? error : new Error('OAuth scope check failed');
+    analytics.captureException(scopeError, {
+      step: 'wizard_login',
+      missing_scope: 'event_definition:write',
+    });
+    getUI().log.error(scopeError.message);
+    await abort();
+  }
 
   // `--project-id`, when provided, is authoritative — but only if the user actually
   // granted access to it on the consent screen. If they authorized a different
