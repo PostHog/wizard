@@ -32,11 +32,29 @@ function text(s: string): {
 
 const HANDOFF_PARAMS = Type.Object({
   goals: Type.String({ description: 'What this task was asked to achieve.' }),
-  did: Type.String({ description: 'What you actually did.' }),
+  did: Type.String({
+    description:
+      'What you actually did — for each file you edited: the change, the intention behind it, and the analytics it should feed (the insight, funnel, or dashboard tile it becomes part of).',
+  }),
   forNextAgent: Type.String({
     description: 'What the next agent should know.',
   }),
-  filesTouched: Type.Optional(Type.Array(Type.String())),
+  filesTouched: Type.Optional(
+    Type.Array(Type.String(), {
+      description: 'Paths of every file you edited.',
+    }),
+  ),
+  evidence: Type.Optional(
+    Type.String({
+      description:
+        'How you know it worked — what you ran or observed, not what you expect.',
+    }),
+  ),
+  assumptions: Type.Optional(
+    Type.String({
+      description: 'What you assumed about the app and could not verify.',
+    }),
+  ),
   conflict: Type.Optional(
     Type.String({
       description:

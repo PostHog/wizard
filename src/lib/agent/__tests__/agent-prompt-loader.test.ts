@@ -266,6 +266,24 @@ describe('resolveTask', () => {
     expect(resolved.prompt).toContain('instrument those two');
   });
 
+  it('renders evidence and assumptions into downstream context when present', () => {
+    const registry = registryOf([prompt]);
+    const dep = store.enqueue({ type: 'plan-capture' });
+    store.complete(dep.id, {
+      goals: 'decide events',
+      did: 'picked signup and purchase',
+      forNextAgent: 'instrument those two',
+      evidence: 'ran the dev server and saw both events in the console',
+      assumptions: 'the auth callback is the only login path',
+    });
+    const task = store.enqueue({ type: 'capture', dependsOn: [dep.id] });
+    const resolved = resolveTask(registry, task, store);
+    expect(resolved.prompt).toContain(
+      'ran the dev server and saw both events in the console',
+    );
+    expect(resolved.prompt).toContain('the auth callback is the only login path');
+  });
+
   it('omits the context section when there are no handoffs', () => {
     const registry = registryOf([prompt]);
     const task = store.enqueue({ type: 'capture' });

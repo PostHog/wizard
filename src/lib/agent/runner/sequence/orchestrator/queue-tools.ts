@@ -190,9 +190,26 @@ export function applyReadHandoffs(
 
 const HANDOFF_SHAPE = {
   goals: z.string().describe('What this task was asked to achieve.'),
-  did: z.string().describe('What you actually did.'),
+  did: z
+    .string()
+    .describe(
+      'What you actually did — for each file you edited: the change, the intention behind it, and the analytics it should feed (the insight, funnel, or dashboard tile it becomes part of).',
+    ),
   forNextAgent: z.string().describe('What the next agent should know.'),
-  filesTouched: z.array(z.string()).optional(),
+  filesTouched: z
+    .array(z.string())
+    .optional()
+    .describe('Paths of every file you edited.'),
+  evidence: z
+    .string()
+    .optional()
+    .describe(
+      'How you know it worked — what you ran or observed, not what you expect.',
+    ),
+  assumptions: z
+    .string()
+    .optional()
+    .describe('What you assumed about the app and could not verify.'),
   conflict: z
     .string()
     .optional()

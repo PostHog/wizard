@@ -363,6 +363,12 @@ function renderHandoffContext(task: QueuedTask, store: QueueStore): string {
     if (handoff.filesTouched?.length) {
       lines.push(`- files: ${handoff.filesTouched.join(', ')}`);
     }
+    if (handoff.evidence) {
+      lines.push(`- evidence: ${handoff.evidence}`);
+    }
+    if (handoff.assumptions) {
+      lines.push(`- assumed: ${handoff.assumptions}`);
+    }
     lines.push('');
   }
   if (lines.length === 0) return '';

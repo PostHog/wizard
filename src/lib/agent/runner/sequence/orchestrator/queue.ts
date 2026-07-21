@@ -66,6 +66,10 @@ export interface TaskHandoff {
   did: string;
   forNextAgent: string;
   filesTouched?: string[];
+  /** How the agent knows it worked — what it ran or observed. */
+  evidence?: string;
+  /** What the agent assumed about the app and could not verify. */
+  assumptions?: string;
   /** A one-line summary of any unresolved conflict, surfaced in the outro. */
   conflict?: string;
 }
