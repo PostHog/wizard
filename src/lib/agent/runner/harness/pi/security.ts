@@ -423,16 +423,27 @@ export function createSecurityExtension(ctx: ToolGateContext = {}): {
         // 'input'-context rules (prompt injection in read content), with
         // triage — same policy as the anthropic PostToolUse Read hook.
         const matches = await scanAndTriage(text, 'input', llmProvider);
+        // Critical severity or a rule asking us to block => terminate; the
+        // same gate the anthropic harness applies (yara-hooks.ts). Anything
+        // below that (e.g. a medium-severity heuristic hit) is a warning —
+        // recorded, not fatal, so a false positive doesn't kill the run.
+        const worst = matches.find(
+          (m) => m.metadata.severity === 'critical' || m.metadata.action === 'block',
+        );
         recordExternalScan(
           'PostToolUse',
           event.toolName === 'read' ? 'Read' : 'Bash',
           matches.map(toReportViolation),
-          'aborted',
+          worst ? 'aborted' : 'warned',
         );
-        if (matches.length > 0) {
+        if (worst) {
           state.criticalViolation = true;
           logToFile(
-            `[pi-security] POST-SCAN VIOLATION ${event.toolName}: ${matches[0].rule}`,
+            `[pi-security] POST-SCAN VIOLATION ${event.toolName}: ${worst.rule}`,
+          );
+        } else if (matches.length > 0) {
+          logToFile(
+            `[pi-security] POST-SCAN WARNING ${event.toolName}: ${matches[0].rule} (severity: ${matches[0].metadata.severity ?? 'unknown'})`,
           );
         }
       } catch (err) {

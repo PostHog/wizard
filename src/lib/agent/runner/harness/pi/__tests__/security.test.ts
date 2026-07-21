@@ -279,6 +279,26 @@ describe('pi-security: extension state machine (fail-closed + runaway + latch)',
     });
   });
 
+  test('a non-critical, non-block post-scan match warns without terminating', async () => {
+    const { factory, state } = createSecurityExtension();
+    const { pi, handlers } = fakePi();
+    factory(pi);
+    // piiMatch is severity: 'high', action: 'remediate' — below the terminate
+    // gate (critical severity OR action: 'block'), so it should only warn.
+    mockedScan.mockResolvedValueOnce({ matched: true, matches: [piiMatch] });
+    await handlers.tool_result({
+      toolName: 'read',
+      content: [{ type: 'text', text: 'some file content' }],
+    });
+    expect(state.criticalViolation).toBe(false);
+    expect(
+      await handlers.tool_call({
+        toolName: 'bash',
+        input: { command: 'npm install' },
+      }),
+    ).toEqual({});
+  });
+
   test('with triageAuth, a triage false_positive verdict unblocks the write', async () => {
     const { factory, state } = createSecurityExtension({
       triageAuth: { baseURL: 'https://gw.example', authToken: 'tok' },
