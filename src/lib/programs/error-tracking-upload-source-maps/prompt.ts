@@ -75,7 +75,18 @@ All file changes, build/run commands, and config edits target the project direct
     inSubproject
       ? ` — this is a monorepo, so scope your work to \`${projectPath}\` and do not touch other packages`
       : ''
-  }.
+  }.${
+    variant === 'rust' && inSubproject
+      ? `
+Cargo workspace exception: if the selected project is a member of a Cargo
+workspace (resolve the root with \`cargo locate-project --workspace
+--message-format plain\`), the workspace root's Cargo.toml (for \`[profile.*]\`
+edits), the workspace-level \`target/\` directory, and a \`.env\` next to the
+root manifest are IN SCOPE — treat them as part of the selected project, and
+follow the skill's workspace guidance for which paths to use. Every other
+package stays off-limits.`
+      : ''
+  }
 
 The skill you install in STEP 2 is the source of truth for the HOW of every
 step: its "## Steps" section has an overview, tips and per-technology
