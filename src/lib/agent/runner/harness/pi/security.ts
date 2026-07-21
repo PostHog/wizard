@@ -23,6 +23,7 @@ import type { LLMProvider, ScanMatch } from '@posthog/warlock';
 import { wizardCanUseTool } from '@lib/agent/agent-interface';
 import {
   createRepeatBlockTracker,
+  isTerminalMatch,
   isWizardDocumentationPath,
   recordExternalScan,
   repeatBlockReason,
@@ -423,13 +424,7 @@ export function createSecurityExtension(ctx: ToolGateContext = {}): {
         // 'input'-context rules (prompt injection in read content), with
         // triage — same policy as the anthropic PostToolUse Read hook.
         const matches = await scanAndTriage(text, 'input', llmProvider);
-        // Critical severity or a rule asking us to block => terminate; the
-        // same gate the anthropic harness applies (yara-hooks.ts). Anything
-        // below that (e.g. a medium-severity heuristic hit) is a warning —
-        // recorded, not fatal, so a false positive doesn't kill the run.
-        const worst = matches.find(
-          (m) => m.metadata.severity === 'critical' || m.metadata.action === 'block',
-        );
+        const worst = matches.find(isTerminalMatch);
         recordExternalScan(
           'PostToolUse',
           event.toolName === 'read' ? 'Read' : 'Bash',

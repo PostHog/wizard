@@ -539,6 +539,17 @@ const SEVERITY_RANK: Record<string, number> = {
   low: 1,
 };
 
+/** Severities that terminate the session outright, not just warn. */
+const TERMINAL_SEVERITIES = new Set(['critical']);
+
+/** A match that terminates the session rather than just warning. */
+export function isTerminalMatch(match: ScanMatch): boolean {
+  return (
+    TERMINAL_SEVERITIES.has(match.metadata.severity ?? '') ||
+    match.metadata.action === 'block'
+  );
+}
+
 /** Return the highest-severity match from a list of matches. */
 function highestSeverityMatch(matches: ScanMatch[]): ScanMatch {
   return matches.reduce((worst, m) =>
@@ -927,13 +938,7 @@ export function createPostToolUseYaraHooks(
 
             const match = highestSeverityMatch(matches);
 
-            // Critical severity or a rule asking us to block => terminate; the
-            // agent's context may be poisoned by injected instructions.
-            const isTerminal =
-              match.metadata.severity === 'critical' ||
-              match.metadata.action === 'block';
-
-            if (isTerminal) {
+            if (isTerminalMatch(match)) {
               recordMatch('PostToolUse', toolName, match, 'aborted');
               const reason =
                 `[YARA CRITICAL] ${match.rule}: Prompt injection detected in file content. ` +
