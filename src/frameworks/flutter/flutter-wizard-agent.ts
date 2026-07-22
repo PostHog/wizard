@@ -46,10 +46,11 @@ export const FLUTTER_AGENT_CONFIG: FrameworkConfig<FlutterContext> = {
     getVersion: () => undefined,
     detectPackageManager: pubPackageManager,
     // A pubspec.yaml alone is any Dart project; depending on the Flutter SDK
-    // (`sdk: flutter`) is what makes it a Flutter app.
+    // (`sdk: flutter`) is what makes it a Flutter app. Anchored to a key/value
+    // line so comments (`# sdk: flutter`) don't match.
     detect: (options) => {
       const pubspec = readPubspec(options.installDir);
-      return Promise.resolve(pubspec?.includes('sdk: flutter') ?? false);
+      return Promise.resolve(/^\s*sdk:\s*flutter\s*$/m.test(pubspec ?? ''));
     },
   },
 
@@ -63,7 +64,9 @@ export const FLUTTER_AGENT_CONFIG: FrameworkConfig<FlutterContext> = {
 
   analytics: {
     getTags: (context) => ({
-      ...(context.platforms ? { platforms: context.platforms.join(',') } : {}),
+      ...(context.platforms?.length
+        ? { platforms: context.platforms.join(',') }
+        : {}),
     }),
   },
 

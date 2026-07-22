@@ -88,8 +88,10 @@ const SIMPLE_MANAGERS: Record<string, readonly string[]> = {
 
 // `pub run` executes arbitrary packages, so it is excluded like npm exec.
 const PUB_SUBCOMMANDS = ['add', 'remove', 'get', 'upgrade', 'outdated', 'deps'];
-// flutter/dart verbs beyond `pub`; run/test execute arbitrary code (like
-// xcodebuild test) and stay out of contract.
+// flutter/dart verbs beyond `pub`. build (native build scripts) and analyze
+// (analyzer plugins) can run project-defined code, same contract as
+// `xcodebuild build`/`gradle assemble`. run/test/`pub run` are excluded only
+// because they execute *arbitrary* code by design, like `xcodebuild test`.
 const FLUTTER_DART_SUBCOMMANDS = ['analyze', 'build', 'clean', 'doctor'];
 
 // Gradle tasks are verb-anchored camelCase: assembleDebug yes, publishToMavenCentral no.
