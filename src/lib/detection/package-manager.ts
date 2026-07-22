@@ -216,6 +216,26 @@ export function bundlerPackageManager(): Promise<PackageManagerInfo> {
 }
 
 // ---------------------------------------------------------------------------
+// Flutter (pub) helper
+// ---------------------------------------------------------------------------
+
+const PUB: DetectedPackageManager = {
+  name: 'pub',
+  label: 'pub',
+  installCommand: 'flutter pub add',
+  runCommand: 'flutter',
+};
+
+export function pubPackageManager(): Promise<PackageManagerInfo> {
+  return Promise.resolve({
+    detected: [PUB],
+    primary: PUB,
+    recommendation:
+      'Use flutter pub add to add dependencies; it updates pubspec.yaml automatically.',
+  });
+}
+
+// ---------------------------------------------------------------------------
 // Android (Gradle) helper
 // ---------------------------------------------------------------------------
 
