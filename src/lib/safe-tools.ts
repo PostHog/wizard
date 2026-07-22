@@ -188,6 +188,7 @@ export const LINTING_TOOLS: string[] = [
   'php-cs-fixer',
   'phpcs',
   'phpstan',
+  'pint',
   'psalm',
 
   // PNG

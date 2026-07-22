@@ -139,6 +139,39 @@ describe('bash fence — allows real toolchain commands (from skills + field log
     expect(allow('carthage bootstrap')).toBe('allow');
   });
 
+  it('bare lint tools and vendor/bin — the non-JS verify path', () => {
+    expect(allow('ruff check .')).toBe('allow');
+    expect(allow('mypy src')).toBe('allow');
+    expect(allow('rubocop app')).toBe('allow');
+    expect(allow('swiftlint')).toBe('allow');
+    expect(allow('tsc --noEmit')).toBe('allow');
+    expect(allow('vendor/bin/pint --test')).toBe('allow');
+    expect(allow('./vendor/bin/phpstan analyse')).toBe('allow');
+    expect(allow('vendor/bin/evil')).toBe('deny');
+    expect(allow('ruffian')).toBe('deny'); // token-exact, no prefix drift
+  });
+
+  it('python compile checks for manage.py-less frameworks', () => {
+    expect(allow('python -m py_compile app/main.py')).toBe('allow');
+    expect(allow('python3 -m compileall .')).toBe('allow');
+    expect(allow('python -m http.server')).toBe('deny');
+    expect(allow('python -m pip install anything')).toBe('deny');
+  });
+
+  it('php syntax lint, nothing else', () => {
+    expect(allow('php -l routes/web.php')).toBe('allow');
+    expect(allow('php artisan serve')).toBe('deny');
+    expect(allow('php evil.php')).toBe('deny');
+  });
+
+  it('dlx/bunx parity with npx', () => {
+    expect(allow('pnpm dlx tsc --noEmit')).toBe('allow');
+    expect(allow('yarn dlx eslint .')).toBe('allow');
+    expect(allow('bunx tsc')).toBe('allow');
+    expect(allow('pnpm dlx build')).toBe('deny');
+    expect(allow('bunx -p evil tsc')).toBe('deny');
+  });
+
   it('android/jvm ecosystem', () => {
     expect(allow('./gradlew assembleDebug')).toBe('allow');
     expect(allow('./gradlew :app:assembleDebug')).toBe('allow');

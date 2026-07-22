@@ -98,7 +98,8 @@ const DANGEROUS_OPERATORS = /[;`$()]/;
 
 const ALLOWED_TOOLS_SUMMARY =
   'Allowed: npm/pnpm/yarn/bun (install|i|ci|add|remove|uninstall|update|view, run <build/lint/typecheck script>), ' +
-  'npx <lint tool|tsc|expo|pod-install|cap>, pip/pip3/poetry/pipenv/uv/pdm/conda (install/add/remove/...), ' +
+  'npx/bunx/pnpm dlx/yarn dlx <lint tool|tsc|expo|pod-install|cap>, pip/pip3/poetry/pipenv/uv/pdm/conda (install/add/remove/...), ' +
+  'python -m py_compile/compileall, bare lint tools (ruff, mypy, rubocop, phpstan, swiftlint, ...) incl. vendor/bin/<tool>, php -l, ' +
   'composer (install|require|update|remove|show), bundle (install|add|remove|update|show|exec <lint tool>), ' +
   'gem (install|uninstall|list|search), swift (package|build), pod (install|update|search), carthage (bootstrap|update), ' +
   'xcodebuild (build/clean/archive actions), gradle/gradlew (build|clean|dependencies|assemble*/compile*/bundle*/lint* tasks), ' +
@@ -169,6 +170,10 @@ function nodeDecision(parts: string[], command: string): BashFenceDecision {
     const target = parts[i + 1];
     if (target && isLintingTool(target)) return { allowed: true };
     return denyCommand(command, feedback);
+  }
+  // dlx downloads and runs a registry package, exactly like npx — same rule.
+  if (sub === 'dlx') {
+    return npxDecision(['npx', ...parts.slice(i + 1)], command);
   }
   if (NODE_SUBCOMMANDS.includes(sub)) return { allowed: true };
   if (isNodeScriptName(sub) || isLintingTool(sub)) return { allowed: true };
@@ -260,19 +265,35 @@ function commandDecision(command: string): BashFenceDecision {
   const bin = parts[0];
   if (!bin) return denyCommand(command, ALLOWED_TOOLS_SUMMARY);
   if (NODE_MANAGERS.has(bin)) return nodeDecision(parts, command);
-  if (bin === 'npx') return npxDecision(parts, command);
+  if (bin === 'npx' || bin === 'bunx') return npxDecision(parts, command);
   if (GRADLE_MANAGERS.has(bin)) return gradleDecision(parts, command);
   if (MAVEN_MANAGERS.has(bin)) return mavenDecision(parts, command);
   if (bin === 'xcodebuild') return xcodebuildDecision(parts, command);
-  // Django's system check — the one sanctioned `python` shape; bare python
-  // stays denied (python -c is arbitrary code).
-  if (
-    (bin === 'python' || bin === 'python3') &&
-    parts[1] === 'manage.py' &&
-    parts[2] === 'check'
-  ) {
-    return { allowed: true };
+  // The sanctioned `python` shapes: Django's system check, and the stdlib
+  // compile checks (the build-verify for manage.py-less python frameworks).
+  // Bare python stays denied (python -c is arbitrary code).
+  if (bin === 'python' || bin === 'python3') {
+    if (parts[1] === 'manage.py' && parts[2] === 'check') {
+      return { allowed: true };
+    }
+    if (
+      parts[1] === '-m' &&
+      (parts[2] === 'py_compile' || parts[2] === 'compileall')
+    ) {
+      return { allowed: true };
+    }
+    return denyCommand(
+      command,
+      'python may only run `manage.py check` or `-m py_compile`/`-m compileall`.',
+    );
   }
+  // PHP syntax lint only — `php <file>` executes it.
+  if (bin === 'php' && parts[1] === '-l') return { allowed: true };
+  // The curated lint/format tools run bare (ruff, mypy, rubocop, phpstan,
+  // swiftlint, ...) and from composer's vendor/bin — same set npx may run.
+  if (isLintingTool(bin)) return { allowed: true };
+  const vendorTool = bin.match(/^(?:\.\/)?vendor\/bin\/([\w.-]+)$/);
+  if (vendorTool && isLintingTool(vendorTool[1])) return { allowed: true };
   if (bin === 'uv' && parts[1] === 'pip') {
     if (parts[2] && PIP_SUBCOMMANDS.includes(parts[2]))
       return { allowed: true };
