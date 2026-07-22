@@ -27,6 +27,21 @@ export const TaskStatus = {
 
 export type TaskStatus = (typeof TaskStatus)[keyof typeof TaskStatus];
 
+/**
+ * How many steps left the integration incomplete.
+ *
+ * A skipped step is a real outcome — the agent reported the step does not apply.
+ * A step that failed, or never ran before the queue drained, means work the user
+ * is told to expect does not exist.
+ */
+export function unfinishedSteps(summary: Record<TaskStatus, number>): number {
+  return (
+    summary[TaskStatus.Failed] +
+    summary[TaskStatus.Pending] +
+    summary[TaskStatus.Running]
+  );
+}
+
 export interface QueuedTask {
   id: string;
   type: string;
