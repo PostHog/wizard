@@ -45,6 +45,19 @@ import { completionFailure } from './completion';
  * menu, and writing literal PostHog URLs that the YARA scanner blocks at write
  * time. Steering it once up front avoids the retry spirals.
  */
+/**
+ * Managing the run's task list is a LINEAR-harness concern: only the linear pi
+ * session holds the Task tools and drives the whole run itself. Orchestrator
+ * task agents each do one step and never see these tools, so this block belongs
+ * to the linear notes alone — do not leak it into task-mode guidance.
+ */
+const LINEAR_TASK_STATUS_NOTES = [
+  '- Use the Task tools to plan and track the whole run so the user always sees where you are. Create the task list once you understand the work — after you load and skim the skill workflow, not before — with one task per stage covering the whole run through to instrumenting events, creating the dashboard, and writing the setup report. Give each an imperative subject AND an `activeForm` (the present-continuous label the panel shows while it runs, e.g. subject "Install SDK" / activeForm "Installing SDK"). Keep the list current: add a task the moment you discover work it is missing.',
+  '- Try to keep exactly ONE task `in_progress`. `TaskUpdate` it to `in_progress` right before you start that stage, and to `completed` the instant you finish it — one at a time, never batched at the end. Only mark `completed` when the work is genuinely done; if the build fails, a step is partial, or you hit a blocker, keep it `in_progress` and add a task for the fix.',
+  '- After you complete a task, take the next one in order (lowest id first — earlier stages set up later ones), mark it `in_progress`, and continue. Driving the list in order top to bottom is how you finish every stage.',
+  '- Each task subject is SHORT — a few words naming only the stage of work: "Analyze project", "Install SDK", "Initialize PostHog", "Instrument events", "Set env vars", "Verify", "Create dashboard". No file or directory names, no framework/router/package names, no specific event names, and no parenthetical "(...)" detail. The detail belongs in the work and the `activeForm`, not the subject.',
+];
+
 const PI_RUNTIME_NOTES = [
   '',
   '## This runtime',
@@ -64,10 +77,7 @@ const PI_RUNTIME_NOTES = [
   "- To inspect or change a project's `.env` files, go straight to the wizard-tools MCP: `check_env_keys` to see which keys are present, `set_env_values` to write them. A plain `read`, `edit`, or `write` of any `.env*` file is blocked — reach for those tools first rather than discovering the block.",
   '- The PostHog MCP is a SINGLE tool named `posthog_exec` that takes a `command` string. The grammar: `tools` (list the catalog), `search <regex>` (find a tool by name), `info <tool>` (show a tool’s schema), `call <tool> <json>` (run it with a JSON argument object). Run `info <tool>` once before your first `call` to that tool so you pass exactly the arguments it expects. Do not guess tool names — reach them through `search`/`info`.',
   '- For the dashboard step, drive it entirely through `posthog_exec`: create the dashboard first, then add each insight to it — `call dashboard-create {…}`, then a `call insight-create {…}` per insight. The JSON argument objects are the same ones the named tools took.',
-  '- Use the Task tools to plan and track the whole run so the user always sees where you are. Create the task list once you understand the work — after you load and skim the skill workflow, not before — with one task per stage covering the whole run through to instrumenting events, creating the dashboard, and writing the setup report. Give each an imperative subject AND an `activeForm` (the present-continuous label the panel shows while it runs, e.g. subject "Install SDK" / activeForm "Installing SDK"). Keep the list current: add a task the moment you discover work it is missing.',
-  '- Try to keep exactly ONE task `in_progress`. `TaskUpdate` it to `in_progress` right before you start that stage, and to `completed` the instant you finish it — one at a time, never batched at the end. Only mark `completed` when the work is genuinely done; if the build fails, a step is partial, or you hit a blocker, keep it `in_progress` and add a task for the fix.',
-  '- After you complete a task, take the next one in order (lowest id first — earlier stages set up later ones), mark it `in_progress`, and continue. Driving the list in order top to bottom is how you finish every stage.',
-  '- Each task subject is SHORT — a few words naming only the stage of work: "Analyze project", "Install SDK", "Initialize PostHog", "Instrument events", "Set env vars", "Verify", "Create dashboard". No file or directory names, no framework/router/package names, no specific event names, and no parenthetical "(...)" detail. The detail belongs in the work and the `activeForm`, not the subject.',
+  ...LINEAR_TASK_STATUS_NOTES,
   '- Status updates are PLAIN TEXT you write in your reply, NOT a tool call — there is no status tool. When you begin a new action, put a line that starts with the literal marker [STATUS] and a short present-tense phrase (e.g. "[STATUS] Reading the router entry") in the SAME turn as the tool call for that action. CRITICAL: never send a turn that is ONLY a [STATUS] line with no tool call — a turn with no tool call ends the run. Always pair [STATUS] with a tool call. The harness parses any [STATUS] line and shows it as the live status. Do this OFTEN — several times per task — but always alongside a tool call. It is free.',
   '- When the skill asks you to verify or revise, actually verify: if the project defines a build/typecheck/lint script, run it via bash and confirm the SDK imports and initializes. If it defines none, confirm by reading the files — do NOT shell out to ad-hoc checks like `node -e` or `python -c`; they are blocked. A file being written is not verification.',
   "- When you call `dispatch_agent`, make the prompt fully self-contained (exact paths, patterns, and the precise question) — the subagent can't see your context, is read-only, and can't dispatch further.",
