@@ -8,6 +8,7 @@
  */
 import { z } from 'zod';
 import { analytics } from '@utils/analytics';
+import { logToFile } from '@utils/debug';
 import {
   TaskStatus,
   type QueueStore,
@@ -163,10 +164,12 @@ export function applyComplete(
     };
   }
   if (args.remark) {
+    const taskType = ctx.store.get(id)?.type;
     analytics.wizardCapture('orchestrator remark', {
-      task_type: ctx.store.get(id)?.type,
+      task_type: taskType,
       remark: args.remark,
     });
+    logToFile(`[orchestrator] remark (${taskType}): ${args.remark}`);
   }
   if (args.status === TaskStatus.Failed) {
     ctx.store.fail(
