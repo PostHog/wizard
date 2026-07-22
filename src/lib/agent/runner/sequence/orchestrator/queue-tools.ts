@@ -8,6 +8,7 @@
  */
 import { z } from 'zod';
 import { analytics } from '@utils/analytics';
+import { REMARK_ASK } from '@lib/agent/signals';
 import {
   TaskStatus,
   type QueueStore,
@@ -198,10 +199,6 @@ export function applyReadHandoffs(
     .filter((h): h is TaskHandoff => h !== null);
 }
 
-/** Sibling of the handoff, not part of it: captured as telemetry, never context for the next agent. Shared with the pi harness's tool schema. */
-export const REMARK_DESCRIPTION =
-  'What information or guidance would have been useful to have in the integration prompt or documentation for this task — specifically anything that would have prevented tool failures, erroneous edits, or other wasted turns.';
-
 const HANDOFF_SHAPE = {
   goals: z.string().describe('What this task was asked to achieve.'),
   did: z
@@ -292,7 +289,7 @@ export function buildOrchestratorTools(
     {
       status: z.enum(['done', 'failed', 'not needed']),
       handoff: z.object(HANDOFF_SHAPE),
-      remark: z.string().optional().describe(REMARK_DESCRIPTION),
+      remark: z.string().optional().describe(REMARK_ASK),
     },
     ((args: {
       status: 'done' | 'failed' | 'not needed';

@@ -14,11 +14,11 @@ import { Type } from 'typebox';
 import { defineTool } from '@earendil-works/pi-coding-agent';
 import type { ToolDefinition } from '@earendil-works/pi-coding-agent';
 import { analytics } from '@utils/analytics';
+import { REMARK_ASK } from '@lib/agent/signals';
 import {
   applyComplete,
   applyEnqueue,
   applyReadHandoffs,
-  REMARK_DESCRIPTION,
   type EnqueueArgs,
   type OrchestratorToolsContext,
 } from '../../sequence/orchestrator/queue-tools';
@@ -123,7 +123,7 @@ export function createPiOrchestratorTools(
         Type.Literal('not needed'),
       ]),
       handoff: HANDOFF_PARAMS,
-      remark: Type.Optional(Type.String({ description: REMARK_DESCRIPTION })),
+      remark: Type.Optional(Type.String({ description: REMARK_ASK })),
     }),
     execute(_id, args) {
       const res = applyComplete(
