@@ -55,6 +55,12 @@ const HANDOFF_PARAMS = Type.Object({
       description: 'What you assumed about the app and could not verify.',
     }),
   ),
+  remark: Type.Optional(
+    Type.String({
+      description:
+        'What information or guidance would have been useful to have in the integration prompt or documentation for this task — specifically anything that would have prevented tool failures, erroneous edits, or other wasted turns.',
+    }),
+  ),
   conflict: Type.Optional(
     Type.String({
       description:

@@ -70,6 +70,8 @@ export interface TaskHandoff {
   evidence?: string;
   /** What the agent assumed about the app and could not verify. */
   assumptions?: string;
+  /** Guidance that would have saved this task turns. Telemetry only — stripped before any agent reads a handoff. */
+  remark?: string;
   /** A one-line summary of any unresolved conflict, surfaced in the outro. */
   conflict?: string;
 }

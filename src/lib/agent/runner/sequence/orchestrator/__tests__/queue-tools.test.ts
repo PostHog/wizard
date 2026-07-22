@@ -135,6 +135,29 @@ describe('apply functions', () => {
     expect(store.nextRunnable().map((task) => task.id)).toContain(dependent.id);
   });
 
+  it('read_handoffs never returns a remark — it is telemetry, not context for the next step', () => {
+    const dep = store.enqueue({ type: 'install' });
+    const dependent = store.enqueue({ type: 'init', dependsOn: [dep.id] });
+    store.start(dep.id);
+    store.complete(dep.id, {
+      goals: 'g',
+      did: 'd',
+      forNextAgent: 'n',
+      remark: 'the install docs omitted the peer dependency',
+    });
+    ctx.currentTaskId = dependent.id;
+
+    for (const args of [{}, { taskId: dep.id }, { type: 'install' }]) {
+      const [handoff] = applyReadHandoffs(ctx, args);
+      expect(handoff.did).toBe('d');
+      expect(handoff.remark).toBeUndefined();
+    }
+    // The remark is still on the stored handoff, for the run-end report.
+    expect(store.readHandoff(dep.id)?.remark).toBe(
+      'the install docs omitted the peer dependency',
+    );
+  });
+
   it('read_handoffs returns a dependency handoff for the running task', () => {
     const dep = store.enqueue({ type: 'install' });
     store.start(dep.id);

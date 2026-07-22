@@ -168,16 +168,23 @@ export function applyComplete(
   return { ok: true };
 }
 
+/** A remark is a complaint about the run, not signal for the next step — strip it so no agent reasons about an earlier task's grievance. */
+function withoutRemark(handoff: TaskHandoff): TaskHandoff {
+  const stripped = { ...handoff };
+  delete stripped.remark;
+  return stripped;
+}
+
 export function applyReadHandoffs(
   ctx: OrchestratorToolsContext,
   args: { type?: string; taskId?: string },
 ): TaskHandoff[] {
   if (args.taskId) {
     const h = ctx.store.readHandoff(args.taskId);
-    return h ? [h] : [];
+    return h ? [withoutRemark(h)] : [];
   }
   if (args.type) {
-    return ctx.store.readHandoffsByType(args.type);
+    return ctx.store.readHandoffsByType(args.type).map(withoutRemark);
   }
   // No filter: every handoff of a dependency of the current task.
   const currentId = ctx.currentTaskId;
@@ -185,7 +192,8 @@ export function applyReadHandoffs(
   if (!current) return [];
   return current.dependsOn
     .map((depId) => ctx.store.readHandoff(depId))
-    .filter((h): h is TaskHandoff => h !== null);
+    .filter((h): h is TaskHandoff => h !== null)
+    .map(withoutRemark);
 }
 
 const HANDOFF_SHAPE = {
@@ -210,6 +218,12 @@ const HANDOFF_SHAPE = {
     .string()
     .optional()
     .describe('What you assumed about the app and could not verify.'),
+  remark: z
+    .string()
+    .optional()
+    .describe(
+      'What information or guidance would have been useful to have in the integration prompt or documentation for this task — specifically anything that would have prevented tool failures, erroneous edits, or other wasted turns.',
+    ),
   conflict: z
     .string()
     .optional()

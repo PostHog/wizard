@@ -21,7 +21,11 @@ import {
 } from 'fs';
 import * as path from 'path';
 import { OutroKind, type WizardSession } from '@lib/wizard-session';
-import { POSTHOG_DOCS_URL, type Integration } from '@lib/constants';
+import {
+  POSTHOG_DOCS_URL,
+  WIZARD_REMARK_EVENT_NAME,
+  type Integration,
+} from '@lib/constants';
 import { FRAMEWORK_REGISTRY } from '@lib/registry';
 import {
   installSkillById,
@@ -101,6 +105,33 @@ export function sweepRunInstalledSkills(
     rmSync(path.join(claudeSkillsDir, id), { recursive: true, force: true });
     logToFile(`[orchestrator] removed run-installed skill ${id}`);
   }
+}
+
+/** One task's remark, attributed to the step and model that produced it. */
+export interface RunRemark {
+  task_type: string;
+  status: TaskStatus;
+  harness: string;
+  model: string | undefined;
+  remark: string;
+}
+
+/** Every remark the run's tasks left, in queue order. Empty on a run where nothing cost a task turns. */
+export function collectRunRemarks(
+  tasks: readonly QueuedTask[],
+  attribute: (task: QueuedTask) => {
+    harness: string;
+    model: string | undefined;
+  },
+): RunRemark[] {
+  return tasks
+    .filter((t) => t.handoff?.remark)
+    .map((t) => ({
+      task_type: t.type,
+      status: t.status,
+      ...attribute(t),
+      remark: t.handoff?.remark as string,
+    }));
 }
 
 function toTodoStatus(status: TaskStatus): string {
@@ -436,7 +467,6 @@ export async function runOrchestrator(
   const preexistingSkills = new Set(
     existsSync(claudeSkillsDir) ? readdirSync(claudeSkillsDir) : [],
   );
-  let remarkRequested = false;
   const runTask: RunTask = async (task) => {
     renderQueue();
     try {
@@ -477,18 +507,6 @@ export async function runOrchestrator(
           );
         }
       }
-      // The run-end reflection fires once, on the task that is last in the
-      // queue when it starts — nothing else pending or running alongside it.
-      const isLastTask = !store
-        .list()
-        .some(
-          (t) =>
-            t.id !== task.id &&
-            (t.status === TaskStatus.Pending ||
-              t.status === TaskStatus.Running),
-        );
-      const requestRemark = isLastTask && !remarkRequested;
-      if (requestRemark) remarkRequested = true;
       // Empty spinner messages suppress the per-task spinner line (the queue
       // panel shows progress); errors still surface — the harness stops the
       // spinner with its own error text.
@@ -513,7 +531,8 @@ export async function runOrchestrator(
         spinnerMessage: '',
         successMessage: '',
         additionalFeatureQueue: [],
-        requestRemark,
+        // Every task remarks in its handoff instead; the run reports them together.
+        requestRemark: false,
         analyticsProperties: {
           task_type: task.type,
           task_id: task.id,
@@ -587,6 +606,28 @@ export async function runOrchestrator(
   logToFile(
     `[orchestrator] DONE done=${summary.done} failed=${summary.failed} total=${summary.total}`,
   );
+
+  // Each task remarked in its own handoff; the run reports them once, together.
+  const remarks = collectRunRemarks(store.list(), (task) => {
+    const pick = resolveHarness(switchboardCtx, task.type);
+    return {
+      harness: pick.harness,
+      model: taskModelSpec(registry, task, pick.harness).model ?? pick.model,
+    };
+  });
+  if (remarks.length > 0) {
+    analytics.capture(WIZARD_REMARK_EVENT_NAME, {
+      remarks,
+      remark_count: remarks.length,
+      task_total: summary.total,
+    });
+    logToFile(
+      `[orchestrator] remarks (${remarks.length}/${summary.total} tasks):\n` +
+        remarks
+          .map((r) => `  ${r.task_type} [${r.model}]: ${r.remark}`)
+          .join('\n'),
+    );
+  }
   analytics.wizardCapture('orchestrator run finished', {
     tasks_total: summary.total,
     tasks_done: summary.done,
