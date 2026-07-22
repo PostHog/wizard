@@ -11,10 +11,17 @@
  * stays product-ignorant: it is the queue, the executor, and the loader.
  */
 import { randomUUID } from 'crypto';
-import { cpSync, existsSync, mkdirSync, readdirSync, rmSync } from 'fs';
+import {
+  cpSync,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  rmSync,
+  writeFileSync,
+} from 'fs';
 import * as path from 'path';
 import { OutroKind, type WizardSession } from '@lib/wizard-session';
-import { pruneSkillToDocs } from '@lib/skill-install';
+import { WORKFLOW_STEP_FILE } from '@lib/skill-install';
 import { POSTHOG_DOCS_URL, type Integration } from '@lib/constants';
 import { FRAMEWORK_REGISTRY } from '@lib/registry';
 import {
@@ -55,10 +62,11 @@ import {
 } from '@lib/agent/agent-prompt-loader';
 
 /**
- * Promote the framework reference docs from the run cache into .claude/skills
+ * Copy the framework reference docs out of the run cache into .claude/skills
  * before the cache is wiped — the one durable artifact an orchestrator run
- * leaves, matching what a linear run leaves behind. Never clobbers an
- * existing install.
+ * leaves. Only the docs leave the cache: the workflow index (SKILL.md) and
+ * the numbered step files are never copied. Never clobbers an existing
+ * install.
  */
 export function promoteReferenceSkill(
   referenceDir: string,
@@ -66,11 +74,20 @@ export function promoteReferenceSkill(
   referenceSkillId: string,
 ): void {
   const target = path.join(claudeSkillsDir, referenceSkillId);
-  if (!existsSync(referenceDir) || existsSync(target)) return;
-  mkdirSync(claudeSkillsDir, { recursive: true });
-  cpSync(referenceDir, target, { recursive: true });
-  // The user keeps the docs, not the agent's workflow files.
-  pruneSkillToDocs(target);
+  const referencesDir = path.join(referenceDir, 'references');
+  if (!existsSync(referencesDir) || existsSync(target)) return;
+  const docs = readdirSync(referencesDir).filter(
+    (f) => !WORKFLOW_STEP_FILE.test(f),
+  );
+  if (docs.length === 0) return;
+  mkdirSync(path.join(target, 'references'), { recursive: true });
+  for (const f of docs) {
+    cpSync(path.join(referencesDir, f), path.join(target, 'references', f), {
+      recursive: true,
+    });
+  }
+  // The marker keeps the copy recognizable to the sweep and future runs.
+  writeFileSync(path.join(target, '.posthog-wizard'), '');
   logToFile(
     `[orchestrator] kept reference docs at .claude/skills/${referenceSkillId}`,
   );

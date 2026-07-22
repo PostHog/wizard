@@ -24,7 +24,8 @@ export function isSkillInstallCommand(command: string): boolean {
 }
 
 /** Numbered workflow-step file: `1-begin.md`, `basic-integration-1.0-edit.md`. */
-const STEP_FILE = /(^|-)\d+(\.\d+)*-[\w-]+\.md$/;
+export const WORKFLOW_STEP_FILE = /(^|-)\d+(\.\d+)*-[\w-]+\.md$/;
+const STEP_FILE = WORKFLOW_STEP_FILE;
 
 /**
  * Strip a kept integration skill down to its docs: remove SKILL.md (the
