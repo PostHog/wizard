@@ -9,7 +9,9 @@
 
 import React from 'react';
 import { render } from 'ink-testing-library';
+import { Box } from 'ink';
 import { AuthErrorScreen } from '@ui/tui/screens/AuthErrorScreen';
+import { ProgressList } from '@ui/tui/primitives/ProgressList';
 import { ManagedSettingsScreen } from '@ui/tui/screens/ManagedSettingsScreen';
 import { SettingsOverrideScreen } from '@ui/tui/screens/SettingsOverrideScreen';
 import type { SettingsConflict } from '@lib/agent/agent-interface';
@@ -139,6 +141,26 @@ check(
     store={fakeStore({ settingsConflicts: [projectConflict] })}
   />,
   [projectConflict.path, 'ANTHROPIC_BASE_URL', 'Backup & continue'],
+);
+
+check(
+  'ProgressList — not-needed row leads with the note and truncates to one line',
+  <Box width={34}>
+    <ProgressList
+      items={[
+        { label: 'Install the PostHog SDK', status: 'completed' },
+        {
+          label:
+            'Wire the global error boundary into the application shell for error tracking',
+          status: 'skipped',
+        },
+        { label: 'Write the setup report', status: 'pending' },
+      ]}
+    />
+  </Box>,
+  ['not needed', 'Wire the global', '…'],
+  // Truncated, so the tail of the long label must not render.
+  ['error tracking', '(skipped)'],
 );
 
 if (failures > 0) {

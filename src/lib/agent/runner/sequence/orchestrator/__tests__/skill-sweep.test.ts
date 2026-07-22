@@ -52,6 +52,24 @@ describe('sweepRunInstalledSkills', () => {
     expect(fs.readdirSync(skillsDir)).toEqual(['my-own-skill']);
   });
 
+  it('runs after every task, keeping the durable set clean mid-run', () => {
+    // Task 1 installs two step skills, then finishes.
+    makeSkill(skillsDir, 'integration-v2-dashboard', true);
+    makeSkill(skillsDir, 'integration-v2-insight', true);
+    sweepRunInstalledSkills(skillsDir, new Set(), 'integration-django');
+    expect(fs.readdirSync(skillsDir)).toEqual([]);
+
+    // Task 2 installs the reference docs and one more step skill.
+    makeSkill(skillsDir, 'integration-django', true);
+    makeSkill(skillsDir, 'integration-v2-build', true);
+    sweepRunInstalledSkills(skillsDir, new Set(), 'integration-django');
+    expect(fs.readdirSync(skillsDir)).toEqual(['integration-django']);
+
+    // Later sweeps stay idempotent — the surviving docs are never re-judged.
+    sweepRunInstalledSkills(skillsDir, new Set(), 'integration-django');
+    expect(fs.readdirSync(skillsDir)).toEqual(['integration-django']);
+  });
+
   it('is a no-op when the skills dir does not exist', () => {
     expect(() =>
       sweepRunInstalledSkills(

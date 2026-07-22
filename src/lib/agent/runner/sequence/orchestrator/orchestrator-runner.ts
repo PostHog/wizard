@@ -398,6 +398,13 @@ export async function runOrchestrator(
   // its agent prompt (the WHAT) and the mini-skills it needs (the HOW), then
   // runs on its own model and tools.
   const taskSkillsRoot = path.join(QUEUE_DIR_NAME, 'skills');
+  // Task agents can install durable skills mid-run (load_skill), and only the
+  // framework reference docs earn a place — snapshot what was already there so
+  // the sweeps remove exactly what this run added.
+  const claudeSkillsDir = path.join(session.installDir, '.claude', 'skills');
+  const preexistingSkills = new Set(
+    existsSync(claudeSkillsDir) ? readdirSync(claudeSkillsDir) : [],
+  );
   let remarkRequested = false;
   const runTask: RunTask = async (task) => {
     renderQueue();
@@ -483,16 +490,21 @@ export async function runOrchestrator(
         },
       });
     } finally {
+      // Durable skills a task installed are irrelevant to later tasks — and
+      // the sdk harness auto-loads .claude/skills into every agent — so sweep
+      // as each task ends, not only at run end.
+      try {
+        sweepRunInstalledSkills(
+          claudeSkillsDir,
+          preexistingSkills,
+          referenceSkillId,
+        );
+      } catch (err) {
+        logToFile(`[orchestrator] per-task skill sweep failed: ${String(err)}`);
+      }
       renderQueue();
     }
   };
-  // Task agents can install durable skills mid-run (load_skill), and only the
-  // framework reference docs earn a place after the run — snapshot what was
-  // already there so the sweep below removes exactly what this run added.
-  const claudeSkillsDir = path.join(session.installDir, '.claude', 'skills');
-  const preexistingSkills = new Set(
-    existsSync(claudeSkillsDir) ? readdirSync(claudeSkillsDir) : [],
-  );
   try {
     await drainQueue(store, runTask);
   } finally {

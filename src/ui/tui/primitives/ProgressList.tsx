@@ -36,34 +36,41 @@ export const ProgressList = ({ items, title }: ProgressListProps) => {
       {items.length === 0 && <LoadingBox message="Analyzing project..." />}
       {items.map((item, i) => {
         const skipped = item.status === 'skipped';
-        const icon =
-          item.status === 'completed'
-            ? Icons.squareFilled
-            : item.status === 'in_progress'
-            ? Icons.triangleRight
-            : Icons.squareOpen;
+        const icon = skipped
+          ? Icons.diamondOpen
+          : item.status === 'completed'
+          ? Icons.squareFilled
+          : item.status === 'in_progress'
+          ? Icons.triangleRight
+          : Icons.squareOpen;
         const color =
           item.status === 'completed'
             ? Colors.success
             : item.status === 'in_progress'
             ? Colors.primary
             : Colors.muted;
-        const label = skipped
-          ? `(not needed) ${item.label}`
-          : item.status === 'in_progress' && item.activeForm
-          ? item.activeForm
-          : item.label;
+        const label =
+          item.status === 'in_progress' && item.activeForm
+            ? item.activeForm
+            : item.label;
 
+        // One row per task: the pane is half the terminal, so truncate rather
+        // than wrap, and lead with the status note so it survives truncation.
         return (
-          <Text key={i}>
-            <Text color={color}>{icon}</Text>
-            <Text
-              dimColor={item.status === 'pending' || skipped}
-              strikethrough={skipped}
-            >
-              {' '}
-              {label}
-            </Text>
+          <Text key={i} wrap="truncate">
+            <Text color={color}>{icon}</Text>{' '}
+            {skipped ? (
+              <>
+                <Text dimColor italic>
+                  not needed{' '}
+                </Text>
+                <Text dimColor strikethrough>
+                  {item.label}
+                </Text>
+              </>
+            ) : (
+              <Text dimColor={item.status === 'pending'}>{label}</Text>
+            )}
           </Text>
         );
       })}
