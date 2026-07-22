@@ -96,6 +96,8 @@ export interface TaskRunInputs {
   successMessage: string;
   errorMessage?: string;
   additionalFeatureQueue: readonly AdditionalFeature[];
+  /** Whether to request the end-of-run reflection remark (fired once, on the last task). */
+  requestRemark: boolean;
   /** Per-call analytics properties merged into `agent completed` / `agent aborted` events. */
   analyticsProperties: Record<string, unknown>;
 }

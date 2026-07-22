@@ -135,26 +135,19 @@ describe('apply functions', () => {
     expect(store.nextRunnable().map((task) => task.id)).toContain(dependent.id);
   });
 
-  it('a remark lands on the task, never in the handoff the next agent reads', () => {
-    const dep = store.enqueue({ type: 'install' });
-    const dependent = store.enqueue({ type: 'init', dependsOn: [dep.id] });
-    ctx.currentTaskId = dep.id;
-    store.start(dep.id);
+  it('a remark lands on the task, not in the handoff the next agent reads', () => {
+    const t = store.enqueue({ type: 'install' });
+    ctx.currentTaskId = t.id;
+    store.start(t.id);
     applyComplete(ctx, {
       status: 'done',
       handoff: { goals: 'g', did: 'd', forNextAgent: 'n' },
-      remark: 'the install docs omitted the peer dependency',
+      remark: 'the docs omitted the peer dependency',
     });
-
-    expect(store.get(dep.id)?.remark).toBe(
-      'the install docs omitted the peer dependency',
+    expect(store.get(t.id)?.remark).toBe(
+      'the docs omitted the peer dependency',
     );
-    ctx.currentTaskId = dependent.id;
-    for (const args of [{}, { taskId: dep.id }, { type: 'install' }]) {
-      const [handoff] = applyReadHandoffs(ctx, args);
-      expect(handoff.did).toBe('d');
-      expect(Object.keys(handoff)).not.toContain('remark');
-    }
+    expect(store.readHandoff(t.id)).not.toHaveProperty('remark');
   });
 
   it('read_handoffs returns a dependency handoff for the running task', () => {

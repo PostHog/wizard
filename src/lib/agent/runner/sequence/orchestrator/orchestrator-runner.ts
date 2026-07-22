@@ -107,33 +107,6 @@ export function sweepRunInstalledSkills(
   }
 }
 
-/** One task's remark, attributed to the step and model that produced it. */
-export interface RunRemark {
-  task_type: string;
-  status: TaskStatus;
-  harness: string;
-  model: string | undefined;
-  remark: string;
-}
-
-/** Every remark the run's tasks left, in queue order. Empty on a run where nothing cost a task turns. */
-export function collectRunRemarks(
-  tasks: readonly QueuedTask[],
-  attribute: (task: QueuedTask) => {
-    harness: string;
-    model: string | undefined;
-  },
-): RunRemark[] {
-  return tasks
-    .filter((t): t is QueuedTask & { remark: string } => !!t.remark)
-    .map((t) => ({
-      task_type: t.type,
-      status: t.status,
-      ...attribute(t),
-      remark: t.remark,
-    }));
-}
-
 function toTodoStatus(status: TaskStatus): string {
   switch (status) {
     case TaskStatus.Running:
@@ -604,26 +577,12 @@ export async function runOrchestrator(
     `[orchestrator] DONE done=${summary.done} failed=${summary.failed} total=${summary.total}`,
   );
 
-  // Each task remarked in its own handoff; the run reports them once, together.
-  const remarks = collectRunRemarks(store.list(), (task) => {
-    const pick = resolveHarness(switchboardCtx, task.type);
-    return {
-      harness: pick.harness,
-      model: taskModelSpec(registry, task, pick.harness).model ?? pick.model,
-    };
-  });
+  const remarks = store
+    .list()
+    .filter((t) => t.remark)
+    .map((t) => `${t.type}: ${t.remark}`);
   if (remarks.length > 0) {
-    analytics.capture(WIZARD_REMARK_EVENT_NAME, {
-      remarks,
-      remark_count: remarks.length,
-      task_total: summary.total,
-    });
-    logToFile(
-      `[orchestrator] remarks (${remarks.length}/${summary.total} tasks):\n` +
-        remarks
-          .map((r) => `  ${r.task_type} [${r.model}]: ${r.remark}`)
-          .join('\n'),
-    );
+    analytics.capture(WIZARD_REMARK_EVENT_NAME, { remark: remarks.join('\n') });
   }
   analytics.wizardCapture('orchestrator run finished', {
     tasks_total: summary.total,

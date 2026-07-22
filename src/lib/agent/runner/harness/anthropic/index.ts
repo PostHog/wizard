@@ -107,6 +107,7 @@ export const anthropicBackend: AgentHarness = {
       successMessage,
       errorMessage,
       additionalFeatureQueue,
+      requestRemark,
       analyticsProperties,
     } = inputs;
     const options = sessionToOptions(session);
@@ -140,8 +141,7 @@ export const anthropicBackend: AgentHarness = {
         successMessage,
         errorMessage,
         additionalFeatureQueue,
-        // Tasks remark on complete_task; executeAgent's reflection is the linear flow's.
-        requestRemark: false,
+        requestRemark,
         analyticsProperties,
       },
     );
