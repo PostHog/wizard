@@ -439,7 +439,6 @@ export async function runOrchestrator(
     spinnerMessage: 'Planning the integration...',
     successMessage: 'Planned the integration',
     additionalFeatureQueue: [],
-    requestRemark: false,
     analyticsProperties: { task_type: 'seed', harness: seedPick.harness },
   });
   if (seedResult.error) {
@@ -531,8 +530,6 @@ export async function runOrchestrator(
         spinnerMessage: '',
         successMessage: '',
         additionalFeatureQueue: [],
-        // Every task remarks in its handoff instead; the run reports them together.
-        requestRemark: false,
         analyticsProperties: {
           task_type: task.type,
           task_id: task.id,

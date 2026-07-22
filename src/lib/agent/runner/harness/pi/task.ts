@@ -19,9 +19,8 @@
 import { getUI } from '@ui';
 import { logToFile } from '@utils/debug';
 import { analytics } from '@utils/analytics';
-import { WIZARD_REMARK_EVENT_NAME, WIZARD_USER_AGENT } from '@lib/constants';
+import { WIZARD_USER_AGENT } from '@lib/constants';
 import { AgentErrorType } from '@lib/agent/agent-interface';
-import { REMARK_INSTRUCTION } from '@lib/agent/signals';
 import { AgentOutputSignals } from '@lib/agent/output-signals';
 import { TaskStatus } from '../../sequence/orchestrator/queue';
 import type { OrchestratorToolsContext } from '../../sequence/orchestrator/queue-tools';
@@ -161,7 +160,6 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
     spinnerMessage,
     successMessage,
     errorMessage,
-    requestRemark,
     analyticsProperties,
   } = inputs;
 
@@ -391,14 +389,6 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
           orchestrator.currentTaskId ? TASK_NUDGE : SEED_NUDGE,
         );
       }
-
-      if (requestRemark && !security.state.criticalViolation) {
-        try {
-          await agentSession.prompt(REMARK_INSTRUCTION);
-        } catch (err) {
-          logToFile(`[pi-task] remark request failed: ${String(err)}`);
-        }
-      }
     } finally {
       unsubscribe();
       mcpCleanup?.();
@@ -411,11 +401,6 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
       );
       captureAborted();
       return { error: AgentErrorType.YARA_VIOLATION };
-    }
-
-    const remark = signals.remark();
-    if (remark) {
-      analytics.capture(WIZARD_REMARK_EVENT_NAME, { remark });
     }
 
     const stats = agentSession.getSessionStats();
