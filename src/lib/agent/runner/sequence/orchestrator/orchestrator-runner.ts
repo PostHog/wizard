@@ -408,7 +408,6 @@ export async function runOrchestrator(
     spinnerMessage: 'Planning the integration...',
     successMessage: 'Planned the integration',
     additionalFeatureQueue: [],
-    requestRemark: false,
     analyticsProperties: { task_type: 'seed', harness: seedPick.harness },
   });
   if (seedResult.error) {
@@ -436,7 +435,6 @@ export async function runOrchestrator(
   const preexistingSkills = new Set(
     existsSync(claudeSkillsDir) ? readdirSync(claudeSkillsDir) : [],
   );
-  let remarkRequested = false;
   const runTask: RunTask = async (task) => {
     renderQueue();
     try {
@@ -477,18 +475,6 @@ export async function runOrchestrator(
           );
         }
       }
-      // The run-end reflection fires once, on the task that is last in the
-      // queue when it starts — nothing else pending or running alongside it.
-      const isLastTask = !store
-        .list()
-        .some(
-          (t) =>
-            t.id !== task.id &&
-            (t.status === TaskStatus.Pending ||
-              t.status === TaskStatus.Running),
-        );
-      const requestRemark = isLastTask && !remarkRequested;
-      if (requestRemark) remarkRequested = true;
       // Empty spinner messages suppress the per-task spinner line (the queue
       // panel shows progress); errors still surface — the harness stops the
       // spinner with its own error text.
@@ -513,7 +499,6 @@ export async function runOrchestrator(
         spinnerMessage: '',
         successMessage: '',
         additionalFeatureQueue: [],
-        requestRemark,
         analyticsProperties: {
           task_type: task.type,
           task_id: task.id,
@@ -587,6 +572,7 @@ export async function runOrchestrator(
   logToFile(
     `[orchestrator] DONE done=${summary.done} failed=${summary.failed} total=${summary.total}`,
   );
+
   analytics.wizardCapture('orchestrator run finished', {
     tasks_total: summary.total,
     tasks_done: summary.done,
