@@ -139,6 +139,21 @@ describe('bash fence — allows real toolchain commands (from skills + field log
     expect(allow('carthage bootstrap')).toBe('allow');
   });
 
+  it('elixir ecosystem', () => {
+    expect(allow('mix deps.get')).toBe('allow');
+    expect(allow('mix deps.update posthog')).toBe('allow');
+    expect(allow('mix deps.tree')).toBe('allow');
+    expect(allow('mix compile')).toBe('allow');
+    expect(allow('mix format')).toBe('allow');
+    expect(allow('mix hex.info posthog')).toBe('allow');
+    // mix runs arbitrary project-defined tasks — everything else stays denied.
+    expect(allow('mix run priv/repo/seeds.exs')).toBe('deny');
+    expect(allow('mix test')).toBe('deny');
+    expect(allow('mix phx.server')).toBe('deny');
+    expect(allow('mix ecto.migrate')).toBe('deny');
+    expect(allow('mix do deps.get, run evil.exs')).toBe('deny');
+  });
+
   it('android/jvm ecosystem', () => {
     expect(allow('./gradlew assembleDebug')).toBe('allow');
     expect(allow('./gradlew :app:assembleDebug')).toBe('allow');
