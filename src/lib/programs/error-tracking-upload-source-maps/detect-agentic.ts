@@ -46,19 +46,17 @@ export type DetectionReport = {
 
 /**
  * Variant precedence for the agentic picker (most specific first). The detector
- * keeps the EARLIEST matching target. Unsupported native targets are included
- * as guards before Android and iOS so React Native and Flutter projects with
- * nested Gradle or Xcode manifests are not misclassified as instrumentable
- * native apps. JS ordering mirrors `pickJsVariant` in detect.ts: opinionated
- * frameworks → bundlers → bare React → Node → generic web.
+ * keeps the EARLIEST matching target. The unsupported Flutter target stays in
+ * the list as a guard, and React Native ranks ahead of Android and iOS, so
+ * projects with nested Gradle or Xcode manifests are not misclassified as
+ * plain native apps. JS ordering mirrors `pickJsVariant` in detect.ts:
+ * opinionated frameworks → bundlers → bare React → Node → generic web.
  */
-const NON_AUTOMATABLE_NATIVE_VARIANTS: readonly SkillVariant[] = [
-  'react-native',
-  'flutter',
-];
+const NON_AUTOMATABLE_NATIVE_VARIANTS: readonly SkillVariant[] = ['flutter'];
 
 const VARIANT_PRECEDENCE: readonly SkillVariant[] = [
   ...NON_AUTOMATABLE_NATIVE_VARIANTS,
+  'react-native',
   'android',
   'ios',
   'nextjs',
@@ -117,9 +115,15 @@ function toSourceMapsReport(report: AgenticDetectionReport): DetectionReport {
   return {
     repoType: report.repoType,
     projects: report.projects.map((p) => {
+      // Flutter is never automatable; an RN/Expo-labelled project only counts
+      // when it resolved to the react-native target — nested Gradle/Xcode
+      // manifests inside an RN repo must not claim android or ios.
+      const namesForeignNativePlatform =
+        /\bflutter\b/i.test(p.framework) ||
+        (/\b(?:react[\s-]*native|expo)\b/i.test(p.framework) &&
+          p.targetId !== 'react-native');
       const variant =
-        isAutomatableVariant(p.targetId) &&
-        !/\b(?:react[\s-]*native|expo|flutter)\b/i.test(p.framework)
+        isAutomatableVariant(p.targetId) && !namesForeignNativePlatform
           ? p.targetId
           : null;
       return {
