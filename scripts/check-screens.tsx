@@ -157,7 +157,12 @@ check(
       ]}
     />
   </Box>,
-  ['Install the PostHog SDK', '…', 'Progress: 1/2 completed'],
+  [
+    'Install the PostHog SDK',
+    '…',
+    'Progress: 1/2 completed',
+    '(1 skipped as not required)',
+  ],
   // The not-needed task is gone and counts against nothing.
   ['Add user identification', 'not needed', '1/3'],
 );

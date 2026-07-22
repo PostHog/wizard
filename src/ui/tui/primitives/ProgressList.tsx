@@ -24,6 +24,7 @@ export const ProgressList = ({ items, title }: ProgressListProps) => {
   const visible = items.filter((t) => t.status !== 'skipped');
   const resolved = visible.filter((t) => t.status === 'completed').length;
   const total = visible.length;
+  const notRequired = items.length - visible.length;
 
   return (
     <Box flexDirection="column">
@@ -69,6 +70,9 @@ export const ProgressList = ({ items, title }: ProgressListProps) => {
               : 'Cleaning up...'}
           </Text>
         </Box>
+      )}
+      {notRequired > 0 && (
+        <Text dimColor>({notRequired} skipped as not required)</Text>
       )}
     </Box>
   );
