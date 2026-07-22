@@ -189,6 +189,22 @@ describe('flutter detect', () => {
     const opts = project({ 'package.json': '{}' });
     await expect(detect(opts)).resolves.toBe(false);
   });
+
+  test('does not claim a commented-out flutter dependency', async () => {
+    const opts = project({
+      'pubspec.yaml':
+        'name: my_dart_cli\ndependencies:\n#  sdk: flutter removed\n',
+    });
+    await expect(detect(opts)).resolves.toBe(false);
+  });
+
+  test('claims the YAML-legal multi-space variant', async () => {
+    const opts = project({
+      'pubspec.yaml':
+        'name: app\ndependencies:\n  flutter:\n    sdk:  flutter\n',
+    });
+    await expect(detect(opts)).resolves.toBe(true);
+  });
 });
 
 describe('android detect', () => {
