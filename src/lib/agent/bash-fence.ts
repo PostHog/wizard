@@ -86,6 +86,12 @@ const SIMPLE_MANAGERS: Record<string, readonly string[]> = {
   carthage: ['bootstrap', 'update'],
 };
 
+// `pub run` executes arbitrary packages, so it is excluded like npm exec.
+const PUB_SUBCOMMANDS = ['add', 'remove', 'get', 'upgrade', 'outdated', 'deps'];
+// flutter/dart verbs beyond `pub`; run/test execute arbitrary code (like
+// xcodebuild test) and stay out of contract.
+const FLUTTER_DART_SUBCOMMANDS = ['analyze', 'build', 'clean', 'doctor'];
+
 // Gradle tasks are verb-anchored camelCase: assembleDebug yes, publishToMavenCentral no.
 const GRADLE_EXACT_TASKS = new Set(['build', 'clean', 'dependencies']);
 const GRADLE_TASK_VERBS = ['assemble', 'compile', 'bundle', 'lint'];
@@ -102,7 +108,8 @@ const ALLOWED_TOOLS_SUMMARY =
   'composer (install|require|update|remove|show), bundle (install|add|remove|update|show|exec <lint tool>), ' +
   'gem (install|uninstall|list|search), swift (package|build), pod (install|update|search), carthage (bootstrap|update), ' +
   'xcodebuild (build/clean/archive actions), gradle/gradlew (build|clean|dependencies|assemble*/compile*/bundle*/lint* tasks), ' +
-  'mvn (install|compile|package|verify|dependency:tree).';
+  'mvn (install|compile|package|verify|dependency:tree), ' +
+  'flutter/dart (pub add/remove/get/upgrade/outdated/deps, analyze, build, clean, doctor).';
 
 function deny(analyticsReason: string, message: string): BashFenceDecision {
   return { allowed: false, message, analyticsReason };
@@ -272,6 +279,26 @@ function commandDecision(command: string): BashFenceDecision {
     parts[2] === 'check'
   ) {
     return { allowed: true };
+  }
+  if (bin === 'flutter' || bin === 'dart') {
+    if (parts[1] === 'pub') {
+      if (parts[2] && PUB_SUBCOMMANDS.includes(parts[2]))
+        return { allowed: true };
+      return denyCommand(
+        command,
+        `Allowed ${bin} pub subcommands: ${PUB_SUBCOMMANDS.join(', ')}.`,
+      );
+    }
+    if (parts[1] && FLUTTER_DART_SUBCOMMANDS.includes(parts[1]))
+      return { allowed: true };
+    return denyCommand(
+      command,
+      `Allowed ${bin} usage: ${bin} pub <${PUB_SUBCOMMANDS.join(
+        '|',
+      )}>, or ${bin} <${FLUTTER_DART_SUBCOMMANDS.join(
+        '|',
+      )}>. run/test execute arbitrary code and are not allowed.`,
+    );
   }
   if (bin === 'uv' && parts[1] === 'pip') {
     if (parts[2] && PIP_SUBCOMMANDS.includes(parts[2]))

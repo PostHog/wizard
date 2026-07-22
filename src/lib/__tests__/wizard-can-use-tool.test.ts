@@ -149,6 +149,23 @@ describe('bash fence — allows real toolchain commands (from skills + field log
     expect(allow('mvn -B compile')).toBe('allow');
     expect(allow('mvn dependency:tree')).toBe('allow');
   });
+
+  it('flutter/dart ecosystem (the flutter field-log denial)', () => {
+    expect(allow('flutter pub add posthog_flutter')).toBe('allow');
+    expect(allow('flutter pub get')).toBe('allow');
+    expect(allow('flutter pub remove posthog_flutter')).toBe('allow');
+    expect(allow('flutter analyze')).toBe('allow');
+    expect(allow('flutter build apk --debug')).toBe('allow');
+    expect(allow('flutter clean')).toBe('allow');
+    expect(allow('dart pub add posthog_flutter')).toBe('allow');
+    expect(allow('dart pub get')).toBe('allow');
+    expect(allow('dart analyze')).toBe('allow');
+    // Arbitrary code execution stays out of contract, like xcodebuild test.
+    expect(allow('flutter run')).toBe('deny');
+    expect(allow('flutter test')).toBe('deny');
+    expect(allow('dart run bin/main.dart')).toBe('deny');
+    expect(allow('flutter pub run build_runner build')).toBe('deny');
+  });
 });
 
 describe('bash fence — attack corpus (one test per bypass vector)', () => {
