@@ -32,11 +32,29 @@ function text(s: string): {
 
 const HANDOFF_PARAMS = Type.Object({
   goals: Type.String({ description: 'What this task was asked to achieve.' }),
-  did: Type.String({ description: 'What you actually did.' }),
+  did: Type.String({
+    description:
+      'What you actually did — for each file you edited: the change, the intention behind it, and the analytics it should feed (the insight, funnel, or dashboard tile it becomes part of).',
+  }),
   forNextAgent: Type.String({
     description: 'What the next agent should know.',
   }),
-  filesTouched: Type.Optional(Type.Array(Type.String())),
+  filesTouched: Type.Optional(
+    Type.Array(Type.String(), {
+      description: 'Paths of every file you edited.',
+    }),
+  ),
+  evidence: Type.Optional(
+    Type.String({
+      description:
+        'How you know it worked — what you ran or observed, not what you expect.',
+    }),
+  ),
+  assumptions: Type.Optional(
+    Type.String({
+      description: 'What you assumed about the app and could not verify.',
+    }),
+  ),
   conflict: Type.Optional(
     Type.String({
       description:
@@ -94,14 +112,14 @@ export function createPiOrchestratorTools(
     name: 'complete_task',
     label: 'Complete task',
     description:
-      "Report the outcome of your task. Always call this exactly once when you finish, with a structured handoff for the next agent. Use status 'skipped' when the task does not apply to this project and you cannot do it (say why in the handoff) — not 'done'.",
+      "Report the outcome of your task. Always call this exactly once when you finish, with a structured handoff for the next agent. Use status 'not needed' when the task does not apply to this project and you cannot do it (say why in the handoff) — not 'done'.",
     promptSnippet:
       'complete_task(status, handoff) — report your outcome exactly once when done',
     parameters: Type.Object({
       status: Type.Union([
         Type.Literal('done'),
         Type.Literal('failed'),
-        Type.Literal('skipped'),
+        Type.Literal('not needed'),
       ]),
       handoff: HANDOFF_PARAMS,
     }),
@@ -109,7 +127,7 @@ export function createPiOrchestratorTools(
       const res = applyComplete(
         ctx,
         args as {
-          status: 'done' | 'failed' | 'skipped';
+          status: 'done' | 'failed' | 'not needed';
           handoff: TaskHandoff;
         },
       );

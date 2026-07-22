@@ -97,7 +97,7 @@ export function fenceDisallowList(
 const MAX_TASK_NUDGES = 3;
 
 const TASK_NUDGE =
-  'You have not called complete_task yet. Finish your task now: if the work is done, call complete_task with your handoff; if it cannot be done, call it with status "failed" or "skipped" and say why.';
+  'You have not called complete_task yet. Finish your task now: if the work is done, call complete_task with your handoff; if it cannot be done, call it with status "failed" or "not needed" and say why.';
 
 const SEED_NUDGE =
   'The queue is still empty. Seed it now with enqueue_task calls for the task graph you planned.';

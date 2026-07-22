@@ -11,7 +11,7 @@
  * stays product-ignorant: it is the queue, the executor, and the loader.
  */
 import { randomUUID } from 'crypto';
-import { existsSync, rmSync } from 'fs';
+import { cpSync, existsSync, mkdirSync, readdirSync, rmSync } from 'fs';
 import * as path from 'path';
 import { OutroKind, type WizardSession } from '@lib/wizard-session';
 import { POSTHOG_DOCS_URL, type Integration } from '@lib/constants';
@@ -52,6 +52,47 @@ import {
   taskModelSpec,
   type OrchestratorPromptContext,
 } from '@lib/agent/agent-prompt-loader';
+
+/**
+ * Promote the framework reference docs from the run cache into .claude/skills
+ * before the cache is wiped — the one durable artifact an orchestrator run
+ * leaves, matching what a linear run leaves behind. Never clobbers an
+ * existing install.
+ */
+export function promoteReferenceSkill(
+  referenceDir: string,
+  claudeSkillsDir: string,
+  referenceSkillId: string,
+): void {
+  const target = path.join(claudeSkillsDir, referenceSkillId);
+  if (!existsSync(referenceDir) || existsSync(target)) return;
+  mkdirSync(claudeSkillsDir, { recursive: true });
+  cpSync(referenceDir, target, { recursive: true });
+  logToFile(
+    `[orchestrator] kept reference docs at .claude/skills/${referenceSkillId}`,
+  );
+}
+
+/**
+ * Remove skills that task agents installed durably mid-run (load_skill):
+ * wizard-marked, new this run, and not the framework reference docs.
+ * User-authored and pre-existing skills stay.
+ */
+export function sweepRunInstalledSkills(
+  claudeSkillsDir: string,
+  preexistingSkills: ReadonlySet<string>,
+  referenceSkillId: string | undefined,
+): void {
+  if (!existsSync(claudeSkillsDir)) return;
+  for (const id of readdirSync(claudeSkillsDir)) {
+    if (preexistingSkills.has(id) || id === referenceSkillId) continue;
+    if (!existsSync(path.join(claudeSkillsDir, id, '.posthog-wizard'))) {
+      continue;
+    }
+    rmSync(path.join(claudeSkillsDir, id), { recursive: true, force: true });
+    logToFile(`[orchestrator] removed run-installed skill ${id}`);
+  }
+}
 
 function toTodoStatus(status: TaskStatus): string {
   switch (status) {
@@ -219,6 +260,7 @@ export async function runOrchestrator(
   // skill — only the example file is read, when the agent's prompt points at it.
   let examplePath: string | undefined;
   let commandmentsPath: string | undefined;
+  let referenceInstallPath: string | undefined;
   const menuSkillEntries = await fetchSkillMenuEntries(boot.skillsBaseUrl);
   const referenceSkillId = session.skillId
     ? resolveReferenceSkillId(menuSkillEntries, session.skillId)
@@ -231,6 +273,7 @@ export async function runOrchestrator(
       path.join(QUEUE_DIR_NAME, 'reference'),
     );
     if (ref.kind === 'ok') {
+      referenceInstallPath = ref.path;
       const example = path.join(ref.path, 'references', 'EXAMPLE.md');
       if (existsSync(path.join(session.installDir, example))) {
         examplePath = example;
@@ -377,6 +420,13 @@ export async function runOrchestrator(
   // its agent prompt (the WHAT) and the mini-skills it needs (the HOW), then
   // runs on its own model and tools.
   const taskSkillsRoot = path.join(QUEUE_DIR_NAME, 'skills');
+  // Task agents can install durable skills mid-run (load_skill), and only the
+  // framework reference docs earn a place — snapshot what was already there so
+  // the sweeps remove exactly what this run added.
+  const claudeSkillsDir = path.join(session.installDir, '.claude', 'skills');
+  const preexistingSkills = new Set(
+    existsSync(claudeSkillsDir) ? readdirSync(claudeSkillsDir) : [],
+  );
   let remarkRequested = false;
   const runTask: RunTask = async (task) => {
     renderQueue();
@@ -462,12 +512,38 @@ export async function runOrchestrator(
         },
       });
     } finally {
+      // Durable skills a task installed are irrelevant to later tasks — and
+      // the sdk harness auto-loads .claude/skills into every agent — so sweep
+      // as each task ends, not only at run end.
+      try {
+        sweepRunInstalledSkills(
+          claudeSkillsDir,
+          preexistingSkills,
+          referenceSkillId,
+        );
+      } catch (err) {
+        logToFile(`[orchestrator] per-task skill sweep failed: ${String(err)}`);
+      }
       renderQueue();
     }
   };
   try {
     await drainQueue(store, runTask);
   } finally {
+    try {
+      if (referenceSkillId && referenceInstallPath) {
+        promoteReferenceSkill(
+          path.join(session.installDir, referenceInstallPath),
+          claudeSkillsDir,
+          referenceSkillId,
+        );
+      }
+    } catch (err) {
+      analytics.captureException(
+        err instanceof Error ? err : new Error(String(err)),
+        { step: 'orchestrator_reference_promote' },
+      );
+    }
     // Success or failure, no run artifact outlives the run — wipe the whole
     // cache folder (queue, handoffs, reference example, installed task
     // instructions). The .DELETE-ME.md inside is the fallback if we don't.
@@ -482,6 +558,18 @@ export async function runOrchestrator(
         { step: 'orchestrator_cache_cleanup' },
       );
     }
+    try {
+      sweepRunInstalledSkills(
+        claudeSkillsDir,
+        preexistingSkills,
+        referenceSkillId,
+      );
+    } catch (err) {
+      analytics.captureException(
+        err instanceof Error ? err : new Error(String(err)),
+        { step: 'orchestrator_skill_sweep' },
+      );
+    }
   }
 
   renderQueue();
@@ -494,7 +582,7 @@ export async function runOrchestrator(
     tasks_total: summary.total,
     tasks_done: summary.done,
     tasks_failed: summary.failed,
-    tasks_skipped: summary.skipped,
+    tasks_skipped: summary[TaskStatus.Skipped],
     total_duration_ms: Date.now() - runStartMs,
     ...metrics.summary(),
     dynamic_enqueue_count: store
@@ -516,9 +604,15 @@ export async function runOrchestrator(
     ? 'posthog-setup-report.md'
     : store.queuePath;
 
+  // Not-needed tasks were never work, so they leave the denominator too.
+  const notRequired = summary[TaskStatus.Skipped];
   const message = conflict
     ? 'PostHog set up, with one conflict to review.'
-    : `PostHog set up: ${summary.done}/${summary.total} steps completed.`;
+    : `PostHog set up: ${summary.done}/${
+        summary.total - notRequired
+      } steps completed${
+        notRequired > 0 ? ` (${notRequired} skipped as not required)` : ''
+      }.`;
   getUI().setOutroData({
     kind: OutroKind.Success,
     message,

@@ -121,6 +121,20 @@ describe('apply functions', () => {
     expect(store.readHandoff(t.id)?.did).toBe('added sdk');
   });
 
+  it("complete_task status 'not needed' marks the task not needed, satisfying dependents", () => {
+    const t = store.enqueue({ type: 'install' });
+    const dependent = store.enqueue({ type: 'init', dependsOn: [t.id] });
+    ctx.currentTaskId = t.id;
+    store.start(t.id);
+    const r = applyComplete(ctx, {
+      status: 'not needed',
+      handoff: { goals: 'g', did: 'nothing to do', forNextAgent: 'n' },
+    });
+    expect(r.ok).toBe(true);
+    expect(store.get(t.id)?.status).toBe('not needed');
+    expect(store.nextRunnable().map((task) => task.id)).toContain(dependent.id);
+  });
+
   it('read_handoffs returns a dependency handoff for the running task', () => {
     const dep = store.enqueue({ type: 'install' });
     store.start(dep.id);
