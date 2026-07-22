@@ -112,14 +112,14 @@ export function createPiOrchestratorTools(
     name: 'complete_task',
     label: 'Complete task',
     description:
-      "Report the outcome of your task. Always call this exactly once when you finish, with a structured handoff for the next agent. Use status 'skipped' when the task does not apply to this project and you cannot do it (say why in the handoff) — not 'done'.",
+      "Report the outcome of your task. Always call this exactly once when you finish, with a structured handoff for the next agent. Use status 'not needed' when the task does not apply to this project and you cannot do it (say why in the handoff) — not 'done'.",
     promptSnippet:
       'complete_task(status, handoff) — report your outcome exactly once when done',
     parameters: Type.Object({
       status: Type.Union([
         Type.Literal('done'),
         Type.Literal('failed'),
-        Type.Literal('skipped'),
+        Type.Literal('not needed'),
       ]),
       handoff: HANDOFF_PARAMS,
     }),
@@ -127,7 +127,7 @@ export function createPiOrchestratorTools(
       const res = applyComplete(
         ctx,
         args as {
-          status: 'done' | 'failed' | 'skipped';
+          status: 'done' | 'failed' | 'not needed';
           handoff: TaskHandoff;
         },
       );

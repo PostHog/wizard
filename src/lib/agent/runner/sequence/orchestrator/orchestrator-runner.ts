@@ -11,7 +11,7 @@
  * stays product-ignorant: it is the queue, the executor, and the loader.
  */
 import { randomUUID } from 'crypto';
-import { existsSync, rmSync } from 'fs';
+import { existsSync, readdirSync, rmSync } from 'fs';
 import * as path from 'path';
 import { OutroKind, type WizardSession } from '@lib/wizard-session';
 import { POSTHOG_DOCS_URL, type Integration } from '@lib/constants';
@@ -52,6 +52,27 @@ import {
   taskModelSpec,
   type OrchestratorPromptContext,
 } from '@lib/agent/agent-prompt-loader';
+
+/**
+ * Remove skills that task agents installed durably mid-run (load_skill):
+ * wizard-marked, new this run, and not the framework reference docs.
+ * User-authored and pre-existing skills stay.
+ */
+export function sweepRunInstalledSkills(
+  claudeSkillsDir: string,
+  preexistingSkills: ReadonlySet<string>,
+  referenceSkillId: string | undefined,
+): void {
+  if (!existsSync(claudeSkillsDir)) return;
+  for (const id of readdirSync(claudeSkillsDir)) {
+    if (preexistingSkills.has(id) || id === referenceSkillId) continue;
+    if (!existsSync(path.join(claudeSkillsDir, id, '.posthog-wizard'))) {
+      continue;
+    }
+    rmSync(path.join(claudeSkillsDir, id), { recursive: true, force: true });
+    logToFile(`[orchestrator] removed run-installed skill ${id}`);
+  }
+}
 
 function toTodoStatus(status: TaskStatus): string {
   switch (status) {
@@ -465,6 +486,13 @@ export async function runOrchestrator(
       renderQueue();
     }
   };
+  // Task agents can install durable skills mid-run (load_skill), and only the
+  // framework reference docs earn a place after the run — snapshot what was
+  // already there so the sweep below removes exactly what this run added.
+  const claudeSkillsDir = path.join(session.installDir, '.claude', 'skills');
+  const preexistingSkills = new Set(
+    existsSync(claudeSkillsDir) ? readdirSync(claudeSkillsDir) : [],
+  );
   try {
     await drainQueue(store, runTask);
   } finally {
@@ -482,6 +510,18 @@ export async function runOrchestrator(
         { step: 'orchestrator_cache_cleanup' },
       );
     }
+    try {
+      sweepRunInstalledSkills(
+        claudeSkillsDir,
+        preexistingSkills,
+        referenceSkillId,
+      );
+    } catch (err) {
+      analytics.captureException(
+        err instanceof Error ? err : new Error(String(err)),
+        { step: 'orchestrator_skill_sweep' },
+      );
+    }
   }
 
   renderQueue();
@@ -494,7 +534,7 @@ export async function runOrchestrator(
     tasks_total: summary.total,
     tasks_done: summary.done,
     tasks_failed: summary.failed,
-    tasks_skipped: summary.skipped,
+    tasks_skipped: summary[TaskStatus.Skipped],
     total_duration_ms: Date.now() - runStartMs,
     ...metrics.summary(),
     dynamic_enqueue_count: store

@@ -21,7 +21,7 @@ export const TaskStatus = {
   Pending: 'pending',
   Running: 'running',
   Done: 'done',
-  Skipped: 'skipped',
+  Skipped: 'not needed',
   Failed: 'failed',
 } as const;
 
@@ -265,7 +265,7 @@ export class QueueStore {
 
   private finish(
     id: string,
-    status: 'done' | 'skipped' | 'failed',
+    status: 'done' | 'not needed' | 'failed',
     handoff?: TaskHandoff,
   ): QueuedTask {
     const t = this.require(id);

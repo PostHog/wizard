@@ -49,7 +49,7 @@ export const ProgressList = ({ items, title }: ProgressListProps) => {
             ? Colors.primary
             : Colors.muted;
         const label = skipped
-          ? `${item.label} (skipped)`
+          ? `(not needed) ${item.label}`
           : item.status === 'in_progress' && item.activeForm
           ? item.activeForm
           : item.label;
