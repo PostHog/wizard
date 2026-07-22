@@ -8,13 +8,16 @@
  */
 import { z } from 'zod';
 import { analytics } from '@utils/analytics';
-import { REMARK_ASK } from '@lib/agent/signals';
 import {
   TaskStatus,
   type QueueStore,
   type QueuedTask,
   type TaskHandoff,
 } from './queue';
+
+/** The per-task remark ask, shared by both harnesses' complete_task schemas. */
+export const REMARK_ASK =
+  'What information or guidance would have been useful to have in the integration prompt or documentation for this task — specifically anything that would have prevented tool failures, erroneous edits, or other wasted turns.';
 
 export interface OrchestratorToolsContext {
   store: QueueStore;

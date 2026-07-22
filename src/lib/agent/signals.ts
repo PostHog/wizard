@@ -51,11 +51,7 @@ export type AgentSignal = (typeof AgentSignals)[keyof typeof AgentSignals];
  * literal models (gpt-5-mini) echo whatever text follows it. The parser also
  * drops remarks that quote this instruction (see AgentOutputSignals.remark).
  */
-/** The ask itself, without the marker mechanics — also the orchestrator's `complete_task` remark field. */
-export const REMARK_ASK =
-  'state briefly what information or guidance would have been useful to have in the integration prompt or documentation — specifically anything that would have prevented tool failures, erroneous edits, or other wasted turns.';
-
-export const REMARK_INSTRUCTION = `Reply with a single line that starts with ${AgentSignals.WIZARD_REMARK} and no other lines. In that line, ${REMARK_ASK}`;
+export const REMARK_INSTRUCTION = `Reply with a single line that starts with ${AgentSignals.WIZARD_REMARK} and no other lines. In that line, state briefly what information or guidance would have been useful to have in the integration prompt or documentation for this run — specifically anything that would have prevented tool failures, erroneous edits, or other wasted turns.`;
 
 /**
  * Error types that can be returned from agent execution.
