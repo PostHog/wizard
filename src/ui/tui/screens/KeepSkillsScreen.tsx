@@ -12,6 +12,7 @@ import { useState, useEffect } from 'react';
 import { useSyncExternalStore } from 'react';
 import { readdir, rm, access } from 'node:fs/promises';
 import { join } from 'node:path';
+import { pruneSkillToDocs } from '@lib/skill-install';
 
 const WIZARD_MARKER = '.posthog-wizard';
 import type { WizardStore } from '@ui/tui/store';
@@ -57,6 +58,12 @@ export const KeepSkillsScreen = ({ store }: KeepSkillsScreenProps) => {
             await access(join(skillsDir, dir.name, WIZARD_MARKER));
           } catch {
             continue;
+          }
+          // What the user keeps is the docs, not the agent's workflow files.
+          try {
+            pruneSkillToDocs(join(skillsDir, dir.name));
+          } catch {
+            // Best-effort — an unpruned skill still lists and removes fine.
           }
           const children = (await readdir(join(skillsDir, dir.name))).filter(
             (c) => c !== WIZARD_MARKER,

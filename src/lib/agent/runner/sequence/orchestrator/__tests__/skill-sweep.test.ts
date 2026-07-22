@@ -98,19 +98,33 @@ describe('promoteReferenceSkill', () => {
     fs.rmSync(skillsDir, { recursive: true, force: true });
   });
 
-  it('copies the reference docs into .claude/skills before the cache is wiped', () => {
+  it('promotes only the docs — workflow index and step files do not survive', () => {
     const ref = makeSkill(cacheDir, 'integration-django', true);
     fs.mkdirSync(path.join(ref, 'references'));
-    fs.writeFileSync(path.join(ref, 'references', 'EXAMPLE.md'), '# example');
+    for (const f of [
+      'EXAMPLE.md',
+      'COMMANDMENTS.md',
+      'django.md',
+      'identify-users.md',
+      '1-begin.md',
+      '4-conclude.md',
+      'basic-integration-1.0-begin.md',
+    ]) {
+      fs.writeFileSync(path.join(ref, 'references', f), '# ' + f);
+    }
 
     promoteReferenceSkill(ref, skillsDir, 'integration-django');
     fs.rmSync(cacheDir, { recursive: true, force: true });
 
     const kept = path.join(skillsDir, 'integration-django');
-    expect(fs.existsSync(path.join(kept, 'SKILL.md'))).toBe(true);
-    expect(fs.existsSync(path.join(kept, 'references', 'EXAMPLE.md'))).toBe(
-      true,
-    );
+    expect(fs.readdirSync(path.join(kept, 'references')).sort()).toEqual([
+      'COMMANDMENTS.md',
+      'EXAMPLE.md',
+      'django.md',
+      'identify-users.md',
+    ]);
+    expect(fs.existsSync(path.join(kept, 'SKILL.md'))).toBe(false);
+    expect(fs.existsSync(path.join(kept, '.posthog-wizard'))).toBe(true);
   });
 
   it('never clobbers an existing install', () => {

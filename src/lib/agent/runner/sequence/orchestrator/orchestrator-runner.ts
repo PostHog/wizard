@@ -14,6 +14,7 @@ import { randomUUID } from 'crypto';
 import { cpSync, existsSync, mkdirSync, readdirSync, rmSync } from 'fs';
 import * as path from 'path';
 import { OutroKind, type WizardSession } from '@lib/wizard-session';
+import { pruneSkillToDocs } from '@lib/skill-install';
 import { POSTHOG_DOCS_URL, type Integration } from '@lib/constants';
 import { FRAMEWORK_REGISTRY } from '@lib/registry';
 import {
@@ -68,6 +69,8 @@ export function promoteReferenceSkill(
   if (!existsSync(referenceDir) || existsSync(target)) return;
   mkdirSync(claudeSkillsDir, { recursive: true });
   cpSync(referenceDir, target, { recursive: true });
+  // The user keeps the docs, not the agent's workflow files.
+  pruneSkillToDocs(target);
   logToFile(
     `[orchestrator] kept reference docs at .claude/skills/${referenceSkillId}`,
   );
