@@ -23,23 +23,21 @@ export function isSkillInstallCommand(command: string): boolean {
   );
 }
 
-/** Numbered workflow-step file: `1-begin.md`, `basic-integration-1.0-edit.md`. */
-export const WORKFLOW_STEP_FILE = /(^|-)\d+(\.\d+)*-[\w-]+\.md$/;
-const STEP_FILE = WORKFLOW_STEP_FILE;
+/** A framework docs page (`django.md`) — not a numbered workflow step (`1-begin.md`) and not an agent artifact (`EXAMPLE.md`, `COMMANDMENTS.md`). */
+export function isSkillDocFile(name: string): boolean {
+  return (
+    name === name.toLowerCase() && !/(^|-)\d+(\.\d+)*-[\w-]+\.md$/.test(name)
+  );
+}
 
-/**
- * Strip a kept integration skill down to its docs: remove SKILL.md (the
- * agent workflow index) and the numbered step files, keep the reference docs
- * (EXAMPLE.md, COMMANDMENTS.md, framework pages). A dir with no step files is
- * not a workflow skill (e.g. one the user asked for by id) and stays whole.
- * Returns true when it pruned.
- */
-export function pruneSkillToDocs(skillDir: string): boolean {
-  const referencesDir = path.join(skillDir, 'references');
-  if (!existsSync(referencesDir)) return false;
-  const steps = readdirSync(referencesDir).filter((f) => STEP_FILE.test(f));
-  if (steps.length === 0) return false;
-  for (const f of steps) unlinkSync(path.join(referencesDir, f));
+/** Strip a kept workflow skill down to its framework docs pages; a skill with no step files stays whole. */
+export function pruneSkillToDocs(skillDir: string): void {
+  const refs = path.join(skillDir, 'references');
+  if (!existsSync(refs)) return;
+  const files = readdirSync(refs);
+  if (files.every(isSkillDocFile)) return;
+  for (const f of files.filter((f) => !isSkillDocFile(f))) {
+    unlinkSync(path.join(refs, f));
+  }
   rmSync(path.join(skillDir, 'SKILL.md'), { force: true });
-  return true;
 }
