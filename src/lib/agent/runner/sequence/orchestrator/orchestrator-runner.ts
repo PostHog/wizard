@@ -21,7 +21,6 @@ import {
 } from 'fs';
 import * as path from 'path';
 import { OutroKind, type WizardSession } from '@lib/wizard-session';
-import { isSkillDocFile } from '@lib/skill-install';
 import { POSTHOG_DOCS_URL, type Integration } from '@lib/constants';
 import { FRAMEWORK_REGISTRY } from '@lib/registry';
 import {
@@ -61,6 +60,10 @@ import {
   type OrchestratorPromptContext,
 } from '@lib/agent/agent-prompt-loader';
 
+/** Docs page (`django.md`, `nuxt-js-3-6.md`) — steps start with a digit, agent artifacts (`SKILL.md`, `EXAMPLE*`, `COMMANDMENTS.md`) have uppercase. */
+const isDocPage = (name: string): boolean =>
+  name.endsWith('.md') && name === name.toLowerCase() && !/^\d/.test(name);
+
 /** Copy only the framework docs pages out of the run cache into .claude/skills — the one durable artifact an orchestrator run leaves. Never clobbers an existing install. */
 export function promoteReferenceSkill(
   referenceDir: string,
@@ -70,7 +73,7 @@ export function promoteReferenceSkill(
   const target = path.join(claudeSkillsDir, referenceSkillId);
   const refs = path.join(referenceDir, 'references');
   if (!existsSync(refs) || existsSync(target)) return;
-  const docs = readdirSync(refs).filter(isSkillDocFile);
+  const docs = readdirSync(refs).filter(isDocPage);
   if (docs.length === 0) return;
   mkdirSync(path.join(target, 'references'), { recursive: true });
   for (const f of docs) {

@@ -101,13 +101,21 @@ describe('promoteReferenceSkill', () => {
   it('copies only the framework docs pages out of the cache', () => {
     const ref = makeSkill(cacheDir, 'integration-django', true);
     fs.mkdirSync(path.join(ref, 'references'));
+    // Real filenames shipped by context-mill integration skills.
     for (const f of [
-      'EXAMPLE.md',
+      '1-begin.md',
+      '2-edit.md',
+      '3-revise.md',
+      '4-conclude.md',
+      '3b-enable-products.md',
       'COMMANDMENTS.md',
+      'EXAMPLE.md',
+      'EXAMPLE-swift.md',
+      'EXAMPLE-swift-xcodegen.md',
       'django.md',
       'identify-users.md',
-      '1-begin.md',
-      'basic-integration-1.0-begin.md',
+      'nuxt-js-3-6.md',
+      'react-router-v6.md',
     ]) {
       fs.writeFileSync(path.join(ref, 'references', f), '# ' + f);
     }
@@ -118,6 +126,8 @@ describe('promoteReferenceSkill', () => {
     expect(fs.readdirSync(path.join(kept, 'references')).sort()).toEqual([
       'django.md',
       'identify-users.md',
+      'nuxt-js-3-6.md',
+      'react-router-v6.md',
     ]);
     expect(fs.existsSync(path.join(kept, 'SKILL.md'))).toBe(false);
     expect(fs.existsSync(path.join(kept, '.posthog-wizard'))).toBe(true);
