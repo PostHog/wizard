@@ -144,23 +144,22 @@ check(
 );
 
 check(
-  'ProgressList — not-needed row leads with the note and truncates to one line',
+  'ProgressList — not-needed tasks leave the list, long rows truncate',
   <Box width={34}>
     <ProgressList
       items={[
-        { label: 'Install the PostHog SDK', status: 'completed' },
         {
-          label:
-            'Wire the global error boundary into the application shell for error tracking',
-          status: 'skipped',
+          label: 'Install the PostHog SDK and configure the environment keys',
+          status: 'completed',
         },
+        { label: 'Add user identification', status: 'skipped' },
         { label: 'Write the setup report', status: 'pending' },
       ]}
     />
   </Box>,
-  ['not needed', 'Wire the global', '…'],
-  // Truncated, so the tail of the long label must not render.
-  ['error tracking', '(skipped)'],
+  ['Install the PostHog SDK', '…', 'Progress: 1/2 completed'],
+  // The not-needed task is gone and counts against nothing.
+  ['Add user identification', 'not needed', '1/3'],
 );
 
 if (failures > 0) {
