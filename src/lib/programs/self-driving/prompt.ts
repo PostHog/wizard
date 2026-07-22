@@ -138,7 +138,12 @@ STEP 5 — Offer issue-tracker integrations. (skill: "Connected tools")
 STEP 6 — Configure the scout troop. (skill: "Scouts")
    Materialize the troop, then enable only a small set — the "general"
    scout plus the one or two specialists for the products this project
-   uses most — and disable the rest, per the skill.
+   uses most — and disable the rest, per the skill. The whole enabled
+   troop shares the project's allowance of up to 24 scout runs per day,
+   and at the default hourly interval a single scout consumes all 24 —
+   so set the run interval of every scout you enable so the troop's
+   combined schedule stays within 24 runs per day, weighting runs
+   toward the "general" scout.
 
 STEP 6b — Design custom scouts for this product. (skill: "Custom scouts")
    You are the only actor that has read this repo — turn that into
@@ -155,7 +160,10 @@ STEP 6b — Design custom scouts for this product. (skill: "Custom scouts")
    Never edit built-in scout bodies. Propose all candidates in ONE
    batched wizard_ask
    before creating anything; the user declining everything (or finding
-   no gap at all) is a valid outcome, not an abort. Mark the task
+   no gap at all) is a valid outcome, not an abort. Custom scouts draw
+   from the same 24-runs-per-day allowance as the built-in troop — when
+   the user approves any, rebalance run intervals so the whole enabled
+   troop still fits within it. Mark the task
    completed either way.
 
 STEP 7 — Write the report and hand off. (skill: "Report")

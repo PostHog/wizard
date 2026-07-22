@@ -103,13 +103,18 @@ and its `(skill: …)` reference never disagree on the number.
   deliberately small set: `general` (always) + the **1–2 specialists** for the
   products this project uses most; never `error-tracking`/`session-replay`
   (consumed as native sources); disable the rest. The enabled troop lands at
-  **2–5** (general + 1–2 specialists + 0–2 custom).
+  **2–5** (general + 1–2 specialists + 0–2 custom) and shares the project's
+  allowance of **up to 24 scout runs per day** — run intervals are set so the
+  combined schedule fits inside it (at the hourly default a single scout alone
+  consumes all 24).
 - **6b — Design custom scouts** — gap-analyze the repo against the troop
   (starting from the repo's for-agents context — AGENTS.md, CLAUDE.md,
   ARCHITECTURE.md, `.cursor/rules` — when present), propose **at most 2**
   candidates in one ask (each a plain-language `label` + a dimmed `description`,
   behind a leading "None — keep the built-in troop" default option), create the
-  approved subset (the only place custom scouts are made).
+  approved subset (the only place custom scouts are made). Approved custom
+  scouts draw from the same 24-runs/day allowance, so intervals are rebalanced
+  after creation.
 - **7 — Write report** — write `./posthog-self-driving-report.md` (everything
   changed + follow-ups); findings reach the inbox in ~30 min.
 
@@ -123,8 +128,8 @@ The table below adds the skill reference and the tool/MCP surface for each.
 | 3b  | Enable products                  | `3b-enable-products.md`               | `products-enable {products:[session_replay,error_tracking,conversations]}` flips the product toggles (server-owned recipes, conservative defaults). Idempotent. Web also gets a posthog-js init check; backend/mobile are inert → recorded for the report. See §9.                                                                                                                                                                                                                                                                                                                                                                      |
 | 4   | Enable signal sources            | `4-sources.md`                        | Create/enable `SignalSourceConfig` rows (`inbox-source-configs-*`). The native sources for the step-3b products (error tracking, replay, support) go on by default; others follow step-2 evidence. Always enables the scout gate `signals_scout`/`cross_source_issue`. Always enable the health check gate `health_checks`/`health_issue`. Never enables an unconfirmed connected tool.                                                                                                                                                                                                                                                 |
 | 5   | Offer issue-tracker integrations | `5-connected-tools.md` (+ `5a`, `5b`) | One batched multi-select for GitHub Issues / Linear / Zendesk / pganalyze. GitHub Issues & Linear auto-connect via `external-data-sources-create` (GitHub Issues: one connected repo → use it by default, no repo research; Linear: OAuth link + one silent `integrations-list`, never nudge); Zendesk / pganalyze are armed dormant + report follow-up (no UI redirect, no verify). Enable a (possibly dormant) responder per pick.                                                                                                                                                                                                    |
-| 6   | Configure the scout troop        | `6-scouts.md`                         | `signals-scout-config-sync` materializes the troop (~19 scouts, grows over time); enable `general` + the **1–2 specialists** for the most-used products (agent judgment over step-2 evidence), never `error-tracking`/`session-replay` (covered by native sources), fall back to one universal cross-product scout if no surface qualifies, disable all the rest (`signals-scout-config-update {enabled:false}`). Never touches `emit`/`run_interval`.                                                                                                                                                                                  |
-| 6b  | Design custom scouts             | `6b-tailor-scouts.md`                 | The **only** place custom scouts are created. Gap-analyze repo surfaces vs the troop, reading the repo's for-agents context first (AGENTS.md, CLAUDE.md, ARCHITECTURE.md, `.cursor/rules`) as the map of surfaces and vocabulary; propose **at most 2** in ONE `wizard_ask`, each option carrying a `description` (an optional `wizard_ask` option field rendered dimmed/wrapped under the label) plus a leading "None" option that's the default highlight (so an empty submit declines); create approved ones via `llma-skill-create` (`signals-scout-<scope>`). **Canonical bodies never edited.** Declining is valid, not an abort. |
+| 6   | Configure the scout troop        | `6-scouts.md`                         | `signals-scout-config-sync` materializes the troop (~19 scouts, grows over time); enable `general` + the **1–2 specialists** for the most-used products (agent judgment over step-2 evidence), never `error-tracking`/`session-replay` (covered by native sources), fall back to one universal cross-product scout if no surface qualifies, disable all the rest (`signals-scout-config-update {enabled:false}`). Never touches `emit`; sets `run_interval_minutes` (`signals-scout-config-update`) so the enabled troop's combined schedule fits the shared **24 runs/day** allowance — at the 60-min default one scout alone consumes it.                                                                                                                                                                                  |
+| 6b  | Design custom scouts             | `6b-tailor-scouts.md`                 | The **only** place custom scouts are created. Gap-analyze repo surfaces vs the troop, reading the repo's for-agents context first (AGENTS.md, CLAUDE.md, ARCHITECTURE.md, `.cursor/rules`) as the map of surfaces and vocabulary; propose **at most 2** in ONE `wizard_ask`, each option carrying a `description` (an optional `wizard_ask` option field rendered dimmed/wrapped under the label) plus a leading "None" option that's the default highlight (so an empty submit declines); create approved ones via `llma-skill-create` (`signals-scout-<scope>`). **Canonical bodies never edited.** Declining is valid, not an abort. Approved scouts draw from the same 24-runs/day allowance — intervals rebalanced so the troop still fits. |
 | 7   | Write report & hand off          | `7-report.md`                         | Write `./posthog-self-driving-report.md`; findings appear in the inbox in ~30 min.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 
 **Abort contract:** the skill emits exact `[ABORT] <reason>` strings; the wizard
@@ -259,7 +264,11 @@ sync).
 
 **Scout troop.** `SignalScoutConfig` (`models.py`): per `(team, skill_name)`,
 `enabled` (participation), `emit` (dry-run vs emit, default on),
-`run_interval_minutes` (default 60). Canonical troop (~19 `signals-scout-*`
+`run_interval_minutes` (default 60). Each project has an allowance of up to
+**24 scout runs per day**, shared across every enabled scout (built-in and
+custom alike) — at the hourly default a single scout consumes the entire
+allowance, so STEP 6 budgets `run_interval_minutes` across the enabled set to
+fit it. Canonical troop (~19 `signals-scout-*`
 skills, and growing) in `posthog/products/signals/skills/`. STEP 6 does **not**
 hardcode the list — it works from whatever `signals-scout-config-sync` returns
 and enables a **deliberately small set**: `general` is the only **always-on**

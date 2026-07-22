@@ -21,7 +21,7 @@ export const SELF_DRIVING_TIPS: Tip[] = [
     id: 'scout',
     title: 'Scout',
     description:
-      'An agent on a schedule, watching your sources for anomalies and patterns.',
+      'An agent on a schedule, watching your sources for anomalies and patterns. Your troop shares up to 24 runs a day.',
   },
   {
     id: 'signal-report',
