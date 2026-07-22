@@ -208,6 +208,11 @@ export async function downloadSkill(
     logToFile(
       `downloadSkill: installed ${skillEntry.id} from ${skillEntry.downloadUrl} (${fileCount} files)`,
     );
+    // The installed variant is a skill program's identity dimension in analytics.
+    analytics.wizardCapture('skill installed', {
+      skill_id: skillEntry.id,
+      platform: process.platform,
+    });
     return { success: true };
   } catch (err: any) {
     logToFile(`downloadSkill: error: ${err.message}`);

@@ -91,6 +91,7 @@ export function decideE2eAction(
     case ScreenId.RevenueIntro:
     case ScreenId.MigrationIntro:
     case ScreenId.AgentSkillIntro:
+    case ScreenId.AiObservabilityIntro:
     case ScreenId.AuditIntro:
     case ScreenId.SourceMapsIntro:
     case ScreenId.DoctorIntro:

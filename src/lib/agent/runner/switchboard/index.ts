@@ -7,7 +7,12 @@
  * Model ids are gateway strings — add new ones as constants in `@lib/constants`.
  */
 
-import { DEFAULT_AGENT_MODEL, Harness, Sequence } from '@lib/constants';
+import {
+  DEFAULT_AGENT_MODEL,
+  SONNET_5_MODEL,
+  Harness,
+  Sequence,
+} from '@lib/constants';
 import type { ProgramId } from '@lib/programs/program-registry';
 import { resolveHarness } from './harness';
 import type { EffortLevel } from './models';
@@ -130,6 +135,11 @@ export const PROGRAM_BINDINGS: Partial<Record<ProgramId, ProgramBinding>> = {
   'mcp-remove': DEFAULT_BINDING,
   'mcp-tutorial': DEFAULT_BINDING,
   'mcp-analytics': DEFAULT_BINDING,
+  'ai-observability': {
+    sequence: Sequence.linear,
+    harness: Harness.anthropic,
+    model: SONNET_5_MODEL,
+  },
   slack: DEFAULT_BINDING,
 };
 
