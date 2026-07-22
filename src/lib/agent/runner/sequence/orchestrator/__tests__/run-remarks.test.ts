@@ -23,12 +23,11 @@ describe('collectRunRemarks', () => {
   function finish(type: string, remark?: string) {
     const task = store.enqueue({ type });
     store.start(task.id);
-    store.complete(task.id, {
-      goals: 'g',
-      did: 'd',
-      forNextAgent: 'n',
-      ...(remark ? { remark } : {}),
-    });
+    store.complete(
+      task.id,
+      { goals: 'g', did: 'd', forNextAgent: 'n' },
+      remark,
+    );
     return task;
   }
 
@@ -64,12 +63,11 @@ describe('collectRunRemarks', () => {
   it('collects from a task that ended not needed or failed', () => {
     const skipped = store.enqueue({ type: 'identify' });
     store.start(skipped.id);
-    store.skip(skipped.id, {
-      goals: 'g',
-      did: 'nothing to do',
-      forNextAgent: 'n',
-      remark: 'no auth in this project, the prompt could say so up front',
-    });
+    store.skip(
+      skipped.id,
+      { goals: 'g', did: 'nothing to do', forNextAgent: 'n' },
+      'no auth in this project, the prompt could say so up front',
+    );
 
     const remarks = collectRunRemarks(store.list(), attribute);
     expect(remarks).toHaveLength(1);

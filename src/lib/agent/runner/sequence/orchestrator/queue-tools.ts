@@ -145,7 +145,11 @@ export type CompleteResult = { ok: true } | { ok: false; message: string };
 
 export function applyComplete(
   ctx: OrchestratorToolsContext,
-  args: { status: 'done' | 'failed' | 'not needed'; handoff: TaskHandoff },
+  args: {
+    status: 'done' | 'failed' | 'not needed';
+    handoff: TaskHandoff;
+    remark?: string;
+  },
 ): CompleteResult {
   const id = ctx.currentTaskId;
   if (!id) {
@@ -159,20 +163,14 @@ export function applyComplete(
       id,
       { type: 'self-reported', message: args.handoff.forNextAgent },
       args.handoff,
+      args.remark,
     );
   } else if (args.status === TaskStatus.Skipped) {
-    ctx.store.skip(id, args.handoff);
+    ctx.store.skip(id, args.handoff, args.remark);
   } else {
-    ctx.store.complete(id, args.handoff);
+    ctx.store.complete(id, args.handoff, args.remark);
   }
   return { ok: true };
-}
-
-/** A remark is a complaint about the run, not signal for the next step — strip it so no agent reasons about an earlier task's grievance. */
-function withoutRemark(handoff: TaskHandoff): TaskHandoff {
-  const stripped = { ...handoff };
-  delete stripped.remark;
-  return stripped;
 }
 
 export function applyReadHandoffs(
@@ -181,10 +179,10 @@ export function applyReadHandoffs(
 ): TaskHandoff[] {
   if (args.taskId) {
     const h = ctx.store.readHandoff(args.taskId);
-    return h ? [withoutRemark(h)] : [];
+    return h ? [h] : [];
   }
   if (args.type) {
-    return ctx.store.readHandoffsByType(args.type).map(withoutRemark);
+    return ctx.store.readHandoffsByType(args.type);
   }
   // No filter: every handoff of a dependency of the current task.
   const currentId = ctx.currentTaskId;
@@ -192,9 +190,12 @@ export function applyReadHandoffs(
   if (!current) return [];
   return current.dependsOn
     .map((depId) => ctx.store.readHandoff(depId))
-    .filter((h): h is TaskHandoff => h !== null)
-    .map(withoutRemark);
+    .filter((h): h is TaskHandoff => h !== null);
 }
+
+/** Sibling of the handoff, not part of it: telemetry for us, never context for the next agent. Shared with the pi harness's tool schema. */
+export const REMARK_DESCRIPTION =
+  'What information or guidance would have been useful to have in the integration prompt or documentation for this task — specifically anything that would have prevented tool failures, erroneous edits, or other wasted turns.';
 
 const HANDOFF_SHAPE = {
   goals: z.string().describe('What this task was asked to achieve.'),
@@ -218,12 +219,6 @@ const HANDOFF_SHAPE = {
     .string()
     .optional()
     .describe('What you assumed about the app and could not verify.'),
-  remark: z
-    .string()
-    .optional()
-    .describe(
-      'What information or guidance would have been useful to have in the integration prompt or documentation for this task — specifically anything that would have prevented tool failures, erroneous edits, or other wasted turns.',
-    ),
   conflict: z
     .string()
     .optional()
@@ -292,10 +287,12 @@ export function buildOrchestratorTools(
     {
       status: z.enum(['done', 'failed', 'not needed']),
       handoff: z.object(HANDOFF_SHAPE),
+      remark: z.string().optional().describe(REMARK_DESCRIPTION),
     },
     ((args: {
       status: 'done' | 'failed' | 'not needed';
       handoff: TaskHandoff;
+      remark?: string;
     }) => {
       const res = applyComplete(ctx, args);
       if (!res.ok) return textResult(res.message, true);

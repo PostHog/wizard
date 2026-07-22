@@ -125,12 +125,12 @@ export function collectRunRemarks(
   },
 ): RunRemark[] {
   return tasks
-    .filter((t) => t.handoff?.remark)
+    .filter((t): t is QueuedTask & { remark: string } => !!t.remark)
     .map((t) => ({
       task_type: t.type,
       status: t.status,
       ...attribute(t),
-      remark: t.handoff?.remark as string,
+      remark: t.remark,
     }));
 }
 

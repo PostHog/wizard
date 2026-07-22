@@ -18,6 +18,7 @@ import {
   applyComplete,
   applyEnqueue,
   applyReadHandoffs,
+  REMARK_DESCRIPTION,
   type EnqueueArgs,
   type OrchestratorToolsContext,
 } from '../../sequence/orchestrator/queue-tools';
@@ -53,12 +54,6 @@ const HANDOFF_PARAMS = Type.Object({
   assumptions: Type.Optional(
     Type.String({
       description: 'What you assumed about the app and could not verify.',
-    }),
-  ),
-  remark: Type.Optional(
-    Type.String({
-      description:
-        'What information or guidance would have been useful to have in the integration prompt or documentation for this task — specifically anything that would have prevented tool failures, erroneous edits, or other wasted turns.',
     }),
   ),
   conflict: Type.Optional(
@@ -128,6 +123,7 @@ export function createPiOrchestratorTools(
         Type.Literal('not needed'),
       ]),
       handoff: HANDOFF_PARAMS,
+      remark: Type.Optional(Type.String({ description: REMARK_DESCRIPTION })),
     }),
     execute(_id, args) {
       const res = applyComplete(
@@ -135,6 +131,7 @@ export function createPiOrchestratorTools(
         args as {
           status: 'done' | 'failed' | 'not needed';
           handoff: TaskHandoff;
+          remark?: string;
         },
       );
       if (!res.ok) return Promise.resolve(text(`Error: ${res.message}`));
