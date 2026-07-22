@@ -44,10 +44,8 @@ export interface QueuedTask {
   model?: string;
   attempts: number;
   maxAttempts: number;
-  /** The structured handoff the task reported on completion, read by the tasks that depend on it. */
+  /** The structured handoff the task reported on completion. */
   handoff?: TaskHandoff;
-  /** Guidance that would have saved this task turns. Telemetry for us, never context for another agent — which is why it sits beside the handoff rather than in it. */
-  remark?: string;
   /** 'orchestrator' for seeded tasks, or the id of the task that enqueued this one. */
   enqueuedBy: string;
   createdAt: string;
@@ -233,24 +231,23 @@ export class QueueStore {
     return t;
   }
 
-  complete(id: string, handoff?: TaskHandoff, remark?: string): QueuedTask {
-    return this.finish(id, TaskStatus.Done, handoff, remark);
+  complete(id: string, handoff?: TaskHandoff): QueuedTask {
+    return this.finish(id, TaskStatus.Done, handoff);
   }
 
   /** Terminal: the agent could not do the task. Not done, not failed. */
-  skip(id: string, handoff?: TaskHandoff, remark?: string): QueuedTask {
-    return this.finish(id, TaskStatus.Skipped, handoff, remark);
+  skip(id: string, handoff?: TaskHandoff): QueuedTask {
+    return this.finish(id, TaskStatus.Skipped, handoff);
   }
 
   fail(
     id: string,
     error: { type: string; message: string },
     handoff?: TaskHandoff,
-    remark?: string,
   ): QueuedTask {
     const t = this.require(id);
     t.error = error;
-    return this.finish(id, TaskStatus.Failed, handoff, remark);
+    return this.finish(id, TaskStatus.Failed, handoff);
   }
 
   /** Put a failed/running task back to pending for a retry within the run. */
@@ -270,11 +267,9 @@ export class QueueStore {
     id: string,
     status: 'done' | 'not needed' | 'failed',
     handoff?: TaskHandoff,
-    remark?: string,
   ): QueuedTask {
     const t = this.require(id);
     if (handoff) t.handoff = handoff;
-    if (remark) t.remark = remark;
     t.status = status;
     t.finishedAt = nowIso();
     this.reflect();

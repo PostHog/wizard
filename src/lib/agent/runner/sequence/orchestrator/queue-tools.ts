@@ -158,17 +158,22 @@ export function applyComplete(
       message: 'complete_task can only be called by a running task agent.',
     };
   }
+  if (args.remark) {
+    analytics.wizardCapture('orchestrator remark', {
+      task_type: ctx.store.get(id)?.type,
+      remark: args.remark,
+    });
+  }
   if (args.status === TaskStatus.Failed) {
     ctx.store.fail(
       id,
       { type: 'self-reported', message: args.handoff.forNextAgent },
       args.handoff,
-      args.remark,
     );
   } else if (args.status === TaskStatus.Skipped) {
-    ctx.store.skip(id, args.handoff, args.remark);
+    ctx.store.skip(id, args.handoff);
   } else {
-    ctx.store.complete(id, args.handoff, args.remark);
+    ctx.store.complete(id, args.handoff);
   }
   return { ok: true };
 }
@@ -193,7 +198,7 @@ export function applyReadHandoffs(
     .filter((h): h is TaskHandoff => h !== null);
 }
 
-/** Sibling of the handoff, not part of it: telemetry for us, never context for the next agent. Shared with the pi harness's tool schema. */
+/** Sibling of the handoff, not part of it: captured as telemetry, never context for the next agent. Shared with the pi harness's tool schema. */
 export const REMARK_DESCRIPTION =
   'What information or guidance would have been useful to have in the integration prompt or documentation for this task — specifically anything that would have prevented tool failures, erroneous edits, or other wasted turns.';
 

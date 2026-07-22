@@ -21,11 +21,7 @@ import {
 } from 'fs';
 import * as path from 'path';
 import { OutroKind, type WizardSession } from '@lib/wizard-session';
-import {
-  POSTHOG_DOCS_URL,
-  WIZARD_REMARK_EVENT_NAME,
-  type Integration,
-} from '@lib/constants';
+import { POSTHOG_DOCS_URL, type Integration } from '@lib/constants';
 import { FRAMEWORK_REGISTRY } from '@lib/registry';
 import {
   installSkillById,
@@ -577,13 +573,6 @@ export async function runOrchestrator(
     `[orchestrator] DONE done=${summary.done} failed=${summary.failed} total=${summary.total}`,
   );
 
-  const remarks = store
-    .list()
-    .filter((t) => t.remark)
-    .map((t) => `${t.type}: ${t.remark}`);
-  if (remarks.length > 0) {
-    analytics.capture(WIZARD_REMARK_EVENT_NAME, { remark: remarks.join('\n') });
-  }
   analytics.wizardCapture('orchestrator run finished', {
     tasks_total: summary.total,
     tasks_done: summary.done,

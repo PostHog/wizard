@@ -1,7 +1,12 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
+import { analytics } from '@utils/analytics';
 import { QueueStore } from '@lib/agent/runner/sequence/orchestrator/queue';
+
+vi.mock('@utils/analytics', () => ({
+  analytics: { wizardCapture: vi.fn() },
+}));
 import {
   applyComplete,
   applyEnqueue,
@@ -135,7 +140,7 @@ describe('apply functions', () => {
     expect(store.nextRunnable().map((task) => task.id)).toContain(dependent.id);
   });
 
-  it('a remark lands on the task, not in the handoff the next agent reads', () => {
+  it('a remark is captured against its task type, never left in the handoff', () => {
     const t = store.enqueue({ type: 'install' });
     ctx.currentTaskId = t.id;
     store.start(t.id);
@@ -144,8 +149,12 @@ describe('apply functions', () => {
       handoff: { goals: 'g', did: 'd', forNextAgent: 'n' },
       remark: 'the docs omitted the peer dependency',
     });
-    expect(store.get(t.id)?.remark).toBe(
-      'the docs omitted the peer dependency',
+    expect(analytics.wizardCapture).toHaveBeenCalledWith(
+      'orchestrator remark',
+      {
+        task_type: 'install',
+        remark: 'the docs omitted the peer dependency',
+      },
     );
     expect(store.readHandoff(t.id)).not.toHaveProperty('remark');
   });
