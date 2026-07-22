@@ -11,7 +11,7 @@
  * stays product-ignorant: it is the queue, the executor, and the loader.
  */
 import { randomUUID } from 'crypto';
-import { existsSync, readdirSync, rmSync } from 'fs';
+import { cpSync, existsSync, mkdirSync, readdirSync, rmSync } from 'fs';
 import * as path from 'path';
 import { OutroKind, type WizardSession } from '@lib/wizard-session';
 import { POSTHOG_DOCS_URL, type Integration } from '@lib/constants';
@@ -52,6 +52,26 @@ import {
   taskModelSpec,
   type OrchestratorPromptContext,
 } from '@lib/agent/agent-prompt-loader';
+
+/**
+ * Promote the framework reference docs from the run cache into .claude/skills
+ * before the cache is wiped — the one durable artifact an orchestrator run
+ * leaves, matching what a linear run leaves behind. Never clobbers an
+ * existing install.
+ */
+export function promoteReferenceSkill(
+  referenceDir: string,
+  claudeSkillsDir: string,
+  referenceSkillId: string,
+): void {
+  const target = path.join(claudeSkillsDir, referenceSkillId);
+  if (!existsSync(referenceDir) || existsSync(target)) return;
+  mkdirSync(claudeSkillsDir, { recursive: true });
+  cpSync(referenceDir, target, { recursive: true });
+  logToFile(
+    `[orchestrator] kept reference docs at .claude/skills/${referenceSkillId}`,
+  );
+}
 
 /**
  * Remove skills that task agents installed durably mid-run (load_skill):
@@ -240,6 +260,7 @@ export async function runOrchestrator(
   // skill — only the example file is read, when the agent's prompt points at it.
   let examplePath: string | undefined;
   let commandmentsPath: string | undefined;
+  let referenceInstallPath: string | undefined;
   const menuSkillEntries = await fetchSkillMenuEntries(boot.skillsBaseUrl);
   const referenceSkillId = session.skillId
     ? resolveReferenceSkillId(menuSkillEntries, session.skillId)
@@ -252,6 +273,7 @@ export async function runOrchestrator(
       path.join(QUEUE_DIR_NAME, 'reference'),
     );
     if (ref.kind === 'ok') {
+      referenceInstallPath = ref.path;
       const example = path.join(ref.path, 'references', 'EXAMPLE.md');
       if (existsSync(path.join(session.installDir, example))) {
         examplePath = example;
@@ -508,6 +530,20 @@ export async function runOrchestrator(
   try {
     await drainQueue(store, runTask);
   } finally {
+    try {
+      if (referenceSkillId && referenceInstallPath) {
+        promoteReferenceSkill(
+          path.join(session.installDir, referenceInstallPath),
+          claudeSkillsDir,
+          referenceSkillId,
+        );
+      }
+    } catch (err) {
+      analytics.captureException(
+        err instanceof Error ? err : new Error(String(err)),
+        { step: 'orchestrator_reference_promote' },
+      );
+    }
     // Success or failure, no run artifact outlives the run — wipe the whole
     // cache folder (queue, handoffs, reference example, installed task
     // instructions). The .DELETE-ME.md inside is the fallback if we don't.
