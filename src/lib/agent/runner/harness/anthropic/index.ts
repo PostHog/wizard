@@ -140,8 +140,7 @@ export const anthropicBackend: AgentHarness = {
         successMessage,
         errorMessage,
         additionalFeatureQueue,
-        // Orchestrator tasks remark in their handoffs; executeAgent's own
-        // end-of-run reflection (default true) is the linear flow's.
+        // Tasks remark on complete_task; executeAgent's reflection is the linear flow's.
         requestRemark: false,
         analyticsProperties,
       },
