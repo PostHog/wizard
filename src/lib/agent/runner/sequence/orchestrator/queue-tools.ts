@@ -145,7 +145,7 @@ export type CompleteResult = { ok: true } | { ok: false; message: string };
 
 export function applyComplete(
   ctx: OrchestratorToolsContext,
-  args: { status: 'done' | 'failed' | 'skipped'; handoff: TaskHandoff },
+  args: { status: 'done' | 'failed' | 'not needed'; handoff: TaskHandoff },
 ): CompleteResult {
   const id = ctx.currentTaskId;
   if (!id) {
@@ -190,9 +190,26 @@ export function applyReadHandoffs(
 
 const HANDOFF_SHAPE = {
   goals: z.string().describe('What this task was asked to achieve.'),
-  did: z.string().describe('What you actually did.'),
+  did: z
+    .string()
+    .describe(
+      'What you actually did — for each file you edited: the change, the intention behind it, and the analytics it should feed (the insight, funnel, or dashboard tile it becomes part of).',
+    ),
   forNextAgent: z.string().describe('What the next agent should know.'),
-  filesTouched: z.array(z.string()).optional(),
+  filesTouched: z
+    .array(z.string())
+    .optional()
+    .describe('Paths of every file you edited.'),
+  evidence: z
+    .string()
+    .optional()
+    .describe(
+      'How you know it worked — what you ran or observed, not what you expect.',
+    ),
+  assumptions: z
+    .string()
+    .optional()
+    .describe('What you assumed about the app and could not verify.'),
   conflict: z
     .string()
     .optional()
@@ -257,13 +274,13 @@ export function buildOrchestratorTools(
 
   const completeTask = tool(
     'complete_task',
-    "Report the outcome of your task. Always call this exactly once when you finish, with a structured handoff for the next agent. Use status 'skipped' when the task does not apply to this project and you cannot do it (say why in the handoff) — not 'done'.",
+    "Report the outcome of your task. Always call this exactly once when you finish, with a structured handoff for the next agent. Use status 'not needed' when the task does not apply to this project and you cannot do it (say why in the handoff) — not 'done'.",
     {
-      status: z.enum(['done', 'failed', 'skipped']),
+      status: z.enum(['done', 'failed', 'not needed']),
       handoff: z.object(HANDOFF_SHAPE),
     },
     ((args: {
-      status: 'done' | 'failed' | 'skipped';
+      status: 'done' | 'failed' | 'not needed';
       handoff: TaskHandoff;
     }) => {
       const res = applyComplete(ctx, args);
