@@ -84,6 +84,18 @@ const SIMPLE_MANAGERS: Record<string, readonly string[]> = {
   swift: ['package', 'build'],
   pod: ['install', 'update', 'search'],
   carthage: ['bootstrap', 'update'],
+  // cargo run/test execute project code; install/publish are outward-facing.
+  cargo: [
+    'add',
+    'remove',
+    'build',
+    'check',
+    'fmt',
+    'clippy',
+    'metadata',
+    'tree',
+    'fetch',
+  ],
 };
 
 // Gradle tasks are verb-anchored camelCase: assembleDebug yes, publishToMavenCentral no.
@@ -102,7 +114,8 @@ const ALLOWED_TOOLS_SUMMARY =
   'composer (install|require|update|remove|show), bundle (install|add|remove|update|show|exec <lint tool>), ' +
   'gem (install|uninstall|list|search), swift (package|build), pod (install|update|search), carthage (bootstrap|update), ' +
   'xcodebuild (build/clean/archive actions), gradle/gradlew (build|clean|dependencies|assemble*/compile*/bundle*/lint* tasks), ' +
-  'mvn (install|compile|package|verify|dependency:tree).';
+  'mvn (install|compile|package|verify|dependency:tree), ' +
+  'cargo (add|remove|build|check|fmt|clippy|metadata|tree|fetch).';
 
 function deny(analyticsReason: string, message: string): BashFenceDecision {
   return { allowed: false, message, analyticsReason };

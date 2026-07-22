@@ -100,6 +100,7 @@ export enum Integration {
   swift = 'swift',
   android = 'android',
   rails = 'rails',
+  rust = 'rust',
 
   // Language fallbacks. Keep javascriptNode last: it matches any package.json.
   python = 'python',
