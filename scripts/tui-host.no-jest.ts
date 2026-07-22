@@ -58,7 +58,7 @@ async function main() {
     ci: true,
     apiKey,
     projectId,
-    region: 'us',
+    region: process.env.POSTHOG_REGION === 'eu' ? 'eu' : 'us',
     // Local skills + MCP (context-mill dev server on :8765, MCP on :8787) —
     // same env-backed flag the bin's --local-mcp reads.
     localMcp: process.env.POSTHOG_WIZARD_LOCAL_MCP === 'true',
