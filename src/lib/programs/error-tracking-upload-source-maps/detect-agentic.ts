@@ -48,20 +48,14 @@ export type DetectionReport = {
 
 /**
  * Variant precedence for the agentic picker (most specific first). The detector
- * keeps the EARLIEST matching target. Unsupported native targets are included
- * as guards before Android and iOS so React Native projects with nested Gradle
- * or Xcode manifests are not misclassified as instrumentable native apps. JS
- * ordering mirrors `pickJsVariant` in detect.ts: opinionated frameworks →
- * bundlers → bare React → Node → generic web.
+ * keeps the EARLIEST matching target. React Native and Flutter both outrank
+ * Android and iOS: their repos carry `android/` and `ios/` folders with real
+ * Gradle and Xcode manifests inside them, and must not be misclassified as
+ * plain native apps. JS ordering mirrors `pickJsVariant` in detect.ts:
+ * opinionated frameworks → bundlers → bare React → Node → generic web.
  */
-const NON_AUTOMATABLE_NATIVE_VARIANTS: readonly SkillVariant[] = [
-  'react-native',
-];
-
 const VARIANT_PRECEDENCE: readonly SkillVariant[] = [
-  ...NON_AUTOMATABLE_NATIVE_VARIANTS,
-  // Flutter outranks android/ios: a Flutter repo carries `android/` and
-  // `ios/` folders with real Gradle and Xcode manifests inside it.
+  'react-native',
   'flutter',
   'android',
   'ios',
@@ -81,15 +75,8 @@ const precedenceRank = (v: SkillVariant): number => {
   return i === -1 ? Number.MAX_SAFE_INTEGER : i;
 };
 
-/**
- * Source-map detection targets, ordered by VARIANT_PRECEDENCE. Unsupported
- * native variants remain in the target list so the detector can identify and
- * block them instead of falling through to iOS or a JS target.
- */
-export const SOURCE_MAPS_TARGETS: DetectTarget[] = [
-  ...NON_AUTOMATABLE_NATIVE_VARIANTS,
-  ...AUTOMATABLE_VARIANTS,
-]
+/** Source-map detection targets, ordered by VARIANT_PRECEDENCE. */
+export const SOURCE_MAPS_TARGETS: DetectTarget[] = [...AUTOMATABLE_VARIANTS]
   .sort((a, b) => precedenceRank(a) - precedenceRank(b))
   .map((v) => ({ id: v, name: VARIANT_DISPLAY_NAME[v] }));
 
@@ -130,11 +117,12 @@ function classifyProject(
     hasPostHog: p.hasPostHog,
   };
 
-  // React Native is not automatable at all; a Flutter-labelled project only
-  // counts when it resolved to the flutter target — the nested Gradle and
-  // Xcode manifests inside a Flutter repo must not claim android or ios.
+  // A React Native or Flutter labelled project only counts when it resolved to
+  // its own target — the nested Gradle and Xcode manifests inside those repos
+  // must not claim android or ios.
   const namesForeignNativePlatform =
-    /\b(?:react[\s-]*native|expo)\b/i.test(p.framework) ||
+    (/\b(?:react[\s-]*native|expo)\b/i.test(p.framework) &&
+      p.targetId !== 'react-native') ||
     (/\bflutter\b/i.test(p.framework) && p.targetId !== 'flutter');
   if (!isAutomatableVariant(p.targetId) || namesForeignNativePlatform) {
     return {
@@ -181,9 +169,9 @@ function toSourceMapsReport(
 
 /**
  * Validate the agent's raw JSON into a source-maps detection report. Exported
- * for testing — recognises detection-only native targets, then clamps them to
- * non-instrumentable projects. Without a `hasBuildTarget` predicate every
- * Flutter project is treated as target-less (blocked).
+ * for testing — clamps projects the wizard cannot wire up to
+ * non-instrumentable. Without a `hasBuildTarget` predicate every Flutter
+ * project is treated as target-less (blocked).
  */
 export function coerceReport(
   parsed: unknown,
