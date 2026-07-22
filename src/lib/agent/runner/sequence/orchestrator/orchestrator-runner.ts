@@ -604,9 +604,15 @@ export async function runOrchestrator(
     ? 'posthog-setup-report.md'
     : store.queuePath;
 
+  // Not-needed tasks were never work, so they leave the denominator too.
+  const notRequired = summary[TaskStatus.Skipped];
   const message = conflict
     ? 'PostHog set up, with one conflict to review.'
-    : `PostHog set up: ${summary.done}/${summary.total} steps completed.`;
+    : `PostHog set up: ${summary.done}/${
+        summary.total - notRequired
+      } steps completed${
+        notRequired > 0 ? ` (${notRequired} skipped as not required)` : ''
+      }.`;
   getUI().setOutroData({
     kind: OutroKind.Success,
     message,
