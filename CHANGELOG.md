@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.48.0](https://github.com/PostHog/wizard/compare/v2.47.0...v2.48.0) (2026-07-22)
+
+
+### Features
+
+* **orchestrator:** handoffs carry per-file intent, evidence, and assumptions ([#935](https://github.com/PostHog/wizard/issues/935)) ([e069dba](https://github.com/PostHog/wizard/commit/e069dba4b2db90e598baeac37e417a5fedb7dc95))
+
+
+### Bug Fixes
+
+* **skills:** kept skills are docs only, not the agent workflow ([#950](https://github.com/PostHog/wizard/issues/950)) ([8314ae0](https://github.com/PostHog/wizard/commit/8314ae04c71736626fe05fadbcd7c688cbf22567))
+
 ## [2.47.0](https://github.com/PostHog/wizard/compare/v2.46.0...v2.47.0) (2026-07-22)
 
 
