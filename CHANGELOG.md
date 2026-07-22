@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.49.0](https://github.com/PostHog/wizard/compare/v2.48.0...v2.49.0) (2026-07-22)
+
+
+### Features
+
+* **orchestrator:** every task remarks, the run reports them together ([#952](https://github.com/PostHog/wizard/issues/952)) ([7672609](https://github.com/PostHog/wizard/commit/76726090f59a83d0e621c7e55240bd7b60fe88b3))
+
 ## [2.48.0](https://github.com/PostHog/wizard/compare/v2.47.0...v2.48.0) (2026-07-22)
 
 
