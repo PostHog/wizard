@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.47.0](https://github.com/PostHog/wizard/compare/v2.46.0...v2.47.0) (2026-07-22)
+
+
+### Features
+
+* **ai-observability:** agent-driven AI Observability program ([#922](https://github.com/PostHog/wizard/issues/922)) ([5841096](https://github.com/PostHog/wizard/commit/5841096a9d6af84085ebb73e4a11e72e15df53fb))
+
 ## [2.46.0](https://github.com/PostHog/wizard/compare/v2.45.0...v2.46.0) (2026-07-21)
 
 
