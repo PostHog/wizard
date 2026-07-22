@@ -44,8 +44,8 @@ function ensurePostHogCli(variant: SkillVariant): void {
       { source: 'source_maps_cli_preinstall', variant },
     );
     getUI().log.warn(
-      `Could not pre-install posthog-cli (${result.error}). Your Xcode build ` +
-        `will fail to upload dSYMs until it's installed: npm install -g @posthog/cli@latest`,
+      `Could not pre-install posthog-cli (${result.error}). Your release build ` +
+        `will fail to upload debug symbols until it's installed: npm install -g @posthog/cli@latest`,
     );
   }
 }

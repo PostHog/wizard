@@ -28,8 +28,8 @@ import {
   repeatBlockReason,
   scanAndTriage,
   type RepeatBlockTracker,
-  type ScanContext,
 } from '@lib/yara-hooks';
+import { scanVerdict, type ScanContext } from '@lib/yara-policy';
 import {
   createTriageLLMProvider,
   type TriageGatewayAuth,
@@ -423,16 +423,25 @@ export function createSecurityExtension(ctx: ToolGateContext = {}): {
         // 'input'-context rules (prompt injection in read content), with
         // triage — same policy as the anthropic PostToolUse Read hook.
         const matches = await scanAndTriage(text, 'input', llmProvider);
+        const verdict = scanVerdict(matches);
+        // Count the scan even when clean, like the anthropic hooks do.
         recordExternalScan(
           'PostToolUse',
           event.toolName === 'read' ? 'Read' : 'Bash',
           matches.map(toReportViolation),
-          'aborted',
+          verdict?.action ?? 'warned',
         );
-        if (matches.length > 0) {
+        if (!verdict) return {};
+        if (verdict.terminal) {
           state.criticalViolation = true;
           logToFile(
-            `[pi-security] POST-SCAN VIOLATION ${event.toolName}: ${matches[0].rule}`,
+            `[pi-security] POST-SCAN VIOLATION ${event.toolName}: ${verdict.match.rule}`,
+          );
+        } else {
+          logToFile(
+            `[pi-security] POST-SCAN WARNING ${event.toolName}: ${
+              verdict.match.rule
+            } (severity: ${verdict.match.metadata.severity ?? 'unknown'})`,
           );
         }
       } catch (err) {

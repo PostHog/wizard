@@ -20,6 +20,7 @@ import {
   GPT5_6_LUNA_MODEL,
   GPT5_6_SOL_MODEL,
   GPT5_6_TERRA_MODEL,
+  SONNET_5_MODEL,
   Harness,
   Sequence,
   WIZARD_ORCHESTRATOR_FLAG_KEY,
@@ -60,11 +61,23 @@ describe('switchboard PROGRAM_BINDINGS', () => {
   // Pins today's behavior: the seam changes nothing until a binding is moved.
   it('resolves every program, unflagged, to the same default binding', () => {
     for (const program of PROGRAM_IDS) {
+      if (program === 'ai-observability') continue; // pinned below
       expect(resolveBinding({ program, flags: {} })).toEqual(DEFAULT_RESOLVED);
     }
   });
 
   runBindingCases([
+    {
+      name: 'binds ai-observability to anthropic + sonnet 5',
+      ctx: { program: 'ai-observability', flags: {} },
+      binding: {
+        sequence: Sequence.linear,
+        harness: Harness.anthropic,
+        model: SONNET_5_MODEL,
+        thinkingLevel: undefined,
+      },
+      trace: { harness: 'binding', model: 'binding', sequence: 'binding' },
+    },
     {
       name: 'falls back to DEFAULT_BINDING for an unmapped program',
       ctx: { program: 'not-a-program', flags: {} },
@@ -187,8 +200,13 @@ describe('switchboard composed clamp', () => {
         trace: {},
       };
       // Only the orchestrator flag is on → harness/model stay at the binding
-      // default, and the composed clamp holds the sequence at linear.
-      expect(resolveBinding(ctx)).toEqual(DEFAULT_RESOLVED);
+      // (sonnet 5 for ai-observability, the default elsewhere), and the
+      // composed clamp holds the sequence at linear.
+      expect(resolveBinding(ctx)).toEqual(
+        program === 'ai-observability'
+          ? { ...DEFAULT_RESOLVED, model: SONNET_5_MODEL }
+          : DEFAULT_RESOLVED,
+      );
       expect(ctx.trace?.sequence).toBe('composed');
     }
   });

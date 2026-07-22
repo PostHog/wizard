@@ -1,5 +1,31 @@
 # Changelog
 
+## [2.47.0](https://github.com/PostHog/wizard/compare/v2.46.0...v2.47.0) (2026-07-22)
+
+
+### Features
+
+* **ai-observability:** agent-driven AI Observability program ([#922](https://github.com/PostHog/wizard/issues/922)) ([5841096](https://github.com/PostHog/wizard/commit/5841096a9d6af84085ebb73e4a11e72e15df53fb))
+
+## [2.46.0](https://github.com/PostHog/wizard/compare/v2.45.0...v2.46.0) (2026-07-21)
+
+
+### Features
+
+* automate Android source-map (mapping) upload ([#931](https://github.com/PostHog/wizard/issues/931)) ([b83c23c](https://github.com/PostHog/wizard/commit/b83c23c7dfec8414a068c966ae75ade41328906f))
+* **data-warehouse:** expand warehouse-source detection registry ([#930](https://github.com/PostHog/wizard/issues/930)) ([ef41560](https://github.com/PostHog/wizard/commit/ef41560406b82fea69ebce28b1dc8e20b8968ba4))
+* **mcp:** OpenCode as a target for wizard installation ([#913](https://github.com/PostHog/wizard/issues/913)) ([27ec6ac](https://github.com/PostHog/wizard/commit/27ec6ac88a3d0eb728196c271bdba379e6263637))
+* support iOS source-map uploads ([#871](https://github.com/PostHog/wizard/issues/871)) ([4430ed2](https://github.com/PostHog/wizard/commit/4430ed2920c8157c5714ad5112b4d6358313671d))
+* **switchboard:** Self-driving on GPT 5.6 ([#902](https://github.com/PostHog/wizard/issues/902)) ([4a072a2](https://github.com/PostHog/wizard/commit/4a072a2c1662c3524346b4451c52451c213ae350))
+* **warehouse:** detect connectable data sources and suggest warehouse setup ([#927](https://github.com/PostHog/wizard/issues/927)) ([e7e651f](https://github.com/PostHog/wizard/commit/e7e651f6dd25f0e476342b18dc971b2c41bd3eea))
+
+
+### Bug Fixes
+
+* **auth:** read posthog_region from the OAuth token response ([#934](https://github.com/PostHog/wizard/issues/934)) ([ecd4c07](https://github.com/PostHog/wizard/commit/ecd4c07463e1a08950d19e4e53be7a2ac6400893))
+* **oauth:** request event definition write scope ([#914](https://github.com/PostHog/wizard/issues/914)) ([1474bc7](https://github.com/PostHog/wizard/commit/1474bc769e53e747f60f993b848c48c4adfa9733))
+* **pi:** terminate on critical/block YARA matches only ([#937](https://github.com/PostHog/wizard/issues/937)) ([757a7b2](https://github.com/PostHog/wizard/commit/757a7b2027918301a5320cb5f102ea40a1984717))
+
 ## [2.45.0](https://github.com/PostHog/wizard/compare/v2.44.0...v2.45.0) (2026-07-16)
 
 

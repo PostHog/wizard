@@ -2,6 +2,7 @@ import {
   assertWizardCompletionScope,
   extractOAuthCode,
   isAuthorizationTimeout,
+  OAuthTokenResponseSchema,
   parseOAuthScopes,
 } from '@utils/oauth';
 import {
@@ -117,5 +118,38 @@ describe('wizard OAuth scopes', () => {
       'wizard_session:write',
       'event_definition:write',
     ]);
+  });
+});
+
+describe('OAuthTokenResponseSchema posthog_region', () => {
+  const base = {
+    access_token: 'pha_test',
+    expires_in: 3600,
+    token_type: 'Bearer',
+    scope: 'event_definition:write',
+  };
+
+  it('passes a recognized region through', () => {
+    const token = OAuthTokenResponseSchema.parse({
+      ...base,
+      posthog_region: 'eu',
+      posthog_base_url: 'https://eu.posthog.com',
+    });
+    expect(token.posthog_region).toBe('eu');
+    expect(token.posthog_base_url).toBe('https://eu.posthog.com');
+  });
+
+  it('degrades an unrecognized region to undefined instead of failing login', () => {
+    const token = OAuthTokenResponseSchema.parse({
+      ...base,
+      posthog_region: 'apac',
+    });
+    expect(token.access_token).toBe('pha_test');
+    expect(token.posthog_region).toBeUndefined();
+  });
+
+  it('parses responses without region fields (self-hosted)', () => {
+    const token = OAuthTokenResponseSchema.parse(base);
+    expect(token.posthog_region).toBeUndefined();
   });
 });

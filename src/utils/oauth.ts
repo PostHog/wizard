@@ -47,7 +47,7 @@ const OAUTH_CALLBACK_STYLES = `
   </style>
 `;
 
-const OAuthTokenResponseSchema = z.object({
+export const OAuthTokenResponseSchema = z.object({
   access_token: z.string(),
   expires_in: z.number(),
   token_type: z.string(),
@@ -55,6 +55,11 @@ const OAuthTokenResponseSchema = z.object({
   refresh_token: z.string().optional(),
   scoped_teams: z.array(z.number()).optional(),
   scoped_organizations: z.array(z.string()).optional(),
+  // Sent by PostHog Cloud (and passed through the oauth.posthog.com proxy); absent on
+  // self-hosted. `.catch(undefined)` so an unrecognized value degrades to the probe
+  // fallback instead of failing the whole login.
+  posthog_region: z.enum(['us', 'eu']).optional().catch(undefined),
+  posthog_base_url: z.string().optional().catch(undefined),
 });
 
 export type OAuthTokenResponse = z.infer<typeof OAuthTokenResponseSchema>;
@@ -376,6 +381,7 @@ async function exchangeCodeForToken(
   const token = OAuthTokenResponseSchema.parse(response.data);
   logToFile(
     `[oauth] token exchange succeeded, granted scopes: ${token.scope}` +
+      `${token.posthog_region ? `, region: ${token.posthog_region}` : ''}` +
       `${
         token.scoped_teams
           ? `, scoped_teams: [${token.scoped_teams.join(', ')}]`
