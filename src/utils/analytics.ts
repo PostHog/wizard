@@ -168,7 +168,15 @@ export class Analytics {
 
   /** Person properties sent with flag evaluation: app name plus the user's. */
   private flagPersonProperties(): Record<string, string> {
-    return { $app_name: this.appName, ...this.personProperties };
+    // run_surface and build let PostHog flag conditions scope an experiment to
+    // an invocation surface (e.g. wizard-orchestrator: local only, not cloud/
+    // headless) — evaluation-time only, never persisted onto the person.
+    return {
+      $app_name: this.appName,
+      run_surface: RUN_SURFACE,
+      build: String(this.tags.build ?? 'dev'),
+      ...this.personProperties,
+    };
   }
 
   setTag(key: string, value: string | boolean | number | null | undefined) {
